@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Apex 26">
+<meta name="theme-color" content="#0a0a0f">
+<title>Apex 26 — F1 Racing &amp; Data</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-180.png">
+<link rel="stylesheet" href="css/style.css?v=1">
+<link rel="stylesheet" href="css/data.css?v=1">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- race HUD -->
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div class="hud-box"><div class="hud-label">POS</div><div id="hud-pos" class="hud-value">-</div></div>
+    <div class="hud-box"><div class="hud-label">LAP</div><div id="hud-lap" class="hud-value">-</div></div>
+    <div class="hud-box"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">0:00.0</div></div>
+    <div class="hud-box"><div class="hud-label">BEST</div><div id="hud-best" class="hud-value">-</div></div>
+  </div>
+  <div class="hud-gaps">
+    <div id="hud-gap-ahead" class="hud-gap"></div>
+    <div id="hud-gap-behind" class="hud-gap"></div>
+  </div>
+  <div class="hud-bottom">
+    <div id="hud-speed"><span id="hud-speed-n">0</span><span class="hud-unit">KM/H</span></div>
+    <div id="hud-energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ENERGY</div></div>
+    <div id="hud-ot" class="ot-off">OVERTAKE</div>
+  </div>
+  <canvas id="minimap" width="140" height="140"></canvas>
+  <div id="hud-flag" hidden></div>
+</div>
+
+<div id="lights" hidden>
+  <span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span>
+</div>
+
+<div id="announce" hidden></div>
+
+<!-- touch controls -->
+<button id="btn-boost" class="touchbtn" hidden>BOOST</button>
+<button id="btn-ot" class="touchbtn" hidden>OT</button>
+<button id="btn-brake" class="touchbtn" hidden>BRAKE</button>
+<button id="steer-left" class="touchbtn steerbtn" hidden>&#9664;</button>
+<button id="steer-right" class="touchbtn steerbtn" hidden>&#9654;</button>
+
+<button id="pausebtn" hidden>&#10074;&#10074;</button>
+<div id="pausemenu" class="panel" hidden>
+  <h2>PAUSED</h2>
+  <button id="pm-resume">RESUME</button>
+  <button id="pm-restart">RESTART RACE</button>
+  <button id="pm-tilt">TILT: ON</button>
+  <button id="pm-calib">RECALIBRATE TILT</button>
+  <button id="pm-sound">SOUND: ON</button>
+  <button id="pm-quit">QUIT TO MENU</button>
+</div>
+
+<!-- main menu -->
+<div id="overlay">
+  <h1 id="title">APEX&nbsp;26</h1>
+  <p id="subtitle">2026 grid &middot; 12 real circuits &middot; tilt to steer</p>
+  <div id="menu-buttons">
+    <button id="mb-race" class="bigbtn">RACE</button>
+    <button id="mb-season" class="bigbtn">SEASON</button>
+    <button id="mb-data" class="bigbtn alt">F1 DATA HUB</button>
+    <button id="mb-help" class="bigbtn alt">HOW TO PLAY</button>
+  </div>
+  <p id="audiostate"></p>
+  <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
+</div>
+
+<!-- select screen -->
+<div id="select" hidden>
+  <h2 id="select-title">SELECT</h2>
+  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div></div>
+  <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-tracks"></div></div>
+  <div class="sel-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
+  <div class="sel-actions">
+    <button id="sel-back">BACK</button>
+    <button id="sel-go" class="bigbtn">START</button>
+  </div>
+</div>
+
+<!-- results -->
+<div id="results" class="panel" hidden>
+  <h2 id="results-title">RACE RESULT</h2>
+  <div id="results-table"></div>
+  <div class="sel-actions">
+    <button id="res-menu">MENU</button>
+    <button id="res-next" class="bigbtn">NEXT</button>
+  </div>
+</div>
+
+<!-- how to play -->
+<div id="howtoplay" hidden>
+  <div id="howtoplay-inner" class="panel">
+    <h2>HOW TO PLAY</h2>
+    <button id="htp-close">&#10005;</button>
+    <dl>
+      <dt>STEER</dt><dd>Tilt your phone (calibrates at the lights) &mdash; or touch the screen halves / &#8592;&#8594; / A D</dd>
+      <dt>THROTTLE</dt><dd>Automatic. <span class="key">BRAKE</span>: &#8595; / S / brake button</dd>
+      <dt>&#9889; BOOST</dt><dd>Hold <span class="key">Space</span> / BOOST to deploy electric power. Drains the energy bar; recharges when you brake or lift. Deploy tapers off at very high speed &mdash; 2026 rules</dd>
+      <dt>OVERTAKE</dt><dd>Within 1s of the car ahead the OT light arms. Press <span class="key">X</span> / OT for 4s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
+      <dt>TRACK LIMITS</dt><dd>Grass is slow. Cutting the track repeatedly earns a +5s penalty</dd>
+      <dt>RACE</dt><dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
+      <dt>SEASON</dt><dd>All 12 circuits in calendar order &mdash; championship standings saved between visits</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- data hub -->
+<div id="datahub" hidden></div>
+
+<button id="soundbtn" hidden>&#9834; ON</button>
+
+<div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
+
+<script src="js/mat4.js?v=1"></script>
+<script src="js/glx.js?v=1"></script>
+<script src="js/teams.js?v=1"></script>
+<script src="js/tracks.js?v=1"></script>
+<script src="js/car3d.js?v=1"></script>
+<script src="js/input.js?v=1"></script>
+<script src="js/audio.js?v=1"></script>
+<script src="js/api.js?v=1"></script>
+<script src="js/data.js?v=1"></script>
+<script src="js/game.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+/* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */
+
+:root {
+  --red: #e10600;
+  --bg: #0a0a0f;
+  --panel: rgba(12, 12, 20, 0.92);
+  --text: #f2f2f5;
+  --dim: #9a9aa5;
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+#game {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+}
+
+h1, h2, .hud-value, .bigbtn {
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.04em;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+}
+button:active { background: rgba(255, 255, 255, 0.16); }
+
+.bigbtn {
+  display: block;
+  width: min(78vw, 340px);
+  margin: 10px auto;
+  padding: 14px 20px;
+  font-size: 20px;
+  background: var(--red);
+  border: none;
+  border-radius: 10px;
+  transform: skewX(-6deg);
+}
+.bigbtn.alt { background: rgba(255, 255, 255, 0.1); }
+
+.panel {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 22px 26px;
+  z-index: 30;
+  max-width: min(92vw, 520px);
+  max-height: 86vh;
+  overflow-y: auto;
+}
+.panel h2 { color: var(--red); margin-bottom: 14px; }
+.panel button { display: block; width: 100%; margin: 8px 0; }
+
+/* ---------- main menu ---------- */
+#overlay {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: radial-gradient(120% 90% at 50% 10%, rgba(225, 6, 0, 0.18), transparent 60%), rgba(6, 6, 10, 0.55);
+  z-index: 20;
+  padding: var(--sat) var(--sar) var(--sab) var(--sal);
+}
+#title {
+  font-size: clamp(44px, 11vw, 92px);
+  color: var(--text);
+  text-shadow: 0 0 28px rgba(225, 6, 0, 0.65);
+}
+#title::after { content: ""; display: block; height: 5px; width: 70%; margin: 4px auto 0; background: var(--red); transform: skewX(-30deg); }
+#subtitle { color: var(--dim); margin: 10px 0 26px; }
+#audiostate { color: var(--dim); font-size: 12px; margin-top: 14px; min-height: 16px; }
+#disclaimer {
+  position: absolute;
+  bottom: calc(10px + var(--sab));
+  color: var(--dim); font-size: 11px;
+}
+
+/* ---------- select screen ---------- */
+#select {
+  position: fixed; inset: 0;
+  z-index: 25;
+  background: rgba(6, 6, 10, 0.92);
+  padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal));
+  overflow-y: auto;
+}
+#select h2 { color: var(--red); margin-bottom: 10px; }
+.sel-label { color: var(--dim); font-size: 12px; letter-spacing: 0.12em; margin: 12px 0 6px; }
+#sel-teams, #sel-tracks, #sel-diff { display: flex; flex-wrap: wrap; gap: 8px; }
+.sel-chip {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+}
+.sel-chip.active { outline: 2px solid var(--red); background: rgba(225, 6, 0, 0.18); }
+.sel-chip .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+#sel-driver { color: var(--dim); font-size: 13px; margin-top: 8px; min-height: 18px; }
+.sel-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+.sel-actions .bigbtn { width: auto; min-width: 150px; margin: 0; }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+.hud-top {
+  position: absolute;
+  top: calc(8px + var(--sat));
+  left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px;
+}
+.hud-box {
+  background: rgba(8, 8, 14, 0.72);
+  border-left: 3px solid var(--red);
+  padding: 4px 12px;
+  border-radius: 4px;
+  text-align: center;
+}
+.hud-label { font-size: 9px; letter-spacing: 0.16em; color: var(--dim); }
+.hud-value { font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hud-gaps {
+  position: absolute;
+  top: calc(64px + var(--sat));
+  left: 50%; transform: translateX(-50%);
+  text-align: center; font-size: 12px; color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.hud-bottom {
+  position: absolute;
+  bottom: calc(14px + var(--sab));
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: flex-end; gap: 14px;
+}
+#hud-speed { font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; }
+.hud-unit { font-size: 12px; color: var(--dim); margin-left: 4px; }
+#hud-energy {
+  width: 130px; height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 7px;
+  position: relative; overflow: hidden;
+  margin-bottom: 8px;
+}
+#hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #00c853, #aeea00); }
+.hud-energy-label { position: absolute; inset: 0; font-size: 8px; letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.55); }
+#hud-ot {
+  font-size: 13px; font-weight: 800; font-style: italic;
+  padding: 5px 10px; border-radius: 5px;
+  margin-bottom: 6px;
+}
+#hud-ot.ot-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
+#hud-ot.ot-armed { color: #0a0a0f; background: #aeea00; animation: pulse 0.8s infinite; }
+#hud-ot.ot-active { color: #fff; background: var(--red); }
+#hud-ot.ot-cool { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); opacity: 0.5; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+#minimap {
+  position: absolute;
+  right: calc(10px + var(--sar));
+  bottom: calc(12px + var(--sab));
+  opacity: 0.85;
+}
+#hud-flag {
+  position: absolute; top: calc(100px + var(--sat)); left: 50%; transform: translateX(-50%);
+  padding: 6px 16px; border-radius: 6px; font-weight: 800;
+  background: #ffd600; color: #000;
+}
+
+/* ---------- start lights ---------- */
+#lights {
+  position: fixed;
+  top: calc(18vh + var(--sat));
+  left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px;
+  background: rgba(8, 8, 12, 0.85);
+  padding: 14px 18px;
+  border-radius: 10px;
+  z-index: 15;
+}
+.light { width: 26px; height: 26px; border-radius: 50%; background: #2a2a32; }
+.light.on { background: #ff1a1a; box-shadow: 0 0 18px rgba(255, 26, 26, 0.9); }
+
+#announce {
+  position: fixed;
+  top: 30vh; left: 50%; transform: translateX(-50%);
+  font-size: clamp(30px, 8vw, 64px);
+  font-weight: 800; font-style: italic;
+  text-shadow: 0 0 24px rgba(225, 6, 0, 0.8);
+  z-index: 15;
+  white-space: nowrap;
+}
+
+/* ---------- touch controls ---------- */
+.touchbtn {
+  position: fixed;
+  z-index: 12;
+  font-weight: 800;
+  background: rgba(20, 20, 30, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  width: 74px; height: 74px;
+  font-size: 13px;
+}
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(96px + var(--sab)); background: rgba(0, 160, 60, 0.4); }
+#btn-ot    { right: calc(100px + var(--sar)); bottom: calc(26px + var(--sab)); }
+#btn-brake { left: calc(16px + var(--sal)); bottom: calc(96px + var(--sab)); background: rgba(160, 30, 30, 0.4); }
+.steerbtn  { bottom: calc(20px + var(--sab)); width: 64px; height: 64px; font-size: 18px; }
+#steer-left  { left: calc(14px + var(--sal)); }
+#steer-right { left: calc(92px + var(--sal)); }
+
+#pausebtn {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  z-index: 14;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  padding: 0;
+}
+#soundbtn {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  z-index: 22;
+}
+
+/* ---------- results ---------- */
+#results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
+#results-table .res-row { display: flex; gap: 10px; padding: 3px 0; align-items: center; }
+#results-table .res-row.you { color: #aeea00; font-weight: 700; }
+#results-table .res-pos { width: 26px; text-align: right; color: var(--dim); }
+#results-table .res-swatch { width: 10px; height: 10px; border-radius: 2px; }
+#results-table .res-name { flex: 1; }
+#results-table .res-pts { width: 40px; text-align: right; }
+
+/* ---------- how to play ---------- */
+#howtoplay { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); }
+#howtoplay-inner { width: min(92vw, 520px); }
+#htp-close { position: absolute; top: 10px; right: 10px; width: 36px; padding: 6px; }
+#howtoplay dt { color: var(--red); font-weight: 700; font-size: 13px; margin-top: 10px; }
+#howtoplay dd { color: var(--text); font-size: 13px; margin-left: 0; }
+.key {
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 12px;
+}
+
+#nogl {
+  position: fixed; inset: 0; z-index: 99;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}
+
+[hidden] { display: none !important; }
