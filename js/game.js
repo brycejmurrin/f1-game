@@ -1,0 +1,737 @@
+/* Apex 26 — main game: state machine, physics, AI, race logic, HUD.
+   Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks,
+   Car3D,Input,GameAudio,F1API,DataHub. */
+(function () {
+"use strict";
+
+// ---------- DOM ----------
+const $ = (id) => document.getElementById(id);
+const canvas = $("game");
+const els = {
+  hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
+  best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
+  ot: $("hud-ot"), gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
+  flag: $("hud-flag"), minimap: $("minimap"),
+  lights: $("lights"), announce: $("announce"),
+  overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
+  select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
+  selDriver: $("sel-driver"), selTracks: $("sel-tracks"),
+  selTrackSection: $("sel-track-section"), selDiff: $("sel-diff"),
+  selBack: $("sel-back"), selGo: $("sel-go"),
+  results: $("results"), resultsTitle: $("results-title"),
+  resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
+  pausebtn: $("pausebtn"), pausemenu: $("pausemenu"),
+  howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
+  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
+  steerL: $("steer-left"), steerR: $("steer-right"),
+};
+
+if (!GLX.init(canvas)) { $("nogl").hidden = false; return; }
+
+// ---------- settings ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("apex26." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("apex26." + k, JSON.stringify(v)); } catch (e) {} },
+};
+let teamIdx = store.get("team", 2);          // default McLaren
+let driverIdx = store.get("driver", 0);
+let trackIdx = store.get("track", 0);
+let difficulty = store.get("difficulty", "normal");
+let soundOn = store.get("sound", true);
+let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
+
+// ---------- physics constants ----------
+const VMAX = 92;            // m/s base (~330 km/h)
+const ACCEL = 17;           // m/s^2 at low speed
+const BRAKE = 34;
+const LAT_MAX = 26;         // m/s^2 cornering grip
+const STEER_VMAX = 15;      // lateral m/s at full lock, full speed
+const CENTRIF = 0.92;       // outward push factor
+const GRASS_V = 30;         // crawl speed on grass
+const DEPLOY_A = 6.2;       // extra accel from electric deploy
+const TAPER_LO = 64, TAPER_HI = 81;  // deploy tapers to 0 across this speed band
+const DRAIN = 0.20, REGEN = 0.115;   // energy per second
+const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
+const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
+const DIFF = {
+  easy:   { ai: 0.90, band: 0.20 },
+  normal: { ai: 0.97, band: 0.10 },
+  hard:   { ai: 1.025, band: 0.03 },
+};
+const GAME_LAPS = 3;
+
+// ---------- state ----------
+let state = "menu";
+let track = null, builtTrackId = null;
+let cars = [], player = null;
+let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
+let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
+let seasonMode = false;
+let frameSky = {}, frame = {};
+const teamMeshes = {};   // teamId -> GLX mesh
+let shake = 0;
+let paused = false;
+let lastFrame = 0;
+let announceT = 0;
+let hudT = 0;
+const mm = els.minimap.getContext("2d");
+const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
+const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+
+// ---------- helpers ----------
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
+function fmtTime(t) {
+  if (!isFinite(t) || t <= 0) return "-";
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
+}
+function announce(msg, dur) {
+  els.announce.textContent = msg;
+  els.announce.hidden = false;
+  announceT = dur || 1.6;
+}
+function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
+function basisMat(r, u, f, p, out) {
+  out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
+  out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
+  out[8] = f[0]; out[9] = f[1]; out[10] = f[2]; out[11] = 0;
+  out[12] = p[0]; out[13] = p[1]; out[14] = p[2]; out[15] = 1;
+  return out;
+}
+const tmpMat = new Float32Array(16);
+const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
+
+// ---------- car setup ----------
+function makeCars() {
+  cars = [];
+  Teams.LIST.forEach((team, ti) => {
+    team.drivers.forEach((d, di) => {
+      const isP = ti === teamIdx && di === driverIdx;
+      cars.push({
+        team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
+        color: team.color, tier: team.tier,
+        s: 0, x: 0, speed: 0, prog: 0, lap: 0,
+        energy: 1, otT: 0, otCool: 0, deploying: false,
+        lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
+        finished: false, finishT: 0, finPos: 0,
+        offroad: false, offT: 0, cuts: 0, penalty: 0,
+        yawVis: 0, steerVis: 0, collideT: 0,
+        skill: 0.92 + Math.random() * 0.1,
+        aiBrakeT: 0, aiOffset: (Math.random() - 0.5) * 1.6,
+      });
+    });
+  });
+  player = cars.find((c) => c.isPlayer);
+}
+
+function gridUp() {
+  // grid order: by tier then random-ish; player at P12 for a fun climb
+  const order = cars.slice().sort((a, b) => (a.tier - b.tier) || (Math.random() - 0.5));
+  const pi = order.indexOf(player);
+  order.splice(pi, 1);
+  order.splice(11, 0, player);
+  order.forEach((c, i) => {
+    c.s = wrapS(track.total - 14 - i * 8);
+    c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
+    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
+    c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
+  });
+}
+function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
+
+function teamMesh(team) {
+  if (!teamMeshes[team.id]) teamMeshes[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2));
+  return teamMeshes[team.id];
+}
+
+// ---------- track loading ----------
+function loadTrack(idx) {
+  const def = Tracks.LIST[idx];
+  if (builtTrackId === def.id) return;
+  track = Tracks.build(def);
+  builtTrackId = def.id;
+  const pal = def.palette;
+  frame = {
+    viewProj: M4.ident(), eye: camEye,
+    sunDir: V3.norm(pal.sunDir), sunColor: pal.sunColor,
+    ambientGround: pal.ambientGround, ambientSky: pal.ambientSky,
+    fogColor: pal.fog, fogDensity: pal.fogDensity,
+  };
+  frameSky = {
+    invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
+    sunDir: frame.sunDir, sunColor: pal.sun, stars: def.night ? 1 : 0,
+  };
+}
+
+// ---------- race flow ----------
+function startRace() {
+  loadTrack(trackIdx);
+  makeCars();
+  gridUp();
+  state = "count"; countT = 0; lightsLit = 0; raceT = 0; paused = false;
+  els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
+  els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
+  for (const l of els.lights.children) l.classList.remove("on");
+  showTouchControls(true);
+  Input.calibrate();
+  if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
+  updateHud(true);
+}
+
+function showTouchControls(show) {
+  const t = show && Input.touchControlsNeeded();
+  els.btnBoost.hidden = !t; els.btnOT.hidden = !t; els.btnBrake.hidden = !t;
+  const steerBtns = t && !(Input.useTilt() && Input.tiltActive());
+  els.steerL.hidden = !steerBtns; els.steerR.hidden = !steerBtns;
+}
+
+function endRace() {
+  state = "results";
+  els.pausebtn.hidden = true;
+  showTouchControls(false);
+  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  if (soundOn) GameAudio.finish();
+  // classification: finished by time(+penalty), rest by progress
+  const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
+  const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
+  const order = fin.concat(run);
+  order.forEach((c, i) => { c.finPos = i + 1; });
+  buildResults(order);
+  if (seasonMode) {
+    order.forEach((c, i) => {
+      const pts = Teams.POINTS[i] || 0;
+      season.pts[c.code] = (season.pts[c.code] || 0) + pts;
+      season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
+    });
+    season.round++;
+    store.set("season", season);
+  }
+  els.results.hidden = false;
+}
+
+function buildResults(order) {
+  els.resultsTable.textContent = "";
+  els.resultsTitle.textContent = seasonMode
+    ? "ROUND " + season.round + (season.round > 1 ? "" : "") + " — " + track.def.name
+    : track.def.name + " RESULT";
+  order.forEach((c, i) => {
+    const row = document.createElement("div");
+    row.className = "res-row" + (c.isPlayer ? " you" : "");
+    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+    const sw = document.createElement("span"); sw.className = "res-swatch";
+    sw.style.background = cssCol(c.team.color);
+    const nm = document.createElement("span"); nm.className = "res-name";
+    nm.textContent = c.code + "  " + c.name + (c.penalty ? "  (+" + c.penalty + "s)" : "");
+    const pt = document.createElement("span"); pt.className = "res-pts";
+    pt.textContent = (Teams.POINTS[i] || 0) + " pts";
+    row.append(pos, sw, nm, pt);
+    els.resultsTable.appendChild(row);
+  });
+  if (seasonMode) {
+    const head = document.createElement("div");
+    head.style.cssText = "margin-top:14px;color:#e10600;font-weight:800;font-style:italic";
+    head.textContent = "CHAMPIONSHIP — AFTER ROUND " + season.round;
+    els.resultsTable.appendChild(head);
+    const all = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0)).slice(0, 8);
+    all.forEach((c, i) => {
+      const row = document.createElement("div");
+      row.className = "res-row" + (c.isPlayer ? " you" : "");
+      const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+      const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
+      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.code] || 0) + " pts";
+      row.append(pos, nm, pt);
+      els.resultsTable.appendChild(row);
+    });
+    els.resNext.textContent = season.round >= Tracks.LIST.length ? "FINISH SEASON" : "NEXT ROUND";
+  } else {
+    els.resNext.textContent = "RACE AGAIN";
+  }
+}
+function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
+
+function quitToMenu() {
+  state = "menu"; paused = false;
+  els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
+  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
+  els.overlay.hidden = false;
+  showTouchControls(false);
+  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  if (soundOn) GameAudio.startMusic(-1);
+}
+
+// ---------- per-frame update ----------
+function update(dt) {
+  if (state === "count") {
+    countT += dt;
+    const lit = Math.min(5, Math.floor(countT));
+    if (lit > lightsLit) {
+      lightsLit = lit;
+      els.lights.children[lit - 1].classList.add("on");
+      if (soundOn) GameAudio.lightOn(lit - 1);
+      if (lit === 1) Input.calibrate();
+    }
+    if (countT > 5 + 0.4 + (countT % 1) * 0 && lightsLit === 5 && countT > 5.6) {
+      state = "race"; raceT = 0;
+      els.lights.hidden = true;
+      for (const l of els.lights.children) l.classList.remove("on");
+      announce("LIGHTS OUT!", 1.4);
+      if (soundOn) GameAudio.lightsOut();
+      cars.forEach((c) => { c.lapStart = 0; });
+    }
+    return;
+  }
+  if (state !== "race") return;
+  raceT += dt;
+  // ranks by progress
+  const ranked = cars.slice().sort((a, b) => b.prog - a.prog);
+  ranked.forEach((c, i) => { c.rank = i + 1; });
+
+  for (const c of cars) updateCar(c, dt, ranked);
+
+  // collisions (cars sorted by prog are roughly sorted by s proximity)
+  for (let i = 0; i < ranked.length; i++) {
+    for (let j = i + 1; j < ranked.length && j <= i + 3; j++) {
+      const a = ranked[i], b = ranked[j];
+      let ds = a.prog - b.prog;
+      if (ds > 6 || ds < -6) continue;
+      const dx = a.x - b.x;
+      if (Math.abs(dx) < 2.0 && Math.abs(ds) < 4.6) {
+        const push = (2.0 - Math.abs(dx)) * 0.5 * (dx >= 0 ? 1 : -1);
+        a.x += push; b.x -= push;
+        b.speed *= 0.985; a.speed *= 0.997;
+        if ((a.isPlayer || b.isPlayer) && a.collideT <= 0) {
+          if (soundOn) GameAudio.collision();
+          shake = 0.35; a.collideT = 0.5;
+        }
+      }
+    }
+  }
+
+  if (player.finished && resultT === 0) resultT = 2.2;
+  if (resultT > 0) { resultT -= dt; if (resultT <= 0) { resultT = 0; endRace(); } }
+
+  if (soundOn) {
+    GameAudio.setEngine(clamp(player.speed / VMAX, 0, 1), player.deploying ? 1 : 0, player.offroad);
+    GameAudio.setSkid(player.offroad ? 0.4 : clamp(Math.abs(Tracks.curvature(track, player.s)) * player.speed * 0.05 - 0.35, 0, 1));
+  }
+}
+
+function updateCar(c, dt, ranked) {
+  if (c.finished) { coast(c, dt); return; }
+  Tracks.sample(track, c.s, smp);
+  const hw = smp.hw;
+  const k = Tracks.curvature(track, c.s);
+  const dd = DIFF[difficulty];
+
+  // --- speed targets ---
+  let vmax = VMAX * (c.isPlayer ? 1.0 : TIER_V[c.tier] * c.skill * dd.ai);
+  // rubber band for AI
+  if (!c.isPlayer) {
+    const gap = player.prog - c.prog;
+    vmax *= 1 + clamp(gap / 700, -1, 1) * dd.band;
+  }
+
+  // --- electric deploy ---
+  let deploy = 0;
+  c.otCool = Math.max(0, c.otCool - dt);
+  if (c.otT > 0) c.otT -= dt;
+  const wantBoost = c.isPlayer ? Input.boosting()
+    : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25);
+  if (wantBoost && c.energy > 0) {
+    const taper = c.otT > 0 ? 1 : clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+    deploy = DEPLOY_A * taper;
+    c.energy = Math.max(0, c.energy - DRAIN * dt);
+    c.deploying = deploy > 0.4;
+  } else c.deploying = false;
+
+  // --- overtake mode ---
+  const ahead = ranked[(c.rank || 1) - 2];
+  const gapAhead = ahead ? (ahead.prog - c.prog) / Math.max(c.speed, 20) : Infinity;
+  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished;
+  const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && Math.random() < dt * 0.7);
+  if (fire && c.otArmed) {
+    c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
+    if (c.isPlayer && soundOn) GameAudio.deployBoost();
+  }
+  if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
+  c.wasArmed = c.otArmed;
+
+  // --- braking / target speed ---
+  let braking = false;
+  if (c.isPlayer) {
+    braking = Input.braking();
+  } else {
+    // AI: brake for upcoming curvature
+    const look = clamp(c.speed * 1.7, 30, 160);
+    let kMax = 0;
+    for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
+    const vCorner = Math.sqrt(LAT_MAX / Math.max(kMax, 1e-5)) * c.skill;
+    braking = c.speed > vCorner + 2;
+  }
+
+  // --- integrate speed ---
+  if (braking) {
+    c.speed = Math.max(0, c.speed - BRAKE * dt);
+    c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
+  } else {
+    const a = (ACCEL * clamp(1 - c.speed / vmax, 0, 1) + deploy) * (state === "race" ? 1 : 0);
+    c.speed = Math.min(vmax + 14, c.speed + a * dt);
+    if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
+  }
+
+  // --- offroad ---
+  c.offroad = Math.abs(c.x) > hw;
+  if (c.offroad) {
+    c.speed = Math.max(GRASS_V * 0.6, c.speed - 42 * dt);
+    c.offT += dt;
+    if (c.offT > 1.2) {
+      c.offT = -2;   // grace before next count
+      c.cuts++;
+      if (c.isPlayer) {
+        if (c.cuts >= 4 && c.penalty === 0) {
+          c.penalty = 5;
+          announce("+5s TRACK LIMITS PENALTY", 2);
+          if (soundOn) GameAudio.penalty();
+        } else if (c.cuts < 4) {
+          announce("TRACK LIMITS " + c.cuts + "/4", 1.2);
+          if (soundOn) GameAudio.offtrack();
+        }
+      }
+    }
+  } else if (c.offT > 0) c.offT = Math.max(0, c.offT - dt);
+
+  // --- lateral ---
+  let steer;
+  if (c.isPlayer) steer = Input.steer();
+  else {
+    const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
+    const targetX = clamp(kA * 130, -0.62, 0.62) * hw + c.aiOffset;
+    // avoid car directly ahead
+    let avoid = 0;
+    const af = ranked[(c.rank || 1) - 2];
+    if (af && af.prog - c.prog < 14 && Math.abs(af.x - c.x) < 2.4) avoid = af.x > c.x ? -1.4 : 1.4;
+    steer = clamp((targetX + avoid - c.x) * 0.55, -1, 1);
+  }
+  const sFac = clamp(c.speed / VMAX, 0, 1);
+  c.x += steer * STEER_VMAX * (0.35 + 0.65 * sFac) * dt;
+  // centrifugal outward push when cornering beyond grip
+  const latNeed = k * c.speed * c.speed;
+  const over = Math.abs(latNeed) > LAT_MAX ? (latNeed - Math.sign(latNeed) * LAT_MAX) : 0;
+  c.x -= over * CENTRIF * 0.02 * dt * 60 * dt;  // gentle arcade understeer
+  // wall
+  const wall = hw + 9;
+  if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
+  if (c.x < -wall) { c.x = -wall; c.speed *= 0.96; }
+  c.steerVis = damp(c.steerVis, steer, 10, dt);
+  c.yawVis = damp(c.yawVis, steer * 0.16 + clamp(k * c.speed * 0.12, -0.2, 0.2), 8, dt);
+  c.collideT = Math.max(0, c.collideT - dt);
+
+  // --- advance along track ---
+  const oldS = c.s;
+  c.s = wrapS(c.s + c.speed * dt);
+  c.prog += c.speed * dt;
+  c.totalT += dt;
+  c.lapTime += dt;
+  // line crossing
+  if (oldS > track.total * 0.5 && c.s < track.total * 0.5 && oldS > c.s) {
+    c.lap++;
+    if (c.lap > 1) {
+      if (c.lapTime < c.best) c.best = c.lapTime;
+      if (c.isPlayer && soundOn) GameAudio.lap();
+    }
+    c.lapTime = 0;
+    if (c.isPlayer && c.lap === GAME_LAPS) announce("FINAL LAP", 1.6);
+    if (c.lap > GAME_LAPS) {
+      c.finished = true;
+      c.finishT = raceT;
+      if (c.isPlayer) announce("FINISH!", 2);
+    }
+  }
+}
+
+function coast(c, dt) {
+  c.speed = Math.max(24, c.speed - 20 * dt);
+  c.s = wrapS(c.s + c.speed * dt);
+  c.prog += c.speed * dt;
+  Tracks.sample(track, c.s, smp);
+  const kA = Tracks.curvature(track, wrapS(c.s + 30));
+  c.x = damp(c.x, clamp(kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
+}
+
+// ---------- render ----------
+function render(dt) {
+  GLX.resize();
+  if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); return; }
+
+  // camera
+  let eyeT, tgtT, fovT;
+  if (state === "menu" || state === "select") {
+    // slow flyby
+    const s = wrapS((performance.now() * 0.012) % track.total);
+    Tracks.sample(track, s, smp);
+    eyeT = [smp.p[0] + smp.r[0] * 26 , smp.p[1] + 17, smp.p[2] + smp.r[2] * 26];
+    tgtT = [smp.p[0] + smp.t[0] * 40, smp.p[1] + 2, smp.p[2] + smp.t[2] * 40];
+    fovT = 58;
+  } else {
+    Tracks.sample(track, player.s, smp);
+    const px = player.x;
+    const p = [smp.p[0] + smp.r[0] * px, smp.p[1], smp.p[2] + smp.r[2] * px];
+    eyeT = [
+      p[0] - smp.t[0] * 9.5 + 0 , p[1] + 3.4, p[2] - smp.t[2] * 9.5,
+    ];
+    tgtT = [p[0] + smp.t[0] * 6, p[1] + 1.1, p[2] + smp.t[2] * 6];
+    fovT = lerp(62, 76, clamp(player.speed / VMAX, 0, 1));
+    if (shake > 0) {
+      shake = Math.max(0, shake - dt * 1.4);
+      eyeT[0] += (Math.random() - 0.5) * shake; eyeT[1] += (Math.random() - 0.5) * shake * 0.6;
+    }
+  }
+  const lE = state === "race" || state === "count" ? 6 : 1.6;
+  for (let i = 0; i < 3; i++) {
+    camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
+    camTgt[i] = damp(camTgt[i], tgtT[i], 10, dt);
+  }
+  camFov = damp(camFov, fovT, 4, dt);
+
+  const proj = M4.perspective(camFov * Math.PI / 180, GLX.aspect, 0.3, 900);
+  const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
+  frame.viewProj = M4.mul(proj, view);
+  frame.eye = camEye;
+  GLX.begin(frame);
+  frameSky.invViewProj = M4.invert(frame.viewProj);
+  GLX.drawSky(frameSky);
+
+  const night = track.def.night;
+  GLX.draw(track.meshes.terrain, M4.ident());
+  GLX.draw(track.meshes.road, M4.ident(), night ? { emissive: 0.25 } : undefined);
+  GLX.draw(track.meshes.props, M4.ident(), night ? { emissive: 0.45 } : undefined);
+  GLX.draw(track.meshes.gate, M4.ident());
+
+  // cars
+  for (const c of cars) {
+    Tracks.sample(track, c.s, smp2);
+    tmpP[0] = smp2.p[0] + smp2.r[0] * c.x;
+    tmpP[1] = smp2.p[1];
+    tmpP[2] = smp2.p[2] + smp2.r[2] * c.x;
+    // yaw the forward/right around up by yawVis
+    const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
+    for (let i = 0; i < 3; i++) {
+      tmpF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
+      tmpR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
+    }
+    tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
+    tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
+    tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+    basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
+    GLX.drawShadow(tmpMat, 2.4, 5.8);
+    GLX.draw(teamMesh(c.team), tmpMat, night ? { emissive: 0.2 } : undefined);
+  }
+}
+
+// ---------- HUD ----------
+function updateHud(force) {
+  if (!player) return;
+  hudT -= 1;
+  if (!force && hudT > 0) return;
+  hudT = 6; // ~10Hz at 60fps
+  els.pos.textContent = (player.rank || "-") + "/" + cars.length;
+  els.lap.textContent = Math.min(player.lap || 1, GAME_LAPS) + "/" + GAME_LAPS;
+  els.time.textContent = fmtTime(player.lapTime);
+  els.best.textContent = isFinite(player.best) ? fmtTime(player.best) : "-";
+  els.speed.textContent = Math.round(player.speed * 3.6);
+  els.energy.style.width = (player.energy * 100).toFixed(0) + "%";
+  const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
+  els.ot.className = ot;
+  els.ot.textContent = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE";
+  // gaps
+  const ranked = cars.slice().sort((a, b) => b.prog - a.prog);
+  const i = ranked.indexOf(player);
+  const a = ranked[i - 1], b = ranked[i + 1];
+  els.gapA.textContent = a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
+  els.gapB.textContent = b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
+  drawMinimap();
+}
+
+function drawMinimap() {
+  const W = els.minimap.width, H = els.minimap.height;
+  mm.clearRect(0, 0, W, H);
+  const map = track.map, n = map.length;
+  mm.strokeStyle = "rgba(255,255,255,0.75)";
+  mm.lineWidth = 2;
+  mm.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const p = map[i % n];
+    const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
+    i === 0 ? mm.moveTo(x, y) : mm.lineTo(x, y);
+  }
+  mm.stroke();
+  for (const c of cars) {
+    if (c === player) continue;
+    const p = map[Math.floor(c.s / track.total * n) % n];
+    mm.fillStyle = cssCol(c.team.color);
+    mm.fillRect(6 + p[0] * (W - 16), 6 + p[1] * (H - 16), 4, 4);
+  }
+  const p = map[Math.floor(player.s / track.total * n) % n];
+  mm.fillStyle = "#fff";
+  mm.beginPath();
+  mm.arc(8 + p[0] * (W - 16), 8 + p[1] * (H - 16), 4, 0, 7);
+  mm.fill();
+}
+
+// ---------- main loop ----------
+function tick(now) {
+  requestAnimationFrame(tick);
+  let dt = Math.min((now - lastFrame) / 1000, 1 / 20);
+  lastFrame = now;
+  if (paused) return;
+  if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
+  update(dt);
+  render(dt);
+  if (state === "race" || state === "count") updateHud(false);
+}
+
+// ---------- UI wiring ----------
+function buildSelect(forSeason) {
+  els.selTitle.textContent = forSeason ? "SEASON — ROUND " + ((season && season.round || 0) + 1) : "GRAND PRIX";
+  els.selTrackSection.hidden = forSeason;
+  els.selTeams.textContent = "";
+  Teams.LIST.forEach((t, i) => {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (i === teamIdx ? " active" : "");
+    const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = cssCol(t.color);
+    b.append(sw, document.createTextNode(t.short));
+    b.onclick = () => { teamIdx = i; driverIdx = 0; store.set("team", i); buildSelect(forSeason); tickUi(); };
+    els.selTeams.appendChild(b);
+  });
+  const team = Teams.LIST[teamIdx];
+  els.selDriver.textContent = "";
+  team.drivers.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (i === driverIdx ? " active" : "");
+    b.textContent = "#" + d.num + " " + d.name;
+    b.onclick = () => { driverIdx = i; store.set("driver", i); buildSelect(forSeason); tickUi(); };
+    els.selDriver.appendChild(b);
+  });
+  if (!forSeason) {
+    els.selTracks.textContent = "";
+    Tracks.LIST.forEach((t, i) => {
+      const b = document.createElement("button");
+      b.className = "sel-chip" + (i === trackIdx ? " active" : "");
+      b.textContent = t.name + (t.night ? " ☾" : "");
+      b.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(forSeason); tickUi(); loadTrack(i); };
+      els.selTracks.appendChild(b);
+    });
+  }
+  els.selDiff.textContent = "";
+  ["easy", "normal", "hard"].forEach((d) => {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (d === difficulty ? " active" : "");
+    b.textContent = d.toUpperCase();
+    b.onclick = () => { difficulty = d; store.set("difficulty", d); buildSelect(forSeason); tickUi(); };
+    els.selDiff.appendChild(b);
+  });
+}
+function tickUi() { if (soundOn) GameAudio.uiTick(); }
+
+function firstGesture() {
+  GameAudio.init();
+  GameAudio.setEnabled(soundOn);
+  Input.requestGyro().then((ok) => {
+    els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready" : "";
+  });
+  if (soundOn) GameAudio.startMusic(-1);
+}
+let gestured = false;
+document.addEventListener("pointerdown", () => {
+  if (gestured) return; gestured = true; firstGesture();
+}, { once: false, capture: true });
+
+els.soundbtn.hidden = false;
+function setSound(b) {
+  soundOn = b; store.set("sound", b);
+  GameAudio.setEnabled(b);
+  els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
+  $("pm-sound").textContent = "SOUND: " + (b ? "ON" : "OFF");
+  if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
+  else if (state === "menu") GameAudio.startMusic(-1);
+}
+els.soundbtn.onclick = () => setSound(!soundOn);
+
+$("mb-race").onclick = () => {
+  seasonMode = false;
+  buildSelect(false);
+  els.overlay.hidden = true; els.select.hidden = false;
+  if (soundOn) GameAudio.uiSelect();
+  loadTrack(trackIdx);
+};
+$("mb-season").onclick = () => {
+  seasonMode = true;
+  if (!season || season.round >= Tracks.LIST.length) {
+    season = { round: 0, pts: {}, teamPts: {} };
+    store.set("season", season);
+  }
+  trackIdx = season.round;
+  buildSelect(true);
+  els.overlay.hidden = true; els.select.hidden = false;
+  if (soundOn) GameAudio.uiSelect();
+  loadTrack(trackIdx);
+};
+$("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
+$("mb-help").onclick = () => { els.howtoplay.hidden = false; };
+$("htp-close").onclick = () => { els.howtoplay.hidden = true; };
+els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
+els.selGo.onclick = () => { if (soundOn) GameAudio.uiSelect(); startRace(); };
+els.resMenu.onclick = () => quitToMenu();
+els.resNext.onclick = () => {
+  if (seasonMode) {
+    if (season.round >= Tracks.LIST.length) {
+      // season over: champion announce then reset
+      const champ = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0))[0];
+      announce(champ.code + " IS CHAMPION!", 3);
+      season = null; store.set("season", null);
+      quitToMenu();
+      return;
+    }
+    trackIdx = season.round;
+  }
+  els.results.hidden = true;
+  startRace();
+};
+
+function setPaused(p) {
+  if (state !== "race" && state !== "count") return;
+  paused = p;
+  els.pausemenu.hidden = !p;
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
+  else if (soundOn) GameAudio.startEngine();
+  lastFrame = performance.now();
+}
+els.pausebtn.onclick = () => setPaused(true);
+$("pm-resume").onclick = () => setPaused(false);
+$("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
+$("pm-quit").onclick = () => quitToMenu();
+$("pm-sound").onclick = () => setSound(!soundOn);
+$("pm-tilt").onclick = () => {
+  Input.setUseTilt(!Input.useTilt());
+  $("pm-tilt").textContent = "TILT: " + (Input.useTilt() ? "ON" : "OFF");
+  showTouchControls(true);
+};
+$("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && state === "race") setPaused(true);
+});
+
+// ---------- boot ----------
+Input.init(canvas, { onPause: () => setPaused(!paused) });
+DataHub.init(els.datahub);
+$("pm-tilt").textContent = "TILT: " + (Input.useTilt() ? "ON" : "OFF");
+setSound(soundOn);
+loadTrack(trackIdx);
+window.addEventListener("resize", () => GLX.resize());
+lastFrame = performance.now();
+requestAnimationFrame(tick);
+
+})();
