@@ -310,7 +310,13 @@ function update(dt) {
     }
   }
 
-  if (player.finished && resultT === 0) resultT = 2.2;
+  // race ends when the player finishes, or shortly after the winner does, or
+  // at a hard time cap so it can never hang
+  if (resultT === 0) {
+    if (player.finished) resultT = 2.2;
+    else if (cars.some((c) => c.finished)) resultT = 3.5;
+    else if (raceT > 360) resultT = 0.1;
+  }
   if (resultT > 0) { resultT -= dt; if (resultT <= 0) { resultT = 0; endRace(); } }
 
   if (soundOn) {
@@ -725,6 +731,11 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- boot ----------
+// Inert in production; only attaches when a test harness pre-sets the flag.
+if (typeof window !== "undefined" && window.__APEX_DEBUG) {
+  window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
+}
+
 Input.init(canvas, { onPause: () => setPaused(!paused) });
 DataHub.init(els.datahub);
 $("pm-tilt").textContent = "TILT: " + (Input.useTilt() ? "ON" : "OFF");
