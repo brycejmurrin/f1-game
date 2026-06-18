@@ -316,21 +316,29 @@ function update(dt) {
 
   for (const c of cars) updateCar(c, dt, ranked);
 
-  // collisions (cars sorted by prog are roughly sorted by s proximity)
+  // collisions — cars are sorted by prog in `ranked` (highest first)
+  // Car footprint: ~2.4 m wide, ~5.5 m long (half-extents 1.2 m, 2.75 m)
   for (let i = 0; i < ranked.length; i++) {
-    for (let j = i + 1; j < ranked.length && j <= i + 3; j++) {
-      const a = ranked[i], b = ranked[j];
-      let ds = a.prog - b.prog;
-      if (ds > 6 || ds < -6) continue;
+    for (let j = i + 1; j < ranked.length && j <= i + 5; j++) {
+      const a = ranked[i], b = ranked[j];   // a is ahead
+      const ds = a.prog - b.prog;
+      if (ds > 7) break;                    // sorted, so further j are even farther back
       const dx = a.x - b.x;
-      if (Math.abs(dx) < 2.0 && Math.abs(ds) < 4.6) {
-        const push = (2.0 - Math.abs(dx)) * 0.5 * (dx >= 0 ? 1 : -1);
-        a.x += push; b.x -= push;
-        b.speed *= 0.985; a.speed *= 0.997;
-        if ((a.isPlayer || b.isPlayer) && a.collideT <= 0) {
-          if (soundOn) GameAudio.collision();
-          shake = 0.35; a.collideT = 0.5;
-        }
+      const overlapX = 2.5 - Math.abs(dx);  // combined half-widths
+      const overlapS = 5.8 - ds;            // combined half-lengths
+      if (overlapX <= 0 || overlapS <= 0) continue;
+      // Lateral push: rear car deflects more than front car
+      const pushX = overlapX * 0.65 * (dx >= 0 ? 1 : -1);
+      a.x += pushX * 0.3;
+      b.x -= pushX * 0.7;
+      // Speed: rear car (b) can't drive faster than front car (a) when same lane
+      if (Math.abs(dx) < 1.8 && b.speed > a.speed + 1) {
+        b.speed = b.speed * 0.88 + (a.speed + 1) * 0.12;
+      }
+      a.speed *= 0.9995; b.speed *= 0.999;
+      if ((a.isPlayer || b.isPlayer) && a.collideT <= 0) {
+        if (soundOn) GameAudio.collision();
+        shake = 0.35; a.collideT = 0.5;
       }
     }
   }
@@ -404,6 +412,14 @@ function updateCar(c, dt, ranked) {
     for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
     const vCorner = Math.sqrt(LAT_MAX / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
+    // also brake for any car directly ahead in the same lane
+    const carAhead = ranked[(c.rank || 1) - 2];
+    if (!braking && carAhead) {
+      const followDist = carAhead.prog - c.prog;
+      if (followDist > 0 && followDist < 10 && Math.abs(carAhead.x - c.x) < 2.2) {
+        if (c.speed > carAhead.speed + 3) braking = true;
+      }
+    }
   }
 
   // --- gearbox (player) ---
@@ -468,10 +484,20 @@ function updateCar(c, dt, ranked) {
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     const targetX = clamp(kA * 130, -0.62, 0.62) * hw + c.aiOffset;
-    // avoid car directly ahead
+    // avoid cars directly ahead (up to 2 cars checked)
     let avoid = 0;
-    const af = ranked[(c.rank || 1) - 2];
-    if (af && af.prog - c.prog < 14 && Math.abs(af.x - c.x) < 2.4) avoid = af.x > c.x ? -1.4 : 1.4;
+    for (let look = 1; look <= 2; look++) {
+      const af = ranked[(c.rank || 1) - 1 - look];
+      if (!af) break;
+      const gap = af.prog - c.prog;
+      if (gap > 16 || gap < 0) break;
+      const adx = af.x - c.x;
+      if (Math.abs(adx) < 2.6) {
+        const urgency = lerp(1.6, 2.4, clamp(1 - gap / 16, 0, 1));
+        avoid = adx > 0 ? -urgency : urgency;
+        break;  // react to the closest blocker only
+      }
+    }
     steer = clamp((targetX + avoid - c.x) * 0.9, -1, 1);
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
@@ -563,7 +589,7 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, 4, dt);
 
-  const proj = M4.perspective(camFov * Math.PI / 180, GLX.aspect, 0.3, 900);
+  const proj = M4.perspective(camFov * Math.PI / 180, GLX.aspect, 0.1, 900);
   const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
   frame.viewProj = M4.mul(proj, view);
   frame.eye = camEye;

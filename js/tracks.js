@@ -276,10 +276,26 @@ const Tracks = (function () {
   }
 
   function buildTerrain(track) {
-    const { n, px, py, pz, hw } = track;
+    const { n, px, py, pz, hw, total } = track;
     const pos = [], nrm = [], col = [];
     const idxArr = [];
     const pal = track.def.palette, grass = pal.grass, runoff = pal.runoff;
+    // For bridge sections the terrain ribbon stays at ground level so the
+    // elevated deck floats above flat ground (supported visually by the bridge
+    // pillars in buildProps) instead of pulling the whole ground plane up with it.
+    const gY = new Float32Array(py);
+    const brs = BRIDGES[track.def.id];
+    if (brs) {
+      const ds = total / n;
+      for (const b of brs) {
+        const cs = b.s * total;
+        for (let k = 0; k < n; k++) {
+          let d = Math.abs(k * ds - cs);
+          d = Math.min(d, total - d);
+          if (d < b.halfM) gY[k] -= b.rise * 0.5 * (1 + Math.cos(Math.PI * d / b.halfM));
+        }
+      }
+    }
     // two ribbons (left/right), 3 lateral verts each: inner, mid, outer.
     // The outer edge runs well past the track so the road sits on a wide
     // ground apron instead of floating against the sky.
@@ -295,9 +311,13 @@ const Tracks = (function () {
         for (let v = 0; v < 3; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const sag = v === 0 ? -0.3 : -0.3 - Math.abs(lats[v]) * 0.02;
-          pos.push(px[k] + r[0] * o, py[k] + sag, pz[k] + r[2] * o);
+          // inner vert (v=0) tracks road height to seal the edge at bridge sections;
+          // outer verts blend down to gY so the ground stays flat away from the deck.
+          const t = v / 2;
+          const yBase = py[k] * (1 - t) + gY[k] * t;
+          pos.push(px[k] + r[0] * o, yBase + sag, pz[k] + r[2] * o);
           nrm.push(0, 1, 0);
-          const t = v / 2, nz = (hash(k * 3 + v) - 0.5) * 0.04;
+          const nz = (hash(k * 3 + v) - 0.5) * 0.04;
           const c = [lerp(runoff[0], grass[0], t) + nz, lerp(runoff[1], grass[1], t) + nz, lerp(runoff[2], grass[2], t) + nz];
           col.push(c[0], c[1], c[2]);
         }
@@ -351,7 +371,9 @@ const Tracks = (function () {
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
       const o = side * (hw[k] + dist);
-      const c = [px[k] + r[0] * o, py[k] + sz[1] / 2 - 0.3 + r[1] * o, pz[k] + r[2] * o];
+      // sink the base 0.8m below grade so prop bottoms tuck under the terrain
+      // apron instead of co-planar Z-fighting where box meets ground.
+      const c = [px[k] + r[0] * o, py[k] + sz[1] / 2 - 0.8 + r[1] * o, pz[k] + r[2] * o];
       addBox(out, c, sz, col, [r, u, t]);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
@@ -392,8 +414,11 @@ const Tracks = (function () {
         for (const side of [-1, 1]) {
           const s = hash(k * 5 + side), h = 14 + s * 40;
           const neon = [[0.9, 0.1, 0.6], [0.1, 0.8, 0.9], [0.95, 0.75, 0.1], [0.5, 0.2, 0.9]][Math.floor(s * 4) % 4];
-          place(k, side, 6 + s * 4, [8, h, 8], [0.05, 0.05, 0.08]);
-          place(k, side, 6 + s * 4, [8.2, 2 + s * 3, 8.2], neon);  // glowing band
+          // set taller towers further back so they don't fill the FOV and clip at
+          // the viewport edge as the camera passes; short blocks stay near the wall.
+          const dist = 9 + s * 18;
+          place(k, side, dist, [8, h, 8], [0.05, 0.05, 0.08]);
+          place(k, side, dist, [8.2, 2 + s * 3, 8.2], neon);  // glowing band
         }
       });
     } else if (theme === "modern") {  // Madrid
