@@ -915,22 +915,22 @@ const Tracks = (function () {
     }
     // COTA: Texas Hill Country terrain, scattered trees, distant ridges, utilities
     if (def.id === "cota") {
-      // Distant limestone ridge lines
-      for (let i = 0; i < 10; i++) {
-        const k = Math.round((i / 10) * n) % n;
+      // Distant limestone ridge lines - increased spacing to reduce visible seams
+      for (let i = 0; i < 8; i++) {
+        const k = Math.round((i / 8) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const ridge_h = 40 + hash(k * 37) * 30;
-        const ridge_d = 200 + hash(k * 39) * 120;
+        const ridge_h = 50 + hash(k * 37) * 35;
+        const ridge_d = 240 + hash(k * 39) * 140;
         for (const side of [-1, 1]) {
           addBox(out, [px[k] + r[0] * side * ridge_d, py[k] + ridge_h / 2, pz[k] + r[2] * side * ridge_d],
-                 [200, ridge_h, 320], [0.4, 0.36, 0.28]);
+                 [240, ridge_h, 360], [0.4, 0.36, 0.28]);
         }
       }
-      // Oak/cedar tree coverage (scattered natural vegetation)
-      every(45, (k) => {
+      // Oak/cedar tree coverage (scattered natural vegetation) - reduced density to avoid clustering
+      every(60, (k) => {
         for (const side of [-1, 1]) {
           for (let j = 0; j < 2; j++) {
-            const d = 25 + hash(k * 43 + j) * 45;
+            const d = 35 + hash(k * 43 + j) * 50;
             const s = hash(k * 45 + side + j);
             const h = 6 + s * 7;
             place(k, side, d, [1.4, 1.6, 1.4], [0.32, 0.24, 0.14]);
@@ -1165,19 +1165,19 @@ const Tracks = (function () {
 
     // --- per-circuit iconic landmarks ---
     if (def.id === "cota") {
-      // observation tower at Turn 1 (251 ft / 76 m steel structure)
+      // observation tower at Turn 1 (251 ft / 76 m steel structure) - pushed further back to avoid clipping
       const kc = Math.round(n * 0.08) % n;
       const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
-      const tcx = px[kc] + r[0] * (hw[kc] + 55), tcy = py[kc], tcz = pz[kc] + r[2] * (hw[kc] + 55);
+      const tcx = px[kc] + r[0] * (hw[kc] + 90), tcy = py[kc], tcz = pz[kc] + r[2] * (hw[kc] + 90);
       addBox(out, [tcx, tcy + 42, tcz], [4.5, 84, 4.5], [0.88, 0.88, 0.90]);
       addBox(out, [tcx - r[0] * 10, tcy + 84, tcz - r[2] * 10], [22, 4, 10], [0.88, 0.88, 0.90]);
       addBox(out, [tcx - r[0] * 16, tcy + 87, tcz - r[2] * 16], [10, 3, 8], [0.95, 0.44, 0.05]);
-      // Red steel tube grandstand framework (COTA signature design element)
+      // Red steel tube grandstand framework (COTA signature design element) - increased spacing to avoid overlaps
       for (let i = 0; i < 8; i++) {
         const k = (Math.round(n * 0.15) + i * Math.round(n / 8)) % n;
         const rk = [track.rx[k], track.ry[k], track.rz[k]];
         const tk = [track.tx[k], 0, track.tz[k]];
-        const o = hw[k] + 14 + (i % 2) * 8;
+        const o = hw[k] + 22 + (i % 2) * 10;
         for (const side of [-1, 1]) {
           addBox(out, [px[k] + rk[0] * side * o, py[k] + 12, pz[k] + rk[2] * side * o],
                  [3, 24, 20], [0.95, 0.44, 0.05], [rk, [0, 1, 0], tk]);
