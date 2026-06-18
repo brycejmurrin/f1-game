@@ -67,9 +67,14 @@ function naturalGear(speed) {
   return GEARS;
 }
 function rpmFor(gear, speed) {
-  const lo = gearLo(gear), hi = gearHi(gear);
-  const frac = clamp((speed - lo) / Math.max(hi - lo, 1), 0, 1.12);
-  return IDLE_RPM + frac * (MAX_RPM - IDLE_RPM);
+  // RPM is proportional to speed / this gear's top speed: a higher gear turns the
+  // engine slower at a given speed. So an upshift drops RPM only PARTIALLY — more
+  // in the low gears (wide ratios) than the high gears (close ratios), as in a
+  // real car — instead of dropping to idle on every shift. Floored at idle,
+  // capped just past redline. (This also drives the engine pitch and the tach.)
+  const hi = gearHi(gear);
+  const rpm = MAX_RPM * (speed / Math.max(hi, 1));
+  return clamp(rpm, IDLE_RPM, MAX_RPM * 1.04);
 }
 const DIFF = {
   easy:   { ai: 0.86, band: 0.18 },
