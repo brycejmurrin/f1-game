@@ -7,16 +7,25 @@ const DataHub = (function () {
 
   const NO_LIVE_MSG = "No live data — sessions appear here during race weekends " +
     "(free data is delayed until ~30 min after each session).";
+  const NO_TELEM_MSG = "No telemetry available yet. The latest completed F1 session " +
+    "(2023+) appears here once its data is published (~30–60 min after the session).";
 
   const MINUTE = 60 * 1000;
   // re-fetch a tab if its rendered content is older than this when shown again
-  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, lastrace: 60 * MINUTE, live: 5 * MINUTE };
+  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, lastrace: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE };
+
+  // tyre compound colors
+  const COMPOUND = {
+    SOFT: "#e8002d", MEDIUM: "#f6d200", HARD: "#f0f0f0",
+    INTERMEDIATE: "#3fb950", WET: "#1e90ff"
+  };
 
   const TABS = [
     { id: "schedule", label: "SCHEDULE", load: loadSchedule },
     { id: "standings", label: "STANDINGS", load: loadStandings },
     { id: "lastrace", label: "LAST RACE", load: loadLastRace },
-    { id: "live", label: "LIVE", load: loadLive }
+    { id: "live", label: "LIVE", load: loadLive },
+    { id: "telemetry", label: "TELEMETRY", load: loadTelemetry }
   ];
 
   let root = null;
@@ -477,6 +486,237 @@ const DataHub = (function () {
     });
     wrap.appendChild(sec);
     return wrap;
+  }
+
+  /* ================= TELEMETRY ================= */
+
+  function driverColor(d) {
+    if (d && d.color && /^[0-9a-fA-F]{6}$/.test(d.color)) {
+      return [parseInt(d.color.slice(0, 2), 16) / 255,
+              parseInt(d.color.slice(2, 4), 16) / 255,
+              parseInt(d.color.slice(4, 6), 16) / 255];
+    }
+    const t = findTeam(d && d.team);
+    return t ? t.color : [0.6, 0.6, 0.6];
+  }
+
+  function loadTelemetry() {
+    return F1API.latestSession().then(function (ses) {
+      const wrap = el("div", "dh-tabbody");
+      if (!ses || ses.sessionKey === null || ses.sessionKey === undefined) {
+        wrap.appendChild(emptyMsg(NO_TELEM_MSG));
+        return wrap;
+      }
+      return F1API.sessionDrivers(ses.sessionKey).catch(function () { return null; }).then(function (drivers) {
+        // session header
+        const info = el("div", "dh-livecard");
+        const title = el("div", "dh-live-title");
+        title.appendChild(el("span", null, ses.name || ses.type || "Session"));
+        if (ses.type && ses.type !== ses.name) title.appendChild(el("span", "dh-live-type", ses.type));
+        info.appendChild(title);
+        const place = [ses.circuit, ses.country].filter(Boolean).join(" · ");
+        if (place) info.appendChild(el("div", "dh-live-sub", place));
+        info.appendChild(el("div", "dh-live-sub", "Fastest-lap telemetry · tap a driver"));
+        wrap.appendChild(info);
+
+        if (!drivers || !drivers.length) {
+          wrap.appendChild(emptyMsg(NO_TELEM_MSG));
+          return wrap;
+        }
+        drivers = drivers.filter(function (d) { return d && d.num !== null && d.num !== undefined; });
+
+        const pick = el("div", "dh-driverpick");
+        const detail = el("div", "dh-telem-detail");
+        drivers.forEach(function (d) {
+          const b = el("button", "dh-dchip", d.code || ("#" + d.num));
+          b.type = "button";
+          const col = driverColor(d);
+          b.style.borderColor = cssColor(col);
+          b.addEventListener("click", function () {
+            const sel = pick.querySelectorAll(".dh-dchip");
+            for (let i = 0; i < sel.length; i++) sel[i].classList.remove("dh-active");
+            b.classList.add("dh-active");
+            showDriverTelemetry(ses.sessionKey, d, detail);
+          });
+          pick.appendChild(b);
+        });
+        wrap.appendChild(pick);
+        detail.appendChild(emptyMsg("Pick a driver above to load their fastest lap."));
+        wrap.appendChild(detail);
+        return wrap;
+      });
+    });
+  }
+
+  function showDriverTelemetry(sessionKey, d, detail) {
+    clear(detail);
+    detail.appendChild(spinner());
+    F1API.fastestLap(sessionKey, d.num).then(function (lap) {
+      if (!lap || !lap.dateStart) {
+        clear(detail);
+        detail.appendChild(emptyMsg("No timed lap found for " + (d.code || ("#" + d.num)) + " in this session."));
+        return;
+      }
+      const start = lap.dateStart;
+      const dur = lap.lapDuration || 90;
+      const end = new Date(Date.parse(start) + dur * 1000 + 1500).toISOString();
+      return Promise.all([
+        F1API.carData(sessionKey, d.num, start, end).catch(function () { return []; }),
+        F1API.locationData(sessionKey, d.num, start, end).catch(function () { return []; }),
+        F1API.stints(sessionKey, d.num).catch(function () { return []; }),
+        F1API.pits(sessionKey, d.num).catch(function () { return []; })
+      ]).then(function (res) {
+        clear(detail);
+        buildDriverTelemetry(detail, d, lap, res[0], res[1], res[2], res[3]);
+      });
+    }, function () {
+      clear(detail);
+      detail.appendChild(emptyMsg("Couldn't load telemetry for " + (d.code || ("#" + d.num)) + "."));
+    });
+  }
+
+  function buildDriverTelemetry(detail, d, lap, car, loc, stints, pits) {
+    const col = driverColor(d);
+    const head = el("div", "dh-livecard");
+    const ht = el("div", "dh-live-title");
+    ht.appendChild(el("span", null, (d.name || d.code || ("#" + d.num))));
+    head.appendChild(ht);
+    head.appendChild(el("div", "dh-live-sub",
+      "Fastest lap " + (lap.lapNumber !== null ? "(L" + lap.lapNumber + ") " : "") + fmtLap(lap.lapDuration)));
+    detail.appendChild(head);
+
+    if (car && car.length) {
+      const c1 = el("canvas", "dh-canvas");
+      c1.width = 600; c1.height = 200;
+      detail.appendChild(c1);
+      drawTraces(c1, car);
+      const legend = el("div", "dh-legend");
+      [["SPEED", "#39d0ff"], ["THROTTLE", "#3fb950"], ["BRAKE", "#ff4d4d"]].forEach(function (it) {
+        const item = el("span", "dh-legend-item");
+        const dot = el("span", "dh-legend-dot"); dot.style.background = it[1];
+        item.appendChild(dot); item.appendChild(document.createTextNode(it[0]));
+        legend.appendChild(item);
+      });
+      detail.appendChild(legend);
+    } else {
+      detail.appendChild(emptyMsg("Car telemetry isn't available for this lap."));
+    }
+
+    if (loc && loc.length > 8) {
+      const c2 = el("canvas", "dh-canvas dh-map");
+      c2.width = 320; c2.height = 320;
+      detail.appendChild(c2);
+      drawTrackMap(c2, loc, car);
+    }
+
+    // stints
+    const myStints = (stints || []).filter(function (s) { return s.num === d.num || s.num === null; });
+    if (myStints.length) {
+      const sec = el("div", "dh-livecard");
+      sec.appendChild(el("h3", "dh-section", "TYRE STINTS"));
+      myStints.sort(function (a, b) { return (a.stint || 0) - (b.stint || 0); });
+      myStints.forEach(function (s) {
+        const row = el("div", "dh-row");
+        const chip = el("span", "dh-codechip", (s.compound || "—").slice(0, 4));
+        chip.style.background = COMPOUND[s.compound] || "#888";
+        chip.style.color = (s.compound === "HARD") ? "#111" : "#fff";
+        row.appendChild(chip);
+        row.appendChild(el("span", "dh-name",
+          "Laps " + (s.lapStart || "?") + "–" + (s.lapEnd || "?")));
+        if (s.age !== null) row.appendChild(el("span", "dh-wins", "age " + s.age));
+        sec.appendChild(row);
+      });
+      detail.appendChild(sec);
+    }
+
+    // pit stops
+    const myPits = (pits || []).filter(function (p) { return p.num === d.num || p.num === null; });
+    if (myPits.length) {
+      const sec = el("div", "dh-livecard");
+      sec.appendChild(el("h3", "dh-section", "PIT STOPS"));
+      myPits.forEach(function (p) {
+        const row = el("div", "dh-row");
+        row.appendChild(el("span", "dh-pos", "L" + (p.lap !== null ? p.lap : "?")));
+        row.appendChild(el("span", "dh-name", p.duration !== null ? p.duration.toFixed(1) + "s" : "—"));
+        sec.appendChild(row);
+      });
+      detail.appendChild(sec);
+    }
+  }
+
+  function fmtLap(sec) {
+    if (sec === null || sec === undefined || !isFinite(sec)) return "—";
+    const m = Math.floor(sec / 60);
+    const s = sec - m * 60;
+    return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
+  }
+
+  // speed/throttle/brake traces over the lap
+  function drawTraces(canvas, car) {
+    const g = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height, pad = 6;
+    g.clearRect(0, 0, W, H);
+    let tMax = 0, vMax = 1;
+    for (let i = 0; i < car.length; i++) {
+      if (car[i].t > tMax) tMax = car[i].t;
+      if ((car[i].speed || 0) > vMax) vMax = car[i].speed;
+    }
+    tMax = tMax || 1;
+    const X = function (t) { return pad + (t / tMax) * (W - 2 * pad); };
+    const Y = function (f) { return H - pad - f * (H - 2 * pad); };  // f in 0..1
+    function line(getF, color, width) {
+      g.beginPath();
+      let started = false;
+      for (let i = 0; i < car.length; i++) {
+        const f = getF(car[i]);
+        if (f === null || f === undefined || isNaN(f)) continue;
+        const x = X(car[i].t), y = Y(f);
+        if (!started) { g.moveTo(x, y); started = true; } else { g.lineTo(x, y); }
+      }
+      g.strokeStyle = color; g.lineWidth = width; g.stroke();
+    }
+    line(function (c) { return c.brake !== null ? c.brake / 100 : null; }, "#ff4d4d", 1.5);
+    line(function (c) { return c.throttle !== null ? c.throttle / 100 : null; }, "#3fb950", 1.5);
+    line(function (c) { return c.speed !== null ? c.speed / vMax : null; }, "#39d0ff", 2);
+  }
+
+  // track map from x/y, colored by speed (nearest car sample by timestamp)
+  function drawTrackMap(canvas, loc, car) {
+    const g = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height, pad = 14;
+    g.clearRect(0, 0, W, H);
+    let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, vMax = 1;
+    for (let i = 0; i < loc.length; i++) {
+      if (loc[i].x < minx) minx = loc[i].x; if (loc[i].x > maxx) maxx = loc[i].x;
+      if (loc[i].y < miny) miny = loc[i].y; if (loc[i].y > maxy) maxy = loc[i].y;
+    }
+    for (let i = 0; i < (car ? car.length : 0); i++) if ((car[i].speed || 0) > vMax) vMax = car[i].speed;
+    const spanx = (maxx - minx) || 1, spany = (maxy - miny) || 1;
+    const sc = Math.min((W - 2 * pad) / spanx, (H - 2 * pad) / spany);
+    const ox = (W - spanx * sc) / 2, oy = (H - spany * sc) / 2;
+    const PX = function (p) { return ox + (p.x - minx) * sc; };
+    const PY = function (p) { return H - (oy + (p.y - miny) * sc); };  // flip Y
+    // speed lookup by nearest timestamp (both sorted by date)
+    let ci = 0;
+    function speedAt(date) {
+      if (!car || !car.length) return null;
+      while (ci < car.length - 1 && car[ci].date < date) ci++;
+      return car[ci].speed;
+    }
+    g.lineWidth = 3; g.lineCap = "round"; g.lineJoin = "round";
+    for (let i = 1; i < loc.length; i++) {
+      const v = speedAt(loc[i].date);
+      const f = v === null ? 0.5 : Math.max(0, Math.min(1, v / vMax));
+      // blue (slow) -> green -> red (fast)
+      const r = Math.round(255 * Math.min(1, f * 1.6));
+      const b = Math.round(255 * Math.min(1, (1 - f) * 1.6));
+      const gr = Math.round(180 * (1 - Math.abs(f - 0.5) * 2));
+      g.strokeStyle = "rgb(" + r + "," + gr + "," + b + ")";
+      g.beginPath();
+      g.moveTo(PX(loc[i - 1]), PY(loc[i - 1]));
+      g.lineTo(PX(loc[i]), PY(loc[i]));
+      g.stroke();
+    }
   }
 
   return { init: init, open: open, close: close, isOpen: isOpen };

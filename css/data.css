@@ -142,3 +142,25 @@
 .dh-wx-cell { background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 8px 10px; }
 .dh-wx-label { font-size: 10px; letter-spacing: 0.1em; color: #8a8a95; }
 .dh-wx-value { font-size: 16px; font-weight: 700; color: #f2f2f5; margin-top: 2px; }
+
+/* ---------- telemetry tab ---------- */
+.dh-driverpick { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.dh-dchip {
+  font-size: 12px; font-weight: 800;
+  padding: 5px 9px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left-width: 3px;
+  color: #f2f2f5;
+}
+.dh-dchip.dh-active { background: rgba(225, 6, 0, 0.18); outline: 1px solid var(--red, #e10600); }
+.dh-telem-detail { display: flex; flex-direction: column; gap: 10px; }
+.dh-canvas {
+  width: 100%; max-width: 600px; height: auto;
+  background: #07070c; border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px; display: block;
+}
+.dh-canvas.dh-map { max-width: 320px; margin: 0 auto; aspect-ratio: 1 / 1; }
+.dh-legend { display: flex; gap: 14px; font-size: 11px; color: #9a9aa5; margin-top: -4px; }
+.dh-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
