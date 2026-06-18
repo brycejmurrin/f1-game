@@ -963,4 +963,45 @@ window.addEventListener("resize", () => GLX.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);
 
+// --- debug / test hook (no effect unless explicitly called) ---
+// Lets a test harness stage the camera anywhere on the track without having to
+// drive there in real time (the software renderer used for screenshots is far
+// too slow to reach distant corners). Examples, from page.evaluate:
+//   __apex.park(0.25)              -> jump to 25% of the lap, field cleared, still
+//   __apex.jump(0.5, 60, 2)        -> 50% of lap, 60 m/s, 2 m right of centre
+window.__apex = {
+  // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
+  jump(frac, speed, lateral) {
+    if (!player || !track) return false;
+    player.s = wrapS(frac * track.total);
+    player.prog = frac * track.total;
+    if (lateral !== undefined) player.x = lateral;
+    if (speed !== undefined) player.speed = speed;
+    return { s: player.s, total: track.total };
+  },
+  // skip the countdown straight into racing, shove the AI pack out of frame,
+  // and park the (stationary) player at a fraction of the lap for a clean shot.
+  park(frac, lateral) {
+    if (!player || !track) return false;
+    state = "race"; raceT = Math.max(raceT, 1);
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); } });
+    return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
+  },
+  info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // lap fractions of corner apexes (local maxima of |curvature|), for parking
+  corners() {
+    if (!track) return [];
+    const n = track.n, total = track.total, kv = [];
+    for (let k = 0; k < n; k++) kv.push(Math.abs(Tracks.curvature(track, k / n * total)));
+    const res = [];
+    for (let k = 0; k < n; k++) {
+      const a = (k - 1 + n) % n, b = (k + 1) % n;
+      if (kv[k] > 0.006 && kv[k] >= kv[a] && kv[k] > kv[b]) res.push(+(k / n).toFixed(4));
+    }
+    return res;
+  },
+};
+
 })();

@@ -212,6 +212,78 @@ const Tracks = (function () {
   }
   const hash = (i) => { let x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); };
 
+  // Corner apexes: local maxima of |curvature| above thresh. Returns
+  // [{k, sign, lo, hi}] — sign>0 = right turn (center of curvature on the
+  // right), lo/hi = node span where curvature stays above ~half the apex.
+  function findCorners(track, thresh) {
+    const n = track.n, ds = track.total / n;
+    const kv = new Float32Array(n), sg = new Float32Array(n);
+    for (let k = 0; k < n; k++) {
+      const c = curvature(track, k * ds);
+      kv[k] = Math.abs(c); sg[k] = Math.sign(c) || 1;
+    }
+    const sm = new Float32Array(n);
+    for (let k = 0; k < n; k++) {
+      const a = (k - 1 + n) % n, b = (k + 1) % n;
+      sm[k] = 0.25 * kv[a] + 0.5 * kv[k] + 0.25 * kv[b];
+    }
+    const corners = [];
+    for (let k = 0; k < n; k++) {
+      const a = (k - 1 + n) % n, b = (k + 1) % n;
+      if (sm[k] >= thresh && sm[k] >= sm[a] && sm[k] > sm[b]) {
+        const half = sm[k] * 0.45;
+        let lo = 0, hi = 0;
+        while (lo < n / 4 && sm[(k - lo - 1 + n) % n] > half) lo++;
+        while (hi < n / 4 && sm[(k + hi + 1) % n] > half) hi++;
+        corners.push({ k, sign: sg[k], lo, hi });
+      }
+    }
+    return corners;
+  }
+
+  // Lay raised red/white kerb ribbons at corner apexes (inside edge, full
+  // corner) and exits (outside edge, shorter), appended to the road mesh.
+  function buildKerbs(track, out) {
+    const { n, px, py, pz, hw } = track;
+    const pal = track.def.palette, ka = pal.kerbA, kb = pal.kerbB;
+    const ds = track.total / n;
+    const KW = 0.9, KH = 0.06;
+    const stripeNodes = Math.max(1, Math.round(1.6 / ds));
+    // one ribbon strip over node range, on `side` (-1 left edge, +1 right).
+    function ribbon(k0, k1, side) {
+      const count = k1 - k0;
+      const base = [];
+      for (let i = 0; i <= count; i++) {
+        const k = (k0 + i + n) % n;
+        const u = upOf(track, k);
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const w = hw[k];
+        // two rails; push the smaller offset first so winding matches the road
+        const oA = side > 0 ? w + 0.05 : -(w + 0.05 + KW);
+        const oB = side > 0 ? w + 0.05 + KW : -(w + 0.05);
+        const ai = out.pos.length / 3;
+        for (const o of [oA, oB]) {
+          out.pos.push(px[k] + r[0] * o + u[0] * KH, py[k] + r[1] * o + u[1] * KH + 0.03, pz[k] + r[2] * o + u[2] * KH);
+          out.nrm.push(u[0], u[1], u[2]);
+        }
+        const c = (Math.floor(i / stripeNodes) % 2) === 0 ? ka : kb;
+        out.col.push(c[0], c[1], c[2], c[0], c[1], c[2]);
+        base.push(ai);
+      }
+      for (let i = 0; i < count; i++) {
+        const a = base[i], b = base[i + 1];
+        // match buildRoad winding (top face up under BACK-face culling)
+        out.idx.push(a, a + 1, b, a + 1, b + 1, b);
+      }
+    }
+    for (const c of findCorners(track, 0.006)) {
+      const inside = c.sign > 0 ? 1 : -1;
+      ribbon(c.k - c.lo, c.k + c.hi, inside);
+      const exLen = Math.max(2, Math.round(c.hi * 0.7));
+      ribbon(c.k + 1, c.k + 1 + exLen, -inside);
+    }
+  }
+
   function buildRoad(track) {
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [];
@@ -241,8 +313,6 @@ const Tracks = (function () {
                     w - 0.95, w - 0.9, w,            // right step + edge line
                     w + 1.2, w + 2.2];
       const rise = [0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0];
-      const kv = Math.abs(curvature(track, k * ds));
-      const onKerb = kv > 0.004;
       const checker = (k * ds) < 9;                  // start/finish band
       const stripe = (Math.floor((k * ds) / 4) % 2) === 0;
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
@@ -253,7 +323,7 @@ const Tracks = (function () {
         nrm.push(u[0], u[1], u[2]);
         let c;
         if (v === 0 || v === 13) c = grass;                                   // grass shoulder
-        else if (v === 1 || v === 12) c = onKerb ? (stripe ? ka : kb) : grass; // kerb only in corners
+        else if (v === 1 || v === 12) c = grass;   // raised kerb ribbons added separately by buildKerbs
         else if (v === 2 || v === 3 || v === 10 || v === 11)                  // bold white edge line
           c = checker ? chk : line;
         else if (v === 6 || v === 7)                                          // dashed centre line
@@ -272,6 +342,7 @@ const Tracks = (function () {
         idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
       }
     }
+    buildKerbs(track, { pos, nrm, col, idx: idxArr });
     return { pos, nrm, col, idx: idxArr };
   }
 
@@ -362,6 +433,9 @@ const Tracks = (function () {
     }
   }
 
+  // street circuits get a continuous barrier wall at the edge instead of grass
+  const STREET_IDS = { monaco: 1, singapore: 1, vegas: 1, madrid: 1 };
+
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
     const out = { pos: [], nrm: [], col: [], idx: [] };
@@ -377,6 +451,32 @@ const Tracks = (function () {
       addBox(out, c, sz, col, [r, u, t]);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
+
+    // continuous barrier wall hugging both edges on street circuits — going off
+    // means hitting a wall, not open grass. Day circuits get red/white armco
+    // striping; night circuits get a dark rail.
+    if (STREET_IDS[def.id]) {
+      const WH = 1.1, WT = 0.4;
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < n; k++) {
+          const kn = (k + 1) % n;
+          const r0 = [track.rx[k], track.ry[k], track.rz[k]];
+          const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
+          const u0 = upOf(track, k);
+          const o0 = side * (hw[k] + 0.35), o1 = side * (hw[kn] + 0.35);
+          const ax = px[k] + r0[0] * o0, ay = py[k], az = pz[k] + r0[2] * o0;
+          const bx = px[kn] + r1[0] * o1, by = py[kn], bz = pz[kn] + r1[2] * o1;
+          const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
+          const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
+          const f = norm([bx - ax, by - ay, bz - az]);
+          const rr = norm(cross(f, u0));
+          const striped = (Math.floor(k / 3) % 2) === 0;
+          const col = def.night ? [0.18, 0.18, 0.22]
+            : (striped ? [0.92, 0.92, 0.94] : [0.85, 0.18, 0.16]);
+          addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
+        }
+      }
+    }
     // floodlights for night tracks
     if (def.night) every(70, (k) => {
       for (const side of [-1, 1]) {
