@@ -428,15 +428,15 @@ const GameAudio = (function () {
       // RPM by the gear ratio — more in low gears, less in high gears). Pitched
       // down overall per feedback; redline kept near where gear 7 sat ("about
       // right"), idle brought lower for a deeper low end.
-      const rate = (0.82 + rev * 0.23) * (1 + 0.04 * b);   // idle ~0.82x .. redline ~1.05x (near native)
+      const rate = (0.6 + rev * 0.3) * (1 + 0.04 * b);     // idle ~0.60x .. redline ~0.90x (lower, near original)
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
       // both loops are pitched together (so the sweep is carried either way);
       // crossfade timbre from the calmer idle loop to the raspier rev loop as the
       // revs rise, for an aggressive top end.
       const acc = clamp01((rev - 0.15) * 1.4);
-      engGainAcc.gain.setTargetAtTime(0.8 * acc, t, 0.05);
-      engGainIdle.gain.setTargetAtTime(0.7 * (1 - 0.65 * acc), t, 0.05);
+      engGainAcc.gain.setTargetAtTime(0.7 * acc, t, 0.05);
+      engGainIdle.gain.setTargetAtTime(0.6 * (1 - 0.65 * acc), t, 0.05);
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
       const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
@@ -453,7 +453,7 @@ const GameAudio = (function () {
       : Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     const lvl = usingSamples
-      ? (0.22 + s * 0.3 + rev * 0.1 + b * 0.1 + (offroad ? 0.03 : 0))
+      ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0))
       : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0));
     engGain.gain.setTargetAtTime(lvl * (1 - 0.55 * shiftDuck), t, 0.03);
 
@@ -610,7 +610,7 @@ const GameAudio = (function () {
   function ensureMusicGain() {
     if (!musicGain && ctx && master) {
       musicGain = ctx.createGain();
-      musicGain.gain.value = 0.55;            // music sits under engine/SFX
+      musicGain.gain.value = 0.26;            // music sits well under the engine
       musicGain.connect(master);
     }
   }
