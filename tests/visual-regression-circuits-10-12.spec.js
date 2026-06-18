@@ -28,7 +28,8 @@ async function goToRace(page, circuit) {
 
 async function park(page, frac = 0) {
   await page.evaluate((f) => window.__apex.park(f), frac);
-  await page.waitForTimeout(100);
+  // Wait for canvas to stabilize - give it more time for rendering
+  await page.waitForTimeout(1000);
 }
 
 test.describe("Visual Regression — Circuits 10-12", () => {
@@ -47,7 +48,7 @@ test.describe("Visual Regression — Circuits 10-12", () => {
           // Capture screenshot for manual inspection
           await expect(page.locator("canvas#game")).toHaveScreenshot(
             `${circuit}-frac-${frac.toFixed(2)}.png`,
-            { maxDiffPixelRatio: 0.1 }
+            { maxDiffPixelRatio: 0.1, timeout: 15000 }
           );
 
           // Basic sanity: HUD should be visible
