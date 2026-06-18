@@ -1384,10 +1384,10 @@ const Tracks = (function () {
       }
     }
     if (def.id === "bahrain") {
-      // Sakhir Tower: 9-storey conical race control with LED facade, visible at pit area
-      const ksc = Math.round(n * 0.02) % n;
+      // Sakhir Tower: 9-storey conical race control with LED facade, visible from grid start
+      const ksc = Math.round(n * 0.01) % n;
       const kr = [track.rx[ksc], track.ry[ksc], track.rz[ksc]];
-      const ksX = px[ksc] + kr[0] * (hw[ksc] + 12), ksY = py[ksc], ksZ = pz[ksc] + kr[2] * (hw[ksc] + 12);
+      const ksX = px[ksc] + kr[0] * (hw[ksc] + 45), ksY = py[ksc], ksZ = pz[ksc] + kr[2] * (hw[ksc] + 45);
       addBox(out, [ksX, ksY + 20, ksZ], [14, 40, 14], [0.95, 0.95, 0.97]); // main tower
       addBox(out, [ksX, ksY + 38, ksZ], [10, 8, 10], [0.1, 0.1, 0.12]);    // top section
       addBox(out, [ksX, ksY + 42, ksZ], [8, 4, 8], [0.9, 0.3, 0.05]);       // orange cap
