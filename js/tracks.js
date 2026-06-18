@@ -1128,7 +1128,7 @@ const Tracks = (function () {
       for (let i = 0; i < 13; i++) {
         const k = (i * 3) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const o = hw[k] + 28;
+        const o = hw[k] + 40;
         addBox(out, [px[k] + r[0] * o, py[k] - 0.5, pz[k] + r[2] * o], [40, 0.6, 14], [0.13, 0.32, 0.5]); // water
         if (i % 2 === 0) {
           const yo = hw[k] + 18;
