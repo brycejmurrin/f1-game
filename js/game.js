@@ -487,11 +487,12 @@ function render(dt) {
     Tracks.sample(track, player.s, smp);
     const px = player.x;
     const p = [smp.p[0] + smp.r[0] * px, smp.p[1], smp.p[2] + smp.r[2] * px];
+    // closer, lower chase cam so the player's car reads as the hero car
     eyeT = [
-      p[0] - smp.t[0] * 9.5 + 0 , p[1] + 3.4, p[2] - smp.t[2] * 9.5,
+      p[0] - smp.t[0] * 6.8, p[1] + 2.55, p[2] - smp.t[2] * 6.8,
     ];
-    tgtT = [p[0] + smp.t[0] * 6, p[1] + 1.1, p[2] + smp.t[2] * 6];
-    fovT = lerp(62, 76, clamp(player.speed / VMAX, 0, 1));
+    tgtT = [p[0] + smp.t[0] * 5, p[1] + 0.85, p[2] + smp.t[2] * 5];
+    fovT = lerp(60, 72, clamp(player.speed / VMAX, 0, 1));
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.4);
       eyeT[0] += (Math.random() - 0.5) * shake; eyeT[1] += (Math.random() - 0.5) * shake * 0.6;
@@ -598,7 +599,15 @@ function tick(now) {
   if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
   update(dt);
   render(dt);
-  if (state === "race" || state === "count") updateHud(false);
+  if (state === "race" || state === "count") { updateHud(false); refreshSteerBtns(); }
+}
+
+// Hide the on-screen steer arrows as soon as tilt is actually delivering data
+// (and bring them back if it stops), so the controls reflect reality live.
+function refreshSteerBtns() {
+  if (!Input.touchControlsNeeded()) return;
+  const hide = Input.useTilt() && Input.tiltActive();
+  if (els.steerL.hidden !== hide) { els.steerL.hidden = hide; els.steerR.hidden = hide; }
 }
 
 // ---------- UI wiring ----------
@@ -644,12 +653,19 @@ function buildSelect(forSeason) {
 }
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
+function enableTilt() {
+  // Must run inside a user gesture for the iOS permission prompt.
+  Input.requestGyro().then((ok) => {
+    if (ok) Input.calibrate();
+    els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready"
+      : (Input.gyroDenied ? "motion access denied — using touch" : "");
+  });
+}
+
 function firstGesture() {
   GameAudio.init();
   GameAudio.setEnabled(soundOn);
-  Input.requestGyro().then((ok) => {
-    els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready" : "";
-  });
+  enableTilt();
   if (soundOn) GameAudio.startMusic(-1);
 }
 let gestured = false;
@@ -691,7 +707,7 @@ $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect()
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
-els.selGo.onclick = () => { if (soundOn) GameAudio.uiSelect(); startRace(); };
+els.selGo.onclick = () => { if (soundOn) GameAudio.uiSelect(); enableTilt(); startRace(); };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
   if (seasonMode) {
@@ -723,8 +739,10 @@ $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false)
 $("pm-quit").onclick = () => quitToMenu();
 $("pm-sound").onclick = () => setSound(!soundOn);
 $("pm-tilt").onclick = () => {
-  Input.setUseTilt(!Input.useTilt());
-  $("pm-tilt").textContent = "TILT: " + (Input.useTilt() ? "ON" : "OFF");
+  const on = !Input.useTilt();
+  Input.setUseTilt(on);
+  if (on) enableTilt();   // (re)request motion permission within this gesture
+  $("pm-tilt").textContent = "TILT: " + (on ? "ON" : "OFF");
   showTouchControls(true);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };

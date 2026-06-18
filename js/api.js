@@ -275,6 +275,100 @@ const F1API = (function () {
     });
   }
 
+  /* ---------- telemetry (OpenF1, free historical) ---------- */
+
+  function sessionLaps(sessionKey, driverNumber) {
+    const url = OPENF1 + "/laps?session_key=" + encodeURIComponent(sessionKey) +
+      "&driver_number=" + encodeURIComponent(driverNumber);
+    return request(url, sessionTtl(sessionKey)).then(function (list) {
+      return arr(list).map(function (l) {
+        l = l || {};
+        return {
+          lapNumber: num(l.lap_number),
+          lapDuration: num(l.lap_duration),
+          s1: num(l.duration_sector_1), s2: num(l.duration_sector_2), s3: num(l.duration_sector_3),
+          i1Speed: num(l.i1_speed), i2Speed: num(l.i2_speed), stSpeed: num(l.st_speed),
+          isPitOut: !!l.is_pit_out_lap,
+          dateStart: str(l.date_start)
+        };
+      });
+    });
+  }
+
+  // fastest valid (non pit-out, has a start time) lap for a driver, or null
+  function fastestLap(sessionKey, driverNumber) {
+    return sessionLaps(sessionKey, driverNumber).then(function (laps) {
+      let best = null;
+      for (let i = 0; i < laps.length; i++) {
+        const l = laps[i];
+        if (l.lapDuration === null || !l.dateStart || l.isPitOut) continue;
+        if (!best || l.lapDuration < best.lapDuration) best = l;
+      }
+      return best;
+    });
+  }
+
+  function windowed(path, sessionKey, driverNumber, startISO, endISO) {
+    let url = OPENF1 + path + "?session_key=" + encodeURIComponent(sessionKey) +
+      "&driver_number=" + encodeURIComponent(driverNumber);
+    if (startISO) url += "&date>=" + encodeURIComponent(startISO);
+    if (endISO) url += "&date<=" + encodeURIComponent(endISO);
+    return request(url, sessionTtl(sessionKey));
+  }
+
+  // car telemetry samples within a time window: speed/throttle/brake/gear/rpm/drs
+  function carData(sessionKey, driverNumber, startISO, endISO) {
+    return windowed("/car_data", sessionKey, driverNumber, startISO, endISO).then(function (list) {
+      const a = arr(list);
+      const t0 = a.length ? Date.parse(a[0].date) : 0;
+      return a.map(function (c) {
+        c = c || {};
+        return {
+          t: (Date.parse(c.date) - t0) / 1000,   // seconds from window start
+          speed: num(c.speed), throttle: num(c.throttle), brake: num(c.brake),
+          gear: num(c.n_gear), rpm: num(c.rpm), drs: num(c.drs),
+          date: Date.parse(c.date) || 0
+        };
+      });
+    });
+  }
+
+  // x/y track positions within a window (arbitrary track-local units)
+  function locationData(sessionKey, driverNumber, startISO, endISO) {
+    return windowed("/location", sessionKey, driverNumber, startISO, endISO).then(function (list) {
+      return arr(list).map(function (p) {
+        p = p || {};
+        return { x: num(p.x), y: num(p.y), date: Date.parse(p.date) || 0 };
+      }).filter(function (p) { return p.x !== null && p.y !== null; });
+    });
+  }
+
+  function stints(sessionKey, driverNumber) {
+    let url = OPENF1 + "/stints?session_key=" + encodeURIComponent(sessionKey);
+    if (driverNumber !== undefined && driverNumber !== null) url += "&driver_number=" + encodeURIComponent(driverNumber);
+    return request(url, sessionTtl(sessionKey)).then(function (list) {
+      return arr(list).map(function (s) {
+        s = s || {};
+        return {
+          num: num(s.driver_number), compound: str(s.compound),
+          lapStart: num(s.lap_start), lapEnd: num(s.lap_end),
+          age: num(s.tyre_age_at_start), stint: num(s.stint_number)
+        };
+      });
+    });
+  }
+
+  function pits(sessionKey, driverNumber) {
+    let url = OPENF1 + "/pit?session_key=" + encodeURIComponent(sessionKey);
+    if (driverNumber !== undefined && driverNumber !== null) url += "&driver_number=" + encodeURIComponent(driverNumber);
+    return request(url, sessionTtl(sessionKey)).then(function (list) {
+      return arr(list).map(function (p) {
+        p = p || {};
+        return { num: num(p.driver_number), lap: num(p.lap_number), duration: num(p.pit_duration) };
+      });
+    });
+  }
+
   return {
     schedule: schedule,
     nextRace: nextRace,
@@ -284,6 +378,12 @@ const F1API = (function () {
     latestSession: latestSession,
     weather: weather,
     positions: positions,
-    sessionDrivers: sessionDrivers
+    sessionDrivers: sessionDrivers,
+    sessionLaps: sessionLaps,
+    fastestLap: fastestLap,
+    carData: carData,
+    locationData: locationData,
+    stints: stints,
+    pits: pits
   };
 })();
