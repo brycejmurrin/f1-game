@@ -1,6 +1,5 @@
 Engine sound effects
 --------------------
-f1_engine.mp3 (sustained engine drone, primary), f1_rev.mp3 (high-rev layer)
-— F1 car engine clips provided by the project owner (sourced from myinstants.com).
-Looped and pitched by rpm/gear at runtime. Licensing of these clips is the
-project owner's responsibility.
+f1_engine.mp3 (sustained F1 engine drone, primary base), f1_rev.mp3 (high-rev layer)
+— F1 car engine clips provided by the project owner. Looped and pitched by
+rpm/gear at runtime. Licensing of these clips is the project owner's responsibility.
