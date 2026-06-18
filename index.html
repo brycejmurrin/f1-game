@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=23">
-<link rel="stylesheet" href="css/data.css?v=23">
+<link rel="stylesheet" href="css/style.css?v=24">
+<link rel="stylesheet" href="css/data.css?v=24">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -56,12 +56,15 @@
 <button id="btn-ot" class="touchbtn" hidden>OT</button>
 <button id="shift-up" class="touchbtn shiftbtn" hidden>&#9650;<small>UP</small></button>
 <button id="shift-down" class="touchbtn shiftbtn" hidden>&#9660;<small>DN</small></button>
+<button id="btn-steer-left" class="touchbtn steerbtn" hidden>&#9664;</button>
+<button id="btn-steer-right" class="touchbtn steerbtn" hidden>&#9654;</button>
 
 <button id="pausebtn" hidden>&#10074;&#10074;</button>
 <div id="pausemenu" class="panel" hidden>
   <h2>PAUSED</h2>
   <button id="pm-resume">RESUME</button>
   <button id="pm-restart">RESTART RACE</button>
+  <button id="pm-steer">STEER: TILT</button>
   <button id="pm-tilt">TILT: ON</button>
   <button id="pm-calib">RECALIBRATE TILT</button>
   <button id="pm-gears">GEARS: AUTO</button>
@@ -131,16 +134,16 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=23"></script>
-<script src="js/glx.js?v=23"></script>
-<script src="js/teams.js?v=23"></script>
-<script src="js/circuits.js?v=23"></script>
-<script src="js/tracks.js?v=23"></script>
-<script src="js/car3d.js?v=23"></script>
-<script src="js/input.js?v=23"></script>
-<script src="js/audio.js?v=23"></script>
-<script src="js/api.js?v=23"></script>
-<script src="js/data.js?v=23"></script>
-<script src="js/game.js?v=23"></script>
+<script src="js/mat4.js?v=24"></script>
+<script src="js/glx.js?v=24"></script>
+<script src="js/teams.js?v=24"></script>
+<script src="js/circuits.js?v=24"></script>
+<script src="js/tracks.js?v=24"></script>
+<script src="js/car3d.js?v=24"></script>
+<script src="js/input.js?v=24"></script>
+<script src="js/audio.js?v=24"></script>
+<script src="js/api.js?v=24"></script>
+<script src="js/data.js?v=24"></script>
+<script src="js/game.js?v=24"></script>
 </body>
 </html>

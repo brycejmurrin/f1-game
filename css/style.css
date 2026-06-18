@@ -274,6 +274,12 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 #shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
 #shift-up   { right: calc(16px + var(--sar)); bottom: calc(100px + var(--sab)); }
 
+/* steer buttons: flank the centre HUD, reachable by either thumb */
+.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: 84px; height: 84px; }
+.steerbtn:active { background: rgba(255, 255, 255, 0.18); }
+#btn-steer-left  { left:  calc(50% - 148px); bottom: calc(16px + var(--sab)); }
+#btn-steer-right { right: calc(50% - 148px); bottom: calc(16px + var(--sab)); }
+
 /* MANUAL (portrait): shifts own the right column; BOOST/OT stack centre,
    above the HUD */
 body.manual #btn-boost { left: calc(50% - 84px); right: auto; bottom: calc(152px + var(--sab)); }
@@ -292,6 +298,9 @@ body.manual #btn-ot    { left: calc(50% + 8px);  right: auto; bottom: calc(152px
   /* manual: BOOST/OT flank the HUD along the bottom, clear of the car body */
   body.manual #btn-boost { left: calc(50% - 250px); bottom: calc(12px + var(--sab)); }
   body.manual #btn-ot    { left: calc(50% + 174px); bottom: calc(12px + var(--sab)); }
+  /* steer buttons tuck closer in landscape (narrower HUD) */
+  #btn-steer-left  { left:  calc(50% - 130px); bottom: calc(12px + var(--sab)); }
+  #btn-steer-right { right: calc(50% - 130px); bottom: calc(12px + var(--sab)); }
 }
 
 #pausebtn {
