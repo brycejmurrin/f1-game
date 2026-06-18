@@ -602,14 +602,30 @@ const Tracks = (function () {
     // section. Anchoring the base low keeps terrain below the road everywhere.
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
+    // True if (x,z) lies on (or within `margin` of) the tarmac of ANY track
+    // station. Used to stop props being dropped onto a *parallel* section of the
+    // circuit — e.g. a tree placed perpendicular to one point landing on the
+    // road at a hairpin or where two straights run close together (COTA,
+    // Suzuka's crossover, etc.).
+    const onTrack = (x, z, margin) => {
+      for (let i = 0; i < n; i++) {
+        const dx = x - px[i], dz = z - pz[i];
+        const rr = hw[i] + margin;
+        if (dx * dx + dz * dz < rr * rr) return true;
+      }
+      return false;
+    };
     const place = (k, side, dist, sz, col) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
       const o = side * (hw[k] + dist);
+      const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+      // skip if this prop would overlap a parallel stretch of track
+      if (onTrack(cx, cz, sz[0] / 2 + 1.5)) return;
       // sink the base 0.8m below grade so prop bottoms tuck under the terrain
       // apron instead of co-planar Z-fighting where box meets ground.
-      const c = [px[k] + r[0] * o, py[k] + sz[1] / 2 - 0.8 + r[1] * o, pz[k] + r[2] * o];
+      const c = [cx, py[k] + sz[1] / 2 - 0.8 + r[1] * o, cz];
       addBox(out, c, sz, col, [r, u, t]);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
