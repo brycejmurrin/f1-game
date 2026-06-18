@@ -106,11 +106,22 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
+  // Flat rectangular skid-mark stamp (x=lateral, y=along-travel in normalised -1..1 space)
+  const MARK_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+out vec4 outColor;
+void main() {
+  float a = 0.38 * smoothstep(1.0, 0.4, abs(vUV.x)) * smoothstep(1.0, 0.3, abs(vUV.y));
+  outColor = vec4(0.0, 0.0, 0.0, a);
+}`;
+
   let gl = null;
   let canvas = null;
   let litProg = null, litU = null;
   let skyProg = null, skyU = null;
   let shadowProg = null, shadowU = null;
+  let markProg = null, markU = null;
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
@@ -161,12 +172,14 @@ void main() {
     litProg = link(LIT_VS, LIT_FS);
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
-    if (!litProg || !skyProg || !shadowProg) return false;
+    markProg = link(SHADOW_VS, MARK_FS);
+    if (!litProg || !skyProg || !shadowProg || !markProg) return false;
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
+    markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
 
     skyVAO = gl.createVertexArray();
 
@@ -308,6 +321,20 @@ void main() {
     gl.disable(gl.BLEND);
   }
 
+  function drawMark(modelMat, w, l) {
+    gl.useProgram(markProg);
+    gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
+    gl.uniformMatrix4fv(markU.uModel, false, modelMat);
+    gl.uniform2f(markU.uSize, w, l);
+    gl.enable(gl.BLEND);
+    gl.depthMask(false);
+    gl.bindVertexArray(shadowVAO);
+    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    gl.bindVertexArray(null);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+
   return {
     init,
     resize,
@@ -316,6 +343,7 @@ void main() {
     draw,
     drawSky,
     drawShadow,
+    drawMark,
     get width() { return width; },
     get height() { return height; },
     get aspect() { return aspect; },

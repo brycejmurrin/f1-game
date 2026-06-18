@@ -94,6 +94,11 @@ let paused = false;
 let lastFrame = 0;
 let announceT = 0;
 let hudT = 0;
+let minimapBg = null;         // offscreen canvas with pre-rendered track shape
+const MAX_SKID = 120;
+const skidMarks = [];         // ring buffer of Float32Array(16) model matrices
+let skidIdx = 0;
+let skidFrameT = 0;           // frame countdown between stamp placements
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -183,6 +188,7 @@ function loadTrack(idx) {
   if (builtTrackId === def.id) return;
   track = Tracks.build(def);
   builtTrackId = def.id;
+  minimapBg = null;           // force minimap redraw for new track
   const pal = def.palette;
   frame = {
     viewProj: M4.ident(), eye: camEye,
@@ -202,6 +208,7 @@ function startRace() {
   makeCars();
   gridUp();
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false;
+  skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
@@ -548,7 +555,8 @@ function updateCar(c, dt, ranked) {
   // --- offroad ---
   c.offroad = Math.abs(c.x) > hw;
   if (c.offroad) {
-    c.speed = Math.max(GRASS_V * 0.6, c.speed - 42 * dt);
+    const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
+    c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
     c.offT += dt;
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
@@ -594,8 +602,15 @@ function updateCar(c, dt, ranked) {
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
   // longer slides you around. Full authority by ~65 km/h.
+  // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(c.speed / 18, 0, 1);
-  c.x += steer * STEER_VMAX * latFac * dt;
+  const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
+  c.x += steer * STEER_VMAX * latFac * gripScale * dt;
+  // set skid intensity once per frame (used by audio and by visual marks)
+  if (c.isPlayer) {
+    c.skidIntensity = c.offroad ? 0.5
+      : clamp(Math.abs(k) * c.speed * 0.05 - 0.35, 0, 1);
+  }
   // wall
   const wall = hw + 9;
   if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
@@ -698,6 +713,11 @@ function render(dt) {
   GLX.draw(track.meshes.props, M4.ident(), night ? { emissive: 0.45 } : undefined);
   GLX.draw(track.meshes.gate, M4.ident());
 
+  // skid marks drawn before cars so cars render on top
+  for (const m of skidMarks) {
+    GLX.drawMark(m, 0.6, 2.2);
+  }
+
   // cars
   for (const c of cars) {
     Tracks.sample(track, c.s, smp2);
@@ -716,6 +736,20 @@ function render(dt) {
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     GLX.drawShadow(tmpMat, 2.4, 5.8);
     GLX.draw(teamMesh(c.team), tmpMat, night ? { emissive: 0.2 } : undefined);
+    if (c.isPlayer && state === "race") {
+      const skid = c.skidIntensity || 0;
+      if ((skid > 0.25 || c.offroad) && c.speed > 10) {
+        skidFrameT--;
+        if (skidFrameT <= 0) {
+          skidFrameT = 5;
+          const m = new Float32Array(tmpMat);
+          if (skidMarks.length < MAX_SKID) skidMarks.push(m);
+          else { skidMarks[skidIdx] = m; skidIdx = (skidIdx + 1) % MAX_SKID; }
+        }
+      } else {
+        skidFrameT = 0;
+      }
+    }
   }
 }
 
@@ -754,17 +788,25 @@ function updateHud(force) {
 
 function drawMinimap() {
   const W = els.minimap.width, H = els.minimap.height;
-  mm.clearRect(0, 0, W, H);
-  const map = track.map, n = map.length;
-  mm.strokeStyle = "rgba(255,255,255,0.75)";
-  mm.lineWidth = 2;
-  mm.beginPath();
-  for (let i = 0; i <= n; i++) {
-    const p = map[i % n];
-    const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
-    i === 0 ? mm.moveTo(x, y) : mm.lineTo(x, y);
+  // pre-render the static track outline once; reuse as a cheap blit every HUD frame
+  if (!minimapBg || minimapBg.width !== W || minimapBg.height !== H) {
+    minimapBg = document.createElement("canvas");
+    minimapBg.width = W; minimapBg.height = H;
+    const mc = minimapBg.getContext("2d");
+    const map = track.map, n = map.length;
+    mc.strokeStyle = "rgba(255,255,255,0.75)";
+    mc.lineWidth = 2;
+    mc.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const p = map[i % n];
+      const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
+      i === 0 ? mc.moveTo(x, y) : mc.lineTo(x, y);
+    }
+    mc.stroke();
   }
-  mm.stroke();
+  mm.clearRect(0, 0, W, H);
+  mm.drawImage(minimapBg, 0, 0);
+  const map = track.map, n = map.length;
   for (const c of cars) {
     if (c === player) continue;
     const p = map[Math.floor(c.s / track.total * n) % n];
