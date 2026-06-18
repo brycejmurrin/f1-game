@@ -652,6 +652,18 @@ const Tracks = (function () {
           place(k, side, d, [3.5, h, 3.5], [0.12 + s * 0.06, 0.36, 0.14]);  // canopy
         }
       });
+      // denser forest for Spa (Ardennes forest setting)
+      if (def.id === "spa") {
+        every(16, (k) => {
+          for (const side of [-1, 1]) {
+            if (hash(k * 3 + side) > 0.35) continue;
+            const s = hash(k * 2 + side);
+            const h = 8 + s * 7, d = 14 + s * 12;
+            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);
+            place(k, side, d, [3.2, h, 3.2], [0.1, 0.32, 0.12]);
+          }
+        });
+      }
       // occasional grandstand
       every(140, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
     } else if (theme === "desert") {
@@ -680,6 +692,386 @@ const Tracks = (function () {
     } else if (theme === "modern") {  // Madrid
       every(30, (k) => { for (const side of [-1, 1]) { const s = hash(k + side); place(k, side, 9 + s * 6, [10, 8 + s * 14, 10], [0.8, 0.82, 0.86]); } });
       every(120, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 24], [0.85, 0.2, 0.2]));
+      // La Monumental: 24% banked high-speed turn with distinctive white structure
+      if (def.id === "madrid") {
+        const kmono = Math.round(n * 0.65) % n;
+        const kmr = [track.rx[kmono], track.ry[kmono], track.rz[kmono]];
+        const kmu = upOf(track, kmono);
+        for (let i = -3; i <= 3; i++) {
+          const k = (kmono + i * Math.round(n / 20)) % n;
+          const kr = [track.rx[k], track.ry[k], track.rz[k]];
+          const o = hw[k] + 16;
+          addBox(out, [px[k] + kr[0] * o, py[k] + 8, pz[k] + kr[2] * o], [28, 16, 18], [0.88, 0.88, 0.92]);
+        }
+        // Sierra mountain backdrop
+        const kmtn = Math.round(n * 0.4) % n;
+        const kmtnr = [track.rx[kmtn], track.ry[kmtn], track.rz[kmtn]];
+        for (let i = 0; i < 4; i++) {
+          const mtn_d = 280 + i * 60;
+          addBox(out, [px[kmtn] + kmtnr[0] * mtn_d, py[kmtn] + 50, pz[kmtn] + kmtnr[2] * mtn_d],
+                 [300, 100, 200], [0.5, 0.48, 0.52]);
+        }
+        // Spanish plains vegetation filler
+        every(40, (k) => {
+          for (const side of [-1, 1]) {
+            if (hash(k * 57 + side) > 0.45) continue;
+            const d = 30 + hash(k * 58 + side) * 50;
+            const s = hash(k * 59 + side);
+            const h = 5 + s * 5;
+            place(k, side, d, [1.6, 1.6, 1.6], [0.30, 0.22, 0.12]);
+            place(k, side, d, [3.5, h, 3.5], [0.26, 0.36, 0.16]);
+          }
+        });
+        // Light towers (occasional)
+        every(180, (k) => {
+          const side = hash(k * 61) < 0.3 ? -1 : 1;
+          place(k, side, hw[k] + 65, [1.8, 32, 1.8], [0.40, 0.40, 0.43]);
+        });
+      }
+    }
+
+    // --- circuit-specific surrounding landscape features with comprehensive filler ---
+    // Bahrain: desert dunes, Persian Gulf, utility infrastructure
+    if (def.id === "bahrain") {
+      // Distant dune layers (depth cues)
+      for (let i = 0; i < 12; i++) {
+        const k = Math.round((i / 12) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const dune_h = 12 + hash(k * 17) * 8;
+        const dune_d = 180 + hash(k * 19) * 80;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + r[0] * side * dune_d, py[k] + dune_h / 2, pz[k] + r[2] * side * dune_d],
+                 [140, dune_h, 200], [0.74, 0.68, 0.52]);
+        }
+      }
+      // Light towers (floodlights): 12 units, 30-35m tall
+      every(95, (k) => {
+        for (const side of [-1, 1]) {
+          const tower_d = hw[k] + 65 + hash(k * side) * 20;
+          place(k, side, tower_d, [2.2, 32, 2.2], [0.38, 0.38, 0.42]);  // tower shaft
+          for (let lt = 0; lt < 4; lt++) {
+            place(k, side, tower_d + hash(k + lt) * 6, [1.2, 1.8, 1.2], [0.85, 0.78, 0.72]);  // light fixtures
+          }
+        }
+      });
+      // Utility structures (fuel, water, service)
+      every(280, (k) => {
+        const side = hash(k * 13) < 0.5 ? -1 : 1;
+        place(k, side, hw[k] + 40, [8, 6, 8], [0.68, 0.66, 0.62]);  // fuel tanks
+        place(k, side, hw[k] + 50, [5, 12, 5], [0.78, 0.75, 0.72]);  // service building
+      });
+      // Persian Gulf water horizon
+      const khorizon = Math.round(n * 0.5) % n;
+      const khz = [track.rx[khorizon], track.ry[khorizon], track.rz[khorizon]];
+      addBox(out, [px[khorizon] + khz[0] * 250, py[khorizon] - 1, pz[khorizon] + khz[2] * 250],
+             [400, 2, 800], [0.12, 0.28, 0.44]);
+      // Sand/dust filler terrain (extensive)
+      every(40, (k) => {
+        for (const side of [-1, 1]) {
+          const sand_d = 90 + hash(k * 21 + side) * 80;
+          addBox(out, [px[k] + track.rx[k] * side * sand_d, py[k] + 2, pz[k] + track.rz[k] * side * sand_d],
+                 [80, 4, 120], [0.72, 0.66, 0.50]);
+        }
+      });
+    }
+    // Spa: dense Ardennes forest with ridges, streams, filler vegetation
+    if (def.id === "spa") {
+      // Forest ridge lines
+      for (let i = 0; i < 8; i++) {
+        const k = Math.round((i / 8) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const ridge_h = 30 + hash(k * 23) * 20;
+        const ridge_d = 200 + hash(k * 25) * 100;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + r[0] * side * ridge_d, py[k] + ridge_h / 2, pz[k] + r[2] * side * ridge_d],
+                 [180, ridge_h, 300], [0.15, 0.28, 0.12]);
+        }
+      }
+      // Dense tree filler (Ardennes forest density)
+      every(12, (k) => {
+        for (const side of [-1, 1]) {
+          for (let j = 0; j < 3; j++) {
+            const d = 35 + hash(k * 27 + j) * 50;
+            const s = hash(k * 29 + side + j);
+            const h = 8 + s * 9;
+            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);   // trunk
+            place(k, side, d, [3.0, h, 3.0], [0.08, 0.28, 0.10]);      // canopy
+          }
+        }
+      });
+      // Water streams/runoff features
+      every(200, (k) => {
+        const stream_d = 100 + hash(k * 31) * 60;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + track.rx[k] * side * stream_d, py[k] - 0.4, pz[k] + track.rz[k] * side * stream_d],
+                 [60, 0.8, 200], [0.08, 0.18, 0.32]);  // water drainage
+        }
+      });
+      // Light towers at viewpoints
+      every(160, (k) => {
+        const side = hash(k * 33) < 0.5 ? -1 : 1;
+        place(k, side, hw[k] + 80, [2.0, 40, 2.0], [0.35, 0.35, 0.38]);
+      });
+    }
+    // Silverstone: English countryside, floodlights, paddock filler
+    if (def.id === "silverstone") {
+      // Rolling green hills background
+      for (let i = 0; i < 7; i++) {
+        const k = Math.round((i / 7) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + r[0] * side * 220, py[k] + 8, pz[k] + r[2] * side * 220],
+                 [200, 16, 280], [0.28, 0.42, 0.22]);
+        }
+      }
+      // Floodlight towers (18 units around circuit)
+      every(120, (k) => {
+        for (const side of [-1, 1]) {
+          const tower_d = hw[k] + 70 + hash(k * 37) * 25;
+          place(k, side, tower_d, [2.4, 38, 2.4], [0.42, 0.42, 0.45]);
+          for (let lt = 0; lt < 5; lt++) {
+            place(k, side, tower_d + hash(k + lt * 2) * 8, [1.4, 2.0, 1.4], [0.88, 0.85, 0.80]);
+          }
+        }
+      });
+      // Grandstand support structures (distributed around circuit)
+      every(85, (k) => {
+        const side = hash(k * 39) < 0.5 ? -1 : 1;
+        place(k, side, hw[k] + 18, [12, 16, 8], [0.88, 0.88, 0.90]);  // main structure
+        place(k, side, hw[k] + 26, [14, 8, 10], [0.82, 0.82, 0.85]);  // support
+      });
+      // Paddock support buildings
+      every(200, (k) => {
+        const side = hash(k * 41) > 0.5 ? -1 : 1;
+        place(k, side, hw[k] + 50, [16, 10, 12], [0.72, 0.72, 0.75]);
+      });
+    }
+    // Monaco: steep hillside buildings and Mediterranean backdrop
+    if (def.id === "monaco") {
+      for (let i = 0; i < 8; i++) {
+        const k = Math.round((i / 8) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const hillx = px[k] + r[0] * (hw[k] + 100);
+        const hillz = pz[k] + r[2] * (hw[k] + 100);
+        const bldg_h = 25 + hash(k * 29) * 35;
+        addBox(out, [hillx, py[k] + bldg_h / 2, hillz], [28, bldg_h, 22],
+               [0.72 + hash(k) * 0.2, 0.68 + hash(k) * 0.2, 0.6 + hash(k) * 0.15]);
+      }
+    }
+    // Monza: royal park lakes and Italian Milan distant skyline
+    if (def.id === "monza") {
+      // Park lakes
+      for (let i = 0; i < 4; i++) {
+        const k = Math.round((i / 4) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        addBox(out, [px[k] + r[0] * (hw[k] + 120), py[k] - 0.8, pz[k] + r[2] * (hw[k] + 120)],
+               [180, 1.6, 240], [0.1, 0.24, 0.4]);  // lake water
+      }
+      // Distant Milan towers
+      const kmilan = Math.round(n * 0.4) % n;
+      const kmr = [track.rx[kmilan], track.ry[kmilan], track.rz[kmilan]];
+      for (let i = 0; i < 5; i++) {
+        const h = 50 + i * 15;
+        addBox(out, [px[kmilan] + kmr[0] * (280 + i * 30), py[kmilan] + h / 2, pz[kmilan] + kmr[2] * (280 + i * 30)],
+               [16, h, 16], [0.48 + i * 0.08, 0.46 + i * 0.08, 0.44 + i * 0.08]);
+      }
+    }
+    // Suzuka: distant Mount Fuji backdrop and Japanese rural surroundings
+    if (def.id === "suzuka") {
+      // Mt. Fuji silhouette (very distant, large)
+      const kfuji = Math.round(n * 0.3) % n;
+      const kfr = [track.rx[kfuji], track.ry[kfuji], track.rz[kfuji]];
+      addBox(out, [px[kfuji] + kfr[0] * 400, py[kfuji] + 80, pz[kfuji] + kfr[2] * 400],
+             [180, 160, 120], [0.6, 0.58, 0.62]);  // Mount Fuji distant peak
+      // Japanese countryside hills
+      for (let i = 0; i < 4; i++) {
+        const k = Math.round((i / 4) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + r[0] * side * 240, py[k] + 20, pz[k] + r[2] * side * 240],
+                 [160, 40, 240], [0.3, 0.38, 0.24]);  // green hills
+        }
+      }
+    }
+    // Singapore: tropical skyline and distant urban sprawl
+    if (def.id === "singapore") {
+      for (let i = 0; i < 8; i++) {
+        const k = Math.round((i / 8) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const h = 35 + hash(k * 31) * 65;
+        addBox(out, [px[k] + r[0] * (hw[k] + 160), py[k] + h / 2, pz[k] + r[2] * (hw[k] + 160)],
+               [28, h, 28], [0.35, 0.32, 0.38]);  // distant skyscrapers
+      }
+      // Tropical vegetation background
+      every(18, (k) => {
+        for (const side of [-1, 1]) {
+          const d = 140 + hash(k * side) * 60;
+          place(k, side, d, [2.2, 2.0, 2.2], [0.28, 0.35, 0.18]);
+          place(k, side, d, [5.5, 8 + hash(k) * 6, 5.5], [0.18, 0.42, 0.2]);
+        }
+      });
+    }
+    // COTA: Texas Hill Country terrain, scattered trees, distant ridges, utilities
+    if (def.id === "cota") {
+      // Distant limestone ridge lines
+      for (let i = 0; i < 10; i++) {
+        const k = Math.round((i / 10) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const ridge_h = 40 + hash(k * 37) * 30;
+        const ridge_d = 200 + hash(k * 39) * 120;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + r[0] * side * ridge_d, py[k] + ridge_h / 2, pz[k] + r[2] * side * ridge_d],
+                 [200, ridge_h, 320], [0.4, 0.36, 0.28]);
+        }
+      }
+      // Oak/cedar tree coverage (scattered natural vegetation)
+      every(45, (k) => {
+        for (const side of [-1, 1]) {
+          for (let j = 0; j < 2; j++) {
+            const d = 25 + hash(k * 43 + j) * 45;
+            const s = hash(k * 45 + side + j);
+            const h = 6 + s * 7;
+            place(k, side, d, [1.4, 1.6, 1.4], [0.32, 0.24, 0.14]);
+            place(k, side, d, [3.8, h, 3.8], [0.28, 0.38, 0.16]);
+          }
+        }
+      });
+      // Floodlight towers (scattered for evening sessions)
+      every(140, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 47 + side) > 0.6) continue;
+          const tower_d = hw[k] + 75 + hash(k * 49) * 30;
+          place(k, side, tower_d, [2.0, 35, 2.0], [0.38, 0.38, 0.42]);
+        }
+      });
+      // Observation tower support infrastructure
+      const kobs = Math.round(n * 0.08) % n;
+      const kobsr = [track.rx[kobs], track.ry[kobs], track.rz[kobs]];
+      place(kobs, -1, hw[kobs] + 45, [8, 6, 8], [0.55, 0.50, 0.42]);  // support facility
+      place(kobs, 1, hw[kobs] + 45, [6, 5, 6], [0.65, 0.60, 0.52]);   // utilities
+    }
+    // Interlagos: São Paulo urban sprawl, tropical vegetation, lake, hillside filler
+    if (def.id === "interlagos") {
+      // Distant city towers (São Paulo skyline)
+      const ksp = Math.round(n * 0.35) % n;
+      const kspr = [track.rx[ksp], track.ry[ksp], track.rz[ksp]];
+      for (let i = 0; i < 9; i++) {
+        const h = 45 + hash(ksp * (i + 1)) * 50;
+        const d = 240 + i * 40;
+        addBox(out, [px[ksp] + kspr[0] * d, py[ksp] + h / 2, pz[ksp] + kspr[2] * d],
+               [22, h, 22], [0.52 + hash(i) * 0.12, 0.48 + hash(i) * 0.12, 0.46 + hash(i) * 0.1]);
+      }
+      // Hillside favela-style housing clusters
+      for (let i = 0; i < 8; i++) {
+        const k = Math.round((i / 8) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const fav_d = 180 + hash(k * 41) * 100;
+        const h_offset = 35 + hash(k * 42) * 30;
+        addBox(out, [px[k] + r[0] * fav_d, py[k] + h_offset, pz[k] + r[2] * fav_d],
+               [160, 70, 140], [0.62, 0.5, 0.38]);
+      }
+      // Dense tropical vegetation on hillsides
+      every(16, (k) => {
+        for (const side of [-1, 1]) {
+          for (let j = 0; j < 2; j++) {
+            if (hash(k * 43 + side + j) > 0.45) continue;
+            const d = 160 + hash(k * 44 + j) * 80;
+            const s = hash(k * 46 + j);
+            const h = 7 + s * 8;
+            place(k, side, d, [1.8, 1.4, 1.8], [0.26, 0.20, 0.10]);
+            place(k, side, d, [4.4, h, 4.4], [0.18, 0.42, 0.16]);
+          }
+        }
+      });
+      // Lake features and water terrain
+      every(180, (k) => {
+        const lake_d = 90 + hash(k * 48) * 100;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + track.rx[k] * side * lake_d, py[k] - 0.6, pz[k] + track.rz[k] * side * lake_d],
+                 [100, 1.2, 140], [0.08, 0.22, 0.38]);
+        }
+      });
+      // Pit complex and infrastructure
+      every(250, (k) => {
+        const side = hash(k * 50) < 0.5 ? -1 : 1;
+        place(k, side, hw[k] + 35, [14, 12, 10], [0.48, 0.46, 0.44]);
+      });
+    }
+    // Vegas: desert rock formations, Strip hotels, neon glow structures, sparse vegetation
+    if (def.id === "vegas") {
+      // Red rock formations (distant)
+      for (let i = 0; i < 8; i++) {
+        const k = Math.round((i / 8) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const rock_h = 35 + hash(k * 47) * 45;
+        const rock_d = 250 + hash(k * 49) * 150;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + r[0] * side * rock_d, py[k] + rock_h / 2, pz[k] + r[2] * side * rock_d],
+                 [180, rock_h, 240], [0.65, 0.52, 0.38]);
+        }
+      }
+      // Floodlight towers for night racing
+      every(110, (k) => {
+        for (const side of [-1, 1]) {
+          const tower_d = hw[k] + 70 + hash(k * 51) * 25;
+          place(k, side, tower_d, [2.2, 35, 2.2], [0.35, 0.35, 0.40]);
+          for (let lt = 0; lt < 4; lt++) {
+            place(k, side, tower_d + hash(k + lt * 3) * 7, [1.2, 1.8, 1.2], [0.90, 0.60, 0.10]);  // warm lights
+          }
+        }
+      });
+      // Sparse desert vegetation (occasional bushes)
+      every(80, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 53 + side) > 0.4) continue;
+          const d = 50 + hash(k * 54) * 60;
+          place(k, side, d, [2.0, 1.5, 2.0], [0.45, 0.38, 0.25]);
+        }
+      });
+      // Power/utility infrastructure
+      every(220, (k) => {
+        const side = hash(k * 55) > 0.5 ? -1 : 1;
+        place(k, side, hw[k] + 40, [6, 8, 6], [0.65, 0.62, 0.58]);
+      });
+    }
+    // Madrid: Spanish plains and distant mountain range
+    if (def.id === "madrid") {
+      // Sierra de Guadarrama distant mountains
+      for (let i = 0; i < 4; i++) {
+        const k = Math.round((i / 4) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const mtn_d = 280 + i * 60;
+        addBox(out, [px[k] + r[0] * mtn_d, py[k] + 50, pz[k] + r[2] * mtn_d],
+               [300, 100, 200], [0.5, 0.48, 0.52]);  // distant mountains
+      }
+      // Spanish plains vegetation
+      every(25, (k) => {
+        for (const side of [-1, 1]) {
+          const d = 120 + hash(k * side) * 60;
+          place(k, side, d, [1.8, 1.8, 1.8], [0.32, 0.24, 0.14]);
+          place(k, side, d, [3.8, 6 + hash(k) * 5, 3.8], [0.28, 0.38, 0.18]);
+        }
+      });
+    }
+    // Zandvoort: North Sea coastal features and dune landscape
+    if (def.id === "zandvoort") {
+      // Water horizon (North Sea far)
+      const ksea = Math.round(n * 0.4) % n;
+      const kser = [track.rx[ksea], track.ry[ksea], track.rz[ksea]];
+      addBox(out, [px[ksea] + kser[0] * 280, py[ksea] - 1.5, pz[ksea] + kser[2] * 280],
+             [500, 3, 600], [0.08, 0.22, 0.38]);  // sea water
+      // Beach area
+      addBox(out, [px[ksea] + kser[0] * 150, py[ksea] - 0.8, pz[ksea] + kser[2] * 150],
+             [300, 1.6, 400], [0.78, 0.72, 0.6]);  // sand beach
+      // Distant wind turbines (Dutch renewable energy)
+      for (let i = 0; i < 4; i++) {
+        const k = Math.round((i / 4) * n) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        addBox(out, [px[k] + r[0] * 300, py[k] + 60, pz[k] + r[2] * 300],
+               [6, 120, 6], [0.82, 0.82, 0.84]);  // turbine tower
+        addBox(out, [px[k] + r[0] * 300, py[k] + 68, pz[k] + r[2] * 300],
+               [80, 4, 6], [0.8, 0.8, 0.78]);  // turbine blades
+      }
     }
 
     // --- main grandstand + pit complex on the start/finish straight (every GP) ---
@@ -720,6 +1112,16 @@ const Tracks = (function () {
 
     // --- Monaco harbour: water + moored yachts along the start straight ---
     if (def.id === "monaco") {
+      // Casino Square building (ornate 1865 structure visible from Casino corner, ~Turn 9-10)
+      const kcs = Math.round(n * 0.32) % n;
+      const kcsr = [track.rx[kcs], track.ry[kcs], track.rz[kcs]];
+      const csX = px[kcs] + kcsr[0] * (hw[kcs] + 8);
+      const csZ = pz[kcs] + kcsr[2] * (hw[kcs] + 8);
+      addBox(out, [csX, py[kcs] + 22, csZ], [48, 44, 36], [0.82, 0.78, 0.68]); // Casino main structure
+      for (let i = 0; i < 4; i++) {
+        addBox(out, [csX - 20 + i * 15, py[kcs] + 32, csZ], [8, 20, 8], [0.92, 0.9, 0.85]); // ornate columns
+      }
+
       for (let i = 0; i < 13; i++) {
         const k = (i * 3) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -768,6 +1170,17 @@ const Tracks = (function () {
       addBox(out, [tcx, tcy + 42, tcz], [4.5, 84, 4.5], [0.88, 0.88, 0.90]);
       addBox(out, [tcx - r[0] * 10, tcy + 84, tcz - r[2] * 10], [22, 4, 10], [0.88, 0.88, 0.90]);
       addBox(out, [tcx - r[0] * 16, tcy + 87, tcz - r[2] * 16], [10, 3, 8], [0.95, 0.44, 0.05]);
+      // Red steel tube grandstand framework (COTA signature design element)
+      for (let i = 0; i < 8; i++) {
+        const k = (Math.round(n * 0.15) + i * Math.round(n / 8)) % n;
+        const rk = [track.rx[k], track.ry[k], track.rz[k]];
+        const tk = [track.tx[k], 0, track.tz[k]];
+        const o = hw[k] + 14 + (i % 2) * 8;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + rk[0] * side * o, py[k] + 12, pz[k] + rk[2] * side * o],
+                 [3, 24, 20], [0.95, 0.44, 0.05], [rk, [0, 1, 0], tk]);
+        }
+      }
     }
     if (def.id === "vegas") {
       // MSG Sphere — distinctive multi-colour LED sphere east of the Strip
@@ -785,6 +1198,15 @@ const Tracks = (function () {
       }
       addBox(out, [scx, hubY + rad, scz], [7, 7, 7], vc[0]);
       addBox(out, [scx, hubY - rad, scz], [7, 7, 7], vc[2]);
+      // Strip hotel towers visible from pit area (Bellagio, Caesars Palace, Paris)
+      const khot = Math.round(n * 0.08) % n;
+      const khr = [track.rx[khot], track.ry[khot], track.rz[khot]];
+      for (let i = 0; i < 4; i++) {
+        const h = 40 + i * 20, d = 140 + i * 30;
+        const hx = px[khot] + khr[0] * d, hz = pz[khot] + khr[2] * d;
+        const tone = [0.8, 0.75, 0.7, 0.65][i];
+        addBox(out, [hx, py[khot] + h / 2, hz], [30 + i * 8, h, 30 + i * 8], [tone, tone * 0.95, tone * 0.9]);
+      }
     }
     if (def.id === "singapore") {
       // Gardens by the Bay supertrees alongside the circuit
@@ -799,8 +1221,24 @@ const Tracks = (function () {
         addBox(out, [scx, py[k] + h + 4, scz], [12 + i * 2, 8, 12 + i * 2], [0.06, 0.38, 0.14]);
         addBox(out, [scx, py[k] + h + 0.5, scz], [14 + i * 2, 1.5, 14 + i * 2], stc[i % 3]);
       }
+      // Marina Bay Sands: 3-tower hotel complex near start/finish area with connecting bridge
+      const kmb = Math.round(n * 0.03) % n;
+      const kmbr = [track.rx[kmb], track.ry[kmb], track.rz[kmb]];
+      for (let i = -1; i <= 1; i++) {
+        const tx = px[kmb] + kmbr[0] * (hw[kmb] + 120 + i * 18);
+        const tz = pz[kmb] + kmbr[2] * (hw[kmb] + 120 + i * 18);
+        const h = 57 + i * 3;  // tallest in middle
+        addBox(out, [tx, py[kmb] + h / 2, tz], [20, h, 20], [0.92, 0.92, 0.95]);
+      }
+      const mbs_mid = px[kmb] + kmbr[0] * (hw[kmb] + 120);
+      const mbz_mid = pz[kmb] + kmbr[2] * (hw[kmb] + 120);
+      addBox(out, [mbs_mid, py[kmb] + 50, mbz_mid], [60, 5, 12], [0.85, 0.85, 0.88]); // roof bridge
     }
     if (def.id === "interlagos") {
+      // Lake: body of water visible from inside track (pit area perspective)
+      const klake = Math.round(n * 0.18) % n;
+      const klaker = [track.rx[klake], track.ry[klake], track.rz[klake]];
+      addBox(out, [px[klake] + klaker[0] * 50, py[klake] - 0.6, pz[klake] + klaker[2] * 50], [280, 1.2, 200], [0.08, 0.25, 0.45]);
       // São Paulo tower-block backdrop visible across the lake
       for (let i = 0; i < 9; i++) {
         const k = (Math.round(n * 0.22) + i * 8) % n;
@@ -810,8 +1248,63 @@ const Tracks = (function () {
         const tone = 0.50 + s * 0.22;
         addBox(out, [px[k] + r[0] * o * side, py[k] + h * 0.5, pz[k] + r[2] * o * side], [11, h, 11], [tone, tone * 0.93, tone * 0.86]);
       }
+      // Pit complex: modernized brutalist control tower
+      const kpit = Math.round(n * 0.02) % n;
+      const kpitr = [track.rx[kpit], track.ry[kpit], track.rz[kpit]];
+      addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 18, pz[kpit] + kpitr[2] * 12], [50, 36, 30], [0.5, 0.48, 0.46]);
+      addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 36, pz[kpit] + kpitr[2] * 12], [46, 6, 26], [0.42, 0.42, 0.44]);
     }
     if (def.id === "zandvoort") {
+      // Extensive dune landscape with multiple layers
+      const kdunes = [Math.round(n * 0.15), Math.round(n * 0.35), Math.round(n * 0.55), Math.round(n * 0.75)];
+      for (const kd of kdunes) {
+        const kr = [track.rx[kd], track.ry[kd], track.rz[kd]];
+        for (let layer = 0; layer < 3; layer++) {
+          const o = hw[kd] + 50 + layer * 40;
+          for (const side of [-1, 1]) {
+            addBox(out, [px[kd] + kr[0] * side * o, py[kd] + 8 + layer * 2, pz[kd] + kr[2] * side * o],
+                   [60, 16, 80], [0.74 - layer * 0.05, 0.68 - layer * 0.05, 0.48]);
+          }
+        }
+      }
+      // Beach vegetation (dune grasses)
+      every(35, (k) => {
+        for (const side of [-1, 1]) {
+          const d = 80 + hash(k * 63 + side) * 50;
+          const h = 1.2 + hash(k * 64) * 1.2;
+          place(k, side, d, [2.2, h, 2.2], [0.55, 0.52, 0.38]);  // dune grass
+        }
+      });
+      // North Sea water features (extensive)
+      every(120, (k) => {
+        const sea_d = 180 + hash(k * 65) * 80;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + track.rx[k] * side * sea_d, py[k] - 0.8, pz[k] + track.rz[k] * side * sea_d],
+                 [140, 1.6, 200], [0.08, 0.20, 0.36]);
+        }
+      });
+      // Beach sand areas
+      every(160, (k) => {
+        const beach_d = 120 + hash(k * 67) * 50;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + track.rx[k] * side * beach_d, py[k] - 0.5, pz[k] + track.rz[k] * side * beach_d],
+                 [100, 1.0, 140], [0.76, 0.70, 0.58]);
+        }
+      });
+      // Wind turbines (Dutch renewable energy infrastructure)
+      every(280, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 69 + side) > 0.5) continue;
+          const tower_d = hw[k] + 80 + hash(k * 70) * 40;
+          place(k, side, tower_d, [4, 60, 4], [0.80, 0.80, 0.82]);  // tower
+          place(k, side, tower_d, [50, 8, 4], [0.78, 0.78, 0.76]);  // blade
+        }
+      });
+      // Floodlights for evening sessions
+      every(150, (k) => {
+        const side = hash(k * 71) < 0.4 ? -1 : 1;
+        place(k, side, hw[k] + 75, [2.0, 36, 2.0], [0.38, 0.38, 0.42]);
+      });
       // Dutch windmill on the dunes
       const kc = Math.round(n * 0.36) % n;
       const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
@@ -842,6 +1335,14 @@ const Tracks = (function () {
         place(k, side, d, [1.2, 1.8, 1.2], [0.28, 0.19, 0.10]);
         place(k, side, d, [3.0, h, 3.0], [0.07, 0.27, 0.09]);
       });
+      // Tribuna Centrale: main grandstand at pit straight (white/cream Italian classic style)
+      const ktc = Math.round(n * 0.01) % n;
+      const ktcr = [track.rx[ktc], track.ry[ktc], track.rz[ktc]];
+      addBox(out, [px[ktc] + ktcr[0] * (hw[ktc] + 10), py[ktc] + 18, pz[ktc] + ktcr[2] * (hw[ktc] + 10)],
+             [42, 36, 26], [0.85, 0.83, 0.78]);
+      // Control tower with press center
+      addBox(out, [px[ktc] + ktcr[0] * (hw[ktc] + 24), py[ktc] + 20, pz[ktc] + ktcr[2] * (hw[ktc] + 24)],
+             [12, 40, 12], [0.95, 0.95, 0.97]);
     }
     if (def.id === "suzuka") {
       // Sakura (cherry blossom) trees scattered among the green zones
@@ -852,9 +1353,17 @@ const Tracks = (function () {
         place(k, side, d, [1.1, 1.3, 1.1], [0.32, 0.22, 0.12]);
         place(k, side, d, [3.8, 3.5 + s * 2, 3.8], [0.92, 0.55, 0.64]);
       });
+      // Theme park area beside ferris wheel (recreational buildings)
+      const ktp = Math.round(n * 0.05) % n;
+      const ktpr = [track.rx[ktp], track.ry[ktp], track.rz[ktp]];
+      for (let i = 0; i < 4; i++) {
+        const h = 8 + i * 3, d = 60 + i * 12;
+        addBox(out, [px[ktp] + ktpr[0] * d, py[ktp] + h / 2, pz[ktp] + ktpr[2] * d],
+               [24 + i * 6, h, 28], [0.6 + i * 0.05, 0.45 + i * 0.08, 0.3 + i * 0.04]);
+      }
     }
     if (def.id === "silverstone") {
-      // The Wing — curved pit-lane roof structure on the main straight
+      // The Wing — curved pit-lane roof structure on the main straight (390m long, 1200 tonnes steel)
       for (let i = 0; i < 6; i++) {
         const k = (Math.round(n * 0.01) + i * 3) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -862,11 +1371,24 @@ const Tracks = (function () {
         const u = upOf(track, k);
         const rise = Math.sin((i / 5) * Math.PI) * 5;
         const scx = px[k] + r[0] * (hw[k] + 4), scy = py[k], scz = pz[k] + r[2] * (hw[k] + 4);
-        addBox(out, [scx, scy + 12 + rise * 0.5, scz], [1.5, 24 + rise, 18], [0.88, 0.88, 0.90], [r, u, t]);
-        addBox(out, [scx, scy + 25 + rise, scz], [36, 1.5, 20], [0.86, 0.86, 0.88], [r, u, t]);
+        // metallic silver polyester-coated steel panels (RAL 9006)
+        addBox(out, [scx, scy + 12 + rise * 0.5, scz], [1.5, 24 + rise, 18], [0.75, 0.75, 0.78], [r, u, t]);
+        addBox(out, [scx, scy + 25 + rise, scz], [36, 1.5, 20], [0.72, 0.72, 0.75], [r, u, t]);
+        // support structures
+        if (i > 0 && i < 5) {
+          addBox(out, [scx - r[0] * 8, scy + 18 + rise * 0.3, scz - r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
+          addBox(out, [scx + r[0] * 8, scy + 18 + rise * 0.3, scz + r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
+        }
       }
     }
     if (def.id === "bahrain") {
+      // Sakhir Tower: 9-storey conical race control with LED facade, visible at pit area
+      const ksc = Math.round(n * 0.02) % n;
+      const kr = [track.rx[ksc], track.ry[ksc], track.rz[ksc]];
+      const ksX = px[ksc] + kr[0] * (hw[ksc] + 12), ksY = py[ksc], ksZ = pz[ksc] + kr[2] * (hw[ksc] + 12);
+      addBox(out, [ksX, ksY + 20, ksZ], [14, 40, 14], [0.95, 0.95, 0.97]); // main tower
+      addBox(out, [ksX, ksY + 38, ksZ], [10, 8, 10], [0.1, 0.1, 0.12]);    // top section
+      addBox(out, [ksX, ksY + 42, ksZ], [8, 4, 8], [0.9, 0.3, 0.05]);       // orange cap
       // Arch grandstand + minaret: a nod to the circuit's Islamic architecture
       const kc = Math.round(n * 0.52) % n;
       const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
