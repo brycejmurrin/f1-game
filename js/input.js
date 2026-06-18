@@ -53,6 +53,8 @@ const Input = (function () {
   let gyroAttached = false;
   let gyroDenied = false;
   let useTiltPref = true;
+  let tiltSmoothed = 0;       // EMA-filtered tilt (eliminates jitter spikes)
+  let lastOrientMs = 0;
 
   let onPauseCb = null;
 
@@ -87,6 +89,10 @@ const Input = (function () {
       default:  t = gamma;  break;
     }
     tiltRaw = t;
+    const n = nowMs();
+    const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
+    lastOrientMs = n;
+    tiltSmoothed += (tiltRaw - tiltSmoothed) * (1 - Math.exp(-10 * odt));
     tiltSeen = true;
   }
 
@@ -132,6 +138,7 @@ const Input = (function () {
     // angle is often well past ±35°, and clamping it leaves a residual offset
     // that pulls the car to one side. Recalibrated on orientation change too.
     tiltZero = tiltRaw;
+    tiltSmoothed = tiltRaw;   // reset smoother so there's no startup transient
   }
 
   function tiltActive() {
@@ -139,7 +146,7 @@ const Input = (function () {
   }
 
   function tiltSteering() {
-    let d = tiltRaw - tiltZero;
+    let d = tiltSmoothed - tiltZero;
     if (Math.abs(d) < DEADZONE) return 0;
     d -= Math.sign(d) * DEADZONE;
     return Math.max(-1, Math.min(1, d / (MAX_TILT - DEADZONE)));
