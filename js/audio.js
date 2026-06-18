@@ -21,7 +21,7 @@ const GameAudio = (function () {
   let isEnabled = true;
 
   // Engine voice (persistent while racing)
-  let engA = null, engB = null, engC = null;     // saw, saw, square
+  let engA = null, engB = null, engC = null;     // saw, saw, square (synth fallback)
   let engFilter = null, engGain = null;
   let whineOsc = null, whineGain = null;          // turbo whine
   let harvSrc = null, harvFilter = null, harvGain = null; // MGU-K harvest whirr
@@ -30,6 +30,17 @@ const GameAudio = (function () {
   let engineOn = false;
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
+
+  // Sample-based engine core: real CC0 recordings (assets/sfx/, from
+  // pmndrs/racing-game, CC0). engine = idle/low-rev loop, accel = high-rev loop;
+  // we pitch both by playbackRate (so revs rise through a gear and DROP on an
+  // upshift) and crossfade idle->accel with load. Falls back to the synth core
+  // below if the samples aren't decoded yet (offline / not loaded).
+  let engBuf = null, accBuf = null, samplesReady = false;
+  let engSrcIdle = null, engSrcAcc = null, engGainIdle = null, engGainAcc = null;
+  let usingSamples = false;
+  const SFX_ENGINE = "assets/sfx/engine.mp3";
+  const SFX_ACCEL = "assets/sfx/accelerate.mp3";
 
   // Music: streamed CC0 tracks (assets/music/), lazy-loaded + cached
   let musicOn = false;
@@ -75,7 +86,21 @@ const GameAudio = (function () {
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
     if (ctx.state !== "running") ctx.resume();
+    loadEngineSamples();
     return true;
+  }
+
+  // Fetch + decode the engine recordings into ctx-bound buffers. Best-effort:
+  // if it fails (offline, decode error), samplesReady stays false and the engine
+  // falls back to the synth core. Buffers are cleared on a context rebuild.
+  function loadEngineSamples() {
+    if (!ctx || samplesReady) return;
+    const grab = (url) => fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
+    Promise.all([grab(SFX_ENGINE), grab(SFX_ACCEL)])
+      .then(([e, a]) => { engBuf = e; accBuf = a; samplesReady = true; })
+      .catch(() => { /* keep synth fallback */ });
   }
 
   function init() {
@@ -142,6 +167,7 @@ const GameAudio = (function () {
     musicGain = null;
     currentUrl = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
+    engBuf = accBuf = null; samplesReady = false;           // ctx-bound; reload for new ctx
     if (!createCtx()) return;
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
@@ -228,25 +254,41 @@ const GameAudio = (function () {
   function startEngine() {
     if (!ctx || engineOn) return;
 
-    // core: two detuned saws + a square through a speed-tracked lowpass
-    engA = ctx.createOscillator();
-    engB = ctx.createOscillator();
-    engC = ctx.createOscillator();
+    // shared lowpass + master gain for the engine core (samples or synth)
     engFilter = ctx.createBiquadFilter();
     engGain = ctx.createGain();
-    engA.type = "sawtooth";
-    engB.type = "sawtooth";
-    engC.type = "square";
-    engA.frequency.value = 70;
-    engB.frequency.value = 70.7;
-    engC.frequency.value = 35;
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
-    engA.connect(engFilter);
-    engB.connect(engFilter);
-    engC.connect(engFilter);
     engFilter.connect(engGain).connect(master);
+
+    usingSamples = !!(samplesReady && engBuf && accBuf);
+    engA = engB = engC = null;
+    engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
+    if (usingSamples) {
+      // real engine recordings: idle loop + acceleration loop, crossfaded and
+      // pitched (playbackRate) by rev/gear in setEngine.
+      engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
+      engSrcAcc = ctx.createBufferSource(); engSrcAcc.buffer = accBuf; engSrcAcc.loop = true;
+      engGainIdle = ctx.createGain(); engGainIdle.gain.value = 0;
+      engGainAcc = ctx.createGain(); engGainAcc.gain.value = 0;
+      engSrcIdle.connect(engGainIdle).connect(engFilter);
+      engSrcAcc.connect(engGainAcc).connect(engFilter);
+    } else {
+      // synth fallback: two detuned saws + a square
+      engA = ctx.createOscillator();
+      engB = ctx.createOscillator();
+      engC = ctx.createOscillator();
+      engA.type = "sawtooth";
+      engB.type = "sawtooth";
+      engC.type = "square";
+      engA.frequency.value = 70;
+      engB.frequency.value = 70.7;
+      engC.frequency.value = 35;
+      engA.connect(engFilter);
+      engB.connect(engFilter);
+      engC.connect(engFilter);
+    }
 
     // turbo whine: faint high sine riding above the core
     whineOsc = ctx.createOscillator();
@@ -275,9 +317,14 @@ const GameAudio = (function () {
     lfo.frequency.value = 8;
     lfoG.gain.value = 0;
     lfo.connect(lfoG);
-    lfoG.connect(engA.detune);
-    lfoG.connect(engB.detune);
-    lfoG.connect(engC.detune);
+    if (usingSamples) {
+      lfoG.connect(engSrcIdle.detune);
+      lfoG.connect(engSrcAcc.detune);
+    } else {
+      lfoG.connect(engA.detune);
+      lfoG.connect(engB.detune);
+      lfoG.connect(engC.detune);
+    }
 
     // tire screech: looped noise through a bandpass, silent until setSkid
     skidSrc = ctx.createBufferSource();
@@ -291,7 +338,8 @@ const GameAudio = (function () {
     skidGain.gain.value = 0;
     skidSrc.connect(skidFilter).connect(skidGain).connect(master);
 
-    engA.start(); engB.start(); engC.start();
+    if (usingSamples) { engSrcIdle.start(); engSrcAcc.start(); }
+    else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     harvSrc.start();
     lfo.start();
@@ -313,7 +361,15 @@ const GameAudio = (function () {
     whineGain.gain.setTargetAtTime(0, t0, 0.06);
     harvGain.gain.setTargetAtTime(0, t0, 0.06);
     skidGain.gain.setTargetAtTime(0, t0, 0.04);
-    engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
+    if (usingSamples) {
+      if (engGainIdle) engGainIdle.gain.setTargetAtTime(0, t0, 0.06);
+      if (engGainAcc) engGainAcc.gain.setTargetAtTime(0, t0, 0.06);
+      if (engSrcIdle) engSrcIdle.stop(t0 + 0.35);
+      if (engSrcAcc) engSrcAcc.stop(t0 + 0.35);
+    } else {
+      engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
+    }
+    engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
     whineOsc.stop(t0 + 0.35);
     harvSrc.stop(t0 + 0.35);
     lfo.stop(t0 + 0.35);
@@ -338,25 +394,16 @@ const GameAudio = (function () {
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
     const t = ctx.currentTime;
 
-    // Per-gear pitch character. Lower gears: higher idle + a higher, buzzier
-    // ceiling (short ratios scream). Higher gears: lower base, lower ceiling
-    // (long ratios drone). g01 is 0 in 1st .. 1 in 8th.
-    let gIdle = 95, gSpan = 700;
+    // Per-gear character. g01 = 0 in 1st .. 1 in 8th. Lower gears reach a higher
+    // ceiling (short ratios scream); higher gears top out lower (long ratios
+    // drone). Used by both the sample (playbackRate) and synth (freq) cores.
+    let g01 = 0.3, gIdle = 95, gSpan = 700;
     if (typeof gear === "number" && isFinite(gear)) {
       const gi = Math.max(1, Math.min(8, Math.round(gear)));
-      const g01 = (gi - 1) / 7;
-      // idle climbs a touch in low gears, settles low in high gears
+      g01 = (gi - 1) / 7;
       gIdle = 130 - g01 * 70;             // 130 Hz (1st) -> 60 Hz (8th)
-      // redline ceiling drops with gear so each gear's top note is distinct
       gSpan = 900 - g01 * 460;            // span 900 (1st) -> 440 (8th)
     }
-
-    // idle -> redline within the gear, widened for an audible per-gear swing;
-    // boost +12% pitch
-    const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
-    engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
-    engB.frequency.setTargetAtTime(base * 1.009, t, 0.025);
-    engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
 
     // transient gain dip from a recent gear shift (rev-cut), decays ~120 ms
     if (shiftDuck > 0.0001) {
@@ -366,12 +413,36 @@ const GameAudio = (function () {
       if (shiftDuck < 0.0001) shiftDuck = 0;
     }
 
-    // lowpass + loudness follow SPEED (steady across shifts); revs add bite
-    const cut = Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
+    if (usingSamples) {
+      // pitch the recordings by rev: idle->redline within the gear, with a lower
+      // ceiling in higher gears, so an upshift drops the pitch audibly. boost
+      // adds a little extra.
+      const rate = (0.8 + rev * (1.5 - 0.5 * g01)) * (1 + 0.1 * b);
+      engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.04);
+      engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.04);
+      // crossfade the idle loop into the acceleration loop as revs rise
+      const acc = clamp01(rev * 1.25);
+      engGainAcc.gain.setTargetAtTime(0.85 * acc, t, 0.05);
+      engGainIdle.gain.setTargetAtTime(0.8 * (1 - 0.8 * acc), t, 0.05);
+    } else {
+      // synth fallback: detuned saws + sub follow the per-gear frequency
+      const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
+      engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
+      engB.frequency.setTargetAtTime(base * 1.009, t, 0.025);
+      engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
+    }
+
+    // lowpass + loudness follow SPEED (steady across shifts); revs add bite.
+    // Samples need a higher cutoff floor (they're full recordings) and their own
+    // master level since the idle/accel sub-gains already mix them.
+    const cut = usingSamples
+      ? Math.min(9000, 1400 + s * 5200 + rev * 1600 + b * 1500)
+      : Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
-    engGain.gain.setTargetAtTime(
-      (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0))
-        * (1 - 0.55 * shiftDuck), t, 0.03);
+    const lvl = usingSamples
+      ? (0.32 + s * 0.4 + rev * 0.12 + b * 0.12 + (offroad ? 0.04 : 0))
+      : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0));
+    engGain.gain.setTargetAtTime(lvl * (1 - 0.55 * shiftDuck), t, 0.03);
 
     // turbo whine tracks revs
     whineOsc.frequency.setTargetAtTime(1500 + rev * 2000, t, 0.05);
@@ -599,5 +670,7 @@ const GameAudio = (function () {
     penalty,
     startMusic,
     stopMusic,
+    // debug/telemetry: lets tests confirm the recorded engine samples loaded
+    debug: function () { return { samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn }; },
   };
 })();
