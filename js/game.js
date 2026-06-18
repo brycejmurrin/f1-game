@@ -57,10 +57,12 @@ const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed ban
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
-// 6-speed gearbox: fewer, wider gears so each one lasts longer and you don't
-// row through them so fast (each gear's top speed as a fraction of VMAX).
+// 6-speed gearbox with ~geometric ratios (constant ~0.66 step), like a real
+// gearbox: each upshift drops the revs to ~66% of redline in EVERY gear, so the
+// gears are clearly "split up" (instead of the high gears barely dropping revs)
+// and each gear has a meaningful rev range to climb. Top speed fraction of VMAX.
 const GEARS = 6;
-const GEAR_TOP = [0.22, 0.40, 0.57, 0.72, 0.87, 1.0];
+const GEAR_TOP = [0.13, 0.20, 0.30, 0.45, 0.67, 1.0];
 const IDLE_RPM = 4000, MAX_RPM = 15000;
 function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
 function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
