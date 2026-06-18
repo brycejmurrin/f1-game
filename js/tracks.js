@@ -493,9 +493,32 @@ const Tracks = (function () {
         { t: -50, l: 90 }, { t: 50, l: 90 }, { t: 160, l: 160, b: 0.31, w: 8 }] },
   ];
 
+  // Real circuit centerlines (js/circuits.js): projected OSM traces in metres.
+  // We use the real layout instead of the authored segment lists. Points are
+  // kept flat (y = 0) — the old per-segment elevation distributed a vertical
+  // residual that tilted the whole loop, which is the height glitch on Monaco.
+  function realPoints(id, baseHW) {
+    const path = (typeof CircuitPaths !== "undefined") && CircuitPaths[id];
+    if (!path) return null;
+    let pts = path.pts.map((p) => [p[0], 0, p[1], baseHW, 0]);
+    // light closed-loop smoothing to take the digitisation jitter off the
+    // raw trace so the Catmull-Rom pass doesn't overshoot at noisy vertices
+    const N = pts.length;
+    for (let it = 0; it < 2; it++) {
+      const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
+      const L = 0.25;
+      for (let i = 0; i < N; i++) {
+        const a = (i - 1 + N) % N, b = (i + 1) % N;
+        pts[i][0] = sx[i] + L * ((sx[a] + sx[b]) * 0.5 - sx[i]);
+        pts[i][2] = sz[i] + L * ((sz[a] + sz[b]) * 0.5 - sz[i]);
+      }
+    }
+    return pts;
+  }
+
   const LIST = DEFS.map((d) => {
     const def = { id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3, night: d.night, theme: d.theme, lengthKm: d.lengthKm, palette: d.pal };
-    def.points = centerline(d.segs, d.baseHW);
+    def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
     return def;
   });
 
