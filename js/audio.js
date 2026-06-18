@@ -323,29 +323,32 @@ const GameAudio = (function () {
     engineOn = false;
   }
 
-  // speed01 0..1, boost01 0..1 (truthy ok), offroad bool
-  function setEngine(speed01, boost01, offroad) {
+  // rev01 0..1 drives engine PITCH (so it revs within a gear and drops on an
+  // upshift); speed01 (optional) drives loudness/brightness/harvest so they
+  // stay steady across shifts. boost01 0..1 (truthy ok), offroad bool.
+  function setEngine(rev01, boost01, offroad, speed01) {
     if (!engineOn || !ctx) return;
-    const s = clamp01(speed01 || 0);
+    const rev = clamp01(rev01 || 0);
+    const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
     const t = ctx.currentTime;
 
-    // 70 Hz idle to ~620 Hz flat out; boost adds +12% pitch
-    const base = (70 + s * 550) * (1 + 0.12 * b);
-    engA.frequency.setTargetAtTime(base * 0.994, t, 0.03);
-    engB.frequency.setTargetAtTime(base * 1.009, t, 0.03);
-    engC.frequency.setTargetAtTime(base * 0.5, t, 0.03);
+    // 90 Hz idle to ~720 Hz at the redline, following revs; boost +12% pitch
+    const base = (90 + rev * 630) * (1 + 0.12 * b);
+    engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
+    engB.frequency.setTargetAtTime(base * 1.009, t, 0.025);
+    engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
 
-    // lowpass 600 -> 5200 Hz with speed; boost opens it further
-    const cut = Math.min(7200, 600 + s * 4600 + b * 1400);
+    // lowpass + loudness follow SPEED (steady across shifts); revs add bite
+    const cut = Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     engGain.gain.setTargetAtTime(
-      0.05 + s * 0.06 + b * 0.025 + (offroad ? 0.012 : 0), t, 0.05);
+      0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0), t, 0.05);
 
-    // turbo whine 1.5–3.5 kHz tracking speed
-    whineOsc.frequency.setTargetAtTime(1500 + s * 2000, t, 0.05);
+    // turbo whine tracks revs
+    whineOsc.frequency.setTargetAtTime(1500 + rev * 2000, t, 0.05);
     whineGain.gain.setTargetAtTime(
-      (0.004 + s * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0), t, 0.08);
+      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0), t, 0.08);
 
     // harvesting whirr fades IN under braking/lift: infer deceleration
     // from the speed trajectory between calls
