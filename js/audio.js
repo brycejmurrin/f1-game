@@ -422,12 +422,13 @@ const GameAudio = (function () {
       // A big, near-uniform low->high sweep makes the rev climb obvious; tall
       // gears top out a touch lower so an upshift still drops the pitch. On an
       // upshift rev resets low, so the note snaps back down and climbs again.
-      // these clips are already F1 engine notes, so a smaller multiplier avoids
-      // a chipmunk effect: each gear sweeps from a low ~0.6x up to a screaming
-      // redline (~1.75x in 1st, lower in tall gears). rev resets on upshift, so
-      // the note snaps back down and climbs again.
-      const top = 1.75 - 0.3 * g01;                // redline rate ~1.75 (1st) .. ~1.45 (8th)
-      const rate = (0.6 + Math.pow(rev, 0.85) * (top - 0.6)) * (1 + 0.07 * b);
+      // Pitch is proportional to RPM, and rev01 IS normalized RPM, so a straight
+      // linear map is physically correct: every gear reaches the SAME redline
+      // note, and an upshift drops the pitch only partially (rpmFor lowers the
+      // RPM by the gear ratio — more in low gears, less in high gears). Pitched
+      // down overall per feedback; redline kept near where gear 7 sat ("about
+      // right"), idle brought lower for a deeper low end.
+      const rate = (0.26 + rev * 0.62) * (1 + 0.05 * b);   // idle ~0.26x .. redline ~0.88x
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
       // both loops are pitched together (so the sweep is carried either way);
