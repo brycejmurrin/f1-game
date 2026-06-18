@@ -395,28 +395,156 @@ const DataHub = (function () {
     });
   }
 
-  /* ================= LIVE ================= */
+  /* ========= session selection (shared by LIVE + TELEMETRY) ========= */
 
-  function loadLive() {
+  const YEARS = [2026, 2025, 2024, 2023];   // OpenF1 data starts in 2023
+  const sel = { year: null, meetingKey: null, sessionKey: null, meta: null };
+
+  function ensureSession() {
+    if (sel.sessionKey !== null) return Promise.resolve(sel.meta);
     return F1API.latestSession().then(function (ses) {
-      const wrap = el("div", "dh-tabbody");
-      if (!ses || ses.sessionKey === null || ses.sessionKey === undefined) {
-        wrap.appendChild(emptyMsg(NO_LIVE_MSG));
-        return wrap;
+      if (ses && ses.sessionKey !== null && ses.sessionKey !== undefined) {
+        sel.meta = ses;
+        sel.sessionKey = ses.sessionKey;
+        sel.meetingKey = ses.meetingKey;
+        sel.year = ses.year || YEARS[0];
       }
-      return Promise.all([
-        F1API.weather(ses.sessionKey).catch(function () { return null; }),
-        F1API.positions(ses.sessionKey).catch(function () { return null; }),
-        F1API.sessionDrivers(ses.sessionKey).catch(function () { return null; })
-      ]).then(function (res) {
-        return buildLive(ses, res[0], res[1], res[2]);
-      });
+      return sel.meta;
     });
   }
 
-  function buildLive(ses, weather, positions, drivers) {
-    const wrap = el("div", "dh-tabbody");
+  // Force the sibling session-tab to re-render for a newly picked session.
+  function invalidateOther(except) {
+    ["live", "telemetry"].forEach(function (id) {
+      if (id !== except) { state[id] = null; gen[id] = (gen[id] || 0) + 1; }
+    });
+  }
 
+  function setSelectOptions(selectEl, opts, selectedVal) {
+    clear(selectEl);
+    opts.forEach(function (o) {
+      const op = el("option", null, o.label);
+      op.value = String(o.value);
+      if (String(o.value) === String(selectedVal)) op.selected = true;
+      selectEl.appendChild(op);
+    });
+  }
+
+  // Year / Grand Prix / Session controls. onPick(meta) fires only on a user
+  // change (not initial population). Selection defaults to the latest session.
+  function buildPicker(onPick) {
+    const box = el("div", "dh-picker");
+    const yearRow = el("div", "dh-pick-years");
+    YEARS.forEach(function (y) {
+      const b = el("button", "dh-pill" + (y === sel.year ? " dh-active" : ""), String(y));
+      b.type = "button";
+      b.addEventListener("click", function () {
+        if (y === sel.year) return;
+        sel.year = y; sel.meetingKey = null; sel.sessionKey = null;
+        for (let i = 0; i < yearRow.children.length; i++) {
+          yearRow.children[i].classList.toggle("dh-active", yearRow.children[i] === b);
+        }
+        loadGPs(true);
+      });
+      yearRow.appendChild(b);
+    });
+    box.appendChild(yearRow);
+
+    const gpField = el("label", "dh-pick-field");
+    gpField.appendChild(el("span", "dh-pick-label", "GRAND PRIX"));
+    const gpSel = el("select", "dh-pick-select");
+    gpField.appendChild(gpSel);
+    box.appendChild(gpField);
+
+    const sesField = el("label", "dh-pick-field");
+    sesField.appendChild(el("span", "dh-pick-label", "SESSION"));
+    const sesSel = el("select", "dh-pick-select");
+    sesField.appendChild(sesSel);
+    box.appendChild(sesField);
+
+    let sesIndex = {};
+    function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
+
+    gpSel.addEventListener("change", function () {
+      sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
+      sel.sessionKey = null;
+      loadSessions(true);
+    });
+    sesSel.addEventListener("change", function () {
+      if (!sesSel.value) return;
+      const m = sesIndex[sesSel.value];
+      if (!m) return;
+      sel.sessionKey = m.sessionKey; sel.meta = m;
+      onPick(m);
+    });
+
+    function loadGPs(userChanged) {
+      ph(gpSel, "loading…"); ph(sesSel, "—");
+      F1API.meetings(sel.year).then(function (ms) {
+        if (!ms.length) { ph(gpSel, "no data"); return; }
+        if (sel.meetingKey === null) sel.meetingKey = ms[ms.length - 1].meetingKey;
+        setSelectOptions(gpSel, ms.map(function (m) {
+          return { value: m.meetingKey, label: m.name || m.circuit || "Round" };
+        }), sel.meetingKey);
+        loadSessions(userChanged);
+      }, function () { ph(gpSel, "error"); });
+    }
+
+    function loadSessions(userChanged) {
+      ph(sesSel, "loading…");
+      F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
+        sesIndex = {};
+        ss.forEach(function (s) { sesIndex[s.sessionKey] = s; });
+        if (!ss.length) { ph(sesSel, "no data"); return; }
+        if (sel.sessionKey === null) {
+          const race = ss.filter(function (s) { return (s.type || "").toLowerCase() === "race"; });
+          const def = race.length ? race[race.length - 1] : ss[ss.length - 1];
+          sel.sessionKey = def.sessionKey; sel.meta = def;
+        }
+        setSelectOptions(sesSel, ss.map(function (s) {
+          return { value: s.sessionKey, label: s.name || s.type || "Session" };
+        }), sel.sessionKey);
+        if (userChanged) onPick(sel.meta);
+      }, function () { ph(sesSel, "error"); });
+    }
+
+    loadGPs(false);   // reflect current selection without firing onPick
+    return box;
+  }
+
+  /* ================= LIVE ================= */
+
+  function loadLive() {
+    return ensureSession().then(function () {
+      const wrap = el("div", "dh-tabbody");
+      if (sel.sessionKey === null) { wrap.appendChild(emptyMsg(NO_LIVE_MSG)); return wrap; }
+      const body = el("div", "dh-tabbody");
+      wrap.appendChild(buildPicker(function (meta) {
+        renderLiveBody(meta, body);
+        invalidateOther("live");
+      }));
+      wrap.appendChild(body);
+      renderLiveBody(sel.meta, body);
+      return wrap;
+    });
+  }
+
+  function renderLiveBody(meta, body) {
+    clear(body);
+    body.appendChild(spinner());
+    Promise.all([
+      F1API.weather(meta.sessionKey).catch(function () { return null; }),
+      F1API.positions(meta.sessionKey).catch(function () { return null; }),
+      F1API.sessionDrivers(meta.sessionKey).catch(function () { return null; })
+    ]).then(function (res) {
+      clear(body);
+      fillLive(body, meta, res[0], res[1], res[2]);
+    }, function () {
+      clear(body); body.appendChild(emptyMsg(NO_LIVE_MSG));
+    });
+  }
+
+  function fillLive(body, ses, weather, positions, drivers) {
     // session info card
     const info = el("div", "dh-livecard");
     const title = el("div", "dh-live-title");
@@ -426,7 +554,7 @@ const DataHub = (function () {
     const place = [ses.circuit, ses.country].filter(Boolean).join(" · ");
     if (place) info.appendChild(el("div", "dh-live-sub", place));
     if (ses.dateStart) info.appendChild(el("div", "dh-live-sub", "Starts " + fmtDateTime(ses.dateStart)));
-    wrap.appendChild(info);
+    body.appendChild(info);
 
     // weather card
     if (weather) {
@@ -448,13 +576,13 @@ const DataHub = (function () {
         grid.appendChild(cell);
       });
       wx.appendChild(grid);
-      wrap.appendChild(wx);
+      body.appendChild(wx);
     }
 
     // classification
     if (!positions || !positions.length) {
-      wrap.appendChild(emptyMsg(NO_LIVE_MSG));
-      return wrap;
+      body.appendChild(emptyMsg(NO_LIVE_MSG));
+      return;
     }
     const byNum = {};
     (drivers || []).forEach(function (d) {
@@ -484,8 +612,7 @@ const DataHub = (function () {
       row.appendChild(el("span", "dh-td-team dh-live-team", d.team || ""));
       sec.appendChild(row);
     });
-    wrap.appendChild(sec);
-    return wrap;
+    body.appendChild(sec);
   }
 
   /* ================= TELEMETRY ================= */
@@ -501,50 +628,57 @@ const DataHub = (function () {
   }
 
   function loadTelemetry() {
-    return F1API.latestSession().then(function (ses) {
+    return ensureSession().then(function () {
       const wrap = el("div", "dh-tabbody");
-      if (!ses || ses.sessionKey === null || ses.sessionKey === undefined) {
-        wrap.appendChild(emptyMsg(NO_TELEM_MSG));
-        return wrap;
-      }
-      return F1API.sessionDrivers(ses.sessionKey).catch(function () { return null; }).then(function (drivers) {
-        // session header
-        const info = el("div", "dh-livecard");
-        const title = el("div", "dh-live-title");
-        title.appendChild(el("span", null, ses.name || ses.type || "Session"));
-        if (ses.type && ses.type !== ses.name) title.appendChild(el("span", "dh-live-type", ses.type));
-        info.appendChild(title);
-        const place = [ses.circuit, ses.country].filter(Boolean).join(" · ");
-        if (place) info.appendChild(el("div", "dh-live-sub", place));
-        info.appendChild(el("div", "dh-live-sub", "Fastest-lap telemetry · tap a driver"));
-        wrap.appendChild(info);
+      if (sel.sessionKey === null) { wrap.appendChild(emptyMsg(NO_TELEM_MSG)); return wrap; }
+      const body = el("div", "dh-tabbody");
+      wrap.appendChild(buildPicker(function (meta) {
+        renderTelemetryBody(meta, body);
+        invalidateOther("telemetry");
+      }));
+      wrap.appendChild(body);
+      renderTelemetryBody(sel.meta, body);
+      return wrap;
+    });
+  }
 
-        if (!drivers || !drivers.length) {
-          wrap.appendChild(emptyMsg(NO_TELEM_MSG));
-          return wrap;
-        }
-        drivers = drivers.filter(function (d) { return d && d.num !== null && d.num !== undefined; });
+  function renderTelemetryBody(meta, body) {
+    clear(body);
+    body.appendChild(spinner());
+    F1API.sessionDrivers(meta.sessionKey).catch(function () { return null; }).then(function (drivers) {
+      clear(body);
+      const info = el("div", "dh-livecard");
+      const title = el("div", "dh-live-title");
+      title.appendChild(el("span", null, meta.name || meta.type || "Session"));
+      if (meta.type && meta.type !== meta.name) title.appendChild(el("span", "dh-live-type", meta.type));
+      info.appendChild(title);
+      const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
+      if (place) info.appendChild(el("div", "dh-live-sub", place));
+      info.appendChild(el("div", "dh-live-sub", "Fastest-lap telemetry · tap a driver"));
+      body.appendChild(info);
 
-        const pick = el("div", "dh-driverpick");
-        const detail = el("div", "dh-telem-detail");
-        drivers.forEach(function (d) {
-          const b = el("button", "dh-dchip", d.code || ("#" + d.num));
-          b.type = "button";
-          const col = driverColor(d);
-          b.style.borderColor = cssColor(col);
-          b.addEventListener("click", function () {
-            const sel = pick.querySelectorAll(".dh-dchip");
-            for (let i = 0; i < sel.length; i++) sel[i].classList.remove("dh-active");
-            b.classList.add("dh-active");
-            showDriverTelemetry(ses.sessionKey, d, detail);
-          });
-          pick.appendChild(b);
+      if (!drivers || !drivers.length) { body.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
+      drivers = drivers.filter(function (d) { return d && d.num !== null && d.num !== undefined; });
+
+      const pick = el("div", "dh-driverpick");
+      const detail = el("div", "dh-telem-detail");
+      drivers.forEach(function (d) {
+        const b = el("button", "dh-dchip", d.code || ("#" + d.num));
+        b.type = "button";
+        b.style.borderColor = cssColor(driverColor(d));
+        b.addEventListener("click", function () {
+          const chips = pick.querySelectorAll(".dh-dchip");
+          for (let i = 0; i < chips.length; i++) chips[i].classList.remove("dh-active");
+          b.classList.add("dh-active");
+          showDriverTelemetry(meta.sessionKey, d, detail);
         });
-        wrap.appendChild(pick);
-        detail.appendChild(emptyMsg("Pick a driver above to load their fastest lap."));
-        wrap.appendChild(detail);
-        return wrap;
+        pick.appendChild(b);
       });
+      body.appendChild(pick);
+      detail.appendChild(emptyMsg("Pick a driver above to load their fastest lap."));
+      body.appendChild(detail);
+    }, function () {
+      clear(body); body.appendChild(emptyMsg(NO_TELEM_MSG));
     });
   }
 

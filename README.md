@@ -46,13 +46,14 @@ open APIs, fetched straight from your browser with polite caching:
 - **[Jolpica F1](https://github.com/jolpica/jolpica-f1)** (the Ergast
   successor) — 2026 race schedule, driver & constructor standings, and the
   latest race result.
-- **[OpenF1](https://openf1.org/)** — latest session info, weather,
-  classification, and a **TELEMETRY** tab: pick a driver from the latest
-  completed session to see their fastest-lap **speed / throttle / brake
-  traces**, a **track map coloured by speed** (from car position data), tyre
-  stints and pit stops. (Live telemetry needs a paid/relayed feed, so this
-  uses OpenF1's free historical data — it populates ~30–60 min after a
-  session.)
+- **[OpenF1](https://openf1.org/)** — session info, weather, classification,
+  and a **TELEMETRY** tab. Both the LIVE and TELEMETRY tabs have a
+  **Year → Grand Prix → Session** picker (any session from 2023 on, defaulting
+  to the latest), and in TELEMETRY you pick a driver to see their fastest-lap
+  **speed / throttle / brake traces**, a **track map coloured by speed** (from
+  car position data), tyre stints and pit stops. (True live telemetry needs a
+  paid/relayed feed, so this uses OpenF1's free historical data — it populates
+  ~30–60 min after a session.)
 
 Responses are cached in localStorage with sensible TTLs so the volunteer-run
 APIs aren't hammered.
