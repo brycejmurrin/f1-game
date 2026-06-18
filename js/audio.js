@@ -425,9 +425,10 @@ const GameAudio = (function () {
       // Pitch is proportional to RPM, and rev01 IS normalized RPM, so a straight
       // linear map is physically correct: every gear reaches the SAME redline
       // note, and an upshift drops the pitch only partially (rpmFor lowers the
-      // RPM by the gear ratio — more in low gears, less in high gears). Tuned so
-      // the redline sits near the clip's native pitch, not screaming above it.
-      const rate = (0.36 + rev * 0.68) * (1 + 0.05 * b);   // idle ~0.36x .. redline ~1.04x
+      // RPM by the gear ratio — more in low gears, less in high gears). Pitched
+      // down overall per feedback; redline kept near where gear 7 sat ("about
+      // right"), idle brought lower for a deeper low end.
+      const rate = (0.26 + rev * 0.62) * (1 + 0.05 * b);   // idle ~0.26x .. redline ~0.88x
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
       // both loops are pitched together (so the sweep is carried either way);
