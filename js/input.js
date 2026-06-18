@@ -17,10 +17,9 @@
 "use strict";
 
 const Input = (function () {
+  // Tilt mechanics ported verbatim from the driving-game (Neon Drift) build.
   const MAX_TILT = 22;        // degrees of tilt for full steering lock
-  const DEADZONE = 2.5;       // degrees ignored around the calibrated zero
-  const EXPO = 1.4;           // response curve past the deadzone
-  const TILT_TAU = 0.06;      // s, low-pass time constant (frame-rate independent)
+  const DEADZONE = 1.5;       // degrees ignored around the calibrated zero
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
 
@@ -48,12 +47,9 @@ const Input = (function () {
   let btnBrake = false;
 
   // tilt
-  let tiltFilt = 0;           // low-passed remapped tilt, degrees
+  let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
   let tiltZero = 0;           // calibrated neutral
-  let tiltSeen = false;
-  let calibPending = false;   // calibrate() requested before first sensor event
-  let lastTiltEventT = -1e9;  // performance.now() ms of last sensor event
-  let lastTiltFilterT = 0;
+  let tiltSeen = false;       // we have actually received sensor data
   let gyroAttached = false;
   let gyroDenied = false;
   let useTiltPref = true;
@@ -83,27 +79,15 @@ const Input = (function () {
     if (e.beta === null && e.gamma === null) return;
     const beta = e.beta || 0;
     const gamma = e.gamma || 0;
-    let raw;
+    let t;
     switch (((screenAngle() % 360) + 360) % 360) {
-      case 90:  raw = beta;   break;
-      case 180: raw = -gamma; break;
-      case 270: raw = -beta;  break;
-      default:  raw = gamma;  break;
+      case 90:  t = beta;   break;
+      case 180: t = -gamma; break;
+      case 270: t = -beta;  break;
+      default:  t = gamma;  break;
     }
-    const t = nowMs();
-    if (!tiltSeen) {
-      tiltFilt = raw;
-      tiltSeen = true;
-    } else {
-      // frame-rate-independent low-pass: alpha from the real inter-event dt
-      const dt = Math.max(0, (t - lastTiltFilterT) / 1000);
-      const alpha = 1 - Math.exp(-dt / TILT_TAU);
-      tiltFilt += (raw - tiltFilt) * alpha;
-    }
-    // a calibrate() requested before sensor data arrived takes effect now
-    if (calibPending) { tiltZero = tiltFilt; calibPending = false; }
-    lastTiltFilterT = t;
-    lastTiltEventT = t;
+    tiltRaw = t;
+    tiltSeen = true;
   }
 
   function attachGyro() {
@@ -143,28 +127,19 @@ const Input = (function () {
     return Promise.resolve(true);
   }
 
-  // Capture the current hold as neutral. No clamp: the neutral attitude can be
-  // any angle (a landscape grip is often well past ±35°); clamping it would
-  // leave a residual offset that pulls the car constantly to one side. If no
-  // sensor reading has arrived yet, defer until the first event.
   function calibrate() {
-    if (tiltSeen) tiltZero = tiltFilt;
-    else calibPending = true;
+    tiltZero = Math.max(-35, Math.min(35, tiltRaw));
   }
 
-  // Latched, like the proven driving-game build: once any orientation event
-  // has arrived (tiltSeen), tilt stays active for the rest of the session —
-  // a momentary gap in events never reverts steering to the buttons.
   function tiltActive() {
     return useTiltPref && tiltSeen;
   }
 
   function tiltSteering() {
-    const d = tiltFilt - tiltZero;
-    const mag = Math.abs(d);
-    if (mag < DEADZONE) return 0;
-    const n = clamp((mag - DEADZONE) / (MAX_TILT - DEADZONE), 0, 1);
-    return Math.sign(d) * Math.pow(n, EXPO);
+    let d = tiltRaw - tiltZero;
+    if (Math.abs(d) < DEADZONE) return 0;
+    d -= Math.sign(d) * DEADZONE;
+    return Math.max(-1, Math.min(1, d / (MAX_TILT - DEADZONE)));
   }
 
   /* ---------------- keyboard ---------------- */
