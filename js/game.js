@@ -484,7 +484,7 @@ function updateCar(c, dt, ranked) {
   if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
   if (c.x < -wall) { c.x = -wall; c.speed *= 0.96; }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
-  c.yawVis = damp(c.yawVis, steer * 0.16 + clamp(k * c.speed * 0.12, -0.2, 0.2), 8, dt);
+  c.yawVis = damp(c.yawVis, steer * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
   c.collideT = Math.max(0, c.collideT - dt);
 
   // --- advance along track ---

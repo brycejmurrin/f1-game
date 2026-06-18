@@ -40,9 +40,9 @@ const GameAudio = (function () {
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
   const MENU_TRACK = "assets/music/menu.mp3";
   const RACE_TRACKS = [
-    "assets/music/race_a.wav",
-    "assets/music/race_b.wav",
-    "assets/music/night.wav",
+    "assets/music/menu.mp3",
+    "assets/music/menu.mp3",
+    "assets/music/menu.mp3",
   ];
 
   let listenersAttached = false;
