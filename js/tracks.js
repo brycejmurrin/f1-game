@@ -592,7 +592,8 @@ const Tracks = (function () {
           const r0 = [track.rx[k], track.ry[k], track.rz[k]];
           const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
           const u0 = upOf(track, k);
-          const o0 = side * (hw[k] + 0.35), o1 = side * (hw[kn] + 0.35);
+          const barrierOffset = def.id === "monaco" ? 2.0 : 0.35;
+          const o0 = side * (hw[k] + barrierOffset), o1 = side * (hw[kn] + barrierOffset);
           const ax = px[k] + r0[0] * o0, ay = py[k], az = pz[k] + r0[2] * o0;
           const bx = px[kn] + r1[0] * o1, by = py[kn], bz = pz[kn] + r1[2] * o1;
           const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
@@ -676,7 +677,7 @@ const Tracks = (function () {
           if (def.id === "monaco" && side === 1 && k < n * 0.14) continue; // leave the harbour open
           const s = hash(k * 3 + side), h = 10 + s * 26;
           const tone = 0.6 + s * 0.25;
-          place(k, side, hw[k] + 15 + s * 2, [7, h, 7], [tone, tone * 0.92, tone * 0.78]);
+          place(k, side, 5 + s * 3, [7, h, 7], [tone, tone * 0.92, tone * 0.78]);
         }
       });
     } else if (theme === "street_night") {  // Singapore / Vegas
