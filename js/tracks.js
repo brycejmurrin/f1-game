@@ -635,12 +635,14 @@ const Tracks = (function () {
       }
     }
 
-    // marshal post + signal board every 270 m on alternating sides
-    every(270, (k) => {
-      const side = hash(k * 7) < 0.5 ? -1 : 1;
-      place(k, side, 7 + hash(k) * 2, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
-      place(k, side, 7 + hash(k) * 2, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
-    });
+    // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
+    if (!STREET_IDS[def.id]) {
+      every(270, (k) => {
+        const side = hash(k * 7) < 0.5 ? -1 : 1;
+        place(k, side, hw[k] + 18, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+        place(k, side, hw[k] + 18, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
+      });
+    }
 
     if (theme === "green") {
       every(26, (k) => {
