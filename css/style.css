@@ -154,10 +154,12 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 }
 .hud-bottom {
   position: absolute;
-  bottom: calc(14px + var(--sab));
+  bottom: calc(12px + var(--sab));
   left: 50%; transform: translateX(-50%);
-  display: flex; align-items: flex-end; gap: 14px;
+  /* compact centred stack so it never collides with the corner buttons */
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
+#hud-ot { display: none; }   /* OT state now shown on the OT button itself */
 #hud-speed { font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
 .hud-unit { font-size: 12px; color: var(--dim); margin-left: 4px; }
 #hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; }
@@ -248,24 +250,31 @@ button:active { background: rgba(255, 255, 255, 0.16); }
   width: 74px; height: 74px;
   font-size: 13px;
 }
-/* LEFT column (left thumb): GAS bottom, BRAKE above, SHIFT-DN top.
-   RIGHT column (right thumb): BOOST bottom, OT above, SHIFT-UP top.
-   Centre stays clear for the HUD and (tilt-off) screen-half steering. */
-.pedal { width: 84px; height: 84px; font-size: 14px; }
-#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(18px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
-#btn-throttle:active { background: rgba(0, 210, 90, 0.7); }
-#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(110px + var(--sab)); width: 74px; height: 74px; background: rgba(180, 35, 35, 0.42); }
-#btn-brake:active { background: rgba(230, 45, 45, 0.7); }
-#btn-boost { right: calc(16px + var(--sar)); bottom: calc(18px + var(--sab)); width: 84px; height: 84px; background: rgba(0, 150, 200, 0.38); }
+/* LEFT thumb column: GAS (bottom) + BRAKE (above) — always.
+   RIGHT thumb column: BOOST + OT by default; in MANUAL mode the gearbox
+   takes the right column (SHIFT-DN bottom, SHIFT-UP above) and BOOST/OT
+   move to the centre. The centre HUD is a narrow stack, clear of both. */
+.pedal { font-size: 14px; }
+#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(18px + var(--sab)); width: 84px; height: 84px; background: rgba(0, 170, 70, 0.42); }
+#btn-throttle:active { background: rgba(0, 210, 90, 0.75); }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(112px + var(--sab)); width: 74px; height: 74px; background: rgba(180, 35, 35, 0.42); }
+#btn-brake:active { background: rgba(230, 45, 45, 0.75); }
+
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(18px + var(--sab)); width: 84px; height: 84px; background: rgba(0, 150, 200, 0.4); }
 #btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
-#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(110px + var(--sab)); }
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(112px + var(--sab)); width: 74px; height: 74px; }
 #btn-ot.armed { background: #aeea00; color: #0a0a0f; border-color: #aeea00; animation: pulse 0.8s infinite; }
 #btn-ot.on { background: var(--red); color: #fff; border-color: var(--red); }
-/* gear shift buttons stack at the top of each column (manual mode only) */
-.shiftbtn { width: 60px; height: 60px; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+
+/* gear shift buttons: right column, stacked (DN bottom, UP above) */
+.shiftbtn { width: 66px; height: 66px; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
 .shiftbtn small { font-size: 9px; letter-spacing: 0.1em; color: var(--dim); }
-#shift-up   { right: calc(28px + var(--sar)); bottom: calc(196px + var(--sab)); }
-#shift-down { left:  calc(28px + var(--sal)); bottom: calc(196px + var(--sab)); }
+#shift-down { right: calc(20px + var(--sar)); bottom: calc(18px + var(--sab)); }
+#shift-up   { right: calc(20px + var(--sar)); bottom: calc(92px + var(--sab)); }
+
+/* MANUAL: shifts own the right column; BOOST/OT relocate to the centre */
+body.manual #btn-boost { left: calc(50% - 78px); right: auto; bottom: calc(150px + var(--sab)); width: 72px; height: 72px; }
+body.manual #btn-ot    { left: calc(50% + 6px);  right: auto; bottom: calc(150px + var(--sab)); width: 72px; height: 72px; }
 
 #pausebtn {
   position: fixed;

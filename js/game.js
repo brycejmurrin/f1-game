@@ -208,6 +208,8 @@ function showTouchControls(show) {
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
   els.shiftUp.hidden = !(t && manualMode);
   els.shiftDown.hidden = !(t && manualMode);
+  // manual mode => shifts take the right column, boost/OT move to centre (CSS)
+  document.body.classList.toggle("manual", manualMode);
 }
 
 function endRace() {
