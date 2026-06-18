@@ -474,9 +474,11 @@ function updateCar(c, dt, ranked) {
     if (af && af.prog - c.prog < 14 && Math.abs(af.x - c.x) < 2.4) avoid = af.x > c.x ? -1.4 : 1.4;
     steer = clamp((targetX + avoid - c.x) * 0.9, -1, 1);
   }
-  const sFac = clamp(c.speed / VMAX, 0, 1);
-  // simple driving: lateral position follows steering input directly
-  c.x += steer * STEER_VMAX * (0.55 + 0.45 * sFac) * dt;
+  // Lateral authority scales with speed and is ZERO at a standstill: a car
+  // that isn't moving can't be steered sideways, so tilting while stopped no
+  // longer slides you around. Full authority by ~65 km/h.
+  const latFac = clamp(c.speed / 18, 0, 1);
+  c.x += steer * STEER_VMAX * latFac * dt;
   // wall
   const wall = hw + 9;
   if (c.x > wall) { c.x = wall; c.speed *= 0.96; }

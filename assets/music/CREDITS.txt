@@ -1,16 +1,12 @@
 Music tracks in this folder
 
-Source : "Homebrew Free Jingle and Fanfare Music Assets" by Beatscribe
-         https://github.com/Beatscribe/homebrew_vgm  (free demo tracks)
-         More by the artist: https://beatscribe.itch.io
-License: Creative Commons Zero v1.0 Universal (CC0 1.0) — public domain.
+menu.mp3  — provided by the project owner for this game.
 
-Original 44.1 kHz stereo WAV demos, downsampled to 22.05 kHz mono for the web.
+Race loops (CC0 1.0 / public domain), from "Homebrew Free Jingle and Fanfare
+Music Assets" by Beatscribe (https://github.com/Beatscribe/homebrew_vgm,
+more at https://beatscribe.itch.io), downsampled to 22.05 kHz mono:
+  race_a.wav  <- bs-mm-metal
+  race_b.wav  <- bs-p1-ps-md
+  night.wav   <- bs-cyb-city-night-nodrums  (race / night circuits)
 
-  menu.wav    <- bs-amb-spaceship          (menu)
-  race_a.wav  <- bs-mm-metal               (race)
-  race_b.wav  <- bs-p1-ps-md               (race)
-  night.wav   <- bs-cyb-city-night-nodrums (race / night circuits)
-
-To use your own music, drop replacement files with these names here (any
-format the browser can decode is fine if you also update js/audio.js).
+To use your own music, drop replacement files with these names here.
