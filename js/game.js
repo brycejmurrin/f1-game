@@ -185,7 +185,9 @@ function startRace() {
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t; els.btnBrake.hidden = !t;
-  const steerBtns = t && !(Input.useTilt() && Input.tiltActive());
+  // tilt ON => no steer arrows at all (touch screen-halves still steer if the
+  // sensor isn't actually delivering data); tilt OFF => show the arrows
+  const steerBtns = t && !Input.useTilt();
   els.steerL.hidden = !steerBtns; els.steerR.hidden = !steerBtns;
 }
 
@@ -602,11 +604,11 @@ function tick(now) {
   if (state === "race" || state === "count") { updateHud(false); refreshSteerBtns(); }
 }
 
-// Hide the on-screen steer arrows as soon as tilt is actually delivering data
-// (and bring them back if it stops), so the controls reflect reality live.
+// Keep the on-screen steer arrows in sync with the tilt preference: tilt ON
+// hides them, tilt OFF shows them.
 function refreshSteerBtns() {
   if (!Input.touchControlsNeeded()) return;
-  const hide = Input.useTilt() && Input.tiltActive();
+  const hide = Input.useTilt();
   if (els.steerL.hidden !== hide) { els.steerL.hidden = hide; els.steerR.hidden = hide; }
 }
 
