@@ -45,7 +45,7 @@ let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
-const VMAX = 75;            // m/s base (~270 km/h)
+const VMAX = 94;            // m/s base (~338 km/h) — F1 top end; wider gears, higher top speed
 const ACCEL = 13;           // m/s^2 at low speed
 const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
@@ -57,13 +57,15 @@ const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed ban
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
-// 6-speed gearbox with ~geometric ratios (constant ~0.66 step), like a real
-// gearbox: each upshift drops the revs to ~66% of redline in EVERY gear, so the
-// gears are clearly "split up" (instead of the high gears barely dropping revs)
-// and each gear has a meaningful rev range to climb. Top speed fraction of VMAX.
-const GEARS = 6;
-const GEAR_TOP = [0.13, 0.20, 0.30, 0.45, 0.67, 1.0];
-const IDLE_RPM = 4000, MAX_RPM = 15000;
+// 6-speed gearbox with realistic PROGRESSIVE ratios (research: real/F1 gearboxes
+// space the ratios so the steps shrink in the higher gears). So an upshift drops
+// the revs a lot in the low gears and less up top, and every shift lands back in
+// the ~8.7-11.3k power band (F1's optimal ~8-12k) before climbing to the limit —
+// rather than dropping to idle or barely dropping at all. Top speed fraction of VMAX.
+// F1-authentic 8 gears.
+const GEARS = 8;
+const GEAR_TOP = [0.095, 0.16, 0.25, 0.36, 0.50, 0.66, 0.83, 1.0];
+const IDLE_RPM = 5000, MAX_RPM = 15000;   // F1 V6 turbo: idle ~5k, rev limit 15k
 function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
 function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
 function naturalGear(speed) {
