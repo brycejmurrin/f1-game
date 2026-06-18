@@ -378,8 +378,8 @@ function collideFx(a, b, impact) {
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
   if (soundOn) GameAudio.collision();
-  shake = Math.min(1, shake + impact * 0.7);
-  hitStop = Math.max(hitStop, impact * 0.05);
+  shake = Math.min(1, shake + impact * 0.45);
+  hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
   if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) {} }
 }
@@ -414,20 +414,21 @@ function resolveCollisions(ranked) {
           // both cars "in contact" so the AI eases off steering this way and
           // stops fighting the push (the cause of the side-by-side vibration).
           const sgn = dX >= 0 ? 1 : -1;
-          const corr = Math.max(penLat - 0.05, 0) * 0.5;
+          const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= 0.99; b.speed *= 0.99;
+          a.speed *= 0.995; b.speed *= 0.995;   // barely scrub speed on a side rub
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
-          // rear-end: separate along the track and transfer speed rear->front
-          const corr = Math.max(penLong - 0.05, 0) * 0.5;
+          // rear-end: separate along the track and nudge speeds together (gentle,
+          // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
+          const corr = Math.max(penLong - 0.05, 0) * 0.4;
           shiftLong(a, corr * (iA / iSum));
           shiftLong(b, -corr * (iB / iSum));
           const relV = b.speed - a.speed;   // >0 means the rear car is closing
           if (relV > 0) {
-            const jImp = 1.15 * relV / iSum;
+            const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
             b.speed = Math.max(0, b.speed - iB * jImp);
             a.speed += iA * jImp * 0.8;
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
@@ -453,13 +454,13 @@ function resolveCollisions(ranked) {
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = invM(a), iB = invM(b), iSum = iA + iB;
       if (penLat < penLong) {
-        const c = Math.max(penLat - SLOP, 0) * 0.85;
+        const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
         a.x += sgn * c * (iA / iSum);
         b.x -= sgn * c * (iB / iSum);
       } else {
-        const c = Math.max(penLong - SLOP, 0) * 0.85;
+        const c = Math.max(penLong - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         shiftLong(a, c * (iA / iSum));
         shiftLong(b, -c * (iB / iSum));
@@ -709,11 +710,11 @@ function updateCar(c, dt, ranked) {
   const wall = track.street ? hw - 0.8 : hw + 9;
   if (Math.abs(c.x) > wall) {
     c.x = c.x > 0 ? wall : -wall;
-    c.speed *= track.street ? 0.9 : 0.96;
+    c.speed *= track.street ? 0.975 : 0.99;   // scrape, don't grind to a halt
     if (c.isPlayer && track.street && c.collideT <= 0) {
-      shake = Math.min(1, shake + 0.3); c.collideT = 0.3;
+      shake = Math.min(1, shake + 0.18); c.collideT = 0.3;
       if (soundOn) GameAudio.collision();
-      if (navigator.vibrate) { try { navigator.vibrate(35); } catch (e) {} }
+      if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) {} }
     }
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
