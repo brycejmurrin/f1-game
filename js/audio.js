@@ -39,6 +39,7 @@ const GameAudio = (function () {
   let engBuf = null, accBuf = null, samplesReady = false;
   let engSrcIdle = null, engSrcAcc = null, engGainIdle = null, engGainAcc = null;
   let usingSamples = false;
+  let dbgAnalyser = null;          // taps the engine output so tests can measure pitch
   const SFX_ENGINE = "assets/sfx/f1_engine.mp3";   // sustained F1 drone (primary)
   const SFX_ACCEL = "assets/sfx/f1_rev.mp3";        // high-rev layer
 
@@ -288,6 +289,10 @@ const GameAudio = (function () {
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
     engFilter.connect(engGain).connect(master);
+    // debug tap: lets tests read the engine's dominant output frequency (pitch)
+    dbgAnalyser = ctx.createAnalyser();
+    dbgAnalyser.fftSize = 16384;
+    engGain.connect(dbgAnalyser);
 
     usingSamples = !!(samplesReady && engBuf && accBuf);
     engA = engB = engC = null;
@@ -727,6 +732,20 @@ const GameAudio = (function () {
     startMusic,
     stopMusic,
     setMusicEnabled,
+    // debug audio-test hooks. rate() is the exact pitch multiplier the engine is
+    // playing at (ground truth — output pitch scales linearly with it).
+    // centroidHz() is the spectral centroid of the live output (a stable
+    // brightness/pitch proxy, unlike the single loudest bin which hops between
+    // harmonics). Together they let tests verify pitch vs gear/throttle.
+    rate: function () { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
+    centroidHz: function () {
+      if (!dbgAnalyser || !ctx) return 0;
+      const n = dbgAnalyser.frequencyBinCount, arr = new Float32Array(n);
+      dbgAnalyser.getFloatFrequencyData(arr);
+      let num = 0, den = 0;
+      for (let i = 1; i < n; i++) { const m = Math.pow(10, arr[i] / 20); num += (i * ctx.sampleRate / dbgAnalyser.fftSize) * m; den += m; }
+      return den > 0 ? Math.round(num / den) : 0;
+    },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
     debug: function () { return { samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
