@@ -45,7 +45,7 @@ let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
-const VMAX = 75;            // m/s base (~270 km/h)
+const VMAX = 94;            // m/s base (~338 km/h) — F1 top end; wider gears, higher top speed
 const ACCEL = 13;           // m/s^2 at low speed
 const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle

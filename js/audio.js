@@ -457,7 +457,13 @@ const GameAudio = (function () {
       // RPM by the gear ratio — more in low gears, less in high gears). Pitched
       // down overall per feedback; redline kept near where gear 7 sat ("about
       // right"), idle brought lower for a deeper low end.
-      const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b);   // idle ~0.25x .. redline ~0.70x (lower)
+      // Base pitch tracks rpm (research: engine pitch is proportional to RPM,
+      // and games crossfade short pitched loops to avoid the chipmunk artifact).
+      // On top of that, drop the low gears noticeably for a deeper, gruntier
+      // launch (gears 1-3 scaled down; 4+ normal) — a deliberate feel choice.
+      const g = (typeof gear === "number" && isFinite(gear)) ? gear : 8;
+      const gmul = g <= 3 ? [0.6, 0.72, 0.84][g - 1] : 1.0;
+      const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
       // both loops are pitched together (so the sweep is carried either way);
