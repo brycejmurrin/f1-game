@@ -34,6 +34,9 @@ const Input = (function () {
 
   // edge-triggered overtake (X key or OT button tap)
   let overtakePressed = false;
+  // edge-triggered gear shifts (manual mode)
+  let shiftUpPressed = false;
+  let shiftDownPressed = false;
 
   // canvas touch halves: id -> -1 | 0 | 1
   const touches = new Map();
@@ -190,6 +193,10 @@ const Input = (function () {
       case "KeyX":
         if (down && !e.repeat) overtakePressed = true;
         break;
+      case "ArrowUp": case "KeyE":
+        if (down && !e.repeat) shiftUpPressed = true; if (down) e.preventDefault(); break;
+      case "KeyQ": case "ShiftLeft":
+        if (down && !e.repeat) shiftDownPressed = true; break;
       case "KeyP": case "Escape":
         if (down && !e.repeat && onPauseCb) onPauseCb();
         break;
@@ -293,6 +300,18 @@ const Input = (function () {
     return v;
   }
 
+  function consumeShiftUp() {
+    const v = shiftUpPressed;
+    shiftUpPressed = false;
+    return v;
+  }
+
+  function consumeShiftDown() {
+    const v = shiftDownPressed;
+    shiftDownPressed = false;
+    return v;
+  }
+
   function setUseTilt(b) {
     useTiltPref = !!b;
   }
@@ -328,6 +347,8 @@ const Input = (function () {
     wireHold("steer-left", function (v) { btnSteerLeft = v; });
     wireHold("steer-right", function (v) { btnSteerRight = v; });
     wireTap("btn-ot", function () { overtakePressed = true; });
+    wireTap("shift-up", function () { shiftUpPressed = true; });
+    wireTap("shift-down", function () { shiftDownPressed = true; });
 
     if (typeof screen !== "undefined" && screen.orientation &&
         typeof screen.orientation.addEventListener === "function") {
@@ -345,6 +366,8 @@ const Input = (function () {
     keySteerVal = 0;
     keySteerT = 0;
     overtakePressed = false;
+    shiftUpPressed = false;
+    shiftDownPressed = false;
   }
 
   return {
@@ -356,6 +379,8 @@ const Input = (function () {
     braking,
     boosting,
     consumeOvertake,
+    consumeShiftUp,
+    consumeShiftDown,
     tiltActive,
     setUseTilt,
     useTilt,

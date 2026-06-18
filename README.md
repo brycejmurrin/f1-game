@@ -24,6 +24,10 @@ Zandvoort in its farewell year. Night races run under floodlights.
 - **Overtake Mode** — get within 1 second of the car ahead and the OT light
   arms; trigger it for 4 seconds of full, taper-free deployment. The DRS
   replacement.
+- **Manual gearbox** (optional, toggle in the pause menu) — an 8-speed
+  'box with a live gear readout and tachometer. Shift up near the redline,
+  down for corner exits; the limiter makes you upshift to reach top speed.
+  Auto mode shifts for you.
 - Five red lights, lights out. Real points (25-18-15-12-10-8-6-4-2-1).
 - **Season mode**: all 12 rounds in calendar order with persistent
   championship standings.
@@ -36,7 +40,7 @@ Zandvoort in its farewell year. Night races run under floodlights.
 - **Mobile (no gyro):** steer with the on-screen arrows or screen halves;
   toggle TILT in the pause menu.
 - **Desktop:** `←`/`→` or `A`/`D` steer, `Space` boost, `X` overtake mode,
-  `↓`/`S` brake, `P`/`Esc` pause.
+  `↓`/`S` brake, `P`/`Esc` pause. Manual gears: `↑`/`E` up, `Q` down.
 
 ## The data hub
 

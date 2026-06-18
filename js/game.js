@@ -24,6 +24,8 @@ const els = {
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
   steerL: $("steer-left"), steerR: $("steer-right"),
+  shiftUp: $("shift-up"), shiftDown: $("shift-down"),
+  gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
 if (!GLX.init(canvas)) { $("nogl").hidden = false; return; }
@@ -38,6 +40,7 @@ let driverIdx = store.get("driver", 0);
 let trackIdx = store.get("track", 0);
 let difficulty = store.get("difficulty", "normal");
 let soundOn = store.get("sound", true);
+let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
@@ -54,6 +57,21 @@ const TAPER_LO = 64, TAPER_HI = 81;  // deploy tapers to 0 across this speed ban
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
+// 8-speed gearbox: each gear's top speed as a fraction of VMAX
+const GEARS = 8;
+const GEAR_TOP = [0.16, 0.28, 0.42, 0.56, 0.69, 0.81, 0.91, 1.0];
+const IDLE_RPM = 4000, MAX_RPM = 15000;
+function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
+function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
+function naturalGear(speed) {
+  for (let g = 1; g <= GEARS; g++) if (speed <= gearHi(g) + 0.01) return g;
+  return GEARS;
+}
+function rpmFor(gear, speed) {
+  const lo = gearLo(gear), hi = gearHi(gear);
+  const frac = clamp((speed - lo) / Math.max(hi - lo, 1), 0, 1.12);
+  return IDLE_RPM + frac * (MAX_RPM - IDLE_RPM);
+}
 const DIFF = {
   easy:   { ai: 0.90, band: 0.20 },
   normal: { ai: 0.97, band: 0.10 },
@@ -115,6 +133,7 @@ function makeCars() {
         team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
+        gear: 1, rpm: IDLE_RPM, shiftT: 0,
         energy: 1, otT: 0, otCool: 0, deploying: false,
         lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
@@ -187,6 +206,8 @@ function startRace() {
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t; els.btnBrake.hidden = !t;
+  els.shiftUp.hidden = !(t && manualMode);
+  els.shiftDown.hidden = !(t && manualMode);
   // tilt ON => no steer arrows at all (touch screen-halves still steer if the
   // sensor isn't actually delivering data); tilt OFF => show the arrows
   const steerBtns = t && !Input.useTilt();
@@ -384,14 +405,33 @@ function updateCar(c, dt, ranked) {
     braking = c.speed > vCorner + 2;
   }
 
+  // --- gearbox (player) ---
+  let gearMult = 1, speedCap = vmax + 14;
+  if (c.isPlayer) {
+    c.shiftT = Math.max(0, c.shiftT - dt);
+    const up = Input.consumeShiftUp(), down = Input.consumeShiftDown();
+    if (manualMode) {
+      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.uiTick(); }
+      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.uiTick(); }
+      const hi = gearHi(c.gear), lo = gearLo(c.gear);
+      const frac = (c.speed - lo) / Math.max(hi - lo, 1);
+      if (c.speed >= hi) { gearMult = 0.08; speedCap = Math.min(speedCap, hi + 1.5); }  // limiter: upshift to go faster
+      else if (frac < 0.25) gearMult = clamp(0.7 + frac * 1.2, 0, 1);   // mild bog at low revs: downshift for best punch
+    }
+  }
+
   // --- integrate speed ---
   if (braking) {
     c.speed = Math.max(0, c.speed - BRAKE * dt);
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else {
-    const a = (ACCEL * clamp(1 - c.speed / vmax, 0, 1) + deploy) * (state === "race" ? 1 : 0);
-    c.speed = Math.min(vmax + 14, c.speed + a * dt);
+    const a = (ACCEL * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
+  }
+  if (c.isPlayer) {
+    if (!manualMode) c.gear = naturalGear(c.speed);
+    c.rpm = rpmFor(c.gear, c.speed);
   }
 
   // --- offroad ---
@@ -566,6 +606,11 @@ function updateHud(force) {
   els.best.textContent = isFinite(player.best) ? fmtTime(player.best) : "-";
   els.speed.textContent = Math.round(player.speed * 3.6);
   els.energy.style.width = (player.energy * 100).toFixed(0) + "%";
+  // gear + tachometer
+  els.gear.textContent = player.gear;
+  const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
+  els.rpmFill.style.width = (rpmFrac * 100).toFixed(0) + "%";
+  els.tach.classList.toggle("redline", player.rpm > MAX_RPM * 0.92);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   els.ot.className = ot;
   els.ot.textContent = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE";
@@ -765,6 +810,13 @@ $("pm-tilt").onclick = () => {
   showTouchControls(true);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+$("pm-gears").onclick = () => {
+  manualMode = !manualMode;
+  store.set("manual", manualMode);
+  $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
+  if (player && !manualMode) player.gear = naturalGear(player.speed);
+  showTouchControls(true);
+};
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "race") setPaused(true);
 });
@@ -778,6 +830,7 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
 Input.init(canvas, { onPause: () => setPaused(!paused) });
 DataHub.init(els.datahub);
 $("pm-tilt").textContent = tiltLabel();
+$("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
 setSound(soundOn);
 loadTrack(trackIdx);
 window.addEventListener("resize", () => GLX.resize());

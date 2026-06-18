@@ -160,6 +160,18 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 }
 #hud-speed { font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; }
 .hud-unit { font-size: 12px; color: var(--dim); margin-left: 4px; }
+#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 4px; }
+#hud-gear {
+  font-size: 38px; font-weight: 800; font-style: italic; line-height: 1;
+  color: #fff; font-variant-numeric: tabular-nums;
+  min-width: 42px; text-align: center;
+}
+#hud-tach {
+  width: 86px; height: 8px; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14); overflow: hidden;
+}
+#hud-rpm-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #2ad1ff, #aeea00 70%, #ffd600); }
+#hud-tach.redline #hud-rpm-fill { background: var(--red); }
 #hud-energy {
   width: 130px; height: 14px;
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -233,6 +245,11 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 .steerbtn  { bottom: calc(20px + var(--sab)); width: 64px; height: 64px; font-size: 18px; }
 #steer-left  { left: calc(14px + var(--sal)); }
 #steer-right { left: calc(92px + var(--sal)); }
+/* gear shift buttons stack above brake (down) / boost (up) */
+.shiftbtn { width: 64px; height: 64px; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.shiftbtn small { font-size: 9px; letter-spacing: 0.1em; color: var(--dim); }
+#shift-up   { right: calc(16px + var(--sar)); bottom: calc(182px + var(--sab)); }
+#shift-down { left:  calc(16px + var(--sal)); bottom: calc(182px + var(--sab)); }
 
 #pausebtn {
   position: fixed;
