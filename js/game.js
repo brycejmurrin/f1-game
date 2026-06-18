@@ -350,7 +350,7 @@ function update(dt) {
 
   if (soundOn) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1));
+    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1), player.gear);
     GameAudio.setSkid(player.offroad ? 0.4 : clamp(Math.abs(Tracks.curvature(track, player.s)) * player.speed * 0.05 - 0.35, 0, 1));
   }
 }
@@ -425,11 +425,11 @@ function resolveCollisions(ranked) {
       }
     }
   }
-  // separation pass with slop: only correct penetration beyond a small
-  // allowance, and only partially. A tiny steady-state overlap (< SLOP) is left
-  // alone, which stops the per-frame snap-back buzz while staying far too small
-  // (a few cm on a 2 m car) to ever look like cars merging.
-  const SLOP = 0.12;
+  // separation pass: enforce the car boundary firmly so they don't visibly
+  // overlap. A small slop is kept to avoid a hard per-frame snap (the proactive
+  // steering separation now keeps cars spaced, so collisions rarely fire and a
+  // tighter boundary no longer causes the old vibration).
+  const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
     for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
@@ -442,13 +442,13 @@ function resolveCollisions(ranked) {
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = invM(a), iB = invM(b), iSum = iA + iB;
       if (penLat < penLong) {
-        const c = Math.max(penLat - SLOP, 0) * 0.6;
+        const c = Math.max(penLat - SLOP, 0) * 0.85;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
         a.x += sgn * c * (iA / iSum);
         b.x -= sgn * c * (iB / iSum);
       } else {
-        const c = Math.max(penLong - SLOP, 0) * 0.6;
+        const c = Math.max(penLong - SLOP, 0) * 0.85;
         if (c <= 0) continue;
         shiftLong(a, c * (iA / iSum));
         shiftLong(b, -c * (iB / iSum));
@@ -458,7 +458,7 @@ function resolveCollisions(ranked) {
   // keep everyone on the drivable surface after being shoved around
   for (const c of ranked) {
     Tracks.sample(track, c.s, smp);
-    const wall = smp.hw + 9;
+    const wall = track.street ? smp.hw - 0.8 : smp.hw + 9;
     if (c.x > wall) c.x = wall; else if (c.x < -wall) c.x = -wall;
   }
 }
@@ -476,6 +476,34 @@ function updateCar(c, dt, ranked) {
   if (!c.isPlayer) {
     const gap = player.prog - c.prog;
     vmax *= 1 + clamp(gap / 700, -1, 1) * dd.band;
+  }
+
+  // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
+  // in our lane, and a "stuck" timer. Shared by the braking and steering logic
+  // so the AI can pick the open side, commit to a pass, and dig itself out when
+  // wedged — instead of grinding to a halt against a car or wall.
+  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
+  if (!c.isPlayer) {
+    const edge = track.street ? hw - 0.8 : hw + 5;
+    roomL = edge + c.x;            // clearance to the left edge from our position
+    roomR = edge - c.x;            // clearance to the right edge
+    for (let j = 0; j < ranked.length; j++) {
+      const o = ranked[j];
+      if (o === c) continue;
+      const dprog = o.prog - c.prog;          // >0 = ahead of us
+      if (dprog < -6 || dprog > 18) continue;
+      const dx = o.x - c.x;
+      if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
+        if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
+        else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
+      }
+      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
+    }
+    roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
+    const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
+    if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
+    else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
+    unstuckActive = c.stuckT > 0.7;
   }
 
   // --- electric deploy ---
@@ -516,16 +544,15 @@ function updateCar(c, dt, ranked) {
     for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
     const vCorner = Math.sqrt(LAT_MAX / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
-    // queue behind a car directly ahead in the same lane: cap our pace to it
-    // and brake if we're closing fast, so we tuck in behind instead of ramming.
-    const carAhead = ranked[(c.rank || 1) - 2];
-    if (carAhead) {
-      const followDist = carAhead.prog - c.prog;
-      if (followDist > 0 && followDist < 16 && Math.abs(carAhead.x - c.x) < 2.0) {
-        vmax = Math.min(vmax, carAhead.speed + clamp(followDist - 6, -6, 8));
-        if (c.speed > carAhead.speed + 3) braking = true;
-      }
+    // queue behind the car blocking our lane (prog-based, so it's immune to the
+    // frame-to-frame rank swapping of near-even cars): cap our pace to it and
+    // brake if closing fast, so we tuck in behind instead of ramming.
+    if (blocker && blockerGap < 16) {
+      vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - 6, -6, 8));
+      if (c.speed > blocker.speed + 3) braking = true;
     }
+    // when wedged in/stopped, power out instead of braking
+    if (unstuckActive) braking = false;
   }
 
   // --- gearbox (player) ---
@@ -534,8 +561,8 @@ function updateCar(c, dt, ranked) {
     c.shiftT = Math.max(0, c.shiftT - dt);
     const up = Input.consumeShiftUp(), down = Input.consumeShiftDown();
     if (manualMode) {
-      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.uiTick(); }
-      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.uiTick(); }
+      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.shift(true); }
+      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.shift(false); }
       const hi = gearHi(c.gear), lo = gearLo(c.gear);
       const frac = (c.speed - lo) / Math.max(hi - lo, 1);
       if (c.speed >= hi) { gearMult = 0.08; speedCap = Math.min(speedCap, hi + 1.5); }  // limiter: upshift to go faster
@@ -559,7 +586,12 @@ function updateCar(c, dt, ranked) {
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
   if (c.isPlayer) {
-    if (!manualMode) c.gear = naturalGear(c.speed);
+    if (!manualMode) {
+      const ng = naturalGear(c.speed);
+      // auto upshift/downshift cue: same shift sound as manual when the box changes
+      if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
+      c.gear = ng;
+    }
     c.rpm = rpmFor(c.gear, c.speed);
   }
 
@@ -594,32 +626,30 @@ function updateCar(c, dt, ranked) {
     // field fans out across the track rather than collapsing onto one line.
     const racingLine = clamp(kA * 130, -0.62, 0.62) * hw;
     const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
-    // Avoid cars clearly AHEAD (overtaking line choice). Skip cars that are
-    // essentially alongside (tiny gap): two near-even cars swap prog-rank every
-    // frame, so a rank-based "car ahead" avoid would flip direction frame to
-    // frame — a major cause of the side-to-side vibration. Alongside spacing is
-    // handled smoothly by the separation term below instead.
-    let avoid = 0;
-    for (let look = 1; look <= 2; look++) {
-      const af = ranked[(c.rank || 1) - 1 - look];
-      if (!af) break;
-      const gap = af.prog - c.prog;
-      if (gap > 16) break;
-      if (gap < 2.5) continue;          // alongside, not ahead — leave to separation
-      const adx = af.x - c.x;
-      if (Math.abs(adx) < 2.6) {
-        const urgency = lerp(1.2, 2.0, clamp(1 - gap / 16, 0, 1));
-        avoid = adx > 0 ? -urgency : urgency;
-        break;  // react to the closest blocker only
-      }
+    // Overtake: if a slower car is blocking our lane ahead, ease toward the side
+    // with more room to pass. Collision-aware — the move is scaled down if that
+    // side is also tight (a car alongside or a wall), so we don't dive into a
+    // gap that isn't there. Uses the prog-based blocker, immune to rank swaps.
+    let overtake = 0;
+    if (blocker && blocker.speed < c.speed + 4 && blockerGap < 14) {
+      const side = roomR >= roomL ? 1 : -1;
+      const need = side > 0 ? roomR : roomL;
+      overtake = side * lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1);
     }
+    // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
+    // clearly-freer side, but when both sides are similar fall back to the car's
+    // own lane sign so a piled-up group fans out BOTH ways instead of all diving
+    // the same direction (and off the track).
+    const freer = roomR - roomL;
+    const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1) : (c.lane >= 0 ? 1 : -1);
+    const unstuck = unstuckActive ? unstuckSide * 2.6 : 0;
     // Proactive lateral separation: drive toward a minimum side-by-side gap so
     // the field settles into clean, non-overlapping spacing instead of pulling
     // onto one line, overlapping, and bouncing (the side-to-side vibration).
     // Push is proportional to how far INSIDE the min gap a neighbour is, so it
     // ramps up only when too close and fades to nothing once spaced — stable, no
     // oscillation, and it doesn't fight the collision push (same direction).
-    const MIN_GAP = 2.6;
+    const MIN_GAP = 2.8;
     let sep = 0;
     for (let j = 0; j < ranked.length; j++) {
       const o = ranked[j];
@@ -632,7 +662,22 @@ function updateCar(c, dt, ranked) {
       sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
     }
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
-    steer = clamp((targetX + avoid + sep - c.x) * 0.9, -1, 1);
+    // clamp the combined target to the drivable surface so overtake/unstuck/
+    // separation biases can never steer the AI off the track or into a wall.
+    const desiredX = clamp(targetX + overtake + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    let err = desiredX - c.x;
+    // Soft deadzone near the target: fade the correction out as the error gets
+    // small so the AI stops making tiny frame-to-frame steering corrections
+    // around its target — those micro-twitches are what made the nose wobble
+    // side to side. Larger errors still get full response.
+    if (Math.abs(err) < 0.3) err *= Math.abs(err) / 0.3;
+    steer = clamp(err * 0.9, -1, 1);
+    // Low-pass the AI steering command itself so it can't reverse frame to frame
+    // (the residual "switchiness"). A sustained turn-in passes through; a
+    // one-frame flip is filtered. Used for both motion and the visual yaw below.
+    if (c.steerSm === undefined) c.steerSm = steer;
+    c.steerSm = damp(c.steerSm, steer, 9, dt);
+    steer = c.steerSm;
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
@@ -647,11 +692,24 @@ function updateCar(c, dt, ranked) {
       : clamp(Math.abs(k) * c.speed * 0.05 - 0.35, 0, 1);
   }
   // wall
-  const wall = hw + 9;
-  if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
-  if (c.x < -wall) { c.x = -wall; c.speed *= 0.96; }
+  // Walls: on street circuits the barrier is right at the track edge, so cars
+  // hit it just outside the racing line (scrape + scrub). On permanent circuits
+  // there's run-off, so the hard limit sits well out past the grass.
+  const wall = track.street ? hw - 0.8 : hw + 9;
+  if (Math.abs(c.x) > wall) {
+    c.x = c.x > 0 ? wall : -wall;
+    c.speed *= track.street ? 0.9 : 0.96;
+    if (c.isPlayer && track.street && c.collideT <= 0) {
+      shake = Math.min(1, shake + 0.3); c.collideT = 0.3;
+      if (soundOn) GameAudio.collision();
+      if (navigator.vibrate) { try { navigator.vibrate(35); } catch (e) {} }
+    }
+  }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
-  c.yawVis = damp(c.yawVis, steer * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
+  // Drive the visual nose yaw from the SMOOTHED steer (steerVis), not the raw
+  // per-frame steer, so residual steering twitch doesn't wobble the nose. A
+  // sustained turn-in still shows; a one-frame correction is filtered out.
+  c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
@@ -1099,6 +1157,28 @@ window.__apex = {
     cars.forEach((c) => { if (c !== a && c !== b) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
     return { a: cars.indexOf(a), b: cars.indexOf(b) };
   },
+  // Deliberate jam: pile N AI cars on top of each other at near-zero speed at a
+  // mid-track point, rest of field shoved away. Used to test stuck-recovery —
+  // a healthy AI should dig out and resume speed within a couple of seconds.
+  jam(n) {
+    if (!track) return false;
+    state = "race"; raceT = Math.max(raceT, 1);
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    const ai = cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
+    const prog = 0.5 * track.total;
+    const ids = [];
+    ai.forEach((c, i) => {
+      if (i < m) {
+        c.prog = prog + (i - m / 2) * 0.4;     // tightly stacked longitudinally
+        c.s = wrapS(c.prog); c.speed = 2; c.x = (i - m / 2) * 0.3;  // and laterally
+        c.xVis = c.x; c.lap = 0; c.finished = false; c.stuckT = 0;
+        ids.push(cars.indexOf(c));
+      } else { c.prog -= 800; c.s = wrapS(c.s - 800); }
+    });
+    cars.forEach((c) => { if (c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return ids;
+  },
   // skip the countdown but keep the grid intact, so the field races and packs
   // up normally — for observing pack behaviour (e.g. collision vibration).
   go() {
@@ -1111,6 +1191,7 @@ window.__apex = {
   // arc-progress, speed and the in-contact timer. For measuring jitter.
   cars: () => cars.map((c, i) => ({
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
+    yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2),
     ct: +(c.contactT || 0).toFixed(2), p: !!c.isPlayer,
   })),
