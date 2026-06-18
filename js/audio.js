@@ -428,7 +428,7 @@ const GameAudio = (function () {
       // RPM by the gear ratio — more in low gears, less in high gears). Pitched
       // down overall per feedback; redline kept near where gear 7 sat ("about
       // right"), idle brought lower for a deeper low end.
-      const rate = (0.26 + rev * 0.62) * (1 + 0.05 * b);   // idle ~0.26x .. redline ~0.88x
+      const rate = (0.82 + rev * 0.23) * (1 + 0.04 * b);   // idle ~0.82x .. redline ~1.05x (near native)
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
       // both loops are pitched together (so the sweep is carried either way);
