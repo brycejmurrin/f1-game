@@ -49,8 +49,6 @@ const ACCEL = 17;           // m/s^2 at low speed
 const BRAKE = 34;
 const LAT_MAX = 26;         // m/s^2 cornering grip
 const STEER_VMAX = 17;      // lateral m/s at full lock, full speed
-const CENTRIF = 0.92;       // outward push factor
-const DRIFT_K = 0.11;       // corner pushes the car outward — you must steer in
 const GRASS_V = 30;         // crawl speed on grass
 const DEPLOY_A = 6.2;       // extra accel from electric deploy
 const TAPER_LO = 64, TAPER_HI = 81;  // deploy tapers to 0 across this speed band
@@ -347,7 +345,8 @@ function update(dt) {
   if (resultT > 0) { resultT -= dt; if (resultT <= 0) { resultT = 0; endRace(); } }
 
   if (soundOn) {
-    GameAudio.setEngine(clamp(player.speed / VMAX, 0, 1), player.deploying ? 1 : 0, player.offroad);
+    const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
+    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1));
     GameAudio.setSkid(player.offroad ? 0.4 : clamp(Math.abs(Tracks.curvature(track, player.s)) * player.speed * 0.05 - 0.35, 0, 1));
   }
 }
@@ -465,16 +464,11 @@ function updateCar(c, dt, ranked) {
     let avoid = 0;
     const af = ranked[(c.rank || 1) - 2];
     if (af && af.prog - c.prog < 14 && Math.abs(af.x - c.x) < 2.4) avoid = af.x > c.x ? -1.4 : 1.4;
-    // feed-forward to cancel the corner's outward drift, then hold the line
-    const sf = clamp(c.speed / VMAX, 0, 1);
-    const ff = (k * c.speed * c.speed * DRIFT_K) / (STEER_VMAX * (0.4 + 0.6 * sf));
-    steer = clamp((targetX + avoid - c.x) * 0.9 + ff, -1, 1);
+    steer = clamp((targetX + avoid - c.x) * 0.9, -1, 1);
   }
   const sFac = clamp(c.speed / VMAX, 0, 1);
-  c.x += steer * STEER_VMAX * (0.4 + 0.6 * sFac) * dt;
-  // Corner throws the car toward the OUTSIDE (k>0 = right turn -> drift left):
-  // with no steering input the car runs wide, so the player must steer in.
-  c.x -= k * c.speed * c.speed * DRIFT_K * dt;
+  // simple driving: lateral position follows steering input directly
+  c.x += steer * STEER_VMAX * (0.55 + 0.45 * sFac) * dt;
   // wall
   const wall = hw + 9;
   if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
