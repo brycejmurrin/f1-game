@@ -968,7 +968,7 @@ const Tracks = (function () {
       for (let i = 0; i < 8; i++) {
         const k = Math.round((i / 8) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const fav_d = 180 + hash(k * 41) * 100;
+        const fav_d = 240 + hash(k * 41) * 100;
         const h_offset = 35 + hash(k * 42) * 30;
         addBox(out, [px[k] + r[0] * fav_d, py[k] + h_offset, pz[k] + r[2] * fav_d],
                [160, 70, 140], [0.62, 0.5, 0.38]);
