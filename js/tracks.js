@@ -249,6 +249,14 @@ const Tracks = (function () {
   // stays dead flat (no global tilt). buildRoad and buildTerrain both read this
   // so the banked road edge and the terrain that meets it rise together.
   function bankingProfile(track) {
+    // Banking is disabled for now: the road/terrain mesh banks correctly, but
+    // cars take their height from the flat centreline so they float/sink on the
+    // banked surface. Doing it right means making the car, camera, shadow and
+    // collisions all follow the banked surface (and reworking the terrain ribbon
+    // so its far edge doesn't over-tilt) — a focused follow-up. Returning null
+    // keeps the run-off feature while neutralising the road/terrain lift.
+    return null;
+    /* eslint-disable no-unreachable */
     if (track.def.id !== "zandvoort") return null;
     const n = track.n;
     const corners = findCorners(track, 0.006);
