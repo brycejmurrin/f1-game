@@ -132,6 +132,17 @@ const Tracks = (function () {
         if (d < b.halfM) py[k] += b.rise * 0.5 * (1 + Math.cos(Math.PI * d / b.halfM));
       }
     }
+    // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
+    const elevs = ELEVATIONS[def.id];
+    if (elevs) for (const e of elevs) {
+      const cs = e.s * total;
+      for (let k = 0; k < n; k++) {
+        let d = Math.abs(k * ds - cs);
+        d = Math.min(d, total - d);
+        if (d < e.halfM) py[k] += e.rise * 0.5 * (1 + Math.cos(Math.PI * d / e.halfM));
+      }
+    }
+
     // tangents by central difference (wrap), then right + banking
     for (let k = 0; k < n; k++) {
       const a = (k - 1 + n) % n, b = (k + 1) % n;
@@ -314,22 +325,30 @@ const Tracks = (function () {
                     w + 1.2, w + 2.2];
       const rise = [0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0];
       const checker = (k * ds) < 9;                  // start/finish band
-      const stripe = (Math.floor((k * ds) / 4) % 2) === 0;
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
-      const chk = stripe ? [0.95, 0.95, 0.97] : dark;
       for (let v = 0; v < V; v++) {
         const o = offs[v];
         pos.push(px[k] + r[0] * o + u[0] * rise[v], py[k] + r[1] * o + u[1] * rise[v] + 0.02, pz[k] + r[2] * o + u[2] * rise[v]);
         nrm.push(u[0], u[1], u[2]);
         let c;
-        if (v === 0 || v === 13) c = grass;                                   // grass shoulder
-        else if (v === 1 || v === 12) c = grass;   // raised kerb ribbons added separately by buildKerbs
-        else if (v === 2 || v === 3 || v === 10 || v === 11)                  // bold white edge line
-          c = checker ? chk : line;
-        else if (v === 6 || v === 7)                                          // dashed centre line
-          c = checker ? chk : (dash ? line : asphalt);
-        else                                                                   // asphalt running surface
-          c = checker ? chk : asphalt;
+        if (checker && v !== 0 && v !== 13) {
+          // true 2D checkerboard at start/finish: alternate by both along-track and lateral position
+          const latBand = Math.floor((o + w + 2.2) / 2.5) % 2;
+          const longBand = Math.floor((k * ds) / 2.5) % 2;
+          c = (latBand + longBand) % 2 === 0 ? [0.95, 0.95, 0.97] : dark;
+        } else if (v === 0 || v === 13) {
+          c = grass;
+        } else if (v === 1 || v === 12) {
+          c = grass;   // kerb ribbons added separately by buildKerbs
+        } else if (v === 2 || v === 3 || v === 10 || v === 11) {
+          c = line;    // bold white edge line
+        } else if (v === 6 || v === 7) {
+          c = dash ? line : asphalt;   // dashed centre line
+        } else {
+          // asphalt running surface with subtle aggregate grain
+          const grain = (hash(k * 13 + v) - 0.5) * 0.016;
+          c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
+        }
         col.push(c[0], c[1], c[2]);
       }
     }
@@ -367,35 +386,41 @@ const Tracks = (function () {
         }
       }
     }
-    // two ribbons (left/right), 3 lateral verts each: inner, mid, outer.
-    // The outer edge runs well past the track so the road sits on a wide
-    // ground apron instead of floating against the sky.
-    const latsL = [-2.2, -28, -120], latsR = [2.2, 28, 120];
-    // flip: the right ribbon's lateral verts run the opposite way from the
-    // left, so it needs the opposite winding to keep its top face front-facing
-    // under BACK-face culling (otherwise the whole right apron is culled).
+    // Five lateral verts per side: inner seam, concrete apron, gravel/runoff,
+    // grass mid, grass far. Gives concrete run-off → gravel trap → grass gradient.
+    const NTV = 5;
+    const latsL = [-2.2, -7.0, -14, -48, -120], latsR = [2.2, 7.0, 14, 48, 120];
+    const concrete = pal.concrete || (track.def.night ? [0.32, 0.30, 0.28] : [0.50, 0.48, 0.44]);
+    // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
       const base = pos.length / 3;
       for (let k = 0; k < n; k++) {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const w = hw[k];
-        for (let v = 0; v < 3; v++) {
+        for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
-          const sag = v === 0 ? -0.3 : -0.3 - Math.abs(lats[v]) * 0.02;
-          // inner vert (v=0) tracks road height to seal the edge at bridge sections;
-          // outer verts blend down to gY so the ground stays flat away from the deck.
-          const t = v / 2;
+          const sag = -0.3 - Math.abs(lats[v]) * 0.018;
+          // inner vert tracks road height; outer verts blend to gY (flat under bridges)
+          const t = v / (NTV - 1);
           const yBase = py[k] * (1 - t) + gY[k] * t;
           pos.push(px[k] + r[0] * o, yBase + sag, pz[k] + r[2] * o);
           nrm.push(0, 1, 0);
           const nz = (hash(k * 3 + v) - 0.5) * 0.04;
-          const c = [lerp(runoff[0], grass[0], t) + nz, lerp(runoff[1], grass[1], t) + nz, lerp(runoff[2], grass[2], t) + nz];
-          col.push(c[0], c[1], c[2]);
+          let tc;
+          if (v < 2) {
+            tc = concrete;                                    // asphalt/concrete apron
+          } else if (v === 2) {
+            tc = runoff;                                      // gravel/runoff zone
+          } else {
+            const gt = (v - 2) / (NTV - 3);                 // 0→1 from runoff to grass
+            tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
+          }
+          col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
         }
       }
       for (let k = 0; k < n; k++) {
-        const a = base + k * 3, b = base + ((k + 1) % n) * 3;
-        for (let v = 0; v < 2; v++) {
+        const a = base + k * NTV, b = base + ((k + 1) % n) * NTV;
+        for (let v = 0; v < NTV - 1; v++) {
           if (flip) idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
           else idxArr.push(a + v, b + v, a + v + 1, a + v + 1, b + v, b + v + 1);
         }
@@ -486,6 +511,33 @@ const Tracks = (function () {
         addBox(out, [px[k] + r[0] * o, py[k] + 8.6, pz[k] + r[2] * o], [3, 1, 1.4], [1, 1, 0.95], [r, [0, 1, 0], [track.tx[k], 0, track.tz[k]]]);
       }
     });
+    // tire barriers at outside of tight corners on permanent (non-street) circuits
+    if (!STREET_IDS[def.id]) {
+      for (const c of findCorners(track, 0.014)) {
+        const outside = c.sign > 0 ? -1 : 1;
+        const lo = Math.max(1, Math.round(c.lo * 0.35));
+        const hi = Math.max(1, Math.round(c.hi * 0.35));
+        const step = Math.max(2, Math.round(3.5 / ds));
+        for (let i = -lo; i <= hi; i += step) {
+          const k = ((c.k + i) + n) % n;
+          const r = [track.rx[k], track.ry[k], track.rz[k]];
+          const t = [track.tx[k], track.ty[k], track.tz[k]];
+          const u = upOf(track, k);
+          const o = outside * (hw[k] + 2.2);
+          const slen = ds * step * 1.1;
+          addBox(out, [px[k] + r[0] * o, py[k] + 0.45, pz[k] + r[2] * o],
+                 [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
+        }
+      }
+    }
+
+    // marshal post + signal board every 270 m on alternating sides
+    every(270, (k) => {
+      const side = hash(k * 7) < 0.5 ? -1 : 1;
+      place(k, side, 7 + hash(k) * 2, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+      place(k, side, 7 + hash(k) * 2, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
+    });
+
     if (theme === "green") {
       every(26, (k) => {
         const s = hash(k);
@@ -573,6 +625,32 @@ const Tracks = (function () {
           const yo = hw[k] + 18;
           addBox(out, [px[k] + r[0] * yo, py[k] + 1.2, pz[k] + r[2] * yo], [4, 3, 11], [0.95, 0.95, 0.97]); // yacht hull
           addBox(out, [px[k] + r[0] * yo, py[k] + 4, pz[k] + r[2] * yo], [2.2, 2, 5], [0.85, 0.86, 0.9]);   // cabin
+        }
+      }
+      // Tunnel: concrete ceiling from Portier (~52%) to post-tunnel chicane (~58%).
+      // The section runs underground parallel to the harbour — a unique Monaco feature.
+      {
+        const tunS = Math.round(0.51 * n) % n;
+        const tunE = Math.round(0.585 * n) % n;
+        const tunLen = ((tunE - tunS) + n) % n;
+        const tunStep = Math.max(2, Math.round(5.0 / ds));
+        for (let i = 0; i < tunLen; i += tunStep) {
+          const k = (tunS + i) % n;
+          const r = [track.rx[k], track.ry[k], track.rz[k]];
+          const t = [track.tx[k], track.ty[k], track.tz[k]];
+          const u = upOf(track, k);
+          const cw = hw[k] * 2 + 4.5;
+          addBox(out, [px[k], py[k] + 6.3, pz[k]], [cw, 1.1, ds * tunStep * 1.05],
+                 [0.30, 0.29, 0.34], [r, u, t]);
+        }
+        // Tunnel portals at entry and exit
+        for (const frac of [0.51, 0.585]) {
+          const k = Math.round(frac * n) % n;
+          const r = [track.rx[k], track.ry[k], track.rz[k]];
+          const t = [track.tx[k], track.ty[k], track.tz[k]];
+          const u = upOf(track, k);
+          addBox(out, [px[k], py[k] + 3.6, pz[k]], [hw[k] * 2 + 6, 7.2, 1.8],
+                 [0.34, 0.33, 0.38], [r, u, t]);
         }
       }
     }
@@ -742,7 +820,7 @@ const Tracks = (function () {
       zenith: [0.18, 0.40, 0.78], horizon: [0.62, 0.74, 0.88], sun: [1, 0.96, 0.85],
       grass: [0.18, 0.42, 0.16], runoff: [0.55, 0.42, 0.28], fog: [0.62, 0.74, 0.88],
       asphalt: [0.16, 0.17, 0.19], line: [0.95, 0.95, 0.98],
-      fogDensity: 0.0017, kerbA: [0.85, 0.12, 0.12], kerbB: [0.95, 0.95, 0.95],
+      fogDensity: 0.0017, kerbA: [0.85, 0.12, 0.12], kerbB: [0.95, 0.95, 0.95], concrete: [0.50, 0.48, 0.44],
       ambientSky: [0.45, 0.52, 0.62], ambientGround: [0.22, 0.22, 0.18],
       sunColor: [1, 0.95, 0.82], sunDir: norm([0.4, 0.72, 0.3]),
     }, o);
@@ -752,7 +830,7 @@ const Tracks = (function () {
       zenith: [0.01, 0.01, 0.04], horizon: [0.05, 0.06, 0.12], sun: [0.2, 0.2, 0.3],
       grass: [0.08, 0.12, 0.08], runoff: [0.18, 0.16, 0.14], fog: [0.03, 0.03, 0.07],
       asphalt: [0.10, 0.10, 0.13], line: [0.85, 0.85, 0.90],
-      fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92],
+      fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92], concrete: [0.32, 0.30, 0.28],
       ambientSky: [0.42, 0.43, 0.5], ambientGround: [0.16, 0.16, 0.18],
       sunColor: [0.5, 0.52, 0.6], sunDir: norm([0.1, 0.9, 0.2]),
     }, o);
@@ -763,6 +841,19 @@ const Tracks = (function () {
   // crosses over the section out of the esses.
   const BRIDGES = {
     suzuka: [{ s: 0.811, halfM: 150, rise: 7 }],
+  };
+
+  // Elevation changes (terrain follows road; distinct from BRIDGES where terrain stays flat).
+  // Each entry is a cosine bump centred at lap fraction s, spanning ±halfM metres.
+  // Negative rise = descent (e.g. Eau Rouge dip before Raidillon climb).
+  const ELEVATIONS = {
+    spa:        [{ s: 0.07, halfM: 270, rise: -14 }, { s: 0.12, halfM: 500, rise: 26 }],
+    monaco:     [{ s: 0.27, halfM: 340, rise: 18 }],
+    cota:       [{ s: 0.06, halfM: 440, rise: 28 }],
+    interlagos: [{ s: 0.86, halfM: 560, rise: 16 }],
+    silverstone:[{ s: 0.62, halfM: 360, rise:  9 }],
+    zandvoort:  [{ s: 0.56, halfM: 300, rise: 12 }],
+    bahrain:    [{ s: 0.45, halfM: 380, rise: -8 }],
   };
 
   const DEFS = [
