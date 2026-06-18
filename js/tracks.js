@@ -817,11 +817,14 @@ const Tracks = (function () {
       const khz = [track.rx[khorizon], track.ry[khorizon], track.rz[khorizon]];
       addBox(out, [px[khorizon] + khz[0] * 250, pyMin - 3, pz[khorizon] + khz[2] * 250],
              [400, 2, 800], [0.12, 0.28, 0.44]);
-      // Sand/dust filler terrain (extensive)
+      // Sand/dust filler terrain (extensive). Sunk so the top sits ~1m below the
+      // lowest road grade — these 80m-wide patches overlap the track footprint on
+      // a flat desert circuit, so keeping them below grade stops them poking up
+      // through the road surface.
       every(40, (k) => {
         for (const side of [-1, 1]) {
           const sand_d = 90 + hash(k * 21 + side) * 80;
-          addBox(out, [px[k] + track.rx[k] * side * sand_d, pyMin + 1, pz[k] + track.rz[k] * side * sand_d],
+          addBox(out, [px[k] + track.rx[k] * side * sand_d, pyMin - 3, pz[k] + track.rz[k] * side * sand_d],
                  [80, 4, 120], [0.72, 0.66, 0.50]);
         }
       });
@@ -969,8 +972,11 @@ const Tracks = (function () {
       for (let i = 0; i < 8; i++) {
         const k = Math.round((i / 8) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const ridge_h = 50 + hash(k * 37) * 35;
-        const ridge_d = 240 + hash(k * 39) * 140;
+        // Low, far ridge band: tall slabs up close read as grey walls / floating
+        // planes (especially where the track climbs above pyMin), so keep them
+        // short and well out so they sit on the horizon as distant hills.
+        const ridge_h = 22 + hash(k * 37) * 16;
+        const ridge_d = 340 + hash(k * 39) * 150;
         for (const side of [-1, 1]) {
           addBox(out, [px[k] + r[0] * side * ridge_d, pyMin + ridge_h / 2 - 1, pz[k] + r[2] * side * ridge_d],
                  [240, ridge_h, 360], [0.4, 0.36, 0.28]);
