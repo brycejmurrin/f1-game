@@ -119,6 +119,19 @@ const Tracks = (function () {
       hw[k] = lerp(dhw[di], dhw[di + 1], f);
       bank[k] = lerp(dbank[di], dbank[di + 1], f);
     }
+    // Localized bridges (figure-8 crossovers): raise one section into a smooth
+    // deck so it passes OVER the lower section instead of clipping through it.
+    // The cosine bump returns to 0 at the window edges, so the rest of the lap
+    // stays flat — no global tilt.
+    const bridges = BRIDGES[def.id];
+    if (bridges) for (const b of bridges) {
+      const cs = b.s * total;
+      for (let k = 0; k < n; k++) {
+        let d = Math.abs(k * ds - cs);
+        d = Math.min(d, total - d);                 // wrap-around distance
+        if (d < b.halfM) py[k] += b.rise * 0.5 * (1 + Math.cos(Math.PI * d / b.halfM));
+      }
+    }
     // tangents by central difference (wrap), then right + banking
     for (let k = 0; k < n; k++) {
       const a = (k - 1 + n) % n, b = (k + 1) % n;
@@ -368,6 +381,7 @@ const Tracks = (function () {
     } else if (theme === "street_day") {  // Monaco
       every(20, (k) => {
         for (const side of [-1, 1]) {
+          if (def.id === "monaco" && side === 1 && k < n * 0.14) continue; // leave the harbour open
           const s = hash(k * 3 + side), h = 10 + s * 26;
           const tone = 0.6 + s * 0.25;
           place(k, side, 5 + s * 3, [7, h, 7], [tone, tone * 0.92, tone * 0.78]);
@@ -385,6 +399,76 @@ const Tracks = (function () {
     } else if (theme === "modern") {  // Madrid
       every(30, (k) => { for (const side of [-1, 1]) { const s = hash(k + side); place(k, side, 9 + s * 6, [10, 8 + s * 14, 10], [0.8, 0.82, 0.86]); } });
       every(120, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 24], [0.85, 0.2, 0.2]));
+    }
+
+    // --- main grandstand + pit complex on the start/finish straight (every GP) ---
+    const crowd = def.night ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
+    for (let i = 0; i < 7; i++) {
+      const k = (i * 4) % n;
+      place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
+      place(k, -1, 10, [1.4, 7, 16], crowd);                // tiered seating
+      place(k, 1, 12, [7, 5.5, 16], [0.83, 0.83, 0.86]);    // pit building
+    }
+
+    // --- iconic landmark: a ferris wheel beside the track (Suzuka, Singapore) ---
+    function ferrisWheel(k, side, dist, radius) {
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const tl = Math.hypot(track.tx[k], track.tz[k]) || 1;
+      const tn = [track.tx[k] / tl, 0, track.tz[k] / tl];   // horizontal tangent
+      const o = side * (hw[k] + dist);
+      const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+      const hubY = py[k] + radius + 5;
+      const hub = [cx, hubY, cz];
+      for (const lo of [-3, 3]) {                            // support legs
+        addBox(out, [cx + tn[0] * lo, py[k] + (hubY - py[k]) / 2 - 0.3, cz + tn[2] * lo],
+               [1.6, hubY - py[k], 1.6], [0.32, 0.33, 0.38]);
+      }
+      addBox(out, hub, [3, 3, 3], [0.3, 0.3, 0.34]);         // hub
+      const seg = 16;
+      for (let i = 0; i < seg; i++) {                        // rim of cabins
+        const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+        const p = [hub[0] + tn[0] * ca * radius, hub[1] + sa * radius, hub[2] + tn[2] * ca * radius];
+        const cab = def.night
+          ? [[0.95, 0.2, 0.5], [0.2, 0.85, 0.95], [0.95, 0.8, 0.2]][i % 3]
+          : (i % 2 ? [0.9, 0.25, 0.25] : [0.95, 0.95, 0.98]);
+        addBox(out, p, [2.4, 2.4, 2.4], cab);
+      }
+    }
+    if (def.id === "suzuka") ferrisWheel(Math.round(n * 0.06) % n, 1, 40, 24);
+    if (def.id === "singapore") ferrisWheel(Math.round(n * 0.05) % n, 1, 46, 28);
+
+    // --- Monaco harbour: water + moored yachts along the start straight ---
+    if (def.id === "monaco") {
+      for (let i = 0; i < 13; i++) {
+        const k = (i * 3) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const o = hw[k] + 28;
+        addBox(out, [px[k] + r[0] * o, py[k] - 0.5, pz[k] + r[2] * o], [40, 0.6, 14], [0.13, 0.32, 0.5]); // water
+        if (i % 2 === 0) {
+          const yo = hw[k] + 18;
+          addBox(out, [px[k] + r[0] * yo, py[k] + 1.2, pz[k] + r[2] * yo], [4, 3, 11], [0.95, 0.95, 0.97]); // yacht hull
+          addBox(out, [px[k] + r[0] * yo, py[k] + 4, pz[k] + r[2] * yo], [2.2, 2, 5], [0.85, 0.86, 0.9]);   // cabin
+        }
+      }
+    }
+
+    // bridge supports: pillars from the ground up to the raised deck, set a
+    // little along the deck from the exact crossing so they clear the lower road
+    const brs = BRIDGES[def.id];
+    if (brs) for (const b of brs) {
+      const kc = Math.round(b.s * n) % n;
+      for (const off of [-18, -9, 9, 18]) {
+        const k = ((kc + off) % n + n) % n;
+        const deckY = py[k];
+        if (deckY < 1) continue;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const tg = [track.tx[k], 0, track.tz[k]];
+        for (const side of [-1, 1]) {
+          const o = side * (hw[k] + 0.7);
+          addBox(out, [px[k] + r[0] * o, deckY / 2 - 0.3, pz[k] + r[2] * o],
+                 [1.6, deckY + 0.4, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
+        }
+      }
     }
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
     return out;
@@ -427,6 +511,13 @@ const Tracks = (function () {
       sunColor: [0.5, 0.52, 0.6], sunDir: norm([0.1, 0.9, 0.2]),
     }, o);
   }
+
+  // Per-circuit bridge decks (arc fraction of the overpass centre, ramp
+  // half-window in metres, peak rise). Suzuka is a figure-8: its back straight
+  // crosses over the section out of the esses.
+  const BRIDGES = {
+    suzuka: [{ s: 0.811, halfM: 150, rise: 7 }],
+  };
 
   const DEFS = [
     { id: "bahrain", name: "BAHRAIN", gp: "Bahrain GP", country: "Bahrain", night: true, theme: "desert", lengthKm: 5.4, baseHW: 7,
