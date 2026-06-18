@@ -39,6 +39,7 @@ const GameAudio = (function () {
   let engBuf = null, accBuf = null, samplesReady = false;
   let engSrcIdle = null, engSrcAcc = null, engGainIdle = null, engGainAcc = null;
   let usingSamples = false;
+  let dbgAnalyser = null;          // taps the engine output so tests can measure pitch
   const SFX_ENGINE = "assets/sfx/f1_engine.mp3";   // sustained F1 drone (primary)
   const SFX_ACCEL = "assets/sfx/f1_rev.mp3";        // high-rev layer
 
@@ -288,6 +289,10 @@ const GameAudio = (function () {
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
     engFilter.connect(engGain).connect(master);
+    // debug tap: lets tests read the engine's dominant output frequency (pitch)
+    dbgAnalyser = ctx.createAnalyser();
+    dbgAnalyser.fftSize = 16384;
+    engGain.connect(dbgAnalyser);
 
     usingSamples = !!(samplesReady && engBuf && accBuf);
     engA = engB = engC = null;
@@ -457,7 +462,13 @@ const GameAudio = (function () {
       // RPM by the gear ratio — more in low gears, less in high gears). Pitched
       // down overall per feedback; redline kept near where gear 7 sat ("about
       // right"), idle brought lower for a deeper low end.
-      const rate = (0.3 + rev * 0.5) * (1 + 0.04 * b);     // idle ~0.30x .. redline ~0.80x (lower, wider sweep)
+      // Base pitch tracks rpm (research: engine pitch is proportional to RPM,
+      // and games crossfade short pitched loops to avoid the chipmunk artifact).
+      // On top of that, drop the low gears noticeably for a deeper, gruntier
+      // launch (gears 1-3 scaled down; 4+ normal) — a deliberate feel choice.
+      const g = (typeof gear === "number" && isFinite(gear)) ? gear : 8;
+      const gmul = g <= 3 ? [0.6, 0.72, 0.84][g - 1] : 1.0;
+      const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
       // both loops are pitched together (so the sweep is carried either way);
@@ -721,6 +732,20 @@ const GameAudio = (function () {
     startMusic,
     stopMusic,
     setMusicEnabled,
+    // debug audio-test hooks. rate() is the exact pitch multiplier the engine is
+    // playing at (ground truth — output pitch scales linearly with it).
+    // centroidHz() is the spectral centroid of the live output (a stable
+    // brightness/pitch proxy, unlike the single loudest bin which hops between
+    // harmonics). Together they let tests verify pitch vs gear/throttle.
+    rate: function () { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
+    centroidHz: function () {
+      if (!dbgAnalyser || !ctx) return 0;
+      const n = dbgAnalyser.frequencyBinCount, arr = new Float32Array(n);
+      dbgAnalyser.getFloatFrequencyData(arr);
+      let num = 0, den = 0;
+      for (let i = 1; i < n; i++) { const m = Math.pow(10, arr[i] / 20); num += (i * ctx.sampleRate / dbgAnalyser.fftSize) * m; den += m; }
+      return den > 0 ? Math.round(num / den) : 0;
+    },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
     debug: function () { return { samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
