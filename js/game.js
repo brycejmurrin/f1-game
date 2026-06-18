@@ -425,11 +425,11 @@ function resolveCollisions(ranked) {
       }
     }
   }
-  // separation pass with slop: only correct penetration beyond a small
-  // allowance, and only partially. A tiny steady-state overlap (< SLOP) is left
-  // alone, which stops the per-frame snap-back buzz while staying far too small
-  // (a few cm on a 2 m car) to ever look like cars merging.
-  const SLOP = 0.12;
+  // separation pass: enforce the car boundary firmly so they don't visibly
+  // overlap. A small slop is kept to avoid a hard per-frame snap (the proactive
+  // steering separation now keeps cars spaced, so collisions rarely fire and a
+  // tighter boundary no longer causes the old vibration).
+  const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
     for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
@@ -442,13 +442,13 @@ function resolveCollisions(ranked) {
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = invM(a), iB = invM(b), iSum = iA + iB;
       if (penLat < penLong) {
-        const c = Math.max(penLat - SLOP, 0) * 0.6;
+        const c = Math.max(penLat - SLOP, 0) * 0.85;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
         a.x += sgn * c * (iA / iSum);
         b.x -= sgn * c * (iB / iSum);
       } else {
-        const c = Math.max(penLong - SLOP, 0) * 0.6;
+        const c = Math.max(penLong - SLOP, 0) * 0.85;
         if (c <= 0) continue;
         shiftLong(a, c * (iA / iSum));
         shiftLong(b, -c * (iB / iSum));
@@ -458,7 +458,7 @@ function resolveCollisions(ranked) {
   // keep everyone on the drivable surface after being shoved around
   for (const c of ranked) {
     Tracks.sample(track, c.s, smp);
-    const wall = smp.hw + 9;
+    const wall = track.street ? smp.hw - 0.8 : smp.hw + 9;
     if (c.x > wall) c.x = wall; else if (c.x < -wall) c.x = -wall;
   }
 }
@@ -619,7 +619,7 @@ function updateCar(c, dt, ranked) {
     // Push is proportional to how far INSIDE the min gap a neighbour is, so it
     // ramps up only when too close and fades to nothing once spaced — stable, no
     // oscillation, and it doesn't fight the collision push (same direction).
-    const MIN_GAP = 2.6;
+    const MIN_GAP = 2.8;
     let sep = 0;
     for (let j = 0; j < ranked.length; j++) {
       const o = ranked[j];
@@ -639,6 +639,12 @@ function updateCar(c, dt, ranked) {
     // side to side. Larger errors still get full response.
     if (Math.abs(err) < 0.3) err *= Math.abs(err) / 0.3;
     steer = clamp(err * 0.9, -1, 1);
+    // Low-pass the AI steering command itself so it can't reverse frame to frame
+    // (the residual "switchiness"). A sustained turn-in passes through; a
+    // one-frame flip is filtered. Used for both motion and the visual yaw below.
+    if (c.steerSm === undefined) c.steerSm = steer;
+    c.steerSm = damp(c.steerSm, steer, 9, dt);
+    steer = c.steerSm;
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
@@ -653,9 +659,19 @@ function updateCar(c, dt, ranked) {
       : clamp(Math.abs(k) * c.speed * 0.05 - 0.35, 0, 1);
   }
   // wall
-  const wall = hw + 9;
-  if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
-  if (c.x < -wall) { c.x = -wall; c.speed *= 0.96; }
+  // Walls: on street circuits the barrier is right at the track edge, so cars
+  // hit it just outside the racing line (scrape + scrub). On permanent circuits
+  // there's run-off, so the hard limit sits well out past the grass.
+  const wall = track.street ? hw - 0.8 : hw + 9;
+  if (Math.abs(c.x) > wall) {
+    c.x = c.x > 0 ? wall : -wall;
+    c.speed *= track.street ? 0.9 : 0.96;
+    if (c.isPlayer && track.street && c.collideT <= 0) {
+      shake = Math.min(1, shake + 0.3); c.collideT = 0.3;
+      if (soundOn) GameAudio.collision();
+      if (navigator.vibrate) { try { navigator.vibrate(35); } catch (e) {} }
+    }
+  }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Drive the visual nose yaw from the SMOOTHED steer (steerVis), not the raw
   // per-frame steer, so residual steering twitch doesn't wobble the nose. A

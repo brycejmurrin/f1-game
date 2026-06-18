@@ -159,7 +159,7 @@ const Tracks = (function () {
       rx[k] = r[0]; ry[k] = r[1]; rz[k] = r[2];
     }
 
-    const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, meshes: {}, map: null };
+    const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, street: !!STREET_IDS[def.id], meshes: {}, map: null };
     track.map = buildMap(px, pz, n);
     if (typeof GLX !== "undefined" && GLX.createMesh) {
       track.meshes.road = GLX.createMesh(buildRoad(track));
