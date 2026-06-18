@@ -73,6 +73,15 @@ builder), `car3d` (procedural car geometry), `input` (keyboard/touch/tilt),
 `audio` (WebAudio synth), `api` (Jolpica/OpenF1 clients), `data` (data hub
 UI), `game` (loop, physics, AI, race logic).
 
+## Credits
+
+Music: free demo tracks from
+[Beatscribe's Homebrew VGM assets](https://github.com/Beatscribe/homebrew_vgm)
+([more at beatscribe.itch.io](https://beatscribe.itch.io)), released under
+**CC0 1.0** (public domain) and downsampled for the web. See
+[`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine and sound
+effects are synthesized in-browser with the Web Audio API.
+
 ---
 
 *Apex 26 is an unofficial fan project and is not associated in any way with

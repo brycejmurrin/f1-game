@@ -30,14 +30,20 @@ const GameAudio = (function () {
   let engineOn = false;
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
 
-  // Music sequencer
+  // Music: streamed CC0 tracks (assets/music/), lazy-loaded + cached
   let musicOn = false;
-  let musicTimer = null;
-  let step = 0;
-  let nextNoteT = 0;
-  let songIdx = 0;
-  let stepDur = 0.1;
   let lastTrackIdx = -1;
+  let musicGain = null;
+  let musicSrc = null;
+  let currentUrl = null;
+  let musicToken = 0;
+  const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
+  const MENU_TRACK = "assets/music/menu.wav";
+  const RACE_TRACKS = [
+    "assets/music/race_a.wav",
+    "assets/music/race_b.wav",
+    "assets/music/night.wav",
+  ];
 
   let listenersAttached = false;
   let rebuildTries = 0;
@@ -132,6 +138,9 @@ const GameAudio = (function () {
     try { ctx.close(); } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
+    musicGain = null;
+    currentUrl = null;
+    for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
     if (!createCtx()) return;
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
@@ -440,223 +449,62 @@ const GameAudio = (function () {
   /* ---------------- music ---------------- */
 
   /*
-   * Three original 64-step (4 bars of 16ths) race loops at ~158 BPM and
-   * a calmer menu loop. The mix leans on mid/high harmonics (saws,
-   * octave doubles) because phone speakers reproduce almost nothing
-   * below ~300 Hz. startMusic(trackIdx) -> loop trackIdx % 3;
-   * startMusic(-1) -> menu loop.
+   * Music is now real, downloaded CC0 tracks (see assets/music/CREDITS.txt),
+   * streamed and looped through the AudioContext. The old synth sequencer was
+   * removed. startMusic(trackIdx) -> a race loop; startMusic(-1) -> menu loop.
    */
-  const PATTERN_LEN = 64;
-  const LOOKAHEAD = 0.3;
-  const RACE_LOOPS = 3;
-  const MENU_SONG = 3;
-
-  const SONGS = [
-    { // GRID ATTACK — Em C D Bm, hammering out of the first corner
-      tempo: 158,
-      roots: [82.41, 130.81, 146.83, 123.47],
-      lead: [
-        659, 0, 587, 659, 784, 0, 659, 587,   659, 0, 494, 0, 392, 440, 494, 0,
-        523, 0, 659, 523, 784, 0, 659, 523,   523, 659, 784, 0, 988, 0, 784, 659,
-        587, 0, 740, 587, 880, 0, 740, 587,   587, 740, 880, 0, 1175, 880, 740, 0,
-        494, 0, 587, 740, 988, 0, 740, 587,   494, 587, 740, 988, 1175, 0, 988, 0,
-      ],
-    },
-    { // SLIPSTREAM — Am Em F G, long straights and a late lift
-      tempo: 158,
-      roots: [110, 82.41, 87.31, 98],
-      lead: [
-        440, 0, 523, 587, 659, 0, 523, 440,   440, 523, 659, 0, 880, 0, 659, 523,
-        494, 0, 587, 659, 784, 0, 659, 587,   659, 0, 494, 392, 659, 0, 587, 0,
-        698, 0, 880, 698, 1047, 0, 880, 698,  698, 880, 1047, 0, 880, 0, 698, 659,
-        784, 0, 988, 784, 1175, 0, 988, 784,  587, 659, 784, 988, 1175, 988, 784, 0,
-      ],
-    },
-    { // RED LIGHTS — Dm C Bb A, tense and minor with a sharp turn home
-      tempo: 158,
-      roots: [146.83, 130.81, 116.54, 110],
-      lead: [
-        587, 0, 698, 0, 880, 698, 587, 0,     587, 698, 880, 0, 1175, 0, 880, 698,
-        523, 0, 659, 0, 784, 659, 523, 0,     523, 659, 784, 1047, 784, 0, 659, 0,
-        466, 0, 587, 0, 698, 587, 466, 0,     932, 0, 880, 698, 587, 0, 698, 0,
-        440, 0, 554, 659, 880, 0, 659, 554,   440, 554, 659, 880, 1109, 880, 659, 0,
-      ],
-    },
-    { // PADDOCK — Am F C G, calm menu loop
-      tempo: 100,
-      menu: true,
-      roots: [110, 87.31, 130.81, 98],
-      lead: [
-        440, 0, 0, 0, 523, 0, 0, 0,           659, 0, 0, 587, 523, 0, 440, 0,
-        698, 0, 0, 0, 659, 0, 0, 0,           523, 0, 0, 440, 523, 0, 0, 0,
-        523, 0, 0, 0, 659, 0, 0, 0,           784, 0, 0, 659, 587, 0, 523, 0,
-        494, 0, 0, 0, 587, 0, 0, 0,           494, 0, 0, 440, 392, 0, 0, 0,
-      ],
-    },
-  ];
-
-  function musicNote(freq, type, peak, dur, t0) {
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t0);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(peak, t0 + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(g).connect(master);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.05);
+  function ensureMusicGain() {
+    if (!musicGain && ctx && master) {
+      musicGain = ctx.createGain();
+      musicGain.gain.value = 0.55;            // music sits under engine/SFX
+      musicGain.connect(master);
+    }
   }
 
-  function kick(t0, soft) {
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(150, t0);
-    osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.1);
-    g.gain.setValueAtTime(soft ? 0.3 : 0.5, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
-    osc.connect(g).connect(master);
-    osc.start(t0);
-    osc.stop(t0 + 0.2);
-    if (soft) return;
-    // click transient so the beat reads on small speakers
+  function playMusicBuffer(buf, token) {
+    if (!ctx || !musicOn || token !== musicToken) return;  // superseded
+    ensureMusicGain();
+    try { if (musicSrc) { musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
     const src = ctx.createBufferSource();
-    src.buffer = noiseBuf(0.02);
-    const cg = ctx.createGain();
-    cg.gain.setValueAtTime(0.18, t0);
-    cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.025);
-    src.connect(cg).connect(master);
-    src.start(t0);
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(musicGain);
+    src.start();
+    musicSrc = src;
   }
 
-  function hat(t0, open) {
-    const src = ctx.createBufferSource();
-    src.buffer = noiseBuf(0.06);
-    const f = ctx.createBiquadFilter();
-    f.type = "highpass";
-    f.frequency.value = 6500;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(open ? 0.16 : 0.09, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + (open ? 0.06 : 0.03));
-    src.connect(f).connect(g).connect(master);
-    src.start(t0);
-  }
-
-  function snare(t0) {
-    const src = ctx.createBufferSource();
-    src.buffer = noiseBuf(0.1);
-    const f = ctx.createBiquadFilter();
-    f.type = "highpass";
-    f.frequency.value = 1600;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.22, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
-    src.connect(f).connect(g).connect(master);
-    src.start(t0);
-    // body thump
-    const osc = ctx.createOscillator();
-    const og = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(220, t0);
-    og.gain.setValueAtTime(0.15, t0);
-    og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.08);
-    osc.connect(og).connect(master);
-    osc.start(t0);
-    osc.stop(t0 + 0.1);
-  }
-
-  function playStep(i, t0) {
-    const song = SONGS[songIdx];
-    const bar = (i / 16) | 0;
-    const root = song.roots[bar];
-    const lead = song.lead[i];
-
-    if (song.menu) {
-      // calm: sparse triangle lead, soft kick, light off-beat hats, pads
-      if (i % 8 === 0) {
-        musicNote(root * 2, "triangle", 0.14, stepDur * 7, t0);
-      }
-      if (i % 16 === 0) kick(t0, true);
-      if (i % 8 === 4) hat(t0, false);
-      if (lead) musicNote(lead, "triangle", 0.11, stepDur * 3.5, t0);
-      if (i % 16 === 0) {
-        musicNote(root * 4, "sine", 0.05, stepDur * 15, t0);
-        musicNote(root * 6, "sine", 0.04, stepDur * 15, t0);  // fifth
-      }
-      return;
-    }
-
-    // race loops: driving bass on eighths with an octave bounce
-    if (i % 2 === 0) {
-      const f = (i % 8 === 6) ? root * 2 : root;
-      // saws + octave double: harmonics survive a phone speaker
-      musicNote(f, "sawtooth", 0.2, stepDur * 1.8, t0);
-      musicNote(f * 2, "square", 0.1, stepDur * 1.6, t0);
-    }
-    if (i % 4 === 0) kick(t0, false);
-    if (i % 8 === 4) snare(t0);                 // backbeat
-    if (i % 2 === 1) hat(t0, i % 16 === 15);    // 16th drive, open at bar end
-    if (lead) {
-      musicNote(lead, "sawtooth", 0.15, stepDur * 2.4, t0);
-      musicNote(lead * 1.005, "sawtooth", 0.09, stepDur * 2.4, t0); // detune shimmer
-    }
-    if (i % 16 === 0) {                          // pad chord on bar starts
-      musicNote(root * 4, "triangle", 0.06, stepDur * 14, t0);
-      musicNote(root * 6, "triangle", 0.05, stepDur * 14, t0);     // fifth
-    }
-  }
-
-  function scheduler() {
-    if (!musicOn || !ctx) return;
-    const t = ctx.currentTime;
-    if (nextNoteT < t - 0.25) {
-      // fell badly behind (frozen tab, long GC): jump ahead, stay on beat
-      const missed = Math.ceil((t + 0.05 - nextNoteT) / stepDur);
-      nextNoteT += missed * stepDur;
-      step += missed;
-    }
-    while (nextNoteT < t + LOOKAHEAD) {
-      playStep(step % PATTERN_LEN, nextNoteT);
-      nextNoteT += stepDur;
-      step++;
-    }
-  }
-
-  function rafPump() {
-    if (!musicOn) return;
-    scheduler();
-    window.requestAnimationFrame(rafPump);
-  }
-
-  // trackIdx >= 0 -> race loop trackIdx % 3; trackIdx -1 (or any
-  // negative) -> menu loop. Safe no-op before init().
+  // trackIdx >= 0 -> one of the race loops; trackIdx < 0 -> menu loop.
+  // Streams a real CC0 track (lazy-loaded, then cached). No-op before init().
   function startMusic(trackIdx) {
     const idx = (typeof trackIdx === "number") ? trackIdx : 0;
-    const next = idx < 0 ? MENU_SONG : ((idx % RACE_LOOPS) + RACE_LOOPS) % RACE_LOOPS;
-    if (!ctx) {
-      lastTrackIdx = idx;
-      return;
-    }
-    if (musicOn) {
-      if (next === songIdx) return;             // already playing this loop
-      stopMusic();
-    }
+    const url = idx < 0 ? MENU_TRACK
+      : RACE_TRACKS[((idx % RACE_TRACKS.length) + RACE_TRACKS.length) % RACE_TRACKS.length];
     lastTrackIdx = idx;
-    songIdx = next;
-    stepDur = 60 / SONGS[songIdx].tempo / 4;    // one 16th note
-    if (ctx.state !== "running") ctx.resume();
+    if (!ctx) return;
+    if (musicOn && currentUrl === url) return;   // already playing this track
+    stopMusic();
     musicOn = true;
-    step = 0;
-    nextNoteT = ctx.currentTime + 0.06;
-    musicTimer = setInterval(scheduler, 60);
-    if (window.requestAnimationFrame) window.requestAnimationFrame(rafPump);
+    currentUrl = url;
+    const token = ++musicToken;
+    if (ctx.state !== "running") ctx.resume();
+    if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
+    fetch(url)
+      .then(function (r) { return r.arrayBuffer(); })
+      .then(function (ab) {
+        return new Promise(function (res, rej) {
+          ctx.decodeAudioData(ab, res, rej);     // callback form: older Safari
+        });
+      })
+      .then(function (buf) { musicBuffers[url] = buf; playMusicBuffer(buf, token); })
+      .catch(function () { /* music is optional — ignore load/decode errors */ });
   }
 
   function stopMusic() {
     musicOn = false;
-    if (musicTimer) clearInterval(musicTimer);
-    musicTimer = null;
+    currentUrl = null;
+    musicToken++;                                // cancel any in-flight load
+    try { if (musicSrc) { musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
+    musicSrc = null;
   }
 
   return {
