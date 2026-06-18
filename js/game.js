@@ -594,24 +594,45 @@ function updateCar(c, dt, ranked) {
     // field fans out across the track rather than collapsing onto one line.
     const racingLine = clamp(kA * 130, -0.62, 0.62) * hw;
     const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
-    // avoid cars directly ahead (up to 2 cars checked)
+    // Avoid cars clearly AHEAD (overtaking line choice). Skip cars that are
+    // essentially alongside (tiny gap): two near-even cars swap prog-rank every
+    // frame, so a rank-based "car ahead" avoid would flip direction frame to
+    // frame — a major cause of the side-to-side vibration. Alongside spacing is
+    // handled smoothly by the separation term below instead.
     let avoid = 0;
     for (let look = 1; look <= 2; look++) {
       const af = ranked[(c.rank || 1) - 1 - look];
       if (!af) break;
       const gap = af.prog - c.prog;
-      if (gap > 16 || gap < 0) break;
+      if (gap > 16) break;
+      if (gap < 2.5) continue;          // alongside, not ahead — leave to separation
       const adx = af.x - c.x;
       if (Math.abs(adx) < 2.6) {
-        const urgency = lerp(1.6, 2.4, clamp(1 - gap / 16, 0, 1));
+        const urgency = lerp(1.2, 2.0, clamp(1 - gap / 16, 0, 1));
         avoid = adx > 0 ? -urgency : urgency;
         break;  // react to the closest blocker only
       }
     }
-    steer = clamp((targetX + avoid - c.x) * 0.9, -1, 1);
-    // while rubbing another car, ease off the steering so we don't fight the
-    // collision push-apart — that tug-of-war is what made the pack vibrate.
-    if ((c.contactT || 0) > 0) steer *= 0.3;
+    // Proactive lateral separation: drive toward a minimum side-by-side gap so
+    // the field settles into clean, non-overlapping spacing instead of pulling
+    // onto one line, overlapping, and bouncing (the side-to-side vibration).
+    // Push is proportional to how far INSIDE the min gap a neighbour is, so it
+    // ramps up only when too close and fades to nothing once spaced — stable, no
+    // oscillation, and it doesn't fight the collision push (same direction).
+    const MIN_GAP = 2.6;
+    let sep = 0;
+    for (let j = 0; j < ranked.length; j++) {
+      const o = ranked[j];
+      if (o === c) continue;
+      const dp = Math.abs(o.prog - c.prog);
+      if (dp > 6.5) continue;                 // only cars roughly alongside
+      const dx = c.x - o.x, adx = Math.abs(dx);
+      const deficit = MIN_GAP - adx;
+      if (deficit <= 0) continue;             // already spaced — leave alone
+      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
+    }
+    sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
+    steer = clamp((targetX + avoid + sep - c.x) * 0.9, -1, 1);
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
@@ -1057,6 +1078,27 @@ window.__apex = {
     return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // Controlled side-by-side test: race state, two AI cars placed dead-even at a
+  // mid-track straight with overlapping lateral positions and equal speed; every
+  // other car (incl. the player) is shoved far away. Returns the two test ids.
+  // Lets a harness measure pure side-by-side jitter without pack chaos.
+  pair(frac, speed) {
+    if (!track) return false;
+    state = "race"; raceT = Math.max(raceT, 1);
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
+    const prog = f * track.total, s = wrapS(prog);
+    const ai = cars.filter((c) => !c.isPlayer);
+    const a = ai[0], b = ai[1];
+    [a, b].forEach((c, i) => {
+      c.prog = prog; c.s = s; c.speed = v;
+      c.x = i === 0 ? 0.6 : -0.6;   // overlap within the ~2 m car width
+      c.xVis = c.x; c.lap = 0; c.finished = false;
+    });
+    cars.forEach((c) => { if (c !== a && c !== b) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return { a: cars.indexOf(a), b: cars.indexOf(b) };
+  },
   // skip the countdown but keep the grid intact, so the field races and packs
   // up normally — for observing pack behaviour (e.g. collision vibration).
   go() {
