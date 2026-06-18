@@ -40,6 +40,7 @@ let driverIdx = store.get("driver", 0);
 let trackIdx = store.get("track", 0);
 let difficulty = store.get("difficulty", "normal");
 let soundOn = store.get("sound", true);
+let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
@@ -56,9 +57,10 @@ const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed ban
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
-// 8-speed gearbox: each gear's top speed as a fraction of VMAX
-const GEARS = 8;
-const GEAR_TOP = [0.16, 0.28, 0.42, 0.56, 0.69, 0.81, 0.91, 1.0];
+// 6-speed gearbox: fewer, wider gears so each one lasts longer and you don't
+// row through them so fast (each gear's top speed as a fraction of VMAX).
+const GEARS = 6;
+const GEAR_TOP = [0.22, 0.40, 0.57, 0.72, 0.87, 1.0];
 const IDLE_RPM = 4000, MAX_RPM = 15000;
 function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
 function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
@@ -1006,6 +1008,7 @@ function enableTilt() {
 function firstGesture() {
   GameAudio.init();
   GameAudio.setEnabled(soundOn);
+  GameAudio.setMusicEnabled(musicEnabled);
   enableTilt();
   if (soundOn) GameAudio.startMusic(-1);
 }
@@ -1021,9 +1024,18 @@ function setSound(b) {
   els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
   $("pm-sound").textContent = "SOUND: " + (b ? "ON" : "OFF");
   if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
-  else if (state === "menu") GameAudio.startMusic(-1);
+  else { if (state === "menu") GameAudio.startMusic(-1); }
 }
 els.soundbtn.onclick = () => setSound(!soundOn);
+
+// Music on/off, independent of the master sound toggle: engine + SFX keep
+// playing with music off.
+function setMusic(b) {
+  musicEnabled = b; store.set("music", b);
+  GameAudio.setMusicEnabled(b);
+  $("pm-music").textContent = "MUSIC: " + (b ? "ON" : "OFF");
+}
+$("pm-music").onclick = () => setMusic(!musicEnabled);
 
 $("mb-race").onclick = () => {
   seasonMode = false;
@@ -1109,6 +1121,7 @@ DataHub.init(els.datahub);
 $("pm-tilt").textContent = tiltLabel();
 $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
 setSound(soundOn);
+setMusic(musicEnabled);
 loadTrack(trackIdx);
 window.addEventListener("resize", () => GLX.resize());
 lastFrame = performance.now();

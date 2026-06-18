@@ -44,6 +44,7 @@ const GameAudio = (function () {
 
   // Music: streamed CC0 tracks (assets/music/), lazy-loaded + cached
   let musicOn = false;
+  let musicEnabled = true;        // separate from the master sound toggle
   let lastTrackIdx = -1;
   let musicGain = null;
   let musicSrc = null;
@@ -629,12 +630,20 @@ const GameAudio = (function () {
 
   // trackIdx >= 0 -> one of the race loops; trackIdx < 0 -> menu loop.
   // Streams a real CC0 track (lazy-loaded, then cached). No-op before init().
+  // Toggle just the music, independent of the master sound toggle. Engine + SFX
+  // keep playing when music is off.
+  function setMusicEnabled(b) {
+    musicEnabled = !!b;
+    if (!musicEnabled) stopMusic();
+    else if (ctx) startMusic(lastTrackIdx);
+  }
+
   function startMusic(trackIdx) {
     const idx = (typeof trackIdx === "number") ? trackIdx : 0;
     const url = idx < 0 ? MENU_TRACK
       : RACE_TRACKS[((idx % RACE_TRACKS.length) + RACE_TRACKS.length) % RACE_TRACKS.length];
     lastTrackIdx = idx;
-    if (!ctx) return;
+    if (!ctx || !musicEnabled) return;   // remember the track but stay silent if music is off
     if (musicOn && currentUrl === url) return;   // already playing this track
     stopMusic();
     musicOn = true;
@@ -683,6 +692,7 @@ const GameAudio = (function () {
     penalty,
     startMusic,
     stopMusic,
+    setMusicEnabled,
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
     debug: function () { return { samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn }; },
   };
