@@ -1433,12 +1433,17 @@ const Tracks = (function () {
     const t = [track.tx[0], track.ty[0], track.tz[0]];
     const u = upOf(track, 0);
     const w = track.hw[0];
+    // Move gate back along track tangent to avoid clipping car at start position
+    const backDist = -15;
+    const gateX = track.px[0] + t[0] * backDist;
+    const gateY = track.py[0];
+    const gateZ = track.pz[0] + t[2] * backDist;
     for (const side of [-1, 1]) {
       const o = side * (w + 1.5);
-      addBox(out, [track.px[0] + r[0] * o, track.py[0] + 3, track.pz[0] + r[2] * o], [1, 6, 1], [0.85, 0.1, 0.1], [r, u, t]);
+      addBox(out, [gateX + r[0] * o, gateY + 3, gateZ + r[2] * o], [1, 6, 1], [0.85, 0.1, 0.1], [r, u, t]);
     }
-    addBox(out, [track.px[0], track.py[0] + 6.2, track.pz[0]], [w * 2 + 4, 0.8, 1.2], [0.1, 0.1, 0.12], [r, u, t]);
-    addBox(out, [track.px[0], track.py[0] + 6.8, track.pz[0]], [w * 1.4, 0.6, 0.6], [0.95, 0.95, 0.97], [r, u, t]);
+    addBox(out, [gateX, gateY + 6.2, gateZ], [w * 2 + 4, 0.8, 1.2], [0.1, 0.1, 0.12], [r, u, t]);
+    addBox(out, [gateX, gateY + 6.8, gateZ], [w * 1.4, 0.6, 0.6], [0.95, 0.95, 0.97], [r, u, t]);
     return out;
   }
 
