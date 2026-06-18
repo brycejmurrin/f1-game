@@ -52,6 +52,7 @@ const Input = (function () {
   let tiltFilt = 0;           // low-passed remapped tilt, degrees
   let tiltZero = 0;           // calibrated neutral
   let tiltSeen = false;
+  let calibPending = false;   // calibrate() requested before first sensor event
   let lastTiltEventT = -1e9;  // performance.now() ms of last sensor event
   let lastTiltFilterT = 0;
   let gyroAttached = false;
@@ -100,6 +101,8 @@ const Input = (function () {
       const alpha = 1 - Math.exp(-dt / TILT_TAU);
       tiltFilt += (raw - tiltFilt) * alpha;
     }
+    // a calibrate() requested before sensor data arrived takes effect now
+    if (calibPending) { tiltZero = tiltFilt; calibPending = false; }
     lastTiltFilterT = t;
     lastTiltEventT = t;
   }
@@ -141,8 +144,13 @@ const Input = (function () {
     return Promise.resolve(true);
   }
 
+  // Capture the current hold as neutral. No clamp: the neutral attitude can be
+  // any angle (a landscape grip is often well past ±35°); clamping it would
+  // leave a residual offset that pulls the car constantly to one side. If no
+  // sensor reading has arrived yet, defer until the first event.
   function calibrate() {
-    tiltZero = clamp(tiltFilt, -35, 35);
+    if (tiltSeen) tiltZero = tiltFilt;
+    else calibPending = true;
   }
 
   // Latched, like the proven driving-game build: once any orientation event
