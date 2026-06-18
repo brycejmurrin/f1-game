@@ -87,7 +87,9 @@ let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let seasonMode = false;
 let frameSky = {}, frame = {};
 const teamMeshes = {};   // teamId -> GLX mesh
-let shake = 0;
+let shake = 0;          // 0..1 trauma; camera offset scales with shake²
+let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
+let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
 let lastFrame = 0;
 let announceT = 0;
@@ -191,7 +193,7 @@ function startRace() {
   loadTrack(trackIdx);
   makeCars();
   gridUp();
-  state = "count"; countT = 0; lightsLit = 0; raceT = 0; paused = false;
+  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
@@ -297,8 +299,11 @@ function update(dt) {
       els.lights.children[lit - 1].classList.add("on");
       if (soundOn) GameAudio.lightOn(lit - 1);
       if (lit === 1) Input.calibrate();
+      // all five lit — hold for a randomised beat, as in real F1, so the
+      // start can't be timed and lights-out is a genuine reaction moment.
+      if (lit === 5) startHold = 0.2 + Math.random() * 1.8;
     }
-    if (countT > 5 + 0.4 + (countT % 1) * 0 && lightsLit === 5 && countT > 5.6) {
+    if (lightsLit === 5 && countT > 5 + startHold) {
       state = "race"; raceT = 0;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
@@ -336,9 +341,19 @@ function update(dt) {
         b.speed = b.speed * 0.88 + (a.speed + 1) * 0.12;
       }
       a.speed *= 0.9995; b.speed *= 0.999;
-      if ((a.isPlayer || b.isPlayer) && a.collideT <= 0) {
-        if (soundOn) GameAudio.collision();
-        shake = 0.35; a.collideT = 0.5;
+      if (a.isPlayer || b.isPlayer) {
+        const pc = a.isPlayer ? a : b;
+        if (pc.collideT <= 0) {
+          // scale feedback by how hard the hit is: closing-speed difference
+          // plus how deep the overlap is. A graze barely registers; a
+          // T-bone shakes hard, briefly freezes the sim, and buzzes the phone.
+          const impact = clamp(Math.abs(a.speed - b.speed) * 0.04 + overlapS * 0.06, 0.15, 1);
+          if (soundOn) GameAudio.collision();
+          shake = Math.min(1, shake + impact * 0.7);
+          hitStop = Math.max(hitStop, impact * 0.06);
+          pc.collideT = 0.4;
+          if (navigator.vibrate) { try { navigator.vibrate(Math.round(20 + impact * 50)); } catch (e) {} }
+        }
       }
     }
   }
@@ -572,10 +587,14 @@ function render(dt) {
       smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.35, smpC.p[2] + smpC.r[2] * cx,
     ];
     tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.75, p[2] + smp.t[2] * 4];
-    fovT = lerp(53, 64, clamp(player.speed / VMAX, 0, 1));
+    // wider FOV at speed reads as faster; boost adds an extra transient kick
+    // that the camFov damping eases in and out.
+    fovT = lerp(56, 76, clamp(player.speed / VMAX, 0, 1)) + (player.deploying ? 7 : 0);
     if (shake > 0) {
-      shake = Math.max(0, shake - dt * 1.4);
-      eyeT[0] += (Math.random() - 0.5) * shake; eyeT[1] += (Math.random() - 0.5) * shake * 0.6;
+      shake = Math.max(0, shake - dt * 1.6);
+      const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
+      eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
+      tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
   }
   // High lambda in-race: the anchor already follows the car along the track,
@@ -690,7 +709,12 @@ function tick(now) {
   lastFrame = now;
   if (paused) return;
   if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
-  update(dt);
+  // hit-stop: slow the simulation to a crawl for a few frames after a hard
+  // crash so the impact reads, but keep the camera (render) at full dt so the
+  // shake still plays out.
+  let simDt = dt;
+  if (hitStop > 0) { hitStop = Math.max(0, hitStop - dt); simDt = dt * 0.15; }
+  update(simDt);
   render(dt);
   if (state === "race" || state === "count") updateHud(false);
 }
