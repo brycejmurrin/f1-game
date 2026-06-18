@@ -45,6 +45,8 @@ const Input = (function () {
   // on-screen buttons (multi-pointer safe via per-button pointer sets)
   let btnThrottle = false;
   let btnBrake = false;
+  let btnSteerLeft = false;
+  let btnSteerRight = false;
 
   // tilt
   let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
@@ -53,6 +55,7 @@ const Input = (function () {
   let gyroAttached = false;
   let gyroDenied = false;
   let useTiltPref = true;
+  let useButtonSteerPref = false;   // when true, on-screen L/R buttons steer
   let tiltSmoothed = 0;       // EMA-filtered tilt (eliminates jitter spikes)
   let lastOrientMs = 0;
 
@@ -272,6 +275,10 @@ const Input = (function () {
   function steer() {
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
+    if (useButtonSteerPref) {
+      if (btnSteerLeft || btnSteerRight) return (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
+      return 0;
+    }
     if (tiltActive()) return tiltSteering();
     return touchSteer;
   }
@@ -316,6 +323,14 @@ const Input = (function () {
     return useTiltPref;
   }
 
+  function setUseButtonSteer(b) {
+    useButtonSteerPref = !!b;
+  }
+
+  function useButtonSteer() {
+    return useButtonSteerPref;
+  }
+
   function touchControlsNeeded() {
     return !!(typeof window !== "undefined" && window.matchMedia &&
               window.matchMedia("(pointer: coarse)").matches);
@@ -344,6 +359,8 @@ const Input = (function () {
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
+    wireHold("btn-steer-left", function (v) { btnSteerLeft = v; });
+    wireHold("btn-steer-right", function (v) { btnSteerRight = v; });
 
     if (typeof screen !== "undefined" && screen.orientation &&
         typeof screen.orientation.addEventListener === "function") {
@@ -357,6 +374,7 @@ const Input = (function () {
     touches.clear();
     touchSteer = 0;
     btnThrottle = btnBrake = false;
+    btnSteerLeft = btnSteerRight = false;
     keyLeft = keyRight = keyBrake = keyThrottle = false;
     keySteerVal = 0;
     keySteerT = 0;
@@ -381,6 +399,8 @@ const Input = (function () {
     tiltActive,
     setUseTilt,
     useTilt,
+    setUseButtonSteer,
+    useButtonSteer,
     touchControlsNeeded,
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
