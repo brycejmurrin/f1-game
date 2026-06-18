@@ -4,7 +4,7 @@
 const Tracks = (function () {
   "use strict";
 
-  const SCALE = 1.25;            // scale authored lengths for arcade racing
+  const SCALE = 1.45;            // scale authored lengths for arcade racing
   const WORLD_UP = [0, 1, 0];
 
   // ---------- small math (self-contained; doesn't depend on M4/V3) ----------
@@ -431,9 +431,8 @@ const Tracks = (function () {
   const DEFS = [
     { id: "bahrain", name: "BAHRAIN", gp: "Bahrain GP", country: "Bahrain", night: true, theme: "desert", lengthKm: 5.4, baseHW: 7,
       pal: nightPal({ horizon: [0.10, 0.07, 0.10], runoff: [0.5, 0.4, 0.26] }),
-      segs: [{ t: 0, l: 500 }, { t: 90, l: 70 }, { t: -60, l: 80 }, { t: 70, l: 60 }, { t: 0, l: 240 }, { t: 60, l: 90 },
-        { t: -120, l: 130 }, { t: 95, l: 80 }, { t: -150, l: 150, h: -6 }, { t: 0, l: 360, h: 4 }, { t: 80, l: 110 },
-        { t: 70, l: 120 }, { t: 60, l: 90 }, { t: -40, l: 70 }, { t: 120, l: 120 }] },
+      segs: [{ t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
+        { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300, h: -4 }, { t: 60, l: 90, h: 4 }, { t: 0, l: 120 }, { t: 60, l: 110 }] },
     { id: "monaco", name: "MONACO", gp: "Monaco GP", country: "Monaco", night: false, theme: "street_day", lengthKm: 3.3, baseHW: 5,
       pal: dayPal({ horizon: [0.55, 0.68, 0.82], grass: [0.3, 0.45, 0.5], runoff: [0.7, 0.66, 0.55], fogDensity: 0.0014 }),
       segs: [{ t: 0, l: 230 }, { t: 70, l: 75 }, { t: -25, l: 260, h: 14 }, { t: -70, l: 110 }, { t: 80, l: 80, w: 4.8 },
@@ -459,9 +458,9 @@ const Tracks = (function () {
         { t: 0, l: 360 }, { t: 150, l: 220 }] },
     { id: "suzuka", name: "SUZUKA", gp: "Japanese GP", country: "Japan", night: false, theme: "green", lengthKm: 5.8, baseHW: 7,
       pal: dayPal({ zenith: [0.28, 0.46, 0.72], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2] }),
-      segs: [{ t: 0, l: 300, h: -6 }, { t: 65, l: 130 }, { t: -40, l: 80, h: 6 }, { t: 50, l: 80, h: 6 }, { t: -45, l: 80, h: 4 },
-        { t: 55, l: 80 }, { t: -60, l: 110 }, { t: 70, l: 90, h: -4 }, { t: 60, l: 90, h: -6 }, { t: -165, l: 180 },
-        { t: -30, l: 240 }, { t: -120, l: 200 }, { t: 0, l: 440, h: 6 }, { t: -35, l: 150 }, { t: 75, l: 80 }, { t: 0, l: 40 }, { t: -80, l: 80 }, { t: 70, l: 150 }] },
+      segs: [{ t: 0, l: 440, h: -6 }, { t: 50, l: 120 }, { t: -35, l: 100, h: 6 }, { t: 45, l: 110, h: 6 }, { t: -30, l: 100, h: 4 },
+        { t: 55, l: 120 }, { t: 60, l: 110 }, { t: 80, l: 120, h: -4 }, { t: 70, l: 120, h: -6 }, { t: 0, l: 300 },
+        { t: 45, l: 120, h: 6 }, { t: -20, l: 90 }, { t: 40, l: 140 }] },
     { id: "singapore", name: "SINGAPORE", gp: "Singapore GP", country: "Singapore", night: true, theme: "street_night", lengthKm: 4.9, baseHW: 6,
       pal: nightPal({ horizon: [0.08, 0.05, 0.14] }),
       segs: [{ t: 0, l: 160 }, { t: 60, l: 70 }, { t: -70, l: 70 }, { t: 55, l: 70 }, { t: 0, l: 220 }, { t: 90, l: 70 },
