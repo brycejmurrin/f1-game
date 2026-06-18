@@ -44,15 +44,15 @@ let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
-const VMAX = 92;            // m/s base (~330 km/h)
-const ACCEL = 17;           // m/s^2 at low speed
-const BRAKE = 34;
-const COAST_DRAG = 7;       // m/s^2 deceleration when off the throttle
-const LAT_MAX = 26;         // m/s^2 cornering grip
-const STEER_VMAX = 17;      // lateral m/s at full lock, full speed
-const GRASS_V = 30;         // crawl speed on grass
-const DEPLOY_A = 6.2;       // extra accel from electric deploy
-const TAPER_LO = 64, TAPER_HI = 81;  // deploy tapers to 0 across this speed band
+const VMAX = 75;            // m/s base (~270 km/h)
+const ACCEL = 13;           // m/s^2 at low speed
+const BRAKE = 27;
+const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
+const LAT_MAX = 22;         // m/s^2 cornering grip
+const STEER_VMAX = 15;      // lateral m/s at full lock, full speed
+const GRASS_V = 24;         // crawl speed on grass
+const DEPLOY_A = 5.0;       // extra accel from electric deploy
+const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
@@ -72,9 +72,9 @@ function rpmFor(gear, speed) {
   return IDLE_RPM + frac * (MAX_RPM - IDLE_RPM);
 }
 const DIFF = {
-  easy:   { ai: 0.90, band: 0.20 },
-  normal: { ai: 0.97, band: 0.10 },
-  hard:   { ai: 1.025, band: 0.03 },
+  easy:   { ai: 0.86, band: 0.18 },
+  normal: { ai: 0.92, band: 0.08 },
+  hard:   { ai: 0.99, band: 0.03 },
 };
 const GAME_LAPS = 3;
 
