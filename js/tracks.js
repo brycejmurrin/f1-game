@@ -205,30 +205,39 @@ const Tracks = (function () {
     const idxArr = [];
     const pal = track.def.palette;
     const ka = pal.kerbA, kb = pal.kerbB, grass = pal.grass;
+    const asphalt = pal.asphalt || [0.2, 0.21, 0.24];
+    const line = pal.line || [0.92, 0.92, 0.95];
+    const dark = [0.05, 0.05, 0.06];
     const ds = track.total / n;
-    // offsets: grassL, kerbL, edgeL, edgeR, kerbR, grassR (lateral, yRaise)
-    const V = 6;
+    // Cross-section, left to right (lateral offset, yRaise): grass shoulder,
+    // raised kerb, then a crisp white boundary line (two verts 0.5m apart with
+    // a 0.05m step into the asphalt), the dark asphalt running surface, then the
+    // line / kerb / grass mirrored on the right. Putting both line verts at the
+    // same colour and stepping sharply into asphalt keeps the painted edge crisp
+    // instead of fading the whole road to grey.
+    const V = 10;
     for (let k = 0; k < n; k++) {
       const u = upOf(track, k);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const w = hw[k];
-      const offs = [-w - 2.2, -w - 1.2, -w, w, w + 1.2, w + 2.2];
-      const rise = [0, 0.05, 0, 0, 0.05, 0];
+      const offs = [-w - 2.2, -w - 1.2, -w, -w + 0.5, -w + 0.55, w - 0.55, w - 0.5, w, w + 1.2, w + 2.2];
+      const rise = [0, 0.05, 0, 0, 0, 0, 0, 0, 0.05, 0];
       const kv = Math.abs(curvature(track, k * ds));
       const onKerb = kv > 0.004;
       const checker = (k * ds) < 9;          // start/finish band
       const stripe = (Math.floor((k * ds) / 4) % 2) === 0;
-      const av = 0.16 + (hash(k) - 0.5) * 0.024;
+      const chk = stripe ? [0.95, 0.95, 0.97] : dark;
       for (let v = 0; v < V; v++) {
         const o = offs[v];
         pos.push(px[k] + r[0] * o + u[0] * rise[v], py[k] + r[1] * o + u[1] * rise[v] + 0.02, pz[k] + r[2] * o + u[2] * rise[v]);
         nrm.push(u[0], u[1], u[2]);
         let c;
-        if (v === 0 || v === 5) c = grass;                       // grass edge
-        else if (v === 1 || v === 4) c = onKerb ? (stripe ? ka : kb) : grass;   // kerb only in corners
-        else if (v === 2 || v === 3) {                            // road edge line
-          c = checker ? (stripe ? [0.95, 0.95, 0.97] : [0.04, 0.04, 0.05]) : [0.85, 0.85, 0.88];
-        }
+        if (v === 0 || v === 9) c = grass;                                    // grass shoulder
+        else if (v === 1 || v === 8) c = onKerb ? (stripe ? ka : kb) : grass;  // kerb only in corners
+        else if (v === 2 || v === 3 || v === 6 || v === 7)                     // white boundary line
+          c = checker ? chk : line;
+        else                                                                    // asphalt running surface
+          c = checker ? chk : asphalt;
         col.push(c[0], c[1], c[2]);
       }
     }
@@ -382,6 +391,7 @@ const Tracks = (function () {
     return Object.assign({
       zenith: [0.18, 0.40, 0.78], horizon: [0.62, 0.74, 0.88], sun: [1, 0.96, 0.85],
       grass: [0.18, 0.42, 0.16], runoff: [0.55, 0.42, 0.28], fog: [0.62, 0.74, 0.88],
+      asphalt: [0.20, 0.21, 0.24], line: [0.92, 0.92, 0.95],
       fogDensity: 0.0017, kerbA: [0.85, 0.12, 0.12], kerbB: [0.95, 0.95, 0.95],
       ambientSky: [0.45, 0.52, 0.62], ambientGround: [0.22, 0.22, 0.18],
       sunColor: [1, 0.95, 0.82], sunDir: norm([0.4, 0.72, 0.3]),
@@ -391,6 +401,7 @@ const Tracks = (function () {
     return Object.assign({
       zenith: [0.01, 0.01, 0.04], horizon: [0.05, 0.06, 0.12], sun: [0.2, 0.2, 0.3],
       grass: [0.08, 0.12, 0.08], runoff: [0.18, 0.16, 0.14], fog: [0.03, 0.03, 0.07],
+      asphalt: [0.13, 0.13, 0.16], line: [0.82, 0.82, 0.88],
       fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92],
       ambientSky: [0.42, 0.43, 0.5], ambientGround: [0.16, 0.16, 0.18],
       sunColor: [0.5, 0.52, 0.6], sunDir: norm([0.1, 0.9, 0.2]),
