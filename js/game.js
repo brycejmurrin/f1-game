@@ -350,7 +350,7 @@ function update(dt) {
 
   if (soundOn) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1));
+    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1), player.gear);
     GameAudio.setSkid(player.offroad ? 0.4 : clamp(Math.abs(Tracks.curvature(track, player.s)) * player.speed * 0.05 - 0.35, 0, 1));
   }
 }
@@ -478,6 +478,34 @@ function updateCar(c, dt, ranked) {
     vmax *= 1 + clamp(gap / 700, -1, 1) * dd.band;
   }
 
+  // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
+  // in our lane, and a "stuck" timer. Shared by the braking and steering logic
+  // so the AI can pick the open side, commit to a pass, and dig itself out when
+  // wedged — instead of grinding to a halt against a car or wall.
+  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
+  if (!c.isPlayer) {
+    const edge = track.street ? hw - 0.8 : hw + 5;
+    roomL = edge + c.x;            // clearance to the left edge from our position
+    roomR = edge - c.x;            // clearance to the right edge
+    for (let j = 0; j < ranked.length; j++) {
+      const o = ranked[j];
+      if (o === c) continue;
+      const dprog = o.prog - c.prog;          // >0 = ahead of us
+      if (dprog < -6 || dprog > 18) continue;
+      const dx = o.x - c.x;
+      if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
+        if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
+        else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
+      }
+      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
+    }
+    roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
+    const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
+    if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
+    else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
+    unstuckActive = c.stuckT > 0.7;
+  }
+
   // --- electric deploy ---
   let deploy = 0;
   c.otCool = Math.max(0, c.otCool - dt);
@@ -516,16 +544,15 @@ function updateCar(c, dt, ranked) {
     for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
     const vCorner = Math.sqrt(LAT_MAX / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
-    // queue behind a car directly ahead in the same lane: cap our pace to it
-    // and brake if we're closing fast, so we tuck in behind instead of ramming.
-    const carAhead = ranked[(c.rank || 1) - 2];
-    if (carAhead) {
-      const followDist = carAhead.prog - c.prog;
-      if (followDist > 0 && followDist < 16 && Math.abs(carAhead.x - c.x) < 2.0) {
-        vmax = Math.min(vmax, carAhead.speed + clamp(followDist - 6, -6, 8));
-        if (c.speed > carAhead.speed + 3) braking = true;
-      }
+    // queue behind the car blocking our lane (prog-based, so it's immune to the
+    // frame-to-frame rank swapping of near-even cars): cap our pace to it and
+    // brake if closing fast, so we tuck in behind instead of ramming.
+    if (blocker && blockerGap < 16) {
+      vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - 6, -6, 8));
+      if (c.speed > blocker.speed + 3) braking = true;
     }
+    // when wedged in/stopped, power out instead of braking
+    if (unstuckActive) braking = false;
   }
 
   // --- gearbox (player) ---
@@ -534,8 +561,8 @@ function updateCar(c, dt, ranked) {
     c.shiftT = Math.max(0, c.shiftT - dt);
     const up = Input.consumeShiftUp(), down = Input.consumeShiftDown();
     if (manualMode) {
-      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.uiTick(); }
-      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.uiTick(); }
+      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.shift(true); }
+      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.shift(false); }
       const hi = gearHi(c.gear), lo = gearLo(c.gear);
       const frac = (c.speed - lo) / Math.max(hi - lo, 1);
       if (c.speed >= hi) { gearMult = 0.08; speedCap = Math.min(speedCap, hi + 1.5); }  // limiter: upshift to go faster
@@ -559,7 +586,12 @@ function updateCar(c, dt, ranked) {
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
   if (c.isPlayer) {
-    if (!manualMode) c.gear = naturalGear(c.speed);
+    if (!manualMode) {
+      const ng = naturalGear(c.speed);
+      // auto upshift/downshift cue: same shift sound as manual when the box changes
+      if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
+      c.gear = ng;
+    }
     c.rpm = rpmFor(c.gear, c.speed);
   }
 
@@ -594,25 +626,23 @@ function updateCar(c, dt, ranked) {
     // field fans out across the track rather than collapsing onto one line.
     const racingLine = clamp(kA * 130, -0.62, 0.62) * hw;
     const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
-    // Avoid cars clearly AHEAD (overtaking line choice). Skip cars that are
-    // essentially alongside (tiny gap): two near-even cars swap prog-rank every
-    // frame, so a rank-based "car ahead" avoid would flip direction frame to
-    // frame — a major cause of the side-to-side vibration. Alongside spacing is
-    // handled smoothly by the separation term below instead.
-    let avoid = 0;
-    for (let look = 1; look <= 2; look++) {
-      const af = ranked[(c.rank || 1) - 1 - look];
-      if (!af) break;
-      const gap = af.prog - c.prog;
-      if (gap > 16) break;
-      if (gap < 2.5) continue;          // alongside, not ahead — leave to separation
-      const adx = af.x - c.x;
-      if (Math.abs(adx) < 2.6) {
-        const urgency = lerp(1.2, 2.0, clamp(1 - gap / 16, 0, 1));
-        avoid = adx > 0 ? -urgency : urgency;
-        break;  // react to the closest blocker only
-      }
+    // Overtake: if a slower car is blocking our lane ahead, ease toward the side
+    // with more room to pass. Collision-aware — the move is scaled down if that
+    // side is also tight (a car alongside or a wall), so we don't dive into a
+    // gap that isn't there. Uses the prog-based blocker, immune to rank swaps.
+    let overtake = 0;
+    if (blocker && blocker.speed < c.speed + 4 && blockerGap < 14) {
+      const side = roomR >= roomL ? 1 : -1;
+      const need = side > 0 ? roomR : roomL;
+      overtake = side * lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1);
     }
+    // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
+    // clearly-freer side, but when both sides are similar fall back to the car's
+    // own lane sign so a piled-up group fans out BOTH ways instead of all diving
+    // the same direction (and off the track).
+    const freer = roomR - roomL;
+    const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1) : (c.lane >= 0 ? 1 : -1);
+    const unstuck = unstuckActive ? unstuckSide * 2.6 : 0;
     // Proactive lateral separation: drive toward a minimum side-by-side gap so
     // the field settles into clean, non-overlapping spacing instead of pulling
     // onto one line, overlapping, and bouncing (the side-to-side vibration).
@@ -632,7 +662,10 @@ function updateCar(c, dt, ranked) {
       sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
     }
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
-    let err = targetX + avoid + sep - c.x;
+    // clamp the combined target to the drivable surface so overtake/unstuck/
+    // separation biases can never steer the AI off the track or into a wall.
+    const desiredX = clamp(targetX + overtake + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    let err = desiredX - c.x;
     // Soft deadzone near the target: fade the correction out as the error gets
     // small so the AI stops making tiny frame-to-frame steering corrections
     // around its target — those micro-twitches are what made the nose wobble
@@ -1123,6 +1156,28 @@ window.__apex = {
     });
     cars.forEach((c) => { if (c !== a && c !== b) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
     return { a: cars.indexOf(a), b: cars.indexOf(b) };
+  },
+  // Deliberate jam: pile N AI cars on top of each other at near-zero speed at a
+  // mid-track point, rest of field shoved away. Used to test stuck-recovery —
+  // a healthy AI should dig out and resume speed within a couple of seconds.
+  jam(n) {
+    if (!track) return false;
+    state = "race"; raceT = Math.max(raceT, 1);
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    const ai = cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
+    const prog = 0.5 * track.total;
+    const ids = [];
+    ai.forEach((c, i) => {
+      if (i < m) {
+        c.prog = prog + (i - m / 2) * 0.4;     // tightly stacked longitudinally
+        c.s = wrapS(c.prog); c.speed = 2; c.x = (i - m / 2) * 0.3;  // and laterally
+        c.xVis = c.x; c.lap = 0; c.finished = false; c.stuckT = 0;
+        ids.push(cars.indexOf(c));
+      } else { c.prog -= 800; c.s = wrapS(c.s - 800); }
+    });
+    cars.forEach((c) => { if (c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return ids;
   },
   // skip the countdown but keep the grid intact, so the field races and packs
   // up normally — for observing pack behaviour (e.g. collision vibration).

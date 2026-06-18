@@ -29,6 +29,7 @@ const GameAudio = (function () {
   let skidSrc = null, skidFilter = null, skidGain = null;
   let engineOn = false;
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
+  let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
 
   // Music: streamed CC0 tracks (assets/music/), lazy-loaded + cached
   let musicOn = false;
@@ -299,6 +300,8 @@ const GameAudio = (function () {
     lastSpeed = 0;
     lastEngT = 0;
     harvLevel = 0;
+    shiftDuck = 0;
+    shiftDuckT = 0;
     engineOn = true;
   }
 
@@ -326,24 +329,49 @@ const GameAudio = (function () {
   // rev01 0..1 drives engine PITCH (so it revs within a gear and drops on an
   // upshift); speed01 (optional) drives loudness/brightness/harvest so they
   // stay steady across shifts. boost01 0..1 (truthy ok), offroad bool.
-  function setEngine(rev01, boost01, offroad, speed01) {
+  // gear (optional 1..8) gives each gear a distinct base/ceiling so an
+  // upshift is clearly heard and 2nd vs 6th differ even at equal rev01.
+  function setEngine(rev01, boost01, offroad, speed01, gear) {
     if (!engineOn || !ctx) return;
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
     const t = ctx.currentTime;
 
-    // 90 Hz idle to ~720 Hz at the redline, following revs; boost +12% pitch
-    const base = (90 + rev * 630) * (1 + 0.12 * b);
+    // Per-gear pitch character. Lower gears: higher idle + a higher, buzzier
+    // ceiling (short ratios scream). Higher gears: lower base, lower ceiling
+    // (long ratios drone). g01 is 0 in 1st .. 1 in 8th.
+    let gIdle = 95, gSpan = 700;
+    if (typeof gear === "number" && isFinite(gear)) {
+      const gi = Math.max(1, Math.min(8, Math.round(gear)));
+      const g01 = (gi - 1) / 7;
+      // idle climbs a touch in low gears, settles low in high gears
+      gIdle = 130 - g01 * 70;             // 130 Hz (1st) -> 60 Hz (8th)
+      // redline ceiling drops with gear so each gear's top note is distinct
+      gSpan = 900 - g01 * 460;            // span 900 (1st) -> 440 (8th)
+    }
+
+    // idle -> redline within the gear, widened for an audible per-gear swing;
+    // boost +12% pitch
+    const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
     engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
     engB.frequency.setTargetAtTime(base * 1.009, t, 0.025);
     engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
+
+    // transient gain dip from a recent gear shift (rev-cut), decays ~120 ms
+    if (shiftDuck > 0.0001) {
+      const sd = shiftDuckT ? Math.max(0, t - shiftDuckT) : 0;
+      shiftDuck = shiftDuck * Math.exp(-sd / 0.12);
+      shiftDuckT = t;
+      if (shiftDuck < 0.0001) shiftDuck = 0;
+    }
 
     // lowpass + loudness follow SPEED (steady across shifts); revs add bite
     const cut = Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     engGain.gain.setTargetAtTime(
-      0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0), t, 0.05);
+      (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0))
+        * (1 - 0.55 * shiftDuck), t, 0.03);
 
     // turbo whine tracks revs
     whineOsc.frequency.setTargetAtTime(1500 + rev * 2000, t, 0.05);
@@ -376,6 +404,45 @@ const GameAudio = (function () {
     if (v > 0) {
       skidFilter.frequency.value = 760 + v * 420 + Math.sin(now() * 30) * 80;
     }
+  }
+
+  // Gear-shift cue: a quick rev-cut/blip layered over the running engine.
+  // up=true -> upshift (clean clutch-kick blip up); up=false -> downshift
+  // (lower heel-and-toe throttle blip). Safe to call rapidly; never restarts
+  // the engine. Triggers a brief gain dip in the live engine via shiftDuck.
+  function shift(up) {
+    if (!sfxOk()) return;
+    const isUp = up !== false;
+    const t0 = now();
+
+    // engine rev-cut: dip the running engine's gain, recovered in setEngine
+    if (engineOn) {
+      shiftDuck = isUp ? 1 : 0.7;     // downshift dips a little less (blip)
+      shiftDuckT = t0;
+    }
+
+    // short synth blip — a filtered saw "chirp". Upshift snaps up and fades;
+    // downshift sits lower and blips slightly up (heel-and-toe).
+    const osc = ctx.createOscillator();
+    const f = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    osc.type = "sawtooth";
+    f.type = "bandpass";
+    f.Q.value = 1.2;
+    const dur = isUp ? 0.085 : 0.11;
+    const f0 = isUp ? 520 : 300;
+    const f1 = isUp ? 300 : 360;     // up: cut down; down: small blip up
+    osc.frequency.setValueAtTime(f0, t0);
+    osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    f.frequency.setValueAtTime(isUp ? 1400 : 900, t0);
+    f.frequency.exponentialRampToValueAtTime(isUp ? 600 : 700, t0 + dur);
+    env(g, t0, isUp ? 0.12 : 0.1, 0.004, dur);
+    osc.connect(f).connect(g).connect(master);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+
+    // a touch of mechanical click via short filtered noise
+    noise(isUp ? 0.05 : 0.045, 0.05, isUp ? 2600 : 1800);
   }
 
   /* ---------------- sfx ---------------- */
@@ -518,6 +585,7 @@ const GameAudio = (function () {
     stopEngine,
     setEngine,
     setSkid,
+    shift,
     lightOn,
     lightsOut,
     overtakeReady,
