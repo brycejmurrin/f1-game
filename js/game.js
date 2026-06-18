@@ -45,8 +45,9 @@ const VMAX = 92;            // m/s base (~330 km/h)
 const ACCEL = 17;           // m/s^2 at low speed
 const BRAKE = 34;
 const LAT_MAX = 26;         // m/s^2 cornering grip
-const STEER_VMAX = 15;      // lateral m/s at full lock, full speed
+const STEER_VMAX = 17;      // lateral m/s at full lock, full speed
 const CENTRIF = 0.92;       // outward push factor
+const DRIFT_K = 0.11;       // corner pushes the car outward — you must steer in
 const GRASS_V = 30;         // crawl speed on grass
 const DEPLOY_A = 6.2;       // extra accel from electric deploy
 const TAPER_LO = 64, TAPER_HI = 81;  // deploy tapers to 0 across this speed band
@@ -77,6 +78,7 @@ let hudT = 0;
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const smpC = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // camera anchor
 
 // ---------- helpers ----------
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -423,14 +425,16 @@ function updateCar(c, dt, ranked) {
     let avoid = 0;
     const af = ranked[(c.rank || 1) - 2];
     if (af && af.prog - c.prog < 14 && Math.abs(af.x - c.x) < 2.4) avoid = af.x > c.x ? -1.4 : 1.4;
-    steer = clamp((targetX + avoid - c.x) * 0.55, -1, 1);
+    // feed-forward to cancel the corner's outward drift, then hold the line
+    const sf = clamp(c.speed / VMAX, 0, 1);
+    const ff = (k * c.speed * c.speed * DRIFT_K) / (STEER_VMAX * (0.4 + 0.6 * sf));
+    steer = clamp((targetX + avoid - c.x) * 0.9 + ff, -1, 1);
   }
   const sFac = clamp(c.speed / VMAX, 0, 1);
-  c.x += steer * STEER_VMAX * (0.35 + 0.65 * sFac) * dt;
-  // centrifugal outward push when cornering beyond grip
-  const latNeed = k * c.speed * c.speed;
-  const over = Math.abs(latNeed) > LAT_MAX ? (latNeed - Math.sign(latNeed) * LAT_MAX) : 0;
-  c.x -= over * CENTRIF * 0.02 * dt * 60 * dt;  // gentle arcade understeer
+  c.x += steer * STEER_VMAX * (0.4 + 0.6 * sFac) * dt;
+  // Corner throws the car toward the OUTSIDE (k>0 = right turn -> drift left):
+  // with no steering input the car runs wide, so the player must steer in.
+  c.x -= k * c.speed * c.speed * DRIFT_K * dt;
   // wall
   const wall = hw + 9;
   if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
@@ -489,21 +493,29 @@ function render(dt) {
     Tracks.sample(track, player.s, smp);
     const px = player.x;
     const p = [smp.p[0] + smp.r[0] * px, smp.p[1], smp.p[2] + smp.r[2] * px];
-    // closer, lower chase cam so the player's car reads as the hero car
+    // Anchor the camera a FIXED distance behind the player along the track
+    // (arc-length), not in world space — so it never lags at high speed and
+    // the car stays a constant, readable size.
+    Tracks.sample(track, wrapS(player.s - 7.5), smpC);
+    const cx = px * 0.5;   // partly follow lateral offset; rest shows position
     eyeT = [
-      p[0] - smp.t[0] * 6.8, p[1] + 2.55, p[2] - smp.t[2] * 6.8,
+      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.35, smpC.p[2] + smpC.r[2] * cx,
     ];
-    tgtT = [p[0] + smp.t[0] * 5, p[1] + 0.85, p[2] + smp.t[2] * 5];
-    fovT = lerp(60, 72, clamp(player.speed / VMAX, 0, 1));
+    tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.75, p[2] + smp.t[2] * 4];
+    fovT = lerp(53, 64, clamp(player.speed / VMAX, 0, 1));
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.4);
       eyeT[0] += (Math.random() - 0.5) * shake; eyeT[1] += (Math.random() - 0.5) * shake * 0.6;
     }
   }
-  const lE = state === "race" || state === "count" ? 6 : 1.6;
+  // High lambda in-race: the anchor already follows the car along the track,
+  // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
+  const racing = state === "race" || state === "count";
+  const lE = racing ? 14 : 1.6;
+  const lT = racing ? 16 : 10;
   for (let i = 0; i < 3; i++) {
     camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
-    camTgt[i] = damp(camTgt[i], tgtT[i], 10, dt);
+    camTgt[i] = damp(camTgt[i], tgtT[i], lT, dt);
   }
   camFov = damp(camFov, fovT, 4, dt);
 
