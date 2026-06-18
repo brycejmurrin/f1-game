@@ -170,6 +170,7 @@ function gridUp() {
   order.forEach((c, i) => {
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
+    c.xVis = c.x;   // reset smoothed render position so the grid doesn't slide
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
@@ -398,12 +399,15 @@ function resolveCollisions(ranked) {
         if (penLong <= 0 || penLat <= 0) continue;
         const iA = invM(a), iB = invM(b), iSum = iA + iB;
         if (penLat < penLong) {
-          // side-by-side contact: separate laterally, scrub a little speed
+          // side-by-side contact: separate laterally, scrub a little speed. Mark
+          // both cars "in contact" so the AI eases off steering this way and
+          // stops fighting the push (the cause of the side-by-side vibration).
           const sgn = dX >= 0 ? 1 : -1;
-          const corr = Math.max(penLat - 0.04, 0) * 0.7;
+          const corr = Math.max(penLat - 0.05, 0) * 0.5;
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= 0.985; b.speed *= 0.985;
+          a.speed *= 0.99; b.speed *= 0.99;
+          a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
           // rear-end: separate along the track and transfer speed rear->front
@@ -421,8 +425,11 @@ function resolveCollisions(ranked) {
       }
     }
   }
-  // hard minimum-separation pass — no slop, full correction — so two cars can
-  // never end the frame visibly overlapping.
+  // separation pass with slop: only correct penetration beyond a small
+  // allowance, and only partially. A tiny steady-state overlap (< SLOP) is left
+  // alone, which stops the per-frame snap-back buzz while staying far too small
+  // (a few cm on a 2 m car) to ever look like cars merging.
+  const SLOP = 0.12;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
     for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
@@ -435,12 +442,16 @@ function resolveCollisions(ranked) {
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = invM(a), iB = invM(b), iSum = iA + iB;
       if (penLat < penLong) {
+        const c = Math.max(penLat - SLOP, 0) * 0.6;
+        if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
-        a.x += sgn * penLat * (iA / iSum);
-        b.x -= sgn * penLat * (iB / iSum);
+        a.x += sgn * c * (iA / iSum);
+        b.x -= sgn * c * (iB / iSum);
       } else {
-        shiftLong(a, penLong * (iA / iSum));
-        shiftLong(b, -penLong * (iB / iSum));
+        const c = Math.max(penLong - SLOP, 0) * 0.6;
+        if (c <= 0) continue;
+        shiftLong(a, c * (iA / iSum));
+        shiftLong(b, -c * (iB / iSum));
       }
     }
   }
@@ -583,21 +594,45 @@ function updateCar(c, dt, ranked) {
     // field fans out across the track rather than collapsing onto one line.
     const racingLine = clamp(kA * 130, -0.62, 0.62) * hw;
     const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
-    // avoid cars directly ahead (up to 2 cars checked)
+    // Avoid cars clearly AHEAD (overtaking line choice). Skip cars that are
+    // essentially alongside (tiny gap): two near-even cars swap prog-rank every
+    // frame, so a rank-based "car ahead" avoid would flip direction frame to
+    // frame — a major cause of the side-to-side vibration. Alongside spacing is
+    // handled smoothly by the separation term below instead.
     let avoid = 0;
     for (let look = 1; look <= 2; look++) {
       const af = ranked[(c.rank || 1) - 1 - look];
       if (!af) break;
       const gap = af.prog - c.prog;
-      if (gap > 16 || gap < 0) break;
+      if (gap > 16) break;
+      if (gap < 2.5) continue;          // alongside, not ahead — leave to separation
       const adx = af.x - c.x;
       if (Math.abs(adx) < 2.6) {
-        const urgency = lerp(1.6, 2.4, clamp(1 - gap / 16, 0, 1));
+        const urgency = lerp(1.2, 2.0, clamp(1 - gap / 16, 0, 1));
         avoid = adx > 0 ? -urgency : urgency;
         break;  // react to the closest blocker only
       }
     }
-    steer = clamp((targetX + avoid - c.x) * 0.9, -1, 1);
+    // Proactive lateral separation: drive toward a minimum side-by-side gap so
+    // the field settles into clean, non-overlapping spacing instead of pulling
+    // onto one line, overlapping, and bouncing (the side-to-side vibration).
+    // Push is proportional to how far INSIDE the min gap a neighbour is, so it
+    // ramps up only when too close and fades to nothing once spaced — stable, no
+    // oscillation, and it doesn't fight the collision push (same direction).
+    const MIN_GAP = 2.6;
+    let sep = 0;
+    for (let j = 0; j < ranked.length; j++) {
+      const o = ranked[j];
+      if (o === c) continue;
+      const dp = Math.abs(o.prog - c.prog);
+      if (dp > 6.5) continue;                 // only cars roughly alongside
+      const dx = c.x - o.x, adx = Math.abs(dx);
+      const deficit = MIN_GAP - adx;
+      if (deficit <= 0) continue;             // already spaced — leave alone
+      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
+    }
+    sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
+    steer = clamp((targetX + avoid + sep - c.x) * 0.9, -1, 1);
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
@@ -618,6 +653,7 @@ function updateCar(c, dt, ranked) {
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   c.yawVis = damp(c.yawVis, steer * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
   c.collideT = Math.max(0, c.collideT - dt);
+  c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
   // --- advance along track ---
   const oldS = c.s;
@@ -672,15 +708,15 @@ function render(dt) {
     // Anchor the camera a FIXED distance behind the player along the track
     // (arc-length), not in world space — so it never lags at high speed and
     // the car stays a constant, readable size.
-    Tracks.sample(track, wrapS(player.s - 7.5), smpC);
+    Tracks.sample(track, wrapS(player.s - 5.8), smpC);
     const cx = px * 0.5;   // partly follow lateral offset; rest shows position
     eyeT = [
-      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.35, smpC.p[2] + smpC.r[2] * cx,
+      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.1, smpC.p[2] + smpC.r[2] * cx,
     ];
-    tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.75, p[2] + smp.t[2] * 4];
-    // wider FOV at speed reads as faster; boost adds an extra transient kick
-    // that the camFov damping eases in and out.
-    fovT = lerp(56, 76, clamp(player.speed / VMAX, 0, 1)) + (player.deploying ? 7 : 0);
+    tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.7, p[2] + smp.t[2] * 4];
+    // closer camera + narrower FOV so the car reads bigger; still widens a bit
+    // with speed for a sense of pace, plus a small boost kick.
+    fovT = lerp(52, 66, clamp(player.speed / VMAX, 0, 1)) + (player.deploying ? 6 : 0);
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
       const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
@@ -721,9 +757,19 @@ function render(dt) {
   // cars
   for (const c of cars) {
     Tracks.sample(track, c.s, smp2);
-    tmpP[0] = smp2.p[0] + smp2.r[0] * c.x;
+    // Smooth the AI cars' RENDERED lateral position (physics x is untouched).
+    // This low-passes any high-frequency collision jitter so a rubbing pack
+    // looks settled, while still tracking real steering and separation. The
+    // player's own car uses its exact position so it stays input-responsive.
+    let renderX = c.x;
+    if (!c.isPlayer) {
+      if (c.xVis === undefined) c.xVis = c.x;
+      else c.xVis = damp(c.xVis, c.x, 16, dt);
+      renderX = c.xVis;
+    }
+    tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
     tmpP[1] = smp2.p[1];
-    tmpP[2] = smp2.p[2] + smp2.r[2] * c.x;
+    tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
     // yaw the forward/right around up by yawVis
     const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
     for (let i = 0; i < 3; i++) {
@@ -1032,6 +1078,42 @@ window.__apex = {
     return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // Controlled side-by-side test: race state, two AI cars placed dead-even at a
+  // mid-track straight with overlapping lateral positions and equal speed; every
+  // other car (incl. the player) is shoved far away. Returns the two test ids.
+  // Lets a harness measure pure side-by-side jitter without pack chaos.
+  pair(frac, speed) {
+    if (!track) return false;
+    state = "race"; raceT = Math.max(raceT, 1);
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
+    const prog = f * track.total, s = wrapS(prog);
+    const ai = cars.filter((c) => !c.isPlayer);
+    const a = ai[0], b = ai[1];
+    [a, b].forEach((c, i) => {
+      c.prog = prog; c.s = s; c.speed = v;
+      c.x = i === 0 ? 0.6 : -0.6;   // overlap within the ~2 m car width
+      c.xVis = c.x; c.lap = 0; c.finished = false;
+    });
+    cars.forEach((c) => { if (c !== a && c !== b) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return { a: cars.indexOf(a), b: cars.indexOf(b) };
+  },
+  // skip the countdown but keep the grid intact, so the field races and packs
+  // up normally — for observing pack behaviour (e.g. collision vibration).
+  go() {
+    state = "race"; raceT = Math.max(raceT, 0.5);
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    return state;
+  },
+  // telemetry snapshot of every car, sorted by prog (leader first): lateral x,
+  // arc-progress, speed and the in-contact timer. For measuring jitter.
+  cars: () => cars.map((c, i) => ({
+    id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
+    prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2),
+    ct: +(c.contactT || 0).toFixed(2), p: !!c.isPlayer,
+  })),
   // lap fractions of corner apexes (local maxima of |curvature|), for parking
   corners() {
     if (!track) return [];
