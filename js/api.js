@@ -198,20 +198,50 @@ const F1API = (function () {
     return TTL_LATEST;
   }
 
+  function mapSession(s) {
+    s = s || {};
+    return {
+      sessionKey: (s.session_key !== undefined && s.session_key !== null) ? s.session_key : null,
+      meetingKey: (s.meeting_key !== undefined && s.meeting_key !== null) ? s.meeting_key : null,
+      year: num(s.year),
+      name: str(s.session_name),
+      type: str(s.session_type),
+      circuit: str(s.circuit_short_name),
+      country: str(s.country_name),
+      dateStart: str(s.date_start)
+    };
+  }
+
   function latestSession() {
     return request(OPENF1 + "/sessions?session_key=latest", TTL_LATEST).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
-      const s = a[a.length - 1] || {};
-      if (s.session_key !== undefined && s.session_key !== null) latestSessionKey = s.session_key;
-      return {
-        sessionKey: (s.session_key !== undefined && s.session_key !== null) ? s.session_key : null,
-        name: str(s.session_name),
-        type: str(s.session_type),
-        circuit: str(s.circuit_short_name),
-        country: str(s.country_name),
-        dateStart: str(s.date_start)
-      };
+      const s = mapSession(a[a.length - 1]);
+      if (s.sessionKey !== null) latestSessionKey = s.sessionKey;
+      return s;
+    });
+  }
+
+  // Grand Prix weekends for a season (for the session picker).
+  function meetings(year) {
+    return request(OPENF1 + "/meetings?year=" + encodeURIComponent(year), TTL_SCHEDULE).then(function (list) {
+      return arr(list).map(function (m) {
+        m = m || {};
+        return {
+          meetingKey: (m.meeting_key !== undefined && m.meeting_key !== null) ? m.meeting_key : null,
+          name: str(m.meeting_name),
+          country: str(m.country_name),
+          circuit: str(m.circuit_short_name),
+          dateStart: str(m.date_start)
+        };
+      }).filter(function (m) { return m.meetingKey !== null; });
+    });
+  }
+
+  // All sessions (FP/Qualifying/Sprint/Race) within one meeting.
+  function sessionsForMeeting(meetingKey) {
+    return request(OPENF1 + "/sessions?meeting_key=" + encodeURIComponent(meetingKey), TTL_HISTORIC).then(function (list) {
+      return arr(list).map(mapSession).filter(function (s) { return s.sessionKey !== null; });
     });
   }
 
@@ -376,6 +406,8 @@ const F1API = (function () {
     constructorStandings: constructorStandings,
     lastRace: lastRace,
     latestSession: latestSession,
+    meetings: meetings,
+    sessionsForMeeting: sessionsForMeeting,
     weather: weather,
     positions: positions,
     sessionDrivers: sessionDrivers,

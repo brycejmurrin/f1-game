@@ -164,3 +164,27 @@
 .dh-legend { display: flex; gap: 14px; font-size: 11px; color: #9a9aa5; margin-top: -4px; }
 .dh-legend-item { display: inline-flex; align-items: center; gap: 5px; }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* ---------- session picker (LIVE + TELEMETRY) ---------- */
+.dh-picker {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end;
+  margin-bottom: 12px; padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dh-pick-years { display: flex; gap: 4px; }
+.dh-pill {
+  font-size: 12px; font-weight: 700;
+  padding: 5px 11px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f2f2f5;
+}
+.dh-pill.dh-active { background: #e10600; border-color: #e10600; color: #fff; }
+.dh-pick-field { display: flex; flex-direction: column; gap: 3px; }
+.dh-pick-label { font-size: 9px; letter-spacing: 0.12em; color: #8a8a95; }
+.dh-pick-select {
+  background: #15151d; color: #f2f2f5;
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px;
+  padding: 6px 8px; font: inherit; font-size: 13px;
+  max-width: 220px;
+}
