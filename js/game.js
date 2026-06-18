@@ -170,6 +170,7 @@ function gridUp() {
   order.forEach((c, i) => {
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
+    c.xVis = c.x;   // reset smoothed render position so the grid doesn't slide
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
@@ -735,9 +736,19 @@ function render(dt) {
   // cars
   for (const c of cars) {
     Tracks.sample(track, c.s, smp2);
-    tmpP[0] = smp2.p[0] + smp2.r[0] * c.x;
+    // Smooth the AI cars' RENDERED lateral position (physics x is untouched).
+    // This low-passes any high-frequency collision jitter so a rubbing pack
+    // looks settled, while still tracking real steering and separation. The
+    // player's own car uses its exact position so it stays input-responsive.
+    let renderX = c.x;
+    if (!c.isPlayer) {
+      if (c.xVis === undefined) c.xVis = c.x;
+      else c.xVis = damp(c.xVis, c.x, 16, dt);
+      renderX = c.xVis;
+    }
+    tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
     tmpP[1] = smp2.p[1];
-    tmpP[2] = smp2.p[2] + smp2.r[2] * c.x;
+    tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
     // yaw the forward/right around up by yawVis
     const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
     for (let i = 0; i < 3; i++) {
@@ -1046,6 +1057,21 @@ window.__apex = {
     return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // skip the countdown but keep the grid intact, so the field races and packs
+  // up normally — for observing pack behaviour (e.g. collision vibration).
+  go() {
+    state = "race"; raceT = Math.max(raceT, 0.5);
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    return state;
+  },
+  // telemetry snapshot of every car, sorted by prog (leader first): lateral x,
+  // arc-progress, speed and the in-contact timer. For measuring jitter.
+  cars: () => cars.map((c, i) => ({
+    id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
+    prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2),
+    ct: +(c.contactT || 0).toFixed(2), p: !!c.isPlayer,
+  })),
   // lap fractions of corner apexes (local maxima of |curvature|), for parking
   corners() {
     if (!track) return [];
