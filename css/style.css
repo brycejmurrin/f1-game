@@ -248,17 +248,24 @@ button:active { background: rgba(255, 255, 255, 0.16); }
   width: 74px; height: 74px;
   font-size: 13px;
 }
-#btn-boost { right: calc(16px + var(--sar)); bottom: calc(96px + var(--sab)); background: rgba(0, 160, 60, 0.4); }
-#btn-ot    { right: calc(100px + var(--sar)); bottom: calc(26px + var(--sab)); }
-#btn-brake { left: calc(16px + var(--sal)); bottom: calc(96px + var(--sab)); background: rgba(160, 30, 30, 0.4); }
-.steerbtn  { bottom: calc(20px + var(--sab)); width: 64px; height: 64px; font-size: 18px; }
-#steer-left  { left: calc(14px + var(--sal)); }
-#steer-right { left: calc(92px + var(--sal)); }
-/* gear shift buttons stack above brake (down) / boost (up) */
-.shiftbtn { width: 64px; height: 64px; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+/* LEFT column (left thumb): GAS bottom, BRAKE above, SHIFT-DN top.
+   RIGHT column (right thumb): BOOST bottom, OT above, SHIFT-UP top.
+   Centre stays clear for the HUD and (tilt-off) screen-half steering. */
+.pedal { width: 84px; height: 84px; font-size: 14px; }
+#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(18px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
+#btn-throttle:active { background: rgba(0, 210, 90, 0.7); }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(110px + var(--sab)); width: 74px; height: 74px; background: rgba(180, 35, 35, 0.42); }
+#btn-brake:active { background: rgba(230, 45, 45, 0.7); }
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(18px + var(--sab)); width: 84px; height: 84px; background: rgba(0, 150, 200, 0.38); }
+#btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(110px + var(--sab)); }
+#btn-ot.armed { background: #aeea00; color: #0a0a0f; border-color: #aeea00; animation: pulse 0.8s infinite; }
+#btn-ot.on { background: var(--red); color: #fff; border-color: var(--red); }
+/* gear shift buttons stack at the top of each column (manual mode only) */
+.shiftbtn { width: 60px; height: 60px; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
 .shiftbtn small { font-size: 9px; letter-spacing: 0.1em; color: var(--dim); }
-#shift-up   { right: calc(16px + var(--sar)); bottom: calc(182px + var(--sab)); }
-#shift-down { left:  calc(16px + var(--sal)); bottom: calc(182px + var(--sab)); }
+#shift-up   { right: calc(28px + var(--sar)); bottom: calc(196px + var(--sab)); }
+#shift-down { left:  calc(28px + var(--sal)); bottom: calc(196px + var(--sab)); }
 
 #pausebtn {
   position: fixed;

@@ -35,12 +35,16 @@ Zandvoort in its farewell year. Night races run under floodlights.
 ### Controls
 
 - **Mobile (tilt):** tilt the phone to steer — calibrates at the start
-  lights. On-screen BOOST / OT / BRAKE buttons. iOS asks motion permission on
-  your first tap.
-- **Mobile (no gyro):** steer with the on-screen arrows or screen halves;
+  lights. On-screen **GAS** / **BRAKE** pedals (left), **BOOST** / **OT**
+  toggles (right). iOS asks motion permission on your first tap.
+- **Mobile (no gyro):** touch the left/right side of the screen to steer;
   toggle TILT in the pause menu.
-- **Desktop:** `←`/`→` or `A`/`D` steer, `Space` boost, `X` overtake mode,
-  `↓`/`S` brake, `P`/`Esc` pause. Manual gears: `↑`/`E` up, `Q` down.
+- **Desktop:** `←`/`→` or `A`/`D` steer, `↑`/`W` throttle, `↓`/`S` brake,
+  `Space` toggle boost, `X` overtake, `P`/`Esc` pause. Manual gears: `E` up,
+  `Q` down.
+
+Throttle is manual — hold GAS to accelerate. BOOST and OVERTAKE are taps that
+toggle/activate rather than buttons you hold.
 
 ## The data hub
 

@@ -28,12 +28,13 @@ const Input = (function () {
   let keyLeft = false;
   let keyRight = false;
   let keyBrake = false;
-  let keyBoost = false;
+  let keyThrottle = false;
   let keySteerVal = 0;        // ramped -1..1
   let keySteerT = 0;          // last ramp timestamp, ms (0 = unset)
 
-  // edge-triggered overtake (X key or OT button tap)
+  // edge-triggered: overtake (X / OT tap), boost toggle (Space / BOOST tap)
   let overtakePressed = false;
+  let boostTogglePressed = false;
   // edge-triggered gear shifts (manual mode)
   let shiftUpPressed = false;
   let shiftDownPressed = false;
@@ -43,10 +44,8 @@ const Input = (function () {
   let touchSteer = 0;
 
   // on-screen buttons (multi-pointer safe via per-button pointer sets)
-  let btnBoost = false;
+  let btnThrottle = false;
   let btnBrake = false;
-  let btnSteerLeft = false;
-  let btnSteerRight = false;
 
   // tilt
   let tiltFilt = 0;           // low-passed remapped tilt, degrees
@@ -194,15 +193,17 @@ const Input = (function () {
         keyLeft = down; if (down) e.preventDefault(); break;
       case "ArrowRight": case "KeyD":
         keyRight = down; if (down) e.preventDefault(); break;
+      case "ArrowUp": case "KeyW":
+        keyThrottle = down; if (down) e.preventDefault(); break;
       case "ArrowDown": case "KeyS":
         keyBrake = down; if (down) e.preventDefault(); break;
       case "Space":
-        keyBoost = down; e.preventDefault(); break;
+        if (down && !e.repeat) boostTogglePressed = true; e.preventDefault(); break;
       case "KeyX":
         if (down && !e.repeat) overtakePressed = true;
         break;
-      case "ArrowUp": case "KeyE":
-        if (down && !e.repeat) shiftUpPressed = true; if (down) e.preventDefault(); break;
+      case "KeyE":
+        if (down && !e.repeat) shiftUpPressed = true; break;
       case "KeyQ": case "ShiftLeft":
         if (down && !e.repeat) shiftDownPressed = true; break;
       case "KeyP": case "Escape":
@@ -214,10 +215,10 @@ const Input = (function () {
   /* ---------------- canvas touch halves ---------------- */
 
   function touchDir(t) {
-    // Only the lower half of the screen steers, and only when tilt
-    // isn't already doing that job.
+    // When tilt isn't steering, a touch anywhere on the canvas (the on-screen
+    // buttons are separate elements) steers by screen half. The control
+    // buttons sit in the corners, leaving the large centre free to steer.
     if (tiltActive()) return 0;
-    if (t.clientY <= window.innerHeight / 2) return 0;
     return t.clientX < window.innerWidth / 2 ? -1 : 1;
   }
 
@@ -281,25 +282,27 @@ const Input = (function () {
     el.addEventListener("pointerdown", function () { fire(); });
   }
 
-  function buttonSteer() {
-    return (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
-  }
-
   /* ---------------- public ---------------- */
 
   function steer() {
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
     if (tiltActive()) return tiltSteering();
-    return buttonSteer() || touchSteer;
+    return touchSteer;
+  }
+
+  function throttle() {
+    return keyThrottle || btnThrottle;
   }
 
   function braking() {
     return keyBrake || btnBrake;
   }
 
-  function boosting() {
-    return keyBoost || btnBoost;
+  function consumeBoostToggle() {
+    const v = boostTogglePressed;
+    boostTogglePressed = false;
+    return v;
   }
 
   function consumeOvertake() {
@@ -350,10 +353,9 @@ const Input = (function () {
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
-    wireHold("btn-boost", function (v) { btnBoost = v; });
+    wireHold("btn-throttle", function (v) { btnThrottle = v; });
     wireHold("btn-brake", function (v) { btnBrake = v; });
-    wireHold("steer-left", function (v) { btnSteerLeft = v; });
-    wireHold("steer-right", function (v) { btnSteerRight = v; });
+    wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
@@ -369,11 +371,12 @@ const Input = (function () {
   function reset() {
     touches.clear();
     touchSteer = 0;
-    btnBoost = btnBrake = btnSteerLeft = btnSteerRight = false;
-    keyLeft = keyRight = keyBrake = keyBoost = false;
+    btnThrottle = btnBrake = false;
+    keyLeft = keyRight = keyBrake = keyThrottle = false;
     keySteerVal = 0;
     keySteerT = 0;
     overtakePressed = false;
+    boostTogglePressed = false;
     shiftUpPressed = false;
     shiftDownPressed = false;
   }
@@ -384,8 +387,9 @@ const Input = (function () {
     requestGyro,
     calibrate,
     steer,
+    throttle,
     braking,
-    boosting,
+    consumeBoostToggle,
     consumeOvertake,
     consumeShiftUp,
     consumeShiftDown,
