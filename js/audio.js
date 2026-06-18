@@ -39,8 +39,8 @@ const GameAudio = (function () {
   let engBuf = null, accBuf = null, samplesReady = false;
   let engSrcIdle = null, engSrcAcc = null, engGainIdle = null, engGainAcc = null;
   let usingSamples = false;
-  const SFX_ENGINE = "assets/sfx/engine.mp3";
-  const SFX_ACCEL = "assets/sfx/accelerate.mp3";
+  const SFX_ENGINE = "assets/sfx/f1_engine.mp3";   // sustained F1 drone (primary)
+  const SFX_ACCEL = "assets/sfx/f1_rev.mp3";        // high-rev layer
 
   // Music: streamed CC0 tracks (assets/music/), lazy-loaded + cached
   let musicOn = false;
@@ -270,6 +270,10 @@ const GameAudio = (function () {
       // pitched (playbackRate) by rev/gear in setEngine.
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
       engSrcAcc = ctx.createBufferSource(); engSrcAcc.buffer = accBuf; engSrcAcc.loop = true;
+      // loop only the steady middle of each clip, skipping any quiet intro/outro
+      // so the recordings sustain cleanly when held; start playback in-region.
+      engSrcIdle.loopStart = engBuf.duration * 0.12; engSrcIdle.loopEnd = engBuf.duration * 0.92;
+      engSrcAcc.loopStart = accBuf.duration * 0.15; engSrcAcc.loopEnd = accBuf.duration * 0.9;
       engGainIdle = ctx.createGain(); engGainIdle.gain.value = 0;
       engGainAcc = ctx.createGain(); engGainAcc.gain.value = 0;
       engSrcIdle.connect(engGainIdle).connect(engFilter);
@@ -338,7 +342,7 @@ const GameAudio = (function () {
     skidGain.gain.value = 0;
     skidSrc.connect(skidFilter).connect(skidGain).connect(master);
 
-    if (usingSamples) { engSrcIdle.start(); engSrcAcc.start(); }
+    if (usingSamples) { engSrcIdle.start(0, engSrcIdle.loopStart); engSrcAcc.start(0, engSrcAcc.loopStart); }
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     harvSrc.start();
@@ -414,16 +418,24 @@ const GameAudio = (function () {
     }
 
     if (usingSamples) {
-      // pitch the recordings by rev: idle->redline within the gear, with a lower
-      // ceiling in higher gears, so an upshift drops the pitch audibly. boost
-      // adds a little extra.
-      const rate = (0.8 + rev * (1.5 - 0.5 * g01)) * (1 + 0.1 * b);
-      engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.04);
-      engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.04);
-      // crossfade the idle loop into the acceleration loop as revs rise
-      const acc = clamp01(rev * 1.25);
-      engGainAcc.gain.setTargetAtTime(0.85 * acc, t, 0.05);
-      engGainIdle.gain.setTargetAtTime(0.8 * (1 - 0.8 * acc), t, 0.05);
+      // F1-style pitch: every gear starts LOW and screams up to a high redline.
+      // A big, near-uniform low->high sweep makes the rev climb obvious; tall
+      // gears top out a touch lower so an upshift still drops the pitch. On an
+      // upshift rev resets low, so the note snaps back down and climbs again.
+      // these clips are already F1 engine notes, so a smaller multiplier avoids
+      // a chipmunk effect: each gear sweeps from a low ~0.6x up to a screaming
+      // redline (~1.75x in 1st, lower in tall gears). rev resets on upshift, so
+      // the note snaps back down and climbs again.
+      const top = 1.75 - 0.3 * g01;                // redline rate ~1.75 (1st) .. ~1.45 (8th)
+      const rate = (0.6 + Math.pow(rev, 0.85) * (top - 0.6)) * (1 + 0.07 * b);
+      engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
+      engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
+      // both loops are pitched together (so the sweep is carried either way);
+      // crossfade timbre from the calmer idle loop to the raspier rev loop as the
+      // revs rise, for an aggressive top end.
+      const acc = clamp01((rev - 0.15) * 1.4);
+      engGainAcc.gain.setTargetAtTime(0.8 * acc, t, 0.05);
+      engGainIdle.gain.setTargetAtTime(0.7 * (1 - 0.65 * acc), t, 0.05);
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
       const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
@@ -440,7 +452,7 @@ const GameAudio = (function () {
       : Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     const lvl = usingSamples
-      ? (0.32 + s * 0.4 + rev * 0.12 + b * 0.12 + (offroad ? 0.04 : 0))
+      ? (0.22 + s * 0.3 + rev * 0.1 + b * 0.1 + (offroad ? 0.03 : 0))
       : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0));
     engGain.gain.setTargetAtTime(lvl * (1 - 0.55 * shiftDuck), t, 0.03);
 
