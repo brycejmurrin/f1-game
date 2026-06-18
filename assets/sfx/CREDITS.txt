@@ -1,5 +1,6 @@
 Engine sound effects
 --------------------
-engine.mp3, accelerate.mp3 — CC0 1.0 (public domain), from the pmndrs/racing-game
-project (https://github.com/pmndrs/racing-game, "CC0 assets only").
-Used as the engine idle loop + acceleration loop; pitched by rpm/gear at runtime.
+f1_engine.mp3 (sustained engine drone, primary), f1_rev.mp3 (high-rev layer)
+— F1 car engine clips provided by the project owner (sourced from myinstants.com).
+Looped and pitched by rpm/gear at runtime. Licensing of these clips is the
+project owner's responsibility.
