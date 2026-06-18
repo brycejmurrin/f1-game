@@ -62,12 +62,12 @@ const Car3D = (function () {
   // disc (rim colour) with a bright hub on each face. center (cx,cy,cz), radius
   // r, width w.
   const TYRE = [0.06, 0.06, 0.07];
-  const RIM = [0.24, 0.24, 0.27];
-  const HUB = [0.55, 0.56, 0.60];
+  const RIM = [0.11, 0.11, 0.13];   // dark cover, only a touch above the tyre
+  const HUB = [0.28, 0.28, 0.31];   // small subtle hub, not a bright plate
   function addWheel(out, cx, cy, cz, r, w) {
     const SEG = 16;
     const x0 = cx - w / 2, x1 = cx + w / 2;
-    const rimR = r * 0.62;                    // cover disc radius
+    const rimR = r * 0.42;                    // small cover disc, mostly black tyre face
     const hub0 = [x0 - 0.012, cy, cz], hub1 = [x1 + 0.012, cy, cz];
     for (let i = 0; i < SEG; i++) {
       const a0 = (i / SEG) * Math.PI * 2;
