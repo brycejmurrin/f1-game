@@ -57,13 +57,15 @@ const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed ban
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
-// 6-speed gearbox with ~geometric ratios (constant ~0.66 step), like a real
-// gearbox: each upshift drops the revs to ~66% of redline in EVERY gear, so the
-// gears are clearly "split up" (instead of the high gears barely dropping revs)
-// and each gear has a meaningful rev range to climb. Top speed fraction of VMAX.
+// 6-speed gearbox with realistic PROGRESSIVE ratios (research: real/F1 gearboxes
+// space the ratios so the steps shrink in the higher gears). So an upshift drops
+// the revs a lot in the low gears and less up top, and every shift lands back in
+// the ~8.7-11.3k power band (F1's optimal ~8-12k) before climbing to the limit —
+// rather than dropping to idle or barely dropping at all. Top speed fraction of VMAX.
+// (F1 mandates 8 gears; kept at 6 for feel per earlier request.)
 const GEARS = 6;
-const GEAR_TOP = [0.13, 0.20, 0.30, 0.45, 0.67, 1.0];
-const IDLE_RPM = 4000, MAX_RPM = 15000;
+const GEAR_TOP = [0.14, 0.24, 0.37, 0.54, 0.75, 1.0];
+const IDLE_RPM = 5000, MAX_RPM = 15000;   // F1 V6 turbo: idle ~5k, rev limit 15k
 function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
 function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
 function naturalGear(speed) {
