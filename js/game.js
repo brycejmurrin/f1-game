@@ -398,12 +398,15 @@ function resolveCollisions(ranked) {
         if (penLong <= 0 || penLat <= 0) continue;
         const iA = invM(a), iB = invM(b), iSum = iA + iB;
         if (penLat < penLong) {
-          // side-by-side contact: separate laterally, scrub a little speed
+          // side-by-side contact: separate laterally, scrub a little speed. Mark
+          // both cars "in contact" so the AI eases off steering this way and
+          // stops fighting the push (the cause of the side-by-side vibration).
           const sgn = dX >= 0 ? 1 : -1;
-          const corr = Math.max(penLat - 0.04, 0) * 0.7;
+          const corr = Math.max(penLat - 0.05, 0) * 0.5;
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= 0.985; b.speed *= 0.985;
+          a.speed *= 0.99; b.speed *= 0.99;
+          a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
           // rear-end: separate along the track and transfer speed rear->front
@@ -421,8 +424,11 @@ function resolveCollisions(ranked) {
       }
     }
   }
-  // hard minimum-separation pass — no slop, full correction — so two cars can
-  // never end the frame visibly overlapping.
+  // separation pass with slop: only correct penetration beyond a small
+  // allowance, and only partially. A tiny steady-state overlap (< SLOP) is left
+  // alone, which stops the per-frame snap-back buzz while staying far too small
+  // (a few cm on a 2 m car) to ever look like cars merging.
+  const SLOP = 0.12;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
     for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
@@ -435,12 +441,16 @@ function resolveCollisions(ranked) {
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = invM(a), iB = invM(b), iSum = iA + iB;
       if (penLat < penLong) {
+        const c = Math.max(penLat - SLOP, 0) * 0.6;
+        if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
-        a.x += sgn * penLat * (iA / iSum);
-        b.x -= sgn * penLat * (iB / iSum);
+        a.x += sgn * c * (iA / iSum);
+        b.x -= sgn * c * (iB / iSum);
       } else {
-        shiftLong(a, penLong * (iA / iSum));
-        shiftLong(b, -penLong * (iB / iSum));
+        const c = Math.max(penLong - SLOP, 0) * 0.6;
+        if (c <= 0) continue;
+        shiftLong(a, c * (iA / iSum));
+        shiftLong(b, -c * (iB / iSum));
       }
     }
   }
@@ -598,6 +608,9 @@ function updateCar(c, dt, ranked) {
       }
     }
     steer = clamp((targetX + avoid - c.x) * 0.9, -1, 1);
+    // while rubbing another car, ease off the steering so we don't fight the
+    // collision push-apart — that tug-of-war is what made the pack vibrate.
+    if ((c.contactT || 0) > 0) steer *= 0.3;
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
@@ -618,6 +631,7 @@ function updateCar(c, dt, ranked) {
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   c.yawVis = damp(c.yawVis, steer * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
   c.collideT = Math.max(0, c.collideT - dt);
+  c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
   // --- advance along track ---
   const oldS = c.s;
@@ -672,15 +686,15 @@ function render(dt) {
     // Anchor the camera a FIXED distance behind the player along the track
     // (arc-length), not in world space — so it never lags at high speed and
     // the car stays a constant, readable size.
-    Tracks.sample(track, wrapS(player.s - 7.5), smpC);
+    Tracks.sample(track, wrapS(player.s - 5.8), smpC);
     const cx = px * 0.5;   // partly follow lateral offset; rest shows position
     eyeT = [
-      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.35, smpC.p[2] + smpC.r[2] * cx,
+      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.1, smpC.p[2] + smpC.r[2] * cx,
     ];
-    tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.75, p[2] + smp.t[2] * 4];
-    // wider FOV at speed reads as faster; boost adds an extra transient kick
-    // that the camFov damping eases in and out.
-    fovT = lerp(56, 76, clamp(player.speed / VMAX, 0, 1)) + (player.deploying ? 7 : 0);
+    tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.7, p[2] + smp.t[2] * 4];
+    // closer camera + narrower FOV so the car reads bigger; still widens a bit
+    // with speed for a sense of pace, plus a small boost kick.
+    fovT = lerp(52, 66, clamp(player.speed / VMAX, 0, 1)) + (player.deploying ? 6 : 0);
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
       const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
