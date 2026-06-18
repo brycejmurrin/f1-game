@@ -127,9 +127,17 @@ const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
 // ---------- car setup ----------
 function makeCars() {
   cars = [];
+  const total = Teams.LIST.reduce((s, t) => s + t.drivers.length, 0);
+  let idx = 0;
   Teams.LIST.forEach((team, ti) => {
     team.drivers.forEach((d, di) => {
       const isP = ti === teamIdx && di === driverIdx;
+      // Spread the field's preferred lanes evenly across the track width (with a
+      // little jitter) so the AI fan out instead of all stacking on the racing
+      // line. Used as a fraction of half-width in updateCar.
+      const lane = clamp(((idx / Math.max(1, total - 1)) * 2 - 1) * 0.78
+        + (Math.random() - 0.5) * 0.12, -0.85, 0.85);
+      idx++;
       cars.push({
         team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
@@ -141,7 +149,7 @@ function makeCars() {
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         skill: 0.92 + Math.random() * 0.1,
-        aiBrakeT: 0, aiOffset: (Math.random() - 0.5) * 1.6,
+        aiBrakeT: 0, lane,
       });
     });
   });
@@ -321,42 +329,7 @@ function update(dt) {
 
   for (const c of cars) updateCar(c, dt, ranked);
 
-  // collisions — cars are sorted by prog in `ranked` (highest first)
-  // Car footprint: ~2.4 m wide, ~5.5 m long (half-extents 1.2 m, 2.75 m)
-  for (let i = 0; i < ranked.length; i++) {
-    for (let j = i + 1; j < ranked.length && j <= i + 5; j++) {
-      const a = ranked[i], b = ranked[j];   // a is ahead
-      const ds = a.prog - b.prog;
-      if (ds > 7) break;                    // sorted, so further j are even farther back
-      const dx = a.x - b.x;
-      const overlapX = 2.5 - Math.abs(dx);  // combined half-widths
-      const overlapS = 5.8 - ds;            // combined half-lengths
-      if (overlapX <= 0 || overlapS <= 0) continue;
-      // Lateral push: rear car deflects more than front car
-      const pushX = overlapX * 0.65 * (dx >= 0 ? 1 : -1);
-      a.x += pushX * 0.3;
-      b.x -= pushX * 0.7;
-      // Speed: rear car (b) can't drive faster than front car (a) when same lane
-      if (Math.abs(dx) < 1.8 && b.speed > a.speed + 1) {
-        b.speed = b.speed * 0.88 + (a.speed + 1) * 0.12;
-      }
-      a.speed *= 0.9995; b.speed *= 0.999;
-      if (a.isPlayer || b.isPlayer) {
-        const pc = a.isPlayer ? a : b;
-        if (pc.collideT <= 0) {
-          // scale feedback by how hard the hit is: closing-speed difference
-          // plus how deep the overlap is. A graze barely registers; a
-          // T-bone shakes hard, briefly freezes the sim, and buzzes the phone.
-          const impact = clamp(Math.abs(a.speed - b.speed) * 0.04 + overlapS * 0.06, 0.15, 1);
-          if (soundOn) GameAudio.collision();
-          shake = Math.min(1, shake + impact * 0.7);
-          hitStop = Math.max(hitStop, impact * 0.06);
-          pc.collideT = 0.4;
-          if (navigator.vibrate) { try { navigator.vibrate(Math.round(20 + impact * 50)); } catch (e) {} }
-        }
-      }
-    }
-  }
+  resolveCollisions(ranked);
 
   // race ends when the player finishes, or shortly after the winner does, or
   // at a hard time cap so it can never hang
@@ -371,6 +344,104 @@ function update(dt) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1));
     GameAudio.setSkid(player.offroad ? 0.4 : clamp(Math.abs(Tracks.curvature(track, player.s)) * player.speed * 0.05 - 0.35, 0, 1));
+  }
+}
+
+// Shift a car along the track. prog (cumulative) and s (wrapped, used for
+// rendering/curvature) advance together, so a longitudinal collision push must
+// move BOTH or the visible car won't budge.
+function shiftLong(c, d) { c.prog += d; c.s = wrapS(c.s + d); }
+
+// Collision feedback when the player is involved, scaled by impact (0..1).
+function collideFx(a, b, impact) {
+  if (!a.isPlayer && !b.isPlayer) return;
+  const pc = a.isPlayer ? a : b;
+  if (pc.collideT > 0) return;
+  impact = clamp(impact, 0.12, 1);
+  if (soundOn) GameAudio.collision();
+  shake = Math.min(1, shake + impact * 0.7);
+  hitStop = Math.max(hitStop, impact * 0.05);
+  pc.collideT = 0.35;
+  if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) {} }
+}
+
+// Frenet-frame collisions: (prog, x) is treated as a 2D plane. Each car is a
+// capsule ~4.8 m long and ~2.0 m wide (combined extents). We pick the axis of
+// least penetration as the contact normal — lateral penetration => a side rub
+// (separate on x, scrub speed); longitudinal => a rear-end (separate along the
+// track, transfer speed rear->front). Mass-weighted, several relaxation passes
+// to settle clusters, then a hard min-separation pass so cars can never render
+// merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
+function resolveCollisions(ranked) {
+  const LCAR = 4.8, WCAR = 2.0, PASSES = 4;
+  const invM = (c) => (c.isPlayer ? 0.5 : 1);
+  for (let pass = 0; pass < PASSES; pass++) {
+    const last = pass === PASSES - 1;
+    const fwd = (pass & 1) === 0;
+    for (let ii = 0; ii < ranked.length; ii++) {
+      const i = fwd ? ii : ranked.length - 1 - ii;
+      const a = ranked[i];
+      for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
+        const b = ranked[j];               // a is ahead (higher prog), b behind
+        const dProg = a.prog - b.prog;
+        if (dProg > LCAR) break;            // sorted by prog: the rest are farther
+        const dX = a.x - b.x;
+        const penLong = LCAR - Math.abs(dProg);
+        const penLat = WCAR - Math.abs(dX);
+        if (penLong <= 0 || penLat <= 0) continue;
+        const iA = invM(a), iB = invM(b), iSum = iA + iB;
+        if (penLat < penLong) {
+          // side-by-side contact: separate laterally, scrub a little speed
+          const sgn = dX >= 0 ? 1 : -1;
+          const corr = Math.max(penLat - 0.04, 0) * 0.7;
+          a.x += sgn * corr * (iA / iSum);
+          b.x -= sgn * corr * (iB / iSum);
+          a.speed *= 0.985; b.speed *= 0.985;
+          if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
+        } else {
+          // rear-end: separate along the track and transfer speed rear->front
+          const corr = Math.max(penLong - 0.05, 0) * 0.5;
+          shiftLong(a, corr * (iA / iSum));
+          shiftLong(b, -corr * (iB / iSum));
+          const relV = b.speed - a.speed;   // >0 means the rear car is closing
+          if (relV > 0) {
+            const jImp = 1.15 * relV / iSum;
+            b.speed = Math.max(0, b.speed - iB * jImp);
+            a.speed += iA * jImp * 0.8;
+            if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+          }
+        }
+      }
+    }
+  }
+  // hard minimum-separation pass — no slop, full correction — so two cars can
+  // never end the frame visibly overlapping.
+  for (let i = 0; i < ranked.length; i++) {
+    const a = ranked[i];
+    for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
+      const b = ranked[j];
+      const dProg = a.prog - b.prog;
+      if (dProg > LCAR) break;
+      const dX = a.x - b.x;
+      const penLong = LCAR - Math.abs(dProg);
+      const penLat = WCAR - Math.abs(dX);
+      if (penLong <= 0 || penLat <= 0) continue;
+      const iA = invM(a), iB = invM(b), iSum = iA + iB;
+      if (penLat < penLong) {
+        const sgn = dX >= 0 ? 1 : -1;
+        a.x += sgn * penLat * (iA / iSum);
+        b.x -= sgn * penLat * (iB / iSum);
+      } else {
+        shiftLong(a, penLong * (iA / iSum));
+        shiftLong(b, -penLong * (iB / iSum));
+      }
+    }
+  }
+  // keep everyone on the drivable surface after being shoved around
+  for (const c of ranked) {
+    Tracks.sample(track, c.s, smp);
+    const wall = smp.hw + 9;
+    if (c.x > wall) c.x = wall; else if (c.x < -wall) c.x = -wall;
   }
 }
 
@@ -427,11 +498,13 @@ function updateCar(c, dt, ranked) {
     for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
     const vCorner = Math.sqrt(LAT_MAX / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
-    // also brake for any car directly ahead in the same lane
+    // queue behind a car directly ahead in the same lane: cap our pace to it
+    // and brake if we're closing fast, so we tuck in behind instead of ramming.
     const carAhead = ranked[(c.rank || 1) - 2];
-    if (!braking && carAhead) {
+    if (carAhead) {
       const followDist = carAhead.prog - c.prog;
-      if (followDist > 0 && followDist < 10 && Math.abs(carAhead.x - c.x) < 2.2) {
+      if (followDist > 0 && followDist < 16 && Math.abs(carAhead.x - c.x) < 2.0) {
+        vmax = Math.min(vmax, carAhead.speed + clamp(followDist - 6, -6, 8));
         if (c.speed > carAhead.speed + 3) braking = true;
       }
     }
@@ -498,7 +571,10 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer) steer = Input.steer();
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
-    const targetX = clamp(kA * 130, -0.62, 0.62) * hw + c.aiOffset;
+    // partly follow the racing line, partly hold the car's own lane, so the
+    // field fans out across the track rather than collapsing onto one line.
+    const racingLine = clamp(kA * 130, -0.62, 0.62) * hw;
+    const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
     // avoid cars directly ahead (up to 2 cars checked)
     let avoid = 0;
     for (let look = 1; look <= 2; look++) {
