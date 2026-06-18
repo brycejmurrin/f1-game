@@ -632,7 +632,13 @@ function updateCar(c, dt, ranked) {
       sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
     }
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
-    steer = clamp((targetX + avoid + sep - c.x) * 0.9, -1, 1);
+    let err = targetX + avoid + sep - c.x;
+    // Soft deadzone near the target: fade the correction out as the error gets
+    // small so the AI stops making tiny frame-to-frame steering corrections
+    // around its target — those micro-twitches are what made the nose wobble
+    // side to side. Larger errors still get full response.
+    if (Math.abs(err) < 0.3) err *= Math.abs(err) / 0.3;
+    steer = clamp(err * 0.9, -1, 1);
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
@@ -651,7 +657,10 @@ function updateCar(c, dt, ranked) {
   if (c.x > wall) { c.x = wall; c.speed *= 0.96; }
   if (c.x < -wall) { c.x = -wall; c.speed *= 0.96; }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
-  c.yawVis = damp(c.yawVis, steer * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
+  // Drive the visual nose yaw from the SMOOTHED steer (steerVis), not the raw
+  // per-frame steer, so residual steering twitch doesn't wobble the nose. A
+  // sustained turn-in still shows; a one-frame correction is filtered out.
+  c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
@@ -1111,6 +1120,7 @@ window.__apex = {
   // arc-progress, speed and the in-contact timer. For measuring jitter.
   cars: () => cars.map((c, i) => ({
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
+    yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2),
     ct: +(c.contactT || 0).toFixed(2), p: !!c.isPlayer,
   })),
