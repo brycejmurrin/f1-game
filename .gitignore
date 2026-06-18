@@ -1,0 +1,2 @@
+# Agent working directories (git worktrees created by background agents)
+.claude/
