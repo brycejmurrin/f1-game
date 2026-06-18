@@ -21,7 +21,6 @@ const Input = (function () {
   const DEADZONE = 2.5;       // degrees ignored around the calibrated zero
   const EXPO = 1.4;           // response curve past the deadzone
   const TILT_TAU = 0.06;      // s, low-pass time constant (frame-rate independent)
-  const TILT_FRESH_MS = 1500; // tilt counts as active if an event arrived this recently
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
 
@@ -143,8 +142,11 @@ const Input = (function () {
     tiltZero = clamp(tiltFilt, -35, 35);
   }
 
+  // Latched, like the proven driving-game build: once any orientation event
+  // has arrived (tiltSeen), tilt stays active for the rest of the session —
+  // a momentary gap in events never reverts steering to the buttons.
   function tiltActive() {
-    return useTiltPref && (nowMs() - lastTiltEventT) < TILT_FRESH_MS;
+    return useTiltPref && tiltSeen;
   }
 
   function tiltSteering() {
@@ -358,6 +360,7 @@ const Input = (function () {
     setUseTilt,
     useTilt,
     touchControlsNeeded,
+    get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
   };
 })();
