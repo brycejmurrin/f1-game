@@ -655,10 +655,15 @@ function buildSelect(forSeason) {
 }
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
+function tiltLabel() {
+  return "TILT: " + (Input.useTilt() ? (Input.gyroSeen ? "ON" : "ON (NO GYRO)") : "OFF");
+}
+
 function enableTilt() {
   // Must run inside a user gesture for the iOS permission prompt.
   Input.requestGyro().then((ok) => {
     if (ok) Input.calibrate();
+    $("pm-tilt").textContent = tiltLabel();
     els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready"
       : (Input.gyroDenied ? "motion access denied — using touch" : "");
   });
@@ -744,7 +749,7 @@ $("pm-tilt").onclick = () => {
   const on = !Input.useTilt();
   Input.setUseTilt(on);
   if (on) enableTilt();   // (re)request motion permission within this gesture
-  $("pm-tilt").textContent = "TILT: " + (on ? "ON" : "OFF");
+  $("pm-tilt").textContent = tiltLabel();
   showTouchControls(true);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
@@ -760,7 +765,7 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
 
 Input.init(canvas, { onPause: () => setPaused(!paused) });
 DataHub.init(els.datahub);
-$("pm-tilt").textContent = "TILT: " + (Input.useTilt() ? "ON" : "OFF");
+$("pm-tilt").textContent = tiltLabel();
 setSound(soundOn);
 loadTrack(trackIdx);
 window.addEventListener("resize", () => GLX.resize());
