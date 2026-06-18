@@ -58,21 +58,35 @@ const Car3D = (function () {
     addLoft(out, cz - sz / 2, cx, cy, sx, sy, cz + sz / 2, cx, cy, sx, sy, col);
   }
 
-  // Cylinder along the X axis (wheel): center (cx,cy,cz), radius r, width w.
-  function addWheel(out, cx, cy, cz, r, w, col) {
-    const SEG = 10;
+  // Wheel along the X axis: dark tyre tread + a 2026-style smooth wheel COVER
+  // disc (rim colour) with a bright hub on each face. center (cx,cy,cz), radius
+  // r, width w.
+  const TYRE = [0.06, 0.06, 0.07];
+  const RIM = [0.24, 0.24, 0.27];
+  const HUB = [0.55, 0.56, 0.60];
+  function addWheel(out, cx, cy, cz, r, w) {
+    const SEG = 16;
     const x0 = cx - w / 2, x1 = cx + w / 2;
-    const ci = [x0, cy, cz], co = [x1, cy, cz];
+    const rimR = r * 0.62;                    // cover disc radius
+    const hub0 = [x0 - 0.012, cy, cz], hub1 = [x1 + 0.012, cy, cz];
     for (let i = 0; i < SEG; i++) {
       const a0 = (i / SEG) * Math.PI * 2;
       const a1 = ((i + 1) / SEG) * Math.PI * 2;
       const y0 = cy + r * Math.cos(a0), z0 = cz + r * Math.sin(a0);
       const y1 = cy + r * Math.cos(a1), z1 = cz + r * Math.sin(a1);
-      const A0 = [x0, y0, z0], B0 = [x1, y0, z0];
-      const A1 = [x0, y1, z1], B1 = [x1, y1, z1];
-      addQuad(out, A0, A1, B1, B0, col);      // tread (outward)
-      addTri(out, co, B0, B1, col);           // outer cap (+X)
-      addTri(out, ci, A1, A0, col);           // inner cap (-X)
+      const ry0 = cy + rimR * Math.cos(a0), rz0 = cz + rimR * Math.sin(a0);
+      const ry1 = cy + rimR * Math.cos(a1), rz1 = cz + rimR * Math.sin(a1);
+      const A0 = [x0, y0, z0], A1 = [x0, y1, z1];
+      const B0 = [x1, y0, z0], B1 = [x1, y1, z1];
+      addQuad(out, A0, A1, B1, B0, TYRE);                 // tread
+      // +X face: tyre rim -> cover ring -> hub
+      const R0 = [x1, ry0, rz0], R1 = [x1, ry1, rz1];
+      addQuad(out, B0, B1, R1, R0, RIM);
+      addTri(out, hub1, R0, R1, HUB);
+      // -X face
+      const L0 = [x0, ry0, rz0], L1 = [x0, ry1, rz1];
+      addQuad(out, A1, A0, L0, L1, RIM);
+      addTri(out, hub0, L1, L0, HUB);
     }
   }
 
@@ -116,16 +130,21 @@ const Car3D = (function () {
     // Driver helmet.
     addBox(out, 0, 0.68, -0.1, 0.24, 0.22, 0.26, HELMET);
 
-    // Engine cover spine + airbox.
+    // Engine cover spine + airbox, with a livery accent fin/stripe so the car
+    // reads in team colour from behind too.
     addLoft(out, -1.9, 0, 0.40, 0.14, 0.16, -0.45, 0, 0.55, 0.34, 0.40, c1);
     addBox(out, 0, 0.82, -0.5, 0.30, 0.26, 0.55, c1);
+    addBox(out, 0, 0.98, -0.55, 0.07, 0.18, 0.5, c2);    // shark-fin accent
+    addBox(out, 0, 0.54, -1.2, 0.09, 0.05, 1.0, c2);     // spine stripe
 
-    // Rear wing on two endplates + beam wing (accent color).
+    // Rear wing: tall dark endplates, a two-element main plane (accent) with a
+    // DRS gap, and a body-colour beam wing under it.
     for (const s of [-1, 1]) {
-      addBox(out, s * 0.48, 0.72, -2.45, 0.04, 0.40, 0.55, c2);
+      addBox(out, s * 0.50, 0.82, -2.42, 0.05, 0.62, 0.52, DARK);
     }
-    addBox(out, 0, 0.88, -2.5, 0.96, 0.05, 0.32, c2);
-    addBox(out, 0, 0.66, -2.4, 0.96, 0.04, 0.22, c2);
+    addBox(out, 0, 1.04, -2.5, 1.02, 0.06, 0.34, c2);   // upper plane
+    addBox(out, 0, 0.90, -2.46, 1.02, 0.05, 0.26, c2);  // lower element
+    addBox(out, 0, 0.64, -2.34, 0.98, 0.04, 0.20, c1);  // beam wing
 
     // Rear diffuser (expands rearward).
     addLoft(out, -2.6, 0, 0.20, 1.25, 0.28, -1.95, 0, 0.12, 1.0, 0.14,
@@ -133,8 +152,8 @@ const Car3D = (function () {
 
     // Wheels: fronts z=+1.7, rears z=-1.6 (slightly wider), outer edge ±0.95.
     for (const s of [-1, 1]) {
-      addWheel(out, s * 0.79, 0.34, 1.7, 0.34, 0.32, DARK);
-      addWheel(out, s * 0.76, 0.34, -1.6, 0.34, 0.38, DARK);
+      addWheel(out, s * 0.79, 0.34, 1.7, 0.34, 0.32);
+      addWheel(out, s * 0.76, 0.34, -1.6, 0.34, 0.38);
     }
 
     return out;
