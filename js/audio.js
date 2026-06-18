@@ -619,6 +619,11 @@ const GameAudio = (function () {
     blip(95, "square", 0.14, 0.01, 0.1, 60);
   }
 
+  // short low rattle for riding a kerb; call repeatedly (throttled) for a rumble
+  function rumble() {
+    noise(0.09, 0.05, 320);
+  }
+
   function lap() {
     blip(988, "square", 0.2, 0.01, 0.1);
     blip(1319, "square", 0.2, 0.01, 0.2, null, 0.1);
@@ -727,6 +732,7 @@ const GameAudio = (function () {
     deployBoost,
     collision,
     offtrack,
+    rumble,
     lap,
     finish,
     uiTick,

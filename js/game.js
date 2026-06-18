@@ -607,8 +607,13 @@ function updateCar(c, dt, ranked) {
     c.rpm = rpmFor(c.gear, c.speed);
   }
 
+  // Kerb vs off-track: a kerb sits just outside the road edge and is DRIVABLE
+  // (rumble + a little grip loss), whereas going past the edge with no kerb is
+  // grass/run-off. So detect the kerb first and exclude it from "offroad".
+  c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
+
   // --- offroad ---
-  c.offroad = Math.abs(c.x) > hw;
+  c.offroad = Math.abs(c.x) > hw && !c.onKerb;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
     c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
@@ -628,6 +633,18 @@ function updateCar(c, dt, ranked) {
       }
     }
   } else if (c.offT > 0) c.offT = Math.max(0, c.offT - dt);
+
+  // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
+  // grip + speed, but you can stay on it. Distinct from going off into grass.
+  if (c.onKerb) {
+    c.speed -= 6 * dt;                       // slight scrub
+    if (c.isPlayer) {
+      shake = Math.max(shake, 0.3);          // continuous light rumble via shake
+      c.kerbSndT = (c.kerbSndT || 0) - dt;
+      if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
+      if (navigator.vibrate && (c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { try { navigator.vibrate(15); } catch (e) {} c.kerbHapT = 0.12; }
+    }
+  }
 
   // --- lateral ---
   let steer;
@@ -697,7 +714,8 @@ function updateCar(c, dt, ranked) {
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
-  c.x += steer * STEER_VMAX * latFac * gripScale * dt;
+  const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
+  c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * dt;
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
@@ -1216,7 +1234,7 @@ window.__apex = {
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
     yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2),
-    ct: +(c.contactT || 0).toFixed(2), p: !!c.isPlayer,
+    ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
   })),
   // lap fractions of corner apexes (local maxima of |curvature|), for parking
   corners() {
