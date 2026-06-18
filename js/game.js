@@ -24,6 +24,7 @@ const els = {
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
   btnThrottle: $("btn-throttle"),
+  btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
@@ -42,6 +43,7 @@ let difficulty = store.get("difficulty", "normal");
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
+let buttonSteer = store.get("buttonSteer", false);  // use on-screen L/R steer buttons
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
@@ -237,8 +239,11 @@ function showTouchControls(show) {
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
   els.shiftUp.hidden = !(t && manualMode);
   els.shiftDown.hidden = !(t && manualMode);
+  els.btnSteerLeft.hidden = !(t && buttonSteer);
+  els.btnSteerRight.hidden = !(t && buttonSteer);
   // manual mode => shifts take the right column, boost/OT move to centre (CSS)
   document.body.classList.toggle("manual", manualMode);
+  document.body.classList.toggle("btn-steer", t && buttonSteer);
 }
 
 function endRace() {
@@ -1114,11 +1119,31 @@ $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 $("pm-sound").onclick = () => setSound(!soundOn);
+function steerLabel() {
+  return "STEER: " + (buttonSteer ? "BUTTONS" : (Input.useTilt() ? "TILT" : "TOUCH"));
+}
+
+function setButtonSteer(b) {
+  buttonSteer = b;
+  store.set("buttonSteer", b);
+  Input.setUseButtonSteer(b);
+  if (b) Input.setUseTilt(false);   // buttons and tilt are mutually exclusive
+  $("pm-steer").textContent = steerLabel();
+  $("pm-tilt").textContent = tiltLabel();
+  showTouchControls(true);
+}
+
+$("pm-steer").onclick = () => setButtonSteer(!buttonSteer);
+
 $("pm-tilt").onclick = () => {
   const on = !Input.useTilt();
   Input.setUseTilt(on);
-  if (on) enableTilt();   // (re)request motion permission within this gesture
+  if (on) {
+    enableTilt();   // (re)request motion permission within this gesture
+    if (buttonSteer) setButtonSteer(false);   // switching to tilt disables button steer
+  }
   $("pm-tilt").textContent = tiltLabel();
+  $("pm-steer").textContent = steerLabel();
   showTouchControls(true);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
@@ -1140,8 +1165,10 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
 }
 
 Input.init(canvas, { onPause: () => setPaused(!paused) });
+Input.setUseButtonSteer(buttonSteer);
 DataHub.init(els.datahub);
 $("pm-tilt").textContent = tiltLabel();
+$("pm-steer").textContent = steerLabel();
 $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
 setSound(soundOn);
 setMusic(musicEnabled);
