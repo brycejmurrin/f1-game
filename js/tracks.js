@@ -241,6 +241,44 @@ const Tracks = (function () {
     return corners;
   }
 
+  // Zandvoort-style banked corners. Returns null for every circuit except
+  // Zandvoort; otherwise per-node arrays describing how much the OUTER road
+  // edge rises (metres) and which side that outer edge is on. The lift is
+  // cosine-ramped to zero over the corner span plus a few run-in/out nodes,
+  // exactly like the localized BRIDGES bump on py — so the rest of the lap
+  // stays dead flat (no global tilt). buildRoad and buildTerrain both read this
+  // so the banked road edge and the terrain that meets it rise together.
+  function bankingProfile(track) {
+    if (track.def.id !== "zandvoort") return null;
+    const n = track.n;
+    const corners = findCorners(track, 0.006);
+    if (!corners.length) return null;
+    // pick the two highest-curvature corners (apex |curvature|)
+    const ds = track.total / n;
+    const scored = corners.map((c) => ({ c, k: Math.abs(curvature(track, c.k * ds)) }));
+    scored.sort((a, b) => b.k - a.k);
+    const picks = scored.slice(0, 2).map((s) => s.c);
+
+    const lift = new Float32Array(n);
+    const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
+    const TAN18 = Math.tan(18 * Math.PI / 180);
+    const RUN = 6;                       // extra run-in/out nodes each side
+    for (const c of picks) {
+      const outer = -c.sign;             // outer edge is opposite the turn centre
+      const peak = 2 * track.hw[c.k] * TAN18;
+      const lo = c.lo + RUN, hi = c.hi + RUN;
+      for (let i = -lo; i <= hi; i++) {
+        const k = (c.k + i + n) % n;
+        // cosine window: 1 at apex, 0 at the span edges
+        const t = i <= 0 ? (i + lo) / lo : (hi - i) / hi;   // 0..1..0 ramp
+        const w = 0.5 * (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t))));
+        const add = peak * w;
+        if (add > lift[k]) { lift[k] = add; bsign[k] = outer; }
+      }
+    }
+    return { lift, bsign };
+  }
+
   // Lay raised red/white kerb ribbons at corner apexes (inside edge, full
   // corner) and exits (outside edge, shorter), appended to the road mesh.
   function buildKerbs(track, out) {
@@ -288,6 +326,7 @@ const Tracks = (function () {
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [];
     const idxArr = [];
+    const bp = bankingProfile(track);
     const pal = track.def.palette;
     const ka = pal.kerbA, kb = pal.kerbB, grass = pal.grass;
     const asphalt = pal.asphalt || [0.17, 0.18, 0.21];
@@ -317,9 +356,22 @@ const Tracks = (function () {
       const stripe = (Math.floor((k * ds) / 4) % 2) === 0;
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
       const chk = stripe ? [0.95, 0.95, 0.97] : dark;
+      // banking: raise each cross-section vert along `up` proportional to how
+      // far it sits toward the outer edge (inner edge -> 0, outer edge -> full
+      // lift). Verts past the edges clamp to 0/full so kerbs/shoulder ride up
+      // with the road edge rather than tearing away from it.
+      const bankLift = bp ? bp.lift[k] : 0;
+      const bankSide = bp ? bp.bsign[k] : 0;
       for (let v = 0; v < V; v++) {
         const o = offs[v];
-        pos.push(px[k] + r[0] * o + u[0] * rise[v], py[k] + r[1] * o + u[1] * rise[v] + 0.02, pz[k] + r[2] * o + u[2] * rise[v]);
+        let by = 0;
+        if (bankLift > 0) {
+          // fraction across road: 0 at inner edge (-bankSide*w), 1 at outer (+bankSide*w)
+          let frac = (bankSide * o + w) / (2 * w);
+          frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+          by = bankLift * frac;
+        }
+        pos.push(px[k] + r[0] * o + u[0] * (rise[v] + by), py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02, pz[k] + r[2] * o + u[2] * (rise[v] + by));
         nrm.push(u[0], u[1], u[2]);
         let c;
         if (v === 0 || v === 13) c = grass;                                   // grass shoulder
@@ -351,6 +403,36 @@ const Tracks = (function () {
     const pos = [], nrm = [], col = [];
     const idxArr = [];
     const pal = track.def.palette, grass = pal.grass, runoff = pal.runoff;
+    const bp = bankingProfile(track);
+    const ds = total / n;
+    // Run-off aprons on permanent (non-street) circuits: a wide tan gravel/tarmac
+    // band where cars actually run wide — fast corners (high |curvature|) and the
+    // braking zone at the end of a straight (curvature rising ahead). Street
+    // circuits keep runoffAmt ~0 (their walls are right at the edge).
+    const APRON_COL = [0.62, 0.55, 0.42];
+    const runoffAmt = new Float32Array(n);
+    if (!STREET_IDS[track.def.id]) {
+      const cur = new Float32Array(n);
+      for (let k = 0; k < n; k++) cur[k] = Math.abs(curvature(track, k * ds));
+      const aheadNodes = Math.max(1, Math.round(60 / ds));  // ~60 m look-ahead
+      for (let k = 0; k < n; k++) {
+        // fast-corner term: corners with moderate (not hairpin) curvature shed
+        // cars onto the run-off; peaks around 0.012 rad/m then tapers for slow turns
+        const corner = Math.max(0, Math.min(1, cur[k] / 0.012)) * Math.max(0, 1 - cur[k] / 0.06);
+        // braking-zone term: low curvature now but a corner soon ahead
+        const ahead = cur[(k + aheadNodes) % n];
+        const brake = Math.max(0, Math.min(1, ahead / 0.012)) * Math.max(0, 1 - cur[k] / 0.004);
+        runoffAmt[k] = Math.max(corner, brake);
+      }
+      // smooth (closed-loop box blur, a few passes) so aprons grow/shrink gently
+      for (let it = 0; it < 4; it++) {
+        const src = new Float32Array(runoffAmt);
+        for (let k = 0; k < n; k++) {
+          const a = (k - 1 + n) % n, b = (k + 1) % n;
+          runoffAmt[k] = 0.25 * src[a] + 0.5 * src[k] + 0.25 * src[b];
+        }
+      }
+    }
     // For bridge sections the terrain ribbon stays at ground level so the
     // elevated deck floats above flat ground (supported visually by the bridge
     // pillars in buildProps) instead of pulling the whole ground plane up with it.
@@ -376,21 +458,49 @@ const Tracks = (function () {
     // under BACK-face culling (otherwise the whole right apron is culled).
     function ribbon(lats, flip) {
       const base = pos.length / 3;
+      const innerSign = lats[0] < 0 ? -1 : 1;     // which side this ribbon is on
       for (let k = 0; k < n; k++) {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const u = upOf(track, k);
         const w = hw[k];
+        const ramt = runoffAmt[k];
+        // banking lift this ribbon's inner edge should inherit so it stays flush
+        // with the (raised) road edge — full lift on the outer side, 0 on inner.
+        const bankLift = bp ? bp.lift[k] : 0;
+        const bankSide = bp ? bp.bsign[k] : 0;
         for (let v = 0; v < 3; v++) {
-          const o = (lats[v] < 0 ? -w : w) + lats[v];
-          const sag = v === 0 ? -0.3 : -0.3 - Math.abs(lats[v]) * 0.02;
+          // widen the inner apron at run-off zones: push the inner vert further
+          // out and pull the mid vert inward so the flat tan band is broader.
+          let lat = lats[v];
+          if (v === 0) lat += innerSign * ramt * 8;        // inner edge out to ~10 m
+          else if (v === 1) lat = lats[1] * (1 - 0.45 * ramt);
+          const o = (lat < 0 ? -w : w) + lat;
+          const sag = v === 0 ? -0.3 : -0.3 - Math.abs(lat) * 0.02;
           // inner vert (v=0) tracks road height to seal the edge at bridge sections;
           // outer verts blend down to gY so the ground stays flat away from the deck.
           const t = v / 2;
           const yBase = py[k] * (1 - t) + gY[k] * t;
-          pos.push(px[k] + r[0] * o, yBase + sag, pz[k] + r[2] * o);
+          // match the road's banked outer edge: rise along up by the same lift,
+          // tapering across the ribbon (full at inner edge, 0 at outer) so the
+          // far ground stays flat. frac uses the same formula as buildRoad.
+          let by = 0;
+          if (bankLift > 0) {
+            let frac = (bankSide * o + w) / (2 * w);
+            frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+            by = bankLift * frac * (1 - t);
+          }
+          pos.push(px[k] + r[0] * o + u[0] * by, yBase + sag + u[1] * by, pz[k] + r[2] * o + u[2] * by);
           nrm.push(0, 1, 0);
           const nz = (hash(k * 3 + v) - 0.5) * 0.04;
-          const c = [lerp(runoff[0], grass[0], t) + nz, lerp(runoff[1], grass[1], t) + nz, lerp(runoff[2], grass[2], t) + nz];
-          col.push(c[0], c[1], c[2]);
+          // base ground colour blends runoff(near road) -> grass(far)
+          let c0 = lerp(runoff[0], grass[0], t), c1 = lerp(runoff[1], grass[1], t), c2 = lerp(runoff[2], grass[2], t);
+          // in run-off zones the inner/mid band turns tan tarmac/gravel instead
+          // of grass; the outer vert stays grass so the apron has a clean edge.
+          const apron = ramt * (v === 0 ? 1 : v === 1 ? 0.65 : 0);
+          c0 = lerp(c0, APRON_COL[0], apron) + nz;
+          c1 = lerp(c1, APRON_COL[1], apron) + nz;
+          c2 = lerp(c2, APRON_COL[2], apron) + nz;
+          col.push(c0, c1, c2);
         }
       }
       for (let k = 0; k < n; k++) {
