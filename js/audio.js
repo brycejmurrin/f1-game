@@ -292,6 +292,7 @@ const GameAudio = (function () {
     // debug tap: lets tests read the engine's dominant output frequency (pitch)
     dbgAnalyser = ctx.createAnalyser();
     dbgAnalyser.fftSize = 16384;
+    dbgAnalyser.smoothingTimeConstant = 0;   // instantaneous spectrum for clean test reads
     engGain.connect(dbgAnalyser);
 
     usingSamples = !!(samplesReady && engBuf && accBuf);
@@ -471,12 +472,12 @@ const GameAudio = (function () {
       const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
-      // both loops are pitched together (so the sweep is carried either way);
-      // crossfade timbre from the calmer idle loop to the raspier rev loop as the
-      // revs rise, for an aggressive top end.
-      const acc = clamp01((rev - 0.15) * 1.4);
-      engGainAcc.gain.setTargetAtTime(0.7 * acc, t, 0.05);
-      engGainIdle.gain.setTargetAtTime(0.6 * (1 - 0.65 * acc), t, 0.05);
+      // Single coherent voice: run only the steady idle loop, pitched. Crossfading
+      // in the second (different) recording made the output incoherent — its
+      // brightness FELL as revs rose (measured via the audio test) instead of
+      // rising. Brightness/"load" now comes from the lowpass opening with revs.
+      engGainAcc.gain.setTargetAtTime(0, t, 0.05);
+      engGainIdle.gain.setTargetAtTime(0.9, t, 0.05);
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
       const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
@@ -489,7 +490,7 @@ const GameAudio = (function () {
     // Samples need a higher cutoff floor (they're full recordings) and their own
     // master level since the idle/accel sub-gains already mix them.
     const cut = usingSamples
-      ? Math.min(9000, 1400 + s * 5200 + rev * 1600 + b * 1500)
+      ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500)   // open: let the recording breathe
       : Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     const lvl = usingSamples
@@ -497,10 +498,12 @@ const GameAudio = (function () {
       : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0));
     engGain.gain.setTargetAtTime(lvl * (1 - 0.55 * shiftDuck), t, 0.03);
 
-    // turbo whine tracks revs
+    // turbo whine tracks revs. With a real recording (which already has its own
+    // turbo/harmonic content) keep this very subtle so it doesn't sit on top as a
+    // synthetic tone — the audio test showed these synth layers dominating.
     whineOsc.frequency.setTargetAtTime(1500 + rev * 2000, t, 0.05);
     whineGain.gain.setTargetAtTime(
-      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0), t, 0.08);
+      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.25 : 1), t, 0.08);
 
     // harvesting whirr fades IN under braking/lift: infer deceleration
     // from the speed trajectory between calls
@@ -513,7 +516,7 @@ const GameAudio = (function () {
     lastEngT = t;
     lastSpeed = s;
     harvLevel += (target - harvLevel) * Math.min(1, (dt || 0.016) / 0.12);
-    harvGain.gain.setTargetAtTime(harvLevel * 0.06, t, 0.06);
+    harvGain.gain.setTargetAtTime(harvLevel * 0.06 * (usingSamples ? 0 : 1), t, 0.06);  // off for real recordings
     harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
 
     // offroad: ~8 Hz pitch wobble via the LFO (gain is cents of detune)
