@@ -128,7 +128,10 @@ const Input = (function () {
   }
 
   function calibrate() {
-    tiltZero = Math.max(-35, Math.min(35, tiltRaw));
+    // Capture the true neutral with no clamp — a landscape grip's neutral
+    // angle is often well past ±35°, and clamping it leaves a residual offset
+    // that pulls the car to one side. Recalibrated on orientation change too.
+    tiltZero = tiltRaw;
   }
 
   function tiltActive() {
