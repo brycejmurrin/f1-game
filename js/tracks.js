@@ -592,7 +592,8 @@ const Tracks = (function () {
           const r0 = [track.rx[k], track.ry[k], track.rz[k]];
           const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
           const u0 = upOf(track, k);
-          const o0 = side * (hw[k] + 0.35), o1 = side * (hw[kn] + 0.35);
+          const barrierOffset = def.id === "monaco" ? 2.0 : 0.35;
+          const o0 = side * (hw[k] + barrierOffset), o1 = side * (hw[kn] + barrierOffset);
           const ax = px[k] + r0[0] * o0, ay = py[k], az = pz[k] + r0[2] * o0;
           const bx = px[kn] + r1[0] * o1, by = py[kn], bz = pz[kn] + r1[2] * o1;
           const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
@@ -639,8 +640,8 @@ const Tracks = (function () {
     if (!STREET_IDS[def.id]) {
       every(270, (k) => {
         const side = hash(k * 7) < 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 18, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
-        place(k, side, hw[k] + 18, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
+        place(k, side, hw[k] + 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+        place(k, side, hw[k] + 25, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
       });
     }
 
@@ -692,8 +693,8 @@ const Tracks = (function () {
         }
       });
     } else if (theme === "modern") {  // Madrid
-      every(30, (k) => { for (const side of [-1, 1]) { const s = hash(k + side); place(k, side, 9 + s * 6, [10, 8 + s * 14, 10], [0.8, 0.82, 0.86]); } });
-      every(120, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 24], [0.85, 0.2, 0.2]));
+      every(30, (k) => { for (const side of [-1, 1]) { const s = hash(k + side); place(k, side, hw[k] + 20 + s * 3, [10, 8 + s * 14, 10], [0.8, 0.82, 0.86]); } });
+      every(120, (k) => place(k, hash(k) < 0.5 ? -1 : 1, hw[k] + 25, [4, 6, 24], [0.85, 0.2, 0.2]));
       // La Monumental: 24% banked high-speed turn with distinctive white structure
       if (def.id === "madrid") {
         const kmono = Math.round(n * 0.65) % n;
@@ -973,10 +974,10 @@ const Tracks = (function () {
                [160, 70, 140], [0.62, 0.5, 0.38]);
       }
       // Dense tropical vegetation on hillsides
-      every(16, (k) => {
+      every(12, (k) => {
         for (const side of [-1, 1]) {
           for (let j = 0; j < 2; j++) {
-            if (hash(k * 43 + side + j) > 0.45) continue;
+            if (hash(k * 43 + side + j) > 0.35) continue;
             const d = 160 + hash(k * 44 + j) * 80;
             const s = hash(k * 46 + j);
             const h = 7 + s * 8;
@@ -1455,12 +1456,12 @@ const Tracks = (function () {
   }
   function nightPal(o) {
     return Object.assign({
-      zenith: [0.01, 0.01, 0.04], horizon: [0.05, 0.06, 0.12], sun: [0.2, 0.2, 0.3],
-      grass: [0.08, 0.12, 0.08], runoff: [0.18, 0.16, 0.14], fog: [0.03, 0.03, 0.07],
-      asphalt: [0.10, 0.10, 0.13], line: [0.85, 0.85, 0.90],
-      fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92], concrete: [0.32, 0.30, 0.28],
-      ambientSky: [0.42, 0.43, 0.5], ambientGround: [0.16, 0.16, 0.18],
-      sunColor: [0.5, 0.52, 0.6], sunDir: norm([0.1, 0.9, 0.2]),
+      zenith: [0.05, 0.06, 0.14], horizon: [0.12, 0.14, 0.24], sun: [0.4, 0.4, 0.5],
+      grass: [0.14, 0.18, 0.14], runoff: [0.28, 0.26, 0.24], fog: [0.08, 0.09, 0.15],
+      asphalt: [0.18, 0.19, 0.22], line: [0.9, 0.9, 0.95],
+      fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92], concrete: [0.42, 0.40, 0.38],
+      ambientSky: [0.55, 0.56, 0.64], ambientGround: [0.28, 0.28, 0.30],
+      sunColor: [0.7, 0.72, 0.8], sunDir: norm([0.1, 0.9, 0.2]),
     }, o);
   }
 
@@ -1523,7 +1524,7 @@ const Tracks = (function () {
         { t: 0, l: 200 }, { t: 95, l: 70 }, { t: -90, l: 80 }, { t: 80, l: 60 }, { t: -60, l: 70 }, { t: 90, l: 90 },
         { t: 0, l: 180 }, { t: 90, l: 70 }, { t: 90, l: 70 }, { t: -85, l: 60 }, { t: 95, l: 80 }] },
     { id: "cota", name: "COTA", gp: "United States GP", country: "USA", night: false, theme: "green", lengthKm: 5.5, baseHW: 8,
-      pal: dayPal({ zenith: [0.20, 0.46, 0.8], horizon: [0.72, 0.66, 0.5], grass: [0.34, 0.4, 0.14], runoff: [0.6, 0.35, 0.2] }),
+      pal: dayPal({ zenith: [0.24, 0.50, 0.84], horizon: [0.76, 0.70, 0.54], grass: [0.34, 0.4, 0.14], runoff: [0.6, 0.35, 0.2], ambientSky: [0.52, 0.58, 0.68], ambientGround: [0.28, 0.28, 0.24] }),
       segs: [{ t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 },
         { t: 60, l: 60 }, { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 },
         { t: 0, l: 460 }, { t: -150, l: 130 }, { t: 70, l: 70 }, { t: -60, l: 70 }, { t: 80, l: 90 }, { t: 90, l: 160 }, { t: -130, l: 110 }] },
