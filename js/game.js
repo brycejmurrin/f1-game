@@ -62,9 +62,9 @@ const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
 // the revs a lot in the low gears and less up top, and every shift lands back in
 // the ~8.7-11.3k power band (F1's optimal ~8-12k) before climbing to the limit —
 // rather than dropping to idle or barely dropping at all. Top speed fraction of VMAX.
-// (F1 mandates 8 gears; kept at 6 for feel per earlier request.)
-const GEARS = 6;
-const GEAR_TOP = [0.14, 0.24, 0.37, 0.54, 0.75, 1.0];
+// F1-authentic 8 gears.
+const GEARS = 8;
+const GEAR_TOP = [0.095, 0.16, 0.25, 0.36, 0.50, 0.66, 0.83, 1.0];
 const IDLE_RPM = 5000, MAX_RPM = 15000;   // F1 V6 turbo: idle ~5k, rev limit 15k
 function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
 function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
