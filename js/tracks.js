@@ -452,6 +452,127 @@ const Tracks = (function () {
       }
     }
 
+    // --- per-circuit iconic landmarks ---
+    if (def.id === "cota") {
+      // observation tower at Turn 1 (251 ft / 76 m steel structure)
+      const kc = Math.round(n * 0.08) % n;
+      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
+      const tcx = px[kc] + r[0] * (hw[kc] + 55), tcy = py[kc], tcz = pz[kc] + r[2] * (hw[kc] + 55);
+      addBox(out, [tcx, tcy + 42, tcz], [4.5, 84, 4.5], [0.88, 0.88, 0.90]);
+      addBox(out, [tcx - r[0] * 10, tcy + 84, tcz - r[2] * 10], [22, 4, 10], [0.88, 0.88, 0.90]);
+      addBox(out, [tcx - r[0] * 16, tcy + 87, tcz - r[2] * 16], [10, 3, 8], [0.95, 0.44, 0.05]);
+    }
+    if (def.id === "vegas") {
+      // MSG Sphere — distinctive multi-colour LED sphere east of the Strip
+      const kc = Math.round(n * 0.50) % n;
+      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
+      const scx = px[kc] + r[0] * (hw[kc] + 148), scz = pz[kc] + r[2] * (hw[kc] + 148);
+      const hubY = py[kc] + 58, rad = 52;
+      const vc = [[0.9, 0.4, 0.05], [0.05, 0.75, 0.95], [0.9, 0.05, 0.85], [0.95, 0.9, 0.05]];
+      for (let i = 1; i <= 6; i++) {
+        const phi = (i / 7) * Math.PI, ringR = rad * Math.sin(phi), ringY = hubY + rad * Math.cos(phi);
+        for (let j = 0; j < 14; j++) {
+          const theta = (j / 14) * Math.PI * 2;
+          addBox(out, [scx + ringR * Math.cos(theta), ringY, scz + ringR * Math.sin(theta)], [7, 7, 7], vc[(i + j) % 4]);
+        }
+      }
+      addBox(out, [scx, hubY + rad, scz], [7, 7, 7], vc[0]);
+      addBox(out, [scx, hubY - rad, scz], [7, 7, 7], vc[2]);
+    }
+    if (def.id === "singapore") {
+      // Gardens by the Bay supertrees alongside the circuit
+      const ks = Math.round(n * 0.30) % n;
+      const stc = [[0.9, 0.1, 0.6], [0.1, 0.8, 0.95], [0.95, 0.78, 0.1]];
+      for (let i = 0; i < 6; i++) {
+        const k = (ks + i * 5) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const o = hw[k] + 28 + i * 9, h = 20 + i * 5;
+        const scx = px[k] + r[0] * o, scz = pz[k] + r[2] * o;
+        addBox(out, [scx, py[k] + h * 0.5, scz], [2.5, h, 2.5], [0.15, 0.18, 0.22]);
+        addBox(out, [scx, py[k] + h + 4, scz], [12 + i * 2, 8, 12 + i * 2], [0.06, 0.38, 0.14]);
+        addBox(out, [scx, py[k] + h + 0.5, scz], [14 + i * 2, 1.5, 14 + i * 2], stc[i % 3]);
+      }
+    }
+    if (def.id === "interlagos") {
+      // São Paulo tower-block backdrop visible across the lake
+      for (let i = 0; i < 9; i++) {
+        const k = (Math.round(n * 0.22) + i * 8) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const s = hash(k * 11 + i), side = (i % 2 === 0) ? 1 : -1;
+        const h = 48 + s * 46, o = hw[k] + 68 + s * 28;
+        const tone = 0.50 + s * 0.22;
+        addBox(out, [px[k] + r[0] * o * side, py[k] + h * 0.5, pz[k] + r[2] * o * side], [11, h, 11], [tone, tone * 0.93, tone * 0.86]);
+      }
+    }
+    if (def.id === "zandvoort") {
+      // Dutch windmill on the dunes
+      const kc = Math.round(n * 0.36) % n;
+      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
+      const tl = Math.hypot(track.tx[kc], track.tz[kc]) || 1;
+      const tn = [track.tx[kc] / tl, 0, track.tz[kc] / tl];
+      const mcx = px[kc] + r[0] * (hw[kc] + 108), mcz = pz[kc] + r[2] * (hw[kc] + 108);
+      const mby = py[kc];
+      addBox(out, [mcx, mby + 15, mcz], [5, 30, 5], [0.85, 0.81, 0.70]);
+      addBox(out, [mcx, mby + 32, mcz], [8, 5, 8], [0.78, 0.72, 0.60]);
+      const hubX = mcx, hubY = mby + 32, hubZ = mcz;
+      const wb = [r, [0, 1, 0], tn];
+      addBox(out, [hubX + tn[0] * 8, hubY,     hubZ + tn[2] * 8], [2, 2, 14], [0.92, 0.90, 0.86], wb);
+      addBox(out, [hubX - tn[0] * 8, hubY,     hubZ - tn[2] * 8], [2, 2, 14], [0.92, 0.90, 0.86], wb);
+      addBox(out, [hubX,             hubY + 8,  hubZ            ], [2, 14, 2], [0.92, 0.90, 0.86], wb);
+      addBox(out, [hubX,             hubY - 8,  hubZ            ], [2, 14, 2], [0.92, 0.90, 0.86], wb);
+      // orange Dutch grandstands over the pit straight
+      for (let i = 0; i < 5; i++) {
+        const k = (Math.round(n * 0.02) + i * 5) % n;
+        place(k, -1, 14, [4, 7, 20], [0.95, 0.44, 0.04]);
+      }
+    }
+    if (def.id === "monza") {
+      // Italian umbrella pines — taller and narrower than the generic green trees
+      every(28, (k) => {
+        const s = hash(k * 31);
+        if (s < 0.40) return;
+        const side = s < 0.70 ? -1 : 1, d = 10 + s * 5, h = 15 + s * 9;
+        place(k, side, d, [1.2, 1.8, 1.2], [0.28, 0.19, 0.10]);
+        place(k, side, d, [3.0, h, 3.0], [0.07, 0.27, 0.09]);
+      });
+    }
+    if (def.id === "suzuka") {
+      // Sakura (cherry blossom) trees scattered among the green zones
+      every(55, (k) => {
+        const s = hash(k * 41);
+        if (s < 0.45) return;
+        const side = s < 0.72 ? -1 : 1, d = 11 + s * 7;
+        place(k, side, d, [1.1, 1.3, 1.1], [0.32, 0.22, 0.12]);
+        place(k, side, d, [3.8, 3.5 + s * 2, 3.8], [0.92, 0.55, 0.64]);
+      });
+    }
+    if (def.id === "silverstone") {
+      // The Wing — curved pit-lane roof structure on the main straight
+      for (let i = 0; i < 6; i++) {
+        const k = (Math.round(n * 0.01) + i * 3) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const t = [track.tx[k], track.ty[k], track.tz[k]];
+        const u = upOf(track, k);
+        const rise = Math.sin((i / 5) * Math.PI) * 5;
+        const scx = px[k] + r[0] * (hw[k] + 4), scy = py[k], scz = pz[k] + r[2] * (hw[k] + 4);
+        addBox(out, [scx, scy + 12 + rise * 0.5, scz], [1.5, 24 + rise, 18], [0.88, 0.88, 0.90], [r, u, t]);
+        addBox(out, [scx, scy + 25 + rise, scz], [36, 1.5, 20], [0.86, 0.86, 0.88], [r, u, t]);
+      }
+    }
+    if (def.id === "bahrain") {
+      // Arch grandstand + minaret: a nod to the circuit's Islamic architecture
+      const kc = Math.round(n * 0.52) % n;
+      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
+      const tl = Math.hypot(track.tx[kc], track.tz[kc]) || 1;
+      const tn = [track.tx[kc] / tl, 0, track.tz[kc] / tl];
+      const scx = px[kc] + r[0] * (hw[kc] + 30), scz = pz[kc] + r[2] * (hw[kc] + 30), bY = py[kc];
+      addBox(out, [scx + tn[0] * (-14), bY + 14, scz + tn[2] * (-14)], [4, 28, 4], [0.84, 0.77, 0.55]);
+      addBox(out, [scx + tn[0] * 14,   bY + 14, scz + tn[2] * 14  ], [4, 28, 4], [0.84, 0.77, 0.55]);
+      addBox(out, [scx,                 bY + 29, scz                ], [38, 3, 5], [0.84, 0.77, 0.55]);
+      addBox(out, [scx + tn[0] * 24,   bY + 22, scz + tn[2] * 24  ], [3.5, 44, 3.5], [0.92, 0.83, 0.64]);
+      addBox(out, [scx + tn[0] * 24,   bY + 46, scz + tn[2] * 24  ], [7, 4, 7], [0.92, 0.65, 0.10]);
+    }
+
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road
     const brs = BRIDGES[def.id];
