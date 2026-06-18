@@ -304,6 +304,12 @@ const Tracks = (function () {
     const { n, px, py, pz, hw } = track;
     const pal = track.def.palette, ka = pal.kerbA, kb = pal.kerbB;
     const ds = track.total / n;
+    // per-node kerb map (which side has a kerb) so the car can detect riding one
+    track.kerbL = new Uint8Array(n);
+    track.kerbR = new Uint8Array(n);
+    const markKerb = (k0, k1, side) => {
+      for (let i = 0; i <= k1 - k0; i++) { const k = (k0 + i + n) % n; if (side > 0) track.kerbR[k] = 1; else track.kerbL[k] = 1; }
+    };
     const KW = 0.9, KH = 0.06;
     const stripeNodes = Math.max(1, Math.round(1.6 / ds));
     // one ribbon strip over node range, on `side` (-1 left edge, +1 right).
@@ -336,9 +342,28 @@ const Tracks = (function () {
     for (const c of findCorners(track, 0.006)) {
       const inside = c.sign > 0 ? 1 : -1;
       ribbon(c.k - c.lo, c.k + c.hi, inside);
+      markKerb(c.k - c.lo, c.k + c.hi, inside);
       const exLen = Math.max(2, Math.round(c.hi * 0.7));
       ribbon(c.k + 1, c.k + 1 + exLen, -inside);
+      markKerb(c.k + 1, c.k + 1 + exLen, -inside);
     }
+  }
+
+  // Is the car at arc-distance s, lateral offset x, riding a kerb? Kerbs sit just
+  // outside the road edge at corners; a car counts as "on" one when it's near/over
+  // the edge on a side that has a kerb here. Returns 0 (no) or 1 (yes).
+  function onKerb(track, s, x) {
+    if (!track.kerbR) return 0;
+    const n = track.n, L = track.total;
+    const k = Math.floor((((s % L) + L) % L) / L * n) % n;
+    const hw = track.hw[k], ax = Math.abs(x);
+    // the kerb sits just OUTSIDE the road edge; a car is riding it when straddling
+    // the edge on a side that has a kerb here (a band from a bit inside the edge
+    // to ~1.1m past it).
+    if (ax < hw - 0.6 || ax > hw + 1.1) return 0;
+    if (x > 0 && track.kerbR[k]) return 1;
+    if (x < 0 && track.kerbL[k]) return 1;
+    return 0;
   }
 
   function buildRoad(track) {
@@ -1598,5 +1623,5 @@ const Tracks = (function () {
     return def;
   });
 
-  return { LIST, build, sample, curvature };
+  return { LIST, build, sample, curvature, onKerb };
 })();

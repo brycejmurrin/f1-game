@@ -378,8 +378,8 @@ function collideFx(a, b, impact) {
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
   if (soundOn) GameAudio.collision();
-  shake = Math.min(1, shake + impact * 0.7);
-  hitStop = Math.max(hitStop, impact * 0.05);
+  shake = Math.min(1, shake + impact * 0.45);
+  hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
   if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) {} }
 }
@@ -414,20 +414,21 @@ function resolveCollisions(ranked) {
           // both cars "in contact" so the AI eases off steering this way and
           // stops fighting the push (the cause of the side-by-side vibration).
           const sgn = dX >= 0 ? 1 : -1;
-          const corr = Math.max(penLat - 0.05, 0) * 0.5;
+          const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= 0.99; b.speed *= 0.99;
+          a.speed *= 0.995; b.speed *= 0.995;   // barely scrub speed on a side rub
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
-          // rear-end: separate along the track and transfer speed rear->front
-          const corr = Math.max(penLong - 0.05, 0) * 0.5;
+          // rear-end: separate along the track and nudge speeds together (gentle,
+          // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
+          const corr = Math.max(penLong - 0.05, 0) * 0.4;
           shiftLong(a, corr * (iA / iSum));
           shiftLong(b, -corr * (iB / iSum));
           const relV = b.speed - a.speed;   // >0 means the rear car is closing
           if (relV > 0) {
-            const jImp = 1.15 * relV / iSum;
+            const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
             b.speed = Math.max(0, b.speed - iB * jImp);
             a.speed += iA * jImp * 0.8;
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
@@ -453,13 +454,13 @@ function resolveCollisions(ranked) {
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = invM(a), iB = invM(b), iSum = iA + iB;
       if (penLat < penLong) {
-        const c = Math.max(penLat - SLOP, 0) * 0.85;
+        const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
         a.x += sgn * c * (iA / iSum);
         b.x -= sgn * c * (iB / iSum);
       } else {
-        const c = Math.max(penLong - SLOP, 0) * 0.85;
+        const c = Math.max(penLong - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         shiftLong(a, c * (iA / iSum));
         shiftLong(b, -c * (iB / iSum));
@@ -606,8 +607,13 @@ function updateCar(c, dt, ranked) {
     c.rpm = rpmFor(c.gear, c.speed);
   }
 
+  // Kerb vs off-track: a kerb sits just outside the road edge and is DRIVABLE
+  // (rumble + a little grip loss), whereas going past the edge with no kerb is
+  // grass/run-off. So detect the kerb first and exclude it from "offroad".
+  c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
+
   // --- offroad ---
-  c.offroad = Math.abs(c.x) > hw;
+  c.offroad = Math.abs(c.x) > hw && !c.onKerb;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
     c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
@@ -627,6 +633,18 @@ function updateCar(c, dt, ranked) {
       }
     }
   } else if (c.offT > 0) c.offT = Math.max(0, c.offT - dt);
+
+  // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
+  // grip + speed, but you can stay on it. Distinct from going off into grass.
+  if (c.onKerb) {
+    c.speed -= 6 * dt;                       // slight scrub
+    if (c.isPlayer) {
+      shake = Math.max(shake, 0.3);          // continuous light rumble via shake
+      c.kerbSndT = (c.kerbSndT || 0) - dt;
+      if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
+      if (navigator.vibrate && (c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { try { navigator.vibrate(15); } catch (e) {} c.kerbHapT = 0.12; }
+    }
+  }
 
   // --- lateral ---
   let steer;
@@ -696,7 +714,8 @@ function updateCar(c, dt, ranked) {
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
-  c.x += steer * STEER_VMAX * latFac * gripScale * dt;
+  const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
+  c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * dt;
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
@@ -709,11 +728,11 @@ function updateCar(c, dt, ranked) {
   const wall = track.street ? hw - 0.8 : hw + 9;
   if (Math.abs(c.x) > wall) {
     c.x = c.x > 0 ? wall : -wall;
-    c.speed *= track.street ? 0.9 : 0.96;
+    c.speed *= track.street ? 0.975 : 0.99;   // scrape, don't grind to a halt
     if (c.isPlayer && track.street && c.collideT <= 0) {
-      shake = Math.min(1, shake + 0.3); c.collideT = 0.3;
+      shake = Math.min(1, shake + 0.18); c.collideT = 0.3;
       if (soundOn) GameAudio.collision();
-      if (navigator.vibrate) { try { navigator.vibrate(35); } catch (e) {} }
+      if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) {} }
     }
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
@@ -1215,7 +1234,7 @@ window.__apex = {
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
     yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2),
-    ct: +(c.contactT || 0).toFixed(2), p: !!c.isPlayer,
+    ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
   })),
   // lap fractions of corner apexes (local maxima of |curvature|), for parking
   corners() {
