@@ -38,7 +38,7 @@ const GameAudio = (function () {
   let currentUrl = null;
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
-  const MENU_TRACK = "assets/music/menu.wav";
+  const MENU_TRACK = "assets/music/menu.mp3";
   const RACE_TRACKS = [
     "assets/music/race_a.wav",
     "assets/music/race_b.wav",
