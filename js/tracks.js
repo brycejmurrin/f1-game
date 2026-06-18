@@ -652,6 +652,18 @@ const Tracks = (function () {
           place(k, side, d, [3.5, h, 3.5], [0.12 + s * 0.06, 0.36, 0.14]);  // canopy
         }
       });
+      // denser forest for Spa (Ardennes forest setting)
+      if (def.id === "spa") {
+        every(16, (k) => {
+          for (const side of [-1, 1]) {
+            if (hash(k * 3 + side) > 0.35) continue;
+            const s = hash(k * 2 + side);
+            const h = 8 + s * 7, d = 14 + s * 12;
+            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);
+            place(k, side, d, [3.2, h, 3.2], [0.1, 0.32, 0.12]);
+          }
+        });
+      }
       // occasional grandstand
       every(140, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
     } else if (theme === "desert") {
@@ -680,6 +692,18 @@ const Tracks = (function () {
     } else if (theme === "modern") {  // Madrid
       every(30, (k) => { for (const side of [-1, 1]) { const s = hash(k + side); place(k, side, 9 + s * 6, [10, 8 + s * 14, 10], [0.8, 0.82, 0.86]); } });
       every(120, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 24], [0.85, 0.2, 0.2]));
+      // La Monumental: 24% banked high-speed turn with distinctive white structure
+      if (def.id === "madrid") {
+        const kmono = Math.round(n * 0.65) % n;
+        const kmr = [track.rx[kmono], track.ry[kmono], track.rz[kmono]];
+        const kmu = upOf(track, kmono);
+        for (let i = -3; i <= 3; i++) {
+          const k = (kmono + i * Math.round(n / 20)) % n;
+          const kr = [track.rx[k], track.ry[k], track.rz[k]];
+          const o = hw[k] + 16;
+          addBox(out, [px[k] + kr[0] * o, py[k] + 8, pz[k] + kr[2] * o], [28, 16, 18], [0.88, 0.88, 0.92]);
+        }
+      }
     }
 
     // --- main grandstand + pit complex on the start/finish straight (every GP) ---
@@ -720,6 +744,16 @@ const Tracks = (function () {
 
     // --- Monaco harbour: water + moored yachts along the start straight ---
     if (def.id === "monaco") {
+      // Casino Square building (ornate 1865 structure visible from Casino corner, ~Turn 9-10)
+      const kcs = Math.round(n * 0.32) % n;
+      const kcsr = [track.rx[kcs], track.ry[kcs], track.rz[kcs]];
+      const csX = px[kcs] + kcsr[0] * (hw[kcs] + 8);
+      const csZ = pz[kcs] + kcsr[2] * (hw[kcs] + 8);
+      addBox(out, [csX, py[kcs] + 22, csZ], [48, 44, 36], [0.82, 0.78, 0.68]); // Casino main structure
+      for (let i = 0; i < 4; i++) {
+        addBox(out, [csX - 20 + i * 15, py[kcs] + 32, csZ], [8, 20, 8], [0.92, 0.9, 0.85]); // ornate columns
+      }
+
       for (let i = 0; i < 13; i++) {
         const k = (i * 3) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -768,6 +802,17 @@ const Tracks = (function () {
       addBox(out, [tcx, tcy + 42, tcz], [4.5, 84, 4.5], [0.88, 0.88, 0.90]);
       addBox(out, [tcx - r[0] * 10, tcy + 84, tcz - r[2] * 10], [22, 4, 10], [0.88, 0.88, 0.90]);
       addBox(out, [tcx - r[0] * 16, tcy + 87, tcz - r[2] * 16], [10, 3, 8], [0.95, 0.44, 0.05]);
+      // Red steel tube grandstand framework (COTA signature design element)
+      for (let i = 0; i < 8; i++) {
+        const k = (Math.round(n * 0.15) + i * Math.round(n / 8)) % n;
+        const rk = [track.rx[k], track.ry[k], track.rz[k]];
+        const tk = [track.tx[k], 0, track.tz[k]];
+        const o = hw[k] + 14 + (i % 2) * 8;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[k] + rk[0] * side * o, py[k] + 12, pz[k] + rk[2] * side * o],
+                 [3, 24, 20], [0.95, 0.44, 0.05], [rk, [0, 1, 0], tk]);
+        }
+      }
     }
     if (def.id === "vegas") {
       // MSG Sphere — distinctive multi-colour LED sphere east of the Strip
@@ -785,6 +830,15 @@ const Tracks = (function () {
       }
       addBox(out, [scx, hubY + rad, scz], [7, 7, 7], vc[0]);
       addBox(out, [scx, hubY - rad, scz], [7, 7, 7], vc[2]);
+      // Strip hotel towers visible from pit area (Bellagio, Caesars Palace, Paris)
+      const khot = Math.round(n * 0.08) % n;
+      const khr = [track.rx[khot], track.ry[khot], track.rz[khot]];
+      for (let i = 0; i < 4; i++) {
+        const h = 40 + i * 20, d = 140 + i * 30;
+        const hx = px[khot] + khr[0] * d, hz = pz[khot] + khr[2] * d;
+        const tone = [0.8, 0.75, 0.7, 0.65][i];
+        addBox(out, [hx, py[khot] + h / 2, hz], [30 + i * 8, h, 30 + i * 8], [tone, tone * 0.95, tone * 0.9]);
+      }
     }
     if (def.id === "singapore") {
       // Gardens by the Bay supertrees alongside the circuit
@@ -799,8 +853,24 @@ const Tracks = (function () {
         addBox(out, [scx, py[k] + h + 4, scz], [12 + i * 2, 8, 12 + i * 2], [0.06, 0.38, 0.14]);
         addBox(out, [scx, py[k] + h + 0.5, scz], [14 + i * 2, 1.5, 14 + i * 2], stc[i % 3]);
       }
+      // Marina Bay Sands: 3-tower hotel complex near start/finish area with connecting bridge
+      const kmb = Math.round(n * 0.03) % n;
+      const kmbr = [track.rx[kmb], track.ry[kmb], track.rz[kmb]];
+      for (let i = -1; i <= 1; i++) {
+        const tx = px[kmb] + kmbr[0] * (hw[kmb] + 120 + i * 18);
+        const tz = pz[kmb] + kmbr[2] * (hw[kmb] + 120 + i * 18);
+        const h = 57 + i * 3;  // tallest in middle
+        addBox(out, [tx, py[kmb] + h / 2, tz], [20, h, 20], [0.92, 0.92, 0.95]);
+      }
+      const mbs_mid = px[kmb] + kmbr[0] * (hw[kmb] + 120);
+      const mbz_mid = pz[kmb] + kmbr[2] * (hw[kmb] + 120);
+      addBox(out, [mbs_mid, py[kmb] + 50, mbz_mid], [60, 5, 12], [0.85, 0.85, 0.88]); // roof bridge
     }
     if (def.id === "interlagos") {
+      // Lake: body of water visible from inside track (pit area perspective)
+      const klake = Math.round(n * 0.18) % n;
+      const klaker = [track.rx[klake], track.ry[klake], track.rz[klake]];
+      addBox(out, [px[klake] + klaker[0] * 50, py[klake] - 0.6, pz[klake] + klaker[2] * 50], [280, 1.2, 200], [0.08, 0.25, 0.45]);
       // São Paulo tower-block backdrop visible across the lake
       for (let i = 0; i < 9; i++) {
         const k = (Math.round(n * 0.22) + i * 8) % n;
@@ -810,8 +880,23 @@ const Tracks = (function () {
         const tone = 0.50 + s * 0.22;
         addBox(out, [px[k] + r[0] * o * side, py[k] + h * 0.5, pz[k] + r[2] * o * side], [11, h, 11], [tone, tone * 0.93, tone * 0.86]);
       }
+      // Pit complex: modernized brutalist control tower
+      const kpit = Math.round(n * 0.02) % n;
+      const kpitr = [track.rx[kpit], track.ry[kpit], track.rz[kpit]];
+      addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 18, pz[kpit] + kpitr[2] * 12], [50, 36, 30], [0.5, 0.48, 0.46]);
+      addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 36, pz[kpit] + kpitr[2] * 12], [46, 6, 26], [0.42, 0.42, 0.44]);
     }
     if (def.id === "zandvoort") {
+      // Dune landscape: sandy terrain features emphasizing coastal setting
+      const kdunes = [Math.round(n * 0.15), Math.round(n * 0.45), Math.round(n * 0.75)];
+      for (const kd of kdunes) {
+        const kr = [track.rx[kd], track.ry[kd], track.rz[kd]];
+        const o = hw[kd] + 50;
+        for (const side of [-1, 1]) {
+          addBox(out, [px[kd] + kr[0] * side * o, py[kd] + 8, pz[kd] + kr[2] * side * o],
+                 [60, 16, 80], [0.74, 0.68, 0.48]);  // sandy dune color
+        }
+      }
       // Dutch windmill on the dunes
       const kc = Math.round(n * 0.36) % n;
       const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
@@ -842,6 +927,14 @@ const Tracks = (function () {
         place(k, side, d, [1.2, 1.8, 1.2], [0.28, 0.19, 0.10]);
         place(k, side, d, [3.0, h, 3.0], [0.07, 0.27, 0.09]);
       });
+      // Tribuna Centrale: main grandstand at pit straight (white/cream Italian classic style)
+      const ktc = Math.round(n * 0.01) % n;
+      const ktcr = [track.rx[ktc], track.ry[ktc], track.rz[ktc]];
+      addBox(out, [px[ktc] + ktcr[0] * (hw[ktc] + 10), py[ktc] + 18, pz[ktc] + ktcr[2] * (hw[ktc] + 10)],
+             [42, 36, 26], [0.85, 0.83, 0.78]);
+      // Control tower with press center
+      addBox(out, [px[ktc] + ktcr[0] * (hw[ktc] + 24), py[ktc] + 20, pz[ktc] + ktcr[2] * (hw[ktc] + 24)],
+             [12, 40, 12], [0.95, 0.95, 0.97]);
     }
     if (def.id === "suzuka") {
       // Sakura (cherry blossom) trees scattered among the green zones
@@ -852,9 +945,17 @@ const Tracks = (function () {
         place(k, side, d, [1.1, 1.3, 1.1], [0.32, 0.22, 0.12]);
         place(k, side, d, [3.8, 3.5 + s * 2, 3.8], [0.92, 0.55, 0.64]);
       });
+      // Theme park area beside ferris wheel (recreational buildings)
+      const ktp = Math.round(n * 0.05) % n;
+      const ktpr = [track.rx[ktp], track.ry[ktp], track.rz[ktp]];
+      for (let i = 0; i < 4; i++) {
+        const h = 8 + i * 3, d = 60 + i * 12;
+        addBox(out, [px[ktp] + ktpr[0] * d, py[ktp] + h / 2, pz[ktp] + ktpr[2] * d],
+               [24 + i * 6, h, 28], [0.6 + i * 0.05, 0.45 + i * 0.08, 0.3 + i * 0.04]);
+      }
     }
     if (def.id === "silverstone") {
-      // The Wing — curved pit-lane roof structure on the main straight
+      // The Wing — curved pit-lane roof structure on the main straight (390m long, 1200 tonnes steel)
       for (let i = 0; i < 6; i++) {
         const k = (Math.round(n * 0.01) + i * 3) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -862,11 +963,24 @@ const Tracks = (function () {
         const u = upOf(track, k);
         const rise = Math.sin((i / 5) * Math.PI) * 5;
         const scx = px[k] + r[0] * (hw[k] + 4), scy = py[k], scz = pz[k] + r[2] * (hw[k] + 4);
-        addBox(out, [scx, scy + 12 + rise * 0.5, scz], [1.5, 24 + rise, 18], [0.88, 0.88, 0.90], [r, u, t]);
-        addBox(out, [scx, scy + 25 + rise, scz], [36, 1.5, 20], [0.86, 0.86, 0.88], [r, u, t]);
+        // metallic silver polyester-coated steel panels (RAL 9006)
+        addBox(out, [scx, scy + 12 + rise * 0.5, scz], [1.5, 24 + rise, 18], [0.75, 0.75, 0.78], [r, u, t]);
+        addBox(out, [scx, scy + 25 + rise, scz], [36, 1.5, 20], [0.72, 0.72, 0.75], [r, u, t]);
+        // support structures
+        if (i > 0 && i < 5) {
+          addBox(out, [scx - r[0] * 8, scy + 18 + rise * 0.3, scz - r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
+          addBox(out, [scx + r[0] * 8, scy + 18 + rise * 0.3, scz + r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
+        }
       }
     }
     if (def.id === "bahrain") {
+      // Sakhir Tower: 9-storey conical race control with LED facade, visible at pit area
+      const ksc = Math.round(n * 0.02) % n;
+      const kr = [track.rx[ksc], track.ry[ksc], track.rz[ksc]];
+      const ksX = px[ksc] + kr[0] * (hw[ksc] + 12), ksY = py[ksc], ksZ = pz[ksc] + kr[2] * (hw[ksc] + 12);
+      addBox(out, [ksX, ksY + 20, ksZ], [14, 40, 14], [0.95, 0.95, 0.97]); // main tower
+      addBox(out, [ksX, ksY + 38, ksZ], [10, 8, 10], [0.1, 0.1, 0.12]);    // top section
+      addBox(out, [ksX, ksY + 42, ksZ], [8, 4, 8], [0.9, 0.3, 0.05]);       // orange cap
       // Arch grandstand + minaret: a nod to the circuit's Islamic architecture
       const kc = Math.round(n * 0.52) % n;
       const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
