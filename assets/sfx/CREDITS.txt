@@ -1,0 +1,5 @@
+Engine sound effects
+--------------------
+engine.mp3, accelerate.mp3 — CC0 1.0 (public domain), from the pmndrs/racing-game
+project (https://github.com/pmndrs/racing-game, "CC0 assets only").
+Used as the engine idle loop + acceleration loop; pitched by rpm/gear at runtime.
