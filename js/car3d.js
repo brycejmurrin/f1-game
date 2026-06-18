@@ -150,6 +150,15 @@ const Car3D = (function () {
     addLoft(out, -2.6, 0, 0.20, 1.25, 0.28, -1.95, 0, 0.12, 1.0, 0.14,
             [0.06, 0.06, 0.07]);
 
+    // Suspension wishbones connecting each wheel to the chassis, so the wheels
+    // don't look detached/floating. Thin dark arms, an upper and lower per wheel.
+    for (const s of [-1, 1]) {
+      addBox(out, s * 0.50, 0.24, 1.70, 0.36, 0.05, 0.06, DARK);   // front lower
+      addBox(out, s * 0.50, 0.42, 1.63, 0.36, 0.05, 0.06, DARK);   // front upper
+      addBox(out, s * 0.49, 0.26, -1.60, 0.34, 0.05, 0.06, DARK);  // rear lower
+      addBox(out, s * 0.49, 0.44, -1.53, 0.34, 0.05, 0.06, DARK);  // rear upper
+    }
+
     // Wheels: fronts z=+1.7, rears z=-1.6 (slightly wider), outer edge ±0.95.
     for (const s of [-1, 1]) {
       addWheel(out, s * 0.79, 0.34, 1.7, 0.34, 0.32);
