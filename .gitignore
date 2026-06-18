@@ -1,2 +1,7 @@
 # Agent working directories (git worktrees created by background agents)
 .claude/
+
+# Node / Playwright
+node_modules/
+test-results/
+playwright-report/
