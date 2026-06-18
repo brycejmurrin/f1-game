@@ -2,6 +2,7 @@
 
 .dh-overlay {
   position: fixed; inset: 0; z-index: 50;
+  height: 100vh; height: 100dvh; /* dvh tracks the *visible* viewport on mobile */
   display: flex; align-items: center; justify-content: center;
   background: rgba(4, 4, 8, 0.82);
   padding: calc(12px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
@@ -11,6 +12,9 @@
 .dh-card {
   width: min(760px, 96vw);
   max-height: 92vh;
+  /* dvh keeps the card within the area not covered by the browser's top/bottom
+     chrome, so the header + close button are never clipped */
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
   display: flex; flex-direction: column;
   background: #0d0d14;
   border: 1px solid rgba(255, 255, 255, 0.12);

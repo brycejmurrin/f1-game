@@ -174,6 +174,7 @@ function startRace() {
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; paused = false;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
+  els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
   Input.calibrate();
@@ -257,6 +258,7 @@ function quitToMenu() {
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
   els.overlay.hidden = false;
+  els.soundbtn.hidden = false;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0);
   if (soundOn) GameAudio.startMusic(-1);
