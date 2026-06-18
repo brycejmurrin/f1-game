@@ -68,6 +68,32 @@ const GameAudio = (function () {
     return v < 0 ? 0 : v > 1 ? 1 : v;
   }
 
+  // Find the most pitch-STABLE ~2s window of a decoded clip, so the engine loop
+  // sits on a steady-RPM stretch instead of a dynamic (revving/shifting) part.
+  // Uses zero-crossing rate per 0.1s as a cheap pitch proxy and picks the window
+  // with the lowest coefficient of variation. Returns { start, end } in seconds.
+  function findStableLoop(buf) {
+    const d = buf.getChannelData(0), sr = buf.sampleRate, N = d.length;
+    const hopN = Math.max(1, Math.floor(sr * 0.1));
+    const zc = [];
+    for (let a = 0; a + hopN < N; a += hopN) {
+      let c = 0, prev = d[a];
+      for (let j = a + 1; j < a + hopN; j++) { const v = d[j]; if ((v >= 0) !== (prev >= 0)) c++; prev = v; }
+      zc.push(c);
+    }
+    const w = Math.round(2.0 / 0.1);                 // ~2s window
+    if (zc.length < w + 2) return { start: buf.duration * 0.1, end: buf.duration * 0.9 };
+    let bestCV = Infinity, bi = 0;
+    for (let i = 0; i + w < zc.length; i++) {
+      let m = 0; for (let k = i; k < i + w; k++) m += zc[k]; m /= w;
+      if (m <= 0) continue;
+      let v = 0; for (let k = i; k < i + w; k++) { const dv = zc[k] - m; v += dv * dv; } v /= w;
+      const cv = Math.sqrt(v) / m;
+      if (cv < bestCV) { bestCV = cv; bi = i; }
+    }
+    return { start: bi * 0.1, end: (bi + w) * 0.1 };
+  }
+
   function createCtx() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
@@ -271,10 +297,12 @@ const GameAudio = (function () {
       // pitched (playbackRate) by rev/gear in setEngine.
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
       engSrcAcc = ctx.createBufferSource(); engSrcAcc.buffer = accBuf; engSrcAcc.loop = true;
-      // loop only the steady middle of each clip, skipping any quiet intro/outro
-      // so the recordings sustain cleanly when held; start playback in-region.
-      engSrcIdle.loopStart = engBuf.duration * 0.12; engSrcIdle.loopEnd = engBuf.duration * 0.92;
-      engSrcAcc.loopStart = accBuf.duration * 0.15; engSrcAcc.loopEnd = accBuf.duration * 0.9;
+      // loop the most pitch-stable ~2s stretch of each clip (steady RPM), not the
+      // whole dynamic recording, so a held throttle sustains a constant note;
+      // start playback in-region.
+      const li = findStableLoop(engBuf), la = findStableLoop(accBuf);
+      engSrcIdle.loopStart = li.start; engSrcIdle.loopEnd = li.end;
+      engSrcAcc.loopStart = la.start; engSrcAcc.loopEnd = la.end;
       engGainIdle = ctx.createGain(); engGainIdle.gain.value = 0;
       engGainAcc = ctx.createGain(); engGainAcc.gain.value = 0;
       engSrcIdle.connect(engGainIdle).connect(engFilter);
@@ -694,6 +722,6 @@ const GameAudio = (function () {
     stopMusic,
     setMusicEnabled,
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
-    debug: function () { return { samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn }; },
+    debug: function () { return { samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
 })();
