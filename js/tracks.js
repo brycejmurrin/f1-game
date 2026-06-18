@@ -968,19 +968,21 @@ const Tracks = (function () {
     }
     // COTA: Texas Hill Country terrain, scattered trees, distant ridges, utilities
     if (def.id === "cota") {
-      // Distant limestone ridge lines - increased spacing to reduce visible seams
-      for (let i = 0; i < 8; i++) {
-        const k = Math.round((i / 8) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        // Low, far ridge band: tall slabs up close read as grey walls / floating
-        // planes (especially where the track climbs above pyMin), so keep them
-        // short and well out so they sit on the horizon as distant hills.
-        const ridge_h = 22 + hash(k * 37) * 16;
-        const ridge_d = 340 + hash(k * 39) * 150;
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * ridge_d, pyMin + ridge_h / 2 - 1, pz[k] + r[2] * side * ridge_d],
-                 [240, ridge_h, 360], [0.4, 0.36, 0.28]);
-        }
+      // Distant limestone ridges. COTA is a compact, hilly loop, so offsetting big
+      // slabs perpendicular to the track lands them over the infield or an
+      // adjacent section. Instead ring them around the whole circuit footprint
+      // (centroid + max radius) so they always sit outside as a horizon backdrop.
+      let cgx = 0, cgz = 0;
+      for (let i = 0; i < n; i++) { cgx += px[i]; cgz += pz[i]; }
+      cgx /= n; cgz /= n;
+      let maxR = 0;
+      for (let i = 0; i < n; i++) { const dd = Math.hypot(px[i] - cgx, pz[i] - cgz); if (dd > maxR) maxR = dd; }
+      const ringR = maxR + 280;
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const rgx = cgx + Math.cos(a) * ringR, rgz = cgz + Math.sin(a) * ringR;
+        const ridge_h = 18 + hash(i * 37) * 16;
+        addBox(out, [rgx, pyMin + ridge_h / 2 - 1, rgz], [200, ridge_h, 200], [0.4, 0.36, 0.28]);
       }
       // Oak/cedar tree coverage (scattered natural vegetation) - reduced density to avoid clustering
       every(60, (k) => {
