@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=11">
-<link rel="stylesheet" href="css/data.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=12">
+<link rel="stylesheet" href="css/data.css?v=12">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -50,13 +50,12 @@
 <div id="announce" hidden></div>
 
 <!-- touch controls -->
+<button id="btn-throttle" class="touchbtn pedal" hidden>GAS</button>
+<button id="btn-brake" class="touchbtn pedal" hidden>BRAKE</button>
 <button id="btn-boost" class="touchbtn" hidden>BOOST</button>
 <button id="btn-ot" class="touchbtn" hidden>OT</button>
-<button id="btn-brake" class="touchbtn" hidden>BRAKE</button>
 <button id="shift-up" class="touchbtn shiftbtn" hidden>&#9650;<small>UP</small></button>
 <button id="shift-down" class="touchbtn shiftbtn" hidden>&#9660;<small>DN</small></button>
-<button id="steer-left" class="touchbtn steerbtn" hidden>&#9664;</button>
-<button id="steer-right" class="touchbtn steerbtn" hidden>&#9654;</button>
 
 <button id="pausebtn" hidden>&#10074;&#10074;</button>
 <div id="pausemenu" class="panel" hidden>
@@ -112,11 +111,11 @@
     <h2>HOW TO PLAY</h2>
     <button id="htp-close">&#10005;</button>
     <dl>
-      <dt>STEER</dt><dd>Tilt your phone (calibrates at the lights) &mdash; or touch the screen halves / &#8592;&#8594; / A D</dd>
-      <dt>THROTTLE</dt><dd>Automatic. <span class="key">BRAKE</span>: &#8595; / S / brake button</dd>
-      <dt>&#9889; BOOST</dt><dd>Hold <span class="key">Space</span> / BOOST to deploy electric power. Drains the energy bar; recharges when you brake or lift. Deploy tapers off at very high speed &mdash; 2026 rules</dd>
-      <dt>OVERTAKE</dt><dd>Within 1s of the car ahead the OT light arms. Press <span class="key">X</span> / OT for 4s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
-      <dt>GEARS</dt><dd>Toggle <span class="key">GEARS: MANUAL</span> in the pause menu. Shift up <span class="key">&#9650;</span> / <span class="key">&uarr;</span> near the redline, down <span class="key">&#9660;</span> / <span class="key">Q</span> for corner exits. The tachometer + gear show bottom-centre; auto mode shifts for you</dd>
+      <dt>STEER</dt><dd>Tilt your phone (calibrates at the lights) &mdash; or touch the left/right of the screen / A D</dd>
+      <dt>THROTTLE</dt><dd>Hold <span class="key">GAS</span> / <span class="key">W</span> / <span class="key">&uarr;</span> to accelerate. <span class="key">BRAKE</span>: hold <span class="key">BRAKE</span> / <span class="key">S</span> / <span class="key">&darr;</span></dd>
+      <dt>&#9889; BOOST</dt><dd>Tap <span class="key">BOOST</span> / <span class="key">Space</span> to toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
+      <dt>OVERTAKE</dt><dd>Within 1s of the car ahead the OT light arms. Tap <span class="key">OT</span> / <span class="key">X</span> for 4s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
+      <dt>GEARS</dt><dd>Toggle <span class="key">GEARS: MANUAL</span> in the pause menu. Shift up <span class="key">&#9650;</span> / <span class="key">E</span> near the redline, down <span class="key">&#9660;</span> / <span class="key">Q</span> for corner exits. The tachometer + gear show bottom-centre; auto mode shifts for you</dd>
       <dt>TRACK LIMITS</dt><dd>Grass is slow. Cutting the track repeatedly earns a +5s penalty</dd>
       <dt>RACE</dt><dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
       <dt>SEASON</dt><dd>All 12 circuits in calendar order &mdash; championship standings saved between visits</dd>
@@ -131,15 +130,15 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=11"></script>
-<script src="js/glx.js?v=11"></script>
-<script src="js/teams.js?v=11"></script>
-<script src="js/tracks.js?v=11"></script>
-<script src="js/car3d.js?v=11"></script>
-<script src="js/input.js?v=11"></script>
-<script src="js/audio.js?v=11"></script>
-<script src="js/api.js?v=11"></script>
-<script src="js/data.js?v=11"></script>
-<script src="js/game.js?v=11"></script>
+<script src="js/mat4.js?v=12"></script>
+<script src="js/glx.js?v=12"></script>
+<script src="js/teams.js?v=12"></script>
+<script src="js/tracks.js?v=12"></script>
+<script src="js/car3d.js?v=12"></script>
+<script src="js/input.js?v=12"></script>
+<script src="js/audio.js?v=12"></script>
+<script src="js/api.js?v=12"></script>
+<script src="js/data.js?v=12"></script>
+<script src="js/game.js?v=12"></script>
 </body>
 </html>

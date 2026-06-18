@@ -23,7 +23,7 @@ const els = {
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
-  steerL: $("steer-left"), steerR: $("steer-right"),
+  btnThrottle: $("btn-throttle"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
@@ -47,6 +47,7 @@ let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{i
 const VMAX = 92;            // m/s base (~330 km/h)
 const ACCEL = 17;           // m/s^2 at low speed
 const BRAKE = 34;
+const COAST_DRAG = 7;       // m/s^2 deceleration when off the throttle
 const LAT_MAX = 26;         // m/s^2 cornering grip
 const STEER_VMAX = 17;      // lateral m/s at full lock, full speed
 const GRASS_V = 30;         // crawl speed on grass
@@ -131,7 +132,7 @@ function makeCars() {
         team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
-        gear: 1, rpm: IDLE_RPM, shiftT: 0,
+        gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otCool: 0, deploying: false,
         lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
@@ -203,13 +204,10 @@ function startRace() {
 
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
-  els.btnBoost.hidden = !t; els.btnOT.hidden = !t; els.btnBrake.hidden = !t;
+  els.btnThrottle.hidden = !t; els.btnBrake.hidden = !t;
+  els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
   els.shiftUp.hidden = !(t && manualMode);
   els.shiftDown.hidden = !(t && manualMode);
-  // tilt ON => no steer arrows at all (touch screen-halves still steer if the
-  // sensor isn't actually delivering data); tilt OFF => show the arrows
-  const steerBtns = t && !Input.useTilt();
-  els.steerL.hidden = !steerBtns; els.steerR.hidden = !steerBtns;
 }
 
 function endRace() {
@@ -370,13 +368,15 @@ function updateCar(c, dt, ranked) {
   let deploy = 0;
   c.otCool = Math.max(0, c.otCool - dt);
   if (c.otT > 0) c.otT -= dt;
-  const wantBoost = c.isPlayer ? Input.boosting()
+  if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
+  const wantBoost = c.isPlayer ? c.boostOn
     : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25);
   if (wantBoost && c.energy > 0) {
     const taper = c.otT > 0 ? 1 : clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
     deploy = DEPLOY_A * taper;
     c.energy = Math.max(0, c.energy - DRAIN * dt);
     c.deploying = deploy > 0.4;
+    if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
   } else c.deploying = false;
 
   // --- overtake mode ---
@@ -420,9 +420,15 @@ function updateCar(c, dt, ranked) {
   }
 
   // --- integrate speed ---
+  // throttle is manual for the player (a held button); AI always drives
+  const onThrottle = c.isPlayer ? Input.throttle() : true;
   if (braking) {
     c.speed = Math.max(0, c.speed - BRAKE * dt);
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
+  } else if (!onThrottle) {
+    // coasting: gentle engine-braking/drag, plus a little energy recovery
+    c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
     const a = (ACCEL * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
@@ -605,6 +611,10 @@ function updateHud(force) {
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
   els.rpmFill.style.width = (rpmFrac * 100).toFixed(0) + "%";
   els.tach.classList.toggle("redline", player.rpm > MAX_RPM * 0.92);
+  // toggle-button states
+  els.btnBoost.classList.toggle("on", player.boostOn);
+  els.btnOT.classList.toggle("on", player.otT > 0);
+  els.btnOT.classList.toggle("armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   els.ot.className = ot;
   els.ot.textContent = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE";
@@ -652,15 +662,7 @@ function tick(now) {
   if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
   update(dt);
   render(dt);
-  if (state === "race" || state === "count") { updateHud(false); refreshSteerBtns(); }
-}
-
-// Keep the on-screen steer arrows in sync with the tilt preference: tilt ON
-// hides them, tilt OFF shows them.
-function refreshSteerBtns() {
-  if (!Input.touchControlsNeeded()) return;
-  const hide = Input.useTilt();
-  if (els.steerL.hidden !== hide) { els.steerL.hidden = hide; els.steerR.hidden = hide; }
+  if (state === "race" || state === "count") updateHud(false);
 }
 
 // ---------- UI wiring ----------
