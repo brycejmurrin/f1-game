@@ -90,7 +90,7 @@
 <!-- select screen -->
 <div id="select" hidden>
   <h2 id="select-title">SELECT</h2>
-  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><button id="sel-customize" class="sel-edit">&#9998; CUSTOMIZE MY TEAM</button></div>
+  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><div class="sel-edit-row"><button id="sel-customize" class="sel-edit">&#9998; MY TEAM</button><button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button></div></div>
   <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-tracks"></div></div>
   <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
   <div class="sel-actions">
@@ -123,6 +123,16 @@
   <div class="sel-actions">
     <button id="cz-cancel">CANCEL</button>
     <button id="cz-save" class="bigbtn">SAVE</button>
+  </div>
+</div>
+
+<!-- car setup -->
+<div id="carsetup" class="panel" hidden>
+  <h2>CAR SETUP</h2>
+  <div id="cs-team"></div>
+  <div id="cs-body"></div>
+  <div class="sel-actions" style="margin-top:18px">
+    <button id="cs-done" class="bigbtn">DONE</button>
   </div>
 </div>
 
@@ -162,6 +172,7 @@
 <script src="js/audio.js?v=46"></script>
 <script src="js/api.js?v=46"></script>
 <script src="js/data.js?v=46"></script>
+<script src="js/parts.js?v=46"></script>
 <script src="js/game.js?v=46"></script>
 </body>
 </html>

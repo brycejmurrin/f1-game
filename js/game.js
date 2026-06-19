@@ -57,6 +57,7 @@ function ttBoardAdd(trackId, entry) {
 const DEFAULT_CUSTOM = {
   id: "custom", name: "My Team", short: "YOU", engine: "Custom", tier: 2, custom: true,
   color: [0.13, 0.79, 0.85], color2: [0.96, 0.86, 0.0],
+  stats: { speed: 84, accel: 82, cornering: 83, braking: 81 },
   drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
 };
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
@@ -158,6 +159,7 @@ let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
+let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let lastFrame = 0;
 let announceT = 0;
 let hudT = 0;
@@ -195,6 +197,22 @@ function basisMat(r, u, f, p, out) {
 }
 const tmpMat = new Float32Array(16);
 const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
+
+// ---------- parts / player mods ----------
+function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
+function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
+
+function recomputePlayerMods() {
+  const team = player ? player.team : Teams.LIST[teamIdx];
+  const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
+  const mods = Parts.getMods(getTeamParts(team.id));
+  playerMods = {
+    speed:     Parts.statMult(stats.speed)     * mods.speed,
+    accel:     Parts.statMult(stats.accel)     * mods.accel,
+    cornering: Parts.statMult(stats.cornering) * mods.cornering,
+    braking:   Parts.statMult(stats.braking)   * mods.braking,
+  };
+}
 
 // ---------- car setup ----------
 function makeCars() {
@@ -289,6 +307,7 @@ function startRace() {
     lapsTarget = GAME_LAPS;
   }
   gridUp();
+  recomputePlayerMods();
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
@@ -607,7 +626,7 @@ function updateCar(c, dt, ranked) {
   const dd = DIFF[difficulty];
 
   // --- speed targets ---
-  let vmax = VMAX * (c.isPlayer ? 1.0 : TIER_V[c.tier] * c.skill * dd.ai);
+  let vmax = VMAX * (c.isPlayer ? playerMods.speed : TIER_V[c.tier] * c.skill * dd.ai);
   // rubber band for AI
   if (!c.isPlayer) {
     const gap = player.prog - c.prog;
@@ -714,14 +733,14 @@ function updateCar(c, dt, ranked) {
   const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
   const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || Input.throttle()) : true;
   if (braking) {
-    c.speed = Math.max(0, c.speed - BRAKE * dt);
+    c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else if (!onThrottle) {
     // coasting: gentle engine-braking/drag, plus a little energy recovery
     c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
-    const a = (ACCEL * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
@@ -843,7 +862,7 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * dt;
+  c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * dt;
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
@@ -1146,6 +1165,110 @@ function tick(now) {
   if (state === "race" || state === "count") updateHud(false);
 }
 
+// ---------- car setup panel ----------
+const CS_STATS = [
+  { key: "speed",     label: "SPEED" },
+  { key: "accel",     label: "ACCEL" },
+  { key: "cornering", label: "CORNERING" },
+  { key: "braking",   label: "BRAKING" },
+];
+
+function buildSetup() {
+  const team = Teams.LIST[teamIdx];
+  const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
+  const parts = getTeamParts(team.id);
+  const mods = Parts.getMods(parts);
+
+  $("cs-team").textContent = team.name.toUpperCase();
+
+  const body = $("cs-body");
+  body.textContent = "";
+
+  // stat bars
+  const statDiv = document.createElement("div");
+  statDiv.className = "cs-stats";
+  for (const { key, label } of CS_STATS) {
+    const base = stats[key] || 75;
+    const effective = Math.round(Math.min(110, base * mods[key]));
+    const delta = effective - base;
+
+    const row = document.createElement("div");
+    row.className = "cs-stat-row";
+
+    const lbl = document.createElement("span");
+    lbl.className = "cs-stat-label";
+    lbl.textContent = label;
+
+    const barWrap = document.createElement("div");
+    barWrap.className = "cs-stat-bar-wrap";
+
+    const baseBar = document.createElement("div");
+    baseBar.className = "cs-stat-base";
+    baseBar.style.width = Math.min(base, 100) + "%";
+
+    const boostBar = document.createElement("div");
+    boostBar.className = "cs-stat-boost" + (delta < 0 ? " penalty" : "");
+    if (delta >= 0) {
+      boostBar.style.left = Math.min(base, 100) + "%";
+      boostBar.style.width = Math.min(delta, 10) + "%";
+    } else {
+      boostBar.style.left = Math.max(0, base + delta) + "%";
+      boostBar.style.width = Math.min(-delta, base) + "%";
+    }
+
+    barWrap.append(baseBar, boostBar);
+
+    const val = document.createElement("span");
+    val.className = "cs-stat-val" + (delta > 0 ? " up" : delta < 0 ? " down" : "");
+    val.textContent = effective;
+
+    row.append(lbl, barWrap, val);
+    statDiv.appendChild(row);
+  }
+  body.appendChild(statDiv);
+
+  // part categories
+  for (const cat of Parts.CATALOG) {
+    const section = document.createElement("div");
+    section.className = "cs-cat-section";
+
+    const catLbl = document.createElement("div");
+    catLbl.className = "cs-cat";
+    catLbl.textContent = cat.label;
+    section.appendChild(catLbl);
+
+    const desc = document.createElement("div");
+    desc.className = "cs-desc";
+    const cur = cat.options.find((o) => o.id === (parts[cat.id] || Parts.DEFAULTS[cat.id]));
+    desc.textContent = cur ? cur.desc : "";
+    section.appendChild(desc);
+
+    const chips = document.createElement("div");
+    chips.className = "cs-chips";
+    for (const opt of cat.options) {
+      const active = (parts[cat.id] || Parts.DEFAULTS[cat.id]) === opt.id;
+      const chip = document.createElement("button");
+      chip.className = "cs-chip" + (active ? " active" : "");
+      chip.textContent = opt.label;
+      chip.onclick = () => {
+        const p = getTeamParts(team.id);
+        p[cat.id] = opt.id;
+        saveTeamParts(team.id, p);
+        if (soundOn) GameAudio.uiTick();
+        buildSetup();
+      };
+      chips.appendChild(chip);
+    }
+    section.appendChild(chips);
+    body.appendChild(section);
+  }
+}
+
+function openSetup() {
+  buildSetup();
+  $("carsetup").hidden = false;
+}
+
 // ---------- UI wiring ----------
 function buildSelect() {
   els.selTitle.textContent = seasonMode ? "SEASON — ROUND " + ((season && season.round || 0) + 1)
@@ -1301,6 +1424,8 @@ function openCustomize() {
   $(id).addEventListener("input", czPreview);
 });
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
+$("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
+$("cs-done").onclick = () => { $("carsetup").hidden = true; recomputePlayerMods(); };
 $("cz-cancel").onclick = () => { els.customize.hidden = true; };
 $("cz-save").onclick = () => {
   const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
