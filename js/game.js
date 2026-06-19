@@ -136,6 +136,9 @@ const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const LAT_MAX = 22;         // m/s^2 cornering grip
 const STEER_VMAX = 15;      // lateral m/s at full lock, full speed
+const CENTRIFUGAL = 0.33;   // outward drift per (curvature x speed^2): the car
+                            // runs wide in corners unless you steer in, so
+                            // holding the throttle no longer auto-follows the track
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -936,6 +939,13 @@ function updateCar(c, dt, ranked) {
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * gripMult() * dt;
+  // Centrifugal run-off (player only): the car wants to go straight, so on a
+  // curve it drifts toward the OUTSIDE of the turn (opposite the curvature sign)
+  // proportional to curvature x speed^2. You must steer INTO the corner to hold
+  // your line — holding the throttle without steering runs you wide instead of
+  // auto-following the track. Better cornering parts boost steer authority above;
+  // low-grip weather drops that authority so you run wider in the wet.
+  if (c.isPlayer) c.x -= k * c.speed * c.speed * CENTRIFUGAL * dt;
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
@@ -973,7 +983,10 @@ function updateCar(c, dt, ranked) {
   // Drive the visual nose yaw from the SMOOTHED steer (steerVis), not the raw
   // per-frame steer, so residual steering twitch doesn't wobble the nose. A
   // sustained turn-in still shows; a one-frame correction is filtered out.
-  c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + clamp(k * c.speed * 0.14, -0.28, 0.28), 6, dt);
+  // The AI also adds a curvature term so its nose points into corners; the
+  // player's nose follows only their own steering (no auto-yaw into the turn).
+  const curveYaw = c.isPlayer ? 0 : clamp(k * c.speed * 0.14, -0.28, 0.28);
+  c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + curveYaw, 6, dt);
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
