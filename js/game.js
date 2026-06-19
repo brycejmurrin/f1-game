@@ -201,6 +201,10 @@ let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
+// Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
+// so the camera still settles to a parked view yet nothing moves — giving the
+// visual-regression harness a deterministic frame. Only set by __apex.park().
+let frozen = false;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let lastFrame = 0;
 let announceT = 0;
@@ -413,7 +417,7 @@ function startRace() {
   }
   gridUp();
   recomputePlayerMods();
-  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false;
+  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -1323,7 +1327,7 @@ function tick(now) {
   // shake still plays out.
   let simDt = dt;
   if (hitStop > 0) { hitStop = Math.max(0, hitStop - dt); simDt = dt * 0.15; }
-  update(simDt);
+  if (!frozen) update(simDt);   // frozen: hold the sim still, keep rendering
   render(dt);
   if (state === "race" || state === "count") updateHud(false);
 }
@@ -1778,8 +1782,10 @@ window.__apex = {
     state = "race"; raceT = Math.max(raceT, 1);
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
-    cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); } });
-    return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
+    cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
+    const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
+    frozen = true;   // hold the scene still for a deterministic screenshot
+    return r;
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
