@@ -785,19 +785,6 @@ const Tracks = (function () {
     // --- circuit-specific surrounding landscape features with comprehensive filler ---
     // Bahrain: desert dunes, Persian Gulf, utility infrastructure
     if (def.id === "bahrain") {
-      // Distant dune layers (depth cues). Kept low and pushed well back so they
-      // read as a faint sand horizon rather than a continuous tan wall ringing
-      // the circuit.
-      for (let i = 0; i < 12; i++) {
-        const k = Math.round((i / 12) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const dune_h = 5 + hash(k * 17) * 5;
-        const dune_d = 320 + hash(k * 19) * 120;
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * dune_d, py[k] + dune_h / 2 - 1, pz[k] + r[2] * side * dune_d],
-                 [180, dune_h, 200], [0.74, 0.68, 0.52]);
-        }
-      }
       // Light towers (floodlights): 12 units, 30-35m tall
       every(95, (k) => {
         for (const side of [-1, 1]) {
