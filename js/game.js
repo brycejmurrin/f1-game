@@ -520,7 +520,8 @@ function buildResults(order) {
     : track.def.name + " RESULT";
   order.forEach((c, i) => {
     const row = document.createElement("div");
-    row.className = "res-row" + (c.isPlayer ? " you" : "");
+    const podium = i === 0 ? " p1" : i === 1 ? " p2" : i === 2 ? " p3" : "";
+    row.className = "res-row" + podium + (c.isPlayer ? " you" : "");
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
     const sw = document.createElement("span"); sw.className = "res-swatch";
     sw.style.background = cssCol(c.team.color);
