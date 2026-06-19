@@ -1022,6 +1022,10 @@ function updateCar(c, dt, ranked) {
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * gripMult() * dt;
+  // Without this the Frenet frame auto-steers the car: constant x = automatic
+  // corner-following, no input needed. Counter-force scaled to ~5-10% steering
+  // lock for a typical corner — noticeable but not aggressive.
+  if (c.isPlayer) c.x -= k * c.speed * c.speed * 0.08 * dt;
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
