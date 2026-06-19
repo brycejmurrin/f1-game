@@ -14,16 +14,10 @@ async function waitForTrack(page, timeout = 10_000) {
 
 async function goToRace(page, circuit) {
   await page.goto("/");
-  await page.locator("#mb-race").click();
-  const chips = await page.locator("#sel-tracks .sel-chip").all();
-  for (const chip of chips) {
-    const text = await chip.innerText();
-    if (text.toLowerCase().includes(circuit)) {
-      await chip.click();
-      break;
-    }
-  }
-  await page.locator("#sel-go").click();
+  // Start the race directly via the debug hook — robust against menu/flow changes
+  // (the menu gained a race-settings step that the old chip-driven flow skipped).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
+  await page.evaluate((c) => window.__apex.race(c), circuit);
   await waitForTrack(page);
 }
 
