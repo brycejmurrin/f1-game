@@ -84,7 +84,7 @@
 
       // ================= START / FINISH STRAIGHT =================
       // Pit building (L, close): very long low white slab + thin glass stripe.
-      building(K(0.00), -1, 9, 14, 11, 150, { wall: PALE, window: [0.30, 0.34, 0.40], floor: 4 });
+      building(K(0.00), -1, 2, 14, 11, 150, { wall: PALE, window: [0.30, 0.34, 0.40], floor: 4 });
       wall(0.97, 0.05, -1, 3, 1.0, [0.85, 0.85, 0.85]);  // pit wall
 
       // Main Grandstand (R, close): the hero — long smooth pale crescent stepped

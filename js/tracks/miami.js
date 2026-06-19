@@ -69,7 +69,7 @@
         const side = (i % 2) ? 1 : -1;
         const col = PASTELS[(i * 2 + 3) % PASTELS.length];
         const h = 22 + hash(i * 17) * 64;
-        building(k, side, 150 + hash(i * 23) * 90, 14 + hash(i * 5) * 8,
+        building(k, side, 150 + hash(i * 23) * 90 - (14 + hash(i * 5) * 8) / 2, 14 + hash(i * 5) * 8,
           h, 14 + hash(i * 29) * 6,
           { wall: col, window: GLASS, floor: 5 + (i % 3) });
       }
@@ -121,7 +121,7 @@
       grandstand(0.06, -1, 16, 70, GREYWHITE, TEAL);
       // pastel hospitality cubes behind T1 stands
       for (let i = 0; i < 5; i++) {
-        building(K(0.05 + i * 0.008), 1, 34 + (i % 2) * 14, 16, 16 + (i % 3) * 10, 16,
+        building(K(0.05 + i * 0.008), 1, 26 + (i % 2) * 14, 16, 16 + (i % 3) * 10, 16,
           { wall: PASTELS[i % PASTELS.length], window: GLASS, floor: 4 });
       }
       for (let i = 0; i < 7; i++) palm(K(0.04 + i * 0.006), 1, 10 + (i % 2) * 5, 8, PALM_GREEN);
@@ -145,7 +145,7 @@
       }
       // pastel low-rise band behind the palm cluster
       for (let i = 0; i < 6; i++) {
-        building(K(0.19 + i * 0.007), -1, 40 + (i % 2) * 16, 16, 14 + (i % 3) * 9, 16,
+        building(K(0.19 + i * 0.007), -1, 32 + (i % 2) * 16, 16, 14 + (i % 3) * 9, 16,
           { wall: PASTELS[(i + 2) % PASTELS.length], window: GLASS, floor: 4 });
       }
 
@@ -190,7 +190,7 @@
       for (let i = 0; i < 10; i++) {
         const k = K(0.44 + i * 0.006);
         const col = PASTELS[i % PASTELS.length];
-        building(k, -1, 30 + (i % 3) * 18, 16, 14 + (i % 4) * 9, 16,
+        building(k, -1, 22 + (i % 3) * 18, 16, 14 + (i % 4) * 9, 16,
           { wall: col, window: GLASS, floor: 4 });
       }
       for (let i = 0; i < 8; i++) palm(K(0.43 + i * 0.005), -1, 11 + (i % 2) * 5, 8, PALM_GREEN);
@@ -205,7 +205,7 @@
       billboard(K(0.54), 1, 10, 16, 8, PINK);
       // pastel hospitality strip behind the braking zone
       for (let i = 0; i < 5; i++) {
-        building(K(0.51 + i * 0.007), 1, 30 + (i % 2) * 16, 16, 16 + (i % 3) * 8, 16,
+        building(K(0.51 + i * 0.007), 1, 22 + (i % 2) * 16, 16, 16 + (i % 3) * 8, 16,
           { wall: PASTELS[(i + 1) % PASTELS.length], window: GLASS, floor: 4 });
       }
 
@@ -239,7 +239,7 @@
       grandstand(0.78, 1, 16, 90, GREYWHITE, PINK);
       // pastel hospitality cubes behind the DRS stands + palms
       for (let i = 0; i < 6; i++) {
-        building(K(0.77 + i * 0.007), -1, 34 + (i % 2) * 16, 16, 15 + (i % 3) * 9, 16,
+        building(K(0.77 + i * 0.007), -1, 26 + (i % 2) * 16, 16, 15 + (i % 3) * 9, 16,
           { wall: PASTELS[i % PASTELS.length], window: GLASS, floor: 4 });
       }
       for (let i = 0; i < 8; i++) palm(K(0.76 + i * 0.006), 1, 12 + (i % 2) * 5, 8, PALM_GREEN);
@@ -249,7 +249,7 @@
       // ===================================================================
       for (let i = 0; i < 10; i++) {
         const k = K(0.88 + i * 0.008);
-        building(k, 1, 26 + (i % 3) * 16, 18, 12 + (i % 3) * 7, 22,
+        building(k, 1, 17 + (i % 3) * 16, 18, 12 + (i % 3) * 7, 22,
           { wall: (i % 4) ? WHITE : PASTELS[i % PASTELS.length], window: GLASS, floor: 3 });
       }
       for (let i = 0; i < 9; i++) palm(K(0.89 + i * 0.006), 1, 12 + (i % 2) * 4, 8, PALM_GREEN);

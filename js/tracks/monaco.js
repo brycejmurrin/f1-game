@@ -78,17 +78,17 @@
         const wNear = 16 + r2 * 12;
         const hNear = 16 + r * 30;
         if (!onTrack(anchor(k, side, dNear).c[0], anchor(k, side, dNear).c[2], 6))
-          building(k, side, dNear, wNear, hNear, 14, { wall: col, window: WIN, floor: 8 });
+          building(k, side, dNear - wNear / 2, wNear, hNear, 14, { wall: col, window: WIN, floor: 8 });
         // mid tier — set back, taller, climbing the hill
         if (i % 2 === 0) {
           const dm = dNear + 20 + r2 * 10;
-          building(K(s + 0.006), side, dm, 18 + r * 10, hNear + 12 + r2 * 16, 15,
+          building(K(s + 0.006), side, dm - (18 + r * 10) / 2, 18 + r * 10, hNear + 12 + r2 * 16, 15,
                    { wall: PASTELS[(i + 2) % PASTELS.length], window: WIN, floor: 9 });
         }
         // far tier — distant tall slabs forming the skyline crest
         if (i % 4 === 0) {
           const df = dNear + 44 + r * 16;
-          building(K(s + 0.011), side, df, 22 + r2 * 12, hNear + 26 + r * 20, 16,
+          building(K(s + 0.011), side, df - (22 + r2 * 12) / 2, 22 + r2 * 12, hNear + 26 + r * 20, 16,
                    { wall: PASTELS[(i + 4) % PASTELS.length], window: WIN, floor: 10 });
         }
       }
@@ -120,11 +120,11 @@
         const col = PASTELS[(i + 1) % PASTELS.length];
         const h = 22 + hash(k * 13 + i) * 22;
         const dist = 26 + (i % 3) * 9;          // tiered back from the kerb
-        building(k, side, dist, 20 + hash(k * 7) * 8, h, 16, { wall: col, window: WIN, floor: 7 });
+        building(k, side, dist - (20 + hash(k * 7) * 8) / 2, 20 + hash(k * 7) * 8, h, 16, { wall: col, window: WIN, floor: 7 });
         // an upper tier set further back to read as terraces climbing the rock
         if (i % 2 === 0) {
           const k2 = K(s + 0.008);
-          building(k2, side, dist + 22, 16, h + 10, 14, { wall: PASTELS[i % PASTELS.length], window: WIN, floor: 7 });
+          building(k2, side, dist + 14, 16, h + 10, 14, { wall: PASTELS[i % PASTELS.length], window: WIN, floor: 7 });
         }
       }
 
@@ -156,9 +156,9 @@
       // ---- Fairmont hairpin hotel (s=0.40, R close): tall pale block wrapping bend ----
       {
         const k = K(0.40);
-        building(k, 1, 14, 20, 48, 30, { wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, setback: true });
-        building(K(0.385), 1, 16, 22, 40, 18, { wall: CREAM, window: WIN, floor: 6 });
-        building(K(0.415), 1, 16, 22, 42, 18, { wall: [0.88, 0.84, 0.76], window: WIN, floor: 6 });
+        building(k, 1, 4, 20, 48, 30, { wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, setback: true });
+        building(K(0.385), 1, 5, 22, 40, 18, { wall: CREAM, window: WIN, floor: 6 });
+        building(K(0.415), 1, 5, 22, 42, 18, { wall: [0.88, 0.84, 0.76], window: WIN, floor: 6 });
       }
 
       // ---- Tunnel (s=0.55, both): dark enclosing roof + side walls ----
@@ -210,7 +210,7 @@
       // ---- Tabac waterfront buildings (s=0.75, R mid): pastel block row ----
       for (let i = 0; i < 3; i++) {
         const k = K(0.71 + i * 0.033);
-        building(k, 1, 18, 18, 24 + hash(k * 5) * 12, 14, { wall: PASTELS[i % PASTELS.length], window: WIN, floor: 6 });
+        building(k, 1, 9, 18, 24 + hash(k * 5) * 12, 14, { wall: PASTELS[i % PASTELS.length], window: WIN, floor: 6 });
       }
 
       // ---- Swimming Pool section (s=0.80, L close): turquoise rect + white edge ----

@@ -61,7 +61,7 @@
           const w = 18 + hash(i * 3) * 22;
           const h = 55 + hash(i * 11) * 130;             // tall, varied CBD
           const tint = hash(i * 19);
-          building(k, side, dist, w, h, w, {
+          building(k, side, dist - w / 2, w, h, w, {
             wall: [0.09, 0.11, 0.18],
             window: tint < 0.2 ? WIN_WARM : (tint < 0.5 ? WIN_CYAN : WIN_BLUE),
             floor: 22,
@@ -69,7 +69,7 @@
           // a shorter infill tower hard against it on the same side fills any gap
           const w2 = 14 + hash(i * 23) * 14;
           const h2 = 40 + hash(i * 29) * 70;
-          building(k, side, dist + w * 0.6 + w2 * 0.6 + 6, w2, h2, w2, {
+          building(k, side, dist + w * 0.6 + w2 * 0.6 + 6 - w2 / 2, w2, h2, w2, {
             wall: [0.08, 0.1, 0.16], window: WIN_BLUE, floor: 22,
           });
         }
@@ -120,7 +120,7 @@
       {
         const k = K(0.34);
         for (let i = 0; i < 5; i++)
-          building(k, -1, 56 + i * 26, 24, 40 + i * 12, 24, { wall: [0.12, 0.14, 0.2], window: i % 2 ? WIN_WARM : WIN_BLUE, floor: 12 });
+          building(k, -1, 44 + i * 26, 24, 40 + i * 12, 24, { wall: [0.12, 0.14, 0.2], window: i % 2 ? WIN_WARM : WIN_BLUE, floor: 12 });
         billboard(k, -1, 12, 20, 12, NEON[0]);
         billboard(K(0.355), -1, 11, 18, 11, NEON[1]);
         billboard(K(0.37), -1, 10, 16, 10, NEON[2]);
@@ -130,7 +130,7 @@
       // s 0.45 R far — distant skyline band over the bay (denser, lit-window reflections)
       for (let i = 0; i < 10; i++) {
         backdrop(K(0.45), 1, 190 + i * 22, [34, 50 + hash(i * 13) * 80, 30], [0.07, 0.09, 0.16]);
-        if (i % 2) building(K(0.45), 1, 150 + i * 22, 18, 50 + hash(i * 7) * 60, 18, { wall: [0.08, 0.1, 0.17], window: WIN_CYAN, floor: 22 });
+        if (i % 2) building(K(0.45), 1, 141 + i * 22, 18, 50 + hash(i * 7) * 60, 18, { wall: [0.08, 0.1, 0.17], window: WIN_CYAN, floor: 22 });
       }
       // bright reflection strip on the black bay water (s 0.45)
       for (let i = 0; i < 6; i++) {
@@ -210,8 +210,8 @@
         billboard(K(0.96), -1, 10, 17, 11, NEON[3]);
         billboard(K(0.98), 1, 10, 15, 10, NEON[2]);
         // pit straight low buildings L / stand R supported by CBD already above
-        building(K(0.0), -1, 30, 30, 16, 20, { wall: [0.15, 0.16, 0.2], window: WIN_WARM });
-        building(K(0.02), -1, 34, 26, 22, 20, { wall: [0.12, 0.14, 0.2], window: WIN_BLUE, floor: 12 });
+        building(K(0.0), -1, 15, 30, 16, 20, { wall: [0.15, 0.16, 0.2], window: WIN_WARM });
+        building(K(0.02), -1, 21, 26, 22, 20, { wall: [0.12, 0.14, 0.2], window: WIN_BLUE, floor: 12 });
       }
 
       // ===================================================================

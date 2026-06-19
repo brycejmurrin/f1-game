@@ -88,18 +88,18 @@
       }
 
       // --- s 0.35 R mid: Venetian tower cluster — tall warm-cream stack, lit grid ---
-      building(K(0.35), 1, 70, 38, 92, 38, { wall: [0.62, 0.58, 0.50], window: WARM, floor: 7 });
-      building(K(0.36), 1, 96, 30, 70, 30, { wall: [0.60, 0.56, 0.48], window: WARM, floor: 7 });
+      building(K(0.35), 1, 51, 38, 92, 38, { wall: [0.62, 0.58, 0.50], window: WARM, floor: 7 });
+      building(K(0.36), 1, 81, 30, 70, 30, { wall: [0.60, 0.56, 0.48], window: WARM, floor: 7 });
 
       // --- s 0.45 R far: extra red-rock silhouette already handled by ring; add a near low ridge ---
       backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
 
       // --- s 0.50 L mid: Strip casino wall — Mirage/Caesars stacked warm-glow towers ---
-      building(K(0.50), -1, 80, 46, 120, 40, { wall: [0.30, 0.27, 0.24], window: WARM, floor: 8 });
-      building(K(0.52), -1, 110, 34, 86, 30, { wall: [0.28, 0.26, 0.24], window: WARM, floor: 8 });
+      building(K(0.50), -1, 57, 46, 120, 40, { wall: [0.30, 0.27, 0.24], window: WARM, floor: 8 });
+      building(K(0.52), -1, 93, 34, 86, 30, { wall: [0.28, 0.26, 0.24], window: WARM, floor: 8 });
 
       // --- s 0.58 L mid: Caesars Palace — wide ivory box, gold up-lights ---
-      building(K(0.58), -1, 76, 60, 70, 44, { wall: [0.70, 0.66, 0.58], window: WARM, floor: 7 });
+      building(K(0.58), -1, 46, 60, 70, 44, { wall: [0.70, 0.66, 0.58], window: WARM, floor: 7 });
       place(K(0.58), -1, 30, [40, 2.0, 6], WARM);   // gold up-light strip at base
 
       // --- s 0.64 L near: Paris Las Vegas — Eiffel replica via tapered tower, amber spots ---
@@ -111,7 +111,7 @@
       billboard(K(0.71), 1, 34, 14, 9, CYAN);
 
       // --- s 0.74 L mid: Bellagio — long low elegant box + blue fountain-pool strip ---
-      building(K(0.74), -1, 70, 64, 48, 34, { wall: [0.52, 0.50, 0.46], window: WARM, floor: 6 });
+      building(K(0.74), -1, 38, 64, 48, 34, { wall: [0.52, 0.50, 0.46], window: WARM, floor: 6 });
       place(K(0.74), -1, 20, [16, 0.6, 60], [0.10, 0.35, 0.70]);   // fountain pool sheen
       place(K(0.75), -1, 20, [12, 0.6, 40], [0.12, 0.45, 0.80]);
 
@@ -157,7 +157,7 @@
         // Sparser taller signature casino towers punched along the canyon (lit grid).
         for (let j = 0; j < 7; j++) {
           const s = s0 + (j + 0.5) / 7 * span, side = (j % 2) ? -1 : 1;
-          building(K(s), side, 124, 40, 96 + hash(j * 17) * 60, 30,
+          building(K(s), side, 104, 40, 96 + hash(j * 17) * 60, 30,
             { wall: [0.22, 0.20, 0.20], window: (j % 2) ? WARM : CYAN, floor: 16 });
         }
         // Strip-side neon billboards + palms threaded along the canyon edge.

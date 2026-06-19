@@ -101,7 +101,7 @@
 
       // ---- s=0: new pit complex (L) facing the main covered grandstand (R) ----
       // Long low white/grey pit slab with a thin VIP terrace stacked on top.
-      building(k(0.00), -1, 9, 14, 10, 70, { wall: WHITE, window: [0.36, 0.42, 0.48], floor: 5 });
+      building(k(0.00), -1, 2, 14, 10, 70, { wall: WHITE, window: [0.36, 0.42, 0.48], floor: 5 });
       {
         const a = anchor(k(0.00), -1, 9);
         addBox(out, vadd(a.c, a.u, 11.5), [10, 2.6, 50], [0.80, 0.82, 0.86], [a.r, a.u, a.t]); // VIP terrace box

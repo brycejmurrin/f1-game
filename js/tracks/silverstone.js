@@ -112,7 +112,7 @@
 
       // ---- The Wing: long low pit/paddock building with a thin roof blade (s≈0.45 R) ----
       // sweeping white-grey slab, far longer than tall, dark glazing band
-      building(k(0.45), 1, 12, 16, 12, 200, {
+      building(k(0.45), 1, 4, 16, 12, 200, {
         wall: [0.80, 0.81, 0.84], window: [0.16, 0.20, 0.26], floor: 5 });
       // thin cantilevered roof fin running the length of the building
       {
@@ -122,7 +122,7 @@
       // tall stepped Wing grandstands flanking it (s≈0.46 R)
       grandstand(0.46, 1, 11, 90, [0.50, 0.51, 0.56], [0.58, 0.30, 0.30]);
       // BRDC clubhouse set back (s≈0.48 R)
-      building(k(0.48), 1, 40, 24, 9, 20, { wall: [0.78, 0.78, 0.74], window: [0.20, 0.26, 0.32] });
+      building(k(0.48), 1, 28, 24, 9, 20, { wall: [0.78, 0.78, 0.74], window: [0.20, 0.26, 0.32] });
 
       // ---- Advertising hoardings (Abbey run-off s≈0.55 R) ----
       billboard(k(0.55), 1, 18, 14, 5, [0.86, 0.30, 0.20]);

@@ -47,7 +47,7 @@
       grandstand(0.97, 1, 24, 80, CONCRETE, PINK);
 
       // --- s=0.02 L near: pit/paddock block, low wide white flat-roof slab ---
-      building(K(0.02), -1, 10, 16, 12, 60, { wall: [0.90, 0.90, 0.92],
+      building(K(0.02), -1, 2, 16, 12, 60, { wall: [0.90, 0.90, 0.92],
                window: [0.30, 0.38, 0.44], floor: 3 });
       place(K(0.02), -1, 10, [17, 0.8, 60], [0.82, 0.82, 0.84]);   // flat roof slab
 
@@ -87,7 +87,7 @@
             if (onTrack(p.c[0], p.c[2], 12)) continue;
             const tone = 0.60 + hash(k * 73 + c) * 0.16;
             const h = 26 + hash(k * 74 + c) * 60, w = 12 + hash(k * 75 + c) * 12;
-            building(k, side, d, w, h, w, { wall: [tone, tone * 0.97, tone * 0.92],
+            building(k, side, d - w / 2, w, h, w, { wall: [tone, tone * 0.97, tone * 0.92],
                      window: [tone * 0.66, tone * 0.70, tone * 0.74], floor: 6 });
           }
         });
@@ -108,7 +108,7 @@
       groundPlane(K(0.55), -1, 24, [180, 1.0, 140], PARKGRN);
       for (const s of [0.515, 0.535, 0.55, 0.565, 0.585]) {
         const k = K(s);
-        building(k, -1, 40 + hash(k) * 30, 22, 8 + hash(k * 3) * 4, 18, { wall: [0.86, 0.86, 0.84],
+        building(k, -1, 29 + hash(k) * 30, 22, 8 + hash(k * 3) * 4, 18, { wall: [0.86, 0.86, 0.84],
                  window: [0.40, 0.46, 0.50], floor: 2 });
         tree(k, 1, 28 + hash(k * 5) * 20, 8 + hash(k * 7) * 4, TREEGRN);
         tree(k, 1, 48 + hash(k * 13) * 18, 7 + hash(k * 17) * 4, PARKGRN);

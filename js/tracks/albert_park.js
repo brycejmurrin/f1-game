@@ -56,7 +56,7 @@
         const dist = 200 + hash(i * 7) * 70;          // far behind the lake
         const w = 14 + hash(i * 3) * 12;              // wide enough to overlap → no gaps
         const h = 60 + hash(i * 11) * 130;            // tall, varied CBD profile
-        building(k(s), 1, dist, w, h, w, {
+        building(k(s), 1, dist - w / 2, w, h, w, {
           wall: [0.30 + hash(i * 5) * 0.06, 0.36, 0.46], window: CBD_WIN, floor: 6,
         });
       }
@@ -132,7 +132,7 @@
       grandstand(0.90, 1, 18, 50, SHELL, CROWD);    // fan-hill grandstand R
 
       // ---- Pit building + garages: long low white box row, dark roof (s≈0.0 R)
-      building(k(0.0), 1, 12, 14, 9, 180, { wall: [0.86, 0.87, 0.88], window: [0.18, 0.22, 0.28], floor: 4 });
+      building(k(0.0), 1, 5, 14, 9, 180, { wall: [0.86, 0.87, 0.88], window: [0.18, 0.22, 0.28], floor: 4 });
       {
         const a = anchor(k(0.0), 1, 12);
         addBox(out, vadd(a.c, a.u, 9.6), [18, 0.8, 190], [0.30, 0.32, 0.34], [a.r, a.u, a.t]); // dark roof slab

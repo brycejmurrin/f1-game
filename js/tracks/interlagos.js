@@ -31,7 +31,7 @@
       const kpit = K(0.0);
       tower(kpit, 1, 14, 15, 40, { col: [0.52, 0.50, 0.48], seg: 4, cap: true,
                                    capCol: [0.22, 0.24, 0.28], mast: 12 });   // tall slab control tower
-      building(kpit, 1, 13, 12, 14, 30, { wall: [0.60, 0.60, 0.62],
+      building(kpit, 1, 7, 12, 14, 30, { wall: [0.60, 0.60, 0.62],
                window: [0.20, 0.28, 0.34], floor: 4 });                       // pit building w/ window bands
       grandstand(0.94, 1, 9, 70, [0.46, 0.47, 0.52], [0.30, 0.52, 0.34]);     // pit-straight stand (Brazil green crowd)
 
@@ -107,7 +107,7 @@
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 10)) continue;
           const tone = 0.50 + hash(k * 75 + c) * 0.14;
-          building(k, side, d, w, h, w, { wall: [tone, tone * 0.98, tone * 1.02],
+          building(k, side, d - w / 2, w, h, w, { wall: [tone, tone * 0.98, tone * 1.02],
                    window: [tone * 0.55, tone * 0.60, tone * 0.66], floor: 8 });
         }
       });
