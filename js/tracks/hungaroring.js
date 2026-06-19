@@ -108,8 +108,8 @@
         addBox(out, vadd(a.c, a.u, 13.2), [14, 0.7, 64], [0.84, 0.86, 0.90], [a.r, a.u, a.t]); // roof blade
       }
       // pit wall + garage strip with red kerb trim
-      place(k(0.02), -1, 3, [70, 1.3, 0.8], WHITE);
-      place(k(0.02), -1, 2, [70, 0.3, 0.4], RED);
+      place(k(0.02), -1, 3, [0.8, 1.3, 70], WHITE);
+      place(k(0.02), -1, 2, [0.4, 0.3, 70], RED);
       // Main covered grandstand (R), big stepped wedge with dark roof
       grandstand(0.00, 1, 9, 90, SHELL, [0.50, 0.52, 0.58]);
 
@@ -149,7 +149,7 @@
       // ---- Red/white kerb accents + grass framing at key apexes ----
       for (const [s, side] of [[0.06, 1], [0.12, -1], [0.18, 1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
         place(k(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE);
-        place(k(s), side, 6, [10, 0.08, 12], GRASS);
+        place(k(s), side, 7, [10, 0.08, 12], GRASS);
       }
       void prop;
     },

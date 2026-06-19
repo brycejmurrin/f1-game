@@ -155,8 +155,8 @@
       // ===================================================================
       {
         const k = K(0.46);
-        place(k, 1, 6, [18, 16, 18], SAND);
-        place(k, 1, 6, [19, 4, 19], SAND_LIT);
+        place(k, 1, 11, [18, 16, 18], SAND);
+        place(k, 1, 11, [19, 4, 19], SAND_LIT);
         const a = anchor(k, 1, 6);
         for (let j = 0; j < 4; j++)
           addBox(out, vadd(vadd(a.c, a.t, (j - 1.5) * 4.5), a.u, 16.6), [3, 1.6, 3], SAND, [a.r, a.u, a.t]);
@@ -214,8 +214,8 @@
           addCyl(out, vadd(a.c, a.t, (j - 1.5) * 3), 1.0, 0.9, [0.10, 0.10, 0.11], 7, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 1.0), [2, 0.3, 12], side > 0 ? [0.9, 0.2, 0.2] : [0.9, 0.9, 0.92], [a.r, a.u, a.t]);
       }
-      billboard(K(0.99), 1, 6, 18, 11, FLAME);
-      billboard(K(0.99), -1, 6, 16, 10, WIN_COOL);
+      billboard(K(0.99), 1, 11, 18, 11, FLAME);
+      billboard(K(0.99), -1, 10, 16, 10, WIN_COOL);
     },
   }
   );

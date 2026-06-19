@@ -134,7 +134,7 @@
       // ---- Red/white kerb accent boxes + green run-off framing at apexes ----
       for (const [s, side] of [[0.04, 1], [0.12, -1], [0.12, 1], [0.30, 1], [0.40, 1], [0.55, 1], [0.66, -1], [0.85, -1]]) {
         place(k(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE);
-        place(k(s), side, 6, [10, 0.1, 12], GRASS); // run-off / grass framing slab
+        place(k(s), side, 7, [10, 0.1, 12], GRASS); // run-off / grass framing slab
       }
       // silence unused-guard lint helpers
       void onTrack; void WHITE; void prop;

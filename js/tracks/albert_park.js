@@ -151,7 +151,7 @@
 
       // ---- Lakeside grass fan banking / hill (s≈0.90 R) ----
       for (let j = 0; j < 4; j++) {
-        place(k(0.90), 1, 14 + j * 8, [30, 2 + j * 1.5, 24], GRASS);
+        place(k(0.90), 1, 17 + j * 8, [30, 2 + j * 1.5, 24], GRASS);
       }
 
       // ====================================================================
@@ -160,7 +160,7 @@
       for (const [s, side] of [[0.04, 1], [0.06, -1], [0.30, 1], [0.62, 1],
                                 [0.78, -1], [0.78, 1], [0.80, -1], [0.97, 1]]) {
         place(k(s), side, 2, [0.5, 0.25, 6], side > 0 ? RED : WHITE);
-        place(k(s), side, 6, [10, 0.1, 12], GRASS); // grass run-off framing
+        place(k(s), side, 7, [10, 0.1, 12], GRASS); // grass run-off framing
       }
 
       // ---- Billboards + start gantry ----

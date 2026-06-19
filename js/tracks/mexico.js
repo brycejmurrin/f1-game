@@ -47,9 +47,9 @@
       grandstand(0.97, 1, 24, 80, CONCRETE, PINK);
 
       // --- s=0.02 L near: pit/paddock block, low wide white flat-roof slab ---
-      building(K(0.02), -1, 11, 60, 12, 16, { wall: [0.90, 0.90, 0.92],
+      building(K(0.02), -1, 10, 16, 12, 60, { wall: [0.90, 0.90, 0.92],
                window: [0.30, 0.38, 0.44], floor: 3 });
-      place(K(0.02), -1, 10, [60, 0.8, 17], [0.82, 0.82, 0.84]);   // flat roof slab
+      place(K(0.02), -1, 10, [17, 0.8, 60], [0.82, 0.82, 0.84]);   // flat roof slab
 
       // --- s=0.06 R far: park tree line along the long straight (denser) ---
       hedge(0.04, 0.11, 1, 26, 3.0, TREEGRN);
@@ -65,7 +65,7 @@
       grandstand(0.12, 1, 24, 80, CONCRETE, ORANGE);   // packed back tier at Turn 1
       const kerb = (s, side, len) => {
         const k = K(s);
-        place(k, side, 0.8, [2.6, 0.16, len], [0.82, 0.16, 0.16]);
+        place(k, side, 2, [0.5, 0.16, len], [0.82, 0.16, 0.16]);
         place(k, side, 3.4, [2.6, 0.16, len], [0.94, 0.94, 0.94]);
       };
       kerb(0.12, 1, 9); kerb(0.115, -1, 8);
@@ -167,7 +167,7 @@
       for (const s of [0.90, 0.93, 0.96]) {
         const k = K(s);
         place(k, 1, 1.2, [2.0, 0.5, 8], [0.78, 0.74, 0.70]);   // low banked kerb edge
-        place(k, 1, 0.8, [2.0, 0.14, 8], [0.82, 0.16, 0.16]);
+        place(k, 1, 2, [0.5, 0.14, 8], [0.82, 0.16, 0.16]);
       }
 
       // --- Catch fence + scattered park trees & festive flags around the lap ---

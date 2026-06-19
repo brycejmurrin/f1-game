@@ -41,7 +41,7 @@
       // --- Senna S (s=0.05, both close): red/white kerb boxes inside each apex ---
       for (const [s, side] of [[0.045, -1], [0.065, 1], [0.085, -1]]) {
         const k = K(s);
-        place(k, side, 1.0, [3.0, 0.18, 7], [0.80, 0.18, 0.18]);   // red kerb
+        place(k, side, 2, [0.5, 0.18, 7], [0.80, 0.18, 0.18]);   // red kerb
         place(k, side, 4.2, [3.0, 0.18, 7], [0.92, 0.92, 0.92]);   // white kerb
       }
       // hero downhill plunge: tropical greenery hugging the Senna S esses
@@ -145,13 +145,13 @@
 
       // --- Junção (s=0.82, L close): tight uphill left, kerbs, start of the climb ---
       const kj = K(0.82);
-      place(kj, -1, 1.0, [3.0, 0.18, 8], [0.80, 0.18, 0.18]);
+      place(kj, -1, 2, [0.5, 0.18, 8], [0.80, 0.18, 0.18]);
       place(kj, -1, 4.2, [3.0, 0.18, 8], [0.92, 0.92, 0.92]);
 
       // --- Climb to s/f, Subida dos Boxes (s=0.92, both mid): banked ramp + pit-wall slabs (R) ---
       for (const s of [0.88, 0.92, 0.96]) {
         const k = K(s);
-        place(k, 1, 1.5, [1.0, 1.1, 9], [0.78, 0.78, 0.80]);   // pit-wall slab on the right
+        place(k, 1, 2.5, [1.0, 1.1, 9], [0.78, 0.78, 0.80]);   // pit-wall slab on the right
       }
       grandstand(0.90, -1, 9, 60, [0.44, 0.45, 0.50], [0.28, 0.50, 0.32]);
       grandstand(0.84, 1, 10, 50, [0.43, 0.44, 0.49], [0.30, 0.52, 0.34]);    // Junção stand
