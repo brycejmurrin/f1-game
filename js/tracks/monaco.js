@@ -21,7 +21,10 @@
       { t: 0, l: 40 }, { t: -65, l: 60 }, { t: 65, l: 60 }, { t: -40, l: 100 }, { t: 70, l: 65, w: 4.8 }, { t: 0, l: 35 },
       { t: -70, l: 65 }, { t: 80, l: 70 }, { t: -70, l: 65 }, { t: 75, l: 70, w: 4.8 }, { t: 40, l: 120 },
     ],
-    elevations: [{ s: 0.27, halfM: 340, rise: 18 }],
+    // Climb to Casino Square, then the plunge down through Mirabeau and the
+    // tunnel toward the harbour (~42 m top-to-bottom). Street circuit: barriers,
+    // not a wide terrain ribbon, so elevation was always safe here.
+    elevations: [{ s: 0.27, halfM: 340, rise: 18 }, { s: 0.55, halfM: 220, rise: -10 }],
   }
   );
 })();

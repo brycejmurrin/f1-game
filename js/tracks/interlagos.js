@@ -19,7 +19,8 @@
       { t: 70, l: 100 }, { t: -80, l: 110 }, { t: 0, l: 160 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: -70, l: 100 },
       { t: -110, l: 140, h: 6 }, { t: -20, l: 440, h: 18 },
     ],
-    elevations: [],
+    // Climb from the Senna S up to the start/finish (the lap's ~40 m of relief).
+    elevations: [{ s: 0.86, halfM: 480, rise: 16 }],
   }
   );
 })();

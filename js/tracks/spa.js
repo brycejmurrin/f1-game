@@ -20,7 +20,9 @@
       { t: -50, l: 90 }, { t: 70, l: 110 }, { t: 0, l: 320, h: -6 }, { t: -30, l: 180 }, { t: 80, l: 70 }, { t: -85, l: 70 },
       { t: 30, l: 120 },
     ],
-    elevations: [],
+    // Eau Rouge dip, the Raidillon/Kemmel climb (the calendar's biggest, ~100 m
+    // top-to-bottom), then the long descent back through the second sector.
+    elevations: [{ s: 0.10, halfM: 280, rise: -12 }, { s: 0.17, halfM: 440, rise: 34 }, { s: 0.46, halfM: 520, rise: -16 }],
   }
   );
 })();

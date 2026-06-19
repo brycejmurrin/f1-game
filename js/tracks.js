@@ -486,6 +486,13 @@ const Tracks = (function () {
         }
       }
     }
+    // Lowest point on the whole lap. The OUTER edge of every terrain ribbon
+    // settles to this baseline so that, on circuits with real elevation, the far
+    // grass of a raised section (e.g. COTA's Turn 1) never floats up across a
+    // lower part of the lap as a plane bisecting the car. The inner seam still
+    // tracks the road exactly; only the distant verts drop away.
+    let pyMin = Infinity;
+    for (let k = 0; k < n; k++) if (py[k] < pyMin) pyMin = py[k];
     // For bridge sections the terrain ribbon stays at ground level so the
     // elevated deck floats above flat ground (supported visually by the bridge
     // pillars in buildProps) instead of pulling the whole ground plane up with it.
@@ -525,9 +532,15 @@ const Tracks = (function () {
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018;
-          // inner vert tracks road height; outer verts blend to gY (flat under bridges)
+          // inner vert tracks road height; outer verts ease down to the lap's
+          // low point (or the flattened bridge ground, whichever is lower). The
+          // quadratic ease keeps the run-off apron near track grade and pushes
+          // the drop out to the distant grass, so a raised corner reads as an
+          // embankment rather than a high plateau hanging over the rest of the lap.
           const t = v / (NTV - 1);
-          const yBase = py[k] * (1 - t) + gY[k] * t;
+          const ease = t * t;
+          const floorY = Math.min(gY[k], pyMin);
+          const yBase = py[k] * (1 - ease) + floorY * ease;
           // match the road's banked outer edge: rise along up by the same lift,
           // tapering across the ribbon (full at inner edge, 0 at outer) so the
           // far ground stays flat. frac uses the same formula as buildRoad.
