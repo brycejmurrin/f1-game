@@ -899,6 +899,8 @@ const Tracks = (function () {
     // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
     // use mountain() for organic, colour-zoned, snow-capped summits.
     const peak = (x, z, baseY, w, h, col) => {
+      // Skip if the pyramid's footprint (outer base radius w*0.75) reaches tarmac.
+      if (onTrack(x, z, w * 0.75)) return;
       addPyramid(out, [x, baseY, z], [w, h, w], col, null);
       addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
     };
@@ -906,6 +908,10 @@ const Tracks = (function () {
     // zones (forest → rock → snow). opts passes seed/snowline/colours — see
     // addMountain. A low foot skirt blends the base into the ground.
     const mountain = (x, z, baseY, w, h, opts) => {
+      // Skip if the skirt footprint (radius w*0.62) would reach the tarmac.
+      // This prevents backdrop mountains from clipping through the racing surface
+      // when extra < w*0.62 (ring placed too close relative to mountain width).
+      if (onTrack(x, z, w * 0.62)) return;
       opts = opts || {};
       addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
                  opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
@@ -914,6 +920,8 @@ const Tracks = (function () {
     // Mountain ridge segment (world coords) — a prism whose ridge runs along
     // `ang` (radians, in the XZ plane). Chain these for a jagged range.
     const ridge = (x, z, baseY, ang, len, w, h, col) => {
+      // Skip if footprint half-extent reaches tarmac.
+      if (onTrack(x, z, Math.max(len, w) * 0.5)) return;
       const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
       addPrism(out, [x, baseY, z], [w, h, len], col, [r, [0, 1, 0], f]);
     };

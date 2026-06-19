@@ -44,12 +44,12 @@
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       // inner continuous grassy banking ring — dense, low, dry-green, no snow.
-      // width (~250) >> centre spacing (2*pi*ring0/40 ~ 160) so footskirts touch.
-      const ring0 = rad + 90;
+      // extra=160 ensures (wMin+wVar)*0.62 < extra-8=152 so the guard won't skip these.
+      const ring0 = rad + 160;
       for (let i = 0; i < 40; i++) {
         const a = i / 40 * 6.2832, h = hash(i * 7);
         mountain(cx + Math.cos(a) * ring0, cz + Math.sin(a) * ring0, pyMin,
-                 230 + h * 70, 18 + h * 10,
+                 80 + h * 50, 16 + h * 8,
                  { seg: 7, seed: i * 13, snowline: 2, forest: GRASS, col: BANK, rock: [0.50, 0.54, 0.36] });
       }
       // second overlapping grassy ring (offset half a step) — fills any seam,

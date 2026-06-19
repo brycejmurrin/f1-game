@@ -35,7 +35,7 @@
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       const ranges = [
-        { extra: 150, wMin: 230, hMin: 64, hVar: 64, count: 44, seg: 8, opts: { forest: [0.18, 0.34, 0.20], rock: [0.34, 0.34, 0.30], snow: [0.92, 0.94, 0.98], snowline: 0.82 } },
+        { extra: 260, wMin: 180, hMin: 64, hVar: 64, count: 44, seg: 8, opts: { forest: [0.18, 0.34, 0.20], rock: [0.34, 0.34, 0.30], snow: [0.92, 0.94, 0.98], snowline: 0.82 } },
         { extra: 360, wMin: 300, hMin: 130, hVar: 90,  count: 40, seg: 8, opts: { forest: [0.24, 0.38, 0.30], rock: [0.46, 0.48, 0.50], snow: [0.94, 0.95, 0.99], snowline: 0.58 } },
         { extra: 560, wMin: 360, hMin: 180, hVar: 120, count: 34, seg: 7, opts: { forest: [0.30, 0.42, 0.38], rock: [0.52, 0.54, 0.56], snow: [0.95, 0.96, 1.0], snowline: 0.46 } },
       ];
