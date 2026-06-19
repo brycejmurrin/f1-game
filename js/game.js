@@ -1076,14 +1076,17 @@ function render(dt) {
   } else {
     Tracks.sample(track, player.s, smp);
     const px = player.x;
-    const p = [smp.p[0] + smp.r[0] * px, smp.p[1], smp.p[2] + smp.r[2] * px];
+    // ride the bank with the car so the camera doesn't sink into the banked road
+    const bankCam = Tracks.banking(track, player.s, px);
+    const bankDy = bankCam ? bankCam.dy : 0;
+    const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
     // Anchor the camera a FIXED distance behind the player along the track
     // (arc-length), not in world space — so it never lags at high speed and
     // the car stays a constant, readable size.
     Tracks.sample(track, wrapS(player.s - 5.8), smpC);
     const cx = px * 0.5;   // partly follow lateral offset; rest shows position
     eyeT = [
-      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.1, smpC.p[2] + smpC.r[2] * cx,
+      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.1 + bankDy, smpC.p[2] + smpC.r[2] * cx,
     ];
     tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.7, p[2] + smp.t[2] * 4];
     // closer camera + narrower FOV so the car reads bigger; still widens a bit
@@ -1148,8 +1151,11 @@ function render(dt) {
       else c.xVis = damp(c.xVis, c.x, 16, dt);
       renderX = c.xVis;
     }
+    // banking: sit the car ON the banked surface (raise it by the local lift)
+    // instead of the flat centreline, so it doesn't float/sink in the corner.
+    const bankC = Tracks.banking(track, c.s, renderX);
     tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
-    tmpP[1] = smp2.p[1];
+    tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
     tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
     // yaw the forward/right around up by yawVis
     const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
@@ -1160,6 +1166,15 @@ function render(dt) {
     tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
     tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
     tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+    // roll the right/up basis about the forward axis so the car leans with the bank
+    if (bankC && bankC.roll) {
+      const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
+      for (let i = 0; i < 3; i++) {
+        const r = tmpR[i], u = tmpU[i];
+        tmpR[i] = r * cr + u * sr;
+        tmpU[i] = u * cr - r * sr;
+      }
+    }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     GLX.drawShadow(tmpMat, 2.4, 5.8);
     GLX.draw(teamMesh(c.team), tmpMat, night ? { emissive: 0.2 } : undefined);

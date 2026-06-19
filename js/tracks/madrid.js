@@ -13,6 +13,8 @@
     theme: "modern",
     lengthKm: 5.5,
     baseHW: 7,
+    // La Monumental: the signature ~24% banked stadium curve.
+    banked: true,
     street: true,
     pal: { zenith: [0.24, 0.46, 0.78], horizon: [0.74, 0.74, 0.72], grass: [0.3, 0.42, 0.2], sunDir: [0.12094709553657013, 0.967576764292561, 0.22173634181704524], sun: [1, 0.99, 0.96], sunColor: [1, 0.98, 0.94] },
     segs: [
