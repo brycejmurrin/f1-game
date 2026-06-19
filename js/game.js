@@ -966,7 +966,16 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, 4, dt);
 
-  const proj = M4.perspective(camFov * Math.PI / 180, GLX.aspect, 0.1, 900);
+  // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
+  // blows the horizontal field out past ~100°, which makes the car look tiny and
+  // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
+  // readable size; portrait (narrow) is unaffected.
+  let fovY = camFov * Math.PI / 180;
+  const HFOV_MAX = 86 * Math.PI / 180;
+  const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(GLX.aspect, 0.0001));
+  fovY = Math.min(fovY, fovYCap);
+
+  const proj = M4.perspective(fovY, GLX.aspect, 0.1, 900);
   const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
   frame.viewProj = M4.mul(proj, view);
   frame.eye = camEye;
@@ -1171,7 +1180,10 @@ function tickUi() { if (soundOn) GameAudio.uiTick(); }
 function steerLabel() {
   if (steerMode === "buttons") return "STEER: BUTTONS";
   if (steerMode === "touch") return "STEER: TOUCH";
-  return "STEER: TILT" + (Input.gyroSeen ? "" : " (NO GYRO)");
+  // Only warn when the gyro is genuinely unavailable/denied — not in the brief
+  // window before the first sensor reading arrives (which would falsely show
+  // "(NO GYRO)" on phones that have a working gyro).
+  return "STEER: TILT" + (Input.gyroDenied ? " (NO GYRO)" : "");
 }
 
 function enableTilt() {
