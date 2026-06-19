@@ -392,6 +392,19 @@ function applyRaceSettings() {
       // When raceTimeOfDay !== "default", sync sky colours to frame too
       frame.skyZenith  = frameSky.zenith;
       frame.skyHorizon = frameSky.horizon;
+    } else if (raceTimeOfDay === "dusk") {
+      frameSky.zenith = [0.10, 0.12, 0.32];
+      frameSky.horizon = [0.62, 0.30, 0.06];
+      frameSky.sunColor = [1.0, 0.60, 0.22];
+      frameSky.sunDir = V3.norm([0.55, 0.18, 0.25]);
+      frame.sunDir = frameSky.sunDir;
+      frame.sunColor = [1.0, 0.68, 0.28];
+      frame.ambientGround = [0.22, 0.14, 0.08];
+      frame.ambientSky = [0.38, 0.26, 0.16];
+      frame.fogColor = [0.50, 0.24, 0.08];
+      frame.fogDensity = 0.0020;
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
     } else {
       frameSky.zenith = [0.25, 0.42, 0.80];
       frameSky.horizon = [0.70, 0.75, 0.82];
@@ -1643,7 +1656,7 @@ function buildRaceSettings() {
   }
   const timeEl = $("rs-time");
   timeEl.innerHTML = "";
-  for (const [id, label] of [["default", "DEFAULT"], ["day", "DAY"], ["night", "NIGHT"]]) {
+  for (const [id, label] of [["default", "DEFAULT"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]]) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (raceTimeOfDay === id ? " active" : "");
     b.textContent = label;
