@@ -19,6 +19,9 @@
       { t: 60, l: 110 }, { t: 80, l: 120, h: -4 }, { t: 70, l: 120, h: -6 }, { t: 0, l: 300 }, { t: 45, l: 120, h: 6 }, { t: -20, l: 90 },
       { t: 40, l: 140 },
     ],
+    // Rolling esses climb then the drop toward the Degners (~40 m of relief over
+    // the lap). Kept clear of the figure-8 crossover at s≈0.81 (that's a bridge).
+    elevations: [{ s: 0.20, halfM: 300, rise: 10 }, { s: 0.45, halfM: 260, rise: -8 }],
     bridges: [{ s: 0.811, halfM: 150, rise: 7 }],
   }
   );
