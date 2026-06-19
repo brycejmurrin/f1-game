@@ -1046,33 +1046,36 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  // Heading model for the player. c.angle is the car's heading measured against
-  // the track tangent (rad, +=pointing right of the way ahead). The driver
-  // rotates that heading; the car then slides toward where it points.
-  //
-  // The track frame itself rotates with the corner (k = curvature). Subtracting
-  // that rotation means: with NO input the car keeps its real-world heading and
-  // runs wide to the OUTSIDE — it never auto-steers onto the racing line. To
-  // hold a corner you must actively steer in, exactly as in a real car.
+  // World-space bicycle model for the player. c.head = absolute world heading
+  // (rad); c.px/c.pz = world position. Yaw rate from tan(steerAngle)/wheelbase,
+  // then project back onto the centreline to recover (c.s, c.x) for gameplay.
+  // No curvature-coupling term — the car naturally runs wide at corners because
+  // the track curves away, not because of any drift correction.
   if (c.isPlayer) {
-    if (c.angle === undefined) c.angle = 0;
-    // Expo response: small inputs stay gentle (no twitchiness on straights / with
-    // tilt); full lock keeps the authority needed to out-turn the curvature drift.
+    if (c.px == null) {   // init world pos from current Frenet state (first frame)
+      c.px = smp.p[0] + smp.r[0] * c.x;
+      c.pz = smp.p[2] + smp.r[2] * c.x;
+      c.head = Math.atan2(smp.t[0], smp.t[2]);
+    }
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
-    const auth = latFac * gripScale * kerbGrip * gripMult() * playerMods.cornering;
-    c.angle += shaped * STEER_RATE * auth * dt;   // input rotates the heading
-    c.angle -= k * c.speed * dt;                  // track frame rotates with the corner
-    c.angle = clamp(c.angle, -STEER_MAX_SLIP, STEER_MAX_SLIP);
-    c.x += c.speed * Math.sin(c.angle) * dt;
-    // Optional racing-line assist (slider; 0 = off). Eases the car toward the
-    // racing line (positive) or wide of it (negative). Speed-scaled so it does
-    // nothing at a standstill; never overrides the driver, just biases.
+    const auth = gripScale * kerbGrip * gripMult() * playerMods.cornering;
+    const maxDelta = STEER_MAX_SLIP * Math.max(0.3, 1 - c.speed / 80);
+    const yawRate = c.speed > 0.5
+      ? c.speed * Math.tan(shaped * auth * maxDelta) / 3.2
+      : 0;
+    c.head += clamp(yawRate, -3.5, 3.5) * dt;
+    c.px += c.speed * Math.sin(c.head) * dt;
+    c.pz += c.speed * Math.cos(c.head) * dt;
+    c._prevS = c.s;
+    const proj = Tracks.project(track, c.px, c.pz, c.s);
+    c.s = proj.s;
+    c.x = proj.lat;
+    steer = clamp(yawRate / 2.5, -1, 1);
     if (raceLineAssist !== 0) {
       const sLook = wrapS(c.s + clamp(c.speed * 0.6, 12, 50));
       const lineX = clamp(Tracks.curvature(track, sLook) * 130, -0.62, 0.62) * hw;
       c.x += (lineX - c.x) * raceLineAssist * 2.2 * latFac * dt;
     }
-    steer = clamp(c.angle / STEER_MAX_SLIP, -1, 1);   // normalise for visual yaw below
   } else {
     c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * dt;
   }
@@ -1088,11 +1091,6 @@ function updateCar(c, dt, ranked) {
   const wall = track.street ? hw - 0.8 : hw + 9;
   if (Math.abs(c.x) > wall) {
     c.x = c.x > 0 ? wall : -wall;
-    // Stop the angle pressing the car further into the wall.
-    if (c.isPlayer && c.angle !== undefined) {
-      if (c.x >= wall) c.angle = Math.min(c.angle, 0);
-      else             c.angle = Math.max(c.angle, 0);
-    }
     if (track.street) {
       // First-frame contact: instant speed hit so the impact is felt immediately.
       if (!c.wasOnWall) c.speed *= 0.72;
@@ -1114,6 +1112,11 @@ function updateCar(c, dt, ranked) {
     c.wasOnWall = false;
     if (c.isPlayer) c.wallT = Math.max(0, (c.wallT || 0) - dt);
   }
+  // Keep world pos consistent with c.x after wall/assist corrections
+  if (c.isPlayer && c.px != null) {
+    c.px = smp.p[0] + smp.r[0] * c.x;
+    c.pz = smp.p[2] + smp.r[2] * c.x;
+  }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   const curveYaw = c.isPlayer ? 0 : clamp(k * c.speed * 0.14, -0.28, 0.28);
   c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + curveYaw, 6, dt);
@@ -1121,8 +1124,9 @@ function updateCar(c, dt, ranked) {
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
   // --- advance along track ---
-  const oldS = c.s;
-  c.s = wrapS(c.s + c.speed * dt);
+  // Player s comes from Tracks.project() above; AI advances by speed*dt in Frenet.
+  const oldS = c.isPlayer ? (c._prevS ?? c.s) : c.s;
+  if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
   c.prog += c.speed * dt;
   c.totalT += dt;
   c.lapTime += dt;
@@ -2131,9 +2135,17 @@ window.__apex = {
     const wz = smp.p[2] + smp.r[2] * lat;
     const p = Tracks.project(track, wx, wz, s);
     let ds = p.s - s; const L = track.total;
-    while (ds > L / 2) ds -= L; while (ds < -L / 2) ds += L;   // signed wrap
+    while (ds > L / 2) ds -= L; while (ds < -L / 2) ds += L;
     return { s, lat, world: [wx, wz], got: { s: p.s, lat: p.lat, dist: p.dist },
              err: { s: ds, lat: p.lat - lat } };
+  },
+  // Console health-check for the world-space migration.
+  // Run window.__apex.wsInfo() while driving to see live position/heading.
+  wsInfo() {
+    if (!player || player.px == null) return "world-space not yet initialized";
+    return { pos: [+player.px.toFixed(1), +player.pz.toFixed(1)],
+             head: +(player.head * 180 / Math.PI).toFixed(1) + "°",
+             s: +player.s.toFixed(1), x: +player.x.toFixed(2) };
   },
   // Debug free camera for surveying track layouts/scenery — look at anything.
   // Call with no args (or "chase") to restore the chase cam. Option forms:
