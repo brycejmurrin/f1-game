@@ -308,9 +308,40 @@ function gridUp() {
 }
 function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
 
+// Optional imported car model (binary glTF / .glb). When loaded, team meshes are
+// built from it — tinted to each livery — instead of the procedural Car3D.
+// null => procedural (the shipped default; there is no bundled model).
+let carModelBuf = null;
+const CAR_MODEL_SCALE = 1;
+
+function buildCarData(team) {
+  if (carModelBuf) {
+    try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: team.color }); }
+    catch (e) { /* any parse trouble: fall through to the procedural car */ }
+  }
+  return Car3D.build(team.color, team.color2);
+}
+
 function teamMesh(team) {
-  if (!teamMeshes[team.id]) teamMeshes[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2));
+  if (!teamMeshes[team.id]) teamMeshes[team.id] = GLX.createMesh(buildCarData(team));
   return teamMeshes[team.id];
+}
+
+// Load an optional .glb car model at runtime. On success, rebuilds every team
+// mesh from it; on any failure (missing file, bad data) silently keeps the
+// procedural car. Returns Promise<boolean>. Not auto-called — so a missing asset
+// never logs a 404 during normal startup. Drop in a model then call this (e.g.
+// from the console or __apex.loadCarModel) once a CC-licensed .glb is available.
+async function loadCarModel(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const buf = await res.arrayBuffer();
+    GLTF.toMesh(buf, { scale: CAR_MODEL_SCALE });   // validate before adopting
+    carModelBuf = buf;
+    for (const k in teamMeshes) delete teamMeshes[k];  // force rebuild from model
+    return true;
+  } catch (e) { return false; }
 }
 
 // ---------- track loading ----------
@@ -1837,6 +1868,9 @@ window.__apex = {
     startRace();
     return { track: Tracks.LIST[i].id, timeOfDay: raceTimeOfDay, weather: raceWeather };
   },
+  // Load an optional .glb car model at runtime (team meshes rebuild from it,
+  // tinted per livery); resolves false and keeps the procedural car on failure.
+  loadCarModel: (url) => loadCarModel(url),
 };
 
 })();
