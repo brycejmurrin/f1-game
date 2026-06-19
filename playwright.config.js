@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: {
     command: "npx serve -l 3456 --no-clipboard",
     url: "http://localhost:3456",
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 10_000,
   },
   reporter: [["list"], ["html", { open: "never" }]],
