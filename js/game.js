@@ -214,6 +214,10 @@ let paused = false;
 // manual (default), >0 gently pulls toward the racing line through corners,
 // <0 pushes the car wide. Always an added bias the driver can steer against.
 let raceLineAssist = 0;
+// Direct multiplier on the tilt steer output (0..1). Applied after reading
+// Input.steer() when tilt is active, so 0.5 means even full-tilt only gives
+// 50% of the normal steering authority. Set by the in-game sensitivity slider.
+let tiltOutputScale = 1.0;
 // Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
@@ -970,7 +974,10 @@ function updateCar(c, dt, ranked) {
 
   // --- lateral ---
   let steer;
-  if (c.isPlayer) steer = _testInput ? (_testInput.steer ?? 0) : Input.steer();
+  if (c.isPlayer) {
+    steer = _testInput ? (_testInput.steer ?? 0) : Input.steer();
+    if (!_testInput && Input.tiltActive()) steer *= tiltOutputScale;
+  }
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
@@ -1927,27 +1934,40 @@ $("pm-steer").onclick = () => {
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 
 // ---- steering tuning sliders (pause menu) ----
-// Slider integers map to physical values: sensitivity 1..10 -> tilt-for-full-lock
-// 50..18 deg (higher slider = more sensitive); smoothing 1..10 -> slew 5..1
-// steer-units/s (higher slider = smoother); racing line -5..5 -> assist -1..1.
-function tiltDegFromSens(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
+// pm-sens  (1..10): TILT STRENGTH — v/10 applied as a direct multiplier to the
+//   tilt steer output AFTER reading Input.steer(). 1 = barely turns, 10 = full
+//   authority. Default 7 (70% of max). This is the most perceptible dial.
+// pm-tiltdeg (1..10): TILT RANGE — degrees of phone tilt needed for full lock.
+//   1 = narrow (small tilt gives full lock), 10 = wide (big tilt needed).
+//   Maps to MAX_TILT 50..18 deg via Input.setTiltSensitivity().
+// pm-smooth (1..10): STEER SMOOTHING — slew-rate cap on the tilt output.
+//   Higher = slower/smoother. Maps to TILT_SLEW 5..1 steer-units/s.
+// pm-line (-5..5): RACING LINE assist. 0=off, +5=pull to line, -5=push wide.
+function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
 function slewFromSmooth(v) { return 5 + (1 - 5) * (v - 1) / 9; }
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
 
 function applySteerTuning() {
-  const sens = store.get("tiltSens", 5);
-  const smooth = store.get("steerSmooth", 6);
-  const line = store.get("raceLine", 0);
-  Input.setTiltSensitivity(tiltDegFromSens(sens));
+  const sens    = store.get("tiltSens",   7);
+  const tiltdeg = store.get("tiltDeg",    5);
+  const smooth  = store.get("steerSmooth", 6);
+  const line    = store.get("raceLine",   0);
+  tiltOutputScale = sens / 10;
+  Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
   Input.setTiltSmoothing(slewFromSmooth(smooth));
   raceLineAssist = line / 5;
-  $("pm-sens").value = sens;   $("pm-sens-v").textContent = sens;
-  $("pm-smooth").value = smooth; $("pm-smooth-v").textContent = smooth;
-  $("pm-line").value = line;   $("pm-line-v").textContent = lineLabel(line);
+  $("pm-sens").value    = sens;    $("pm-sens-v").textContent    = sens;
+  $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
+  $("pm-smooth").value  = smooth;  $("pm-smooth-v").textContent  = smooth;
+  $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
 }
 $("pm-sens").oninput = (e) => {
   const v = +e.target.value; store.set("tiltSens", v);
-  Input.setTiltSensitivity(tiltDegFromSens(v)); $("pm-sens-v").textContent = v;
+  tiltOutputScale = v / 10; $("pm-sens-v").textContent = v;
+};
+$("pm-tiltdeg").oninput = (e) => {
+  const v = +e.target.value; store.set("tiltDeg", v);
+  Input.setTiltSensitivity(tiltDegFromRange(v)); $("pm-tiltdeg-v").textContent = v;
 };
 $("pm-smooth").oninput = (e) => {
   const v = +e.target.value; store.set("steerSmooth", v);
