@@ -210,6 +210,10 @@ let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
+// Player racing-line assist, set by the pause-menu slider. -1..1: 0 = pure
+// manual (default), >0 gently pulls toward the racing line through corners,
+// <0 pushes the car wide. Always an added bias the driver can steer against.
+let raceLineAssist = 0;
 // Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
@@ -1051,6 +1055,14 @@ function updateCar(c, dt, ranked) {
     c.angle -= k * c.speed * dt;                  // track frame rotates with the corner
     c.angle = clamp(c.angle, -STEER_MAX_SLIP, STEER_MAX_SLIP);
     c.x += c.speed * Math.sin(c.angle) * dt;
+    // Optional racing-line assist (slider; 0 = off). Eases the car toward the
+    // racing line (positive) or wide of it (negative). Speed-scaled so it does
+    // nothing at a standstill; never overrides the driver, just biases.
+    if (raceLineAssist !== 0) {
+      const sLook = wrapS(c.s + clamp(c.speed * 0.6, 12, 50));
+      const lineX = clamp(Tracks.curvature(track, sLook) * 130, -0.62, 0.62) * hw;
+      c.x += (lineX - c.x) * raceLineAssist * 2.2 * latFac * dt;
+    }
     steer = clamp(c.angle / STEER_MAX_SLIP, -1, 1);   // normalise for visual yaw below
   } else {
     c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * dt;
@@ -1838,6 +1850,39 @@ $("pm-steer").onclick = () => {
   setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+
+// ---- steering tuning sliders (pause menu) ----
+// Slider integers map to physical values: sensitivity 1..10 -> tilt-for-full-lock
+// 50..18 deg (higher slider = more sensitive); smoothing 1..10 -> slew 5..1
+// steer-units/s (higher slider = smoother); racing line -5..5 -> assist -1..1.
+function tiltDegFromSens(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
+function slewFromSmooth(v) { return 5 + (1 - 5) * (v - 1) / 9; }
+function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
+
+function applySteerTuning() {
+  const sens = store.get("tiltSens", 5);
+  const smooth = store.get("steerSmooth", 6);
+  const line = store.get("raceLine", 0);
+  Input.setTiltSensitivity(tiltDegFromSens(sens));
+  Input.setTiltSmoothing(slewFromSmooth(smooth));
+  raceLineAssist = line / 5;
+  $("pm-sens").value = sens;   $("pm-sens-v").textContent = sens;
+  $("pm-smooth").value = smooth; $("pm-smooth-v").textContent = smooth;
+  $("pm-line").value = line;   $("pm-line-v").textContent = lineLabel(line);
+}
+$("pm-sens").oninput = (e) => {
+  const v = +e.target.value; store.set("tiltSens", v);
+  Input.setTiltSensitivity(tiltDegFromSens(v)); $("pm-sens-v").textContent = v;
+};
+$("pm-smooth").oninput = (e) => {
+  const v = +e.target.value; store.set("steerSmooth", v);
+  Input.setTiltSmoothing(slewFromSmooth(v)); $("pm-smooth-v").textContent = v;
+};
+$("pm-line").oninput = (e) => {
+  const v = +e.target.value; store.set("raceLine", v);
+  raceLineAssist = v / 5; $("pm-line-v").textContent = lineLabel(v);
+};
+applySteerTuning();
 // GEARS toggle: show when thumbs are free (tilt or desktop keyboard).
 function refreshGearsBtn() {
   $("pm-gears").hidden = Input.touchControlsNeeded() && steerMode !== "tilt";
@@ -1888,6 +1933,7 @@ window.__apex = {
     if (!player || !track) return false;
     player.s = wrapS(frac * track.total);
     player.prog = frac * track.total;
+    player.angle = 0;   // teleport aligns the car with the track (deterministic)
     if (lateral !== undefined) player.x = lateral;
     if (speed !== undefined) player.speed = speed;
     return { s: player.s, total: track.total };

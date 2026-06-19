@@ -18,7 +18,7 @@
 
 const Input = (function () {
   // Tilt mechanics ported verbatim from the driving-game (Neon Drift) build.
-  const MAX_TILT = 36;        // degrees of tilt for full steering lock (higher = less sensitive)
+  let MAX_TILT = 36;          // degrees of tilt for full steering lock (higher = less sensitive)
   const DEADZONE = 2.5;       // degrees ignored around the calibrated zero
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
@@ -62,7 +62,7 @@ const Input = (function () {
   // Slew-rate limit on the tilt steering OUTPUT: caps how fast the steering
   // command can change, so a quick or jittery hand movement can't snap the car.
   // (Recommended technique for tilt controls: a hard limit on turn rate.)
-  const TILT_SLEW = 2.2;      // max steer-units/s of change from tilt
+  let TILT_SLEW = 2.2;        // max steer-units/s of change from tilt
   let tiltSteerVal = 0;       // current rate-limited tilt steer (-1..1)
   let tiltSteerT = 0;         // last slew timestamp, ms (0 = unset)
 
@@ -354,6 +354,15 @@ const Input = (function () {
     return steerMode;
   }
 
+  // Tilt tuning, driven by the in-game sliders. deg = tilt for full lock
+  // (higher = less sensitive); slew = max steer-units/s of change (lower = smoother).
+  function setTiltSensitivity(deg) {
+    if (typeof deg === "number" && isFinite(deg)) MAX_TILT = Math.max(8, Math.min(60, deg));
+  }
+  function setTiltSmoothing(slew) {
+    if (typeof slew === "number" && isFinite(slew)) TILT_SLEW = Math.max(0.4, Math.min(12, slew));
+  }
+
   function touchControlsNeeded() {
     return !!(typeof window !== "undefined" && window.matchMedia &&
               window.matchMedia("(pointer: coarse)").matches);
@@ -424,6 +433,8 @@ const Input = (function () {
     tiltActive,
     setSteerMode,
     getSteerMode,
+    setTiltSensitivity,
+    setTiltSmoothing,
     touchControlsNeeded,
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
