@@ -46,6 +46,26 @@ async function run(page, { frac, speed = 30, steer = 0, throttle = false, brake 
   return { before, after };
 }
 
+// Move the racing-line slider and fire its handler (exercises the full wiring:
+// slider -> store -> raceLineAssist -> physics). v in -5..5.
+async function setRaceLine(page, v) {
+  await page.evaluate((val) => {
+    const el = document.getElementById("pm-line");
+    el.value = String(val);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, v);
+}
+
+// First corner with curvature above `min` (rad/m); returns { frac, k }.
+async function firstCorner(page, min = 0.02) {
+  const corners = await page.evaluate(() => window.__apex.corners());
+  for (const f of corners) {
+    const p = await page.evaluate((ff) => { window.__apex.jump(ff, 24, 0); return window.__apex.probe(); }, f);
+    if (Math.abs(p.k) > min) return { frac: f, k: p.k };
+  }
+  return { frac: corners[0], k: 0 };
+}
+
 // A reasonably straight stretch: the lap fraction with the smallest |k|.
 async function findStraight(page) {
   return page.evaluate(() => {
@@ -159,5 +179,38 @@ test.describe("Apex 26 — steering", () => {
     expect(aL).toBeLessThan(0);
     // Within 15 % of each other.
     expect(Math.abs(aR + aL)).toBeLessThan(Math.max(aR, -aL) * 0.15);
+  });
+
+  test("racing-line assist off by default: same as pure manual", async ({ page }) => {
+    await startLiveRace(page);
+    // No slider interaction; store is empty, so assist must be 0.
+    const { frac, k } = await firstCorner(page);
+    expect(Math.abs(k)).toBeGreaterThan(0.02);
+    const { before, after } = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+    // Default behavior is unchanged: car still runs wide to the outside.
+    expect(Math.sign(after.x - before.x)).toBe(-Math.sign(k));
+  });
+
+  test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
+    await startLiveRace(page);
+    const { frac, k } = await firstCorner(page);
+    expect(Math.abs(k)).toBeGreaterThan(0.02);
+    const inside = Math.sign(k);
+
+    await setRaceLine(page, 0);
+    const off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+    await setRaceLine(page, 5);
+    const pull = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+    await setRaceLine(page, -5);
+    const push = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+    await setRaceLine(page, 0); // restore
+
+    const dxOff = off.after.x - off.before.x;
+    const dxPull = pull.after.x - pull.before.x;
+    const dxPush = push.after.x - push.before.x;
+    // PULL ends up clearly more toward the inside than no assist...
+    expect((dxPull - dxOff) * inside).toBeGreaterThan(0.5);
+    // ...and PUSH clearly more toward the outside.
+    expect((dxPush - dxOff) * inside).toBeLessThan(-0.2);
   });
 });
