@@ -157,7 +157,6 @@ float hash3(vec3 p) {
   p *= 17.0;
   return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }
-// 2D value-noise FBM for clouds.
 float hash2(vec2 p) {
   p = fract(p * vec2(127.1, 311.7));
   p += dot(p, p + 34.5);
@@ -177,55 +176,76 @@ float fbm(vec2 p) {
 }
 void main() {
   vec3 dir = normalize(vDir);
-  float up = max(dir.y, 0.0);
-
-  // Base gradient
-  vec3 c = mix(uHorizon, uZenith, pow(up, 0.5));
-
+  float up = dir.y;
   float sd = max(dot(dir, uSunDir), 0.0);
 
-  // Procedural cloud layer: project the view ray onto a high plane and sample
-  // FBM. Static (no time uniform) so screenshots stay deterministic. uCloud is
-  // coverage 0..1; clouds fade into the horizon and dim at night.
-  if (uCloud > 0.001 && dir.y > 0.03) {
-    vec2 cp = dir.xz / dir.y * 0.42;
+  // Sun-elevation factor: 0 = sun on/below horizon, 1 = overhead noon.
+  // Drives automatic golden-hour / sunset tint without per-track authoring.
+  float sunE = clamp(uSunDir.y * 1.4, 0.0, 1.0);
+
+  // --- Sky gradient ---
+  vec3 c;
+  if (up >= 0.0) {
+    c = mix(uHorizon, uZenith, pow(up, 0.5));
+    // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
+    // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
+    float goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE))
+                    * (1.0 - smoothstep(0.0, 0.32, up));
+    vec3 goldenColor = mix(vec3(0.70, 0.22, 0.04), vec3(0.92, 0.55, 0.16),
+                           clamp(sunE * 2.5, 0.0, 1.0));
+    c = mix(c, c * 0.45 + goldenColor * 0.55, goldenAmt * 0.80);
+  } else {
+    // Below the horizon: dark earth tone, smoothly blended from the horizon colour.
+    float gnd = clamp(-up * 5.0, 0.0, 1.0);
+    c = mix(uHorizon * 0.85, vec3(0.035, 0.030, 0.022), gnd * gnd);
+  }
+
+  // --- Procedural cloud layer ---
+  // Static (no time uniform) so screenshots stay deterministic.
+  if (uCloud > 0.001 && up > 0.012) {
+    vec2 cp = dir.xz / up * 0.42;
     float f = fbm(cp);
     float cov = smoothstep(0.55 - uCloud * 0.4, 0.92, f);
-    cov *= smoothstep(0.015, 0.09, dir.y);
-    float sl = pow(sd, 3.0);
-    vec3 lit = mix(vec3(0.60, 0.62, 0.69), vec3(1.0, 0.98, 0.94), sl);
-    lit *= 0.35 + 0.65 * max(max(uSunColor.r, uSunColor.g), uSunColor.b);
+    cov *= smoothstep(0.012, 0.08, up);
+    // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
+    // thick billowing regions = shadowed dark underside.
+    float thick = clamp(fbm(cp * 0.55 + vec2(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
+    float sl = pow(sd, 2.0);
+    float sunBright = max(uSunColor.r, max(uSunColor.g, uSunColor.b));
+    // Sunlit tops: white in daylight, warm-tinted at sunset
+    vec3 cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl);
+    cloudTop *= 0.38 + 0.62 * sunBright;
+    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.45, sl * (1.0 - sunE) * 0.55);
+    // Dark undersides: cooler and dimmer, conveying mass/volume
+    vec3 cloudBot = vec3(0.31, 0.32, 0.38) * (0.28 + 0.48 * sunBright);
+    vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
     c = mix(c, lit, cov);
   }
 
-  // Mie forward scatter: warms the sky toward the sun, strongest near the horizon
-  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - up * 1.5, 0.0));
+  // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
+  float upPos = max(up, 0.0);
+  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0));
 
-  // Horizon glow: brightens the horizon band in the sun's compass direction
+  // --- Horizon glow in the sun's compass direction ---
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
   float sunHLen = length(sunH);
   if (sunHLen > 0.05) {
     vec2 dirH = vec2(dir.x, dir.z);
     float dirHLen = length(dirH);
     float hdot = dirHLen > 0.05 ? max(dot(dirH / dirHLen, sunH / sunHLen), 0.0) : 0.0;
-    float hband = max(1.0 - abs(dir.y) * 5.0, 0.0);
+    float hband = max(1.0 - abs(up) * 5.0, 0.0);
     c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen;
   }
 
-  // Outer corona (~15° half-angle, subtle halo)
-  c += uSunColor * pow(sd, 20.0) * 0.55;
-
-  // Inner corona (~4° half-angle, brighter ring around disc)
-  c += uSunColor * pow(sd, 300.0) * 0.90;
-
-  // Sun disc: stable perpendicular-distance method avoids precision issues
-  // perp = sin(angle to sun) for a unit dir; disc fades from ~0.35° to ~1.0°
+  // --- Sun corona + disc ---
+  c += uSunColor * pow(sd, 20.0) * 0.55;   // outer halo ~15°
+  c += uSunColor * pow(sd, 300.0) * 0.90;  // inner ring ~4°
   float perp = length(dir - uSunDir * sd);
   float disc = smoothstep(0.018, 0.006, perp);
   c += mix(uSunColor * 1.6, vec3(1.8, 1.75, 1.5), disc) * disc;
 
-  // Stars (night tracks): two hash samples give varied brightness
-  if (uStars > 0.5 && dir.y > 0.05) {
+  // --- Stars (night tracks) ---
+  if (uStars > 0.5 && up > 0.05) {
     float h = hash3(floor(dir * 180.0));
     float star = smoothstep(0.9975, 1.0, h);
     float bright = 0.5 + 0.5 * hash3(floor(dir * 43.0));

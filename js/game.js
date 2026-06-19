@@ -1202,16 +1202,26 @@ function render(dt) {
   GLX.drawSky(frameSky);
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
-  // Per-surface materials (roughness/metalness/specular) drive the new GGX
-  // specular term. Grass is matte; asphalt keeps a low-roughness sheen so the
-  // racing surface catches the sun; props matte; the start gantry reads metallic.
+  const wet = raceWeather === "wet";
+  // Per-surface materials drive the GGX specular term.
+  // Wet weather: rain films lower effective roughness dramatically — road becomes
+  // mirror-like, cars and barriers pick up sharper reflections.
   GLX.draw(track.meshes.terrain, M4.ident(),
-    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.35 } : { roughness: 0.97, specular: 0.06, detail: 0.35 });
+    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.35 }
+          : { roughness: 0.97, specular: 0.06, detail: 0.35 });
   GLX.draw(track.meshes.road, M4.ident(),
-    night ? { emissive: 0.09, roughness: 0.85, specular: 0.2, detail: 0.22 } : { roughness: 0.85, specular: 0.2, detail: 0.22 });
+    wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 }
+                   : { roughness: 0.14, specular: 0.85, detail: 0.06 })
+          : (night ? { emissive: 0.09, roughness: 0.85, specular: 0.20, detail: 0.22 }
+                   : { roughness: 0.85, specular: 0.20, detail: 0.22 }));
   GLX.draw(track.meshes.props, M4.ident(),
-    night ? { emissive: 0.45, roughness: 0.85, specular: 0.2 } : { roughness: 0.85, specular: 0.2 });
-  GLX.draw(track.meshes.gate, M4.ident(), { roughness: 0.45, metalness: 0.3, specular: 0.5 });
+    wet   ? (night ? { emissive: 0.35, roughness: 0.55, specular: 0.38 }
+                   : { roughness: 0.55, specular: 0.38 })
+          : (night ? { emissive: 0.45, roughness: 0.85, specular: 0.20 }
+                   : { roughness: 0.85, specular: 0.20 }));
+  GLX.draw(track.meshes.gate, M4.ident(),
+    wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
+        : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
 
   // skid marks drawn before cars so cars render on top
   for (const m of skidMarks) {
@@ -1257,10 +1267,12 @@ function render(dt) {
     }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     GLX.drawShadow(tmpMat, 2.4, 5.8);
-    // Glossy automotive paint: low roughness, a touch of metalness, strong spec.
+    // Glossy automotive paint; wet adds a water film (sharper highlights, lower roughness).
     GLX.draw(teamMesh(c.team), tmpMat,
-      night ? { emissive: 0.2, roughness: 0.38, metalness: 0.1, specular: 0.55 }
-            : { roughness: 0.38, metalness: 0.1, specular: 0.55 });
+      wet   ? (night ? { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70 }
+                     : { roughness: 0.22, metalness: 0.12, specular: 0.70 })
+            : (night ? { emissive: 0.20, roughness: 0.38, metalness: 0.10, specular: 0.55 }
+                     : { roughness: 0.38, metalness: 0.10, specular: 0.55 }));
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
       if ((skid > 0.25 || c.offroad) && c.speed > 10) {
