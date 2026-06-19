@@ -24,7 +24,7 @@
     elevations: [{ s: 0.20, halfM: 300, rise: 7 }, { s: 0.45, halfM: 260, rise: -5 }],
     bridges: [{ s: 0.811, halfM: 150, rise: 7 }],
     scenery: function (api) {
-      const { n, px, pz, pyMin, place, prop, every, ferrisWheel, hash, peak, pine, tree } = api;
+      const { n, px, pz, pyMin, place, prop, every, ferrisWheel, hash, mountain, pine, tree } = api;
 
       // Packed grandstand running along the track: taller back shell + a shorter
       // front tier of blue-clad fans (Suzuka's stands are always full).
@@ -43,15 +43,18 @@
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      for (const [extra, wMin, hMin, hVar, count, col] of [
-        [200, 180, 46, 46, 26, [0.26, 0.44, 0.28]],   // near range
-        [430, 260, 92, 72, 22, [0.45, 0.55, 0.49]],   // far hazed range
+      for (const [extra, wMin, hMin, hVar, count, fc, rc] of [
+        [200, 180, 46, 46, 26, [0.24, 0.42, 0.26], [0.34, 0.40, 0.30]],   // near range
+        [430, 260, 92, 72, 22, [0.42, 0.53, 0.46], [0.46, 0.52, 0.46]],   // far hazed range
       ]) {
         const ring = rad + extra;
         for (let i = 0; i < count; i++) {
           const a = (i + extra * 0.004) / count * 6.2832, h = hash(i * 7 + extra);
           const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
-          peak(x, z, pyMin, wMin + h * 90, hMin + h * hVar, [col[0] + h * 0.06, col[1] + h * 0.04, col[2] + h * 0.05]);
+          mountain(x, z, pyMin, wMin + h * 90, hMin + h * hVar, {
+            seed: i * 13 + extra, snowline: 1.1,   // Mie hills — wooded, not alpine
+            forest: [fc[0] + h * 0.05, fc[1] + h * 0.04, fc[2] + h * 0.04], rock: rc,
+          });
         }
       }
 

@@ -48,21 +48,50 @@ instead of floating. World-coord primitives take an explicit `[x,y,z]`.
 | `addPyramid(out, c, [w,h,d], col, basis)` | 4-sided peak / spire |
 | `addCone(out, c, rad, h, col, seg, basis)` | conifer / spire / round tower |
 | `addCyl(out, c, rad, h, col, seg, basis)` | trunk / post / tower / silo |
+| `addFrustum(out, c, rBase, rTop, h, col, seg, basis)` | truncated cone — colour-banded mountains, tapered towers |
+| `addMountain(out, c, baseR, h, opts)` | organic craggy summit, height colour zones + snow (see below) |
 | `vadd(p, v, s)` | `p + v*s` (build offset points) |
 | `anchor(k, side, dist)` | `{ c:[x,y,z], r, u, t }` ground point + track basis, for placing primitives trackside |
+| `along(s0, s1, stepM, fn)` | walk nodes from `s0`→`s1` (wraps), ~`stepM` apart — for linear furniture |
 
 `basis` is `[right, up, forward]`; pass `null` for world axes. Winding is
 auto-oriented (faces always point outward) so you never fight backface culling.
 
-### Composite models
+`addMountain` / `mountain` opts: `{ seg, seed, rough, forest, rock, snow,
+snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`.
+
+### Composite models — landscape & vegetation
 | Model | Builds |
 |---|---|
+| `mountain(x, z, baseY, w, h, opts)` | **organic** colour-zoned, snow-capped summit + foot skirt |
+| `peak(x, z, baseY, w, h, col)` | simple clean pyramid summit |
+| `ridge(x, z, baseY, ang, len, w, h, col)` | mountain ridge prism along bearing `ang` (rad) |
 | `pine(k, side, dist, h, col)` | conifer: tapered trunk + 3 stacked cones |
 | `tree(k, side, dist, h, col)` | broadleaf: trunk + rounded twin-cone canopy |
 | `palm(k, side, dist, h, frond)` | thin trunk + a crown of frond prisms |
-| `peak(x, z, baseY, w, h, col)` | mountain summit (pyramid + foot skirt) |
-| `ridge(x, z, baseY, ang, len, w, h, col)` | mountain ridge prism along bearing `ang` (rad) |
+| `bush(k, side, dist, col)` | low rounded shrub |
+| `hedge(s0, s1, side, gap, h, col)` | continuous clipped hedge / treeline |
+
+### Composite models — structures
+| Model | Builds |
+|---|---|
+| `building(k, side, dist, w, h, d, opts)` | mass + window bands; `opts:{wall,window,floor,setback,roof}` |
+| `tower(k, side, dist, baseW, h, opts)` | tapered tower; `opts:{col,seg,cap,capCol,mast}` |
 | `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof |
+| `billboard(k, side, gap, w, h, col)` | advertising hoarding on two posts |
+| `gantry(s, h, col)` | overhead structure spanning the track (start/scoring) |
+| `marshalPost(k, side, gap)` | orange-roofed post + flag pole |
+
+### Composite models — barriers / track furniture
+| Model | Builds |
+|---|---|
+| `wall(s0, s1, side, gap, h, col, thick)` | continuous solid wall (pit/concrete) |
+| `fence(s0, s1, side, gap, h, col)` | catch/debris fence — posts + pale mesh |
+| `guardrail(s0, s1, side, gap, col)` | waist-high armco rail on posts |
+| `tyreWall(s0, s1, side, gap, capCol)` | stacked tyres + coloured conveyor cap |
+
+> Verify a track builds: `node tools/verify-track.cjs <id>` (catches a scenery
+> that throws — which silently strands the game on the menu).
 
 ## Pattern: an encircling mountain range
 
