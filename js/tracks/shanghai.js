@@ -108,8 +108,8 @@
         for (let i = 0; i < n; i++) rd = Math.max(rd, Math.hypot(px[i] - sx, pz[i] - sz));
         // Two concentric rings of tight-packed towers — front sharper, back hazed.
         for (const [extra, cnt, hMin, hVar, col] of [
-          [205, 70, 34, 80, SKY],          // front skyline row
-          [285, 60, 40, 95, SKY_HAZE],     // back hazed row (taller, greyer)
+          [205, 90, 34, 80, SKY],          // front skyline row
+          [285, 76, 40, 95, SKY_HAZE],     // back hazed row (taller, greyer)
         ]) {
           const ring = rd + extra;
           for (let i = 0; i < cnt; i++) {
@@ -206,19 +206,26 @@
         }
       }
 
-      // ---- Distant low hazy treeline ring (no mountains — flat marshland) ----
+      // ---- Distant low hazy treeline ring (three overlapping bands, continuous) ----
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      const ring = rad + 240;
-      const count = 30;
-      for (let i = 0; i < count; i++) {
-        const a = i / count * 6.2832, h = hash(i * 7 + 3);
-        const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
-        // low flat treeline strip box settled on the baseline
-        addBox(out, [x, pyMin + 4 + h * 3, z], [70 + h * 50, 8 + h * 5, 18], MARSH_N, null);
+      for (const [extra, count, wMin, hMin, hVar, col] of [
+        [180, 52, 100, 7,  6,  MARSH_N],
+        [240, 46, 120, 10, 7,  [0.26, 0.40, 0.22]],
+        [310, 40, 140, 12, 8,  [0.24, 0.38, 0.20]],
+      ]) {
+        const ring = rad + extra;
+        const span = 2 * Math.PI * ring / count;
+        for (let i = 0; i < count; i++) {
+          const a = (i + (hash(i * 3 + extra) - 0.5) * 0.3) / count * 6.2832;
+          const h = hash(i * 7 + extra);
+          const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
+          const w = Math.max(wMin + h * 60, span * 1.5);
+          addBox(out, [x, pyMin + (hMin + h * hVar) / 2, z], [w, hMin + h * hVar, 20], col, null);
+        }
       }
     },
   }
