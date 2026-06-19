@@ -1075,7 +1075,7 @@ const Tracks = (function () {
         const k = (i * 3) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const o = hw[k] + 40;
-        addBox(out, [px[k] + r[0] * o, py[k] - 0.5, pz[k] + r[2] * o], [40, 0.6, 14], [0.13, 0.32, 0.5]); // water
+        // Removed water boxes that were creating a horizontal blocking plane
         if (i % 2 === 0) {
           const yo = hw[k] + 18;
           addBox(out, [px[k] + r[0] * yo, py[k] + 1.2, pz[k] + r[2] * yo], [4, 3, 11], [0.95, 0.95, 0.97]); // yacht hull
