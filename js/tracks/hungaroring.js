@@ -73,7 +73,7 @@
       every(60, (kk) => {
         for (const side of [-1, 1]) {
           const hh = hash(kk * 5 + side);
-          backdrop(kk, side, 70 + hh * 60, [120, 14 + hh * 10, 120],
+          backdrop(kk, side, 130 + hh * 60, [100, 12 + hh * 8, 100],
                    hh < 0.5 ? BANK : GRASS);
         }
       });
@@ -136,7 +136,7 @@
       grandstand(0.58, 1, 12, 32, SHELL, [0.55, 0.32, 0.30]);  // s≈0.58 opposite stand
       clump(0.50, 1, 56);
       clump(0.58, -1, 60);
-      backdrop(k(0.62), 1, 90, [140, 20, 120], HAZE);          // s≈0.62 distant haze hill
+      backdrop(k(0.62), 1, 150, [120, 18, 100], HAZE);         // s≈0.62 distant haze hill
       grandstand(0.68, -1, 11, 34, SHELL, [0.50, 0.52, 0.56]); // s≈0.68 exit-of-sector stand
       clump(0.68, 1, 58);
 
