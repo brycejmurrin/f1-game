@@ -37,6 +37,20 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("apex26." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("apex26." + k, JSON.stringify(v)); } catch (e) {} },
 };
+
+// Per-track time-trial leaderboard: top 5 laps ever, each tagged with the
+// team + driver that set it. Stored sorted ascending by lap time.
+const TT_BOARD_MAX = 5;
+function ttBoard(trackId) { return store.get("ttlb." + trackId, []); }
+function ttBoardAdd(trackId, entry) {
+  const b = ttBoard(trackId);
+  b.push(entry);
+  b.sort((a, z) => a.t - z.t);
+  if (b.length > TT_BOARD_MAX) b.length = TT_BOARD_MAX;
+  store.set("ttlb." + trackId, b);
+  return b;
+}
+
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 let trackIdx = store.get("track", 0);
@@ -103,9 +117,10 @@ let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let seasonMode = false;
 let timeTrial = false;      // solo run against the clock, no AI
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
-let ttRecord = Infinity;    // stored best lap for the current TT track (seconds)
-let ttNewRecord = false;    // set when the player beats the stored record this session
+let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
+let ttNewRecord = false;    // set when the player takes provisional pole this session
 let ttLaps = [];            // completed lap times this time-trial session
+let ttSessionTs = 0;        // session start stamp; entries at/after it are "yours, just now"
 let frameSky = {}, frame = {};
 const teamMeshes = {};   // teamId -> GLX mesh
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
@@ -231,9 +246,11 @@ function startRace() {
   if (timeTrial) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = TT_LAPS;
-    ttRecord = store.get("tt." + track.def.id, Infinity);
+    const board = ttBoard(track.def.id);
+    ttRecord = board.length ? board[0].t : Infinity;
     ttNewRecord = false;
     ttLaps = [];
+    ttSessionTs = Date.now();
   } else {
     lapsTarget = GAME_LAPS;
   }
@@ -332,42 +349,45 @@ function buildTTResults() {
   els.resultsTable.textContent = "";
   els.resultsTitle.textContent = track.def.name + " — TIME TRIAL";
   const best = player.best;
-  const bestIdx = ttLaps.indexOf(best);
 
-  // headline: your best lap this session
+  // headline: your best lap this session (green if it set a new track record)
   const head = document.createElement("div");
   head.className = "res-row you";
   head.style.fontSize = "18px";
-  const hl = document.createElement("span"); hl.className = "res-name"; hl.textContent = "BEST LAP";
-  const hv = document.createElement("span"); hv.className = "res-pts"; hv.style.width = "auto"; hv.textContent = fmtTime(best);
+  const hl = document.createElement("span"); hl.className = "res-name";
+  hl.textContent = ttNewRecord ? "★ NEW RECORD" : "YOUR BEST";
+  const hv = document.createElement("span"); hv.className = "res-pts"; hv.style.width = "auto";
+  hv.textContent = isFinite(best) ? fmtTime(best) : "-";
   head.append(hl, hv);
   els.resultsTable.appendChild(head);
 
-  // record line: new record this session, or the standing record to chase
-  const rec = document.createElement("div");
-  rec.className = "res-row";
-  rec.style.color = ttNewRecord ? "#aeea00" : "var(--dim)";
-  const rl = document.createElement("span"); rl.className = "res-name";
-  rl.textContent = ttNewRecord ? "★ NEW TRACK RECORD" : "TRACK RECORD";
-  const rv = document.createElement("span"); rv.className = "res-pts"; rv.style.width = "auto";
-  rv.textContent = isFinite(ttRecord) ? fmtTime(ttRecord) : "-";
-  rec.append(rl, rv);
-  els.resultsTable.appendChild(rec);
+  // leaderboard header
+  const lbHead = document.createElement("div");
+  lbHead.style.cssText = "margin-top:12px;color:#e10600;font-weight:800;font-style:italic";
+  lbHead.textContent = "LEADERBOARD — " + track.def.name;
+  els.resultsTable.appendChild(lbHead);
 
-  // per-lap breakdown (lap 1 is the standing-start out-lap)
-  ttLaps.forEach((t, i) => {
+  // top laps ever on this track, each tagged with the team + driver that set it.
+  // Entries from this session (ts >= session start) are highlighted.
+  const board = ttBoard(track.def.id);
+  board.forEach((e, i) => {
+    const team = teamById(e.teamId);
     const row = document.createElement("div");
-    row.className = "res-row" + (i === bestIdx ? " you" : "");
-    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = "L" + (i + 1);
-    const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = fmtTime(t);
+    row.className = "res-row" + (e.ts >= ttSessionTs ? " you" : "");
+    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+    const sw = document.createElement("span"); sw.className = "res-swatch";
+    sw.style.background = cssCol(team ? team.color : [0.5, 0.5, 0.5]);
+    const nm = document.createElement("span"); nm.className = "res-name";
+    nm.textContent = e.code + "  " + e.name + (team ? "  · " + team.short : "");
     const pt = document.createElement("span"); pt.className = "res-pts"; pt.style.width = "auto";
-    pt.textContent = i === bestIdx ? "fastest" : "+" + (t - best).toFixed(2);
-    row.append(pos, nm, pt);
+    pt.textContent = fmtTime(e.t);
+    row.append(pos, sw, nm, pt);
     els.resultsTable.appendChild(row);
   });
 
   els.resNext.textContent = "TRY AGAIN";
 }
+function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
 
 function quitToMenu() {
@@ -834,14 +854,17 @@ function updateCar(c, dt, ranked) {
   }
 }
 
-// Record a completed time-trial lap: store it, and if it beats the saved
-// record persist the new best so it survives quitting and reloads.
+// Record a completed time-trial lap: add it to the track's leaderboard tagged
+// with the car used, and flag a new record if it takes provisional pole. The
+// board persists, so it survives quitting and reloads.
 function onTTLap(lapTime) {
   ttLaps.push(lapTime);
+  ttBoardAdd(track.def.id, {
+    t: lapTime, teamId: player.team.id, code: player.code, name: player.name, ts: Date.now(),
+  });
   if (lapTime < ttRecord) {
     ttRecord = lapTime;
     ttNewRecord = true;
-    store.set("tt." + track.def.id, lapTime);
     announce("NEW RECORD " + fmtTime(lapTime), 2);
   }
 }
@@ -1086,8 +1109,9 @@ function buildSelect() {
     Tracks.LIST.forEach((t, i) => {
       const b = document.createElement("button");
       b.className = "sel-chip" + (i === trackIdx ? " active" : "");
-      // in time trial, surface each track's stored best lap on its chip
-      const rec = timeTrial ? store.get("tt." + t.id, Infinity) : Infinity;
+      // in time trial, surface each track's leaderboard-best lap on its chip
+      const board = timeTrial ? ttBoard(t.id) : [];
+      const rec = board.length ? board[0].t : Infinity;
       b.textContent = t.name + (t.night ? " ☾" : "") + (isFinite(rec) ? "  " + fmtTime(rec) : "");
       b.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); loadTrack(i); };
       els.selTracks.appendChild(b);
