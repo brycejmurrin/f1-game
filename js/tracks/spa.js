@@ -22,7 +22,49 @@
     ],
     // Eau Rouge dip, the Raidillon/Kemmel climb (the calendar's biggest, ~100 m
     // top-to-bottom), then the long descent back through the second sector.
-    elevations: [{ s: 0.10, halfM: 280, rise: -12 }, { s: 0.17, halfM: 440, rise: 34 }, { s: 0.46, halfM: 520, rise: -16 }],
+    elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
+    scenery: function (api) {
+      const { out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin, place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack, ferrisWheel, hash, upOf, cross, norm, lerp } = api;
+        every(16, (k) => {
+          for (const side of [-1, 1]) {
+            if (hash(k * 3 + side) > 0.35) continue;
+            const s = hash(k * 2 + side);
+            const h = 8 + s * 7, d = 14 + s * 12;
+            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);
+            place(k, side, d, [3.2, h, 3.2], [0.1, 0.32, 0.12]);
+          }
+        });
+
+      // Dense tree filler (Ardennes forest density)
+      every(12, (k) => {
+        for (const side of [-1, 1]) {
+          for (let j = 0; j < 3; j++) {
+            const d = 35 + hash(k * 27 + j) * 50;
+            const s = hash(k * 29 + side + j);
+            const h = 8 + s * 9;
+            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);   // trunk
+            place(k, side, d, [3.0, h, 3.0], [0.08, 0.28, 0.10]);      // canopy
+          }
+        }
+      });
+      // Forested Ardennes ridgelines rising behind the treeline
+      every(60, (k) => {
+        for (const side of [-1, 1]) {
+          backdrop(k, side, 170 + hash(k * 13 + side) * 120, [200, 50, 200], [0.16, 0.30, 0.18]);
+        }
+      });
+      // Yellow marshal posts at trackside (a Spa staple), close but cleared
+      every(46, (k) => {
+        const side = hash(k * 33) < 0.5 ? -1 : 1;
+        prop(k, side, 3, [1.4, 2.6, 1.4], [0.90, 0.78, 0.10]);
+      });
+      // Grass spectator banking with sparse crowd colour
+      every(120, (k) => {
+        const side = hash(k * 35) < 0.5 ? -1 : 1;
+        prop(k, side, 6, [8, 5, 22], [0.18, 0.34, 0.16]);
+        prop(k, side, 6, [8, 2, 20], [0.62, 0.4, 0.34]);
+      });
+    },
   }
   );
 })();

@@ -20,7 +20,7 @@
     ],
     // Steep alpine circuit (~65 m top-to-bottom): climb out of Turn 1, long
     // descent through the back of the lap.
-    elevations: [{ s: 0.10, halfM: 240, rise: 16 }, { s: 0.40, halfM: 320, rise: -14 }],
+    elevations: [{ s: 0.10, halfM: 240, rise: 10 }, { s: 0.40, halfM: 320, rise: -8 }],
   }
   );
 })();
