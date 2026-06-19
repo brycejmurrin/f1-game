@@ -62,9 +62,11 @@
       }
 
       // --- Forested ridgelines settling behind the trackside treeline.
+      // 22 m height ≈ tall Ardennes pine — reads as a tree-top horizon, not a
+      // looming wall. 200 m+ keeps the near face >140 m from the road edge.
       every(64, (k) => {
         for (const side of [-1, 1]) {
-          backdrop(k, side, 150 + hash(k * 13 + side) * 110, [200, 46, 200], [0.13, 0.30, 0.16]);
+          backdrop(k, side, 200 + hash(k * 13 + side) * 100, [110, 22, 90], [0.13, 0.30, 0.16]);
         }
       });
 
