@@ -166,7 +166,7 @@
       // faint banked kerb edge through the Peraltada/Estadio corners
       for (const s of [0.90, 0.93, 0.96]) {
         const k = K(s);
-        place(k, 1, 1.2, [2.0, 0.5, 8], [0.78, 0.74, 0.70]);   // low banked kerb edge
+        place(k, 1, 2.5, [2.0, 0.5, 8], [0.78, 0.74, 0.70]);   // low banked kerb edge
         place(k, 1, 2, [0.5, 0.14, 8], [0.82, 0.16, 0.16]);
       }
 

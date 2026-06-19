@@ -112,7 +112,7 @@
       // s 0.05 L — Turn 1 + esses: marshal-light spectator banks
       // ===================================================================
       grandstand(0.05, -1, 8, 70, [0.20, 0.21, 0.27], [0.28, 0.32, 0.44]);
-      billboard(K(0.05), -1, 6, 18, 11, LED_TEAL);
+      billboard(K(0.05), -1, 10, 18, 11, LED_TEAL);
 
       // ===================================================================
       // s 0.18 R far — FERRARI WORLD: huge low red roof box + white/yellow logo
@@ -120,8 +120,8 @@
       // ===================================================================
       {
         const k = K(0.18);
-        place(k, 1, 70, [180, 26, 150], FERRARI);               // vast red roof mass
-        place(k, 1, 70, [184, 5, 154], [0.55, 0.05, 0.06]);     // shaded eave band
+        place(k, 1, 92, [180, 26, 150], FERRARI);               // vast red roof mass
+        place(k, 1, 95, [184, 5, 154], [0.55, 0.05, 0.06]);     // shaded eave band
         const a = anchor(k, 1, 70);
         addCyl(out, vadd(a.c, a.u, 30), 22, 3, [0.95, 0.93, 0.85], 14, [a.r, a.u, a.t]);   // logo disc
         addCyl(out, vadd(a.c, a.u, 31.5), 11, 2, [1.00, 0.85, 0.10], 12, [a.r, a.u, a.t]); // yellow centre
@@ -155,7 +155,7 @@
       // s 0.42 L — banked Turn 9: runoff + grandstand boxes
       // ===================================================================
       grandstand(0.42, -1, 9, 80, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      place(K(0.42), -1, 4, [60, 0.4, 30], [0.20, 0.21, 0.22]);   // pale runoff apron
+      place(K(0.42), -1, 32, [60, 0.4, 30], [0.20, 0.21, 0.22]);   // pale runoff apron
 
       // ===================================================================
       // s 0.55 R mid — MARINA opens: CONTINUOUS dark water plane running the
@@ -181,7 +181,7 @@
       building(K(0.62), 1, 25, 50, 56, 30, { wall: [0.16, 0.18, 0.26], window: WIN, floor: 6 });
       building(K(0.60), 1, 29, 34, 34, 24, { wall: [0.15, 0.17, 0.24], window: WIN_WARM, floor: 5 });
       building(K(0.64), 1, 29, 34, 38, 24, { wall: [0.15, 0.17, 0.24], window: WIN, floor: 5 });
-      place(K(0.62), 1, 24, [54, 4, 8], WARM);   // warm uplit base band
+      place(K(0.62), 1, 29, [54, 4, 8], WARM);   // warm uplit base band
       place(K(0.60), 1, 22, [36, 3, 7], WARM);
       place(K(0.64), 1, 22, [36, 3, 7], WARM);
 
@@ -235,8 +235,8 @@
       // ===================================================================
       // s 0.95 both — final left-right: barriers funnel back, lit billboards
       // ===================================================================
-      billboard(K(0.95), 1, 6, 16, 10, LED_MAG);
-      billboard(K(0.95), -1, 6, 16, 10, LED_TEAL);
+      billboard(K(0.95), 1, 9, 16, 10, LED_MAG);
+      billboard(K(0.95), -1, 9, 16, 10, LED_TEAL);
       grandstand(0.96, -1, 6, 80, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
 
       // extra grandstands ringing T1/T5/T9/T11 (makes the seating bowl complete)
