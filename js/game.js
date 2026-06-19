@@ -43,7 +43,8 @@ let difficulty = store.get("difficulty", "normal");
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
-let buttonSteer = store.get("buttonSteer", false);  // use on-screen L/R steer buttons
+// how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
+let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
@@ -239,11 +240,12 @@ function showTouchControls(show) {
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
   els.shiftUp.hidden = !(t && manualMode);
   els.shiftDown.hidden = !(t && manualMode);
-  els.btnSteerLeft.hidden = !(t && buttonSteer);
-  els.btnSteerRight.hidden = !(t && buttonSteer);
+  const steerBtns = t && steerMode === "buttons";
+  els.btnSteerLeft.hidden = !steerBtns;
+  els.btnSteerRight.hidden = !steerBtns;
   // manual mode => shifts take the right column, boost/OT move to centre (CSS)
   document.body.classList.toggle("manual", manualMode);
-  document.body.classList.toggle("btn-steer", t && buttonSteer);
+  document.body.classList.toggle("btn-steer", steerBtns);
 }
 
 function endRace() {
@@ -1019,15 +1021,17 @@ function buildSelect(forSeason) {
 }
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
-function tiltLabel() {
-  return "TILT: " + (Input.useTilt() ? (Input.gyroSeen ? "ON" : "ON (NO GYRO)") : "OFF");
+function steerLabel() {
+  if (steerMode === "buttons") return "STEER: BUTTONS";
+  if (steerMode === "touch") return "STEER: TOUCH";
+  return "STEER: TILT" + (Input.gyroSeen ? "" : " (NO GYRO)");
 }
 
 function enableTilt() {
   // Must run inside a user gesture for the iOS permission prompt.
   Input.requestGyro().then((ok) => {
     if (ok) Input.calibrate();
-    $("pm-tilt").textContent = tiltLabel();
+    $("pm-steer").textContent = steerLabel();
     els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready"
       : (Input.gyroDenied ? "motion access denied — using touch" : "");
   });
@@ -1088,7 +1092,7 @@ $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect()
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
-els.selGo.onclick = () => { if (soundOn) GameAudio.uiSelect(); enableTilt(); startRace(); };
+els.selGo.onclick = () => { if (soundOn) GameAudio.uiSelect(); if (steerMode === "tilt") enableTilt(); startRace(); };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
   if (seasonMode) {
@@ -1119,32 +1123,19 @@ $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 $("pm-sound").onclick = () => setSound(!soundOn);
-function steerLabel() {
-  return "STEER: " + (buttonSteer ? "BUTTONS" : (Input.useTilt() ? "TILT" : "TOUCH"));
-}
 
-function setButtonSteer(b) {
-  buttonSteer = b;
-  store.set("buttonSteer", b);
-  Input.setUseButtonSteer(b);
-  if (b) Input.setUseTilt(false);   // buttons and tilt are mutually exclusive
-  $("pm-steer").textContent = steerLabel();
-  $("pm-tilt").textContent = tiltLabel();
-  showTouchControls(true);
-}
-
-$("pm-steer").onclick = () => setButtonSteer(!buttonSteer);
-
-$("pm-tilt").onclick = () => {
-  const on = !Input.useTilt();
-  Input.setUseTilt(on);
-  if (on) {
-    enableTilt();   // (re)request motion permission within this gesture
-    if (buttonSteer) setButtonSteer(false);   // switching to tilt disables button steer
-  }
-  $("pm-tilt").textContent = tiltLabel();
+// One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
+const STEER_MODES = ["tilt", "buttons", "touch"];
+function setSteerMode(mode) {
+  steerMode = mode;
+  store.set("steerMode", mode);
+  Input.setSteerMode(mode);
+  if (mode === "tilt") enableTilt();   // (re)request motion permission within this gesture
   $("pm-steer").textContent = steerLabel();
   showTouchControls(true);
+}
+$("pm-steer").onclick = () => {
+  setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 $("pm-gears").onclick = () => {
@@ -1165,9 +1156,8 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
 }
 
 Input.init(canvas, { onPause: () => setPaused(!paused) });
-Input.setUseButtonSteer(buttonSteer);
+Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
-$("pm-tilt").textContent = tiltLabel();
 $("pm-steer").textContent = steerLabel();
 $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
 setSound(soundOn);
