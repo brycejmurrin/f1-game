@@ -503,8 +503,12 @@ const Tracks = (function () {
     }
     // Five lateral verts per side: inner seam, concrete apron, gravel/runoff,
     // grass mid, grass far. Gives concrete run-off → gravel trap → grass gradient.
+    // Street circuits push the ribbon further from the road edge so barriers
+    // fully hide it and it cannot visually bleed onto the road surface.
     const NTV = 5;
-    const latsL = [-2.2, -7.0, -14, -48, -120], latsR = [2.2, 7.0, 14, 48, 120];
+    const isStreet = !!STREET_IDS[track.def.id];
+    const latsL = isStreet ? [-5.0, -10.0, -20, -55, -120] : [-2.2, -7.0, -14, -48, -120];
+    const latsR = isStreet ? [ 5.0,  10.0,  20,  55,  120] : [ 2.2,  7.0,  14,  48,  120];
     const concrete = pal.concrete || (track.def.night ? [0.32, 0.30, 0.28] : [0.50, 0.48, 0.44]);
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
@@ -519,7 +523,7 @@ const Tracks = (function () {
         const bankSide = bp ? bp.bsign[k] : 0;
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
-          const sag = -0.3 - Math.abs(lats[v]) * 0.018;
+          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018;
           // inner vert tracks road height; outer verts blend to gY (flat under bridges)
           const t = v / (NTV - 1);
           const yBase = py[k] * (1 - t) + gY[k] * t;
