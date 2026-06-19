@@ -853,11 +853,13 @@ const Tracks = (function () {
           backdrop(k, side, 360 + hash(k * 7 + side) * 160, [220, 14, 220], [0.46, 0.39, 0.28]);
         }
       });
-      // Floodlit grandstand banking opposite the pits (night race spectators)
+      // Floodlit grandstand banking opposite the pits (night race spectators).
+      // Pushed to 24m+ inner-face clearance so stands read as distant spectator
+      // banking rather than walls flanking the road.
       every(110, (k) => {
         const side = hash(k * 9) < 0.5 ? -1 : 1;
-        prop(k, side, 10, [8, 9, 24], [0.30, 0.30, 0.36]);     // stand shell
-        prop(k, side, 8,  [8, 5, 22], [0.55, 0.30, 0.28]);     // crowd tier
+        prop(k, side, 26, [12, 12, 36], [0.30, 0.30, 0.36]);   // stand shell
+        prop(k, side, 24, [12,  6, 34], [0.55, 0.30, 0.28]);   // crowd tier
       });
     }
     // Spa: dense Ardennes forest with ridges, streams, filler vegetation
