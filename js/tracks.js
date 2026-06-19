@@ -1,6 +1,7 @@
-/* Apex 26 — Tracks: 12 real circuits as authored centerlines, resampled into a
-   closed Catmull-Rom spline, extruded into 3D meshes. Contract: docs/ARCHITECTURE.md.
-   Depends on global GLX (at runtime) for mesh upload. */
+/* Apex 26 — Tracks engine: turns per-circuit definitions (js/tracks/<id>.js,
+   registered on the global TrackDefs list) into resampled closed Catmull-Rom
+   splines extruded into 3D meshes. Contract: docs/ARCHITECTURE.md.
+   Depends on globals TrackDefs + CircuitPaths (data) and GLX (mesh upload). */
 const Tracks = (function () {
   "use strict";
 
@@ -123,7 +124,7 @@ const Tracks = (function () {
     // deck so it passes OVER the lower section instead of clipping through it.
     // The cosine bump returns to 0 at the window edges, so the rest of the lap
     // stays flat — no global tilt.
-    const bridges = BRIDGES[def.id];
+    const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
       const cs = b.s * total;
       for (let k = 0; k < n; k++) {
@@ -133,7 +134,7 @@ const Tracks = (function () {
       }
     }
     // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
-    const elevs = ELEVATIONS[def.id];
+    const elevs = def.elevations;
     if (elevs) for (const e of elevs) {
       const cs = e.s * total;
       for (let k = 0; k < n; k++) {
@@ -159,8 +160,11 @@ const Tracks = (function () {
       rx[k] = r[0]; ry[k] = r[1]; rz[k] = r[2];
     }
 
-    const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, street: !!STREET_IDS[def.id], meshes: {}, map: null };
+    const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, street: !!def.street, meshes: {}, map: null };
     track.map = buildMap(px, pz, n);
+    // Banking profile (outer-edge lift per node). Computed once and shared by the
+    // road/terrain meshes and the car/camera placement in game.js.
+    track.bankP = bankingProfile(track);
     if (typeof GLX !== "undefined" && GLX.createMesh) {
       track.meshes.road = GLX.createMesh(buildRoad(track));
       track.meshes.terrain = GLX.createMesh(buildTerrain(track));
@@ -260,15 +264,12 @@ const Tracks = (function () {
   // stays dead flat (no global tilt). buildRoad and buildTerrain both read this
   // so the banked road edge and the terrain that meets it rise together.
   function bankingProfile(track) {
-    // Banking is disabled for now: the road/terrain mesh banks correctly, but
-    // cars take their height from the flat centreline so they float/sink on the
-    // banked surface. Doing it right means making the car, camera, shadow and
-    // collisions all follow the banked surface (and reworking the terrain ribbon
-    // so its far edge doesn't over-tilt) — a focused follow-up. Returning null
-    // keeps the run-off feature while neutralising the road/terrain lift.
-    return null;
-    /* eslint-disable no-unreachable */
-    if (track.def.id !== "zandvoort") return null;
+    // Opt-in per circuit via the `banked` data flag. The road/terrain mesh raises
+    // its outer edge here; game.js makes the car, shadow and camera ride the
+    // banked surface (height + roll) so nothing floats. The terrain ribbon's bank
+    // lift already tapers to zero at its far edge (see buildTerrain), so the
+    // distant ground stays flat.
+    if (!track.def.banked) return null;
     const n = track.n;
     const corners = findCorners(track, 0.006);
     if (!corners.length) return null;
@@ -366,11 +367,29 @@ const Tracks = (function () {
     return 0;
   }
 
+  // Banking under a car at arc-distance s, lateral offset x: how far the surface
+  // is raised there (dy, metres) and the roll of that surface about the tangent
+  // (rad, + tips the car toward the corner's inside). Lets game.js sit the car,
+  // its shadow and the camera ON the banked road instead of the flat centreline.
+  // Returns null on un-banked circuits/sections.
+  function banking(track, s, x) {
+    const bp = track.bankP;
+    if (!bp) return null;
+    const n = track.n, L = track.total;
+    const k = Math.floor((((s % L) + L) % L) / L * n) % n;
+    const lift = bp.lift[k];
+    if (!lift) return null;
+    const side = bp.bsign[k], w = track.hw[k];
+    let frac = (side * x + w) / (2 * w);
+    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+    return { dy: lift * frac, roll: -side * Math.atan2(lift, 2 * w) };
+  }
+
   function buildRoad(track) {
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [];
     const idxArr = [];
-    const bp = bankingProfile(track);
+    const bp = track.bankP;
     const pal = track.def.palette;
     const ka = pal.kerbA, kb = pal.kerbB, grass = pal.grass;
     const asphalt = pal.asphalt || [0.17, 0.18, 0.21];
@@ -389,12 +408,12 @@ const Tracks = (function () {
       const u = upOf(track, k);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const w = hw[k];
-      const offs = [-w - 2.2, -w - 1.2,
-                    -w, -w + 0.9, -w + 0.95,        // left edge line + step
+      const offs = [-w - 2.2, -w - 0.4,
+                    -w, -w + 0.2, -w + 0.25,        // left edge line + step
                     -0.35, -0.30,                    // centre line (left half)
                     0.30, 0.35,                      // centre line (right half)
-                    w - 0.95, w - 0.9, w,            // right step + edge line
-                    w + 1.2, w + 2.2];
+                    w - 0.25, w - 0.2, w,            // right step + edge line
+                    w + 0.4, w + 2.2];
       const rise = [0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0];
       const checker = (k * ds) < 9;                  // start/finish band
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
@@ -455,7 +474,7 @@ const Tracks = (function () {
     const pos = [], nrm = [], col = [];
     const idxArr = [];
     const pal = track.def.palette, grass = pal.grass, runoff = pal.runoff;
-    const bp = bankingProfile(track);
+    const bp = track.bankP;
     const ds = total / n;
     // Run-off aprons on permanent (non-street) circuits: a wide tan gravel/tarmac
     // band where cars actually run wide — fast corners (high |curvature|) and the
@@ -463,7 +482,7 @@ const Tracks = (function () {
     // circuits keep runoffAmt ~0 (their walls are right at the edge).
     const APRON_COL = [0.62, 0.55, 0.42];
     const runoffAmt = new Float32Array(n);
-    if (!STREET_IDS[track.def.id]) {
+    if (!track.def.street) {
       const cur = new Float32Array(n);
       for (let k = 0; k < n; k++) cur[k] = Math.abs(curvature(track, k * ds));
       const aheadNodes = Math.max(1, Math.round(60 / ds));  // ~60 m look-ahead
@@ -485,11 +504,18 @@ const Tracks = (function () {
         }
       }
     }
+    // Lowest point on the whole lap. The OUTER edge of every terrain ribbon
+    // settles to this baseline so that, on circuits with real elevation, the far
+    // grass of a raised section (e.g. COTA's Turn 1) never floats up across a
+    // lower part of the lap as a plane bisecting the car. The inner seam still
+    // tracks the road exactly; only the distant verts drop away.
+    let pyMin = Infinity;
+    for (let k = 0; k < n; k++) if (py[k] < pyMin) pyMin = py[k];
     // For bridge sections the terrain ribbon stays at ground level so the
     // elevated deck floats above flat ground (supported visually by the bridge
     // pillars in buildProps) instead of pulling the whole ground plane up with it.
     const gY = new Float32Array(py);
-    const brs = BRIDGES[track.def.id];
+    const brs = track.def.bridges;
     if (brs) {
       const ds = total / n;
       for (const b of brs) {
@@ -501,15 +527,15 @@ const Tracks = (function () {
         }
       }
     }
-    // Five lateral verts per side: inner seam, concrete apron, gravel/runoff,
-    // grass mid, grass far. Gives concrete run-off → gravel trap → grass gradient.
+    // Five lateral verts per side: a gravel/runoff verge at the road edge graded
+    // out to grass. The old bright concrete apron has been removed — it read as a
+    // glaring light slab flanking the track — so the verge is gravel, not tarmac.
     // Street circuits push the ribbon further from the road edge so barriers
     // fully hide it and it cannot visually bleed onto the road surface.
     const NTV = 5;
-    const isStreet = !!STREET_IDS[track.def.id];
+    const isStreet = !!track.def.street;
     const latsL = isStreet ? [-5.0, -10.0, -20, -55, -120] : [-2.2, -7.0, -14, -48, -120];
     const latsR = isStreet ? [ 5.0,  10.0,  20,  55,  120] : [ 2.2,  7.0,  14,  48,  120];
-    const concrete = pal.concrete || (track.def.night ? [0.32, 0.30, 0.28] : [0.50, 0.48, 0.44]);
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
       const base = pos.length / 3;
@@ -524,9 +550,15 @@ const Tracks = (function () {
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018;
-          // inner vert tracks road height; outer verts blend to gY (flat under bridges)
+          // inner vert tracks road height; outer verts ease down to the lap's
+          // low point (or the flattened bridge ground, whichever is lower). The
+          // quadratic ease keeps the run-off apron near track grade and pushes
+          // the drop out to the distant grass, so a raised corner reads as an
+          // embankment rather than a high plateau hanging over the rest of the lap.
           const t = v / (NTV - 1);
-          const yBase = py[k] * (1 - t) + gY[k] * t;
+          const ease = t * t;
+          const floorY = Math.min(gY[k], pyMin);
+          const yBase = py[k] * (1 - ease) + floorY * ease;
           // match the road's banked outer edge: rise along up by the same lift,
           // tapering across the ribbon (full at inner edge, 0 at outer) so the
           // far ground stays flat. frac uses the same formula as buildRoad.
@@ -539,15 +571,9 @@ const Tracks = (function () {
           pos.push(px[k] + r[0] * o + u[0] * by, yBase + sag + u[1] * by, pz[k] + r[2] * o + u[2] * by);
           nrm.push(0, 1, 0);
           const nz = (hash(k * 3 + v) - 0.5) * 0.04;
-          let tc;
-          if (v < 2) {
-            tc = concrete;                                    // asphalt/concrete apron
-          } else if (v === 2) {
-            tc = runoff;                                      // gravel/runoff zone
-          } else {
-            const gt = (v - 2) / (NTV - 3);                 // 0→1 from runoff to grass
-            tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
-          }
+          // gravel/runoff verge at the road edge, grading out to grass (no apron)
+          const gt = v / (NTV - 1);                          // 0 inner edge → 1 far
+          const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
         }
       }
@@ -593,8 +619,132 @@ const Tracks = (function () {
     }
   }
 
-  // street circuits get a continuous barrier wall at the edge instead of grass
-  const STREET_IDS = { monaco: 1, singapore: 1, vegas: 1, madrid: 1 };
+  // ---------- richer primitives (beyond the box) ----------
+  // Emit one flat convex polygon (3+ coplanar verts in perimeter order), fan-
+  // triangulated, auto-oriented so its face points AWAY from `ref` (an interior
+  // point) — so callers never have to reason about CCW winding under backface
+  // culling. Normal is the face normal (flat shading, matches the box look).
+  function emit(out, verts, col, ref) {
+    let nv = norm(cross(
+      [verts[1][0] - verts[0][0], verts[1][1] - verts[0][1], verts[1][2] - verts[0][2]],
+      [verts[2][0] - verts[0][0], verts[2][1] - verts[0][1], verts[2][2] - verts[0][2]]));
+    if (ref) {
+      let fx = 0, fy = 0, fz = 0;
+      for (const v of verts) { fx += v[0]; fy += v[1]; fz += v[2]; }
+      fx = fx / verts.length - ref[0]; fy = fy / verts.length - ref[1]; fz = fz / verts.length - ref[2];
+      if (nv[0] * fx + nv[1] * fy + nv[2] * fz < 0) { verts = verts.slice().reverse(); nv = [-nv[0], -nv[1], -nv[2]]; }
+    }
+    const base = out.pos.length / 3;
+    for (const v of verts) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]); }
+    for (let i = 1; i < verts.length - 1; i++) out.idx.push(base, base + i, base + i + 1);
+  }
+  const vadd = (p, v, s) => [p[0] + v[0] * s, p[1] + v[1] * s, p[2] + v[2] * s];
+
+  // Triangular prism / ridge: base sz[0] wide × sz[2] long, rising to a ridge
+  // line along the LENGTH at height sz[1]. A-frame roofs, mountain ridges.
+  function addPrism(out, c, sz, col, basis) {
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const hx = sz[0] / 2, hl = sz[2] / 2, h = sz[1], ref = vadd(c, u, h * 0.4);
+    const b0 = vadd(vadd(c, r, -hx), f, -hl), b1 = vadd(vadd(c, r, hx), f, -hl);
+    const b2 = vadd(vadd(c, r, hx), f, hl), b3 = vadd(vadd(c, r, -hx), f, hl);
+    const p0 = vadd(vadd(c, u, h), f, -hl), p1 = vadd(vadd(c, u, h), f, hl);
+    emit(out, [b0, b1, p0], col, ref); emit(out, [b3, b2, p1], col, ref);  // gables
+    emit(out, [b1, b2, p1, p0], col, ref); emit(out, [b0, p0, p1, b3], col, ref);  // slopes
+  }
+
+  // Pyramid: base sz[0]×sz[2] up to a single apex at height sz[1]. Peaks, spires.
+  function addPyramid(out, c, sz, col, basis) {
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const hx = sz[0] / 2, hl = sz[2] / 2, ref = vadd(c, u, sz[1] * 0.35);
+    const b0 = vadd(vadd(c, r, -hx), f, -hl), b1 = vadd(vadd(c, r, hx), f, -hl);
+    const b2 = vadd(vadd(c, r, hx), f, hl), b3 = vadd(vadd(c, r, -hx), f, hl);
+    const ap = vadd(c, u, sz[1]);
+    emit(out, [b0, b1, ap], col, ref); emit(out, [b1, b2, ap], col, ref);
+    emit(out, [b2, b3, ap], col, ref); emit(out, [b3, b0, ap], col, ref);
+  }
+
+  // Cone: n-gon base radius `rad` up to an apex at `h`. Conifers, spires, towers.
+  function addCone(out, c, rad, h, col, seg, basis) {
+    seg = seg || 8;
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const ap = vadd(c, u, h), ref = vadd(c, u, h * 0.35);
+    const ring = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
+    for (let i = 0; i < seg; i++) emit(out, [ring(i / seg * 6.2832), ring((i + 1) / seg * 6.2832), ap], col, ref);
+  }
+
+  // Cylinder: n-gon column radius `rad`, height `h` (+ top cap). Trunks, towers.
+  function addCyl(out, c, rad, h, col, seg, basis) {
+    seg = seg || 8;
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const ref = vadd(c, u, h * 0.5), top = vadd(c, u, h);
+    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
+    for (let i = 0; i < seg; i++) {
+      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
+      emit(out, [lo(a0), lo(a1), vadd(lo(a1), u, h), vadd(lo(a0), u, h)], col, ref);
+      emit(out, [vadd(lo(a0), u, h), vadd(lo(a1), u, h), top], col, ref);
+    }
+  }
+
+  // Frustum: n-gon truncated cone, base radius `rBase` → top radius `rTop` over
+  // height `h`. Stack these for colour-banded mountains (forest → rock → snow).
+  function addFrustum(out, c, rBase, rTop, h, col, seg, basis) {
+    seg = seg || 8;
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const ref = vadd(c, u, h * 0.5);
+    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rBase), f, Math.sin(a) * rBase);
+    const hi = (a) => vadd(vadd(vadd(c, u, h), r, Math.cos(a) * rTop), f, Math.sin(a) * rTop);
+    for (let i = 0; i < seg; i++) {
+      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
+      emit(out, [lo(a0), lo(a1), hi(a1), hi(a0)], col, ref);
+    }
+  }
+
+  // Organic mountain at world `c`, base radius `baseR`, height `h`. A radial mesh
+  // of stacked rings whose per-angle radius is perturbed (vertical ridges/gullies)
+  // and whose apex is jittered off-centre, so no two read as the same symmetric
+  // cone. Faces are coloured by height — forested base → rock → ragged snow cap.
+  // opts: { seg, seed, rough, forest, rock, snow, snowline, right, fwd }.
+  function addMountain(out, c, baseR, h, opts) {
+    opts = opts || {};
+    const seg = opts.seg || 10, seed = opts.seed || 0, rough = opts.rough != null ? opts.rough : 0.34;
+    const forest = opts.forest || [0.22, 0.38, 0.22];
+    const rock = opts.rock || [0.40, 0.38, 0.36];
+    const snow = opts.snow || [0.93, 0.95, 0.99];
+    const snowline = opts.snowline != null ? opts.snowline : 0.62;
+    const rx = opts.right || [1, 0, 0], fz = opts.fwd || [0, 0, 1];
+    const h2 = (a, b) => { const x = Math.sin(a * 12.9898 + b * 78.233 + seed * 0.137) * 43758.5453; return x - Math.floor(x); };
+    const ridgeOff = [];
+    for (let i = 0; i < seg; i++) ridgeOff.push(h2(i, 7) - 0.5);            // shared down each ridge
+    const rings = [[0, 1], [0.38, 0.64], [0.70, 0.34]];                    // [heightFrac, radiusFrac]
+    const pt = (hf, rf, i) => {
+      const a = i / seg * 6.2832;
+      const rad = baseR * rf * (1 + ridgeOff[i] * rough * 1.4) * (1 + (h2(i, hf * 97 + 3) - 0.5) * rough * 0.7);
+      const y = h * (hf + (h2(i, hf * 97 + 9) - 0.5) * rough * 0.12);
+      return [c[0] + rx[0] * Math.cos(a) * rad + fz[0] * Math.sin(a) * rad, c[1] + y, c[2] + rx[2] * Math.cos(a) * rad + fz[2] * Math.sin(a) * rad];
+    };
+    const ref = [c[0], c[1] + h * 0.4, c[2]];
+    const colAt = (fy, i) => {
+      const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;                        // ragged zone edges
+      if (fr > snowline + 0.04) return snow;
+      if (fr > snowline - 0.16) return [(rock[0] + snow[0]) / 2, (rock[1] + snow[1]) / 2, (rock[2] + snow[2]) / 2];
+      if (fr > 0.34) return rock;
+      const j = 0.88 + 0.24 * h2(i, 21);
+      return [forest[0] * j, forest[1] * j, forest[2] * j];
+    };
+    const V = rings.map(([hf, rf]) => { const row = []; for (let i = 0; i < seg; i++) row.push(pt(hf, rf, i)); return row; });
+    for (let r = 0; r < rings.length - 1; r++) {
+      for (let i = 0; i < seg; i++) {
+        const a = V[r][i], b = V[r][(i + 1) % seg], cc = V[r + 1][(i + 1) % seg], d = V[r + 1][i];
+        emit(out, [a, b, cc, d], colAt((a[1] + b[1] + cc[1] + d[1]) / 4 - c[1], i + r), ref);
+      }
+    }
+    const apex = [c[0] + (h2(1, 1) - 0.5) * baseR * 0.14, c[1] + h * (0.97 + h2(2, 2) * 0.06), c[2] + (h2(3, 3) - 0.5) * baseR * 0.14];
+    const tr = rings.length - 1;
+    for (let i = 0; i < seg; i++) {
+      const a = V[tr][i], b = V[tr][(i + 1) % seg];
+      emit(out, [a, b, apex], colAt((a[1] + b[1] + apex[1]) / 3 - c[1], i), ref);
+    }
+  }
 
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
@@ -608,6 +758,43 @@ const Tracks = (function () {
     // section. Anchoring the base low keeps terrain below the road everywhere.
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
+    // Terrain surface height `dist` metres beyond the road edge at node k. Mirrors
+    // the ribbon built in buildTerrain: the inner verts hug the road, the outer
+    // ones ease (quadratically) down to the lap's low point. Roadside props anchor
+    // to THIS instead of the road height, so on an elevated or embanked section
+    // they sit on the sloping ground rather than floating at the old flat grade.
+    const isStreetT = !!track.def.street;
+    const gLats = isStreetT ? [5, 10, 20, 55, 120] : [2.2, 7, 14, 48, 120];
+    const gSag = isStreetT ? -1.5 : -0.3;
+    const groundYAt = (k, dist) => {
+      const base = py[k];
+      if (dist <= 0) return base;
+      let prevD = 0, prevY = base + gSag;
+      for (let v = 0; v < 5; v++) {
+        const e = (v / 4) * (v / 4);
+        const y = base * (1 - e) + pyMin * e + (gSag - gLats[v] * 0.018);
+        if (dist <= gLats[v]) return prevY + (y - prevY) * ((dist - prevD) / (gLats[v] - prevD || 1));
+        prevD = gLats[v]; prevY = y;
+      }
+      return prevY;   // beyond the last vert: the lap's low baseline
+    };
+    // Universal ground floor: one big flat slab at the lap's low point, sized to
+    // reach well past the farthest scenery. The terrain ribbon only extends ~120 m
+    // from the road, so without this, distant hills/skylines would sit over open
+    // sky (reading as "floating"). Tucked just under the ribbon's far edge so it
+    // only shows through the gap beyond it. Coloured from the circuit's ground.
+    {
+      let gx = 0, gz = 0;
+      for (let i = 0; i < n; i++) { gx += px[i]; gz += pz[i]; }
+      gx /= n; gz /= n;
+      let grad = 0;
+      for (let i = 0; i < n; i++) grad = Math.max(grad, Math.hypot(px[i] - gx, pz[i] - gz));
+      const gc = pal.grass || [0.2, 0.38, 0.18];
+      // top sits at pyMin-3 — below the terrain ribbon's far edge and the water
+      // planes (~pyMin-2.4) so it fills the gap without hiding lakes/sea.
+      addBox(out, [gx, pyMin - 5, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
+             [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
+    }
     // True if (x,z) lies on (or within `margin` of) the tarmac of ANY track
     // station. Used to stop props being dropped onto a *parallel* section of the
     // circuit — e.g. a tree placed perpendicular to one point landing on the
@@ -630,8 +817,10 @@ const Tracks = (function () {
       // skip if this prop would overlap a parallel stretch of track
       if (onTrack(cx, cz, sz[0] / 2 + 1.5)) return;
       // sink the base 0.8m below grade so prop bottoms tuck under the terrain
-      // apron instead of co-planar Z-fighting where box meets ground.
-      const c = [cx, py[k] + sz[1] / 2 - 0.8 + r[1] * o, cz];
+      // apron instead of co-planar Z-fighting where box meets ground. Anchored to
+      // the terrain height at this lateral distance (not the road) so it sits on
+      // the ground on elevated/embanked sections.
+      const c = [cx, groundYAt(k, dist) + sz[1] / 2 - 0.8, cz];
       addBox(out, c, sz, col, [r, u, t]);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
@@ -651,7 +840,7 @@ const Tracks = (function () {
       const o = side * (hw[k] + gap + sz[0] / 2);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       if (onTrack(cx, cz, sz[0] / 2 + 4)) return;
-      addBox(out, [cx, py[k] - sz[1] / 2 - 1.0, cz], sz, col);
+      addBox(out, [cx, groundYAt(k, gap + sz[0] / 2) - sz[1] / 2 - 1.0, cz], sz, col);
     };
     // backdrop(): a distant scenery box (skyline, hills, dunes) on the horizon.
     // Tall things go far enough back that they never clip the viewport edge, and
@@ -661,17 +850,183 @@ const Tracks = (function () {
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       if (onTrack(cx, cz, sz[0] / 2 + 6)) return;
-      addBox(out, [cx, py[k] + sz[1] / 2 - 2, cz], sz, col);
+      // distant scenery settles to the lap's low baseline (groundYAt past the last
+      // ribbon vert returns it), so a ridge/skyline never floats on a high section
+      addBox(out, [cx, groundYAt(k, dist) + sz[1] / 2 - 2, cz], sz, col);
+    };
+
+    // ---------- composite scenery models (beyond single boxes) ----------
+    // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
+    // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
+    const anchor = (k, side, dist) => {
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const t = [track.tx[k], track.ty[k], track.tz[k]];
+      const u = upOf(track, k);
+      const o = side * (hw[k] + dist);
+      return { c: [px[k] + r[0] * o, groundYAt(k, dist), pz[k] + r[2] * o], r, u, t };
+    };
+    // Conifer/pine: tapered trunk + stacked cones. col = needle green.
+    const pine = (k, side, dist, h, col) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
+      let y = h * 0.3;
+      for (let i = 0; i < 3; i++) {
+        const w = 2.6 * (1 - i * 0.27);
+        addCone(out, vadd(a.c, a.u, y), w, h * 0.34, col, 7, b);
+        y += h * 0.22;
+      }
+    };
+    // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
+    const tree = (k, side, dist, h, col) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
+      addCone(out, vadd(a.c, a.u, h * 0.32), 2.8 + h * 0.12, h * 0.5, col, 8, b);
+      addCone(out, vadd(a.c, a.u, h * 0.62), 1.8 + h * 0.06, h * 0.32, col, 7, b);
+    };
+    // Palm: tall thin trunk + a crown of drooping frond prisms.
+    const palm = (k, side, dist, h, frond) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      addCyl(out, a.c, 0.3, h, [0.45, 0.36, 0.22], 6, b);
+      const top = vadd(a.c, a.u, h);
+      for (let i = 0; i < 6; i++) {
+        const ang = i / 6 * 6.2832, dir = [Math.cos(ang), 0, Math.sin(ang)];
+        const fr = [dir[0] * a.r[0] + dir[2] * a.t[0], 0, dir[0] * a.r[2] + dir[2] * a.t[2]];
+        const fc = vadd(vadd(top, fr, 2.4), a.u, -0.4);
+        addPrism(out, fc, [1.6, 0.5, 4.4], frond || [0.18, 0.40, 0.16], [fr, a.u, [-fr[2], 0, fr[0]]]);
+      }
+    };
+    // Distant mountain peak (world coords), pyramid so it reads as a summit, with
+    // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
+    // use mountain() for organic, colour-zoned, snow-capped summits.
+    const peak = (x, z, baseY, w, h, col) => {
+      addPyramid(out, [x, baseY, z], [w, h, w], col, null);
+      addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
+    };
+    // Organic mountain (world coords): irregular craggy summit with height colour
+    // zones (forest → rock → snow). opts passes seed/snowline/colours — see
+    // addMountain. A low foot skirt blends the base into the ground.
+    const mountain = (x, z, baseY, w, h, opts) => {
+      opts = opts || {};
+      addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
+                 opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
+      addMountain(out, [x, baseY, z], w * 0.5, h, opts);
+    };
+    // Mountain ridge segment (world coords) — a prism whose ridge runs along
+    // `ang` (radians, in the XZ plane). Chain these for a jagged range.
+    const ridge = (x, z, baseY, ang, len, w, h, col) => {
+      const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
+      addPrism(out, [x, baseY, z], [w, h, len], col, [r, [0, 1, 0], f]);
+    };
+    // Tiered grandstand running along the track: a raked seating wedge (prism on
+    // its side reads as a rake), a back shell and a flat roof slab on posts.
+    const grandstand = (s, side, gap, len, shell, crowd) => {
+      const k = Math.round(s * n) % n;
+      prop(k, side, gap + 2.5, [10, 12, len], shell || [0.40, 0.41, 0.46]);   // back shell
+      prop(k, side, gap, [9, 7, len - 2], crowd || [0.55, 0.32, 0.30]);        // raked crowd
+      // roof slab cantilevered over the crowd, lifted on the up axis
+      const a = anchor(k, side, gap + 5);
+      addBox(out, vadd(a.c, a.u, 13), [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+    };
+
+    // ---------- linear track furniture (run along the track from s0→s1) ----------
+    // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart.
+    const along = (s0, s1, stepM, fn) => {
+      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      const span = ((k1 - k0) + n) % n || n, step = Math.max(1, Math.round(stepM / ds));
+      for (let i = 0; i <= span; i += step) fn((k0 + i) % n);
+    };
+    // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
+    const wall = (s0, s1, side, gap, h, col, thick) => {
+      const a = thick || 0.5;
+      along(s0, s1, 6, (k) => { const p = anchor(k, side, gap); addBox(out, vadd(p.c, p.u, h / 2), [a, h, 6.3], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]); });
+    };
+    // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
+    const fence = (s0, s1, side, gap, h, col) => {
+      along(s0, s1, 5, (k) => {
+        const p = anchor(k, side, gap);
+        addCyl(out, p.c, 0.13, h, [0.28, 0.28, 0.30], 5, [p.r, p.u, p.t]);          // post
+        addBox(out, vadd(p.c, p.u, h * 0.55), [0.05, h * 0.9, 5.2], col || [0.72, 0.74, 0.78], [p.r, p.u, p.t]);  // mesh
+      });
+    };
+    // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
+    const guardrail = (s0, s1, side, gap, col) => {
+      along(s0, s1, 4, (k) => {
+        const p = anchor(k, side, gap);
+        addCyl(out, p.c, 0.09, 0.7, [0.5, 0.5, 0.52], 4, [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 0.7), [0.18, 0.45, 4.2], col || [0.82, 0.82, 0.85], [p.r, p.u, p.t]);
+      });
+    };
+    // Stacked-tyre barrier with a coloured conveyor-belt cap.
+    const tyreWall = (s0, s1, side, gap, capCol) => {
+      along(s0, s1, 3.4, (k) => {
+        const p = anchor(k, side, gap);
+        addCyl(out, p.c, 1.0, 0.9, [0.10, 0.10, 0.11], 7, [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 0.95), [2.0, 0.3, 3.6], capCol || [0.9, 0.9, 0.92], [p.r, p.u, p.t]);
+      });
+    };
+    // Low clipped hedge / continuous treeline.
+    const hedge = (s0, s1, side, gap, h, col) => {
+      along(s0, s1, 4, (k) => { const p = anchor(k, side, gap); addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, 4.3], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]); });
+    };
+
+    // ---------- structures ----------
+    // Multi-storey building: mass + horizontal window bands + optional setback top.
+    const building = (k, side, dist, w, h, d, opts) => {
+      opts = opts || {};
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      const body = opts.wall || [0.62, 0.64, 0.68], win = opts.window || [0.18, 0.26, 0.34];
+      addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b);
+      const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
+      for (let i = 0; i < floors; i++) {
+        addBox(out, vadd(p.c, p.u, (i + 0.62) * (h / floors)), [w * 1.01, (h / floors) * 0.46, d * 1.01], win, b);  // glazing band
+      }
+      if (opts.setback) addBox(out, vadd(p.c, p.u, h + h * 0.1), [w * 0.6, h * 0.22, d * 0.6], body, b);
+      if (opts.roof) addBox(out, vadd(p.c, p.u, h + (opts.setback ? h * 0.22 : 0) + 1), [w * 0.3, 2, d * 0.3], [0.3, 0.3, 0.33], b);  // rooftop plant
+    };
+    // Tapered tower (control tower, spire) + optional antenna mast.
+    const tower = (k, side, dist, baseW, h, opts) => {
+      opts = opts || {};
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      addFrustum(out, p.c, baseW * 0.5, baseW * 0.32, h, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);
+      if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
+      if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
+    };
+    // Advertising hoarding / billboard: a panel on two slim posts.
+    const billboard = (k, side, gap, w, h, col) => {
+      const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(p.c, p.t, o), 0.12, h, [0.2, 0.2, 0.22], 4, b);
+      addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], col || [0.9, 0.85, 0.2], b);
+    };
+    // Overhead gantry spanning the track (start/scoring/DRS): two legs + a beam.
+    const gantry = (s, h, col) => {
+      const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
+      const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
+      addCyl(out, aL.c, 0.3, h, c, 6, [aL.r, u, aL.t]); addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
+      addBox(out, [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h], [hw[k] * 2 + 5, 0.9, 1.4], c, [aL.r, u, aL.t]);
+    };
+    // Marshal post / flag bunker: a small orange-roofed box with a pole.
+    const marshalPost = (k, side, gap) => {
+      const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
+      addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
+      addCyl(out, vadd(p.c, p.r, side * 1.4), 0.08, 4, [0.4, 0.4, 0.42], 4, b);
+    };
+    // Bush / shrub clump (low rounded greenery).
+    const bush = (k, side, dist, col) => {
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      addCone(out, vadd(p.c, p.u, 0.3), 1.6, 2.2, col || [0.20, 0.38, 0.18], 6, b);
     };
 
     // continuous barrier wall hugging both edges on street circuits — going off
     // means hitting a wall, not open grass. Day circuits get red/white armco
     // striping; night circuits get a dark rail.
-    if (STREET_IDS[def.id]) {
-      const WH = 1.1, WT = 0.4;
+    if (def.street) {
+      // Barriers are straight panels — span a few nodes each instead of one box
+      // per ~4 m node, roughly halving the barrier vertex cost on long street laps.
+      const WH = 1.1, WT = 0.4, STEP = 2;
       for (const side of [-1, 1]) {
-        for (let k = 0; k < n; k++) {
-          const kn = (k + 1) % n;
+        for (let k = 0; k < n; k += STEP) {
+          const kn = (k + STEP) % n;
           const r0 = [track.rx[k], track.ry[k], track.rz[k]];
           const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
           const u0 = upOf(track, k);
@@ -683,7 +1038,7 @@ const Tracks = (function () {
           const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
           const f = norm([bx - ax, by - ay, bz - az]);
           const rr = norm(cross(f, u0));
-          const striped = (Math.floor(k / 3) % 2) === 0;
+          const striped = (Math.floor(k / (STEP * 3)) % 2) === 0;
           const col = def.night ? [0.18, 0.18, 0.22]
             : (striped ? [0.92, 0.92, 0.94] : [0.85, 0.18, 0.16]);
           addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
@@ -700,7 +1055,7 @@ const Tracks = (function () {
       }
     });
     // tire barriers at outside of tight corners on permanent (non-street) circuits
-    if (!STREET_IDS[def.id]) {
+    if (!def.street) {
       for (const c of findCorners(track, 0.014)) {
         const outside = c.sign > 0 ? -1 : 1;
         const lo = Math.max(1, Math.round(c.lo * 0.35));
@@ -720,7 +1075,7 @@ const Tracks = (function () {
     }
 
     // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
-    if (!STREET_IDS[def.id]) {
+    if (!def.street) {
       every(270, (k) => {
         const side = hash(k * 7) < 0.5 ? -1 : 1;
         place(k, side, hw[k] + 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
@@ -739,17 +1094,7 @@ const Tracks = (function () {
         }
       });
       // denser forest for Spa (Ardennes forest setting)
-      if (def.id === "spa") {
-        every(16, (k) => {
-          for (const side of [-1, 1]) {
-            if (hash(k * 3 + side) > 0.35) continue;
-            const s = hash(k * 2 + side);
-            const h = 8 + s * 7, d = 14 + s * 12;
-            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);
-            place(k, side, d, [3.2, h, 3.2], [0.1, 0.32, 0.12]);
-          }
-        });
-      }
+      
       // occasional grandstand
       every(140, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
     } else if (theme === "desert") {
@@ -793,387 +1138,6 @@ const Tracks = (function () {
     } else if (theme === "modern") {  // Madrid
       every(30, (k) => { for (const side of [-1, 1]) { const s = hash(k + side); place(k, side, hw[k] + 20 + s * 3, [10, 8 + s * 14, 10], [0.8, 0.82, 0.86]); } });
       every(120, (k) => place(k, hash(k) < 0.5 ? -1 : 1, hw[k] + 25, [4, 6, 24], [0.85, 0.2, 0.2]));
-      // La Monumental: 24% banked high-speed turn with distinctive white structure
-      if (def.id === "madrid") {
-        const kmono = Math.round(n * 0.65) % n;
-        const kmr = [track.rx[kmono], track.ry[kmono], track.rz[kmono]];
-        const kmu = upOf(track, kmono);
-        for (let i = -3; i <= 3; i++) {
-          const k = (kmono + i * Math.round(n / 20)) % n;
-          // oriented + cleared so the white grandstand wraps the banked turn
-          // alongside it instead of cutting across the apex (near face was ~2m in)
-          prop(k, 1, 8, [10, 16, 26], [0.88, 0.88, 0.92]);
-        }
-        // Sierra mountain backdrop
-        const kmtn = Math.round(n * 0.4) % n;
-        const kmtnr = [track.rx[kmtn], track.ry[kmtn], track.rz[kmtn]];
-        for (let i = 0; i < 4; i++) {
-          const mtn_d = 280 + i * 60;
-          const mx = px[kmtn] + kmtnr[0] * mtn_d, mz = pz[kmtn] + kmtnr[2] * mtn_d;
-          if (onTrack(mx, mz, 155)) continue;
-          addBox(out, [mx, py[kmtn] + 50, mz], [300, 100, 200], [0.5, 0.48, 0.52]);
-        }
-        // Spanish plains vegetation filler
-        every(40, (k) => {
-          for (const side of [-1, 1]) {
-            if (hash(k * 57 + side) > 0.45) continue;
-            const d = 30 + hash(k * 58 + side) * 50;
-            const s = hash(k * 59 + side);
-            const h = 5 + s * 5;
-            place(k, side, d, [1.6, 1.6, 1.6], [0.30, 0.22, 0.12]);
-            place(k, side, d, [3.5, h, 3.5], [0.26, 0.36, 0.16]);
-          }
-        });
-        // Light towers (occasional)
-        every(180, (k) => {
-          const side = hash(k * 61) < 0.3 ? -1 : 1;
-          place(k, side, hw[k] + 65, [1.8, 32, 1.8], [0.40, 0.40, 0.43]);
-        });
-      }
-    }
-
-    // --- circuit-specific surrounding landscape features with comprehensive filler ---
-    // Bahrain: desert dunes, Persian Gulf, utility infrastructure
-    if (def.id === "bahrain") {
-      // Date-palm clusters (the circuit's oasis planting), set back behind the runoff
-      every(24, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 17 + side) > 0.5) continue;
-          const d = 12 + hash(k * 19 + side) * 22;
-          const h = 6.5 + hash(k * 23 + side) * 4;
-          prop(k, side, d, [0.9, h, 0.9], [0.34, 0.26, 0.14]);   // slender trunk
-          prop(k, side, d, [5.0, 1.8, 5.0], [0.20, 0.34, 0.12]); // frond crown
-        }
-      });
-      // Low sand-dune ridges far out on the flat-desert horizon. Pushed well
-      // back and kept low so they read as a distant skyline, not tan walls
-      // flanking the straights; darkened for the night race.
-      every(120, (k) => {
-        for (const side of [-1, 1]) {
-          backdrop(k, side, 360 + hash(k * 7 + side) * 160, [220, 14, 220], [0.46, 0.39, 0.28]);
-        }
-      });
-      // Floodlit grandstand banking opposite the pits (night race spectators).
-      // Pushed to 24m+ inner-face clearance so stands read as distant spectator
-      // banking rather than walls flanking the road.
-      every(110, (k) => {
-        const side = hash(k * 9) < 0.5 ? -1 : 1;
-        prop(k, side, 26, [12, 12, 36], [0.30, 0.30, 0.36]);   // stand shell
-        prop(k, side, 24, [12,  6, 34], [0.55, 0.30, 0.28]);   // crowd tier
-      });
-    }
-    // Spa: dense Ardennes forest with ridges, streams, filler vegetation
-    if (def.id === "spa") {
-      // Dense tree filler (Ardennes forest density)
-      every(12, (k) => {
-        for (const side of [-1, 1]) {
-          for (let j = 0; j < 3; j++) {
-            const d = 35 + hash(k * 27 + j) * 50;
-            const s = hash(k * 29 + side + j);
-            const h = 8 + s * 9;
-            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);   // trunk
-            place(k, side, d, [3.0, h, 3.0], [0.08, 0.28, 0.10]);      // canopy
-          }
-        }
-      });
-      // Forested Ardennes ridgelines rising behind the treeline
-      every(60, (k) => {
-        for (const side of [-1, 1]) {
-          backdrop(k, side, 170 + hash(k * 13 + side) * 120, [200, 50, 200], [0.16, 0.30, 0.18]);
-        }
-      });
-      // Yellow marshal posts at trackside (a Spa staple), close but cleared
-      every(46, (k) => {
-        const side = hash(k * 33) < 0.5 ? -1 : 1;
-        prop(k, side, 3, [1.4, 2.6, 1.4], [0.90, 0.78, 0.10]);
-      });
-      // Grass spectator banking with sparse crowd colour
-      every(120, (k) => {
-        const side = hash(k * 35) < 0.5 ? -1 : 1;
-        prop(k, side, 6, [8, 5, 22], [0.18, 0.34, 0.16]);
-        prop(k, side, 6, [8, 2, 20], [0.62, 0.4, 0.34]);
-      });
-    }
-    // Silverstone: English countryside
-    if (def.id === "silverstone") {
-      // Hedgerows and oak copses around the old airfield perimeter
-      every(20, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 21 + side) > 0.55) continue;
-          const d = 40 + hash(k * 22 + side) * 60;
-          const h = 6 + hash(k * 24 + side) * 6;
-          place(k, side, d, [1.2, 1.4, 1.2], [0.30, 0.22, 0.12]);
-          place(k, side, d, [4.2, h, 4.2], [0.20, 0.40, 0.18]);
-        }
-      });
-      // Spectator grandstands at the fast corners (Stowe / Copse / Maggotts)
-      for (const frac of [0.18, 0.34, 0.58, 0.78]) {
-        const k = Math.round(frac * n) % n;
-        const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [8, 10, 30], [0.40, 0.42, 0.48]);   // stand shell
-        prop(k, side, 7, [8, 6, 28], [0.66, 0.40, 0.34]);    // crowd
-      }
-      // Distant low Northamptonshire treeline
-      every(80, (k) => {
-        for (const side of [-1, 1]) {
-          backdrop(k, side, 180 + hash(k * 6 + side) * 90, [180, 22, 180], [0.22, 0.36, 0.20]);
-        }
-      });
-    }
-    // Monaco: steep hillside buildings and Mediterranean backdrop
-    if (def.id === "monaco") {
-      for (let i = 0; i < 8; i++) {
-        const k = Math.round((i / 8) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const hillx = px[k] + r[0] * (hw[k] + 100);
-        const hillz = pz[k] + r[2] * (hw[k] + 100);
-        if (onTrack(hillx, hillz, 20)) continue; // skip if box would land on a parallel section
-        const bldg_h = 25 + hash(k * 29) * 35;
-        addBox(out, [hillx, py[k] + bldg_h / 2, hillz], [28, bldg_h, 22],
-               [0.72 + hash(k) * 0.2, 0.68 + hash(k) * 0.2, 0.6 + hash(k) * 0.15]);
-      }
-    }
-    // Monza: royal park lakes and Italian Milan distant skyline
-    if (def.id === "monza") {
-      // Park lakes
-      for (let i = 0; i < 4; i++) {
-        const k = Math.round((i / 4) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const lx = px[k] + r[0] * (hw[k] + 120), lz = pz[k] + r[2] * (hw[k] + 120);
-        if (onTrack(lx, lz, 95)) continue;  // keep the 180m water slab off parallel sections
-        addBox(out, [lx, pyMin - 3, lz], [180, 1.6, 240], [0.1, 0.24, 0.4]);  // lake water
-      }
-      // Distant Milan towers
-      const kmilan = Math.round(n * 0.4) % n;
-      const kmr = [track.rx[kmilan], track.ry[kmilan], track.rz[kmilan]];
-      for (let i = 0; i < 5; i++) {
-        const h = 50 + i * 15, d = 280 + i * 30;
-        const mx = px[kmilan] + kmr[0] * d, mz = pz[kmilan] + kmr[2] * d;
-        if (onTrack(mx, mz, 14)) continue;
-        addBox(out, [mx, py[kmilan] + h / 2, mz], [16, h, 16], [0.48 + i * 0.08, 0.46 + i * 0.08, 0.44 + i * 0.08]);
-      }
-    }
-    // Suzuka: distant Mount Fuji backdrop and Japanese rural surroundings
-    if (def.id === "suzuka") {
-      // Mt. Fuji silhouette (very distant, large)
-      const kfuji = Math.round(n * 0.3) % n;
-      const kfr = [track.rx[kfuji], track.ry[kfuji], track.rz[kfuji]];
-      addBox(out, [px[kfuji] + kfr[0] * 400, py[kfuji] + 80, pz[kfuji] + kfr[2] * 400],
-             [180, 160, 120], [0.6, 0.58, 0.62]);  // Mount Fuji distant peak
-      // Japanese countryside hills
-      for (let i = 0; i < 4; i++) {
-        const k = Math.round((i / 4) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        for (const side of [-1, 1]) {
-          const hx = px[k] + r[0] * side * 240, hz = pz[k] + r[2] * side * 240;
-          if (onTrack(hx, hz, 90)) continue;  // figure-8 crossover loops back near itself
-          addBox(out, [hx, py[k] + 20, hz], [160, 40, 240], [0.3, 0.38, 0.24]);  // green hills
-        }
-      }
-    }
-    // Singapore: tropical skyline and distant urban sprawl
-    if (def.id === "singapore") {
-      for (let i = 0; i < 8; i++) {
-        const k = Math.round((i / 8) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const h = 35 + hash(k * 31) * 65;
-        const sx = px[k] + r[0] * (hw[k] + 160), sz = pz[k] + r[2] * (hw[k] + 160);
-        if (onTrack(sx, sz, 20)) continue;
-        addBox(out, [sx, py[k] + h / 2, sz], [28, h, 28], [0.35, 0.32, 0.38]);  // distant skyscrapers
-      }
-      // Tropical vegetation background
-      every(18, (k) => {
-        for (const side of [-1, 1]) {
-          const d = 140 + hash(k * side) * 60;
-          place(k, side, d, [2.2, 2.0, 2.2], [0.28, 0.35, 0.18]);
-          place(k, side, d, [5.5, 8 + hash(k) * 6, 5.5], [0.18, 0.42, 0.2]);
-        }
-      });
-    }
-    // COTA: Texas Hill Country terrain, scattered trees, utilities
-    if (def.id === "cota") {
-      // Oak/cedar tree coverage (scattered natural vegetation) - reduced density to avoid clustering
-      every(60, (k) => {
-        for (const side of [-1, 1]) {
-          for (let j = 0; j < 2; j++) {
-            const d = 35 + hash(k * 43 + j) * 50;
-            const s = hash(k * 45 + side + j);
-            const h = 6 + s * 7;
-            place(k, side, d, [1.4, 1.6, 1.4], [0.32, 0.24, 0.14]);
-            place(k, side, d, [3.8, h, 3.8], [0.28, 0.38, 0.16]);
-          }
-        }
-      });
-      // Floodlight towers (scattered for evening sessions)
-      every(140, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 47 + side) > 0.6) continue;
-          const tower_d = hw[k] + 75 + hash(k * 49) * 30;
-          place(k, side, tower_d, [2.0, 35, 2.0], [0.38, 0.38, 0.42]);
-        }
-      });
-      // Observation tower support infrastructure
-      const kobs = Math.round(n * 0.08) % n;
-      const kobsr = [track.rx[kobs], track.ry[kobs], track.rz[kobs]];
-      place(kobs, -1, hw[kobs] + 45, [8, 6, 8], [0.55, 0.50, 0.42]);  // support facility
-      place(kobs, 1, hw[kobs] + 45, [6, 5, 6], [0.65, 0.60, 0.52]);   // utilities
-    }
-    // Interlagos: São Paulo urban sprawl, tropical vegetation, lake, hillside filler
-    if (def.id === "interlagos") {
-      // Distant city towers (São Paulo skyline)
-      const ksp = Math.round(n * 0.35) % n;
-      const kspr = [track.rx[ksp], track.ry[ksp], track.rz[ksp]];
-      for (let i = 0; i < 9; i++) {
-        const h = 45 + hash(ksp * (i + 1)) * 50;
-        const d = 240 + i * 40;
-        const tx = px[ksp] + kspr[0] * d, tz = pz[ksp] + kspr[2] * d;
-        if (onTrack(tx, tz, 16)) continue;
-        addBox(out, [tx, py[ksp] + h / 2, tz], [22, h, 22], [0.52 + hash(i) * 0.12, 0.48 + hash(i) * 0.12, 0.46 + hash(i) * 0.1]);
-      }
-      // Dense tropical vegetation on hillsides
-      every(12, (k) => {
-        for (const side of [-1, 1]) {
-          for (let j = 0; j < 2; j++) {
-            if (hash(k * 43 + side + j) > 0.35) continue;
-            const d = 160 + hash(k * 44 + j) * 80;
-            const s = hash(k * 46 + j);
-            const h = 7 + s * 8;
-            place(k, side, d, [1.8, 1.4, 1.8], [0.26, 0.20, 0.10]);
-            place(k, side, d, [4.4, h, 4.4], [0.18, 0.42, 0.16]);
-          }
-        }
-      });
-      // Lake features and water terrain
-      every(180, (k) => {
-        const lake_d = 90 + hash(k * 48) * 100;
-        for (const side of [-1, 1]) {
-          const lx = px[k] + track.rx[k] * side * lake_d, lz = pz[k] + track.rz[k] * side * lake_d;
-          if (onTrack(lx, lz, 55)) continue;
-          addBox(out, [lx, pyMin - 3, lz], [100, 1.2, 140], [0.08, 0.22, 0.38]);
-        }
-      });
-      // Pit complex and infrastructure
-      every(250, (k) => {
-        const side = hash(k * 50) < 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 35, [14, 12, 10], [0.48, 0.46, 0.44]);
-      });
-    }
-    // Vegas: desert rock formations, Strip hotels, neon glow structures, sparse vegetation
-    if (def.id === "vegas") {
-      // Red rock formations (distant)
-      for (let i = 0; i < 8; i++) {
-        const k = Math.round((i / 8) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const rock_h = 35 + hash(k * 47) * 45;
-        const rock_d = 250 + hash(k * 49) * 150;
-        for (const side of [-1, 1]) {
-          const rx = px[k] + r[0] * side * rock_d, rz = pz[k] + r[2] * side * rock_d;
-          if (onTrack(rx, rz, 95)) continue;
-          addBox(out, [rx, py[k] + rock_h / 2, rz], [180, rock_h, 240], [0.65, 0.52, 0.38]);
-        }
-      }
-      // Floodlight towers for night racing
-      every(110, (k) => {
-        for (const side of [-1, 1]) {
-          const tower_d = hw[k] + 70 + hash(k * 51) * 25;
-          place(k, side, tower_d, [2.2, 35, 2.2], [0.35, 0.35, 0.40]);
-          for (let lt = 0; lt < 4; lt++) {
-            place(k, side, tower_d + hash(k + lt * 3) * 7, [1.2, 1.8, 1.2], [0.90, 0.60, 0.10]);  // warm lights
-          }
-        }
-      });
-      // Sparse desert vegetation (occasional bushes)
-      every(80, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 53 + side) > 0.4) continue;
-          const d = 50 + hash(k * 54) * 60;
-          place(k, side, d, [2.0, 1.5, 2.0], [0.45, 0.38, 0.25]);
-        }
-      });
-      // Power/utility infrastructure
-      every(220, (k) => {
-        const side = hash(k * 55) > 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 40, [6, 8, 6], [0.65, 0.62, 0.58]);
-      });
-    }
-    // Madrid: Spanish plains and distant mountain range
-    if (def.id === "madrid") {
-      // Sierra de Guadarrama distant mountains
-      for (let i = 0; i < 4; i++) {
-        const k = Math.round((i / 4) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const mtn_d = 280 + i * 60;
-        const mx = px[k] + r[0] * mtn_d, mz = pz[k] + r[2] * mtn_d;
-        if (onTrack(mx, mz, 155)) continue;
-        addBox(out, [mx, py[k] + 50, mz], [300, 100, 200], [0.5, 0.48, 0.52]);  // distant mountains
-      }
-      // Spanish plains vegetation
-      every(25, (k) => {
-        for (const side of [-1, 1]) {
-          const d = 120 + hash(k * side) * 60;
-          place(k, side, d, [1.8, 1.8, 1.8], [0.32, 0.24, 0.14]);
-          place(k, side, d, [3.8, 6 + hash(k) * 5, 3.8], [0.28, 0.38, 0.18]);
-        }
-      });
-      // IFEMA-style modern grandstands with clean white roofs at key corners
-      for (const frac of [0.14, 0.38, 0.82]) {
-        const k = Math.round(frac * n) % n;
-        const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 10, [9, 11, 32], [0.80, 0.82, 0.86]);  // white shell
-        prop(k, side, 8,  [9, 6, 30], [0.55, 0.30, 0.30]);   // crowd
-        prop(k, side, 9,  [11, 2, 34], [0.90, 0.92, 0.95]);  // roof canopy
-      }
-    }
-    // Zandvoort: North Sea coastal features and dune landscape
-    if (def.id === "zandvoort") {
-      // North Sea horizon: a single distant water strip far beyond the dunes.
-      // Anchored well below pyMin (the lowest track point) and pushed far out so
-      // it reads as a sliver on the horizon — never a flat plane floating into
-      // the cockpit on the banked, elevation-changing sections. The foreground
-      // beach slab was removed: the dune mounds below already cover the verge,
-      // and a large near-grade plane is exactly what produced the wall.
-      const ksea = Math.round(n * 0.4) % n;
-      const kser = [track.rx[ksea], track.ry[ksea], track.rz[ksea]];
-      const seaX = px[ksea] + kser[0] * 420, seaZ = pz[ksea] + kser[2] * 420;
-      // 9m below the lowest track point, so even over a parallel stretch it
-      // stays under the road — no onTrack rejection needed.
-      addBox(out, [seaX, pyMin - 9, seaZ], [520, 3, 520], [0.10, 0.26, 0.42]);
-      // Distant wind turbines (Dutch renewable energy). Guarded with onTrack so
-      // a turbine projected perpendicular from one point never lands beside a
-      // parallel stretch of this compact, winding circuit (the "pole in the road").
-      for (let i = 0; i < 4; i++) {
-        const k = Math.round((i / 4) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const tx = px[k] + r[0] * 380, tz = pz[k] + r[2] * 380;
-        if (onTrack(tx, tz, 90)) continue;
-        addBox(out, [tx, py[k] + 60, tz], [6, 120, 6], [0.82, 0.82, 0.84]);  // turbine tower
-        addBox(out, [tx, py[k] + 68, tz], [80, 4, 6], [0.8, 0.8, 0.78]);     // turbine blades
-      }
-      // Sand dunes hugging the circuit (Zandvoort runs through the dune belt)
-      every(22, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 71 + side) > 0.6) continue;
-          const d = 28 + hash(k * 72 + side) * 40;
-          prop(k, side, d, [18, 6 + hash(k * 73 + side) * 6, 18], [0.78, 0.72, 0.56]); // dune mound
-          prop(k, side, d, [16, 1.4, 16], [0.62, 0.66, 0.40]);                          // marram grass
-        }
-      });
-      // Sea of orange: Dutch grandstands packed with fans at the banked corners
-      for (const frac of [0.12, 0.30, 0.50, 0.72, 0.90]) {
-        const k = Math.round(frac * n) % n;
-        const side = hash(k * 7) < 0.5 ? -1 : 1;
-        prop(k, side, 8, [8, 10, 26], [0.36, 0.38, 0.42]);  // stand shell
-        prop(k, side, 6, [8, 6, 24], [0.92, 0.46, 0.08]);   // orange crowd
-      }
-      // Beach huts along the seafront approach
-      every(120, (k) => {
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const o = (hash(k * 8) < 0.5 ? -1 : 1) * (hw[k] + 120);
-        const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-        if (onTrack(cx, cz, 12)) return;
-        const hutCol = [[0.85, 0.25, 0.20], [0.20, 0.45, 0.70], [0.90, 0.85, 0.30]][Math.floor(hash(k * 9) * 3) % 3];
-        addBox(out, [cx, py[k] + 1.6, cz], [5, 4, 5], hutCol);
-      });
     }
 
     // --- main grandstand + pit complex on the start/finish straight (every GP) ---
@@ -1209,329 +1173,27 @@ const Tracks = (function () {
         addBox(out, p, [2.4, 2.4, 2.4], cab);
       }
     }
-    if (def.id === "suzuka") ferrisWheel(Math.round(n * 0.06) % n, 1, 40, 24);
-    if (def.id === "singapore") ferrisWheel(Math.round(n * 0.05) % n, 1, 46, 28);
+    
+    
 
-    // --- Monaco harbour: water + moored yachts along the start straight ---
-    if (def.id === "monaco") {
-      // Casino Square building (ornate 1865 structure visible from Casino corner, ~Turn 9-10).
-      // Offset must clear the box's own half-width (24m) plus the road so the
-      // 48m-wide structure never sits on the tarmac. Anchored well back.
-      const kcs = Math.round(n * 0.32) % n;
-      const kcsr = [track.rx[kcs], track.ry[kcs], track.rz[kcs]];
-      const csX = px[kcs] + kcsr[0] * (hw[kcs] + 50);
-      const csZ = pz[kcs] + kcsr[2] * (hw[kcs] + 50);
-      if (!onTrack(csX, csZ, 26)) {
-        addBox(out, [csX, py[kcs] + 22, csZ], [48, 44, 36], [0.82, 0.78, 0.68]); // Casino main structure
-        for (let i = 0; i < 4; i++) {
-          addBox(out, [csX + kcsr[0] * (-20 + i * 15), py[kcs] + 32, csZ + kcsr[2] * (-20 + i * 15)],
-                 [8, 20, 8], [0.92, 0.9, 0.85]); // ornate columns
-        }
-      }
-
-      for (let i = 0; i < 13; i++) {
-        const k = (i * 3) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const o = hw[k] + 40;
-        // Removed water boxes that were creating a horizontal blocking plane
-        if (i % 2 === 0) {
-          const yo = hw[k] + 18;
-          addBox(out, [px[k] + r[0] * yo, py[k] + 1.2, pz[k] + r[2] * yo], [4, 3, 11], [0.95, 0.95, 0.97]); // yacht hull
-          addBox(out, [px[k] + r[0] * yo, py[k] + 4, pz[k] + r[2] * yo], [2.2, 2, 5], [0.85, 0.86, 0.9]);   // cabin
-        }
-      }
-      // A pair of moored super-yachts further out in the harbour
-      for (const yi of [2, 7]) {
-        const k = (yi * 3) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const yo = hw[k] + 34;
-        const yx = px[k] + r[0] * yo, yz = pz[k] + r[2] * yo;
-        if (onTrack(yx, yz, 14)) continue;
-        addBox(out, [yx, py[k] + 2.5, yz], [8, 6, 26], [0.97, 0.97, 0.99]); // hull
-        addBox(out, [yx, py[k] + 7, yz], [5, 4, 13], [0.80, 0.83, 0.90]);   // superstructure
-        addBox(out, [yx, py[k] + 10.5, yz], [3, 2, 6], [0.60, 0.66, 0.78]); // top deck
-      }
-      // Promenade date-palms along the harbour railing (open side only)
-      every(34, (k) => {
-        if (k > n * 0.5) return;
-        prop(k, 1, 4, [0.6, 5, 0.6], [0.34, 0.26, 0.14]);
-        prop(k, 1, 4, [3.6, 1.4, 3.6], [0.18, 0.36, 0.14]);
-      });
-      // Tunnel: concrete ceiling from Portier (~52%) to post-tunnel chicane (~58%).
-      // The section runs underground parallel to the harbour — a unique Monaco feature.
-      {
-        const tunS = Math.round(0.51 * n) % n;
-        const tunE = Math.round(0.585 * n) % n;
-        const tunLen = ((tunE - tunS) + n) % n;
-        const tunStep = Math.max(2, Math.round(5.0 / ds));
-        for (let i = 0; i < tunLen; i += tunStep) {
-          const k = (tunS + i) % n;
-          const r = [track.rx[k], track.ry[k], track.rz[k]];
-          const t = [track.tx[k], track.ty[k], track.tz[k]];
-          const u = upOf(track, k);
-          const cw = hw[k] * 2 + 4.5;
-          addBox(out, [px[k], py[k] + 6.3, pz[k]], [cw, 1.1, ds * tunStep * 1.05],
-                 [0.30, 0.29, 0.34], [r, u, t]);
-        }
-        // Tunnel portals at entry and exit
-        for (const frac of [0.51, 0.585]) {
-          const k = Math.round(frac * n) % n;
-          const r = [track.rx[k], track.ry[k], track.rz[k]];
-          const t = [track.tx[k], track.ty[k], track.tz[k]];
-          const u = upOf(track, k);
-          addBox(out, [px[k], py[k] + 3.6, pz[k]], [hw[k] * 2 + 6, 7.2, 1.8],
-                 [0.34, 0.33, 0.38], [r, u, t]);
-        }
-      }
-    }
-
-    // --- per-circuit iconic landmarks ---
-    if (def.id === "cota") {
-      // observation tower at Turn 1 (251 ft / 76 m steel structure) - pushed further back to avoid clipping
-      const kc = Math.round(n * 0.08) % n;
-      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
-      const tcx = px[kc] + r[0] * (hw[kc] + 90), tcy = py[kc], tcz = pz[kc] + r[2] * (hw[kc] + 90);
-      addBox(out, [tcx, tcy + 42, tcz], [4.5, 84, 4.5], [0.88, 0.88, 0.90]);
-      addBox(out, [tcx - r[0] * 10, tcy + 84, tcz - r[2] * 10], [22, 4, 10], [0.88, 0.88, 0.90]);
-      addBox(out, [tcx - r[0] * 16, tcy + 87, tcz - r[2] * 16], [10, 3, 8], [0.95, 0.44, 0.05]);
-      // Red steel tube grandstand framework (COTA signature design element) - increased spacing to avoid overlaps
-      for (let i = 0; i < 8; i++) {
-        const k = (Math.round(n * 0.15) + i * Math.round(n / 8)) % n;
-        const rk = [track.rx[k], track.ry[k], track.rz[k]];
-        const tk = [track.tx[k], 0, track.tz[k]];
-        const o = hw[k] + 22 + (i % 2) * 10;
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + rk[0] * side * o, py[k] + 12, pz[k] + rk[2] * side * o],
-                 [3, 24, 20], [0.95, 0.44, 0.05], [rk, [0, 1, 0], tk]);
-        }
-      }
-      // Austin360 Amphitheater: curved canopy roof behind Turn 12
-      const kamp = Math.round(n * 0.62) % n;
-      const kar = [track.rx[kamp], track.ry[kamp], track.rz[kamp]];
-      const ampX = px[kamp] + kar[0] * (hw[kamp] + 70), ampZ = pz[kamp] + kar[2] * (hw[kamp] + 70);
-      if (!onTrack(ampX, ampZ, 30)) {
-        addBox(out, [ampX, py[kamp] + 18, ampZ], [48, 36, 30], [0.86, 0.84, 0.80]);
-        addBox(out, [ampX, py[kamp] + 38, ampZ], [54, 4, 36], [0.70, 0.72, 0.76]);
-      }
-      // Texas Hill Country ridgeline on the horizon
-      every(80, (k) => {
-        for (const side of [-1, 1]) {
-          backdrop(k, side, 200 + hash(k * 8 + side) * 110, [180, 30, 180], [0.34, 0.34, 0.22]);
-        }
-      });
-    }
-    if (def.id === "vegas") {
-      // MSG Sphere — distinctive multi-colour LED sphere east of the Strip
-      const kc = Math.round(n * 0.50) % n;
-      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
-      const scx = px[kc] + r[0] * (hw[kc] + 148), scz = pz[kc] + r[2] * (hw[kc] + 148);
-      const hubY = py[kc] + 58, rad = 52;
-      const vc = [[0.9, 0.4, 0.05], [0.05, 0.75, 0.95], [0.9, 0.05, 0.85], [0.95, 0.9, 0.05]];
-      for (let i = 1; i <= 6; i++) {
-        const phi = (i / 7) * Math.PI, ringR = rad * Math.sin(phi), ringY = hubY + rad * Math.cos(phi);
-        for (let j = 0; j < 14; j++) {
-          const theta = (j / 14) * Math.PI * 2;
-          addBox(out, [scx + ringR * Math.cos(theta), ringY, scz + ringR * Math.sin(theta)], [7, 7, 7], vc[(i + j) % 4]);
-        }
-      }
-      addBox(out, [scx, hubY + rad, scz], [7, 7, 7], vc[0]);
-      addBox(out, [scx, hubY - rad, scz], [7, 7, 7], vc[2]);
-      // Strip hotel towers visible from pit area (Bellagio, Caesars Palace, Paris)
-      const khot = Math.round(n * 0.08) % n;
-      const khr = [track.rx[khot], track.ry[khot], track.rz[khot]];
-      for (let i = 0; i < 4; i++) {
-        const h = 40 + i * 20, d = 140 + i * 30;
-        const hx = px[khot] + khr[0] * d, hz = pz[khot] + khr[2] * d;
-        const tone = [0.8, 0.75, 0.7, 0.65][i];
-        addBox(out, [hx, py[khot] + h / 2, hz], [30 + i * 8, h, 30 + i * 8], [tone, tone * 0.95, tone * 0.9]);
-      }
-    }
-    if (def.id === "singapore") {
-      // Gardens by the Bay supertrees alongside the circuit
-      const ks = Math.round(n * 0.30) % n;
-      const stc = [[0.9, 0.1, 0.6], [0.1, 0.8, 0.95], [0.95, 0.78, 0.1]];
-      for (let i = 0; i < 6; i++) {
-        const k = (ks + i * 5) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const o = hw[k] + 28 + i * 9, h = 20 + i * 5;
-        const scx = px[k] + r[0] * o, scz = pz[k] + r[2] * o;
-        addBox(out, [scx, py[k] + h * 0.5, scz], [2.5, h, 2.5], [0.15, 0.18, 0.22]);
-        addBox(out, [scx, py[k] + h + 4, scz], [12 + i * 2, 8, 12 + i * 2], [0.06, 0.38, 0.14]);
-        addBox(out, [scx, py[k] + h + 0.5, scz], [14 + i * 2, 1.5, 14 + i * 2], stc[i % 3]);
-      }
-      // Marina Bay Sands: 3-tower hotel complex near start/finish area with connecting bridge
-      const kmb = Math.round(n * 0.03) % n;
-      const kmbr = [track.rx[kmb], track.ry[kmb], track.rz[kmb]];
-      for (let i = -1; i <= 1; i++) {
-        const tx = px[kmb] + kmbr[0] * (hw[kmb] + 120 + i * 18);
-        const tz = pz[kmb] + kmbr[2] * (hw[kmb] + 120 + i * 18);
-        const h = 57 + i * 3;  // tallest in middle
-        addBox(out, [tx, py[kmb] + h / 2, tz], [20, h, 20], [0.92, 0.92, 0.95]);
-      }
-      const mbs_mid = px[kmb] + kmbr[0] * (hw[kmb] + 120);
-      const mbz_mid = pz[kmb] + kmbr[2] * (hw[kmb] + 120);
-      addBox(out, [mbs_mid, py[kmb] + 50, mbz_mid], [60, 5, 12], [0.85, 0.85, 0.88]); // roof bridge
-    }
-    if (def.id === "interlagos") {
-      // Lake: body of water visible from inside track (pit area perspective)
-      const klake = Math.round(n * 0.18) % n;
-      const klaker = [track.rx[klake], track.ry[klake], track.rz[klake]];
-      const wlx = px[klake] + klaker[0] * 110, wlz = pz[klake] + klaker[2] * 110;
-      if (!onTrack(wlx, wlz, 145)) addBox(out, [wlx, pyMin - 3, wlz], [280, 1.2, 200], [0.08, 0.25, 0.45]);
-      // São Paulo tower-block backdrop visible across the lake
-      for (let i = 0; i < 9; i++) {
-        const k = (Math.round(n * 0.22) + i * 8) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const s = hash(k * 11 + i), side = (i % 2 === 0) ? 1 : -1;
-        const h = 48 + s * 46, o = hw[k] + 68 + s * 28;
-        const tone = 0.50 + s * 0.22;
-        const bx = px[k] + r[0] * o * side, bz = pz[k] + r[2] * o * side;
-        if (onTrack(bx, bz, 12)) continue;
-        addBox(out, [bx, py[k] + h * 0.5, bz], [11, h, 11], [tone, tone * 0.93, tone * 0.86]);
-      }
-      // Pit complex: modernized brutalist control tower, oriented alongside the
-      // start straight (prop() clears its depth so it never sits on the tarmac).
-      const kpit = Math.round(n * 0.02) % n;
-      prop(kpit, 1, 12, [14, 36, 44], [0.5, 0.48, 0.46]);   // control tower (14m deep)
-      prop(kpit, 1, 12, [16, 6, 40], [0.42, 0.42, 0.44]);   // overhanging roof band
-      // Colourful hillside houses (the São Paulo favela backdrop) — small boxes
-      // set well back and onTrack-guarded so they never become a wall or ceiling.
-      const favCol = [[0.82, 0.46, 0.34], [0.86, 0.74, 0.40], [0.46, 0.58, 0.66],
-                      [0.78, 0.78, 0.72], [0.60, 0.70, 0.52]];
-      every(14, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 61 + side) > 0.5) continue;
-          const r = [track.rx[k], track.ry[k], track.rz[k]];
-          const stack = 1 + Math.floor(hash(k * 62 + side) * 3);
-          for (let j = 0; j < stack; j++) {
-            const d = 95 + j * 12 + hash(k * 63 + side + j) * 40;
-            const o = side * (hw[k] + d);
-            const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-            if (onTrack(cx, cz, 10)) continue;
-            const h = 5 + hash(k * 64 + side + j) * 4;
-            addBox(out, [cx, py[k] + 6 + j * 7 + h / 2, cz], [7, h, 7],
-                   favCol[Math.floor(hash(k * 65 + side + j) * 5) % 5]);
-          }
-        }
-      });
-      // Grandstands at the Senna S and the start straight
-      for (const frac of [0.06, 0.30, 0.55]) {
-        const k = Math.round(frac * n) % n;
-        const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [8, 9, 28], [0.42, 0.42, 0.48]);
-        prop(k, side, 7, [8, 5, 26], [0.30, 0.46, 0.34]);   // green/yellow Brazilian crowd
-      }
-    }
-    if (def.id === "monza") {
-      // Italian umbrella pines — taller and narrower than the generic green trees
-      every(28, (k) => {
-        const s = hash(k * 31);
-        if (s < 0.40) return;
-        const side = s < 0.70 ? -1 : 1, d = 10 + s * 5, h = 15 + s * 9;
-        place(k, side, d, [1.2, 1.8, 1.2], [0.28, 0.19, 0.10]);
-        place(k, side, d, [3.0, h, 3.0], [0.07, 0.27, 0.09]);
-      });
-      // Tribuna Centrale: main grandstand spanning the pit straight (white/cream
-      // Italian classic). Built as oriented segments via prop() so each sits
-      // alongside the track with its inner face cleared — never a wall across it.
-      const ktc = Math.round(n * 0.01) % n;
-      const seg = Math.max(1, Math.round(n * 0.006));
-      for (let i = 0; i < 6; i++) {
-        const k = (ktc + i * seg) % n;
-        prop(k, -1, 10, [9, 22, 24], [0.85, 0.83, 0.78]);   // stand shell (9m deep)
-        prop(k, -1, 8,  [9, 13, 22], [0.66, 0.42, 0.36]);   // crowd tiers
-      }
-      // Control tower with press centre, set back beyond the stand
-      prop(ktc, -1, 16, [10, 40, 12], [0.95, 0.95, 0.97]);
-      // Sopraelevata: weathered banking of the abandoned oval, looming in the park
-      for (let i = 0; i < 5; i++) {
-        const k = (Math.round(n * 0.42) + i * 4) % n;
-        backdrop(k, 1, 120 + i * 10, [30, 16, 60], [0.55, 0.54, 0.50]);
-      }
-      // Grandstands at Curva Grande and the Parabolica. prop()'s sz is
-      // [depth(perpendicular), height, length(along track)] — shallow + long so
-      // the stand runs alongside the corner instead of jutting into it.
-      for (const frac of [0.10, 0.46, 0.88]) {
-        const k = Math.round(frac * n) % n;
-        const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [8, 9, 30], [0.42, 0.42, 0.48]);
-        prop(k, side, 7, [8, 5, 28], [0.66, 0.40, 0.34]);
-      }
-    }
-    if (def.id === "suzuka") {
-      // Sakura (cherry blossom) trees scattered among the green zones
-      every(55, (k) => {
-        const s = hash(k * 41);
-        if (s < 0.45) return;
-        const side = s < 0.72 ? -1 : 1, d = 11 + s * 7;
-        place(k, side, d, [1.1, 1.3, 1.1], [0.32, 0.22, 0.12]);
-        place(k, side, d, [3.8, 3.5 + s * 2, 3.8], [0.92, 0.55, 0.64]);
-      });
-      // Theme park area beside ferris wheel (recreational buildings)
-      const ktp = Math.round(n * 0.05) % n;
-      const ktpr = [track.rx[ktp], track.ry[ktp], track.rz[ktp]];
-      for (let i = 0; i < 4; i++) {
-        const h = 8 + i * 3, d = 60 + i * 12;
-        addBox(out, [px[ktp] + ktpr[0] * d, py[ktp] + h / 2, pz[ktp] + ktpr[2] * d],
-               [24 + i * 6, h, 28], [0.6 + i * 0.05, 0.45 + i * 0.08, 0.3 + i * 0.04]);
-      }
-      // Grandstands at the Esses and the Spoon (always packed at Suzuka)
-      for (const frac of [0.16, 0.40, 0.62, 0.84]) {
-        const k = Math.round(frac * n) % n;
-        const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [8, 9, 28], [0.42, 0.42, 0.48]);
-        prop(k, side, 7, [8, 5, 26], [0.30, 0.40, 0.62]);   // blue-clad fans
-      }
-      // Forested Mie-prefecture hills beyond the park
-      every(70, (k) => {
-        for (const side of [-1, 1]) {
-          backdrop(k, side, 200 + hash(k * 6 + side) * 100, [180, 44, 180], [0.18, 0.32, 0.20]);
-        }
-      });
-    }
-    if (def.id === "silverstone") {
-      // The Wing — curved pit-lane roof structure on the main straight (390m long, 1200 tonnes steel)
-      for (let i = 0; i < 6; i++) {
-        const k = (Math.round(n * 0.01) + i * 3) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const t = [track.tx[k], track.ty[k], track.tz[k]];
-        const u = upOf(track, k);
-        const rise = Math.sin((i / 5) * Math.PI) * 5;
-        const scx = px[k] + r[0] * (hw[k] + 4), scy = py[k], scz = pz[k] + r[2] * (hw[k] + 4);
-        // metallic silver polyester-coated steel panels (RAL 9006)
-        addBox(out, [scx, scy + 12 + rise * 0.5, scz], [1.5, 24 + rise, 18], [0.75, 0.75, 0.78], [r, u, t]);
-        addBox(out, [scx, scy + 25 + rise, scz], [36, 1.5, 20], [0.72, 0.72, 0.75], [r, u, t]);
-        // support structures
-        if (i > 0 && i < 5) {
-          addBox(out, [scx - r[0] * 8, scy + 18 + rise * 0.3, scz - r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
-          addBox(out, [scx + r[0] * 8, scy + 18 + rise * 0.3, scz + r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
-        }
-      }
-    }
-    if (def.id === "bahrain") {
-      // Sakhir Tower: 9-storey conical race control with LED facade, visible from grid start
-      const ksc = Math.round(n * 0.01) % n;
-      const kr = [track.rx[ksc], track.ry[ksc], track.rz[ksc]];
-      const ksX = px[ksc] + kr[0] * (hw[ksc] + 45), ksY = py[ksc], ksZ = pz[ksc] + kr[2] * (hw[ksc] + 45);
-      addBox(out, [ksX, ksY + 20, ksZ], [14, 40, 14], [0.95, 0.95, 0.97]); // main tower
-      addBox(out, [ksX, ksY + 38, ksZ], [10, 8, 10], [0.1, 0.1, 0.12]);    // top section
-      addBox(out, [ksX, ksY + 42, ksZ], [8, 4, 8], [0.9, 0.3, 0.05]);       // orange cap
-      // Arch grandstand + minaret: a nod to the circuit's Islamic architecture
-      const kc = Math.round(n * 0.52) % n;
-      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
-      const tl = Math.hypot(track.tx[kc], track.tz[kc]) || 1;
-      const tn = [track.tx[kc] / tl, 0, track.tz[kc] / tl];
-      const scx = px[kc] + r[0] * (hw[kc] + 30), scz = pz[kc] + r[2] * (hw[kc] + 30), bY = py[kc];
-      addBox(out, [scx + tn[0] * (-14), bY + 14, scz + tn[2] * (-14)], [4, 28, 4], [0.84, 0.77, 0.55]);
-      addBox(out, [scx + tn[0] * 14,   bY + 14, scz + tn[2] * 14  ], [4, 28, 4], [0.84, 0.77, 0.55]);
-      addBox(out, [scx,                 bY + 29, scz                ], [38, 3, 5], [0.84, 0.77, 0.55]);
-      addBox(out, [scx + tn[0] * 24,   bY + 22, scz + tn[2] * 24  ], [3.5, 44, 3.5], [0.92, 0.83, 0.64]);
-      addBox(out, [scx + tn[0] * 24,   bY + 46, scz + tn[2] * 24  ], [7, 4, 7], [0.92, 0.65, 0.10]);
-    }
+    // Per-circuit bespoke scenery lives in js/tracks/<id>.js (def.scenery).
+    if (def.scenery) def.scenery({
+      out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
+      place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
+      ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
+      // richer primitives (world coords): non-cube shapes
+      addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
+      // landscape + vegetation
+      pine, tree, palm, bush, hedge, peak, mountain, ridge,
+      // structures
+      building, tower, grandstand, billboard, gantry, marshalPost,
+      // barriers / track furniture
+      wall, fence, guardrail, tyreWall,
+    });
 
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road
-    const brs = BRIDGES[def.id];
+    const brs = def.bridges;
     if (brs) for (const b of brs) {
       const kc = Math.round(b.s * n) % n;
       for (const off of [-18, -9, 9, 18]) {
@@ -1574,187 +1236,65 @@ const Tracks = (function () {
   // ---------- circuit layouts (turn +=right, lengths in meters pre-SCALE) ----------
   // palettes
   function dayPal(o) {
-    return Object.assign({
+    const p = Object.assign({
       zenith: [0.18, 0.40, 0.78], horizon: [0.62, 0.74, 0.88], sun: [1, 0.96, 0.85],
       grass: [0.18, 0.42, 0.16], runoff: [0.55, 0.42, 0.28], fog: [0.62, 0.74, 0.88],
       asphalt: [0.16, 0.17, 0.19], line: [0.95, 0.95, 0.98],
       fogDensity: 0.0017, kerbA: [0.85, 0.12, 0.12], kerbB: [0.95, 0.95, 0.95], concrete: [0.50, 0.48, 0.44],
       ambientSky: [0.45, 0.52, 0.62], ambientGround: [0.22, 0.22, 0.18],
-      sunColor: [1, 0.95, 0.82], sunDir: norm([0.4, 0.72, 0.3]),
+      sunColor: [1, 0.95, 0.82], sunDir: [0.4, 0.72, 0.3],
     }, o);
+    p.sunDir = norm(p.sunDir);   // data files store raw sunDir; normalize here
+    return p;
   }
   function nightPal(o) {
-    return Object.assign({
+    const p = Object.assign({
       zenith: [0.05, 0.06, 0.14], horizon: [0.12, 0.14, 0.24], sun: [0.4, 0.4, 0.5],
       grass: [0.14, 0.18, 0.14], runoff: [0.28, 0.26, 0.24], fog: [0.08, 0.09, 0.15],
       asphalt: [0.18, 0.19, 0.22], line: [0.9, 0.9, 0.95],
       fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92], concrete: [0.42, 0.40, 0.38],
-      ambientSky: [0.55, 0.56, 0.64], ambientGround: [0.28, 0.28, 0.30],
-      sunColor: [0.7, 0.72, 0.8], sunDir: norm([0.1, 0.9, 0.2]),
+      ambientSky: [0.62, 0.64, 0.76], ambientGround: [0.44, 0.44, 0.48],
+      sunColor: [0.7, 0.72, 0.8], sunDir: [0.1, 0.9, 0.2],
     }, o);
+    p.sunDir = norm(p.sunDir);
+    return p;
   }
 
-  // Per-circuit bridge decks (arc fraction of the overpass centre, ramp
-  // half-window in metres, peak rise). Suzuka is a figure-8: its back straight
-  // crosses over the section out of the esses.
-  const BRIDGES = {
-    suzuka: [{ s: 0.811, halfM: 150, rise: 7 }],
-  };
+  // Circuit definitions live in js/tracks/<id>.js — each registers itself on the
+  // global TrackDefs list (loaded before this engine). Palette is resolved here
+  // from the `night` flag; bridges/elevations/street travel with each def.
+  const DEFS = (typeof window !== "undefined" && window.TrackDefs) || [];
 
-  // Elevation changes (terrain follows road; distinct from BRIDGES where terrain stays flat).
-  // Each entry is a cosine bump centred at lap fraction s, spanning ±halfM metres.
-  // Negative rise = descent (e.g. Eau Rouge dip before Raidillon climb).
-  const ELEVATIONS = {
-    // Spa kept flat: the s=0.12 Raidillon/Eau Rouge 26m rise floated the terrain
-    // ribbon over the lower Eau Rouge valley as a plane bisecting the car.
-    // (was [{ s: 0.07, halfM: 270, rise: -14 }, { s: 0.12, halfM: 500, rise: 26 }])
-    spa:        [],
-    monaco:     [{ s: 0.27, halfM: 340, rise: 18 }],
-    // COTA kept flat: its compact, open infield exposed the elevated Turn 1
-    // terrain ribbon as a green plane floating across the infield from lower
-    // parts of the lap. (was [{ s: 0.06, halfM: 440, rise: 28 }])
-    cota:       [],
-    // Interlagos kept flat: the s=0.86 climb floated the terrain ribbon over the
-    // lower road as a green plane on this compact circuit (same failure as COTA /
-    // Bahrain). (was [{ s: 0.86, halfM: 560, rise: 16 }])
-    interlagos: [],
-    silverstone:[{ s: 0.62, halfM: 360, rise:  9 }],
-    zandvoort:  [{ s: 0.56, halfM: 300, rise: 12 }],
-    // Bahrain kept flat: the s=0.45 dip created a bowl whose higher rim pushed
-    // the terrain ribbon across the lower road as a plane bisecting the car
-    // (same failure COTA had). (was [{ s: 0.45, halfM: 380, rise: -8 }])
-    bahrain:    [],
-  };
-
-  const DEFS = [
-    { id: "bahrain", name: "BAHRAIN", gp: "Bahrain GP", country: "Bahrain", night: true, theme: "desert", lengthKm: 5.4, baseHW: 7,
-      pal: nightPal({ horizon: [0.10, 0.07, 0.10], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] }),
-      segs: [{ t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
-        { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300 }, { t: 60, l: 90 }, { t: 0, l: 120 }, { t: 60, l: 110 }] },
-    { id: "monaco", name: "MONACO", gp: "Monaco GP", country: "Monaco", night: false, theme: "street_day", lengthKm: 3.3, baseHW: 5,
-      pal: dayPal({ horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.40], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014,
-        sunDir: norm([0.22, 0.88, 0.42]), sun: [1.0, 0.98, 0.93], sunColor: [1.0, 0.97, 0.90] }),
-      segs: [{ t: 0, l: 230 }, { t: 70, l: 75 }, { t: -25, l: 260, h: 14 }, { t: -70, l: 110 }, { t: 80, l: 80, w: 4.8 },
-        { t: 0, l: 90, h: -6 }, { t: 80, l: 80, w: 4.8 }, { t: 160, l: 120, w: 4.5, h: -4 }, { t: 55, l: 80 }, { t: 45, l: 80 },
-        { t: -15, l: 260, h: -4 }, { t: 60, l: 70, w: 4.8 }, { t: 0, l: 40 }, { t: -65, l: 60 }, { t: 65, l: 60 }, { t: -40, l: 100 },
-        { t: 70, l: 65, w: 4.8 }, { t: 0, l: 35 }, { t: -70, l: 65 }, { t: 80, l: 70 }, { t: -70, l: 65 }, { t: 75, l: 70, w: 4.8 }, { t: 40, l: 120 }] },
-    { id: "silverstone", name: "SILVERSTONE", gp: "British GP", country: "UK", night: false, theme: "green", lengthKm: 5.9, baseHW: 8,
-      pal: dayPal({ zenith: [0.30, 0.42, 0.62], horizon: [0.66, 0.72, 0.78], grass: [0.20, 0.46, 0.18], fogDensity: 0.0016,
-        sunDir: norm([0.35, 0.46, 0.60]), sun: [0.88, 0.91, 1.0], sunColor: [0.84, 0.88, 0.96] }),
-      segs: [{ t: 0, l: 260 }, { t: 60, l: 120 }, { t: -50, l: 90 }, { t: 80, l: 80 }, { t: -150, l: 160 }, { t: 0, l: 120 },
-        { t: -70, l: 90 }, { t: 120, l: 150 }, { t: 40, l: 100 }, { t: 0, l: 160 }, { t: 70, l: 130 },
-        { t: -55, l: 70 }, { t: 60, l: 70 }, { t: -55, l: 70 }, { t: 50, l: 70 }, { t: 0, l: 300 }, { t: 75, l: 110 },
-        { t: -40, l: 90 }, { t: 95, l: 90 }, { t: 60, l: 90 }] },
-    { id: "spa", name: "SPA", gp: "Belgian GP", country: "Belgium", night: false, theme: "green", lengthKm: 7.0, baseHW: 8,
-      pal: dayPal({ zenith: [0.34, 0.44, 0.56], horizon: [0.6, 0.65, 0.66], grass: [0.12, 0.34, 0.14], runoff: [0.4, 0.4, 0.4], fog: [0.66, 0.7, 0.72], fogDensity: 0.0026,
-        sunDir: norm([0.58, 0.36, 0.44]), sun: [0.98, 0.84, 0.64], sunColor: [0.90, 0.80, 0.62] }),
-      segs: [{ t: 0, l: 120 }, { t: 170, l: 80, h: -4 }, { t: 0, l: 140, h: -18 }, { t: -40, l: 60, h: 6 }, { t: 50, l: 60, h: 14 },
-        { t: -30, l: 80, h: 16 }, { t: 0, l: 480, h: 18 }, { t: 70, l: 90 }, { t: -60, l: 90, h: -6 }, { t: 50, l: 140, h: -12 },
-        { t: -90, l: 160, h: -10 }, { t: 40, l: 90 }, { t: -50, l: 90 }, { t: 70, l: 110 }, { t: 0, l: 320, h: -6 },
-        { t: -30, l: 180 }, { t: 80, l: 70 }, { t: -85, l: 70 }, { t: 30, l: 120 }] },
-    { id: "monza", name: "MONZA", gp: "Italian GP", country: "Italy", night: false, theme: "green", lengthKm: 5.8, baseHW: 8,
-      pal: dayPal({ zenith: [0.22, 0.42, 0.72], horizon: [0.7, 0.74, 0.7], grass: [0.2, 0.44, 0.18],
-        sunDir: norm([0.74, 0.50, 0.22]), sun: [1.0, 0.88, 0.60], sunColor: [1.0, 0.86, 0.58] }),
-      segs: [{ t: 0, l: 560 }, { t: 70, l: 55 }, { t: -75, l: 60 }, { t: 80, l: 220 }, { t: 0, l: 200 }, { t: -60, l: 55 },
-        { t: 70, l: 70 }, { t: 75, l: 130 }, { t: 60, l: 120 }, { t: 0, l: 260 }, { t: -50, l: 55 }, { t: 65, l: 70 },
-        { t: 0, l: 360 }, { t: 150, l: 220 }] },
-    { id: "suzuka", name: "SUZUKA", gp: "Japanese GP", country: "Japan", night: false, theme: "green", lengthKm: 5.8, baseHW: 7,
-      pal: dayPal({ zenith: [0.28, 0.46, 0.72], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2],
-        sunDir: norm([0.84, 0.42, 0.14]), sun: [1.0, 0.84, 0.58], sunColor: [1.0, 0.82, 0.55] }),
-      segs: [{ t: 0, l: 440, h: -6 }, { t: 50, l: 120 }, { t: -35, l: 100, h: 6 }, { t: 45, l: 110, h: 6 }, { t: -30, l: 100, h: 4 },
-        { t: 55, l: 120 }, { t: 60, l: 110 }, { t: 80, l: 120, h: -4 }, { t: 70, l: 120, h: -6 }, { t: 0, l: 300 },
-        { t: 45, l: 120, h: 6 }, { t: -20, l: 90 }, { t: 40, l: 140 }] },
-    { id: "singapore", name: "SINGAPORE", gp: "Singapore GP", country: "Singapore", night: true, theme: "street_night", lengthKm: 4.9, baseHW: 6,
-      pal: nightPal({ horizon: [0.08, 0.05, 0.14] }),
-      segs: [{ t: 0, l: 160 }, { t: 60, l: 70 }, { t: -70, l: 70 }, { t: 55, l: 70 }, { t: 0, l: 220 }, { t: 90, l: 70 },
-        { t: 0, l: 200 }, { t: 95, l: 70 }, { t: -90, l: 80 }, { t: 80, l: 60 }, { t: -60, l: 70 }, { t: 90, l: 90 },
-        { t: 0, l: 180 }, { t: 90, l: 70 }, { t: 90, l: 70 }, { t: -85, l: 60 }, { t: 95, l: 80 }] },
-    { id: "cota", name: "COTA", gp: "United States GP", country: "USA", night: false, theme: "green", lengthKm: 5.5, baseHW: 8,
-      pal: dayPal({ zenith: [0.24, 0.50, 0.84], horizon: [0.76, 0.70, 0.54], grass: [0.34, 0.4, 0.14], runoff: [0.6, 0.35, 0.2], ambientSky: [0.52, 0.58, 0.68], ambientGround: [0.28, 0.28, 0.24],
-        sunDir: norm([0.52, 0.54, 0.62]), sun: [1.0, 0.90, 0.70], sunColor: [1.0, 0.88, 0.68] }),
-      segs: [{ t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 },
-        { t: 60, l: 60 }, { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 },
-        { t: 0, l: 460 }, { t: -150, l: 130 }, { t: 70, l: 70 }, { t: -60, l: 70 }, { t: 80, l: 90 }, { t: 90, l: 160 }, { t: -130, l: 110 }] },
-    { id: "interlagos", name: "INTERLAGOS", gp: "São Paulo GP", country: "Brazil", night: false, theme: "green", lengthKm: 4.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.26, 0.4, 0.6], horizon: [0.55, 0.58, 0.6], grass: [0.18, 0.46, 0.18], fog: [0.55, 0.58, 0.6], fogDensity: 0.0019,
-        sunDir: norm([0.18, 0.82, 0.54]), sun: [1.0, 0.95, 0.82], sunColor: [1.0, 0.93, 0.80] }),
-      segs: [{ t: 0, l: 240, h: 8 }, { t: -55, l: 100, h: -10 }, { t: 40, l: 90, h: -6 }, { t: -20, l: 400, h: -4 },
-        { t: -60, l: 110 }, { t: -50, l: 100, h: 6 }, { t: 70, l: 100 }, { t: -80, l: 110 }, { t: 0, l: 160 }, { t: -90, l: 100 },
-        { t: 60, l: 90 }, { t: -70, l: 100 }, { t: -110, l: 140, h: 6 }, { t: -20, l: 440, h: 18 }] },
-    { id: "vegas", name: "LAS VEGAS", gp: "Las Vegas GP", country: "USA", night: true, theme: "street_night", lengthKm: 6.2, baseHW: 7,
-      pal: nightPal({ horizon: [0.1, 0.06, 0.16] }),
-      segs: [{ t: 0, l: 140 }, { t: 90, l: 70 }, { t: -60, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 120 }, { t: -60, l: 60 },
-        { t: 70, l: 60 }, { t: -55, l: 60 }, { t: 0, l: 360 }, { t: 90, l: 80 }, { t: -50, l: 70 }, { t: 0, l: 900, t2: 0 },
-        { t: -20, l: 200 }, { t: 90, l: 90 }, { t: -60, l: 60 }, { t: 70, l: 70 }, { t: 65, l: 120 }] },
-    { id: "madrid", name: "MADRID", gp: "Spanish GP", country: "Spain", night: false, theme: "modern", lengthKm: 5.5, baseHW: 7,
-      pal: dayPal({ zenith: [0.24, 0.46, 0.78], horizon: [0.74, 0.74, 0.72], grass: [0.3, 0.42, 0.2],
-        sunDir: norm([0.12, 0.96, 0.22]), sun: [1.0, 0.99, 0.96], sunColor: [1.0, 0.98, 0.94] }),
-      segs: [{ t: 0, l: 320 }, { t: 70, l: 70 }, { t: -65, l: 70 }, { t: 50, l: 120 }, { t: 0, l: 360 }, { t: 90, l: 80 },
-        { t: -85, l: 70 }, { t: 90, l: 80 }, { t: 0, l: 140 }, { t: 180, l: 240, b: 0.42, w: 9 }, { t: 0, l: 80 },
-        { t: -60, l: 90, h: 6 }, { t: 70, l: 90, h: -4 }, { t: -50, l: 80 }, { t: 80, l: 90 }, { t: 60, l: 130 }] },
-    { id: "zandvoort", name: "ZANDVOORT", gp: "Dutch GP", country: "Netherlands", night: false, theme: "green", lengthKm: 4.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.3, 0.44, 0.62], horizon: [0.72, 0.72, 0.68], grass: [0.42, 0.44, 0.24], runoff: [0.62, 0.54, 0.36], fog: [0.72, 0.72, 0.68], fogDensity: 0.0018,
-        sunDir: norm([0.50, 0.58, 0.46]), sun: [1.0, 0.92, 0.76], sunColor: [1.0, 0.90, 0.74] }),
-      segs: [{ t: 0, l: 260 }, { t: 75, l: 120, b: 0.16 }, { t: -50, l: 90 }, { t: 130, l: 150, b: 0.3 }, { t: 0, l: 180, h: 8 },
-        { t: 40, l: 110, h: -8 }, { t: 60, l: 100 }, { t: -50, l: 90, h: 4 }, { t: 70, l: 90 }, { t: -60, l: 90 }, { t: 90, l: 90 },
-        { t: -50, l: 90 }, { t: 50, l: 90 }, { t: 160, l: 160, b: 0.31, w: 8 }] },
-    { id: "jeddah", name: "JEDDAH", gp: "Saudi Arabian GP", country: "Saudi Arabia", night: true, theme: "street_night", lengthKm: 6.2, baseHW: 6,
-      pal: nightPal({ horizon: [0.12, 0.08, 0.05], concrete: [0.28, 0.27, 0.26], runoff: [0.25, 0.24, 0.22], grass: [0.20, 0.18, 0.14] }),
-      segs: [{ t: 0, l: 700 }, { t: -80, l: 70 }, { t: 75, l: 60 }, { t: 0, l: 120 }, { t: -70, l: 65 }, { t: 70, l: 60 }, { t: 0, l: 300 }, { t: 90, l: 80 }, { t: 0, l: 600 }, { t: 90, l: 80 }, { t: -65, l: 70 }, { t: 70, l: 70 }] },
-    { id: "albert_park", name: "ALBERT PARK", gp: "Australian GP", country: "Australia", night: false, theme: "green", lengthKm: 5.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.22, 0.44, 0.82], horizon: [0.74, 0.78, 0.82], grass: [0.24, 0.50, 0.18], runoff: [0.48, 0.42, 0.32], fogDensity: 0.0012,
-        sunDir: norm([0.60, 0.60, 0.30]), sun: [1.0, 0.95, 0.80], sunColor: [1.0, 0.93, 0.78] }),
-      segs: [{ t: 0, l: 300 }, { t: 50, l: 100 }, { t: -50, l: 90 }, { t: 65, l: 80 }, { t: 0, l: 200 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 260 }, { t: 80, l: 90 }, { t: 0, l: 200 }, { t: 70, l: 80 }] },
-    { id: "shanghai", name: "SHANGHAI", gp: "Chinese GP", country: "China", night: false, theme: "modern", lengthKm: 5.5, baseHW: 8,
-      pal: dayPal({ zenith: [0.28, 0.40, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.20, 0.42, 0.18], runoff: [0.40, 0.40, 0.40], fog: [0.64, 0.66, 0.66], fogDensity: 0.0020,
-        sunDir: norm([0.52, 0.64, 0.28]), sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.90, 0.82] }),
-      segs: [{ t: 0, l: 400 }, { t: 50, l: 130 }, { t: 180, l: 200 }, { t: 50, l: 100 }, { t: 0, l: 250 }, { t: -90, l: 100 }, { t: 0, l: 550 }, { t: -60, l: 90 }, { t: 60, l: 80 }, { t: -70, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 200 }] },
-    { id: "miami", name: "MIAMI", gp: "Miami GP", country: "USA", night: false, theme: "modern", lengthKm: 5.4, baseHW: 7,
-      pal: dayPal({ zenith: [0.22, 0.50, 0.88], horizon: [0.74, 0.80, 0.86], grass: [0.28, 0.50, 0.20], runoff: [0.56, 0.48, 0.34], fogDensity: 0.0010,
-        sunDir: norm([0.30, 0.76, 0.50]), sun: [1.0, 0.96, 0.82], sunColor: [1.0, 0.94, 0.80] }),
-      segs: [{ t: 0, l: 300 }, { t: -60, l: 80 }, { t: 65, l: 70 }, { t: 0, l: 200 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 70, l: 80 }, { t: 0, l: 400 }, { t: -80, l: 90 }, { t: 80, l: 90 }, { t: 0, l: 240 }] },
-    { id: "imola", name: "IMOLA", gp: "Emilia Romagna GP", country: "Italy", night: false, theme: "green", lengthKm: 4.9, baseHW: 7,
-      pal: dayPal({ zenith: [0.24, 0.44, 0.74], horizon: [0.72, 0.76, 0.74], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36],
-        sunDir: norm([0.72, 0.50, 0.26]), sun: [1.0, 0.90, 0.65], sunColor: [1.0, 0.88, 0.62] }),
-      segs: [{ t: 0, l: 450 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -70, l: 90 }, { t: 60, l: 80 }, { t: 80, l: 100 }, { t: 0, l: 400 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 0, l: 180 }, { t: 80, l: 90 }, { t: -100, l: 110 }] },
-    { id: "montreal", name: "MONTREAL", gp: "Canadian GP", country: "Canada", night: false, theme: "green", lengthKm: 4.4, baseHW: 7,
-      pal: dayPal({ zenith: [0.28, 0.44, 0.70], horizon: [0.68, 0.74, 0.80], grass: [0.22, 0.48, 0.18], runoff: [0.42, 0.40, 0.38], fogDensity: 0.0014,
-        sunDir: norm([0.44, 0.52, 0.52]), sun: [1.0, 0.92, 0.78], sunColor: [1.0, 0.90, 0.76] }),
-      segs: [{ t: 0, l: 380 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 0, l: 300 }, { t: 90, l: 90 }, { t: 0, l: 420 }, { t: -80, l: 90 }, { t: 60, l: 70 }, { t: -60, l: 70 }, { t: 0, l: 220 }, { t: 100, l: 110 }, { t: -100, l: 110 }] },
-    { id: "redbull", name: "RED BULL RING", gp: "Austrian GP", country: "Austria", night: false, theme: "green", lengthKm: 4.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.26, 0.46, 0.80], horizon: [0.66, 0.76, 0.86], grass: [0.22, 0.52, 0.18], runoff: [0.42, 0.38, 0.30], fogDensity: 0.0012,
-        sunDir: norm([0.50, 0.54, 0.40]), sun: [1.0, 0.94, 0.82], sunColor: [1.0, 0.92, 0.80] }),
-      segs: [{ t: 0, l: 280 }, { t: -90, l: 100, h: 12 }, { t: 90, l: 90 }, { t: -100, l: 110, h: 8 }, { t: 80, l: 90 }, { t: 0, l: 220, h: -10 }, { t: -70, l: 80 }, { t: 80, l: 90 }, { t: 0, l: 480, h: -10 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 }] },
-    { id: "hungaroring", name: "HUNGARORING", gp: "Hungarian GP", country: "Hungary", night: false, theme: "green", lengthKm: 4.4, baseHW: 7,
-      pal: dayPal({ zenith: [0.26, 0.44, 0.72], horizon: [0.70, 0.74, 0.76], grass: [0.22, 0.46, 0.16], runoff: [0.48, 0.44, 0.34], fogDensity: 0.0016,
-        sunDir: norm([0.68, 0.54, 0.30]), sun: [1.0, 0.88, 0.66], sunColor: [1.0, 0.86, 0.64] }),
-      segs: [{ t: 0, l: 300 }, { t: 70, l: 90 }, { t: -50, l: 80 }, { t: 60, l: 80 }, { t: 0, l: 200 }, { t: -80, l: 100 }, { t: 50, l: 80 }, { t: -60, l: 80 }, { t: 60, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 200 }, { t: -90, l: 100 }, { t: 70, l: 90 }] },
-    { id: "baku", name: "BAKU", gp: "Azerbaijan GP", country: "Azerbaijan", night: true, theme: "street_night", lengthKm: 6.0, baseHW: 6,
-      pal: nightPal({ horizon: [0.06, 0.08, 0.14] }),
-      segs: [{ t: 0, l: 200 }, { t: 90, l: 80 }, { t: -80, l: 70 }, { t: 0, l: 800 }, { t: 90, l: 80 }, { t: 0, l: 400 }, { t: -70, l: 70 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 600 }, { t: -80, l: 80 }] },
-    { id: "mexico", name: "MEXICO CITY", gp: "Mexican GP", country: "Mexico", night: false, theme: "modern", lengthKm: 4.3, baseHW: 8,
-      pal: dayPal({ zenith: [0.24, 0.48, 0.88], horizon: [0.74, 0.78, 0.82], grass: [0.28, 0.42, 0.18], runoff: [0.52, 0.38, 0.24], fogDensity: 0.0010,
-        sunDir: norm([0.24, 0.86, 0.44]), sun: [1.0, 0.98, 0.88], sunColor: [1.0, 0.96, 0.86] }),
-      segs: [{ t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 }, { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 }] },
-    { id: "qatar", name: "QATAR", gp: "Qatar GP", country: "Qatar", night: true, theme: "desert", lengthKm: 5.4, baseHW: 8,
-      pal: nightPal({ horizon: [0.14, 0.10, 0.06], concrete: [0.28, 0.26, 0.24], runoff: [0.24, 0.22, 0.20], grass: [0.20, 0.18, 0.14] }),
-      segs: [{ t: 0, l: 300 }, { t: -60, l: 90 }, { t: 80, l: 100 }, { t: -70, l: 90 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 70, l: 90 }, { t: 0, l: 400 }, { t: -60, l: 90 }, { t: 70, l: 90 }, { t: 0, l: 300 }] },
-    { id: "abudhabi", name: "ABU DHABI", gp: "Abu Dhabi GP", country: "UAE", night: true, theme: "desert", lengthKm: 5.3, baseHW: 8,
-      pal: nightPal({ horizon: [0.12, 0.08, 0.06], concrete: [0.26, 0.25, 0.24], runoff: [0.22, 0.21, 0.20], grass: [0.18, 0.16, 0.12] }),
-      segs: [{ t: 0, l: 300 }, { t: -60, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 400 }, { t: 90, l: 100 }, { t: 0, l: 200 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 60, l: 80 }, { t: 90, l: 100 }, { t: -60, l: 80 }] },
-  ];
+  // Surveyed elevation profile lookup. js/circuit-elevations.js (baked offline
+  // by tools/bake-elevation.mjs from SRTM) registers CircuitElevations[id] as an
+  // array of metres, relative to the start, sampled evenly by arc-fraction. When
+  // present it supersedes the authored cosine `elevations` bumps for that
+  // circuit. Returns 0 when no profile is loaded (the shipped default).
+  function elevationAt(id, frac) {
+    const prof = (typeof CircuitElevations !== "undefined") && CircuitElevations[id];
+    if (!prof || !prof.length) return null;
+    const M = prof.length, f = (((frac % 1) + 1) % 1) * M;
+    const i = Math.floor(f) % M, j = (i + 1) % M, t = f - Math.floor(f);
+    return prof[i] + (prof[j] - prof[i]) * t;
+  }
+  function hasRealElevation(id) {
+    return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
+  }
 
   // Real circuit centerlines (js/circuits.js): projected OSM traces in metres.
   // We use the real layout instead of the authored segment lists. Points are
-  // kept flat (y = 0) — the old per-segment elevation distributed a vertical
-  // residual that tilted the whole loop, which is the height glitch on Monaco.
+  // kept flat (y = 0) unless a surveyed elevation profile is loaded — the old
+  // per-segment elevation distributed a vertical residual that tilted the whole
+  // loop, which is the height glitch on Monaco; the profile path closes the
+  // elevation seam explicitly instead.
   function realPoints(id, baseHW) {
     const path = (typeof CircuitPaths !== "undefined") && CircuitPaths[id];
     if (!path) return null;
-    let pts = path.pts.map((p) => [p[0], 0, p[1], baseHW, 0]);
+    const N = path.pts.length;
+    const real = hasRealElevation(id);
+    let pts = path.pts.map((p, i) => [p[0], real ? elevationAt(id, i / N) : 0, p[1], baseHW, 0]);
     // light closed-loop smoothing to take the digitisation jitter off the
     // raw trace so the Catmull-Rom pass doesn't overshoot at noisy vertices
-    const N = pts.length;
     for (let it = 0; it < 2; it++) {
       const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
       const L = 0.25;
@@ -1764,14 +1304,30 @@ const Tracks = (function () {
         pts[i][2] = sz[i] + L * ((sz[a] + sz[b]) * 0.5 - sz[i]);
       }
     }
+    if (real) {
+      // close the elevation loop: ramp out any start↔end residual so the lap
+      // meets itself seamlessly (same idea as the xz closure in centerline()).
+      const eEnd = pts[N - 1][1] - pts[0][1];
+      for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (i / (N - 1));
+    }
     return pts;
   }
 
   const LIST = DEFS.map((d) => {
-    const def = { id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3, night: d.night, theme: d.theme, lengthKm: d.lengthKm, palette: d.pal };
+    const def = {
+      id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
+      night: d.night, theme: d.theme, lengthKm: d.lengthKm,
+      palette: (d.night ? nightPal : dayPal)(d.pal || {}),
+      street: !!d.street, banked: !!d.banked, bridges: d.bridges || null,
+      // bespoke per-circuit scenery (js/tracks/<id>.js); run by buildProps
+      scenery: d.scenery || null,
+      // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
+      // the points below and supersedes the authored cosine bumps.
+      elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
+    };
     def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
     return def;
   });
 
-  return { LIST, build, sample, curvature, onKerb };
+  return { LIST, build, sample, curvature, onKerb, banking };
 })();
