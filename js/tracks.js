@@ -1614,17 +1614,36 @@ const Tracks = (function () {
   // from the `night` flag; bridges/elevations/street travel with each def.
   const DEFS = (typeof window !== "undefined" && window.TrackDefs) || [];
 
+  // Surveyed elevation profile lookup. js/circuit-elevations.js (baked offline
+  // by tools/bake-elevation.mjs from SRTM) registers CircuitElevations[id] as an
+  // array of metres, relative to the start, sampled evenly by arc-fraction. When
+  // present it supersedes the authored cosine `elevations` bumps for that
+  // circuit. Returns 0 when no profile is loaded (the shipped default).
+  function elevationAt(id, frac) {
+    const prof = (typeof CircuitElevations !== "undefined") && CircuitElevations[id];
+    if (!prof || !prof.length) return null;
+    const M = prof.length, f = (((frac % 1) + 1) % 1) * M;
+    const i = Math.floor(f) % M, j = (i + 1) % M, t = f - Math.floor(f);
+    return prof[i] + (prof[j] - prof[i]) * t;
+  }
+  function hasRealElevation(id) {
+    return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
+  }
+
   // Real circuit centerlines (js/circuits.js): projected OSM traces in metres.
   // We use the real layout instead of the authored segment lists. Points are
-  // kept flat (y = 0) — the old per-segment elevation distributed a vertical
-  // residual that tilted the whole loop, which is the height glitch on Monaco.
+  // kept flat (y = 0) unless a surveyed elevation profile is loaded — the old
+  // per-segment elevation distributed a vertical residual that tilted the whole
+  // loop, which is the height glitch on Monaco; the profile path closes the
+  // elevation seam explicitly instead.
   function realPoints(id, baseHW) {
     const path = (typeof CircuitPaths !== "undefined") && CircuitPaths[id];
     if (!path) return null;
-    let pts = path.pts.map((p) => [p[0], 0, p[1], baseHW, 0]);
+    const N = path.pts.length;
+    const real = hasRealElevation(id);
+    let pts = path.pts.map((p, i) => [p[0], real ? elevationAt(id, i / N) : 0, p[1], baseHW, 0]);
     // light closed-loop smoothing to take the digitisation jitter off the
     // raw trace so the Catmull-Rom pass doesn't overshoot at noisy vertices
-    const N = pts.length;
     for (let it = 0; it < 2; it++) {
       const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
       const L = 0.25;
@@ -1634,6 +1653,12 @@ const Tracks = (function () {
         pts[i][2] = sz[i] + L * ((sz[a] + sz[b]) * 0.5 - sz[i]);
       }
     }
+    if (real) {
+      // close the elevation loop: ramp out any start↔end residual so the lap
+      // meets itself seamlessly (same idea as the xz closure in centerline()).
+      const eEnd = pts[N - 1][1] - pts[0][1];
+      for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (i / (N - 1));
+    }
     return pts;
   }
 
@@ -1642,7 +1667,10 @@ const Tracks = (function () {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
-      street: !!d.street, bridges: d.bridges || null, elevations: d.elevations || null,
+      street: !!d.street, bridges: d.bridges || null,
+      // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
+      // the points below and supersedes the authored cosine bumps.
+      elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
     };
     def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
     return def;
