@@ -10,6 +10,7 @@
   --sar: env(safe-area-inset-right, 0px);
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
+  --setup-drawer: min(460px, 56vw);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -156,8 +157,18 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 /* ---------- car setup ---------- */
 .sel-edit-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .sel-edit-row .sel-edit { margin-top: 0; }
-/* widen the setup panel so the stat bars + chip rows breathe */
-#carsetup { max-width: min(94vw, 640px); }
+/* The setup panel is a docked drawer (not a centred modal) so the always-on
+   stat bars stay visible beside it. Portrait: bottom sheet. Landscape: right
+   drawer. Overrides the centring/sizing from the generic .panel rule. */
+#carsetup {
+  left: 0; right: 0; bottom: 0; top: auto;
+  transform: none;
+  max-width: none; width: 100%;
+  max-height: 64dvh;
+  border-radius: 16px 16px 0 0;
+  border-bottom: none;
+  background: #0c0c13;   /* opaque so the select screen doesn't bleed through */
+}
 #cs-team {
   font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 0.08em;
   color: var(--text); margin-bottom: 14px;
@@ -197,12 +208,16 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 /* category sections flow into 2 columns when the panel is wide (landscape) */
 #cs-body { display: grid; grid-template-columns: 1fr; gap: 0 20px; }
 .cs-stats { grid-column: 1 / -1; }
-/* inside the setup panel the stats are pinned to the top of the scroll area,
-   with an opaque backdrop so the part chips scroll cleanly underneath */
-.cs-stats-pinned {
-  position: sticky; top: -2px; z-index: 3;
+/* When the setup drawer is open, lift the select-screen stats out of flow and
+   pin them where the drawer can't cover them — top in portrait, top-left
+   beside the right drawer in landscape — so stats + parts are seen together. */
+.setup-open #sel-stats {
+  position: fixed; z-index: 60; margin: 0;
+  top: calc(var(--sat) + 10px);
+  left: calc(var(--sal) + 12px);
+  right: calc(var(--sar) + 12px);
   background: #14141c;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
 }
 .cs-cat-section {
   margin-top: 14px; padding-top: 12px;
@@ -220,7 +235,21 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 .cs-chips .cs-chip.active { background: rgba(225,6,0,0.22); border-color: var(--red); }
 
 @media (min-aspect-ratio: 1/1) {
+  /* right-side drawer; categories in two columns */
+  #carsetup {
+    left: auto; right: 0; top: 0; bottom: 0;
+    width: var(--setup-drawer); max-width: var(--setup-drawer);
+    max-height: 100dvh;
+    border-radius: 16px 0 0 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  }
   #cs-body { grid-template-columns: 1fr 1fr; }
+  /* stats pinned to the left of the drawer, filling the remaining width */
+  .setup-open #sel-stats {
+    right: auto;
+    width: calc(100vw - var(--setup-drawer) - var(--sal) - 26px);
+    max-width: 520px;
+  }
 }
 
 /* ---------- HUD ---------- */

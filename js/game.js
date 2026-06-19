@@ -1228,13 +1228,7 @@ function buildSetup() {
   const body = $("cs-body");
   body.textContent = "";
 
-  // stat bars, pinned at the top so they stay visible while picking parts
-  const statDiv = document.createElement("div");
-  statDiv.className = "cs-stats cs-stats-pinned";
-  renderStatBars(statDiv, team);
-  body.appendChild(statDiv);
-
-  // part categories
+  // part categories — stats live on the select screen (pinned while open)
   for (const cat of Parts.CATALOG) {
     const section = document.createElement("div");
     section.className = "cs-cat-section";
@@ -1274,6 +1268,7 @@ function buildSetup() {
 
 function openSetup() {
   buildSetup();
+  document.body.classList.add("setup-open");
   $("carsetup").hidden = false;
 }
 
@@ -1434,7 +1429,11 @@ function openCustomize() {
 });
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
 $("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
-$("cs-done").onclick = () => { $("carsetup").hidden = true; recomputePlayerMods(); buildSelect(); };
+$("cs-done").onclick = () => {
+  $("carsetup").hidden = true;
+  document.body.classList.remove("setup-open");
+  recomputePlayerMods(); buildSelect();
+};
 $("cz-cancel").onclick = () => { els.customize.hidden = true; };
 $("cz-save").onclick = () => {
   const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
