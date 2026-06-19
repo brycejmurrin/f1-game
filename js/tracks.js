@@ -602,24 +602,6 @@ const Tracks = (function () {
     // section. Anchoring the base low keeps terrain below the road everywhere.
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
-    // Circuit footprint: centroid + max radius. Used to ring distant backdrops
-    // and to lay a ground-fill plane under the whole scene.
-    let cgx = 0, cgz = 0;
-    for (let i = 0; i < n; i++) { cgx += px[i]; cgz += pz[i]; }
-    cgx /= n; cgz /= n;
-    let maxR = 0;
-    for (let i = 0; i < n; i++) { const dd = Math.hypot(px[i] - cgx, pz[i] - cgz); if (dd > maxR) maxR = dd; }
-    // Ground-fill plane across the whole footprint at a low grade. The road
-    // terrain ribbon only reaches ~120m out and follows the road's elevation, so
-    // on hilly circuits (e.g. COTA's +28m Turn 1) an elevated section's run-off
-    // apron would otherwise float as a plane over the empty infield. This sits
-    // under everything — below the decorative water planes too — so distant
-    // terrain always has solid ground beneath it.
-    {
-      const g = pal.grass || [0.3, 0.4, 0.2], ro = pal.runoff || g;
-      const groundCol = [(g[0] + ro[0]) / 2, (g[1] + ro[1]) / 2, (g[2] + ro[2]) / 2];
-      addBox(out, [cgx, pyMin - 6, cgz], [(maxR + 700) * 2, 2, (maxR + 700) * 2], groundCol);
-    }
     // True if (x,z) lies on (or within `margin` of) the tarmac of ANY track
     // station. Used to stop props being dropped onto a *parallel* section of the
     // circuit — e.g. a tree placed perpendicular to one point landing on the
@@ -803,15 +785,17 @@ const Tracks = (function () {
     // --- circuit-specific surrounding landscape features with comprehensive filler ---
     // Bahrain: desert dunes, Persian Gulf, utility infrastructure
     if (def.id === "bahrain") {
-      // Distant dune layers (depth cues)
+      // Distant dune layers (depth cues). Kept low and pushed well back so they
+      // read as a faint sand horizon rather than a continuous tan wall ringing
+      // the circuit.
       for (let i = 0; i < 12; i++) {
         const k = Math.round((i / 12) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const dune_h = 12 + hash(k * 17) * 8;
-        const dune_d = 180 + hash(k * 19) * 80;
+        const dune_h = 5 + hash(k * 17) * 5;
+        const dune_d = 320 + hash(k * 19) * 120;
         for (const side of [-1, 1]) {
           addBox(out, [px[k] + r[0] * side * dune_d, pyMin + dune_h / 2 - 1, pz[k] + r[2] * side * dune_d],
-                 [140, dune_h, 200], [0.74, 0.68, 0.52]);
+                 [180, dune_h, 200], [0.74, 0.68, 0.52]);
         }
       }
       // Light towers (floodlights): 12 units, 30-35m tall
@@ -1548,7 +1532,10 @@ const Tracks = (function () {
   const ELEVATIONS = {
     spa:        [{ s: 0.07, halfM: 270, rise: -14 }, { s: 0.12, halfM: 500, rise: 26 }],
     monaco:     [{ s: 0.27, halfM: 340, rise: 18 }],
-    cota:       [{ s: 0.06, halfM: 440, rise: 28 }],
+    // COTA kept flat: its compact, open infield exposed the elevated Turn 1
+    // terrain ribbon as a green plane floating across the infield from lower
+    // parts of the lap. (was [{ s: 0.06, halfM: 440, rise: 28 }])
+    cota:       [],
     interlagos: [{ s: 0.86, halfM: 560, rise: 16 }],
     silverstone:[{ s: 0.62, halfM: 360, rise:  9 }],
     zandvoort:  [{ s: 0.56, halfM: 300, rise: 12 }],
