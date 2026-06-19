@@ -135,7 +135,9 @@ const ACCEL = 13;           // m/s^2 at low speed
 const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const LAT_MAX = 22;         // m/s^2 cornering grip
-const STEER_VMAX = 15;      // lateral m/s at full lock, full speed
+const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (also caps the
+                            // player's heading model so lateral grip stays bounded)
+const STEER_TURN = 3.0;     // rad/s the player car's heading rotates at full lock
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -935,7 +937,25 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * gripMult() * dt;
+  if (c.isPlayer) {
+    // "Point the car" steering — no on-rails follow. The car holds a heading
+    // (c.head, relative to the track tangent) and moves where it points.
+    // Steering rotates the heading; as the car advances the track tangent
+    // curves away beneath it, so NOT steering through a corner keeps you going
+    // straight and runs you wide. Steering into the corner tracks it cleanly,
+    // with no artificial outward shove. The heading is capped so lateral speed
+    // never exceeds the available grip at the current track speed.
+    if (c.head === undefined) c.head = 0;
+    const auth = latFac * gripScale * kerbGrip * playerMods.cornering * gripMult();
+    c.head += steer * STEER_TURN * auth * dt;   // driver rotates the car
+    c.head -= k * c.speed * dt;                  // track curves away under it
+    const maxLat = STEER_VMAX * gripScale * kerbGrip * playerMods.cornering * gripMult();
+    const hmax = c.speed > 1 ? Math.asin(clamp(maxLat / c.speed, 0, 1)) : 0.9;
+    c.head = clamp(c.head, -hmax, hmax);
+    c.x += c.speed * Math.sin(c.head) * dt;
+  } else {
+    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * dt;
+  }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
@@ -970,13 +990,16 @@ function updateCar(c, dt, ranked) {
     if (c.isPlayer) c.wallT = Math.max(0, (c.wallT || 0) - dt);
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
-  // Drive the visual nose yaw from the SMOOTHED steer (steerVis), not the raw
-  // per-frame steer, so residual steering twitch doesn't wobble the nose. A
-  // sustained turn-in still shows; a one-frame correction is filtered out.
-  // The AI also adds a curvature term so its nose points into corners; the
-  // player's nose follows only their own steering (no auto-yaw into the turn).
-  const curveYaw = c.isPlayer ? 0 : clamp(k * c.speed * 0.14, -0.28, 0.28);
-  c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + curveYaw, 6, dt);
+  // Visual nose yaw. The player's nose points in the car's ACTUAL heading
+  // (c.head from the point-the-car model), so what you see is where you're
+  // going. The AI uses its smoothed steer plus a curvature term so its nose
+  // points into corners.
+  if (c.isPlayer) {
+    c.yawVis = damp(c.yawVis, c.head || 0, 12, dt);
+  } else {
+    const curveYaw = clamp(k * c.speed * 0.14, -0.28, 0.28);
+    c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + curveYaw, 6, dt);
+  }
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
