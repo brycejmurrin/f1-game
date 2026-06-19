@@ -8,7 +8,8 @@ Pure JS/CSS/HTML, **no build step, no dependencies**. Served as static files
 js/mat4.js     -> M4, V3
 js/glx.js      -> GLX        (WebGL2 renderer)
 js/teams.js    -> Teams      (2026 grid data)
-js/tracks.js   -> Tracks     (12 circuits: data + spline + meshes)
+js/tracks/*.js -> TrackDefs   (one file per circuit; registers itself on the list)
+js/tracks.js   -> Tracks     (engine: spline + meshes; reads TrackDefs)
 js/car3d.js    -> Car3D      (procedural F1 car geometry)
 js/input.js    -> Input      (keyboard / touch / tilt)
 js/audio.js    -> GameAudio  (WebAudio synth: engine, sfx, music)
@@ -89,15 +90,31 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
 
-## js/tracks.js — `Tracks`
+## js/tracks/<id>.js — `TrackDefs` (circuit data)
 
-Each circuit is control points + theme; module samples a closed Catmull-Rom
-spline and emits meshes.
+One file per circuit. Each is a self-contained IIFE that pushes a plain data
+object onto the global `TrackDefs` list. No engine logic, no palette helpers —
+just raw fields. Loaded (in calendar order) *before* `js/tracks.js`.
+
+```
+def = { id, name, gp, country, night, theme, lengthKm, baseHW,
+        street?:true,                              // continuous-barrier street circuit
+        pal: { ...palette overrides... },          // engine wraps with day/nightPal
+        segs: [ {t,l,h?,b?,w?}, ... ],             // authored fallback if no OSM trace
+        bridges?:   [ {s,halfM,rise}, ... ],       // figure-8 overpass deck (terrain stays flat)
+        elevations?:[ {s,halfM,rise}, ... ] }      // real elevation bumps (terrain follows road)
+```
+
+## js/tracks.js — `Tracks` (engine)
+
+Resolves each `TrackDefs` entry (palette from the `night` flag, geometry from
+the OSM trace in `js/circuits.js` or the authored `segs`), samples a closed
+Catmull-Rom spline, and emits meshes.
 
 ```
 Tracks.LIST -> [ trackDef, ... ]   // 12: bahrain, monaco, silverstone, spa, monza,
                                    // suzuka, singapore, cota, interlagos, vegas,
-                                   // madrid, zandvoort  (calendar order)
+                                   // madrid, zandvoort  (+ extended calendar; order = load order)
 trackDef = { id, name:"MONZA", gp:"Italian GP", country:"Italy",
              laps:3, night:false, lengthKm:5.79,
              palette: { zenith,horizon,sun:[r,g,b], grass:[r,g,b], runoff:[r,g,b],
