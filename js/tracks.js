@@ -602,6 +602,24 @@ const Tracks = (function () {
     // section. Anchoring the base low keeps terrain below the road everywhere.
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
+    // Circuit footprint: centroid + max radius. Used to ring distant backdrops
+    // and to lay a ground-fill plane under the whole scene.
+    let cgx = 0, cgz = 0;
+    for (let i = 0; i < n; i++) { cgx += px[i]; cgz += pz[i]; }
+    cgx /= n; cgz /= n;
+    let maxR = 0;
+    for (let i = 0; i < n; i++) { const dd = Math.hypot(px[i] - cgx, pz[i] - cgz); if (dd > maxR) maxR = dd; }
+    // Ground-fill plane across the whole footprint at a low grade. The road
+    // terrain ribbon only reaches ~120m out and follows the road's elevation, so
+    // on hilly circuits (e.g. COTA's +28m Turn 1) an elevated section's run-off
+    // apron would otherwise float as a plane over the empty infield. This sits
+    // under everything — below the decorative water planes too — so distant
+    // terrain always has solid ground beneath it.
+    {
+      const g = pal.grass || [0.3, 0.4, 0.2], ro = pal.runoff || g;
+      const groundCol = [(g[0] + ro[0]) / 2, (g[1] + ro[1]) / 2, (g[2] + ro[2]) / 2];
+      addBox(out, [cgx, pyMin - 6, cgz], [(maxR + 700) * 2, 2, (maxR + 700) * 2], groundCol);
+    }
     // True if (x,z) lies on (or within `margin` of) the tarmac of ANY track
     // station. Used to stop props being dropped onto a *parallel* section of the
     // circuit — e.g. a tree placed perpendicular to one point landing on the
@@ -966,24 +984,8 @@ const Tracks = (function () {
         }
       });
     }
-    // COTA: Texas Hill Country terrain, scattered trees, distant ridges, utilities
+    // COTA: Texas Hill Country terrain, scattered trees, utilities
     if (def.id === "cota") {
-      // Distant limestone ridges. COTA is a compact, hilly loop, so offsetting big
-      // slabs perpendicular to the track lands them over the infield or an
-      // adjacent section. Instead ring them around the whole circuit footprint
-      // (centroid + max radius) so they always sit outside as a horizon backdrop.
-      let cgx = 0, cgz = 0;
-      for (let i = 0; i < n; i++) { cgx += px[i]; cgz += pz[i]; }
-      cgx /= n; cgz /= n;
-      let maxR = 0;
-      for (let i = 0; i < n; i++) { const dd = Math.hypot(px[i] - cgx, pz[i] - cgz); if (dd > maxR) maxR = dd; }
-      const ringR = maxR + 280;
-      for (let i = 0; i < 16; i++) {
-        const a = (i / 16) * Math.PI * 2;
-        const rgx = cgx + Math.cos(a) * ringR, rgz = cgz + Math.sin(a) * ringR;
-        const ridge_h = 18 + hash(i * 37) * 16;
-        addBox(out, [rgx, pyMin + ridge_h / 2 - 1, rgz], [200, ridge_h, 200], [0.4, 0.36, 0.28]);
-      }
       // Oak/cedar tree coverage (scattered natural vegetation) - reduced density to avoid clustering
       every(60, (k) => {
         for (const side of [-1, 1]) {
