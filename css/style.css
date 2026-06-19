@@ -391,4 +391,34 @@ body.steer-touch #btn-ot    { right: calc(96px + var(--sar)); }
   background: var(--bg);
 }
 
+/* ---------- SHORT LANDSCAPE (phones): compact menus/panels so titles aren't
+   clipped and primary actions (START / SAVE / QUIT) never fall below the fold.
+   Gated on a short height so tablets and desktop keep the roomy layout. ---- */
+@media (orientation: landscape) and (max-height: 520px) {
+  /* main menu: top-aligned + smaller so all five buttons + title fit */
+  #overlay { justify-content: flex-start; }
+  #title { font-size: clamp(24px, 6vw, 44px); margin-top: 6px; }
+  #title::after { height: 3px; }
+  #subtitle { margin: 4px 0 10px; font-size: 13px; }
+  .bigbtn { padding: 8px 18px; font-size: 16px; margin: 5px auto; }
+  #disclaimer { position: static; margin-top: 8px; }
+
+  /* dialog panels: tighter padding + buttons */
+  .panel { padding: 12px 18px; }
+  .panel h2 { margin-bottom: 8px; }
+  .panel button { margin: 5px 0; padding: 6px 14px; }
+  .sel-actions { margin-top: 10px; }
+
+  /* customize form: compact rows so SAVE/CANCEL stay visible */
+  #customize .cz-row { margin: 4px 0; font-size: 12px; }
+  #customize input[type="text"], #customize input[type="number"] { padding: 5px 8px; }
+  #customize input[type="color"] { height: 28px; }
+  #cz-preview { margin-top: 8px; padding: 7px; }
+
+  /* select screen: compact chips + sections */
+  .sel-label { margin: 7px 0 4px; }
+  .sel-chip { padding: 6px 10px; font-size: 12px; }
+  .sel-actions .bigbtn { padding: 9px 16px; }
+}
+
 [hidden] { display: none !important; }
