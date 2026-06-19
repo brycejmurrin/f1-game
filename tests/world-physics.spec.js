@@ -81,6 +81,27 @@ test.describe("Apex 26 — world-space player physics", () => {
     for (const { k, dx } of r) expect(Math.sign(dx)).toBe(Math.sign(k));
   });
 
+  test("RESPONSE slider changes turn-in (wheelbase): high = snappier", async ({ page }) => {
+    await startRace(page);
+    // Hold the same steer from a straight at each RESPONSE extreme and compare
+    // how far the heading swings in a short burst. Higher slider must turn more.
+    const turnAt = (slider) => page.evaluate((s) => {
+      const el = document.getElementById("pm-rate");
+      el.value = String(s);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      window.__apex.jump(0.0, 40, 0);
+      window.__apex.setInput({ steer: 1, throttle: false });
+      const a0 = window.__apex.probe().angle;
+      for (let i = 0; i < 10; i++) window.__apex.step(1 / 60, 1);
+      const a1 = window.__apex.probe().angle;
+      window.__apex.clearInput();
+      return Math.abs(a1 - a0);
+    }, slider);
+    const low = await turnAt(2);    // long wheelbase = lazy
+    const high = await turnAt(9);   // short wheelbase = snappy
+    expect(high).toBeGreaterThan(low * 1.15);
+  });
+
   test("AI stays on track and progresses after the racing-line flip", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {

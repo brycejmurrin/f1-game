@@ -138,17 +138,17 @@ const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
 const LAT_MAX = 22;         // m/s^2 cornering grip
 const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
-// Player steering (heading model). STEER_RATE is how fast full lock rotates the
-// car's heading (rad/s); it must beat the curvature drift (k*speed) of the
-// tightest corner at its proper speed, or the car can't be held on line.
+// Player steering (world-space bicycle model). WHEELBASE sets the turn-in
+// snappiness: yaw rate = speed * tan(steerAngle) / WHEELBASE, so a SHORTER
+// wheelbase turns in harder/faster (this is the RESPONSE slider).
 // STEER_EXPO shapes the input: >1 = gentle near centre (fine, non-twitchy
 // corrections) while keeping full authority at the stops. STEER_MAX_SLIP caps
-// the heading offset (tyre slip-angle limit, ~28°).
+// the steering (slip) angle (~28°).
 // These three are tuned live by the pause-menu sliders (RESPONSE / LINEARITY /
 // STEER LOCK), so they're `let`, not `const`. applySteerTuning() sets them.
-let STEER_RATE = 2.6;       // rad/s of heading rotation at full lock (snappiness)
+let WHEELBASE = 3.2;        // m; shorter = snappier turn-in (RESPONSE slider)
 let STEER_EXPO = 2.4;       // input shaping: higher = much gentler near centre
-let STEER_MAX_SLIP = 0.5;   // max heading offset / slip-angle limit (steer lock)
+let STEER_MAX_SLIP = 0.5;   // max steering / slip-angle (steer lock)
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -1063,7 +1063,7 @@ function updateCar(c, dt, ranked) {
     const auth = gripScale * kerbGrip * gripMult() * playerMods.cornering;
     const maxDelta = STEER_MAX_SLIP * Math.max(0.3, 1 - c.speed / 80);
     const yawRate = c.speed > 0.5
-      ? c.speed * Math.tan(shaped * auth * maxDelta) / 3.2
+      ? c.speed * Math.tan(shaped * auth * maxDelta) / WHEELBASE
       : 0;
     // Right vector is cross(tangent, up) = (-tz, tx); increasing head rotates the
     // direction toward -right, so SUBTRACT yaw to make +steer turn right (+x),
@@ -1957,7 +1957,8 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // hand-tuned feel. Higher slider = the direction named in the label.
 //
 //  pm-sens     TILT STRENGTH  output multiplier on tilt steer (v/10). Most felt.
-//  pm-rate     RESPONSE       STEER_RATE rad/s — how fast/snappy it turns.
+//  pm-rate     RESPONSE       WHEELBASE m (inverted) — high slider = shorter
+//                             wheelbase = snappier, sharper turn-in.
 //  pm-expo     LINEARITY      STEER_EXPO — high slider = more linear/direct,
 //                             low = gentle near centre. (affects tilt + keys)
 //  pm-smooth   STEER SMOOTHING TILT_SLEW — higher = slower, smoother changes.
@@ -1967,7 +1968,8 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
 function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
 function slewFromSmooth(v)   { return 5 + (1 - 5) * (v - 1) / 9; }     // 5..1
-function rateFromSlider(v)   { return 1.4 + (4.0 - 1.4) * (v - 1) / 9; } // 1.4..4.0
+// High slider = SHORTER wheelbase = snappier; v5 ≈ 3.2 m (the original feel).
+function wheelbaseFromSlider(v) { return 4.3 + (1.9 - 4.3) * (v - 1) / 9; } // 4.3..1.9
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
 function lockFromSlider(v)   { return 0.30 + (0.70 - 0.30) * (v - 1) / 9; } // .3..0.7
 function dzFromSlider(v)     { return (v - 1) * 0.8; }                  // 0..7.2 deg
@@ -1983,7 +1985,7 @@ function applySteerTuning() {
   const lock    = store.get("steerLock",  5);
   const line    = store.get("raceLine",   0);
   tiltOutputScale = sens / 10;
-  STEER_RATE     = rateFromSlider(rate);
+  WHEELBASE      = wheelbaseFromSlider(rate);
   STEER_EXPO     = expoFromSlider(expo);
   STEER_MAX_SLIP = lockFromSlider(lock);
   Input.setTiltSmoothing(slewFromSmooth(smooth));
@@ -2005,7 +2007,7 @@ $("pm-sens").oninput = (e) => {
 };
 $("pm-rate").oninput = (e) => {
   const v = +e.target.value; store.set("steerRate", v);
-  STEER_RATE = rateFromSlider(v); $("pm-rate-v").textContent = v;
+  WHEELBASE = wheelbaseFromSlider(v); $("pm-rate-v").textContent = v;
 };
 $("pm-expo").oninput = (e) => {
   const v = +e.target.value; store.set("steerExpo", v);
@@ -2085,10 +2087,13 @@ window.__apex = {
     player.angle = 0;   // teleport aligns the car with the track (deterministic)
     if (lateral !== undefined) player.x = lateral;
     if (speed !== undefined) player.speed = speed;
-    // Force the world-space physics state to re-initialise from the new (s, x) on
-    // the next update; otherwise px/pz/head keep the pre-teleport position and the
-    // projection desyncs (progress stalls, steering reads wrong).
-    player.px = null;
+    // Reset the world-space physics state to the new (s, x), heading aligned with
+    // the track tangent. Done immediately (not lazily) so the car is deterministic
+    // and probe() reads a correct heading offset right after a teleport.
+    Tracks.sample(track, player.s, smp);
+    player.px = smp.p[0] + smp.r[0] * player.x;
+    player.pz = smp.p[2] + smp.r[2] * player.x;
+    player.head = Math.atan2(smp.t[0], smp.t[2]);
     return { s: player.s, total: track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
