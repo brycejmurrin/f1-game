@@ -134,6 +134,7 @@ const VMAX = 94;            // m/s base (~338 km/h) — F1 top end; wider gears,
 const ACCEL = 13;           // m/s^2 at low speed
 const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
+const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
 const LAT_MAX = 22;         // m/s^2 cornering grip
 const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (also caps the
                             // player's heading model so lateral grip stays bounded)
@@ -697,6 +698,7 @@ function updateCar(c, dt, ranked) {
   if (c.finished) { coast(c, dt); return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
+  const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
   const k = Tracks.curvature(track, c.s);
   const dd = DIFF[difficulty];
 
@@ -819,6 +821,10 @@ function updateCar(c, dt, ranked) {
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
+  // --- slope gravity: on real-elevation circuits the climbs bleed speed and the
+  // descents feed it back. slopeSin is the road tangent's vertical component
+  // (sin of the pitch). Race-only so the grid doesn't creep during the countdown.
+  if (state === "race" && slopeSin) c.speed = Math.max(0, c.speed - GRAVITY_SLOPE * slopeSin * dt);
   if (c.isPlayer) {
     if (!gearsManual()) {
       const ng = naturalGear(c.speed);

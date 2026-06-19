@@ -19,6 +19,8 @@
       { t: 70, l: 70 }, { t: 75, l: 130 }, { t: 60, l: 120 }, { t: 0, l: 260 }, { t: -50, l: 55 }, { t: 65, l: 70 },
       { t: 0, l: 360 }, { t: 150, l: 220 },
     ],
+    // Royal-park circuit is nearly flat — a gentle rise through the Lesmos.
+    elevations: [{ s: 0.55, halfM: 320, rise: 7 }],
   }
   );
 })();

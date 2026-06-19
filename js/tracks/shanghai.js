@@ -18,6 +18,8 @@
       { t: 0, l: 400 }, { t: 50, l: 130 }, { t: 180, l: 200 }, { t: 50, l: 100 }, { t: 0, l: 250 }, { t: -90, l: 100 },
       { t: 0, l: 550 }, { t: -60, l: 90 }, { t: 60, l: 80 }, { t: -70, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 200 },
     ],
+    // Mostly flat — a mild rise on the long back straight.
+    elevations: [{ s: 0.45, halfM: 360, rise: 6 }],
   }
   );
 })();
