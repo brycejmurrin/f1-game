@@ -469,5 +469,9 @@ const Input = (function () {
     touchControlsNeeded,
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
+    // Read-only tilt-tuning state (for tests / diagnostics).
+    get maxTilt() { return MAX_TILT; },
+    get deadzone() { return DEADZONE; },
+    get tiltSlew() { return TILT_SLEW; },
   };
 })();

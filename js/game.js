@@ -2179,6 +2179,20 @@ window.__apex = {
              head: +(player.head * 180 / Math.PI).toFixed(1) + "°",
              s: +player.s.toFixed(1), x: +player.x.toFixed(2) };
   },
+  // Live values the steering sliders map to — for tests/diagnostics. Each slider
+  // moving should move its value here (and the car's behaviour).
+  tuning() {
+    return {
+      tiltOutputScale,                 // TILT STRENGTH
+      wheelbase: WHEELBASE,            // RESPONSE (shorter = snappier)
+      expo: STEER_EXPO,                // LINEARITY
+      maxSlip: STEER_MAX_SLIP,         // STEER LOCK
+      raceLineAssist,                  // RACING LINE
+      maxTilt: Input.maxTilt,          // TILT RANGE
+      deadzone: Input.deadzone,        // DEAD ZONE
+      tiltSlew: Input.tiltSlew,        // STEER SMOOTHING
+    };
+  },
   // Debug free camera for surveying track layouts/scenery — look at anything.
   // Call with no args (or "chase") to restore the chase cam. Option forms:
   //   {}                                       aerial of the whole track
