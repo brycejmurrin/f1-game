@@ -1373,7 +1373,7 @@ const Tracks = (function () {
       segs: [{ t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
         { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300, h: -4 }, { t: 60, l: 90, h: 4 }, { t: 0, l: 120 }, { t: 60, l: 110 }] },
     { id: "monaco", name: "MONACO", gp: "Monaco GP", country: "Monaco", night: false, theme: "street_day", lengthKm: 3.3, baseHW: 5,
-      pal: dayPal({ horizon: [0.55, 0.68, 0.82], grass: [0.3, 0.45, 0.5], runoff: [0.7, 0.66, 0.55], fogDensity: 0.0014 }),
+      pal: dayPal({ horizon: [0.55, 0.68, 0.82], grass: [0.48, 0.46, 0.42], runoff: [0.7, 0.66, 0.55], fogDensity: 0.0014 }),
       segs: [{ t: 0, l: 230 }, { t: 70, l: 75 }, { t: -25, l: 260, h: 14 }, { t: -70, l: 110 }, { t: 80, l: 80, w: 4.8 },
         { t: 0, l: 90, h: -6 }, { t: 80, l: 80, w: 4.8 }, { t: 160, l: 120, w: 4.5, h: -4 }, { t: 55, l: 80 }, { t: 45, l: 80 },
         { t: -15, l: 260, h: -4 }, { t: 60, l: 70, w: 4.8 }, { t: 0, l: 40 }, { t: -65, l: 60 }, { t: 65, l: 60 }, { t: -40, l: 100 },
