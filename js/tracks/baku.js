@@ -64,8 +64,8 @@
       // ===================================================================
       {
         const k = K(0.0);
-        place(k, 1, 34, [64, 30, 30], SAND);
-        place(k, 1, 36, [66, 6, 32], SAND_LIT);                 // warm uplit base band
+        place(k, 1, 42, [64, 30, 30], SAND);
+        place(k, 1, 43, [66, 6, 32], SAND_LIT);                 // warm uplit base band
         for (const o of [-22, 22]) {                            // twin corner towers
           const a = anchor(k, 1, 24);
           const c = vadd(a.c, a.t, o);
@@ -155,8 +155,8 @@
       // ===================================================================
       {
         const k = K(0.46);
-        place(k, 1, 11, [18, 16, 18], SAND);
-        place(k, 1, 11, [19, 4, 19], SAND_LIT);
+        place(k, 1, 20, [18, 16, 18], SAND);
+        place(k, 1, 21, [19, 4, 19], SAND_LIT);
         const a = anchor(k, 1, 6);
         for (let j = 0; j < 4; j++)
           addBox(out, vadd(vadd(a.c, a.t, (j - 1.5) * 4.5), a.u, 16.6), [3, 1.6, 3], SAND, [a.r, a.u, a.t]);
