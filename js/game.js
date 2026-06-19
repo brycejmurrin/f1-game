@@ -17,8 +17,9 @@ const els = {
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
   selDriver: $("sel-driver"), selTracks: $("sel-tracks"),
   selTrackSection: $("sel-track-section"), selDiff: $("sel-diff"),
-  selDiffSection: $("sel-diff-section"),
+  selDiffSection: $("sel-diff-section"), selCustomize: $("sel-customize"),
   selBack: $("sel-back"), selGo: $("sel-go"),
+  customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"),
@@ -49,6 +50,28 @@ function ttBoardAdd(trackId, entry) {
   if (b.length > TT_BOARD_MAX) b.length = TT_BOARD_MAX;
   store.set("ttlb." + trackId, b);
   return b;
+}
+
+// Custom "MY TEAM": a player-defined team injected into Teams.LIST. It only
+// joins the grid when the player actually selects it (see makeCars).
+const DEFAULT_CUSTOM = {
+  id: "custom", name: "My Team", short: "YOU", engine: "Custom", tier: 2, custom: true,
+  color: [0.13, 0.79, 0.85], color2: [0.96, 0.86, 0.0],
+  drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
+};
+function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
+function syncCustomTeam() {
+  const i = Teams.LIST.findIndex((t) => t.id === "custom");
+  if (i >= 0) Teams.LIST.splice(i, 1);
+  Teams.LIST.push(loadCustomTeam());
+  delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
+}
+function hexToRgb(h) {
+  return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+}
+function rgbToHex(c) {
+  const f = (v) => ("0" + Math.round(clamp(v, 0, 1) * 255).toString(16)).slice(-2);
+  return "#" + f(c[0]) + f(c[1]) + f(c[2]);
 }
 
 let teamIdx = store.get("team", 2);          // default McLaren
@@ -168,9 +191,12 @@ const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
 // ---------- car setup ----------
 function makeCars() {
   cars = [];
-  const total = Teams.LIST.reduce((s, t) => s + t.drivers.length, 0);
+  // the custom team only enters the grid when the player has selected it
+  const grid = Teams.LIST.filter((t, ti) => !t.custom || ti === teamIdx);
+  const total = grid.reduce((s, t) => s + t.drivers.length, 0);
   let idx = 0;
-  Teams.LIST.forEach((team, ti) => {
+  grid.forEach((team) => {
+    const ti = Teams.LIST.indexOf(team);
     team.drivers.forEach((d, di) => {
       const isP = ti === teamIdx && di === driverIdx;
       // Spread the field's preferred lanes evenly across the track width (with a
@@ -1207,6 +1233,55 @@ $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
 els.selGo.onclick = () => { if (soundOn) GameAudio.uiSelect(); if (steerMode === "tilt") enableTilt(); startRace(); };
+
+// ---- customize my team ----
+function czPreview() {
+  $("cz-swatch1").style.background = $("cz-color").value;
+  $("cz-swatch2").style.background = $("cz-color2").value;
+  const code = ($("cz-code").value || "YOU").toUpperCase();
+  $("cz-pvtext").textContent = "#" + ($("cz-num").value || "99") + " " + code + " · " + ($("cz-short").value || "YOU").toUpperCase();
+  $("cz-pvtext").style.color = $("cz-color").value;
+}
+function openCustomize() {
+  const ct = loadCustomTeam();
+  $("cz-name").value = ct.name;
+  $("cz-short").value = ct.short;
+  $("cz-color").value = rgbToHex(ct.color);
+  $("cz-color2").value = rgbToHex(ct.color2);
+  $("cz-driver").value = ct.drivers[0].name;
+  $("cz-code").value = ct.drivers[0].code;
+  $("cz-num").value = ct.drivers[0].num;
+  czPreview();
+  els.customize.hidden = false;
+}
+["cz-name", "cz-short", "cz-color", "cz-color2", "cz-code", "cz-num"].forEach((id) => {
+  $(id).addEventListener("input", czPreview);
+});
+els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
+$("cz-cancel").onclick = () => { els.customize.hidden = true; };
+$("cz-save").onclick = () => {
+  const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
+  const ct = {
+    id: "custom", engine: "Custom", tier: 2, custom: true,
+    name: clean($("cz-name").value, "My Team", 22),
+    short: clean($("cz-short").value, "YOU", 4).toUpperCase(),
+    color: hexToRgb($("cz-color").value),
+    color2: hexToRgb($("cz-color2").value),
+    drivers: [{
+      name: clean($("cz-driver").value, "Your Name", 22),
+      code: clean($("cz-code").value, "YOU", 3).toUpperCase(),
+      num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
+    }],
+  };
+  store.set("customTeam", ct);
+  syncCustomTeam();
+  teamIdx = Teams.LIST.findIndex((t) => t.id === "custom");
+  driverIdx = 0;
+  store.set("team", teamIdx); store.set("driver", 0);
+  els.customize.hidden = true;
+  buildSelect();
+  if (soundOn) GameAudio.uiSelect();
+};
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
   if (seasonMode) {
@@ -1269,6 +1344,9 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
   window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
 }
 
+syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
+if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
+if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
 Input.init(canvas, { onPause: () => setPaused(!paused) });
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
