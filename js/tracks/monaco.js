@@ -156,7 +156,7 @@
       // ---- Fairmont hairpin hotel (s=0.40, R close): tall pale block wrapping bend ----
       {
         const k = K(0.40);
-        building(k, 1, 14, 30, 48, 20, { wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, setback: true });
+        building(k, 1, 14, 20, 48, 30, { wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, setback: true });
         building(K(0.385), 1, 16, 22, 40, 18, { wall: CREAM, window: WIN, floor: 6 });
         building(K(0.415), 1, 16, 22, 42, 18, { wall: [0.88, 0.84, 0.76], window: WIN, floor: 6 });
       }

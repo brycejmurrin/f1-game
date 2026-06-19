@@ -101,10 +101,10 @@
       });
 
       // --- Modern pit/paddock building: long low white-grey mass on the pit straight.
-      building(0, -1, 8, 14, 11, 64, { wall: [0.90, 0.91, 0.93], window: [0.40, 0.46, 0.50], floor: 5 });
+      building(0, -1, 16, 14, 11, 64, { wall: [0.90, 0.91, 0.93], window: [0.40, 0.46, 0.50], floor: 5 });
       {
         // Thin cantilever roof blade over the pit lane.
-        const a = anchor(0, -1, 12);
+        const a = anchor(0, -1, 20);
         addBox(out, vadd(a.c, a.u, 12.5), [16, 0.8, 60], [0.82, 0.84, 0.88], [a.r, a.u, a.t]);
       }
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).

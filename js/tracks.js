@@ -932,8 +932,6 @@ const Tracks = (function () {
     // its side reads as a rake), a back shell and a flat roof slab on posts.
     const grandstand = (s, side, gap, len, shell, crowd) => {
       const k = Math.round(s * n) % n;
-      const ag = anchor(k, side, gap);
-      if (onTrack(ag.c[0], ag.c[2], len / 2 + 8)) return;
       prop(k, side, gap + 2.5, [10, 12, len], shell || [0.40, 0.41, 0.46]);   // back shell
       prop(k, side, gap, [9, 7, len - 2], crowd || [0.55, 0.32, 0.30]);        // raked crowd
       // roof slab cantilevered over the crowd, lifted on the up axis
@@ -987,7 +985,11 @@ const Tracks = (function () {
     const building = (k, side, dist, w, h, d, opts) => {
       opts = opts || {};
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], w / 2 + 2)) return;
+      // Check the inner face (w/2 toward track from anchor) — skip only if it
+      // overlaps the road surface itself, not just because it's close to the track.
+      const ifx = p.c[0] - p.r[0] * side * w / 2;
+      const ifz = p.c[2] - p.r[2] * side * w / 2;
+      if (onTrack(ifx, ifz, 0)) return;
       const body = opts.wall || [0.62, 0.64, 0.68], win = opts.window || [0.18, 0.26, 0.34];
       addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b);
       const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
@@ -1001,7 +1003,9 @@ const Tracks = (function () {
     const tower = (k, side, dist, baseW, h, opts) => {
       opts = opts || {};
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], baseW / 2 + 2)) return;
+      const ifx = p.c[0] - p.r[0] * side * baseW / 2;
+      const ifz = p.c[2] - p.r[2] * side * baseW / 2;
+      if (onTrack(ifx, ifz, 0)) return;
       addFrustum(out, p.c, baseW * 0.5, baseW * 0.32, h, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
