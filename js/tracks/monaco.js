@@ -228,8 +228,8 @@
       // ---- Rascasse / paddock buildings (s=0.90, R close): low cream sheds + rail ----
       for (let i = 0; i < 4; i++) {
         const k = K(0.87 + i * 0.02);
-        place(k, 1, 8, [12, 7, 16], CREAM);          // low cream shed
-        place(k, 1, 8, [12.3, 1.5, 16.3], TERRA);    // terracotta cap band
+        place(k, 1, 14, [12, 7, 16], CREAM);          // low cream shed
+        place(k, 1, 14, [12.3, 1.5, 16.3], TERRA);    // terracotta cap band
       }
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);          // marina railing
 
