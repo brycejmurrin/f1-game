@@ -162,6 +162,9 @@ const Tracks = (function () {
 
     const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, street: !!def.street, meshes: {}, map: null };
     track.map = buildMap(px, pz, n);
+    // Banking profile (outer-edge lift per node). Computed once and shared by the
+    // road/terrain meshes and the car/camera placement in game.js.
+    track.bankP = bankingProfile(track);
     if (typeof GLX !== "undefined" && GLX.createMesh) {
       track.meshes.road = GLX.createMesh(buildRoad(track));
       track.meshes.terrain = GLX.createMesh(buildTerrain(track));
@@ -261,15 +264,12 @@ const Tracks = (function () {
   // stays dead flat (no global tilt). buildRoad and buildTerrain both read this
   // so the banked road edge and the terrain that meets it rise together.
   function bankingProfile(track) {
-    // Banking is disabled for now: the road/terrain mesh banks correctly, but
-    // cars take their height from the flat centreline so they float/sink on the
-    // banked surface. Doing it right means making the car, camera, shadow and
-    // collisions all follow the banked surface (and reworking the terrain ribbon
-    // so its far edge doesn't over-tilt) — a focused follow-up. Returning null
-    // keeps the run-off feature while neutralising the road/terrain lift.
-    return null;
-    /* eslint-disable no-unreachable */
-    if (track.def.id !== "zandvoort") return null;
+    // Opt-in per circuit via the `banked` data flag. The road/terrain mesh raises
+    // its outer edge here; game.js makes the car, shadow and camera ride the
+    // banked surface (height + roll) so nothing floats. The terrain ribbon's bank
+    // lift already tapers to zero at its far edge (see buildTerrain), so the
+    // distant ground stays flat.
+    if (!track.def.banked) return null;
     const n = track.n;
     const corners = findCorners(track, 0.006);
     if (!corners.length) return null;
@@ -367,11 +367,29 @@ const Tracks = (function () {
     return 0;
   }
 
+  // Banking under a car at arc-distance s, lateral offset x: how far the surface
+  // is raised there (dy, metres) and the roll of that surface about the tangent
+  // (rad, + tips the car toward the corner's inside). Lets game.js sit the car,
+  // its shadow and the camera ON the banked road instead of the flat centreline.
+  // Returns null on un-banked circuits/sections.
+  function banking(track, s, x) {
+    const bp = track.bankP;
+    if (!bp) return null;
+    const n = track.n, L = track.total;
+    const k = Math.floor((((s % L) + L) % L) / L * n) % n;
+    const lift = bp.lift[k];
+    if (!lift) return null;
+    const side = bp.bsign[k], w = track.hw[k];
+    let frac = (side * x + w) / (2 * w);
+    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+    return { dy: lift * frac, roll: -side * Math.atan2(lift, 2 * w) };
+  }
+
   function buildRoad(track) {
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [];
     const idxArr = [];
-    const bp = bankingProfile(track);
+    const bp = track.bankP;
     const pal = track.def.palette;
     const ka = pal.kerbA, kb = pal.kerbB, grass = pal.grass;
     const asphalt = pal.asphalt || [0.17, 0.18, 0.21];
@@ -456,7 +474,7 @@ const Tracks = (function () {
     const pos = [], nrm = [], col = [];
     const idxArr = [];
     const pal = track.def.palette, grass = pal.grass, runoff = pal.runoff;
-    const bp = bankingProfile(track);
+    const bp = track.bankP;
     const ds = total / n;
     // Run-off aprons on permanent (non-street) circuits: a wide tan gravel/tarmac
     // band where cars actually run wide — fast corners (high |curvature|) and the
@@ -1667,7 +1685,7 @@ const Tracks = (function () {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
-      street: !!d.street, bridges: d.bridges || null,
+      street: !!d.street, banked: !!d.banked, bridges: d.bridges || null,
       // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
       // the points below and supersedes the authored cosine bumps.
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
@@ -1676,5 +1694,5 @@ const Tracks = (function () {
     return def;
   });
 
-  return { LIST, build, sample, curvature, onKerb };
+  return { LIST, build, sample, curvature, onKerb, banking };
 })();
