@@ -133,6 +133,13 @@ button:active { background: rgba(255, 255, 255, 0.16); }
   border: 1px solid var(--red); background: rgba(225, 6, 0, 0.12); border-radius: 7px;
 }
 
+/* ---------- race settings ---------- */
+#race-settings { width: min(92vw, 420px); }
+.rs-row { margin: 14px 0; }
+.rs-label { color: var(--dim); font-size: 12px; letter-spacing: 0.12em; margin-bottom: 8px; }
+#rs-laps, #rs-weather, #rs-time { display: flex; flex-wrap: wrap; gap: 8px; }
+#race-settings .sel-chip { font-size: 14px; padding: 9px 16px; }
+
 /* ---------- customize my team ---------- */
 #customize .cz-row {
   display: flex; align-items: center; justify-content: space-between;
