@@ -200,9 +200,9 @@
       // ===================================================================
       for (let i = 0; i < 16; i++) palm(K(0.50 + i * 0.004), 1, 11 + (i % 3) * 6, 9, PALM_GREEN);
       for (let i = 0; i < 6; i++) palm(K(0.55 + i * 0.005), -1, 12 + (i % 2) * 5, 8, PALM_DARK);
-      billboard(K(0.50), 1, 6, 18, 9, CORAL);
-      billboard(K(0.52), 1, 6, 16, 8, TEAL);
-      billboard(K(0.54), 1, 6, 16, 8, PINK);
+      billboard(K(0.50), 1, 11, 18, 9, CORAL);
+      billboard(K(0.52), 1, 10, 16, 8, TEAL);
+      billboard(K(0.54), 1, 10, 16, 8, PINK);
       // pastel hospitality strip behind the braking zone
       for (let i = 0; i < 5; i++) {
         building(K(0.51 + i * 0.007), 1, 30 + (i % 2) * 16, 16, 16 + (i % 3) * 8, 16,

@@ -36,8 +36,8 @@
 
       // ================= START / FINISH — WINGED PIT COMPLEX (s 0.00, L) =================
       // Long white pit/control building hugging the main straight.
-      building(K(0.00), -1, 14, 150, 14, 18, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 4 });
-      building(K(0.98), -1, 14, 90, 11, 16, { wall: [0.84, 0.85, 0.87], window: [0.28, 0.32, 0.38], floor: 3 });
+      building(K(0.00), -1, 11, 18, 14, 150, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 4 });
+      building(K(0.98), -1, 10, 16, 11, 90, { wall: [0.84, 0.85, 0.87], window: [0.28, 0.32, 0.38], floor: 3 });
 
       // The two suspended tower-bridges — the instant Shanghai signature.
       // Tall slim towers either side of the straight, joined by flat bridge slabs
@@ -68,8 +68,8 @@
 
       // ---- Pit wall + low garage boxes (R, near) red-edged ----
       wall(0.965, 0.05, 1, 3, 1.1, WHITE);
-      place(K(0.99), 1, 4, [40, 2.4, 5], CONC);   // low garage box bank
-      place(K(0.99), 1, 4.2, [40, 0.6, 5.4], RED); // red edge cap
+      place(K(0.99), 1, 5, [5, 2.4, 40], CONC);   // low garage box bank
+      place(K(0.99), 1, 5, [5, 0.6, 40], RED); // red edge cap
       billboard(K(0.02), 1, 7, 16, 4.5, RED);
 
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
@@ -191,9 +191,9 @@
       marshalPost(K(0.90), 1, 14);
 
       // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
-      building(K(0.96), 1, 16, 50, 9, 12, { wall: [0.86, 0.87, 0.88], window: [0.28, 0.32, 0.38], floor: 3 });
-      building(K(0.94), 1, 18, 34, 7, 10, { wall: [0.84, 0.85, 0.87], window: [0.28, 0.32, 0.38], floor: 2 });
-      building(K(0.92), -1, 18, 40, 10, 12, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 3 });
+      building(K(0.96), 1, 8, 12, 9, 50, { wall: [0.86, 0.87, 0.88], window: [0.28, 0.32, 0.38], floor: 3 });
+      building(K(0.94), 1, 7, 10, 7, 34, { wall: [0.84, 0.85, 0.87], window: [0.28, 0.32, 0.38], floor: 2 });
+      building(K(0.92), -1, 8, 12, 10, 40, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 3 });
 
       // ---- Scattered marsh greenery + low treeline around the flat perimeter ----
       for (let k = 0; k < n; k += Math.max(1, Math.round(n / 60))) {

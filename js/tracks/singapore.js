@@ -121,10 +121,10 @@
         const k = K(0.34);
         for (let i = 0; i < 5; i++)
           building(k, -1, 56 + i * 26, 24, 40 + i * 12, 24, { wall: [0.12, 0.14, 0.2], window: i % 2 ? WIN_WARM : WIN_BLUE, floor: 12 });
-        billboard(k, -1, 6, 20, 12, NEON[0]);
-        billboard(K(0.355), -1, 6, 18, 11, NEON[1]);
-        billboard(K(0.37), -1, 6, 16, 10, NEON[2]);
-        billboard(K(0.38), -1, 6, 17, 11, NEON[3]);
+        billboard(k, -1, 12, 20, 12, NEON[0]);
+        billboard(K(0.355), -1, 11, 18, 11, NEON[1]);
+        billboard(K(0.37), -1, 10, 16, 10, NEON[2]);
+        billboard(K(0.38), -1, 10, 17, 11, NEON[3]);
       }
 
       // s 0.45 R far — distant skyline band over the bay (denser, lit-window reflections)
@@ -202,13 +202,13 @@
       // s 0.92 both — illuminated billboards funnel back to start
       // ===================================================================
       {
-        billboard(K(0.92), 1, 6, 18, 11, NEON[3]);
-        billboard(K(0.92), -1, 6, 18, 11, NEON[2]);
-        billboard(K(0.94), 1, 6, 16, 10, NEON[1]);
-        billboard(K(0.94), -1, 6, 16, 10, NEON[0]);
-        billboard(K(0.96), 1, 6, 16, 10, NEON[0]);
-        billboard(K(0.96), -1, 6, 17, 11, NEON[3]);
-        billboard(K(0.98), 1, 6, 15, 10, NEON[2]);
+        billboard(K(0.92), 1, 11, 18, 11, NEON[3]);
+        billboard(K(0.92), -1, 11, 18, 11, NEON[2]);
+        billboard(K(0.94), 1, 10, 16, 10, NEON[1]);
+        billboard(K(0.94), -1, 10, 16, 10, NEON[0]);
+        billboard(K(0.96), 1, 10, 16, 10, NEON[0]);
+        billboard(K(0.96), -1, 10, 17, 11, NEON[3]);
+        billboard(K(0.98), 1, 10, 15, 10, NEON[2]);
         // pit straight low buildings L / stand R supported by CBD already above
         building(K(0.0), -1, 30, 30, 16, 20, { wall: [0.15, 0.16, 0.2], window: WIN_WARM });
         building(K(0.02), -1, 34, 26, 22, 20, { wall: [0.12, 0.14, 0.2], window: WIN_BLUE, floor: 12 });
@@ -219,7 +219,7 @@
       // waterfront window-band detail to thicken the nightscape (~1.5x density).
       // ===================================================================
       for (const [s, side, hue] of [[0.04, 1, 1], [0.14, -1, 0], [0.5, -1, 2], [0.58, 1, 3], [0.72, 1, 1], [0.84, -1, 0]]) {
-        billboard(K(s), side, 6, 16, 10, NEON[hue]);
+        billboard(K(s), side, 10, 16, 10, NEON[hue]);
       }
       // low warm waterfront promenade window strips (s 0.18-0.45, 0.80-0.86)
       for (const s of [0.2, 0.3, 0.42, 0.82, 0.88]) {

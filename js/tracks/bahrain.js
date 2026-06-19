@@ -74,7 +74,7 @@
 
       // ================= START / FINISH =================
       // Pit/control building: long low white box (L, close)
-      building(K(0.00), -1, 16, 70, 12, 14, { wall: [0.90, 0.90, 0.88], window: [0.30, 0.34, 0.40], floor: 4 });
+      building(K(0.00), -1, 9, 14, 12, 70, { wall: [0.90, 0.90, 0.88], window: [0.30, 0.34, 0.40], floor: 4 });
       // Pit wall + start gantry
       wall(0.97, 0.04, -1, 3, 1.1, [0.85, 0.85, 0.85]);
       gantry(0.005, 8.5, STEEL);
@@ -158,7 +158,7 @@
       marshalPost(K(0.86), -1, 24);
 
       // ================= PIT ENTRY (s 0.95, L) =================
-      building(K(0.95), -1, 18, 50, 8, 12, { wall: [0.78, 0.78, 0.76], window: [0.26, 0.30, 0.36], floor: 4 });
+      building(K(0.95), -1, 8, 12, 8, 50, { wall: [0.78, 0.78, 0.76], window: [0.26, 0.30, 0.36], floor: 4 });
       wall(0.92, 0.99, -1, 4, 1.0, [0.85, 0.85, 0.85]);
 
       // ---- Desert palms scattered behind the runoff (oasis planting), denser

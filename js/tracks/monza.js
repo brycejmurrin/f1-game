@@ -88,7 +88,7 @@
 
       // --- s 0.04 R — Variante del Rettifilo chicane: kerb + gravel slab ---
       groundPlane(K(0.04), 1, 5, [22, 28], [0.78, 0.70, 0.52]);   // gravel trap tan
-      billboard(K(0.04), 1, 6, 12, 5, [0.86, 0.84, 0.80]);
+      billboard(K(0.04), 1, 8, 12, 5, [0.86, 0.84, 0.80]);
 
       // --- s 0.40 R far — Park lake (Villa Reale pond), reflective blue slab ---
       groundPlane(K(0.40), 1, 95, [180, 230], [0.30, 0.50, 0.70]);

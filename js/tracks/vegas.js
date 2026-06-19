@@ -112,8 +112,8 @@
 
       // --- s 0.74 L mid: Bellagio — long low elegant box + blue fountain-pool strip ---
       building(K(0.74), -1, 70, 64, 48, 34, { wall: [0.52, 0.50, 0.46], window: WARM, floor: 6 });
-      place(K(0.74), -1, 20, [60, 0.6, 16], [0.10, 0.35, 0.70]);   // fountain pool sheen
-      place(K(0.75), -1, 20, [40, 0.6, 12], [0.12, 0.45, 0.80]);
+      place(K(0.74), -1, 20, [16, 0.6, 60], [0.10, 0.35, 0.70]);   // fountain pool sheen
+      place(K(0.75), -1, 20, [12, 0.6, 40], [0.12, 0.45, 0.80]);
 
       // --- s 0.85 both near: Strip-side neon billboards flanking final straight ---
       for (const [side, col] of [[-1, MAGENTA], [1, CYAN]]) {

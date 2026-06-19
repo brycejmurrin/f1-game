@@ -130,7 +130,7 @@
       // --- Eau Rouge: low concrete runoff wall boxes at the valley base (s≈0.06, left).
       {
         const kw = Math.round(n * 0.06) % n;
-        place(kw, -1, 4, [22, 1.4, 1.0], [0.55, 0.55, 0.52]);
+        place(kw, -1, 4, [1.0, 1.4, 22], [0.55, 0.55, 0.52]);
       }
     },
   }

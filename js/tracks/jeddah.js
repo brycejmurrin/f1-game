@@ -49,7 +49,7 @@
       // Short debris fence on the tight technical final sector (kept brief for vert budget)
       fence(0.88, 0.95, 1, 1.3, 3.0, [0.50, 0.52, 0.56]);
       // Saudi-green accent stripe on the wall through the T1-3 complex
-      place(K(0.05), -1, 0.6, [60, 0.5, 4], GREEN);
+      place(K(0.05), -1, 4, [4, 0.5, 60], GREEN);
 
       // --- LED light towers ringing the whole lap (dark pole + bright cap pool) ---
       const lightTower = (k, side, dist) => {
