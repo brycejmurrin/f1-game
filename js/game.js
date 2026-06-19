@@ -1032,7 +1032,7 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer) {
     if (c.angle === undefined) c.angle = 0;
     const auth = latFac * gripScale * kerbGrip * gripMult() * playerMods.cornering;
-    c.angle += steer * 1.8 * auth * dt;      // steering input rotates heading
+    c.angle += steer * 1.2 * auth * dt;      // steering input rotates heading
     c.angle -= k * c.speed * dt;             // Frenet curvature rotates reference frame
     c.angle = clamp(c.angle, -0.52, 0.52);  // tyre slip angle limit (~30°)
     c.x += c.speed * Math.sin(c.angle) * dt;
