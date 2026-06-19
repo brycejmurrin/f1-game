@@ -24,46 +24,94 @@
     // top-to-bottom), then the long descent back through the second sector.
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
-      const { out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin, place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack, ferrisWheel, hash, upOf, cross, norm, lerp } = api;
-        every(16, (k) => {
-          for (const side of [-1, 1]) {
-            if (hash(k * 3 + side) > 0.35) continue;
-            const s = hash(k * 2 + side);
-            const h = 8 + s * 7, d = 14 + s * 12;
-            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);
-            place(k, side, d, [3.2, h, 3.2], [0.1, 0.32, 0.12]);
-          }
-        });
+      const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop,
+              addBox, vadd, anchor, mountain, pine, grandstand, building, marshalPost } = api;
 
-      // Dense tree filler (Ardennes forest density)
+      // --- Encircling Ardennes mountains: a near forested range with light snow
+      // only on the highest tops, and a far hazed range. Centre-based ring so the
+      // forested peaks sit on the horizon, not scattered across the infield.
+      let cx = 0, cz = 0;
+      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
+      cx /= n; cz /= n;
+      let rad = 0;
+      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const ranges = [
+        // near forested range — dark Ardennes greens, only a hint of snow on the very tops
+        { extra: 190, wMin: 220, hMin: 60, hVar: 60, count: 11,
+          opts: { seg: 8, forest: [0.10, 0.32, 0.14], rock: [0.30, 0.32, 0.30], snow: [0.90, 0.93, 0.96], snowline: 0.86 } },
+        // far hazed range — paler, damp grey-green, mostly bare
+        { extra: 440, wMin: 340, hMin: 130, hVar: 110, count: 9,
+          opts: { seg: 8, forest: [0.18, 0.42, 0.20], rock: [0.46, 0.50, 0.50], snow: [0.92, 0.94, 0.97], snowline: 0.8 } },
+      ];
+      for (const rg of ranges) {
+        const ring = rad + rg.extra;
+        for (let i = 0; i < rg.count; i++) {
+          const a = (i + rg.extra * 0.004) / rg.count * 6.2832, h = hash(i * 7 + rg.extra);
+          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
+                   rg.wMin + h * 110, rg.hMin + h * rg.hVar, Object.assign({ seed: i * 13 + rg.extra }, rg.opts));
+        }
+      }
+
+      // --- Forested ridgelines settling behind the trackside treeline.
+      every(64, (k) => {
+        for (const side of [-1, 1]) {
+          backdrop(k, side, 150 + hash(k * 13 + side) * 110, [200, 46, 200], [0.13, 0.30, 0.16]);
+        }
+      });
+
+      // --- Dense Ardennes pine forest walling both sides of the track.
+      every(48, (k) => {
+        for (const side of [-1, 1]) {
+          const s = hash(k * 41 + side);
+          if (s < 0.30) continue;
+          const dist = 8 + s * 22, h = 9 + s * 9;
+          pine(k, side, dist, h, [0.09 + s * 0.05, 0.30, 0.14]);
+          if (s > 0.72) pine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
+        }
+      });
+      // Hero density at Eau Rouge / Raidillon (s≈0.05–0.10): crowd the climb with pines.
       every(12, (k) => {
+        const s = k / n;
+        if (s < 0.045 || s > 0.12) return;
         for (const side of [-1, 1]) {
-          for (let j = 0; j < 3; j++) {
-            const d = 35 + hash(k * 27 + j) * 50;
-            const s = hash(k * 29 + side + j);
-            const h = 8 + s * 9;
-            place(k, side, d, [1.0, 1.2, 1.0], [0.22, 0.15, 0.08]);   // trunk
-            place(k, side, d, [3.0, h, 3.0], [0.08, 0.28, 0.10]);      // canopy
-          }
+          const r = hash(k * 53 + side);
+          pine(k, side, 7 + r * 10, 10 + r * 10, [0.08 + r * 0.05, 0.31, 0.15]);
+          if (r > 0.5) pine(k, side, 20 + r * 18, 13 + r * 9, [0.10 + r * 0.04, 0.28, 0.13]);
         }
       });
-      // Forested Ardennes ridgelines rising behind the treeline
-      every(60, (k) => {
-        for (const side of [-1, 1]) {
-          backdrop(k, side, 170 + hash(k * 13 + side) * 120, [200, 50, 200], [0.16, 0.30, 0.18]);
-        }
-      });
-      // Yellow marshal posts at trackside (a Spa staple), close but cleared
-      every(46, (k) => {
-        const side = hash(k * 33) < 0.5 ? -1 : 1;
-        prop(k, side, 3, [1.4, 2.6, 1.4], [0.90, 0.78, 0.10]);
-      });
-      // Grass spectator banking with sparse crowd colour
+
+      // --- Modern pit/paddock building: long low white-grey mass on the pit straight.
+      building(0, -1, 8, 14, 11, 64, { wall: [0.90, 0.91, 0.93], window: [0.40, 0.46, 0.50], floor: 5 });
+      {
+        // Thin cantilever roof blade over the pit lane.
+        const a = anchor(0, -1, 12);
+        addBox(out, vadd(a.c, a.u, 12.5), [16, 0.8, 60], [0.82, 0.84, 0.88], [a.r, a.u, a.t]);
+      }
+      // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
+      building(Math.round(n * 0.10) % n, -1, 46, 12, 9, 40, { wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
+
+      // --- Grandstands: La Source, Eau Rouge, Les Combes, Bus Stop, pit straight.
+      const shell = [0.42, 0.43, 0.47];
+      grandstand(0.00, 1, 8, 40, shell, [0.50, 0.52, 0.56]);   // main grandstand, pit straight
+      grandstand(0.02, 1, 8, 26, shell, [0.62, 0.16, 0.16]);   // La Source hairpin
+      grandstand(0.07, 1, 8, 28, shell, [0.20, 0.36, 0.62]);   // Eau Rouge / Raidillon
+      grandstand(0.16, 1, 8, 30, shell, [0.50, 0.52, 0.56]);   // Les Combes
+      grandstand(0.92, 1, 8, 28, shell, [0.46, 0.48, 0.52]);   // Bus Stop chicane
+
+      // --- Yellow-capped marshal posts dotted around the lap.
       every(120, (k) => {
-        const side = hash(k * 35) < 0.5 ? -1 : 1;
-        prop(k, side, 6, [8, 5, 22], [0.18, 0.34, 0.16]);
-        prop(k, side, 6, [8, 2, 20], [0.62, 0.4, 0.34]);
+        const side = hash(k * 33) < 0.5 ? -1 : 1;
+        marshalPost(k, side, 4);
       });
+      // Extra marshal posts flanking pit entry (s≈0.97).
+      marshalPost(Math.round(n * 0.97) % n, -1, 4);
+      marshalPost(Math.round(n * 0.97) % n, 1, 4);
+
+      // --- Eau Rouge: low concrete runoff wall boxes at the valley base (s≈0.06, left).
+      {
+        const kw = Math.round(n * 0.06) % n;
+        place(kw, -1, 4, [22, 1.4, 1.0], [0.55, 0.55, 0.52]);
+      }
     },
   }
   );

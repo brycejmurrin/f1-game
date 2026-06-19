@@ -20,6 +20,171 @@
     ],
     // Mostly flat — a mild rise on the long back straight.
     elevations: [{ s: 0.45, halfM: 360, rise: 6 }],
+    scenery: function (api) {
+      const { out, n, px, pz, pyMin, hash, vadd,
+        place, prop, backdrop, anchor, addBox, addCyl,
+        building, tower, grandstand, billboard, gantry, marshalPost,
+        wall, fence, tree, bush, hedge } = api;
+      const K = (s) => Math.round(s * n) % n;
+
+      // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
+      const CONC = [0.70, 0.72, 0.74], WHITE = [0.90, 0.91, 0.92], STEEL = [0.62, 0.64, 0.67];
+      const SEAT = [0.40, 0.42, 0.46], DARK = [0.30, 0.32, 0.36];
+      const ASPH = [0.50, 0.52, 0.54], MARSH = [0.34, 0.45, 0.28], MARSH_N = [0.28, 0.38, 0.24];
+      const RED = [0.82, 0.16, 0.14], YELLOW = [0.90, 0.78, 0.16];
+      const SKY = [0.66, 0.68, 0.72], SKY_HAZE = [0.72, 0.74, 0.77];
+
+      // ================= START / FINISH — WINGED PIT COMPLEX (s 0.00, L) =================
+      // Long white pit/control building hugging the main straight.
+      building(K(0.00), -1, 14, 150, 14, 18, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 4 });
+      building(K(0.98), -1, 14, 90, 11, 16, { wall: [0.84, 0.85, 0.87], window: [0.28, 0.32, 0.38], floor: 3 });
+
+      // The two suspended tower-bridges — the instant Shanghai signature.
+      // Tall slim towers either side of the straight, joined by flat bridge slabs
+      // on thin pillars spanning over the pit straight.
+      (function wingedTowers() {
+        const sLap = 0.005;
+        const aL = anchor(K(sLap), -1, 30), bL = [aL.r, aL.u, aL.t];
+        const aR = anchor(K(sLap), 1, 30), bR = [aR.r, aR.u, aR.t];
+        // Two tall tapered towers on the left (pit) side flanking a gap.
+        tower(K(sLap), -1, 30, 7, 56, { col: WHITE, seg: 6, cap: true, capCol: STEEL, mast: 8 });
+        tower(K(0.01), -1, 30, 7, 56, { col: WHITE, seg: 6, cap: true, capCol: STEEL, mast: 8 });
+        // A matching tower across the track on the right to anchor the spanning bridge.
+        tower(K(sLap), 1, 30, 7, 46, { col: WHITE, seg: 6, cap: true, capCol: STEEL });
+        // Suspended bridge slabs spanning over the pit straight on thin pillars.
+        for (const hgt of [34, 44]) {
+          // thin support pillars rising on left tower line
+          addCyl(out, vadd(aL.c, aL.u, 0), 1.1, hgt, STEEL, 6, bL);
+          // flat bridge slab reaching out across the track toward the right
+          addBox(out, vadd(vadd(aL.c, aL.u, hgt), aL.r, 24), [50, 3, 10], WHITE, bL);
+          addBox(out, vadd(vadd(aL.c, aL.u, hgt - 1.6), aL.r, 24), [50, 0.8, 9], STEEL, bL);
+        }
+        // catwalk pillars landing on the right side
+        addCyl(out, vadd(aR.c, aR.u, 0), 1.1, 44, STEEL, 6, bR);
+      })();
+
+      // Start gantry over the line.
+      gantry(0.004, 9, STEEL);
+
+      // ---- Pit wall + low garage boxes (R, near) red-edged ----
+      wall(0.965, 0.05, 1, 3, 1.1, WHITE);
+      place(K(0.99), 1, 4, [40, 2.4, 5], CONC);   // low garage box bank
+      place(K(0.99), 1, 4.2, [40, 0.6, 5.4], RED); // red edge cap
+      billboard(K(0.02), 1, 7, 16, 4.5, RED);
+
+      // ================= START GRANDSTAND TIERS (s 0.04, L) =================
+      grandstand(0.04, -1, 18, 130, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.06, -1, 22, 80, [0.42, 0.43, 0.48], SEAT);
+
+      // ================= SNAIL T1–3 RUN-OFF SLAB (s 0.06, R) =================
+      (function snailRunoff() {
+        const a = anchor(K(0.065), 1, 6), b = [a.r, a.u, a.t];
+        // huge flat pale-grey asphalt slab, just above grade
+        addBox(out, vadd(vadd(a.c, a.u, 0.15), a.r, 36), [80, 0.4, 120], ASPH, b);
+      })();
+      // Snail grandstands wrapping the coiling Turn 1–3 spiral.
+      grandstand(0.05, 1, 80, 70, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.085, 1, 70, 60, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.10, -1, 30, 60, [0.42, 0.43, 0.48], SEAT);
+      billboard(K(0.07), 1, 50, 16, 5, YELLOW);
+
+      // ================= DISTANT SHANGHAI SKYLINE (s 0.30, L far) =================
+      // Cluster of tall thin grey boxes fading into haze — pushed ≥180 m out.
+      (function skyline() {
+        const a = anchor(K(0.30), -1, 200), b = [a.r, a.u, a.t];
+        for (let i = 0; i < 18; i++) {
+          const off = (i - 9) * 24 + (hash(i * 5) - 0.5) * 14;
+          const depth = 30 + hash(i * 7) * 70;              // recede into haze
+          const h = 40 + hash(i * 11) * 90;
+          const w = 10 + hash(i * 13) * 10;
+          const col = depth > 70 ? SKY_HAZE : SKY;
+          addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), b[1], h / 2),
+                 [w, h, w], col, b);
+        }
+      })();
+      // A second hazy skyline cluster on the far back side.
+      (function skyline2() {
+        const a = anchor(K(0.55), -1, 220), b = [a.r, a.u, a.t];
+        for (let i = 0; i < 12; i++) {
+          const off = (i - 6) * 28 + (hash(i * 9) - 0.5) * 16;
+          const h = 36 + hash(i * 3) * 70;
+          const w = 11 + hash(i * 17) * 9;
+          addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, 20 + hash(i) * 50), b[1], h / 2),
+                 [w, h, w], SKY_HAZE, b);
+        }
+      })();
+
+      // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
+      grandstand(0.45, 1, 16, 90, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.47, 1, 20, 60, [0.42, 0.43, 0.48], SEAT);
+      marshalPost(K(0.45), 1, 12);
+
+      // ================= MARSH / TREELINE (s 0.62, L far) =================
+      // Flat green strip with scattered green cubes — low distant marshland.
+      (function marshline() {
+        const a = anchor(K(0.62), -1, 70), b = [a.r, a.u, a.t];
+        addBox(out, vadd(vadd(a.c, a.u, 0.2), a.r, 30), [60, 0.5, 140], MARSH, b);
+        for (let i = 0; i < 12; i++) {
+          const off = (hash(i * 7) - 0.5) * 110;
+          const depth = 10 + hash(i * 5) * 50;
+          const sz = 3 + hash(i * 3) * 4;
+          addBox(out, vadd(vadd(vadd(a.c, a.r, 30 + (hash(i * 11) - 0.5) * 40), a.t, off),
+                 a.u, sz / 2 + 0.2), [sz, sz, sz], i % 2 ? MARSH_N : MARSH, b);
+        }
+      })();
+      hedge(0.58, 0.66, -1, 24, 3.5, MARSH_N);
+
+      // ================= LONG BACK STRAIGHT — open verges (s 0.78, R) =================
+      fence(0.72, 0.88, 1, 8, 3.0, [0.70, 0.72, 0.76]);
+      billboard(K(0.76), 1, 10, 18, 5, RED);
+      billboard(K(0.82), 1, 10, 18, 5, YELLOW);
+      marshalPost(K(0.80), 1, 14);
+      // sparse green/grey verges
+      for (let i = 0; i < 4; i++) {
+        place((K(0.74) + i * Math.round(n * 0.01)) % n, 1, 20 + i * 8, [6, 1.2, 18], MARSH);
+      }
+
+      // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
+      // Curved bank of stepped grey boxes around the heavy-braking hairpin.
+      grandstand(0.88, -1, 18, 70, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.905, -1, 22, 70, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.93, -1, 24, 50, [0.42, 0.43, 0.48], SEAT);
+      // big run-off slab at the hairpin
+      (function hairpinRunoff() {
+        const a = anchor(K(0.90), 1, 6), b = [a.r, a.u, a.t];
+        addBox(out, vadd(vadd(a.c, a.u, 0.15), a.r, 24), [56, 0.4, 70], ASPH, b);
+      })();
+      marshalPost(K(0.90), 1, 14);
+
+      // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
+      building(K(0.96), 1, 16, 50, 9, 12, { wall: [0.86, 0.87, 0.88], window: [0.28, 0.32, 0.38], floor: 3 });
+
+      // ---- Scattered marsh greenery + low treeline around the flat perimeter ----
+      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 40))) {
+        for (const side of [-1, 1]) {
+          const r = hash(k * 13 + side * 3);
+          if (r > 0.5) continue;
+          const d = 30 + hash(k * 7 + side) * 40;
+          tree(k, side, d, 6 + hash(k * 17 + side) * 4, MARSH_N);
+          if (hash(k * 23 + side) > 0.6) bush(k, side, d + 5, MARSH);
+        }
+      }
+
+      // ---- Distant low hazy treeline ring (no mountains — flat marshland) ----
+      let cx = 0, cz = 0;
+      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
+      cx /= n; cz /= n;
+      let rad = 0;
+      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const ring = rad + 240;
+      const count = 30;
+      for (let i = 0; i < count; i++) {
+        const a = i / count * 6.2832, h = hash(i * 7 + 3);
+        const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
+        // low flat treeline strip box settled on the baseline
+        addBox(out, [x, pyMin + 4 + h * 3, z], [70 + h * 50, 8 + h * 5, 18], MARSH_N, null);
+      }
+    },
   }
   );
 })();

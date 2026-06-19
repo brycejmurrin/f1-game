@@ -25,66 +25,82 @@
     // ~26 m of relief: climb toward the high point at Turn 7, drop back to the pits.
     elevations: [{ s: 0.60, halfM: 300, rise: 12 }, { s: 0.85, halfM: 200, rise: -6 }],
     scenery: function (api) {
-      const { out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin, place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack, ferrisWheel, hash, upOf, cross, norm, lerp } = api;
-        const kmono = Math.round(n * 0.65) % n;
-        const kmr = [track.rx[kmono], track.ry[kmono], track.rz[kmono]];
-        const kmu = upOf(track, kmono);
-        for (let i = -3; i <= 3; i++) {
-          const k = (kmono + i * Math.round(n / 20)) % n;
-          // oriented + cleared so the white grandstand wraps the banked turn
-          // alongside it instead of cutting across the apex (near face was ~2m in)
-          prop(k, 1, 8, [10, 16, 26], [0.88, 0.88, 0.92]);
-        }
-        // Sierra mountain backdrop
-        const kmtn = Math.round(n * 0.4) % n;
-        const kmtnr = [track.rx[kmtn], track.ry[kmtn], track.rz[kmtn]];
-        for (let i = 0; i < 4; i++) {
-          const mtn_d = 280 + i * 60;
-          const mx = px[kmtn] + kmtnr[0] * mtn_d, mz = pz[kmtn] + kmtnr[2] * mtn_d;
-          if (onTrack(mx, mz, 155)) continue;
-          addBox(out, [mx, py[kmtn] + 50, mz], [300, 100, 200], [0.5, 0.48, 0.52]);
-        }
-        // Spanish plains vegetation filler
-        every(40, (k) => {
-          for (const side of [-1, 1]) {
-            if (hash(k * 57 + side) > 0.45) continue;
-            const d = 30 + hash(k * 58 + side) * 50;
-            const s = hash(k * 59 + side);
-            const h = 5 + s * 5;
-            place(k, side, d, [1.6, 1.6, 1.6], [0.30, 0.22, 0.12]);
-            place(k, side, d, [3.5, h, 3.5], [0.26, 0.36, 0.16]);
-          }
-        });
-        // Light towers (occasional)
-        every(180, (k) => {
-          const side = hash(k * 61) < 0.3 ? -1 : 1;
-          place(k, side, hw[k] + 65, [1.8, 32, 1.8], [0.40, 0.40, 0.43]);
-        });
+      const { out, n, px, py, pz, hw, pyMin, place, prop, hash, onTrack,
+              mountain, grandstand, building, tower, tree, bush } = api;
 
-      // Sierra de Guadarrama distant mountains
-      for (let i = 0; i < 4; i++) {
-        const k = Math.round((i / 4) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const mtn_d = 280 + i * 60;
-        const mx = px[k] + r[0] * mtn_d, mz = pz[k] + r[2] * mtn_d;
-        if (onTrack(mx, mz, 155)) continue;
-        addBox(out, [mx, py[k] + 50, mz], [300, 100, 200], [0.5, 0.48, 0.52]);  // distant mountains
-      }
-      // Spanish plains vegetation
-      every(25, (k) => {
-        for (const side of [-1, 1]) {
-          const d = 120 + hash(k * side) * 60;
-          place(k, side, d, [1.8, 1.8, 1.8], [0.32, 0.24, 0.14]);
-          place(k, side, d, [3.8, 6 + hash(k) * 5, 3.8], [0.28, 0.38, 0.18]);
+      const WHITE = [0.90, 0.92, 0.94], GLASS = [0.62, 0.74, 0.82];
+      const CONCRETE = [0.74, 0.75, 0.77], OLIVE = [0.42, 0.48, 0.30];
+
+      // --- Sierra de Guadarrama: organic mountain RING pushed well out (centre-based) ---
+      let cx = 0, cz = 0;
+      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
+      cx /= n; cz /= n;
+      let rad = 0;
+      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      for (const [extra, wMin, hMin, count, col] of [
+        [300, 220, 70, 24, [0.50, 0.55, 0.60]],   // near hazed ridge
+        [560, 320, 150, 20, [0.55, 0.60, 0.66]],  // far high Sierra (snow-capped)
+      ]) {
+        const ring = rad + extra;
+        for (let i = 0; i < count; i++) {
+          const a = i / count * 6.2832, h = hash(i * 7 + extra);
+          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
+                   wMin + h * 120, hMin + h * 90,
+                   { seed: i * 13 + extra, snowline: 0.75, rock: col,
+                     forest: [0.40, 0.42, 0.38] });
         }
-      });
-      // IFEMA-style modern grandstands with clean white roofs at key corners
-      for (const frac of [0.14, 0.38, 0.82]) {
+      }
+
+      // --- La Monumental: the hero banked stadium curve, tall grandstands wrapping ~270° ---
+      const kmono = Math.round(n * 0.75) % n;
+      for (let i = -7; i <= 7; i++) {
+        const k = ((kmono + i * Math.round(n / 40)) % n + n) % n;
+        // tall tiered stands encircling the banked turn (both sides → wrap)
+        grandstand(k / n, 1, 7, 30, [0.86, 0.87, 0.90], [0.50, 0.30, 0.30]);
+        if (i % 2 === 0) grandstand(k / n, -1, 9, 30, [0.86, 0.87, 0.90], [0.52, 0.32, 0.32]);
+      }
+      // Monumental light towers — thin tall grey poles with bright caps
+      for (let i = -6; i <= 6; i += 3) {
+        const k = ((kmono + i * Math.round(n / 40)) % n + n) % n;
+        tower(k, 1, hw[k] + 50, 3.2, 40, { col: [0.42, 0.43, 0.46], cap: true, capCol: [0.96, 0.96, 0.92] });
+        tower(k, -1, hw[k] + 50, 3.2, 40, { col: [0.42, 0.43, 0.46], cap: true, capCol: [0.96, 0.96, 0.92] });
+      }
+
+      // --- IFEMA exhibition halls: huge clean white masses + glass window bands (≥150 m out) ---
+      for (const [frac, side, w, h, d] of [
+        [0.02, 1, 70, 18, 90], [0.02, -1, 64, 16, 80], [0.05, 1, 80, 16, 70],
+      ]) {
         const k = Math.round(frac * n) % n;
-        const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 10, [9, 11, 32], [0.80, 0.82, 0.86]);  // white shell
-        prop(k, side, 8,  [9, 6, 30], [0.55, 0.30, 0.30]);   // crowd
-        prop(k, side, 9,  [11, 2, 34], [0.90, 0.92, 0.95]);  // roof canopy
+        building(k, side, 160, w, h, d, { wall: WHITE, window: GLASS, floor: 5 });
+      }
+      // Modern IFEMA grandstands (s≈0.90) — white-shelled stepped stands
+      for (const frac of [0.90, 0.92]) {
+        grandstand(frac, 1, 10, 36, WHITE, [0.50, 0.30, 0.30]);
+      }
+      // Main grandstand + pit straight white stands (s≈0.00)
+      grandstand(0.0, 1, 11, 44, WHITE, [0.48, 0.30, 0.30]);
+
+      // --- Dry Castilian plains: straw-tan ground filler with sparse olive scrub ---
+      const TAN = [0.78, 0.70, 0.48];
+      for (let i = 0; i < n; i += 2) {
+        for (const side of [-1, 1]) {
+          if (hash(i * 31 + side) > 0.5) continue;
+          const d = 26 + hash(i * 17 + side) * 70;
+          const mx = px[i], mz = pz[i];
+          if (onTrack(mx, mz, 18)) continue;
+          // dry ground patch
+          place(i, side, d, [6, 0.4, 6], TAN);
+          const r = hash(i * 41 + side);
+          if (r < 0.4) bush(i, side, d, OLIVE);
+          else if (r < 0.7) tree(i, side, d + 3, 6 + hash(i * 53) * 5, OLIVE);
+        }
+      }
+
+      // --- Concrete barrier furniture on the street sectors (low pale-grey posts) ---
+      for (let i = 0; i < n; i += 5) {
+        if (hash(i * 7) > 0.6) continue;
+        place(i, 1, 1.5, [0.4, 1.0, 4.0], CONCRETE);
+        place(i, -1, 1.5, [0.4, 1.0, 4.0], CONCRETE);
       }
     },
   }
