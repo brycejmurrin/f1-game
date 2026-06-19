@@ -276,7 +276,7 @@ function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(getTeamParts(team.id));
+  const mods = Parts.getMods(getTeamParts(team.id), team.engine);
   playerMods = {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
@@ -1475,7 +1475,7 @@ const CS_STATS = [
 // container. Shared by the select screen (always-on) and the setup panel.
 function renderStatBars(container, team) {
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(getTeamParts(team.id));
+  const mods = Parts.getMods(getTeamParts(team.id), team.engine);
   container.textContent = "";
   for (const { key, label } of CS_STATS) {
     const base = stats[key] || 75;
@@ -1520,12 +1520,26 @@ function renderStatBars(container, team) {
 function buildSetup() {
   const team = Teams.LIST[teamIdx];
   const parts = getTeamParts(team.id);
-  const spent = Parts.getCost(parts);
+
+  // Drop any saved exclusive option the current team can't use
+  let partsChanged = false;
+  for (const cat of Parts.CATALOG) {
+    const selId = parts[cat.id];
+    if (selId) {
+      const opt = cat.options.find((o) => o.id === selId);
+      if (opt && opt.supplier && opt.supplier !== team.engine) {
+        delete parts[cat.id];
+        partsChanged = true;
+      }
+    }
+  }
+  if (partsChanged) saveTeamParts(team.id, parts);
+
+  const spent = Parts.getCost(parts, team.engine);
   const remaining = Parts.BUDGET - spent;
 
   $("cs-team").textContent = team.name.toUpperCase();
 
-  // Budget bar
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
   if (budgetEl) {
@@ -1551,26 +1565,39 @@ function buildSetup() {
     const desc = document.createElement("div");
     desc.className = "cs-desc";
     const curId = parts[cat.id] || Parts.DEFAULTS[cat.id];
-    const curOpt = cat.options.find((o) => o.id === curId);
+    // Resolve active option respecting supplier lock
+    const curOpt = cat.options.find((o) => o.id === curId && (!o.supplier || o.supplier === team.engine))
+                || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
     desc.textContent = curOpt ? curOpt.desc : "";
     section.appendChild(desc);
 
     const chips = document.createElement("div");
     chips.className = "cs-chips";
     for (const opt of cat.options) {
-      const active = curId === opt.id;
+      // Hide exclusive options belonging to other suppliers
+      if (opt.supplier && opt.supplier !== team.engine) continue;
+
+      const active = curOpt && curOpt.id === opt.id;
       const curCost = curOpt ? (curOpt.cost || 0) : 0;
       const costDelta = (opt.cost || 0) - curCost;
       const wouldExceed = !active && (spent + costDelta > Parts.BUDGET);
 
       const chip = document.createElement("button");
-      chip.className = "cs-chip" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "");
+      chip.className = "cs-chip"
+        + (active ? " active" : "")
+        + (wouldExceed ? " over-budget" : "")
+        + (opt.tag ? " exclusive" : "");
 
       const labelSpan = document.createElement("span");
       labelSpan.textContent = opt.label;
       chip.appendChild(labelSpan);
 
-      if (opt.cost > 0) {
+      if (opt.tag) {
+        const tagBadge = document.createElement("span");
+        tagBadge.className = "cs-chip-tag";
+        tagBadge.textContent = opt.tag;
+        chip.appendChild(tagBadge);
+      } else if (opt.cost > 0) {
         const badge = document.createElement("span");
         badge.className = "cs-chip-cost";
         badge.textContent = opt.cost + "cr";
@@ -1580,19 +1607,19 @@ function buildSetup() {
       chip.addEventListener("mouseenter", () => { desc.textContent = opt.desc; });
       chip.addEventListener("focus",      () => { desc.textContent = opt.desc; });
       chip.addEventListener("mouseleave", () => {
-        const sel = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
-        desc.textContent = sel ? sel.desc : "";
+        const c = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
+        desc.textContent = c ? c.desc : "";
       });
       chip.addEventListener("blur", () => {
-        const sel = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
-        desc.textContent = sel ? sel.desc : "";
+        const c = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
+        desc.textContent = c ? c.desc : "";
       });
 
       chip.onclick = () => {
         const p = getTeamParts(team.id);
         const co = cat.options.find((o) => o.id === (p[cat.id] || Parts.DEFAULTS[cat.id]));
         const cc = co ? (co.cost || 0) : 0;
-        if ((Parts.getCost(p) - cc + (opt.cost || 0)) > Parts.BUDGET) {
+        if ((Parts.getCost(p, team.engine) - cc + (opt.cost || 0)) > Parts.BUDGET) {
           chip.classList.add("budget-reject");
           chip.addEventListener("animationend", () => chip.classList.remove("budget-reject"), { once: true });
           if (soundOn) GameAudio.uiTick();

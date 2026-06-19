@@ -280,6 +280,17 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   font-size: 10px; font-weight: 600; opacity: 0.65; letter-spacing: 0.04em;
 }
 .cs-chip.active .cs-chip-cost { opacity: 0.85; }
+.cs-chip.exclusive { border-color: rgba(255,200,60,0.45); }
+.cs-chip.exclusive.active {
+  background: #b8960a; border-color: #c9a80e;
+  box-shadow: 0 2px 14px rgba(200,160,10,0.5);
+}
+.cs-chip-tag {
+  display: inline-block; margin-left: 6px; vertical-align: middle;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  background: rgba(255,200,40,0.18); color: #f5c842;
+  border-radius: 3px; padding: 1px 5px;
+}
 #cs-budget-wrap { margin-top: 10px; }
 #cs-budget-bar {
   height: 5px; background: rgba(255,255,255,0.1);

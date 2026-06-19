@@ -1,70 +1,91 @@
 "use strict";
 /* Apex 26 — Parts catalog and stat helpers.
    Six upgrade categories: engine, aero, suspension, brakes, tyres, ers.
-   Each option carries stat multipliers and a credit cost.
-   Total budget: BUDGET credits. Free options cost 0.
-   getMods() collapses a setup object into a single multiplier object.
-   getCost() returns total credits spent for a setup.
+   Options marked with `supplier` are exclusive to teams using that power unit.
+   getMods(setup, teamEngine) / getCost(setup, teamEngine) fall back to the
+   category default when a supplier-locked option doesn't match the team.
    statMult() maps a 0-100 team stat to a 0.85-1.00 physics multiplier. */
 const Parts = (function () {
-  const BUDGET = 500;
+  const BUDGET = 600;
 
   const CATALOG = [
     {
       id: "engine", label: "ENGINE",
       options: [
-        { id: "stock",       label: "Stock",       cost:   0, desc: "Factory spec power unit",                         speed: 1.00, accel: 1.00 },
-        { id: "performance", label: "Performance", cost:  60, desc: "Optimised for peak acceleration",                 speed: 1.00, accel: 1.09 },
-        { id: "turbo",       label: "Turbo",       cost:  80, desc: "Balanced power and top speed gains",              speed: 1.03, accel: 1.06 },
-        { id: "highrev",     label: "High-Rev",    cost: 100, desc: "Higher top speed, mild accel gain",               speed: 1.05, accel: 1.04 },
-        { id: "race",        label: "Race",        cost: 160, desc: "Maximum power output and top speed",              speed: 1.06, accel: 1.11 },
+        { id: "stock",       label: "Stock",            cost:   0, desc: "Factory spec power unit",                             speed: 1.00, accel: 1.00 },
+        { id: "performance", label: "Performance",      cost:  60, desc: "Optimised mapping — peak acceleration gains",         speed: 1.00, accel: 1.09 },
+        { id: "turbo",       label: "Turbo",            cost:  80, desc: "Broader power band — balanced speed and accel",       speed: 1.03, accel: 1.06 },
+        { id: "highrev",     label: "High-Rev",         cost: 100, desc: "High-RPM spec — top speed focus, mild accel gain",    speed: 1.05, accel: 1.04 },
+        { id: "sprint",      label: "Sprint",           cost: 140, desc: "Torque-focused unit — explosive accel, lower top speed", speed: 0.97, accel: 1.14 },
+        { id: "race",        label: "Race",             cost: 160, desc: "Maximum power output across the rev range",           speed: 1.06, accel: 1.11 },
+        // Manufacturer-exclusive power units — shown only when team.engine matches
+        { id: "manu_mercedes", label: "AMG HPP",        cost: 200, supplier: "Mercedes",      tag: "FACTORY",
+          desc: "Mercedes-AMG High Performance Powertrains — 2026 peak spec",                  speed: 1.08, accel: 1.14 },
+        { id: "manu_ferrari",  label: "Ferrari 066/12", cost: 200, supplier: "Ferrari",       tag: "FACTORY",
+          desc: "Scuderia Ferrari power unit — strong top speed and precision braking",         speed: 1.09, accel: 1.11, braking: 1.04 },
+        { id: "manu_ford",     label: "Ford Powertrains", cost: 200, supplier: "Red Bull Ford", tag: "FACTORY",
+          desc: "Ford/Red Bull 2026 unit — explosive torque delivery out of slow corners",      speed: 1.06, accel: 1.16 },
+        { id: "manu_honda",    label: "Honda RA626H",   cost: 200, supplier: "Honda",         tag: "FACTORY",
+          desc: "Honda RA626H — balanced power with exceptional traction assist",               speed: 1.07, accel: 1.12, cornering: 1.04 },
+        { id: "manu_audi",     label: "Audi P.U.",      cost: 200, supplier: "Audi",          tag: "FACTORY",
+          desc: "Audi 2026 power unit — strong braking recovery and mid-range punch",           speed: 1.07, accel: 1.12, braking: 1.06 },
       ],
     },
     {
       id: "aero", label: "AERO",
       options: [
-        { id: "minimal",  label: "Minimal",    cost:   0, desc: "+10% top speed, heavily reduced grip",              speed: 1.10, cornering: 0.78 },
-        { id: "low",      label: "Low DF",     cost:  40, desc: "+6% top speed, reduced cornering",                  speed: 1.06, cornering: 0.88 },
-        { id: "medium",   label: "Medium",     cost:   0, desc: "Balanced for all circuit types",                    speed: 1.00, cornering: 1.00 },
-        { id: "high",     label: "High DF",    cost:  80, desc: "−5% top speed, strong cornering grip",              speed: 0.95, cornering: 1.15 },
-        { id: "extreme",  label: "Extreme DF", cost: 130, desc: "Maximum downforce — Monaco spec",                   speed: 0.89, cornering: 1.26 },
+        { id: "minimal",          label: "Minimal",         cost:   0, desc: "+10% top speed — heavily reduced downforce",       speed: 1.10, cornering: 0.78 },
+        { id: "low",              label: "Low DF",          cost:  40, desc: "+6% top speed — reduced cornering grip",           speed: 1.06, cornering: 0.88 },
+        { id: "medium",           label: "Medium",          cost:   0, desc: "Balanced configuration for all circuit types",     speed: 1.00, cornering: 1.00 },
+        { id: "rake_setup",       label: "Rake Setup",      cost:  90, desc: "High-rear rake — improved cornering and braking",  speed: 0.97, cornering: 1.10, braking: 1.08 },
+        { id: "high",             label: "High DF",         cost:  80, desc: "−5% top speed, strong cornering grip",             speed: 0.95, cornering: 1.15 },
+        { id: "extreme",          label: "Extreme DF",      cost: 130, desc: "Maximum downforce — Monaco / Singapore spec",      speed: 0.89, cornering: 1.26 },
+        { id: "ground_effect",    label: "Ground Effect",   cost: 170, desc: "2026 tunnel floor package — peak grip and braking", speed: 0.87, cornering: 1.32, braking: 1.10 },
       ],
     },
     {
       id: "suspension", label: "SUSPENSION",
       options: [
-        { id: "standard", label: "Standard",  cost:   0, desc: "Factory road setup",                               cornering: 1.00 },
-        { id: "comfort",  label: "Comfort",   cost:   0, desc: "Softer springs, forgiving on kerbs",               cornering: 0.94 },
-        { id: "sport",    label: "Sport",     cost:  50, desc: "Stiffer setup, improved cornering",                cornering: 1.08 },
-        { id: "racing",   label: "Racing",    cost:  90, desc: "Track-focused, high lateral grip",                 cornering: 1.16 },
-        { id: "track",    label: "Track",     cost: 130, desc: "Extreme stiffness, maximum cornering",             cornering: 1.24 },
+        { id: "comfort",  label: "Comfort",    cost:   0, desc: "Softer springs — forgiving over kerbs, less cornering bite",   cornering: 0.94 },
+        { id: "standard", label: "Standard",   cost:   0, desc: "Factory road setup",                                          cornering: 1.00 },
+        { id: "sport",    label: "Sport",      cost:  50, desc: "Stiffer setup — improved cornering response",                  cornering: 1.08 },
+        { id: "kerb_spec",label: "Kerb Spec",  cost:  70, desc: "Circuit-tuned stiffness — helps cornering and braking",       cornering: 1.11, braking: 1.05 },
+        { id: "racing",   label: "Racing",     cost:  90, desc: "Track-focused — high lateral grip",                           cornering: 1.16 },
+        { id: "track",    label: "Track",      cost: 130, desc: "Extreme stiffness — maximum cornering",                       cornering: 1.24 },
+        { id: "active",   label: "Active",     cost: 190, desc: "Active suspension system — peak cornering, slight top speed boost", cornering: 1.28, speed: 1.02 },
       ],
     },
     {
       id: "brakes", label: "BRAKES",
       options: [
-        { id: "standard", label: "Standard",       cost:   0, desc: "Factory steel brake discs",                   braking: 1.00 },
-        { id: "sport",    label: "Sport",           cost:  40, desc: "Improved pads and discs",                    braking: 1.08 },
-        { id: "carbon",   label: "Carbon",          cost:  90, desc: "F1-spec carbon composite brakes",            braking: 1.16 },
-        { id: "ceramic",  label: "Carbon Ceramic",  cost: 140, desc: "Maximum stopping power, zero fade",          braking: 1.24 },
+        { id: "standard",       label: "Standard",        cost:   0, desc: "Factory steel brake discs",                        braking: 1.00 },
+        { id: "sport",          label: "Sport",           cost:  40, desc: "Improved pads and discs",                          braking: 1.08 },
+        { id: "endurance",      label: "Endurance",       cost:  60, desc: "Consistent fade-free braking — aids corner exit",   braking: 1.10, accel: 1.02 },
+        { id: "carbon",         label: "Carbon",          cost:  90, desc: "F1-spec carbon composite brakes",                   braking: 1.16 },
+        { id: "carbon_mag",     label: "Carbon-Mag",      cost: 120, desc: "Carbon-magnesium alloy — lighter, better mass dist", braking: 1.20, accel: 1.03 },
+        { id: "ceramic",        label: "Carbon Ceramic",  cost: 140, desc: "Maximum stopping power — zero fade",               braking: 1.24 },
       ],
     },
     {
       id: "tyres", label: "TYRES",
       options: [
-        { id: "hard",      label: "Hard",       cost:   0, desc: "Durable compound — +2% top speed, lower grip",  speed: 1.02, cornering: 0.92, accel: 0.97 },
-        { id: "medium",    label: "Medium",     cost:   0, desc: "Balanced compound for all conditions",           speed: 1.00, cornering: 1.00, accel: 1.00 },
-        { id: "soft",      label: "Soft",       cost:  80, desc: "+12% cornering, +4% accel, −3% top speed",      speed: 0.97, cornering: 1.12, accel: 1.04 },
-        { id: "supersoft", label: "Super Soft", cost: 130, desc: "Maximum grip — aggressive tyre load",           speed: 0.94, cornering: 1.20, accel: 1.06 },
+        { id: "intermediate", label: "Intermediate",  cost:   0, desc: "Wet-weather compound — lower grip in dry conditions",  speed: 0.92, cornering: 0.94, accel: 0.93 },
+        { id: "hard",         label: "Hard",          cost:   0, desc: "Durable compound — +2% top speed, lower grip",        speed: 1.02, cornering: 0.92, accel: 0.97 },
+        { id: "medium",       label: "Medium",        cost:   0, desc: "Balanced compound for all conditions",                speed: 1.00, cornering: 1.00, accel: 1.00 },
+        { id: "soft",         label: "Soft",          cost:  80, desc: "+12% cornering, +4% accel — some top speed drag",     speed: 0.97, cornering: 1.12, accel: 1.04 },
+        { id: "supersoft",    label: "Super Soft",    cost: 130, desc: "High grip compound — aggressive tyre load",           speed: 0.94, cornering: 1.20, accel: 1.06 },
+        { id: "qualigum",     label: "Quali Spec",    cost: 180, desc: "One-lap ultra-soft — maximum short-run grip",         speed: 0.91, cornering: 1.28, accel: 1.09 },
       ],
     },
     {
       id: "ers", label: "ERS",
       options: [
-        { id: "standard",  label: "Standard",   cost:   0, desc: "Balanced energy recovery and deployment",        speed: 1.00, accel: 1.00 },
-        { id: "harvest",   label: "Harvest",    cost:  60, desc: "Aggressive harvest: +2% top speed, −5% accel",  speed: 1.02, accel: 0.95 },
-        { id: "deploy",    label: "Deploy",     cost: 100, desc: "Full deployment: +10% accel, −3% top speed",    speed: 0.97, accel: 1.10 },
-        { id: "race_mode", label: "Race Mode",  cost: 150, desc: "High-output 2026 mode: +7% accel, +3% speed",  speed: 1.03, accel: 1.07 },
+        { id: "standard",       label: "Standard",      cost:   0, desc: "Balanced energy recovery and deployment",            speed: 1.00, accel: 1.00 },
+        { id: "harvest",        label: "Harvest",       cost:  60, desc: "Aggressive recovery: +2% top speed, −5% accel",      speed: 1.02, accel: 0.95 },
+        { id: "deploy",         label: "Deploy",        cost: 100, desc: "Full deployment: +10% accel, −3% top speed",         speed: 0.97, accel: 1.10 },
+        { id: "overtake_focus", label: "OT Focus",      cost: 130, desc: "Traction-biased deploy: +12% accel, +4% cornering",  speed: 0.96, accel: 1.12, cornering: 1.04 },
+        { id: "race_mode",      label: "Race Mode",     cost: 150, desc: "High-output 2026 mode: +7% accel, +3% top speed",   speed: 1.03, accel: 1.07 },
+        { id: "full_attack",    label: "Full Attack",   cost: 200, desc: "Maximum ERS output — qualifying/sprint spec",       speed: 1.06, accel: 1.14 },
       ],
     },
   ];
@@ -74,11 +95,18 @@ const Parts = (function () {
     brakes: "standard", tyres: "medium", ers: "standard",
   };
 
-  function getMods(setup) {
+  function _resolve(cat, setup, teamEngine) {
+    const selId = setup[cat.id] !== undefined ? setup[cat.id] : DEFAULTS[cat.id];
+    let opt = cat.options.find((o) => o.id === selId);
+    if (opt && opt.supplier && teamEngine && opt.supplier !== teamEngine) opt = null;
+    return opt || cat.options.find((o) => o.id === DEFAULTS[cat.id]) || cat.options[0];
+  }
+
+  function getMods(setup, teamEngine) {
     const p = Object.assign({}, DEFAULTS, setup);
     const out = { speed: 1, accel: 1, cornering: 1, braking: 1 };
     for (const cat of CATALOG) {
-      const opt = cat.options.find((o) => o.id === p[cat.id]) || cat.options[0];
+      const opt = _resolve(cat, p, teamEngine);
       if (opt.speed     !== undefined) out.speed     *= opt.speed;
       if (opt.accel     !== undefined) out.accel     *= opt.accel;
       if (opt.cornering !== undefined) out.cornering *= opt.cornering;
@@ -87,12 +115,11 @@ const Parts = (function () {
     return out;
   }
 
-  function getCost(setup) {
+  function getCost(setup, teamEngine) {
     const p = Object.assign({}, DEFAULTS, setup);
     let total = 0;
     for (const cat of CATALOG) {
-      const opt = cat.options.find((o) => o.id === p[cat.id]) || cat.options[0];
-      total += opt.cost || 0;
+      total += _resolve(cat, p, teamEngine).cost || 0;
     }
     return total;
   }
