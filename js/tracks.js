@@ -636,6 +636,34 @@ const Tracks = (function () {
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
 
+    // --- safe-placement helpers (the rules learned from Monaco/Vegas walls) ---
+    // prop(): place a roadside object by CLEARANCE. `gap` is how far the box's
+    // inner face sits beyond the road edge, so however wide the box is it can
+    // never reach the tarmac and loom as a wall against the car. Inherits
+    // place()'s onTrack overlap guard and base-sink.
+    const prop = (k, side, gap, sz, col) => place(k, side, gap + sz[0] / 2, sz, col);
+    // groundPlane(): a large flat feature (water / sand / paddock apron) whose
+    // top sits just below the LOCAL track height at k — never the global minimum,
+    // which on elevation-changing circuits floats up as a ceiling or rises as a
+    // wall. Skipped if it would overlap any stretch of track.
+    const groundPlane = (k, side, gap, sz, col) => {
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const o = side * (hw[k] + gap + sz[0] / 2);
+      const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+      if (onTrack(cx, cz, sz[0] / 2 + 4)) return;
+      addBox(out, [cx, py[k] - sz[1] / 2 - 1.0, cz], sz, col);
+    };
+    // backdrop(): a distant scenery box (skyline, hills, dunes) on the horizon.
+    // Tall things go far enough back that they never clip the viewport edge, and
+    // onTrack keeps them off any parallel stretch. Anchored to local py[k].
+    const backdrop = (k, side, dist, sz, col) => {
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const o = side * (hw[k] + dist);
+      const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+      if (onTrack(cx, cz, sz[0] / 2 + 6)) return;
+      addBox(out, [cx, py[k] + sz[1] / 2 - 2, cz], sz, col);
+    };
+
     // continuous barrier wall hugging both edges on street circuits — going off
     // means hitting a wall, not open grass. Day circuits get red/white armco
     // striping; night circuits get a dark rail.
@@ -754,6 +782,14 @@ const Tracks = (function () {
           place(k, side, dist, [8.2, 2 + s * 3, 8.2], neon);  // glowing band
         }
       });
+      // Illuminated billboards: thin laterally so the face never walls the car,
+      // mounted on a slim pole and angled along the straight.
+      every(40, (k) => {
+        const side = hash(k * 13) < 0.5 ? -1 : 1;
+        const neon = [[0.95, 0.15, 0.55], [0.15, 0.85, 0.95], [0.98, 0.80, 0.15]][Math.floor(hash(k * 14) * 3) % 3];
+        prop(k, side, 5, [1.0, 7, 1.0], [0.10, 0.10, 0.12]);   // pole
+        prop(k, side, 5, [1.4, 5, 9], neon);                   // glowing panel
+      });
     } else if (theme === "modern") {  // Madrid
       every(30, (k) => { for (const side of [-1, 1]) { const s = hash(k + side); place(k, side, hw[k] + 20 + s * 3, [10, 8 + s * 14, 10], [0.8, 0.82, 0.86]); } });
       every(120, (k) => place(k, hash(k) < 0.5 ? -1 : 1, hw[k] + 25, [4, 6, 24], [0.85, 0.2, 0.2]));
@@ -798,7 +834,28 @@ const Tracks = (function () {
     // --- circuit-specific surrounding landscape features with comprehensive filler ---
     // Bahrain: desert dunes, Persian Gulf, utility infrastructure
     if (def.id === "bahrain") {
-      // Kept: only iconic Sakhir Tower and Arch grandstand (defined later in landmark section)
+      // Date-palm clusters (the circuit's oasis planting), set back behind the runoff
+      every(24, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 17 + side) > 0.5) continue;
+          const d = 12 + hash(k * 19 + side) * 22;
+          const h = 6.5 + hash(k * 23 + side) * 4;
+          prop(k, side, d, [0.9, h, 0.9], [0.34, 0.26, 0.14]);   // slender trunk
+          prop(k, side, d, [5.0, 1.8, 5.0], [0.20, 0.34, 0.12]); // frond crown
+        }
+      });
+      // Rolling sand-dune ridges on the horizon (warm dusk tone)
+      every(70, (k) => {
+        for (const side of [-1, 1]) {
+          backdrop(k, side, 200 + hash(k * 7 + side) * 130, [170, 26, 170], [0.74, 0.60, 0.40]);
+        }
+      });
+      // Floodlit grandstand banking opposite the pits (night race spectators)
+      every(110, (k) => {
+        const side = hash(k * 9) < 0.5 ? -1 : 1;
+        prop(k, side, 10, [22, 9, 16], [0.30, 0.30, 0.36]);     // stand shell
+        prop(k, side, 8,  [22, 5, 14], [0.55, 0.30, 0.28]);     // crowd tier
+      });
     }
     // Spa: dense Ardennes forest with ridges, streams, filler vegetation
     if (def.id === "spa") {
@@ -814,10 +871,49 @@ const Tracks = (function () {
           }
         }
       });
+      // Forested Ardennes ridgelines rising behind the treeline
+      every(60, (k) => {
+        for (const side of [-1, 1]) {
+          backdrop(k, side, 170 + hash(k * 13 + side) * 120, [200, 50, 200], [0.16, 0.30, 0.18]);
+        }
+      });
+      // Yellow marshal posts at trackside (a Spa staple), close but cleared
+      every(46, (k) => {
+        const side = hash(k * 33) < 0.5 ? -1 : 1;
+        prop(k, side, 3, [1.4, 2.6, 1.4], [0.90, 0.78, 0.10]);
+      });
+      // Grass spectator banking with sparse crowd colour
+      every(120, (k) => {
+        const side = hash(k * 35) < 0.5 ? -1 : 1;
+        prop(k, side, 6, [20, 5, 16], [0.18, 0.34, 0.16]);
+        prop(k, side, 6, [18, 2, 14], [0.62, 0.4, 0.34]);
+      });
     }
     // Silverstone: English countryside
     if (def.id === "silverstone") {
-      // Iconic Wing structure (pit lane roof) - kept in landmark section
+      // Hedgerows and oak copses around the old airfield perimeter
+      every(20, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 21 + side) > 0.55) continue;
+          const d = 40 + hash(k * 22 + side) * 60;
+          const h = 6 + hash(k * 24 + side) * 6;
+          place(k, side, d, [1.2, 1.4, 1.2], [0.30, 0.22, 0.12]);
+          place(k, side, d, [4.2, h, 4.2], [0.20, 0.40, 0.18]);
+        }
+      });
+      // Spectator grandstands at the fast corners (Stowe / Copse / Maggotts)
+      for (const frac of [0.18, 0.34, 0.58, 0.78]) {
+        const k = Math.round(frac * n) % n;
+        const side = hash(k * 5) < 0.5 ? -1 : 1;
+        prop(k, side, 9, [30, 10, 18], [0.40, 0.42, 0.48]);   // stand shell
+        prop(k, side, 7, [30, 6, 16], [0.66, 0.40, 0.34]);    // crowd
+      }
+      // Distant low Northamptonshire treeline
+      every(80, (k) => {
+        for (const side of [-1, 1]) {
+          backdrop(k, side, 180 + hash(k * 6 + side) * 90, [180, 22, 180], [0.22, 0.36, 0.20]);
+        }
+      });
     }
     // Monaco: steep hillside buildings and Mediterranean backdrop
     if (def.id === "monaco") {
@@ -1006,6 +1102,14 @@ const Tracks = (function () {
           place(k, side, d, [3.8, 6 + hash(k) * 5, 3.8], [0.28, 0.38, 0.18]);
         }
       });
+      // IFEMA-style modern grandstands with clean white roofs at key corners
+      for (const frac of [0.14, 0.38, 0.82]) {
+        const k = Math.round(frac * n) % n;
+        const side = hash(k * 5) < 0.5 ? -1 : 1;
+        prop(k, side, 10, [32, 11, 18], [0.80, 0.82, 0.86]);  // white shell
+        prop(k, side, 8,  [32, 6, 16], [0.55, 0.30, 0.30]);   // crowd
+        prop(k, side, 9,  [34, 2, 20], [0.90, 0.92, 0.95]);   // roof canopy
+      }
     }
     // Zandvoort: North Sea coastal features and dune landscape
     if (def.id === "zandvoort") {
@@ -1026,6 +1130,31 @@ const Tracks = (function () {
         addBox(out, [px[k] + r[0] * 300, py[k] + 68, pz[k] + r[2] * 300],
                [80, 4, 6], [0.8, 0.8, 0.78]);  // turbine blades
       }
+      // Sand dunes hugging the circuit (Zandvoort runs through the dune belt)
+      every(22, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 71 + side) > 0.6) continue;
+          const d = 28 + hash(k * 72 + side) * 40;
+          prop(k, side, d, [18, 6 + hash(k * 73 + side) * 6, 18], [0.78, 0.72, 0.56]); // dune mound
+          prop(k, side, d, [16, 1.4, 16], [0.62, 0.66, 0.40]);                          // marram grass
+        }
+      });
+      // Sea of orange: Dutch grandstands packed with fans at the banked corners
+      for (const frac of [0.12, 0.30, 0.50, 0.72, 0.90]) {
+        const k = Math.round(frac * n) % n;
+        const side = hash(k * 7) < 0.5 ? -1 : 1;
+        prop(k, side, 8, [26, 10, 18], [0.36, 0.38, 0.42]);  // stand shell
+        prop(k, side, 6, [26, 6, 16], [0.92, 0.46, 0.08]);   // orange crowd
+      }
+      // Beach huts along the seafront approach
+      every(120, (k) => {
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const o = (hash(k * 8) < 0.5 ? -1 : 1) * (hw[k] + 120);
+        const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+        if (onTrack(cx, cz, 12)) return;
+        const hutCol = [[0.85, 0.25, 0.20], [0.20, 0.45, 0.70], [0.90, 0.85, 0.30]][Math.floor(hash(k * 9) * 3) % 3];
+        addBox(out, [cx, py[k] + 1.6, cz], [5, 4, 5], hutCol);
+      });
     }
 
     // --- main grandstand + pit complex on the start/finish straight (every GP) ---
@@ -1092,6 +1221,23 @@ const Tracks = (function () {
           addBox(out, [px[k] + r[0] * yo, py[k] + 4, pz[k] + r[2] * yo], [2.2, 2, 5], [0.85, 0.86, 0.9]);   // cabin
         }
       }
+      // A pair of moored super-yachts further out in the harbour
+      for (const yi of [2, 7]) {
+        const k = (yi * 3) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const yo = hw[k] + 34;
+        const yx = px[k] + r[0] * yo, yz = pz[k] + r[2] * yo;
+        if (onTrack(yx, yz, 14)) continue;
+        addBox(out, [yx, py[k] + 2.5, yz], [8, 6, 26], [0.97, 0.97, 0.99]); // hull
+        addBox(out, [yx, py[k] + 7, yz], [5, 4, 13], [0.80, 0.83, 0.90]);   // superstructure
+        addBox(out, [yx, py[k] + 10.5, yz], [3, 2, 6], [0.60, 0.66, 0.78]); // top deck
+      }
+      // Promenade date-palms along the harbour railing (open side only)
+      every(34, (k) => {
+        if (k > n * 0.5) return;
+        prop(k, 1, 4, [0.6, 5, 0.6], [0.34, 0.26, 0.14]);
+        prop(k, 1, 4, [3.6, 1.4, 3.6], [0.18, 0.36, 0.14]);
+      });
       // Tunnel: concrete ceiling from Portier (~52%) to post-tunnel chicane (~58%).
       // The section runs underground parallel to the harbour — a unique Monaco feature.
       {
@@ -1140,6 +1286,20 @@ const Tracks = (function () {
                  [3, 24, 20], [0.95, 0.44, 0.05], [rk, [0, 1, 0], tk]);
         }
       }
+      // Austin360 Amphitheater: curved canopy roof behind Turn 12
+      const kamp = Math.round(n * 0.62) % n;
+      const kar = [track.rx[kamp], track.ry[kamp], track.rz[kamp]];
+      const ampX = px[kamp] + kar[0] * (hw[kamp] + 70), ampZ = pz[kamp] + kar[2] * (hw[kamp] + 70);
+      if (!onTrack(ampX, ampZ, 30)) {
+        addBox(out, [ampX, py[kamp] + 18, ampZ], [48, 36, 30], [0.86, 0.84, 0.80]);
+        addBox(out, [ampX, py[kamp] + 38, ampZ], [54, 4, 36], [0.70, 0.72, 0.76]);
+      }
+      // Texas Hill Country ridgeline on the horizon
+      every(80, (k) => {
+        for (const side of [-1, 1]) {
+          backdrop(k, side, 200 + hash(k * 8 + side) * 110, [180, 30, 180], [0.34, 0.34, 0.22]);
+        }
+      });
     }
     if (def.id === "vegas") {
       // MSG Sphere — distinctive multi-colour LED sphere east of the Strip
@@ -1212,6 +1372,33 @@ const Tracks = (function () {
       const kpitr = [track.rx[kpit], track.ry[kpit], track.rz[kpit]];
       addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 18, pz[kpit] + kpitr[2] * 12], [50, 36, 30], [0.5, 0.48, 0.46]);
       addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 36, pz[kpit] + kpitr[2] * 12], [46, 6, 26], [0.42, 0.42, 0.44]);
+      // Colourful hillside houses (the São Paulo favela backdrop) — small boxes
+      // set well back and onTrack-guarded so they never become a wall or ceiling.
+      const favCol = [[0.82, 0.46, 0.34], [0.86, 0.74, 0.40], [0.46, 0.58, 0.66],
+                      [0.78, 0.78, 0.72], [0.60, 0.70, 0.52]];
+      every(14, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 61 + side) > 0.5) continue;
+          const r = [track.rx[k], track.ry[k], track.rz[k]];
+          const stack = 1 + Math.floor(hash(k * 62 + side) * 3);
+          for (let j = 0; j < stack; j++) {
+            const d = 95 + j * 12 + hash(k * 63 + side + j) * 40;
+            const o = side * (hw[k] + d);
+            const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+            if (onTrack(cx, cz, 10)) continue;
+            const h = 5 + hash(k * 64 + side + j) * 4;
+            addBox(out, [cx, py[k] + 6 + j * 7 + h / 2, cz], [7, h, 7],
+                   favCol[Math.floor(hash(k * 65 + side + j) * 5) % 5]);
+          }
+        }
+      });
+      // Grandstands at the Senna S and the start straight
+      for (const frac of [0.06, 0.30, 0.55]) {
+        const k = Math.round(frac * n) % n;
+        const side = hash(k * 5) < 0.5 ? -1 : 1;
+        prop(k, side, 9, [28, 9, 18], [0.42, 0.42, 0.48]);
+        prop(k, side, 7, [28, 5, 16], [0.30, 0.46, 0.34]);   // green/yellow Brazilian crowd
+      }
     }
     if (def.id === "monza") {
       // Italian umbrella pines — taller and narrower than the generic green trees
@@ -1230,6 +1417,18 @@ const Tracks = (function () {
       // Control tower with press center
       addBox(out, [px[ktc] + ktcr[0] * (hw[ktc] + 24), py[ktc] + 20, pz[ktc] + ktcr[2] * (hw[ktc] + 24)],
              [12, 40, 12], [0.95, 0.95, 0.97]);
+      // Sopraelevata: weathered banking of the abandoned oval, looming in the park
+      for (let i = 0; i < 5; i++) {
+        const k = (Math.round(n * 0.42) + i * 4) % n;
+        backdrop(k, 1, 120 + i * 10, [30, 16, 60], [0.55, 0.54, 0.50]);
+      }
+      // Grandstands at Curva Grande and the Parabolica
+      for (const frac of [0.10, 0.46, 0.88]) {
+        const k = Math.round(frac * n) % n;
+        const side = hash(k * 5) < 0.5 ? -1 : 1;
+        prop(k, side, 9, [30, 9, 18], [0.42, 0.42, 0.48]);
+        prop(k, side, 7, [30, 5, 16], [0.66, 0.40, 0.34]);
+      }
     }
     if (def.id === "suzuka") {
       // Sakura (cherry blossom) trees scattered among the green zones
@@ -1248,6 +1447,19 @@ const Tracks = (function () {
         addBox(out, [px[ktp] + ktpr[0] * d, py[ktp] + h / 2, pz[ktp] + ktpr[2] * d],
                [24 + i * 6, h, 28], [0.6 + i * 0.05, 0.45 + i * 0.08, 0.3 + i * 0.04]);
       }
+      // Grandstands at the Esses and the Spoon (always packed at Suzuka)
+      for (const frac of [0.16, 0.40, 0.62, 0.84]) {
+        const k = Math.round(frac * n) % n;
+        const side = hash(k * 5) < 0.5 ? -1 : 1;
+        prop(k, side, 9, [28, 9, 18], [0.42, 0.42, 0.48]);
+        prop(k, side, 7, [28, 5, 16], [0.30, 0.40, 0.62]);   // blue-clad fans
+      }
+      // Forested Mie-prefecture hills beyond the park
+      every(70, (k) => {
+        for (const side of [-1, 1]) {
+          backdrop(k, side, 200 + hash(k * 6 + side) * 100, [180, 44, 180], [0.18, 0.32, 0.20]);
+        }
+      });
     }
     if (def.id === "silverstone") {
       // The Wing — curved pit-lane roof structure on the main straight (390m long, 1200 tonnes steel)
