@@ -930,11 +930,27 @@ const Tracks = (function () {
     };
     // Tiered grandstand running along the track: a raked seating wedge (prism on
     // its side reads as a rake), a back shell and a flat roof slab on posts.
+    // Uses addBox directly to avoid place()'s per-box onTrack guard, which fires
+    // false-positives at hairpins (La Source at Spa, etc.). Single guard uses the
+    // crowd inner face — only skips if the seating literally overlaps the tarmac.
     const grandstand = (s, side, gap, len, shell, crowd) => {
       const k = Math.round(s * n) % n;
-      prop(k, side, gap + 2.5, [10, 12, len], shell || [0.40, 0.41, 0.46]);   // back shell
-      prop(k, side, gap, [9, 7, len - 2], crowd || [0.55, 0.32, 0.30]);        // raked crowd
-      // roof slab cantilevered over the crowd, lifted on the up axis
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const t = [track.tx[k], track.ty[k], track.tz[k]];
+      const u = upOf(track, k);
+      // Skip only if crowd inner face (= road edge + gap) literally sits on track.
+      const oInner = side * (hw[k] + gap);
+      const ifx = px[k] + r[0] * oInner, ifz = pz[k] + r[2] * oInner;
+      if (onTrack(ifx, ifz, 0)) return;
+      // Back shell — center at gap+7.5 beyond road edge
+      const oShell = side * (hw[k] + gap + 7.5);
+      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + 6 - 0.8, pz[k] + r[2] * oShell];
+      addBox(out, cShell, [10, 12, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+      // Raked crowd — center at gap+4.5 beyond road edge
+      const oCrowd = side * (hw[k] + gap + 4.5);
+      const cCrowd = [px[k] + r[0] * oCrowd, groundYAt(k, gap + 4.5) + 3.5 - 0.8, pz[k] + r[2] * oCrowd];
+      addBox(out, cCrowd, [9, 7, len - 2], crowd || [0.55, 0.32, 0.30], [r, u, t]);
+      // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
       addBox(out, vadd(a.c, a.u, 13), [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
     };
