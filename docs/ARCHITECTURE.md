@@ -253,6 +253,11 @@ Camera: chase, eye = p - t*9.5 + up*3.4, lookAt = p + t*6 + up*1.1,
 exp damp (lambda 6 eye, 10 target), fov 62 -> 76 with speed.
 ```
 
+Debug API: `window.__apex` (race/park/jump/view/corners/cars/pair/jam/go/info)
+drives the game from the console or a headless harness — see
+[DEBUG-HOOKS.md](DEBUG-HOOKS.md). Per-circuit scenery design briefs live in
+[docs/tracks/](tracks/).
+
 ## index.html / css
 
 `index.html` owns ALL static DOM: canvas `#game`, HUD, overlay menus, select
