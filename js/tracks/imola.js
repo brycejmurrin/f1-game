@@ -21,7 +21,7 @@
     ],
     // Hilly Italian classic (~40 m): dip to Acque Minerali, climb to Piratella,
     // then the descent through the Rivazza.
-    elevations: [{ s: 0.28, halfM: 300, rise: -12 }, { s: 0.52, halfM: 300, rise: 16 }, { s: 0.78, halfM: 240, rise: -8 }],
+    elevations: [{ s: 0.28, halfM: 300, rise: -6 }, { s: 0.52, halfM: 300, rise: 10 }, { s: 0.78, halfM: 240, rise: -5 }],
   }
   );
 })();

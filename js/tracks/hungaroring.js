@@ -20,7 +20,7 @@
       { t: 70, l: 90 },
     ],
     // Undulating amphitheatre (~36 m): climb from Turn 1, long descent into the back.
-    elevations: [{ s: 0.20, halfM: 280, rise: 10 }, { s: 0.55, halfM: 320, rise: -12 }],
+    elevations: [{ s: 0.20, halfM: 280, rise: 7 }, { s: 0.55, halfM: 320, rise: -8 }],
   }
   );
 })();
