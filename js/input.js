@@ -189,6 +189,8 @@ const Input = (function () {
   }
 
   function onKey(e, down) {
+    const tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
     switch (e.code) {
       case "ArrowLeft": case "KeyA":
         keyLeft = down; if (down) e.preventDefault(); break;
