@@ -26,6 +26,10 @@ for (const s of shots) {
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.waitForTimeout(300);
   await page.screenshot({ path: `/tmp/carsetup-${s.name}.png` });
+  // scrolled-down view to confirm the stats stay pinned at the top
+  await page.locator("#carsetup").evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `/tmp/carsetup-${s.name}-scrolled.png` });
   console.log(`shot ${s.name} done`);
   await ctx.close();
 }
