@@ -234,6 +234,69 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
+  // ---- Post-processing (HDR scene target -> bloom -> tonemap + vignette) ----
+  // Fullscreen triangle via gl_VertexID; vUV in 0..1.
+  const POST_VS = `#version 300 es
+out vec2 vUV;
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  vUV = p;
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+  // Bright-pass: keep only the portion of each pixel above the threshold (the
+  // sun, floodlights, specular hotspots, bright markings) for the bloom blur.
+  const BRIGHT_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uScene;
+uniform float uThreshold;
+out vec4 outColor;
+void main() {
+  vec3 c = texture(uScene, vUV).rgb;
+  float l = max(max(c.r, c.g), c.b);
+  float k = max(0.0, l - uThreshold) / max(l, 1e-4);
+  outColor = vec4(c * k, 1.0);
+}`;
+
+  // Separable 5-tap gaussian (uDir = texelSize * axis).
+  const BLUR_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform vec2 uDir;
+out vec4 outColor;
+void main() {
+  vec2 o1 = uDir * 1.3846153846;
+  vec2 o2 = uDir * 3.2307692308;
+  vec3 s = texture(uTex, vUV).rgb * 0.2270270270;
+  s += texture(uTex, vUV + o1).rgb * 0.3162162162;
+  s += texture(uTex, vUV - o1).rgb * 0.3162162162;
+  s += texture(uTex, vUV + o2).rgb * 0.0702702703;
+  s += texture(uTex, vUV - o2).rgb * 0.0702702703;
+  outColor = vec4(s, 1.0);
+}`;
+
+  // Composite: scene + bloom, then a highlight-preserving rolloff (identity below
+  // ~0.8 so the hand-tuned mid/shadow palette is untouched; bright values compress
+  // toward 1 instead of harshly clipping), plus a soft vignette.
+  const COMPOSITE_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uScene;
+uniform sampler2D uBloom;
+uniform float uBloomAmt;
+out vec4 outColor;
+void main() {
+  vec3 c = texture(uScene, vUV).rgb;
+  c += texture(uBloom, vUV).rgb * uBloomAmt;
+  c = c / (1.0 + max(c - vec3(0.8), vec3(0.0)));
+  vec2 q = vUV - 0.5;
+  float vig = smoothstep(0.95, 0.35, length(q));
+  c *= mix(0.86, 1.0, vig);
+  outColor = vec4(c, 1.0);
+}`;
+
   let gl = null;
   let canvas = null;
   let litProg = null, litU = null;
@@ -244,6 +307,19 @@ void main() {
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
   let frameViewProj = null;
+
+  // Post-processing state. postEnabled stays false (and rendering goes straight
+  // to the default framebuffer, exactly as before) if any target/program setup
+  // fails, so the game always renders.
+  let postEnabled = false;
+  let brightProg = null, brightU = null;
+  let blurProg = null, blurU = null;
+  let compProg = null, compU = null;
+  let sceneFBO = null, sceneTex = null, sceneDepth = null;
+  let bloomFBO = [null, null], bloomTex = [null, null];
+  let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
+  let bloomW = 0, bloomH = 0;
+  const BLOOM_DIV = 2;         // bloom buffers at half resolution
 
   function compile(type, src) {
     const sh = gl.createShader(type);
@@ -278,6 +354,65 @@ void main() {
     return u;
   }
 
+  // Build the post-processing programs + pick a colour format. Returns true if
+  // the whole chain is usable; on any failure the caller leaves post disabled.
+  function initPost() {
+    // RGBA16F is the ideal HDR target (preserves sun/specular > 1 for bloom);
+    // fall back to 8-bit if float colour buffers aren't renderable.
+    const ext = gl.getExtension("EXT_color_buffer_float");
+    colorType = ext ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+
+    brightProg = link(POST_VS, BRIGHT_FS);
+    blurProg = link(POST_VS, BLUR_FS);
+    compProg = link(POST_VS, COMPOSITE_FS);
+    if (!brightProg || !blurProg || !compProg) return false;
+    brightU = locs(brightProg, ["uScene", "uThreshold"]);
+    blurU = locs(blurProg, ["uTex", "uDir"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt"]);
+    return true;
+  }
+
+  // (Re)allocate the scene + bloom render targets at the current size.
+  function createTargets() {
+    if (!postEnabled) return;
+    const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
+    const mk = (w, h) => {
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return tex;
+    };
+    // scene target (full res) + depth
+    if (sceneTex) gl.deleteTexture(sceneTex);
+    if (sceneDepth) gl.deleteRenderbuffer(sceneDepth);
+    if (!sceneFBO) sceneFBO = gl.createFramebuffer();
+    sceneTex = mk(width, height);
+    sceneDepth = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, sceneDepth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, sceneDepth);
+    // bloom ping-pong targets (half res)
+    bloomW = Math.max(1, Math.floor(width / BLOOM_DIV));
+    bloomH = Math.max(1, Math.floor(height / BLOOM_DIV));
+    for (let i = 0; i < 2; i++) {
+      if (bloomTex[i]) gl.deleteTexture(bloomTex[i]);
+      if (!bloomFBO[i]) bloomFBO[i] = gl.createFramebuffer();
+      bloomTex[i] = mk(bloomW, bloomH);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[i]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bloomTex[i], 0);
+    }
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      postEnabled = false;     // unsupported combo: fall back to direct rendering
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
   function init(canvasEl) {
     canvas = canvasEl;
     gl = canvas.getContext("webgl2", {
@@ -292,6 +427,8 @@ void main() {
     shadowProg = link(SHADOW_VS, SHADOW_FS);
     markProg = link(SHADOW_VS, MARK_FS);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
+
+    postEnabled = initPost();   // best-effort; false -> render straight to screen
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
@@ -331,14 +468,17 @@ void main() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
-    if (canvas.width !== w || canvas.height !== h) {
+    const changed = canvas.width !== w || canvas.height !== h;
+    if (changed) {
       canvas.width = w;
       canvas.height = h;
       gl.viewport(0, 0, w, h);
     }
+    const first = width === 0;
     width = w;
     height = h;
     aspect = w / h;
+    if (changed || first) createTargets();   // (re)allocate HDR + bloom targets
   }
 
   function toF32(a) {
@@ -381,6 +521,12 @@ void main() {
 
   function begin(frame) {
     frameViewProj = frame.viewProj;
+    // Render the scene into the HDR offscreen target when post is enabled, else
+    // straight to the default framebuffer.
+    if (postEnabled) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
+      gl.viewport(0, 0, width, height);
+    }
     const fc = frame.fogColor;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -465,6 +611,59 @@ void main() {
     gl.disable(gl.BLEND);
   }
 
+  // Resolve the HDR scene to the screen: extract bright areas, blur them into a
+  // bloom buffer, then composite scene + bloom with tonemap + vignette. No-op when
+  // post is disabled (the scene was drawn straight to the screen already).
+  function present(opts) {
+    if (!postEnabled) return;
+    const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
+    const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.bindVertexArray(skyVAO);   // reuse the empty VAO for fullscreen triangles
+
+    // 1) bright-pass scene -> bloom[0] (half res)
+    gl.viewport(0, 0, bloomW, bloomH);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
+    gl.useProgram(brightProg);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+    gl.uniform1i(brightU.uScene, 0);
+    gl.uniform1f(brightU.uThreshold, threshold);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // 2) separable gaussian blur, a couple of ping-pong passes
+    gl.useProgram(blurProg);
+    gl.uniform1i(blurU.uTex, 0);
+    const passes = [[1 / bloomW, 0], [0, 1 / bloomH], [1 / bloomW, 0], [0, 1 / bloomH]];
+    let src = 0;
+    for (const [dx, dy] of passes) {
+      const dst = 1 - src;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[dst]);
+      gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
+      gl.uniform2f(blurU.uDir, dx, dy);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      src = dst;
+    }
+
+    // 3) composite to the screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(compProg);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+    gl.uniform1i(compU.uScene, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
+    gl.uniform1i(compU.uBloom, 1);
+    gl.uniform1f(compU.uBloomAmt, bloomAmt);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    gl.bindVertexArray(null);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.enable(gl.DEPTH_TEST);
+  }
+
   return {
     init,
     resize,
@@ -474,6 +673,7 @@ void main() {
     drawSky,
     drawShadow,
     drawMark,
+    present,
     get width() { return width; },
     get height() { return height; },
     get aspect() { return aspect; },
