@@ -22,48 +22,120 @@
     ],
     elevations: [{ s: 0.62, halfM: 360, rise: 9 }],
     scenery: function (api) {
-      const { out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin, place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack, ferrisWheel, hash, upOf, cross, norm, lerp } = api;
-      // Hedgerows and oak copses around the old airfield perimeter
-      every(20, (k) => {
+      const { out, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash,
+              grandstand, building, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox } = api;
+      const k = (s) => Math.round(s * n) % n;
+
+      // ---- Palette (English-countryside green / overcast) ----
+      const COPSE = [0.18, 0.38, 0.20];   // dark-green tree copses / hedgerows
+      const GRASS = [0.30, 0.55, 0.25];
+      const WHITE = [0.92, 0.92, 0.92], RED = [0.85, 0.15, 0.15];
+
+      // ---- LOW distant Northamptonshire treeline backdrop (flat — no snow) ----
+      // Dense unbroken band wrapping every node, both sides — no gaps.
+      every(38, (kk) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 21 + side) > 0.55) continue;
-          const d = 40 + hash(k * 22 + side) * 60;
-          const h = 6 + hash(k * 24 + side) * 6;
-          place(k, side, d, [1.2, 1.4, 1.2], [0.30, 0.22, 0.12]);
-          place(k, side, d, [4.2, h, 4.2], [0.20, 0.40, 0.18]);
+          backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], [0.22, 0.34, 0.20]);
+          backdrop(kk, side, 260 + hash(kk * 9 + side) * 70, [170, 12, 170], [0.20, 0.31, 0.19]);
         }
       });
-      // Spectator grandstands at the fast corners (Stowe / Copse / Maggotts)
-      for (const frac of [0.18, 0.34, 0.58, 0.78]) {
-        const k = Math.round(frac * n) % n;
-        const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [8, 10, 30], [0.40, 0.42, 0.48]);   // stand shell
-        prop(k, side, 7, [8, 6, 28], [0.66, 0.40, 0.34]);    // crowd
+      // very low, soft organic green rises far out (snowline > 1 = never snowy),
+      // placed as a CONTINUOUS ring from track centre so the horizon never breaks.
+      let cx = 0, cz = 0;
+      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
+      cx /= n; cz /= n;
+      let rad = 0;
+      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      // two overlapping rings of low green rises — dense enough to read as a wall
+      for (const [extra, count, wMin, hMin, col] of [
+        [300, 30, 150, 22, [0.24, 0.40, 0.24]],
+        [400, 26, 190, 26, [0.21, 0.36, 0.22]],
+      ]) {
+        const ring = rad + extra;
+        for (let i = 0; i < count; i++) {
+          const a = (i / count + hash(i + extra) * 0.06) * 6.2832, h = hash(i * 7 + extra);
+          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
+                   wMin + h * 110, hMin + h * 12, { snowline: 2, forest: 0.6,
+                   col, rock: [0.30, 0.44, 0.28] });
+        }
       }
-      // Distant low Northamptonshire treeline
-      every(80, (k) => {
+
+      // ---- Hedgerow-gridded flat farmland (s≈0.60) + perimeter hedgerows ----
+      // denser farmland grid — long low green strips wrapping most of the lap
+      hedge(0.58, 0.66, -1, 70, 2.4, COPSE);
+      hedge(0.58, 0.66, 1, 85, 2.4, COPSE);
+      hedge(0.20, 0.30, 1, 95, 2.2, COPSE);
+      hedge(0.85, 0.95, -1, 80, 2.2, COPSE);
+      hedge(0.06, 0.14, 1, 105, 2.2, COPSE);   // outside Copse → Maggotts
+      hedge(0.32, 0.40, 1, 100, 2.3, COPSE);   // Stowe → Club outfield
+      hedge(0.66, 0.74, 1, 90, 2.2, COPSE);    // beyond The Loop
+      hedge(0.74, 0.84, -1, 95, 2.2, COPSE);   // Brooklands approach
+      hedge(0.16, 0.24, -1, 110, 2.2, COPSE);  // far infield copse line
+
+      // ---- Oak copses (Chapel/Cheese Copse, s≈0.15 L; scattered elsewhere) ----
+      const copse = (s, side, dist) => {
+        for (let j = 0; j < 5; j++) {
+          const kk = (k(s) + j) % n;
+          tree(kk, side, dist + hash(kk * 3 + j) * 16, 9 + hash(kk * 5 + j) * 5, COPSE);
+        }
+        bush(k(s), side, dist - 4, COPSE);
+      };
+      copse(0.15, -1, 90);
+      copse(0.62, 1, 75);
+      copse(0.70, -1, 70);
+      copse(0.24, 1, 110);   // Stowe outfield copse
+      copse(0.45, -1, 100);  // far side of The Wing infield
+      copse(0.78, 1, 95);    // Brooklands outfield
+      copse(0.90, -1, 85);   // Luffield / Woodcote approach
+      // denser single oaks around the airfield perimeter
+      every(95, (kk) => {
         for (const side of [-1, 1]) {
-          backdrop(k, side, 180 + hash(k * 6 + side) * 90, [180, 22, 180], [0.22, 0.36, 0.20]);
+          if (hash(kk * 21 + side) > 0.62) continue;
+          tree(kk, side, 55 + hash(kk * 22 + side) * 75, 8 + hash(kk * 24 + side) * 5, COPSE);
+          if (hash(kk * 31 + side) > 0.7) bush(kk, side, 48 + hash(kk * 33 + side) * 20, COPSE);
         }
       });
 
-      // The Wing — curved pit-lane roof structure on the main straight (390m long, 1200 tonnes steel)
-      for (let i = 0; i < 6; i++) {
-        const k = (Math.round(n * 0.01) + i * 3) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const t = [track.tx[k], track.ty[k], track.tz[k]];
-        const u = upOf(track, k);
-        const rise = Math.sin((i / 5) * Math.PI) * 5;
-        const scx = px[k] + r[0] * (hw[k] + 4), scy = py[k], scz = pz[k] + r[2] * (hw[k] + 4);
-        // metallic silver polyester-coated steel panels (RAL 9006)
-        addBox(out, [scx, scy + 12 + rise * 0.5, scz], [1.5, 24 + rise, 18], [0.75, 0.75, 0.78], [r, u, t]);
-        addBox(out, [scx, scy + 25 + rise, scz], [36, 1.5, 20], [0.72, 0.72, 0.75], [r, u, t]);
-        // support structures
-        if (i > 0 && i < 5) {
-          addBox(out, [scx - r[0] * 8, scy + 18 + rise * 0.3, scz - r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
-          addBox(out, [scx + r[0] * 8, scy + 18 + rise * 0.3, scz + r[2] * 8], [2, 16, 4], [0.68, 0.68, 0.72], [r, u, t]);
-        }
+      // ---- Big grandstands at the signature corners ----
+      grandstand(0.04, 1, 12, 70, [0.46, 0.47, 0.52], [0.55, 0.32, 0.30]); // Copse
+      grandstand(0.12, -1, 14, 55, [0.46, 0.47, 0.52], [0.50, 0.34, 0.32]); // Maggotts/Becketts
+      grandstand(0.30, 1, 16, 75, [0.46, 0.47, 0.52], [0.58, 0.30, 0.30]); // Stowe
+      grandstand(0.40, 1, 12, 80, [0.46, 0.47, 0.52], [0.55, 0.32, 0.30]); // Club
+      grandstand(0.66, -1, 14, 45, [0.46, 0.47, 0.52], [0.50, 0.34, 0.32]); // The Loop
+      grandstand(0.85, -1, 14, 55, [0.46, 0.47, 0.52], [0.55, 0.32, 0.30]); // Brooklands/Luffield
+      grandstand(0.07, 1, 13, 55, [0.46, 0.47, 0.52], [0.52, 0.32, 0.32]); // Copse exit (fast)
+      grandstand(0.13, 1, 15, 50, [0.46, 0.47, 0.52], [0.55, 0.30, 0.30]); // Becketts outfield
+      grandstand(0.55, 1, 16, 60, [0.46, 0.47, 0.52], [0.50, 0.34, 0.32]); // Abbey (fast)
+      grandstand(0.88, -1, 13, 48, [0.46, 0.47, 0.52], [0.58, 0.30, 0.30]); // Luffield exit
+
+      // ---- The Wing: long low pit/paddock building with a thin roof blade (s≈0.45 R) ----
+      // sweeping white-grey slab, far longer than tall, dark glazing band
+      building(k(0.45), 1, 12, 16, 12, 200, {
+        wall: [0.80, 0.81, 0.84], window: [0.16, 0.20, 0.26], floor: 5 });
+      // thin cantilevered roof fin running the length of the building
+      {
+        const a = anchor(k(0.45), 1, 12);
+        addBox(out, vadd(a.c, a.u, 13.2), [22, 0.7, 210], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
       }
+      // tall stepped Wing grandstands flanking it (s≈0.46 R)
+      grandstand(0.46, 1, 11, 90, [0.50, 0.51, 0.56], [0.58, 0.30, 0.30]);
+      // BRDC clubhouse set back (s≈0.48 R)
+      building(k(0.48), 1, 40, 24, 9, 20, { wall: [0.78, 0.78, 0.74], window: [0.20, 0.26, 0.32] });
+
+      // ---- Advertising hoardings (Abbey run-off s≈0.55 R) ----
+      billboard(k(0.55), 1, 18, 14, 5, [0.86, 0.30, 0.20]);
+      billboard(k(0.30), 1, 22, 14, 5, [0.20, 0.40, 0.70]);
+
+      // ---- Start gantry over Woodcote / start-finish ----
+      gantry(0.0, 7.5, [0.30, 0.32, 0.36]);
+
+      // ---- Red/white kerb accent boxes + green run-off framing at apexes ----
+      for (const [s, side] of [[0.04, 1], [0.12, -1], [0.12, 1], [0.30, 1], [0.40, 1], [0.55, 1], [0.66, -1], [0.85, -1]]) {
+        place(k(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE);
+        place(k(s), side, 6, [10, 0.1, 12], GRASS); // run-off / grass framing slab
+      }
+      // silence unused-guard lint helpers
+      void onTrack; void WHITE; void prop;
     },
   }
   );
