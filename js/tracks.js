@@ -750,6 +750,23 @@ const Tracks = (function () {
     const { n, px, py, pz, hw } = track;
     const out = { pos: [], nrm: [], col: [], idx: [] };
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
+    // Per-segment driving boundary (lateral limit from the centreline on each
+    // side). Initialised to the default runoff, then TIGHTENED wherever a solid
+    // barrier (wall/guardrail/tyre wall/grandstand) is actually placed, so the car
+    // always stops just before a model instead of clipping into it. WALL_CLEAR is
+    // the car's half-width + margin: the limit sits that far inside the barrier
+    // face. recordBarrier() fills the boundary along a barrier's node range.
+    const WALL_CLEAR = 1.1;
+    const RUNOFF_DEFAULT = 9;   // loose default; tightened wherever a barrier sits
+    track.barL = new Float32Array(n);
+    track.barR = new Float32Array(n);
+    for (let k = 0; k < n; k++) { track.barL[k] = hw[k] + RUNOFF_DEFAULT; track.barR[k] = hw[k] + RUNOFF_DEFAULT; }
+    // Tighten one node's boundary on a side to a barrier at clearance `gap`.
+    const markBarrier = (k, side, gap) => {
+      const lim = Math.max(hw[k] - 1.2, hw[k] + gap - WALL_CLEAR);
+      const arr = side > 0 ? track.barR : track.barL;
+      if (lim < arr[k]) arr[k] = lim;
+    };
     // Lowest track elevation. Large flat terrain planes (water, sand, lakes) and
     // tall distant backdrops (dunes, ridges, hills) are anchored to this baseline
     // rather than a single point's py — otherwise, on tracks with elevation
@@ -812,6 +829,23 @@ const Tracks = (function () {
         if (lat < hwt + margin) return true;
       }
       return false;
+    };
+    // Tighten the driving boundary along a solid barrier placed from lap-fraction
+    // s0→s1 on `side` at clearance `gap` beyond the road edge. Skips nodes where
+    // the barrier geometry would be suppressed (a parallel stretch of track), so
+    // we never raise a phantom wall the player can't see.
+    const recordBarrier = (s0, s1, side, gap) => {
+      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      const span = ((k1 - k0) + n) % n;
+      const arr = side > 0 ? track.barR : track.barL;
+      for (let i = 0; i <= span; i++) {
+        const k = (k0 + i) % n;
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const o = side * (hw[k] + gap);
+        if (onTrack(px[k] + r[0] * o, pz[k] + r[2] * o, 0.3)) continue;
+        const lim = Math.max(hw[k] - 1.2, hw[k] + gap - WALL_CLEAR);
+        if (lim < arr[k]) arr[k] = lim;
+      }
     };
     const place = (k, side, dist, sz, col) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -967,6 +1001,8 @@ const Tracks = (function () {
     // crowd inner face — only skips if the seating literally overlaps the tarmac.
     const grandstand = (s, side, gap, len, shell, crowd) => {
       const k = Math.round(s * n) % n;
+      const halfFrac = (len / 2) / track.total;
+      recordBarrier(s - halfFrac, s + halfFrac, side, gap);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -1000,6 +1036,7 @@ const Tracks = (function () {
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick) => {
       const a = thick || 0.5;
+      recordBarrier(s0, s1, side, gap);
       along(s0, s1, 6, (k) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], a / 2)) {
@@ -1023,6 +1060,7 @@ const Tracks = (function () {
     };
     // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
     const guardrail = (s0, s1, side, gap, col) => {
+      recordBarrier(s0, s1, side, gap);
       along(s0, s1, 4, (k) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -1035,6 +1073,7 @@ const Tracks = (function () {
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
     const tyreWall = (s0, s1, side, gap, capCol) => {
+      recordBarrier(s0, s1, side, gap);
       along(s0, s1, 3.4, (k) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
@@ -1161,6 +1200,10 @@ const Tracks = (function () {
           addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
         }
       }
+      // Record the boundary for EVERY node (the geometry loop steps by 2, which
+      // would leave gaps), both sides, at the barrier offset.
+      const off = def.id === "monaco" ? 2.0 : 0.35;
+      for (let k = 0; k < n; k++) { markBarrier(k, -1, off); markBarrier(k, 1, off); }
     }
     // floodlights for night tracks
     if (def.night) every(70, (k) => {
@@ -1187,6 +1230,8 @@ const Tracks = (function () {
           const slen = ds * step * 1.1;
           addBox(out, [px[k] + r[0] * o, py[k] + 0.45, pz[k] + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
+          // record the tyre barrier along its span so the car stops just short of it
+          for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
         }
       }
     }
@@ -1491,5 +1536,22 @@ const Tracks = (function () {
     return { s, lat, k: bestK, heading, dist: Math.sqrt(bestD2) };
   }
 
-  return { LIST, build, sample, curvature, onKerb, banking, project };
+  // Driving boundary (max |lateral| from the centreline) at arc-length s on a
+  // side (sideSign >= 0 = right/+x, < 0 = left). Derived from where solid barriers
+  // were placed (see buildProps), so the car stops just before a model. Uses the
+  // tighter of the two bracketing nodes — conservative, never lets the car past a
+  // barrier at a node transition.
+  function wallAt(track, s, sideSign) {
+    const arr = sideSign >= 0 ? track.barR : track.barL;
+    const n = track.n, L = track.total;
+    if (!arr) {                                   // pre-build fallback
+      const i0 = (((Math.round(s / L * n) % n) + n) % n);
+      return track.hw[i0] + (track.def && track.def.street ? -0.8 : 9);
+    }
+    let f = (((s % L) + L) % L) / L * n;
+    const i = Math.floor(f) % n, j = (i + 1) % n;
+    return Math.min(arr[i], arr[j]);
+  }
+
+  return { LIST, build, sample, curvature, onKerb, banking, project, wallAt };
 })();
