@@ -56,14 +56,18 @@ the normal cam.
 |---|---|
 | `view()` | aerial framing of the **whole track** (from its bounding box) |
 | `view({ s, radius })` | focus a point at lap-fraction `s`, framed to `radius` m |
-| `view({ azimuth, elevation, zoom, fov, fog })` | framing controls — `azimuth`/`elevation` in degrees, `zoom` scales distance, `fog` multiplies fog density (default 0.15) |
-| `view({ eye:[x,y,z], target:[x,y,z], fov })` | fully explicit free camera |
+| `view({ azimuth, elevation, zoom, fov, fog })` | aerial/focus framing — `azimuth`/`elevation` in degrees, `zoom` scales distance, `fog` multiplies fog density (default 0.15) |
+| `view({ s, side, dist, height, look })` | stand **trackside** at `s` and look outward at the scenery on `side` (`"L"`/`"R"`/`±1`); `look:"in"` faces back at the track |
+| `view({ eye:[x,y,z], yaw, pitch, fov })` | **free-look** from a point — `yaw` 0 = −Z, +90 = +X; `pitch` − = down (degrees) |
+| `view({ eye:[x,y,z], target:[x,y,z], fov })` | fully explicit |
 | `view("chase")` | restore the chase cam |
 
 ```js
 __apex.view();                                   // whole-track aerial
-__apex.view({ elevation: 80, zoom: 1.0 });       // near top-down
+__apex.view({ elevation: 22, azimuth: 35 });     // low aerial — see the hills/peaks
 __apex.view({ s: 0.06, radius: 220, azimuth: 60 }); // inspect Turn 1's scenery
+__apex.view({ s: 0.16, side: "L", dist: 18, height: 10 }); // survey left-side scenery
+__apex.view({ eye: [0, 40, 0], yaw: 0, pitch: -90 });      // free-look straight down
 ```
 
 ### `corners() → [number, …]`

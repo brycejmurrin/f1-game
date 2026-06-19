@@ -24,7 +24,7 @@
     elevations: [{ s: 0.20, halfM: 300, rise: 7 }, { s: 0.45, halfM: 260, rise: -5 }],
     bridges: [{ s: 0.811, halfM: 150, rise: 7 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, prop, addBox, every, ferrisWheel, hash } = api;
+      const { n, px, pz, pyMin, place, prop, every, ferrisWheel, hash, peak, pine, tree } = api;
 
       // Packed grandstand running along the track: taller back shell + a shorter
       // front tier of blue-clad fans (Suzuka's stands are always full).
@@ -35,25 +35,23 @@
         prop(k, side, gap, [8, 6, len - 3], blue);                   // crowd tier (front)
       };
 
-      // --- Forested Mie-prefecture hills: two haze-depth rings of green
-      // silhouettes encircling the whole circuit (computed from the track centre)
-      // so they read as a layered horizon instead of boxes scattered through the
-      // infield. Suzuka sits in rolling hills — no single peak; Fuji isn't visible.
+      // --- Forested Mie-prefecture hills: two haze-depth rings of PEAKED
+      // summits encircling the circuit (computed from the track centre), so the
+      // horizon reads as a layered mountain range rather than a wall of cubes.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      for (const [extra, base, htMin, htVar, col] of [
-        [150, 14, 34, 24, [0.22, 0.40, 0.22]],   // near ring
-        [330, 22, 56, 40, [0.40, 0.52, 0.42]],   // far hazed ring
+      for (const [extra, wMin, hMin, hVar, count, col] of [
+        [200, 180, 46, 46, 26, [0.26, 0.44, 0.28]],   // near range
+        [430, 260, 92, 72, 22, [0.45, 0.55, 0.49]],   // far hazed range
       ]) {
-        const ring = rad + extra, count = 22;
+        const ring = rad + extra;
         for (let i = 0; i < count; i++) {
-          const a = (i / count) * Math.PI * 2 + extra * 0.01;   // offset the rings
-          const h = hash(i * 7 + extra);
-          addBox(out, [cx + Math.cos(a) * ring, pyMin + base + h * 6, cz + Math.sin(a) * ring],
-                 [300, htMin + h * htVar, 300], [col[0] + h * 0.06, col[1] + h * 0.04, col[2] + h * 0.05]);
+          const a = (i + extra * 0.004) / count * 6.2832, h = hash(i * 7 + extra);
+          const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
+          peak(x, z, pyMin, wMin + h * 90, hMin + h * hVar, [col[0] + h * 0.06, col[1] + h * 0.04, col[2] + h * 0.05]);
         }
       }
 
@@ -65,14 +63,17 @@
         place(Math.round(n * 0.05) % n, -1, 38 + i * 12, [10 + i * 2, 7 + i * 3, 14], parkCol[i % 4]);
       }
 
-      // --- Sakura (cherry blossom) accents along the climbing Esses, used
-      // sparingly for seasonal pop against the dominant green.
-      every(48, (k) => {
+      // --- Conifer stands lining the green zones (proper cone trees), with
+      // sparse Sakura (cherry-blossom) broadleaves for seasonal pop.
+      every(36, (k) => {
         const s = hash(k * 41);
-        if (s < 0.55) return;
-        const side = s < 0.78 ? -1 : 1, d = 10 + s * 8;
-        place(k, side, d, [1.1, 1.4, 1.1], [0.34, 0.24, 0.14]);          // trunk
-        place(k, side, d, [3.6, 3.2 + s * 2, 3.6], [0.93, 0.62, 0.70]);  // blossom crown
+        if (s < 0.45) return;
+        pine(k, s < 0.72 ? -1 : 1, 10 + s * 10, 9 + s * 7, [0.13 + s * 0.06, 0.34, 0.16]);
+      });
+      every(80, (k) => {
+        const s = hash(k * 53);
+        if (s < 0.7) return;
+        tree(k, s < 0.85 ? -1 : 1, 11 + s * 6, 6 + s * 3, [0.93, 0.62, 0.70]);  // sakura
       });
 
       // --- Grandstands at the signature corners (lap-fractions from the brief).
