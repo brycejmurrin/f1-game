@@ -123,8 +123,8 @@
 
       // --- s 0.95 R near: Harmon Ave chicane grandstands — tiered dark boxes, bright flecks ---
       for (let i = 0; i < 4; i++) {
-        place(K(0.95 + i * 0.006), 1, 16, [22, 8 + i * 3, 14], [0.16, 0.16, 0.20]);
-        place(K(0.95 + i * 0.006), 1, 16, [22.4, 0.8, 14.5], LED);   // crowd-light fleck band
+        place(K(0.95 + i * 0.006), 1, 24, [22, 8 + i * 3, 14], [0.16, 0.16, 0.20]);
+        place(K(0.95 + i * 0.006), 1, 24, [22.4, 0.8, 14.5], LED);   // crowd-light fleck band
       }
 
       // --- CONTINUOUS STRIP SKYLINE: a packed neon canyon lining BOTH sides of the

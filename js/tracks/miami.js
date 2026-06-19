@@ -102,9 +102,9 @@
       // s 0.00 L near — pit/paddock: long low flat white box block, glass faces
       {
         const k = K(0.0);
-        place(k, -1, 16, [22, 9, 120], WHITE);
+        place(k, -1, 24, [22, 9, 120], WHITE);
         place(k, -1, 14, [1.0, 6, 116], GLASS);   // glass-grey face band
-        place(k, -1, 16, [22.4, 1.5, 120], GREYWHITE); // flat roof cap
+        place(k, -1, 24, [22.4, 1.5, 120], GREYWHITE); // flat roof cap
       }
       // palms lining the pit straight, both sides
       for (let i = 0; i < 10; i++) {

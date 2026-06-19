@@ -120,8 +120,8 @@
       // ===================================================================
       {
         const k = K(0.18);
-        place(k, 1, 92, [180, 26, 150], FERRARI);               // vast red roof mass
-        place(k, 1, 95, [184, 5, 154], [0.55, 0.05, 0.06]);     // shaded eave band
+        place(k, 1, 100, [180, 26, 150], FERRARI);               // vast red roof mass
+        place(k, 1, 103, [184, 5, 154], [0.55, 0.05, 0.06]);     // shaded eave band
         const a = anchor(k, 1, 70);
         addCyl(out, vadd(a.c, a.u, 30), 22, 3, [0.95, 0.93, 0.85], 14, [a.r, a.u, a.t]);   // logo disc
         addCyl(out, vadd(a.c, a.u, 31.5), 11, 2, [1.00, 0.85, 0.10], 12, [a.r, a.u, a.t]); // yellow centre
@@ -181,9 +181,9 @@
       building(K(0.62), 1, 25, 50, 56, 30, { wall: [0.16, 0.18, 0.26], window: WIN, floor: 6 });
       building(K(0.60), 1, 29, 34, 34, 24, { wall: [0.15, 0.17, 0.24], window: WIN_WARM, floor: 5 });
       building(K(0.64), 1, 29, 34, 38, 24, { wall: [0.15, 0.17, 0.24], window: WIN, floor: 5 });
-      place(K(0.62), 1, 29, [54, 4, 8], WARM);   // warm uplit base band
-      place(K(0.60), 1, 22, [36, 3, 7], WARM);
-      place(K(0.64), 1, 22, [36, 3, 7], WARM);
+      place(K(0.62), 1, 52, [54, 4, 8], WARM);   // warm uplit base band
+      place(K(0.60), 1, 46, [36, 3, 7], WARM);
+      place(K(0.64), 1, 46, [36, 3, 7], WARM);
 
       // ===================================================================
       // s 0.70 R near — marina-side grandstand + amber dock-lamp dot row
