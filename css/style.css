@@ -268,6 +268,32 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   color: #fff; font-weight: 700;
   box-shadow: 0 2px 12px rgba(225,6,0,0.45);
 }
+.cs-chips .cs-chip.over-budget { opacity: 0.42; }
+.cs-chips .cs-chip.budget-reject { animation: cs-shake 0.32s ease; }
+@keyframes cs-shake {
+  0%,100% { transform: translateX(0); }
+  25%      { transform: translateX(-5px); }
+  75%      { transform: translateX(5px); }
+}
+.cs-chip-cost {
+  display: inline-block; margin-left: 5px; vertical-align: middle;
+  font-size: 10px; font-weight: 600; opacity: 0.65; letter-spacing: 0.04em;
+}
+.cs-chip.active .cs-chip-cost { opacity: 0.85; }
+#cs-budget-wrap { margin-top: 10px; }
+#cs-budget-bar {
+  height: 5px; background: rgba(255,255,255,0.1);
+  border-radius: 3px; overflow: hidden; margin-bottom: 5px;
+}
+#cs-budget-fill {
+  height: 100%; background: var(--red); border-radius: 3px;
+  transition: width 0.22s ease;
+}
+#cs-budget {
+  font-size: 11px; letter-spacing: 0.1em; color: var(--dim);
+}
+#cs-budget.tight { color: #f90; }
+#cs-budget.over  { color: var(--red); }
 
 /* portrait: single-column body, single-column stats */
 @media (max-width: 600px) {

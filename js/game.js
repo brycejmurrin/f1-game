@@ -1520,13 +1520,25 @@ function renderStatBars(container, team) {
 function buildSetup() {
   const team = Teams.LIST[teamIdx];
   const parts = getTeamParts(team.id);
+  const spent = Parts.getCost(parts);
+  const remaining = Parts.BUDGET - spent;
 
   $("cs-team").textContent = team.name.toUpperCase();
+
+  // Budget bar
+  const budgetEl = $("cs-budget");
+  const budgetFill = $("cs-budget-fill");
+  if (budgetEl) {
+    budgetEl.textContent = "BUDGET: " + remaining + " / " + Parts.BUDGET + " cr remaining";
+    budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
+  }
+  if (budgetFill) {
+    budgetFill.style.width = Math.max(0, Math.min(100, (spent / Parts.BUDGET) * 100)) + "%";
+  }
 
   const body = $("cs-body");
   body.textContent = "";
 
-  // part categories — stats live on the select screen (pinned while open)
   for (const cat of Parts.CATALOG) {
     const section = document.createElement("div");
     section.className = "cs-cat-section";
@@ -1538,24 +1550,60 @@ function buildSetup() {
 
     const desc = document.createElement("div");
     desc.className = "cs-desc";
-    const cur = cat.options.find((o) => o.id === (parts[cat.id] || Parts.DEFAULTS[cat.id]));
-    desc.textContent = cur ? cur.desc : "";
+    const curId = parts[cat.id] || Parts.DEFAULTS[cat.id];
+    const curOpt = cat.options.find((o) => o.id === curId);
+    desc.textContent = curOpt ? curOpt.desc : "";
     section.appendChild(desc);
 
     const chips = document.createElement("div");
     chips.className = "cs-chips";
     for (const opt of cat.options) {
-      const active = (parts[cat.id] || Parts.DEFAULTS[cat.id]) === opt.id;
+      const active = curId === opt.id;
+      const curCost = curOpt ? (curOpt.cost || 0) : 0;
+      const costDelta = (opt.cost || 0) - curCost;
+      const wouldExceed = !active && (spent + costDelta > Parts.BUDGET);
+
       const chip = document.createElement("button");
-      chip.className = "cs-chip" + (active ? " active" : "");
-      chip.textContent = opt.label;
+      chip.className = "cs-chip" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "");
+
+      const labelSpan = document.createElement("span");
+      labelSpan.textContent = opt.label;
+      chip.appendChild(labelSpan);
+
+      if (opt.cost > 0) {
+        const badge = document.createElement("span");
+        badge.className = "cs-chip-cost";
+        badge.textContent = opt.cost + "cr";
+        chip.appendChild(badge);
+      }
+
+      chip.addEventListener("mouseenter", () => { desc.textContent = opt.desc; });
+      chip.addEventListener("focus",      () => { desc.textContent = opt.desc; });
+      chip.addEventListener("mouseleave", () => {
+        const sel = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
+        desc.textContent = sel ? sel.desc : "";
+      });
+      chip.addEventListener("blur", () => {
+        const sel = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
+        desc.textContent = sel ? sel.desc : "";
+      });
+
       chip.onclick = () => {
         const p = getTeamParts(team.id);
+        const co = cat.options.find((o) => o.id === (p[cat.id] || Parts.DEFAULTS[cat.id]));
+        const cc = co ? (co.cost || 0) : 0;
+        if ((Parts.getCost(p) - cc + (opt.cost || 0)) > Parts.BUDGET) {
+          chip.classList.add("budget-reject");
+          chip.addEventListener("animationend", () => chip.classList.remove("budget-reject"), { once: true });
+          if (soundOn) GameAudio.uiTick();
+          return;
+        }
         p[cat.id] = opt.id;
         saveTeamParts(team.id, p);
         if (soundOn) GameAudio.uiTick();
         buildSetup();
       };
+
       chips.appendChild(chip);
     }
     section.appendChild(chips);
