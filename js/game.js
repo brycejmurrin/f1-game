@@ -806,6 +806,14 @@ function resolveCollisions(ranked) {
     const wall = track.street ? smp.hw - 0.8 : smp.hw + 9;
     if (c.x > wall) c.x = wall; else if (c.x < -wall) c.x = -wall;
   }
+  // The player runs world-space physics; collisions just moved its (s, x), so
+  // feed that back into px/pz or the next frame's integration would overwrite the
+  // push (cars would slide through each other). Heading is unchanged by a bump.
+  if (player && player.px != null && !player.finished) {
+    Tracks.sample(track, player.s, smp);
+    player.px = smp.p[0] + smp.r[0] * player.x;
+    player.pz = smp.p[2] + smp.r[2] * player.x;
+  }
 }
 
 function updateCar(c, dt, ranked) {
@@ -1124,6 +1132,9 @@ function updateCar(c, dt, ranked) {
   const wall = track.street ? hw - 0.8 : hw + 9;
   if (Math.abs(c.x) > wall) {
     c.x = c.x > 0 ? wall : -wall;
+    // The barrier absorbs sideways momentum: kill the player's lateral slip so a
+    // drift into the wall doesn't keep grinding/bouncing the car back into it.
+    if (c.isPlayer && c.vLat) c.vLat = 0;
     if (track.street) {
       // First-frame contact: instant speed hit so the impact is felt immediately.
       if (!c.wasOnWall) c.speed *= 0.72;
@@ -2386,6 +2397,20 @@ window.__apex = {
     });
     cars.forEach((c) => { if (c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
     return ids;
+  },
+  // Place ONE AI rival relative to the player for driver-vs-AI collision tests:
+  // dProg metres ahead(+)/behind(−), dx metres to the right(+), matching the
+  // player's speed. All other AI are shoved away so only this pair interacts.
+  rival(dProg, dx) {
+    if (!player || !track) return false;
+    const ai = cars.find((c) => !c.isPlayer);
+    if (!ai) return false;
+    ai.prog = player.prog + (dProg || 0);
+    ai.s = wrapS(player.s + (dProg || 0));
+    ai.x = player.x + (dx || 0);
+    ai.xVis = ai.x; ai.speed = player.speed; ai.finished = false; ai.lap = player.lap;
+    cars.forEach((c) => { if (c !== ai && !c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return { rival: cars.indexOf(ai) };
   },
   // skip the countdown but keep the grid intact, so the field races and packs
   // up normally — for observing pack behaviour (e.g. collision vibration).
