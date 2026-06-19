@@ -57,14 +57,19 @@ const Input = (function () {
   let gyroDenied = false;
   // single source of truth for how the player steers: "tilt" | "buttons" | "touch"
   let steerMode = "tilt";
-  let tiltSmoothed = 0;       // EMA-filtered tilt (eliminates jitter spikes)
+  let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
   let lastOrientMs = 0;
-  // Slew-rate limit on the tilt steering OUTPUT: caps how fast the steering
-  // command can change, so a quick or jittery hand movement can't snap the car.
-  // (Recommended technique for tilt controls: a hard limit on turn rate.)
-  let TILT_SLEW = 2.2;        // max steer-units/s of change from tilt
-  let tiltSteerVal = 0;       // current rate-limited tilt steer (-1..1)
-  let tiltSteerT = 0;         // last slew timestamp, ms (0 = unset)
+  // One-Euro adaptive low-pass filter (Casiez, Roussel & Vogel 2012) on the tilt
+  // roll angle. The cutoff frequency RISES with how fast the angle is changing:
+  // when the hand is still it filters hard (kills jitter on straights), when the
+  // hand moves fast it barely filters (no lag mid-corner). This replaces the old
+  // fixed EMA + slew-rate limiter, which had to trade one for the other.
+  //   minCutoff : Hz at rest — lower = smoother/steadier (the SMOOTHING slider)
+  //   beta      : how much the cutoff opens up with speed — higher = more responsive
+  let OE_MIN_CUTOFF = 1.2;    // Hz
+  let OE_BETA = 0.05;
+  const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
+  let oePrev = 0, oeDPrev = 0, oeInit = false;
 
   let onPauseCb = null;
 
@@ -75,6 +80,23 @@ const Input = (function () {
 
   function clamp(v, lo, hi) {
     return v < lo ? lo : v > hi ? hi : v;
+  }
+
+  // One-Euro filter: smoothing factor for a given cutoff frequency and timestep.
+  function oeAlpha(cutoff, dt) {
+    const r = 2 * Math.PI * cutoff * dt;
+    return r / (r + 1);
+  }
+  // Filter a raw angle sample (deg) given the elapsed time (s). Adaptive: heavy
+  // smoothing when slow, light when fast — the standard fix for "jittery vs laggy".
+  function oneEuro(x, dt) {
+    if (!oeInit || dt <= 0) { oePrev = x; oeDPrev = 0; oeInit = true; return x; }
+    const dx = (x - oePrev) / dt;                       // raw rate of change
+    const dxHat = oeDPrev + oeAlpha(OE_DCUTOFF, dt) * (dx - oeDPrev);
+    const cutoff = OE_MIN_CUTOFF + OE_BETA * Math.abs(dxHat);
+    const xHat = oePrev + oeAlpha(cutoff, dt) * (x - oePrev);
+    oePrev = xHat; oeDPrev = dxHat;
+    return xHat;
   }
 
   /* ---------------- tilt ---------------- */
@@ -114,7 +136,7 @@ const Input = (function () {
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
     lastOrientMs = n;
-    tiltSmoothed += (tiltRaw - tiltSmoothed) * (1 - Math.exp(-8 * odt));
+    tiltSmoothed = oneEuro(tiltRaw, odt);
     tiltSeen = true;
   }
 
