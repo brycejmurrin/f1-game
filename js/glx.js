@@ -379,11 +379,36 @@ in vec2 vUV;
 uniform sampler2D uScene;
 uniform sampler2D uBloom;
 uniform float uBloomAmt;
+uniform vec2 uSunUV;
+uniform float uFlareStr;
 out vec4 outColor;
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
   c += texture(uBloom, vUV).rgb * uBloomAmt;
   c = c / (1.0 + max(c - vec3(0.8), vec3(0.0)));
+
+  // Lens flare: anamorphic streak + ghost circles
+  vec3 flare = vec3(0.0);
+  if (uFlareStr > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 &&
+      uSunUV.y >= 0.0 && uSunUV.y <= 1.0) {
+    // Anamorphic horizontal streak
+    float streakY = exp(-abs(vUV.y - uSunUV.y) * 120.0);
+    float streakX = exp(-abs(vUV.x - uSunUV.x) * 1.8);
+    flare += vec3(0.55, 0.72, 1.0) * streakY * streakX * 0.9;
+
+    // Lens ghost circles along sun-to-center axis
+    vec2 toCenter = vec2(0.5) - uSunUV;
+    float d0 = length(vUV - (uSunUV + toCenter * 0.5));
+    flare += vec3(1.0, 0.88, 0.65) * smoothstep(0.055, 0.020, d0) * 0.45;
+    float d1 = length(vUV - (uSunUV + toCenter * 1.3));
+    flare += vec3(0.70, 0.60, 1.00) * smoothstep(0.038, 0.012, d1) * 0.35;
+    float d2 = length(vUV - (uSunUV + toCenter * 1.8));
+    flare += vec3(0.50, 1.00, 0.70) * smoothstep(0.028, 0.008, d2) * 0.25;
+
+    flare = min(flare * uFlareStr, vec3(1.2));
+  }
+  c += flare;
+
   vec2 q = vUV - 0.5;
   float vig = smoothstep(0.95, 0.35, length(q));
   c *= mix(0.86, 1.0, vig);
@@ -410,6 +435,7 @@ void main() {}`;
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
   let frameViewProj = null;
+  let frameSunDir = null;
 
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
@@ -477,7 +503,7 @@ void main() {}`;
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt", "uSunUV", "uFlareStr"]);
     return true;
   }
 
@@ -657,6 +683,7 @@ void main() {}`;
 
   function begin(frame) {
     frameViewProj = frame.viewProj;
+    frameSunDir = frame.sunDir;
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer.
     if (postEnabled) {
@@ -807,6 +834,22 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
     gl.uniform1i(compU.uBloom, 1);
     gl.uniform1f(compU.uBloomAmt, bloomAmt);
+    // Project sun direction to screen UV for lens flare
+    let sunUV = [-2, -2], flareStr = 0;
+    if (frameSunDir && frameViewProj) {
+      const s = frameSunDir;
+      // Treat sun as infinitely distant: clip pos = VP * (sunDir, 0)
+      const vp = frameViewProj;
+      const cx = vp[0]*s[0] + vp[4]*s[1] + vp[8]*s[2];
+      const cy = vp[1]*s[0] + vp[5]*s[1] + vp[9]*s[2];
+      const cw = vp[3]*s[0] + vp[7]*s[1] + vp[11]*s[2];
+      if (cw > 0) {
+        sunUV = [cx / cw * 0.5 + 0.5, cy / cw * 0.5 + 0.5];
+        flareStr = Math.max(s[1], 0) * 0.65;
+      }
+    }
+    gl.uniform2fv(compU.uSunUV, sunUV);
+    gl.uniform1f(compU.uFlareStr, flareStr);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     gl.bindVertexArray(null);
