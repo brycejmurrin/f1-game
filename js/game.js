@@ -1020,6 +1020,11 @@ function updateCar(c, dt, ranked) {
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * gripMult() * dt;
+  // Centrifugal drift (player only): the Frenet frame rotates with the track,
+  // so without inward steering the car slides to the outside of every corner.
+  // Scale 0.28 → ~15–25% lock needed to hold a typical corner; fast sweeps
+  // require ~30% lock; exceeding corner speed drifts the car visibly wide.
+  if (c.isPlayer) c.x -= k * c.speed * c.speed * 0.28 * dt;
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
