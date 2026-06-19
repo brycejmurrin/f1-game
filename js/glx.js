@@ -725,6 +725,7 @@ void main() {}`;
   }
 
   function draw(mesh, modelMat, opts) {
+    gl.useProgram(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
