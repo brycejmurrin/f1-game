@@ -114,8 +114,8 @@
         addBox(out, vadd(a.c, a.u, 1.4), [4.1, 0.5, 11.1], (i % 2) ? SPANGLE : WINTEAL); // deck running lights
         addCyl(out, vadd(a.c, a.u, 2.6), 0.2, 14, [0.85, 0.86, 0.9], 4, b); // mast spike
       }
-      place(K(0.45), 1, 16, [30, 3, 10], [0.24, 0.25, 0.28]);         // yacht club building
-      place(K(0.45), 1, 16, [30.4, 0.7, 10.5], WINWARM);
+      place(K(0.45), 1, 17, [30, 3, 10], [0.24, 0.25, 0.28]);         // yacht club building
+      place(K(0.45), 1, 17, [30.4, 0.7, 10.5], WINWARM);
       place(K(0.47), 1, 16, [24, 4, 9], [0.22, 0.23, 0.27]);          // marina office annex
       place(K(0.47), 1, 16, [24.4, 0.8, 9.5], WINCOOL);
 
@@ -144,7 +144,7 @@
       // --- s 0.80 both near: tight technical sector — bright sawtooth kerb strips ---
       for (const side of [-1, 1]) {
         for (let i = 0; i < 6; i++) {
-          place(K(0.78 + i * 0.006), side, 0.4, [6, 0.3, 3], (i % 2) ? [0.9, 0.1, 0.1] : [0.95, 0.95, 0.95]);
+          place(K(0.78 + i * 0.006), side, 5, [6, 0.3, 3], (i % 2) ? [0.9, 0.1, 0.1] : [0.95, 0.95, 0.95]);
         }
       }
 

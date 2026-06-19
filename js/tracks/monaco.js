@@ -42,7 +42,7 @@
       // right rail lines the inland climb (Casino/Fairmont) where there's no
       // harbour edge; the marina side reads off the quay walls + railing below.
       wall(0.0, 0.48, 1, 0.4, 0.8, ARMCO, 0.22);
-      guardrail(0.02, 0.07, -1, 0.4, ARMCO);   // Sainte Devote accent
+      guardrail(0.02, 0.07, -1, 0.5, ARMCO);   // Sainte Devote accent
 
       // ---- CONTINUOUS HILLSIDE CITY (lap-long inland backdrop) ----------------
       // Monte Carlo is a packed urban mass climbing the rock behind the track.

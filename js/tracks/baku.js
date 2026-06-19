@@ -64,8 +64,8 @@
       // ===================================================================
       {
         const k = K(0.0);
-        place(k, 1, 24, [64, 30, 30], SAND);
-        place(k, 1, 24, [66, 6, 32], SAND_LIT);                 // warm uplit base band
+        place(k, 1, 34, [64, 30, 30], SAND);
+        place(k, 1, 36, [66, 6, 32], SAND_LIT);                 // warm uplit base band
         for (const o of [-22, 22]) {                            // twin corner towers
           const a = anchor(k, 1, 24);
           const c = vadd(a.c, a.t, o);

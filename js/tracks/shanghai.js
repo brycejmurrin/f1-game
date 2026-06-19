@@ -70,7 +70,7 @@
       wall(0.965, 0.05, 1, 3, 1.1, WHITE);
       place(K(0.99), 1, 5, [5, 2.4, 40], CONC);   // low garage box bank
       place(K(0.99), 1, 5, [5, 0.6, 40], RED); // red edge cap
-      billboard(K(0.02), 1, 7, 16, 4.5, RED);
+      billboard(K(0.02), 1, 9, 16, 4.5, RED);
 
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
       grandstand(0.04, -1, 18, 130, [0.44, 0.45, 0.50], SEAT);
