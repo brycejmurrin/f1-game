@@ -144,8 +144,8 @@ const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
 // STEER_EXPO shapes the input: >1 = gentle near centre (fine, non-twitchy
 // corrections) while keeping full authority at the stops. STEER_MAX_SLIP caps
 // the heading offset (tyre slip-angle limit, ~28°).
-const STEER_RATE = 2.8;
-const STEER_EXPO = 1.7;
+const STEER_RATE = 2.6;
+const STEER_EXPO = 2.4;     // higher = much gentler near centre (calmer steering)
 const STEER_MAX_SLIP = 0.5;
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy

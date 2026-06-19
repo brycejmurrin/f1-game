@@ -129,10 +129,10 @@ test.describe("Apex 26 — steering", () => {
     const aFull = Math.abs(full.after.angle - full.before.angle);
     const aHalf = Math.abs(half.after.angle - half.before.angle);
     expect(aFull).toBeGreaterThan(0.05);
-    // STEER_EXPO = 1.7 → half stick ≈ 0.5^1.7 ≈ 0.31 of the turn rate: clearly
-    // gentle near centre. Allow margin: between 12 % and 45 % of full.
-    expect(aHalf).toBeLessThan(aFull * 0.45);
-    expect(aHalf).toBeGreaterThan(aFull * 0.12);
+    // STEER_EXPO = 2.4 → half stick ≈ 0.5^2.4 ≈ 0.19 of the turn rate: very
+    // gentle near centre. Allow margin: between 8 % and 35 % of full.
+    expect(aHalf).toBeLessThan(aFull * 0.35);
+    expect(aHalf).toBeGreaterThan(aFull * 0.08);
   });
 
   test("straight tracking: no input keeps the car on its line", async ({ page }) => {
