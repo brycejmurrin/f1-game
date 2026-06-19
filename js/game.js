@@ -2118,6 +2118,23 @@ window.__apex = {
       speed: player.speed, s: player.s,
     };
   },
+  // Phase-1 migration check: take a track point (s, lateral), build its world
+  // position the same way the renderer/physics do (centre + right*lateral), then
+  // project that world point back with Tracks.project and report both, so a test
+  // can verify the world<->(s,x) round-trip before we move physics to world space.
+  projTest(frac, lateral) {
+    if (!track) return null;
+    const s = wrapS((frac || 0) * track.total);
+    const lat = lateral || 0;
+    Tracks.sample(track, s, smp);
+    const wx = smp.p[0] + smp.r[0] * lat;
+    const wz = smp.p[2] + smp.r[2] * lat;
+    const p = Tracks.project(track, wx, wz, s);
+    let ds = p.s - s; const L = track.total;
+    while (ds > L / 2) ds -= L; while (ds < -L / 2) ds += L;   // signed wrap
+    return { s, lat, world: [wx, wz], got: { s: p.s, lat: p.lat, dist: p.dist },
+             err: { s: ds, lat: p.lat - lat } };
+  },
   // Debug free camera for surveying track layouts/scenery — look at anything.
   // Call with no args (or "chase") to restore the chase cam. Option forms:
   //   {}                                       aerial of the whole track

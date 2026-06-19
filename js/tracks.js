@@ -1446,5 +1446,50 @@ const Tracks = (function () {
     return def;
   });
 
-  return { LIST, build, sample, curvature, onKerb, banking };
+  // ---------- world -> track projection ----------
+  // Project a world ground point (wx, wz) onto the centreline polyline and return
+  // its arc-length s, signed lateral offset (along the local `right`, matching the
+  // (s,x) model's x), the nearest node index, the tangent heading, and the
+  // perpendicular distance. This is the inverse of sample()+offset and the bridge
+  // that lets the car physics live in world space while gameplay still reasons in
+  // (s, lateral). `hint` (an arc-length s from last frame) restricts the search to
+  // a small window of segments so it's O(1) per car; omit it for a full search.
+  function project(track, wx, wz, hint) {
+    const n = track.n, L = track.total, ds = L / n;
+    const px = track.px, pz = track.pz, rx = track.rx, rz = track.rz, tx = track.tx, tz = track.tz;
+    let bestD2 = Infinity, bestK = 0, bestT = 0, bestCx = 0, bestCz = 0;
+    function evalSeg(i) {
+      const j = (i + 1) % n;
+      const ax = px[i], az = pz[i];
+      const dx = px[j] - ax, dz = pz[j] - az;
+      const len2 = dx * dx + dz * dz || 1e-6;
+      let t = ((wx - ax) * dx + (wz - az) * dz) / len2;
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+      const cx = ax + t * dx, cz = az + t * dz;
+      const ex = wx - cx, ez = wz - cz;
+      const d2 = ex * ex + ez * ez;
+      if (d2 < bestD2) { bestD2 = d2; bestK = i; bestT = t; bestCx = cx; bestCz = cz; }
+    }
+    if (hint != null && isFinite(hint)) {
+      const h = ((Math.round(hint / ds) % n) + n) % n;
+      const W = 16;                       // ±16 nodes (~128 m) around last position
+      for (let d = -W; d <= W; d++) evalSeg(((h + d) % n + n) % n);
+    } else {
+      for (let i = 0; i < n; i++) evalSeg(i);
+    }
+    const j = (bestK + 1) % n;
+    const s = ((bestK + bestT) * ds) % L;
+    // signed lateral offset along the interpolated right vector (ground plane)
+    let r0 = rx[bestK] + (rx[j] - rx[bestK]) * bestT;
+    let r2 = rz[bestK] + (rz[j] - rz[bestK]) * bestT;
+    const rl = Math.hypot(r0, r2) || 1; r0 /= rl; r2 /= rl;
+    const lat = (wx - bestCx) * r0 + (wz - bestCz) * r2;
+    // tangent heading (same convention as centreline: dir = (sin θ, cos θ))
+    const h0 = tx[bestK] + (tx[j] - tx[bestK]) * bestT;
+    const h2 = tz[bestK] + (tz[j] - tz[bestK]) * bestT;
+    const heading = Math.atan2(h0, h2);
+    return { s, lat, k: bestK, heading, dist: Math.sqrt(bestD2) };
+  }
+
+  return { LIST, build, sample, curvature, onKerb, banking, project };
 })();
