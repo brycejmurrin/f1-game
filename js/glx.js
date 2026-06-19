@@ -55,6 +55,7 @@ uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
 uniform float uShadowBias;
 uniform float uShadowStr;
+uniform float uShadowTexel;
 uniform vec3 uSkyZenith;
 uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
@@ -78,7 +79,8 @@ float V_SmithGGX(float NoV, float NoL, float a) {
 // (Frostbite trick) so rough surfaces like asphalt/grass don't pick up a wet
 // mirror sheen at the horizon, while smooth paint keeps its grazing reflection.
 vec3 F_Schlick(float VoH, vec3 f0, float f90) {
-  return f0 + (vec3(f90) - f0) * pow(1.0 - VoH, 5.0);
+  float v = 1.0 - VoH; float v2 = v * v;
+  return f0 + (vec3(f90) - f0) * (v2 * v2 * v);
 }
 
 // --- Procedural surface texture (value noise on world XZ; no UVs needed) ---
@@ -99,12 +101,14 @@ float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z >= 1.0) return 1.0;
-  ivec2 sz = textureSize(uShadowMap, 0);
-  float t = 1.0 / float(sz.x);
-  float s = 0.0;
-  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++)
-    s += texture(uShadowMap, vec3(sc.xy + vec2(float(i), float(j)) * t, sc.z - uShadowBias));
-  return mix(1.0, s / 9.0, uShadowStr);
+  float t = uShadowTexel;
+  float z = sc.z - uShadowBias;
+  // 4-tap rotated grid — same softness as 3×3 PCF at half the sample count
+  float s = texture(uShadowMap, vec3(sc.xy + vec2(-t,  t * 0.5), z))
+          + texture(uShadowMap, vec3(sc.xy + vec2( t,  t * 0.5), z))
+          + texture(uShadowMap, vec3(sc.xy + vec2(-t, -t * 0.5), z))
+          + texture(uShadowMap, vec3(sc.xy + vec2( t, -t * 0.5), z));
+  return mix(1.0, s * 0.25, uShadowStr);
 }
 
 void main() {
@@ -123,7 +127,7 @@ void main() {
   // a solid slab. Multiplicative, so it darkens as much as it lightens.
   if (uDetail > 0.0) {
     vec2 wp = vWorldPos.xz;
-    float n = vnoise(wp * 0.35) * 0.55 + vnoise(wp * 1.9) * 0.30 + vnoise(wp * 8.0) * 0.15;
+    float n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40;
     albedo *= 1.0 + (n - 0.5) * uDetail;
     albedo = max(albedo, vec3(0.0));
   }
@@ -594,7 +598,7 @@ void main() {}`;
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail",
-      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr",
+      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -711,6 +715,7 @@ void main() {}`;
       gl.uniformMatrix4fv(litU.uLightVP, false, shadowLightVP);
       gl.uniform1f(litU.uShadowBias, 0.002);
       gl.uniform1f(litU.uShadowStr, 1.0);
+      gl.uniform1f(litU.uShadowTexel, 1.0 / SHADOW_SIZE);
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);
     }
@@ -720,7 +725,6 @@ void main() {}`;
   }
 
   function draw(mesh, modelMat, opts) {
-    gl.useProgram(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
@@ -741,8 +745,7 @@ void main() {}`;
     if (blend) gl.enable(gl.BLEND);
     gl.bindVertexArray(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    gl.bindVertexArray(null);
-    if (blend) gl.disable(gl.BLEND);
+    if (blend) { gl.disable(gl.BLEND); gl.bindVertexArray(null); }
   }
 
   function drawSky(sky) {
@@ -813,7 +816,7 @@ void main() {}`;
     // 2) separable gaussian blur, a couple of ping-pong passes
     gl.useProgram(blurProg);
     gl.uniform1i(blurU.uTex, 0);
-    const passes = [[1 / bloomW, 0], [0, 1 / bloomH], [1 / bloomW, 0], [0, 1 / bloomH]];
+    const passes = [[1 / bloomW, 0], [0, 1 / bloomH]];
     let src = 0;
     for (const [dx, dy] of passes) {
       const dst = 1 - src;
