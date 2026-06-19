@@ -47,16 +47,18 @@
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       // two overlapping rings of low green rises — dense enough to read as a wall
-      for (const [extra, count, wMin, hMin, col] of [
-        [300, 30, 150, 22, [0.24, 0.40, 0.24]],
-        [400, 26, 190, 26, [0.21, 0.36, 0.22]],
+      for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
+        [270, 42, 180, 20, 14, [0.22, 0.40, 0.22], [0.28, 0.44, 0.26]],
+        [370, 36, 220, 24, 14, [0.18, 0.36, 0.20], [0.24, 0.40, 0.24]],
+        [470, 30, 260, 28, 16, [0.16, 0.32, 0.18], [0.22, 0.38, 0.22]],
       ]) {
         const ring = rad + extra;
+        const span = 2 * Math.PI * ring / count;
         for (let i = 0; i < count; i++) {
-          const a = (i / count + hash(i + extra) * 0.06) * 6.2832, h = hash(i * 7 + extra);
+          const a = (i / count + hash(i + extra) * 0.05) * 6.2832, h = hash(i * 7 + extra);
           mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                   wMin + h * 110, hMin + h * 12, { snowline: 2, forest: 0.6,
-                   col, rock: [0.30, 0.44, 0.28] });
+                   Math.max(wMin + h * 120, span * 1.5), hMin + h * hVar,
+                   { snowline: 2, seg: 7, seed: i * 13 + extra, forest: fc, rock: rc });
         }
       }
 
