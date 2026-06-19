@@ -796,15 +796,20 @@ const Tracks = (function () {
              [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
     }
     // True if (x,z) lies on (or within `margin` of) the tarmac of ANY track
-    // station. Used to stop props being dropped onto a *parallel* section of the
-    // circuit — e.g. a tree placed perpendicular to one point landing on the
-    // road at a hairpin or where two straights run close together (COTA,
-    // Suzuka's crossover, etc.).
+    // segment. Uses segment lateral distance (closest point on centerline →
+    // perpendicular distance) rather than per-node circles, so hairpin interiors
+    // don't create false-positive blobs that swallow outside-of-corner scenery.
     const onTrack = (x, z, margin) => {
       for (let i = 0; i < n; i++) {
-        const dx = x - px[i], dz = z - pz[i];
-        const rr = hw[i] + margin;
-        if (dx * dx + dz * dz < rr * rr) return true;
+        const j = (i + 1) % n;
+        const dx = px[j] - px[i], dz = pz[j] - pz[i];
+        const len2 = dx * dx + dz * dz;
+        if (len2 < 0.01) continue;
+        const t = Math.max(0, Math.min(1, ((x - px[i]) * dx + (z - pz[i]) * dz) / len2));
+        const cx = px[i] + t * dx, cz = pz[i] + t * dz;
+        const lat = Math.hypot(x - cx, z - cz);
+        const hwt = hw[i] + (hw[j] - hw[i]) * t;
+        if (lat < hwt + margin) return true;
       }
       return false;
     };
