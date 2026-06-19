@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=47">
-<link rel="stylesheet" href="css/data.css?v=47">
+<link rel="stylesheet" href="css/style.css?v=54">
+<link rel="stylesheet" href="css/data.css?v=54">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -90,7 +90,7 @@
 <!-- select screen -->
 <div id="select" hidden>
   <h2 id="select-title">SELECT</h2>
-  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><button id="sel-customize" class="sel-edit">&#9998; CUSTOMIZE MY TEAM</button></div>
+  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><div id="sel-stats" class="cs-stats"></div><div class="sel-edit-row"><button id="sel-customize" class="sel-edit">&#9998; MY TEAM</button><button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button></div></div>
   <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-tracks"></div></div>
   <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
   <div class="sel-actions">
@@ -126,6 +126,16 @@
   </div>
 </div>
 
+<!-- car setup -->
+<div id="carsetup" class="panel" hidden>
+  <h2>CAR SETUP</h2>
+  <div id="cs-team"></div>
+  <div id="cs-body"></div>
+  <div class="sel-actions" style="margin-top:18px">
+    <button id="cs-done" class="bigbtn">DONE</button>
+  </div>
+</div>
+
 <!-- how to play -->
 <div id="howtoplay" hidden>
   <div id="howtoplay-inner" class="panel">
@@ -152,16 +162,17 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=47"></script>
-<script src="js/glx.js?v=47"></script>
-<script src="js/teams.js?v=47"></script>
-<script src="js/circuits.js?v=47"></script>
-<script src="js/tracks.js?v=47"></script>
-<script src="js/car3d.js?v=47"></script>
-<script src="js/input.js?v=47"></script>
-<script src="js/audio.js?v=47"></script>
-<script src="js/api.js?v=47"></script>
-<script src="js/data.js?v=47"></script>
-<script src="js/game.js?v=47"></script>
+<script src="js/mat4.js?v=54"></script>
+<script src="js/glx.js?v=54"></script>
+<script src="js/teams.js?v=54"></script>
+<script src="js/circuits.js?v=54"></script>
+<script src="js/tracks.js?v=54"></script>
+<script src="js/car3d.js?v=54"></script>
+<script src="js/input.js?v=54"></script>
+<script src="js/audio.js?v=54"></script>
+<script src="js/api.js?v=54"></script>
+<script src="js/data.js?v=54"></script>
+<script src="js/parts.js?v=54"></script>
+<script src="js/game.js?v=54"></script>
 </body>
 </html>
