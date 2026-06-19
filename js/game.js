@@ -122,11 +122,10 @@ let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "button
 // Manual gears require both thumbs free, which only tilt steering allows. In
 // touch/button modes the thumbs steer, so gears are forced to auto.
 function gearsManual() { return manualMode && steerMode === "tilt"; }
-// Auto-throttle is purely a steering-mode thing: in touch/button modes the
-// thumbs steer, so the car accelerates on its own (like the AI) and the GAS
-// pedal is hidden. Tilt always keeps the manual GAS pedal (a thumb is free),
-// and desktop always keeps the keyboard throttle.
-function autoThrottle() { return Input.touchControlsNeeded() && steerMode !== "tilt"; }
+// Auto-throttle: enabled in touch/button steering modes (thumbs are occupied)
+// unless the player has opted into manual mode, in which case they always drive
+// the throttle themselves regardless of steering mode.
+function autoThrottle() { return !manualMode && Input.touchControlsNeeded() && steerMode !== "tilt"; }
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
