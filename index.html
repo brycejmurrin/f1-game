@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=72">
-<link rel="stylesheet" href="css/data.css?v=72">
+<link rel="stylesheet" href="css/style.css?v=73">
+<link rel="stylesheet" href="css/data.css?v=73">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -252,6 +252,23 @@
         <input id="pm-lock" type="range" min="1" max="10" step="1" value="5"></label>
       <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
     </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
+        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">SLIDE <b id="pm-slide-v">3</b></span>
+        <input id="pm-slide" type="range" min="1" max="10" step="1" value="3"></label>
+      <p class="adv-help">Rear grip / slide. Low = planted and grippy (on rails); higher = the car slides and runs wide when you push a corner. Pure feel.</p>
+    </div>
+
+    <h3 class="adv-sec">RACE <span>affects the whole field</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">5</b></span>
+        <input id="pm-pace" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">Pace of the entire field &mdash; you and the AI together. Higher = everyone faster (more accel + top speed); lower = calmer. Racing stays competitive.</p>
+    </div>
 
     <h3 class="adv-sec">DRIVER AID</h3>
     <div class="adv-item">
@@ -269,43 +286,43 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=72"></script>
-<script src="js/glx.js?v=72"></script>
-<script src="js/gltf.js?v=72"></script>
-<script src="js/teams.js?v=72"></script>
-<script src="js/circuits.js?v=72"></script>
+<script src="js/mat4.js?v=73"></script>
+<script src="js/glx.js?v=73"></script>
+<script src="js/gltf.js?v=73"></script>
+<script src="js/teams.js?v=73"></script>
+<script src="js/circuits.js?v=73"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=72"></script>
-<script src="js/tracks/monaco.js?v=72"></script>
-<script src="js/tracks/silverstone.js?v=72"></script>
-<script src="js/tracks/spa.js?v=72"></script>
-<script src="js/tracks/monza.js?v=72"></script>
-<script src="js/tracks/suzuka.js?v=72"></script>
-<script src="js/tracks/singapore.js?v=72"></script>
-<script src="js/tracks/cota.js?v=72"></script>
-<script src="js/tracks/interlagos.js?v=72"></script>
-<script src="js/tracks/vegas.js?v=72"></script>
-<script src="js/tracks/madrid.js?v=72"></script>
-<script src="js/tracks/zandvoort.js?v=72"></script>
-<script src="js/tracks/jeddah.js?v=72"></script>
-<script src="js/tracks/albert_park.js?v=72"></script>
-<script src="js/tracks/shanghai.js?v=72"></script>
-<script src="js/tracks/miami.js?v=72"></script>
-<script src="js/tracks/imola.js?v=72"></script>
-<script src="js/tracks/montreal.js?v=72"></script>
-<script src="js/tracks/redbull.js?v=72"></script>
-<script src="js/tracks/hungaroring.js?v=72"></script>
-<script src="js/tracks/baku.js?v=72"></script>
-<script src="js/tracks/mexico.js?v=72"></script>
-<script src="js/tracks/qatar.js?v=72"></script>
-<script src="js/tracks/abudhabi.js?v=72"></script>
-<script src="js/tracks.js?v=72"></script>
-<script src="js/car3d.js?v=72"></script>
-<script src="js/input.js?v=72"></script>
-<script src="js/audio.js?v=72"></script>
-<script src="js/api.js?v=72"></script>
-<script src="js/data.js?v=72"></script>
-<script src="js/parts.js?v=72"></script>
-<script src="js/game.js?v=72"></script>
+<script src="js/tracks/bahrain.js?v=73"></script>
+<script src="js/tracks/monaco.js?v=73"></script>
+<script src="js/tracks/silverstone.js?v=73"></script>
+<script src="js/tracks/spa.js?v=73"></script>
+<script src="js/tracks/monza.js?v=73"></script>
+<script src="js/tracks/suzuka.js?v=73"></script>
+<script src="js/tracks/singapore.js?v=73"></script>
+<script src="js/tracks/cota.js?v=73"></script>
+<script src="js/tracks/interlagos.js?v=73"></script>
+<script src="js/tracks/vegas.js?v=73"></script>
+<script src="js/tracks/madrid.js?v=73"></script>
+<script src="js/tracks/zandvoort.js?v=73"></script>
+<script src="js/tracks/jeddah.js?v=73"></script>
+<script src="js/tracks/albert_park.js?v=73"></script>
+<script src="js/tracks/shanghai.js?v=73"></script>
+<script src="js/tracks/miami.js?v=73"></script>
+<script src="js/tracks/imola.js?v=73"></script>
+<script src="js/tracks/montreal.js?v=73"></script>
+<script src="js/tracks/redbull.js?v=73"></script>
+<script src="js/tracks/hungaroring.js?v=73"></script>
+<script src="js/tracks/baku.js?v=73"></script>
+<script src="js/tracks/mexico.js?v=73"></script>
+<script src="js/tracks/qatar.js?v=73"></script>
+<script src="js/tracks/abudhabi.js?v=73"></script>
+<script src="js/tracks.js?v=73"></script>
+<script src="js/car3d.js?v=73"></script>
+<script src="js/input.js?v=73"></script>
+<script src="js/audio.js?v=73"></script>
+<script src="js/api.js?v=73"></script>
+<script src="js/data.js?v=73"></script>
+<script src="js/parts.js?v=73"></script>
+<script src="js/game.js?v=73"></script>
 </body>
 </html>
