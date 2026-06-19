@@ -144,9 +144,11 @@ const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
 // STEER_EXPO shapes the input: >1 = gentle near centre (fine, non-twitchy
 // corrections) while keeping full authority at the stops. STEER_MAX_SLIP caps
 // the heading offset (tyre slip-angle limit, ~28°).
-const STEER_RATE = 2.6;
-const STEER_EXPO = 2.4;     // higher = much gentler near centre (calmer steering)
-const STEER_MAX_SLIP = 0.5;
+// These three are tuned live by the pause-menu sliders (RESPONSE / LINEARITY /
+// STEER LOCK), so they're `let`, not `const`. applySteerTuning() sets them.
+let STEER_RATE = 2.6;       // rad/s of heading rotation at full lock (snappiness)
+let STEER_EXPO = 2.4;       // input shaping: higher = much gentler near centre
+let STEER_MAX_SLIP = 0.5;   // max heading offset / slip-angle limit (steer lock)
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -1934,44 +1936,80 @@ $("pm-steer").onclick = () => {
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 
 // ---- steering tuning sliders (pause menu) ----
-// pm-sens  (1..10): TILT STRENGTH — v/10 applied as a direct multiplier to the
-//   tilt steer output AFTER reading Input.steer(). 1 = barely turns, 10 = full
-//   authority. Default 7 (70% of max). This is the most perceptible dial.
-// pm-tiltdeg (1..10): TILT RANGE — degrees of phone tilt needed for full lock.
-//   1 = narrow (small tilt gives full lock), 10 = wide (big tilt needed).
-//   Maps to MAX_TILT 50..18 deg via Input.setTiltSensitivity().
-// pm-smooth (1..10): STEER SMOOTHING — slew-rate cap on the tilt output.
-//   Higher = slower/smoother. Maps to TILT_SLEW 5..1 steer-units/s.
-// pm-line (-5..5): RACING LINE assist. 0=off, +5=pull to line, -5=push wide.
+// Every slider is an integer 1..10 (racing line is -5..5) that maps to a
+// physical value. Each maps so the DEFAULT value reproduces the original
+// hand-tuned feel. Higher slider = the direction named in the label.
+//
+//  pm-sens     TILT STRENGTH  output multiplier on tilt steer (v/10). Most felt.
+//  pm-rate     RESPONSE       STEER_RATE rad/s — how fast/snappy it turns.
+//  pm-expo     LINEARITY      STEER_EXPO — high slider = more linear/direct,
+//                             low = gentle near centre. (affects tilt + keys)
+//  pm-smooth   STEER SMOOTHING TILT_SLEW — higher = slower, smoother changes.
+//  pm-dz       DEAD ZONE      degrees of tilt ignored around neutral.
+//  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock.
+//  pm-lock     STEER LOCK     STEER_MAX_SLIP — max heading/turn angle.
+//  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
 function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
-function slewFromSmooth(v) { return 5 + (1 - 5) * (v - 1) / 9; }
+function slewFromSmooth(v)   { return 5 + (1 - 5) * (v - 1) / 9; }     // 5..1
+function rateFromSlider(v)   { return 1.4 + (4.0 - 1.4) * (v - 1) / 9; } // 1.4..4.0
+function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
+function lockFromSlider(v)   { return 0.30 + (0.70 - 0.30) * (v - 1) / 9; } // .3..0.7
+function dzFromSlider(v)     { return (v - 1) * 0.8; }                  // 0..7.2 deg
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
 
 function applySteerTuning() {
   const sens    = store.get("tiltSens",   7);
-  const tiltdeg = store.get("tiltDeg",    5);
+  const rate    = store.get("steerRate",  5);
+  const expo    = store.get("steerExpo",  5);
   const smooth  = store.get("steerSmooth", 6);
+  const dz      = store.get("tiltDz",     4);
+  const tiltdeg = store.get("tiltDeg",    5);
+  const lock    = store.get("steerLock",  5);
   const line    = store.get("raceLine",   0);
   tiltOutputScale = sens / 10;
-  Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
+  STEER_RATE     = rateFromSlider(rate);
+  STEER_EXPO     = expoFromSlider(expo);
+  STEER_MAX_SLIP = lockFromSlider(lock);
   Input.setTiltSmoothing(slewFromSmooth(smooth));
+  Input.setTiltDeadzone(dzFromSlider(dz));
+  Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
   raceLineAssist = line / 5;
   $("pm-sens").value    = sens;    $("pm-sens-v").textContent    = sens;
-  $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
+  $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
+  $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
   $("pm-smooth").value  = smooth;  $("pm-smooth-v").textContent  = smooth;
+  $("pm-dz").value      = dz;      $("pm-dz-v").textContent      = dz;
+  $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
+  $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
 }
 $("pm-sens").oninput = (e) => {
   const v = +e.target.value; store.set("tiltSens", v);
   tiltOutputScale = v / 10; $("pm-sens-v").textContent = v;
 };
-$("pm-tiltdeg").oninput = (e) => {
-  const v = +e.target.value; store.set("tiltDeg", v);
-  Input.setTiltSensitivity(tiltDegFromRange(v)); $("pm-tiltdeg-v").textContent = v;
+$("pm-rate").oninput = (e) => {
+  const v = +e.target.value; store.set("steerRate", v);
+  STEER_RATE = rateFromSlider(v); $("pm-rate-v").textContent = v;
+};
+$("pm-expo").oninput = (e) => {
+  const v = +e.target.value; store.set("steerExpo", v);
+  STEER_EXPO = expoFromSlider(v); $("pm-expo-v").textContent = v;
 };
 $("pm-smooth").oninput = (e) => {
   const v = +e.target.value; store.set("steerSmooth", v);
   Input.setTiltSmoothing(slewFromSmooth(v)); $("pm-smooth-v").textContent = v;
+};
+$("pm-dz").oninput = (e) => {
+  const v = +e.target.value; store.set("tiltDz", v);
+  Input.setTiltDeadzone(dzFromSlider(v)); $("pm-dz-v").textContent = v;
+};
+$("pm-tiltdeg").oninput = (e) => {
+  const v = +e.target.value; store.set("tiltDeg", v);
+  Input.setTiltSensitivity(tiltDegFromRange(v)); $("pm-tiltdeg-v").textContent = v;
+};
+$("pm-lock").oninput = (e) => {
+  const v = +e.target.value; store.set("steerLock", v);
+  STEER_MAX_SLIP = lockFromSlider(v); $("pm-lock-v").textContent = v;
 };
 $("pm-line").oninput = (e) => {
   const v = +e.target.value; store.set("raceLine", v);

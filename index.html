@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=66">
-<link rel="stylesheet" href="css/data.css?v=66">
+<link rel="stylesheet" href="css/style.css?v=67">
+<link rel="stylesheet" href="css/data.css?v=67">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -72,12 +72,28 @@
       <input id="pm-sens" type="range" min="1" max="10" step="1" value="7">
     </label>
     <label class="tune-row">
-      <span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
-      <input id="pm-tiltdeg" type="range" min="1" max="10" step="1" value="5">
+      <span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
+      <input id="pm-rate" type="range" min="1" max="10" step="1" value="5">
+    </label>
+    <label class="tune-row">
+      <span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
+      <input id="pm-expo" type="range" min="1" max="10" step="1" value="5">
     </label>
     <label class="tune-row">
       <span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
       <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6">
+    </label>
+    <label class="tune-row">
+      <span class="tune-label">DEAD ZONE <b id="pm-dz-v">4</b></span>
+      <input id="pm-dz" type="range" min="1" max="10" step="1" value="4">
+    </label>
+    <label class="tune-row">
+      <span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
+      <input id="pm-tiltdeg" type="range" min="1" max="10" step="1" value="5">
+    </label>
+    <label class="tune-row">
+      <span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
+      <input id="pm-lock" type="range" min="1" max="10" step="1" value="5">
     </label>
     <label class="tune-row">
       <span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
@@ -231,43 +247,43 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=66"></script>
-<script src="js/glx.js?v=66"></script>
-<script src="js/gltf.js?v=66"></script>
-<script src="js/teams.js?v=66"></script>
-<script src="js/circuits.js?v=66"></script>
+<script src="js/mat4.js?v=67"></script>
+<script src="js/glx.js?v=67"></script>
+<script src="js/gltf.js?v=67"></script>
+<script src="js/teams.js?v=67"></script>
+<script src="js/circuits.js?v=67"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=66"></script>
-<script src="js/tracks/monaco.js?v=66"></script>
-<script src="js/tracks/silverstone.js?v=66"></script>
-<script src="js/tracks/spa.js?v=66"></script>
-<script src="js/tracks/monza.js?v=66"></script>
-<script src="js/tracks/suzuka.js?v=66"></script>
-<script src="js/tracks/singapore.js?v=66"></script>
-<script src="js/tracks/cota.js?v=66"></script>
-<script src="js/tracks/interlagos.js?v=66"></script>
-<script src="js/tracks/vegas.js?v=66"></script>
-<script src="js/tracks/madrid.js?v=66"></script>
-<script src="js/tracks/zandvoort.js?v=66"></script>
-<script src="js/tracks/jeddah.js?v=66"></script>
-<script src="js/tracks/albert_park.js?v=66"></script>
-<script src="js/tracks/shanghai.js?v=66"></script>
-<script src="js/tracks/miami.js?v=66"></script>
-<script src="js/tracks/imola.js?v=66"></script>
-<script src="js/tracks/montreal.js?v=66"></script>
-<script src="js/tracks/redbull.js?v=66"></script>
-<script src="js/tracks/hungaroring.js?v=66"></script>
-<script src="js/tracks/baku.js?v=66"></script>
-<script src="js/tracks/mexico.js?v=66"></script>
-<script src="js/tracks/qatar.js?v=66"></script>
-<script src="js/tracks/abudhabi.js?v=66"></script>
-<script src="js/tracks.js?v=66"></script>
-<script src="js/car3d.js?v=66"></script>
-<script src="js/input.js?v=66"></script>
-<script src="js/audio.js?v=66"></script>
-<script src="js/api.js?v=66"></script>
-<script src="js/data.js?v=66"></script>
-<script src="js/parts.js?v=66"></script>
-<script src="js/game.js?v=66"></script>
+<script src="js/tracks/bahrain.js?v=67"></script>
+<script src="js/tracks/monaco.js?v=67"></script>
+<script src="js/tracks/silverstone.js?v=67"></script>
+<script src="js/tracks/spa.js?v=67"></script>
+<script src="js/tracks/monza.js?v=67"></script>
+<script src="js/tracks/suzuka.js?v=67"></script>
+<script src="js/tracks/singapore.js?v=67"></script>
+<script src="js/tracks/cota.js?v=67"></script>
+<script src="js/tracks/interlagos.js?v=67"></script>
+<script src="js/tracks/vegas.js?v=67"></script>
+<script src="js/tracks/madrid.js?v=67"></script>
+<script src="js/tracks/zandvoort.js?v=67"></script>
+<script src="js/tracks/jeddah.js?v=67"></script>
+<script src="js/tracks/albert_park.js?v=67"></script>
+<script src="js/tracks/shanghai.js?v=67"></script>
+<script src="js/tracks/miami.js?v=67"></script>
+<script src="js/tracks/imola.js?v=67"></script>
+<script src="js/tracks/montreal.js?v=67"></script>
+<script src="js/tracks/redbull.js?v=67"></script>
+<script src="js/tracks/hungaroring.js?v=67"></script>
+<script src="js/tracks/baku.js?v=67"></script>
+<script src="js/tracks/mexico.js?v=67"></script>
+<script src="js/tracks/qatar.js?v=67"></script>
+<script src="js/tracks/abudhabi.js?v=67"></script>
+<script src="js/tracks.js?v=67"></script>
+<script src="js/car3d.js?v=67"></script>
+<script src="js/input.js?v=67"></script>
+<script src="js/audio.js?v=67"></script>
+<script src="js/api.js?v=67"></script>
+<script src="js/data.js?v=67"></script>
+<script src="js/parts.js?v=67"></script>
+<script src="js/game.js?v=67"></script>
 </body>
 </html>

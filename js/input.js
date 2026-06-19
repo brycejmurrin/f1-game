@@ -19,7 +19,7 @@
 const Input = (function () {
   // Tilt mechanics ported verbatim from the driving-game (Neon Drift) build.
   let MAX_TILT = 36;          // degrees of tilt for full steering lock (higher = less sensitive)
-  const DEADZONE = 2.5;       // degrees ignored around the calibrated zero
+  let DEADZONE = 2.5;         // degrees ignored around the calibrated zero (slider)
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
   const DEG = Math.PI / 180;
@@ -362,6 +362,9 @@ const Input = (function () {
   function setTiltSmoothing(slew) {
     if (typeof slew === "number" && isFinite(slew)) TILT_SLEW = Math.max(0.4, Math.min(12, slew));
   }
+  function setTiltDeadzone(deg) {
+    if (typeof deg === "number" && isFinite(deg)) DEADZONE = Math.max(0, Math.min(15, deg));
+  }
 
   function touchControlsNeeded() {
     return !!(typeof window !== "undefined" && window.matchMedia &&
@@ -435,6 +438,7 @@ const Input = (function () {
     getSteerMode,
     setTiltSensitivity,
     setTiltSmoothing,
+    setTiltDeadzone,
     touchControlsNeeded,
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
