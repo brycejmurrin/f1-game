@@ -75,12 +75,47 @@ float hash3(vec3 p) {
 }
 void main() {
   vec3 dir = normalize(vDir);
-  vec3 c = mix(uHorizon, uZenith, pow(max(dir.y, 0.0), 0.6));
-  c += pow(max(dot(dir, uSunDir), 0.0), 350.0) * uSunColor;
+  float up = max(dir.y, 0.0);
+
+  // Base gradient
+  vec3 c = mix(uHorizon, uZenith, pow(up, 0.5));
+
+  float sd = max(dot(dir, uSunDir), 0.0);
+
+  // Mie forward scatter: warms the sky toward the sun, strongest near the horizon
+  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - up * 1.5, 0.0));
+
+  // Horizon glow: brightens the horizon band in the sun's compass direction
+  vec2 sunH = vec2(uSunDir.x, uSunDir.z);
+  float sunHLen = length(sunH);
+  if (sunHLen > 0.05) {
+    vec2 dirH = vec2(dir.x, dir.z);
+    float dirHLen = length(dirH);
+    float hdot = dirHLen > 0.05 ? max(dot(dirH / dirHLen, sunH / sunHLen), 0.0) : 0.0;
+    float hband = max(1.0 - abs(dir.y) * 5.0, 0.0);
+    c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen;
+  }
+
+  // Outer corona (~15° half-angle, subtle halo)
+  c += uSunColor * pow(sd, 20.0) * 0.55;
+
+  // Inner corona (~4° half-angle, brighter ring around disc)
+  c += uSunColor * pow(sd, 300.0) * 0.90;
+
+  // Sun disc: stable perpendicular-distance method avoids precision issues
+  // perp = sin(angle to sun) for a unit dir; disc fades from ~0.35° to ~1.0°
+  float perp = length(dir - uSunDir * sd);
+  float disc = smoothstep(0.018, 0.006, perp);
+  c += mix(uSunColor * 1.6, vec3(1.8, 1.75, 1.5), disc) * disc;
+
+  // Stars (night tracks): two hash samples give varied brightness
   if (uStars > 0.5 && dir.y > 0.05) {
     float h = hash3(floor(dir * 180.0));
-    c += vec3(smoothstep(0.9975, 1.0, h)) * 0.9;
+    float star = smoothstep(0.9975, 1.0, h);
+    float bright = 0.5 + 0.5 * hash3(floor(dir * 43.0));
+    c += vec3(star * bright);
   }
+
   outColor = vec4(c, 1.0);
 }`;
 
