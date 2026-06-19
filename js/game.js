@@ -1228,9 +1228,9 @@ function buildSetup() {
   const body = $("cs-body");
   body.textContent = "";
 
-  // stat bars
+  // stat bars, pinned at the top so they stay visible while picking parts
   const statDiv = document.createElement("div");
-  statDiv.className = "cs-stats";
+  statDiv.className = "cs-stats cs-stats-pinned";
   renderStatBars(statDiv, team);
   body.appendChild(statDiv);
 
@@ -1263,6 +1263,7 @@ function buildSetup() {
         saveTeamParts(team.id, p);
         if (soundOn) GameAudio.uiTick();
         buildSetup();
+        renderStatBars($("sel-stats"), team);   // live update behind the panel
       };
       chips.appendChild(chip);
     }
