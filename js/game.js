@@ -86,10 +86,11 @@ let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "button
 // Manual gears require both thumbs free, which only tilt steering allows. In
 // touch/button modes the thumbs steer, so gears are forced to auto.
 function gearsManual() { return manualMode && steerMode === "tilt"; }
-// In auto mode on a touch device the car accelerates on its own (like the AI),
-// so the player only steers, brakes and boosts — no throttle thumb needed.
-// Desktop keeps the keyboard throttle; manual gears keep the GAS pedal.
-function autoThrottle() { return Input.touchControlsNeeded() && !gearsManual(); }
+// Auto-throttle is purely a steering-mode thing: in touch/button modes the
+// thumbs steer, so the car accelerates on its own (like the AI) and the GAS
+// pedal is hidden. Tilt always keeps the manual GAS pedal (a thumb is free),
+// and desktop always keeps the keyboard throttle.
+function autoThrottle() { return Input.touchControlsNeeded() && steerMode !== "tilt"; }
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
@@ -303,8 +304,8 @@ function startRace() {
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
   const manual = gearsManual();   // only ever true in tilt mode
-  // GAS pedal only when throttle is manual; auto-throttle hides it
-  els.btnThrottle.hidden = !(t && manual);
+  // GAS pedal whenever throttle is manual (tilt); auto-throttle (touch/button) hides it
+  els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
   els.shiftUp.hidden = !(t && manual);
