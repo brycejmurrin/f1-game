@@ -785,52 +785,10 @@ const Tracks = (function () {
     // --- circuit-specific surrounding landscape features with comprehensive filler ---
     // Bahrain: desert dunes, Persian Gulf, utility infrastructure
     if (def.id === "bahrain") {
-      // Light towers (floodlights): 12 units, 30-35m tall
-      every(95, (k) => {
-        for (const side of [-1, 1]) {
-          const tower_d = hw[k] + 65 + hash(k * side) * 20;
-          place(k, side, tower_d, [2.2, 32, 2.2], [0.38, 0.38, 0.42]);  // tower shaft
-          for (let lt = 0; lt < 4; lt++) {
-            place(k, side, tower_d + hash(k + lt) * 6, [1.2, 1.8, 1.2], [0.85, 0.78, 0.72]);  // light fixtures
-          }
-        }
-      });
-      // Utility structures (fuel, water, service)
-      every(280, (k) => {
-        const side = hash(k * 13) < 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 40, [8, 6, 8], [0.68, 0.66, 0.62]);  // fuel tanks
-        place(k, side, hw[k] + 50, [5, 12, 5], [0.78, 0.75, 0.72]);  // service building
-      });
-      // Persian Gulf water horizon
-      const khorizon = Math.round(n * 0.5) % n;
-      const khz = [track.rx[khorizon], track.ry[khorizon], track.rz[khorizon]];
-      addBox(out, [px[khorizon] + khz[0] * 250, py[khorizon] - 3, pz[khorizon] + khz[2] * 250],
-             [400, 2, 800], [0.12, 0.28, 0.44]);
-      // Sand/dust filler terrain (extensive). Sunk so the top sits ~1m below the
-      // lowest road grade — these 80m-wide patches overlap the track footprint on
-      // a flat desert circuit, so keeping them below grade stops them poking up
-      // through the road surface.
-      every(40, (k) => {
-        for (const side of [-1, 1]) {
-          const sand_d = 90 + hash(k * 21 + side) * 80;
-          addBox(out, [px[k] + track.rx[k] * side * sand_d, py[k] - 3, pz[k] + track.rz[k] * side * sand_d],
-                 [80, 4, 120], [0.72, 0.66, 0.50]);
-        }
-      });
+      // Kept: only iconic Sakhir Tower and Arch grandstand (defined later in landmark section)
     }
     // Spa: dense Ardennes forest with ridges, streams, filler vegetation
     if (def.id === "spa") {
-      // Forest ridge lines
-      for (let i = 0; i < 8; i++) {
-        const k = Math.round((i / 8) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const ridge_h = 30 + hash(k * 23) * 20;
-        const ridge_d = 200 + hash(k * 25) * 100;
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * ridge_d, py[k] + ridge_h / 2 - 1, pz[k] + r[2] * side * ridge_d],
-                 [180, ridge_h, 300], [0.15, 0.28, 0.12]);
-        }
-      }
       // Dense tree filler (Ardennes forest density)
       every(12, (k) => {
         for (const side of [-1, 1]) {
@@ -843,52 +801,10 @@ const Tracks = (function () {
           }
         }
       });
-      // Water streams/runoff features
-      every(200, (k) => {
-        const stream_d = 100 + hash(k * 31) * 60;
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * stream_d, py[k] - 3, pz[k] + track.rz[k] * side * stream_d],
-                 [60, 0.8, 200], [0.08, 0.18, 0.32]);  // water drainage
-        }
-      });
-      // Light towers at viewpoints
-      every(160, (k) => {
-        const side = hash(k * 33) < 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 80, [2.0, 40, 2.0], [0.35, 0.35, 0.38]);
-      });
     }
-    // Silverstone: English countryside, floodlights, paddock filler
+    // Silverstone: English countryside
     if (def.id === "silverstone") {
-      // Rolling green hills background
-      for (let i = 0; i < 7; i++) {
-        const k = Math.round((i / 7) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * 220, py[k] + 8 - 1, pz[k] + r[2] * side * 220],
-                 [200, 16, 280], [0.28, 0.42, 0.22]);
-        }
-      }
-      // Floodlight towers (18 units around circuit)
-      every(120, (k) => {
-        for (const side of [-1, 1]) {
-          const tower_d = hw[k] + 70 + hash(k * 37) * 25;
-          place(k, side, tower_d, [2.4, 38, 2.4], [0.42, 0.42, 0.45]);
-          for (let lt = 0; lt < 5; lt++) {
-            place(k, side, tower_d + hash(k + lt * 2) * 8, [1.4, 2.0, 1.4], [0.88, 0.85, 0.80]);
-          }
-        }
-      });
-      // Grandstand support structures (distributed around circuit)
-      every(85, (k) => {
-        const side = hash(k * 39) < 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 18, [12, 16, 8], [0.88, 0.88, 0.90]);  // main structure
-        place(k, side, hw[k] + 26, [14, 8, 10], [0.82, 0.82, 0.85]);  // support
-      });
-      // Paddock support buildings
-      every(200, (k) => {
-        const side = hash(k * 41) > 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 50, [16, 10, 12], [0.72, 0.72, 0.75]);
-      });
+      // Iconic Wing structure (pit lane roof) - kept in landmark section
     }
     // Monaco: steep hillside buildings and Mediterranean backdrop
     if (def.id === "monaco") {
@@ -1286,84 +1202,6 @@ const Tracks = (function () {
       const kpitr = [track.rx[kpit], track.ry[kpit], track.rz[kpit]];
       addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 18, pz[kpit] + kpitr[2] * 12], [50, 36, 30], [0.5, 0.48, 0.46]);
       addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 36, pz[kpit] + kpitr[2] * 12], [46, 6, 26], [0.42, 0.42, 0.44]);
-    }
-    if (def.id === "zandvoort") {
-      // Extensive dune landscape with multiple layers
-      const kdunes = [Math.round(n * 0.15), Math.round(n * 0.35), Math.round(n * 0.55), Math.round(n * 0.75)];
-      for (const kd of kdunes) {
-        const kr = [track.rx[kd], track.ry[kd], track.rz[kd]];
-        for (let layer = 0; layer < 3; layer++) {
-          // These are world-axis-aligned boxes near a curving track, so a tall one
-          // can poke toward the racing line and read as a wall. Kept LOW (height 5,
-          // base at the lowest grade) so even when a dune sits close it reads as a
-          // rolling sand mound behind the run-off, never a vertical wall. Pushed
-          // well out and stepped back layer by layer for a deep dune backdrop.
-          const o = hw[kd] + 140 + layer * 55;
-          const h = 5 + layer * 3;
-          for (const side of [-1, 1]) {
-            addBox(out, [px[kd] + kr[0] * side * o, py[kd] + h / 2 - 2, pz[kd] + kr[2] * side * o],
-                   [90, h, 100], [0.74 - layer * 0.05, 0.68 - layer * 0.05, 0.48]);
-          }
-        }
-      }
-      // Beach vegetation (dune grasses)
-      every(35, (k) => {
-        for (const side of [-1, 1]) {
-          const d = 80 + hash(k * 63 + side) * 50;
-          const h = 1.2 + hash(k * 64) * 1.2;
-          place(k, side, d, [2.2, h, 2.2], [0.55, 0.52, 0.38]);  // dune grass
-        }
-      });
-      // North Sea water features (extensive)
-      every(120, (k) => {
-        const sea_d = 180 + hash(k * 65) * 80;
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * sea_d, py[k] - 4, pz[k] + track.rz[k] * side * sea_d],
-                 [140, 1.6, 200], [0.08, 0.20, 0.36]);
-        }
-      });
-      // Beach sand areas
-      every(160, (k) => {
-        const beach_d = 120 + hash(k * 67) * 50;
-        for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * beach_d, py[k] - 2, pz[k] + track.rz[k] * side * beach_d],
-                 [100, 1.0, 140], [0.76, 0.70, 0.58]);
-        }
-      });
-      // Wind turbines (Dutch renewable energy infrastructure)
-      every(280, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 69 + side) > 0.5) continue;
-          const tower_d = hw[k] + 80 + hash(k * 70) * 40;
-          place(k, side, tower_d, [4, 60, 4], [0.80, 0.80, 0.82]);  // tower
-          place(k, side, tower_d, [50, 8, 4], [0.78, 0.78, 0.76]);  // blade
-        }
-      });
-      // Floodlights for evening sessions
-      every(150, (k) => {
-        const side = hash(k * 71) < 0.4 ? -1 : 1;
-        place(k, side, hw[k] + 75, [2.0, 36, 2.0], [0.38, 0.38, 0.42]);
-      });
-      // Dutch windmill on the dunes
-      const kc = Math.round(n * 0.36) % n;
-      const r = [track.rx[kc], track.ry[kc], track.rz[kc]];
-      const tl = Math.hypot(track.tx[kc], track.tz[kc]) || 1;
-      const tn = [track.tx[kc] / tl, 0, track.tz[kc] / tl];
-      const mcx = px[kc] + r[0] * (hw[kc] + 108), mcz = pz[kc] + r[2] * (hw[kc] + 108);
-      const mby = py[kc];
-      addBox(out, [mcx, mby + 15, mcz], [5, 30, 5], [0.85, 0.81, 0.70]);
-      addBox(out, [mcx, mby + 32, mcz], [8, 5, 8], [0.78, 0.72, 0.60]);
-      const hubX = mcx, hubY = mby + 32, hubZ = mcz;
-      const wb = [r, [0, 1, 0], tn];
-      addBox(out, [hubX + tn[0] * 8, hubY,     hubZ + tn[2] * 8], [2, 2, 14], [0.92, 0.90, 0.86], wb);
-      addBox(out, [hubX - tn[0] * 8, hubY,     hubZ - tn[2] * 8], [2, 2, 14], [0.92, 0.90, 0.86], wb);
-      addBox(out, [hubX,             hubY + 8,  hubZ            ], [2, 14, 2], [0.92, 0.90, 0.86], wb);
-      addBox(out, [hubX,             hubY - 8,  hubZ            ], [2, 14, 2], [0.92, 0.90, 0.86], wb);
-      // orange Dutch grandstands over the pit straight
-      for (let i = 0; i < 5; i++) {
-        const k = (Math.round(n * 0.02) + i * 5) % n;
-        place(k, -1, 14, [4, 7, 20], [0.95, 0.44, 0.04]);
-      }
     }
     if (def.id === "monza") {
       // Italian umbrella pines — taller and narrower than the generic green trees
