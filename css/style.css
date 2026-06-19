@@ -305,10 +305,10 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 #btn-steer-left  { left:  calc(50% - 148px); bottom: calc(16px + var(--sab)); }
 #btn-steer-right { right: calc(50% - 148px); bottom: calc(16px + var(--sab)); }
 
-/* MANUAL (portrait): shifts own the right column; BOOST/OT stack centre,
-   above the HUD */
-body.manual #btn-boost { left: calc(50% - 84px); right: auto; bottom: calc(152px + var(--sab)); }
-body.manual #btn-ot    { left: calc(50% + 8px);  right: auto; bottom: calc(152px + var(--sab)); }
+/* MANUAL (portrait): right column holds everything, stacked — shift DN, shift UP,
+   then BOOST and OT above them */
+body.manual #btn-boost { bottom: calc(184px + var(--sab)); }
+body.manual #btn-ot    { bottom: calc(268px + var(--sab)); }
 
 /* BUTTON mode (auto-throttle: no GAS, no shifts): cluster each thumb's controls
    above its steer button — BRAKE over the left, BOOST then OT over the right. */
@@ -331,9 +331,10 @@ body.steer-touch #btn-ot    { right: calc(96px + var(--sar)); }
   #hud-tach { width: 92px; height: 13px; }
   #hud-speed { font-size: 26px; }
   #hud-energy { width: 112px; }
-  /* manual: BOOST/OT flank the HUD along the bottom, clear of the car body */
-  body.manual #btn-boost { left: calc(50% - 250px); bottom: calc(12px + var(--sab)); }
-  body.manual #btn-ot    { left: calc(50% + 174px); bottom: calc(12px + var(--sab)); }
+  /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
+     in a second column just inboard (vertical space is too short to stack four) */
+  body.manual #btn-boost { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
+  body.manual #btn-ot    { left: auto; right: calc(100px + var(--sar)); bottom: calc(96px + var(--sab)); }
   /* steer buttons tuck closer in landscape (narrower HUD) */
   #btn-steer-left  { left:  calc(50% - 130px); bottom: calc(12px + var(--sab)); }
   #btn-steer-right { right: calc(50% - 130px); bottom: calc(12px + var(--sab)); }
