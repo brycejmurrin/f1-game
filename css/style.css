@@ -299,27 +299,35 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 #shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
 #shift-up   { right: calc(16px + var(--sar)); bottom: calc(100px + var(--sab)); }
 
-/* steer buttons: flank the centre HUD, reachable by either thumb */
+/* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
+   so the left thumb steers like a d-pad and the right thumb stays free for the
+   action buttons (BRAKE/BOOST/OT). */
 .steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: 84px; height: 84px; }
 .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
-#btn-steer-left  { left:  calc(50% - 148px); bottom: calc(16px + var(--sab)); }
-#btn-steer-right { right: calc(50% - 148px); bottom: calc(16px + var(--sab)); }
+#btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
+#btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(16px + var(--sab)); }
 
 /* MANUAL (portrait): right column holds everything, stacked — shift DN, shift UP,
    then BOOST and OT above them */
 body.manual #btn-boost { bottom: calc(184px + var(--sab)); }
 body.manual #btn-ot    { bottom: calc(268px + var(--sab)); }
 
-/* BUTTON mode (auto-throttle: no GAS, no shifts): cluster each thumb's controls
-   above its steer button — BRAKE over the left, BOOST then OT over the right. */
-body.steer-buttons #btn-brake { left:  calc(50% - 148px); bottom: calc(108px + var(--sab)); }
-body.steer-buttons #btn-boost { left: auto; right: calc(50% - 148px); bottom: calc(108px + var(--sab)); }
-body.steer-buttons #btn-ot    { left: auto; right: calc(50% - 148px); bottom: calc(192px + var(--sab)); }
+/* BUTTON mode (console, auto-throttle so no GAS): arrows are bottom-left; the
+   right thumb gets BRAKE in the corner, then BOOST and OT stacked above it. */
+body.steer-buttons #btn-brake { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
+body.steer-buttons #btn-boost { left: auto; right: calc(16px + var(--sar)); bottom: calc(108px + var(--sab)); }
+body.steer-buttons #btn-ot    { left: auto; right: calc(16px + var(--sar)); bottom: calc(200px + var(--sab)); }
 
-/* TOUCH mode (steer by screen halves, auto-throttle): pull BOOST/OT in from the
-   far corner so they sit nearer the thumbs. */
-body.steer-touch #btn-boost { right: calc(96px + var(--sar)); }
-body.steer-touch #btn-ot    { right: calc(96px + var(--sar)); }
+/* TOUCH mode (steer by screen halves, auto-throttle): BRAKE drops to the left
+   corner (no GAS); BOOST/OT keep the right corner. */
+body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
+
+/* In PORTRAIT button mode the side-by-side steering arrows reach toward the
+   centre, so lift the gear/speed/energy readout above the control row to keep
+   it clear. Portrait-only so tilt/touch and all of landscape are untouched. */
+@media (orientation: portrait) {
+  body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab)); }
+}
 
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
 @media (orientation: landscape) {
@@ -335,15 +343,18 @@ body.steer-touch #btn-ot    { right: calc(96px + var(--sar)); }
      in a second column just inboard (vertical space is too short to stack four) */
   body.manual #btn-boost { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
   body.manual #btn-ot    { left: auto; right: calc(100px + var(--sar)); bottom: calc(96px + var(--sab)); }
-  /* steer buttons tuck closer in landscape (narrower HUD) */
-  #btn-steer-left  { left:  calc(50% - 130px); bottom: calc(12px + var(--sab)); }
-  #btn-steer-right { right: calc(50% - 130px); bottom: calc(12px + var(--sab)); }
-  /* button mode: BRAKE over the left steer, BOOST/OT over the right steer */
-  body.steer-buttons #btn-brake { left:  calc(50% - 130px); bottom: calc(96px + var(--sab)); }
-  body.steer-buttons #btn-boost { left: auto; right: calc(50% - 130px); bottom: calc(96px + var(--sab)); }
-  body.steer-buttons #btn-ot    { left: auto; right: calc(50% - 130px); bottom: calc(176px + var(--sab)); }
-  body.steer-touch #btn-boost { right: calc(96px + var(--sar)); }
-  body.steer-touch #btn-ot    { right: calc(96px + var(--sar)); }
+  /* console steer: arrows bottom-left, side by side (left thumb home) */
+  #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(12px + var(--sab)); }
+  #btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(12px + var(--sab)); }
+  /* button mode actions: BRAKE + BOOST side by side bottom-right, OT above BRAKE
+     (uses the landscape width instead of a tall stack) */
+  body.steer-buttons #btn-brake { left: auto; right: calc(16px + var(--sar));  bottom: calc(12px + var(--sab)); }
+  body.steer-buttons #btn-boost { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
+  body.steer-buttons #btn-ot    { left: auto; right: calc(16px + var(--sar));  bottom: calc(96px + var(--sab)); }
+  /* touch: BRAKE left corner, BOOST/OT right corner */
+  body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
+  body.steer-touch #btn-boost { right: calc(16px + var(--sar)); bottom: calc(12px + var(--sab)); }
+  body.steer-touch #btn-ot    { right: calc(16px + var(--sar)); bottom: calc(96px + var(--sab)); }
 }
 
 #pausebtn {
