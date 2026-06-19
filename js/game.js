@@ -2320,7 +2320,7 @@ window.__apex = {
   cars: () => cars.map((c, i) => ({
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
     yaw: +(c.yawVis || 0).toFixed(4),
-    prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2),
+    prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
   })),
   // lap fractions of corner apexes (local maxima of |curvature|), for parking
