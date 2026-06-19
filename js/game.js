@@ -119,9 +119,11 @@ let musicEnabled = store.get("music", true);    // music on/off, independent of 
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
 let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
-// Manual gears require both thumbs free, which only tilt steering allows. In
-// touch/button modes the thumbs steer, so gears are forced to auto.
-function gearsManual() { return manualMode && steerMode === "tilt"; }
+// Manual gears: available in tilt mode (thumbs free) or on desktop keyboard
+// (no thumbs involved). Touch/button modes on mobile force auto to free thumbs.
+function gearsManual() {
+  return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
+}
 // Auto-throttle: enabled in touch/button steering modes (thumbs are occupied)
 // unless the player has opted into manual mode, in which case they always drive
 // the throttle themselves regardless of steering mode.
@@ -1805,10 +1807,9 @@ $("pm-steer").onclick = () => {
   setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
-// GEARS manual is only meaningful with tilt steering (both thumbs free), so the
-// toggle is shown only then; touch/button modes always run auto.
+// GEARS toggle: show when thumbs are free (tilt or desktop keyboard).
 function refreshGearsBtn() {
-  $("pm-gears").hidden = steerMode !== "tilt";
+  $("pm-gears").hidden = Input.touchControlsNeeded() && steerMode !== "tilt";
   $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
 }
 $("pm-gears").onclick = () => {
@@ -1832,6 +1833,7 @@ syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
 Input.init(canvas, { onPause: () => setPaused(!paused) });
+if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();

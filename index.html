@@ -89,13 +89,15 @@
 
 <!-- select screen -->
 <div id="select" hidden>
-  <h2 id="select-title">SELECT</h2>
-  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><div id="sel-stats" class="cs-stats"></div><div class="sel-edit-row"><button id="sel-customize" class="sel-edit">&#9998; MY TEAM</button><button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button></div></div>
-  <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-tracks"></div></div>
-  <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
-  <div class="sel-actions">
-    <button id="sel-back">BACK</button>
-    <button id="sel-go" class="bigbtn">START</button>
+  <div id="sel-inner">
+    <h2 id="select-title">SELECT</h2>
+    <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><div id="sel-stats" class="cs-stats"></div><div class="sel-edit-row"><button id="sel-customize" class="sel-edit">&#9998; MY TEAM</button><button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button></div></div>
+    <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-tracks"></div></div>
+    <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
+    <div class="sel-actions">
+      <button id="sel-back">BACK</button>
+      <button id="sel-go" class="bigbtn">START</button>
+    </div>
   </div>
 </div>
 
@@ -163,15 +165,32 @@
     <h2>HOW TO PLAY</h2>
     <button id="htp-close">&#10005;</button>
     <dl>
-      <dt>STEER</dt><dd>Pick <span class="key">STEER</span> in the pause menu: TILT your phone (calibrates at the lights), on-screen BUTTONS, or TOUCH the left/right of the screen. Keyboard <span class="key">A</span> <span class="key">D</span> always works</dd>
-      <dt>THROTTLE</dt><dd>In TILT + MANUAL gears, hold <span class="key">GAS</span> / <span class="key">W</span> / <span class="key">&uarr;</span> to accelerate. In AUTO (touch / button steering) the car accelerates for you &mdash; just steer and brake. <span class="key">BRAKE</span>: hold <span class="key">BRAKE</span> / <span class="key">S</span> / <span class="key">&darr;</span></dd>
-      <dt>&#9889; BOOST</dt><dd>Tap <span class="key">BOOST</span> / <span class="key">Space</span> to toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
-      <dt>OVERTAKE</dt><dd>Within 1s of the car ahead the OT light arms. Tap <span class="key">OT</span> / <span class="key">X</span> for 4s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
-      <dt>GEARS</dt><dd>Toggle <span class="key">GEARS: MANUAL</span> in the pause menu. Shift up <span class="key">&#9650;</span> / <span class="key">E</span> near the redline, down <span class="key">&#9660;</span> / <span class="key">Q</span> for corner exits. The tachometer + gear show bottom-centre; auto mode shifts for you</dd>
-      <dt>TRACK LIMITS</dt><dd>Grass is slow. Cutting the track repeatedly earns a +5s penalty</dd>
-      <dt>RACE</dt><dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
-      <dt>SEASON</dt><dd>All 12 circuits in calendar order &mdash; championship standings saved between visits</dd>
-      <dt>TIME TRIAL</dt><dd>Solo on track, no rivals. Set your fastest lap over four laps; your track record is saved and shown on the circuit list</dd>
+      <dt>PC / KEYBOARD</dt>
+      <dd>
+        Steer <span class="key">A</span><span class="key">D</span> or <span class="key">&larr;</span><span class="key">&rarr;</span> &nbsp;
+        Gas <span class="key">W</span> / <span class="key">&uarr;</span> &nbsp;
+        Brake <span class="key">S</span> / <span class="key">&darr;</span> &nbsp;
+        Boost <span class="key">Space</span> &nbsp;
+        Overtake <span class="key">X</span><br>
+        Shift Up <span class="key">E</span> &nbsp; Shift Down <span class="key">Q</span> / <span class="key">Shift</span> &nbsp;
+        Pause <span class="key">P</span> / <span class="key">Esc</span>
+      </dd>
+      <dt>TOUCH / MOBILE</dt>
+      <dd>Pick <span class="key">STEER</span> in the pause menu: TILT your phone (auto-calibrates at the lights), on-screen BUTTONS, or tap left/right screen HALVES. In button and touch modes the car accelerates for you &mdash; just steer and brake</dd>
+      <dt>&#9889; BOOST</dt>
+      <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
+      <dt>OVERTAKE</dt>
+      <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
+      <dt>GEARS</dt>
+      <dd>Toggle <span class="key">GEARS: MANUAL</span> in the pause menu. Shift up near the redline, down for corner exits. The tachometer + gear indicator sit bottom-centre</dd>
+      <dt>TRACK LIMITS</dt>
+      <dd>Grass is slow. Cutting the track repeatedly earns a +5 s penalty</dd>
+      <dt>RACE</dt>
+      <dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
+      <dt>SEASON</dt>
+      <dd>All 24 circuits in calendar order &mdash; championship standings saved between visits</dd>
+      <dt>TIME TRIAL</dt>
+      <dd>Solo on track, no rivals. Set your fastest lap; your track record is saved and shown on the circuit list</dd>
     </dl>
   </div>
 </div>
