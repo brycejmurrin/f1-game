@@ -50,6 +50,13 @@ uniform float uRoughness;
 uniform float uMetalness;
 uniform float uSpecular;
 uniform float uDetail;
+uniform sampler2DShadow uShadowMap;
+uniform mat4 uLightVP;
+uniform float uShadowBias;
+uniform float uShadowStr;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform float uFogHeight;
 out vec4 outColor;
 
 const float PI = 3.14159265359;
@@ -87,6 +94,18 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+float sampleShadow(vec3 wpos) {
+  vec4 lc = uLightVP * vec4(wpos, 1.0);
+  vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
+  if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z >= 1.0) return 1.0;
+  ivec2 sz = textureSize(uShadowMap, 0);
+  float t = 1.0 / float(sz.x);
+  float s = 0.0;
+  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++)
+    s += texture(uShadowMap, vec3(sc.xy + vec2(float(i), float(j)) * t, sc.z - uShadowBias));
+  return mix(1.0, s / 9.0, uShadowStr);
+}
+
 void main() {
   vec3 N = normalize(vNrm);
   vec3 V = normalize(uEye - vWorldPos);
@@ -113,20 +132,41 @@ void main() {
 
   vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
 
+  float shadow = sampleShadow(vWorldPos);
+  float litNoL = NoL * shadow;
+
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
-  vec3 color = albedo * (amb + uSunColor * NoL * (1.0 - uMetalness));
+  vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - uMetalness));
 
   // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
   float D = D_GGX(NoH, a);
   float Vis = V_SmithGGX(NoV, NoL, a);
   vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
-  vec3 specCol = (D * Vis) * F * uSunColor * NoL;
+  vec3 specCol = (D * Vis) * F * uSunColor * litNoL;
   specCol = specCol / (1.0 + specCol);
   color += specCol;
 
+  // Environment reflection: when roughness is very low (wet road / glossy paint),
+  // sample the sky gradient in the reflected view direction.
+  // Roughness > 0.4 = no visible reflection; < 0.15 = mirror-like sky in road.
+  float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
+  if (envBlend > 0.001) {
+    vec3 R = reflect(-V, N);
+    float skyT = pow(max(R.y, 0.0), 0.5);
+    vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
+    // Fresnel: reflection is strongest at grazing angles
+    float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
+    color += envColor * envFresnel * envBlend * (1.0 - uMetalness);
+  }
+
   color = mix(color, albedo, uEmissive);
 
-  float fd = vDist * uFogDensity;
+  // Height-based fog: density falls off exponentially with altitude above eye level.
+  // uFogHeight = 0 → uniform (original behaviour); > 0 → pooling fog.
+  float heightAtten = uFogHeight > 0.0
+    ? exp(-max(vWorldPos.y - uEye.y, 0.0) * uFogHeight)
+    : 1.0;
+  float fd = vDist * uFogDensity * heightAtten;
   float f = 1.0 - exp(-fd * fd);
   outColor = vec4(mix(color, uFogColor, f), uAlpha);
 }`;
@@ -350,6 +390,16 @@ void main() {
   outColor = vec4(c, 1.0);
 }`;
 
+  // Depth-only pass for shadow map — renders world position into depth buffer.
+  const DEPTH_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+uniform mat4 uModel;
+uniform mat4 uLightVP;
+void main() { gl_Position = uLightVP * uModel * vec4(aPos, 1.0); }`;
+
+  const DEPTH_FS = `#version 300 es
+void main() {}`;
+
   let gl = null;
   let canvas = null;
   let litProg = null, litU = null;
@@ -360,6 +410,12 @@ void main() {
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
   let frameViewProj = null;
+
+  let depthProg = null, depthU = null;
+  let shadowMapFBO = null, shadowMapTex = null;
+  let shadowLightVP = new Float32Array(16);
+  const SHADOW_SIZE = 1024;
+  let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
   // to the default framebuffer, exactly as before) if any target/program setup
@@ -466,6 +522,30 @@ void main() {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
+  function initShadowMap() {
+    depthProg = link(DEPTH_VS, DEPTH_FS);
+    if (!depthProg) return false;
+    depthU = locs(depthProg, ["uModel", "uLightVP"]);
+
+    shadowMapTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
+      gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+
+    shadowMapFBO = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowMapTex, 0);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return ok;
+  }
+
   function init(canvasEl) {
     canvas = canvasEl;
     gl = canvas.getContext("webgl2", {
@@ -482,10 +562,13 @@ void main() {
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
 
     postEnabled = initPost();   // best-effort; false -> render straight to screen
+    shadowEnabled = initShadowMap();
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail"]);
+      "uRoughness", "uMetalness", "uSpecular", "uDetail",
+      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -593,6 +676,19 @@ void main() {
     gl.uniform3fv(litU.uAmbSky, frame.ambientSky);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
     gl.uniform1f(litU.uFogDensity, frame.fogDensity);
+    if (shadowEnabled) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
+      gl.uniform1i(litU.uShadowMap, 0);
+      gl.uniformMatrix4fv(litU.uLightVP, false, shadowLightVP);
+      gl.uniform1f(litU.uShadowBias, 0.002);
+      gl.uniform1f(litU.uShadowStr, 1.0);
+    } else {
+      gl.uniform1f(litU.uShadowStr, 0.0);
+    }
+    gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
+    gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
+    gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
   }
 
   function draw(mesh, modelMat, opts) {
@@ -728,6 +824,28 @@ void main() {
     drawShadow,
     drawMark,
     present,
+    shadowBegin(lightVP) {
+      if (!shadowEnabled) return;
+      shadowLightVP.set(lightVP);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
+      gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.useProgram(depthProg);
+      gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
+      gl.disable(gl.CULL_FACE);  // render back faces to avoid peter-panning
+    },
+    castShadow(mesh, model) {
+      if (!shadowEnabled || !mesh) return;
+      gl.bindVertexArray(mesh.vao);
+      gl.uniformMatrix4fv(depthU.uModel, false, model);
+      gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    },
+    shadowEnd() {
+      if (!shadowEnabled) return;
+      gl.enable(gl.CULL_FACE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? sceneFBO : null);
+      gl.viewport(0, 0, width, height);
+    },
     get width() { return width; },
     get height() { return height; },
     get aspect() { return aspect; },

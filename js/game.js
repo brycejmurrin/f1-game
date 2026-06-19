@@ -366,6 +366,9 @@ function loadTrack(idx) {
     sunDir: V3.norm(pal.sunDir), sunColor: pal.sunColor,
     ambientGround: pal.ambientGround, ambientSky: pal.ambientSky,
     fogColor: pal.fog, fogDensity: pal.fogDensity,
+    skyZenith:  pal.zenith,
+    skyHorizon: pal.horizon,
+    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018,
   };
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
@@ -388,6 +391,9 @@ function applyRaceSettings() {
       frame.ambientSky = [0.08, 0.08, 0.14];
       frame.fogColor = [0.03, 0.03, 0.06];
       frame.fogDensity = 0.004;
+      // When raceTimeOfDay !== "default", sync sky colours to frame too
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
     } else {
       frameSky.zenith = [0.25, 0.42, 0.80];
       frameSky.horizon = [0.70, 0.75, 0.82];
@@ -396,6 +402,9 @@ function applyRaceSettings() {
       frame.ambientSky = [0.45, 0.48, 0.60];
       frame.fogColor = [0.72, 0.72, 0.72];
       frame.fogDensity = 0.0015;
+      // When raceTimeOfDay !== "default", sync sky colours to frame too
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
     }
   }
   // Wet weather: overcast the sky and flatten the light (soft, diffuse, fewer
@@ -1192,6 +1201,25 @@ function render(dt) {
   const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
   frame.viewProj = M4.mul(proj, view);
   frame.eye = camEye;
+
+  // Shadow pass — render terrain + road from sun's perspective
+  if (track) {
+    const sd = frame.sunDir;
+    const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
+    const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
+    const lightView = M4.lookAt(
+      [cx + sd[0] * 150, cy + sd[1] * 150, cz + sd[2] * 150],
+      [cx, cy, cz], up
+    );
+    const lightProj = M4.ortho(-70, 70, -70, 70, 1.0, 320);
+    const lightVP = M4.mul(lightProj, lightView);
+    GLX.shadowBegin(lightVP);
+    GLX.castShadow(track.meshes.terrain, M4.ident());
+    GLX.castShadow(track.meshes.road, M4.ident());
+    GLX.castShadow(track.meshes.props, M4.ident());
+    GLX.shadowEnd();
+  }
+
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
