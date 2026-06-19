@@ -854,8 +854,8 @@ const Tracks = (function () {
       // Floodlit grandstand banking opposite the pits (night race spectators)
       every(110, (k) => {
         const side = hash(k * 9) < 0.5 ? -1 : 1;
-        prop(k, side, 10, [22, 9, 16], [0.30, 0.30, 0.36]);     // stand shell
-        prop(k, side, 8,  [22, 5, 14], [0.55, 0.30, 0.28]);     // crowd tier
+        prop(k, side, 10, [8, 9, 24], [0.30, 0.30, 0.36]);     // stand shell
+        prop(k, side, 8,  [8, 5, 22], [0.55, 0.30, 0.28]);     // crowd tier
       });
     }
     // Spa: dense Ardennes forest with ridges, streams, filler vegetation
@@ -886,8 +886,8 @@ const Tracks = (function () {
       // Grass spectator banking with sparse crowd colour
       every(120, (k) => {
         const side = hash(k * 35) < 0.5 ? -1 : 1;
-        prop(k, side, 6, [20, 5, 16], [0.18, 0.34, 0.16]);
-        prop(k, side, 6, [18, 2, 14], [0.62, 0.4, 0.34]);
+        prop(k, side, 6, [8, 5, 22], [0.18, 0.34, 0.16]);
+        prop(k, side, 6, [8, 2, 20], [0.62, 0.4, 0.34]);
       });
     }
     // Silverstone: English countryside
@@ -906,8 +906,8 @@ const Tracks = (function () {
       for (const frac of [0.18, 0.34, 0.58, 0.78]) {
         const k = Math.round(frac * n) % n;
         const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [30, 10, 18], [0.40, 0.42, 0.48]);   // stand shell
-        prop(k, side, 7, [30, 6, 16], [0.66, 0.40, 0.34]);    // crowd
+        prop(k, side, 9, [8, 10, 30], [0.40, 0.42, 0.48]);   // stand shell
+        prop(k, side, 7, [8, 6, 28], [0.66, 0.40, 0.34]);    // crowd
       }
       // Distant low Northamptonshire treeline
       every(80, (k) => {
@@ -1115,9 +1115,9 @@ const Tracks = (function () {
       for (const frac of [0.14, 0.38, 0.82]) {
         const k = Math.round(frac * n) % n;
         const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 10, [32, 11, 18], [0.80, 0.82, 0.86]);  // white shell
-        prop(k, side, 8,  [32, 6, 16], [0.55, 0.30, 0.30]);   // crowd
-        prop(k, side, 9,  [34, 2, 20], [0.90, 0.92, 0.95]);   // roof canopy
+        prop(k, side, 10, [9, 11, 32], [0.80, 0.82, 0.86]);  // white shell
+        prop(k, side, 8,  [9, 6, 30], [0.55, 0.30, 0.30]);   // crowd
+        prop(k, side, 9,  [11, 2, 34], [0.90, 0.92, 0.95]);  // roof canopy
       }
     }
     // Zandvoort: North Sea coastal features and dune landscape
@@ -1158,8 +1158,8 @@ const Tracks = (function () {
       for (const frac of [0.12, 0.30, 0.50, 0.72, 0.90]) {
         const k = Math.round(frac * n) % n;
         const side = hash(k * 7) < 0.5 ? -1 : 1;
-        prop(k, side, 8, [26, 10, 18], [0.36, 0.38, 0.42]);  // stand shell
-        prop(k, side, 6, [26, 6, 16], [0.92, 0.46, 0.08]);   // orange crowd
+        prop(k, side, 8, [8, 10, 26], [0.36, 0.38, 0.42]);  // stand shell
+        prop(k, side, 6, [8, 6, 24], [0.92, 0.46, 0.08]);   // orange crowd
       }
       // Beach huts along the seafront approach
       every(120, (k) => {
@@ -1414,8 +1414,8 @@ const Tracks = (function () {
       for (const frac of [0.06, 0.30, 0.55]) {
         const k = Math.round(frac * n) % n;
         const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [28, 9, 18], [0.42, 0.42, 0.48]);
-        prop(k, side, 7, [28, 5, 16], [0.30, 0.46, 0.34]);   // green/yellow Brazilian crowd
+        prop(k, side, 9, [8, 9, 28], [0.42, 0.42, 0.48]);
+        prop(k, side, 7, [8, 5, 26], [0.30, 0.46, 0.34]);   // green/yellow Brazilian crowd
       }
     }
     if (def.id === "monza") {
@@ -1427,25 +1427,31 @@ const Tracks = (function () {
         place(k, side, d, [1.2, 1.8, 1.2], [0.28, 0.19, 0.10]);
         place(k, side, d, [3.0, h, 3.0], [0.07, 0.27, 0.09]);
       });
-      // Tribuna Centrale: main grandstand at pit straight (white/cream Italian classic style)
+      // Tribuna Centrale: main grandstand spanning the pit straight (white/cream
+      // Italian classic). Built as oriented segments via prop() so each sits
+      // alongside the track with its inner face cleared — never a wall across it.
       const ktc = Math.round(n * 0.01) % n;
-      const ktcr = [track.rx[ktc], track.ry[ktc], track.rz[ktc]];
-      addBox(out, [px[ktc] + ktcr[0] * (hw[ktc] + 10), py[ktc] + 18, pz[ktc] + ktcr[2] * (hw[ktc] + 10)],
-             [42, 36, 26], [0.85, 0.83, 0.78]);
-      // Control tower with press center
-      addBox(out, [px[ktc] + ktcr[0] * (hw[ktc] + 24), py[ktc] + 20, pz[ktc] + ktcr[2] * (hw[ktc] + 24)],
-             [12, 40, 12], [0.95, 0.95, 0.97]);
+      const seg = Math.max(1, Math.round(n * 0.006));
+      for (let i = 0; i < 6; i++) {
+        const k = (ktc + i * seg) % n;
+        prop(k, -1, 10, [9, 22, 24], [0.85, 0.83, 0.78]);   // stand shell (9m deep)
+        prop(k, -1, 8,  [9, 13, 22], [0.66, 0.42, 0.36]);   // crowd tiers
+      }
+      // Control tower with press centre, set back beyond the stand
+      prop(ktc, -1, 16, [10, 40, 12], [0.95, 0.95, 0.97]);
       // Sopraelevata: weathered banking of the abandoned oval, looming in the park
       for (let i = 0; i < 5; i++) {
         const k = (Math.round(n * 0.42) + i * 4) % n;
         backdrop(k, 1, 120 + i * 10, [30, 16, 60], [0.55, 0.54, 0.50]);
       }
-      // Grandstands at Curva Grande and the Parabolica
+      // Grandstands at Curva Grande and the Parabolica. prop()'s sz is
+      // [depth(perpendicular), height, length(along track)] — shallow + long so
+      // the stand runs alongside the corner instead of jutting into it.
       for (const frac of [0.10, 0.46, 0.88]) {
         const k = Math.round(frac * n) % n;
         const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [30, 9, 18], [0.42, 0.42, 0.48]);
-        prop(k, side, 7, [30, 5, 16], [0.66, 0.40, 0.34]);
+        prop(k, side, 9, [8, 9, 30], [0.42, 0.42, 0.48]);
+        prop(k, side, 7, [8, 5, 28], [0.66, 0.40, 0.34]);
       }
     }
     if (def.id === "suzuka") {
@@ -1469,8 +1475,8 @@ const Tracks = (function () {
       for (const frac of [0.16, 0.40, 0.62, 0.84]) {
         const k = Math.round(frac * n) % n;
         const side = hash(k * 5) < 0.5 ? -1 : 1;
-        prop(k, side, 9, [28, 9, 18], [0.42, 0.42, 0.48]);
-        prop(k, side, 7, [28, 5, 16], [0.30, 0.40, 0.62]);   // blue-clad fans
+        prop(k, side, 9, [8, 9, 28], [0.42, 0.42, 0.48]);
+        prop(k, side, 7, [8, 5, 26], [0.30, 0.40, 0.62]);   // blue-clad fans
       }
       // Forested Mie-prefecture hills beyond the park
       every(70, (k) => {
