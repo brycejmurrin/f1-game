@@ -1173,20 +1173,12 @@ const CS_STATS = [
   { key: "braking",   label: "BRAKING" },
 ];
 
-function buildSetup() {
-  const team = Teams.LIST[teamIdx];
+// Render the four stat bars (base + part boost overlay) for a team into a
+// container. Shared by the select screen (always-on) and the setup panel.
+function renderStatBars(container, team) {
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const parts = getTeamParts(team.id);
-  const mods = Parts.getMods(parts);
-
-  $("cs-team").textContent = team.name.toUpperCase();
-
-  const body = $("cs-body");
-  body.textContent = "";
-
-  // stat bars
-  const statDiv = document.createElement("div");
-  statDiv.className = "cs-stats";
+  const mods = Parts.getMods(getTeamParts(team.id));
+  container.textContent = "";
   for (const { key, label } of CS_STATS) {
     const base = stats[key] || 75;
     const effective = Math.round(Math.min(110, base * mods[key]));
@@ -1223,8 +1215,23 @@ function buildSetup() {
     val.textContent = effective;
 
     row.append(lbl, barWrap, val);
-    statDiv.appendChild(row);
+    container.appendChild(row);
   }
+}
+
+function buildSetup() {
+  const team = Teams.LIST[teamIdx];
+  const parts = getTeamParts(team.id);
+
+  $("cs-team").textContent = team.name.toUpperCase();
+
+  const body = $("cs-body");
+  body.textContent = "";
+
+  // stat bars
+  const statDiv = document.createElement("div");
+  statDiv.className = "cs-stats";
+  renderStatBars(statDiv, team);
   body.appendChild(statDiv);
 
   // part categories
@@ -1293,6 +1300,7 @@ function buildSelect() {
     b.onclick = () => { driverIdx = i; store.set("driver", i); buildSelect(); tickUi(); };
     els.selDriver.appendChild(b);
   });
+  renderStatBars($("sel-stats"), team);
   if (!seasonMode) {
     els.selTracks.textContent = "";
     Tracks.LIST.forEach((t, i) => {
@@ -1425,7 +1433,7 @@ function openCustomize() {
 });
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
 $("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
-$("cs-done").onclick = () => { $("carsetup").hidden = true; recomputePlayerMods(); };
+$("cs-done").onclick = () => { $("carsetup").hidden = true; recomputePlayerMods(); buildSelect(); };
 $("cz-cancel").onclick = () => { els.customize.hidden = true; };
 $("cz-save").onclick = () => {
   const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
