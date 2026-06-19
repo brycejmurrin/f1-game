@@ -156,34 +156,65 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 /* ---------- car setup ---------- */
 .sel-edit-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .sel-edit-row .sel-edit { margin-top: 0; }
-#cs-team { font-size: 11px; color: var(--dim); letter-spacing: 0.1em; margin-bottom: 14px; }
-.cs-stats { margin-bottom: 16px; }
-.cs-stat-row {
-  display: flex; align-items: center; gap: 8px; margin: 7px 0;
-  font-size: 11px; letter-spacing: 0.07em; color: var(--dim);
+/* widen the setup panel so the stat bars + chip rows breathe */
+#carsetup { max-width: min(94vw, 640px); }
+#cs-team {
+  font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 0.08em;
+  color: var(--text); margin-bottom: 14px;
 }
-.cs-stat-label { width: 80px; flex-shrink: 0; }
+
+/* stats block: bordered card so it reads as the team's baseline */
+.cs-stats {
+  margin-bottom: 8px; padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px;
+}
+.cs-stat-row {
+  display: flex; align-items: center; gap: 10px; margin: 8px 0;
+  font-size: 11px; letter-spacing: 0.08em; color: var(--dim);
+}
+.cs-stat-label { width: 84px; flex-shrink: 0; }
 .cs-stat-bar-wrap {
-  flex: 1; height: 10px; background: rgba(255,255,255,0.07);
-  border-radius: 5px; overflow: hidden; position: relative;
+  flex: 1; height: 12px; background: rgba(255,255,255,0.08);
+  border-radius: 6px; overflow: hidden; position: relative;
 }
 .cs-stat-base {
   position: absolute; left: 0; top: 0; height: 100%;
-  background: rgba(255,255,255,0.28); border-radius: 5px;
+  background: rgba(255,255,255,0.32); border-radius: 6px;
 }
 .cs-stat-boost {
-  position: absolute; top: 0; height: 100%; background: var(--red); opacity: 0.9;
+  position: absolute; top: 0; height: 100%; background: var(--red); opacity: 0.92;
 }
 .cs-stat-boost.penalty { background: #f90; }
-.cs-stat-val { width: 30px; text-align: right; font-size: 12px; color: var(--text); }
+.cs-stat-val {
+  width: 34px; flex-shrink: 0; text-align: right;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 .cs-stat-val.up { color: #4df; }
 .cs-stat-val.down { color: #f90; }
-.cs-cat-section { margin: 12px 0 0; }
-.cs-cat { font-size: 10px; letter-spacing: 0.14em; color: var(--red); margin-bottom: 4px; }
-.cs-desc { font-size: 11px; color: var(--dim); min-height: 15px; margin-bottom: 7px; }
-.cs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cs-chip { font-size: 12px; padding: 7px 13px; border-radius: 7px; white-space: nowrap; }
-.cs-chip.active { background: rgba(225,6,0,0.22); border-color: var(--red); }
+
+/* category sections flow into 2 columns when the panel is wide (landscape) */
+#cs-body { display: grid; grid-template-columns: 1fr; gap: 0 20px; }
+.cs-stats { grid-column: 1 / -1; }
+.cs-cat-section {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cs-cat { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--red); margin-bottom: 4px; }
+.cs-desc { font-size: 11px; color: var(--dim); min-height: 28px; margin-bottom: 8px; line-height: 1.3; }
+.cs-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+/* override .panel button (display:block; width:100%) so chips sit compactly */
+.cs-chips .cs-chip {
+  display: inline-block; width: auto; margin: 0;
+  flex: 0 0 auto; font-size: 13px; padding: 8px 14px;
+  border-radius: 7px; white-space: nowrap;
+}
+.cs-chips .cs-chip.active { background: rgba(225,6,0,0.22); border-color: var(--red); }
+
+@media (min-aspect-ratio: 1/1) {
+  #cs-body { grid-template-columns: 1fr 1fr; }
+}
 
 /* ---------- HUD ---------- */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
