@@ -1609,10 +1609,16 @@ const Tracks = (function () {
     // terrain ribbon as a green plane floating across the infield from lower
     // parts of the lap. (was [{ s: 0.06, halfM: 440, rise: 28 }])
     cota:       [],
-    interlagos: [{ s: 0.86, halfM: 560, rise: 16 }],
+    // Interlagos kept flat: the s=0.86 climb floated the terrain ribbon over the
+    // lower road as a green plane on this compact circuit (same failure as COTA /
+    // Bahrain). (was [{ s: 0.86, halfM: 560, rise: 16 }])
+    interlagos: [],
     silverstone:[{ s: 0.62, halfM: 360, rise:  9 }],
     zandvoort:  [{ s: 0.56, halfM: 300, rise: 12 }],
-    bahrain:    [{ s: 0.45, halfM: 380, rise: -8 }],
+    // Bahrain kept flat: the s=0.45 dip created a bowl whose higher rim pushed
+    // the terrain ribbon across the lower road as a plane bisecting the car
+    // (same failure COTA had). (was [{ s: 0.45, halfM: 380, rise: -8 }])
+    bahrain:    [],
   };
 
   const DEFS = [
