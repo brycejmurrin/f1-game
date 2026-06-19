@@ -882,7 +882,10 @@ const Tracks = (function () {
     // Conifer/pine: tapered trunk + stacked cones. col = needle green.
     const pine = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (onTrack(a.c[0], a.c[2], 3)) return;
+      if (onTrack(a.c[0], a.c[2], 3)) {
+        console.warn(`[scenery] pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
       addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
       let y = h * 0.3;
       for (let i = 0; i < 3; i++) {
@@ -894,7 +897,10 @@ const Tracks = (function () {
     // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
     const tree = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (onTrack(a.c[0], a.c[2], 4)) return;
+      if (onTrack(a.c[0], a.c[2], 4)) {
+        console.warn(`[scenery] tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
       addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
       addCone(out, vadd(a.c, a.u, h * 0.32), 2.8 + h * 0.12, h * 0.5, col, 8, b);
       addCone(out, vadd(a.c, a.u, h * 0.62), 1.8 + h * 0.06, h * 0.32, col, 7, b);
@@ -902,7 +908,10 @@ const Tracks = (function () {
     // Palm: tall thin trunk + a crown of drooping frond prisms.
     const palm = (k, side, dist, h, frond) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (onTrack(a.c[0], a.c[2], 4)) return;
+      if (onTrack(a.c[0], a.c[2], 4)) {
+        console.warn(`[scenery] palm SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
       addCyl(out, a.c, 0.3, h, [0.45, 0.36, 0.22], 6, b);
       const top = vadd(a.c, a.u, h);
       for (let i = 0; i < 6; i++) {
@@ -917,7 +926,10 @@ const Tracks = (function () {
     // use mountain() for organic, colour-zoned, snow-capped summits.
     const peak = (x, z, baseY, w, h, col) => {
       // Skip if the pyramid's footprint (outer base radius w*0.75) reaches tarmac.
-      if (onTrack(x, z, w * 0.75)) return;
+      if (onTrack(x, z, w * 0.75)) {
+        console.warn(`[scenery] peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
+        return;
+      }
       addPyramid(out, [x, baseY, z], [w, h, w], col, null);
       addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
     };
@@ -928,7 +940,10 @@ const Tracks = (function () {
       // Skip if the skirt footprint (radius w*0.62) would reach the tarmac.
       // This prevents backdrop mountains from clipping through the racing surface
       // when extra < w*0.62 (ring placed too close relative to mountain width).
-      if (onTrack(x, z, w * 0.62)) return;
+      if (onTrack(x, z, w * 0.62)) {
+        console.warn(`[scenery] mountain SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
+        return;
+      }
       opts = opts || {};
       addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
                  opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
@@ -938,7 +953,10 @@ const Tracks = (function () {
     // `ang` (radians, in the XZ plane). Chain these for a jagged range.
     const ridge = (x, z, baseY, ang, len, w, h, col) => {
       // Skip if footprint half-extent reaches tarmac.
-      if (onTrack(x, z, Math.max(len, w) * 0.5)) return;
+      if (onTrack(x, z, Math.max(len, w) * 0.5)) {
+        console.warn(`[scenery] ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
+        return;
+      }
       const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
       addPrism(out, [x, baseY, z], [w, h, len], col, [r, [0, 1, 0], f]);
     };
@@ -955,7 +973,10 @@ const Tracks = (function () {
       // Skip only if crowd inner face (= road edge + gap) literally sits on track.
       const oInner = side * (hw[k] + gap);
       const ifx = px[k] + r[0] * oInner, ifz = pz[k] + r[2] * oInner;
-      if (onTrack(ifx, ifz, 0)) return;
+      if (onTrack(ifx, ifz, 0)) {
+        console.warn(`[scenery] grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (inner face on track)`);
+        return;
+      }
       // Back shell — center at gap+7.5 beyond road edge
       const oShell = side * (hw[k] + gap + 7.5);
       const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + 6 - 0.8, pz[k] + r[2] * oShell];
@@ -979,12 +1000,23 @@ const Tracks = (function () {
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick) => {
       const a = thick || 0.5;
-      along(s0, s1, 6, (k) => { const p = anchor(k, side, gap); addBox(out, vadd(p.c, p.u, h / 2), [a, h, 6.3], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]); });
+      along(s0, s1, 6, (k) => {
+        const p = anchor(k, side, gap);
+        if (onTrack(p.c[0], p.c[2], a / 2)) {
+          console.warn(`[scenery] wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
+        addBox(out, vadd(p.c, p.u, h / 2), [a, h, 6.3], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]);
+      });
     };
     // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
     const fence = (s0, s1, side, gap, h, col) => {
       along(s0, s1, 5, (k) => {
         const p = anchor(k, side, gap);
+        if (onTrack(p.c[0], p.c[2], 0.5)) {
+          console.warn(`[scenery] fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
         addCyl(out, p.c, 0.13, h, [0.28, 0.28, 0.30], 5, [p.r, p.u, p.t]);          // post
         addBox(out, vadd(p.c, p.u, h * 0.55), [0.05, h * 0.9, 5.2], col || [0.72, 0.74, 0.78], [p.r, p.u, p.t]);  // mesh
       });
@@ -993,6 +1025,10 @@ const Tracks = (function () {
     const guardrail = (s0, s1, side, gap, col) => {
       along(s0, s1, 4, (k) => {
         const p = anchor(k, side, gap);
+        if (onTrack(p.c[0], p.c[2], 0.5)) {
+          console.warn(`[scenery] guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
         addCyl(out, p.c, 0.09, 0.7, [0.5, 0.5, 0.52], 4, [p.r, p.u, p.t]);
         addBox(out, vadd(p.c, p.u, 0.7), [0.18, 0.45, 4.2], col || [0.82, 0.82, 0.85], [p.r, p.u, p.t]);
       });
@@ -1001,13 +1037,24 @@ const Tracks = (function () {
     const tyreWall = (s0, s1, side, gap, capCol) => {
       along(s0, s1, 3.4, (k) => {
         const p = anchor(k, side, gap);
+        if (onTrack(p.c[0], p.c[2], 1.0)) {
+          console.warn(`[scenery] tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
         addCyl(out, p.c, 1.0, 0.9, [0.10, 0.10, 0.11], 7, [p.r, p.u, p.t]);
         addBox(out, vadd(p.c, p.u, 0.95), [2.0, 0.3, 3.6], capCol || [0.9, 0.9, 0.92], [p.r, p.u, p.t]);
       });
     };
     // Low clipped hedge / continuous treeline.
     const hedge = (s0, s1, side, gap, h, col) => {
-      along(s0, s1, 4, (k) => { const p = anchor(k, side, gap); addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, 4.3], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]); });
+      along(s0, s1, 4, (k) => {
+        const p = anchor(k, side, gap);
+        if (onTrack(p.c[0], p.c[2], 1.2)) {
+          console.warn(`[scenery] hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
+        addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, 4.3], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);
+      });
     };
 
     // ---------- structures ----------
@@ -1041,7 +1088,10 @@ const Tracks = (function () {
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       const ifx = p.c[0] - p.r[0] * side * baseW / 2;
       const ifz = p.c[2] - p.r[2] * side * baseW / 2;
-      if (onTrack(ifx, ifz, 0)) return;
+      if (onTrack(ifx, ifz, 0)) {
+        console.warn(`[scenery] tower SUPPRESSED at k=${k} side=${side}: dist=${dist} baseW=${baseW}`);
+        return;
+      }
       addFrustum(out, p.c, baseW * 0.5, baseW * 0.32, h, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
@@ -1066,7 +1116,10 @@ const Tracks = (function () {
     // Marshal post / flag bunker: a small orange-roofed box with a pole.
     const marshalPost = (k, side, gap) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], 3)) return;
+      if (onTrack(p.c[0], p.c[2], 3)) {
+        console.warn(`[scenery] marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        return;
+      }
       addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
       addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
       addCyl(out, vadd(p.c, p.r, side * 1.4), 0.08, 4, [0.4, 0.4, 0.42], 4, b);
@@ -1074,7 +1127,10 @@ const Tracks = (function () {
     // Bush / shrub clump (low rounded greenery).
     const bush = (k, side, dist, col) => {
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], 2)) return;
+      if (onTrack(p.c[0], p.c[2], 2)) {
+        console.warn(`[scenery] bush SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
       addCone(out, vadd(p.c, p.u, 0.3), 1.6, 2.2, col || [0.20, 0.38, 0.18], 6, b);
     };
 
