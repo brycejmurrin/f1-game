@@ -1603,7 +1603,10 @@ const Tracks = (function () {
   // Each entry is a cosine bump centred at lap fraction s, spanning ±halfM metres.
   // Negative rise = descent (e.g. Eau Rouge dip before Raidillon climb).
   const ELEVATIONS = {
-    spa:        [{ s: 0.07, halfM: 270, rise: -14 }, { s: 0.12, halfM: 500, rise: 26 }],
+    // Spa kept flat: the s=0.12 Raidillon/Eau Rouge 26m rise floated the terrain
+    // ribbon over the lower Eau Rouge valley as a plane bisecting the car.
+    // (was [{ s: 0.07, halfM: 270, rise: -14 }, { s: 0.12, halfM: 500, rise: 26 }])
+    spa:        [],
     monaco:     [{ s: 0.27, halfM: 340, rise: 18 }],
     // COTA kept flat: its compact, open infield exposed the elevated Turn 1
     // terrain ribbon as a green plane floating across the infield from lower
