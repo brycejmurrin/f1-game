@@ -133,6 +133,10 @@ let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{i
 // ---------- physics constants ----------
 const VMAX = 94;            // m/s base (~338 km/h) — F1 top end; wider gears, higher top speed
 const ACCEL = 13;           // m/s^2 at low speed
+// Global pace multiplier on top speed AND acceleration, applied to EVERY car
+// (player + AI) so the whole field speeds up/slows down together and the racing
+// stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
+let PACE = 1.0;
 const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
@@ -149,6 +153,15 @@ const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
 let WHEELBASE = 3.2;        // m; shorter = snappier turn-in (RESPONSE slider)
 let STEER_EXPO = 2.4;       // input shaping: higher = much gentler near centre
 let STEER_MAX_SLIP = 0.5;   // max steering / slip-angle (steer lock)
+let STEER_SPEED_REF = 80;   // m/s reference for the speed-sensitive steer taper:
+                            // higher = keeps more steering at speed (SPEED STEER slider)
+// Tier-b lateral slip ("drift factor" + grip circle). Velocity lags heading: the
+// turn injects sideways velocity (scaled by DRIFT), tyre grip bleeds it back
+// (LAT_GRIP per second), and a grip circle caps it (MAX_LAT_SLIP). DRIFT 0 = the
+// old on-rails feel; higher = slidey. Braking eats lateral grip → understeer.
+let DRIFT = 0.2;            // slide amount (SLIDE slider)
+const LAT_GRIP = 7.0;       // 1/s — how fast sideways slip decays back to zero
+const MAX_LAT_SLIP = 9;     // m/s — grip-circle cap on lateral slip
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -804,7 +817,7 @@ function updateCar(c, dt, ranked) {
   const dd = DIFF[difficulty];
 
   // --- speed targets ---
-  let vmax = VMAX * (c.isPlayer ? playerMods.speed : TIER_V[c.tier] * c.skill * dd.ai);
+  let vmax = VMAX * PACE * (c.isPlayer ? playerMods.speed : TIER_V[c.tier] * c.skill * dd.ai);
   // rubber band for AI
   if (!c.isPlayer) {
     const gap = player.prog - c.prog;
@@ -918,7 +931,7 @@ function updateCar(c, dt, ranked) {
     c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
-    const a = (ACCEL * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
@@ -1059,19 +1072,32 @@ function updateCar(c, dt, ranked) {
       c.px = smp.p[0] + smp.r[0] * c.x;
       c.pz = smp.p[2] + smp.r[2] * c.x;
       c.head = Math.atan2(smp.t[0], smp.t[2]);
+      c.vLat = 0;
     }
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     const auth = gripScale * kerbGrip * gripMult() * playerMods.cornering;
-    const maxDelta = STEER_MAX_SLIP * Math.max(0.3, 1 - c.speed / 80);
+    // Speed-sensitive steer taper: full lock at low speed, less at high speed.
+    const maxDelta = STEER_MAX_SLIP * Math.max(0.3, 1 - c.speed / STEER_SPEED_REF);
     const yawRate = c.speed > 0.5
       ? c.speed * Math.tan(shaped * auth * maxDelta) / WHEELBASE
       : 0;
     // Right vector is cross(tangent, up) = (-tz, tx); increasing head rotates the
     // direction toward -right, so SUBTRACT yaw to make +steer turn right (+x),
     // matching the lateral sign convention and the old Frenet model.
-    c.head -= clamp(yawRate, -3.5, 3.5) * dt;
-    c.px += c.speed * Math.sin(c.head) * dt;
-    c.pz += c.speed * Math.cos(c.head) * dt;
+    const dHead = -clamp(yawRate, -3.5, 3.5) * dt;
+    c.head += dHead;
+    const fx = Math.sin(c.head), fz = Math.cos(c.head);
+    // Lateral slip: the heading rotated, so forward momentum now points slightly
+    // sideways vs the new heading. Inject that (scaled by DRIFT), bleed it with
+    // grip, cap it with the grip circle. +slip pushes the car to the OUTSIDE.
+    c.vLat = (c.vLat || 0) - DRIFT * c.speed * dHead;
+    const latGrip = LAT_GRIP * (braking ? 0.5 : 1);   // braking eats lateral grip
+    c.vLat *= Math.max(0, 1 - latGrip * dt);
+    const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
+    c.vLat = clamp(c.vLat, -slipCap, slipCap);
+    // world velocity = forward + sideways slip (perp = (fz, -fx) = +right)
+    c.px += (c.speed * fx + c.vLat * fz) * dt;
+    c.pz += (c.speed * fz - c.vLat * fx) * dt;
     c._prevS = c.s;
     const proj = Tracks.project(track, c.px, c.pz, c.s);
     c.s = proj.s;
@@ -1970,6 +1996,9 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 //  pm-dz       DEAD ZONE      degrees of tilt ignored around neutral.
 //  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock.
 //  pm-lock     STEER LOCK     STEER_MAX_SLIP — max heading/turn angle.
+//  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
+//                             at speed (sharper); low = calmer/stabler at speed.
+//  pm-slide    SLIDE          DRIFT — 0 = grippy/on-rails, high = slidey.
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
 function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
 function slewFromSmooth(v)   { return 5 + (1 - 5) * (v - 1) / 9; }     // 5..1
@@ -1978,6 +2007,9 @@ function wheelbaseFromSlider(v) { return 4.3 + (1.9 - 4.3) * (v - 1) / 9; } // 4
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
 function lockFromSlider(v)   { return 0.30 + (0.70 - 0.30) * (v - 1) / 9; } // .3..0.7
 function dzFromSlider(v)     { return (v - 1) * 0.8; }                  // 0..7.2 deg
+function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
+function driftFromSlider(v)  { return (v - 1) / 9 * 0.9; }              // 0..0.9, v3≈0.2
+function paceFromSlider(v)   { return 1 + (v - 5) * 0.06; }             // 0.76..1.30, v5=1.0
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
 
 function applySteerTuning() {
@@ -1988,11 +2020,17 @@ function applySteerTuning() {
   const dz      = store.get("tiltDz",     4);
   const tiltdeg = store.get("tiltDeg",    5);
   const lock    = store.get("steerLock",  5);
+  const spdsteer = store.get("steerSpeed", 5);
+  const slide   = store.get("slide",      3);
+  const pace    = store.get("pace",       5);
   const line    = store.get("raceLine",   0);
   tiltOutputScale = sens / 10;
+  PACE           = paceFromSlider(pace);
   WHEELBASE      = wheelbaseFromSlider(rate);
   STEER_EXPO     = expoFromSlider(expo);
   STEER_MAX_SLIP = lockFromSlider(lock);
+  STEER_SPEED_REF = speedRefFromSlider(spdsteer);
+  DRIFT          = driftFromSlider(slide);
   Input.setTiltSmoothing(slewFromSmooth(smooth));
   Input.setTiltDeadzone(dzFromSlider(dz));
   Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
@@ -2004,6 +2042,9 @@ function applySteerTuning() {
   $("pm-dz").value      = dz;      $("pm-dz-v").textContent      = dz;
   $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
+  $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
+  $("pm-slide").value   = slide;   $("pm-slide-v").textContent   = slide;
+  $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = pace;
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
 }
 $("pm-sens").oninput = (e) => {
@@ -2033,6 +2074,18 @@ $("pm-tiltdeg").oninput = (e) => {
 $("pm-lock").oninput = (e) => {
   const v = +e.target.value; store.set("steerLock", v);
   STEER_MAX_SLIP = lockFromSlider(v); $("pm-lock-v").textContent = v;
+};
+$("pm-speedsteer").oninput = (e) => {
+  const v = +e.target.value; store.set("steerSpeed", v);
+  STEER_SPEED_REF = speedRefFromSlider(v); $("pm-speedsteer-v").textContent = v;
+};
+$("pm-slide").oninput = (e) => {
+  const v = +e.target.value; store.set("slide", v);
+  DRIFT = driftFromSlider(v); $("pm-slide-v").textContent = v;
+};
+$("pm-pace").oninput = (e) => {
+  const v = +e.target.value; store.set("pace", v);
+  PACE = paceFromSlider(v); $("pm-pace-v").textContent = v;
 };
 $("pm-line").oninput = (e) => {
   const v = +e.target.value; store.set("raceLine", v);
@@ -2099,6 +2152,7 @@ window.__apex = {
     player.px = smp.p[0] + smp.r[0] * player.x;
     player.pz = smp.p[2] + smp.r[2] * player.x;
     player.head = Math.atan2(smp.t[0], smp.t[2]);
+    player.vLat = 0;
     return { s: player.s, total: track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
@@ -2192,11 +2246,37 @@ window.__apex = {
       wheelbase: WHEELBASE,            // RESPONSE (shorter = snappier)
       expo: STEER_EXPO,                // LINEARITY
       maxSlip: STEER_MAX_SLIP,         // STEER LOCK
+      speedRef: STEER_SPEED_REF,       // SPEED STEER (higher = sharper at speed)
+      drift: DRIFT,                    // SLIDE (0 = on-rails)
+      pace: PACE,                      // OVERALL SPEED (player + AI)
       raceLineAssist,                  // RACING LINE
       maxTilt: Input.maxTilt,          // TILT RANGE
       deadzone: Input.deadzone,        // DEAD ZONE
       tiltSlew: Input.tiltSlew,        // STEER SMOOTHING
     };
+  },
+  // Richer player physics readout for drift/grip tests: world heading + the
+  // lateral slip velocity and slip angle the tier-b model produces.
+  physState() {
+    if (!player || player.px == null) return null;
+    const slip = Math.atan2(player.vLat || 0, Math.max(1, player.speed));
+    return {
+      s: player.s, x: player.x, speed: player.speed,
+      head: player.head, vLat: player.vLat || 0,
+      slipDeg: slip * 180 / Math.PI,
+    };
+  },
+  // Set physics params directly (bypassing the sliders) for deterministic A/B
+  // tests and on-device tuning. Any omitted field is left unchanged.
+  setPhysics(o) {
+    o = o || {};
+    if (o.drift != null) DRIFT = o.drift;
+    if (o.pace != null) PACE = o.pace;
+    if (o.speedRef != null) STEER_SPEED_REF = o.speedRef;
+    if (o.wheelbase != null) WHEELBASE = o.wheelbase;
+    if (o.expo != null) STEER_EXPO = o.expo;
+    if (o.maxSlip != null) STEER_MAX_SLIP = o.maxSlip;
+    return this.tuning();
   },
   // Debug free camera for surveying track layouts/scenery — look at anything.
   // Call with no args (or "chase") to restore the chase cam. Option forms:

@@ -36,6 +36,9 @@ const SLIDERS = [
   { id: "pm-dz",      key: "deadzone",        store: "tiltDz",     vid: "pm-dz-v",      min: 1,  max: 10, sign: +1 },
   { id: "pm-tiltdeg", key: "maxTilt",         store: "tiltDeg",    vid: "pm-tiltdeg-v", min: 1,  max: 10, sign: -1 },
   { id: "pm-lock",    key: "maxSlip",         store: "steerLock",  vid: "pm-lock-v",    min: 1,  max: 10, sign: +1 },
+  { id: "pm-speedsteer", key: "speedRef",     store: "steerSpeed", vid: "pm-speedsteer-v", min: 1, max: 10, sign: +1 },
+  { id: "pm-slide",   key: "drift",           store: "slide",      vid: "pm-slide-v",   min: 1,  max: 10, sign: +1 },
+  { id: "pm-pace",    key: "pace",            store: "pace",       vid: "pm-pace-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-line",    key: "raceLineAssist",  store: "raceLine",   vid: "pm-line-v",    min: -5, max: 5,  sign: +1 },
 ];
 
@@ -85,6 +88,39 @@ test.describe("Apex 26 — steering sliders", () => {
     await setSlider(page, "pm-lock", 9);
     const lockHigh = await turnBurst(page, 1, 20);
     expect(lockHigh).toBeGreaterThan(lockLow * 1.15);
+  });
+
+  test("OVERALL SPEED lifts BOTH the player's and the AI's top speed", async ({ page }) => {
+    await startRace(page);
+    // Top speed reached flat-out on the straight at a given pace, for the player.
+    const playerTop = (paceSlider) => page.evaluate((sv) => {
+      const el = document.getElementById("pm-pace");
+      el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
+      window.__apex.jump(0.0, 0, 0);
+      window.__apex.setInput({ steer: 0, throttle: true });
+      for (let i = 0; i < 420; i++) window.__apex.step(1 / 60, 1);  // ~7 s
+      const v = window.__apex.probe().speed;
+      window.__apex.clearInput();
+      return v;
+    }, paceSlider);
+    const slow = await playerTop(2);
+    const fast = await playerTop(9);
+    expect(fast).toBeGreaterThan(slow + 5);   // player clearly faster at high pace
+
+    // AI also lifts: run the field and compare leader speed at low vs high pace.
+    const aiTop = (paceSlider) => page.evaluate((sv) => {
+      const el = document.getElementById("pm-pace");
+      el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
+      window.__apex.race("monza", "day", "dry"); window.__apex.go();
+      window.__apex.setInput({ steer: 0, throttle: false });
+      for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // 10 s of AI racing
+      const ai = window.__apex.cars().filter((c) => !c.p);
+      window.__apex.clearInput();
+      return Math.max(...ai.map((c) => c.speed));
+    }, paceSlider);
+    const aiSlow = await aiTop(2);
+    const aiFast = await aiTop(9);
+    expect(aiFast).toBeGreaterThan(aiSlow + 5);   // AI field clearly faster too
   });
 
   // The tilt INPUT sliders (TILT STRENGTH/RANGE, DEAD ZONE, STEER SMOOTHING) are
