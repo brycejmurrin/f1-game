@@ -619,6 +619,133 @@ const Tracks = (function () {
     }
   }
 
+  // ---------- richer primitives (beyond the box) ----------
+  // Emit one flat convex polygon (3+ coplanar verts in perimeter order), fan-
+  // triangulated, auto-oriented so its face points AWAY from `ref` (an interior
+  // point) — so callers never have to reason about CCW winding under backface
+  // culling. Normal is the face normal (flat shading, matches the box look).
+  function emit(out, verts, col, ref) {
+    let nv = norm(cross(
+      [verts[1][0] - verts[0][0], verts[1][1] - verts[0][1], verts[1][2] - verts[0][2]],
+      [verts[2][0] - verts[0][0], verts[2][1] - verts[0][1], verts[2][2] - verts[0][2]]));
+    if (ref) {
+      let fx = 0, fy = 0, fz = 0;
+      for (const v of verts) { fx += v[0]; fy += v[1]; fz += v[2]; }
+      fx = fx / verts.length - ref[0]; fy = fy / verts.length - ref[1]; fz = fz / verts.length - ref[2];
+      if (nv[0] * fx + nv[1] * fy + nv[2] * fz < 0) { verts = verts.slice().reverse(); nv = [-nv[0], -nv[1], -nv[2]]; }
+    }
+    const base = out.pos.length / 3;
+    for (const v of verts) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]); }
+    for (let i = 1; i < verts.length - 1; i++) out.idx.push(base, base + i, base + i + 1);
+  }
+  const vadd = (p, v, s) => [p[0] + v[0] * s, p[1] + v[1] * s, p[2] + v[2] * s];
+
+  // Triangular prism / ridge: base sz[0] wide × sz[2] long, rising to a ridge
+  // line along the LENGTH at height sz[1]. A-frame roofs, mountain ridges.
+  function addPrism(out, c, sz, col, basis) {
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const hx = sz[0] / 2, hl = sz[2] / 2, h = sz[1], ref = vadd(c, u, h * 0.4);
+    const b0 = vadd(vadd(c, r, -hx), f, -hl), b1 = vadd(vadd(c, r, hx), f, -hl);
+    const b2 = vadd(vadd(c, r, hx), f, hl), b3 = vadd(vadd(c, r, -hx), f, hl);
+    const p0 = vadd(vadd(c, u, h), f, -hl), p1 = vadd(vadd(c, u, h), f, hl);
+    emit(out, [b0, b1, p0], col, ref); emit(out, [b3, b2, p1], col, ref);  // gables
+    emit(out, [b1, b2, p1, p0], col, ref); emit(out, [b0, p0, p1, b3], col, ref);  // slopes
+  }
+
+  // Pyramid: base sz[0]×sz[2] up to a single apex at height sz[1]. Peaks, spires.
+  function addPyramid(out, c, sz, col, basis) {
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const hx = sz[0] / 2, hl = sz[2] / 2, ref = vadd(c, u, sz[1] * 0.35);
+    const b0 = vadd(vadd(c, r, -hx), f, -hl), b1 = vadd(vadd(c, r, hx), f, -hl);
+    const b2 = vadd(vadd(c, r, hx), f, hl), b3 = vadd(vadd(c, r, -hx), f, hl);
+    const ap = vadd(c, u, sz[1]);
+    emit(out, [b0, b1, ap], col, ref); emit(out, [b1, b2, ap], col, ref);
+    emit(out, [b2, b3, ap], col, ref); emit(out, [b3, b0, ap], col, ref);
+  }
+
+  // Cone: n-gon base radius `rad` up to an apex at `h`. Conifers, spires, towers.
+  function addCone(out, c, rad, h, col, seg, basis) {
+    seg = seg || 8;
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const ap = vadd(c, u, h), ref = vadd(c, u, h * 0.35);
+    const ring = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
+    for (let i = 0; i < seg; i++) emit(out, [ring(i / seg * 6.2832), ring((i + 1) / seg * 6.2832), ap], col, ref);
+  }
+
+  // Cylinder: n-gon column radius `rad`, height `h` (+ top cap). Trunks, towers.
+  function addCyl(out, c, rad, h, col, seg, basis) {
+    seg = seg || 8;
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const ref = vadd(c, u, h * 0.5), top = vadd(c, u, h);
+    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
+    for (let i = 0; i < seg; i++) {
+      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
+      emit(out, [lo(a0), lo(a1), vadd(lo(a1), u, h), vadd(lo(a0), u, h)], col, ref);
+      emit(out, [vadd(lo(a0), u, h), vadd(lo(a1), u, h), top], col, ref);
+    }
+  }
+
+  // Frustum: n-gon truncated cone, base radius `rBase` → top radius `rTop` over
+  // height `h`. Stack these for colour-banded mountains (forest → rock → snow).
+  function addFrustum(out, c, rBase, rTop, h, col, seg, basis) {
+    seg = seg || 8;
+    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+    const ref = vadd(c, u, h * 0.5);
+    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rBase), f, Math.sin(a) * rBase);
+    const hi = (a) => vadd(vadd(vadd(c, u, h), r, Math.cos(a) * rTop), f, Math.sin(a) * rTop);
+    for (let i = 0; i < seg; i++) {
+      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
+      emit(out, [lo(a0), lo(a1), hi(a1), hi(a0)], col, ref);
+    }
+  }
+
+  // Organic mountain at world `c`, base radius `baseR`, height `h`. A radial mesh
+  // of stacked rings whose per-angle radius is perturbed (vertical ridges/gullies)
+  // and whose apex is jittered off-centre, so no two read as the same symmetric
+  // cone. Faces are coloured by height — forested base → rock → ragged snow cap.
+  // opts: { seg, seed, rough, forest, rock, snow, snowline, right, fwd }.
+  function addMountain(out, c, baseR, h, opts) {
+    opts = opts || {};
+    const seg = opts.seg || 10, seed = opts.seed || 0, rough = opts.rough != null ? opts.rough : 0.34;
+    const forest = opts.forest || [0.22, 0.38, 0.22];
+    const rock = opts.rock || [0.40, 0.38, 0.36];
+    const snow = opts.snow || [0.93, 0.95, 0.99];
+    const snowline = opts.snowline != null ? opts.snowline : 0.62;
+    const rx = opts.right || [1, 0, 0], fz = opts.fwd || [0, 0, 1];
+    const h2 = (a, b) => { const x = Math.sin(a * 12.9898 + b * 78.233 + seed * 0.137) * 43758.5453; return x - Math.floor(x); };
+    const ridgeOff = [];
+    for (let i = 0; i < seg; i++) ridgeOff.push(h2(i, 7) - 0.5);            // shared down each ridge
+    const rings = [[0, 1], [0.38, 0.64], [0.70, 0.34]];                    // [heightFrac, radiusFrac]
+    const pt = (hf, rf, i) => {
+      const a = i / seg * 6.2832;
+      const rad = baseR * rf * (1 + ridgeOff[i] * rough * 1.4) * (1 + (h2(i, hf * 97 + 3) - 0.5) * rough * 0.7);
+      const y = h * (hf + (h2(i, hf * 97 + 9) - 0.5) * rough * 0.12);
+      return [c[0] + rx[0] * Math.cos(a) * rad + fz[0] * Math.sin(a) * rad, c[1] + y, c[2] + rx[2] * Math.cos(a) * rad + fz[2] * Math.sin(a) * rad];
+    };
+    const ref = [c[0], c[1] + h * 0.4, c[2]];
+    const colAt = (fy, i) => {
+      const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;                        // ragged zone edges
+      if (fr > snowline + 0.04) return snow;
+      if (fr > snowline - 0.16) return [(rock[0] + snow[0]) / 2, (rock[1] + snow[1]) / 2, (rock[2] + snow[2]) / 2];
+      if (fr > 0.34) return rock;
+      const j = 0.88 + 0.24 * h2(i, 21);
+      return [forest[0] * j, forest[1] * j, forest[2] * j];
+    };
+    const V = rings.map(([hf, rf]) => { const row = []; for (let i = 0; i < seg; i++) row.push(pt(hf, rf, i)); return row; });
+    for (let r = 0; r < rings.length - 1; r++) {
+      for (let i = 0; i < seg; i++) {
+        const a = V[r][i], b = V[r][(i + 1) % seg], cc = V[r + 1][(i + 1) % seg], d = V[r + 1][i];
+        emit(out, [a, b, cc, d], colAt((a[1] + b[1] + cc[1] + d[1]) / 4 - c[1], i + r), ref);
+      }
+    }
+    const apex = [c[0] + (h2(1, 1) - 0.5) * baseR * 0.14, c[1] + h * (0.97 + h2(2, 2) * 0.06), c[2] + (h2(3, 3) - 0.5) * baseR * 0.14];
+    const tr = rings.length - 1;
+    for (let i = 0; i < seg; i++) {
+      const a = V[tr][i], b = V[tr][(i + 1) % seg];
+      emit(out, [a, b, apex], colAt((a[1] + b[1] + apex[1]) / 3 - c[1], i), ref);
+    }
+  }
+
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
     const out = { pos: [], nrm: [], col: [], idx: [] };
@@ -651,6 +778,23 @@ const Tracks = (function () {
       }
       return prevY;   // beyond the last vert: the lap's low baseline
     };
+    // Universal ground floor: one big flat slab at the lap's low point, sized to
+    // reach well past the farthest scenery. The terrain ribbon only extends ~120 m
+    // from the road, so without this, distant hills/skylines would sit over open
+    // sky (reading as "floating"). Tucked just under the ribbon's far edge so it
+    // only shows through the gap beyond it. Coloured from the circuit's ground.
+    {
+      let gx = 0, gz = 0;
+      for (let i = 0; i < n; i++) { gx += px[i]; gz += pz[i]; }
+      gx /= n; gz /= n;
+      let grad = 0;
+      for (let i = 0; i < n; i++) grad = Math.max(grad, Math.hypot(px[i] - gx, pz[i] - gz));
+      const gc = pal.grass || [0.2, 0.38, 0.18];
+      // top sits at pyMin-3 — below the terrain ribbon's far edge and the water
+      // planes (~pyMin-2.4) so it fills the gap without hiding lakes/sea.
+      addBox(out, [gx, pyMin - 5, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
+             [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
+    }
     // True if (x,z) lies on (or within `margin` of) the tarmac of ANY track
     // station. Used to stop props being dropped onto a *parallel* section of the
     // circuit — e.g. a tree placed perpendicular to one point landing on the
@@ -711,14 +855,178 @@ const Tracks = (function () {
       addBox(out, [cx, groundYAt(k, dist) + sz[1] / 2 - 2, cz], sz, col);
     };
 
+    // ---------- composite scenery models (beyond single boxes) ----------
+    // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
+    // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
+    const anchor = (k, side, dist) => {
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const t = [track.tx[k], track.ty[k], track.tz[k]];
+      const u = upOf(track, k);
+      const o = side * (hw[k] + dist);
+      return { c: [px[k] + r[0] * o, groundYAt(k, dist), pz[k] + r[2] * o], r, u, t };
+    };
+    // Conifer/pine: tapered trunk + stacked cones. col = needle green.
+    const pine = (k, side, dist, h, col) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
+      let y = h * 0.3;
+      for (let i = 0; i < 3; i++) {
+        const w = 2.6 * (1 - i * 0.27);
+        addCone(out, vadd(a.c, a.u, y), w, h * 0.34, col, 7, b);
+        y += h * 0.22;
+      }
+    };
+    // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
+    const tree = (k, side, dist, h, col) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
+      addCone(out, vadd(a.c, a.u, h * 0.32), 2.8 + h * 0.12, h * 0.5, col, 8, b);
+      addCone(out, vadd(a.c, a.u, h * 0.62), 1.8 + h * 0.06, h * 0.32, col, 7, b);
+    };
+    // Palm: tall thin trunk + a crown of drooping frond prisms.
+    const palm = (k, side, dist, h, frond) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      addCyl(out, a.c, 0.3, h, [0.45, 0.36, 0.22], 6, b);
+      const top = vadd(a.c, a.u, h);
+      for (let i = 0; i < 6; i++) {
+        const ang = i / 6 * 6.2832, dir = [Math.cos(ang), 0, Math.sin(ang)];
+        const fr = [dir[0] * a.r[0] + dir[2] * a.t[0], 0, dir[0] * a.r[2] + dir[2] * a.t[2]];
+        const fc = vadd(vadd(top, fr, 2.4), a.u, -0.4);
+        addPrism(out, fc, [1.6, 0.5, 4.4], frond || [0.18, 0.40, 0.16], [fr, a.u, [-fr[2], 0, fr[0]]]);
+      }
+    };
+    // Distant mountain peak (world coords), pyramid so it reads as a summit, with
+    // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
+    // use mountain() for organic, colour-zoned, snow-capped summits.
+    const peak = (x, z, baseY, w, h, col) => {
+      addPyramid(out, [x, baseY, z], [w, h, w], col, null);
+      addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
+    };
+    // Organic mountain (world coords): irregular craggy summit with height colour
+    // zones (forest → rock → snow). opts passes seed/snowline/colours — see
+    // addMountain. A low foot skirt blends the base into the ground.
+    const mountain = (x, z, baseY, w, h, opts) => {
+      opts = opts || {};
+      addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
+                 opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
+      addMountain(out, [x, baseY, z], w * 0.5, h, opts);
+    };
+    // Mountain ridge segment (world coords) — a prism whose ridge runs along
+    // `ang` (radians, in the XZ plane). Chain these for a jagged range.
+    const ridge = (x, z, baseY, ang, len, w, h, col) => {
+      const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
+      addPrism(out, [x, baseY, z], [w, h, len], col, [r, [0, 1, 0], f]);
+    };
+    // Tiered grandstand running along the track: a raked seating wedge (prism on
+    // its side reads as a rake), a back shell and a flat roof slab on posts.
+    const grandstand = (s, side, gap, len, shell, crowd) => {
+      const k = Math.round(s * n) % n;
+      prop(k, side, gap + 2.5, [10, 12, len], shell || [0.40, 0.41, 0.46]);   // back shell
+      prop(k, side, gap, [9, 7, len - 2], crowd || [0.55, 0.32, 0.30]);        // raked crowd
+      // roof slab cantilevered over the crowd, lifted on the up axis
+      const a = anchor(k, side, gap + 5);
+      addBox(out, vadd(a.c, a.u, 13), [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+    };
+
+    // ---------- linear track furniture (run along the track from s0→s1) ----------
+    // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart.
+    const along = (s0, s1, stepM, fn) => {
+      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      const span = ((k1 - k0) + n) % n || n, step = Math.max(1, Math.round(stepM / ds));
+      for (let i = 0; i <= span; i += step) fn((k0 + i) % n);
+    };
+    // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
+    const wall = (s0, s1, side, gap, h, col, thick) => {
+      const a = thick || 0.5;
+      along(s0, s1, 6, (k) => { const p = anchor(k, side, gap); addBox(out, vadd(p.c, p.u, h / 2), [a, h, 6.3], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]); });
+    };
+    // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
+    const fence = (s0, s1, side, gap, h, col) => {
+      along(s0, s1, 5, (k) => {
+        const p = anchor(k, side, gap);
+        addCyl(out, p.c, 0.13, h, [0.28, 0.28, 0.30], 5, [p.r, p.u, p.t]);          // post
+        addBox(out, vadd(p.c, p.u, h * 0.55), [0.05, h * 0.9, 5.2], col || [0.72, 0.74, 0.78], [p.r, p.u, p.t]);  // mesh
+      });
+    };
+    // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
+    const guardrail = (s0, s1, side, gap, col) => {
+      along(s0, s1, 4, (k) => {
+        const p = anchor(k, side, gap);
+        addCyl(out, p.c, 0.09, 0.7, [0.5, 0.5, 0.52], 4, [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 0.7), [0.18, 0.45, 4.2], col || [0.82, 0.82, 0.85], [p.r, p.u, p.t]);
+      });
+    };
+    // Stacked-tyre barrier with a coloured conveyor-belt cap.
+    const tyreWall = (s0, s1, side, gap, capCol) => {
+      along(s0, s1, 3.4, (k) => {
+        const p = anchor(k, side, gap);
+        addCyl(out, p.c, 1.0, 0.9, [0.10, 0.10, 0.11], 7, [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 0.95), [2.0, 0.3, 3.6], capCol || [0.9, 0.9, 0.92], [p.r, p.u, p.t]);
+      });
+    };
+    // Low clipped hedge / continuous treeline.
+    const hedge = (s0, s1, side, gap, h, col) => {
+      along(s0, s1, 4, (k) => { const p = anchor(k, side, gap); addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, 4.3], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]); });
+    };
+
+    // ---------- structures ----------
+    // Multi-storey building: mass + horizontal window bands + optional setback top.
+    const building = (k, side, dist, w, h, d, opts) => {
+      opts = opts || {};
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      const body = opts.wall || [0.62, 0.64, 0.68], win = opts.window || [0.18, 0.26, 0.34];
+      addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b);
+      const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
+      for (let i = 0; i < floors; i++) {
+        addBox(out, vadd(p.c, p.u, (i + 0.62) * (h / floors)), [w * 1.01, (h / floors) * 0.46, d * 1.01], win, b);  // glazing band
+      }
+      if (opts.setback) addBox(out, vadd(p.c, p.u, h + h * 0.1), [w * 0.6, h * 0.22, d * 0.6], body, b);
+      if (opts.roof) addBox(out, vadd(p.c, p.u, h + (opts.setback ? h * 0.22 : 0) + 1), [w * 0.3, 2, d * 0.3], [0.3, 0.3, 0.33], b);  // rooftop plant
+    };
+    // Tapered tower (control tower, spire) + optional antenna mast.
+    const tower = (k, side, dist, baseW, h, opts) => {
+      opts = opts || {};
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      addFrustum(out, p.c, baseW * 0.5, baseW * 0.32, h, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);
+      if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
+      if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
+    };
+    // Advertising hoarding / billboard: a panel on two slim posts.
+    const billboard = (k, side, gap, w, h, col) => {
+      const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(p.c, p.t, o), 0.12, h, [0.2, 0.2, 0.22], 4, b);
+      addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], col || [0.9, 0.85, 0.2], b);
+    };
+    // Overhead gantry spanning the track (start/scoring/DRS): two legs + a beam.
+    const gantry = (s, h, col) => {
+      const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
+      const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
+      addCyl(out, aL.c, 0.3, h, c, 6, [aL.r, u, aL.t]); addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
+      addBox(out, [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h], [hw[k] * 2 + 5, 0.9, 1.4], c, [aL.r, u, aL.t]);
+    };
+    // Marshal post / flag bunker: a small orange-roofed box with a pole.
+    const marshalPost = (k, side, gap) => {
+      const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
+      addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
+      addCyl(out, vadd(p.c, p.r, side * 1.4), 0.08, 4, [0.4, 0.4, 0.42], 4, b);
+    };
+    // Bush / shrub clump (low rounded greenery).
+    const bush = (k, side, dist, col) => {
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      addCone(out, vadd(p.c, p.u, 0.3), 1.6, 2.2, col || [0.20, 0.38, 0.18], 6, b);
+    };
+
     // continuous barrier wall hugging both edges on street circuits — going off
     // means hitting a wall, not open grass. Day circuits get red/white armco
     // striping; night circuits get a dark rail.
     if (def.street) {
-      const WH = 1.1, WT = 0.4;
+      // Barriers are straight panels — span a few nodes each instead of one box
+      // per ~4 m node, roughly halving the barrier vertex cost on long street laps.
+      const WH = 1.1, WT = 0.4, STEP = 2;
       for (const side of [-1, 1]) {
-        for (let k = 0; k < n; k++) {
-          const kn = (k + 1) % n;
+        for (let k = 0; k < n; k += STEP) {
+          const kn = (k + STEP) % n;
           const r0 = [track.rx[k], track.ry[k], track.rz[k]];
           const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
           const u0 = upOf(track, k);
@@ -730,7 +1038,7 @@ const Tracks = (function () {
           const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
           const f = norm([bx - ax, by - ay, bz - az]);
           const rr = norm(cross(f, u0));
-          const striped = (Math.floor(k / 3) % 2) === 0;
+          const striped = (Math.floor(k / (STEP * 3)) % 2) === 0;
           const col = def.night ? [0.18, 0.18, 0.22]
             : (striped ? [0.92, 0.92, 0.94] : [0.85, 0.18, 0.16]);
           addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
@@ -872,7 +1180,15 @@ const Tracks = (function () {
     if (def.scenery) def.scenery({
       out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
       place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
-      ferrisWheel, hash, upOf, cross, norm, lerp,
+      ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
+      // richer primitives (world coords): non-cube shapes
+      addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
+      // landscape + vegetation
+      pine, tree, palm, bush, hedge, peak, mountain, ridge,
+      // structures
+      building, tower, grandstand, billboard, gantry, marshalPost,
+      // barriers / track furniture
+      wall, fence, guardrail, tyreWall,
     });
 
     // bridge supports: pillars from the ground up to the raised deck, set a
@@ -937,7 +1253,7 @@ const Tracks = (function () {
       grass: [0.14, 0.18, 0.14], runoff: [0.28, 0.26, 0.24], fog: [0.08, 0.09, 0.15],
       asphalt: [0.18, 0.19, 0.22], line: [0.9, 0.9, 0.95],
       fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92], concrete: [0.42, 0.40, 0.38],
-      ambientSky: [0.55, 0.56, 0.64], ambientGround: [0.28, 0.28, 0.30],
+      ambientSky: [0.62, 0.64, 0.76], ambientGround: [0.44, 0.44, 0.48],
       sunColor: [0.7, 0.72, 0.8], sunDir: [0.1, 0.9, 0.2],
     }, o);
     p.sunDir = norm(p.sunDir);
