@@ -67,9 +67,10 @@
         }
       }
       // Tiered dark-green box ridges settling behind the trackside treeline (Imola hills enclosing the back).
+      // 24 m height ≈ tall deciduous canopy; 200 m+ keeps near face >140 m from road edge.
       every(70, (k) => {
         for (const side of [-1, 1]) {
-          backdrop(k, side, 150 + hash(k * 13 + side) * 90, [190, 38, 190], [0.16, 0.34, 0.18]);
+          backdrop(k, side, 200 + hash(k * 13 + side) * 90, [110, 24, 90], [0.16, 0.34, 0.18]);
         }
       });
 
