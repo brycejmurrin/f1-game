@@ -910,15 +910,6 @@ const Tracks = (function () {
         addBox(out, [px[ksp] + kspr[0] * d, py[ksp] + h / 2, pz[ksp] + kspr[2] * d],
                [22, h, 22], [0.52 + hash(i) * 0.12, 0.48 + hash(i) * 0.12, 0.46 + hash(i) * 0.1]);
       }
-      // Hillside favela-style housing clusters
-      for (let i = 0; i < 8; i++) {
-        const k = Math.round((i / 8) * n) % n;
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const fav_d = 240 + hash(k * 41) * 100;
-        const h_offset = 35 + hash(k * 42) * 30;
-        addBox(out, [px[k] + r[0] * fav_d, py[k] + h_offset, pz[k] + r[2] * fav_d],
-               [160, 70, 140], [0.62, 0.5, 0.38]);
-      }
       // Dense tropical vegetation on hillsides
       every(12, (k) => {
         for (const side of [-1, 1]) {
@@ -936,7 +927,7 @@ const Tracks = (function () {
       every(180, (k) => {
         const lake_d = 90 + hash(k * 48) * 100;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * lake_d, pyMin - 3, pz[k] + track.rz[k] * side * lake_d],
+          addBox(out, [px[k] + track.rx[k] * side * lake_d, py[k] - 3, pz[k] + track.rz[k] * side * lake_d],
                  [100, 1.2, 140], [0.08, 0.22, 0.38]);
         }
       });
