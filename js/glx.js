@@ -33,6 +33,7 @@ void main() {
   // blooms. Per-draw material: uRoughness / uMetalness / uSpecular.
   const LIT_FS = `#version 300 es
 precision highp float;
+precision highp sampler2DShadow;
 in vec3 vNrm;
 in vec3 vCol;
 in vec3 vWorldPos;
