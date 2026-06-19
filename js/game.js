@@ -138,6 +138,8 @@ const ACCEL = 13;           // m/s^2 at low speed
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
 let PACE = 1.0;
 const BRAKE = 27;
+const REVERSE_MAX = -7;     // m/s — top reverse crawl speed (brake held at a stop)
+const REVERSE_ACCEL = 7;    // m/s^2 — how quickly the reverse crawl builds
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
 const LAT_MAX = 22;         // m/s^2 cornering grip
@@ -932,7 +934,13 @@ function updateCar(c, dt, ranked) {
   const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
   const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || (_testInput ? !!_testInput.throttle : Input.throttle())) : true;
   if (braking) {
-    c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
+    if (c.speed > 0) {
+      c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
+    } else if (c.isPlayer && state === "race") {
+      // Stopped and still braking: crawl backwards so the player can ease off a
+      // wall or re-aim after a spin. Capped slow; throttle drives forward again.
+      c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * dt);
+    }
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else if (!onThrottle) {
     // coasting: gentle engine-braking/drag, plus a little energy recovery
@@ -946,15 +954,16 @@ function updateCar(c, dt, ranked) {
   // --- slope gravity: on real-elevation circuits the climbs bleed speed and the
   // descents feed it back. slopeSin is the road tangent's vertical component
   // (sin of the pitch). Race-only so the grid doesn't creep during the countdown.
-  if (state === "race" && slopeSin) c.speed = Math.max(0, c.speed - GRAVITY_SLOPE * slopeSin * dt);
+  if (state === "race" && slopeSin && c.speed > 0) c.speed = Math.max(0, c.speed - GRAVITY_SLOPE * slopeSin * dt);
   if (c.isPlayer) {
+    const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
     if (!gearsManual()) {
-      const ng = naturalGear(c.speed);
+      const ng = naturalGear(gearSpeed);
       // auto upshift/downshift cue: same shift sound as manual when the box changes
       if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
       c.gear = ng;
     }
-    c.rpm = rpmFor(c.gear, c.speed);
+    c.rpm = rpmFor(c.gear, gearSpeed);
   }
 
   // Kerb vs off-track: a kerb sits just outside the road edge and is DRIVABLE
@@ -966,7 +975,7 @@ function updateCar(c, dt, ranked) {
   c.offroad = Math.abs(c.x) > hw && !c.onKerb;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
-    c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
+    if (c.speed > 0) c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
     c.offT += dt;
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
@@ -1176,10 +1185,23 @@ function updateCar(c, dt, ranked) {
   // Player s comes from Tracks.project() above; AI advances by speed*dt in Frenet.
   const oldS = c.isPlayer ? (c._prevS ?? c.s) : c.s;
   if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
-  c.prog += c.speed * dt;
+  // Progress is the cumulative arc-length. For the PLAYER, derive it from the
+  // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
+  // coupled to s, and going backwards (a spin/reverse) correctly DECREASES prog
+  // instead of cheating progress forward.
+  const L = track.total;
+  let ds;
+  if (c.isPlayer) {
+    ds = c.s - oldS;
+    if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap
+    c.prog += ds;
+  } else {
+    ds = c.speed * dt;
+    c.prog += ds;
+  }
   c.totalT += dt;
   c.lapTime += dt;
-  // line crossing
+  // line crossing (forward only: oldS just before the line, new s just after)
   if (oldS > track.total * 0.5 && c.s < track.total * 0.5 && oldS > c.s) {
     c.lap++;
     if (c.lap > 1) {
@@ -1197,6 +1219,39 @@ function updateCar(c, dt, ranked) {
       if (c.isPlayer) announce("FINISH!", 2);
     }
   }
+
+  // --- wrong-way + auto-rescue (player only) ---
+  if (c.isPlayer && state === "race" && !c.finished) {
+    // Moving backwards along the track at speed = going the wrong way. (A slow
+    // reverse crawl to recover off a wall is fine and does NOT trip this.)
+    if (ds < -0.03 && c.speed > 8) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
+    else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
+    c.wrongWay = c.wrongT > 0.4;
+    if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
+      announce("WRONG WAY", 1.0); c.wrongCueT = 1.0;
+    }
+    // Auto-rescue: stuck off-track, wrong-way, or pinned/stopped for too long.
+    const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0);
+    if (stuck) c.rescueT = (c.rescueT || 0) + dt;
+    else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
+    if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
+  }
+}
+
+// Put the player back on the racing line at its CURRENT progress, facing forward
+// at a modest speed — for recovering from a spin, a beached off-track moment, or
+// being pinned to a wall. Progress (s/prog/lap) is preserved; only the lateral
+// position, heading and slip are reset, and a little speed restored.
+function rescuePlayer(c) {
+  Tracks.sample(track, c.s, smp);
+  c.x = 0; c.xVis = 0;
+  c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
+  c.vLat = 0;
+  c.speed = Math.max(c.speed, 16);
+  c.px = smp.p[0]; c.pz = smp.p[2];
+  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false;
+  announce("RECOVERED", 1.2);
+  if (soundOn) GameAudio.offtrack();
 }
 
 // Record a completed time-trial lap: add it to the track's leaderboard tagged
@@ -2272,9 +2327,10 @@ window.__apex = {
     if (!player || player.px == null) return null;
     const slip = Math.atan2(player.vLat || 0, Math.max(1, player.speed));
     return {
-      s: player.s, x: player.x, speed: player.speed,
+      s: player.s, x: player.x, speed: player.speed, prog: player.prog,
       head: player.head, vLat: player.vLat || 0,
       slipDeg: slip * 180 / Math.PI,
+      wrongWay: !!player.wrongWay, rescueT: player.rescueT || 0, lap: player.lap,
     };
   },
   // Set physics params directly (bypassing the sliders) for deterministic A/B
@@ -2411,6 +2467,34 @@ window.__apex = {
     ai.xVis = ai.x; ai.speed = player.speed; ai.finished = false; ai.lap = player.lap;
     cars.forEach((c) => { if (c !== ai && !c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
     return { rival: cars.indexOf(ai) };
+  },
+  // Place several AI rivals relative to the player for multi-car collision tests:
+  // list = [{ dProg, dx, speed }]. Unused AI are shoved far away. Returns indices.
+  rivals(list) {
+    if (!player || !track) return false;
+    const ai = cars.filter((c) => !c.isPlayer);
+    const used = [];
+    (list || []).forEach((spec, i) => {
+      const c = ai[i];
+      if (!c) return;
+      c.prog = player.prog + (spec.dProg || 0);
+      c.s = wrapS(player.s + (spec.dProg || 0));
+      c.x = player.x + (spec.dx || 0);
+      c.xVis = c.x; c.speed = spec.speed != null ? spec.speed : player.speed;
+      c.finished = false; c.lap = player.lap;
+      used.push(c);
+    });
+    ai.forEach((c) => { if (!used.includes(c)) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return used.map((c) => cars.indexOf(c));
+  },
+  // Point the player relDeg degrees off the track tangent (180 = backwards) for
+  // wrong-way / spin / rescue tests. Position/progress unchanged.
+  aim(relDeg) {
+    if (!player || !track || player.px == null) return false;
+    Tracks.sample(track, player.s, smp);
+    player.head = Math.atan2(smp.t[0], smp.t[2]) + (relDeg || 0) * Math.PI / 180;
+    player.vLat = 0;
+    return { head: player.head };
   },
   // skip the countdown but keep the grid intact, so the field races and packs
   // up normally — for observing pack behaviour (e.g. collision vibration).

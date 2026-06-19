@@ -172,6 +172,138 @@ test.describe("Apex 26 — collisions (deep)", () => {
     expect(r.maxAbsX).toBeLessThan(20);
   });
 
+  test("sandwiched between two rivals: player stays on track, no merge, no NaN", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      window.__apex.setPhysics({ drift: 0 });
+      window.__apex.jump(0.3, 40, 0);
+      window.__apex.rivals([{ dProg: 0, dx: -1.4 }, { dProg: 0, dx: 1.4 }]);  // both sides
+      let finite = true, maxAbsX = 0;
+      for (let i = 0; i < 60; i++) {
+        window.__apex.setInput({ steer: 0, throttle: false });
+        window.__apex.step(1 / 60, 1);
+        const p = window.__apex.probe();
+        if (!Number.isFinite(p.x)) finite = false;
+        maxAbsX = Math.max(maxAbsX, Math.abs(p.x));
+      }
+      window.__apex.clearInput();
+      return { finite, maxAbsX, hw: window.__apex.probe().hw };
+    });
+    expect(errors).toEqual([]);
+    expect(r.finite).toBe(true);
+    expect(r.maxAbsX).toBeLessThan(r.hw + 9.5);   // never squeezed off through a wall
+  });
+
+  test("a side rub never INCREASES the player's speed (no energy injection)", async ({ page }) => {
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      window.__apex.setPhysics({ drift: 0 });
+      window.__apex.jump(0.3, 40, 0);
+      window.__apex.rivals([{ dProg: 0, dx: 0.8 }]);   // overlapping to the right
+      const v0 = window.__apex.probe().speed;
+      let maxV = v0;
+      for (let i = 0; i < 40; i++) {
+        window.__apex.setInput({ steer: 0, throttle: false });
+        window.__apex.step(1 / 60, 1);
+        maxV = Math.max(maxV, window.__apex.probe().speed);
+      }
+      window.__apex.clearInput();
+      return { v0, maxV };
+    });
+    expect(r.maxV).toBeLessThanOrEqual(r.v0 + 0.5);   // contact only scrubs speed
+  });
+
+  test("a single AI rub only nudges the player apart — never launches it", async ({ page }) => {
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      window.__apex.setPhysics({ drift: 0 });
+      window.__apex.jump(0.3, 40, 0);
+      window.__apex.rivals([{ dProg: 0, dx: 1.0 }]);   // overlapping to the right
+      let maxStep = 0, prev = window.__apex.probe().x;
+      for (let i = 0; i < 40; i++) {
+        window.__apex.setInput({ steer: 0, throttle: false });
+        window.__apex.step(1 / 60, 1);
+        const x = window.__apex.probe().x;
+        maxStep = Math.max(maxStep, Math.abs(x - prev));   // per-frame displacement
+        prev = x;
+      }
+      window.__apex.clearInput();
+      return { finalX: prev, maxStep };
+    });
+    expect(r.finalX).toBeLessThan(0);        // shoved away from the rival (to the left)
+    expect(r.maxStep).toBeLessThan(0.6);     // gentle rub, never a launch/teleport
+  });
+
+  test("AI shoving the player toward the wall can't push them through it", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.race("monaco", "day", "dry"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.go());
+    const r = await page.evaluate(() => {
+      window.__apex.setPhysics({ drift: 0 });
+      const hw = window.__apex.probe().hw;
+      window.__apex.jump(0.2, 30, hw - 1.2);            // player near the right barrier
+      window.__apex.rivals([{ dProg: 0, dx: -1.2 }]);   // AI on the inside, shoving out
+      let maxAbsX = 0;
+      for (let i = 0; i < 60; i++) { window.__apex.setInput({ steer: 0, throttle: false }); window.__apex.step(1 / 60, 1); maxAbsX = Math.max(maxAbsX, Math.abs(window.__apex.probe().x)); }
+      window.__apex.clearInput();
+      return { maxAbsX, hw };
+    });
+    expect(r.maxAbsX).toBeLessThan(r.hw + 0.2);   // held inside the street barrier
+  });
+
+  test("five-car pileup around the player stays bounded and finite", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      window.__apex.setPhysics({ drift: 0.2 });
+      window.__apex.jump(0.3, 35, 0);
+      window.__apex.rivals([
+        { dProg: 2, dx: 0.5 }, { dProg: -2, dx: -0.5 },
+        { dProg: 1, dx: -1.2 }, { dProg: -1, dx: 1.2 }, { dProg: 0, dx: 0 },
+      ]);
+      let finite = true, maxAbsX = 0;
+      for (let i = 0; i < 90; i++) {
+        window.__apex.setInput({ steer: Math.sin(i / 6), throttle: true });
+        window.__apex.step(1 / 60, 1);
+        const cars = window.__apex.cars();
+        for (const c of cars) { if (!Number.isFinite(c.x) || !Number.isFinite(c.prog)) finite = false; maxAbsX = Math.max(maxAbsX, Math.abs(c.x)); }
+      }
+      window.__apex.clearInput();
+      return { finite, maxAbsX };
+    });
+    expect(errors).toEqual([]);
+    expect(r.finite).toBe(true);
+    expect(r.maxAbsX).toBeLessThan(20);
+  });
+
+  test("collision across the start/finish line keeps prog monotonic (no wrap glitch)", async ({ page }) => {
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      const total = window.__apex.info().total;
+      window.__apex.setPhysics({ drift: 0 });
+      window.__apex.jump(0.985, 55, 0);                 // just before the line
+      window.__apex.rivals([{ dProg: 3, dx: 0.6 }]);    // rival straddling the line ahead
+      window.__apex.setInput({ steer: 0, throttle: true });
+      let prev = window.__apex.physState().prog, backsteps = 0, finite = true;
+      for (let i = 0; i < 120; i++) {
+        window.__apex.step(1 / 60, 1);
+        const p = window.__apex.physState();
+        if (!Number.isFinite(p.prog)) finite = false;
+        if (p.prog < prev - 0.6) backsteps++;           // big backward jump = wrap glitch
+        prev = p.prog;
+      }
+      window.__apex.clearInput();
+      return { backsteps, finite };
+    });
+    expect(r.finite).toBe(true);
+    expect(r.backsteps).toBe(0);     // prog advanced cleanly through the line despite contact
+  });
+
   test("driver↔AI contact never NaNs or desyncs prog/s for the player", async ({ page }) => {
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
