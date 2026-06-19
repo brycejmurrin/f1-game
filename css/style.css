@@ -310,6 +310,17 @@ button:active { background: rgba(255, 255, 255, 0.16); }
 body.manual #btn-boost { left: calc(50% - 84px); right: auto; bottom: calc(152px + var(--sab)); }
 body.manual #btn-ot    { left: calc(50% + 8px);  right: auto; bottom: calc(152px + var(--sab)); }
 
+/* BUTTON mode (auto-throttle: no GAS, no shifts): cluster each thumb's controls
+   above its steer button — BRAKE over the left, BOOST then OT over the right. */
+body.steer-buttons #btn-brake { left:  calc(50% - 148px); bottom: calc(108px + var(--sab)); }
+body.steer-buttons #btn-boost { left: auto; right: calc(50% - 148px); bottom: calc(108px + var(--sab)); }
+body.steer-buttons #btn-ot    { left: auto; right: calc(50% - 148px); bottom: calc(192px + var(--sab)); }
+
+/* TOUCH mode (steer by screen halves, auto-throttle): pull BOOST/OT in from the
+   far corner so they sit nearer the thumbs. */
+body.steer-touch #btn-boost { right: calc(96px + var(--sar)); }
+body.steer-touch #btn-ot    { right: calc(96px + var(--sar)); }
+
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
 @media (orientation: landscape) {
   /* HUD becomes a short horizontal strip at the very bottom so the big gear
@@ -326,6 +337,12 @@ body.manual #btn-ot    { left: calc(50% + 8px);  right: auto; bottom: calc(152px
   /* steer buttons tuck closer in landscape (narrower HUD) */
   #btn-steer-left  { left:  calc(50% - 130px); bottom: calc(12px + var(--sab)); }
   #btn-steer-right { right: calc(50% - 130px); bottom: calc(12px + var(--sab)); }
+  /* button mode: BRAKE over the left steer, BOOST/OT over the right steer */
+  body.steer-buttons #btn-brake { left:  calc(50% - 130px); bottom: calc(96px + var(--sab)); }
+  body.steer-buttons #btn-boost { left: auto; right: calc(50% - 130px); bottom: calc(96px + var(--sab)); }
+  body.steer-buttons #btn-ot    { left: auto; right: calc(50% - 130px); bottom: calc(176px + var(--sab)); }
+  body.steer-touch #btn-boost { right: calc(96px + var(--sar)); }
+  body.steer-touch #btn-ot    { right: calc(96px + var(--sar)); }
 }
 
 #pausebtn {

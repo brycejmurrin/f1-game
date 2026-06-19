@@ -80,9 +80,16 @@ let trackIdx = store.get("track", 0);
 let difficulty = store.get("difficulty", "normal");
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
-let manualMode = store.get("manual", false);   // manual gearbox (player shifts)
+let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
 let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
+// Manual gears require both thumbs free, which only tilt steering allows. In
+// touch/button modes the thumbs steer, so gears are forced to auto.
+function gearsManual() { return manualMode && steerMode === "tilt"; }
+// In auto mode on a touch device the car accelerates on its own (like the AI),
+// so the player only steers, brakes and boosts — no throttle thumb needed.
+// Desktop keeps the keyboard throttle; manual gears keep the GAS pedal.
+function autoThrottle() { return Input.touchControlsNeeded() && !gearsManual(); }
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
@@ -295,16 +302,21 @@ function startRace() {
 
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
-  els.btnThrottle.hidden = !t; els.btnBrake.hidden = !t;
+  const manual = gearsManual();   // only ever true in tilt mode
+  // GAS pedal only when throttle is manual; auto-throttle hides it
+  els.btnThrottle.hidden = !(t && manual);
+  els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
-  els.shiftUp.hidden = !(t && manualMode);
-  els.shiftDown.hidden = !(t && manualMode);
+  els.shiftUp.hidden = !(t && manual);
+  els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
   els.btnSteerLeft.hidden = !steerBtns;
   els.btnSteerRight.hidden = !steerBtns;
-  // manual mode => shifts take the right column, boost/OT move to centre (CSS)
-  document.body.classList.toggle("manual", manualMode);
-  document.body.classList.toggle("btn-steer", steerBtns);
+  // manual mode => shifts take the right column, boost/OT move to centre (CSS).
+  // button/touch modes => boost/OT pull in next to the steering thumb (CSS).
+  document.body.classList.toggle("manual", manual);
+  document.body.classList.toggle("steer-buttons", steerBtns);
+  document.body.classList.toggle("steer-touch", t && steerMode === "touch");
 }
 
 function endRace() {
@@ -683,7 +695,7 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer) {
     c.shiftT = Math.max(0, c.shiftT - dt);
     const up = Input.consumeShiftUp(), down = Input.consumeShiftDown();
-    if (manualMode) {
+    if (gearsManual()) {
       if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.shift(true); }
       if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.shift(false); }
       const hi = gearHi(c.gear), lo = gearLo(c.gear);
@@ -694,8 +706,9 @@ function updateCar(c, dt, ranked) {
   }
 
   // --- integrate speed ---
-  // throttle is manual for the player (a held button); AI always drives
-  const onThrottle = c.isPlayer ? Input.throttle() : true;
+  // AI always drives; the player holds GAS unless auto-throttle is on (then the
+  // car accelerates on its own and braking still takes over below)
+  const onThrottle = c.isPlayer ? (autoThrottle() || Input.throttle()) : true;
   if (braking) {
     c.speed = Math.max(0, c.speed - BRAKE * dt);
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
@@ -709,7 +722,7 @@ function updateCar(c, dt, ranked) {
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
   if (c.isPlayer) {
-    if (!manualMode) {
+    if (!gearsManual()) {
       const ng = naturalGear(c.speed);
       // auto upshift/downshift cue: same shift sound as manual when the box changes
       if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
@@ -1321,17 +1334,24 @@ function setSteerMode(mode) {
   Input.setSteerMode(mode);
   if (mode === "tilt") enableTilt();   // (re)request motion permission within this gesture
   $("pm-steer").textContent = steerLabel();
+  refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle hides off-tilt
   showTouchControls(true);
 }
 $("pm-steer").onclick = () => {
   setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);
 };
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+// GEARS manual is only meaningful with tilt steering (both thumbs free), so the
+// toggle is shown only then; touch/button modes always run auto.
+function refreshGearsBtn() {
+  $("pm-gears").hidden = steerMode !== "tilt";
+  $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
+}
 $("pm-gears").onclick = () => {
   manualMode = !manualMode;
   store.set("manual", manualMode);
-  $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
-  if (player && !manualMode) player.gear = naturalGear(player.speed);
+  refreshGearsBtn();
+  if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
 };
 document.addEventListener("visibilitychange", () => {
@@ -1351,7 +1371,7 @@ Input.init(canvas, { onPause: () => setPaused(!paused) });
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
-$("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
+refreshGearsBtn();
 setSound(soundOn);
 setMusic(musicEnabled);
 loadTrack(trackIdx);
