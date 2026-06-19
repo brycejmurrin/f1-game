@@ -800,9 +800,9 @@ const Tracks = (function () {
         const kmu = upOf(track, kmono);
         for (let i = -3; i <= 3; i++) {
           const k = (kmono + i * Math.round(n / 20)) % n;
-          const kr = [track.rx[k], track.ry[k], track.rz[k]];
-          const o = hw[k] + 16;
-          addBox(out, [px[k] + kr[0] * o, py[k] + 8, pz[k] + kr[2] * o], [28, 16, 18], [0.88, 0.88, 0.92]);
+          // oriented + cleared so the white grandstand wraps the banked turn
+          // alongside it instead of cutting across the apex (near face was ~2m in)
+          prop(k, 1, 8, [10, 16, 26], [0.88, 0.88, 0.92]);
         }
         // Sierra mountain backdrop
         const kmtn = Math.round(n * 0.4) % n;
@@ -1385,11 +1385,11 @@ const Tracks = (function () {
         if (onTrack(bx, bz, 12)) continue;
         addBox(out, [bx, py[k] + h * 0.5, bz], [11, h, 11], [tone, tone * 0.93, tone * 0.86]);
       }
-      // Pit complex: modernized brutalist control tower
+      // Pit complex: modernized brutalist control tower, oriented alongside the
+      // start straight (prop() clears its depth so it never sits on the tarmac).
       const kpit = Math.round(n * 0.02) % n;
-      const kpitr = [track.rx[kpit], track.ry[kpit], track.rz[kpit]];
-      addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 18, pz[kpit] + kpitr[2] * 12], [50, 36, 30], [0.5, 0.48, 0.46]);
-      addBox(out, [px[kpit] + kpitr[0] * 12, py[kpit] + 36, pz[kpit] + kpitr[2] * 12], [46, 6, 26], [0.42, 0.42, 0.44]);
+      prop(kpit, 1, 12, [14, 36, 44], [0.5, 0.48, 0.46]);   // control tower (14m deep)
+      prop(kpit, 1, 12, [16, 6, 40], [0.42, 0.42, 0.44]);   // overhanging roof band
       // Colourful hillside houses (the São Paulo favela backdrop) — small boxes
       // set well back and onTrack-guarded so they never become a wall or ceiling.
       const favCol = [[0.82, 0.46, 0.34], [0.86, 0.74, 0.40], [0.46, 0.58, 0.66],
