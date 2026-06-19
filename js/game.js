@@ -802,11 +802,10 @@ function resolveCollisions(ranked) {
       }
     }
   }
-  // keep everyone on the drivable surface after being shoved around
+  // keep everyone inside the per-side barriers after being shoved around
   for (const c of ranked) {
-    Tracks.sample(track, c.s, smp);
-    const wall = track.street ? smp.hw - 0.8 : smp.hw + 9;
-    if (c.x > wall) c.x = wall; else if (c.x < -wall) c.x = -wall;
+    const wr = Tracks.wallAt(track, c.s, 1), wl = Tracks.wallAt(track, c.s, -1);
+    if (c.x > wr) c.x = wr; else if (c.x < -wl) c.x = -wl;
   }
   // The player runs world-space physics; collisions just moved its (s, x), so
   // feed that back into px/pz or the next frame's integration would overwrite the
@@ -840,6 +839,8 @@ function updateCar(c, dt, ranked) {
   // wedged — instead of grinding to a halt against a car or wall.
   let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
   if (!c.isPlayer) {
+    // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
+    // flows through barrier-lined corners instead of treating them as boxed-in).
     const edge = track.street ? hw - 0.8 : hw + 5;
     roomL = edge + c.x;            // clearance to the left edge from our position
     roomR = edge - c.x;            // clearance to the right edge
@@ -1135,12 +1136,13 @@ function updateCar(c, dt, ranked) {
       : clamp(Math.abs(k) * c.speed * 0.05 - 0.35, 0, 1);
   }
   // wall
-  // Walls: on street circuits the barrier is right at the track edge, so cars
-  // hit it just outside the racing line. On permanent circuits there's run-off,
-  // so the hard limit sits well out past the grass.
-  const wall = track.street ? hw - 0.8 : hw + 9;
-  if (Math.abs(c.x) > wall) {
-    c.x = c.x > 0 ? wall : -wall;
+  // The driving boundary is per-side and derived from where solid barriers were
+  // actually placed (Tracks.wallAt), so the car always stops just before a model
+  // instead of clipping through it — consistent across street and open circuits.
+  const wallR = Tracks.wallAt(track, c.s, 1);
+  const wallL = Tracks.wallAt(track, c.s, -1);
+  if (c.x > wallR || c.x < -wallL) {
+    c.x = c.x > wallR ? wallR : -wallL;
     // The barrier absorbs sideways momentum: kill the player's lateral slip so a
     // drift into the wall doesn't keep grinding/bouncing the car back into it.
     if (c.isPlayer && c.vLat) c.vLat = 0;
@@ -2332,6 +2334,20 @@ window.__apex = {
       slipDeg: slip * 180 / Math.PI,
       wrongWay: !!player.wrongWay, rescueT: player.rescueT || 0, lap: player.lap,
     };
+  },
+  // Driving-boundary stats for the current track (both sides, all nodes): the
+  // tightest/widest lateral limit and the closest-to-the-edge any barrier sits.
+  // For verifying every track keeps the car off the models and is recoverable.
+  wallStats() {
+    if (!track || !track.barR) return null;
+    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false;
+    for (let k = 0; k < track.n; k++) {
+      const r = track.barR[k], l = track.barL[k];
+      if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
+      minB = Math.min(minB, r, l); maxB = Math.max(maxB, r, l);
+      minOverHw = Math.min(minOverHw, r - track.hw[k], l - track.hw[k]);
+    }
+    return { minB, maxB, minOverHw, anyNaN, street: !!track.street, n: track.n };
   },
   // Set physics params directly (bypassing the sliders) for deterministic A/B
   // tests and on-device tuning. Any omitted field is left unchanged.

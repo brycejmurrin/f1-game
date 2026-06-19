@@ -11,6 +11,7 @@
     country: "Azerbaijan",
     night: true,
     theme: "street_night",
+    street: true,
     lengthKm: 6,
     baseHW: 6,
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
