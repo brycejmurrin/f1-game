@@ -245,6 +245,12 @@ function basisMat(r, u, f, p, out) {
 }
 const tmpMat = new Float32Array(16);
 const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
+// Pre-allocated scratch matrices — zero-GC hot-path matrix math.
+const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new Float32Array(16);
+const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
+const _mInvVP = new Float32Array(16);
+let _shadowSnapX = null, _shadowSnapZ = null;
 
 // ---------- parts / player mods ----------
 function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
@@ -1182,27 +1188,31 @@ function render(dt) {
     fovY = Math.min(fovY, fovYCap);
   }
 
-  const proj = M4.perspective(fovY, GLX.aspect, 0.1, farPlane);
-  const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
-  frame.viewProj = M4.mul(proj, view);
+  M4.perspectiveTo(_mProj, fovY, GLX.aspect, 0.1, farPlane);
+  M4.lookAtTo(_mView, camEye, camTgt, [0, 1, 0]);
+  M4.mulTo(_mVP, _mProj, _mView);
+  frame.viewProj = _mVP;
   frame.eye = camEye;
 
-  // Shadow pass — render terrain + road from sun's perspective
+  // Shadow pass — render terrain + road from sun's perspective.
+  // Snap the frustum centre to a 15 m grid so the shadow map only re-renders
+  // when the camera moves enough to shift the snapped cell.
   if (track) {
     const sd = frame.sunDir;
     const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
     const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
-    const lightView = M4.lookAt(
-      [cx + sd[0] * 150, cy + sd[1] * 150, cz + sd[2] * 150],
-      [cx, cy, cz], up
-    );
-    const lightProj = M4.ortho(-70, 70, -70, 70, 1.0, 320);
-    const lightVP = M4.mul(lightProj, lightView);
-    GLX.shadowBegin(lightVP);
-    GLX.castShadow(track.meshes.terrain, M4.ident());
-    GLX.castShadow(track.meshes.road, M4.ident());
-    GLX.castShadow(track.meshes.props, M4.ident());
-    GLX.shadowEnd();
+    const snapX = Math.round(cx / 15) * 15, snapZ = Math.round(cz / 15) * 15;
+    if (snapX !== _shadowSnapX || snapZ !== _shadowSnapZ) {
+      _shadowSnapX = snapX; _shadowSnapZ = snapZ;
+      M4.lookAtTo(_mLView, [snapX + sd[0] * 150, cy + sd[1] * 150, snapZ + sd[2] * 150], [snapX, cy, snapZ], up);
+      M4.orthoTo(_mLProj, -70, 70, -70, 70, 1.0, 320);
+      M4.mulTo(_mLVP, _mLProj, _mLView);
+      GLX.shadowBegin(_mLVP);
+      GLX.castShadow(track.meshes.terrain, MAT_IDENT);
+      GLX.castShadow(track.meshes.road, MAT_IDENT);
+      GLX.castShadow(track.meshes.props, MAT_IDENT);
+      GLX.shadowEnd();
+    }
   }
 
   if (dbgCam) {
@@ -1211,7 +1221,8 @@ function render(dt) {
     GLX.begin(frame);
     frame.fogDensity = bf;
   } else GLX.begin(frame);
-  frameSky.invViewProj = M4.invert(frame.viewProj);
+  M4.invertTo(_mInvVP, _mVP);
+  frameSky.invViewProj = _mInvVP;
   GLX.drawSky(frameSky);
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
@@ -1219,20 +1230,20 @@ function render(dt) {
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
   // mirror-like, cars and barriers pick up sharper reflections.
-  GLX.draw(track.meshes.terrain, M4.ident(),
+  GLX.draw(track.meshes.terrain, MAT_IDENT,
     night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.35 }
           : { roughness: 0.97, specular: 0.06, detail: 0.35 });
-  GLX.draw(track.meshes.road, M4.ident(),
+  GLX.draw(track.meshes.road, MAT_IDENT,
     wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 }
                    : { roughness: 0.14, specular: 0.85, detail: 0.06 })
           : (night ? { emissive: 0.09, roughness: 0.85, specular: 0.20, detail: 0.22 }
                    : { roughness: 0.85, specular: 0.20, detail: 0.22 }));
-  GLX.draw(track.meshes.props, M4.ident(),
+  GLX.draw(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: 0.35, roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
           : (night ? { emissive: 0.45, roughness: 0.85, specular: 0.20 }
                    : { roughness: 0.85, specular: 0.20 }));
-  GLX.draw(track.meshes.gate, M4.ident(),
+  GLX.draw(track.meshes.gate, MAT_IDENT,
     wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
         : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
 
@@ -1241,8 +1252,12 @@ function render(dt) {
     GLX.drawMark(m, 0.6, 2.2);
   }
 
-  // cars
+  // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   for (const c of cars) {
+    if (!c.isPlayer && player) {
+      const ds = Math.abs(c.s - player.s);
+      if (Math.min(ds, track.total - ds) > 550) continue;
+    }
     Tracks.sample(track, c.s, smp2);
     // Smooth the AI cars' RENDERED lateral position (physics x is untouched).
     // This low-passes any high-frequency collision jitter so a rubbing pack

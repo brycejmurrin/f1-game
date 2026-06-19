@@ -461,6 +461,9 @@ void main() {}`;
   let bloomW = 0, bloomH = 0;
   const BLOOM_DIV = 2;         // bloom buffers at half resolution
 
+  // Material uniform cache — skip redundant per-draw scalar uploads.
+  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1;
+
   function compile(type, src) {
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
@@ -657,33 +660,38 @@ void main() {}`;
     const nrm = toF32(data.nrm);
     const col = toF32(data.col);
     let idx = data.idx;
-    const big = pos.length / 3 > 65535;
+    const vCount = pos.length / 3;
+    const big = vCount > 65535;
     if (idx instanceof Uint16Array || idx instanceof Uint32Array) {
       if (big && idx instanceof Uint16Array) idx = new Uint32Array(idx);
     } else {
       idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
     }
 
+    // Interleaved: [x,y,z, nx,ny,nz, r,g,b] per vertex — one buffer, stride=36.
+    // Better GPU cache locality vs 3 separate VBOs.
+    const interleaved = new Float32Array(vCount * 9);
+    for (let i = 0; i < vCount; i++) {
+      interleaved[i*9  ] = pos[i*3  ]; interleaved[i*9+1] = pos[i*3+1]; interleaved[i*9+2] = pos[i*3+2];
+      interleaved[i*9+3] = nrm[i*3  ]; interleaved[i*9+4] = nrm[i*3+1]; interleaved[i*9+5] = nrm[i*3+2];
+      interleaved[i*9+6] = col[i*3  ]; interleaved[i*9+7] = col[i*3+1]; interleaved[i*9+8] = col[i*3+2];
+    }
+
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
-    const attribs = [pos, nrm, col];
-    for (let i = 0; i < 3; i++) {
-      const buf = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, attribs[i], gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(i);
-      gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 0, 0);
-    }
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
+    const stride = 36;
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
     const ib = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
 
-    return {
-      vao,
-      count: idx.length,
-      indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
-    };
+    return { vao, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
   }
 
   function begin(frame) {
@@ -722,6 +730,7 @@ void main() {}`;
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
     gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
+    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = -1;
   }
 
   function draw(mesh, modelMat, opts) {
@@ -736,12 +745,12 @@ void main() {}`;
     const metalness = opts && opts.metalness !== undefined ? opts.metalness : 0.0;
     const specular = opts && opts.specular !== undefined ? opts.specular : 0.5;
     const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
-    gl.uniform1f(litU.uEmissive, emissive);
-    gl.uniform1f(litU.uAlpha, alpha);
-    gl.uniform1f(litU.uRoughness, roughness);
-    gl.uniform1f(litU.uMetalness, metalness);
-    gl.uniform1f(litU.uSpecular, specular);
-    gl.uniform1f(litU.uDetail, detail);
+    if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
+    if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
+    if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
+    if (metalness !== _matMetal)    { gl.uniform1f(litU.uMetalness, metalness); _matMetal    = metalness; }
+    if (specular  !== _matSpec)     { gl.uniform1f(litU.uSpecular,  specular);  _matSpec     = specular; }
+    if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
     const blend = alpha < 1;
     if (blend) gl.enable(gl.BLEND);
     gl.bindVertexArray(mesh.vao);
