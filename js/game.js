@@ -708,8 +708,11 @@ function updateCar(c, dt, ranked) {
 
   // --- integrate speed ---
   // AI always drives; the player holds GAS unless auto-throttle is on (then the
-  // car accelerates on its own and braking still takes over below)
-  const onThrottle = c.isPlayer ? (autoThrottle() || Input.throttle()) : true;
+  // car accelerates on its own and braking still takes over below).
+  // Suppress auto-throttle while wallT > 0 (just bounced off a wall) so the car
+  // doesn't immediately re-pin itself: the player has to steer clear first.
+  const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
+  const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || Input.throttle()) : true;
   if (braking) {
     c.speed = Math.max(0, c.speed - BRAKE * dt);
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
@@ -848,17 +851,31 @@ function updateCar(c, dt, ranked) {
   }
   // wall
   // Walls: on street circuits the barrier is right at the track edge, so cars
-  // hit it just outside the racing line (scrape + scrub). On permanent circuits
-  // there's run-off, so the hard limit sits well out past the grass.
+  // hit it just outside the racing line. On permanent circuits there's run-off,
+  // so the hard limit sits well out past the grass.
   const wall = track.street ? hw - 0.8 : hw + 9;
   if (Math.abs(c.x) > wall) {
     c.x = c.x > 0 ? wall : -wall;
-    c.speed *= track.street ? 0.975 : 0.99;   // scrape, don't grind to a halt
-    if (c.isPlayer && track.street && c.collideT <= 0) {
-      shake = Math.min(1, shake + 0.18); c.collideT = 0.3;
-      if (soundOn) GameAudio.collision();
-      if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) {} }
+    if (track.street) {
+      // First-frame contact: instant speed hit so the impact is felt immediately.
+      if (!c.wasOnWall) c.speed *= 0.72;
+      // While pinned: strong deceleration force (grinding to a crawl).
+      c.speed = Math.max(0, c.speed - 38 * dt);
+      // Suppress auto-throttle briefly so the player can steer away cleanly.
+      if (c.isPlayer) c.wallT = 0.55;
+    } else {
+      // Open-circuit run-off wall: much softer boundary, gentle drag.
+      c.speed = Math.max(0, c.speed - 12 * dt);
     }
+    if (c.isPlayer && track.street && c.collideT <= 0) {
+      shake = Math.min(1, shake + 0.32); c.collideT = 0.35;
+      if (soundOn) GameAudio.collision();
+      if (navigator.vibrate) { try { navigator.vibrate(40); } catch (e) {} }
+    }
+    c.wasOnWall = true;
+  } else {
+    c.wasOnWall = false;
+    if (c.isPlayer) c.wallT = Math.max(0, (c.wallT || 0) - dt);
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Drive the visual nose yaw from the SMOOTHED steer (steerVis), not the raw
