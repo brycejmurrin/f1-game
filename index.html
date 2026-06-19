@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=29">
-<link rel="stylesheet" href="css/data.css?v=29">
+<link rel="stylesheet" href="css/style.css?v=30">
+<link rel="stylesheet" href="css/data.css?v=30">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -90,7 +90,7 @@
 <!-- select screen -->
 <div id="select" hidden>
   <h2 id="select-title">SELECT</h2>
-  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div></div>
+  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><button id="sel-customize" class="sel-edit">&#9998; CUSTOMIZE MY TEAM</button></div>
   <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-tracks"></div></div>
   <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
   <div class="sel-actions">
@@ -106,6 +106,23 @@
   <div class="sel-actions">
     <button id="res-menu">MENU</button>
     <button id="res-next" class="bigbtn">NEXT</button>
+  </div>
+</div>
+
+<!-- customize my team -->
+<div id="customize" class="panel" hidden>
+  <h2>MY TEAM</h2>
+  <label class="cz-row">TEAM NAME<input id="cz-name" type="text" maxlength="22" placeholder="My Team"></label>
+  <label class="cz-row">SHORT CODE<input id="cz-short" type="text" maxlength="4" placeholder="YOU"></label>
+  <label class="cz-row">PRIMARY<input id="cz-color" type="color"></label>
+  <label class="cz-row">ACCENT<input id="cz-color2" type="color"></label>
+  <label class="cz-row">DRIVER<input id="cz-driver" type="text" maxlength="22" placeholder="Your Name"></label>
+  <label class="cz-row">DRIVER CODE<input id="cz-code" type="text" maxlength="3" placeholder="YOU"></label>
+  <label class="cz-row">CAR NUMBER<input id="cz-num" type="number" min="0" max="99" placeholder="99"></label>
+  <div id="cz-preview"><span id="cz-swatch1"></span><span id="cz-swatch2"></span><span id="cz-pvtext"></span></div>
+  <div class="sel-actions">
+    <button id="cz-cancel">CANCEL</button>
+    <button id="cz-save" class="bigbtn">SAVE</button>
   </div>
 </div>
 
@@ -135,16 +152,16 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=29"></script>
-<script src="js/glx.js?v=29"></script>
-<script src="js/teams.js?v=29"></script>
-<script src="js/circuits.js?v=29"></script>
-<script src="js/tracks.js?v=29"></script>
-<script src="js/car3d.js?v=29"></script>
-<script src="js/input.js?v=29"></script>
-<script src="js/audio.js?v=29"></script>
-<script src="js/api.js?v=29"></script>
-<script src="js/data.js?v=29"></script>
-<script src="js/game.js?v=29"></script>
+<script src="js/mat4.js?v=30"></script>
+<script src="js/glx.js?v=30"></script>
+<script src="js/teams.js?v=30"></script>
+<script src="js/circuits.js?v=30"></script>
+<script src="js/tracks.js?v=30"></script>
+<script src="js/car3d.js?v=30"></script>
+<script src="js/input.js?v=30"></script>
+<script src="js/audio.js?v=30"></script>
+<script src="js/api.js?v=30"></script>
+<script src="js/data.js?v=30"></script>
+<script src="js/game.js?v=30"></script>
 </body>
 </html>
