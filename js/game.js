@@ -1766,18 +1766,44 @@ window.__apex = {
     return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
-  // Debug free camera for inspecting track layouts/scenery. Call with no args (or
-  // {mode:'chase'}) to restore the normal chase cam. Options:
-  //   { s, radius }      focus on lap-fraction s (else the whole-track bbox)
-  //   { azimuth, elevation, zoom, fov, fog }   aerial framing controls (degrees)
-  //   { eye:[x,y,z], target:[x,y,z], fov }     fully explicit free camera
-  // Returns the resolved {eye, target, span}.
+  // Debug free camera for surveying track layouts/scenery — look at anything.
+  // Call with no args (or "chase") to restore the chase cam. Option forms:
+  //   {}                                       aerial of the whole track
+  //   { s, radius }                            focus a lap-fraction s
+  //   { azimuth, elevation, zoom, fov, fog }   aerial/focus framing (degrees)
+  //   { s, side, dist, height, look }          stand TRACKSIDE at s, look outward
+  //                                            (side "L"/"R"/±1; look:"in" faces track)
+  //   { eye:[x,y,z], yaw, pitch, fov }         free-look from a point (degrees)
+  //   { eye:[x,y,z], target:[x,y,z], fov }     fully explicit
+  // Returns the resolved {eye, target, ...}.
   view(opts) {
     if (!track) return false;
     if (!opts || opts === "chase" || opts.mode === "chase") { dbgCam = null; return { mode: "chase" }; }
+    // free-look: explicit eye, aimed by yaw (0 = -Z, +90 = +X) and pitch (deg)
+    if (opts.eye && (opts.yaw != null || opts.pitch != null)) {
+      const yaw = (opts.yaw || 0) * Math.PI / 180, pit = (opts.pitch || 0) * Math.PI / 180;
+      const d = [Math.sin(yaw) * Math.cos(pit), Math.sin(pit), -Math.cos(yaw) * Math.cos(pit)];
+      const e = opts.eye;
+      dbgCam = { eye: e.slice(), target: [e[0] + d[0] * 100, e[1] + d[1] * 100, e[2] + d[2] * 100], fov: opts.fov || 60, far: opts.far || 6000, fog: opts.fog };
+      return { eye: e.slice(), yaw: opts.yaw || 0, pitch: opts.pitch || 0 };
+    }
     if (opts.eye && opts.target) {
       dbgCam = { eye: opts.eye.slice(), target: opts.target.slice(), fov: opts.fov || 60, far: opts.far || 6000, fog: opts.fog };
       return dbgCam;
+    }
+    // trackside survey: stand beside the track at fraction s, look out at the
+    // scenery on `side` (or back at the track with look:"in")
+    if (opts.s != null && opts.side != null) {
+      Tracks.sample(track, opts.s * track.total, smp);
+      const side = opts.side === "L" ? -1 : opts.side === "R" ? 1 : (opts.side || 1);
+      const dist = opts.dist != null ? opts.dist : 14, height = opts.height != null ? opts.height : 9;
+      const p = smp.p, r = smp.r;
+      const eye = [p[0] + r[0] * side * dist, p[1] + height, p[2] + r[2] * side * dist];
+      const target = opts.look === "in"
+        ? [p[0], p[1] + 1, p[2]]
+        : [p[0] + r[0] * side * (dist + 80), p[1] + height * 0.4, p[2] + r[2] * side * (dist + 80)];
+      dbgCam = { eye, target, fov: opts.fov || 62, far: opts.far || 6000, fog: opts.fog };
+      return { eye, target };
     }
     // centre + span: a focus point at lap-fraction s, or the whole-track bbox
     let cx, cy, cz, span;
