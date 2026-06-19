@@ -322,6 +322,13 @@ body.steer-buttons #btn-ot    { left: auto; right: calc(16px + var(--sar)); bott
    corner (no GAS); BOOST/OT keep the right corner. */
 body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 
+/* In PORTRAIT button mode the side-by-side steering arrows reach toward the
+   centre, so lift the gear/speed/energy readout above the control row to keep
+   it clear. Portrait-only so tilt/touch and all of landscape are untouched. */
+@media (orientation: portrait) {
+  body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab)); }
+}
+
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
 @media (orientation: landscape) {
   /* HUD becomes a short horizontal strip at the very bottom so the big gear
