@@ -845,10 +845,12 @@ const Tracks = (function () {
           prop(k, side, d, [5.0, 1.8, 5.0], [0.20, 0.34, 0.12]); // frond crown
         }
       });
-      // Rolling sand-dune ridges on the horizon (warm dusk tone)
-      every(70, (k) => {
+      // Low sand-dune ridges far out on the flat-desert horizon. Pushed well
+      // back and kept low so they read as a distant skyline, not tan walls
+      // flanking the straights; darkened for the night race.
+      every(120, (k) => {
         for (const side of [-1, 1]) {
-          backdrop(k, side, 200 + hash(k * 7 + side) * 130, [170, 26, 170], [0.74, 0.60, 0.40]);
+          backdrop(k, side, 360 + hash(k * 7 + side) * 160, [220, 14, 220], [0.46, 0.39, 0.28]);
         }
       });
       // Floodlit grandstand banking opposite the pits (night race spectators)
@@ -1615,9 +1617,9 @@ const Tracks = (function () {
 
   const DEFS = [
     { id: "bahrain", name: "BAHRAIN", gp: "Bahrain GP", country: "Bahrain", night: true, theme: "desert", lengthKm: 5.4, baseHW: 7,
-      pal: nightPal({ horizon: [0.10, 0.07, 0.10], runoff: [0.5, 0.4, 0.26] }),
+      pal: nightPal({ horizon: [0.10, 0.07, 0.10], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] }),
       segs: [{ t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
-        { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300, h: -4 }, { t: 60, l: 90, h: 4 }, { t: 0, l: 120 }, { t: 60, l: 110 }] },
+        { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300 }, { t: 60, l: 90 }, { t: 0, l: 120 }, { t: 60, l: 110 }] },
     { id: "monaco", name: "MONACO", gp: "Monaco GP", country: "Monaco", night: false, theme: "street_day", lengthKm: 3.3, baseHW: 5,
       pal: dayPal({ horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.40], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014,
         sunDir: norm([0.22, 0.88, 0.42]), sun: [1.0, 0.98, 0.93], sunColor: [1.0, 0.97, 0.90] }),
