@@ -81,7 +81,7 @@
         [0.05, -1, 58, 14, 64, 150], [0.08, 1, 66, 17, 76, 158], [0.97, -1, 72, 16, 84, 162],
       ]) {
         const k = Math.round(frac * n) % n;
-        building(k, side, dist, w, h, d, { wall: WHITE, window: GLASS, floor: 5 });
+        building(k, side, dist - w / 2, w, h, d, { wall: WHITE, window: GLASS, floor: 5 });
       }
       // Modern IFEMA grandstands (s≈0.88–0.94) — white-shelled stepped stands, denser
       for (const [frac, side] of [[0.88, 1], [0.90, 1], [0.92, 1], [0.94, 1], [0.90, -1], [0.93, -1]]) {

@@ -820,7 +820,10 @@ const Tracks = (function () {
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       // skip if this prop would overlap a parallel stretch of track
-      if (onTrack(cx, cz, sz[0] / 2 + 1.5)) return;
+      if (onTrack(cx, cz, sz[0] / 2 + 1.5)) {
+        console.warn(`[scenery] place SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]} (need dist>${(sz[0]/2+1.5).toFixed(1)})`);
+        return;
+      }
       // sink the base 0.8m below grade so prop bottoms tuck under the terrain
       // apron instead of co-planar Z-fighting where box meets ground. Anchored to
       // the terrain height at this lateral distance (not the road) so it sits on
@@ -844,7 +847,10 @@ const Tracks = (function () {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const o = side * (hw[k] + gap + sz[0] / 2);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-      if (onTrack(cx, cz, sz[0] / 2 + 4)) return;
+      if (onTrack(cx, cz, sz[0] / 2 + 4)) {
+        console.warn(`[scenery] groundPlane SUPPRESSED at k=${k} side=${side}: gap=${gap} sz[0]=${sz[0]} (need gap>4)`);
+        return;
+      }
       addBox(out, [cx, groundYAt(k, gap + sz[0] / 2) - sz[1] / 2 - 1.0, cz], sz, col);
     };
     // backdrop(): a distant scenery box (skyline, hills, dunes) on the horizon.
@@ -854,7 +860,10 @@ const Tracks = (function () {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-      if (onTrack(cx, cz, sz[0] / 2 + 6)) return;
+      if (onTrack(cx, cz, sz[0] / 2 + 6)) {
+        console.warn(`[scenery] backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
+        return;
+      }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
       // ribbon vert returns it), so a ridge/skyline never floats on a high section
       addBox(out, [cx, groundYAt(k, dist) + sz[1] / 2 - 2, cz], sz, col);
@@ -1003,14 +1012,20 @@ const Tracks = (function () {
 
     // ---------- structures ----------
     // Multi-storey building: mass + horizontal window bands + optional setback top.
-    const building = (k, side, dist, w, h, d, opts) => {
+    // `gap` is the clearance of the building's inner face from the road edge (same
+    // convention as prop() / billboard()). Internally dist = gap + w/2.
+    const building = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
+      if (w > d * 2.5)
+        console.warn(`[scenery] building: w=${w} >> d=${d} at k=${k} — dimensions likely swapped`);
+      const dist = gap + w / 2;
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
-      // Check the inner face (w/2 toward track from anchor) — skip only if it
-      // overlaps the road surface itself, not just because it's close to the track.
       const ifx = p.c[0] - p.r[0] * side * w / 2;
       const ifz = p.c[2] - p.r[2] * side * w / 2;
-      if (onTrack(ifx, ifz, 0)) return;
+      if (onTrack(ifx, ifz, 0)) {
+        console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (inner face on track)`);
+        return;
+      }
       const body = opts.wall || [0.62, 0.64, 0.68], win = opts.window || [0.18, 0.26, 0.34];
       addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b);
       const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
@@ -1034,7 +1049,10 @@ const Tracks = (function () {
     // Advertising hoarding / billboard: a panel on two slim posts.
     const billboard = (k, side, gap, w, h, col) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], w / 2 + 1)) return;
+      if (onTrack(p.c[0], p.c[2], w / 2 + 1)) {
+        console.warn(`[scenery] billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (need gap>${(w/2+1).toFixed(1)})`);
+        return;
+      }
       for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(p.c, p.t, o), 0.12, h, [0.2, 0.2, 0.22], 4, b);
       addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], col || [0.9, 0.85, 0.2], b);
     };

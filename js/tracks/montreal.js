@@ -81,7 +81,7 @@
       // ===================================================================
       {
         const k = K(0.25);
-        building(k, 1, 190, 40, 70, 40, { wall: [0.80, 0.82, 0.86], window: [0.62, 0.74, 0.86], floor: 6 });
+        building(k, 1, 170, 40, 70, 40, { wall: [0.80, 0.82, 0.86], window: [0.62, 0.74, 0.86], floor: 6 });
         // stepped faceted upper blocks
         const a = anchor(k, 1, 190);
         addBox(out, vadd(a.c, a.u, 78), [30, 16, 30], [0.84, 0.86, 0.90], [a.r, a.u, a.t]);
@@ -117,7 +117,7 @@
         const dist = 190 + hash(i * 7) * 50;
         const w = 18 + hash(i * 3) * 16;
         const h = 70 + hash(i * 11) * 150;
-        building(k, -1, dist, w, h, w, { wall: [0.55, 0.58, 0.64], window: [0.66, 0.74, 0.84], floor: 6 });
+        building(k, -1, dist - w / 2, w, h, w, { wall: [0.55, 0.58, 0.64], window: [0.66, 0.74, 0.84], floor: 6 });
       }
       // Mid rank: fills the gaps behind the front rank
       for (let i = 0; i < 26; i++) {
@@ -125,7 +125,7 @@
         const dist = 260 + hash(i * 13) * 60;
         const w = 16 + hash(i * 5) * 14;
         const h = 60 + hash(i * 9) * 120;
-        building(k, -1, dist, w, h, w, { wall: [0.52, 0.55, 0.61], window: [0.62, 0.70, 0.80], floor: 6 });
+        building(k, -1, dist - w / 2, w, h, w, { wall: [0.52, 0.55, 0.61], window: [0.62, 0.70, 0.80], floor: 6 });
       }
       // hazed back silhouette band — continuous wrap
       for (let i = 0; i < 28; i++) {

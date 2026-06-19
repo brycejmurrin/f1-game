@@ -104,7 +104,7 @@
       }
 
       // --- s 0.62 R far — glimpse of Villa Reale, cream neoclassical block ---
-      building(K(0.62), 1, 100, 60, 26, 30, { wall: [0.86, 0.80, 0.66], window: [0.70, 0.64, 0.50] });
+      building(K(0.62), 1, 70, 60, 26, 30, { wall: [0.86, 0.80, 0.66], window: [0.70, 0.64, 0.50] });
 
       // --- s 0.78 L+R — Variante Ascari chicane: gravel run-offs ---
       groundPlane(K(0.78), -1, 6, [26, 34], [0.78, 0.70, 0.52]);
@@ -116,7 +116,7 @@
       // --- s 0.96 R far — distant low Milan skyline cluster ---
       const kmilan = K(0.96);
       for (let i = 0; i < 6; i++) {
-        building(kmilan, 1, 210 + i * 26, 16, 34 + i * 9, 16,
+        building(kmilan, 1, 202 + i * 26, 16, 34 + i * 9, 16,
           { wall: [0.60 + i * 0.02, 0.64 + i * 0.02, 0.70 + i * 0.02], window: [0.50, 0.54, 0.60] });
       }
       // --- CONTINUOUS royal-park forest backdrop ringing the WHOLE lap ---

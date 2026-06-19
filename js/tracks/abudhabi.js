@@ -178,9 +178,9 @@
       // s 0.62 R mid — MARINA HOTEL: mid-rise lit-window slab + warm base
       // uplight, flanked by two shorter lit wings (denser hotel cluster)
       // ===================================================================
-      building(K(0.62), 1, 50, 50, 56, 30, { wall: [0.16, 0.18, 0.26], window: WIN, floor: 6 });
-      building(K(0.60), 1, 46, 34, 34, 24, { wall: [0.15, 0.17, 0.24], window: WIN_WARM, floor: 5 });
-      building(K(0.64), 1, 46, 34, 38, 24, { wall: [0.15, 0.17, 0.24], window: WIN, floor: 5 });
+      building(K(0.62), 1, 25, 50, 56, 30, { wall: [0.16, 0.18, 0.26], window: WIN, floor: 6 });
+      building(K(0.60), 1, 29, 34, 34, 24, { wall: [0.15, 0.17, 0.24], window: WIN_WARM, floor: 5 });
+      building(K(0.64), 1, 29, 34, 38, 24, { wall: [0.15, 0.17, 0.24], window: WIN, floor: 5 });
       place(K(0.62), 1, 24, [54, 4, 8], WARM);   // warm uplit base band
       place(K(0.60), 1, 22, [36, 3, 7], WARM);
       place(K(0.64), 1, 22, [36, 3, 7], WARM);
@@ -250,8 +250,8 @@
       grandstand(0.92, -1, 8, 80, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
 
       // second Yas Marina hotel group across the infield at s 0.44 R (the Radisson)
-      building(K(0.44), 1, 55, 38, 44, 26, { wall: [0.14, 0.16, 0.22], window: WIN, floor: 6 });
-      building(K(0.45), 1, 50, 26, 30, 18, { wall: [0.12, 0.14, 0.20], window: WIN_WARM, floor: 5 });
+      building(K(0.44), 1, 36, 38, 44, 26, { wall: [0.14, 0.16, 0.22], window: WIN, floor: 6 });
+      building(K(0.45), 1, 37, 26, 30, 18, { wall: [0.12, 0.14, 0.20], window: WIN_WARM, floor: 5 });
       place(K(0.44), 1, 30, [42, 3, 7], WARM);
 
       // more light towers along S1 back straight + marina sector

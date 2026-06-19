@@ -115,7 +115,7 @@
       hedge(0.16, 0.26, 1, 26, 7, WOODS);
 
       // ---- s 0.00 L — Old pit building + main grandstand on the pit straight ----
-      building(K(0.00), -1, 9, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: [0.34, 0.36, 0.40], floor: 5 });
+      building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: [0.34, 0.36, 0.40], floor: 5 });
       // red trim row fronting the old pit building
       prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
       grandstand(0.965, -1, 10, 90, [0.55, 0.58, 0.62], RED);

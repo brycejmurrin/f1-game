@@ -72,12 +72,12 @@
           addBox(out, vadd(c, a.u, 28), [12, 26, 12], SAND, [a.r, a.u, a.t]);
           addBox(out, vadd(c, a.u, 41), [9, 8, 9], SAND_LIT, [a.r, a.u, a.t]);
         }
-        building(k, 1, 24, 40, 18, 24, { wall: SAND, window: WIN_WARM, floor: 4.5 });
+        building(k, 1, 4, 40, 18, 24, { wall: SAND, window: WIN_WARM, floor: 4.5 });
       }
 
       // s 0.04 L mid — plaza framed by low civic blocks
       for (let i = 0; i < 3; i++)
-        building(K(0.04), -1, 28 + i * 22, 26, 16 + i * 4, 22, { wall: [0.34, 0.33, 0.32], window: WIN_WARM });
+        building(K(0.04), -1, 15 + i * 22, 26, 16 + i * 4, 22, { wall: [0.34, 0.33, 0.32], window: WIN_WARM });
 
       // ===================================================================
       // s 0.12 both near — first 90 squeeze: tall flat grey wall boxes
@@ -115,7 +115,7 @@
       // s 0.30 L mid — mixed modern mid-rise: stacked glass boxes, lit grids
       // ===================================================================
       for (let i = 0; i < 4; i++)
-        building(K(0.30), -1, 40 + i * 26, 22, 44 + (i % 2) * 22, 22, { wall: GLASS, window: WIN_COOL, floor: 4 });
+        building(K(0.30), -1, 29 + i * 26, 22, 44 + (i % 2) * 22, 22, { wall: GLASS, window: WIN_COOL, floor: 4 });
 
       // ===================================================================
       // s 0.36 R near — OLD CITY wall: one CONTINUOUS crenellated sandstone
@@ -136,7 +136,7 @@
         const k = K(0.37 + (i % 5) * 0.034);
         const tier = 18 + (i % 3) * 16 + Math.floor(i / 5) * 22;
         const h = 9 + hash(i * 7) * 12;
-        building(k, 1, tier, 13 + hash(i * 3) * 6, h, 13, { wall: i % 3 ? SAND : SAND_LIT, window: WIN_WARM, floor: 4.5 });
+        building(k, 1, tier - (13 + hash(i * 3) * 6) / 2, 13 + hash(i * 3) * 6, h, 13, { wall: i % 3 ? SAND : SAND_LIT, window: WIN_WARM, floor: 4.5 });
       }
 
       // ===================================================================
@@ -192,9 +192,9 @@
       // sea-side horizon reads as a solid wall of city from 0.63→0.97.
       for (let i = 0; i < 14; i++) {
         const s = 0.63 + i * 0.026;
-        building(K(s), 1, 36 + hash(i * 3) * 18, 18 + hash(i * 5) * 10, 50 + hash(i * 9) * 60, 18, { wall: GLASS, window: WIN_COOL, floor: 4 });
+        building(K(s), 1, 36 + hash(i * 3) * 18 - (18 + hash(i * 5) * 10) / 2, 18 + hash(i * 5) * 10, 50 + hash(i * 9) * 60, 18, { wall: GLASS, window: WIN_COOL, floor: 4 });
         if (i % 2 === 0)                                                       // taller back rank, every other slot
-          building(K(s), 1, 80 + hash(i * 13) * 24, 20 + hash(i * 17) * 12, 80 + hash(i * 19) * 70, 20, { wall: GLASS, window: WIN_WARM, floor: 5 });
+          building(K(s), 1, 80 + hash(i * 13) * 24 - (20 + hash(i * 17) * 12) / 2, 20 + hash(i * 17) * 12, 80 + hash(i * 19) * 70, 20, { wall: GLASS, window: WIN_WARM, floor: 5 });
       }
 
       // ===================================================================

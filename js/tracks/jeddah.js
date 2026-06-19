@@ -96,12 +96,12 @@
       }
 
       // --- s 0.28 L mid: modern Jeddah skyline — lit-window high-rise cluster ---
-      building(K(0.26), -1, 70, 34, 110, 34, { wall: [0.20, 0.21, 0.26], window: WINCOOL, floor: 9 });
-      building(K(0.28), -1, 60, 40, 88, 36, { wall: [0.22, 0.22, 0.27], window: WINWARM, floor: 8 });
-      building(K(0.30), -1, 92, 30, 134, 30, { wall: [0.18, 0.19, 0.24], window: WINCOOL, floor: 10 });
+      building(K(0.26), -1, 53, 34, 110, 34, { wall: [0.20, 0.21, 0.26], window: WINCOOL, floor: 9 });
+      building(K(0.28), -1, 40, 40, 88, 36, { wall: [0.22, 0.22, 0.27], window: WINWARM, floor: 8 });
+      building(K(0.30), -1, 77, 30, 134, 30, { wall: [0.18, 0.19, 0.24], window: WINCOOL, floor: 10 });
       tower(K(0.29), -1, 130, 26, 170, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: true });
-      building(K(0.27), -1, 78, 32, 120, 32, { wall: [0.19, 0.20, 0.25], window: WINTEAL, floor: 22 });
-      building(K(0.31), -1, 56, 36, 96, 34, { wall: [0.21, 0.21, 0.27], window: WINGOLD, floor: 20 });
+      building(K(0.27), -1, 62, 32, 120, 32, { wall: [0.19, 0.20, 0.25], window: WINTEAL, floor: 22 });
+      building(K(0.31), -1, 38, 36, 96, 34, { wall: [0.21, 0.21, 0.27], window: WINGOLD, floor: 20 });
       tower(K(0.305), -1, 150, 22, 150, { col: [0.15, 0.16, 0.21], seg: 4, cap: true, capCol: MAGENTA, mast: true });
 
       // --- s 0.45 R mid: Marina / Jeddah Yacht Club — pontoons + yacht hulls + mast spikes ---
@@ -134,8 +134,8 @@
       }
 
       // --- s 0.70 L mid: mid-rise hotel/apartment boxes + emissive billboards ---
-      building(K(0.68), -1, 64, 30, 60, 28, { wall: [0.22, 0.22, 0.26], window: WINWARM, floor: 7 });
-      building(K(0.72), -1, 70, 26, 72, 26, { wall: [0.20, 0.21, 0.25], window: WINCOOL, floor: 8 });
+      building(K(0.68), -1, 49, 30, 60, 28, { wall: [0.22, 0.22, 0.26], window: WINWARM, floor: 7 });
+      building(K(0.72), -1, 57, 26, 72, 26, { wall: [0.20, 0.21, 0.25], window: WINCOOL, floor: 8 });
       billboard(K(0.70), -1, 30, 18, 11, GREEN);
       billboard(K(0.71), -1, 56, 16, 10, SPANGLE);
       billboard(K(0.69), -1, 22, 16, 10, MAGENTA);
@@ -180,7 +180,7 @@
         const h = 26 + r2 * 38;
         const dist = 46 + r1 * 22;
         const win = WINPAL[i % WINPAL.length];
-        building(K(s), -1, dist, w, h, w * 0.85, { wall: WALLPAL[i % 4], window: win, floor: 14 });
+        building(K(s), -1, dist - w / 2, w, h, w * 0.85, { wall: WALLPAL[i % 4], window: win, floor: 14 });
       }
       // Far high-rise band: taller slimmer lit towers behind, continuous ring.
       for (let i = 0; i < 22; i++) {
@@ -190,7 +190,7 @@
         const h = 70 + r2 * 110;
         const dist = 130 + i * 4 + r1 * 26;
         const win = WINPAL[(i + 1) % WINPAL.length];
-        building(K(s), -1, dist, w, h, w * 0.8, { wall: WALLPAL[(i + 2) % 4], window: win, floor: 26 });
+        building(K(s), -1, dist - w / 2, w, h, w * 0.8, { wall: WALLPAL[(i + 2) % 4], window: win, floor: 26 });
       }
       // Cheap far silhouette filler so no sky-gap shows between the lit towers.
       for (let i = 0; i < 30; i++) {
