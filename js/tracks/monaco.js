@@ -44,6 +44,55 @@
       wall(0.0, 0.48, 1, 0.4, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.4, ARMCO);   // Sainte Devote accent
 
+      // ---- CONTINUOUS HILLSIDE CITY (lap-long inland backdrop) ----------------
+      // Monte Carlo is a packed urban mass climbing the rock behind the track.
+      // To read as a CONTINUOUS city (not scattered towers) we wrap the whole lap
+      // with three stacked bands of building masses on the inland side, plus a
+      // continuous low "city base" wall so no empty ground shows between blocks.
+      //
+      // Pick the inland side per node: the harbour sits on the LEFT through the
+      // flat back half (s≈0.55→1.0), so the city climbs the RIGHT there; the
+      // hillside climb (Casino/Beau Rivage, s≈0.0→0.45) is built up on BOTH
+      // banks but leans LEFT (the rock face above Casino).
+      const inland = (s) => (s > 0.55 && s < 0.98) ? 1 : -1;
+      // Continuous low stone retaining base behind the inland rail — fills the
+      // ground line so the city never floats above bare terrain. Cheap (one wall).
+      wall(0.0, 0.55, -1, 5, 4, [0.62, 0.58, 0.50], 1.2);   // hillside base, climb
+      wall(0.55, 0.98, 1, 5, 4, [0.62, 0.58, 0.50], 1.2);   // harbour-back base
+      wall(0.0, 0.98, 1, 60, 5, [0.70, 0.66, 0.60], 1.4);   // far city plinth, R
+      wall(0.55, 1.0, -1, 60, 5, [0.70, 0.66, 0.60], 1.4);  // far city plinth, L (back)
+
+      // Three tiers of pastel blocks, packed shoulder-to-shoulder around the lap.
+      // Spaced every ~1.6% of the lap so facades read as a solid urban wall.
+      for (let i = 0; i < 56; i++) {
+        const s = (i / 56);
+        const k = K(s);
+        const side = inland(s);
+        // skip the close-up signature zones so hand-placed landmarks stay clean
+        const nearLandmark = (Math.abs(s - 0.20) < 0.02) || (Math.abs(s - 0.40) < 0.02) ||
+                             (s > 0.52 && s < 0.60);   // Casino / Fairmont / tunnel
+        const col = PASTELS[(i * 3 + (i & 1)) % PASTELS.length];
+        const r = hash(k * 17 + i), r2 = hash(k * 31 + i * 5);
+        // near tier — right up behind the barrier line, varied heights
+        const dNear = nearLandmark ? 30 : 11 + r * 6;
+        const wNear = 16 + r2 * 12;
+        const hNear = 16 + r * 30;
+        if (!onTrack(anchor(k, side, dNear).c[0], anchor(k, side, dNear).c[2], 6))
+          building(k, side, dNear, wNear, hNear, 14, { wall: col, window: WIN, floor: 8 });
+        // mid tier — set back, taller, climbing the hill
+        if (i % 2 === 0) {
+          const dm = dNear + 20 + r2 * 10;
+          building(K(s + 0.006), side, dm, 18 + r * 10, hNear + 12 + r2 * 16, 15,
+                   { wall: PASTELS[(i + 2) % PASTELS.length], window: WIN, floor: 9 });
+        }
+        // far tier — distant tall slabs forming the skyline crest
+        if (i % 4 === 0) {
+          const df = dNear + 44 + r * 16;
+          building(K(s + 0.011), side, df, 22 + r2 * 12, hNear + 26 + r * 20, 16,
+                   { wall: PASTELS[(i + 4) % PASTELS.length], window: WIN, floor: 10 });
+        }
+      }
+
       // ---- Pit wall & start grandstand (s=0.03, R close) ----
       wall(0.0, 0.06, 1, 1.5, 1.0, [0.66, 0.67, 0.69], 0.6);     // long low pit wall
       place(K(0.03), 1, 10, [7, 9, 40], [0.55, 0.56, 0.60]);     // start grandstand shell
@@ -97,8 +146,8 @@
       }
 
       // ---- Casino Square (s=0.22, both close): plaza planters + palms ----
-      for (let i = 0; i < 5; i++) {
-        const k = K(0.215 + i * 0.004);
+      for (let i = 0; i < 9; i++) {
+        const k = K(0.205 + i * 0.0035);
         place(k, -1, 3, [3, 1.2, 4], [0.55, 0.55, 0.58]);              // grey planter box
         prop(k, -1, 3, [2, 0.5, 2], [0.25, 0.45, 0.22]);               // greenery in planter
         palm(k, i % 2 ? 1 : -1, 4, 9, [0.25, 0.45, 0.22]);            // square palms
@@ -142,17 +191,18 @@
       // ---- Harbour & yachts (s=0.65, L mid): deep-blue water + white deck boxes ----
       {
         const SEA = [0.10, 0.34, 0.55];
-        for (let i = 0; i < 6; i++) {
-          const k = K(0.60 + i * 0.012), a = anchor(k, -1, 24 + (i % 3) * 8);
+        for (let i = 0; i < 11; i++) {
+          const k = K(0.595 + i * 0.0075), a = anchor(k, -1, 22 + (i % 4) * 9);
           if (onTrack(a.c[0], a.c[2], 12)) continue;
           const b = [a.r, a.u, a.t];
           // water plane just below grade
           addBox(out, vadd(a.c, a.u, -0.6), [40, 0.6, 30], SEA, b);
           // moored super-yacht: hull + stacked white decks + thin mast box
-          const yc = vadd(a.c, a.r, -8);
-          addBox(out, vadd(yc, a.u, 2), [7, 4, 22], [0.97, 0.97, 0.99], b);   // hull
-          addBox(out, vadd(yc, a.u, 5.5), [5, 3, 12], [0.86, 0.88, 0.92], b); // superstructure
-          addBox(out, vadd(yc, a.u, 8.5), [3, 2, 6], [0.70, 0.74, 0.82], b);  // top deck
+          const sc = 0.7 + hash(k * 9 + i) * 0.7;   // size jitter for a packed marina
+          const yc = vadd(a.c, a.r, -8 + (i % 3) * 3);
+          addBox(out, vadd(yc, a.u, 2), [7 * sc, 4, 22 * sc], [0.97, 0.97, 0.99], b);   // hull
+          addBox(out, vadd(yc, a.u, 5.5), [5 * sc, 3, 12 * sc], [0.86, 0.88, 0.92], b); // superstructure
+          addBox(out, vadd(yc, a.u, 8.5), [3 * sc, 2, 6 * sc], [0.70, 0.74, 0.82], b);  // top deck
           addBox(out, vadd(yc, a.u, 13), [0.4, 6, 0.4], [0.85, 0.85, 0.88], b); // mast
         }
       }
@@ -184,9 +234,19 @@
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);          // marina railing
 
       // ---- Promenade date-palms along the harbour railing (back half) ----
-      for (let i = 0; i < 6; i++) {
-        const k = K(0.60 + i * 0.058);
+      for (let i = 0; i < 12; i++) {
+        const k = K(0.59 + i * 0.029);
         palm(k, -1, 5, 8 + hash(k * 3) * 3, [0.25, 0.45, 0.22]);
+      }
+      // ---- Inland street palms climbing the front half (Beau Rivage/Mirabeau) -
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.06 + i * 0.045);
+        palm(k, -1, 6, 7 + hash(k * 5) * 4, [0.24, 0.44, 0.21]);
+      }
+      // ---- Waterfront balcony/terrace bands on the Tabac block row ----------
+      for (let i = 0; i < 5; i++) {
+        const k = K(0.71 + i * 0.02);
+        place(k, 1, 18, [20, 0.8, 1.2], [0.88, 0.86, 0.80]);   // terrace lip
       }
     },
   }

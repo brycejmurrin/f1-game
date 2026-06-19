@@ -38,16 +38,40 @@
       const PASTELS = [TEAL, CORAL, PINK, [0.75, 0.90, 1.0], [1.0, 0.85, 0.55]];
 
       // ===================================================================
-      // Pastel low-rise haze backdrop ring — flat tropical skyline pushed
+      // CONTINUOUS pastel Miami skyline — a dense, gapless band of pastel
+      // backdrop boxes wrapping nearly the whole lap on BOTH sides, pushed
       // far back so nothing walls in the camera. No mountains.
       // ===================================================================
-      for (let i = 0; i < 34; i++) {
-        const k = K(i / 34);
+      // Far hazed band: lower, softer, even further back (depth layer 1).
+      for (let i = 0; i < 120; i++) {
+        const k = K(i / 120);
         const side = (i % 2) ? 1 : -1;
         const col = PASTELS[i % PASTELS.length];
-        backdrop(k, side, 240 + hash(i * 5) * 200,
-          [22 + hash(i * 3) * 26, 26 + hash(i * 11) * 60, 22],
-          [col[0] * 0.7 + 0.25, col[1] * 0.7 + 0.25, col[2] * 0.7 + 0.25]);
+        backdrop(k, side, 420 + hash(i * 5) * 220,
+          [26 + hash(i * 3) * 22, 20 + hash(i * 11) * 38, 24],
+          [col[0] * 0.62 + 0.32, col[1] * 0.62 + 0.32, col[2] * 0.62 + 0.32]);
+      }
+      // Mid skyline band: taller, brighter, closer (depth layer 2). Continuous
+      // — every node both sides, varied heights, no gaps.
+      for (let i = 0; i < 132; i++) {
+        const k = K(i / 132);
+        const side = (i % 2) ? 1 : -1;
+        const col = PASTELS[(i * 3 + 1) % PASTELS.length];
+        const hh = 24 + hash(i * 7) * 70;
+        backdrop(k, side, 240 + hash(i * 9) * 150,
+          [20 + hash(i * 13) * 18, hh, 22],
+          [col[0] * 0.72 + 0.22, col[1] * 0.72 + 0.22, col[2] * 0.72 + 0.22]);
+      }
+      // Near pastel high-rises: actual building()s forming the foreground city
+      // skyline as a continuous ring — varied heights, bright tropical pastels.
+      for (let i = 0; i < 80; i++) {
+        const k = K(i / 80 + 0.003);
+        const side = (i % 2) ? 1 : -1;
+        const col = PASTELS[(i * 2 + 3) % PASTELS.length];
+        const h = 22 + hash(i * 17) * 64;
+        building(k, side, 150 + hash(i * 23) * 90, 14 + hash(i * 5) * 8,
+          h, 14 + hash(i * 29) * 6,
+          { wall: col, window: GLASS, floor: 5 + (i % 3) });
       }
 
       // ===================================================================
@@ -82,12 +106,25 @@
         place(k, -1, 14, [1.0, 6, 116], GLASS);   // glass-grey face band
         place(k, -1, 16, [22.4, 1.5, 120], GREYWHITE); // flat roof cap
       }
+      // palms lining the pit straight, both sides
+      for (let i = 0; i < 10; i++) {
+        palm(K(0.0 + i * 0.007), -1, 9 + (i % 2) * 4, 8 + hash(i) * 4, PALM_GREEN);
+        palm(K(0.0 + i * 0.007), 1, 40 + (i % 2) * 6, 9 + hash(i * 5) * 4, PALM_DARK);
+      }
 
       // ===================================================================
       // s 0.06 R mid — T1 grandstand: tiered seating + bright crowd flecks
       // ===================================================================
       grandstand(0.06, 1, 12, 90, GREYWHITE, CORAL);
       grandstand(0.08, 1, 12, 70, GREYWHITE, TEAL);
+      grandstand(0.10, 1, 14, 80, GREYWHITE, PINK);
+      grandstand(0.06, -1, 16, 70, GREYWHITE, TEAL);
+      // pastel hospitality cubes behind T1 stands
+      for (let i = 0; i < 5; i++) {
+        building(K(0.05 + i * 0.008), 1, 34 + (i % 2) * 14, 16, 16 + (i % 3) * 10, 16,
+          { wall: PASTELS[i % PASTELS.length], window: GLASS, floor: 4 });
+      }
+      for (let i = 0; i < 7; i++) palm(K(0.04 + i * 0.006), 1, 10 + (i % 2) * 5, 8, PALM_GREEN);
 
       // ===================================================================
       // s 0.15 both near — concrete barriers + debris fence
@@ -99,30 +136,41 @@
       // ===================================================================
       // s 0.20 L mid — palm tree cluster
       // ===================================================================
-      for (let i = 0; i < 9; i++) {
-        const k = K(0.20 + (i % 3) * 0.004);
-        palm(k, -1, 14 + (i % 3) * 7 + hash(i) * 4, 8 + hash(i * 7) * 5,
+      for (let i = 0; i < 18; i++) {
+        const k = K(0.18 + (i % 6) * 0.004);
+        palm(k, -1, 12 + (i % 4) * 7 + hash(i) * 4, 8 + hash(i * 7) * 5,
           (i % 2) ? PALM_GREEN : PALM_DARK);
+        palm(K(0.18 + (i % 6) * 0.005), 1, 14 + (i % 3) * 6, 8 + hash(i * 3) * 4,
+          (i % 2) ? PALM_DARK : PALM_GREEN);
+      }
+      // pastel low-rise band behind the palm cluster
+      for (let i = 0; i < 6; i++) {
+        building(K(0.19 + i * 0.007), -1, 40 + (i % 2) * 16, 16, 14 + (i % 3) * 9, 16,
+          { wall: PASTELS[(i + 2) % PASTELS.length], window: GLASS, floor: 4 });
       }
 
       // ===================================================================
       // s 0.30 R near — MIA MARINA: flat painted "water" slab with white
       // yacht boxes standing on it (the gimmick: they obviously don't float).
       // ===================================================================
-      {
-        const k = K(0.30);
-        groundPlane(k, 1, 6, [150, 110], [0.15, 0.45, 0.60]); // painted water
-        // yacht boxes sitting on the flat slab
-        for (let i = 0; i < 7; i++) {
-          const a = anchor(k, 1, 22 + (i % 3) * 24);
-          const off = (i - 3) * 18 + hash(i * 9) * 6;
+      // CONTINUOUS painted-water marina: a chain of slabs along the sweep so
+      // the blue "water" reads as one unbroken body, packed with yacht boxes.
+      for (let m = 0; m < 3; m++) {
+        const k = K(0.28 + m * 0.03);
+        groundPlane(k, 1, 6, [150, 130], [0.15, 0.45, 0.60]); // painted water
+        // yacht boxes sitting on the flat slab — denser, more rows
+        for (let i = 0; i < 9; i++) {
+          const a = anchor(k, 1, 18 + (i % 4) * 22);
+          const off = (i - 4) * 17 + hash(i * 9 + m * 5) * 6;
           const c = vadd(a.c, a.t, off);
-          const len = 12 + hash(i * 3) * 8;
+          const len = 11 + hash(i * 3 + m) * 9;
           addBox(out, vadd(c, a.u, 1.4), [5, 2.8, len], WHITE, [a.r, a.u, a.t]); // hull
           addBox(out, vadd(c, a.u, 3.6), [3.6, 2.0, len * 0.55], GREYWHITE, [a.r, a.u, a.t]); // cabin
           addBox(out, vadd(c, a.u, 5.2), [2.0, 1.4, len * 0.3], GLASS, [a.r, a.u, a.t]); // upper deck
         }
       }
+      // palms along the marina waterfront
+      for (let i = 0; i < 8; i++) palm(K(0.28 + i * 0.006), 1, 8 + (i % 2) * 4, 8, PALM_GREEN);
 
       // s 0.32 R near — faux superyacht hospitality: long white multi-deck box
       {
@@ -137,19 +185,29 @@
       // s 0.45 L mid — stadium-lot grandstands + pastel hospitality cubes
       // ===================================================================
       grandstand(0.45, -1, 14, 80, GREYWHITE, PINK);
-      for (let i = 0; i < 5; i++) {
-        const k = K(0.46 + i * 0.006);
+      grandstand(0.43, -1, 14, 70, GREYWHITE, TEAL);
+      grandstand(0.47, -1, 16, 80, GREYWHITE, CORAL);
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.44 + i * 0.006);
         const col = PASTELS[i % PASTELS.length];
-        building(k, -1, 30 + (i % 2) * 18, 16, 14 + (i % 3) * 8, 16,
+        building(k, -1, 30 + (i % 3) * 18, 16, 14 + (i % 4) * 9, 16,
           { wall: col, window: GLASS, floor: 4 });
       }
+      for (let i = 0; i < 8; i++) palm(K(0.43 + i * 0.005), -1, 11 + (i % 2) * 5, 8, PALM_GREEN);
 
       // ===================================================================
       // s 0.50 R mid — palm rows + low signage boxes (T11 braking zone)
       // ===================================================================
-      for (let i = 0; i < 8; i++) palm(K(0.50 + i * 0.004), 1, 12 + (i % 2) * 6, 9, PALM_GREEN);
+      for (let i = 0; i < 16; i++) palm(K(0.50 + i * 0.004), 1, 11 + (i % 3) * 6, 9, PALM_GREEN);
+      for (let i = 0; i < 6; i++) palm(K(0.55 + i * 0.005), -1, 12 + (i % 2) * 5, 8, PALM_DARK);
       billboard(K(0.50), 1, 6, 18, 9, CORAL);
       billboard(K(0.52), 1, 6, 16, 8, TEAL);
+      billboard(K(0.54), 1, 6, 16, 8, PINK);
+      // pastel hospitality strip behind the braking zone
+      for (let i = 0; i < 5; i++) {
+        building(K(0.51 + i * 0.007), 1, 30 + (i % 2) * 16, 16, 16 + (i % 3) * 8, 16,
+          { wall: PASTELS[(i + 1) % PASTELS.length], window: GLASS, floor: 4 });
+      }
 
       // ===================================================================
       // s 0.62 both near — FLORIDA TURNPIKE OVERPASS: grey concrete deck box
@@ -177,16 +235,26 @@
       // ===================================================================
       grandstand(0.78, -1, 12, 110, GREYWHITE, CORAL);
       grandstand(0.80, -1, 12, 80, GREYWHITE, PINK);
+      grandstand(0.82, -1, 14, 90, GREYWHITE, TEAL);
+      grandstand(0.78, 1, 16, 90, GREYWHITE, PINK);
+      // pastel hospitality cubes behind the DRS stands + palms
+      for (let i = 0; i < 6; i++) {
+        building(K(0.77 + i * 0.007), -1, 34 + (i % 2) * 16, 16, 15 + (i % 3) * 9, 16,
+          { wall: PASTELS[i % PASTELS.length], window: GLASS, floor: 4 });
+      }
+      for (let i = 0; i < 8; i++) palm(K(0.76 + i * 0.006), 1, 12 + (i % 2) * 5, 8, PALM_GREEN);
 
       // ===================================================================
       // s 0.90 R mid — paddock/team-building cluster: clean white box blocks
       // ===================================================================
-      for (let i = 0; i < 5; i++) {
-        const k = K(0.90 + i * 0.008);
-        building(k, 1, 26 + (i % 2) * 16, 18, 12 + (i % 2) * 6, 22,
-          { wall: WHITE, window: GLASS, floor: 3 });
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.88 + i * 0.008);
+        building(k, 1, 26 + (i % 3) * 16, 18, 12 + (i % 3) * 7, 22,
+          { wall: (i % 4) ? WHITE : PASTELS[i % PASTELS.length], window: GLASS, floor: 3 });
       }
-      for (let i = 0; i < 4; i++) palm(K(0.91 + i * 0.006), 1, 14, 8, PALM_GREEN);
+      for (let i = 0; i < 9; i++) palm(K(0.89 + i * 0.006), 1, 12 + (i % 2) * 4, 8, PALM_GREEN);
+      for (let i = 0; i < 5; i++) palm(K(0.90 + i * 0.007), -1, 13 + (i % 2) * 5, 8, PALM_DARK);
+      grandstand(0.92, -1, 14, 70, GREYWHITE, CORAL);
 
       // ===================================================================
       // s 0.96 both near — final-corner barrier walls flanking the run to S/F

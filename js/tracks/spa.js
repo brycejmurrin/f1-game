@@ -35,20 +35,29 @@
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      // Three concentric rings of organic peaks. Each ring is densely packed and
+      // angularly offset from its neighbours so the summits OVERLAP into one
+      // continuous forested wall with no gaps anywhere around the lap. Low `seg`
+      // keeps each peak cheap so we can afford many. Snow only on the far tops.
       const ranges = [
-        // near forested range — dark Ardennes greens, only a hint of snow on the very tops
-        { extra: 190, wMin: 220, hMin: 60, hVar: 60, count: 11,
-          opts: { seg: 8, forest: [0.10, 0.32, 0.14], rock: [0.30, 0.32, 0.30], snow: [0.90, 0.93, 0.96], snowline: 0.86 } },
-        // far hazed range — paler, damp grey-green, mostly bare
-        { extra: 440, wMin: 340, hMin: 130, hVar: 110, count: 9,
-          opts: { seg: 8, forest: [0.18, 0.42, 0.20], rock: [0.46, 0.50, 0.50], snow: [0.92, 0.94, 0.97], snowline: 0.8 } },
+        // near forested wall — many overlapping dark-green peaks, no snow
+        { extra: 170, wMin: 300, hMin: 56, hVar: 54, wVar: 130, count: 30, phase: 0.0,
+          opts: { seg: 7, rough: 0.30, forest: [0.10, 0.32, 0.14], rock: [0.28, 0.32, 0.28], snow: [0.90, 0.93, 0.96], snowline: 1.2 } },
+        // mid forested wall — offset to fill the seams of the near ring
+        { extra: 290, wMin: 340, hMin: 92, hVar: 70, wVar: 150, count: 26, phase: 0.5,
+          opts: { seg: 7, rough: 0.32, forest: [0.13, 0.36, 0.17], rock: [0.34, 0.38, 0.36], snow: [0.90, 0.93, 0.96], snowline: 0.92 } },
+        // far hazed range — paler damp grey-green, light snow on the very tops
+        { extra: 450, wMin: 380, hMin: 132, hVar: 110, wVar: 150, count: 22, phase: 0.0,
+          opts: { seg: 7, rough: 0.34, forest: [0.18, 0.42, 0.20], rock: [0.46, 0.50, 0.50], snow: [0.92, 0.94, 0.97], snowline: 0.78 } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;
         for (let i = 0; i < rg.count; i++) {
-          const a = (i + rg.extra * 0.004) / rg.count * 6.2832, h = hash(i * 7 + rg.extra);
-          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                   rg.wMin + h * 110, rg.hMin + h * rg.hVar, Object.assign({ seed: i * 13 + rg.extra }, rg.opts));
+          const a = (i + rg.phase + rg.extra * 0.004) / rg.count * 6.2832, h = hash(i * 7 + rg.extra);
+          // jitter the radius inward/outward so the wall has depth but never opens a gap
+          const rr = ring - rg.wMin * 0.18 + hash(i * 5 + rg.extra) * rg.wMin * 0.30;
+          mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin,
+                   rg.wMin + h * rg.wVar, rg.hMin + h * rg.hVar, Object.assign({ seed: i * 13 + rg.extra }, rg.opts));
         }
       }
 
@@ -59,14 +68,25 @@
         }
       });
 
-      // --- Dense Ardennes pine forest walling both sides of the track.
-      every(48, (k) => {
+      // --- Dense Ardennes pine forest walling both sides of the track. Tighter
+      // spacing and a low skip threshold so the woodland is continuous; a second
+      // deeper rank thickens the wall behind the front line.
+      every(44, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 41 + side);
-          if (s < 0.30) continue;
-          const dist = 8 + s * 22, h = 9 + s * 9;
+          if (s < 0.26) continue;
+          const dist = 8 + s * 20, h = 9 + s * 9;
           pine(k, side, dist, h, [0.09 + s * 0.05, 0.30, 0.14]);
-          if (s > 0.72) pine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
+          if (s > 0.70) pine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
+        }
+      });
+      // Fill the sparse stretches: a staggered front-line rank offset from the above.
+      every(64, (k) => {
+        for (const side of [-1, 1]) {
+          const s = hash(k * 67 + side * 5 + 3);
+          if (s < 0.58) continue;
+          const dist = 6 + s * 10, h = 8 + s * 7;
+          pine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
         }
       });
       // Hero density at Eau Rouge / Raidillon (s≈0.05–0.10): crowd the climb with pines.

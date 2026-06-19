@@ -31,11 +31,14 @@
       const LED_CYCLE = [LED_TEAL, LED_MAG, LED_AMBER];
       const WARM = [1.00, 0.72, 0.38];     // dock / base uplight
       const WIN = [0.70, 0.78, 0.95];      // cool lit windows
+      const WIN_WARM = [1.00, 0.84, 0.58];  // warm lit windows (sunset side)
       const FLOOD = [0.88, 0.92, 1.00];    // floodlit white
       const SAND = [0.70, 0.55, 0.35];
+      const SAND_DK = [0.52, 0.40, 0.26];  // shaded dune
       const WATER = [0.04, 0.06, 0.12];
       const FERRARI = [0.85, 0.08, 0.10];
       const DARK = [0.10, 0.10, 0.14];
+      const DUSK = [0.30, 0.16, 0.20];     // deep sunset masonry
 
       // ===================================================================
       // Flat far horizon: low desert-sand dune band ringing the lap (no hills)
@@ -45,12 +48,60 @@
       cx /= n; cz /= n;
       let trad = 0;
       for (let i = 0; i < n; i++) trad = Math.max(trad, Math.hypot(px[i] - cx, pz[i] - cz));
-      const ring = trad + 480;
-      for (let i = 0; i < 34; i++) {
-        const a = i / 34 * 6.2832, h = hash(i * 7 + 2);
-        const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
-        if (onTrack(mx, mz, 80)) continue;
-        addBox(out, [mx, pyMin + (10 + h * 10) / 2, mz], [220 + h * 140, 10 + h * 10, 150], SAND);
+      // two staggered dune bands = continuous seaward backdrop, no gaps
+      for (const [extra, count, wMin, hMin, col] of [
+        [430, 46, 200, 9, SAND],
+        [560, 40, 260, 14, SAND_DK],
+      ]) {
+        const ring = trad + extra;
+        for (let i = 0; i < count; i++) {
+          const a = (i + 0.5 * (extra > 500 ? 1 : 0)) / count * 6.2832, h = hash(i * 7 + extra);
+          const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
+          if (onTrack(mx, mz, 80)) continue;
+          addBox(out, [mx, pyMin + (hMin + h * 10) / 2, mz], [wMin + h * 140, hMin + h * 10, 150], col);
+        }
+      }
+
+      // ===================================================================
+      // CONTINUOUS Yas Island marina skyline: a dense unbroken band of lit
+      // building boxes ringing the lap just inside the dune band. Skips only
+      // where it would overlap the tarmac, so the lap is wrapped in city.
+      // ===================================================================
+      {
+        const ring = trad + 230;
+        const N = 60;
+        for (let i = 0; i < N; i++) {
+          const a = i / N * 6.2832, h = hash(i * 13 + 5), h2 = hash(i * 29 + 11);
+          const bx = cx + Math.cos(a) * (ring + h * 120);
+          const bz = cz + Math.sin(a) * (ring + h * 120);
+          if (onTrack(bx, bz, 70)) continue;
+          const w = 22 + h * 30, d = 22 + h2 * 30, hh = 16 + h * 48;
+          // dusk-toned mass
+          addBox(out, [bx, pyMin + hh / 2, bz], [w, hh, d], (i % 3 === 0) ? DUSK : DARK);
+          // emissive lit-window cap band so the skyline glows
+          const win = (i % 2) ? WIN : WIN_WARM;
+          addBox(out, [bx, pyMin + hh - 5, bz], [w + 0.6, 9, d + 0.6], win);
+          // rooftop warm/LED beacon dot
+          const bc = LED_CYCLE[i % 3];
+          addBox(out, [bx, pyMin + hh + 2, bz], [3, 4, 3], bc);
+        }
+      }
+
+      // ===================================================================
+      // Leisure structures between the skyline and dunes (domes, low halls)
+      // — adds depth + warm fill so the band reads as a resort island
+      // ===================================================================
+      {
+        const ring = trad + 330;
+        const N = 26;
+        for (let i = 0; i < N; i++) {
+          const a = (i + 0.5) / N * 6.2832, h = hash(i * 17 + 3);
+          const lx = cx + Math.cos(a) * ring, lz = cz + Math.sin(a) * ring;
+          if (onTrack(lx, lz, 80)) continue;
+          const w = 50 + h * 60;
+          addBox(out, [lx, pyMin + 9, lz], [w, 18, w * 0.7], DARK);          // hall mass
+          addBox(out, [lx, pyMin + 18, lz], [w * 0.5, 6, w * 0.4], WARM);    // lit roof lantern
+        }
       }
 
       // ===================================================================
@@ -96,11 +147,17 @@
       // s 0.34 both — back straight: thin LED light-tower boxes at intervals
       // (dark pole + bright cap), alternating sides
       // ===================================================================
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 13; i++) {
         const side = (i % 2) ? 1 : -1;
-        tower(K(0.34 + i * 0.008), side, 16, 4, 34,
+        tower(K(0.34 + i * 0.006), side, 16, 4, 34,
           { col: DARK, seg: 4, cap: true, capCol: FLOOD });
       }
+      // extra floodlights ringing pit straight + hairpin for the night look
+      for (let i = 0; i < 6; i++)
+        tower(K(0.0 + i * 0.012), -1, 20, 4, 36, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
+      for (const side of [-1, 1])
+        for (let i = 0; i < 3; i++)
+          tower(K(0.27 + i * 0.014), side, 18, 4, 34, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
 
       // ===================================================================
       // s 0.42 L — banked Turn 9: runoff + grandstand boxes
@@ -109,25 +166,32 @@
       place(K(0.42), -1, 4, [60, 0.4, 30], [0.20, 0.21, 0.22]);   // pale runoff apron
 
       // ===================================================================
-      // s 0.55 R mid — MARINA opens: dark water plane, rows of slim white
-      // yacht-hull boxes + mast spikes + warm reflection specks
+      // s 0.55 R mid — MARINA opens: CONTINUOUS dark water plane running the
+      // whole marina half, dense rows of white yacht-hull boxes + masts +
+      // warm reflection specks
       // ===================================================================
-      for (let i = 0; i < 4; i++) groundPlane(K(0.55 + i * 0.04), 1, 14, [120, 1.2, 110], WATER);
-      for (let i = 0; i < 14; i++) {
-        const k = K(0.55 + (i % 7) * 0.018);
-        const a = anchor(k, 1, 26 + (i % 3) * 10);
+      for (let i = 0; i < 11; i++) groundPlane(K(0.52 + i * 0.026), 1, 14, [130, 1.2, 130], WATER);
+      for (let i = 0; i < 28; i++) {
+        const k = K(0.53 + (i % 14) * 0.018);
+        const a = anchor(k, 1, 22 + (i % 4) * 11);
         const off = ((i % 7) - 3) * 9;
         const hc = vadd(a.c, a.t, off);
-        addBox(out, vadd(hc, a.u, 1.2), [4.5, 2.4, 11], [0.92, 0.93, 0.95], [a.r, a.u, a.t]);  // hull
-        addCyl(out, vadd(hc, a.u, 9), 0.18, 12, [0.85, 0.86, 0.9], 4, [a.r, a.u, a.t]);        // mast
-        addBox(out, vadd(hc, a.u, 0.5), [5.0, 0.4, 11.5], WARM, [a.r, a.u, a.t]);              // warm reflection speck
+        const big = (i % 5 === 0) ? 1.5 : 1.0;
+        addBox(out, vadd(hc, a.u, 1.2 * big), [4.5 * big, 2.4 * big, 11 * big], [0.92, 0.93, 0.95], [a.r, a.u, a.t]);  // hull
+        addCyl(out, vadd(hc, a.u, 9 * big), 0.18, 12 * big, [0.85, 0.86, 0.9], 4, [a.r, a.u, a.t]);                    // mast
+        addBox(out, vadd(hc, a.u, 0.5), [5.0 * big, 0.4, 11.5 * big], WARM, [a.r, a.u, a.t]);                          // warm reflection speck
       }
 
       // ===================================================================
-      // s 0.62 R mid — MARINA HOTEL: mid-rise lit-window slab + warm base uplight
+      // s 0.62 R mid — MARINA HOTEL: mid-rise lit-window slab + warm base
+      // uplight, flanked by two shorter lit wings (denser hotel cluster)
       // ===================================================================
       building(K(0.62), 1, 50, 50, 56, 30, { wall: [0.16, 0.18, 0.26], window: WIN, floor: 6 });
+      building(K(0.60), 1, 46, 34, 34, 24, { wall: [0.15, 0.17, 0.24], window: WIN_WARM, floor: 5 });
+      building(K(0.64), 1, 46, 34, 38, 24, { wall: [0.15, 0.17, 0.24], window: WIN, floor: 5 });
       place(K(0.62), 1, 24, [54, 4, 8], WARM);   // warm uplit base band
+      place(K(0.60), 1, 22, [36, 3, 7], WARM);
+      place(K(0.64), 1, 22, [36, 3, 7], WARM);
 
       // ===================================================================
       // s 0.70 R near — marina-side grandstand + amber dock-lamp dot row
@@ -186,11 +250,13 @@
       // ===================================================================
       // Palms scattered along the marina half + pit straight approaches
       // ===================================================================
-      for (let i = 0; i < 18; i++) {
-        const s = 0.50 + (i / 18) * 0.42;
+      for (let i = 0; i < 30; i++) {
+        const s = 0.50 + (i / 30) * 0.42;
         palm(K(s), (i % 2) ? 1 : -1, 7 + hash(i * 5) * 6, 8 + hash(i * 3) * 4);
       }
-      for (let i = 0; i < 6; i++) palm(K(0.0 + i * 0.01), 1, 6, 8);
+      for (let i = 0; i < 10; i++) palm(K(0.0 + i * 0.008), 1, 6 + hash(i * 9) * 4, 8);
+      // palm avenue lining the Marsa curve + final sector
+      for (let i = 0; i < 12; i++) palm(K(0.78 + i * 0.012), -1, 8 + hash(i * 11) * 4, 9);
     },
   }
   );

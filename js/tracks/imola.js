@@ -37,27 +37,34 @@
       const RED    = [0.82, 0.16, 0.14];
       const WHITE  = [0.92, 0.92, 0.90];
 
-      // ---- Encircling WOODED IMOLA HILLS (low, no snow — snowline > 1) ----
+      // ---- Encircling WOODED IMOLA HILLS — CONTINUOUS green ring, no snow (snowline > 1) ----
       // Centre-based ring so peaks sit on the horizon, not in the infield.
+      // Counts are sized so neighbouring peaks overlap (touch) — an unbroken wooded wall.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       const ranges = [
-        // near low wooded hills — dense dark park greens, no snow
-        { extra: 240, wMin: 200, hMin: 50, hVar: 40, count: 12,
+        // near low wooded hills — wide overlapping low peaks (width > spacing => neighbours touch, no gaps)
+        { extra: 230, wMin: 640, hMin: 46, hVar: 34, count: 14, seg: 7,
           opts: { snowline: 2, forest: [0.13, 0.32, 0.16], rock: [0.30, 0.40, 0.26], col: [0.18, 0.36, 0.20] } },
-        // far hazed wooded ridges — paler green, still no snow
-        { extra: 470, wMin: 280, hMin: 90, hVar: 70, count: 11,
+        // mid wooded hills — slightly taller, fills the gaps behind the near ring
+        { extra: 380, wMin: 760, hMin: 72, hVar: 50, count: 13, seg: 7,
+          opts: { snowline: 2, forest: [0.17, 0.38, 0.20], rock: [0.36, 0.46, 0.34], col: [0.21, 0.40, 0.23] } },
+        // far hazed wooded ridges — paler green, still no snow; continuous backdrop
+        { extra: 540, wMin: 900, hMin: 98, hVar: 64, count: 12, seg: 7,
           opts: { snowline: 2, forest: [0.20, 0.42, 0.22], rock: [0.40, 0.48, 0.40], col: [0.24, 0.42, 0.26] } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;
         for (let i = 0; i < rg.count; i++) {
           const a = (i + rg.extra * 0.004) / rg.count * 6.2832, h = hash(i * 7 + rg.extra);
+          // width comfortably exceeds the chord between neighbours so peaks overlap with no gaps
+          const w = rg.wMin + h * 90;
           mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                   rg.wMin + h * 90, rg.hMin + h * rg.hVar, Object.assign({ seed: i * 13 + rg.extra }, rg.opts));
+                   w, rg.hMin + h * rg.hVar,
+                   Object.assign({ seg: rg.seg, seed: i * 13 + rg.extra }, rg.opts));
         }
       }
       // Tiered dark-green box ridges settling behind the trackside treeline (Imola hills enclosing the back).
@@ -68,27 +75,43 @@
       });
 
       // ---- DENSE PARKLAND: deciduous canopy + conifers walling both sides ----
-      every(24, (k) => {
+      every(18, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 41 + side);
-          if (s < 0.34) continue;
+          if (s < 0.22) continue;
           const dist = 9 + s * 20, h = 9 + s * 8;
           if (s < 0.62) tree(k, side, dist, h, [0.18 + s * 0.06, 0.44, 0.21]);
           else pine(k, side, dist, h + 2, [0.10 + s * 0.04, 0.30, 0.15]);
         }
       });
+      // Second, deeper rank of forest behind the first wall for thickness.
+      every(30, (k) => {
+        for (const side of [-1, 1]) {
+          const s = hash(k * 67 + side * 5);
+          if (s < 0.46) continue;
+          const dist = 30 + s * 26, h = 12 + s * 8;
+          if (s < 0.70) pine(k, side, dist, h + 2, WOODS);
+          else tree(k, side, dist, h, [0.15 + s * 0.05, 0.40, 0.19]);
+        }
+      });
       // Sunlit broadleaf verge trees scattered between.
-      every(90, (k) => {
+      every(70, (k) => {
         const h = hash(k * 53 + 9);
-        if (h < 0.5) return;
-        tree(k, h < 0.72 ? -1 : 1, 13 + h * 9, 11 + h * 6, CANOPY);
+        if (h < 0.45) return;
+        tree(k, h < 0.7 ? -1 : 1, 13 + h * 9, 11 + h * 6, CANOPY);
       });
 
-      // ---- s 0.00 R — Santerno river: flat slab running parallel to the start straight ----
+      // ---- s 0.00 R — Santerno river: CONTINUOUS flat water slab paralleling the river run ----
+      // Overlapping slabs from the pit straight through the run to Tosa, no gaps.
+      for (let i = 0; i <= 10; i++) {
+        const s = i * 0.018;            // 0.00 → 0.18, the river-side stretch
+        groundPlane(K(s), 1, 15, [34, 90], RIVER);
+      }
       groundPlane(K(0.00), 1, 16, [70, 220], RIVER);
       groundPlane(K(0.05), 1, 18, [60, 180], RIVER);
-      // grassy bank between road and river
+      // grassy bank between road and river, running the whole river stretch
       groundPlane(K(0.02), 1, 6, [16, 200], BANK);
+      groundPlane(K(0.10), 1, 6, [16, 160], BANK);
       // tree line hugging the back run to Tosa (s≈0.20, right, mid)
       hedge(0.16, 0.26, 1, 26, 7, WOODS);
 
@@ -97,6 +120,9 @@
       // red trim row fronting the old pit building
       prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
       grandstand(0.965, -1, 10, 90, [0.55, 0.58, 0.62], RED);
+      // packed start-straight stands opposite the pits (river side) + extra pit-straight stand
+      grandstand(0.02, 1, 22, 80, [0.52, 0.55, 0.60], [0.78, 0.30, 0.22]);
+      grandstand(0.93, -1, 10, 70, [0.55, 0.58, 0.62], RED);
 
       // ---- s 0.05 L — Tamburello chicane + Ayrton Senna memorial ----
       // green lawn with a small bronze statue box reading as the memorial
@@ -114,6 +140,7 @@
 
       // ---- s 0.28 L — Tosa tight hairpin: stepped grandstand + gravel run-off ----
       grandstand(0.28, -1, 12, 60, [0.52, 0.55, 0.60], RED);
+      grandstand(0.31, -1, 12, 50, [0.54, 0.57, 0.61], [0.20, 0.42, 0.72]);
       groundPlane(K(0.28), -1, 6, [34, 40], GRAVEL);
 
       // ---- s 0.35 L+R far — Piratella blind hill-crest: dark wooded green walls ----
@@ -146,6 +173,7 @@
 
       // ---- s 0.80 L mid — Rivazza double-left descent: grass banks, gravel, grandstand ----
       grandstand(0.80, -1, 12, 55, [0.52, 0.55, 0.60], RED);
+      grandstand(0.84, -1, 12, 48, [0.54, 0.57, 0.61], [0.78, 0.30, 0.22]);
       groundPlane(K(0.80), -1, 6, [30, 50], GRAVEL);
       groundPlane(K(0.81), -1, 14, [40, 60], BANK);
       // shaded fog dip at Rivazza

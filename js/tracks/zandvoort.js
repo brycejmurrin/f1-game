@@ -36,24 +36,40 @@
 
       // --- Low rolling sand dunes hemming the track (the Zandvoort dune belt).
       // Organic mountain()/peak() kept LOW and sandy, snowline > 1 so NO snow.
-      // Tan body, marram-green caps via opts.forest skirt + bush/hedge below. ---
+      // Tan body, marram-green caps via opts.forest skirt + bush/hedge below.
+      // A CONTINUOUS, overlapping belt wraps the WHOLE lap on BOTH sides — no
+      // gap-skipping — so the sand reads as an unbroken dune ridge. Low seg (7)
+      // keeps the dense belt affordable. ---
       const sand = [0.80, 0.74, 0.56], sandDk = [0.70, 0.64, 0.46];
+      const sandLt = [0.86, 0.80, 0.62];
       const marramG = [0.34, 0.50, 0.26], marramT = [0.66, 0.62, 0.40];
-      every(34, (k) => {
+      // Inner dune wall: overlapping organic mounds hugging the verge on BOTH
+      // sides the WHOLE lap (no gap-skip) — low seg (7) to afford the belt.
+      every(32, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 71 + side) > 0.62) continue;
-          const a = anchor(k, side, 30 + hash(k * 72 + side) * 26);
-          const h = 7 + hash(k * 73 + side) * 8;        // LOW dune mounds
-          mountain(a.c[0], a.c[2], a.c[1], 26 + hash(k * 74 + side) * 16, h, {
-            seed: k * 13 + side, rough: 0.5, snowline: 2,  // >1 = no snow
+          const a = anchor(k, side, 22 + hash(k * 72 + side) * 22);
+          const h = 6 + hash(k * 73 + side) * 9;        // LOW dune mounds
+          mountain(a.c[0], a.c[2], a.c[1], 30 + hash(k * 74 + side) * 18, h, {
+            seg: 7, seed: k * 13 + side, rough: 0.5, snowline: 2,  // >1 = no snow
             forest: marramG, rock: sandDk, snow: sand,
           });
         }
       });
-      // A few far dune ridges as a continuous sandy backdrop on the horizon.
-      every(60, (k) => {
+      // Mid dune ridge: a second overlapping band of cheap sandy peaks set back,
+      // filling between the inner mounds so the belt never breaks from the
+      // cockpit. peak() (clean pyramid) is far lighter than mountain().
+      every(22, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 41 + side) > 0.5) continue;
+          const a = anchor(k, side, 50 + hash(k * 81 + side) * 30);
+          if (onTrack(a.c[0], a.c[2], 12)) continue;
+          peak(a.c[0], a.c[2], a.c[1], 34 + hash(k * 83 + side) * 24,
+               10 + hash(k * 82 + side) * 12,
+               hash(k * 84 + side) < 0.5 ? sand : sandLt);
+        }
+      });
+      // Far dune ridges as a continuous sandy backdrop on the horizon.
+      every(48, (k) => {
+        for (const side of [-1, 1]) {
           const a = anchor(k, side, 150 + hash(k * 42 + side) * 90);
           if (onTrack(a.c[0], a.c[2], 14)) continue;
           peak(a.c[0], a.c[2], pyMin, 60 + hash(k * 43 + side) * 50,
@@ -61,22 +77,34 @@
         }
       });
       // Marram grass tufts hugging the verge (low organic green/tan greenery).
-      every(20, (k) => {
+      every(13, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 51 + side) > 0.45) continue;
-          bush(k, side, 12 + hash(k * 52 + side) * 14,
+          if (hash(k * 51 + side) > 0.62) continue;
+          bush(k, side, 10 + hash(k * 52 + side) * 16,
                hash(k * 53 + side) < 0.5 ? marramG : marramT);
         }
       });
-      hedge(0.20, 0.34, 1, 10, 1.4, marramT);   // dune-ridge marram band (Hunserug)
-      hedge(0.35, 0.48, -1, 12, 1.4, marramG);
+      hedge(0.18, 0.40, 1, 10, 1.4, marramT);   // dune-ridge marram band (Hunserug)
+      hedge(0.32, 0.56, -1, 12, 1.4, marramG);
+      hedge(0.58, 0.78, 1, 11, 1.4, marramG);
+      hedge(0.62, 0.88, -1, 13, 1.4, marramT);
 
       // --- Orange-clad Dutch grandstands at the banked corners and pit straight.
       // crowd colour = fanatic Verstappen orange. ---
-      grandstand(0.04, 1, 9, 30, [0.36, 0.38, 0.42], [0.95, 0.45, 0.05]); // Tarzan hairpin R
-      grandstand(0.14, -1, 9, 34, [0.36, 0.38, 0.42], [0.95, 0.45, 0.05]); // Hugenholtz T3 banked L
-      grandstand(0.92, 1, 9, 34, [0.36, 0.38, 0.42], [0.95, 0.45, 0.05]); // Arie Luyendyk final banked R
-      grandstand(0.96, -1, 11, 30, [0.40, 0.41, 0.46], [0.95, 0.45, 0.05]); // pit-straight L
+      const shell = [0.36, 0.38, 0.42], shellLt = [0.40, 0.41, 0.46];
+      const orange = [0.95, 0.45, 0.05];
+      grandstand(0.02, 1, 11, 30, shellLt, orange); // main stand R (pit straight)
+      grandstand(0.04, 1, 9, 30, shell, orange);    // Tarzan hairpin R
+      grandstand(0.07, -1, 10, 28, shell, orange);  // Tarzan exit L
+      grandstand(0.12, -1, 9, 30, shell, orange);   // Hugenholtz approach L
+      grandstand(0.14, -1, 9, 34, shell, orange);   // Hugenholtz T3 banked L
+      grandstand(0.17, 1, 10, 28, shellLt, orange); // Hugenholtz exit R
+      grandstand(0.50, -1, 12, 30, shell, orange);  // Scheivlak inner L
+      grandstand(0.88, 1, 10, 30, shell, orange);   // Luyendyk approach R
+      grandstand(0.92, 1, 9, 34, shell, orange);    // Arie Luyendyk final banked R
+      grandstand(0.95, 1, 10, 30, shellLt, orange); // Luyendyk exit R
+      grandstand(0.96, -1, 11, 30, shellLt, orange); // pit-straight L
+      grandstand(0.98, -1, 10, 28, shell, orange);  // pit-straight L exit
 
       // --- Pit building: long low white-grey box with repeated garage bays. ---
       (() => {
@@ -89,7 +117,7 @@
       // --- Wind turbines on the seaward dune horizon (tower + 3-blade cap).
       // Guarded with onTrack so a perpendicular projection never lands on this
       // compact winding circuit's parallel stretch. ---
-      for (const s of [0.20, 0.50, 0.78]) {
+      for (const s of [0.20, 0.34, 0.50, 0.62, 0.78]) {
         const k = K(s), a = anchor(k, 1, 300), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 60)) continue;
         tower(k, 1, 300, 7, 80, { col: [0.92, 0.92, 0.94], seg: 8 }); // white pole
@@ -103,12 +131,17 @@
 
       // --- Beach huts: tiny low pastel box row at the dune base near the shore
       // (s≈0.50 R, seaward). ---
-      every(110, (k) => {
-        const a = anchor(k, hash(k * 8) < 0.5 ? -1 : 1, hw[k] + 120);
+      every(60, (k) => {
+        const side = hash(k * 8) < 0.5 ? -1 : 1;
+        const a = anchor(k, side, hw[k] + 110 + hash(k * 7) * 30);
         if (onTrack(a.c[0], a.c[2], 12)) return;
         const cols = [[0.85, 0.25, 0.20], [0.20, 0.45, 0.70], [0.90, 0.85, 0.30], [0.20, 0.60, 0.40]];
-        const hutCol = cols[Math.floor(hash(k * 9) * 4) % 4];
-        addBox(out, vadd(a.c, a.u, 2), [5, 4, 5], hutCol, [a.r, a.u, a.t]);
+        const b = [a.r, a.u, a.t];
+        // a short row of huts along the dune base
+        for (let i = -1; i <= 1; i++) {
+          const hutCol = cols[Math.floor(hash(k * 9 + i * 3) * 4) % 4];
+          addBox(out, vadd(vadd(a.c, a.u, 2), a.t, i * 7), [5, 4, 5], hutCol, b);
+        }
       });
     },
   }

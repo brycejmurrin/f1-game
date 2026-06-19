@@ -35,24 +35,27 @@
         prop(k, side, gap, [8, 6, len - 3], blue);                   // crowd tier (front)
       };
 
-      // --- Forested Mie-prefecture hills: two haze-depth rings of PEAKED
-      // summits encircling the circuit (computed from the track centre), so the
-      // horizon reads as a layered mountain range rather than a wall of cubes.
+      // --- Forested Mie-prefecture hills: three haze-depth rings of wooded
+      // summits encircling the circuit (computed from the track centre). The
+      // near rings are dense and OVERLAPPING — neighbouring peaks touch so the
+      // horizon reads as one CONTINUOUS green forested wall with no gaps, not a
+      // ring of separated cubes. No snow (Suzuka is wooded, not alpine).
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      for (const [extra, wMin, hMin, hVar, count, fc, rc] of [
-        [200, 180, 46, 46, 26, [0.24, 0.42, 0.26], [0.34, 0.40, 0.30]],   // near range
-        [430, 260, 92, 72, 22, [0.42, 0.53, 0.46], [0.46, 0.52, 0.46]],   // far hazed range
+      for (const [extra, wMin, wVar, hMin, hVar, count, seg, fc, rc] of [
+        [170, 250, 70, 40, 40, 40, 7, [0.22, 0.40, 0.25], [0.32, 0.38, 0.29]],   // near base — overlapping continuous forest backdrop
+        [300, 280, 90, 62, 52, 32, 7, [0.28, 0.46, 0.30], [0.38, 0.44, 0.34]],   // mid green ridge
+        [470, 320, 110, 96, 70, 26, 8, [0.42, 0.53, 0.46], [0.46, 0.52, 0.46]],   // far hazed range
       ]) {
         const ring = rad + extra;
         for (let i = 0; i < count; i++) {
           const a = (i + extra * 0.004) / count * 6.2832, h = hash(i * 7 + extra);
           const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
-          mountain(x, z, pyMin, wMin + h * 90, hMin + h * hVar, {
-            seed: i * 13 + extra, snowline: 1.1,   // Mie hills — wooded, not alpine
+          mountain(x, z, pyMin, wMin + h * wVar, hMin + h * hVar, {
+            seg, seed: i * 13 + extra, snowline: 1.1,   // Mie hills — wooded, not alpine
             forest: [fc[0] + h * 0.05, fc[1] + h * 0.04, fc[2] + h * 0.04], rock: rc,
           });
         }
@@ -66,17 +69,25 @@
         place(Math.round(n * 0.05) % n, -1, 38 + i * 12, [10 + i * 2, 7 + i * 3, 14], parkCol[i % 4]);
       }
 
-      // --- Conifer stands lining the green zones (proper cone trees), with
-      // sparse Sakura (cherry-blossom) broadleaves for seasonal pop.
-      every(36, (k) => {
+      // --- Dense conifer stands lining BOTH green zones (proper cone trees) in
+      // staggered double rows, with Sakura (cherry-blossom) broadleaves scattered
+      // for seasonal pop against the green.
+      every(24, (k) => {
         const s = hash(k * 41);
-        if (s < 0.45) return;
-        pine(k, s < 0.72 ? -1 : 1, 10 + s * 10, 9 + s * 7, [0.13 + s * 0.06, 0.34, 0.16]);
+        if (s < 0.25) return;
+        // inner row, both sides
+        pine(k, -1, 9 + s * 9, 9 + s * 7, [0.13 + s * 0.06, 0.34, 0.16]);
+        pine(k, 1, 9 + s * 9, 9 + s * 7, [0.12 + s * 0.07, 0.33, 0.15]);
+        // staggered taller back row
+        if (s > 0.45) {
+          const b = hash(k * 71);
+          pine(k, b < 0.5 ? -1 : 1, 20 + b * 14, 12 + b * 9, [0.11 + b * 0.05, 0.32, 0.15]);
+        }
       });
-      every(80, (k) => {
+      every(44, (k) => {
         const s = hash(k * 53);
-        if (s < 0.7) return;
-        tree(k, s < 0.85 ? -1 : 1, 11 + s * 6, 6 + s * 3, [0.93, 0.62, 0.70]);  // sakura
+        if (s < 0.4) return;
+        tree(k, s < 0.7 ? -1 : 1, 11 + s * 8, 6 + s * 4, [0.94, 0.64, 0.72]);  // sakura
       });
 
       // --- Grandstands at the signature corners (lap-fractions from the brief).

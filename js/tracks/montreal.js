@@ -48,6 +48,8 @@
       // ===================================================================
       grandstand(0.02, 1, 8, 120, [0.50, 0.51, 0.56], [0.62, 0.34, 0.30]);
       grandstand(0.0, -1, 10, 90, [0.46, 0.47, 0.52], [0.55, 0.40, 0.38]);
+      grandstand(0.06, 1, 9, 90, [0.48, 0.49, 0.55], [0.58, 0.36, 0.34]);
+      grandstand(0.96, -1, 11, 80, [0.47, 0.48, 0.53], [0.56, 0.38, 0.36]);
 
       // ===================================================================
       // s 0.04 both — Senna S chicane: angled kerb slabs + wall funnel
@@ -59,18 +61,19 @@
       }
 
       // ===================================================================
-      // s 0.10 L — Olympic Basin rowing lake (wide flat teal plane)
+      // s 0.10 L — Olympic Basin rowing lake (continuous teal water band)
       // ===================================================================
-      groundPlane(K(0.10), -1, 14, [180, 2, 220], BASIN);
-      groundPlane(K(0.13), -1, 14, [160, 2, 160], BASIN);
+      for (let i = 0; i < 5; i++) {
+        groundPlane(K(0.07 + i * 0.022), -1, 14, [200, 2, 260], BASIN);
+      }
 
       // ===================================================================
       // s 0.15 both — Parkland trees (green cube canopies on trunks)
       // ===================================================================
-      for (let i = 0; i < 18; i++) {
-        const s = 0.14 + i * 0.004;
+      for (let i = 0; i < 34; i++) {
+        const s = 0.13 + i * 0.0022;
         const side = (i % 2) ? 1 : -1;
-        tree(K(s), side, 8 + hash(i * 5) * 10, 6 + hash(i * 3) * 4, FOLIAGE);
+        tree(K(s), side, 7 + hash(i * 5) * 12, 6 + hash(i * 3) * 4, FOLIAGE);
       }
 
       // ===================================================================
@@ -104,17 +107,30 @@
       // ===================================================================
       // s 0.38 L far — Montreal CBD skyline across the river
       // ===================================================================
-      groundPlane(K(0.36), -1, 30, [240, 2, 260], RIVER);  // river between
-      for (let i = 0; i < 16; i++) {
-        const k = K(0.34 + (i / 16) * 0.10);
-        const dist = 200 + hash(i * 7) * 120;
-        const w = 16 + hash(i * 3) * 14;
-        const h = 70 + hash(i * 11) * 130;
+      // Continuous St. Lawrence water band between island and downtown
+      for (let i = 0; i < 5; i++) {
+        groundPlane(K(0.30 + i * 0.022), -1, 30, [260, 2, 240], RIVER);
+      }
+      // Front rank: dense unbroken band of towers (no gaps, varied heights)
+      for (let i = 0; i < 30; i++) {
+        const k = K(0.30 + (i / 30) * 0.16);
+        const dist = 190 + hash(i * 7) * 50;
+        const w = 18 + hash(i * 3) * 16;
+        const h = 70 + hash(i * 11) * 150;
         building(k, -1, dist, w, h, w, { wall: [0.55, 0.58, 0.64], window: [0.66, 0.74, 0.84], floor: 6 });
       }
-      // hazed back silhouette band
-      for (let i = 0; i < 14; i++) {
-        backdrop(K(0.38), -1, 320 + i * 16, [24, 50 + hash(i * 13) * 80, 24], [0.50, 0.55, 0.62]);
+      // Mid rank: fills the gaps behind the front rank
+      for (let i = 0; i < 26; i++) {
+        const k = K(0.305 + (i / 26) * 0.155);
+        const dist = 260 + hash(i * 13) * 60;
+        const w = 16 + hash(i * 5) * 14;
+        const h = 60 + hash(i * 9) * 120;
+        building(k, -1, dist, w, h, w, { wall: [0.52, 0.55, 0.61], window: [0.62, 0.70, 0.80], floor: 6 });
+      }
+      // hazed back silhouette band — continuous wrap
+      for (let i = 0; i < 28; i++) {
+        const k = K(0.30 + (i / 28) * 0.17);
+        backdrop(k, -1, 340 + hash(i * 17) * 60, [26, 50 + hash(i * 13) * 90, 26], [0.50, 0.55, 0.62]);
       }
 
       // ===================================================================
@@ -132,6 +148,7 @@
       // s 0.55 both — L'Épingle hairpin: tight U of walls + grandstand
       // ===================================================================
       grandstand(0.55, 1, 12, 70, [0.48, 0.49, 0.54], [0.60, 0.36, 0.32]);
+      grandstand(0.53, -1, 12, 60, [0.46, 0.47, 0.52], [0.58, 0.38, 0.34]);
       for (const side of [-1, 1]) {
         for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 0.5, [3, 0.2, 4], (j % 2) ? KERB_R : KERB_W);
       }
@@ -139,17 +156,18 @@
       // ===================================================================
       // s 0.60 L mid — Casino Straight flanked by Olympic Basin water
       // ===================================================================
-      groundPlane(K(0.60), -1, 14, [180, 2, 240], BASIN);
-      groundPlane(K(0.64), -1, 14, [160, 2, 180], BASIN);
-      for (let i = 0; i < 10; i++) {
-        tree(K(0.58 + i * 0.005), 1, 8 + hash(i * 4) * 8, 5 + hash(i * 2) * 4, FOLIAGE);
+      for (let i = 0; i < 4; i++) {
+        groundPlane(K(0.58 + i * 0.024), -1, 14, [190, 2, 240], BASIN);
+      }
+      for (let i = 0; i < 18; i++) {
+        tree(K(0.575 + i * 0.0035), 1, 7 + hash(i * 4) * 9, 5 + hash(i * 2) * 4, FOLIAGE);
       }
 
       // more parkland trees through the back of the lap
-      for (let i = 0; i < 16; i++) {
-        const s = 0.70 + i * 0.008;
+      for (let i = 0; i < 30; i++) {
+        const s = 0.69 + i * 0.0044;
         const side = (i % 2) ? 1 : -1;
-        tree(K(s), side, 7 + hash(i * 6) * 10, 5 + hash(i * 3) * 4, FOLIAGE);
+        tree(K(s), side, 7 + hash(i * 6) * 11, 5 + hash(i * 3) * 4, FOLIAGE);
       }
 
       // ===================================================================
