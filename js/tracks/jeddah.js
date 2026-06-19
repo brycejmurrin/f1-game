@@ -114,17 +114,17 @@
         addBox(out, vadd(a.c, a.u, 1.4), [4.1, 0.5, 11.1], (i % 2) ? SPANGLE : WINTEAL); // deck running lights
         addCyl(out, vadd(a.c, a.u, 2.6), 0.2, 14, [0.85, 0.86, 0.9], 4, b); // mast spike
       }
-      place(K(0.45), 1, 17, [30, 3, 10], [0.24, 0.25, 0.28]);         // yacht club building
-      place(K(0.45), 1, 17, [30.4, 0.7, 10.5], WINWARM);
-      place(K(0.47), 1, 16, [24, 4, 9], [0.22, 0.23, 0.27]);          // marina office annex
-      place(K(0.47), 1, 16, [24.4, 0.8, 9.5], WINCOOL);
+      place(K(0.45), 1, 40, [30, 3, 10], [0.24, 0.25, 0.28]);         // yacht club building
+      place(K(0.45), 1, 40, [30.4, 0.7, 10.5], WINWARM);
+      place(K(0.47), 1, 32, [24, 4, 9], [0.22, 0.23, 0.27]);          // marina office annex
+      place(K(0.47), 1, 32, [24.4, 0.8, 9.5], WINCOOL);
 
       // --- s 0.50 L near: banked T13 — light towers + packed grandstand R ---
       lightTower(K(0.50), -1, 10);
       lightTower(K(0.50), -1, 16);
       for (let i = 0; i < 4; i++) {
-        place(K(0.50 + i * 0.008), 1, 14, [20, 7 + i * 2, 14], [0.15, 0.15, 0.19]);
-        place(K(0.50 + i * 0.008), 1, 14, [20.4, 0.8, 14.5], LED);    // crowd light band
+        place(K(0.50 + i * 0.008), 1, 20, [20, 7 + i * 2, 14], [0.15, 0.15, 0.19]);
+        place(K(0.50 + i * 0.008), 1, 20, [20.4, 0.8, 14.5], LED);    // crowd light band
       }
 
       // --- s 0.60 R mid: open Corniche lagoon — warm amber path-lamp dots along the edge ---
@@ -150,8 +150,8 @@
 
       // --- s 0.90 R near: grandstand bank + light towers funnel toward final run ---
       for (let i = 0; i < 4; i++) {
-        place(K(0.89 + i * 0.008), 1, 14, [20, 8 + i * 2, 14], [0.15, 0.15, 0.19]);
-        place(K(0.89 + i * 0.008), 1, 14, [20.4, 0.8, 14.5], LED);
+        place(K(0.89 + i * 0.008), 1, 20, [20, 8 + i * 2, 14], [0.15, 0.15, 0.19]);
+        place(K(0.89 + i * 0.008), 1, 20, [20.4, 0.8, 14.5], LED);
       }
       lightTower(K(0.90), 1, 10);
       lightTower(K(0.93), -1, 10);
