@@ -8,6 +8,20 @@
     "test:update": "playwright test --update-snapshots"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1"
-  }
+    "@playwright/test": "^1.56.1",
+    "playwright": "^1.61.0"
+  },
+  "description": "**[Play live on GitHub Pages &rarr;](https://brycejmurrin.github.io/f1-game/)**",
+  "main": "playwright.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:36407/git/brycejmurrin/f1-game"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

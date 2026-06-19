@@ -54,8 +54,8 @@ const Input = (function () {
   let tiltSeen = false;       // we have actually received sensor data
   let gyroAttached = false;
   let gyroDenied = false;
-  let useTiltPref = true;
-  let useButtonSteerPref = false;   // when true, on-screen L/R buttons steer
+  // single source of truth for how the player steers: "tilt" | "buttons" | "touch"
+  let steerMode = "tilt";
   let tiltSmoothed = 0;       // EMA-filtered tilt (eliminates jitter spikes)
   let lastOrientMs = 0;
 
@@ -145,7 +145,7 @@ const Input = (function () {
   }
 
   function tiltActive() {
-    return useTiltPref && tiltSeen;
+    return steerMode === "tilt" && tiltSeen;
   }
 
   function tiltSteering() {
@@ -203,10 +203,10 @@ const Input = (function () {
   /* ---------------- canvas touch halves ---------------- */
 
   function touchDir(t) {
-    // When tilt isn't steering, a touch anywhere on the canvas (the on-screen
-    // buttons are separate elements) steers by screen half. The control
-    // buttons sit in the corners, leaving the large centre free to steer.
-    if (tiltActive()) return 0;
+    // Only in touch mode does a tap on the canvas steer by screen half (the
+    // control buttons are separate elements in the corners, leaving the large
+    // centre free). Tilt and button modes ignore canvas taps.
+    if (steerMode !== "touch") return 0;
     return t.clientX < window.innerWidth / 2 ? -1 : 1;
   }
 
@@ -275,10 +275,7 @@ const Input = (function () {
   function steer() {
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
-    if (useButtonSteerPref) {
-      if (btnSteerLeft || btnSteerRight) return (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
-      return 0;
-    }
+    if (steerMode === "buttons") return (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
     if (tiltActive()) return tiltSteering();
     return touchSteer;
   }
@@ -315,20 +312,13 @@ const Input = (function () {
     return v;
   }
 
-  function setUseTilt(b) {
-    useTiltPref = !!b;
+  function setSteerMode(m) {
+    steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
+    if (steerMode !== "buttons") btnSteerLeft = btnSteerRight = false;  // drop held buttons
   }
 
-  function useTilt() {
-    return useTiltPref;
-  }
-
-  function setUseButtonSteer(b) {
-    useButtonSteerPref = !!b;
-  }
-
-  function useButtonSteer() {
-    return useButtonSteerPref;
+  function getSteerMode() {
+    return steerMode;
   }
 
   function touchControlsNeeded() {
@@ -397,10 +387,8 @@ const Input = (function () {
     consumeShiftUp,
     consumeShiftDown,
     tiltActive,
-    setUseTilt,
-    useTilt,
-    setUseButtonSteer,
-    useButtonSteer,
+    setSteerMode,
+    getSteerMode,
     touchControlsNeeded,
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
