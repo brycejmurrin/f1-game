@@ -40,8 +40,8 @@
       // continuous forested wall with no gaps anywhere around the lap. Low `seg`
       // keeps each peak cheap so we can afford many. Snow only on the far tops.
       const ranges = [
-        // near forested wall — many overlapping dark-green peaks, no snow
-        { extra: 170, wMin: 300, hMin: 56, hVar: 54, wVar: 130, count: 30, phase: 0.0,
+        // near forested wall — wMin/wVar sized so max(w)*0.62 < extra-8 (guard won't fire)
+        { extra: 280, wMin: 160, hMin: 56, hVar: 54, wVar: 80, count: 32, phase: 0.0,
           opts: { seg: 7, rough: 0.30, forest: [0.10, 0.32, 0.14], rock: [0.28, 0.32, 0.28], snow: [0.90, 0.93, 0.96], snowline: 1.2 } },
         // mid forested wall — offset to fill the seams of the near ring
         { extra: 290, wMin: 340, hMin: 92, hVar: 70, wVar: 150, count: 26, phase: 0.5,

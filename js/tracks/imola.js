@@ -46,22 +46,21 @@
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       const ranges = [
-        // near low wooded hills — wide overlapping low peaks (width > spacing => neighbours touch, no gaps)
-        { extra: 230, wMin: 640, hMin: 46, hVar: 34, count: 14, seg: 7,
+        // near low wooded hills — wMin sized so w*0.62 < extra-8 (guard won't fire)
+        { extra: 230, wMin: 140, hMin: 38, hVar: 28, wVar: 80, count: 26, seg: 7,
           opts: { snowline: 2, forest: [0.13, 0.32, 0.16], rock: [0.30, 0.40, 0.26], col: [0.18, 0.36, 0.20] } },
-        // mid wooded hills — slightly taller, fills the gaps behind the near ring
-        { extra: 380, wMin: 760, hMin: 72, hVar: 50, count: 13, seg: 7,
+        // mid wooded hills — fills the gaps behind the near ring
+        { extra: 380, wMin: 220, hMin: 58, hVar: 40, wVar: 80, count: 20, seg: 7,
           opts: { snowline: 2, forest: [0.17, 0.38, 0.20], rock: [0.36, 0.46, 0.34], col: [0.21, 0.40, 0.23] } },
         // far hazed wooded ridges — paler green, still no snow; continuous backdrop
-        { extra: 540, wMin: 900, hMin: 98, hVar: 64, count: 12, seg: 7,
+        { extra: 540, wMin: 320, hMin: 82, hVar: 52, wVar: 80, count: 16, seg: 7,
           opts: { snowline: 2, forest: [0.20, 0.42, 0.22], rock: [0.40, 0.48, 0.40], col: [0.24, 0.42, 0.26] } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;
         for (let i = 0; i < rg.count; i++) {
           const a = (i + rg.extra * 0.004) / rg.count * 6.2832, h = hash(i * 7 + rg.extra);
-          // width comfortably exceeds the chord between neighbours so peaks overlap with no gaps
-          const w = rg.wMin + h * 90;
+          const w = rg.wMin + h * rg.wVar;
           mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
                    w, rg.hMin + h * rg.hVar,
                    Object.assign({ seg: rg.seg, seed: i * 13 + rg.extra }, rg.opts));
