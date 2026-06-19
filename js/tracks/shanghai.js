@@ -75,6 +75,8 @@
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
       grandstand(0.04, -1, 18, 130, [0.44, 0.45, 0.50], SEAT);
       grandstand(0.06, -1, 22, 80, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.025, -1, 26, 70, [0.43, 0.44, 0.49], SEAT);
+      billboard(K(0.045), -1, 14, 16, 4.5, YELLOW);
 
       // ================= SNAIL T1–3 RUN-OFF SLAB (s 0.06, R) =================
       (function snailRunoff() {
@@ -86,37 +88,61 @@
       grandstand(0.05, 1, 80, 70, [0.43, 0.44, 0.49], SEAT);
       grandstand(0.085, 1, 70, 60, [0.43, 0.44, 0.49], SEAT);
       grandstand(0.10, -1, 30, 60, [0.42, 0.43, 0.48], SEAT);
+      // denser tiers wrapping the snail spiral
+      grandstand(0.065, 1, 58, 60, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.05, 1, 100, 80, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.115, -1, 26, 50, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.13, 1, 40, 50, [0.43, 0.44, 0.49], SEAT);
       billboard(K(0.07), 1, 50, 16, 5, YELLOW);
+      billboard(K(0.095), 1, 38, 16, 5, RED);
+      marshalPost(K(0.08), -1, 14);
 
-      // ================= DISTANT SHANGHAI SKYLINE (s 0.30, L far) =================
-      // Cluster of tall thin grey boxes fading into haze — pushed ≥180 m out.
-      (function skyline() {
-        const a = anchor(K(0.30), -1, 200), b = [a.r, a.u, a.t];
-        for (let i = 0; i < 18; i++) {
-          const off = (i - 9) * 24 + (hash(i * 5) - 0.5) * 14;
-          const depth = 30 + hash(i * 7) * 70;              // recede into haze
-          const h = 40 + hash(i * 11) * 90;
-          const w = 10 + hash(i * 13) * 10;
-          const col = depth > 70 ? SKY_HAZE : SKY;
-          addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), b[1], h / 2),
-                 [w, h, w], col, b);
+      // ================= CONTINUOUS HAZY SHANGHAI SKYLINE (wraps whole lap) =================
+      // One unbroken band of haze-greyed buildings ringing the far side of the
+      // entire lap — varied heights, no gaps, receding into a back row.
+      (function skylineBand() {
+        let sx = 0, sz = 0;
+        for (let i = 0; i < n; i++) { sx += px[i]; sz += pz[i]; }
+        sx /= n; sz /= n;
+        let rd = 0;
+        for (let i = 0; i < n; i++) rd = Math.max(rd, Math.hypot(px[i] - sx, pz[i] - sz));
+        // Two concentric rings of tight-packed towers — front sharper, back hazed.
+        for (const [extra, cnt, hMin, hVar, col] of [
+          [205, 70, 34, 80, SKY],          // front skyline row
+          [285, 60, 40, 95, SKY_HAZE],     // back hazed row (taller, greyer)
+        ]) {
+          const ring = rd + extra;
+          for (let i = 0; i < cnt; i++) {
+            const a = i / cnt * 6.2832;
+            const jx = (hash(i * 5 + extra) - 0.5) * 18;
+            const jz = (hash(i * 7 + extra) - 0.5) * 18;
+            const x = sx + Math.cos(a) * ring + jx;
+            const z = sz + Math.sin(a) * ring + jz;
+            const h = hMin + hash(i * 11 + extra) * hVar;
+            const w = 12 + hash(i * 13 + extra) * 12;
+            addBox(out, [x, pyMin + h / 2, z], [w, h, w], col, null);
+          }
         }
       })();
-      // A second hazy skyline cluster on the far back side.
-      (function skyline2() {
-        const a = anchor(K(0.55), -1, 220), b = [a.r, a.u, a.t];
-        for (let i = 0; i < 12; i++) {
-          const off = (i - 6) * 28 + (hash(i * 9) - 0.5) * 16;
-          const h = 36 + hash(i * 3) * 70;
-          const w = 11 + hash(i * 17) * 9;
-          addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, 20 + hash(i) * 50), b[1], h / 2),
-                 [w, h, w], SKY_HAZE, b);
+      // Denser feature cluster of taller towers behind T6 (s 0.30, L far).
+      (function skylineCluster() {
+        const a = anchor(K(0.30), -1, 200), b = [a.r, a.u, a.t];
+        for (let i = 0; i < 14; i++) {
+          const off = (i - 7) * 26 + (hash(i * 5) - 0.5) * 14;
+          const depth = 24 + hash(i * 7) * 50;
+          const h = 60 + hash(i * 11) * 100;
+          const w = 11 + hash(i * 13) * 11;
+          addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), b[1], h / 2),
+                 [w, h, w], depth > 55 ? SKY_HAZE : SKY, b);
         }
       })();
 
       // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
       grandstand(0.45, 1, 16, 90, [0.43, 0.44, 0.49], SEAT);
       grandstand(0.47, 1, 20, 60, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.42, 1, 18, 60, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.50, 1, 16, 50, [0.43, 0.44, 0.49], SEAT);
+      billboard(K(0.46), 1, 12, 16, 4.5, RED);
       marshalPost(K(0.45), 1, 12);
 
       // ================= MARSH / TREELINE (s 0.62, L far) =================
@@ -138,10 +164,18 @@
       fence(0.72, 0.88, 1, 8, 3.0, [0.70, 0.72, 0.76]);
       billboard(K(0.76), 1, 10, 18, 5, RED);
       billboard(K(0.82), 1, 10, 18, 5, YELLOW);
+      billboard(K(0.79), 1, 10, 18, 5, RED);
       marshalPost(K(0.80), 1, 14);
+      marshalPost(K(0.74), 1, 12);
+      // small grandstand banks lining the long back straight
+      grandstand(0.755, 1, 22, 70, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.80, 1, 22, 70, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.845, 1, 22, 60, [0.43, 0.44, 0.49], SEAT);
+      // low treeline along the verges behind the stands
+      hedge(0.72, 0.88, 1, 40, 3.2, MARSH_N);
       // sparse green/grey verges
-      for (let i = 0; i < 4; i++) {
-        place((K(0.74) + i * Math.round(n * 0.01)) % n, 1, 20 + i * 8, [6, 1.2, 18], MARSH);
+      for (let i = 0; i < 6; i++) {
+        place((K(0.74) + i * Math.round(n * 0.008)) % n, 1, 20 + i * 6, [6, 1.2, 18], MARSH);
       }
 
       // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
@@ -158,15 +192,17 @@
 
       // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
       building(K(0.96), 1, 16, 50, 9, 12, { wall: [0.86, 0.87, 0.88], window: [0.28, 0.32, 0.38], floor: 3 });
+      building(K(0.94), 1, 18, 34, 7, 10, { wall: [0.84, 0.85, 0.87], window: [0.28, 0.32, 0.38], floor: 2 });
+      building(K(0.92), -1, 18, 40, 10, 12, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 3 });
 
       // ---- Scattered marsh greenery + low treeline around the flat perimeter ----
-      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 40))) {
+      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 60))) {
         for (const side of [-1, 1]) {
           const r = hash(k * 13 + side * 3);
-          if (r > 0.5) continue;
-          const d = 30 + hash(k * 7 + side) * 40;
+          if (r > 0.6) continue;
+          const d = 28 + hash(k * 7 + side) * 44;
           tree(k, side, d, 6 + hash(k * 17 + side) * 4, MARSH_N);
-          if (hash(k * 23 + side) > 0.6) bush(k, side, d + 5, MARSH);
+          if (hash(k * 23 + side) > 0.55) bush(k, side, d + 5, MARSH);
         }
       }
 

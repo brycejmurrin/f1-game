@@ -36,30 +36,36 @@
       cx /= n; cz /= n;
 
       // ====================================================================
-      // ALBERT PARK LAKE — broad flat steel-blue slab to the L horizon (s≈0.45)
+      // ALBERT PARK LAKE — broad flat steel-blue slab to the L horizon, laid as
+      // a CONTINUOUS water sheet wrapping the whole skyline side (s≈0.30–0.60 L)
       // ====================================================================
-      groundPlane(k(0.45), -1, 70, [900, 4, 900], WATER);
-      groundPlane(k(0.55), -1, 60, [500, 4, 500], [0.22, 0.47, 0.64]);
+      groundPlane(k(0.45), -1, 70, [1100, 4, 1100], WATER);
+      groundPlane(k(0.40), -1, 90, [700, 4, 700], [0.22, 0.47, 0.64]);
+      groundPlane(k(0.55), -1, 80, [700, 4, 700], [0.22, 0.47, 0.64]);
 
       // ====================================================================
-      // MELBOURNE CBD SKYLINE — tall thin blue-grey towers far across the lake
-      // pushed ≥180 m out (s≈0.30 R), with a faint silhouette band behind
+      // MELBOURNE CBD SKYLINE — CONTINUOUS dense band of blue-grey towers far
+      // across the lake (s≈0.22–0.42 R), varied heights, packed shoulder-to-
+      // shoulder with no gaps, backed by a faint unbroken silhouette ridge.
       // ====================================================================
       const CBD_WIN = [0.55, 0.65, 0.80];
-      for (let i = 0; i < 16; i++) {
-        const s = 0.24 + (i / 16) * 0.16;       // cluster around s≈0.30
-        const side = 1;
-        const dist = 190 + hash(i * 7) * 90;     // far behind the lake
-        const w = 12 + hash(i * 3) * 12;
-        const h = 70 + hash(i * 11) * 120;       // tall CBD
-        building(k(s), side, dist, w, h, w, {
-          wall: [0.32, 0.38, 0.46], window: CBD_WIN, floor: 6,
+      const CBD_N = 34, CBD_S0 = 0.21, CBD_S1 = 0.43;
+      for (let i = 0; i < CBD_N; i++) {
+        const f = i / (CBD_N - 1);
+        const s = CBD_S0 + f * (CBD_S1 - CBD_S0);     // unbroken span across lake
+        const dist = 200 + hash(i * 7) * 70;          // far behind the lake
+        const w = 14 + hash(i * 3) * 12;              // wide enough to overlap → no gaps
+        const h = 60 + hash(i * 11) * 130;            // tall, varied CBD profile
+        building(k(s), 1, dist, w, h, w, {
+          wall: [0.30 + hash(i * 5) * 0.06, 0.36, 0.46], window: CBD_WIN, floor: 6,
         });
       }
-      // distant silhouette band behind the towers
-      for (let i = 0; i < 18; i++) {
-        backdrop(k(0.24 + (i / 18) * 0.18), 1, 300 + hash(i * 5) * 120,
-                 [20 + hash(i * 9) * 22, 40 + hash(i * 13) * 80, 20], [0.40, 0.46, 0.54]);
+      // continuous distant silhouette band behind the towers (overlapping → solid)
+      for (let i = 0; i < 22; i++) {
+        const f = i / 21;
+        backdrop(k(CBD_S0 - 0.02 + f * (CBD_S1 - CBD_S0 + 0.04)), 1,
+                 300 + hash(i * 5) * 110,
+                 [28 + hash(i * 9) * 24, 40 + hash(i * 13) * 80, 20], [0.40, 0.46, 0.54]);
       }
 
       // ====================================================================
@@ -72,40 +78,58 @@
       });
 
       // ====================================================================
-      // PARKLAND — scattered broadleaf trees + sparse palms through the park
+      // PARKLAND — DENSE broadleaf trees + bushes through the park (both sides)
       // ====================================================================
-      every(48, (kk) => {
+      every(28, (kk) => {
         for (const side of [-1, 1]) {
-          if (hash(kk * 21 + side) > 0.55) continue;
-          const dist = 26 + hash(kk * 22 + side) * 60;
+          if (hash(kk * 21 + side) > 0.78) continue;     // denser fill
+          const dist = 24 + hash(kk * 22 + side) * 62;
           tree(kk, side, dist, 8 + hash(kk * 24 + side) * 6, TREE);
-          if (hash(kk * 31 + side) > 0.7) bush(kk, side, dist - 5, TREE);
+          if (hash(kk * 27 + side) > 0.5)               // second tree, staggered
+            tree(kk, side, dist + 14 + hash(kk * 29 + side) * 18,
+                 7 + hash(kk * 33 + side) * 6, TREE);
+          if (hash(kk * 31 + side) > 0.55) bush(kk, side, dist - 5, TREE);
         }
       });
-      // dense tree clusters at s≈0.20 (both sides)
-      for (const side of [-1, 1]) {
-        for (let j = 0; j < 5; j++) {
-          const kk = (k(0.20) + j) % n;
-          tree(kk, side, 24 + hash(kk * 3 + j) * 22, 9 + hash(kk * 5 + j) * 6, TREE);
+      // dense tree clusters at signature parkland spots (both sides)
+      for (const [sc, cnt] of [[0.20, 8], [0.36, 7], [0.70, 7], [0.86, 6]]) {
+        for (const side of [-1, 1]) {
+          for (let j = 0; j < cnt; j++) {
+            const kk = (k(sc) + j) % n;
+            tree(kk, side, 22 + hash(kk * 3 + j + sc * 50) * 26,
+                 8 + hash(kk * 5 + j) * 6, TREE);
+            if (hash(kk * 7 + j) > 0.6) bush(kk, side, 18 + hash(kk * 9 + j) * 10, TREE);
+          }
         }
       }
 
-      // ---- Palm avenue along the fast Lakeside Drive section (s≈0.55 L) ----
-      for (let j = 0; j < 8; j++) {
-        const kk = (k(0.52) + j) % n;
-        palm(kk, -1, 18 + hash(kk * 9 + j) * 8, 11 + hash(kk * 12 + j) * 5, [0.20, 0.46, 0.24]);
+      // ---- Palm avenue along the fast Lakeside Drive section (s≈0.50–0.60 L) ----
+      for (let j = 0; j < 18; j++) {
+        const kk = (k(0.49) + j) % n;
+        palm(kk, -1, 16 + hash(kk * 9 + j) * 10, 10 + hash(kk * 12 + j) * 6, [0.20, 0.46, 0.24]);
+        if (hash(kk * 17 + j) > 0.5)
+          palm(kk, -1, 30 + hash(kk * 19 + j) * 12, 9 + hash(kk * 23 + j) * 5, [0.20, 0.46, 0.24]);
       }
-      // a few palms by the pits as locale flavour
-      palm(k(0.02), 1, 16, 12, [0.20, 0.46, 0.24]);
-      palm(k(0.98), 1, 16, 11, [0.20, 0.46, 0.24]);
+      // palm clusters by the pits/start and around grandstands as locale flavour
+      for (let j = 0; j < 5; j++) {
+        palm((k(0.0) + j) % n, 1, 16 + j * 6, 11 + hash(j * 3) * 3, [0.20, 0.46, 0.24]);
+        palm((k(0.96) + j) % n, 1, 16 + j * 6, 11 + hash(j * 5) * 3, [0.20, 0.46, 0.24]);
+        palm((k(0.62) + j) % n, 1, 40 + j * 6, 10 + hash(j * 7) * 3, [0.20, 0.46, 0.24]);
+      }
 
       // ====================================================================
       // GRANDSTANDS — main straight + signature corners (crowd-tinted)
       // ====================================================================
       grandstand(0.00, -1, 12, 90, SHELL, CROWD);   // main grandstand, pit straight L
+      grandstand(0.07, -1, 14, 60, SHELL, CROWD);   // extended pit-straight bank L
       grandstand(0.04, 1, 14, 55, SHELL, CROWD);    // Turn 1-2 sweep R
+      grandstand(0.12, 1, 16, 48, SHELL, CROWD);    // Turn 3 exit bank R
+      grandstand(0.30, -1, 16, 50, SHELL, CROWD);   // lakeside spectator bank L
+      grandstand(0.55, -1, 16, 55, SHELL, CROWD);   // Lakeside Drive bank L
       grandstand(0.62, 1, 14, 60, SHELL, CROWD);    // spectator grandstand R
+      grandstand(0.66, 1, 16, 45, SHELL, CROWD);    // adjoining spectator bank R
       grandstand(0.78, -1, 14, 45, SHELL, CROWD);   // chicane complex L
+      grandstand(0.90, 1, 18, 50, SHELL, CROWD);    // fan-hill grandstand R
 
       // ---- Pit building + garages: long low white box row, dark roof (s≈0.0 R)
       building(k(0.0), 1, 12, 14, 9, 180, { wall: [0.86, 0.87, 0.88], window: [0.18, 0.22, 0.28], floor: 4 });

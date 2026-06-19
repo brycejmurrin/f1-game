@@ -32,30 +32,45 @@
       const WHITE = [0.92, 0.92, 0.92], RED = [0.85, 0.15, 0.15];
 
       // ---- LOW distant Northamptonshire treeline backdrop (flat — no snow) ----
-      every(70, (kk) => {
+      // Dense unbroken band wrapping every node, both sides — no gaps.
+      every(38, (kk) => {
         for (const side of [-1, 1]) {
-          backdrop(kk, side, 200 + hash(kk * 6 + side) * 70, [190, 16, 190], [0.22, 0.34, 0.20]);
+          backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], [0.22, 0.34, 0.20]);
+          backdrop(kk, side, 260 + hash(kk * 9 + side) * 70, [170, 12, 170], [0.20, 0.31, 0.19]);
         }
       });
-      // very low, soft organic green rises far out (snowline > 1 = never snowy)
+      // very low, soft organic green rises far out (snowline > 1 = never snowy),
+      // placed as a CONTINUOUS ring from track centre so the horizon never breaks.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      const ring = rad + 320;
-      for (let i = 0; i < 14; i++) {
-        const a = i / 14 * 6.2832, h = hash(i * 7);
-        mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                 200 + h * 120, 24 + h * 14, { snowline: 2, forest: 0.6,
-                 col: [0.24, 0.40, 0.24], rock: [0.30, 0.44, 0.28] });
+      // two overlapping rings of low green rises — dense enough to read as a wall
+      for (const [extra, count, wMin, hMin, col] of [
+        [300, 30, 150, 22, [0.24, 0.40, 0.24]],
+        [400, 26, 190, 26, [0.21, 0.36, 0.22]],
+      ]) {
+        const ring = rad + extra;
+        for (let i = 0; i < count; i++) {
+          const a = (i / count + hash(i + extra) * 0.06) * 6.2832, h = hash(i * 7 + extra);
+          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
+                   wMin + h * 110, hMin + h * 12, { snowline: 2, forest: 0.6,
+                   col, rock: [0.30, 0.44, 0.28] });
+        }
       }
 
       // ---- Hedgerow-gridded flat farmland (s≈0.60) + perimeter hedgerows ----
+      // denser farmland grid — long low green strips wrapping most of the lap
       hedge(0.58, 0.66, -1, 70, 2.4, COPSE);
       hedge(0.58, 0.66, 1, 85, 2.4, COPSE);
       hedge(0.20, 0.30, 1, 95, 2.2, COPSE);
       hedge(0.85, 0.95, -1, 80, 2.2, COPSE);
+      hedge(0.06, 0.14, 1, 105, 2.2, COPSE);   // outside Copse → Maggotts
+      hedge(0.32, 0.40, 1, 100, 2.3, COPSE);   // Stowe → Club outfield
+      hedge(0.66, 0.74, 1, 90, 2.2, COPSE);    // beyond The Loop
+      hedge(0.74, 0.84, -1, 95, 2.2, COPSE);   // Brooklands approach
+      hedge(0.16, 0.24, -1, 110, 2.2, COPSE);  // far infield copse line
 
       // ---- Oak copses (Chapel/Cheese Copse, s≈0.15 L; scattered elsewhere) ----
       const copse = (s, side, dist) => {
@@ -68,11 +83,16 @@
       copse(0.15, -1, 90);
       copse(0.62, 1, 75);
       copse(0.70, -1, 70);
-      // sparse single oaks around the airfield perimeter
-      every(140, (kk) => {
+      copse(0.24, 1, 110);   // Stowe outfield copse
+      copse(0.45, -1, 100);  // far side of The Wing infield
+      copse(0.78, 1, 95);    // Brooklands outfield
+      copse(0.90, -1, 85);   // Luffield / Woodcote approach
+      // denser single oaks around the airfield perimeter
+      every(95, (kk) => {
         for (const side of [-1, 1]) {
-          if (hash(kk * 21 + side) > 0.5) continue;
-          tree(kk, side, 55 + hash(kk * 22 + side) * 70, 8 + hash(kk * 24 + side) * 5, COPSE);
+          if (hash(kk * 21 + side) > 0.62) continue;
+          tree(kk, side, 55 + hash(kk * 22 + side) * 75, 8 + hash(kk * 24 + side) * 5, COPSE);
+          if (hash(kk * 31 + side) > 0.7) bush(kk, side, 48 + hash(kk * 33 + side) * 20, COPSE);
         }
       });
 
@@ -83,6 +103,10 @@
       grandstand(0.40, 1, 12, 80, [0.46, 0.47, 0.52], [0.55, 0.32, 0.30]); // Club
       grandstand(0.66, -1, 14, 45, [0.46, 0.47, 0.52], [0.50, 0.34, 0.32]); // The Loop
       grandstand(0.85, -1, 14, 55, [0.46, 0.47, 0.52], [0.55, 0.32, 0.30]); // Brooklands/Luffield
+      grandstand(0.07, 1, 13, 55, [0.46, 0.47, 0.52], [0.52, 0.32, 0.32]); // Copse exit (fast)
+      grandstand(0.13, 1, 15, 50, [0.46, 0.47, 0.52], [0.55, 0.30, 0.30]); // Becketts outfield
+      grandstand(0.55, 1, 16, 60, [0.46, 0.47, 0.52], [0.50, 0.34, 0.32]); // Abbey (fast)
+      grandstand(0.88, -1, 13, 48, [0.46, 0.47, 0.52], [0.58, 0.30, 0.30]); // Luffield exit
 
       // ---- The Wing: long low pit/paddock building with a thin roof blade (s≈0.45 R) ----
       // sweeping white-grey slab, far longer than tall, dark glazing band

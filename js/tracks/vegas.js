@@ -21,15 +21,19 @@
       { t: -20, l: 200 }, { t: 90, l: 90 }, { t: -60, l: 60 }, { t: 70, l: 70 }, { t: 65, l: 120 },
     ],
     scenery: function (api) {
-      const { out, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, anchor, onTrack, ferrisWheel, building, tower, billboard, wall, fence, hash } = api;
+      const { out, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, anchor, onTrack, ferrisWheel, building, tower, billboard, palm, fence, hash } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Neon night palette
       const WARM = [1.0, 0.78, 0.35];     // casino glow / gold
+      const GOLD = [1.0, 0.62, 0.18];     // hot up-light
       const MAGENTA = [0.95, 0.15, 0.65];
       const CYAN = [0.15, 0.85, 0.95];
+      const VIOLET = [0.55, 0.25, 0.95];  // neon purple
+      const LIME = [0.55, 0.95, 0.30];    // neon green
       const LED = [0.95, 0.96, 1.0];      // white LED facade
       const DARKROCK = [0.18, 0.08, 0.07];
+      const NEON = [MAGENTA, CYAN, VIOLET, LIME, WARM, GOLD];  // cycle for lit faces
 
       // --- Street-circuit furniture ---
       // The engine already emits a continuous dark barrier wall on both edges for
@@ -123,12 +127,63 @@
         place(K(0.95 + i * 0.006), 1, 16, [22.4, 0.8, 14.5], LED);   // crowd-light fleck band
       }
 
-      // --- Background Venetian / skyline depth band pushed well back along the Strip ---
-      // Fewer, wider backdrop towers stand in for the dense skyline band.
-      for (let i = 0; i < 3; i++) {
-        const s = 0.50 + i * 0.09;
-        building(K(s), -1, 150 + i * 24, 48, 70 + hash(i * 11) * 50, 32,
-          { wall: [0.26, 0.24, 0.22], window: i % 2 ? WARM : CYAN, floor: 14 });
+      // --- CONTINUOUS STRIP SKYLINE: a packed neon canyon lining BOTH sides of the
+      //     long Strip straight (s ~0.49–0.81). A back wall of lit blocks gives a
+      //     gapless skyline band; a mid row of taller lit casino slabs varies the
+      //     rooftop line; cheap single-box masses keep it dense within the cap. ---
+      {
+        const s0 = 0.485, s1 = 0.815;
+        const span = s1 - s0;
+        const STEP = 0.0079;                 // ~48 m between masses; blocks 56 m wide → overlap, no gaps
+        const wallCol = [[0.24, 0.22, 0.22], [0.22, 0.21, 0.23], [0.26, 0.23, 0.20]];
+        let idx = 0;
+        for (let s = s0; s <= s1; s += STEP, idx++) {
+          const k = K(s);
+          for (const side of [-1, 1]) {
+            const h1 = hash(idx * 5 + (side > 0 ? 13 : 71));
+            const h2 = hash(idx * 9 + (side > 0 ? 31 : 7));
+            const neon = NEON[(idx + (side > 0 ? 3 : 0)) % NEON.length];
+            // FAR continuous backdrop wall: one tall lit block, varied height — the
+            // gapless skyline silhouette. Wide enough to overlap its neighbours.
+            const fh = 64 + h1 * 96;
+            backdrop(k, side, 168, [56, fh, 30], wallCol[idx % 3]);
+            backdrop(k, side, 162, [58, 5.0, 24], neon);            // crowning neon band
+            // MID lit casino slab — closer, warm-glow facade, varied rooftop line.
+            const mh = 40 + h2 * 70;
+            place(k, side, 96, [34, mh, 26], [0.20 + h1 * 0.12, 0.18, 0.18]);
+            place(k, side, 90, [36, 4.0, 22], (idx % 2) ? WARM : neon);  // lit facade band
+          }
+        }
+        // Sparser taller signature casino towers punched along the canyon (lit grid).
+        for (let j = 0; j < 7; j++) {
+          const s = s0 + (j + 0.5) / 7 * span, side = (j % 2) ? -1 : 1;
+          building(K(s), side, 124, 40, 96 + hash(j * 17) * 60, 30,
+            { wall: [0.22, 0.20, 0.20], window: (j % 2) ? WARM : CYAN, floor: 16 });
+        }
+        // Strip-side neon billboards + palms threaded along the canyon edge.
+        for (let j = 0; j < 9; j++) {
+          const s = s0 + (j + 0.3) / 9 * span, side = (j % 2) ? 1 : -1;
+          billboard(K(s), side, 44, 14 + hash(j * 3) * 6, 9, NEON[j % NEON.length]);
+          palm(K(s + 0.004), side, 22, 9 + hash(j * 23) * 4, LIME);
+          palm(K(s - 0.004), -side, 22, 9 + hash(j * 29) * 4, LIME);
+        }
+      }
+
+      // --- Denser palms + neon accents around the paddock / Sphere / Bellagio approaches ---
+      for (const [s, side] of [[0.02, 1], [0.08, -1], [0.42, 1], [0.46, 1], [0.72, -1], [0.78, -1]]) {
+        palm(K(s), side, 18, 10 + hash(s * 100) * 3, LIME);
+        palm(K(s + 0.006), side, 22, 9 + hash(s * 131) * 3, LIME);
+      }
+      billboard(K(0.34), 1, 40, 16, 10, VIOLET);
+      billboard(K(0.55), -1, 50, 16, 10, GOLD);
+      billboard(K(0.67), 1, 38, 14, 9, LIME);
+
+      // --- Extra near red-rock desert outcrops (dark, denser silhouette layer) ---
+      for (let j = 0; j < 6; j++) {
+        const a = j / 6 * 6.2832 + 0.4, h = hash(j * 13 + 5);
+        const mx = cx + Math.cos(a) * (ring - 180), mz = cz + Math.sin(a) * (ring - 180);
+        if (onTrack(mx, mz, 60)) continue;
+        addBox(out, [mx, pyMin + (18 + h * 22) / 2, mz], [180 + h * 140, 18 + h * 22, 140], DARKROCK);
       }
     },
   }

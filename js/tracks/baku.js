@@ -44,17 +44,18 @@
       wall(0.0, 0.62, -1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.97, 1.0, -1, 2.0, 1.3, CONCRETE, 0.4);
 
-      // Floodlight poles for the night mood, sparse around the lap.
-      for (let i = 0; i < 16; i++) {
-        const k = K(i / 16), side = (i % 2) ? 1 : -1, a = anchor(k, side, 5);
+      // Floodlight poles / light towers for the night mood, denser around the lap.
+      for (let i = 0; i < 24; i++) {
+        const k = K(i / 24), side = (i % 2) ? 1 : -1, a = anchor(k, side, 5);
         addCyl(out, a.c, 0.25, 12, [0.22, 0.22, 0.25], 5, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 12), [1.6, 0.5, 0.6], [1.0, 0.95, 0.7], [a.r, a.u, a.t]);
       }
 
-      // Distant dusk-haze silhouette band so the horizon never reads empty.
-      for (let i = 0; i < 14; i++) {
-        const k = K(i / 14), side = (i % 2) ? 1 : -1;
-        backdrop(k, side, 240 + hash(i * 5) * 160, [20 + hash(i * 7) * 26, 36 + hash(i * 11) * 70, 20], DARK);
+      // Distant dusk-haze silhouette band so the horizon never reads empty — denser,
+      // a near-continuous wrap of overlapping silhouette boxes around the whole lap.
+      for (let i = 0; i < 22; i++) {
+        const k = K(i / 22), side = (i % 2) ? 1 : -1;
+        backdrop(k, side, 240 + hash(i * 5) * 160, [30 + hash(i * 7) * 26, 36 + hash(i * 11) * 70, 22], DARK);
       }
 
       // ===================================================================
@@ -117,15 +118,25 @@
         building(K(0.30), -1, 40 + i * 26, 22, 44 + (i % 2) * 22, 22, { wall: GLASS, window: WIN_COOL, floor: 4 });
 
       // ===================================================================
-      // s 0.38 R near — OLD CITY wall begins: long crenellated sandstone box,
-      // uplit. Use wall() + notched crenellation boxes along the top.
+      // s 0.36 R near — OLD CITY wall: one CONTINUOUS crenellated sandstone
+      // rampart wrapping the whole castle/Maiden-Tower stretch (no gaps),
+      // uplit, with a dense packed old-town sprawl rising behind it.
       // ===================================================================
-      wall(0.38, 0.50, 1, 10, 9, SAND, 1.2);
-      {
-        const a = anchor(K(0.38), 1, 10);
-        addBox(out, vadd(a.c, a.u, 1), [3, 2, 30], SAND_LIT, [a.r, a.u, a.t]);  // uplit footing
-        for (let j = 0; j < 10; j++)                                            // crenellations
-          addBox(out, vadd(vadd(a.c, a.t, (j - 4.5) * 5), a.u, 9.6), [3, 1.4, 2.6], SAND, [a.r, a.u, a.t]);
+      wall(0.36, 0.56, 1, 10, 9, SAND, 1.2);                                  // unbroken Old City rampart
+      for (let p = 0; p < 7; p++) {                                           // continuous crenellated cap + uplit footing
+        const k = K(0.36 + p * 0.0285);
+        const a = anchor(k, 1, 10);
+        addBox(out, vadd(a.c, a.u, 1), [3, 2, 34], SAND_LIT, [a.r, a.u, a.t]);
+        for (let j = 0; j < 12; j++)
+          addBox(out, vadd(vadd(a.c, a.t, (j - 5.5) * 5), a.u, 9.6), [3, 1.4, 2.6], SAND, [a.r, a.u, a.t]);
+      }
+      // Dense sandstone old-town behind the rampart: packed flat-roof houses
+      // climbing the hill so the Old City reads as a solid mass, not a fence.
+      for (let i = 0; i < 9; i++) {
+        const k = K(0.37 + (i % 5) * 0.034);
+        const tier = 18 + (i % 3) * 16 + Math.floor(i / 5) * 22;
+        const h = 9 + hash(i * 7) * 12;
+        building(k, 1, tier, 13 + hash(i * 3) * 6, h, 13, { wall: i % 3 ? SAND : SAND_LIT, window: WIN_WARM, floor: 4.5 });
       }
 
       // ===================================================================
@@ -176,18 +187,22 @@
         const a = anchor(K(0.78), -1, 60);
         addBox(out, vadd(a.c, a.u, -1.5), [180, 1, 240], [0.05, 0.07, 0.13], [a.r, a.u, a.t]); // dark Caspian void
       }
-      for (let i = 0; i < 8; i++) {
-        const s = 0.65 + i * 0.036;
-        building(K(s), 1, 40 + hash(i * 3) * 30, 18 + hash(i * 5) * 10, 50 + hash(i * 9) * 60, 18, { wall: GLASS, window: WIN_COOL, floor: 4 });
+      // CONTINUOUS modern Caspian-front skyline: a packed unbroken band of lit
+      // glass towers right, two rows (front mid-rise + taller back rank) so the
+      // sea-side horizon reads as a solid wall of city from 0.63→0.97.
+      for (let i = 0; i < 14; i++) {
+        const s = 0.63 + i * 0.026;
+        building(K(s), 1, 36 + hash(i * 3) * 18, 18 + hash(i * 5) * 10, 50 + hash(i * 9) * 60, 18, { wall: GLASS, window: WIN_COOL, floor: 4 });
+        if (i % 2 === 0)                                                       // taller back rank, every other slot
+          building(K(s), 1, 80 + hash(i * 13) * 24, 20 + hash(i * 17) * 12, 80 + hash(i * 19) * 70, 20, { wall: GLASS, window: WIN_WARM, floor: 5 });
       }
 
       // ===================================================================
-      // s 0.80 R mid — cluster of glass Caspian-front towers, cool-blue lit
+      // s 0.78–0.86 R mid — cluster of glass Caspian-front towers, cool-blue lit
       // ===================================================================
-      {
-        const k = K(0.80);
-        for (let i = 0; i < 4; i++)
-          tower(k, 1, 60 + i * 30, 16, 80 + (i % 2) * 50, { col: GLASS, seg: 6, cap: true, capCol: WIN_COOL });
+      for (let i = 0; i < 7; i++) {
+        const k = K(0.78 + i * 0.013);
+        tower(k, 1, 56 + (i % 3) * 28, 16, 80 + (i % 2) * 50, { col: GLASS, seg: 6, cap: true, capCol: i % 2 ? WIN_COOL : WIN_WARM });
       }
 
       // ===================================================================

@@ -22,7 +22,7 @@
     // Climb from the Senna S up to the start/finish (the lap's ~40 m of relief).
     elevations: [{ s: 0.86, halfM: 480, rise: 10 }],
     scenery: function (api) {
-      const { out, n, hw, pyMin, place, prop, backdrop, groundPlane, groundYAt,
+      const { out, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, every, onTrack, hash, vadd, anchor, building, tower,
               grandstand, billboard, tyreWall, pine, tree, hedge } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -52,24 +52,28 @@
       }
 
       // --- Colourful favela hillside (s=0.15, L far): saturated cubes climbing a green slope ---
+      // CONTINUOUS dense favela band: stacked saturated houses wrap most of the L side,
+      // climbing the green slope; densest at the s=0.15 hillside, never gapping out.
       const favCol = [[0.85, 0.35, 0.30], [0.95, 0.78, 0.25], [0.30, 0.55, 0.80],
-                      [0.90, 0.90, 0.85], [0.60, 0.72, 0.52], [0.86, 0.46, 0.34]];
-      every(20, (k) => {
+                      [0.90, 0.90, 0.85], [0.60, 0.72, 0.52], [0.86, 0.46, 0.34],
+                      [0.92, 0.62, 0.30], [0.40, 0.62, 0.62], [0.80, 0.30, 0.40]];
+      every(18, (k) => {
         const side = -1;
-        // bias the dense cluster toward the s=0.15 hillside; sparse elsewhere
-        const near = Math.min((k - K(0.15) + n) % n, (K(0.15) - k + n) % n) < n * 0.10;
-        if (!near && hash(k * 61) > 0.26) return;
-        const stack = (near ? 3 : 1) + Math.floor(hash(k * 62) * 2);
+        // bias the densest stacks toward the s=0.15 hillside; thinner band elsewhere
+        const near = Math.min((k - K(0.15) + n) % n, (K(0.15) - k + n) % n) < n * 0.14;
+        if (!near && hash(k * 61) > 0.55) return;     // continuous coverage, rarely skip
+        const stack = (near ? 4 : 2) + Math.floor(hash(k * 62) * 2);
         for (let j = 0; j < stack; j++) {
-          const d = 150 + j * 14 + hash(k * 63 + j) * 70;
+          const d = 120 + j * 12 + hash(k * 63 + j) * 80;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 9)) continue;
-          const h = 5 + hash(k * 64 + j) * 4;
-          // stack each house a little higher up the slope (grounded base + slope lift); larger blocks to keep mass
-          addBox(out, vadd(p.c, p.u, j * 7.5 + h / 2), [10, h, 10],
-                 favCol[Math.floor(hash(k * 65 + j) * 6) % 6], [p.r, p.u, p.t]);
+          const h = 5 + hash(k * 64 + j) * 5;
+          const w = 8 + hash(k * 66 + j) * 4;
+          // stack each house a little higher up the slope (grounded base + slope lift)
+          addBox(out, vadd(p.c, p.u, j * 7 + h / 2), [w, h, w],
+                 favCol[Math.floor(hash(k * 65 + j) * 9) % 9], [p.r, p.u, p.t]);
         }
-        if (near && hash(k * 8) > 0.5) tree(k, side, 140 + hash(k * 9) * 30, 8 + hash(k * 11) * 5, [0.20, 0.44, 0.20]);
+        if (hash(k * 8) > 0.55) tree(k, side, 110 + hash(k * 9) * 40, 8 + hash(k * 11) * 5, [0.20, 0.44, 0.20]);
       });
 
       // --- Reta Oposta straight (s=0.25, R mid): open green banks + advert boards ---
@@ -89,16 +93,17 @@
       hedge(0.42, 0.50, -1, 12, 2.0, [0.20, 0.44, 0.20]);
 
       // --- São Paulo high-rise skyline (s=0.60, R far): row of haze-grey slabs on horizon ---
-      // dense clusters of varied-height window-banded towers, pushed >=150 m out.
+      // CONTINUOUS window-banded tower band on the R side — densest at s=0.60, but
+      // packed all around so the city reads as a sprawl wrapping the park, no gaps.
       every(34, (k) => {
-        const near = Math.min((k - K(0.60) + n) % n, (K(0.60) - k + n) % n) < n * 0.14;
-        if (!near && hash(k * 71) > 0.30) return;
+        const near = Math.min((k - K(0.60) + n) % n, (K(0.60) - k + n) % n) < n * 0.18;
+        if (!near && hash(k * 71) > 0.45) return;     // continuous coverage
         const side = 1;
         const cluster = near ? 2 : 1;
         for (let c = 0; c < cluster; c++) {
-          const d = 160 + c * 34 + hash(k * 72 + c) * 90;
-          const h = 50 + hash(k * 73 + c) * 70;
-          const w = 16 + hash(k * 74 + c) * 10;
+          const d = 150 + c * 28 + hash(k * 72 + c) * 90;
+          const h = 50 + hash(k * 73 + c) * 80;
+          const w = 14 + hash(k * 74 + c) * 12;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 10)) continue;
           const tone = 0.50 + hash(k * 75 + c) * 0.14;
@@ -106,14 +111,30 @@
                    window: [tone * 0.55, tone * 0.60, tone * 0.66], floor: 8 });
         }
       });
-      // far hazed skyline backdrop ring on both sides
-      every(48, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 81 + side) > 0.34) continue;
-          backdrop(k, side, 300 + hash(k * 82 + side) * 120,
-                   [60, 40 + hash(k * 83 + side) * 30, 24], [0.55, 0.57, 0.60]);
+      // CONTINUOUS far-haze skyline ring computed from the lap centre, so a dense
+      // unbroken band of high-rise slabs encircles the whole park on the horizon.
+      let cx = 0, cz = 0;
+      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
+      cx /= n; cz /= n;
+      let rad = 0;
+      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      for (const [extra, count, hMin, hVar, wMin] of [
+        [120, 96, 34, 70, 26],    // inner dense high-rise band
+        [260, 72, 24, 44, 40],    // far hazed backdrop band
+      ]) {
+        const ring = rad + extra;
+        for (let i = 0; i < count; i++) {
+          const a = i / count * 6.2832, h = hash(i * 7 + extra);
+          const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
+          if (onTrack(x, z, 10)) continue;
+          const u = [0, 1, 0], r = [Math.cos(a + 1.5708), 0, Math.sin(a + 1.5708)];
+          const f = [Math.cos(a), 0, Math.sin(a)];
+          const ht = hMin + h * hVar, w = wMin + hash(i * 11 + extra) * 22;
+          const tone = 0.53 + hash(i * 13 + extra) * 0.10;
+          addBox(out, [x, pyMin + ht / 2, z], [w, ht, w * 0.8],
+                 [tone, tone * 1.01, tone * 1.04], [r, u, f]);
         }
-      });
+      }
 
       // --- Ferradura / infield esses (s=0.70, L mid): green banks + tyre walls ---
       tyreWall(0.67, 0.73, -1, 4, [0.90, 0.78, 0.25]);   // yellow-capped tyre wall
@@ -133,12 +154,15 @@
         place(k, 1, 1.5, [1.0, 1.1, 9], [0.78, 0.78, 0.80]);   // pit-wall slab on the right
       }
       grandstand(0.90, -1, 9, 60, [0.44, 0.45, 0.50], [0.28, 0.50, 0.32]);
+      grandstand(0.84, 1, 10, 50, [0.43, 0.44, 0.49], [0.30, 0.52, 0.34]);    // Junção stand
+      grandstand(0.27, -1, 11, 64, [0.45, 0.46, 0.51], [0.28, 0.50, 0.32]);   // Reta Oposta stand
+      grandstand(0.71, 1, 11, 56, [0.42, 0.43, 0.48], [0.30, 0.52, 0.34]);    // Ferradura stand
 
-      // --- Pervasive vivid tropical-green vegetation around the lap ---
-      every(24, (k) => {
+      // --- Pervasive vivid tropical-green vegetation around the lap (denser belt) ---
+      every(19, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 91 + side) > 0.34) continue;
-          const d = 28 + hash(k * 92 + side) * 60;
+          if (hash(k * 91 + side) > 0.46) continue;
+          const d = 28 + hash(k * 92 + side) * 70;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
           if (hash(k * 93 + side) > 0.5) tree(k, side, d, 8 + hash(k * 94 + side) * 6, [0.22, 0.46, 0.22]);
