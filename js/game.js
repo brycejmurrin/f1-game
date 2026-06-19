@@ -984,7 +984,9 @@ function updateCar(c, dt, ranked) {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
     // field fans out across the track rather than collapsing onto one line.
-    const racingLine = clamp(kA * 130, -0.62, 0.62) * hw;
+    // Apex is on the INSIDE = -sign(k) (k>0 curves toward screen-left, so the
+    // inside is -x); the racing line aims there.
+    const racingLine = clamp(-kA * 130, -0.62, 0.62) * hw;
     const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
@@ -1063,7 +1065,10 @@ function updateCar(c, dt, ranked) {
     const yawRate = c.speed > 0.5
       ? c.speed * Math.tan(shaped * auth * maxDelta) / 3.2
       : 0;
-    c.head += clamp(yawRate, -3.5, 3.5) * dt;
+    // Right vector is cross(tangent, up) = (-tz, tx); increasing head rotates the
+    // direction toward -right, so SUBTRACT yaw to make +steer turn right (+x),
+    // matching the lateral sign convention and the old Frenet model.
+    c.head -= clamp(yawRate, -3.5, 3.5) * dt;
     c.px += c.speed * Math.sin(c.head) * dt;
     c.pz += c.speed * Math.cos(c.head) * dt;
     c._prevS = c.s;
@@ -1073,7 +1078,8 @@ function updateCar(c, dt, ranked) {
     steer = clamp(yawRate / 2.5, -1, 1);
     if (raceLineAssist !== 0) {
       const sLook = wrapS(c.s + clamp(c.speed * 0.6, 12, 50));
-      const lineX = clamp(Tracks.curvature(track, sLook) * 130, -0.62, 0.62) * hw;
+      // Racing line is on the inside = -sign(k); PULL eases the car toward it.
+      const lineX = clamp(-Tracks.curvature(track, sLook) * 130, -0.62, 0.62) * hw;
       c.x += (lineX - c.x) * raceLineAssist * 2.2 * latFac * dt;
     }
   } else {
@@ -1112,13 +1118,18 @@ function updateCar(c, dt, ranked) {
     c.wasOnWall = false;
     if (c.isPlayer) c.wallT = Math.max(0, (c.wallT || 0) - dt);
   }
-  // Keep world pos consistent with c.x after wall/assist corrections
+  // Keep world pos consistent with c.x after wall/assist/collision corrections.
+  // Re-sample at the NEW projected c.s (smp above is still at the pre-projection
+  // s); sampling at the stale s here would snap the car back and halve progress.
   if (c.isPlayer && c.px != null) {
+    Tracks.sample(track, c.s, smp);
     c.px = smp.p[0] + smp.r[0] * c.x;
     c.pz = smp.p[2] + smp.r[2] * c.x;
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
-  const curveYaw = c.isPlayer ? 0 : clamp(k * c.speed * 0.14, -0.28, 0.28);
+  // AI cars visually lean into the corner: k>0 curves toward screen-left, so the
+  // nose yaws toward -x (-r) — hence the negative sign.
+  const curveYaw = c.isPlayer ? 0 : clamp(-k * c.speed * 0.14, -0.28, 0.28);
   c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + curveYaw, 6, dt);
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
@@ -1171,7 +1182,8 @@ function coast(c, dt) {
   c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
   const kA = Tracks.curvature(track, wrapS(c.s + 30));
-  c.x = damp(c.x, clamp(kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
+  // Finished cars cruise the inside line (-sign(k)), same convention as the AI.
+  c.x = damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
 }
 
 // ---------- render ----------
@@ -2073,6 +2085,10 @@ window.__apex = {
     player.angle = 0;   // teleport aligns the car with the track (deterministic)
     if (lateral !== undefined) player.x = lateral;
     if (speed !== undefined) player.speed = speed;
+    // Force the world-space physics state to re-initialise from the new (s, x) on
+    // the next update; otherwise px/pz/head keep the pre-teleport position and the
+    // projection desyncs (progress stalls, steering reads wrong).
+    player.px = null;
     return { s: player.s, total: track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
@@ -2115,10 +2131,21 @@ window.__apex = {
   // (rad/m, +=right turn), half-width hw (m), speed (m/s) and arc position s.
   probe() {
     if (!player || !track) return null;
+    Tracks.sample(track, player.s, smp);
+    // Heading offset = how far the car points off the track tangent, + = turned
+    // right (toward +x). In world space head is subtracted from the tangent, so
+    // (tangentAngle - head) recovers the same +right convention as the old model.
+    let angle = 0;
+    if (player.head != null) {
+      const tAng = Math.atan2(smp.t[0], smp.t[2]);
+      angle = tAng - player.head;
+      while (angle > Math.PI) angle -= 2 * Math.PI;
+      while (angle < -Math.PI) angle += 2 * Math.PI;
+    }
     return {
-      x: player.x, angle: player.angle || 0,
+      x: player.x, angle,
       k: Tracks.curvature(track, player.s),
-      hw: (Tracks.sample(track, player.s, smp), smp.hw),
+      hw: smp.hw,
       speed: player.speed, s: player.s,
     };
   },

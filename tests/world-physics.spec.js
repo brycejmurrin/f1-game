@@ -1,0 +1,100 @@
+// @ts-check
+// World-space physics migration: the player car integrates a bicycle model in
+// Cartesian world space (px/pz/head) and derives the Frenet (s, x) each frame by
+// projecting onto the centreline. These tests lock in the observable contract:
+// progress advances with speed, steering direction is correct, the car runs wide
+// to the geometric OUTSIDE with no input, and teleports stay consistent.
+import { test, expect } from "@playwright/test";
+
+async function startRace(page) {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
+  await page.evaluate(() => window.__apex.go());
+}
+
+test.describe("Apex 26 — world-space player physics", () => {
+  test("loads and runs a race with no uncaught errors", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    await startRace(page);
+    await page.evaluate(() => {
+      window.__apex.setInput({ steer: 0.4, throttle: true });
+      for (let i = 0; i < 300; i++) window.__apex.step(1 / 60, 1);
+      window.__apex.clearInput();
+    });
+    expect(errors.filter((e) => !e.includes("favicon"))).toEqual([]);
+  });
+
+  test("progress advances ~linearly with speed", async ({ page }) => {
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      window.__apex.jump(0.30, 50, 0);
+      window.__apex.setInput({ steer: 0, throttle: false });
+      const s0 = window.__apex.probe().s;
+      for (let i = 0; i < 60; i++) window.__apex.step(1 / 60, 1);  // 1 s
+      const p = window.__apex.probe();
+      window.__apex.clearInput();
+      return { s0, s1: p.s, x: p.x };
+    });
+    const ds = ((r.s1 - r.s0) + 1e6) % 1e6;
+    expect(ds).toBeGreaterThan(35);          // ~46 m at ~46 m/s
+    expect(Number.isFinite(r.x)).toBe(true);
+  });
+
+  test("steer direction: +steer goes right (+x), -steer goes left", async ({ page }) => {
+    await startRace(page);
+    const measure = (steer) => page.evaluate((s) => {
+      window.__apex.jump(0.0, 40, 0);
+      window.__apex.setInput({ steer: s, throttle: false });
+      const x0 = window.__apex.probe().x;
+      for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1);
+      const x1 = window.__apex.probe().x;
+      window.__apex.clearInput();
+      return x1 - x0;
+    }, steer);
+    expect(await measure(0.5)).toBeGreaterThan(0);
+    expect(await measure(-0.5)).toBeLessThan(0);
+  });
+
+  test("no input runs wide to the OUTSIDE (+sign(k)) at corners", async ({ page }) => {
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      const corners = window.__apex.corners();
+      const out = [];
+      for (const frac of corners.slice(0, 12)) {
+        window.__apex.jump(frac, 24, 0);
+        window.__apex.setInput({ steer: 0, throttle: false });
+        window.__apex.step(1 / 60, 3);
+        const b = window.__apex.probe();
+        window.__apex.step(1 / 60, 40);
+        const a = window.__apex.probe();
+        window.__apex.clearInput();
+        if (Math.abs(b.k) < 0.012) continue;
+        out.push({ k: b.k, dx: a.x - b.x });
+      }
+      return out;
+    });
+    expect(r.length).toBeGreaterThan(0);
+    for (const { k, dx } of r) expect(Math.sign(dx)).toBe(Math.sign(k));
+  });
+
+  test("AI stays on track and progresses after the racing-line flip", async ({ page }) => {
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      window.__apex.setInput({ steer: 0, throttle: true });
+      for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // ~10 s
+      window.__apex.clearInput();
+      const cars = window.__apex.cars();
+      const ai = cars.filter((c) => !c.p);   // the player is hand-driven here
+      return {
+        offTrack: cars.filter((c) => Math.abs(c.x) > 18).length,
+        minProg: Math.min(...ai.map((c) => c.prog)),
+      };
+    });
+    expect(r.offTrack).toBe(0);
+    expect(r.minProg).toBeGreaterThan(100);
+  });
+});

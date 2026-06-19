@@ -94,9 +94,10 @@ test.describe("Apex 26 — steering", () => {
       if (Math.abs(before.k) < 0.012) continue; // skip near-straight false peaks
       checked++;
       const dx = after.x - before.x;
-      // Outside is the -sign(k) direction. The car must move that way, not toward
-      // the apex — proving there is no auto-steer onto the racing line.
-      expect(Math.sign(dx)).toBe(-Math.sign(before.k));
+      // k>0 curves toward screen-left, so the OUTSIDE is +x = +sign(k). With no
+      // input the car holds a straight world line and runs wide that way — it
+      // never auto-steers onto the apex.
+      expect(Math.sign(dx)).toBe(Math.sign(before.k));
       expect(Math.abs(dx)).toBeGreaterThan(1); // and it's a clear slide, not a wobble
     }
     expect(checked).toBeGreaterThan(0);
@@ -187,15 +188,15 @@ test.describe("Apex 26 — steering", () => {
     const { frac, k } = await firstCorner(page);
     expect(Math.abs(k)).toBeGreaterThan(0.02);
     const { before, after } = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    // Default behavior is unchanged: car still runs wide to the outside.
-    expect(Math.sign(after.x - before.x)).toBe(-Math.sign(k));
+    // Default behavior is unchanged: car runs wide to the outside (+sign(k)).
+    expect(Math.sign(after.x - before.x)).toBe(Math.sign(k));
   });
 
   test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
     await startLiveRace(page);
     const { frac, k } = await firstCorner(page);
     expect(Math.abs(k)).toBeGreaterThan(0.02);
-    const inside = Math.sign(k);
+    const inside = -Math.sign(k);   // apex is on the -sign(k) side
 
     await setRaceLine(page, 0);
     const off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
