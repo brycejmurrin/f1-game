@@ -1192,6 +1192,25 @@ function render(dt) {
   const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
   frame.viewProj = M4.mul(proj, view);
   frame.eye = camEye;
+
+  // Shadow pass — render terrain + road from sun's perspective
+  if (track) {
+    const sd = frame.sunDir;
+    const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
+    const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
+    const lightView = M4.lookAt(
+      [cx + sd[0] * 150, cy + sd[1] * 150, cz + sd[2] * 150],
+      [cx, cy, cz], up
+    );
+    const lightProj = M4.ortho(-70, 70, -70, 70, 1.0, 320);
+    const lightVP = M4.mul(lightProj, lightView);
+    GLX.shadowBegin(lightVP);
+    GLX.castShadow(track.meshes.terrain, M4.ident());
+    GLX.castShadow(track.meshes.road, M4.ident());
+    GLX.castShadow(track.meshes.props, M4.ident());
+    GLX.shadowEnd();
+  }
+
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
