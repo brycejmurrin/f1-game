@@ -1093,7 +1093,7 @@ function coast(c, dt) {
 // ---------- render ----------
 function render(dt) {
   GLX.resize();
-  if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); return; }
+  if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); GLX.present(); return; }
 
   // camera
   let eyeT, tgtT, fovT;
@@ -1233,6 +1233,8 @@ function render(dt) {
       }
     }
   }
+  // Resolve the HDR scene (bloom + tonemap + vignette) to the screen.
+  GLX.present();
   if (raceWeather === "wet" && rainDrops.length) drawRain(dt);
 }
 
