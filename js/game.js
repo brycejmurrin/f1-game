@@ -1128,10 +1128,16 @@ function render(dt) {
   GLX.drawSky(frameSky);
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
-  GLX.draw(track.meshes.terrain, M4.ident());
-  GLX.draw(track.meshes.road, M4.ident(), night ? { emissive: 0.25 } : undefined);
-  GLX.draw(track.meshes.props, M4.ident(), night ? { emissive: 0.45 } : undefined);
-  GLX.draw(track.meshes.gate, M4.ident());
+  // Per-surface materials (roughness/metalness/specular) drive the new GGX
+  // specular term. Grass is matte; asphalt keeps a low-roughness sheen so the
+  // racing surface catches the sun; props matte; the start gantry reads metallic.
+  GLX.draw(track.meshes.terrain, M4.ident(),
+    night ? { emissive: 0.1, roughness: 0.97, specular: 0.06, detail: 0.35 } : { roughness: 0.97, specular: 0.06, detail: 0.35 });
+  GLX.draw(track.meshes.road, M4.ident(),
+    night ? { emissive: 0.14, roughness: 0.85, specular: 0.2, detail: 0.22 } : { roughness: 0.85, specular: 0.2, detail: 0.22 });
+  GLX.draw(track.meshes.props, M4.ident(),
+    night ? { emissive: 0.45, roughness: 0.85, specular: 0.2 } : { roughness: 0.85, specular: 0.2 });
+  GLX.draw(track.meshes.gate, M4.ident(), { roughness: 0.45, metalness: 0.3, specular: 0.5 });
 
   // skid marks drawn before cars so cars render on top
   for (const m of skidMarks) {
@@ -1177,7 +1183,10 @@ function render(dt) {
     }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     GLX.drawShadow(tmpMat, 2.4, 5.8);
-    GLX.draw(teamMesh(c.team), tmpMat, night ? { emissive: 0.2 } : undefined);
+    // Glossy automotive paint: low roughness, a touch of metalness, strong spec.
+    GLX.draw(teamMesh(c.team), tmpMat,
+      night ? { emissive: 0.2, roughness: 0.38, metalness: 0.1, specular: 0.55 }
+            : { roughness: 0.38, metalness: 0.1, specular: 0.55 });
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
       if ((skid > 0.25 || c.offroad) && c.speed > 10) {
@@ -1810,6 +1819,23 @@ window.__apex = {
       if (kv[k] > 0.006 && kv[k] >= kv[a] && kv[k] > kv[b]) res.push(+(k / n).toFixed(4));
     }
     return res;
+  },
+  // Load any circuit (by index or id, e.g. "monza") and start a normal race,
+  // optionally forcing time of day ("day" | "night" | "default") and weather
+  // ("dry" | "wet"). Skips the menus so a harness can grab a render of any track.
+  race(trackRef, timeOfDay, weather) {
+    const i = typeof trackRef === "number"
+      ? trackRef
+      : Tracks.LIST.findIndex((t) => t.id === trackRef);
+    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    trackIdx = i;
+    seasonMode = false;
+    timeTrial = false;
+    raceLaps = GAME_LAPS;
+    raceWeather = weather === "wet" ? "wet" : "dry";
+    raceTimeOfDay = timeOfDay || "default";
+    startRace();
+    return { track: Tracks.LIST[i].id, timeOfDay: raceTimeOfDay, weather: raceWeather };
   },
 };
 

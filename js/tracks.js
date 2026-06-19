@@ -408,12 +408,12 @@ const Tracks = (function () {
       const u = upOf(track, k);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const w = hw[k];
-      const offs = [-w - 2.2, -w - 1.2,
-                    -w, -w + 0.9, -w + 0.95,        // left edge line + step
+      const offs = [-w - 2.2, -w - 0.4,
+                    -w, -w + 0.2, -w + 0.25,        // left edge line + step
                     -0.35, -0.30,                    // centre line (left half)
                     0.30, 0.35,                      // centre line (right half)
-                    w - 0.95, w - 0.9, w,            // right step + edge line
-                    w + 1.2, w + 2.2];
+                    w - 0.25, w - 0.2, w,            // right step + edge line
+                    w + 0.4, w + 2.2];
       const rise = [0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0];
       const checker = (k * ds) < 9;                  // start/finish band
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
@@ -527,15 +527,15 @@ const Tracks = (function () {
         }
       }
     }
-    // Five lateral verts per side: inner seam, concrete apron, gravel/runoff,
-    // grass mid, grass far. Gives concrete run-off → gravel trap → grass gradient.
+    // Five lateral verts per side: a gravel/runoff verge at the road edge graded
+    // out to grass. The old bright concrete apron has been removed — it read as a
+    // glaring light slab flanking the track — so the verge is gravel, not tarmac.
     // Street circuits push the ribbon further from the road edge so barriers
     // fully hide it and it cannot visually bleed onto the road surface.
     const NTV = 5;
     const isStreet = !!track.def.street;
     const latsL = isStreet ? [-5.0, -10.0, -20, -55, -120] : [-2.2, -7.0, -14, -48, -120];
     const latsR = isStreet ? [ 5.0,  10.0,  20,  55,  120] : [ 2.2,  7.0,  14,  48,  120];
-    const concrete = pal.concrete || (track.def.night ? [0.32, 0.30, 0.28] : [0.50, 0.48, 0.44]);
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
       const base = pos.length / 3;
@@ -571,15 +571,9 @@ const Tracks = (function () {
           pos.push(px[k] + r[0] * o + u[0] * by, yBase + sag + u[1] * by, pz[k] + r[2] * o + u[2] * by);
           nrm.push(0, 1, 0);
           const nz = (hash(k * 3 + v) - 0.5) * 0.04;
-          let tc;
-          if (v < 2) {
-            tc = concrete;                                    // asphalt/concrete apron
-          } else if (v === 2) {
-            tc = runoff;                                      // gravel/runoff zone
-          } else {
-            const gt = (v - 2) / (NTV - 3);                 // 0→1 from runoff to grass
-            tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
-          }
+          // gravel/runoff verge at the road edge, grading out to grass (no apron)
+          const gt = v / (NTV - 1);                          // 0 inner edge → 1 far
+          const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
         }
       }
