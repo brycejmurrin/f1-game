@@ -1021,10 +1021,12 @@ const Tracks = (function () {
     // means hitting a wall, not open grass. Day circuits get red/white armco
     // striping; night circuits get a dark rail.
     if (def.street) {
-      const WH = 1.1, WT = 0.4;
+      // Barriers are straight panels — span a few nodes each instead of one box
+      // per ~4 m node, roughly halving the barrier vertex cost on long street laps.
+      const WH = 1.1, WT = 0.4, STEP = 2;
       for (const side of [-1, 1]) {
-        for (let k = 0; k < n; k++) {
-          const kn = (k + 1) % n;
+        for (let k = 0; k < n; k += STEP) {
+          const kn = (k + STEP) % n;
           const r0 = [track.rx[k], track.ry[k], track.rz[k]];
           const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
           const u0 = upOf(track, k);
@@ -1036,7 +1038,7 @@ const Tracks = (function () {
           const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
           const f = norm([bx - ax, by - ay, bz - az]);
           const rr = norm(cross(f, u0));
-          const striped = (Math.floor(k / 3) % 2) === 0;
+          const striped = (Math.floor(k / (STEP * 3)) % 2) === 0;
           const col = def.night ? [0.18, 0.18, 0.22]
             : (striped ? [0.92, 0.92, 0.94] : [0.85, 0.18, 0.16]);
           addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
