@@ -809,8 +809,9 @@ const Tracks = (function () {
         const kmtnr = [track.rx[kmtn], track.ry[kmtn], track.rz[kmtn]];
         for (let i = 0; i < 4; i++) {
           const mtn_d = 280 + i * 60;
-          addBox(out, [px[kmtn] + kmtnr[0] * mtn_d, py[kmtn] + 50, pz[kmtn] + kmtnr[2] * mtn_d],
-                 [300, 100, 200], [0.5, 0.48, 0.52]);
+          const mx = px[kmtn] + kmtnr[0] * mtn_d, mz = pz[kmtn] + kmtnr[2] * mtn_d;
+          if (onTrack(mx, mz, 155)) continue;
+          addBox(out, [mx, py[kmtn] + 50, mz], [300, 100, 200], [0.5, 0.48, 0.52]);
         }
         // Spanish plains vegetation filler
         every(40, (k) => {
@@ -934,16 +935,18 @@ const Tracks = (function () {
       for (let i = 0; i < 4; i++) {
         const k = Math.round((i / 4) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        addBox(out, [px[k] + r[0] * (hw[k] + 120), py[k] - 3, pz[k] + r[2] * (hw[k] + 120)],
-               [180, 1.6, 240], [0.1, 0.24, 0.4]);  // lake water
+        const lx = px[k] + r[0] * (hw[k] + 120), lz = pz[k] + r[2] * (hw[k] + 120);
+        if (onTrack(lx, lz, 95)) continue;  // keep the 180m water slab off parallel sections
+        addBox(out, [lx, pyMin - 3, lz], [180, 1.6, 240], [0.1, 0.24, 0.4]);  // lake water
       }
       // Distant Milan towers
       const kmilan = Math.round(n * 0.4) % n;
       const kmr = [track.rx[kmilan], track.ry[kmilan], track.rz[kmilan]];
       for (let i = 0; i < 5; i++) {
-        const h = 50 + i * 15;
-        addBox(out, [px[kmilan] + kmr[0] * (280 + i * 30), py[kmilan] + h / 2, pz[kmilan] + kmr[2] * (280 + i * 30)],
-               [16, h, 16], [0.48 + i * 0.08, 0.46 + i * 0.08, 0.44 + i * 0.08]);
+        const h = 50 + i * 15, d = 280 + i * 30;
+        const mx = px[kmilan] + kmr[0] * d, mz = pz[kmilan] + kmr[2] * d;
+        if (onTrack(mx, mz, 14)) continue;
+        addBox(out, [mx, py[kmilan] + h / 2, mz], [16, h, 16], [0.48 + i * 0.08, 0.46 + i * 0.08, 0.44 + i * 0.08]);
       }
     }
     // Suzuka: distant Mount Fuji backdrop and Japanese rural surroundings
@@ -958,8 +961,9 @@ const Tracks = (function () {
         const k = Math.round((i / 4) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * 240, py[k] + 20, pz[k] + r[2] * side * 240],
-                 [160, 40, 240], [0.3, 0.38, 0.24]);  // green hills
+          const hx = px[k] + r[0] * side * 240, hz = pz[k] + r[2] * side * 240;
+          if (onTrack(hx, hz, 90)) continue;  // figure-8 crossover loops back near itself
+          addBox(out, [hx, py[k] + 20, hz], [160, 40, 240], [0.3, 0.38, 0.24]);  // green hills
         }
       }
     }
@@ -969,8 +973,9 @@ const Tracks = (function () {
         const k = Math.round((i / 8) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const h = 35 + hash(k * 31) * 65;
-        addBox(out, [px[k] + r[0] * (hw[k] + 160), py[k] + h / 2, pz[k] + r[2] * (hw[k] + 160)],
-               [28, h, 28], [0.35, 0.32, 0.38]);  // distant skyscrapers
+        const sx = px[k] + r[0] * (hw[k] + 160), sz = pz[k] + r[2] * (hw[k] + 160);
+        if (onTrack(sx, sz, 20)) continue;
+        addBox(out, [sx, py[k] + h / 2, sz], [28, h, 28], [0.35, 0.32, 0.38]);  // distant skyscrapers
       }
       // Tropical vegetation background
       every(18, (k) => {
@@ -1017,8 +1022,9 @@ const Tracks = (function () {
       for (let i = 0; i < 9; i++) {
         const h = 45 + hash(ksp * (i + 1)) * 50;
         const d = 240 + i * 40;
-        addBox(out, [px[ksp] + kspr[0] * d, py[ksp] + h / 2, pz[ksp] + kspr[2] * d],
-               [22, h, 22], [0.52 + hash(i) * 0.12, 0.48 + hash(i) * 0.12, 0.46 + hash(i) * 0.1]);
+        const tx = px[ksp] + kspr[0] * d, tz = pz[ksp] + kspr[2] * d;
+        if (onTrack(tx, tz, 16)) continue;
+        addBox(out, [tx, py[ksp] + h / 2, tz], [22, h, 22], [0.52 + hash(i) * 0.12, 0.48 + hash(i) * 0.12, 0.46 + hash(i) * 0.1]);
       }
       // Dense tropical vegetation on hillsides
       every(12, (k) => {
@@ -1037,8 +1043,9 @@ const Tracks = (function () {
       every(180, (k) => {
         const lake_d = 90 + hash(k * 48) * 100;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * lake_d, py[k] - 3, pz[k] + track.rz[k] * side * lake_d],
-                 [100, 1.2, 140], [0.08, 0.22, 0.38]);
+          const lx = px[k] + track.rx[k] * side * lake_d, lz = pz[k] + track.rz[k] * side * lake_d;
+          if (onTrack(lx, lz, 55)) continue;
+          addBox(out, [lx, pyMin - 3, lz], [100, 1.2, 140], [0.08, 0.22, 0.38]);
         }
       });
       // Pit complex and infrastructure
@@ -1056,8 +1063,9 @@ const Tracks = (function () {
         const rock_h = 35 + hash(k * 47) * 45;
         const rock_d = 250 + hash(k * 49) * 150;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * rock_d, py[k] + rock_h / 2, pz[k] + r[2] * side * rock_d],
-                 [180, rock_h, 240], [0.65, 0.52, 0.38]);
+          const rx = px[k] + r[0] * side * rock_d, rz = pz[k] + r[2] * side * rock_d;
+          if (onTrack(rx, rz, 95)) continue;
+          addBox(out, [rx, py[k] + rock_h / 2, rz], [180, rock_h, 240], [0.65, 0.52, 0.38]);
         }
       }
       // Floodlight towers for night racing
@@ -1091,8 +1099,9 @@ const Tracks = (function () {
         const k = Math.round((i / 4) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const mtn_d = 280 + i * 60;
-        addBox(out, [px[k] + r[0] * mtn_d, py[k] + 50, pz[k] + r[2] * mtn_d],
-               [300, 100, 200], [0.5, 0.48, 0.52]);  // distant mountains
+        const mx = px[k] + r[0] * mtn_d, mz = pz[k] + r[2] * mtn_d;
+        if (onTrack(mx, mz, 155)) continue;
+        addBox(out, [mx, py[k] + 50, mz], [300, 100, 200], [0.5, 0.48, 0.52]);  // distant mountains
       }
       // Spanish plains vegetation
       every(25, (k) => {
@@ -1125,14 +1134,16 @@ const Tracks = (function () {
       // 9m below the lowest track point, so even over a parallel stretch it
       // stays under the road — no onTrack rejection needed.
       addBox(out, [seaX, pyMin - 9, seaZ], [520, 3, 520], [0.10, 0.26, 0.42]);
-      // Distant wind turbines (Dutch renewable energy)
+      // Distant wind turbines (Dutch renewable energy). Guarded with onTrack so
+      // a turbine projected perpendicular from one point never lands beside a
+      // parallel stretch of this compact, winding circuit (the "pole in the road").
       for (let i = 0; i < 4; i++) {
         const k = Math.round((i / 4) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        addBox(out, [px[k] + r[0] * 300, py[k] + 60, pz[k] + r[2] * 300],
-               [6, 120, 6], [0.82, 0.82, 0.84]);  // turbine tower
-        addBox(out, [px[k] + r[0] * 300, py[k] + 68, pz[k] + r[2] * 300],
-               [80, 4, 6], [0.8, 0.8, 0.78]);  // turbine blades
+        const tx = px[k] + r[0] * 380, tz = pz[k] + r[2] * 380;
+        if (onTrack(tx, tz, 90)) continue;
+        addBox(out, [tx, py[k] + 60, tz], [6, 120, 6], [0.82, 0.82, 0.84]);  // turbine tower
+        addBox(out, [tx, py[k] + 68, tz], [80, 4, 6], [0.8, 0.8, 0.78]);     // turbine blades
       }
       // Sand dunes hugging the circuit (Zandvoort runs through the dune belt)
       every(22, (k) => {
@@ -1361,7 +1372,8 @@ const Tracks = (function () {
       // Lake: body of water visible from inside track (pit area perspective)
       const klake = Math.round(n * 0.18) % n;
       const klaker = [track.rx[klake], track.ry[klake], track.rz[klake]];
-      addBox(out, [px[klake] + klaker[0] * 110, py[klake] - 3, pz[klake] + klaker[2] * 110], [280, 1.2, 200], [0.08, 0.25, 0.45]);
+      const wlx = px[klake] + klaker[0] * 110, wlz = pz[klake] + klaker[2] * 110;
+      if (!onTrack(wlx, wlz, 145)) addBox(out, [wlx, pyMin - 3, wlz], [280, 1.2, 200], [0.08, 0.25, 0.45]);
       // São Paulo tower-block backdrop visible across the lake
       for (let i = 0; i < 9; i++) {
         const k = (Math.round(n * 0.22) + i * 8) % n;
@@ -1369,7 +1381,9 @@ const Tracks = (function () {
         const s = hash(k * 11 + i), side = (i % 2 === 0) ? 1 : -1;
         const h = 48 + s * 46, o = hw[k] + 68 + s * 28;
         const tone = 0.50 + s * 0.22;
-        addBox(out, [px[k] + r[0] * o * side, py[k] + h * 0.5, pz[k] + r[2] * o * side], [11, h, 11], [tone, tone * 0.93, tone * 0.86]);
+        const bx = px[k] + r[0] * o * side, bz = pz[k] + r[2] * o * side;
+        if (onTrack(bx, bz, 12)) continue;
+        addBox(out, [bx, py[k] + h * 0.5, bz], [11, h, 11], [tone, tone * 0.93, tone * 0.86]);
       }
       // Pit complex: modernized brutalist control tower
       const kpit = Math.round(n * 0.02) % n;
