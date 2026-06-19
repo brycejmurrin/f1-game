@@ -1,7 +1,18 @@
 // @ts-check
+// Steering-physics tests for the player heading model (js/game.js, updateCar).
+//
+// These run the real simulation deterministically: __apex.setInput() overrides
+// the player's steer/throttle/brake and __apex.step(dt, n) advances the physics
+// at a fixed timestep, so results don't depend on the (very slow, ~2 fps under
+// SwiftShader) render clock. __apex.probe() reports the player's lateral offset
+// x, heading offset angle, local curvature k, half-width hw and speed.
+//
+// Sign conventions (see Tracks.curvature + the heading model):
+//   x      metres, + = right of the centreline
+//   k      rad/m,  + = right-hand corner
+//   inside of a corner is the sign(k) side; outside is -sign(k).
 import { test, expect } from "@playwright/test";
 
-// Navigate the menus and start a live race (physics running, not frozen).
 async function startLiveRace(page) {
   await page.goto("/");
   await page.locator("#mb-race").click();
@@ -11,139 +22,142 @@ async function startLiveRace(page) {
     () => window.__apex && window.__apex.info().track != null,
     { timeout: 10_000 }
   );
-  // go() skips the countdown and sets state="race" without freezing physics.
   await page.evaluate(() => window.__apex.go());
 }
 
-function playerCar(carsArr) {
-  return carsArr.find((c) => c.p);
+const probe = (page) => page.evaluate(() => window.__apex.probe());
+
+// Place the player, hold the given input for `ticks` physics frames, return the
+// before/after probes. dt is fixed at 1/60 s. throttle defaults off so speed
+// stays close to the value we jumped in at (no acceleration ramp).
+async function run(page, { frac, speed = 30, steer = 0, throttle = false, brake = false, settle = 3, ticks = 90 }) {
+  await page.evaluate((f) => { window.__apex.jump(f.frac, f.speed, 0); }, { frac, speed });
+  await page.evaluate((inp) => {
+    window.__apex.setInput(inp);
+    window.__apex.step(1 / 60, inp.settle);
+  }, { steer: 0, throttle, brake, settle });
+  const before = await probe(page);
+  await page.evaluate((inp) => {
+    window.__apex.setInput(inp);
+    window.__apex.step(1 / 60, inp.ticks);
+    window.__apex.clearInput();
+  }, { steer, throttle, brake, ticks });
+  const after = await probe(page);
+  return { before, after };
 }
 
-// Pump N physics ticks of dt seconds each, with the given steer/throttle/brake.
-// Using step() + setInput() bypasses the rAF timer so tests work at any GPU speed.
-async function sim(page, ticks, { steer = 0, throttle = false, brake = false } = {}) {
-  await page.evaluate(
-    ([n, inp]) => {
-      window.__apex.setInput(inp);
-      window.__apex.step(1 / 60, n);
-      window.__apex.clearInput();
-    },
-    [ticks, { steer, throttle, brake }]
-  );
+// A reasonably straight stretch: the lap fraction with the smallest |k|.
+async function findStraight(page) {
+  return page.evaluate(() => {
+    let best = 0, bestK = Infinity;
+    for (let i = 0; i < 50; i++) {
+      const f = i / 50;
+      window.__apex.jump(f, 20, 0);
+      const k = Math.abs(window.__apex.probe().k);
+      if (k < bestK) { bestK = k; best = f; }
+    }
+    return { frac: best, k: bestK };
+  });
 }
 
-test.describe("Apex 26 — steering physics", () => {
-  test("right steering (+1) moves car to the right (+x)", async ({ page }) => {
+test.describe("Apex 26 — steering", () => {
+  test("no auto-steer: with no input the car runs wide to the OUTSIDE at corners", async ({ page }) => {
     await startLiveRace(page);
-    // Centre the player at 30 m/s on an early straight. Let 5 ticks settle.
-    await page.evaluate(() => { window.__apex.jump(0.05, 30, 0); });
-    await sim(page, 5);
-
-    const x0 = playerCar(await page.evaluate(() => window.__apex.cars())).x;
-
-    // 120 ticks ≈ 2 s of simulated time at full right lock (steer = 1).
-    await sim(page, 120, { steer: 1, throttle: true });
-
-    const after = playerCar(await page.evaluate(() => window.__apex.cars()));
-
-    // At 30 m/s with steer = 1 the car moves several metres to the right.
-    // 0.5 m is a very conservative lower bound.
-    expect(after.x).toBeGreaterThan(x0 + 0.5);
-  });
-
-  test("left steering (−1) moves car to the left (−x)", async ({ page }) => {
-    await startLiveRace(page);
-    await page.evaluate(() => { window.__apex.jump(0.05, 30, 0); });
-    await sim(page, 5);
-
-    const x0 = playerCar(await page.evaluate(() => window.__apex.cars())).x;
-
-    await sim(page, 120, { steer: -1, throttle: true });
-
-    const after = playerCar(await page.evaluate(() => window.__apex.cars()));
-    expect(after.x).toBeLessThan(x0 - 0.5);
-  });
-
-  test("opposite steering directions both produce significant lateral movement", async ({ page }) => {
-    await startLiveRace(page);
-
-    // — right pass —
-    await page.evaluate(() => { window.__apex.jump(0.05, 30, 0); });
-    await sim(page, 5);
-    await sim(page, 60, { steer: 1, throttle: true });
-    const xRight = playerCar(await page.evaluate(() => window.__apex.cars())).x;
-
-    // — left pass (reset to same start) —
-    await page.evaluate(() => { window.__apex.jump(0.05, 30, 0); });
-    await sim(page, 5);
-    await sim(page, 60, { steer: -1, throttle: true });
-    const xLeft = playerCar(await page.evaluate(() => window.__apex.cars())).x;
-
-    // Both directions must produce significant lateral displacement.
-    // (Track curvature at the test section may assist one direction and resist the
-    // other, so strict numerical symmetry is not tested here.)
-    expect(xRight).toBeGreaterThan(0.4);
-    expect(xLeft).toBeLessThan(-0.4);
-  });
-
-  test("car drifts outward at a corner with no steering — no auto-steer", async ({ page }) => {
-    await startLiveRace(page);
-
-    // corners() returns lap fractions where |curvature| > 0.006 m⁻¹.
     const corners = await page.evaluate(() => window.__apex.corners());
     expect(corners.length).toBeGreaterThan(0);
 
-    // Jump to the first corner, centred, at 30 m/s.
-    await page.evaluate((f) => { window.__apex.jump(f, 30, 0); }, corners[0]);
-    await sim(page, 3);  // initialise angle to 0
-
-    const x0 = playerCar(await page.evaluate(() => window.__apex.cars())).x;
-
-    // 90 ticks ≈ 1.5 s with steer = 0. The Frenet curvature term rotates
-    // the heading angle so the car drifts outward — no magic auto-steer.
-    await sim(page, 90, { steer: 0, throttle: true });
-
-    const x1 = playerCar(await page.evaluate(() => window.__apex.cars())).x;
-
-    // Even at minimum qualifying curvature (0.006 m⁻¹) at 30 m/s the car
-    // slides > 1 m in 1.5 s of simulated time.
-    expect(Math.abs(x1 - x0)).toBeGreaterThan(0.5);
+    // Sample several distinct corners across the lap.
+    const sample = corners.filter((_, i) => i % 4 === 0).slice(0, 5);
+    let checked = 0;
+    for (const frac of sample) {
+      const { before, after } = await run(page, { frac, speed: 28, throttle: true, ticks: 75 });
+      if (Math.abs(before.k) < 0.012) continue; // skip near-straight false peaks
+      checked++;
+      const dx = after.x - before.x;
+      // Outside is the -sign(k) direction. The car must move that way, not toward
+      // the apex — proving there is no auto-steer onto the racing line.
+      expect(Math.sign(dx)).toBe(-Math.sign(before.k));
+      expect(Math.abs(dx)).toBeGreaterThan(1); // and it's a clear slide, not a wobble
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 
-  test("yaw telemetry shows positive yaw after right steering", async ({ page }) => {
+  test("steering has authority to fight the curvature drift", async ({ page }) => {
     await startLiveRace(page);
-    await page.evaluate(() => { window.__apex.jump(0.05, 30, 0); });
-    await sim(page, 5);
+    const corners = await page.evaluate(() => window.__apex.corners());
+    // Pick a real corner.
+    let frac = corners[0], k0 = 0;
+    for (const f of corners) {
+      const p = await page.evaluate((ff) => { window.__apex.jump(ff, 24, 0); return window.__apex.probe(); }, f);
+      if (Math.abs(p.k) > 0.02) { frac = f; k0 = p.k; break; }
+    }
+    expect(Math.abs(k0)).toBeGreaterThan(0.02);
 
-    const yaw0 = playerCar(await page.evaluate(() => window.__apex.cars())).yaw;
-    expect(Math.abs(yaw0)).toBeLessThan(0.05);  // near zero before any input
+    // Inward steer is the sign(k) side. Hold it through the corner at a sane
+    // corner speed and compare against doing nothing.
+    const inward = Math.sign(k0);
+    const zero = await run(page, { frac, speed: 22, steer: 0, throttle: false, ticks: 75 });
+    const held = await run(page, { frac, speed: 22, steer: inward, throttle: false, ticks: 75 });
 
-    // 60 ticks at full right lock, then 20 more ticks to let yawVis damp.
-    await sim(page, 60, { steer: 1, throttle: true });
-    await sim(page, 20);
-
-    const yaw1 = playerCar(await page.evaluate(() => window.__apex.cars())).yaw;
-    // steer = clamp(angle/0.52, -1,1) → 1 at full lock.
-    // yawVis converges to steerVis * 0.35 ≈ 0.35 rad. Expect at least 0.15.
-    expect(yaw1).toBeGreaterThan(0.15);
+    const dxZero = zero.after.x - zero.before.x;   // drifts outward (−sign(k))
+    const dxHeld = held.after.x - held.before.x;   // should be far more inward
+    // Steering must move the car at least 2 m further toward the inside than
+    // coasting does — i.e. the driver genuinely controls the line.
+    expect((dxHeld - dxZero) * inward).toBeGreaterThan(2);
   });
 
-  test("zero steer on a straight keeps the car roughly centred", async ({ page }) => {
+  test("direction: +steer goes right, −steer goes left on a straight", async ({ page }) => {
     await startLiveRace(page);
+    const { frac } = await findStraight(page);
 
-    // Park at a low-curvature straight section (first 5 % of Bahrain is start/finish)
-    await page.evaluate(() => { window.__apex.jump(0.0, 30, 0); });
-    await sim(page, 5);
+    const right = await run(page, { frac, speed: 30, steer: 1, ticks: 60 });
+    const left = await run(page, { frac, speed: 30, steer: -1, ticks: 60 });
 
-    const x0 = playerCar(await page.evaluate(() => window.__apex.cars())).x;
+    expect(right.after.x - right.before.x).toBeGreaterThan(0.5);
+    expect(left.after.x - left.before.x).toBeLessThan(-0.5);
+  });
 
-    // 120 ticks ≈ 2 s with no steer input and no curvature
-    await sim(page, 120, { steer: 0, throttle: true });
+  test("expo response: half input turns the car well under half as fast", async ({ page }) => {
+    await startLiveRace(page);
+    const { frac } = await findStraight(page);
 
-    const x1 = playerCar(await page.evaluate(() => window.__apex.cars())).x;
+    // Short burst (6 ticks ≈ 0.1 s) keeps the heading below the slip clamp, so
+    // the change in angle reflects the raw input→turn-rate curve, not saturation.
+    const full = await run(page, { frac, speed: 30, steer: 1, ticks: 6 });
+    const half = await run(page, { frac, speed: 30, steer: 0.5, ticks: 6 });
 
-    // On a straight, angle stays at 0 and x should barely move.
-    // Allow up to 0.4 m of drift (straight isn't perfectly 0 curvature).
-    expect(Math.abs(x1 - x0)).toBeLessThan(0.4);
+    const aFull = Math.abs(full.after.angle - full.before.angle);
+    const aHalf = Math.abs(half.after.angle - half.before.angle);
+    expect(aFull).toBeGreaterThan(0.05);
+    // STEER_EXPO = 1.7 → half stick ≈ 0.5^1.7 ≈ 0.31 of the turn rate: clearly
+    // gentle near centre. Allow margin: between 12 % and 45 % of full.
+    expect(aHalf).toBeLessThan(aFull * 0.45);
+    expect(aHalf).toBeGreaterThan(aFull * 0.12);
+  });
+
+  test("straight tracking: no input keeps the car on its line", async ({ page }) => {
+    await startLiveRace(page);
+    const { frac } = await findStraight(page);
+    const { before, after } = await run(page, { frac, speed: 30, steer: 0, throttle: true, ticks: 90 });
+    // On a straight the heading stays put, so lateral position barely moves.
+    expect(Math.abs(after.x - before.x)).toBeLessThan(0.5);
+    expect(Math.abs(after.angle)).toBeLessThan(0.05);
+  });
+
+  test("symmetry: opposite inputs turn the heading by opposite, equal amounts", async ({ page }) => {
+    await startLiveRace(page);
+    const { frac } = await findStraight(page);
+
+    // Compare heading change over a short burst (pre-saturation) so the result
+    // isn't dominated by residual track curvature over a long slide.
+    const right = await run(page, { frac, speed: 30, steer: 1, ticks: 6 });
+    const left = await run(page, { frac, speed: 30, steer: -1, ticks: 6 });
+
+    const aR = right.after.angle - right.before.angle;
+    const aL = left.after.angle - left.before.angle;
+    expect(aR).toBeGreaterThan(0);
+    expect(aL).toBeLessThan(0);
+    // Within 15 % of each other.
+    expect(Math.abs(aR + aL)).toBeLessThan(Math.max(aR, -aL) * 0.15);
   });
 });
