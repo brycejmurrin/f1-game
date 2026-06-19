@@ -63,7 +63,8 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   box-shadow: 0 4px 18px rgba(225, 6, 0, 0.4);
 }
 .bigbtn:hover { box-shadow: 0 6px 24px rgba(225, 6, 0, 0.6); }
-.bigbtn.alt { background: rgba(255, 255, 255, 0.1); box-shadow: none; }
+.bigbtn.alt { background: rgba(255, 255, 255, 0.1); box-shadow: none; border: 1px solid rgba(255, 255, 255, 0.22); }
+.bigbtn.alt:hover { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
 
 .panel {
   position: fixed;
@@ -541,20 +542,25 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    clipped and primary actions (START / SAVE / QUIT) never fall below the fold.
    Gated on a short height so tablets and desktop keep the roomy layout. ---- */
 @media (orientation: landscape) and (max-height: 520px) {
-  /* main menu: 2-col button grid so title + all five buttons fit without scrolling */
-  #overlay { justify-content: center; padding-top: 8px; }
-  #title { font-size: clamp(24px, 6vw, 44px); margin-top: 0; }
-  #title::after { height: 3px; }
-  #subtitle { margin: 4px 0 8px; font-size: 12px; }
-  #disclaimer { position: static; margin-top: 6px; font-size: 10px; }
-  #menu-buttons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 14px;
-    width: min(90vw, 560px);
-    margin: 0 auto;
+  /* main menu: branding left — red buttons | grey buttons right */
+  #overlay {
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center; align-content: center; justify-items: start;
+    gap: 3px 28px; padding: 8px 24px; overflow: hidden;
   }
-  #menu-buttons .bigbtn { width: 100%; margin: 4px 0; padding: 8px 14px; font-size: 15px; }
+  #title { grid-column: 1; font-size: clamp(22px, 6vw, 42px); margin: 0; }
+  #title::after { height: 3px; }
+  #subtitle { grid-column: 1; margin: 3px 0 0; font-size: 11px; }
+  #audiostate { grid-column: 1; font-size: 10px; margin-top: 3px; min-height: 0; }
+  #disclaimer { grid-column: 1 / -1; position: static; font-size: 10px; justify-self: center; margin-top: 6px; }
+  #menu-buttons {
+    grid-column: 2; grid-row: 1 / 4; align-self: center; justify-self: center;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px;
+    width: auto; margin: 0;
+  }
+  #menu-buttons .bigbtn { width: 100%; min-width: 90px; margin: 0; padding: 8px 10px; font-size: 14px; }
+  #menu-buttons .bigbtn:not(.alt) { grid-column: 1; }
+  #menu-buttons .bigbtn.alt { grid-column: 2; }
 
   /* dialog panels: tighter padding + buttons */
   .panel { padding: 12px 18px; }
@@ -614,6 +620,25 @@ body.desktop #pm-calib { display: none !important; }
   #sel-diff-section  { grid-column: 1; }
   .sel-actions { grid-column: 1; justify-content: flex-start; }
   .sel-actions .bigbtn { width: auto; min-width: 130px; }
+
+  /* Main menu: branding left, red buttons | grey buttons right */
+  #overlay {
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center; align-content: center; justify-items: start;
+    gap: 14px 80px; padding: 60px 100px; overflow: hidden;
+    background: radial-gradient(70% 80% at 28% 50%, rgba(225,6,0,0.18), transparent 60%), rgba(6,6,10,0.55);
+  }
+  #title { grid-column: 1; }
+  #subtitle { grid-column: 1; }
+  #audiostate { grid-column: 1; }
+  #disclaimer { grid-column: 1 / -1; position: static; justify-self: center; }
+  #menu-buttons {
+    grid-column: 2; grid-row: 1 / 4; align-self: center; justify-self: start; margin: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; width: auto;
+  }
+  #menu-buttons .bigbtn { width: 190px; margin: 0; }
+  #menu-buttons .bigbtn:not(.alt) { grid-column: 1; }
+  #menu-buttons .bigbtn.alt { grid-column: 2; }
 }
 
 /* Scale up HUD readouts on large screens so they're legible at arm's length. */
