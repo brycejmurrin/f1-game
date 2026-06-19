@@ -143,18 +143,37 @@ void main() {
 }`;
 
   const SKY_FS = `#version 300 es
-precision mediump float;
+precision highp float;
 in vec3 vDir;
 uniform vec3 uZenith;
 uniform vec3 uHorizon;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform float uStars;
+uniform float uCloud;
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
   p *= 17.0;
   return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+// 2D value-noise FBM for clouds.
+float hash2(vec2 p) {
+  p = fract(p * vec2(127.1, 311.7));
+  p += dot(p, p + 34.5);
+  return fract(p.x * p.y);
+}
+float vnoise2(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash2(i), b = hash2(i + vec2(1.0, 0.0));
+  float c = hash2(i + vec2(0.0, 1.0)), d = hash2(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { s += a * vnoise2(p); p *= 2.02; a *= 0.5; }
+  return s;
 }
 void main() {
   vec3 dir = normalize(vDir);
@@ -164,6 +183,20 @@ void main() {
   vec3 c = mix(uHorizon, uZenith, pow(up, 0.5));
 
   float sd = max(dot(dir, uSunDir), 0.0);
+
+  // Procedural cloud layer: project the view ray onto a high plane and sample
+  // FBM. Static (no time uniform) so screenshots stay deterministic. uCloud is
+  // coverage 0..1; clouds fade into the horizon and dim at night.
+  if (uCloud > 0.001 && dir.y > 0.03) {
+    vec2 cp = dir.xz / dir.y * 0.42;
+    float f = fbm(cp);
+    float cov = smoothstep(0.55 - uCloud * 0.4, 0.92, f);
+    cov *= smoothstep(0.015, 0.09, dir.y);
+    float sl = pow(sd, 3.0);
+    vec3 lit = mix(vec3(0.60, 0.62, 0.69), vec3(1.0, 0.98, 0.94), sl);
+    lit *= 0.35 + 0.65 * max(max(uSunColor.r, uSunColor.g), uSunColor.b);
+    c = mix(c, lit, cov);
+  }
 
   // Mie forward scatter: warms the sky toward the sun, strongest near the horizon
   c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - up * 1.5, 0.0));
@@ -433,7 +466,7 @@ void main() {
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
 
@@ -576,6 +609,7 @@ void main() {
     gl.uniform3fv(skyU.uSunDir, sky.sunDir);
     gl.uniform3fv(skyU.uSunColor, sky.sunColor);
     gl.uniform1f(skyU.uStars, sky.stars ? 1 : 0);
+    gl.uniform1f(skyU.uCloud, sky.cloud !== undefined ? sky.cloud : 0);
     gl.depthMask(false);
     gl.bindVertexArray(skyVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

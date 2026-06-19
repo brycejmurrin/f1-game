@@ -205,6 +205,9 @@ let paused = false;
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
 let frozen = false;
+// When set by __apex.sky(), overrides the normal chase-cam with a horizon-facing
+// view so clouds and the sky gradient are visible in screenshots.
+let skyViewOverride = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let lastFrame = 0;
 let announceT = 0;
@@ -366,6 +369,8 @@ function loadTrack(idx) {
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
     sunDir: frame.sunDir, sunColor: pal.sun, stars: def.night ? 1 : 0,
+    // procedural cloud coverage 0..1 (night skies stay clearer to show stars)
+    cloud: pal.cloud !== undefined ? pal.cloud : (def.night ? 0.22 : 0.4),
   };
 }
 
@@ -392,6 +397,15 @@ function applyRaceSettings() {
       frame.fogDensity = 0.0015;
     }
   }
+  // Wet weather: overcast the sky and flatten the light (soft, diffuse, fewer
+  // shadows) — clouds roll in and the sun is muted while ambient lifts.
+  if (raceWeather === "wet") {
+    frameSky.cloud = 0.9;
+    frame.sunColor = frame.sunColor.map((v) => v * 0.5);
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.65);
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.18));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.18));
+  }
 }
 
 function startRace() {
@@ -417,7 +431,7 @@ function startRace() {
   }
   gridUp();
   recomputePlayerMods();
-  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false;
+  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -1134,6 +1148,14 @@ function render(dt) {
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
   }
+  // Sky-view override: __apex.sky() positions the camera to show the horizon
+  // and clouds instead of the normal low chase angle.
+  if (frozen && skyViewOverride) {
+    eyeT = skyViewOverride.eye;
+    tgtT = skyViewOverride.tgt;
+    fovT = skyViewOverride.fov;
+  }
+
   // High lambda in-race: the anchor already follows the car along the track,
   // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
   const racing = state === "race" || state === "count";
@@ -1779,12 +1801,34 @@ window.__apex = {
   // and park the (stationary) player at a fraction of the lap for a clean shot.
   park(frac, lateral) {
     if (!player || !track) return false;
+    skyViewOverride = null;   // clear any sky override so normal chase cam resumes
     state = "race"; raceT = Math.max(raceT, 1);
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
     cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
     const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
     frozen = true;   // hold the scene still for a deterministic screenshot
+    return r;
+  },
+  // Like park(), but orients the camera toward the horizon so clouds and sky
+  // gradient are clearly visible. Eye sits 7 m above track; target is 25 m ahead
+  // and 14 m higher — giving ~24° upward tilt, centred in the FOV-75 frustum.
+  // Returns the same value as park(), or false when the track isn't loaded yet.
+  sky(frac, lateral) {
+    const r = this.park(frac, lateral);
+    if (!r) return false;
+    Tracks.sample(track, player.s, smp);
+    const e = [smp.p[0], smp.p[1] + 7, smp.p[2]];
+    const t = [
+      smp.p[0] + smp.t[0] * 25,
+      smp.p[1] + 14,
+      smp.p[2] + smp.t[2] * 25,
+    ];
+    skyViewOverride = { eye: e, tgt: t, fov: 75 };
+    // snap immediately so the very first rendered frame is correct
+    camEye[0] = e[0]; camEye[1] = e[1]; camEye[2] = e[2];
+    camTgt[0] = t[0]; camTgt[1] = t[1]; camTgt[2] = t[2];
+    camFov = 75;
     return r;
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
