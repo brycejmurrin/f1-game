@@ -18,8 +18,8 @@
 
 const Input = (function () {
   // Tilt mechanics ported verbatim from the driving-game (Neon Drift) build.
-  const MAX_TILT = 22;        // degrees of tilt for full steering lock
-  const DEADZONE = 1.5;       // degrees ignored around the calibrated zero
+  const MAX_TILT = 28;        // degrees of tilt for full steering lock (higher = less sensitive)
+  const DEADZONE = 2.5;       // degrees ignored around the calibrated zero
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
   const DEG = Math.PI / 180;
