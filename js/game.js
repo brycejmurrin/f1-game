@@ -136,9 +136,11 @@ const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const LAT_MAX = 22;         // m/s^2 cornering grip
 const STEER_VMAX = 15;      // lateral m/s at full lock, full speed
-const CENTRIFUGAL = 0.33;   // outward drift per (curvature x speed^2): the car
-                            // runs wide in corners unless you steer in, so
-                            // holding the throttle no longer auto-follows the track
+const CENTRIFUGAL = 0.5;    // outward drift per (curvature x speed^2): no steering
+                            // assist — the car runs wide in every corner unless you
+                            // actively steer in. Tuned so full lock at a sensible
+                            // corner speed just holds the line; not steering at all
+                            // runs you straight off the road.
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
