@@ -868,6 +868,7 @@ const Tracks = (function () {
     // Conifer/pine: tapered trunk + stacked cones. col = needle green.
     const pine = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      if (onTrack(a.c[0], a.c[2], 3)) return;
       addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
       let y = h * 0.3;
       for (let i = 0; i < 3; i++) {
@@ -879,6 +880,7 @@ const Tracks = (function () {
     // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
     const tree = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      if (onTrack(a.c[0], a.c[2], 4)) return;
       addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
       addCone(out, vadd(a.c, a.u, h * 0.32), 2.8 + h * 0.12, h * 0.5, col, 8, b);
       addCone(out, vadd(a.c, a.u, h * 0.62), 1.8 + h * 0.06, h * 0.32, col, 7, b);
@@ -886,6 +888,7 @@ const Tracks = (function () {
     // Palm: tall thin trunk + a crown of drooping frond prisms.
     const palm = (k, side, dist, h, frond) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      if (onTrack(a.c[0], a.c[2], 4)) return;
       addCyl(out, a.c, 0.3, h, [0.45, 0.36, 0.22], 6, b);
       const top = vadd(a.c, a.u, h);
       for (let i = 0; i < 6; i++) {
@@ -929,6 +932,8 @@ const Tracks = (function () {
     // its side reads as a rake), a back shell and a flat roof slab on posts.
     const grandstand = (s, side, gap, len, shell, crowd) => {
       const k = Math.round(s * n) % n;
+      const ag = anchor(k, side, gap);
+      if (onTrack(ag.c[0], ag.c[2], len / 2 + 8)) return;
       prop(k, side, gap + 2.5, [10, 12, len], shell || [0.40, 0.41, 0.46]);   // back shell
       prop(k, side, gap, [9, 7, len - 2], crowd || [0.55, 0.32, 0.30]);        // raked crowd
       // roof slab cantilevered over the crowd, lifted on the up axis
@@ -982,6 +987,7 @@ const Tracks = (function () {
     const building = (k, side, dist, w, h, d, opts) => {
       opts = opts || {};
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      if (onTrack(p.c[0], p.c[2], w / 2 + 2)) return;
       const body = opts.wall || [0.62, 0.64, 0.68], win = opts.window || [0.18, 0.26, 0.34];
       addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b);
       const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
@@ -995,6 +1001,7 @@ const Tracks = (function () {
     const tower = (k, side, dist, baseW, h, opts) => {
       opts = opts || {};
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      if (onTrack(p.c[0], p.c[2], baseW / 2 + 2)) return;
       addFrustum(out, p.c, baseW * 0.5, baseW * 0.32, h, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
@@ -1002,6 +1009,7 @@ const Tracks = (function () {
     // Advertising hoarding / billboard: a panel on two slim posts.
     const billboard = (k, side, gap, w, h, col) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      if (onTrack(p.c[0], p.c[2], w / 2 + 1)) return;
       for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(p.c, p.t, o), 0.12, h, [0.2, 0.2, 0.22], 4, b);
       addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], col || [0.9, 0.85, 0.2], b);
     };
@@ -1015,6 +1023,7 @@ const Tracks = (function () {
     // Marshal post / flag bunker: a small orange-roofed box with a pole.
     const marshalPost = (k, side, gap) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      if (onTrack(p.c[0], p.c[2], 3)) return;
       addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
       addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
       addCyl(out, vadd(p.c, p.r, side * 1.4), 0.08, 4, [0.4, 0.4, 0.42], 4, b);
@@ -1022,6 +1031,7 @@ const Tracks = (function () {
     // Bush / shrub clump (low rounded greenery).
     const bush = (k, side, dist, col) => {
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      if (onTrack(p.c[0], p.c[2], 2)) return;
       addCone(out, vadd(p.c, p.u, 0.3), 1.6, 2.2, col || [0.20, 0.38, 0.18], 6, b);
     };
 
