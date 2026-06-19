@@ -208,6 +208,9 @@ let frozen = false;
 // When set by __apex.sky(), overrides the normal chase-cam with a horizon-facing
 // view so clouds and the sky gradient are visible in screenshots.
 let skyViewOverride = null;
+// Test-only steer/throttle/brake overrides (null = use real Input). Set via
+// __apex.setInput() so Playwright tests can pump physics at deterministic dt.
+let _testInput = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let lastFrame = 0;
 let announceT = 0;
@@ -846,7 +849,7 @@ function updateCar(c, dt, ranked) {
   // --- braking / target speed ---
   let braking = false;
   if (c.isPlayer) {
-    braking = Input.braking();
+    braking = _testInput ? !!_testInput.brake : Input.braking();
   } else {
     // AI: brake for upcoming curvature
     const look = clamp(c.speed * 1.7, 30, 160);
@@ -886,7 +889,7 @@ function updateCar(c, dt, ranked) {
   // Suppress auto-throttle while wallT > 0 (just bounced off a wall) so the car
   // doesn't immediately re-pin itself: the player has to steer clear first.
   const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
-  const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || Input.throttle()) : true;
+  const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || (_testInput ? !!_testInput.throttle : Input.throttle())) : true;
   if (braking) {
     c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
@@ -954,7 +957,7 @@ function updateCar(c, dt, ranked) {
 
   // --- lateral ---
   let steer;
-  if (c.isPlayer) steer = Input.steer();
+  if (c.isPlayer) steer = _testInput ? (_testInput.steer ?? 0) : Input.steer();
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
@@ -2066,6 +2069,15 @@ window.__apex = {
   // Load an optional .glb car model at runtime (team meshes rebuild from it,
   // tinted per livery); resolves false and keeps the procedural car on failure.
   loadCarModel: (url) => loadCarModel(url),
+  // Test helpers: override Input and pump physics at fixed dt.
+  // setInput({ steer, throttle, brake }) — values held until clearInput().
+  // step(dt, n) — run n physics ticks of dt seconds each (default 1 tick, 1/60 s).
+  setInput(v) { _testInput = v || null; },
+  clearInput() { _testInput = null; },
+  step(dt, n) {
+    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    for (let i = 0; i < count; i++) update(d);
+  },
 };
 
 })();
