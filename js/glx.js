@@ -15,20 +15,29 @@ uniform mat4 uViewProj;
 uniform vec3 uEye;
 out vec3 vNrm;
 out vec3 vCol;
+out vec3 vWorldPos;
 out float vDist;
 void main() {
   vec4 wp = uModel * vec4(aPos, 1.0);
+  vWorldPos = wp.xyz;
   vNrm = mat3(uModel) * aNrm;
   vCol = aCol;
   vDist = length(wp.xyz - uEye);
   gl_Position = uViewProj * wp;
 }`;
 
+  // Lit shader: hemisphere ambient + lambert sun (the original, tuned look) PLUS
+  // a Cook-Torrance (GGX) specular highlight on top. The diffuse + ambient base is
+  // identical to the old shader when uMetalness==0, so the hand-tuned vertex-colour
+  // palette is preserved; the spec term is soft-clipped so it sheens rather than
+  // blooms. Per-draw material: uRoughness / uMetalness / uSpecular.
   const LIT_FS = `#version 300 es
-precision mediump float;
+precision highp float;
 in vec3 vNrm;
 in vec3 vCol;
+in vec3 vWorldPos;
 in float vDist;
+uniform vec3 uEye;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec3 uAmbGround;
@@ -37,15 +46,89 @@ uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform float uEmissive;
 uniform float uAlpha;
+uniform float uRoughness;
+uniform float uMetalness;
+uniform float uSpecular;
+uniform float uDetail;
 out vec4 outColor;
+
+const float PI = 3.14159265359;
+
+float D_GGX(float NoH, float a) {
+  float a2 = a * a;
+  float d = (NoH * NoH) * (a2 - 1.0) + 1.0;
+  return a2 / max(PI * d * d, 1e-6);
+}
+// Height-correlated Smith visibility (folds in the 1/(4 NoL NoV) denominator).
+float V_SmithGGX(float NoV, float NoL, float a) {
+  float a2 = a * a;
+  float gv = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
+  float gl = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+  return 0.5 / max(gv + gl, 1e-5);
+}
+// Roughness-aware Schlick: grazing reflectance is capped at f90 = 1-roughness
+// (Frostbite trick) so rough surfaces like asphalt/grass don't pick up a wet
+// mirror sheen at the horizon, while smooth paint keeps its grazing reflection.
+vec3 F_Schlick(float VoH, vec3 f0, float f90) {
+  return f0 + (vec3(f90) - f0) * pow(1.0 - VoH, 5.0);
+}
+
+// --- Procedural surface texture (value noise on world XZ; no UVs needed) ---
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i), b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0)), d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
 void main() {
-  vec3 n = normalize(vNrm);
-  vec3 amb = mix(uAmbGround, uAmbSky, n.y * 0.5 + 0.5);
-  vec3 lit = vCol * (amb + uSunColor * max(dot(n, uSunDir), 0.0));
-  vec3 c = mix(lit, vCol, uEmissive);
+  vec3 N = normalize(vNrm);
+  vec3 V = normalize(uEye - vWorldPos);
+  vec3 L = uSunDir;
+  vec3 H = normalize(L + V);
+  float NoL = max(dot(N, L), 0.0);
+  float NoV = max(dot(N, V), 1e-4);
+  float NoH = max(dot(N, H), 0.0);
+  float VoH = max(dot(V, H), 0.0);
+
+  vec3 albedo = vCol;
+  // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
+  // world position, so flat asphalt/concrete/grass read as a surface rather than
+  // a solid slab. Multiplicative, so it darkens as much as it lightens.
+  if (uDetail > 0.0) {
+    vec2 wp = vWorldPos.xz;
+    float n = vnoise(wp * 0.35) * 0.55 + vnoise(wp * 1.9) * 0.30 + vnoise(wp * 8.0) * 0.15;
+    albedo *= 1.0 + (n - 0.5) * uDetail;
+    albedo = max(albedo, vec3(0.0));
+  }
+  float rough = clamp(uRoughness, 0.04, 1.0);
+  float a = rough * rough;
+  vec3 f0 = mix(vec3(0.08 * uSpecular), albedo, uMetalness);
+
+  vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
+
+  // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
+  vec3 color = albedo * (amb + uSunColor * NoL * (1.0 - uMetalness));
+
+  // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
+  float D = D_GGX(NoH, a);
+  float Vis = V_SmithGGX(NoV, NoL, a);
+  vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
+  vec3 specCol = (D * Vis) * F * uSunColor * NoL;
+  specCol = specCol / (1.0 + specCol);
+  color += specCol;
+
+  color = mix(color, albedo, uEmissive);
+
   float fd = vDist * uFogDensity;
   float f = 1.0 - exp(-fd * fd);
-  outColor = vec4(mix(c, uFogColor, f), uAlpha);
+  outColor = vec4(mix(color, uFogColor, f), uAlpha);
 }`;
 
   const SKY_VS = `#version 300 es
@@ -211,7 +294,8 @@ void main() {
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
-      "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha"]);
+      "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -317,8 +401,19 @@ void main() {
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
+    // Material (set every draw so values never leak from the previous mesh).
+    // Defaults give a matte dielectric, so callers that pass no material look
+    // essentially like the original lambert shading, just with a faint sheen.
+    const roughness = opts && opts.roughness !== undefined ? opts.roughness : 0.7;
+    const metalness = opts && opts.metalness !== undefined ? opts.metalness : 0.0;
+    const specular = opts && opts.specular !== undefined ? opts.specular : 0.5;
+    const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
     gl.uniform1f(litU.uEmissive, emissive);
     gl.uniform1f(litU.uAlpha, alpha);
+    gl.uniform1f(litU.uRoughness, roughness);
+    gl.uniform1f(litU.uMetalness, metalness);
+    gl.uniform1f(litU.uSpecular, specular);
+    gl.uniform1f(litU.uDetail, detail);
     const blend = alpha < 1;
     if (blend) gl.enable(gl.BLEND);
     gl.bindVertexArray(mesh.vao);
