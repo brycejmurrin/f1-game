@@ -559,7 +559,9 @@ const Tracks = (function () {
         }
       }
     }
-    ribbon(latsL, false); ribbon(latsR, true);
+    // Street circuits have barriers and buildings right at the road edge —
+    // no open terrain apron should be visible beside the car.
+    if (!isStreet) { ribbon(latsL, false); ribbon(latsR, true); }
     return { pos, nrm, col, idx: idxArr };
   }
 
@@ -725,12 +727,17 @@ const Tracks = (function () {
     } else if (theme === "desert") {
       every(34, (k) => { for (const side of [-1, 1]) if (hash(k + side) > 0.6) place(k, side, 8 + hash(k) * 10, [2 + hash(k) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day") {  // Monaco
+      // Mediterranean palette: cream, terracotta, coral, ochre, off-white
+      const medPal = [
+        [0.94, 0.88, 0.74], [0.82, 0.52, 0.38], [0.90, 0.72, 0.58],
+        [0.88, 0.78, 0.52], [0.93, 0.90, 0.83],
+      ];
       every(20, (k) => {
         for (const side of [-1, 1]) {
           if (def.id === "monaco" && side === 1 && k < n * 0.14) continue; // leave the harbour open
-          const s = hash(k * 3 + side), h = 10 + s * 26;
-          const tone = 0.6 + s * 0.25;
-          place(k, side, 5 + s * 3, [7, h, 7], [tone, tone * 0.92, tone * 0.78]);
+          const s = hash(k * 3 + side), h = 12 + s * 28;
+          const col = medPal[Math.floor(hash(k * 7 + side) * 5) % 5];
+          place(k, side, 16 + s * 10, [8, h, 8], col);
         }
       });
     } else if (theme === "street_night") {  // Singapore / Vegas
@@ -817,6 +824,7 @@ const Tracks = (function () {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const hillx = px[k] + r[0] * (hw[k] + 100);
         const hillz = pz[k] + r[2] * (hw[k] + 100);
+        if (onTrack(hillx, hillz, 20)) continue; // skip if box would land on a parallel section
         const bldg_h = 25 + hash(k * 29) * 35;
         addBox(out, [hillx, py[k] + bldg_h / 2, hillz], [28, bldg_h, 22],
                [0.72 + hash(k) * 0.2, 0.68 + hash(k) * 0.2, 0.6 + hash(k) * 0.15]);
