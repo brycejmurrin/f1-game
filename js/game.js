@@ -137,7 +137,16 @@ const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
 const LAT_MAX = 22;         // m/s^2 cornering grip
-const STEER_VMAX = 15;      // lateral m/s at full lock, full speed
+const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
+// Player steering (heading model). STEER_RATE is how fast full lock rotates the
+// car's heading (rad/s); it must beat the curvature drift (k*speed) of the
+// tightest corner at its proper speed, or the car can't be held on line.
+// STEER_EXPO shapes the input: >1 = gentle near centre (fine, non-twitchy
+// corrections) while keeping full authority at the stops. STEER_MAX_SLIP caps
+// the heading offset (tyre slip-angle limit, ~28°).
+const STEER_RATE = 2.8;
+const STEER_EXPO = 1.7;
+const STEER_MAX_SLIP = 0.5;
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -1024,19 +1033,25 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  // Angle-based steering for the player: track the car's heading offset (radians)
-  // relative to the track tangent. The Frenet tangent rotates with curvature, so
-  // without inward input the angle drifts and the car slides to the outside —
-  // real physics, no magic counter-force. Steering rotates the heading; the
-  // curvature term is the exact maths behind "centrifugal force" in the Frenet frame.
+  // Heading model for the player. c.angle is the car's heading measured against
+  // the track tangent (rad, +=pointing right of the way ahead). The driver
+  // rotates that heading; the car then slides toward where it points.
+  //
+  // The track frame itself rotates with the corner (k = curvature). Subtracting
+  // that rotation means: with NO input the car keeps its real-world heading and
+  // runs wide to the OUTSIDE — it never auto-steers onto the racing line. To
+  // hold a corner you must actively steer in, exactly as in a real car.
   if (c.isPlayer) {
     if (c.angle === undefined) c.angle = 0;
+    // Expo response: small inputs stay gentle (no twitchiness on straights / with
+    // tilt); full lock keeps the authority needed to out-turn the curvature drift.
+    const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     const auth = latFac * gripScale * kerbGrip * gripMult() * playerMods.cornering;
-    c.angle += steer * 1.2 * auth * dt;      // steering input rotates heading
-    c.angle -= k * c.speed * dt;             // Frenet curvature rotates reference frame
-    c.angle = clamp(c.angle, -0.52, 0.52);  // tyre slip angle limit (~30°)
+    c.angle += shaped * STEER_RATE * auth * dt;   // input rotates the heading
+    c.angle -= k * c.speed * dt;                  // track frame rotates with the corner
+    c.angle = clamp(c.angle, -STEER_MAX_SLIP, STEER_MAX_SLIP);
     c.x += c.speed * Math.sin(c.angle) * dt;
-    steer = clamp(c.angle / 0.52, -1, 1);   // normalise for visual yaw below
+    steer = clamp(c.angle / STEER_MAX_SLIP, -1, 1);   // normalise for visual yaw below
   } else {
     c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * dt;
   }
@@ -1912,6 +1927,18 @@ window.__apex = {
     return r;
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
+  // heading offset angle (rad, relative to track tangent), local curvature k
+  // (rad/m, +=right turn), half-width hw (m), speed (m/s) and arc position s.
+  probe() {
+    if (!player || !track) return null;
+    return {
+      x: player.x, angle: player.angle || 0,
+      k: Tracks.curvature(track, player.s),
+      hw: (Tracks.sample(track, player.s, smp), smp.hw),
+      speed: player.speed, s: player.s,
+    };
+  },
   // Debug free camera for surveying track layouts/scenery — look at anything.
   // Call with no args (or "chase") to restore the chase cam. Option forms:
   //   {}                                       aerial of the whole track
