@@ -17,6 +17,7 @@ const els = {
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
   selDriver: $("sel-driver"), selTracks: $("sel-tracks"),
   selTrackSection: $("sel-track-section"), selDiff: $("sel-diff"),
+  selDiffSection: $("sel-diff-section"),
   selBack: $("sel-back"), selGo: $("sel-go"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
@@ -36,6 +37,20 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("apex26." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("apex26." + k, JSON.stringify(v)); } catch (e) {} },
 };
+
+// Per-track time-trial leaderboard: top 5 laps ever, each tagged with the
+// team + driver that set it. Stored sorted ascending by lap time.
+const TT_BOARD_MAX = 5;
+function ttBoard(trackId) { return store.get("ttlb." + trackId, []); }
+function ttBoardAdd(trackId, entry) {
+  const b = ttBoard(trackId);
+  b.push(entry);
+  b.sort((a, z) => a.t - z.t);
+  if (b.length > TT_BOARD_MAX) b.length = TT_BOARD_MAX;
+  store.set("ttlb." + trackId, b);
+  return b;
+}
+
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 let trackIdx = store.get("track", 0);
@@ -91,6 +106,7 @@ const DIFF = {
   hard:   { ai: 0.99, band: 0.03 },
 };
 const GAME_LAPS = 3;
+const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
 
 // ---------- state ----------
 let state = "menu";
@@ -99,6 +115,12 @@ let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let seasonMode = false;
+let timeTrial = false;      // solo run against the clock, no AI
+let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
+let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
+let ttNewRecord = false;    // set when the player takes provisional pole this session
+let ttLaps = [];            // completed lap times this time-trial session
+let ttSessionTs = 0;        // session start stamp; entries at/after it are "yours, just now"
 let frameSky = {}, frame = {};
 const teamMeshes = {};   // teamId -> GLX mesh
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
@@ -221,6 +243,17 @@ function loadTrack(idx) {
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
+  if (timeTrial) {
+    cars = [player];          // solo against the clock — no AI on track
+    lapsTarget = TT_LAPS;
+    const board = ttBoard(track.def.id);
+    ttRecord = board.length ? board[0].t : Infinity;
+    ttNewRecord = false;
+    ttLaps = [];
+    ttSessionTs = Date.now();
+  } else {
+    lapsTarget = GAME_LAPS;
+  }
   gridUp();
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
@@ -254,6 +287,7 @@ function endRace() {
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0);
   if (soundOn) GameAudio.finish();
+  if (timeTrial) { buildTTResults(); els.results.hidden = false; return; }
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
   const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
@@ -310,6 +344,50 @@ function buildResults(order) {
     els.resNext.textContent = "RACE AGAIN";
   }
 }
+
+function buildTTResults() {
+  els.resultsTable.textContent = "";
+  els.resultsTitle.textContent = track.def.name + " — TIME TRIAL";
+  const best = player.best;
+
+  // headline: your best lap this session (green if it set a new track record)
+  const head = document.createElement("div");
+  head.className = "res-row you";
+  head.style.fontSize = "18px";
+  const hl = document.createElement("span"); hl.className = "res-name";
+  hl.textContent = ttNewRecord ? "★ NEW RECORD" : "YOUR BEST";
+  const hv = document.createElement("span"); hv.className = "res-pts"; hv.style.width = "auto";
+  hv.textContent = isFinite(best) ? fmtTime(best) : "-";
+  head.append(hl, hv);
+  els.resultsTable.appendChild(head);
+
+  // leaderboard header
+  const lbHead = document.createElement("div");
+  lbHead.style.cssText = "margin-top:12px;color:#e10600;font-weight:800;font-style:italic";
+  lbHead.textContent = "LEADERBOARD — " + track.def.name;
+  els.resultsTable.appendChild(lbHead);
+
+  // top laps ever on this track, each tagged with the team + driver that set it.
+  // Entries from this session (ts >= session start) are highlighted.
+  const board = ttBoard(track.def.id);
+  board.forEach((e, i) => {
+    const team = teamById(e.teamId);
+    const row = document.createElement("div");
+    row.className = "res-row" + (e.ts >= ttSessionTs ? " you" : "");
+    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+    const sw = document.createElement("span"); sw.className = "res-swatch";
+    sw.style.background = cssCol(team ? team.color : [0.5, 0.5, 0.5]);
+    const nm = document.createElement("span"); nm.className = "res-name";
+    nm.textContent = e.code + "  " + e.name + (team ? "  · " + team.short : "");
+    const pt = document.createElement("span"); pt.className = "res-pts"; pt.style.width = "auto";
+    pt.textContent = fmtTime(e.t);
+    row.append(pos, sw, nm, pt);
+    els.resultsTable.appendChild(row);
+  });
+
+  els.resNext.textContent = "TRY AGAIN";
+}
+function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
 
 function quitToMenu() {
@@ -760,16 +838,34 @@ function updateCar(c, dt, ranked) {
   if (oldS > track.total * 0.5 && c.s < track.total * 0.5 && oldS > c.s) {
     c.lap++;
     if (c.lap > 1) {
-      if (c.lapTime < c.best) c.best = c.lapTime;
+      const lapDone = c.lapTime;
+      c.lastLap = lapDone;
+      if (lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
+      if (c.isPlayer && timeTrial) onTTLap(lapDone);
     }
     c.lapTime = 0;
-    if (c.isPlayer && c.lap === GAME_LAPS) announce("FINAL LAP", 1.6);
-    if (c.lap > GAME_LAPS) {
+    if (c.isPlayer && c.lap === lapsTarget) announce("FINAL LAP", 1.6);
+    if (c.lap > lapsTarget) {
       c.finished = true;
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
     }
+  }
+}
+
+// Record a completed time-trial lap: add it to the track's leaderboard tagged
+// with the car used, and flag a new record if it takes provisional pole. The
+// board persists, so it survives quitting and reloads.
+function onTTLap(lapTime) {
+  ttLaps.push(lapTime);
+  ttBoardAdd(track.def.id, {
+    t: lapTime, teamId: player.team.id, code: player.code, name: player.name, ts: Date.now(),
+  });
+  if (lapTime < ttRecord) {
+    ttRecord = lapTime;
+    ttNewRecord = true;
+    announce("NEW RECORD " + fmtTime(lapTime), 2);
   }
 }
 
@@ -900,8 +996,8 @@ function updateHud(force) {
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
-  els.pos.textContent = (player.rank || "-") + "/" + cars.length;
-  els.lap.textContent = Math.min(player.lap || 1, GAME_LAPS) + "/" + GAME_LAPS;
+  els.pos.textContent = timeTrial ? "TT" : (player.rank || "-") + "/" + cars.length;
+  els.lap.textContent = Math.min(player.lap || 1, lapsTarget) + "/" + lapsTarget;
   els.time.textContent = fmtTime(player.lapTime);
   els.best.textContent = isFinite(player.best) ? fmtTime(player.best) : "-";
   els.speed.textContent = Math.round(player.speed * 3.6);
@@ -918,12 +1014,18 @@ function updateHud(force) {
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   els.ot.className = ot;
   els.ot.textContent = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE";
-  // gaps
-  const ranked = cars.slice().sort((a, b) => b.prog - a.prog);
-  const i = ranked.indexOf(player);
-  const a = ranked[i - 1], b = ranked[i + 1];
-  els.gapA.textContent = a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
-  els.gapB.textContent = b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
+  if (timeTrial) {
+    // no rivals — show last lap and the record to chase instead of gaps
+    els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
+    els.gapB.textContent = isFinite(ttRecord) ? "REC " + fmtTime(ttRecord) : "REC —";
+  } else {
+    // gaps
+    const ranked = cars.slice().sort((a, b) => b.prog - a.prog);
+    const i = ranked.indexOf(player);
+    const a = ranked[i - 1], b = ranked[i + 1];
+    els.gapA.textContent = a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
+    els.gapB.textContent = b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
+  }
   drawMinimap();
 }
 
@@ -979,16 +1081,18 @@ function tick(now) {
 }
 
 // ---------- UI wiring ----------
-function buildSelect(forSeason) {
-  els.selTitle.textContent = forSeason ? "SEASON — ROUND " + ((season && season.round || 0) + 1) : "GRAND PRIX";
-  els.selTrackSection.hidden = forSeason;
+function buildSelect() {
+  els.selTitle.textContent = seasonMode ? "SEASON — ROUND " + ((season && season.round || 0) + 1)
+    : timeTrial ? "TIME TRIAL" : "GRAND PRIX";
+  els.selTrackSection.hidden = seasonMode;     // season uses the round's track
+  els.selDiffSection.hidden = timeTrial;       // no AI in a time trial
   els.selTeams.textContent = "";
   Teams.LIST.forEach((t, i) => {
     const b = document.createElement("button");
     b.className = "sel-chip" + (i === teamIdx ? " active" : "");
     const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = cssCol(t.color);
     b.append(sw, document.createTextNode(t.short));
-    b.onclick = () => { teamIdx = i; driverIdx = 0; store.set("team", i); buildSelect(forSeason); tickUi(); };
+    b.onclick = () => { teamIdx = i; driverIdx = 0; store.set("team", i); buildSelect(); tickUi(); };
     els.selTeams.appendChild(b);
   });
   const team = Teams.LIST[teamIdx];
@@ -997,16 +1101,19 @@ function buildSelect(forSeason) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (i === driverIdx ? " active" : "");
     b.textContent = "#" + d.num + " " + d.name;
-    b.onclick = () => { driverIdx = i; store.set("driver", i); buildSelect(forSeason); tickUi(); };
+    b.onclick = () => { driverIdx = i; store.set("driver", i); buildSelect(); tickUi(); };
     els.selDriver.appendChild(b);
   });
-  if (!forSeason) {
+  if (!seasonMode) {
     els.selTracks.textContent = "";
     Tracks.LIST.forEach((t, i) => {
       const b = document.createElement("button");
       b.className = "sel-chip" + (i === trackIdx ? " active" : "");
-      b.textContent = t.name + (t.night ? " ☾" : "");
-      b.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(forSeason); tickUi(); loadTrack(i); };
+      // in time trial, surface each track's leaderboard-best lap on its chip
+      const board = timeTrial ? ttBoard(t.id) : [];
+      const rec = board.length ? board[0].t : Infinity;
+      b.textContent = t.name + (t.night ? " ☾" : "") + (isFinite(rec) ? "  " + fmtTime(rec) : "");
+      b.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); loadTrack(i); };
       els.selTracks.appendChild(b);
     });
   }
@@ -1015,7 +1122,7 @@ function buildSelect(forSeason) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (d === difficulty ? " active" : "");
     b.textContent = d.toUpperCase();
-    b.onclick = () => { difficulty = d; store.set("difficulty", d); buildSelect(forSeason); tickUi(); };
+    b.onclick = () => { difficulty = d; store.set("difficulty", d); buildSelect(); tickUi(); };
     els.selDiff.appendChild(b);
   });
 }
@@ -1070,20 +1177,27 @@ function setMusic(b) {
 $("pm-music").onclick = () => setMusic(!musicEnabled);
 
 $("mb-race").onclick = () => {
-  seasonMode = false;
-  buildSelect(false);
+  seasonMode = false; timeTrial = false;
+  buildSelect();
+  els.overlay.hidden = true; els.select.hidden = false;
+  if (soundOn) GameAudio.uiSelect();
+  loadTrack(trackIdx);
+};
+$("mb-tt").onclick = () => {
+  seasonMode = false; timeTrial = true;
+  buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
   loadTrack(trackIdx);
 };
 $("mb-season").onclick = () => {
-  seasonMode = true;
+  seasonMode = true; timeTrial = false;
   if (!season || season.round >= Tracks.LIST.length) {
     season = { round: 0, pts: {}, teamPts: {} };
     store.set("season", season);
   }
   trackIdx = season.round;
-  buildSelect(true);
+  buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
   loadTrack(trackIdx);
