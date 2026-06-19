@@ -1510,18 +1510,17 @@ function buildSetup() {
         saveTeamParts(team.id, p);
         if (soundOn) GameAudio.uiTick();
         buildSetup();
-        renderStatBars($("sel-stats"), team);   // live update behind the panel
       };
       chips.appendChild(chip);
     }
     section.appendChild(chips);
     body.appendChild(section);
   }
+  renderStatBars($("cs-stats-inner"), team);
 }
 
 function openSetup() {
   buildSetup();
-  document.body.classList.add("setup-open");
   $("carsetup").hidden = false;
 }
 
@@ -1734,7 +1733,6 @@ els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustom
 $("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
-  document.body.classList.remove("setup-open");
   recomputePlayerMods(); buildSelect();
 };
 $("cz-cancel").onclick = () => { els.customize.hidden = true; };
