@@ -1132,9 +1132,9 @@ function render(dt) {
   // specular term. Grass is matte; asphalt keeps a low-roughness sheen so the
   // racing surface catches the sun; props matte; the start gantry reads metallic.
   GLX.draw(track.meshes.terrain, M4.ident(),
-    night ? { emissive: 0.1, roughness: 0.97, specular: 0.06, detail: 0.35 } : { roughness: 0.97, specular: 0.06, detail: 0.35 });
+    night ? { emissive: 0.05, roughness: 0.97, specular: 0.06, detail: 0.35 } : { roughness: 0.97, specular: 0.06, detail: 0.35 });
   GLX.draw(track.meshes.road, M4.ident(),
-    night ? { emissive: 0.14, roughness: 0.85, specular: 0.2, detail: 0.22 } : { roughness: 0.85, specular: 0.2, detail: 0.22 });
+    night ? { emissive: 0.09, roughness: 0.85, specular: 0.2, detail: 0.22 } : { roughness: 0.85, specular: 0.2, detail: 0.22 });
   GLX.draw(track.meshes.props, M4.ident(),
     night ? { emissive: 0.45, roughness: 0.85, specular: 0.2 } : { roughness: 0.85, specular: 0.2 });
   GLX.draw(track.meshes.gate, M4.ident(), { roughness: 0.45, metalness: 0.3, specular: 0.5 });
