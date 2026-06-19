@@ -59,6 +59,12 @@ const Input = (function () {
   let steerMode = "tilt";
   let tiltSmoothed = 0;       // EMA-filtered tilt (eliminates jitter spikes)
   let lastOrientMs = 0;
+  // Slew-rate limit on the tilt steering OUTPUT: caps how fast the steering
+  // command can change, so a quick or jittery hand movement can't snap the car.
+  // (Recommended technique for tilt controls: a hard limit on turn rate.)
+  const TILT_SLEW = 2.2;      // max steer-units/s of change from tilt
+  let tiltSteerVal = 0;       // current rate-limited tilt steer (-1..1)
+  let tiltSteerT = 0;         // last slew timestamp, ms (0 = unset)
 
   let onPauseCb = null;
 
@@ -108,7 +114,7 @@ const Input = (function () {
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
     lastOrientMs = n;
-    tiltSmoothed += (tiltRaw - tiltSmoothed) * (1 - Math.exp(-10 * odt));
+    tiltSmoothed += (tiltRaw - tiltSmoothed) * (1 - Math.exp(-8 * odt));
     tiltSeen = true;
   }
 
@@ -155,6 +161,7 @@ const Input = (function () {
     // that pulls the car to one side. Recalibrated on orientation change too.
     tiltZero = tiltRaw;
     tiltSmoothed = tiltRaw;   // reset smoother so there's no startup transient
+    tiltSteerVal = 0;         // and the slew limiter, so neutral means neutral
   }
 
   function tiltActive() {
@@ -162,10 +169,20 @@ const Input = (function () {
   }
 
   function tiltSteering() {
+    // Map the calibrated, filtered tilt to a target steer (-1..1) with a soft
+    // dead zone, then slew-rate limit the change toward that target so the
+    // command can't jump even if the hand does.
+    let target = 0;
     let d = tiltSmoothed - tiltZero;
-    if (Math.abs(d) < DEADZONE) return 0;
-    d -= Math.sign(d) * DEADZONE;
-    return Math.max(-1, Math.min(1, d / (MAX_TILT - DEADZONE)));
+    if (Math.abs(d) >= DEADZONE) {
+      d -= Math.sign(d) * DEADZONE;
+      target = Math.max(-1, Math.min(1, d / (MAX_TILT - DEADZONE)));
+    }
+    const t = nowMs();
+    const dt = tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0;
+    tiltSteerT = t;
+    tiltSteerVal = moveToward(tiltSteerVal, target, TILT_SLEW * dt);
+    return tiltSteerVal;
   }
 
   /* ---------------- keyboard ---------------- */
@@ -384,6 +401,8 @@ const Input = (function () {
     keyLeft = keyRight = keyBrake = keyThrottle = false;
     keySteerVal = 0;
     keySteerT = 0;
+    tiltSteerVal = 0;
+    tiltSteerT = 0;
     overtakePressed = false;
     boostTogglePressed = false;
     shiftUpPressed = false;
