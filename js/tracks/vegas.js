@@ -14,7 +14,7 @@
     lengthKm: 6.2,
     baseHW: 7,
     street: true,
-    pal: { horizon: [0.1, 0.06, 0.16] },
+    pal: { horizon: [0.22, 0.08, 0.28], zenith: [0.04, 0.02, 0.10], sunColor: [0.55, 0.45, 0.80], ambientSky: [0.28, 0.18, 0.38], ambientGround: [0.32, 0.14, 0.24], fogColor: [0.18, 0.06, 0.22], fogDensity: 0.0025, sunDir: [0.8, 0.15, 0.1] },
     segs: [
       { t: 0, l: 140 }, { t: 90, l: 70 }, { t: -60, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 120 }, { t: -60, l: 60 },
       { t: 70, l: 60 }, { t: -55, l: 60 }, { t: 0, l: 360 }, { t: 90, l: 80 }, { t: -50, l: 70 }, { t: 0, l: 900, t2: 0 },
