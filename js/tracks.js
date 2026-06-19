@@ -794,7 +794,7 @@ const Tracks = (function () {
         const dune_h = 5 + hash(k * 17) * 5;
         const dune_d = 320 + hash(k * 19) * 120;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * dune_d, pyMin + dune_h / 2 - 1, pz[k] + r[2] * side * dune_d],
+          addBox(out, [px[k] + r[0] * side * dune_d, py[k] + dune_h / 2 - 1, pz[k] + r[2] * side * dune_d],
                  [180, dune_h, 200], [0.74, 0.68, 0.52]);
         }
       }
@@ -817,7 +817,7 @@ const Tracks = (function () {
       // Persian Gulf water horizon
       const khorizon = Math.round(n * 0.5) % n;
       const khz = [track.rx[khorizon], track.ry[khorizon], track.rz[khorizon]];
-      addBox(out, [px[khorizon] + khz[0] * 250, pyMin - 3, pz[khorizon] + khz[2] * 250],
+      addBox(out, [px[khorizon] + khz[0] * 250, py[khorizon] - 3, pz[khorizon] + khz[2] * 250],
              [400, 2, 800], [0.12, 0.28, 0.44]);
       // Sand/dust filler terrain (extensive). Sunk so the top sits ~1m below the
       // lowest road grade — these 80m-wide patches overlap the track footprint on
@@ -826,7 +826,7 @@ const Tracks = (function () {
       every(40, (k) => {
         for (const side of [-1, 1]) {
           const sand_d = 90 + hash(k * 21 + side) * 80;
-          addBox(out, [px[k] + track.rx[k] * side * sand_d, pyMin - 3, pz[k] + track.rz[k] * side * sand_d],
+          addBox(out, [px[k] + track.rx[k] * side * sand_d, py[k] - 3, pz[k] + track.rz[k] * side * sand_d],
                  [80, 4, 120], [0.72, 0.66, 0.50]);
         }
       });
@@ -840,7 +840,7 @@ const Tracks = (function () {
         const ridge_h = 30 + hash(k * 23) * 20;
         const ridge_d = 200 + hash(k * 25) * 100;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * ridge_d, pyMin + ridge_h / 2 - 1, pz[k] + r[2] * side * ridge_d],
+          addBox(out, [px[k] + r[0] * side * ridge_d, py[k] + ridge_h / 2 - 1, pz[k] + r[2] * side * ridge_d],
                  [180, ridge_h, 300], [0.15, 0.28, 0.12]);
         }
       }
@@ -860,7 +860,7 @@ const Tracks = (function () {
       every(200, (k) => {
         const stream_d = 100 + hash(k * 31) * 60;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * stream_d, pyMin - 3, pz[k] + track.rz[k] * side * stream_d],
+          addBox(out, [px[k] + track.rx[k] * side * stream_d, py[k] - 3, pz[k] + track.rz[k] * side * stream_d],
                  [60, 0.8, 200], [0.08, 0.18, 0.32]);  // water drainage
         }
       });
@@ -877,7 +877,7 @@ const Tracks = (function () {
         const k = Math.round((i / 7) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + r[0] * side * 220, pyMin + 8 - 1, pz[k] + r[2] * side * 220],
+          addBox(out, [px[k] + r[0] * side * 220, py[k] + 8 - 1, pz[k] + r[2] * side * 220],
                  [200, 16, 280], [0.28, 0.42, 0.22]);
         }
       }
@@ -921,7 +921,7 @@ const Tracks = (function () {
       for (let i = 0; i < 4; i++) {
         const k = Math.round((i / 4) * n) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
-        addBox(out, [px[k] + r[0] * (hw[k] + 120), pyMin - 3, pz[k] + r[2] * (hw[k] + 120)],
+        addBox(out, [px[k] + r[0] * (hw[k] + 120), py[k] - 3, pz[k] + r[2] * (hw[k] + 120)],
                [180, 1.6, 240], [0.1, 0.24, 0.4]);  // lake water
       }
       // Distant Milan towers
@@ -1104,10 +1104,10 @@ const Tracks = (function () {
       // Water horizon (North Sea far)
       const ksea = Math.round(n * 0.4) % n;
       const kser = [track.rx[ksea], track.ry[ksea], track.rz[ksea]];
-      addBox(out, [px[ksea] + kser[0] * 280, pyMin - 4, pz[ksea] + kser[2] * 280],
+      addBox(out, [px[ksea] + kser[0] * 280, py[ksea] - 4, pz[ksea] + kser[2] * 280],
              [500, 3, 600], [0.08, 0.22, 0.38]);  // sea water
       // Beach area
-      addBox(out, [px[ksea] + kser[0] * 150, pyMin - 2.5, pz[ksea] + kser[2] * 150],
+      addBox(out, [px[ksea] + kser[0] * 150, py[ksea] - 2.5, pz[ksea] + kser[2] * 150],
              [300, 1.6, 400], [0.78, 0.72, 0.6]);  // sand beach
       // Distant wind turbines (Dutch renewable energy)
       for (let i = 0; i < 4; i++) {
@@ -1284,7 +1284,7 @@ const Tracks = (function () {
       // Lake: body of water visible from inside track (pit area perspective)
       const klake = Math.round(n * 0.18) % n;
       const klaker = [track.rx[klake], track.ry[klake], track.rz[klake]];
-      addBox(out, [px[klake] + klaker[0] * 110, pyMin - 3, pz[klake] + klaker[2] * 110], [280, 1.2, 200], [0.08, 0.25, 0.45]);
+      addBox(out, [px[klake] + klaker[0] * 110, py[klake] - 3, pz[klake] + klaker[2] * 110], [280, 1.2, 200], [0.08, 0.25, 0.45]);
       // São Paulo tower-block backdrop visible across the lake
       for (let i = 0; i < 9; i++) {
         const k = (Math.round(n * 0.22) + i * 8) % n;
@@ -1314,7 +1314,7 @@ const Tracks = (function () {
           const o = hw[kd] + 140 + layer * 55;
           const h = 5 + layer * 3;
           for (const side of [-1, 1]) {
-            addBox(out, [px[kd] + kr[0] * side * o, pyMin + h / 2 - 2, pz[kd] + kr[2] * side * o],
+            addBox(out, [px[kd] + kr[0] * side * o, py[kd] + h / 2 - 2, pz[kd] + kr[2] * side * o],
                    [90, h, 100], [0.74 - layer * 0.05, 0.68 - layer * 0.05, 0.48]);
           }
         }
@@ -1331,7 +1331,7 @@ const Tracks = (function () {
       every(120, (k) => {
         const sea_d = 180 + hash(k * 65) * 80;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * sea_d, pyMin - 4, pz[k] + track.rz[k] * side * sea_d],
+          addBox(out, [px[k] + track.rx[k] * side * sea_d, py[k] - 4, pz[k] + track.rz[k] * side * sea_d],
                  [140, 1.6, 200], [0.08, 0.20, 0.36]);
         }
       });
@@ -1339,7 +1339,7 @@ const Tracks = (function () {
       every(160, (k) => {
         const beach_d = 120 + hash(k * 67) * 50;
         for (const side of [-1, 1]) {
-          addBox(out, [px[k] + track.rx[k] * side * beach_d, pyMin - 2, pz[k] + track.rz[k] * side * beach_d],
+          addBox(out, [px[k] + track.rx[k] * side * beach_d, py[k] - 2, pz[k] + track.rz[k] * side * beach_d],
                  [100, 1.0, 140], [0.76, 0.70, 0.58]);
         }
       });
