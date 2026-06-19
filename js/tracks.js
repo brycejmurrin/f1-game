@@ -1,6 +1,7 @@
-/* Apex 26 — Tracks: 12 real circuits as authored centerlines, resampled into a
-   closed Catmull-Rom spline, extruded into 3D meshes. Contract: docs/ARCHITECTURE.md.
-   Depends on global GLX (at runtime) for mesh upload. */
+/* Apex 26 — Tracks engine: turns per-circuit definitions (js/tracks/<id>.js,
+   registered on the global TrackDefs list) into resampled closed Catmull-Rom
+   splines extruded into 3D meshes. Contract: docs/ARCHITECTURE.md.
+   Depends on globals TrackDefs + CircuitPaths (data) and GLX (mesh upload). */
 const Tracks = (function () {
   "use strict";
 
@@ -123,7 +124,7 @@ const Tracks = (function () {
     // deck so it passes OVER the lower section instead of clipping through it.
     // The cosine bump returns to 0 at the window edges, so the rest of the lap
     // stays flat — no global tilt.
-    const bridges = BRIDGES[def.id];
+    const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
       const cs = b.s * total;
       for (let k = 0; k < n; k++) {
@@ -133,7 +134,7 @@ const Tracks = (function () {
       }
     }
     // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
-    const elevs = ELEVATIONS[def.id];
+    const elevs = def.elevations;
     if (elevs) for (const e of elevs) {
       const cs = e.s * total;
       for (let k = 0; k < n; k++) {
@@ -159,7 +160,7 @@ const Tracks = (function () {
       rx[k] = r[0]; ry[k] = r[1]; rz[k] = r[2];
     }
 
-    const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, street: !!STREET_IDS[def.id], meshes: {}, map: null };
+    const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, street: !!def.street, meshes: {}, map: null };
     track.map = buildMap(px, pz, n);
     if (typeof GLX !== "undefined" && GLX.createMesh) {
       track.meshes.road = GLX.createMesh(buildRoad(track));
@@ -463,7 +464,7 @@ const Tracks = (function () {
     // circuits keep runoffAmt ~0 (their walls are right at the edge).
     const APRON_COL = [0.62, 0.55, 0.42];
     const runoffAmt = new Float32Array(n);
-    if (!STREET_IDS[track.def.id]) {
+    if (!track.def.street) {
       const cur = new Float32Array(n);
       for (let k = 0; k < n; k++) cur[k] = Math.abs(curvature(track, k * ds));
       const aheadNodes = Math.max(1, Math.round(60 / ds));  // ~60 m look-ahead
@@ -489,7 +490,7 @@ const Tracks = (function () {
     // elevated deck floats above flat ground (supported visually by the bridge
     // pillars in buildProps) instead of pulling the whole ground plane up with it.
     const gY = new Float32Array(py);
-    const brs = BRIDGES[track.def.id];
+    const brs = track.def.bridges;
     if (brs) {
       const ds = total / n;
       for (const b of brs) {
@@ -506,7 +507,7 @@ const Tracks = (function () {
     // Street circuits push the ribbon further from the road edge so barriers
     // fully hide it and it cannot visually bleed onto the road surface.
     const NTV = 5;
-    const isStreet = !!STREET_IDS[track.def.id];
+    const isStreet = !!track.def.street;
     const latsL = isStreet ? [-5.0, -10.0, -20, -55, -120] : [-2.2, -7.0, -14, -48, -120];
     const latsR = isStreet ? [ 5.0,  10.0,  20,  55,  120] : [ 2.2,  7.0,  14,  48,  120];
     const concrete = pal.concrete || (track.def.night ? [0.32, 0.30, 0.28] : [0.50, 0.48, 0.44]);
@@ -593,9 +594,6 @@ const Tracks = (function () {
     }
   }
 
-  // street circuits get a continuous barrier wall at the edge instead of grass
-  const STREET_IDS = { monaco: 1, singapore: 1, vegas: 1, madrid: 1 };
-
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
     const out = { pos: [], nrm: [], col: [], idx: [] };
@@ -667,7 +665,7 @@ const Tracks = (function () {
     // continuous barrier wall hugging both edges on street circuits — going off
     // means hitting a wall, not open grass. Day circuits get red/white armco
     // striping; night circuits get a dark rail.
-    if (STREET_IDS[def.id]) {
+    if (def.street) {
       const WH = 1.1, WT = 0.4;
       for (const side of [-1, 1]) {
         for (let k = 0; k < n; k++) {
@@ -700,7 +698,7 @@ const Tracks = (function () {
       }
     });
     // tire barriers at outside of tight corners on permanent (non-street) circuits
-    if (!STREET_IDS[def.id]) {
+    if (!def.street) {
       for (const c of findCorners(track, 0.014)) {
         const outside = c.sign > 0 ? -1 : 1;
         const lo = Math.max(1, Math.round(c.lo * 0.35));
@@ -720,7 +718,7 @@ const Tracks = (function () {
     }
 
     // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
-    if (!STREET_IDS[def.id]) {
+    if (!def.street) {
       every(270, (k) => {
         const side = hash(k * 7) < 0.5 ? -1 : 1;
         place(k, side, hw[k] + 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
@@ -1531,7 +1529,7 @@ const Tracks = (function () {
 
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road
-    const brs = BRIDGES[def.id];
+    const brs = def.bridges;
     if (brs) for (const b of brs) {
       const kc = Math.round(b.s * n) % n;
       for (const off of [-18, -9, 9, 18]) {
@@ -1574,175 +1572,34 @@ const Tracks = (function () {
   // ---------- circuit layouts (turn +=right, lengths in meters pre-SCALE) ----------
   // palettes
   function dayPal(o) {
-    return Object.assign({
+    const p = Object.assign({
       zenith: [0.18, 0.40, 0.78], horizon: [0.62, 0.74, 0.88], sun: [1, 0.96, 0.85],
       grass: [0.18, 0.42, 0.16], runoff: [0.55, 0.42, 0.28], fog: [0.62, 0.74, 0.88],
       asphalt: [0.16, 0.17, 0.19], line: [0.95, 0.95, 0.98],
       fogDensity: 0.0017, kerbA: [0.85, 0.12, 0.12], kerbB: [0.95, 0.95, 0.95], concrete: [0.50, 0.48, 0.44],
       ambientSky: [0.45, 0.52, 0.62], ambientGround: [0.22, 0.22, 0.18],
-      sunColor: [1, 0.95, 0.82], sunDir: norm([0.4, 0.72, 0.3]),
+      sunColor: [1, 0.95, 0.82], sunDir: [0.4, 0.72, 0.3],
     }, o);
+    p.sunDir = norm(p.sunDir);   // data files store raw sunDir; normalize here
+    return p;
   }
   function nightPal(o) {
-    return Object.assign({
+    const p = Object.assign({
       zenith: [0.05, 0.06, 0.14], horizon: [0.12, 0.14, 0.24], sun: [0.4, 0.4, 0.5],
       grass: [0.14, 0.18, 0.14], runoff: [0.28, 0.26, 0.24], fog: [0.08, 0.09, 0.15],
       asphalt: [0.18, 0.19, 0.22], line: [0.9, 0.9, 0.95],
       fogDensity: 0.0023, kerbA: [0.85, 0.12, 0.12], kerbB: [0.92, 0.92, 0.92], concrete: [0.42, 0.40, 0.38],
       ambientSky: [0.55, 0.56, 0.64], ambientGround: [0.28, 0.28, 0.30],
-      sunColor: [0.7, 0.72, 0.8], sunDir: norm([0.1, 0.9, 0.2]),
+      sunColor: [0.7, 0.72, 0.8], sunDir: [0.1, 0.9, 0.2],
     }, o);
+    p.sunDir = norm(p.sunDir);
+    return p;
   }
 
-  // Per-circuit bridge decks (arc fraction of the overpass centre, ramp
-  // half-window in metres, peak rise). Suzuka is a figure-8: its back straight
-  // crosses over the section out of the esses.
-  const BRIDGES = {
-    suzuka: [{ s: 0.811, halfM: 150, rise: 7 }],
-  };
-
-  // Elevation changes (terrain follows road; distinct from BRIDGES where terrain stays flat).
-  // Each entry is a cosine bump centred at lap fraction s, spanning ±halfM metres.
-  // Negative rise = descent (e.g. Eau Rouge dip before Raidillon climb).
-  const ELEVATIONS = {
-    // Spa kept flat: the s=0.12 Raidillon/Eau Rouge 26m rise floated the terrain
-    // ribbon over the lower Eau Rouge valley as a plane bisecting the car.
-    // (was [{ s: 0.07, halfM: 270, rise: -14 }, { s: 0.12, halfM: 500, rise: 26 }])
-    spa:        [],
-    monaco:     [{ s: 0.27, halfM: 340, rise: 18 }],
-    // COTA kept flat: its compact, open infield exposed the elevated Turn 1
-    // terrain ribbon as a green plane floating across the infield from lower
-    // parts of the lap. (was [{ s: 0.06, halfM: 440, rise: 28 }])
-    cota:       [],
-    // Interlagos kept flat: the s=0.86 climb floated the terrain ribbon over the
-    // lower road as a green plane on this compact circuit (same failure as COTA /
-    // Bahrain). (was [{ s: 0.86, halfM: 560, rise: 16 }])
-    interlagos: [],
-    silverstone:[{ s: 0.62, halfM: 360, rise:  9 }],
-    zandvoort:  [{ s: 0.56, halfM: 300, rise: 12 }],
-    // Bahrain kept flat: the s=0.45 dip created a bowl whose higher rim pushed
-    // the terrain ribbon across the lower road as a plane bisecting the car
-    // (same failure COTA had). (was [{ s: 0.45, halfM: 380, rise: -8 }])
-    bahrain:    [],
-  };
-
-  const DEFS = [
-    { id: "bahrain", name: "BAHRAIN", gp: "Bahrain GP", country: "Bahrain", night: true, theme: "desert", lengthKm: 5.4, baseHW: 7,
-      pal: nightPal({ horizon: [0.10, 0.07, 0.10], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] }),
-      segs: [{ t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
-        { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300 }, { t: 60, l: 90 }, { t: 0, l: 120 }, { t: 60, l: 110 }] },
-    { id: "monaco", name: "MONACO", gp: "Monaco GP", country: "Monaco", night: false, theme: "street_day", lengthKm: 3.3, baseHW: 5,
-      pal: dayPal({ horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.40], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014,
-        sunDir: norm([0.22, 0.88, 0.42]), sun: [1.0, 0.98, 0.93], sunColor: [1.0, 0.97, 0.90] }),
-      segs: [{ t: 0, l: 230 }, { t: 70, l: 75 }, { t: -25, l: 260, h: 14 }, { t: -70, l: 110 }, { t: 80, l: 80, w: 4.8 },
-        { t: 0, l: 90, h: -6 }, { t: 80, l: 80, w: 4.8 }, { t: 160, l: 120, w: 4.5, h: -4 }, { t: 55, l: 80 }, { t: 45, l: 80 },
-        { t: -15, l: 260, h: -4 }, { t: 60, l: 70, w: 4.8 }, { t: 0, l: 40 }, { t: -65, l: 60 }, { t: 65, l: 60 }, { t: -40, l: 100 },
-        { t: 70, l: 65, w: 4.8 }, { t: 0, l: 35 }, { t: -70, l: 65 }, { t: 80, l: 70 }, { t: -70, l: 65 }, { t: 75, l: 70, w: 4.8 }, { t: 40, l: 120 }] },
-    { id: "silverstone", name: "SILVERSTONE", gp: "British GP", country: "UK", night: false, theme: "green", lengthKm: 5.9, baseHW: 8,
-      pal: dayPal({ zenith: [0.30, 0.42, 0.62], horizon: [0.66, 0.72, 0.78], grass: [0.20, 0.46, 0.18], fogDensity: 0.0016,
-        sunDir: norm([0.35, 0.46, 0.60]), sun: [0.88, 0.91, 1.0], sunColor: [0.84, 0.88, 0.96] }),
-      segs: [{ t: 0, l: 260 }, { t: 60, l: 120 }, { t: -50, l: 90 }, { t: 80, l: 80 }, { t: -150, l: 160 }, { t: 0, l: 120 },
-        { t: -70, l: 90 }, { t: 120, l: 150 }, { t: 40, l: 100 }, { t: 0, l: 160 }, { t: 70, l: 130 },
-        { t: -55, l: 70 }, { t: 60, l: 70 }, { t: -55, l: 70 }, { t: 50, l: 70 }, { t: 0, l: 300 }, { t: 75, l: 110 },
-        { t: -40, l: 90 }, { t: 95, l: 90 }, { t: 60, l: 90 }] },
-    { id: "spa", name: "SPA", gp: "Belgian GP", country: "Belgium", night: false, theme: "green", lengthKm: 7.0, baseHW: 8,
-      pal: dayPal({ zenith: [0.34, 0.44, 0.56], horizon: [0.6, 0.65, 0.66], grass: [0.12, 0.34, 0.14], runoff: [0.4, 0.4, 0.4], fog: [0.66, 0.7, 0.72], fogDensity: 0.0026,
-        sunDir: norm([0.58, 0.36, 0.44]), sun: [0.98, 0.84, 0.64], sunColor: [0.90, 0.80, 0.62] }),
-      segs: [{ t: 0, l: 120 }, { t: 170, l: 80, h: -4 }, { t: 0, l: 140, h: -18 }, { t: -40, l: 60, h: 6 }, { t: 50, l: 60, h: 14 },
-        { t: -30, l: 80, h: 16 }, { t: 0, l: 480, h: 18 }, { t: 70, l: 90 }, { t: -60, l: 90, h: -6 }, { t: 50, l: 140, h: -12 },
-        { t: -90, l: 160, h: -10 }, { t: 40, l: 90 }, { t: -50, l: 90 }, { t: 70, l: 110 }, { t: 0, l: 320, h: -6 },
-        { t: -30, l: 180 }, { t: 80, l: 70 }, { t: -85, l: 70 }, { t: 30, l: 120 }] },
-    { id: "monza", name: "MONZA", gp: "Italian GP", country: "Italy", night: false, theme: "green", lengthKm: 5.8, baseHW: 8,
-      pal: dayPal({ zenith: [0.22, 0.42, 0.72], horizon: [0.7, 0.74, 0.7], grass: [0.2, 0.44, 0.18],
-        sunDir: norm([0.74, 0.50, 0.22]), sun: [1.0, 0.88, 0.60], sunColor: [1.0, 0.86, 0.58] }),
-      segs: [{ t: 0, l: 560 }, { t: 70, l: 55 }, { t: -75, l: 60 }, { t: 80, l: 220 }, { t: 0, l: 200 }, { t: -60, l: 55 },
-        { t: 70, l: 70 }, { t: 75, l: 130 }, { t: 60, l: 120 }, { t: 0, l: 260 }, { t: -50, l: 55 }, { t: 65, l: 70 },
-        { t: 0, l: 360 }, { t: 150, l: 220 }] },
-    { id: "suzuka", name: "SUZUKA", gp: "Japanese GP", country: "Japan", night: false, theme: "green", lengthKm: 5.8, baseHW: 7,
-      pal: dayPal({ zenith: [0.28, 0.46, 0.72], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2],
-        sunDir: norm([0.84, 0.42, 0.14]), sun: [1.0, 0.84, 0.58], sunColor: [1.0, 0.82, 0.55] }),
-      segs: [{ t: 0, l: 440, h: -6 }, { t: 50, l: 120 }, { t: -35, l: 100, h: 6 }, { t: 45, l: 110, h: 6 }, { t: -30, l: 100, h: 4 },
-        { t: 55, l: 120 }, { t: 60, l: 110 }, { t: 80, l: 120, h: -4 }, { t: 70, l: 120, h: -6 }, { t: 0, l: 300 },
-        { t: 45, l: 120, h: 6 }, { t: -20, l: 90 }, { t: 40, l: 140 }] },
-    { id: "singapore", name: "SINGAPORE", gp: "Singapore GP", country: "Singapore", night: true, theme: "street_night", lengthKm: 4.9, baseHW: 6,
-      pal: nightPal({ horizon: [0.08, 0.05, 0.14] }),
-      segs: [{ t: 0, l: 160 }, { t: 60, l: 70 }, { t: -70, l: 70 }, { t: 55, l: 70 }, { t: 0, l: 220 }, { t: 90, l: 70 },
-        { t: 0, l: 200 }, { t: 95, l: 70 }, { t: -90, l: 80 }, { t: 80, l: 60 }, { t: -60, l: 70 }, { t: 90, l: 90 },
-        { t: 0, l: 180 }, { t: 90, l: 70 }, { t: 90, l: 70 }, { t: -85, l: 60 }, { t: 95, l: 80 }] },
-    { id: "cota", name: "COTA", gp: "United States GP", country: "USA", night: false, theme: "green", lengthKm: 5.5, baseHW: 8,
-      pal: dayPal({ zenith: [0.24, 0.50, 0.84], horizon: [0.76, 0.70, 0.54], grass: [0.34, 0.4, 0.14], runoff: [0.6, 0.35, 0.2], ambientSky: [0.52, 0.58, 0.68], ambientGround: [0.28, 0.28, 0.24],
-        sunDir: norm([0.52, 0.54, 0.62]), sun: [1.0, 0.90, 0.70], sunColor: [1.0, 0.88, 0.68] }),
-      segs: [{ t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 },
-        { t: 60, l: 60 }, { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 },
-        { t: 0, l: 460 }, { t: -150, l: 130 }, { t: 70, l: 70 }, { t: -60, l: 70 }, { t: 80, l: 90 }, { t: 90, l: 160 }, { t: -130, l: 110 }] },
-    { id: "interlagos", name: "INTERLAGOS", gp: "São Paulo GP", country: "Brazil", night: false, theme: "green", lengthKm: 4.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.26, 0.4, 0.6], horizon: [0.55, 0.58, 0.6], grass: [0.18, 0.46, 0.18], fog: [0.55, 0.58, 0.6], fogDensity: 0.0019,
-        sunDir: norm([0.18, 0.82, 0.54]), sun: [1.0, 0.95, 0.82], sunColor: [1.0, 0.93, 0.80] }),
-      segs: [{ t: 0, l: 240, h: 8 }, { t: -55, l: 100, h: -10 }, { t: 40, l: 90, h: -6 }, { t: -20, l: 400, h: -4 },
-        { t: -60, l: 110 }, { t: -50, l: 100, h: 6 }, { t: 70, l: 100 }, { t: -80, l: 110 }, { t: 0, l: 160 }, { t: -90, l: 100 },
-        { t: 60, l: 90 }, { t: -70, l: 100 }, { t: -110, l: 140, h: 6 }, { t: -20, l: 440, h: 18 }] },
-    { id: "vegas", name: "LAS VEGAS", gp: "Las Vegas GP", country: "USA", night: true, theme: "street_night", lengthKm: 6.2, baseHW: 7,
-      pal: nightPal({ horizon: [0.1, 0.06, 0.16] }),
-      segs: [{ t: 0, l: 140 }, { t: 90, l: 70 }, { t: -60, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 120 }, { t: -60, l: 60 },
-        { t: 70, l: 60 }, { t: -55, l: 60 }, { t: 0, l: 360 }, { t: 90, l: 80 }, { t: -50, l: 70 }, { t: 0, l: 900, t2: 0 },
-        { t: -20, l: 200 }, { t: 90, l: 90 }, { t: -60, l: 60 }, { t: 70, l: 70 }, { t: 65, l: 120 }] },
-    { id: "madrid", name: "MADRID", gp: "Spanish GP", country: "Spain", night: false, theme: "modern", lengthKm: 5.5, baseHW: 7,
-      pal: dayPal({ zenith: [0.24, 0.46, 0.78], horizon: [0.74, 0.74, 0.72], grass: [0.3, 0.42, 0.2],
-        sunDir: norm([0.12, 0.96, 0.22]), sun: [1.0, 0.99, 0.96], sunColor: [1.0, 0.98, 0.94] }),
-      segs: [{ t: 0, l: 320 }, { t: 70, l: 70 }, { t: -65, l: 70 }, { t: 50, l: 120 }, { t: 0, l: 360 }, { t: 90, l: 80 },
-        { t: -85, l: 70 }, { t: 90, l: 80 }, { t: 0, l: 140 }, { t: 180, l: 240, b: 0.42, w: 9 }, { t: 0, l: 80 },
-        { t: -60, l: 90, h: 6 }, { t: 70, l: 90, h: -4 }, { t: -50, l: 80 }, { t: 80, l: 90 }, { t: 60, l: 130 }] },
-    { id: "zandvoort", name: "ZANDVOORT", gp: "Dutch GP", country: "Netherlands", night: false, theme: "green", lengthKm: 4.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.3, 0.44, 0.62], horizon: [0.72, 0.72, 0.68], grass: [0.42, 0.44, 0.24], runoff: [0.62, 0.54, 0.36], fog: [0.72, 0.72, 0.68], fogDensity: 0.0018,
-        sunDir: norm([0.50, 0.58, 0.46]), sun: [1.0, 0.92, 0.76], sunColor: [1.0, 0.90, 0.74] }),
-      segs: [{ t: 0, l: 260 }, { t: 75, l: 120, b: 0.16 }, { t: -50, l: 90 }, { t: 130, l: 150, b: 0.3 }, { t: 0, l: 180, h: 8 },
-        { t: 40, l: 110, h: -8 }, { t: 60, l: 100 }, { t: -50, l: 90, h: 4 }, { t: 70, l: 90 }, { t: -60, l: 90 }, { t: 90, l: 90 },
-        { t: -50, l: 90 }, { t: 50, l: 90 }, { t: 160, l: 160, b: 0.31, w: 8 }] },
-    { id: "jeddah", name: "JEDDAH", gp: "Saudi Arabian GP", country: "Saudi Arabia", night: true, theme: "street_night", lengthKm: 6.2, baseHW: 6,
-      pal: nightPal({ horizon: [0.12, 0.08, 0.05], concrete: [0.28, 0.27, 0.26], runoff: [0.25, 0.24, 0.22], grass: [0.20, 0.18, 0.14] }),
-      segs: [{ t: 0, l: 700 }, { t: -80, l: 70 }, { t: 75, l: 60 }, { t: 0, l: 120 }, { t: -70, l: 65 }, { t: 70, l: 60 }, { t: 0, l: 300 }, { t: 90, l: 80 }, { t: 0, l: 600 }, { t: 90, l: 80 }, { t: -65, l: 70 }, { t: 70, l: 70 }] },
-    { id: "albert_park", name: "ALBERT PARK", gp: "Australian GP", country: "Australia", night: false, theme: "green", lengthKm: 5.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.22, 0.44, 0.82], horizon: [0.74, 0.78, 0.82], grass: [0.24, 0.50, 0.18], runoff: [0.48, 0.42, 0.32], fogDensity: 0.0012,
-        sunDir: norm([0.60, 0.60, 0.30]), sun: [1.0, 0.95, 0.80], sunColor: [1.0, 0.93, 0.78] }),
-      segs: [{ t: 0, l: 300 }, { t: 50, l: 100 }, { t: -50, l: 90 }, { t: 65, l: 80 }, { t: 0, l: 200 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 260 }, { t: 80, l: 90 }, { t: 0, l: 200 }, { t: 70, l: 80 }] },
-    { id: "shanghai", name: "SHANGHAI", gp: "Chinese GP", country: "China", night: false, theme: "modern", lengthKm: 5.5, baseHW: 8,
-      pal: dayPal({ zenith: [0.28, 0.40, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.20, 0.42, 0.18], runoff: [0.40, 0.40, 0.40], fog: [0.64, 0.66, 0.66], fogDensity: 0.0020,
-        sunDir: norm([0.52, 0.64, 0.28]), sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.90, 0.82] }),
-      segs: [{ t: 0, l: 400 }, { t: 50, l: 130 }, { t: 180, l: 200 }, { t: 50, l: 100 }, { t: 0, l: 250 }, { t: -90, l: 100 }, { t: 0, l: 550 }, { t: -60, l: 90 }, { t: 60, l: 80 }, { t: -70, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 200 }] },
-    { id: "miami", name: "MIAMI", gp: "Miami GP", country: "USA", night: false, theme: "modern", lengthKm: 5.4, baseHW: 7,
-      pal: dayPal({ zenith: [0.22, 0.50, 0.88], horizon: [0.74, 0.80, 0.86], grass: [0.28, 0.50, 0.20], runoff: [0.56, 0.48, 0.34], fogDensity: 0.0010,
-        sunDir: norm([0.30, 0.76, 0.50]), sun: [1.0, 0.96, 0.82], sunColor: [1.0, 0.94, 0.80] }),
-      segs: [{ t: 0, l: 300 }, { t: -60, l: 80 }, { t: 65, l: 70 }, { t: 0, l: 200 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 70, l: 80 }, { t: 0, l: 400 }, { t: -80, l: 90 }, { t: 80, l: 90 }, { t: 0, l: 240 }] },
-    { id: "imola", name: "IMOLA", gp: "Emilia Romagna GP", country: "Italy", night: false, theme: "green", lengthKm: 4.9, baseHW: 7,
-      pal: dayPal({ zenith: [0.24, 0.44, 0.74], horizon: [0.72, 0.76, 0.74], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36],
-        sunDir: norm([0.72, 0.50, 0.26]), sun: [1.0, 0.90, 0.65], sunColor: [1.0, 0.88, 0.62] }),
-      segs: [{ t: 0, l: 450 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -70, l: 90 }, { t: 60, l: 80 }, { t: 80, l: 100 }, { t: 0, l: 400 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 0, l: 180 }, { t: 80, l: 90 }, { t: -100, l: 110 }] },
-    { id: "montreal", name: "MONTREAL", gp: "Canadian GP", country: "Canada", night: false, theme: "green", lengthKm: 4.4, baseHW: 7,
-      pal: dayPal({ zenith: [0.28, 0.44, 0.70], horizon: [0.68, 0.74, 0.80], grass: [0.22, 0.48, 0.18], runoff: [0.42, 0.40, 0.38], fogDensity: 0.0014,
-        sunDir: norm([0.44, 0.52, 0.52]), sun: [1.0, 0.92, 0.78], sunColor: [1.0, 0.90, 0.76] }),
-      segs: [{ t: 0, l: 380 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 0, l: 300 }, { t: 90, l: 90 }, { t: 0, l: 420 }, { t: -80, l: 90 }, { t: 60, l: 70 }, { t: -60, l: 70 }, { t: 0, l: 220 }, { t: 100, l: 110 }, { t: -100, l: 110 }] },
-    { id: "redbull", name: "RED BULL RING", gp: "Austrian GP", country: "Austria", night: false, theme: "green", lengthKm: 4.3, baseHW: 7,
-      pal: dayPal({ zenith: [0.26, 0.46, 0.80], horizon: [0.66, 0.76, 0.86], grass: [0.22, 0.52, 0.18], runoff: [0.42, 0.38, 0.30], fogDensity: 0.0012,
-        sunDir: norm([0.50, 0.54, 0.40]), sun: [1.0, 0.94, 0.82], sunColor: [1.0, 0.92, 0.80] }),
-      segs: [{ t: 0, l: 280 }, { t: -90, l: 100, h: 12 }, { t: 90, l: 90 }, { t: -100, l: 110, h: 8 }, { t: 80, l: 90 }, { t: 0, l: 220, h: -10 }, { t: -70, l: 80 }, { t: 80, l: 90 }, { t: 0, l: 480, h: -10 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 }] },
-    { id: "hungaroring", name: "HUNGARORING", gp: "Hungarian GP", country: "Hungary", night: false, theme: "green", lengthKm: 4.4, baseHW: 7,
-      pal: dayPal({ zenith: [0.26, 0.44, 0.72], horizon: [0.70, 0.74, 0.76], grass: [0.22, 0.46, 0.16], runoff: [0.48, 0.44, 0.34], fogDensity: 0.0016,
-        sunDir: norm([0.68, 0.54, 0.30]), sun: [1.0, 0.88, 0.66], sunColor: [1.0, 0.86, 0.64] }),
-      segs: [{ t: 0, l: 300 }, { t: 70, l: 90 }, { t: -50, l: 80 }, { t: 60, l: 80 }, { t: 0, l: 200 }, { t: -80, l: 100 }, { t: 50, l: 80 }, { t: -60, l: 80 }, { t: 60, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 200 }, { t: -90, l: 100 }, { t: 70, l: 90 }] },
-    { id: "baku", name: "BAKU", gp: "Azerbaijan GP", country: "Azerbaijan", night: true, theme: "street_night", lengthKm: 6.0, baseHW: 6,
-      pal: nightPal({ horizon: [0.06, 0.08, 0.14] }),
-      segs: [{ t: 0, l: 200 }, { t: 90, l: 80 }, { t: -80, l: 70 }, { t: 0, l: 800 }, { t: 90, l: 80 }, { t: 0, l: 400 }, { t: -70, l: 70 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 600 }, { t: -80, l: 80 }] },
-    { id: "mexico", name: "MEXICO CITY", gp: "Mexican GP", country: "Mexico", night: false, theme: "modern", lengthKm: 4.3, baseHW: 8,
-      pal: dayPal({ zenith: [0.24, 0.48, 0.88], horizon: [0.74, 0.78, 0.82], grass: [0.28, 0.42, 0.18], runoff: [0.52, 0.38, 0.24], fogDensity: 0.0010,
-        sunDir: norm([0.24, 0.86, 0.44]), sun: [1.0, 0.98, 0.88], sunColor: [1.0, 0.96, 0.86] }),
-      segs: [{ t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 }, { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 }] },
-    { id: "qatar", name: "QATAR", gp: "Qatar GP", country: "Qatar", night: true, theme: "desert", lengthKm: 5.4, baseHW: 8,
-      pal: nightPal({ horizon: [0.14, 0.10, 0.06], concrete: [0.28, 0.26, 0.24], runoff: [0.24, 0.22, 0.20], grass: [0.20, 0.18, 0.14] }),
-      segs: [{ t: 0, l: 300 }, { t: -60, l: 90 }, { t: 80, l: 100 }, { t: -70, l: 90 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 70, l: 90 }, { t: 0, l: 400 }, { t: -60, l: 90 }, { t: 70, l: 90 }, { t: 0, l: 300 }] },
-    { id: "abudhabi", name: "ABU DHABI", gp: "Abu Dhabi GP", country: "UAE", night: true, theme: "desert", lengthKm: 5.3, baseHW: 8,
-      pal: nightPal({ horizon: [0.12, 0.08, 0.06], concrete: [0.26, 0.25, 0.24], runoff: [0.22, 0.21, 0.20], grass: [0.18, 0.16, 0.12] }),
-      segs: [{ t: 0, l: 300 }, { t: -60, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 400 }, { t: 90, l: 100 }, { t: 0, l: 200 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 60, l: 80 }, { t: 90, l: 100 }, { t: -60, l: 80 }] },
-  ];
+  // Circuit definitions live in js/tracks/<id>.js — each registers itself on the
+  // global TrackDefs list (loaded before this engine). Palette is resolved here
+  // from the `night` flag; bridges/elevations/street travel with each def.
+  const DEFS = (typeof window !== "undefined" && window.TrackDefs) || [];
 
   // Real circuit centerlines (js/circuits.js): projected OSM traces in metres.
   // We use the real layout instead of the authored segment lists. Points are
@@ -1768,7 +1625,12 @@ const Tracks = (function () {
   }
 
   const LIST = DEFS.map((d) => {
-    const def = { id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3, night: d.night, theme: d.theme, lengthKm: d.lengthKm, palette: d.pal };
+    const def = {
+      id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
+      night: d.night, theme: d.theme, lengthKm: d.lengthKm,
+      palette: (d.night ? nightPal : dayPal)(d.pal || {}),
+      street: !!d.street, bridges: d.bridges || null, elevations: d.elevations || null,
+    };
     def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
     return def;
   });
