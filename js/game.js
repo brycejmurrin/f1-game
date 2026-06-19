@@ -1180,7 +1180,10 @@ function tickUi() { if (soundOn) GameAudio.uiTick(); }
 function steerLabel() {
   if (steerMode === "buttons") return "STEER: BUTTONS";
   if (steerMode === "touch") return "STEER: TOUCH";
-  return "STEER: TILT" + (Input.gyroSeen ? "" : " (NO GYRO)");
+  // Only warn when the gyro is genuinely unavailable/denied — not in the brief
+  // window before the first sensor reading arrives (which would falsely show
+  // "(NO GYRO)" on phones that have a working gyro).
+  return "STEER: TILT" + (Input.gyroDenied ? " (NO GYRO)" : "");
 }
 
 function enableTilt() {
