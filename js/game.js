@@ -626,6 +626,7 @@ function quitToMenu() {
   state = "menu"; paused = false;
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
+  $("advanced").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
   rainCanvas.style.display = "none";
@@ -1798,6 +1799,9 @@ $("mb-season").onclick = () => {
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
+// Advanced steering: opened from the pause menu, closes back to it.
+$("pm-advanced").onclick = () => { $("advanced").hidden = false; };
+$("adv-close").onclick = () => { $("advanced").hidden = true; };
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
 
 function buildRaceSettings() {
@@ -1925,6 +1929,7 @@ function setPaused(p) {
   if (state !== "race" && state !== "count") return;
   paused = p;
   els.pausemenu.hidden = !p;
+  if (!p) $("advanced").hidden = true;   // never leave the overlay up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();

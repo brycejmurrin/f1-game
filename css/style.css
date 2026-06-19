@@ -84,22 +84,30 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .panel h2 { color: var(--red); margin-bottom: 14px; }
 .panel button { display: block; width: 100%; margin: 8px 0; }
 
-/* steering tuning sliders (pause menu) */
-#pm-tune {
-  margin: 8px 0;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+/* ---------- advanced steering panel ---------- */
+#advanced { position: fixed; inset: 0; z-index: 41; background: rgba(0, 0, 0, 0.6); }
+#advanced-inner { width: min(94vw, 600px); }
+#adv-close { position: absolute; top: 10px; right: 10px; width: 36px; padding: 6px; }
+.adv-intro { font-size: 12px; opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
+.adv-sec {
+  color: var(--red); font-size: 12px; letter-spacing: 0.08em;
+  margin: 16px 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
-.tune-row { display: block; margin: 6px 0; }
+.adv-sec span {
+  color: rgba(255, 255, 255, 0.45); font-size: 10px;
+  letter-spacing: 0.02em; margin-left: 6px;
+}
+.adv-item { margin: 11px 0; }
+.adv-help { font-size: 11px; opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
+.tune-row { display: block; margin: 0; }
 .tune-label {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 11px; letter-spacing: 0.04em; opacity: 0.85; margin-bottom: 2px;
+  font-size: 12px; letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
 }
-.tune-label b { color: var(--red); font-size: 12px; }
-#pm-tune input[type="range"] {
-  width: 100%; margin: 0; accent-color: var(--red); height: 22px; cursor: pointer;
+.tune-label b { color: var(--red); font-size: 13px; }
+.tune-row input[type="range"] {
+  width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
 }
 
 /* ---------- main menu ---------- */
@@ -631,11 +639,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
   #pausemenu h2 { grid-column: 1 / -1; }
   #pausemenu button { margin: 4px 0; }
-  #pm-tune {
-    grid-column: 1 / -1; margin: 4px 0; padding: 8px 10px;
-    display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px;
+  /* advanced panel: two columns of settings so it fits a sideways phone */
+  #advanced-inner { width: min(96vw, 820px); }
+  #advanced-inner .adv-item {
+    display: inline-block; width: calc(50% - 8px); vertical-align: top;
+    margin: 8px 0; padding-right: 12px; box-sizing: border-box;
   }
-  .tune-row { margin: 4px 0; }
+  .adv-sec { margin-top: 10px; }
 
   /* customize form: compact rows so SAVE/CANCEL stay visible */
   #customize .cz-row { margin: 4px 0; font-size: 12px; }
