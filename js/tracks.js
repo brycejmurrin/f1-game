@@ -1113,14 +1113,18 @@ const Tracks = (function () {
     }
     // Zandvoort: North Sea coastal features and dune landscape
     if (def.id === "zandvoort") {
-      // Water horizon (North Sea far)
+      // North Sea horizon: a single distant water strip far beyond the dunes.
+      // Anchored well below pyMin (the lowest track point) and pushed far out so
+      // it reads as a sliver on the horizon — never a flat plane floating into
+      // the cockpit on the banked, elevation-changing sections. The foreground
+      // beach slab was removed: the dune mounds below already cover the verge,
+      // and a large near-grade plane is exactly what produced the wall.
       const ksea = Math.round(n * 0.4) % n;
       const kser = [track.rx[ksea], track.ry[ksea], track.rz[ksea]];
-      addBox(out, [px[ksea] + kser[0] * 280, py[ksea] - 4, pz[ksea] + kser[2] * 280],
-             [500, 3, 600], [0.08, 0.22, 0.38]);  // sea water
-      // Beach area
-      addBox(out, [px[ksea] + kser[0] * 150, py[ksea] - 2.5, pz[ksea] + kser[2] * 150],
-             [300, 1.6, 400], [0.78, 0.72, 0.6]);  // sand beach
+      const seaX = px[ksea] + kser[0] * 420, seaZ = pz[ksea] + kser[2] * 420;
+      // 9m below the lowest track point, so even over a parallel stretch it
+      // stays under the road — no onTrack rejection needed.
+      addBox(out, [seaX, pyMin - 9, seaZ], [520, 3, 520], [0.10, 0.26, 0.42]);
       // Distant wind turbines (Dutch renewable energy)
       for (let i = 0; i < 4; i++) {
         const k = Math.round((i / 4) * n) % n;
