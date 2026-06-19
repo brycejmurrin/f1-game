@@ -185,6 +185,7 @@ let track = null, builtTrackId = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
+let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
 let seasonMode = false;
 let timeTrial = false;      // solo run against the clock, no AI
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
@@ -1110,20 +1111,36 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, 4, dt);
 
-  // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-  // blows the horizontal field out past ~100°, which makes the car look tiny and
-  // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-  // readable size; portrait (narrow) is unaffected.
-  let fovY = camFov * Math.PI / 180;
-  const HFOV_MAX = 86 * Math.PI / 180;
-  const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(GLX.aspect, 0.0001));
-  fovY = Math.min(fovY, fovYCap);
+  // Debug free camera (set via __apex.view) overrides the chase cam — instant
+  // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
+  // whole-track layouts and trackside scenery from any angle.
+  let fovY, farPlane = 900;
+  if (dbgCam) {
+    camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
+    camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
+    fovY = dbgCam.fov * Math.PI / 180;
+    farPlane = dbgCam.far;
+  } else {
+    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
+    // blows the horizontal field out past ~100°, which makes the car look tiny and
+    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
+    // readable size; portrait (narrow) is unaffected.
+    fovY = camFov * Math.PI / 180;
+    const HFOV_MAX = 86 * Math.PI / 180;
+    const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(GLX.aspect, 0.0001));
+    fovY = Math.min(fovY, fovYCap);
+  }
 
-  const proj = M4.perspective(fovY, GLX.aspect, 0.1, 900);
+  const proj = M4.perspective(fovY, GLX.aspect, 0.1, farPlane);
   const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
   frame.viewProj = M4.mul(proj, view);
   frame.eye = camEye;
-  GLX.begin(frame);
+  if (dbgCam) {
+    const bf = frame.fogDensity;
+    frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
+    GLX.begin(frame);
+    frame.fogDensity = bf;
+  } else GLX.begin(frame);
   frameSky.invViewProj = M4.invert(frame.viewProj);
   GLX.drawSky(frameSky);
 
@@ -1749,6 +1766,46 @@ window.__apex = {
     return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // Debug free camera for inspecting track layouts/scenery. Call with no args (or
+  // {mode:'chase'}) to restore the normal chase cam. Options:
+  //   { s, radius }      focus on lap-fraction s (else the whole-track bbox)
+  //   { azimuth, elevation, zoom, fov, fog }   aerial framing controls (degrees)
+  //   { eye:[x,y,z], target:[x,y,z], fov }     fully explicit free camera
+  // Returns the resolved {eye, target, span}.
+  view(opts) {
+    if (!track) return false;
+    if (!opts || opts === "chase" || opts.mode === "chase") { dbgCam = null; return { mode: "chase" }; }
+    if (opts.eye && opts.target) {
+      dbgCam = { eye: opts.eye.slice(), target: opts.target.slice(), fov: opts.fov || 60, far: opts.far || 6000, fog: opts.fog };
+      return dbgCam;
+    }
+    // centre + span: a focus point at lap-fraction s, or the whole-track bbox
+    let cx, cy, cz, span;
+    if (opts.s != null) {
+      Tracks.sample(track, opts.s * track.total, smp);
+      cx = smp.p[0]; cy = smp.p[1]; cz = smp.p[2];
+      span = opts.radius || 180;
+    } else {
+      let nx = Infinity, xx = -Infinity, nz = Infinity, xz = -Infinity, ny = Infinity, xy = -Infinity;
+      for (let i = 0; i < track.n; i++) {
+        const x = track.px[i], z = track.pz[i], y = track.py[i];
+        if (x < nx) nx = x; if (x > xx) xx = x; if (z < nz) nz = z; if (z > xz) xz = z;
+        if (y < ny) ny = y; if (y > xy) xy = y;
+      }
+      cx = (nx + xx) / 2; cy = (ny + xy) / 2; cz = (nz + xz) / 2;
+      span = Math.max(xx - nx, xz - nz);
+    }
+    const az = (opts.azimuth != null ? opts.azimuth : 35) * Math.PI / 180;
+    const el = Math.min(85, Math.max(5, opts.elevation != null ? opts.elevation : 55)) * Math.PI / 180;
+    const dist = span * (opts.zoom != null ? opts.zoom : 1.0) * 0.95 + 60;
+    const eye = [
+      cx + Math.cos(el) * Math.sin(az) * dist,
+      cy + Math.sin(el) * dist,
+      cz + Math.cos(el) * Math.cos(az) * dist,
+    ];
+    dbgCam = { eye, target: [cx, cy, cz], fov: opts.fov || 55, far: Math.max(6000, dist * 4), fog: opts.fog };
+    return { eye, target: [cx, cy, cz], span: Math.round(span) };
+  },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
   // mid-track straight with overlapping lateral positions and equal speed; every
   // other car (incl. the player) is shoved far away. Returns the two test ids.
