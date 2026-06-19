@@ -746,8 +746,10 @@ const Tracks = (function () {
           const s = hash(k * 5 + side), h = 14 + s * 40;
           const neon = [[0.9, 0.1, 0.6], [0.1, 0.8, 0.9], [0.95, 0.75, 0.1], [0.5, 0.2, 0.9]][Math.floor(s * 4) % 4];
           // set taller towers further back so they don't fill the FOV and clip at
-          // the viewport edge as the camera passes; short blocks stay near the wall.
-          const dist = 9 + s * 18;
+          // the viewport edge as the camera passes; even short blocks must clear
+          // their own half-width plus the barrier so no tower face becomes a wall
+          // beside the car.
+          const dist = 18 + s * 18;
           place(k, side, dist, [8, h, 8], [0.05, 0.05, 0.08]);
           place(k, side, dist, [8.2, 2 + s * 3, 8.2], neon);  // glowing band
         }
@@ -1064,14 +1066,19 @@ const Tracks = (function () {
 
     // --- Monaco harbour: water + moored yachts along the start straight ---
     if (def.id === "monaco") {
-      // Casino Square building (ornate 1865 structure visible from Casino corner, ~Turn 9-10)
+      // Casino Square building (ornate 1865 structure visible from Casino corner, ~Turn 9-10).
+      // Offset must clear the box's own half-width (24m) plus the road so the
+      // 48m-wide structure never sits on the tarmac. Anchored well back.
       const kcs = Math.round(n * 0.32) % n;
       const kcsr = [track.rx[kcs], track.ry[kcs], track.rz[kcs]];
-      const csX = px[kcs] + kcsr[0] * (hw[kcs] + 8);
-      const csZ = pz[kcs] + kcsr[2] * (hw[kcs] + 8);
-      addBox(out, [csX, py[kcs] + 22, csZ], [48, 44, 36], [0.82, 0.78, 0.68]); // Casino main structure
-      for (let i = 0; i < 4; i++) {
-        addBox(out, [csX - 20 + i * 15, py[kcs] + 32, csZ], [8, 20, 8], [0.92, 0.9, 0.85]); // ornate columns
+      const csX = px[kcs] + kcsr[0] * (hw[kcs] + 50);
+      const csZ = pz[kcs] + kcsr[2] * (hw[kcs] + 50);
+      if (!onTrack(csX, csZ, 26)) {
+        addBox(out, [csX, py[kcs] + 22, csZ], [48, 44, 36], [0.82, 0.78, 0.68]); // Casino main structure
+        for (let i = 0; i < 4; i++) {
+          addBox(out, [csX + kcsr[0] * (-20 + i * 15), py[kcs] + 32, csZ + kcsr[2] * (-20 + i * 15)],
+                 [8, 20, 8], [0.92, 0.9, 0.85]); // ornate columns
+        }
       }
 
       for (let i = 0; i < 13; i++) {
