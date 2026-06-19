@@ -1021,11 +1021,22 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * gripMult() * dt;
-  // Without this the Frenet frame auto-steers the car: constant x = automatic
-  // corner-following, no input needed. Counter-force scaled to ~5-10% steering
-  // lock for a typical corner — noticeable but not aggressive.
-  if (c.isPlayer) c.x -= k * c.speed * c.speed * 0.08 * dt;
+  // Angle-based steering for the player: track the car's heading offset (radians)
+  // relative to the track tangent. The Frenet tangent rotates with curvature, so
+  // without inward input the angle drifts and the car slides to the outside —
+  // real physics, no magic counter-force. Steering rotates the heading; the
+  // curvature term is the exact maths behind "centrifugal force" in the Frenet frame.
+  if (c.isPlayer) {
+    if (c.angle === undefined) c.angle = 0;
+    const auth = latFac * gripScale * kerbGrip * gripMult() * playerMods.cornering;
+    c.angle += steer * 6.0 * auth * dt;      // steering input rotates heading
+    c.angle -= k * c.speed * dt;             // Frenet curvature rotates reference frame
+    c.angle = clamp(c.angle, -0.52, 0.52);  // tyre slip angle limit (~30°)
+    c.x += c.speed * Math.sin(c.angle) * dt;
+    steer = clamp(c.angle / 0.52, -1, 1);   // normalise for visual yaw below
+  } else {
+    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * dt;
+  }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
@@ -1038,6 +1049,11 @@ function updateCar(c, dt, ranked) {
   const wall = track.street ? hw - 0.8 : hw + 9;
   if (Math.abs(c.x) > wall) {
     c.x = c.x > 0 ? wall : -wall;
+    // Stop the angle pressing the car further into the wall.
+    if (c.isPlayer && c.angle !== undefined) {
+      if (c.x >= wall) c.angle = Math.min(c.angle, 0);
+      else             c.angle = Math.max(c.angle, 0);
+    }
     if (track.street) {
       // First-frame contact: instant speed hit so the impact is felt immediately.
       if (!c.wasOnWall) c.speed *= 0.72;
