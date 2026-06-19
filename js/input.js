@@ -22,6 +22,7 @@ const Input = (function () {
   const DEADZONE = 1.5;       // degrees ignored around the calibrated zero
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
+  const DEG = Math.PI / 180;
 
   // keyboard
   let keyLeft = false;
@@ -82,16 +83,28 @@ const Input = (function () {
 
   function onOrient(e) {
     if (e.beta === null && e.gamma === null) return;
-    const beta = e.beta || 0;
-    const gamma = e.gamma || 0;
-    let t;
+    // Build the gravity direction in device coordinates from the Euler angles
+    // (independent of alpha/compass). Steering off a gravity-based ROLL — rather
+    // than the raw beta/gamma angle — keeps the response smooth and consistent
+    // however upright the phone is held: raw Euler angles jump and rescale near
+    // gimbal lock (phone near vertical), which made tilt "act differently" when
+    // held up vs laid flat. At flat the roll equals gamma/beta, so the familiar
+    // feel is preserved.
+    const beta = (e.beta || 0) * DEG;     // front-back (X)
+    const gamma = (e.gamma || 0) * DEG;   // left-right (Y)
+    const cb = Math.cos(beta), sb = Math.sin(beta);
+    const cg = Math.cos(gamma), sg = Math.sin(gamma);
+    const gx = sg * cb;   // gravity along device right
+    const gy = -sb;       // gravity along device top
+    const gz = -cg * cb;  // gravity along device out-of-screen
+    let h, v;             // gravity along screen-right (h) vs the rest (v)
     switch (((screenAngle() % 360) + 360) % 360) {
-      case 90:  t = beta;   break;
-      case 180: t = -gamma; break;
-      case 270: t = -beta;  break;
-      default:  t = gamma;  break;
+      case 90:  h = -gy; v = Math.hypot(gx, gz); break;
+      case 180: h = -gx; v = Math.hypot(gy, gz); break;
+      case 270: h =  gy; v = Math.hypot(gx, gz); break;
+      default:  h =  gx; v = Math.hypot(gy, gz); break;
     }
-    tiltRaw = t;
+    tiltRaw = Math.atan2(h, v) / DEG;   // signed roll in degrees
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
     lastOrientMs = n;
