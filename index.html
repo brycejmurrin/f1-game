@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=54">
-<link rel="stylesheet" href="css/data.css?v=54">
+<link rel="stylesheet" href="css/style.css?v=55">
+<link rel="stylesheet" href="css/data.css?v=55">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -75,7 +75,7 @@
 <!-- main menu -->
 <div id="overlay">
   <h1 id="title">APEX&nbsp;26</h1>
-  <p id="subtitle">2026 grid &middot; 12 real circuits &middot; tilt to steer</p>
+  <p id="subtitle">2026 grid &middot; 24 real circuits &middot; tilt to steer</p>
   <div id="menu-buttons">
     <button id="mb-race" class="bigbtn">RACE</button>
     <button id="mb-tt" class="bigbtn">TIME TRIAL</button>
@@ -96,6 +96,27 @@
   <div class="sel-actions">
     <button id="sel-back">BACK</button>
     <button id="sel-go" class="bigbtn">START</button>
+  </div>
+</div>
+
+<!-- race settings -->
+<div id="race-settings" class="panel" hidden>
+  <h2>RACE SETTINGS</h2>
+  <div class="rs-row">
+    <div class="rs-label">LAPS</div>
+    <div id="rs-laps"></div>
+  </div>
+  <div class="rs-row">
+    <div class="rs-label">WEATHER</div>
+    <div id="rs-weather"></div>
+  </div>
+  <div class="rs-row" id="rs-time-section">
+    <div class="rs-label">TIME OF DAY</div>
+    <div id="rs-time"></div>
+  </div>
+  <div class="sel-actions">
+    <button id="rs-cancel">BACK</button>
+    <button id="rs-go" class="bigbtn">RACE!</button>
   </div>
 </div>
 
@@ -162,17 +183,17 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=54"></script>
-<script src="js/glx.js?v=54"></script>
-<script src="js/teams.js?v=54"></script>
-<script src="js/circuits.js?v=54"></script>
-<script src="js/tracks.js?v=54"></script>
-<script src="js/car3d.js?v=54"></script>
-<script src="js/input.js?v=54"></script>
-<script src="js/audio.js?v=54"></script>
-<script src="js/api.js?v=54"></script>
-<script src="js/data.js?v=54"></script>
-<script src="js/parts.js?v=54"></script>
-<script src="js/game.js?v=54"></script>
+<script src="js/mat4.js?v=55"></script>
+<script src="js/glx.js?v=55"></script>
+<script src="js/teams.js?v=55"></script>
+<script src="js/circuits.js?v=55"></script>
+<script src="js/tracks.js?v=55"></script>
+<script src="js/car3d.js?v=55"></script>
+<script src="js/input.js?v=55"></script>
+<script src="js/audio.js?v=55"></script>
+<script src="js/api.js?v=55"></script>
+<script src="js/data.js?v=55"></script>
+<script src="js/parts.js?v=55"></script>
+<script src="js/game.js?v=55"></script>
 </body>
 </html>

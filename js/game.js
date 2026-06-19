@@ -33,6 +33,41 @@ const els = {
 
 if (!GLX.init(canvas)) { $("nogl").hidden = false; return; }
 
+// ---------- rain overlay ----------
+const rainCanvas = document.createElement("canvas");
+rainCanvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;display:none;";
+document.body.appendChild(rainCanvas);
+const rainCtx2d = rainCanvas.getContext("2d");
+let rainDrops = [];
+function initRainDrops() {
+  rainCanvas.width = window.innerWidth;
+  rainCanvas.height = window.innerHeight;
+  rainDrops = Array.from({ length: 220 }, () => ({
+    x: Math.random() * rainCanvas.width,
+    y: Math.random() * rainCanvas.height,
+    len: 12 + Math.random() * 18,
+    speed: 300 + Math.random() * 250,
+    opacity: 0.18 + Math.random() * 0.30,
+  }));
+}
+function drawRain(dt) {
+  const w = rainCanvas.width, h = rainCanvas.height;
+  rainCtx2d.clearRect(0, 0, w, h);
+  rainCtx2d.lineWidth = 1;
+  for (const d of rainDrops) {
+    d.y += d.speed * dt;
+    d.x += d.speed * dt * 0.18;
+    if (d.y - d.len > h || d.x > w) { d.y = -d.len; d.x = Math.random() * w; }
+    rainCtx2d.globalAlpha = d.opacity;
+    rainCtx2d.strokeStyle = "#afc8e8";
+    rainCtx2d.beginPath();
+    rainCtx2d.moveTo(d.x, d.y);
+    rainCtx2d.lineTo(d.x + d.len * 0.18, d.y + d.len);
+    rainCtx2d.stroke();
+  }
+  rainCtx2d.globalAlpha = 1;
+}
+
 // ---------- settings ----------
 const store = {
   get(k, d) { try { const v = localStorage.getItem("apex26." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -139,6 +174,7 @@ const DIFF = {
 };
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
+function gripMult() { return raceWeather === "wet" ? 0.72 : 1; }
 
 // ---------- state ----------
 let state = "menu";
@@ -149,6 +185,9 @@ let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let seasonMode = false;
 let timeTrial = false;      // solo run against the clock, no AI
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
+let raceLaps = GAME_LAPS;      // user-selected lap count
+let raceWeather = "dry";       // "dry" | "wet"
+let raceTimeOfDay = "default"; // "default" | "day" | "night"
 let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
 let ttNewRecord = false;    // set when the player takes provisional pole this session
 let ttLaps = [];            // completed lap times this time-trial session
@@ -274,10 +313,11 @@ function teamMesh(team) {
 // ---------- track loading ----------
 function loadTrack(idx) {
   const def = Tracks.LIST[idx];
-  if (builtTrackId === def.id) return;
-  track = Tracks.build(def);
-  builtTrackId = def.id;
-  minimapBg = null;           // force minimap redraw for new track
+  if (builtTrackId !== def.id) {
+    track = Tracks.build(def);
+    builtTrackId = def.id;
+    minimapBg = null;           // force minimap redraw for new track
+  }
   const pal = def.palette;
   frame = {
     viewProj: M4.ident(), eye: camEye,
@@ -292,19 +332,50 @@ function loadTrack(idx) {
 }
 
 // ---------- race flow ----------
+function applyRaceSettings() {
+  if (raceTimeOfDay !== "default") {
+    const night = raceTimeOfDay === "night";
+    frameSky.stars = night ? 1 : 0;
+    if (night) {
+      frameSky.zenith = [0.01, 0.02, 0.05];
+      frameSky.horizon = [0.04, 0.03, 0.06];
+      frame.sunColor = [0.3, 0.3, 0.4];
+      frame.ambientGround = [0.03, 0.03, 0.06];
+      frame.ambientSky = [0.08, 0.08, 0.14];
+      frame.fogColor = [0.03, 0.03, 0.06];
+      frame.fogDensity = 0.004;
+    } else {
+      frameSky.zenith = [0.25, 0.42, 0.80];
+      frameSky.horizon = [0.70, 0.75, 0.82];
+      frame.sunColor = [1.0, 0.95, 0.80];
+      frame.ambientGround = [0.22, 0.20, 0.18];
+      frame.ambientSky = [0.45, 0.48, 0.60];
+      frame.fogColor = [0.72, 0.72, 0.72];
+      frame.fogDensity = 0.0015;
+    }
+  }
+}
+
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
   if (timeTrial) {
     cars = [player];          // solo against the clock — no AI on track
-    lapsTarget = TT_LAPS;
+    lapsTarget = raceLaps;
     const board = ttBoard(track.def.id);
     ttRecord = board.length ? board[0].t : Infinity;
     ttNewRecord = false;
     ttLaps = [];
     ttSessionTs = Date.now();
   } else {
-    lapsTarget = GAME_LAPS;
+    lapsTarget = raceLaps;
+  }
+  applyRaceSettings();
+  if (raceWeather === "wet") {
+    initRainDrops();
+    rainCanvas.style.display = "block";
+  } else {
+    rainCanvas.style.display = "none";
   }
   gridUp();
   recomputePlayerMods();
@@ -453,6 +524,8 @@ function quitToMenu() {
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
   els.overlay.hidden = false;
+  $("race-settings").hidden = true;
+  rainCanvas.style.display = "none";
   els.soundbtn.hidden = false;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0);
@@ -697,7 +770,7 @@ function updateCar(c, dt, ranked) {
     const look = clamp(c.speed * 1.7, 30, 160);
     let kMax = 0;
     for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
-    const vCorner = Math.sqrt(LAT_MAX / Math.max(kMax, 1e-5)) * c.skill;
+    const vCorner = Math.sqrt(LAT_MAX * gripMult() / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
     // queue behind the car blocking our lane (prog-based, so it's immune to the
     // frame-to-frame rank swapping of near-even cars): cap our pace to it and
@@ -862,7 +935,7 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * dt;
+  c.x += steer * STEER_VMAX * (c.isPlayer ? playerMods.cornering : 1) * latFac * gripScale * kerbGrip * gripMult() * dt;
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
     c.skidIntensity = c.offroad ? 0.5
@@ -1019,7 +1092,7 @@ function render(dt) {
   frameSky.invViewProj = M4.invert(frame.viewProj);
   GLX.drawSky(frameSky);
 
-  const night = track.def.night;
+  const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
   GLX.draw(track.meshes.terrain, M4.ident());
   GLX.draw(track.meshes.road, M4.ident(), night ? { emissive: 0.25 } : undefined);
   GLX.draw(track.meshes.props, M4.ident(), night ? { emissive: 0.45 } : undefined);
@@ -1073,6 +1146,7 @@ function render(dt) {
       }
     }
   }
+  if (raceWeather === "wet" && rainDrops.length) drawRain(dt);
 }
 
 // ---------- HUD ----------
@@ -1402,7 +1476,57 @@ $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect()
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
-els.selGo.onclick = () => { if (soundOn) GameAudio.uiSelect(); if (steerMode === "tilt") enableTilt(); startRace(); };
+
+function buildRaceSettings() {
+  const lapOpts = timeTrial ? [3, 5, 8] : [3, 5, 10, 25, 57];
+  const lapsEl = $("rs-laps");
+  lapsEl.innerHTML = "";
+  for (const n of lapOpts) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceLaps === n ? " active" : "");
+    b.textContent = n === 57 ? "57 (FULL)" : String(n);
+    b.onclick = () => { raceLaps = n; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    lapsEl.appendChild(b);
+  }
+  const weatherEl = $("rs-weather");
+  weatherEl.innerHTML = "";
+  for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "🌧"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceWeather === id ? " active" : "");
+    b.textContent = icon + " " + label;
+    b.onclick = () => { raceWeather = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    weatherEl.appendChild(b);
+  }
+  const timeEl = $("rs-time");
+  timeEl.innerHTML = "";
+  for (const [id, label] of [["default", "DEFAULT"], ["day", "DAY"], ["night", "NIGHT"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceTimeOfDay === id ? " active" : "");
+    b.textContent = label;
+    b.onclick = () => { raceTimeOfDay = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    timeEl.appendChild(b);
+  }
+}
+
+els.selGo.onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  raceLaps = timeTrial ? TT_LAPS : GAME_LAPS;
+  raceWeather = "dry";
+  raceTimeOfDay = "default";
+  buildRaceSettings();
+  els.select.hidden = true;
+  $("race-settings").hidden = false;
+};
+$("rs-cancel").onclick = () => {
+  $("race-settings").hidden = true;
+  els.select.hidden = false;
+};
+$("rs-go").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  $("race-settings").hidden = true;
+  if (steerMode === "tilt") enableTilt();
+  startRace();
+};
 
 // ---- customize my team ----
 function czPreview() {
