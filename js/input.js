@@ -20,6 +20,7 @@ const Input = (function () {
   // Tilt mechanics ported verbatim from the driving-game (Neon Drift) build.
   let MAX_TILT = 36;          // degrees of tilt for full steering lock (higher = less sensitive)
   let DEADZONE = 2.5;         // degrees ignored around the calibrated zero (slider)
+  let TILT_SLEW = 5;          // max steer units/s the command may change (STEER SMOOTHING slider)
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
   const DEG = Math.PI / 180;
@@ -70,6 +71,10 @@ const Input = (function () {
   let OE_BETA = 0.05;
   const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
   let oePrev = 0, oeDPrev = 0, oeInit = false;
+  // Final output stage: slew-rate limit the steer command toward its target so a
+  // hand jolt can't snap the wheel (TILT_SLEW = units/s, the SMOOTHING slider).
+  let tiltSteerVal = 0;       // last steer command emitted (-1..1)
+  let tiltSteerT = 0;         // timestamp of the last tiltSteering() call (ms)
 
   let onPauseCb = null;
 
