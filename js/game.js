@@ -134,6 +134,7 @@ const VMAX = 94;            // m/s base (~338 km/h) — F1 top end; wider gears,
 const ACCEL = 13;           // m/s^2 at low speed
 const BRAKE = 27;
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
+const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
 const LAT_MAX = 22;         // m/s^2 cornering grip
 const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (also caps the
                             // player's heading model so lateral grip stays bounded)
@@ -184,6 +185,7 @@ let track = null, builtTrackId = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
+let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
 let seasonMode = false;
 let timeTrial = false;      // solo run against the clock, no AI
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
@@ -200,6 +202,13 @@ let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
+// Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
+// so the camera still settles to a parked view yet nothing moves — giving the
+// visual-regression harness a deterministic frame. Only set by __apex.park().
+let frozen = false;
+// When set by __apex.sky(), overrides the normal chase-cam with a horizon-facing
+// view so clouds and the sky gradient are visible in screenshots.
+let skyViewOverride = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let lastFrame = 0;
 let announceT = 0;
@@ -307,9 +316,40 @@ function gridUp() {
 }
 function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
 
+// Optional imported car model (binary glTF / .glb). When loaded, team meshes are
+// built from it — tinted to each livery — instead of the procedural Car3D.
+// null => procedural (the shipped default; there is no bundled model).
+let carModelBuf = null;
+const CAR_MODEL_SCALE = 1;
+
+function buildCarData(team) {
+  if (carModelBuf) {
+    try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: team.color }); }
+    catch (e) { /* any parse trouble: fall through to the procedural car */ }
+  }
+  return Car3D.build(team.color, team.color2);
+}
+
 function teamMesh(team) {
-  if (!teamMeshes[team.id]) teamMeshes[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2));
+  if (!teamMeshes[team.id]) teamMeshes[team.id] = GLX.createMesh(buildCarData(team));
   return teamMeshes[team.id];
+}
+
+// Load an optional .glb car model at runtime. On success, rebuilds every team
+// mesh from it; on any failure (missing file, bad data) silently keeps the
+// procedural car. Returns Promise<boolean>. Not auto-called — so a missing asset
+// never logs a 404 during normal startup. Drop in a model then call this (e.g.
+// from the console or __apex.loadCarModel) once a CC-licensed .glb is available.
+async function loadCarModel(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const buf = await res.arrayBuffer();
+    GLTF.toMesh(buf, { scale: CAR_MODEL_SCALE });   // validate before adopting
+    carModelBuf = buf;
+    for (const k in teamMeshes) delete teamMeshes[k];  // force rebuild from model
+    return true;
+  } catch (e) { return false; }
 }
 
 // ---------- track loading ----------
@@ -326,10 +366,15 @@ function loadTrack(idx) {
     sunDir: V3.norm(pal.sunDir), sunColor: pal.sunColor,
     ambientGround: pal.ambientGround, ambientSky: pal.ambientSky,
     fogColor: pal.fog, fogDensity: pal.fogDensity,
+    skyZenith:  pal.zenith,
+    skyHorizon: pal.horizon,
+    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018,
   };
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
     sunDir: frame.sunDir, sunColor: pal.sun, stars: def.night ? 1 : 0,
+    // procedural cloud coverage 0..1 (night skies stay clearer to show stars)
+    cloud: pal.cloud !== undefined ? pal.cloud : (def.night ? 0.22 : 0.4),
   };
 }
 
@@ -346,6 +391,9 @@ function applyRaceSettings() {
       frame.ambientSky = [0.08, 0.08, 0.14];
       frame.fogColor = [0.03, 0.03, 0.06];
       frame.fogDensity = 0.004;
+      // When raceTimeOfDay !== "default", sync sky colours to frame too
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
     } else {
       frameSky.zenith = [0.25, 0.42, 0.80];
       frameSky.horizon = [0.70, 0.75, 0.82];
@@ -354,7 +402,19 @@ function applyRaceSettings() {
       frame.ambientSky = [0.45, 0.48, 0.60];
       frame.fogColor = [0.72, 0.72, 0.72];
       frame.fogDensity = 0.0015;
+      // When raceTimeOfDay !== "default", sync sky colours to frame too
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
     }
+  }
+  // Wet weather: overcast the sky and flatten the light (soft, diffuse, fewer
+  // shadows) — clouds roll in and the sun is muted while ambient lifts.
+  if (raceWeather === "wet") {
+    frameSky.cloud = 0.9;
+    frame.sunColor = frame.sunColor.map((v) => v * 0.5);
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.65);
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.18));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.18));
   }
 }
 
@@ -381,7 +441,7 @@ function startRace() {
   }
   gridUp();
   recomputePlayerMods();
-  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false;
+  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -697,6 +757,7 @@ function updateCar(c, dt, ranked) {
   if (c.finished) { coast(c, dt); return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
+  const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
   const k = Tracks.curvature(track, c.s);
   const dd = DIFF[difficulty];
 
@@ -819,6 +880,10 @@ function updateCar(c, dt, ranked) {
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
+  // --- slope gravity: on real-elevation circuits the climbs bleed speed and the
+  // descents feed it back. slopeSin is the road tangent's vertical component
+  // (sin of the pitch). Race-only so the grid doesn't creep during the countdown.
+  if (state === "race" && slopeSin) c.speed = Math.max(0, c.speed - GRAVITY_SLOPE * slopeSin * dt);
   if (c.isPlayer) {
     if (!gearsManual()) {
       const ng = naturalGear(c.speed);
@@ -1056,7 +1121,7 @@ function coast(c, dt) {
 // ---------- render ----------
 function render(dt) {
   GLX.resize();
-  if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); return; }
+  if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); GLX.present(); return; }
 
   // camera
   let eyeT, tgtT, fovT;
@@ -1070,14 +1135,17 @@ function render(dt) {
   } else {
     Tracks.sample(track, player.s, smp);
     const px = player.x;
-    const p = [smp.p[0] + smp.r[0] * px, smp.p[1], smp.p[2] + smp.r[2] * px];
+    // ride the bank with the car so the camera doesn't sink into the banked road
+    const bankCam = Tracks.banking(track, player.s, px);
+    const bankDy = bankCam ? bankCam.dy : 0;
+    const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
     // Anchor the camera a FIXED distance behind the player along the track
     // (arc-length), not in world space — so it never lags at high speed and
     // the car stays a constant, readable size.
     Tracks.sample(track, wrapS(player.s - 5.8), smpC);
     const cx = px * 0.5;   // partly follow lateral offset; rest shows position
     eyeT = [
-      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.1, smpC.p[2] + smpC.r[2] * cx,
+      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.1 + bankDy, smpC.p[2] + smpC.r[2] * cx,
     ];
     tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.7, p[2] + smp.t[2] * 4];
     // closer camera + narrower FOV so the car reads bigger; still widens a bit
@@ -1090,6 +1158,14 @@ function render(dt) {
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
   }
+  // Sky-view override: __apex.sky() positions the camera to show the horizon
+  // and clouds instead of the normal low chase angle.
+  if (frozen && skyViewOverride) {
+    eyeT = skyViewOverride.eye;
+    tgtT = skyViewOverride.tgt;
+    fovT = skyViewOverride.fov;
+  }
+
   // High lambda in-race: the anchor already follows the car along the track,
   // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
   const racing = state === "race" || state === "count";
@@ -1101,28 +1177,79 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, 4, dt);
 
-  // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-  // blows the horizontal field out past ~100°, which makes the car look tiny and
-  // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-  // readable size; portrait (narrow) is unaffected.
-  let fovY = camFov * Math.PI / 180;
-  const HFOV_MAX = 86 * Math.PI / 180;
-  const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(GLX.aspect, 0.0001));
-  fovY = Math.min(fovY, fovYCap);
+  // Debug free camera (set via __apex.view) overrides the chase cam — instant
+  // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
+  // whole-track layouts and trackside scenery from any angle.
+  let fovY, farPlane = 900;
+  if (dbgCam) {
+    camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
+    camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
+    fovY = dbgCam.fov * Math.PI / 180;
+    farPlane = dbgCam.far;
+  } else {
+    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
+    // blows the horizontal field out past ~100°, which makes the car look tiny and
+    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
+    // readable size; portrait (narrow) is unaffected.
+    fovY = camFov * Math.PI / 180;
+    const HFOV_MAX = 86 * Math.PI / 180;
+    const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(GLX.aspect, 0.0001));
+    fovY = Math.min(fovY, fovYCap);
+  }
 
-  const proj = M4.perspective(fovY, GLX.aspect, 0.1, 900);
+  const proj = M4.perspective(fovY, GLX.aspect, 0.1, farPlane);
   const view = M4.lookAt(camEye, camTgt, [0, 1, 0]);
   frame.viewProj = M4.mul(proj, view);
   frame.eye = camEye;
-  GLX.begin(frame);
+
+  // Shadow pass — render terrain + road from sun's perspective
+  if (track) {
+    const sd = frame.sunDir;
+    const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
+    const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
+    const lightView = M4.lookAt(
+      [cx + sd[0] * 150, cy + sd[1] * 150, cz + sd[2] * 150],
+      [cx, cy, cz], up
+    );
+    const lightProj = M4.ortho(-70, 70, -70, 70, 1.0, 320);
+    const lightVP = M4.mul(lightProj, lightView);
+    GLX.shadowBegin(lightVP);
+    GLX.castShadow(track.meshes.terrain, M4.ident());
+    GLX.castShadow(track.meshes.road, M4.ident());
+    GLX.castShadow(track.meshes.props, M4.ident());
+    GLX.shadowEnd();
+  }
+
+  if (dbgCam) {
+    const bf = frame.fogDensity;
+    frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
+    GLX.begin(frame);
+    frame.fogDensity = bf;
+  } else GLX.begin(frame);
   frameSky.invViewProj = M4.invert(frame.viewProj);
   GLX.drawSky(frameSky);
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
-  GLX.draw(track.meshes.terrain, M4.ident());
-  GLX.draw(track.meshes.road, M4.ident(), night ? { emissive: 0.25 } : undefined);
-  GLX.draw(track.meshes.props, M4.ident(), night ? { emissive: 0.45 } : undefined);
-  GLX.draw(track.meshes.gate, M4.ident());
+  const wet = raceWeather === "wet";
+  // Per-surface materials drive the GGX specular term.
+  // Wet weather: rain films lower effective roughness dramatically — road becomes
+  // mirror-like, cars and barriers pick up sharper reflections.
+  GLX.draw(track.meshes.terrain, M4.ident(),
+    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.35 }
+          : { roughness: 0.97, specular: 0.06, detail: 0.35 });
+  GLX.draw(track.meshes.road, M4.ident(),
+    wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 }
+                   : { roughness: 0.14, specular: 0.85, detail: 0.06 })
+          : (night ? { emissive: 0.09, roughness: 0.85, specular: 0.20, detail: 0.22 }
+                   : { roughness: 0.85, specular: 0.20, detail: 0.22 }));
+  GLX.draw(track.meshes.props, M4.ident(),
+    wet   ? (night ? { emissive: 0.35, roughness: 0.55, specular: 0.38 }
+                   : { roughness: 0.55, specular: 0.38 })
+          : (night ? { emissive: 0.45, roughness: 0.85, specular: 0.20 }
+                   : { roughness: 0.85, specular: 0.20 }));
+  GLX.draw(track.meshes.gate, M4.ident(),
+    wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
+        : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
 
   // skid marks drawn before cars so cars render on top
   for (const m of skidMarks) {
@@ -1142,8 +1269,11 @@ function render(dt) {
       else c.xVis = damp(c.xVis, c.x, 16, dt);
       renderX = c.xVis;
     }
+    // banking: sit the car ON the banked surface (raise it by the local lift)
+    // instead of the flat centreline, so it doesn't float/sink in the corner.
+    const bankC = Tracks.banking(track, c.s, renderX);
     tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
-    tmpP[1] = smp2.p[1];
+    tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
     tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
     // yaw the forward/right around up by yawVis
     const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
@@ -1154,9 +1284,23 @@ function render(dt) {
     tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
     tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
     tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+    // roll the right/up basis about the forward axis so the car leans with the bank
+    if (bankC && bankC.roll) {
+      const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
+      for (let i = 0; i < 3; i++) {
+        const r = tmpR[i], u = tmpU[i];
+        tmpR[i] = r * cr + u * sr;
+        tmpU[i] = u * cr - r * sr;
+      }
+    }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     GLX.drawShadow(tmpMat, 2.4, 5.8);
-    GLX.draw(teamMesh(c.team), tmpMat, night ? { emissive: 0.2 } : undefined);
+    // Glossy automotive paint; wet adds a water film (sharper highlights, lower roughness).
+    GLX.draw(teamMesh(c.team), tmpMat,
+      wet   ? (night ? { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70 }
+                     : { roughness: 0.22, metalness: 0.12, specular: 0.70 })
+            : (night ? { emissive: 0.20, roughness: 0.38, metalness: 0.10, specular: 0.55 }
+                     : { roughness: 0.38, metalness: 0.10, specular: 0.55 }));
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
       if ((skid > 0.25 || c.offroad) && c.speed > 10) {
@@ -1172,6 +1316,8 @@ function render(dt) {
       }
     }
   }
+  // Resolve the HDR scene (bloom + tonemap + vignette) to the screen.
+  GLX.present();
   if (raceWeather === "wet" && rainDrops.length) drawRain(dt);
 }
 
@@ -1260,7 +1406,7 @@ function tick(now) {
   // shake still plays out.
   let simDt = dt;
   if (hitStop > 0) { hitStop = Math.max(0, hitStop - dt); simDt = dt * 0.15; }
-  update(simDt);
+  if (!frozen) update(simDt);   // frozen: hold the sim still, keep rendering
   render(dt);
   if (state === "race" || state === "count") updateHud(false);
 }
@@ -1712,13 +1858,103 @@ window.__apex = {
   // and park the (stationary) player at a fraction of the lap for a clean shot.
   park(frac, lateral) {
     if (!player || !track) return false;
+    skyViewOverride = null;   // clear any sky override so normal chase cam resumes
     state = "race"; raceT = Math.max(raceT, 1);
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
-    cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); } });
-    return this.jump(frac, 0, lateral !== undefined ? lateral : 0);
+    cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
+    const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
+    frozen = true;   // hold the scene still for a deterministic screenshot
+    return r;
+  },
+  // Like park(), but orients the camera toward the horizon so clouds and sky
+  // gradient are clearly visible. Eye sits 7 m above track; target is 25 m ahead
+  // and 14 m higher — giving ~24° upward tilt, centred in the FOV-75 frustum.
+  // Returns the same value as park(), or false when the track isn't loaded yet.
+  sky(frac, lateral) {
+    const r = this.park(frac, lateral);
+    if (!r) return false;
+    Tracks.sample(track, player.s, smp);
+    const e = [smp.p[0], smp.p[1] + 7, smp.p[2]];
+    const t = [
+      smp.p[0] + smp.t[0] * 25,
+      smp.p[1] + 14,
+      smp.p[2] + smp.t[2] * 25,
+    ];
+    skyViewOverride = { eye: e, tgt: t, fov: 75 };
+    // snap immediately so the very first rendered frame is correct
+    camEye[0] = e[0]; camEye[1] = e[1]; camEye[2] = e[2];
+    camTgt[0] = t[0]; camTgt[1] = t[1]; camTgt[2] = t[2];
+    camFov = 75;
+    return r;
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // Debug free camera for surveying track layouts/scenery — look at anything.
+  // Call with no args (or "chase") to restore the chase cam. Option forms:
+  //   {}                                       aerial of the whole track
+  //   { s, radius }                            focus a lap-fraction s
+  //   { azimuth, elevation, zoom, fov, fog }   aerial/focus framing (degrees)
+  //   { s, side, dist, height, look }          stand TRACKSIDE at s, look outward
+  //                                            (side "L"/"R"/±1; look:"in" faces track)
+  //   { eye:[x,y,z], yaw, pitch, fov }         free-look from a point (degrees)
+  //   { eye:[x,y,z], target:[x,y,z], fov }     fully explicit
+  // Returns the resolved {eye, target, ...}.
+  view(opts) {
+    if (!track) return false;
+    if (!opts || opts === "chase" || opts.mode === "chase") { dbgCam = null; return { mode: "chase" }; }
+    // free-look: explicit eye, aimed by yaw (0 = -Z, +90 = +X) and pitch (deg)
+    if (opts.eye && (opts.yaw != null || opts.pitch != null)) {
+      const yaw = (opts.yaw || 0) * Math.PI / 180, pit = (opts.pitch || 0) * Math.PI / 180;
+      const d = [Math.sin(yaw) * Math.cos(pit), Math.sin(pit), -Math.cos(yaw) * Math.cos(pit)];
+      const e = opts.eye;
+      dbgCam = { eye: e.slice(), target: [e[0] + d[0] * 100, e[1] + d[1] * 100, e[2] + d[2] * 100], fov: opts.fov || 60, far: opts.far || 6000, fog: opts.fog };
+      return { eye: e.slice(), yaw: opts.yaw || 0, pitch: opts.pitch || 0 };
+    }
+    if (opts.eye && opts.target) {
+      dbgCam = { eye: opts.eye.slice(), target: opts.target.slice(), fov: opts.fov || 60, far: opts.far || 6000, fog: opts.fog };
+      return dbgCam;
+    }
+    // trackside survey: stand beside the track at fraction s, look out at the
+    // scenery on `side` (or back at the track with look:"in")
+    if (opts.s != null && opts.side != null) {
+      Tracks.sample(track, opts.s * track.total, smp);
+      const side = opts.side === "L" ? -1 : opts.side === "R" ? 1 : (opts.side || 1);
+      const dist = opts.dist != null ? opts.dist : 14, height = opts.height != null ? opts.height : 9;
+      const p = smp.p, r = smp.r;
+      const eye = [p[0] + r[0] * side * dist, p[1] + height, p[2] + r[2] * side * dist];
+      const target = opts.look === "in"
+        ? [p[0], p[1] + 1, p[2]]
+        : [p[0] + r[0] * side * (dist + 80), p[1] + height * 0.4, p[2] + r[2] * side * (dist + 80)];
+      dbgCam = { eye, target, fov: opts.fov || 62, far: opts.far || 6000, fog: opts.fog };
+      return { eye, target };
+    }
+    // centre + span: a focus point at lap-fraction s, or the whole-track bbox
+    let cx, cy, cz, span;
+    if (opts.s != null) {
+      Tracks.sample(track, opts.s * track.total, smp);
+      cx = smp.p[0]; cy = smp.p[1]; cz = smp.p[2];
+      span = opts.radius || 180;
+    } else {
+      let nx = Infinity, xx = -Infinity, nz = Infinity, xz = -Infinity, ny = Infinity, xy = -Infinity;
+      for (let i = 0; i < track.n; i++) {
+        const x = track.px[i], z = track.pz[i], y = track.py[i];
+        if (x < nx) nx = x; if (x > xx) xx = x; if (z < nz) nz = z; if (z > xz) xz = z;
+        if (y < ny) ny = y; if (y > xy) xy = y;
+      }
+      cx = (nx + xx) / 2; cy = (ny + xy) / 2; cz = (nz + xz) / 2;
+      span = Math.max(xx - nx, xz - nz);
+    }
+    const az = (opts.azimuth != null ? opts.azimuth : 35) * Math.PI / 180;
+    const el = Math.min(85, Math.max(5, opts.elevation != null ? opts.elevation : 55)) * Math.PI / 180;
+    const dist = span * (opts.zoom != null ? opts.zoom : 1.0) * 0.95 + 60;
+    const eye = [
+      cx + Math.cos(el) * Math.sin(az) * dist,
+      cy + Math.sin(el) * dist,
+      cz + Math.cos(el) * Math.cos(az) * dist,
+    ];
+    dbgCam = { eye, target: [cx, cy, cz], fov: opts.fov || 55, far: Math.max(6000, dist * 4), fog: opts.fog };
+    return { eye, target: [cx, cy, cz], span: Math.round(span) };
+  },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
   // mid-track straight with overlapping lateral positions and equal speed; every
   // other car (incl. the player) is shoved far away. Returns the two test ids.
@@ -1790,6 +2026,26 @@ window.__apex = {
     }
     return res;
   },
+  // Load any circuit (by index or id, e.g. "monza") and start a normal race,
+  // optionally forcing time of day ("day" | "night" | "default") and weather
+  // ("dry" | "wet"). Skips the menus so a harness can grab a render of any track.
+  race(trackRef, timeOfDay, weather) {
+    const i = typeof trackRef === "number"
+      ? trackRef
+      : Tracks.LIST.findIndex((t) => t.id === trackRef);
+    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    trackIdx = i;
+    seasonMode = false;
+    timeTrial = false;
+    raceLaps = GAME_LAPS;
+    raceWeather = weather === "wet" ? "wet" : "dry";
+    raceTimeOfDay = timeOfDay || "default";
+    startRace();
+    return { track: Tracks.LIST[i].id, timeOfDay: raceTimeOfDay, weather: raceWeather };
+  },
+  // Load an optional .glb car model at runtime (team meshes rebuild from it,
+  // tinted per livery); resolves false and keeps the procedural car on failure.
+  loadCarModel: (url) => loadCarModel(url),
 };
 
 })();

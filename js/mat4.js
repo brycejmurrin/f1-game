@@ -144,7 +144,16 @@ const M4 = (function () {
     ];
   }
 
-  return { ident, mul, perspective, lookAt, translation, rotX, rotY, rotZ, scale, invert, transformPoint };
+  function ortho(l, r, b, t, n, f) {
+    return new Float32Array([
+      2/(r-l), 0, 0, 0,
+      0, 2/(t-b), 0, 0,
+      0, 0, -2/(f-n), 0,
+      -(r+l)/(r-l), -(t+b)/(t-b), -(f+n)/(f-n), 1,
+    ]);
+  }
+
+  return { ident, mul, perspective, lookAt, translation, rotX, rotY, rotZ, scale, invert, transformPoint, ortho };
 })();
 
 const V3 = (function () {
