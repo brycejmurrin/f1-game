@@ -54,6 +54,9 @@ uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
 uniform float uShadowBias;
 uniform float uShadowStr;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform float uFogHeight;
 out vec4 outColor;
 
 const float PI = 3.14159265359;
@@ -143,9 +146,27 @@ void main() {
   specCol = specCol / (1.0 + specCol);
   color += specCol;
 
+  // Environment reflection: when roughness is very low (wet road / glossy paint),
+  // sample the sky gradient in the reflected view direction.
+  // Roughness > 0.4 = no visible reflection; < 0.15 = mirror-like sky in road.
+  float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
+  if (envBlend > 0.001) {
+    vec3 R = reflect(-V, N);
+    float skyT = pow(max(R.y, 0.0), 0.5);
+    vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
+    // Fresnel: reflection is strongest at grazing angles
+    float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
+    color += envColor * envFresnel * envBlend * (1.0 - uMetalness);
+  }
+
   color = mix(color, albedo, uEmissive);
 
-  float fd = vDist * uFogDensity;
+  // Height-based fog: density falls off exponentially with altitude above eye level.
+  // uFogHeight = 0 → uniform (original behaviour); > 0 → pooling fog.
+  float heightAtten = uFogHeight > 0.0
+    ? exp(-max(vWorldPos.y - uEye.y, 0.0) * uFogHeight)
+    : 1.0;
+  float fd = vDist * uFogDensity * heightAtten;
   float f = 1.0 - exp(-fd * fd);
   outColor = vec4(mix(color, uFogColor, f), uAlpha);
 }`;
@@ -546,7 +567,8 @@ void main() {}`;
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail",
-      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr"]);
+      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -664,6 +686,9 @@ void main() {}`;
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);
     }
+    gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
+    gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
+    gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
   }
 
   function draw(mesh, modelMat, opts) {

@@ -366,6 +366,9 @@ function loadTrack(idx) {
     sunDir: V3.norm(pal.sunDir), sunColor: pal.sunColor,
     ambientGround: pal.ambientGround, ambientSky: pal.ambientSky,
     fogColor: pal.fog, fogDensity: pal.fogDensity,
+    skyZenith:  pal.zenith,
+    skyHorizon: pal.horizon,
+    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018,
   };
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
@@ -388,6 +391,9 @@ function applyRaceSettings() {
       frame.ambientSky = [0.08, 0.08, 0.14];
       frame.fogColor = [0.03, 0.03, 0.06];
       frame.fogDensity = 0.004;
+      // When raceTimeOfDay !== "default", sync sky colours to frame too
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
     } else {
       frameSky.zenith = [0.25, 0.42, 0.80];
       frameSky.horizon = [0.70, 0.75, 0.82];
@@ -396,6 +402,9 @@ function applyRaceSettings() {
       frame.ambientSky = [0.45, 0.48, 0.60];
       frame.fogColor = [0.72, 0.72, 0.72];
       frame.fogDensity = 0.0015;
+      // When raceTimeOfDay !== "default", sync sky colours to frame too
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
     }
   }
   // Wet weather: overcast the sky and flatten the light (soft, diffuse, fewer
