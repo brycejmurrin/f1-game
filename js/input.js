@@ -70,8 +70,8 @@ const Input = (function () {
   //   minCutoff : Hz at rest — lower = smoother/steadier (the SMOOTHING slider)
   //   beta      : how much the cutoff opens up with speed — higher = more responsive
   let OE_MIN_CUTOFF = 1.2;    // Hz
-  let OE_BETA = 0.05;
-  const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
+  let OE_BETA = 0.10;
+  const OE_DCUTOFF = 2.0;     // Hz, cutoff for the derivative estimate
   let oePrev = 0, oeDPrev = 0, oeInit = false;
   // Final output stage: slew-rate limit the steer command toward its target so a
   // hand jolt can't snap the wheel (TILT_SLEW = units/s, the SMOOTHING slider).
@@ -125,8 +125,8 @@ const Input = (function () {
     // gimbal lock (phone near vertical), which made tilt "act differently" when
     // held up vs laid flat. At flat the roll equals gamma/beta, so the familiar
     // feel is preserved.
-    const beta = (e.beta || 0) * DEG;     // front-back (X)
-    const gamma = (e.gamma || 0) * DEG;   // left-right (Y)
+    const beta = (e.beta ?? 0) * DEG;     // front-back (X)
+    const gamma = (e.gamma ?? 0) * DEG;  // left-right (Y)
     const cb = Math.cos(beta), sb = Math.sin(beta);
     const cg = Math.cos(gamma), sg = Math.sin(gamma);
     const gx = sg * cb;   // gravity along device right
@@ -189,8 +189,11 @@ const Input = (function () {
     // angle is often well past ±35°, and clamping it leaves a residual offset
     // that pulls the car to one side. Recalibrated on orientation change too.
     tiltZero = tiltRaw;
-    tiltSmoothed = tiltRaw;   // reset smoother so there's no startup transient
-    tiltSteerVal = 0;         // and the slew limiter, so neutral means neutral
+    // Reset One-Euro state so the first post-calibration sample sees dx=0,
+    // not a giant jump from the pre-calibration oePrev → avoids a derivative spike.
+    oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
+    tiltSmoothed = tiltRaw;
+    tiltSteerVal = 0;
   }
 
   function tiltActive() {
