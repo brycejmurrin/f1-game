@@ -90,6 +90,37 @@ test.describe("Apex 26 — longitudinal & grip", () => {
     expect(slow).toBeGreaterThan(fast * 1.3);   // turns much tighter when slow
   });
 
+  test("slope gravity: descents don't overspeed past top speed; climbs aren't a barrier", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => { window.__apex.race("spa", "day", "dry"); window.__apex.go(); });
+    const r = await page.evaluate(() => {
+      // locate the steepest descent and climb on the lap
+      let dnAt = 0, dn = 0, upAt = 0, up = 0;
+      for (let i = 0; i < 300; i++) {
+        const f = i / 300;
+        window.__apex.jump(f, 40, 0); window.__apex.step(1 / 60, 1);
+        const s = window.__apex.physState().slope;
+        if (s < dn) { dn = s; dnAt = f; }
+        if (s > up) { up = s; upAt = f; }
+      }
+      // descent at top speed: gravity must not push past vmax
+      window.__apex.jump(dnAt, 90, 0);
+      window.__apex.setInput({ steer: 0, throttle: true });
+      let maxV = 0;
+      for (let i = 0; i < 120; i++) { window.__apex.step(1 / 60, 1); maxV = Math.max(maxV, window.__apex.physState().speed); }
+      // climb from low speed: must still accelerate (gravity isn't a wall)
+      window.__apex.jump(upAt, 10, 0);
+      const v0 = window.__apex.physState().speed;
+      for (let i = 0; i < 120; i++) window.__apex.step(1 / 60, 1);
+      const v1 = window.__apex.physState().speed;
+      window.__apex.clearInput();
+      return { maxV, climbGain: v1 - v0 };
+    });
+    expect(r.maxV).toBeLessThan(98);        // no descent overspeed → no slide-off at the bottom
+    expect(r.climbGain).toBeGreaterThan(10); // climbs freely, never an invisible barrier
+  });
+
   test("crossing the start/finish line advances s (wraps) and increments the lap", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {

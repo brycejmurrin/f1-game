@@ -952,10 +952,20 @@ function updateCar(c, dt, ranked) {
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
-  // --- slope gravity: on real-elevation circuits the climbs bleed speed and the
-  // descents feed it back. slopeSin is the road tangent's vertical component
-  // (sin of the pitch). Race-only so the grid doesn't creep during the countdown.
-  if (state === "race" && slopeSin && c.speed > 0) c.speed = Math.max(0, c.speed - GRAVITY_SLOPE * slopeSin * dt);
+  // --- slope gravity: climbs gently bleed speed, descents gently feed it back.
+  // slopeSin is the road tangent's vertical component (+uphill / -downhill).
+  // Two guards so elevation never feels wrong: a descent can NEVER push you past
+  // your own top speed (uncapped overspeed used to fling the car off at the bottom
+  // of a hill), and the pull is magnitude-capped so a steep ramp can't act like an
+  // invisible wall. Race-only so the grid doesn't creep during the countdown.
+  if (state === "race" && slopeSin) {
+    const a = clamp(-GRAVITY_SLOPE * slopeSin, -ACCEL * 0.5, ACCEL * 0.5);   // m/s^2
+    if (a < 0) {                                   // uphill: gentle bleed
+      if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);
+    } else {                                        // downhill: feed, but never overspeed
+      c.speed = Math.min(Math.max(c.speed, vmax), c.speed + a * dt);
+    }
+  }
   if (c.isPlayer) {
     const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
     if (!gearsManual()) {
@@ -2328,10 +2338,11 @@ window.__apex = {
   physState() {
     if (!player || player.px == null) return null;
     const slip = Math.atan2(player.vLat || 0, Math.max(1, player.speed));
+    Tracks.sample(track, player.s, smp);
     return {
       s: player.s, x: player.x, speed: player.speed, prog: player.prog,
       head: player.head, vLat: player.vLat || 0,
-      slipDeg: slip * 180 / Math.PI,
+      slipDeg: slip * 180 / Math.PI, slope: smp.t[1] || 0,
       wrongWay: !!player.wrongWay, rescueT: player.rescueT || 0, lap: player.lap,
     };
   },
