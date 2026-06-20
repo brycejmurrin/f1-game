@@ -249,12 +249,19 @@ Points per Teams.POINTS; SEASON mode = 12 races in calendar order, standings
 table between races, saved in `apex26.season`. localStorage: hiscore N/A,
 settings (team, difficulty, tilt, sound), season.
 
-Camera: chase, eye = p - t*9.5 + up*3.4, lookAt = p + t*6 + up*1.1,
-exp damp (lambda 6 eye, 10 target), fov 62 -> 76 with speed.
+Camera: four player modes cycled with the CAM button / C key (persisted) —
+CHASE (close, behind+above), FAR (pulled back/up), COCKPIT (onboard eye, player
+car hidden), HOOD (nose cam). Chase modes anchor a fixed arc-length behind the
+car so they never lag at speed; onboard modes ride ON the car with very high
+damping. fov widens with speed; a debug free camera (`__apex.view`) can override
+all of it.
 ```
 
-Debug API: `window.__apex` (race/park/jump/view/corners/cars/pair/jam/go/info)
-drives the game from the console or a headless harness — see
+Debug & test API: `window.__apex` drives the game from the console or a headless
+harness — loading/positioning (race/park/jump/aim/sky/go/info), cameras
+(camera/view/snapCam), telemetry (probe/physState/tuning/cars/corners/wallStats),
+deterministic physics (setInput/clearInput/step/setPhysics), and collision/AI
+scenarios (rival/rivals/pair/jam). Full reference in
 [DEBUG-HOOKS.md](DEBUG-HOOKS.md). Per-circuit scenery design briefs live in
 [docs/tracks/](tracks/).
 

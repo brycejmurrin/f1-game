@@ -39,6 +39,8 @@ const Input = (function () {
   // edge-triggered gear shifts (manual mode)
   let shiftUpPressed = false;
   let shiftDownPressed = false;
+  // edge-triggered camera cycle (C key / CAM tap)
+  let cameraCyclePressed = false;
 
   // canvas touch halves: id -> -1 | 0 | 1
   const touches = new Map();
@@ -254,6 +256,8 @@ const Input = (function () {
         if (down && !e.repeat) shiftUpPressed = true; break;
       case "KeyQ": case "ShiftLeft":
         if (down && !e.repeat) shiftDownPressed = true; break;
+      case "KeyC":
+        if (down && !e.repeat) cameraCyclePressed = true; break;
       case "KeyP": case "Escape":
         if (down && !e.repeat && onPauseCb) onPauseCb();
         break;
@@ -372,6 +376,12 @@ const Input = (function () {
     return v;
   }
 
+  function consumeCameraCycle() {
+    const v = cameraCyclePressed;
+    cameraCyclePressed = false;
+    return v;
+  }
+
   function setSteerMode(m) {
     steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
     if (steerMode !== "buttons") btnSteerLeft = btnSteerRight = false;  // drop held buttons
@@ -446,6 +456,7 @@ const Input = (function () {
     boostTogglePressed = false;
     shiftUpPressed = false;
     shiftDownPressed = false;
+    cameraCyclePressed = false;
   }
 
   return {
@@ -460,6 +471,7 @@ const Input = (function () {
     consumeOvertake,
     consumeShiftUp,
     consumeShiftDown,
+    consumeCameraCycle,
     tiltActive,
     setSteerMode,
     getSteerMode,
