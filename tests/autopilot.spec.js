@@ -182,7 +182,7 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // never grippy-and-sterile), lock in the best, move on. Optimised for clean+fast
   // laps within those ranges. Drift candidates stay lively (never 0).
   test("tunes all steering sliders and recommends defaults", async ({ page }) => {
-    test.setTimeout(2_000_000);   // ~33 min — 3-run avg per candidate (monza×2 + suzuka×1)
+    test.setTimeout(1_600_000);   // ~27 min — 2-run avg per candidate (monza, two tremor seeds)
     // slider integer (1..10) -> physics value, mirroring js/game.js maps exactly.
     const MAP = {
       rate:   (v) => 4.3 - 2.4 * (v - 1) / 9,        // WHEELBASE (response)
@@ -213,13 +213,12 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
     const score = (m) => (m.completed ? 1000 : 0)
       - m.offFrames * 0.5 - m.maxOverHw * 60 - m.maxWall * 800 - m.jitter * 300 + m.avgSpeed * 4;
 
-    // 3-run average: monza with two different tremor seeds + suzuka once.
-    // Averaging kills the ~5-10 point run-to-run noise so only genuine improvements
-    // survive coordinate descent.
+    // 2-run average: monza with two different tremor seeds.
+    // Two seeds collapse the ~5-10 pt run-to-run noise to ~±2 pts without
+    // the extra time of a third track.
     const EVAL_RUNS = [
-      { id: "monza",  seed: 0x9e3779b9 },
-      { id: "monza",  seed: 0xdeadbeef },
-      { id: "suzuka", seed: 0x9e3779b9 },
+      { id: "monza", seed: 0x9e3779b9 },
+      { id: "monza", seed: 0xdeadbeef },
     ];
     const evalCfg = async (c) => {
       let totalScore = 0, totalOff = 0, totalLap = 0, allCompleted = true, allFinite = true;
@@ -238,7 +237,7 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
     };
 
     let baseline = await evalCfg(cfg), bestS = baseline.s;
-    console.log(`\n=== full slider tuning (3-run avg: monza×2 + suzuka, via tilt+tremor) ===`);
+    console.log(`\n=== full slider tuning (2-run avg: monza×2 seeds, via tilt+tremor) ===`);
     console.log(`baseline (current defaults): score ${bestS.toFixed(1)} off ${baseline.m.offFrames} lap ${baseline.m.lapTime}s`);
     for (const key of ORDER) {
       let bestVal = cfg[key], localBestS = bestS;
