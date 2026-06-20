@@ -1946,6 +1946,9 @@ $("pm-music").onclick = () => setMusic(!musicEnabled);
 // Uses the Screen Orientation API + Fullscreen API (lock requires fullscreen on
 // non-PWA browsers). Silently skips the lock step if the API isn't available
 // (desktop, iOS Safari) — the button still cycles and persists the preference.
+// Tilt steering is compatible: Input.onOrient() reads screen.orientation.angle
+// each sample and remaps gravity axes for all four orientations. The orientation
+// change event in input.js also auto-recalibrates tilt 300 ms after a lock.
 const ORIENT_STATES = [
   { label: "LANDSCAPE", lock: "landscape" },
   { label: "PORTRAIT",  lock: "portrait"  },
@@ -2219,12 +2222,12 @@ function paceFromSlider(v)   { return 1 + (v - 5) * 0.06; }             // 0.76.
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
 
 function applySteerTuning() {
-  const sens    = store.get("tiltSens",   7);
+  const sens    = store.get("tiltSens",   6);   // reduced: 6 → 0.6× output scale (less reactive)
   const rate    = store.get("steerRate",  5);
   const expo    = store.get("steerExpo",  5);
   const smooth  = store.get("steerSmooth", 5);  // tuner: 5 beats 6 (snappier slew)
   const dz      = store.get("tiltDz",     3);   // tuner: 3 beats 4 (less dead zone, snappier)
-  const tiltdeg = store.get("tiltDeg",    6);   // tuner: 6 beats 5 (wider gesture = less sensitive)
+  const tiltdeg = store.get("tiltDeg",    4);   // reduced: 4→39° for full lock (was 6→32°, less sensitive)
   const lock    = store.get("steerLock",  5);
   const spdsteer = store.get("steerSpeed", 5);
   const slide   = store.get("slide",      3);
