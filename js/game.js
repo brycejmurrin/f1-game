@@ -278,10 +278,11 @@ let paused = false;
 // manual (default), >0 gently pulls toward the racing line through corners,
 // <0 pushes the car wide. Always an added bias the driver can steer against.
 let raceLineAssist = 0;
-// Direct multiplier on the tilt steer output (0..1). Applied after reading
-// Input.steer() when tilt is active, so 0.5 means even full-tilt only gives
-// 50% of the normal steering authority. Set by the in-game sensitivity slider.
-let tiltOutputScale = 1.0;
+// Fixed tilt-authority gain, applied after Input.steer() when tilt is active so
+// tilt steering is a touch gentler than keys/pad (it trims on top of the road-
+// follow assist rather than throwing full lock). Sensitivity proper — how far you
+// tilt for a given steer — is the single MAX_TILT knob in the Input module.
+const TILT_OUTPUT_SCALE = 0.7;
 // Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
@@ -1088,7 +1089,7 @@ function updateCar(c, dt, ranked) {
   let steer;
   if (c.isPlayer) {
     steer = _testInput ? (_testInput.steer ?? 0) : Input.steer();
-    if (!_testInput && Input.tiltActive()) steer *= tiltOutputScale;
+    if (!_testInput && Input.tiltActive()) steer *= TILT_OUTPUT_SCALE;
   }
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
@@ -2334,14 +2335,14 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // physical value. Each maps so the DEFAULT value reproduces the original
 // hand-tuned feel. Higher slider = the direction named in the label.
 //
-//  pm-sens     TILT STRENGTH  output multiplier on tilt steer (v/10). Most felt.
 //  pm-rate     RESPONSE       WHEELBASE m (inverted) — high slider = shorter
 //                             wheelbase = less yaw inertia = snappier turn-in.
 //  pm-expo     LINEARITY      STEER_EXPO — high slider = more linear/direct,
 //                             low = gentle near centre. (affects tilt + keys)
-//  pm-smooth   STEER SMOOTHING TILT_SLEW — higher = slower, smoother changes.
-//  pm-dz       DEAD ZONE      degrees of tilt ignored around neutral.
-//  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock.
+//  pm-smooth   STEER SMOOTHING One-Euro min-cutoff (Hz) — higher slider = lower
+//                             cutoff = steadier/smoother tilt (kills jitter).
+//  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock (the one
+//                             tilt-sensitivity knob; dead zone is fixed at 2.5°).
 //  pm-lock     STEER LOCK     STEER_MAX_SLIP — max road-wheel steer angle (rad).
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
@@ -2351,12 +2352,13 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // The simplified default-view controls (STEERING / TILT / DRIVING HELP / RACING
 // LINE) bundle these for players who don't want the detail — see refreshMacros().
 function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
-function slewFromSmooth(v)   { return 5 + (1 - 5) * (v - 1) / 9; }     // 5..1
+// SMOOTHING -> One-Euro min-cutoff (Hz). Higher slider = LOWER cutoff = smoother.
+// v6 = 1.2 Hz (the original feel); v1 = 2.2 (snappy), v10 = 0.4 (very steady).
+function cutoffFromSmooth(v) { return 2.2 + (0.4 - 2.2) * (v - 1) / 9; }
 // High slider = SHORTER wheelbase = snappier; v5 ≈ 3.2 m (the original feel).
 function wheelbaseFromSlider(v) { return 4.3 + (1.9 - 4.3) * (v - 1) / 9; } // 4.3..1.9
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
 function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // rad, .18..0.42, v5≈0.29
-function dzFromSlider(v)     { return (v - 1) * 0.8; }                  // 0..7.2 deg
 function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
 function driftFromSlider(v)  { return (v - 1) / 9 * 0.7; }              // 0..0.7 rear looseness, v3≈0.16
 function paceFromSlider(v)   { return 1 + (v - 5) * 0.06; }             // 0.76..1.30, v5=1.0
@@ -2375,15 +2377,15 @@ function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " 
 // PRO sharpens response and frees up the slide for skilled play. PACE is left
 // out — it's a race-wide setting, not a handling feel.
 const PRESETS = {
-  relax:    { tiltSens: 6, tiltDeg: 4, tiltDz: 5, steerSmooth: 8, steerRate: 4,
+  relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 4,
               steerExpo: 4, steerLock: 5, steerSpeed: 4, slide: 1, drivingHelp: 9, raceLine: 2 },
-  standard: { tiltSens: 7, tiltDeg: 6, tiltDz: 4, steerSmooth: 6, steerRate: 5,
+  standard: { tiltDeg: 6, steerSmooth: 6, steerRate: 5,
               steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3, drivingHelp: 6, raceLine: 0 },
-  pro:      { tiltSens: 8, tiltDeg: 7, tiltDz: 2, steerSmooth: 3, steerRate: 7,
+  pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, slide: 6, drivingHelp: 3, raceLine: 0 },
 };
 const PRESET_STORE = {  // slider store-key  ->  preset field
-  tiltSens: "tiltSens", tiltDeg: "tiltDeg", tiltDz: "tiltDz", steerSmooth: "steerSmooth",
+  tiltDeg: "tiltDeg", steerSmooth: "steerSmooth",
   steerRate: "steerRate", steerExpo: "steerExpo", steerLock: "steerLock",
   steerSpeed: "steerSpeed", slide: "slide", drivingHelp: "drivingHelp", raceLine: "raceLine",
 };
@@ -2451,11 +2453,9 @@ function refreshMacros() {
 }
 
 function applySteerTuning() {
-  const sens    = store.get("tiltSens",   6);   // reduced: 6 → 0.6× output scale (less reactive)
   const rate    = store.get("steerRate",  5);
   const expo    = store.get("steerExpo",  5);
   const smooth  = store.get("steerSmooth", 6);
-  const dz      = store.get("tiltDz",     4);
   const tiltdeg = store.get("tiltDeg",    6);   // 6→32° for full lock (tuner optimum)
   const lock    = store.get("steerLock",  5);
   const spdsteer = store.get("steerSpeed", 5);
@@ -2463,7 +2463,6 @@ function applySteerTuning() {
   const help    = store.get("drivingHelp", 6);
   const pace    = store.get("pace",       5);
   const line    = store.get("raceLine",   0);
-  tiltOutputScale = sens / 10;
   PACE           = paceFromSlider(pace);
   WHEELBASE      = wheelbaseFromSlider(rate);
   STEER_EXPO     = expoFromSlider(expo);
@@ -2471,15 +2470,12 @@ function applySteerTuning() {
   STEER_SPEED_REF = speedRefFromSlider(spdsteer);
   DRIFT          = driftFromSlider(slide);
   ROAD_FOLLOW    = helpFromSlider(help);
-  Input.setTiltSmoothing(slewFromSmooth(smooth));
-  Input.setTiltDeadzone(dzFromSlider(dz));
+  Input.setTiltSmoothing(cutoffFromSmooth(smooth));
   Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
   raceLineAssist = line / 5;
-  $("pm-sens").value    = sens;    $("pm-sens-v").textContent    = sens;
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
   $("pm-smooth").value  = smooth;  $("pm-smooth-v").textContent  = smooth;
-  $("pm-dz").value      = dz;      $("pm-dz-v").textContent      = dz;
   $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
@@ -2490,10 +2486,6 @@ function applySteerTuning() {
   refreshPresetButtons();
   refreshMacros();
 }
-$("pm-sens").oninput = (e) => {
-  const v = +e.target.value; store.set("tiltSens", v);
-  tiltOutputScale = v / 10; $("pm-sens-v").textContent = v; clearPreset();
-};
 $("pm-rate").oninput = (e) => {
   const v = +e.target.value; store.set("steerRate", v);
   WHEELBASE = wheelbaseFromSlider(v); $("pm-rate-v").textContent = v; clearPreset();
@@ -2504,11 +2496,7 @@ $("pm-expo").oninput = (e) => {
 };
 $("pm-smooth").oninput = (e) => {
   const v = +e.target.value; store.set("steerSmooth", v);
-  Input.setTiltSmoothing(slewFromSmooth(v)); $("pm-smooth-v").textContent = v; clearPreset();
-};
-$("pm-dz").oninput = (e) => {
-  const v = +e.target.value; store.set("tiltDz", v);
-  Input.setTiltDeadzone(dzFromSlider(v)); $("pm-dz-v").textContent = v; clearPreset();
+  Input.setTiltSmoothing(cutoffFromSmooth(v)); $("pm-smooth-v").textContent = v; clearPreset();
 };
 $("pm-tiltdeg").oninput = (e) => {
   const v = +e.target.value; store.set("tiltDeg", v);
@@ -2785,7 +2773,6 @@ window.__apex = {
   // moving should move its value here (and the car's behaviour).
   tuning() {
     return {
-      tiltOutputScale,                 // TILT STRENGTH
       wheelbase: WHEELBASE,            // RESPONSE (shorter = snappier)
       expo: STEER_EXPO,                // LINEARITY
       maxSlip: STEER_MAX_SLIP,         // STEER LOCK
@@ -2798,9 +2785,9 @@ window.__apex = {
       yawInertia: YAW_INERTIA,         // rotational-inertia scale (turn-in speed)
       pace: PACE,                      // OVERALL SPEED (player + AI)
       raceLineAssist,                  // RACING LINE
-      maxTilt: Input.maxTilt,          // TILT RANGE
-      deadzone: Input.deadzone,        // DEAD ZONE
-      tiltSlew: Input.tiltSlew,        // STEER SMOOTHING
+      maxTilt: Input.maxTilt,          // TILT SENSITIVITY (deg for full lock)
+      deadzone: Input.deadzone,        // fixed dead zone (deg) — no longer a slider
+      tiltCutoff: Input.minCutoff,     // STEER SMOOTHING (One-Euro min-cutoff, Hz)
     };
   },
   // Richer player physics readout for drift/grip tests: world heading + the
@@ -2863,7 +2850,7 @@ window.__apex = {
     // tuner sweep them the same way as the handling params.
     if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
     if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
-    if (o.tiltSlew != null) Input.setTiltSmoothing(o.tiltSlew);
+    if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);
     return this.tuning();
   },
   // Debug free camera for surveying track layouts/scenery — look at anything.

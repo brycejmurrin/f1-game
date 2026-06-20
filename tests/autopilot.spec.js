@@ -226,13 +226,13 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
       spd:    (v) => 44 + 80 * (v - 1) / 9,          // SPEED STEER (speedRef)
       slide:  (v) => (v - 1) / 9 * 0.9,              // SLIDE (drift)
       tdeg:   (v) => Math.round(50 - 32 * (v - 1) / 9), // TILT RANGE (maxTilt deg)
-      dz:     (v) => (v - 1) * 0.8,                  // DEAD ZONE (deg)
-      smooth: (v) => 5 - 4 * (v - 1) / 9,            // STEER SMOOTHING (slew)
+      dz:     (v) => (v - 1) * 0.8,                  // DEAD ZONE (deg) — now fixed in-game
+      smooth: (v) => 2.2 - 1.8 * (v - 1) / 9,        // STEER SMOOTHING (One-Euro cutoff, Hz)
     };
     const toPhysics = (c) => ({
       wheelbase: MAP.rate(c.rate), expo: MAP.expo(c.expo), maxSlip: MAP.lock(c.lock),
       speedRef: MAP.spd(c.spd), drift: MAP.slide(c.slide),
-      maxTilt: MAP.tdeg(c.tdeg), deadzone: MAP.dz(c.dz), tiltSlew: MAP.smooth(c.smooth),
+      maxTilt: MAP.tdeg(c.tdeg), deadzone: MAP.dz(c.dz), tiltCutoff: MAP.smooth(c.smooth),
     });
     // current shipped defaults (store integers)
     const cfg = { rate: 5, expo: 5, lock: 5, spd: 5, slide: 3, tdeg: 5, dz: 4, smooth: 6 };
@@ -285,7 +285,7 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
       cfg[key] = bestVal; bestS = localBestS;
     }
     const phys = toPhysics(cfg);
-    const physOf = { tdeg: "maxTilt", dz: "deadzone", smooth: "tiltSlew", rate: "wheelbase",
+    const physOf = { tdeg: "maxTilt", dz: "deadzone", smooth: "tiltCutoff", rate: "wheelbase",
       lock: "maxSlip", spd: "speedRef", expo: "expo", slide: "drift" };
     console.log(`\n>>> RECOMMENDED SLIDER DEFAULTS (store integer  ->  physics):`);
     for (const key of ORDER)

@@ -24,8 +24,9 @@
 const Input = (function () {
   // Tilt mechanics ported verbatim from the driving-game (Neon Drift) build.
   let MAX_TILT = 36;          // degrees of tilt for full steering lock (higher = less sensitive)
-  let DEADZONE = 2.5;         // degrees ignored around the calibrated zero (slider)
-  let TILT_SLEW = 5;          // max steer units/s the command may change (STEER SMOOTHING slider)
+  let DEADZONE = 2.5;         // degrees ignored around neutral — fixed small; not a player knob
+  const TILT_SLEW = 8;        // fixed safety cap (steer units/s): a last guard so a hand jolt
+                              // can't snap the wheel. Smoothing itself is the One-Euro filter.
   const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
   const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
   const DEG = Math.PI / 180;
@@ -85,12 +86,12 @@ const Input = (function () {
   // fixed EMA + slew-rate limiter, which had to trade one for the other.
   //   minCutoff : Hz at rest — lower = smoother/steadier (the SMOOTHING slider)
   //   beta      : how much the cutoff opens up with speed — higher = more responsive
-  let OE_MIN_CUTOFF = 1.2;    // Hz
+  let OE_MIN_CUTOFF = 1.2;    // Hz — THE smoothing knob (set by the SMOOTHING slider)
   let OE_BETA = 0.10;
   const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
   let oePrev = 0, oeDPrev = 0, oeInit = false;
-  // Final output stage: slew-rate limit the steer command toward its target so a
-  // hand jolt can't snap the wheel (TILT_SLEW = units/s, the SMOOTHING slider).
+  // Final output stage: a FIXED slew-rate cap (TILT_SLEW units/s) as a last guard
+  // against a hand jolt; the One-Euro min-cutoff above is the player SMOOTHING knob.
   let tiltSteerVal = 0;       // last steer command emitted (-1..1)
   let tiltSteerT = 0;         // timestamp of the last tiltSteering() call (ms)
 
@@ -545,8 +546,11 @@ const Input = (function () {
   function setTiltSensitivity(deg) {
     if (typeof deg === "number" && isFinite(deg)) MAX_TILT = Math.max(8, Math.min(60, deg));
   }
-  function setTiltSmoothing(slew) {
-    if (typeof slew === "number" && isFinite(slew)) TILT_SLEW = Math.max(0.4, Math.min(12, slew));
+  // SMOOTHING knob: sets the One-Euro min-cutoff (Hz) — the filter that actually
+  // shapes tilt feel. Lower = steadier/smoother at rest (kills jitter, a touch of
+  // lag); higher = more immediate. (The slew limiter above is a fixed safety cap.)
+  function setTiltSmoothing(cutoff) {
+    if (typeof cutoff === "number" && isFinite(cutoff)) OE_MIN_CUTOFF = Math.max(0.3, Math.min(4, cutoff));
   }
   function setTiltDeadzone(deg) {
     if (typeof deg === "number" && isFinite(deg)) DEADZONE = Math.max(0, Math.min(15, deg));
@@ -651,5 +655,6 @@ const Input = (function () {
     get maxTilt() { return MAX_TILT; },
     get deadzone() { return DEADZONE; },
     get tiltSlew() { return TILT_SLEW; },
+    get minCutoff() { return OE_MIN_CUTOFF; },
   };
 })();
