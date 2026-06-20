@@ -1,9 +1,14 @@
 /*
- * Input: keyboard / tilt / touch for Apex 26.
+ * Input: keyboard / gamepad / tilt / touch for Apex 26.
  *
  * Steering sources, by priority: keyboard (held or still returning to
- * center) > tilt (enabled and delivering fresh data) > touch (on-screen
- * steer buttons or lower-screen halves).
+ * center) > gamepad (a connected pad with its stick deflected) > tilt
+ * (enabled and delivering fresh data) > touch (on-screen steer buttons or
+ * lower-screen halves).
+ *
+ * Gamepad uses the W3C Gamepad API ("standard" mapping). It has no change
+ * events, so poll() must be called once per frame from the game loop; it
+ * works on desktop and iOS 14.5+ Safari with a paired PS5/Xbox/MFi pad.
  *
  * Tilt comes from the DeviceOrientationEvent API. Which euler angle maps
  * to a physical left-right tilt depends on how the screen is rotated, so
@@ -41,6 +46,17 @@ const Input = (function () {
   let shiftDownPressed = false;
   // edge-triggered camera cycle (C key / CAM tap)
   let cameraCyclePressed = false;
+
+  // gamepad (W3C Gamepad API, "standard" mapping). Polled once per display
+  // frame from poll(). Works on desktop browsers and iOS 14.5+ Safari with a
+  // paired PS5 / Xbox / MFi controller — no secure-context or permission gate,
+  // so it runs anywhere the game is served (GitHub Pages included).
+  let padConnected = false;
+  let padSteer = 0;            // -1..1 from left stick / d-pad
+  let padThrottle = false;
+  let padBrake = false;
+  let padPrevButtons = [];     // previous frame's pressed state, for rising edges
+  const PAD_DEADZONE = 0.14;   // left-stick centre slop (ignored, then re-scaled)
 
   // canvas touch halves: id -> -1 | 0 | 1
   const touches = new Map();
@@ -372,22 +388,117 @@ const Input = (function () {
     el.addEventListener("pointerdown", function () { fire(); });
   }
 
+  /* ---------------- gamepad ---------------- */
+
+  // First connected pad, or null. (getGamepads() can return holes / stale slots.)
+  function activePad() {
+    if (typeof navigator === "undefined" || !navigator.getGamepads) return null;
+    let pads;
+    try { pads = navigator.getGamepads(); } catch (e) { return null; }
+    if (!pads) return null;
+    for (let i = 0; i < pads.length; i++) {
+      if (pads[i] && pads[i].connected) return pads[i];
+    }
+    return null;
+  }
+
+  // Buttons may be GamepadButton objects or bare numbers depending on browser.
+  function btnVal(pad, i) {
+    const b = pad.buttons && pad.buttons[i];
+    if (b == null) return 0;
+    return typeof b === "object" ? b.value : b;
+  }
+  function btnDown(pad, i) {
+    const b = pad.buttons && pad.buttons[i];
+    if (b == null) return false;
+    return typeof b === "object" ? b.pressed : b > 0.5;
+  }
+  function btnEdge(pad, i) {            // rising edge since last poll
+    return btnDown(pad, i) && !padPrevButtons[i];
+  }
+
+  // Poll the active gamepad once per frame. The Gamepad API has no events for
+  // button/axis changes — you must read a fresh snapshot each frame — so this is
+  // called at the top of the game loop, before the physics step, to keep input
+  // latency to a single frame. Standard mapping:
+  //   axis 0  left-stick X (steer)      btn 7 RT / btn 0 A  throttle
+  //   btn 14/15 d-pad left/right        btn 6 LT / btn 1 B  brake
+  //   btn 2 X  boost toggle             btn 3 Y  overtake
+  //   btn 4 LB shift down               btn 5 RB shift up
+  //   btn 8 View/Back  camera           btn 9 Menu/Start  pause
+  function pollGamepad() {
+    const pad = activePad();
+    if (!pad) {
+      padConnected = false;
+      padSteer = 0; padThrottle = false; padBrake = false;
+      if (padPrevButtons.length) padPrevButtons.length = 0;
+      return;
+    }
+    padConnected = true;
+    // steering: left-stick X with a centre dead zone, re-scaled so it still
+    // reaches full lock; d-pad gives a digital override.
+    let ax = (pad.axes && pad.axes.length) ? pad.axes[0] : 0;
+    if (Math.abs(ax) < PAD_DEADZONE) ax = 0;
+    else ax = Math.sign(ax) * (Math.abs(ax) - PAD_DEADZONE) / (1 - PAD_DEADZONE);
+    if (btnDown(pad, 15)) ax = 1;
+    else if (btnDown(pad, 14)) ax = -1;
+    padSteer = clamp(ax, -1, 1);
+    // pedals: analog triggers or the A/B face buttons.
+    padThrottle = btnVal(pad, 7) > 0.12 || btnDown(pad, 0);
+    padBrake = btnVal(pad, 6) > 0.12 || btnDown(pad, 1);
+    // edge-triggered actions reuse the same latches the keyboard sets.
+    if (btnEdge(pad, 2)) boostTogglePressed = true;
+    if (btnEdge(pad, 3)) overtakePressed = true;
+    if (btnEdge(pad, 5)) shiftUpPressed = true;
+    if (btnEdge(pad, 4)) shiftDownPressed = true;
+    if (btnEdge(pad, 8)) cameraCyclePressed = true;
+    if (btnEdge(pad, 9) && onPauseCb) onPauseCb();
+    const n = pad.buttons ? pad.buttons.length : 0;
+    padPrevButtons.length = n;
+    for (let i = 0; i < n; i++) padPrevButtons[i] = btnDown(pad, i);
+  }
+
+  // A connected pad only "wins" steering when its stick is actually deflected,
+  // so an idle controller never overrides tilt / touch / on-screen buttons.
+  function padSteerActive() {
+    return padConnected && Math.abs(padSteer) > 0.001;
+  }
+
+  // Best-effort rumble on the active pad (dual-rumble or generic actuator).
+  // Silently no-ops where unsupported (e.g. most iOS controllers) — callers
+  // already fire navigator.vibrate alongside, so haptics degrade gracefully.
+  function rumble(intensity, ms) {
+    const pad = activePad();
+    if (!pad) return;
+    const a = pad.vibrationActuator;
+    if (!a || typeof a.playEffect !== "function") return;
+    const mag = clamp(intensity, 0, 1);
+    try {
+      a.playEffect("dual-rumble", {
+        duration: Math.max(0, ms | 0),
+        strongMagnitude: mag,
+        weakMagnitude: mag * 0.7,
+      });
+    } catch (e) { /* actuator busy or unsupported effect type */ }
+  }
+
   /* ---------------- public ---------------- */
 
   function steer() {
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
+    if (padSteerActive()) return padSteer;
     if (steerMode === "buttons") return (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
     if (tiltActive()) return tiltSteering();
     return touchSteer;
   }
 
   function throttle() {
-    return keyThrottle || btnThrottle;
+    return keyThrottle || btnThrottle || padThrottle;
   }
 
   function braking() {
-    return keyBrake || btnBrake;
+    return keyBrake || btnBrake || padBrake;
   }
 
   function consumeBoostToggle() {
@@ -478,6 +589,12 @@ const Input = (function () {
     } else {
       window.addEventListener("orientationchange", onScreenRotate);
     }
+
+    window.addEventListener("gamepadconnected", function () { padConnected = true; });
+    window.addEventListener("gamepaddisconnected", function () {
+      padConnected = false; padSteer = 0; padThrottle = padBrake = false;
+      padPrevButtons.length = 0;
+    });
   }
 
   function reset() {
@@ -496,11 +613,17 @@ const Input = (function () {
     shiftUpPressed = false;
     shiftDownPressed = false;
     cameraCyclePressed = false;
+    padSteer = 0;
+    padThrottle = false;
+    padBrake = false;
+    padPrevButtons.length = 0;
   }
 
   return {
     init,
     reset,
+    poll: pollGamepad,
+    rumble,
     requestGyro,
     calibrate,
     steer,
@@ -521,6 +644,7 @@ const Input = (function () {
     setTiltSmoothing,
     setTiltDeadzone,
     touchControlsNeeded,
+    get padConnected() { return padConnected; },
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
     // Read-only tilt-tuning state (for tests / diagnostics).

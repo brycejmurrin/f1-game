@@ -768,6 +768,7 @@ function collideFx(a, b, impact) {
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
   if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) {} }
+  Input.rumble(0.4 + impact * 0.6, 120);
 }
 
 // Frenet-frame collisions: (prog, x) is treated as a 2D plane. Each car is a
@@ -1067,7 +1068,7 @@ function updateCar(c, dt, ranked) {
       shake = Math.max(shake, 0.3);          // continuous light rumble via shake
       c.kerbSndT = (c.kerbSndT || 0) - dt;
       if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-      if (navigator.vibrate && (c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { try { navigator.vibrate(15); } catch (e) {} c.kerbHapT = 0.12; }
+      if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
     }
   }
 
@@ -1268,6 +1269,7 @@ function updateCar(c, dt, ranked) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision();
           if (navigator.vibrate) { try { navigator.vibrate(Math.round(15 + incidence * 35)); } catch (e) {} }
+          if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100);
         }
       }
       // Steering held INTO the barrier while pinned = the wall denies that turn,
@@ -1759,6 +1761,8 @@ function tick(now) {
   requestAnimationFrame(tick);
   let dt = Math.min((now - lastFrame) / 1000, 1 / 4);   // clamp big gaps (tab resume)
   lastFrame = now;
+  Input.poll();   // refresh gamepad state once per frame (before the paused gate
+                  // so the Start/Menu button can also un-pause)
   if (paused) return;
   if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard

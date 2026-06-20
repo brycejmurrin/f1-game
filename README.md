@@ -42,6 +42,11 @@ Zandvoort in its farewell year. Night races run under floodlights.
 - **Desktop:** `←`/`→` or `A`/`D` steer, `↑`/`W` throttle, `↓`/`S` brake,
   `Space` toggle boost, `X` overtake, `C` change camera, `P`/`Esc` pause.
   Manual gears: `E` up, `Q` down.
+- **Gamepad:** plug in or pair a controller (PS5 / Xbox / MFi — works on
+  desktop browsers and iOS&nbsp;14.5+ Safari) for low-latency analog steering.
+  Left stick steers, **RT**/**A** throttle, **LT**/**B** brake, **X** boost,
+  **Y** overtake, **RB**/**LB** shift up/down, **View/Back** camera,
+  **Menu/Start** pause. Supported pads also rumble on contact and kerbs.
 - **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
   cycle four views — **CHASE** (close), **FAR** (pulled back), **COCKPIT**
   (onboard driver's eye), and **HOOD** (nose cam). Your choice is remembered.
@@ -86,7 +91,7 @@ sensors require a secure context.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
 Plain script-tag IIFE modules, in load order: `mat4` (matrix math), `glx`
 (WebGL2 renderer), `teams` (2026 grid data), `tracks` (spline → mesh circuit
-builder), `car3d` (procedural car geometry), `input` (keyboard/touch/tilt),
+builder), `car3d` (procedural car geometry), `input` (keyboard/gamepad/touch/tilt),
 `audio` (WebAudio synth), `api` (Jolpica/OpenF1 clients), `data` (data hub
 UI), `game` (loop, physics, AI, race logic).
 
