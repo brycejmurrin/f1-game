@@ -1160,11 +1160,17 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  // World-space dynamic bicycle model for the player. c.head = absolute world
-  // heading (rad); c.px/c.pz = world position; c.yawRateCur/c.vLat = yaw rate and
-  // body lateral velocity. Per-axle tyre forces (from slip angles, grip-capped)
-  // drive yaw and lateral accel; the world position is then projected back onto
-  // the centreline to recover (c.s, c.x) for gameplay. See the constants block.
+  // Track-frame dynamic bicycle model for the player. c.head = real world
+  // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.
+  // Per-axle tyre forces (from slip angles, grip-capped) drive yaw and lateral
+  // accel exactly as before — the nose keeps a true world heading so it can point
+  // off the tangent (understeer, a slide, leaning into a wall). The car's POSITION
+  // then advances directly in the track frame: build the world velocity from the
+  // heading and dot it onto the local tangent/right to step (c.s, c.x), instead of
+  // integrating a separate world point and searching for it on the centreline.
+  // No Tracks.project() round-trip means progress can't snap onto the wrong leg at
+  // a hairpin and (s, x) can't desync from a world position. c.px/c.pz are kept
+  // only as a derived mirror for debug/telemetry. See the constants block.
   if (c.isPlayer) {
     if (c.px == null) {   // init world pos from current Frenet state (first frame)
       c.px = smp.p[0] + smp.r[0] * c.x;
@@ -1245,13 +1251,19 @@ function updateCar(c, dt, ranked) {
     // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
     c.head -= c.yawRateCur * dt;
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
-    // world velocity = forward + lateral slip (perp = (fz, -fx) = +right)
-    c.px += (c.speed * fx + c.vLat * fz) * dt;
-    c.pz += (c.speed * fz - c.vLat * fx) * dt;
+    // world velocity = forward + lateral slip (perp = (fz, -fx) = +right)…
+    const vWx = c.speed * fx + c.vLat * fz;
+    const vWz = c.speed * fz - c.vLat * fx;
+    // …advance (s, x) by projecting that velocity straight onto the local road
+    // frame: tangent → arc-length progress, right → lateral. Same first-order step
+    // the old code took, minus the world-point round-trip — no Tracks.project()
+    // search to snap progress onto the wrong leg at a hairpin, and (s, x) can never
+    // desync from a separate world position.
+    let tX = smp.t[0], tZ = smp.t[2]; const tL = Math.hypot(tX, tZ) || 1; tX /= tL; tZ /= tL;
+    let rX = smp.r[0], rZ = smp.r[2]; const rL = Math.hypot(rX, rZ) || 1; rX /= rL; rZ /= rL;
     c._prevS = c.s;
-    const proj = Tracks.project(track, c.px, c.pz, c.s);
-    c.s = proj.s;
-    c.x = proj.lat;
+    c.s = wrapS(c.s + (vWx * tX + vWz * tZ) * dt);   // progress = velocity · tangent
+    c.x += (vWx * rX + vWz * rZ) * dt;               // lateral  = velocity · right
     steer = clamp(shaped, -1, 1);   // steer vis = driver input only, not assist
     if (raceLineAssist !== 0) {
       const sLook = wrapS(c.s + clamp(c.speed * 0.6, 12, 50));
@@ -1326,19 +1338,30 @@ function updateCar(c, dt, ranked) {
     c.wasOnWall = false;
     if (c.isPlayer) c.wallT = Math.max(0, (c.wallT || 0) - dt);
   }
-  // Keep world pos consistent with c.x after wall/assist/collision corrections.
-  // Re-sample at the NEW projected c.s (smp above is still at the pre-projection
-  // s); sampling at the stale s here would snap the car back and halve progress.
+  // Re-sample at the NEW c.s and refresh the debug px/pz mirror from the
+  // authoritative (s, x); also gives the yawVis below the tangent at the car's
+  // current position.
   if (c.isPlayer && c.px != null) {
     Tracks.sample(track, c.s, smp);
     c.px = smp.p[0] + smp.r[0] * c.x;
     c.pz = smp.p[2] + smp.r[2] * c.x;
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
-  // AI cars visually lean into the corner: k>0 curves toward screen-left, so the
-  // nose yaws toward -x (-r) — hence the negative sign.
-  const curveYaw = c.isPlayer ? 0 : clamp(-k * c.speed * 0.14, -0.28, 0.28);
-  c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + curveYaw, 6, dt);
+  // Visual nose yaw. The player uses its REAL heading relative to the track
+  // tangent, so the body visibly points where the car is actually aimed (turn-in,
+  // understeer, a slide) instead of just echoing the stick. AI cars have no world
+  // heading, so they lean from steer input + corner curvature (k>0 curves toward
+  // screen-left, nose yaws toward -x — hence the negative sign).
+  let yawTarget;
+  if (c.isPlayer && c.head != null) {
+    let psi = Math.atan2(smp.t[0], smp.t[2]) - c.head;   // + = nose turned right (+x)
+    while (psi > Math.PI) psi -= 2 * Math.PI;
+    while (psi < -Math.PI) psi += 2 * Math.PI;
+    yawTarget = clamp(psi, -0.7, 0.7);
+  } else {
+    yawTarget = c.steerVis * 0.35 + clamp(-k * c.speed * 0.14, -0.28, 0.28);
+  }
+  c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
   // Pitch animation: nose lifts under throttle (rear squat), dives under braking.
   // Stored so the render loop can apply it without re-evaluating throttle/brake state.
   const pitchTarget = c.isPlayer
@@ -1349,7 +1372,7 @@ function updateCar(c, dt, ranked) {
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
   // --- advance along track ---
-  // Player s comes from Tracks.project() above; AI advances by speed*dt in Frenet.
+  // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   const oldS = c.isPlayer ? (c._prevS ?? c.s) : c.s;
   if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
