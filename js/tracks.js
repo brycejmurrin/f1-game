@@ -767,6 +767,14 @@ const Tracks = (function () {
       const arr = side > 0 ? track.barR : track.barL;
       if (lim < arr[k]) arr[k] = lim;
     };
+    // Record a SOLID roadside model so the car stops before it: inner face at
+    // `innerGap` beyond the road edge, spanning ±halfM metres along the track.
+    // Only tightens where the model is within reach, so models out past the
+    // runoff have no effect.
+    const blockAt = (k, side, innerGap, halfM) => {
+      const half = Math.max(0, Math.round((halfM || 0) / ds));
+      for (let d = -half; d <= half; d++) markBarrier(((k + d) % n + n) % n, side, innerGap);
+    };
     // Lowest track elevation. Large flat terrain planes (water, sand, lakes) and
     // tall distant backdrops (dunes, ridges, hills) are anchored to this baseline
     // rather than a single point's py — otherwise, on tracks with elevation
@@ -864,6 +872,8 @@ const Tracks = (function () {
       // the ground on elevated/embanked sections.
       const c = [cx, groundYAt(k, dist) + sz[1] / 2 - 0.8, cz];
       addBox(out, c, sz, col, [r, u, t]);
+      // solid box → the car must stop before its inner face (sz[0] across, sz[2] long)
+      blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
 
@@ -1120,6 +1130,7 @@ const Tracks = (function () {
       }
       if (opts.setback) addBox(out, vadd(p.c, p.u, h + h * 0.1), [w * 0.6, h * 0.22, d * 0.6], body, b);
       if (opts.roof) addBox(out, vadd(p.c, p.u, h + (opts.setback ? h * 0.22 : 0) + 1), [w * 0.3, 2, d * 0.3], [0.3, 0.3, 0.33], b);  // rooftop plant
+      blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
     };
     // Tapered tower (control tower, spire) + optional antenna mast.
     const tower = (k, side, dist, baseW, h, opts) => {
@@ -1134,6 +1145,7 @@ const Tracks = (function () {
       addFrustum(out, p.c, baseW * 0.5, baseW * 0.32, h, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
+      blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
     };
     // Advertising hoarding / billboard: a panel on two slim posts.
     const billboard = (k, side, gap, w, h, col) => {
@@ -1162,6 +1174,7 @@ const Tracks = (function () {
       addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
       addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
       addCyl(out, vadd(p.c, p.r, side * 1.4), 0.08, 4, [0.4, 0.4, 0.42], 4, b);
+      blockAt(k, side, gap, 1.3);   // solid hut
     };
     // Bush / shrub clump (low rounded greenery).
     const bush = (k, side, dist, col) => {
