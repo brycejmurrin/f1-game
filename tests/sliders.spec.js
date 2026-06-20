@@ -63,15 +63,15 @@ test.describe("Apex 26 — steering sliders", () => {
   // ---- behaviour: physics sliders genuinely change how the car drives ----
 
   // Hold a fixed steer from a straight and measure how far the heading swings.
-  const turnBurst = (page, steer, ticks = 12) => page.evaluate(({ steer, ticks }) => {
-    window.__apex.jump(0.0, 28, 0);
+  const turnBurst = (page, steer, ticks = 12, speed = 28) => page.evaluate(({ steer, ticks, speed }) => {
+    window.__apex.jump(0.0, speed, 0);
     window.__apex.setInput({ steer, throttle: false });
     const a0 = window.__apex.probe().angle;
     for (let i = 0; i < ticks; i++) window.__apex.step(1 / 60, 1);
     const a1 = window.__apex.probe().angle;
     window.__apex.clearInput();
     return Math.abs(a1 - a0);
-  }, { steer, ticks });
+  }, { steer, ticks, speed });
 
   test("LINEARITY: higher slider (more linear) turns more for the same part-input", async ({ page }) => {
     await startRace(page);
@@ -84,10 +84,13 @@ test.describe("Apex 26 — steering sliders", () => {
 
   test("STEER LOCK: higher slider allows a larger max turn at full lock", async ({ page }) => {
     await startRace(page);
+    // Measured at low speed, where the tyres aren't yet grip-limited, so a bigger
+    // road-wheel lock genuinely tightens the turn (at racing speed the friction
+    // limit caps it — correct, but not what this slider is for).
     await setSlider(page, "pm-lock", 2);
-    const lockLow = await turnBurst(page, 1, 20);
+    const lockLow = await turnBurst(page, 1, 20, 12);
     await setSlider(page, "pm-lock", 9);
-    const lockHigh = await turnBurst(page, 1, 20);
+    const lockHigh = await turnBurst(page, 1, 20, 12);
     expect(lockHigh).toBeGreaterThan(lockLow * 1.15);
   });
 

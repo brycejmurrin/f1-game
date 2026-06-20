@@ -148,44 +148,56 @@ const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
 const LAT_MAX = 22;         // m/s^2 cornering grip
 const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
-// Player steering (world-space bicycle model). WHEELBASE sets the turn-in
-// snappiness: yaw rate = speed * tan(steerAngle) / WHEELBASE, so a SHORTER
-// wheelbase turns in harder/faster (this is the RESPONSE slider).
-// STEER_EXPO shapes the input: >1 = gentle near centre (fine, non-twitchy
-// corrections) while keeping full authority at the stops. STEER_MAX_SLIP caps
-// the steering (slip) angle (~28°).
-// These three are tuned live by the pause-menu sliders (RESPONSE / LINEARITY /
-// STEER LOCK), so they're `let`, not `const`. applySteerTuning() sets them.
+// Player steering inputs into the dynamic model below. WHEELBASE is the real
+// axle spacing — a SHORTER wheelbase has a smaller yaw inertia so it turns in
+// harder/faster (the RESPONSE slider). STEER_EXPO shapes the input: >1 = gentle
+// near centre (fine, non-twitchy corrections) while keeping full lock at the
+// stops. STEER_MAX_SLIP is the max road-wheel steer ANGLE (radians) the driver
+// can command; STEER_SPEED_REF tapers that lock a little at speed for stability.
+// All four are tuned live by the pause-menu sliders, so they're `let`.
 let WHEELBASE = 3.2;        // m; shorter = snappier turn-in (RESPONSE slider)
 let STEER_EXPO = 2.4;       // input shaping: higher = much gentler near centre
-let STEER_MAX_SLIP = 0.5;   // max steering / slip-angle (steer lock)
-let STEER_SPEED_REF = 80;   // m/s reference for the speed-sensitive steer taper:
+let STEER_MAX_SLIP = 0.32;  // rad — max road-wheel steer angle (~18°), STEER LOCK
+let STEER_SPEED_REF = 80;   // m/s reference for the speed-sensitive lock taper:
                             // higher = keeps more steering at speed (SPEED STEER slider)
-// Tier-b lateral slip ("drift factor" + grip circle). Velocity lags heading: the
-// turn injects sideways velocity (scaled by DRIFT), tyre grip bleeds it back
-// (LAT_GRIP per second), and a grip circle caps it (MAX_LAT_SLIP). DRIFT 0 = the
-// old on-rails feel; higher = slidey. Braking eats lateral grip → understeer.
-let DRIFT = 0.2;            // slide amount (SLIDE slider)
-const LAT_GRIP = 7.0;       // 1/s — how fast sideways slip decays back to zero
-const MAX_LAT_SLIP = 9;     // m/s — grip-circle cap on lateral slip
-// Self-aligning torque: when the player isn't actively steering, the slide
-// "catches" itself by bleeding lateral slip away faster. A wheel/stick player
-// counter-steers to catch a slide; a player tilting a phone can't, so the car
-// recovers for them as input returns to neutral. This is what keeps the slip
-// model controllable on tilt instead of spinning out — the higher the slide
-// (SLIDE slider), the more the catch matters. Scales the decay up to (1+this)×.
-const AUTO_CATCH = 1.6;
-// Weight transfer (subtle, arcade): braking loads the front for a touch more
-// turn-in (trail-braking rotates the car); hard throttle loads the rear for a
-// little power-on rotation. Small enough to read as feel, not instability.
-const WT_BRAKE_TURNIN = 0.12;   // +12% steering authority while braking
-const WT_THROTTLE_SLIP = 0.15;  // +15% slip injection on power above 20 m/s
-// Road-following: track curvature passively yaws the car (tyre grip on the
-// road surface), separate from player steering so it doesn't inject drift.
-// 0 = pure world-space (car goes straight at corners), 1 = Frenet-like fully
-// road-locked; 0.7 means the car tracks 70% of any corner automatically and
-// the player must steer the remaining 30% — corners are manageable without
-// requiring perfect braking technique.
+// Dynamic single-track ("bicycle") tyre model for the player. Each axle makes a
+// lateral force from its SLIP ANGLE (how far its travel differs from where it
+// points), soft-saturating at a friction limit (the grip circle). Cornering
+// force — not a kinematic "rotate the car and it follows" rule — curves the
+// path, so the car can never rotate faster than the tyres can grip: overcook a
+// corner and the FRONT washes wide (understeer); loosen the rear and it steps
+// out (oversteer). Both emerge from the same equations instead of being faked.
+//   c.yawRateCur  yaw rate r (rad/s, + = nose swinging right)
+//   c.vLat        body lateral velocity (m/s, + = sliding right)
+// DRIFT/ROAD_FOLLOW etc. stay `let` so the pause sliders can tune them live.
+let DRIFT = 0.15;           // rear looseness 0..1 (SLIDE): higher = earlier oversteer
+const FRONT_WEIGHT = 0.47;  // static front-axle load fraction (F1 is rear-biased)
+const CS_FRONT = 130;       // front cornering stiffness (accel per rad of slip)
+const CS_REAR  = 175;       // rear stiffer than front → understeer in the linear range too
+const WT_LONG = 0.22;       // longitudinal load transfer (braking loads the front axle)
+// These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
+// — they are the core feel levers found by emulating real drivers, not pause-menu
+// sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
+// YAW_DAMP: yaw damping for arcade stability. YAW_INERTIA: rotational inertia
+// scale (<1 = snappier turn-in). PLAYER_GRIP: forgiveness headroom over the AI.
+let FRONT_GRIP = 0.89;
+let YAW_DAMP = 1.0;
+let YAW_INERTIA = 0.7;      // scales the car's rotational inertia: <1 = snappier turn-in
+                            // (quicker direction changes through chicanes) without
+                            // touching steady-state grip. Too low over-rotates into slip
+                            // (washes wide); 0.7 keeps turn-in lively but settled.
+let PLAYER_GRIP = 1.15;     // player-only grip headroom over the AI's LAT_MAX baseline:
+                            // keeps the dynamic model's character but forgiving enough
+                            // that a tidy line holds the road (neutral-simcade target)
+const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer assist so
+                            // it keeps tracking the road as speed rises. Kept modest:
+                            // the grippy car understeers little, so a large term would
+                            // OVER-steer and cut the car to the inside of the corner.
+// Steering-assist ("DRIVING HELP"): adds road-wheel steer toward the upcoming
+// curvature so the car helps drive each corner — but the assist goes THROUGH the
+// tyres (grip-limited) like the driver's own steering, it can't teleport the
+// heading. 0 = pure manual (the car runs straight off at corners), 0.9 = the
+// car nearly steers the corner for you. The driver always adds on top.
 let ROAD_FOLLOW = 0.7;
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
@@ -1144,13 +1156,13 @@ function updateCar(c, dt, ranked) {
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(c.speed / 18, 0, 1);
-  const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.38;
+  const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
-  // World-space bicycle model for the player. c.head = absolute world heading
-  // (rad); c.px/c.pz = world position. Yaw rate from tan(steerAngle)/wheelbase,
-  // then project back onto the centreline to recover (c.s, c.x) for gameplay.
-  // No curvature-coupling term — the car naturally runs wide at corners because
-  // the track curves away, not because of any drift correction.
+  // World-space dynamic bicycle model for the player. c.head = absolute world
+  // heading (rad); c.px/c.pz = world position; c.yawRateCur/c.vLat = yaw rate and
+  // body lateral velocity. Per-axle tyre forces (from slip angles, grip-capped)
+  // drive yaw and lateral accel; the world position is then projected back onto
+  // the centreline to recover (c.s, c.x) for gameplay. See the constants block.
   if (c.isPlayer) {
     if (c.px == null) {   // init world pos from current Frenet state (first frame)
       c.px = smp.p[0] + smp.r[0] * c.x;
@@ -1159,65 +1171,67 @@ function updateCar(c, dt, ranked) {
       c.vLat = 0;
       c.yawRateCur = 0;
     }
+    // Fade the lateral model out toward a standstill so a parked car can't be
+    // spun by steering (slip angle is undefined at zero speed).
+    const sp = clamp(c.speed / 3, 0, 1);
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
-    // Weight transfer: braking shifts load onto the front tyres, so the car
-    // turns in a little sharper (trail-braking rotation).
-    const turnIn = braking ? 1 + WT_BRAKE_TURNIN : 1;
-    const auth = gripScale * kerbGrip * gripMult() * playerMods.cornering * turnIn;
-    // Speed-sensitive steer taper: full lock at low speed, less at high speed.
-    const maxDelta = STEER_MAX_SLIP * Math.max(0.3, 1 - c.speed / STEER_SPEED_REF);
-    // Steering angle is bounded well below pi/2, but clamp before tan() so no
-    // tuning combination can ever drive it into the singularity (Infinity yaw).
-    const steerAngle = clamp(shaped * auth * maxDelta, -1.3, 1.3);
-    // Player steering yaw (causes lateral slip / drift).
-    const playerYaw = Math.abs(c.speed) > 0.5
-      ? c.speed * Math.tan(steerAngle) / WHEELBASE : 0;
-    // Passive road-following: track curvature forces a yaw that keeps the car
-    // naturally tracking the road curve. Represented as tyre grip (not slip),
-    // so it doesn't inject lateral velocity. k<0 = right-hand corner needs
-    // rightward yaw (positive), hence the negation.
-    const roadYaw = -k * c.speed * ROAD_FOLLOW;
-    // Yaw inertia: ease-in/ease-out via first-order lag (tau ≈ 0.06 s) so the
-    // car feels like it has rotational mass — steering has weight without lag.
-    const targetYaw = playerYaw + roadYaw;
-    c.yawRateCur = (c.yawRateCur || 0) + (targetYaw - (c.yawRateCur || 0)) * Math.min(1, dt / 0.06);
-    // Increasing head = CCW / left; SUBTRACT combined yaw so +steer turns right.
-    const dHead = -clamp(c.yawRateCur, -3.5, 3.5) * dt;
-    c.head += dHead;
+    // --- road-wheel steer angle: driver lock (eased a little at speed) + the
+    // DRIVING-HELP assist that steers toward the road curvature for you. Both
+    // act through the front tyre below, so neither can exceed available grip.
+    const lockTaper = Math.max(0.4, 1 - c.speed / STEER_SPEED_REF);
+    const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
+    // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
+    // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
+    // more lock to hold the same radius as speed rises. Supplying both is what
+    // lets the assist actually keep the car on the road at racing speed (at low
+    // speed the v² term vanishes and it's just gentle centring).
+    const assistDelta = ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed) * k;
+    const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
+    // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
+    // shifts load to the front under braking (sharper turn-in) and the rear on
+    // power (a touch of throttle-on looseness) — emergent, not a special case.
+    const L = Math.max(2, WHEELBASE);
+    const ar = FRONT_WEIGHT * L, af = L - ar;            // CG → rear / front axle
+    const axEst = braking ? -BRAKE : (onThrottle ? DEPLOY_A : -COAST_DRAG);
+    const wt = clamp(-axEst / LAT_MAX * WT_LONG, -0.16, 0.18);
+    const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
+    // --- friction limit per axle (the grip circle). SLIDE bleeds rear grip so
+    // the back steps out earlier; everything scales with the same surface/weather
+    // grip the rest of the sim uses.
+    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering;
+    const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
+    const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
+    const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
+    // --- slip angles: each axle's lateral travel (body frame) vs its forward
+    // travel, minus the steer it's pointed at. vx is floored so the atan stays
+    // well-conditioned at low speed.
+    const vx = Math.max(c.speed, 4);
+    const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
+    const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
+    // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
+    // near centre, smoothly capped at the friction limit — how real tyres behave
+    // and far more controllable on a noisy tilt signal than a hard clamp.
+    const tyre = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
+    const Fyf = tyre(CS_FRONT, slipF, muF) * sp;
+    const Fyr = tyre(csR, slipR, muR) * sp;
+    const cosD = Math.cos(delta);
+    // --- rigid-body equations of motion (per unit mass). kz2 = yaw inertia/mass.
+    const ay = Fyf * cosD + Fyr;                         // body lateral accel
+    const kz2 = af * ar * YAW_INERTIA;                   // yaw inertia / mass (scaled)
+    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * (c.yawRateCur || 0);
+    c.vLat = clamp((c.vLat || 0) + (ay - c.speed * (c.yawRateCur || 0)) * dt, -40, 40);
+    c.yawRateCur = clamp((c.yawRateCur || 0) + rdot * dt, -4, 4);
+    // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
+    c.head -= c.yawRateCur * dt;
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
-    // Lateral slip comes from player steering only (road grip ≠ slip angle).
-    // +slip pushes the car to the OUTSIDE of the corner. Power-on shifts load
-    // rearward, loosening the rear into a little more rotation.
-    const power = (onThrottle && c.speed > 20) ? 1 + WT_THROTTLE_SLIP : 1;
-    c.vLat = (c.vLat || 0) + DRIFT * power * c.speed * clamp(playerYaw, -3.5, 3.5) * dt;
-    // Self-aligning catch: as the player's steering input returns toward neutral
-    // the slide recovers faster, so a tilt player who simply levels the phone
-    // gets the car back. Decay ranges from LAT_GRIP (full lock) up to
-    // LAT_GRIP*(1+AUTO_CATCH) (hands-off).
-    // Boost catch when car is actually sliding (slip angle > ~10°) on top of
-    // the steering-based catch — so a deep slide self-corrects even faster.
-    const slipBoost = clamp(Math.abs(c.vLat || 0) / Math.max(1, c.speed) / 0.18, 0, 1);
-    const catchUp = 1 + (1 - Math.abs(shaped)) * AUTO_CATCH * (1 + 0.5 * slipBoost);
-    const latGrip = LAT_GRIP * (braking ? 0.5 : 1) * catchUp;  // braking eats lateral grip
-    const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
-    // Soft-knee grip circle: instead of a hard clamp (a cliff the noisy tilt
-    // signal chatters against), saturate the slip smoothly with tanh so force
-    // keeps rising toward the cap with falling slope — the limit reads as a
-    // region, not a wall, which is far more controllable on tilt and how real
-    // tyres actually saturate. Applied before AND after the decay so a shrinking
-    // cap (e.g. braking into a corner) never leaves a one-frame over-slip.
-    const softCap = (v) => slipCap > 1e-4 ? slipCap * Math.tanh(v / slipCap) : 0;
-    c.vLat = softCap(c.vLat);
-    c.vLat *= Math.max(0, 1 - latGrip * dt);
-    c.vLat = softCap(c.vLat);
-    // world velocity = forward + sideways slip (perp = (fz, -fx) = +right)
+    // world velocity = forward + lateral slip (perp = (fz, -fx) = +right)
     c.px += (c.speed * fx + c.vLat * fz) * dt;
     c.pz += (c.speed * fz - c.vLat * fx) * dt;
     c._prevS = c.s;
     const proj = Tracks.project(track, c.px, c.pz, c.s);
     c.s = proj.s;
     c.x = proj.lat;
-    steer = clamp(playerYaw / 2.5, -1, 1);   // steer vis = driver input only, not road-follow
+    steer = clamp(shaped, -1, 1);   // steer vis = driver input only, not assist
     if (raceLineAssist !== 0) {
       const sLook = wrapS(c.s + clamp(c.speed * 0.6, 12, 50));
       // Racing line is on the inside = -sign(k); PULL eases the car toward it.
@@ -2322,30 +2336,35 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 //
 //  pm-sens     TILT STRENGTH  output multiplier on tilt steer (v/10). Most felt.
 //  pm-rate     RESPONSE       WHEELBASE m (inverted) — high slider = shorter
-//                             wheelbase = snappier, sharper turn-in.
+//                             wheelbase = less yaw inertia = snappier turn-in.
 //  pm-expo     LINEARITY      STEER_EXPO — high slider = more linear/direct,
 //                             low = gentle near centre. (affects tilt + keys)
 //  pm-smooth   STEER SMOOTHING TILT_SLEW — higher = slower, smoother changes.
 //  pm-dz       DEAD ZONE      degrees of tilt ignored around neutral.
 //  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock.
-//  pm-lock     STEER LOCK     STEER_MAX_SLIP — max heading/turn angle.
+//  pm-lock     STEER LOCK     STEER_MAX_SLIP — max road-wheel steer angle (rad).
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
-//  pm-slide    SLIDE          DRIFT — 0 = grippy/on-rails, high = slidey.
+//  pm-slide    SLIDE          DRIFT — rear looseness: 0 = planted/understeer,
+//                             high = loose rear that steps out (oversteer).
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
+// The simplified default-view controls (STEERING / TILT / DRIVING HELP / RACING
+// LINE) bundle these for players who don't want the detail — see refreshMacros().
 function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
 function slewFromSmooth(v)   { return 5 + (1 - 5) * (v - 1) / 9; }     // 5..1
 // High slider = SHORTER wheelbase = snappier; v5 ≈ 3.2 m (the original feel).
 function wheelbaseFromSlider(v) { return 4.3 + (1.9 - 4.3) * (v - 1) / 9; } // 4.3..1.9
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
-function lockFromSlider(v)   { return 0.30 + (0.70 - 0.30) * (v - 1) / 9; } // .3..0.7
+function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // rad, .18..0.42, v5≈0.29
 function dzFromSlider(v)     { return (v - 1) * 0.8; }                  // 0..7.2 deg
 function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
-function driftFromSlider(v)  { return (v - 1) / 9 * 0.9; }              // 0..0.9, v3≈0.2
+function driftFromSlider(v)  { return (v - 1) / 9 * 0.7; }              // 0..0.7 rear looseness, v3≈0.16
 function paceFromSlider(v)   { return 1 + (v - 5) * 0.06; }             // 0.76..1.30, v5=1.0
 // DRIVING HELP = ROAD_FOLLOW: how much of each corner the car tracks for you.
 // v6 ≈ 0.70 (the original feel); higher = the car does more of the steering.
-function helpFromSlider(v)   { return 0.45 + (v - 1) / 9 * 0.45; }      // 0.45..0.90, v6≈0.70
+function helpFromSlider(v)   { return 0.25 + (v - 1) / 9 * 0.45; }      // 0.25..0.70 assist gain, v6≈0.50
+                                                                       // (gentle: the snappy/grippy car
+                                                                       // over-steers if the assist is too strong)
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
 
 // ---- presets ----
@@ -2771,8 +2790,12 @@ window.__apex = {
       expo: STEER_EXPO,                // LINEARITY
       maxSlip: STEER_MAX_SLIP,         // STEER LOCK
       speedRef: STEER_SPEED_REF,       // SPEED STEER (higher = sharper at speed)
-      drift: DRIFT,                    // SLIDE (0 = on-rails)
-      roadFollow: ROAD_FOLLOW,         // passive road-tracking strength (0=world-space, 1=Frenet-like)
+      drift: DRIFT,                    // SLIDE (rear looseness)
+      roadFollow: ROAD_FOLLOW,         // DRIVING HELP steer-assist gain
+      playerGrip: PLAYER_GRIP,         // forgiveness headroom over AI grip
+      frontGrip: FRONT_GRIP,           // front friction bias (understeer-safety)
+      yawDamp: YAW_DAMP,               // yaw damping
+      yawInertia: YAW_INERTIA,         // rotational-inertia scale (turn-in speed)
       pace: PACE,                      // OVERALL SPEED (player + AI)
       raceLineAssist,                  // RACING LINE
       maxTilt: Input.maxTilt,          // TILT RANGE
@@ -2830,6 +2853,11 @@ window.__apex = {
     if (o.expo != null) STEER_EXPO = o.expo;
     if (o.maxSlip != null) STEER_MAX_SLIP = o.maxSlip;
     if (o.roadFollow != null) ROAD_FOLLOW = o.roadFollow;
+    // core dynamic-model feel levers (swept by the emulation/tuning harness)
+    if (o.playerGrip != null) PLAYER_GRIP = o.playerGrip;
+    if (o.frontGrip != null) FRONT_GRIP = o.frontGrip;
+    if (o.yawDamp != null) YAW_DAMP = o.yawDamp;
+    if (o.yawInertia != null) YAW_INERTIA = o.yawInertia;
     // Tilt sliders (routed to the Input module): sensitivity (MAX_TILT, deg for
     // full lock), dead zone (deg) and smoothing (slew, units/s). Lets the tilt
     // tuner sweep them the same way as the handling params.
