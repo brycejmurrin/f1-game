@@ -29,11 +29,9 @@ const stored = (page, key) => page.evaluate((k) => localStorage.getItem("apex26.
 // id, mapped tuning() key, store key, value label id, and the sign of
 // (value@max - value@min) — i.e. which way the mapped value moves with the slider.
 const SLIDERS = [
-  { id: "pm-sens",    key: "tiltOutputScale", store: "tiltSens",   vid: "pm-sens-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-rate",    key: "wheelbase",       store: "steerRate",  vid: "pm-rate-v",    min: 1,  max: 10, sign: -1 },
   { id: "pm-expo",    key: "expo",            store: "steerExpo",  vid: "pm-expo-v",    min: 1,  max: 10, sign: -1 },
-  { id: "pm-smooth",  key: "tiltSlew",        store: "steerSmooth",vid: "pm-smooth-v",  min: 1,  max: 10, sign: -1 },
-  { id: "pm-dz",      key: "deadzone",        store: "tiltDz",     vid: "pm-dz-v",      min: 1,  max: 10, sign: +1 },
+  { id: "pm-smooth",  key: "tiltCutoff",      store: "steerSmooth",vid: "pm-smooth-v",  min: 1,  max: 10, sign: -1 },
   { id: "pm-tiltdeg", key: "maxTilt",         store: "tiltDeg",    vid: "pm-tiltdeg-v", min: 1,  max: 10, sign: -1 },
   { id: "pm-lock",    key: "maxSlip",         store: "steerLock",  vid: "pm-lock-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-speedsteer", key: "speedRef",     store: "steerSpeed", vid: "pm-speedsteer-v", min: 1, max: 10, sign: +1 },
@@ -127,12 +125,13 @@ test.describe("Apex 26 — steering sliders", () => {
     expect(aiFast).toBeGreaterThan(aiSlow + 5);   // AI field clearly faster too
   });
 
-  // The tilt INPUT sliders (TILT STRENGTH/RANGE, DEAD ZONE, STEER SMOOTHING) are
-  // covered by the wiring tests above — each moves the exact live value
-  // (tiltOutputScale / maxTilt / deadzone / tiltSlew) that the tilt pipeline
-  // consumes in tiltSteering(). A full end-to-end tilt-input check can't run in
-  // this headless environment because DeviceOrientationEvent is unavailable, so
-  // requestGyro() never attaches the sensor listener.
+  // The tilt INPUT sliders (TILT RANGE, STEER SMOOTHING) are covered by the wiring
+  // tests above — each moves the exact live value (maxTilt / tiltCutoff) that the
+  // tilt pipeline consumes in tiltSteering(). Tilt sensitivity is the single
+  // MAX_TILT knob; the output gain is a fixed constant and the dead zone is fixed
+  // small, so neither is a slider anymore. A full end-to-end tilt-input check
+  // can't run headless (DeviceOrientationEvent is unavailable, so requestGyro()
+  // never attaches the sensor listener).
 });
 
 // ---- simplified ("macro") default-view controls ----
