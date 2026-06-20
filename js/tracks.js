@@ -1593,7 +1593,16 @@ const Tracks = (function () {
   function project(track, wx, wz, hint) {
     const n = track.n, L = track.total, ds = L / n;
     const px = track.px, pz = track.pz, rx = track.rx, rz = track.rz, tx = track.tx, tz = track.tz;
-    let bestD2 = Infinity, bestK = 0, bestT = 0, bestCx = 0, bestCz = 0;
+    let bestD2 = Infinity, bestCost = Infinity, bestK = 0, bestT = 0, bestCx = 0, bestCz = 0;
+    // Continuity bias: when we have a hint (last frame's arc-length), prefer the
+    // segment closest to it ALONG THE LAP, not just in space. At a hairpin the
+    // inbound and outbound legs are only metres apart but far apart in s, so a car
+    // running slightly wide could otherwise snap onto the wrong leg and teleport
+    // its lap distance (phantom wrong-way / lost progress). Penalising arc-length
+    // jumps breaks that tie toward the continuous choice; it only changes the
+    // outcome when two segments are near-equidistant in space.
+    const hs = (hint != null && isFinite(hint)) ? (((hint % L) + L) % L) : -1;
+    const CONT = 0.08;                    // weight of the arc-length penalty
     function evalSeg(i) {
       const j = (i + 1) % n;
       const ax = px[i], az = pz[i];
@@ -1604,11 +1613,16 @@ const Tracks = (function () {
       const cx = ax + t * dx, cz = az + t * dz;
       const ex = wx - cx, ez = wz - cz;
       const d2 = ex * ex + ez * ez;
-      if (d2 < bestD2) { bestD2 = d2; bestK = i; bestT = t; bestCx = cx; bestCz = cz; }
+      let cost = d2;
+      if (hs >= 0) {
+        let da = Math.abs(((i + t) * ds) - hs); da = Math.min(da, L - da);
+        cost += CONT * da * da;
+      }
+      if (cost < bestCost) { bestCost = cost; bestD2 = d2; bestK = i; bestT = t; bestCx = cx; bestCz = cz; }
     }
     if (hint != null && isFinite(hint)) {
       const h = ((Math.round(hint / ds) % n) + n) % n;
-      const W = 16;                       // ±16 nodes (~128 m) around last position
+      const W = 16;                       // ±16 nodes around last position
       for (let d = -W; d <= W; d++) evalSeg(((h + d) % n + n) % n);
     } else {
       for (let i = 0; i < n; i++) evalSeg(i);
