@@ -1181,7 +1181,10 @@ function updateCar(c, dt, ranked) {
     // the slide recovers faster, so a tilt player who simply levels the phone
     // gets the car back. Decay ranges from LAT_GRIP (full lock) up to
     // LAT_GRIP*(1+AUTO_CATCH) (hands-off).
-    const catchUp = 1 + (1 - Math.abs(shaped)) * AUTO_CATCH;
+    // Boost catch when car is actually sliding (slip angle > ~10°) on top of
+    // the steering-based catch — so a deep slide self-corrects even faster.
+    const slipBoost = clamp(Math.abs(c.vLat || 0) / Math.max(1, c.speed) / 0.18, 0, 1);
+    const catchUp = 1 + (1 - Math.abs(shaped)) * AUTO_CATCH * (1 + 0.5 * slipBoost);
     const latGrip = LAT_GRIP * (braking ? 0.5 : 1) * catchUp;  // braking eats lateral grip
     const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
     // Cap to the grip circle BOTH before and after the decay so a shrinking cap
