@@ -77,8 +77,12 @@ const store = {
 // Per-track time-trial leaderboard: top 5 laps ever, each tagged with the
 // team + driver that set it. Stored sorted ascending by lap time.
 const TT_BOARD_MAX = 5;
-function ttBoard(trackId) { return store.get("ttlb." + trackId, []); }
+function ttBoard(trackId) {
+  const b = store.get("ttlb." + trackId, []);
+  return Array.isArray(b) ? b : [];
+}
 function ttBoardAdd(trackId, entry) {
+  if (!isFinite(entry.t) || entry.t <= 0) return ttBoard(trackId);
   const b = ttBoard(trackId);
   b.push(entry);
   b.sort((a, z) => a.t - z.t);
@@ -254,6 +258,7 @@ let ttSessionTs = 0;        // session start stamp; entries at/after it are "you
 let frameSky = {}, frame = {};
 const teamMeshes = {};   // teamId -> GLX mesh
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
+let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
@@ -384,6 +389,8 @@ function gridUp() {
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0;
   });
 }
 function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
@@ -526,12 +533,14 @@ function startRace() {
   }
   gridUp();
   recomputePlayerMods();
+  resultT = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
+  document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
   Input.calibrate();
@@ -560,6 +569,7 @@ function showTouchControls(show) {
 
 function endRace() {
   state = "results";
+  document.body.classList.remove("in-race");
   els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
@@ -671,6 +681,7 @@ function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) +
 
 function quitToMenu() {
   state = "menu"; paused = false;
+  document.body.classList.remove("in-race");
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
@@ -920,8 +931,8 @@ function updateCar(c, dt, ranked) {
 
   // --- overtake mode ---
   const ahead = ranked[(c.rank || 1) - 2];
-  const gapAhead = ahead ? (ahead.prog - c.prog) / Math.max(c.speed, 20) : Infinity;
-  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished;
+  const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
+  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
   const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && Math.random() < dt * 0.7);
   if (fire && c.otArmed) {
     c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
@@ -1141,6 +1152,7 @@ function updateCar(c, dt, ranked) {
       c.pz = smp.p[2] + smp.r[2] * c.x;
       c.head = Math.atan2(smp.t[0], smp.t[2]);
       c.vLat = 0;
+      c.yawRateCur = 0;
     }
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     // Weight transfer: braking shifts load onto the front tyres, so the car
@@ -1153,16 +1165,19 @@ function updateCar(c, dt, ranked) {
     // tuning combination can ever drive it into the singularity (Infinity yaw).
     const steerAngle = clamp(shaped * auth * maxDelta, -1.3, 1.3);
     // Player steering yaw (causes lateral slip / drift).
-    const playerYaw = c.speed > 0.5
+    const playerYaw = Math.abs(c.speed) > 0.5
       ? c.speed * Math.tan(steerAngle) / WHEELBASE : 0;
     // Passive road-following: track curvature forces a yaw that keeps the car
     // naturally tracking the road curve. Represented as tyre grip (not slip),
     // so it doesn't inject lateral velocity. k<0 = right-hand corner needs
     // rightward yaw (positive), hence the negation.
     const roadYaw = -k * c.speed * ROAD_FOLLOW;
-    const yawRate = playerYaw + roadYaw;
+    // Yaw inertia: ease-in/ease-out via first-order lag (tau ≈ 0.06 s) so the
+    // car feels like it has rotational mass — steering has weight without lag.
+    const targetYaw = playerYaw + roadYaw;
+    c.yawRateCur = (c.yawRateCur || 0) + (targetYaw - (c.yawRateCur || 0)) * Math.min(1, dt / 0.06);
     // Increasing head = CCW / left; SUBTRACT combined yaw so +steer turns right.
-    const dHead = -clamp(yawRate, -3.5, 3.5) * dt;
+    const dHead = -clamp(c.yawRateCur, -3.5, 3.5) * dt;
     c.head += dHead;
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
     // Lateral slip comes from player steering only (road grip ≠ slip angle).
@@ -1174,7 +1189,10 @@ function updateCar(c, dt, ranked) {
     // the slide recovers faster, so a tilt player who simply levels the phone
     // gets the car back. Decay ranges from LAT_GRIP (full lock) up to
     // LAT_GRIP*(1+AUTO_CATCH) (hands-off).
-    const catchUp = 1 + (1 - Math.abs(shaped)) * AUTO_CATCH;
+    // Boost catch when car is actually sliding (slip angle > ~10°) on top of
+    // the steering-based catch — so a deep slide self-corrects even faster.
+    const slipBoost = clamp(Math.abs(c.vLat || 0) / Math.max(1, c.speed) / 0.18, 0, 1);
+    const catchUp = 1 + (1 - Math.abs(shaped)) * AUTO_CATCH * (1 + 0.5 * slipBoost);
     const latGrip = LAT_GRIP * (braking ? 0.5 : 1) * catchUp;  // braking eats lateral grip
     const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
     // Soft-knee grip circle: instead of a hard clamp (a cliff the noisy tilt
@@ -1303,8 +1321,8 @@ function updateCar(c, dt, ranked) {
   }
   c.totalT += dt;
   c.lapTime += dt;
-  // line crossing (forward only: oldS just before the line, new s just after)
-  if (oldS > track.total * 0.5 && c.s < track.total * 0.5 && oldS > c.s) {
+  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
+  if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
     if (c.lap > 1) {
       const lapDone = c.lapTime;
@@ -1354,10 +1372,11 @@ function rescuePlayer(c) {
   Tracks.sample(track, c.s, smp);
   c.x = 0; c.xVis = 0;
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
-  c.vLat = 0;
+  c.vLat = 0; c.yawRateCur = 0;
   c.speed = Math.max(c.speed, 16);
   c.px = smp.p[0]; c.pz = smp.p[2];
-  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false;
+  c.boostOn = false; c.deploying = false;
+  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   announce("RECOVERED", 1.2);
   if (soundOn) GameAudio.offtrack();
 }
@@ -1468,6 +1487,12 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, 4, dt);
 
+  // Camera roll: lean ~2-4° into corners proportional to lateral slip, like Codemasters F1/GRID
+  {
+    const slip = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
+    camRoll += (clamp(slip, -1, 1) * 0.07 - camRoll) * Math.min(1, dt / 0.15);
+  }
+
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
   // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
   // whole-track layouts and trackside scenery from any angle.
@@ -1489,7 +1514,11 @@ function render(dt) {
   }
 
   M4.perspectiveTo(_mProj, fovY, GLX.aspect, 0.1, farPlane);
-  M4.lookAtTo(_mView, camEye, camTgt, [0, 1, 0]);
+  // Tilt the up vector by camRoll to roll the camera into corners
+  const _camBack = V3.norm(V3.sub(camEye, camTgt));
+  const _camRight = V3.norm(V3.cross([0, 1, 0], _camBack));
+  const _camUp = V3.norm(V3.add([0, 1, 0], V3.scale(_camRight, Math.sin(camRoll))));
+  M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
   frame.viewProj = _mVP;
   frame.eye = camEye;
@@ -2007,6 +2036,53 @@ function setMusic(b) {
 }
 $("pm-music").onclick = () => setMusic(!musicEnabled);
 
+// Screen orientation lock: cycles LANDSCAPE → PORTRAIT → AUTO.
+// Uses the Screen Orientation API + Fullscreen API (lock requires fullscreen on
+// non-PWA browsers). Silently skips the lock step if the API isn't available
+// (desktop, iOS Safari) — the button still cycles and persists the preference.
+// Tilt steering is compatible: Input.onOrient() reads screen.orientation.angle
+// each sample and remaps gravity axes for all four orientations. The orientation
+// change event in input.js also auto-recalibrates tilt 300 ms after a lock.
+const ORIENT_STATES = [
+  { label: "LANDSCAPE", lock: "landscape" },
+  { label: "PORTRAIT",  lock: "portrait"  },
+  { label: "AUTO",      lock: null        },
+];
+let orientIdx = Math.min(store.get("orientLock", 0), ORIENT_STATES.length - 1);
+function updateOrientBtn() {
+  $("pm-orient").textContent = "SCREEN: " + ORIENT_STATES[orientIdx].label;
+}
+updateOrientBtn();
+async function cycleOrient() {
+  orientIdx = (orientIdx + 1) % ORIENT_STATES.length;
+  store.set("orientLock", orientIdx);
+  updateOrientBtn();
+  const { lock } = ORIENT_STATES[orientIdx];
+  try {
+    if (!lock) {
+      screen.orientation?.unlock?.();
+    } else {
+      if (!document.fullscreenElement)
+        await document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+      await screen.orientation?.lock?.(lock);
+    }
+  } catch (e) { /* lock unavailable on this browser/context — UI still cycles */ }
+}
+$("pm-orient").onclick = cycleOrient;
+// Restore saved lock after the first user gesture (lock needs user activation).
+if (orientIdx > 0) {
+  const saved = ORIENT_STATES[orientIdx].lock;
+  if (saved) {
+    document.addEventListener("pointerdown", async () => {
+      try {
+        if (!document.fullscreenElement)
+          await document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+        await screen.orientation?.lock?.(saved);
+      } catch (e) {}
+    }, { once: true, capture: true });
+  }
+}
+
 $("mb-race").onclick = () => {
   seasonMode = false; timeTrial = false;
   buildSelect();
@@ -2281,12 +2357,12 @@ function refreshPresetButtons() {
 }
 
 function applySteerTuning() {
-  const sens    = store.get("tiltSens",   7);
+  const sens    = store.get("tiltSens",   6);   // reduced: 6 → 0.6× output scale (less reactive)
   const rate    = store.get("steerRate",  5);
   const expo    = store.get("steerExpo",  5);
-  const smooth  = store.get("steerSmooth", 6);
-  const dz      = store.get("tiltDz",     4);
-  const tiltdeg = store.get("tiltDeg",    5);
+  const smooth  = store.get("steerSmooth", 5);  // tuner: 5 beats 6 (snappier slew)
+  const dz      = store.get("tiltDz",     3);   // tuner: 3 beats 4 (less dead zone, snappier)
+  const tiltdeg = store.get("tiltDeg",    4);   // reduced: 4→39° for full lock (was 6→32°, less sensitive)
   const lock    = store.get("steerLock",  5);
   const spdsteer = store.get("steerSpeed", 5);
   const slide   = store.get("slide",      3);
@@ -2431,7 +2507,7 @@ window.__apex = {
     player.px = smp.p[0] + smp.r[0] * player.x;
     player.pz = smp.p[2] + smp.r[2] * player.x;
     player.head = Math.atan2(smp.t[0], smp.t[2]);
-    player.vLat = 0;
+    player.vLat = 0; player.yawRateCur = 0;
     return { s: player.s, total: track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
@@ -2649,6 +2725,12 @@ window.__apex = {
     if (o.expo != null) STEER_EXPO = o.expo;
     if (o.maxSlip != null) STEER_MAX_SLIP = o.maxSlip;
     if (o.roadFollow != null) ROAD_FOLLOW = o.roadFollow;
+    // Tilt sliders (routed to the Input module): sensitivity (MAX_TILT, deg for
+    // full lock), dead zone (deg) and smoothing (slew, units/s). Lets the tilt
+    // tuner sweep them the same way as the handling params.
+    if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
+    if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
+    if (o.tiltSlew != null) Input.setTiltSmoothing(o.tiltSlew);
     return this.tuning();
   },
   // Debug free camera for surveying track layouts/scenery — look at anything.
@@ -2858,6 +2940,17 @@ window.__apex = {
   step(dt, n) {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
     for (let i = 0; i < count; i++) update(d);
+  },
+  // Deterministic tilt emulation for the autopilot harness. `step(deg, dt)` runs a
+  // raw tilt angle (deg) through the real tilt pipeline (One-Euro filter + dead
+  // zone + MAX_TILT map + slew limiter) at an explicit timestep and returns the
+  // resulting steer (-1..1); `steerToAngle(cmd)` inverts the map (steer→tilt deg)
+  // so a controller can convert its steer command into a tilt; `reset()` clears the
+  // filter/slew state between runs. Tilt params come from the sliders (tuning()).
+  tiltSim: {
+    step: (deg, dt) => Input.simTilt(deg, dt),
+    reset: () => Input.simTiltReset(),
+    steerToAngle: (cmd) => Input.steerToTilt(cmd),
   },
 };
 

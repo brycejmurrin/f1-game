@@ -70,8 +70,8 @@ const Input = (function () {
   //   minCutoff : Hz at rest — lower = smoother/steadier (the SMOOTHING slider)
   //   beta      : how much the cutoff opens up with speed — higher = more responsive
   let OE_MIN_CUTOFF = 1.2;    // Hz
-  let OE_BETA = 0.05;
-  const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
+  let OE_BETA = 0.10;
+  const OE_DCUTOFF = 2.0;     // Hz, cutoff for the derivative estimate
   let oePrev = 0, oeDPrev = 0, oeInit = false;
   // Final output stage: slew-rate limit the steer command toward its target so a
   // hand jolt can't snap the wheel (TILT_SLEW = units/s, the SMOOTHING slider).
@@ -125,8 +125,8 @@ const Input = (function () {
     // gimbal lock (phone near vertical), which made tilt "act differently" when
     // held up vs laid flat. At flat the roll equals gamma/beta, so the familiar
     // feel is preserved.
-    const beta = (e.beta || 0) * DEG;     // front-back (X)
-    const gamma = (e.gamma || 0) * DEG;   // left-right (Y)
+    const beta = (e.beta ?? 0) * DEG;     // front-back (X)
+    const gamma = (e.gamma ?? 0) * DEG;  // left-right (Y)
     const cb = Math.cos(beta), sb = Math.sin(beta);
     const cg = Math.cos(gamma), sg = Math.sin(gamma);
     const gx = sg * cb;   // gravity along device right
@@ -189,12 +189,47 @@ const Input = (function () {
     // angle is often well past ±35°, and clamping it leaves a residual offset
     // that pulls the car to one side. Recalibrated on orientation change too.
     tiltZero = tiltRaw;
-    tiltSmoothed = tiltRaw;   // reset smoother so there's no startup transient
-    tiltSteerVal = 0;         // and the slew limiter, so neutral means neutral
+    // Reset One-Euro state so the first post-calibration sample sees dx=0,
+    // not a giant jump from the pre-calibration oePrev → avoids a derivative spike.
+    oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
+    tiltSmoothed = tiltRaw;
+    tiltSteerVal = 0;
   }
 
   function tiltActive() {
     return steerMode === "tilt" && tiltSeen;
+  }
+
+  // ---- deterministic tilt emulation (test/autopilot harness) ----
+  // Drive the FULL tilt pipeline with an explicit timestep instead of wall-clock:
+  // feed a raw tilt angle (deg) and dt (s), get back the steer command (-1..1)
+  // after the real One-Euro filter, dead zone, MAX_TILT map and slew limiter. Lets
+  // a headless harness "play via tilt" and measure how tilt settings actually drive.
+  // (The live game still uses the wall-clock onOrient/tiltSteering path untouched.)
+  function simTilt(rawDeg, dt) {
+    const step = dt > 0 ? dt : 0.016;
+    tiltSeen = true;
+    tiltRaw = rawDeg;
+    tiltSmoothed = oneEuro(rawDeg, step);
+    let target = 0, d = tiltSmoothed - tiltZero;
+    if (Math.abs(d) >= DEADZONE) {
+      d -= Math.sign(d) * DEADZONE;
+      target = clamp(d / (MAX_TILT - DEADZONE), -1, 1);
+    }
+    const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
+    tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * step);
+    return tiltSteerVal;
+  }
+  // Reset the tilt filter/slew/zero state so a fresh emulation run starts clean.
+  function simTiltReset() {
+    oeInit = false; oePrev = 0; oeDPrev = 0;
+    tiltSmoothed = 0; tiltSteerVal = 0; tiltZero = 0; tiltRaw = 0;
+  }
+  // Invert the dead-zone + MAX_TILT map: the raw tilt angle (deg) needed to command
+  // a given steer target (-1..1). Used to convert an autopilot steer into a tilt.
+  function steerToTilt(cmd) {
+    if (Math.abs(cmd) < 1e-4) return 0;
+    return clamp(cmd, -1, 1) * (MAX_TILT - DEADZONE) + Math.sign(cmd) * DEADZONE;
   }
 
   function tiltSteering() {
@@ -210,7 +245,8 @@ const Input = (function () {
     const t = nowMs();
     const dt = tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0;
     tiltSteerT = t;
-    tiltSteerVal = moveToward(tiltSteerVal, target, TILT_SLEW * dt);
+    const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
+    tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * dt);
     return tiltSteerVal;
   }
 
@@ -473,6 +509,9 @@ const Input = (function () {
     consumeShiftDown,
     consumeCameraCycle,
     tiltActive,
+    simTilt,
+    simTiltReset,
+    steerToTilt,
     setSteerMode,
     getSteerMode,
     setTiltSensitivity,

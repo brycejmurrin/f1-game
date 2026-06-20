@@ -753,3 +753,32 @@ body.desktop #pm-calib { display: none !important; }
 }
 
 [hidden] { display: none !important; }
+
+/* Portrait-mode overlay: shown only during races via body.in-race class.
+   Uses a CSS media query so it works on iOS Safari where JS lock APIs fail. */
+#rotate-device {
+  display: none;
+  position: fixed; inset: 0; z-index: 9000;
+  background: #000;
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  padding: 2rem;
+  gap: 0.8rem;
+}
+.rotate-icon {
+  font-size: 3.5rem;
+  animation: rotate-hint 1.6s ease-in-out infinite alternate;
+}
+@keyframes rotate-hint {
+  from { transform: rotate(-30deg); }
+  to   { transform: rotate(30deg); }
+}
+.rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: 0.05em; }
+.rotate-inner small { opacity: 0.6; font-size: 0.8rem; }
+
+@media (orientation: portrait) {
+  body.in-race #rotate-device { display: flex; }
+}

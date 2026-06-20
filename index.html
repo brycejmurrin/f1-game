@@ -17,6 +17,14 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
+<div id="rotate-device" aria-hidden="true">
+  <div class="rotate-inner">
+    <div class="rotate-icon">&#8635;</div>
+    <p>Rotate to landscape to race</p>
+    <small>Or lock rotation in Control Center&nbsp;/&nbsp;Quick Settings</small>
+  </div>
+</div>
 
 <!-- race HUD -->
 <div id="hud" hidden>
@@ -71,6 +79,7 @@
   <button id="pm-gears">GEARS: AUTO</button>
   <button id="pm-sound">SOUND: ON</button>
   <button id="pm-music">MUSIC: ON</button>
+  <button id="pm-orient">SCREEN: LANDSCAPE</button>
   <button id="pm-quit">QUIT TO MENU</button>
 </div>
 
