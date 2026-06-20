@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=80">
-<link rel="stylesheet" href="css/data.css?v=80">
+<link rel="stylesheet" href="css/style.css?v=81">
+<link rel="stylesheet" href="css/data.css?v=81">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -225,7 +225,7 @@
   <div id="advanced-inner" class="panel">
     <h2>STEERING &amp; ASSISTS</h2>
     <button id="adv-close">&#10005;</button>
-    <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Fine-tune below if you like; every setting is 1&ndash;10 and takes effect immediately. Your choices are saved.</p>
+    <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Adjust the few controls below to taste, or open <b>Advanced</b> for the full set of knobs. Everything takes effect immediately and is saved.</p>
 
     <div class="preset-row">
       <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
@@ -233,6 +233,48 @@
       <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
     </div>
 
+    <!-- simplified, player-facing controls (most players never need more) -->
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">6</b></span>
+        <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="6" aria-label="Tilt sensitivity"></label>
+      <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">STEERING</span>
+      <div class="opt-row" role="group" aria-label="Steering feel">
+        <button id="pm-steer-easy" class="opt-btn">SUPER EASY</button>
+        <button id="pm-steer-assist" class="opt-btn">ASSISTED</button>
+        <button id="pm-steer-normal" class="opt-btn">NORMAL</button>
+        <button id="pm-steer-sim" class="opt-btn">SIM</button>
+      </div>
+      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">DRIVING HELP</span>
+      <div class="opt-row" role="group" aria-label="Driving help">
+        <button id="pm-help-low" class="opt-btn">LOW</button>
+        <button id="pm-help-med" class="opt-btn">MEDIUM</button>
+        <button id="pm-help-high" class="opt-btn">HIGH</button>
+      </div>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">RACING LINE</span>
+      <div class="opt-row" role="group" aria-label="Racing line assist">
+        <button id="pm-line-off" class="opt-btn">OFF</button>
+        <button id="pm-line-corner" class="opt-btn">CORNERS</button>
+        <button id="pm-line-full" class="opt-btn">FULL</button>
+      </div>
+      <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">5</b></span>
+        <input id="pm-pace" type="range" min="1" max="10" step="1" value="5" aria-label="Overall speed"></label>
+      <p class="adv-help">Pace of the whole field &mdash; you and the AI together. Higher = everyone faster; racing stays competitive.</p>
+    </div>
+
+    <button id="adv-more" class="adv-more-btn" aria-expanded="false">ADVANCED &#9662;</button>
+    <div id="adv-extra" hidden>
     <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">TILT STRENGTH <b id="pm-sens-v">7</b></span>
@@ -287,18 +329,12 @@
       <p class="adv-help">Rear grip / slide. Low = planted and grippy (on rails); higher = the car slides and runs wide when you push a corner. Pure feel.</p>
     </div>
 
-    <h3 class="adv-sec">RACE <span>affects the whole field</span></h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">5</b></span>
-        <input id="pm-pace" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">Pace of the entire field &mdash; you and the AI together. Higher = everyone faster (more accel + top speed); lower = calmer. Racing stays competitive.</p>
-    </div>
-
     <h3 class="adv-sec">DRIVER AID</h3>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
         <input id="pm-line" type="range" min="-5" max="5" step="1" value="0"></label>
       <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
+    </div>
     </div>
   </div>
 </div>
@@ -310,44 +346,44 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=80"></script>
-<script src="js/glx.js?v=80"></script>
-<script src="js/gltf.js?v=80"></script>
-<script src="js/teams.js?v=80"></script>
-<script src="js/circuits.js?v=80"></script>
+<script src="js/mat4.js?v=81"></script>
+<script src="js/glx.js?v=81"></script>
+<script src="js/gltf.js?v=81"></script>
+<script src="js/teams.js?v=81"></script>
+<script src="js/circuits.js?v=81"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=80"></script>
-<script src="js/tracks/monaco.js?v=80"></script>
-<script src="js/tracks/silverstone.js?v=80"></script>
-<script src="js/tracks/spa.js?v=80"></script>
-<script src="js/tracks/monza.js?v=80"></script>
-<script src="js/tracks/suzuka.js?v=80"></script>
-<script src="js/tracks/singapore.js?v=80"></script>
-<script src="js/tracks/cota.js?v=80"></script>
-<script src="js/tracks/interlagos.js?v=80"></script>
-<script src="js/tracks/vegas.js?v=80"></script>
-<script src="js/tracks/madrid.js?v=80"></script>
-<script src="js/tracks/zandvoort.js?v=80"></script>
-<script src="js/tracks/jeddah.js?v=80"></script>
-<script src="js/tracks/albert_park.js?v=80"></script>
-<script src="js/tracks/shanghai.js?v=80"></script>
-<script src="js/tracks/miami.js?v=80"></script>
-<script src="js/tracks/imola.js?v=80"></script>
-<script src="js/tracks/montreal.js?v=80"></script>
-<script src="js/tracks/redbull.js?v=80"></script>
-<script src="js/tracks/hungaroring.js?v=80"></script>
-<script src="js/tracks/baku.js?v=80"></script>
-<script src="js/tracks/mexico.js?v=80"></script>
-<script src="js/tracks/qatar.js?v=80"></script>
-<script src="js/tracks/abudhabi.js?v=80"></script>
-<script src="js/tracks.js?v=80"></script>
-<script src="js/car3d.js?v=80"></script>
-<script src="js/input.js?v=80"></script>
-<script src="js/audio.js?v=80"></script>
-<script src="js/api.js?v=80"></script>
-<script src="js/data.js?v=80"></script>
-<script src="js/parts.js?v=80"></script>
-<script src="js/ghost.js?v=80"></script>
-<script src="js/game.js?v=80"></script>
+<script src="js/tracks/bahrain.js?v=81"></script>
+<script src="js/tracks/monaco.js?v=81"></script>
+<script src="js/tracks/silverstone.js?v=81"></script>
+<script src="js/tracks/spa.js?v=81"></script>
+<script src="js/tracks/monza.js?v=81"></script>
+<script src="js/tracks/suzuka.js?v=81"></script>
+<script src="js/tracks/singapore.js?v=81"></script>
+<script src="js/tracks/cota.js?v=81"></script>
+<script src="js/tracks/interlagos.js?v=81"></script>
+<script src="js/tracks/vegas.js?v=81"></script>
+<script src="js/tracks/madrid.js?v=81"></script>
+<script src="js/tracks/zandvoort.js?v=81"></script>
+<script src="js/tracks/jeddah.js?v=81"></script>
+<script src="js/tracks/albert_park.js?v=81"></script>
+<script src="js/tracks/shanghai.js?v=81"></script>
+<script src="js/tracks/miami.js?v=81"></script>
+<script src="js/tracks/imola.js?v=81"></script>
+<script src="js/tracks/montreal.js?v=81"></script>
+<script src="js/tracks/redbull.js?v=81"></script>
+<script src="js/tracks/hungaroring.js?v=81"></script>
+<script src="js/tracks/baku.js?v=81"></script>
+<script src="js/tracks/mexico.js?v=81"></script>
+<script src="js/tracks/qatar.js?v=81"></script>
+<script src="js/tracks/abudhabi.js?v=81"></script>
+<script src="js/tracks.js?v=81"></script>
+<script src="js/car3d.js?v=81"></script>
+<script src="js/input.js?v=81"></script>
+<script src="js/audio.js?v=81"></script>
+<script src="js/api.js?v=81"></script>
+<script src="js/data.js?v=81"></script>
+<script src="js/parts.js?v=81"></script>
+<script src="js/ghost.js?v=81"></script>
+<script src="js/game.js?v=81"></script>
 </body>
 </html>

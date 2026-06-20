@@ -123,6 +123,16 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   background: var(--red); border-color: var(--red); color: #fff;
 }
 .preset-btn.active small { opacity: 0.85; }
+/* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
+.opt-row { display: flex; gap: 6px; margin-top: 4px; }
+.opt-row .opt-btn {
+  flex: 1; width: auto; margin: 0; padding: 8px 4px;
+  font-size: 12px; letter-spacing: 0.03em; text-align: center;
+}
+.opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+/* advanced disclosure */
+.adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
+#adv-extra { margin-top: 4px; }
 
 /* ---------- main menu ---------- */
 #overlay {
