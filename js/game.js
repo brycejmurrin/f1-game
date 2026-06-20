@@ -2368,6 +2368,22 @@ const PRESET_STORE = {  // slider store-key  ->  preset field
   steerRate: "steerRate", steerExpo: "steerExpo", steerLock: "steerLock",
   steerSpeed: "steerSpeed", slide: "slide", drivingHelp: "drivingHelp", raceLine: "raceLine",
 };
+
+// ---- simplified ("macro") controls ----
+// The default view exposes a handful of plain-language controls; each fans out to
+// the granular store keys above, so presets, the Advanced sliders and the macros
+// all stay in sync. STEER_LEVELS bundle the four cornering-feel knobs into named
+// steps that line up with the presets (RELAX→easy, STANDARD→normal, PRO→sim).
+const STEER_LEVELS = {
+  easy:   { steerRate: 4, steerExpo: 4, steerLock: 5, steerSpeed: 4, slide: 1 },
+  assist: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 4, slide: 2 },
+  normal: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3 },
+  sim:    { steerRate: 7, steerExpo: 6, steerLock: 7, steerSpeed: 7, slide: 6 },
+};
+const STEER_LEVEL_ORDER = ["easy", "assist", "normal", "sim"];
+const STEER_DEFAULTS = { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3 };
+const HELP_LEVELS = { low: 3, med: 6, high: 9 };
+const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
 function applyPreset(name) {
   const p = PRESETS[name];
   if (!p) return;
@@ -2383,6 +2399,35 @@ function refreshPresetButtons() {
   for (const name of ["relax", "standard", "pro"]) {
     const btn = $("pm-preset-" + name);
     if (btn) btn.classList.toggle("active", name === active);
+  }
+}
+
+// Which named steering step (if any) the current granular values correspond to.
+function matchSteerLevel() {
+  for (const n of STEER_LEVEL_ORDER) {
+    const L = STEER_LEVELS[n];
+    if (Object.keys(L).every((k) => store.get(k, STEER_DEFAULTS[k]) === L[k])) return n;
+  }
+  return null;
+}
+// Mirror the granular store values back onto the simplified controls so the two
+// views never disagree (presets, Advanced edits and macros all stay in sync).
+function refreshMacros() {
+  const ts = store.get("tiltDeg", 6);
+  if ($("pm-tiltsimple")) { $("pm-tiltsimple").value = ts; $("pm-tiltsimple-v").textContent = ts; }
+  const lvl = matchSteerLevel();
+  for (const n of STEER_LEVEL_ORDER) {
+    const b = $("pm-steer-" + n); if (b) b.classList.toggle("active", n === lvl);
+  }
+  const dh = store.get("drivingHelp", 6);
+  const hb = dh <= 4 ? "low" : dh <= 7 ? "med" : "high";
+  for (const n of ["low", "med", "high"]) {
+    const b = $("pm-help-" + n); if (b) b.classList.toggle("active", n === hb);
+  }
+  const rl = store.get("raceLine", 0);
+  const lb = rl <= 0 ? "off" : rl >= 5 ? "full" : "corner";
+  for (const n of ["off", "corner", "full"]) {
+    const b = $("pm-line-" + n); if (b) b.classList.toggle("active", n === lb);
   }
 }
 
@@ -2424,6 +2469,7 @@ function applySteerTuning() {
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = pace;
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
   refreshPresetButtons();
+  refreshMacros();
 }
 $("pm-sens").oninput = (e) => {
   const v = +e.target.value; store.set("tiltSens", v);
@@ -2476,6 +2522,35 @@ $("pm-line").oninput = (e) => {
 $("pm-preset-relax").onclick    = () => { applyPreset("relax");    if (soundOn) GameAudio.uiSelect(); };
 $("pm-preset-standard").onclick = () => { applyPreset("standard"); if (soundOn) GameAudio.uiSelect(); };
 $("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (soundOn) GameAudio.uiSelect(); };
+
+// ---- simplified controls: each fans out to the granular store keys ----
+$("pm-tiltsimple").oninput = (e) => {
+  store.set("tiltDeg", +e.target.value); clearPreset(); applySteerTuning();
+};
+function applySteerLevel(name) {
+  const L = STEER_LEVELS[name]; if (!L) return;
+  for (const k in L) store.set(k, L[k]);
+  clearPreset(); applySteerTuning();
+  if (soundOn) GameAudio.uiSelect();
+}
+for (const n of STEER_LEVEL_ORDER) $("pm-steer-" + n).onclick = () => applySteerLevel(n);
+for (const n of ["low", "med", "high"]) $("pm-help-" + n).onclick = () => {
+  store.set("drivingHelp", HELP_LEVELS[n]); clearPreset(); applySteerTuning();
+  if (soundOn) GameAudio.uiSelect();
+};
+for (const n of ["off", "corner", "full"]) $("pm-line-" + n).onclick = () => {
+  store.set("raceLine", LINE_LEVELS[n]); clearPreset(); applySteerTuning();
+  if (soundOn) GameAudio.uiSelect();
+};
+$("adv-more").onclick = () => {
+  const open = $("adv-extra").hidden;        // currently hidden → about to open
+  $("adv-extra").hidden = !open;
+  $("adv-more").setAttribute("aria-expanded", String(open));
+  $("adv-more").innerHTML = open ? "ADVANCED &#9652;" : "ADVANCED &#9662;";
+  if (soundOn) GameAudio.uiSelect();
+};
+// Any granular Advanced edit refreshes the simplified controls (events bubble up).
+$("advanced-inner").addEventListener("input", refreshMacros);
 applySteerTuning();
 // GEARS toggle: show when thumbs are free (tilt or desktop keyboard).
 function refreshGearsBtn() {

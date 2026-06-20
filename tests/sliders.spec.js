@@ -131,3 +131,84 @@ test.describe("Apex 26 — steering sliders", () => {
   // this headless environment because DeviceOrientationEvent is unavailable, so
   // requestGyro() never attaches the sensor listener.
 });
+
+// ---- simplified ("macro") default-view controls ----
+// The default view shows a handful of plain-language controls that fan out to the
+// granular store keys; these tests confirm the fan-out, the active-state mirroring,
+// and the Advanced disclosure.
+const click = (page, id) =>
+  page.evaluate((id) => document.getElementById(id).click(), id);
+const isActive = (page, id) =>
+  page.evaluate((id) => document.getElementById(id).classList.contains("active"), id);
+const hidden = (page, id) =>
+  page.evaluate((id) => document.getElementById(id).hidden, id);
+const num = async (page, key) => Number(await stored(page, key));
+
+test.describe("Apex 26 — simplified controls", () => {
+  test("STEERING levels fan out to the four cornering keys and mirror active state", async ({ page }) => {
+    await load(page);
+    await click(page, "pm-steer-sim");
+    expect(await num(page, "steerRate")).toBe(7);
+    expect(await num(page, "steerLock")).toBe(7);
+    expect(await num(page, "slide")).toBe(6);
+    expect(await isActive(page, "pm-steer-sim")).toBe(true);
+    expect(await isActive(page, "pm-steer-normal")).toBe(false);
+
+    await click(page, "pm-steer-easy");
+    expect(await num(page, "steerRate")).toBe(4);
+    expect(await num(page, "slide")).toBe(1);
+    expect(await isActive(page, "pm-steer-easy")).toBe(true);
+    expect(await isActive(page, "pm-steer-sim")).toBe(false);
+  });
+
+  test("TILT SENSITIVITY macro drives tiltDeg / maxTilt", async ({ page }) => {
+    await load(page);
+    await setSlider(page, "pm-tiltsimple", 2);
+    const lo = (await tuning(page)).maxTilt;
+    await setSlider(page, "pm-tiltsimple", 9);
+    const hi = (await tuning(page)).maxTilt;
+    expect(hi).toBeLessThan(lo);                 // higher slider = fewer degrees = more sensitive
+    expect(await num(page, "tiltDeg")).toBe(9);
+  });
+
+  test("DRIVING HELP and RACING LINE buttons set their store keys", async ({ page }) => {
+    await load(page);
+    await click(page, "pm-help-high");
+    expect(await num(page, "drivingHelp")).toBe(9);
+    expect(await isActive(page, "pm-help-high")).toBe(true);
+
+    await click(page, "pm-line-full");
+    expect(await num(page, "raceLine")).toBe(5);
+    expect(await isActive(page, "pm-line-full")).toBe(true);
+    await click(page, "pm-line-off");
+    expect(await num(page, "raceLine")).toBe(0);
+    expect(await isActive(page, "pm-line-off")).toBe(true);
+  });
+
+  test("presets light up the matching simplified controls", async ({ page }) => {
+    await load(page);
+    await click(page, "pm-preset-pro");
+    expect(await isActive(page, "pm-steer-sim")).toBe(true);   // PRO → sim
+    await click(page, "pm-preset-relax");
+    expect(await isActive(page, "pm-steer-easy")).toBe(true);  // RELAX → easy
+    await click(page, "pm-preset-standard");
+    expect(await isActive(page, "pm-steer-normal")).toBe(true);// STANDARD → normal
+  });
+
+  test("ADVANCED toggle shows and hides the granular sliders", async ({ page }) => {
+    await load(page);
+    expect(await hidden(page, "adv-extra")).toBe(true);
+    await click(page, "adv-more");
+    expect(await hidden(page, "adv-extra")).toBe(false);
+    await click(page, "adv-more");
+    expect(await hidden(page, "adv-extra")).toBe(true);
+  });
+
+  test("editing a granular Advanced slider updates the simplified view", async ({ page }) => {
+    await load(page);
+    await click(page, "pm-preset-standard");
+    expect(await isActive(page, "pm-steer-normal")).toBe(true);
+    await setSlider(page, "pm-slide", 6);        // nudge one cornering key off NORMAL
+    expect(await isActive(page, "pm-steer-normal")).toBe(false);  // no longer a clean level
+  });
+});
