@@ -109,6 +109,20 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .tune-row input[type="range"] {
   width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
 }
+.preset-row { display: flex; gap: 8px; margin: 4px 0 6px; }
+.preset-row .preset-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  flex: 1; width: auto; margin: 0; padding: 9px 6px; text-align: center;
+  letter-spacing: 0.06em; font-size: 13px;
+}
+.preset-btn small {
+  font-size: 9.5px; letter-spacing: 0.01em; opacity: 0.6; font-weight: normal;
+  text-transform: none; line-height: 1.2;
+}
+.preset-btn.active {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
+.preset-btn.active small { opacity: 0.85; }
 
 /* ---------- main menu ---------- */
 #overlay {

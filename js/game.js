@@ -164,6 +164,18 @@ let STEER_SPEED_REF = 80;   // m/s reference for the speed-sensitive steer taper
 let DRIFT = 0.2;            // slide amount (SLIDE slider)
 const LAT_GRIP = 7.0;       // 1/s — how fast sideways slip decays back to zero
 const MAX_LAT_SLIP = 9;     // m/s — grip-circle cap on lateral slip
+// Self-aligning torque: when the player isn't actively steering, the slide
+// "catches" itself by bleeding lateral slip away faster. A wheel/stick player
+// counter-steers to catch a slide; a player tilting a phone can't, so the car
+// recovers for them as input returns to neutral. This is what keeps the slip
+// model controllable on tilt instead of spinning out — the higher the slide
+// (SLIDE slider), the more the catch matters. Scales the decay up to (1+this)×.
+const AUTO_CATCH = 1.6;
+// Weight transfer (subtle, arcade): braking loads the front for a touch more
+// turn-in (trail-braking rotates the car); hard throttle loads the rear for a
+// little power-on rotation. Small enough to read as feel, not instability.
+const WT_BRAKE_TURNIN = 0.12;   // +12% steering authority while braking
+const WT_THROTTLE_SLIP = 0.15;  // +15% slip injection on power above 20 m/s
 // Road-following: track curvature passively yaws the car (tyre grip on the
 // road surface), separate from player steering so it doesn't inject drift.
 // 0 = pure world-space (car goes straight at corners), 1 = Frenet-like fully
@@ -1131,7 +1143,10 @@ function updateCar(c, dt, ranked) {
       c.vLat = 0;
     }
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
-    const auth = gripScale * kerbGrip * gripMult() * playerMods.cornering;
+    // Weight transfer: braking shifts load onto the front tyres, so the car
+    // turns in a little sharper (trail-braking rotation).
+    const turnIn = braking ? 1 + WT_BRAKE_TURNIN : 1;
+    const auth = gripScale * kerbGrip * gripMult() * playerMods.cornering * turnIn;
     // Speed-sensitive steer taper: full lock at low speed, less at high speed.
     const maxDelta = STEER_MAX_SLIP * Math.max(0.3, 1 - c.speed / STEER_SPEED_REF);
     // Steering angle is bounded well below pi/2, but clamp before tan() so no
@@ -1151,9 +1166,16 @@ function updateCar(c, dt, ranked) {
     c.head += dHead;
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
     // Lateral slip comes from player steering only (road grip ≠ slip angle).
-    // +slip pushes the car to the OUTSIDE of the corner.
-    c.vLat = (c.vLat || 0) + DRIFT * c.speed * clamp(playerYaw, -3.5, 3.5) * dt;
-    const latGrip = LAT_GRIP * (braking ? 0.5 : 1);   // braking eats lateral grip
+    // +slip pushes the car to the OUTSIDE of the corner. Power-on shifts load
+    // rearward, loosening the rear into a little more rotation.
+    const power = (onThrottle && c.speed > 20) ? 1 + WT_THROTTLE_SLIP : 1;
+    c.vLat = (c.vLat || 0) + DRIFT * power * c.speed * clamp(playerYaw, -3.5, 3.5) * dt;
+    // Self-aligning catch: as the player's steering input returns toward neutral
+    // the slide recovers faster, so a tilt player who simply levels the phone
+    // gets the car back. Decay ranges from LAT_GRIP (full lock) up to
+    // LAT_GRIP*(1+AUTO_CATCH) (hands-off).
+    const catchUp = 1 + (1 - Math.abs(shaped)) * AUTO_CATCH;
+    const latGrip = LAT_GRIP * (braking ? 0.5 : 1) * catchUp;  // braking eats lateral grip
     const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
     // Cap to the grip circle BOTH before and after the decay so a shrinking cap
     // (e.g. braking into a corner) can never leave a one-frame over-slip.
@@ -2172,7 +2194,48 @@ function dzFromSlider(v)     { return (v - 1) * 0.8; }                  // 0..7.
 function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
 function driftFromSlider(v)  { return (v - 1) / 9 * 0.9; }              // 0..0.9, v3≈0.2
 function paceFromSlider(v)   { return 1 + (v - 5) * 0.06; }             // 0.76..1.30, v5=1.0
+// DRIVING HELP = ROAD_FOLLOW: how much of each corner the car tracks for you.
+// v6 ≈ 0.70 (the original feel); higher = the car does more of the steering.
+function helpFromSlider(v)   { return 0.45 + (v - 1) / 9 * 0.45; }      // 0.45..0.90, v6≈0.70
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
+
+// ---- presets ----
+// Three named bundles drive all the handling sliders at once so a player never
+// has to understand the underlying knobs. STANDARD reproduces the original
+// hand-tuned defaults; RELAX stacks every forgiveness lever (on-rails grip,
+// heavy corner help, racing-line pull, smooth/wide tilt) without maxing any one;
+// PRO sharpens response and frees up the slide for skilled play. PACE is left
+// out — it's a race-wide setting, not a handling feel.
+const PRESETS = {
+  relax:    { tiltSens: 6, tiltDeg: 4, tiltDz: 5, steerSmooth: 8, steerRate: 4,
+              steerExpo: 4, steerLock: 5, steerSpeed: 4, slide: 1, drivingHelp: 9, raceLine: 2 },
+  standard: { tiltSens: 7, tiltDeg: 5, tiltDz: 4, steerSmooth: 6, steerRate: 5,
+              steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3, drivingHelp: 6, raceLine: 0 },
+  pro:      { tiltSens: 8, tiltDeg: 7, tiltDz: 2, steerSmooth: 3, steerRate: 7,
+              steerExpo: 6, steerLock: 7, steerSpeed: 7, slide: 6, drivingHelp: 3, raceLine: 0 },
+};
+const PRESET_STORE = {  // slider store-key  ->  preset field
+  tiltSens: "tiltSens", tiltDeg: "tiltDeg", tiltDz: "tiltDz", steerSmooth: "steerSmooth",
+  steerRate: "steerRate", steerExpo: "steerExpo", steerLock: "steerLock",
+  steerSpeed: "steerSpeed", slide: "slide", drivingHelp: "drivingHelp", raceLine: "raceLine",
+};
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  for (const storeKey of Object.keys(PRESET_STORE)) store.set(storeKey, p[storeKey]);
+  store.set("preset", name);
+  applySteerTuning();      // pushes the new values into both the live sim and the UI
+  refreshPresetButtons();
+}
+// A manual slider edit means the settings no longer match a named preset.
+function clearPreset() { if (store.get("preset", null)) { store.set("preset", "custom"); refreshPresetButtons(); } }
+function refreshPresetButtons() {
+  const active = store.get("preset", "standard");
+  for (const name of ["relax", "standard", "pro"]) {
+    const btn = $("pm-preset-" + name);
+    if (btn) btn.classList.toggle("active", name === active);
+  }
+}
 
 function applySteerTuning() {
   const sens    = store.get("tiltSens",   7);
@@ -2184,6 +2247,7 @@ function applySteerTuning() {
   const lock    = store.get("steerLock",  5);
   const spdsteer = store.get("steerSpeed", 5);
   const slide   = store.get("slide",      3);
+  const help    = store.get("drivingHelp", 6);
   const pace    = store.get("pace",       5);
   const line    = store.get("raceLine",   0);
   tiltOutputScale = sens / 10;
@@ -2193,6 +2257,7 @@ function applySteerTuning() {
   STEER_MAX_SLIP = lockFromSlider(lock);
   STEER_SPEED_REF = speedRefFromSlider(spdsteer);
   DRIFT          = driftFromSlider(slide);
+  ROAD_FOLLOW    = helpFromSlider(help);
   Input.setTiltSmoothing(slewFromSmooth(smooth));
   Input.setTiltDeadzone(dzFromSlider(dz));
   Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
@@ -2206,44 +2271,50 @@ function applySteerTuning() {
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
   $("pm-slide").value   = slide;   $("pm-slide-v").textContent   = slide;
+  $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = pace;
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
+  refreshPresetButtons();
 }
 $("pm-sens").oninput = (e) => {
   const v = +e.target.value; store.set("tiltSens", v);
-  tiltOutputScale = v / 10; $("pm-sens-v").textContent = v;
+  tiltOutputScale = v / 10; $("pm-sens-v").textContent = v; clearPreset();
 };
 $("pm-rate").oninput = (e) => {
   const v = +e.target.value; store.set("steerRate", v);
-  WHEELBASE = wheelbaseFromSlider(v); $("pm-rate-v").textContent = v;
+  WHEELBASE = wheelbaseFromSlider(v); $("pm-rate-v").textContent = v; clearPreset();
 };
 $("pm-expo").oninput = (e) => {
   const v = +e.target.value; store.set("steerExpo", v);
-  STEER_EXPO = expoFromSlider(v); $("pm-expo-v").textContent = v;
+  STEER_EXPO = expoFromSlider(v); $("pm-expo-v").textContent = v; clearPreset();
 };
 $("pm-smooth").oninput = (e) => {
   const v = +e.target.value; store.set("steerSmooth", v);
-  Input.setTiltSmoothing(slewFromSmooth(v)); $("pm-smooth-v").textContent = v;
+  Input.setTiltSmoothing(slewFromSmooth(v)); $("pm-smooth-v").textContent = v; clearPreset();
 };
 $("pm-dz").oninput = (e) => {
   const v = +e.target.value; store.set("tiltDz", v);
-  Input.setTiltDeadzone(dzFromSlider(v)); $("pm-dz-v").textContent = v;
+  Input.setTiltDeadzone(dzFromSlider(v)); $("pm-dz-v").textContent = v; clearPreset();
 };
 $("pm-tiltdeg").oninput = (e) => {
   const v = +e.target.value; store.set("tiltDeg", v);
-  Input.setTiltSensitivity(tiltDegFromRange(v)); $("pm-tiltdeg-v").textContent = v;
+  Input.setTiltSensitivity(tiltDegFromRange(v)); $("pm-tiltdeg-v").textContent = v; clearPreset();
 };
 $("pm-lock").oninput = (e) => {
   const v = +e.target.value; store.set("steerLock", v);
-  STEER_MAX_SLIP = lockFromSlider(v); $("pm-lock-v").textContent = v;
+  STEER_MAX_SLIP = lockFromSlider(v); $("pm-lock-v").textContent = v; clearPreset();
 };
 $("pm-speedsteer").oninput = (e) => {
   const v = +e.target.value; store.set("steerSpeed", v);
-  STEER_SPEED_REF = speedRefFromSlider(v); $("pm-speedsteer-v").textContent = v;
+  STEER_SPEED_REF = speedRefFromSlider(v); $("pm-speedsteer-v").textContent = v; clearPreset();
 };
 $("pm-slide").oninput = (e) => {
   const v = +e.target.value; store.set("slide", v);
-  DRIFT = driftFromSlider(v); $("pm-slide-v").textContent = v;
+  DRIFT = driftFromSlider(v); $("pm-slide-v").textContent = v; clearPreset();
+};
+$("pm-help").oninput = (e) => {
+  const v = +e.target.value; store.set("drivingHelp", v);
+  ROAD_FOLLOW = helpFromSlider(v); $("pm-help-v").textContent = v; clearPreset();
 };
 $("pm-pace").oninput = (e) => {
   const v = +e.target.value; store.set("pace", v);
@@ -2251,8 +2322,11 @@ $("pm-pace").oninput = (e) => {
 };
 $("pm-line").oninput = (e) => {
   const v = +e.target.value; store.set("raceLine", v);
-  raceLineAssist = v / 5; $("pm-line-v").textContent = lineLabel(v);
+  raceLineAssist = v / 5; $("pm-line-v").textContent = lineLabel(v); clearPreset();
 };
+$("pm-preset-relax").onclick    = () => { applyPreset("relax");    if (soundOn) GameAudio.uiSelect(); };
+$("pm-preset-standard").onclick = () => { applyPreset("standard"); if (soundOn) GameAudio.uiSelect(); };
+$("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (soundOn) GameAudio.uiSelect(); };
 applySteerTuning();
 // GEARS toggle: show when thumbs are free (tilt or desktop keyboard).
 function refreshGearsBtn() {
