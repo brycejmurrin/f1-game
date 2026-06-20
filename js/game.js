@@ -1197,10 +1197,21 @@ function updateCar(c, dt, ranked) {
     const axEst = braking ? -BRAKE : (onThrottle ? DEPLOY_A : -COAST_DRAG);
     const wt = clamp(-axEst / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
-    // --- friction limit per axle (the grip circle). SLIDE bleeds rear grip so
-    // the back steps out earlier; everything scales with the same surface/weather
-    // grip the rest of the sim uses.
-    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering;
+    // --- road-surface grip modifiers ---
+    // Banking: a banked road tilts the gravity vector so lateral G presses the
+    // tyres harder into the surface (Zandvoort's ~18° banking adds ~30% grip).
+    // Only non-null on circuits with def.banked = true; flat circuits cost nothing.
+    const bankPhys = Tracks.banking(track, c.s, 0);
+    const bankMu = bankPhys ? 1 + Math.sin(Math.abs(bankPhys.roll)) * 0.8 : 1;
+    // Vertical load: crests reduce normal force (car goes light, less grip);
+    // valleys increase it (car feels planted). Estimated from slope change over
+    // 12 m. Capped to ±20% so sparse elevation data can't break the model.
+    Tracks.sample(track, wrapS(c.s + 12), smp2);
+    const kv = ((smp2.t[1] || 0) - slopeSin) / 12;
+    const vertLoad = clamp(kv * c.speed * c.speed / 9.8, -0.20, 0.20);
+    // --- friction limit per axle (the grip circle). Everything scales with the
+    // same surface/weather grip the rest of the sim uses.
+    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad);
     const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
