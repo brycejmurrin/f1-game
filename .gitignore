@@ -5,3 +5,6 @@
 node_modules/
 test-results/
 playwright-report/
+
+# scratch visual-inspection captures (tests/inspect-*.spec.js)
+tests/ui-screenshots/inspect/
