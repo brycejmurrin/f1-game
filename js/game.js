@@ -2426,6 +2426,19 @@ window.__apex = {
       speed: player.speed, s: player.s,
     };
   },
+  // Look-ahead road sampler for closed-loop driving (the autopilot harness):
+  // curvature k (rad/m, +=right) and half-width hw at distAhead metres in front of
+  // the player. Pass an array of distances to get one reading each, e.g. for
+  // picking the sharpest corner inside a braking window. Pure read — no state change.
+  scan(distAhead) {
+    if (!player || !track) return null;
+    const one = (d) => {
+      const s = wrapS(player.s + (d || 0));
+      Tracks.sample(track, s, smp);
+      return { s, k: Tracks.curvature(track, s), hw: smp.hw, slope: smp.t[1] || 0 };
+    };
+    return Array.isArray(distAhead) ? distAhead.map(one) : one(distAhead);
+  },
   // Phase-1 migration check: take a track point (s, lateral), build its world
   // position the same way the renderer/physics do (centre + right*lateral), then
   // project that world point back with Tracks.project and report both, so a test
