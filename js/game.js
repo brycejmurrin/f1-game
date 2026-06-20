@@ -738,8 +738,10 @@ function resolveCollisions(ranked) {
       for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
         const b = ranked[j];               // a is ahead (higher prog), b behind
         const dProg = a.prog - b.prog;
+        if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
         if (dProg > LCAR) break;            // sorted by prog: the rest are farther
         const dX = a.x - b.x;
+        if (!Number.isFinite(dX)) continue;
         const penLong = LCAR - Math.abs(dProg);
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
@@ -782,8 +784,10 @@ function resolveCollisions(ranked) {
     for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
       const b = ranked[j];
       const dProg = a.prog - b.prog;
+      if (!Number.isFinite(dProg)) continue;
       if (dProg > LCAR) break;
       const dX = a.x - b.x;
+      if (!Number.isFinite(dX)) continue;
       const penLong = LCAR - Math.abs(dProg);
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
@@ -1106,8 +1110,11 @@ function updateCar(c, dt, ranked) {
     const auth = gripScale * kerbGrip * gripMult() * playerMods.cornering;
     // Speed-sensitive steer taper: full lock at low speed, less at high speed.
     const maxDelta = STEER_MAX_SLIP * Math.max(0.3, 1 - c.speed / STEER_SPEED_REF);
+    // Steering angle is bounded well below pi/2, but clamp before tan() so no
+    // tuning combination can ever drive it into the singularity (Infinity yaw).
+    const steerAngle = clamp(shaped * auth * maxDelta, -1.3, 1.3);
     const yawRate = c.speed > 0.5
-      ? c.speed * Math.tan(shaped * auth * maxDelta) / WHEELBASE
+      ? c.speed * Math.tan(steerAngle) / WHEELBASE
       : 0;
     // Right vector is cross(tangent, up) = (-tz, tx); increasing head rotates the
     // direction toward -right, so SUBTRACT yaw to make +steer turn right (+x),
@@ -1120,8 +1127,11 @@ function updateCar(c, dt, ranked) {
     // grip, cap it with the grip circle. +slip pushes the car to the OUTSIDE.
     c.vLat = (c.vLat || 0) - DRIFT * c.speed * dHead;
     const latGrip = LAT_GRIP * (braking ? 0.5 : 1);   // braking eats lateral grip
-    c.vLat *= Math.max(0, 1 - latGrip * dt);
     const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
+    // Cap to the grip circle BOTH before and after the decay so a shrinking cap
+    // (e.g. braking into a corner) can never leave a one-frame over-slip.
+    c.vLat = clamp(c.vLat, -slipCap, slipCap);
+    c.vLat *= Math.max(0, 1 - latGrip * dt);
     c.vLat = clamp(c.vLat, -slipCap, slipCap);
     // world velocity = forward + sideways slip (perp = (fz, -fx) = +right)
     c.px += (c.speed * fx + c.vLat * fz) * dt;
@@ -2359,6 +2369,18 @@ window.__apex = {
       minOverHw = Math.min(minOverHw, r - track.hw[k], l - track.hw[k]);
     }
     return { minB, maxB, minOverHw, anyNaN, street: !!track.street, n: track.n };
+  },
+  // Largest amount any (non-finished) car is currently OUTSIDE its per-side
+  // barrier — should stay ~0, proving nothing (player or AI) clips through a wall.
+  maxWallOvershoot() {
+    if (!track || !track.barR) return null;
+    let m = 0;
+    for (const c of cars) {
+      if (c.finished) continue;
+      const wr = Tracks.wallAt(track, c.s, 1), wl = Tracks.wallAt(track, c.s, -1);
+      m = Math.max(m, c.x - wr, -wl - c.x, 0);
+    }
+    return m;
   },
   // Set physics params directly (bypassing the sliders) for deterministic A/B
   // tests and on-device tuning. Any omitted field is left unchanged.
