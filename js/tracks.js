@@ -534,8 +534,10 @@ const Tracks = (function () {
     // fully hide it and it cannot visually bleed onto the road surface.
     const NTV = 5;
     const isStreet = !!track.def.street;
-    const latsL = isStreet ? [-5.0, -10.0, -20, -55, -120] : [-2.2, -7.0, -14, -48, -120];
-    const latsR = isStreet ? [ 5.0,  10.0,  20,  55,  120] : [ 2.2,  7.0,  14,  48,  120];
+    const outerW = track.def.terrainOuter || 120;
+    const cap = (v) => Math.min(v, outerW);
+    const latsL = isStreet ? [-5.0, -cap(10), -cap(20), -cap(55), -outerW] : [-2.2, -cap(7.0), -cap(14), -cap(48), -outerW];
+    const latsR = isStreet ? [ 5.0,  cap(10),  cap(20),  cap(55),  outerW] : [ 2.2,  cap(7.0),  cap(14),  cap(48),  outerW];
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
       const base = pos.length / 3;
@@ -1569,6 +1571,7 @@ const Tracks = (function () {
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
       street: !!d.street, banked: !!d.banked, bridges: d.bridges || null,
+      terrainOuter: d.terrainOuter,
       // bespoke per-circuit scenery (js/tracks/<id>.js); run by buildProps
       scenery: d.scenery || null,
       // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
