@@ -2109,8 +2109,7 @@ function refreshCamBtn() {
 function setCamMode(m) {
   camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
   store.set("camMode", camMode);
-  refreshCamBtn();
-  announce("CAM: " + CAM_MODES[camMode].label, 0.9);
+  refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
   return CAM_MODES[camMode].id;
 }
 function cycleCam() { return setCamMode(camMode + 1); }
