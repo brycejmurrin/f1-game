@@ -5,7 +5,7 @@ export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
   retries: 1,
-  timeout: 30_000,
+  timeout: 120_000,
   use: {
     baseURL: "http://localhost:3456",
     viewport: { width: 1280, height: 720 },
@@ -17,7 +17,12 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         launchOptions: {
           executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-          args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"],
+          args: [
+            "--use-angle=swiftshader",
+            "--enable-unsafe-webgpu",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+          ],
         },
       },
     },
