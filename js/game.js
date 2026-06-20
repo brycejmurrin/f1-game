@@ -254,6 +254,7 @@ let ttSessionTs = 0;        // session start stamp; entries at/after it are "you
 let frameSky = {}, frame = {};
 const teamMeshes = {};   // teamId -> GLX mesh
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
+let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
@@ -1447,6 +1448,12 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, 4, dt);
 
+  // Camera roll: lean ~2-4° into corners proportional to lateral slip, like Codemasters F1/GRID
+  {
+    const slip = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
+    camRoll += (clamp(slip, -1, 1) * 0.07 - camRoll) * Math.min(1, dt / 0.15);
+  }
+
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
   // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
   // whole-track layouts and trackside scenery from any angle.
@@ -1468,7 +1475,11 @@ function render(dt) {
   }
 
   M4.perspectiveTo(_mProj, fovY, GLX.aspect, 0.1, farPlane);
-  M4.lookAtTo(_mView, camEye, camTgt, [0, 1, 0]);
+  // Tilt the up vector by camRoll to roll the camera into corners
+  const _camBack = V3.norm(V3.sub(camEye, camTgt));
+  const _camRight = V3.norm(V3.cross([0, 1, 0], _camBack));
+  const _camUp = V3.norm(V3.add([0, 1, 0], V3.scale(_camRight, Math.sin(camRoll))));
+  M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
   frame.viewProj = _mVP;
   frame.eye = camEye;
