@@ -1144,6 +1144,7 @@ function updateCar(c, dt, ranked) {
       c.pz = smp.p[2] + smp.r[2] * c.x;
       c.head = Math.atan2(smp.t[0], smp.t[2]);
       c.vLat = 0;
+      c.yawRateCur = 0;
     }
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     // Weight transfer: braking shifts load onto the front tyres, so the car
@@ -1163,9 +1164,12 @@ function updateCar(c, dt, ranked) {
     // so it doesn't inject lateral velocity. k<0 = right-hand corner needs
     // rightward yaw (positive), hence the negation.
     const roadYaw = -k * c.speed * ROAD_FOLLOW;
-    const yawRate = playerYaw + roadYaw;
+    // Yaw inertia: ease-in/ease-out via first-order lag (tau ≈ 0.06 s) so the
+    // car feels like it has rotational mass — steering has weight without lag.
+    const targetYaw = playerYaw + roadYaw;
+    c.yawRateCur = (c.yawRateCur || 0) + (targetYaw - (c.yawRateCur || 0)) * Math.min(1, dt / 0.06);
     // Increasing head = CCW / left; SUBTRACT combined yaw so +steer turns right.
-    const dHead = -clamp(yawRate, -3.5, 3.5) * dt;
+    const dHead = -clamp(c.yawRateCur, -3.5, 3.5) * dt;
     c.head += dHead;
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
     // Lateral slip comes from player steering only (road grip ≠ slip angle).
@@ -1326,7 +1330,7 @@ function rescuePlayer(c) {
   Tracks.sample(track, c.s, smp);
   c.x = 0; c.xVis = 0;
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
-  c.vLat = 0;
+  c.vLat = 0; c.yawRateCur = 0;
   c.speed = Math.max(c.speed, 16);
   c.px = smp.p[0]; c.pz = smp.p[2];
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false;
@@ -2438,7 +2442,7 @@ window.__apex = {
     player.px = smp.p[0] + smp.r[0] * player.x;
     player.pz = smp.p[2] + smp.r[2] * player.x;
     player.head = Math.atan2(smp.t[0], smp.t[2]);
-    player.vLat = 0;
+    player.vLat = 0; player.yawRateCur = 0;
     return { s: player.s, total: track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,

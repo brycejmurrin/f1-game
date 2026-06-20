@@ -216,7 +216,8 @@ const Input = (function () {
       d -= Math.sign(d) * DEADZONE;
       target = clamp(d / (MAX_TILT - DEADZONE), -1, 1);
     }
-    tiltSteerVal = moveToward(tiltSteerVal, target, TILT_SLEW * step);
+    const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
+    tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * step);
     return tiltSteerVal;
   }
   // Reset the tilt filter/slew/zero state so a fresh emulation run starts clean.
@@ -244,7 +245,8 @@ const Input = (function () {
     const t = nowMs();
     const dt = tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0;
     tiltSteerT = t;
-    tiltSteerVal = moveToward(tiltSteerVal, target, TILT_SLEW * dt);
+    const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
+    tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * dt);
     return tiltSteerVal;
   }
 
