@@ -59,12 +59,13 @@ test.describe("Apex 26 — world-space player physics", () => {
     expect(await measure(-0.5)).toBeLessThan(0);
   });
 
-  test("no input runs wide to the OUTSIDE (+sign(k)) at corners", async ({ page }) => {
+  test("no input runs wide with road-follow off; tracks the corner at the default", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {
+      const def = window.__apex.tuning().roadFollow;
       const corners = window.__apex.corners();
-      const out = [];
-      for (const frac of corners.slice(0, 12)) {
+      const meas = (frac, rf) => {
+        window.__apex.setPhysics({ roadFollow: rf });
         window.__apex.jump(frac, 24, 0);
         window.__apex.setInput({ steer: 0, throttle: false });
         window.__apex.step(1 / 60, 3);
@@ -72,13 +73,26 @@ test.describe("Apex 26 — world-space player physics", () => {
         window.__apex.step(1 / 60, 40);
         const a = window.__apex.probe();
         window.__apex.clearInput();
-        if (Math.abs(b.k) < 0.012) continue;
-        out.push({ k: b.k, dx: a.x - b.x });
+        return { k: b.k, dx: a.x - b.x };
+      };
+      const out = [];
+      for (const frac of corners.slice(0, 12)) {
+        const off = meas(frac, 0);            // pure world-space: no auto-steer
+        if (Math.abs(off.k) < 0.012) continue;
+        const on = meas(frac, def);           // shipped default: road-follow tracks
+        out.push({ k: off.k, dxOff: off.dx, dxOn: on.dx });
       }
+      window.__apex.setPhysics({ roadFollow: def });
       return out;
     });
     expect(r.length).toBeGreaterThan(0);
-    for (const { k, dx } of r) expect(Math.sign(dx)).toBe(Math.sign(k));
+    for (const { k, dxOff, dxOn } of r) {
+      // Road-follow OFF: the car holds a straight world line and runs wide to the
+      // OUTSIDE (+sign(k)). At the shipped default it tracks the bend and stays
+      // much closer to the line (the "fix Bahrain slide-off" / DRIVING HELP design).
+      expect(Math.sign(dxOff)).toBe(Math.sign(k));
+      expect(Math.abs(dxOn)).toBeLessThan(Math.abs(dxOff));
+    }
   });
 
   test("RESPONSE slider changes turn-in (wheelbase): high = snappier", async ({ page }) => {
