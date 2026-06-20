@@ -120,4 +120,54 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(errors).toEqual([]);
     expect(finite).toBe(true);
   });
+
+  test("road-following: entering Bahrain T1 at speed with no steer stays within track limits", async ({ page }) => {
+    // Regression for the Bahrain corner slide-off: in the pure world-space bicycle
+    // model the car went straight through every corner without road-following yaw.
+    // The fix adds passive road-curvature yaw so the car tracks ~70% of the corner
+    // automatically. With zero steering the car should stay on the road surface.
+    await race(page, "bahrain");
+    const r = await page.evaluate(() => {
+      // Approach Bahrain T1 (first right-hand corner, frac ~0.10) at a brisk speed
+      // from just before the corner; no steering — the road-following must do the work.
+      window.__apex.jump(0.08, 55, 0);
+      window.__apex.setInput({ steer: 0, throttle: false });
+      const hw = window.__apex.probe().hw;
+      let maxAbsX = 0;
+      for (let i = 0; i < 90; i++) {
+        window.__apex.step(1 / 60, 1);
+        maxAbsX = Math.max(maxAbsX, Math.abs(window.__apex.probe().x));
+      }
+      window.__apex.clearInput();
+      return { maxAbsX, hw };
+    });
+    // Car should stay well within the road surface (hw) — not 9 m past it.
+    expect(r.maxAbsX).toBeLessThan(r.hw * 1.6);   // some runoff allowed, not wide open
+  });
+
+  test("road-following: ROAD_FOLLOW=0 reverts to straight-line in corners", async ({ page }) => {
+    // Confirm that disabling road-following restores the pure world-space behaviour
+    // (car goes straight, runs wide) vs the default that tracks the curve.
+    await race(page, "bahrain");
+    const r = await page.evaluate(() => {
+      const runCorner = (rf) => {
+        window.__apex.setPhysics({ roadFollow: rf });
+        window.__apex.jump(0.08, 55, 0);
+        window.__apex.setInput({ steer: 0, throttle: false });
+        let maxX = 0;
+        for (let i = 0; i < 90; i++) {
+          window.__apex.step(1 / 60, 1);
+          maxX = Math.max(maxX, Math.abs(window.__apex.probe().x));
+        }
+        window.__apex.clearInput();
+        return maxX;
+      };
+      const withFollow = runCorner(0.7);
+      const withoutFollow = runCorner(0.0);
+      window.__apex.setPhysics({ roadFollow: 0.7 });   // restore default
+      return { withFollow, withoutFollow };
+    });
+    // With road-following the car drifts far less wide through the corner.
+    expect(r.withFollow).toBeLessThan(r.withoutFollow * 0.7);
+  });
 });

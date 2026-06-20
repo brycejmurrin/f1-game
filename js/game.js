@@ -164,6 +164,13 @@ let STEER_SPEED_REF = 80;   // m/s reference for the speed-sensitive steer taper
 let DRIFT = 0.2;            // slide amount (SLIDE slider)
 const LAT_GRIP = 7.0;       // 1/s — how fast sideways slip decays back to zero
 const MAX_LAT_SLIP = 9;     // m/s — grip-circle cap on lateral slip
+// Road-following: track curvature passively yaws the car (tyre grip on the
+// road surface), separate from player steering so it doesn't inject drift.
+// 0 = pure world-space (car goes straight at corners), 1 = Frenet-like fully
+// road-locked; 0.7 means the car tracks 70% of any corner automatically and
+// the player must steer the remaining 30% — corners are manageable without
+// requiring perfect braking technique.
+let ROAD_FOLLOW = 0.7;
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -1113,19 +1120,22 @@ function updateCar(c, dt, ranked) {
     // Steering angle is bounded well below pi/2, but clamp before tan() so no
     // tuning combination can ever drive it into the singularity (Infinity yaw).
     const steerAngle = clamp(shaped * auth * maxDelta, -1.3, 1.3);
-    const yawRate = c.speed > 0.5
-      ? c.speed * Math.tan(steerAngle) / WHEELBASE
-      : 0;
-    // Right vector is cross(tangent, up) = (-tz, tx); increasing head rotates the
-    // direction toward -right, so SUBTRACT yaw to make +steer turn right (+x),
-    // matching the lateral sign convention and the old Frenet model.
+    // Player steering yaw (causes lateral slip / drift).
+    const playerYaw = c.speed > 0.5
+      ? c.speed * Math.tan(steerAngle) / WHEELBASE : 0;
+    // Passive road-following: track curvature forces a yaw that keeps the car
+    // naturally tracking the road curve. Represented as tyre grip (not slip),
+    // so it doesn't inject lateral velocity. k<0 = right-hand corner needs
+    // rightward yaw (positive), hence the negation.
+    const roadYaw = -k * c.speed * ROAD_FOLLOW;
+    const yawRate = playerYaw + roadYaw;
+    // Increasing head = CCW / left; SUBTRACT combined yaw so +steer turns right.
     const dHead = -clamp(yawRate, -3.5, 3.5) * dt;
     c.head += dHead;
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
-    // Lateral slip: the heading rotated, so forward momentum now points slightly
-    // sideways vs the new heading. Inject that (scaled by DRIFT), bleed it with
-    // grip, cap it with the grip circle. +slip pushes the car to the OUTSIDE.
-    c.vLat = (c.vLat || 0) - DRIFT * c.speed * dHead;
+    // Lateral slip comes from player steering only (road grip ≠ slip angle).
+    // +slip pushes the car to the OUTSIDE of the corner.
+    c.vLat = (c.vLat || 0) + DRIFT * c.speed * clamp(playerYaw, -3.5, 3.5) * dt;
     const latGrip = LAT_GRIP * (braking ? 0.5 : 1);   // braking eats lateral grip
     const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
     // Cap to the grip circle BOTH before and after the decay so a shrinking cap
@@ -1140,7 +1150,7 @@ function updateCar(c, dt, ranked) {
     const proj = Tracks.project(track, c.px, c.pz, c.s);
     c.s = proj.s;
     c.x = proj.lat;
-    steer = clamp(yawRate / 2.5, -1, 1);
+    steer = clamp(playerYaw / 2.5, -1, 1);   // steer vis = driver input only, not road-follow
     if (raceLineAssist !== 0) {
       const sLook = wrapS(c.s + clamp(c.speed * 0.6, 12, 50));
       // Racing line is on the inside = -sign(k); PULL eases the car toward it.
@@ -2356,6 +2366,7 @@ window.__apex = {
       maxSlip: STEER_MAX_SLIP,         // STEER LOCK
       speedRef: STEER_SPEED_REF,       // SPEED STEER (higher = sharper at speed)
       drift: DRIFT,                    // SLIDE (0 = on-rails)
+      roadFollow: ROAD_FOLLOW,         // passive road-tracking strength (0=world-space, 1=Frenet-like)
       pace: PACE,                      // OVERALL SPEED (player + AI)
       raceLineAssist,                  // RACING LINE
       maxTilt: Input.maxTilt,          // TILT RANGE
@@ -2412,6 +2423,7 @@ window.__apex = {
     if (o.wheelbase != null) WHEELBASE = o.wheelbase;
     if (o.expo != null) STEER_EXPO = o.expo;
     if (o.maxSlip != null) STEER_MAX_SLIP = o.maxSlip;
+    if (o.roadFollow != null) ROAD_FOLLOW = o.roadFollow;
     return this.tuning();
   },
   // Debug free camera for surveying track layouts/scenery — look at anything.
