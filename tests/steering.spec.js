@@ -81,8 +81,10 @@ async function findStraight(page) {
 }
 
 test.describe("Apex 26 — steering", () => {
-  test("no auto-steer: with no input the car runs wide to the OUTSIDE at corners", async ({ page }) => {
+  test("road-follow tracks corners: no input keeps the car near the line, not sliding off", async ({ page }) => {
     await startLiveRace(page);
+    // Capture the shipped default road-follow so we can A/B it against OFF.
+    const def = await page.evaluate(() => window.__apex.tuning().roadFollow);
     const corners = await page.evaluate(() => window.__apex.corners());
     expect(corners.length).toBeGreaterThan(0);
 
@@ -90,16 +92,25 @@ test.describe("Apex 26 — steering", () => {
     const sample = corners.filter((_, i) => i % 4 === 0).slice(0, 5);
     let checked = 0;
     for (const frac of sample) {
-      const { before, after } = await run(page, { frac, speed: 28, throttle: true, ticks: 75 });
-      if (Math.abs(before.k) < 0.012) continue; // skip near-straight false peaks
+      // Road-follow OFF = the old pure-world-space model: with no input the car
+      // holds a straight world line and runs wide to the OUTSIDE (+sign(k)) — it
+      // does not auto-steer onto the apex.
+      await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
+      const off = await run(page, { frac, speed: 28, throttle: true, ticks: 75 });
+      if (Math.abs(off.before.k) < 0.012) continue;   // skip near-straight false peaks
       checked++;
-      const dx = after.x - before.x;
-      // k>0 curves toward screen-left, so the OUTSIDE is +x = +sign(k). With no
-      // input the car holds a straight world line and runs wide that way — it
-      // never auto-steers onto the apex.
-      expect(Math.sign(dx)).toBe(Math.sign(before.k));
-      expect(Math.abs(dx)).toBeGreaterThan(1); // and it's a clear slide, not a wobble
+      const dxOff = off.after.x - off.before.x;
+      expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k));
+      expect(Math.abs(dxOff)).toBeGreaterThan(1);     // a clear slide, not a wobble
+      // Road-follow at the shipped default: the car now TRACKS the bend — the
+      // deliberate "fix Bahrain slide-off" change that the DRIVING HELP slider
+      // exposes — so with no input it stays far closer to the line instead of
+      // sliding off to the outside.
+      await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
+      const on = await run(page, { frac, speed: 28, throttle: true, ticks: 75 });
+      expect(Math.abs(on.after.x - on.before.x)).toBeLessThan(Math.abs(dxOff));
     }
+    await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
     expect(checked).toBeGreaterThan(0);
   });
 
@@ -182,14 +193,21 @@ test.describe("Apex 26 — steering", () => {
     expect(Math.abs(aR + aL)).toBeLessThan(Math.max(aR, -aL) * 0.15);
   });
 
-  test("racing-line assist off by default: same as pure manual", async ({ page }) => {
+  test("racing-line assist off by default", async ({ page }) => {
     await startLiveRace(page);
-    // No slider interaction; store is empty, so assist must be 0.
+    // No slider interaction; store is empty, so the assist must be 0.
+    const assist = await page.evaluate(() => window.__apex.tuning().raceLineAssist);
+    expect(assist).toBe(0);
+    // ...and with the assist explicitly off, the car's line through a corner is
+    // identical to the untouched default — the assist adds nothing. (The absolute
+    // drift here is set by road-follow, not the racing line, so we compare the two
+    // runs rather than assuming a wide-to-the-outside slide.)
     const { frac, k } = await firstCorner(page);
     expect(Math.abs(k)).toBeGreaterThan(0.02);
-    const { before, after } = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    // Default behavior is unchanged: car runs wide to the outside (+sign(k)).
-    expect(Math.sign(after.x - before.x)).toBe(Math.sign(k));
+    const a = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+    await setRaceLine(page, 0);
+    const b = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+    expect(Math.abs((a.after.x - a.before.x) - (b.after.x - b.before.x))).toBeLessThan(0.5);
   });
 
   test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
