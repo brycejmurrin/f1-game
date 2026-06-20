@@ -43,7 +43,7 @@ test.describe("Apex 26 — presets", () => {
     const t = await tuning(page);
     expect(t.wheelbase).toBeCloseTo(3.2, 1);   // RESPONSE 5
     expect(t.expo).toBeCloseTo(2.4, 1);        // LINEARITY 5
-    expect(t.roadFollow).toBeCloseTo(0.70, 1); // DRIVING HELP 6
+    expect(t.roadFollow).toBeCloseTo(0.50, 1); // DRIVING HELP 6 (grip-limited assist gain)
   });
 
   test("a manual slider edit drops the preset back to custom", async ({ page }) => {
