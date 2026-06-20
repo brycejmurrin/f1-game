@@ -223,9 +223,15 @@
 <!-- advanced steering options -->
 <div id="advanced" hidden>
   <div id="advanced-inner" class="panel">
-    <h2>ADVANCED STEERING</h2>
+    <h2>STEERING &amp; ASSISTS</h2>
     <button id="adv-close">&#10005;</button>
-    <p class="adv-intro">Every setting is 1&ndash;10 and takes effect immediately. Higher = the direction in the name. Your choices are saved.</p>
+    <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Fine-tune below if you like; every setting is 1&ndash;10 and takes effect immediately. Your choices are saved.</p>
+
+    <div class="preset-row">
+      <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
+      <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
+      <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
+    </div>
 
     <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
     <div class="adv-item">
@@ -250,6 +256,11 @@
     </div>
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="6"></label>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
+    </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
         <input id="pm-rate" type="range" min="1" max="10" step="1" value="5"></label>

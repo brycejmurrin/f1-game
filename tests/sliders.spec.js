@@ -38,6 +38,7 @@ const SLIDERS = [
   { id: "pm-lock",    key: "maxSlip",         store: "steerLock",  vid: "pm-lock-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-speedsteer", key: "speedRef",     store: "steerSpeed", vid: "pm-speedsteer-v", min: 1, max: 10, sign: +1 },
   { id: "pm-slide",   key: "drift",           store: "slide",      vid: "pm-slide-v",   min: 1,  max: 10, sign: +1 },
+  { id: "pm-help",    key: "roadFollow",      store: "drivingHelp",vid: "pm-help-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-pace",    key: "pace",            store: "pace",       vid: "pm-pace-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-line",    key: "raceLineAssist",  store: "raceLine",   vid: "pm-line-v",    min: -5, max: 5,  sign: +1 },
 ];
