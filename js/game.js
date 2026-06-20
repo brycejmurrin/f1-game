@@ -1942,6 +1942,50 @@ function setMusic(b) {
 }
 $("pm-music").onclick = () => setMusic(!musicEnabled);
 
+// Screen orientation lock: cycles LANDSCAPE → PORTRAIT → AUTO.
+// Uses the Screen Orientation API + Fullscreen API (lock requires fullscreen on
+// non-PWA browsers). Silently skips the lock step if the API isn't available
+// (desktop, iOS Safari) — the button still cycles and persists the preference.
+const ORIENT_STATES = [
+  { label: "LANDSCAPE", lock: "landscape" },
+  { label: "PORTRAIT",  lock: "portrait"  },
+  { label: "AUTO",      lock: null        },
+];
+let orientIdx = Math.min(store.get("orientLock", 0), ORIENT_STATES.length - 1);
+function updateOrientBtn() {
+  $("pm-orient").textContent = "SCREEN: " + ORIENT_STATES[orientIdx].label;
+}
+updateOrientBtn();
+async function cycleOrient() {
+  orientIdx = (orientIdx + 1) % ORIENT_STATES.length;
+  store.set("orientLock", orientIdx);
+  updateOrientBtn();
+  const { lock } = ORIENT_STATES[orientIdx];
+  try {
+    if (!lock) {
+      screen.orientation?.unlock?.();
+    } else {
+      if (!document.fullscreenElement)
+        await document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+      await screen.orientation?.lock?.(lock);
+    }
+  } catch (e) { /* lock unavailable on this browser/context — UI still cycles */ }
+}
+$("pm-orient").onclick = cycleOrient;
+// Restore saved lock after the first user gesture (lock needs user activation).
+if (orientIdx > 0) {
+  const saved = ORIENT_STATES[orientIdx].lock;
+  if (saved) {
+    document.addEventListener("pointerdown", async () => {
+      try {
+        if (!document.fullscreenElement)
+          await document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+        await screen.orientation?.lock?.(saved);
+      } catch (e) {}
+    }, { once: true, capture: true });
+  }
+}
+
 $("mb-race").onclick = () => {
   seasonMode = false; timeTrial = false;
   buildSelect();
