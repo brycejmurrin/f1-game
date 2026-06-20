@@ -1156,6 +1156,7 @@ const Tracks = (function () {
       }
       for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(p.c, p.t, o), 0.12, h, [0.2, 0.2, 0.22], 4, b);
       addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], col || [0.9, 0.85, 0.2], b);
+      blockAt(k, side, gap, w * 0.4);   // posts + panel face → stop before it
     };
     // Overhead gantry spanning the track (start/scoring/DRS): two legs + a beam.
     const gantry = (s, h, col) => {
@@ -1347,6 +1348,8 @@ const Tracks = (function () {
           : (i % 2 ? [0.9, 0.25, 0.25] : [0.95, 0.95, 0.98]);
         addBox(out, p, [2.4, 2.4, 2.4], cab);
       }
+      // solid base (legs + hub footprint) → stop the car before it on open tracks
+      blockAt(k, side, dist - 0.8, 4);
     }
     
     
@@ -1381,6 +1384,7 @@ const Tracks = (function () {
           const o = side * (hw[k] + 0.7);
           addBox(out, [px[k] + r[0] * o, deckY / 2 - 0.3, pz[k] + r[2] * o],
                  [1.6, deckY + 0.4, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
+          blockAt(k, side, 0.7, 1);   // solid pillar at the deck edge
         }
       }
     }
