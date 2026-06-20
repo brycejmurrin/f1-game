@@ -136,4 +136,33 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     });
     expect(r.onTrack).toBe(true);
   });
+
+  // Regression: a car stopped ON the track (within the road, NOT off-track and not
+  // wrong-way) must not sit at 0 forever — the case where you wedge against an
+  // inside corner barrier on an incline. The catch-all rescue must dig it out.
+  test("auto-rescue: a car stopped on-track (wedged) is freed, never stuck at 0", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.go());
+    const r = await page.evaluate(() => {
+      // Park on-track, mid-road, at a standstill and apply NO throttle so the car
+      // would otherwise stay at 0. It is not off-track and not wrong-way, so only
+      // the stopped-on-track catch-all can save it.
+      window.__apex.jump(0.12, 0, 0);
+      let maxSpeed = 0, freed = false;
+      for (let i = 0; i < 420; i++) {            // 7 s
+        window.__apex.setInput({ steer: 0, throttle: false });
+        window.__apex.step(1 / 60, 1);
+        const p = window.__apex.physState();
+        maxSpeed = Math.max(maxSpeed, p.speed);
+        if (Math.abs(p.x) < 1 && p.speed > 10) freed = true;   // rescued back onto the line, moving
+      }
+      window.__apex.clearInput();
+      return { maxSpeed, freed };
+    });
+    expect(r.freed).toBe(true);          // the car was dug out, not left at 0
+    expect(r.maxSpeed).toBeGreaterThan(10);
+  });
 });
