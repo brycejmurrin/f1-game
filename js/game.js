@@ -1279,8 +1279,14 @@ function updateCar(c, dt, ranked) {
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
       announce("WRONG WAY", 1.0); c.wrongCueT = 1.0;
     }
-    // Auto-rescue: stuck off-track, wrong-way, or pinned/stopped for too long.
-    const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0);
+    // Auto-rescue: stuck off-track, wrong-way, pinned to a wall, or simply
+    // crawling/stopped on-track for too long. The last clause is the catch-all
+    // for being WEDGED against a corner barrier (e.g. an inside tyre wall on an
+    // incline): on open circuits wall contact doesn't set wallT and a car pinned
+    // at |x| < hw isn't "offroad", so without it the car could sit at 0 forever.
+    // Gated past the race launch so the standing start (everyone at 0) is exempt.
+    const stoppedOnTrack = c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
+    const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     if (stuck) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
