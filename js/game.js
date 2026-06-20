@@ -22,7 +22,7 @@ const els = {
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
-  pausebtn: $("pausebtn"), pausemenu: $("pausemenu"),
+  pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
   btnThrottle: $("btn-throttle"),
@@ -218,6 +218,16 @@ let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
+// Player camera modes, cycled with the CAM button / C key and persisted. Each is
+// a distinct vantage computed in render(): a close action chase, a higher/wider
+// chase for race-craft, an in-cockpit eye, and a nose/hood cam. Index into CAM_MODES.
+const CAM_MODES = [
+  { id: "chase",   label: "CHASE" },
+  { id: "far",     label: "FAR" },
+  { id: "cockpit", label: "COCKPIT" },
+  { id: "hood",    label: "HOOD" },
+];
+let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
 let seasonMode = false;
 let timeTrial = false;      // solo run against the clock, no AI
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
@@ -507,6 +517,7 @@ function startRace() {
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
+  if (els.btnCam) els.btnCam.hidden = false;
   els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
@@ -537,6 +548,7 @@ function showTouchControls(show) {
 function endRace() {
   state = "results";
   els.pausebtn.hidden = true;
+  if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0);
   if (soundOn) GameAudio.finish();
@@ -647,6 +659,7 @@ function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) +
 function quitToMenu() {
   state = "menu"; paused = false;
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
+  if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
   $("advanced").hidden = true;
   els.overlay.hidden = false;
@@ -660,6 +673,9 @@ function quitToMenu() {
 
 // ---------- per-frame update ----------
 function update(dt) {
+  // Camera cycling works during the countdown and the race (set your view before
+  // lights-out). Edge-triggered via the C key or the CAM button.
+  if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
   if (state === "count") {
     countT += dt;
     const lit = Math.min(5, Math.floor(countT));
@@ -1332,18 +1348,37 @@ function render(dt) {
     const bankCam = Tracks.banking(track, player.s, px);
     const bankDy = bankCam ? bankCam.dy : 0;
     const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
-    // Anchor the camera a FIXED distance behind the player along the track
-    // (arc-length), not in world space — so it never lags at high speed and
-    // the car stays a constant, readable size.
-    Tracks.sample(track, wrapS(player.s - 5.8), smpC);
-    const cx = px * 0.5;   // partly follow lateral offset; rest shows position
-    eyeT = [
-      smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 2.1 + bankDy, smpC.p[2] + smpC.r[2] * cx,
-    ];
-    tgtT = [p[0] + smp.t[0] * 4, p[1] + 0.7, p[2] + smp.t[2] * 4];
-    // closer camera + narrower FOV so the car reads bigger; still widens a bit
-    // with speed for a sense of pace, plus a small boost kick.
-    fovT = lerp(52, 66, clamp(player.speed / VMAX, 0, 1)) + (player.deploying ? 6 : 0);
+    const spd = clamp(player.speed / VMAX, 0, 1);
+    const mode = CAM_MODES[camMode].id;
+    if (mode === "cockpit" || mode === "hood") {
+      // Onboard cams sit ON the car and look down the track ahead. Eye placed at
+      // the car (riding its lateral offset fully) with a forward+up offset; target
+      // far down the road so the horizon reads. Forward is the track tangent
+      // (smooth — using the car's slewing heading here would induce nausea).
+      const eyeFwd = mode === "cockpit" ? 0.2 : 1.9;   // hood sits out on the nose
+      const eyeUp  = mode === "cockpit" ? 1.15 : 0.78;
+      eyeT = [
+        p[0] + smp.t[0] * eyeFwd, p[1] + eyeUp, p[2] + smp.t[2] * eyeFwd,
+      ];
+      tgtT = [p[0] + smp.t[0] * 30, p[1] + eyeUp + 1.5, p[2] + smp.t[2] * 30];
+      fovT = lerp(64, 78, spd) + (player.deploying ? 5 : 0);   // wider = faster feel
+    } else {
+      // Chase cams anchor a FIXED distance behind the player along the track
+      // (arc-length), not in world space — so they never lag at high speed and
+      // the car stays a constant, readable size. FAR pulls back and up for race-craft.
+      const back = mode === "far" ? 10.5 : 5.8;
+      const eyeUp = mode === "far" ? 4.2 : 2.1;
+      Tracks.sample(track, wrapS(player.s - back), smpC);
+      const cx = px * 0.5;   // partly follow lateral offset; rest shows position
+      eyeT = [
+        smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + eyeUp + bankDy, smpC.p[2] + smpC.r[2] * cx,
+      ];
+      const aheadT = mode === "far" ? 6 : 4;
+      tgtT = [p[0] + smp.t[0] * aheadT, p[1] + (mode === "far" ? 1.0 : 0.7), p[2] + smp.t[2] * aheadT];
+      // closer camera + narrower FOV so the car reads bigger; still widens a bit
+      // with speed for a sense of pace, plus a small boost kick. FAR is a touch wider.
+      fovT = lerp(52, 66, spd) + (mode === "far" ? 4 : 0) + (player.deploying ? 6 : 0);
+    }
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
       const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
@@ -1361,9 +1396,12 @@ function render(dt) {
 
   // High lambda in-race: the anchor already follows the car along the track,
   // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
+  // Onboard cams (cockpit/hood) ride ON the car, so they need very high lambda or
+  // the eye lags behind/into the bodywork at speed.
   const racing = state === "race" || state === "count";
-  const lE = racing ? 14 : 1.6;
-  const lT = racing ? 16 : 10;
+  const onboard = racing && (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "hood");
+  const lE = onboard ? 40 : racing ? 14 : 1.6;
+  const lT = onboard ? 40 : racing ? 16 : 10;
   for (let i = 0; i < 3; i++) {
     camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
     camTgt[i] = damp(camTgt[i], tgtT[i], lT, dt);
@@ -1455,7 +1493,10 @@ function render(dt) {
   }
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
+  const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
+    CAM_MODES[camMode].id === "cockpit";   // don't draw the car you're sitting inside
   for (const c of cars) {
+    if (c.isPlayer && hidePlayerCar) continue;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
@@ -2059,6 +2100,23 @@ function setPaused(p) {
   lastFrame = performance.now();
 }
 els.pausebtn.onclick = () => setPaused(true);
+
+// ---- player camera modes (CAM button / C key) ----
+function refreshCamBtn() {
+  const b = $("btn-cam");
+  if (b) b.textContent = CAM_MODES[camMode].label;
+}
+function setCamMode(m) {
+  camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
+  store.set("camMode", camMode);
+  refreshCamBtn();
+  announce("CAM: " + CAM_MODES[camMode].label, 0.9);
+  return CAM_MODES[camMode].id;
+}
+function cycleCam() { return setCamMode(camMode + 1); }
+$("btn-cam") && ($("btn-cam").onclick = () => cycleCam());
+refreshCamBtn();
+
 $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
@@ -2286,6 +2344,16 @@ window.__apex = {
     camTgt[0] = t[0]; camTgt[1] = t[1]; camTgt[2] = t[2];
     camFov = 75;
     return r;
+  },
+  // Get or set the player camera mode (CHASE / FAR / COCKPIT / HOOD). Called with
+  // no argument it returns the current mode; with a mode id ("cockpit"), label, or
+  // index it switches and persists. Mirrors the in-game CAM button / C key.
+  camera(m) {
+    if (m == null) return { mode: CAM_MODES[camMode].id, index: camMode, modes: CAM_MODES.map((c) => c.id) };
+    let i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
+    if (i < 0 || i >= CAM_MODES.length) return false;
+    setCamMode(i);
+    return { mode: CAM_MODES[camMode].id, index: camMode };
   },
   // Instantly snap the chase camera to the correct position behind the current
   // player without waiting for exponential damping to converge. Call right after

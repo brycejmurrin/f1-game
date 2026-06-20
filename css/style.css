@@ -544,6 +544,20 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   border-radius: 8px;
   padding: 0;
 }
+/* CAM mode button sits just left of the pause button (top-right). */
+#btn-cam {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(58px + var(--sar));
+  z-index: 14;
+  height: 40px;
+  min-width: 76px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
 #soundbtn {
   position: fixed;
   top: calc(8px + var(--sat));

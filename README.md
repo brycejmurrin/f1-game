@@ -40,8 +40,11 @@ Zandvoort in its farewell year. Night races run under floodlights.
 - **Mobile (no gyro):** touch the left/right side of the screen to steer;
   toggle TILT in the pause menu.
 - **Desktop:** `←`/`→` or `A`/`D` steer, `↑`/`W` throttle, `↓`/`S` brake,
-  `Space` toggle boost, `X` overtake, `P`/`Esc` pause. Manual gears: `E` up,
-  `Q` down.
+  `Space` toggle boost, `X` overtake, `C` change camera, `P`/`Esc` pause.
+  Manual gears: `E` up, `Q` down.
+- **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
+  cycle four views — **CHASE** (close), **FAR** (pulled back), **COCKPIT**
+  (onboard driver's eye), and **HOOD** (nose cam). Your choice is remembered.
 
 Throttle is manual — hold GAS to accelerate. BOOST and OVERTAKE are taps that
 toggle/activate rather than buttons you hold.
