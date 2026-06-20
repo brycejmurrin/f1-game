@@ -71,7 +71,7 @@ const Input = (function () {
   //   beta      : how much the cutoff opens up with speed — higher = more responsive
   let OE_MIN_CUTOFF = 1.2;    // Hz
   let OE_BETA = 0.10;
-  const OE_DCUTOFF = 2.0;     // Hz, cutoff for the derivative estimate
+  const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
   let oePrev = 0, oeDPrev = 0, oeInit = false;
   // Final output stage: slew-rate limit the steer command toward its target so a
   // hand jolt can't snap the wheel (TILT_SLEW = units/s, the SMOOTHING slider).
@@ -97,7 +97,8 @@ const Input = (function () {
   // Filter a raw angle sample (deg) given the elapsed time (s). Adaptive: heavy
   // smoothing when slow, light when fast — the standard fix for "jittery vs laggy".
   function oneEuro(x, dt) {
-    if (!oeInit || dt <= 0) { oePrev = x; oeDPrev = 0; oeInit = true; return x; }
+    if (!oeInit) { oePrev = x; oeDPrev = 0; oeInit = true; return x; }
+    if (dt <= 0) return oePrev;
     const dx = (x - oePrev) / dt;                       // raw rate of change
     const dxHat = oeDPrev + oeAlpha(OE_DCUTOFF, dt) * (dx - oeDPrev);
     const cutoff = OE_MIN_CUTOFF + OE_BETA * Math.abs(dxHat);
@@ -194,6 +195,7 @@ const Input = (function () {
     oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
     tiltSmoothed = tiltRaw;
     tiltSteerVal = 0;
+    tiltSteerT = 0;
   }
 
   function tiltActive() {
@@ -488,6 +490,7 @@ const Input = (function () {
     keySteerT = 0;
     tiltSteerVal = 0;
     tiltSteerT = 0;
+    oeInit = false; oePrev = 0; oeDPrev = 0;
     overtakePressed = false;
     boostTogglePressed = false;
     shiftUpPressed = false;

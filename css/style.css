@@ -319,8 +319,9 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   border-radius: 3px; overflow: hidden; margin-bottom: 5px;
 }
 #cs-budget-fill {
-  height: 100%; background: var(--red); border-radius: 3px;
-  transition: width 0.22s ease;
+  height: 100%; width: 100%; background: var(--red); border-radius: 3px;
+  transform-origin: left;
+  transition: transform 0.22s ease;
 }
 #cs-budget {
   font-size: 11px; letter-spacing: 0.1em; color: var(--dim);

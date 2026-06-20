@@ -209,9 +209,11 @@ const Tracks = (function () {
   function curvature(track, s) {
     const n = track.n, L = track.total, w = 12;
     const head = (ss) => {
-      let f = (ss % L + L) % L / L * n;
-      const i = Math.floor(f) % n;
-      return Math.atan2(track.tx[i], track.tz[i]);
+      const fi = ((ss % L + L) % L) / L * n;
+      const i = Math.floor(fi) % n, j = (i + 1) % n, frac = fi - Math.floor(fi);
+      const tx = track.tx[i] + (track.tx[j] - track.tx[i]) * frac;
+      const tz = track.tz[i] + (track.tz[j] - track.tz[i]) * frac;
+      return Math.atan2(tx, tz);
     };
     let d = head(s + w) - head(s - w);
     while (d > Math.PI) d -= 2 * Math.PI;

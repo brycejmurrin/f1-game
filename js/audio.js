@@ -505,7 +505,7 @@ const GameAudio = (function () {
     // synthetic tone — the audio test showed these synth layers dominating.
     whineOsc.frequency.setTargetAtTime(1500 + rev * 2000, t, 0.05);
     whineGain.gain.setTargetAtTime(
-      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.25 : 1), t, 0.08);
+      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1), t, 0.08);
 
     // harvesting whirr fades IN under braking/lift: infer deceleration
     // from the speed trajectory between calls
@@ -523,6 +523,41 @@ const GameAudio = (function () {
 
     // offroad: ~8 Hz pitch wobble via the LFO (gain is cents of detune)
     lfoG.gain.setTargetAtTime(offroad ? 45 : 0, t, 0.05);
+  }
+
+  /* ---------------- rain ---------------- */
+
+  let rainSrc = null, rainGain = null;
+
+  function startRain() {
+    if (!sfxOk() || rainSrc) return;
+    const dur = 4;
+    const buf = noiseBuf(dur);
+    rainSrc = ctx.createBufferSource();
+    rainSrc.buffer = buf;
+    rainSrc.loop = true;
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 2200;
+    hp.Q.value = 0.4;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 8000;
+    rainGain = ctx.createGain();
+    rainGain.gain.value = 0;
+    rainSrc.connect(hp).connect(lp).connect(rainGain).connect(master);
+    rainSrc.start();
+    rainGain.gain.setTargetAtTime(0.065, now(), 1.2);
+  }
+
+  function stopRain() {
+    if (!rainSrc) return;
+    try {
+      rainGain.gain.setTargetAtTime(0, now(), 0.4);
+      const s = rainSrc;
+      setTimeout(() => { try { s.stop(); s.disconnect(); } catch (e) {} }, 1200);
+    } catch (e) {}
+    rainSrc = null; rainGain = null;
   }
 
   // x 0..1; looped bandpass noise follows it
@@ -741,6 +776,8 @@ const GameAudio = (function () {
     uiTick,
     uiSelect,
     penalty,
+    startRain,
+    stopRain,
     startMusic,
     stopMusic,
     setMusicEnabled,
