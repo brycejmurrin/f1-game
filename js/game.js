@@ -520,6 +520,7 @@ function startRace() {
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
+  document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
   Input.calibrate();
@@ -548,6 +549,7 @@ function showTouchControls(show) {
 
 function endRace() {
   state = "results";
+  document.body.classList.remove("in-race");
   els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
@@ -659,6 +661,7 @@ function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) +
 
 function quitToMenu() {
   state = "menu"; paused = false;
+  document.body.classList.remove("in-race");
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
