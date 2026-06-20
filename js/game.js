@@ -217,6 +217,7 @@ let track = null, builtTrackId = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
+let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
 // Player camera modes, cycled with the CAM button / C key and persisted. Each is
 // a distinct vantage computed in render(): a close action chase, a higher/wider
@@ -1470,20 +1471,20 @@ function render(dt) {
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
   // mirror-like, cars and barriers pick up sharper reflections.
-  GLX.draw(track.meshes.terrain, MAT_IDENT,
+  if (!hideMeshes.terrain) GLX.draw(track.meshes.terrain, MAT_IDENT,
     night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.35 }
           : { roughness: 0.97, specular: 0.06, detail: 0.35 });
-  GLX.draw(track.meshes.road, MAT_IDENT,
+  if (!hideMeshes.road) GLX.draw(track.meshes.road, MAT_IDENT,
     wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 }
                    : { roughness: 0.14, specular: 0.85, detail: 0.06 })
           : (night ? { emissive: 0.09, roughness: 0.85, specular: 0.20, detail: 0.22 }
                    : { roughness: 0.85, specular: 0.20, detail: 0.22 }));
-  GLX.draw(track.meshes.props, MAT_IDENT,
+  if (!hideMeshes.props) GLX.draw(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: 0.35, roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
           : (night ? { emissive: 0.45, roughness: 0.85, specular: 0.20 }
                    : { roughness: 0.85, specular: 0.20 }));
-  GLX.draw(track.meshes.gate, MAT_IDENT,
+  if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
     wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
         : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
 
@@ -2375,6 +2376,27 @@ window.__apex = {
     camFov = lerp(52, 66, clamp(player.speed / VMAX, 0, 1));
   },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  camState: () => ({ eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov }),
+  // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
+  meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },
+  // Return all track nodes within radius r of world position (wx, wz).
+  // Useful for finding self-intersecting sections and locating nearby geometry.
+  nodesNear(wx, wz, r) {
+    if (!track) return [];
+    const r2 = r * r, out = [];
+    for (let i = 0; i < track.n; i++) {
+      const dx = track.px[i] - wx, dz = track.pz[i] - wz;
+      if (dx * dx + dz * dz < r2)
+        out.push({ i, frac: +(i / track.n).toFixed(4), x: +track.px[i].toFixed(2), y: +track.py[i].toFixed(2), z: +track.pz[i].toFixed(2) });
+    }
+    return out;
+  },
+  // World position and orientation of a track node by fraction (0-1).
+  nodeAt(frac) {
+    if (!track) return null;
+    const k = Math.round(frac * track.n) % track.n;
+    return { k, frac: +(k / track.n).toFixed(4), x: +track.px[k].toFixed(3), y: +track.py[k].toFixed(3), z: +track.pz[k].toFixed(3), tx: +track.tx[k].toFixed(3), tz: +track.tz[k].toFixed(3), rx: +track.rx[k].toFixed(3), rz: +track.rz[k].toFixed(3) };
+  },
   // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
   // heading offset angle (rad, relative to track tangent), local curvature k
   // (rad/m, +=right turn), half-width hw (m), speed (m/s) and arc position s.

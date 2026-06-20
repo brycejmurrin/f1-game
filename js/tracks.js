@@ -746,10 +746,75 @@ const Tracks = (function () {
     }
   }
 
+  // Raw (unguarded) emitters, captured so buildProps can wrap them with the
+  // on-track rejection guard below while still reaching the real implementations.
+  const RAW = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain };
+
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
     const out = { pos: [], nrm: [], col: [], idx: [] };
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
+
+    // ===================================================================
+    // Hard guarantee: NO scenery primitive may sit on the racing surface.
+    // Every shape — the helpers below AND the raw emitters handed to each
+    // circuit's bespoke scenery() — funnels through these guarded wrappers.
+    // Before emitting, a primitive's ground footprint is tested against the
+    // tarmac at road height; if it covers any part of the road it is dropped
+    // whole, so a misplaced or self-overlapping prop (common on street
+    // circuits whose straights run close in world space) can never enclose the
+    // chase camera or wall off the track. Sub-grade slabs (water, the universal
+    // ground floor) sit below road level and are exempt via the topY check.
+    // ===================================================================
+    let _culled = 0;
+    // True if a footprint covers the tarmac at any node it rises above. A
+    // circular footprint is given by rad>0 at (cx,cz); otherwise an oriented
+    // rectangle with unit XZ axes (arx,arz)/(afx,afz) and half-extents hx,hz.
+    const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz) => {
+      for (let k = 0; k < n; k++) {
+        if (topY < py[k] - 0.3) continue;                 // sits below road here
+        const w = hw[k];
+        const dxc = px[k] - cx, dzc = pz[k] - cz;
+        // Reach to the farthest footprint point: an oriented box can extend to its
+        // half-DIAGONAL, not just max(hx,hz), so the prefilter must use the diagonal
+        // or it will skip road nodes a large rotated box actually covers.
+        const reach = (rad > 0 ? rad : Math.hypot(hx, hz)) + w + 2;
+        if (dxc * dxc + dzc * dzc > reach * reach) continue;   // cheap far reject
+        const rkx = track.rx[k], rkz = track.rz[k];
+        // sample five points across the road width and test containment
+        for (let s = -2; s <= 2; s++) {
+          const o = (s / 2) * w * 0.98;
+          const ex = px[k] + rkx * o - cx, ez = pz[k] + rkz * o - cz;
+          if (rad > 0) {
+            if (ex * ex + ez * ez <= rad * rad) return true;
+          } else {
+            const a = Math.abs(ex * arx + ez * arz), b = Math.abs(ex * afx + ez * afz);
+            if (a <= hx && b <= hz) return true;
+          }
+        }
+      }
+      return false;
+    };
+    const rejBox = (c, sz, basis) => {
+      const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
+      const topY = c[1] + Math.abs(sz[0] / 2 * r[1]) + Math.abs(sz[1] / 2 * u[1]) + Math.abs(sz[2] / 2 * f[1]);
+      return onRoadHit(c[0], c[2], topY, 0, r[0], r[2], f[0], f[2], sz[0] / 2, sz[2] / 2);
+    };
+    const rejRad = (c, rad, h, basis) => {
+      const u = basis ? basis[1] : [0, 1, 0];
+      const topY = c[1] + Math.max(0, h * u[1]) + rad;     // generous top estimate
+      return onRoadHit(c[0], c[2], topY, rad, 0, 0, 0, 0, 0, 0);
+    };
+    // Guarded wrappers shadow the raw emitter names for the whole of buildProps
+    // (helpers + the api passed to def.scenery). Each returns false when dropped
+    // so a caller can also skip its barrier record (e.g. place/building).
+    const addBox = (o, c, sz, col, basis) => { if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addBox(o, c, sz, col, basis); return true; };
+    const addCyl = (o, c, rad, h, col, seg, basis) => { if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCyl(o, c, rad, h, col, seg, basis); return true; };
+    const addCone = (o, c, rad, h, col, seg, basis) => { if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCone(o, c, rad, h, col, seg, basis); return true; };
+    const addFrustum = (o, c, rB, rT, h, col, seg, basis) => { if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; } RAW.addFrustum(o, c, rB, rT, h, col, seg, basis); return true; };
+    const addPrism = (o, c, sz, col, basis) => { if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPrism(o, c, sz, col, basis); return true; };
+    const addPyramid = (o, c, sz, col, basis) => { if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPyramid(o, c, sz, col, basis); return true; };
+    const addMountain = (o, c, baseR, h, opts) => { if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; } RAW.addMountain(o, c, baseR, h, opts); return true; };
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
     // barrier (wall/guardrail/tyre wall/grandstand) is actually placed, so the car
@@ -871,7 +936,7 @@ const Tracks = (function () {
       // the terrain height at this lateral distance (not the road) so it sits on
       // the ground on elevated/embanked sections.
       const c = [cx, groundYAt(k, dist) + sz[1] / 2 - 0.8, cz];
-      addBox(out, c, sz, col, [r, u, t]);
+      if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long)
       blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
     };
@@ -1128,7 +1193,7 @@ const Tracks = (function () {
         return;
       }
       const body = opts.wall || [0.62, 0.64, 0.68], win = opts.window || [0.18, 0.26, 0.34];
-      addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b);
+      if (addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b) === false) return;  // on-track: dropped whole
       const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
       for (let i = 0; i < floors; i++) {
         addBox(out, vadd(p.c, p.u, (i + 0.62) * (h / floors)), [w * 1.01, (h / floors) * 0.46, d * 1.01], win, b);  // glazing band
@@ -1394,6 +1459,7 @@ const Tracks = (function () {
       }
     }
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
+    if (_culled) console.info(`[scenery] ${def.id}: culled ${_culled} on-track primitive(s)`);
     return out;
   }
 
