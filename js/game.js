@@ -2532,6 +2532,12 @@ window.__apex = {
     if (o.expo != null) STEER_EXPO = o.expo;
     if (o.maxSlip != null) STEER_MAX_SLIP = o.maxSlip;
     if (o.roadFollow != null) ROAD_FOLLOW = o.roadFollow;
+    // Tilt sliders (routed to the Input module): sensitivity (MAX_TILT, deg for
+    // full lock), dead zone (deg) and smoothing (slew, units/s). Lets the tilt
+    // tuner sweep them the same way as the handling params.
+    if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
+    if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
+    if (o.tiltSlew != null) Input.setTiltSmoothing(o.tiltSlew);
     return this.tuning();
   },
   // Debug free camera for surveying track layouts/scenery — look at anything.

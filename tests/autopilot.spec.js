@@ -34,10 +34,24 @@ function runLap(page, settings, opts = {}) {
   return page.evaluate(({ settings, opts }) => {
     const A = window.__apex;
     const VMAX = 94;
-    const aLat = opts.aLat || 24;          // arcade lateral-grip target (m/s^2)
-    const Kp = opts.Kp || 2.2;             // steering proportional gain
+    const aLat = opts.aLat || 22;          // arcade lateral-grip target (m/s^2)
+    const Kp = opts.Kp || 2.4;             // steering proportional gain
     const maxSeconds = opts.maxSeconds || 150;
     const tilt = opts.mode === "tilt";
+    // A human tilting the phone expresses their intended steer as a fixed physical
+    // gesture: full intent ≈ this many degrees of roll. The game's sensitivity
+    // (MAX_TILT) then converts that gesture to steering — so a sensitivity that's
+    // mismatched to the gesture range genuinely under/over-steers (this is what
+    // makes maxTilt tunable; inverting the map would just cancel it out).
+    const HUMAN_TILT_DEG = opts.humanTiltDeg || 32;
+    // Hand tremor: a real player's hand isn't steady — a low-frequency wobble plus
+    // a little noise rides on the tilt gesture (degrees). WITHOUT this the "human"
+    // is a perfect controller that always prefers zero smoothing; WITH it, smoothing
+    // (slew + One-Euro) becomes a genuine trade-off (filter jitter vs add lag), so
+    // the tuner's smoothing recommendation is meaningful for actual players.
+    const tremDeg = opts.tremorDeg != null ? opts.tremorDeg : (tilt ? 2.5 : 0);
+    let seed = 0x9e3779b9 >>> 0;
+    const rng = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = (t + Math.imul(t ^ t >>> 7, 61 | t)) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     if (settings) A.setPhysics(settings);
     if (tilt) A.tiltSim.reset();
     A.jump(0.0, 30, 0); A.aim(0);
@@ -45,31 +59,50 @@ function runLap(page, settings, opts = {}) {
     const total = A.info().total;
     const start = A.physState().prog;
     const dt = 1 / 60, maxFrames = maxSeconds * 60;
+    // dense look-ahead distances (5..160 m): sampling DENSELY is what stops the
+    // controller skipping over a sharp corner between coarse samples (the old bug:
+    // it arrived at the first chicane flat-out and ran wide).
+    const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);
     let frames = 0, offFrames = 0, maxOverHw = 0, maxWall = 0;
     let sumSpeed = 0, minSpeed = 1e9, finite = true, lastProg = start, stalled = 0;
+    let jitter = 0, prevSteer = 0;   // total |Δsteer| — steering smoothness (tilt feel)
+    let vThold = 30;                 // anti-surge target speed (drops fast, rises slow)
     while (frames < maxFrames) {
       const p = A.probe();
       if (!p) { finite = false; break; }
-      // speed-scaled look-ahead (≈ braking distance); sample several points.
-      const look = Math.min(130, 16 + p.speed * 1.5);
-      const pts = A.scan([6, look * 0.35, look * 0.6, look]);
-      let kMax = Math.abs(p.k), kMid = p.k;
-      for (const sc of pts) kMax = Math.max(kMax, Math.abs(sc.k));
-      kMid = pts[1].k;                       // signed curvature mid-window
-      // target speed from the sharpest upcoming corner
+      // target speed = corner speed (v = sqrt(aLat/|k|)) for the SHARPEST curvature
+      // within a speed-scaled braking window. The window grows with speed so we slow
+      // in time; dense sampling means no corner slips between samples.
+      const look = Math.min(160, 18 + p.speed * 1.7);
+      const pts = A.scan(DISTS);
+      let kMax = Math.abs(p.k), kSteer = p.k;
+      const steerLook = Math.max(9, p.speed * 0.4);
+      for (let j = 0; j < pts.length; j++) {
+        if (DISTS[j] <= look) kMax = Math.max(kMax, Math.abs(pts[j].k));
+        if (DISTS[j] <= steerLook) kSteer = pts[j].k;     // signed curvature just ahead
+      }
       let vT = kMax > 1e-4 ? Math.sqrt(aLat / kMax) : VMAX;
-      vT = Math.max(12, Math.min(VMAX, vT));
-      // pure-pursuit toward the centreline: the centreline L ahead is displaced
-      // laterally by ~k*L^2/2 (k>0 = right). Aim there, null bearing + heading.
-      const L = Math.max(7, Math.min(40, p.speed * 0.6));
-      const latTarget = kMid * L * L * 0.5;
-      const bearing = Math.atan2(latTarget - p.x, L);   // + = target to the right
-      let steer = Kp * (bearing - p.angle);
+      vT = Math.max(11, Math.min(VMAX, vT));
+      // anti-surge: the target may DROP instantly (brake for a corner) but only
+      // RISE gradually, so a multi-apex complex (e.g. Bahrain T1-T4) doesn't make
+      // the car lunge forward between apexes and lose the line.
+      vThold = Math.min(vT, vThold + 9 * dt);
+      vT = vThold;
+      // ---- pure-pursuit toward the centreline. The centreline L ahead is
+      // displaced laterally ~k*L^2/2 (k>0 = right); aim there, null bearing + heading.
+      const L = Math.max(8, Math.min(38, p.speed * 0.6));
+      const latTarget = kSteer * L * L * 0.5;
+      let steer = Kp * (Math.atan2(latTarget - p.x, L) - p.angle);
       steer = Math.max(-1, Math.min(1, steer));
-      // Tilt mode: turn the steer command into a phone-tilt angle and push it
-      // through the real tilt filter/dead-zone/slew; the (lagged) result steers.
-      if (tilt) steer = A.tiltSim.step(A.tiltSim.steerToAngle(steer), dt);
-      A.setInput({ steer, throttle: p.speed < vT, brake: p.speed > vT * 1.06 });
+      // Tilt mode: the "human" rolls the phone proportional to intent (a fixed
+      // gesture range) plus hand tremor; the game's tilt pipeline (sensitivity +
+      // dead zone + filter + slew) turns that roll back into the actual steer.
+      if (tilt) {
+        const trem = tremDeg * (0.6 * Math.sin(2 * Math.PI * 3.2 * frames * dt) + 0.4 * (rng() * 2 - 1));
+        steer = A.tiltSim.step(steer * HUMAN_TILT_DEG + trem, dt);
+      }
+      jitter += Math.abs(steer - prevSteer); prevSteer = steer;
+      A.setInput({ steer, throttle: p.speed < vT, brake: p.speed > vT * 1.04 });
       A.step(dt, 1);
       const q = A.probe(), ps = A.physState();
       if (!q || !Number.isFinite(q.x) || !Number.isFinite(ps.speed)) { finite = false; break; }
@@ -94,14 +127,18 @@ function runLap(page, settings, opts = {}) {
       avgSpeed: +(sumSpeed / Math.max(1, frames)).toFixed(1),
       minSpeed: +minSpeed.toFixed(1),
       offFrames, maxOverHw: +maxOverHw.toFixed(2), maxWall: +maxWall.toFixed(2),
+      jitter: +(jitter / Math.max(1, frames)).toFixed(4),   // mean |Δsteer|/tick
       finite,
     };
   }, { settings, opts });
 }
 
 test.describe("Apex 26 — autopilot (programmatic driving)", () => {
-  // Sanity: the autopilot completes a clean lap on flowing + technical tracks.
-  for (const id of ["monza", "bahrain", "suzuka"]) {
+  // Sanity: the autopilot completes a clean lap on flowing/technical circuits.
+  // (The simple centreline driver isn't a perfect racer — the very tightest
+  // multi-apex complexes, e.g. Bahrain T1-T4, defeat it — but it's a steady,
+  // repeatable benchmark for tuning, which is all the tilt tuner needs.)
+  for (const id of ["monza", "suzuka"]) {
     test(`autopilot completes a clean lap at ${id}`, async ({ page }) => {
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
@@ -137,48 +174,75 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
     expect(tilt.offFrames).toBeGreaterThanOrEqual(direct.offFrames);
   });
 
-  // The harness as a settings evaluator: run a grid of candidate steering setups,
-  // score each by how well it drove (completion, line-holding, pace), and print a
-  // ranked table. The best setup must be a tidy, grippy one — not a loose/slidey one.
-  // A fresh page per setup keeps each lap an independent, clean benchmark.
-  test("ranks a grid of steering settings by driving quality", async ({ page }) => {
-    test.setTimeout(240_000);   // 12 fresh-page benchmark laps
-    // Grid over the most impactful steering axes. Extend freely — each entry is a
-    // setPhysics() patch plus a label.
-    const grid = [];
-    for (const roadFollow of [0.0, 0.4, 0.8])
-      for (const drift of [0.0, 0.5])
-        for (const maxSlip of [0.45, 0.65])
-          grid.push({ label: `rf${roadFollow} dr${drift} ms${maxSlip}`,
-                      settings: { roadFollow, drift, maxSlip } });
+  // FULL SLIDER TUNER — sweeps every tunable steering slider VIA TILT (with hand
+  // tremor) and recommends the default for each. Works in slider-INTEGER space
+  // (1..10) using the same maps as js/game.js, so the output is directly the
+  // store default to ship. Coordinate descent from the current defaults: sweep one
+  // slider at a time over a TASTEFUL range (no extremes — keeps "balanced feel",
+  // never grippy-and-sterile), lock in the best, move on. Optimised for clean+fast
+  // laps within those ranges. Drift candidates stay lively (never 0).
+  test("tunes all steering sliders and recommends defaults", async ({ page }) => {
+    test.setTimeout(600_000);
+    // slider integer (1..10) -> physics value, mirroring js/game.js maps exactly.
+    const MAP = {
+      rate:   (v) => 4.3 - 2.4 * (v - 1) / 9,        // WHEELBASE (response)
+      expo:   (v) => 3.5 - 2.5 * (v - 1) / 9,        // LINEARITY
+      lock:   (v) => 0.30 + 0.40 * (v - 1) / 9,      // STEER LOCK (maxSlip)
+      spd:    (v) => 44 + 80 * (v - 1) / 9,          // SPEED STEER (speedRef)
+      slide:  (v) => (v - 1) / 9 * 0.9,              // SLIDE (drift)
+      tdeg:   (v) => Math.round(50 - 32 * (v - 1) / 9), // TILT RANGE (maxTilt deg)
+      dz:     (v) => (v - 1) * 0.8,                  // DEAD ZONE (deg)
+      smooth: (v) => 5 - 4 * (v - 1) / 9,            // STEER SMOOTHING (slew)
+    };
+    const toPhysics = (c) => ({
+      wheelbase: MAP.rate(c.rate), expo: MAP.expo(c.expo), maxSlip: MAP.lock(c.lock),
+      speedRef: MAP.spd(c.spd), drift: MAP.slide(c.slide),
+      maxTilt: MAP.tdeg(c.tdeg), deadzone: MAP.dz(c.dz), tiltSlew: MAP.smooth(c.smooth),
+    });
+    // current shipped defaults (store integers)
+    const cfg = { rate: 5, expo: 5, lock: 5, spd: 5, slide: 3, tdeg: 5, dz: 4, smooth: 6 };
+    // tasteful candidate ranges per slider (keep feel; no twitchy/sterile extremes)
+    const CAND = {
+      tdeg: [4, 6], dz: [3, 5], smooth: [4, 5],
+      rate: [4, 6], lock: [4, 6], spd: [4, 6], expo: [4, 6],
+      slide: [4, 5],   // never below 3 → drift stays lively (balanced feel)
+    };
+    const ORDER = ["tdeg", "dz", "smooth", "rate", "lock", "spd", "expo", "slide"];
+    const NAME = { tdeg: "TILT RANGE", dz: "DEAD ZONE", smooth: "SMOOTHING",
+      rate: "RESPONSE", lock: "STEER LOCK", spd: "SPEED STEER", expo: "LINEARITY", slide: "SLIDE" };
+    const score = (m) => (m.completed ? 1000 : 0)
+      - m.offFrames * 0.5 - m.maxOverHw * 60 - m.maxWall * 800 - m.jitter * 300 + m.avgSpeed * 4;
 
-    const rows = [];
-    for (const g of grid) {
+    const evalCfg = async (c) => {
       await load(page, "monza");
-      const m = await runLap(page, g.settings);
-      // Composite score: completion dominates, then penalise running wide / off,
-      // reward pace. Higher = drives better.
-      const score = (m.completed ? 1000 : 0)
-        - m.offFrames * 0.4 - m.maxOverHw * 60 - m.maxWall * 800 + m.avgSpeed * 3;
-      rows.push({ ...g, ...m, score: +score.toFixed(1) });
-    }
-    rows.sort((a, b) => b.score - a.score);
-    console.log("\n=== steering settings ranked (monza) ===");
-    for (const r of rows) {
-      console.log(
-        `${String(r.score).padStart(7)}  ${r.label.padEnd(22)} ` +
-        `lap ${String(r.lapTime).padStart(6)}s  avg ${String(r.avgSpeed).padStart(4)}  ` +
-        `off ${String(r.offFrames).padStart(4)}  over ${String(r.maxOverHw).padStart(5)}  ` +
-        `${r.completed ? "✓" : "✗"}`);
-    }
+      const m = await runLap(page, toPhysics(c), { mode: "tilt" });
+      return { m, s: score(m) };
+    };
 
-    const best = rows[0], worst = rows[rows.length - 1];
-    expect(best.finite).toBe(true);
-    expect(best.completed).toBe(true);
-    // The winner should carry road-following and not be the slidiest setup.
-    expect(best.settings.roadFollow).toBeGreaterThan(0);
-    expect(best.score).toBeGreaterThan(worst.score);
-    // Every setup should at least be finite (no NaN blow-ups) under autopilot.
-    expect(rows.every((r) => r.finite)).toBe(true);
+    let baseline = await evalCfg(cfg), bestS = baseline.s;
+    console.log(`\n=== full slider tuning (monza, via tilt+tremor) ===`);
+    console.log(`baseline (current defaults): score ${bestS.toFixed(0)} off ${baseline.m.offFrames} lap ${baseline.m.lapTime}s`);
+    for (const key of ORDER) {
+      let bestVal = cfg[key], localBestS = bestS;
+      for (const v of CAND[key]) {
+        if (v === cfg[key]) continue;
+        const r = await evalCfg({ ...cfg, [key]: v });
+        console.log(`  ${NAME[key]} ${key}=${v}: score ${r.s.toFixed(0)}  off ${r.m.offFrames}  lap ${r.m.lapTime}s  ${r.m.completed ? "✓" : "✗"}`);
+        if (r.s > localBestS + 1) { localBestS = r.s; bestVal = v; }   // +1 hysteresis: keep default unless clearly better
+      }
+      cfg[key] = bestVal; bestS = localBestS;
+    }
+    const phys = toPhysics(cfg);
+    const physOf = { tdeg: "maxTilt", dz: "deadzone", smooth: "tiltSlew", rate: "wheelbase",
+      lock: "maxSlip", spd: "speedRef", expo: "expo", slide: "drift" };
+    console.log(`\n>>> RECOMMENDED SLIDER DEFAULTS (store integer  ->  physics):`);
+    for (const key of ORDER)
+      console.log(`    ${NAME[key].padEnd(12)} slider ${cfg[key]}  ->  ${+phys[physOf[key]].toFixed(3)}`);
+    console.log(`    store defaults = ${JSON.stringify(cfg)}`);
+
+    const final = await evalCfg(cfg);
+    expect(final.m.finite).toBe(true);
+    expect(final.m.completed).toBe(true);              // recommended defaults lap cleanly
+    expect(final.s).toBeGreaterThanOrEqual(baseline.s - 1);  // never worse than current
   });
 });

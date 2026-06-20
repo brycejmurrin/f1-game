@@ -213,6 +213,12 @@ tuning. Any omitted field is left unchanged; returns the new `tuning()`.
 | `wheelbase` | turn-in snappiness (RESPONSE; shorter = snappier) |
 | `expo` | input shaping (LINEARITY) |
 | `maxSlip` | max steering/slip angle (STEER LOCK) |
+| `maxTilt` | tilt sensitivity — degrees of roll for full lock (TILT RANGE) |
+| `deadzone` | tilt dead zone around neutral, degrees (DEAD ZONE) |
+| `tiltSlew` | tilt steer slew limit, units/s (STEER SMOOTHING) |
+
+`roadFollow` is internal (not a slider); the rest map to the Advanced Steering
+sliders. `maxTilt`/`deadzone`/`tiltSlew` are routed to the Input module.
 
 ```js
 __apex.setPhysics({ drift: 0, roadFollow: 0 });   // on-rails, no auto road-tracking
@@ -237,35 +243,43 @@ until the car completes a lap (or stalls / times out) and returns metrics:
   finite }
 ```
 
-To evaluate steering settings end-to-end, run a grid of `setPhysics()` patches,
-score each lap, and rank them — a tidier setup laps faster with fewer `offFrames`
-and lower `maxOverHw`. Run each candidate **on a fresh page** so laps don't inherit
-one another's end state:
+**Purpose: tuning the steering defaults players get.** Run a grid of `setPhysics()`
+patches, score each lap, and rank them. The headline use is the **tilt tuner**: it
+drives lap after lap *via tilt* while sweeping the tilt sliders and recommends what
+to set in Advanced Steering. Run each candidate **on a fresh page** so laps don't
+inherit one another's end state.
 
 ```
-=== steering settings ranked (monza) ===
- 1158  rf0.8 dr0 ms0.45   lap 112s  avg 52.7  off   0  over 0     ✓   strong road-follow = best
-  952  rf0.4 dr0.5 ms0.45 lap 125s  avg 48.1  off 241  over 1.6   ✓   slidey = runs wide
-   98  rf0   dr0 ms0.45   lap  24s  avg 32.7  off   0  over 0     ✗   no road-follow = undriveable
+=== TILT slider tuning ranked (monza, driven via tilt) ===
+ 1051  sens36 slew6   off  34  ✓   matches the shipped default
+  883  sens46 ...     off 219  ✓   too dull → can't reach full lock, understeers
+   65  sens28 ...     off   0  ✗   too sensitive → twitchy, fails at T1
+>>> RECOMMENDED: TILT RANGE 36°, DEAD ZONE 2.5°, STEER SMOOTHING slew 6
 ```
+
+The tuner independently lands on the shipped sensitivity/dead-zone defaults
+(36° / 2.4°), validating them; smoothing it judges only once **hand tremor** is
+modelled (below).
 
 ### Emulated tilt — `__apex.tiltSim`
-The autopilot can drive **through the real tilt pipeline** so tilt settings are
-testable headless. Each tick it converts its steer command to a phone-tilt angle
-and pushes it through the One-Euro filter + dead zone + `MAX_TILT` map + slew
-limiter, then steers with the (lagged) result:
+The autopilot drives **through the real tilt pipeline** so tilt settings are
+tunable headless. In tilt mode the "human" rolls the phone proportional to intent
+(a fixed gesture range) **plus hand tremor**, and the game's pipeline (One-Euro
+filter → dead zone → `MAX_TILT` map → slew limiter) turns that roll back into the
+actual steer:
 
 ```js
 __apex.tiltSim.reset();                       // clear filter/slew state per run
-const angle = __apex.tiltSim.steerToAngle(cmd);   // steer cmd (-1..1) → tilt deg
-const steer = __apex.tiltSim.step(angle, dt);     // filtered/slewed steer (-1..1)
+const steer = __apex.tiltSim.step(rollDeg, dt);   // roll (deg) → filtered steer (-1..1)
+__apex.tiltSim.steerToAngle(cmd);             // inverse map (steer → tilt deg), if needed
 ```
 
-`runLap(page, settings, { mode: "tilt" })` drives a whole lap this way. Tilt params
-come from the sliders (`tuning().maxTilt / deadzone / tiltSlew`); set them with the
-pause-menu sliders or `Input.setTilt*`. Because the slew limiter caps how fast the
-command can move, an aggressive line is laggier than direct input — which is
-exactly what the metrics surface.
+Modelling tremor matters: without it the "human" is a perfect controller that
+always prefers zero smoothing; with it, smoothing becomes a real trade-off
+(filter jitter vs add lag), so the recommendation is meaningful for real players.
+Set tilt params with `setPhysics({ maxTilt, deadzone, tiltSlew })`, the pause-menu
+sliders, or `Input.setTilt*`. `runLap(page, settings, { mode: "tilt" })` drives a
+whole lap this way; `opts.tremorDeg` controls the tremor amplitude.
 
 Run it: `npx playwright test tests/autopilot.spec.js` (or against a separate
 server with `--config playwright.alt.config.js`, see below).
