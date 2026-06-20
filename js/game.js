@@ -2358,7 +2358,7 @@ function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " 
 const PRESETS = {
   relax:    { tiltSens: 6, tiltDeg: 4, tiltDz: 5, steerSmooth: 8, steerRate: 4,
               steerExpo: 4, steerLock: 5, steerSpeed: 4, slide: 1, drivingHelp: 9, raceLine: 2 },
-  standard: { tiltSens: 7, tiltDeg: 5, tiltDz: 4, steerSmooth: 6, steerRate: 5,
+  standard: { tiltSens: 7, tiltDeg: 6, tiltDz: 4, steerSmooth: 6, steerRate: 5,
               steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3, drivingHelp: 6, raceLine: 0 },
   pro:      { tiltSens: 8, tiltDeg: 7, tiltDz: 2, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, slide: 6, drivingHelp: 3, raceLine: 0 },
@@ -2390,9 +2390,9 @@ function applySteerTuning() {
   const sens    = store.get("tiltSens",   6);   // reduced: 6 → 0.6× output scale (less reactive)
   const rate    = store.get("steerRate",  5);
   const expo    = store.get("steerExpo",  5);
-  const smooth  = store.get("steerSmooth", 5);  // tuner: 5 beats 6 (snappier slew)
-  const dz      = store.get("tiltDz",     3);   // tuner: 3 beats 4 (less dead zone, snappier)
-  const tiltdeg = store.get("tiltDeg",    4);   // reduced: 4→39° for full lock (was 6→32°, less sensitive)
+  const smooth  = store.get("steerSmooth", 6);
+  const dz      = store.get("tiltDz",     4);
+  const tiltdeg = store.get("tiltDeg",    6);   // 6→32° for full lock (tuner optimum)
   const lock    = store.get("steerLock",  5);
   const spdsteer = store.get("steerSpeed", 5);
   const slide   = store.get("slide",      3);
