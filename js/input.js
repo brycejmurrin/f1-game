@@ -197,6 +197,37 @@ const Input = (function () {
     return steerMode === "tilt" && tiltSeen;
   }
 
+  // ---- deterministic tilt emulation (test/autopilot harness) ----
+  // Drive the FULL tilt pipeline with an explicit timestep instead of wall-clock:
+  // feed a raw tilt angle (deg) and dt (s), get back the steer command (-1..1)
+  // after the real One-Euro filter, dead zone, MAX_TILT map and slew limiter. Lets
+  // a headless harness "play via tilt" and measure how tilt settings actually drive.
+  // (The live game still uses the wall-clock onOrient/tiltSteering path untouched.)
+  function simTilt(rawDeg, dt) {
+    const step = dt > 0 ? dt : 0.016;
+    tiltSeen = true;
+    tiltRaw = rawDeg;
+    tiltSmoothed = oneEuro(rawDeg, step);
+    let target = 0, d = tiltSmoothed - tiltZero;
+    if (Math.abs(d) >= DEADZONE) {
+      d -= Math.sign(d) * DEADZONE;
+      target = clamp(d / (MAX_TILT - DEADZONE), -1, 1);
+    }
+    tiltSteerVal = moveToward(tiltSteerVal, target, TILT_SLEW * step);
+    return tiltSteerVal;
+  }
+  // Reset the tilt filter/slew/zero state so a fresh emulation run starts clean.
+  function simTiltReset() {
+    oeInit = false; oePrev = 0; oeDPrev = 0;
+    tiltSmoothed = 0; tiltSteerVal = 0; tiltZero = 0; tiltRaw = 0;
+  }
+  // Invert the dead-zone + MAX_TILT map: the raw tilt angle (deg) needed to command
+  // a given steer target (-1..1). Used to convert an autopilot steer into a tilt.
+  function steerToTilt(cmd) {
+    if (Math.abs(cmd) < 1e-4) return 0;
+    return clamp(cmd, -1, 1) * (MAX_TILT - DEADZONE) + Math.sign(cmd) * DEADZONE;
+  }
+
   function tiltSteering() {
     // Map the calibrated, filtered tilt to a target steer (-1..1) with a soft
     // dead zone, then slew-rate limit the change toward that target so the
@@ -473,6 +504,9 @@ const Input = (function () {
     consumeShiftDown,
     consumeCameraCycle,
     tiltActive,
+    simTilt,
+    simTiltReset,
+    steerToTilt,
     setSteerMode,
     getSteerMode,
     setTiltSensitivity,

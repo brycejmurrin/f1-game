@@ -27,6 +27,9 @@ async function load(page, id) {
 
 // Drive one lap under the given physics settings; returns metrics. Runs entirely
 // in-page (one evaluate) so the per-tick loop has no round-trip overhead.
+// opts.mode: "direct" (default) feeds the steer straight in; "tilt" routes the
+// steer command through the real tilt pipeline (One-Euro + dead zone + MAX_TILT +
+// slew) via __apex.tiltSim, so a lap can be driven "as if tilting the phone".
 function runLap(page, settings, opts = {}) {
   return page.evaluate(({ settings, opts }) => {
     const A = window.__apex;
@@ -34,8 +37,11 @@ function runLap(page, settings, opts = {}) {
     const aLat = opts.aLat || 24;          // arcade lateral-grip target (m/s^2)
     const Kp = opts.Kp || 2.2;             // steering proportional gain
     const maxSeconds = opts.maxSeconds || 150;
+    const tilt = opts.mode === "tilt";
     if (settings) A.setPhysics(settings);
+    if (tilt) A.tiltSim.reset();
     A.jump(0.0, 30, 0); A.aim(0);
+    A.rivals([]);                 // clear the AI field — a clean solo benchmark lap
     const total = A.info().total;
     const start = A.physState().prog;
     const dt = 1 / 60, maxFrames = maxSeconds * 60;
@@ -60,6 +66,9 @@ function runLap(page, settings, opts = {}) {
       const bearing = Math.atan2(latTarget - p.x, L);   // + = target to the right
       let steer = Kp * (bearing - p.angle);
       steer = Math.max(-1, Math.min(1, steer));
+      // Tilt mode: turn the steer command into a phone-tilt angle and push it
+      // through the real tilt filter/dead-zone/slew; the (lagged) result steers.
+      if (tilt) steer = A.tiltSim.step(A.tiltSim.steerToAngle(steer), dt);
       A.setInput({ steer, throttle: p.speed < vT, brake: p.speed > vT * 1.06 });
       A.step(dt, 1);
       const q = A.probe(), ps = A.physState();
@@ -107,18 +116,69 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
     });
   }
 
-  // The harness as a steering-settings evaluator: sweep a setting and report how
-  // each value drives. On-rails (drift 0 / strong road-follow) should hold the
-  // line at least as well as a loose, slidey, no-road-follow setup.
-  test("sweeps steering settings and the tidy setup holds the line best", async ({ page }) => {
+  // Emulated tilt: drive a lap through the real tilt pipeline (One-Euro + dead
+  // zone + slew). It's laggier than direct input, so the line is looser — but a
+  // sane tilt setup must still complete the lap without clipping a barrier. Each
+  // lap reloads a fresh page so runs don't inherit one another's end state.
+  test("can drive a full lap via emulated tilt input", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
     await load(page, "monza");
-    const tidy   = await runLap(page, { drift: 0.0, roadFollow: 0.8, maxSlip: 0.55 });
-    const loose  = await runLap(page, { drift: 0.7, roadFollow: 0.3, maxSlip: 0.7 });
-    console.log("[sweep monza] tidy =", JSON.stringify(tidy));
-    console.log("[sweep monza] loose =", JSON.stringify(loose));
-    expect(tidy.finite && loose.finite).toBe(true);
-    expect(tidy.completed).toBe(true);                       // a good setup laps cleanly
-    expect(tidy.maxOverHw).toBeLessThanOrEqual(loose.maxOverHw + 0.5);  // tidier line
-    expect(tidy.offFrames).toBeLessThanOrEqual(loose.offFrames + 30);
+    const direct = await runLap(page, null, { mode: "direct" });
+    await load(page, "monza");
+    const tilt   = await runLap(page, null, { mode: "tilt" });
+    console.log("[tilt monza] direct =", JSON.stringify(direct));
+    console.log("[tilt monza] tilt   =", JSON.stringify(tilt));
+    expect(errors).toEqual([]);
+    expect(tilt.finite).toBe(true);
+    expect(tilt.completed).toBe(true);            // tilt can get round the lap
+    expect(tilt.maxWall).toBeLessThan(1);         // without clipping a barrier
+    // The tilt pipeline adds smoothing/lag, so its line is no tidier than direct.
+    expect(tilt.offFrames).toBeGreaterThanOrEqual(direct.offFrames);
+  });
+
+  // The harness as a settings evaluator: run a grid of candidate steering setups,
+  // score each by how well it drove (completion, line-holding, pace), and print a
+  // ranked table. The best setup must be a tidy, grippy one — not a loose/slidey one.
+  // A fresh page per setup keeps each lap an independent, clean benchmark.
+  test("ranks a grid of steering settings by driving quality", async ({ page }) => {
+    test.setTimeout(240_000);   // 12 fresh-page benchmark laps
+    // Grid over the most impactful steering axes. Extend freely — each entry is a
+    // setPhysics() patch plus a label.
+    const grid = [];
+    for (const roadFollow of [0.0, 0.4, 0.8])
+      for (const drift of [0.0, 0.5])
+        for (const maxSlip of [0.45, 0.65])
+          grid.push({ label: `rf${roadFollow} dr${drift} ms${maxSlip}`,
+                      settings: { roadFollow, drift, maxSlip } });
+
+    const rows = [];
+    for (const g of grid) {
+      await load(page, "monza");
+      const m = await runLap(page, g.settings);
+      // Composite score: completion dominates, then penalise running wide / off,
+      // reward pace. Higher = drives better.
+      const score = (m.completed ? 1000 : 0)
+        - m.offFrames * 0.4 - m.maxOverHw * 60 - m.maxWall * 800 + m.avgSpeed * 3;
+      rows.push({ ...g, ...m, score: +score.toFixed(1) });
+    }
+    rows.sort((a, b) => b.score - a.score);
+    console.log("\n=== steering settings ranked (monza) ===");
+    for (const r of rows) {
+      console.log(
+        `${String(r.score).padStart(7)}  ${r.label.padEnd(22)} ` +
+        `lap ${String(r.lapTime).padStart(6)}s  avg ${String(r.avgSpeed).padStart(4)}  ` +
+        `off ${String(r.offFrames).padStart(4)}  over ${String(r.maxOverHw).padStart(5)}  ` +
+        `${r.completed ? "✓" : "✗"}`);
+    }
+
+    const best = rows[0], worst = rows[rows.length - 1];
+    expect(best.finite).toBe(true);
+    expect(best.completed).toBe(true);
+    // The winner should carry road-following and not be the slidiest setup.
+    expect(best.settings.roadFollow).toBeGreaterThan(0);
+    expect(best.score).toBeGreaterThan(worst.score);
+    // Every setup should at least be finite (no NaN blow-ups) under autopilot.
+    expect(rows.every((r) => r.finite)).toBe(true);
   });
 });

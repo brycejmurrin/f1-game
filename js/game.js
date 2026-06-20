@@ -2742,6 +2742,17 @@ window.__apex = {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
     for (let i = 0; i < count; i++) update(d);
   },
+  // Deterministic tilt emulation for the autopilot harness. `step(deg, dt)` runs a
+  // raw tilt angle (deg) through the real tilt pipeline (One-Euro filter + dead
+  // zone + MAX_TILT map + slew limiter) at an explicit timestep and returns the
+  // resulting steer (-1..1); `steerToAngle(cmd)` inverts the map (steer→tilt deg)
+  // so a controller can convert its steer command into a tilt; `reset()` clears the
+  // filter/slew state between runs. Tilt params come from the sliders (tuning()).
+  tiltSim: {
+    step: (deg, dt) => Input.simTilt(deg, dt),
+    reset: () => Input.simTiltReset(),
+    steerToAngle: (cmd) => Input.steerToTilt(cmd),
+  },
 };
 
 })();

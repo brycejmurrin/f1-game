@@ -237,14 +237,35 @@ until the car completes a lap (or stalls / times out) and returns metrics:
   finite }
 ```
 
-To evaluate a steering setting end-to-end, sweep `setPhysics()` and compare the
-metrics — a tidier setup laps with fewer `offFrames` and lower `maxOverHw`:
+To evaluate steering settings end-to-end, run a grid of `setPhysics()` patches,
+score each lap, and rank them — a tidier setup laps faster with fewer `offFrames`
+and lower `maxOverHw`. Run each candidate **on a fresh page** so laps don't inherit
+one another's end state:
+
+```
+=== steering settings ranked (monza) ===
+ 1158  rf0.8 dr0 ms0.45   lap 112s  avg 52.7  off   0  over 0     ✓   strong road-follow = best
+  952  rf0.4 dr0.5 ms0.45 lap 125s  avg 48.1  off 241  over 1.6   ✓   slidey = runs wide
+   98  rf0   dr0 ms0.45   lap  24s  avg 32.7  off   0  over 0     ✗   no road-follow = undriveable
+```
+
+### Emulated tilt — `__apex.tiltSim`
+The autopilot can drive **through the real tilt pipeline** so tilt settings are
+testable headless. Each tick it converts its steer command to a phone-tilt angle
+and pushes it through the One-Euro filter + dead zone + `MAX_TILT` map + slew
+limiter, then steers with the (lagged) result:
 
 ```js
-const tidy  = await runLap(page, { drift: 0.0, roadFollow: 0.8, maxSlip: 0.55 });
-const loose = await runLap(page, { drift: 0.7, roadFollow: 0.3, maxSlip: 0.70 });
-// tidy.offFrames ≪ loose.offFrames, tidy.maxOverHw ≤ loose.maxOverHw
+__apex.tiltSim.reset();                       // clear filter/slew state per run
+const angle = __apex.tiltSim.steerToAngle(cmd);   // steer cmd (-1..1) → tilt deg
+const steer = __apex.tiltSim.step(angle, dt);     // filtered/slewed steer (-1..1)
 ```
+
+`runLap(page, settings, { mode: "tilt" })` drives a whole lap this way. Tilt params
+come from the sliders (`tuning().maxTilt / deadzone / tiltSlew`); set them with the
+pause-menu sliders or `Input.setTilt*`. Because the slew limiter caps how fast the
+command can move, an aggressive line is laggier than direct input — which is
+exactly what the metrics surface.
 
 Run it: `npx playwright test tests/autopilot.spec.js` (or against a separate
 server with `--config playwright.alt.config.js`, see below).
