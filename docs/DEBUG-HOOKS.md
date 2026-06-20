@@ -133,6 +133,21 @@ Player steering telemetry: lateral `x` (m, +right), heading offset `angle`
 turn — note this is the raw curvature sign, opposite the steer convention),
 half-width `hw` (m), `speed` (m/s), arc position `s` (m).
 
+### `scan(distAhead) → {s, k, hw, slope} | [...]`
+Look-ahead road sampler for closed-loop driving: signed curvature `k` (rad/m,
++right), half-width `hw` and road pitch `slope` at `distAhead` metres in front of
+the player. Pass an **array** of distances to get one reading each (e.g. to find
+the sharpest corner inside a braking window). Pure read — no state change. This is
+the primitive the autopilot harness (`tests/autopilot.spec.js`) steers and brakes
+from; combine with `probe()` for a full closed-loop driver:
+
+```js
+const p = __apex.probe();
+const ahead = __apex.scan([6, 30, 60, 100]);     // curvature at 6/30/60/100 m
+const kMax = Math.max(...ahead.map(a => Math.abs(a.k)));
+const targetSpeed = Math.sqrt(24 / Math.max(kMax, 1e-4));   // v = sqrt(aLat/|k|)
+```
+
 ### `physState() → {s, x, speed, prog, head, vLat, slipDeg, slope, wrongWay, rescueT, lap}`
 Richer readout for the world-space / drift model: world `head`ing (rad), lateral
 slip velocity `vLat` (m/s) and slip `slipDeg` (°), road pitch `slope`
@@ -203,6 +218,36 @@ tuning. Any omitted field is left unchanged; returns the new `tuning()`.
 __apex.setPhysics({ drift: 0, roadFollow: 0 });   // on-rails, no auto road-tracking
 __apex.setPhysics({ drift: 0.6 });                // slidey
 ```
+
+---
+
+## Autopilot — programmatic driving to test steering settings
+
+`tests/autopilot.spec.js` is a closed-loop driver built entirely on these hooks.
+Each tick it reads `probe()` + `scan()`, picks a target speed from the sharpest
+upcoming curvature (`v = sqrt(aLat / |k|)`), and steers pure-pursuit toward the
+centreline (aiming at where the centreline reaches `L` m ahead). `runLap()` drives
+until the car completes a lap (or stalls / times out) and returns metrics:
+
+```js
+{ completed, lapTime, distPct, avgSpeed, minSpeed,
+  offFrames,        // ticks spent past the road edge (line-holding quality)
+  maxOverHw,        // worst excursion past the edge (m)
+  maxWall,          // worst barrier overshoot (should be ~0)
+  finite }
+```
+
+To evaluate a steering setting end-to-end, sweep `setPhysics()` and compare the
+metrics — a tidier setup laps with fewer `offFrames` and lower `maxOverHw`:
+
+```js
+const tidy  = await runLap(page, { drift: 0.0, roadFollow: 0.8, maxSlip: 0.55 });
+const loose = await runLap(page, { drift: 0.7, roadFollow: 0.3, maxSlip: 0.70 });
+// tidy.offFrames ≪ loose.offFrames, tidy.maxOverHw ≤ loose.maxOverHw
+```
+
+Run it: `npx playwright test tests/autopilot.spec.js` (or against a separate
+server with `--config playwright.alt.config.js`, see below).
 
 ---
 
