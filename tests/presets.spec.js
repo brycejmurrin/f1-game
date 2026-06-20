@@ -16,15 +16,15 @@ const activeName = (page) => page.evaluate(() =>
   ["relax", "standard", "pro"].find((n) => document.getElementById("pm-preset-" + n).classList.contains("active")) || null);
 
 test.describe("Apex 26 — presets", () => {
-  test("RELAX is more forgiving than PRO (more help, less slide)", async ({ page }) => {
+  test("RELAX is more forgiving than PRO (more help, calmer steering)", async ({ page }) => {
     await load(page);
     await clickPreset(page, "relax");
     const relax = await tuning(page);
     await clickPreset(page, "pro");
     const pro = await tuning(page);
-    // RELAX tracks more of the corner for you and slides less.
+    // RELAX tracks more of the corner for you and turns in more gently.
     expect(relax.roadFollow).toBeGreaterThan(pro.roadFollow);
-    expect(relax.drift).toBeLessThan(pro.drift);
+    expect(relax.wheelbase).toBeGreaterThan(pro.wheelbase);   // longer wheelbase = lazier
     // RELAX pulls toward the racing line; PRO leaves it off.
     expect(relax.raceLineAssist).toBeGreaterThan(0);
     expect(pro.raceLineAssist).toBe(0);
@@ -51,7 +51,7 @@ test.describe("Apex 26 — presets", () => {
     await clickPreset(page, "relax");
     expect(await activeName(page)).toBe("relax");
     await page.evaluate(() => {
-      const el = document.getElementById("pm-slide");
+      const el = document.getElementById("pm-lock");
       el.value = "8"; el.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(await activeName(page)).toBe(null);

@@ -35,7 +35,6 @@ const SLIDERS = [
   { id: "pm-tiltdeg", key: "maxTilt",         store: "tiltDeg",    vid: "pm-tiltdeg-v", min: 1,  max: 10, sign: -1 },
   { id: "pm-lock",    key: "maxSlip",         store: "steerLock",  vid: "pm-lock-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-speedsteer", key: "speedRef",     store: "steerSpeed", vid: "pm-speedsteer-v", min: 1, max: 10, sign: +1 },
-  { id: "pm-slide",   key: "drift",           store: "slide",      vid: "pm-slide-v",   min: 1,  max: 10, sign: +1 },
   { id: "pm-help",    key: "roadFollow",      store: "drivingHelp",vid: "pm-help-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-pace",    key: "pace",            store: "pace",       vid: "pm-pace-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-line",    key: "raceLineAssist",  store: "raceLine",   vid: "pm-line-v",    min: -5, max: 5,  sign: +1 },
@@ -147,18 +146,18 @@ const hidden = (page, id) =>
 const num = async (page, key) => Number(await stored(page, key));
 
 test.describe("Apex 26 — simplified controls", () => {
-  test("STEERING levels fan out to the four cornering keys and mirror active state", async ({ page }) => {
+  test("STEERING levels fan out to the cornering keys and mirror active state", async ({ page }) => {
     await load(page);
     await click(page, "pm-steer-sim");
     expect(await num(page, "steerRate")).toBe(7);
     expect(await num(page, "steerLock")).toBe(7);
-    expect(await num(page, "slide")).toBe(6);
+    expect(await num(page, "steerSpeed")).toBe(7);
     expect(await isActive(page, "pm-steer-sim")).toBe(true);
     expect(await isActive(page, "pm-steer-normal")).toBe(false);
 
     await click(page, "pm-steer-easy");
     expect(await num(page, "steerRate")).toBe(4);
-    expect(await num(page, "slide")).toBe(1);
+    expect(await num(page, "steerSpeed")).toBe(4);
     expect(await isActive(page, "pm-steer-easy")).toBe(true);
     expect(await isActive(page, "pm-steer-sim")).toBe(false);
   });
@@ -210,7 +209,7 @@ test.describe("Apex 26 — simplified controls", () => {
     await load(page);
     await click(page, "pm-preset-standard");
     expect(await isActive(page, "pm-steer-normal")).toBe(true);
-    await setSlider(page, "pm-slide", 6);        // nudge one cornering key off NORMAL
+    await setSlider(page, "pm-speedsteer", 8);   // nudge one cornering key off NORMAL
     expect(await isActive(page, "pm-steer-normal")).toBe(false);  // no longer a clean level
   });
 });
