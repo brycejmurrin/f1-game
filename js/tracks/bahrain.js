@@ -18,8 +18,9 @@
       { t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
       { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300 }, { t: 60, l: 90 }, { t: 0, l: 120 }, { t: 60, l: 110 },
     ],
-    // Gentle mid-lap dip — the real circuit drops ~15 m below its high point.
-    elevations: [{ s: 0.45, halfM: 340, rise: -7 }],
+    // T1 approach descends ~4 m from the start/finish line; mid-lap drops ~7 m
+    // further to the lowest point (~15 m total relief on the real circuit).
+    elevations: [{ s: 0.03, halfM: 260, rise: -4 }, { s: 0.45, halfM: 340, rise: -7 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, vadd,
         place, prop, backdrop, anchor, addBox, addCyl, addFrustum,
