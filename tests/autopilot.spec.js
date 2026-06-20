@@ -50,7 +50,7 @@ function runLap(page, settings, opts = {}) {
     // (slew + One-Euro) becomes a genuine trade-off (filter jitter vs add lag), so
     // the tuner's smoothing recommendation is meaningful for actual players.
     const tremDeg = opts.tremorDeg != null ? opts.tremorDeg : (tilt ? 2.5 : 0);
-    let seed = 0x9e3779b9 >>> 0;
+    let seed = (opts.seed != null ? opts.seed : 0x9e3779b9) >>> 0;
     const rng = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = (t + Math.imul(t ^ t >>> 7, 61 | t)) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     if (settings) A.setPhysics(settings);
     if (tilt) A.tiltSim.reset();
@@ -182,7 +182,7 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // never grippy-and-sterile), lock in the best, move on. Optimised for clean+fast
   // laps within those ranges. Drift candidates stay lively (never 0).
   test("tunes all steering sliders and recommends defaults", async ({ page }) => {
-    test.setTimeout(600_000);
+    test.setTimeout(2_000_000);   // ~33 min — 3-run avg per candidate (monza×2 + suzuka×1)
     // slider integer (1..10) -> physics value, mirroring js/game.js maps exactly.
     const MAP = {
       rate:   (v) => 4.3 - 2.4 * (v - 1) / 9,        // WHEELBASE (response)
@@ -213,21 +213,39 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
     const score = (m) => (m.completed ? 1000 : 0)
       - m.offFrames * 0.5 - m.maxOverHw * 60 - m.maxWall * 800 - m.jitter * 300 + m.avgSpeed * 4;
 
+    // 3-run average: monza with two different tremor seeds + suzuka once.
+    // Averaging kills the ~5-10 point run-to-run noise so only genuine improvements
+    // survive coordinate descent.
+    const EVAL_RUNS = [
+      { id: "monza",  seed: 0x9e3779b9 },
+      { id: "monza",  seed: 0xdeadbeef },
+      { id: "suzuka", seed: 0x9e3779b9 },
+    ];
     const evalCfg = async (c) => {
-      await load(page, "monza");
-      const m = await runLap(page, toPhysics(c), { mode: "tilt" });
-      return { m, s: score(m) };
+      let totalScore = 0, totalOff = 0, totalLap = 0, allCompleted = true, allFinite = true;
+      for (const run of EVAL_RUNS) {
+        await load(page, run.id);
+        const m = await runLap(page, toPhysics(c), { mode: "tilt", seed: run.seed });
+        totalScore += score(m);
+        totalOff += m.offFrames;
+        totalLap += m.lapTime;
+        if (!m.completed) allCompleted = false;
+        if (!m.finite) allFinite = false;
+      }
+      const n = EVAL_RUNS.length;
+      const avgM = { offFrames: Math.round(totalOff / n), lapTime: +(totalLap / n).toFixed(2), completed: allCompleted, finite: allFinite };
+      return { m: avgM, s: totalScore / n };
     };
 
     let baseline = await evalCfg(cfg), bestS = baseline.s;
-    console.log(`\n=== full slider tuning (monza, via tilt+tremor) ===`);
-    console.log(`baseline (current defaults): score ${bestS.toFixed(0)} off ${baseline.m.offFrames} lap ${baseline.m.lapTime}s`);
+    console.log(`\n=== full slider tuning (3-run avg: monza×2 + suzuka, via tilt+tremor) ===`);
+    console.log(`baseline (current defaults): score ${bestS.toFixed(1)} off ${baseline.m.offFrames} lap ${baseline.m.lapTime}s`);
     for (const key of ORDER) {
       let bestVal = cfg[key], localBestS = bestS;
       for (const v of CAND[key]) {
         if (v === cfg[key]) continue;
         const r = await evalCfg({ ...cfg, [key]: v });
-        console.log(`  ${NAME[key]} ${key}=${v}: score ${r.s.toFixed(0)}  off ${r.m.offFrames}  lap ${r.m.lapTime}s  ${r.m.completed ? "✓" : "✗"}`);
+        console.log(`  ${NAME[key]} ${key}=${v}: score ${r.s.toFixed(1)}  off ${r.m.offFrames}  lap ${r.m.lapTime}s  ${r.m.completed ? "✓" : "✗"}`);
         if (r.s > localBestS + 1) { localBestS = r.s; bestVal = v; }   // +1 hysteresis: keep default unless clearly better
       }
       cfg[key] = bestVal; bestS = localBestS;
