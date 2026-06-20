@@ -1186,7 +1186,7 @@ function updateCar(c, dt, ranked) {
     // more lock to hold the same radius as speed rises. Supplying both is what
     // lets the assist actually keep the car on the road at racing speed (at low
     // speed the v² term vanishes and it's just gentle centring).
-    const assistDelta = ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed) * k;
+    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed) * k;
     const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
