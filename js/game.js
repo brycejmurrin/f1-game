@@ -2178,11 +2178,11 @@ function applySteerTuning() {
   const sens    = store.get("tiltSens",   7);
   const rate    = store.get("steerRate",  5);
   const expo    = store.get("steerExpo",  5);
-  const smooth  = store.get("steerSmooth", 6);
+  const smooth  = store.get("steerSmooth", 5);  // tuner: 5 beats 6 (snappier slew)
   const dz      = store.get("tiltDz",     3);   // tuner: 3 beats 4 (less dead zone, snappier)
   const tiltdeg = store.get("tiltDeg",    6);   // tuner: 6 beats 5 (wider gesture = less sensitive)
   const lock    = store.get("steerLock",  5);
-  const spdsteer = store.get("steerSpeed", 6);  // tuner: 6 beats 5 (tapers off quicker at speed)
+  const spdsteer = store.get("steerSpeed", 5);
   const slide   = store.get("slide",      3);
   const pace    = store.get("pace",       5);
   const line    = store.get("raceLine",   0);
