@@ -170,7 +170,8 @@ let STEER_SPEED_REF = 80;   // m/s reference for the speed-sensitive lock taper:
 //   c.yawRateCur  yaw rate r (rad/s, + = nose swinging right)
 //   c.vLat        body lateral velocity (m/s, + = sliding right)
 // DRIFT/ROAD_FOLLOW etc. stay `let` so the pause sliders can tune them live.
-let DRIFT = 0.15;           // rear looseness 0..1 (SLIDE): higher = earlier oversteer
+let DRIFT = 0;             // rear looseness 0..1: 0 = planted (no oversteer). Slide was
+                          // removed as a player control; left settable for the debug bridge.
 const FRONT_WEIGHT = 0.47;  // static front-axle load fraction (F1 is rear-biased)
 const CS_FRONT = 130;       // front cornering stiffness (accel per rad of slip)
 const CS_REAR  = 175;       // rear stiffer than front → understeer in the linear range too
@@ -2346,9 +2347,9 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 //  pm-lock     STEER LOCK     STEER_MAX_SLIP — max road-wheel steer angle (rad).
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
-//  pm-slide    SLIDE          DRIFT — rear looseness: 0 = planted/understeer,
-//                             high = loose rear that steps out (oversteer).
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
+// The car is planted (understeer-only): DRIFT defaults to 0 so the rear never
+// steps out — overcooking a corner washes the front wide, it never snaps round.
 // The simplified default-view controls (STEERING / TILT / DRIVING HELP / RACING
 // LINE) bundle these for players who don't want the detail — see refreshMacros().
 function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
@@ -2360,7 +2361,6 @@ function wheelbaseFromSlider(v) { return 4.3 + (1.9 - 4.3) * (v - 1) / 9; } // 4
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
 function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // rad, .18..0.42, v5≈0.29
 function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
-function driftFromSlider(v)  { return (v - 1) / 9 * 0.7; }              // 0..0.7 rear looseness, v3≈0.16
 function paceFromSlider(v)   { return 1 + (v - 5) * 0.06; }             // 0.76..1.30, v5=1.0
 // DRIVING HELP = ROAD_FOLLOW: how much of each corner the car tracks for you.
 // v6 ≈ 0.70 (the original feel); higher = the car does more of the steering.
@@ -2378,16 +2378,16 @@ function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " 
 // out — it's a race-wide setting, not a handling feel.
 const PRESETS = {
   relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 4,
-              steerExpo: 4, steerLock: 5, steerSpeed: 4, slide: 1, drivingHelp: 9, raceLine: 2 },
+              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 9, raceLine: 2 },
   standard: { tiltDeg: 6, steerSmooth: 6, steerRate: 5,
-              steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3, drivingHelp: 6, raceLine: 0 },
+              steerExpo: 5, steerLock: 5, steerSpeed: 5, drivingHelp: 6, raceLine: 0 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
-              steerExpo: 6, steerLock: 7, steerSpeed: 7, slide: 6, drivingHelp: 3, raceLine: 0 },
+              steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 3, raceLine: 0 },
 };
 const PRESET_STORE = {  // slider store-key  ->  preset field
   tiltDeg: "tiltDeg", steerSmooth: "steerSmooth",
   steerRate: "steerRate", steerExpo: "steerExpo", steerLock: "steerLock",
-  steerSpeed: "steerSpeed", slide: "slide", drivingHelp: "drivingHelp", raceLine: "raceLine",
+  steerSpeed: "steerSpeed", drivingHelp: "drivingHelp", raceLine: "raceLine",
 };
 
 // ---- simplified ("macro") controls ----
@@ -2396,13 +2396,13 @@ const PRESET_STORE = {  // slider store-key  ->  preset field
 // all stay in sync. STEER_LEVELS bundle the four cornering-feel knobs into named
 // steps that line up with the presets (RELAX→easy, STANDARD→normal, PRO→sim).
 const STEER_LEVELS = {
-  easy:   { steerRate: 4, steerExpo: 4, steerLock: 5, steerSpeed: 4, slide: 1 },
-  assist: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 4, slide: 2 },
-  normal: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3 },
-  sim:    { steerRate: 7, steerExpo: 6, steerLock: 7, steerSpeed: 7, slide: 6 },
+  easy:   { steerRate: 4, steerExpo: 4, steerLock: 5, steerSpeed: 4 },
+  assist: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 4 },
+  normal: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5 },
+  sim:    { steerRate: 7, steerExpo: 6, steerLock: 7, steerSpeed: 7 },
 };
 const STEER_LEVEL_ORDER = ["easy", "assist", "normal", "sim"];
-const STEER_DEFAULTS = { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5, slide: 3 };
+const STEER_DEFAULTS = { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5 };
 const HELP_LEVELS = { low: 3, med: 6, high: 9 };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
 function applyPreset(name) {
@@ -2459,7 +2459,6 @@ function applySteerTuning() {
   const tiltdeg = store.get("tiltDeg",    6);   // 6→32° for full lock (tuner optimum)
   const lock    = store.get("steerLock",  5);
   const spdsteer = store.get("steerSpeed", 5);
-  const slide   = store.get("slide",      3);
   const help    = store.get("drivingHelp", 6);
   const pace    = store.get("pace",       5);
   const line    = store.get("raceLine",   0);
@@ -2468,7 +2467,6 @@ function applySteerTuning() {
   STEER_EXPO     = expoFromSlider(expo);
   STEER_MAX_SLIP = lockFromSlider(lock);
   STEER_SPEED_REF = speedRefFromSlider(spdsteer);
-  DRIFT          = driftFromSlider(slide);
   ROAD_FOLLOW    = helpFromSlider(help);
   Input.setTiltSmoothing(cutoffFromSmooth(smooth));
   Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
@@ -2479,7 +2477,6 @@ function applySteerTuning() {
   $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
-  $("pm-slide").value   = slide;   $("pm-slide-v").textContent   = slide;
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = pace;
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
@@ -2509,10 +2506,6 @@ $("pm-lock").oninput = (e) => {
 $("pm-speedsteer").oninput = (e) => {
   const v = +e.target.value; store.set("steerSpeed", v);
   STEER_SPEED_REF = speedRefFromSlider(v); $("pm-speedsteer-v").textContent = v; clearPreset();
-};
-$("pm-slide").oninput = (e) => {
-  const v = +e.target.value; store.set("slide", v);
-  DRIFT = driftFromSlider(v); $("pm-slide-v").textContent = v; clearPreset();
 };
 $("pm-help").oninput = (e) => {
   const v = +e.target.value; store.set("drivingHelp", v);
