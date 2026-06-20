@@ -194,7 +194,8 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .rs-row { margin: 14px 0; }
 .rs-label { color: var(--dim); font-size: 12px; letter-spacing: 0.12em; margin-bottom: 8px; }
 #rs-laps, #rs-weather, #rs-time { display: flex; flex-wrap: wrap; gap: 8px; }
-#race-settings .sel-chip { font-size: 14px; padding: 9px 16px; }
+/* chips inside race settings must NOT stretch full-width (unlike .panel button default) */
+#race-settings .sel-chip { display: inline-block; width: auto; margin: 0; font-size: 14px; padding: 9px 16px; }
 
 /* ---------- customize my team ---------- */
 #customize .cz-row {
@@ -678,6 +679,18 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
   #pausemenu h2 { grid-column: 1 / -1; }
   #pausemenu button { margin: 4px 0; }
+  /* race settings: 2-column grid so LAPS+WEATHER share one row, TIME+actions share another */
+  #race-settings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 14px;
+    align-items: start;
+  }
+  #race-settings h2 { grid-column: 1 / -1; }
+  #race-settings .sel-actions { grid-column: 1 / -1; margin-top: 6px; }
+  .rs-row { margin: 6px 0; }
+  #race-settings .sel-chip { font-size: 12px; padding: 7px 12px; }
+
   /* advanced panel: two columns of settings so it fits a sideways phone */
   #advanced-inner { width: min(96vw, 820px); }
   #advanced-inner .adv-item {

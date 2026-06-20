@@ -131,7 +131,7 @@ function gearsManual() {
 // Auto-throttle: enabled in touch/button steering modes (thumbs are occupied)
 // unless the player has opted into manual mode, in which case they always drive
 // the throttle themselves regardless of steering mode.
-function autoThrottle() { return !manualMode && Input.touchControlsNeeded() && steerMode !== "tilt"; }
+function autoThrottle() { return Input.touchControlsNeeded() && steerMode !== "tilt"; }
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
@@ -1194,8 +1194,12 @@ function updateCar(c, dt, ranked) {
     // power (a touch of throttle-on looseness) — emergent, not a special case.
     const L = Math.max(2, WHEELBASE);
     const ar = FRONT_WEIGHT * L, af = L - ar;            // CG → rear / front axle
-    const axEst = braking ? -BRAKE : (onThrottle ? DEPLOY_A : -COAST_DRAG);
-    const wt = clamp(-axEst / LAT_MAX * WT_LONG, -0.16, 0.18);
+    // Smooth longitudinal accel estimate over ~0.25 s so weight transfer doesn't
+    // snap instantly when throttle/brake state toggles — removes the twitchy
+    // left-right twitch you'd otherwise see the moment you press the throttle.
+    const axEstTarget = braking ? -BRAKE : (onThrottle ? DEPLOY_A : -COAST_DRAG);
+    c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
+    const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
     // --- road-surface grip modifiers ---
     // Banking: a banked road tilts the gravity vector so lateral G presses the
@@ -1205,10 +1209,14 @@ function updateCar(c, dt, ranked) {
     const bankMu = bankPhys ? 1 + Math.sin(Math.abs(bankPhys.roll)) * 0.8 : 1;
     // Vertical load: crests reduce normal force (car goes light, less grip);
     // valleys increase it (car feels planted). Estimated from slope change over
-    // 12 m. Capped to ±20% so sparse elevation data can't break the model.
+    // 12 m. Low-pass filtered so the v²·kv term doesn't oscillate as speed
+    // builds on the throttle — the road curvature changes over hundreds of metres,
+    // not per-frame.
     Tracks.sample(track, wrapS(c.s + 12), smp2);
     const kv = ((smp2.t[1] || 0) - slopeSin) / 12;
-    const vertLoad = clamp(kv * c.speed * c.speed / 9.8, -0.20, 0.20);
+    const vtRaw = clamp(kv * c.speed * c.speed / 9.8, -0.20, 0.20);
+    c.vertLoad = damp(c.vertLoad ?? vtRaw, vtRaw, 4, dt);
+    const vertLoad = c.vertLoad;
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
     const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad);
@@ -1331,6 +1339,12 @@ function updateCar(c, dt, ranked) {
   // nose yaws toward -x (-r) — hence the negative sign.
   const curveYaw = c.isPlayer ? 0 : clamp(-k * c.speed * 0.14, -0.28, 0.28);
   c.yawVis = damp(c.yawVis, c.steerVis * 0.35 + curveYaw, 6, dt);
+  // Pitch animation: nose lifts under throttle (rear squat), dives under braking.
+  // Stored so the render loop can apply it without re-evaluating throttle/brake state.
+  const pitchTarget = c.isPlayer
+    ? (braking ? 0.018 : (onThrottle ? -0.010 : 0))
+    : (clamp(-k * c.speed * 0.002, -0.012, 0.012));   // AI: subtle pitch through corners
+  c.pitchVis = damp(c.pitchVis ?? 0, pitchTarget, 5, dt);
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
@@ -1478,7 +1492,7 @@ function render(dt) {
         p[0] + smp.t[0] * eyeFwd, p[1] + eyeUp, p[2] + smp.t[2] * eyeFwd,
       ];
       tgtT = [p[0] + smp.t[0] * 30, p[1] + eyeUp + 1.5, p[2] + smp.t[2] * 30];
-      fovT = lerp(64, 78, spd) + (player.deploying ? 5 : 0);   // wider = faster feel
+      fovT = lerp(64, 78, spd) + (player.deploying ? 3 : 0);   // wider = faster feel
     } else {
       // Chase cams anchor a FIXED distance behind the player along the track
       // (arc-length), not in world space — so they never lag at high speed and
@@ -1494,7 +1508,7 @@ function render(dt) {
       tgtT = [p[0] + smp.t[0] * aheadT, p[1] + (mode === "far" ? 1.0 : 0.7), p[2] + smp.t[2] * aheadT];
       // closer camera + narrower FOV so the car reads bigger; still widens a bit
       // with speed for a sense of pace, plus a small boost kick. FAR is a touch wider.
-      fovT = lerp(52, 66, spd) + (mode === "far" ? 4 : 0) + (player.deploying ? 6 : 0);
+      fovT = lerp(52, 66, spd) + (mode === "far" ? 4 : 0) + (player.deploying ? 3 : 0);
     }
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
@@ -1629,16 +1643,14 @@ function render(dt) {
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
     Tracks.sample(track, c.s, smp2);
-    // Smooth the AI cars' RENDERED lateral position (physics x is untouched).
-    // This low-passes any high-frequency collision jitter so a rubbing pack
-    // looks settled, while still tracking real steering and separation. The
-    // player's own car uses its exact position so it stays input-responsive.
-    let renderX = c.x;
-    if (!c.isPlayer) {
-      if (c.xVis === undefined) c.xVis = c.x;
-      else c.xVis = damp(c.xVis, c.x, 16, dt);
-      renderX = c.xVis;
-    }
+    // Smooth RENDERED lateral position. Physics c.x stays exact (used for walls,
+    // collisions, racing-line assist). Only the mesh position is low-passed so
+    // Frenet-projection noise doesn't appear as visible left-right wobble.
+    // Player rate 30 (≈0.1 s lag) is fast enough to feel instant but cuts the
+    // per-frame projection noise; AI rate 16 kills the harsher collision jitter.
+    if (c.xVis === undefined) c.xVis = c.x;
+    else c.xVis = damp(c.xVis, c.x, c.isPlayer ? 30 : 16, dt);
+    let renderX = c.xVis;
     // banking: sit the car ON the banked surface (raise it by the local lift)
     // instead of the flat centreline, so it doesn't float/sink in the corner.
     const bankC = Tracks.banking(track, c.s, renderX);
@@ -1654,6 +1666,17 @@ function render(dt) {
     tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
     tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
     tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+    // Pitch: rotate forward+up around the right axis by pitchVis (positive = nose up).
+    // This gives throttle-squat (nose lifts) and brake-dive (nose dips) without
+    // moving the contact point — it's purely a mesh animation.
+    if (c.pitchVis) {
+      const cp = Math.cos(c.pitchVis), sp = Math.sin(c.pitchVis);
+      for (let i = 0; i < 3; i++) {
+        const f = tmpF[i], u = tmpU[i];
+        tmpF[i] = f * cp + u * sp;
+        tmpU[i] = u * cp - f * sp;
+      }
+    }
     // roll the right/up basis about the forward axis so the car leans with the bank
     if (bankC && bankC.roll) {
       const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
@@ -2334,6 +2357,7 @@ function setSteerMode(mode) {
   Input.setSteerMode(mode);
   if (mode === "tilt") enableTilt();   // (re)request motion permission within this gesture
   $("pm-steer").textContent = steerLabel();
+  $("pm-calib").hidden = mode !== "tilt";
   refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle hides off-tilt
   showTouchControls(true);
 }
@@ -2593,6 +2617,7 @@ if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
+$("pm-calib").hidden = steerMode !== "tilt";
 refreshGearsBtn();
 setSound(soundOn);
 setMusic(musicEnabled);
