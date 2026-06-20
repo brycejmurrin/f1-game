@@ -368,7 +368,7 @@ function makeCars() {
         finished: false, finishT: 0, finPos: 0,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
-        skill: 0.92 + Math.random() * 0.1,
+        skill: Math.min(1.0, 0.92 + Math.random() * 0.1),
         aiBrakeT: 0, lane,
       });
     });
@@ -381,7 +381,7 @@ function gridUp() {
   const order = cars.slice().sort((a, b) => (a.tier - b.tier) || (Math.random() - 0.5));
   const pi = order.indexOf(player);
   order.splice(pi, 1);
-  order.splice(11, 0, player);
+  order.splice(Math.min(11, order.length), 0, player);
   order.forEach((c, i) => {
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
@@ -437,6 +437,7 @@ function loadTrack(idx) {
   if (builtTrackId !== def.id) {
     track = Tracks.build(def);
     builtTrackId = def.id;
+    Ghost.setTrack(def.id);
     minimapBg = null;           // force minimap redraw for new track
   }
   const pal = def.palette;
@@ -534,6 +535,7 @@ function startRace() {
   gridUp();
   recomputePlayerMods();
   resultT = 0;
+  camRoll = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
@@ -545,6 +547,7 @@ function startRace() {
   showTouchControls(true);
   Input.calibrate();
   if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
+  if (soundOn && raceWeather === "wet") GameAudio.startRain();
   updateHud(true);
 }
 
@@ -573,7 +576,7 @@ function endRace() {
   els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
-  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.finish();
   if (timeTrial) { buildTTResults(); els.results.hidden = false; return; }
   // classification: finished by time(+penalty), rest by progress
@@ -691,7 +694,7 @@ function quitToMenu() {
   rainCanvas.style.display = "none";
   els.soundbtn.hidden = false;
   showTouchControls(false);
-  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.startMusic(-1);
 }
 
@@ -718,6 +721,7 @@ function update(dt) {
       for (const l of els.lights.children) l.classList.remove("on");
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
+      if (timeTrial) Ghost.startLap();
       cars.forEach((c) => { c.lapStart = 0; });
     }
     return;
@@ -782,7 +786,7 @@ function resolveCollisions(ranked) {
     for (let ii = 0; ii < ranked.length; ii++) {
       const i = fwd ? ii : ranked.length - 1 - ii;
       const a = ranked[i];
-      for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
+      for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
         const b = ranked[j];               // a is ahead (higher prog), b behind
         const dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
@@ -881,7 +885,7 @@ function updateCar(c, dt, ranked) {
   // rubber band for AI
   if (!c.isPlayer) {
     const gap = player.prog - c.prog;
-    vmax *= 1 + clamp(gap / 700, -1, 1) * dd.band;
+    if (Math.abs(gap) > 50) vmax *= 1 + clamp(gap / 700, -1, 1) * dd.band;
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -933,7 +937,7 @@ function updateCar(c, dt, ranked) {
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
   c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
-  const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && Math.random() < dt * 0.7);
+  const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && Math.random() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
     c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
@@ -1014,7 +1018,7 @@ function updateCar(c, dt, ranked) {
     if (a < 0) {                                   // uphill: gentle bleed
       if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);
     } else {                                        // downhill: feed, but never overspeed
-      c.speed = Math.min(Math.max(c.speed, vmax), c.speed + a * dt);
+      c.speed = Math.min(vmax, c.speed + a * dt);
     }
   }
   if (c.isPlayer) {
@@ -1321,6 +1325,8 @@ function updateCar(c, dt, ranked) {
   }
   c.totalT += dt;
   c.lapTime += dt;
+  if (timeTrial && c.isPlayer) Ghost.record(c.lapTime, c.s, c.x);
+  c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
   // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
@@ -1389,6 +1395,8 @@ function onTTLap(lapTime) {
   ttBoardAdd(track.def.id, {
     t: lapTime, teamId: player.team.id, code: player.code, name: player.name, ts: Date.now(),
   });
+  Ghost.finishLap(lapTime);
+  Ghost.startLap();
   if (lapTime < ttRecord) {
     ttRecord = lapTime;
     ttNewRecord = true;
@@ -1421,6 +1429,7 @@ function render(dt) {
     tgtT = [smp.p[0] + smp.t[0] * 40, smp.p[1] + 2, smp.p[2] + smp.t[2] * 40];
     fovT = 58;
   } else {
+    if (!player) return;
     Tracks.sample(track, player.s, smp);
     const px = player.x;
     // ride the bank with the car so the camera doesn't sink into the banked road
@@ -1648,6 +1657,23 @@ function render(dt) {
       }
     }
   }
+  // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
+  if (timeTrial && player && (state === "race" || state === "count")) {
+    const g = Ghost.at(player.lapTime);
+    if (g && !g.done) {
+      Tracks.sample(track, g.s, smp2);
+      tmpP[0] = smp2.p[0] + smp2.r[0] * g.x;
+      tmpP[1] = smp2.p[1];
+      tmpP[2] = smp2.p[2] + smp2.r[2] * g.x;
+      for (let i = 0; i < 3; i++) { tmpF[i] = smp2.t[i]; tmpR[i] = smp2.r[i]; }
+      tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
+      tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
+      tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+      basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
+      GLX.draw(teamMesh(player.team), tmpMat, { emissive: 0.60, roughness: 0.20, metalness: 0.08, specular: 0.35 });
+    }
+  }
+
   // Resolve the HDR scene (bloom + tonemap + vignette) to the screen.
   GLX.present();
   if (raceWeather === "wet" && rainDrops.length) drawRain(dt);
@@ -1839,7 +1865,7 @@ function buildSetup() {
     budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
   }
   if (budgetFill) {
-    budgetFill.style.width = Math.max(0, Math.min(100, (spent / Parts.BUDGET) * 100)) + "%";
+    budgetFill.style.transform = "scaleX(" + Math.max(0, Math.min(1, spent / Parts.BUDGET)) + ")";
   }
 
   const body = $("cs-body");
