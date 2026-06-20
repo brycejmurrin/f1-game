@@ -77,8 +77,12 @@ const store = {
 // Per-track time-trial leaderboard: top 5 laps ever, each tagged with the
 // team + driver that set it. Stored sorted ascending by lap time.
 const TT_BOARD_MAX = 5;
-function ttBoard(trackId) { return store.get("ttlb." + trackId, []); }
+function ttBoard(trackId) {
+  const b = store.get("ttlb." + trackId, []);
+  return Array.isArray(b) ? b : [];
+}
 function ttBoardAdd(trackId, entry) {
+  if (!isFinite(entry.t) || entry.t <= 0) return ttBoard(trackId);
   const b = ttBoard(trackId);
   b.push(entry);
   b.sort((a, z) => a.t - z.t);
@@ -385,6 +389,8 @@ function gridUp() {
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0;
   });
 }
 function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
@@ -527,6 +533,7 @@ function startRace() {
   }
   gridUp();
   recomputePlayerMods();
+  resultT = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
@@ -924,8 +931,8 @@ function updateCar(c, dt, ranked) {
 
   // --- overtake mode ---
   const ahead = ranked[(c.rank || 1) - 2];
-  const gapAhead = ahead ? (ahead.prog - c.prog) / Math.max(c.speed, 20) : Infinity;
-  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished;
+  const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
+  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
   const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && Math.random() < dt * 0.7);
   if (fire && c.otArmed) {
     c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
@@ -1158,7 +1165,7 @@ function updateCar(c, dt, ranked) {
     // tuning combination can ever drive it into the singularity (Infinity yaw).
     const steerAngle = clamp(shaped * auth * maxDelta, -1.3, 1.3);
     // Player steering yaw (causes lateral slip / drift).
-    const playerYaw = c.speed > 0.5
+    const playerYaw = Math.abs(c.speed) > 0.5
       ? c.speed * Math.tan(steerAngle) / WHEELBASE : 0;
     // Passive road-following: track curvature forces a yaw that keeps the car
     // naturally tracking the road curve. Represented as tyre grip (not slip),
@@ -1283,8 +1290,8 @@ function updateCar(c, dt, ranked) {
   }
   c.totalT += dt;
   c.lapTime += dt;
-  // line crossing (forward only: oldS just before the line, new s just after)
-  if (oldS > track.total * 0.5 && c.s < track.total * 0.5 && oldS > c.s) {
+  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
+  if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
     if (c.lap > 1) {
       const lapDone = c.lapTime;
@@ -1337,7 +1344,8 @@ function rescuePlayer(c) {
   c.vLat = 0; c.yawRateCur = 0;
   c.speed = Math.max(c.speed, 16);
   c.px = smp.p[0]; c.pz = smp.p[2];
-  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false;
+  c.boostOn = false; c.deploying = false;
+  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   announce("RECOVERED", 1.2);
   if (soundOn) GameAudio.offtrack();
 }

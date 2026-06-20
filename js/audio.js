@@ -252,6 +252,7 @@ const GameAudio = (function () {
     osc.connect(g).connect(master);
     osc.start(t0);
     osc.stop(t0 + attack + decay + 0.05);
+    osc.onended = () => { osc.disconnect(); g.disconnect(); };
   }
 
   function noiseBuf(seconds) {
@@ -275,6 +276,7 @@ const GameAudio = (function () {
     src.connect(f).connect(g).connect(master);
     src.start(t0);
     src.stop(t0 + decay + 0.1);
+    src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
 
   /* ---------------- engine ---------------- */
@@ -567,6 +569,7 @@ const GameAudio = (function () {
     osc.connect(f).connect(g).connect(master);
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
+    osc.onended = () => { osc.disconnect(); f.disconnect(); g.disconnect(); };
 
     // a touch of mechanical click via short filtered noise
     noise(isUp ? 0.05 : 0.045, 0.05, isUp ? 2600 : 1800);
