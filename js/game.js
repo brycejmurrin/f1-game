@@ -1195,11 +1195,16 @@ function updateCar(c, dt, ranked) {
     const catchUp = 1 + (1 - Math.abs(shaped)) * AUTO_CATCH * (1 + 0.5 * slipBoost);
     const latGrip = LAT_GRIP * (braking ? 0.5 : 1) * catchUp;  // braking eats lateral grip
     const slipCap = MAX_LAT_SLIP * gripScale * kerbGrip * gripMult();
-    // Cap to the grip circle BOTH before and after the decay so a shrinking cap
-    // (e.g. braking into a corner) can never leave a one-frame over-slip.
-    c.vLat = clamp(c.vLat, -slipCap, slipCap);
+    // Soft-knee grip circle: instead of a hard clamp (a cliff the noisy tilt
+    // signal chatters against), saturate the slip smoothly with tanh so force
+    // keeps rising toward the cap with falling slope — the limit reads as a
+    // region, not a wall, which is far more controllable on tilt and how real
+    // tyres actually saturate. Applied before AND after the decay so a shrinking
+    // cap (e.g. braking into a corner) never leaves a one-frame over-slip.
+    const softCap = (v) => slipCap > 1e-4 ? slipCap * Math.tanh(v / slipCap) : 0;
+    c.vLat = softCap(c.vLat);
     c.vLat *= Math.max(0, 1 - latGrip * dt);
-    c.vLat = clamp(c.vLat, -slipCap, slipCap);
+    c.vLat = softCap(c.vLat);
     // world velocity = forward + sideways slip (perp = (fz, -fx) = +right)
     c.px += (c.speed * fx + c.vLat * fz) * dt;
     c.pz += (c.speed * fz - c.vLat * fx) * dt;
@@ -1215,7 +1220,11 @@ function updateCar(c, dt, ranked) {
       c.x += (lineX - c.x) * raceLineAssist * 2.2 * latFac * dt;
     }
   } else {
-    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * dt;
+    // While rubbing another car (contactT>0) the AI goes compliant: it stops
+    // driving hard back to its racing line, so a player leaning on it can
+    // actually move it sideways instead of bouncing off a rigid, on-rails line.
+    const give = (c.contactT > 0) ? 0.4 : 1;
+    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * give * dt;
   }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
@@ -1229,25 +1238,47 @@ function updateCar(c, dt, ranked) {
   const wallR = Tracks.wallAt(track, c.s, 1);
   const wallL = Tracks.wallAt(track, c.s, -1);
   if (c.x > wallR || c.x < -wallL) {
-    c.x = c.x > wallR ? wallR : -wallL;
-    // The barrier absorbs sideways momentum: kill the player's lateral slip so a
-    // drift into the wall doesn't keep grinding/bouncing the car back into it.
-    if (c.isPlayer && c.vLat) c.vLat = 0;
-    if (track.street) {
-      // First-frame contact: instant speed hit so the impact is felt immediately.
-      if (!c.wasOnWall) c.speed *= 0.72;
-      // While pinned: strong deceleration force (grinding to a crawl).
-      c.speed = Math.max(0, c.speed - 38 * dt);
-      // Suppress auto-throttle briefly so the player doesn't immediately re-accelerate into the wall.
-      if (c.isPlayer) c.wallT = 0.55;
+    const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
+    c.x = into > 0 ? wallR : -wallL;
+    if (c.isPlayer) {
+      // Slide along the barrier instead of stopping dead. Decompose the car's
+      // heading into the part running ALONG the wall (kept) and the part driving
+      // INTO it (killed): a shallow scrape barely slows you and you keep sliding,
+      // a head-on hit scrubs hard. The nose is rotated toward the wall tangent so
+      // the car runs parallel rather than re-pinning every frame.
+      Tracks.sample(track, c.s, smp);
+      const tHead = Math.atan2(smp.t[0], smp.t[2]);
+      let rel = c.head - tHead;
+      while (rel > Math.PI) rel -= 2 * Math.PI;
+      while (rel < -Math.PI) rel += 2 * Math.PI;
+      const noseIn = into > 0 ? rel > 0 : rel < 0;        // nose pointing into wall?
+      const incidence = Math.min(1, Math.abs(Math.sin(rel)));  // 0 graze … 1 head-on
+      if (c.vLat) c.vLat = 0;                             // slip into the wall is gone
+      if (noseIn) {
+        // first-frame impact: lose only the normal component — a graze is nearly
+        // free, a head-on hit bites hard.
+        if (!c.wasOnWall) c.speed *= 1 - incidence * (track.street ? 0.5 : 0.28);
+        // straighten the nose toward the wall tangent so the car slides along it
+        c.head -= rel * Math.min(1, (4 + incidence * 8) * dt);
+        if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
+          shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
+          if (soundOn) GameAudio.collision();
+          if (navigator.vibrate) { try { navigator.vibrate(Math.round(15 + incidence * 35)); } catch (e) {} }
+        }
+      }
+      // Steering held INTO the barrier while pinned = the wall denies that turn,
+      // which scrubs speed — you can't ride the wall for free. `steer` is the
+      // driver input (sign = turn direction); `into` is ±1 for the wall side.
+      const pushIn = Math.max(0, into * steer);
+      if (pushIn > 0.02) {
+        c.speed = Math.max(0, c.speed - pushIn * (track.street ? 40 : 16) * dt);
+        if (track.street) c.wallT = 0.35;     // brief auto-throttle suppress
+      }
+      // Nose/steer pointing AWAY = peeling off: speed and heading left alone so
+      // the player just drives off the barrier — no sticky pin, no auto-rescue.
     } else {
-      // Open-circuit run-off wall: much softer boundary, gentle drag.
-      c.speed = Math.max(0, c.speed - 12 * dt);
-    }
-    if (c.isPlayer && track.street && c.collideT <= 0) {
-      shake = Math.min(1, shake + 0.32); c.collideT = 0.35;
-      if (soundOn) GameAudio.collision();
-      if (navigator.vibrate) { try { navigator.vibrate(40); } catch (e) {} }
+      // AI has no world-space heading to slide; clamp + gentle scrub.
+      c.speed = Math.max(0, c.speed - (track.street ? 24 : 12) * dt);
     }
     c.wasOnWall = true;
   } else {
@@ -1696,19 +1727,31 @@ function drawMinimap() {
 }
 
 // ---------- main loop ----------
+let physAcc = 0;                 // leftover sim time carried between frames
+const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
   requestAnimationFrame(tick);
-  let dt = Math.min((now - lastFrame) / 1000, 1 / 20);
+  let dt = Math.min((now - lastFrame) / 1000, 1 / 4);   // clamp big gaps (tab resume)
   lastFrame = now;
   if (paused) return;
   if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard
   // crash so the impact reads, but keep the camera (render) at full dt so the
   // shake still plays out.
-  let simDt = dt;
-  if (hitStop > 0) { hitStop = Math.max(0, hitStop - dt); simDt = dt * 0.15; }
-  if (!frozen) update(simDt);   // frozen: hold the sim still, keep rendering
-  render(dt);
+  let simTime = dt;
+  if (hitStop > 0) { hitStop = Math.max(0, hitStop - dt); simTime = dt * 0.15; }
+  // Fixed-step physics: advance the sim in constant 1/60 s chunks regardless of
+  // the display framerate, so handling is identical on a 30 fps phone, a 120 fps
+  // desktop, and a janky frame — a long frame can never enlarge the integration
+  // step (which would change the slip/grip behaviour). Leftover time carries to
+  // the next frame; cap the substeps so a stall can't trigger a spiral of death.
+  if (!frozen) {
+    physAcc += simTime;
+    let steps = 0;
+    while (physAcc >= PHYS_DT && steps < 5) { update(PHYS_DT); physAcc -= PHYS_DT; steps++; }
+    if (steps === 5) physAcc = 0;             // fell badly behind — drop the backlog
+  }
+  render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
   if (state === "race" || state === "count") updateHud(false);
 }
 
