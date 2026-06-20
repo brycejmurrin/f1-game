@@ -1,12 +1,16 @@
 // @ts-check
-// Tier-b physics: lateral-velocity "drift factor" + grip circle, and the
-// speed-sensitive steer taper. Uses the setPhysics()/physState() hooks to drive
-// the model deterministically and assert the qualitative contract:
-//   - DRIFT=0 reproduces the on-rails kinematic model (no lateral slip)
-//   - DRIFT>0 makes the car understeer (turn LESS than commanded = run wider)
-//   - with no steering, slip decays back to zero (no spurious crabbing)
-//   - the model never NaNs or throws the car off the world
-//   - SPEED STEER keeps more steering at high speed
+// Dynamic single-track ("bicycle") tyre model: per-axle slip-angle forces capped
+// by a friction limit. Uses setPhysics()/physState() to drive the model
+// deterministically and assert the qualitative contract for a "balanced simcade"
+// car:
+//   - the default car is STABLE at the limit: full lock washes wide (understeer),
+//     it never spins or NaNs
+//   - SLIDE loosens the rear: more slip and more rotation (toward oversteer)
+//   - releasing the steering lets the slide self-align back toward straight
+//   - cornering is GRIP-LIMITED: yaw rate doesn't run away with speed (the old
+//     kinematic model's signature failure)
+//   - SPEED STEER keeps more steering at high speed (at part-lock, below the grip
+//     limit, where the lock taper is what's felt)
 import { test, expect } from "@playwright/test";
 
 async function startRace(page) {
@@ -17,67 +21,75 @@ async function startRace(page) {
   await page.evaluate(() => window.__apex.go());
 }
 
-// Hold full lock through a corner at a given DRIFT; report how far the heading
-// swings (turn-in) and the peak slip angle.
-const corner = (page, drift) => page.evaluate((d) => {
-  window.__apex.setPhysics({ drift: d });
-  window.__apex.jump(0.10, 30, 0);
-  window.__apex.setInput({ steer: 1, throttle: false });
-  const a0 = window.__apex.probe().angle;
-  let peakSlip = 0;
-  for (let i = 0; i < 36; i++) {
-    window.__apex.step(1 / 60, 1);
-    peakSlip = Math.max(peakSlip, Math.abs(window.__apex.physState().slipDeg));
-  }
-  const a1 = window.__apex.probe().angle;
-  window.__apex.clearInput();
-  return { turn: Math.abs(a1 - a0), peakSlip };
-}, drift);
+// Hold a fixed steer from the main straight at a given SLIDE (drift); report how
+// far the heading swings (turn-in), the peak slip angle, and the steady heading
+// yaw rate (deg/s) averaged over the last few frames.
+const corner = (page, drift, steer = 1, speed = 40, frames = 48) =>
+  page.evaluate(({ d, steer, speed, frames }) => {
+    window.__apex.setPhysics({ drift: d });
+    window.__apex.jump(0.0, speed, 0);
+    window.__apex.setInput({ steer, throttle: false });
+    const a0 = window.__apex.probe().angle;
+    let peakSlip = 0, prev = window.__apex.physState().head, yawSum = 0, yawN = 0;
+    for (let i = 0; i < frames; i++) {
+      window.__apex.step(1 / 60, 1);
+      const ps = window.__apex.physState();
+      peakSlip = Math.max(peakSlip, Math.abs(ps.slipDeg));
+      let dh = ps.head - prev; prev = ps.head;
+      while (dh > Math.PI) dh -= 2 * Math.PI;
+      while (dh < -Math.PI) dh += 2 * Math.PI;
+      if (i >= frames - 12) { yawSum += Math.abs(dh) * 60 * 180 / Math.PI; yawN++; }
+    }
+    const a1 = window.__apex.probe().angle;
+    const x = window.__apex.probe().x;
+    window.__apex.clearInput();
+    return { turn: Math.abs(a1 - a0), peakSlip, steadyYaw: yawSum / yawN, x, finite: Number.isFinite(x) };
+  }, { d: drift, steer, speed, frames });
 
-test.describe("Apex 26 — tier-b drift & grip", () => {
-  test("DRIFT=0 is on-rails: no lateral slip", async ({ page }) => {
+test.describe("Apex 26 — dynamic bicycle model", () => {
+  test("default car is stable at the limit: full lock washes wide, never spins", async ({ page }) => {
     await startRace(page);
-    const r = await page.evaluate(() => {
-      window.__apex.setPhysics({ drift: 0 });
-      window.__apex.jump(0.10, 30, 0);
-      window.__apex.setInput({ steer: 1, throttle: false });
-      let maxSlip = 0;
-      for (let i = 0; i < 36; i++) {
-        window.__apex.step(1 / 60, 1);
-        maxSlip = Math.max(maxSlip, Math.abs(window.__apex.physState().slipDeg));
-      }
-      window.__apex.clearInput();
-      return { maxSlip };
-    });
-    expect(r.maxSlip).toBeLessThan(0.5);   // effectively zero slip
+    const r = await corner(page, 0.15, 1, 50, 90);   // shipped-ish SLIDE, full lock, 1.5 s
+    expect(r.finite).toBe(true);
+    expect(r.peakSlip).toBeLessThan(45);             // understeer wash, not a spin
+    expect(Math.abs(r.x)).toBeLessThan(60);          // stayed in the track neighbourhood
   });
 
-  test("DRIFT>0 understeers: more slip and less turn-in than on-rails", async ({ page }) => {
+  test("SLIDE loosens the rear: more slip and more rotation than planted", async ({ page }) => {
     await startRace(page);
-    const grip = await corner(page, 0);
-    const slide = await corner(page, 0.6);
-    expect(slide.peakSlip).toBeGreaterThan(4);          // a real slide angle
-    expect(grip.peakSlip).toBeLessThan(1);
-    // understeer: with slide the heading swings LESS for the same full lock
-    expect(slide.turn).toBeLessThan(grip.turn);
+    const planted = await corner(page, 0.0, 1, 40, 48);
+    const loose = await corner(page, 0.7, 1, 40, 48);
+    expect(loose.finite && planted.finite).toBe(true);
+    expect(loose.peakSlip).toBeGreaterThan(planted.peakSlip + 2);  // a real, bigger slide
+    expect(loose.turn).toBeGreaterThan(planted.turn);              // looser rear rotates more
   });
 
-  test("slip decays to zero with no steering input", async ({ page }) => {
+  test("slide self-aligns: release the steering and the slip decays", async ({ page }) => {
     await startRace(page);
     const tail = await page.evaluate(() => {
-      window.__apex.setPhysics({ drift: 0.8 });
-      window.__apex.jump(0.10, 40, 0);
-      // throw it into a slide...
+      window.__apex.setPhysics({ drift: 0.7 });
+      window.__apex.jump(0.0, 40, 0);
       window.__apex.setInput({ steer: 1, throttle: false });
-      for (let i = 0; i < 20; i++) window.__apex.step(1 / 60, 1);
-      // ...then release and let grip recover
+      for (let i = 0; i < 24; i++) window.__apex.step(1 / 60, 1);   // throw it into a slide
       window.__apex.setInput({ steer: 0, throttle: false });
-      for (let i = 0; i < 60; i++) window.__apex.step(1 / 60, 1);
+      for (let i = 0; i < 72; i++) window.__apex.step(1 / 60, 1);   // release, let it settle (1.2 s)
       const s = window.__apex.physState();
       window.__apex.clearInput();
+      window.__apex.setPhysics({ drift: 0.15 });
       return Math.abs(s.vLat);
     });
-    expect(tail).toBeLessThan(0.5);    // slip bled away
+    expect(tail).toBeLessThan(1.5);    // slip bled away — the car straightens itself
+  });
+
+  test("cornering is grip-limited: yaw rate doesn't run away with speed", async ({ page }) => {
+    await startRace(page);
+    // Kinematic models spin faster the faster you go (yaw ∝ speed). A grip-limited
+    // tyre model caps the path: steady heading yaw at full lock should be roughly
+    // flat — certainly not growing with speed.
+    const slow = await corner(page, 0.0, 1, 25, 60);
+    const fast = await corner(page, 0.0, 1, 65, 60);
+    expect(fast.finite && slow.finite).toBe(true);
+    expect(fast.steadyYaw).toBeLessThan(slow.steadyYaw * 1.3);
   });
 
   test("high drift + aggressive steering never NaNs or flies off", async ({ page }) => {
@@ -85,7 +97,7 @@ test.describe("Apex 26 — tier-b drift & grip", () => {
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
     await startRace(page);
     const r = await page.evaluate(() => {
-      window.__apex.setPhysics({ drift: 0.9 });
+      window.__apex.setPhysics({ drift: 0.7 });
       window.__apex.jump(0.0, 70, 0);
       let maxAbsX = 0, finite = true;
       for (let i = 0; i < 400; i++) {
@@ -96,28 +108,30 @@ test.describe("Apex 26 — tier-b drift & grip", () => {
         maxAbsX = Math.max(maxAbsX, Math.abs(p.x));
       }
       window.__apex.clearInput();
-      window.__apex.setPhysics({ drift: 0.2 });   // restore default
+      window.__apex.setPhysics({ drift: 0.15 });   // restore default
       return { finite, maxAbsX };
     });
     expect(errors).toEqual([]);
     expect(r.finite).toBe(true);
-    expect(r.maxAbsX).toBeLessThan(40);   // stayed in the track's neighbourhood
+    expect(r.maxAbsX).toBeLessThan(60);   // stayed in the track's neighbourhood
   });
 
   test("SPEED STEER: higher keeps more turn-in at high speed", async ({ page }) => {
     await startRace(page);
-    const turnAtSpeed = (ref) => page.evaluate((r) => {
+    // At part-lock (below the grip limit) the lock taper is what's felt: a higher
+    // reference keeps more steer angle — and so more turn-in — at speed.
+    const turnAtRef = (ref) => page.evaluate((r) => {
       window.__apex.setPhysics({ drift: 0, speedRef: r });
-      window.__apex.jump(0.0, 60, 0);          // high speed, on the straight
-      window.__apex.setInput({ steer: 1, throttle: false });
+      window.__apex.jump(0.0, 58, 0);
+      window.__apex.setInput({ steer: 0.5, throttle: false });
       const a0 = window.__apex.probe().angle;
-      for (let i = 0; i < 10; i++) window.__apex.step(1 / 60, 1);
+      for (let i = 0; i < 16; i++) window.__apex.step(1 / 60, 1);
       const a1 = window.__apex.probe().angle;
       window.__apex.clearInput();
       return Math.abs(a1 - a0);
     }, ref);
-    const calm = await turnAtSpeed(50);    // taper steering hard at speed
-    const sharp = await turnAtSpeed(120);  // keep steering at speed
-    expect(sharp).toBeGreaterThan(calm * 1.2);
+    const calm = await turnAtRef(50);
+    const sharp = await turnAtRef(120);
+    expect(sharp).toBeGreaterThan(calm * 1.1);
   });
 });

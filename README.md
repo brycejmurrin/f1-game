@@ -54,6 +54,18 @@ Zandvoort in its farewell year. Night races run under floodlights.
 Throttle is manual — hold GAS to accelerate. BOOST and OVERTAKE are taps that
 toggle/activate rather than buttons you hold.
 
+### Handling & tuning
+
+The car runs a **dynamic bicycle model**: each axle generates grip from its slip
+angle and saturates at a friction limit, so cornering is grip-limited — overcook
+a corner and the front washes wide (understeer); loosen the rear and it steps out
+(oversteer). Brake for the corners; the car rewards a tidy line.
+
+**ADVANCED STEERING…** in the pause menu opens plain-language controls —
+**RELAX / STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**,
+**DRIVING HELP** and **RACING LINE** — with the full set of per-parameter knobs
+tucked behind an **ADVANCED** disclosure for anyone who wants them.
+
 ## The data hub
 
 The **F1 DATA HUB** button opens a live data view powered by two free,
