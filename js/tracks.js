@@ -900,8 +900,13 @@ const Tracks = (function () {
     // backdrop(): a distant scenery box (skyline, hills, dunes) on the horizon.
     // Tall things go far enough back that they never clip the viewport edge, and
     // onTrack keeps them off any parallel stretch. Anchored to local py[k].
+    // Box is track-aligned ([t,u,r] basis) so its large face always runs parallel
+    // to the road — a forward camera only ever sees the thin sz[2] edge, never
+    // the full sz[0]×sz[1] face regardless of the track's world-space heading.
     const backdrop = (k, side, dist, sz, col) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const t = [track.tx[k], track.ty[k], track.tz[k]];
+      const u = upOf(track, k);
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       if (onTrack(cx, cz, sz[0] / 2 + 6)) {
@@ -910,7 +915,7 @@ const Tracks = (function () {
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
       // ribbon vert returns it), so a ridge/skyline never floats on a high section
-      addBox(out, [cx, groundYAt(k, dist) + sz[1] / 2 - 2, cz], sz, col);
+      addBox(out, [cx, groundYAt(k, dist) + sz[1] / 2 - 2, cz], sz, col, [t, u, r]);
     };
 
     // ---------- composite scenery models (beyond single boxes) ----------

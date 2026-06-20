@@ -2277,6 +2277,26 @@ window.__apex = {
     camFov = 75;
     return r;
   },
+  // Instantly snap the chase camera to the correct position behind the current
+  // player without waiting for exponential damping to converge. Call right after
+  // jump() so the very next rendered frame is a clean forward-facing view.
+  snapCam() {
+    if (!player || !track) return;
+    Tracks.sample(track, player.s, smp);
+    const px = player.x;
+    const bankCam = Tracks.banking(track, player.s, px);
+    const bankDy  = bankCam ? bankCam.dy : 0;
+    const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
+    Tracks.sample(track, wrapS(player.s - 5.8), smpC);
+    const cx = px * 0.5;
+    camEye[0] = smpC.p[0] + smpC.r[0] * cx;
+    camEye[1] = smpC.p[1] + 2.1 + bankDy;
+    camEye[2] = smpC.p[2] + smpC.r[2] * cx;
+    camTgt[0] = p[0] + smp.t[0] * 4;
+    camTgt[1] = p[1] + 0.7;
+    camTgt[2] = p[2] + smp.t[2] * 4;
+    camFov = lerp(52, 66, clamp(player.speed / VMAX, 0, 1));
+  },
   info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
   // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
   // heading offset angle (rad, relative to track tangent), local curvature k
