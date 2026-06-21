@@ -21,12 +21,32 @@ async function goToRace(page, circuit) {
   await waitForTrack(page);
 }
 
-async function park(page, frac = 0) {
-  await page.evaluate((f) => window.__apex.park(f), frac);
-  await page.waitForTimeout(1000);
+// Place the car at `frac` with a forward-facing chase camera.
+// park() uses jump(f, 0) so the camera has no heading — snapCam after a
+// non-zero speed jump gives a deterministic, forward-facing view every time.
+async function snapForward(page, frac) {
+  await page.evaluate((f) => {
+    window.__apex.camera("chase");
+    window.__apex.jump(f, 40, 0);   // non-zero speed → camera has a heading
+    window.__apex.snapCam();         // instantly align camera, no damping lag
+    window.__apex.step(1 / 60, 5);  // advance a few ticks so GPU draws the frame
+    window.__apex.freeze(true);      // hold the scene for the screenshot
+    window.__apex.hud(false);        // hide HUD overlay for cleaner track shots
+  }, frac);
+  // A short settle ensures the compositor has flushed the latest frame.
+  await page.waitForTimeout(150);
 }
 
-// Builds an 11-position visual regression suite for a single circuit.
+async function resetScene(page) {
+  await page.evaluate(() => {
+    window.__apex.freeze(false);
+    window.__apex.hud(true);
+    window.__apex.clearInput();
+  });
+}
+
+// Builds a 25-position visual regression suite for a single circuit.
+// Each screenshot is a forward-facing chase-cam view taken at 0%, 4%, ..., 96%.
 export function describeTrack(circuit) {
   test.describe(circuit, () => {
     for (const frac of LAP_FRACTIONS) {
@@ -34,17 +54,17 @@ export function describeTrack(circuit) {
         page,
       }) => {
         await goToRace(page, circuit);
-        await park(page, frac);
+        await snapForward(page, frac);
 
         const info = await page.evaluate(() => window.__apex.info());
         expect(info.state).toBe("race");
 
         await expect(page.locator("canvas#game")).toHaveScreenshot(
           `${circuit}-${(frac * 100).toFixed(0)}.png`,
-          { maxDiffPixelRatio: 0.15, timeout: 15000 }
+          { maxDiffPixelRatio: 0.10, timeout: 15000 }
         );
 
-        await expect(page.locator("#hud")).toBeVisible();
+        await resetScene(page);
       });
     }
   });
