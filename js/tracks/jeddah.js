@@ -12,6 +12,7 @@
     night: true,
     theme: "street_night",
     street: true,
+    barrierGap: 0.6,
     lengthKm: 6.2,
     baseHW: 6,
     pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.03, 0.04, 0.12], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, concrete: [0.28, 0.27, 0.26], runoff: [0.25, 0.24, 0.22], grass: [0.2, 0.18, 0.14] },
@@ -42,8 +43,9 @@
       // Custom coarse-stepped barrier: overlapping long boxes so the wall never opens a
       // gap, at a wider spacing than wall()'s fixed 6 m step to stay within the vert budget.
       // Physics boundary registered at the same 0.6m gap so the stop matches the visual.
+      // Use (n-1)/n as s1 — s1=1.0 wraps k1 back to 0, making span=0 and covering nothing.
       for (const side of [-1, 1]) {
-        recordBarrier(0.0, 1.0, side, 0.6);
+        recordBarrier(0.0, (n - 1) / n, side, 0.6);
         every(13, (k) => {
           const a = anchor(k, side, 0.6), b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 0.65), [0.5, 1.3, 15], BARRIER, b);
