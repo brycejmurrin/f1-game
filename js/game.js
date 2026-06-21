@@ -1957,6 +1957,17 @@ function drawMinimap() {
     mm.fillStyle = cssCol(c.team.color);
     mm.fillRect(6 + p[0] * (W - 16), 6 + p[1] * (H - 16), 4, 4);
   }
+  // ghost replay marker (time trial): where your best lap is right now
+  if (timeTrial && Ghost.hasGhost()) {
+    const gh = Ghost.at(player.lapTime);
+    if (gh && !gh.done) {
+      const gp = map[Math.floor((gh.s / track.total) * n) % n];
+      mm.fillStyle = "rgba(120, 220, 255, 0.95)";
+      mm.beginPath();
+      mm.arc(8 + gp[0] * (W - 16), 8 + gp[1] * (H - 16), 3.4, 0, 7);
+      mm.fill();
+    }
+  }
   const p = map[Math.floor(player.s / track.total * n) % n];
   mm.fillStyle = "#fff";
   mm.beginPath();
@@ -2221,15 +2232,45 @@ function buildSelect() {
   renderStatBars($("sel-stats"), team);
   if (!seasonMode) {
     els.selTracks.textContent = "";
+    els.selTracks.classList.add("track-grid");
     Tracks.LIST.forEach((t, i) => {
-      const b = document.createElement("button");
-      b.className = "sel-chip" + (i === trackIdx ? " active" : "");
-      // in time trial, surface each track's leaderboard-best lap on its chip
-      const board = timeTrial ? ttBoard(t.id) : [];
-      const rec = board.length ? board[0].t : Infinity;
-      b.textContent = t.name + (t.night ? " ☾" : "") + (isFinite(rec) ? "  " + fmtTime(rec) : "");
-      b.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); loadTrack(i); };
-      els.selTracks.appendChild(b);
+      const card = document.createElement("button");
+      card.className = "track-card" + (i === trackIdx ? " active" : "");
+      card.setAttribute("aria-label", t.name);
+
+      const cv = document.createElement("canvas");
+      cv.className = "track-card-map";
+      cv.width = 300; cv.height = 188;
+      card.appendChild(cv);
+      // draw the circuit outline from the game's own spline geometry
+      TrackMaps.draw(cv, t, {
+        color: i === trackIdx ? "#fff" : "rgba(235,235,240,0.82)",
+        startColor: "#e10600", width: 3
+      });
+
+      const info = document.createElement("div");
+      info.className = "track-card-info";
+      const name = document.createElement("div");
+      name.className = "track-card-name";
+      name.textContent = t.name + (t.night ? " ☾" : "");
+      info.appendChild(name);
+      const meta = document.createElement("div");
+      meta.className = "track-card-meta";
+      meta.textContent = [t.country, t.lengthKm ? t.lengthKm.toFixed(1) + " km" : ""].filter(Boolean).join(" · ");
+      info.appendChild(meta);
+      // in time trial, surface each circuit's leaderboard-best lap
+      if (timeTrial) {
+        const board = ttBoard(t.id);
+        const rec = board.length ? board[0].t : Infinity;
+        const recEl = document.createElement("div");
+        recEl.className = "track-card-rec";
+        recEl.textContent = isFinite(rec) ? "★ " + fmtTime(rec) : "—";
+        info.appendChild(recEl);
+      }
+      card.appendChild(info);
+
+      card.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); loadTrack(i); };
+      els.selTracks.appendChild(card);
     });
   }
   els.selDiff.textContent = "";
