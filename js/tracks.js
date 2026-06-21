@@ -1452,7 +1452,7 @@ const Tracks = (function () {
       // structures
       building, tower, grandstand, billboard, gantry, marshalPost,
       // barriers / track furniture
-      wall, fence, guardrail, tyreWall,
+      wall, fence, guardrail, tyreWall, recordBarrier,
     });
 
     // bridge supports: pillars from the ground up to the raised deck, set a
