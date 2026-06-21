@@ -14,11 +14,12 @@ async function waitForTrack(page, timeout = 10_000) {
 
 async function goToRace(page, circuit) {
   await page.goto("/");
-  // Start the race directly via the debug hook — robust against menu/flow changes
-  // (the menu gained a race-settings step that the old chip-driven flow skipped).
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
   await page.evaluate((c) => window.__apex.race(c), circuit);
   await waitForTrack(page);
+  // race() leaves the game in "count" (countdown) state; go() skips to "race"
+  // so that jump() and freeze() operate in the right game phase.
+  await page.evaluate(() => window.__apex.go());
 }
 
 // Place the car at `frac` with a forward-facing chase camera.
