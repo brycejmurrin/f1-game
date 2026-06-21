@@ -108,16 +108,25 @@ Called with no argument it returns `{ mode, index, modes }`. Called with a mode
 **id**, **label**, or **index** it switches and persists (to `localStorage`),
 returning `{ mode, index }`; an unknown mode returns `false`.
 
-| Mode | Vantage |
-|---|---|
-| `chase` | close action cam, just behind and above the car (default) |
-| `far` | pulled back & higher — more of the road ahead, for race-craft |
-| `cockpit` | driver's-eye onboard; the player car mesh is hidden |
-| `hood` | nose/bonnet onboard, looking down the road |
+| Mode | Label | Vantage |
+|---|---|---|
+| `chase` | CHASE | Close action cam anchored behind the car at fixed arc-length — car stays a constant readable size at all speeds (default) |
+| `far` | FAR | Chase cam pulled further back and higher — more road ahead visible, better for race-craft |
+| `cockpit` | COCKPIT | Driver's-eye onboard; the player car mesh is hidden |
+| `hood` | HOOD | Nose/bonnet onboard, looking down the road |
+| `overhead` | OVERHEAD | Top-down drone, high above and slightly behind — steeply angled to show the car and road ahead |
+| `heli` | HELI | Broadcast helicopter: high, behind and off to the side, long-lens telephoto on the car |
+| `reverse` | REVERSE | Mounted just ahead of the car looking back down the track — watch who's chasing you |
+| `side` | TV SIDE | Panning trackside camera, offset to the outside of the current corner, framing the car against the apex |
+| `cinematic` | CINEMATIC | Free-orbit: circles the car continuously on a slow azimuth sweep — shows surroundings from every angle |
+| `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
+| `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
+| `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:[chase,far,cockpit,hood] }
+__apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"] }
 __apex.camera("hood");      // → { mode:"hood", index:3 }
+__apex.camera("tcam");      // → { mode:"tcam", index:10 }
 __apex.camera(2);           // switch by index → cockpit
 ```
 
