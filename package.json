@@ -8,7 +8,7 @@
     "test:update": "playwright test --update-snapshots",
 
     "test:smoke":     "playwright test tests/smoke.spec.js",
-    "test:api":       "playwright test tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js",
+    "test:api":       "playwright test tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js tests/new-hooks.spec.js",
     "test:headless":  "playwright test tests/headless-api.spec.js tests/obs-act-edge.spec.js",
     "test:physics":   "playwright test tests/physics-*.spec.js tests/world-physics.spec.js tests/longitudinal.spec.js tests/elevation-tracks.spec.js",
     "test:collision": "playwright test tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js",

@@ -577,6 +577,19 @@ function loadTrack(idx) {
   };
 }
 
+// The full 3D track build (loadTrack -> Tracks.build) is heavy. On the menu it's
+// only needed for the background flyby, so don't run it synchronously inside a
+// click handler — defer + debounce it to the final selection so browsing the
+// grid (and entering the GP screen) stays instant. startRace() builds the real
+// track when the race actually starts, so racing never depends on this.
+let flybyBuildTimer = 0;
+function scheduleFlybyTrack() {
+  clearTimeout(flybyBuildTimer);
+  flybyBuildTimer = setTimeout(() => {
+    if (state === "menu" || state === "select") loadTrack(trackIdx);
+  }, 120);
+}
+
 // ---------- race flow ----------
 function applyRaceSettings() {
   if (raceTimeOfDay !== "default") {
@@ -2532,7 +2545,7 @@ function buildSelect() {
       }
       card.appendChild(info);
 
-      card.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); loadTrack(i); };
+      card.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); scheduleFlybyTrack(); };
       els.selTracks.appendChild(card);
     });
     updateTrackPreview();
@@ -2757,14 +2770,14 @@ $("mb-race").onclick = () => {
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
-  loadTrack(trackIdx);
+  scheduleFlybyTrack();
 };
 $("mb-tt").onclick = () => {
   seasonMode = false; timeTrial = true;
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
-  loadTrack(trackIdx);
+  scheduleFlybyTrack();
 };
 $("mb-season").onclick = () => {
   seasonMode = true; timeTrial = false;
@@ -2776,7 +2789,7 @@ $("mb-season").onclick = () => {
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
-  loadTrack(trackIdx);
+  scheduleFlybyTrack();
 };
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };

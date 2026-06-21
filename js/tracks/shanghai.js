@@ -13,7 +13,7 @@
     theme: "modern",
     lengthKm: 5.5,
     baseHW: 8,
-    pal: { zenith: [0.28, 0.4, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.2, 0.42, 0.18], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.002, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
+    pal: { zenith: [0.28, 0.4, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.26, 0.42, 0.22], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.002, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
     segs: [
       { t: 0, l: 400 }, { t: 50, l: 130 }, { t: 180, l: 200 }, { t: 50, l: 100 }, { t: 0, l: 250 }, { t: -90, l: 100 },
       { t: 0, l: 550 }, { t: -60, l: 90 }, { t: 60, l: 80 }, { t: -70, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 200 },
@@ -92,6 +92,8 @@
           addBox(out, vadd(vadd(a.c, a.u, 18), a.r, -8), [16.5, 0.7, 6], STEEL, b);
           // leading-edge fascia of the roof
           addBox(out, vadd(vadd(a.c, a.u, 17.3), a.r, -10.5), [16.5, 1.8, 1.0], STEEL, b);
+          // roof rib strip segmenting the roof slab (steel grey perpendicular fin)
+          addBox(out, vadd(vadd(a.c, a.u, 19), a.r, 4), [0.4, 2.8, 30], [0.55, 0.58, 0.62], b);
         }
       })();
 
@@ -177,7 +179,7 @@
           // tapered glass tower with a spire cap
           addFrustum(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0),
                      w / 2, w / 3.4, h, col, 4, b);
-          if (hash(i * 17) > 0.5)
+          if (hash(i * 17) > 0.3)
             addBox(out, vadd(vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h), u, 6),
                    [1.2, 12, 1.2], STEEL, b);
         }
@@ -324,6 +326,39 @@
       // pines lining the back straight verge
       for (let i = 0; i < 10; i++) {
         pine(K(0.72 + i * 0.015), 1, 46 + (i % 2) * 5, 8 + hash(i * 5) * 4, TREE_G);
+      }
+
+      // ================= FORMAL GARDEN FEATURES — SNAIL T1 ZONE (s 0.05–0.10) =================
+      // Dense formal hedging replacing sparse trees near the snail turn.
+      (function formalGardens() {
+        // Tight hedgerow walls on both sides of the snail approach.
+        hedge(0.05, 0.10, -1, 18, 2.8, [0.24, 0.38, 0.20]);
+        hedge(0.05, 0.10, 1, 30, 2.8, [0.24, 0.38, 0.20]);
+        // Additional every(18) closer hedging for formal density.
+        const snailSpots = [0.055, 0.065, 0.075, 0.085, 0.095, 0.100, 0.105, 0.110];
+        for (let i = 0; i < snailSpots.length; i++) {
+          const sk = K(snailSpots[i]);
+          const a0 = anchor(sk, -1, 20), b0 = [a0.r, a0.u, a0.t];
+          addBox(out, vadd(a0.c, a0.u, 1.4), [4, 2.8, 6], [0.24, 0.38, 0.20], b0);
+          const a1 = anchor(sk, 1, 24), b1 = [a1.r, a1.u, a1.t];
+          addBox(out, vadd(a1.c, a1.u, 1.4), [4, 2.8, 6], [0.24, 0.38, 0.20], b1);
+        }
+        // Ornamental topiary cubes alternating sides at s=0.06–0.12.
+        const topiaryFracs = [0.060, 0.070, 0.080, 0.090, 0.105, 0.115];
+        const topiarySides = [-1, 1, -1, 1, -1, 1];
+        for (let i = 0; i < topiaryFracs.length; i++) {
+          const tk = K(topiaryFracs[i]);
+          const at = anchor(tk, topiarySides[i], 22), bt = [at.r, at.u, at.t];
+          addBox(out, vadd(at.c, at.u, 1.2), [4, 2.4, 4], [0.26, 0.40, 0.22], bt);
+        }
+      })();
+
+      // ================= FORMAL TREE AVENUE (s 0.45–0.50) =================
+      // Aligned tree pairs replacing random scatter — formal Chinese garden avenue.
+      for (let j = 0; j < 4; j++) {
+        const avS = 0.45 + j * 0.01;
+        tree(K(avS), -1, 20 + j * 8, 7, [0.20, 0.40, 0.18]);
+        tree(K(avS), 1, 20 + j * 8, 7, [0.20, 0.40, 0.18]);
       }
 
       // ---- Distant low hazy treeline ring (three overlapping bands, continuous) ----

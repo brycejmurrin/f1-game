@@ -13,7 +13,7 @@
     theme: "modern",
     lengthKm: 5.4,
     baseHW: 7,
-    pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.74, 0.8, 0.86], grass: [0.28, 0.5, 0.2], runoff: [0.56, 0.48, 0.34], fogDensity: 0.001, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
+    pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.74, 0.8, 0.86], grass: [0.20, 0.42, 0.18], runoff: [0.56, 0.48, 0.34], fogDensity: 0.001, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     segs: [
       { t: 0, l: 300 }, { t: -60, l: 80 }, { t: 65, l: 70 }, { t: 0, l: 200 }, { t: 80, l: 90 }, { t: -90, l: 100 },
       { t: 70, l: 80 }, { t: 0, l: 400 }, { t: -80, l: 90 }, { t: 80, l: 90 }, { t: 0, l: 240 },
@@ -391,6 +391,82 @@
         const side = (i % 2) ? 1 : -1;
         palm(K(s + 0.002), side, 16 + hash(i * 31) * 14, 7 + hash(i * 13) * 4,
           (i % 2) ? PALM_GREEN : PALM_DARK);
+      }
+
+      // ===================================================================
+      // ADDED SCENERY IMPROVEMENTS
+      // ===================================================================
+
+      // 1. Enlarged Hard Rock Stadium — increase radii ~30%, add roof cap.
+      {
+        const a = anchor(K(0.0), 1, 96);
+        const r = a.r, u = a.u, t = a.t;
+        const RA = 112, RB = 86;                      // ~30% larger than original 86/66
+        const segC = 40, by = a.c[1];
+        for (let i = 0; i < segC; i++) {
+          const ang = i / segC * 6.2832;
+          const ca = Math.cos(ang), sa = Math.sin(ang);
+          const ex = ca * RA, ez = sa * RB;
+          const c = vadd(vadd([a.c[0], by, a.c[2]], t, ex), r, ez);
+          const nx = t[0] * (ca * RB) + r[0] * (sa * RA);
+          const nz = t[2] * (ca * RB) + r[2] * (sa * RA);
+          const nl = Math.hypot(nx, nz) || 1;
+          const rad2 = [nx / nl, 0, nz / nl];
+          const tan = [-rad2[2], 0, rad2[0]];
+          const h = 39 + (i % 3) * 4;                // ~30% taller (was 30+)
+          const segW = 16;
+          // extended upper shell
+          addBox(out, vadd(vadd(c, u, h + 8), rad2, 9), [9, 14, segW - 1], WHITE, [rad2, u, tan]);
+          // roof cap wedge angling inward
+          addBox(out, vadd(vadd(c, u, h + 18), rad2, 2), [12, 2.0, segW + 1],
+            (i % 2) ? [0.82, 0.82, 0.84] : GREYWHITE, [rad2, u, tan]);
+        }
+        // Large curved frustum roof cap crowning the bowl.
+        addFrustum(out, vadd([a.c[0], by, a.c[2]], u, 42), 98, 60, 12,
+          [0.78, 0.80, 0.82], 40, [r, u, t]);
+      }
+
+      // 2. Bold sponsor billboards — Miami Vice palette.
+      billboard(K(0.10), -1, 15, 12, 14, [0.0, 0.62, 0.70]);
+      billboard(K(0.35),  1, 15, 12, 14, [0.92, 0.35, 0.28]);
+      billboard(K(0.50), -1, 15, 12, 14, [0.90, 0.45, 0.75]);
+      billboard(K(0.80),  1, 15, 12, 14, [0.0, 0.62, 0.70]);
+
+      // 3. Denser palm pass — both sides, focusing on s=0.15–0.30 and s=0.70–0.85.
+      every(20, (k) => {
+        const s = k / n;
+        const h = hash(k * 37 + 11);
+        const inZone = (s > 0.15 && s < 0.30) || (s > 0.70 && s < 0.85);
+        if (!inZone && h > 0.5) return;              // outside zones only half density
+        const dist = 12 + h * 13;
+        palm(k, -1, dist, 8 + h * 5, (h < 0.5) ? PALM_GREEN : PALM_DARK);
+        palm(k,  1, dist + 4, 8 + hash(k * 59) * 4, PALM_GREEN);
+      });
+
+      // 4. Marina depth — darker secondary water slab behind yacht rows.
+      {
+        const DEEP = [0.08, 0.28, 0.45];
+        for (let m = 0; m < 4; m++) {
+          const k = K(0.27 + m * 0.028);
+          const a = anchor(k, 1, 90);
+          addBox(out, vadd(a.c, a.u, -1.8), [200, 0.6, 160], DEEP, [a.r, a.u, a.t]);
+        }
+      }
+
+      // 5. Overpass pillar + underside shadow detail.
+      for (const s of [0.62, 0.67]) {
+        const k = K(s);
+        const aL = anchor(k, -1, 1), aR = anchor(k, 1, 1);
+        const mid = vadd(aL.c, [(aR.c[0] - aL.c[0]), 0, (aR.c[2] - aL.c[2])], 0.5);
+        const span = Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]) + 16;
+        // dark underside shadow slab just below deck
+        addBox(out, vadd(mid, aL.u, 10.8), [span, 0.6, 14],
+          [0.28, 0.28, 0.30], [aL.r, aL.u, aL.t]);
+        // vertical pillars from deck to ground (inner pair)
+        for (const off of [-span * 0.22, span * 0.22]) {
+          const pc = [mid[0] + aL.r[0] * off, mid[1], mid[2] + aL.r[2] * off];
+          addBox(out, vadd(pc, aL.u, 5.5), [2.2, 11, 2.2], CONCRETE, [aL.r, aL.u, aL.t]);
+        }
       }
     },
   }

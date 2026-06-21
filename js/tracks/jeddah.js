@@ -15,7 +15,7 @@
     barrierGap: 0.6,
     lengthKm: 6.2,
     baseHW: 6,
-    pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.03, 0.04, 0.12], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, concrete: [0.28, 0.27, 0.26], runoff: [0.25, 0.24, 0.22], grass: [0.2, 0.18, 0.14] },
+    pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.05, 0.05, 0.15], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, concrete: [0.28, 0.27, 0.26], runoff: [0.25, 0.24, 0.22], grass: [0.2, 0.18, 0.14] },
     segs: [
       { t: 0, l: 700 }, { t: -80, l: 70 }, { t: 75, l: 60 }, { t: 0, l: 120 }, { t: -70, l: 65 }, { t: 70, l: 60 },
       { t: 0, l: 300 }, { t: 90, l: 80 }, { t: 0, l: 600 }, { t: 90, l: 80 }, { t: -65, l: 70 }, { t: 70, l: 70 },
@@ -178,12 +178,12 @@
       }
 
       // --- s 0.28 L mid: modern Jeddah skyline — lit-window high-rise cluster ---
-      building(K(0.26), -1, 53, 34, 110, 34, { wall: [0.20, 0.21, 0.26], window: WINCOOL, floor: 9 });
-      building(K(0.28), -1, 40, 40, 88, 36, { wall: [0.22, 0.22, 0.27], window: WINWARM, floor: 8 });
-      building(K(0.30), -1, 77, 30, 134, 30, { wall: [0.18, 0.19, 0.24], window: WINCOOL, floor: 10 });
+      building(K(0.26), -1, 53, 34, 143, 34, { wall: [0.20, 0.21, 0.26], window: WINCOOL, floor: 9 });
+      building(K(0.28), -1, 40, 40, 114, 36, { wall: [0.22, 0.22, 0.27], window: WINWARM, floor: 8 });
+      building(K(0.30), -1, 77, 30, 174, 30, { wall: [0.18, 0.19, 0.24], window: WINCOOL, floor: 10 });
       tower(K(0.29), -1, 130, 26, 170, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: true });
-      building(K(0.27), -1, 62, 32, 120, 32, { wall: [0.19, 0.20, 0.25], window: WINTEAL, floor: 22 });
-      building(K(0.31), -1, 38, 36, 96, 34, { wall: [0.21, 0.21, 0.27], window: WINGOLD, floor: 20 });
+      building(K(0.27), -1, 62, 32, 156, 32, { wall: [0.19, 0.20, 0.25], window: WINTEAL, floor: 22 });
+      building(K(0.31), -1, 38, 36, 125, 34, { wall: [0.21, 0.21, 0.27], window: WINGOLD, floor: 20 });
       tower(K(0.305), -1, 150, 22, 150, { col: [0.15, 0.16, 0.21], seg: 4, cap: true, capCol: MAGENTA, mast: true });
 
       // --- s 0.45 R mid: Marina / Jeddah Yacht Club — pontoons + yacht hulls + mast
@@ -269,6 +269,44 @@
       billboard(K(0.96), -1, 26, 14, 9, SPANGLE);
       billboard(K(0.94), -1, 24, 16, 10, MAGENTA);
       billboard(K(0.98), 1, 24, 15, 9, WINTEAL);
+
+      // --- Red Sea deep water ground plane along the seaward (R) side ---
+      // Additional warm blue ground plane at 120–200m distance to evoke Red Sea
+      for (let i = 0; i < 18; i++) {
+        const k = K(i / 18);
+        const a = anchor(k, 1, 160);
+        addBox(out, [a.c[0], pyMin - 0.8, a.c[2]], [300, 1.5, 80], [0.08, 0.18, 0.32], [a.r, a.u, a.t]);
+      }
+
+      // --- Saturated neon/LED signage billboards: 4 bold signs around the Corniche ---
+      billboard(K(0.10), 1,  15, 14, 7, [0.10, 0.70, 1.0]);   // cyan — seafront sector
+      billboard(K(0.30), -1, 18, 16, 8, [1.0, 0.30, 0.10]);   // orange — city sector
+      billboard(K(0.55), 1,  12, 14, 7, [0.90, 0.10, 0.70]);  // magenta — mid Corniche
+      billboard(K(0.75), -1, 16, 15, 7, [0.10, 0.70, 1.0]);   // cyan — final sector
+
+      // --- Corniche fountain / public sculpture at s≈0.50 (mid-circuit landmark) ---
+      {
+        const sA = anchor(K(0.50), 1, 38), sBasis = [sA.r, sA.u, sA.t];
+        if (!onTrack(sA.c[0], sA.c[2], 10)) {
+          addCyl(out, sA.c, 3, 20, [0.80, 0.76, 0.68], 8, sBasis);               // monument column
+          const sTop = vadd(sA.c, sA.u, 20);
+          addCone(out, sTop, 4, 8, [0.92, 0.88, 0.72], 8, sBasis);               // cone cap
+        }
+      }
+
+      // --- Urban canyon density: buildings every 24m both sides through city sections ---
+      every(24, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 53 + side) > 0.70) continue;
+          const dist = 50 + hash(k * 77 + side) * 30;
+          const h = 30 + hash(k * 61 + side) * 30;
+          const w = 14 + hash(k * 43 + side) * 12;
+          const p = anchor(k, side, dist);
+          if (onTrack(p.c[0], p.c[2], 12)) continue;
+          building(k, side, dist, w, h, w * 0.9,
+            { wall: [0.35, 0.32, 0.30], window: [0.28, 0.38, 0.52], floor: 6 });
+        }
+      });
 
       // --- CONTINUOUS lit Jeddah skyline wrapping the WHOLE inland (L) side ---
       // Two depth rings of lit-window slabs placed at every node-step so the city

@@ -13,7 +13,7 @@
     theme: "modern",
     lengthKm: 4.3,
     baseHW: 8,
-    pal: { zenith: [0.24, 0.48, 0.88], horizon: [0.74, 0.78, 0.82], grass: [0.28, 0.42, 0.18], runoff: [0.52, 0.38, 0.24], fogDensity: 0.001, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
+    pal: { zenith: [0.24, 0.48, 0.88], horizon: [0.72, 0.68, 0.60], grass: [0.28, 0.42, 0.18], runoff: [0.52, 0.38, 0.24], fogDensity: 0.0015, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
     segs: [
       { t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 },
       { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 },
@@ -178,13 +178,14 @@
       // ====== HERO: FORO SOL BASEBALL STADIUM (s≈0.72–0.88) ======
       // Tall encircling concrete bowl the track threads through — raked tiers,
       // dense fan-colour crowd, cantilever roof rim, banner ring, floodlights.
+      // Tiers expanded ~30% for greater visual dominance.
       const stadiumBowl = (s0, s1, side) => {
         along(s0, s1, 9, (k) => {
-          // 3 raked concrete tiers stepping back & up
+          // 3 raked concrete tiers stepping back & up — 30% bigger
           for (let t = 0; t < 3; t++) {
-            const sh = anchor(k, side, 13 + t * 7);
+            const sh = anchor(k, side, 13 + t * 9);
             if (onTrack(sh.c[0], sh.c[2], 0.5)) continue;
-            addBox(out, vadd(sh.c, sh.u, 8 + t * 7), [12, 16 + t * 2, 11], CONCRETE, [sh.r, sh.u, sh.t]);
+            addBox(out, vadd(sh.c, sh.u, 8 + t * 9), [16, 20 + t * 3, 14], CONCRETE, [sh.r, sh.u, sh.t]);
           }
           // dense crowd seat-rows on the rake facing the corridor
           for (let r = 0; r < 5; r++) {
@@ -194,9 +195,12 @@
             addBox(out, vadd(sp.c, sp.u, 4 + r * 2.4), [6.3, 1.6, 6.0], col, [sp.r, sp.u, sp.t]);
           }
           // cantilever roof rim lip over the top tier
-          const rf = anchor(k, side, 18);
-          if (!onTrack(rf.c[0], rf.c[2], 0.5))
-            addBox(out, vadd(rf.c, rf.u, 28), [16, 1.0, 11], [0.84, 0.86, 0.90], [rf.r, rf.u, rf.t]);
+          const rf = anchor(k, side, 22);
+          if (!onTrack(rf.c[0], rf.c[2], 0.5)) {
+            addBox(out, vadd(rf.c, rf.u, 36), [20, 1.2, 14], [0.84, 0.86, 0.90], [rf.r, rf.u, rf.t]);
+            // Roof bowl cap: addFrustum closing the bowl ceiling
+            addFrustum(out, vadd(rf.c, rf.u, 37), 9, 6, 3.5, [0.78, 0.80, 0.84], 6, [rf.r, rf.u, rf.t]);
+          }
         });
       };
       // both bowls hug the slow corridor, threaded by the track
@@ -282,6 +286,58 @@
                    [92, 24 + hash(k * 83 + side) * 26, 40], [0.66, 0.68, 0.70]);
         }
       });
+
+      // --- Aztec stepped pyramid accent at s≈0.40–0.50 (infield monument) ---
+      {
+        const pA = anchor(K(0.45), -1, 55);
+        if (!onTrack(pA.c[0], pA.c[2], 14)) {
+          const pb = [pA.r, pA.u, pA.t];
+          const STONE = [0.68, 0.60, 0.44];
+          // Three stacked boxes, each smaller — stepped pyramid silhouette
+          addBox(out, vadd(pA.c, pA.u, 2),  [20, 4, 20], STONE, pb);  // base level
+          addBox(out, vadd(pA.c, pA.u, 6),  [14, 4, 14], STONE, pb);  // mid level
+          addBox(out, vadd(pA.c, pA.u, 10), [8,  4, 8],  STONE, pb);  // top level
+        }
+      }
+
+      // --- Cactus / arid vegetation: saguaro-style every 20m on outer side ---
+      every(20, (k) => {
+        for (const side of [1, -1]) {
+          if (hash(k * 57 + side) > 0.65) continue;
+          const d = 30 + hash(k * 63 + side) * 30;
+          const p = anchor(k, side, d);
+          if (onTrack(p.c[0], p.c[2], 8)) continue;
+          const h = 5 + hash(k * 67 + side) * 3;
+          // Tall saguaro trunk
+          addCyl(out, p.c, 1.2, h, [0.25, 0.38, 0.18], 6, [p.r, p.u, p.t]);
+          // Horizontal cross-arm near the top
+          addBox(out, vadd(p.c, p.u, h * 0.7), [4.5, 1.0, 1.2], [0.25, 0.38, 0.18], [p.r, p.u, p.t]);
+        }
+      });
+
+      // --- Mexico City skyline at altitude: 8 buildings at 200–300m distance ---
+      for (let i = 0; i < 8; i++) {
+        const f = i / 8;
+        const k = K(f);
+        const side = i % 2 === 0 ? -1 : 1;
+        const d = 200 + hash(i * 29) * 100;
+        const h = 50 + hash(i * 37) * 50;
+        const w = 16 + hash(i * 53) * 14;
+        const p = anchor(k, side, d);
+        if (!onTrack(p.c[0], p.c[2], 18))
+          building(k, side, d - w / 2, w, h, w,
+            { wall: [0.52, 0.54, 0.58], window: [0.30, 0.36, 0.48], floor: 7 });
+      }
+
+      // --- Peraltada banked corner Mexican flag strips (s≈0.88–0.95) ---
+      // Green, white, red banner accents at the outer grandstand area
+      for (let i = 0; i < 5; i++) {
+        const f = 0.88 + i * 0.015;
+        const k = K(f);
+        place(k, 1, 16, [0.4, 6, 14], [0.12, 0.56, 0.24]);   // green banner
+        place(k, 1, 19, [0.4, 6, 14], [0.92, 0.92, 0.90]);    // white banner
+        place(k, 1, 22, [0.4, 6, 14], [0.80, 0.14, 0.18]);    // red banner
+      }
     },
   }
   );

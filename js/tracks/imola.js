@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 4.9,
     baseHW: 7,
-    pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.72, 0.76, 0.74], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
+    pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.80, 0.72, 0.56], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
     segs: [
       { t: 0, l: 450 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -70, l: 90 }, { t: 60, l: 80 },
       { t: 80, l: 100 }, { t: 0, l: 400 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 0, l: 180 }, { t: 80, l: 90 },
@@ -34,7 +34,7 @@
       const CANOPY = [0.20, 0.46, 0.22];   // sunlit deciduous canopy
       const WOODS  = [0.11, 0.30, 0.15];   // shaded woods
       const BANK   = [0.42, 0.63, 0.30];   // sunlit grass bank
-      const RIVER  = [0.30, 0.42, 0.34];   // muted green-brown Santerno water
+      const RIVER  = [0.28, 0.42, 0.52];   // blue-green Santerno water
       const GRAVEL = [0.78, 0.70, 0.52];   // pale tan gravel
       const RED    = [0.82, 0.16, 0.14];
       const WHITE  = [0.92, 0.92, 0.90];
@@ -121,6 +121,19 @@
         bush(k, s < 0.8 ? -1 : 1, 7 + s * 6, [0.18 + s * 0.06, 0.40, 0.20]);
       });
 
+      // ---- Dense forest lining Tamburello approach ----
+      for (let i = 0; i < 28; i++) {
+        const s = i / 28;  // 0.0 → 1.0 full lap but focused on start straight
+        if (s > 0.10 && s < 0.90) continue;  // only start/finish straight approach
+        const kk = K(s);
+        for (const side of [-1, 1]) {
+          const h2 = hash(kk * 81 + side + i);
+          const dist = 10 + h2 * 10;
+          if (h2 < 0.45) pine(kk, side, dist, 10 + h2 * 6, [0.10, 0.28, 0.14]);
+          else tree(kk, side, dist, 9 + h2 * 5, [0.18, 0.38, 0.20]);
+        }
+      }
+
       // ---- s 0.00 R — Santerno river: CONTINUOUS flat water slab paralleling the river run ----
       // Overlapping slabs from the pit straight through the run to Tosa, no gaps.
       for (let i = 0; i <= 10; i++) {
@@ -152,6 +165,12 @@
       // red/white kerb accents
       place(K(0.05), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
+
+      // ---- Senna memorial plaque at Tamburello chicane (s≈0.07) ----
+      {
+        const am = anchor(K(0.07), -1, 8);
+        addBox(out, vadd(am.c, am.u, 1.25), [3, 2.5, 0.4], [0.90, 0.90, 0.88], [am.r, am.u, am.t]);
+      }
 
       // ---- s 0.12 L — Villeneuve chicane kerbs + gravel trap beyond ----
       groundPlane(K(0.12), -1, 5, [24, 30], GRAVEL);
@@ -198,6 +217,28 @@
       groundPlane(K(0.81), -1, 14, [40, 60], BANK);
       // shaded fog dip at Rivazza
       groundPlane(K(0.82), -1, 8, [30, 40], [0.74, 0.78, 0.74]);
+
+      // ---- Italian town buildings at Variante Alta / Rivazza (s=0.60–0.80) ----
+      const TERRA2  = [0.78, 0.58, 0.42];
+      const STONE3  = [0.88, 0.82, 0.72];
+      const TOWN_POS = [
+        [0.60, -1, 85,  14, 18],
+        [0.63, -1, 92,  12, 22],
+        [0.66, -1, 100, 16, 15],
+        [0.70, -1, 88,  13, 25],
+        [0.74, -1, 95,  15, 20],
+      ];
+      for (const [s, side, dist, bw, bh] of TOWN_POS) {
+        const tc = (bh > 20) ? TERRA2 : STONE3;
+        building(K(s), side, dist, bw, bh, bw * 0.8, { wall: tc, window: [0.28, 0.32, 0.38], floor: 3 });
+      }
+
+      // ---- Campanile bell tower at s≈0.68 ----
+      {
+        const ac = anchor(K(0.68), -1, 110);
+        addCyl(out, ac.c, 2.0, 30, [0.78, 0.74, 0.68], 8, [ac.r, ac.u, ac.t]);
+        addCone(out, vadd(ac.c, ac.u, 30), 2.5, 6, [0.45, 0.35, 0.28], 8, [ac.r, ac.u, ac.t]);
+      }
 
       // ---- s 0.92 R near — Variante Bassa / pit approach kerbs back toward river ----
       place(K(0.92), 1, 2, [0.4, 0.3, 7], RED);

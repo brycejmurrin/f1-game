@@ -16,7 +16,7 @@
     // Hugenholtz + Arie Luyendyk: the two steeply banked corners get a raised
     // outer edge (the engine banks the highest-curvature corners).
     banked: true,
-    pal: { zenith: [0.3, 0.44, 0.62], horizon: [0.72, 0.72, 0.68], grass: [0.42, 0.44, 0.24], runoff: [0.62, 0.54, 0.36], fog: [0.72, 0.72, 0.68], fogDensity: 0.0018, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.92, 0.76], sunColor: [1, 0.9, 0.74] },
+    pal: { zenith: [0.3, 0.44, 0.62], horizon: [0.80, 0.76, 0.66], grass: [0.45, 0.52, 0.28], runoff: [0.62, 0.54, 0.36], fog: [0.72, 0.72, 0.68], fogDensity: 0.0018, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
     segs: [
       { t: 0, l: 260 }, { t: 75, l: 120, b: 0.16 }, { t: -50, l: 90 }, { t: 130, l: 150, b: 0.3 }, { t: 0, l: 180, h: 8 }, { t: 40, l: 110, h: -8 },
       { t: 60, l: 100 }, { t: -50, l: 90, h: 4 }, { t: 70, l: 90 }, { t: -60, l: 90 }, { t: 90, l: 90 }, { t: -50, l: 90 },
@@ -25,7 +25,7 @@
     elevations: [{ s: 0.56, halfM: 300, rise: 8 }],
     scenery: function (api) {
       const { out, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
-              addBox, addCyl, addPrism, anchor, vadd, onTrack, hash, every,
+              addBox, addCyl, addPrism, addCone, anchor, vadd, onTrack, hash, every,
               mountain, peak, bush, hedge, grandstand, tower,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -78,6 +78,18 @@
           });
         }
       });
+      // Coastal Dutch pines on the dune slopes — dark conifers
+      every(30, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 91 + side * 17) > 0.40) continue;   // ~40% density
+          const dist = 55 + hash(k * 92 + side) * 35;       // 55–90 m
+          const a = anchor(k, side, dist);
+          if (onTrack(a.c[0], a.c[2], 8)) continue;
+          const th = 5 + hash(k * 93 + side) * 5;           // height 5–10 m
+          addCyl(out, vadd(a.c, a.u, th * 0.5), 0.35, th, [0.25, 0.32, 0.20], 5, [a.r, a.u, a.t]);  // trunk
+          addCone(out, vadd(a.c, a.u, th * 0.5 + th * 0.55), th * 0.55 + hash(k * 94 + side) * 2, th * 0.6, [0.18, 0.38, 0.14], 6, [a.r, a.u, a.t]);  // pine canopy
+        }
+      });
       // Mid dune ridge: a second overlapping band of cheap sandy peaks set back,
       // filling between the inner mounds so the belt never breaks from the
       // cockpit. peak() (clean pyramid) is far lighter than mountain().
@@ -124,7 +136,7 @@
       grandstand(0.17, 1, 10, 28, shellLt, orange); // Hugenholtz exit R
       grandstand(0.50, -1, 22, 30, shell, orange);  // Scheivlak inner L (set back)
       grandstand(0.88, 1, 10, 30, shell, orange);   // Luyendyk approach R
-      grandstand(0.92, 1, 9, 34, shell, orange);    // Arie Luyendyk final banked R
+      grandstand(0.92, 1, 9, 68, shell, orange);    // Arie Luyendyk final banked R
       grandstand(0.95, 1, 10, 30, shellLt, orange); // Luyendyk exit R
       grandstand(0.96, -1, 11, 30, shellLt, orange); // pit-straight L
       grandstand(0.98, -1, 10, 28, shell, orange);  // pit-straight L exit
@@ -223,6 +235,17 @@
       gantry(0.005, 7.5, [0.12, 0.13, 0.16]);
       gantry(0.99, 6.5, [0.14, 0.14, 0.18]);
 
+      // Sea glimpses — blue sliver cresting the dune ridge
+      {
+        const seaGlimpse = [0.42, 0.58, 0.70];
+        for (const s of [0.42, 0.78]) {
+          const a = anchor(K(s), 1, 180);
+          if (!onTrack(a.c[0], a.c[2], 20)) {
+            addBox(out, vadd(a.c, a.u, 1), [50, 2, 50], seaGlimpse, [a.r, a.u, a.t]);
+          }
+        }
+      }
+
       // --- Marram dune-grass scrub: dense low tufts of tan/green clumps right at
       // the verge to break up bare sand. Small cones, cheap, both sides. ---
       every(9, (k) => {
@@ -248,8 +271,11 @@
         const a = anchor(K(s), side, 9);
         if (onTrack(a.c[0], a.c[2], 5)) continue;
         const b = [a.r, a.u, a.t];
-        for (let i = -2; i <= 2; i++)
+        for (let i = -4; i <= 4; i++)
           addBox(out, vadd(vadd(a.c, a.u, 6.5), a.t, i * 4.5),
+                 [0.6, 1.2, 2.4], [0.95, 0.45, 0.05], b);
+        for (let i = -4; i <= 4; i++)
+          addBox(out, vadd(vadd(a.c, a.u, 8.7), a.t, i * 4.5),
                  [0.6, 1.2, 2.4], [0.95, 0.45, 0.05], b);
       }
     },

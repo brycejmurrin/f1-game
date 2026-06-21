@@ -58,7 +58,7 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Critical conventions
 
-- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=90).
+- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=118).
   **Always increment N when changing any JS or CSS file** — search `?v=` and replace
   all instances.
 - **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
@@ -128,12 +128,23 @@ __apex.setInput({steer:1,throttle:true}) // override input
 __apex.step(1/60, 10)         // pump physics deterministically
 __apex.clearInput()
 __apex.tiltSim.step(deg, dt)  // tilt pipeline emulation (for autopilot harness)
+// ── Timing & field ──
+__apex.timing()               // compact race clock: raceT, lapTime, best, lap, pos, energy, gear, sector
+__apex.sectorState()          // live S1/S2/S3 splits: {idx, elapsed, bests[3], last[3]}
+__apex.lapHistory()           // completed lap times — full array in TT, best/lastLap in race
+__apex.fieldState()           // full grid sorted by race position with gap (m)
+__apex.aiPlace(idx,frac,v?,x?) // teleport any AI car (by cars[] index) to a track position
+__apex.setEnergy(v)           // set player ERS charge 0–1 (clamped)
+__apex.setLap(n)              // override player lap counter (for results-screen tests)
+__apex.trackProfile(n?)       // [{frac,y,k,hw,slope}] — elevation/curvature profile (default 100 pts)
 // ── Headless / RL control loop ──
 __apex.headless(true)         // skip render() — physics runs uncapped
-__apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward)
+__apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward, gear)
 __apex.act({steer,throttle,brake}, dt, n) // set input + step n ticks → obs (1 round-trip)
 __apex.reset(frac, speed, x)  // fast episode reset without reloading assets → obs
 ```
+
+**Note:** `obs()` and `physState()` require `player.px` to be initialised (set by `jump()` or one physics tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` before calling these. The game also pre-loads a default track on startup, so `trackProfile()` works without an explicit `race()` call.
 
 ### Headless control loop pattern
 ```js
@@ -156,7 +167,7 @@ const obs = await page.evaluate(() =>
 
 ## Testing
 
-100+ Playwright specs. Run groups with `npm run test:<group>` (see Key commands).
+100+ Playwright specs (50+ files). Run groups with `npm run test:<group>` (see Key commands).
 
 | Spec(s) | What they cover |
 |---|---|
@@ -178,6 +189,7 @@ const obs = await page.evaluate(() =>
 | `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
+| `new-hooks.spec.js` | contract tests for the 8 new hooks: `timing()`, `sectorState()`, `lapHistory()`, `fieldState()`, `aiPlace()`, `setEnergy()`, `setLap()`, `trackProfile()`, `obs().gear` |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
 | `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
 | `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection |

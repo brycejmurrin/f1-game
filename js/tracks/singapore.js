@@ -14,7 +14,7 @@
     lengthKm: 4.9,
     baseHW: 6,
     street: true,
-    pal: { horizon: [0.18, 0.12, 0.06], zenith: [0.03, 0.04, 0.08], sunColor: [0.9, 0.80, 0.55], ambientSky: [0.30, 0.24, 0.16], ambientGround: [0.38, 0.28, 0.14], fogColor: [0.14, 0.10, 0.06], fogDensity: 0.0030 },
+    pal: { horizon: [0.18, 0.12, 0.06], zenith: [0.03, 0.04, 0.08], sunColor: [0.9, 0.80, 0.55], ambientSky: [0.30, 0.24, 0.16], ambientGround: [0.38, 0.28, 0.14], fogColor: [0.14, 0.10, 0.06], fogDensity: 0.0021},
     segs: [
       { t: 0, l: 160 }, { t: 60, l: 70 }, { t: -70, l: 70 }, { t: 55, l: 70 }, { t: 0, l: 220 }, { t: 90, l: 70 },
       { t: 0, l: 200 }, { t: 95, l: 70 }, { t: -90, l: 80 }, { t: 80, l: 60 }, { t: -60, l: 70 }, { t: 90, l: 90 },
@@ -34,7 +34,7 @@
       const WIN_BLUE = [0.6, 0.7, 0.95];
       const WIN_WARM = [0.95, 0.85, 0.7];
       const WIN_CYAN = [0.45, 0.75, 0.95];
-      const NEON = [[0.95, 0.15, 0.7], [0.15, 0.85, 0.98], [1.0, 0.7, 0.15], [0.55, 0.3, 0.95]];
+      const NEON = [[1.0, 0.2, 0.85], [0.15, 0.85, 0.98], [1.0, 0.7, 0.15], [0.55, 0.3, 0.95]];
       const CONC = [0.30, 0.31, 0.36];   // night concrete barrier grey
 
       // ===================================================================
@@ -89,7 +89,7 @@
         const k = K(0.18);
         const a = anchor(k, 1, 150);
         const wall = [0.9, 0.9, 0.94], win = [0.7, 0.78, 0.95];
-        const H = 165, gap = 34;
+        const H = 215, gap = 34;
         const tops = [];
         for (let t = -1; t <= 1; t++) {
           // lean the slabs slightly toward the centre by offsetting along right
@@ -101,8 +101,8 @@
         }
         // skypark slab bridging the three tops
         const mid = tops[1];
-        addBox(out, vadd(mid, a.u, 4), [gap * 2 + 18, 6, 30], [0.85, 0.86, 0.9], [a.r, a.u, a.t]);
-        addBox(out, vadd(mid, a.u, 8.5), [gap * 2 + 18, 1.5, 30], NEON[1], [a.r, a.u, a.t]); // glowing edge
+        addBox(out, vadd(mid, a.u, 4), [gap * 2 + 18, 13, 30], [0.85, 0.86, 0.9], [a.r, a.u, a.t]);
+        addBox(out, vadd(mid, a.u, 17), [gap * 2 + 18, 1.5, 30], NEON[1], [a.r, a.u, a.t]); // glowing edge
       }
 
       // ===================================================================
@@ -116,8 +116,9 @@
           const c = vadd(a.c, a.r, ((i % 6) - 3) * 7 + (i >= 6 ? 4 : 0));
           const z = vadd(c, a.t, (i >= 6 ? 20 : 0));
           addCyl(out, vadd(z, a.u, h / 2), 2.4, h, [0.16, 0.4, 0.22], 7, [a.r, a.u, a.t]); // trunk
-          addCone(out, vadd(z, a.u, h + 4), 9 + (i % 2) * 3, 9, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]); // glowing canopy
-          addCone(out, vadd(z, a.u, h - 3), 6, 5, NEON[(i % 3)], 8, [a.r, a.u, a.t]); // mid glow band
+          addCone(out, vadd(z, a.u, h + 4), 13.5 + (i % 2) * 4.5, 9, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]); // glowing canopy
+          addCone(out, vadd(z, a.u, h - 3), 9, 5, NEON[(i % 3)], 8, [a.r, a.u, a.t]); // mid glow band
+          addCone(out, vadd(z, a.u, h + 11), 6, 5, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]); // upper branch cone
         }
       }
 
@@ -140,7 +141,7 @@
         if (i % 2) building(K(0.45), 1, 141 + i * 22, 18, 50 + hash(i * 7) * 60, 18, { wall: [0.08, 0.1, 0.17], window: WIN_CYAN, floor: 22 });
       }
       // bright reflection strip on the black bay water (s 0.45)
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 12; i++) {
         const a = anchor(K(0.45), 1, 50 + i * 14);
         addBox(out, vadd(a.c, a.u, 0.4), [10, 0.6, 5], NEON[i % 4], [a.r, a.u, a.t]);
       }
@@ -178,6 +179,22 @@
           addCone(out, vadd(a.c, a.u, 10), 16, 14, [0.55, 0.5, 0.42], 7, [a.r, a.u, a.t]);
           // spiky cap
           addCone(out, vadd(a.c, a.u, 20), 8, 8, NEON[2], 6, [a.r, a.u, a.t]);
+        }
+      }
+      // Esplanade ribs — 8 thin vertical prisms around the base perimeter
+      {
+        const k = K(0.66);
+        for (let i = 0; i < 2; i++) {
+          const a = anchor(k, -1, 40 + i * 24);
+          for (let r = 0; r < 8; r++) {
+            const ang = (r / 8) * Math.PI * 2;
+            const dx = Math.cos(ang) * 14;
+            const dz = Math.sin(ang) * 14;
+            const rc = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
+                        a.c[1],
+                        a.c[2] + a.r[2] * dx + a.t[2] * dz];
+            addBox(out, vadd(rc, a.u, 7), [0.8, 14, 0.8], [0.55, 0.5, 0.42], [a.r, a.u, a.t]);
+          }
         }
       }
 
@@ -245,7 +262,7 @@
       }
       for (const s of [0.22, 0.32, 0.44, 0.83, 0.87]) {
         const a = anchor(K(s), 1, 42);
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 10; i++) {
           const c = vadd(vadd(a.c, a.t, (i - 2) * 12), a.u, 0.35);
           addBox(out, c, [8, 0.5, 3.2], NEON[(i + K(s)) % 4], [a.r, a.u, a.t]);
         }
@@ -279,7 +296,7 @@
           const head = vadd(a.c, a.u, H);
           addBox(out, head, [5.5, 0.8, 1.6], [0.14, 0.14, 0.17], [a.r, a.u, a.t]);
           for (let j = -2; j <= 2; j++)
-            addBox(out, vadd(head, a.r, j * 1.1), [0.85, 0.85, 0.5], [1.0, 0.96, 0.82], [a.r, a.u, a.t]);
+            addBox(out, vadd(head, a.r, j * 1.1), [1.28, 1.28, 0.75], [1.0, 0.96, 0.82], [a.r, a.u, a.t]);
         }
       });
 

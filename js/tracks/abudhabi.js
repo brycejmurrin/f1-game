@@ -13,7 +13,7 @@
     theme: "desert",
     lengthKm: 5.3,
     baseHW: 8,
-    pal: { horizon: [0.28, 0.14, 0.06], zenith: [0.04, 0.04, 0.14], sunColor: [0.85, 0.65, 0.35], ambientSky: [0.28, 0.22, 0.18], ambientGround: [0.30, 0.18, 0.10], fogColor: [0.20, 0.10, 0.05], fogDensity: 0.0022, sunDir: [0.6, 0.12, 0.3], concrete: [0.26, 0.25, 0.24], runoff: [0.22, 0.21, 0.2], grass: [0.18, 0.16, 0.12] },
+    pal: { horizon: [0.28, 0.14, 0.06], zenith: [0.08, 0.06, 0.22], sunColor: [0.85, 0.65, 0.35], ambientSky: [0.32, 0.26, 0.22], ambientGround: [0.30, 0.18, 0.10], fogColor: [0.20, 0.10, 0.05], fogDensity: 0.0022, sunDir: [0.6, 0.12, 0.3], concrete: [0.26, 0.25, 0.24], runoff: [0.22, 0.21, 0.2], grass: [0.18, 0.16, 0.12] },
     segs: [
       { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 400 }, { t: 90, l: 100 }, { t: 0, l: 200 },
       { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 60, l: 80 }, { t: 90, l: 100 }, { t: -60, l: 80 },
@@ -35,7 +35,7 @@
       const WARM = [1.00, 0.72, 0.38];     // dock / base uplight
       const WIN = [0.70, 0.78, 0.95];      // cool lit windows
       const WIN_WARM = [1.00, 0.84, 0.58];  // warm lit windows (sunset side)
-      const FLOOD = [0.88, 0.92, 1.00];    // floodlit white
+      const FLOOD = [1.0, 0.96, 0.82];    // floodlit white
       const SAND = [0.70, 0.55, 0.35];
       const SAND_DK = [0.52, 0.40, 0.26];  // shaded dune
       const WATER = [0.04, 0.06, 0.12];
@@ -214,7 +214,7 @@
         // Made tall + bright so the hotel reads as the hero landmark from far out.
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 16);
-          const H = 72;
+          const H = 97;
           // tapered tower core (curved-tower read via frustum)
           addFrustum(out, a.c, 20, 14, H, [0.08, 0.09, 0.14], 8, [a.r, a.u, a.t]);
           // dark glass podium base
@@ -236,6 +236,7 @@
           // crown cap + beacon
           addBox(out, vadd(a.c, a.u, H + 2), [18, 3, 22], FLOOD, [a.r, a.u, a.t]);
           addBox(out, vadd(a.c, a.u, H + 5), [3, 4, 3], LED_MAG, [a.r, a.u, a.t]);
+          addBox(out, vadd(a.c, a.u, H - 2), [38, 1.2, 50], [1.0, 0.82, 0.40], [a.r, a.u, a.t]); // warm gold LED strip along roof
         }
         // SWEEPING CANOPY — two inward-leaning cantilever half-shells reaching from
         // each tower crown toward the track. They arch high overhead; the central
@@ -265,6 +266,12 @@
         }
         // hotel-side reflecting pool + dock lamps below the arch (warm specks)
         groundPlane(K(0.87), 1, 12, [70, 1.2, 60], WATER);
+      // ---- Marina water light reflection streaks ----
+      for (let i = 0; i < 6; i++) {
+        const ak = anchor(K(0.53 + i * 0.032), 1, 20 + (i % 3) * 8);
+        addBox(out, vadd(ak.c, ak.u, -0.2), [40, 0.3, 2], [1.0, 0.82, 0.40], [ak.r, ak.u, ak.t]); // warm gold reflection
+        addBox(out, vadd(ak.c, ak.u, -0.5), [40, 0.3, 2], [0.40, 0.55, 0.75], [ak.r, ak.u, ak.t]); // cool blue reflection
+      }
         for (let i = 0; i < 6; i++) {
           const a = anchor(K(0.87), 1, 8 + i);
           addBox(out, vadd(vadd(a.c, a.t, (i - 3) * 10), a.u, 0.4), [2, 0.4, 2], LED_AMBER, [a.r, a.u, a.t]);
@@ -460,6 +467,36 @@
         for (let i = 0; i < 5; i++) {
           const jk = anchor(K(0.55 + i * 0.02), 1, 12);
           addBox(out, vadd(jk.c, jk.t, 0), [2, 0.5, 26], [0.30, 0.28, 0.25], [jk.r, jk.u, jk.t]);
+        }
+      }
+      // ---- Palm avenue along start/finish straight (s=0.0–0.15 and s=0.85–1.0) ----
+      for (let i = 0; i < 24; i++) {
+        const s = 0.0 + (i / 24) * 0.15;
+        const side = (i % 2) ? 1 : -1;
+        palm(K(s), side, 20 + hash(i * 17) * 15, 10 + hash(i * 7) * 4, [0.25, 0.55, 0.20]);
+      }
+      for (let i = 0; i < 20; i++) {
+        const s = 0.85 + (i / 20) * 0.15;
+        const side = (i % 2) ? 1 : -1;
+        palm(K(s), side, 20 + hash(i * 23) * 15, 10 + hash(i * 11) * 4, [0.25, 0.55, 0.20]);
+      }
+
+      // ---- Desert ridge backdrop at outer perimeter ----
+      for (const [distOff, sandCol] of [
+        [250, [0.62, 0.52, 0.36]],
+        [310, [0.58, 0.48, 0.32]],
+        [360, [0.54, 0.44, 0.28]],
+      ]) {
+        let cx2 = 0, cz2 = 0;
+        for (let i = 0; i < n; i++) { cx2 += px[i]; cz2 += pz[i]; }
+        cx2 /= n; cz2 /= n;
+        let tr = 0;
+        for (let i = 0; i < n; i++) tr = Math.max(tr, Math.hypot(px[i] - cx2, pz[i] - cz2));
+        const ring = tr + distOff;
+        for (let i = 0; i < 20; i++) {
+          const ang = i / 20 * 6.2832;
+          const rx = cx2 + Math.cos(ang) * ring, rz = cz2 + Math.sin(ang) * ring;
+          addBox(out, [rx, pyMin + 4, rz], [160 + hash(i * 11) * 60, 8, 80], sandCol);
         }
       }
     },

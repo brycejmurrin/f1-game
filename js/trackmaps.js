@@ -27,7 +27,11 @@ const TrackMaps = (function () {
     if (Object.prototype.hasOwnProperty.call(cache, def.id)) return cache[def.id];
     let out = null;
     try {
-      const tr = Tracks.build(def);
+      // Centreline-only build: the minimap needs the spline (positions, tangents,
+      // curvature, elevation) but NOT the 3D road/terrain/props meshes or any GPU
+      // upload. Using the full build here meant the select screen ran 24 complete
+      // 3D circuit builds on first open (~16 s stall).
+      const tr = Tracks.buildCenterline(def);
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
         const crns = detectCorners(tr);

@@ -76,7 +76,12 @@ const Tracks = (function () {
   }
 
   // ---------- build ----------
-  function build(def) {
+  // Cheap centreline-only build: runs just the spline engine (positions,
+  // tangents, banking, map, banking profile) WITHOUT generating the road /
+  // terrain / props meshes or uploading anything to the GPU. Used by TrackMaps
+  // to draw the 2D minimaps without paying the full 3D build cost (24 of those
+  // on the select screen was a ~16 s first-open stall).
+  function buildCenterline(def) {
     const P = def.points, N = P.length;
     const idx = (i) => ((i % N) + N) % N;
     // dense sampling for arc-length parameterization
@@ -165,6 +170,13 @@ const Tracks = (function () {
     // Banking profile (outer-edge lift per node). Computed once and shared by the
     // road/terrain meshes and the car/camera placement in game.js.
     track.bankP = bankingProfile(track);
+    return track;
+  }
+
+  // Full build: centreline + 3D meshes (road/terrain/props/gate) uploaded to the
+  // GPU. This is the heavy one — only needed to actually render/drive a circuit.
+  function build(def) {
+    const track = buildCenterline(def);
     if (typeof GLX !== "undefined" && GLX.createMesh) {
       track.meshes.road = GLX.createMesh(buildRoad(track));
       track.meshes.terrain = GLX.createMesh(buildTerrain(track));
@@ -1676,5 +1688,5 @@ const Tracks = (function () {
     return Math.min(arr[i], arr[j]);
   }
 
-  return { LIST, build, sample, curvature, onKerb, banking, bankAngle, project, wallAt };
+  return { LIST, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt };
 })();
