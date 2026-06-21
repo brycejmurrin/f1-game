@@ -331,7 +331,8 @@ let announceT = 0;
 let hudT = 0;
 let minimapBg = null;         // offscreen canvas with pre-rendered track shape
 const MAX_SKID = 120;
-const skidMarks = [];         // ring buffer of Float32Array(16) model matrices
+const skidMarks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
+let skidActive = 0;           // how many marks are live (grows to MAX_SKID then stays)
 let skidIdx = 0;
 let skidFrameT = 0;           // frame countdown between stamp placements
 
@@ -455,7 +456,7 @@ function gridUp() {
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
-    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = -4; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0;
   });
 }
@@ -544,6 +545,12 @@ async function loadCarModel(url) {
 function loadTrack(idx) {
   const def = Tracks.LIST[idx];
   if (builtTrackId !== def.id) {
+    if (track && track.meshes) {
+      GLX.freeMesh(track.meshes.road);
+      GLX.freeMesh(track.meshes.terrain);
+      GLX.freeMesh(track.meshes.props);
+      GLX.freeMesh(track.meshes.gate);
+    }
     track = Tracks.build(def);
     builtTrackId = def.id;
     Ghost.setTrack(def.id);
@@ -649,7 +656,7 @@ function startRace() {
   resultT = 0;
   camRoll = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
-  skidMarks.length = 0; skidIdx = 0; skidFrameT = 0;
+  skidActive = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
@@ -1989,9 +1996,12 @@ function render(dt) {
     wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
         : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
 
-  // skid marks drawn before cars so cars render on top
-  for (const m of skidMarks) {
-    GLX.drawMark(m, 0.6, 2.2);
+  // skid marks drawn oldest-first (newest on top). When buffer is full the
+  // oldest entry is at skidIdx; before that all live entries are 0..skidActive-1.
+  if (skidActive < MAX_SKID) {
+    for (let i = 0; i < skidActive; i++) GLX.drawMark(skidMarks[i], 0.6, 2.2);
+  } else {
+    for (let i = 0; i < MAX_SKID; i++) GLX.drawMark(skidMarks[(skidIdx + i) % MAX_SKID], 0.6, 2.2);
   }
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
@@ -2086,9 +2096,9 @@ function render(dt) {
         skidFrameT--;
         if (skidFrameT <= 0) {
           skidFrameT = 5;
-          const m = new Float32Array(tmpMat);
-          if (skidMarks.length < MAX_SKID) skidMarks.push(m);
-          else { skidMarks[skidIdx] = m; skidIdx = (skidIdx + 1) % MAX_SKID; }
+          skidMarks[skidIdx].set(tmpMat);
+          skidIdx = (skidIdx + 1) % MAX_SKID;
+          if (skidActive < MAX_SKID) skidActive++;
         }
       } else {
         skidFrameT = 0;

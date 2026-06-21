@@ -696,7 +696,7 @@ void main() {}`;
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
 
-    return { vao, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
+    return { vao, vbo, ib, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
   }
 
   function begin(frame) {
@@ -876,10 +876,18 @@ void main() {}`;
     gl.enable(gl.DEPTH_TEST);
   }
 
+  function freeMesh(mesh) {
+    if (!mesh) return;
+    gl.deleteBuffer(mesh.ib);
+    gl.deleteBuffer(mesh.vbo);
+    gl.deleteVertexArray(mesh.vao);
+  }
+
   return {
     init,
     resize,
     createMesh,
+    freeMesh,
     begin,
     draw,
     drawSky,
