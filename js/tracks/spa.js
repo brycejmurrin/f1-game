@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 7,
     baseHW: 8,
-    pal: { zenith: [0.34, 0.44, 0.56], horizon: [0.6, 0.65, 0.66], grass: [0.12, 0.34, 0.14], runoff: [0.4, 0.4, 0.4], fog: [0.66, 0.7, 0.72], fogDensity: 0.0026, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.98, 0.84, 0.64], sunColor: [0.9, 0.8, 0.62] },
+    pal: { zenith: [0.34, 0.44, 0.56], horizon: [0.6, 0.65, 0.66], grass: [0.18, 0.42, 0.18], runoff: [0.4, 0.4, 0.4], fog: [0.66, 0.7, 0.72], fogDensity: 0.0026, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.98, 0.84, 0.64], sunColor: [0.9, 0.8, 0.62] },
     segs: [
       { t: 0, l: 120 }, { t: 170, l: 80, h: -4 }, { t: 0, l: 140, h: -18 }, { t: -40, l: 60, h: 6 }, { t: 50, l: 60, h: 14 }, { t: -30, l: 80, h: 16 },
       { t: 0, l: 480, h: 18 }, { t: 70, l: 90 }, { t: -60, l: 90, h: -6 }, { t: 50, l: 140, h: -12 }, { t: -90, l: 160, h: -10 }, { t: 40, l: 90 },
@@ -201,6 +201,30 @@
         addCyl(out, a.c, 0.35, 11, [0.86, 0.87, 0.90], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 11), [1.6, 0.9, 1.2], [0.20, 0.20, 0.22], [a.r, a.u, a.t]);
       });
+
+      // --- La Source hotel: iconic red-roofed structure at the La Source hairpin.
+      building(Math.round(n * 0.01) % n, 1, 35, 10, 12, 30, { wall: [0.74, 0.38, 0.20], window: [0.38, 0.34, 0.28], floor: 2 });
+
+      // --- Denser Eau Rouge forest: extra close pines narrowing the sightline through the dip.
+      every(8, (k) => {
+        const s = k / n;
+        if (s < 0.04 || s > 0.14) return;
+        for (const side of [-1, 1]) {
+          const r = hash(k * 79 + side * 11 + 17);
+          pine(k, side, 5 + r * 10, 10 + r * 8, [0.08, 0.22, 0.10]);
+        }
+      });
+
+      // --- Kemmel Straight billboard: on the uphill Kemmel drag.
+      billboard(Math.round(n * 0.12) % n, -1, 8, 10, 3.4, [0.16, 0.42, 0.74]);
+
+      // --- Blanchimont billboards: compress the visual width through the high-speed section.
+      billboard(Math.round(n * 0.82) % n, 1, 8, 10, 3.4, [0.85, 0.12, 0.15]);
+      billboard(Math.round(n * 0.85) % n, 1, 8, 10, 3.4, [0.15, 0.30, 0.82]);
+      billboard(Math.round(n * 0.87) % n, 1, 8, 10, 3.4, [0.85, 0.12, 0.15]);
+
+      // --- Pouhon interior guardrail: mirrored inside line to tighten the corner envelope.
+      guardrail(0.50, 0.58, -1, 3.0, [0.66, 0.67, 0.70]);
     },
   }
   );

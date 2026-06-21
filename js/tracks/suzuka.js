@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 5.8,
     baseHW: 7,
-    pal: { zenith: [0.28, 0.46, 0.72], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2], sunDir: [0.8846517369293829, 0.44232586846469146, 0.14744195615489716], sun: [1, 0.84, 0.58], sunColor: [1, 0.82, 0.55] },
+    pal: { zenith: [0.35, 0.50, 0.70], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2], sunDir: [0.8846517369293829, 0.44232586846469146, 0.14744195615489716], sun: [1, 0.90, 0.65], sunColor: [1, 0.82, 0.55] },
     segs: [
       { t: 0, l: 440, h: -6 }, { t: 50, l: 120 }, { t: -35, l: 100, h: 6 }, { t: 45, l: 110, h: 6 }, { t: -30, l: 100, h: 4 }, { t: 55, l: 120 },
       { t: 60, l: 110 }, { t: 80, l: 120, h: -4 }, { t: 70, l: 120, h: -6 }, { t: 0, l: 300 }, { t: 45, l: 120, h: 6 }, { t: -20, l: 90 },
@@ -170,8 +170,8 @@
       every(18, (k) => {
         const s = hash(k * 41);
         if (s < 0.18) return;
-        pine(k, -1, 8 + s * 10, 9 + s * 8, [0.13 + s * 0.06, 0.34, 0.16]);
-        pine(k, 1, 8 + s * 10, 9 + s * 8, [0.12 + s * 0.07, 0.33, 0.15]);
+        pine(k, -1, 6.8 + s * 10, 9 + s * 8, [0.13 + s * 0.06, 0.34, 0.16]);
+        pine(k, 1, 6.8 + s * 10, 9 + s * 8, [0.12 + s * 0.07, 0.33, 0.15]);
         if (s > 0.40) {
           const b = hash(k * 71);
           pine(k, b < 0.5 ? -1 : 1, 19 + b * 16, 12 + b * 10, [0.11 + b * 0.05, 0.32, 0.15]);
@@ -207,6 +207,45 @@
       // Trackside billboards around the lap (sponsor hoardings).
       for (const [s, sd] of [[0.20, 1], [0.46, 1], [0.63, -1], [0.88, 1]]) {
         billboard(Math.round(n * s) % n, sd, 7, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
+      }
+
+      // --- Figure-8 bridge structure: Suzuka's iconic crossover at s≈0.81.
+      {
+        const bk = Math.round(n * 0.81) % n;
+        const ab = anchor(bk, -1, 14);
+        const basis = [ab.r, ab.u, ab.t];
+        const bridgePos = vadd(ab.c, ab.u, 12);
+        // Main bridge beam spanning the crossing
+        addBox(out, bridgePos, [8, 0.8, 30], [0.50, 0.50, 0.55], basis);
+        // Two vertical support columns on either end of the beam
+        addBox(out, vadd(ab.c, ab.u, 6), [1.4, 12, 1.4], [0.46, 0.47, 0.52], basis);
+        addBox(out, vadd(vadd(ab.c, ab.u, 6), ab.t, 14), [1.4, 12, 1.4], [0.46, 0.47, 0.52], basis);
+        // Diagonal cross-bracing: two thin cylinders at ~45 degrees
+        addCyl(out, vadd(ab.c, ab.u, 8), 0.18, 10, [0.44, 0.46, 0.50], 4, basis);
+        addCyl(out, vadd(vadd(ab.c, ab.u, 8), ab.t, 10), 0.18, 10, [0.44, 0.46, 0.50], 4, basis);
+      }
+
+      // --- Honda orange accent stripe on main grandstand (s≈0.00, R side).
+      {
+        const hk = Math.round(n * 0.00) % n;
+        const ah = anchor(hk, -1, 11);
+        const bh = [ah.r, ah.u, ah.t];
+        addBox(out, vadd(ah.c, ah.u, 16), [3, 2, 70], [0.98, 0.50, 0.10], bh);
+      }
+
+      // --- Park observation towers on Motopia ridges.
+      tower(Math.round(n * 0.50) % n, 1, 180, 7, 22, { col: [0.80, 0.82, 0.86], seg: 6, cap: true, capCol: [0.88, 0.30, 0.30], mast: 4 });
+      tower(Math.round(n * 0.60) % n, 1, 180, 7, 22, { col: [0.80, 0.82, 0.86], seg: 6, cap: true, capCol: [0.88, 0.30, 0.30], mast: 4 });
+
+      // --- Additional cherry blossom / sakura tree scatter near s=0.05–0.15.
+      {
+        const blossomFracs = [0.050, 0.065, 0.080, 0.095, 0.110, 0.130];
+        const blossomSides = [-1, 1, -1, 1, -1, 1];
+        const blossomDists = [18, 22, 14, 26, 20, 16];
+        for (let i = 0; i < blossomFracs.length; i++) {
+          const bk = Math.round(n * blossomFracs[i]) % n;
+          tree(bk, blossomSides[i], blossomDists[i], 7 + hash(bk * 31) * 4, [0.70, 0.85, 0.60]);
+        }
       }
 
       // --- Grandstands at the signature corners (lap-fractions from the brief).

@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 5.9,
     baseHW: 8,
-    pal: { zenith: [0.3, 0.42, 0.62], horizon: [0.66, 0.72, 0.78], grass: [0.2, 0.46, 0.18], fogDensity: 0.0016, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.88, 0.91, 1], sunColor: [0.84, 0.88, 0.96] },
+    pal: { zenith: [0.3, 0.42, 0.62], horizon: [0.64, 0.70, 0.76], grass: [0.2, 0.46, 0.18], fogDensity: 0.0016, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.88, 0.91, 1], sunColor: [0.84, 0.88, 0.96] },
     segs: [
       { t: 0, l: 260 }, { t: 60, l: 120 }, { t: -50, l: 90 }, { t: 80, l: 80 }, { t: -150, l: 160 }, { t: 0, l: 120 },
       { t: -70, l: 90 }, { t: 120, l: 150 }, { t: 40, l: 100 }, { t: 0, l: 160 }, { t: 70, l: 130 }, { t: -55, l: 70 },
@@ -130,7 +130,8 @@
       building(k(0.48), 1, 28, 24, 9, 20, { wall: [0.78, 0.78, 0.74], window: [0.20, 0.26, 0.32] });
 
       // ---- Advertising hoardings (Abbey run-off s≈0.55 R) ----
-      billboard(k(0.55), 1, 18, 14, 5, [0.86, 0.30, 0.20]);
+      billboard(k(0.55), 1, 14, 14, 5, [0.86, 0.30, 0.20]);
+      billboard(k(0.54), -1, 14, 14, 5, [0.20, 0.40, 0.70]);
       billboard(k(0.30), 1, 22, 14, 5, [0.20, 0.40, 0.70]);
 
       // ---- The Wing detail: control tower, pit garages, podium block ----
@@ -245,6 +246,46 @@
       for (const [s, side] of [[0.04, 1], [0.12, -1], [0.12, 1], [0.30, 1], [0.40, 1], [0.55, 1], [0.66, -1], [0.85, -1]]) {
         place(k(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE);
         place(k(s), side, 7, [10, 0.1, 12], GRASS); // run-off / grass framing slab
+      }
+
+      // ---- The Wing glazing band: dark curtain-wall glass strip at The Wing (s≈0.45 R) ----
+      {
+        const a = anchor(k(0.45), 1, 4);
+        addBox(out, vadd(a.c, a.u, 6), [22, 8, 200], [0.12, 0.18, 0.26], [a.r, a.u, a.t]);
+      }
+
+      // ---- Pit garage bays: 5 evenly spaced garage boxes along the pit wall (s≈0.97 R) ----
+      {
+        for (let i = 0; i < 5; i++) {
+          const dist = 6 + i * 6;
+          const gb = anchor(k(0.97), 1, dist);
+          addBox(out, vadd(gb.c, gb.u, 4), [8, 8, 14], [0.48, 0.50, 0.52], [gb.r, gb.u, gb.t]);
+        }
+      }
+
+      // ---- Copse corner near-side tree cluster (denser, 50–70m) ----
+      {
+        for (let j = 0; j < 5; j++) {
+          const kk = (k(0.04) + j) % n;
+          tree(kk, 1, 50 + hash(kk * 7 + j) * 20, 10 + hash(kk * 11 + j) * 6, COPSE);
+        }
+        for (let j = 0; j < 4; j++) {
+          const kk = (k(0.06) + j) % n;
+          tree(kk, 1, 55 + hash(kk * 9 + j) * 15, 9 + hash(kk * 13 + j) * 5, COPSE);
+        }
+      }
+
+      // ---- Pit control tower near the start gantry ----
+      building(k(0.01), 1, 8, 10, 6, 12, { wall: [0.78, 0.77, 0.72], window: [0.28, 0.32, 0.36] });
+
+      // ---- Maggotts/Becketts infield tree cluster (s=0.11–0.13, R) ----
+      {
+        const maggFracs = [0.110, 0.115, 0.120, 0.125, 0.130];
+        const maggDists = [80, 95, 85, 100, 90];
+        const maggH = [12, 16, 14, 18, 13];
+        for (let i = 0; i < maggFracs.length; i++) {
+          tree(k(maggFracs[i]), 1, maggDists[i], maggH[i], [0.22, 0.42, 0.18]);
+        }
       }
 
       // silence unused-guard lint helpers

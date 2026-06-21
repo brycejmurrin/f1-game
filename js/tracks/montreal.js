@@ -31,9 +31,9 @@
       const WALL = [0.78, 0.79, 0.80];      // pale concrete
       const RIVER = [0.22, 0.45, 0.58];     // St. Lawrence
       const BASIN = [0.20, 0.50, 0.60];     // Olympic rowing lake
-      const GRASS = [0.30, 0.55, 0.28];     // park green
-      const FOLIAGE = [0.18, 0.42, 0.22];   // deep tree green
-      const FOLIAGE2 = [0.24, 0.48, 0.24];  // lighter June foliage
+      const GRASS = [0.32, 0.58, 0.30];     // park green (vibrant)
+      const FOLIAGE = [0.20, 0.44, 0.24];   // deep tree green (boosted)
+      const FOLIAGE2 = [0.26, 0.50, 0.26];  // lighter June foliage (boosted)
       const HEDGE = [0.20, 0.40, 0.20];     // clipped hedge green
       const PATH = [0.62, 0.60, 0.55];      // paved cycle path
 
@@ -290,6 +290,58 @@
       // Packed grandstand opposite the Wall of Champions watching the chicane
       grandstand(0.97, -1, 12, 90, [0.49, 0.50, 0.55], [0.60, 0.36, 0.30]);
       billboard(K(0.96), -1, 12, 14, 4, [0.88, 0.82, 0.22]);
+
+      // ===================================================================
+      // ADDED SCENERY IMPROVEMENTS
+      // ===================================================================
+
+      // 1. Mid-stretch trees — varied heights and foliage tones, alternating sides.
+      {
+        const TREE_COLS = [
+          [0.20, 0.42, 0.22], [0.24, 0.48, 0.26], [0.22, 0.50, 0.24]
+        ];
+        const { every: everyFn, onTrack: onTrackFn } = api;
+        everyFn(16, (k) => {
+          const s = k / n;
+          const active = (s > 0.40 && s < 0.65) || (s > 0.78 && s < 0.92);
+          if (!active) return;
+          const h = hash(k * 53 + 19);
+          const side = (Math.round(k * 0.37) % 2) ? 1 : -1;
+          const dist = 15 + h * 15;
+          const col = TREE_COLS[Math.floor(h * 3) % 3];
+          const height = 6 + h * 8;
+          tree(k, side, dist, height, col);
+          if (h > 0.6) tree(k, -side, dist + 8 + h * 4, height - 2, TREE_COLS[(Math.floor(h * 5) + 1) % 3]);
+        });
+      }
+
+      // 2. Diverse CBD skyline — 8 glass towers at s=0.30–0.46 on the river side.
+      for (let i = 0; i < 8; i++) {
+        const s = 0.30 + i * (0.16 / 8);
+        const k = K(s);
+        const h = hash(k * 23 + i * 7);
+        const ht = 120 + h * 80;
+        const w = 12 + hash(k * 11 + i) * 4;
+        building(k, -1, 280 + i * 18, w, ht, w,
+          { wall: [0.60, 0.65, 0.72], window: [0.28, 0.34, 0.40], floor: 6 });
+      }
+
+      // 3. Pit paddock detail — hospitality/media buildings at s=0.96–0.99 on side=1.
+      building(K(0.960), 1, 16, 12, 8, 12,
+        { wall: [0.62, 0.64, 0.68], window: [0.42, 0.50, 0.58], floor: 4 });
+      building(K(0.972), 1, 16, 12, 8, 12,
+        { wall: [0.62, 0.64, 0.68], window: [0.42, 0.50, 0.58], floor: 4 });
+      building(K(0.984), 1, 16, 12, 8, 12,
+        { wall: [0.62, 0.64, 0.68], window: [0.42, 0.50, 0.58], floor: 4 });
+
+      // 4. Wall of Champions drama — bold red billboard accent.
+      billboard(K(0.955), 1, 4, 18, 6, [0.85, 0.15, 0.18]);
+      // Red accent stripe at close distance reinforcing the iconic barrier.
+      {
+        const k = K(0.955);
+        const a = anchor(k, 1, 1.5);
+        addBox(out, vadd(a.c, a.u, 1.8), [0.9, 1.2, 22], [0.85, 0.15, 0.18], [a.r, a.u, a.t]);
+      }
     },
   }
   );

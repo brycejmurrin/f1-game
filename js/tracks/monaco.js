@@ -30,9 +30,9 @@
       const K = (s) => Math.round(s * n) % n;
 
       // Mediterranean pastel wall palette + galvanized armco.
-      const CREAM = [0.92, 0.86, 0.72], TERRA = [0.80, 0.45, 0.32], OCHRE = [0.85, 0.70, 0.45];
+      const CREAM = [0.95, 0.90, 0.78], TERRA = [0.80, 0.45, 0.32], OCHRE = [0.85, 0.70, 0.45];
       const PASTELS = [CREAM, TERRA, OCHRE, [0.88, 0.82, 0.78], [0.78, 0.74, 0.62]];
-      const WIN = [0.30, 0.36, 0.40], ARMCO = [0.70, 0.72, 0.74];
+      const WIN = [0.20, 0.30, 0.36], ARMCO = [0.70, 0.72, 0.74];
 
       // ---- Continuous Armco lining both sides — the "no margin" street feel ----
       // Engine already supplies street barriers; add a galvanized rail accent.
@@ -367,6 +367,53 @@
         const k = K(s), a = anchor(k, side, 70 + hash(k) * 20);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           tower(k, side, 70 + hash(k) * 20, 16 + hash(k * 3) * 6, h, { col: PASTELS[K(s) % PASTELS.length], cap: true, capCol: [0.55, 0.58, 0.56], mast: 6 });
+        }
+      }
+
+      // ====================================================================
+      // ADDED SCENERY IMPROVEMENTS
+      // ====================================================================
+
+      // 1. Cliff-face apartment tiers behind Casino Square (stacked blocks rising).
+      for (let i = 0; i < 6; i++) {
+        building(K(0.15 + i * 0.02), -1, 90 + i * 12, 28, 55 + i * 8, 18,
+          { wall: [0.88, 0.85, 0.80], window: [0.28, 0.34, 0.38], floor: 11 });
+      }
+
+      // 2. Terraced mid-level buildings across the Casino-to-Fairmont elevation change.
+      building(K(0.28), -1, 40, 24, 30, 16, { wall: [0.86, 0.82, 0.76], window: WIN, floor: 9 });
+      building(K(0.32), -1, 60, 24, 40, 16, { wall: [0.88, 0.84, 0.78], window: WIN, floor: 9 });
+      building(K(0.36), -1, 80, 24, 50, 16, { wall: [0.85, 0.80, 0.72], window: WIN, floor: 9 });
+
+      // 3. Paddock tech buildings at s=0.88–0.92 with grey industrial palette + control tower.
+      building(K(0.88), 1, 18, 28, 12, 20, { wall: [0.70, 0.68, 0.64], window: [0.30, 0.34, 0.38], floor: 5 });
+      building(K(0.91), 1, 18, 28, 12, 20, { wall: [0.70, 0.68, 0.64], window: [0.30, 0.34, 0.38], floor: 5 });
+      tower(K(0.895), 1, 22, 10, 36, { col: [0.70, 0.68, 0.64], cap: true, capCol: [0.30, 0.34, 0.38], mast: 5 });
+
+      // 4. Cypress accent conifers — tall dark-green cylinders at key points.
+      {
+        const CYPRESS = [0.18, 0.35, 0.16];
+        for (const sf of [0.10, 0.35, 0.65]) {
+          const k = K(sf);
+          const a = anchor(k, -1, 12);
+          if (!onTrack(a.c[0], a.c[2], 4)) {
+            addCyl(out, vadd(a.c, a.u, 0), 1.5, 16, CYPRESS, 6, [a.r, a.u, a.t]);
+            // small cluster beside
+            const a2 = anchor(k, -1, 15);
+            addCyl(out, vadd(a2.c, a2.u, 0), 1.5, 14, CYPRESS, 6, [a2.r, a2.u, a2.t]);
+          }
+        }
+      }
+
+      // 5. Dock mooring bollards at s=0.65 (harbour side, side=-1).
+      {
+        const BOLLARD = [0.72, 0.70, 0.68];
+        for (let i = 0; i < 5; i++) {
+          const k = K(0.63 + i * 0.005);
+          const a = anchor(k, -1, 4 + i * 2);
+          if (!onTrack(a.c[0], a.c[2], 3)) {
+            addCyl(out, vadd(a.c, a.u, 0), 0.5, 18, BOLLARD, 6, [a.r, a.u, a.t]);
+          }
         }
       }
     },

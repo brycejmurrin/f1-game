@@ -13,7 +13,7 @@
     theme: "desert",
     lengthKm: 5.4,
     baseHW: 8,
-    pal: { horizon: [0.22, 0.12, 0.04], zenith: [0.04, 0.03, 0.09], sunColor: [0.85, 0.70, 0.42], ambientSky: [0.28, 0.22, 0.14], ambientGround: [0.30, 0.20, 0.10], fogColor: [0.18, 0.10, 0.04], fogDensity: 0.0030, concrete: [0.28, 0.26, 0.24], runoff: [0.24, 0.22, 0.2], grass: [0.2, 0.18, 0.14] },
+    pal: { horizon: [0.22, 0.12, 0.04], zenith: [0.08, 0.06, 0.18], sunColor: [0.85, 0.70, 0.42], ambientSky: [0.31, 0.25, 0.17], ambientGround: [0.25, 0.15, 0.05], fogColor: [0.18, 0.10, 0.04], fogDensity: 0.0030, concrete: [0.28, 0.26, 0.24], runoff: [0.24, 0.22, 0.2], grass: [0.2, 0.18, 0.14] },
     segs: [
       { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 80, l: 100 }, { t: -70, l: 90 }, { t: 60, l: 90 }, { t: 0, l: 300 },
       { t: -80, l: 100 }, { t: 70, l: 90 }, { t: 0, l: 400 }, { t: -60, l: 90 }, { t: 70, l: 90 }, { t: 0, l: 300 },
@@ -52,7 +52,7 @@
         // three lamp boxes across the truss — bright white lit faces
         for (const dx of [-2.6, 0, 2.6]) {
           const lc = vadd(vadd(a.c, a.u, h - 0.6), a.r, dx);
-          addBox(out, lc, [1.9, 1.5, 1.4], FLOOD, b);
+          addBox(out, lc, [2.3, 1.8, 1.7], FLOOD, b);
         }
         addBox(out, vadd(a.c, a.u, h + 0.6), [7.4, 0.4, 1.6], FLOOD, b); // upper lit edge
       };
@@ -128,7 +128,7 @@
         // pale curved roof fascia + support pylons, reading as one smooth crescent
         for (let i = 0; i < 8; i++) {
           const a = anchor(K((0.955 + i * 0.012) % 1), 1, 21), b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, 23), [17, 2.6, 52], PALE, b);     // roof slab
+          addBox(out, vadd(a.c, a.u, 23), [17, 3.4, 68], PALE, b);     // roof slab
           addBox(out, vadd(a.c, a.u, 12), [0.8, 22, 0.8], WHITEROOF, b); // front pylon
           // sponsor band across the roof fascia front face
           addBox(out, vadd(vadd(a.c, a.u, 24), a.r, -8), [0.6, 1.8, 40], AD[i % AD.length], b);
@@ -157,7 +157,7 @@
       grandstand(0.072, 1, 22, 60, GREY, SEAT);
       for (let i = 0; i < 6; i++) {
         const a = anchor(K((0.055 + i * 0.012) % 1), 1, 27), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 23), [16, 2.2, 50], WHITEROOF, b); // roof line
+        addBox(out, vadd(a.c, a.u, 23), [16, 2.9, 65], WHITEROOF, b); // roof line
       }
       tyreWall(0.04, 0.085, 1, 5, [0.90, 0.86, 0.20]);   // T1 outside tyre stack
       floodTower(K(0.06), 1, 36, 32);
@@ -179,7 +179,7 @@
       grandstand(0.205, 1, 24, 50, GREY, SEAT);
       for (const s of [0.165, 0.185, 0.205]) {
         const a = anchor(K(s), 1, 29), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 16), [14, 1.8, 44], WHITEROOF, b);
+        addBox(out, vadd(a.c, a.u, 16), [14, 2.3, 57], WHITEROOF, b);
       }
       floodTower(K(0.18), -1, 34, 30);
       floodTower(K(0.20), 1, 34, 30);
@@ -226,7 +226,7 @@
             addBox(out, c, [w, h, w], SKYLINE, b);
             // tapered crown on the taller ones (Doha-style towers)
             if (h > 90) addPyramid(out, vadd(c, a.u, h * 0.5 + 6), [w, 14, w], SKYLINE, b);
-            addBox(out, vadd(c, a.u, h * 0.5 + (h > 90 ? 14 : 1)), [1.6, 4, 1.6], FLOOD, b); // beacon
+            addBox(out, vadd(c, a.u, h * 0.5 + (h > 90 ? 14 : 1)), [1.6, 4, 1.6], [1.0, 1.0, 1.0], b); // beacon
           }
         }
       })();
@@ -272,7 +272,7 @@
       grandstand(0.955, 1, 18, 50, GREY, SEAT);
       for (const s of [0.93, 0.955]) {
         const a = anchor(K(s), 1, 23), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 17), [14, 1.8, 44], WHITEROOF, b);
+        addBox(out, vadd(a.c, a.u, 17), [14, 2.3, 57], WHITEROOF, b);
       }
       tyreWall(0.91, 0.945, 1, 5, [0.90, 0.86, 0.20]);
       floodTower(K(0.95), 1, 34, 30);
@@ -314,6 +314,12 @@
       every(46, (k) => {
         for (const side of [-1, 1]) place(k, side, 2.0, [3.0, 0.2, 7], [0.20, 0.42, 0.22]);
       });
+
+      // Sand-creep wedges — flat tan aprons simulating sand drifting onto the verge
+      for (const [s, side] of [[0.06, 1], [0.07, 1], [0.08, -1], [0.40, -1], [0.42, 1], [0.43, -1], [0.44, 1], [0.92, 1], [0.94, -1], [0.95, 1], [0.96, -1]]) {
+        const a = anchor(K(s), side, 14), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.15), [8, 0.3, 12], [0.72, 0.64, 0.48], b);
+      }
     },
   }
   );

@@ -150,7 +150,7 @@
       {
         const k = K(0.22);
         const a = anchor(k, 1, 170);
-        const heights = [150, 168, 150];
+        const heights = [210, 235, 210];   // ~40% taller than original 150/168/150
         for (let t = 0; t < 3; t++) {
           const c = vadd(a.c, a.r, (t - 1) * 42);
           const H = heights[t];
@@ -163,7 +163,9 @@
             addFrustum(out, vadd(c, a.u, fr * H), r * 1.02, r * 0.78, H * 0.06, b % 2 ? FLAME : WIN_WARM, 6, [a.r, a.u, a.t]);
           }
           // bright flame cap
-          addFrustum(out, vadd(c, a.u, H), 4, 0.6, 10, FLAME, 6, [a.r, a.u, a.t]);
+          addFrustum(out, vadd(c, a.u, H), 4, 0.6, 14, FLAME, 6, [a.r, a.u, a.t]);
+          // flame-shaped glow panel at the top — wider than the tower body
+          addBox(out, vadd(c, a.u, H + 2), [28, 12, 8], [1.0, 0.55, 0.10], [a.r, a.u, a.t]);
         }
       }
 
@@ -293,6 +295,60 @@
       }
       billboard(K(0.93), 1, 11, 18, 11, FLAME);
       billboard(K(0.99), -1, 8, 14, 8, WIN_COOL);
+
+      // ================= OLD CITY WALL — denser medieval stone presence =================
+      // Extra building() calls with medieval stone palette to thicken the Old City.
+      {
+        const STONE = [0.58, 0.52, 0.42];
+        const oldCityData = [
+          [0.41, 1, 28, 10, 10, 14],
+          [0.44, 1, 32, 12, 14, 12],
+          [0.48, 1, 24, 14,  8, 16],
+          [0.51, 1, 36,  9, 18, 10],
+        ];
+        for (const [s, side, dist, w, h, d] of oldCityData) {
+          building(K(s), side, dist, w, h, d, { wall: STONE, window: WIN_WARM, floor: 3 });
+        }
+      }
+
+      // ================= PALACE OF THE SHIRVANSHAHS cluster (s≈0.50) =================
+      // Low distinctive stone complex with crenellated parapet strips on top.
+      {
+        const PALACE = [0.72, 0.66, 0.54];
+        const k = K(0.50);
+        building(k, 1, 44, 22, 10, 28, { wall: PALACE, window: WIN_WARM, floor: 2 });
+        // crenellated parapet strips on top
+        const a = anchor(k, 1, 44), b = [a.r, a.u, a.t];
+        for (let j = 0; j < 6; j++) {
+          addBox(out, vadd(vadd(a.c, a.t, (j - 2.5) * 5), a.u, 11), [3, 1.6, 2.8], PALACE, b);
+        }
+        // flanking smaller wing building
+        building(K(0.505), 1, 36, 12, 7, 16, { wall: PALACE, window: WIN_WARM, floor: 2 });
+      }
+
+      // ================= CASPIAN SEA — additional groundPlane at harbour section =================
+      // Supplement the existing sea planes with a more prominent water panel.
+      groundPlane(K(0.68), -1, 18, [300, 2, 260], [0.12, 0.18, 0.28]);
+
+      // ================= URBAN CANYON density — modern city sections =================
+      // Taller buildings at s=0.0–0.20 and s=0.80–1.0 to tighten the street canyon.
+      {
+        const CITY_GLASS = [0.30, 0.40, 0.55];
+        const cityHeights = [40, 55, 70, 60, 80, 45, 65];
+        for (let i = 0; i < 7; i++) {
+          const s = 0.02 + i * 0.025;
+          building(K(s), -1, 28 + (i % 3) * 14, 14 + (i % 2) * 4, cityHeights[i], 16,
+            { wall: GLASS, window: CITY_GLASS, floor: 4 });
+        }
+        for (let i = 0; i < 6; i++) {
+          const s = 0.81 + i * 0.028;
+          building(K(s), 1, 30 + (i % 3) * 12, 16 + (i % 2) * 6, 40 + (i % 3) * 20, 18,
+            { wall: GLASS, window: CITY_GLASS, floor: 5 });
+        }
+      }
+
+      // ================= SEAFRONT BILLBOARD (s≈0.15, Azeri colours) =================
+      billboard(K(0.15), -1, 20, 14, 5, [0.85, 0.35, 0.10]);
     },
   }
   );

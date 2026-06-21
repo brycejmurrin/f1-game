@@ -14,7 +14,7 @@
     lengthKm: 6.2,
     baseHW: 7,
     street: true,
-    pal: { horizon: [0.22, 0.08, 0.28], zenith: [0.04, 0.02, 0.10], sunColor: [0.55, 0.45, 0.80], ambientSky: [0.28, 0.18, 0.38], ambientGround: [0.32, 0.14, 0.24], fogColor: [0.18, 0.06, 0.22], fogDensity: 0.0025, sunDir: [0.8, 0.15, 0.1] },
+    pal: { horizon: [0.22, 0.08, 0.28], zenith: [0.04, 0.02, 0.10], sunColor: [0.55, 0.45, 0.80], ambientSky: [0.35, 0.22, 0.45], ambientGround: [0.40, 0.18, 0.30], fogColor: [0.18, 0.06, 0.22], fogDensity: 0.0025, sunDir: [0.8, 0.15, 0.1] },
     segs: [
       { t: 0, l: 140 }, { t: 90, l: 70 }, { t: -60, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 120 }, { t: -60, l: 60 },
       { t: 70, l: 60 }, { t: -55, l: 60 }, { t: 0, l: 360 }, { t: 90, l: 80 }, { t: -50, l: 70 }, { t: 0, l: 900, t2: 0 },
@@ -30,7 +30,7 @@
       const K = (s) => Math.round(s * n) % n;
 
       // Neon night palette
-      const WARM = [1.0, 0.78, 0.35];     // casino glow / gold
+      const WARM = [1.0, 0.82, 0.40];     // casino glow / gold
       const GOLD = [1.0, 0.62, 0.18];     // hot up-light
       const MAGENTA = [0.95, 0.15, 0.65];
       const CYAN = [0.15, 0.85, 0.95];
@@ -136,6 +136,15 @@
           addCyl(out, [a.c[0], yy, a.c[2]], rad * 0.86, 3.0, vc[(i + 2) % vc.length], 16, null);
         }
       }
+      // MSG Sphere — horizontal LED glow bands for screen content illusion
+      {
+        const a = anchor(K(0.30), -1, 138);
+        const vc = [MAGENTA, CYAN, WARM, ROSE];
+        for (let b = 0; b < 4; b++) {
+          const yy = a.c[1] + 20 + b * 12;
+          addCyl(out, [a.c[0], yy, a.c[2]], 65, 2.5, vc[b % vc.length], 16, null);
+        }
+      }
 
       // --- s 0.35 R mid: Venetian tower cluster — tall warm-cream stack, lit grid ---
       building(K(0.35), 1, 51, 38, 92, 38, { wall: [0.62, 0.58, 0.50], window: WARM, floor: 7 });
@@ -152,6 +161,10 @@
       // --- s 0.58 L mid: Caesars Palace — wide ivory box, gold up-lights ---
       building(K(0.58), -1, 46, 60, 70, 44, { wall: [0.70, 0.66, 0.58], window: WARM, floor: 7 });
       place(K(0.58), -1, 30, [40, 2.0, 6], WARM);   // gold up-light strip at base
+      // MGM Grand — tall gold-windowed tower
+      building(K(0.54), 1, 76, 50, 140, 50, { wall: [0.25, 0.23, 0.21], window: [0.95, 0.75, 0.20], floor: 9 });
+      // Welcome to Las Vegas sign billboard
+      billboard(K(0.60), -1, 48, 20, 12, [0.95, 0.80, 0.15]);
 
       // --- s 0.64 L near: Paris Las Vegas — Eiffel replica via tapered tower, amber spots ---
       tower(K(0.64), -1, 60, 26, 138, { col: [0.16, 0.14, 0.12], seg: 4, cap: true, capCol: WARM, mast: true });
@@ -194,7 +207,7 @@
       {
         const s0 = 0.485, s1 = 0.815;
         const span = s1 - s0;
-        const STEP = 0.0072;                 // ~44 m between masses; blocks overlap, no gaps
+        const STEP = 0.0058;                 // ~35 m between masses; denser canyon wall
         const wallCol = [[0.24, 0.22, 0.22], [0.22, 0.21, 0.23], [0.26, 0.23, 0.20]];
         let idx = 0;
         for (let s = s0; s <= s1; s += STEP, idx++) {
@@ -262,6 +275,12 @@
         const mx = cx + Math.cos(a) * (ring - 180), mz = cz + Math.sin(a) * (ring - 180);
         if (onTrack(mx, mz, 60)) continue;
         addBox(out, [mx, pyMin + (18 + h * 22) / 2, mz], [180 + h * 140, 18 + h * 22, 140], DARKROCK);
+      }
+      // Neon finish arch at s≈0.98
+      {
+        const k = K(0.98);
+        const a = anchor(k, 0, 0);
+        addCyl(out, vadd(a.c, a.u, 8), 8, 0.8, MAGENTA, 12, [a.r, a.u, a.t]);
       }
     },
   }

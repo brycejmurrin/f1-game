@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 5.5,
     baseHW: 8,
-    pal: { zenith: [0.24, 0.5, 0.84], horizon: [0.76, 0.7, 0.54], grass: [0.34, 0.4, 0.14], runoff: [0.6, 0.35, 0.2], ambientSky: [0.52, 0.58, 0.68], ambientGround: [0.28, 0.28, 0.24], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1, 0.9, 0.7], sunColor: [1, 0.88, 0.68] },
+    pal: { zenith: [0.24, 0.5, 0.84], horizon: [0.76, 0.7, 0.54], grass: [0.34, 0.4, 0.14], runoff: [0.6, 0.35, 0.2], ambientSky: [0.52, 0.58, 0.68], ambientGround: [0.28, 0.28, 0.24], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
     segs: [
       { t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 },
       { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 }, { t: 0, l: 460 },
@@ -81,17 +81,19 @@
       const kt = K(0.085);
       const at = anchor(kt, -1, 78), tb = [at.r, at.u, at.t];
       const tBase = at.c;
-      // tapered concrete shaft, built in stacked frustum bands for the silhouette
-      addFrustum(out, vadd(tBase, at.u, 0), 6.5, 5.2, 30, [0.86, 0.86, 0.89], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 30), 5.2, 4.2, 30, [0.84, 0.84, 0.88], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 60), 4.2, 3.4, 24, [0.82, 0.82, 0.86], 8, tb);
-      // cantilevered viewing-deck ring near the top
-      addCyl(out, vadd(tBase, at.u, 80), 9, 5, [0.62, 0.64, 0.70], 10, tb);
-      addCyl(out, vadd(tBase, at.u, 81.5), 9.6, 1.6, glass, 10, tb);   // glass band
+      // tapered concrete shaft — ~50% taller than original 84 m, now ~126 m
+      addFrustum(out, vadd(tBase, at.u, 0), 6.5, 5.2, 42, [0.86, 0.86, 0.89], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 42), 5.2, 4.2, 42, [0.84, 0.84, 0.88], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 84), 4.2, 3.4, 30, [0.82, 0.82, 0.86], 8, tb);
+      // cantilevered viewing-deck ring near the top — wider platform box
+      addCyl(out, vadd(tBase, at.u, 110), 9, 5, [0.62, 0.64, 0.70], 10, tb);
+      addCyl(out, vadd(tBase, at.u, 111.5), 9.6, 1.6, glass, 10, tb);   // glass band
+      // viewing platform box — wider than the tower shaft
+      addBox(out, vadd(tBase, at.u, 113), [22, 3.5, 22], [0.72, 0.74, 0.78], tb);
       // lit cap + crown
-      addCone(out, vadd(tBase, at.u, 85), 6, 6, [0.55, 0.57, 0.62], 10, tb);
-      addCyl(out, vadd(tBase, at.u, 91), 0.5, 10, redSteel, 6, tb);    // red mast
-      addBox(out, vadd(tBase, at.u, 100), [1.4, 1.4, 1.4], [1.0, 0.85, 0.4], tb); // lit beacon
+      addCone(out, vadd(tBase, at.u, 116), 6, 6, [0.55, 0.57, 0.62], 10, tb);
+      addCyl(out, vadd(tBase, at.u, 122), 0.5, 14, redSteel, 6, tb);    // red mast
+      addBox(out, vadd(tBase, at.u, 135), [1.4, 1.4, 1.4], [1.0, 0.85, 0.4], tb); // lit beacon
       // small white support facility at the tower base
       prop(kt, -1, 70, [12, 7, 14], [0.86, 0.86, 0.88]);
       prop(kt, -1, 88, [10, 5, 10], [0.80, 0.80, 0.83]);
@@ -237,6 +239,17 @@
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      // ---- T1 hill climb ridge cues: ridges curve away from the track on both
+      // sides of s=0.00–0.05 to visually reinforce the dramatic elevation gain. ----
+      {
+        const hillGrass = [0.36, 0.44, 0.22];
+        const hillPts = [[0.01, 1], [0.02, -1], [0.035, 1], [0.045, -1]];
+        for (const [sf, side] of hillPts) {
+          const a = anchor(K(sf), side, 30 + hash(K(sf) * 3) * 20), b = [a.r, a.u, a.t];
+          addFrustum(out, a.c, 50, 20, 14 + hash(K(sf) * 7) * 8, hillGrass, 6, b);
+        }
+      }
+
       // CONTINUOUS Texas Hill Country backdrop: three overlapping rings of LOW
       // organic hills, spaced so wide bases overlap into an unbroken green/tan
       // band that wraps the WHOLE lap — no gaps, no snow, never tall.

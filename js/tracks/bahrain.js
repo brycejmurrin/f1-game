@@ -13,7 +13,7 @@
     theme: "desert",
     lengthKm: 5.4,
     baseHW: 7,
-    pal: { horizon: [0.20, 0.10, 0.05], zenith: [0.04, 0.04, 0.10], sunColor: [0.80, 0.62, 0.40], ambientSky: [0.26, 0.20, 0.14], ambientGround: [0.28, 0.18, 0.10], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0028, sunDir: [0.5, 0.14, 0.4], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] },
+    pal: { horizon: [0.20, 0.10, 0.05], zenith: [0.06, 0.05, 0.16], sunColor: [0.80, 0.62, 0.40], ambientSky: [0.30, 0.22, 0.16], ambientGround: [0.28, 0.18, 0.10], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0028, sunDir: [0.5, 0.14, 0.4], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] },
     segs: [
       { t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
       { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300 }, { t: 60, l: 90 }, { t: 0, l: 120 }, { t: 60, l: 110 },
@@ -64,7 +64,7 @@
       const floodMast = (k, side, gap, h) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.4, h, STEEL, 6, b);
-        addBox(out, vadd(a.c, a.u, h), [4.2, 1.4, 1.6], FLOOD, b);   // lamp bank cap
+        addBox(out, vadd(a.c, a.u, h), [5.25, 1.75, 2.0], FLOOD, b);  // lamp bank cap
       };
 
       // ---- Sculpted artificial dunes: low rounded tan wedges near the track. ----
@@ -346,6 +346,47 @@
       // density of trackside furniture (kept at safe clearance). ----
       fence(0.10, 0.16, 1, 7, 3.0, [0.70, 0.72, 0.76]);
       fence(0.66, 0.72, -1, 7, 3.0, [0.70, 0.72, 0.76]);
+
+      // ================= DUNE SILHOUETTE RIDGES (outer desert, s 0.15–0.75) =================
+      // Three ridge calls on the outer (L) side at 120–200 m, suggesting dune
+      // crests beyond the circuit perimeter in tan/dark-sand tones.
+      {
+        const DUNE_RIDGE = [0.55, 0.44, 0.28];
+        const rdPts = [[0.18, 120], [0.45, 160], [0.68, 200]];
+        for (const [s, dist] of rdPts) {
+          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          // ridge: wide flat-bottomed wedge approximated as a low frustum
+          addFrustum(out, a.c, 90, 40, 10 + hash(K(s) * 7) * 6, DUNE_RIDGE, 6, b);
+        }
+      }
+
+      // ================= SAND RUNOFF PATCHES (s 0.10–0.20 and s 0.60–0.70, outer) =================
+      // Small low boxes on the outer side suggesting sand drifting onto the apron.
+      {
+        const SAND_RUNOFF = [0.70, 0.60, 0.42];
+        for (const [s0, s1] of [[0.10, 0.20], [0.60, 0.70]]) {
+          const steps = Math.round((s1 - s0) / (20 / (n * 1.0 / n)));
+          const stepFrac = (s1 - s0) / Math.max(1, steps);
+          let cnt = 0;
+          for (let sf = s0; sf < s1; sf += 0.018) {
+            const kk = K(sf);
+            const a = anchor(kk, -1, 18 + hash(kk * 5) * 14), b = [a.r, a.u, a.t];
+            addBox(out, a.c, [6, 0.2, 10], SAND_RUNOFF, b);
+            cnt++;
+            if (cnt > 7) break;
+          }
+        }
+      }
+
+      // ================= MID-CIRCUIT DESERT COMPOUND BUILDING (s 0.55) =================
+      building(K(0.55), -1, 40, 14, 8, 20, { wall: [0.62, 0.58, 0.50], window: [0.30, 0.35, 0.40], floor: 2 });
+
+      // ================= BRIGHT BEACON ON SAKHIR TOWER (s 0.005) =================
+      // Add a warm light cone at the very peak of the Sakhir Tower.
+      {
+        const a = anchor(K(0.005), -1, 46), b = [a.r, a.u, a.t];
+        addCone(out, vadd(a.c, a.u, 68), 1.5, 4, [1.0, 0.90, 0.60], 8, b);
+      }
     },
   }
   );

@@ -42,7 +42,7 @@
       // Royal-park greens.
       const PINE_D = [0.08, 0.26, 0.12], PINE = [0.10, 0.30, 0.14], PINE_L = [0.13, 0.34, 0.17];
       const LEAF = [0.18, 0.45, 0.20], LEAF_L = [0.24, 0.50, 0.24], LEAF_D = [0.15, 0.38, 0.18];
-      const GRAVEL = [0.80, 0.72, 0.54];
+      const GRAVEL = [0.68, 0.60, 0.42];
 
       // =====================================================================
       // 1. ROYAL PARK FOREST — very dense broadleaf + umbrella-pine corridor
@@ -299,6 +299,40 @@
           ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
         }
       }
+      // =====================================================================
+      // 8. ADDED SCENERY IMPROVEMENTS
+      // =====================================================================
+
+      // 8a. Denser front pine pass — fills the gaps between Rank A pines.
+      every(9, (k) => {
+        const h = hash(k * 43 + 7);
+        const s = k / n;
+        if (h < 0.05) return;                       // only tiny gaps allowed
+        const side = h < 0.5 ? -1 : 1;
+        pine(k, side, 8 + h * 5, 16 + h * 10, PINE);
+        if (h > 0.45) pine(k, -side, 9 + h * 6, 15 + h * 9, PINE_L);
+      });
+
+      // 8b. Expand Parabolica grandstand — two extra sections widening the arc.
+      grandstand(0.875, 1, 14, 80, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
+      grandstand(0.935, 1, 14, 80, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
+
+      // 8c. Red/white kerb stripes on start straight (pit-wall side, s=0.0–0.07).
+      {
+        const kerbR = [0.88, 0.18, 0.14], kerbW = [0.92, 0.92, 0.90];
+        for (let i = 0; i < 15; i++) {
+          const sFrac = i * (0.07 / 15);
+          const k = K(sFrac);
+          const a = anchor(k, -1, 5);
+          const col = (i % 2 === 0) ? kerbR : kerbW;
+          addBox(a.out || api.out, vadd(a.c, a.u, 0.2), [0.8, 0.4, 3.5], col, [a.r, a.u, a.t]);
+        }
+      }
+
+      // 8d. Tifosi banner billboards near the start (side=1, Italian red atmosphere).
+      billboard(K(0.01), 1, 30, 14, 6, [0.90, 0.15, 0.15]);
+      billboard(K(0.02), 1, 30, 14, 6, [0.90, 0.15, 0.15]);
+
       // Pine silhouettes breaking the near canopy edge into a tree texture.
       for (let i = 0; i < 28; i++) {
         const a = i / 28 * 6.2832, h = hash(i * 11 + 5);
