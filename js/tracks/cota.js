@@ -22,7 +22,7 @@
     // Turn 1: the calendar's most famous climb — ~30 m up in a few hundred metres.
     elevations: [{ s: 0.06, halfM: 320, rise: 12 }],
     scenery: function (api) {
-      const { out, n, px, pz, hw, pyMin, place, prop, backdrop, groundYAt, addBox, addPrism, every, onTrack, anchor, vadd, hash, tower, grandstand, tree, bush, mountain } = api;
+      const { out, n, px, pz, hw, pyMin, place, prop, backdrop, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, every, along, onTrack, anchor, vadd, hash, tower, grandstand, building, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // -- Palette (Texas Hill Country, DAY) --
@@ -34,6 +34,10 @@
       const redSteel = [0.86, 0.20, 0.16];
       const white = [0.92, 0.92, 0.94];
       const concrete = [0.80, 0.80, 0.82];
+      const darkSteel = [0.32, 0.34, 0.40];
+      const glass = [0.40, 0.56, 0.66];
+      const cotaBlue = [0.16, 0.30, 0.52];
+      const tyreBlack = [0.12, 0.12, 0.14];
 
       // ---- Main grandstand on the start/finish straight (s≈0.00, R) ----
       grandstand(0.00, 1, 8, 150, [0.34, 0.35, 0.40], [0.5, 0.5, 0.54]);
@@ -53,15 +57,44 @@
       grandstand(0.625, 1, 14, 70, [0.38, 0.39, 0.44], [0.5, 0.5, 0.54]);
       // Triple-apex sweeper stand (s≈0.83, R)
       grandstand(0.83, 1, 16, 64, [0.40, 0.41, 0.46], [0.5, 0.5, 0.54]);
+      // Extra deep main-straight upper tier behind the front stand (s≈0.00, R far)
+      grandstand(0.02, 1, 30, 130, [0.30, 0.31, 0.36], [0.48, 0.48, 0.52]);
+      // T1 amphitheatre — two extra raked banks climbing the famous hairpin hill (L)
+      grandstand(0.09, -1, 30, 70, [0.40, 0.41, 0.46], [0.52, 0.5, 0.5]);
+      grandstand(0.13, -1, 26, 64, [0.36, 0.37, 0.42], [0.5, 0.5, 0.54]);
+      // Esses-exit second-row stand (s≈0.24, R)
+      grandstand(0.24, 1, 18, 54, [0.38, 0.39, 0.44], [0.5, 0.5, 0.54]);
 
-      // ---- Pit/paddock block (s≈0.02, L) ----
-      prop(0.02 * n | 0, -1, 14, [26, 9, 90], [0.82, 0.82, 0.84]);
+      // ---- Pit/paddock building cluster (s≈0.00–0.05, L) ----
+      // long low pit garage block flanking the main straight
+      building(K(0.97), -1, 12, 24, 8, 120, { wall: [0.84, 0.84, 0.86], window: glass, floor: 2, roof: [0.55, 0.56, 0.60] });
+      // paddock hospitality / team motorhomes behind the pits
+      building(K(0.99), -1, 40, 30, 11, 60, { wall: [0.88, 0.88, 0.90], window: glass, floor: 3, roof: [0.5, 0.52, 0.56] });
+      building(K(0.04), -1, 38, 26, 9, 44, { wall: [0.80, 0.80, 0.83], window: glass, floor: 2 });
+      // race-control / media tower at pit exit (s≈0.05, L)
+      building(K(0.05), -1, 16, 16, 18, 22, { wall: cotaBlue, window: glass, floor: 5, roof: darkSteel });
+      // pit-lane low boundary wall along the straight (inside, R)
+      wall(0.92, 0.10, 1, 3, 1.0, [0.90, 0.90, 0.92], 0.5);
 
-      // ---- 76 m Observation Tower — the hero at Turn 1 (s≈0.09, L far) ----
+      // ---- 76 m Observation Tower — the hero at Turn 1 (s≈0.085, L far) ----
+      // Real COTA tower: tapered concrete shaft + cantilevered ring deck + red mast.
       const kt = K(0.085);
-      tower(kt, -1, 70, 9, 64, { col: [0.88, 0.88, 0.90], seg: 6, cap: true, capCol: [0.55, 0.57, 0.62], mast: 12 });
+      const at = anchor(kt, -1, 78), tb = [at.r, at.u, at.t];
+      const tBase = at.c;
+      // tapered concrete shaft, built in stacked frustum bands for the silhouette
+      addFrustum(out, vadd(tBase, at.u, 0), 6.5, 5.2, 30, [0.86, 0.86, 0.89], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 30), 5.2, 4.2, 30, [0.84, 0.84, 0.88], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 60), 4.2, 3.4, 24, [0.82, 0.82, 0.86], 8, tb);
+      // cantilevered viewing-deck ring near the top
+      addCyl(out, vadd(tBase, at.u, 80), 9, 5, [0.62, 0.64, 0.70], 10, tb);
+      addCyl(out, vadd(tBase, at.u, 81.5), 9.6, 1.6, glass, 10, tb);   // glass band
+      // lit cap + crown
+      addCone(out, vadd(tBase, at.u, 85), 6, 6, [0.55, 0.57, 0.62], 10, tb);
+      addCyl(out, vadd(tBase, at.u, 91), 0.5, 10, redSteel, 6, tb);    // red mast
+      addBox(out, vadd(tBase, at.u, 100), [1.4, 1.4, 1.4], [1.0, 0.85, 0.4], tb); // lit beacon
       // small white support facility at the tower base
-      prop(kt, -1, 64, [10, 7, 10], [0.86, 0.86, 0.88]);
+      prop(kt, -1, 70, [12, 7, 14], [0.86, 0.86, 0.88]);
+      prop(kt, -1, 88, [10, 5, 10], [0.80, 0.80, 0.83]);
 
       // ---- Uphill Turn 1: red-soil bank rising at the apex (s≈0.10, R mid) ----
       const k1 = K(0.10);
@@ -112,12 +145,91 @@
           for (let j = 0; j < cnt; j++) {
             const d = 26 + hash(k * 7 + side + j * 11) * 55;
             const h = 6 + hash(k * 17 + side + j * 9) * 7;
-            tree(k, side, d, h, hash(k * 5 + j) > 0.5 ? oak : cedar);
+            const pick = hash(k * 5 + j);
+            if (pick > 0.66) pine(k, side, d, h + 2, cedar);          // occasional conifer
+            else tree(k, side, d, h, pick > 0.33 ? oak : cedar);
           }
           if (hash(k * 23 + side) > 0.45) bush(k, side, 22 + hash(k * 3 + side) * 50, scrub);
           if (hash(k * 29 + side) > 0.6) bush(k, side, 30 + hash(k * 19 + side) * 40, oak);
+          if (hash(k * 41 + side) > 0.55) bush(k, side, 14 + hash(k * 11 + side) * 16, dryGrass); // low scrub near edge
         }
       });
+
+      // ---- Start/finish gantry over the main straight (s≈0.00) ----
+      gantry(0.00, 7.5, darkSteel);
+      // scoring / DRS-detection gantry on the back straight (s≈0.50)
+      gantry(0.50, 7.0, darkSteel);
+
+      // ---- Catch fences behind the kerbs on the fast/spectator sections ----
+      // (gap kept well clear of tarmac so the mesh never touches the racing line)
+      fence(0.00, 0.06, 1, 5, 3.4, [0.62, 0.64, 0.68]);   // main straight, R
+      fence(0.94, 1.00, 1, 5, 3.4, [0.62, 0.64, 0.68]);   // final corner, R
+      fence(0.46, 0.62, -1, 6, 3.4, [0.62, 0.64, 0.68]);  // back straight, L
+      fence(0.08, 0.14, -1, 8, 3.4, [0.62, 0.64, 0.68]);  // T1 hill, L
+
+      // ---- Armco guardrails lining the flowing Esses and sweepers ----
+      guardrail(0.15, 0.28, 1, 4, [0.80, 0.80, 0.82]);    // Esses, R
+      guardrail(0.15, 0.28, -1, 4, [0.80, 0.80, 0.82]);   // Esses, L
+      guardrail(0.78, 0.90, 1, 4, [0.80, 0.80, 0.82]);    // triple-apex sweeper, R
+      guardrail(0.62, 0.70, 1, 5, [0.80, 0.80, 0.82]);    // T12 hairpin exit, R
+
+      // ---- Tyre walls at the two big braking zones (T1 + T12 hairpin) ----
+      tyreWall(0.095, 0.135, 1, 6, redSteel);             // T1 apex outside
+      tyreWall(0.61, 0.66, 1, 6, [0.95, 0.85, 0.1]);      // T12 hairpin
+      tyreWall(0.30, 0.34, -1, 6, [0.1, 0.5, 0.9]);       // mid-lap chicane
+
+      // ---- Billboards / advertising hoardings around the lap ----
+      billboard(K(0.07), -1, 14, 16, 6, redSteel);
+      billboard(K(0.22), 1, 16, 18, 6, cotaBlue);
+      billboard(K(0.40), -1, 18, 16, 6, [0.92, 0.5, 0.1]);
+      billboard(K(0.50), 1, 18, 18, 6, [0.1, 0.6, 0.35]);
+      billboard(K(0.70), -1, 16, 16, 6, redSteel);
+      billboard(K(0.88), 1, 18, 16, 6, cotaBlue);
+
+      // ---- Marshal posts at corner stations ----
+      [0.04, 0.12, 0.20, 0.28, 0.43, 0.58, 0.64, 0.80, 0.90].forEach((s, i) => {
+        marshalPost(K(s), (i % 2 ? 1 : -1), 7);
+      });
+
+      // ---- Distance-marker boards on the two big braking zones ----
+      [50, 100, 150].forEach((m, i) => {
+        const km = K(0.085 - m * 0.00018);
+        place(km, 1, 9 + i, [1.0, 2.4, 0.4], white);
+        const kh = K(0.60 - m * 0.00018);
+        place(kh, -1, 9 + i, [1.0, 2.4, 0.4], white);
+      });
+
+      // ---- TV camera towers at scenic vantage points ----
+      [[0.10, -1, 22], [0.50, 1, 24], [0.84, -1, 24]].forEach(([s, side, d]) => {
+        const kc = K(s), ac = anchor(kc, side, d), cb = [ac.r, ac.u, ac.t];
+        if (!onTrack(ac.c[0], ac.c[2], 18)) {
+          addCyl(out, ac.c, 0.6, 11, darkSteel, 4, cb);
+          addBox(out, vadd(ac.c, ac.u, 11), [2.4, 1.6, 1.6], [0.1, 0.1, 0.12], cb);
+        }
+      });
+
+      // ---- Big paddock car park rows in the infield far side (s≈0.55, L far) ----
+      const kp = K(0.55), ap = anchor(kp, -1, 70), pb = [ap.r, ap.u, ap.t];
+      if (!onTrack(ap.c[0], ap.c[2], 40)) {
+        for (let row = -2; row <= 2; row++) {
+          for (let col = -3; col <= 3; col++) {
+            const c = vadd(vadd(ap.c, ap.t, col * 6), ap.r, row * 4);
+            const tint = hash(row * 9 + col * 3 + 1);
+            addBox(out, vadd(c, ap.u, 0.7), [2.0, 1.4, 4.0],
+                   [0.3 + tint * 0.5, 0.3 + hash(col * 7) * 0.4, 0.35 + hash(row * 5) * 0.4], pb);
+          }
+        }
+      }
+
+      // ---- Texas water tower — a regional silhouette landmark (s≈0.36, R far) ----
+      const kw = K(0.36), aw = anchor(kw, 1, 95), wb = [aw.r, aw.u, aw.t];
+      if (!onTrack(aw.c[0], aw.c[2], 30)) {
+        for (const leg of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) {
+          addCyl(out, vadd(vadd(aw.c, aw.r, leg[0]), aw.t, leg[1]), 0.5, 18, [0.7, 0.72, 0.74], 4, wb);
+        }
+        addFrustum(out, vadd(aw.c, aw.u, 18), 7, 5, 6, [0.82, 0.84, 0.86], 10, wb);
+        addCone(out, vadd(aw.c, aw.u, 24), 5, 4, [0.6, 0.62, 0.66], 10, wb);
+      }
 
       // ---- Texas Hill Country ridgelines — LOW organic hills on the horizon ----
       let cx = 0, cz = 0;

@@ -24,8 +24,10 @@
     // top-to-bottom), then the long descent back through the second sector.
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop,
-              addBox, vadd, anchor, mountain, pine, grandstand, building, marshalPost } = api;
+      const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop, onTrack,
+              addBox, addCyl, vadd, anchor, along, mountain, pine, tree, bush, hedge,
+              grandstand, building, tower, billboard, gantry, marshalPost,
+              fence, guardrail, tyreWall } = api;
 
       // --- Encircling Ardennes mountains: a near forested range with light snow
       // only on the highest tops, and a far hazed range. Centre-based ring so the
@@ -70,40 +72,58 @@
         }
       });
 
-      // --- Dense Ardennes pine forest walling both sides of the track. Tighter
-      // spacing and a low skip threshold so the woodland is continuous; a second
-      // deeper rank thickens the wall behind the front line.
-      every(44, (k) => {
+      // --- Continuous dark treeline wall hugging both sides of the track. This
+      // is the read-at-a-glance "wall of forest" the brief calls for: a dense
+      // hedge mass that closes off every grass gap behind the front-rank pines.
+      hedge(0.0, 1.0, -1, 5, 7.5, [0.10, 0.30, 0.14]);
+      hedge(0.0, 1.0, 1, 5, 7.5, [0.11, 0.31, 0.15]);
+
+      // --- Dense Ardennes pine forest walling both sides of the track. Three
+      // staggered ranks give a continuous, multi-deep woodland. The hedge above
+      // already closes the gaps at the very front, so the pines read as the
+      // textured woodland behind it; spacing is tuned to stay within budget.
+      // Front rank (close to the edge), textured woodland just behind the hedge.
+      every(56, (k) => {
         for (const side of [-1, 1]) {
-          const s = hash(k * 41 + side);
-          if (s < 0.26) continue;
-          const dist = 8 + s * 20, h = 9 + s * 9;
-          pine(k, side, dist, h, [0.09 + s * 0.05, 0.30, 0.14]);
-          if (s > 0.70) pine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
+          const s = hash(k * 41 + side * 7);
+          if (s < 0.40) continue;
+          const dist = 7 + s * 10, h = 9 + s * 9;
+          pine(k, side, dist, h, [0.08 + s * 0.05, 0.30, 0.14]);
         }
       });
-      // Fill the sparse stretches: a staggered front-line rank offset from the above.
-      every(64, (k) => {
+      // Second rank (mid/deep depth), the looming taller back wall.
+      every(76, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 67 + side * 5 + 3);
-          if (s < 0.58) continue;
-          const dist = 6 + s * 10, h = 8 + s * 7;
-          pine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
+          if (s < 0.42) continue;
+          const dist = 20 + s * 24, h = 12 + s * 12;
+          pine(k, side, dist, h, [0.09 + s * 0.04, 0.27, 0.13]);
+        }
+      });
+      // Scattered broadleaf trees breaking up the conifer monotony, mid depth.
+      every(110, (k) => {
+        for (const side of [-1, 1]) {
+          const s = hash(k * 113 + side * 3 + 9);
+          if (s < 0.6) continue;
+          tree(k, side, 14 + s * 22, 8 + s * 6, [0.14 + s * 0.06, 0.36, 0.18]);
         }
       });
       // Hero density at Eau Rouge / Raidillon (s≈0.05–0.10): crowd the climb with pines.
-      every(12, (k) => {
+      every(18, (k) => {
         const s = k / n;
         if (s < 0.045 || s > 0.12) return;
         for (const side of [-1, 1]) {
           const r = hash(k * 53 + side);
           pine(k, side, 7 + r * 10, 10 + r * 10, [0.08 + r * 0.05, 0.31, 0.15]);
-          if (r > 0.5) pine(k, side, 20 + r * 18, 13 + r * 9, [0.10 + r * 0.04, 0.28, 0.13]);
+          if (r > 0.5) pine(k, side, 22 + r * 18, 13 + r * 9, [0.10 + r * 0.04, 0.28, 0.13]);
         }
       });
 
-      // --- Modern pit/paddock building: long low white-grey mass on the pit straight.
+      // --- Modern pit/paddock complex: long low white-grey mass on the pit straight,
+      // with a stacked hospitality tier and a control tower at the start.
       building(0, -1, 9, 14, 11, 64, { wall: [0.90, 0.91, 0.93], window: [0.40, 0.46, 0.50], floor: 5 });
+      building(0, -1, 11, 12, 6, 50, { wall: [0.84, 0.86, 0.89], window: [0.32, 0.40, 0.46], floor: 3, setback: 2 });
+      tower(Math.round(n * 0.985) % n, -1, 16, 9, { col: [0.88, 0.89, 0.92], cap: 4, capCol: [0.30, 0.36, 0.42], mast: 8 });
       {
         // Thin cantilever roof blade over the pit lane.
         const a = anchor(0, -1, 20);
@@ -112,28 +132,75 @@
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
       building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
 
-      // --- Grandstands: La Source, Eau Rouge, Les Combes, Bus Stop, pit straight.
+      // --- Grandstands with crowds: La Source, Eau Rouge, Les Combes, Stavelot, Bus Stop, pit straight.
       const shell = [0.42, 0.43, 0.47];
-      grandstand(0.00, 1, 8, 40, shell, [0.50, 0.52, 0.56]);   // main grandstand, pit straight
-      grandstand(0.02, 1, 8, 26, shell, [0.62, 0.16, 0.16]);   // La Source hairpin
-      grandstand(0.07, 1, 8, 28, shell, [0.20, 0.36, 0.62]);   // Eau Rouge / Raidillon
-      grandstand(0.16, 1, 8, 30, shell, [0.50, 0.52, 0.56]);   // Les Combes
-      grandstand(0.92, 1, 8, 28, shell, [0.46, 0.48, 0.52]);   // Bus Stop chicane
+      grandstand(0.00, 1, 8, 46, shell, [0.50, 0.52, 0.56]);   // main grandstand, pit straight
+      grandstand(0.995, 1, 8, 34, shell, [0.46, 0.48, 0.52]);  // pit straight extension
+      grandstand(0.02, 1, 8, 30, shell, [0.62, 0.16, 0.16]);   // La Source hairpin (red crowd)
+      grandstand(0.02, -1, 9, 24, shell, [0.20, 0.40, 0.66]);  // La Source inner (blue crowd)
+      grandstand(0.07, 1, 8, 34, shell, [0.20, 0.36, 0.62]);   // Eau Rouge / Raidillon
+      grandstand(0.09, -1, 9, 26, shell, [0.66, 0.48, 0.16]);  // Raidillon crest, opposite bank
+      grandstand(0.16, 1, 8, 34, shell, [0.50, 0.52, 0.56]);   // Les Combes
+      grandstand(0.55, -1, 9, 24, shell, [0.40, 0.46, 0.52]);  // Pouhon
+      grandstand(0.78, 1, 8, 26, shell, [0.46, 0.48, 0.52]);   // Stavelot
+      grandstand(0.92, 1, 8, 32, shell, [0.46, 0.48, 0.52]);   // Bus Stop chicane
+
+      // --- Overhead gantries: start/finish line and the Kemmel timing point.
+      gantry(0.00, 7.0, [0.20, 0.22, 0.26]);
+      gantry(0.13, 6.5, [0.24, 0.26, 0.30]);
+      gantry(0.92, 6.5, [0.24, 0.26, 0.30]);
+
+      // --- Advertising hoardings lining the fast straights and braking zones.
+      [0.005, 0.04, 0.11, 0.14, 0.32, 0.50, 0.62, 0.78, 0.90, 0.94].forEach((s, i) => {
+        const col = [[0.80, 0.16, 0.16], [0.16, 0.42, 0.74], [0.92, 0.72, 0.12],
+                     [0.18, 0.56, 0.30], [0.85, 0.85, 0.88]][i % 5];
+        billboard(Math.round(n * s) % n, 1, 8, 10, 3.4, col);
+        if (hash(i * 23 + 7) > 0.4) billboard(Math.round(n * (s + 0.01)) % n, -1, 8, 9, 3.0, col);
+      });
+
+      // --- Guardrails: armco on the outside of the fast forest sweepers and the
+      // approaches to the chicane, where cars actually run wide. Kept to targeted
+      // runs (not the full lap) to stay within the vert budget.
+      guardrail(0.18, 0.30, 1, 3.0, [0.66, 0.67, 0.70]);   // Malmedy / Rivage outside
+      guardrail(0.40, 0.50, -1, 3.0, [0.66, 0.67, 0.70]);  // Pouhon entry inside
+      guardrail(0.62, 0.72, 1, 3.0, [0.66, 0.67, 0.70]);   // Stavelot outside
+      guardrail(0.86, 0.97, 1, 3.0, [0.66, 0.67, 0.70]);   // Blanchimont → Bus Stop outside
+
+      // --- Catch / debris fences behind the grandstand zones and fast sections.
+      fence(0.00, 0.10, 1, 4.0, 5.0, [0.55, 0.57, 0.60]);     // pit straight + La Source
+      fence(0.05, 0.18, -1, 5.0, 5.0, [0.55, 0.57, 0.60]);    // Eau Rouge / Kemmel outside
+      fence(0.85, 1.00, 1, 4.0, 5.0, [0.55, 0.57, 0.60]);     // Blanchimont / Bus Stop
+
+      // --- Tyre walls stacked at the high-risk corner exits.
+      tyreWall(0.015, 0.035, 1, 2.0, [0.85, 0.20, 0.18]);     // La Source exit
+      tyreWall(0.055, 0.075, -1, 2.5, [0.92, 0.78, 0.16]);    // Eau Rouge apex
+      tyreWall(0.155, 0.175, 1, 2.0, [0.18, 0.50, 0.86]);     // Les Combes
+      tyreWall(0.535, 0.560, -1, 2.0, [0.85, 0.20, 0.18]);    // Pouhon
+      tyreWall(0.905, 0.925, 1, 2.0, [0.92, 0.78, 0.16]);     // Bus Stop
 
       // --- Yellow-capped marshal posts dotted around the lap.
-      every(120, (k) => {
+      every(110, (k) => {
         const side = hash(k * 33) < 0.5 ? -1 : 1;
         marshalPost(k, side, 4);
       });
-      // Extra marshal posts flanking pit entry (s≈0.97).
+      // Extra marshal posts flanking pit entry (s≈0.97) and Pouhon (s≈0.55).
       marshalPost(Math.round(n * 0.97) % n, -1, 4);
       marshalPost(Math.round(n * 0.97) % n, 1, 4);
+      marshalPost(Math.round(n * 0.55) % n, -1, 4);
 
       // --- Eau Rouge: low concrete runoff wall boxes at the valley base (s≈0.06, left).
       {
         const kw = Math.round(n * 0.06) % n;
         place(kw, -1, 4, [1.0, 1.4, 22], [0.55, 0.55, 0.52]);
       }
+
+      // --- TV camera towers (slim white masts) on outside of marquee corners.
+      [0.02, 0.07, 0.16, 0.55, 0.92].forEach((s) => {
+        const k = Math.round(n * s) % n;
+        const a = anchor(k, 1, 12);
+        addCyl(out, a.c, 0.35, 11, [0.86, 0.87, 0.90], 6, [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 11), [1.6, 0.9, 1.2], [0.20, 0.20, 0.22], [a.r, a.u, a.t]);
+      });
     },
   }
   );
