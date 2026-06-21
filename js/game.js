@@ -401,6 +401,7 @@ function gridUp() {
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
     c.xVis = c.x;   // reset smoothed render position so the grid doesn't slide
+    c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
