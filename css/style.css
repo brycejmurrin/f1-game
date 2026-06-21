@@ -358,6 +358,17 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   #cs-stats-inner { grid-template-columns: 1fr; }
 }
 
+/* car setup: sticky DONE button so it's always reachable without scrolling to end */
+#carsetup .sel-actions {
+  position: sticky;
+  bottom: 0;
+  width: 100%; /* prevent sticky from collapsing flex-item width */
+  background: rgba(6, 6, 10, 0.96);
+  padding: 10px 0 6px;
+  margin-top: 10px;
+  z-index: 1;
+}
+
 /* short landscape (phones): tighten spacing */
 @media (orientation: landscape) and (max-height: 520px) {
   #carsetup { padding-top: calc(var(--sat) + 8px); }
@@ -620,6 +631,20 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 #howtoplay { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); }
 #howtoplay-inner { width: min(92vw, 560px); }
 #htp-close { position: absolute; top: 10px; right: 10px; width: 36px; padding: 6px; }
+/* Scroll-fade: sticky gradient that hugs the bottom of the visible panel area,
+   hinting at more content below. Disappears automatically when scrolled to the end
+   (the sticky element reaches its natural position at the bottom of the content). */
+#howtoplay-inner::after {
+  content: "";
+  display: block;
+  position: sticky;
+  bottom: 0;
+  height: 48px;
+  margin-top: -48px;
+  background: linear-gradient(to bottom, transparent, var(--panel));
+  pointer-events: none;
+  border-radius: 0 0 14px 14px;
+}
 #howtoplay dl {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -690,7 +715,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     column-gap: 10px;
   }
   #pausemenu h2 { grid-column: 1 / -1; }
-  #pausemenu button { margin: 4px 0; }
+  #pausemenu button { margin: 4px 0; font-size: 11.5px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* race settings: 2-column grid so LAPS+WEATHER share one row, TIME+actions share another */
   #race-settings {
     display: grid;
