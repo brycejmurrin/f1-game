@@ -165,11 +165,21 @@ const kMax = Math.max(...ahead.map(a => Math.abs(a.k)));
 const targetSpeed = Math.sqrt(24 / Math.max(kMax, 1e-4));   // v = sqrt(aLat/|k|)
 ```
 
-### `physState() → {s, x, speed, prog, head, vLat, slipDeg, slope, wrongWay, rescueT, lap}`
+### `physState() → {s, x, speed, prog, head, vLat, slipDeg, slope, wrongWay, rescueT, lap, axEstSm, axFrac, slipFactor}`
 Richer readout for the world-space / drift model: world `head`ing (rad), lateral
 slip velocity `vLat` (m/s) and slip `slipDeg` (°), road pitch `slope`
 (+up/−down), `wrongWay` flag, auto-rescue timer `rescueT`, cumulative `prog` (m)
 and `lap`.
+
+Three combined-slip fields expose the traction-circle state in real time:
+
+| Field | Meaning |
+|---|---|
+| `axEstSm` | Smoothed longitudinal acceleration (m/s²) — positive = accelerating, negative = braking |
+| `axFrac` | `axEstSm / LONG_GRIP` clamped to 1 — fraction of the longitudinal grip budget consumed |
+| `slipFactor` | `sqrt(1 − axFrac²)` — fraction of lateral grip remaining (1 = none consumed, 0 = all consumed) |
+
+`slipFactor` < 1 means the car is braking or accelerating hard enough to reduce cornering grip. When it approaches 0 the car will wash wide (understeer). Trail-braking — easing off the brake while turning in — lets `slipFactor` rise and rotates the car.
 
 ### `tuning() → {wheelbase, expo, maxSlip, speedRef, drift, roadFollow, playerGrip, frontGrip, yawDamp, yawInertia, pace, raceLineAssist, maxTilt, deadzone, tiltCutoff}`
 Live values the steering sliders and physics constants currently hold. Each slider

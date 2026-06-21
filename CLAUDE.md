@@ -73,6 +73,12 @@ Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
 `PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
 `__apex.setPhysics(o)` for A/B tests.
 
+**Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
+axis of the traction circle. Braking or accelerating consumes longitudinal grip;
+`slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
+rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
+fields `axEstSm`, `axFrac`, `slipFactor`.
+
 ---
 
 ## `window.__apex` dev API
