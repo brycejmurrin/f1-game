@@ -77,9 +77,9 @@ const store = {
   set(k, v) { try { localStorage.setItem("apex26." + k, JSON.stringify(v)); } catch (e) {} },
 };
 
-// Per-track time-trial leaderboard: top 5 laps ever, each tagged with the
+/// Per-track time-trial leaderboard: top 10 laps ever, each tagged with the
 // team + driver that set it. Stored sorted ascending by lap time.
-const TT_BOARD_MAX = 5;
+const TT_BOARD_MAX = 10;
 function ttBoard(trackId) {
   const b = store.get("ttlb." + trackId, []);
   return Array.isArray(b) ? b : [];
@@ -2574,11 +2574,11 @@ function updateTrackPreview() {
       for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
       const span = mx - mn || 1;
       const pad = 3;
+      function yNorm(v) { return eh - pad - ((v - mn) / span) * (eh - 2 * pad); }
       eg.beginPath();
       for (let i = 0; i <= py.length; i++) {
         const px = (i / py.length) * ew;
-        const pyNorm = eh - pad - ((py[i % py.length] - mn) / span) * (eh - 2 * pad);
-        i === 0 ? eg.moveTo(px, pyNorm) : eg.lineTo(px, pyNorm);
+        i === 0 ? eg.moveTo(px, yNorm(py[0])) : eg.lineTo(px, yNorm(py[i % py.length]));
       }
       eg.lineTo(ew, eh); eg.lineTo(0, eh); eg.closePath();
       eg.fillStyle = "rgba(57,183,240,0.18)";
@@ -2587,10 +2587,15 @@ function updateTrackPreview() {
       eg.beginPath();
       for (let i = 0; i <= py.length; i++) {
         const px = (i / py.length) * ew;
-        const pyNorm = eh - pad - ((py[i % py.length] - mn) / span) * (eh - 2 * pad);
-        i === 0 ? eg.moveTo(px, pyNorm) : eg.lineTo(px, pyNorm);
+        i === 0 ? eg.moveTo(px, yNorm(py[0])) : eg.lineTo(px, yNorm(py[i % py.length]));
       }
       eg.stroke();
+      // Y-axis elevation labels (top = max, bottom = min)
+      eg.font = "8px monospace";
+      eg.fillStyle = "rgba(57,183,240,0.75)";
+      eg.textAlign = "right";
+      eg.fillText("+" + Math.round(mx) + "m", ew - 2, 9);
+      eg.fillText(Math.round(mn) + "m", ew - 2, eh - 1);
     } else {
       elevCv.hidden = true;
     }
@@ -2865,10 +2870,44 @@ els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
   if (seasonMode) {
     if (season.round >= Tracks.LIST.length) {
-      // season over: champion announce then reset
-      const champ = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0))[0];
-      announce(champ.code + " IS CHAMPION!", 3);
+      if (els.resNext.textContent !== "MAIN MENU") {
+        // First click: build champion panel, stay on results screen
+        const sorted = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0));
+        const champ = sorted[0];
+        const champColor = cssCol(champ.team.color);
+        els.resultsTitle.textContent = "WORLD CHAMPION";
+        els.resultsTitle.style.color = champColor;
+        els.resultsTable.textContent = "";
+        // Big champion row
+        const banner = document.createElement("div");
+        banner.style.cssText = "text-align:center;padding:18px 0 10px;font-weight:900;font-style:italic;font-size:1.4em;color:" + champColor;
+        banner.textContent = champ.code + "  " + champ.name;
+        const teamBanner = document.createElement("div");
+        teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:#aaa;margin-bottom:14px;letter-spacing:2px";
+        teamBanner.textContent = champ.team.name.toUpperCase();
+        els.resultsTable.append(banner, teamBanner);
+        // Full standings
+        const head = document.createElement("div");
+        head.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin-bottom:4px;font-size:0.85em";
+        head.textContent = "FINAL STANDINGS";
+        els.resultsTable.appendChild(head);
+        sorted.forEach((c, i) => {
+          const row = document.createElement("div"); row.className = "res-row";
+          const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+          const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(c.team.color);
+          const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
+          const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.code] || 0) + " pts";
+          row.append(pos, sw, nm, pt);
+          els.resultsTable.appendChild(row);
+        });
+        els.resNext.textContent = "MAIN MENU";
+        announce(champ.code + " IS WORLD CHAMPION!", 4);
+        if (soundOn) GameAudio.finish();
+        return;
+      }
+      // Second click: go to menu, reset season
       season = null; store.set("season", null);
+      els.resultsTitle.style.color = "";
       quitToMenu();
       return;
     }
