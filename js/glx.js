@@ -464,6 +464,11 @@ void main() {}`;
   // Material uniform cache — skip redundant per-draw scalar uploads.
   let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1;
 
+  // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
+  // skip it when the requested program is already bound. Route every bind here.
+  let _activeProg = null;
+  function useProg(p) { if (p !== _activeProg) { gl.useProgram(p); _activeProg = p; } }
+
   function compile(type, src) {
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
@@ -707,7 +712,7 @@ void main() {}`;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    gl.useProgram(litProg);
+    useProg(litProg);
     gl.uniformMatrix4fv(litU.uViewProj, false, frame.viewProj);
     gl.uniform3fv(litU.uEye, frame.eye);
     gl.uniform3fv(litU.uSunDir, frame.sunDir);
@@ -734,7 +739,7 @@ void main() {}`;
   }
 
   function draw(mesh, modelMat, opts) {
-    gl.useProgram(litProg);
+    useProg(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
@@ -759,7 +764,7 @@ void main() {}`;
   }
 
   function drawSky(sky) {
-    gl.useProgram(skyProg);
+    useProg(skyProg);
     gl.uniformMatrix4fv(skyU.uInvViewProj, false, sky.invViewProj);
     gl.uniform3fv(skyU.uZenith, sky.zenith);
     gl.uniform3fv(skyU.uHorizon, sky.horizon);
@@ -775,7 +780,7 @@ void main() {}`;
   }
 
   function drawShadow(modelMat, w, l) {
-    gl.useProgram(shadowProg);
+    useProg(shadowProg);
     gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
     gl.uniformMatrix4fv(shadowU.uModel, false, modelMat);
     gl.uniform2f(shadowU.uSize, w, l);
@@ -789,7 +794,7 @@ void main() {}`;
   }
 
   function drawMark(modelMat, w, l) {
-    gl.useProgram(markProg);
+    useProg(markProg);
     gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
     gl.uniformMatrix4fv(markU.uModel, false, modelMat);
     gl.uniform2f(markU.uSize, w, l);
@@ -816,7 +821,7 @@ void main() {}`;
     // 1) bright-pass scene -> bloom[0] (half res)
     gl.viewport(0, 0, bloomW, bloomH);
     gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
-    gl.useProgram(brightProg);
+    useProg(brightProg);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(brightU.uScene, 0);
@@ -824,7 +829,7 @@ void main() {}`;
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // 2) separable gaussian blur, a couple of ping-pong passes
-    gl.useProgram(blurProg);
+    useProg(blurProg);
     gl.uniform1i(blurU.uTex, 0);
     const passes = [[1 / bloomW, 0], [0, 1 / bloomH]];
     let src = 0;
@@ -840,7 +845,7 @@ void main() {}`;
     // 3) composite to the screen
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
-    gl.useProgram(compProg);
+    useProg(compProg);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(compU.uScene, 0);
@@ -887,7 +892,7 @@ void main() {}`;
       gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
       gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
       gl.clear(gl.DEPTH_BUFFER_BIT);
-      gl.useProgram(depthProg);
+      useProg(depthProg);
       gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
       gl.disable(gl.CULL_FACE);  // render back faces to avoid peter-panning
     },
