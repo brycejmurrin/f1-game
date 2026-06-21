@@ -768,6 +768,22 @@ function buildTTResults() {
   head.append(hl, hv);
   els.resultsTable.appendChild(head);
 
+  // Ghost delta row (shows gap to ghost best)
+  if (Ghost.hasGhost() && isFinite(best)) {
+    const ghostBest = Ghost.bestTime();
+    if (isFinite(ghostBest)) {
+      const delta = best - ghostBest;
+      const gr = document.createElement("div");
+      gr.className = "res-row";
+      const gl = document.createElement("span"); gl.className = "res-name"; gl.textContent = "vs Ghost";
+      const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
+      gv.style.color = delta <= 0 ? "#a3e635" : "#e10600";
+      gv.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(3) + "s";
+      gr.append(gl, gv);
+      els.resultsTable.appendChild(gr);
+    }
+  }
+
   // leaderboard header
   const lbHead = document.createElement("div");
   lbHead.style.cssText = "margin-top:12px;color:#e10600;font-weight:800;font-style:italic";
@@ -2471,8 +2487,10 @@ function updateTrackPreview() {
     const dir = TrackMaps.direction(t);
     const elev = TrackMaps.elevRange(t);
     const facts = [];
+    const dz = TrackMaps.drsZones(t);
     if (dir) facts.push('<span class="spf-fact spf-dir">' + (dir === "CW" ? "↻ Clockwise" : "↺ Anti-clockwise") + "</span>");
     if (elev > 2) facts.push('<span class="spf-fact spf-elev">&#9650; ' + elev + " m elevation</span>");
+    if (dz && dz.length) facts.push('<span class="spf-fact spf-drs">' + dz.length + " DRS zone" + (dz.length > 1 ? "s" : "") + "</span>");
     if (crns.length) {
       const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
       facts.push('<span class="spf-fact spf-corner">T' + slowest.n + " slowest</span>");
@@ -3565,6 +3583,20 @@ window.__apex = {
     raceTimeOfDay = timeOfDay || "default";
     startRace();
     return { track: Tracks.LIST[i].id, timeOfDay: raceTimeOfDay, weather: raceWeather };
+  },
+  tt(trackRef, timeOfDay) {
+    const i = typeof trackRef === "number"
+      ? trackRef
+      : Tracks.LIST.findIndex((t) => t.id === trackRef);
+    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    trackIdx = i;
+    seasonMode = false;
+    timeTrial = true;
+    raceLaps = TT_LAPS;
+    raceWeather = "dry";
+    raceTimeOfDay = timeOfDay || "default";
+    startRace();
+    return { track: Tracks.LIST[i].id, timeTrial: true };
   },
   // Load an optional .glb car model at runtime (team meshes rebuild from it,
   // tinted per livery); resolves false and keeps the procedural car on failure.
