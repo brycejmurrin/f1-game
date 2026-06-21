@@ -20,7 +20,12 @@
       { t: -70, l: 70 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 600 }, { t: -80, l: 80 },
     ],
     scenery: function (api) {
-      const { out, n, place, prop, backdrop, building, tower, wall, billboard, anchor, addBox, addCyl, addFrustum, vadd, hash } = api;
+      const {
+        out, n, place, prop, backdrop, groundPlane, building, tower, wall,
+        fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
+        palm, anchor, along, every, onTrack, addBox, addCyl, addPrism,
+        addFrustum, vadd, hash,
+      } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Dusk street palette ----
@@ -31,7 +36,13 @@
       const WIN_COOL = [0.6, 0.7, 0.95];      // cool lit windows
       const FLAME = [0.95, 0.35, 0.10];       // Flame Towers glow
       const DARK = [0.08, 0.09, 0.13];        // silhouette
+      const DARK2 = [0.11, 0.12, 0.18];       // nearer hazed silhouette
       const CONCRETE = [0.30, 0.30, 0.34];
+      const ARMCO = [0.74, 0.76, 0.82];       // steel guardrail
+      const FENCE = [0.55, 0.58, 0.66];       // catch-fence mesh
+      const SEA = [0.04, 0.06, 0.12];         // dark Caspian water
+      const TARMAC_AD = [0.85, 0.20, 0.18];   // red ad accent
+      const AZ_BLUE = [0.10, 0.45, 0.78];     // Azerbaijan flag blue
 
       // ===================================================================
       // Continuous low concrete walls + dark rail lining the whole lap
@@ -45,18 +56,36 @@
       wall(0.0, 0.62, -1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.97, 1.0, -1, 2.0, 1.3, CONCRETE, 0.4);
 
+      // Debris catch-fence behind the concrete walls — the see-through wire mesh
+      // that lines real street circuits. Set just beyond the wall clearance so it
+      // never reaches the tarmac. Covers the city opening sector, both sides.
+      fence(0.0, 0.35, 1, 2.6, 3.4, FENCE);
+      fence(0.86, 1.0, 1, 2.6, 3.4, FENCE);
+      fence(0.0, 0.32, -1, 2.6, 3.4, FENCE);
+      // Armco guardrail on the Caspian straight (right side, behind the wall break).
+      guardrail(0.63, 0.96, 1, 3.0, ARMCO);
+      // Catch-fence along the Caspian straight, right side (behind the guardrail).
+      fence(0.63, 0.95, 1, 4.0, 3.0, FENCE);
+
       // Floodlight poles / light towers for the night mood, denser around the lap.
-      for (let i = 0; i < 24; i++) {
-        const k = K(i / 24), side = (i % 2) ? 1 : -1, a = anchor(k, side, 5);
-        addCyl(out, a.c, 0.25, 12, [0.22, 0.22, 0.25], 5, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 12), [1.6, 0.5, 0.6], [1.0, 0.95, 0.7], [a.r, a.u, a.t]);
+      for (let i = 0; i < 22; i++) {
+        const k = K(i / 22), side = (i % 2) ? 1 : -1, a = anchor(k, side, 5);
+        addCyl(out, a.c, 0.25, 13, [0.22, 0.22, 0.25], 5, [a.r, a.u, a.t]);
+        // angled lamp head + warm emissive bulb
+        addBox(out, vadd(a.c, a.u, 13), [2.0, 0.5, 0.7], [0.30, 0.30, 0.34], [a.r, a.u, a.t]);
+        addBox(out, vadd(vadd(a.c, a.u, 12.7), a.r, side * 0.8), [0.7, 0.4, 0.7], [1.0, 0.95, 0.7], [a.r, a.u, a.t]);
       }
 
-      // Distant dusk-haze silhouette band so the horizon never reads empty — denser,
-      // a near-continuous wrap of overlapping silhouette boxes around the whole lap.
-      for (let i = 0; i < 22; i++) {
-        const k = K(i / 22), side = (i % 2) ? 1 : -1;
-        backdrop(k, side, 240 + hash(i * 5) * 160, [30 + hash(i * 7) * 26, 36 + hash(i * 11) * 70, 22], DARK);
+      // Marshal posts spaced around the lap — orange-roofed flag points.
+      for (let i = 0; i < 9; i++) marshalPost(K(0.05 + i * 0.105), (i % 2) ? 1 : -1, 3.0);
+
+      // Distant dusk-haze silhouette band so the horizon never reads empty — TWO
+      // ranks (near hazed + far dark) forming a near-continuous wrap of city
+      // silhouette around the whole lap. onTrack guards against the infield.
+      for (let i = 0; i < 24; i++) {
+        const k = K(i / 24), side = (i % 2) ? 1 : -1;
+        backdrop(k, side, 150 + hash(i * 5) * 90, [26 + hash(i * 7) * 22, 28 + hash(i * 11) * 50, 20], DARK2);
+        backdrop(k, side, 280 + hash(i * 13) * 170, [32 + hash(i * 17) * 30, 44 + hash(i * 19) * 90, 24], DARK);
       }
 
       // ===================================================================
@@ -76,9 +105,32 @@
         building(k, 1, 4, 40, 18, 24, { wall: SAND, window: WIN_WARM, floor: 4.5 });
       }
 
-      // s 0.04 L mid — plaza framed by low civic blocks
+      // ===================================================================
+      // START/FINISH straight — pit complex (R, low), main grandstands +
+      // crowd (L), and the start gantry spanning the track.
+      // ===================================================================
+      // Long low pit garage block on the right, ahead of Government House.
+      for (let i = 0; i < 5; i++)
+        building(K(0.95 + i * 0.012), 1, 5, 16, 9, 14, { wall: [0.20, 0.21, 0.26], window: WIN_COOL, floor: 3 });
+      // Pit wall (low) + pit-lane separator on the right edge of the straight.
+      wall(0.94, 0.02, 1, 1.0, 1.0, [0.85, 0.85, 0.88], 0.4);
+      // Twin grandstands with crowd on the left of the main straight.
+      grandstand(0.985, -1, 4, 70, [0.42, 0.36, 0.40], [0.50, 0.30, 0.34]);
+      grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
+      // Start gantry across the line + a scoring gantry a little later.
+      gantry(0.0, 7.5, [0.14, 0.14, 0.18]);
+      gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
+      // Start-line banner billboards.
+      billboard(0.01, 1, 9, 14, 5, FLAME);
+
+      // s 0.04 L mid — plaza framed by low civic blocks + a small fountain plaza
       for (let i = 0; i < 3; i++)
         building(K(0.04), -1, 15 + i * 22, 26, 16 + i * 4, 22, { wall: [0.34, 0.33, 0.32], window: WIN_WARM });
+      // plaza monument: slim lit obelisk
+      {
+        const a = anchor(K(0.045), -1, 12);
+        addFrustum(out, vadd(a.c, a.u, 0), 1.4, 0.3, 16, SAND_LIT, 4, [a.r, a.u, a.t]);
+      }
 
       // ===================================================================
       // s 0.12 both near — first 90 squeeze: tall flat grey wall boxes
@@ -133,11 +185,17 @@
       }
       // Dense sandstone old-town behind the rampart: packed flat-roof houses
       // climbing the hill so the Old City reads as a solid mass, not a fence.
-      for (let i = 0; i < 9; i++) {
-        const k = K(0.37 + (i % 5) * 0.034);
-        const tier = 18 + (i % 3) * 16 + Math.floor(i / 5) * 22;
-        const h = 9 + hash(i * 7) * 12;
-        building(k, 1, tier - (13 + hash(i * 3) * 6) / 2, 13 + hash(i * 3) * 6, h, 13, { wall: i % 3 ? SAND : SAND_LIT, window: WIN_WARM, floor: 4.5 });
+      for (let i = 0; i < 13; i++) {
+        const k = K(0.37 + (i % 6) * 0.029);
+        const tier = 16 + (i % 3) * 15 + Math.floor(i / 6) * 20;
+        const h = 8 + hash(i * 7) * 13;
+        building(k, 1, tier - (12 + hash(i * 3) * 7) / 2, 12 + hash(i * 3) * 7, h, 12, { wall: i % 3 ? SAND : SAND_LIT, window: WIN_WARM, floor: 4.5 });
+      }
+      // small domes / minaret silhouettes rising over the old town for texture.
+      for (let i = 0; i < 4; i++) {
+        const a = anchor(K(0.4 + i * 0.035), 1, 40 + hash(i * 9) * 20);
+        addCyl(out, a.c, 1.0, 14 + hash(i) * 8, SAND, 6, [a.r, a.u, a.t]);          // minaret shaft
+        addFrustum(out, vadd(a.c, a.u, 14 + hash(i) * 8), 1.6, 0.4, 3, SAND_LIT, 6, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
@@ -175,18 +233,28 @@
       }
 
       // ===================================================================
-      // s 0.58 L far — seafront opens: low boulevard rail + palm-row low boxes
+      // s 0.58 L far — seafront opens: boulevard promenade + palm row, low
+      // landscaped green boxes (the Caspian seaside park).
       // ===================================================================
       for (let i = 0; i < 3; i++)
-        place(K(0.58), -1, 30 + i * 16, [12, 6, 12], [0.14, 0.30, 0.18]);  // low green boxes
+        place(K(0.58), -1, 26 + i * 14, [12, 4, 12], [0.14, 0.30, 0.18]);  // low green boxes
+      // palm-lined promenade down the seafront straight, left side.
+      for (let i = 0; i < 16; i++)
+        palm(K(0.6 + i * 0.024), -1, 8 + (i % 2) * 4, 9 + hash(i * 3) * 4, [0.16, 0.42, 0.22]);
+      // low promenade balustrade wall between the road and the sea.
+      wall(0.6, 0.95, -1, 5, 0.8, [0.74, 0.70, 0.62], 0.4);
 
       // ===================================================================
-      // s 0.65–0.95 — CASPIAN-FRONT straight (~2.2 km): sea void left,
-      // sparse lit modern boxes right.
+      // s 0.65–0.95 — CASPIAN-FRONT straight (~2.2 km): open dark sea left,
+      // lit modern skyline right.
       // ===================================================================
-      {
-        const a = anchor(K(0.78), -1, 60);
-        addBox(out, vadd(a.c, a.u, -1.5), [180, 1, 240], [0.05, 0.07, 0.13], [a.r, a.u, a.t]); // dark Caspian void
+      // Caspian Sea: a broad water groundPlane settled just below grade, left.
+      groundPlane(K(0.72), -1, 14, [260, 2, 300], SEA);
+      groundPlane(K(0.85), -1, 14, [200, 2, 240], SEA);
+      // A couple of distant boats / breakwater silhouettes far out on the water.
+      for (let i = 0; i < 4; i++) {
+        const a = anchor(K(0.66 + i * 0.07), -1, 90 + hash(i * 5) * 60);
+        addBox(out, vadd(a.c, a.u, 2), [10 + hash(i) * 8, 4, 4], [0.10, 0.12, 0.18], [a.r, a.u, a.t]);
       }
       // CONTINUOUS modern Caspian-front skyline: a packed unbroken band of lit
       // glass towers right, two rows (front mid-rise + taller back rank) so the
@@ -206,17 +274,22 @@
         tower(k, 1, 56 + (i % 3) * 28, 16, 80 + (i % 2) * 50, { col: GLASS, seg: 6, cap: true, capCol: i % 2 ? WIN_COOL : WIN_WARM });
       }
 
+      // billboards punctuating the long Caspian straight, right side.
+      for (let i = 0; i < 4; i++)
+        billboard(K(0.66 + i * 0.07), 1, 8, 12, 5, i % 2 ? FLAME : AZ_BLUE);
+
       // ===================================================================
-      // s 0.97 both near — braking zone into T1: tyre-wall + barrier boxes
+      // s 0.97 both near — braking zone into T1: stacked tyre-wall barriers
+      // with conveyor caps + striped barrier boxes.
       // ===================================================================
+      tyreWall(0.955, 0.99, 1, 3.0, TARMAC_AD);
+      tyreWall(0.955, 0.99, -1, 3.0, [0.9, 0.9, 0.92]);
       for (const side of [-1, 1]) {
         const a = anchor(K(0.97), side, 4);
-        for (let j = 0; j < 4; j++)
-          addCyl(out, vadd(a.c, a.t, (j - 1.5) * 3), 1.0, 0.9, [0.10, 0.10, 0.11], 7, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 1.0), [2, 0.3, 12], side > 0 ? [0.9, 0.2, 0.2] : [0.9, 0.9, 0.92], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 1.0), [2, 0.3, 12], side > 0 ? TARMAC_AD : [0.9, 0.9, 0.92], [a.r, a.u, a.t]);
       }
-      billboard(K(0.99), 1, 11, 18, 11, FLAME);
-      billboard(K(0.99), -1, 10, 16, 10, WIN_COOL);
+      billboard(K(0.93), 1, 11, 18, 11, FLAME);
+      billboard(K(0.99), -1, 8, 14, 8, WIN_COOL);
     },
   }
   );
