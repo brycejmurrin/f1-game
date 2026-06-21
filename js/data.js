@@ -773,8 +773,8 @@ const DataHub = (function () {
       info.appendChild(el("div", "dh-live-sub", "Fastest-lap telemetry · tap up to two drivers to compare · drag the chart to scrub"));
       body.appendChild(info);
 
-      if (!drivers || !drivers.length) { body.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
-      drivers = drivers.filter(function (d) { return d && d.num !== null && d.num !== undefined; });
+      drivers = (drivers || []).filter(function (d) { return d && d.num !== null && d.num !== undefined; });
+      if (!drivers.length) { body.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
 
       const picked = [];                 // driver objects in click order, max 2
       const chipByNum = {};
@@ -814,7 +814,8 @@ const DataHub = (function () {
       if (!lap || !lap.dateStart) return { d: d, lap: null };
       const start = lap.dateStart;
       const dur = lap.lapDuration || 90;
-      const end = new Date(Date.parse(start) + dur * 1000 + 1500).toISOString();
+      const ms = Date.parse(start);
+      const end = isFinite(ms) ? new Date(ms + dur * 1000 + 1500).toISOString() : start;
       const jobs = [
         F1API.carData(sessionKey, d.num, start, end).catch(function () { return []; }),
         F1API.locationData(sessionKey, d.num, start, end).catch(function () { return []; })
@@ -1157,7 +1158,7 @@ const DataHub = (function () {
 
   function appendStintsPits(detail, b) {
     const d = b.d;
-    const myStints = (b.stints || []).filter(function (s) { return s.num === d.num || s.num === null; });
+    const myStints = (b.stints || []).filter(function (s) { return s.num === d.num; });
     if (myStints.length) {
       const sec = el("div", "dh-livecard");
       sec.appendChild(el("h3", "dh-section", "TYRE STINTS"));
@@ -1257,9 +1258,9 @@ const DataHub = (function () {
     g.clearRect(0, 0, W, H);
     let vMax = 1;
     for (let i = 0; i < (car ? car.length : 0); i++) if ((car[i].speed || 0) > vMax) vMax = car[i].speed;
-    let ci = 0;
     function speedAtDate(date) {
       if (!car || !car.length) return null;
+      let ci = 0;
       while (ci < car.length - 1 && car[ci].date < date) ci++;
       return car[ci].speed;
     }

@@ -668,7 +668,6 @@ function endRace() {
   const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
   const order = fin.concat(run);
   order.forEach((c, i) => { c.finPos = i + 1; });
-  buildResults(order);
   if (seasonMode) {
     order.forEach((c, i) => {
       const pts = Teams.POINTS[i] || 0;
@@ -678,6 +677,8 @@ function endRace() {
     season.round++;
     store.set("season", season);
   }
+  dbgCam = null;
+  buildResults(order);
   els.results.hidden = false;
 }
 
@@ -3097,14 +3098,14 @@ window.__apex = {
     if (!opts || opts === "chase" || opts.mode === "chase") { dbgCam = null; return { mode: "chase" }; }
     // free-look: explicit eye, aimed by yaw (0 = -Z, +90 = +X) and pitch (deg)
     if (opts.eye && (opts.yaw != null || opts.pitch != null)) {
-      const yaw = (opts.yaw || 0) * Math.PI / 180, pit = (opts.pitch || 0) * Math.PI / 180;
+      const yaw = (opts.yaw || 0) * Math.PI / 180, pit = Math.min(80, Math.max(-80, opts.pitch || 0)) * Math.PI / 180;
       const d = [Math.sin(yaw) * Math.cos(pit), Math.sin(pit), -Math.cos(yaw) * Math.cos(pit)];
       const e = opts.eye;
-      dbgCam = { eye: e.slice(), target: [e[0] + d[0] * 100, e[1] + d[1] * 100, e[2] + d[2] * 100], fov: opts.fov || 60, far: opts.far || 6000, fog: opts.fog };
+      dbgCam = { eye: e.slice(), target: [e[0] + d[0] * 100, e[1] + d[1] * 100, e[2] + d[2] * 100], fov: Math.min(170, Math.max(1, opts.fov || 60)), far: opts.far || 6000, fog: opts.fog };
       return { eye: e.slice(), yaw: opts.yaw || 0, pitch: opts.pitch || 0 };
     }
     if (opts.eye && opts.target) {
-      dbgCam = { eye: opts.eye.slice(), target: opts.target.slice(), fov: opts.fov || 60, far: opts.far || 6000, fog: opts.fog };
+      dbgCam = { eye: opts.eye.slice(), target: opts.target.slice(), fov: Math.min(170, Math.max(1, opts.fov || 60)), far: opts.far || 6000, fog: opts.fog };
       return dbgCam;
     }
     // trackside survey: stand beside the track at fraction s, look out at the
@@ -3118,7 +3119,7 @@ window.__apex = {
       const target = opts.look === "in"
         ? [p[0], p[1] + 1, p[2]]
         : [p[0] + r[0] * side * (dist + 80), p[1] + height * 0.4, p[2] + r[2] * side * (dist + 80)];
-      dbgCam = { eye, target, fov: opts.fov || 62, far: opts.far || 6000, fog: opts.fog };
+      dbgCam = { eye, target, fov: Math.min(170, Math.max(1, opts.fov || 62)), far: opts.far || 6000, fog: opts.fog };
       return { eye, target };
     }
     // centre + span: a focus point at lap-fraction s, or the whole-track bbox
@@ -3126,7 +3127,7 @@ window.__apex = {
     if (opts.s != null) {
       Tracks.sample(track, opts.s * track.total, smp);
       cx = smp.p[0]; cy = smp.p[1]; cz = smp.p[2];
-      span = opts.radius || 180;
+      span = Math.max(10, opts.radius || 180);
     } else {
       let nx = Infinity, xx = -Infinity, nz = Infinity, xz = -Infinity, ny = Infinity, xy = -Infinity;
       for (let i = 0; i < track.n; i++) {
@@ -3145,7 +3146,7 @@ window.__apex = {
       cy + Math.sin(el) * dist,
       cz + Math.cos(el) * Math.cos(az) * dist,
     ];
-    dbgCam = { eye, target: [cx, cy, cz], fov: opts.fov || 55, far: Math.max(6000, dist * 4), fog: opts.fog };
+    dbgCam = { eye, target: [cx, cy, cz], fov: Math.min(170, Math.max(1, opts.fov || 55)), far: Math.max(6000, dist * 4), fog: opts.fog };
     return { eye, target: [cx, cy, cz], span: Math.round(span) };
   },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
