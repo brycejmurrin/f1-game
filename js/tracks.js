@@ -374,6 +374,18 @@ const Tracks = (function () {
   // (rad, + tips the car toward the corner's inside). Lets game.js sit the car,
   // its shadow and the camera ON the banked road instead of the flat centreline.
   // Returns null on un-banked circuits/sections.
+  // Authored per-segment bank angle (radians) at arc-position s. This is the bank
+  // baked into the road basis from each segment's `b` field — the road and car
+  // already tilt with it visually, but it's separate from the auto bankingProfile
+  // (bankP) used by banking()/grip, so physics needs this to grant grip on
+  // authored-banked corners (e.g. Zandvoort's banking).
+  function bankAngle(track, s) {
+    if (!track.bank) return 0;
+    const n = track.n, L = track.total;
+    const k = Math.floor((((s % L) + L) % L) / L * n) % n;
+    return track.bank[k] || 0;
+  }
+
   function banking(track, s, x) {
     const bp = track.bankP;
     if (!bp) return null;
@@ -1660,5 +1672,5 @@ const Tracks = (function () {
     return Math.min(arr[i], arr[j]);
   }
 
-  return { LIST, build, sample, curvature, onKerb, banking, project, wallAt };
+  return { LIST, build, sample, curvature, onKerb, banking, bankAngle, project, wallAt };
 })();

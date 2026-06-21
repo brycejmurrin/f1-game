@@ -1283,8 +1283,14 @@ function updateCar(c, dt, ranked) {
     // Banking: a banked road tilts the gravity vector so lateral G presses the
     // tyres harder into the surface (Zandvoort's ~18° banking adds ~30% grip).
     // Only non-null on circuits with def.banked = true; flat circuits cost nothing.
+    // Combine the auto bankingProfile roll with the authored per-segment bank
+    // (which the road basis already tilts the car by, but which previously granted
+    // NO grip) — use the larger so authored-banked corners (e.g. Zandvoort) drive
+    // banked instead of flat.
     const bankPhys = Tracks.banking(track, c.s, 0);
-    const bankMu = bankPhys ? 1 + Math.sin(Math.abs(bankPhys.roll)) * 0.8 : 1;
+    const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
+                              Math.abs(Tracks.bankAngle(track, c.s)));
+    const bankMu = 1 + Math.sin(bankRoll) * 0.8;
     // Vertical load: crests reduce normal force (car goes light, less grip);
     // valleys increase it (car feels planted). Estimated from slope change over
     // 12 m. Low-pass filtered so the v²·kv term doesn't oscillate as speed
