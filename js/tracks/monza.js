@@ -32,122 +32,280 @@
     // Royal-park circuit is nearly flat — a gentle rise through the Lesmos.
     elevations: [{ s: 0.55, halfM: 320, rise: 7 }],
     scenery: function (api) {
-      const { n, pyMin, place, prop, backdrop, groundPlane, every, onTrack, hash,
-        pine, tree, hedge, ridge, building, tower, grandstand, billboard, px, pz } = api;
+      const { n, ds, pyMin, place, prop, backdrop, groundPlane, groundYAt, every,
+        onTrack, hash, pine, tree, bush, hedge, ridge, building, tower, grandstand,
+        billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
+        addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
+        px, pz } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // --- Green royal park: continuous umbrella-pine / tree corridor ---
-      // Tall narrow Italian umbrella pines lining the park almost the whole lap,
-      // on BOTH sides — denser than before (~1.5-2x), only thin breathing gaps.
-      every(22, (k) => {
+      // Royal-park greens.
+      const PINE_D = [0.08, 0.26, 0.12], PINE = [0.10, 0.30, 0.14], PINE_L = [0.13, 0.34, 0.17];
+      const LEAF = [0.18, 0.45, 0.20], LEAF_L = [0.24, 0.50, 0.24], LEAF_D = [0.15, 0.38, 0.18];
+      const GRAVEL = [0.80, 0.72, 0.54];
+
+      // =====================================================================
+      // 1. ROYAL PARK FOREST — very dense broadleaf + umbrella-pine corridor
+      //    lining nearly the whole lap on BOTH sides, in several staggered ranks
+      //    so the canopy reads as a deep wood, not a thin hedge.
+      // =====================================================================
+      // Rank A — front pines, close to the verge, almost gapless.
+      every(13, (k) => {
         const h = hash(k * 31);
-        if (h < 0.18) return;                       // thin gaps only
-        const side = h < 0.55 ? -1 : 1;
-        const d = 11 + h * 7;
-        // pine() = tapered trunk + 3 stacked cones; tall + slim for umbrella look.
-        pine(k, side, d, 20 + h * 12, [0.10, 0.30, 0.14]);
-        // mirror a pine on the far side for a true two-sided corridor.
-        if (h > 0.62) pine(k, -side, d + 3 + h * 4, 17 + h * 11, [0.09, 0.27, 0.13]);
-      });
-      // A second, set-back rank of pines forms the park-interior wall behind the verge.
-      every(46, (k) => {
-        const h = hash(k * 41 + 3);
-        if (h < 0.48) return;
+        if (h < 0.12) return;                       // tiny breathing gaps only
         const side = h < 0.5 ? -1 : 1;
-        pine(k, side, 26 + h * 16, 22 + h * 13, [0.08, 0.26, 0.12]);
+        pine(k, side, 9 + h * 6, 18 + h * 13, h < 0.3 ? PINE_D : PINE);
+        // mirror on the other side most of the time → two-sided corridor
+        if (h > 0.4) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
       });
-      // Sunlit broadleaf verge trees scattered between the pines — denser.
-      every(46, (k) => {
+      // Rank B — broadleaf trees interleaved with the pines (warmer, rounder).
+      every(15, (k) => {
         const h = hash(k * 53 + 9);
-        if (h < 0.42) return;
-        tree(k, h < 0.66 ? -1 : 1, 13 + h * 9, 12 + h * 7, [0.18, 0.45, 0.20]);
-        if (h > 0.82) tree(k, h < 0.9 ? 1 : -1, 18 + h * 8, 11 + h * 6, [0.22, 0.48, 0.22]);
+        if (h < 0.2) return;
+        const side = h < 0.5 ? -1 : 1;
+        tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
+        if (h > 0.55) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
       });
-      // Clipped park treeline / hedge banding several sweeps, both sides, lap-wide.
-      hedge(0.06, 0.18, -1, 22, 7, [0.12, 0.33, 0.16]);
-      hedge(0.06, 0.18,  1, 22, 7, [0.12, 0.33, 0.16]);
-      hedge(0.32, 0.46, -1, 24, 6, [0.13, 0.34, 0.17]);
-      hedge(0.66, 0.78,  1, 24, 6, [0.13, 0.34, 0.17]);
-      hedge(0.82, 0.94, -1, 26, 6, [0.12, 0.33, 0.16]);
+      // Rank C — set-back interior wall of taller pines (the deep park).
+      every(18, (k) => {
+        const h = hash(k * 41 + 3);
+        if (h < 0.28) return;
+        const side = h < 0.5 ? -1 : 1;
+        pine(k, side, 24 + h * 18, 22 + h * 16, PINE_D);
+        if (h > 0.6) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
+      });
+      // Rank D — outermost broadleaf rank, blends into the backdrop ring.
+      every(24, (k) => {
+        const h = hash(k * 67 + 17);
+        if (h < 0.4) return;
+        tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
+      });
+      // Low underbrush / shrubs scattered along the verge for ground texture.
+      every(11, (k) => {
+        const h = hash(k * 97 + 23);
+        if (h < 0.55) return;
+        bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4, h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
+      });
+      // Clipped park hedge banding through several sweeps for a manicured edge.
+      hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
+      hedge(0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]);
+      hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
+      hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
+      hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
 
-      // --- s 0.00 L — Tribuna Centrale main grandstand on the pit straight ---
-      grandstand(0.005, -1, 9, 150, [0.55, 0.58, 0.62], [0.74, 0.30, 0.26]);
-      grandstand(0.965, -1, 9, 90, [0.55, 0.58, 0.62], [0.70, 0.28, 0.24]);
-      // facing grandstand on the right of the pit straight
-      grandstand(0.02, 1, 11, 110, [0.52, 0.55, 0.60], [0.72, 0.30, 0.26]);
-      // red trim row fronting the stand
-      prop(K(0.01), -1, 7, [3, 2, 120], [0.78, 0.18, 0.16]);
-      // additional spectator grandstands around the lap (chicanes & Parabolica)
-      grandstand(0.05, -1, 12, 70, [0.54, 0.57, 0.61], [0.70, 0.30, 0.26]);
-      grandstand(0.30, 1, 13, 64, [0.53, 0.56, 0.60], [0.68, 0.28, 0.24]);
-      grandstand(0.78, -1, 13, 72, [0.54, 0.57, 0.61], [0.70, 0.28, 0.24]);
-      grandstand(0.91, 1, 14, 80, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
+      // =====================================================================
+      // 2. PIT STRAIGHT / START–FINISH — grandstands, tifosi, podium, pit boxes
+      // =====================================================================
+      // Tribuna Centrale — long stepped main grandstand (pit-side, left).
+      grandstand(0.005, -1, 10, 160, [0.55, 0.58, 0.62], [0.74, 0.26, 0.22]);
+      grandstand(0.955, -1, 10, 110, [0.55, 0.58, 0.62], [0.70, 0.26, 0.22]);
+      // Facing grandstand across the straight (right side).
+      grandstand(0.02, 1, 12, 120, [0.52, 0.55, 0.60], [0.72, 0.28, 0.24]);
+      // Red trim band fronting the main stand.
+      prop(K(0.01), -1, 8, [2, 1.6, 130], [0.80, 0.16, 0.14]);
 
-      // --- s 0.00 R — pit wall + slim white podium tower with red cap ---
-      tower(K(0.0), 1, 12, 6, 44, { col: [0.90, 0.90, 0.88], cap: true, capCol: [0.78, 0.16, 0.14], mast: 6 });
+      // Pit building / garages along the pit wall (right side), with roof banner.
+      const pitWall = [0.86, 0.86, 0.84];
+      for (let i = 0; i < 8; i++) {
+        const s = 0.965 + i * 0.0085;
+        building(K(s), 1, 14, 16, 9, 11,
+          { wall: pitWall, window: [0.30, 0.34, 0.40], floor: 4.5, roof: false });
+      }
+      // Long flat pit-roof banner over the garages.
+      const aPit = anchor(K(0.99), 1, 18);
+      addBox(aPit.out || api.out, vadd(aPit.c, aPit.u, 10), [4, 0.6, 70], [0.82, 0.20, 0.18], [aPit.r, aPit.u, aPit.t]);
+      // Podium / timing tower at the line — slim white with red cap.
+      tower(K(0.0), 1, 13, 6, 46, { col: [0.92, 0.92, 0.90], cap: true, capCol: [0.78, 0.14, 0.12], mast: 7 });
+      // Start gantry spanning the straight.
+      gantry(0.0, 9, [0.14, 0.14, 0.17]);
+      gantry(0.98, 8.5, [0.14, 0.14, 0.17]);
 
-      // --- s 0.04 R — Variante del Rettifilo chicane: kerb + gravel slab ---
-      groundPlane(K(0.04), 1, 5, [22, 28], [0.78, 0.70, 0.52]);   // gravel trap tan
-      billboard(K(0.04), 1, 8, 12, 5, [0.86, 0.84, 0.80]);
+      // Pit-straight furniture: armco both sides, debris fence behind left stand.
+      guardrail(0.93, 0.07, 1, 3.5, [0.85, 0.85, 0.88]);
+      fence(0.95, 0.06, -1, 8, 4, [0.74, 0.76, 0.80]);
+      // Sponsor billboards lining the main straight.
+      for (const s of [0.94, 0.97, 0.015, 0.04]) billboard(K(s), -1, 7, 11, 4.5, [0.92, 0.88, 0.30]);
+      for (const s of [0.95, 0.03]) billboard(K(s), 1, 26, 12, 5, [0.88, 0.84, 0.80]);
 
-      // --- s 0.40 R far — Park lake (Villa Reale pond), reflective blue slab ---
-      groundPlane(K(0.40), 1, 95, [180, 230], [0.30, 0.50, 0.70]);
-      // second smaller ornamental lake on the left earlier in the lap
-      groundPlane(K(0.24), -1, 90, [140, 170], [0.28, 0.48, 0.68]);
+      // =====================================================================
+      // 3. CHICANES & PARABOLICA — gravel traps, kerb trim, tyre walls, stands
+      // =====================================================================
+      // Variante del Rettifilo (s~0.04) — heavy braking, big gravel, tyre wall.
+      groundPlane(K(0.04), 1, 5, [24, 34], GRAVEL);
+      tyreWall(0.03, 0.055, 1, 4, [0.88, 0.20, 0.18]);
+      grandstand(0.05, -1, 12, 76, [0.54, 0.57, 0.61], [0.70, 0.28, 0.24]);
+      marshalPost(K(0.045), 1, 10);
 
-      // --- s 0.55 L far — old Sopraelevata banking ruin in the park backdrop ---
-      // Weathered grey concrete + moss-green tilted ramp boxes as a ridge/prism row.
-      for (let i = 0; i < 5; i++) {
-        const k = K(0.50 + i * 0.018);
-        backdrop(k, -1, 110 + i * 12, [34, 14 + (i % 2) * 4, 64], [0.62, 0.60, 0.58]);
-        backdrop(k, -1, 150 + i * 12, [30, 9, 60], [0.35, 0.45, 0.30]);   // moss-green
+      // Variante della Roggia (s~0.30) — shaded chicane, gravel both sides.
+      groundPlane(K(0.30), -1, 6, [22, 28], GRAVEL);
+      groundPlane(K(0.305), 1, 5, [20, 26], GRAVEL);
+      tyreWall(0.29, 0.315, -1, 4, [0.20, 0.40, 0.85]);
+      grandstand(0.30, 1, 13, 70, [0.53, 0.56, 0.60], [0.68, 0.28, 0.24]);
+      marshalPost(K(0.31), -1, 9);
+
+      // Lesmo 1 & 2 (s~0.45–0.52) — tight woodland curves, gravel + tyre.
+      groundPlane(K(0.46), 1, 5, [18, 26], GRAVEL);
+      groundPlane(K(0.51), 1, 5, [18, 24], GRAVEL);
+      tyreWall(0.45, 0.47, 1, 4, [0.85, 0.78, 0.20]);
+      marshalPost(K(0.48), 1, 9);
+
+      // Variante Ascari (s~0.78) — triple chicane, gravel run-offs, grandstand.
+      groundPlane(K(0.78), -1, 6, [28, 40], GRAVEL);
+      groundPlane(K(0.795), 1, 6, [24, 32], GRAVEL);
+      tyreWall(0.77, 0.80, -1, 4, [0.88, 0.20, 0.18]);
+      grandstand(0.78, -1, 14, 80, [0.54, 0.57, 0.61], [0.70, 0.28, 0.24]);
+      marshalPost(K(0.785), 1, 9);
+
+      // Parabolica / Curva Alboreto (s~0.88–0.93) — wide outer gravel, big arc stand.
+      groundPlane(K(0.90), -1, 8, [50, 110], GRAVEL);
+      grandstand(0.905, 1, 14, 96, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
+      tyreWall(0.885, 0.92, -1, 6, [0.88, 0.20, 0.18]);
+      marshalPost(K(0.91), 1, 11);
+      // Sponsor hoardings around the Parabolica outside.
+      for (const s of [0.87, 0.89, 0.91]) billboard(K(s), -1, 12, 13, 5, [0.90, 0.86, 0.30]);
+
+      // Catch fences behind the major spectator zones.
+      fence(0.03, 0.06, 1, 7, 4, [0.74, 0.76, 0.80]);
+      fence(0.295, 0.32, 1, 8, 4, [0.74, 0.76, 0.80]);
+      fence(0.77, 0.80, -1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.89, 0.93, 1, 9, 4, [0.74, 0.76, 0.80]);
+
+      // Marshal posts sprinkled around the rest of the lap.
+      for (const s of [0.12, 0.20, 0.38, 0.58, 0.66, 0.84, 0.96]) {
+        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // --- s 0.62 R far — glimpse of Villa Reale, cream neoclassical block ---
-      building(K(0.62), 1, 70, 60, 26, 30, { wall: [0.86, 0.80, 0.66], window: [0.70, 0.64, 0.50] });
+      // =====================================================================
+      // 4. SOPRAELEVATA — old steep banked-oval ruin landmark (s~0.50–0.58 L)
+      //    A raised, curved, tilted concrete bank built from a fan of leaning
+      //    prism/box segments, weathered grey with moss-green streaks. Placed
+      //    well off-track in the infield/park so it reads as a historic relic.
+      // =====================================================================
+      (function buildBanking() {
+        const out = api.out;
+        const conc = [0.64, 0.62, 0.58], concDk = [0.52, 0.50, 0.47], moss = [0.34, 0.46, 0.30];
+        // Anchor the structure in the park to the LEFT of the Lesmo area.
+        const a = anchor(K(0.535), -1, 95);
+        // Lay the banking as a gentle arc of N tilted panels.
+        const N = 16, arcSpan = 1.9, radius = 120;
+        const baseY = a.c[1];
+        // local frame: r = lateral (right), t = forward
+        for (let i = 0; i < N; i++) {
+          const f = i / (N - 1);
+          const ang = -arcSpan / 2 + f * arcSpan;
+          // centre of this panel out along the arc (in r/t plane)
+          const ox = Math.sin(ang) * radius, oz = (1 - Math.cos(ang)) * radius;
+          const cx = a.c[0] + a.r[0] * ox + a.t[0] * oz;
+          const cz = a.c[2] + a.r[2] * ox + a.t[2] * oz;
+          if (onTrack(cx, cz, 18)) continue;
+          // tilt the panel so its top leans outward → banked look. Build the
+          // tilted "up" by blending world-up with the outward lateral dir.
+          const outward = [Math.sin(ang), 0, Math.cos(ang)]; // arc-local outward in r/t
+          const ow = [a.r[0] * outward[0] + a.t[0] * outward[1] /*0*/, 0,
+                      a.r[2] * outward[0] + a.t[2] * outward[1]];
+          // outward world vector (lateral component only)
+          const owx = a.r[0] * Math.sin(ang) + a.t[0] * Math.cos(ang);
+          const owz = a.r[2] * Math.sin(ang) + a.t[2] * Math.cos(ang);
+          const owl = Math.hypot(owx, owz) || 1;
+          const od = [owx / owl, 0, owz / owl];
+          const tilt = 0.55; // lean factor
+          const upv = [od[0] * tilt, 1, od[2] * tilt];
+          const ul = Math.hypot(upv[0], upv[1], upv[2]);
+          const u = [upv[0] / ul, upv[1] / ul, upv[2] / ul];
+          // forward along the arc (tangent)
+          const tfx = a.r[0] * Math.cos(ang) - a.t[0] * Math.sin(ang);
+          const tfz = a.r[2] * Math.cos(ang) - a.t[2] * Math.sin(ang);
+          const tfl = Math.hypot(tfx, tfz) || 1;
+          const fw = [tfx / tfl, 0, tfz / tfl];
+          const rr = od; // right = outward
+          const h = 11 + (i % 3) * 1.5;
+          const col = (i % 4 === 0) ? concDk : conc;
+          // banked slab
+          addBox(out, [cx, baseY + h * 0.42, cz], [8.5, h, 14], col, [rr, u, fw]);
+          // moss streak band on the face
+          if (i % 2 === 0)
+            addBox(out, [cx + od[0] * 0.6, baseY + h * 0.30, cz + od[2] * 0.6], [0.6, h * 0.5, 13], moss, [rr, u, fw]);
+        }
+        // Crumbling support pillars along the base of the bank.
+        for (let i = 0; i < N; i += 2) {
+          const f = i / (N - 1);
+          const ang = -arcSpan / 2 + f * arcSpan;
+          const ox = Math.sin(ang) * radius, oz = (1 - Math.cos(ang)) * radius;
+          const cx = a.c[0] + a.r[0] * ox + a.t[0] * oz;
+          const cz = a.c[2] + a.r[2] * ox + a.t[2] * oz;
+          if (onTrack(cx, cz, 6)) continue;
+          addCyl(out, [cx, baseY, cz], 1.0, 6 + (i % 3), concDk, 6, null);
+        }
+      })();
 
-      // --- s 0.78 L+R — Variante Ascari chicane: gravel run-offs ---
-      groundPlane(K(0.78), -1, 6, [26, 34], [0.78, 0.70, 0.52]);
-      groundPlane(K(0.79), 1, 6, [24, 30], [0.78, 0.70, 0.52]);
+      // =====================================================================
+      // 5. PARK STRUCTURES — Villa Reale, paddock buildings, ornamental lakes
+      // =====================================================================
+      // Villa Reale — cream neoclassical block in the park (s~0.62 R far).
+      building(K(0.62), 1, 70, 64, 24, 30, { wall: [0.87, 0.81, 0.67], window: [0.70, 0.64, 0.50], floor: 6 });
+      // Two flanking wings.
+      building(K(0.605), 1, 72, 30, 16, 22, { wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
+      building(K(0.635), 1, 72, 30, 16, 22, { wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
 
-      // --- s 0.90 L — Parabolica / Curva Alboreto: wide outer gravel slab ---
-      groundPlane(K(0.90), -1, 8, [40, 90], [0.78, 0.70, 0.52]);
+      // Paddock / hospitality buildings behind the pits (left, s~0.97–0.02).
+      for (let i = 0; i < 4; i++) {
+        const s = 0.93 + i * 0.022;
+        building(K(s), -1, 40, 24, 12, 18,
+          { wall: [0.78, 0.79, 0.80], window: [0.34, 0.40, 0.48], floor: 4.5, roof: true });
+      }
+      // Motorhome / truck row in the paddock (low coloured boxes).
+      every(40, (k) => {
+        const h = hash(k * 71 + 31);
+        if (h < 0.5) return;
+        const s = k / n;
+        if (s > 0.10 && s < 0.90) return;   // only behind pit/paddock
+        prop(k, -1, 55 + h * 10, [10, 4, 6], [0.6 + h * 0.3, 0.6, 0.62]);
+      });
 
-      // --- s 0.96 R far — distant low Milan skyline cluster ---
+      // Ornamental park lakes (reflective blue slabs).
+      groundPlane(K(0.40), 1, 95, [180, 230], [0.30, 0.50, 0.70]);
+      groundPlane(K(0.24), -1, 90, [140, 170], [0.28, 0.48, 0.68]);
+      // A few lakeside broadleaf clusters.
+      for (const [s, sd] of [[0.40, 1], [0.24, -1]]) {
+        for (let i = 0; i < 4; i++) tree(K(s + (i - 2) * 0.01), sd, 70 + i * 8, 12 + i, LEAF_L);
+      }
+
+      // =====================================================================
+      // 6. MILAN SKYLINE — distant faint towers on the horizon (s~0.96 R far)
+      // =====================================================================
       const kmilan = K(0.96);
-      for (let i = 0; i < 6; i++) {
-        building(kmilan, 1, 202 + i * 26, 16, 34 + i * 9, 16,
+      for (let i = 0; i < 7; i++) {
+        building(kmilan, 1, 210 + i * 28, 16, 36 + i * 10, 16,
           { wall: [0.60 + i * 0.02, 0.64 + i * 0.02, 0.70 + i * 0.02], window: [0.50, 0.54, 0.60] });
       }
-      // --- CONTINUOUS royal-park forest backdrop ringing the WHOLE lap ---
-      // Flat parkland: a LOW, dense, gapless green treeline band on the horizon
-      // (no tall mountains). Built as overlapping ridge prisms in concentric rings
-      // so the canopy reads as one unbroken forest wall all the way around.
+
+      // =====================================================================
+      // 7. CONTINUOUS FOREST BACKDROP — unbroken low canopy wall ringing the lap
+      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       // [extraRadius, count, ridgeLen, ridgeW, hMin, hVar, colour]
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [150, 46, 96, 26, 9,  5, [0.16, 0.36, 0.20]],   // near treeline, taller, gapless
-        [215, 40, 112, 30, 11, 7, [0.13, 0.33, 0.17]],  // mid forest band
-        [285, 34, 134, 34, 13, 8, [0.11, 0.30, 0.15]],  // far hazed forest wall
+        [120, 58, 92, 26, 10, 6, [0.16, 0.36, 0.20]],   // near treeline, gapless
+        [185, 50, 110, 30, 12, 7, [0.13, 0.33, 0.17]],  // mid forest band
+        [260, 42, 132, 34, 14, 8, [0.11, 0.30, 0.15]],  // far hazed forest wall
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
-          const r = rad + extra + h * 30;
+          const r = rad + extra + h * 28;
           const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
           if (onTrack(tx, tz, 30)) continue;
           ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
         }
       }
-      // Scatter individual pine silhouettes along the near ring to break the
-      // ridge tops into a tree-textured canopy edge (still low, flat parkland).
-      for (let i = 0; i < 20; i++) {
-        const a = i / 20 * 6.2832, h = hash(i * 11 + 5);
-        const r = rad + 120 + h * 60;
+      // Pine silhouettes breaking the near canopy edge into a tree texture.
+      for (let i = 0; i < 28; i++) {
+        const a = i / 28 * 6.2832, h = hash(i * 11 + 5);
+        const r = rad + 100 + h * 55;
         const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
         if (onTrack(tx, tz, 30)) continue;
-        ridge(tx, tz, pyMin, a, 22, 22, 16 + h * 10, [0.10, 0.28, 0.14]);
+        ridge(tx, tz, pyMin, a, 20, 20, 15 + h * 11, PINE_D);
       }
     },
   }

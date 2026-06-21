@@ -25,14 +25,35 @@
     elevations: [{ s: 0.56, halfM: 300, rise: 8 }],
     scenery: function (api) {
       const { out, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
-              addBox, addCyl, anchor, vadd, onTrack, hash, every,
-              mountain, peak, bush, hedge, grandstand, tower } = api;
+              addBox, addCyl, addPrism, anchor, vadd, onTrack, hash, every,
+              mountain, peak, bush, hedge, grandstand, tower,
+              fence, guardrail, tyreWall, billboard, gantry, marshalPost } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // --- North Sea horizon: a single far, low blue water plane behind the
       // dunes (s≈0.45 L). Settled below grade and pushed way out so it reads as
       // a hazed sliver, never a wall rising into the cockpit. ---
-      groundPlane(K(0.45), -1, 520, [900, 5, 900], [0.20, 0.42, 0.58]);
+      // Computed from the track centre so the sea/beach band sits on ONE far
+      // seaward arc instead of a giant plane that the compact infield rejects.
+      let cx0 = 0, cz0 = 0;
+      for (let i = 0; i < n; i++) { cx0 += px[i]; cz0 += pz[i]; }
+      cx0 /= n; cz0 /= n;
+      let lapRad = 0;
+      for (let i = 0; i < n; i++) lapRad = Math.max(lapRad, Math.hypot(px[i] - cx0, pz[i] - cz0));
+      // Seaward = the −X arc (where the s≈0.45 L edge faces). Lay a curved band of
+      // flat blue water boxes + a pale beach strip just inside it on the horizon.
+      const seaCol = [0.20, 0.42, 0.58], beachCol = [0.88, 0.82, 0.64];
+      for (let i = 0; i < 14; i++) {
+        const a = Math.PI * 0.55 + (i / 13) * Math.PI * 0.9;  // seaward sweep
+        const bx = cx0 + Math.cos(a) * (lapRad + 560);
+        const bz = cz0 + Math.sin(a) * (lapRad + 560);
+        if (onTrack(bx, bz, 30)) continue;
+        addBox(out, [bx, pyMin - 1.5, bz], [120, 4, 120], seaCol);          // sea
+        const px2 = cx0 + Math.cos(a) * (lapRad + 430);
+        const pz2 = cz0 + Math.sin(a) * (lapRad + 430);
+        if (onTrack(px2, pz2, 30)) continue;
+        addBox(out, [px2, pyMin - 1.0, pz2], [110, 3, 70], beachCol);        // beach
+      }
 
       // --- Low rolling sand dunes hemming the track (the Zandvoort dune belt).
       // Organic mountain()/peak() kept LOW and sandy, snowline > 1 so NO snow.
@@ -47,11 +68,13 @@
       // sides the WHOLE lap (no gap-skip) — low seg (7) to afford the belt.
       every(32, (k) => {
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 22 + hash(k * 72 + side) * 22);
+          const a = anchor(k, side, 42 + hash(k * 72 + side) * 24);
           const h = 6 + hash(k * 73 + side) * 9;        // LOW dune mounds
+          // forest=tan marram so the verge-side dune base reads SANDY, not a flat
+          // green wall when the camera is close on this tight winding circuit.
           mountain(a.c[0], a.c[2], a.c[1], 30 + hash(k * 74 + side) * 18, h, {
             seg: 7, seed: k * 13 + side, rough: 0.5, snowline: 2,  // >1 = no snow
-            forest: marramG, rock: sandDk, snow: sand,
+            forest: marramT, rock: sandDk, snow: sand,
           });
         }
       });
@@ -84,7 +107,7 @@
                hash(k * 53 + side) < 0.5 ? marramG : marramT);
         }
       });
-      hedge(0.18, 0.40, 1, 10, 1.4, marramT);   // dune-ridge marram band (Hunserug)
+      hedge(0.18, 0.40, 1, 30, 1.4, marramT);   // dune-ridge marram band (Hunserug)
       hedge(0.32, 0.56, -1, 12, 1.4, marramG);
       hedge(0.58, 0.78, 1, 11, 1.4, marramG);
       hedge(0.62, 0.88, -1, 13, 1.4, marramT);
@@ -99,7 +122,7 @@
       grandstand(0.12, -1, 9, 30, shell, orange);   // Hugenholtz approach L
       grandstand(0.14, -1, 9, 34, shell, orange);   // Hugenholtz T3 banked L
       grandstand(0.17, 1, 10, 28, shellLt, orange); // Hugenholtz exit R
-      grandstand(0.50, -1, 12, 30, shell, orange);  // Scheivlak inner L
+      grandstand(0.50, -1, 22, 30, shell, orange);  // Scheivlak inner L (set back)
       grandstand(0.88, 1, 10, 30, shell, orange);   // Luyendyk approach R
       grandstand(0.92, 1, 9, 34, shell, orange);    // Arie Luyendyk final banked R
       grandstand(0.95, 1, 10, 30, shellLt, orange); // Luyendyk exit R
@@ -143,6 +166,92 @@
           addBox(out, vadd(vadd(a.c, a.u, 2), a.t, i * 7), [5, 4, 5], hutCol, b);
         }
       });
+
+      // ===================================================================
+      // TRACKSIDE FURNITURE — fences, guardrails, tyre walls, billboards,
+      // marshal posts, start gantry. These all auto-guard with onTrack.
+      // ===================================================================
+
+      // --- Catch / debris fencing: in front of the grandstands and along the
+      // fast dune runs so spectator areas are screened. Posts + pale mesh. ---
+      const fenceCol = [0.74, 0.76, 0.80];
+      fence(0.00, 0.10, 1, 6.0, 4.2, fenceCol);   // pit-straight + Tarzan R stands
+      fence(0.04, 0.09, -1, 6.0, 4.2, fenceCol);  // Tarzan exit L
+      fence(0.11, 0.19, -1, 5.5, 4.2, fenceCol);  // Hugenholtz L
+      fence(0.15, 0.19, 1, 5.5, 4.0, fenceCol);   // Hugenholtz exit R
+      fence(0.48, 0.54, -1, 6.5, 4.0, fenceCol);  // Scheivlak inner
+      fence(0.86, 0.99, 1, 6.0, 4.4, fenceCol);   // Luyendyk + pit straight R
+      fence(0.94, 1.00, -1, 6.0, 4.2, fenceCol);  // pit-straight L
+
+      // --- Steel armco guardrail backing the verges on the fast undulating
+      // dune stretches (no stands there — just rail then sand). ---
+      const railRW = [0.86, 0.20, 0.18];
+      guardrail(0.21, 0.33, 1, 4.0, railRW);
+      guardrail(0.22, 0.31, -1, 4.0, [0.85, 0.86, 0.88]);
+      guardrail(0.36, 0.47, 1, 4.0, [0.85, 0.86, 0.88]);
+      guardrail(0.57, 0.66, -1, 4.0, railRW);
+      guardrail(0.68, 0.80, 1, 4.0, [0.85, 0.86, 0.88]);
+      guardrail(0.80, 0.86, -1, 4.0, railRW);
+
+      // --- Stacked tyre walls on the OUTSIDE of the heavy corners (gravel-trap
+      // backstops): Tarzan, Hugenholtz, Scheivlak, Arie Luyendyk. capCol bright. ---
+      tyreWall(0.025, 0.06, 1, 4.6, [0.95, 0.55, 0.08]);  // Tarzan hairpin outside
+      tyreWall(0.13, 0.17, -1, 4.6, [0.90, 0.90, 0.92]);  // Hugenholtz outside
+      tyreWall(0.49, 0.53, -1, 5.0, [0.20, 0.45, 0.70]);  // Scheivlak outside
+      tyreWall(0.90, 0.95, 1, 4.8, [0.95, 0.55, 0.08]);   // Arie Luyendyk outside
+
+      // --- Billboards / advertising hoardings around the lap (need wide clearance
+      // so the panel face never reaches the tarmac). Alternating bright panels. ---
+      const adCols = [[0.90, 0.20, 0.10], [0.10, 0.45, 0.75], [0.95, 0.55, 0.08],
+                      [0.92, 0.86, 0.20], [0.20, 0.55, 0.35]];
+      let adI = 0;
+      every(110, (k) => {
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, 16);
+          if (onTrack(a.c[0], a.c[2], 9)) continue;
+          billboard(k, side, 14, 12, 4, adCols[(adI++) % adCols.length]);
+        }
+      });
+
+      // --- Marshal posts at corner stations around the lap. ---
+      for (const s of [0.05, 0.16, 0.29, 0.42, 0.55, 0.66, 0.79, 0.93]) {
+        const side = hash(K(s) * 31) < 0.5 ? -1 : 1;
+        marshalPost(K(s), side, 6.5);
+      }
+
+      // --- Start/finish gantry over the pit straight + a scoring gantry. ---
+      gantry(0.005, 7.5, [0.12, 0.13, 0.16]);
+      gantry(0.99, 6.5, [0.14, 0.14, 0.18]);
+
+      // --- Marram dune-grass scrub: dense low tufts of tan/green clumps right at
+      // the verge to break up bare sand. Small cones, cheap, both sides. ---
+      every(9, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 61 + side * 5) > 0.55) continue;
+          const a = anchor(k, side, 7 + hash(k * 62 + side) * 7);
+          if (onTrack(a.c[0], a.c[2], 2)) continue;
+          const tuft = hash(k * 63 + side) < 0.5 ? marramG : marramT;
+          const b = [a.r, a.u, a.t];
+          // a small clump of 2-3 leaning grass prisms
+          const cnt = 2 + (hash(k * 64 + side) < 0.4 ? 1 : 0);
+          for (let i = 0; i < cnt; i++) {
+            const off = (i - 1) * 1.4;
+            addPrism(out, vadd(vadd(a.c, a.t, off), a.u, 0.7),
+                     [0.8, 1.4 + hash(k * 65 + i + side) * 0.8, 0.8], tuft, b);
+          }
+        }
+      });
+
+      // --- Verstappen-orange flag bunting accents on the main grandstand fronts:
+      // small bright caps to amplify the orange crowd feel from trackside. ---
+      for (const [s, side] of [[0.02, 1], [0.92, 1], [0.96, -1], [0.14, -1]]) {
+        const a = anchor(K(s), side, 9);
+        if (onTrack(a.c[0], a.c[2], 5)) continue;
+        const b = [a.r, a.u, a.t];
+        for (let i = -2; i <= 2; i++)
+          addBox(out, vadd(vadd(a.c, a.u, 6.5), a.t, i * 4.5),
+                 [0.6, 1.2, 2.4], [0.95, 0.45, 0.05], b);
+      }
     },
   }
   );
