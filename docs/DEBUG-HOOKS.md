@@ -12,6 +12,18 @@ line, increasing in the racing direction. Internally that maps to an arc-length
 **`+` = right**, `−` = left. World heading lives in `player.head`; the steering /
 slip convention is `+steer → turns right (+x)`.
 
+## Catalog & meta
+
+### `tracks() → [{id, name, i}, …]`
+List all loaded circuits in order. `id` matches the `trackRef` accepted by
+`race()`. Use this in test loops instead of hardcoding circuit names.
+
+### `teams() → [{id, name, engine, i}, …]`
+List all teams. `engine` is the power-unit supplier string used to filter
+factory-exclusive parts in the Parts catalog (e.g. `"Mercedes"`, `"Ferrari"`).
+
+---
+
 ## Quick start
 
 ```js
@@ -51,6 +63,11 @@ loaded — poll this to know when a track has finished building.
 ### `go() → state`
 Skip the countdown but leave the grid intact, so the whole field races and packs
 up normally. For observing pack/AI behaviour rather than a static shot.
+
+### `finishRace() → {state} | false`
+Mark all cars finished, call `endRace()`, and show the results screen. Returns
+`false` if no race is loaded or the state machine is already in `results` or
+`menu`. Useful for testing the podium / standings flow without driving a full lap.
 
 ### `park(frac, lateral?) → {s, total} | false`
 Enter **race** state, hide the lights, shove the AI pack 600 m away, and park the
@@ -164,6 +181,18 @@ here (and the car's behaviour).
 Telemetry for every car, leader first: lateral `x` (and smoothed `xv`), visual
 `yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, and `p` =
 is-player. For measuring pack jitter / side-by-side stability.
+
+### `carAt(idx?) → {id, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT} | null`
+Detailed telemetry for one car by index (from the `cars()` list). Called with no
+argument returns the player car. Returns `null` for an out-of-range index. Extends
+`cars()` with fields not worth fetching for the whole field: `team`, `finished`,
+`finishT` (finish timestamp), `contactT` (contact timer), `wrongWay`, `rescueT`.
+
+### `viewState() → {camMode, camIndex, frozen, dbgCamActive, skyOverride, weather, state, eye, tgt, fov}`
+Combined scene snapshot: camera mode, frozen/debug flags, weather, the game
+state-machine value, and current camera geometry (`eye`, `tgt`, `fov`). The
+single call to check "what is the scene doing right now" before taking a
+screenshot — avoids calling `info()`, `camera()`, and `probe()` separately.
 
 ### `corners() → [number, …]`
 Lap-fractions of the corner apexes (local maxima of `|curvature|`). Handy for
@@ -286,6 +315,32 @@ server with `--config playwright.alt.config.js`, see below).
 
 ---
 
+## Scene control
+
+### `freeze(v?) → boolean`
+Get or set the `frozen` flag. `park()` sets `frozen` automatically; this exposes
+it so tests can unfreeze after a `park()` call without reloading the track. Called
+with no argument it returns the current state; called with a boolean it sets the
+flag and returns the new value.
+
+### `hud(show?) → boolean`
+Get or set HUD visibility. Called with no argument returns whether the HUD is
+currently visible. Called with a boolean shows (`true`) or hides (`false`) the
+HUD overlay and returns the new state.
+
+### `weather(w?) → "dry" | "wet"`
+Get or set race weather. Called with no argument returns `"dry"` or `"wet"`.
+Setting `"wet"` starts rain audio and changes the road/sky state; `"dry"` stops
+it. The change takes effect immediately without reloading the track.
+
+### `resetPlayer() → physState | false`
+Force-rescue the player immediately — same mechanism as the 3-second auto-rescue
+(repositions on the centreline at the nearest safe point). Returns the updated
+`physState()` so a test can confirm the car was repositioned. Returns `false` if
+no race is active.
+
+---
+
 ## Scenario setup (collision / AI tests)
 
 ### `rival(dProg, dx) → {rival} | false`
@@ -310,6 +365,11 @@ stuck-recovery: a healthy AI digs out and resumes within a couple of seconds.
 ### `loadCarModel(url) → Promise<bool>`
 Load an optional `.glb` car model at runtime (team meshes rebuild from it, tinted
 per livery); resolves `false` and keeps the procedural car on failure.
+
+### `clearMeshes() → {}`
+Reset all `meshToggle()` overrides, restoring every mesh to its default visibility
+state. Companion to `meshToggle()` — call this between tests so toggled meshes
+don't bleed into later screenshots.
 
 ---
 

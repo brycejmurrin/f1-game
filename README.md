@@ -11,10 +11,12 @@ zero-dependency philosophy, this time in true 3D.
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across **12 real circuits** recreated as low-poly 3D tracks: Bahrain, Monaco,
+across **24 real circuits** recreated as low-poly 3D tracks: Bahrain, Monaco,
 Silverstone, Spa, Monza, Suzuka, Singapore, COTA, Interlagos, Las Vegas, the
-brand-new Madrid Madring (with its 24%-banked Monumental curve), and
-Zandvoort in its farewell year. Night races run under floodlights.
+brand-new Madrid Madring (with its 24%-banked Monumental curve), Zandvoort in
+its farewell year, Imola, Baku, Jeddah, Albert Park, Shanghai, Miami, Mexico
+City, Montreal, Qatar, Red Bull Ring, Hungaroring, and Abu Dhabi. Night races
+run under floodlights.
 
 2026-regulation game mechanics:
 
@@ -29,7 +31,7 @@ Zandvoort in its farewell year. Night races run under floodlights.
   down for corner exits; the limiter makes you upshift to reach top speed.
   Auto mode shifts for you.
 - Five red lights, lights out. Real points (25-18-15-12-10-8-6-4-2-1).
-- **Season mode**: all 12 rounds in calendar order with persistent
+- **Season mode**: all 24 rounds in calendar order with persistent
   championship standings.
 
 ### Controls
@@ -66,6 +68,27 @@ a corner and the front washes wide (understeer); loosen the rear and it steps ou
 **DRIVING HELP** and **RACING LINE** — with the full set of per-parameter knobs
 tucked behind an **ADVANCED** disclosure for anyone who wants them.
 
+### Car Setup
+
+The **CAR SETUP** screen (accessible from the main menu) lets you configure
+your car across **8 upgrade categories** before each race:
+
+| Category | What it affects |
+|---|---|
+| **ENGINE** | Top speed and straight-line power |
+| **AERO** | Downforce balance — drag vs. cornering grip |
+| **SUSPENSION** | Mechanical grip and kerb handling |
+| **BRAKES** | Braking distance and stability under heavy braking |
+| **TYRES** | Grip level and degradation rate |
+| **ERS** | Battery deployment curve and harvest efficiency |
+| **GEARBOX** | Shift speed and ratio spread |
+| **FUEL** | Fuel load trade-off (weight vs. range) |
+
+Budget is **600 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
+screen to remove the cap for testing. Some parts are **factory/supplier-exclusive**
+and only appear when your team uses that power unit (Mercedes, Ferrari, Red Bull
+Ford, Honda, or Audi).
+
 ## The data hub
 
 The **F1 DATA HUB** button opens a live data view powered by two free,
@@ -91,8 +114,10 @@ APIs aren't hammered.
 Any static file server works:
 
 ```sh
-python3 -m http.server 8000
-# then open http://localhost:8000
+npx serve -l 3456 .
+# or
+python3 -m http.server 3456
+# then open http://localhost:3456
 ```
 
 For tilt steering on a phone, serve over HTTPS (e.g. GitHub Pages) — motion
@@ -103,9 +128,30 @@ sensors require a secure context.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
 Plain script-tag IIFE modules, in load order: `mat4` (matrix math), `glx`
 (WebGL2 renderer), `teams` (2026 grid data), `tracks` (spline → mesh circuit
-builder), `car3d` (procedural car geometry), `input` (keyboard/gamepad/touch/tilt),
-`audio` (WebAudio synth), `api` (Jolpica/OpenF1 clients), `data` (data hub
-UI), `game` (loop, physics, AI, race logic).
+builder), `parts` (8-category upgrade catalog), `car3d` (procedural car
+geometry), `input` (keyboard/gamepad/touch/tilt), `audio` (WebAudio synth),
+`api` (Jolpica/OpenF1 clients), `data` (data hub UI), `game` (loop, physics,
+AI, race logic).
+
+## Testing & development
+
+The project ships a **Playwright test suite** with 50+ specs covering physics
+regression, AI behaviour, UI screens, and visual regression:
+
+```sh
+npx playwright test                          # run all specs
+npx playwright test tests/autopilot.spec.js  # single file
+```
+
+A debug scripting API — `window.__apex` — is available at runtime (devtools
+console or headless harness). Full reference in
+[docs/DEBUG-HOOKS.md](docs/DEBUG-HOOKS.md). Quick example:
+
+```js
+__apex.race("monza");   // load Monza, skip menus
+__apex.park(0.1);       // stationary at 10% lap for a screenshot
+__apex.probe();         // player telemetry
+```
 
 ## Credits
 

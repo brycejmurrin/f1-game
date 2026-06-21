@@ -1,0 +1,157 @@
+# Apex 26 — engineering reference
+
+Unofficial WebGL2 F1 fan game. No build step, no frameworks. Pure IIFE modules
+loaded via `<script>` tags. Static files — runs on GitHub Pages.
+
+---
+
+## Key commands
+
+```sh
+npx serve -l 3456 .               # run locally (or: python3 -m http.server 3456)
+npx playwright test               # run all specs
+npx playwright test tests/<file>.spec.js   # single spec
+npx playwright test tests/ui-audit.spec.js # → tests/ui-screenshots/
+npx playwright test tests/visual-regression-*.spec.js  # pixel-diff regression
+```
+
+---
+
+## File layout
+
+```
+js/mat4.js       M4, V3         matrix math
+js/glx.js        GLX            WebGL2 renderer
+js/teams.js      Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
+js/tracks/*.js   TrackDefs      24 circuits (one file each, registers on Tracks.LIST)
+js/tracks.js     Tracks         spline engine, mesh builder
+js/parts.js      Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
+js/car3d.js      Car3D          procedural F1 car geometry + liveries
+js/input.js      Input          keyboard / gamepad / touch / tilt
+js/audio.js      GameAudio      WebAudio synth: engine, sfx, music
+js/api.js        F1API          Jolpica + OpenF1 clients, localStorage cache
+js/data.js       DataHub        data hub DOM overlay
+js/game.js       (main)         game loop, physics, AI, race logic, __apex API
+css/style.css                   all styles
+index.html                      shell — script tags, DOM structure, cache-bust version
+tests/*.spec.js                 Playwright test suite (50+ files)
+docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
+```
+
+---
+
+## Critical conventions
+
+- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=90).
+  **Always increment N when changing any JS or CSS file** — search `?v=` and replace
+  all instances.
+- **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
+  `import`/`export`.
+- **localStorage keys** are all prefixed `apex26.` (e.g. `apex26.team`,
+  `apex26.parts.mercedes`).
+- **Coordinates**: +Y up, distances in metres, angles in radians, arc position `s`
+  in metres (0 → track.total), lateral `x` in metres (+right of centreline).
+
+---
+
+## Parts system (`js/parts.js`)
+
+`Parts.CATALOG` — 8 categories: `engine`, `aero`, `suspension`, `brakes`, `tyres`,
+`ers`, `gearbox`, `fuel`. Each option has
+`{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
+Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
+`{speed, accel, cornering, braking}` multipliers. Supplier-exclusive options
+(e.g. `manu_mercedes`) are only shown when `team.engine` matches.
+`unlimitedBudget` (localStorage `apex26.unlimitedBudget`) removes the 600 cr cap.
+
+---
+
+## Physics
+
+Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
+`STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF`, `DRIFT`, `ROAD_FOLLOW`,
+`PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
+`__apex.setPhysics(o)` for A/B tests.
+
+---
+
+## `window.__apex` dev API
+
+Full reference in `docs/DEBUG-HOOKS.md`. Quick summary:
+
+```js
+__apex.race("monza")          // load track, skip menus
+__apex.park(0.1)              // stationary at 10% lap, frozen for screenshot
+__apex.jump(0.5, 60, 0)       // teleport to 50% lap at 60 m/s
+__apex.go()                   // start race, grid intact
+__apex.finishRace()           // trigger results screen
+__apex.freeze(bool?)          // get/set physics-frozen state
+__apex.hud(show?)             // toggle HUD visibility
+__apex.weather("wet"|"dry")   // live weather change
+__apex.resetPlayer()          // force immediate rescue
+__apex.carAt(idx?)            // detailed telemetry for one car
+__apex.tracks()               // list all circuit ids
+__apex.teams()                // list all teams + engine suppliers
+__apex.camera("cockpit")      // switch camera mode
+__apex.view({ s:0.3, side:"L" }) // free debug camera
+__apex.viewState()            // combined scene/camera snapshot
+__apex.setPhysics({pace:0.8}) // override physics params
+__apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
+__apex.physState()            // full state (slip, wrongWay, lap, rescueT)
+__apex.cars()                 // all car telemetry sorted by prog
+__apex.scan([10,30,60])       // look-ahead curvature/width at distances
+__apex.corners()              // apex fractions for the loaded track
+__apex.wallStats()            // barrier geometry audit
+__apex.setInput({steer:1,throttle:true}) // override input
+__apex.step(1/60, 10)         // pump physics deterministically
+__apex.clearInput()
+__apex.tiltSim.step(deg, dt)  // tilt pipeline emulation (for autopilot harness)
+```
+
+---
+
+## Testing
+
+50+ Playwright specs. Key groups:
+
+| Spec(s) | What they cover |
+|---|---|
+| `smoke.spec.js` | page loads, `__apex` available, race starts |
+| `autopilot.spec.js` | closed-loop programmatic driving (monza, suzuka) |
+| `track-*.spec.js` | per-circuit smoke tests |
+| `tracks-walls.spec.js` | barrier geometry on all 24 circuits |
+| `physics-*.spec.js`, `world-physics.spec.js`, `longitudinal.spec.js` | physics regression |
+| `collisions*.spec.js`, `drift.spec.js`, `offtrack.spec.js` | behaviour tests |
+| `ui-audit.spec.js` | portrait+landscape screenshots of all 10 screens |
+| `visual-regression-*.spec.js` | pixel-diff regression |
+| `presets.spec.js`, `sliders.spec.js`, `steering.spec.js` | steering parameter tests |
+| `parts-physics.spec.js` | Parts module unit tests (getMods, getCost, statMult) |
+| `parts-budget.spec.js` | budget UI and unlimited toggle |
+| `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
+| `parts-persistence.spec.js` | localStorage persistence across reloads |
+| `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
+| `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
+
+**Viewport rules:**
+- Tests that touch `#pm-steer` / `#pm-calib` must use `hasTouch: true` (desktop
+  adds `body.desktop` which hides those elements).
+- In-race tests use LANDSCAPE viewport `{width:844, height:390}` to avoid the
+  `#rotate-device` overlay.
+
+Playwright config: `playwright.config.js`, baseURL `localhost:3456`, retries 1,
+SwiftShader headless GPU.
+
+---
+
+## Steering modes
+
+`steerMode`: `"tilt"` | `"buttons"` | `"touch"`. Set via `#pm-steer` in pause
+menu. `autoThrottle()` returns true when mode is `"buttons"` or `"touch"` (hides
+the gas pedal). Calibrate button (`#pm-calib`) hidden unless mode is `"tilt"`.
+
+---
+
+## Git branch
+
+Active development branch: `claude/f1-game-project-26h3ng`. Never push to main
+without review.
