@@ -2475,8 +2475,10 @@ function updateTrackPreview() {
     const dir = TrackMaps.direction(t);
     const elev = TrackMaps.elevRange(t);
     const facts = [];
+    const dz = TrackMaps.drsZones(t);
     if (dir) facts.push('<span class="spf-fact spf-dir">' + (dir === "CW" ? "↻ Clockwise" : "↺ Anti-clockwise") + "</span>");
     if (elev > 2) facts.push('<span class="spf-fact spf-elev">&#9650; ' + elev + " m elevation</span>");
+    if (dz && dz.length) facts.push('<span class="spf-fact spf-drs">' + dz.length + " DRS zone" + (dz.length > 1 ? "s" : "") + "</span>");
     if (crns.length) {
       const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
       facts.push('<span class="spf-fact spf-corner">T' + slowest.n + " slowest</span>");
