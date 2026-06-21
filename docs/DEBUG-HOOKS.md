@@ -307,6 +307,25 @@ input. Always pair them so later tests aren't affected.
 Run `n` (default 1) physics ticks of `dt` (default `1/60`) seconds each. The
 deterministic substitute for the rAF loop — drive the whole model from a test.
 
+### `setEnergy(v) → {energy} | false`
+Set the player's ERS charge level. `v` is clamped to `[0, 1]`. Returns the new
+energy value, or `false` if no race is loaded. Useful for testing ERS-sensitive
+physics branches (cornering grip, top-speed boost) and the energy HUD element.
+
+```js
+__apex.setEnergy(0);    // empty — no ERS boost
+__apex.setEnergy(1);    // full charge
+```
+
+### `setLap(n) → {lap} | false`
+Override the player's lap counter (integer ≥ 0) without resetting lap time or
+sector state. Useful for triggering end-of-race logic (`n = lapsTarget`) and
+testing the results screen without driving a full session.
+
+```js
+__apex.setLap(5);       // skip to lap 5
+```
+
 ### `setPhysics(o) → tuning`
 Set physics params directly (bypassing the sliders) for A/B tests and on-device
 tuning. Any omitted field is left unchanged; returns the new `tuning()`.
@@ -440,6 +459,87 @@ Place two AI dead-even and slightly overlapping at `frac` (default 0.3) and
 Pile `n` (default 5) AI on top of each other at near-zero speed mid-track. Tests
 stuck-recovery: a healthy AI digs out and resumes within a couple of seconds.
 
+### `aiPlace(idx, frac, speed?, x?) → {id, frac, speed, x} | false`
+Teleport an AI car (by its `cars()` index) to lap-fraction `frac`, optionally
+setting `speed` (m/s) and `x` (lateral m). Cannot move the player car — use
+`jump()` for that. Resets lateral velocity and yaw-rate, aligns heading with the
+track tangent, and returns the car's new state.
+
+```js
+// put car #3 at 60% of the lap at 50 m/s, 2 m right
+__apex.aiPlace(3, 0.6, 50, 2);
+```
+
+---
+
+## Timing & field
+
+### `timing() → {raceT, lapTime, best, lastLap, lap, pos, total, gapAhead, gapBehind, energy, gear, sector, sectorElapsed} | null`
+Compact race-clock + ERS snapshot in one call. Returns `null` if no race is
+loaded.
+
+| Field | Description |
+|---|---|
+| `raceT` | Elapsed race time (s) |
+| `lapTime` | Time in current lap (s) |
+| `best` | Personal-best lap time (s), or `null` before the first completed lap |
+| `lastLap` | Time of the most recently completed lap (s), or `null` |
+| `lap` | Current lap count |
+| `pos, total` | Race position and total cars |
+| `gapAhead, gapBehind` | Progress gap (m) to nearest rival ahead/behind |
+| `energy` | ERS charge 0–1 |
+| `gear` | Current gear 1–8 |
+| `sector` | Active sector (1, 2, or 3) |
+| `sectorElapsed` | Seconds spent in the current sector so far |
+
+### `sectorState() → {idx, elapsed, bests, last} | null`
+Live S1/S2/S3 timing. `idx` = current sector (0–2). `elapsed` = seconds into it.
+`bests[i]` = personal-best for sector i (`null` until a lap is completed).
+`last[i]` = sector i time from the most recently completed lap.
+
+```js
+const s = __apex.sectorState();
+// → { idx: 1, elapsed: 12.34, bests: [28.1, null, null], last: [28.4, null, null] }
+```
+
+### `lapHistory() → {mode, laps, best, lastLap} | null`
+Completed-lap history for the current session. `mode` is `"tt"` or `"race"`.
+In TT mode, `laps` is a full `[{lap, time}, …]` array (all laps this session).
+In race mode, `laps` is `[]` — only `best` and `lastLap` are available.
+
+```js
+const h = __apex.lapHistory();
+// TT:   { mode:"tt", laps:[{lap:1,time:84.2},{lap:2,time:82.9}], best:82.9, lastLap:82.9 }
+// Race: { mode:"race", laps:[], best:83.1, lastLap:83.5 }
+```
+
+### `fieldState() → [{pos, id, name, code, team, isPlayer, lap, frac, speed, gap, finished, finishT}, …] | null`
+Full field snapshot sorted by race position (leader first). `gap` is the
+arc-progress distance (m) behind the leader.
+
+```js
+const field = __apex.fieldState();
+field.slice(0, 3).forEach(c =>
+  console.log(`P${c.pos} ${c.code} gap ${c.gap.toFixed(0)}m`)
+);
+```
+
+### `trackProfile(n?) → [{frac, y, k, hw, slope}, …] | null`
+Sample the circuit at `n` evenly-spaced points (default 100, max 1 000). Returns
+an array of track cross-sections — elevation `y` (m), curvature `k` (rad/m),
+half-width `hw` (m), road pitch `slope` (+up/−down) — useful for elevation
+visualisation and offline curvature analysis.
+
+```js
+// elevation profile as CSV
+const pts = __apex.trackProfile(360);
+console.log(pts.map(p => `${(p.frac*100).toFixed(2)},${p.y.toFixed(1)}`).join("\n"));
+
+// highest and lowest points on track
+const maxY = Math.max(...pts.map(p => p.y));
+const minY = Math.min(...pts.map(p => p.y));
+```
+
 ---
 
 ## Misc
@@ -496,6 +596,7 @@ proximity. Returns `null` if no track is loaded.
 | `k, hw, slope, gripMult, weather` | Track context at player: curvature, half-width, road pitch, grip multiplier |
 | `wallR, wallL, clearR, clearL` | Signed barrier distances and clearances to each side (m) |
 | `energy` | ERS charge level 0–1 |
+| `gear` | Current gear (1–8) |
 | `wrongWay, offT, rescueT, done` | Episode flags: `done = wrongWay ∥ rescueT > 8` |
 | `input` | Currently applied override input (null fields = live device input) |
 | `posInField, gapAhead, gapBehind` | Race position and gap to nearest rivals (m) |

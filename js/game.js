@@ -3917,6 +3917,7 @@ window.__apex = {
 
       // ── energy / ERS ──
       energy: +(player.energy || 0).toFixed(3),
+      gear: player.gear || 1,
 
       // ── episode state flags ──
       wrongWay: !!player.wrongWay,
@@ -3964,6 +3965,138 @@ window.__apex = {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
     for (let i = 0; i < count; i++) update(d);
     return this.obs();
+  },
+
+  // ── Timing & field hooks ──────────────────────────────────────────────────
+
+  // sectorState() — live S1/S2/S3 timing.
+  // idx: current sector (0=S1, 1=S2, 2=S3). elapsed: seconds into it.
+  // bests: personal-best times per sector (null until first completed lap).
+  // last: sector times from the most recently completed lap.
+  sectorState() {
+    if (!player || !track) return null;
+    const elapsed = (player.lapTime || 0) - sectorStartT;
+    return {
+      idx: sectorIdx,
+      elapsed: +elapsed.toFixed(3),
+      bests: sectorBests.map((v) => v === Infinity ? null : +v.toFixed(3)),
+      last:  sectorLast.map((v) => v == null     ? null : +v.toFixed(3)),
+    };
+  },
+
+  // lapHistory() — completed lap times for this session.
+  // TT mode returns a full array via ttLaps[]; race mode returns only lastLap.
+  lapHistory() {
+    if (!player) return null;
+    return {
+      mode: timeTrial ? "tt" : "race",
+      laps: timeTrial
+        ? ttLaps.map((t, i) => ({ lap: i + 1, time: +t.toFixed(3) }))
+        : [],
+      best:    isFinite(player.best)  ? +player.best.toFixed(3)    : null,
+      lastLap: player.lastLap != null ? +player.lastLap.toFixed(3) : null,
+    };
+  },
+
+  // timing() — compact race-clock + ERS snapshot.
+  // One call replaces physState() + obs() for lightweight telemetry consumers.
+  timing() {
+    if (!player || !track) return null;
+    const sorted = cars.slice().sort((a, b) => b.prog - a.prog);
+    const pi = sorted.findIndex((c) => c.isPlayer);
+    const ahead  = pi > 0               ? sorted[pi - 1] : null;
+    const behind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
+    return {
+      raceT:         +raceT.toFixed(3),
+      lapTime:       +(player.lapTime  || 0).toFixed(3),
+      best:          isFinite(player.best) ? +player.best.toFixed(3) : null,
+      lastLap:       player.lastLap != null ? +player.lastLap.toFixed(3) : null,
+      lap:            player.lap || 0,
+      pos:            pi + 1,
+      total:          cars.length,
+      gapAhead:      ahead  ? +(ahead.prog  - (player.prog || 0)).toFixed(2) : null,
+      gapBehind:     behind ? +((player.prog || 0) - behind.prog).toFixed(2) : null,
+      energy:        +(player.energy || 0).toFixed(3),
+      gear:           player.gear || 1,
+      sector:         sectorIdx + 1,
+      sectorElapsed: +((player.lapTime || 0) - sectorStartT).toFixed(3),
+    };
+  },
+
+  // fieldState() — full field sorted by race position (leader first).
+  // gap: metres of track-arc behind the leader (0 for leader).
+  fieldState() {
+    if (!track || !cars.length) return null;
+    const sorted = cars.slice().sort((a, b) => b.prog - a.prog);
+    const leader = sorted[0];
+    return sorted.map((c, pos) => ({
+      pos:      pos + 1,
+      id:       cars.indexOf(c),
+      name:     c.name,
+      code:     c.code,
+      team:     c.team && c.team.id,
+      isPlayer: !!c.isPlayer,
+      lap:      c.lap || 0,
+      frac:     +(c.s / track.total).toFixed(4),
+      speed:    +c.speed.toFixed(2),
+      gap:      +(leader.prog - c.prog).toFixed(2),
+      finished: !!c.finished,
+      finishT:  c.finishT != null ? +c.finishT.toFixed(2) : null,
+    }));
+  },
+
+  // aiPlace(idx, frac, speed?, x?) — teleport an AI car (by cars[] index) to
+  // the given lap fraction. Cannot move the player car; use jump() for that.
+  // Returns the car's new state, or false on invalid input.
+  aiPlace(idx, frac, speed, x) {
+    if (!track || !cars[idx]) return false;
+    const c = cars[idx];
+    if (c.isPlayer) return false;
+    c.s    = wrapS((frac != null ? frac : 0) * track.total);
+    c.prog = (c.lap || 0) * track.total + (frac != null ? frac : 0) * track.total;
+    if (x     !== undefined) { c.x = x; c.xVis = x; }
+    if (speed !== undefined) c.speed = speed;
+    c.vLat = 0; c.yawRateCur = 0;
+    Tracks.sample(track, c.s, smp2);
+    c.head = Math.atan2(smp2.t[0], smp2.t[2]);
+    return { id: idx, frac: +(c.s / track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
+  },
+
+  // setEnergy(v) — set player ERS charge (0..1). Clamps silently.
+  setEnergy(v) {
+    if (!player) return false;
+    player.energy = Math.max(0, Math.min(1, +v || 0));
+    return { energy: +player.energy.toFixed(3) };
+  },
+
+  // setLap(n) — override the player's lap counter (for testing end-of-race
+  // logic and results screen). Does not reset lapTime or sector state.
+  setLap(n) {
+    if (!player) return false;
+    player.lap = Math.max(0, Math.floor(+n || 0));
+    return { lap: player.lap };
+  },
+
+  // trackProfile(n?) — sample the circuit at n evenly-spaced points (default 100,
+  // max 1 000). Returns {frac, y, k, hw, slope} per point — useful for
+  // elevation visualisation and curvature analysis without a live race.
+  trackProfile(n) {
+    if (!track) return null;
+    const steps = Math.max(2, Math.min(1000, n != null ? Math.floor(+n) : 100));
+    const out = [];
+    for (let i = 0; i < steps; i++) {
+      const frac = i / steps;
+      const s = frac * track.total;
+      Tracks.sample(track, s, smp2);
+      out.push({
+        frac:  +frac.toFixed(4),
+        y:     +smp2.p[1].toFixed(3),
+        k:     +Tracks.curvature(track, s).toFixed(5),
+        hw:    +smp2.hw.toFixed(2),
+        slope: +(smp2.t[1] || 0).toFixed(4),
+      });
+    }
+    return out;
   },
 
   // reset(frac, speed, x) — fast episode reset reusing the loaded track.
