@@ -121,6 +121,7 @@ let difficulty = store.get("difficulty", "normal");
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
+let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
 let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
 // Manual gears: available in tilt mode (thumbs free) or on desktop keyboard
@@ -1937,12 +1938,22 @@ function buildSetup() {
 
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
+  const unlimitedBtn = $("cs-unlimited");
   if (budgetEl) {
-    budgetEl.textContent = "BUDGET: " + remaining + " / " + Parts.BUDGET + " cr remaining";
-    budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
+    if (unlimitedBudget) {
+      budgetEl.textContent = "FREE BUILD — no budget limit";
+      budgetEl.className = "unlimited";
+    } else {
+      budgetEl.textContent = "BUDGET: " + remaining + " / " + Parts.BUDGET + " cr remaining";
+      budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
+    }
   }
   if (budgetFill) {
-    budgetFill.style.transform = "scaleX(" + Math.max(0, Math.min(1, spent / Parts.BUDGET)) + ")";
+    budgetFill.style.transform = unlimitedBudget ? "scaleX(0)" : "scaleX(" + Math.max(0, Math.min(1, spent / Parts.BUDGET)) + ")";
+  }
+  if (unlimitedBtn) {
+    unlimitedBtn.textContent = unlimitedBudget ? "∞ FREE BUILD: ON" : "∞ FREE BUILD";
+    unlimitedBtn.className = "cs-unlimited-btn" + (unlimitedBudget ? " on" : "");
   }
 
   const body = $("cs-body");
@@ -1975,7 +1986,7 @@ function buildSetup() {
       const active = curOpt && curOpt.id === opt.id;
       const curCost = curOpt ? (curOpt.cost || 0) : 0;
       const costDelta = (opt.cost || 0) - curCost;
-      const wouldExceed = !active && (spent + costDelta > Parts.BUDGET);
+      const wouldExceed = !active && !unlimitedBudget && (spent + costDelta > Parts.BUDGET);
 
       const chip = document.createElement("button");
       chip.className = "cs-chip"
@@ -2014,7 +2025,7 @@ function buildSetup() {
         const p = getTeamParts(team.id);
         const co = cat.options.find((o) => o.id === (p[cat.id] || Parts.DEFAULTS[cat.id]));
         const cc = co ? (co.cost || 0) : 0;
-        if ((Parts.getCost(p, team.engine) - cc + (opt.cost || 0)) > Parts.BUDGET) {
+        if (!unlimitedBudget && (Parts.getCost(p, team.engine) - cc + (opt.cost || 0)) > Parts.BUDGET) {
           chip.classList.add("budget-reject");
           chip.addEventListener("animationend", () => chip.classList.remove("budget-reject"), { once: true });
           if (soundOn) GameAudio.uiTick();
@@ -2299,6 +2310,11 @@ $("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup();
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
   recomputePlayerMods(); buildSelect();
+};
+$("cs-unlimited").onclick = () => {
+  unlimitedBudget = !unlimitedBudget;
+  store.set("unlimitedBudget", unlimitedBudget);
+  buildSetup();
 };
 $("cz-cancel").onclick = () => { els.customize.hidden = true; };
 $("cz-save").onclick = () => {
