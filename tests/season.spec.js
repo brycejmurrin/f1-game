@@ -48,8 +48,8 @@ test.describe("Season — standings panel", () => {
     // Results screen should be visible
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
 
-    // Click through to next round (back to menu)
-    await page.locator("#res-next").click();
+    // Return to menu (res-next starts next race; res-menu calls quitToMenu() which shows standings btn)
+    await page.locator("#res-menu").click();
     await page.waitForTimeout(300);
 
     // The STANDINGS button should now be visible on the main menu
@@ -63,7 +63,7 @@ test.describe("Season — standings panel", () => {
     await page.evaluate(() => window.__apex.finishRace());
     await page.waitForTimeout(500);
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
-    await page.locator("#res-next").click();
+    await page.locator("#res-menu").click();
     await page.waitForTimeout(300);
 
     // Open standings
