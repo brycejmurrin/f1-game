@@ -14,7 +14,7 @@
     lengthKm: 4.3,
     baseHW: 7,
     terrainOuter: 45,
-    pal: { zenith: [0.26, 0.4, 0.6], horizon: [0.55, 0.58, 0.6], grass: [0.18, 0.46, 0.18], fog: [0.55, 0.58, 0.6], fogDensity: 0.0019, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.95, 0.82], sunColor: [1, 0.93, 0.8] },
+    pal: { zenith: [0.26, 0.4, 0.6], horizon: [0.72, 0.74, 0.72], grass: [0.22, 0.48, 0.18], fog: [0.55, 0.58, 0.6], fogDensity: 0.0019, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.95, 0.82], sunColor: [1, 0.93, 0.8] },
     segs: [
       { t: 0, l: 240, h: 8 }, { t: -55, l: 100, h: -10 }, { t: 40, l: 90, h: -6 }, { t: -20, l: 400, h: -4 }, { t: -60, l: 110 }, { t: -50, l: 100, h: 6 },
       { t: 70, l: 100 }, { t: -80, l: 110 }, { t: 0, l: 160 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: -70, l: 100 },
@@ -57,6 +57,15 @@
       // start/finish gantry over the line + a scoring gantry further on
       gantry(0.005, 7.0, [0.18, 0.20, 0.24]);
       gantry(0.92, 6.5, [0.20, 0.22, 0.26]);
+
+      // ---- Helicopter pad in paddock (s≈0.02) ----
+      {
+        const ahp = anchor(K(0.025), 1, 40);
+        addBox(out, vadd(ahp.c, ahp.u, 0.1), [20, 0.2, 20], [0.52, 0.54, 0.54], [ahp.r, ahp.u, ahp.t]);
+        // H marking: two crossing beams in yellow
+        addBox(out, vadd(ahp.c, ahp.u, 0.2), [18, 0.2, 2.0], [0.92, 0.88, 0.10], [ahp.r, ahp.u, ahp.t]);
+        addBox(out, vadd(ahp.c, ahp.u, 0.2), [2.0, 0.2, 18], [0.92, 0.88, 0.10], [ahp.r, ahp.u, ahp.t]);
+      }
 
       // ===================================================================
       // MAIN GRANDSTAND TIER (s≈0.02, L) — the big stand on the climb
@@ -110,6 +119,18 @@
         }
         if (hash(k * 8) > 0.55) tree(k, side, 110 + hash(k * 9) * 40, 8 + hash(k * 11) * 5, [0.20, 0.44, 0.20]);
       });
+      // ---- Favela hillside landmark buildings (s=0.15–0.35) ----
+      const FAV_COLS = [
+        [0.82, 0.45, 0.38], [0.38, 0.62, 0.80], [0.85, 0.75, 0.30],
+        [0.80, 0.35, 0.42], [0.42, 0.70, 0.45], [0.90, 0.55, 0.25],
+        [0.35, 0.48, 0.78], [0.78, 0.42, 0.35],
+      ];
+      for (let i = 0; i < 8; i++) {
+        const s = 0.15 + (i / 8) * 0.20;
+        const dist = 60 + i * 7.5;
+        const bh = 6 + hash(K(s) * 11 + i) * 8;
+        building(K(s), -1, dist, 10, bh + i * 2, 10, { wall: FAV_COLS[i], window: [0.90, 0.90, 0.85], floor: 2 });
+      }
 
       // --- Reta Oposta straight (s=0.25, R mid): open green banks + advert boards ---
       for (const s of [0.22, 0.25, 0.28]) billboard(K(s), 1, 8, 11, 4, [0.90, 0.90, 0.88]);
@@ -128,6 +149,10 @@
         tree(k, -1, 40 + hash(k) * 16, 9 + hash(k * 3) * 5, GREEN2);   // treeline screening the lake
         palm(k, -1, 52 + hash(k * 7) * 20, 10 + hash(k * 11) * 5, [0.24, 0.46, 0.20]);
         bush(k, -1, 30 + hash(k * 5) * 10, GREEN);
+      }
+      // ---- Reservoir infield water planes ----
+      for (let i = 0; i < 4; i++) {
+        groundPlane(K(0.35 + i * 0.05), -1, 70 + i * 15, [200, 2, 150], [0.22, 0.34, 0.48]);
       }
 
       // --- Descida do Lago (s=0.45, both mid): grass run-off + tan gravel trap ---
@@ -155,6 +180,16 @@
                    window: [tone * 0.55, tone * 0.60, tone * 0.66], floor: 8 });
         }
       });
+      // ---- Additional São Paulo city buildings (s=0.35–0.70 right side) ----
+      const SP_BLDGS = [
+        [0.35, 1, 220, 16, 120], [0.40, 1, 260, 14, 150], [0.44, 1, 200, 18, 100],
+        [0.48, 1, 300, 15, 180], [0.52, 1, 240, 17, 130], [0.56, 1, 280, 13, 160],
+        [0.60, 1, 210, 16, 140], [0.63, 1, 340, 14, 170], [0.66, 1, 190, 18, 110],
+        [0.70, 1, 260, 15, 155],
+      ];
+      for (const [s, side, dist, bw, bh] of SP_BLDGS) {
+        building(K(s), side, dist, bw, bh, bw, { wall: [0.50, 0.52, 0.58], window: [0.30, 0.38, 0.52], floor: 8 });
+      }
       // CONTINUOUS far-haze skyline ring computed from the lap centre, so a dense
       // unbroken band of high-rise slabs encircles the whole park on the horizon.
       let cx = 0, cz = 0;
@@ -254,6 +289,15 @@
           else bush(k, side, d, [0.22, 0.46, 0.22]);
         }
       });
+      // ---- Additional tall tropical trees near reservoir ----
+      for (let i = 0; i < 36; i++) {
+        const s = i / 36;
+        const kk = K(s);
+        if (hash(kk * 97 + i) > 0.48) continue;
+        const side = (i % 2) ? 1 : -1;
+        const d = 20 + hash(kk * 98 + i) * 25;
+        tree(kk, side, d, 10 + hash(kk * 99 + i) * 6, [0.18, 0.44, 0.16]);
+      }
     },
   }
   );

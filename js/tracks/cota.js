@@ -267,6 +267,43 @@
                    { seed: i * 3 + extra, snowline: 2, forest: col, rock: [col[0] * 0.92, col[1] * 0.9, col[2] * 0.82] });
         }
       }
+
+      // ================= AUSTIN SKYLINE (s 0.30–0.60, L far) =================
+      // 7 buildings at 200–300 m on side=-1, varying heights 60–120 m.
+      {
+        const AUSTIN_WALL = [0.55, 0.58, 0.62];
+        const AUSTIN_WIN  = [0.35, 0.42, 0.52];
+        const skylineData = [
+          [0.30, -1, 220,  18, 65],
+          [0.35, -1, 260,  20, 95],
+          [0.40, -1, 200,  16, 75],
+          [0.45, -1, 280,  22, 115],
+          [0.50, -1, 240,  18, 85],
+          [0.55, -1, 210,  20, 60],
+          [0.60, -1, 270,  24, 100],
+        ];
+        for (const [s, side, dist, w, h] of skylineData) {
+          building(K(s), side, dist, w, h, w,
+            { wall: AUSTIN_WALL, window: AUSTIN_WIN, floor: Math.round(h / 15) });
+        }
+      }
+
+      // ================= EXTRA BACK-SECTOR GRANDSTANDS (amphitheatre feel) =================
+      // Two more grandstand calls near s=0.45–0.55 to increase seating density.
+      grandstand(0.47, -1, 18, 66, [0.38, 0.39, 0.44], [0.50, 0.50, 0.54]);
+      grandstand(0.52, 1, 20, 58, [0.36, 0.37, 0.42], [0.52, 0.50, 0.50]);
+
+      // ================= TEXAS VEGETATION — sage scrub + live oaks =================
+      // Outer-side only: olive/sage scrub every ~22 m, with occasional live oak.
+      every(22, (kk) => {
+        const r = hash(kk * 61);
+        if (r > 0.80) return;
+        const d = 18 + r * 22;
+        bush(kk, 1, d, [0.30, 0.38, 0.20]);   // sage scrub, outer side
+        if (hash(kk * 71) > 0.65) {
+          tree(kk, 1, d + 10 + hash(kk * 79) * 14, 5 + hash(kk * 83) * 4, [0.22, 0.36, 0.16]);
+        }
+      });
     },
   }
   );

@@ -322,6 +322,16 @@
           tree(kk, side, dist, 9 + hash(kk * 61 + side) * 7, TREE);
         }
       });
+      // ---- Botanical Garden trees (s=0.70–0.80) ----
+      const BOT_GREENS = [[0.18, 0.42, 0.18], [0.22, 0.48, 0.20], [0.14, 0.38, 0.16], [0.20, 0.46, 0.22]];
+      for (let i = 0; i < 8; i++) {
+        const s = 0.70 + (i / 8) * 0.10;
+        const kk = k(s);
+        const side = (i % 2) ? 1 : -1;
+        tree(kk, side, 30 + hash(kk * 71 + i) * 30, 10 + hash(kk * 73 + i) * 10, BOT_GREENS[i % 4]);
+        if (hash(kk * 75 + i) > 0.5)
+          tree(kk, side, 50 + hash(kk * 77 + i) * 20, 12 + hash(kk * 79 + i) * 8, BOT_GREENS[(i + 1) % 4]);
+      }
 
       // ====================================================================
       // BILLBOARDS + start gantry + sponsor hoardings

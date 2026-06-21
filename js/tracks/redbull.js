@@ -69,7 +69,7 @@
       every(7, (k) => {
         const s = hash(k * 41);
         if (s < 0.18) return;
-        pine(k, s < 0.6 ? -1 : 1, 8 + s * 13, 9 + s * 9, [0.12 + s * 0.05, 0.29, 0.15]);
+        pine(k, s < 0.6 ? -1 : 1, 8 + s * 13, 9 + s * 9, [0.10, 0.26, 0.13]);
         const s2 = hash(k * 67 + 5);
         if (s2 > 0.45) pine(k, s2 < 0.7 ? -1 : 1, 20 + s2 * 22, 8 + s2 * 8, [0.11 + s2 * 0.06, 0.28, 0.14]);
         const s3 = hash(k * 91 + 13);
@@ -181,6 +181,55 @@
       grandstand(0.88, 1, 8, 34, shell, rbNavy);
       grandstand(0.92, 1, 9, 28, shell, rbRed);
       grandstand(0.95, 1, 10, 22, shell, rbNavy);
+
+      // --- Meadow clearing foreground: pale gold/tan pastoral hedges both sides ---
+      every(30, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 113 + side) > 0.72) continue;
+          const d = 20 + hash(k * 127 + side) * 20;
+          const p = anchor(k, side, d);
+          if (onTrack(p.c[0], p.c[2], 8)) return;
+          hedge(k / n, k / n + 0.005, side, d, 0.8 + hash(k * 131 + side) * 0.4, [0.66, 0.62, 0.50]);
+        }
+      });
+
+      // --- Remus corner crest landmark tower (s≈0.23) — golden tower, red cap ---
+      {
+        const rA = anchor(Math.round(n * 0.23) % n, 1, 16);
+        addCyl(out, rA.c, 2.5, 42, [0.95, 0.85, 0.20], 8, [rA.r, rA.u, rA.t]);
+        const rTop = vadd(rA.c, rA.u, 42);
+        addCone(out, rTop, 3, 6, [0.92, 0.10, 0.16], 8, [rA.r, rA.u, rA.t]);
+      }
+
+      // --- Descent ridge emphasis at s=0.28–0.32 (back-sector drop) ---
+      {
+        for (let i = 0; i < 6; i++) {
+          const f = 0.28 + i * 0.007;
+          const k = Math.round(f * n) % n;
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, 60 + i * 8);
+            ridge(a.c[0], a.c[2], pyMin,
+                  Math.atan2(a.t[2], a.t[0]) + 1.5708,
+                  80 + hash(k * 37 + side) * 50, 40 + hash(k * 53 + side) * 30, 18 + hash(k * 71 + side) * 12,
+                  [0.14, 0.28, 0.16]);
+          }
+        }
+      }
+
+      // --- Orange Army billboard near stadium bowl (s≈0.87, Dutch orange) ---
+      billboard(Math.round(n * 0.87) % n, -1, 12, 8, 4, [1.0, 0.65, 0.0]);
+
+      // --- Styrian Alpine farmhouse silhouette (s≈0.55) ---
+      building(Math.round(n * 0.55) % n, -1, 18, 12, 6, 15,
+        { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });
+
+      // --- Rocky outcrops: grey rock clusters at s=0.15, 0.40, 0.65 ---
+      for (const [sf, rockSide] of [[0.15, 1], [0.40, -1], [0.65, 1]]) {
+        const kR = Math.round(sf * n) % n;
+        const aR = anchor(kR, rockSide, 30);
+        if (!onTrack(aR.c[0], aR.c[2], 10))
+          addBox(out, vadd(aR.c, aR.u, 1.5), [4, 3, 5], [0.42, 0.40, 0.38], [aR.r, aR.u, aR.t]);
+      }
     },
   }
   );

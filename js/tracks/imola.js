@@ -166,6 +166,12 @@
       place(K(0.05), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
 
+      // ---- Senna memorial plaque at Tamburello chicane (s≈0.07) ----
+      {
+        const am = anchor(K(0.07), -1, 8);
+        addBox(out, vadd(am.c, am.u, 1.25), [3, 2.5, 0.4], [0.90, 0.90, 0.88], [am.r, am.u, am.t]);
+      }
+
       // ---- s 0.12 L — Villeneuve chicane kerbs + gravel trap beyond ----
       groundPlane(K(0.12), -1, 5, [24, 30], GRAVEL);
       place(K(0.12), -1, 2, [0.4, 0.3, 7], RED);
@@ -211,6 +217,28 @@
       groundPlane(K(0.81), -1, 14, [40, 60], BANK);
       // shaded fog dip at Rivazza
       groundPlane(K(0.82), -1, 8, [30, 40], [0.74, 0.78, 0.74]);
+
+      // ---- Italian town buildings at Variante Alta / Rivazza (s=0.60–0.80) ----
+      const TERRA2  = [0.78, 0.58, 0.42];
+      const STONE3  = [0.88, 0.82, 0.72];
+      const TOWN_POS = [
+        [0.60, -1, 85,  14, 18],
+        [0.63, -1, 92,  12, 22],
+        [0.66, -1, 100, 16, 15],
+        [0.70, -1, 88,  13, 25],
+        [0.74, -1, 95,  15, 20],
+      ];
+      for (const [s, side, dist, bw, bh] of TOWN_POS) {
+        const tc = (bh > 20) ? TERRA2 : STONE3;
+        building(K(s), side, dist, bw, bh, bw * 0.8, { wall: tc, window: [0.28, 0.32, 0.38], floor: 3 });
+      }
+
+      // ---- Campanile bell tower at s≈0.68 ----
+      {
+        const ac = anchor(K(0.68), -1, 110);
+        addCyl(out, ac.c, 2.0, 30, [0.78, 0.74, 0.68], 8, [ac.r, ac.u, ac.t]);
+        addCone(out, vadd(ac.c, ac.u, 30), 2.5, 6, [0.45, 0.35, 0.28], 8, [ac.r, ac.u, ac.t]);
+      }
 
       // ---- s 0.92 R near — Variante Bassa / pit approach kerbs back toward river ----
       place(K(0.92), 1, 2, [0.4, 0.3, 7], RED);

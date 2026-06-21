@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 4.4,
     baseHW: 7,
-    pal: { zenith: [0.26, 0.44, 0.72], horizon: [0.7, 0.74, 0.76], grass: [0.22, 0.46, 0.16], runoff: [0.48, 0.44, 0.34], fogDensity: 0.0016, sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1, 0.88, 0.66], sunColor: [1, 0.86, 0.64] },
+    pal: { zenith: [0.26, 0.44, 0.72], horizon: [0.74, 0.76, 0.76], grass: [0.26, 0.50, 0.22], runoff: [0.48, 0.44, 0.34], fogDensity: 0.0016, sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1, 0.88, 0.66], sunColor: [1, 0.86, 0.64] },
     segs: [
       { t: 0, l: 300 }, { t: 70, l: 90 }, { t: -50, l: 80 }, { t: 60, l: 80 }, { t: 0, l: 200 }, { t: -80, l: 100 },
       { t: 50, l: 80 }, { t: -60, l: 80 }, { t: 60, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 200 }, { t: -90, l: 100 },
@@ -258,6 +258,58 @@
       for (const [s, side] of [[0.06, 1], [0.12, -1], [0.18, 1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
         place(k(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE);
         place(k(s), side, 7, [10, 0.08, 12], GRASS);
+      }
+
+      // ================= DENSE HILLSIDE TREES (every 14 m, both sides) =================
+      // Mix of tree() and pine() at distance 40–80 m on the valley slopes.
+      {
+        const HILL_MID  = [0.20, 0.42, 0.18];
+        const HILL_DARK = [0.14, 0.30, 0.14];
+        every(14, (kk) => {
+          for (const side of [-1, 1]) {
+            const h = hash(kk * 37 + side * 5);
+            if (h < 0.30) continue;
+            const dist = 40 + h * 40;
+            const ht = 8 + h * 8;
+            (h < 0.55 ? tree : pine)(kk, side, dist, ht, h < 0.50 ? HILL_DARK : HILL_MID);
+          }
+        });
+      }
+
+      // ================= VILLAGE CHURCH SPIRE (s≈0.37, far hillside) =================
+      // Church tower cylinder + conical steeple at ~90 m on the hillside.
+      {
+        const CHURCH_COL  = [0.82, 0.82, 0.78];
+        const STEEPLE_COL = [0.48, 0.50, 0.58];
+        const a = anchor(k(0.37), 1, 90);
+        const b = [a.r, a.u, a.t];
+        addCyl(out, a.c, 1.5, 22, CHURCH_COL, 8, b);
+        addCone(out, vadd(a.c, a.u, 22), 2.0, 8, STEEPLE_COL, 8, b);
+      }
+
+      // ================= EXTRA GRANDSTANDS at s=0.12 and s=0.65 =================
+      grandstand(0.12, 1, 14, 44, SHELL2, CROWD[2]);
+      grandstand(0.65, -1, 13, 38, SHELL,  CROWD[3]);
+
+      // ================= HUNGARIAN FLAG ACCENT BILLBOARDS =================
+      billboard(k(0.02), -1, 18, 10, 4, [0.20, 0.48, 0.20]);   // green
+      billboard(k(0.04), 1,  17, 10, 4, [0.85, 0.20, 0.20]);   // red
+
+      // ================= VALLEY BOWL TOPOGRAPHY RIDGES =================
+      // 5 ridge calls at 100–150 m staggered around the circuit, dark forest green.
+      {
+        const FOREST_SLOPE = [0.12, 0.28, 0.12];
+        const ridgePts = [
+          [0.10, -1, 110],
+          [0.25,  1, 130],
+          [0.42, -1, 100],
+          [0.62,  1, 150],
+          [0.80, -1, 120],
+        ];
+        for (const [s, side, dist] of ridgePts) {
+          const a = anchor(k(s), side, dist), b = [a.r, a.u, a.t];
+          addFrustum(out, a.c, 80, 30, 18 + hash(k(s) * 11) * 10, FOREST_SLOPE, 6, b);
+        }
       }
     },
   }
