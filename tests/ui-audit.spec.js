@@ -86,9 +86,12 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
       await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
-      await page.evaluate(() => window.__apex.park(0.1));
-      await page.waitForTimeout(800);
-      await page.locator("#pausebtn").click();
+      await page.evaluate(() => {
+        window.__apex.park(0.1);
+        // Show pause menu directly to avoid the #rotate-device overlay blocking
+        // the pause button in portrait orientation.
+        document.getElementById("pausemenu").hidden = false;
+      });
       await page.locator("#pausemenu").waitFor({ state: "visible" });
       await shot(page, `${orient}-08-pause`);
     });
@@ -113,6 +116,29 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#datahub").waitFor({ state: "visible" });
       await page.waitForTimeout(500);
       await shot(page, `${orient}-10-datahub`);
+    });
+
+    test("11 time trial select", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-tt").click();
+      await page.locator("#select").waitFor({ state: "visible" });
+      await shot(page, `${orient}-11-time-trial`);
+    });
+
+    test("12 in-race hood camera", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.race("bahrain"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => {
+        window.__apex.camera("hood");
+        window.__apex.park(0.1);
+        window.__apex.jump(0.1, 50, 0);
+        window.__apex.snapCam();
+      });
+      await page.waitForTimeout(600);
+      await shot(page, `${orient}-12-hood-cam`);
     });
   });
 }

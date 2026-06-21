@@ -16,12 +16,19 @@ async function goToRace(page, circuit) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
   await page.evaluate((c) => window.__apex.race(c), circuit);
   await waitForTrack(page);
+  // Use hood camera (forward-facing from the car) for consistent regression shots.
+  await page.evaluate(() => window.__apex.camera("hood"));
 }
 
 async function park(page, frac = 0) {
-  await page.evaluate((f) => window.__apex.park(f), frac);
-  // Wait for canvas to stabilize - give it more time for rendering
-  await page.waitForTimeout(1000);
+  await page.evaluate((f) => {
+    window.__apex.park(f);    // sets state="race", freezes scene
+    window.__apex.jump(f, 50, 0);  // add speed so hood cam faces track ahead
+    window.__apex.snapCam();
+  }, frac);
+  // Wait for at least one render frame after snapCam() settles the camera.
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r)))));
+  await page.waitForTimeout(200);
 }
 
 test.describe("Visual Regression — Circuits 10-12", () => {
@@ -40,7 +47,7 @@ test.describe("Visual Regression — Circuits 10-12", () => {
           // Capture screenshot for manual inspection
           await expect(page.locator("canvas#game")).toHaveScreenshot(
             `${circuit}-frac-${frac.toFixed(2)}.png`,
-            { maxDiffPixelRatio: 0.1, timeout: 15000 }
+            { maxDiffPixelRatio: 0.1 }
           );
 
           // Basic sanity: HUD should be visible

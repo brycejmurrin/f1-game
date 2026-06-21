@@ -3281,6 +3281,9 @@ window.__apex = {
     player.pz = smp.p[2] + smp.r[2] * player.x;
     player.head = Math.atan2(smp.t[0], smp.t[2]);
     player.vLat = 0; player.yawRateCur = 0;
+    // Sync render-interpolation anchors so lerpS(rPrevS, s, alpha) == s regardless
+    // of renderAlpha — ensures the hood/cockpit camera is at exactly this position.
+    player.rPrevS = player.s; player.rPrevX = player.x;
     return { s: player.s, total: track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
@@ -3328,8 +3331,9 @@ window.__apex = {
     return { mode: CAM_MODES[camMode].id, index: camMode };
   },
   // Instantly snap the chase camera to the correct position behind the current
-  // player without waiting for exponential damping to converge. Call right after
-  // jump() so the very next rendered frame is a clean forward-facing view.
+  // Instantly snap the camera to the correct position for the current camera mode,
+  // bypassing exponential damping. Call after park()/jump() so the very first
+  // rendered frame shows a clean view. Handles chase, hood, and cockpit modes.
   snapCam() {
     if (!player || !track) return;
     Tracks.sample(track, player.s, smp);
@@ -3337,15 +3341,29 @@ window.__apex = {
     const bankCam = Tracks.banking(track, player.s, px);
     const bankDy  = bankCam ? bankCam.dy : 0;
     const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
-    Tracks.sample(track, wrapS(player.s - 5.8), smpC);
-    const cx = px * 0.5;
-    camEye[0] = smpC.p[0] + smpC.r[0] * cx;
-    camEye[1] = smpC.p[1] + 2.1 + bankDy;
-    camEye[2] = smpC.p[2] + smpC.r[2] * cx;
-    camTgt[0] = p[0] + smp.t[0] * 4;
-    camTgt[1] = p[1] + 0.7;
-    camTgt[2] = p[2] + smp.t[2] * 4;
-    camFov = lerp(52, 66, clamp(player.speed / VMAX, 0, 1));
+    const spd = clamp(player.speed / VMAX, 0, 1);
+    const mode = CAM_MODES[camMode].id;
+    if (mode === "cockpit" || mode === "hood") {
+      const eyeFwd = mode === "cockpit" ? 0.2 : 1.9;
+      const eyeUp  = mode === "cockpit" ? 1.15 : 0.78;
+      camEye[0] = p[0] + smp.t[0] * eyeFwd;
+      camEye[1] = p[1] + eyeUp;
+      camEye[2] = p[2] + smp.t[2] * eyeFwd;
+      camTgt[0] = p[0] + smp.t[0] * 30;
+      camTgt[1] = p[1] + eyeUp + 1.5;
+      camTgt[2] = p[2] + smp.t[2] * 30;
+      camFov = lerp(64, 78, spd);
+    } else {
+      Tracks.sample(track, wrapS(player.s - 5.8), smpC);
+      const cx = px * 0.5;
+      camEye[0] = smpC.p[0] + smpC.r[0] * cx;
+      camEye[1] = smpC.p[1] + 2.1 + bankDy;
+      camEye[2] = smpC.p[2] + smpC.r[2] * cx;
+      camTgt[0] = p[0] + smp.t[0] * 4;
+      camTgt[1] = p[1] + 0.7;
+      camTgt[2] = p[2] + smp.t[2] * 4;
+      camFov = lerp(52, 66, spd);
+    }
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).

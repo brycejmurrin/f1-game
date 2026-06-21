@@ -16,11 +16,19 @@ async function goToRace(page, circuit) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
   await page.evaluate((c) => window.__apex.race(c), circuit);
   await waitForTrack(page);
+  // Use hood camera (forward-facing from the car) for consistent regression shots.
+  await page.evaluate(() => window.__apex.camera("hood"));
 }
 
 async function park(page, frac = 0) {
-  await page.evaluate((f) => window.__apex.park(f), frac);
-  await page.waitForTimeout(100);
+  await page.evaluate((f) => {
+    window.__apex.park(f);    // sets state="race", freezes scene
+    window.__apex.jump(f, 50, 0);  // add speed so hood cam faces track ahead
+    window.__apex.snapCam();
+  }, frac);
+  // Wait for at least one render frame after snapCam() settles the camera.
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r)))));
+  await page.waitForTimeout(200);
 }
 
 test.describe("Visual Regression — Circuits 1-3", () => {
