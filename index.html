@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=99">
-<link rel="stylesheet" href="css/data.css?v=99">
+<link rel="stylesheet" href="css/style.css?v=100">
+<link rel="stylesheet" href="css/data.css?v=100">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -103,7 +103,7 @@
   <div id="sel-inner">
     <h2 id="select-title">SELECT</h2>
     <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><div id="sel-stats" class="cs-stats"></div><div class="sel-edit-row"><button id="sel-customize" class="sel-edit">&#9998; MY TEAM</button><button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button></div></div>
-    <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-track-preview"><canvas id="sel-preview-map" width="520" height="300"></canvas><div id="sel-preview-info"><div id="sel-preview-name"></div><div id="sel-preview-gp"></div><div id="sel-preview-meta"></div><div id="sel-preview-rec"></div></div></div><div id="sel-tracks"></div></div>
+    <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-track-preview"><canvas id="sel-preview-map" width="520" height="300"></canvas><div id="sel-preview-info"><div id="sel-preview-name"></div><div id="sel-preview-gp"></div><div id="sel-preview-meta"></div><div id="sel-preview-rec"></div><div id="sel-preview-facts"></div></div></div><div id="sel-tracks"></div></div>
     <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
     <div class="sel-actions">
       <button id="sel-back">BACK</button>
@@ -332,45 +332,45 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=99"></script>
-<script src="js/glx.js?v=99"></script>
-<script src="js/gltf.js?v=99"></script>
-<script src="js/teams.js?v=99"></script>
-<script src="js/circuits.js?v=99"></script>
+<script src="js/mat4.js?v=100"></script>
+<script src="js/glx.js?v=100"></script>
+<script src="js/gltf.js?v=100"></script>
+<script src="js/teams.js?v=100"></script>
+<script src="js/circuits.js?v=100"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=99"></script>
-<script src="js/tracks/monaco.js?v=99"></script>
-<script src="js/tracks/silverstone.js?v=99"></script>
-<script src="js/tracks/spa.js?v=99"></script>
-<script src="js/tracks/monza.js?v=99"></script>
-<script src="js/tracks/suzuka.js?v=99"></script>
-<script src="js/tracks/singapore.js?v=99"></script>
-<script src="js/tracks/cota.js?v=99"></script>
-<script src="js/tracks/interlagos.js?v=99"></script>
-<script src="js/tracks/vegas.js?v=99"></script>
-<script src="js/tracks/madrid.js?v=99"></script>
-<script src="js/tracks/zandvoort.js?v=99"></script>
-<script src="js/tracks/jeddah.js?v=99"></script>
-<script src="js/tracks/albert_park.js?v=99"></script>
-<script src="js/tracks/shanghai.js?v=99"></script>
-<script src="js/tracks/miami.js?v=99"></script>
-<script src="js/tracks/imola.js?v=99"></script>
-<script src="js/tracks/montreal.js?v=99"></script>
-<script src="js/tracks/redbull.js?v=99"></script>
-<script src="js/tracks/hungaroring.js?v=99"></script>
-<script src="js/tracks/baku.js?v=99"></script>
-<script src="js/tracks/mexico.js?v=99"></script>
-<script src="js/tracks/qatar.js?v=99"></script>
-<script src="js/tracks/abudhabi.js?v=99"></script>
-<script src="js/tracks.js?v=99"></script>
-<script src="js/trackmaps.js?v=99"></script>
-<script src="js/car3d.js?v=99"></script>
-<script src="js/input.js?v=99"></script>
-<script src="js/audio.js?v=99"></script>
-<script src="js/api.js?v=99"></script>
-<script src="js/data.js?v=99"></script>
-<script src="js/parts.js?v=99"></script>
-<script src="js/ghost.js?v=99"></script>
-<script src="js/game.js?v=99"></script>
+<script src="js/tracks/bahrain.js?v=100"></script>
+<script src="js/tracks/monaco.js?v=100"></script>
+<script src="js/tracks/silverstone.js?v=100"></script>
+<script src="js/tracks/spa.js?v=100"></script>
+<script src="js/tracks/monza.js?v=100"></script>
+<script src="js/tracks/suzuka.js?v=100"></script>
+<script src="js/tracks/singapore.js?v=100"></script>
+<script src="js/tracks/cota.js?v=100"></script>
+<script src="js/tracks/interlagos.js?v=100"></script>
+<script src="js/tracks/vegas.js?v=100"></script>
+<script src="js/tracks/madrid.js?v=100"></script>
+<script src="js/tracks/zandvoort.js?v=100"></script>
+<script src="js/tracks/jeddah.js?v=100"></script>
+<script src="js/tracks/albert_park.js?v=100"></script>
+<script src="js/tracks/shanghai.js?v=100"></script>
+<script src="js/tracks/miami.js?v=100"></script>
+<script src="js/tracks/imola.js?v=100"></script>
+<script src="js/tracks/montreal.js?v=100"></script>
+<script src="js/tracks/redbull.js?v=100"></script>
+<script src="js/tracks/hungaroring.js?v=100"></script>
+<script src="js/tracks/baku.js?v=100"></script>
+<script src="js/tracks/mexico.js?v=100"></script>
+<script src="js/tracks/qatar.js?v=100"></script>
+<script src="js/tracks/abudhabi.js?v=100"></script>
+<script src="js/tracks.js?v=100"></script>
+<script src="js/trackmaps.js?v=100"></script>
+<script src="js/car3d.js?v=100"></script>
+<script src="js/input.js?v=100"></script>
+<script src="js/audio.js?v=100"></script>
+<script src="js/api.js?v=100"></script>
+<script src="js/data.js?v=100"></script>
+<script src="js/parts.js?v=100"></script>
+<script src="js/ghost.js?v=100"></script>
+<script src="js/game.js?v=100"></script>
 </body>
 </html>

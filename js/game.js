@@ -2287,19 +2287,21 @@ function buildSelect() {
   });
 }
 
-// large preview of the currently-selected circuit: themed outline with numbered
-// corners, name / GP / length / turn count, and the time-trial best lap.
+// large preview of the currently-selected circuit: sector-coloured outline,
+// DRS zones, numbered corners, name / GP / length / turn count, track facts.
 function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[trackIdx];
   if (!t) return;
   TrackMaps.draw(els.selPreviewMap, t, {
     color: TrackMaps.themeColor(t), startColor: "#e10600",
-    width: 4, pad: 24, corners: true, cornerR: 9, cornerFont: 11
+    width: 4, pad: 24, corners: true, cornerR: 9, cornerFont: 11,
+    sectors: true, drs: true
   });
   els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
   els.selPreviewGp.textContent = t.gp || "";
-  const turns = TrackMaps.corners(t).length;
+  const crns = TrackMaps.corners(t);
+  const turns = crns.length;
   els.selPreviewMeta.textContent = [
     t.country,
     t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
@@ -2311,6 +2313,20 @@ function updateTrackPreview() {
     els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
   } else {
     els.selPreviewRec.textContent = "";
+  }
+  // Track facts: direction arrow, elevation badge, slowest corner callout
+  const factsEl = document.getElementById("sel-preview-facts");
+  if (factsEl) {
+    const dir = TrackMaps.direction(t);
+    const elev = TrackMaps.elevRange(t);
+    const facts = [];
+    if (dir) facts.push('<span class="spf-fact spf-dir">' + (dir === "CW" ? "↻ Clockwise" : "↺ Anti-clockwise") + "</span>");
+    if (elev > 2) facts.push('<span class="spf-fact spf-elev">&#9650; ' + elev + " m elevation</span>");
+    if (crns.length) {
+      const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
+      facts.push('<span class="spf-fact spf-corner">T' + slowest.n + " slowest</span>");
+    }
+    factsEl.innerHTML = facts.join("");
   }
 }
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
