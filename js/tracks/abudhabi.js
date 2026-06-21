@@ -18,6 +18,8 @@
       { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 400 }, { t: 90, l: 100 }, { t: 0, l: 200 },
       { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 60, l: 80 }, { t: 90, l: 100 }, { t: -60, l: 80 },
     ],
+    // Yas Marina underpass: the circuit dips below the Yas Hotel near the end of the lap.
+    elevations: [{ s: 0.88, halfM: 160, rise: -4 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, groundPlane, addBox,
         anchor, onTrack, hash, vadd, building, tower, grandstand, billboard,

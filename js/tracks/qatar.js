@@ -18,6 +18,8 @@
       { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 80, l: 100 }, { t: -70, l: 90 }, { t: 60, l: 90 }, { t: 0, l: 300 },
       { t: -80, l: 100 }, { t: 70, l: 90 }, { t: 0, l: 400 }, { t: -60, l: 90 }, { t: 70, l: 90 }, { t: 0, l: 300 },
     ],
+    // Losail: gentle desert undulation through the far hairpin section.
+    elevations: [{ s: 0.55, halfM: 380, rise: 5 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, vadd,
         place, prop, backdrop, anchor, addBox, addCyl, addFrustum,

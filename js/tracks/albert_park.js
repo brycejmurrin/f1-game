@@ -18,6 +18,9 @@
       { t: 0, l: 300 }, { t: 50, l: 100 }, { t: -50, l: 90 }, { t: 65, l: 80 }, { t: 0, l: 200 }, { t: 80, l: 90 },
       { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 260 }, { t: 80, l: 90 }, { t: 0, l: 200 }, { t: 70, l: 80 },
     ],
+    // Gentle parkland undulation: slight rise through the T11-T15 lakeside section,
+    // then a dip back through the T1-T4 approach — mirrors Melbourne's actual terrain.
+    elevations: [{ s: 0.12, halfM: 340, rise: 7 }, { s: 0.55, halfM: 300, rise: -5 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, every, hash,
               grandstand, building, tree, palm, bush, billboard, gantry, anchor, vadd, addBox } = api;
