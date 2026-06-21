@@ -158,6 +158,13 @@ test.describe("__apex.info()", () => {
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.state).toBe("results");
   });
+
+  test("timeTrial and seasonMode are false in normal race", async ({ page }) => {
+    await load(page);
+    const info = await page.evaluate(() => window.__apex.info());
+    expect(info.timeTrial).toBe(false);
+    expect(info.seasonMode).toBe(false);
+  });
 });
 
 // ── Camera tools ───────────────────────────────────────────────────────────

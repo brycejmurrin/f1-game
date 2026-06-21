@@ -73,6 +73,10 @@ const TrackMaps = (function () {
     const c = def && compute(def);
     return c ? c.elevRange : 0;
   }
+  function elevProfile(def) {
+    const c = def && compute(def);
+    return c ? c.py : null;
+  }
 
   // Circuit direction: signed area of the 2D polygon (px, pz).
   // Positive signed area = counter-clockwise; negative = clockwise.
@@ -276,5 +280,5 @@ const TrackMaps = (function () {
     return true;
   }
 
-  return { outline, corners, direction, drsZones, elevRange, themeColor, draw, SECTOR_COLORS };
+  return { outline, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, SECTOR_COLORS };
 })();
