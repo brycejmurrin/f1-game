@@ -941,3 +941,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
   /* Suppress the "rotate device" overlay — we're already showing landscape. */
   body.sw-landscape #rotate-device { display: none !important; }
 }
+
+/* ---------- season standings overlay ---------- */
+#standings { max-width: min(92vw, 540px); max-height: 80vh; }
+#standings-body { max-height: 55vh; overflow-y: auto; }
+#standings-body .res-row { font-size: 13px; }
