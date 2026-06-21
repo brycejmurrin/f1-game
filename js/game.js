@@ -3570,6 +3570,20 @@ window.__apex = {
     startRace();
     return { track: Tracks.LIST[i].id, timeOfDay: raceTimeOfDay, weather: raceWeather };
   },
+  tt(trackRef, timeOfDay) {
+    const i = typeof trackRef === "number"
+      ? trackRef
+      : Tracks.LIST.findIndex((t) => t.id === trackRef);
+    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    trackIdx = i;
+    seasonMode = false;
+    timeTrial = true;
+    raceLaps = TT_LAPS;
+    raceWeather = "dry";
+    raceTimeOfDay = timeOfDay || "default";
+    startRace();
+    return { track: Tracks.LIST[i].id, timeTrial: true };
+  },
   // Load an optional .glb car model at runtime (team meshes rebuild from it,
   // tinted per livery); resolves false and keeps the procedural car on failure.
   loadCarModel: (url) => loadCarModel(url),
