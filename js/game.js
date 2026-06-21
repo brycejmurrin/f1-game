@@ -1632,8 +1632,11 @@ function updateCar(c, dt, ranked) {
     // Gated past the race launch so the standing start (everyone at 0) is exempt.
     const stoppedOnTrack = c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
     const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
-    // 4-second grace period after a rescue prevents rapid re-rescue on marginal stuck conditions.
-    const rescueGrace = raceT < (c.rescueLastT || 0) + 4;
+    // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
+    // stuck conditions. Only applies once a rescue has actually happened —
+    // (c.rescueLastT || 0) defaulted to 0 and blocked rescue for the first 4 s of
+    // every race, so a car stuck from the start was never recovered.
+    const rescueGrace = c.rescueLastT != null && raceT < c.rescueLastT + 4;
     if (stuck && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
@@ -3136,7 +3139,9 @@ window.__apex = {
     camTgt[2] = p[2] + smp.t[2] * 4;
     camFov = lerp(52, 66, clamp(player.speed / VMAX, 0, 1));
   },
-  info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  // track reflects the ACTIVE race track — null at the menu/select even though a
+  // track is loaded for the background flyby (matches the documented contract).
+  info: () => ({ state, track: (state === "race" || state === "count") ? (track && track.def.id) : null, n: track && track.n, total: track && track.total }),
   camState: () => ({ eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov }),
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },
