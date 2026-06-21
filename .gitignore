@@ -8,3 +8,6 @@ playwright-report/
 
 # scratch visual-inspection captures (tests/inspect-*.spec.js)
 tests/ui-screenshots/inspect/
+
+# generated follow-cam track traces (tests/track-trace.spec.js) — regenerable
+tests/track-trace/
