@@ -23,9 +23,9 @@
     elevations: [{ s: 0.03, halfM: 260, rise: -4 }, { s: 0.45, halfM: 340, rise: -7 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, vadd,
-        place, prop, backdrop, anchor, addBox, addCyl, addFrustum,
+        place, prop, backdrop, anchor, addBox, addCyl, addFrustum, addPrism,
         palm, bush, grandstand, building, tower, billboard, gantry, marshalPost,
-        peak, mountain, fence, wall } = api;
+        peak, mountain, fence, wall, guardrail, tyreWall, groundYAt, onTrack } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Palettes from the brief
@@ -196,6 +196,156 @@
         const side = hash(k * 9) < 0.5 ? -1 : 1;
         floodMast(k, side, 36 + hash(k * 11) * 18, 24 + hash(k * 13) * 4);
       }
+
+      // ============================================================
+      // ====  ADDED DETAIL — richer paddock, stands, desert  =======
+      // ============================================================
+
+      const HOSP_GLASS = [0.34, 0.40, 0.50], HOSP_WALL = [0.82, 0.82, 0.80];
+      const TYRE_CAP = [0.85, 0.13, 0.13], BILLBOARD_LITE = [0.95, 0.93, 0.86];
+
+      // ---- A floodlit mast helper variant placed in clusters for a "bank" of
+      // lights (three poles in a short row). ----
+      const lightBank = (k, side, gap) => {
+        for (const off of [-6, 0, 6]) {
+          const kk = (k + off + n) % n;
+          floodMast(kk, side, gap, 24 + hash(kk * 3) * 4);
+        }
+      };
+
+      // ---- A small hospitality / team motorhome: a low glassy box with a
+      // bright lit parapet, for the paddock area. ----
+      const hospitality = (k, side, dist, w, h, d) => {
+        building(k, side, dist, w, h, d, { wall: HOSP_WALL, window: HOSP_GLASS, floor: 3 });
+        // lit roof parapet line
+        const a = anchor(k, side, dist + d * 0.5), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, h + 0.5), [w * 1.05, 0.6, d * 1.02], FLOOD, b);
+      };
+
+      // ================= PADDOCK / HOSPITALITY ROW (behind pits, s 0.00–0.95) =================
+      // Cluster of team motorhomes & hospitality units set well back on the
+      // left (paddock side) behind the pit building — adds depth at S/F.
+      for (let i = 0; i < 6; i++) {
+        const k = (K(0.985) + i * 4) % n;
+        hospitality(k, -1, 30 + (i % 2) * 6, 12, 7 + hash(k * 3) * 3, 16);
+      }
+      // taller paddock office block + comms tower behind the Sakhir Tower side
+      building(K(0.97), -1, 64, 20, 22, 26, { wall: [0.78, 0.78, 0.76], window: [0.30, 0.34, 0.42], floor: 6 });
+      tower(K(0.95), -1, 84, 5, 38, { col: TOWER_PALE, seg: 6, cap: true, capCol: FLOOD, mast: true });
+      // pit-lane tyre wall + guardrail edging on the pit side
+      tyreWall(0.90, 0.98, -1, 5, TYRE_CAP);
+      guardrail(0.985, 0.06, 1, 9, [0.80, 0.80, 0.82]);
+      // extra start-line advertising hoardings
+      billboard(K(0.99), 1, 9, 13, 4, BILLBOARD_LITE);
+      billboard(K(0.02), -1, 9, 12, 4, [0.10, 0.55, 0.30]);
+
+      // ================= TURN 1 — denser stands + furniture (s 0.05) =================
+      grandstand(0.065, 1, 26, 64, [0.39, 0.40, 0.45], [0.20, 0.30, 0.50]); // outer second tier
+      lightBank(K(0.06), 1, 34);
+      tyreWall(0.045, 0.085, 1, 4, TYRE_CAP);        // T1 apex tyre stack
+      fence(0.03, 0.09, -1, 7, 3.2, [0.70, 0.72, 0.76]);
+      billboard(K(0.08), 1, 8, 12, 3.5, [0.05, 0.45, 0.75]);
+      marshalPost(K(0.06), 1, 20);
+
+      // ================= TURN 3/4 COMPLEX (s 0.22–0.28) — was sparse =================
+      grandstand(0.24, 1, 22, 56, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.26, -1, 24, 46, [0.41, 0.42, 0.47], [0.16, 0.24, 0.42]);
+      lightBank(K(0.25), -1, 32);
+      lightBank(K(0.27), 1, 32);
+      tyreWall(0.225, 0.255, 1, 4, TYRE_CAP);
+      fence(0.22, 0.29, 1, 6, 3.2, [0.70, 0.72, 0.76]);
+      billboard(K(0.23), -1, 9, 12, 4, [0.85, 0.12, 0.12]);
+      billboard(K(0.27), 1, 9, 12, 4, [0.90, 0.55, 0.05]);
+      marshalPost(K(0.24), -1, 22);
+      // small desert hospitality cluster set back at T4
+      for (let i = 0; i < 3; i++) hospitality((K(0.255) + i * 4) % n, 1, 40 + i * 5, 11, 6, 14);
+
+      // ================= TURNS 5-6-7 SWEEP (s 0.32–0.40) — palm oasis + furniture =================
+      // A genuine palm oasis clump filling the sparse left-side sweep.
+      for (let i = 0; i < 14; i++) {
+        const k = (K(0.32) + Math.round(i * n * 0.006)) % n;
+        const side = (i % 3 === 0) ? 1 : -1;
+        const d = 22 + (i % 4) * 9 + hash(k * 7 + i) * 8;
+        palm(k, side, d, 6.5 + hash(k * 11 + i) * 4.5, [0.16, 0.34, 0.14]);
+        if (hash(k * 13 + i) > 0.5) bush((k + 1) % n, side, d - 4, [0.28, 0.31, 0.18]);
+      }
+      lightBank(K(0.35), -1, 34);
+      grandstand(0.37, 1, 24, 44, [0.41, 0.42, 0.47], SEAT);
+      fence(0.34, 0.41, 1, 6, 3.0, [0.70, 0.72, 0.76]);
+      billboard(K(0.36), -1, 10, 12, 4, [0.10, 0.30, 0.70]);
+
+      // ================= TURN 8 HAIRPIN — extra detail (s 0.42) =================
+      tyreWall(0.405, 0.44, 1, 4, TYRE_CAP);          // outer hairpin tyre wall
+      fence(0.40, 0.46, -1, 7, 3.2, [0.70, 0.72, 0.76]);
+      grandstand(0.44, 1, 22, 50, [0.42, 0.43, 0.48], [0.20, 0.30, 0.50]);
+      billboard(K(0.43), 1, 9, 12, 4, [0.05, 0.45, 0.75]);
+
+      // ================= OPEN DESERT (s 0.48–0.56) — fill empty foreground =================
+      // Mid-distance dune wedges + scrub on both sides plus a couple of
+      // distant hospitality boxes so the flats aren't bare.
+      for (let i = 0; i < 6; i++) {
+        const k = (K(0.49) + Math.round(i * n * 0.01)) % n;
+        for (const side of [-1, 1]) {
+          duneWedge(k, side, 44 + i * 14, 32 + hash(k * 3 + side) * 26, 3.5 + hash(k * 5) * 2.5);
+        }
+        if (i % 2 === 0) palm(k, (i % 4 < 2) ? -1 : 1, 30 + i * 6, 6 + hash(k * 9) * 3, [0.15, 0.32, 0.13]);
+      }
+      grandstand(0.52, 1, 26, 48, [0.40, 0.41, 0.46], SEAT);
+      lightBank(K(0.51), 1, 36);
+      lightBank(K(0.54), -1, 36);
+      marshalPost(K(0.50), -1, 24);
+
+      // ================= TURN 9-10 (s 0.58–0.66) — paddock annex + furniture =================
+      tyreWall(0.585, 0.62, 1, 4, TYRE_CAP);
+      fence(0.58, 0.67, 1, 6, 3.2, [0.70, 0.72, 0.76]);
+      grandstand(0.63, 1, 22, 46, [0.41, 0.42, 0.47], [0.16, 0.24, 0.42]);
+      billboard(K(0.60), -1, 10, 12, 4, [0.90, 0.55, 0.05]);
+      billboard(K(0.64), 1, 9, 12, 4, [0.85, 0.12, 0.12]);
+      // a low timing/medical building cluster set back
+      for (let i = 0; i < 3; i++) building((K(0.62) + i * 4) % n, -1, 38 + i * 6, 10, 6 + hash(i) * 3, 13,
+        { wall: [0.90, 0.90, 0.86], window: [0.28, 0.32, 0.40], floor: 3 });
+
+      // ================= BACK STRAIGHT (s 0.72–0.90) — denser banks + walls =================
+      tyreWall(0.74, 0.88, 1, 5, TYRE_CAP);
+      guardrail(0.73, 0.90, -1, 8, [0.80, 0.80, 0.82]);
+      lightBank(K(0.76), 1, 34);
+      lightBank(K(0.86), 1, 34);
+      grandstand(0.78, 1, 24, 60, [0.42, 0.43, 0.48], SEAT);
+      billboard(K(0.75), -1, 10, 14, 4, BILLBOARD_LITE);
+      billboard(K(0.78), 1, 12, 14, 4, [0.05, 0.45, 0.75]);
+      billboard(K(0.86), -1, 10, 12, 4, [0.10, 0.55, 0.30]);
+      marshalPost(K(0.82), 1, 22);
+      // mid-straight overhead gantry (DRS / scoring)
+      gantry(0.81, 8.2, STEEL);
+
+      // ---- Distant Manama-style desert-city glow on the far horizon: a sparse
+      // ring of low lit boxes well beyond the dune band, kept off any tarmac. ----
+      const cityRing = rad + 540;
+      for (let i = 0; i < 40; i++) {
+        const a = i / 40 * 6.2832 + 0.3, h = hash(i * 17 + 99);
+        const x = cx + Math.cos(a) * (cityRing + (h - 0.5) * 120);
+        const z = cz + Math.sin(a) * (cityRing + (h - 0.5) * 120);
+        if (onTrack(x, z, 30)) continue;
+        const bw = 16 + h * 22, bh = 18 + h * 70;
+        addBox(out, [x, pyMin + bh * 0.5, z], [bw, bh, bw], [0.16, 0.17, 0.24]);
+        // lit crown / window glow on the city towers
+        addBox(out, [x, pyMin + bh + 1, z], [bw * 0.7, 2, bw * 0.7], [0.85, 0.78, 0.55]);
+      }
+
+      // ---- A few tall slim distant comms / lighting towers on the city ring for
+      // silhouette variety. ----
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * 6.2832 + 1.1, h = hash(i * 23 + 7);
+        const x = cx + Math.cos(a) * (cityRing - 40), z = cz + Math.sin(a) * (cityRing - 40);
+        if (onTrack(x, z, 20)) continue;
+        addCyl(out, [x, pyMin, z], 2.5, 70 + h * 50, [0.18, 0.19, 0.26], 6, null);
+        addBox(out, [x, pyMin + 72 + h * 50, z], [4, 3, 4], [0.90, 0.40, 0.10], null);
+      }
+
+      // ---- Extra catch-fence ribbon along sweeping mid-lap corners for visual
+      // density of trackside furniture (kept at safe clearance). ----
+      fence(0.10, 0.16, 1, 7, 3.0, [0.70, 0.72, 0.76]);
+      fence(0.66, 0.72, -1, 7, 3.0, [0.70, 0.72, 0.76]);
     },
   }
   );

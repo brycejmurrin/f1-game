@@ -19,9 +19,10 @@
       { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 60, l: 80 }, { t: 90, l: 100 }, { t: -60, l: 80 },
     ],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, groundPlane, addBox,
+      const { out, n, px, pz, pyMin, place, prop, groundPlane, addBox,
         anchor, onTrack, hash, vadd, building, tower, grandstand, billboard,
-        gantry, palm, addCyl } = api;
+        gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
+        addPyramid, fence, guardrail, tyreWall, marshalPost, wall, along } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- dusk-to-night marina palette ----
@@ -207,28 +208,64 @@
       // ===================================================================
       {
         const k = K(0.88);
-        // flanking towers — built clear of the racing line, with LED-grid shells
+        // flanking twin curved towers — built clear of the racing line, LED-grid shells.
+        // Made tall + bright so the hotel reads as the hero landmark from far out.
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 14);
-          const H = 44;
-          addBox(out, vadd(a.c, a.u, H / 2), [26, H, 30], [0.10, 0.11, 0.16], [a.r, a.u, a.t]); // tower mass
-          // emissive LED grid facing the track
-          for (let gy = 0; gy < 7; gy++) for (let gx = 0; gx < 4; gx++) {
-            const cc = vadd(vadd(a.c, a.u, 6 + gy * 5.4), a.t, (gx - 1.5) * 7);
-            const col = LED_CYCLE[(gx + gy) % 3];
-            addBox(out, vadd(cc, a.r, -side * 13.2), [0.6, 4.2, 5.4], col, [a.r, a.u, a.t]);
+          const a = anchor(k, side, 16);
+          const H = 72;
+          // tapered tower core (curved-tower read via frustum)
+          addFrustum(out, a.c, 20, 14, H, [0.08, 0.09, 0.14], 8, [a.r, a.u, a.t]);
+          // dark glass podium base
+          addBox(out, vadd(a.c, a.u, 6), [34, 12, 40], [0.06, 0.07, 0.11], [a.r, a.u, a.t]);
+          // warm uplit base band
+          addBox(out, vadd(a.c, a.u, 1.4), [37, 2.8, 43], WARM, [a.r, a.u, a.t]);
+          // emissive LED grid-shell facing the track (dense diagrid panels)
+          for (let gy = 0; gy < 12; gy++) for (let gx = 0; gx < 6; gx++) {
+            const cc = vadd(vadd(a.c, a.u, 9 + gy * 5.2), a.t, (gx - 2.5) * 6.4);
+            const col = LED_CYCLE[(gx + gy + k) % 3];
+            addBox(out, vadd(cc, a.r, -side * 15.0), [0.5, 4.0, 5.0], col, [a.r, a.u, a.t]);
+          }
+          // wrap-around LED band on the side face too (curved-shell read)
+          for (let gy = 0; gy < 12; gy++) {
+            const cc = vadd(a.c, a.u, 9 + gy * 5.2);
+            const col = LED_CYCLE[(gy + k + 1) % 3];
+            addBox(out, vadd(cc, a.t, side * 19.5), [0.5, 4.0, 4.0], col, [a.r, a.u, a.t]);
+          }
+          // crown cap + beacon
+          addBox(out, vadd(a.c, a.u, H + 2), [18, 3, 22], FLOOD, [a.r, a.u, a.t]);
+          addBox(out, vadd(a.c, a.u, H + 5), [3, 4, 3], LED_MAG, [a.r, a.u, a.t]);
+        }
+        // SWEEPING CANOPY — two inward-leaning cantilever half-shells reaching from
+        // each tower crown toward the track. They arch high overhead; the central
+        // over-tarmac gap (which the engine culls) is left open. Reads as the iconic
+        // grid-shell hugging both sides of the road.
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, 16);
+          for (let band = -2; band <= 2; band++) {
+            const foff = band * 8;
+            let prev = null;
+            // reach from 16m out (tower) toward 4m off the inner edge — never on tarmac
+            for (let j = 0; j <= 9; j++) {
+              const t = j / 9;
+              const dist = 16 - t * 11;                      // 16 → 5m off the edge
+              const ap = anchor(k, side, dist);
+              const lift = 22 + Math.sin(t * 1.45) * 22;     // rises toward the centre
+              const c = vadd(vadd(ap.c, ap.u, lift), ap.t, foff);
+              const col = LED_CYCLE[(j + band + side + 6) % 3];
+              addBox(out, c, [3.0, 1.4, 2.6], col, [ap.r, ap.u, ap.t]);
+              if (prev) {
+                const mid = [(prev[0] + c[0]) / 2, (prev[1] + c[1]) / 2, (prev[2] + c[2]) / 2];
+                addBox(out, mid, [2.8, 0.7, 1.0], [0.05, 0.06, 0.09], [ap.r, ap.u, ap.t]);
+              }
+              prev = c;
+            }
           }
         }
-        // gridshell arch straddling the track: lattice ribs from L crown to R crown
-        const aL = anchor(k, -1, 14), aR = anchor(k, 1, 14);
-        for (let j = 0; j <= 12; j++) {
-          const t = j / 12;
-          const bx = aL.c[0] + (aR.c[0] - aL.c[0]) * t;
-          const bz = aL.c[2] + (aR.c[2] - aL.c[2]) * t;
-          const lift = Math.sin(t * Math.PI) * 18 + 26;   // arch over road, well above cars
-          const c = [bx, aL.c[1] + lift, bz];
-          const col = LED_CYCLE[j % 3];
-          addBox(out, c, [6, 2.0, 6], col, [aL.r, aL.u, aL.t]);
+        // hotel-side reflecting pool + dock lamps below the arch (warm specks)
+        groundPlane(K(0.87), 1, 12, [70, 1.2, 60], WATER);
+        for (let i = 0; i < 6; i++) {
+          const a = anchor(K(0.87), 1, 8 + i);
+          addBox(out, vadd(vadd(a.c, a.t, (i - 3) * 10), a.u, 0.4), [2, 0.4, 2], LED_AMBER, [a.r, a.u, a.t]);
         }
       }
 
@@ -283,6 +320,146 @@
       for (let i = 0; i < 18; i++) palm(K(0.78 + i * 0.008), -1, 8 + hash(i * 11) * 4, 9);
       // inner-infield palms at pit-entry chicane
       for (let i = 0; i < 10; i++) palm(K(0.92 + i * 0.007), 1, 9 + hash(i * 7) * 5, 7);
+
+      // ===================================================================
+      // CONTINUOUS TRACK FURNITURE — catch fences, guardrails, tyre walls,
+      // marshal posts ringing the lap. Kept at safe clearance off the tarmac.
+      // ===================================================================
+      // Outer catch/debris fence running most of the lap (spectator protection)
+      fence(0.03, 0.30, -1, 4.5, 4.5, [0.42, 0.45, 0.50]);
+      fence(0.50, 0.86, 1, 4.5, 4.5, [0.42, 0.45, 0.50]);
+      fence(0.30, 0.48, -1, 4.5, 4.0, [0.42, 0.45, 0.50]);
+      // Pit-wall (solid concrete) along the start/finish straight, pit side
+      wall(0.985, 0.07, 1, 3.0, 1.1, [0.80, 0.82, 0.86], 0.6);
+      // Armco guardrails on the open runoff edges
+      guardrail(0.05, 0.18, -1, 6, [0.75, 0.77, 0.80]);
+      guardrail(0.32, 0.42, 1, 6, [0.75, 0.77, 0.80]);
+      guardrail(0.90, 0.99, -1, 6, [0.75, 0.77, 0.80]);
+      // Tyre-wall stacks at the tight corner exits (hairpin + final chicane)
+      tyreWall(0.27, 0.31, 1, 5, LED_TEAL);
+      tyreWall(0.27, 0.31, -1, 5, LED_AMBER);
+      tyreWall(0.95, 0.985, 1, 5, LED_MAG);
+      tyreWall(0.05, 0.085, -1, 5, LED_TEAL);
+      // Marshal posts (orange roof + flag pole) spaced around the lap
+      for (let i = 0; i < 14; i++) {
+        const s = i / 14;
+        marshalPost(K(s), (i % 2) ? 1 : -1, 7);
+      }
+
+      // ===================================================================
+      // ADVERTISING — ring of lit billboards facing the grandstands
+      // ===================================================================
+      {
+        const ad = [LED_TEAL, LED_MAG, LED_AMBER, WIN, FERRARI];
+        for (let i = 0; i < 16; i++) {
+          const s = i / 16;
+          const side = (i % 2) ? -1 : 1;
+          billboard(K(s + 0.013), side, 11, 15, 8, ad[i % ad.length]);
+        }
+      }
+
+      // ===================================================================
+      // PIT / PADDOCK complex behind the pit wall (R of S/F straight):
+      // garage block, motorhome row, fuel/tyre bays, paddock floodlights
+      // ===================================================================
+      {
+        // long paddock apron
+        place(K(0.02), 1, 40, [120, 0.5, 60], [0.18, 0.19, 0.21]);
+        // team motorhome row (two-storey lit hospitality units)
+        for (let i = 0; i < 8; i++) {
+          const k = K(0.985 + i * 0.011);
+          const wc = (i % 2) ? WIN : WIN_WARM;
+          place(k, 1, 44, [14, 9, 16], [0.20, 0.21, 0.26]);
+          place(k, 1, 44, [14.4, 2.4, 16.4], wc);          // lit window band
+          place(k, 1, 44, [15, 1.5, 17], [0.10, 0.11, 0.14]); // roof cap (slightly above via h offset handled by place center)
+        }
+        // pit-lane back wall + garage roof line
+        for (let i = 0; i < 6; i++) {
+          place(K(0.0 + i * 0.012), 1, 22, [10, 8, 28], [0.22, 0.23, 0.28]);
+          place(K(0.0 + i * 0.012), 1, 22, [10.4, 1.2, 28.4], FLOOD); // roof fascia glow
+        }
+        // paddock floodlight masts
+        for (let i = 0; i < 5; i++)
+          tower(K(0.99 + i * 0.013), 1, 50, 4, 30, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
+      }
+
+      // ===================================================================
+      // START GANTRY DETAIL — five red lights bar over the line + camera gantry
+      // ===================================================================
+      {
+        const aL = anchor(K(0.0), -1, 7), aR = anchor(K(0.0), 1, 7);
+        for (let j = 0; j < 5; j++) {
+          const t = (j + 0.5) / 5;
+          const bx = aL.c[0] + (aR.c[0] - aL.c[0]) * t;
+          const bz = aL.c[2] + (aR.c[2] - aL.c[2]) * t;
+          addBox(out, [bx, aL.c[1] + 8.5, bz], [1.6, 1.6, 0.8], [0.85, 0.10, 0.08], [aL.r, aL.u, aL.t]);
+        }
+        // a second photo/scoring gantry just before T1
+        gantry(0.96, 9, DARK);
+      }
+
+      // ===================================================================
+      // SUN-TOWER landmark at the North Hairpin (curved viewing tower)
+      // ===================================================================
+      {
+        const k = K(0.28);
+        const a = anchor(k, 1, 36);
+        addFrustum(out, a.c, 14, 9, 40, [0.12, 0.13, 0.18], 10, [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 22), [30, 8, 12], WIN, [a.r, a.u, a.t]);   // glazed observation deck
+        addBox(out, vadd(a.c, a.u, 42), [10, 4, 10], FLOOD, [a.r, a.u, a.t]); // lit crown
+      }
+
+      // ===================================================================
+      // GRANDSTAND CROWN DETAIL — big-screen video walls + roof spotlights
+      // on the main stands
+      // ===================================================================
+      for (const [s, side] of [[0.0, -1], [0.28, -1], [0.28, 1], [0.70, 1], [0.78, -1]]) {
+        const a = anchor(K(s), side, 22);
+        addBox(out, vadd(a.c, a.u, 20), [22, 12, 1.5], WIN, [a.r, a.u, a.t]);        // screen frame
+        addBox(out, vadd(vadd(a.c, a.u, 20), a.r, side * 0.9), [19, 10, 0.6], LED_TEAL, [a.r, a.u, a.t]); // bright screen
+      }
+
+      // ===================================================================
+      // ISLAND LANDSCAPING — hedges, low shrubs, ornamental palm clusters in
+      // the infield gaps and along the marina promenade
+      // ===================================================================
+      hedge(0.10, 0.18, -1, 12, 2.2, [0.16, 0.22, 0.14]);
+      hedge(0.62, 0.74, 1, 13, 2.2, [0.16, 0.22, 0.14]);
+      for (let i = 0; i < 24; i++) {
+        const s = i / 24;
+        bush(K(s), (i % 2) ? 1 : -1, 10 + hash(i * 13) * 6, [0.15, 0.21, 0.13]);
+      }
+      // palm clusters at corner apex gardens (small grouped trios)
+      for (const s of [0.05, 0.18, 0.42, 0.55, 0.78, 0.95]) {
+        for (let j = 0; j < 3; j++)
+          palm(K(s + j * 0.004), (s < 0.5) ? -1 : 1, 12 + j * 2, 7 + hash(j * 3) * 4);
+      }
+
+      // ===================================================================
+      // MARINA PROMENADE DETAIL — pavilion tents + a hero mega-yacht +
+      // jetty fingers reaching into the water
+      // ===================================================================
+      {
+        // hero mega-yacht moored at the marina mouth (s ~0.66)
+        const k = K(0.66);
+        const a = anchor(k, 1, 30);
+        const hc = vadd(a.c, a.u, 2.5);
+        addBox(out, hc, [9, 5, 34], [0.95, 0.96, 0.97], [a.r, a.u, a.t]);          // hull
+        addBox(out, vadd(hc, a.u, 4), [7, 4, 22], [0.90, 0.91, 0.94], [a.r, a.u, a.t]); // superstructure
+        addBox(out, vadd(hc, a.u, 7.5), [5, 3, 12], WIN, [a.r, a.u, a.t]);          // bridge deck windows
+        addCyl(out, vadd(hc, a.u, 12), 0.25, 14, [0.85, 0.86, 0.9], 4, [a.r, a.u, a.t]); // mast
+        addBox(out, vadd(hc, a.u, 0.6), [10, 0.4, 36], WARM, [a.r, a.u, a.t]);      // reflection
+        // white pavilion tents along the promenade (A-frame prisms)
+        for (let i = 0; i < 7; i++) {
+          const ak = anchor(K(0.56 + i * 0.018), 1, 18);
+          addPrism(out, vadd(ak.c, ak.u, 3), [6, 4, 8], [0.94, 0.95, 0.97], [ak.r, ak.u, ak.t]);
+        }
+        // jetty fingers
+        for (let i = 0; i < 5; i++) {
+          const jk = anchor(K(0.55 + i * 0.02), 1, 12);
+          addBox(out, vadd(jk.c, jk.t, 0), [2, 0.5, 26], [0.30, 0.28, 0.25], [jk.r, jk.u, jk.t]);
+        }
+      }
     },
   }
   );
