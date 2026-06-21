@@ -14,7 +14,7 @@ async function startRace(page, id = "monza") {
 }
 
 test.describe("Apex 26 — player camera modes", () => {
-  test("camera() reports the four modes and switches by id, index and label", async ({ page }) => {
+  test("camera() reports all modes and switches by id, index and label", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {
       const init = window.__apex.camera();
@@ -23,7 +23,7 @@ test.describe("Apex 26 — player camera modes", () => {
       const bad = window.__apex.camera("banana");
       return { init, byId, byIdx, bad };
     });
-    expect(r.init.modes).toEqual(["chase", "far", "cockpit", "hood"]);
+    expect(r.init.modes).toEqual(["chase", "far", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic"]);
     expect(r.byId.mode).toBe("cockpit");
     expect(r.byIdx.mode).toBe("chase");
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
@@ -35,13 +35,14 @@ test.describe("Apex 26 — player camera modes", () => {
       window.__apex.camera(0);            // start at chase
       const out = [];
       const btn = document.getElementById("btn-cam");
-      for (let i = 0; i < 5; i++) {        // 4 modes + wrap back to the first
+      const count = window.__apex.camera().modes.length;
+      for (let i = 0; i < count + 1; i++) {   // all modes + wrap back to the first
         out.push(window.__apex.camera().mode);
         btn.click();
       }
       return out;
     });
-    expect(seq).toEqual(["chase", "far", "cockpit", "hood", "chase"]);
+    expect(seq).toEqual(["chase", "far", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "chase"]);
   });
 
   test("camera choice persists across a reload", async ({ page }) => {
@@ -58,7 +59,7 @@ test.describe("Apex 26 — player camera modes", () => {
     await startRace(page);
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const shots = {};
-    for (const mode of ["chase", "far", "cockpit", "hood"]) {
+    for (const mode of ["chase", "far", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic"]) {
       await page.evaluate((m) => window.__apex.camera(m), mode);
       // let the camera damp toward the new vantage and render a few frames
       await page.evaluate(() => { for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1); });
