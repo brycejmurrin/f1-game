@@ -127,11 +127,20 @@ const Input = (function () {
   /* ---------------- tilt ---------------- */
 
   function screenAngle() {
+    let angle = 0;
     if (typeof screen !== "undefined" && screen.orientation &&
         typeof screen.orientation.angle === "number") {
-      return screen.orientation.angle;
+      angle = screen.orientation.angle;
+    } else if (typeof window.orientation === "number") {
+      angle = window.orientation;
     }
-    return typeof window.orientation === "number" ? window.orientation : 0;
+    // CSS software rotation (body.sw-landscape) adds an effective 90° CW rotation
+    // without firing a real orientationchange, so compensate here to keep tilt axes correct.
+    if (typeof document !== "undefined" && document.body &&
+        document.body.classList.contains("sw-landscape")) {
+      angle = (angle + 90) % 360;
+    }
+    return angle;
   }
 
   function onOrient(e) {
@@ -553,7 +562,8 @@ const Input = (function () {
     if (typeof cutoff === "number" && isFinite(cutoff)) OE_MIN_CUTOFF = Math.max(0.3, Math.min(4, cutoff));
   }
   function setTiltDeadzone(deg) {
-    if (typeof deg === "number" && isFinite(deg)) DEADZONE = Math.max(0, Math.min(15, deg));
+    // Clamp DEADZONE strictly below MAX_TILT so the steering formula d/(MAX_TILT-DEADZONE) never divides by zero or inverts.
+    if (typeof deg === "number" && isFinite(deg)) DEADZONE = Math.max(0, Math.min(Math.min(15, MAX_TILT - 1), deg));
   }
 
   function touchControlsNeeded() {

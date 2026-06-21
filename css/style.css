@@ -228,7 +228,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   background: rgba(6,6,10,0.97);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   display: flex; align-items: flex-start; justify-content: center;
-  padding: calc(var(--sat) + 16px) calc(var(--sal) + 16px) calc(var(--sab) + 16px) calc(var(--sar) + 16px);
+  padding: calc(var(--sat) + 16px) calc(var(--sar) + 16px) calc(var(--sab) + 16px) calc(var(--sal) + 16px);
 }
 #cs-inner {
   width: 100%; max-width: 900px;
@@ -814,6 +814,9 @@ body.desktop #pm-calib { display: none !important; }
   #hud-energy { width: 150px; height: 16px; }
   #minimap { width: 140px; height: 140px; }
 }
+
+/* Keyboard focus ring — required for WCAG 2.4.7 Focus Visible (AA). */
+button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 
 [hidden] { display: none !important; }
 

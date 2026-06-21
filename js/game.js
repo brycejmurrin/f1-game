@@ -1509,7 +1509,9 @@ function updateCar(c, dt, ranked) {
     // Gated past the race launch so the standing start (everyone at 0) is exempt.
     const stoppedOnTrack = c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
     const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
-    if (stuck) c.rescueT = (c.rescueT || 0) + dt;
+    // 4-second grace period after a rescue prevents rapid re-rescue on marginal stuck conditions.
+    const rescueGrace = raceT < (c.rescueLastT || 0) + 4;
+    if (stuck && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
   }
@@ -1528,6 +1530,7 @@ function rescuePlayer(c) {
   c.px = smp.p[0]; c.pz = smp.p[2];
   c.boostOn = false; c.deploying = false;
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
+  c.rescueLastT = raceT;
   announce("RECOVERED", 1.2);
   if (soundOn) GameAudio.offtrack();
 }
@@ -2286,10 +2289,12 @@ function updateOrientBtn() {
   $("pm-orient").textContent = "SCREEN: " + st.label + (sw ? " *" : "");
 }
 // Apply CSS software-landscape rotation and notify the renderer of the new size.
+// RAF defers the resize event until after the CSS transform layout pass completes,
+// ensuring canvas.clientWidth/Height reflect the rotated dimensions.
 function applySWLandscape(on) {
   document.body.classList.toggle("sw-landscape", on);
   store.set("swLandscape", on ? 1 : 0);
-  window.dispatchEvent(new Event("resize"));
+  requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
 }
 // Restore CSS rotation immediately (no gesture needed).
 if (store.get("swLandscape", 0)) applySWLandscape(true);
