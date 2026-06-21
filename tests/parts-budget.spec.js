@@ -45,7 +45,7 @@ test.describe("Budget system — display", () => {
   test("budget bar fill is zero at all defaults", async ({ page }) => {
     await openSetup(page);
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
-      (el as HTMLElement).style.transform
+      el.style.transform
     );
     expect(transform).toContain("scaleX(0)");
   });
@@ -67,7 +67,7 @@ test.describe("Budget system — part selection", () => {
     await page.locator(".cs-chip").filter({ hasText: /^Race$/ }).first().click();
     await page.waitForTimeout(200);
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
-      (el as HTMLElement).style.transform
+      el.style.transform
     );
     // 160/600 ≈ 0.267 — must be a scaleX > 0
     expect(transform).toMatch(/scaleX\(0\.[1-9]/);
@@ -122,7 +122,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.locator("#cs-unlimited").click();
     await page.waitForTimeout(200);
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
-      (el as HTMLElement).style.transform
+      el.style.transform
     );
     expect(transform).toContain("scaleX(0)");
   });
