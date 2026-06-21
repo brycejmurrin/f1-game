@@ -16,7 +16,7 @@
     // La Monumental: the signature ~24% banked stadium curve.
     banked: true,
     street: true,
-    pal: { zenith: [0.24, 0.46, 0.78], horizon: [0.74, 0.74, 0.72], grass: [0.3, 0.42, 0.2], sunDir: [0.12094709553657013, 0.967576764292561, 0.22173634181704524], sun: [1, 0.99, 0.96], sunColor: [1, 0.98, 0.94] },
+    pal: { zenith: [0.22, 0.48, 0.82], horizon: [0.74, 0.74, 0.72], grass: [0.3, 0.42, 0.2], sunDir: [0.12094709553657013, 0.967576764292561, 0.22173634181704524], sun: [1.0, 0.90, 0.65], sunColor: [1, 0.98, 0.94] },
     segs: [
       { t: 0, l: 320 }, { t: 70, l: 70 }, { t: -65, l: 70 }, { t: 50, l: 120 }, { t: 0, l: 360 }, { t: 90, l: 80 },
       { t: -85, l: 70 }, { t: 90, l: 80 }, { t: 0, l: 140 }, { t: 180, l: 240, b: 0.42, w: 9 }, { t: 0, l: 80 }, { t: -60, l: 90, h: 6 },
@@ -145,13 +145,18 @@
 
       // ── (4) IFEMA exhibition halls: huge clean white masses w/ glass window bands.
       //     The pit & paddock sit inside these big rectangular halls (brief). ──
+      //     Footprint/height increased ~25% for greater visual mass. ──
       for (const [frac, side, w, h, d, dist] of [
-        [0.02, 1, 78, 20, 100, 165], [0.02, -1, 70, 18, 90, 155], [0.05, 1, 90, 18, 80, 175],
-        [0.05, -1, 64, 16, 72, 158], [0.08, 1, 74, 19, 84, 165], [0.11, -1, 80, 17, 90, 168],
-        [0.97, -1, 80, 18, 92, 170], [0.94, 1, 70, 17, 82, 165],
+        [0.02, 1, 98, 25, 125, 165], [0.02, -1, 88, 23, 113, 155], [0.05, 1, 113, 23, 100, 175],
+        [0.05, -1, 80, 20, 90, 158], [0.08, 1, 93, 24, 105, 165], [0.11, -1, 100, 21, 113, 168],
+        [0.97, -1, 100, 23, 115, 170], [0.94, 1, 88, 21, 103, 165],
       ]) {
         const k = Math.round(frac * n) % n;
         building(k, side, dist - w / 2, w, h, d, { wall: WHITE, window: GLASS, floor: 5 });
+        // Glass curtain wall strip along the front facade
+        const A = anchor(k, side, dist - w / 2 - 4);
+        if (!onTrack(A.c[0], A.c[2], 18))
+          addBox(out, vadd(A.c, A.u, h / 2), [60, 12, 200], [0.28, 0.35, 0.45], [A.r, A.u, A.t]);
       }
       // modern IFEMA grandstands (s≈0.88–0.94) — white-shelled stepped stands
       for (const [frac, side] of [[0.88, 1], [0.90, 1], [0.92, 1], [0.94, 1], [0.90, -1], [0.93, -1]]) {
@@ -261,6 +266,45 @@
         }
       }
       function k_safe(i) { return ((i % n) + n) % n; }
+
+      // ── (10) AIRPORT RUNWAY EDGE LIGHTS: s≈0.0–0.10, amber/white taxi-light dots ──
+      // A row of small bright boxes at distance 80m, one side, every 15m
+      for (let i = 0; i < 7; i++) {
+        const f = i * 0.014;   // ~0.10 / 7 steps
+        const k = Math.round(f * n) % n;
+        const A = anchor(k, 1, 80);
+        if (!onTrack(A.c[0], A.c[2], 4))
+          addBox(out, vadd(A.c, A.u, 0.5), [0.5, 1.0, 0.5], [1.0, 0.80, 0.30], [A.r, A.u, A.t]);
+      }
+
+      // ── (11) MADRID IFEMA-AREA SKYLINE: 7 buildings at distance 250–350m ──
+      for (let i = 0; i < 7; i++) {
+        const f = 0.25 + i * 0.07;   // spread from s≈0.25 to s≈0.70
+        const k = Math.round((f % 1) * n) % n;
+        const dist = 250 + hash(i * 19) * 100;
+        const h = 60 + hash(i * 31) * 40;
+        const w = 20 + hash(i * 47) * 16;
+        const A = anchor(k, -1, dist);
+        if (!onTrack(A.c[0], A.c[2], 22))
+          building(k, -1, dist - w / 2, w, h, w,
+            { wall: [0.58, 0.56, 0.54], window: [0.32, 0.38, 0.48], floor: 8 });
+      }
+
+      // ── (12) WIDE PLAZA GEOMETRY: flat slabs at s≈0.45–0.55 (open IFEMA plaza) ──
+      for (let i = 0; i < 5; i++) {
+        const f = 0.45 + i * 0.025;
+        const k = Math.round(f * n) % n;
+        for (const side of [-1, 1]) {
+          const dist = 30 + i * 4;
+          const A = anchor(k, side, dist);
+          if (!onTrack(A.c[0], A.c[2], 10))
+            addBox(out, vadd(A.c, A.u, 0.15), [60, 0.3, 40], [0.58, 0.56, 0.54], [A.r, A.u, A.t]);
+        }
+      }
+
+      // ── (13) SPANISH COLOUR ACCENT billboards near the pit straight ──
+      billboard(Math.round(0.01 * n) % n, 1, 14, 12, 5, [0.85, 0.15, 0.12]);   // Spanish red
+      billboard(Math.round(0.04 * n) % n, -1, 12, 12, 5, [0.92, 0.72, 0.08]);  // Spanish gold
     },
   }
   );

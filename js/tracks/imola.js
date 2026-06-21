@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 4.9,
     baseHW: 7,
-    pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.72, 0.76, 0.74], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
+    pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.80, 0.72, 0.56], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
     segs: [
       { t: 0, l: 450 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -70, l: 90 }, { t: 60, l: 80 },
       { t: 80, l: 100 }, { t: 0, l: 400 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 0, l: 180 }, { t: 80, l: 90 },
@@ -34,7 +34,7 @@
       const CANOPY = [0.20, 0.46, 0.22];   // sunlit deciduous canopy
       const WOODS  = [0.11, 0.30, 0.15];   // shaded woods
       const BANK   = [0.42, 0.63, 0.30];   // sunlit grass bank
-      const RIVER  = [0.30, 0.42, 0.34];   // muted green-brown Santerno water
+      const RIVER  = [0.28, 0.42, 0.52];   // blue-green Santerno water
       const GRAVEL = [0.78, 0.70, 0.52];   // pale tan gravel
       const RED    = [0.82, 0.16, 0.14];
       const WHITE  = [0.92, 0.92, 0.90];
@@ -120,6 +120,19 @@
         if (s < 0.6) return;
         bush(k, s < 0.8 ? -1 : 1, 7 + s * 6, [0.18 + s * 0.06, 0.40, 0.20]);
       });
+
+      // ---- Dense forest lining Tamburello approach ----
+      for (let i = 0; i < 28; i++) {
+        const s = i / 28;  // 0.0 → 1.0 full lap but focused on start straight
+        if (s > 0.10 && s < 0.90) continue;  // only start/finish straight approach
+        const kk = K(s);
+        for (const side of [-1, 1]) {
+          const h2 = hash(kk * 81 + side + i);
+          const dist = 10 + h2 * 10;
+          if (h2 < 0.45) pine(kk, side, dist, 10 + h2 * 6, [0.10, 0.28, 0.14]);
+          else tree(kk, side, dist, 9 + h2 * 5, [0.18, 0.38, 0.20]);
+        }
+      }
 
       // ---- s 0.00 R — Santerno river: CONTINUOUS flat water slab paralleling the river run ----
       // Overlapping slabs from the pit straight through the run to Tosa, no gaps.
