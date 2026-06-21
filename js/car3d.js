@@ -73,7 +73,17 @@ const Car3D = (function () {
     }
   }
 
-  function build(color, color2) {
+  // A single wheel centred on the origin, axle along X — so the render layer can
+  // spin it about X (∝ speed) and steer the fronts about Y, then translate it to
+  // each corner. Used only for the player car (AI keep the baked static wheels).
+  function buildWheel(w) {
+    const out = { pos: [], nrm: [], col: [], idx: [] };
+    addWheel(out, 0, 0, 0, 0.34, w || 0.34);
+    return out;
+  }
+
+  function build(color, color2, opts) {
+    const noWheels = opts && opts.noWheels;
     const out = { pos: [], nrm: [], col: [], idx: [] };
     const c1 = color  || [0.8, 0.05, 0.05];
     const c2 = color2 || [0.9, 0.9, 0.1];
@@ -166,14 +176,16 @@ const Car3D = (function () {
       addBox(out, s*0.49, 0.44, -1.53, 0.34, 0.05, 0.06, DARK); // rear upper
     }
 
-    // --- Wheels ---
-    for (const s of [-1, 1]) {
-      addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32);
-      addWheel(out, s*0.76, 0.34, -1.6, 0.34, 0.38);
+    // --- Wheels --- (skipped for the player car, which draws animated wheels)
+    if (!noWheels) {
+      for (const s of [-1, 1]) {
+        addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32);
+        addWheel(out, s*0.76, 0.34, -1.6, 0.34, 0.38);
+      }
     }
 
     return out;
   }
 
-  return { build };
+  return { build, buildWheel };
 })();
