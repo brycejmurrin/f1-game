@@ -212,6 +212,9 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 }
 .dh-ratebtn.dh-active { background: rgba(225, 6, 0, 0.18); border-color: var(--red, #e10600); color: #fff; }
 .dh-thint { font-size: 11px; color: #7a7a85; font-style: italic; margin-left: auto; }
+.dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: #fff; }
+.dh-delta { max-width: 600px; height: auto; margin-top: -2px; }
+.dh-sectors { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; color: #b4b4b8; }
 
 .dh-dash {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 10px;
