@@ -2187,9 +2187,9 @@ function setMusic(b) {
 $("pm-music").onclick = () => setMusic(!musicEnabled);
 
 // Screen orientation lock: cycles LANDSCAPE → PORTRAIT → AUTO.
-// Uses the Screen Orientation API + Fullscreen API (lock requires fullscreen on
-// non-PWA browsers). Silently skips the lock step if the API isn't available
-// (desktop, iOS Safari) — the button still cycles and persists the preference.
+// Primary path: Screen Orientation API + Fullscreen API (requires fullscreen on
+// non-PWA browsers). Fallback path: CSS software rotation (body.sw-landscape)
+// for browsers that don't support the API (iOS Safari, desktop).
 // Tilt steering is compatible: Input.onOrient() reads screen.orientation.angle
 // each sample and remaps gravity axes for all four orientations. The orientation
 // change event in input.js also auto-recalibrates tilt 300 ms after a lock.
@@ -2200,27 +2200,45 @@ const ORIENT_STATES = [
 ];
 let orientIdx = Math.min(store.get("orientLock", 0), ORIENT_STATES.length - 1);
 function updateOrientBtn() {
-  $("pm-orient").textContent = "SCREEN: " + ORIENT_STATES[orientIdx].label;
+  const st = ORIENT_STATES[orientIdx];
+  const sw = document.body.classList.contains("sw-landscape");
+  $("pm-orient").textContent = "SCREEN: " + st.label + (sw ? " *" : "");
 }
+// Apply CSS software-landscape rotation and notify the renderer of the new size.
+function applySWLandscape(on) {
+  document.body.classList.toggle("sw-landscape", on);
+  store.set("swLandscape", on ? 1 : 0);
+  window.dispatchEvent(new Event("resize"));
+}
+// Restore CSS rotation immediately (no gesture needed).
+if (store.get("swLandscape", 0)) applySWLandscape(true);
 updateOrientBtn();
 async function cycleOrient() {
   orientIdx = (orientIdx + 1) % ORIENT_STATES.length;
   store.set("orientLock", orientIdx);
-  updateOrientBtn();
   const { lock } = ORIENT_STATES[orientIdx];
-  try {
-    if (!lock) {
-      screen.orientation?.unlock?.();
-    } else {
+  // Always clear CSS rotation first; re-apply below if API lock fails.
+  applySWLandscape(false);
+  if (!lock) {
+    screen.orientation?.unlock?.();
+  } else {
+    let apiOk = false;
+    try {
       if (!document.fullscreenElement)
         await document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
-      await screen.orientation?.lock?.(lock);
-    }
-  } catch (e) { /* lock unavailable on this browser/context — UI still cycles */ }
+      if (typeof screen.orientation?.lock === "function") {
+        await screen.orientation.lock(lock);
+        apiOk = true;
+      }
+    } catch (e) { /* API unavailable or fullscreen blocked */ }
+    // CSS fallback: software-rotate into landscape when the API can't.
+    if (!apiOk && lock === "landscape") applySWLandscape(true);
+  }
+  updateOrientBtn();
 }
 $("pm-orient").onclick = cycleOrient;
-// Restore saved lock after the first user gesture (lock needs user activation).
-if (orientIdx > 0) {
+// Restore API-based lock after the first user gesture (lock requires activation).
+if (orientIdx > 0 && !store.get("swLandscape", 0)) {
   const saved = ORIENT_STATES[orientIdx].lock;
   if (saved) {
     document.addEventListener("pointerdown", async () => {
