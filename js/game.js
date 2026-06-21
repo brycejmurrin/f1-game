@@ -2483,6 +2483,42 @@ function updateTrackPreview() {
     }
     factsEl.innerHTML = facts.join("");
   }
+
+  // Elevation profile chart (shown only when there is meaningful elevation data)
+  const elevCv = document.getElementById("sel-preview-elev");
+  if (elevCv) {
+    const py = TrackMaps.elevProfile(t);
+    const elevR = TrackMaps.elevRange(t);
+    if (py && py.length > 2 && elevR > 2) {
+      elevCv.hidden = false;
+      const ew = elevCv.width, eh = elevCv.height;
+      const eg = elevCv.getContext("2d");
+      eg.clearRect(0, 0, ew, eh);
+      let mn = Infinity, mx = -Infinity;
+      for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
+      const span = mx - mn || 1;
+      const pad = 3;
+      eg.beginPath();
+      for (let i = 0; i <= py.length; i++) {
+        const px = (i / py.length) * ew;
+        const pyNorm = eh - pad - ((py[i % py.length] - mn) / span) * (eh - 2 * pad);
+        i === 0 ? eg.moveTo(px, pyNorm) : eg.lineTo(px, pyNorm);
+      }
+      eg.lineTo(ew, eh); eg.lineTo(0, eh); eg.closePath();
+      eg.fillStyle = "rgba(57,183,240,0.18)";
+      eg.fill();
+      eg.strokeStyle = "rgba(57,183,240,0.7)"; eg.lineWidth = 1.5;
+      eg.beginPath();
+      for (let i = 0; i <= py.length; i++) {
+        const px = (i / py.length) * ew;
+        const pyNorm = eh - pad - ((py[i % py.length] - mn) / span) * (eh - 2 * pad);
+        i === 0 ? eg.moveTo(px, pyNorm) : eg.lineTo(px, pyNorm);
+      }
+      eg.stroke();
+    } else {
+      elevCv.hidden = true;
+    }
+  }
 }
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
