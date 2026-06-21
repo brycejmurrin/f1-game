@@ -28,10 +28,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npx serve -l 3456 --no-clipboard",
+    // python's http.server starts instantly with no package resolution, unlike
+    // `npx serve` (which cold-resolves the package and often missed the old 10 s
+    // window — the cause of flaky net::ERR_CONNECTION_REFUSED on the first specs).
+    command: "python3 -m http.server 3456",
     url: "http://localhost:3456",
     reuseExistingServer: true,
-    timeout: 10_000,
+    timeout: 60_000,
   },
   reporter: [["list"], ["html", { open: "never" }]],
 });
