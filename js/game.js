@@ -271,10 +271,15 @@ let headlessMode = false;  // skip render() when true (headless control loop)
 // a distinct vantage computed in render(): a close action chase, a higher/wider
 // chase for race-craft, an in-cockpit eye, and a nose/hood cam. Index into CAM_MODES.
 const CAM_MODES = [
-  { id: "chase",   label: "CHASE" },
-  { id: "far",     label: "FAR" },
-  { id: "cockpit", label: "COCKPIT" },
-  { id: "hood",    label: "HOOD" },
+  { id: "chase",     label: "CHASE" },
+  { id: "far",       label: "FAR" },
+  { id: "cockpit",   label: "COCKPIT" },
+  { id: "hood",      label: "HOOD" },
+  { id: "overhead",  label: "OVERHEAD" },
+  { id: "heli",      label: "HELI" },
+  { id: "reverse",   label: "REVERSE" },
+  { id: "side",      label: "TV SIDE" },
+  { id: "cinematic", label: "CINEMATIC" },
 ];
 let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
 let seasonMode = false;
@@ -1769,6 +1774,40 @@ function render(dt) {
       ];
       tgtT = [p[0] + smp.t[0] * 30, p[1] + eyeUp + 1.5, p[2] + smp.t[2] * 30];
       fovT = lerp(64, 78, spd) + (player.deploying ? 3 : 0);   // wider = faster feel
+    } else if (mode === "overhead") {
+      // Top-down drone: high above and a touch behind, steeply angled so you see
+      // the car and the road ahead. (Not perfectly vertical — keeps lookAt stable.)
+      eyeT = [p[0] - smp.t[0] * 9, p[1] + 42, p[2] - smp.t[2] * 9];
+      tgtT = [p[0] + smp.t[0] * 12, p[1], p[2] + smp.t[2] * 12];
+      fovT = 46;
+    } else if (mode === "heli") {
+      // Broadcast helicopter: high, behind and off to the side, long lens on the car.
+      Tracks.sample(track, wrapS(pS - 26), smpC);
+      eyeT = [smpC.p[0] + smpC.r[0] * 18, smpC.p[1] + 21 + bankDy, smpC.p[2] + smpC.r[2] * 18];
+      tgtT = [p[0], p[1] + 0.8, p[2]];
+      fovT = 36 + (player.deploying ? 2 : 0);
+    } else if (mode === "reverse") {
+      // Rear-view: mounted just ahead of the car looking back down the track —
+      // watch who's chasing you.
+      eyeT = [p[0] + smp.t[0] * 5.5, p[1] + 1.35, p[2] + smp.t[2] * 5.5];
+      tgtT = [p[0] - smp.t[0] * 26, p[1] + 0.9, p[2] - smp.t[2] * 26];
+      fovT = lerp(60, 72, spd);
+    } else if (mode === "side") {
+      // TV trackside: a panning camera offset to the side, framing the car. Side is
+      // chosen by the corner so it sits on the OUTSIDE looking across the apex.
+      const kHere = Tracks.curvature(track, pS);
+      const sgn = kHere > 0.002 ? 1 : kHere < -0.002 ? -1 : 1;
+      eyeT = [p[0] + smp.r[0] * sgn * 25, p[1] + 5.5, p[2] + smp.r[2] * sgn * 25];
+      tgtT = [p[0], p[1] + 0.8, p[2]];
+      fovT = 44;
+    } else if (mode === "cinematic") {
+      // Free-orbit: the camera circles the car continuously — a cinematic moving
+      // vantage that shows the car and surroundings from every angle.
+      const a = (performance.now() * 0.00035) % (Math.PI * 2);
+      const od = 15;
+      eyeT = [p[0] + Math.cos(a) * od, p[1] + 6.5, p[2] + Math.sin(a) * od];
+      tgtT = [p[0], p[1] + 0.8, p[2]];
+      fovT = lerp(50, 60, spd);
     } else {
       // Chase cams anchor a FIXED distance behind the player along the track
       // (arc-length), not in world space — so they never lag at high speed and
