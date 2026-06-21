@@ -2880,11 +2880,15 @@ window.__apex = {
     if (!player || player.px == null) return null;
     const slip = Math.atan2(player.vLat || 0, Math.max(1, player.speed));
     Tracks.sample(track, player.s, smp);
+    const axFrac = Math.min(1, Math.abs(player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
     return {
       s: player.s, x: player.x, speed: player.speed, prog: player.prog,
       head: player.head, vLat: player.vLat || 0,
       slipDeg: slip * 180 / Math.PI, slope: smp.t[1] || 0,
       wrongWay: !!player.wrongWay, rescueT: player.rescueT || 0, lap: player.lap,
+      axEstSm: +(player.axEstSm ?? 0).toFixed(2),
+      axFrac: +axFrac.toFixed(3),
+      slipFactor: +Math.sqrt(Math.max(0, 1 - axFrac * axFrac)).toFixed(3),
     };
   },
   // Driving-boundary stats for the current track (both sides, all nodes): the

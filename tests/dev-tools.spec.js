@@ -356,6 +356,36 @@ test.describe("__apex.physState()", () => {
     expect(typeof ps.wrongWay).toBe("boolean");
     expect(typeof ps.rescueT).toBe("number");
   });
+
+  test("exposes combined-slip traction circle fields", async ({ page }) => {
+    await loadParked(page);
+    const ps = await page.evaluate(() => window.__apex.physState());
+    expect(typeof ps.axEstSm).toBe("number");
+    expect(typeof ps.axFrac).toBe("number");
+    expect(typeof ps.slipFactor).toBe("number");
+    // at rest: no longitudinal load, so full lateral grip available
+    expect(ps.axFrac).toBeCloseTo(0, 1);
+    expect(ps.slipFactor).toBeCloseTo(1, 1);
+  });
+
+  test("slipFactor drops when braking hard", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    // Teleport to mid-lap at high speed then brake hard
+    await page.evaluate(() => window.__apex.jump(0.2, 70, 0));
+    await page.waitForTimeout(100);
+    await page.evaluate(() => window.__apex.setInput({ throttle: false, brake: true }));
+    await page.evaluate(() => {
+      for (let i = 0; i < 30; i++) window.__apex.step(1 / 60);
+    });
+    const ps = await page.evaluate(() => window.__apex.physState());
+    // axFrac should be > 0 (car was braking), slipFactor should be < 1
+    expect(ps.axFrac).toBeGreaterThan(0);
+    expect(ps.slipFactor).toBeLessThan(1);
+    await page.evaluate(() => window.__apex.clearInput());
+  });
 });
 
 test.describe("__apex.carAt()", () => {
