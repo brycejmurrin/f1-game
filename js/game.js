@@ -287,6 +287,10 @@ let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (s
 let ttNewRecord = false;    // set when the player takes provisional pole this session
 let ttLaps = [];            // completed lap times this time-trial session
 let ttSessionTs = 0;        // session start stamp; entries at/after it are "yours, just now"
+let sectorStartT = 0;        // lapTime when current sector started
+let sectorIdx = 0;           // 0, 1, 2 (current sector)
+let sectorBests = [Infinity, Infinity, Infinity];  // best S1/S2/S3 times ever
+let sectorLast = [null, null, null];               // last lap's S1/S2/S3 times
 let frameSky = {}, frame = {};
 const teamMeshes = {};   // teamId -> GLX mesh
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
@@ -527,6 +531,9 @@ function loadTrack(idx) {
     builtTrackId = def.id;
     Ghost.setTrack(def.id);
     minimapBg = null;           // force minimap redraw for new track
+    sectorIdx = 0; sectorStartT = 0;
+    sectorBests = [Infinity, Infinity, Infinity];
+    sectorLast = [null, null, null];
   }
   const pal = def.palette;
   frame = {
@@ -706,18 +713,37 @@ function buildResults(order) {
     els.resultsTable.appendChild(row);
   });
   if (seasonMode) {
+    // Driver championship (top 10)
     const head = document.createElement("div");
     head.style.cssText = "margin-top:14px;color:#e10600;font-weight:800;font-style:italic";
-    head.textContent = "CHAMPIONSHIP — AFTER ROUND " + season.round;
+    head.textContent = "DRIVERS — AFTER ROUND " + season.round;
     els.resultsTable.appendChild(head);
-    const all = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0)).slice(0, 8);
+    const all = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0)).slice(0, 10);
     all.forEach((c, i) => {
       const row = document.createElement("div");
       row.className = "res-row" + (c.isPlayer ? " you" : "");
       const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-      const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
+      const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(c.team.color);
+      const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code + "  " + c.name;
       const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.code] || 0) + " pts";
-      row.append(pos, nm, pt);
+      row.append(pos, sw, nm, pt);
+      els.resultsTable.appendChild(row);
+    });
+    // Team championship (top 5)
+    const tmHead = document.createElement("div");
+    tmHead.style.cssText = "margin-top:10px;color:#e10600;font-weight:800;font-style:italic";
+    tmHead.textContent = "CONSTRUCTORS";
+    els.resultsTable.appendChild(tmHead);
+    const tmList = Object.entries(season.teamPts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    tmList.forEach(([teamId, pts], i) => {
+      const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
+      const row = document.createElement("div");
+      row.className = "res-row";
+      const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+      const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(team.color);
+      const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = team.name || teamId;
+      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = pts + " pts";
+      row.append(pos, sw, nm, pt);
       els.resultsTable.appendChild(row);
     });
     els.resNext.textContent = season.round >= Tracks.LIST.length ? "FINISH SEASON" : "NEXT ROUND";
@@ -766,6 +792,18 @@ function buildTTResults() {
     els.resultsTable.appendChild(row);
   });
 
+  // Ghost clear link
+  if (Ghost.hasGhost()) {
+    const clrRow = document.createElement("div");
+    clrRow.style.cssText = "margin-top:10px;text-align:center";
+    const clrBtn = document.createElement("button");
+    clrBtn.style.cssText = "font-size:11px;padding:4px 10px;opacity:0.6";
+    clrBtn.textContent = "✕ CLEAR GHOST";
+    clrBtn.onclick = () => { Ghost.clear(track.def.id); ttRecord = Infinity; buildTTResults(); };
+    clrRow.appendChild(clrBtn);
+    els.resultsTable.appendChild(clrRow);
+  }
+
   els.resNext.textContent = "TRY AGAIN";
 }
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
@@ -785,6 +823,70 @@ function quitToMenu() {
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.startMusic(-1);
+  // Show standings button when an active season is in progress
+  const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;
+  $("mb-standings").hidden = !hasSeason;
+}
+
+function buildStandings() {
+  const body = $("standings-body");
+  body.textContent = "";
+  if (!season) return;
+  const round = season.round;
+  $("standings-title").textContent = round >= Tracks.LIST.length
+    ? "FINAL CHAMPIONSHIP" : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + Tracks.LIST.length;
+
+  // Driver standings — all cars sorted by pts
+  const drHead = document.createElement("div");
+  drHead.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin-bottom:6px";
+  drHead.textContent = "DRIVERS";
+  body.appendChild(drHead);
+
+  const drList = Object.entries(season.pts)
+    .sort((a, b) => b[1] - a[1]);
+  drList.forEach(([code, pts], i) => {
+    const c = cars.find((x) => x.code === code);
+    const row = document.createElement("div");
+    row.className = "res-row" + (c && c.isPlayer ? " you" : "");
+    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+    const sw = document.createElement("span"); sw.className = "res-swatch";
+    sw.style.background = c ? cssCol(c.team.color) : "#555";
+    const nm = document.createElement("span"); nm.className = "res-name";
+    nm.textContent = code + (c ? "  " + c.name : "");
+    const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = pts + " pts";
+    row.append(pos, sw, nm, pt);
+    body.appendChild(row);
+  });
+
+  // Team standings
+  const tmHead = document.createElement("div");
+  tmHead.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin:14px 0 6px";
+  tmHead.textContent = "CONSTRUCTORS";
+  body.appendChild(tmHead);
+
+  const tmList = Object.entries(season.teamPts)
+    .sort((a, b) => b[1] - a[1]);
+  tmList.forEach(([teamId, pts], i) => {
+    const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
+    const row = document.createElement("div");
+    row.className = "res-row";
+    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+    const sw = document.createElement("span"); sw.className = "res-swatch";
+    sw.style.background = cssCol(team.color);
+    const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = team.name || teamId;
+    const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = pts + " pts";
+    row.append(pos, sw, nm, pt);
+    body.appendChild(row);
+  });
+
+  // Next round info
+  if (round < Tracks.LIST.length) {
+    const nextTrack = Tracks.LIST[round];
+    const info = document.createElement("div");
+    info.style.cssText = "margin-top:12px;font-size:12px;color:#9a9aa5;text-align:center";
+    info.textContent = "NEXT: ROUND " + (round + 1) + " — " + nextTrack.name + " (" + nextTrack.gp + ")";
+    body.appendChild(info);
+  }
 }
 
 // ---------- per-frame update ----------
@@ -1491,11 +1593,32 @@ function updateCar(c, dt, ranked) {
       if (c.isPlayer && timeTrial) onTTLap(lapDone);
     }
     c.lapTime = 0;
+    if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     if (c.isPlayer && c.lap === lapsTarget) announce("FINAL LAP", 1.6);
     if (c.lap > lapsTarget) {
       c.finished = true;
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
+    }
+  }
+
+  // Sector detection: thirds of track
+  if (c.isPlayer && state === "race" && track) {
+    const sFrac = c.s / track.total;
+    const newSector = sFrac < 1/3 ? 0 : sFrac < 2/3 ? 1 : 2;
+    if (newSector !== sectorIdx) {
+      if (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0)) {
+        // completed the current sector
+        const elapsed = c.lapTime - sectorStartT;
+        const prevSector = sectorIdx;
+        sectorLast[prevSector] = elapsed;
+        if (elapsed < sectorBests[prevSector]) sectorBests[prevSector] = elapsed;
+        const delta = elapsed - (sectorBests[prevSector] < Infinity ? sectorBests[prevSector] : elapsed);
+        const sign = delta <= 0 ? "▼ S" : "▲ S";
+        announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+      }
+      sectorIdx = newSector;
+      sectorStartT = c.lapTime;
     }
   }
 
@@ -1517,8 +1640,11 @@ function updateCar(c, dt, ranked) {
     // Gated past the race launch so the standing start (everyone at 0) is exempt.
     const stoppedOnTrack = c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
     const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
-    // 4-second grace period after a rescue prevents rapid re-rescue on marginal stuck conditions.
-    const rescueGrace = raceT < (c.rescueLastT || 0) + 4;
+    // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
+    // stuck conditions. Only applies once a rescue has actually happened —
+    // (c.rescueLastT || 0) defaulted to 0 and blocked rescue for the first 4 s of
+    // every race, so a car stuck from the start was never recovered.
+    const rescueGrace = c.rescueLastT != null && raceT < c.rescueLastT + 4;
     if (stuck && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
@@ -1917,8 +2043,19 @@ function updateHud(force) {
   els.ot.className = ot;
   els.ot.textContent = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE";
   if (timeTrial) {
-    // no rivals — show last lap and the record to chase instead of gaps
-    els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
+    // no rivals — show ghost delta (or last lap) and the record to chase instead of gaps
+    if (Ghost.hasGhost()) {
+      const ghostT = Ghost.timeAt(player.s);
+      if (ghostT !== null) {
+        const delta = player.lapTime - ghostT;
+        const sign = delta >= 0 ? "+" : "";
+        els.gapA.textContent = "GHOST " + sign + delta.toFixed(3) + "s";
+      } else {
+        els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
+      }
+    } else {
+      els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
+    }
     els.gapB.textContent = isFinite(ttRecord) ? "REC " + fmtTime(ttRecord) : "REC —";
   } else {
     // gaps
@@ -1939,15 +2076,33 @@ function drawMinimap() {
     minimapBg.width = W; minimapBg.height = H;
     const mc = minimapBg.getContext("2d");
     const map = track.map, n = map.length;
-    mc.strokeStyle = "rgba(255,255,255,0.75)";
-    mc.lineWidth = 2;
-    mc.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const p = map[i % n];
-      const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
-      i === 0 ? mc.moveTo(x, y) : mc.lineTo(x, y);
+    mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
+    const SC = ["rgba(192,132,252,0.8)", "rgba(225,6,0,0.8)", "rgba(163,230,53,0.8)"];
+    for (let s = 0; s < 3; s++) {
+      const from = Math.floor((s / 3) * n), to = Math.floor(((s + 1) / 3) * n);
+      mc.strokeStyle = SC[s];
+      mc.beginPath();
+      for (let i = from; i <= to; i++) {
+        const p = map[i % n];
+        const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
+        i === from ? mc.moveTo(x, y) : mc.lineTo(x, y);
+      }
+      mc.stroke();
     }
-    mc.stroke();
+    // DRS zone highlight (cyan, slightly thicker)
+    const zones = TrackMaps.drsZones(track.def);
+    if (zones && zones.length) {
+      mc.strokeStyle = "rgba(0,220,180,0.85)"; mc.lineWidth = 3;
+      for (const z of zones) {
+        const from2 = Math.floor(z.a * n), to2 = Math.min(n - 1, Math.floor(z.b * n));
+        mc.beginPath();
+        for (let i = from2; i <= to2; i++) {
+          const p = map[i % n];
+          mc.lineTo(8 + p[0] * (W - 16), 8 + p[1] * (H - 16));
+        }
+        mc.stroke();
+      }
+    }
   }
   mm.clearRect(0, 0, W, H);
   mm.drawImage(minimapBg, 0, 0);
@@ -2283,19 +2438,21 @@ function buildSelect() {
   });
 }
 
-// large preview of the currently-selected circuit: themed outline with numbered
-// corners, name / GP / length / turn count, and the time-trial best lap.
+// large preview of the currently-selected circuit: sector-coloured outline,
+// DRS zones, numbered corners, name / GP / length / turn count, track facts.
 function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[trackIdx];
   if (!t) return;
   TrackMaps.draw(els.selPreviewMap, t, {
     color: TrackMaps.themeColor(t), startColor: "#e10600",
-    width: 4, pad: 24, corners: true, cornerR: 9, cornerFont: 11
+    width: 4, pad: 24, corners: true, cornerR: 9, cornerFont: 11,
+    sectors: true, drs: true
   });
   els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
   els.selPreviewGp.textContent = t.gp || "";
-  const turns = TrackMaps.corners(t).length;
+  const crns = TrackMaps.corners(t);
+  const turns = crns.length;
   els.selPreviewMeta.textContent = [
     t.country,
     t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
@@ -2307,6 +2464,20 @@ function updateTrackPreview() {
     els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
   } else {
     els.selPreviewRec.textContent = "";
+  }
+  // Track facts: direction arrow, elevation badge, slowest corner callout
+  const factsEl = document.getElementById("sel-preview-facts");
+  if (factsEl) {
+    const dir = TrackMaps.direction(t);
+    const elev = TrackMaps.elevRange(t);
+    const facts = [];
+    if (dir) facts.push('<span class="spf-fact spf-dir">' + (dir === "CW" ? "↻ Clockwise" : "↺ Anti-clockwise") + "</span>");
+    if (elev > 2) facts.push('<span class="spf-fact spf-elev">&#9650; ' + elev + " m elevation</span>");
+    if (crns.length) {
+      const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
+      facts.push('<span class="spf-fact spf-corner">T' + slowest.n + " slowest</span>");
+    }
+    factsEl.innerHTML = facts.join("");
   }
 }
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
@@ -2455,6 +2626,8 @@ $("mb-season").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   loadTrack(trackIdx);
 };
+$("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
+$("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
@@ -2883,6 +3056,8 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
+{ const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;
+  $("mb-standings").hidden = !hasSeason; }
 Input.init(canvas, { onPause: () => setPaused(!paused) });
 if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
 Input.setSteerMode(steerMode);
@@ -2986,7 +3161,9 @@ window.__apex = {
     camTgt[2] = p[2] + smp.t[2] * 4;
     camFov = lerp(52, 66, clamp(player.speed / VMAX, 0, 1));
   },
-  info: () => ({ state, track: (state !== "menu" && track) ? track.def.id : null, n: track && track.n, total: track && track.total }),
+  // track reflects the ACTIVE race track — null at the menu/select even though a
+  // track is loaded for the background flyby (matches the documented contract).
+  info: () => ({ state, track: (state === "race" || state === "count") ? (track && track.def.id) : null, n: track && track.n, total: track && track.total }),
   camState: () => ({ eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov }),
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },

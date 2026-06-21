@@ -201,6 +201,11 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 #sel-preview-gp { font-size: 12px; color: var(--red); font-weight: 700; margin-top: 2px; }
 #sel-preview-meta { font-size: 12px; color: var(--dim); margin-top: 8px; line-height: 1.5; }
 #sel-preview-rec { font-size: 13px; color: #f6d200; font-weight: 700; margin-top: 8px; font-variant-numeric: tabular-nums; }
+#sel-preview-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.spf-fact { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: 0.03em; }
+.spf-dir { background: rgba(255,255,255,0.1); color: #e0e0e8; }
+.spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
+.spf-corner { background: rgba(225,6,0,0.18); color: #e10600; }
 @media (max-width: 520px) {
   #sel-track-preview { flex-direction: column; align-items: stretch; gap: 10px; }
   #sel-preview-map { max-width: none; }
@@ -936,3 +941,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
   /* Suppress the "rotate device" overlay — we're already showing landscape. */
   body.sw-landscape #rotate-device { display: none !important; }
 }
+
+/* ---------- season standings overlay ---------- */
+#standings { max-width: min(92vw, 540px); max-height: 80vh; }
+#standings-body { max-height: 55vh; overflow-y: auto; }
+#standings-body .res-row { font-size: 13px; }

@@ -114,6 +114,21 @@ const Ghost = (function () {
     return { s: ss[i] + (ss[j] - ss[i]) * f, x: xs[i] + (xs[j] - xs[i]) * f, done: false };
   }
 
+  // Inverse lookup: given the player's current arc-distance s, return the ghost's
+  // lap time when it was at that same position. Uses binary search on best.s[]
+  // (which is monotonically increasing). Returns null if no ghost exists.
+  function timeAt(s) {
+    if (!enabled || !best || !best.s.length) return null;
+    const ss = best.s, ts = best.t, n = ss.length;
+    // binary search: find largest index where ss[i] <= s
+    let lo = 0, hi = n - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ss[mid] <= s) lo = mid; else hi = mid - 1; }
+    const j = Math.min(lo + 1, n - 1);
+    const span = ss[j] - ss[lo];
+    const f = span > 0.1 ? (s - ss[lo]) / span : 0;
+    return ts[lo] + (ts[j] - ts[lo]) * f;
+  }
+
   // Wipe the stored best for one circuit (null = all). Used by a "clear records"
   // control and useful in tests.
   function clear(id) {
@@ -124,7 +139,7 @@ const Ghost = (function () {
   }
 
   return {
-    setTrack, setEnabled, startLap, record, finishLap, at,
+    setTrack, setEnabled, startLap, record, finishLap, at, timeAt,
     hasGhost, bestTime, clear,
   };
 })();
