@@ -206,6 +206,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .spf-fact { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: 0.03em; }
 .spf-dir { background: rgba(255,255,255,0.1); color: #e0e0e8; }
 .spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
+.spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
 .spf-corner { background: rgba(225,6,0,0.18); color: #e10600; }
 @media (max-width: 520px) {
   #sel-track-preview { flex-direction: column; align-items: stretch; gap: 10px; }
