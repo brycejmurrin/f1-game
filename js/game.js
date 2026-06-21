@@ -105,6 +105,7 @@ function syncCustomTeam() {
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
   delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
+  delete playerBodies.custom; // and the body-only (animated-wheel) variant
 }
 function hexToRgb(h) {
   return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
@@ -454,6 +455,48 @@ function teamMesh(team) {
   return teamMeshes[team.id];
 }
 
+// Player car gets animated wheels: a body-only mesh + four separate wheel meshes
+// the render layer spins (∝ speed) and steers (fronts). Only for the procedural
+// car — a loaded glb model is one piece, so playerBodyMesh returns null and the
+// player falls back to the full static mesh. Wheels are team-independent (dark
+// tyres), so the two wheel meshes (narrow front, wide rear) are shared/global.
+const playerBodies = {};
+let wheelMeshF = null, wheelMeshR = null;
+const WHEELS = [
+  { x: -0.79, y: 0.34, z:  1.7, front: true,  rear: false },
+  { x:  0.79, y: 0.34, z:  1.7, front: true,  rear: false },
+  { x: -0.76, y: 0.34, z: -1.6, front: false, rear: true },
+  { x:  0.76, y: 0.34, z: -1.6, front: false, rear: true },
+];
+const _wheelLocal = new Float32Array(16);
+const _wheelWorld = new Float32Array(16);
+function playerBodyMesh(team) {
+  if (carModelBuf) return null;   // glb model: single piece, no wheel split
+  if (!playerBodies[team.id]) playerBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2, { noWheels: true }));
+  return playerBodies[team.id];
+}
+// Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
+// driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
+// straight into a scratch matrix (no per-frame allocation), then into world.
+function drawPlayerWheels(c, base, dt, opt) {
+  if (!wheelMeshF) { wheelMeshF = GLX.createMesh(Car3D.buildWheel(0.32)); wheelMeshR = GLX.createMesh(Car3D.buildWheel(0.38)); }
+  c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / WHEEL_R) * dt) % (Math.PI * 2);
+  const sp = Math.sin(c.wheelSpin), cp = Math.cos(c.wheelSpin);
+  const steerA = clamp(c.steerVis || 0, -1, 1) * WHEEL_STEER_VIS;
+  for (let w = 0; w < WHEELS.length; w++) {
+    const wd = WHEELS[w];
+    const yaw = wd.front ? steerA : 0;
+    const ss = Math.sin(yaw), cs = Math.cos(yaw);
+    const L = _wheelLocal;
+    L[0] = cs;    L[1] = 0;   L[2] = -ss;    L[3] = 0;
+    L[4] = ss*sp; L[5] = cp;  L[6] = cs*sp;  L[7] = 0;
+    L[8] = ss*cp; L[9] = -sp; L[10] = cs*cp; L[11] = 0;
+    L[12] = wd.x; L[13] = wd.y; L[14] = wd.z; L[15] = 1;
+    M4.mulTo(_wheelWorld, base, L);
+    GLX.draw(wd.rear ? wheelMeshR : wheelMeshF, _wheelWorld, opt);
+  }
+}
+
 // Load an optional .glb car model at runtime. On success, rebuilds every team
 // mesh from it; on any failure (missing file, bad data) silently keeps the
 // procedural car. Returns Promise<boolean>. Not auto-called — so a missing asset
@@ -467,6 +510,7 @@ async function loadCarModel(url) {
     GLTF.toMesh(buf, { scale: CAR_MODEL_SCALE });   // validate before adopting
     carModelBuf = buf;
     for (const k in teamMeshes) delete teamMeshes[k];  // force rebuild from model
+    for (const k in playerBodies) delete playerBodies[k];
     return true;
   } catch (e) { return false; }
 }
@@ -1769,11 +1813,20 @@ function render(dt) {
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     GLX.drawShadow(tmpMat, 2.4, 5.8);
     // Glossy automotive paint; wet adds a water film (sharper highlights, lower roughness).
-    GLX.draw(teamMesh(c.team), tmpMat,
-      wet   ? (night ? { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70 }
-                     : { roughness: 0.22, metalness: 0.12, specular: 0.70 })
-            : (night ? { emissive: 0.20, roughness: 0.38, metalness: 0.10, specular: 0.55 }
-                     : { roughness: 0.38, metalness: 0.10, specular: 0.55 }));
+    const paint = wet
+      ? (night ? { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70 }
+               : { roughness: 0.22, metalness: 0.12, specular: 0.70 })
+      : (night ? { emissive: 0.20, roughness: 0.38, metalness: 0.10, specular: 0.55 }
+               : { roughness: 0.38, metalness: 0.10, specular: 0.55 });
+    // Player: body-only mesh + animated (spinning/steering) wheels. Others (and
+    // the player when a glb model is loaded) draw the full mesh with baked wheels.
+    const body = c.isPlayer ? playerBodyMesh(c.team) : null;
+    if (body) {
+      GLX.draw(body, tmpMat, paint);
+      drawPlayerWheels(c, tmpMat, dt, { roughness: 0.85, metalness: 0.0, specular: 0.12, emissive: night ? 0.12 : 0 });
+    } else {
+      GLX.draw(teamMesh(c.team), tmpMat, paint);
+    }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
       if ((skid > 0.25 || c.offroad) && c.speed > 10) {
