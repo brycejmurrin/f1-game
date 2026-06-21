@@ -1102,8 +1102,10 @@ function updateCar(c, dt, ranked) {
     const a = clamp(-GRAVITY_SLOPE * slopeSin, -ACCEL * 0.5, ACCEL * 0.5);   // m/s^2
     if (a < 0) {                                   // uphill: gentle bleed
       if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);
-    } else {                                        // downhill: feed, but never overspeed
-      c.speed = Math.min(vmax, c.speed + a * dt);
+    } else {                                        // downhill: feed, with a small
+      // overspeed margin so a long descent actually gives you something (a hard
+      // clamp to vmax made steep downhills feel inert once at pace).
+      c.speed = Math.min(vmax * 1.06, c.speed + a * dt);
     }
   }
   if (c.isPlayer) {
@@ -1131,15 +1133,14 @@ function updateCar(c, dt, ranked) {
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
       c.cuts++;
-      if (c.isPlayer) {
-        if (c.cuts >= 4 && c.penalty === 0) {
-          c.penalty = 5;
-          announce("+5s TRACK LIMITS PENALTY", 2);
-          if (soundOn) GameAudio.penalty();
-        } else if (c.cuts < 4) {
-          announce("TRACK LIMITS " + c.cuts + "/4", 1.2);
-          if (soundOn) GameAudio.offtrack();
-        }
+      // Penalty applies to EVERY car (it feeds race classification) so the AI
+      // can't cut corners for free; only the player gets the on-screen cues.
+      if (c.cuts >= 4 && c.penalty === 0) {
+        c.penalty = 5;
+        if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2); if (soundOn) GameAudio.penalty(); }
+      } else if (c.cuts < 4 && c.isPlayer) {
+        announce("TRACK LIMITS " + c.cuts + "/4", 1.2);
+        if (soundOn) GameAudio.offtrack();
       }
     }
   } else if (c.offT > 0) c.offT = Math.max(0, c.offT - dt);
@@ -1514,6 +1515,22 @@ function updateCar(c, dt, ranked) {
     if (stuck && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
+  } else if (!c.isPlayer && state === "race" && !c.finished) {
+    // Lightweight AI rescue: an AI beached in the grass or pinned against a
+    // barrier (and NOT just shuffling in a pack — contactT/unstuckActive exclude
+    // that) gets put back on the drivable surface after a few seconds, so it
+    // can't crawl in a run-off for the rest of the race. AI is kinematic, so the
+    // reset just clamps lateral position onto the track and restores some speed.
+    const aiStuck = (c.offroad && c.offT > 0.5) ||
+      (c.speed < 5 && raceT > 2 && (c.contactT || 0) === 0 && !unstuckActive);
+    if (aiStuck) c.rescueT = (c.rescueT || 0) + dt;
+    else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
+    if (c.rescueT > 4) {
+      Tracks.sample(track, c.s, smp);
+      c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
+      c.speed = Math.max(c.speed, 14);
+      c.rescueT = 0; c.offT = 0; c.stuckT = 0;
+    }
   }
 }
 
