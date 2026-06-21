@@ -792,6 +792,18 @@ function buildTTResults() {
     els.resultsTable.appendChild(row);
   });
 
+  // Ghost clear link
+  if (Ghost.hasGhost()) {
+    const clrRow = document.createElement("div");
+    clrRow.style.cssText = "margin-top:10px;text-align:center";
+    const clrBtn = document.createElement("button");
+    clrBtn.style.cssText = "font-size:11px;padding:4px 10px;opacity:0.6";
+    clrBtn.textContent = "✕ CLEAR GHOST";
+    clrBtn.onclick = () => { Ghost.clear(track.def.id); ttRecord = Infinity; buildTTResults(); };
+    clrRow.appendChild(clrBtn);
+    els.resultsTable.appendChild(clrRow);
+  }
+
   els.resNext.textContent = "TRY AGAIN";
 }
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
@@ -2080,6 +2092,20 @@ function drawMinimap() {
         i === from ? mc.moveTo(x, y) : mc.lineTo(x, y);
       }
       mc.stroke();
+    }
+    // DRS zone highlight (cyan, slightly thicker)
+    const zones = TrackMaps.drsZones(track.def);
+    if (zones && zones.length) {
+      mc.strokeStyle = "rgba(0,220,180,0.85)"; mc.lineWidth = 3;
+      for (const z of zones) {
+        const from2 = Math.floor(z.a * n), to2 = Math.min(n - 1, Math.floor(z.b * n));
+        mc.beginPath();
+        for (let i = from2; i <= to2; i++) {
+          const p = map[i % n];
+          mc.lineTo(8 + p[0] * (W - 16), 8 + p[1] * (H - 16));
+        }
+        mc.stroke();
+      }
     }
   }
   mm.clearRect(0, 0, W, H);

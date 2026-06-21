@@ -65,6 +65,10 @@ const TrackMaps = (function () {
     }
     return Math.round(mx - mn);
   }
+  function drsZones(def) {
+    const c = def && compute(def);
+    return c ? c.drsZones : [];
+  }
   function elevRange(def) {
     const c = def && compute(def);
     return c ? c.elevRange : 0;
@@ -272,5 +276,5 @@ const TrackMaps = (function () {
     return true;
   }
 
-  return { outline, corners, direction, elevRange, themeColor, draw, SECTOR_COLORS };
+  return { outline, corners, direction, drsZones, elevRange, themeColor, draw, SECTOR_COLORS };
 })();
