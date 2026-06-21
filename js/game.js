@@ -280,6 +280,9 @@ const CAM_MODES = [
   { id: "reverse",   label: "REVERSE" },
   { id: "side",      label: "TV SIDE" },
   { id: "cinematic", label: "CINEMATIC" },
+  { id: "low",       label: "LOW" },
+  { id: "tcam",      label: "T-CAM" },
+  { id: "rear",      label: "REAR CAM" },
 ];
 let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
 let seasonMode = false;
@@ -1808,6 +1811,26 @@ function render(dt) {
       eyeT = [p[0] + Math.cos(a) * od, p[1] + 6.5, p[2] + Math.sin(a) * od];
       tgtT = [p[0], p[1] + 0.8, p[2]];
       fovT = lerp(50, 60, spd);
+    } else if (mode === "low") {
+      // Low-angle drama: eye skims the track surface 10 m behind, looks up at the car.
+      // Gives a ground-level perspective with the car silhouetted against the sky.
+      Tracks.sample(track, wrapS(pS - 10), smpC);
+      const cx = px * 0.3;
+      eyeT = [smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 0.45 + bankDy, smpC.p[2] + smpC.r[2] * cx];
+      tgtT = [p[0], p[1] + 0.6, p[2]];
+      fovT = lerp(55, 68, spd);
+    } else if (mode === "tcam") {
+      // T-cam: broadcast roll-hoop camera, narrow telephoto looking forward.
+      // Mimics the FOM airbox camera — mounted 1.3 m above car, slight tilt down.
+      eyeT = [p[0] - smp.t[0] * 0.15, p[1] + 1.3, p[2] - smp.t[2] * 0.15];
+      tgtT = [p[0] + smp.t[0] * 25, p[1] + 0.9, p[2] + smp.t[2] * 25];
+      fovT = 40 + (player.deploying ? 2 : 0);
+    } else if (mode === "rear") {
+      // Rear-mounted onboard: camera sits at the car's tail looking back down the track —
+      // see who's chasing you. Different from REVERSE which floats ahead of the car.
+      eyeT = [p[0] - smp.t[0] * 0.5, p[1] + 0.85, p[2] - smp.t[2] * 0.5];
+      tgtT = [p[0] - smp.t[0] * 22, p[1] + 0.8, p[2] - smp.t[2] * 22];
+      fovT = lerp(62, 76, spd) + (player.deploying ? 2 : 0);
     } else {
       // Chase cams anchor a FIXED distance behind the player along the track
       // (arc-length), not in world space — so they never lag at high speed and
