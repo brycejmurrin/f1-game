@@ -174,6 +174,7 @@ const DataHub = (function () {
   function close() {
     if (!root) return;
     stopLiveAuto();
+    stopTelAnim();
     root.hidden = true;
     openFlag = false;
   }
@@ -188,6 +189,7 @@ const DataHub = (function () {
   }
 
   function showTab(id) {
+    stopTelAnim();   // pause any running lap replay when changing tabs
     active = id;
     for (const k in tabButtons) {
       tabButtons[k].classList.toggle("dh-active", k === id);
@@ -828,8 +830,12 @@ const DataHub = (function () {
   }
 
   let telGen = 0;
+  let telView = null;                 // the live telemetry view (for animation cleanup)
+  function stopTelAnim() { if (telView) pauseAnim(telView); }
+
   function loadTelemetrySet(sessionKey, picked, detail) {
     const myGen = ++telGen;
+    stopTelAnim();
     clear(detail);
     if (!picked.length) {
       detail.appendChild(emptyMsg("Pick a driver above to load their fastest lap."));
@@ -849,6 +855,7 @@ const DataHub = (function () {
   }
 
   function buildTelemetryView(detail, tels) {
+    stopTelAnim();
     const primary = tels[0];
     const compare = tels[1] || null;
 
@@ -874,8 +881,11 @@ const DataHub = (function () {
     const view = {
       primary: primary,
       compare: (compare && compare.car && compare.car.length) ? compare : null,
-      visible: {}, cursorT: null,
-      tMax: 0, speedMax: 1, rpmMax: 1
+      visible: {}, cursorT: 0,
+      tMax: 0, speedMax: 1, rpmMax: 1,
+      playing: false, rate: 2, _raf: 0, _last: 0,
+      chart: null, map: null, chartBase: null, mapBase: null, mapT: null,
+      g: null, playBtn: null
     };
     CHANNELS.forEach(function (ch) { view.visible[ch.id] = !ch.off; });
     function scan(car) {
@@ -888,13 +898,19 @@ const DataHub = (function () {
     scan(primary.car);
     if (view.compare) scan(view.compare.car);
     view.tMax = view.tMax || 1;
+    primary.cum = cumDist(primary.car);
+    if (view.compare) view.compare.cum = cumDist(view.compare.car);
 
+    // transport: play / restart / speed — drives the scrub cursor on a timer
+    detail.appendChild(buildTransport(view));
+
+    // trace chart (static traces are cached to an offscreen canvas; each frame
+    // just blits that and overlays the moving cursor)
     const c1 = el("canvas", "dh-canvas");
     c1.width = 600; c1.height = 220; c1.style.touchAction = "none";
     detail.appendChild(c1);
-
-    const readout = el("div", "dh-readout");
-    detail.appendChild(readout);
+    view.chart = c1;
+    view.chartBase = makeOffscreen(600, 220);
 
     const legend = el("div", "dh-legend");
     CHANNELS.forEach(function (ch) {
@@ -905,7 +921,7 @@ const DataHub = (function () {
       item.addEventListener("click", function () {
         view.visible[ch.id] = !view.visible[ch.id];
         item.classList.toggle("dh-off", !view.visible[ch.id]);
-        redraw();
+        buildBases(view); paintFrame(view);
       });
       legend.appendChild(item);
     });
@@ -918,60 +934,225 @@ const DataHub = (function () {
     }
     detail.appendChild(legend);
 
-    let c2 = null;
+    // animated gauge dashboard window
+    detail.appendChild(buildGauges(view));
+
+    // track map (cached base + moving car dot[s])
     if (primary.loc && primary.loc.length > 8) {
-      c2 = el("canvas", "dh-canvas dh-map");
+      const c2 = el("canvas", "dh-canvas dh-map");
       c2.width = 320; c2.height = 320;
       detail.appendChild(c2);
+      view.map = c2;
+      view.mapBase = makeOffscreen(320, 320);
     }
 
-    function redraw() {
-      drawTraces(c1, view);
-      if (c2) drawTrackMap(c2, view);
-      updateReadout(readout, view);
-    }
-    attachScrub(c1, view, redraw);
-    redraw();
+    attachScrub(c1, view);
+    buildBases(view);
+    paintFrame(view);
+    telView = view;
 
     appendStintsPits(detail, primary);
   }
 
-  // drag/hover the trace chart to move the scrub cursor
-  function attachScrub(canvas, view, redraw) {
+  function makeOffscreen(w, h) {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    return c;
+  }
+
+  // cumulative distance (m) along the lap, sampled at each car-data time, so we
+  // can compute a real position-based time delta between two laps.
+  function cumDist(car) {
+    const t = [], d = [];
+    let acc = 0;
+    for (let i = 0; i < car.length; i++) {
+      if (i > 0) {
+        const dt = car[i].t - car[i - 1].t;
+        const v = (car[i].speed || 0) / 3.6;   // km/h -> m/s
+        acc += v * dt;
+      }
+      t.push(car[i].t); d.push(acc);
+    }
+    return { t: t, d: d };
+  }
+  function interp(xs, ys, x) {
+    if (!xs.length) return 0;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+    let lo = 0, hi = xs.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (xs[m] < x) lo = m + 1; else hi = m; }
+    const x0 = xs[lo - 1], x1 = xs[lo], f = (x - x0) / ((x1 - x0) || 1);
+    return ys[lo - 1] + (ys[lo] - ys[lo - 1]) * f;
+  }
+  function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
+  function timeAtDist(cum, dist) { return interp(cum.d, cum.t, dist); }
+
+  function buildTransport(view) {
+    const bar = el("div", "dh-transport");
+    const play = el("button", "dh-tbtn dh-tplay", "▶ PLAY");
+    play.type = "button";
+    play.addEventListener("click", function () { if (view.playing) pauseAnim(view); else playAnim(view); });
+    view.playBtn = play;
+    const restart = el("button", "dh-tbtn dh-trestart", "⏮");
+    restart.type = "button"; restart.title = "Restart lap";
+    restart.addEventListener("click", function () { view.cursorT = 0; view._last = 0; paintFrame(view); });
+    bar.appendChild(play); bar.appendChild(restart);
+
+    const rates = el("div", "dh-trates");
+    [1, 2, 4].forEach(function (r) {
+      const b = el("button", "dh-ratebtn" + (r === view.rate ? " dh-active" : ""), r + "×");
+      b.type = "button";
+      b.addEventListener("click", function () {
+        view.rate = r;
+        const bs = rates.querySelectorAll(".dh-ratebtn");
+        for (let i = 0; i < bs.length; i++) bs[i].classList.toggle("dh-active", bs[i] === b);
+      });
+      rates.appendChild(b);
+    });
+    bar.appendChild(rates);
+    bar.appendChild(el("span", "dh-thint", "drag chart to scrub"));
+    return bar;
+  }
+  function setPlayLabel(view) {
+    if (!view.playBtn) return;
+    view.playBtn.textContent = view.playing ? "⏸ PAUSE" : "▶ PLAY";
+    view.playBtn.classList.toggle("dh-tplaying", view.playing);
+  }
+
+  function buildGauges(view) {
+    const card = el("div", "dh-dash");
+    function valCell(cls, label) {
+      const w = el("div", "dh-gcell " + cls);
+      w.appendChild(el("div", "dh-glabel", label));
+      const v = el("div", "dh-gval", "—"); w.appendChild(v);
+      card.appendChild(w); return v;
+    }
+    function barCell(cls, label, color) {
+      const w = el("div", "dh-gcell " + cls);
+      w.appendChild(el("div", "dh-glabel", label));
+      const track = el("div", "dh-gbar");
+      const fill = el("div", "dh-gfill"); fill.style.background = color;
+      track.appendChild(fill); w.appendChild(track);
+      card.appendChild(w); return fill;
+    }
+    const g = {};
+    g.speed = valCell("dh-gspeed", "SPEED km/h");
+    g.gear = valCell("dh-ggear", "GEAR");
+    g.thr = barCell("dh-gthr", "THROTTLE", "#3fb950");
+    g.brk = barCell("dh-gbrk", "BRAKE", "#ff4d4d");
+    g.rpm = barCell("dh-grpm", "RPM", "#c084fc");
+    const drsCell = el("div", "dh-gcell dh-gdrscell");
+    drsCell.appendChild(el("div", "dh-glabel", "DRS"));
+    g.drs = el("div", "dh-gdrs-pill", "—");
+    drsCell.appendChild(g.drs); card.appendChild(drsCell);
+    if (view.compare) {
+      const dcell = el("div", "dh-gcell dh-gdeltacell");
+      dcell.appendChild(el("div", "dh-glabel", "Δ " + dcode(view.compare.d)));
+      g.delta = el("div", "dh-gval dh-gdelta", "—");
+      dcell.appendChild(g.delta); card.appendChild(dcell);
+    }
+    view.g = g;
+    return card;
+  }
+  function updateGauges(view) {
+    const g = view.g; if (!g) return;
+    const t = view.cursorT === null ? 0 : view.cursorT;
+    const c = sampleAt(view.primary.car, t);
+    if (!c) return;
+    g.speed.textContent = c.speed === null ? "—" : Math.round(c.speed);
+    g.gear.textContent = (c.gear === null || c.gear === undefined) ? "—" : (c.gear ? "G" + c.gear : "N");
+    g.thr.style.width = (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) + "%";
+    g.brk.style.width = (c.brake === null ? 0 : clamp(c.brake, 0, 100)) + "%";
+    g.rpm.style.width = (c.rpm === null ? 0 : clamp(c.rpm / view.rpmMax * 100, 0, 100)) + "%";
+    const open = c.drs !== null && c.drs !== undefined && drsOpen(c.drs);
+    g.drs.textContent = open ? "OPEN" : "—";
+    g.drs.classList.toggle("dh-on", open);
+    if (g.delta && view.compare) {
+      const dP = distAtT(view.primary.cum, t);
+      const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
+      g.delta.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(2) + "s";
+      g.delta.classList.toggle("dh-pos", delta > 0.02);
+      g.delta.classList.toggle("dh-neg", delta < -0.02);
+    }
+  }
+
+  // drag the trace chart to scrub (pauses playback)
+  function attachScrub(canvas, view) {
     function at(ev) {
       const r = canvas.getBoundingClientRect();
       view.cursorT = clamp((ev.clientX - r.left) / (r.width || 1), 0, 1) * view.tMax;
-      redraw();
+      paintFrame(view);
     }
-    canvas.addEventListener("pointerdown", function (ev) { canvas.setPointerCapture && canvas.setPointerCapture(ev.pointerId); at(ev); });
-    canvas.addEventListener("pointermove", at);
-    canvas.addEventListener("pointerleave", function () { if (view.cursorT !== null) { view.cursorT = null; redraw(); } });
+    canvas.addEventListener("pointerdown", function (ev) {
+      pauseAnim(view);
+      canvas.setPointerCapture && canvas.setPointerCapture(ev.pointerId);
+      at(ev);
+    });
+    canvas.addEventListener("pointermove", function (ev) {
+      if (ev.buttons) at(ev);
+      else if (ev.pointerType === "mouse" && !view.playing) at(ev);
+    });
   }
 
-  function updateReadout(readout, view) {
-    clear(readout);
-    if (view.cursorT === null) {
-      readout.appendChild(el("span", "dh-ro-hint", "Drag the chart to read values at any point"));
-      return;
-    }
-    readout.appendChild(el("span", "dh-ro-time", view.cursorT.toFixed(2) + "s"));
-    const c = sampleAt(view.primary.car, view.cursorT);
-    CHANNELS.forEach(function (ch) {
-      if (!view.visible[ch.id]) return;
-      const v = chanRaw(ch, c);
-      const cell = el("span", "dh-ro-cell");
-      const dot = el("span", "dh-ro-dot"); dot.style.background = ch.color; cell.appendChild(dot);
-      cell.appendChild(el("span", "dh-ro-val", v === null ? "—" : ch.fmt(v)));
-      readout.appendChild(cell);
+  function playAnim(view) {
+    if (view.playing) return;
+    if (view.cursorT === null || view.cursorT >= view.tMax) view.cursorT = 0;
+    view.playing = true; view._last = 0; setPlayLabel(view);
+    view._raf = requestAnimationFrame(function step(ts) {
+      if (!view.playing) return;
+      if (!view._last) view._last = ts;
+      const dt = (ts - view._last) / 1000; view._last = ts;
+      let nt = (view.cursorT || 0) + dt * view.rate;
+      if (nt >= view.tMax) nt = 0;        // loop the lap
+      view.cursorT = nt;
+      paintFrame(view);
+      view._raf = requestAnimationFrame(step);
     });
-    if (view.compare) {
-      const cc = sampleAt(view.compare.car, view.cursorT);
-      const v = cc ? cc.speed : null;
-      const cell = el("span", "dh-ro-cell");
-      const dot = el("span", "dh-ro-dot"); dot.style.background = cssColor(driverColor(view.compare.d)); cell.appendChild(dot);
-      cell.appendChild(el("span", "dh-ro-val", v === null ? "—" : Math.round(v) + " km/h"));
-      readout.appendChild(cell);
+  }
+  function pauseAnim(view) {
+    if (!view.playing) return;
+    view.playing = false;
+    if (view._raf) { cancelAnimationFrame(view._raf); view._raf = 0; }
+    setPlayLabel(view);
+  }
+
+  // composite one frame: cached chart/map bases + moving cursor, car dots, gauges
+  function paintFrame(view) {
+    const T = view.cursorT === null ? 0 : view.cursorT;
+    const cg = view.chart.getContext("2d");
+    const W = view.chart.width, H = view.chart.height, pad = 6;
+    cg.clearRect(0, 0, W, H);
+    cg.drawImage(view.chartBase, 0, 0);
+    const X = pad + (T / view.tMax) * (W - 2 * pad);
+    cg.strokeStyle = "rgba(255,255,255,0.55)"; cg.lineWidth = 1;
+    cg.beginPath(); cg.moveTo(X, pad); cg.lineTo(X, H - pad); cg.stroke();
+    const c = sampleAt(view.primary.car, T);
+    const f = chanNorm(CHANNELS[0], c, view);
+    if (f !== null) {
+      cg.fillStyle = CHANNELS[0].color;
+      cg.beginPath(); cg.arc(X, H - pad - f * (H - 2 * pad), 3.5, 0, Math.PI * 2); cg.fill();
     }
+    if (view.map) {
+      const mg = view.map.getContext("2d");
+      mg.clearRect(0, 0, view.map.width, view.map.height);
+      mg.drawImage(view.mapBase, 0, 0);
+      if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(driverColor(view.compare.d)));
+      drawCarDot(mg, view, view.primary, T, "#fff");
+    }
+    updateGauges(view);
+  }
+  function drawCarDot(g, view, tel, t, fill) {
+    const cs = sampleAt(tel.car, t);
+    if (!cs) return;
+    const loc = (tel.loc && tel.loc.length) ? tel.loc : view.primary.loc;
+    let best = loc[0], bd = Infinity;
+    for (let i = 0; i < loc.length; i++) {
+      const dd = Math.abs(loc[i].date - cs.date);
+      if (dd < bd) { bd = dd; best = loc[i]; }
+    }
+    const p = mapPoint(view, best);
+    g.fillStyle = fill; g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 2;
+    g.beginPath(); g.arc(p[0], p[1], 5.5, 0, Math.PI * 2); g.fill(); g.stroke();
   }
 
   function appendStintsPits(detail, b) {
@@ -1014,11 +1195,18 @@ const DataHub = (function () {
     return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
   }
 
-  // multi-channel traces for the primary driver (+ compare speed overlay),
-  // with an optional scrub cursor.
-  function drawTraces(canvas, view) {
-    const g = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height, pad = 6;
+  // rebuild the cached static layers (chart traces + coloured track map)
+  function buildBases(view) {
+    renderTraces(view.chartBase.getContext("2d"), view.chartBase.width, view.chartBase.height, view);
+    if (view.map) {
+      computeMapTransform(view);
+      renderMap(view.mapBase.getContext("2d"), view.mapBase.width, view.mapBase.height, view);
+    }
+  }
+
+  // multi-channel traces for the primary driver (+ compare speed overlay).
+  function renderTraces(g, W, H, view) {
+    const pad = 6;
     g.clearRect(0, 0, W, H);
     const X = function (t) { return pad + (t / view.tMax) * (W - 2 * pad); };
     const Y = function (f) { return H - pad - f * (H - 2 * pad); };
@@ -1035,48 +1223,40 @@ const DataHub = (function () {
       }
       g.strokeStyle = color; g.lineWidth = width; g.lineJoin = "round"; g.stroke();
     }
-    // compare speed first (underneath), dashed in the driver's colour
     if (view.compare) {
       g.setLineDash([4, 3]);
       line(view.compare.car, CHANNELS[0], cssColor(driverColor(view.compare.d)), 1.5);
       g.setLineDash([]);
     }
-    // primary channels — draw secondary channels first, speed on top
     for (let k = CHANNELS.length - 1; k >= 0; k--) {
       const ch = CHANNELS[k];
       if (view.visible[ch.id]) line(view.primary.car, ch, ch.color, ch.w);
     }
-    // scrub cursor + dot on the speed trace
-    if (view.cursorT !== null) {
-      const x = X(view.cursorT);
-      g.strokeStyle = "rgba(255,255,255,0.5)"; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(x, pad); g.lineTo(x, H - pad); g.stroke();
-      const c = sampleAt(view.primary.car, view.cursorT);
-      const f = chanNorm(CHANNELS[0], c, view);
-      if (f !== null) {
-        g.fillStyle = CHANNELS[0].color;
-        g.beginPath(); g.arc(X(c.t), Y(f), 3.5, 0, Math.PI * 2); g.fill();
-      }
-    }
   }
 
-  // track map from x/y, coloured by speed, with the scrub position marked
-  function drawTrackMap(canvas, view) {
-    const loc = view.primary.loc, car = view.primary.car;
-    const g = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height, pad = 14;
-    g.clearRect(0, 0, W, H);
-    let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, vMax = 1;
+  // screen transform for the track map (from the primary lap's x/y bounds)
+  function computeMapTransform(view) {
+    const loc = view.primary.loc, W = view.mapBase.width, H = view.mapBase.height, pad = 14;
+    let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
     for (let i = 0; i < loc.length; i++) {
       if (loc[i].x < minx) minx = loc[i].x; if (loc[i].x > maxx) maxx = loc[i].x;
       if (loc[i].y < miny) miny = loc[i].y; if (loc[i].y > maxy) maxy = loc[i].y;
     }
-    for (let i = 0; i < (car ? car.length : 0); i++) if ((car[i].speed || 0) > vMax) vMax = car[i].speed;
     const spanx = (maxx - minx) || 1, spany = (maxy - miny) || 1;
     const sc = Math.min((W - 2 * pad) / spanx, (H - 2 * pad) / spany);
-    const ox = (W - spanx * sc) / 2, oy = (H - spany * sc) / 2;
-    const PX = function (p) { return ox + (p.x - minx) * sc; };
-    const PY = function (p) { return H - (oy + (p.y - miny) * sc); };
+    view.mapT = { minx: minx, miny: miny, sc: sc, ox: (W - spanx * sc) / 2, oy: (H - spany * sc) / 2, W: W, H: H };
+  }
+  function mapPoint(view, p) {
+    const m = view.mapT;
+    return [m.ox + (p.x - m.minx) * m.sc, m.H - (m.oy + (p.y - m.miny) * m.sc)];
+  }
+
+  // track map from x/y, coloured by speed (slow = blue, fast = red)
+  function renderMap(g, W, H, view) {
+    const loc = view.primary.loc, car = view.primary.car;
+    g.clearRect(0, 0, W, H);
+    let vMax = 1;
+    for (let i = 0; i < (car ? car.length : 0); i++) if ((car[i].speed || 0) > vMax) vMax = car[i].speed;
     let ci = 0;
     function speedAtDate(date) {
       if (!car || !car.length) return null;
@@ -1091,21 +1271,8 @@ const DataHub = (function () {
       const b = Math.round(255 * Math.min(1, (1 - f) * 1.6));
       const gr = Math.round(180 * (1 - Math.abs(f - 0.5) * 2));
       g.strokeStyle = "rgb(" + r + "," + gr + "," + b + ")";
-      g.beginPath();
-      g.moveTo(PX(loc[i - 1]), PY(loc[i - 1]));
-      g.lineTo(PX(loc[i]), PY(loc[i]));
-      g.stroke();
-    }
-    // scrub marker: nearest location sample to the cursor's car-data timestamp
-    if (view.cursorT !== null && car && car.length) {
-      const cs = sampleAt(car, view.cursorT);
-      let best = loc[0], bd = Infinity;
-      for (let i = 0; i < loc.length; i++) {
-        const dd = Math.abs(loc[i].date - cs.date);
-        if (dd < bd) { bd = dd; best = loc[i]; }
-      }
-      g.fillStyle = "#fff"; g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 2;
-      g.beginPath(); g.arc(PX(best), PY(best), 5, 0, Math.PI * 2); g.fill(); g.stroke();
+      const p0 = mapPoint(view, loc[i - 1]), p1 = mapPoint(view, loc[i]);
+      g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke();
     }
   }
 
