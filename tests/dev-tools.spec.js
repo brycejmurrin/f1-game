@@ -165,6 +165,16 @@ test.describe("__apex.info()", () => {
     expect(info.timeTrial).toBe(false);
     expect(info.seasonMode).toBe(false);
   });
+
+  test("tt() sets timeTrial:true", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.tt("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    const info = await page.evaluate(() => window.__apex.info());
+    expect(info.timeTrial).toBe(true);
+    expect(info.track).toBe("monza");
+  });
 });
 
 // ── Camera tools ───────────────────────────────────────────────────────────
