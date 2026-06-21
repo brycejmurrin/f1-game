@@ -108,16 +108,25 @@ Called with no argument it returns `{ mode, index, modes }`. Called with a mode
 **id**, **label**, or **index** it switches and persists (to `localStorage`),
 returning `{ mode, index }`; an unknown mode returns `false`.
 
-| Mode | Vantage |
-|---|---|
-| `chase` | close action cam, just behind and above the car (default) |
-| `far` | pulled back & higher — more of the road ahead, for race-craft |
-| `cockpit` | driver's-eye onboard; the player car mesh is hidden |
-| `hood` | nose/bonnet onboard, looking down the road |
+| Mode | Label | Vantage |
+|---|---|---|
+| `chase` | CHASE | Close action cam anchored behind the car at fixed arc-length — car stays a constant readable size at all speeds (default) |
+| `far` | FAR | Chase cam pulled further back and higher — more road ahead visible, better for race-craft |
+| `cockpit` | COCKPIT | Driver's-eye onboard; the player car mesh is hidden |
+| `hood` | HOOD | Nose/bonnet onboard, looking down the road |
+| `overhead` | OVERHEAD | Top-down drone, high above and slightly behind — steeply angled to show the car and road ahead |
+| `heli` | HELI | Broadcast helicopter: high, behind and off to the side, long-lens telephoto on the car |
+| `reverse` | REVERSE | Mounted just ahead of the car looking back down the track — watch who's chasing you |
+| `side` | TV SIDE | Panning trackside camera, offset to the outside of the current corner, framing the car against the apex |
+| `cinematic` | CINEMATIC | Free-orbit: circles the car continuously on a slow azimuth sweep — shows surroundings from every angle |
+| `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
+| `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
+| `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:[chase,far,cockpit,hood] }
+__apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"] }
 __apex.camera("hood");      // → { mode:"hood", index:3 }
+__apex.camera("tcam");      // → { mode:"tcam", index:10 }
 __apex.camera(2);           // switch by index → cockpit
 ```
 
@@ -220,6 +229,12 @@ argument returns the player car. Returns `null` for an out-of-range index. Exten
 `cars()` with fields not worth fetching for the whole field: `team`, `finished`,
 `finishT` (finish timestamp), `contactT` (contact timer), `wrongWay`, `rescueT`.
 
+### `camState() → {eye, tgt, fov}`
+Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), and `fov`
+(degrees). Snapshot is taken at the moment of the call from the currently active
+camera (chase, cockpit, hood, or debug free-cam). For the combined scene+camera
+snapshot, prefer `viewState()`.
+
 ### `viewState() → {camMode, camIndex, frozen, dbgCamActive, skyOverride, weather, state, eye, tgt, fov}`
 Combined scene snapshot: camera mode, frozen/debug flags, weather, the game
 state-machine value, and current camera geometry (`eye`, `tgt`, `fov`). The
@@ -229,6 +244,37 @@ screenshot — avoids calling `info()`, `camera()`, and `probe()` separately.
 ### `corners() → [number, …]`
 Lap-fractions of the corner apexes (local maxima of `|curvature|`). Handy for
 parking at each corner in turn: `corners().forEach(s => …)`.
+
+### `nodeAt(frac) → {k, frac, x, y, z, tx, tz, rx, rz} | null`
+World position and orientation of the track node closest to lap-fraction `frac`
+(0–1). Returns `null` if no track is loaded. Fields:
+
+| Field | Meaning |
+|---|---|
+| `k` | Node index |
+| `frac` | Actual fraction of the returned node |
+| `x, y, z` | World-space centre position (m) |
+| `tx, tz` | Track tangent direction (unit vector, XZ components) |
+| `rx, rz` | Right-vector (perpendicular to tangent, in XZ plane) |
+
+Useful for geometry tests, self-intersection checks, and building world-space
+coordinates from arc-position data:
+```js
+const n = __apex.nodeAt(0.25);          // node at ~quarter-lap
+const worldPt = [n.x + n.rx * 3, n.y, n.z + n.rz * 3];  // 3 m right of centreline
+```
+
+### `nodesNear(wx, wz, r) → [{i, frac, x, y, z}]`
+All track nodes within radius `r` (m) of the world XZ point `(wx, wz)`. Returns
+an empty array if no track is loaded. Each entry includes the node index `i`, its
+lap-fraction, and world position `(x, y, z)`.
+
+Useful for auditing self-intersecting track layouts:
+```js
+// nodes within 4 m of world origin
+const near = __apex.nodesNear(0, 0, 4);
+console.log(near.map(n => `[${n.i}] ${(n.frac*100).toFixed(1)}% @ (${n.x},${n.z})`));
+```
 
 ### `wallStats() → {minB, maxB, minOverHw, anyNaN, street, n} | null`
 Driving-boundary stats for the current track (both sides, all nodes): tightest
@@ -402,10 +448,97 @@ stuck-recovery: a healthy AI digs out and resumes within a couple of seconds.
 Load an optional `.glb` car model at runtime (team meshes rebuild from it, tinted
 per livery); resolves `false` and keeps the procedural car on failure.
 
+### `meshToggle(o) → overrides`
+Hide or show individual track meshes by name. `o` is an object of `{meshName:
+bool}` — `false` hides the mesh, `true` restores it. Keys are additive; omitted
+keys are unchanged. Returns the full current override map.
+
+```js
+__apex.meshToggle({ props: false });       // hide track props (cones, barriers)
+__apex.meshToggle({ road: false });        // hide the road surface
+__apex.clearMeshes();                      // restore all meshes
+```
+
 ### `clearMeshes() → {}`
 Reset all `meshToggle()` overrides, restoring every mesh to its default visibility
 state. Companion to `meshToggle()` — call this between tests so toggled meshes
 don't bleed into later screenshots.
+
+---
+
+## Headless / RL control loop
+
+For reinforcement-learning, autopilot testing, or any high-throughput physics
+simulation, the RL API lets you step physics at uncapped speed (skipping the
+WebGL render pass entirely) and receive a rich observation in a single
+cross-boundary call.
+
+### `headless(on?) → boolean`
+Get or set headless mode. When `true`, `render()` returns immediately — physics
+can be stepped via `act()` at far above 60 fps without GPU overhead. Called with
+no argument returns the current state.
+
+```js
+__apex.headless(true);   // skip render — physics-only loop
+__apex.headless(false);  // restore normal rendering
+```
+
+### `obs() → observation | null`
+Full debug observation of the current game state — superset of `physState()` and
+`probe()` with track context, barrier clearances, lookahead scan, and rival
+proximity. Returns `null` if no track is loaded.
+
+| Field(s) | Description |
+|---|---|
+| `s, x, prog, lap, raceT` | Position, progress (m cumulative), lap count, race clock |
+| `speed, speedKph, head, vLat` | Motion: speed (m/s), heading (rad), lateral velocity |
+| `axEstSm, axFrac, slipFactor, slipDeg` | Combined-slip state (see `physState()`) |
+| `k, hw, slope, gripMult, weather` | Track context at player: curvature, half-width, road pitch, grip multiplier |
+| `wallR, wallL, clearR, clearL` | Signed barrier distances and clearances to each side (m) |
+| `energy` | ERS charge level 0–1 |
+| `wrongWay, offT, rescueT, done` | Episode flags: `done = wrongWay ∥ rescueT > 8` |
+| `input` | Currently applied override input (null fields = live device input) |
+| `posInField, gapAhead, gapBehind` | Race position and gap to nearest rivals (m) |
+| `scan` | Lookahead at [10, 30, 60] m: `{d, k, hw, wallR, wallL, width}` |
+| `reward` | Pre-composed reward components: `speed`, `offTrack`, `wallDist`, `wrongWay` |
+
+### `act(input, dt?, n?) → observation | null`
+Set input, step `n` (default 1) physics ticks of `dt` (default `1/60`) seconds
+each, then return `obs()`. Single round-trip replaces three separate
+`page.evaluate()` calls in a control loop.
+
+`input = { steer: -1..1, throttle: bool, brake: bool }` — pass `null` to keep the
+current input. Returns `null` if no track is loaded.
+
+### `reset(frac, speed?, x?) → observation | false`
+Fast episode reset reusing the already-loaded track. Reinitialises the car grid,
+positions the player at lap-fraction `frac` (0–1) with optional `speed` (m/s) and
+lateral offset `x` (m), sets `state = "race"` and `raceT = 0` — all without
+reloading assets. Returns the initial `obs()`, or `false` if no track is loaded.
+
+Call `race()` first to load the desired circuit, then call `reset()` at the start
+of each episode instead of reloading:
+
+```js
+// one-time setup
+await page.evaluate(() => window.__apex.race("monza"));
+await page.waitForFunction(() => window.__apex.info().track != null);
+
+// per-episode: fast reset, no page reload
+const obs = await page.evaluate(() => {
+  window.__apex.headless(true);
+  return window.__apex.reset(0.1, 30, 0);   // start at 10% lap, 30 m/s
+});
+
+// control loop: 1 evaluate() per decision step
+while (!obs.done) {
+  const next = await page.evaluate((steer) =>
+    window.__apex.act({ steer, throttle: true, brake: false }, 1/60, 5),
+    chooseSteer(obs)
+  );
+  obs = next;
+}
+```
 
 ---
 
