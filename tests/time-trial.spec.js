@@ -56,14 +56,16 @@ test.describe("Time Trial — sector splits", () => {
   test("sector announce fires when crossing S1→S2 boundary", async ({ page }) => {
     await enterTT(page);
 
-    // Advance through the 33% boundary using headless physics
+    // Start just before the 33% sector boundary at low speed so the car
+    // crosses cleanly without triggering auto-rescue (which would overwrite
+    // the "S1" announce with "RECOVERED").
     await page.evaluate(async () => {
       window.__apex.headless(true);
-      window.__apex.reset(0.28, 60);
+      window.__apex.reset(0.327, 10);
       const total = window.__apex.info().total || 5000;
-      for (let i = 0; i < 200; i++) {
-        window.__apex.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 2);
-        if (window.__apex.physState().s / total > 0.38) break;
+      for (let i = 0; i < 300; i++) {
+        window.__apex.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 3);
+        if (window.__apex.physState().s / total > 0.34) break;
       }
       window.__apex.headless(false);
     });
