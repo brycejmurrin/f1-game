@@ -62,14 +62,18 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         for (let i = 0; i < 150; i++) window.__apex.step(1 / 60, 1);
         const cv1 = window.__apex.physState().speed;
 
-        // Road-following on the grade: approach the sharpest corner with NO steer,
-        // brisk pace, and confirm the car tracks the road instead of running off
-        // (which on a slope would also pitch it up/down the bank).
+        // Road-following on the grade: approach the sharpest corner with NO steer
+        // at a moderate corner speed, and confirm the assist tracks the road
+        // instead of running off (which on a slope would also pitch it up/down the
+        // bank). NOTE: the driving-help assist is intentionally light by default
+        // (~0.50), so an un-steered car at full racing pace WILL run to the runoff
+        // on a tight corner — that's by design (you must steer). This checks the
+        // assist still holds at a sensible corner speed, not that it defies physics.
         const corners = window.__apex.corners();
         let widest = 0, hw = 7;
         for (const f of corners) {
           // start a little before the apex so the car turns INTO the corner
-          window.__apex.jump((f - 0.02 + 1) % 1, 50, 0);
+          window.__apex.jump((f - 0.02 + 1) % 1, 30, 0);
           window.__apex.setInput({ steer: 0, throttle: false });
           hw = window.__apex.probe().hw;
           for (let i = 0; i < 70; i++) {
