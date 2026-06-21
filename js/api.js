@@ -350,14 +350,16 @@ const F1API = (function () {
   function carData(sessionKey, driverNumber, startISO, endISO) {
     return windowed("/car_data", sessionKey, driverNumber, startISO, endISO).then(function (list) {
       const a = arr(list);
-      const t0 = a.length ? Date.parse(a[0].date) : 0;
+      const t0ms = a.length ? Date.parse(a[0].date) : NaN;
+      const t0 = isFinite(t0ms) ? t0ms : 0;
       return a.map(function (c) {
         c = c || {};
+        const cMs = Date.parse(c.date);
         return {
-          t: (Date.parse(c.date) - t0) / 1000,   // seconds from window start
+          t: isFinite(cMs) ? (cMs - t0) / 1000 : 0,   // seconds from window start
           speed: num(c.speed), throttle: num(c.throttle), brake: num(c.brake),
           gear: num(c.n_gear), rpm: num(c.rpm), drs: num(c.drs),
-          date: Date.parse(c.date) || 0
+          date: isFinite(cMs) ? cMs : 0
         };
       });
     });
