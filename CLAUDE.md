@@ -13,6 +13,22 @@ npx playwright test               # run all specs
 npx playwright test tests/<file>.spec.js   # single spec
 npx playwright test tests/ui-audit.spec.js # → tests/ui-screenshots/
 npx playwright test tests/visual-regression-*.spec.js  # pixel-diff regression
+
+# Named test groups (via npm run <script>):
+npm run test:smoke      # page load + __apex available
+npm run test:api        # __apex contract: dev-tools + headless + obs/act edge cases
+npm run test:headless   # headless control loop only (fast, no rendering)
+npm run test:physics    # physics regression + elevation
+npm run test:collision  # collision, drift, offtrack
+npm run test:behaviour  # collision + drift + offtrack + collision-ai-fixes (all behaviour)
+npm run test:barriers   # track wall geometry + AI-fixes barrier tests
+npm run test:parts      # parts catalog, budget, persistence, physics
+npm run test:steering   # presets, sliders, steering modes
+npm run test:ui         # all UI screenshots (slow, ~5 min)
+npm run test:visual     # pixel-diff visual regression (slow)
+npm run test:modes      # season + time-trial game modes
+npm run test:circuit    # walls + autopilot + elevation (all circuit-level tests)
+npm run test:fast       # curated fast subset: smoke + api + collision + parts (~3 min)
 ```
 
 ---
@@ -140,7 +156,7 @@ const obs = await page.evaluate(() =>
 
 ## Testing
 
-50+ Playwright specs. Key groups:
+100+ Playwright specs. Run groups with `npm run test:<group>` (see Key commands).
 
 | Spec(s) | What they cover |
 |---|---|
@@ -149,7 +165,11 @@ const obs = await page.evaluate(() =>
 | `track-*.spec.js` | per-circuit smoke tests |
 | `tracks-walls.spec.js` | barrier geometry on all 24 circuits |
 | `physics-*.spec.js`, `world-physics.spec.js`, `longitudinal.spec.js` | physics regression |
+| `elevation-tracks.spec.js` | slope/gravity, banking grip, road-follow on graded circuits |
 | `collisions*.spec.js`, `drift.spec.js`, `offtrack.spec.js` | behaviour tests |
+| `collision-ai-fixes.spec.js` | regression tests for June 2026 audit: wrong-way threshold/hysteresis, wallT on open circuits, rear-end contactT, 10-car pack separation, AI banking grip, Jeddah barriers |
+| `headless-api.spec.js` | headless control loop: `headless()`, `obs()`, `act()`, `reset()` |
+| `obs-act-edge.spec.js` | edge cases: `act(n=0)`, `reset(0.999)` lap seam, scan wrap-around, `done` semantics, numeric stability |
 | `ui-audit.spec.js` | portrait+landscape screenshots of all 10 screens |
 | `visual-regression-*.spec.js` | pixel-diff regression |
 | `presets.spec.js`, `sliders.spec.js`, `steering.spec.js` | steering parameter tests |
@@ -158,7 +178,9 @@ const obs = await page.evaluate(() =>
 | `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
+| `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
 | `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
+| `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection |
 
 **Viewport rules:**
 - Tests that touch `#pm-steer` / `#pm-calib` must use `hasTouch: true` (desktop

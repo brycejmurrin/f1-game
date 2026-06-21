@@ -1286,7 +1286,7 @@ const Tracks = (function () {
           const r0 = [track.rx[k], track.ry[k], track.rz[k]];
           const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
           const u0 = upOf(track, k);
-          const barrierOffset = def.id === "monaco" ? 2.0 : 0.35;
+          const barrierOffset = def.barrierGap != null ? def.barrierGap : (def.id === "monaco" ? 2.0 : 0.35);
           const o0 = side * (hw[k] + barrierOffset), o1 = side * (hw[kn] + barrierOffset);
           const ax = px[k] + r0[0] * o0, ay = py[k], az = pz[k] + r0[2] * o0;
           const bx = px[kn] + r1[0] * o1, by = py[kn], bz = pz[kn] + r1[2] * o1;
@@ -1302,7 +1302,7 @@ const Tracks = (function () {
       }
       // Record the boundary for EVERY node (the geometry loop steps by 2, which
       // would leave gaps), both sides, at the barrier offset.
-      const off = def.id === "monaco" ? 2.0 : 0.35;
+      const off = def.barrierGap != null ? def.barrierGap : (def.id === "monaco" ? 2.0 : 0.35);
       for (let k = 0; k < n; k++) { markBarrier(k, -1, off); markBarrier(k, 1, off); }
     }
     // floodlights for night tracks
@@ -1585,6 +1585,7 @@ const Tracks = (function () {
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
       street: !!d.street, banked: !!d.banked, bridges: d.bridges || null,
+      barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
       // bespoke per-circuit scenery (js/tracks/<id>.js); run by buildProps
       scenery: d.scenery || null,
