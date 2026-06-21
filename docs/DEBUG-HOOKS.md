@@ -54,11 +54,17 @@ circuit **id** (`"monza"`) or its index in `Tracks.LIST`. `timeOfDay` is
 `"day" | "night" | "default"` (default uses the circuit's own setting);
 `weather` is `"dry" | "wet"`. The recommended entry point for any harness.
 
-### `info() → {state, track, n, total}`
+### `tt(trackRef, timeOfDay?) → {track, timeTrial} | false`
+Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true`).
+Same `trackRef` and `timeOfDay` semantics as `race()`. Use this instead of `race()`
+when testing TT-specific behaviour (ghost delta, TT results, sector splits).
+
+### `info() → {state, track, n, total, timeTrial, seasonMode}`
 Snapshot of state: `state` is the state-machine value
 (`menu｜select｜count｜race｜results｜…`), `track` the loaded circuit id, `n` the
-sample count, `total` the lap length (m). Returns `track: null` if no circuit is
-loaded — poll this to know when a track has finished building.
+sample count, `total` the lap length (m). `timeTrial` and `seasonMode` reflect the
+active game mode. Returns `track: null` if no circuit is loaded — poll this to
+know when a track has finished building.
 
 ### `go() → state`
 Skip the countdown but leave the grid intact, so the whole field races and packs
