@@ -98,31 +98,11 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
       await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
-      await page.evaluate(() => window.__apex.park(0));
-      await page.waitForTimeout(500);
-      // Trigger results directly via the JS API
-      await page.evaluate(() => window.__apex.finishRace && window.__apex.finishRace());
-      // fallback: if no finishRace API, force the results panel visible
-      await page.evaluate(() => {
-        const r = document.getElementById("results");
-        const h = document.getElementById("hud");
-        if (r) r.hidden = false;
-        if (h) h.hidden = true;
-        // Populate a dummy table if empty
-        const tbl = document.getElementById("results-table");
-        const ttl = document.getElementById("results-title");
-        if (ttl && !ttl.textContent) ttl.textContent = "RACE RESULT";
-        if (tbl && !tbl.children.length) {
-          const positions = ["HAM", "VER", "LEC", "NOR", "SAI"];
-          positions.forEach((code, i) => {
-            const row = document.createElement("div");
-            row.className = "res-row";
-            row.textContent = `${i + 1}  ${code}`;
-            tbl.appendChild(row);
-          });
-        }
-      });
+      await page.evaluate(() => window.__apex.park(0.1));
       await page.waitForTimeout(300);
+      await page.evaluate(() => window.__apex.finishRace());
+      await page.locator("#results").waitFor({ state: "visible" });
+      await page.waitForTimeout(200);
       await shot(page, `${orient}-09-results`);
     });
 
