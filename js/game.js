@@ -201,6 +201,12 @@ const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer 
 // heading. 0 = pure manual (the car runs straight off at corners), 0.9 = the
 // car nearly steers the corner for you. The driver always adds on top.
 let ROAD_FOLLOW = 0.7;
+// Combined-slip friction ellipse: grip used braking/accelerating is taken out of
+// the cornering budget. LONG_GRIP is the longitudinal axis of the ellipse (m/s²),
+// set a little above BRAKE (27) so straight-line braking keeps most grip, but
+// braking hard WHILE turning washes the front wide; easing off the brake as you
+// turn in (trail-braking) hands grip back to cornering. Higher = more forgiving.
+const LONG_GRIP = 34;
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -1225,9 +1231,18 @@ function updateCar(c, dt, ranked) {
     const vtRaw = clamp(kv * c.speed * c.speed / 9.8, -0.20, 0.20);
     c.vertLoad = damp(c.vertLoad ?? vtRaw, vtRaw, 4, dt);
     const vertLoad = c.vertLoad;
+    // --- combined slip (traction circle): grip already spent braking or
+    // accelerating is unavailable for cornering. axEstSm is the smoothed
+    // longitudinal accel (m/s²) computed above for weight transfer; the friction
+    // ellipse drops lateral grip by sqrt(1 - (axUsed/LONG_GRIP)²). So braking
+    // hard mid-corner understeers wide, while trail-braking (easing off as you
+    // turn in) progressively returns grip to the front tyres and rotates the car.
+    // Weather thins the longitudinal budget too, so braking bites grip in the wet.
+    const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
+    const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
-    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad);
+    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor;
     const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
