@@ -16,6 +16,9 @@ const els = {
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
   selDriver: $("sel-driver"), selTracks: $("sel-tracks"),
+  selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
+  selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
+  selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selDiff: $("sel-diff"),
   selDiffSection: $("sel-diff-section"), selCustomize: $("sel-customize"),
   selBack: $("sel-back"), selGo: $("sel-go"),
@@ -2242,11 +2245,9 @@ function buildSelect() {
       cv.className = "track-card-map";
       cv.width = 300; cv.height = 188;
       card.appendChild(cv);
-      // draw the circuit outline from the game's own spline geometry
-      TrackMaps.draw(cv, t, {
-        color: i === trackIdx ? "#fff" : "rgba(235,235,240,0.82)",
-        startColor: "#e10600", width: 3
-      });
+      // draw the circuit outline from the game's own spline geometry,
+      // tinted by the circuit's theme
+      TrackMaps.draw(cv, t, { color: TrackMaps.themeColor(t), startColor: "#e10600", width: 3 });
 
       const info = document.createElement("div");
       info.className = "track-card-info";
@@ -2272,6 +2273,7 @@ function buildSelect() {
       card.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); loadTrack(i); };
       els.selTracks.appendChild(card);
     });
+    updateTrackPreview();
   }
   els.selDiff.textContent = "";
   ["easy", "normal", "hard"].forEach((d) => {
@@ -2281,6 +2283,33 @@ function buildSelect() {
     b.onclick = () => { difficulty = d; store.set("difficulty", d); buildSelect(); tickUi(); };
     els.selDiff.appendChild(b);
   });
+}
+
+// large preview of the currently-selected circuit: themed outline with numbered
+// corners, name / GP / length / turn count, and the time-trial best lap.
+function updateTrackPreview() {
+  if (!els.selPreviewMap) return;
+  const t = Tracks.LIST[trackIdx];
+  if (!t) return;
+  TrackMaps.draw(els.selPreviewMap, t, {
+    color: TrackMaps.themeColor(t), startColor: "#e10600",
+    width: 4, pad: 24, corners: true, cornerR: 9, cornerFont: 11
+  });
+  els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
+  els.selPreviewGp.textContent = t.gp || "";
+  const turns = TrackMaps.corners(t).length;
+  els.selPreviewMeta.textContent = [
+    t.country,
+    t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
+    turns ? turns + " turns" : ""
+  ].filter(Boolean).join("  ·  ");
+  if (timeTrial) {
+    const board = ttBoard(t.id);
+    const rec = board.length ? board[0].t : Infinity;
+    els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
+  } else {
+    els.selPreviewRec.textContent = "";
+  }
 }
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
