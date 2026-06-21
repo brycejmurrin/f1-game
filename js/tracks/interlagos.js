@@ -23,33 +23,67 @@
     // Climb from the Senna S up to the start/finish (the lap's ~40 m of relief).
     elevations: [{ s: 0.86, halfM: 480, rise: 10 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, backdrop, groundPlane,
-              addBox, every, onTrack, hash, vadd, anchor, building, tower,
-              grandstand, billboard, tyreWall, pine, tree, hedge } = api;
+      const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
+              addBox, every, onTrack, hash, vadd, anchor, along, building, tower,
+              grandstand, billboard, gantry, marshalPost, fence, guardrail, wall,
+              tyreWall, pine, tree, palm, bush, hedge, peak, ridge,
+              addCyl, addCone, addPrism } = api;
       const K = (s) => Math.round(s * n) % n;
+      const GREEN = [0.20, 0.44, 0.20], GREEN2 = [0.24, 0.48, 0.22];
 
-      // --- Pit / control tower + pit building on the start straight (s=0.00, R close) ---
+      // ===================================================================
+      // PIT / PADDOCK COMPLEX (s≈0.00, R close) — the recognisable hub
+      // ===================================================================
       const kpit = K(0.0);
       tower(kpit, 1, 14, 15, 40, { col: [0.52, 0.50, 0.48], seg: 4, cap: true,
                                    capCol: [0.22, 0.24, 0.28], mast: 12 });   // tall slab control tower
       building(kpit, 1, 7, 12, 14, 30, { wall: [0.60, 0.60, 0.62],
                window: [0.20, 0.28, 0.34], floor: 4 });                       // pit building w/ window bands
+      // long low pit garages running back down the straight
+      for (const s of [0.97, 0.99, 0.01, 0.03]) {
+        building(K(s), 1, 6, 9, 7, 22, { wall: [0.66, 0.66, 0.68],
+                 window: [0.30, 0.34, 0.40], floor: 3, roof: [0.50, 0.50, 0.54] });
+      }
+      // paddock hospitality / motorhomes behind the pits
+      for (const s of [0.95, 0.98, 0.02, 0.05]) {
+        const k = K(s);
+        addBox(out, anchor(k, 1, 40 + hash(k) * 14).c, [10, 5, 16],
+               [0.80, 0.82, 0.84], [anchor(k, 1, 40).r, [0, 1, 0], anchor(k, 1, 40).t]);
+      }
+      // pit wall: solid low concrete wall on the R of the pit straight
+      wall(0.96, 0.06, 1, 2.2, 1.0, [0.80, 0.80, 0.82], 0.4);
       grandstand(0.94, 1, 9, 70, [0.46, 0.47, 0.52], [0.30, 0.52, 0.34]);     // pit-straight stand (Brazil green crowd)
 
-      // --- Main grandstand (s=0.02, L mid) ---
-      grandstand(0.02, -1, 10, 90, [0.42, 0.43, 0.48], [0.28, 0.50, 0.32]);
+      // start/finish gantry over the line + a scoring gantry further on
+      gantry(0.005, 7.0, [0.18, 0.20, 0.24]);
+      gantry(0.92, 6.5, [0.20, 0.22, 0.26]);
 
-      // --- Senna S (s=0.05, both close): red/white kerb boxes inside each apex ---
+      // ===================================================================
+      // MAIN GRANDSTAND TIER (s≈0.02, L) — the big stand on the climb
+      // ===================================================================
+      grandstand(0.02, -1, 10, 90, [0.42, 0.43, 0.48], [0.28, 0.50, 0.32]);
+      grandstand(0.06, -1, 11, 64, [0.45, 0.46, 0.51], [0.30, 0.52, 0.34]);
+      for (const s of [0.00, 0.03, 0.06]) billboard(K(s), -1, 22, 12, 5, [0.94, 0.92, 0.88]);
+
+      // ===================================================================
+      // SENNA S (s≈0.05, both close): kerbs, tyre walls, greenery
+      // ===================================================================
       for (const [s, side] of [[0.045, -1], [0.065, 1], [0.085, -1]]) {
         const k = K(s);
         place(k, side, 2, [0.5, 0.18, 7], [0.80, 0.18, 0.18]);   // red kerb
         place(k, side, 4.2, [3.0, 0.18, 7], [0.92, 0.92, 0.92]);   // white kerb
       }
+      // tyre walls on the OUTSIDE of each Senna S apex
+      tyreWall(0.04, 0.07, 1, 5, [0.92, 0.92, 0.30]);
+      tyreWall(0.06, 0.09, -1, 5, [0.30, 0.55, 0.85]);
+      marshalPost(K(0.05), 1, 8);
+      marshalPost(K(0.085), -1, 8);
       // hero downhill plunge: tropical greenery hugging the Senna S esses
       for (const [s, side] of [[0.05, 1], [0.07, -1], [0.09, 1]]) {
         const k = K(s);
         pine(k, side, 16 + hash(k) * 10, 12 + hash(k * 3) * 6, [0.18, 0.40, 0.18]);
-        tree(k, side, 26 + hash(k * 5) * 14, 9 + hash(k * 7) * 5, [0.22, 0.46, 0.22]);
+        tree(k, side, 26 + hash(k * 5) * 14, 9 + hash(k * 7) * 5, GREEN2);
+        palm(k, side, 20 + hash(k * 9) * 8, 9 + hash(k * 13) * 4, [0.24, 0.46, 0.20]);
       }
 
       // --- Colourful favela hillside (s=0.15, L far): saturated cubes climbing a green slope ---
@@ -79,19 +113,28 @@
 
       // --- Reta Oposta straight (s=0.25, R mid): open green banks + advert boards ---
       for (const s of [0.22, 0.25, 0.28]) billboard(K(s), 1, 8, 11, 4, [0.90, 0.90, 0.88]);
-      hedge(0.20, 0.30, 1, 14, 2.2, [0.20, 0.44, 0.20]);
+      hedge(0.20, 0.30, 1, 14, 2.2, GREEN);
+      grandstand(0.27, -1, 11, 64, [0.45, 0.46, 0.51], [0.28, 0.50, 0.32]);   // Reta Oposta stand
+      marshalPost(K(0.24), 1, 7);
 
       // --- Lago / Guarapiranga water (s=0.35, L far): muddy blue-green plane beyond trees ---
-      groundPlane(K(0.35), -1, 70, [320, 2, 240], [0.22, 0.42, 0.50]);
-      groundPlane(K(0.40), -1, 60, [220, 2, 180], [0.20, 0.40, 0.48]);
-      for (const s of [0.33, 0.36, 0.39]) {
+      // place the lake well off-track in the distant L so it never overlaps tarmac
+      groundPlane(K(0.33), -1, 210, [150, 2, 140], [0.22, 0.42, 0.50]);
+      groundPlane(K(0.30), -1, 220, [130, 2, 120], [0.20, 0.40, 0.48]);
+      groundPlane(K(0.43), -1, 220, [120, 2, 110], [0.21, 0.41, 0.49]);
+      // little jetties / reeds at the near shore
+      for (const s of [0.33, 0.36, 0.39, 0.42]) {
         const k = K(s);
-        tree(k, -1, 40 + hash(k) * 16, 9 + hash(k * 3) * 5, [0.22, 0.46, 0.22]);  // treeline screening the lake
+        tree(k, -1, 40 + hash(k) * 16, 9 + hash(k * 3) * 5, GREEN2);   // treeline screening the lake
+        palm(k, -1, 52 + hash(k * 7) * 20, 10 + hash(k * 11) * 5, [0.24, 0.46, 0.20]);
+        bush(k, -1, 30 + hash(k * 5) * 10, GREEN);
       }
 
       // --- Descida do Lago (s=0.45, both mid): grass run-off + tan gravel trap ---
       groundPlane(K(0.45), 1, 6, [40, 1.2, 30], [0.62, 0.56, 0.40]);   // gravel trap (tan)
-      hedge(0.42, 0.50, -1, 12, 2.0, [0.20, 0.44, 0.20]);
+      hedge(0.42, 0.50, -1, 12, 2.0, GREEN);
+      tyreWall(0.44, 0.48, 1, 5, [0.85, 0.30, 0.30]);
+      marshalPost(K(0.46), -1, 8);
 
       // --- São Paulo high-rise skyline (s=0.60, R far): row of haze-grey slabs on horizon ---
       // CONTINUOUS window-banded tower band on the R side — densest at s=0.60, but
@@ -139,15 +182,22 @@
 
       // --- Ferradura / infield esses (s=0.70, L mid): green banks + tyre walls ---
       tyreWall(0.67, 0.73, -1, 4, [0.90, 0.78, 0.25]);   // yellow-capped tyre wall
+      grandstand(0.71, 1, 11, 56, [0.42, 0.43, 0.48], [0.30, 0.52, 0.34]);    // Ferradura stand
+      marshalPost(K(0.70), -1, 8);
       for (const s of [0.66, 0.70, 0.74]) {
         const k = K(s);
         pine(k, -1, 18 + hash(k) * 12, 11 + hash(k * 3) * 5, [0.18, 0.40, 0.18]);
+        tree(k, 1, 24 + hash(k * 5) * 14, 9 + hash(k * 7) * 5, GREEN2);
       }
 
       // --- Junção (s=0.82, L close): tight uphill left, kerbs, start of the climb ---
       const kj = K(0.82);
       place(kj, -1, 2, [0.5, 0.18, 8], [0.80, 0.18, 0.18]);
       place(kj, -1, 4.2, [3.0, 0.18, 8], [0.92, 0.92, 0.92]);
+      tyreWall(0.80, 0.84, -1, 5, [0.30, 0.55, 0.85]);
+      grandstand(0.84, 1, 10, 50, [0.43, 0.44, 0.49], [0.30, 0.52, 0.34]);    // Junção stand
+      marshalPost(K(0.82), 1, 8);
+      for (const s of [0.84, 0.86]) billboard(K(s), 1, 9, 11, 4, [0.92, 0.90, 0.86]);
 
       // --- Climb to s/f, Subida dos Boxes (s=0.92, both mid): banked ramp + pit-wall slabs (R) ---
       for (const s of [0.88, 0.92, 0.96]) {
@@ -155,19 +205,53 @@
         place(k, 1, 2.5, [1.0, 1.1, 9], [0.78, 0.78, 0.80]);   // pit-wall slab on the right
       }
       grandstand(0.90, -1, 9, 60, [0.44, 0.45, 0.50], [0.28, 0.50, 0.32]);
-      grandstand(0.84, 1, 10, 50, [0.43, 0.44, 0.49], [0.30, 0.52, 0.34]);    // Junção stand
-      grandstand(0.27, -1, 11, 64, [0.45, 0.46, 0.51], [0.28, 0.50, 0.32]);   // Reta Oposta stand
-      grandstand(0.71, 1, 11, 56, [0.42, 0.43, 0.48], [0.30, 0.52, 0.34]);    // Ferradura stand
 
-      // --- Pervasive vivid tropical-green vegetation around the lap (denser belt) ---
-      every(19, (k) => {
+      // ===================================================================
+      // CONTINUOUS TRACK FURNITURE — catch fences + armco rings the lap
+      // (clearance-based; never reaches the tarmac, guarded off straights)
+      // ===================================================================
+      // debris/catch fence on the spectator (outer) side of the big stands
+      fence(0.90, 0.10, -1, 4.0, 3.4, [0.66, 0.68, 0.70]);   // main-straight / S enclosure
+      fence(0.24, 0.30, 1, 4.0, 3.0, [0.64, 0.66, 0.68]);    // Reta Oposta
+      fence(0.68, 0.74, 1, 4.0, 3.0, [0.64, 0.66, 0.68]);    // Ferradura
+      // waist-high armco around fast open corners
+      guardrail(0.10, 0.22, 1, 3.0, [0.74, 0.74, 0.78]);
+      guardrail(0.30, 0.42, -1, 3.0, [0.74, 0.74, 0.78]);
+      guardrail(0.50, 0.66, 1, 3.0, [0.74, 0.74, 0.78]);
+
+      // marshal posts spaced around the lap (orange roofs catch the eye)
+      for (const s of [0.12, 0.20, 0.34, 0.56, 0.62, 0.76, 0.90]) {
+        marshalPost(K(s), (hash(K(s)) > 0.5 ? 1 : -1), 7);
+      }
+
+      // ===================================================================
+      // GREEN HILLS + WOODED BANKS ringing the park (between track & city)
+      // reuses cx/cz/rad computed for the skyline ring above
+      // ===================================================================
+      // wide low wooded hill ring set BEHIND the favela/tower bands (a green
+      // ridgeline on the horizon, not foreground pyramids) — broad & low-rise
+      for (let i = 0; i < 34; i++) {
+        const a = i / 34 * 6.2832, h = hash(i * 17 + 3);
+        const ring = rad + 200 + h * 90;
+        const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
+        if (onTrack(x, z, 12)) continue;
+        ridge(x, z, pyMin, a + 1.5708, 200 + h * 120, 150 + h * 80, 36 + h * 30,
+              [0.19, 0.40 + h * 0.07, 0.20]);
+      }
+
+      // ===================================================================
+      // Pervasive vivid tropical-green vegetation around the lap (denser belt)
+      // ===================================================================
+      every(16, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 91 + side) > 0.46) continue;
-          const d = 28 + hash(k * 92 + side) * 70;
+          if (hash(k * 91 + side) > 0.52) continue;
+          const d = 26 + hash(k * 92 + side) * 70;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
-          if (hash(k * 93 + side) > 0.5) tree(k, side, d, 8 + hash(k * 94 + side) * 6, [0.22, 0.46, 0.22]);
-          else pine(k, side, d, 10 + hash(k * 95 + side) * 6, [0.18, 0.40, 0.18]);
+          const r = hash(k * 93 + side);
+          if (r > 0.66) tree(k, side, d, 8 + hash(k * 94 + side) * 6, GREEN2);
+          else if (r > 0.33) pine(k, side, d, 10 + hash(k * 95 + side) * 6, [0.18, 0.40, 0.18]);
+          else bush(k, side, d, [0.22, 0.46, 0.22]);
         }
       });
     },

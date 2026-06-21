@@ -24,8 +24,10 @@
     elevations: [{ s: 0.28, halfM: 300, rise: -6 }, { s: 0.52, halfM: 300, rise: 10 }, { s: 0.78, halfM: 240, rise: -5 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
-              addBox, vadd, anchor, mountain, tree, pine, hedge, bush,
-              grandstand, building, billboard, marshalPost } = api;
+              groundYAt, onTrack, addBox, addCyl, addCone, addPrism, vadd, anchor,
+              along, mountain, tree, pine, hedge, bush,
+              grandstand, building, tower, billboard, marshalPost, gantry,
+              fence, guardrail, tyreWall, wall } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette (Imola riverside parkland greens) ----
@@ -99,6 +101,24 @@
         const h = hash(k * 53 + 9);
         if (h < 0.45) return;
         tree(k, h < 0.7 ? -1 : 1, 13 + h * 9, 11 + h * 6, CANOPY);
+      });
+      // Third, far rank: a deep mature woodland mass — clusters of large broadleaf
+      // crowns + the odd tall pine, set well back so the parkland reads as endless.
+      every(40, (k) => {
+        for (const side of [-1, 1]) {
+          const s = hash(k * 91 + side * 13);
+          if (s < 0.5) continue;
+          const dist = 56 + s * 50;
+          if (onTrack(px[k], pz[k], 0)) continue; // cheap guard; tree() also guards
+          if (s < 0.78) tree(k, side, dist, 14 + s * 8, [0.13 + s * 0.05, 0.36, 0.18]);
+          else pine(k, side, dist, 16 + s * 8, WOODS);
+        }
+      });
+      // Low understory shrubs dotted along the verge for ground texture.
+      every(46, (k) => {
+        const s = hash(k * 29 + 3);
+        if (s < 0.6) return;
+        bush(k, s < 0.8 ? -1 : 1, 7 + s * 6, [0.18 + s * 0.06, 0.40, 0.20]);
       });
 
       // ---- s 0.00 R — Santerno river: CONTINUOUS flat water slab paralleling the river run ----
@@ -195,6 +215,127 @@
       {
         const a = anchor(K(0.00), -1, 12);
         addBox(out, vadd(a.c, a.u, 12), [18, 0.7, 120], [0.66, 0.68, 0.70], [a.r, a.u, a.t]);
+      }
+
+      // ============================================================
+      //  ENRICHMENT — buildings, town backdrop, crowds, furniture
+      // ============================================================
+      const STONE   = [0.74, 0.70, 0.60];  // warm Italian stucco
+      const STONE2  = [0.80, 0.74, 0.62];
+      const TERRA   = [0.66, 0.34, 0.22];  // terracotta roof
+      const CONC    = [0.62, 0.63, 0.66];  // concrete grey
+      const PITWALL = [0.86, 0.86, 0.84];  // white pit/paddock wall
+      const TYRE    = [0.10, 0.10, 0.11];
+      const CROWD_A = [0.62, 0.34, 0.30];
+      const CROWD_B = [0.30, 0.40, 0.66];
+      const CROWD_C = [0.70, 0.62, 0.30];
+
+      // ---- Start/finish overhead gantry + scoring gantry into turn 1 ----
+      gantry(0.00, 7.5, [0.14, 0.14, 0.17]);
+      gantry(0.965, 7.0, [0.18, 0.18, 0.20]);
+
+      // ---- Pit / paddock complex along the pit straight (left) ----
+      // long low pit garages behind the old pit building, plus a small paddock block
+      building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: [0.30, 0.34, 0.40], floor: 4 });
+      building(K(0.90), -1, 20, 22, 9, 40, { wall: [0.66, 0.67, 0.70], window: [0.28, 0.32, 0.38], floor: 4, roof: true });
+      building(K(0.94), -1, 46, 30, 12, 34, { wall: STONE, window: [0.34, 0.30, 0.26], floor: 4 }); // paddock hospitality
+      // race control / timing tower above the pits
+      tower(K(0.99), -1, 16, 9, 22, { col: [0.78, 0.80, 0.82], cap: true, capCol: [0.2, 0.2, 0.24], mast: 6 });
+      // pit wall separating pit lane from track
+      wall(0.95, 0.06, -1, 2, 1.0, PITWALL, 0.5);
+
+      // ============================================================
+      //  HILLSIDE TOWN BACKDROP — Imola old town with church + tower
+      //  Placed as a cluster on far hill (left of pit straight / T1).
+      // ============================================================
+      {
+        // anchor the town on the hill behind the main straight, well off-track.
+        // Use ONE consistent ground baseline + manual hill tiers so houses spread
+        // along the basis don't drift off mismatched per-node terrain samples.
+        const at = anchor(K(0.02), -1, 150);
+        const r = at.r, u = at.u, t = at.t;
+        const baseY = groundYAt(K(0.02), 150);
+        const base = [at.c[0], baseY, at.c[2]];
+        const put = (alongM, outM, rise, w, h, d, col) => {
+          // build the ground footing point, then lift onto the up axis by rise
+          const foot = vadd(vadd(vadd(base, t, alongM), r, -outM), u, rise);
+          addBox(out, vadd(foot, u, h / 2), [w, h, d], col, [r, u, t]);
+          addPrism(out, vadd(foot, u, h + 1.4), [w, 2.8, d], TERRA, [r, u, t]); // hip roof
+        };
+        // rows of town houses stepping UP the hill (rise grows with how far back)
+        for (let i = 0; i < 9; i++) {
+          const h2 = hash(i * 17 + 5);
+          put(-90 + i * 24, h2 * 26, 6 + h2 * 10, 14 + h2 * 6, 9 + h2 * 7, 12 + h2 * 4, h2 < 0.5 ? STONE : STONE2);
+        }
+        for (let i = 0; i < 7; i++) {
+          const h2 = hash(i * 31 + 9);
+          put(-60 + i * 26, 44 + h2 * 30, 16 + h2 * 12, 16 + h2 * 8, 8 + h2 * 6, 13, h2 < 0.5 ? STONE2 : CONC);
+        }
+        // ---- church: nave + bell tower (campanile) with a conical spire ----
+        const churchFoot = vadd(vadd(vadd(base, t, 30), r, -36), u, 22);
+        addBox(out, vadd(churchFoot, u, 7), [16, 14, 26], STONE2, [r, u, t]);          // nave
+        addPrism(out, vadd(churchFoot, u, 14 + 2), [16, 5, 26], TERRA, [r, u, t]);      // gable roof
+        const towerFoot = vadd(churchFoot, t, 16);
+        addBox(out, vadd(towerFoot, u, 13), [7, 26, 7], STONE, [r, u, t]);              // campanile
+        addCone(out, vadd(towerFoot, u, 26 + 4), 5, 9, [0.40, 0.30, 0.26], 6, [r, u, t]); // spire
+      }
+
+      // ============================================================
+      //  GRANDSTANDS + CROWDS at the marquee corners
+      // ============================================================
+      // Main straight — twin decks both sides already; add a third tier opposite.
+      grandstand(0.99, -1, 11, 60, [0.50, 0.53, 0.58], CROWD_C);
+      grandstand(0.05, 1, 20, 70, [0.52, 0.55, 0.60], CROWD_B);
+      // Tamburello / Variante Tamburello viewing bank stand (left, s≈0.07)
+      grandstand(0.07, -1, 16, 56, [0.54, 0.56, 0.60], CROWD_A);
+      // Tosa hairpin — extra stand + opposite-side terrace
+      grandstand(0.27, 1, 16, 44, [0.52, 0.55, 0.60], CROWD_B);
+      // Acque Minerali — packed natural amphitheatre stand on the right bank
+      grandstand(0.51, 1, 16, 60, [0.52, 0.55, 0.60], CROWD_A);
+      grandstand(0.54, 1, 18, 46, [0.54, 0.57, 0.61], CROWD_C);
+      // Rivazza — big banked stand on the descent
+      grandstand(0.82, -1, 14, 64, [0.52, 0.55, 0.60], CROWD_B);
+
+      // ============================================================
+      //  TRACK FURNITURE — fences, guardrails, tyre walls, billboards
+      // ============================================================
+      // Catch / debris fencing in front of the main grandstands
+      fence(0.96, 0.10, -1, 4, 4, [0.62, 0.64, 0.66]);
+      fence(0.49, 0.56, 1, 4, 4, [0.62, 0.64, 0.66]);
+      fence(0.79, 0.86, -1, 4, 4, [0.62, 0.64, 0.66]);
+      // Armco guardrails lining the river-side run and fast sweeps
+      guardrail(0.00, 0.18, 1, 3, [0.78, 0.78, 0.80]);
+      guardrail(0.20, 0.30, -1, 3, [0.78, 0.78, 0.80]);
+      guardrail(0.60, 0.70, 1, 3, [0.78, 0.78, 0.80]);
+      // Tyre walls protecting the chicane apexes + hairpin outside
+      tyreWall(0.05, 0.075, -1, 2, RED);
+      tyreWall(0.115, 0.135, -1, 2, [0.20, 0.40, 0.70]);
+      tyreWall(0.27, 0.295, -1, 2, RED);
+      tyreWall(0.655, 0.675, 1, 2, [0.20, 0.40, 0.70]);
+      tyreWall(0.79, 0.815, -1, 2, RED);
+      tyreWall(0.915, 0.93, 1, 2, RED);
+
+      // ---- Billboards / sponsor hoardings around the lap ----
+      billboard(K(0.02), 1, 18, 14, 5, [0.86, 0.16, 0.14]);   // start straight
+      billboard(K(0.12), -1, 16, 12, 5, [0.20, 0.40, 0.70]);
+      billboard(K(0.27), 1, 18, 12, 5, [0.90, 0.80, 0.20]);
+      billboard(K(0.51), 1, 20, 14, 5, [0.86, 0.30, 0.20]);
+      billboard(K(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);
+      billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);
+      billboard(K(0.93), 1, 16, 12, 5, [0.90, 0.80, 0.20]);
+
+      // ---- Denser marshal posts at every flag point ----
+      every(95, (k) => {
+        marshalPost(k, hash(k * 47) < 0.5 ? -1 : 1, 4);
+      });
+
+      // ---- Trackside hospitality / TV compound near Acque Minerali ----
+      building(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: [0.30, 0.34, 0.40], floor: 3, roof: true });
+      // a couple of marquee tents (prism roofs) at the paddock
+      {
+        const a = anchor(K(0.92), -1, 30);
+        addBox(out, vadd(a.c, a.u, 2.2), [16, 4.4, 12], [0.90, 0.90, 0.88], [a.r, a.u, a.t]);
+        addPrism(out, vadd(a.c, a.u, 4.4 + 1.4), [16, 2.8, 12], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
       }
     },
   }
