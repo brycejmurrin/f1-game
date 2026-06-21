@@ -6,5 +6,11 @@ node_modules/
 test-results/
 playwright-report/
 
-# scratch visual-inspection captures (tests/inspect-*.spec.js)
-tests/ui-screenshots/inspect/
+# regenerable screenshot dumps written via page.screenshot()/fs.writeFileSync
+# (lap-audit, baku-audit, ui/parts/dev-tools captures). These are human-review
+# galleries with NO toHaveScreenshot assertions — regenerate on demand. The
+# golden visual-regression baselines live in tests/*-snapshots/ and stay tracked.
+tests/ui-screenshots/
+
+# generated follow-cam track traces (tests/track-trace.spec.js) — regenerable
+tests/track-trace/

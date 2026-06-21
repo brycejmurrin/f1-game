@@ -334,6 +334,14 @@ const MAX_SKID = 120;
 const skidMarks = [];         // ring buffer of Float32Array(16) model matrices
 let skidIdx = 0;
 let skidFrameT = 0;           // frame countdown between stamp placements
+
+// Car paint materials, hoisted to module scope so the render loop reads a shared
+// const per (wet/dry × night/day) combo instead of allocating a fresh object for
+// every car every frame.
+const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70 };
+const PAINT_WET_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.70 };
+const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.38, metalness: 0.10, specular: 0.55 };
+const PAINT_DRY_DAY   = { roughness: 0.38, metalness: 0.10, specular: 0.55 };
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -379,6 +387,7 @@ const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new Float32Array(16);
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
+const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null;
 
 // ---------- parts / player mods ----------
@@ -914,6 +923,9 @@ function buildStandings() {
 }
 
 // ---------- per-frame update ----------
+// Reusable rank buffer — refilled and sorted each physics step (up to 5x per
+// rendered frame) so we don't allocate a fresh array via cars.slice() each time.
+const ranked = [];
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
@@ -943,8 +955,10 @@ function update(dt) {
   }
   if (state !== "race") return;
   raceT += dt;
-  // ranks by progress
-  const ranked = cars.slice().sort((a, b) => b.prog - a.prog);
+  // ranks by progress (reuse module-scope buffer, no per-step allocation)
+  ranked.length = 0;
+  for (const c of cars) ranked.push(c);
+  ranked.sort((a, b) => b.prog - a.prog);
   ranked.forEach((c, i) => { c.rank = i + 1; });
 
   for (const c of cars) updateCar(c, dt, ranked);
@@ -995,7 +1009,6 @@ function collideFx(a, b, impact) {
 // merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
 function resolveCollisions(ranked) {
   const LCAR = 4.8, WCAR = 2.0, PASSES = 4;
-  const invM = (c) => (c.isPlayer ? 0.5 : 1);
   for (let pass = 0; pass < PASSES; pass++) {
     const last = pass === PASSES - 1;
     const fwd = (pass & 1) === 0;
@@ -1012,7 +1025,7 @@ function resolveCollisions(ranked) {
         const penLong = LCAR - Math.abs(dProg);
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
-        const iA = invM(a), iB = invM(b), iSum = iA + iB;
+        const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
         if (penLat < penLong) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
           // both cars "in contact" so the AI eases off steering this way and
@@ -1059,7 +1072,7 @@ function resolveCollisions(ranked) {
       const penLong = LCAR - Math.abs(dProg);
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
-      const iA = invM(a), iB = invM(b), iSum = iA + iB;
+      const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
       if (penLat < penLong) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
@@ -1904,10 +1917,20 @@ function render(dt) {
   }
 
   M4.perspectiveTo(_mProj, fovY, GLX.aspect, 0.1, farPlane);
-  // Tilt the up vector by camRoll to roll the camera into corners
-  const _camBack = V3.norm(V3.sub(camEye, camTgt));
-  const _camRight = V3.norm(V3.cross([0, 1, 0], _camBack));
-  const _camUp = V3.norm(V3.add([0, 1, 0], V3.scale(_camRight, Math.sin(camRoll))));
+  // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
+  // module-scope scratch vectors (no per-frame V3 array allocation); same math.
+  {
+    let bx = camEye[0] - camTgt[0], by = camEye[1] - camTgt[1], bz = camEye[2] - camTgt[2];
+    let bl = Math.hypot(bx, by, bz) || 1; bx /= bl; by /= bl; bz /= bl;
+    // right = normalize(worldUp × back), worldUp = (0,1,0)
+    let rx = 1 * bz - 0 * by, ry = 0 * bx - 0 * bz, rz = 0 * by - 1 * bx;
+    let rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+    // up = normalize(worldUp + right*sin(roll))
+    const s = Math.sin(camRoll);
+    let ux = rx * s, uy = 1 + ry * s, uz = rz * s;
+    let ul = Math.hypot(ux, uy, uz) || 1;
+    _camUp[0] = ux / ul; _camUp[1] = uy / ul; _camUp[2] = uz / ul;
+  }
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
   frame.viewProj = _mVP;
@@ -2046,10 +2069,8 @@ function render(dt) {
     GLX.drawShadow(tmpMat, 2.4, 5.8);
     // Glossy automotive paint; wet adds a water film (sharper highlights, lower roughness).
     const paint = wet
-      ? (night ? { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70 }
-               : { roughness: 0.22, metalness: 0.12, specular: 0.70 })
-      : (night ? { emissive: 0.20, roughness: 0.38, metalness: 0.10, specular: 0.55 }
-               : { roughness: 0.38, metalness: 0.10, specular: 0.55 });
+      ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
+      : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY);
     // Player: body-only mesh + animated (spinning/steering) wheels. Others (and
     // the player when a glb model is loaded) draw the full mesh with baked wheels.
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;

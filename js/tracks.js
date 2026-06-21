@@ -206,16 +206,19 @@ const Tracks = (function () {
     return out;
   }
 
+  // Hot path: called several times per car per physics step. Inlined (no inner
+  // closure / array allocation) so it produces zero garbage while keeping the
+  // exact same math as before.
   function curvature(track, s) {
     const n = track.n, L = track.total, w = 12;
-    const head = (ss) => {
-      const fi = ((ss % L + L) % L) / L * n;
-      const i = Math.floor(fi) % n, j = (i + 1) % n, frac = fi - Math.floor(fi);
-      const tx = track.tx[i] + (track.tx[j] - track.tx[i]) * frac;
-      const tz = track.tz[i] + (track.tz[j] - track.tz[i]) * frac;
-      return Math.atan2(tx, tz);
-    };
-    let d = head(s + w) - head(s - w);
+    const tx = track.tx, tz = track.tz;
+    let fi = (((s + w) % L + L) % L) / L * n;
+    let i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
+    const h1 = Math.atan2(tx[i] + (tx[j] - tx[i]) * f, tz[i] + (tz[j] - tz[i]) * f);
+    fi = (((s - w) % L + L) % L) / L * n;
+    i = Math.floor(fi) % n; j = (i + 1) % n; f = fi - Math.floor(fi);
+    const h2 = Math.atan2(tx[i] + (tx[j] - tx[i]) * f, tz[i] + (tz[j] - tz[i]) * f);
+    let d = h1 - h2;
     while (d > Math.PI) d -= 2 * Math.PI;
     while (d < -Math.PI) d += 2 * Math.PI;
     return d / (2 * w);   // rad per meter, + = right
