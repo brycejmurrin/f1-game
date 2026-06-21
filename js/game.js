@@ -207,6 +207,13 @@ let ROAD_FOLLOW = 0.7;
 // braking hard WHILE turning washes the front wide; easing off the brake as you
 // turn in (trail-braking) hands grip back to cornering. Higher = more forgiving.
 const LONG_GRIP = 34;
+// Visual animation (render-only, never touches physics): the chassis leans into
+// corners (roll ∝ lateral g) and pitches to the road gradient, and the wheels
+// spin with speed + steer with input — all on a smoothed visual layer, the way
+// SuperTuxKart keeps a rigid physics body and animates only the model.
+const BODY_ROLL_MAX = 0.06;   // rad (~3.4°) max chassis lean at full lateral grip
+const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
+const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 24;         // crawl speed on grass
 const DEPLOY_A = 5.0;       // extra accel from electric deploy
 const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
@@ -1717,9 +1724,22 @@ function render(dt) {
         tmpU[i] = u * cp - f * sp;
       }
     }
-    // roll the right/up basis about the forward axis so the car leans with the bank
-    if (bankC && bankC.roll) {
-      const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
+    // Cornering lean (render-only): roll the chassis toward the OUTSIDE of the
+    // corner, proportional to lateral g, so the car visibly leans into turns like
+    // a real F1 car. The body already follows the road slope via the tangent
+    // basis, so only roll (not gradient pitch) is added here. Player uses its real
+    // centripetal accel (speed·yawRate); AI uses curvature·speed².
+    // (curvature sign is opposite the yaw-rate sign — see the racing-line code,
+    // racingLine = -k·130 toward the inside — so the AI term is negated to lean
+    // outward like the player.)
+    const aLat = c.isPlayer ? c.speed * (c.yawRateCur || 0)
+                            : -c.speed * c.speed * Tracks.curvature(track, c.s);
+    const rollTgt = clamp(aLat / LAT_MAX, -1, 1) * BODY_ROLL_MAX;
+    c.rollVis = (c.rollVis === undefined) ? rollTgt : damp(c.rollVis, rollTgt, 6, dt);
+    // roll the right/up basis about the forward axis: road bank + cornering lean.
+    const rollTot = (bankC && bankC.roll ? bankC.roll : 0) + (c.rollVis || 0);
+    if (rollTot) {
+      const cr = Math.cos(rollTot), sr = Math.sin(rollTot);
       for (let i = 0; i < 3; i++) {
         const r = tmpR[i], u = tmpU[i];
         tmpR[i] = r * cr + u * sr;
