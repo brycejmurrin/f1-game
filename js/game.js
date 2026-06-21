@@ -266,6 +266,7 @@ let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
+let headlessMode = false;  // skip render() when true (headless control loop)
 // Player camera modes, cycled with the CAM button / C key and persisted. Each is
 // a distinct vantage computed in render(): a close action chase, a higher/wider
 // chase for race-craft, an in-cockpit eye, and a nose/hood cam. Index into CAM_MODES.
@@ -1591,6 +1592,7 @@ function coast(c, dt) {
 
 // ---------- render ----------
 function render(dt) {
+  if (headlessMode) return;
   GLX.resize();
   if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); GLX.present(); return; }
 
@@ -3454,6 +3456,167 @@ window.__apex = {
       weather: raceWeather, state,
       ...this.camState(),
     };
+  },
+
+  // ── Headless / RL control loop ─────────────────────────────────────────────
+
+  // headless(on?) — get or set headless mode. When on, render() exits immediately
+  // so physics can be stepped at uncapped speed via act() without GPU overhead.
+  headless(on) {
+    if (on === undefined) return headlessMode;
+    headlessMode = !!on;
+    return headlessMode;
+  },
+
+  // obs() — full debug observation of the current game state. Superset of
+  // physState() and probe() with track context, barrier clearances, lookahead
+  // scan, nearest rivals, reward components, and episode terminal flag.
+  obs() {
+    if (!player || player.px == null || !track) return null;
+    Tracks.sample(track, player.s, smp);
+    const axFrac = Math.min(1, Math.abs(player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
+    const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    const slip = Math.atan2(player.vLat || 0, Math.max(1, player.speed));
+    const kNow = Tracks.curvature(track, player.s);
+    const hwNow = smp.hw, slopeNow = smp.t[1] || 0;
+
+    // barrier distances: wallAt() always returns a positive absolute distance from
+    // centreline; the left wall sits at x = -wallLAbs (negative), right at +wallRAbs.
+    const wallRAbs = Tracks.wallAt(track, player.s, 1);
+    const wallLAbs = Tracks.wallAt(track, player.s, -1);
+    const wallR =  wallRAbs;   // signed: right wall is at +wallR
+    const wallL = -wallLAbs;   // signed: left  wall is at  wallL (negative)
+
+    // lookahead scan at [10, 30, 60] m ahead
+    const scanDists = [10, 30, 60];
+    const scanAhead = scanDists.map((d) => {
+      const ss = wrapS(player.s + d);
+      Tracks.sample(track, ss, smp);
+      const sR = Tracks.wallAt(track, ss, 1), sLA = Tracks.wallAt(track, ss, -1);
+      return { d, k: +Tracks.curvature(track, ss).toFixed(5), hw: +smp.hw.toFixed(2),
+               wallR: +sR.toFixed(2), wallL: +(-sLA).toFixed(2),
+               width: +(sR + sLA).toFixed(2) };
+    });
+    // restore smp to player position
+    Tracks.sample(track, player.s, smp);
+
+    // nearest rivals by progress (leader-first order)
+    const sorted = cars.slice().sort((a, b) => b.prog - a.prog);
+    const pi = sorted.findIndex((c) => c.isPlayer);
+    const rivalAhead  = pi > 0 ? sorted[pi - 1] : null;
+    const rivalBehind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
+
+    const inp = _testInput || {};
+    const done = !!player.wrongWay || (player.rescueT || 0) > 8;
+
+    return {
+      // ── position & progress ──
+      s:       +player.s.toFixed(3),
+      x:       +player.x.toFixed(3),
+      prog:    +(player.prog || 0).toFixed(4),
+      lap:      player.lap || 0,
+      raceT:   +raceT.toFixed(3),
+
+      // ── motion ──
+      speed:     +(player.speed || 0).toFixed(2),
+      speedKph:  +((player.speed || 0) * 3.6).toFixed(1),
+      head:      +(player.head || 0).toFixed(4),
+      vLat:      +(player.vLat || 0).toFixed(3),
+
+      // ── combined-slip physics ──
+      axEstSm:    +(player.axEstSm ?? 0).toFixed(2),
+      axFrac:     +axFrac.toFixed(3),
+      slipFactor: +slipFactor.toFixed(3),
+      slipDeg:    +(slip * 180 / Math.PI).toFixed(2),
+
+      // ── track context at player position ──
+      k:     +kNow.toFixed(5),
+      hw:    +hwNow.toFixed(2),
+      slope: +slopeNow.toFixed(4),
+      gripMult: gripMult(),
+      weather: raceWeather,
+
+      // ── barrier clearances (both in metres, positive = clear) ──
+      wallR:  +wallR.toFixed(2),
+      wallL:  +wallL.toFixed(2),
+      clearR: +(wallR - player.x).toFixed(2),
+      clearL: +(player.x - wallL).toFixed(2),
+
+      // ── energy / ERS ──
+      energy: +(player.energy || 0).toFixed(3),
+
+      // ── episode state flags ──
+      wrongWay: !!player.wrongWay,
+      offT:     +(player.offT || 0).toFixed(2),
+      rescueT:  +(player.rescueT || 0).toFixed(2),
+      done,
+
+      // ── currently applied input (null fields = real device input) ──
+      input: {
+        steer:    inp.steer    !== undefined ? inp.steer    : null,
+        throttle: inp.throttle !== undefined ? !!inp.throttle : null,
+        brake:    inp.brake    !== undefined ? !!inp.brake    : null,
+      },
+
+      // ── rival proximity ──
+      posInField: pi + 1,
+      gapAhead:  rivalAhead  ? +(rivalAhead.prog  - (player.prog || 0)).toFixed(2) : null,
+      gapBehind: rivalBehind ? +((player.prog || 0) - rivalBehind.prog).toFixed(2) : null,
+
+      // ── lookahead ──
+      scan: scanAhead,
+
+      // ── reward components (combine as you see fit) ──
+      reward: {
+        speed:    +(player.speed || 0).toFixed(2),          // m/s forward — maximise
+        offTrack: +(player.offT  || 0).toFixed(2),          // seconds off-track
+        wallDist: +Math.min(wallR - player.x, player.x - wallL).toFixed(2), // m to nearer wall
+        wrongWay: !!player.wrongWay,
+      },
+    };
+  },
+
+  // act(input, dt, n) — set input, step n ticks of dt seconds, return obs().
+  // Single round-trip replaces three separate evaluate() calls in a control loop.
+  // input: { steer: -1..1, throttle: bool, brake: bool }; pass null to keep current.
+  act(input, dt, n) {
+    if (!track || !player) return null;
+    // auto-enter race state so physics advances even if called during countdown
+    if (state === "count") {
+      state = "race"; raceT = 0;
+      els.lights.hidden = true;
+      for (const l of els.lights.children) l.classList.remove("on");
+    }
+    if (input !== undefined) _testInput = input || null;
+    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    for (let i = 0; i < count; i++) update(d);
+    return this.obs();
+  },
+
+  // reset(frac, speed, x) — fast episode reset reusing the loaded track.
+  // Reinitialises the grid, repositions the player at lap-fraction frac (0..1),
+  // sets state="race" and raceT=0 without reloading assets. Returns initial obs().
+  // Call __apex.race() first to load the desired track.
+  reset(frac, speed, x) {
+    if (!track || !player) return false;
+    gridUp();
+    state = "race"; raceT = 0;
+    els.lights.hidden = true;
+    for (const l of els.lights.children) l.classList.remove("on");
+    player.s     = wrapS((frac  != null ? frac  : 0) * track.total);
+    player.prog  = (frac != null ? frac : 0) * track.total;
+    player.speed = speed != null ? speed : 0;
+    player.x     = x     != null ? x     : 0;
+    player.xVis  = player.x;
+    player.vLat  = 0; player.yawRateCur = 0;
+    player.lap   = 0; player.axEstSm = 0;
+    // seed world-space position + heading from (s, x) immediately, same as jump()
+    Tracks.sample(track, player.s, smp);
+    player.px   = smp.p[0] + smp.r[0] * player.x;
+    player.pz   = smp.p[2] + smp.r[2] * player.x;
+    player.head = Math.atan2(smp.t[0], smp.t[2]);
+    _testInput = null;
+    return this.obs();
   },
 };
 

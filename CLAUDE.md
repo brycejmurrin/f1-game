@@ -112,6 +112,28 @@ __apex.setInput({steer:1,throttle:true}) // override input
 __apex.step(1/60, 10)         // pump physics deterministically
 __apex.clearInput()
 __apex.tiltSim.step(deg, dt)  // tilt pipeline emulation (for autopilot harness)
+// ── Headless / RL control loop ──
+__apex.headless(true)         // skip render() — physics runs uncapped
+__apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward)
+__apex.act({steer,throttle,brake}, dt, n) // set input + step n ticks → obs (1 round-trip)
+__apex.reset(frac, speed, x)  // fast episode reset without reloading assets → obs
+```
+
+### Headless control loop pattern
+```js
+await page.evaluate(async () => {
+  await new Promise(r => { const t = setInterval(() => { if (window.__apex) { clearInterval(t); r(); } }, 50); });
+  __apex.race("monza");
+  await new Promise(r => setTimeout(r, 2000));   // wait for track load
+  __apex.headless(true);
+  __apex.reset(0.1, 30);                         // start at 10% lap, 30 m/s
+});
+
+// control loop: 1 evaluate per decision step
+const obs = await page.evaluate(() =>
+  __apex.act({ steer: -0.3, throttle: true, brake: false }, 1/60, 5)
+);
+// obs.speed, obs.clearR, obs.clearL, obs.scan, obs.done, obs.reward …
 ```
 
 ---
