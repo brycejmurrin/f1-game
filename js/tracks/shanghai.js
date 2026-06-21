@@ -21,10 +21,11 @@
     // Mostly flat — a mild rise on the long back straight.
     elevations: [{ s: 0.45, halfM: 360, rise: 6 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, hash, vadd,
-        place, prop, backdrop, anchor, addBox, addCyl,
+      const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,
+        place, prop, backdrop, groundPlane, anchor, addBox, addCyl, addCone,
+        addFrustum, addPrism, addPyramid, along,
         building, tower, grandstand, billboard, gantry, marshalPost,
-        wall, fence, tree, bush, hedge } = api;
+        wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
@@ -33,11 +34,20 @@
       const ASPH = [0.50, 0.52, 0.54], MARSH = [0.34, 0.45, 0.28], MARSH_N = [0.28, 0.38, 0.24];
       const RED = [0.82, 0.16, 0.14], YELLOW = [0.90, 0.78, 0.16];
       const SKY = [0.66, 0.68, 0.72], SKY_HAZE = [0.72, 0.74, 0.77];
+      const GLASS = [0.52, 0.60, 0.70], GLASS_HAZE = [0.66, 0.71, 0.77];
+      const WATER = [0.34, 0.46, 0.54], TREE_G = [0.24, 0.40, 0.22];
+      const CROWD = [0.62, 0.30, 0.30], TARMAC = [0.26, 0.27, 0.29];
+      const KERB_R = [0.80, 0.16, 0.14], KERB_W = [0.90, 0.90, 0.90];
+      const PEARL = [0.78, 0.62, 0.58];
 
       // ================= START / FINISH — WINGED PIT COMPLEX (s 0.00, L) =================
       // Long white pit/control building hugging the main straight.
       building(K(0.00), -1, 2, 18, 14, 150, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 4 });
       building(K(0.98), -1, 2, 16, 11, 90, { wall: [0.84, 0.85, 0.87], window: [0.28, 0.32, 0.38], floor: 3 });
+      // Paddock / hospitality block set further back behind the pit building.
+      building(K(0.99), -1, 40, 26, 9, 110, { wall: [0.80, 0.82, 0.84], window: [0.30, 0.34, 0.40], floor: 3 });
+      building(K(0.96), -1, 44, 20, 12, 60, { wall: WHITE, window: GLASS, floor: 4 });
+      building(K(0.02), -1, 42, 22, 8, 70, { wall: [0.82, 0.83, 0.85], window: [0.30, 0.34, 0.40], floor: 2 });
 
       // The two suspended tower-bridges — the instant Shanghai signature.
       // Tall slim towers either side of the straight, joined by flat bridge slabs
@@ -63,6 +73,28 @@
         addCyl(out, vadd(aR.c, aR.u, 0), 1.1, 44, STEEL, 6, bR);
       })();
 
+      // ---- Signature CURVED CANTILEVER MAIN GRANDSTAND + overhanging roof (L) ----
+      // A long raked stand with a huge sweeping roof on a back wall of pillars that
+      // cantilevers out over the seating toward the track.
+      (function cantileverMain() {
+        const segN = 9;            // segments stepping along the straight
+        for (let i = 0; i < segN; i++) {
+          const s = 0.018 + i * 0.012;
+          const a = anchor(K(s), -1, 16), b = [a.r, a.u, a.t];
+          // raked seating block (crowd-coloured front face implied by tier colour)
+          addBox(out, vadd(vadd(a.c, a.u, 5), a.r, 7), [16, 11, 18], SEAT, b);
+          addBox(out, vadd(vadd(a.c, a.u, 8.5), a.r, 1), [16, 3.5, 6], CROWD, b);
+          // back support wall + columns
+          addBox(out, vadd(vadd(a.c, a.u, 9), a.r, 18), [16, 19, 3], CONC, b);
+          addCyl(out, vadd(vadd(a.c, a.u, 0), a.r, 16), 0.8, 18, STEEL, 6, b);
+          // big overhanging cantilever roof slab — tilts down toward the track
+          addBox(out, vadd(vadd(a.c, a.u, 19), a.r, 4), [16.5, 1.6, 30], WHITE, b);
+          addBox(out, vadd(vadd(a.c, a.u, 18), a.r, -8), [16.5, 0.7, 6], STEEL, b);
+          // leading-edge fascia of the roof
+          addBox(out, vadd(vadd(a.c, a.u, 17.3), a.r, -10.5), [16.5, 1.8, 1.0], STEEL, b);
+        }
+      })();
+
       // Start gantry over the line.
       gantry(0.004, 9, STEEL);
 
@@ -71,6 +103,13 @@
       place(K(0.99), 1, 10, [5, 2.4, 40], CONC);   // low garage box bank
       place(K(0.99), 1, 10, [5, 0.6, 40], RED); // red edge cap
       billboard(K(0.02), 1, 9, 16, 4.5, RED);
+      billboard(K(0.97), 1, 9, 14, 4, YELLOW);
+
+      // ---- LAKE by the pit complex (groundPlane water, L behind paddock) ----
+      groundPlane(K(0.92), -1, 60, [200, 130], WATER);
+      groundPlane(K(0.00), -1, 70, [160, 110], WATER);
+      // small dock / jetty boxes at the water edge
+      place(K(0.95), -1, 56, [10, 1.2, 4], CONC);
 
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
       grandstand(0.04, -1, 18, 130, [0.44, 0.45, 0.50], SEAT);
@@ -124,17 +163,31 @@
           }
         }
       })();
-      // Denser feature cluster of taller towers behind T6 (s 0.30, L far).
-      (function skylineCluster() {
-        const a = anchor(K(0.30), -1, 200), b = [a.r, a.u, a.t];
-        for (let i = 0; i < 14; i++) {
-          const off = (i - 7) * 26 + (hash(i * 5) - 0.5) * 14;
-          const depth = 24 + hash(i * 7) * 50;
-          const h = 60 + hash(i * 11) * 100;
-          const w = 11 + hash(i * 13) * 11;
-          addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), b[1], h / 2),
-                 [w, h, w], depth > 55 ? SKY_HAZE : SKY, b);
+      // Denser PUDONG-STYLE feature cluster of tall glass towers behind T6 (s 0.30, L far),
+      // with a pearl-tower-like landmark (twin spheres on a tripod) as the centrepiece.
+      (function pudongCluster() {
+        const a = anchor(K(0.30), -1, 220), b = [a.r, a.u, a.t];
+        const u = b[1];
+        for (let i = 0; i < 20; i++) {
+          const off = (i - 10) * 26 + (hash(i * 5) - 0.5) * 16;
+          const depth = 20 + hash(i * 7) * 70;
+          const h = 70 + hash(i * 11) * 140;
+          const w = 11 + hash(i * 13) * 12;
+          const col = depth > 55 ? GLASS_HAZE : GLASS;
+          // tapered glass tower with a spire cap
+          addFrustum(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0),
+                     w / 2, w / 3.4, h, col, 4, b);
+          if (hash(i * 17) > 0.5)
+            addBox(out, vadd(vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h), u, 6),
+                   [1.2, 12, 1.2], STEEL, b);
         }
+        // Pearl-tower landmark: tripod legs, a big lower sphere, a smaller upper sphere, spire.
+        const pc = vadd(vadd(a.c, a.r, -6), a.t, 30);
+        for (const ld of [-5, 5]) addCyl(out, vadd(pc, a.r, ld), 1.6, 70, PEARL, 6, b);
+        addBox(out, vadd(pc, u, 50), [22, 18, 22], PEARL, b);   // lower sphere (boxy approx)
+        addCyl(out, vadd(pc, u, 60), 2.4, 36, PEARL, 6, b);
+        addBox(out, vadd(pc, u, 100), [14, 14, 14], PEARL, b);  // upper sphere
+        addCone(out, vadd(pc, u, 110), 2.2, 30, [0.86, 0.72, 0.66], 6, b); // spire
       })();
 
       // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
@@ -204,6 +257,73 @@
           tree(k, side, d, 6 + hash(k * 17 + side) * 4, MARSH_N);
           if (hash(k * 23 + side) > 0.55) bush(k, side, d + 5, MARSH);
         }
+      }
+
+      // ================= TRACKSIDE FURNITURE — barriers, kerbs, signage (whole lap) =================
+      // Continuous armco guardrail + catch fence ringing most of the lap (set back
+      // beyond the run-off so it never reaches the tarmac).
+      guardrail(0.10, 0.42, 1, 5, STEEL);
+      guardrail(0.50, 0.70, -1, 5, STEEL);
+      guardrail(0.10, 0.42, -1, 6, STEEL);
+      fence(0.12, 0.40, 1, 7, 3.2, [0.70, 0.72, 0.76]);
+      fence(0.50, 0.70, -1, 7, 3.2, [0.70, 0.72, 0.76]);
+
+      // Tyre walls protecting the heavy corners (hairpin entry, snail apex, T6).
+      tyreWall(0.885, 0.915, 1, 4, RED);
+      tyreWall(0.06, 0.09, 1, 4, YELLOW);
+      tyreWall(0.30, 0.33, -1, 5, RED);
+
+      // Low red/white kerb-edge markers set just beyond the verge at apexes/exits.
+      (function kerbs() {
+        const spots = [
+          [0.055, 0.075, 1], [0.085, 0.10, 1], [0.30, 0.32, -1],
+          [0.46, 0.48, 1], [0.595, 0.61, -1], [0.895, 0.915, 1],
+        ];
+        for (const [s0, s1, sd] of spots) {
+          let j = 0;
+          along(s0, s1, 3.2, (k) => {
+            place(k, sd, 3.0, [1.4, 0.22, 2.8], (j++) % 2 ? KERB_R : KERB_W);
+          });
+        }
+      })();
+
+      // Marshal posts + extra billboards spread around the lap.
+      marshalPost(K(0.20), -1, 12);
+      marshalPost(K(0.34), -1, 14);
+      marshalPost(K(0.55), 1, 13);
+      marshalPost(K(0.66), -1, 13);
+      billboard(K(0.18), 1, 10, 14, 4, YELLOW);
+      billboard(K(0.33), -1, 16, 16, 4.5, RED);
+      billboard(K(0.55), 1, 12, 14, 4, RED);
+      billboard(K(0.66), -1, 14, 14, 4, YELLOW);
+
+      // ---- Crowd dabs on the existing grandstand banks (cheap warm colour) ----
+      (function crowds() {
+        const spots = [
+          [0.045, -1, 18], [0.06, 1, 70], [0.46, 1, 16],
+          [0.80, 1, 22], [0.905, -1, 20], [0.10, -1, 30],
+        ];
+        for (const [s, sd, d] of spots) {
+          const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
+          for (let i = 0; i < 5; i++) {
+            const off = (i - 2) * 12;
+            addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 6), a.r, 2),
+                   [9, 2.2, 5], i % 2 ? CROWD : [0.50, 0.34, 0.40], b);
+          }
+        }
+      })();
+
+      // ---- Landscaping: avenues of trees behind stands + reeds near the lake ----
+      hedge(0.90, 0.95, -1, 28, 3.0, TREE_G);
+      for (let i = 0; i < 5; i++) {
+        tree(K(0.90 + i * 0.008), -1, 30 + (i % 2) * 5, 7 + hash(i) * 3, TREE_G);
+      }
+      for (let i = 0; i < 6; i++) {
+        palm(K(0.92 + i * 0.008), -1, 50, 6 + hash(i * 3) * 2, [0.30, 0.46, 0.26]);
+      }
+      // pines lining the back straight verge
+      for (let i = 0; i < 10; i++) {
+        pine(K(0.72 + i * 0.015), 1, 46 + (i % 2) * 5, 8 + hash(i * 5) * 4, TREE_G);
       }
 
       // ---- Distant low hazy treeline ring (three overlapping bands, continuous) ----
