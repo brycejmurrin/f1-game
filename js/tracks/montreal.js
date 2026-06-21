@@ -20,7 +20,9 @@
     ],
     scenery: function (api) {
       const { out, n, px, pz, place, prop, backdrop, groundPlane, wall, grandstand,
-        tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash } = api;
+        tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
+        fence, guardrail, tyreWall, hedge, billboard, gantry, marshalPost, bush,
+        ferrisWheel, tower, onTrack } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Île Notre-Dame palette (bright June day) ----
@@ -29,6 +31,10 @@
       const BASIN = [0.20, 0.50, 0.60];     // Olympic rowing lake
       const GRASS = [0.30, 0.55, 0.28];     // park green
       const FOLIAGE = [0.18, 0.42, 0.22];   // deep tree green
+      const FOLIAGE2 = [0.24, 0.48, 0.24];  // lighter June foliage
+      const HEDGE = [0.20, 0.40, 0.20];     // clipped hedge green
+      const PATH = [0.62, 0.60, 0.55];      // paved cycle path
+
       const KERB_R = [0.82, 0.20, 0.18], KERB_W = [0.90, 0.90, 0.90];
 
       // ===================================================================
@@ -37,10 +43,24 @@
       wall(0.0, 1.0, -1, 2.5, 1.5, WALL);
       wall(0.0, 1.0, 1, 2.5, 1.5, WALL);
 
+      // Catch / debris fence behind the walls — the tight street-style corridor.
+      fence(0.0, 1.0, -1, 3.4, 3.0, [0.74, 0.76, 0.80]);
+      fence(0.0, 1.0, 1, 3.4, 3.0, [0.74, 0.76, 0.80]);
+
       // Grass strips of parkland just beyond the walls, both sides
       for (let i = 0; i < n; i += 3) {
         const side = (i % 2) ? 1 : -1;
         place(i, side, 7, [10, 0.4, 12], GRASS);
+      }
+
+      // Continuous low clipped hedge / treeline ribbon framing both verges
+      hedge(0.13, 0.24, 1, 9, 1.6, HEDGE);
+      hedge(0.62, 0.78, -1, 9, 1.6, HEDGE);
+      hedge(0.78, 0.90, 1, 9, 1.6, HEDGE);
+
+      // Marshal posts spaced around the lap (orange-roofed bunkers + flag pole)
+      for (const s of [0.05, 0.18, 0.32, 0.47, 0.56, 0.68, 0.82, 0.94]) {
+        marshalPost(K(s), (Math.round(s * 100) % 2) ? 1 : -1, 8.5);
       }
 
       // ===================================================================
@@ -51,20 +71,51 @@
       grandstand(0.06, 1, 9, 90, [0.48, 0.49, 0.55], [0.58, 0.36, 0.34]);
       grandstand(0.96, -1, 11, 80, [0.47, 0.48, 0.53], [0.56, 0.38, 0.36]);
 
+      // Start/finish gantry spanning the main straight + a second timing arch
+      gantry(0.005, 7.5, [0.14, 0.14, 0.18]);
+      gantry(0.97, 6.5, [0.16, 0.16, 0.20]);
+
+      // Pit lane garages / paddock buildings behind the left pit wall (long low row)
+      for (let i = 0; i < 6; i++) {
+        const s = 0.965 + i * 0.012;
+        building(K(s), -1, 13, 16, 9, 14,
+          { wall: [0.66, 0.67, 0.71], window: [0.42, 0.50, 0.60], floor: 4 });
+      }
+      // Paddock hospitality block + media centre, taller, set further back
+      building(K(0.0), -1, 30, 26, 16, 22,
+        { wall: [0.72, 0.74, 0.78], window: [0.50, 0.62, 0.74], floor: 4, setback: true, roof: true });
+      building(K(0.03), -1, 32, 22, 13, 20,
+        { wall: [0.68, 0.70, 0.74], window: [0.48, 0.58, 0.70], floor: 4, roof: true });
+
+      // Pit-straight billboards / advertising hoardings (right verge, well clear)
+      for (const s of [0.01, 0.04, 0.97, 0.94]) {
+        billboard(K(s), 1, 10, 14, 4, [0.88, 0.82, 0.22]);
+      }
+      billboard(K(0.07), -1, 11, 12, 4, [0.86, 0.30, 0.26]);
+
       // ===================================================================
-      // s 0.04 both — Senna S chicane: angled kerb slabs + wall funnel
+      // s 0.04 both — Senna S chicane: angled kerb slabs + tyre-wall funnel
       // ===================================================================
       for (const side of [-1, 1]) {
         for (let j = 0; j < 4; j++) {
           place(K(0.04 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_W : KERB_R);
         }
       }
+      // Tyre barriers stacked against the apex walls of the Senna S
+      tyreWall(0.038, 0.058, 1, 3.2, [0.85, 0.30, 0.20]);
+      tyreWall(0.042, 0.06, -1, 3.2, [0.90, 0.90, 0.30]);
+      marshalPost(K(0.05), 1, 9);
 
       // ===================================================================
       // s 0.10 L — Olympic Basin rowing lake (continuous teal water band)
       // ===================================================================
       for (let i = 0; i < 5; i++) {
         groundPlane(K(0.07 + i * 0.022), -1, 14, [200, 2, 260], BASIN);
+      }
+      // Far bank of the basin: low green treeline ridge across the water
+      for (let i = 0; i < 14; i++) {
+        const k = K(0.07 + (i / 14) * 0.12);
+        backdrop(k, -1, 150 + hash(i * 7) * 30, [22, 8 + hash(i * 3) * 6, 22], [0.20, 0.40, 0.22]);
       }
 
       // ===================================================================
@@ -73,7 +124,12 @@
       for (let i = 0; i < 34; i++) {
         const s = 0.13 + i * 0.0022;
         const side = (i % 2) ? 1 : -1;
-        tree(K(s), side, 7 + hash(i * 5) * 12, 6 + hash(i * 3) * 4, FOLIAGE);
+        tree(K(s), side, 7 + hash(i * 5) * 12, 6 + hash(i * 3) * 4, (i % 3) ? FOLIAGE : FOLIAGE2);
+      }
+      // Shrub clumps dotted between the trees for low-level greenery
+      for (let i = 0; i < 16; i++) {
+        bush(K(0.135 + i * 0.0045), (i % 2) ? 1 : -1, 8 + hash(i * 9) * 5,
+          (i % 2) ? [0.22, 0.42, 0.20] : [0.18, 0.36, 0.18]);
       }
 
       // ===================================================================
@@ -145,13 +201,27 @@
       }
 
       // ===================================================================
+      // s 0.45 R far — La Ronde amusement park ferris wheel across the water
+      // ===================================================================
+      ferrisWheel(K(0.42), 1, 150, 34);
+      // a couple of fairground towers beside it
+      tower(K(0.40), 1, 175, 14, 46, { col: [0.78, 0.62, 0.40], seg: 6, cap: true, capCol: [0.8, 0.3, 0.2], mast: 10 });
+
+      // ===================================================================
       // s 0.55 both — L'Épingle hairpin: tight U of walls + grandstand
       // ===================================================================
       grandstand(0.55, 1, 12, 70, [0.48, 0.49, 0.54], [0.60, 0.36, 0.32]);
       grandstand(0.53, -1, 12, 60, [0.46, 0.47, 0.52], [0.58, 0.38, 0.34]);
+      grandstand(0.57, 1, 13, 60, [0.50, 0.51, 0.55], [0.62, 0.38, 0.34]);
       for (const side of [-1, 1]) {
         for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_R : KERB_W);
       }
+      // Tyre walls + marshal post packed around the slow hairpin apex
+      tyreWall(0.545, 0.565, -1, 3.0, [0.90, 0.85, 0.20]);
+      tyreWall(0.548, 0.568, 1, 3.0, [0.85, 0.30, 0.20]);
+      marshalPost(K(0.55), -1, 9);
+      billboard(K(0.52), 1, 11, 12, 4, [0.30, 0.50, 0.85]);
+      billboard(K(0.58), -1, 11, 12, 4, [0.88, 0.82, 0.22]);
 
       // ===================================================================
       // s 0.60 L mid — Casino Straight flanked by Olympic Basin water
@@ -163,30 +233,61 @@
         tree(K(0.575 + i * 0.0035), 1, 7 + hash(i * 4) * 9, 5 + hash(i * 2) * 4, FOLIAGE);
       }
 
-      // more parkland trees through the back of the lap
-      for (let i = 0; i < 30; i++) {
-        const s = 0.69 + i * 0.0044;
+      // ===================================================================
+      // s 0.69–0.90 — leafy back stretch through Parc Jean-Drapeau
+      // ===================================================================
+      // Dense parkland trees both verges (filling the previously bare stretch)
+      for (let i = 0; i < 44; i++) {
+        const s = 0.66 + i * 0.0055;
         const side = (i % 2) ? 1 : -1;
-        tree(K(s), side, 7 + hash(i * 6) * 11, 5 + hash(i * 3) * 4, FOLIAGE);
+        tree(K(s), side, 7 + hash(i * 6) * 12, 5 + hash(i * 3) * 5, (i % 3) ? FOLIAGE : FOLIAGE2);
       }
+      // Shrubs + grass mounds threaded between
+      for (let i = 0; i < 20; i++) {
+        bush(K(0.665 + i * 0.0115), (i % 2) ? -1 : 1, 8 + hash(i * 11) * 6,
+          (i % 2) ? [0.20, 0.40, 0.18] : [0.24, 0.44, 0.22]);
+      }
+      // Paved cycle-path slabs hinting the park's bike trails (well off track)
+      for (let i = 0; i < 10; i++) {
+        place(K(0.70 + i * 0.018), 1, 12 + hash(i * 5) * 4, [3, 0.3, 9], PATH);
+      }
+      // A small grandstand + bridge canal scenery on the back straight
+      grandstand(0.74, -1, 11, 64, [0.47, 0.48, 0.53], [0.56, 0.40, 0.36]);
+      // Canal water slab off the right verge (island laced with canals)
+      for (let i = 0; i < 3; i++) {
+        groundPlane(K(0.78 + i * 0.02), 1, 16, [120, 2, 150], RIVER);
+      }
+      // Treeline ridge on the canal's far bank
+      for (let i = 0; i < 10; i++) {
+        backdrop(K(0.78 + (i / 10) * 0.08), 1, 130 + hash(i * 7) * 30, [20, 9, 20], [0.20, 0.40, 0.22]);
+      }
+      billboard(K(0.84), -1, 11, 12, 4, [0.86, 0.30, 0.26]);
 
       // ===================================================================
-      // s 0.92 both — Final chicane: tight kerb funnel
+      // s 0.92 both — Final chicane: tight kerb funnel + tyre walls
       // ===================================================================
       for (const side of [-1, 1]) {
         for (let j = 0; j < 4; j++) place(K(0.92 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_W : KERB_R);
       }
+      tyreWall(0.915, 0.935, -1, 3.0, [0.90, 0.85, 0.20]);
+      marshalPost(K(0.93), -1, 9);
+      grandstand(0.93, -1, 12, 70, [0.48, 0.49, 0.54], [0.58, 0.36, 0.32]);
 
       // ===================================================================
       // s 0.96 R — WALL OF CHAMPIONS: unbroken pale concrete wall on exit
       // ===================================================================
       wall(0.955, 0.99, 1, 0.8, 1.8, [0.82, 0.83, 0.84], 0.7);
-      // "Bienvenue" graphic band along it
+      // "Bienvenue au Québec" graphic band along it (signature red stripe)
       {
         const k = K(0.97);
         const a = anchor(k, 1, 0.8);
         addBox(out, vadd(a.c, a.u, 1.4), [0.85, 0.6, 18], [0.85, 0.30, 0.30], [a.r, a.u, a.t]);
+        // white sponsor stripe beneath the red band
+        addBox(out, vadd(a.c, a.u, 0.8), [0.86, 0.4, 18], [0.92, 0.92, 0.94], [a.r, a.u, a.t]);
       }
+      // Packed grandstand opposite the Wall of Champions watching the chicane
+      grandstand(0.97, -1, 12, 90, [0.49, 0.50, 0.55], [0.60, 0.36, 0.30]);
+      billboard(K(0.96), -1, 12, 14, 4, [0.88, 0.82, 0.22]);
     },
   }
   );
