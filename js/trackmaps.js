@@ -5,7 +5,7 @@
 const TrackMaps = (function () {
   "use strict";
 
-  const cache = {};   // id -> { pts:[[x,y]...], corners:[{n,x,y}], turns } | null
+  const cache = {};   // id -> { pts, py, corners, turns, dir, elevRange, drsZones } | null
 
   // theme accent colour for a circuit (used to tint its outline)
   const THEME = {
@@ -19,6 +19,9 @@ const TrackMaps = (function () {
     return (def && THEME[def.theme]) || "#cfd2d8";
   }
 
+  // F1 sector colours (S1 = purple, S2 = red, S3 = yellow-green)
+  const SECTOR_COLORS = ["#c084fc", "#e10600", "#a3e635"];
+
   // Build the outline + corner list once from the spline engine, then cache.
   function compute(def) {
     if (Object.prototype.hasOwnProperty.call(cache, def.id)) return cache[def.id];
@@ -27,8 +30,11 @@ const TrackMaps = (function () {
       const tr = Tracks.build(def);
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
-        out = { pts: pts, corners: detectCorners(tr), turns: 0 };
-        out.turns = out.corners.length;
+        const crns = detectCorners(tr);
+        const dir = circuitDirection(tr);
+        const elevRange = elevationRange(tr);
+        const drsZones = detectDRS(tr);
+        out = { pts: pts, py: tr.py, corners: crns, turns: crns.length, dir: dir, elevRange: elevRange, drsZones: drsZones };
       }
     } catch (e) {
       out = null;
@@ -44,6 +50,65 @@ const TrackMaps = (function () {
   function corners(def) {
     const c = def && compute(def);
     return c ? c.corners : [];
+  }
+  function direction(def) {
+    const c = def && compute(def);
+    return c ? c.dir : null;
+  }
+  function elevationRange(tr) {
+    const py = tr.py;
+    if (!py || !py.length) return 0;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < py.length; i++) {
+      if (py[i] < mn) mn = py[i];
+      if (py[i] > mx) mx = py[i];
+    }
+    return Math.round(mx - mn);
+  }
+  function drsZones(def) {
+    const c = def && compute(def);
+    return c ? c.drsZones : [];
+  }
+  function elevRange(def) {
+    const c = def && compute(def);
+    return c ? c.elevRange : 0;
+  }
+
+  // Circuit direction: signed area of the 2D polygon (px, pz).
+  // Positive signed area = counter-clockwise; negative = clockwise.
+  function circuitDirection(tr) {
+    const px = tr.px, pz = tr.pz, n = tr.n;
+    let area = 0;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      area += px[i] * pz[j] - px[j] * pz[i];
+    }
+    return area > 0 ? "CCW" : "CW";
+  }
+
+  // Detect DRS-eligible zones: long runs of very low curvature (straights).
+  // Returns array of { a, b } fractional indices into map pts (0..1).
+  function detectDRS(tr) {
+    const n = tr.n, total = tr.total;
+    const MIN_FRAC = 0.04;   // minimum 4% of lap = ~200m on a 5km circuit
+    const KV_THRESH = 0.003; // straighter than this qualifies
+    // sample curvature at each spline node
+    const kv = new Array(n);
+    for (let k = 0; k < n; k++) kv[k] = Math.abs(Tracks.curvature(tr, (k / n) * total));
+    // find runs of low curvature
+    const zones = [];
+    let runStart = -1;
+    for (let k = 0; k <= n; k++) {
+      const ki = k % n;
+      const straight = kv[ki] < KV_THRESH;
+      if (straight && runStart < 0) { runStart = k; }
+      else if (!straight && runStart >= 0) {
+        const frac = (k - runStart) / n;
+        if (frac >= MIN_FRAC) zones.push({ a: runStart / n, b: k / n });
+        runStart = -1;
+      }
+    }
+    return zones;
   }
 
   // Local maxima of |curvature| above a threshold, merged when close together,
@@ -73,12 +138,13 @@ const TrackMaps = (function () {
     return merged.map(function (p, i) {
       const idx = Math.floor((p.k / n) * m) % m;
       const mp = tr.map[idx];
-      return { n: i + 1, x: mp[0], y: mp[1] };
+      return { n: i + 1, x: mp[0], y: mp[1], v: p.v };
     });
   }
 
   // Draw the outline into a canvas, fit with margin, preserving aspect ratio.
-  // opts: { color, casing, width, pad, start, startColor, corners, cornerColor }
+  // opts: { color, casing, width, pad, start, startColor, corners, cornerColor,
+  //         sectors, drs }
   function draw(canvas, def, opts) {
     opts = opts || {};
     const g = canvas.getContext("2d");
@@ -102,15 +168,88 @@ const TrackMaps = (function () {
 
     const width = opts.width || 3;
     g.lineJoin = "round"; g.lineCap = "round";
-    g.beginPath();
-    for (let i = 0; i <= pts.length; i++) {
-      const p = pts[i % pts.length];
-      const x = PX(p[0]), y = PY(p[1]);
-      i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+
+    // helper: stroke a sub-range of pts (inclusive indices, wrapping)
+    function strokeRange(from, to, color) {
+      g.strokeStyle = opts.casing || "rgba(0,0,0,0.55)";
+      g.lineWidth = width + 2.5;
+      g.beginPath();
+      const count = ((to - from + pts.length) % pts.length) + 1;
+      for (let di = 0; di <= count; di++) {
+        const p = pts[(from + di) % pts.length];
+        di === 0 ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
+      }
+      g.stroke();
+      g.strokeStyle = color;
+      g.lineWidth = width;
+      g.beginPath();
+      for (let di = 0; di <= count; di++) {
+        const p = pts[(from + di) % pts.length];
+        di === 0 ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
+      }
+      g.stroke();
     }
-    g.closePath();
-    g.strokeStyle = opts.casing || "rgba(0,0,0,0.55)"; g.lineWidth = width + 2.5; g.stroke();
-    g.strokeStyle = opts.color || themeColor(def); g.lineWidth = width; g.stroke();
+
+    if (opts.sectors) {
+      // Draw the full casing first so sectors don't have gaps in the outline
+      g.strokeStyle = opts.casing || "rgba(0,0,0,0.55)";
+      g.lineWidth = width + 2.5;
+      g.beginPath();
+      for (let i = 0; i <= pts.length; i++) {
+        const p = pts[i % pts.length];
+        i === 0 ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
+      }
+      g.closePath();
+      g.stroke();
+      // Draw three coloured sectors on top
+      const m = pts.length;
+      for (let s = 0; s < 3; s++) {
+        const from = Math.floor((s / 3) * m);
+        const to = s === 2 ? m - 1 : Math.floor(((s + 1) / 3) * m);
+        g.strokeStyle = SECTOR_COLORS[s];
+        g.lineWidth = width;
+        g.beginPath();
+        for (let i = from; i <= to; i++) {
+          const p = pts[i];
+          i === from ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
+        }
+        // close S3 back to start
+        if (s === 2) {
+          const p0 = pts[0];
+          g.lineTo(PX(p0[0]), PY(p0[1]));
+        }
+        g.stroke();
+      }
+    } else {
+      // Single-color outline
+      g.beginPath();
+      for (let i = 0; i <= pts.length; i++) {
+        const p = pts[i % pts.length];
+        i === 0 ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
+      }
+      g.closePath();
+      g.strokeStyle = opts.casing || "rgba(0,0,0,0.55)"; g.lineWidth = width + 2.5; g.stroke();
+      g.strokeStyle = opts.color || themeColor(def); g.lineWidth = width; g.stroke();
+    }
+
+    // DRS zones: bright cyan overlay on straight segments
+    if (opts.drs && data.drsZones && data.drsZones.length) {
+      const m = pts.length;
+      g.lineWidth = width + 2;
+      g.lineCap = "round";
+      for (let z = 0; z < data.drsZones.length; z++) {
+        const zone = data.drsZones[z];
+        const from = Math.floor(zone.a * m);
+        const to = Math.min(m - 1, Math.floor(zone.b * m));
+        g.strokeStyle = "rgba(0,220,180,0.85)";
+        g.beginPath();
+        for (let i = from; i <= to; i++) {
+          const p = pts[i];
+          i === from ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
+        }
+        g.stroke();
+      }
+    }
 
     if (opts.start !== false) {
       const s = pts[0];
@@ -137,5 +276,5 @@ const TrackMaps = (function () {
     return true;
   }
 
-  return { outline: outline, corners: corners, themeColor: themeColor, draw: draw };
+  return { outline, corners, direction, drsZones, elevRange, themeColor, draw, SECTOR_COLORS };
 })();
