@@ -164,9 +164,55 @@
   border-radius: 8px; display: block;
 }
 .dh-canvas.dh-map { max-width: 320px; margin: 0 auto; aspect-ratio: 1 / 1; }
-.dh-legend { display: flex; gap: 14px; font-size: 11px; color: #9a9aa5; margin-top: -4px; }
-.dh-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.dh-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11px; color: #9a9aa5; margin-top: -2px; }
+.dh-legend-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; border: none; border-radius: 5px;
+  padding: 3px 6px; margin: 0; color: inherit; font: inherit;
+  letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.12s;
+}
+button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
+.dh-legend-item.dh-off { opacity: 0.35; }
+.dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* scrub readout — values at the cursor position on the trace chart */
+.dh-readout {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  min-height: 22px; margin: 2px 0 4px;
+  font-size: 12px; color: #d4d4d8;
+}
+.dh-ro-hint { font-size: 11px; color: #7a7a85; font-style: italic; }
+.dh-ro-time {
+  font-weight: 800; color: #fff; font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.08); border-radius: 5px; padding: 2px 7px;
+}
+.dh-ro-cell { display: inline-flex; align-items: center; gap: 5px; }
+.dh-ro-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.dh-ro-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---------- live controls + sortable classification ---------- */
+.dh-livecontrols { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.dh-livebtn {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  padding: 6px 12px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f2f2f5;
+}
+.dh-livebtn.dh-active { background: #e10600; border-color: #e10600; color: #fff; }
+.dh-live-updated { font-size: 11px; color: #7a7a85; margin-left: auto; }
+.dh-class-head { display: flex; align-items: center; gap: 10px; }
+.dh-class-head .dh-section { margin: 6px 0 8px; flex: 1; }
+.dh-sorts { display: flex; gap: 4px; flex: 0 0 auto; }
+.dh-sortbtn {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+  padding: 4px 9px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #9a9aa5;
+}
+.dh-sortbtn.dh-active { background: rgba(225, 6, 0, 0.18); border-color: var(--red, #e10600); color: #fff; }
 
 /* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
