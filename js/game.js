@@ -3141,6 +3141,83 @@ window.__apex = {
     reset: () => Input.simTiltReset(),
     steerToAngle: (cmd) => Input.steerToTilt(cmd),
   },
+
+  // ── New dev / test helpers ─────────────────────────────────────────────────
+
+  // Trigger the race-results screen cleanly, as if all cars crossed the line.
+  // Fixes the fallback-DOM-hack in ui-audit.spec.js (finishRace was missing).
+  finishRace() {
+    if (!track || state === "results" || state === "menu") return false;
+    cars.forEach((c) => { if (!c.finished) { c.finished = true; c.finishT = raceT; } });
+    endRace();
+    return { state };
+  },
+
+  // Get or set the frozen flag (true = physics paused, scene held still).
+  // park() sets this automatically; expose it so tests can freeze/unfreeze.
+  freeze(v) {
+    if (v === undefined) return frozen;
+    frozen = !!v;
+    return frozen;
+  },
+
+  // Get or set HUD visibility. Returns current visible state.
+  hud(show) {
+    if (show === undefined) return !els.hud.hidden;
+    els.hud.hidden = !show;
+    if (show) { els.pausebtn.hidden = (state !== "race"); } else { els.pausebtn.hidden = true; }
+    return !els.hud.hidden;
+  },
+
+  // Get or set race weather ("dry" | "wet"). Toggling wet starts/stops rain audio.
+  weather(w) {
+    if (w === undefined) return raceWeather;
+    const wet = w === "wet";
+    raceWeather = wet ? "wet" : "dry";
+    if (soundOn) { if (wet) GameAudio.startRain(); else GameAudio.stopRain(); }
+    return raceWeather;
+  },
+
+  // Force-rescue the player immediately (same as auto-rescue after 3 s stuck).
+  // Returns updated physState so the test can confirm repositioning.
+  resetPlayer() {
+    if (!player) return false;
+    rescuePlayer(player);
+    return this.physState();
+  },
+
+  // Detailed telemetry for a single car by index (from cars() list).
+  carAt(idx) {
+    const c = typeof idx === "number" ? cars[idx] : cars.find((x) => x.isPlayer);
+    if (!c) return null;
+    return {
+      id: cars.indexOf(c), isPlayer: !!c.isPlayer, team: c.team && c.team.id,
+      x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
+      prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
+      finished: !!c.finished, finishT: c.finishT != null ? +c.finishT.toFixed(2) : null,
+      contactT: +(c.contactT || 0).toFixed(3),
+      wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
+    };
+  },
+
+  // List all available circuit IDs and names (for iterating in test harnesses).
+  tracks: () => Tracks.LIST.map((t, i) => ({ id: t.id, name: t.name, i })),
+
+  // List all teams with engine supplier (for factory-parts and setup tests).
+  teams: () => Teams.LIST.map((t, i) => ({ id: t.id, name: t.name, engine: t.engine, i })),
+
+  // Reset mesh-visibility overrides (companion to meshToggle).
+  clearMeshes() { hideMeshes = {}; return hideMeshes; },
+
+  // Combined debug snapshot: camera mode, frozen, dbgCam active, weather.
+  viewState() {
+    return {
+      camMode: CAM_MODES[camMode].id, camIndex: camMode,
+      frozen, dbgCamActive: dbgCam !== null, skyOverride: skyViewOverride !== null,
+      weather: raceWeather, state,
+      ...this.camState(),
+    };
+  },
 };
 
 })();
