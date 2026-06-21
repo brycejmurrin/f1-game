@@ -337,6 +337,17 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
+// Render interpolation: blend a car's arc position between its previous and
+// current fixed-physics-step values by the leftover-accumulator fraction, so
+// motion stays smooth between steps (no judder on 120/144 Hz or uneven frames).
+// Wrap-safe: takes the short way around the start/finish line.
+function lerpS(prev, cur, a) {
+  if (prev === undefined || a >= 1) return cur;
+  const L = track.total;
+  let d = cur - prev;
+  if (d > L * 0.5) d -= L; else if (d < -L * 0.5) d += L;
+  return wrapS(prev + d * a);
+}
 function basisMat(r, u, f, p, out) {
   out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
   out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
@@ -1520,10 +1531,14 @@ function render(dt) {
     fovT = 58;
   } else {
     if (!player) return;
-    Tracks.sample(track, player.s, smp);
-    const px = player.x;
+    // Interpolated arc/lateral position so the chase anchor tracks the car
+    // smoothly between physics steps (no high-refresh judder).
+    const pS = lerpS(player.rPrevS, player.s, renderAlpha);
+    const px = (player.rPrevX === undefined) ? player.x
+             : player.rPrevX + (player.x - player.rPrevX) * renderAlpha;
+    Tracks.sample(track, pS, smp);
     // ride the bank with the car so the camera doesn't sink into the banked road
-    const bankCam = Tracks.banking(track, player.s, px);
+    const bankCam = Tracks.banking(track, pS, px);
     const bankDy = bankCam ? bankCam.dy : 0;
     const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
     const spd = clamp(player.speed / VMAX, 0, 1);
@@ -1546,7 +1561,7 @@ function render(dt) {
       // the car stays a constant, readable size. FAR pulls back and up for race-craft.
       const back = mode === "far" ? 10.5 : 5.8;
       const eyeUp = mode === "far" ? 4.2 : 2.1;
-      Tracks.sample(track, wrapS(player.s - back), smpC);
+      Tracks.sample(track, wrapS(pS - back), smpC);
       const cx = px * 0.5;   // partly follow lateral offset; rest shows position
       eyeT = [
         smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + eyeUp + bankDy, smpC.p[2] + smpC.r[2] * cx,
@@ -1689,18 +1704,23 @@ function render(dt) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
-    Tracks.sample(track, c.s, smp2);
+    // Interpolate the arc/lateral position between the last two physics steps so
+    // the car renders smoothly between fixed steps (no judder on high-refresh).
+    const cS = lerpS(c.rPrevS, c.s, renderAlpha);
+    const cX = (c.rPrevX === undefined) ? c.x
+             : c.rPrevX + (c.x - c.rPrevX) * renderAlpha;
+    Tracks.sample(track, cS, smp2);
     // Smooth RENDERED lateral position. Physics c.x stays exact (used for walls,
     // collisions, racing-line assist). Only the mesh position is low-passed so
     // Frenet-projection noise doesn't appear as visible left-right wobble.
     // Player rate 30 (≈0.1 s lag) is fast enough to feel instant but cuts the
     // per-frame projection noise; AI rate 16 kills the harsher collision jitter.
-    if (c.xVis === undefined) c.xVis = c.x;
-    else c.xVis = damp(c.xVis, c.x, c.isPlayer ? 30 : 16, dt);
+    if (c.xVis === undefined) c.xVis = cX;
+    else c.xVis = damp(c.xVis, cX, c.isPlayer ? 30 : 16, dt);
     let renderX = c.xVis;
     // banking: sit the car ON the banked surface (raise it by the local lift)
     // instead of the flat centreline, so it doesn't float/sink in the corner.
-    const bankC = Tracks.banking(track, c.s, renderX);
+    const bankC = Tracks.banking(track, cS, renderX);
     tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
     tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
     tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
@@ -1866,6 +1886,7 @@ function drawMinimap() {
 
 // ---------- main loop ----------
 let physAcc = 0;                 // leftover sim time carried between frames
+let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
 const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
   requestAnimationFrame(tick);
@@ -1888,9 +1909,16 @@ function tick(now) {
   if (!frozen) {
     physAcc += simTime;
     let steps = 0;
-    while (physAcc >= PHYS_DT && steps < 5) { update(PHYS_DT); physAcc -= PHYS_DT; steps++; }
+    while (physAcc >= PHYS_DT && steps < 5) {
+      // snapshot each car's pre-step arc/lateral position so render can interpolate
+      // between the last two physics steps (snapshotting every step leaves rPrev*
+      // holding the state just before the final step taken this frame).
+      for (let i = 0; i < cars.length; i++) { const c = cars[i]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      update(PHYS_DT); physAcc -= PHYS_DT; steps++;
+    }
     if (steps === 5) physAcc = 0;             // fell badly behind — drop the backlog
   }
+  renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
   if (state === "race" || state === "count") updateHud(false);
 }
