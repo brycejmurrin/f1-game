@@ -22,7 +22,7 @@
     scenery: function (api) {
       const { out, n, pyMin, place, backdrop, groundPlane,
         addBox, addCyl, addCone, anchor, vadd, building, tower, billboard,
-        fence, hash, every } = api;
+        fence, hash, every, recordBarrier } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Night Corniche palette
@@ -41,7 +41,9 @@
       // --- Continuous grey barrier wall both sides (the walls ARE the circuit) ---
       // Custom coarse-stepped barrier: overlapping long boxes so the wall never opens a
       // gap, at a wider spacing than wall()'s fixed 6 m step to stay within the vert budget.
+      // Physics boundary registered at the same 0.6m gap so the stop matches the visual.
       for (const side of [-1, 1]) {
+        recordBarrier(0.0, 1.0, side, 0.6);
         every(13, (k) => {
           const a = anchor(k, side, 0.6), b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 0.65), [0.5, 1.3, 15], BARRIER, b);

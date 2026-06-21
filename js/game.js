@@ -434,7 +434,7 @@ function gridUp() {
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
-    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = -4; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0;
   });
 }
@@ -909,6 +909,7 @@ function resolveCollisions(ranked) {
             const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
             b.speed = Math.max(0, b.speed - iB * jImp);
             a.speed += iA * jImp * 0.8;
+            a.contactT = b.contactT = 0.22;
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           }
         }
@@ -922,7 +923,7 @@ function resolveCollisions(ranked) {
   const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
-    for (let j = i + 1; j < ranked.length && j <= i + 6; j++) {
+    for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
       const b = ranked[j];
       const dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
@@ -1236,6 +1237,11 @@ function updateCar(c, dt, ranked) {
   const latFac = clamp(c.speed / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
+  // Banking: computed once, shared between player and AI so both get grip boost.
+  const bankPhys = Tracks.banking(track, c.s, 0);
+  const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
+                            Math.abs(Tracks.bankAngle(track, c.s)));
+  const bankMu = 1 + Math.sin(bankRoll) * 0.8;
   // Track-frame dynamic bicycle model for the player. c.head = real world
   // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.
   // Per-axle tyre forces (from slip angles, grip-capped) drive yaw and lateral
@@ -1284,17 +1290,7 @@ function updateCar(c, dt, ranked) {
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
     // --- road-surface grip modifiers ---
-    // Banking: a banked road tilts the gravity vector so lateral G presses the
-    // tyres harder into the surface (Zandvoort's ~18° banking adds ~30% grip).
-    // Only non-null on circuits with def.banked = true; flat circuits cost nothing.
-    // Combine the auto bankingProfile roll with the authored per-segment bank
-    // (which the road basis already tilts the car by, but which previously granted
-    // NO grip) — use the larger so authored-banked corners (e.g. Zandvoort) drive
-    // banked instead of flat.
-    const bankPhys = Tracks.banking(track, c.s, 0);
-    const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
-                              Math.abs(Tracks.bankAngle(track, c.s)));
-    const bankMu = 1 + Math.sin(bankRoll) * 0.8;
+    // bankMu computed above, shared with AI.
     // Vertical load: crests reduce normal force (car goes light, less grip);
     // valleys increase it (car feels planted). Estimated from slope change over
     // 12 m. Low-pass filtered so the v²·kv term doesn't oscillate as speed
@@ -1367,7 +1363,7 @@ function updateCar(c, dt, ranked) {
     // driving hard back to its racing line, so a player leaning on it can
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
     const give = (c.contactT > 0) ? 0.4 : 1;
-    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * give * dt;
+    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * dt;
   }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
@@ -1416,7 +1412,7 @@ function updateCar(c, dt, ranked) {
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
         c.speed = Math.max(0, c.speed - pushIn * (track.street ? 40 : 16) * dt);
-        if (track.street) c.wallT = 0.35;     // brief auto-throttle suppress
+        c.wallT = 0.35;     // brief auto-throttle suppress
       }
       // Nose/steer pointing AWAY = peeling off: speed and heading left alone so
       // the player just drives off the barrier — no sticky pin, no auto-rescue.
@@ -1507,9 +1503,9 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer && state === "race" && !c.finished) {
     // Moving backwards along the track at speed = going the wrong way. (A slow
     // reverse crawl to recover off a wall is fine and does NOT trip this.)
-    if (ds < -0.03 && c.speed > 8) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
+    if (ds < -0.03 && c.speed > 15) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
-    c.wrongWay = c.wrongT > 0.4;
+    c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
       announce("WRONG WAY", 1.0); c.wrongCueT = 1.0;
     }
@@ -2990,7 +2986,7 @@ window.__apex = {
     camTgt[2] = p[2] + smp.t[2] * 4;
     camFov = lerp(52, 66, clamp(player.speed / VMAX, 0, 1));
   },
-  info: () => ({ state, track: track && track.def.id, n: track && track.n, total: track && track.total }),
+  info: () => ({ state, track: (state !== "menu" && track) ? track.def.id : null, n: track && track.n, total: track && track.total }),
   camState: () => ({ eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov }),
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },
