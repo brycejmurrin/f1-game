@@ -25,7 +25,7 @@
       const { out, n, px, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, tower,
               billboard, gantry, marshalPost, fence, guardrail, tyreWall,
-              anchor, addBox, addCone, vadd, onTrack } = api;
+              anchor, addBox, addCyl, addCone, addFrustum, vadd, onTrack } = api;
       const k = (s) => Math.round(s * n) % n;
 
       // ---- Dry Hungarian-summer palette ----
