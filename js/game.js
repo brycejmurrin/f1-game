@@ -768,6 +768,22 @@ function buildTTResults() {
   head.append(hl, hv);
   els.resultsTable.appendChild(head);
 
+  // Ghost delta row (shows gap to ghost best)
+  if (Ghost.hasGhost() && isFinite(best)) {
+    const ghostBest = Ghost.bestTime();
+    if (isFinite(ghostBest)) {
+      const delta = best - ghostBest;
+      const gr = document.createElement("div");
+      gr.className = "res-row";
+      const gl = document.createElement("span"); gl.className = "res-name"; gl.textContent = "vs Ghost";
+      const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
+      gv.style.color = delta <= 0 ? "#a3e635" : "#e10600";
+      gv.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(3) + "s";
+      gr.append(gl, gv);
+      els.resultsTable.appendChild(gr);
+    }
+  }
+
   // leaderboard header
   const lbHead = document.createElement("div");
   lbHead.style.cssText = "margin-top:12px;color:#e10600;font-weight:800;font-style:italic";
