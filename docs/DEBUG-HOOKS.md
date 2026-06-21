@@ -171,11 +171,27 @@ slip velocity `vLat` (m/s) and slip `slipDeg` (°), road pitch `slope`
 (+up/−down), `wrongWay` flag, auto-rescue timer `rescueT`, cumulative `prog` (m)
 and `lap`.
 
-### `tuning() → {…}`
-Live values the steering sliders map to: `tiltOutputScale`, `wheelbase`, `expo`,
-`maxSlip`, `speedRef`, `drift`, `roadFollow`, `pace`, `raceLineAssist`,
-`maxTilt`, `deadzone`, `tiltSlew`. Each slider movement should move its value
-here (and the car's behaviour).
+### `tuning() → {wheelbase, expo, maxSlip, speedRef, drift, roadFollow, playerGrip, frontGrip, yawDamp, yawInertia, pace, raceLineAssist, maxTilt, deadzone, tiltCutoff}`
+Live values the steering sliders and physics constants currently hold. Each slider
+movement should move its corresponding value here (and the car's behaviour).
+
+| Field | Slider / source |
+|---|---|
+| `wheelbase` | RESPONSE (shorter = snappier) |
+| `expo` | LINEARITY |
+| `maxSlip` | STEER LOCK |
+| `speedRef` | SPEED STEER |
+| `drift` | SLIDE |
+| `roadFollow` | DRIVING HELP steer-assist gain (internal, not a user slider) |
+| `playerGrip` | forgiveness headroom above AI grip (internal) |
+| `frontGrip` | front-axle friction bias (understeer safety; internal) |
+| `yawDamp` | yaw damping (internal) |
+| `yawInertia` | rotational-inertia scale, controls turn-in speed (internal) |
+| `pace` | OVERALL SPEED |
+| `raceLineAssist` | RACING LINE |
+| `maxTilt` | TILT SENSITIVITY (deg for full lock) |
+| `deadzone` | tilt dead zone (deg; fixed, not a slider) |
+| `tiltCutoff` | STEER SMOOTHING (One-Euro min-cutoff frequency, Hz) |
 
 ### `cars() → [{id, x, xv, yaw, prog, speed, lap, ct, kerb, p}, …]`
 Telemetry for every car, leader first: lateral `x` (and smoothed `xv`), visual
@@ -236,18 +252,22 @@ tuning. Any omitted field is left unchanged; returns the new `tuning()`.
 | Field | Meaning |
 |---|---|
 | `drift` | lateral-slip injection (SLIDE; 0 = on-rails) |
-| `roadFollow` | passive road-curvature tracking (0 = pure world-space, 1 = Frenet-like) |
+| `roadFollow` | passive road-curvature tracking — internal, not exposed as a slider |
 | `pace` | global speed/accel multiplier for all cars (OVERALL SPEED) |
 | `speedRef` | speed-sensitive steer taper reference (SPEED STEER) |
 | `wheelbase` | turn-in snappiness (RESPONSE; shorter = snappier) |
 | `expo` | input shaping (LINEARITY) |
 | `maxSlip` | max steering/slip angle (STEER LOCK) |
-| `maxTilt` | tilt sensitivity — degrees of roll for full lock (TILT RANGE) |
-| `deadzone` | tilt dead zone around neutral, degrees (DEAD ZONE) |
-| `tiltSlew` | tilt steer slew limit, units/s (STEER SMOOTHING) |
+| `playerGrip` | forgiveness headroom above AI grip (internal) |
+| `frontGrip` | front-axle friction bias — controls understeer safety (internal) |
+| `yawDamp` | yaw damping coefficient (internal) |
+| `yawInertia` | rotational-inertia scale — how fast the car yaws (internal) |
+| `maxTilt` | tilt sensitivity — degrees of roll for full lock (TILT SENSITIVITY) |
+| `deadzone` | tilt dead zone around neutral, degrees |
+| `tiltCutoff` | One-Euro filter min-cutoff (Hz) — STEER SMOOTHING slider |
 
-`roadFollow` is internal (not a slider); the rest map to the Advanced Steering
-sliders. `maxTilt`/`deadzone`/`tiltSlew` are routed to the Input module.
+Fields marked "internal" have no slider but are settable via `setPhysics()` for
+A/B tests. `maxTilt`/`deadzone`/`tiltCutoff` are routed to the Input module.
 
 ```js
 __apex.setPhysics({ drift: 0, roadFollow: 0 });   // on-rails, no auto road-tracking
@@ -306,7 +326,7 @@ __apex.tiltSim.steerToAngle(cmd);             // inverse map (steer → tilt deg
 Modelling tremor matters: without it the "human" is a perfect controller that
 always prefers zero smoothing; with it, smoothing becomes a real trade-off
 (filter jitter vs add lag), so the recommendation is meaningful for real players.
-Set tilt params with `setPhysics({ maxTilt, deadzone, tiltSlew })`, the pause-menu
+Set tilt params with `setPhysics({ maxTilt, deadzone, tiltCutoff })`, the pause-menu
 sliders, or `Input.setTilt*`. `runLap(page, settings, { mode: "tilt" })` drives a
 whole lap this way; `opts.tremorDeg` controls the tremor amplitude.
 
