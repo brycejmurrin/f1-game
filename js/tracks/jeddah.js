@@ -20,6 +20,9 @@
       { t: 0, l: 700 }, { t: -80, l: 70 }, { t: 75, l: 60 }, { t: 0, l: 120 }, { t: -70, l: 65 }, { t: 70, l: 60 },
       { t: 0, l: 300 }, { t: 90, l: 80 }, { t: 0, l: 600 }, { t: 90, l: 80 }, { t: -65, l: 70 }, { t: 70, l: 70 },
     ],
+    // Jeddah Corniche: the circuit grades down from the sweeping first sector
+    // then recovers along the seafront — real circuit has ~12 m total change.
+    elevations: [{ s: 0.30, halfM: 480, rise: -8 }, { s: 0.62, halfM: 400, rise: 6 }],
     scenery: function (api) {
       const { out, n, pyMin, place, backdrop, groundPlane,
         addBox, addCyl, addCone, addPrism, anchor, vadd, building, tower, billboard,

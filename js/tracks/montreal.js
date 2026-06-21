@@ -18,6 +18,8 @@
       { t: 0, l: 380 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 0, l: 300 }, { t: 90, l: 90 }, { t: 0, l: 420 },
       { t: -80, l: 90 }, { t: 60, l: 70 }, { t: -60, l: 70 }, { t: 0, l: 220 }, { t: 100, l: 110 }, { t: -100, l: 110 },
     ],
+    // Île Notre-Dame: very slight rise through the casino hairpin complex.
+    elevations: [{ s: 0.52, halfM: 340, rise: 4 }],
     scenery: function (api) {
       const { out, n, px, pz, place, prop, backdrop, groundPlane, wall, grandstand,
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
