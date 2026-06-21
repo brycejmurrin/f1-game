@@ -870,6 +870,10 @@ const DataHub = (function () {
       head.appendChild(el("div", "dh-live-sub", t.lap
         ? "Fastest lap " + (t.lap.lapNumber !== null ? "(L" + t.lap.lapNumber + ") " : "") + fmtLap(t.lap.lapDuration)
         : "No timed lap found in this session."));
+      if (t.lap && t.lap.s1 !== null && t.lap.s2 !== null && t.lap.s3 !== null) {
+        head.appendChild(el("div", "dh-live-sub dh-sectors",
+          "S1 " + t.lap.s1.toFixed(3) + "  ·  S2 " + t.lap.s2.toFixed(3) + "  ·  S3 " + t.lap.s3.toFixed(3)));
+      }
       detail.appendChild(head);
     });
 
@@ -884,9 +888,10 @@ const DataHub = (function () {
       compare: (compare && compare.car && compare.car.length) ? compare : null,
       visible: {}, cursorT: 0,
       tMax: 0, speedMax: 1, rpmMax: 1,
-      playing: false, rate: 2, _raf: 0, _last: 0,
-      chart: null, map: null, chartBase: null, mapBase: null, mapT: null,
-      g: null, playBtn: null
+      playing: false, rate: 2, _raf: 0, _last: 0, onboard: false,
+      chart: null, map: null, delta: null,
+      chartBase: null, mapBase: null, deltaBase: null, mapT: null,
+      sectors: null, g: null, playBtn: null
     };
     CHANNELS.forEach(function (ch) { view.visible[ch.id] = !ch.off; });
     function scan(car) {
@@ -901,8 +906,12 @@ const DataHub = (function () {
     view.tMax = view.tMax || 1;
     primary.cum = cumDist(primary.car);
     if (view.compare) view.compare.cum = cumDist(view.compare.car);
+    // sector boundary times (s) from the primary lap, if the API reported them
+    if (primary.lap && primary.lap.s1 !== null && primary.lap.s2 !== null) {
+      view.sectors = [primary.lap.s1, primary.lap.s1 + primary.lap.s2];
+    }
 
-    // transport: play / restart / speed — drives the scrub cursor on a timer
+    // transport: play / restart / speed / onboard — drives the scrub cursor
     detail.appendChild(buildTransport(view));
 
     // trace chart (static traces are cached to an offscreen canvas; each frame
@@ -912,6 +921,16 @@ const DataHub = (function () {
     detail.appendChild(c1);
     view.chart = c1;
     view.chartBase = makeOffscreen(600, 220);
+
+    // delta strip (gap to the compare driver across the whole lap)
+    if (view.compare) {
+      const cd = el("canvas", "dh-canvas dh-delta");
+      cd.width = 600; cd.height = 72; cd.style.touchAction = "none";
+      detail.appendChild(cd);
+      view.delta = cd;
+      view.deltaBase = makeOffscreen(600, 72);
+      attachScrub(cd, view);
+    }
 
     const legend = el("div", "dh-legend");
     CHANNELS.forEach(function (ch) {
@@ -1011,6 +1030,19 @@ const DataHub = (function () {
       rates.appendChild(b);
     });
     bar.appendChild(rates);
+
+    if (view.primary.loc && view.primary.loc.length > 8) {
+      const ob = el("button", "dh-tbtn dh-onboard", "ONBOARD");
+      ob.type = "button";
+      ob.title = "Rotate the map so the car always points up";
+      ob.addEventListener("click", function () {
+        view.onboard = !view.onboard;
+        ob.classList.toggle("dh-tplaying", view.onboard);
+        paintFrame(view);
+      });
+      bar.appendChild(ob);
+    }
+
     bar.appendChild(el("span", "dh-thint", "drag chart to scrub"));
     return bar;
   }
@@ -1117,9 +1149,23 @@ const DataHub = (function () {
     setPlayLabel(view);
   }
 
-  // composite one frame: cached chart/map bases + moving cursor, car dots, gauges
+  // nearest location sample to lap time t (matched on car-data timestamp)
+  function locAt(view, tel, t) {
+    const cs = sampleAt(tel.car, t);
+    const loc = (tel.loc && tel.loc.length) ? tel.loc : view.primary.loc;
+    if (!cs || !loc || !loc.length) return loc && loc[0];
+    let best = loc[0], bd = Infinity;
+    for (let i = 0; i < loc.length; i++) {
+      const dd = Math.abs(loc[i].date - cs.date);
+      if (dd < bd) { bd = dd; best = loc[i]; }
+    }
+    return best;
+  }
+
+  // composite one frame: cached bases + moving cursor, car dots, delta, gauges
   function paintFrame(view) {
     const T = view.cursorT === null ? 0 : view.cursorT;
+    // ---- trace chart ----
     const cg = view.chart.getContext("2d");
     const W = view.chart.width, H = view.chart.height, pad = 6;
     cg.clearRect(0, 0, W, H);
@@ -1133,27 +1179,51 @@ const DataHub = (function () {
       cg.fillStyle = CHANNELS[0].color;
       cg.beginPath(); cg.arc(X, H - pad - f * (H - 2 * pad), 3.5, 0, Math.PI * 2); cg.fill();
     }
+    // ---- delta strip ----
+    if (view.delta) {
+      const dgx = view.delta.getContext("2d");
+      const DW = view.delta.width, DH = view.delta.height;
+      dgx.clearRect(0, 0, DW, DH);
+      dgx.drawImage(view.deltaBase, 0, 0);
+      const dx = pad + (T / view.tMax) * (DW - 2 * pad);
+      dgx.strokeStyle = "rgba(255,255,255,0.55)"; dgx.lineWidth = 1;
+      dgx.beginPath(); dgx.moveTo(dx, 0); dgx.lineTo(dx, DH); dgx.stroke();
+    }
+    // ---- track map (with optional onboard rotation) ----
     if (view.map) {
       const mg = view.map.getContext("2d");
-      mg.clearRect(0, 0, view.map.width, view.map.height);
-      mg.drawImage(view.mapBase, 0, 0);
-      if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(driverColor(view.compare.d)));
-      drawCarDot(mg, view, view.primary, T, "#fff");
+      const MW = view.map.width, MH = view.map.height;
+      mg.clearRect(0, 0, MW, MH);
+      if (view.onboard && view.mapT) {
+        const here = locAt(view, view.primary, T);
+        const ahead = locAt(view, view.primary, Math.min(view.tMax, T + 0.6));
+        const p0 = mapPoint(view, here), p1 = mapPoint(view, ahead);
+        const ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+        const ZOOM = 2.6;
+        mg.save();
+        mg.translate(MW / 2, MH / 2);
+        mg.scale(ZOOM, ZOOM);
+        mg.rotate(-ang - Math.PI / 2);     // heading -> up
+        mg.translate(-p0[0], -p0[1]);
+        mg.drawImage(view.mapBase, 0, 0);
+        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(driverColor(view.compare.d)), 1 / ZOOM);
+        drawCarDot(mg, view, view.primary, T, "#fff", 1 / ZOOM);
+        mg.restore();
+      } else {
+        mg.drawImage(view.mapBase, 0, 0);
+        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(driverColor(view.compare.d)), 1);
+        drawCarDot(mg, view, view.primary, T, "#fff", 1);
+      }
     }
     updateGauges(view);
   }
-  function drawCarDot(g, view, tel, t, fill) {
-    const cs = sampleAt(tel.car, t);
-    if (!cs) return;
-    const loc = (tel.loc && tel.loc.length) ? tel.loc : view.primary.loc;
-    let best = loc[0], bd = Infinity;
-    for (let i = 0; i < loc.length; i++) {
-      const dd = Math.abs(loc[i].date - cs.date);
-      if (dd < bd) { bd = dd; best = loc[i]; }
-    }
+  function drawCarDot(g, view, tel, t, fill, rscale) {
+    const best = locAt(view, tel, t);
+    if (!best) return;
     const p = mapPoint(view, best);
-    g.fillStyle = fill; g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 2;
-    g.beginPath(); g.arc(p[0], p[1], 5.5, 0, Math.PI * 2); g.fill(); g.stroke();
+    const r = 5.5 * (rscale || 1);
+    g.fillStyle = fill; g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 2 * (rscale || 1);
+    g.beginPath(); g.arc(p[0], p[1], r, 0, Math.PI * 2); g.fill(); g.stroke();
   }
 
   function appendStintsPits(detail, b) {
@@ -1196,21 +1266,40 @@ const DataHub = (function () {
     return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
   }
 
-  // rebuild the cached static layers (chart traces + coloured track map)
+  // rebuild the cached static layers (chart traces + coloured track map + delta)
   function buildBases(view) {
     renderTraces(view.chartBase.getContext("2d"), view.chartBase.width, view.chartBase.height, view);
     if (view.map) {
       computeMapTransform(view);
       renderMap(view.mapBase.getContext("2d"), view.mapBase.width, view.mapBase.height, view);
     }
+    if (view.delta) renderDelta(view.deltaBase.getContext("2d"), view.deltaBase.width, view.deltaBase.height, view);
   }
 
-  // multi-channel traces for the primary driver (+ compare speed overlay).
+  // multi-channel traces for the primary driver (+ compare speed overlay),
+  // with faint sector-boundary markers.
   function renderTraces(g, W, H, view) {
     const pad = 6;
     g.clearRect(0, 0, W, H);
     const X = function (t) { return pad + (t / view.tMax) * (W - 2 * pad); };
     const Y = function (f) { return H - pad - f * (H - 2 * pad); };
+    // sector dividers + labels
+    if (view.sectors) {
+      g.font = "9px system-ui, sans-serif"; g.textBaseline = "top";
+      const bounds = [0].concat(view.sectors).concat([view.tMax]);
+      g.strokeStyle = "rgba(255,255,255,0.18)"; g.lineWidth = 1;
+      view.sectors.forEach(function (sb) {
+        const x = X(sb);
+        g.setLineDash([3, 3]);
+        g.beginPath(); g.moveTo(x, pad); g.lineTo(x, H - pad); g.stroke();
+        g.setLineDash([]);
+      });
+      g.fillStyle = "rgba(255,255,255,0.4)";
+      for (let s = 0; s < 3; s++) {
+        const mid = X((bounds[s] + bounds[s + 1]) / 2);
+        g.fillText("S" + (s + 1), mid - 6, pad + 1);
+      }
+    }
     function line(car, ch, color, width) {
       g.beginPath();
       let started = false, prevY = 0;
@@ -1233,6 +1322,50 @@ const DataHub = (function () {
       const ch = CHANNELS[k];
       if (view.visible[ch.id]) line(view.primary.car, ch, ch.color, ch.w);
     }
+  }
+
+  // gap-to-compare across the lap: delta(t) = time for compare to reach the
+  // same track distance, minus t. Filled green where the primary is ahead.
+  function deltaSamples(view) {
+    const car = view.primary.car, out = [];
+    let mn = 0, mx = 0;
+    for (let i = 0; i < car.length; i++) {
+      const t = car[i].t;
+      const dP = distAtT(view.primary.cum, t);
+      const dl = timeAtDist(view.compare.cum, dP) - t;
+      out.push(dl);
+      if (dl < mn) mn = dl; if (dl > mx) mx = dl;
+    }
+    return { d: out, mn: mn, mx: mx };
+  }
+  function renderDelta(g, W, H, view) {
+    const pad = 6, car = view.primary.car;
+    g.clearRect(0, 0, W, H);
+    const ds = deltaSamples(view);
+    view._delta = ds;
+    const span = Math.max(0.15, ds.mx - ds.mn);
+    const X = function (t) { return pad + (t / view.tMax) * (W - 2 * pad); };
+    const Y = function (v) { return pad + (ds.mx - v) / span * (H - 2 * pad); };
+    const y0 = Y(0);
+    // zero line
+    g.strokeStyle = "rgba(255,255,255,0.25)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(pad, y0); g.lineTo(W - pad, y0); g.stroke();
+    // filled gap area, split at the zero crossing colour-wise
+    const col = cssColor(driverColor(view.primary.d));
+    g.beginPath();
+    g.moveTo(X(0), y0);
+    for (let i = 0; i < car.length; i++) g.lineTo(X(car[i].t), Y(ds.d[i]));
+    g.lineTo(X(view.tMax), y0); g.closePath();
+    g.fillStyle = "rgba(63,185,80,0.18)"; g.fill();
+    g.beginPath();
+    let started = false;
+    for (let i = 0; i < car.length; i++) {
+      const x = X(car[i].t), y = Y(ds.d[i]);
+      if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
+    }
+    g.strokeStyle = col; g.lineWidth = 1.5; g.lineJoin = "round"; g.stroke();
+    g.fillStyle = "rgba(255,255,255,0.45)"; g.font = "9px system-ui, sans-serif";
+    g.textBaseline = "top"; g.fillText("GAP TO " + dcode(view.compare.d) + " (s)", pad + 2, 2);
   }
 
   // screen transform for the track map (from the primary lap's x/y bounds)
@@ -1274,6 +1407,22 @@ const DataHub = (function () {
       g.strokeStyle = "rgb(" + r + "," + gr + "," + b + ")";
       const p0 = mapPoint(view, loc[i - 1]), p1 = mapPoint(view, loc[i]);
       g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke();
+    }
+    // sector-boundary ticks
+    if (view.sectors) {
+      g.fillStyle = "rgba(255,255,255,0.9)";
+      g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 1;
+      g.font = "9px system-ui, sans-serif"; g.textBaseline = "middle"; g.textAlign = "center";
+      view.sectors.forEach(function (sb, idx) {
+        const lp = locAt(view, view.primary, sb);
+        if (!lp) return;
+        const p = mapPoint(view, lp);
+        g.beginPath(); g.arc(p[0], p[1], 3.5, 0, Math.PI * 2); g.fill(); g.stroke();
+        g.fillStyle = "rgba(255,255,255,0.7)";
+        g.fillText("S" + (idx + 2), p[0], p[1] - 9);
+        g.fillStyle = "rgba(255,255,255,0.9)";
+      });
+      g.textAlign = "left";
     }
   }
 
