@@ -26,7 +26,7 @@
     // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.27, halfM: 340, rise: 18 }, { s: 0.55, halfM: 220, rise: -10 }],
     scenery: function (api) {
-      const { out, track, n, ds, px, py, pz, hw, groundYAt, addBox, addPrism, onTrack, hash, upOf, vadd, anchor, place, prop, building, palm, guardrail, wall } = api;
+      const { out, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Mediterranean pastel wall palette + galvanized armco.
@@ -145,12 +145,25 @@
         }
       }
 
-      // ---- Casino Square (s=0.22, both close): plaza planters + palms ----
-      for (let i = 0; i < 9; i++) {
-        const k = K(0.205 + i * 0.0035);
+      // ---- Casino Square (s=0.22, both close): plaza planters + palms + gardens --
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.20 + i * 0.0035);
         place(k, -1, 3, [3, 1.2, 4], [0.55, 0.55, 0.58]);              // grey planter box
         prop(k, -1, 3, [2, 0.5, 2], [0.25, 0.45, 0.22]);               // greenery in planter
         palm(k, i % 2 ? 1 : -1, 4, 9, [0.25, 0.45, 0.22]);            // square palms
+      }
+      // Casino gardens — formal hedges + a central fountain on the L set back
+      hedge(0.195, 0.235, -1, 7, 1.6, [0.22, 0.42, 0.20]);
+      {
+        const k = K(0.215), a = anchor(k, -1, 14);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const b = [a.r, a.u, a.t];
+          addCyl(out, vadd(a.c, a.u, 0.5), 3.0, 1.0, [0.70, 0.72, 0.76], 10, b);   // fountain basin
+          addCyl(out, vadd(a.c, a.u, 1.6), 0.5, 2.2, [0.78, 0.80, 0.84], 8, b);    // fountain plume column
+          addCyl(out, vadd(a.c, a.u, 3.4), 1.2, 0.4, [0.85, 0.90, 0.96], 8, b);    // upper dish
+        }
+        // ring of clipped topiary balls around the garden
+        for (let j = 0; j < 6; j++) bush(K(0.198 + j * 0.007), -1, 9 + (j % 2) * 3, [0.24, 0.44, 0.22]);
       }
 
       // ---- Fairmont hairpin hotel (s=0.40, R close): tall pale block wrapping bend ----
@@ -188,23 +201,72 @@
         }
       }
 
-      // ---- Harbour & yachts (s=0.65, L mid): deep-blue water + white deck boxes ----
-      {
-        const SEA = [0.10, 0.34, 0.55];
-        for (let i = 0; i < 11; i++) {
-          const k = K(0.595 + i * 0.0075), a = anchor(k, -1, 22 + (i % 4) * 9);
-          if (onTrack(a.c[0], a.c[2], 12)) continue;
-          const b = [a.r, a.u, a.t];
-          // water plane just below grade
-          addBox(out, vadd(a.c, a.u, -0.6), [40, 0.6, 30], SEA, b);
-          // moored super-yacht: hull + stacked white decks + thin mast box
-          const sc = 0.7 + hash(k * 9 + i) * 0.7;   // size jitter for a packed marina
-          const yc = vadd(a.c, a.r, -8 + (i % 3) * 3);
-          addBox(out, vadd(yc, a.u, 2), [7 * sc, 4, 22 * sc], [0.97, 0.97, 0.99], b);   // hull
-          addBox(out, vadd(yc, a.u, 5.5), [5 * sc, 3, 12 * sc], [0.86, 0.88, 0.92], b); // superstructure
-          addBox(out, vadd(yc, a.u, 8.5), [3 * sc, 2, 6 * sc], [0.70, 0.74, 0.82], b);  // top deck
-          addBox(out, vadd(yc, a.u, 13), [0.4, 6, 0.4], [0.85, 0.85, 0.88], b); // mast
+      // ---- Harbour & yachts (s≈0.58→0.98, L): big sea plane + a packed marina ----
+      // The signature Monaco visual: a wide deep-blue Mediterranean plane on the
+      // harbour (LEFT) side of the back half, crowded with super-yachts of varied
+      // sizes (hull + stacked decks + radar arch + masts), plus a couple of small
+      // tenders. A continuous quay edge separates the street from the water.
+      const SEA = [0.10, 0.34, 0.55], SEA2 = [0.13, 0.40, 0.60];
+
+      // moored super-yacht builder at world point yc (basis b), facing along t
+      const yacht = (yc, b, u, r, t, sc, hullCol) => {
+        const HULL = hullCol || [0.97, 0.97, 0.99];
+        const L = 22 * sc, W = 7 * sc;
+        addBox(out, vadd(yc, u, 1.6 * sc), [W, 3.0 * sc, L], HULL, b);                 // hull
+        addBox(out, vadd(yc, u, 0.4 * sc), [W * 0.82, 1.2 * sc, L * 0.96], [0.20, 0.30, 0.40], b); // waterline shadow
+        // bow taper (small prism nose) + stern step
+        addBox(out, vadd(vadd(yc, t, L * 0.46), u, 1.8 * sc), [W * 0.6, 2.0 * sc, L * 0.16], HULL, b);
+        // superstructure decks, set slightly aft
+        const sup = vadd(yc, t, -L * 0.06);
+        addBox(out, vadd(sup, u, 4.2 * sc), [W * 0.78, 2.6 * sc, L * 0.55], [0.90, 0.91, 0.94], b); // main deck cabin
+        addBox(out, vadd(sup, u, 5.8 * sc), [W * 0.74, 1.0 * sc, L * 0.58], [0.40, 0.55, 0.70], b); // tinted window band
+        addBox(out, vadd(sup, u, 6.8 * sc), [W * 0.6, 2.2 * sc, L * 0.40], [0.94, 0.95, 0.97], b);  // upper deck
+        addBox(out, vadd(sup, u, 9.0 * sc), [W * 0.42, 1.8 * sc, L * 0.26], [0.84, 0.86, 0.90], b); // sun deck / bridge
+        // radar arch + mast
+        addBox(out, vadd(sup, u, 11.6 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
+        addCyl(out, vadd(sup, u, 12 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b); // mast
+        // a couple of stanchions / handrails on the foredeck
+        addBox(out, vadd(vadd(yc, t, L * 0.30), u, 3.4 * sc), [W * 0.7, 0.7 * sc, 0.3 * sc], [0.85, 0.86, 0.9], b);
+      };
+
+      // big water plane (single slab spanning the back-half harbour) — settled
+      // just below grade so the street/quay reads above it.
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.60 + i * 0.062), a = anchor(k, -1, 70);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, -1.2), [150, 0.8, 120], i % 2 ? SEA2 : SEA, b);
+      }
+      // continuous low stone quay wall between street and water
+      wall(0.585, 0.99, -1, 1.0, 1.4, [0.74, 0.70, 0.62], 1.0);
+
+      // packed marina rows — two ranks of yachts at increasing distance
+      for (let i = 0; i < 16; i++) {
+        const s = 0.59 + i * 0.0245;
+        const k = K(s);
+        const rank = i % 3;                         // 0 near, 1 mid, 2 far
+        const dist = 16 + rank * 16 + hash(k * 7) * 4;
+        const a = anchor(k, -1, dist);
+        if (onTrack(a.c[0], a.c[2], 12)) continue;
+        const b = [a.r, a.u, a.t];
+        const sc = 0.7 + hash(k * 9 + i) * 0.9;     // size jitter
+        const hull = (i % 5 === 0) ? [0.18, 0.20, 0.26] : (i % 7 === 0) ? [0.85, 0.86, 0.9] : [0.97, 0.97, 0.99];
+        yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
+        // a small tender / motorboat tucked beside the big yachts
+        if (i % 3 === 0) {
+          const tc = vadd(vadd(a.c, a.r, -14), a.t, 8);
+          addBox(out, vadd(tc, a.u, 0.9), [3.2, 1.2, 8], [0.92, 0.5, 0.3], b);
+          addBox(out, vadd(tc, a.u, 1.8), [2.0, 0.8, 3.2], [0.95, 0.95, 0.97], b);
         }
+      }
+      // a distant cluster of yacht masts far out for harbour depth
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.62 + i * 0.03), a = anchor(k, -1, 95 + hash(k) * 25);
+        addCyl(out, vadd(a.c, a.u, 5), 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
+      }
+      // breakwater / harbour wall arm in the far distance
+      for (let i = 0; i < 5; i++) {
+        const k = K(0.66 + i * 0.02), a = anchor(k, -1, 120);
+        addBox(out, vadd(a.c, a.u, 0.5), [30, 2.4, 8], [0.66, 0.62, 0.56], [a.r, a.u, a.t]);
       }
 
       // ---- Tabac waterfront buildings (s=0.75, R mid): pastel block row ----
@@ -222,6 +284,13 @@
           // white pool-edge boxes
           for (const o of [-7.4, 7.4]) addBox(out, vadd(vadd(a.c, a.r, o), a.u, 0.6), [1.4, 0.7, 23], [0.94, 0.94, 0.96], b);
           for (const o of [-11.4, 11.4]) addBox(out, vadd(vadd(a.c, a.t, o), a.u, 0.6), [16, 0.7, 1.4], [0.94, 0.94, 0.96], b);
+          // poolside parasols (pole + canopy) and a diving platform
+          for (let j = 0; j < 4; j++) {
+            const pc = vadd(vadd(a.c, a.r, -5 + (j % 2) * 10), a.t, -8 + j * 5);
+            addCyl(out, vadd(pc, a.u, 1.3), 0.08, 2.6, [0.8, 0.8, 0.82], 4, b);
+            addCone(out, vadd(pc, a.u, 3.0), 1.8, 0.8, j % 2 ? [0.9, 0.4, 0.35] : [0.95, 0.95, 0.97], 7, b);
+          }
+          addBox(out, vadd(vadd(a.c, a.r, 7.4), a.u, 2.2), [1.4, 0.4, 4], [0.85, 0.86, 0.88], b);
         }
       }
 
@@ -247,6 +316,58 @@
       for (let i = 0; i < 5; i++) {
         const k = K(0.71 + i * 0.02);
         place(k, 1, 18, [20, 0.8, 1.2], [0.88, 0.86, 0.80]);   // terrace lip
+      }
+
+      // ====================================================================
+      // TRACK FURNITURE — grandstands, billboards, gantry, fences, marshals
+      // ====================================================================
+
+      // Start/finish overhead gantry + a scoring gantry exiting Casino
+      gantry(0.0, 7.0, [0.20, 0.22, 0.26]);
+      gantry(0.235, 6.4, [0.22, 0.24, 0.28]);
+
+      // Harbour-front grandstands (back half, on the water side, well clear of tarmac)
+      grandstand(0.64, -1, 8, 60, [0.55, 0.56, 0.60], [0.85, 0.30, 0.28]);
+      grandstand(0.78, -1, 8, 48, [0.54, 0.55, 0.58], [0.30, 0.45, 0.80]);
+      // Casino-square grandstand on the inland side
+      grandstand(0.25, 1, 7, 40, [0.56, 0.57, 0.60], [0.90, 0.80, 0.30]);
+      // tribune at Tabac
+      grandstand(0.72, 1, 9, 36, [0.55, 0.55, 0.58], [0.85, 0.85, 0.88]);
+
+      // Billboards / advertising hoardings at key braking zones
+      for (const [s, sd] of [[0.07, 1], [0.18, -1], [0.33, 1], [0.62, -1], [0.74, 1], [0.84, -1], [0.93, 1]]) {
+        const col = [[0.85, 0.20, 0.20], [0.10, 0.30, 0.70], [0.95, 0.80, 0.10], [0.10, 0.55, 0.45]][K(s) % 4];
+        billboard(K(s), sd, 2.5, 7, 3.2, col);
+      }
+
+      // Catch / debris fences along the fast harbour straights (water side)
+      fence(0.66, 0.71, -1, 2.0, 3.2, [0.78, 0.80, 0.82]);
+      fence(0.82, 0.87, -1, 2.0, 3.2, [0.78, 0.80, 0.82]);
+
+      // Marshal posts around the lap (orange-roofed huts + flag poles)
+      for (const [s, sd] of [[0.04, 1], [0.13, -1], [0.30, 1], [0.42, -1], [0.50, 1], [0.62, -1], [0.79, 1], [0.91, -1]]) {
+        marshalPost(K(s), sd, 1.8);
+      }
+
+      // Extra guardrail accents at the famous tight corners
+      guardrail(0.29, 0.34, 1, 0.5, ARMCO);    // Mirabeau
+      guardrail(0.38, 0.43, 1, 0.5, ARMCO);    // Fairmont hairpin
+      guardrail(0.78, 0.84, -1, 0.5, ARMCO);   // Swimming pool
+
+      // Roadside street palms along the harbour promenade (extra density)
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.60 + i * 0.038);
+        palm(k, -1, 6.5, 7 + hash(k * 11) * 3, [0.24, 0.45, 0.21]);
+      }
+
+      // ---- Distinctive hillside high-rises behind the city (skyline crest) ----
+      // A few taller tapered towers set far back on the inland side to break the
+      // even building line and read as the Monte-Carlo tower district.
+      for (const [s, side, h] of [[0.12, -1, 70], [0.20, -1, 60], [0.34, -1, 64], [0.74, 1, 66], [0.88, 1, 58]]) {
+        const k = K(s), a = anchor(k, side, 70 + hash(k) * 20);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          tower(k, side, 70 + hash(k) * 20, 16 + hash(k * 3) * 6, h, { col: PASTELS[K(s) % PASTELS.length], cap: true, capCol: [0.55, 0.58, 0.56], mast: 6 });
+        }
       }
     },
   }
