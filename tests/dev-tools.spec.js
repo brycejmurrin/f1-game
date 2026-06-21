@@ -369,10 +369,7 @@ test.describe("__apex.physState()", () => {
   });
 
   test("slipFactor drops when braking hard", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
-    await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    await loadParked(page, 0.2, "bahrain");
     // Teleport to mid-lap at high speed then brake hard
     await page.evaluate(() => window.__apex.jump(0.2, 70, 0));
     await page.waitForTimeout(100);

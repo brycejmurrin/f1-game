@@ -527,37 +527,42 @@ const GameAudio = (function () {
 
   /* ---------------- rain ---------------- */
 
-  let rainSrc = null, rainGain = null;
+  let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
 
   function startRain() {
-    if (!sfxOk() || rainSrc) return;
+    if (!sfxOk() || rainSrc || rainStopping) return;
     const dur = 4;
     const buf = noiseBuf(dur);
     rainSrc = ctx.createBufferSource();
     rainSrc.buffer = buf;
     rainSrc.loop = true;
-    const hp = ctx.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.value = 2200;
-    hp.Q.value = 0.4;
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = 8000;
+    rainHp = ctx.createBiquadFilter();
+    rainHp.type = "highpass";
+    rainHp.frequency.value = 2200;
+    rainHp.Q.value = 0.4;
+    rainLp = ctx.createBiquadFilter();
+    rainLp.type = "lowpass";
+    rainLp.frequency.value = 8000;
     rainGain = ctx.createGain();
     rainGain.gain.value = 0;
-    rainSrc.connect(hp).connect(lp).connect(rainGain).connect(master);
+    rainSrc.connect(rainHp).connect(rainLp).connect(rainGain).connect(master);
     rainSrc.start();
     rainGain.gain.setTargetAtTime(0.065, now(), 1.2);
   }
 
   function stopRain() {
     if (!rainSrc) return;
+    rainStopping = true;
+    const s = rainSrc, g = rainGain, h = rainHp, l = rainLp;
+    rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     try {
-      rainGain.gain.setTargetAtTime(0, now(), 0.4);
-      const s = rainSrc;
-      setTimeout(() => { try { s.stop(); s.disconnect(); } catch (e) {} }, 1200);
-    } catch (e) {}
-    rainSrc = null; rainGain = null;
+      g.gain.setTargetAtTime(0, now(), 0.4);
+      setTimeout(() => {
+        try { s.stop(); } catch (e) {}
+        try { s.disconnect(); g.disconnect(); h.disconnect(); l.disconnect(); } catch (e) {}
+        rainStopping = false;
+      }, 1200);
+    } catch (e) { rainStopping = false; }
   }
 
   // x 0..1; looped bandpass noise follows it
@@ -644,6 +649,7 @@ const GameAudio = (function () {
     src.connect(f).connect(g).connect(master);
     src.start(t0);
     src.stop(t0 + 0.6);
+    src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) {} };
     blip(220, "sawtooth", 0.12, 0.03, 0.4, 880);
   }
 
