@@ -20,6 +20,9 @@
       { t: 70, l: 60 }, { t: -55, l: 60 }, { t: 0, l: 360 }, { t: 90, l: 80 }, { t: -50, l: 70 }, { t: 0, l: 900, t2: 0 },
       { t: -20, l: 200 }, { t: 90, l: 90 }, { t: -60, l: 60 }, { t: 70, l: 70 }, { t: 65, l: 120 },
     ],
+    // Las Vegas Strip: the tunnel section under Las Vegas Boulevard dips below
+    // road level near the T14 hairpin complex.
+    elevations: [{ s: 0.65, halfM: 240, rise: -4 }],
     scenery: function (api) {
       const { out, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, anchor, vadd, onTrack, ferrisWheel, building, tower, billboard,

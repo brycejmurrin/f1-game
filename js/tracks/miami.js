@@ -18,6 +18,8 @@
       { t: 0, l: 300 }, { t: -60, l: 80 }, { t: 65, l: 70 }, { t: 0, l: 200 }, { t: 80, l: 90 }, { t: -90, l: 100 },
       { t: 70, l: 80 }, { t: 0, l: 400 }, { t: -80, l: 90 }, { t: 80, l: 90 }, { t: 0, l: 240 },
     ],
+    // Hard Rock Stadium: gentle rise through the stadium section (overpass area).
+    elevations: [{ s: 0.42, halfM: 280, rise: 4 }],
     scenery: function (api) {
       const {
         out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, grandstand,

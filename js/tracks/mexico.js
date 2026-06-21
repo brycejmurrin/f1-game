@@ -18,6 +18,9 @@
       { t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 },
       { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 },
     ],
+    // Stadium section: dips into the baseball/football stadium complex (Foro Sol)
+    // then climbs back out through the banked Peraltada run — ~12 m real change.
+    elevations: [{ s: 0.62, halfM: 260, rise: -7 }, { s: 0.74, halfM: 220, rise: 5 }],
     scenery: function (api) {
       const { out, n, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,

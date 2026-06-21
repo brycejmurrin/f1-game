@@ -20,6 +20,9 @@
       { t: 0, l: 200 }, { t: 95, l: 70 }, { t: -90, l: 80 }, { t: 80, l: 60 }, { t: -60, l: 70 }, { t: 90, l: 90 },
       { t: 0, l: 180 }, { t: 90, l: 70 }, { t: 90, l: 70 }, { t: -85, l: 60 }, { t: 95, l: 80 },
     ],
+    // Marina Bay: Anderson Bridge descent into the Padang section, then the climb
+    // back up through the Singapore Sling complex — real change ~10 m.
+    elevations: [{ s: 0.40, halfM: 360, rise: -7 }, { s: 0.65, halfM: 300, rise: 8 }],
     scenery: function (api) {
       const { out, n, hw, px, pz, place, backdrop, groundPlane, groundYAt, ferrisWheel,
               building, billboard, anchor, along, every, onTrack, addBox, addCyl, addCone,

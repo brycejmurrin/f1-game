@@ -1,9 +1,9 @@
 // @ts-check
 // Elevation + banking ("berm") tracks. The slope-gravity fix (descents must not
 // overspeed past VMAX, climbs must not act as an invisible wall) and the passive
-// road-following yaw were verified on Spa/Bahrain only; this sweeps every circuit
-// that carries elevation data and both banked circuits so a regression on any one
-// of them is caught. For each track it:
+// road-following yaw were verified on Spa/Bahrain only; this now sweeps all 24
+// circuits (every track carries elevation data) so a regression on any one is
+// caught. For each track it:
 //   - finds the steepest descent and asserts gravity never pushes past top speed
 //   - finds the steepest climb and asserts the car still accelerates up it
 //   - drives the sharpest corner with NO steering and asserts road-following keeps
@@ -11,10 +11,12 @@
 //   - never NaNs or throws the car off the world
 import { test, expect } from "@playwright/test";
 
-// Circuits with `elevations:` in their track definition.
+// All circuits — every track now carries elevations data.
 const ELEVATION_TRACKS = [
-  "bahrain", "cota", "hungaroring", "imola", "interlagos", "madrid", "monaco",
-  "monza", "redbull", "shanghai", "silverstone", "spa", "suzuka", "zandvoort",
+  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
+  "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
+  "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
+  "suzuka", "vegas", "zandvoort",
 ];
 // Circuits with `banked: true` (raised outer edge through the fast corners).
 const BANKED_TRACKS = ["zandvoort", "madrid"];

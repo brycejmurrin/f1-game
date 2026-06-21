@@ -19,6 +19,9 @@
       { t: 0, l: 200 }, { t: 90, l: 80 }, { t: -80, l: 70 }, { t: 0, l: 800 }, { t: 90, l: 80 }, { t: 0, l: 400 },
       { t: -70, l: 70 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 600 }, { t: -80, l: 80 },
     ],
+    // Baku's castle section: the old-city hairpin climbs steeply through the
+    // medieval walls (~14 m), then the circuit descends back to the corniche level.
+    elevations: [{ s: 0.35, halfM: 560, rise: 14 }, { s: 0.58, halfM: 320, rise: -10 }],
     scenery: function (api) {
       const {
         out, n, place, prop, backdrop, groundPlane, building, tower, wall,
