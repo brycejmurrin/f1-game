@@ -668,6 +668,7 @@ function startRace() {
   recomputePlayerMods();
   resultT = 0;
   camRoll = 0;
+  sectorIdx = 0; sectorStartT = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidActive = 0; skidIdx = 0; skidFrameT = 0;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
@@ -1671,8 +1672,10 @@ function updateCar(c, dt, ranked) {
         sectorLast[prevSector] = elapsed;
         if (elapsed < sectorBests[prevSector]) sectorBests[prevSector] = elapsed;
         const delta = elapsed - (sectorBests[prevSector] < Infinity ? sectorBests[prevSector] : elapsed);
-        const sign = delta <= 0 ? "▼ S" : "▲ S";
-        announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+        if (elapsed >= 2) {
+          const sign = delta <= 0 ? "▼ S" : "▲ S";
+          announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+        }
       }
       sectorIdx = newSector;
       sectorStartT = c.lapTime;
@@ -2645,6 +2648,44 @@ function updateTrackPreview() {
     }
   }
 }
+function openTrackDetail() {
+  const t = Tracks.LIST[trackIdx];
+  if (!t) return;
+  const modal = document.getElementById("track-detail");
+  if (!modal) return;
+  const crns = TrackMaps.corners(t);
+  document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
+  const dz = TrackMaps.drsZones(t);
+  const dir = TrackMaps.direction(t);
+  const elev = TrackMaps.elevRange(t);
+  const meta = [
+    t.country,
+    t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
+    crns.length + " turns",
+    dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "",
+    elev > 2 ? "+" + elev + " m elev" : "",
+    dz && dz.length ? dz.length + " DRS" : ""
+  ].filter(Boolean).join("  ·  ");
+  document.getElementById("track-detail-meta").textContent = meta;
+  const list = document.getElementById("track-detail-list");
+  list.innerHTML = crns.map(function (c) {
+    const cls = c.v > 0.025 ? "tdc-hairpin" : c.v > 0.013 ? "tdc-slow" : c.v > 0.008 ? "tdc-medium" : "tdc-fast";
+    const lbl = c.v > 0.025 ? "HAIRPIN" : c.v > 0.013 ? "SLOW" : c.v > 0.008 ? "MEDIUM" : "FAST";
+    return '<div class="tdc-corner"><span class="tdc-num">T' + c.n + '</span><span class="' + cls + '">' + lbl + '</span></div>';
+  }).join("");
+  modal.hidden = false;
+  const cv = document.getElementById("track-detail-canvas");
+  requestAnimationFrame(function () {
+    const rect = cv.getBoundingClientRect();
+    if (rect.width > 0) { cv.width = Math.round(rect.width); cv.height = Math.round(rect.height || rect.width * 0.7); }
+    TrackMaps.draw(cv, t, {
+      color: TrackMaps.themeColor(t), startColor: "#e10600",
+      width: 5, pad: 30, corners: true, cornerR: 12, cornerFont: 13,
+      sectors: true, drs: true
+    });
+  });
+}
+
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
 function steerLabel() {
@@ -2742,6 +2783,8 @@ $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
+els.selPreviewMap.onclick = openTrackDetail;
+$("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
 
 function buildRaceSettings() {
   const lapOpts = timeTrial ? [3, 5, 8] : [3, 5, 10, 25, 57];

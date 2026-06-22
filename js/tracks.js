@@ -423,7 +423,6 @@ const Tracks = (function () {
     const ka = pal.kerbA, kb = pal.kerbB, grass = pal.grass;
     const asphalt = pal.asphalt || [0.17, 0.18, 0.21];
     const line = pal.line || [0.95, 0.95, 0.98];
-    const dark = [0.05, 0.05, 0.06];
     const ds = track.total / n;
     // Cross-section, left to right (lateral offset, yRaise). Crisp painted
     // markings come from placing the two verts of each white band at the same
@@ -444,7 +443,6 @@ const Tracks = (function () {
                     w - 0.25, w - 0.2, w,            // right step + edge line
                     w + 0.4, w + 2.2];
       const rise = [0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0];
-      const checker = (k * ds) < 9;                  // start/finish band
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
       // banking: raise each cross-section vert along `up` proportional to how
       // far it sits toward the outer edge (inner edge -> 0, outer edge -> full
@@ -464,12 +462,7 @@ const Tracks = (function () {
         pos.push(px[k] + r[0] * o + u[0] * (rise[v] + by), py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02, pz[k] + r[2] * o + u[2] * (rise[v] + by));
         nrm.push(u[0], u[1], u[2]);
         let c;
-        if (checker && v !== 0 && v !== 13) {
-          // true 2D checkerboard at start/finish: alternate by both along-track and lateral position
-          const latBand = Math.floor((o + w + 2.2) / 2.5) % 2;
-          const longBand = Math.floor((k * ds) / 2.5) % 2;
-          c = (latBand + longBand) % 2 === 0 ? [0.95, 0.95, 0.97] : dark;
-        } else if (v === 0 || v === 13) {
+        if (v === 0 || v === 13) {
           c = grass;
         } else if (v === 1 || v === 12) {
           c = grass;   // kerb ribbons added separately by buildKerbs
