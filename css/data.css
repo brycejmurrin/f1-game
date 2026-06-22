@@ -359,3 +359,94 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   .dh-pts { min-width: 36px; }
   .dh-gap { min-width: 30px; }
 }
+
+/* ── Schedule 2-column grid in landscape ──────────────── */
+.dh-race-grid { display: flex; flex-direction: column; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-race-grid { display: grid; grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Session picker: GP + session selects side-by-side ── */
+.dh-pick-fields { display: flex; gap: 8px; }
+.dh-pick-fields .dh-pick-field { flex: 1; min-width: 0; }
+.dh-pick-fields .dh-pick-select { max-width: none; width: 100%; }
+
+/* ── Two-pane split layout (Live + Telemetry) ─────────── */
+.dh-split { display: flex; flex-direction: column; gap: 0; flex: 1; }
+.dh-split-L { display: flex; flex-direction: column; gap: 10px; }
+.dh-split-R { display: flex; flex-direction: column; gap: 12px; }
+
+/* Portrait: normal stacked flow, left pane content above right pane */
+.dh-split-L { padding-bottom: 4px; }
+.dh-split-R { padding-top: 4px; }
+
+/* Landscape: left pane = fixed-width sidebar; right pane = scrollable main */
+@media (orientation: landscape) and (max-height: 520px) {
+  /* Remove outer content padding and overflow so panes control their own */
+  .dh-content.dh-has-split {
+    padding: 0;
+    overflow: hidden;
+  }
+  .dh-split {
+    flex-direction: row;
+    height: 100%;
+    overflow: hidden;
+  }
+  .dh-split-L {
+    width: 228px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 8px;
+  }
+  .dh-split-R {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px 14px;
+    min-width: 0;
+    gap: 10px;
+  }
+
+  /* Compact picker in left pane */
+  .dh-split-L .dh-picker {
+    margin-bottom: 0;
+    padding-bottom: 8px;
+    gap: 6px 8px;
+  }
+  .dh-split-L .dh-pick-years { gap: 3px; }
+  .dh-split-L .dh-pill { padding: 3px 7px; font-size: 11px; }
+  .dh-split-L .dh-pick-fields { flex-direction: column; gap: 5px; }
+  .dh-split-L .dh-pick-label { font-size: 8px; }
+  .dh-split-L .dh-pick-select { padding: 4px 6px; font-size: 11px; }
+
+  /* Compact session info card in left pane */
+  .dh-split-L .dh-livecard { gap: 2px; }
+  .dh-split-L .dh-live-title { font-size: 13px; gap: 5px; }
+  .dh-split-L .dh-live-sub { font-size: 10px; line-height: 1.3; }
+  .dh-split-L .dh-live-type { font-size: 9px; }
+
+  /* Compact control bar in left pane */
+  .dh-split-L .dh-livecontrols { gap: 5px; flex-wrap: nowrap; margin-bottom: 0; }
+  .dh-split-L .dh-livebtn { padding: 4px 8px; font-size: 10px; }
+  .dh-split-L .dh-live-updated { font-size: 9px; }
+
+  /* Driver chips compact in left pane */
+  .dh-split-L .dh-driverpick { gap: 3px; margin: 0; }
+  .dh-split-L .dh-dchip { padding: 3px 6px; font-size: 11px; border-left-width: 2px; }
+
+  /* Weather grid 2 columns in right pane */
+  .dh-split-R .dh-wx-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .dh-split-R .dh-wx-cell { padding: 6px 8px; }
+  .dh-split-R .dh-wx-value { font-size: 14px; }
+
+  /* Last race header compact (single line) */
+  .dh-lr-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .dh-lr-name { font-size: 15px; }
+
+  /* Gauge dashboard tighter */
+  .dh-dash { gap: 6px; padding: 8px 10px; }
+  .dh-gval { font-size: 17px; }
+}

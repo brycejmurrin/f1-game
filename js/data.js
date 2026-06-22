@@ -200,6 +200,8 @@ const DataHub = (function () {
     if (activeBtn && activeBtn.scrollIntoView) {
       activeBtn.scrollIntoView({ inline: "nearest", behavior: "smooth", block: "nearest" });
     }
+    // Mark content area so CSS can zero-out padding for split-layout tabs
+    if (contentEl) contentEl.classList.toggle("dh-has-split", id === "live" || id === "telemetry");
     const st = state[id];
     const maxAge = MAX_AGE[id] || 60 * MINUTE;
     if (st && st.node && (Date.now() - st.at) < maxAge) {
@@ -274,6 +276,7 @@ const DataHub = (function () {
       const today = todayISO();
       let nextMarked = false;
       wrap.appendChild(el("h3", "dh-section", "2026 CALENDAR"));
+      const grid = el("div", "dh-race-grid");
       items.forEach(function (r) {
         const row = el("div", "dh-race");
         const isNext = !nextMarked && r.date && r.date >= today;
@@ -306,8 +309,9 @@ const DataHub = (function () {
         row.appendChild(main);
 
         row.appendChild(el("div", "dh-race-date", fmtDate(r.date)));
-        wrap.appendChild(row);
+        grid.appendChild(row);
       });
+      wrap.appendChild(grid);
       return wrap;
     });
   }
@@ -477,17 +481,21 @@ const DataHub = (function () {
     });
     box.appendChild(yearRow);
 
+    const fieldsRow = el("div", "dh-pick-fields");
+
     const gpField = el("label", "dh-pick-field");
     gpField.appendChild(el("span", "dh-pick-label", "GRAND PRIX"));
     const gpSel = el("select", "dh-pick-select");
     gpField.appendChild(gpSel);
-    box.appendChild(gpField);
+    fieldsRow.appendChild(gpField);
 
     const sesField = el("label", "dh-pick-field");
     sesField.appendChild(el("span", "dh-pick-label", "SESSION"));
     const sesSel = el("select", "dh-pick-select");
     sesField.appendChild(sesSel);
-    box.appendChild(sesField);
+    fieldsRow.appendChild(sesField);
+
+    box.appendChild(fieldsRow);
 
     let sesIndex = {};
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
@@ -549,24 +557,39 @@ const DataHub = (function () {
 
   function loadLive() {
     return ensureSession().then(function () {
-      const wrap = el("div", "dh-tabbody");
+      const wrap = el("div", "dh-tabbody dh-split");
       if (sel.sessionKey === null) { wrap.appendChild(emptyMsg(NO_LIVE_MSG)); return wrap; }
-      const body = el("div", "dh-tabbody");
-      wrap.appendChild(buildPicker(function (meta) {
-        renderLiveBody(meta, body);
+      const leftPane = el("div", "dh-split-L");
+      const rightPane = el("div", "dh-split-R");
+      leftPane.appendChild(buildPicker(function (meta) {
+        renderLiveBody(meta, leftPane, rightPane);
         invalidateOther("live");
       }));
-      wrap.appendChild(body);
-      renderLiveBody(sel.meta, body);
+      wrap.appendChild(leftPane);
+      wrap.appendChild(rightPane);
+      renderLiveBody(sel.meta, leftPane, rightPane);
       return wrap;
     });
   }
 
-  function renderLiveBody(meta, body) {
+  function renderLiveBody(meta, leftPane, rightPane) {
     stopLiveAuto();
-    clear(body);
+    // Keep the picker (first child of leftPane); remove everything appended after it
+    while (leftPane.children.length > 1) leftPane.removeChild(leftPane.lastChild);
+    clear(rightPane);
 
-    // control bar: manual refresh + auto-refresh toggle + last-updated stamp
+    // Session info → left pane
+    const info = el("div", "dh-livecard");
+    const infoTitle = el("div", "dh-live-title");
+    infoTitle.appendChild(el("span", null, meta.name || meta.type || "Session"));
+    if (meta.type && meta.type !== meta.name) infoTitle.appendChild(el("span", "dh-live-type", meta.type));
+    info.appendChild(infoTitle);
+    const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
+    if (place) info.appendChild(el("div", "dh-live-sub", place));
+    if (meta.dateStart) info.appendChild(el("div", "dh-live-sub", "Starts " + fmtDateTime(meta.dateStart)));
+    leftPane.appendChild(info);
+
+    // Control bar → left pane
     const bar = el("div", "dh-livecontrols");
     const refreshBtn = el("button", "dh-livebtn", "↻ REFRESH");
     refreshBtn.type = "button";
@@ -577,10 +600,11 @@ const DataHub = (function () {
     bar.appendChild(refreshBtn);
     bar.appendChild(autoBtn);
     bar.appendChild(stamp);
-    body.appendChild(bar);
+    leftPane.appendChild(bar);
 
+    // Weather + classification → right pane
     const dataEl = el("div", "dh-tabbody");
-    body.appendChild(dataEl);
+    rightPane.appendChild(dataEl);
 
     function refresh() {
       clear(dataEl);
@@ -591,7 +615,7 @@ const DataHub = (function () {
         F1API.sessionDrivers(meta.sessionKey).catch(function () { return null; })
       ]).then(function (res) {
         clear(dataEl);
-        fillLive(dataEl, meta, res[0], res[1], res[2]);
+        fillLive(dataEl, res[0], res[1], res[2]);
         stamp.textContent = "updated " + new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       }, function () {
         clear(dataEl); dataEl.appendChild(emptyMsg(NO_LIVE_MSG));
@@ -613,18 +637,7 @@ const DataHub = (function () {
     refresh();
   }
 
-  function fillLive(body, ses, weather, positions, drivers) {
-    // session info card
-    const info = el("div", "dh-livecard");
-    const title = el("div", "dh-live-title");
-    title.appendChild(el("span", null, ses.name || ses.type || "Session"));
-    if (ses.type && ses.type !== ses.name) title.appendChild(el("span", "dh-live-type", ses.type));
-    info.appendChild(title);
-    const place = [ses.circuit, ses.country].filter(Boolean).join(" · ");
-    if (place) info.appendChild(el("div", "dh-live-sub", place));
-    if (ses.dateStart) info.appendChild(el("div", "dh-live-sub", "Starts " + fmtDateTime(ses.dateStart)));
-    body.appendChild(info);
-
+  function fillLive(body, weather, positions, drivers) {
     // weather card
     if (weather) {
       const wx = el("div", "dh-livecard dh-weather");
@@ -769,24 +782,29 @@ const DataHub = (function () {
 
   function loadTelemetry() {
     return ensureSession().then(function () {
-      const wrap = el("div", "dh-tabbody");
+      const wrap = el("div", "dh-tabbody dh-split");
       if (sel.sessionKey === null) { wrap.appendChild(emptyMsg(NO_TELEM_MSG)); return wrap; }
-      const body = el("div", "dh-tabbody");
-      wrap.appendChild(buildPicker(function (meta) {
-        renderTelemetryBody(meta, body);
+      const leftPane = el("div", "dh-split-L");
+      const rightPane = el("div", "dh-split-R");
+      leftPane.appendChild(buildPicker(function (meta) {
+        renderTelemetryBody(meta, leftPane, rightPane);
         invalidateOther("telemetry");
       }));
-      wrap.appendChild(body);
-      renderTelemetryBody(sel.meta, body);
+      wrap.appendChild(leftPane);
+      wrap.appendChild(rightPane);
+      renderTelemetryBody(sel.meta, leftPane, rightPane);
       return wrap;
     });
   }
 
-  function renderTelemetryBody(meta, body) {
-    clear(body);
-    body.appendChild(spinner());
+  function renderTelemetryBody(meta, leftPane, rightPane) {
+    // Keep the picker (first child of leftPane); remove everything appended after it
+    while (leftPane.children.length > 1) leftPane.removeChild(leftPane.lastChild);
+    clear(rightPane);
+    rightPane.appendChild(spinner());
+
     F1API.sessionDrivers(meta.sessionKey).catch(function () { return null; }).then(function (drivers) {
-      clear(body);
+      // Session info → left pane
       const info = el("div", "dh-livecard");
       const title = el("div", "dh-live-title");
       title.appendChild(el("span", null, meta.name || meta.type || "Session"));
@@ -794,13 +812,15 @@ const DataHub = (function () {
       info.appendChild(title);
       const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
-      info.appendChild(el("div", "dh-live-sub", "Fastest-lap telemetry · tap up to two drivers to compare · drag the chart to scrub"));
-      body.appendChild(info);
+      info.appendChild(el("div", "dh-live-sub", "Tap up to 2 drivers · drag chart to scrub"));
+      leftPane.appendChild(info);
+
+      clear(rightPane);
 
       drivers = (drivers || []).filter(function (d) { return d && d.num !== null && d.num !== undefined; });
-      if (!drivers.length) { body.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
+      if (!drivers.length) { rightPane.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
 
-      const picked = [];                 // driver objects in click order, max 2
+      const picked = [];
       const chipByNum = {};
       const pick = el("div", "dh-driverpick");
       const detail = el("div", "dh-telem-detail");
@@ -824,11 +844,13 @@ const DataHub = (function () {
         chipByNum[d.num] = b;
         pick.appendChild(b);
       });
-      body.appendChild(pick);
-      detail.appendChild(emptyMsg("Pick a driver above to load their fastest lap."));
-      body.appendChild(detail);
+
+      // Driver chips → left pane; chart detail → right pane
+      leftPane.appendChild(pick);
+      detail.appendChild(emptyMsg("← Pick a driver to load their fastest lap."));
+      rightPane.appendChild(detail);
     }, function () {
-      clear(body); body.appendChild(emptyMsg(NO_TELEM_MSG));
+      clear(rightPane); rightPane.appendChild(emptyMsg(NO_TELEM_MSG));
     });
   }
 
@@ -943,12 +965,13 @@ const DataHub = (function () {
     // transport: play / restart / speed / onboard — drives the scrub cursor
     detail.appendChild(buildTransport(view));
 
-    // Canvas width: match the actual content area so portrait renders at native res.
-    // contentEl.clientWidth includes padding (18px × 2 = 36px), subtract to get
-    // the usable width. Cap at 600 (the reference resolution for the chart).
+    // Canvas width: in landscape split the right pane is ~230px narrower than
+    // the full content area (left pane 230 + right padding 28). In portrait
+    // subtract only the content padding (36px).
+    const isLS = typeof window !== "undefined" && window.innerWidth > window.innerHeight && window.innerHeight < 520;
     const CW = contentEl
-      ? Math.min(600, Math.max(280, contentEl.clientWidth - 36))
-      : 600;
+      ? Math.min(600, Math.max(280, contentEl.clientWidth - (isLS ? 258 : 36)))
+      : (isLS ? 380 : 600);
     const CH_CHART = Math.round(CW * (220 / 600));   // maintain aspect ratio
 
     // trace chart (static traces are cached to an offscreen canvas; each frame
@@ -1009,12 +1032,27 @@ const DataHub = (function () {
     paintFrame(view);
     telView = view;
 
-    // Rebuild canvas bases when the card resizes (e.g. orientation change)
+    // Rebuild canvas bases (and resize canvases) when orientation/size changes
     if (typeof ResizeObserver !== "undefined" && contentEl) {
       let lastW = contentEl.clientWidth;
       const ro = new ResizeObserver(function () {
         const w = contentEl.clientWidth;
-        if (Math.abs(w - lastW) > 20) { lastW = w; buildBases(view); paintFrame(view); }
+        if (Math.abs(w - lastW) > 20) {
+          lastW = w;
+          const ls = window.innerWidth > window.innerHeight && window.innerHeight < 520;
+          const newCW = Math.min(600, Math.max(280, w - (ls ? 258 : 36)));
+          if (view.chart && view.chart.width !== newCW) {
+            const newCH = Math.round(newCW * (220 / 600));
+            view.chart.width = newCW; view.chart.height = newCH;
+            view.chartBase = makeOffscreen(newCW, newCH);
+            if (view.delta) {
+              const dh = Math.round(newCW * (72 / 600));
+              view.delta.width = newCW; view.delta.height = dh;
+              view.deltaBase = makeOffscreen(newCW, dh);
+            }
+          }
+          buildBases(view); paintFrame(view);
+        }
       });
       ro.observe(contentEl);
       view._ro = ro;
