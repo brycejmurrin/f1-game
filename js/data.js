@@ -388,8 +388,8 @@ const DataHub = (function () {
       const table = el("table", "dh-table");
       const thead = el("thead");
       const hr = el("tr");
-      ["POS", "DRIVER", "TEAM", "GRID", "TIME", "PTS"].forEach(function (h) {
-        hr.appendChild(el("th", null, h));
+      [["POS", null], ["DRIVER", null], ["TEAM", "dh-th-team"], ["GRID", "dh-th-grid"], ["TIME", null], ["PTS", null]].forEach(function (h) {
+        hr.appendChild(el("th", h[1], h[0]));
       });
       thead.appendChild(hr);
       table.appendChild(thead);
