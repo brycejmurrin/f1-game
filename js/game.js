@@ -1443,7 +1443,22 @@ function updateCar(c, dt, ranked) {
     // accel so it eases in rather than toggling: trail-braking still rotates the
     // car, but the hard-braking turn-in spike is gone.
     const brakeFade = 1 - 0.5 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
-    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k;
+    // Curb entry over-rotation generally (not just under braking): the assist
+    // tracks curvature k, but if the car is ALREADY yawing into the corner
+    // faster than k needs, adding more lock just cuts it to the apex. Ease the
+    // assist by how far the current yaw rate exceeds the rate that follows the
+    // road (rNeed = v·k). Same-sign only, so it does nothing at steady state
+    // (yaw ≈ rNeed), on straights (k ≈ 0), or while countersteering a slide —
+    // it only bites on the transient overshoot. This is the right answer to
+    // "taper the assist at speed": tie it to actual over-rotation, not raw speed
+    // (a blanket speed taper would just make the car understeer wide).
+    let yawEase = 1;
+    const rNeed = c.speed * k;
+    if (rNeed !== 0) {
+      const ratio = (c.yawRateCur || 0) / rNeed;   // >1 = rotating faster than needed
+      if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
+    }
+    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase;
     const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
@@ -1453,7 +1468,12 @@ function updateCar(c, dt, ranked) {
     // Smooth longitudinal accel estimate over ~0.25 s so weight transfer doesn't
     // snap instantly when throttle/brake state toggles — removes the twitchy
     // left-right twitch you'd otherwise see the moment you press the throttle.
-    const axEstTarget = braking ? -BRAKE : (onThrottle ? DEPLOY_A : -COAST_DRAG);
+    // Fade the throttle accel target toward 0 as the car approaches vmax: when
+    // speed-limited the throttle is still held but real accel ≈ 0, so without
+    // this the friction ellipse would shave cornering grip (and add rear weight
+    // transfer) for an acceleration that isn't actually happening.
+    const axEstTarget = braking ? -BRAKE
+      : (onThrottle ? DEPLOY_A * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
