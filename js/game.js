@@ -11,6 +11,7 @@ const els = {
   hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
+  hudSectors: $("hud-sectors"),
   flag: $("hud-flag"), minimap: $("minimap"),
   lights: $("lights"), announce: $("announce"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
@@ -133,10 +134,9 @@ let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "button
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: enabled in touch/button steering modes (thumbs are occupied)
-// unless the player has opted into manual mode, in which case they always drive
-// the throttle themselves regardless of steering mode.
-function autoThrottle() { return Input.touchControlsNeeded() && steerMode !== "tilt"; }
+// Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
+// the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
+function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
@@ -2189,6 +2189,17 @@ function updateHud(force) {
     const a = ranked[i - 1], b = ranked[i + 1];
     els.gapA.textContent = a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
     els.gapB.textContent = b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
+  }
+  drawMinimap();
+  // Sector split display (top-right)
+  if (els.hudSectors) {
+    const SC = ["#c084fc", "#e10600", "#a3e635"]; // S1 purple, S2 red, S3 green
+    const labels = ["S1", "S2", "S3"];
+    els.hudSectors.innerHTML = labels.map((lbl, i) => {
+      const t = sectorLast[i];
+      const val = t == null ? "--" : t.toFixed(3);
+      return `<div class="sec-row"><span class="sec-lbl" style="color:${SC[i]}">${lbl}</span><span class="sec-val">${val}</span></div>`;
+    }).join("");
   }
   drawMinimap();
 }
