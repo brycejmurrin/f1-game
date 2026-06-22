@@ -25,7 +25,7 @@
         out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, grandstand,
         building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
         marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
-        addCone, addFrustum, vadd, hash, onTrack, every,
+        addCone, addFrustum, vadd, hash, onTrack, every, cityFront, forestEdge,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -38,22 +38,33 @@
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
 
       // ---- Miami pastel palette (bright tropical day) ----
-      const TEAL      = [0.20, 0.80, 0.78];
-      const CORAL     = [1.0,  0.55, 0.45];
-      const PINK      = [1.0,  0.65, 0.80];
-      const WHITE     = [0.94, 0.95, 0.96];
-      const GREYWHITE = [0.80, 0.82, 0.84];
+      const TEAL       = [0.20, 0.80, 0.78];
+      const CORAL      = [1.0,  0.55, 0.45];
+      const PINK       = [1.0,  0.65, 0.80];
+      const WHITE      = [0.94, 0.95, 0.96];
+      const GREYWHITE  = [0.80, 0.82, 0.84];
       const PALM_GREEN = [0.20, 0.55, 0.25];
       const PALM_DARK  = [0.16, 0.45, 0.20];
-      const GLASS     = [0.55, 0.72, 0.78];
-      const CONCRETE  = [0.70, 0.70, 0.72];
-      const WATER     = [0.13, 0.46, 0.62];
+      const GLASS      = [0.55, 0.72, 0.78];
+      const CONCRETE   = [0.70, 0.70, 0.72];
+      const WATER      = [0.13, 0.46, 0.62];
       const WATER_DEEP = [0.08, 0.32, 0.48];
-      const PASTELS   = [TEAL, CORAL, PINK, [0.75, 0.90, 1.0], [1.0, 0.85, 0.55]];
+      const PASTELS    = [TEAL, CORAL, PINK, [0.75, 0.90, 1.0], [1.0, 0.85, 0.55]];
       // Night/emissive colours
-      const LAMP_WARM = [1.0,  0.92, 0.70];
-      const FLOOD_WH  = [0.98, 0.97, 0.92];
-      const WIN_AMBER = [1.0,  0.88, 0.55];
+      const LAMP_WARM  = [1.0,  0.92, 0.70];
+      const FLOOD_WH   = [0.98, 0.97, 0.92];
+      const WIN_AMBER  = [1.0,  0.88, 0.55];
+      const WIN_COOL   = [0.68, 0.85, 1.0];
+
+      // Miami skyline building palette — pastel tropical glass towers
+      const SKY_PAL = [
+        [0.62, 0.82, 0.88],   // glass-teal
+        [0.88, 0.76, 0.62],   // warm sandstone
+        [0.76, 0.88, 0.82],   // mint
+        [0.94, 0.82, 0.68],   // peach
+        [0.58, 0.74, 0.90],   // ice-blue
+        [0.82, 0.90, 0.76],   // sage
+      ];
 
       // ===================================================================
       // Shared overpass builder — used at s 0.635 and 0.685 (Turnpike zone).
@@ -68,9 +79,9 @@
         const span = Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]) + 16;
         const mid = vadd(aL.c, [(aR.c[0] - aL.c[0]), 0, (aR.c[2] - aL.c[2])], 0.5);
         // Main deck — concrete top, darker underside shadow band
-        addBox(out, vadd(mid, aL.u, 13.2), [span, 2.8, 16], CONCRETE,   [aL.r, aL.u, aL.t]);
-        addBox(out, vadd(mid, aL.u, 11.4), [span, 1.2, 16], [0.50, 0.50, 0.54], [aL.r, aL.u, aL.t]);
-        addBox(out, vadd(mid, aL.u, 10.8), [span, 0.8, 16], [0.24, 0.24, 0.26], [aL.r, aL.u, aL.t]);
+        addBox(out, vadd(mid, aL.u, 13.2), [span, 2.8, 16], CONCRETE,               [aL.r, aL.u, aL.t]);
+        addBox(out, vadd(mid, aL.u, 11.4), [span, 1.2, 16], [0.50, 0.50, 0.54],     [aL.r, aL.u, aL.t]);
+        addBox(out, vadd(mid, aL.u, 10.8), [span, 0.8, 16], [0.24, 0.24, 0.26],     [aL.r, aL.u, aL.t]);
         // Two pillars per side — kept within ±38 % of the half-span so they
         // cannot drift into adjacent start-line geometry.
         const pillarReach = span * 0.38;
@@ -83,13 +94,13 @@
             mid[1],
             mid[2] + aL.r[2] * pillarOff,
           ];
-          // Pillar body (height raised to just touch the deck underside)
-          addBox(out, vadd(pc, aL.u, 5.5),  [3.4, 11,  3.4], CONCRETE,              [aL.r, aL.u, aL.t]);
-          // Pillar cap (flush bracket under the deck)
-          addBox(out, vadd(pc, aL.u, 11.2), [4.0,  0.4, 4.0], [0.45, 0.45, 0.47],  [aL.r, aL.u, aL.t]);
+          // Pillar body — height 10.4 so top cap sits flush under the deck underside at 10.8
+          addBox(out, vadd(pc, aL.u, 5.2),  [3.4, 10.4, 3.4], CONCRETE,              [aL.r, aL.u, aL.t]);
+          // Pillar cap bracket — centred at 10.8 (deck underside)
+          addBox(out, vadd(pc, aL.u, 10.6), [4.0,  0.4,  4.0], [0.45, 0.45, 0.47],  [aL.r, aL.u, aL.t]);
         }
         // Day: thin white road-marking stripe on the deck top
-        addBox(out, vadd(mid, aL.u, 14.8), [span, 0.1, 1.2], WHITE, [aL.r, aL.u, aL.t]);
+        addBox(out, vadd(mid, aL.u, 14.8), [span, 0.1, 1.2], WHITE,      [aL.r, aL.u, aL.t]);
         // Night / atmosphere: amber under-deck sodium lights (emissive look)
         addBox(out, vadd(mid, aL.u, 10.5), [span * 0.7, 0.3, 0.6], WIN_AMBER, [aL.r, aL.u, aL.t]);
       };
@@ -139,10 +150,13 @@
           addBox(out, [tx, settledY + th, tz], [tw * 0.42, tw * 0.5, tw * 0.42], WHITE, null);
           if (th > 150) addCyl(out, [tx, settledY + th + tw * 0.25, tz], 0.6, 16 + h0 * 18,
             [0.85, 0.85, 0.88], 4, null);
-          // Lit windows emissive stripe (night reads as glowing tower)
-          if (i % 3 !== 2)
-            addBox(out, [tx, settledY + th * 0.55, tz], [tw * 0.62, th * 0.35, tw * 0.12],
-              [WIN_AMBER[0] * 0.9, WIN_AMBER[1] * 0.7, WIN_AMBER[2] * 0.3], null);
+          // Lit windows — warm amber stripes so skyline reads at dusk/night
+          addBox(out, [tx, settledY + th * 0.55, tz], [tw * 0.62, th * 0.35, tw * 0.12],
+            [WIN_AMBER[0] * 0.9, WIN_AMBER[1] * 0.65, WIN_AMBER[2] * 0.25], null);
+          // Cool-tinted alternating window stripe
+          if (i % 2 === 0)
+            addBox(out, [tx, settledY + th * 0.35, tz], [tw * 0.12, th * 0.28, tw * 0.62],
+              [WIN_COOL[0] * 0.7, WIN_COOL[1] * 0.6, WIN_COOL[2] * 0.4], null);
         }
         // Mid-rise pastel blocks skirting the tower cluster
         for (let i = 0; i < 26; i++) {
@@ -154,8 +168,11 @@
           const tw = 26 + h1 * 22, th = 30 + h2 * 70;
           if (onTrack(tx, tz, tw * 0.7)) continue;
           const col = PASTELS[(i * 2) % PASTELS.length];
-          addBox(out, [tx, pyMin - 2 + th * 0.5, tz], [tw, th, tw * 0.9],
-            [col[0] * 0.66 + 0.26, col[1] * 0.66 + 0.26, col[2] * 0.66 + 0.26], null);
+          const bCol = [col[0] * 0.66 + 0.26, col[1] * 0.66 + 0.26, col[2] * 0.66 + 0.26];
+          addBox(out, [tx, pyMin - 2 + th * 0.5, tz], [tw, th, tw * 0.9], bCol, null);
+          // lit window band on each mid-rise for dusk legibility
+          addBox(out, [tx, pyMin - 2 + th * 0.55, tz], [tw * 1.01, th * 0.22, tw * 0.15],
+            [WIN_AMBER[0] * 0.8, WIN_AMBER[1] * 0.6, WIN_AMBER[2] * 0.2], null);
         }
       }
 
@@ -183,19 +200,23 @@
           const h = 42 + (i % 3) * 4;
           const segW = 18;
           // lower raked seating
-          addBox(out, vadd(vadd(c, u, h * 0.5), rad2, 6),  [11, h + 2, segW], GREYWHITE,  [rad2, u, tan]);
+          addBox(out, vadd(vadd(c, u, h * 0.5),  rad2,  6), [11, h + 2, segW], GREYWHITE, [rad2, u, tan]);
           // upper shell tier
-          addBox(out, vadd(vadd(c, u, h + 9),   rad2, 8),  [10, 16, segW + 1], WHITE,      [rad2, u, tan]);
+          addBox(out, vadd(vadd(c, u, h + 9),    rad2,  8), [10, 16, segW + 1], WHITE,     [rad2, u, tan]);
           // coral/teal rim crown
-          addBox(out, vadd(vadd(c, u, h + 20),  rad2, 8),  [11, 3.2, segW + 1],
+          addBox(out, vadd(vadd(c, u, h + 20),   rad2,  8), [11, 3.2, segW + 1],
             (i % 2) ? CORAL : TEAL, [rad2, u, tan]);
-          // crowd colour detail
+          // crowd colour detail — lit so the stadium bowl reads at dusk
           if (i % 2 === 0)
             addBox(out, vadd(vadd(c, u, h * 0.6), rad2, 0), [1.5, h * 0.65, segW - 2],
               PASTELS[(i * 3) % PASTELS.length], [rad2, u, tan]);
           if (i % 3 === 1)
             addBox(out, vadd(vadd(c, u, h * 0.45), rad2, 2), [0.8, h * 0.5, segW - 3],
               PASTELS[(i * 5 + 2) % PASTELS.length], [rad2, u, tan]);
+          // Interior concourse lighting strips (visible from inside the bowl)
+          if (i % 4 === 0)
+            addBox(out, vadd(vadd(c, u, h * 0.25), rad2, -1), [1.0, h * 0.3, segW - 4],
+              [WIN_AMBER[0] * 0.75, WIN_AMBER[1] * 0.6, WIN_AMBER[2] * 0.2], [rad2, u, tan]);
         }
         // 6 floodlight masts — placed on the same ellipse ring as the bowl wall,
         // so they anchor to the stadium structure (not floating outside it).
@@ -204,10 +225,10 @@
           const ex = Math.cos(ang) * RA, ez = Math.sin(ang) * RB;
           const c = vadd(vadd([a.c[0], by, a.c[2]], t, ex), r, ez);
           addCyl(out, vadd(c, u, 0),  1.0, 64, GREYWHITE, 6, [r, u, t]); // mast shaft
-          addBox(out, vadd(c, u, 64), [12, 3.6, 4], WHITE, [r, u, t]);   // crossbeam
+          addBox(out, vadd(c, u, 64), [12, 3.6, 4], WHITE, [r, u, t]);    // crossbeam
           // Light ring — warm-white emissive tone for day and night reads
           addCyl(out, vadd(c, u, 62), 4.5, 1.2, FLOOD_WH, 8, [r, u, t]);
-          // Light spill patch below the mast (emissive ground pool — bright circle)
+          // Light spill patch at base
           addBox(out, vadd(c, u, 0.05), [18, 0.2, 18], [0.96, 0.96, 0.88], [r, u, t]);
         }
         // Massive curved roof cap
@@ -216,10 +237,23 @@
         // Roof underside shadow stripe
         addFrustum(out, vadd([a.c[0], by, a.c[2]], u, 49), 112, 72, 0.8,
           [0.55, 0.55, 0.57], 48, [r, u, t]);
+        // Concourse level: a ring of teal hospitality units around the base
+        for (let i = 0; i < 8; i++) {
+          const ang = i / 8 * 6.2832;
+          const ex = Math.cos(ang) * (RA - 20), ez = Math.sin(ang) * (RB - 20);
+          const hc = vadd(vadd([a.c[0], by, a.c[2]], t, ex), r, ez);
+          if (onTrack(hc[0], hc[2], 8)) continue;
+          addBox(out, [hc[0], by + 5, hc[2]], [14, 10, 14],
+            (i % 2) ? TEAL : CORAL, null);
+          // lit awning band
+          addBox(out, [hc[0], by + 10.5, hc[2]], [14.2, 1.0, 14.2],
+            [WIN_AMBER[0] * 0.65, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], null);
+        }
       }
 
       // ===================================================================
       // s 0.00 L near — pit lane & paddock building block.
+      // All buildings get lit:true for dusk/night legibility.
       // ===================================================================
       {
         const k = K(0.0);
@@ -227,20 +261,19 @@
         place(k, -1, 14, [1.0, 6, 116], GLASS);
         place(k, -1, 24, [22.4, 1.5, 120], GREYWHITE);
         // paddock club terrace
-        building(k, -1, 42, 26, 22, 120, { wall: WHITE, window: GLASS, floor: 6 });
+        building(k, -1, 42, 26, 22, 120,
+          { wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER });
         // pit wall
         wall(0.0, 0.05, -1, 2.2, 1.1, GREYWHITE);
       }
 
       // ===================================================================
-      // START/FINISH GANTRIES — separated further to avoid mutual clipping.
-      // The timing gantry (coral) is at s=0.014 (was 0.012).
+      // START/FINISH GANTRIES — separated to avoid mutual clipping.
       // The dark scoring arch is at s=0.0.
-      // Both are placed at the same s so the K() indices differ enough,
-      // then a lamp post cluster marks the start line for night reads.
+      // The coral timing gantry is at s=0.014 (slightly further along).
       // ===================================================================
       gantry(0.0,   6.6, [0.18, 0.20, 0.24]);   // dark scoring arch (start line)
-      gantry(0.014, 7.0, CORAL);                  // coral timing gantry (slightly further back)
+      gantry(0.014, 7.0, CORAL);                  // coral timing gantry
 
       // Lamp posts flanking the start line — both sides, every ~30 m along the pit straight
       for (let i = 0; i < 10; i++) {
@@ -257,41 +290,46 @@
         addBox(out, vadd(aL.c, aL.u, 10.0), [1.6, 0.5, 1.2], LAMP_WARM, [aL.r, aL.u, aL.t]);
       }
 
-      // palms lining the pit straight
+      // Palms lining the pit straight
       for (let i = 0; i < 14; i++) {
-        palm(K(0.0 + i * 0.006), -1, 9 + (i % 2) * 4,  8 + hash(i)     * 4, PALM_GREEN);
-        palm(K(0.0 + i * 0.006),  1, 46 + (i % 2) * 6, 9 + hash(i * 5) * 4, PALM_DARK);
+        palm(K(0.0 + i * 0.006), -1,  9 + (i % 2) * 4,  8 + hash(i)     * 4, PALM_GREEN);
+        palm(K(0.0 + i * 0.006),  1, 46 + (i % 2) * 6,  9 + hash(i * 5) * 4, PALM_DARK);
       }
-      // sponsor billboards along the pit wall
+      // Sponsor billboards along the pit wall
       billboard(K(0.02),  -1, 11, 16, 7, TEAL);
       billboard(K(0.035), -1, 11, 16, 7, CORAL);
       billboard(K(0.05),  -1, 11, 16, 7, PINK);
 
       // ===================================================================
-      // s 0.05–0.12 R mid — T1 ZONE: grandstands + pastel cubes + palms
+      // s 0.05–0.12 R mid — T1 ZONE: grandstands + cityFront facade + palms
       // ===================================================================
       for (let i = 0; i < 4; i++) {
-        const s   = 0.05 + i * 0.015;
+        const s    = 0.05 + i * 0.015;
         const side = (i % 2) ? 1 : -1;
         const col  = [TEAL, CORAL, PINK, [0.90, 0.50, 0.70]][i];
         grandstand(s, side, 11, 95 + i * 5, GREYWHITE, col);
       }
-      // Hospitality cubes with lit window bands
-      for (let i = 0; i < 8; i++) {
-        building(K(0.04 + i * 0.007), 1, 26 + (i % 2) * 12, 18, 15 + (i % 3) * 8, 18,
-          { wall: PASTELS[i % PASTELS.length], window: GLASS, floor: 4 });
-      }
+      // Coherent pastel street facade on the right — hospitality buildings
+      cityFront(0.04, 0.12, 1, 26, {
+        minH: 12, maxH: 32, depth: 22, step: 20,
+        palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
+      });
       for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 11 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
 
       // ===================================================================
-      // s 0.15 both near — concrete barriers + debris fence
+      // s 0.13–0.19 — concrete barriers + debris fence + forestEdge backing
       // ===================================================================
       wall(0.13, 0.19,  1, 3, 1.2, CONCRETE);
       wall(0.13, 0.19, -1, 3, 1.2, CONCRETE);
       fence(0.13, 0.19,  1, 3.5, 3.5, [0.78, 0.80, 0.82]);
+      // Palm tree line behind the fence — gap >= fence dist + canopy radius to avoid clipping
+      forestEdge(0.13, 0.19, 1, 8, {
+        density: 0.5, hMin: 9, hMax: 14,
+        col: PALM_GREEN, col2: PALM_DARK, pineFrac: 0.0,
+      });
 
       // ===================================================================
-      // s 0.20 L mid — palm tree cluster + pastel low-rise buildings
+      // s 0.20 L mid — PALM CLUSTER + pastel low-rise street facade
       // ===================================================================
       for (let i = 0; i < 18; i++) {
         const k = K(0.18 + (i % 6) * 0.004);
@@ -300,97 +338,126 @@
         palm(K(0.18 + (i % 6) * 0.005), 1, 14 + (i % 3) * 6, 8 + hash(i * 3) * 4,
           (i % 2) ? PALM_DARK : PALM_GREEN);
       }
-      for (let i = 0; i < 6; i++) {
-        building(K(0.19 + i * 0.007), -1, 32 + (i % 2) * 16, 16, 14 + (i % 3) * 9, 16,
-          { wall: PASTELS[(i + 2) % PASTELS.length], window: GLASS, floor: 4 });
-      }
+      cityFront(0.18, 0.26, -1, 28, {
+        minH: 10, maxH: 26, depth: 20, step: 18,
+        palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
+        lit: true, windowCol: WIN_AMBER,
+      });
 
       // ===================================================================
-      // s 0.27 R — MIA MARINA: "water" slab + moored yachts.
-      // Yachts: hull centre placed at u*1.6 (was 1.6 — kept, sits on the
-      // water plane which is sub-grade so hulls visually float just above it).
-      // Masts anchored from the hull base (u*7.0 above ground = mast foot).
-      // Superyacht at s=0.32 set back to dist=32 (was 30) so it clears
-      // the water boundary cleanly.
+      // s 0.27–0.38 R — MIA MARINA: painted-water "fake marina" + moored yachts.
+      // The real Miami GP uses a fake marina with painted blue water and
+      // yachts moored dockside.  We render this as groundPlane water slabs
+      // (vivid teal-blue) set back behind the barriers, with small yachts
+      // and a superyacht hospitality barge.  Palms line the marina promenade.
+      // Crucially we use forestEdge() on the land side so palms never clip
+      // through barriers.
       // ===================================================================
+
+      // Painted marina water ground planes — these large slabs define the visual "sea"
       for (let m = 0; m < 5; m++) {
         const k = K(0.27 + m * 0.026);
-        groundPlane(k, 1, 5.5, [180, 160], WATER);
-        groundPlane(k, 1, 6.8, [200, 180], WATER_DEEP);
-        groundPlane(k, 1, 7,   [160,   6], [0.68, 0.68, 0.66]); // pontoon walkway
-        for (let i = 0; i < 14; i++) {
-          const a = anchor(k, 1, 14 + (i % 6) * 22);
-          const off = (i - 7) * 16 + hash(i * 11 + m * 7) * 8;
+        // Outer water slab (dark deep blue)
+        groundPlane(k, 1, 7.0, [200, 180], WATER_DEEP);
+        // Inner shallows / wake (brighter teal)
+        groundPlane(k, 1, 5.5, [160, 140], WATER);
+        // Pontoon walkway along the marina edge
+        groundPlane(k, 1, 4.6, [160, 6], [0.68, 0.68, 0.66]);
+      }
+
+      // Moored yachts — 4 rows of boats with varied sizes and trim colours
+      for (let m = 0; m < 5; m++) {
+        const k = K(0.27 + m * 0.026);
+        for (let i = 0; i < 10; i++) {
+          const a = anchor(k, 1, 14 + (i % 5) * 18);
+          const off = (i - 5) * 20 + hash(i * 11 + m * 7) * 10;
           const c = vadd(a.c, a.t, off);
-          const len = 12 + hash(i * 4 + m) * 13;
+          const len = 14 + hash(i * 4 + m) * 14;
           const trim = (i % 3 === 0) ? TEAL : ((i % 3 === 1) ? CORAL : PINK);
-          // Hull: centre lifted 1.6 m above anchor (water surface level)
-          addBox(out, vadd(c, a.u, 1.6),      [6,   3.4, len],        WHITE,     [a.r, a.u, a.t]);
-          addBox(out, vadd(c, a.u, 3.0),      [6.4, 0.8, len],        trim,      [a.r, a.u, a.t]);
-          addBox(out, vadd(c, a.u, 4.2),      [4.2, 2.6, len * 0.58], GREYWHITE, [a.r, a.u, a.t]);
-          addBox(out, vadd(c, a.u, 6.2),      [2.6, 1.8, len * 0.36], GLASS,     [a.r, a.u, a.t]);
-          // Mast base at top of cabin (u*7.0); bimini arm
-          if (len > 16) {
-            addCyl(out, vadd(c, a.u, 7.0), 0.22, 10 + hash(i + m) * 5, GREYWHITE, 5, [a.r, a.u, a.t]);
-            addBox(out, vadd(c, a.u, 7.8), [3.2, 0.5, 1.6], WHITE, [a.r, a.u, a.t]);
+          // Hull: lifted 1.2 m above anchor (water surface level)
+          addBox(out, vadd(c, a.u, 1.2),      [5.5, 2.8, len],        WHITE,     [a.r, a.u, a.t]);
+          addBox(out, vadd(c, a.u, 2.6),      [5.8, 0.8, len],        trim,      [a.r, a.u, a.t]);
+          addBox(out, vadd(c, a.u, 3.6),      [4.0, 2.2, len * 0.55], GREYWHITE, [a.r, a.u, a.t]);
+          addBox(out, vadd(c, a.u, 5.4),      [2.4, 1.6, len * 0.34], GLASS,     [a.r, a.u, a.t]);
+          // Mast and bimini arm for larger yachts
+          if (len > 18) {
+            addCyl(out, vadd(c, a.u, 6.2), 0.20, 10 + hash(i + m) * 5, GREYWHITE, 5, [a.r, a.u, a.t]);
+            addBox(out, vadd(c, a.u, 7.0), [3.0, 0.4, 1.4], WHITE, [a.r, a.u, a.t]);
           }
-          // Port-side running light (red) and starboard (green) — emissive dots
-          addBox(out, vadd(vadd(c, a.r,  3.4), a.u, 3.2), [0.5, 0.5, 0.5], [0.15, 0.80, 0.25], [a.r, a.u, a.t]);
-          addBox(out, vadd(vadd(c, a.r, -3.4), a.u, 3.2), [0.5, 0.5, 0.5], [0.90, 0.15, 0.15], [a.r, a.u, a.t]);
+          // Port running light (red) and starboard (green)
+          addBox(out, vadd(vadd(c, a.r,  3.0), a.u, 2.8), [0.5, 0.5, 0.5], [0.15, 0.80, 0.25], [a.r, a.u, a.t]);
+          addBox(out, vadd(vadd(c, a.r, -3.0), a.u, 2.8), [0.5, 0.5, 0.5], [0.90, 0.15, 0.15], [a.r, a.u, a.t]);
+          // Cabin windows lit for dusk (porthole amber glow)
+          addBox(out, vadd(c, a.u, 4.4), [4.1, 0.5, len * 0.54],
+            [WIN_AMBER[0] * 0.6, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], [a.r, a.u, a.t]);
         }
-        // Jet skis / tenders
-        for (let i = 0; i < 6; i++) {
-          const a = anchor(k, 1, 8 + (i % 4) * 32);
-          const c = vadd(a.c, a.t, (i - 3) * 28 + hash(i * 19 + m) * 10);
-          addBox(out, vadd(c, a.u, 0.8), [2.0, 1.2, 3.8], (i % 2) ? CORAL : TEAL, [a.r, a.u, a.t]);
+        // Jet skis / tenders alongside the pontoon
+        for (let i = 0; i < 4; i++) {
+          const a = anchor(k, 1, 8 + (i % 3) * 28);
+          const c = vadd(a.c, a.t, (i - 2) * 32 + hash(i * 19 + m) * 12);
+          addBox(out, vadd(c, a.u, 0.7), [1.8, 1.0, 3.4], (i % 2) ? CORAL : TEAL, [a.r, a.u, a.t]);
         }
       }
-      // Marina waterfront palms
-      for (let i = 0; i < 18; i++) palm(K(0.26 + i * 0.0045), 1, 9 + (i % 3) * 3, 9 + hash(i * 7) * 3, PALM_GREEN);
 
-      // s 0.32 R near — superyacht hospitality: long white multi-deck box.
-      // dist bumped to 32 (was 30) to avoid hull overlap with the pontoon.
+      // Superyacht hospitality barge — iconic Miami GP feature.
+      // dist=34 keeps it clear of the pontoon and barrier geometry.
       {
         const k = K(0.32);
-        const a = anchor(k, 1, 32);
-        addBox(out, vadd(a.c, a.u,  5), [10, 10, 60], WHITE,     [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u,  7), [10.4, 2.4, 56], TEAL,  [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 11), [8,  4, 40], GREYWHITE,  [a.r, a.u, a.t]);
-        // Lit portholes / windows on the upper deck
-        addBox(out, vadd(a.c, a.u,  8), [10.5, 0.8, 54], [WIN_AMBER[0]*0.7, WIN_AMBER[1]*0.6, WIN_AMBER[2]*0.2], [a.r, a.u, a.t]);
+        const a = anchor(k, 1, 34);
+        addBox(out, vadd(a.c, a.u,  4), [12,  8, 64], WHITE,      [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u,  8), [12.4, 2.4, 60], TEAL,   [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 11), [9,  4, 44], GREYWHITE,   [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 16), [7,  3, 28], WHITE,       [a.r, a.u, a.t]);
+        // Helipad circle on top deck
+        addCyl(out, vadd(a.c, a.u, 19.5), 5.5, 0.5, [0.50, 0.52, 0.54], 12, [a.r, a.u, a.t]);
+        addCyl(out, vadd(a.c, a.u, 20.1), 5.0, 0.3, [0.85, 0.10, 0.10], 12, [a.r, a.u, a.t]);
+        // Lit porthole strip (2 decks)
+        addBox(out, vadd(a.c, a.u,  5.6), [12.5, 0.9, 62],
+          [WIN_AMBER[0] * 0.65, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u,  9.2), [12.5, 0.7, 58],
+          [WIN_AMBER[0] * 0.60, WIN_AMBER[1] * 0.45, WIN_AMBER[2] * 0.12], [a.r, a.u, a.t]);
+        // Radar mast
+        addCyl(out, vadd(a.c, a.u, 20.0), 0.18, 12, GREYWHITE, 4, [a.r, a.u, a.t]);
       }
 
+      // Marina promenade palms — placed via forestEdge so no barrier clipping
+      forestEdge(0.26, 0.38, 1, 5, {
+        density: 0.6, hMin: 9, hMax: 14,
+        col: PALM_GREEN, col2: PALM_DARK, pineFrac: 0.0,
+      });
+
       // ===================================================================
-      // s 0.43–0.52 L mid — stadium-lot zone: grandstands + cubes + palms
+      // s 0.43–0.52 L mid — STADIUM-LOT ZONE: grandstands + cityFront + palms
       // ===================================================================
       for (let i = 0; i < 3; i++) {
         grandstand(0.43 + i * 0.035, -1, 13, 85 + i * 10, GREYWHITE,
           [PINK, TEAL, CORAL][i]);
       }
-      for (let i = 0; i < 6; i++) {
-        const col = [TEAL, CORAL, PINK, [0.92, 0.80, 0.40], [0.70, 0.85, 1.0], [1.0, 0.75, 0.55]][i];
-        building(K(0.44 + i * 0.008), -1, 24 + (i % 2) * 14, 16, 14 + (i % 3) * 10, 18,
-          { wall: col, window: GLASS, floor: 4 });
-      }
+      cityFront(0.42, 0.53, -1, 24, {
+        minH: 14, maxH: 34, depth: 22, step: 20,
+        palette: [TEAL, CORAL, PINK, [0.92, 0.80, 0.40], [0.70, 0.85, 1.0]],
+        lit: true, windowCol: WIN_AMBER,
+      });
       for (let i = 0; i < 10; i++) palm(K(0.43 + i * 0.005), -1, 12 + (i % 2) * 4, 8 + hash(i * 3) * 2, PALM_GREEN);
 
       // ===================================================================
-      // s 0.50–0.60 R mid — BRAKING ZONE: palms, billboards, cubes
+      // s 0.50–0.60 R mid — BRAKING ZONE: palms + billboards + cityFront
       // ===================================================================
       for (let i = 0; i < 16; i++) palm(K(0.50 + i * 0.004),  1, 11 + (i % 3) * 6, 9 + hash(i)     * 2, PALM_GREEN);
       for (let i = 0; i < 6;  i++) palm(K(0.55 + i * 0.005), -1, 12 + (i % 2) * 5, 8 + hash(i * 2) * 1, PALM_DARK);
       billboard(K(0.50), 1, 11, 18, 9, CORAL);
       billboard(K(0.52), 1, 10, 16, 8, TEAL);
       billboard(K(0.54), 1, 10, 16, 8, PINK);
-      for (let i = 0; i < 5; i++) {
-        building(K(0.51 + i * 0.007), 1, 22 + (i % 2) * 16, 16, 16 + (i % 3) * 8, 16,
-          { wall: PASTELS[(i + 1) % PASTELS.length], window: GLASS, floor: 4 });
-      }
+      cityFront(0.50, 0.60, 1, 22, {
+        minH: 12, maxH: 28, depth: 20, step: 20,
+        palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
+      });
 
       // ===================================================================
-      // s 0.635 & 0.685 — FLORIDA TURNPIKE OVERPASSES (FIXED positions).
+      // s 0.635 & 0.685 — FLORIDA TURNPIKE OVERPASSES.
       // Moved from 0.62/0.67 to 0.635/0.685 to ensure maximum separation
       // from both the start gantry (s≈0) and the back straight billboards.
+      // Pillar height fixed so tops sit flush under the deck (no penetration).
       // ===================================================================
       buildOverpass(0.635);
       buildOverpass(0.685);
@@ -409,16 +476,22 @@
       }
 
       // ===================================================================
-      // s 0.77–0.85 both — BACK STRAIGHT (DRS zone): grandstands + cubes
+      // s 0.77–0.85 both — BACK STRAIGHT (DRS zone): grandstands + cityFront
       // ===================================================================
       for (let i = 0; i < 4; i++) {
         const s = 0.77 + i * 0.025;
         grandstand(s, -1, 12, 105 + i * 5, GREYWHITE, PASTELS[i % PASTELS.length]);
       }
-      for (let i = 0; i < 8; i++) {
-        building(K(0.77 + i * 0.007), -1, 24 + (i % 2) * 16, 16, 15 + (i % 3) * 10, 16,
-          { wall: PASTELS[(i + 1) % PASTELS.length], window: GLASS, floor: 4 });
-      }
+      // Coherent back-straight building facades both sides
+      cityFront(0.76, 0.86, -1, 24, {
+        minH: 16, maxH: 38, depth: 22, step: 20,
+        palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
+      });
+      cityFront(0.76, 0.86, 1, 22, {
+        minH: 12, maxH: 28, depth: 20, step: 22,
+        palette: [CORAL, TEAL, PINK, [1.0, 0.85, 0.55], GREYWHITE],
+        lit: true, windowCol: WIN_COOL,
+      });
       for (let i = 0; i < 12; i++) {
         palm(K(0.76 + i * 0.006), (i % 2) ? 1 : -1, 12 + (i % 2) * 4, 8 + hash(i * 5) * 2, PALM_GREEN);
       }
@@ -435,11 +508,10 @@
       // ===================================================================
       // s 0.88–0.96 R — PADDOCK & FINAL CORNER: team buildings + grandstand
       // ===================================================================
-      for (let i = 0; i < 10; i++) {
-        const k = K(0.88 + i * 0.008);
-        building(k, 1, 17 + (i % 3) * 16, 18, 12 + (i % 3) * 7, 22,
-          { wall: (i % 4) ? WHITE : PASTELS[i % PASTELS.length], window: GLASS, floor: 3 });
-      }
+      cityFront(0.87, 0.97, 1, 18, {
+        minH: 10, maxH: 28, depth: 22, step: 18,
+        palette: [WHITE, ...SKY_PAL], lit: true, windowCol: WIN_AMBER,
+      });
       for (let i = 0; i < 2; i++) {
         grandstand(0.88 + i * 0.035, -1, 14, 80, GREYWHITE, [CORAL, TEAL][i]);
       }
@@ -507,7 +579,7 @@
       });
       every(25, (k) => {
         const h = hash(k * 47 + 19);
-        const inTech   = (k / n > 0.60 && k / n < 0.75);
+        const inTech    = (k / n > 0.60 && k / n < 0.75);
         const onStretch = (k / n < 0.12 || (k / n > 0.38 && k / n < 0.55));
         if (inTech || onStretch || h > 0.45) {
           palm(k, (h < 0.5) ? -1 : 1, 11 + h * 10, 8 + h * 4,

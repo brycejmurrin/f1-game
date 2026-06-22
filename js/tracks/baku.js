@@ -27,7 +27,7 @@
         out, n, place, prop, backdrop, groundPlane, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
-        addFrustum, vadd, hash,
+        addFrustum, vadd, hash, cityFront,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -49,6 +49,28 @@
       const TARMAC_AD   = [0.85, 0.20, 0.18];        // red ad accent
       const AZ_BLUE     = [0.10, 0.45, 0.78];        // Azerbaijan flag blue
       const LAMP_WARM   = [1.00, 0.96, 0.70];        // sodium lamp glow
+
+      // Sandstone facade palette for Old City streets
+      const SAND_PAL = [
+        [0.62, 0.50, 0.34],
+        [0.68, 0.56, 0.38],
+        [0.58, 0.47, 0.30],
+        [0.72, 0.60, 0.42],
+      ];
+      // Modern glass palette for the Caspian / main-straight canyon
+      const GLASS_PAL = [
+        [0.17, 0.19, 0.27],
+        [0.20, 0.22, 0.30],
+        [0.14, 0.18, 0.28],
+        [0.24, 0.22, 0.32],
+      ];
+      // Neoclassical/civic mid-tone palette for government district
+      const CIVIC_PAL = [
+        [0.42, 0.40, 0.38],
+        [0.48, 0.45, 0.40],
+        [0.52, 0.48, 0.43],
+        [0.38, 0.37, 0.35],
+      ];
 
       // ===================================================================
       // Continuous concrete walls + catch-fence lining the whole lap
@@ -106,52 +128,63 @@
       }
 
       // ===================================================================
-      // s 0.00 R near — GOVERNMENT HOUSE: ornate neoclassical palace.
+      // s 0.0–0.12 R — GOVERNMENT HOUSE district: civic street canyon
+      // A continuous neoclassical facade lines the R side of the start straight,
+      // with the iconic Government House palace set back as the centrepiece.
+      // ===================================================================
+
+      // Continuous civic facade — R side (gap=8 keeps it behind the concrete wall)
+      cityFront(0.0, 0.12, 1, 8, {
+        minH: 14, maxH: 28, depth: 20, step: 20,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
+      });
+
+      // Continuous civic facade — L side of start straight
+      cityFront(0.0, 0.12, -1, 8, {
+        minH: 12, maxH: 24, depth: 18, step: 20,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
+      });
+
+      // GOVERNMENT HOUSE: ornate neoclassical palace set well back from road.
       // Built from coordinated anchor offsets so sub-parts do NOT intersect.
       // Layout: central body + two independent corner towers set back.
-      // ===================================================================
       {
-        const k = K(0.0);
-        // Central palace body via building() — controls inner gap cleanly
-        building(k, 1, 20, 52, 22, 30, { wall: SAND, window: WIN_WARM, floor: 4.5 });
+        const k = K(0.02);
+        // Central palace body via building() — gap=42 keeps it well behind facade row
+        building(k, 1, 42, 52, 22, 30, { wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
         // Decorative base plinth (uplit, slightly wider than body, very low)
-        const aBase = anchor(k, 1, 46);
+        const aBase = anchor(k, 1, 68);
         addBox(out, vadd(aBase.c, aBase.u, 1.5), [58, 3, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
 
         // Twin corner towers — set further back from road than the body so they
-        // don't clip through it. Each tower is self-contained: base box → body
-        // cylinder → dome frustum → cone spire, all stacked vertically with
-        // no horizontal overlap between parts.
+        // don't clip through it.
         for (const tOff of [-20, 20]) {
-          const aTow = anchor(k, 1, 55);
-          const tc = vadd(aTow.c, aTow.t, tOff);  // offset along track direction
+          const aTow = anchor(k, 1, 75);
+          const tc = vadd(aTow.c, aTow.t, tOff);
           const b  = [aTow.r, aTow.u, aTow.t];
-          // Square base podium
           addBox(out, vadd(tc, aTow.u, 5),  [14, 10, 14], SAND,     b);
-          // Octagonal tower drum sits ON TOP of base (y+10 to y+30)
           addCyl(out, vadd(tc, aTow.u, 10), 6.0, 20, SAND,     8, b);
-          // Transitional cornice ring (sits on top of drum, y+30 to y+33)
           addFrustum(out, vadd(tc, aTow.u, 30), 6.5, 5.0, 3, SAND_LIT, 8, b);
-          // Dome frustum (y+33 to y+39)
           addFrustum(out, vadd(tc, aTow.u, 33), 5.0, 1.5, 6, SAND_LIT, 8, b);
-          // Cone spire (y+39 to y+47, tip)
           addCone(out, vadd(tc, aTow.u, 39), 1.5, 8, SAND_LIT, 8, b);
-          // Lit crown band (emissive ring at cornice level)
           addFrustum(out, vadd(tc, aTow.u, 29), 7.0, 6.5, 1.2, WIN_WARM, 8, b);
         }
 
         // Ornate entrance gate portico in front of central body
-        const aGate = anchor(k, 1, 18);
+        const aGate = anchor(k, 1, 40);
         addBox(out, vadd(aGate.c, aGate.u, 3), [40, 6, 3], [0.78, 0.68, 0.50], [aGate.r, aGate.u, aGate.t]);
-        // Lit archway header
         addBox(out, vadd(aGate.c, aGate.u, 7), [42, 2, 3], WIN_WARM, [aGate.r, aGate.u, aGate.t]);
+
+        // Uplit wash at Government House base (warm stone courtyard glow)
+        const aGov = anchor(k, 1, 64);
+        addBox(out, vadd(aGov.c, aGov.u, 0.1), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
       }
 
       // ===================================================================
       // START/FINISH — pit complex (R), grandstands (L), gantries
       // ===================================================================
       for (let i = 0; i < 5; i++)
-        building(K(0.95 + i * 0.012), 1, 5, 16, 9, 14, { wall: [0.20, 0.21, 0.26], window: WIN_COOL, floor: 3 });
+        building(K(0.95 + i * 0.012), 1, 5, 16, 9, 14, { wall: [0.20, 0.21, 0.26], window: WIN_COOL, floor: 3, lit: true });
       wall(0.94, 0.02, 1, 1.0, 1.0, [0.85, 0.85, 0.88], 0.4);
       grandstand(0.985, -1, 4, 70, [0.42, 0.36, 0.40], [0.50, 0.30, 0.34]);
       grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
@@ -159,24 +192,25 @@
       gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
       billboard(0.01, 1, 9, 14, 5, FLAME);
 
-      // Civic plaza buildings (L, near straight)
-      for (let i = 0; i < 3; i++)
-        building(K(0.04), -1, 15 + i * 22, 26, 16 + i * 4, 22, { wall: [0.34, 0.33, 0.32], window: WIN_WARM });
-      // Plaza lit obelisk
+      // Civic plaza obelisk (L side, gap well behind facade row)
       {
-        const a = anchor(K(0.045), -1, 12);
+        const a = anchor(K(0.045), -1, 28);
         addFrustum(out, vadd(a.c, a.u, 0), 1.4, 0.3, 16, SAND_LIT, 4, [a.r, a.u, a.t]);
-        // Obelisk tip glow
         addBox(out, vadd(a.c, a.u, 14), [1.0, 1.0, 1.0], WIN_WARM, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
-      // s 0.12 both near — first 90 squeeze: tall flat grey wall boxes
+      // s 0.12–0.22 — T1/T2 STREET CANYON: both sides aligned city facades
+      // Replaces the old scattered `place()` flat boxes at this turn complex.
       // ===================================================================
-      for (const side of [-1, 1]) {
-        place(K(0.12), side, 6, [6, 22, 40], [0.26, 0.26, 0.30]);
-        place(K(0.12), side, 6, [6.2, 5, 40], SAND_LIT);
-      }
+      cityFront(0.12, 0.22, 1, 8, {
+        minH: 18, maxH: 40, depth: 20, step: 18,
+        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+      });
+      cityFront(0.12, 0.22, -1, 8, {
+        minH: 14, maxH: 30, depth: 18, step: 18,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 3.5,
+      });
 
       // ===================================================================
       // s 0.22 R far — FLAME TOWERS: three iconic tapered towers.
@@ -195,16 +229,14 @@
           const H  = heights[t];
           const tc = vadd(aF.c, aF.r, towerOffs[t]);
 
-          // Main tapered body (glass-clad curtain wall)
-          addFrustum(out, tc, 16, 3.0, H, GLASS, 8, b);
+          // Main tapered body (glass-clad curtain wall — curved facade with blue tint)
+          addFrustum(out, tc, 16, 3.0, H, [0.15, 0.22, 0.38], 8, b);
 
           // Window bands — narrow addFrustum rings stacked every ~H/7
-          // Each ring sits inside the tower's taper so it doesn't stick out.
           for (let band = 1; band <= 6; band++) {
             const yFr   = band / 7;
-            const rAtY  = 16 * (1 - yFr) + 3.0 * yFr;  // interpolated radius at this height
-            const rInner = rAtY * 0.96;                   // just inside the face
-            const rOuter = rAtY * 1.04;                   // just outside — thin emissive band
+            const rAtY  = 16 * (1 - yFr) + 3.0 * yFr;
+            const rOuter = rAtY * 1.04;
             const isFlame = band % 2 === 0;
             addFrustum(out, vadd(tc, aF.u, yFr * H - H * 0.035),
               rOuter, rOuter * 0.94, H * 0.055,
@@ -212,7 +244,6 @@
           }
 
           // Flame crown — stacked narrow cones (not a wide box).
-          // rBase matches the tapered top radius (3.0) so there is NO gap.
           addCone(out, vadd(tc, aF.u, H),        3.0, 10, FLAME,      8, b);
           addCone(out, vadd(tc, aF.u, H + 10),   2.2,  8, FLAME_PALE, 8, b);
           addCone(out, vadd(tc, aF.u, H + 18),   1.2,  6, WIN_WARM,   8, b);
@@ -220,13 +251,32 @@
           // Emissive lit observation crown ring just below top
           addFrustum(out, vadd(tc, aF.u, H - 14), 3.5, 3.0, 3, WIN_WARM, 8, b);
         }
+
+        // Uplit ground wash at the Flame Towers base
+        addBox(out, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.18, 0.10, 0.04], b);
+        for (let t = 0; t < 3; t++) {
+          const tc = vadd(aF.c, aF.r, (t - 1) * 50);
+          addBox(out, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.25, 0.14, 0.04], b);
+        }
       }
 
       // ===================================================================
-      // s 0.30 L mid — mixed modern mid-rise: stacked glass boxes, lit grids
+      // s 0.22–0.36 — MAIN STRAIGHT city canyon (both sides)
+      // Continuous aligned glass tower facades on both sides of the long
+      // 800 m straight leading towards the Old City section.
       // ===================================================================
-      for (let i = 0; i < 4; i++)
-        building(K(0.30), -1, 29 + i * 26, 22, 44 + (i % 2) * 22, 22, { wall: GLASS, window: WIN_COOL, floor: 4 });
+
+      // R side: tall glass high-rises (the financial district facing the corniche)
+      cityFront(0.22, 0.36, 1, 8, {
+        minH: 30, maxH: 80, depth: 22, step: 22,
+        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+      });
+
+      // L side: mixed modern facades (slightly lower — the city middle band)
+      cityFront(0.22, 0.36, -1, 8, {
+        minH: 20, maxH: 55, depth: 20, step: 20,
+        palette: GLASS_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
+      });
 
       // ===================================================================
       // s 0.36 R near — OLD CITY WALL: continuous crenellated sandstone
@@ -251,41 +301,44 @@
         }
       }
 
-      // Dense sandstone old-town behind the rampart
-      for (let i = 0; i < 24; i++) {
-        const k    = K(0.36 + (i % 8) * 0.024);
-        const tier = 14 + (i % 5) * 12 + Math.floor(i / 8) * 16;
-        const h    = 6 + hash(i * 7) * 12;
-        const w    = 8 + hash(i * 5) * 10;
-        const d    = 9 + hash(i * 11) * 8;
-        building(k, 1, tier, w, h, d, { wall: i % 2 ? SAND : [0.68, 0.58, 0.42], window: WIN_WARM, floor: 3.2 });
-      }
+      // Dense sandstone old-town behind the rampart — ALIGNED cityFront facade
+      // (gap=18 keeps it well behind the 9m wall at gap=10, so depth 16 never clips)
+      cityFront(0.36, 0.56, 1, 18, {
+        minH: 6, maxH: 18, depth: 14, step: 16,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+      });
 
       // Old-town minaret shafts — slim cylinders + domed cap, spaced
       // with enough distance so they don't overlap the rampart.
       for (let i = 0; i < 5; i++) {
-        const dist = 32 + hash(i * 13) * 14;  // well behind the 10m wall gap
-        const a    = anchor(K(0.40 + i * 0.028), 1, dist);
+        const dist = 34 + hash(i * 13) * 14;  // well behind the 10m wall gap
+        const a    = anchor(K(0.38 + i * 0.032), 1, dist);
         const b    = [a.r, a.u, a.t];
         const shH  = 18 + hash(i * 7) * 8;    // shaft height
         addCyl(out, a.c, 1.6, shH, SAND, 8, b);              // minaret shaft
         addFrustum(out, vadd(a.c, a.u, shH),   2.2, 1.4, 3, SAND_LIT, 8, b);  // balcony ring
         addCone(out,   vadd(a.c, a.u, shH + 3), 1.4, 5,   SAND_LIT, 8, b);   // cone cap
-        // Lit lantern at tip
         addBox(out, vadd(a.c, a.u, shH + 7.5), [0.8, 0.8, 0.8], WIN_WARM, b);
       }
 
       // Small dome silhouettes rising over the old town — addFrustum hemisphere
       for (let i = 0; i < 5; i++) {
-        const dist = 42 + hash(i * 9) * 22;
+        const dist = 44 + hash(i * 9) * 22;
         const a    = anchor(K(0.39 + i * 0.032), 1, dist);
         const b    = [a.r, a.u, a.t];
         const dH   = 6 + hash(i * 3) * 4;
-        // dome body
         addFrustum(out, a.c, 5.0, 0.5, dH, SAND, 8, b);
-        // Small finial
         addCyl(out, vadd(a.c, a.u, dH), 0.4, 2.5, SAND_LIT, 6, b);
       }
+
+      // ===================================================================
+      // s 0.36–0.56 L side — Old-town street facade (inside of the circuit)
+      // Continuous low sandstone buildings on the left of the old city section
+      // ===================================================================
+      cityFront(0.36, 0.42, -1, 8, {
+        minH: 6, maxH: 14, depth: 12, step: 14,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
+      });
 
       // ===================================================================
       // s 0.42–0.50 — CASTLE SECTION: tall walls both sides, crenellated
@@ -311,23 +364,21 @@
         // Corner tower cylinder above wall height (y=11 upward)
         addCyl(out, vadd(aL.c, aL.u, 11), 1.4, 8, SAND, 8, [aL.r, aL.u, aL.t]);
         addCyl(out, vadd(aR.c, aR.u, 11), 1.4, 8, SAND, 8, [aR.r, aR.u, aR.t]);
-        // Cone caps on the towers
         addCone(out, vadd(aL.c, aL.u, 19), 1.4, 4, SAND_LIT, 8, [aL.r, aL.u, aL.t]);
         addCone(out, vadd(aR.c, aR.u, 19), 1.4, 4, SAND_LIT, 8, [aR.r, aR.u, aR.t]);
-        // Lit lanterns atop each tower
         addBox(out, vadd(aL.c, aL.u, 22.5), [1.0, 0.8, 1.0], WIN_WARM, [aL.r, aL.u, aL.t]);
         addBox(out, vadd(aR.c, aR.u, 22.5), [1.0, 0.8, 1.0], WIN_WARM, [aR.r, aR.u, aR.t]);
       }
 
-      // s 0.46 R near — stone bastion box (crest past castle gate)
-      {
-        const k = K(0.46);
-        place(k, 1, 20, [18, 16, 18], SAND);
-        place(k, 1, 21, [19, 4, 19], SAND_LIT);
-        const a = anchor(k, 1, 6);
-        for (let j = 0; j < 4; j++)
-          addBox(out, vadd(vadd(a.c, a.t, (j - 1.5) * 4.5), a.u, 16.6), [3, 1.6, 3], SAND, [a.r, a.u, a.t]);
-      }
+      // Old-town buildings set back behind castle walls (gap=20 to clear 11m walls)
+      cityFront(0.42, 0.50, 1, 20, {
+        minH: 5, maxH: 12, depth: 10, step: 12,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
+      });
+      cityFront(0.42, 0.50, -1, 18, {
+        minH: 5, maxH: 12, depth: 10, step: 12,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
+      });
 
       // ===================================================================
       // s 0.52 L near — MAIDEN TOWER: rebuilt as a clean stack of non-
@@ -359,7 +410,7 @@
 
         // Stone band window slits — narrow emissive strips along the drum face
         for (let wl = 0; wl < 4; wl++) {
-          const wy = 5 + 5 + wl * 6;  // y positions of windows along drum
+          const wy = 5 + 5 + wl * 6;
           addFrustum(out, vadd(a.c, a.u, wy), 9.3, 9.3, 1.2, WIN_WARM, 12, b);
         }
 
@@ -379,6 +430,9 @@
 
         // Uplit glow ring at base (ground-level uplit stone look)
         addFrustum(out, vadd(a.c, a.u, 3.2), 12.0, 11.5, 0.8, SAND_LIT, 8, b);
+
+        // Uplit forecourt at Maiden Tower
+        addBox(out, vadd(a.c, a.u, 0.1), [30, 0.5, 30], [0.20, 0.16, 0.08], b);
       }
 
       // ===================================================================
@@ -390,15 +444,14 @@
         const PALACE_DARK = [0.62, 0.56, 0.44];
         const k = K(0.50);
 
-        // Main palace structure (building handles its own gap/anchor)
-        building(k, 1, 44, 22, 10, 28, { wall: PALACE, window: WIN_WARM, floor: 2 });
+        // Main palace structure (gap=20 to clear the castle wall at gap=1.5)
+        building(k, 1, 20, 22, 10, 28, { wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
 
         // Crenellated parapet: merlons at y=10 (top of 10m building)
-        const a = anchor(k, 1, 44);
+        const a = anchor(k, 1, 20);
         const b = [a.r, a.u, a.t];
         for (let j = 0; j < 8; j++) {
           if (j % 2 === 0) {
-            // y = 10 (building top) + 0.9 (half of 1.8m merlon) = 10.9
             addBox(out, vadd(vadd(a.c, a.t, (j - 3.5) * 3.8), a.u, 10.9), [2.5, 1.8, 2.5], PALACE, b);
           }
         }
@@ -406,32 +459,37 @@
         // Ornamental turrets at corners — cylinders that begin AT the building top
         addCyl(out, vadd(vadd(a.c, a.t, -13), a.u, 10), 2.2, 6, PALACE_DARK, 8, b);
         addCyl(out, vadd(vadd(a.c, a.t,  13), a.u, 10), 2.2, 6, PALACE_DARK, 8, b);
-        // Turret cone caps
         addCone(out, vadd(vadd(a.c, a.t, -13), a.u, 16), 2.2, 4, PALACE, 8, b);
         addCone(out, vadd(vadd(a.c, a.t,  13), a.u, 16), 2.2, 4, PALACE, 8, b);
-        // Lit lanterns on turrets
         addBox(out, vadd(vadd(a.c, a.t, -13), a.u, 19.5), [1.0, 0.8, 1.0], WIN_WARM, b);
         addBox(out, vadd(vadd(a.c, a.t,  13), a.u, 19.5), [1.0, 0.8, 1.0], WIN_WARM, b);
 
         // Flanking wing building (east)
-        building(K(0.505), 1, 36, 12, 7, 16, { wall: PALACE, window: WIN_WARM, floor: 2 });
+        building(K(0.505), 1, 14, 12, 7, 16, { wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
 
-        // Ornamental archway detail on main façade
+        // Ornamental archway detail on main facade
         addBox(out, vadd(a.c, a.u, 4), [20, 3, 1.5], [0.82, 0.76, 0.64], b);
+      }
+
+      // ===================================================================
+      // s 0.50–0.58 EXTRA OLD CITY density — stone buildings at the exit
+      // of castle/old-city section on BOTH sides before the descent
+      // ===================================================================
+      {
+        const STONE = [0.58, 0.52, 0.42];
+        const oldCityData = [
+          [0.51, 1, 20, 10, 10, 14],
+          [0.54, 1, 22, 12, 12, 12],
+          [0.56, 1, 18, 14,  8, 16],
+        ];
+        for (const [s, side, dist, w, h, d] of oldCityData) {
+          building(K(s), side, dist, w, h, d, { wall: STONE, window: WIN_WARM, floor: 3, lit: true });
+        }
       }
 
       // ===================================================================
       // s 0.58 L — seafront: boulevard promenade + palm row
       // ===================================================================
-      for (let i = 0; i < 6; i++) {
-        const s = 0.58 + i * 0.018;
-        place(K(s), -1, 16 + i * 10, [16, 2.8 + i * 0.6, 16], [0.18, 0.32, 0.20]);
-      }
-      // Palm-lined promenade
-      for (let i = 0; i < 22; i++) {
-        const s = 0.58 + i * 0.018;
-        palm(K(s), -1, 8 + (i % 3) * 2, 9 + hash(i * 3) * 3.5, [0.18, 0.44, 0.24]);
-      }
       // Ornate promenade balustrade wall
       wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);
       // Decorative balusters
@@ -439,6 +497,16 @@
         const s = 0.58 + i * 0.0118;
         const a = anchor(K(s), -1, 5.7);
         addCyl(out, vadd(a.c, a.u, 0.7), 0.16, 1.1, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);
+      }
+      // Palm-lined promenade (gap=8 keeps palms behind balustrade)
+      for (let i = 0; i < 22; i++) {
+        const s = 0.58 + i * 0.018;
+        palm(K(s), -1, 8 + (i % 3) * 2, 9 + hash(i * 3) * 3.5, [0.18, 0.44, 0.24]);
+      }
+      // Seafront boulevard pavilion buildings (low, gap=12 behind palms)
+      for (let i = 0; i < 6; i++) {
+        const s = 0.58 + i * 0.025;
+        building(K(s), -1, 14, 14, 5 + i, 12, { wall: [0.38, 0.36, 0.34], window: WIN_WARM, floor: 2.5, lit: true });
       }
 
       // ===================================================================
@@ -456,11 +524,15 @@
           [0.10, 0.12, 0.18], [a.r, a.u, a.t]);
       }
 
-      // Waterfront pavilion buildings
+      // Supplemental Caspian harbour water panel
+      groundPlane(K(0.68), -1, 18, [300, 2, 260], [0.12, 0.18, 0.28]);
+
+      // Waterfront pavilion buildings (L side, modest gap past balustrade)
       for (let i = 0; i < 4; i++) {
         const s = 0.66 + i * 0.075;
-        building(K(s), -1, 18, 14, 9, 14, { wall: [0.30, 0.34, 0.42], window: WIN_COOL, floor: 3 });
+        building(K(s), -1, 18, 14, 9, 14, { wall: [0.30, 0.34, 0.42], window: WIN_COOL, floor: 3, lit: true });
       }
+
       // Pier/breakwater structures
       for (let i = 0; i < 3; i++) {
         const s = 0.68 + i * 0.12;
@@ -468,18 +540,17 @@
         addBox(out, vadd(a.c, a.u, 0.5), [2.5, 1.0, 40], [0.55, 0.54, 0.58], [a.r, a.u, a.t]);
       }
 
-      // Continuous modern Caspian-front skyline: packed band of lit glass towers R
-      for (let i = 0; i < 14; i++) {
-        const s = 0.63 + i * 0.026;
-        building(K(s), 1, 36 + hash(i * 3) * 18 - (18 + hash(i * 5) * 10) / 2, 18 + hash(i * 5) * 10,
-          50 + hash(i * 9) * 60, 18, { wall: GLASS, window: WIN_COOL, floor: 4 });
-        if (i % 2 === 0)
-          building(K(s), 1, 80 + hash(i * 13) * 24 - (20 + hash(i * 17) * 12) / 2, 20 + hash(i * 17) * 12,
-            80 + hash(i * 19) * 70, 20, { wall: GLASS, window: WIN_WARM, floor: 5 });
-      }
+      // Continuous modern Caspian-front skyline R: aligned glass tower facades
+      // (gap=8 keeps towers behind armco/fence combo at this section)
+      cityFront(0.63, 0.95, 1, 8, {
+        minH: 40, maxH: 100, depth: 22, step: 20,
+        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+      });
 
       // ===================================================================
-      // s 0.78–0.86 R mid — glass Caspian-front tower cluster
+      // s 0.78–0.86 R mid — prominent glass Caspian-front tower cluster
+      // These landmark towers are placed further back to read as
+      // distinct silhouettes behind the continuous city wall.
       // ===================================================================
       for (let i = 0; i < 9; i++) {
         const k   = K(0.77 + i * 0.011);
@@ -511,77 +582,8 @@
       billboard(K(0.99), -1, 8, 14, 8, WIN_COOL);
 
       // ===================================================================
-      // EXTRA OLD CITY density — stone buildings packed into old-town
-      // ===================================================================
-      {
-        const STONE = [0.58, 0.52, 0.42];
-        const oldCityData = [
-          [0.41, 1, 28, 10, 10, 14],
-          [0.44, 1, 32, 12, 14, 12],
-          [0.48, 1, 24, 14,  8, 16],
-          [0.51, 1, 36,  9, 18, 10],
-        ];
-        for (const [s, side, dist, w, h, d] of oldCityData) {
-          building(K(s), side, dist, w, h, d, { wall: STONE, window: WIN_WARM, floor: 3 });
-        }
-      }
-
-      // Supplemental Caspian harbour water panel
-      groundPlane(K(0.68), -1, 18, [300, 2, 260], [0.12, 0.18, 0.28]);
-
-      // ===================================================================
-      // URBAN CANYON density — modern city s=0.0–0.20 (L side)
-      // ===================================================================
-      {
-        const cityHeights = [40, 55, 70, 60, 80, 45, 65];
-        for (let i = 0; i < 7; i++) {
-          const s = 0.02 + i * 0.025;
-          building(K(s), -1, 16 + (i % 3) * 14, 14 + (i % 2) * 4, cityHeights[i], 14,
-            { wall: GLASS, window: [0.32, 0.42, 0.52], floor: 4 });
-        }
-        // Lit window accents on the taller city buildings (emissive bands)
-        for (let i = 0; i < 4; i++) {
-          const s = 0.03 + i * 0.040;
-          const a = anchor(K(s), -1, 22 + i * 12);
-          const h = cityHeights[i * 2] || 60;
-          // Crown lit band near top of building
-          addBox(out, vadd(a.c, a.u, h - 4), [16 + i * 4, 3, 14], WIN_COOL, [a.r, a.u, a.t]);
-        }
-      }
-
-      // Seafront billboard (s≈0.15)
-      billboard(K(0.15), -1, 20, 14, 5, [0.85, 0.35, 0.10]);
-
-      // ===================================================================
-      // NIGHT AMBIENCE: uplit Flame Tower base + lit waterfront bar/pavilion
-      // ground-level pools around key landmarks
-      // ===================================================================
-
-      // Uplit ground wash at the Flame Towers base
-      {
-        const aFire = anchor(K(0.22), 1, 178);
-        // Wide low slab simulating up-lit forecourt glow
-        addBox(out, vadd(aFire.c, aFire.u, 0.1), [160, 0.6, 60], [0.18, 0.10, 0.04], [aFire.r, aFire.u, aFire.t]);
-        // Bright pool directly under each tower
-        for (let t = 0; t < 3; t++) {
-          const tc = vadd(aFire.c, aFire.r, (t - 1) * 50);
-          addBox(out, vadd(tc, aFire.u, 0.2), [30, 0.5, 30], [0.25, 0.14, 0.04], [aFire.r, aFire.u, aFire.t]);
-        }
-      }
-
-      // Uplit wash at Government House base (warm stone courtyard glow)
-      {
-        const aGov = anchor(K(0.0), 1, 44);
-        addBox(out, vadd(aGov.c, aGov.u, 0.1), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
-      }
-
-      // Uplit forecourt at Maiden Tower
-      {
-        const aMT = anchor(K(0.52), -1, 8);
-        addBox(out, vadd(aMT.c, aMT.u, 0.1), [30, 0.5, 30], [0.20, 0.16, 0.08], [aMT.r, aMT.u, aMT.t]);
-      }
-
       // Waterfront night bar/cafe strip — small lit pavilion boxes with warm windows
+      // ===================================================================
       for (let i = 0; i < 5; i++) {
         const s = 0.60 + i * 0.035;
         const a = anchor(K(s), -1, 9 + (i % 2) * 3);
@@ -589,6 +591,9 @@
         addBox(out, vadd(a.c, a.u, 2), [6, 4, 8], [0.28, 0.30, 0.36], b);
         addBox(out, vadd(a.c, a.u, 2.5), [6.2, 1.2, 8.2], WIN_WARM, b);  // lit windows
       }
+
+      // Seafront billboard (s≈0.15)
+      billboard(K(0.15), -1, 20, 14, 5, [0.85, 0.35, 0.10]);
     },
   }
   );
