@@ -174,7 +174,7 @@ const DataHub = (function () {
   function close() {
     if (!root) return;
     stopLiveAuto();
-    stopTelAnim();
+    closeTelemPopup();
     root.hidden = true;
     openFlag = false;
   }
@@ -189,7 +189,7 @@ const DataHub = (function () {
   }
 
   function showTab(id) {
-    stopTelAnim();   // pause any running lap replay when changing tabs
+    closeTelemPopup();   // close popup and pause any running lap replay when changing tabs
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
     for (const k in tabButtons) {
@@ -878,6 +878,8 @@ const DataHub = (function () {
 
   let telGen = 0;
   let telView = null;                 // the live telemetry view (for animation cleanup)
+  let telemPopup = null;              // the full-screen player popup element
+
   function stopTelAnim() {
     if (telView) {
       pauseAnim(telView);
@@ -885,20 +887,73 @@ const DataHub = (function () {
     }
   }
 
+  function closeTelemPopup() {
+    stopTelAnim();
+    if (telemPopup) {
+      if (telemPopup.parentNode) telemPopup.parentNode.removeChild(telemPopup);
+      telemPopup = null;
+    }
+  }
+
+  function openTelemPopup(tels) {
+    closeTelemPopup();
+    const overlay = el("div", "dh-tpopup");
+
+    const card = el("div", "dh-tpopup-card");
+
+    // Header: driver name(s) + session context + close button
+    const hdr = el("div", "dh-tpopup-hdr");
+    const titleEl = el("div", "dh-tpopup-title");
+    titleEl.appendChild(el("span", null, tels.map(function (t) { return t.d.name || dcode(t.d); }).join(" vs ")));
+    if (sel.meta) {
+      const sub = [sel.meta.name || sel.meta.type, sel.meta.circuit || sel.meta.country].filter(Boolean).join(" · ");
+      if (sub) titleEl.appendChild(el("span", "dh-tpopup-sub", sub));
+    }
+    hdr.appendChild(titleEl);
+    const closeBtn = el("button", "dh-close", "✕");
+    closeBtn.addEventListener("click", closeTelemPopup);
+    hdr.appendChild(closeBtn);
+    card.appendChild(hdr);
+
+    const body = el("div", "dh-tpopup-body");
+    body.appendChild(spinner());
+    card.appendChild(body);
+    overlay.appendChild(card);
+
+    // Close on backdrop click
+    overlay.addEventListener("pointerdown", function (e) {
+      if (e.target === overlay) closeTelemPopup();
+    });
+
+    // Close on Escape (cleaned up when popup closes)
+    function onKey(e) {
+      if (e.key === "Escape") { closeTelemPopup(); document.removeEventListener("keydown", onKey); }
+    }
+    document.addEventListener("keydown", onKey);
+
+    document.body.appendChild(overlay);
+    telemPopup = overlay;
+
+    // Build after layout so clientWidth measurements are real
+    setTimeout(function () {
+      if (telemPopup !== overlay) return;
+      clear(body);
+      buildTelemetryView(body, tels);
+    }, 0);
+  }
+
   function loadTelemetrySet(sessionKey, picked, detail) {
     const myGen = ++telGen;
     stopTelAnim();
+    if (!picked.length) return;
     clear(detail);
-    if (!picked.length) {
-      detail.appendChild(emptyMsg("Pick a driver above to load their fastest lap."));
-      return;
-    }
     detail.appendChild(spinner());
     Promise.all(picked.map(function (d, i) { return fetchDriverTel(sessionKey, d, i === 0); }))
       .then(function (tels) {
         if (myGen !== telGen) return;
         clear(detail);
-        buildTelemetryView(detail, tels);
+        detail.appendChild(emptyMsg("← Pick a driver to load their fastest lap."));
+        openTelemPopup(tels);
       }, function () {
         if (myGen !== telGen) return;
         clear(detail);
@@ -910,6 +965,11 @@ const DataHub = (function () {
     stopTelAnim();
     const primary = tels[0];
     const compare = tels[1] || null;
+
+    // Main column: driver headers, transport, chart, legend, stints
+    const mainArea = el("div", "dh-telem-main");
+    // Side column: gauges + map
+    const sideArea = el("div", "dh-telem-side");
 
     tels.forEach(function (t) {
       const head = el("div", "dh-livecard");
@@ -925,12 +985,13 @@ const DataHub = (function () {
         head.appendChild(el("div", "dh-live-sub dh-sectors",
           "S1 " + t.lap.s1.toFixed(3) + "  ·  S2 " + t.lap.s2.toFixed(3) + "  ·  S3 " + t.lap.s3.toFixed(3)));
       }
-      detail.appendChild(head);
+      mainArea.appendChild(head);
     });
 
     if (!primary.car || !primary.car.length) {
-      detail.appendChild(emptyMsg("Car telemetry isn't available for this lap."));
-      appendStintsPits(detail, primary);
+      mainArea.appendChild(emptyMsg("Car telemetry isn't available for this lap."));
+      detail.appendChild(mainArea);
+      appendStintsPits(mainArea, primary);
       return;
     }
 
@@ -957,37 +1018,33 @@ const DataHub = (function () {
     view.tMax = view.tMax || 1;
     primary.cum = cumDist(primary.car);
     if (view.compare) view.compare.cum = cumDist(view.compare.car);
-    // sector boundary times (s) from the primary lap, if the API reported them
     if (primary.lap && primary.lap.s1 !== null && primary.lap.s2 !== null) {
       view.sectors = [primary.lap.s1, primary.lap.s1 + primary.lap.s2];
     }
 
-    // transport: play / restart / speed / onboard — drives the scrub cursor
-    detail.appendChild(buildTransport(view));
+    // Transport bar → main
+    mainArea.appendChild(buildTransport(view));
 
-    // Canvas width: in landscape split the right pane is ~230px narrower than
-    // the full content area (left pane 230 + right padding 28). In portrait
-    // subtract only the content padding (36px).
+    // Canvas width: detail is the popup body, already in DOM (called via setTimeout).
+    // In landscape the side panel takes 200px + 1px border + 24px padding = 225px.
     const isLS = typeof window !== "undefined" && window.innerWidth > window.innerHeight && window.innerHeight < 520;
-    const CW = contentEl
-      ? Math.min(600, Math.max(280, contentEl.clientWidth - (isLS ? 258 : 36)))
-      : (isLS ? 380 : 600);
-    const CH_CHART = Math.round(CW * (220 / 600));   // maintain aspect ratio
+    const sideW = isLS ? 225 : 0;
+    const CW = detail.clientWidth > 40
+      ? Math.min(600, Math.max(260, detail.clientWidth - sideW - 28))
+      : (isLS ? 360 : 330);
+    const CH_CHART = Math.round(CW * (220 / 600));
 
-    // trace chart (static traces are cached to an offscreen canvas; each frame
-    // just blits that and overlays the moving cursor)
     const c1 = el("canvas", "dh-canvas");
     c1.width = CW; c1.height = CH_CHART; c1.style.touchAction = "none";
-    detail.appendChild(c1);
+    mainArea.appendChild(c1);
     view.chart = c1;
     view.chartBase = makeOffscreen(CW, CH_CHART);
 
-    // delta strip (gap to the compare driver across the whole lap)
     if (view.compare) {
       const CD_H = Math.round(CW * (72 / 600));
       const cd = el("canvas", "dh-canvas dh-delta");
       cd.width = CW; cd.height = CD_H; cd.style.touchAction = "none";
-      detail.appendChild(cd);
+      mainArea.appendChild(cd);
       view.delta = cd;
       view.deltaBase = makeOffscreen(CW, CD_H);
       attachScrub(cd, view);
@@ -1013,34 +1070,40 @@ const DataHub = (function () {
       item.appendChild(document.createTextNode(dcode(view.compare.d) + " SPEED"));
       legend.appendChild(item);
     }
-    detail.appendChild(legend);
+    mainArea.appendChild(legend);
 
-    // animated gauge dashboard window
-    detail.appendChild(buildGauges(view));
+    // Stints/pits below the chart in the main column
+    appendStintsPits(mainArea, primary);
 
-    // track map (cached base + moving car dot[s])
+    // Gauges + map → side column
+    sideArea.appendChild(buildGauges(view));
+
     if (primary.loc && primary.loc.length > 8) {
       const c2 = el("canvas", "dh-canvas dh-map");
       c2.width = 320; c2.height = 320;
-      detail.appendChild(c2);
+      sideArea.appendChild(c2);
       view.map = c2;
       view.mapBase = makeOffscreen(320, 320);
     }
+
+    detail.appendChild(mainArea);
+    detail.appendChild(sideArea);
 
     attachScrub(c1, view);
     buildBases(view);
     paintFrame(view);
     telView = view;
 
-    // Rebuild canvas bases (and resize canvases) when orientation/size changes
-    if (typeof ResizeObserver !== "undefined" && contentEl) {
-      let lastW = contentEl.clientWidth;
+    // Resize canvases when the popup is resized (e.g. orientation change)
+    if (typeof ResizeObserver !== "undefined") {
+      let lastW = detail.clientWidth;
       const ro = new ResizeObserver(function () {
-        const w = contentEl.clientWidth;
+        const w = detail.clientWidth;
         if (Math.abs(w - lastW) > 20) {
           lastW = w;
           const ls = window.innerWidth > window.innerHeight && window.innerHeight < 520;
-          const newCW = Math.min(600, Math.max(280, w - (ls ? 258 : 36)));
+          const sw = ls ? 225 : 0;
+          const newCW = Math.min(600, Math.max(260, w - sw - 28));
           if (view.chart && view.chart.width !== newCW) {
             const newCH = Math.round(newCW * (220 / 600));
             view.chart.width = newCW; view.chart.height = newCH;
@@ -1054,11 +1117,9 @@ const DataHub = (function () {
           buildBases(view); paintFrame(view);
         }
       });
-      ro.observe(contentEl);
+      ro.observe(detail);
       view._ro = ro;
     }
-
-    appendStintsPits(detail, primary);
   }
 
   function makeOffscreen(w, h) {
