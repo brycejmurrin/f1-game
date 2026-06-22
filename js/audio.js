@@ -420,6 +420,8 @@ const GameAudio = (function () {
     harvSrc = null;
     lfo = null;
     skidSrc = null;
+    // Disconnect the test analyser tap so it doesn't accumulate across restarts.
+    if (dbgAnalyser) { try { dbgAnalyser.disconnect(); } catch (e) {} dbgAnalyser = null; }
     engineOn = false;
   }
 
