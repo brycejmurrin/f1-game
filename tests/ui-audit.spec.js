@@ -10,6 +10,12 @@ async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
 }
 
+async function waitTabLoaded(page) {
+  // Wait until the data hub spinner is gone (API resolved or failed), cap at 8s
+  await page.waitForFunction(() => !document.querySelector(".dh-spinner"), { timeout: 8_000 }).catch(() => {});
+  await page.waitForTimeout(300);
+}
+
 async function shot(page, name) {
   await page.waitForTimeout(300);
   await page.screenshot({ path: `tests/ui-screenshots/${name}.png`, fullPage: false });
@@ -114,7 +120,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.locator("#mb-data").click();
       await page.locator("#datahub").waitFor({ state: "visible" });
-      await page.waitForTimeout(500);
+      await waitTabLoaded(page);
       await shot(page, `${orient}-10-datahub`);
     });
 
@@ -301,7 +307,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.locator("#mb-data").click();
       await page.locator("#datahub").waitFor({ state: "visible" });
-      await page.waitForTimeout(600);
+      await waitTabLoaded(page);
       await shot(page, `${orient}-24-datahub-schedule`);
     });
 
@@ -311,7 +317,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#mb-data").click();
       await page.locator("#datahub").waitFor({ state: "visible" });
       await page.locator(".dh-tab").filter({ hasText: "STANDINGS" }).click();
-      await page.waitForTimeout(600);
+      await waitTabLoaded(page);
       await shot(page, `${orient}-25-datahub-standings`);
     });
 
@@ -321,7 +327,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#mb-data").click();
       await page.locator("#datahub").waitFor({ state: "visible" });
       await page.locator(".dh-tab").filter({ hasText: "LAST RACE" }).click();
-      await page.waitForTimeout(600);
+      await waitTabLoaded(page);
       await shot(page, `${orient}-26-datahub-lastrace`);
     });
   });

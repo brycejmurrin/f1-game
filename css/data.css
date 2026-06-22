@@ -2,18 +2,22 @@
 
 .dh-overlay {
   position: fixed; inset: 0; z-index: 50;
-  height: 100vh; height: 100dvh; /* dvh tracks the *visible* viewport on mobile */
+  height: 100vh; height: 100dvh;
   display: flex; align-items: center; justify-content: center;
   background: rgba(4, 4, 8, 0.82);
   padding: calc(12px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
   font-variant-numeric: tabular-nums;
 }
 
+/* In short landscape, stretch to fill full height (phone rotated) */
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-overlay { align-items: stretch; padding-top: 6px; padding-bottom: 6px; }
+}
+
 .dh-card {
   width: min(760px, 96vw);
-  max-height: 92vh;
-  /* dvh keeps the card within the area not covered by the browser's top/bottom
-     chrome, so the header + close button are never clipped */
+  /* Always fill most of the viewport — content scrolls inside */
+  min-height: clamp(300px, calc(100dvh - 60px), 900px);
   max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
   display: flex; flex-direction: column;
   background: #0d0d14;
@@ -21,6 +25,10 @@
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+/* Short landscape: card fills full height, no extra radius on top (flush with safe area) */
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-card { min-height: 0; height: 100%; max-height: none; border-radius: 10px; }
 }
 
 .dh-header {
@@ -72,6 +80,11 @@
   overflow-y: auto;
   padding: 16px 18px;
   -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column;  /* so flex:1 children (loading/error) expand */
+}
+/* Tighter padding on small phones */
+@media (max-width: 480px) {
+  .dh-content { padding: 12px 14px; }
 }
 .dh-tabbody { display: flex; flex-direction: column; gap: 12px; }
 
@@ -82,9 +95,13 @@
 }
 
 /* loading / error / empty */
-.dh-loading, .dh-error { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 12px; color: #9a9aa5; }
+.dh-loading, .dh-error {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 32px 12px; color: #9a9aa5;
+  flex: 1;  /* grow to fill the content area so the card always looks full */
+}
 @media (orientation: landscape) and (max-height: 520px) {
-  .dh-loading, .dh-error { padding: 18px 12px; }
+  .dh-loading, .dh-error { padding: 14px 12px; }
 }
 .dh-spinner {
   width: 34px; height: 34px; border-radius: 50%;
@@ -294,6 +311,22 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   max-width: 220px;
 }
 
+/* Slightly smaller pill tabs on very small phones */
 @media (max-width: 480px) {
-  .dh-tab { font-size: 10px; letter-spacing: 0.03em; padding: 10px 4px; }
+  .dh-tab { font-size: 10px; padding: 6px 10px; }
+}
+
+/* Last Race table: hide less-critical columns on narrow screens so the table fits */
+@media (max-width: 520px) {
+  .dh-th-team, .dh-td-team { display: none; }
+}
+@media (max-width: 400px) {
+  .dh-th-grid, .dh-td-grid { display: none; }
+}
+
+/* Last Race: tighten table cell padding on portrait */
+@media (max-width: 520px) {
+  .dh-table td, .dh-table thead th { padding: 6px 4px; }
+  .dh-td-time { width: auto; font-size: 11px; }
+  .dh-td-pts { width: 28px; }
 }
