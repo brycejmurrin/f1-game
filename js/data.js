@@ -195,6 +195,11 @@ const DataHub = (function () {
     for (const k in tabButtons) {
       tabButtons[k].classList.toggle("dh-active", k === id);
     }
+    // Scroll the active tab button into view on narrow screens where tabs overflow
+    const activeBtn = tabButtons[id];
+    if (activeBtn && activeBtn.scrollIntoView) {
+      activeBtn.scrollIntoView({ inline: "nearest", behavior: "smooth", block: "nearest" });
+    }
     const st = state[id];
     const maxAge = MAX_AGE[id] || 60 * MINUTE;
     if (st && st.node && (Date.now() - st.at) < maxAge) {
@@ -851,7 +856,12 @@ const DataHub = (function () {
 
   let telGen = 0;
   let telView = null;                 // the live telemetry view (for animation cleanup)
-  function stopTelAnim() { if (telView) pauseAnim(telView); }
+  function stopTelAnim() {
+    if (telView) {
+      pauseAnim(telView);
+      if (telView._ro) { telView._ro.disconnect(); telView._ro = null; }
+    }
+  }
 
   function loadTelemetrySet(sessionKey, picked, detail) {
     const myGen = ++telGen;
@@ -933,21 +943,30 @@ const DataHub = (function () {
     // transport: play / restart / speed / onboard — drives the scrub cursor
     detail.appendChild(buildTransport(view));
 
+    // Canvas width: match the actual content area so portrait renders at native res.
+    // contentEl.clientWidth includes padding (18px × 2 = 36px), subtract to get
+    // the usable width. Cap at 600 (the reference resolution for the chart).
+    const CW = contentEl
+      ? Math.min(600, Math.max(280, contentEl.clientWidth - 36))
+      : 600;
+    const CH_CHART = Math.round(CW * (220 / 600));   // maintain aspect ratio
+
     // trace chart (static traces are cached to an offscreen canvas; each frame
     // just blits that and overlays the moving cursor)
     const c1 = el("canvas", "dh-canvas");
-    c1.width = 600; c1.height = 220; c1.style.touchAction = "none";
+    c1.width = CW; c1.height = CH_CHART; c1.style.touchAction = "none";
     detail.appendChild(c1);
     view.chart = c1;
-    view.chartBase = makeOffscreen(600, 220);
+    view.chartBase = makeOffscreen(CW, CH_CHART);
 
     // delta strip (gap to the compare driver across the whole lap)
     if (view.compare) {
+      const CD_H = Math.round(CW * (72 / 600));
       const cd = el("canvas", "dh-canvas dh-delta");
-      cd.width = 600; cd.height = 72; cd.style.touchAction = "none";
+      cd.width = CW; cd.height = CD_H; cd.style.touchAction = "none";
       detail.appendChild(cd);
       view.delta = cd;
-      view.deltaBase = makeOffscreen(600, 72);
+      view.deltaBase = makeOffscreen(CW, CD_H);
       attachScrub(cd, view);
     }
 
@@ -989,6 +1008,17 @@ const DataHub = (function () {
     buildBases(view);
     paintFrame(view);
     telView = view;
+
+    // Rebuild canvas bases when the card resizes (e.g. orientation change)
+    if (typeof ResizeObserver !== "undefined" && contentEl) {
+      let lastW = contentEl.clientWidth;
+      const ro = new ResizeObserver(function () {
+        const w = contentEl.clientWidth;
+        if (Math.abs(w - lastW) > 20) { lastW = w; buildBases(view); paintFrame(view); }
+      });
+      ro.observe(contentEl);
+      view._ro = ro;
+    }
 
     appendStintsPits(detail, primary);
   }
