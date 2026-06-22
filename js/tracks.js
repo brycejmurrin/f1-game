@@ -573,15 +573,25 @@ const Tracks = (function () {
         const bankSide = bp ? bp.bsign[k] : 0;
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
-          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018;
+          // Sag: push terrain below road level. Inner vertex gets extra sag on
+          // elevation-change sections so the terrain face doesn't visually clip
+          // the road surface when the road climbs steeply.
+          const localGrade = v === 0 ? Math.abs(py[k] - py[(k + 1) % n]) : 0;
+          const innerExtra = v === 0 ? Math.min(localGrade * 2, 1.2) : 0;
+          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra;
           // inner vert tracks road height; outer verts ease down to the lap's
           // low point (or the flattened bridge ground, whichever is lower). The
           // quadratic ease keeps the run-off apron near track grade and pushes
           // the drop out to the distant grass, so a raised corner reads as an
           // embankment rather than a high plateau hanging over the rest of the lap.
+          // Cap the lateral drop so elevated sections look like natural slopes
+          // rather than cliff walls (without the cap, a 15 m elevation above pyMin
+          // produces a 12.5 % lateral grade — visually a near-vertical wall).
           const t = v / (NTV - 1);
           const ease = t * t;
-          const floorY = Math.min(gY[k], pyMin);
+          const DROP_CAP = 10;
+          const rawFloor = Math.min(gY[k], pyMin);
+          const floorY = Math.max(py[k] - DROP_CAP, rawFloor);
           const yBase = py[k] * (1 - ease) + floorY * ease;
           // match the road's banked outer edge: rise along up by the same lift,
           // tapering across the ribbon (full at inner edge, 0 at outer) so the
