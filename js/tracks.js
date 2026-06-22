@@ -461,20 +461,16 @@ const Tracks = (function () {
         }
         pos.push(px[k] + r[0] * o + u[0] * (rise[v] + by), py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02, pz[k] + r[2] * o + u[2] * (rise[v] + by));
         nrm.push(u[0], u[1], u[2]);
-        // Start/finish line: 2-segment checker (~8 m) with fine lateral bands.
-        // Lateral zone is determined by actual position (2 m bands) so squares
-        // are roughly 4 m × 2 m — visible but not blocky. Both dimensions
-        // alternate so k=0 and k=1 invert each other (true checker grid).
-        const isStartLine = k <= 1 && v >= 2 && v <= 11;
+        // Start/finish line: one segment (~4 m) of solid white across the
+        // full road width — matches how real F1 circuits paint the line.
+        const isStartLine = k === 0 && v >= 2 && v <= 11;
         let c;
         if (v === 0 || v === 13) {
           c = grass;
         } else if (v === 1 || v === 12) {
           c = grass;   // kerb ribbons added separately by buildKerbs
         } else if (isStartLine) {
-          const lateralZone = Math.floor((o + w) / 2.0); // 2 m-wide lateral bands
-          const whiteSquare = (lateralZone + k) % 2 === 0;
-          c = whiteSquare ? line : [0.08, 0.08, 0.09];
+          c = line;    // solid white finish stripe
         } else if (v === 2 || v === 3 || v === 10 || v === 11) {
           c = line;    // bold white edge line
         } else if (v === 6 || v === 7) {

@@ -1240,6 +1240,7 @@ function updateCar(c, dt, ranked) {
   // doesn't immediately re-pin itself: the player has to steer clear first.
   const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
   const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || (_testInput ? !!_testInput.throttle : Input.throttle())) : true;
+  if (c.isPlayer && onThrottle) c.lastThrottleT = raceT; // track when player last applied gas
   if (braking) {
     if (c.speed > 0) {
       c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
@@ -1697,8 +1698,10 @@ function updateCar(c, dt, ranked) {
     // for being WEDGED against a corner barrier (e.g. an inside tyre wall on an
     // incline): on open circuits wall contact doesn't set wallT and a car pinned
     // at |x| < hw isn't "offroad", so without it the car could sit at 0 forever.
-    // Gated past the race launch so the standing start (everyone at 0) is exempt.
-    const stoppedOnTrack = c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
+    // Gated on throttle having been applied recently so a player who voluntarily
+    // parks (no gas) is never rescued against their will.
+    const throttleRecent = raceT - (c.lastThrottleT || -99) < 4;
+    const stoppedOnTrack = throttleRecent && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
     const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
