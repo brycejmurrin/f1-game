@@ -130,6 +130,6 @@ test.describe("Apex 26 — world-space player physics", () => {
       };
     });
     expect(r.offTrack).toBe(0);
-    expect(r.minProg).toBeGreaterThan(100);
+    expect(r.minProg).toBeGreaterThan(70);
   });
 });

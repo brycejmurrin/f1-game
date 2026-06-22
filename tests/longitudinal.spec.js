@@ -39,7 +39,7 @@ test.describe("Apex 26 — longitudinal & grip", () => {
       window.__apex.clearInput();
       return v;
     });
-    expect(top).toBeGreaterThan(55);     // climbing strongly toward VMAX (94)
+    expect(top).toBeGreaterThan(40);     // climbing strongly toward VMAX (72)
     expect(top).toBeLessThan(100);       // never exceeds it
   });
 

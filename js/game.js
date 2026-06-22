@@ -140,15 +140,15 @@ function autoThrottle() { return Input.touchControlsNeeded() && steerMode !== "t
 let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
 
 // ---------- physics constants ----------
-const VMAX = 94;            // m/s base (~338 km/h) — F1 top end; wider gears, higher top speed
-const ACCEL = 13;           // m/s^2 at low speed
+const VMAX = 72;            // m/s base (~259 km/h) — F1 race pace; scales all speeds
+const ACCEL = 10;           // m/s^2 at low speed
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
 let PACE = 1.0;
-const BRAKE = 27;
-const REVERSE_MAX = -7;     // m/s — top reverse crawl speed (brake held at a stop)
-const REVERSE_ACCEL = 7;    // m/s^2 — how quickly the reverse crawl builds
+const BRAKE = 22;
+const REVERSE_MAX = -5;     // m/s — top reverse crawl speed (brake held at a stop)
+const REVERSE_ACCEL = 5;    // m/s^2 — how quickly the reverse crawl builds
 const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
 const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
 const LAT_MAX = 22;         // m/s^2 cornering grip
@@ -163,7 +163,7 @@ const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
 let WHEELBASE = 3.2;        // m; shorter = snappier turn-in (RESPONSE slider)
 let STEER_EXPO = 2.4;       // input shaping: higher = much gentler near centre
 let STEER_MAX_SLIP = 0.32;  // rad — max road-wheel steer angle (~18°), STEER LOCK
-let STEER_SPEED_REF = 80;   // m/s reference for the speed-sensitive lock taper:
+let STEER_SPEED_REF = 60;   // m/s reference for the speed-sensitive lock taper:
                             // higher = keeps more steering at speed (SPEED STEER slider)
 // Dynamic single-track ("bicycle") tyre model for the player. Each axle makes a
 // lateral force from its SLIP ANGLE (how far its travel differs from where it
@@ -218,9 +218,9 @@ const LONG_GRIP = 34;
 const BODY_ROLL_MAX = 0.06;   // rad (~3.4°) max chassis lean at full lateral grip
 const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
 const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
-const GRASS_V = 24;         // crawl speed on grass
-const DEPLOY_A = 5.0;       // extra accel from electric deploy
-const TAPER_LO = 54, TAPER_HI = 70;  // deploy tapers to 0 across this speed band
+const GRASS_V = 18;         // crawl speed on grass
+const DEPLOY_A = 4.0;       // extra accel from electric deploy
+const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
@@ -3046,7 +3046,7 @@ function wheelbaseFromSlider(v) { return 4.3 + (1.9 - 4.3) * (v - 1) / 9; } // 4
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
 function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // rad, .18..0.42, v5≈0.29
 function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
-function paceFromSlider(v)   { return 1 + (v - 5) * 0.06; }             // 0.76..1.30, v5=1.0
+function paceFromSlider(v)   { return v <= 5 ? 0.5 + (v - 1) * 0.125 : 1.0 + (v - 5) * 0.06; } // 0.50..1.30, v5=1.0
 // DRIVING HELP = ROAD_FOLLOW: how much of each corner the car tracks for you.
 // v6 ≈ 0.70 (the original feel); higher = the car does more of the steering.
 function helpFromSlider(v)   { return 0.25 + (v - 1) / 9 * 0.45; }      // 0.25..0.70 assist gain, v6≈0.50
