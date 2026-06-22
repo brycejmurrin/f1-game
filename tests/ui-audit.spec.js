@@ -2,6 +2,7 @@
 // UI audit — captures every screen/menu in portrait and landscape.
 // Run with: npx playwright test ui-audit --update-snapshots
 import { test, expect } from "@playwright/test";
+import { setupApiMocks } from "./f1-api-mock.js";
 
 const PORTRAIT  = { width: 390, height: 844 };   // iPhone 14
 const LANDSCAPE = { width: 844, height: 390 };   // same rotated
@@ -116,6 +117,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     });
 
     test("10 f1 data hub", async ({ page }) => {
+      await setupApiMocks(page);
       await page.goto("/");
       await waitReady(page);
       await page.locator("#mb-data").click();
@@ -303,6 +305,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     });
 
     test("24 data hub schedule tab", async ({ page }) => {
+      await setupApiMocks(page);
       await page.goto("/");
       await waitReady(page);
       await page.locator("#mb-data").click();
@@ -312,6 +315,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     });
 
     test("25 data hub standings tab", async ({ page }) => {
+      await setupApiMocks(page);
       await page.goto("/");
       await waitReady(page);
       await page.locator("#mb-data").click();
@@ -322,6 +326,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     });
 
     test("26 data hub last race tab", async ({ page }) => {
+      await setupApiMocks(page);
       await page.goto("/");
       await waitReady(page);
       await page.locator("#mb-data").click();
