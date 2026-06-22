@@ -18,7 +18,12 @@ async function loadTrack(page, circuit) {
 }
 
 export function scanCircuit(circuit) {
-  test(`blank scan: ${circuit}`, { timeout: 90_000 }, async ({ page }) => {
+  // 150s per circuit: this suite renders 25 frames under SwiftShader (CPU
+  // rasteriser, ~200× slower than a real GPU). The richer static scenery makes
+  // the densest circuits exceed the old 90s budget on software rendering alone;
+  // the test's job is BLANK-FRAME detection, not perf benchmarking, so the cap
+  // is raised to keep that detection working without false timeouts.
+  test(`blank scan: ${circuit}`, { timeout: 150_000 }, async ({ page }) => {
     let culled = 0;
     page.on("console", (m) => {
       const mm = m.text().match(new RegExp(`\\[scenery\\] ${circuit}: culled (\\d+)`));

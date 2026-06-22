@@ -1018,7 +1018,47 @@ const Tracks = (function () {
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
       // ribbon vert returns it), so a ridge/skyline never floats on a high section
-      addBox(out, [cx, groundYAt(k, dist) + sz[1] / 2 - 2, cz], sz, col, [t, u, r]);
+      const cy0 = groundYAt(k, dist) + sz[1] / 2 - 2;
+      const greenDom = col[1] > col[0] && col[1] > col[2] * 1.05;
+      // GREEN terrain → render as a ROUNDED organic mound (stacked frustums +
+      // dome cap) instead of a boxy slab, so wooded hills read as hills. Radius
+      // from the footprint; height from sz[1]. A small hash jitter keeps a run
+      // of mounds from looking like identical bumps.
+      if (greenDom) {
+        const foot = groundYAt(k, dist) - 2;
+        const R = Math.max(sz[0], sz[2]) * 0.5 * (0.92 + hash(k * 2.3 + side) * 0.2);
+        const H = sz[1] * (0.9 + hash(k * 3.7 + side * 1.3) * 0.35);
+        const c1 = [col[0], col[1], col[2]];
+        const c3 = [col[0] * 0.92, col[1] * 0.94, col[2] * 0.92];   // shaded crown
+        addFrustum(out, [cx, foot, cz], R, R * 0.5, H * 0.5, c1, 7);  // rounded base
+        addCone(out,    [cx, foot + H * 0.5, cz], R * 0.5, H * 0.5, c3, 7);  // dome cap
+        return;
+      }
+      const isBld = sz[1] > 26 && sz[1] > sz[2];
+      // Night skyline walls get a small glow floor so they aren't black planes.
+      const bcol = (isBld && def.night)
+        ? [Math.max(col[0], 0.20), Math.max(col[1], 0.19), Math.max(col[2], 0.24)] : col;
+      addBox(out, [cx, cy0, cz], sz, bcol, [t, u, r]);
+      // If this distant box reads as a BUILDING — tall, taller than it is deep,
+      // and not green terrain — give it window bands + a parapet so a city
+      // skyline doesn't render as flat dark planes. Wide/low/dune silhouettes
+      // (dunes, mesas) are left as plain masses.
+      if (isBld) {
+        const lit = !!def.night;
+        const win = lit ? [0.95, 0.86, 0.60]
+                        : [Math.min(1, col[0] * 1.6 + 0.05), Math.min(1, col[1] * 1.6 + 0.05), Math.min(1, col[2] * 1.6 + 0.07)];
+        const darkWin = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.6];
+        const floors = Math.max(2, Math.min(4, Math.round(sz[1] / 18)));
+        const fh = sz[1] / floors;
+        const base = cy0 - sz[1] / 2;
+        for (let i = 1; i < floors; i++) {
+          const wc = (lit && hash(k * 7.7 + i * 3.3 + dist * 0.1) < 0.34) ? darkWin : win;
+          // band on the camera-facing (u × sz2) face; thin in up, proud in sz2
+          addBox(out, [cx, base + (i + 0.5) * fh, cz], [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
+        }
+        // parapet cap so the roofline isn't a bare slab edge
+        addBox(out, [cx, base + sz[1] + 0.6, cz], [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
+      }
     };
 
     // ---------- composite scenery models (beyond single boxes) ----------
@@ -1259,9 +1299,12 @@ const Tracks = (function () {
     };
 
     // ---------- structures ----------
-    // Multi-storey building: mass + horizontal window bands + optional setback top.
-    // `gap` is the clearance of the building's inner face from the road edge (same
-    // convention as prop() / billboard()). Internally dist = gap + w/2.
+    // Multi-storey building with real MASSING — not a single box. Picks an
+    // archetype (flat / stepped / tapered / tower) by hash and stacks setback
+    // sections so the silhouette reads as a built structure. Each section is a
+    // solid core + inset glazing bands (corner columns show) + a mullion rib;
+    // the roofline gets a parapet and hash-varied clutter. `gap` is the inner
+    // face clearance from the road edge (dist = gap + w/2).
     const building = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
       if (w > d * 2.5)
@@ -1274,22 +1317,92 @@ const Tracks = (function () {
         console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (inner face on track)`);
         return;
       }
-      const body = opts.wall || [0.62, 0.64, 0.68];
-      // Lit (night) buildings: bright glazing so windows read as illuminated.
-      // A few floors are scattered "dark" (unlit rooms) via hash for realism.
-      // Unlit default: dark glass band, identical to the original behaviour.
-      const litWin = opts.windowCol || [0.95, 0.85, 0.55];   // warm bright default
-      const dark = [0.10, 0.11, 0.15];
-      const win = opts.lit ? litWin : (opts.window || [0.18, 0.26, 0.34]);
-      if (addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b) === false) return;  // on-track: dropped whole
-      const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
-      for (let i = 0; i < floors; i++) {
-        // when lit, ~28% of floors stay dark so the facade isn't a uniform glow
-        const wc = (opts.lit && hash(k * 13.7 + i * 5.1 + side * 2.3) < 0.28) ? dark : win;
-        addBox(out, vadd(p.c, p.u, (i + 0.62) * (h / floors)), [w * 1.01, (h / floors) * 0.46, d * 1.01], wc, b);  // glazing band
+      const nightLit = opts.lit || !!def.night;
+      let body = opts.wall || [0.62, 0.64, 0.68];
+      // Night city-glow floor: ambient + neon spill keep real building walls off
+      // pure black at night. Without this, dark-walled night facades (e.g. Vegas
+      // [0.20]) read as black silhouettes once the sun is low.
+      if (nightLit) body = [Math.max(body[0], 0.26), Math.max(body[1], 0.24), Math.max(body[2], 0.30)];
+      const litWin = opts.windowCol || [1.0, 0.88, 0.55];    // warm bright (night)
+      const darkW = [0.07, 0.08, 0.12];                       // unlit pane at night
+      // Day glass: reflective blue-grey that reads as a WINDOW on the wall, not a
+      // dark void — brighter than the wall so panes pop without hollowing it out.
+      const glass = opts.lit ? litWin : (opts.window || [0.26, 0.34, 0.48]);
+      const floorH = opts.floor || 4.0;
+      // One mass section, yBase → yBase+sh. The SOLID wall is the dominant
+      // surface; windows are short, flush, bright panels set INTO it, divided
+      // into a grid by wall-coloured mullions. Reads as a building with windows —
+      // never a hollow glass frame.
+      const section = (yBase, sw, sh, sd) => {
+        const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], body, b);   // solid wall mass
+        const rows = Math.max(2, Math.min(6, Math.round(sh / floorH)));
+        const fh = sh / rows;
+        // Window bands: ≈half each storey, glass-coloured, sitting PROUD of the
+        // wall so glancing angles never hide them. The solid wall between bands
+        // reads as the structure. Kept lean (a few boxes) for the renderer.
+        for (let r = 0; r < rows; r++) {
+          const wc = (opts.lit && hash(k * 13.7 + yBase * 0.7 + r * 5.1 + side * 2.3) < 0.22) ? darkW : glass;
+          addBox(out, vadd(p.c, p.u, yBase + (r + 0.5) * fh), [sw * 1.016, fh * 0.5, sd * 1.016], wc, b);
+        }
+        // Vertical wall mullions break the bands into a real window GRID (so the
+        // glazing reads as windows, not glowing floor stripes). ~1 per 5.5 m of
+        // length, capped — a handful of boxes, not one per pane.
+        const nm = Math.max(2, Math.min(5, Math.round(sd / 5.5)));
+        for (let c = 1; c <= nm; c++) {
+          const off = -sd / 2 + (c / (nm + 1)) * sd;
+          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.t, off), [sw * 1.03, sh, 0.55], body, b);
+        }
+        // and 1–2 on the end faces so those panes aren't floor stripes either
+        const nmR = sw > 16 ? 2 : 1;
+        for (let c = 1; c <= nmR; c++) {
+          const off = -sw / 2 + (c / (nmR + 1)) * sw;
+          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), [0.55, sh, sd * 1.03], body, b);
+        }
+        return ok;
+      };
+      // Darker ground-floor plinth so the mass sits grounded.
+      const plH = Math.min(3.2, h * 0.14);
+      addBox(out, vadd(p.c, p.u, plH / 2), [w * 1.02, plH, d * 1.02], [body[0] * 0.5, body[1] * 0.5, body[2] * 0.55], b);
+      // Archetype: short blocks stay simple, tall ones get dramatic massing.
+      const t = hash(k * 4.1 + side * 2.7);
+      const arch = opts.arch || (h < 22 ? (t < 0.7 ? "flat" : "stepped")
+                                : h < 42 ? (t < 0.45 ? "flat" : t < 0.8 ? "stepped" : "tapered")
+                                : (t < 0.38 ? "stepped" : t < 0.66 ? "tapered" : "tower"));
+      let topY = h, topW = w, topD = d;
+      if (arch === "flat") {
+        if (section(0, w, h, d) === false) return;
+      } else if (arch === "stepped") {
+        // two concentric setback tiers
+        const h1 = h * 0.62, h2 = h - h1;
+        if (section(0, w, h1, d) === false) return;
+        section(h1, w * 0.7, h2, d * 0.7);
+        topW = w * 0.7; topD = d * 0.7;
+      } else if (arch === "tapered") {
+        // straight shaft + a frustum crown (sloped glass cap)
+        const bh = h * 0.72;
+        if (section(0, w, bh, d) === false) return;
+        const rB = Math.max(w, d) * 0.5, rT = Math.max(w, d) * 0.27;
+        addFrustum(out, vadd(p.c, p.u, bh), rB, rT, h - bh, body, 8, b);
+        // a couple of glazing rings up the crown
+        addCyl(out, vadd(p.c, p.u, bh + (h - bh) * 0.45), rB * 0.62, (h - bh) * 0.12, glass, 8, b);
+        topW = w * 0.5; topD = d * 0.5;
+      } else { // tower: wide podium base + slender setback shaft
+        const baseH = Math.min(h * 0.24, 10);
+        if (section(0, w, baseH, d) === false) return;
+        section(baseH, w * 0.68, h - baseH, d * 0.68);
+        topW = w * 0.68; topD = d * 0.68;
       }
-      if (opts.setback) addBox(out, vadd(p.c, p.u, h + h * 0.1), [w * 0.6, h * 0.22, d * 0.6], body, b);
-      if (opts.roof) addBox(out, vadd(p.c, p.u, h + (opts.setback ? h * 0.22 : 0) + 1), [w * 0.3, 2, d * 0.3], [0.3, 0.3, 0.33], b);  // rooftop plant
+      // Roofline: parapet + hash-varied silhouette element (no two identical).
+      addBox(out, vadd(p.c, p.u, topY + 0.55), [topW * 1.03, 1.1, topD * 1.03], body, b);
+      if (opts.roof) {
+        addBox(out, vadd(p.c, p.u, topY + 1.6), [topW * 0.3, 2, topD * 0.3], [0.3, 0.3, 0.33], b);  // rooftop plant
+      } else {
+        const rt = hash(k * 3.3 + side * 1.9);
+        if (rt < 0.28)      addCyl(out, vadd(p.c, p.u, topY + 1.3), Math.min(topW, topD) * 0.16, 2.0, [0.32, 0.32, 0.36], 6, b);  // water tank
+        else if (rt < 0.5)  addBox(out, vadd(p.c, p.u, topY + 1.4), [topW * 0.3, 2.6, topD * 0.3], [0.30, 0.30, 0.34], b);       // plant housing
+        else if (rt < 0.72) addCyl(out, vadd(p.c, p.u, topY + 3), 0.12, 7, [0.40, 0.40, 0.42], 4, b);                           // antenna mast
+        // else: clean flat roof with just the parapet
+      }
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
     };
     // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
@@ -1316,12 +1429,19 @@ const Tracks = (function () {
       along(s0, s1, step, (k) => {
         const s = hash(k * 5.3 + side * 0.9);
         const w = 14 + s * 16;                    // 14–30 m wide facade unit
-        const h = minH + hash(k * 9.1 + side * 1.7) * (maxH - minH);
+        // Height = blend of a per-building hash and a slow per-cluster hash so the
+        // skyline has runs of related heights (a real street), not jarring
+        // tall-short-tall noise. Occasional unit spikes into a landmark tower.
+        const hLocal = hash(k * 9.1 + side * 1.7);
+        const hCluster = hash(Math.floor(k / 3) * 2.7 + side * 1.3);
+        let h = minH + (0.6 * hLocal + 0.4 * hCluster) * (maxH - minH);
+        if (hash(k * 1.7 + side * 3.1) < 0.10) h = Math.min(maxH * 1.5, h * 1.5);  // landmark tower
         const col = palette[((idx % palette.length) + palette.length) % palette.length];
         const wcol = lit ? (hash(k * 2.1 + side) < 0.5 ? warm : cool) : undefined;
-        building(k, side, gap, w, h, depth, {
+        building(k, side, gap, w, h, depth + (s - 0.5) * depth * 0.3, {
           wall: col, floor: opts.floor || (4 + s * 3),
           lit: lit, windowCol: opts.windowCol || wcol,
+          setback: h > minH + (maxH - minH) * 0.66,   // tall units step back at the top
         });
         idx++;
       });
