@@ -539,9 +539,9 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   background: #ffd600; color: #000;
 }
 #hud-sectors {
-  position: absolute;
-  top: calc(8px + var(--sat));
-  right: calc(8px + var(--sar));
+  position: fixed;
+  top: calc(56px + var(--sat));
+  right: calc(10px + var(--sar));
   background: rgba(8, 8, 14, 0.72);
   border-radius: 6px;
   padding: 5px 9px;
