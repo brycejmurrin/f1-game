@@ -753,25 +753,24 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    clipped and primary actions (START / SAVE / QUIT) never fall below the fold.
    Gated on a short height so tablets and desktop keep the roomy layout. ---- */
 @media (orientation: landscape) and (max-height: 520px) {
-  /* main menu: branding left — red buttons | grey buttons right */
+  /* main menu: branding left — buttons right (single column, vertically centred) */
   #overlay {
-    display: grid; grid-template-columns: 1fr 1fr;
+    display: grid; grid-template-columns: 1fr 1.2fr;
     align-items: center; align-content: center; justify-items: start;
-    gap: 3px 28px; padding: 8px 24px; overflow: hidden;
+    gap: 4px 32px; padding: 10px 28px; overflow: hidden;
   }
-  #title { grid-column: 1; font-size: clamp(22px, 6vw, 42px); margin: 0; margin-left: clamp(20px, 5vw, 60px); }
+  #title { grid-column: 1; font-size: clamp(26px, 7.5vw, 48px); margin: 0; margin-left: clamp(12px, 3vw, 36px); }
   #title::after { height: 3px; }
-  #subtitle { grid-column: 1; margin: 3px 0 0; font-size: 11px; }
-  #audiostate { grid-column: 1; font-size: 10px; margin-top: 3px; min-height: 0; }
-  #disclaimer { grid-column: 1 / -1; position: static; font-size: 10px; justify-self: center; margin-top: 6px; }
+  #subtitle { grid-column: 1; margin: 5px 0 0; font-size: 12px; margin-left: clamp(12px, 3vw, 36px); }
+  #audiostate { grid-column: 1; font-size: 10px; margin-top: 3px; min-height: 0; margin-left: clamp(12px, 3vw, 36px); }
+  #disclaimer { grid-column: 1 / -1; position: static; font-size: 10px; justify-self: center; margin-top: 4px; }
   #menu-buttons {
-    grid-column: 2; grid-row: 1 / 4; align-self: center; justify-self: center;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px;
-    width: auto; margin: 0;
+    grid-column: 2; grid-row: 1 / 5; align-self: center; justify-self: start;
+    display: grid; grid-template-columns: 1fr; gap: 6px;
+    width: 100%; margin: 0;
   }
-  #menu-buttons .bigbtn { width: 100%; min-width: 90px; margin: 0; padding: 8px 10px; font-size: 14px; }
-  #menu-buttons .bigbtn:not(.alt) { grid-column: 1; }
-  #menu-buttons .bigbtn.alt { grid-column: 2; }
+  #menu-buttons .bigbtn { width: 100%; min-width: 130px; margin: 0; padding: 9px 14px; font-size: 14px; grid-column: 1; }
+  #menu-buttons .bigbtn.alt { grid-column: 1; }
 
   /* dialog panels: tighter padding + buttons */
   .panel { padding: 12px 18px; }
