@@ -25,7 +25,8 @@
       const { out, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, tower,
               billboard, gantry, marshalPost, fence, guardrail, tyreWall,
-              anchor, addBox, addCyl, addCone, addFrustum, vadd, onTrack, groundYAt } = api;
+              anchor, addBox, addCyl, addCone, addFrustum, vadd, onTrack, groundYAt,
+              forestEdge, along } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Dry Hungarian-summer palette ----
@@ -50,6 +51,9 @@
       const LAMP_ARM  = [0.34, 0.35, 0.36]; // bracket
       // Crowd seating tints (varied so stands read as packed)
       const CROWD = [[0.55, 0.32, 0.30], [0.50, 0.52, 0.58], [0.62, 0.58, 0.40], [0.48, 0.50, 0.54]];
+      // Lit window warmth for pit building / concourse strips
+      const WIN_WARM = [0.92, 0.78, 0.42];
+      const WIN_COOL = [0.78, 0.84, 0.96];
 
       // ---- Track centre + radius (used for horizon ring placement) ----
       let cx = 0, cz = 0;
@@ -74,18 +78,19 @@
         ridge(cx + Math.cos(a) * ringHorizon, cz + Math.sin(a) * ringHorizon, pyMin,
               a + Math.PI / 2, 340 + h * 160, 190 + h * 100, 38 + h * 22, HAZE2);
       }
-      // Mid-slope tree masses on the inner amphitheatre wall (24 world-coord cones).
-      // Anchored to pyMin so they never float; placed far enough (ringMid) that
-      // onTrack will catch any accidental road overlap.
-      const ringMid = rad + 330;
-      for (let i = 0; i < 24; i++) {
-        const a = i / 24 * 6.2832, h = hash(i * 19 + 100);
+      // Mid-distance ring of tree-topped hillocks — the amphitheatre bowl wall.
+      // Kept far enough (rad+320) that onTrack(10) catches any near overlap.
+      // These read as the characteristic valley hillsides, not close obstacles.
+      const ringMid = rad + 320;
+      for (let i = 0; i < 18; i++) {
+        const a = i / 18 * 6.2832, h = hash(i * 19 + 100);
         const tx = cx + Math.cos(a) * ringMid;
         const tz = cz + Math.sin(a) * ringMid;
-        if (onTrack(tx, tz, 10)) continue;
-        // Sit cones on pyMin so they never float on the elevated back section
-        addCone(out, [tx, pyMin, tz], 22 + h * 12, 26 + h * 14,
-                h < 0.4 ? TREE : TREE2, 6, null);
+        if (onTrack(tx, tz, 14)) continue;
+        // Low wide hillocks (modest height, wide base) — reads as rolling terrain
+        // not isolated cones. Radius kept to ≤18 so they stay well clear of track.
+        addCone(out, [tx, pyMin, tz], 18 + h * 10, 16 + h * 10,
+                h < 0.4 ? TREE : TREE2, 7, null);
       }
 
       // ---- Distant banking terraces ----
@@ -109,40 +114,46 @@
         }
       });
 
-      // ---- Scattered trackside trees and dry scrub ----
-      every(32, (kk) => {
-        for (const side of [-1, 1]) {
-          const s = hash(kk * 19 + side);
-          if (s < 0.45) continue;
-          const dist = 62 + s * 50;
-          (s < 0.55 ? pine : tree)(kk, side, dist, 9 + s * 5, s < 0.50 ? TREE : TREE2);
-        }
-      });
-      // Dry scrub close to the edge (~every 40 m, very sparse)
-      every(40, (kk) => {
+      // ---- Natural amphitheatre treelines via forestEdge ----
+      // forestEdge() guarantees the canopy inner edge starts at `gap` from the road
+      // edge — no canopy ever pokes through a barrier/fence.
+      // The catch fences run at gap=6.5; using gap=8 puts all foliage behind them.
+
+      // Outside (side=1): continuous hillside treeline — the classic Hungaroring
+      // valley wall glimpsed through the fences on the run from T1 → T4.
+      forestEdge(0.0, 0.25, 1, 8, { density: 0.55, hMin: 8, hMax: 14,
+                                     col: TREE, col2: TREE2, pineFrac: 0.45 });
+      // Outside mid-sector (T4 → T7): open-feeling with slightly sparser treeline
+      forestEdge(0.25, 0.50, 1, 8, { density: 0.45, hMin: 7, hMax: 12,
+                                     col: TREE2, col2: TREE, pineFrac: 0.35 });
+      // Outside back sector: amphitheatre wall of mixed oak/pine
+      forestEdge(0.50, 1.00, 1, 8, { density: 0.50, hMin: 8, hMax: 13,
+                                     col: TREE, col2: TREE2, pineFrac: 0.40 });
+
+      // Inside (side=-1): tighter valley — more pines, darker greens
+      forestEdge(0.0, 0.14, -1, 8, { density: 0.55, hMin: 7, hMax: 13,
+                                      col: TREE, col2: TREE2, pineFrac: 0.55 });
+      // Gap around pit complex (s=0.00 is pit building; covered by hedge below)
+      forestEdge(0.14, 0.35, -1, 8, { density: 0.48, hMin: 8, hMax: 13,
+                                       col: TREE2, col2: TREE, pineFrac: 0.40 });
+      forestEdge(0.35, 0.55, -1, 8, { density: 0.52, hMin: 8, hMax: 14,
+                                       col: TREE, col2: TREE2, pineFrac: 0.45 });
+      forestEdge(0.55, 1.00, -1, 8, { density: 0.48, hMin: 7, hMax: 12,
+                                       col: TREE2, col2: TREE, pineFrac: 0.38 });
+
+      // Dry scrub close to the edge (~every 44 m, sparse) — pushed clear of fences
+      // gap=9 keeps bush base (radius~1.6m) safely behind fence at gap=6.5
+      every(44, (kk) => {
         for (const side of [-1, 1]) {
           const s = hash(kk * 37 + side * 11);
-          if (s < 0.60) continue;
-          bush(kk, side, 18 + s * 14, SCRUB);
+          if (s < 0.62) continue;
+          bush(kk, side, 9 + s * 10, SCRUB);
         }
       });
-      // Four small tree clumps at key turns
-      const clump = (s, side, dist) => {
-        for (let j = 0; j < 4; j++) {
-          const kk = (K(s) + j) % n;
-          if (j % 2) tree(kk, side, dist + hash(kk * 5 + j) * 12, 8 + hash(kk * 7 + j) * 4, TREE2);
-          else       pine(kk, side, dist + hash(kk * 3 + j) * 12, 8 + hash(kk * 7 + j) * 4, TREE);
-        }
-      };
-      clump(0.15, -1, 90);
-      clump(0.50,  1, 95);
-      clump(0.65, -1, 88);
-      clump(0.82,  1, 92);
 
       // ---- Lamp posts — night-ready + day character ----
       // Double-arm lamp posts every ~80 m on both sides of the full circuit.
       // Height 10 m; warm sodium-tinted head. Placed at gap=5 (just beyond armco).
-      // On day they read as steel infrastructure; on night the bright heads glow.
       every(80, (kk) => {
         for (const side of [-1, 1]) {
           const hh = hash(kk * 31 + side * 7);
@@ -160,8 +171,7 @@
           addBox(out, headC, [1.0, 0.3, 0.7], LAMP_HEAD, b);
         }
       });
-      // Extra lamp clusters at key braking zones (Turn 1, twisty sector) for
-      // grandstand readability — denser spacing over those stands.
+      // Extra lamp clusters at key braking zones (Turn 1, twisty sector)
       for (const [s0, s1, side] of [[0.95, 0.08, 1], [0.52, 0.62, 1], [0.30, 0.44, -1]]) {
         let kk = K(s0);
         const kEnd = K(s1), step = Math.max(1, Math.round(50 / ds));
@@ -176,18 +186,15 @@
         }
       }
 
-      // ---- Grandstand emissive accent strips ----
-      // Bright fascia strips on the grandstand roof slab and front lip to give
-      // the stands a lit-underside look that reads as floodlighting after dark.
+      // ---- Grandstand emissive accent strips (lit fascia) ----
+      // Bright fascia strips on grandstand roof and front lip — floodlighting character.
       const FASCIA  = [0.94, 0.92, 0.84]; // warm near-white underlit fascia
       const FASCIA2 = [0.78, 0.80, 0.82]; // cooler secondary trim
       const standAccent = (s, side, gap, len) => {
         const a = anchor(K(s), side, gap + 5);
         if (onTrack(a.c[0], a.c[2], len * 0.5)) return;
         const b = [a.r, a.u, a.t];
-        // Roof fascia underside strip — sits at 13 m (matches grandstand roof y)
         addBox(out, vadd(a.c, a.u, 13.15), [0.3, 0.5, len + 2], FASCIA, b);
-        // Front lip trim — vertical accent on the crowd box front face
         addBox(out, vadd(a.c, a.u, 7.5), [0.2, 0.6, len - 2], FASCIA2, b);
       };
       // Main straight and Turn 1 group
@@ -202,6 +209,25 @@
       standAccent(0.68, -1, 10, 44);
       standAccent(0.80,  1, 10, 40);
       standAccent(0.90,  1, 10, 62);
+
+      // ---- Grandstand lit-window concourse strips (night legibility) ----
+      // Amber + cool-white strips on the concourse level and upper deck rear,
+      // so grandstands read as illuminated structures even in dusk light.
+      const gsLit = [
+        { s: 0.00, side: 1, gap: 18, len: 96 },   // pit-straight main stand back
+        { s: 0.06, side: 1, gap: 14, len: 58 },   // Turn 1 stand back
+        { s: 0.35, side: -1, gap: 15, len: 44 },  // twisty sector L
+        { s: 0.55, side: -1, gap: 15, len: 46 },  // sector exit L
+        { s: 0.90, side: 1, gap: 15, len: 58 },   // final sector R
+      ];
+      for (const g of gsLit) {
+        const k = K(g.s);
+        const a = anchor(k, g.side, g.gap);
+        // Ground-floor concourse strip: warm amber
+        addBox(out, vadd(a.c, a.u, 1.4), [0.22, 1.0, g.len - 4], WIN_WARM, [a.r, a.u, a.t]);
+        // Upper deck rear: cooler press/broadcast tint
+        addBox(out, vadd(a.c, a.u, 8.6), [0.22, 0.8, g.len - 6], WIN_COOL, [a.r, a.u, a.t]);
+      }
 
       // ---- Continuous track furniture ----
       guardrail(0.00, 1.00,  1, 4.5, STEEL);  // outside armco, full lap
@@ -222,9 +248,11 @@
       }
 
       // ---- s=0: pit complex (L) + main grandstand (R) ----
-      building(K(0.00), -1, 2, 14, 9, 70, { wall: WHITE, window: [0.36, 0.42, 0.48], floor: 4 });
+      // Main pit building: white modern concrete, lit glazing for dusk legibility
+      building(K(0.00), -1, 2, 14, 9, 70, { wall: WHITE, window: WIN_WARM, lit: true, floor: 4 });
       groundPlane(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK);
-      building(K(0.03), -1, 32, 16, 10, 34, { wall: WHITE, window: [0.40, 0.46, 0.52], floor: 4 });
+      // Rear hospitality/paddock building
+      building(K(0.03), -1, 32, 16, 10, 34, { wall: WHITE, window: WIN_WARM, lit: true, floor: 4 });
       // Comms tower — provides vertical landmark
       tower(K(0.02), -1, 44, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: true });
       // Pit wall + kerb trim
@@ -232,7 +260,25 @@
       place(K(0.02), -1, 2, [0.4, 0.3, 70], RED);
       // Start/finish gantry
       gantry(0.005, 7.5, [0.30, 0.32, 0.36]);
-      // Main covered grandstand — 2-tier R side
+
+      // ---- Pit building lit window detail (warm panes on facade) ----
+      {
+        const aW = anchor(K(0.00), -1, 9);
+        // Ground-floor amber windows — pit lane facing
+        for (let wi = 0; wi < 6; wi++) {
+          const tOff = (wi - 2.5) * 10;
+          addBox(out, vadd(vadd(aW.c, aW.t, tOff), aW.u, 2.6),
+                 [0.18, 1.6, 3.8], WIN_WARM, [aW.r, aW.u, aW.t]);
+        }
+        // Upper-floor cool-white office light
+        for (let wi = 0; wi < 6; wi++) {
+          const tOff = (wi - 2.5) * 10;
+          addBox(out, vadd(vadd(aW.c, aW.t, tOff), aW.u, 6.8),
+                 [0.18, 1.6, 3.8], WIN_COOL, [aW.r, aW.u, aW.t]);
+        }
+      }
+
+      // ---- Main covered grandstand — 2-tier R side ----
       grandstand(0.00, 1,  9, 100, SHELL,  CROWD[1]);
       grandstand(0.00, 1, 28,  90, SHELL2, CROWD[0]);
       billboard(K(0.00), 1, 28, 26, 7, RED);

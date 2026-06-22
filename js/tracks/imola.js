@@ -27,12 +27,15 @@
               groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               along, mountain, tree, pine, hedge, bush,
               grandstand, building, tower, billboard, marshalPost, gantry,
-              fence, guardrail, tyreWall, wall } = api;
+              fence, guardrail, tyreWall, wall,
+              forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette (Imola riverside parkland: rich greens, warm Italian earth, Santerno blues) ----
       const CANOPY  = [0.21, 0.48, 0.21];   // sunlit deciduous canopy — warm spring green
+      const CANOPY2 = [0.17, 0.44, 0.19];   // slightly deeper mid-canopy variant
       const WOODS   = [0.10, 0.28, 0.14];   // shaded woods — deep forest
+      const WOODS2  = [0.13, 0.32, 0.16];   // mid-shadow forest layer
       const BANK    = [0.44, 0.65, 0.28];   // sunlit grass bank — warm hillside
       const RIVER   = [0.26, 0.40, 0.54];   // blue-green Santerno water — cooler tone
       const GRAVEL  = [0.80, 0.72, 0.50];   // pale tan gravel — classic pit/runoff
@@ -81,70 +84,96 @@
                    Object.assign({ seg: rg.seg, seed: i * 13 + rg.extra }, rg.opts));
         }
       }
-      // Tiered dark-green box ridges settling behind the trackside treeline.
-      every(70, (k) => {
-        for (const side of [-1, 1]) {
-          backdrop(k, side, 200 + hash(k * 13 + side) * 90, [110, 24, 90], [0.16, 0.34, 0.18]);
-        }
-      });
 
-      // ---- DENSE PARKLAND: deciduous canopy + conifers walling both sides ----
-      every(16, (k) => {
-        for (const side of [-1, 1]) {
-          const s = hash(k * 41 + side);
-          if (s < 0.18) continue;
-          const dist = 8 + s * 22, h = 10 + s * 9;
-          if (s < 0.60) tree(k, side, dist, h, [0.17 + s * 0.08, 0.46, 0.20]);
-          else pine(k, side, dist, h + 2, [0.08 + s * 0.05, 0.32, 0.14]);
-        }
-      });
-      // Second, deeper rank of forest
-      every(24, (k) => {
-        for (const side of [-1, 1]) {
-          const s = hash(k * 67 + side * 5);
-          if (s < 0.38) continue;
-          const dist = 28 + s * 30, h = 13 + s * 9;
-          if (s < 0.68) pine(k, side, dist, h + 2, WOODS);
-          else tree(k, side, dist, h, [0.14 + s * 0.06, 0.42, 0.18]);
-        }
-      });
-      // Sunlit broadleaf verge trees scattered between
-      every(55, (k) => {
-        const h = hash(k * 53 + 9);
-        if (h < 0.40) return;
-        tree(k, h < 0.7 ? -1 : 1, 12 + h * 11, 12 + h * 7, [0.19 + h * 0.06, 0.47, 0.21]);
-      });
-      // Third, far rank: deep mature woodland mass
-      every(36, (k) => {
-        for (const side of [-1, 1]) {
-          const s = hash(k * 91 + side * 13);
-          if (s < 0.42) continue;
-          const dist = 54 + s * 54;
-          if (onTrack(px[k], pz[k], 0)) continue;
-          if (s < 0.75) tree(k, side, dist, 15 + s * 10, [0.12 + s * 0.07, 0.38, 0.17]);
-          else pine(k, side, dist, 17 + s * 9, [0.09, 0.28, 0.12]);
-        }
-      });
-      // Low understory shrubs dotted along the verge
+      // ---- PARKLAND TREELINE: use forestEdge() for guaranteed no-clip placement ----
+      // forestEdge auto-positions each tree so the canopy inner edge = gap from road edge.
+      // Primary near treeline — mixed deciduous/conifer all the way round the circuit.
+      // gap=4 is the minimum safe clearance past the road edge + any barriers.
+      forestEdge(0.00, 1.00, -1, 4, { density: 0.72, hMin: 9, hMax: 15,
+        col:  [0.09, 0.26, 0.13],   // pine: deep park green
+        col2: [0.18, 0.44, 0.20],   // deciduous: warm mid-green
+        pineFrac: 0.50 });
+      forestEdge(0.00, 1.00,  1, 4, { density: 0.68, hMin: 8, hMax: 14,
+        col:  [0.10, 0.28, 0.14],
+        col2: [0.20, 0.46, 0.21],
+        pineFrac: 0.45 });
+
+      // Second rank — slightly deeper, taller trees for a layered woodland canopy.
+      // gap=16 keeps the back-rank well behind the front rank.
+      forestEdge(0.00, 1.00, -1, 18, { density: 0.50, hMin: 12, hMax: 19,
+        col:  [0.08, 0.22, 0.11],
+        col2: [0.14, 0.38, 0.17],
+        pineFrac: 0.60 });
+      forestEdge(0.00, 1.00,  1, 18, { density: 0.46, hMin: 11, hMax: 18,
+        col:  [0.09, 0.24, 0.12],
+        col2: [0.15, 0.36, 0.16],
+        pineFrac: 0.55 });
+
+      // Third rank — tall mature woodland mass for depth/silhouette.
+      forestEdge(0.00, 1.00, -1, 40, { density: 0.30, hMin: 15, hMax: 22,
+        col:  [0.07, 0.20, 0.10],
+        col2: [0.12, 0.32, 0.14],
+        pineFrac: 0.65 });
+      forestEdge(0.00, 1.00,  1, 40, { density: 0.28, hMin: 14, hMax: 21,
+        col:  [0.08, 0.22, 0.11],
+        col2: [0.11, 0.30, 0.13],
+        pineFrac: 0.60 });
+
+      // Low understory shrubs dotted along the verge — kept well clear with bush() (compact).
       every(38, (k) => {
         const s = hash(k * 29 + 3);
         if (s < 0.50) return;
         bush(k, s < 0.8 ? -1 : 1, 6 + s * 7, [0.17 + s * 0.08, 0.42, 0.19]);
       });
 
-      // ---- Dense forest lining Tamburello approach (s≈0.05-0.10) and turn-in (s≈0.88-0.98) ----
-      for (let i = 0; i < 36; i++) {
-        const s = i / 36;
-        if (s > 0.12 && s < 0.88) continue;
-        const kk = K(s);
-        for (const side of [-1, 1]) {
-          const h2 = hash(kk * 81 + side + i);
-          if (h2 < 0.30) continue;
-          const dist = 9 + h2 * 12;
-          if (h2 < 0.55) pine(kk, side, dist, 11 + h2 * 7, [0.09, 0.26, 0.13]);
-          else tree(kk, side, dist, 10 + h2 * 6, [0.16, 0.40, 0.19]);
-        }
+      // ---- Denser forest at Tamburello approach & exit — gap=5 keeps canopy clear ----
+      forestEdge(0.88, 1.00, -1, 5, { density: 0.85, hMin: 10, hMax: 16,
+        col: [0.08, 0.24, 0.12], col2: [0.15, 0.38, 0.18], pineFrac: 0.60 });
+      forestEdge(0.88, 1.00,  1, 5, { density: 0.80, hMin: 10, hMax: 15,
+        col: [0.09, 0.26, 0.13], col2: [0.16, 0.40, 0.19], pineFrac: 0.55 });
+      forestEdge(0.00, 0.12, -1, 5, { density: 0.85, hMin: 10, hMax: 16,
+        col: [0.08, 0.24, 0.12], col2: [0.15, 0.38, 0.18], pineFrac: 0.60 });
+      forestEdge(0.00, 0.12,  1, 5, { density: 0.80, hMin: 10, hMax: 15,
+        col: [0.09, 0.26, 0.13], col2: [0.16, 0.40, 0.19], pineFrac: 0.55 });
+
+      // ---- Piratella blind hill-crest (s≈0.33-0.42): dense wooded enclosure ----
+      forestEdge(0.33, 0.42, -1, 5, { density: 0.90, hMin: 11, hMax: 17,
+        col: WOODS, col2: WOODS2, pineFrac: 0.70 });
+      forestEdge(0.33, 0.42,  1, 5, { density: 0.88, hMin: 11, hMax: 16,
+        col: WOODS, col2: WOODS2, pineFrac: 0.65 });
+      // Piratella hill backdrop boxes (far field dark wooded ridge)
+      for (const side of [-1, 1]) {
+        backdrop(K(0.35), side, 70 + side * 6, [60, 30, 90], [0.14, 0.32, 0.17]);
       }
+
+      // ---- Acque Minerali valley (s≈0.46-0.56): misty hollow with deeper forestEdge ----
+      // REPLACED individual pine/tree at dist 16-34 (clipping risk) with forestEdge.
+      forestEdge(0.45, 0.57,  1, 5, { density: 0.88, hMin: 12, hMax: 18,
+        col: [0.07, 0.22, 0.10], col2: [0.12, 0.32, 0.14], pineFrac: 0.65 });
+      forestEdge(0.45, 0.57, -1, 5, { density: 0.70, hMin: 10, hMax: 16,
+        col: [0.08, 0.24, 0.12], col2: [0.13, 0.33, 0.15], pineFrac: 0.55 });
+      // Misty valley floor — gap raised to 18 to stay clear of road+forestEdge front rank
+      groundPlane(K(0.48),  1, 18, [44, 70], [0.77, 0.81, 0.77]);
+      groundPlane(K(0.51),  1, 16, [40, 58], [0.75, 0.79, 0.75]);
+      groundPlane(K(0.54),  1, 14, [36, 50], [0.76, 0.80, 0.76]);
+      // A few scrubby bushes at the valley margins (bush is compact, gap=7 safe)
+      every(28, (k) => {
+        const s2 = hash(k * 83 + 5);
+        if (s2 < 0.45 || k < K(0.45) || k > K(0.57)) return;
+        bush(k, 1, 7 + s2 * 5, [0.14, 0.36, 0.16]);
+      });
+
+      // ---- Variante Alta chicane (s≈0.64-0.70): mixed woodland on crest ----
+      forestEdge(0.62, 0.72, -1, 4, { density: 0.80, hMin: 9, hMax: 14,
+        col: WOODS, col2: CANOPY2, pineFrac: 0.55 });
+      forestEdge(0.62, 0.72,  1, 4, { density: 0.75, hMin: 9, hMax: 14,
+        col: WOODS, col2: CANOPY2, pineFrac: 0.50 });
+
+      // ---- Rivazza descent (s≈0.76-0.88): dense side-forest on the bowl ----
+      forestEdge(0.76, 0.89, -1, 4, { density: 0.78, hMin: 10, hMax: 16,
+        col: WOODS, col2: WOODS2, pineFrac: 0.60 });
+      forestEdge(0.76, 0.89,  1, 4, { density: 0.72, hMin: 9, hMax: 15,
+        col: WOODS, col2: WOODS2, pineFrac: 0.55 });
 
       // ---- s 0.00 R — Santerno river: CONTINUOUS water & banks along pit straight ----
       // River runs on the right side from pit straight (s≈0.00) → Tosa (s≈0.28).
@@ -161,7 +190,7 @@
       hedge(0.02, 0.28, 1, 30, 9, WOODS);
 
       // ---- s 0.00 L — Old pit building + main grandstand on the pit straight ----
-      building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5 });
+      building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
       // red trim row fronting the old pit building
       prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
       grandstand(0.965, -1, 10, 90, [0.55, 0.58, 0.62], RED);
@@ -172,7 +201,6 @@
       // ---- s 0.05 L — Tamburello chicane + Ayrton Senna memorial ----
       groundPlane(K(0.05), -1, 8, [26, 30], BANK);
       place(K(0.05), -1, 14, [2, 3.2, 2], [0.45, 0.40, 0.30]);   // bronze Senna memorial
-      tree(K(0.05), -1, 22, 12, CANOPY);
       // red/white kerb accents
       place(K(0.05), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
@@ -192,26 +220,6 @@
       grandstand(0.28, -1, 12, 60, [0.52, 0.55, 0.60], RED);
       grandstand(0.31, -1, 12, 50, [0.54, 0.57, 0.61], [0.20, 0.42, 0.72]);
       groundPlane(K(0.28), -1, 6, [34, 40], GRAVEL);
-
-      // ---- s 0.35 L+R far — Piratella blind hill-crest: dark wooded green walls ----
-      for (const side of [-1, 1]) {
-        backdrop(K(0.35), side, 70 + side * 6, [60, 30, 90], [0.14, 0.32, 0.17]);
-        pine(K(0.35), side, 30, 13, WOODS);
-        pine(K(0.36), side, 24, 12, WOODS);
-      }
-
-      // ---- s 0.46-0.56 R — Acque Minerali: tree-lined valley with misty green hollow ----
-      for (let i = 0; i < 10; i++) {
-        const k = K(0.46 + i * 0.009);
-        const h2 = hash(k * 7);
-        if (i < 5) pine(k, 1, 16 + h2 * 18, 15 + h2 * 8, [0.07, 0.23, 0.11]);
-        tree(k, 1, 32 + h2 * 20, 13 + h2 * 5, [0.12, 0.33, 0.14]);
-        if (i > 1 && i < 8) bush(k, 1, 9 + h2 * 8, [0.14, 0.36, 0.16]);
-      }
-      // Misty valley floor
-      groundPlane(K(0.48), 1, 18, [44, 70], [0.77, 0.81, 0.77]);
-      groundPlane(K(0.51), 1, 16, [40, 58], [0.75, 0.79, 0.75]);
-      groundPlane(K(0.54), 1, 14, [36, 50], [0.76, 0.80, 0.76]);
 
       // ---- s 0.58-0.70 L far — Wooded hills backdrop with the campanile tower rising ----
       for (let i = 0; i < 4; i++) {
@@ -241,9 +249,7 @@
         place(K(0.67), side, 2, [0.7, 0.5, 8], WHITE);
       }
       bush(K(0.66), -1, 10, BANK);
-      bush(K(0.66), 1, 12, [0.16, 0.36, 0.18]);
-      tree(K(0.65), -1, 20, 10, [0.15, 0.40, 0.18]);
-      pine(K(0.68), 1, 18, 11, WOODS);
+      bush(K(0.66),  1, 12, [0.16, 0.36, 0.18]);
 
       // ---- s 0.78-0.86 L — Rivazza double-left descent: grass banks, gravel, grandstand + wooded sides ----
       grandstand(0.80, -1, 12, 55, [0.52, 0.55, 0.60], RED);
@@ -252,10 +258,6 @@
       groundPlane(K(0.81), -1, 20, [36, 55], BANK);    // gap raised to 20 to clear road+grandstand
       // shaded fog dip at Rivazza
       groundPlane(K(0.82), -1, 14, [26, 38], [0.74, 0.78, 0.74]);
-      // woody enclosure on the descent
-      pine(K(0.79), -1, 28, 12, WOODS);
-      tree(K(0.82), 1, 25, 11, [0.12, 0.34, 0.16]);
-      tree(K(0.85), 1, 20, 10, WOODS);
 
       // ---- Italian town buildings at Variante Alta / Rivazza (s=0.60–0.80) ----
       // All windows use WIN_LIT for day warmth + night legibility.
@@ -268,7 +270,7 @@
       ];
       for (const [s, side, dist, bw, bh] of TOWN_POS) {
         const tc = (bh > 20) ? TERRA2 : STONE3;
-        building(K(s), side, dist, bw, bh, bw * 0.8, { wall: tc, window: WIN_LIT, floor: 3 });
+        building(K(s), side, dist, bw, bh, bw * 0.8, { wall: tc, window: WIN_LIT, floor: 3, lit: true });
       }
 
       // ---- s 0.92 R near — Variante Bassa / pit approach kerbs back toward river ----
@@ -298,9 +300,9 @@
       gantry(0.965, 7.0, [0.18, 0.18, 0.20]);
 
       // ---- Pit / paddock complex along the pit straight (left) ----
-      building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: WIN_LIT, floor: 4 });
-      building(K(0.90), -1, 20, 22, 9, 40, { wall: [0.66, 0.67, 0.70], window: WIN_LIT, floor: 4, roof: true });
-      building(K(0.94), -1, 46, 30, 12, 34, { wall: STONE, window: WIN_LIT, floor: 4 }); // paddock hospitality
+      building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: WIN_LIT, floor: 4, lit: true });
+      building(K(0.90), -1, 20, 22, 9, 40, { wall: [0.66, 0.67, 0.70], window: WIN_LIT, floor: 4, roof: true, lit: true });
+      building(K(0.94), -1, 46, 30, 12, 34, { wall: STONE, window: WIN_LIT, floor: 4, lit: true }); // paddock hospitality
       // fuel depot (tall cylindrical tanks) — two tanks side by side, not overlapping.
       // Tank A at dist=56, tank B offset +6m along t to avoid overlap.
       {
@@ -371,14 +373,14 @@
       //  GRANDSTANDS + CROWDS at the marquee corners
       // ============================================================
       grandstand(0.99, -1, 11, 60, [0.50, 0.53, 0.58], CROWD_C);
-      grandstand(0.05, 1, 20, 70, [0.52, 0.55, 0.60], CROWD_B);
+      grandstand(0.05,  1, 20, 70, [0.52, 0.55, 0.60], CROWD_B);
       // Tamburello / Variante Tamburello viewing bank stand (left, s≈0.07)
       grandstand(0.07, -1, 16, 56, [0.54, 0.56, 0.60], CROWD_A);
       // Tosa hairpin — extra stand + opposite-side terrace
-      grandstand(0.27, 1, 16, 44, [0.52, 0.55, 0.60], CROWD_B);
+      grandstand(0.27,  1, 16, 44, [0.52, 0.55, 0.60], CROWD_B);
       // Acque Minerali — packed natural amphitheatre stand on the right bank
-      grandstand(0.51, 1, 16, 60, [0.52, 0.55, 0.60], CROWD_A);
-      grandstand(0.54, 1, 18, 46, [0.54, 0.57, 0.61], CROWD_C);
+      grandstand(0.51,  1, 16, 60, [0.52, 0.55, 0.60], CROWD_A);
+      grandstand(0.54,  1, 18, 46, [0.54, 0.57, 0.61], CROWD_C);
       // Rivazza — big banked stand on the descent
       grandstand(0.82, -1, 14, 64, [0.52, 0.55, 0.60], CROWD_B);
 
@@ -386,31 +388,31 @@
       //  TRACK FURNITURE — fences, guardrails, tyre walls, billboards
       // ============================================================
       fence(0.96, 0.10, -1, 4, 4, [0.62, 0.64, 0.66]);
-      fence(0.49, 0.56, 1, 4, 4, [0.62, 0.64, 0.66]);
+      fence(0.49, 0.56,  1, 4, 4, [0.62, 0.64, 0.66]);
       fence(0.79, 0.86, -1, 4, 4, [0.62, 0.64, 0.66]);
       // Armco guardrails lining the river-side run and fast sweeps
       guardrail(0.00, 0.18, 1, 3, [0.78, 0.78, 0.80]);
       guardrail(0.20, 0.30, -1, 3, [0.78, 0.78, 0.80]);
-      guardrail(0.60, 0.70, 1, 3, [0.78, 0.78, 0.80]);
+      guardrail(0.60, 0.70,  1, 3, [0.78, 0.78, 0.80]);
       // Tyre walls protecting the chicane apexes + hairpin outside
-      tyreWall(0.05, 0.075, -1, 2, RED);
+      tyreWall(0.05,  0.075, -1, 2, RED);
       tyreWall(0.115, 0.135, -1, 2, [0.20, 0.40, 0.70]);
-      tyreWall(0.27, 0.295, -1, 2, RED);
-      tyreWall(0.655, 0.675, 1, 2, [0.20, 0.40, 0.70]);
-      tyreWall(0.79, 0.815, -1, 2, RED);
-      tyreWall(0.915, 0.93, 1, 2, RED);
+      tyreWall(0.27,  0.295, -1, 2, RED);
+      tyreWall(0.655, 0.675,  1, 2, [0.20, 0.40, 0.70]);
+      tyreWall(0.79,  0.815, -1, 2, RED);
+      tyreWall(0.915, 0.93,   1, 2, RED);
 
       // ---- Billboards / sponsor hoardings at key viewing areas ----
-      billboard(K(0.05), 1, 18, 14, 5, [0.86, 0.16, 0.14]);   // Tamburello
-      billboard(K(0.12), -1, 16, 12, 5, [0.20, 0.40, 0.70]);  // Villeneuve chicane
-      billboard(K(0.27), 1, 18, 12, 5, [0.90, 0.80, 0.20]);   // Tosa hairpin
-      billboard(K(0.51), 1, 20, 14, 5, [0.86, 0.30, 0.20]);   // Acque Minerali
-      billboard(K(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);  // Variante Alta
-      billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);  // Rivazza
-      billboard(K(0.95), 1, 16, 12, 5, [0.90, 0.80, 0.20]);   // pit straight
+      billboard(K(0.05),  1, 18, 14, 5, [0.86, 0.16, 0.14]);   // Tamburello
+      billboard(K(0.12), -1, 16, 12, 5, [0.20, 0.40, 0.70]);   // Villeneuve chicane
+      billboard(K(0.27),  1, 18, 12, 5, [0.90, 0.80, 0.20]);   // Tosa hairpin
+      billboard(K(0.51),  1, 20, 14, 5, [0.86, 0.30, 0.20]);   // Acque Minerali
+      billboard(K(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);   // Variante Alta
+      billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);   // Rivazza
+      billboard(K(0.95),  1, 16, 12, 5, [0.90, 0.80, 0.20]);   // pit straight
 
       // ---- Trackside hospitality / TV compound near Acque Minerali ----
-      building(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: WIN_LIT, floor: 3, roof: true });
+      building(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: WIN_LIT, floor: 3, roof: true, lit: true });
       // Paddock marquee tents at the paddock (s≈0.92, left)
       {
         const a = anchor(K(0.92), -1, 30);

@@ -24,7 +24,7 @@
       const { out, n, px, pz, place, prop, backdrop, groundPlane, wall, grandstand,
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
         fence, guardrail, tyreWall, hedge, billboard, gantry, marshalPost, bush,
-        ferrisWheel, tower, onTrack, groundYAt } = api;
+        ferrisWheel, tower, onTrack, groundYAt, forestEdge, cityFront } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Île Notre-Dame palette (bright June day) ----
@@ -137,10 +137,36 @@
       for (let i = 0; i < 8; i++) {
         groundPlane(K(0.065 + i * 0.020), -1, 14, [220, 2, 280], BASIN);
       }
-      // Far bank of the basin: low green treeline ridge across the water
+      // Far bank of the basin: dense broadleaf forestEdge (safe gap behind fence)
+      forestEdge(0.07, 0.21, -1, 18, {
+        density: 0.75, hMin: 9, hMax: 16,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.2
+      });
+      // Far bank low treeline backdrop across the water
       for (let i = 0; i < 12; i++) {
         const k = K(0.08 + (i / 12) * 0.12);
         backdrop(k, -1, 140 + hash(i * 11) * 25, [20, 7 + hash(i * 5) * 5, 20], [0.22, 0.40, 0.22]);
+      }
+
+      // ===================================================================
+      // s 0.13–0.35 — Parc Jean-Drapeau: parkland forestEdge both sides
+      // (replaces old manual tree() loops that clipped into fences)
+      // ===================================================================
+      // Right verge: park trees from Senna S through the back of the island
+      forestEdge(0.13, 0.35, 1, 12, {
+        density: 0.72, hMin: 8, hMax: 14,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
+      });
+      // Left verge: treeline on the inner infield side
+      forestEdge(0.13, 0.30, -1, 12, {
+        density: 0.60, hMin: 7, hMax: 12,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
+      });
+
+      // Shrub clumps for low-level ground greenery detail
+      for (let i = 0; i < 18; i++) {
+        bush(K(0.16 + i * 0.0088), (i % 2) ? 1 : -1, 9 + hash(i * 11) * 5,
+          (i % 2) ? [0.22, 0.42, 0.20] : [0.18, 0.38, 0.18]);
       }
 
       // ===================================================================
@@ -150,12 +176,10 @@
         // Main hall: inner face at gap 170 m, footprint 40 m wide × 40 m deep, 70 m tall
         const k = K(0.25);
         building(k, 1, 170, 40, 70, 40,
-          { wall: [0.80, 0.82, 0.86], window: [0.60, 0.72, 0.84], floor: 6 });
+          { wall: [0.80, 0.82, 0.86], window: [0.60, 0.72, 0.84], floor: 6,
+            lit: true, windowCol: [0.90, 0.95, 1.0] });
 
         // Stepped upper blocks placed via anchor, ABOVE the main hall roof.
-        // anchor at dist=190 (center of the 40 m-wide main block face + half-width)
-        // so the stacked boxes sit directly on top of the main building.
-        // main hall roof y ≈ groundYAt(k, 190) + 70; we use vadd with a.u to climb.
         const a = anchor(k, 1, 190);
         // First step: 30×30 × 16 m, rising from height 72 (2 m above roof to avoid z-fight)
         addBox(out, vadd(a.c, a.u, 72 + 8),  [30, 16, 30], [0.84, 0.86, 0.90], [a.r, a.u, a.t]);
@@ -165,19 +189,6 @@
 
       // ===================================================================
       // s 0.30 L far — Biosphère geodesic dome (landmark across St. Lawrence)
-      //
-      // The dome sits 220 m off the track edge (well across the river) so
-      // geometry is placed in world space via anchor + vadd along the up axis.
-      // Rings stack from ground (y=0) upward; each frustum is centred at its
-      // own mid-height so rings touch cleanly with no gap or overlap.
-      //
-      // Ring spec: [rBase, rTop, height]   (all in metres)
-      //   bottom:  45 → 40, h=14  (widening base skirt)
-      //   lower:   40 → 30, h=16  (main lower sphere section)
-      //   upper:   30 → 14, h=16  (narrowing upper section)
-      //   neck:    14 →  5, h=10  (transition to cupola)
-      //   cupola:   5 →  5, h= 6  (flat-top drum)
-      // Then a small cone cap on the very top.
       // ===================================================================
       {
         const k = K(0.30);
@@ -185,7 +196,6 @@
         const DOME   = [0.76, 0.80, 0.84];  // light steel-grey lattice
         const DOME_D = [0.70, 0.74, 0.78];  // slightly darker lower rings
 
-        // Accumulate y from ground level (a.c is already at groundYAt)
         let y = 0;
         const rings = [
           [45, 40, 14, DOME_D],   // base skirt
@@ -195,7 +205,6 @@
           [ 5,  5,  6, DOME],     // cupola drum
         ];
         for (const [rb, rt, h, col] of rings) {
-          // centre of frustum is at y + h/2 along the up axis from anchor
           addFrustum(out, vadd(a.c, a.u, y + h / 2), rb, rt, h, col, 14, [a.r, a.u, a.t]);
           y += h;
         }
@@ -206,6 +215,45 @@
       // St. Lawrence water band between island and downtown
       for (let i = 0; i < 5; i++) {
         groundPlane(K(0.30 + i * 0.022), -1, 30, [260, 2, 240], RIVER);
+      }
+
+      // ===================================================================
+      // s 0.30–0.46 L far — Montreal CBD skyline across St. Lawrence
+      //
+      // Three tiers via cityFront() so buildings align and windows are lit.
+      // lit:true ensures glazing reads as bright glass in daylight and emissive
+      // lit windows at dusk / night.
+      // ===================================================================
+
+      // Front rank: mid-rise towers (40–120 m), tight step for a dense skyline
+      cityFront(0.30, 0.46, -1, 200, {
+        minH: 40, maxH: 120, depth: 28, step: 18,
+        palette: [
+          [0.54, 0.58, 0.64], [0.58, 0.60, 0.66],
+          [0.50, 0.54, 0.60], [0.62, 0.62, 0.68],
+        ],
+        lit: true,
+        windowCol: [0.62, 0.78, 0.98],   // cool blue-white reflective glass
+        floor: 6,
+      });
+
+      // Mid-rank infill behind the front row — slightly taller towers
+      cityFront(0.305, 0.455, -1, 270, {
+        minH: 60, maxH: 200, depth: 30, step: 26,
+        palette: [
+          [0.50, 0.54, 0.60], [0.46, 0.50, 0.56],
+          [0.54, 0.52, 0.58], [0.48, 0.52, 0.58],
+        ],
+        lit: true,
+        windowCol: [0.70, 0.82, 1.0],
+        floor: 5,
+      });
+
+      // Far hazed backdrop rank — silhouetted against the sky
+      for (let i = 0; i < 20; i++) {
+        const k = K(0.30 + (i / 20) * 0.17);
+        backdrop(k, -1, 370 + hash(i * 19) * 50,
+                 [24, 50 + hash(i * 13) * 80, 24], [0.50, 0.55, 0.62]);
       }
 
       // ===================================================================
@@ -248,31 +296,49 @@
       billboard(K(0.58), -1, 11, 12, 4, [0.88, 0.82, 0.22]);
 
       // ===================================================================
-      // s 0.58–0.75 R — Casino Straight: water slab + parkland trees
+      // s 0.58–0.75 R — Casino Straight: water slab + parkland forestEdge
+      // (old tree() loop with dist 7-17 replaced with forestEdge — no clipping)
       // ===================================================================
       for (let i = 0; i < 6; i++) {
         groundPlane(K(0.565 + i * 0.019), 1, 14, [200, 2, 260], BASIN);
       }
-      for (let i = 0; i < 22; i++) {
-        const s    = 0.575 + i * 0.0038;
-        const side = (i % 2) ? 1 : -1;
-        tree(K(s), side, 7 + hash(i * 7) * 10, 5 + hash(i * 4) * 5, (i % 3) ? FOLIAGE : FOLIAGE2);
-      }
+      // Right verge: island parkland trees behind the rowing basin
+      forestEdge(0.575, 0.75, 1, 14, {
+        density: 0.80, hMin: 8, hMax: 15,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.20
+      });
+      // Left verge: infield trees along the Casino straight
+      forestEdge(0.58, 0.72, -1, 12, {
+        density: 0.65, hMin: 7, hMax: 13,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
+      });
 
       // ===================================================================
       // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
       // ===================================================================
       // Grandstand midway on the back straight
       grandstand(0.74, -1, 11, 64, [0.48, 0.49, 0.54], [0.56, 0.40, 0.36]);
-      // Canal/water feature off the right verge
+
+      // Canal / water feature off the right verge
       for (let i = 0; i < 3; i++) {
         groundPlane(K(0.78 + i * 0.020), 1, 16, [130, 2, 160], RIVER);
       }
-      // Far treeline backdrop on the canal's far bank
+      // Far treeline backdrop on the canal's far bank (behind the water)
       for (let i = 0; i < 8; i++) {
         backdrop(K(0.78 + (i / 8) * 0.08), 1, 135 + hash(i * 11) * 25, [22, 8, 22], [0.20, 0.40, 0.22]);
       }
       billboard(K(0.84), -1, 11, 12, 4, [0.86, 0.30, 0.26]);
+
+      // Parkland forestEdge: back straight and final sector
+      // (replaces scattered tree() calls with clipping-safe placement)
+      forestEdge(0.75, 0.92, 1, 14, {
+        density: 0.68, hMin: 8, hMax: 14,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
+      });
+      forestEdge(0.66, 0.90, -1, 12, {
+        density: 0.60, hMin: 7, hMax: 13,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
+      });
 
       // ===================================================================
       // s 0.92 both — Final chicane: tight kerb funnel + tyre walls
@@ -291,8 +357,6 @@
       wall(0.955, 0.99, 1, 0.8, 1.8, [0.80, 0.81, 0.82], 0.6);
 
       // Red "Bienvenue" signature stripe on the wall face.
-      // anchor gap=0.78 places us flush with the wall face; the stripe box
-      // is 0.08 m thick (proud of wall by a few cm), 0.5 m tall, 18 m long.
       {
         const k = K(0.97);
         const a = anchor(k, 1, 0.78);
@@ -301,71 +365,6 @@
       // Grandstand viewing the Wall + final chicane
       grandstand(0.97, -1, 12, 90, [0.50, 0.51, 0.56], [0.60, 0.36, 0.30]);
       billboard(K(0.96), -1, 12, 14, 4, [0.88, 0.82, 0.22]);
-
-      // ===================================================================
-      // s 0.13–0.85 — Parkland trees (Parc Jean-Drapeau) lining circuit
-      // ===================================================================
-      for (let i = 0; i < 48; i++) {
-        const s    = 0.13 + i * 0.0048;
-        const side = (i % 2) ? 1 : -1;
-        const dist = 8 + hash(i * 13) * 9;
-        const height = 5 + hash(i * 7) * 6;
-        tree(K(s), side, dist, height, (i % 4) ? FOLIAGE : FOLIAGE2);
-      }
-
-      // Shrub clumps for low-level ground greenery detail
-      for (let i = 0; i < 18; i++) {
-        bush(K(0.16 + i * 0.0088), (i % 2) ? 1 : -1, 9 + hash(i * 11) * 5,
-          (i % 2) ? [0.22, 0.42, 0.20] : [0.18, 0.38, 0.18]);
-      }
-
-      // ===================================================================
-      // s 0.30–0.46 L far — Montreal CBD skyline across St. Lawrence
-      //
-      // Three tiers of buildings at 210 m, 290 m, and 360 m from the track
-      // edge.  Window colour is deliberately vivid (0.68–0.88 in the blue
-      // channel) so the glazing reads as reflective glass in daylight and
-      // as lit windows at dusk / in night screenshots.
-      // ===================================================================
-
-      // Front-rank towers (dense, varied heights: 85–240 m)
-      for (let i = 0; i < 28; i++) {
-        const s  = 0.30 + (i / 28) * 0.16;
-        const k  = K(s);
-        const h  = hash(k * 23 + i * 7);
-        const ht = 85 + h * 155;
-        const w  = 12 + hash(k * 11 + i * 3) * 10;
-        building(k, -1, 210 + i * 14, w, ht, w,
-          { wall: [0.54, 0.58, 0.64], window: [0.62, 0.74, 0.88], floor: 6 });
-        // Emissive lit-window overlay: a thin bright box on the near face,
-        // offset so it sits ~0.2 m proud of the building facade.
-        // Only on tall towers (ht > 140) to keep draw count reasonable.
-        if (ht > 140) {
-          const a = anchor(k, -1, 210 + i * 14 - w * 0.5);
-          addBox(out, vadd(a.c, a.u, ht * 0.55),
-                 [0.2, ht * 0.30, w * 0.96],
-                 [0.75, 0.85, 0.98],   // cool blue-white lit glass
-                 [a.r, a.u, a.t]);
-        }
-      }
-
-      // Mid-rank infill behind the front rank (70–180 m tall)
-      for (let i = 0; i < 20; i++) {
-        const s  = 0.305 + (i / 20) * 0.155;
-        const k  = K(s);
-        const h  = hash(k * 31 + i * 11);
-        const ht = 70 + h * 110;
-        const w  = 14 + hash(k * 17 + i * 5) * 8;
-        building(k, -1, 290 + i * 18, w, ht, w,
-          { wall: [0.50, 0.54, 0.60], window: [0.60, 0.70, 0.84], floor: 5 });
-      }
-
-      // Far hazed backdrop rank — silhouetted against the sky
-      for (let i = 0; i < 20; i++) {
-        const k = K(0.30 + (i / 20) * 0.17);
-        backdrop(k, -1, 360 + hash(i * 19) * 50,
-                 [24, 50 + hash(i * 13) * 80, 24], [0.50, 0.55, 0.62]);
-      }
     },
   }
   );

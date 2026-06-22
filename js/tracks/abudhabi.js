@@ -24,7 +24,8 @@
       const { out, n, px, pz, pyMin, place, prop, groundPlane, addBox,
         anchor, onTrack, hash, vadd, building, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
-        fence, guardrail, tyreWall, marshalPost, wall, along } = api;
+        fence, guardrail, tyreWall, marshalPost, wall, along,
+        cityFront, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -74,46 +75,50 @@
       }
 
       // ===================================================================
-      // CONTINUOUS Yas Island marina skyline: two rings of lit buildings
-      // wrapping the lap. Modern resort aesthetic — emissive lit windows
-      // and coloured LED rooftop accents so buildings read bright at night.
+      // Yas Island skyline: cityFront() street-wall facades with lit windows
+      // Wrap the far side of the circuit in a continuous resort/hotel streetscape.
+      // Using cityFront() instead of scattered ring-boxes so buildings are ALIGNED,
+      // CONTINUOUS, and properly lit for night/dusk legibility.
       // ===================================================================
-      for (const [extra, N, jit] of [[200, 60, 60], [290, 50, 90]]) {
-        const ring = trad + extra;
-        for (let i = 0; i < N; i++) {
-          const a = i / N * 6.2832, h = hash(i * 13 + extra), h2 = hash(i * 29 + extra + 11);
-          const bx = cx + Math.cos(a) * (ring + (h - 0.5) * jit);
-          const bz = cz + Math.sin(a) * (ring + (h - 0.5) * jit);
-          const w = 20 + h * 28, d = 20 + h2 * 28, hh = 14 + h * 54;
-          // Facade shell — modern glass-and-concrete resort tower
-          const shellCol = (i % 4 === 0) ? [0.34, 0.37, 0.42] : [0.28, 0.30, 0.36];
-          addBox(out, [bx, pyMin + hh / 2, bz], [w, hh, d], shellCol);
-          // Emissive upper-floor window band — bright lit windows visible at night
-          const win = (i % 2) ? WIN_EMI : WIN_WARM;
-          addBox(out, [bx, pyMin + hh - 4, bz], [w + 0.8, 8, d + 0.8], win);
-          // Mid-floor lit band (alternating cool/warm for variety)
-          const winMid = (i % 3 === 0) ? WIN : WIN_WARM;
-          addBox(out, [bx, pyMin + hh * 0.5, bz], [w + 0.5, hh * 0.14, d + 0.5], winMid);
-          // LED rooftop beacon — strong colour so the skyline reads against the dark sky
-          const bc = LED_CYCLE[i % 3];
-          addBox(out, [bx, pyMin + hh + 2.5, bz], [3.5, 5, 3.5], bc);
-          // Warm amber base uplight strip — hotel ground-level glow
-          if (i % 3 !== 2) addBox(out, [bx, pyMin + 1.2, bz], [w + 1.0, 2.4, d + 1.0], WARM);
-        }
-      }
+      // Main Yas island hotel/resort strip — far right of the pit straight
+      cityFront(0.15, 0.35, 1, 55, {
+        minH: 22, maxH: 58, depth: 26, lit: true,
+        palette: [[0.18, 0.20, 0.30], [0.22, 0.22, 0.32], [0.16, 0.18, 0.28], [0.20, 0.24, 0.34]],
+        windowCol: WIN_WARM, step: 24,
+      });
+      // Marina/resort strip along the back section — left side
+      cityFront(0.35, 0.55, -1, 52, {
+        minH: 18, maxH: 44, depth: 22, lit: true,
+        palette: [[0.15, 0.17, 0.26], [0.18, 0.20, 0.28], [0.20, 0.22, 0.30]],
+        windowCol: WIN_EMI, step: 22,
+      });
+      // Yas island east side — opposite the marina
+      cityFront(0.56, 0.76, -1, 50, {
+        minH: 16, maxH: 42, depth: 22, lit: true,
+        palette: [[0.14, 0.16, 0.24], [0.18, 0.19, 0.27], [0.16, 0.18, 0.26]],
+        windowCol: WIN_WARM, step: 20,
+      });
+      // Final sector resort/hotel strip (approach to hotel)
+      cityFront(0.76, 0.88, 1, 54, {
+        minH: 20, maxH: 52, depth: 24, lit: true,
+        palette: [[0.17, 0.19, 0.27], [0.20, 0.21, 0.30], [0.22, 0.22, 0.32]],
+        windowCol: WIN_EMI, step: 22,
+      });
 
       // ===================================================================
-      // Mid-depth leisure structures: domes + low resort halls + warm lanterns
+      // Mid-depth leisure structures: domes + low resort halls — farther back
+      // so they don't clash with the cityFront street walls.
       // ===================================================================
       {
         const ring = trad + 350;
-        const N = 38;
+        const N = 28;
         for (let i = 0; i < N; i++) {
           const a = (i + 0.4) / N * 6.2832, h = hash(i * 17 + 3);
           const lx = cx + Math.cos(a) * ring, lz = cz + Math.sin(a) * ring;
           const w = 44 + h * 56;
-          addBox(out, [lx, pyMin + 9, lz], [w, 18, w * 0.7], DARK);
-          addBox(out, [lx, pyMin + 18, lz], [w * 0.5, 6, w * 0.4], WARM);
+          addBox(out, [lx, pyMin + 9, lz], [w, 18, w * 0.7], [0.14, 0.15, 0.20]);
+          // lit window band on mid-depth leisure buildings
+          addBox(out, [lx, pyMin + 14, lz], [w * 0.9, 4, w * 0.65], WIN_WARM);
         }
       }
 
@@ -195,7 +200,7 @@
 
       // ===================================================================
       // s 0.55 R mid — MARINA opens: dark water planes + yacht fleet
-      // White hulls with masts + mooring posts. Reduced density for performance.
+      // White hulls with masts + mooring posts.
       // ===================================================================
       for (let i = 0; i < 10; i++) groundPlane(K(0.52 + i * 0.030), 1, 14, [140, 1.2, 140], WATER);
       for (let i = 0; i < 24; i++) {
@@ -213,7 +218,7 @@
         // cabin on larger boats
         if (big > 1.2) addBox(out, vadd(hc, a.u, 2.5 * big), [2.4 * big, 1.4 * big, 4.5 * big], [0.82, 0.84, 0.90], [a.r, a.u, a.t]);
       }
-      // mooring posts and buoys (reduced from 14 to 10)
+      // mooring posts and buoys
       for (let i = 0; i < 10; i++) {
         const k = K(0.54 + i * 0.033);
         const a = anchor(k, 1, 28 + (i % 3) * 7);
@@ -227,10 +232,11 @@
       // s 0.62 R mid — MARINA HOTEL cluster: modern white/glass resort slab +
       // warm base uplight, flanked by two shorter wings.
       // Emissive lit window highlights: bright overlay so glass reads lit at night.
+      // Using lit:true on building() for proper window glow effect.
       // ===================================================================
-      building(K(0.62), 1, 25, 54, 60, 32, { wall: [0.20, 0.22, 0.30], window: WIN_EMI, floor: 6 });
-      building(K(0.60), 1, 30, 36, 36, 26, { wall: [0.18, 0.20, 0.28], window: WIN_WARM, floor: 5 });
-      building(K(0.64), 1, 30, 36, 40, 26, { wall: [0.18, 0.20, 0.28], window: WIN_EMI, floor: 5 });
+      building(K(0.62), 1, 25, 54, 60, 32, { wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
+      building(K(0.60), 1, 30, 36, 36, 26, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_WARM, floor: 5 });
+      building(K(0.64), 1, 30, 36, 40, 26, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 5 });
       // Bright crown caps — lit top floors glow against the night sky
       {
         const aH = anchor(K(0.62), 1, 25 + 27);   // dist = gap + w/2
@@ -273,8 +279,8 @@
       // ===================================================================
       // s 0.88 OVER — W YAS HOTEL (hero): twin tall curved towers with sweeping
       // LED-lit lattice arch spanning the track. Night-race hero landmark.
-      // Third pass: brighter grid-shell panels, emissive lit window floors,
-      // stronger arch glow, base light pools on the hotel plaza.
+      // The iconic Yas Viceroy hotel straddles the circuit with a glowing LED
+      // grid-shell canopy — teal/magenta/amber LEDs, lit glass facades.
       // ===================================================================
       {
         const k = K(0.88);
@@ -377,10 +383,10 @@
       grandstand(0.92, -1, 8, 80, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
 
       // Second hotel group at s 0.44 R (Radisson / Abu Dhabi circuit area)
-      // Emissive window colours for prominent night appearance
-      building(K(0.44), 1, 36, 42, 48, 28, { wall: [0.18, 0.20, 0.28], window: WIN_EMI, floor: 6 });
-      building(K(0.45), 1, 37, 28, 34, 20, { wall: [0.16, 0.18, 0.26], window: WIN_WARM, floor: 5 });
-      building(K(0.43), 1, 42, 32, 28, 22, { wall: [0.15, 0.17, 0.24], window: WIN_EMI, floor: 5 });
+      // Using lit:true for proper night window glow
+      building(K(0.44), 1, 36, 42, 48, 28, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 6 });
+      building(K(0.45), 1, 37, 28, 34, 20, { wall: [0.16, 0.18, 0.26], lit: true, windowCol: WIN_WARM, floor: 5 });
+      building(K(0.43), 1, 42, 32, 28, 22, { wall: [0.15, 0.17, 0.24], lit: true, windowCol: WIN_EMI, floor: 5 });
       place(K(0.44), 1, 30, [46, 3.2, 8], [1.0, 0.84, 0.48]);
       // Lit crown highlights on Radisson towers
       {
@@ -419,34 +425,41 @@
       }
 
       // ===================================================================
-      // Palms scattered along the marina + pit areas — tropical accents
-      // Strategic placement rather than dense clustering for performance
+      // PALMS — using forestEdge() for sections near barriers so canopies
+      // never clip through fence/wall geometry.
+      // Bare palm() calls only where dist is safely large (20m+).
       // ===================================================================
-      // Marina-facing palms (right side, moderate density)
-      for (let i = 0; i < 42; i++) {
-        const s = 0.48 + (i / 42) * 0.44;
-        const side = (i % 3 === 0) ? 1 : ((i % 2) ? -1 : 1);
-        const dist = 8 + hash(i * 5) * 7 + (i % 2);
-        const h = 9 + hash(i * 3) * 5;
-        const frond = (i % 4 === 0) ? [0.28, 0.55, 0.22] : [0.25, 0.55, 0.20];
-        palm(K(s), side, dist, h, frond);
-      }
-      // pit straight palms (avenue flanking both sides)
+      // Marina-facing palm avenue: forestEdge() handles barrier-safe placement.
+      // gap=14 keeps canopy inner edge well clear of any barrier at ~4-5m.
+      forestEdge(0.50, 0.74, 1, 14, {
+        density: 0.55, hMin: 8, hMax: 13,
+        col: [0.25, 0.55, 0.20], col2: [0.28, 0.57, 0.22],
+        pineFrac: 0.0,  // all palms (broadleaf trees look like palms at distance)
+      });
+      // Marsa curve palms — forestEdge, left side
+      forestEdge(0.78, 0.87, -1, 14, {
+        density: 0.50, hMin: 9, hMax: 14,
+        col: [0.27, 0.57, 0.22], col2: [0.24, 0.52, 0.18],
+        pineFrac: 0.0,
+      });
+      // pit straight palms at safe distance (20m+) — no clipping risk
       for (let i = 0; i < 14; i++) {
         const side = (i % 2) ? 1 : -1;
-        const dist = 6 + hash(i * 9) * 5;
-        palm(K(0.0 + i * 0.010), side, dist, 9 + hash(i * 7) * 2, [0.26, 0.56, 0.21]);
+        palm(K(0.0 + i * 0.010), side, 20 + hash(i * 9) * 6, 9 + hash(i * 7) * 2, [0.26, 0.56, 0.21]);
       }
-      // Marsa curve palms (taller cluster, left side)
-      for (let i = 0; i < 16; i++) {
-        const dist = 8 + hash(i * 11) * 5;
-        palm(K(0.78 + i * 0.009), -1, dist, 10 + hash(i * 3) * 3, [0.27, 0.57, 0.22]);
-      }
-      // pit-entry chicane palms (inner-infield accents)
+      // pit-entry chicane palms at safe distance
       for (let i = 0; i < 12; i++) {
         const side = (i % 2) ? 1 : -1;
-        const dist = 9 + hash(i * 7) * 5 + (i % 2);
-        palm(K(0.92 + i * 0.007), side, dist, 8 + hash(i * 5) * 2, [0.26, 0.55, 0.20]);
+        palm(K(0.92 + i * 0.007), side, 20 + hash(i * 7) * 6, 8 + hash(i * 5) * 2, [0.26, 0.55, 0.20]);
+      }
+      // Palm avenue far side (well back from track)
+      for (let i = 0; i < 18; i++) {
+        const s = 0.0 + (i / 18) * 0.15;
+        palm(K(s), (i % 2) ? 1 : -1, 22 + hash(i * 17) * 12, 11 + hash(i * 7) * 3, [0.25, 0.55, 0.20]);
+      }
+      for (let i = 0; i < 14; i++) {
+        const s = 0.85 + (i / 14) * 0.12;
+        palm(K(s), (i % 2) ? 1 : -1, 22 + hash(i * 23) * 12, 11 + hash(i * 11) * 3, [0.25, 0.55, 0.20]);
       }
 
       // ===================================================================
@@ -549,33 +562,33 @@
       }
 
       // ===================================================================
-      // GRANDSTAND CROWN DETAIL — big-screen video walls + roof spot glow
-      // Screens use bright emissive colour; add a soft light spill below each.
+      // GRANDSTAND VIDEO WALLS — mounted flush on grandstand back wall,
+      // not floating in air. Screen at a sensible height (6m) so it reads
+      // as attached to the stand structure.
       // ===================================================================
       for (const [s, side] of [[0.0, -1], [0.28, -1], [0.28, 1], [0.70, 1], [0.78, -1]]) {
-        const a = anchor(K(s), side, 22);
-        // Screen frame (slightly bright)
-        addBox(out, vadd(a.c, a.u, 20), [22, 12, 1.5], WIN_EMI, [a.r, a.u, a.t]);
-        // Bright screen face — LED_TEAL for the main SF/marina stands
-        addBox(out, vadd(vadd(a.c, a.u, 20), a.r, side * 0.9), [19, 10, 0.8], LED_TEAL, [a.r, a.u, a.t]);
-        // Soft light spill on the grandstand roof below the screen
-        addBox(out, vadd(a.c, a.u, 14), [24, 0.4, 3], POOL_SOFT, [a.r, a.u, a.t]);
+        const a = anchor(K(s), side, 18);
+        // Screen frame — sits atop the grandstand at ~8m height
+        addBox(out, vadd(a.c, a.u, 8), [20, 10, 1.5], WIN_EMI, [a.r, a.u, a.t]);
+        // Bright screen face
+        addBox(out, vadd(vadd(a.c, a.u, 8), a.r, side * 0.8), [17, 8, 0.8], LED_TEAL, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
-      // ISLAND LANDSCAPING — hedges + shrubs + ornamental palm clusters
+      // ISLAND LANDSCAPING — hedges + shrubs
+      // Hedges kept at generous gap (12m+) so they don't clip barriers.
       // ===================================================================
       hedge(0.10, 0.18, -1, 12, 2.2, [0.16, 0.22, 0.14]);
       hedge(0.62, 0.74, 1, 13, 2.2, [0.16, 0.22, 0.14]);
-      // low shrub clusters (reduced from 24 to 16 for perf)
+      // low shrub clusters at safe distances
       for (let i = 0; i < 16; i++) {
         const s = i / 16;
-        bush(K(s), (i % 2) ? 1 : -1, 10 + hash(i * 13) * 6, [0.15, 0.21, 0.13]);
+        bush(K(s), (i % 2) ? 1 : -1, 12 + hash(i * 13) * 6, [0.15, 0.21, 0.13]);
       }
-      // palm clusters at corner apex (strategic placement)
+      // palm clusters at corner apex (strategic placement, safe distance)
       for (const s of [0.05, 0.18, 0.42, 0.55, 0.78, 0.95]) {
         for (let j = 0; j < 3; j++)
-          palm(K(s + j * 0.005), (s < 0.5) ? -1 : 1, 12 + j * 2.2, 7 + hash(j * 3) * 4, [0.26, 0.56, 0.21]);
+          palm(K(s + j * 0.005), (s < 0.5) ? -1 : 1, 18 + j * 2.5, 7 + hash(j * 3) * 4, [0.26, 0.56, 0.21]);
       }
 
       // ===================================================================
@@ -598,14 +611,14 @@
         addBox(out, vadd(hc, a.u, 0.6), [11, 0.5, 40], [1.0, 0.86, 0.50], [a.r, a.u, a.t]);
         // deck lighting accent
         addBox(out, vadd(hc, a.u, 5.5), [2.4, 0.6, 8], [0.85, 0.85, 0.88], [a.r, a.u, a.t]);
-        // white luxury pavilion tents (A-frame, reduced from 9 to 7)
+        // white luxury pavilion tents (A-frame)
         for (let i = 0; i < 7; i++) {
           const ak = anchor(K(0.56 + i * 0.020), 1, 19);
           addPrism(out, vadd(ak.c, ak.u, 3.5), [7, 4.8, 9], [0.96, 0.96, 0.98], [ak.r, ak.u, ak.t]);
           // tent lighting
           addBox(out, vadd(ak.c, ak.u, 2), [7.2, 0.8, 9.2], [1.0, 0.88, 0.60], [ak.r, ak.u, ak.t]);
         }
-        // jetty fingers reaching into water (reduced from 6 to 5)
+        // jetty fingers reaching into water
         for (let i = 0; i < 5; i++) {
           const jk = anchor(K(0.55 + i * 0.022), 1, 13);
           // jetty deck
@@ -614,20 +627,8 @@
           addBox(out, vadd(jk.c, jk.t, 0), [1.2, 0.4, 28.2], [0.95, 0.82, 0.55], [jk.r, jk.u, jk.t]);
         }
       }
-      // Palm avenue: start/finish straight entrance/exit (tall accent trees)
-      for (let i = 0; i < 18; i++) {
-        const s = 0.0 + (i / 18) * 0.15;
-        const side = (i % 2) ? 1 : -1;
-        palm(K(s), side, 20 + hash(i * 17) * 14, 11 + hash(i * 7) * 3, [0.25, 0.55, 0.20]);
-      }
-      for (let i = 0; i < 14; i++) {
-        const s = 0.85 + (i / 14) * 0.15;
-        const side = (i % 2) ? 1 : -1;
-        palm(K(s), side, 20 + hash(i * 23) * 14, 11 + hash(i * 11) * 3, [0.25, 0.55, 0.20]);
-      }
 
       // ---- Desert ridge backdrop at outer perimeter (darker/hazier at distance) ----
-      // Re-use the already-computed cx, cz, trad from the dune-band section above.
       for (const [distOff, sandCol] of [
         [250, [0.65, 0.54, 0.38]],
         [310, [0.60, 0.50, 0.34]],

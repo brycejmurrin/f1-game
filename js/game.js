@@ -1640,6 +1640,7 @@ function updateCar(c, dt, ranked) {
       c.head = Math.atan2(smp.t[0], smp.t[2]);
       c.vLat = 0;
       c.yawRateCur = 0;
+      c._assistPrev = 0;
     }
     // Fade the lateral model out toward a standstill so a parked car can't be
     // spun by steering (slip angle is undefined at zero speed).
@@ -1662,7 +1663,7 @@ function updateCar(c, dt, ranked) {
     // that compensation with braking effort, using the SMOOTHED longitudinal
     // accel so it eases in rather than toggling: trail-braking still rotates the
     // car, but the hard-braking turn-in spike is gone.
-    const brakeFade = 1 - 0.5 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
+    const brakeFade = 1 - 0.8 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
     // Curb entry over-rotation generally (not just under braking): the assist
     // tracks curvature k, but if the car is ALREADY yawing into the corner
     // faster than k needs, adding more lock just cuts it to the apex. Ease the
@@ -1678,7 +1679,15 @@ function updateCar(c, dt, ranked) {
       const ratio = (c.yawRateCur || 0) / rNeed;   // >1 = rotating faster than needed
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
-    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase;
+    const assistTarget = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase;
+    // Slew-limit the assist's road-wheel angle so it can never SNAP in: even if
+    // curvature or the v² term jumps on hard high-speed turn-in, the assisted
+    // lock ramps toward its target at a bounded rate instead of jerking the car
+    // to the apex. The cap is generous (well above any normal corner's ramp) so
+    // it only clips genuine spikes, leaving ordinary cornering response intact.
+    const assistStep = 3.0 * dt;   // rad/s max change of the assisted steer angle
+    let assistDelta = (c._assistPrev ?? 0) + clamp(assistTarget - (c._assistPrev ?? 0), -assistStep, assistStep);
+    c._assistPrev = assistDelta;
     const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
@@ -1740,7 +1749,14 @@ function updateCar(c, dt, ranked) {
     // --- rigid-body equations of motion (per unit mass). kz2 = yaw inertia/mass.
     const ay = Fyf * cosD + Fyr;                         // body lateral accel
     const kz2 = af * ar * YAW_INERTIA;                   // yaw inertia / mass (scaled)
-    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * (c.yawRateCur || 0);
+    // Under hard braking the front axle is heavily loaded and the rear goes light,
+    // so the yaw moment (af·Fyf − ar·Fyr) drives the nose into the corner faster
+    // than the baseline damping can check — that's the "snap to the inside" on a
+    // high-speed stop. Scale yaw damping up with braking effort so the rotation is
+    // arrested at the limit; gentle/trail braking (small decel) is barely affected,
+    // preserving the rotation that helps the car turn in.
+    const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
+    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * (c.yawRateCur || 0);
     c.vLat = clamp((c.vLat || 0) + (ay - c.speed * (c.yawRateCur || 0)) * dt, -40, 40);
     c.yawRateCur = clamp((c.yawRateCur || 0) + rdot * dt, -4, 4);
     // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
