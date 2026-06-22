@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=137">
-<link rel="stylesheet" href="css/data.css?v=137">
+<link rel="stylesheet" href="css/style.css?v=138">
+<link rel="stylesheet" href="css/data.css?v=138">
 </head>
 <body><canvas id="game"></canvas>
 <!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
@@ -106,7 +106,7 @@
     <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-track-preview"><canvas id="sel-preview-map" width="520" height="300"></canvas><div id="sel-preview-info"><div id="sel-preview-name"></div><div id="sel-preview-gp"></div><div id="sel-preview-meta"></div><div id="sel-preview-rec"></div><div id="sel-preview-facts"></div><canvas id="sel-preview-elev" width="280" height="36"></canvas></div></div><div id="sel-tracks"></div></div>
     <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
     <div class="sel-actions">
-      <button id="sel-back">BACK</button>
+      <button id="sel-back" class="bigbtn alt">BACK</button>
       <button id="sel-go" class="bigbtn">START</button>
     </div>
   </div>
@@ -146,7 +146,7 @@
     <div id="rs-time"></div>
   </div>
   <div class="sel-actions">
-    <button id="rs-cancel">BACK</button>
+    <button id="rs-cancel" class="bigbtn alt">BACK</button>
     <button id="rs-go" class="bigbtn">RACE!</button>
   </div>
 </div>
@@ -165,7 +165,7 @@
   <h2 id="results-title">RACE RESULT</h2>
   <div id="results-table"></div>
   <div class="sel-actions">
-    <button id="res-menu">MENU</button>
+    <button id="res-menu" class="bigbtn alt">MENU</button>
     <button id="res-next" class="bigbtn">NEXT</button>
   </div>
 </div>
@@ -182,7 +182,7 @@
   <div class="cz-row"><label for="cz-num">CAR NUMBER</label><input id="cz-num" type="number" min="0" max="99" placeholder="99"></div>
   <div id="cz-preview"><span id="cz-swatch1"></span><span id="cz-swatch2"></span><span id="cz-pvtext"></span></div>
   <div class="sel-actions">
-    <button id="cz-cancel">CANCEL</button>
+    <button id="cz-cancel" class="bigbtn alt">CANCEL</button>
     <button id="cz-save" class="bigbtn">SAVE</button>
   </div>
 </div>
@@ -363,45 +363,45 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=137"></script>
-<script src="js/glx.js?v=137"></script>
-<script src="js/gltf.js?v=137"></script>
-<script src="js/teams.js?v=137"></script>
-<script src="js/circuits.js?v=137"></script>
+<script src="js/mat4.js?v=138"></script>
+<script src="js/glx.js?v=138"></script>
+<script src="js/gltf.js?v=138"></script>
+<script src="js/teams.js?v=138"></script>
+<script src="js/circuits.js?v=138"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=137"></script>
-<script src="js/tracks/monaco.js?v=137"></script>
-<script src="js/tracks/silverstone.js?v=137"></script>
-<script src="js/tracks/spa.js?v=137"></script>
-<script src="js/tracks/monza.js?v=137"></script>
-<script src="js/tracks/suzuka.js?v=137"></script>
-<script src="js/tracks/singapore.js?v=137"></script>
-<script src="js/tracks/cota.js?v=137"></script>
-<script src="js/tracks/interlagos.js?v=137"></script>
-<script src="js/tracks/vegas.js?v=137"></script>
-<script src="js/tracks/madrid.js?v=137"></script>
-<script src="js/tracks/zandvoort.js?v=137"></script>
-<script src="js/tracks/jeddah.js?v=137"></script>
-<script src="js/tracks/albert_park.js?v=137"></script>
-<script src="js/tracks/shanghai.js?v=137"></script>
-<script src="js/tracks/miami.js?v=137"></script>
-<script src="js/tracks/imola.js?v=137"></script>
-<script src="js/tracks/montreal.js?v=137"></script>
-<script src="js/tracks/redbull.js?v=137"></script>
-<script src="js/tracks/hungaroring.js?v=137"></script>
-<script src="js/tracks/baku.js?v=137"></script>
-<script src="js/tracks/mexico.js?v=137"></script>
-<script src="js/tracks/qatar.js?v=137"></script>
-<script src="js/tracks/abudhabi.js?v=137"></script>
-<script src="js/tracks.js?v=137"></script>
-<script src="js/trackmaps.js?v=137"></script>
-<script src="js/car3d.js?v=137"></script>
-<script src="js/input.js?v=137"></script>
-<script src="js/audio.js?v=137"></script>
-<script src="js/api.js?v=137"></script>
-<script src="js/data.js?v=137"></script>
-<script src="js/parts.js?v=137"></script>
-<script src="js/ghost.js?v=137"></script>
-<script src="js/game.js?v=137"></script>
+<script src="js/tracks/bahrain.js?v=138"></script>
+<script src="js/tracks/monaco.js?v=138"></script>
+<script src="js/tracks/silverstone.js?v=138"></script>
+<script src="js/tracks/spa.js?v=138"></script>
+<script src="js/tracks/monza.js?v=138"></script>
+<script src="js/tracks/suzuka.js?v=138"></script>
+<script src="js/tracks/singapore.js?v=138"></script>
+<script src="js/tracks/cota.js?v=138"></script>
+<script src="js/tracks/interlagos.js?v=138"></script>
+<script src="js/tracks/vegas.js?v=138"></script>
+<script src="js/tracks/madrid.js?v=138"></script>
+<script src="js/tracks/zandvoort.js?v=138"></script>
+<script src="js/tracks/jeddah.js?v=138"></script>
+<script src="js/tracks/albert_park.js?v=138"></script>
+<script src="js/tracks/shanghai.js?v=138"></script>
+<script src="js/tracks/miami.js?v=138"></script>
+<script src="js/tracks/imola.js?v=138"></script>
+<script src="js/tracks/montreal.js?v=138"></script>
+<script src="js/tracks/redbull.js?v=138"></script>
+<script src="js/tracks/hungaroring.js?v=138"></script>
+<script src="js/tracks/baku.js?v=138"></script>
+<script src="js/tracks/mexico.js?v=138"></script>
+<script src="js/tracks/qatar.js?v=138"></script>
+<script src="js/tracks/abudhabi.js?v=138"></script>
+<script src="js/tracks.js?v=138"></script>
+<script src="js/trackmaps.js?v=138"></script>
+<script src="js/car3d.js?v=138"></script>
+<script src="js/input.js?v=138"></script>
+<script src="js/audio.js?v=138"></script>
+<script src="js/api.js?v=138"></script>
+<script src="js/data.js?v=138"></script>
+<script src="js/parts.js?v=138"></script>
+<script src="js/ghost.js?v=138"></script>
+<script src="js/game.js?v=138"></script>
 </body>
 </html>

@@ -255,6 +255,13 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 #sel-driver { color: var(--dim); font-size: 13px; margin-top: 8px; min-height: 18px; }
 .sel-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
 .sel-actions .bigbtn { width: auto; min-width: 150px; margin: 0; }
+#select .sel-actions {
+  position: sticky;
+  bottom: 0;
+  background: rgba(6, 6, 10, 0.96);
+  padding: 10px 0 6px;
+  z-index: 1;
+}
 .sel-edit {
   margin-top: 10px; font-size: 12px; padding: 7px 12px;
   border: 1px solid var(--red); background: rgba(225, 6, 0, 0.12); border-radius: 7px;
@@ -438,6 +445,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   padding: 10px 0 6px;
   margin-top: 10px;
   z-index: 1;
+  justify-content: center;
 }
 
 /* short landscape (phones): tighten spacing */
@@ -706,6 +714,16 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 }
 
 /* ---------- results ---------- */
+#results .sel-actions {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  background: rgba(6, 6, 10, 0.96);
+  padding: 10px 0 6px;
+  margin-top: 10px;
+  z-index: 1;
+  justify-content: center;
+}
 #results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
 #results-table .res-row { display: flex; gap: 10px; padding: 4px 6px; align-items: center; border-radius: 5px; }
 #results-table .res-row:nth-child(even) { background: rgba(255,255,255,0.03); }
@@ -731,20 +749,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   margin-top: 10px;
   z-index: 1;
   justify-content: center;
-}
-/* Scroll-fade: sticky gradient that hugs the bottom of the visible panel area,
-   hinting at more content below. Disappears automatically when scrolled to the end
-   (the sticky element reaches its natural position at the bottom of the content). */
-#howtoplay-inner::after {
-  content: "";
-  display: block;
-  position: sticky;
-  bottom: 0;
-  height: 48px;
-  margin-top: -48px;
-  background: linear-gradient(to bottom, transparent, var(--panel));
-  pointer-events: none;
-  border-radius: 0 0 14px 14px;
 }
 #howtoplay dl {
   display: grid;
