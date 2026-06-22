@@ -450,3 +450,98 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   .dh-dash { gap: 6px; padding: 8px 10px; }
   .dh-gval { font-size: 17px; }
 }
+
+/* ── Telemetry player popup ───────────────────────────── */
+.dh-tpopup {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(4, 4, 8, 0.88);
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(10px + env(safe-area-inset-top, 0px))
+           calc(10px + env(safe-area-inset-right, 0px))
+           calc(10px + env(safe-area-inset-bottom, 0px))
+           calc(10px + env(safe-area-inset-left, 0px));
+}
+.dh-tpopup-card {
+  width: min(860px, 98vw);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px);
+  background: #0d0d14;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+.dh-tpopup-hdr {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  background: linear-gradient(90deg, rgba(225, 6, 0, 0.18), transparent);
+  flex: 0 0 auto;
+}
+.dh-tpopup-title {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  font-size: 15px; font-weight: 800; font-style: italic; color: #fff;
+}
+.dh-tpopup-sub {
+  font-size: 11px; font-weight: 600; font-style: normal;
+  color: #8a8a95; letter-spacing: 0.04em;
+}
+.dh-tpopup-body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Content areas */
+.dh-telem-main {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px;
+}
+.dh-telem-side {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 0 16px 14px;
+}
+
+/* Landscape: chart in left column, gauges + map in right sidebar */
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-tpopup { padding: 5px; }
+  .dh-tpopup-card {
+    max-height: calc(100dvh - 10px);
+    border-radius: 10px;
+    width: 100%;
+  }
+  .dh-tpopup-hdr { padding: 8px 14px; }
+  .dh-tpopup-title { font-size: 13px; }
+  .dh-tpopup-body {
+    flex-direction: row;
+    overflow: hidden;
+  }
+  .dh-telem-main {
+    flex: 1; min-width: 0;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 10px 12px;
+    gap: 7px;
+  }
+  .dh-telem-side {
+    width: 200px; flex-shrink: 0;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 10px 12px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 8px;
+  }
+  /* Compact transport in landscape popup */
+  .dh-tpopup .dh-transport { gap: 5px; flex-wrap: nowrap; margin: 2px 0; }
+  .dh-tpopup .dh-thint { display: none; }
+  .dh-tpopup .dh-tbtn { padding: 5px 11px; font-size: 11px; }
+  /* Compact driver header in landscape popup */
+  .dh-tpopup .dh-livecard { gap: 2px; }
+  .dh-tpopup .dh-live-title { font-size: 13px; }
+  .dh-tpopup .dh-live-sub { font-size: 10px; }
+  /* Compact gauges in side panel */
+  .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
+  .dh-telem-side .dh-gval { font-size: 15px; }
+  .dh-telem-side .dh-glabel { font-size: 8px; }
+  /* Track map fits the sidebar */
+  .dh-telem-side .dh-canvas.dh-map { max-width: 176px; }
+}
