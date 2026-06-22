@@ -20,12 +20,13 @@ const els = {
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
-  selTrackSection: $("sel-track-section"), selDiff: $("sel-diff"),
+  selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"), selDiff: $("sel-diff"),
   selDiffSection: $("sel-diff-section"), selCustomize: $("sel-customize"),
   selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
+  pmStandings: $("pm-standings"),
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
@@ -2531,7 +2532,9 @@ function openSetup() {
 function buildSelect() {
   els.selTitle.textContent = seasonMode ? "SEASON — ROUND " + ((season && season.round || 0) + 1)
     : timeTrial ? "TIME TRIAL" : "GRAND PRIX";
-  els.selTrackSection.hidden = seasonMode;     // season uses the round's track
+  // Track section: interactive circuit picker in GP/TT; read-only NEXT RACE preview in season
+  els.selTrackSection.hidden = false;
+  if (els.selCircuitLabel) els.selCircuitLabel.textContent = seasonMode ? "NEXT RACE" : "CIRCUIT";
   els.selDiffSection.hidden = timeTrial;       // no AI in a time trial
   els.selTeams.textContent = "";
   Teams.LIST.forEach((t, i) => {
@@ -2552,7 +2555,13 @@ function buildSelect() {
     els.selDriver.appendChild(b);
   });
   renderStatBars($("sel-stats"), team);
-  if (!seasonMode) {
+  if (seasonMode) {
+    // Non-interactive preview of the upcoming season circuit
+    els.selTracks.textContent = "";
+    updateTrackPreview();
+    const rnd = (season && season.round || 0) + 1;
+    els.selPreviewRec.textContent = "Round " + rnd + " of " + Tracks.LIST.length;
+  } else {
     els.selTracks.textContent = "";
     Tracks.LIST.forEach((t, i) => {
       const row = document.createElement("button");
@@ -3010,6 +3019,7 @@ function setPaused(p) {
   if (state !== "race" && state !== "count") return;
   paused = p;
   els.pausemenu.hidden = !p;
+  if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
   if (!p) $("advanced").hidden = true;   // never leave the overlay up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
@@ -3035,6 +3045,7 @@ refreshCamBtn();
 $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
+els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 $("pm-sound").onclick = () => setSound(!soundOn);
 
 // One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
@@ -3305,7 +3316,7 @@ if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx 
 { const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;
   $("mb-standings").hidden = !hasSeason; }
 Input.init(canvas, { onPause: () => setPaused(!paused) });
-if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
+if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · 24 real circuits"; }
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();

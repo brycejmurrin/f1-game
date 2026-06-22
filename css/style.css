@@ -85,6 +85,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .panel h2 { color: var(--red); margin-bottom: 14px; }
 .panel button { display: block; width: 100%; margin: 8px 0; }
 #pm-resume { border-color: var(--red); color: var(--red); font-weight: 700; }
+#pm-standings { border-color: #f6d200; color: #f6d200; }
 
 /* ---------- advanced steering panel ---------- */
 #advanced { position: fixed; inset: 0; z-index: 41; background: rgba(0, 0, 0, 0.6); }
@@ -812,6 +813,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #pausemenu h2 { grid-column: 1 / -1; }
   #pausemenu button { margin: 4px 0; font-size: 11.5px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #pm-resume { grid-column: 1 / -1; }
+  #pm-standings { grid-column: 1 / -1; }
+  #results { max-width: 600px; }
   /* race settings: 2-column grid so LAPS+WEATHER share one row, TIME+actions share another */
   #race-settings {
     display: grid;
