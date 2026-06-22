@@ -2814,12 +2814,76 @@ function openTrackDetail() {
     dz && dz.length ? dz.length + " DRS" : ""
   ].filter(Boolean).join("  ·  ");
   document.getElementById("track-detail-meta").textContent = meta;
+
+  // Circuit type flags
+  var nightEl = document.getElementById("tdf-night");
+  var streetEl = document.getElementById("tdf-street");
+  var bankedEl = document.getElementById("tdf-banked");
+  if (nightEl) nightEl.hidden = !t.night;
+  if (streetEl) streetEl.hidden = !t.street;
+  if (bankedEl) bankedEl.hidden = !t.banked;
+
+  // Elevation sparkline
+  var elevWrap = document.getElementById("track-detail-elev-wrap");
+  var elevCv = document.getElementById("track-detail-elev");
+  if (elevWrap && elevCv) {
+    const py = TrackMaps.elevProfile(t);
+    const elevR = TrackMaps.elevRange(t);
+    if (py && py.length > 2 && elevR > 2) {
+      elevWrap.hidden = false;
+      const ew = elevCv.width, eh = elevCv.height;
+      const eg = elevCv.getContext("2d");
+      eg.clearRect(0, 0, ew, eh);
+      let mn = Infinity, mx = -Infinity;
+      for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
+      const span = mx - mn || 1;
+      const pad = 3;
+      function yNorm(v) { return eh - pad - ((v - mn) / span) * (eh - 2 * pad); }
+      eg.beginPath();
+      for (let i = 0; i <= py.length; i++) {
+        const ex = (i / py.length) * ew;
+        i === 0 ? eg.moveTo(ex, yNorm(py[0])) : eg.lineTo(ex, yNorm(py[i % py.length]));
+      }
+      eg.lineTo(ew, eh); eg.lineTo(0, eh); eg.closePath();
+      eg.fillStyle = "rgba(57,183,240,0.18)"; eg.fill();
+      eg.strokeStyle = "rgba(57,183,240,0.7)"; eg.lineWidth = 1.5;
+      eg.beginPath();
+      for (let i = 0; i <= py.length; i++) {
+        const ex = (i / py.length) * ew;
+        i === 0 ? eg.moveTo(ex, yNorm(py[0])) : eg.lineTo(ex, yNorm(py[i % py.length]));
+      }
+      eg.stroke();
+      eg.font = "8px monospace"; eg.fillStyle = "rgba(57,183,240,0.75)"; eg.textAlign = "right";
+      eg.fillText("+" + Math.round(mx) + "m", ew - 2, 9);
+      eg.fillText(Math.round(mn) + "m", ew - 2, eh - 1);
+    } else {
+      elevWrap.hidden = true;
+    }
+  }
+
+  // DRS zones with metre positions
+  var drsWrap = document.getElementById("track-detail-drs-wrap");
+  var drsList = document.getElementById("track-detail-drs-list");
+  if (drsWrap && drsList) {
+    if (dz && dz.length) {
+      const trackLen = (t.lengthKm || 5) * 1000;
+      drsList.innerHTML = dz.map(function (z, i) {
+        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + Math.round(z.a * trackLen) + ' m &ndash; ' + Math.round(z.b * trackLen) + ' m</div>';
+      }).join("");
+      drsWrap.hidden = false;
+    } else {
+      drsWrap.hidden = true;
+    }
+  }
+
+  // Turns list
   const list = document.getElementById("track-detail-list");
   list.innerHTML = crns.map(function (c) {
     const cls = c.v > 0.025 ? "tdc-hairpin" : c.v > 0.013 ? "tdc-slow" : c.v > 0.008 ? "tdc-medium" : "tdc-fast";
     const lbl = c.v > 0.025 ? "HAIRPIN" : c.v > 0.013 ? "SLOW" : c.v > 0.008 ? "MEDIUM" : "FAST";
     return '<div class="tdc-corner"><span class="tdc-num">T' + c.n + '</span><span class="' + cls + '">' + lbl + '</span></div>';
   }).join("");
+
   modal.hidden = false;
   const cv = document.getElementById("track-detail-canvas");
   requestAnimationFrame(function () {
@@ -2835,21 +2899,18 @@ function openTrackDetail() {
       }
       trackAspect = Math.max(0.5, Math.min(2.5, (maxx - minx) / ((maxy - miny) || 1)));
     }
-    const header = document.getElementById("track-detail-header");
-    const headerH = header.getBoundingClientRect().height || 40;
-    const isLandscape = window.innerWidth > window.innerHeight;
-    const availW = window.innerWidth - 24;
-    const availH = window.innerHeight - headerH - 26;
+    const wrap = document.getElementById("track-detail-canvas-wrap");
+    const wrapW = wrap ? wrap.clientWidth : (window.innerWidth - 24);
+    const wrapH = wrap ? wrap.clientHeight : (window.innerHeight - 80);
     let canvW, canvH;
-    if (isLandscape) {
-      canvH = availH;
+    if (wrapH > 0 && wrapW > 0) {
+      // Fit canvas within wrapper preserving track aspect ratio
+      canvH = wrapH;
       canvW = Math.round(canvH * trackAspect);
-      if (canvW > availW - 120) canvW = availW - 120;
+      if (canvW > wrapW) { canvW = wrapW; canvH = Math.round(canvW / trackAspect); }
     } else {
-      canvW = availW;
-      const cornersEl = document.getElementById("track-detail-corners");
-      const cornersH = cornersEl ? (cornersEl.scrollHeight || 90) : 90;
-      canvH = Math.max(150, availH - cornersH - 8);
+      canvW = Math.min(window.innerWidth - 24, 600);
+      canvH = Math.round(canvW / trackAspect);
     }
     cv.width = Math.max(200, Math.round(canvW));
     cv.height = Math.max(150, Math.round(canvH));
