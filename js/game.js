@@ -2809,6 +2809,24 @@ function buildSelect() {
     updateTrackPreview();
     const rnd = (season && season.round || 0) + 1;
     els.selPreviewRec.textContent = "Round " + rnd + " of " + Tracks.LIST.length;
+    // Upcoming rounds list (next 5 circuits after current)
+    const upcoming = [];
+    for (let i = rnd; i < Math.min(rnd + 5, Tracks.LIST.length); i++) upcoming.push({ n: i + 1, t: Tracks.LIST[i] });
+    if (upcoming.length) {
+      const upHead = document.createElement("div");
+      upHead.className = "season-upcoming-head";
+      upHead.textContent = "UPCOMING";
+      els.selTracks.appendChild(upHead);
+      upcoming.forEach(({ n, t }) => {
+        const row = document.createElement("div");
+        row.className = "season-upcoming-row";
+        const rndEl = document.createElement("span"); rndEl.className = "sur-rnd"; rndEl.textContent = "R" + n;
+        const nmEl = document.createElement("span"); nmEl.className = "sur-name"; nmEl.textContent = t.name;
+        const ctEl = document.createElement("span"); ctEl.className = "sur-country"; ctEl.textContent = t.country || "";
+        row.append(rndEl, nmEl, ctEl);
+        els.selTracks.appendChild(row);
+      });
+    }
   } else {
     els.selTracks.textContent = "";
     Tracks.LIST.forEach((t, i) => {
@@ -2818,7 +2836,9 @@ function buildSelect() {
 
       const nm = document.createElement("span");
       nm.className = "track-row-name";
-      nm.textContent = t.name + (t.night ? " ☾" : "");
+      nm.textContent = t.name;
+      if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
+      if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
       row.appendChild(nm);
 
       const mt = document.createElement("span");
