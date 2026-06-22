@@ -190,6 +190,7 @@ const DataHub = (function () {
 
   function showTab(id) {
     stopTelAnim();   // pause any running lap replay when changing tabs
+    if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
     for (const k in tabButtons) {
       tabButtons[k].classList.toggle("dh-active", k === id);
@@ -291,6 +292,12 @@ const DataHub = (function () {
         const place = [r.locality, r.country].filter(Boolean).join(", ");
         if (place) subParts.push(place);
         main.appendChild(el("div", "dh-race-sub", subParts.join(" · ") || "—"));
+        if (r.time) {
+          const t = new Date("1970-01-01T" + r.time);
+          if (!isNaN(t.getTime())) {
+            main.appendChild(el("div", "dh-race-time", t.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })));
+          }
+        }
         row.appendChild(main);
 
         row.appendChild(el("div", "dh-race-date", fmtDate(r.date)));
@@ -313,6 +320,7 @@ const DataHub = (function () {
       if (!drivers.length) {
         dSec.appendChild(emptyMsg("No driver standings yet — season hasn't started."));
       } else {
+        const leaderPts = drivers.length > 0 && drivers[0].pos === 1 ? drivers[0].points : null;
         drivers.forEach(function (s) {
           const row = el("div", "dh-row");
           row.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
@@ -320,6 +328,9 @@ const DataHub = (function () {
           row.appendChild(el("span", "dh-name", s.name || "—"));
           if (s.wins > 0) row.appendChild(el("span", "dh-wins", s.wins + "W"));
           row.appendChild(el("span", "dh-pts", s.points));
+          if (leaderPts !== null && s.pos !== 1) {
+            row.appendChild(el("span", "dh-gap", "−" + (leaderPts - s.points)));
+          }
           dSec.appendChild(row);
         });
       }
@@ -330,13 +341,18 @@ const DataHub = (function () {
       if (!cons.length) {
         cSec.appendChild(emptyMsg("No constructor standings yet."));
       } else {
+        const cLeaderPts = cons.length > 0 && cons[0].pos === 1 ? cons[0].points : null;
         cons.forEach(function (s) {
           const row = el("div", "dh-row");
           row.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
-          row.appendChild(teamSwatch(s.name));
+          const ct = findTeam(s.name);
+          row.appendChild(teamChip(ct ? ct.short : s.name.slice(0, 3).toUpperCase(), s.name));
           row.appendChild(el("span", "dh-name", s.name || "—"));
           if (s.wins > 0) row.appendChild(el("span", "dh-wins", s.wins + "W"));
           row.appendChild(el("span", "dh-pts", s.points));
+          if (cLeaderPts !== null && s.pos !== 1) {
+            row.appendChild(el("span", "dh-gap", "−" + (cLeaderPts - s.points)));
+          }
           cSec.appendChild(row);
         });
       }
@@ -381,6 +397,9 @@ const DataHub = (function () {
       const tbody = el("tbody");
       results.forEach(function (r) {
         const tr = el("tr");
+        if (r.pos === 1) tr.classList.add("dh-lr-p1");
+        else if (r.pos === 2) tr.classList.add("dh-lr-p2");
+        else if (r.pos === 3) tr.classList.add("dh-lr-p3");
         tr.appendChild(el("td", "dh-td-pos", r.pos !== null && r.pos !== undefined ? r.pos : "—"));
         const tdDrv = el("td", "dh-td-driver");
         tdDrv.appendChild(teamChip(r.code, r.team));
@@ -389,7 +408,7 @@ const DataHub = (function () {
         tr.appendChild(el("td", "dh-td-team", r.team || "—"));
         tr.appendChild(el("td", "dh-td-grid", r.grid !== null && r.grid !== undefined ? r.grid : "—"));
         tr.appendChild(el("td", "dh-td-time", r.time || r.status || "—"));
-        tr.appendChild(el("td", "dh-td-pts", r.points || ""));
+        tr.appendChild(el("td", "dh-td-pts", r.points != null ? r.points : ""));
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -1123,7 +1142,6 @@ const DataHub = (function () {
     });
     canvas.addEventListener("pointermove", function (ev) {
       if (ev.buttons) at(ev);
-      else if (ev.pointerType === "mouse" && !view.playing) at(ev);
     });
   }
 
