@@ -2454,11 +2454,14 @@ function updateHud(force) {
         const delta = player.lapTime - ghostT;
         const sign = delta >= 0 ? "+" : "";
         els.gapA.textContent = "GHOST " + sign + delta.toFixed(3) + "s";
+        els.gapA.style.color = delta <= 0 ? "#a3e635" : "#e10600";
       } else {
         els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
+        els.gapA.style.color = "";
       }
     } else {
       els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
+      els.gapA.style.color = "";
     }
     els.gapB.textContent = isFinite(ttRecord) ? "REC " + fmtTime(ttRecord) : "REC —";
   } else {
