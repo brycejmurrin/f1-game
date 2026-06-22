@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=136">
-<link rel="stylesheet" href="css/data.css?v=136">
+<link rel="stylesheet" href="css/style.css?v=137">
+<link rel="stylesheet" href="css/data.css?v=137">
 </head>
 <body><canvas id="game"></canvas>
 <!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
@@ -125,7 +125,9 @@
       <div id="track-detail-list"></div>
     </div>
   </div>
-  <button id="track-detail-close">CLOSE</button>
+  <div class="sel-actions">
+    <button id="track-detail-close" class="bigbtn">CLOSE</button>
+  </div>
 </div>
 
 <!-- race settings -->
@@ -211,7 +213,6 @@
 <div id="howtoplay" hidden>
   <div id="howtoplay-inner" class="panel">
     <h2>HOW TO PLAY</h2>
-    <button id="htp-close">&#10005;</button>
     <dl>
       <dt>PC / KEYBOARD</dt>
       <dd>
@@ -243,6 +244,9 @@
       <dt>TIME TRIAL</dt>
       <dd>Solo on track, no rivals. Set your fastest lap; your track record is saved and shown on the circuit list</dd>
     </dl>
+    <div class="sel-actions" style="margin-top:14px">
+      <button id="htp-close" class="bigbtn">DONE</button>
+    </div>
   </div>
 </div>
 
@@ -250,7 +254,6 @@
 <div id="advanced" hidden>
   <div id="advanced-inner" class="panel">
     <h2>STEERING &amp; ASSISTS</h2>
-    <button id="adv-close">&#10005;</button>
     <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Adjust the few controls below to taste, or open <b>Advanced</b> for the full set of knobs. Everything takes effect immediately and is saved.</p>
 
     <div class="preset-row">
@@ -347,6 +350,9 @@
       <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
     </div>
     </div>
+    <div class="sel-actions" style="margin-top:14px">
+      <button id="adv-close" class="bigbtn">DONE</button>
+    </div>
   </div>
 </div>
 
@@ -357,45 +363,45 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=136"></script>
-<script src="js/glx.js?v=136"></script>
-<script src="js/gltf.js?v=136"></script>
-<script src="js/teams.js?v=136"></script>
-<script src="js/circuits.js?v=136"></script>
+<script src="js/mat4.js?v=137"></script>
+<script src="js/glx.js?v=137"></script>
+<script src="js/gltf.js?v=137"></script>
+<script src="js/teams.js?v=137"></script>
+<script src="js/circuits.js?v=137"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=136"></script>
-<script src="js/tracks/monaco.js?v=136"></script>
-<script src="js/tracks/silverstone.js?v=136"></script>
-<script src="js/tracks/spa.js?v=136"></script>
-<script src="js/tracks/monza.js?v=136"></script>
-<script src="js/tracks/suzuka.js?v=136"></script>
-<script src="js/tracks/singapore.js?v=136"></script>
-<script src="js/tracks/cota.js?v=136"></script>
-<script src="js/tracks/interlagos.js?v=136"></script>
-<script src="js/tracks/vegas.js?v=136"></script>
-<script src="js/tracks/madrid.js?v=136"></script>
-<script src="js/tracks/zandvoort.js?v=136"></script>
-<script src="js/tracks/jeddah.js?v=136"></script>
-<script src="js/tracks/albert_park.js?v=136"></script>
-<script src="js/tracks/shanghai.js?v=136"></script>
-<script src="js/tracks/miami.js?v=136"></script>
-<script src="js/tracks/imola.js?v=136"></script>
-<script src="js/tracks/montreal.js?v=136"></script>
-<script src="js/tracks/redbull.js?v=136"></script>
-<script src="js/tracks/hungaroring.js?v=136"></script>
-<script src="js/tracks/baku.js?v=136"></script>
-<script src="js/tracks/mexico.js?v=136"></script>
-<script src="js/tracks/qatar.js?v=136"></script>
-<script src="js/tracks/abudhabi.js?v=136"></script>
-<script src="js/tracks.js?v=136"></script>
-<script src="js/trackmaps.js?v=136"></script>
-<script src="js/car3d.js?v=136"></script>
-<script src="js/input.js?v=136"></script>
-<script src="js/audio.js?v=136"></script>
-<script src="js/api.js?v=136"></script>
-<script src="js/data.js?v=136"></script>
-<script src="js/parts.js?v=136"></script>
-<script src="js/ghost.js?v=136"></script>
-<script src="js/game.js?v=136"></script>
+<script src="js/tracks/bahrain.js?v=137"></script>
+<script src="js/tracks/monaco.js?v=137"></script>
+<script src="js/tracks/silverstone.js?v=137"></script>
+<script src="js/tracks/spa.js?v=137"></script>
+<script src="js/tracks/monza.js?v=137"></script>
+<script src="js/tracks/suzuka.js?v=137"></script>
+<script src="js/tracks/singapore.js?v=137"></script>
+<script src="js/tracks/cota.js?v=137"></script>
+<script src="js/tracks/interlagos.js?v=137"></script>
+<script src="js/tracks/vegas.js?v=137"></script>
+<script src="js/tracks/madrid.js?v=137"></script>
+<script src="js/tracks/zandvoort.js?v=137"></script>
+<script src="js/tracks/jeddah.js?v=137"></script>
+<script src="js/tracks/albert_park.js?v=137"></script>
+<script src="js/tracks/shanghai.js?v=137"></script>
+<script src="js/tracks/miami.js?v=137"></script>
+<script src="js/tracks/imola.js?v=137"></script>
+<script src="js/tracks/montreal.js?v=137"></script>
+<script src="js/tracks/redbull.js?v=137"></script>
+<script src="js/tracks/hungaroring.js?v=137"></script>
+<script src="js/tracks/baku.js?v=137"></script>
+<script src="js/tracks/mexico.js?v=137"></script>
+<script src="js/tracks/qatar.js?v=137"></script>
+<script src="js/tracks/abudhabi.js?v=137"></script>
+<script src="js/tracks.js?v=137"></script>
+<script src="js/trackmaps.js?v=137"></script>
+<script src="js/car3d.js?v=137"></script>
+<script src="js/input.js?v=137"></script>
+<script src="js/audio.js?v=137"></script>
+<script src="js/api.js?v=137"></script>
+<script src="js/data.js?v=137"></script>
+<script src="js/parts.js?v=137"></script>
+<script src="js/ghost.js?v=137"></script>
+<script src="js/game.js?v=137"></script>
 </body>
 </html>

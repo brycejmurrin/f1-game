@@ -87,7 +87,6 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 /* ---------- advanced steering panel ---------- */
 #advanced { position: fixed; inset: 0; z-index: 41; background: rgba(0, 0, 0, 0.6); }
 #advanced-inner { width: min(94vw, 600px); }
-#adv-close { position: absolute; top: 10px; right: 10px; width: 36px; padding: 6px; }
 .adv-intro { font-size: 12px; opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
 .adv-sec {
   color: var(--red); font-size: 12px; letter-spacing: 0.08em;
@@ -722,7 +721,17 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 /* ---------- how to play ---------- */
 #howtoplay { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); }
 #howtoplay-inner { width: min(92vw, 560px); }
-#htp-close { position: absolute; top: 10px; right: 10px; width: 36px; padding: 6px; }
+#howtoplay-inner .sel-actions,
+#advanced-inner .sel-actions {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  background: rgba(6, 6, 10, 0.96);
+  padding: 10px 0 6px;
+  margin-top: 10px;
+  z-index: 1;
+  justify-content: center;
+}
 /* Scroll-fade: sticky gradient that hugs the bottom of the visible panel area,
    hinting at more content below. Disappears automatically when scrolled to the end
    (the sticky element reaches its natural position at the bottom of the content). */
@@ -984,14 +993,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
   overflow: hidden;
 }
 #track-detail[hidden] { display: none; }
-#track-detail-close {
-  flex: none;
-  width: 100%; height: 44px;
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
-  color: #fff; font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
-  border-radius: 8px; cursor: pointer; padding: 0; margin-top: 2px;
-}
-#track-detail-close:active { background: rgba(255,255,255,0.18); }
+#track-detail .sel-actions { flex: none; padding: 4px 0; margin-top: 4px; justify-content: center; }
 #track-detail-header { text-align: center; }
 #track-detail-name { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 0.08em; }
 #track-detail-meta { font-size: 10px; color: #888; margin-top: 2px; letter-spacing: 0.04em; }

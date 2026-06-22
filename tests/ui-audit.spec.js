@@ -140,5 +140,56 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.waitForTimeout(600);
       await shot(page, `${orient}-12-hood-cam`);
     });
+
+    test("13 track detail modal", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-race").click();
+      await page.locator("#select").waitFor({ state: "visible" });
+      // open track detail by revealing it directly
+      await page.evaluate(() => {
+        const t = Tracks.LIST[0];
+        document.getElementById("track-detail").hidden = false;
+        document.getElementById("track-detail-name").textContent = t ? t.name : "Bahrain";
+        document.getElementById("track-detail-meta").textContent = "Test";
+      });
+      await page.locator("#track-detail").waitFor({ state: "visible" });
+      await page.waitForTimeout(300);
+      await shot(page, `${orient}-13-track-detail`);
+    });
+
+    test("14 advanced steering", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => { window.__apex.race("bahrain"); });
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => {
+        // Hide the rotate-device overlay so it doesn't intercept clicks in portrait
+        const rd = document.getElementById("rotate-device");
+        if (rd) rd.hidden = true;
+        document.getElementById("pausemenu").hidden = false;
+      });
+      await page.locator("#pm-advanced").click();
+      await page.locator("#advanced").waitFor({ state: "visible" });
+      await shot(page, `${orient}-14-advanced-steering`);
+    });
+
+    test("15 howtoplay", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-help").click();
+      await page.locator("#howtoplay").waitFor({ state: "visible" });
+      await shot(page, `${orient}-15-howtoplay`);
+    });
+
+    test("16 standings", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      // Start a season and go to standings
+      await page.locator("#mb-season").click();
+      await page.locator("#select").waitFor({ state: "visible" });
+      await page.waitForTimeout(300);
+      await shot(page, `${orient}-16-season-select`);
+    });
   });
 }
