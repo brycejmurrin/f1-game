@@ -63,7 +63,7 @@ test.describe("Apex 26 — smoke", () => {
 
     await expect(page.locator("#select")).toBeVisible();
     await expect(page.locator("#sel-teams .sel-chip").first()).toBeVisible();
-    await expect(page.locator("#sel-tracks .track-card").first()).toBeVisible();
+    await expect(page.locator("#sel-tracks .track-row").first()).toBeVisible();
     await expect(page.locator("#sel-diff .sel-chip").first()).toBeVisible();
   });
 
