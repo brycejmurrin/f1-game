@@ -24,37 +24,50 @@
     elevations: [{ s: 0.28, halfM: 300, rise: -6 }, { s: 0.52, halfM: 300, rise: 10 }, { s: 0.78, halfM: 240, rise: -5 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
-              groundYAt, onTrack, addBox, addCyl, addCone, addPrism, vadd, anchor,
+              groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               along, mountain, tree, pine, hedge, bush,
               grandstand, building, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette (Imola riverside parkland: rich greens, warm Italian earth, Santerno blues) ----
-      const CANOPY = [0.21, 0.48, 0.21];   // sunlit deciduous canopy — warm spring green
-      const WOODS  = [0.10, 0.28, 0.14];   // shaded woods — deep forest
-      const BANK   = [0.44, 0.65, 0.28];   // sunlit grass bank — warm hillside
-      const RIVER  = [0.26, 0.40, 0.54];   // blue-green Santerno water — cooler tone
-      const GRAVEL = [0.80, 0.72, 0.50];   // pale tan gravel — classic pit/runoff
-      const RED    = [0.82, 0.16, 0.14];   // traditional kerb red
-      const WHITE  = [0.92, 0.92, 0.90];   // kerb white
+      const CANOPY  = [0.21, 0.48, 0.21];   // sunlit deciduous canopy — warm spring green
+      const WOODS   = [0.10, 0.28, 0.14];   // shaded woods — deep forest
+      const BANK    = [0.44, 0.65, 0.28];   // sunlit grass bank — warm hillside
+      const RIVER   = [0.26, 0.40, 0.54];   // blue-green Santerno water — cooler tone
+      const GRAVEL  = [0.80, 0.72, 0.50];   // pale tan gravel — classic pit/runoff
+      const RED     = [0.82, 0.16, 0.14];   // traditional kerb red
+      const WHITE   = [0.92, 0.92, 0.90];   // kerb white
+      const STONE   = [0.74, 0.70, 0.60];   // warm Italian stucco
+      const STONE2  = [0.80, 0.74, 0.62];   // lighter stucco / rendered plaster
+      const TERRA   = [0.66, 0.34, 0.22];   // terracotta roof
+      const CONC    = [0.62, 0.63, 0.66];   // concrete grey
+      const PITWALL = [0.86, 0.86, 0.84];   // white pit/paddock wall
+      const TERRA2  = [0.78, 0.58, 0.42];   // warm sandstone
+      const STONE3  = [0.88, 0.82, 0.72];   // pale limestone
+      const TYRE    = [0.10, 0.10, 0.11];   // black rubber
+      const CROWD_A = [0.62, 0.34, 0.30];   // warm crowd colour
+      const CROWD_B = [0.30, 0.40, 0.66];   // blue crowd
+      const CROWD_C = [0.70, 0.62, 0.30];   // gold crowd
+
+      // Night-ready: emissive warm window colour and lamp glow colour
+      const WIN_LIT  = [0.94, 0.82, 0.48];   // warm amber lit window (emissive-reads night)
+      const LAMP_COL = [0.88, 0.78, 0.50];   // warm sodium lamp head
 
       // ---- Encircling WOODED IMOLA HILLS — CONTINUOUS green ring, no snow (snowline > 1) ----
-      // Centre-based ring so peaks sit on the horizon, not in the infield.
-      // Counts are sized so neighbouring peaks overlap (touch) — an unbroken wooded wall.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       const ranges = [
-        // near low wooded hills — wMin sized so w*0.62 < extra-8 (guard won't fire)
+        // near low wooded hills
         { extra: 230, wMin: 140, hMin: 38, hVar: 28, wVar: 80, count: 26, seg: 7,
           opts: { snowline: 2, forest: [0.13, 0.32, 0.16], rock: [0.30, 0.40, 0.26], col: [0.18, 0.36, 0.20] } },
-        // mid wooded hills — fills the gaps behind the near ring
+        // mid wooded hills
         { extra: 380, wMin: 220, hMin: 58, hVar: 40, wVar: 80, count: 20, seg: 7,
           opts: { snowline: 2, forest: [0.17, 0.38, 0.20], rock: [0.36, 0.46, 0.34], col: [0.21, 0.40, 0.23] } },
-        // far hazed wooded ridges — paler green, still no snow; continuous backdrop
+        // far hazed wooded ridges
         { extra: 540, wMin: 320, hMin: 82, hVar: 52, wVar: 80, count: 16, seg: 7,
           opts: { snowline: 2, forest: [0.20, 0.42, 0.22], rock: [0.40, 0.48, 0.40], col: [0.24, 0.42, 0.26] } },
       ];
@@ -68,8 +81,7 @@
                    Object.assign({ seg: rg.seg, seed: i * 13 + rg.extra }, rg.opts));
         }
       }
-      // Tiered dark-green box ridges settling behind the trackside treeline (Imola hills enclosing the back).
-      // 24 m height ≈ tall deciduous canopy; 200 m+ keeps near face >140 m from road edge.
+      // Tiered dark-green box ridges settling behind the trackside treeline.
       every(70, (k) => {
         for (const side of [-1, 1]) {
           backdrop(k, side, 200 + hash(k * 13 + side) * 90, [110, 24, 90], [0.16, 0.34, 0.18]);
@@ -77,91 +89,87 @@
       });
 
       // ---- DENSE PARKLAND: deciduous canopy + conifers walling both sides ----
-      // Classic Italian mature parkland: thick mixed broadleaf/conifer walls
       every(16, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 41 + side);
-          if (s < 0.18) continue;  // denser placement (reduced skip)
+          if (s < 0.18) continue;
           const dist = 8 + s * 22, h = 10 + s * 9;
           if (s < 0.60) tree(k, side, dist, h, [0.17 + s * 0.08, 0.46, 0.20]);
           else pine(k, side, dist, h + 2, [0.08 + s * 0.05, 0.32, 0.14]);
         }
       });
-      // Second, deeper rank of forest behind the first wall — THICKENED for mature woodland effect
+      // Second, deeper rank of forest
       every(24, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 67 + side * 5);
-          if (s < 0.38) continue;  // denser coverage (reduced skip threshold)
+          if (s < 0.38) continue;
           const dist = 28 + s * 30, h = 13 + s * 9;
           if (s < 0.68) pine(k, side, dist, h + 2, WOODS);
           else tree(k, side, dist, h, [0.14 + s * 0.06, 0.42, 0.18]);
         }
       });
-      // Sunlit broadleaf verge trees scattered between — increased frequency
+      // Sunlit broadleaf verge trees scattered between
       every(55, (k) => {
         const h = hash(k * 53 + 9);
         if (h < 0.40) return;
         tree(k, h < 0.7 ? -1 : 1, 12 + h * 11, 12 + h * 7, [0.19 + h * 0.06, 0.47, 0.21]);
       });
-      // Third, far rank: a deep mature woodland mass — clusters of large broadleaf
-      // crowns + the odd tall pine, set well back so the parkland reads as endless and unbroken.
+      // Third, far rank: deep mature woodland mass
       every(36, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 91 + side * 13);
-          if (s < 0.42) continue;  // denser background
+          if (s < 0.42) continue;
           const dist = 54 + s * 54;
-          if (onTrack(px[k], pz[k], 0)) continue; // cheap guard; tree() also guards
+          if (onTrack(px[k], pz[k], 0)) continue;
           if (s < 0.75) tree(k, side, dist, 15 + s * 10, [0.12 + s * 0.07, 0.38, 0.17]);
           else pine(k, side, dist, 17 + s * 9, [0.09, 0.28, 0.12]);
         }
       });
-      // Low understory shrubs dotted along the verge for ground texture — more frequent
+      // Low understory shrubs dotted along the verge
       every(38, (k) => {
         const s = hash(k * 29 + 3);
-        if (s < 0.50) return;  // more shrubs
+        if (s < 0.50) return;
         bush(k, s < 0.8 ? -1 : 1, 6 + s * 7, [0.17 + s * 0.08, 0.42, 0.19]);
       });
 
       // ---- Dense forest lining Tamburello approach (s≈0.05-0.10) and turn-in (s≈0.88-0.98) ----
-      // Tamburello is classically a dark, tree-lined corner; emphasize the forest density
       for (let i = 0; i < 36; i++) {
-        const s = i / 36;  // extended coverage
-        if (s > 0.12 && s < 0.88) continue;  // only start/finish approach + late-lap return
+        const s = i / 36;
+        if (s > 0.12 && s < 0.88) continue;
         const kk = K(s);
         for (const side of [-1, 1]) {
           const h2 = hash(kk * 81 + side + i);
-          if (h2 < 0.30) continue;  // skip some for variation
+          if (h2 < 0.30) continue;
           const dist = 9 + h2 * 12;
           if (h2 < 0.55) pine(kk, side, dist, 11 + h2 * 7, [0.09, 0.26, 0.13]);
           else tree(kk, side, dist, 10 + h2 * 6, [0.16, 0.40, 0.19]);
         }
       }
 
-      // ---- s 0.00 R — Santerno river: CONTINUOUS water & banks along pit straight + run ----
-      // River runs down the right side from pit straight (s≈0.00) → Tosa (s≈0.28)
-      // Multiple depth zones create natural banks and reflective quality
-      groundPlane(K(0.00), 1, 16, [70, 220], RIVER);   // main basin at start
-      groundPlane(K(0.05), 1, 18, [60, 180], RIVER);   // mid-basin
-      groundPlane(K(0.10), 1, 18, [60, 160], RIVER);   // at Tamburello area
-      groundPlane(K(0.15), 1, 17, [55, 140], RIVER);   // approaching Villeneuve
-      // Grassy banks: the characteristic green strip between tarmac and water
-      groundPlane(K(0.02), 1, 6, [18, 200], BANK);     // start straight bank
-      groundPlane(K(0.08), 1, 7, [16, 150], BANK);     // Tamburello bank
-      groundPlane(K(0.13), 1, 7, [14, 120], BANK);     // Villeneuve bank
-      // Dense riverside treeline: continuous from pit straight to Tosa hairpin
-      hedge(0.02, 0.28, 1, 28, 9, WOODS);
+      // ---- s 0.00 R — Santerno river: CONTINUOUS water & banks along pit straight ----
+      // River runs on the right side from pit straight (s≈0.00) → Tosa (s≈0.28).
+      // groundPlane gap > 4 required; these sit well past the tarmac edge.
+      groundPlane(K(0.00), 1, 20, [60, 200], RIVER);   // main basin at start
+      groundPlane(K(0.05), 1, 20, [55, 170], RIVER);   // mid-basin
+      groundPlane(K(0.10), 1, 20, [55, 150], RIVER);   // at Tamburello
+      groundPlane(K(0.15), 1, 18, [50, 130], RIVER);   // approaching Villeneuve
+      // Grassy banks between tarmac and water — gap must clear road edge + bank width
+      groundPlane(K(0.02), 1, 9,  [12, 180], BANK);    // start straight bank
+      groundPlane(K(0.08), 1, 10, [12, 140], BANK);    // Tamburello bank
+      groundPlane(K(0.13), 1, 10, [11, 110], BANK);    // Villeneuve bank
+      // Dense riverside treeline from pit straight to Tosa hairpin
+      hedge(0.02, 0.28, 1, 30, 9, WOODS);
 
       // ---- s 0.00 L — Old pit building + main grandstand on the pit straight ----
-      building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: [0.34, 0.36, 0.40], floor: 5 });
+      building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5 });
       // red trim row fronting the old pit building
       prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
       grandstand(0.965, -1, 10, 90, [0.55, 0.58, 0.62], RED);
-      // packed start-straight stands opposite the pits (river side) + extra pit-straight stand
+      // packed start-straight stands opposite the pits + extra stand
       grandstand(0.02, 1, 22, 80, [0.52, 0.55, 0.60], [0.78, 0.30, 0.22]);
       grandstand(0.93, -1, 10, 70, [0.55, 0.58, 0.62], RED);
 
       // ---- s 0.05 L — Tamburello chicane + Ayrton Senna memorial ----
-      // green lawn with a small bronze statue box reading as the memorial
       groundPlane(K(0.05), -1, 8, [26, 30], BANK);
       place(K(0.05), -1, 14, [2, 3.2, 2], [0.45, 0.40, 0.30]);   // bronze Senna memorial
       tree(K(0.05), -1, 22, 12, CANOPY);
@@ -193,42 +201,47 @@
       }
 
       // ---- s 0.46-0.56 R — Acque Minerali: tree-lined valley with misty green hollow ----
-      // The Acque Minerali curves are the lowest point on the lap; enclose with tall conifers
-      // and create a sunken-valley mood with layered fog and understory
       for (let i = 0; i < 10; i++) {
         const k = K(0.46 + i * 0.009);
         const h2 = hash(k * 7);
-        // tall pines framing the valley walls
         if (i < 5) pine(k, 1, 16 + h2 * 18, 15 + h2 * 8, [0.07, 0.23, 0.11]);
-        // broadleaf canopy mid-slope for depth
         tree(k, 1, 32 + h2 * 20, 13 + h2 * 5, [0.12, 0.33, 0.14]);
-        // dense shrub understory
         if (i > 1 && i < 8) bush(k, 1, 9 + h2 * 8, [0.14, 0.36, 0.16]);
       }
-      // Misty valley floor: layered fog grounds emphasize the sunken feel
-      groundPlane(K(0.48), 1, 12, [50, 80], [0.77, 0.81, 0.77]);   // furthest fog
-      groundPlane(K(0.51), 1, 10, [45, 65], [0.75, 0.79, 0.75]);   // mid fog
-      groundPlane(K(0.54), 1, 9, [38, 55], [0.76, 0.80, 0.76]);    // near fog
+      // Misty valley floor
+      groundPlane(K(0.48), 1, 18, [44, 70], [0.77, 0.81, 0.77]);
+      groundPlane(K(0.51), 1, 16, [40, 58], [0.75, 0.79, 0.75]);
+      groundPlane(K(0.54), 1, 14, [36, 50], [0.76, 0.80, 0.76]);
 
       // ---- s 0.58-0.70 L far — Wooded hills backdrop with the campanile tower rising ----
       for (let i = 0; i < 4; i++) {
         backdrop(K(0.58 + i * 0.012), -1, 100 + i * 18, [120, 26 + i * 6, 80], [0.16, 0.34, 0.18]);
       }
-      // Classic Imola campanile (bell tower) visible above the treeline
+      // Classic Imola campanile (bell tower) visible above treeline.
+      // Placed at dist=120 off-track left; cylinder base sits at ground, cone sits
+      // directly atop the cylinder at height=32 (so no gap / no floating spire).
       {
         const ac = anchor(K(0.64), -1, 120);
-        addCyl(out, ac.c, 2.2, 32, [0.82, 0.78, 0.70], 8, [ac.r, ac.u, ac.t]);    // tower shaft
-        addCone(out, vadd(ac.c, ac.u, 32), 2.8, 7, [0.48, 0.38, 0.32], 8, [ac.r, ac.u, ac.t]); // spire
+        const towerH = 30;
+        addCyl(out, ac.c, 2.0, towerH, STONE2, 8, [ac.r, ac.u, ac.t]);          // shaft — base at ground
+        addBox(out, vadd(ac.c, ac.u, towerH), [5.0, 2.4, 5.0], STONE, [ac.r, ac.u, ac.t]);      // belfry cap
+        addCone(out, vadd(ac.c, ac.u, towerH + 2.4), 2.5, 7, [0.44, 0.34, 0.28], 7, [ac.r, ac.u, ac.t]); // spire — sits on cap
+        // Lit belfry windows — four narrow bright slots (two on each axis)
+        for (let qi = 0; qi < 2; qi++) {
+          const ofs = (qi === 0) ? ac.r : ac.t;
+          for (const sg of [-1, 1]) {
+            addBox(out, vadd(vadd(ac.c, ac.u, towerH + 0.9), ofs, sg * 2.0), [0.6, 1.2, 0.25], WIN_LIT, [ac.r, ac.u, ac.t]);
+          }
+        }
       }
 
-      // ---- s 0.66 L+R near — Variante Alta chicane over a crest: tall sausage kerbs + vegetation ----
+      // ---- s 0.66 L+R near — Variante Alta chicane over a crest: sausage kerbs + vegetation ----
       for (const side of [-1, 1]) {
         place(K(0.66), side, 2, [0.7, 0.5, 8], RED);
         place(K(0.67), side, 2, [0.7, 0.5, 8], WHITE);
       }
       bush(K(0.66), -1, 10, BANK);
       bush(K(0.66), 1, 12, [0.16, 0.36, 0.18]);
-      // vegetation along the Variante Alta crest area
       tree(K(0.65), -1, 20, 10, [0.15, 0.40, 0.18]);
       pine(K(0.68), 1, 18, 11, WOODS);
 
@@ -236,17 +249,16 @@
       grandstand(0.80, -1, 12, 55, [0.52, 0.55, 0.60], RED);
       grandstand(0.84, -1, 12, 48, [0.54, 0.57, 0.61], [0.78, 0.30, 0.22]);
       groundPlane(K(0.80), -1, 6, [30, 50], GRAVEL);
-      groundPlane(K(0.81), -1, 14, [40, 60], BANK);
+      groundPlane(K(0.81), -1, 20, [36, 55], BANK);    // gap raised to 20 to clear road+grandstand
       // shaded fog dip at Rivazza
-      groundPlane(K(0.82), -1, 8, [30, 40], [0.74, 0.78, 0.74]);
+      groundPlane(K(0.82), -1, 14, [26, 38], [0.74, 0.78, 0.74]);
       // woody enclosure on the descent
       pine(K(0.79), -1, 28, 12, WOODS);
       tree(K(0.82), 1, 25, 11, [0.12, 0.34, 0.16]);
       tree(K(0.85), 1, 20, 10, WOODS);
 
       // ---- Italian town buildings at Variante Alta / Rivazza (s=0.60–0.80) ----
-      const TERRA2  = [0.78, 0.58, 0.42];
-      const STONE3  = [0.88, 0.82, 0.72];
+      // All windows use WIN_LIT for day warmth + night legibility.
       const TOWN_POS = [
         [0.60, -1, 85,  14, 18],
         [0.63, -1, 92,  12, 22],
@@ -256,14 +268,13 @@
       ];
       for (const [s, side, dist, bw, bh] of TOWN_POS) {
         const tc = (bh > 20) ? TERRA2 : STONE3;
-        building(K(s), side, dist, bw, bh, bw * 0.8, { wall: tc, window: [0.28, 0.32, 0.38], floor: 3 });
+        building(K(s), side, dist, bw, bh, bw * 0.8, { wall: tc, window: WIN_LIT, floor: 3 });
       }
-
 
       // ---- s 0.92 R near — Variante Bassa / pit approach kerbs back toward river ----
       place(K(0.92), 1, 2, [0.4, 0.3, 7], RED);
       place(K(0.93), 1, 2, [0.4, 0.3, 7], WHITE);
-      groundPlane(K(0.92), 1, 16, [50, 120], RIVER);   // river rejoins by pit straight
+      groundPlane(K(0.92), 1, 22, [44, 110], RIVER);   // river rejoins by pit straight (gap raised)
 
       // ---- Marshal posts for corner flagging ----
       every(110, (k) => {
@@ -271,6 +282,8 @@
       });
 
       // ---- thin cantilever roof blade over the old pit lane ----
+      // Placed at dist=12 from road edge; the pit building is at dist=1 + w/2=9.
+      // The roof sits at 11.5m above ground — clear of the building top (11m).
       {
         const a = anchor(K(0.00), -1, 12);
         addBox(out, vadd(a.c, a.u, 12), [18, 0.7, 120], [0.66, 0.68, 0.70], [a.r, a.u, a.t]);
@@ -279,30 +292,23 @@
       // ============================================================
       //  ENRICHMENT — buildings, town backdrop, crowds, furniture
       // ============================================================
-      const STONE   = [0.74, 0.70, 0.60];  // warm Italian stucco
-      const STONE2  = [0.80, 0.74, 0.62];
-      const TERRA   = [0.66, 0.34, 0.22];  // terracotta roof
-      const CONC    = [0.62, 0.63, 0.66];  // concrete grey
-      const PITWALL = [0.86, 0.86, 0.84];  // white pit/paddock wall
-      const TYRE    = [0.10, 0.10, 0.11];
-      const CROWD_A = [0.62, 0.34, 0.30];
-      const CROWD_B = [0.30, 0.40, 0.66];
-      const CROWD_C = [0.70, 0.62, 0.30];
 
       // ---- Start/finish overhead gantry + scoring gantry into turn 1 ----
       gantry(0.00, 7.5, [0.14, 0.14, 0.17]);
       gantry(0.965, 7.0, [0.18, 0.18, 0.20]);
 
       // ---- Pit / paddock complex along the pit straight (left) ----
-      // long low pit garages behind the old pit building + fuel depot
-      building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: [0.30, 0.34, 0.40], floor: 4 });
-      building(K(0.90), -1, 20, 22, 9, 40, { wall: [0.66, 0.67, 0.70], window: [0.28, 0.32, 0.38], floor: 4, roof: true });
-      building(K(0.94), -1, 46, 30, 12, 34, { wall: STONE, window: [0.34, 0.30, 0.26], floor: 4 }); // paddock hospitality
-      // fuel depot (tall cylindrical tanks)
+      building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: WIN_LIT, floor: 4 });
+      building(K(0.90), -1, 20, 22, 9, 40, { wall: [0.66, 0.67, 0.70], window: WIN_LIT, floor: 4, roof: true });
+      building(K(0.94), -1, 46, 30, 12, 34, { wall: STONE, window: WIN_LIT, floor: 4 }); // paddock hospitality
+      // fuel depot (tall cylindrical tanks) — two tanks side by side, not overlapping.
+      // Tank A at dist=56, tank B offset +6m along t to avoid overlap.
       {
-        const a = anchor(K(0.92), -1, 56);
-        addCyl(out, vadd(a.c, a.u, 6), 1.8, 12, [0.60, 0.56, 0.48], 8, [a.r, a.u, a.t]);
-        addCyl(out, vadd(a.c, a.u, 6), 1.5, 12, [0.78, 0.74, 0.60], 8, [a.r, a.u, a.t]);  // stripe
+        const aA = anchor(K(0.92), -1, 56);
+        addCyl(out, aA.c, 2.0, 13, [0.60, 0.56, 0.48], 8, [aA.r, aA.u, aA.t]);
+        // Tank B shifted 5.5m along track direction to avoid cylinder intersection
+        const aB = anchor(K(0.92), -1, 63);
+        addCyl(out, aB.c, 1.6, 11, [0.78, 0.74, 0.60], 8, [aB.r, aB.u, aB.t]);
       }
       // race control / timing tower above the pits
       tower(K(0.99), -1, 16, 9, 22, { col: [0.78, 0.80, 0.82], cap: true, capCol: [0.2, 0.2, 0.24], mast: 6 });
@@ -314,7 +320,7 @@
       //  Placed as a cluster on far hill (left of pit straight / T1).
       // ============================================================
       {
-        // anchor the town on the hill behind the main straight, well off-track.
+        // Anchor to the hill behind the main straight, well off-track.
         // Use ONE consistent ground baseline + manual hill tiers so houses spread
         // along the basis don't drift off mismatched per-node terrain samples.
         const at = anchor(K(0.02), -1, 150);
@@ -322,34 +328,48 @@
         const baseY = groundYAt(K(0.02), 150);
         const base = [at.c[0], baseY, at.c[2]];
         const put = (alongM, outM, rise, w, h, d, col) => {
-          // build the ground footing point, then lift onto the up axis by rise
+          // Build the ground footing point, then lift by rise.
+          // rise is the hillside elevation offset above the far-field baseline —
+          // NOT an additional u-axis translation, so buildings sit on the slope.
           const foot = vadd(vadd(vadd(base, t, alongM), r, -outM), u, rise);
           addBox(out, vadd(foot, u, h / 2), [w, h, d], col, [r, u, t]);
-          addPrism(out, vadd(foot, u, h + 1.4), [w, 2.8, d], TERRA, [r, u, t]); // terracotta hip roof
+          addPrism(out, vadd(foot, u, h + 1.0), [w, 2.6, d], TERRA, [r, u, t]); // terracotta hip roof
         };
         // lower tier: rows of town houses stepping UP the hill
         for (let i = 0; i < 6; i++) {
           const h2 = hash(i * 17 + 5);
-          put(-80 + i * 28, h2 * 24, 4 + h2 * 8, 16 + h2 * 5, 10 + h2 * 6, 14 + h2 * 3, h2 < 0.5 ? STONE : STONE2);
+          put(-80 + i * 28, h2 * 22, 3 + h2 * 6, 16 + h2 * 5, 10 + h2 * 6, 14 + h2 * 3, h2 < 0.5 ? STONE : STONE2);
         }
         // mid tier: larger buildings in the distance
         for (let i = 0; i < 4; i++) {
           const h2 = hash(i * 31 + 9);
-          put(-40 + i * 36, 48 + h2 * 34, 14 + h2 * 10, 18 + h2 * 6, 11 + h2 * 5, 16, h2 < 0.5 ? STONE2 : CONC);
+          put(-40 + i * 36, 46 + h2 * 30, 12 + h2 * 8, 18 + h2 * 6, 11 + h2 * 5, 16, h2 < 0.5 ? STONE2 : CONC);
         }
-        // ---- church: nave + bell tower (campanile) with a conical spire ----
-        const churchFoot = vadd(vadd(vadd(base, t, 60), r, -44), u, 24);
-        addBox(out, vadd(churchFoot, u, 8), [18, 16, 28], STONE2, [r, u, t]);          // nave: warm stone
-        addPrism(out, vadd(churchFoot, u, 16 + 2), [18, 6, 28], TERRA, [r, u, t]);     // gable roof: terracotta
-        const towerFoot = vadd(churchFoot, t, 18);
-        addBox(out, vadd(towerFoot, u, 15), [8, 30, 8], STONE, [r, u, t]);             // campanile shaft
-        addCone(out, vadd(towerFoot, u, 30 + 5), 4.5, 10, [0.44, 0.34, 0.28], 7, [r, u, t]); // spire
+        // ---- church: nave + bell tower (campanile) cleanly positioned ----
+        // churchFoot is on the hillside baseline; rise=18 keeps it above the lower
+        // tier houses (max rise≈9) without floating off into space.
+        const churchFoot = vadd(vadd(vadd(base, t, 55), r, -42), u, 18);
+        addBox(out, vadd(churchFoot, u, 8), [18, 16, 28], STONE2, [r, u, t]);        // nave
+        addPrism(out, vadd(churchFoot, u, 16 + 1.0), [18, 5.5, 28], TERRA, [r, u, t]); // gable roof
+        // Lit window bands on the nave facade
+        addBox(out, vadd(churchFoot, u, 6), [18, 2.5, 0.4], WIN_LIT, [r, u, t]);
+
+        // Town campanile: placed beside the nave (offset +22 along t so they don't overlap).
+        // The base of the shaft anchors at churchFoot height — no additional rise needed.
+        const towerFoot = vadd(churchFoot, t, 22);
+        const campH = 28;
+        addCyl(out, towerFoot, 1.8, campH, STONE, 8, [r, u, t]);                    // cylindrical shaft
+        addBox(out, vadd(towerFoot, u, campH), [5.5, 2.2, 5.5], STONE2, [r, u, t]); // belfry block
+        addCone(out, vadd(towerFoot, u, campH + 2.2), 2.8, 8, [0.44, 0.34, 0.28], 7, [r, u, t]); // spire
+        // Lit belfry openings on tower
+        for (const sg of [-1, 1]) {
+          addBox(out, vadd(vadd(towerFoot, u, campH + 0.8), r, sg * 2.2), [0.5, 1.0, 0.3], WIN_LIT, [r, u, t]);
+        }
       }
 
       // ============================================================
       //  GRANDSTANDS + CROWDS at the marquee corners
       // ============================================================
-      // Main straight — twin decks both sides already; add a third tier opposite.
       grandstand(0.99, -1, 11, 60, [0.50, 0.53, 0.58], CROWD_C);
       grandstand(0.05, 1, 20, 70, [0.52, 0.55, 0.60], CROWD_B);
       // Tamburello / Variante Tamburello viewing bank stand (left, s≈0.07)
@@ -365,7 +385,6 @@
       // ============================================================
       //  TRACK FURNITURE — fences, guardrails, tyre walls, billboards
       // ============================================================
-      // Catch / debris fencing in front of the main grandstands
       fence(0.96, 0.10, -1, 4, 4, [0.62, 0.64, 0.66]);
       fence(0.49, 0.56, 1, 4, 4, [0.62, 0.64, 0.66]);
       fence(0.79, 0.86, -1, 4, 4, [0.62, 0.64, 0.66]);
@@ -391,13 +410,43 @@
       billboard(K(0.95), 1, 16, 12, 5, [0.90, 0.80, 0.20]);   // pit straight
 
       // ---- Trackside hospitality / TV compound near Acque Minerali ----
-      building(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: [0.30, 0.34, 0.40], floor: 3, roof: true });
-      // a couple of marquee tents (prism roofs) at the paddock
+      building(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: WIN_LIT, floor: 3, roof: true });
+      // Paddock marquee tents at the paddock (s≈0.92, left)
       {
         const a = anchor(K(0.92), -1, 30);
         addBox(out, vadd(a.c, a.u, 2.2), [16, 4.4, 12], [0.90, 0.90, 0.88], [a.r, a.u, a.t]);
         addPrism(out, vadd(a.c, a.u, 4.4 + 1.4), [16, 2.8, 12], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
       }
+
+      // ============================================================
+      //  LAMP POSTS — Italian-style column lamps at regular intervals.
+      //  Placed along pit straight (both sides) and major corner exits
+      //  so the circuit reads at night and reads as "organised" by day.
+      //  A slim cylinder post + small bright box head.
+      // ============================================================
+      // Pit straight lamp posts — left side only (right is the river)
+      along(0.95, 0.10, 18, (k) => {
+        const p = anchor(k, -1, 8);
+        if (onTrack(p.c[0], p.c[2], 0.5)) return;
+        addCyl(out, p.c, 0.12, 8.5, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 8.5), [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+      });
+      // Tosa hairpin exit lamp posts (s≈0.30–0.38)
+      along(0.30, 0.38, 20, (k) => {
+        const side = -1;
+        const p = anchor(k, side, 7);
+        if (onTrack(p.c[0], p.c[2], 0.5)) return;
+        addCyl(out, p.c, 0.12, 8.0, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 8.0), [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+      });
+      // Rivazza exit lamp posts (s≈0.84–0.92)
+      along(0.84, 0.92, 22, (k) => {
+        const side = hash(k * 11) < 0.5 ? -1 : 1;
+        const p = anchor(k, side, 7);
+        if (onTrack(p.c[0], p.c[2], 0.5)) return;
+        addCyl(out, p.c, 0.12, 8.0, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 8.0), [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+      });
     },
   }
   );

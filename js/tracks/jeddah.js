@@ -24,374 +24,405 @@
     // then recovers along the seafront — real circuit has ~12 m total change.
     elevations: [{ s: 0.30, halfM: 480, rise: -8 }, { s: 0.62, halfM: 400, rise: 6 }],
     scenery: function (api) {
-      const { out, n, pyMin, place, backdrop, groundPlane,
-        addBox, addCyl, addCone, addPrism, anchor, vadd, building, tower, billboard,
-        grandstand, gantry, marshalPost, fence, guardrail, tyreWall, palm,
-        onTrack, hash, every, recordBarrier } = api;
+      const { out, n, pyMin, place, backdrop,
+        addBox, addCyl, addCone, anchor, vadd, building, tower, billboard,
+        grandstand, gantry, marshalPost, guardrail, tyreWall, palm,
+        onTrack, hash, every } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Night Corniche palette: refined for warm amber/cool LED contrast
-      const SEA = [0.02, 0.04, 0.08];        // deep black mirror water
-      const SPANGLE = [1.0, 0.80, 0.40];     // warm amber reflections + path lamps
-      const LED = [0.92, 0.96, 1.0];         // cool-white LED glow
-      const WINWARM = [1.0, 0.84, 0.48];     // warm interior windows
-      const WINCOOL = [0.58, 0.82, 1.0];     // cool glass tower windows
-      const WINGOLD = [1.0, 0.76, 0.28];     // deep sodium/tungsten glow
-      const WINTEAL = [0.42, 0.96, 0.94];    // bright teal accent glass
-      const GREEN = [0.10, 0.56, 0.24];      // Saudi-green wall stripe
-      const MAGENTA = [0.96, 0.28, 0.64];    // neon magenta accent
-      const BARRIER = [0.32, 0.32, 0.35];    // grey concrete barrier
-      const DARKPOLE = [0.09, 0.09, 0.12];   // dark pole base
+      // ── Night Corniche palette: warm amber floodlights vs cool LED strips ──
+      const SEA       = [0.02, 0.04, 0.08];        // deep black-mirror water
+      const SPANGLE   = [1.0,  0.80, 0.40];        // warm amber reflections / path lamps
+      const LED       = [0.92, 0.96, 1.0 ];        // cool-white LED lamp banks
+      const WINWARM   = [1.0,  0.84, 0.48];        // warm interior windows
+      const WINCOOL   = [0.58, 0.82, 1.0 ];        // cool glass tower windows
+      const WINGOLD   = [1.0,  0.76, 0.28];        // deep sodium / tungsten glow
+      const WINTEAL   = [0.42, 0.96, 0.94];        // bright teal accent glass
+      const GREEN     = [0.10, 0.56, 0.24];        // Saudi-green livery stripe
+      const MAGENTA   = [0.96, 0.28, 0.64];        // neon magenta accent
+      const BARRIER   = [0.32, 0.32, 0.35];        // grey concrete barrier
+      const DARKPOLE  = [0.09, 0.09, 0.12];        // dark lamp-pole shaft
+      const LAMPGLOW  = [1.0,  0.88, 0.52];        // warm sodium lamp head
+      const POOLAMB   = [0.44, 0.38, 0.22];        // muted amber pool on tarmac
 
-      // --- Continuous grey barrier wall (visual; physics handled by street circuit code) ---
-      // Overlapping long boxes at 13m spacing to ensure no visible gaps in the wall,
-      // while staying within vertex budget. Reflective impact strips every 16m for
-      // night-race safety markers. Physics boundary registered at barrierGap (0.6m).
-      for (const side of [-1, 1]) {
-        recordBarrier(0.0, (n - 1) / n, side, 0.6);
-        every(13, (k) => {
-          const a = anchor(k, side, 0.6), b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, 0.65), [0.5, 1.3, 15], BARRIER, b);
-        });
-      }
-      // Reflective impact strips (bright marker zones) at regular intervals — reads as
-      // safety lighting on the barrier edges under headlights
-      every(16, (k) => {
-        for (const side of [-1, 1]) {
-          const a = anchor(k, side, 0.6), b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, 0.9), [0.45, 0.25, 6], [0.72, 0.70, 0.66], b);
-        }
-      });
-      // Saudi-green accent stripe on the wall through the T1-3 complex (first sector visual)
-      place(K(0.05), -1, 4, [4, 0.5, 60], GREEN);
-      // Bright white stripe in the high-speed esses (T4-T12 safety marker)
-      place(K(0.35), 1, 4, [3.5, 0.4, 50], [0.76, 0.76, 0.79]);
-
-      // --- LED light towers ringing the whole lap (dark pole + bright cap pool) ---
-      const lightTower = (k, side, dist) => {
+      // ── Helpers ────────────────────────────────────────────────────────────
+      // Corniche lamp post: slim dark shaft, warm glowing head, amber pool at base.
+      // Uses anchor() so it sits on local terrain height rather than floating.
+      const lampPost = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-        addCyl(out, a.c, 0.5, 22, DARKPOLE, 5, b);
-        addBox(out, vadd(a.c, a.u, 22), [3.2, 1.4, 3.2], LED);   // bright lamp head
-        addBox(out, a.c, [2.4, 0.3, 2.4], LED);                  // light pool on tarmac base
+        if (onTrack(a.c[0], a.c[2], 2)) return;
+        // Shaft — dark galvanised steel, 8 m tall
+        addCyl(out, a.c, 0.12, 8.0, DARKPOLE, 4, b);
+        // Lamp head at crown — small warm box reads as lantern
+        addBox(out, vadd(a.c, a.u, 8.0), [0.55, 0.55, 0.55], LAMPGLOW, b);
+        // Light-spill pool on ground — flat amber disc just above surface
+        addBox(out, vadd(a.c, a.u, 0.12), [2.8, 0.18, 2.8], POOLAMB, b);
       };
-      for (let i = 0; i < 24; i++) {
-        const s = i / 24;
-        lightTower(K(s), (i % 2) ? 1 : -1, 9 + (i % 3) * 2);
-      }
 
-      // --- Tall floodlight MASTS for the night race: a crossed-truss tower carrying
-      // a bank of glowing lamps, ringing the lap at a wider spacing than the LED
-      // poles so the whole circuit is properly lit for the night GP. ---
+      // Floodlight mast: tall truss tower + bank of LED fixtures + large pool.
+      // Uses onTrack guard so masts never appear on the racing surface.
       const floodMast = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 4)) return;
-        addCyl(out, a.c, 0.7, 34, [0.09, 0.09, 0.12], 5, b);                 // tall mast
-        addBox(out, vadd(a.c, a.u, 30), [7, 0.8, 1.4], [0.10, 0.10, 0.13], b); // lamp gantry crossbar
+        if (onTrack(a.c[0], a.c[2], 5)) return;
+        // Main mast — 38 m hexagonal shaft
+        addCyl(out, a.c, 0.65, 38, DARKPOLE, 6, b);
+        // Horizontal lamp gantry crossbar at 34 m
+        addBox(out, vadd(a.c, a.u, 34), [8.0, 0.9, 1.6], [0.10, 0.10, 0.14], b);
+        // Three LED lamp banks arrayed along the crossbar
         for (let j = -1; j <= 1; j++) {
-          addBox(out, vadd(vadd(a.c, a.u, 31), a.r, side * j * 2.4), [1.8, 1.4, 1.0], LED, b); // lamp banks
+          const off = vadd(vadd(a.c, a.u, 35.2), a.r, side * j * 2.6);
+          addBox(out, off, [2.4, 1.8, 1.2], LED, b);
+          // Small downward emissive patch simulating spill on the crossbar underside
+          addBox(out, vadd(off, a.u, -0.9), [2.2, 0.25, 1.0], [0.7, 0.76, 0.82], b);
         }
-        addBox(out, a.c, [3.0, 0.25, 3.0], [0.5, 0.52, 0.6], b);             // light pool base
+        // Large warm light-pool on ground — reads as the lit tarmac under the mast
+        addBox(out, vadd(a.c, a.u, 0.20), [5.0, 0.28, 5.0], POOLAMB, b);
+        // Secondary pool ring — larger, dimmer, for realistic falloff halo
+        addBox(out, vadd(a.c, a.u, 0.08), [10.0, 0.14, 10.0], [0.22, 0.18, 0.09], b);
       };
-      for (let i = 0; i < 14; i++) {
-        floodMast(K(i / 14 + 0.02), (i % 2) ? -1 : 1, 16 + (i % 3) * 4);
+
+      // LED light tower: medium column, cool lamp head, small pool.
+      const lightTower = (k, side, dist) => {
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 3)) return;
+        addCyl(out, a.c, 0.40, 22, DARKPOLE, 5, b);
+        // Lamp head box at apex
+        addBox(out, vadd(a.c, a.u, 22.0), [3.0, 1.2, 3.0], LED, b);
+        // Underside emissive strip — reads as reflected light on the head housing
+        addBox(out, vadd(a.c, a.u, 21.2), [2.6, 0.22, 2.6], [0.55, 0.60, 0.68], b);
+        // Ground pool — small warm disc at base
+        addBox(out, vadd(a.c, a.u, 0.12), [3.2, 0.20, 3.2], POOLAMB, b);
+      };
+
+      // ── Full-lap floodlight masts (ring the entire circuit) ─────────────
+      // 16 masts staggered both sides at wider spacing so the whole lap is lit.
+      for (let i = 0; i < 16; i++) {
+        floodMast(K(i / 16 + 0.015), (i % 2) ? -1 : 1, 18 + (i % 3) * 5);
       }
 
-      // --- Palm trees: Corniche signature vegetation (coastal appearance) ---
-      // Lit fronds against the night sky. Seaward row (lit, prominent) + inland row (darker).
-      // Thinned but sufficient for tropical waterfront feel.
-      const PALMFROND = [0.12, 0.44, 0.19];   // warm-lit green
+      // ── Supplementary LED light towers between masts ─────────────────────
+      // 24 towers fill the gaps; alternating sides, staggered depth.
+      for (let i = 0; i < 24; i++) {
+        lightTower(K(i / 24 + 0.03), (i % 2) ? 1 : -1, 10 + (i % 3) * 2);
+      }
+
+      // ── Corniche lamp posts along both barrier lines ──────────────────────
+      // Right side (seaward Corniche promenade): warm amber posts every ~15 m.
+      for (let i = 0; i < 42; i++) {
+        lampPost(K(i / 42), 1, 4.5 + (i % 2) * 1.2);
+      }
+      // Left side (inland / pit side): sparser, slightly further out.
+      for (let i = 0; i < 28; i++) {
+        lampPost(K(i / 28 + 0.008), -1, 5.0 + (i % 2) * 1.5);
+      }
+
+      // ── Palm trees: Corniche signature vegetation ─────────────────────────
+      // Seaward row (lit fronds, prominent) + sparse inland row (darker).
+      const PALMFROND = [0.12, 0.44, 0.19];
       for (let i = 0; i < 60; i++) {
-        const s = (i / 60);
-        // Seaward (R) row: visible, lit
-        const h = 6.5 + hash(i * 3) * 3.5;
-        const dist = 6 + hash(i * 5) * 3;
+        const s = i / 60;
+        // Seaward (R) row — dist 9+ so they clear the lamp posts at dist 4-6
+        const h   = 6.5 + hash(i * 3) * 3.5;
+        const dist = 9 + hash(i * 5) * 4;
         palm(K(s), 1, dist, h, PALMFROND);
-        // Inland (L) row, sparser (every 2nd, darker frond)
+        // Inland (L) row — every 2nd, darker frond, further back
         if (i % 2 === 0) {
           const h2 = 7 + hash(i * 11) * 3;
-          palm(K(s + 0.008), -1, 8.5 + hash(i * 7) * 4, h2, [0.08, 0.36, 0.14]);
+          palm(K(s + 0.008), -1, 11 + hash(i * 7) * 4, h2, [0.08, 0.36, 0.14]);
         }
       }
-      // Warm uplight pools at the base of seaward palms (amber ambient)
+      // Warm uplight pools at the base of prominent seaward palms
       for (let i = 0; i < 24; i++) {
-        const a = anchor(K(i / 24), 1, 6);
-        if (onTrack(a.c[0], a.c[2], 1)) continue;
-        addBox(out, vadd(a.c, a.u, 0.2), [1.2, 0.35, 1.2], [0.98, 0.78, 0.42]);
+        const a = anchor(K(i / 24), 1, 9);
+        if (onTrack(a.c[0], a.c[2], 1.5)) continue;
+        addBox(out, vadd(a.c, a.u, 0.20), [1.4, 0.32, 1.4], [0.98, 0.78, 0.42], [a.r, a.u, a.t]);
       }
 
-      // --- Marshal posts: orange-roofed bunkers at corner exits around the lap ---
+      // ── Marshal posts at corner exits ─────────────────────────────────────
       for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],
         [0.62, -1], [0.74, 1], [0.81, -1], [0.92, 1], [0.97, -1]]) {
-        marshalPost(K(s), side, 1.2);
+        marshalPost(K(s), side, 1.8);
       }
 
-      // --- Red Sea: continuous flat black water, track-aligned, sub-grade (mirror effect) ---
-      // Three depth bands placed via anchor() to avoid parallel-stretch culling. Sitting
-      // below pyMin reads as depth. Reflection spangles (warm + cool) animate the surface.
+      // ── Red Sea: continuous flat dark water, sub-grade ────────────────────
+      // Three depth bands anchored via anchor() to follow the track heading.
+      // All top faces sit below pyMin so the on-track rejection guard (topY check)
+      // never incorrectly culls them.
       for (let i = 0; i < 36; i++) {
         const k = K(i / 36);
-        const a = anchor(k, 1, 110);              // near shore water (50-120m out)
+        const a = anchor(k, 1, 110);
         const b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 0.5, a.c[2]], [260, 1.3, 95], SEA, b);
+        addBox(out, [a.c[0], pyMin - 1.8, a.c[2]], [260, 1.2, 95], SEA, b);
       }
       for (let i = 0; i < 32; i++) {
         const k = K(i / 32);
-        const a = anchor(k, 1, 270);              // mid-depth water (150-280m out)
+        const a = anchor(k, 1, 270);
         const b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 1.0, a.c[2]], [500, 1.8, 125], [0.025, 0.045, 0.095], b);
+        addBox(out, [a.c[0], pyMin - 2.2, a.c[2]], [500, 1.6, 125], [0.025, 0.045, 0.095], b);
       }
       for (let i = 0; i < 24; i++) {
         const k = K(i / 24);
-        const a = anchor(k, 1, 430);              // far horizon (far offshore)
+        const a = anchor(k, 1, 430);
         const b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 1.3, a.c[2]], [750, 2.2, 150], [0.018, 0.035, 0.080], b);
+        addBox(out, [a.c[0], pyMin - 2.6, a.c[2]], [750, 2.0, 150], [0.018, 0.035, 0.080], b);
       }
-      // Reflection spangles (bright specks) on the water surface — mix of warm amber,
-      // cool LED, and magenta accents. Reads as distant light reflections on black sea.
+      // Reflection spangles on the water surface — warm amber, cool LED, occasional magenta.
       for (let i = 0; i < 28; i++) {
-        const s = (i / 28), side = 1;
-        const dist = 75 + hash(i * 5) * 180;      // varied distances
-        const a = anchor(K(s), side, dist);
-        // Rotate spangle colors: mostly warm amber, some cool LED, occasional magenta
-        const col = (i % 5 === 0) ? MAGENTA : (i % 5 === 1) ? [0.92, 0.96, 1.0] : SPANGLE;
-        addBox(out, [a.c[0], pyMin + 0.3, a.c[2]], [6 + hash(i * 7) * 5, 0.25, 6 + hash(i * 11) * 5], col);
+        const s = i / 28;
+        const dist = 75 + hash(i * 5) * 180;
+        const a = anchor(K(s), 1, dist);
+        const col = (i % 5 === 0) ? MAGENTA : (i % 5 === 1) ? LED : SPANGLE;
+        addBox(out, [a.c[0], pyMin - 1.2, a.c[2]],
+               [6 + hash(i * 7) * 5, 0.22, 6 + hash(i * 11) * 5], col);
       }
 
-      // --- s 0.20 R far: King Fahd's Fountain — elegant thin cool-white jet far offshore ---
-      // One of the world's tallest fountains (260m+). Render as: slender water column
-      // (2m dia) rising from the sea, crowned with a glowing cone. The pier base is dark.
+      // ── King Fahd's Fountain — far offshore landmark ──────────────────────
+      // One of the world's tallest fountains (260m+). Very slender jet far out so
+      // it never intersects any shoreside scenery.
       {
-        const a = anchor(K(0.20), 1, 360);
+        const a = anchor(K(0.20), 1, 380);
         const b = [a.r, a.u, a.t];
-        // Main jet: very thin (1.8m) tall column, glowing cool-white
-        addCyl(out, [a.c[0], pyMin - 0.4, a.c[2]], 0.9, 250, LED, 6, b);
-        // Spray crown: diffuse cone at the apex
-        addCone(out, [a.c[0], pyMin + 250, a.c[2]], 6, 50, [0.94, 0.97, 1.0], 6, b);
-        // Dark pier/base sitting just above water
-        addCyl(out, [a.c[0], pyMin - 0.2, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, b);
+        // Main jet: very thin cool-white column
+        addCyl(out, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, b);
+        // Spray crown cone at the apex
+        addCone(out, [a.c[0], pyMin + 255, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
+        // Dark pier base just above water
+        addCyl(out, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, b);
       }
 
-      // --- s 0.00: START/FINISH gantry spanning the track ---
-      gantry(0.0, 9, [0.12, 0.13, 0.17]);
-      gantry(0.012, 7, [0.12, 0.13, 0.17]);   // second scoring gantry just downstream
+      // ── START/FINISH gantries ─────────────────────────────────────────────
+      gantry(0.0,   9, [0.12, 0.13, 0.17]);
+      gantry(0.012, 7, [0.12, 0.13, 0.17]);
 
-      // --- s 0.00 L: PIT / PADDOCK — long pit building + garage band + paddock block ---
+      // ── PIT / PADDOCK — s 0.00 L ─────────────────────────────────────────
+      // 7 garage bays: main mass + lit opening + LED strip above opening.
       for (let i = 0; i < 7; i++) {
-        place(K(0.0 + i * 0.011), -1, 16, [12, 8, 28], [0.26, 0.27, 0.30]);   // pit garage mass
-        place(K(0.0 + i * 0.011), -1, 16, [12.4, 1.0, 29], WINWARM);          // lit garage opening
-        place(K(0.0 + i * 0.011), -1, 16, [12.4, 0.5, 29], LED);              // upper window strip
+        place(K(0.0 + i * 0.011), -1, 16, [12, 8, 28], [0.26, 0.27, 0.30]);
+        place(K(0.0 + i * 0.011), -1, 16, [12.4, 1.0, 29], WINWARM);
+        place(K(0.0 + i * 0.011), -1, 16, [12.4, 0.5, 29], LED);
       }
-      // pit wall (low) on the right of the pit lane = left of track edge
+      // Pit wall (low concrete lip on the lane side)
       for (let i = 0; i < 6; i++) {
         place(K(0.0 + i * 0.012), -1, 3.0, [0.4, 1.1, 26], [0.40, 0.41, 0.44]);
       }
-      // paddock buildings + motorhomes set back behind the garages
+      // Paddock motorhomes set well back — at 38m+ they clear the garage fascias.
       for (let i = 0; i < 5; i++) {
-        const a = anchor(K(0.0 + i * 0.014), -1, 36), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.0 + i * 0.014), -1, 40), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 14)) continue;
-        addBox(out, vadd(a.c, a.u, 5), [24, 10, 22], [0.20, 0.21, 0.25], b);
-        addBox(out, vadd(a.c, a.u, 6), [24.4, 0.9, 22.4], (i % 2) ? WINCOOL : WINWARM, b);
+        addBox(out, vadd(a.c, a.u, 5), [22, 10, 20], [0.20, 0.21, 0.25], b);
+        addBox(out, vadd(a.c, a.u, 5.9), [22.4, 0.9, 20.4], (i % 2) ? WINCOOL : WINWARM, b);
+        // Upper lit strip — hospitality suite windows
+        addBox(out, vadd(a.c, a.u, 7.2), [22.4, 0.7, 20.4], (i % 2) ? WINWARM : WINCOOL, b);
       }
 
-      // --- s 0.00 R: MAIN GRANDSTAND — raked stands packed with crowd + roof ---
-      grandstand(0.0, 1, 12, 70, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
+      // ── MAIN GRANDSTAND — s 0.00 R ───────────────────────────────────────
+      grandstand(0.0,  1, 12, 70, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
       grandstand(0.02, 1, 12, 60, [0.13, 0.14, 0.18], [0.50, 0.42, 0.46]);
-      // bright crowd-light band reading as a sea of phone lights
+      // Phone-light band across the crowd
       for (let i = 0; i < 6; i++) {
         place(K(0.0 + i * 0.012), 1, 13, [12.4, 0.6, 22], LED);
       }
 
-      // --- s 0.28 L mid: modern Jeddah skyline — lit-window high-rise cluster ---
-      // Primary cluster of distinctive towers
-      building(K(0.26), -1, 53, 34, 143, 34, { wall: [0.20, 0.21, 0.26], window: WINCOOL, floor: 9 });
-      building(K(0.28), -1, 40, 40, 114, 36, { wall: [0.22, 0.22, 0.27], window: WINWARM, floor: 8 });
-      building(K(0.30), -1, 77, 30, 174, 30, { wall: [0.18, 0.19, 0.24], window: WINCOOL, floor: 10 });
-      tower(K(0.29), -1, 130, 26, 170, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: true });
-      building(K(0.27), -1, 62, 32, 156, 32, { wall: [0.19, 0.20, 0.25], window: WINTEAL, floor: 22 });
-      building(K(0.31), -1, 38, 36, 125, 34, { wall: [0.21, 0.21, 0.27], window: WINGOLD, floor: 20 });
-      tower(K(0.305), -1, 150, 22, 150, { col: [0.15, 0.16, 0.21], seg: 4, cap: true, capCol: MAGENTA, mast: true });
-      // Additional accent towers for skyline depth and verticality
-      tower(K(0.252), -1, 95, 20, 138, { col: [0.17, 0.18, 0.23], seg: 4, cap: true, capCol: LED, mast: false });
-      tower(K(0.285), -1, 75, 24, 156, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: [0.50, 0.80, 1.0], mast: true });
-      tower(K(0.315), -1, 110, 22, 128, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: SPANGLE, mast: false });
-
-      // --- s 0.45 R mid: Marina / Jeddah Yacht Club — lit pontoons, sleek yacht hulls, mast spikes ---
-      // Placed far out (30-50m) so no parallel-stretch culling. Sparse lineup (10 yachts)
-      // for cleaner silhouette against the sea.
-      for (let i = 0; i < 10; i++) {
-        const k = K(0.41 + i * 0.0075);
-        const dp = 36 + (i % 3) * 12;    // staggered depths
-        const a = anchor(k, 1, dp), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 8)) continue;
-        // Low pontoon finger (dock)
-        addBox(out, vadd(a.c, a.u, 0.4), [16, 0.8, 3.5], [0.28, 0.28, 0.30], b);
-        // Sleek white yacht hull (tapered for elegance)
-        const hullLen = 6 + (i % 3) * 1.5;
-        addBox(out, vadd(a.c, a.u, 1.2), [2.8, 2.0, hullLen], [0.94, 0.94, 0.96], b);
-        // Warm deck light strip + cool navigation light
-        addBox(out, vadd(a.c, a.u, 2.2), [2.9, 0.35, hullLen], (i % 2) ? SPANGLE : WINCOOL, b);
-        // Slender mast (0.2m dia, 14m tall)
-        addCyl(out, vadd(a.c, a.u, 2.4), 0.2, 14, [0.88, 0.88, 0.92], 4, b);
-        // Masthead light (small bright point)
-        addBox(out, vadd(a.c, a.u, 10.0), [0.25, 0.6, 1.4], SPANGLE, b);
-      }
-      // Yacht club main building + annex (lit), set well back on the marina apron
+      // ── JEDDAH SKYLINE — s 0.26–0.32 L mid (primary cluster) ─────────────
+      // Towers spaced ≥15 m apart in dist to prevent intersection.
+      // dist values: 40, 55, 72, 88, 110, 130, 155 — all non-overlapping.
+      building(K(0.27), -1, 40,  36, 118, 34, { wall: [0.22, 0.22, 0.27], window: WINWARM,  floor:  8 });
+      building(K(0.26), -1, 55,  32, 147, 32, { wall: [0.20, 0.21, 0.26], window: WINCOOL,  floor:  9 });
+      building(K(0.30), -1, 72,  28, 178, 28, { wall: [0.18, 0.19, 0.24], window: WINCOOL,  floor: 10 });
+      building(K(0.28), -1, 88,  30, 158, 30, { wall: [0.19, 0.20, 0.25], window: WINTEAL,  floor: 22 });
+      building(K(0.31), -1, 110, 34, 128, 34, { wall: [0.21, 0.21, 0.27], window: WINGOLD,  floor: 20 });
+      // Slender towers: dist staggered far out so they sit behind the buildings.
+      tower(K(0.29),  -1, 135, 24, 175, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED,     mast: true  });
+      tower(K(0.305), -1, 160, 20, 154, { col: [0.15, 0.16, 0.21], seg: 4, cap: true, capCol: MAGENTA, mast: true  });
+      tower(K(0.255), -1, 100, 18, 142, { col: [0.17, 0.18, 0.23], seg: 4, cap: true, capCol: LED,     mast: false });
+      tower(K(0.285), -1, 120, 22, 160, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: [0.50, 0.80, 1.0], mast: true });
+      tower(K(0.315), -1, 145, 20, 132, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: SPANGLE, mast: false });
+      // Extra emissive crown strips on the two tallest buildings — reads as lit rooftop plant
       {
-        const a = anchor(K(0.45), 1, 72), b = [a.r, a.u, a.t];
-        if (!onTrack(a.c[0], a.c[2], 15)) {
-          addBox(out, vadd(a.c, a.u, 3.2), [28, 5.5, 11], [0.25, 0.26, 0.29], b);
-          addBox(out, vadd(a.c, a.u, 4.2), [28.3, 0.9, 11.3], WINWARM, b);
-          addBox(out, vadd(a.c, a.u, 4.9), [28.3, 0.8, 11.3], WINGOLD, b);  // upper warm lit floor
+        const a1 = anchor(K(0.30), -1, 72 + 14), b1 = [a1.r, a1.u, a1.t];
+        addBox(out, vadd(a1.c, a1.u, 178 + 2), [28, 0.8, 28], [0.30, 0.42, 0.58], b1);
+        const a2 = anchor(K(0.26), -1, 55 + 16), b2 = [a2.r, a2.u, a2.t];
+        addBox(out, vadd(a2.c, a2.u, 147 + 2), [32, 0.8, 32], [0.38, 0.24, 0.52], b2);
+      }
+
+      // ── MARINA / Jeddah Yacht Club — s 0.41–0.49 R ───────────────────────
+      // 10 yachts at staggered depths (36–60 m). All guarded by onTrack.
+      for (let i = 0; i < 10; i++) {
+        const k   = K(0.41 + i * 0.0075);
+        const dp  = 38 + (i % 3) * 12;
+        const a   = anchor(k, 1, dp), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 9)) continue;
+        // Pontoon finger (dock)
+        addBox(out, vadd(a.c, a.u, 0.4), [16, 0.8, 3.5], [0.28, 0.28, 0.30], b);
+        // Sleek hull
+        const hullLen = 6 + (i % 3) * 1.5;
+        addBox(out, vadd(a.c, a.u, 1.3), [2.8, 2.0, hullLen], [0.94, 0.94, 0.96], b);
+        // Deck light strip
+        addBox(out, vadd(a.c, a.u, 2.3), [2.9, 0.32, hullLen], (i % 2) ? SPANGLE : WINCOOL, b);
+        // Mast
+        addCyl(out, vadd(a.c, a.u, 2.5), 0.18, 14, [0.88, 0.88, 0.92], 4, b);
+        // Masthead light
+        addBox(out, vadd(a.c, a.u, 10.2), [0.25, 0.55, 1.2], SPANGLE, b);
+      }
+      // Yacht club main building (72 m out) + annex (58 m out — different k so no overlap)
+      {
+        const a = anchor(K(0.45), 1, 78), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          addBox(out, vadd(a.c, a.u, 3.2), [26, 6.0, 11], [0.25, 0.26, 0.29], b);
+          addBox(out, vadd(a.c, a.u, 4.5), [26.3, 1.0, 11.3], WINWARM, b);
+          addBox(out, vadd(a.c, a.u, 5.6), [26.3, 0.8, 11.3], WINGOLD, b);
         }
-        const a2 = anchor(K(0.47), 1, 58), b2 = [a2.r, a2.u, a2.t];
-        if (!onTrack(a2.c[0], a2.c[2], 12)) {
-          addBox(out, vadd(a2.c, a2.u, 3.5), [22, 7.5, 9], [0.23, 0.24, 0.27], b2);
-          addBox(out, vadd(a2.c, a2.u, 4.8), [22.3, 0.9, 9.3], WINCOOL, b2);
+      }
+      {
+        const a2 = anchor(K(0.47), 1, 60), b2 = [a2.r, a2.u, a2.t];
+        if (!onTrack(a2.c[0], a2.c[2], 13)) {
+          addBox(out, vadd(a2.c, a2.u, 3.5), [20, 7.5, 9], [0.23, 0.24, 0.27], b2);
+          addBox(out, vadd(a2.c, a2.u, 4.8), [20.3, 0.9, 9.3], WINCOOL, b2);
+          // Second lit floor
+          addBox(out, vadd(a2.c, a2.u, 6.0), [20.3, 0.7, 9.3], WINWARM, b2);
         }
       }
 
-      // --- s 0.50 L near: banked T13 — light towers + packed grandstand R + tyre wall ---
-      lightTower(K(0.50), -1, 10);
-      lightTower(K(0.50), -1, 16);
-      floodMast(K(0.51), 1, 26);
+      // ── T13 BANKED SECTOR — s 0.50 ───────────────────────────────────────
+      // Extra masts + grandstand + tyre wall.
+      floodMast(K(0.49), -1, 22);
+      floodMast(K(0.51),  1, 26);
+      lightTower(K(0.50), -1, 12);
       grandstand(0.50, 1, 14, 55, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
       for (let i = 0; i < 4; i++) {
-        place(K(0.50 + i * 0.008), 1, 15, [16.4, 0.7, 14], LED);    // crowd light band
+        place(K(0.50 + i * 0.008), 1, 15, [16.4, 0.7, 14], LED);
       }
-      // protective tyre wall stacks on the banked apex (gap clears the barrier line)
-      tyreWall(0.485, 0.515, -1, 1.8, MAGENTA);
+      tyreWall(0.485, 0.515, -1, 2.0, MAGENTA);
 
-      // --- s 0.60 R mid: open Corniche lagoon & waterfront promenade ---
-      // Lagoon water (darker than main Red Sea, sheltered) + path lighting along the edge.
+      // ── CORNICHE LAGOON PROMENADE — s 0.55–0.64 R ────────────────────────
+      // Sheltered lagoon water + lamp posts every ~10 m along the waterfront.
       for (let i = 0; i < 12; i++) {
         const k = K(0.55 + i * 0.0075);
-        const a = anchor(k, 1, 65);
-        const b = [a.r, a.u, a.t];
-        // Sheltered lagoon water (slightly warmer tint than open sea)
-        addBox(out, [a.c[0], pyMin - 0.4, a.c[2]], [160, 1.1, 55], [0.05, 0.08, 0.14], b);
+        const a = anchor(k, 1, 65), b = [a.r, a.u, a.t];
+        addBox(out, [a.c[0], pyMin - 1.4, a.c[2]], [160, 1.0, 55], [0.05, 0.08, 0.14], b);
       }
-      // Warm amber path-lamp dots along waterfront promenade (street lamps)
-      for (let i = 0; i < 16; i++) {
-        const a = anchor(K(0.55 + i * 0.0055), 1, 7);
-        if (!onTrack(a.c[0], a.c[2], 0.8)) {
-          addBox(out, vadd(a.c, a.u, 2.8), [1.4, 1.1, 1.4], [1.0, 0.81, 0.38]);  // warm path lamp
-        }
+      // Corniche promenade lamp posts at the water's edge (dist 5–6 m).
+      for (let i = 0; i < 18; i++) {
+        lampPost(K(0.55 + i * 0.005), 1, 5.0 + (i % 2) * 0.8);
       }
 
-      // --- s 0.70 L mid: mid-rise hotel cluster + emissive signage + tower accent ---
-      // Cluster of 2-3 mid-rise buildings (25-30 storeys) at various depths to create
-      // a dense urban silhouette. Lit windows (warm/cool) + tall tower accent.
-      building(K(0.68), -1, 51, 32, 65, 28, { wall: [0.22, 0.22, 0.26], window: WINWARM, floor: 8 });
-      building(K(0.72), -1, 59, 28, 74, 26, { wall: [0.20, 0.21, 0.25], window: WINCOOL, floor: 9 });
-      // Accent tower — tall, tapered, with a bright cap
-      tower(K(0.70), -1, 88, 22, 100, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: true });
-      // Emissive billboards for night energy (neon palette mixed)
-      billboard(K(0.70), -1, 28, 16, 11, GREEN);         // Saudi green
-      billboard(K(0.71), -1, 54, 18, 10, SPANGLE);       // warm amber
-      billboard(K(0.69), -1, 20, 17, 11, MAGENTA);       // magenta pop
-      billboard(K(0.73), -1, 26, 16, 10, WINTEAL);       // teal accent
+      // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
+      // Spaced at dist 48, 64, 82 (well separated to avoid intersection).
+      building(K(0.68), -1, 48, 30, 68, 26, { wall: [0.22, 0.22, 0.26], window: WINWARM, floor: 8 });
+      building(K(0.72), -1, 64, 26, 78, 24, { wall: [0.20, 0.21, 0.25], window: WINCOOL, floor: 9 });
+      // Accent tower well behind the mid-rise buildings
+      tower(K(0.70), -1, 90, 20, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: true });
+      // Emissive billboards: gaps must exceed w/2 + 1 per billboard helper rule.
+      // w=10 → min gap 6; w=9 → min gap 5.5 — all values here are safe.
+      billboard(K(0.70), -1, 26, 10, 11, GREEN);
+      billboard(K(0.71), -1, 50, 10, 10, SPANGLE);
+      billboard(K(0.69), -1, 20, 9,  11, MAGENTA);
+      billboard(K(0.73), -1, 24, 9,  10, WINTEAL);
 
-      // --- s 0.78-0.84: tight technical sector (T22-26) — bright sawtooth kerbs ---
-      // Red/white alternating strips on both barriers for visual excitement in tight section.
+      // ── TIGHT TECHNICAL SECTOR — s 0.78–0.84 ─────────────────────────────
+      // Red/white alternating kerb strips on both sides (safety visibility).
       for (const side of [-1, 1]) {
         for (let i = 0; i < 8; i++) {
-          const col = (i % 2) ? [0.92, 0.08, 0.08] : [0.96, 0.96, 0.97];  // red/white
+          const col = (i % 2) ? [0.92, 0.08, 0.08] : [0.96, 0.96, 0.97];
           place(K(0.78 + i * 0.0075), side, 5, [5.5, 0.28, 2.8], col);
         }
       }
 
-      // --- s 0.90 R near: grandstand bank + light towers funnel toward final run ---
+      // ── FINAL SECTOR GRANDSTAND + FUNNEL LIGHTS — s 0.89–0.93 R ──────────
       grandstand(0.89, 1, 14, 60, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
       for (let i = 0; i < 4; i++) {
         place(K(0.89 + i * 0.008), 1, 15, [16.4, 0.7, 14], LED);
       }
-      lightTower(K(0.90), 1, 10);
-      lightTower(K(0.93), -1, 10);
-      floodMast(K(0.91), -1, 22);
+      lightTower(K(0.90),  1, 11);
+      lightTower(K(0.93), -1, 11);
+      floodMast(K(0.91), -1, 24);
 
-      // --- Corner protection: tyre walls + guardrails at the tightest braking zones ---
-      tyreWall(0.07, 0.10, -1, 1.8, GREEN);     // T1 complex
-      tyreWall(0.79, 0.82, 1, 1.8, SPANGLE);    // tight technical sector
-      guardrail(0.34, 0.38, -1, 1.6, [0.55, 0.56, 0.6]); // fast esses inner
-      guardrail(0.96, 0.99, 1, 1.6, [0.55, 0.56, 0.6]);  // DRS run-in
+      // ── CORNER PROTECTION ─────────────────────────────────────────────────
+      tyreWall(0.07, 0.10, -1, 2.0, GREEN);
+      tyreWall(0.79, 0.82,  1, 2.0, SPANGLE);
+      guardrail(0.34, 0.38, -1, 1.8, [0.55, 0.56, 0.6]);
+      guardrail(0.96, 0.99,  1, 1.8, [0.55, 0.56, 0.6]);
 
-      // --- s 0.94-0.99: final DRS straight into start/finish — emissive signage ---
-      // Bright billboards on both sides to mark the final acceleration zone.
-      billboard(K(0.95), 1, 24, 14, 10, GREEN);         // Saudi green
-      billboard(K(0.96), -1, 24, 14, 9, SPANGLE);       // warm amber
-      billboard(K(0.97), -1, 22, 15, 10, MAGENTA);      // magenta accent
-      billboard(K(0.98), 1, 22, 14, 9, WINTEAL);        // teal accent
+      // ── FINAL DRS STRAIGHT SIGNAGE — s 0.94–0.99 ─────────────────────────
+      billboard(K(0.95),  1, 22, 10, 10, GREEN);
+      billboard(K(0.96), -1, 22, 10,  9, SPANGLE);
+      billboard(K(0.97), -1, 20, 10, 10, MAGENTA);
+      billboard(K(0.98),  1, 20, 10,  9, WINTEAL);
 
-      // --- accent signage: 4 bold neon billboards around the Corniche ---
-      // Strategic placements: seafront, city cluster, mid-lagoon, final sector
-      billboard(K(0.10), 1,  16, 13, 8, [0.12, 0.68, 0.98]);    // cyan (seafront)
-      billboard(K(0.30), -1, 20, 15, 8, [0.98, 0.32, 0.12]);    // orange (city)
-      billboard(K(0.55), 1,  14, 13, 7, [0.92, 0.12, 0.68]);    // magenta (lagoon)
-      billboard(K(0.75), -1, 18, 14, 7, [0.12, 0.68, 0.98]);    // cyan (final)
+      // ── ACCENT SIGNAGE around the Corniche ───────────────────────────────
+      billboard(K(0.10),  1, 15, 8, 8, [0.12, 0.68, 0.98]);
+      billboard(K(0.30), -1, 18, 8, 8, [0.98, 0.32, 0.12]);
+      billboard(K(0.55),  1, 13, 8, 7, [0.92, 0.12, 0.68]);
+      billboard(K(0.75), -1, 16, 8, 7, [0.12, 0.68, 0.98]);
 
-      // --- s 0.50: Corniche fountain / sculpture (landmark near the banked T13) ---
-      // Public waterfront monument: cream-coloured column with a golden crown.
+      // ── CORNICHE MONUMENT — s 0.50 R (at 42 m, clear of marina yachts) ───
       {
-        const sA = anchor(K(0.50), 1, 40), sBasis = [sA.r, sA.u, sA.t];
-        if (!onTrack(sA.c[0], sA.c[2], 9)) {
-          // Monument column (rendered in pale cream stone)
+        const sA = anchor(K(0.50), 1, 42), sBasis = [sA.r, sA.u, sA.t];
+        if (!onTrack(sA.c[0], sA.c[2], 10)) {
           addCyl(out, sA.c, 3.2, 22, [0.82, 0.78, 0.68], 8, sBasis);
-          // Crown cap (gold/bronze finish)
           const sTop = vadd(sA.c, sA.u, 22);
           addCone(out, sTop, 5, 9, [0.94, 0.86, 0.64], 8, sBasis);
+          // Uplight pool at the monument base — amber glow
+          addBox(out, vadd(sA.c, sA.u, 0.15), [7.0, 0.25, 7.0], [0.55, 0.44, 0.20], sBasis);
         }
       }
 
-      // --- Urban canyon: buildings every 28m on both sides (city texture) ---
-      // Sparse residential/commercial mix. Right-side ones are lit cooler (night glow);
-      // left-side (toward the circuit) are darker to frame the track.
+      // ── URBAN CANYON — random buildings at 28 m intervals ────────────────
+      // 32% density, both sides, 50–80 m out. onTrack guard prevents road overlap.
       every(28, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 53 + side) > 0.68) continue;   // 32% placement density
-          const dist = 48 + hash(k * 77 + side) * 28;
-          const h = 28 + hash(k * 61 + side) * 28;
-          const w = 15 + hash(k * 43 + side) * 14;
-          const p = anchor(k, side, dist);
-          if (onTrack(p.c[0], p.c[2], 10)) continue;
-          const winCol = side > 0 ? [0.30, 0.42, 0.56] : [0.24, 0.28, 0.35]; // cool-right, dark-left
+          if (hash(k * 53 + side) > 0.68) continue;
+          const dist = 50 + hash(k * 77 + side) * 28;
+          const h    = 28 + hash(k * 61 + side) * 28;
+          const w    = 15 + hash(k * 43 + side) * 14;
+          const p    = anchor(k, side, dist);
+          if (onTrack(p.c[0], p.c[2], 11)) continue;
+          const winCol = side > 0
+            ? [0.30, 0.42, 0.56]  // cooler glass on sea side
+            : [0.24, 0.28, 0.35]; // darker inland side
           building(k, side, dist, w, h, w * 0.85,
             { wall: [0.34, 0.31, 0.29], window: winCol, floor: 7 });
         }
       });
 
-      // --- CONTINUOUS lit Jeddah skyline (inland L side) ---
-      // Two-ring skyline: near mid-rise band (lit windows) + far high-rise towers (lit).
-      // Placed to avoid gaps while respecting vertex budget. Skips stand frontages.
-      const WINPAL = [WINWARM, WINCOOL, WINGOLD, WINTEAL];
+      // ── CONTINUOUS JEDDAH SKYLINE (inland L) ─────────────────────────────
+      // Near mid-rise band + far high-rise band. Window palettes cycle through all
+      // four warm/cool tones so the skyline glows continuously.
+      const WINPAL  = [WINWARM, WINCOOL, WINGOLD, WINTEAL];
       const WALLPAL = [[0.18, 0.19, 0.24], [0.20, 0.21, 0.26], [0.22, 0.22, 0.27], [0.16, 0.17, 0.22]];
-      // Near band: ~20 mid-rise lit blocks (reduced from 30 for better performance)
+
+      // Near band — 20 mid-rise lit blocks
       for (let i = 0; i < 20; i++) {
         const s = i / 20;
-        // skip pit-straight (s ~0) and banked-stand (s ~0.5) frontages
+        // Skip pit-straight and banked-stand frontages
         if (Math.abs(((s + 0.5) % 1) - 0.5) < 0.024) continue;
         if (Math.abs(((s - 0.5 + 0.5) % 1) - 0.5) < 0.024) continue;
         const r1 = hash(i * 13), r2 = hash(i * 29 + 3);
-        const w = 28 + r1 * 18;        // wider, more visible
-        const h = 24 + r2 * 32;        // shorter than before
-        const dist = 48 + r1 * 20;
-        const win = WINPAL[i % WINPAL.length];
-        building(K(s), -1, dist - w / 2, w, h, w * 0.82, { wall: WALLPAL[i % 4], window: win, floor: 12 });
+        const w    = 28 + r1 * 18;
+        const h    = 24 + r2 * 32;
+        const dist = 50 + r1 * 20;
+        const win  = WINPAL[i % WINPAL.length];
+        building(K(s), -1, dist - w / 2, w, h, w * 0.82,
+          { wall: WALLPAL[i % 4], window: win, floor: 12 });
       }
-      // Far high-rise band: ~16 tall towers (reduced from 22) for clear silhouette
+
+      // Far high-rise band — 16 tall towers
       for (let i = 0; i < 16; i++) {
-        const s = (i + 0.5) / 16;
+        const s  = (i + 0.5) / 16;
         const r1 = hash(i * 17 + 7), r2 = hash(i * 41 + 1);
-        const w = 20 + r1 * 12;
-        const h = 80 + r2 * 100;       // taller than mid-rises
-        const dist = 140 + i * 6 + r1 * 24;
-        const win = WINPAL[(i + 1) % WINPAL.length];
-        building(K(s), -1, dist - w / 2, w, h, w * 0.8, { wall: WALLPAL[(i + 2) % 4], window: win, floor: 24 });
+        const w    = 20 + r1 * 12;
+        const h    = 80 + r2 * 100;
+        const dist = 145 + i * 6 + r1 * 24;
+        const win  = WINPAL[(i + 1) % WINPAL.length];
+        building(K(s), -1, dist - w / 2, w, h, w * 0.8,
+          { wall: WALLPAL[(i + 2) % 4], window: win, floor: 24 });
       }
-      // Cheap silhouette backdrop (dark profile) behind towers to prevent sky-gap
+
+      // Cheap silhouette backdrop behind towers to prevent sky-gap
       for (let i = 0; i < 20; i++) {
         const s = i / 20;
         const w = 32 + hash(i * 11) * 20, h = 60 + hash(i * 7) * 70;
-        backdrop(K(s), -1, 290 + (i % 4) * 16, [w, h, w], [0.13, 0.14, 0.19]);
+        backdrop(K(s), -1, 295 + (i % 4) * 16, [w, h, w], [0.13, 0.14, 0.19]);
       }
     },
   }

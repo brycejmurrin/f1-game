@@ -282,7 +282,10 @@ void main() {
     // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
     vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.75);
     vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.60);
-    c = mix(horizonO, zenithO, pow(up, 0.5));
+    // pow(up, 0.35): richer blue zenith extends further down, horizon band
+    // narrower — avoids the pale/washed look at mid-sky while keeping the
+    // gradient smooth. (Was 0.5 which mapped too much sky to the horizon tint.)
+    c = mix(horizonO, zenithO, pow(up, 0.35));
     // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
     // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
     // Damped under overcast so heavy cloud doesn't show warm colour.
