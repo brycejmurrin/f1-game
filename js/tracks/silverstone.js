@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 5.9,
     baseHW: 8,
-    pal: { zenith: [0.3, 0.42, 0.62], horizon: [0.64, 0.70, 0.76], grass: [0.2, 0.46, 0.18], fogDensity: 0.0016, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.88, 0.91, 1], sunColor: [0.84, 0.88, 0.96] },
+    pal: { zenith: [0.32, 0.44, 0.64], horizon: [0.62, 0.68, 0.74], grass: [0.22, 0.48, 0.20], fogDensity: 0.0014, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.86, 0.89, 0.98], sunColor: [0.82, 0.86, 0.94] },
     segs: [
       { t: 0, l: 260 }, { t: 60, l: 120 }, { t: -50, l: 90 }, { t: 80, l: 80 }, { t: -150, l: 160 }, { t: 0, l: 120 },
       { t: -70, l: 90 }, { t: 120, l: 150 }, { t: 40, l: 100 }, { t: 0, l: 160 }, { t: 70, l: 130 }, { t: -55, l: 70 },
@@ -24,7 +24,7 @@
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash,
               grandstand, building, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
-              tower, pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, along } = api;
+              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along } = api;
       const k = (s) => Math.round(s * n) % n;
 
       // ---- Palette (English-countryside green / overcast) ----
@@ -68,21 +68,21 @@
       }
 
       // ---- Hedgerow-gridded flat farmland (s≈0.60) + perimeter hedgerows ----
-      // denser farmland grid — long low green strips wrapping most of the lap
-      hedge(0.58, 0.66, -1, 70, 2.4, COPSE);
-      hedge(0.58, 0.66, 1, 85, 2.4, COPSE);
-      hedge(0.20, 0.30, 1, 95, 2.2, COPSE);
-      hedge(0.85, 0.95, -1, 80, 2.2, COPSE);
-      hedge(0.06, 0.14, 1, 105, 2.2, COPSE);   // outside Copse → Maggotts
-      hedge(0.32, 0.40, 1, 100, 2.3, COPSE);   // Stowe → Club outfield
-      hedge(0.66, 0.74, 1, 90, 2.2, COPSE);    // beyond The Loop
-      hedge(0.74, 0.84, -1, 95, 2.2, COPSE);   // Brooklands approach
-      hedge(0.16, 0.24, -1, 110, 2.2, COPSE);  // far infield copse line
-      // Additional hedgerow grid to emphasize flat English farmland character
-      hedge(0.00, 0.10, -1, 140, 2.1, COPSE);  // far side from pit straight
-      hedge(0.25, 0.35, -1, 155, 2.1, COPSE);  // infield behind Stowe
-      hedge(0.44, 0.54, -1, 145, 2.1, COPSE);  // infield beyond The Wing
-      hedge(0.62, 0.72, -1, 150, 2.1, COPSE);  // far side beyond The Loop
+      // denser farmland grid — long low green strips wrapping most of the lap (at safe distances)
+      hedge(0.60, 0.64, -1, 80, 2.4, COPSE);   // far side beyond The Loop
+      hedge(0.60, 0.64, 1, 95, 2.4, COPSE);    // near side
+      hedge(0.20, 0.28, 1, 105, 2.2, COPSE);   // Maggotts outfield
+      hedge(0.86, 0.94, -1, 90, 2.2, COPSE);   // Luffield / Woodcote far
+      hedge(0.08, 0.12, 1, 115, 2.2, COPSE);   // far outside Copse
+      hedge(0.34, 0.38, 1, 110, 2.3, COPSE);   // Stowe far field
+      hedge(0.70, 0.76, 1, 100, 2.2, COPSE);   // beyond The Loop
+      hedge(0.76, 0.82, -1, 105, 2.2, COPSE);  // Brooklands far approach
+      hedge(0.18, 0.22, -1, 120, 2.2, COPSE);  // infield far copse line
+      // Additional distant hedgerow grid for farmland depth
+      hedge(0.02, 0.08, -1, 150, 2.1, COPSE);  // far side from pit straight
+      hedge(0.28, 0.32, -1, 165, 2.1, COPSE);  // infield behind Stowe
+      hedge(0.48, 0.52, -1, 155, 2.1, COPSE);  // far infield beyond The Wing
+      hedge(0.66, 0.70, -1, 160, 2.1, COPSE);  // far side The Loop approach
 
       // ---- Oak copses (Chapel/Cheese Copse, s≈0.15 L; scattered elsewhere) ----
       const copse = (s, side, dist) => {
@@ -115,30 +115,26 @@
       grandstand(0.40, 1, 12, 90, [0.46, 0.47, 0.52], [0.55, 0.32, 0.30]); // Club — fast corner seating
       grandstand(0.66, -1, 14, 50, [0.46, 0.47, 0.52], [0.50, 0.34, 0.32]); // The Loop — hairpin seating
       grandstand(0.85, -1, 14, 65, [0.46, 0.47, 0.52], [0.55, 0.32, 0.30]); // Brooklands/Luffield — signature view
-      grandstand(0.07, 1, 13, 65, [0.46, 0.47, 0.52], [0.52, 0.32, 0.32]); // Copse exit (fast)
-      grandstand(0.13, 1, 15, 55, [0.46, 0.47, 0.52], [0.55, 0.30, 0.30]); // Becketts outfield
       grandstand(0.55, 1, 16, 70, [0.46, 0.47, 0.52], [0.50, 0.34, 0.32]); // Abbey (fast) — wide run-off viewing
-      grandstand(0.88, -1, 13, 55, [0.46, 0.47, 0.52], [0.58, 0.30, 0.30]); // Luffield exit
-      // Additional grandstands for better coverage
-      grandstand(0.02, -1, 15, 60, [0.48, 0.49, 0.54], [0.56, 0.31, 0.31]); // Copse far side
-      grandstand(0.37, -1, 16, 70, [0.48, 0.49, 0.54], [0.54, 0.33, 0.31]); // Club infield
-      grandstand(0.52, -1, 14, 65, [0.48, 0.49, 0.54], [0.52, 0.32, 0.32]); // Abbey outfield
 
       // ---- The Wing: long low pit/paddock building with a thin roof blade (s≈0.45 R) ----
-      // sweeping white-grey slab, far longer than tall, dark glazing band — Silverstone's signature
-      building(k(0.45), 1, 4, 18, 13, 220, {
-        wall: [0.82, 0.82, 0.85], window: [0.14, 0.18, 0.24], floor: 4.5 });
+      // sweeping white-grey slab, far longer than tall, minimal dark glazing on track side — Silverstone's signature
+      building(k(0.45), 1, 4, 20, 11, 240, {
+        wall: [0.84, 0.84, 0.86], window: [0.16, 0.20, 0.26], floor: 5 });
       // thin cantilevered roof fin running the length of the building (very prominent)
       {
         const a = anchor(k(0.45), 1, 13);
-        addBox(out, vadd(a.c, a.u, 14), [24, 0.9, 230], [0.88, 0.90, 0.94], [a.r, a.u, a.t]);
+        if (addBox(out, vadd(a.c, a.u, 14), [24, 0.9, 240], [0.88, 0.90, 0.94], [a.r, a.u, a.t]) === false) {
+          // fallback: roof blade suppressed, skip glazing band
+        } else {
+          // glazing band only if roof isn't clipped
+          addBox(out, vadd(a.c, a.u, 6.2), [22, 8, 240], [0.12, 0.18, 0.26], [a.r, a.u, a.t]);
+        }
       }
-      // tall stepped Wing grandstands flanking it (s≈0.46 R) — the distinctive seating
-      grandstand(0.46, 1, 12, 100, [0.48, 0.50, 0.55], [0.60, 0.28, 0.28]);
-      // additional Wing seating on the opposite side (s≈0.445 R)
-      grandstand(0.445, 1, 13, 95, [0.50, 0.51, 0.56], [0.58, 0.30, 0.30]);
-      // BRDC clubhouse set back (s≈0.48 R) — pale historical building
-      building(k(0.48), 1, 30, 26, 10, 22, { wall: [0.78, 0.78, 0.74], window: [0.20, 0.26, 0.32] });
+      // tall stepped Wing grandstand (s≈0.46 R) — the distinctive seating (single stand, less clutter)
+      grandstand(0.46, 1, 12, 110, [0.50, 0.52, 0.56], [0.62, 0.26, 0.26]);
+      // BRDC clubhouse set back (s≈0.48 R) — pale historical building, smaller/more modest
+      building(k(0.48), 1, 28, 22, 9, 20, { wall: [0.78, 0.78, 0.74], window: [0.20, 0.26, 0.32] });
 
       // ---- Advertising hoardings (Abbey run-off s≈0.55 R) ----
       billboard(k(0.55), 1, 14, 14, 5, [0.86, 0.30, 0.20]);
@@ -147,18 +143,30 @@
 
       // ---- The Wing detail: control tower, pit garages, podium block ----
       // slim control/race-control tower rising off the Wing roofline (s≈0.45 R) — prominent landmark
-      tower(k(0.45), 1, 32, 10, 28, { col: [0.84, 0.85, 0.88], seg: 8, cap: true, capCol: [0.16, 0.20, 0.26], mast: 10 });
-      // a second flag-mast cluster on the Wing apron (more visible)
+      // Use addFrustum directly with onTrack guard to avoid tower() which is not in api
       {
-        const a = anchor(k(0.455), 1, 10);
-        for (const o of [-30, -15, 0, 15, 30]) {
-          addCyl(out, vadd(a.c, a.t, o), 0.14, 14, [0.56, 0.57, 0.62], 5, [a.r, a.u, a.t]);
+        const a = anchor(k(0.45), 1, 32);
+        if (!onTrack(a.c[0], a.c[2], 5)) {
+          addFrustum(out, a.c, 5, 3.2, 28, [0.84, 0.85, 0.88], 8, [a.r, a.u, a.t]);
+          // control room cap
+          addBox(out, vadd(a.c, a.u, 28), [3.5, 2.2, 3.5], [0.16, 0.20, 0.26], [a.r, a.u, a.t]);
+          // tall antenna mast
+          addCyl(out, vadd(a.c, a.u, 30.5), 0.18, 8, [0.3, 0.3, 0.32], 4, [a.r, a.u, a.t]);
         }
       }
-      // low pit-lane wall along the start straight in front of the Wing
+      // flag-mast cluster on the Wing apron (more visible, fewer posts = less clutter)
+      {
+        const a = anchor(k(0.455), 1, 10);
+        for (const o of [-20, 0, 20]) {
+          if (addCyl(out, vadd(a.c, a.t, o), 0.14, 14, [0.56, 0.57, 0.62], 5, [a.r, a.u, a.t]) === false) continue;
+        }
+      }
+      // low pit-lane wall along the start straight in front of the Wing (guarded)
       {
         const a = anchor(k(0.46), 1, 2.5);
-        addBox(out, vadd(a.c, a.u, 0.6), [0.6, 1.2, 120], CONC, [a.r, a.u, a.t]);
+        if (!onTrack(a.c[0], a.c[2], 0.3)) {
+          addBox(out, vadd(a.c, a.u, 0.6), [0.6, 1.2, 120], CONC, [a.r, a.u, a.t]);
+        }
       }
 
       // ---- National pit straight (s≈0.0) garages + pit wall + paddock ----
@@ -199,15 +207,12 @@
         marshalPost(k(s), side, 4);
       }
 
-      // ---- More advertising hoardings around the major corners ----
-      billboard(k(0.04), 1, 20, 12, 4.5, [0.20, 0.55, 0.30]);
-      billboard(k(0.40), 1, 20, 14, 5, [0.85, 0.30, 0.20]);
-      billboard(k(0.66), -1, 18, 12, 4.5, [0.20, 0.40, 0.70]);
-      billboard(k(0.85), -1, 20, 14, 5, [0.90, 0.55, 0.10]);
-      billboard(k(0.13), -1, 22, 12, 4.5, [0.80, 0.20, 0.30]);
-      // Additional sponsorship hoardings throughout the lap
-      billboard(k(0.30), -1, 24, 14, 5, [0.85, 0.55, 0.10]);
-      billboard(k(0.55), -1, 20, 12, 4.5, [0.20, 0.40, 0.70]);
+      // ---- Advertising hoardings around the major corners ----
+      billboard(k(0.04), 1, 20, 12, 4.5, [0.20, 0.55, 0.30]);  // Copse corner
+      billboard(k(0.40), 1, 20, 14, 5, [0.85, 0.30, 0.20]);    // Club corner
+      billboard(k(0.66), -1, 18, 12, 4.5, [0.20, 0.40, 0.70]); // The Loop
+      billboard(k(0.85), -1, 20, 14, 5, [0.90, 0.55, 0.10]);   // Brooklands
+      billboard(k(0.13), -1, 22, 12, 4.5, [0.80, 0.20, 0.30]); // Maggotts
 
       // ---- Start gantry over Woodcote / start-finish ----
       gantry(0.0, 7.5, [0.30, 0.32, 0.36]);
@@ -258,54 +263,60 @@
         }
       }
 
-      // ---- Red/white kerb accent boxes + green run-off framing at apexes ----
-      // Generous red/white sawtooth kerbs + wide paved grey run-off (former airfield spacing)
+      // ---- Red/white kerb accent boxes + paved run-off framing at apexes ----
+      // Generous red/white sawtooth kerbs + wide paved concrete run-off (former airfield spacing)
       for (const [s, side] of [[0.04, 1], [0.12, -1], [0.12, 1], [0.30, 1], [0.40, 1], [0.55, 1], [0.66, -1], [0.85, -1]]) {
         place(k(s), side, 2, [0.5, 0.3, 8], side > 0 ? RED : WHITE);
-        place(k(s), side, 9, [12, 0.1, 14], GRASS); // wide run-off / grass framing slab
+        place(k(s), side, 9, [12, 0.1, 14], CONC); // wide run-off / concrete apron slab
       }
       // Extra kerb emphasize at The Wing area
       place(k(0.45), 1, 2, [0.4, 0.28, 6], RED);
-      place(k(0.45), 1, 8, [11, 0.1, 10], GRASS);
-
-      // ---- The Wing glazing band: dark curtain-wall glass strip at The Wing (s≈0.45 R) ----
-      {
-        const a = anchor(k(0.45), 1, 4);
-        addBox(out, vadd(a.c, a.u, 6), [22, 8, 200], [0.12, 0.18, 0.26], [a.r, a.u, a.t]);
-      }
+      place(k(0.45), 1, 8, [11, 0.1, 10], CONC);
 
       // ---- Pit garage bays: 5 evenly spaced garage boxes along the pit wall (s≈0.97 R) ----
+      // These are placed via guarded addBox calls
       {
         for (let i = 0; i < 5; i++) {
           const dist = 6 + i * 6;
           const gb = anchor(k(0.97), 1, dist);
-          addBox(out, vadd(gb.c, gb.u, 4), [8, 8, 14], [0.48, 0.50, 0.52], [gb.r, gb.u, gb.t]);
+          if (!onTrack(gb.c[0], gb.c[2], 4)) {
+            addBox(out, vadd(gb.c, gb.u, 4), [8, 8, 14], [0.48, 0.50, 0.52], [gb.r, gb.u, gb.t]);
+          }
         }
       }
+
 
       // ---- Copse corner near-side tree cluster (denser, 50–70m) ----
       {
-        for (let j = 0; j < 5; j++) {
-          const kk = (k(0.04) + j) % n;
-          tree(kk, 1, 50 + hash(kk * 7 + j) * 20, 10 + hash(kk * 11 + j) * 6, COPSE);
-        }
         for (let j = 0; j < 4; j++) {
+          const kk = (k(0.04) + j) % n;
+          tree(kk, 1, 55 + hash(kk * 7 + j) * 25, 11 + hash(kk * 11 + j) * 6, COPSE);
+        }
+        for (let j = 0; j < 3; j++) {
           const kk = (k(0.06) + j) % n;
-          tree(kk, 1, 55 + hash(kk * 9 + j) * 15, 9 + hash(kk * 13 + j) * 5, COPSE);
+          tree(kk, 1, 60 + hash(kk * 9 + j) * 18, 10 + hash(kk * 13 + j) * 5, COPSE);
         }
       }
 
-      // ---- Pit control tower near the start gantry ----
-      building(k(0.01), 1, 8, 10, 6, 12, { wall: [0.78, 0.77, 0.72], window: [0.28, 0.32, 0.36] });
+      // ---- Pit control tower near the start gantry (modest building) ----
+      building(k(0.01), 1, 8, 9, 5, 11, { wall: [0.78, 0.77, 0.72], window: [0.28, 0.32, 0.36] });
 
       // ---- Maggotts/Becketts infield tree cluster (s=0.11–0.13, R) ----
       {
-        const maggFracs = [0.110, 0.115, 0.120, 0.125, 0.130];
-        const maggDists = [80, 95, 85, 100, 90];
-        const maggH = [12, 16, 14, 18, 13];
+        const maggFracs = [0.110, 0.120, 0.130];
+        const maggDists = [85, 95, 100];
+        const maggH = [12, 14, 13];
         for (let i = 0; i < maggFracs.length; i++) {
-          tree(k(maggFracs[i]), 1, maggDists[i], maggH[i], [0.22, 0.42, 0.18]);
+          tree(k(maggFracs[i]), 1, maggDists[i], maggH[i], COPSE);
         }
+      }
+
+      // ---- Brooklands section: slight banking simulation with darker outer trees ----
+      // Historic high-speed banking (1930s original) — suggest it with tree density on outer edge
+      for (let i = 0; i < 4; i++) {
+        const s = 0.80 + i * 0.015;
+        tree(k(s), -1, 85 + hash(k(s) * 17) * 20, 11 + hash(k(s) * 19) * 5, [0.20, 0.36, 0.18]);
+        tree(k(s), -1, 65 + hash(k(s) * 23) * 25, 10 + hash(k(s) * 29) * 6, [0.18, 0.34, 0.16]);
       }
 
       // silence unused-guard lint helpers

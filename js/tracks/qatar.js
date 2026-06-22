@@ -13,7 +13,7 @@
     theme: "desert",
     lengthKm: 5.4,
     baseHW: 8,
-    pal: { horizon: [0.18, 0.14, 0.06], zenith: [0.05, 0.04, 0.12], sunColor: [0.80, 0.65, 0.35], ambientSky: [0.28, 0.22, 0.16], ambientGround: [0.22, 0.14, 0.08], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0025, concrete: [0.28, 0.26, 0.24], runoff: [0.24, 0.22, 0.2], grass: [0.20, 0.42, 0.22] },
+    pal: { horizon: [0.08, 0.10, 0.14], zenith: [0.03, 0.04, 0.09], ambientSky: [0.15, 0.16, 0.20], ambientGround: [0.12, 0.12, 0.14], fogColor: [0.10, 0.12, 0.16], fogDensity: 0.0015, concrete: [0.17, 0.17, 0.19], runoff: [0.24, 0.22, 0.2], grass: [0.20, 0.42, 0.22] },
     segs: [
       { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 80, l: 100 }, { t: -70, l: 90 }, { t: 60, l: 90 }, { t: 0, l: 300 },
       { t: -80, l: 100 }, { t: 70, l: 90 }, { t: 0, l: 400 }, { t: -60, l: 90 }, { t: 70, l: 90 }, { t: 0, l: 300 },
@@ -41,27 +41,29 @@
         [0.10, 0.62, 0.42], [0.90, 0.90, 0.88], [0.62, 0.18, 0.55],
       ];
 
-      // ---- Floodlight tower: tall dark pole topped by a bright white lamp box.
-      // The defining "Qatar night" motif — repeated densely around the lap. ----
+      // ---- Floodlight tower: tall dark pole topped by bright white lamp array.
+      // The defining "Qatar night" motif — pure white banks cut desert blackness. ----
       const floodTower = (k, side, gap, h) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        addCyl(out, a.c, 0.45, h, STEEL, 6, b);
-        // tapered cap section near the top for a finished look
-        addCyl(out, vadd(a.c, a.u, h - 4), 0.62, 3.0, STEEL, 6, b);
-        // horizontal cross-truss carrying the lamp banks
-        addBox(out, vadd(a.c, a.u, h - 1.4), [7.6, 0.4, 0.5], STEEL, b);
-        // three lamp boxes across the truss — bright white lit faces
-        for (const dx of [-2.6, 0, 2.6]) {
-          const lc = vadd(vadd(a.c, a.u, h - 0.6), a.r, dx);
-          addBox(out, lc, [2.3, 1.8, 1.7], FLOOD, b);
+        // Slender dark tapered pole
+        addCyl(out, a.c, 0.50, h, STEEL, 6, b);
+        // tapered upper section for finished proportions
+        addCyl(out, vadd(a.c, a.u, h - 3.5), 0.68, 3.5, STEEL, 6, b);
+        // horizontal cross-truss carrying lamp banks (wider spread)
+        addBox(out, vadd(a.c, a.u, h - 0.8), [8.4, 0.35, 0.45], STEEL, b);
+        // Four bright lamp boxes across the truss — intense white lit faces
+        for (const dx of [-3.2, -1.0, 1.0, 3.2]) {
+          const lc = vadd(vadd(a.c, a.u, h - 0.3), a.r, dx);
+          addBox(out, lc, [2.0, 2.2, 1.8], FLOOD, b);
         }
-        addBox(out, vadd(a.c, a.u, h + 0.6), [7.4, 0.4, 1.6], FLOOD, b); // upper lit edge
+        // bright upper cap ledge casting light downward
+        addBox(out, vadd(a.c, a.u, h + 0.9), [8.2, 0.3, 1.4], FLOOD, b);
       };
 
-      // ---- Glowing light pool on the ground beneath a mast (lit-ribbon read). ----
+      // ---- Glowing light pool on the ground beneath a mast (bright lit white, Qatar signature). ----
       const lightPool = (k, side, gap, r) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        addCyl(out, vadd(a.c, a.u, 0.04), r, 0.08, [0.40, 0.40, 0.37], 8, b);
+        addCyl(out, vadd(a.c, a.u, 0.04), r, 0.08, [0.88, 0.88, 0.85], 8, b);
       };
 
       // ---- Catch-fence + guardrail run helper (track furniture). ----
@@ -82,9 +84,9 @@
         for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
         // [extraDist, ringRadiusFudge, baseW, baseH, count, sand, dark]
         for (const [extra, wMin, hMin, count, sand, dark] of [
-          [160, 120, 6, 52, SAND, SAND_D],     // inner: close smooth dunes
-          [280, 160, 11, 48, DUNE, DUNE_N],    // middle: undulating ridge band
-          [400, 220, 18, 36, SAND_D, [0.38, 0.30, 0.18]], // outer: distant hazy range
+          [160, 130, 7, 32, SAND, SAND_D],     // inner: close smooth dunes (reduced from 52)
+          [280, 170, 12, 28, DUNE, DUNE_N],    // middle: undulating ridge band (reduced from 48)
+          [400, 240, 20, 20, SAND_D, [0.38, 0.30, 0.18]], // outer: distant hazy range (reduced from 36)
         ]) {
           const ring = rad + extra;
           for (let i = 0; i < count; i++) {
@@ -100,11 +102,11 @@
       })();
 
       // ================= START / FINISH STRAIGHT =================
-      // Pit building (L, close): record-length sleek white slab (1000+ m) + thin smart glass.
-      // Modern minimalist design with deep glass stripe reading as sleek control room.
-      building(K(0.00), -1, 1.5, 15, 12, 160, { wall: [0.96, 0.96, 0.94], window: [0.35, 0.40, 0.48], floor: 3.5 });
+      // Pit building (L, close): record-length sleek white slab + thin smart glass.
+      // Modern minimalist desert design with pale walls reading clean against night sky.
+      building(K(0.00), -1, 1.2, 16, 11, 165, { wall: [0.94, 0.94, 0.92], window: [0.32, 0.38, 0.46], floor: 3.6 });
       // Upper paddock / hospitality deck stacked back behind the pit roof.
-      building(K(0.01), -1, 16, 12, 8.5, 130, { wall: [0.93, 0.93, 0.90], window: [0.32, 0.38, 0.46], floor: 3 });
+      building(K(0.01), -1, 17, 13, 8, 135, { wall: [0.90, 0.90, 0.88], window: [0.30, 0.36, 0.44], floor: 3.2 });
       // Pit garage roll-up door band along the pit lane edge (dark panels).
       (function pitGarages() {
         let i = 0;
@@ -120,21 +122,21 @@
       gantry(0.012, 7.5, [0.12, 0.12, 0.14]);
       tower(K(0.985), -1, 8, 26, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
-      // Main Grandstand (R, close): the hero — long smooth pale crescent stepped
-      // slab with modern minimalist design. Built as a chain of overlapping curved sections.
+      // Main Grandstand (R, close): the hero — long curved crescent stepped slab.
+      // Modern sleek design reading as pale curved shell against black desert night.
       (function crescentStand() {
-        for (let i = 0; i < 9; i++) {
-          const s = 0.950 + i * 0.012;
-          // Brighter white shell reading against black night sky
-          grandstand(s % 1, 1, 15, 55, [0.88, 0.88, 0.86], [0.18, 0.18, 0.22]);  // shell + crowd
+        for (let i = 0; i < 10; i++) {
+          const s = 0.950 + i * 0.011;
+          // Pale white shell reading clean against night sky
+          grandstand(s % 1, 1, 16, 60, [0.86, 0.86, 0.84], [0.20, 0.20, 0.24]);  // shell + crowd
         }
-        // bright white curved roof fascia with clean support pylons
-        for (let i = 0; i < 9; i++) {
-          const a = anchor(K((0.950 + i * 0.012) % 1), 1, 22), b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, 24), [18, 3.6, 70], [0.96, 0.96, 0.94], b);  // bright roof
-          addBox(out, vadd(a.c, a.u, 12), [0.9, 24, 0.9], [0.92, 0.92, 0.90], b); // support pylon
+        // bright white curved roof fascia with slim support pylons
+        for (let i = 0; i < 10; i++) {
+          const a = anchor(K((0.950 + i * 0.011) % 1), 1, 24), b = [a.r, a.u, a.t];
+          addBox(out, vadd(a.c, a.u, 25), [16, 3.2, 75], [0.94, 0.94, 0.92], b);  // bright roof
+          addBox(out, vadd(a.c, a.u, 12.5), [0.8, 25, 0.8], [0.90, 0.90, 0.88], b); // support pylon
           // sponsor band across the roof fascia front face
-          addBox(out, vadd(vadd(a.c, a.u, 25), a.r, -8.5), [0.7, 2.0, 42], AD[i % AD.length], b);
+          addBox(out, vadd(vadd(a.c, a.u, 26), a.r, -9), [0.6, 1.8, 45], AD[i % AD.length], b);
         }
       })();
 
@@ -219,26 +221,26 @@
       }
 
       // ================= DISTANT LUSAIL / DOHA SKYLINE (s 0.45–0.60, L far) ====
-      // Thin pale tower silhouettes low on the horizon. Modern glittering Doha skyline
-      // with varied heights, tapered spires, and warm beacon glows reading as pinpricks.
+      // Thin pale tower silhouettes low on the horizon. Modern Lusail skyline with
+      // varied sleek tapered towers and cool teal beacon glow reading as distant pricks.
       (function skyline() {
-        for (const sBase of [0.46, 0.50, 0.54, 0.58]) {
-          for (let i = 0; i < 14; i++) {
-            const off = (i - 7) * 28 + hash(i * 11 + sBase * 100) * 12;
-            const distVar = 540 + hash(i * 5 + sBase * 70) * 160;
+        for (const sBase of [0.48, 0.52, 0.56]) {
+          for (let i = 0; i < 12; i++) {
+            const off = (i - 6) * 32 + hash(i * 13 + sBase * 100) * 14;
+            const distVar = 580 + hash(i * 5 + sBase * 70) * 180;
             const a = anchor(K(sBase), -1, distVar);
             const c = vadd(a.c, a.r, off), b = [a.r, a.u, a.t];
-            const w = 5.5 + hash(i * 3 + sBase) * 6.5;
-            const h = 25 + hash(i * 7 + sBase * 30) * 125;
-            // Main tower slab — slightly cooler tone reading as silhouette
-            addBox(out, c, [w, h, w], [0.58, 0.72, 0.82], b);
-            // Tapered spire crown on tall towers (modern architectural flourish)
-            if (h > 100) {
-              addPyramid(out, vadd(c, a.u, h * 0.48 + 8), [w * 0.9, 16, w * 0.9], [0.60, 0.74, 0.84], b);
+            const w = 4.2 + hash(i * 3 + sBase) * 4.8;
+            const h = 38 + hash(i * 7 + sBase * 30) * 140;  // taller, more dramatic
+            // Main tower slab — cool teal reading as night-lit silhouette
+            addBox(out, c, [w, h, w], [0.52, 0.68, 0.78], b);
+            // Tapered spire crown on tall towers (sleek modern tapers)
+            if (h > 110) {
+              addPyramid(out, vadd(c, a.u, h * 0.50 + 6), [w * 0.85, 12, w * 0.85], [0.56, 0.70, 0.80], b);
             }
-            // warm beacon/navigation lights at the spire tip
-            const beaconH = h + (h > 100 ? 8 : 1);
-            addBox(out, vadd(c, a.u, beaconH), [1.8, 4.5, 1.8], [1.0, 0.92, 0.70], b);
+            // Cool teal beacon lights at tip (night navigation aesthetic)
+            const beaconH = h + (h > 110 ? 6 : 0.5);
+            addBox(out, vadd(c, a.u, beaconH), [1.4, 3.2, 1.4], [0.70, 0.88, 0.95], b);
           }
         }
       })();
@@ -294,50 +296,53 @@
       marshalPost(K(0.94), -1, 6);
       billboard(K(0.92), 1, 6, 12, 3.6, AD[5]);
 
-      // ---- Scattered palms behind the runoff (desert planting), denser. ----
-      every(95, (k) => {
+      // ---- Scattered palms behind the runoff (desert planting), sparse. ----
+      every(140, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 17 + side * 3) <= 0.58) {
-            palm(k, side, 22 + hash(k * 19 + side) * 24, 6 + hash(k * 23 + side) * 4, FROND);
+          if (hash(k * 17 + side * 3) <= 0.45) {
+            palm(k, side, 24 + hash(k * 19 + side) * 26, 6.5 + hash(k * 23 + side) * 3.5, FROND);
           }
         }
       });
 
-      // ---- Desert scrub: low tan/olive bushes scattered across the sand verge,
-      // sparse vegetation between the verge and dune ring for authentic desert appearance. ----
-      every(55, (k) => {
+      // ---- Desert scrub: sparse low tan/olive bushes scattered across sand verge for
+      // authentic desert appearance (not overly dense). ----
+      every(80, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 29 + side * 7) <= 0.65) {
-            const a = anchor(k, side, 28 + hash(k * 31 + side) * 56), b = [a.r, a.u, a.t];
-            const s = 1.6 + hash(k * 37 + side) * 1.8;
+          if (hash(k * 29 + side * 7) <= 0.48) {
+            const a = anchor(k, side, 32 + hash(k * 31 + side) * 60), b = [a.r, a.u, a.t];
+            const s = 1.8 + hash(k * 37 + side) * 1.6;
             // Mix of tan and muted green tones for natural scrub appearance
-            const scrubCol = hash(k * 41 + side) < 0.55 ? [0.48, 0.44, 0.28] : [0.28, 0.34, 0.18];
-            addFrustum(out, a.c, s, s * 0.38, s * 0.85, scrubCol, 6, b);
+            const scrubCol = hash(k * 41 + side) < 0.55 ? [0.50, 0.46, 0.32] : [0.30, 0.36, 0.20];
+            addFrustum(out, a.c, s, s * 0.40, s * 0.90, scrubCol, 6, b);
           }
         }
       });
 
-      // ---- Scattered floodlight towers + light pools densely ringing the lap (Qatar signature). ----
+      // ---- Scattered floodlight towers + light pools ringing the lap (Qatar signature). ----
       // Tall dark poles with bright white lamp boxes — the defining lighting aesthetic.
-      every(200, (k) => {
+      every(280, (k) => {
         const side = hash(k * 9) < 0.5 ? -1 : 1;
-        floodTower(k, side, 36 + hash(k * 11) * 14, 30 + hash(k * 13) * 4);
-        lightPool(k, side, 11, 8.5 + hash(k * 17) * 1.5);
+        floodTower(k, side, 38 + hash(k * 11) * 12, 31 + hash(k * 13) * 3);
+        lightPool(k, side, 12, 9 + hash(k * 17) * 1.2);
       });
 
       // ---- Continuous bright green artificial-grass verge band hugging both edges,
       // the signature moisture-control strip framing the lit asphalt ribbon (prevents sand creep). ----
-      every(40, (k) => {
+      every(50, (k) => {
         for (const side of [-1, 1]) {
           // Bright muted green reading as maintained synthetic grass
-          place(k, side, 2.0, [3.2, 0.25, 8], [0.20, 0.42, 0.22]);
+          place(k, side, 1.8, [3.4, 0.28, 10], [0.22, 0.44, 0.24]);
         }
       });
 
-      // Sand-creep wedges — flat tan aprons simulating sand drifting onto the verge
-      for (const [s, side] of [[0.06, 1], [0.07, 1], [0.08, -1], [0.40, -1], [0.42, 1], [0.43, -1], [0.44, 1], [0.92, 1], [0.94, -1], [0.95, 1], [0.96, -1]]) {
-        const a = anchor(K(s), side, 14), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 0.15), [8, 0.3, 12], [0.72, 0.64, 0.48], b);
+      // Sand-creep wedges — flat tan aprons simulating sand drifting onto verge at high-speed corners
+      for (const [s, side, w, d] of [
+        [0.06, 1, 9, 14], [0.08, -1, 8, 12], [0.40, -1, 7, 11], [0.42, 1, 8, 13],
+        [0.44, 1, 7, 10], [0.92, 1, 9, 15], [0.94, -1, 8, 12], [0.96, -1, 7, 11]
+      ]) {
+        const a = anchor(K(s), side, 13), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.12), [w, 0.25, d], [0.70, 0.62, 0.46], b);
       }
     },
   }

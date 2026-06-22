@@ -291,7 +291,7 @@ let timeTrial = false;      // solo run against the clock, no AI
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
 let raceWeather = "dry";       // "dry" | "wet"
-let raceTimeOfDay = "default"; // "default" | "day" | "night"
+let raceTimeOfDay = "default"; // "default" | "dawn" | "day" | "dusk" | "night"
 let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
 let ttNewRecord = false;    // set when the player takes provisional pole this session
 let ttLaps = [];            // completed lap times this time-trial session
@@ -626,46 +626,131 @@ function applyRaceSettings() {
       frameSky.moon = 0.85;
       // Night skies: few scattered clouds (don't block stars)
       _cloudBase = 0.22;
+      // Night: lift exposure slightly — otherwise shadow detail is lost
+      frame.exposure = 1.15;
+    } else if (raceTimeOfDay === "dawn") {
+      // Pre-sunrise: deep teal-indigo zenith fading to a warm peach/rose horizon.
+      // Sun is barely above the horizon — very low elevation, coming from the east.
+      frameSky.zenith  = [0.06, 0.10, 0.22];
+      frameSky.horizon = [0.72, 0.40, 0.22];
+      frameSky.sunColor = [1.0, 0.72, 0.38];
+      frameSky.sunDir  = V3.norm([-0.62, 0.08, 0.28]);
+      frame.sunDir     = frameSky.sunDir;
+      frame.sunColor   = [1.0, 0.70, 0.36];
+      // Cool teal fill from the sky, very soft warm bounce from the ground
+      frame.ambientGround = [0.18, 0.12, 0.08];
+      frame.ambientSky    = [0.22, 0.26, 0.38];
+      frame.fogColor      = [0.42, 0.30, 0.20];
+      frame.fogDensity    = 0.0028;
+      frame.skyZenith     = frameSky.zenith;
+      frame.skyHorizon    = frameSky.horizon;
+      frameSky.moon = 0.30;   // fading moon still visible in the pre-dawn sky
+      // Dawn: a few lingering thin clouds catch the first pink light
+      _cloudBase = 0.50;
+      // Low sun + low ambient → lift exposure so the scene reads
+      frame.exposure = 1.18;
     } else if (raceTimeOfDay === "dusk") {
       // Richer golden hour: deeper indigo zenith, warmer coral/amber horizon,
       // a sun closer to the deck for that low-angle drama.
-      frameSky.zenith = [0.08, 0.10, 0.28];
+      frameSky.zenith  = [0.08, 0.10, 0.28];
       frameSky.horizon = [0.72, 0.34, 0.08];
       frameSky.sunColor = [1.0, 0.55, 0.18];
-      frameSky.sunDir = V3.norm([0.50, 0.10, 0.22]);
-      frame.sunDir = frameSky.sunDir;
-      frame.sunColor = [1.0, 0.62, 0.22];
+      // Sun low in the west; vary azimuth slightly per track so not every
+      // circuit has identical low-angle raking light.
+      const _duskAz = track && track.def ? ((_trackAtmoBias(track.def) * 0.28) - 0.14) : 0;
+      frameSky.sunDir  = V3.norm([0.50 + _duskAz, 0.10, 0.22]);
+      frame.sunDir     = frameSky.sunDir;
+      frame.sunColor   = [1.0, 0.62, 0.22];
       // Warm amber ground bounce, cool sky fill from the blue zenith overhead
       frame.ambientGround = [0.28, 0.16, 0.06];
-      frame.ambientSky = [0.32, 0.22, 0.28];
-      frame.fogColor = [0.58, 0.28, 0.10];
-      frame.fogDensity = 0.0022;
-      frame.skyZenith  = frameSky.zenith;
-      frame.skyHorizon = frameSky.horizon;
+      frame.ambientSky    = [0.32, 0.22, 0.28];
+      frame.fogColor      = [0.58, 0.28, 0.10];
+      frame.fogDensity    = 0.0022;
+      frame.skyZenith     = frameSky.zenith;
+      frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
       // Dusk: moderate cloud to catch the orange light nicely
       _cloudBase = 0.45;
+      // Low sun energy but rich colour — slightly lifted exposure
+      frame.exposure = 1.10;
     } else {
       // Bright midday
-      frameSky.zenith = [0.22, 0.40, 0.82];
+      frameSky.zenith  = [0.22, 0.40, 0.82];
       frameSky.horizon = [0.68, 0.74, 0.88];
-      frame.sunColor = [1.0, 0.96, 0.82];
+      frame.sunColor   = [1.0, 0.96, 0.82];
       frame.ambientGround = [0.24, 0.22, 0.19];
-      frame.ambientSky = [0.46, 0.50, 0.62];
-      frame.fogColor = [0.72, 0.72, 0.72];
-      frame.fogDensity = 0.0015;
+      frame.ambientSky    = [0.46, 0.50, 0.62];
+      frame.fogColor      = [0.72, 0.72, 0.72];
+      frame.fogDensity    = 0.0015;
       // When raceTimeOfDay !== "default", sync sky colours to frame too
-      frame.skyZenith  = frameSky.zenith;
-      frame.skyHorizon = frameSky.horizon;
+      frame.skyZenith     = frameSky.zenith;
+      frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
       // Clear day: light fair-weather clouds
       _cloudBase = 0.38;
+      // Bright midday is the reference: slightly pulled back so brights
+      // don't clip on desert/concrete surroundings.
+      frame.exposure = 0.92;
     }
   } else {
     // "default" — driven by the track palette; set moon for night tracks
     frameSky.moon = isNightSession ? 0.85 : 0;
     _cloudBase = frameSky.cloud !== undefined ? frameSky.cloud
                : (isNightSession ? 0.22 : 0.4);
+
+    // ── Per-track atmosphere (default mode only) ──────────────────────────
+    // Nudge cloud cover and fog to give circuits a characteristic sky
+    // without overriding any explicit raceWeather or raceTimeOfDay choice.
+    if (track && track.def) {
+      const _def  = track.def;
+      const _pal  = _def.pal || {};
+      const _bias = _trackAtmoBias(_def);   // -1 (clear) … +1 (overcast)
+
+      // Cloud cover: start from the existing base then nudge by the bias.
+      // Bias +1 = +0.20 cloud; bias -1 = -0.18 cloud. Cap so stars remain.
+      const _cloudNudge = _bias > 0 ? _bias * 0.20 : _bias * 0.18;
+      _cloudBase = Math.max(0.10, Math.min(isNightSession ? 0.45 : 0.80,
+                            _cloudBase + _cloudNudge));
+
+      // Fog density: cloudy/misty circuits get a touch more atmospheric haze.
+      if (_bias > 0.2 && _pal.fogDensity != null) {
+        frame.fogDensity = Math.min(0.005, _pal.fogDensity * (1 + _bias * 0.30));
+      }
+
+      // Exposure: night tracks already bright with floodlights; desert night
+      // tracks get a gentle lift; daytime green tracks sit near neutral.
+      if (isNightSession) {
+        // Street-night circuits (Las Vegas, Singapore, Baku, Jeddah) are
+        // brilliantly lit — pull exposure down slightly to keep neon readable.
+        frame.exposure = (_def.theme === "street_night") ? 1.05 : 1.18;
+      } else if (_def.theme === "desert") {
+        // Daytime desert: very bright, slight exposure pull-back
+        frame.exposure = 0.88;
+      } else if (_bias > 0.3) {
+        // Overcast / grey-sky circuits: lift exposure so the scene isn't muddy
+        frame.exposure = 1.08;
+      } else {
+        frame.exposure = 1.0;
+      }
+
+      // Per-track sun azimuth variation: rotate the default sun direction
+      // horizontally by a small per-circuit offset so the raking shadows
+      // fall at a slightly different angle on each track. This is a purely
+      // cosmetic tweak applied only when the palette supplies a sunDir.
+      if (_pal.sunDir && !isNightSession) {
+        const _sd = _pal.sunDir.slice();
+        // Derive a stable per-track hash in -1..+1 from the track id chars
+        const _azOffset = _bias * 0.12;   // mild tilt proportional to bias
+        // Rotate the horizontal (X,Z) components by _azOffset radians
+        const _sx = _sd[0], _sz = _sd[2];
+        const _cos = Math.cos(_azOffset), _sin = Math.sin(_azOffset);
+        _sd[0] = _sx * _cos - _sz * _sin;
+        _sd[2] = _sx * _sin + _sz * _cos;
+        const _sdn = V3.norm(_sd);
+        frame.sunDir = _sdn;
+        frameSky.sunDir = _sdn;
+      }
+    }
   }
   // Wet weather: overcast the sky and flatten the light (soft, diffuse, fewer
   // shadows) — clouds roll in and the sun is muted while ambient lifts.
@@ -677,8 +762,16 @@ function applyRaceSettings() {
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.65);
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.18));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.18));
+    // Wet + overcast: lift exposure to keep the scene moody but readable.
+    // Only override exposure if the time-of-day branch didn't already set a
+    // specific wet value (it only sets exposure for dry scenarios, so this is safe).
+    if (frame.exposure == null || frame.exposure <= 1.0) {
+      frame.exposure = Math.max(frame.exposure != null ? frame.exposure : 1.0, 1.10);
+    }
   } else {
     frameSky.cloud = _cloudBase;
+    // Guarantee frame.exposure always has a value (default = 1.0 if nothing set above)
+    if (frame.exposure == null) frame.exposure = 1.0;
   }
   // Save base ambient values so the lightning system can restore them each frame
   _ltBase = {
@@ -688,6 +781,53 @@ function applyRaceSettings() {
   // Reset lightning timing: first strike after a random 3-8 s delay
   _ltFlash = 0;
   _ltNextT = 3 + Math.random() * 5;
+}
+
+// ── Per-track atmosphere bias ─────────────────────────────────────────────────
+// Returns a value in roughly -1 (clear/arid) to +1 (overcast/misty) for the
+// given track def, based on known geographic/meteorological character.
+// Used by applyRaceSettings() to nudge _cloudBase and fog density.
+function _trackAtmoBias(def) {
+  if (!def) return 0;
+  const id = def.id;
+  // Specific well-known circuits first (highest priority)
+  const _specific = {
+    // Notoriously overcast / changeable
+    spa:        0.85,
+    silverstone: 0.70,
+    zandvoort:  0.60,
+    interlagos: 0.55,
+    // High-altitude / hazy
+    mexico:    -0.10,
+    // Crisp mountain air
+    redbull:    0.10,
+    // Mediterranean / sunny
+    monaco:    -0.25,
+    imola:     -0.20,
+    // Asian circuits — moderate humidity but generally good visibility
+    suzuka:     0.05,
+    shanghai:   0.15,
+    // Street circuits in sunny climates
+    baku:      -0.10,
+    jeddah:    -0.20,
+    singapore:  0.10,   // humid but the night keeps it dark regardless
+    vegas:     -0.30,   // desert night, very clear
+    miami:     -0.05,
+    madrid:    -0.15,
+    montreal:   0.20,
+    albert_park: 0.05,
+    // Pure desert / very clear skies
+    bahrain:   -0.50,
+    qatar:     -0.55,
+    abudhabi:  -0.45,
+    cota:       0.10,
+    hungaroring: 0.15,
+  };
+  if (_specific[id] !== undefined) return _specific[id];
+  // Fall back to theme
+  if (def.theme === "desert") return -0.45;
+  if (def.theme === "street_night") return -0.10;
+  return 0;
 }
 
 function startRace() {
@@ -2268,7 +2408,7 @@ function render(dt) {
   }
 
   // Resolve the HDR scene (bloom + tonemap + vignette) to the screen.
-  GLX.present();
+  GLX.present({ exposure: frame.exposure });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too
@@ -3046,7 +3186,7 @@ function buildRaceSettings() {
   }
   const timeEl = $("rs-time");
   timeEl.innerHTML = "";
-  for (const [id, label] of [["default", "DEFAULT"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]]) {
+  for (const [id, label] of [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]]) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (raceTimeOfDay === id ? " active" : "");
     b.textContent = label;

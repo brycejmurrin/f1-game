@@ -54,33 +54,30 @@
       // dramatic skybridges. These are the defining visual landmark of Shanghai.
       (function wingedTowers() {
         const sLap = 0.005;
-        const aL = anchor(K(sLap), -1, 32), bL = [aL.r, aL.u, aL.t];
-        const aR = anchor(K(sLap), 1, 32), bR = [aR.r, aR.u, aR.t];
+        const aL = anchor(K(sLap), -1, 28), bL = [aL.r, aL.u, aL.t];
+        const aR = anchor(K(sLap), 1, 28), bR = [aR.r, aR.u, aR.t];
 
         // LEFT SIDE: Two tall tapered pagoda towers flanking a central gap (team buildings).
-        // First tower (left-most, slightly forward)
-        tower(K(sLap), -1, 32, 8.2, 68, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 10 });
-        // Second tower (right-most on left side, slightly back)
-        tower(K(0.008), -1, 32, 8.0, 70, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 10 });
+        // Slimmer, taller proportions for more iconic pagoda-like silhouette.
+        tower(K(sLap), -1, 28, 7.2, 72, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 8 });
+        // Second tower (right-most on left side, staggered back)
+        tower(K(0.008), -1, 28, 6.8, 74, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 8 });
 
-        // RIGHT SIDE: Matching anchoring tower across the track.
-        tower(K(sLap), 1, 32, 7.8, 64, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 9 });
+        // RIGHT SIDE: Single anchoring tower across the track.
+        tower(K(sLap), 1, 28, 6.6, 68, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 8 });
 
-        // SKYBRIDGES: Multiple levels of suspended glass/white bridge decks spanning across.
-        for (const hgt of [36, 48, 58]) {
-          // left side support pillars
-          addCyl(out, vadd(aL.c, aL.u, 0), 1.4, hgt, STEEL, 8, bL);
-          // main bridge deck spanning right, with glass tint
-          const bridgeCol = hgt === 48 ? GLASS : WHITE;
-          addBox(out, vadd(vadd(aL.c, aL.u, hgt), aL.r, 26), [54, 2.8, 12], bridgeCol, bL);
-          // lower structural beam under the deck
-          addBox(out, vadd(vadd(aL.c, aL.u, hgt - 1.8), aL.r, 26), [54, 0.9, 10], STEEL, bL);
+        // SKYBRIDGES: Two levels of suspended bridge decks — cleaner than three.
+        for (const hgt of [44, 56]) {
+          // left side support pillars (thinner for elegance)
+          addCyl(out, vadd(aL.c, aL.u, 0), 1.1, hgt, STEEL, 8, bL);
+          // main bridge deck spanning right
+          const bridgeCol = hgt === 44 ? GLASS : WHITE;
+          addBox(out, vadd(vadd(aL.c, aL.u, hgt), aL.r, 24), [48, 2.4, 11], bridgeCol, bL);
+          // lower structural beam under the deck (thinner)
+          addBox(out, vadd(vadd(aL.c, aL.u, hgt - 1.4), aL.r, 24), [48, 0.6, 9.5], STEEL, bL);
           // right side landing pillars
-          addCyl(out, vadd(aR.c, aR.u, 0), 1.2, hgt - 4, STEEL, 8, bR);
+          addCyl(out, vadd(aR.c, aR.u, 0), 1.0, hgt - 3, STEEL, 8, bR);
         }
-
-        // ADDITIONAL DETAIL: smaller connector bridge at mid-height
-        addBox(out, vadd(vadd(aL.c, aL.u, 42), aL.r, 28), [48, 1.2, 8], [0.75, 0.78, 0.82], bL);
       })();
 
       // ---- Signature CURVED CANTILEVER MAIN GRANDSTAND + overhanging roof (L) ----
@@ -114,18 +111,19 @@
       wall(0.965, 0.05, 1, 3, 1.1, WHITE);
       place(K(0.99), 1, 10, [5, 2.4, 40], CONC);   // low garage box bank
       place(K(0.99), 1, 10, [5, 0.6, 40], RED); // red edge cap
-      billboard(K(0.02), 1, 9, 16, 4.5, RED);
-      billboard(K(0.97), 1, 9, 14, 4, YELLOW);
+      billboard(K(0.02), 1, 11, 16, 4.5, RED);
+      billboard(K(0.97), 1, 11, 14, 4, YELLOW);
 
       // ---- LAKES by the pit complex and paddock (groundPlane water, distinctive Shanghai feature) ----
       // Large water feature behind the pit straight, adding to the modern circuit character.
-      groundPlane(K(0.92), -1, 62, [220, 150], WATER);
-      groundPlane(K(0.00), -1, 75, [180, 130], WATER);
+      // Position away from tight track areas to avoid culling
+      groundPlane(K(0.88), -1, 95, [180, 130], WATER);
+      groundPlane(K(0.01), -1, 110, [150, 110], WATER);
       // Modern dock/jetty structures and landscaping nodes at the water edge
-      place(K(0.95), -1, 58, [12, 1.4, 5], CONC);
-      place(K(0.01), -1, 76, [14, 1.2, 6], [0.65, 0.68, 0.72]);  // light grey deck
+      place(K(0.90), -1, 85, [10, 1.0, 5], CONC);
+      place(K(0.02), -1, 115, [11, 0.9, 5], [0.65, 0.68, 0.72]);  // light grey deck
       // Smaller decorative water feature in the infield beyond T6
-      groundPlane(K(0.32), -1, 180, [120, 80], [0.36, 0.48, 0.56]);
+      groundPlane(K(0.32), -1, 220, [90, 65], [0.36, 0.48, 0.56]);
 
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
       grandstand(0.04, -1, 18, 130, [0.44, 0.45, 0.50], SEAT);
@@ -140,16 +138,16 @@
         addBox(out, vadd(vadd(a.c, a.u, 0.15), a.r, 36), [80, 0.4, 120], ASPH, b);
       })();
       // Snail grandstands wrapping the coiling Turn 1–3 spiral.
-      grandstand(0.05, 1, 80, 70, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.085, 1, 70, 60, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.10, -1, 30, 60, [0.42, 0.43, 0.48], SEAT);
+      // Increased gaps to avoid culling on the tight spiral
+      grandstand(0.05, 1, 95, 70, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.085, 1, 85, 60, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.10, -1, 45, 60, [0.42, 0.43, 0.48], SEAT);
       // denser tiers wrapping the snail spiral
-      grandstand(0.065, 1, 58, 60, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.05, 1, 100, 80, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.115, -1, 26, 50, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.13, 1, 40, 50, [0.43, 0.44, 0.49], SEAT);
-      billboard(K(0.07), 1, 50, 16, 5, YELLOW);
-      billboard(K(0.095), 1, 38, 16, 5, RED);
+      grandstand(0.065, 1, 70, 60, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.115, -1, 40, 50, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.13, 1, 70, 50, [0.43, 0.44, 0.49], SEAT);
+      billboard(K(0.07), 1, 56, 16, 5, YELLOW);
+      billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
 
       // ================= CONTINUOUS HAZY SHANGHAI SKYLINE (wraps whole lap) =================
@@ -183,31 +181,36 @@
       // Denser PUDONG-STYLE feature cluster of tall glass towers behind T6 (s 0.30, L far),
       // modern Shanghai skyline with the iconic Pearl Tower landmark as centrepiece.
       (function pudongCluster() {
-        const a = anchor(K(0.30), -1, 230), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.30), -1, 260), b = [a.r, a.u, a.t];
         const u = b[1];
-        for (let i = 0; i < 24; i++) {
-          const off = (i - 12) * 28 + (hash(i * 5) - 0.5) * 18;
-          const depth = 25 + hash(i * 7) * 80;
-          const h = 75 + hash(i * 11) * 160;
-          const w = 12 + hash(i * 13) * 14;
-          const col = depth > 60 ? GLASS_HAZE : GLASS;
-          // tapered glass tower with a spire cap — more distinct heights
+        // Dense pack of towers framing the Pearl Tower
+        for (let i = 0; i < 28; i++) {
+          const off = (i - 14) * 24 + (hash(i * 5) - 0.5) * 16;
+          const depth = 20 + hash(i * 7) * 90;
+          const h = 70 + hash(i * 11) * 150;
+          const w = 11 + hash(i * 13) * 13;
+          const col = depth > 65 ? SKY_HAZE : (depth > 50 ? GLASS_HAZE : GLASS);
+          // tapered glass tower — varied heights give density without clutter
           addFrustum(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0),
-                     w / 2, w / 3.2, h, col, 5, b);
-          if (hash(i * 17) > 0.25)
-            addBox(out, vadd(vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h), u, 7),
-                   [1.4, 14, 1.4], STEEL, b);
+                     w / 2, w / 3.4, h, col, 5, b);
+          // occasional glass spire cap
+          if (hash(i * 17) > 0.3)
+            addBox(out, vadd(vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h), u, 6),
+                   [1.2, 12, 1.2], STEEL, b);
         }
-        // PEARL TOWER landmark: The iconic Shanghai symbol.
-        // Tripod support legs, large lower sphere, smaller upper sphere, tall spire.
-        const pc = vadd(vadd(a.c, a.r, 0), a.t, 45);
-        // Three diagonal tripod legs (major support structure)
-        for (const ld of [-8, 0, 8]) addCyl(out, vadd(pc, a.r, ld), 2.2, 84, [0.76, 0.74, 0.72], 8, b);
-        // Main spherical sections with enhanced scale
-        addBox(out, vadd(pc, u, 58), [28, 22, 28], PEARL, b);   // lower main sphere
-        addCyl(out, vadd(pc, u, 72), 3.2, 48, PEARL, 8, b);     // connector column
-        addBox(out, vadd(pc, u, 116), [18, 18, 18], [0.82, 0.68, 0.64], b);  // upper sphere (slightly warmer)
-        addCone(out, vadd(pc, u, 128), 2.8, 36, [0.88, 0.76, 0.70], 8, b); // tall spire cap
+        // ORIENTAL PEARL TOWER: iconic Shanghai landmark at the heart of Pudong.
+        // Three spheres stacked on tripod legs, visible from the circuit.
+        const pc = vadd(vadd(a.c, a.r, -2), a.t, 50);
+        // Three diagonal tripod legs anchoring the structure
+        for (const ld of [-10, 0, 10]) addCyl(out, vadd(pc, a.r, ld), 2.4, 88, [0.72, 0.70, 0.68], 8, b);
+        // Lower sphere (largest)
+        addBox(out, vadd(pc, u, 62), [32, 26, 32], PEARL, b);
+        // Mid connector column
+        addCyl(out, vadd(pc, u, 78), 3.8, 50, [0.78, 0.68, 0.62], 8, b);
+        // Upper observation sphere
+        addBox(out, vadd(pc, u, 128), [20, 20, 20], [0.80, 0.66, 0.60], b);
+        // Top spire reaching high
+        addCone(out, vadd(pc, u, 138), 3.2, 42, [0.86, 0.74, 0.68], 8, b);
       })();
 
       // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
@@ -241,14 +244,14 @@
       marshalPost(K(0.80), 1, 14);
       marshalPost(K(0.74), 1, 12);
       // small grandstand banks lining the long back straight
-      grandstand(0.755, 1, 22, 70, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.80, 1, 22, 70, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.845, 1, 22, 60, [0.43, 0.44, 0.49], SEAT);
-      // low treeline along the verges behind the stands
-      hedge(0.72, 0.88, 1, 40, 3.2, MARSH_N);
-      // sparse green/grey verges
-      for (let i = 0; i < 6; i++) {
-        place((K(0.74) + i * Math.round(n * 0.008)) % n, 1, 20 + i * 6, [6, 1.2, 18], MARSH);
+      grandstand(0.755, 1, 28, 70, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.80, 1, 28, 70, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.845, 1, 28, 60, [0.43, 0.44, 0.49], SEAT);
+      // low treeline along the verges behind the stands — increased distance
+      hedge(0.72, 0.88, 1, 55, 3.2, MARSH_N);
+      // sparse green/grey verges — push further back
+      for (let i = 0; i < 4; i++) {
+        place((K(0.74) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, [5, 0.9, 14], MARSH);
       }
 
       // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
@@ -269,13 +272,14 @@
       building(K(0.92), -1, 2, 12, 10, 40, { wall: WHITE, window: [0.30, 0.34, 0.40], floor: 3 });
 
       // ---- Scattered marsh greenery + low treeline around the flat perimeter ----
-      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 60))) {
+      // Increased minimum distance to avoid culling; sparser placement
+      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 50))) {
         for (const side of [-1, 1]) {
           const r = hash(k * 13 + side * 3);
-          if (r > 0.6) continue;
-          const d = 28 + hash(k * 7 + side) * 44;
-          tree(k, side, d, 6 + hash(k * 17 + side) * 4, MARSH_N);
-          if (hash(k * 23 + side) > 0.55) bush(k, side, d + 5, MARSH);
+          if (r > 0.65) continue;
+          const d = 42 + hash(k * 7 + side) * 50;
+          tree(k, side, d, 7 + hash(k * 17 + side) * 4, MARSH_N);
+          if (hash(k * 23 + side) > 0.6) bush(k, side, d + 6, MARSH);
         }
       }
 
@@ -308,14 +312,14 @@
       })();
 
       // Marshal posts + extra billboards spread around the lap.
-      marshalPost(K(0.20), -1, 12);
-      marshalPost(K(0.34), -1, 14);
-      marshalPost(K(0.55), 1, 13);
-      marshalPost(K(0.66), -1, 13);
-      billboard(K(0.18), 1, 10, 14, 4, YELLOW);
-      billboard(K(0.33), -1, 16, 16, 4.5, RED);
-      billboard(K(0.55), 1, 12, 14, 4, RED);
-      billboard(K(0.66), -1, 14, 14, 4, YELLOW);
+      marshalPost(K(0.20), -1, 18);
+      marshalPost(K(0.34), -1, 20);
+      marshalPost(K(0.55), 1, 19);
+      marshalPost(K(0.66), -1, 19);
+      billboard(K(0.18), 1, 12, 14, 4, YELLOW);
+      billboard(K(0.33), -1, 20, 16, 4.5, RED);
+      billboard(K(0.55), 1, 14, 14, 4, RED);
+      billboard(K(0.66), -1, 16, 14, 4, YELLOW);
 
       // ---- Crowd dabs on the existing grandstand banks (cheap warm colour) ----
       (function crowds() {
@@ -334,40 +338,29 @@
       })();
 
       // ---- Landscaping: avenues of trees behind stands + reeds near the lake ----
-      hedge(0.90, 0.95, -1, 28, 3.0, TREE_G);
+      // Push hedges further back to reduce culling
+      hedge(0.90, 0.95, -1, 42, 3.0, TREE_G);
+      for (let i = 0; i < 4; i++) {
+        tree(K(0.90 + i * 0.012), -1, 42 + (i % 2) * 6, 7 + hash(i) * 3, TREE_G);
+      }
       for (let i = 0; i < 5; i++) {
-        tree(K(0.90 + i * 0.008), -1, 30 + (i % 2) * 5, 7 + hash(i) * 3, TREE_G);
+        palm(K(0.92 + i * 0.010), -1, 65, 6 + hash(i * 3) * 2, [0.30, 0.46, 0.26]);
       }
-      for (let i = 0; i < 6; i++) {
-        palm(K(0.92 + i * 0.008), -1, 50, 6 + hash(i * 3) * 2, [0.30, 0.46, 0.26]);
-      }
-      // pines lining the back straight verge
-      for (let i = 0; i < 10; i++) {
-        pine(K(0.72 + i * 0.015), 1, 46 + (i % 2) * 5, 8 + hash(i * 5) * 4, TREE_G);
+      // pines lining the back straight verge — reduced density
+      for (let i = 0; i < 8; i++) {
+        pine(K(0.72 + i * 0.018), 1, 58 + (i % 2) * 5, 8 + hash(i * 5) * 4, TREE_G);
       }
 
       // ================= FORMAL GARDEN FEATURES — SNAIL T1 ZONE (s 0.05–0.10) =================
-      // Dense formal hedging replacing sparse trees near the snail turn.
+      // Light formal landscaping with spacing to avoid culling on the tight snail spiral
       (function formalGardens() {
-        // Tight hedgerow walls on both sides of the snail approach.
-        hedge(0.05, 0.10, -1, 18, 2.8, [0.24, 0.38, 0.20]);
-        hedge(0.05, 0.10, 1, 30, 2.8, [0.24, 0.38, 0.20]);
-        // Additional every(18) closer hedging for formal density.
-        const snailSpots = [0.055, 0.065, 0.075, 0.085, 0.095, 0.100, 0.105, 0.110];
-        for (let i = 0; i < snailSpots.length; i++) {
-          const sk = K(snailSpots[i]);
-          const a0 = anchor(sk, -1, 20), b0 = [a0.r, a0.u, a0.t];
-          addBox(out, vadd(a0.c, a0.u, 1.4), [4, 2.8, 6], [0.24, 0.38, 0.20], b0);
-          const a1 = anchor(sk, 1, 24), b1 = [a1.r, a1.u, a1.t];
-          addBox(out, vadd(a1.c, a1.u, 1.4), [4, 2.8, 6], [0.24, 0.38, 0.20], b1);
-        }
-        // Ornamental topiary cubes alternating sides at s=0.06–0.12.
-        const topiaryFracs = [0.060, 0.070, 0.080, 0.090, 0.105, 0.115];
-        const topiarySides = [-1, 1, -1, 1, -1, 1];
+        // Sparse topiary cubes marking the formal garden accent (not a dense hedge)
+        const topiaryFracs = [0.060, 0.090, 0.120];
+        const topiarySides = [-1, 1, -1];
         for (let i = 0; i < topiaryFracs.length; i++) {
           const tk = K(topiaryFracs[i]);
-          const at = anchor(tk, topiarySides[i], 22), bt = [at.r, at.u, at.t];
-          addBox(out, vadd(at.c, at.u, 1.2), [4, 2.4, 4], [0.26, 0.40, 0.22], bt);
+          const at = anchor(tk, topiarySides[i], 50), bt = [at.r, at.u, at.t];
+          addBox(out, vadd(at.c, at.u, 1.2), [5, 3.0, 5], [0.24, 0.38, 0.20], bt);
         }
       })();
 

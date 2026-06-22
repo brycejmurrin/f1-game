@@ -73,40 +73,48 @@
       const sandLt = [0.87, 0.81, 0.64];
       const marramG = [0.33, 0.49, 0.24], marramT = [0.67, 0.63, 0.41];
       // Inner dune wall: overlapping organic mounds hugging the verge on BOTH
-      // sides the WHOLE lap (no gap-skip) — slightly higher for dune prominence.
-      every(32, (k) => {
+      // sides the WHOLE lap (no gap-skip) — DENSER spacing (every 24m) for continuous
+      // dune ridge effect. Heights vary 8–20m, orientation respects track curvature.
+      every(24, (k) => {
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 45 + hash(k * 72 + side) * 26);
-          const h = 8 + hash(k * 73 + side) * 12;        // TALLER dune mounds (8–20m)
+          const a = anchor(k, side, 40 + hash(k * 72 + side) * 30);
+          const h = 9 + hash(k * 73 + side) * 13;        // TALLER dune mounds (9–22m)
           // forest=tan marram so the verge-side dune base reads SANDY, not a flat
           // green wall when the camera is close on this tight winding circuit.
-          mountain(a.c[0], a.c[2], a.c[1], 32 + hash(k * 74 + side) * 20, h, {
-            seg: 8, seed: k * 13 + side, rough: 0.5, snowline: 2,  // >1 = no snow
+          mountain(a.c[0], a.c[2], a.c[1], 28 + hash(k * 74 + side) * 24, h, {
+            seg: 8, seed: k * 13 + side, rough: 0.6, snowline: 2,  // >1 = no snow
             forest: marramT, rock: sandDk, snow: sand,
           });
         }
       });
-      // Coastal Dutch pines on the dune slopes — dark conifers
-      every(30, (k) => {
+      // Coastal Dutch pines on the dune slopes — dark conifers clustering in dense stands
+      every(20, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 91 + side * 17) > 0.40) continue;   // ~40% density
-          const dist = 55 + hash(k * 92 + side) * 35;       // 55–90 m
-          const a = anchor(k, side, dist);
-          if (onTrack(a.c[0], a.c[2], 8)) continue;
-          const th = 5 + hash(k * 93 + side) * 5;           // height 5–10 m
-          addCyl(out, vadd(a.c, a.u, th * 0.5), 0.35, th, [0.25, 0.32, 0.20], 5, [a.r, a.u, a.t]);  // trunk
-          addCone(out, vadd(a.c, a.u, th * 0.5 + th * 0.55), th * 0.55 + hash(k * 94 + side) * 2, th * 0.6, [0.18, 0.38, 0.14], 6, [a.r, a.u, a.t]);  // pine canopy
+          if (hash(k * 91 + side * 17) > 0.50) continue;   // ~50% density (denser clustering)
+          const baseDist = 50 + hash(k * 92 + side) * 40;   // 50–90 m from verge
+          // 2-3 trees per cluster to group them visually (not just scattered)
+          const treeCount = hash(k * 92.5 + side) < 0.5 ? 2 : 3;
+          for (let t = 0; t < treeCount; t++) {
+            const offsetAng = (t / treeCount) * 0.4 - 0.2;  // ±0.2 rad spread
+            const offsetDist = hash(k * 93.2 + side + t * 0.3) * 8 - 4;  // ±4 m
+            const dist = baseDist + offsetDist;
+            const a = anchor(k, side, dist);
+            if (onTrack(a.c[0], a.c[2], 10)) continue;
+            const th = 6 + hash(k * 93.5 + side + t) * 4;   // height 6–10 m (taller variety)
+            addCyl(out, vadd(a.c, a.u, th * 0.5), 0.35, th, [0.23, 0.30, 0.18], 5, [a.r, a.u, a.t]);  // trunk
+            addCone(out, vadd(a.c, a.u, th * 0.5 + th * 0.55), th * 0.55 + hash(k * 94 + side + t) * 2, th * 0.6, [0.16, 0.36, 0.12], 6, [a.r, a.u, a.t]);  // pine canopy, darker green
+          }
         }
       });
       // Mid dune ridge: a second overlapping band of sandy peaks set back,
       // filling between the inner mounds so the belt never breaks from the
-      // cockpit. Taller peaks now (12–22m) to emphasize dune terrain.
-      every(22, (k) => {
+      // cockpit. DENSER (every 18m) for seamless continuous dune barrier.
+      every(18, (k) => {
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 52 + hash(k * 81 + side) * 32);
-          if (onTrack(a.c[0], a.c[2], 14)) continue;
-          peak(a.c[0], a.c[2], a.c[1], 36 + hash(k * 83 + side) * 26,
-               12 + hash(k * 82 + side) * 14,
+          const a = anchor(k, side, 60 + hash(k * 81 + side) * 38);
+          if (onTrack(a.c[0], a.c[2], 18)) continue;
+          peak(a.c[0], a.c[2], a.c[1], 32 + hash(k * 83 + side) * 28,
+               14 + hash(k * 82 + side) * 16,
                hash(k * 84 + side) < 0.5 ? sand : sandLt);
         }
       });
@@ -121,40 +129,38 @@
         }
       });
       // Marram grass tufts hugging the verge (low organic green/tan greenery).
-      // Denser coverage now to emphasize the coastal dune grass ecosystem.
-      every(11, (k) => {
+      // MUCH DENSER coverage (every 8m) to emphasize the coastal dune grass ecosystem.
+      every(8, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 51 + side) > 0.55) continue;  // Increased density (was 0.62)
-          bush(k, side, 9 + hash(k * 52 + side) * 14,
+          if (hash(k * 51 + side) > 0.35) continue;  // ~65% density (much denser)
+          bush(k, side, 7 + hash(k * 52 + side) * 12,
                hash(k * 53 + side) < 0.5 ? marramG : marramT);
         }
       });
-      // Extended continuous marram hedge bands around the lap.
-      hedge(0.15, 0.42, 1, 28, 1.5, marramT);   // dune-ridge marram band (extended)
-      hedge(0.30, 0.58, -1, 11, 1.5, marramG);  // longer L-side stretch
-      hedge(0.56, 0.80, 1, 10, 1.5, marramG);   // extended R-side
-      hedge(0.60, 0.90, -1, 12, 1.5, marramT);  // extended L-side
+      // Extended continuous marram hedge bands around the lap — more coverage for
+      // a seamless dune-verge green fringe visible from cockpit.
+      hedge(0.10, 0.50, 1, 22, 1.8, marramT);   // extended R-side dune band
+      hedge(0.20, 0.60, -1, 16, 1.8, marramG);  // extended L-side early dunes
+      hedge(0.55, 0.85, 1, 18, 1.8, marramG);   // far-corner R-side hedge
+      hedge(0.65, 0.98, -1, 14, 1.8, marramT);  // pit-straight L-side hedge
+      hedge(0.80, 0.95, 1, 20, 1.8, marramG);   // Luyendyk approach hedge
 
       // --- Orange-clad Dutch grandstands at the banked corners and pit straight.
       // crowd colour = "Orange Army" Verstappen fans (300,000+ at Dutch GP).
-      // Expanded to convey the scale of spectator enthusiasm.
+      // Tuned fractions to avoid clustering, richer Verstappen orange.
       const shell = [0.36, 0.38, 0.42], shellLt = [0.40, 0.41, 0.46];
-      const orange = [0.95, 0.44, 0.04];  // Slightly deeper Verstappen orange
-      grandstand(0.01, 1, 12, 32, shellLt, orange); // main stand R (pit straight) - larger
-      grandstand(0.04, 1, 10, 32, shell, orange);   // Tarzan hairpin R
-      grandstand(0.07, -1, 11, 30, shell, orange);  // Tarzan exit L
-      grandstand(0.10, -1, 10, 28, shell, orange);  // Hugenholtz approach L early
-      grandstand(0.12, -1, 9, 32, shell, orange);   // Hugenholtz approach L
-      grandstand(0.14, -1, 10, 36, shell, orange);  // Hugenholtz T3 banked L - larger
-      grandstand(0.17, 1, 11, 30, shellLt, orange); // Hugenholtz exit R
-      grandstand(0.48, -1, 24, 32, shell, orange);  // Scheivlak approach L (set back) - larger
-      grandstand(0.52, 1, 14, 26, shell, orange);   // Scheivlak R spectator area (new)
-      grandstand(0.86, 1, 24, 32, shell, orange);   // Luyendyk approach R - larger
-      grandstand(0.90, 1, 11, 30, shell, orange);   // Arie Luyendyk banked approach R (new)
-      grandstand(0.92, 1, 10, 72, shell, orange);   // Arie Luyendyk final banked R - massive
-      grandstand(0.95, 1, 11, 32, shellLt, orange); // Luyendyk exit R - larger
-      grandstand(0.96, -1, 12, 32, shellLt, orange); // pit-straight L - larger
-      grandstand(0.98, -1, 11, 30, shell, orange);  // pit-straight L exit
+      const orange = [0.96, 0.42, 0.02];  // Richer, deeper Verstappen orange (less neon)
+      grandstand(0.01, 1, 12, 36, shellLt, orange); // main stand R (pit straight) - largest
+      grandstand(0.05, 1, 9, 28, shell, orange);    // Tarzan hairpin R
+      grandstand(0.09, -1, 10, 26, shell, orange);  // Tarzan exit L
+      grandstand(0.135, -1, 10, 40, shell, orange); // Hugenholtz banked L - major stand
+      grandstand(0.18, 1, 11, 32, shellLt, orange); // Hugenholtz exit R
+      grandstand(0.48, -1, 24, 34, shell, orange);  // Scheivlak approach L (set back)
+      grandstand(0.53, 1, 14, 28, shell, orange);   // Scheivlak R spectator area
+      grandstand(0.865, 1, 22, 36, shell, orange);  // Luyendyk approach R - major
+      grandstand(0.915, 1, 10, 80, shell, orange);  // Arie Luyendyk final banked R - MASSIVE
+      grandstand(0.96, 1, 11, 32, shellLt, orange); // Luyendyk exit R
+      grandstand(0.97, -1, 12, 34, shellLt, orange); // pit-straight L - larger
 
       // --- Pit building: long low white-grey box with repeated garage bays. ---
       (() => {
@@ -179,18 +185,24 @@
         }
       }
 
-      // --- Beach huts: tiny low pastel box row at the dune base near the shore
-      // (s≈0.50 R, seaward). ---
-      every(60, (k) => {
-        const side = hash(k * 8) < 0.5 ? -1 : 1;
-        const a = anchor(k, side, hw[k] + 110 + hash(k * 7) * 30);
-        if (onTrack(a.c[0], a.c[2], 12)) return;
-        const cols = [[0.85, 0.25, 0.20], [0.20, 0.45, 0.70], [0.90, 0.85, 0.30], [0.20, 0.60, 0.40]];
+      // --- Beach huts: pastel-colored rows clustered near the seaward dune face
+      // (s≈0.30–0.70 R & L, deep back in landscape). Iconic beach shelter rows.
+      every(40, (k) => {
+        // Alternate L/R sides with bias to the seaward quadrant (~0.3–0.7 lap)
+        const lapFrac = (k / n) % 1.0;
+        const sideProb = lapFrac > 0.3 && lapFrac < 0.7 ? 0.7 : 0.3;  // cluster seaward
+        const side = hash(k * 8) < sideProb ? 1 : -1;
+        const dist = hw[k] + 140 + hash(k * 7) * 35;  // 140–175 m back
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], 16)) return;
+        const cols = [[0.88, 0.26, 0.18], [0.18, 0.48, 0.72], [0.92, 0.87, 0.28], [0.20, 0.62, 0.38]];
         const b = [a.r, a.u, a.t];
-        // a short row of huts along the dune base
-        for (let i = -1; i <= 1; i++) {
+        // Row of 2-4 huts per cluster, varying count for organic spacing
+        const hutCount = 2 + Math.floor(hash(k * 10) * 2.5);
+        for (let i = 0; i < hutCount; i++) {
           const hutCol = cols[Math.floor(hash(k * 9 + i * 3) * 4) % 4];
-          addBox(out, vadd(vadd(a.c, a.u, 2), a.t, i * 7), [5, 4, 5], hutCol, b);
+          const offset = (i - (hutCount - 1) / 2) * 7.5;  // centered spread
+          addBox(out, vadd(vadd(a.c, a.u, 2.2), a.t, offset), [5.5, 4.2, 5.5], hutCol, b);
         }
       });
 
@@ -221,11 +233,11 @@
       guardrail(0.80, 0.86, -1, 4.0, railRW);
 
       // --- Stacked tyre walls on the OUTSIDE of the heavy corners (gravel-trap
-      // backstops): Tarzan, Hugenholtz, Scheivlak, Arie Luyendyk. capCol bright. ---
-      tyreWall(0.025, 0.06, 1, 4.6, [0.95, 0.55, 0.08]);  // Tarzan hairpin outside
-      tyreWall(0.13, 0.17, -1, 4.6, [0.90, 0.90, 0.92]);  // Hugenholtz outside
-      tyreWall(0.49, 0.53, -1, 5.0, [0.20, 0.45, 0.70]);  // Scheivlak outside
-      tyreWall(0.90, 0.95, 1, 4.8, [0.95, 0.55, 0.08]);   // Arie Luyendyk outside
+      // backstops): Tarzan, Hugenholtz, Scheivlak, Arie Luyendyk. Richer rubber tones. ---
+      tyreWall(0.025, 0.065, 1, 4.6, [0.88, 0.42, 0.06]);  // Tarzan hairpin outside (darker orange/rubber)
+      tyreWall(0.125, 0.18, -1, 4.8, [0.30, 0.30, 0.32]);  // Hugenholtz outside (dark grey)
+      tyreWall(0.48, 0.54, -1, 5.2, [0.18, 0.40, 0.65]);   // Scheivlak outside (blue-grey)
+      tyreWall(0.90, 0.96, 1, 5.0, [0.86, 0.38, 0.04]);    // Arie Luyendyk outside (rich tyre orange)
 
       // --- Billboards / advertising hoardings around the lap (need wide clearance
       // so the panel face never reaches the tarmac). Alternating bright panels. ---
@@ -262,37 +274,42 @@
         }
       }
 
-      // --- Marram dune-grass scrub: dense low tufts of tan/green clumps right at
-      // the verge to break up bare sand. Small cones, cheap, both sides. ---
-      every(9, (k) => {
+      // --- Marram dune-grass scrub: MUCH DENSER tufts of tan/green clumps right at
+      // the verge to break up bare sand and anchor dunes visually. Every 6m for
+      // continuous grass fringe. 2-4 prisms per tuft for clustering.
+      every(6, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 61 + side * 5) > 0.55) continue;
-          const a = anchor(k, side, 7 + hash(k * 62 + side) * 7);
-          if (onTrack(a.c[0], a.c[2], 2)) continue;
+          if (hash(k * 61 + side * 5) > 0.40) continue;  // ~60% density
+          const baseX = 5 + hash(k * 62 + side) * 8;
+          const a = anchor(k, side, baseX);
+          if (onTrack(a.c[0], a.c[2], 3)) continue;
           const tuft = hash(k * 63 + side) < 0.5 ? marramG : marramT;
           const b = [a.r, a.u, a.t];
-          // a small clump of 2-3 leaning grass prisms
-          const cnt = 2 + (hash(k * 64 + side) < 0.4 ? 1 : 0);
+          // 3-4 leaning grass prisms per tuft cluster for organic look
+          const cnt = 3 + (hash(k * 64 + side) < 0.4 ? 1 : 0);
           for (let i = 0; i < cnt; i++) {
-            const off = (i - 1) * 1.4;
-            addPrism(out, vadd(vadd(a.c, a.t, off), a.u, 0.7),
-                     [0.8, 1.4 + hash(k * 65 + i + side) * 0.8, 0.8], tuft, b);
+            const off = (i - (cnt - 1) / 2) * 1.2;
+            const h = 1.6 + hash(k * 65 + i + side) * 0.7;
+            addPrism(out, vadd(vadd(a.c, a.t, off), a.u, 0.6),
+                     [0.7, h, 0.8], tuft, b);
           }
         }
       });
 
-      // --- Verstappen-orange flag bunting accents on the main grandstand fronts:
-      // small bright caps to amplify the orange crowd feel from trackside. ---
-      for (const [s, side] of [[0.02, 1], [0.92, 1], [0.96, -1], [0.14, -1]]) {
-        const a = anchor(K(s), side, 9);
-        if (onTrack(a.c[0], a.c[2], 5)) continue;
+      // --- Verstappen-orange flag bunting accents on major grandstand fronts:
+      // small bright capsules to amplify the orange crowd feel from trackside.
+      // Positioned at main spectator areas with richer orange tone.
+      for (const [s, side] of [[0.01, 1], [0.135, -1], [0.915, 1], [0.97, -1]]) {
+        const a = anchor(K(s), side, 8);
+        if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
-        for (let i = -4; i <= 4; i++)
-          addBox(out, vadd(vadd(a.c, a.u, 6.5), a.t, i * 4.5),
-                 [0.6, 1.2, 2.4], [0.95, 0.45, 0.05], b);
-        for (let i = -4; i <= 4; i++)
-          addBox(out, vadd(vadd(a.c, a.u, 8.7), a.t, i * 4.5),
-                 [0.6, 1.2, 2.4], [0.95, 0.45, 0.05], b);
+        const buntingCol = [0.96, 0.40, 0.02];  // Match richer orange
+        for (let i = -5; i <= 5; i++)
+          addBox(out, vadd(vadd(a.c, a.u, 7.2), a.t, i * 4.5),
+                 [0.7, 1.4, 2.6], buntingCol, b);
+        for (let i = -5; i <= 5; i++)
+          addBox(out, vadd(vadd(a.c, a.u, 9.6), a.t, i * 4.5),
+                 [0.7, 1.4, 2.6], buntingCol, b);
       }
     },
   }

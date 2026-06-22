@@ -92,20 +92,30 @@
       }
 
       // ===================================================================
-      // s 0.00 R near — GOVERNMENT HOUSE: wide ornate twin-tower sandstone
-      // box, pit/start backdrop.
+      // s 0.00 R near — GOVERNMENT HOUSE: ornate neoclassical twin-tower
+      // sandstone palace, pit/start landmark. Characteristic Baku architecture.
       // ===================================================================
       {
         const k = K(0.0);
-        place(k, 1, 42, [64, 30, 30], SAND);
-        place(k, 1, 43, [66, 6, 32], SAND_LIT);                 // warm uplit base band
-        for (const o of [-22, 22]) {                            // twin corner towers
-          const a = anchor(k, 1, 24);
+        const a = anchor(k, 1, 36);
+        const b = [a.r, a.u, a.t];
+        // Main palace mass — larger, more ornate
+        place(k, 1, 36, [68, 32, 34], SAND);
+        // Uplit decorative base band — stronger
+        place(k, 1, 37, [70, 8, 36], SAND_LIT);
+        // Twin ornamental corner towers (neo-classical style)
+        for (const o of [-24, 24]) {
           const c = vadd(a.c, a.t, o);
-          addBox(out, vadd(c, a.u, 28), [12, 26, 12], SAND, [a.r, a.u, a.t]);
-          addBox(out, vadd(c, a.u, 41), [9, 8, 9], SAND_LIT, [a.r, a.u, a.t]);
+          // Tower body
+          addBox(out, vadd(c, a.u, 26), [14, 28, 14], SAND, b);
+          // Tower cap — cupola/dome style
+          addBox(out, vadd(c, a.u, 42), [11, 10, 11], SAND_LIT, b);
+          addCone(out, vadd(c, a.u, 52), 6, 10, SAND_LIT, 8, b);
         }
-        building(k, 1, 4, 40, 18, 24, { wall: SAND, window: WIN_WARM, floor: 4.5 });
+        // Central entrance pavilion
+        building(k, 1, 6, 42, 20, 26, { wall: SAND, window: WIN_WARM, floor: 4.5 });
+        // Decorative gate/portico detail in front
+        addBox(out, vadd(a.c, a.u, 2), [48, 6, 3], [0.78, 0.68, 0.50], b);
       }
 
       // ===================================================================
@@ -144,28 +154,30 @@
       }
 
       // ===================================================================
-      // s 0.22 R far — FLAME TOWERS: three tall tapered towers on a raised
-      // tier far back, warm-lit window bands + animated flame glow (the icon).
+      // s 0.22 R far — FLAME TOWERS: three iconic tapered towers on a raised
+      // tier far back, alternating warm/flame window bands + animated glow.
+      // Most recognizable landmark of Baku's skyline — the flaming towers.
       // ===================================================================
       {
         const k = K(0.22);
-        const a = anchor(k, 1, 170);
-        const heights = [210, 235, 210];   // ~40% taller than original 150/168/150
+        const a = anchor(k, 1, 180);
+        const heights = [215, 240, 215];   // Approximate real heights (150/168/150 m scale)
         for (let t = 0; t < 3; t++) {
-          const c = vadd(a.c, a.r, (t - 1) * 42);
+          const c = vadd(a.c, a.r, (t - 1) * 45);
           const H = heights[t];
-          // tapered tower body
-          addFrustum(out, c, 17, 4, H, GLASS, 6, [a.r, a.u, a.t]);
-          // warm-lit window bands climbing the flame
-          for (let b = 0; b < 6; b++) {
-            const fr = b / 6;
-            const r = 17 * (1 - fr) + 4 * fr;
-            addFrustum(out, vadd(c, a.u, fr * H), r * 1.02, r * 0.78, H * 0.06, b % 2 ? FLAME : WIN_WARM, 6, [a.r, a.u, a.t]);
+          // tapered tower body — wider base for stability silhouette
+          addFrustum(out, c, 18, 3.5, H, GLASS, 7, [a.r, a.u, a.t]);
+          // Animated warm-lit window bands — denser pattern for night presence
+          for (let b = 0; b < 8; b++) {
+            const fr = b / 8;
+            const r = 18 * (1 - fr) + 3.5 * fr;
+            const isFlame = b % 2 === 0;
+            addFrustum(out, vadd(c, a.u, fr * H), r * 1.04, r * 0.76, H * 0.05, isFlame ? FLAME : WIN_WARM, 7, [a.r, a.u, a.t]);
           }
-          // bright flame cap
-          addFrustum(out, vadd(c, a.u, H), 4, 0.6, 14, FLAME, 6, [a.r, a.u, a.t]);
-          // flame-shaped glow panel at the top — wider than the tower body
-          addBox(out, vadd(c, a.u, H + 2), [28, 12, 8], [1.0, 0.55, 0.10], [a.r, a.u, a.t]);
+          // Bright flame cap — conical termination
+          addCone(out, vadd(c, a.u, H), 3.5, 16, FLAME, 7, [a.r, a.u, a.t]);
+          // Large flame glow panel at the top — wider, more emissive appearance
+          addBox(out, vadd(c, a.u, H + 4), [32, 14, 10], [1.0, 0.58, 0.12], [a.r, a.u, a.t]);
         }
       }
 
@@ -181,42 +193,43 @@
       // uplit, with a dense packed old-town sprawl rising behind it.
       // ===================================================================
       wall(0.36, 0.56, 1, 10, 9, SAND, 1.2);                                  // unbroken Old City rampart
-      for (let p = 0; p < 8; p++) {                                           // enhanced crenellated cap + uplit footing
-        const k = K(0.36 + p * 0.025);
+      // Enhanced crenellated cap with denser merlon pattern and stronger visual presence
+      for (let p = 0; p < 10; p++) {
+        const k = K(0.36 + p * 0.020);
         const a = anchor(k, 1, 10);
-        // uplit footing band at base
-        addBox(out, vadd(a.c, a.u, 1.2), [3.5, 2.2, 38], SAND_LIT, [a.r, a.u, a.t]);
-        // dense crenellations (merlon/embrasure pattern) — alternating raised/gap
-        for (let j = 0; j < 14; j++) {
-          if (j % 2 === 0) {  // merlons (raised sections)
-            addBox(out, vadd(vadd(a.c, a.t, (j - 6.5) * 4.2), a.u, 9.8), [2.8, 1.6, 2.4], SAND, [a.r, a.u, a.t]);
-          } else {            // embrasures (gaps) — no geometry, space between
-            // leave gap for castle-like appearance
+        // uplit footing band at base — stronger, wider
+        addBox(out, vadd(a.c, a.u, 1.2), [4.2, 2.5, 40], SAND_LIT, [a.r, a.u, a.t]);
+        // Very dense crenellations: narrower spacing for more medieval fortress look
+        for (let j = 0; j < 16; j++) {
+          const isRaised = j % 2 === 0;
+          if (isRaised) {  // merlons (raised sections)
+            addBox(out, vadd(vadd(a.c, a.t, (j - 7.5) * 3.6), a.u, 10.2), [2.6, 1.8, 2.0], SAND, [a.r, a.u, a.t]);
           }
+          // embrasures (gaps between merlons) — leave open for shooting ports
         }
       }
       // Dense sandstone old-town behind the rampart: packed flat-roof houses
       // climbing the hill so the Old City reads as a solid mass, not a fence.
-      // Enhanced density and layering for stronger medieval character.
-      for (let i = 0; i < 18; i++) {
-        const k = K(0.36 + (i % 7) * 0.027);
-        const tier = 12 + (i % 4) * 13 + Math.floor(i / 7) * 18;
-        const h = 7 + hash(i * 7) * 14;
-        const w = 10 + hash(i * 5) * 8;
-        const d = 10 + hash(i * 11) * 6;
-        building(k, 1, tier - w / 2, w, h, d, { wall: i % 3 ? SAND : SAND_LIT, window: WIN_WARM, floor: 3.5 });
+      // Much higher density for authentic medieval Icherisheher appearance.
+      for (let i = 0; i < 24; i++) {
+        const k = K(0.36 + (i % 8) * 0.024);
+        const tier = 14 + (i % 5) * 12 + Math.floor(i / 8) * 16;
+        const h = 6 + hash(i * 7) * 12;
+        const w = 8 + hash(i * 5) * 10;
+        const d = 9 + hash(i * 11) * 8;
+        building(k, 1, tier - w / 2, w, h, d, { wall: i % 2 ? SAND : [0.68, 0.58, 0.42], window: WIN_WARM, floor: 3.2 });
       }
-      // Additional foreground tower accents in old town
-      for (let i = 0; i < 4; i++) {
-        const a = anchor(K(0.42 + i * 0.032), 1, 28 + hash(i * 13) * 14);
-        addCyl(out, vadd(a.c, a.u, 8), 1.8, 14, SAND, 8, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 22), [4, 2.2, 4], SAND_LIT, [a.r, a.u, a.t]);
+      // Additional foreground tower accents in old town — thicker minarets
+      for (let i = 0; i < 5; i++) {
+        const a = anchor(K(0.40 + i * 0.028), 1, 30 + hash(i * 13) * 16);
+        addCyl(out, vadd(a.c, a.u, 6), 2.0, 16, SAND, 8, [a.r, a.u, a.t]);   // wider tower base
+        addBox(out, vadd(a.c, a.u, 23), [4.5, 2.6, 4.5], SAND_LIT, [a.r, a.u, a.t]);  // stronger cap
       }
-      // small domes / minaret silhouettes rising over the old town for texture.
-      for (let i = 0; i < 4; i++) {
-        const a = anchor(K(0.4 + i * 0.035), 1, 40 + hash(i * 9) * 20);
-        addCyl(out, a.c, 1.0, 14 + hash(i) * 8, SAND, 6, [a.r, a.u, a.t]);          // minaret shaft
-        addFrustum(out, vadd(a.c, a.u, 14 + hash(i) * 8), 1.6, 0.4, 3, SAND_LIT, 6, [a.r, a.u, a.t]);
+      // small domes / minaret silhouettes rising over the old town — more prominent
+      for (let i = 0; i < 6; i++) {
+        const a = anchor(K(0.39 + i * 0.030), 1, 44 + hash(i * 9) * 24);
+        addCyl(out, a.c, 1.2, 16 + hash(i) * 10, SAND, 7, [a.r, a.u, a.t]);   // minaret shaft, taller
+        addFrustum(out, vadd(a.c, a.u, 16 + hash(i) * 10), 1.8, 0.5, 4, SAND_LIT, 7, [a.r, a.u, a.t]);  // domed cap
       }
 
       // ===================================================================
@@ -258,62 +271,79 @@
       }
 
       // ===================================================================
-      // s 0.52 L near — MAIDEN TOWER: stout round stepped sandstone tower
-      // Enhanced with conical top and stronger visual presence
+      // s 0.52 L near — MAIDEN TOWER: iconic round stepped sandstone tower
+      // Historic 12th-century structure with distinctive tapered silhouette.
       // ===================================================================
       {
         const k = K(0.52);
         const a = anchor(k, -1, 8);
-        // Wider stepped base (octagonal presence)
-        addCyl(out, vadd(a.c, a.u, 3), 10, 7, SAND, 10, [a.r, a.u, a.t]);
-        // Main cylindrical drum (the tower body)
-        addCyl(out, vadd(a.c, a.u, 13), 8.5, 30, SAND, 12, [a.r, a.u, a.t]);
-        // Intermediate band (uplit mid-section)
-        addFrustum(out, vadd(a.c, a.u, 22), 8.5, 8, 4, SAND_LIT, 12, [a.r, a.u, a.t]);
-        // Tapered crown (conical top, iconic silhouette)
-        addCone(out, vadd(a.c, a.u, 38), 7, 12, SAND_LIT, 12, [a.r, a.u, a.t]);
-        // Decorative cap at spire tip
-        addBox(out, vadd(a.c, a.u, 50), [2, 2.5, 2], [0.92, 0.82, 0.62], [a.r, a.u, a.t]);
+        // Octagonal stepped base platform
+        addCyl(out, vadd(a.c, a.u, 1.5), 11.5, 5, [0.60, 0.48, 0.34], 8, [a.r, a.u, a.t]);
+        // Main cylindrical drum (the tower body) — tapers upward
+        addCyl(out, vadd(a.c, a.u, 10), 9.5, 28, SAND, 12, [a.r, a.u, a.t]);
+        // Intermediate banded section (uplit stonework)
+        addFrustum(out, vadd(a.c, a.u, 20), 9.2, 8.8, 5, SAND_LIT, 12, [a.r, a.u, a.t]);
+        addFrustum(out, vadd(a.c, a.u, 27), 8.6, 8, 3, SAND, 12, [a.r, a.u, a.t]);
+        // Tapered upper tower — graceful cone to the spire
+        addCone(out, vadd(a.c, a.u, 38), 7.5, 14, SAND_LIT, 12, [a.r, a.u, a.t]);
+        // Decorative roof cap at the spire tip (characteristic feature)
+        addBox(out, vadd(a.c, a.u, 52), [2.2, 2.8, 2.2], [0.94, 0.84, 0.64], [a.r, a.u, a.t]);
+        // Subtle base platform rim
+        addCyl(out, vadd(a.c, a.u, 4), 12, 0.8, [0.72, 0.62, 0.46], 10, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
       // s 0.58 L far — seafront opens: boulevard promenade + palm row, low
       // landscaped green boxes (the Caspian seaside park).
-      // Enhanced waterfront character with ornate balustrade and terraced gardens.
+      // Enhanced waterfront character with landscape terraces and pedestrian walkways.
       // ===================================================================
-      // Terraced seafront parks in multiple tiers
-      for (let i = 0; i < 5; i++)
-        place(K(0.58 + i * 0.015), -1, 20 + i * 12, [14, 3.5, 14], [0.12, 0.28, 0.16]);
-      // palm-lined promenade down the seafront straight, left side.
-      for (let i = 0; i < 18; i++)
-        palm(K(0.6 + i * 0.022), -1, 8 + (i % 2) * 3, 10 + hash(i * 3) * 3, [0.16, 0.42, 0.22]);
-      // ornate promenade balustrade wall between the road and the sea
-      wall(0.6, 0.95, -1, 5, 1.2, [0.74, 0.70, 0.62], 0.5);
-      // decorative balusters on the promenade wall
-      for (let i = 0; i < 28; i++) {
-        const s = 0.60 + i * 0.0125;
-        const a = anchor(K(s), -1, 5.5);
-        addCyl(out, vadd(a.c, a.u, 0.6), 0.18, 1.0, [0.78, 0.72, 0.60], 6, [a.r, a.u, a.t]);
+      // Terraced seafront parks: stacked, descending toward the water
+      for (let i = 0; i < 6; i++) {
+        const s = 0.58 + i * 0.018;
+        const terraceDist = 16 + i * 10;
+        place(K(s), -1, terraceDist, [16, 2.8 + i * 0.6, 16], [0.18, 0.32, 0.20]);
+      }
+      // palm-lined promenade down the seafront straight, left side — denser planting
+      for (let i = 0; i < 22; i++) {
+        const s = 0.58 + i * 0.018;
+        palm(K(s), -1, 8 + (i % 3) * 2, 9 + hash(i * 3) * 3.5, [0.18, 0.44, 0.24]);
+      }
+      // Ornate promenade balustrade wall between the road and the sea — refined stonework
+      wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);
+      // Decorative balusters on the promenade wall — closer spaced for elegance
+      for (let i = 0; i < 32; i++) {
+        const s = 0.58 + i * 0.0118;
+        const a = anchor(K(s), -1, 5.7);
+        addCyl(out, vadd(a.c, a.u, 0.7), 0.16, 1.1, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
       // s 0.65–0.95 — CASPIAN-FRONT straight (~2.2 km): open dark sea left,
       // lit modern skyline right.
-      // Enhanced water presence and waterfront character.
+      // Enhanced water presence, waterfront piers, and maritime character.
       // ===================================================================
       // Caspian Sea: broad water groundPlanes settled just below grade, left.
-      groundPlane(K(0.65), -1, 16, [280, 2, 320], SEA);
-      groundPlane(K(0.77), -1, 18, [300, 2, 340], SEA);
-      groundPlane(K(0.88), -1, 16, [260, 2, 300], SEA);
-      // A couple of distant boats / breakwater silhouettes far out on the water.
-      for (let i = 0; i < 5; i++) {
-        const a = anchor(K(0.66 + i * 0.065), -1, 100 + hash(i * 5) * 70);
-        addBox(out, vadd(a.c, a.u, 2.5), [12 + hash(i) * 6, 4, 4], [0.08, 0.10, 0.16], [a.r, a.u, a.t]);
+      // Multiple panels for continuous water coverage across the long straight.
+      groundPlane(K(0.65), -1, 14, [300, 2.4, 340], SEA);
+      groundPlane(K(0.75), -1, 14, [320, 2.4, 360], SEA);
+      groundPlane(K(0.85), -1, 14, [300, 2.4, 340], SEA);
+      groundPlane(K(0.92), -1, 14, [280, 2.4, 320], SEA);
+      // Distant boats / breakwater silhouettes far out on the water — more varied
+      for (let i = 0; i < 6; i++) {
+        const a = anchor(K(0.65 + i * 0.055), -1, 110 + hash(i * 5) * 80);
+        // Cargo vessel silhouettes
+        addBox(out, vadd(a.c, a.u, 3), [14 + hash(i) * 8, 5 + hash(i * 2) * 3, 3.5], [0.10, 0.12, 0.18], [a.r, a.u, a.t]);
       }
-      // Harbor/waterfront architecture: small waterfront pavilions/structures
+      // Harbor/waterfront architecture: waterfront pavilions and terminal buildings
+      for (let i = 0; i < 4; i++) {
+        const s = 0.66 + i * 0.075;
+        building(K(s), -1, 18, 14, 9, 14, { wall: [0.30, 0.34, 0.42], window: [0.60, 0.70, 0.95], floor: 3 });
+      }
+      // Pier/breakwater structures extending into the water
       for (let i = 0; i < 3; i++) {
-        const s = 0.68 + i * 0.08;
-        building(K(s), -1, 22, 16, 8, 12, { wall: [0.28, 0.32, 0.40], window: WIN_COOL, floor: 2.5 });
+        const s = 0.68 + i * 0.12;
+        const a = anchor(K(s), -1, 12);
+        addBox(out, vadd(a.c, a.u, 0.5), [2.5, 1.0, 40], [0.55, 0.54, 0.58], [a.r, a.u, a.t]);  // breakwater structure
       }
       // CONTINUOUS modern Caspian-front skyline: a packed unbroken band of lit
       // glass towers right, two rows (front mid-rise + taller back rank) so the
@@ -327,15 +357,19 @@
 
       // ===================================================================
       // s 0.78–0.86 R mid — cluster of glass Caspian-front towers, cool-blue lit
+      // Iconic towers of Baku's modern skyline, each with lit window crown.
       // ===================================================================
-      for (let i = 0; i < 7; i++) {
-        const k = K(0.78 + i * 0.013);
-        tower(k, 1, 56 + (i % 3) * 28, 16, 80 + (i % 2) * 50, { col: GLASS, seg: 6, cap: true, capCol: i % 2 ? WIN_COOL : WIN_WARM });
+      for (let i = 0; i < 9; i++) {
+        const k = K(0.77 + i * 0.011);
+        const baseW = 14 + (i % 2) * 4;
+        const h = 85 + (i % 3) * 45;
+        tower(k, 1, 52 + (i % 4) * 24, baseW, h, { col: GLASS, seg: 7, cap: true, capCol: i % 3 ? WIN_COOL : WIN_WARM });
       }
 
-      // billboards punctuating the long Caspian straight, right side.
-      for (let i = 0; i < 4; i++)
-        billboard(K(0.66 + i * 0.07), 1, 8, 12, 5, i % 2 ? FLAME : AZ_BLUE);
+      // Illuminated billboards punctuating the long Caspian straight, right side.
+      for (let i = 0; i < 5; i++) {
+        billboard(K(0.65 + i * 0.065), 1, 9, 14, 6, i % 2 ? FLAME : AZ_BLUE);
+      }
 
       // ===================================================================
       // s 0.97 both near — braking zone into T1: stacked tyre-wall barriers
@@ -396,19 +430,17 @@
 
       // ================= URBAN CANYON density — modern city sections =================
       // Taller buildings at s=0.0–0.20 and s=0.80–1.0 to tighten the street canyon.
+      // Replaced place() with building() to properly respect track boundaries.
       {
         const CITY_GLASS = [0.30, 0.40, 0.55];
         const cityHeights = [40, 55, 70, 60, 80, 45, 65];
         for (let i = 0; i < 7; i++) {
           const s = 0.02 + i * 0.025;
-          building(K(s), -1, 28 + (i % 3) * 14, 14 + (i % 2) * 4, cityHeights[i], 16,
-            { wall: GLASS, window: CITY_GLASS, floor: 4 });
+          // Use building() with gap parameter instead of place() with distance
+          building(K(s), -1, 16 + (i % 3) * 14, 14 + (i % 2) * 4, cityHeights[i], 14,
+            { wall: GLASS, window: [0.32, 0.42, 0.52], floor: 4 });
         }
-        for (let i = 0; i < 6; i++) {
-          const s = 0.81 + i * 0.028;
-          building(K(s), 1, 30 + (i % 3) * 12, 16 + (i % 2) * 6, 40 + (i % 3) * 20, 18,
-            { wall: GLASS, window: CITY_GLASS, floor: 5 });
-        }
+        // Right-side Caspian-front towers already handled in main section; skip duplication
       }
 
       // ================= SEAFRONT BILLBOARD (s≈0.15, Azeri colours) =================
