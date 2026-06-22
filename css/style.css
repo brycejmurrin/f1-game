@@ -212,6 +212,12 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
 .spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
 .spf-corner { background: rgba(225,6,0,0.18); color: #e10600; }
+/* Season upcoming rounds list */
+.season-upcoming-head { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
+.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 3px; background: rgba(255,255,255,0.02); }
+.sur-rnd { font-size: 9px; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; min-width: 22px; }
+.sur-name { font-size: 12px; font-weight: 700; color: #ccc; flex: 1; font-style: italic; }
+.sur-country { font-size: 10px; color: var(--dim); }
 @media (max-width: 520px) {
   #sel-track-preview { flex-direction: column; align-items: stretch; gap: 10px; }
   #sel-preview-map { max-width: none; }
@@ -246,6 +252,9 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .track-row.active .track-row-name { color: var(--red); }
 .track-row-meta { font-size: 11px; color: var(--dim); }
 .track-row-rec { font-size: 11px; color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
+.trb { display: inline-block; font-size: 8px; letter-spacing: 0.08em; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; font-weight: 700; }
+.trb-night { background: rgba(129,140,248,0.15); color: #818cf8; border: 1px solid rgba(129,140,248,0.3); }
+.trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
 #sel-driver { color: var(--dim); font-size: 13px; margin-top: 8px; min-height: 18px; }
 .sel-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
 .sel-actions .bigbtn { width: auto; min-width: 150px; margin: 0; }
@@ -489,7 +498,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 #hud-ot { display: none; }   /* OT state now shown on the OT button itself */
 #hud-speed { font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
 .hud-unit { font-size: 12px; color: var(--dim); margin-left: 4px; }
-#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; background: rgba(8,8,14,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 10px; }
+#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; background: rgba(8,8,14,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 5px 8px; }
 #hud-gear {
   font-size: 58px; font-weight: 800; font-style: italic; line-height: 0.85;
   color: #fff; font-variant-numeric: tabular-nums;
@@ -730,7 +739,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 #results-table .res-pos { width: 26px; text-align: right; color: var(--dim); }
 #results-table .res-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 #results-table .res-name { flex: 1; }
-#results-table .res-pts { width: 40px; text-align: right; }
+#results-table .res-pts { width: 52px; text-align: right; white-space: nowrap; }
 
 /* ---------- how to play ---------- */
 #howtoplay { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); }
@@ -1057,14 +1066,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
 .tdf-banked { color: #818cf8; border-color: rgba(129,140,248,0.4); background: rgba(129,140,248,0.08); }
 #sel-preview-map { cursor: pointer; }
 
+/* Portrait: canvas fills top portion, info panel scrolls below */
+@media (orientation: portrait) {
+  #track-detail { overflow-y: auto; }
+  #track-detail-body { overflow: visible; flex: none; }
+  #track-detail-canvas-wrap { flex: none; height: min(56vw, 320px); }
+  #track-detail-panel { display: flex; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px; }
+}
+
 @media (orientation: landscape) and (max-height: 520px) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 10px; }
-  #track-detail-canvas-wrap { flex: none; }
-  #track-detail-panel { display: flex; flex: 1; min-width: 100px; max-width: 200px; overflow-y: auto; }
+  #track-detail-canvas-wrap { flex: 1; min-width: 0; }
+  #track-detail-panel { display: flex; flex: 0 0 185px; max-width: 185px; overflow-y: auto; }
 }
 
 @media (min-width: 900px) and (min-height: 600px) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
-  #track-detail-canvas-wrap { flex: none; }
-  #track-detail-panel { display: flex; flex: 1; max-width: 280px; overflow-y: auto; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
+  #track-detail-canvas-wrap { flex: 1; min-width: 0; }
+  #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
 }
