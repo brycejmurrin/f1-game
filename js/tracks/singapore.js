@@ -14,7 +14,18 @@
     lengthKm: 4.9,
     baseHW: 6,
     street: true,
-    pal: { horizon: [0.18, 0.12, 0.06], zenith: [0.03, 0.04, 0.08], sunColor: [0.9, 0.80, 0.55], ambientSky: [0.30, 0.24, 0.16], ambientGround: [0.38, 0.28, 0.14], fogColor: [0.14, 0.10, 0.06], fogDensity: 0.0021},
+    // Vivid night palette: brighter horizon glow from the city, stronger ambient
+    // so buildings read as lit objects not silhouettes, warm fog mimicking humid
+    // haze around the floodlights.
+    pal: {
+      horizon:      [0.38, 0.24, 0.12],
+      zenith:       [0.04, 0.05, 0.12],
+      sunColor:     [0.95, 0.85, 0.60],
+      ambientSky:   [0.55, 0.44, 0.30],
+      ambientGround:[0.55, 0.42, 0.22],
+      fogColor:     [0.26, 0.18, 0.10],
+      fogDensity:   0.0018,
+    },
     segs: [
       { t: 0, l: 160 }, { t: 60, l: 70 }, { t: -70, l: 70 }, { t: 55, l: 70 }, { t: 0, l: 220 }, { t: 90, l: 70 },
       { t: 0, l: 200 }, { t: 95, l: 70 }, { t: -90, l: 80 }, { t: 80, l: 60 }, { t: -60, l: 70 }, { t: 90, l: 90 },
@@ -24,438 +35,573 @@
     // back up through the Singapore Sling complex — real change ~10 m.
     elevations: [{ s: 0.40, halfM: 360, rise: -7 }, { s: 0.65, halfM: 300, rise: 8 }],
     scenery: function (api) {
-      const { out, n, hw, px, pz, place, backdrop, groundPlane, groundYAt, ferrisWheel,
+      const { out, n, hw, px, pz, place, backdrop, groundPlane, groundYAt,
               building, billboard, anchor, along, every, onTrack, addBox, addCyl, addCone,
               addPrism, addPyramid, addFrustum, grandstand, gantry, marshalPost, palm, bush,
               fence, guardrail, tyreWall, vadd, hash } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ---- Neon palette (night street race) ----
-      const WIN_BLUE = [0.6, 0.7, 0.95];
-      const WIN_WARM = [0.95, 0.85, 0.7];
-      const WIN_CYAN = [0.45, 0.75, 0.95];
-      const NEON = [[1.0, 0.2, 0.85], [0.15, 0.85, 0.98], [1.0, 0.7, 0.15], [0.55, 0.3, 0.95]];
-      const CONC = [0.30, 0.31, 0.36];   // night concrete barrier grey
+      // ---- Night colour palette ----
+      // Windows: warm incandescent, cool fluorescent, bright cyan office
+      const WIN_WARM = [1.00, 0.88, 0.68];   // warm incandescent
+      const WIN_COOL = [0.72, 0.82, 1.00];   // cool fluorescent
+      const WIN_CYAN = [0.55, 0.90, 1.00];   // bright cyan glass
+      const WIN_GOLD = [1.00, 0.80, 0.40];   // golden hotel windows
+      // Neon signage (vivid, high-saturation)
+      const NEON = [
+        [1.00, 0.20, 0.85],   // magenta
+        [0.20, 0.92, 1.00],   // cyan
+        [1.00, 0.75, 0.10],   // amber
+        [0.60, 0.30, 1.00],   // violet
+      ];
+      // Building wall colours — dark but readable (not near-black)
+      const WALL_CBD  = [0.18, 0.20, 0.30];  // dark blue-grey CBD glass
+      const WALL_LITE = [0.22, 0.24, 0.34];  // slightly lighter near tower
+      const WALL_WARM = [0.26, 0.22, 0.18];  // warm concrete hotel
+      // Floodlight lamp colour — very bright warm white
+      const FLOOD = [1.00, 0.98, 0.88];
+      // Light pool on track — subtle warm patch below each mast
+      const POOL  = [0.68, 0.62, 0.50];
+      // Concrete barrier night grey
+      const CONC  = [0.30, 0.31, 0.36];
 
       // ===================================================================
-      // CONTINUOUS CBD SKYLINE — a packed Marina Bay nightscape that wraps the
-      // inland side of the WHOLE lap. Two layers: a far dark silhouette band so
-      // no empty sky shows between towers, and a dense near band of lit-window
-      // towers of varied height/width butted edge to edge. The "inland" side
-      // alternates so the city reads as a continuous wall around the circuit.
+      // FAR SILHOUETTE BAND — fills sky behind near towers; anchored far
+      // enough that it never overlaps parallel straights. Two passes:
+      // alternating sides to avoid a monotone wall. Colour is dark but
+      // slightly above pure black so the horizon glow still reads.
       // ===================================================================
-      // Far continuous silhouette band — dense, no gaps, fills sky behind towers.
       {
-        const N = 96;
+        const N = 80;
         for (let i = 0; i < N; i++) {
-          const k = K(i / N);
-          const side = (i % 2) ? 1 : -1;
-          const w = 30 + hash(i * 5) * 38;
-          const h = 50 + hash(i * 9) * 110;
-          backdrop(k, side, 280 + hash(i * 13) * 220, [w, h, 28], [0.06, 0.07, 0.14]);
-          if (i % 2) backdrop(k, -side, 300 + hash(i * 17) * 200, [w * 0.9, h * 0.8, 26], [0.05, 0.06, 0.12]);
-        }
-      }
-      // Near continuous lit-window tower band — varied heights, butted together
-      // so the camera never sees empty sky between towers. Cheap floor spacing
-      // keeps the dense ring within the vertex budget. Enhanced night palette.
-      {
-        const N = 70;
-        for (let i = 0; i < N; i++) {
-          const k = K(i / N);
-          const side = (i % 2) ? 1 : -1;
-          const dist = 130 + hash(i * 7) * 120;          // behind barriers
-          const w = 18 + hash(i * 3) * 22;
-          const h = 55 + hash(i * 11) * 130;             // tall, varied CBD
-          const tint = hash(i * 19);
-          const mainWin = tint < 0.15 ? [1.0, 0.82, 0.62] :
-                          tint < 0.35 ? [0.55, 0.8, 1.0] :
-                          tint < 0.65 ? [0.62, 0.75, 0.98] : WIN_BLUE;
-          building(k, side, dist - w / 2, w, h, w, {
-            wall: [0.08, 0.10, 0.16],
-            window: mainWin,
-            floor: 20,
-          });
-          // a shorter infill tower hard against it on the same side fills any gap
-          const w2 = 14 + hash(i * 23) * 14;
-          const h2 = 40 + hash(i * 29) * 70;
-          const infillWin = hash(i * 37) < 0.5 ? WIN_CYAN : WIN_BLUE;
-          building(k, side, dist + w * 0.6 + w2 * 0.6 + 6 - w2 / 2, w2, h2, w2, {
-            wall: [0.07, 0.09, 0.15], window: infillWin, floor: 20,
-          });
+          const k  = K(i / N);
+          const sd = (i % 2) ? 1 : -1;
+          const w  = 32 + hash(i * 5) * 42;
+          const h  = 60 + hash(i * 9) * 120;
+          // keep far band well back — minimum 320 m so it never clips near band
+          backdrop(k, sd,  340 + hash(i * 13) * 200, [w, h, 30], [0.08, 0.09, 0.18]);
+          // occasional taller spire on opposite side for depth layering
+          if (i % 3 === 0) {
+            backdrop(k, -sd, 360 + hash(i * 17) * 180, [w * 0.8, h * 1.1, 28], [0.07, 0.08, 0.16]);
+          }
         }
       }
 
       // ===================================================================
-      // s 0.18 R far — MARINA BAY SANDS: 3 tall towers + roof skypark slab + detail
+      // NEAR CBD TOWER BAND — dense ring of lit-window towers with clean
+      // spacing to prevent intersection. Each tower pair (main + infill)
+      // uses a fixed centre distance + calculated non-overlapping gap.
+      // Wall colour lifted to ~0.20 so towers read as dark glass, not voids.
       // ===================================================================
       {
-        const k = K(0.18);
-        const a = anchor(k, 1, 150);
-        const wall = [0.88, 0.88, 0.92], win = [0.65, 0.75, 0.98];
-        const H = 215, gap = 34;
-        const tops = [];
+        const N = 56;
+        // Step evenly around the lap; stagger distance & side for depth
+        for (let i = 0; i < N; i++) {
+          const k    = K(i / N);
+          const side = (i % 2) ? 1 : -1;
+          // Main tower: width 20-38 m, height 60-180 m
+          const wA   = 20 + hash(i * 3)  * 18;
+          const hA   = 60 + hash(i * 11) * 120;
+          // distance is edge of near band (100-160 m), centred on tower
+          const dA   = 108 + hash(i * 7) * 52;
+          const tintA = hash(i * 19);
+          const winA  = tintA < 0.20 ? WIN_GOLD :
+                        tintA < 0.45 ? WIN_COOL :
+                        tintA < 0.72 ? WIN_CYAN : WIN_WARM;
+          building(k, side, dA - wA * 0.5, wA, hA, wA * 0.9, {
+            wall:   WALL_CBD,
+            window: winA,
+            floor:  18,
+          });
+
+          // Infill tower: placed OUTSIDE the main tower with a 12 m clear gap
+          // between their closest faces, preventing intersection.
+          const wB   = 14 + hash(i * 23) * 12;
+          const hB   = 40 + hash(i * 29) * 80;
+          // inner face of infill = outer face of main + 12 m gap + infill half-width
+          const dBInner = dA + wA * 0.5 + 12;
+          const dBCentre = dBInner + wB * 0.5;
+          const winB  = hash(i * 37) < 0.5 ? WIN_CYAN : WIN_COOL;
+          building(k, side, dBCentre - wB * 0.5, wB, hB, wB * 0.9, {
+            wall:   WALL_LITE,
+            window: winB,
+            floor:  18,
+          });
+        }
+      }
+
+      // ===================================================================
+      // s 0.18 R — MARINA BAY SANDS: 3 towers + skypark slab
+      // Towers are separated by a fixed `gap` so they never intersect.
+      // Each tower has bright window bands + vertical light fins.
+      // ===================================================================
+      {
+        const k    = K(0.18);
+        const a    = anchor(k, 1, 150);
+        const wall = [0.82, 0.84, 0.90];
+        const winC = [0.62, 0.80, 1.00];    // strong blue-white façade glow
+        const H      = 200;
+        const gap    = 36;    // centre-to-centre distance between towers
+        const TOWERW = 18;   // tower width — declared here so skypark can reference it
+        const tops   = [];
+
         for (let t = -1; t <= 1; t++) {
-          // lean the slabs slightly towards the centre by offsetting along right
+          // Centres spaced `gap` apart — TOWERW < gap so faces never overlap
           const c = vadd(a.c, a.r, t * gap);
-          addBox(out, vadd(c, a.u, H / 2), [16, H, 26], wall, [a.r, a.u, a.t]);
-          // lit window face with strong cyan glow
-          addBox(out, vadd(c, a.u, H * 0.55), [16.4, H * 0.7, 26.4], win, [a.r, a.u, a.t]);
-          // vertical lit bands on each tower for night detail
-          addBox(out, vadd(c, a.u, H * 0.3), [1.6, H * 0.5, 26.8], [0.35, 0.6, 1.0], [a.r, a.u, a.t]);
-          addBox(out, vadd(c, a.u, H * 0.7), [1.6, H * 0.4, 26.8], [0.4, 0.55, 0.95], [a.r, a.u, a.t]);
+          // Main shaft
+          addBox(out, vadd(c, a.u, H * 0.5),   [TOWERW, H, 28],             wall,               [a.r, a.u, a.t]);
+          // Window glazing face — slightly proud of the wall, covers 70% of height
+          addBox(out, vadd(c, a.u, H * 0.52),  [TOWERW + 0.6, H * 0.76, 28.6],  winC,          [a.r, a.u, a.t]);
+          // Vertical lit fin, alternating blue & gold for night detail
+          const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
+          addBox(out, vadd(c, a.u, H * 0.50),  [2.0, H * 0.60, 29.2],       finCol,             [a.r, a.u, a.t]);
+          // Bright crown at top of each tower
+          addBox(out, vadd(c, a.u, H * 0.92),  [TOWERW + 1, H * 0.10, 29],  [0.92, 0.95, 1.00], [a.r, a.u, a.t]);
           tops.push(vadd(c, a.u, H));
         }
-        // skypark slab bridging the three tops — the boat-shaped roof
+
+        // Skypark slab bridging all three tops (boat hull profile)
         const mid = tops[1];
-        addBox(out, vadd(mid, a.u, 4), [gap * 2 + 18, 3, 30], [0.80, 0.81, 0.88], [a.r, a.u, a.t]);
-        // bright neon rim of skypark, the iconic glow
-        addBox(out, vadd(mid, a.u, 7), [gap * 2 + 18, 1.5, 30], NEON[1], [a.r, a.u, a.t]);
-        // additional skypark detail — central atrium lights
-        addBox(out, vadd(mid, a.u, 5), [8, 2.5, 12], [0.9, 0.75, 0.2], [a.r, a.u, a.t]);
+        // Main slab — lighter warm sand colour (the real MBS deck is sand-coloured)
+        addBox(out, vadd(mid, a.u, 3.5), [gap * 2 + TOWERW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
+        // Glowing neon rim — the iconic cyan strip seen from every angle
+        addBox(out, vadd(mid, a.u, 6.0), [gap * 2 + TOWERW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
+        // Rooftop pool and garden strip — warm amber
+        addBox(out, vadd(mid, a.u, 5.5), [gap * 2 + 4, 0.8, 10],           WIN_GOLD,             [a.r, a.u, a.t]);
       }
 
       // ===================================================================
-      // s 0.22 R mid — ARTSCIENCE MUSEUM: white lotus petals (5 shells)
+      // s 0.22 R — ARTSCIENCE MUSEUM: white lotus — 5 separated petal cones
+      // Petals spaced 15 m apart (diameter 14 m each) so they don't overlap.
       // ===================================================================
       {
-        const k = K(0.22);
-        const a = anchor(k, 1, 85);
-        const petal_h = 22, base_r = 18;
-        // 5 lotus petals (shells) radiating from center
+        const k       = K(0.22);
+        const a       = anchor(k, 1, 90);
+        const PETAL_H = 24;
+        const BASE_R  = 22;   // ring radius for petal centres — petal rad=6 m so no overlap
         for (let i = 0; i < 5; i++) {
-          const ang = (i / 5) * Math.PI * 2 + 0.3;
-          const dx = Math.cos(ang) * base_r * 0.65;
-          const dz = Math.sin(ang) * base_r * 0.65;
-          const petal_c = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
-                           a.c[1],
-                           a.c[2] + a.r[2] * dx + a.t[2] * dz];
-          addCone(out, vadd(petal_c, a.u, petal_h / 2), 7, petal_h, [0.92, 0.93, 0.96], 9, [a.r, a.u, a.t]);
-          // inner lit shell face (warm glow)
-          addCone(out, vadd(petal_c, a.u, petal_h * 0.55), 5.2, petal_h * 0.65, [1.0, 0.90, 0.75], 8, [a.r, a.u, a.t]);
+          const ang   = (i / 5) * Math.PI * 2 + 0.3;
+          const dx    = Math.cos(ang) * BASE_R * 0.65;
+          const dz    = Math.sin(ang) * BASE_R * 0.65;
+          const pc    = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
+                         a.c[1],
+                         a.c[2] + a.r[2] * dx + a.t[2] * dz];
+          // Outer white shell
+          addCone(out, vadd(pc, a.u, PETAL_H * 0.5), 6.5, PETAL_H,       [0.94, 0.95, 0.97], 9, [a.r, a.u, a.t]);
+          // Inner warm-lit face (slightly smaller, glows like up-lit marble)
+          addCone(out, vadd(pc, a.u, PETAL_H * 0.58), 4.8, PETAL_H * 0.6, [1.00, 0.92, 0.76], 8, [a.r, a.u, a.t]);
         }
-        // central stem/podium
-        addCyl(out, vadd(a.c, a.u, 4), 4.5, 8, [0.80, 0.80, 0.84], 7, [a.r, a.u, a.t]);
+        // Central podium stem
+        addCyl(out, vadd(a.c, a.u, 3), 5, 9, [0.82, 0.82, 0.86], 7, [a.r, a.u, a.t]);
+        // Rim accent glow at ground level
+        addBox(out, vadd(a.c, a.u, 1.5), [BASE_R * 2 + 4, 0.6, BASE_R * 2 + 4], [0.70, 0.65, 0.50], [a.r, a.u, a.t]);
       }
 
       // ===================================================================
-      // s 0.26 R far — GARDENS BY THE BAY SUPERTREES: tapered cyl + glow cap
+      // s 0.26 R — GARDENS BY THE BAY SUPERTREES: 11 trees, offset laterally
+      // so canopies (rad ~14-18 m) don't overlap; two staggered rows.
       // ===================================================================
       {
         const k = K(0.26);
-        for (let i = 0; i < 10; i++) {
-          const a = anchor(k, 1, 64 + i * 13);
-          const h = 28 + (i % 4) * 8;
-          const c = vadd(a.c, a.r, ((i % 6) - 3) * 7 + (i >= 6 ? 4 : 0));
-          const z = vadd(c, a.t, (i >= 6 ? 20 : 0));
-          addCyl(out, vadd(z, a.u, h / 2), 2.4, h, [0.16, 0.4, 0.22], 7, [a.r, a.u, a.t]); // trunk
-          addCone(out, vadd(z, a.u, h + 4), 13.5 + (i % 2) * 4.5, 9, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]); // glowing canopy
-          addCone(out, vadd(z, a.u, h + 10), 7, 4, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]); // upper accent glow
+        // Row A: 6 trees along track direction, spread 16 m apart laterally
+        // Row B: 5 trees inset 20 m further back, staggered between row A
+        for (let i = 0; i < 11; i++) {
+          const rowB  = i >= 6;
+          const idx   = rowB ? i - 6 : i;
+          const rowDist = rowB ? 90 : 70;
+          // Lateral stagger: each tree is 17 m apart along the row
+          const latOff = (idx - (rowB ? 2 : 2.5)) * 17;
+          const depOff = rowB ? (idx % 2) * 10 : 0;
+          const a    = anchor(k, 1, rowDist + depOff);
+          const c    = vadd(a.c, a.r, latOff);
+          const h    = 28 + (idx % 4) * 9;
+          const capR = 13 + (idx % 2) * 4;
+          // Trunk (dark green)
+          addCyl(out, vadd(c, a.u, h * 0.5), 2.2, h, [0.15, 0.36, 0.20], 7, [a.r, a.u, a.t]);
+          // Main canopy cap — vivid NEON colour
+          addCone(out, vadd(c, a.u, h + 3), capR, 8, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]);
+          // Upper secondary glow
+          addCone(out, vadd(c, a.u, h + 9), capR * 0.55, 5, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]);
         }
       }
 
       // ===================================================================
-      // s 0.34 L mid — mid-rise hotels + bright billboards
+      // s 0.34 L — mid-rise hotels with vivid neon billboards
+      // Buildings spaced 28 m apart (w=24 → clear gap 4 m) so no overlap.
       // ===================================================================
       {
         const k = K(0.34);
-        for (let i = 0; i < 5; i++)
-          building(k, -1, 44 + i * 26, 24, 40 + i * 12, 24, { wall: [0.12, 0.14, 0.2], window: i % 2 ? WIN_WARM : WIN_BLUE, floor: 12 });
-        billboard(k, -1, 12, 20, 12, NEON[0]);
-        billboard(K(0.355), -1, 11, 18, 11, NEON[1]);
-        billboard(K(0.37), -1, 10, 16, 10, NEON[2]);
-        billboard(K(0.38), -1, 10, 17, 11, NEON[3]);
-      }
-
-      // s 0.45 R far — distant skyline band over the bay (denser, lit-window reflections)
-      for (let i = 0; i < 6; i++) {
-        backdrop(K(0.45), 1, 190 + i * 28, [38, 50 + hash(i * 13) * 80, 30], [0.07, 0.09, 0.16]);
-        if (i % 2) building(K(0.45), 1, 141 + i * 28, 20, 50 + hash(i * 7) * 60, 20, { wall: [0.08, 0.1, 0.17], window: WIN_CYAN, floor: 22 });
-      }
-      // bright reflection strip on the black bay water (s 0.45)
-      for (let i = 0; i < 12; i++) {
-        const a = anchor(K(0.45), 1, 50 + i * 14);
-        addBox(out, vadd(a.c, a.u, 0.6), [10, 0.6, 5], NEON[i % 4], [a.r, a.u, a.t]);
+        // 5 buildings: inner face starts at 42 m + (i*28) to give clear spacing
+        for (let i = 0; i < 5; i++) {
+          const gap = 42 + i * 28;
+          building(k, -1, gap, 24, 44 + i * 10, 24, {
+            wall:   WALL_WARM,
+            window: i % 2 ? WIN_WARM : WIN_COOL,
+            floor:  14,
+          });
+        }
+        // Neon billboards at the kerb
+        billboard(k,         -1, 12, 20, 12, NEON[0]);
+        billboard(K(0.355),  -1, 11, 18, 11, NEON[1]);
+        billboard(K(0.37),   -1, 10, 16, 10, NEON[2]);
+        billboard(K(0.38),   -1, 10, 17, 11, NEON[3]);
       }
 
       // ===================================================================
-      // s 0.55 L near — FULLERTON HOTEL: wide low warm-uplit classical block
+      // s 0.45 R — distant skyline across the bay (waterfront towers)
+      // Staggered distances to avoid any mutual intersection.
+      // ===================================================================
+      for (let i = 0; i < 6; i++) {
+        const dist = 200 + i * 36;   // stepped distances — no overlap possible
+        backdrop(K(0.45), 1, dist, [40, 55 + hash(i * 13) * 80, 32], [0.09, 0.10, 0.20]);
+        if (i % 2 === 0) {
+          building(K(0.45), 1, dist - 56, 22, 55 + hash(i * 7) * 65, 22, {
+            wall:   WALL_CBD,
+            window: WIN_CYAN,
+            floor:  20,
+          });
+        }
+      }
+
+      // Bay water reflection streaks — flat bright strips just above water level.
+      // Placed at dist > 38 m so they sit beyond the barriers.
+      for (const s of [0.20, 0.28, 0.38, 0.46, 0.80, 0.88]) {
+        const a = anchor(K(s), 1, 44);
+        for (let i = 0; i < 10; i++) {
+          const c   = vadd(vadd(a.c, a.t, (i - 4) * 11), a.u, 0.5);
+          const hue = (i + Math.round(s * 17)) % 4;
+          // brighter reflection: 0.45-0.65 intensity range (was 0.35)
+          const inten = 0.45 + Math.sin(i * 0.8) * 0.20;
+          const col   = [NEON[hue][0] * inten, NEON[hue][1] * inten, NEON[hue][2] * inten];
+          addBox(out, c, [8, 0.4, 3], col, [a.r, a.u, a.t]);
+        }
+      }
+
+      // ===================================================================
+      // s 0.55 L — FULLERTON HOTEL: wide warm-uplit neoclassical block
       // ===================================================================
       {
         const k = K(0.55);
-        place(k, -1, 38, [48, 22, 30], [1.0, 0.85, 0.55]);
-        place(k, -1, 39, [50, 6, 32], [1.0, 0.78, 0.45]); // warm uplit base band
+        // Main body (cream sandstone colour, brighter than before)
+        place(k, -1, 38, [48, 24, 32], [0.88, 0.78, 0.58]);
+        // Warm uplighting base band
+        place(k, -1, 39, [50, 5, 34],  [1.00, 0.82, 0.50]);
+        // Upper cornice highlight
+        place(k, -1, 38, [48,  2, 32], [1.00, 0.90, 0.65]);
       }
 
       // ===================================================================
-      // s 0.62 both near — ANDERSON BRIDGE: pale arched truss boxes
+      // s 0.62 — ANDERSON BRIDGE: arched truss over the Singapore River
+      // (two separate bridge sides, ribs spaced 10 m apart — no overlap)
       // ===================================================================
       {
         const k = K(0.62);
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 4);
+          for (let j = 0; j < 5; j++) {
+            const c = vadd(a.c, a.t, (j - 2) * 10);  // 10 m spacing — ribs are 2 m wide
+            addPrism(out, vadd(c, a.u, 7),  [2.2, 4.5, 9], [0.88, 0.88, 0.92], [a.r, a.u, a.t]);
+            addCyl(out,   vadd(c, a.u, 3.5), 0.55, 7, [0.80, 0.80, 0.85], 5, [a.r, a.u, a.t]);
+          }
+          // Decorative bridge-lamp posts on the railing
           for (let j = 0; j < 3; j++) {
-            const c = vadd(a.c, a.t, (j - 1) * 12);
-            addCyl(out, vadd(c, a.u, 7), 1.2, 10, [0.88, 0.88, 0.9], 6, [a.r, a.u, a.t]);
+            const c = vadd(a.c, a.t, (j - 1) * 18);
+            addCyl(out, vadd(c, a.u, 3), 0.12, 4.5, [0.72, 0.72, 0.75], 5, [a.r, a.u, a.t]);
+            addBox(out, vadd(c, a.u, 4.6), [0.6, 0.6, 0.6], WIN_WARM, [a.r, a.u, a.t]);
           }
         }
       }
 
       // ===================================================================
-      // s 0.66 L mid — ESPLANADE: two spiky low-poly dome boxes
+      // s 0.66 L — ESPLANADE "Durian": two spiky domed shells
+      // Spaced 28 m apart (dome radius ~18 m → 10 m clear gap).
       // ===================================================================
       {
         const k = K(0.66);
+        const DOME_SEP = 28;   // centre-to-centre; each dome rad ~14 m so no overlap
         for (let i = 0; i < 2; i++) {
-          const a = anchor(k, -1, 40 + i * 24);
-          addCone(out, vadd(a.c, a.u, 10), 16, 14, [0.55, 0.5, 0.42], 7, [a.r, a.u, a.t]);
-          // spiky cap
-          addCone(out, vadd(a.c, a.u, 20), 8, 8, NEON[2], 6, [a.r, a.u, a.t]);
+          // The offset along track direction ensures clear spacing
+          const a = anchor(k, -1, 44 + i * DOME_SEP);
+          // Grey aluminium shell
+          addCone(out, vadd(a.c, a.u, 10), 16, 15, [0.52, 0.48, 0.40], 7, [a.r, a.u, a.t]);
+          // Glowing spiky crown (amber neon)
+          addCone(out, vadd(a.c, a.u, 21), 8.5, 9,  NEON[2], 6, [a.r, a.u, a.t]);
         }
-      }
-      // Esplanade ribs — 8 thin vertical prisms around the base perimeter
-      {
-        const k = K(0.66);
+        // Esplanade ribs — 8 thin vertical fins around each dome
         for (let i = 0; i < 2; i++) {
-          const a = anchor(k, -1, 40 + i * 24);
+          const a = anchor(k, -1, 44 + i * DOME_SEP);
           for (let r = 0; r < 8; r++) {
             const ang = (r / 8) * Math.PI * 2;
-            const dx = Math.cos(ang) * 14;
-            const dz = Math.sin(ang) * 14;
-            const rc = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
-                        a.c[1],
-                        a.c[2] + a.r[2] * dx + a.t[2] * dz];
-            addBox(out, vadd(rc, a.u, 7), [0.8, 14, 0.8], [0.55, 0.5, 0.42], [a.r, a.u, a.t]);
+            const dx  = Math.cos(ang) * 14;
+            const dz  = Math.sin(ang) * 14;
+            const rc  = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
+                         a.c[1],
+                         a.c[2] + a.r[2] * dx + a.t[2] * dz];
+            addBox(out, vadd(rc, a.u, 7.5), [0.9, 15, 0.9], [0.56, 0.52, 0.44], [a.r, a.u, a.t]);
           }
         }
+        // Waterfront promenade terrace in front of Esplanade
+        const ta = anchor(k, -1, 20);
+        addBox(out, vadd(ta.c, ta.u, 0.3), [40, 0.5, 55], [0.30, 0.28, 0.24], [ta.r, ta.u, ta.t]);
       }
 
-      // s 0.70 L mid — The Padang: dark flat open field box
-      place(K(0.70), -1, 46, [70, 1.5, 70], [0.04, 0.08, 0.05]);
+      // s 0.70 L — The Padang: dark open field (lawn)
+      place(K(0.70), -1, 46, [70, 1.5, 70], [0.06, 0.10, 0.06]);
 
       // ===================================================================
-      // s 0.80 R mid — HELIX BRIDGE: white spiraling lattice tube arc + detail
+      // s 0.80 R — HELIX BRIDGE: glowing double-helix lattice arc
+      // 16 arc segments; each node uses track basis so no floating geometry.
       // ===================================================================
       {
         const k = K(0.80);
-        const a = anchor(k, 1, 30);
-        // main arch spine (16 segments for smoother curve)
+        const a = anchor(k, 1, 32);
         for (let j = 0; j < 16; j++) {
-          const t = j / 15;
-          const ang = t * Math.PI;
-          const up = Math.sin(ang) * 12;
-          const c = vadd(vadd(a.c, a.t, (t - 0.5) * 62), a.u, up + 2);
-          // main tube
-          addCyl(out, c, 2.2, 4.2, [0.90, 0.92, 0.96], 6, [a.r, a.u, a.t]);
-          // lattice detail on tube sides
-          addBox(out, vadd(c, a.r, Math.sin(t * 11) * 5.5), [0.8, 1.2, 1.4], [0.88, 0.90, 0.94], [a.r, a.u, a.t]);
-          // crossbar structure
-          if (j % 2 === 0) {
-            addBox(out, vadd(c, a.t, Math.cos(t * 7) * 3), [0.6, 1.0, 4.8], [0.85, 0.87, 0.92], [a.r, a.u, a.t]);
-          }
-          // night accent lights on the structure
+          const t2  = j / 15;
+          const ang = t2 * Math.PI;
+          const up  = Math.sin(ang) * 13;
+          const c   = vadd(vadd(a.c, a.t, (t2 - 0.5) * 66), a.u, up + 2);
+          // Main structural tube
+          addCyl(out, c, 2.4, 4.4, [0.88, 0.90, 0.95], 6, [a.r, a.u, a.t]);
+          // Side lattice bar
+          addBox(out, vadd(c, a.r, Math.sin(t2 * 11) * 5.5), [0.9, 1.4, 1.6], [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
+          // Helix crossbar
+          if (j % 2 === 0)
+            addBox(out, vadd(c, a.t, Math.cos(t2 * 7) * 3.5), [0.7, 1.1, 5.2], [0.83, 0.85, 0.90], [a.r, a.u, a.t]);
+          // Vivid night accent lights on the helix nodes (cyan)
           if (j % 3 === 0) {
-            addBox(out, vadd(vadd(c, a.r, 3), a.u, 1), [0.4, 0.4, 0.4], NEON[1], [a.r, a.u, a.t]);
-            addBox(out, vadd(vadd(c, a.r, -3), a.u, 1), [0.4, 0.4, 0.4], NEON[1], [a.r, a.u, a.t]);
+            addBox(out, vadd(vadd(c, a.r,  3.2), a.u, 0.8), [0.5, 0.5, 0.5], NEON[1], [a.r, a.u, a.t]);
+            addBox(out, vadd(vadd(c, a.r, -3.2), a.u, 0.8), [0.5, 0.5, 0.5], NEON[1], [a.r, a.u, a.t]);
           }
         }
       }
 
       // ===================================================================
-      // s 0.86 R near — SINGAPORE FLYER (ferris wheel), cyan-lit rim + spokes
+      // s 0.86 R — SINGAPORE FLYER: ferris wheel (hub + spokes + lit rim)
       // ===================================================================
       {
         const k = K(0.86);
-        const a = anchor(k, 1, 55);
-        const r = 42, h = 135;
-        // central hub + main axle
-        addCyl(out, vadd(a.c, a.u, h), 2.2, 2, [0.35, 0.35, 0.38], 8, [a.r, a.u, a.t]);
-        // 8 major spokes radiating from hub
+        const a = anchor(k, 1, 58);
+        const WHEEL_R = 44, WHEEL_H = 138;
+
+        // Central support hub
+        addCyl(out, vadd(a.c, a.u, WHEEL_H), 2.4, 2.5, [0.35, 0.35, 0.38], 8, [a.r, a.u, a.t]);
+
+        // 8 spokes from rim to hub
         for (let i = 0; i < 8; i++) {
-          const ang = (i / 8) * Math.PI * 2;
-          const dx = Math.cos(ang) * r;
-          const dz = Math.sin(ang) * r;
-          const rim_c = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
-                         a.c[1] + a.u[1] * h,
+          const ang   = (i / 8) * Math.PI * 2;
+          const dx    = Math.cos(ang) * WHEEL_R;
+          const dz    = Math.sin(ang) * WHEEL_R;
+          const rimPt = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
+                         a.c[1] + a.u[1] * WHEEL_H,
                          a.c[2] + a.r[2] * dx + a.t[2] * dz];
-          addCyl(out, vadd(rim_c, a.u, -h / 2), 0.4, h, [0.55, 0.55, 0.6], 5, [a.r, a.u, a.t]); // spoke
-          // cabin pods along rim
-          addBox(out, rim_c, [3.2, 3.8, 3.2], [0.25, 0.6, 0.95], [a.r, a.u, a.t]);
+          addCyl(out, vadd(rimPt, a.u, -WHEEL_H * 0.5), 0.45, WHEEL_H, [0.55, 0.55, 0.60], 5, [a.r, a.u, a.t]);
+          // Glass capsule / observation cabin (bright cyan)
+          addBox(out, rimPt, [3.4, 4.0, 3.4], WIN_CYAN, [a.r, a.u, a.t]);
         }
-        // rim cylinder (the famous lit necklace of the Flyer)
-        const seg = 32;
-        for (let i = 0; i < seg; i++) {
-          const a0 = (i / seg) * Math.PI * 2, a1 = ((i + 1) / seg) * Math.PI * 2;
-          const p0 = [a.c[0] + a.r[0] * Math.cos(a0) * r + a.t[0] * Math.sin(a0) * r,
-                      a.c[1] + a.u[1] * h,
-                      a.c[2] + a.r[2] * Math.cos(a0) * r + a.t[2] * Math.sin(a0) * r];
-          const p1 = [a.c[0] + a.r[0] * Math.cos(a1) * r + a.t[0] * Math.sin(a1) * r,
-                      a.c[1] + a.u[1] * h,
-                      a.c[2] + a.r[2] * Math.cos(a1) * r + a.t[2] * Math.sin(a1) * r];
-          addBox(out, [(p0[0] + p1[0]) / 2, a.c[1] + a.u[1] * h, (p0[2] + p1[2]) / 2], [1, 0.8, (r * 2 * Math.PI / seg)], NEON[1], [a.r, a.u, a.t]);
+
+        // Lit necklace rim — 36 bright segments (cyan/white alternating)
+        const SEG = 36;
+        for (let i = 0; i < SEG; i++) {
+          const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+          const p0 = [a.c[0] + a.r[0] * Math.cos(a0) * WHEEL_R + a.t[0] * Math.sin(a0) * WHEEL_R,
+                      a.c[1] + a.u[1] * WHEEL_H,
+                      a.c[2] + a.r[2] * Math.cos(a0) * WHEEL_R + a.t[2] * Math.sin(a0) * WHEEL_R];
+          const p1 = [a.c[0] + a.r[0] * Math.cos(a1) * WHEEL_R + a.t[0] * Math.sin(a1) * WHEEL_R,
+                      a.c[1] + a.u[1] * WHEEL_H,
+                      a.c[2] + a.r[2] * Math.cos(a1) * WHEEL_R + a.t[2] * Math.sin(a1) * WHEEL_R];
+          const segCol = (i % 3 === 0) ? NEON[0] : NEON[1];
+          addBox(out,
+            [(p0[0] + p1[0]) * 0.5, a.c[1] + a.u[1] * WHEEL_H, (p0[2] + p1[2]) * 0.5],
+            [1.1, 0.9, (WHEEL_R * 2 * Math.PI / SEG)],
+            segCol, [a.r, a.u, a.t]
+          );
+        }
+
+        // Support leg structure (A-frame)
+        for (const side2 of [-1, 1]) {
+          const legC = vadd(a.c, a.r, side2 * 30);
+          addCyl(out, vadd(legC, a.u, WHEEL_H * 0.45), 1.2, WHEEL_H * 0.9, [0.38, 0.38, 0.42], 6, [a.r, a.u, a.t]);
         }
       }
 
       // ===================================================================
-      // s 0.92 both — illuminated billboards funnel back to start
+      // s 0.92 both — neon billboard funnel back to start line
       // ===================================================================
       {
-        billboard(K(0.92), 1, 11, 18, 11, NEON[3]);
-        billboard(K(0.92), -1, 11, 18, 11, NEON[2]);
-        billboard(K(0.94), 1, 10, 16, 10, NEON[1]);
-        billboard(K(0.94), -1, 10, 16, 10, NEON[0]);
-        billboard(K(0.96), 1, 10, 16, 10, NEON[0]);
-        billboard(K(0.96), -1, 10, 17, 11, NEON[3]);
-        billboard(K(0.98), 1, 10, 15, 10, NEON[2]);
-        // pit straight low buildings L / stand R supported by CBD already above
-        building(K(0.0), -1, 15, 30, 16, 20, { wall: [0.15, 0.16, 0.2], window: WIN_WARM });
-        building(K(0.02), -1, 21, 26, 22, 20, { wall: [0.12, 0.14, 0.2], window: WIN_BLUE, floor: 12 });
+        billboard(K(0.92),  1,  11, 18, 11, NEON[3]);
+        billboard(K(0.92), -1,  11, 18, 11, NEON[2]);
+        billboard(K(0.94),  1,  10, 16, 10, NEON[1]);
+        billboard(K(0.94), -1,  10, 16, 10, NEON[0]);
+        billboard(K(0.96),  1,  10, 16, 10, NEON[0]);
+        billboard(K(0.96), -1,  10, 17, 11, NEON[3]);
+        billboard(K(0.98),  1,  10, 15, 10, NEON[2]);
+        // Pit straight low buildings L / stand R
+        building(K(0.00), -1, 15, 30, 18, 22, { wall: WALL_WARM, window: WIN_WARM });
+        building(K(0.02), -1, 21, 26, 24, 22, { wall: WALL_CBD,  window: WIN_COOL, floor: 14 });
       }
 
-      // ===================================================================
-      // Illuminated billboards punctuating straights, with lit waterfront
-      // window-band detail to thicken the nightscape.
-      // ===================================================================
-      for (const [s, side, hue] of [[0.04, 1, 1], [0.14, -1, 0], [0.50, -1, 2], [0.58, 1, 3], [0.72, 1, 1], [0.84, -1, 0]]) {
+      // Scattered billboard punctuation along the lap
+      for (const [s, side, hue] of [
+        [0.04,  1, 1], [0.14, -1, 0], [0.50, -1, 2],
+        [0.58,  1, 3], [0.72,  1, 1], [0.84, -1, 0],
+      ]) {
         billboard(K(s), side, 10, 16, 10, NEON[hue]);
       }
-      // low warm waterfront promenade window strips (s 0.18-0.45, 0.80-0.86)
-      for (const s of [0.2, 0.3, 0.42, 0.82, 0.88]) {
-        const a = anchor(K(s), 1, 18);
-        addBox(out, vadd(a.c, a.u, 2.4), [3, 1.4, 26], WIN_WARM, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 0.6), [3.2, 1.0, 26], NEON[1], [a.r, a.u, a.t]);
+
+      // ===================================================================
+      // WATERFRONT PROMENADE GLOW STRIPS — warm illuminated window bands
+      // on the harbourfront walk (s 0.18–0.45 and 0.80–0.88).
+      // Pushed out to 24 m so they sit beyond the kerb/barrier.
+      // ===================================================================
+      for (const s of [0.20, 0.30, 0.42, 0.82, 0.88]) {
+        const a = anchor(K(s), 1, 24);
+        addBox(out, vadd(a.c, a.u, 3.0), [3.5, 1.8, 28], WIN_WARM, [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 0.8), [3.8, 1.2, 28], NEON[1],  [a.r, a.u, a.t]);
       }
 
       // ===================================================================
-      // BAY WATER — dark mirror groundPlanes along the open harbour stretches,
-      // with bright coloured reflection streaks of the skyline lights + detail.
+      // BAY WATER — dark mirror ground planes along open harbour stretches.
       // ===================================================================
-      const BAY = [0.08, 0.10, 0.16];  // dark water with slight reflectivity for night
-      for (const s of [0.2, 0.3, 0.4, 0.45, 0.82, 0.86]) {
-        groundPlane(K(s), 1, 36, [70, 60], BAY);
+      const BAY = [0.06, 0.08, 0.14];
+      for (const s of [0.20, 0.30, 0.40, 0.45, 0.82, 0.86]) {
+        groundPlane(K(s), 1, 38, [70, 60], BAY);
       }
-      // dense reflection strips — the famous Marina Bay light trails
-      for (const s of [0.20, 0.28, 0.38, 0.46, 0.80, 0.88]) {
-        const a = anchor(K(s), 1, 42);
-        for (let i = 0; i < 8; i++) {
-          const c = vadd(vadd(a.c, a.t, (i - 2) * 12), a.u, 0.5);
-          const hue = (i + Math.round(s * 17)) % 4;
-          const intensity = 0.35 + Math.sin(i * 0.8) * 0.15;
-          const col = [NEON[hue][0] * intensity, NEON[hue][1] * intensity, NEON[hue][2] * intensity];
-          addBox(out, c, [7, 0.4, 3], col, [a.r, a.u, a.t]);
+
+      // ===================================================================
+      // FLOODLIGHT MASTS — key night feature. Dense, bright, warm-white.
+      // Every 75 m; all masts are kept, skip probability reduced to 0.15.
+      // Each mast has: pole, head bar, 5 bright lamp boxes, halo glow ring,
+      // and a LIGHT POOL patch on the ground below.
+      // ===================================================================
+      every(75, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 3 + side) < 0.15) continue;   // keep ~85% of masts
+          const a = anchor(k, side, 11 + hash(k + side) * 5);
+          const H = 20 + hash(k * 7 + side) * 8;
+
+          // Pole (dark grey)
+          addCyl(out, vadd(a.c, a.u, H * 0.5), 0.52, H, [0.12, 0.12, 0.15], 6, [a.r, a.u, a.t]);
+          // Head cross-bar
+          const head = vadd(a.c, a.u, H);
+          addBox(out, head, [7.0, 0.90, 2.0], [0.14, 0.14, 0.18], [a.r, a.u, a.t]);
+
+          // 5 very bright flood lamps along the bar
+          for (let j = -2; j <= 2; j++) {
+            const lampC = vadd(head, a.r, j * 1.35);
+            // Lamp housing (extremely bright warm white)
+            addBox(out, lampC, [1.5, 1.5, 0.9], FLOOD, [a.r, a.u, a.t]);
+            // Wide halo glow ring around each lamp
+            addBox(out, vadd(lampC, a.u, 0.8), [2.2, 0.25, 1.4], [0.95, 0.90, 0.75], [a.r, a.u, a.t]);
+          }
+
+          // Base mounting bracket
+          addBox(out, vadd(a.c, a.u, 1.8), [4.0, 1.4, 2.2], [0.18, 0.18, 0.22], [a.r, a.u, a.t]);
+
+          // Light pool — a warm glowing slab on the ground just inboard of the mast,
+          // simulating the cone of illumination hitting the track surface.
+          // Placed 4 m inboard (towards the track centreline) and kept thin.
+          const poolOff = side * -4;  // towards track
+          const poolC   = vadd(vadd(a.c, a.r, poolOff), a.u, 0.1);
+          addBox(out, poolC, [14, 0.18, 18], POOL, [a.r, a.u, a.t]);
         }
+      });
+
+      // ===================================================================
+      // LAMP POSTS along the promenade and grandstand straight — smaller
+      // street-scale lights between the floodlight masts.
+      // ===================================================================
+      every(22, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 11 + side) < 0.40) continue;
+          const a = anchor(k, side, 9 + hash(k * 2) * 3);
+          addCyl(out, vadd(a.c, a.u, 4),    0.12, 8,  [0.25, 0.25, 0.28], 5, [a.r, a.u, a.t]);
+          addBox(out, vadd(a.c, a.u, 8.5),  [0.7, 0.7, 0.7], WIN_WARM,         [a.r, a.u, a.t]);
+          // Tiny glow halo around the lamp head
+          addBox(out, vadd(a.c, a.u, 8.8),  [1.2, 0.2, 1.2], [0.90, 0.82, 0.60], [a.r, a.u, a.t]);
+        }
+      });
+
+      // ===================================================================
+      // MAIN STRAIGHT — pit building (L) + Float@Marina Bay grandstands (R),
+      // start gantry, illuminated timing tower, marshal posts.
+      // ===================================================================
+      // Pit garage block — 5 linked garage bays
+      for (let i = 0; i < 5; i++) {
+        const k = K(0.965 + i * 0.012);
+        building(k, -1, 9, 16, 10, 14, { wall: WALL_WARM, window: WIN_WARM, floor: 4 });
+      }
+      // Timing tower — bright landmark visible across the circuit
+      {
+        const a = anchor(K(0.99), -1, 28);
+        // Main tower shaft
+        addBox(out, vadd(a.c, a.u, 18), [11, 36, 11], [0.14, 0.15, 0.20], [a.r, a.u, a.t]);
+        // Bright cyan-lit glazing on the tower face
+        addBox(out, vadd(a.c, a.u, 18), [11.6, 28, 3.0], WIN_CYAN, [a.r, a.u, a.t]);
+        // Vivid blue vertical accent fin
+        addBox(out, vadd(a.c, a.u, 20), [1.4, 24, 11.8], [0.35, 0.65, 1.00], [a.r, a.u, a.t]);
+        // Crown: glowing amber top
+        addBox(out, vadd(a.c, a.u, 35), [12, 4, 12], WIN_GOLD, [a.r, a.u, a.t]);
+      }
+
+      // Grandstands on the right of the main straight
+      grandstand(0.99,  1, 8,  62, [0.20, 0.22, 0.28], [0.48, 0.34, 0.44]);
+      grandstand(0.02,  1, 8,  62, [0.20, 0.22, 0.28], [0.44, 0.30, 0.40]);
+      grandstand(0.05,  1, 8,  50, [0.22, 0.24, 0.30], [0.50, 0.36, 0.46]);
+      grandstand(0.93,  1, 8,  52, [0.20, 0.22, 0.28], [0.46, 0.32, 0.42]);
+      grandstand(0.70, -1, 30, 48, [0.20, 0.22, 0.28], [0.42, 0.30, 0.40]);
+
+      // Start/finish gantry + halfway scoring gantry
+      gantry(0.0, 7.5, [0.12, 0.12, 0.16]);
+      gantry(0.5, 7.0, [0.12, 0.12, 0.16]);
+      // Lit start-light cluster on the gantry
+      {
+        const a = anchor(K(0.0), 0, 0);
+        addBox(out, vadd(a.c, a.u, 7.6), [4.5, 1.4, 0.9], [0.95, 0.05, 0.05], null);
       }
 
       // ===================================================================
-      // CATCH FENCES along the concrete barriers (the signature street-circuit
-      // look) on both sides, broken into spans so the lap reads as fully fenced.
-      // Posts + pale mesh sit just behind the auto barrier (gap ~1.4 m).
+      // MARSHAL POSTS at corner approaches
+      // ===================================================================
+      for (const s of [0.07, 0.16, 0.28, 0.36, 0.47, 0.60, 0.68, 0.76, 0.84, 0.94]) {
+        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 7);
+      }
+
+      // ===================================================================
+      // CATCH FENCES — street-circuit look, both sides, broken into spans.
       // ===================================================================
       for (const [s0, s1, side] of [
         [0.00, 0.18, -1], [0.20, 0.40, -1], [0.42, 0.62, -1], [0.64, 0.85, -1], [0.87, 0.99, -1],
-        [0.00, 0.16, 1], [0.30, 0.44, 1], [0.55, 0.66, 1], [0.92, 0.99, 1],
+        [0.00, 0.16,  1], [0.30, 0.44,  1], [0.55, 0.66,  1], [0.92, 0.99,  1],
       ]) {
         fence(s0, s1, side, 1.4, 3.4, [0.66, 0.70, 0.78]);
       }
 
       // ===================================================================
-      // FLOODLIGHT MASTS — dense banks of tall lighting rigs ringing the lap
-      // (the defining Marina Bay night look). Hero masts with multi-lamp heads,
-      // staggered every ~110 m for dense, dramatic stadium-style lighting.
-      // ===================================================================
-      every(90, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 3 + side) < 0.32) return;   // skip some for variation
-          const a = anchor(k, side, 12 + hash(k + side) * 5);
-          const H = 18 + hash(k * 7 + side) * 7;
-          addCyl(out, vadd(a.c, a.u, H / 2), 0.48, H, [0.10, 0.10, 0.13], 6, [a.r, a.u, a.t]); // mast
-          // angled head bar with array of powerful lamps
-          const head = vadd(a.c, a.u, H);
-          addBox(out, head, [6.2, 0.85, 1.8], [0.12, 0.12, 0.15], [a.r, a.u, a.t]);
-          // 5 bright floodlamps along the bar
-          for (let j = -2; j <= 2; j++) {
-            const lampC = vadd(head, a.r, j * 1.2);
-            addBox(out, lampC, [1.35, 1.35, 0.8], [1.0, 0.97, 0.80], [a.r, a.u, a.t]);
-            // extra glow ring around each lamp for night effect
-            if (j % 2 === 0) {
-              addBox(out, vadd(lampC, a.u, 0.7), [1.8, 0.2, 1.1], [0.95, 0.92, 0.75], [a.r, a.u, a.t]);
-            }
-          }
-          // base support strut
-          addBox(out, vadd(a.c, a.u, 1.5), [3.6, 1.2, 2], [0.15, 0.15, 0.18], [a.r, a.u, a.t]);
-        }
-      });
-
-      // ===================================================================
-      // MAIN STRAIGHT — pit building (L) + Float@Marina Bay grandstands with
-      // crowds (R), start gantry, marshal posts. Night detail.
-      // ===================================================================
-      // Pit building — long low garage block on the left of the start straight.
-      {
-        for (let i = 0; i < 5; i++) {
-          const k = K(0.965 + i * 0.012);
-          building(k, -1, 9, 16, 9, 12, { wall: [0.16, 0.17, 0.22], window: WIN_WARM, floor: 4 });
-        }
-        // pit wall (low) and a tall lit timing tower — the control center
-        const a = anchor(K(0.99), -1, 26);
-        addBox(out, vadd(a.c, a.u, 16), [10, 32, 10], [0.13, 0.14, 0.18], [a.r, a.u, a.t]);
-        // bright cyan-lit tower cap visible from all viewing angles
-        addBox(out, vadd(a.c, a.u, 22), [10.4, 12, 10.4], WIN_CYAN, [a.r, a.u, a.t]);
-        // vertical accent lights on tower
-        addBox(out, vadd(a.c, a.u, 18), [1.2, 8, 10.8], [0.35, 0.65, 1.0], [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 26), [1.2, 6, 10.8], [0.4, 0.6, 0.95], [a.r, a.u, a.t]);
-      }
-      // Float@Marina Bay grandstands on the right of the main straight — the
-      // famous floating platform stands packed with crowd.
-      grandstand(0.99, 1, 8, 60, [0.20, 0.22, 0.28], [0.45, 0.32, 0.42]);
-      grandstand(0.02, 1, 8, 60, [0.20, 0.22, 0.28], [0.42, 0.30, 0.40]);
-      grandstand(0.05, 1, 8, 48, [0.22, 0.24, 0.30], [0.48, 0.34, 0.44]);
-      // a couple more stands at the lap's end section (under-grandstand straight)
-      grandstand(0.93, 1, 8, 50, [0.20, 0.22, 0.28], [0.44, 0.31, 0.41]);
-      grandstand(0.70, -1, 30, 46, [0.20, 0.22, 0.28], [0.40, 0.30, 0.40]); // Padang stand
-      // Start/finish gantry over the line + a second scoring gantry.
-      gantry(0.0, 7.5, [0.12, 0.12, 0.16]);
-      gantry(0.5, 7.0, [0.12, 0.12, 0.16]);
-      // lit start-light box on the gantry
-      {
-        const a = anchor(K(0.0), 0, 0);
-        addBox(out, vadd(a.c, a.u, 7.6), [4, 1.2, 0.8], [0.9, 0.05, 0.05], null);
-      }
-
-      // ===================================================================
-      // MARSHAL POSTS — orange-roofed bunkers at corner approaches.
-      // ===================================================================
-      for (const s of [0.07, 0.16, 0.28, 0.36, 0.47, 0.6, 0.68, 0.76, 0.84, 0.94]) {
-        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 7);
-      }
-
-      // ===================================================================
-      // PALMS & LANDSCAPING — tropical roadside palms along the promenade and
-      // boulevard sections; low planter boxes for the harbourfront.
-      // ===================================================================
-      every(46, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 5 + side) < 0.5) return;
-          palm(k, side, 9 + hash(k + side) * 6, 8 + hash(k * 2 + side) * 5, [0.18, 0.40, 0.20]);
-        }
-      });
-      every(60, (k) => {
-        if (hash(k * 9) < 0.6) return;
-        bush(k, hash(k) < 0.5 ? -1 : 1, 8 + hash(k) * 5, [0.14, 0.34, 0.18]);
-      });
-
-      // ===================================================================
-      // TYRE WALLS at the tight 90-degree apex/exit kerbs (street-circuit
-      // staple) — bright conveyor caps for visibility.
+      // TYRE WALLS at tight 90-degree apex/exit kerbs
       // ===================================================================
       for (const [s0, s1, side] of [
-        [0.085, 0.10, 1], [0.235, 0.25, -1], [0.475, 0.49, -1], [0.66, 0.675, 1], [0.82, 0.835, -1],
+        [0.085, 0.10, 1], [0.235, 0.25, -1], [0.475, 0.49, -1],
+        [0.66, 0.675,  1], [0.82, 0.835,  -1],
       ]) {
         tyreWall(s0, s1, side, 1.6, NEON[K(s0) % 4]);
       }
 
       // ===================================================================
-      // Additional neon signage — corner billboards on opposite sides
+      // TROPICAL PALMS & LANDSCAPING
+      // ===================================================================
+      every(48, (k) => {
+        for (const side of [-1, 1]) {
+          if (hash(k * 5 + side) < 0.50) continue;
+          palm(k, side, 9 + hash(k + side) * 6, 9 + hash(k * 2 + side) * 5, [0.18, 0.42, 0.20]);
+        }
+      });
+      every(62, (k) => {
+        if (hash(k * 9) < 0.60) return;
+        bush(k, hash(k) < 0.5 ? -1 : 1, 8 + hash(k) * 5, [0.14, 0.36, 0.18]);
+      });
+
+      // ===================================================================
+      // CORNER NEON BILLBOARDS — additional signage at corners
       // ===================================================================
       for (const [s, side, hue] of [
         [0.08, 1, 2], [0.31, 1, 1], [0.53, -1, 1], [0.77, 1, 2], [0.90, 1, 1],
@@ -464,32 +610,21 @@
       }
 
       // ===================================================================
-      // ANDERSON BRIDGE — pale arched truss flanking the road over the river
-      // (improved with prism arch ribs).
+      // CBD HERO TOWERS — a few extra-tall tapered skyscrapers giving
+      // skyline depth (frustum shaft + lit glazing face + glowing spire).
+      // Placed at 200-280 m to ensure they sit behind the near band.
       // ===================================================================
-      {
-        const k = K(0.62);
-        for (const side of [-1, 1]) {
-          const a = anchor(k, side, 3);
-          for (let j = 0; j < 5; j++) {
-            const c = vadd(a.c, a.t, (j - 2) * 9);
-            // arch rib: a low prism ridge
-            addPrism(out, vadd(c, a.u, 6), [2, 4, 8], [0.86, 0.86, 0.9], [a.r, a.u, a.t]);
-            addCyl(out, vadd(c, a.u, 3), 0.5, 6, [0.80, 0.80, 0.84], 5, [a.r, a.u, a.t]);
-          }
-        }
-      }
-
-      // ===================================================================
-      // CBD HERO TOWERS — a few extra-tall tapered skyscrapers behind the near
-      // band for skyline depth (frustum spires + lit caps).
-      // ===================================================================
-      for (const [s, side] of [[0.12, -1], [0.5, -1], [0.58, 1], [0.74, -1], [0.06, 1]]) {
-        const a = anchor(K(s), side, 200 + hash(K(s)) * 80);
-        const H = 150 + hash(K(s) * 3) * 90;
-        addFrustum(out, vadd(a.c, a.u, H / 2), 16, 8, H, [0.09, 0.10, 0.17], 6, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, H * 0.55), [22, H * 0.6, 6], hash(K(s)) < 0.5 ? WIN_CYAN : WIN_BLUE, [a.r, a.u, a.t]);
-        addCone(out, vadd(a.c, a.u, H + 6), 3, 12, NEON[1], 6, [a.r, a.u, a.t]); // lit antenna
+      for (const [s, side, seedOff] of [
+        [0.12, -1, 0], [0.50, -1, 3], [0.58, 1, 6], [0.74, -1, 9], [0.06, 1, 12],
+      ]) {
+        const a  = anchor(K(s), side, 210 + hash(K(s) * 3 + seedOff) * 70);
+        const H  = 160 + hash(K(s) * 3 + seedOff + 1) * 100;
+        // Dark glass shaft (frustum — narrows toward top)
+        addFrustum(out, vadd(a.c, a.u, H * 0.5), 18, 10, H, WALL_CBD, 6, [a.r, a.u, a.t]);
+        // Bright glazing face (vivid vertical stripe)
+        addBox(out, vadd(a.c, a.u, H * 0.52), [28, H * 0.65, 6], hash(K(s)) < 0.5 ? WIN_CYAN : WIN_COOL, [a.r, a.u, a.t]);
+        // Glowing antenna spire
+        addCone(out, vadd(a.c, a.u, H + 5), 3.5, 14, NEON[1], 6, [a.r, a.u, a.t]);
       }
     },
   }

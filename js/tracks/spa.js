@@ -24,8 +24,8 @@
     // top-to-bottom), then the long descent back through the second sector.
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop, onTrack,
-              addBox, addCyl, addFrustum, vadd, anchor, along, mountain, pine, tree, bush, hedge,
+      const { out, n, px, pz, pyMin, hash, every, place, backdrop,
+              addBox, addCyl, addFrustum, vadd, anchor, along, mountain, pine, tree, hedge,
               grandstand, building, tower, billboard, gantry, marshalPost,
               fence, guardrail, tyreWall } = api;
 
@@ -131,13 +131,68 @@
       building(0, -1, 11, 12, 6, 50, { wall: [0.82, 0.84, 0.87], window: [0.28, 0.36, 0.42], floor: 3, setback: 2 });
       tower(Math.round(n * 0.985) % n, -1, 16, 9, { col: [0.86, 0.87, 0.90], cap: 4, capCol: [0.28, 0.34, 0.40], mast: 8 });
       {
-        // Thin cantilever roof blade over the pit lane.
+        // Thin cantilever roof blade over the pit lane — raised to 13 m clearance
+        // so the box top clears the gantry leg radius and avoids z-fighting with
+        // the building top (building h=11, roof blade centre at 13 = 2 m gap).
         const a = anchor(0, -1, 20);
-        addBox(out, vadd(a.c, a.u, 12.5), [16, 0.8, 60], [0.82, 0.84, 0.88], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 13.5), [16, 0.8, 60], [0.82, 0.84, 0.88], [a.r, a.u, a.t]);
       }
-      // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
+
+      // --- Lit window accents on the pit building (emissive-style warm panes).
+      // These warm-lit boxes sit flush against the building face so they read as
+      // interior illumination — useful in dawn/dusk light and night-preview screenshots.
+      {
+        const aW = anchor(0, -1, 9);   // same dist as main building inner face
+        // Ground-floor window row: warm amber glow along the pit-lane face
+        for (let wi = 0; wi < 6; wi++) {
+          const tOff = (wi - 2.5) * 9.5;
+          addBox(out, vadd(vadd(aW.c, aW.t, tOff), aW.u, 2.4),
+                 [0.18, 1.6, 3.6], [0.92, 0.78, 0.42], [aW.r, aW.u, aW.t]);
+        }
+        // Upper-floor window row: cooler blue-white office light
+        for (let wi = 0; wi < 6; wi++) {
+          const tOff = (wi - 2.5) * 9.5;
+          addBox(out, vadd(vadd(aW.c, aW.t, tOff), aW.u, 6.8),
+                 [0.18, 1.6, 3.6], [0.82, 0.86, 0.96], [aW.r, aW.u, aW.t]);
+        }
+      }
+
+      // --- Lamp posts along the pit straight and key grandstand zones.
+      // Steel mast + luminaire arm angled over the track — thin enough to be
+      // cheap yet read clearly as trackside lighting infrastructure. Placed on
+      // the pit-building side (left, side=-1) at the standard 14 m dist so they
+      // clear the building face.  Spaced ~55 m so ~8–10 posts line the straight.
+      along(0.97, 0.06, 55, (k) => {
+        const a = anchor(k, -1, 14);
+        // Mast: slim dark-grey pole
+        addCyl(out, a.c, 0.22, 10, [0.26, 0.27, 0.30], 5, [a.r, a.u, a.t]);
+        // Arm: short horizontal box projecting inward over the pit lane
+        addBox(out, vadd(vadd(a.c, a.u, 10), a.r, 1.8),
+               [4.0, 0.22, 0.22], [0.26, 0.27, 0.30], [a.r, a.u, a.t]);
+        // Luminaire: warm white flat box at the arm tip — reads as a lamp head
+        addBox(out, vadd(vadd(a.c, a.u, 9.7), a.r, 3.6),
+               [1.6, 0.36, 0.9], [0.97, 0.94, 0.82], [a.r, a.u, a.t]);
+      });
+
+      // Additional lamp posts at La Source and Bus Stop grandstand zones
+      // where visibility matters most. Side=1 (right/outside) mounted higher
+      // on the forest bank.
+      [0.02, 0.92].forEach((s) => {
+        along(s - 0.015, s + 0.015, 40, (k) => {
+          const a = anchor(k, 1, 12);
+          addCyl(out, a.c, 0.20, 9, [0.28, 0.28, 0.31], 5, [a.r, a.u, a.t]);
+          addBox(out, vadd(vadd(a.c, a.u, 9), a.r, -1.6),
+                 [3.4, 0.20, 0.20], [0.28, 0.28, 0.31], [a.r, a.u, a.t]);
+          addBox(out, vadd(vadd(a.c, a.u, 8.8), a.r, -2.9),
+                 [1.4, 0.32, 0.8], [0.96, 0.93, 0.80], [a.r, a.u, a.t]);
+        });
+      });
+
+      // --- Lone weathered old pit building on the original Kemmel straight
+      // (s≈0.10, far left). Pushed to dist=42 so its inner face clears 42-6=36m
+      // from the road edge — safely past any parallel track overlap.
       // Historic structure; aged cream-grey stone with small dark windows.
-      building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { wall: [0.72, 0.70, 0.64], window: [0.26, 0.26, 0.24], floor: 4 });
+      building(Math.round(n * 0.10) % n, -1, 42, 12, 9, 40, { wall: [0.72, 0.70, 0.64], window: [0.26, 0.26, 0.24], floor: 4 });
 
       // --- Grandstands with crowds: La Source, Eau Rouge, Les Combes, Stavelot, Bus Stop, pit straight.
       const shell = [0.40, 0.41, 0.45];
@@ -153,6 +208,26 @@
       grandstand(0.55, -1, 9, 24, shell, [0.38, 0.44, 0.50]);  // Pouhon
       grandstand(0.78, 1, 8, 26, shell, [0.44, 0.46, 0.50]);   // Stavelot
       grandstand(0.92, 1, 8, 32, shell, [0.44, 0.46, 0.50]);   // Bus Stop chicane
+
+      // --- Lit window accents on grandstand backs — long amber strips reading
+      // as concourse lighting visible from the opposite side of the track.
+      {
+        const gsLit = [
+          { s: 0.00, side: 1, gap: 8 + 7.5, len: 44 },   // pit straight stand back
+          { s: 0.07, side: 1, gap: 8 + 7.5, len: 32 },   // Eau Rouge stand back
+          { s: 0.92, side: 1, gap: 8 + 7.5, len: 30 },   // Bus Stop stand back
+        ];
+        for (const g of gsLit) {
+          const k = Math.round(g.s * n) % n;
+          const a = anchor(k, g.side, g.gap);
+          // Concourse strip: warm amber low band
+          addBox(out, vadd(a.c, a.u, 1.2),
+                 [0.22, 0.9, g.len - 4], [0.90, 0.72, 0.34], [a.r, a.u, a.t]);
+          // Upper strip: cooler white-blue press/broadcast level
+          addBox(out, vadd(a.c, a.u, 8.4),
+                 [0.22, 0.7, g.len - 6], [0.78, 0.84, 0.96], [a.r, a.u, a.t]);
+        }
+      }
 
       // --- Overhead gantries: start/finish line and the Kemmel timing point.
       // Dark grey steel structures spanning the track.
@@ -199,12 +274,10 @@
       marshalPost(Math.round(n * 0.97) % n, 1, 4);
       marshalPost(Math.round(n * 0.55) % n, -1, 4);
 
-      // --- Eau Rouge: low concrete runoff wall boxes at the valley base (s≈0.06, left).
-      // Grey-concrete barrier at the low point of the dip.
-      {
-        const kw = Math.round(n * 0.06) % n;
-        place(kw, -1, 4, [1.0, 1.4, 22], [0.58, 0.58, 0.56]);
-      }
+      // --- Eau Rouge: low concrete runoff wall box at the valley base (s≈0.06, left).
+      // Uses place() so it terrain-anchors correctly on the descent and never floats.
+      // dist=6 puts the inner face 6 m beyond the road edge (safe clearance).
+      place(Math.round(n * 0.06) % n, -1, 6, [1.0, 1.4, 22], [0.58, 0.58, 0.56]);
 
       // --- TV camera towers (slim white masts) on outside of marquee corners.
       // Distinctive light-grey poles with camera boxes at the roof.
@@ -217,17 +290,26 @@
 
       // --- Raidillon giant-screen structure (brief: s≈0.08, mid distance).
       // Signature structure on the Raidillon crest; tall enough to loom over the grandstand.
+      // Components are vertically separated so they don't clip into each other:
+      //   • base footings  : y = ground + 0.6  (half-height of 1.2 m slab)
+      //   • column frustum : base = ground, top = ground + 15
+      //   • cross-beam     : centre at y = ground + 8 (mid of column), offset laterally
+      //   • screen panel   : centre at y = ground + 17 (2 m above column top)
       {
         const k = Math.round(n * 0.08) % n;
         const a = anchor(k, 1, 18);
-        // Screen frame tower base (tapered column, sturdy grey steel)
-        addFrustum(out, a.c, 3.4, 2.8, 15, [0.48, 0.48, 0.50], 8, [a.r, a.u, a.t]);
-        // Screen panel (large dark rectangle mounted on top, slightly angled)
-        addBox(out, vadd(a.c, a.u, 16.5), [8.4, 5.8, 0.7], [0.10, 0.10, 0.12], [a.r, a.u, a.t]);
-        // Cross-beam supports (darker steel bracers)
-        addCyl(out, vadd(a.c, a.u, 12.5), 0.28, 9, [0.42, 0.42, 0.45], 5, [a.r, a.u, a.t]);
-        // Base footings
-        addBox(out, vadd(a.c, a.u, 0.5), [6.0, 1.2, 6.0], [0.56, 0.56, 0.54], [a.r, a.u, a.t]);
+        // Base footings — concrete pad at grade level
+        addBox(out, vadd(a.c, a.u, 0.6), [6.0, 1.2, 6.0], [0.56, 0.56, 0.54], [a.r, a.u, a.t]);
+        // Screen frame tower column (tapered, no overlap with footings — base starts at 0)
+        addFrustum(out, vadd(a.c, a.u, 0), 3.4, 2.8, 15, [0.48, 0.48, 0.50], 8, [a.r, a.u, a.t]);
+        // Cross-beam: lateral arm jutting out from the column mid-point — offset
+        // on the r axis so it doesn't clip through the column body
+        addBox(out, vadd(vadd(a.c, a.r, 4.2), a.u, 8.0),
+               [5.0, 0.36, 0.36], [0.42, 0.42, 0.45], [a.r, a.u, a.t]);
+        // Screen panel — 2 m clear above column top to avoid intersection
+        addBox(out, vadd(a.c, a.u, 17.2), [8.4, 5.8, 0.7], [0.10, 0.10, 0.12], [a.r, a.u, a.t]);
+        // Screen face: bright panel surface (slightly inset so it sits proud of the frame)
+        addBox(out, vadd(a.c, a.u, 17.6), [7.6, 5.0, 0.22], [0.14, 0.46, 0.78], [a.r, a.u, a.t]);
       }
 
       // --- La Source hotel: iconic red-roofed structure at the La Source hairpin.
@@ -284,14 +366,17 @@
       guardrail(0.50, 0.58, -1, 3.0, [0.66, 0.67, 0.70]);
 
       // --- Stavelot run-off + barrier boxes (brief: s≈0.78, near distance).
-      // Brief specifies "Stavelot run-off + barrier boxes against treeline".
+      // Both use place() so they terrain-anchor on the embanked outer kerb rather
+      // than sitting at a fixed global y. Boxes staggered laterally so they don't
+      // intersect each other: inner pad at dist=12, outer barrier at dist=22.
       {
-        const k = Math.round(n * 0.78) % n;
-        // Concrete run-off pad
-        place(k, 1, 12, [18, 0.6, 26], [0.58, 0.58, 0.56]);
-        // Barrier boxes at edge of run-off
-        place(k, 1, 24, [8, 1.2, 20], [0.54, 0.54, 0.52]);
-        place(Math.round(n * 0.80) % n, 1, 20, [8, 1.2, 16], [0.56, 0.56, 0.54]);
+        const k78 = Math.round(n * 0.78) % n;
+        const k80 = Math.round(n * 0.80) % n;
+        // Concrete run-off pad — wide but thin, inner face at 12 m
+        place(k78, 1, 12, [18, 0.6, 26], [0.58, 0.58, 0.56]);
+        // Outer barrier boxes — clearly separated from pad (inner face at 22 m vs pad outer at 21 m)
+        place(k78, 1, 22, [8, 1.2, 20], [0.54, 0.54, 0.52]);
+        place(k80, 1, 22, [8, 1.2, 16], [0.56, 0.56, 0.54]);
       }
 
       // --- Kemmel straight backdrop (s≈0.09–0.18): tall distant pines on the climb.

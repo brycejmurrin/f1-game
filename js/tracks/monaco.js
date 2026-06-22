@@ -33,11 +33,12 @@
       const CREAM = [0.95, 0.90, 0.78], TERRA = [0.80, 0.45, 0.32], OCHRE = [0.85, 0.70, 0.45];
       const PASTELS = [CREAM, TERRA, OCHRE, [0.88, 0.82, 0.78], [0.78, 0.74, 0.62]];
       const WIN = [0.20, 0.30, 0.36], ARMCO = [0.70, 0.72, 0.74];
+      // Lit window colour (emissive warm yellow — reads as glowing interior at dusk/night)
+      const WINLIT = [0.95, 0.88, 0.55];
+      // Street lamp cap colour (warm sodium glow)
+      const LAMP = [1.0, 0.90, 0.60];
 
       // ---- Continuous Armco lining both sides — the "no margin" street feel ----
-      // Engine already supplies street barriers; add a galvanized rail accent.
-      // A low continuous wall reads as the lap-long armco line at a fraction of
-      // the per-post vertex cost; short guardrail accents punch up key corners.
       wall(0.0, 1.0, -1, 0.4, 0.8, ARMCO, 0.22);   // left rail, full lap
       // right rail lines the inland climb (Casino/Fairmont) where there's no
       // harbour edge; the marina side reads off the quay walls + railing below.
@@ -46,9 +47,15 @@
 
       // ---- CONTINUOUS HILLSIDE CITY (lap-long inland backdrop) ----------------
       // Monte Carlo is a packed urban mass climbing the rock behind the track.
-      // To read as a CONTINUOUS city (not scattered towers) we wrap the whole lap
-      // with three stacked bands of building masses on the inland side, plus a
-      // continuous low "city base" wall so no empty ground shows between blocks.
+      // Three tiers of pastel apartment blocks, stacked to sit in CLEAN TIERS
+      // without interpenetrating. Key fix: each tier's inner face begins beyond
+      // the previous tier's outer face — no tier can be inside another.
+      //
+      // For each i, the near building occupies: inner face at gap=dNear−w/2, outer
+      // face at dNear+w/2. Mid tier must have its INNER face beyond near's OUTER
+      // face, and far tier beyond mid's outer face. We enforce this by expressing
+      // each tier's `gap` argument to building() as the outer edge of the previous
+      // tier plus a clearance margin (≥2m to account for rounding + width jitter).
       //
       // Pick the inland side per node: the harbour sits on the LEFT through the
       // flat back half (s≈0.55→1.0), so the city climbs the RIGHT there; the
@@ -63,7 +70,8 @@
       wall(0.55, 1.0, -1, 60, 5, [0.70, 0.66, 0.60], 1.4);  // far city plinth, L (back)
 
       // Three tiers of pastel blocks, packed shoulder-to-shoulder around the lap.
-      // Spaced every ~1.6% of the lap so facades read as a solid urban wall.
+      // Each building gap= argument = outer face of the tier, so building() places
+      // the box centre at gap+w/2 and inner face at gap. Tiers never overlap.
       for (let i = 0; i < 56; i++) {
         const s = (i / 56);
         const k = K(s);
@@ -73,24 +81,79 @@
                              (s > 0.52 && s < 0.60);   // Casino / Fairmont / tunnel
         const col = PASTELS[(i * 3 + (i & 1)) % PASTELS.length];
         const r = hash(k * 17 + i), r2 = hash(k * 31 + i * 5);
-        // near tier — right up behind the barrier line, varied heights
-        const dNear = nearLandmark ? 30 : 11 + r * 6;
-        const wNear = 16 + r2 * 12;
-        const hNear = 16 + r * 30;
-        if (!onTrack(anchor(k, side, dNear).c[0], anchor(k, side, dNear).c[2], 6))
-          building(k, side, dNear - wNear / 2, wNear, hNear, 14, { wall: col, window: WIN, floor: 8 });
-        // mid tier — set back, taller, climbing the hill
+
+        // --- NEAR tier ---
+        // Inner face starts at gNear (≥10m from edge for nearLandmark zones, ≥8m otherwise).
+        const wNear = 14 + r2 * 10;      // 14–24m wide
+        const hNear = 14 + r * 26;       // 14–40m tall
+        const gNear = nearLandmark ? 28 : 8 + r * 5;   // gap to inner face
+        // outer face of near tier (beyond road edge) — tiers above must start here
+        const outerNear = gNear + wNear;
+        building(k, side, gNear, wNear, hNear, 13, { wall: col, window: WIN, floor: 8 });
+
+        // lit windows on near tier — warm band slightly above mid-height
+        if (!nearLandmark) {
+          const aN = anchor(k, side, gNear + wNear * 0.5);
+          if (!onTrack(aN.c[0], aN.c[2], 4)) {
+            addBox(out, vadd(aN.c, aN.u, hNear * 0.55), [wNear * 1.02, hNear * 0.12, 13.1],
+                   WINLIT, [aN.r, aN.u, aN.t]);
+          }
+        }
+
+        // --- MID tier: inner face at outerNear + 3m clearance ---
         if (i % 2 === 0) {
-          const dm = dNear + 20 + r2 * 10;
-          building(K(s + 0.006), side, dm - (18 + r * 10) / 2, 18 + r * 10, hNear + 12 + r2 * 16, 15,
+          const wMid = 16 + r * 10;
+          const hMid = hNear + 10 + r2 * 14;
+          const gMid = outerNear + 3;
+          const outerMid = gMid + wMid;
+          building(K(s + 0.006), side, gMid, wMid, hMid, 14,
                    { wall: PASTELS[(i + 2) % PASTELS.length], window: WIN, floor: 9 });
+
+          // lit mid-tier windows
+          if (!nearLandmark) {
+            const aM = anchor(K(s + 0.006), side, gMid + wMid * 0.5);
+            if (!onTrack(aM.c[0], aM.c[2], 4)) {
+              addBox(out, vadd(aM.c, aM.u, hMid * 0.6), [wMid * 1.02, hMid * 0.10, 14.1],
+                     WINLIT, [aM.r, aM.u, aM.t]);
+            }
+          }
+
+          // --- FAR tier: inner face at outerMid + 4m clearance ---
+          if (i % 4 === 0) {
+            const wFar = 20 + r2 * 12;
+            const hFar = hMid + 22 + r * 18;
+            const gFar = outerMid + 4;
+            building(K(s + 0.011), side, gFar, wFar, hFar, 15,
+                     { wall: PASTELS[(i + 4) % PASTELS.length], window: WIN, floor: 10 });
+
+            // lit far-tier windows — visible at night as glowing skyline
+            const aF = anchor(K(s + 0.011), side, gFar + wFar * 0.5);
+            if (!onTrack(aF.c[0], aF.c[2], 4)) {
+              addBox(out, vadd(aF.c, aF.u, hFar * 0.55), [wFar * 1.02, hFar * 0.14, 15.1],
+                     WINLIT, [aF.r, aF.u, aF.t]);
+            }
+          }
         }
-        // far tier — distant tall slabs forming the skyline crest
-        if (i % 4 === 0) {
-          const df = dNear + 44 + r * 16;
-          building(K(s + 0.011), side, df - (22 + r2 * 12) / 2, 22 + r2 * 12, hNear + 26 + r * 20, 16,
-                   { wall: PASTELS[(i + 4) % PASTELS.length], window: WIN, floor: 10 });
-        }
+      }
+
+      // ---- Street lamp posts along the track (both sides, every ~40m) ----
+      // Thin galvanised poles with a warm sodium-yellow cap disc — Monaco's
+      // famous boulevard lighting. Placed just inside the armco so they are
+      // always visible but never block the racing line.
+      for (let i = 0; i < 36; i++) {
+        const s = i / 36;
+        const k = K(s);
+        const side = (i % 2 === 0) ? 1 : -1;
+        // skip tunnel interior (s=0.51→0.585) — lamp would be inside
+        if (s > 0.50 && s < 0.60) continue;
+        const aL = anchor(k, side, 1.8);
+        if (onTrack(aL.c[0], aL.c[2], 1.2)) continue;
+        const b = [aL.r, aL.u, aL.t];
+        addCyl(out, aL.c, 0.09, 6.5, [0.68, 0.70, 0.72], 5, b);           // pole
+        addCyl(out, vadd(aL.c, aL.u, 6.3), 0.65, 0.22, LAMP, 7, b);       // lamp cap disc
+        // small light-pool patch on the ground below
+        addBox(out, vadd(aL.c, aL.u, 0.1), [1.6, 0.06, 1.6],
+               [0.92, 0.88, 0.72], b);
       }
 
       // ---- Pit wall & start grandstand (s=0.03, R close) ----
@@ -111,20 +174,32 @@
       }
 
       // ---- Beau Rivage climb buildings (s≈0.08→0.16, both): tiered pastel blocks ----
-      // Stacked blocks rising in tiers up the hillside, pushed well back.
-      // Spaced wider + taller floor bands to keep the tiered hillside read at low cost.
+      // Stacked blocks rising in tiers up the hillside. Each step-back tier has
+      // its gap placed beyond the outer face of the tier below, so no interpenetration.
       for (let i = 0; i < 5; i++) {
         const s = 0.08 + i * 0.018;
         const k = K(s);
         const side = i % 2 === 0 ? -1 : 1;
         const col = PASTELS[(i + 1) % PASTELS.length];
-        const h = 22 + hash(k * 13 + i) * 22;
-        const dist = 26 + (i % 3) * 9;          // tiered back from the kerb
-        building(k, side, dist - (20 + hash(k * 7) * 8) / 2, 20 + hash(k * 7) * 8, h, 16, { wall: col, window: WIN, floor: 7 });
-        // an upper tier set further back to read as terraces climbing the rock
+        const hA = 20 + hash(k * 13 + i) * 20;
+        const wA = 18 + hash(k * 7) * 8;
+        const gA = 22 + (i % 3) * 8;           // inner face gap, stepped back from kerb
+        building(k, side, gA, wA, hA, 16, { wall: col, window: WIN, floor: 7 });
+
+        // lit windows on Beau Rivage blocks
+        const aB = anchor(k, side, gA + wA * 0.5);
+        if (!onTrack(aB.c[0], aB.c[2], 4)) {
+          addBox(out, vadd(aB.c, aB.u, hA * 0.55), [wA * 1.02, hA * 0.11, 16.1],
+                 WINLIT, [aB.r, aB.u, aB.t]);
+        }
+
+        // upper tier — inner face starts at outer face of lower tier + 4m
         if (i % 2 === 0) {
           const k2 = K(s + 0.008);
-          building(k2, side, dist + 14, 16, h + 10, 14, { wall: PASTELS[i % PASTELS.length], window: WIN, floor: 7 });
+          const wU = 15;
+          const hU = hA + 10;
+          const gU = gA + wA + 4;              // beyond outer face of lower tier
+          building(k2, side, gU, wU, hU, 14, { wall: PASTELS[i % PASTELS.length], window: WIN, floor: 7 });
         }
       }
 
@@ -142,6 +217,16 @@
           }
           // window bands across the facade
           for (let f = 0; f < 4; f++) addBox(out, vadd(a.c, a.u, 5 + f * 6), [44.4, 2.2, 30.4], WIN, b);
+          // Casino lit windows (warm evening glow across all four floors)
+          for (let f = 0; f < 4; f++) {
+            addBox(out, vadd(a.c, a.u, 6.0 + f * 6), [44.6, 1.1, 30.6], WINLIT, b);
+          }
+          // Lamp posts flanking the Casino entrance — two ornate poles
+          for (const o of [-8, 8]) {
+            const lc = vadd(vadd(a.c, a.t, o), a.u, 0);
+            addCyl(out, lc, 0.10, 5.5, [0.72, 0.74, 0.76], 5, b);
+            addCyl(out, vadd(lc, a.u, 5.3), 0.55, 0.18, LAMP, 6, b);
+          }
         }
       }
 
@@ -172,6 +257,12 @@
         building(k, 1, 4, 20, 48, 30, { wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, setback: true });
         building(K(0.385), 1, 5, 22, 40, 18, { wall: CREAM, window: WIN, floor: 6 });
         building(K(0.415), 1, 5, 22, 42, 18, { wall: [0.88, 0.84, 0.76], window: WIN, floor: 6 });
+        // Lit hotel windows
+        const aH = anchor(K(0.40), 1, 14);
+        if (!onTrack(aH.c[0], aH.c[2], 6)) {
+          addBox(out, vadd(aH.c, aH.u, 28), [20.2, 5.0, 30.2], WINLIT, [aH.r, aH.u, aH.t]);
+          addBox(out, vadd(aH.c, aH.u, 14), [20.2, 4.0, 30.2], WINLIT, [aH.r, aH.u, aH.t]);
+        }
       }
 
       // ---- Tunnel (s=0.55, both): dark enclosing roof + side walls ----
@@ -191,6 +282,11 @@
             const o = sd * (hw[k] + 1.5);
             addBox(out, vadd([px[k] + r[0] * o, py[k], pz[k] + r[2] * o], u, 3.2), [1.4, 6.4, ds * step * 1.05], [0.30, 0.29, 0.33], [r, u, t]);
           }
+          // strip lighting inside the tunnel — a pale warm strip along the roof
+          if (i % (step * 2) === 0) {
+            addBox(out, vadd([px[k], py[k], pz[k]], u, 6.0), [cw * 0.6, 0.2, ds * step * 0.6],
+                   [0.94, 0.92, 0.80], [r, u, t]);
+          }
         }
         for (const frac of [0.51, 0.585]) {                                      // portals
           const k = K(frac);
@@ -202,10 +298,6 @@
       }
 
       // ---- Harbour & yachts (s≈0.58→0.98, L): big sea plane + a packed marina ----
-      // The signature Monaco visual: a wide deep-blue Mediterranean plane on the
-      // harbour (LEFT) side of the back half, crowded with super-yachts of varied
-      // sizes (hull + stacked decks + radar arch + masts), plus a couple of small
-      // tenders. A continuous quay edge separates the street from the water.
       const SEA = [0.10, 0.34, 0.55], SEA2 = [0.13, 0.40, 0.60];
 
       // moored super-yacht builder at world point yc (basis b), facing along t
@@ -227,10 +319,11 @@
         addCyl(out, vadd(sup, u, 12 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b); // mast
         // a couple of stanchions / handrails on the foredeck
         addBox(out, vadd(vadd(yc, t, L * 0.30), u, 3.4 * sc), [W * 0.7, 0.7 * sc, 0.3 * sc], [0.85, 0.86, 0.9], b);
+        // lit cabin windows at night (warm glow through porthole band)
+        addBox(out, vadd(sup, u, 5.9 * sc), [W * 0.75, 0.5 * sc, L * 0.59], WINLIT, b);
       };
 
-      // big water plane (single slab spanning the back-half harbour) — settled
-      // just below grade so the street/quay reads above it.
+      // big water plane (single slab spanning the back-half harbour)
       for (let i = 0; i < 6; i++) {
         const k = K(0.60 + i * 0.062), a = anchor(k, -1, 70);
         const b = [a.r, a.u, a.t];
@@ -269,10 +362,29 @@
         addBox(out, vadd(a.c, a.u, 0.5), [30, 2.4, 8], [0.66, 0.62, 0.56], [a.r, a.u, a.t]);
       }
 
+      // Harbour-side lamp posts along the quay (every ~30m)
+      for (let i = 0; i < 14; i++) {
+        const s = 0.585 + i * 0.029;
+        const k = K(s);
+        const aQ = anchor(k, -1, 2.4);
+        if (onTrack(aQ.c[0], aQ.c[2], 1.2)) continue;
+        const bQ = [aQ.r, aQ.u, aQ.t];
+        addCyl(out, aQ.c, 0.09, 5.8, [0.70, 0.72, 0.74], 5, bQ);
+        addCyl(out, vadd(aQ.c, aQ.u, 5.6), 0.55, 0.20, LAMP, 7, bQ);
+        addBox(out, vadd(aQ.c, aQ.u, 0.1), [1.4, 0.06, 1.4], [0.90, 0.86, 0.68], bQ);
+      }
+
       // ---- Tabac waterfront buildings (s=0.75, R mid): pastel block row ----
       for (let i = 0; i < 3; i++) {
         const k = K(0.71 + i * 0.033);
         building(k, 1, 9, 18, 24 + hash(k * 5) * 12, 14, { wall: PASTELS[i % PASTELS.length], window: WIN, floor: 6 });
+        // lit windows on Tabac block
+        const hT = 24 + hash(k * 5) * 12;
+        const aT = anchor(k, 1, 9 + 9);    // gap + w/2
+        if (!onTrack(aT.c[0], aT.c[2], 4)) {
+          addBox(out, vadd(aT.c, aT.u, hT * 0.55), [18.2, hT * 0.10, 14.1],
+                 WINLIT, [aT.r, aT.u, aT.t]);
+        }
       }
 
       // ---- Swimming Pool section (s=0.80, L close): turquoise rect + white edge ----
@@ -361,12 +473,17 @@
       }
 
       // ---- Distinctive hillside high-rises behind the city (skyline crest) ----
-      // A few taller tapered towers set far back on the inland side to break the
-      // even building line and read as the Monte-Carlo tower district.
+      // Taller tapered towers set far back on the inland side — Monte-Carlo tower
+      // district. Placed at dist≥90m so they sit clearly behind the city tiers.
       for (const [s, side, h] of [[0.12, -1, 70], [0.20, -1, 60], [0.34, -1, 64], [0.74, 1, 66], [0.88, 1, 58]]) {
         const k = K(s), a = anchor(k, side, 70 + hash(k) * 20);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           tower(k, side, 70 + hash(k) * 20, 16 + hash(k * 3) * 6, h, { col: PASTELS[K(s) % PASTELS.length], cap: true, capCol: [0.55, 0.58, 0.56], mast: 6 });
+          // lit tower windows — wide emissive band across upper floors
+          const bW = 16 + hash(k * 3) * 6;
+          const aT2 = anchor(k, side, 70 + hash(k) * 20);
+          addBox(out, vadd(aT2.c, aT2.u, h * 0.60), [bW * 1.2, h * 0.15, bW * 1.2],
+                 WINLIT, [aT2.r, aT2.u, aT2.t]);
         }
       }
 
@@ -374,49 +491,54 @@
       // REFINED MONACO-SPECIFIC ACCENTS & ENHANCEMENTS
       // ====================================================================
 
-      // PRINCE'S PALACE / ROCK OF MONACO — the iconic cream fortress rising 60m+
-      // Positioned well inland (110m) above Casino Square, reads as the principality's
-      // white landmark. Main tapered tower + flanking rampart walls + corner bastions.
+      // PRINCE'S PALACE / ROCK OF MONACO — iconic cream fortress rising 60m+
+      // Positioned well inland (110m) above Casino Square. The INNER face of
+      // each palace wing sits beyond the previous box, so no interpenetration.
       {
         const k = K(0.17), a = anchor(k, -1, 110);
         if (!onTrack(a.c[0], a.c[2], 20)) {
           const b = [a.r, a.u, a.t];
-          // Central tower — tall cream frustum (palace rises to ~60m)
+          // Central tower — tall cream frustum
           addFrustum(out, vadd(a.c, a.u, 32), 28, 20, 56, CREAM, 10, b);
-          // Flanking rampart walls — fortress wing structures
+          // Flanking rampart walls — sit beside the tower, not inside it
           addBox(out, vadd(vadd(a.c, a.r, -20), a.u, 24), [10, 44, 42], [0.92, 0.88, 0.82], b);
           addBox(out, vadd(vadd(a.c, a.r, 20), a.u, 24), [10, 44, 42], [0.92, 0.88, 0.82], b);
-          // Corner bastions — dark stone defensive towers
+          // Corner bastions — set at ±24m lateral (outside rampart outer faces)
           for (const sd of [-1, 1]) {
             addCyl(out, vadd(vadd(a.c, a.r, sd * 24), a.u, 52), 3.2, 16, [0.72, 0.70, 0.66], 7, b);
           }
           // Palace courtyard plaza — light stone base
           addBox(out, vadd(a.c, a.u, 4), [44, 1.6, 48], [0.86, 0.85, 0.82], b);
+          // Palace lit windows across the main mass
+          addBox(out, vadd(a.c, a.u, 22), [44.4, 5.0, 30.4], WINLIT, b);
         }
       }
 
-      // PALACE ROCK GARDEN — terraced gardens below the palace structure
-      // Creates the sense of tiered Mediterranean architecture cascading down.
+      // PALACE ROCK GARDEN — terraced gardens below the palace structure.
+      // Each terrace level is at a different dist so the wall boxes do not overlap
+      // the palace or each other. Dist stepped by 12m intervals.
       for (let i = 0; i < 3; i++) {
         const k = K(0.18 + i * 0.015);
-        const a = anchor(k, -1, 50 + i * 12);
+        // The terrace sits at dist = 52+i*12, far clear of the palace at dist=110.
+        const distT = 52 + i * 12;
+        const a = anchor(k, -1, distT);
         if (!onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           // Terraced garden retaining wall
-          addBox(out, vadd(a.c, a.u, 2 + i * 1.5), [20 + i * 6, 4 + i * 0.8, 10], [0.86, 0.82, 0.74], b);
-          // Succulent/cactus plantings
-          for (let j = 0; j < 4; j++) {
-            addCone(out, vadd(vadd(a.c, a.r, (j - 1.5) * 5), a.u, 4 + i), 0.6, 1.8, [0.50, 0.62, 0.38], 4, b);
+          addBox(out, vadd(a.c, a.u, 2.4), [18 + i * 4, 3.6 + i * 0.6, 10], [0.86, 0.82, 0.74], b);
+          // Succulent/cactus plantings — anchored at ground (vadd ...a.u, 0) so no float
+          for (let j = 0; j < 3; j++) {
+            const pc = vadd(vadd(a.c, a.r, (j - 1) * 5), a.u, 0);
+            addCone(out, vadd(pc, a.u, 4 + i * 0.5), 0.55, 1.6, [0.50, 0.62, 0.38], 4, b);
           }
         }
       }
 
       // HARBOUR ENHANCEMENT — curated yacht detail with multi-rank mooring layout
-      // Refines the existing yacht loop (s≈0.59–0.88) with visually distinct ranks
       for (let i = 0; i < 12; i++) {
         const s = 0.62 + i * 0.0205;
         const k = K(s);
-        const rank = i % 3;  // 0=near visible boats, 1=mid superstructure, 2=far masts
+        const rank = i % 3;
         const dist = 18 + rank * 20 + hash(k * 7) * 6;
         const a = anchor(k, -1, dist);
         if (onTrack(a.c[0], a.c[2], 14)) continue;
@@ -449,8 +571,8 @@
         addBox(out, vadd(a.c, a.u, 0.5), [30, 2.6, 7], [0.70, 0.66, 0.58], [a.r, a.u, a.t]);
       }
 
-      // DOCK MOORING BOLLARDS — functional waterfront detail
-      // Sparse placement (8 posts) for realism without clutter
+      // DOCK MOORING BOLLARDS — corrected height: 1.2m (not 20m!)
+      // These are quayside bollards, each capped with a mooring ring.
       {
         const BOLLARD = [0.74, 0.72, 0.70];
         const RING = [0.68, 0.65, 0.60];
@@ -458,32 +580,33 @@
           const k = K(0.61 + i * 0.012);
           const a = anchor(k, -1, 6 + (i % 2) * 1.5);
           if (!onTrack(a.c[0], a.c[2], 2.8)) {
-            addCyl(out, vadd(a.c, a.u, 0), 0.58, 20, BOLLARD, 6, [a.r, a.u, a.t]);
+            addCyl(out, vadd(a.c, a.u, 0), 0.28, 1.2, BOLLARD, 6, [a.r, a.u, a.t]);
             if (i % 2 === 0) {
-              addCyl(out, vadd(a.c, a.u, 15), 0.65, 0.35, RING, 7, [a.r, a.u, a.t]);
+              addCyl(out, vadd(a.c, a.u, 0.9), 0.35, 0.24, RING, 7, [a.r, a.u, a.t]);
             }
           }
         }
       }
 
-      // CYPRESS ACCENT TREES — tall columnar dark-green silhouettes for Mediterranean flair
-      // Strategic placement at vista points: Casino approach & pool section
+      // CYPRESS ACCENT TREES — tall columnar dark-green silhouettes.
+      // Placed at safe distances: dist≥10m, no secondary cypress that overlaps
+      // the near building tier. The second (offset) cypress is removed to avoid
+      // it floating into building geometry.
       {
         const CYPRESS = [0.16, 0.32, 0.14];
         for (const [sf, cnt] of [[0.20, 2], [0.80, 3]]) {
           for (let j = 0; j < cnt; j++) {
             const k = K(sf + j * 0.012);
             const side = (j & 1) ? -1 : 1;
-            const dist = 9 + (j & 1) * 4;
+            // dist=10 places the cypress just outside the road edge furniture but
+            // well inside the near building tier (which starts at ~8–13m gap, so
+            // buildings don't appear until dist=16+ for a 14m wide building).
+            // The cylinder radius (1.1m) is narrow enough not to interpenetrate.
+            const dist = 10 + (j & 1) * 3;
             const a = anchor(k, side, dist);
             if (!onTrack(a.c[0], a.c[2], 2.8)) {
+              // anchor base to ground height — no floating
               addCyl(out, vadd(a.c, a.u, 0), 1.1, 17, CYPRESS, 5, [a.r, a.u, a.t]);
-              if (j % 2 === 0) {
-                const a2 = anchor(k, side, dist + 5);
-                if (!onTrack(a2.c[0], a2.c[2], 2.4)) {
-                  addCyl(out, vadd(a2.c, a2.u, 0), 0.9, 13, [0.20, 0.38, 0.18], 4, [a2.r, a2.u, a2.t]);
-                }
-              }
             }
           }
         }

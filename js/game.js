@@ -768,6 +768,27 @@ function applyRaceSettings() {
     if (frame.exposure == null || frame.exposure <= 1.0) {
       frame.exposure = Math.max(frame.exposure != null ? frame.exposure : 1.0, 1.10);
     }
+  } else if (raceWeather === "overcast") {
+    // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
+    _cloudBase = Math.min(0.90, _cloudBase + 0.50);
+    frameSky.cloud = _cloudBase;
+    frame.sunColor = frame.sunColor.map((v) => v * 0.7);
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.8);
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.12));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.12));
+    if (frame.exposure == null || frame.exposure < 1.05) frame.exposure = 1.05;
+  } else if (raceWeather === "fog") {
+    // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
+    frameSky.cloud = Math.min(0.85, _cloudBase + 0.35);
+    frame.fogDensity = (frame.fogDensity || 0.0017) * 3.0;
+    const fc = [0.74, 0.76, 0.78];
+    frame.fogColor = fc;
+    frameSky.horizon = fc.slice();
+    frame.sunColor = frame.sunColor.map((v) => v * 0.6);
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.7);
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.10));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.10));
+    if (frame.exposure == null || frame.exposure < 1.08) frame.exposure = 1.08;
   } else {
     frameSky.cloud = _cloudBase;
     // Guarantee frame.exposure always has a value (default = 1.0 if nothing set above)
@@ -3200,7 +3221,7 @@ function buildRaceSettings() {
   }
   const weatherEl = $("rs-weather");
   weatherEl.innerHTML = "";
-  for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "🌧"]]) {
+  for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "🌧"], ["overcast", "CLOUDY", "☁"], ["fog", "FOG", "🌫"]]) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (raceWeather === id ? " active" : "");
     b.textContent = icon + " " + label;
@@ -4132,7 +4153,7 @@ window.__apex = {
     seasonMode = false;
     timeTrial = false;
     raceLaps = GAME_LAPS;
-    raceWeather = weather === "wet" ? "wet" : "dry";
+    raceWeather = (weather === "wet" || weather === "overcast" || weather === "fog") ? weather : "dry";
     raceTimeOfDay = timeOfDay || "default";
     startRace();
     return { track: Tracks.LIST[i].id, timeOfDay: raceTimeOfDay, weather: raceWeather };
@@ -4202,12 +4223,11 @@ window.__apex = {
     return !els.hud.hidden;
   },
 
-  // Get or set race weather ("dry" | "wet"). Toggling wet starts/stops rain audio.
+  // Get or set race weather ("dry" | "wet" | "overcast" | "fog"). Wet drives rain.
   weather(w) {
     if (w === undefined) return raceWeather;
-    const wet = w === "wet";
-    raceWeather = wet ? "wet" : "dry";
-    if (soundOn) { if (wet) GameAudio.startRain(); else GameAudio.stopRain(); }
+    raceWeather = (w === "wet" || w === "overcast" || w === "fog") ? w : "dry";
+    if (soundOn) { if (raceWeather === "wet") GameAudio.startRain(); else GameAudio.stopRain(); }
     return raceWeather;
   },
 
