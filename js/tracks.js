@@ -182,6 +182,7 @@ const Tracks = (function () {
       track.meshes.terrain = GLX.createMesh(buildTerrain(track));
       track.meshes.props = GLX.createMesh(buildProps(track));
       track.meshes.gate = GLX.createMesh(buildGate(track));
+      track.meshes.startline = GLX.createMesh(buildStartLine(track));
     }
     return track;
   }
@@ -461,16 +462,14 @@ const Tracks = (function () {
         }
         pos.push(px[k] + r[0] * o + u[0] * (rise[v] + by), py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02, pz[k] + r[2] * o + u[2] * (rise[v] + by));
         nrm.push(u[0], u[1], u[2]);
-        // Start/finish line: one segment (~4 m) of solid white across the
-        // full road width — matches how real F1 circuits paint the line.
-        const isStartLine = k === 0 && v >= 2 && v <= 11;
+        // The start/finish line is a separate chequered decal mesh (buildStartLine)
+        // laid just above the asphalt here at s=0 — far cleaner than painting a
+        // whole road segment solid white, which read as a sprayed-on blob.
         let c;
         if (v === 0 || v === 13) {
           c = grass;
         } else if (v === 1 || v === 12) {
           c = grass;   // kerb ribbons added separately by buildKerbs
-        } else if (isStartLine) {
-          c = line;    // solid white finish stripe
         } else if (v === 2 || v === 3 || v === 10 || v === 11) {
           c = line;    // bold white edge line
         } else if (v === 6 || v === 7) {
@@ -1519,6 +1518,48 @@ const Tracks = (function () {
     }
     addBox(out, [gateX, gateY + 6.2, gateZ], [w * 2 + 4, 0.8, 1.2], [0.1, 0.1, 0.12], [r, u, t]);
     addBox(out, [gateX, gateY + 6.8, gateZ], [w * 1.4, 0.6, 0.6], [0.95, 0.95, 0.97], [r, u, t]);
+    return out;
+  }
+
+  // Chequered start/finish line: a grid of black/white squares laid as a thin
+  // decal across the road at s=0, sitting a hair above the asphalt and following
+  // the local road basis (so it banks/slopes with the surface). Real circuits
+  // paint a proper chequered line here — far cleaner than the old solid-white
+  // band that filled a whole ~4 m road segment and looked sprayed on.
+  function buildStartLine(track) {
+    const out = { pos: [], nrm: [], col: [], idx: [] };
+    const r = [track.rx[0], track.ry[0], track.rz[0]];
+    const t = [track.tx[0], track.ty[0], track.tz[0]];
+    const u = upOf(track, 0);
+    const w = track.hw[0];
+    const P = [track.px[0], track.py[0], track.pz[0]];
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const dark = [0.05, 0.05, 0.06];
+    const SQ = 0.5;                          // square size (m)
+    const rows = 2;                          // two squares deep (~1 m line)
+    const depth = rows * SQ;
+    const cols = Math.max(2, Math.round((2 * w) / SQ));
+    const colW = (2 * w) / cols;
+    const lift = 0.05;                        // along the road normal, just above the asphalt
+    let base = 0;
+    for (let ri = 0; ri < rows; ri++) {
+      for (let ci = 0; ci < cols; ci++) {
+        const c = (((ri + ci) & 1) === 0) ? white : dark;
+        const o0 = -w + ci * colW, o1 = o0 + colW;
+        const d0 = -depth / 2 + ri * SQ, d1 = d0 + SQ;
+        const vert = (o, d) => {
+          out.pos.push(P[0] + r[0] * o + t[0] * d + u[0] * lift,
+                       P[1] + r[1] * o + t[1] * d + u[1] * lift,
+                       P[2] + r[2] * o + t[2] * d + u[2] * lift);
+          out.nrm.push(u[0], u[1], u[2]);
+          out.col.push(c[0], c[1], c[2]);
+        };
+        // verts: (o0,d0) (o1,d0) (o0,d1) (o1,d1) — same CCW winding as the road
+        vert(o0, d0); vert(o1, d0); vert(o0, d1); vert(o1, d1);
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+        base += 4;
+      }
+    }
     return out;
   }
 

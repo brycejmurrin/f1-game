@@ -551,6 +551,7 @@ function loadTrack(idx) {
       GLX.freeMesh(track.meshes.terrain);
       GLX.freeMesh(track.meshes.props);
       GLX.freeMesh(track.meshes.gate);
+      GLX.freeMesh(track.meshes.startline);
     }
     track = Tracks.build(def);
     builtTrackId = def.id;
@@ -2034,6 +2035,10 @@ function render(dt) {
                    : { roughness: 0.14, specular: 0.85, detail: 0.06 })
           : (night ? { emissive: 0.09, roughness: 0.85, specular: 0.20, detail: 0.22 }
                    : { roughness: 0.85, specular: 0.20, detail: 0.22 }));
+  if (!hideMeshes.startline && track.meshes.startline) GLX.draw(track.meshes.startline, MAT_IDENT,
+    wet   ? { roughness: 0.16, specular: 0.80, detail: 0 }
+          : (night ? { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 }
+                   : { roughness: 0.80, specular: 0.22, detail: 0 }));
   if (!hideMeshes.props) GLX.draw(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: 0.35, roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
