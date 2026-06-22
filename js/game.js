@@ -1640,7 +1640,6 @@ function updateCar(c, dt, ranked) {
       c.head = Math.atan2(smp.t[0], smp.t[2]);
       c.vLat = 0;
       c.yawRateCur = 0;
-      c._assistPrev = 0;
     }
     // Fade the lateral model out toward a standstill so a parked car can't be
     // spun by steering (slip angle is undefined at zero speed).
@@ -1679,15 +1678,7 @@ function updateCar(c, dt, ranked) {
       const ratio = (c.yawRateCur || 0) / rNeed;   // >1 = rotating faster than needed
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
-    const assistTarget = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase;
-    // Slew-limit the assist's road-wheel angle so it can never SNAP in: even if
-    // curvature or the v² term jumps on hard high-speed turn-in, the assisted
-    // lock ramps toward its target at a bounded rate instead of jerking the car
-    // to the apex. The cap is generous (well above any normal corner's ramp) so
-    // it only clips genuine spikes, leaving ordinary cornering response intact.
-    const assistStep = 3.0 * dt;   // rad/s max change of the assisted steer angle
-    let assistDelta = (c._assistPrev ?? 0) + clamp(assistTarget - (c._assistPrev ?? 0), -assistStep, assistStep);
-    c._assistPrev = assistDelta;
+    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase;
     const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
