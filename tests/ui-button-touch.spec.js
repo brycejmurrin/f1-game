@@ -78,7 +78,7 @@ test.describe("Pause menu — touch mode", () => {
 test.describe("Auto-throttle in button/touch mode", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
-  test("throttle button hidden in button mode", async ({ page }) => {
+  test("throttle button visible in button mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openPauseMenu(page);
@@ -86,10 +86,10 @@ test.describe("Auto-throttle in button/touch mode", () => {
     await page.locator("#pm-resume").click();
     await page.locator("#pausemenu").waitFor({ state: "hidden" });
 
-    // In button mode, autoThrottle() returns true → throttle button hidden
+    // Button mode exposes an explicit GAS button for manual throttle control
     const throttleBtn = page.locator("#btn-throttle");
     if (await throttleBtn.count() > 0) {
-      await expect(throttleBtn).toBeHidden();
+      await expect(throttleBtn).toBeVisible();
     }
     await page.screenshot({ path: "tests/ui-screenshots/hud-button-mode.png" });
   });
