@@ -103,7 +103,8 @@
 .dh-race-main { flex: 1; min-width: 0; }
 .dh-race-name { font-size: 14px; color: #f2f2f5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dh-race-sub { font-size: 12px; color: #8a8a95; margin-top: 2px; }
-.dh-race-date { font-size: 12px; color: #c4c4c8; flex: 0 0 auto; text-align: right; }
+.dh-race-time { font-size: 11px; color: #7a7a85; margin-top: 2px; }
+.dh-race-date { font-size: 12px; color: #c4c4c8; flex: 0 0 auto; text-align: right; min-width: 56px; }
 .dh-race-next { background: rgba(225, 6, 0, 0.1); border-radius: 8px; }
 .dh-chip-next { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; background: #e10600; color: #fff; padding: 2px 6px; border-radius: 4px; }
 .dh-chip-sprint { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; background: #4a4a9a; color: #fff; padding: 2px 6px; border-radius: 4px; }
@@ -125,7 +126,8 @@
 .dh-swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-wins { font-size: 11px; color: #f6d200; font-weight: 700; flex: 0 0 auto; }
-.dh-pts { width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; }
+.dh-pts { min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; }
+.dh-gap { font-size: 11px; color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; }
 
 /* last race */
 .dh-lr-head { margin-bottom: 12px; }
@@ -146,6 +148,9 @@
 .dh-td-grid { width: 32px; text-align: center; color: #8a8a95; flex: 0 0 auto; }
 .dh-td-time { width: 92px; text-align: right; color: #c4c4c8; font-size: 12px; flex: 0 0 auto; }
 .dh-td-pts { width: 36px; text-align: right; font-weight: 700; flex: 0 0 auto; }
+.dh-table tbody tr.dh-lr-p1 { color: #ffd700; background: rgba(255, 215, 0, 0.07); border-left: 3px solid #ffd700; }
+.dh-table tbody tr.dh-lr-p2 { color: #c0c0c0; background: rgba(192, 192, 192, 0.05); border-left: 3px solid #c0c0c0; }
+.dh-table tbody tr.dh-lr-p3 { color: #cd9b5a; background: rgba(205, 155, 90, 0.05); border-left: 3px solid #cd9b5a; }
 
 /* live */
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: 4px; }
@@ -177,7 +182,9 @@
   width: 100%; max-width: 600px; height: auto;
   background: #07070c; border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px; display: block;
+  cursor: ew-resize;
 }
+.dh-canvas.dh-map { cursor: default; }
 .dh-canvas.dh-map { max-width: 320px; margin: 0 auto; aspect-ratio: 1 / 1; }
 .dh-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11px; color: #9a9aa5; margin-top: -2px; }
 .dh-legend-item {
@@ -190,21 +197,6 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dh-legend-item.dh-off { opacity: 0.35; }
 .dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
-
-/* scrub readout — values at the cursor position on the trace chart */
-.dh-readout {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
-  min-height: 22px; margin: 2px 0 4px;
-  font-size: 12px; color: #d4d4d8;
-}
-.dh-ro-hint { font-size: 11px; color: #7a7a85; font-style: italic; }
-.dh-ro-time {
-  font-weight: 800; color: #fff; font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.08); border-radius: 5px; padding: 2px 7px;
-}
-.dh-ro-cell { display: inline-flex; align-items: center; gap: 5px; }
-.dh-ro-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.dh-ro-val { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ---------- lap-replay transport + gauge dashboard ---------- */
 .dh-transport { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
@@ -246,8 +238,8 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dh-gfill { height: 100%; width: 0%; border-radius: 4px; transition: width 0.05s linear; }
 .dh-gdrs-pill { font-size: 14px; font-weight: 800; letter-spacing: 0.05em; color: #5a5a65; line-height: 1; margin-top: 2px; }
 .dh-gdrs-pill.dh-on { color: #00e0c0; text-shadow: 0 0 8px rgba(0, 224, 192, 0.6); }
-.dh-gdelta.dh-pos { color: #ff6b6b; }
-.dh-gdelta.dh-neg { color: #3fb950; }
+.dh-gdelta.dh-pos { color: #3fb950; }
+.dh-gdelta.dh-neg { color: #ff6b6b; }
 
 /* ---------- live controls + sortable classification ---------- */
 .dh-livecontrols { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }

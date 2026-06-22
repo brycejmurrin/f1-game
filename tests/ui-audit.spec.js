@@ -146,13 +146,8 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.locator("#mb-race").click();
       await page.locator("#select").waitFor({ state: "visible" });
-      // open track detail by revealing it directly
-      await page.evaluate(() => {
-        const t = Tracks.LIST[0];
-        document.getElementById("track-detail").hidden = false;
-        document.getElementById("track-detail-name").textContent = t ? t.name : "Bahrain";
-        document.getElementById("track-detail-meta").textContent = "Test";
-      });
+      // Click the circuit preview map — triggers openTrackDetail() with real canvas/elevation
+      await page.locator("#sel-preview-map").click();
       await page.locator("#track-detail").waitFor({ state: "visible" });
       await page.waitForTimeout(300);
       await shot(page, `${orient}-13-track-detail`);
@@ -174,12 +169,26 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await shot(page, `${orient}-14-advanced-steering`);
     });
 
-    test("15 howtoplay", async ({ page }) => {
+    test("15 season standings panel", async ({ page }) => {
       await page.goto("/");
       await waitReady(page);
-      await page.locator("#mb-help").click();
-      await page.locator("#howtoplay").waitFor({ state: "visible" });
-      await shot(page, `${orient}-15-howtoplay`);
+      // Start a season race, finish it, then open standings from main menu
+      await page.locator("#mb-season").click();
+      await page.locator("#select").waitFor({ state: "visible" });
+      await page.locator("#sel-go").click();
+      await page.locator("#race-settings").waitFor({ state: "visible" });
+      await page.locator("#rs-go").click();
+      await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => window.__apex.park(0));
+      await page.waitForTimeout(200);
+      await page.evaluate(() => window.__apex.finishRace());
+      await page.locator("#results").waitFor({ state: "visible" });
+      await page.locator("#res-menu").click();
+      await page.waitForTimeout(300);
+      await page.locator("#mb-standings").waitFor({ state: "visible" });
+      await page.locator("#mb-standings").click();
+      await page.locator("#standings").waitFor({ state: "visible" });
+      await shot(page, `${orient}-15-standings`);
     });
 
     test("16 standings", async ({ page }) => {
@@ -190,6 +199,130 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#select").waitFor({ state: "visible" });
       await page.waitForTimeout(300);
       await shot(page, `${orient}-16-season-select`);
+    });
+
+    test("17 wet weather HUD", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.race("bahrain", "day", "wet"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => window.__apex.park(0.1));
+      await page.waitForTimeout(1000);
+      await shot(page, `${orient}-17-hud-wet`);
+    });
+
+    test("18 night race HUD", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.race("singapore", "night", "dry"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => window.__apex.park(0.1));
+      await page.waitForTimeout(1000);
+      await shot(page, `${orient}-18-hud-night`);
+    });
+
+    test("19 cockpit camera", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.race("bahrain"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => {
+        window.__apex.camera("cockpit");
+        window.__apex.park(0.1);
+        window.__apex.jump(0.1, 50, 0);
+        window.__apex.snapCam();
+      });
+      await page.waitForTimeout(600);
+      await shot(page, `${orient}-19-cockpit-cam`);
+    });
+
+    test("20 TT results screen", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.tt("monza"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => window.__apex.park(0));
+      await page.waitForTimeout(200);
+      await page.evaluate(() => window.__apex.finishRace());
+      await page.locator("#results").waitFor({ state: "visible" });
+      await page.waitForTimeout(200);
+      await shot(page, `${orient}-20-results-tt`);
+    });
+
+    test("21 season results screen", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-season").click();
+      await page.locator("#select").waitFor({ state: "visible" });
+      await page.locator("#sel-go").click();
+      await page.locator("#race-settings").waitFor({ state: "visible" });
+      await page.locator("#rs-go").click();
+      await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => window.__apex.park(0));
+      await page.waitForTimeout(200);
+      await page.evaluate(() => window.__apex.finishRace());
+      await page.locator("#results").waitFor({ state: "visible" });
+      await page.waitForTimeout(200);
+      await shot(page, `${orient}-21-results-season`);
+    });
+
+    test("22 advanced steering expanded", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.race("bahrain"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      await page.evaluate(() => {
+        const rd = document.getElementById("rotate-device");
+        if (rd) rd.hidden = true;
+        document.getElementById("pausemenu").hidden = false;
+      });
+      await page.locator("#pm-advanced").click();
+      await page.locator("#advanced").waitFor({ state: "visible" });
+      await page.locator("#adv-more").click();
+      await page.locator("#adv-extra").waitFor({ state: "visible" });
+      await page.waitForTimeout(300);
+      await shot(page, `${orient}-22-advanced-expanded`);
+    });
+
+    test("23 portrait rotate-device overlay", async ({ page }) => {
+      if (orient === "landscape") { test.skip(); return; }
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.race("bahrain"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+      // Do NOT hide rotate-device — that is the whole point of this test
+      await page.evaluate(() => window.__apex.go());
+      await page.waitForTimeout(500);
+      await shot(page, `${orient}-23-rotate-device`);
+    });
+
+    test("24 data hub schedule tab", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-data").click();
+      await page.locator("#datahub").waitFor({ state: "visible" });
+      await page.waitForTimeout(600);
+      await shot(page, `${orient}-24-datahub-schedule`);
+    });
+
+    test("25 data hub standings tab", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-data").click();
+      await page.locator("#datahub").waitFor({ state: "visible" });
+      await page.locator(".dh-tab").filter({ hasText: "STANDINGS" }).click();
+      await page.waitForTimeout(600);
+      await shot(page, `${orient}-25-datahub-standings`);
+    });
+
+    test("26 data hub last race tab", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-data").click();
+      await page.locator("#datahub").waitFor({ state: "visible" });
+      await page.locator(".dh-tab").filter({ hasText: "LAST RACE" }).click();
+      await page.waitForTimeout(600);
+      await shot(page, `${orient}-26-datahub-lastrace`);
     });
   });
 }
