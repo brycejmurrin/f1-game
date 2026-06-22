@@ -2534,43 +2534,32 @@ function buildSelect() {
   renderStatBars($("sel-stats"), team);
   if (!seasonMode) {
     els.selTracks.textContent = "";
-    els.selTracks.classList.add("track-grid");
     Tracks.LIST.forEach((t, i) => {
-      const card = document.createElement("button");
-      card.className = "track-card" + (i === trackIdx ? " active" : "");
-      card.setAttribute("aria-label", t.name);
+      const row = document.createElement("button");
+      row.className = "track-row" + (i === trackIdx ? " active" : "");
+      row.setAttribute("aria-label", t.name);
 
-      const cv = document.createElement("canvas");
-      cv.className = "track-card-map";
-      cv.width = 300; cv.height = 188;
-      card.appendChild(cv);
-      // draw the circuit outline from the game's own spline geometry,
-      // tinted by the circuit's theme
-      TrackMaps.draw(cv, t, { color: TrackMaps.themeColor(t), startColor: "#e10600", width: 3 });
+      const nm = document.createElement("span");
+      nm.className = "track-row-name";
+      nm.textContent = t.name + (t.night ? " ☾" : "");
+      row.appendChild(nm);
 
-      const info = document.createElement("div");
-      info.className = "track-card-info";
-      const name = document.createElement("div");
-      name.className = "track-card-name";
-      name.textContent = t.name + (t.night ? " ☾" : "");
-      info.appendChild(name);
-      const meta = document.createElement("div");
-      meta.className = "track-card-meta";
-      meta.textContent = [t.country, t.lengthKm ? t.lengthKm.toFixed(1) + " km" : ""].filter(Boolean).join(" · ");
-      info.appendChild(meta);
-      // in time trial, surface each circuit's leaderboard-best lap
+      const mt = document.createElement("span");
+      mt.className = "track-row-meta";
+      mt.textContent = [t.country, t.lengthKm ? t.lengthKm.toFixed(1) + " km" : ""].filter(Boolean).join(" · ");
+      row.appendChild(mt);
+
       if (timeTrial) {
         const board = ttBoard(t.id);
         const rec = board.length ? board[0].t : Infinity;
-        const recEl = document.createElement("div");
-        recEl.className = "track-card-rec";
+        const recEl = document.createElement("span");
+        recEl.className = "track-row-rec";
         recEl.textContent = isFinite(rec) ? "★ " + fmtTime(rec) : "—";
-        info.appendChild(recEl);
+        row.appendChild(recEl);
       }
-      card.appendChild(info);
 
-      card.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); scheduleFlybyTrack(); };
-      els.selTracks.appendChild(card);
+      row.onclick = () => { trackIdx = i; store.set("track", i); buildSelect(); tickUi(); scheduleFlybyTrack(); };
+      els.selTracks.appendChild(row);
     });
     updateTrackPreview();
   }
