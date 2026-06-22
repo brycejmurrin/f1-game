@@ -698,6 +698,18 @@ function applyRaceSettings() {
     _cloudBase = frameSky.cloud !== undefined ? frameSky.cloud
                : (isNightSession ? 0.22 : 0.4);
 
+    // Global night ambient FLOOR: some night tracks ship very dark palette
+    // ambients and rely entirely on per-mesh emissive to stay legible. Lift
+    // any night track up to a baseline so the road and scenery always read,
+    // without touching tracks that are already brighter (a floor, not a
+    // multiply — brilliantly-lit street circuits keep their tuned values).
+    if (isNightSession && frame.ambientSky && frame.ambientGround) {
+      const floorSky = [0.11, 0.11, 0.17], floorGnd = [0.05, 0.05, 0.09];
+      // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
+      frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.max(v, floorSky[i]));
+      frame.ambientGround = frame.ambientGround.map((v, i) => Math.max(v, floorGnd[i]));
+    }
+
     // ── Per-track atmosphere (default mode only) ──────────────────────────
     // Nudge cloud cover and fog to give circuits a characteristic sky
     // without overriding any explicit raceWeather or raceTimeOfDay choice.

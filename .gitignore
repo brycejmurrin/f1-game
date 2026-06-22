@@ -14,3 +14,4 @@ tests/ui-screenshots/
 
 # generated follow-cam track traces (tests/track-trace.spec.js) — regenerable
 tests/track-trace/
+tests/scenery-shots/
