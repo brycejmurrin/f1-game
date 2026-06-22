@@ -2676,8 +2676,38 @@ function openTrackDetail() {
   modal.hidden = false;
   const cv = document.getElementById("track-detail-canvas");
   requestAnimationFrame(function () {
-    const rect = cv.getBoundingClientRect();
-    if (rect.width > 0) { cv.width = Math.round(rect.width); cv.height = Math.round(rect.height || rect.width * 0.7); }
+    // Compute the track's natural aspect ratio from its outline points so the
+    // canvas matches the circuit shape instead of being CSS-stretched.
+    let trackAspect = 1.2;
+    const pts = TrackMaps.outline(t);
+    if (pts && pts.length > 2) {
+      let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+      for (let i = 0; i < pts.length; i++) {
+        if (pts[i][0] < minx) minx = pts[i][0]; if (pts[i][0] > maxx) maxx = pts[i][0];
+        if (pts[i][1] < miny) miny = pts[i][1]; if (pts[i][1] > maxy) maxy = pts[i][1];
+      }
+      trackAspect = Math.max(0.5, Math.min(2.5, (maxx - minx) / ((maxy - miny) || 1)));
+    }
+    const header = document.getElementById("track-detail-header");
+    const headerH = header.getBoundingClientRect().height || 40;
+    const isLandscape = window.innerWidth > window.innerHeight;
+    const availW = window.innerWidth - 24;
+    const availH = window.innerHeight - headerH - 26;
+    let canvW, canvH;
+    if (isLandscape) {
+      canvH = availH;
+      canvW = Math.round(canvH * trackAspect);
+      if (canvW > availW - 120) canvW = availW - 120;
+    } else {
+      canvW = availW;
+      const cornersEl = document.getElementById("track-detail-corners");
+      const cornersH = cornersEl ? (cornersEl.scrollHeight || 90) : 90;
+      canvH = Math.max(150, availH - cornersH - 8);
+    }
+    cv.width = Math.max(200, Math.round(canvW));
+    cv.height = Math.max(150, Math.round(canvH));
+    cv.style.width = cv.width + "px";
+    cv.style.height = cv.height + "px";
     TrackMaps.draw(cv, t, {
       color: TrackMaps.themeColor(t), startColor: "#e10600",
       width: 5, pad: 30, corners: true, cornerR: 12, cornerFont: 13,
