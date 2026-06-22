@@ -1435,7 +1435,15 @@ function updateCar(c, dt, ranked) {
     // more lock to hold the same radius as speed rises. Supplying both is what
     // lets the assist actually keep the car on the road at racing speed (at low
     // speed the v² term vanishes and it's just gentle centring).
-    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed) * k;
+    // The speed² term compensates for understeer that grows with speed. But
+    // braking hard into a corner loads the front axle (weight transfer below)
+    // while you're still fast, so the v² assist spikes and over-rotates the car
+    // onto the apex — the "snap to the inside" when braking for a corner. Fade
+    // that compensation with braking effort, using the SMOOTHED longitudinal
+    // accel so it eases in rather than toggling: trail-braking still rotates the
+    // car, but the hard-braking turn-in spike is gone.
+    const brakeFade = 1 - 0.5 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
+    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k;
     const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
