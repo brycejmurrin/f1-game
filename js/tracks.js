@@ -461,17 +461,19 @@ const Tracks = (function () {
         }
         pos.push(px[k] + r[0] * o + u[0] * (rise[v] + by), py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02, pz[k] + r[2] * o + u[2] * (rise[v] + by));
         nrm.push(u[0], u[1], u[2]);
-        // Start/finish line: 3-segment checker spanning ~12 m at s=0.
-        // Squares alternate left/right per segment so aliasing can't occur
-        // (squares are ~4 m × half-track-width, not sub-pixel stripes).
-        const isStartLine = k <= 2 && v >= 2 && v <= 11;
+        // Start/finish line: 2-segment checker (~8 m) with fine lateral bands.
+        // Lateral zone is determined by actual position (2 m bands) so squares
+        // are roughly 4 m × 2 m — visible but not blocky. Both dimensions
+        // alternate so k=0 and k=1 invert each other (true checker grid).
+        const isStartLine = k <= 1 && v >= 2 && v <= 11;
         let c;
         if (v === 0 || v === 13) {
           c = grass;
         } else if (v === 1 || v === 12) {
           c = grass;   // kerb ribbons added separately by buildKerbs
         } else if (isStartLine) {
-          const whiteSquare = (v <= 6) ? (k % 2 === 0) : (k % 2 === 1);
+          const lateralZone = Math.floor((o + w) / 2.0); // 2 m-wide lateral bands
+          const whiteSquare = (lateralZone + k) % 2 === 0;
           c = whiteSquare ? line : [0.08, 0.08, 0.09];
         } else if (v === 2 || v === 3 || v === 10 || v === 11) {
           c = line;    // bold white edge line
