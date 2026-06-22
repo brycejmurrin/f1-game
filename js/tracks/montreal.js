@@ -29,12 +29,12 @@
 
       // ---- Île Notre-Dame palette (bright June day) ----
       const WALL = [0.78, 0.79, 0.80];      // pale concrete
-      const RIVER = [0.22, 0.45, 0.58];     // St. Lawrence
-      const BASIN = [0.20, 0.50, 0.60];     // Olympic rowing lake
-      const GRASS = [0.32, 0.58, 0.30];     // park green (vibrant)
-      const FOLIAGE = [0.20, 0.44, 0.24];   // deep tree green (boosted)
-      const FOLIAGE2 = [0.26, 0.50, 0.26];  // lighter June foliage (boosted)
-      const HEDGE = [0.20, 0.40, 0.20];     // clipped hedge green
+      const RIVER = [0.28, 0.48, 0.62];     // St. Lawrence (desaturated)
+      const BASIN = [0.26, 0.52, 0.64];     // Olympic rowing lake (cleaner)
+      const GRASS = [0.30, 0.55, 0.28];     // park green (balanced)
+      const FOLIAGE = [0.22, 0.46, 0.26];   // deep tree green
+      const FOLIAGE2 = [0.28, 0.52, 0.28];  // lighter June foliage
+      const HEDGE = [0.22, 0.42, 0.22];     // clipped hedge green
       const PATH = [0.62, 0.60, 0.55];      // paved cycle path
 
       const KERB_R = [0.82, 0.20, 0.18], KERB_W = [0.90, 0.90, 0.90];
@@ -109,30 +109,17 @@
       marshalPost(K(0.05), 1, 9);
 
       // ===================================================================
-      // s 0.10 L — Olympic Basin rowing lake (continuous teal water band)
+      // s 0.07–0.20 L — Olympic Basin rowing lake (continuous water band)
       // ===================================================================
-      for (let i = 0; i < 5; i++) {
-        groundPlane(K(0.07 + i * 0.022), -1, 14, [200, 2, 260], BASIN);
+      for (let i = 0; i < 8; i++) {
+        groundPlane(K(0.065 + i * 0.020), -1, 14, [220, 2, 280], BASIN);
       }
       // Far bank of the basin: low green treeline ridge across the water
-      for (let i = 0; i < 14; i++) {
-        const k = K(0.07 + (i / 14) * 0.12);
-        backdrop(k, -1, 150 + hash(i * 7) * 30, [22, 8 + hash(i * 3) * 6, 22], [0.20, 0.40, 0.22]);
+      for (let i = 0; i < 12; i++) {
+        const k = K(0.08 + (i / 12) * 0.12);
+        backdrop(k, -1, 140 + hash(i * 11) * 25, [20, 7 + hash(i * 5) * 5, 20], [0.24, 0.42, 0.24]);
       }
 
-      // ===================================================================
-      // s 0.15 both — Parkland trees (green cube canopies on trunks)
-      // ===================================================================
-      for (let i = 0; i < 34; i++) {
-        const s = 0.13 + i * 0.0022;
-        const side = (i % 2) ? 1 : -1;
-        tree(K(s), side, 7 + hash(i * 5) * 12, 6 + hash(i * 3) * 4, (i % 3) ? FOLIAGE : FOLIAGE2);
-      }
-      // Shrub clumps dotted between the trees for low-level greenery
-      for (let i = 0; i < 16; i++) {
-        bush(K(0.135 + i * 0.0045), (i % 2) ? 1 : -1, 8 + hash(i * 9) * 5,
-          (i % 2) ? [0.22, 0.42, 0.20] : [0.18, 0.36, 0.18]);
-      }
 
       // ===================================================================
       // s 0.25 R far — Casino de Montréal (faceted pale Expo pavilion)
@@ -147,48 +134,24 @@
       }
 
       // ===================================================================
-      // s 0.30 L far — Biosphère dome (sphere via stacked frustums + cone)
+      // s 0.30 L far — Biosphère geodesic dome (landmark across water)
       // ===================================================================
       {
         const k = K(0.30);
-        const a = anchor(k, -1, 200);
-        const DOME = [0.80, 0.82, 0.85];
-        const rings = [[40, 36, 14], [36, 28, 14], [28, 16, 14], [16, 6, 12]];
+        const a = anchor(k, -1, 220);
+        const DOME = [0.78, 0.80, 0.83];
+        const rings = [[45, 39, 15], [39, 28, 16], [28, 14, 14], [14, 4, 12]];
         let y = 0;
         for (const [rb, rt, h] of rings) {
           addFrustum(out, vadd(a.c, a.u, y + h / 2), rb, rt, h, DOME, 12, [a.r, a.u, a.t]);
           y += h;
         }
-        addCone(out, vadd(a.c, a.u, y), 6, 8, DOME, 10, [a.r, a.u, a.t]);
+        addCone(out, vadd(a.c, a.u, y), 4, 8, DOME, 10, [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s 0.38 L far — Montreal CBD skyline across the river
-      // ===================================================================
-      // Continuous St. Lawrence water band between island and downtown
+      // St. Lawrence water band between island and downtown
       for (let i = 0; i < 5; i++) {
         groundPlane(K(0.30 + i * 0.022), -1, 30, [260, 2, 240], RIVER);
-      }
-      // Front rank: dense unbroken band of towers (no gaps, varied heights)
-      for (let i = 0; i < 30; i++) {
-        const k = K(0.30 + (i / 30) * 0.16);
-        const dist = 190 + hash(i * 7) * 50;
-        const w = 18 + hash(i * 3) * 16;
-        const h = 70 + hash(i * 11) * 150;
-        building(k, -1, dist - w / 2, w, h, w, { wall: [0.55, 0.58, 0.64], window: [0.66, 0.74, 0.84], floor: 6 });
-      }
-      // Mid rank: fills the gaps behind the front rank
-      for (let i = 0; i < 26; i++) {
-        const k = K(0.305 + (i / 26) * 0.155);
-        const dist = 260 + hash(i * 13) * 60;
-        const w = 16 + hash(i * 5) * 14;
-        const h = 60 + hash(i * 9) * 120;
-        building(k, -1, dist - w / 2, w, h, w, { wall: [0.52, 0.55, 0.61], window: [0.62, 0.70, 0.80], floor: 6 });
-      }
-      // hazed back silhouette band — continuous wrap
-      for (let i = 0; i < 28; i++) {
-        const k = K(0.30 + (i / 28) * 0.17);
-        backdrop(k, -1, 340 + hash(i * 17) * 60, [26, 50 + hash(i * 13) * 90, 26], [0.50, 0.55, 0.62]);
       }
 
       // ===================================================================
@@ -225,43 +188,19 @@
       billboard(K(0.52), 1, 11, 12, 4, [0.30, 0.50, 0.85]);
       billboard(K(0.58), -1, 11, 12, 4, [0.88, 0.82, 0.22]);
 
-      // ===================================================================
-      // s 0.60 L mid — Casino Straight flanked by Olympic Basin water
-      // ===================================================================
-      for (let i = 0; i < 4; i++) {
-        groundPlane(K(0.58 + i * 0.024), -1, 14, [190, 2, 240], BASIN);
-      }
-      for (let i = 0; i < 18; i++) {
-        tree(K(0.575 + i * 0.0035), 1, 7 + hash(i * 4) * 9, 5 + hash(i * 2) * 4, FOLIAGE);
-      }
 
       // ===================================================================
-      // s 0.69–0.90 — leafy back stretch through Parc Jean-Drapeau
+      // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
       // ===================================================================
-      // Dense parkland trees both verges (filling the previously bare stretch)
-      for (let i = 0; i < 44; i++) {
-        const s = 0.66 + i * 0.0055;
-        const side = (i % 2) ? 1 : -1;
-        tree(K(s), side, 7 + hash(i * 6) * 12, 5 + hash(i * 3) * 5, (i % 3) ? FOLIAGE : FOLIAGE2);
-      }
-      // Shrubs + grass mounds threaded between
-      for (let i = 0; i < 20; i++) {
-        bush(K(0.665 + i * 0.0115), (i % 2) ? -1 : 1, 8 + hash(i * 11) * 6,
-          (i % 2) ? [0.20, 0.40, 0.18] : [0.24, 0.44, 0.22]);
-      }
-      // Paved cycle-path slabs hinting the park's bike trails (well off track)
-      for (let i = 0; i < 10; i++) {
-        place(K(0.70 + i * 0.018), 1, 12 + hash(i * 5) * 4, [3, 0.3, 9], PATH);
-      }
-      // A small grandstand + bridge canal scenery on the back straight
-      grandstand(0.74, -1, 11, 64, [0.47, 0.48, 0.53], [0.56, 0.40, 0.36]);
-      // Canal water slab off the right verge (island laced with canals)
+      // Grandstand midway on the back straight
+      grandstand(0.74, -1, 11, 64, [0.48, 0.49, 0.54], [0.56, 0.40, 0.36]);
+      // Canal/water feature off the right verge
       for (let i = 0; i < 3; i++) {
-        groundPlane(K(0.78 + i * 0.02), 1, 16, [120, 2, 150], RIVER);
+        groundPlane(K(0.78 + i * 0.020), 1, 16, [130, 2, 160], RIVER);
       }
-      // Treeline ridge on the canal's far bank
-      for (let i = 0; i < 10; i++) {
-        backdrop(K(0.78 + (i / 10) * 0.08), 1, 130 + hash(i * 7) * 30, [20, 9, 20], [0.20, 0.40, 0.22]);
+      // Far treeline backdrop on the canal's far bank
+      for (let i = 0; i < 8; i++) {
+        backdrop(K(0.78 + (i / 8) * 0.08), 1, 135 + hash(i * 11) * 25, [22, 8, 22], [0.22, 0.42, 0.24]);
       }
       billboard(K(0.84), -1, 11, 12, 4, [0.86, 0.30, 0.26]);
 
@@ -276,126 +215,77 @@
       grandstand(0.93, -1, 12, 70, [0.48, 0.49, 0.54], [0.58, 0.36, 0.32]);
 
       // ===================================================================
-      // s 0.96 R — WALL OF CHAMPIONS: unbroken pale concrete wall on exit
+      // s 0.95–0.99 R — Wall of Champions: iconic concrete wall + red stripe
       // ===================================================================
-      wall(0.955, 0.99, 1, 0.8, 1.8, [0.82, 0.83, 0.84], 0.7);
-      // "Bienvenue au Québec" graphic band along it (signature red stripe)
+      wall(0.955, 0.99, 1, 0.8, 1.8, [0.80, 0.81, 0.82], 0.6);
+      // Red "Bienvenue" signature stripe at the wall face
       {
         const k = K(0.97);
-        const a = anchor(k, 1, 0.8);
-        addBox(out, vadd(a.c, a.u, 1.4), [0.85, 0.6, 18], [0.85, 0.30, 0.30], [a.r, a.u, a.t]);
-        // white sponsor stripe beneath the red band
-        addBox(out, vadd(a.c, a.u, 0.8), [0.86, 0.4, 18], [0.92, 0.92, 0.94], [a.r, a.u, a.t]);
+        const a = anchor(k, 1, 0.7);
+        // Clean single red band: the iconic feature
+        addBox(out, vadd(a.c, a.u, 1.1), [0.7, 0.45, 16], [0.88, 0.28, 0.26], [a.r, a.u, a.t]);
       }
-      // Packed grandstand opposite the Wall of Champions watching the chicane
-      grandstand(0.97, -1, 12, 90, [0.49, 0.50, 0.55], [0.60, 0.36, 0.30]);
+      // Grandstand viewing the Wall + final chicane
+      grandstand(0.97, -1, 12, 90, [0.50, 0.51, 0.56], [0.60, 0.36, 0.30]);
       billboard(K(0.96), -1, 12, 14, 4, [0.88, 0.82, 0.22]);
 
       // ===================================================================
-      // ENHANCED SCENERY — CIRCUIT GILLES VILLENEUVE ACCURACY
+      // s 0.58–0.75 R — Casino Straight: water slab + parkland trees
       // ===================================================================
-
-      // Water features: enhanced rowing basin + St. Lawrence river bands
-      // The Olympic rowing basin runs alongside the Casino Straight (s 0.60 L)
       for (let i = 0; i < 6; i++) {
-        groundPlane(K(0.54 + i * 0.018), -1, 12, [220, 2, 280], BASIN);
+        groundPlane(K(0.565 + i * 0.019), 1, 14, [200, 2, 260], BASIN);
       }
-      // Extra water slab: northern shoreline away from the island (s 0.22–0.32)
-      for (let i = 0; i < 4; i++) {
-        groundPlane(K(0.22 + i * 0.025), -1, 200, [280, 2, 200], RIVER);
-      }
-
-      // Biosphère dome — geodesic structure via stacked frustums + cone cap
-      // Placed further back (dist ~240) to simulate the landmark's distance across water
-      {
-        const k = K(0.32);
-        const a = anchor(k, -1, 240);
-        const DOME_COL = [0.76, 0.78, 0.82];
-        // 5 rings of decreasing radius to form a geodesic-like bulge
-        const rings = [[48, 42, 16], [42, 32, 16], [32, 20, 15], [20, 10, 14], [10, 2, 12]];
-        let y = 0;
-        for (const [rb, rt, h] of rings) {
-          addFrustum(out, vadd(a.c, a.u, y + h / 2), rb, rt, h, DOME_COL, 14, [a.r, a.u, a.t]);
-          y += h;
-        }
-        // Geodesic dome cap — cone to apex
-        addCone(out, vadd(a.c, a.u, y), 4, 10, DOME_COL, 12, [a.r, a.u, a.t]);
-      }
-
-      // Parkland trees — dense coverage both sides, especially s 0.15–0.35 and s 0.66–0.90
-      // Parc Jean-Drapeau is heavily wooded; trees line the entire circuit.
-      for (let i = 0; i < 58; i++) {
-        const s = 0.11 + i * 0.0042;
+      for (let i = 0; i < 22; i++) {
+        const s = 0.575 + i * 0.0038;
         const side = (i % 2) ? 1 : -1;
-        const h = hash(i * 17 + 39);
-        const height = 5 + h * 7;
-        const dist = 8 + hash(i * 23) * 10;
-        const col = (i % 5) ? FOLIAGE : FOLIAGE2;
-        tree(K(s), side, dist, height, col);
+        tree(K(s), side, 7 + hash(i * 7) * 10, 5 + hash(i * 4) * 5, (i % 3) ? FOLIAGE : FOLIAGE2);
       }
 
-      // Mid-stretch deciduous trees (Casino Straight, s 0.58–0.75)
-      for (let i = 0; i < 32; i++) {
-        const s = 0.58 + i * 0.0055;
-        const side = (i % 2) ? -1 : 1;
-        const h = hash(i * 31 + 17);
-        const height = 6 + h * 6;
-        const dist = 9 + hash(i * 19) * 8;
-        tree(K(s), side, dist, height, (i % 3) ? FOLIAGE : FOLIAGE2);
+      // ===================================================================
+      // s 0.13–0.85 — Parkland trees (Parc Jean-Drapeau) lining circuit
+      // ===================================================================
+      for (let i = 0; i < 48; i++) {
+        const s = 0.13 + i * 0.0048;
+        const side = (i % 2) ? 1 : -1;
+        const dist = 8 + hash(i * 13) * 9;
+        const height = 5 + hash(i * 7) * 6;
+        tree(K(s), side, dist, height, (i % 4) ? FOLIAGE : FOLIAGE2);
       }
 
-      // Enhanced shrub/bush layer — fine-grained ground-level greenery
-      for (let i = 0; i < 24; i++) {
-        bush(K(0.18 + i * 0.0078), (i % 2) ? 1 : -1, 10 + hash(i * 7) * 5,
-          (i % 3) ? [0.22, 0.42, 0.20] : [0.18, 0.38, 0.18]);
+      // Shrub clumps for low-level ground greenery detail
+      for (let i = 0; i < 18; i++) {
+        bush(K(0.16 + i * 0.0088), (i % 2) ? 1 : -1, 9 + hash(i * 11) * 5,
+          (i % 2) ? [0.24, 0.44, 0.22] : [0.20, 0.40, 0.20]);
       }
 
-      // CBD skyline — denser, more varied tower field
-      // Front rank (s 0.30–0.47): tall, dense towers
-      for (let i = 0; i < 35; i++) {
-        const s = 0.30 + (i / 35) * 0.17;
-        const k = K(s);
-        const h = hash(k * 29 + i * 11);
-        const ht = 90 + h * 160;
-        const w = 11 + hash(k * 13 + i * 3) * 8;
-        const d = w + hash(k * 17 + i) * 4;
-        building(k, -1, 230 + i * 12, w, ht, d,
-          { wall: [0.54, 0.58, 0.65], window: [0.64, 0.72, 0.82], floor: 5 });
-      }
-      // Mid rank (s 0.28–0.48): infill behind front rank
+      // ===================================================================
+      // s 0.30–0.46 L far — Montreal CBD skyline across St. Lawrence
+      // ===================================================================
+      // Front-rank towers (dense, varied heights)
       for (let i = 0; i < 28; i++) {
-        const s = 0.28 + (i / 28) * 0.20;
+        const s = 0.30 + (i / 28) * 0.16;
         const k = K(s);
-        const h = hash(k * 37 + i * 7);
-        const ht = 70 + h * 100;
-        const w = 13 + hash(k * 19 + i) * 6;
-        building(k, -1, 310 + i * 15, w, ht, w,
-          { wall: [0.50, 0.54, 0.61], window: [0.58, 0.66, 0.76], floor: 5 });
+        const h = hash(k * 23 + i * 7);
+        const ht = 85 + h * 155;
+        const w = 12 + hash(k * 11 + i * 3) * 10;
+        building(k, -1, 210 + i * 14, w, ht, w,
+          { wall: [0.56, 0.60, 0.66], window: [0.66, 0.76, 0.86], floor: 6 });
       }
-
-      // Pit paddock hospitality blocks — more buildings at s 0.95–1.00 on right side
-      for (let i = 0; i < 5; i++) {
-        const s = 0.955 + i * 0.0078;
-        building(K(s), 1, 14 + i, 14 + i * 2, 9 + i, 13 + i,
-          { wall: [0.64, 0.66, 0.70], window: [0.44, 0.52, 0.60], floor: 4 });
+      // Mid-rank infill behind the front rank
+      for (let i = 0; i < 20; i++) {
+        const s = 0.305 + (i / 20) * 0.155;
+        const k = K(s);
+        const h = hash(k * 31 + i * 11);
+        const ht = 70 + h * 110;
+        const w = 14 + hash(k * 17 + i * 5) * 8;
+        building(k, -1, 280 + i * 18, w, ht, w,
+          { wall: [0.52, 0.56, 0.62], window: [0.62, 0.70, 0.80], floor: 5 });
       }
-
-      // Wall of Champions — iconic red stripe paint detail
-      // Main wall is already there; add visual emphasis with red graphic stripe
-      billboard(K(0.955), 1, 3, 20, 5, [0.88, 0.20, 0.16]);
-      // Multilayer red accent on the wall itself
-      {
-        const k = K(0.97);
-        const a = anchor(k, 1, 0.6);
-        // Lower red stripe — bold sponsor marking
-        addBox(out, vadd(a.c, a.u, 1.2), [0.88, 0.5, 20], [0.90, 0.22, 0.20], [a.r, a.u, a.t]);
-        // Upper white/cream stripe
-        addBox(out, vadd(a.c, a.u, 1.8), [0.88, 0.45, 20], [0.94, 0.94, 0.96], [a.r, a.u, a.t]);
+      // Hazed skyline backdrop far rank
+      for (let i = 0; i < 20; i++) {
+        const k = K(0.30 + (i / 20) * 0.17);
+        backdrop(k, -1, 330 + hash(i * 19) * 50, [24, 45 + hash(i * 13) * 85, 24], [0.52, 0.57, 0.64]);
       }
-
-      // Extra grandstand detail at final chicane (s 0.90–0.98)
-      grandstand(0.91, -1, 11, 80, [0.47, 0.48, 0.53], [0.58, 0.38, 0.36]);
-      grandstand(0.95, 1, 11, 70, [0.49, 0.50, 0.55], [0.60, 0.36, 0.32]);
     },
   }
   );

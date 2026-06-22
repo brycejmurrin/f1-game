@@ -108,11 +108,11 @@
         }
         // skypark slab bridging the three tops — the boat-shaped roof
         const mid = tops[1];
-        addBox(out, vadd(mid, a.u, 4), [gap * 2 + 18, 13, 30], [0.80, 0.81, 0.88], [a.r, a.u, a.t]);
+        addBox(out, vadd(mid, a.u, 4), [gap * 2 + 18, 3, 30], [0.80, 0.81, 0.88], [a.r, a.u, a.t]);
         // bright neon rim of skypark, the iconic glow
-        addBox(out, vadd(mid, a.u, 17), [gap * 2 + 18, 1.5, 30], NEON[1], [a.r, a.u, a.t]);
+        addBox(out, vadd(mid, a.u, 7), [gap * 2 + 18, 1.5, 30], NEON[1], [a.r, a.u, a.t]);
         // additional skypark detail — central atrium lights
-        addBox(out, vadd(mid, a.u, 10.5), [8, 2.5, 12], [0.9, 0.75, 0.2], [a.r, a.u, a.t]);
+        addBox(out, vadd(mid, a.u, 5), [8, 2.5, 12], [0.9, 0.75, 0.2], [a.r, a.u, a.t]);
       }
 
       // ===================================================================
@@ -143,15 +143,14 @@
       // ===================================================================
       {
         const k = K(0.26);
-        for (let i = 0; i < 12; i++) {
-          const a = anchor(k, 1, 64 + i * 12);
-          const h = 30 + (i % 4) * 12;
+        for (let i = 0; i < 10; i++) {
+          const a = anchor(k, 1, 64 + i * 13);
+          const h = 28 + (i % 4) * 8;
           const c = vadd(a.c, a.r, ((i % 6) - 3) * 7 + (i >= 6 ? 4 : 0));
           const z = vadd(c, a.t, (i >= 6 ? 20 : 0));
           addCyl(out, vadd(z, a.u, h / 2), 2.4, h, [0.16, 0.4, 0.22], 7, [a.r, a.u, a.t]); // trunk
           addCone(out, vadd(z, a.u, h + 4), 13.5 + (i % 2) * 4.5, 9, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]); // glowing canopy
-          addCone(out, vadd(z, a.u, h - 3), 9, 5, NEON[(i % 3)], 8, [a.r, a.u, a.t]); // mid glow band
-          addCone(out, vadd(z, a.u, h + 11), 6, 5, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]); // upper branch cone
+          addCone(out, vadd(z, a.u, h + 10), 7, 4, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]); // upper accent glow
         }
       }
 
@@ -169,14 +168,14 @@
       }
 
       // s 0.45 R far — distant skyline band over the bay (denser, lit-window reflections)
-      for (let i = 0; i < 10; i++) {
-        backdrop(K(0.45), 1, 190 + i * 22, [34, 50 + hash(i * 13) * 80, 30], [0.07, 0.09, 0.16]);
-        if (i % 2) building(K(0.45), 1, 141 + i * 22, 18, 50 + hash(i * 7) * 60, 18, { wall: [0.08, 0.1, 0.17], window: WIN_CYAN, floor: 22 });
+      for (let i = 0; i < 6; i++) {
+        backdrop(K(0.45), 1, 190 + i * 28, [38, 50 + hash(i * 13) * 80, 30], [0.07, 0.09, 0.16]);
+        if (i % 2) building(K(0.45), 1, 141 + i * 28, 20, 50 + hash(i * 7) * 60, 20, { wall: [0.08, 0.1, 0.17], window: WIN_CYAN, floor: 22 });
       }
       // bright reflection strip on the black bay water (s 0.45)
       for (let i = 0; i < 12; i++) {
         const a = anchor(K(0.45), 1, 50 + i * 14);
-        addBox(out, vadd(a.c, a.u, 0.4), [10, 0.6, 5], NEON[i % 4], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 0.6), [10, 0.6, 5], NEON[i % 4], [a.r, a.u, a.t]);
       }
 
       // ===================================================================
@@ -267,8 +266,8 @@
       // ===================================================================
       {
         const k = K(0.86);
-        const a = anchor(k, 1, 40);
-        const r = 30, h = 80;
+        const a = anchor(k, 1, 55);
+        const r = 42, h = 135;
         // central hub + main axle
         addCyl(out, vadd(a.c, a.u, h), 2.2, 2, [0.35, 0.35, 0.38], 8, [a.r, a.u, a.t]);
         // 8 major spokes radiating from hub
@@ -293,7 +292,7 @@
           const p1 = [a.c[0] + a.r[0] * Math.cos(a1) * r + a.t[0] * Math.sin(a1) * r,
                       a.c[1] + a.u[1] * h,
                       a.c[2] + a.r[2] * Math.cos(a1) * r + a.t[2] * Math.sin(a1) * r];
-          addBox(out, [(p0[0] + p1[0]) / 2, h + a.c[1], (p0[2] + p1[2]) / 2], [1, 0.8, (r * 2 * Math.PI / seg)], NEON[1], [a.r, a.u, a.t]);
+          addBox(out, [(p0[0] + p1[0]) / 2, a.c[1] + a.u[1] * h, (p0[2] + p1[2]) / 2], [1, 0.8, (r * 2 * Math.PI / seg)], NEON[1], [a.r, a.u, a.t]);
         }
       }
 
@@ -314,10 +313,10 @@
       }
 
       // ===================================================================
-      // Extra illuminated billboards punctuating the long straights, and lit
-      // waterfront window-band detail to thicken the nightscape (~1.5x density).
+      // Illuminated billboards punctuating straights, with lit waterfront
+      // window-band detail to thicken the nightscape.
       // ===================================================================
-      for (const [s, side, hue] of [[0.04, 1, 1], [0.14, -1, 0], [0.5, -1, 2], [0.58, 1, 3], [0.72, 1, 1], [0.84, -1, 0]]) {
+      for (const [s, side, hue] of [[0.04, 1, 1], [0.14, -1, 0], [0.50, -1, 2], [0.58, 1, 3], [0.72, 1, 1], [0.84, -1, 0]]) {
         billboard(K(s), side, 10, 16, 10, NEON[hue]);
       }
       // low warm waterfront promenade window strips (s 0.18-0.45, 0.80-0.86)
@@ -331,19 +330,19 @@
       // BAY WATER — dark mirror groundPlanes along the open harbour stretches,
       // with bright coloured reflection streaks of the skyline lights + detail.
       // ===================================================================
-      const BAY = [0.04, 0.06, 0.12];  // darker water for night
+      const BAY = [0.08, 0.10, 0.16];  // dark water with slight reflectivity for night
       for (const s of [0.2, 0.3, 0.4, 0.45, 0.82, 0.86]) {
         groundPlane(K(s), 1, 36, [70, 60], BAY);
       }
       // dense reflection strips — the famous Marina Bay light trails
-      for (const s of [0.20, 0.24, 0.28, 0.32, 0.38, 0.42, 0.46, 0.80, 0.84, 0.88]) {
+      for (const s of [0.20, 0.28, 0.38, 0.46, 0.80, 0.88]) {
         const a = anchor(K(s), 1, 42);
-        for (let i = 0; i < 12; i++) {
-          const c = vadd(vadd(a.c, a.t, (i - 3) * 10), a.u, 0.38);
+        for (let i = 0; i < 8; i++) {
+          const c = vadd(vadd(a.c, a.t, (i - 2) * 12), a.u, 0.5);
           const hue = (i + Math.round(s * 17)) % 4;
-          const intensity = 0.3 + Math.sin(i * 0.8) * 0.2;
+          const intensity = 0.35 + Math.sin(i * 0.8) * 0.15;
           const col = [NEON[hue][0] * intensity, NEON[hue][1] * intensity, NEON[hue][2] * intensity];
-          addBox(out, c, [6.5, 0.4, 2.8], col, [a.r, a.u, a.t]);
+          addBox(out, c, [7, 0.4, 3], col, [a.r, a.u, a.t]);
         }
       }
 
@@ -420,7 +419,7 @@
       // lit start-light box on the gantry
       {
         const a = anchor(K(0.0), 0, 0);
-        addBox(out, [px[K(0.0)], a.c[1] + 7.6, pz[K(0.0)]], [4, 1.2, 0.8], [0.9, 0.05, 0.05], null);
+        addBox(out, vadd(a.c, a.u, 7.6), [4, 1.2, 0.8], [0.9, 0.05, 0.05], null);
       }
 
       // ===================================================================
@@ -456,13 +455,10 @@
       }
 
       // ===================================================================
-      // EXTRA LIT BILLBOARDS & NEON SIGNAGE around the lap — punctuate every
-      // straight with shifting neon hoardings (set back, never on tarmac).
+      // Additional neon signage — corner billboards on opposite sides
       // ===================================================================
       for (const [s, side, hue] of [
-        [0.03, -1, 0], [0.08, 1, 2], [0.24, -1, 3], [0.31, 1, 1], [0.39, -1, 0],
-        [0.47, 1, 2], [0.53, -1, 1], [0.61, 1, 3], [0.69, -1, 0], [0.77, 1, 2],
-        [0.85, -1, 3], [0.90, 1, 1], [0.97, -1, 0],
+        [0.08, 1, 2], [0.31, 1, 1], [0.53, -1, 1], [0.77, 1, 2], [0.90, 1, 1],
       ]) {
         billboard(K(s), side, 12, 14 + hash(K(s)) * 6, 9, NEON[hue]);
       }

@@ -102,13 +102,31 @@ float sampleShadow(vec3 wpos) {
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z >= 1.0) return 1.0;
   float t = uShadowTexel;
-  float z = sc.z - uShadowBias;
-  // 4-tap rotated grid — same softness as 3×3 PCF at half the sample count
-  float s = texture(uShadowMap, vec3(sc.xy + vec2(-t,  t * 0.5), z))
-          + texture(uShadowMap, vec3(sc.xy + vec2( t,  t * 0.5), z))
-          + texture(uShadowMap, vec3(sc.xy + vec2(-t, -t * 0.5), z))
-          + texture(uShadowMap, vec3(sc.xy + vec2( t, -t * 0.5), z));
-  return mix(1.0, s * 0.25, uShadowStr);
+  // Slope-scale bias: gentle base + steeper slope term reduces both acne and
+  // peter-panning on angled surfaces (walls, banking kerbs).
+  float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.0, 1.0);
+  float slopeBias = t * 1.5 * tan(acos(max(cosTheta, 0.05)));
+  float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
+  // 8-tap rotated Poisson disk — balanced coverage, cheap enough for mobile.
+  // Disk radius = 1.4 texels → smooth penumbra without over-blurring.
+  const float R = 1.4;
+  vec2 d0 = vec2(-0.94201624, -0.39906216) * t * R;
+  vec2 d1 = vec2( 0.94558609, -0.76890725) * t * R;
+  vec2 d2 = vec2(-0.09418410, -0.92938870) * t * R;
+  vec2 d3 = vec2( 0.34495938,  0.29387760) * t * R;
+  vec2 d4 = vec2(-0.91588581,  0.45771432) * t * R;
+  vec2 d5 = vec2(-0.81544232, -0.87912464) * t * R;
+  vec2 d6 = vec2(-0.38277543,  0.27676845) * t * R;
+  vec2 d7 = vec2( 0.97484398,  0.75648379) * t * R;
+  float s = texture(uShadowMap, vec3(sc.xy + d0, z))
+          + texture(uShadowMap, vec3(sc.xy + d1, z))
+          + texture(uShadowMap, vec3(sc.xy + d2, z))
+          + texture(uShadowMap, vec3(sc.xy + d3, z))
+          + texture(uShadowMap, vec3(sc.xy + d4, z))
+          + texture(uShadowMap, vec3(sc.xy + d5, z))
+          + texture(uShadowMap, vec3(sc.xy + d6, z))
+          + texture(uShadowMap, vec3(sc.xy + d7, z));
+  return mix(1.0, s * 0.125, uShadowStr);
 }
 
 void main() {
@@ -158,10 +176,35 @@ void main() {
   if (envBlend > 0.001) {
     vec3 R = reflect(-V, N);
     float skyT = pow(max(R.y, 0.0), 0.5);
+    // Tint env sample by sky gradient; also pick up a gentle sun-horizon blush
+    // when the reflected direction aligns with the sun (warm chrome/paint sheen).
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
+    float envSunAlign = max(dot(R, uSunDir), 0.0);
+    envColor = mix(envColor, envColor * uSunColor * 1.3, envSunAlign * envSunAlign * (1.0 - rough));
+    // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
+    float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
-    color += envColor * envFresnel * envBlend * (1.0 - uMetalness);
+    color += envColor * envFresnel * envBlend * roughDamp * (1.0 - uMetalness);
+  }
+
+  // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,
+  // tinted by the horizon sky colour. Gives edges a little 'air' without
+  // making surfaces look wet or plastic. Damped by roughness.
+  {
+    float rimFresnel = pow(1.0 - NoV, 3.0);
+    float rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18;
+    color += uSkyHorizon * rimAmt;
+  }
+
+  // Ambient contact darkening: surfaces facing each other (concave) receive
+  // less sky light. Approximate with a bent-normal trick: upward-facing
+  // surfaces receive full ambient; downward faces lose it.
+  // This is already partially handled by hemisphere ambient (N.y), but a
+  // gentle extra crush in the darkest zones adds perceived depth.
+  {
+    float ao = pow(N.y * 0.5 + 0.5, 0.35);
+    color *= mix(0.88, 1.0, ao);
   }
 
   color = mix(color, albedo, uEmissive);
@@ -446,9 +489,8 @@ void main() {
   outColor = vec4(s, 1.0);
 }`;
 
-  // Composite: scene + bloom, then a highlight-preserving rolloff (identity below
-  // ~0.8 so the hand-tuned mid/shadow palette is untouched; bright values compress
-  // toward 1 instead of harshly clipping), plus a soft vignette.
+  // Composite: scene + bloom, filmic ACES tone-map, colour grading, sun shafts,
+  // lens flare, and a soft vignette.
   const COMPOSITE_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
@@ -457,11 +499,71 @@ uniform sampler2D uBloom;
 uniform float uBloomAmt;
 uniform vec2 uSunUV;
 uniform float uFlareStr;
+uniform float uExposure;
+uniform float uSunShaft;
 out vec4 outColor;
+
+// ACES fitted filmic tone-map (Stephen Hill's approximation).
+// Preserves colour ratios better than Reinhard; keeps darks dark, rolls off highlights.
+vec3 acesTonemap(vec3 x) {
+  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+// Lift-gamma-gain colour grade: very mild S-curve per channel.
+// Lifts shadows slightly (warm), crushes a tiny bit of the blue channel in
+// mid-tones, and boosts green just a hint — gives an F1 broadcast look.
+vec3 colourGrade(vec3 c) {
+  // Gain (per-channel linear scale in highlights)
+  c *= vec3(1.01, 1.005, 0.995);
+  // Soft S-curve: darken lower mids, open upper mids
+  c = c * (1.0 + c * 0.08) / (1.0 + c * 0.12);
+  // Slight lift: prevents pure blacks — adds a tiny warm floor
+  c = max(c, vec3(0.005, 0.004, 0.003));
+  return c;
+}
+
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
-  c += texture(uBloom, vUV).rgb * uBloomAmt;
-  c = c / (1.0 + max(c - vec3(0.8), vec3(0.0)));
+
+  // Exposure multiply before tone-mapping (default 1.0 = no change).
+  c *= uExposure;
+
+  // Improved bloom: add with a mild tone-aware mask so it doesn't wash out
+  // already-bright pixels (reduce bloom addition proportionally in highlights).
+  vec3 bloomSample = texture(uBloom, vUV).rgb;
+  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
+  c += bloomSample * uBloomAmt * bloomMask;
+
+  // Sun shafts / god-rays: radial samples from current pixel toward the sun's
+  // screen position, reading the bright-pass (bloom[0] after bright-pass step).
+  // Additively composited. Gated when uSunShaft > 0 (sun on-screen, above horizon).
+  if (uSunShaft > 0.0) {
+    vec2 toSun = uSunUV - vUV;
+    float dist = length(toSun);
+    // Only cast rays when we're not right on top of the sun (avoid div-zero).
+    if (dist > 0.005) {
+      vec2 step = toSun / dist * min(dist, 0.40) / 8.0;
+      vec3 shaft = vec3(0.0);
+      vec2 uv = vUV;
+      float decay = 1.0;
+      for (int i = 0; i < 8; i++) {
+        uv += step;
+        // Clamp so we don't sample outside 0..1 (avoids edge bleed).
+        vec2 suv = clamp(uv, vec2(0.0), vec2(1.0));
+        shaft += texture(uBloom, suv).rgb * decay;
+        decay *= 0.82;
+      }
+      shaft /= 8.0;
+      // Radial falloff: strongest near the sun, zero at the edge of the screen.
+      float radial = 1.0 - clamp(dist * 1.8, 0.0, 1.0);
+      c += shaft * uSunShaft * radial * 0.55;
+    }
+  }
+
+  // Filmic tone-map (ACES) + colour grading.
+  c = acesTonemap(c);
+  c = colourGrade(c);
 
   // Lens flare: anamorphic streak + ghost circles
   vec3 flare = vec3(0.0);
@@ -599,7 +701,7 @@ void main() {}`;
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt", "uSunUV", "uFlareStr"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft"]);
     return true;
   }
 
@@ -813,7 +915,7 @@ void main() {}`;
       gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
       gl.uniform1i(litU.uShadowMap, 0);
       gl.uniformMatrix4fv(litU.uLightVP, false, shadowLightVP);
-      gl.uniform1f(litU.uShadowBias, 0.002);
+      gl.uniform1f(litU.uShadowBias, 0.001);
       gl.uniform1f(litU.uShadowStr, 1.0);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHADOW_SIZE);
     } else {
@@ -945,7 +1047,7 @@ void main() {}`;
     gl.uniform1i(compU.uBloom, 1);
     gl.uniform1f(compU.uBloomAmt, bloomAmt);
     // Project sun direction to screen UV for lens flare
-    let sunUV = [-2, -2], flareStr = 0;
+    let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
     if (frameSunDir && frameViewProj) {
       const s = frameSunDir;
       // Treat sun as infinitely distant: clip pos = VP * (sunDir, 0)
@@ -956,10 +1058,14 @@ void main() {}`;
       if (cw > 0) {
         sunUV = [cx / cw * 0.5 + 0.5, cy / cw * 0.5 + 0.5];
         flareStr = Math.max(s[1], 0) * 0.65;
+        if (s[1] > 0.05) sunShaft = s[1] * 0.8;
       }
     }
     gl.uniform2fv(compU.uSunUV, sunUV);
     gl.uniform1f(compU.uFlareStr, flareStr);
+    const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
+    gl.uniform1f(compU.uExposure, exposure);
+    gl.uniform1f(compU.uSunShaft, sunShaft);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     gl.bindVertexArray(null);

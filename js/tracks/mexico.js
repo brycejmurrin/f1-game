@@ -133,25 +133,29 @@
 
       // --- CONTINUOUS Mexico City skyline: an unbroken band of building()s
       //     wrapping the far side of the lap. Two depth ranks (front + back) laid
-      //     node-by-node so there are no gaps. ---
+      //     node-by-node so there are no gaps. Tuned palette for high-altitude
+      //     washed tone (cooler, less saturated on the distant rank).
       const cityBand = (s0, s1, side, step) => {
         along(s0, s1, step, (k) => {
           for (let c = 0; c < 2; c++) {                 // two staggered depth ranks
-            const d = (c === 0 ? 150 : 210) + hash(k * 72 + c) * 60 + (k & 1) * 10;
+            const d = (c === 0 ? 140 : 220) + hash(k * 72 + c) * 70 + (k & 1) * 12;
             const p = anchor(k, side, d);
             if (onTrack(p.c[0], p.c[2], 12)) continue;
-            const tone = 0.60 + hash(k * 73 + c) * 0.16;
-            const h = 26 + hash(k * 74 + c) * 60, w = 12 + hash(k * 75 + c) * 12;
-            building(k, side, d - w / 2, w, h, w, { wall: [tone, tone * 0.97, tone * 0.92],
-                     window: [tone * 0.66, tone * 0.70, tone * 0.74], floor: 6 });
+            // High-altitude: tone gets cooler & more desaturated at distance
+            const baseTone = 0.64 + hash(k * 73 + c) * 0.14;
+            const coolShift = c === 0 ? 0 : 0.04;  // far rank is cooler
+            const tone = baseTone + coolShift;
+            const h = 28 + hash(k * 74 + c) * 56, w = 14 + hash(k * 75 + c) * 10;
+            building(k, side, d - w / 2, w, h, w, { wall: [tone, tone * 0.98, tone * 0.94],
+                     window: [tone * 0.70, tone * 0.74, tone * 0.80], floor: 6 });
           }
         });
       };
       // Far side (-1) wraps the long bend through Solana / city / park / lucha.
-      cityBand(0.22, 0.50, -1, 26);
-      cityBand(0.58, 0.72, -1, 26);
+      cityBand(0.22, 0.50, -1, 24);
+      cityBand(0.58, 0.72, -1, 24);
       // Right side fills the far rank opposite the stadium / final sector.
-      cityBand(0.30, 0.46, 1, 30);
+      cityBand(0.30, 0.46, 1, 28);
 
       // --- s=0.42 R near: Horquilla hairpin, grey runoff, kerb, small fan stand ---
       groundPlane(K(0.42), 1, 5, [60, 1.0, 50], [0.40, 0.40, 0.43]);   // grey runoff
@@ -172,12 +176,16 @@
 
       // --- s=0.66 R far: lucha-libre tribute statue (masked wrestler box on plinth) ---
       {
-        const k = K(0.66), d = 36;
+        const k = K(0.66), d = 38;
         const p = anchor(k, 1, d);
-        addBox(out, vadd(p.c, p.u, 1.5), [4, 3, 4], [0.55, 0.55, 0.58], [p.r, p.u, p.t]);  // plinth
-        addBox(out, vadd(p.c, p.u, 6), [2.2, 6, 1.6], [0.30, 0.42, 0.85], [p.r, p.u, p.t]); // body (blue suit)
-        addBox(out, vadd(p.c, p.u, 9.6), [1.6, 1.6, 1.6], [0.95, 0.20, 0.30], [p.r, p.u, p.t]); // masked head (red)
-        place(k, 1, d - 4, [3, 0.2, 6], ORANGE);   // accent base
+        // Stone plinth base
+        addBox(out, vadd(p.c, p.u, 1.5), [4.2, 3.2, 4.2], [0.58, 0.56, 0.52], [p.r, p.u, p.t]);
+        // Wrestler body — deeper saturated blue suit (more iconic Mexican color)
+        addBox(out, vadd(p.c, p.u, 6.2), [2.4, 6.2, 1.8], [0.20, 0.38, 0.72], [p.r, p.u, p.t]);
+        // Masked head — vivid red mask
+        addBox(out, vadd(p.c, p.u, 10), [1.8, 1.8, 1.8], [0.98, 0.18, 0.28], [p.r, p.u, p.t]);
+        // Gold/yellow accent stripe
+        place(k, 1, d - 3.5, [3.2, 0.3, 5.5], [0.95, 0.80, 0.15]);
       }
 
       // ====== HERO: FORO SOL BASEBALL STADIUM (s≈0.72–0.88) ======
@@ -185,26 +193,27 @@
       // dense fan-colour crowd, cantilever roof rim, banner ring, floodlights.
       // The iconic enclosed corridor packed with tens of thousands of fans.
       const stadiumBowl = (s0, s1, side) => {
-        along(s0, s1, 7, (k) => {
-          // 4 raked concrete tiers stepping back & up — taller & closer together for density
+        along(s0, s1, 6, (k) => {
+          // 4 raked concrete tiers stepping back & up — taller & closer for density
           for (let t = 0; t < 4; t++) {
-            const sh = anchor(k, side, 11 + t * 7.5);
+            const sh = anchor(k, side, 11 + t * 8);
             if (onTrack(sh.c[0], sh.c[2], 0.5)) continue;
-            addBox(out, vadd(sh.c, sh.u, 7 + t * 9.5), [18, 22 + t * 2.5, 14], CONCRETE, [sh.r, sh.u, sh.t]);
+            // Tiers grow taller & wider
+            addBox(out, vadd(sh.c, sh.u, 6 + t * 10), [20 + t * 2, 24 + t * 3, 14], CONCRETE, [sh.r, sh.u, sh.t]);
           }
           // VERY dense crowd seat-rows filling the rake facing the corridor
-          for (let r = 0; r < 7; r++) {
-            const sp = anchor(k, side, 9 + r * 2.2);
+          // 8 rows instead of 7, tighter spacing, more vibrant colors
+          for (let r = 0; r < 8; r++) {
+            const sp = anchor(k, side, 8.5 + r * 2.0);
             if (onTrack(sp.c[0], sp.c[2], 0.5)) continue;
-            const col = hash(k * 19 + r * 7) > 0.38 ? fiesta[(k * 3 + r) % 4] : SEATS;
-            addBox(out, vadd(sp.c, sp.u, 3 + r * 2.1), [7.2, 1.5, 6.5], col, [sp.r, sp.u, sp.t]);
+            // Higher ratio of festive colors (50% instead of 38%)
+            const col = hash(k * 19 + r * 7) > 0.42 ? fiesta[(k * 3 + r) % 4] : SEATS;
+            addBox(out, vadd(sp.c, sp.u, 2.8 + r * 1.9), [7.6, 1.4, 6.8], col, [sp.r, sp.u, sp.t]);
           }
           // cantilever roof rim lip over the top tier
-          const rf = anchor(k, side, 23);
+          const rf = anchor(k, side, 24);
           if (!onTrack(rf.c[0], rf.c[2], 0.5)) {
-            addBox(out, vadd(rf.c, rf.u, 42), [22, 1.4, 14], [0.84, 0.86, 0.90], [rf.r, rf.u, rf.t]);
-            // Roof bowl cap: addFrustum closing the bowl ceiling
-            addFrustum(out, vadd(rf.c, rf.u, 43.5), 11, 7, 4, [0.78, 0.80, 0.84], 8, [rf.r, rf.u, rf.t]);
+            addBox(out, vadd(rf.c, rf.u, 46), [24, 1.2, 14], [0.86, 0.88, 0.92], [rf.r, rf.u, rf.t]);
           }
         });
       };
@@ -212,18 +221,18 @@
       stadiumBowl(0.72, 0.88, -1);
       stadiumBowl(0.72, 0.88, 1);
       // floodlight masts crowning the bowl rim, ringing the stadium — taller
-      for (const s of [0.73, 0.77, 0.81, 0.85]) {
-        lightMast(K(s), -1, 27, 42); lightMast(K(s), 1, 27, 42);
+      for (const s of [0.73, 0.76, 0.79, 0.82, 0.85]) {
+        lightMast(K(s), -1, 28, 44); lightMast(K(s), 1, 28, 44);
       }
       // EXTRA festive banner rings at multiple levels inside the bowl
-      for (const s of [0.72, 0.75, 0.79, 0.83, 0.87]) {
+      for (const s of [0.72, 0.75, 0.78, 0.81, 0.84, 0.87]) {
         banners(s, -1, 10); banners(s, 1, 10);
       }
-      fence(0.72, 0.88, -1, 6, 3.4, [0.80, 0.82, 0.85]);
-      fence(0.72, 0.88, 1, 6, 3.4, [0.80, 0.82, 0.85]);
-      tyreWall(0.755, 0.775, -1, 4, ORANGE);
-      tyreWall(0.795, 0.815, 1, 4, PINK);
-      kerb(0.78, -1, 8); kerb(0.80, 1, 8);
+      fence(0.72, 0.88, -1, 7, 3.2, [0.82, 0.84, 0.88]);
+      fence(0.72, 0.88, 1, 7, 3.2, [0.82, 0.84, 0.88]);
+      tyreWall(0.755, 0.775, -1, 5, ORANGE);
+      tyreWall(0.795, 0.815, 1, 5, PINK);
+      kerb(0.76, -1, 8); kerb(0.80, 1, 8);
 
       // --- s=0.88 L near: Foro Sol exit gap, bright opening between bowls ---
       place(K(0.88), -1, 12, [12, 18, 8], [0.98, 0.94, 0.80]);   // bright opening — taller
@@ -233,13 +242,14 @@
       grandstand(0.92, 1, 9, 100, SEATS, PINK);
       grandstand(0.92, 1, 24, 100, CONCRETE, GREEN);   // packed Peraltada back tier
       crowdSpeckle(0.92, 1, 9, 100, 4, 2.5);  // denser crowds
-      lightMast(K(0.91), 1, 32, 38); lightMast(K(0.95), 1, 32, 38);  // taller lights
+      lightMast(K(0.90), 1, 32, 40); lightMast(K(0.94), 1, 32, 40);  // taller lights
       banners(0.92, 1, 9);  // more banners
       // faint banked kerb edge through the Peraltada/Estadio corners
-      for (const s of [0.90, 0.93, 0.96]) {
+      // Made more visible: wider edge, deeper red stripe
+      for (const s of [0.89, 0.92, 0.95]) {
         const k = K(s);
-        place(k, 1, 2.5, [2.0, 0.5, 8], [0.78, 0.74, 0.70]);   // low banked kerb edge
-        place(k, 1, 2, [0.5, 0.14, 8], [0.82, 0.16, 0.16]);
+        place(k, 1, 2.2, [2.4, 0.6, 9], [0.80, 0.76, 0.72]);   // wider banked kerb edge
+        place(k, 1, 1.8, [0.6, 0.16, 9], [0.88, 0.12, 0.12]);   // deeper red stripe
       }
 
       // --- Catch fence + scattered park trees & festive flags around the lap ---
@@ -281,11 +291,14 @@
       });
 
       // --- Distant hazed skyline ring: CONTINUOUS pale washed city band (high-altitude haze) ---
-      every(35, (k) => {
+      every(32, (k) => {
         for (const side of [-1, 1]) {
-          const d = 360 + hash(k * 82 + side) * 110 + (k & 1) * 20;
+          // High-altitude Mexico City at ~2285m: thin haze, cool pale tones
+          const d = 380 + hash(k * 82 + side) * 130 + (k & 1) * 25;
+          const h = 32 + hash(k * 83 + side) * 40;  // varied but subtle
+          const tone = 0.63 + hash(k * 84 + side) * 0.11;  // pale, cool
           backdrop(k, side, d,
-                   [100, 28 + hash(k * 83 + side) * 32, 45], [0.62, 0.65, 0.70]);  // more pale, cooler high-altitude tone
+                   [110, h, 50], [tone, tone * 0.99, tone * 0.98]);
         }
       });
 
@@ -302,43 +315,54 @@
         }
       }
 
-      // --- Cactus / arid vegetation: saguaro-style every 20m on outer side ---
-      every(20, (k) => {
+      // --- Cactus / arid vegetation: saguaro-style, sparse on far verges ---
+      // Not in the park section (s<0.50) or stadium (s>0.70), scattered in the open sections
+      every(18, (k) => {
         for (const side of [1, -1]) {
-          if (hash(k * 57 + side) > 0.65) continue;
-          const d = 30 + hash(k * 63 + side) * 30;
+          // Skip dense park/stadium zones
+          const s = k / n;
+          if (s > 0.12 && s < 0.50) continue;   // park trees section
+          if (s > 0.70 && s < 0.90) continue;   // stadium section
+
+          if (hash(k * 57 + side) > 0.62) continue;  // sparse spawn
+          const d = 32 + hash(k * 63 + side) * 35;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
-          const h = 5 + hash(k * 67 + side) * 3;
+          const h = 4.8 + hash(k * 67 + side) * 3.2;
           // Tall saguaro trunk
-          addCyl(out, p.c, 1.2, h, [0.25, 0.38, 0.18], 6, [p.r, p.u, p.t]);
+          addCyl(out, p.c, 1.3, h, [0.28, 0.40, 0.20], 6, [p.r, p.u, p.t]);
           // Horizontal cross-arm near the top
-          addBox(out, vadd(p.c, p.u, h * 0.7), [4.5, 1.0, 1.2], [0.25, 0.38, 0.18], [p.r, p.u, p.t]);
+          addBox(out, vadd(p.c, p.u, h * 0.65), [4.8, 1.1, 1.4], [0.28, 0.40, 0.20], [p.r, p.u, p.t]);
         }
       });
 
-      // --- Mexico City skyline at altitude: 12+ buildings at 220–320m distance for horizon depth ---
-      for (let i = 0; i < 12; i++) {
-        const f = i / 12;
+      // --- Mexico City skyline at altitude: distributed landmarks at horizon distance ---
+      // More varied height profile, cooler/hazier tones for high-altitude perspective
+      for (let i = 0; i < 16; i++) {
+        const f = i / 16;
         const k = K(f);
         const side = i % 2 === 0 ? -1 : 1;
-        const d = 240 + hash(i * 29) * 120;
-        const h = 45 + hash(i * 37) * 60;
-        const w = 18 + hash(i * 53) * 16;
+        const d = 260 + hash(i * 29) * 140 + (i % 3) * 30;
+        const h = 38 + hash(i * 37) * 72;
+        const w = 20 + hash(i * 53) * 18;
         const p = anchor(k, side, d);
-        if (!onTrack(p.c[0], p.c[2], 20))
+        if (!onTrack(p.c[0], p.c[2], 20)) {
+          // High-altitude pale tone with cool blue shift
+          const tone = 0.58 + hash(i * 41) * 0.12;
           building(k, side, d - w / 2, w, h, w,
-            { wall: [0.54, 0.56, 0.62], window: [0.32, 0.38, 0.50], floor: 7 });
+            { wall: [tone, tone * 0.99, tone * 0.98],
+              window: [tone * 0.68, tone * 0.72, tone * 0.82], floor: 8 });
+        }
       }
 
-      // --- Peraltada banked corner Mexican flag strips (s≈0.88–0.95) ---
-      // Green, white, red banner accents at the outer grandstand area
-      for (let i = 0; i < 5; i++) {
-        const f = 0.88 + i * 0.015;
+      // --- Peraltada banked corner Mexican flag strips (s≈0.88–0.97) ---
+      // Larger, more spaced Mexican flag-band accents at the outer area
+      for (let i = 0; i < 6; i++) {
+        const f = 0.88 + i * 0.018;
         const k = K(f);
-        place(k, 1, 16, [0.4, 6, 14], [0.12, 0.56, 0.24]);   // green banner
-        place(k, 1, 19, [0.4, 6, 14], [0.92, 0.92, 0.90]);    // white banner
-        place(k, 1, 22, [0.4, 6, 14], [0.80, 0.14, 0.18]);    // red banner
+        place(k, 1, 15, [0.5, 7, 16], [0.10, 0.58, 0.26]);   // vivid green
+        place(k, 1, 18, [0.5, 7, 16], [0.94, 0.94, 0.92]);   // bright white
+        place(k, 1, 21, [0.5, 7, 16], [0.86, 0.12, 0.16]);   // deep red
       }
     },
   }

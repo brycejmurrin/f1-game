@@ -137,26 +137,19 @@
         }
       }
 
-      // ---- s 0.00 R — Santerno river: CONTINUOUS flat water slab paralleling the river run ----
-      // Overlapping slabs from the pit straight through the run to Tosa, no gaps.
-      // Extended river presence from start straight through to Acque Minerali bend
-      for (let i = 0; i <= 12; i++) {
-        const s = i * 0.016;            // 0.00 → 0.19, extended river-side stretch
-        groundPlane(K(s), 1, 15, [34, 90], RIVER);
-      }
-      // Large river basins to emphasize the Santerno's prominence
-      groundPlane(K(0.00), 1, 16, [70, 220], RIVER);
-      groundPlane(K(0.05), 1, 18, [60, 180], RIVER);
-      groundPlane(K(0.09), 1, 17, [55, 160], RIVER);
-      groundPlane(K(0.15), 1, 16, [50, 140], RIVER);
-      // grassy banks between road and river, the characteristic green belt
-      groundPlane(K(0.02), 1, 6, [16, 200], BANK);
-      groundPlane(K(0.10), 1, 6, [16, 160], BANK);
-      groundPlane(K(0.17), 1, 7, [14, 120], BANK);
-      // dense river-side tree line hugging the back run to Tosa (s≈0.16-0.28, right, mid)
-      hedge(0.16, 0.28, 1, 26, 8, WOODS);
-      // additional far-bank foliage along the river
-      hedge(0.02, 0.15, 1, 35, 6, [0.12, 0.28, 0.13]);
+      // ---- s 0.00 R — Santerno river: CONTINUOUS water & banks along pit straight + run ----
+      // River runs down the right side from pit straight (s≈0.00) → Tosa (s≈0.28)
+      // Multiple depth zones create natural banks and reflective quality
+      groundPlane(K(0.00), 1, 16, [70, 220], RIVER);   // main basin at start
+      groundPlane(K(0.05), 1, 18, [60, 180], RIVER);   // mid-basin
+      groundPlane(K(0.10), 1, 18, [60, 160], RIVER);   // at Tamburello area
+      groundPlane(K(0.15), 1, 17, [55, 140], RIVER);   // approaching Villeneuve
+      // Grassy banks: the characteristic green strip between tarmac and water
+      groundPlane(K(0.02), 1, 6, [18, 200], BANK);     // start straight bank
+      groundPlane(K(0.08), 1, 7, [16, 150], BANK);     // Tamburello bank
+      groundPlane(K(0.13), 1, 7, [14, 120], BANK);     // Villeneuve bank
+      // Dense riverside treeline: continuous from pit straight to Tosa hairpin
+      hedge(0.02, 0.28, 1, 28, 9, WOODS);
 
       // ---- s 0.00 L — Old pit building + main grandstand on the pit straight ----
       building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: [0.34, 0.36, 0.40], floor: 5 });
@@ -199,22 +192,33 @@
         pine(K(0.36), side, 24, 12, WOODS);
       }
 
-      // ---- s 0.48-0.55 R — Acque Minerali right-left in a green hollow: dense trees + valley fog ----
-      // The valley feels enclosed by forest; enhance the dense woodland effect
-      for (let i = 0; i < 8; i++) {
-        const k = K(0.47 + i * 0.010);
-        pine(k, 1, 15 + hash(k * 9) * 16, 13 + hash(k * 5) * 7, [0.08, 0.25, 0.12]);
-        tree(k, 1, 28 + hash(k * 7) * 18, 12 + hash(k * 3) * 4, [0.13, 0.35, 0.15]);
-        if (i > 2) bush(k, 1, 8 + hash(k * 11) * 6, [0.15, 0.38, 0.17]);
+      // ---- s 0.46-0.56 R — Acque Minerali: tree-lined valley with misty green hollow ----
+      // The Acque Minerali curves are the lowest point on the lap; enclose with tall conifers
+      // and create a sunken-valley mood with layered fog and understory
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.46 + i * 0.009);
+        const h2 = hash(k * 7);
+        // tall pines framing the valley walls
+        if (i < 5) pine(k, 1, 16 + h2 * 18, 15 + h2 * 8, [0.07, 0.23, 0.11]);
+        // broadleaf canopy mid-slope for depth
+        tree(k, 1, 32 + h2 * 20, 13 + h2 * 5, [0.12, 0.33, 0.14]);
+        // dense shrub understory
+        if (i > 1 && i < 8) bush(k, 1, 9 + h2 * 8, [0.14, 0.36, 0.16]);
       }
-      // multiple fog bands in the hollow for greater valley atmosphere
-      groundPlane(K(0.49), 1, 10, [45, 70], [0.76, 0.80, 0.76]);
-      groundPlane(K(0.52), 1, 12, [40, 60], [0.74, 0.78, 0.74]);
-      groundPlane(K(0.55), 1, 10, [35, 50], [0.75, 0.79, 0.75]);
+      // Misty valley floor: layered fog grounds emphasize the sunken feel
+      groundPlane(K(0.48), 1, 12, [50, 80], [0.77, 0.81, 0.77]);   // furthest fog
+      groundPlane(K(0.51), 1, 10, [45, 65], [0.75, 0.79, 0.75]);   // mid fog
+      groundPlane(K(0.54), 1, 9, [38, 55], [0.76, 0.80, 0.76]);    // near fog
 
-      // ---- s 0.60 L far — Wooded hills backdrop: tiered dark-green box ridges ----
+      // ---- s 0.58-0.70 L far — Wooded hills backdrop with the campanile tower rising ----
       for (let i = 0; i < 4; i++) {
         backdrop(K(0.58 + i * 0.012), -1, 100 + i * 18, [120, 26 + i * 6, 80], [0.16, 0.34, 0.18]);
+      }
+      // Classic Imola campanile (bell tower) visible above the treeline
+      {
+        const ac = anchor(K(0.64), -1, 120);
+        addCyl(out, ac.c, 2.2, 32, [0.82, 0.78, 0.70], 8, [ac.r, ac.u, ac.t]);    // tower shaft
+        addCone(out, vadd(ac.c, ac.u, 32), 2.8, 7, [0.48, 0.38, 0.32], 8, [ac.r, ac.u, ac.t]); // spire
       }
 
       // ---- s 0.66 L+R near — Variante Alta chicane over a crest: tall sausage kerbs + vegetation ----
@@ -255,23 +259,15 @@
         building(K(s), side, dist, bw, bh, bw * 0.8, { wall: tc, window: [0.28, 0.32, 0.38], floor: 3 });
       }
 
-      // ---- Campanile bell tower at s≈0.68 ----
-      {
-        const ac = anchor(K(0.68), -1, 110);
-        addCyl(out, ac.c, 2.0, 30, [0.78, 0.74, 0.68], 8, [ac.r, ac.u, ac.t]);
-        addCone(out, vadd(ac.c, ac.u, 30), 2.5, 6, [0.45, 0.35, 0.28], 8, [ac.r, ac.u, ac.t]);
-      }
 
       // ---- s 0.92 R near — Variante Bassa / pit approach kerbs back toward river ----
       place(K(0.92), 1, 2, [0.4, 0.3, 7], RED);
       place(K(0.93), 1, 2, [0.4, 0.3, 7], WHITE);
       groundPlane(K(0.92), 1, 16, [50, 120], RIVER);   // river rejoins by pit straight
 
-      // ---- Advertising hoardings + marshal posts for rhythm ----
-      billboard(K(0.28), -1, 16, 12, 5, [0.86, 0.30, 0.20]);
-      billboard(K(0.80), -1, 16, 12, 5, [0.20, 0.40, 0.70]);
-      every(130, (k) => {
-        marshalPost(k, hash(k * 33) < 0.5 ? -1 : 1, 4);
+      // ---- Marshal posts for corner flagging ----
+      every(110, (k) => {
+        marshalPost(k, hash(k * 37) < 0.5 ? -1 : 1, 5);
       });
 
       // ---- thin cantilever roof blade over the old pit lane ----
@@ -298,17 +294,23 @@
       gantry(0.965, 7.0, [0.18, 0.18, 0.20]);
 
       // ---- Pit / paddock complex along the pit straight (left) ----
-      // long low pit garages behind the old pit building, plus a small paddock block
+      // long low pit garages behind the old pit building + fuel depot
       building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: [0.30, 0.34, 0.40], floor: 4 });
       building(K(0.90), -1, 20, 22, 9, 40, { wall: [0.66, 0.67, 0.70], window: [0.28, 0.32, 0.38], floor: 4, roof: true });
       building(K(0.94), -1, 46, 30, 12, 34, { wall: STONE, window: [0.34, 0.30, 0.26], floor: 4 }); // paddock hospitality
+      // fuel depot (tall cylindrical tanks)
+      {
+        const a = anchor(K(0.92), -1, 56);
+        addCyl(out, vadd(a.c, a.u, 6), 1.8, 12, [0.60, 0.56, 0.48], 8, [a.r, a.u, a.t]);
+        addCyl(out, vadd(a.c, a.u, 6), 1.5, 12, [0.78, 0.74, 0.60], 8, [a.r, a.u, a.t]);  // stripe
+      }
       // race control / timing tower above the pits
       tower(K(0.99), -1, 16, 9, 22, { col: [0.78, 0.80, 0.82], cap: true, capCol: [0.2, 0.2, 0.24], mast: 6 });
       // pit wall separating pit lane from track
       wall(0.95, 0.06, -1, 2, 1.0, PITWALL, 0.5);
 
       // ============================================================
-      //  HILLSIDE TOWN BACKDROP — Imola old town with church + tower
+      //  HILLSIDE TOWN BACKDROP — Imola old town with church
       //  Placed as a cluster on far hill (left of pit straight / T1).
       // ============================================================
       {
@@ -323,24 +325,25 @@
           // build the ground footing point, then lift onto the up axis by rise
           const foot = vadd(vadd(vadd(base, t, alongM), r, -outM), u, rise);
           addBox(out, vadd(foot, u, h / 2), [w, h, d], col, [r, u, t]);
-          addPrism(out, vadd(foot, u, h + 1.4), [w, 2.8, d], TERRA, [r, u, t]); // hip roof
+          addPrism(out, vadd(foot, u, h + 1.4), [w, 2.8, d], TERRA, [r, u, t]); // terracotta hip roof
         };
-        // rows of town houses stepping UP the hill (rise grows with how far back)
-        for (let i = 0; i < 9; i++) {
+        // lower tier: rows of town houses stepping UP the hill
+        for (let i = 0; i < 6; i++) {
           const h2 = hash(i * 17 + 5);
-          put(-90 + i * 24, h2 * 26, 6 + h2 * 10, 14 + h2 * 6, 9 + h2 * 7, 12 + h2 * 4, h2 < 0.5 ? STONE : STONE2);
+          put(-80 + i * 28, h2 * 24, 4 + h2 * 8, 16 + h2 * 5, 10 + h2 * 6, 14 + h2 * 3, h2 < 0.5 ? STONE : STONE2);
         }
-        for (let i = 0; i < 7; i++) {
+        // mid tier: larger buildings in the distance
+        for (let i = 0; i < 4; i++) {
           const h2 = hash(i * 31 + 9);
-          put(-60 + i * 26, 44 + h2 * 30, 16 + h2 * 12, 16 + h2 * 8, 8 + h2 * 6, 13, h2 < 0.5 ? STONE2 : CONC);
+          put(-40 + i * 36, 48 + h2 * 34, 14 + h2 * 10, 18 + h2 * 6, 11 + h2 * 5, 16, h2 < 0.5 ? STONE2 : CONC);
         }
         // ---- church: nave + bell tower (campanile) with a conical spire ----
-        const churchFoot = vadd(vadd(vadd(base, t, 30), r, -36), u, 22);
-        addBox(out, vadd(churchFoot, u, 7), [16, 14, 26], STONE2, [r, u, t]);          // nave
-        addPrism(out, vadd(churchFoot, u, 14 + 2), [16, 5, 26], TERRA, [r, u, t]);      // gable roof
-        const towerFoot = vadd(churchFoot, t, 16);
-        addBox(out, vadd(towerFoot, u, 13), [7, 26, 7], STONE, [r, u, t]);              // campanile
-        addCone(out, vadd(towerFoot, u, 26 + 4), 5, 9, [0.40, 0.30, 0.26], 6, [r, u, t]); // spire
+        const churchFoot = vadd(vadd(vadd(base, t, 60), r, -44), u, 24);
+        addBox(out, vadd(churchFoot, u, 8), [18, 16, 28], STONE2, [r, u, t]);          // nave: warm stone
+        addPrism(out, vadd(churchFoot, u, 16 + 2), [18, 6, 28], TERRA, [r, u, t]);     // gable roof: terracotta
+        const towerFoot = vadd(churchFoot, t, 18);
+        addBox(out, vadd(towerFoot, u, 15), [8, 30, 8], STONE, [r, u, t]);             // campanile shaft
+        addCone(out, vadd(towerFoot, u, 30 + 5), 4.5, 10, [0.44, 0.34, 0.28], 7, [r, u, t]); // spire
       }
 
       // ============================================================
@@ -378,19 +381,14 @@
       tyreWall(0.79, 0.815, -1, 2, RED);
       tyreWall(0.915, 0.93, 1, 2, RED);
 
-      // ---- Billboards / sponsor hoardings around the lap ----
-      billboard(K(0.02), 1, 18, 14, 5, [0.86, 0.16, 0.14]);   // start straight
-      billboard(K(0.12), -1, 16, 12, 5, [0.20, 0.40, 0.70]);
-      billboard(K(0.27), 1, 18, 12, 5, [0.90, 0.80, 0.20]);
-      billboard(K(0.51), 1, 20, 14, 5, [0.86, 0.30, 0.20]);
-      billboard(K(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);
-      billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);
-      billboard(K(0.93), 1, 16, 12, 5, [0.90, 0.80, 0.20]);
-
-      // ---- Denser marshal posts at every flag point ----
-      every(95, (k) => {
-        marshalPost(k, hash(k * 47) < 0.5 ? -1 : 1, 4);
-      });
+      // ---- Billboards / sponsor hoardings at key viewing areas ----
+      billboard(K(0.05), 1, 18, 14, 5, [0.86, 0.16, 0.14]);   // Tamburello
+      billboard(K(0.12), -1, 16, 12, 5, [0.20, 0.40, 0.70]);  // Villeneuve chicane
+      billboard(K(0.27), 1, 18, 12, 5, [0.90, 0.80, 0.20]);   // Tosa hairpin
+      billboard(K(0.51), 1, 20, 14, 5, [0.86, 0.30, 0.20]);   // Acque Minerali
+      billboard(K(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);  // Variante Alta
+      billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);  // Rivazza
+      billboard(K(0.95), 1, 16, 12, 5, [0.90, 0.80, 0.20]);   // pit straight
 
       // ---- Trackside hospitality / TV compound near Acque Minerali ----
       building(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: [0.30, 0.34, 0.40], floor: 3, roof: true });

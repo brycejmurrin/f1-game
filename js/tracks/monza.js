@@ -108,11 +108,12 @@
       // =====================================================================
       // Tribuna Centrale — long stepped main grandstand (pit-side, left).
       // Historic stand built to seat 3000, now modernized with island design.
-      grandstand(0.005, -1, 10, 160, [0.55, 0.58, 0.62], [0.74, 0.26, 0.22]);
+      // Warmed greys for Italian sun.
+      grandstand(0.005, -1, 10, 160, [0.57, 0.59, 0.61], [0.76, 0.28, 0.24]);
       // Secondary lower stand behind Centrale (historic structure).
-      grandstand(0.955, -1, 10, 110, [0.55, 0.58, 0.62], [0.70, 0.26, 0.22]);
+      grandstand(0.955, -1, 10, 110, [0.56, 0.57, 0.60], [0.74, 0.28, 0.24]);
       // Facing grandstand across the straight (right side) — modernized.
-      grandstand(0.02, 1, 12, 120, [0.52, 0.55, 0.60], [0.72, 0.28, 0.24]);
+      grandstand(0.02, 1, 12, 120, [0.54, 0.56, 0.59], [0.74, 0.30, 0.26]);
       // Red trim band fronting the main stand (Italian colors).
       prop(K(0.01), -1, 8, [2, 1.6, 130], [0.80, 0.16, 0.14]);
       // Accent green band (park integration) below red trim.
@@ -129,13 +130,13 @@
       // New permanent tensile roofing structure over the pit building (2024+ modernization).
       // Raised from the old banner height to full-height permanent canopy.
       const aPit = anchor(K(0.99), 1, 18);
-      // Main roof panel — permanent hard structure.
-      addBox(aPit.out || api.out, vadd(aPit.c, aPit.u, 11), [5.2, 0.8, 72], [0.84, 0.84, 0.82], [aPit.r, aPit.u, aPit.t]);
+      // Main roof panel — permanent hard structure, slightly warmed grey.
+      addBox(aPit.out || api.out, vadd(aPit.c, aPit.u, 11), [5.2, 0.8, 72], [0.86, 0.84, 0.80], [aPit.r, aPit.u, aPit.t]);
       // Support pillar detail (reinforced structure for modernized roof).
       for (let j = 0; j < 4; j++) {
         const s2 = 0.965 + j * 0.025;
         const a2 = anchor(K(s2), 1, 16);
-        addCyl(a2.out || api.out, [a2.c[0], a2.c[1] + 4, a2.c[2]], 0.35, 8, [0.70, 0.70, 0.68], 8, null);
+        addCyl(a2.out || api.out, [a2.c[0], a2.c[1] + 4, a2.c[2]], 0.35, 8, [0.72, 0.70, 0.68], 8, null);
       }
       // Podium / timing tower at the line — iconic white tower with red cap.
       // Historic 1922 structure, recently modernized. Tall mast for timing/announcements.
@@ -160,14 +161,22 @@
       // Variante del Rettifilo (s~0.04) — heavy braking, big gravel, tyre wall.
       groundPlane(K(0.04), 1, 5, [24, 34], GRAVEL);
       tyreWall(0.03, 0.055, 1, 4, [0.88, 0.20, 0.18]);
-      grandstand(0.05, -1, 12, 76, [0.54, 0.57, 0.61], [0.70, 0.28, 0.24]);
+      grandstand(0.05, -1, 12, 76, [0.56, 0.58, 0.60], [0.72, 0.30, 0.26]);
       marshalPost(K(0.045), 1, 10);
 
-      // Variante della Roggia (s~0.30) — shaded chicane, gravel both sides.
+      // Variante della Roggia (s~0.30) — shaded chicane, gravel both sides, fog detail.
       groundPlane(K(0.30), -1, 6, [22, 28], GRAVEL);
       groundPlane(K(0.305), 1, 5, [20, 26], GRAVEL);
       tyreWall(0.29, 0.315, -1, 4, [0.20, 0.40, 0.85]);
-      grandstand(0.30, 1, 13, 70, [0.53, 0.56, 0.60], [0.68, 0.28, 0.24]);
+      grandstand(0.30, 1, 13, 70, [0.55, 0.57, 0.59], [0.70, 0.30, 0.26]);
+      // Thin drifting fog boxes under tree shade (Roggia's signature element).
+      const fogCol = [0.76, 0.74, 0.68];   // warm tan-grey fog
+      for (let i = 0; i < 3; i++) {
+        const sf = 0.28 + i * 0.025;
+        const kf = K(sf);
+        const af = anchor(kf, hash(kf) < 0.5 ? -1 : 1, 25 + hash(kf * 3) * 15);
+        addBox(api.out, vadd(af.c, af.u, 2.5), [14, 2.4, 22], fogCol, [af.r, af.u, af.t]);
+      }
       marshalPost(K(0.31), -1, 9);
 
       // Lesmo 1 & 2 (s~0.45–0.52) — tight woodland curves, gravel + tyre.
@@ -180,12 +189,12 @@
       groundPlane(K(0.78), -1, 6, [28, 40], GRAVEL);
       groundPlane(K(0.795), 1, 6, [24, 32], GRAVEL);
       tyreWall(0.77, 0.80, -1, 4, [0.88, 0.20, 0.18]);
-      grandstand(0.78, -1, 14, 80, [0.54, 0.57, 0.61], [0.70, 0.28, 0.24]);
+      grandstand(0.78, -1, 14, 80, [0.56, 0.58, 0.60], [0.72, 0.30, 0.26]);
       marshalPost(K(0.785), 1, 9);
 
       // Parabolica / Curva Alboreto (s~0.88–0.93) — wide outer gravel, big arc stand.
       groundPlane(K(0.90), -1, 8, [50, 110], GRAVEL);
-      grandstand(0.905, 1, 14, 96, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
+      grandstand(0.905, 1, 14, 96, [0.55, 0.57, 0.59], [0.74, 0.32, 0.28]);
       tyreWall(0.885, 0.92, -1, 6, [0.88, 0.20, 0.18]);
       marshalPost(K(0.91), 1, 11);
       // Sponsor hoardings around the Parabolica outside.
@@ -211,8 +220,9 @@
       // =====================================================================
       (function buildBanking() {
         const out = api.out;
-        const conc = [0.64, 0.62, 0.58], concDk = [0.52, 0.50, 0.47], moss = [0.34, 0.46, 0.30];
-        const crackCol = [0.48, 0.46, 0.42]; // darker cracks/shadows
+        // Refined weathered concrete tones: main grey, darker in shadows, moss-green streaks
+        const conc = [0.66, 0.64, 0.60], concDk = [0.54, 0.52, 0.49], moss = [0.36, 0.48, 0.32];
+        const crackCol = [0.50, 0.48, 0.44]; // darker cracks/shadows
         // Anchor the structure in the park to the LEFT of the Lesmo area.
         const a = anchor(K(0.535), -1, 95);
         // Lay the banking as a gentle arc of N tilted panels.
@@ -252,13 +262,13 @@
           const col = (i % 4 === 0) ? concDk : conc;
           // banked slab
           addBox(out, [cx, baseY + h * 0.42, cz], [8.5, h, 14], col, [rr, u, fw]);
-          // moss streak band on the face (algae from decades of weathering)
+          // moss streak band on the face (algae from decades of weathering) — more visible
           if (i % 2 === 0)
-            addBox(out, [cx + od[0] * 0.6, baseY + h * 0.30, cz + od[2] * 0.6], [0.6, h * 0.5, 13], moss, [rr, u, fw]);
+            addBox(out, [cx + od[0] * 0.7, baseY + h * 0.32, cz + od[2] * 0.7], [0.8, h * 0.55, 13], moss, [rr, u, fw]);
           // weathering cracks: vertical stress lines from tree roots and freeze-thaw
           if (i % 3 === 1) {
-            const crackW = 0.15, crackH = h * 0.7;
-            addBox(out, [cx + od[0] * 0.3, baseY + h * 0.45, cz + od[2] * 0.3],
+            const crackW = 0.18, crackH = h * 0.75;
+            addBox(out, [cx + od[0] * 0.25, baseY + h * 0.42, cz + od[2] * 0.25],
                    [crackW, crackH, 12.5], crackCol, [rr, u, fw]);
           }
         }
@@ -273,10 +283,10 @@
           if (onTrack(cx, cz, 6)) continue;
           const pillarH = 8 + (i % 4) * 1.2;
           addCyl(out, [cx, baseY - 0.5, cz], 1.2, pillarH, concDk, 8, null);
-          // weathered/crumbling detail on pillar (moss/lichen)
+          // weathered/crumbling detail on pillar (moss/lichen) — more prominent
           if (i % 4 === 0)
-            addCyl(out, [cx + (hash(i) - 0.5) * 0.3, baseY + pillarH * 0.6, cz + (hash(i * 2) - 0.5) * 0.3],
-                   0.3, pillarH * 0.4, moss, 6, null);
+            addCyl(out, [cx + (hash(i) - 0.5) * 0.4, baseY + pillarH * 0.58, cz + (hash(i * 2) - 0.5) * 0.4],
+                   0.4, pillarH * 0.45, moss, 6, null);
         }
       })();
 
@@ -290,10 +300,11 @@
       building(K(0.635), 1, 72, 30, 16, 22, { wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
 
       // Paddock / hospitality buildings behind the pits (left, s~0.97–0.02).
+      // Modern containerized/modular hospitality modules, white/light grey with dark windows.
       for (let i = 0; i < 4; i++) {
         const s = 0.93 + i * 0.022;
         building(K(s), -1, 40, 24, 12, 18,
-          { wall: [0.78, 0.79, 0.80], window: [0.34, 0.40, 0.48], floor: 4.5, roof: true });
+          { wall: [0.80, 0.80, 0.82], window: [0.32, 0.36, 0.44], floor: 4.5, roof: true });
       }
       // Motorhome / truck row in the paddock (low coloured boxes).
       every(40, (k) => {
@@ -314,11 +325,12 @@
 
       // =====================================================================
       // 6. MILAN SKYLINE — distant faint towers on the horizon (s~0.96 R far)
+      //    Hazed, cool-grey silhouette suggesting urban sprawl far from the park.
       // =====================================================================
       const kmilan = K(0.96);
       for (let i = 0; i < 7; i++) {
         building(kmilan, 1, 210 + i * 28, 16, 36 + i * 10, 16,
-          { wall: [0.60 + i * 0.02, 0.64 + i * 0.02, 0.70 + i * 0.02], window: [0.50, 0.54, 0.60] });
+          { wall: [0.62 + i * 0.015, 0.66 + i * 0.015, 0.72 + i * 0.015], window: [0.52, 0.56, 0.62] });
       }
 
       // =====================================================================
@@ -330,11 +342,11 @@
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       // [extraRadius, count, ridgeLen, ridgeW, hMin, hVar, colour]
-      // Denser rings for deeper forest effect
+      // Refined rings: near/mid denser, far lighter to avoid over-density
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [120, 65, 92, 26, 10, 6, [0.16, 0.36, 0.20]],   // near treeline, very gapless (was 58)
-        [185, 58, 110, 30, 12, 7, [0.13, 0.33, 0.17]],  // mid forest band (was 50)
-        [260, 50, 132, 34, 14, 8, [0.11, 0.30, 0.15]],  // far hazed forest wall (was 42)
+        [120, 62, 90, 25, 10, 5.5, [0.16, 0.36, 0.20]],   // near treeline, dense but not overstuffed
+        [185, 52, 108, 28, 12, 6.5, [0.13, 0.33, 0.17]],  // mid forest band, lighter
+        [260, 44, 128, 32, 14, 7.5, [0.11, 0.30, 0.15]],  // far hazed forest, very sparse
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -348,24 +360,24 @@
       // 8. ENHANCED SCENERY — denser forest, improved landmarks, Italian character
       // =====================================================================
 
-      // 8a. Ultra-dense front pine pass — nearly fills all gaps between Rank A pines.
-      // Creates immersive "forest corridor" effect on straightaways.
-      every(9, (k) => {
+      // 8a. Dense front pine pass — fills gaps between Rank A pines for corridor effect.
+      // Balanced density: not so heavy it clutters, but immersive on straights.
+      every(10, (k) => {
         const h = hash(k * 43 + 7);
         const s = k / n;
-        if (h < 0.02) return;                       // only minimal gaps (increased from 0.05)
+        if (h < 0.08) return;                       // minimal gaps, but not overstuffed
         const side = h < 0.5 ? -1 : 1;
         pine(k, side, 8 + h * 5, 16 + h * 10, PINE);
-        // bilateral pines for full canopy coverage
-        if (h > 0.35) pine(k, -side, 9 + h * 6, 15 + h * 9, PINE_L);
-        // tertiary fill trees for deepest density on straights
-        if (h > 0.75) pine(k, side > 0 ? -1 : 1, 7 + h * 4, 14 + h * 8, PINE_D);
+        // bilateral pines for canopy coverage (but not excessive)
+        if (h > 0.42) pine(k, -side, 9 + h * 6, 15 + h * 9, PINE_L);
+        // tertiary fill only on high-side sections (very selective)
+        if (h > 0.80 && s < 0.15) pine(k, side > 0 ? -1 : 1, 7 + h * 4, 14 + h * 8, PINE_D);
       });
 
       // 8b. Expand Parabolica grandstand — two extra sections widening the arc.
-      // Most iconic turn at Monza with largest crowd presence.
-      grandstand(0.875, 1, 14, 80, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
-      grandstand(0.935, 1, 14, 80, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
+      // Most iconic turn at Monza with largest crowd presence. Warmed Italian greys.
+      grandstand(0.875, 1, 14, 80, [0.55, 0.57, 0.59], [0.74, 0.32, 0.28]);
+      grandstand(0.935, 1, 14, 80, [0.55, 0.57, 0.59], [0.74, 0.32, 0.28]);
       // Support structure underneath stands (concrete plinths)
       for (const s of [0.875, 0.935]) {
         const as = anchor(K(s), 1, 20);
@@ -373,40 +385,42 @@
       }
 
       // 8c. Red/white Italian kerb stripes on start straight (pit-wall side, s=0.0–0.07).
-      // Traditional F1 pit-lane kerb pattern in Italian colors.
+      // Traditional F1 pit-lane kerb pattern in Italian colors, raised for visibility.
       {
-        const kerbR = [0.88, 0.18, 0.14], kerbW = [0.92, 0.92, 0.90];
-        for (let i = 0; i < 15; i++) {
-          const sFrac = i * (0.07 / 15);
+        const kerbR = [0.88, 0.16, 0.12], kerbW = [0.94, 0.94, 0.92];
+        for (let i = 0; i < 18; i++) {
+          const sFrac = i * (0.07 / 18);
           const k = K(sFrac);
-          const a = anchor(k, -1, 5);
+          const a = anchor(k, -1, 4.5);
           const col = (i % 2 === 0) ? kerbR : kerbW;
-          addBox(a.out || api.out, vadd(a.c, a.u, 0.2), [0.8, 0.4, 3.5], col, [a.r, a.u, a.t]);
+          addBox(a.out || api.out, vadd(a.c, a.u, 0.25), [0.9, 0.5, 3.2], col, [a.r, a.u, a.t]);
         }
       }
 
       // 8d. Italian tifosi atmosphere — red banners near the start/finish.
-      // Bright red Italian flags add championship atmosphere.
-      billboard(K(0.01), 1, 30, 14, 6, [0.90, 0.15, 0.15]);
-      billboard(K(0.02), 1, 30, 14, 6, [0.90, 0.15, 0.15]);
-      billboard(K(0.005), 1, 28, 13, 5.5, [0.92, 0.20, 0.18]);
+      // Bright red Italian flags and vertical accent banners add championship energy.
+      billboard(K(0.01), 1, 32, 16, 7, [0.92, 0.14, 0.12]);
+      billboard(K(0.02), 1, 32, 16, 7, [0.92, 0.14, 0.12]);
+      billboard(K(0.005), 1, 30, 15, 6, [0.94, 0.18, 0.16]);
+      // Extra red accent banner (Tifosi section emphasis).
+      billboard(K(0.01), -1, 28, 12, 8, [0.90, 0.12, 0.10]);
 
-      // 8e. Dense pine silhouette ring — breaks the near canopy into natural texture.
-      // Forms the immersive first layer of the 688-hectare park forest.
-      for (let i = 0; i < 32; i++) {  // increased from 28 for more density
-        const a = i / 32 * 6.2832, h = hash(i * 11 + 5);
+      // 8e. Pine silhouette ring — adds natural texture to near canopy.
+      // Forms part of the 688-hectare park forest (lighter touch to avoid clutter).
+      for (let i = 0; i < 26; i++) {  // reduced from 32 for balanced coverage
+        const a = i / 26 * 6.2832, h = hash(i * 11 + 5);
         const r = rad + 100 + h * 55;
         const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
         if (onTrack(tx, tz, 30)) continue;
-        ridge(tx, tz, pyMin, a, 20, 20, 15 + h * 11, PINE_D);
+        ridge(tx, tz, pyMin, a, 20, 18, 14 + h * 10, PINE_D);
       }
 
       // 8f. Park furniture details — ornamental elements scattered deep in woods.
-      // Lake-edge vegetation clusters (weeping willows / water plants).
+      // Lake-edge vegetation clusters (weeping willows / water-loving broadleaf).
       for (const [s, sd, colL] of [[0.40, 1, LEAF_L], [0.24, -1, LEAF_L]]) {
-        for (let i = 0; i < 6; i++) {
-          const si = i - 3;
-          tree(K(s + si * 0.008), sd, 75 + i * 6, 14 + i * 0.5, colL);
+        for (let i = 0; i < 5; i++) {
+          const si = i - 2;
+          tree(K(s + si * 0.01), sd, 72 + i * 8, 15 + i * 0.8, colL);
         }
       }
     },

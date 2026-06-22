@@ -28,15 +28,15 @@
         peak, mountain, fence, wall, guardrail, tyreWall, groundYAt, onTrack } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Palettes from the brief
-      const SAND = [0.62, 0.50, 0.34], DUNE = [0.74, 0.62, 0.44], DUNE_N = [0.46, 0.39, 0.28];
-      const DUNE_LIT = [0.70, 0.58, 0.40], DUNE_ROCK = [0.52, 0.44, 0.33];
-      const CONC = [0.66, 0.66, 0.62], SEAT = [0.18, 0.18, 0.21], STEEL = [0.16, 0.16, 0.19];
+      // Palettes from the brief: night race desert
+      const SAND = [0.62, 0.50, 0.34], DUNE = [0.74, 0.62, 0.44], DUNE_ROCK = [0.52, 0.44, 0.33];
+      const DUNE_LIT = [0.70, 0.58, 0.40], SAND_DARK = [0.55, 0.44, 0.28], SAND_LIGHT = [0.75, 0.62, 0.42];
+      const SEAT = [0.18, 0.18, 0.21], STEEL = [0.16, 0.16, 0.19];
       const FLOOD = [0.95, 0.95, 0.88], TOWER_PALE = [0.85, 0.85, 0.80];
-      // Enhanced desert palette for better visual accuracy
-      const SAND_DARK = [0.55, 0.44, 0.28], SAND_LIGHT = [0.75, 0.62, 0.42];
-      const TOWER_CYLINDER = [0.82, 0.82, 0.78], TOWER_ACCENT = [0.70, 0.62, 0.50];
-      const TOWER_LIGHT_WARM = [1.0, 0.88, 0.50], TOWER_LIGHT_COOL = [0.60, 0.80, 0.95];
+      // Sakhir Tower: pale cream/beige modern tower with LED video façade. 8-storey cylindrical form.
+      const TOWER_CYL = [0.84, 0.83, 0.79], TOWER_LED_BAND = [0.88, 0.85, 0.70];
+      // Night-race LED beacon: warm amber for visibility + cool accent for video-screen effect
+      const BEACON_WARM = [0.98, 0.75, 0.35], BEACON_COOL = [0.70, 0.88, 0.98];
 
       // ---- CONTINUOUS DUNE BACKDROP: a low organic dune band wrapping the whole
       // lap, computed as a ring from the track centre so it reads as an unbroken
@@ -88,26 +88,23 @@
       grandstand(0.00, 1, 16, 130, [0.42, 0.43, 0.47], SEAT);
       grandstand(0.985, 1, 18, 70, [0.42, 0.43, 0.47], SEAT);
 
-      // Sakhir Tower: iconic cylindrical modern tower with video façade lighting (L, far).
-      // The real tower is 8-storey with a brilliant lighting/video façade, visible from
-      // multiple track positions. Its cylindrical form dominates the desert landscape.
+      // Sakhir Tower: iconic 8-storey cylindrical tower with LED video façade (L, far).
+      // The real tower has a brilliant 360° LED lighting system with dynamic content,
+      // visible as the signature landmark from multiple track positions.
       (function sakhirTower() {
         const a = anchor(K(0.005), -1, 48), b = [a.r, a.u, a.t];
-        // Main cylindrical shaft — wider base tapering slightly toward crown
-        addCyl(out, a.c, 7.0, 64, TOWER_CYLINDER, 12, b);
-        // Secondary tapered shaft for visual depth (off-centre for asymmetry)
-        addCyl(out, vadd(a.c, a.r, 1.2), 5.2, 56, [0.78, 0.78, 0.74], 10, b);
-        // Horizontal bands / floors — video façade segments (bright accents)
+        // Main cylindrical shaft — modern tapered form, pale cream colour
+        addCyl(out, a.c, 7.2, 62, TOWER_CYL, 12, b);
+        // Eight horizontal LED bands (one per storey) — bright video façade colour
         for (let i = 0; i < 8; i++) {
-          const yOff = (i / 7) * 56 + 4;
-          addBox(out, vadd(a.c, a.u, yOff), [14.8, 0.8, 14.8], TOWER_ACCENT, b);
+          const yOff = (i / 7) * 58 + 3;
+          addBox(out, vadd(a.c, a.u, yOff), [15.2, 0.7, 15.2], TOWER_LED_BAND, b);
         }
-        // Lit crown cap — prominent beacon visible from entire circuit
-        addCyl(out, vadd(a.c, a.u, 64), 8.5, 3, FLOOD, 10, b);
-        // Central beacon light stack (warm glow)
-        addCone(out, vadd(a.c, a.u, 67), 5.0, 6, TOWER_LIGHT_WARM, 8, b);
-        // Accent glow on the very top (cooler colour for night video screens)
-        addBox(out, vadd(a.c, a.u, 71), [6, 2, 6], TOWER_LIGHT_COOL, b);
+        // Crown cap — serves as base for beacon lighting
+        addCyl(out, vadd(a.c, a.u, 62), 8.8, 2.5, FLOOD, 10, b);
+        // Beacon stack: visible from the entire circuit (warm + cool for video effect)
+        addCone(out, vadd(a.c, a.u, 64.5), 4.2, 5, BEACON_WARM, 8, b);
+        addBox(out, vadd(a.c, a.u, 67.5), [4.5, 1.5, 4.5], BEACON_COOL, b);
       })();
 
       // ================= TURN 1 (s 0.05) =================
@@ -132,9 +129,9 @@
       floodMast(K(0.16), 1, 32, 26);
 
       // ================= SCULPTED DUNES (s 0.30, L far) =================
-      for (let i = 0; i < 8; i++) {
-        const k = (K(0.27) + i * Math.round(n * 0.009)) % n;
-        duneWedge(k, -1, 56 + i * 12, 38 + hash(k) * 30, 4 + hash(k * 5) * 3);
+      for (let i = 0; i < 5; i++) {
+        const k = (K(0.27) + i * Math.round(n * 0.015)) % n;
+        duneWedge(k, -1, 58 + i * 14, 40 + hash(k) * 28, 3.5 + hash(k * 5) * 3);
       }
 
       // ================= TURN 8 HAIRPIN (s 0.42, R) =================
@@ -145,9 +142,9 @@
       marshalPost(K(0.43), -1, 24);
 
       // ================= OPEN DESERT FLATS (s 0.50, both far) =================
-      for (let i = 0; i < 4; i++) {
-        const k = (K(0.48) + i * Math.round(n * 0.012)) % n;
-        for (const side of [-1, 1]) duneWedge(k, side, 90 + i * 20, 50, 3.5);
+      for (let i = 0; i < 3; i++) {
+        const k = (K(0.48) + i * Math.round(n * 0.016)) % n;
+        for (const side of [-1, 1]) duneWedge(k, side, 92 + i * 18, 48, 3.2);
       }
 
       // ================= MARSHAL / TIMING HUTS (s 0.62, L far) =================
@@ -300,15 +297,14 @@
       grandstand(0.44, 1, 22, 50, [0.42, 0.43, 0.48], [0.20, 0.30, 0.50]);
       billboard(K(0.43), 1, 9, 12, 4, [0.05, 0.45, 0.75]);
 
-      // ================= OPEN DESERT (s 0.48–0.56) — fill empty foreground =================
-      // Mid-distance dune wedges + scrub on both sides plus a couple of
-      // distant hospitality boxes so the flats aren't bare.
-      for (let i = 0; i < 6; i++) {
-        const k = (K(0.49) + Math.round(i * n * 0.01)) % n;
+      // ================= OPEN DESERT (s 0.48–0.56) — mid-distance fill =================
+      // Sparse dune wedges + scattered palms on both sides for visual depth.
+      for (let i = 0; i < 4; i++) {
+        const k = (K(0.49) + Math.round(i * n * 0.014)) % n;
         for (const side of [-1, 1]) {
-          duneWedge(k, side, 44 + i * 14, 32 + hash(k * 3 + side) * 26, 3.5 + hash(k * 5) * 2.5);
+          duneWedge(k, side, 46 + i * 16, 35 + hash(k * 3 + side) * 24, 3.3 + hash(k * 5) * 2.2);
         }
-        if (i % 2 === 0) palm(k, (i % 4 < 2) ? -1 : 1, 30 + i * 6, 6 + hash(k * 9) * 3, [0.15, 0.32, 0.13]);
+        if (i % 3 === 0) palm(k, (i % 2 === 0) ? -1 : 1, 32 + i * 7, 6.5 + hash(k * 9) * 3, [0.15, 0.32, 0.13]);
       }
       grandstand(0.52, 1, 26, 48, [0.40, 0.41, 0.46], SEAT);
       lightBank(K(0.51), 1, 36);
@@ -338,32 +334,31 @@
       // mid-straight overhead gantry (DRS / scoring)
       gantry(0.81, 8.2, STEEL);
 
-      // ---- Distant Manama-style desert-city glow on the far horizon: a sparse
-      // ring of low lit boxes well beyond the dune band, kept off any tarmac.
-      // Warmer amber tones for night-time city lighting. ----
+      // ---- Distant Manama-style desert-city glow on the far horizon: sparse
+      // silhouette ring well beyond the dune band, kept off any tarmac.
+      // Only ~14 buildings to suggest city presence without cluttering the far view. ----
       const cityRing = rad + 540;
-      for (let i = 0; i < 40; i++) {
-        const a = i / 40 * 6.2832 + 0.3, h = hash(i * 17 + 99);
-        const x = cx + Math.cos(a) * (cityRing + (h - 0.5) * 120);
-        const z = cz + Math.sin(a) * (cityRing + (h - 0.5) * 120);
+      for (let i = 0; i < 14; i++) {
+        const a = i / 14 * 6.2832 + 0.3, h = hash(i * 17 + 99);
+        const x = cx + Math.cos(a) * (cityRing + (h - 0.5) * 100);
+        const z = cz + Math.sin(a) * (cityRing + (h - 0.5) * 100);
         if (onTrack(x, z, 30)) continue;
-        const bw = 16 + h * 22, bh = 18 + h * 70;
+        const bw = 14 + h * 18, bh = 22 + h * 50;
         addBox(out, [x, pyMin + bh * 0.5, z], [bw, bh, bw], [0.14, 0.14, 0.18]);
-        // lit crown / window glow on the city towers — warmer night-time amber glow
-        addBox(out, [x, pyMin + bh + 1, z], [bw * 0.7, 2, bw * 0.7], [0.88, 0.75, 0.45]);
+        // Lit window glow — warm amber for night atmosphere
+        addBox(out, [x, pyMin + bh + 0.8, z], [bw * 0.65, 1.6, bw * 0.65], [0.86, 0.72, 0.40]);
       }
 
-      // ---- Tall slim distant comms / lighting towers on the city ring for silhouette
-      // variety. Multiple towers at various heights to suggest Bahrain's skyline. ----
-      for (let i = 0; i < 8; i++) {
-        const a = i / 8 * 6.2832 + 1.1, h = hash(i * 23 + 7);
-        const x = cx + Math.cos(a) * (cityRing - 40), z = cz + Math.sin(a) * (cityRing - 40);
+      // ---- Tall slim distant comms / lighting towers on the city ring for skyline
+      // variety — sparse, positioned to provide silhouette accent. ----
+      for (let i = 0; i < 5; i++) {
+        const a = i / 5 * 6.2832 + 1.1, h = hash(i * 23 + 7);
+        const x = cx + Math.cos(a) * (cityRing - 30), z = cz + Math.sin(a) * (cityRing - 30);
         if (onTrack(x, z, 20)) continue;
-        const towerH = 70 + h * 50;
-        addCyl(out, [x, pyMin, z], 2.5, towerH, [0.16, 0.16, 0.20], 6, null);
-        // Lit beacons on top — red/orange for navigation, warm for atmosphere
-        const beaconCol = (i % 2 === 0) ? [0.95, 0.35, 0.10] : [0.90, 0.45, 0.15];
-        addBox(out, [x, pyMin + towerH + 1, z], [4, 3, 4], beaconCol, null);
+        const towerH = 68 + h * 46;
+        addCyl(out, [x, pyMin, z], 2.2, towerH, [0.16, 0.16, 0.20], 6, null);
+        // Lit beacons on top — warm amber navigation light
+        addBox(out, [x, pyMin + towerH + 1, z], [3.5, 2.5, 3.5], [0.92, 0.60, 0.22], null);
       }
 
       // ---- Extra catch-fence ribbon along sweeping mid-lap corners for visual
@@ -371,33 +366,30 @@
       fence(0.10, 0.16, 1, 7, 3.0, [0.70, 0.72, 0.76]);
       fence(0.66, 0.72, -1, 7, 3.0, [0.70, 0.72, 0.76]);
 
-      // ================= DUNE SILHOUETTE RIDGES (outer desert, s 0.15–0.75) =================
-      // Three ridge calls on the outer (L) side at 120–200 m, suggesting dune
-      // crests beyond the circuit perimeter in tan/dark-sand tones.
+      // ================= DUNE SILHOUETTE RIDGES (outer L side, s 0.15–0.75) =================
+      // Low sand ridges on the distant left side, suggesting natural dune crests.
       {
-        const DUNE_RIDGE = [0.55, 0.44, 0.28];
-        const rdPts = [[0.18, 120], [0.45, 160], [0.68, 200]];
+        const DUNE_RIDGE = [0.54, 0.43, 0.27];
+        const rdPts = [[0.20, 124], [0.48, 162], [0.70, 196]];
         for (const [s, dist] of rdPts) {
           const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
-          // ridge: wide flat-bottomed wedge approximated as a low frustum
-          addFrustum(out, a.c, 90, 40, 10 + hash(K(s) * 7) * 6, DUNE_RIDGE, 6, b);
+          // Low ridge: wide frustum for natural dune silhouette
+          addFrustum(out, a.c, 88, 38, 9 + hash(K(s) * 7) * 5.5, DUNE_RIDGE, 6, b);
         }
       }
 
-      // ================= SAND RUNOFF PATCHES (s 0.10–0.20 and s 0.60–0.70, outer) =================
-      // Small low boxes on the outer side suggesting sand drifting onto the apron.
+      // ================= SAND RUNOFF PATCHES (s 0.10–0.20 and s 0.60–0.70, L outer) =================
+      // Low sand-drift patches on the outer side at problem zones.
       {
-        const SAND_RUNOFF = [0.70, 0.60, 0.42];
+        const SAND_RUNOFF = [0.69, 0.59, 0.40];
         for (const [s0, s1] of [[0.10, 0.20], [0.60, 0.70]]) {
-          const steps = Math.round((s1 - s0) / (20 / (n * 1.0 / n)));
-          const stepFrac = (s1 - s0) / Math.max(1, steps);
           let cnt = 0;
-          for (let sf = s0; sf < s1; sf += 0.018) {
+          for (let sf = s0; sf < s1; sf += 0.020) {
             const kk = K(sf);
-            const a = anchor(kk, -1, 18 + hash(kk * 5) * 14), b = [a.r, a.u, a.t];
-            addBox(out, a.c, [6, 0.2, 10], SAND_RUNOFF, b);
+            const a = anchor(kk, -1, 20 + hash(kk * 5) * 12), b = [a.r, a.u, a.t];
+            addBox(out, a.c, [5.5, 0.2, 9.5], SAND_RUNOFF, b);
             cnt++;
-            if (cnt > 7) break;
+            if (cnt > 6) break;
           }
         }
       }
@@ -405,16 +397,6 @@
       // ================= MID-CIRCUIT DESERT COMPOUND BUILDING (s 0.55) =================
       building(K(0.55), -1, 40, 14, 8, 20, { wall: [0.62, 0.58, 0.50], window: [0.30, 0.35, 0.40], floor: 2 });
 
-      // ================= BRIGHT BEACON ON SAKHIR TOWER (s 0.005) =================
-      // Enhanced beacon stack at the tower's peak — the iconic lighting symbol
-      // visible from the entire circuit during night race.
-      {
-        const a = anchor(K(0.005), -1, 48), b = [a.r, a.u, a.t];
-        // Lower warm beacon cone
-        addCone(out, vadd(a.c, a.u, 72), 2.0, 5, TOWER_LIGHT_WARM, 10, b);
-        // Upper accent light (cooler tone for video screen effect)
-        addCone(out, vadd(a.c, a.u, 76), 1.2, 3, TOWER_LIGHT_COOL, 8, b);
-      }
     },
   }
   );

@@ -77,52 +77,52 @@
       wall(0.92, 0.10, 1, 3, 1.0, [0.90, 0.90, 0.92], 0.5);
 
       // ---- COTA Observation Tower — the iconic 77m red structure at Turn 1 (s≈0.085, L far) ----
-      // Real COTA tower: tapered concrete/steel shaft + broad deck with red railings + viewing platform.
+      // Real COTA tower: tapered concrete/steel shaft + broad RED deck with railings + viewing platform.
       const kt = K(0.085);
       const at = anchor(kt, -1, 78), tb = [at.r, at.u, at.t];
       const tBase = at.c;
-      // tapered concrete/steel shaft (actual is ~77 m)
-      addFrustum(out, vadd(tBase, at.u, 0), 5.8, 4.6, 35, [0.80, 0.81, 0.85], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 35), 4.6, 3.8, 35, [0.78, 0.79, 0.83], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 70), 3.8, 3.0, 8, [0.76, 0.77, 0.81], 8, tb);
-      // broad observation deck near the top — iconic RED steel with railings
-      addCyl(out, vadd(tBase, at.u, 75), 8.6, 2.2, redSteel, 10, tb);   // main deck ring
-      addBox(out, vadd(tBase, at.u, 76.5), [18, 1.8, 18], [0.92, 0.92, 0.94], tb);  // deck floor (light grey)
+      // tapered concrete/steel shaft in 3 stages (total ~77 m)
+      addFrustum(out, vadd(tBase, at.u, 0), 5.8, 4.6, 32, [0.80, 0.81, 0.85], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 32), 4.6, 3.8, 32, [0.78, 0.79, 0.83], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 64), 3.8, 2.8, 10, [0.76, 0.77, 0.81], 8, tb);
+      // broad observation deck assembly (the iconic RED feature, ~8 m diameter)
+      const deckH = 74;
+      addCyl(out, vadd(tBase, at.u, deckH), 8.6, 2.4, redSteel, 10, tb);   // main RED deck ring
+      addBox(out, vadd(tBase, at.u, deckH + 1.2), [18, 1.8, 18], [0.92, 0.92, 0.94], tb);  // deck floor (light grey)
       // upper viewing platform — slightly raised, open-sided
-      addCyl(out, vadd(tBase, at.u, 78.2), 7.2, 2, [0.74, 0.76, 0.82], 8, tb);
-      // red railing segments around the deck edge (colourful from distance)
+      addCyl(out, vadd(tBase, at.u, deckH + 3.0), 7.2, 2.0, [0.74, 0.76, 0.82], 8, tb);
+      // red railing segments around the deck edge (8 posts fanned outward) — colourful silhouette from distance
       for (let i = 0; i < 8; i++) {
         const ang = (i / 8) * 6.2832;
-        const ox = Math.cos(ang) * 8.8, oz = Math.sin(ang) * 8.8;
-        addBox(out, vadd(vadd(tBase, at.t, ox), vadd(at.r, [0, 0, 0], oz)),
-               [0.6, 1.2, 1.2], redSteel, tb);
+        const ox = Math.cos(ang) * 9.0, oz = Math.sin(ang) * 9.0;
+        const rkPos = vadd(vadd(tBase, at.t, ox), at.r, 0);
+        const railPos = [rkPos[0], rkPos[1] + deckH + 0.8, rkPos[2]];
+        addBox(out, railPos, [0.6, 1.4, 1.4], redSteel, tb);
       }
-      // crown cap
-      addCone(out, vadd(tBase, at.u, 80.2), 4.6, 4, [0.65, 0.66, 0.70], 8, tb);
-      // slender red antenna mast on top
-      addCyl(out, vadd(tBase, at.u, 84.2), 0.35, 12, redSteel, 5, tb);
-      // beacon light at the very top
-      addBox(out, vadd(tBase, at.u, 96.2), [1.0, 1.0, 1.0], [1.0, 0.80, 0.2], tb);
-      // base facilities: small white operator/support buildings at tower base
-      prop(kt, -1, 60, [14, 6, 16], [0.86, 0.86, 0.88]);
-      prop(kt, -1, 80, [11, 5, 12], [0.80, 0.80, 0.83]);
+      // crown cap + antenna
+      addCone(out, vadd(tBase, at.u, deckH + 5.2), 4.4, 4, [0.65, 0.66, 0.70], 8, tb);
+      // slender antenna mast (tapers toward beacon)
+      addCyl(out, vadd(tBase, at.u, deckH + 9.2), 0.35, 9, redSteel, 5, tb);
+      // beacon light cap
+      addBox(out, vadd(tBase, at.u, deckH + 18.2), [0.8, 0.8, 0.8], [1.0, 0.82, 0.25], tb);
+      // base facilities: control/mechanical room at tower base
+      prop(kt, -1, 55, [16, 7, 18], [0.84, 0.84, 0.86]);
 
-      // ---- Uphill Turn 1: dramatic red-soil embankment + amphitheatre mounding ----
+      // ---- Uphill Turn 1: dramatic red-soil embankment — the amphitheatre climb ----
       const k1 = K(0.10);
-      const a1 = anchor(k1, 1, 14), b1 = [a1.r, a1.u, a1.t];
-      // main ascending earth bank on the inside of the turn
-      addPrism(out, vadd(a1.c, a1.u, 5), [24, 12, 70], redSoil, [a1.t, a1.u, a1.r]);
-      // large outer mound with red earth on the left side of the hill
-      const k1L = K(0.10);
-      const a1L = anchor(k1L, -1, 20), b1L = [a1L.r, a1L.u, a1L.t];
-      addPrism(out, vadd(a1L.c, a1L.u, 4), [32, 8, 80], [0.58, 0.32, 0.22], [a1L.t, a1L.u, a1L.r]);
+      const a1 = anchor(k1, 1, 14);
+      // main ascending earth bank on the inside of the turn (facing camera on climb)
+      addPrism(out, vadd(a1.c, a1.u, 5), [24, 14, 70], redSoil, [a1.t, a1.u, a1.r]);
+      // large outer mound with red-tan earth on the left side of the hill (wide base)
+      const a1L = anchor(k1, -1, 24);
+      addPrism(out, vadd(a1L.c, a1L.u, 4), [36, 9, 80], [0.58, 0.36, 0.26], [a1L.t, a1L.u, a1L.r]);
 
-      // ---- Esses spectator mounds flanking the track (s≈0.18, both, far) ----
+      // ---- Esses spectator viewing mounds (s≈0.18, both sides) ----
       const ke = K(0.18);
-      const me = anchor(ke, -1, 30), mr = [me.r, me.u, me.t];
-      addPrism(out, vadd(me.c, me.u, 3), [40, 6, 70], scrub, [me.t, me.u, me.r]);
-      const me2 = anchor(ke, 1, 30), mr2 = [me2.r, me2.u, me2.t];
-      addPrism(out, vadd(me2.c, me2.u, 3), [40, 6, 70], scrub, [me2.t, me2.u, me2.r]);
+      const me = anchor(ke, -1, 30);
+      addPrism(out, vadd(me.c, me.u, 3), [40, 7, 70], scrub, [me.t, me.u, me.r]);
+      const me2 = anchor(ke, 1, 30);
+      addPrism(out, vadd(me2.c, me2.u, 3), [40, 7, 70], scrub, [me2.t, me2.u, me2.r]);
 
       // ---- Austin360 Amphitheater: curved fan canopy behind Turn 12 (s≈0.64, R mid) ----
       const ka = K(0.64);
@@ -224,45 +224,45 @@
         }
       });
 
-      // ---- Big paddock car park rows in the infield far side (s≈0.55, L far) ----
+      // ---- Paddock car park rows (s≈0.55, L far) — sparser, cleaner layout ----
       const kp = K(0.55), ap = anchor(kp, -1, 70), pb = [ap.r, ap.u, ap.t];
-      if (!onTrack(ap.c[0], ap.c[2], 40)) {
-        for (let row = -2; row <= 2; row++) {
-          for (let col = -3; col <= 3; col++) {
-            const c = vadd(vadd(ap.c, ap.t, col * 6), ap.r, row * 4);
-            const tint = hash(row * 9 + col * 3 + 1);
-            addBox(out, vadd(c, ap.u, 0.7), [2.0, 1.4, 4.0],
-                   [0.3 + tint * 0.5, 0.3 + hash(col * 7) * 0.4, 0.35 + hash(row * 5) * 0.4], pb);
+      if (!onTrack(ap.c[0], ap.c[2], 42)) {
+        for (let row = -1; row <= 1; row++) {
+          for (let col = -2; col <= 2; col++) {
+            const c = vadd(vadd(ap.c, ap.t, col * 7), ap.r, row * 5);
+            const tint = hash(row * 7 + col * 11);
+            const carCol = [0.32 + tint * 0.48, 0.28 + hash(col * 13) * 0.38, 0.30 + hash(row * 17) * 0.42];
+            addBox(out, vadd(c, ap.u, 0.7), [2.0, 1.3, 4.0], carCol, pb);
           }
         }
       }
 
-      // ---- Velocity Tower — iconic orange/yellow landmark (s≈0.36, R far) ----
+      // ---- Velocity Tower — iconic colourful Austin landmark (s≈0.36, R far) ----
       const kv = K(0.36), av = anchor(kv, 1, 95), vb = [av.r, av.u, av.t];
-      if (!onTrack(av.c[0], av.c[2], 30)) {
-        // steel lattice tower with colored panels — distinctive Austin landmark
-        addFrustum(out, vadd(av.c, av.u, 0), 8, 6.5, 28, [0.32, 0.34, 0.38], 6, vb);
-        // bright orange/yellow band wrapping the tower
-        addFrustum(out, vadd(av.c, av.u, 28), 6.5, 5.5, 4, [0.95, 0.65, 0.15], 8, vb);
-        // continuation of the tower above the band
-        addFrustum(out, vadd(av.c, av.u, 32), 5.5, 4.5, 18, [0.32, 0.34, 0.38], 6, vb);
-        // colored crown cap — red/orange accent
-        addCone(out, vadd(av.c, av.u, 50), 4.5, 6, [0.88, 0.40, 0.20], 8, vb);
-        // antenna spire
-        addCyl(out, vadd(av.c, av.u, 56), 0.3, 8, [0.30, 0.32, 0.36], 4, vb);
+      if (!onTrack(av.c[0], av.c[2], 32)) {
+        // steel lattice tower base with tapered profile
+        addFrustum(out, vadd(av.c, av.u, 0), 8.5, 6.8, 26, [0.32, 0.34, 0.38], 6, vb);
+        // distinctive bright ORANGE band — the signature feature
+        addFrustum(out, vadd(av.c, av.u, 26), 6.8, 6.0, 6, [0.96, 0.64, 0.12], 8, vb);
+        // continuation of tower above orange band
+        addFrustum(out, vadd(av.c, av.u, 32), 6.0, 4.2, 18, [0.32, 0.34, 0.38], 6, vb);
+        // accent cap — burnt orange/red (visible from far distance)
+        addCone(out, vadd(av.c, av.u, 50), 4.2, 5.5, [0.84, 0.38, 0.18], 8, vb);
+        // thin antenna spire
+        addCyl(out, vadd(av.c, av.u, 55.5), 0.3, 7, [0.30, 0.32, 0.36], 4, vb);
       }
 
-      // ---- Texas water tower — a regional silhouette landmark (s≈0.68, L far) ----
+      // ---- Texas water tower — classic regional silhouette landmark (s≈0.68, L far) ----
       const kw = K(0.68), aw = anchor(kw, -1, 110), wb = [aw.r, aw.u, aw.t];
-      if (!onTrack(aw.c[0], aw.c[2], 35)) {
-        // classic elevated water tank on four steel legs
-        for (const leg of [[-3.5, -3.5], [3.5, -3.5], [-3.5, 3.5], [3.5, 3.5]]) {
-          addCyl(out, vadd(vadd(aw.c, aw.r, leg[0]), aw.t, leg[1]), 0.45, 20, [0.68, 0.70, 0.76], 4, wb);
+      if (!onTrack(aw.c[0], aw.c[2], 36)) {
+        // classic elevated tank on four tapered steel legs
+        for (const leg of [[-3.8, -3.8], [3.8, -3.8], [-3.8, 3.8], [3.8, 3.8]]) {
+          addCyl(out, vadd(vadd(aw.c, aw.r, leg[0]), aw.t, leg[1]), 0.50, 21, [0.68, 0.70, 0.76], 4, wb);
         }
-        // main tank cylinder
-        addFrustum(out, vadd(aw.c, aw.u, 20), 7.5, 7.2, 8, [0.82, 0.84, 0.88], 12, wb);
-        // tank dome cap
-        addCone(out, vadd(aw.c, aw.u, 28), 7.2, 5, [0.72, 0.74, 0.80], 12, wb);
+        // main cylindrical tank body
+        addFrustum(out, vadd(aw.c, aw.u, 21), 7.5, 7.3, 7, [0.82, 0.84, 0.88], 12, wb);
+        // dome cap on tank
+        addCone(out, vadd(aw.c, aw.u, 28), 7.3, 5, [0.72, 0.74, 0.80], 12, wb);
       }
 
       // ---- Texas Hill Country ridgelines — LOW organic hills on the horizon ----
@@ -282,50 +282,48 @@
         }
       }
 
-      // CONTINUOUS Texas Hill Country backdrop: three overlapping rings of LOW
-      // organic rolling hills, spaced for unbroken green/tan visual band around lap.
-      // Emphasizes the dry grassland and cedar/oak coverage of the real venue.
+      // CONTINUOUS Texas Hill Country backdrop: three overlapping rings of rolling hills
+      // Low organic mountains emphasize the dry grassland/scrub landscape of the real venue.
+      // Frame the circuit without overpowering the track view.
       for (const [extra, wMin, hMin, count, col] of [
-        [150, 240, 28, 48, [0.42, 0.50, 0.28]],          // near ring: dry grass + scrub
-        [340, 300, 42, 42, [0.48, 0.54, 0.40]],          // mid ring: tan-green band
-        [560, 360, 54, 36, [0.44, 0.50, 0.42]],          // far ring: hazy green (depth)
+        [140, 240, 26, 46, [0.42, 0.50, 0.28]],          // near ring: scrub-covered hills
+        [330, 300, 40, 40, [0.48, 0.54, 0.40]],          // mid ring: tan-green transition
+        [540, 360, 52, 34, [0.44, 0.50, 0.42]],          // far ring: hazy depth effect
       ]) {
         const ring = rad + extra;
         for (let i = 0; i < count; i++) {
-          // half-step offset for seamless coverage
           const a = (i + (i % 2) * 0.5) / count * 6.2832, h = hash(i * 7 + extra);
           const hillOpts = {
             seed: i * 3 + extra,
-            snowline: 3,  // never snow (Texas Hill Country)
+            snowline: 4,  // no snow (Texas Hill Country, not Alpine)
             forest: col,
-            rock: [Math.max(0.4, col[0] * 0.88), Math.max(0.35, col[1] * 0.88), Math.max(0.28, col[2] * 0.80)]
+            rock: [Math.max(0.42, col[0] * 0.87), Math.max(0.37, col[1] * 0.87), Math.max(0.30, col[2] * 0.78)]
           };
           mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                   wMin + h * 110, hMin + h * 24, hillOpts);
+                   wMin + h * 100, hMin + h * 22, hillOpts);
         }
       }
 
-      // ================= AUSTIN SKYLINE (s 0.30–0.65, L far) =================
-      // Iconic Austin downtown skyline visible from the south side of the circuit.
-      // 9 buildings at 220–300 m distance, varying heights 60–130 m (modern steel + glass).
+      // ================= AUSTIN DOWNTOWN SKYLINE (s 0.28–0.65, L far) =================
+      // Iconic downtown Austin skyline visible from the south side of the circuit.
+      // Modern glass/steel towers at 220–290 m distance; varied heights 60–130 m.
       {
-        const AUSTIN_WALL = [0.52, 0.56, 0.62];
-        const AUSTIN_WIN  = [0.32, 0.40, 0.54];
-        const AUSTIN_STEEL = [0.48, 0.50, 0.58];
+        const AUSTIN_STEEL = [0.50, 0.52, 0.60];     // subtle steel blue
+        const AUSTIN_WIN   = [0.30, 0.38, 0.52];     // glass blue
         const skylineData = [
-          [0.28, -1, 240,  16, 62],       // left edge
-          [0.32, -1, 280,  22, 88],       // rising
-          [0.36, -1, 210,  18, 72],       // variation
-          [0.40, -1, 300,  24, 120],      // tall centerpiece
-          [0.45, -1, 260,  20, 95],       // peak cluster
-          [0.50, -1, 230,  19, 85],       // falling sequence
-          [0.55, -1, 270,  21, 100],
-          [0.60, -1, 220,  18, 78],
-          [0.65, -1, 290,  23, 110],      // right edge tall
+          [0.28, -1, 240,  14, 60],       // left anchor
+          [0.32, -1, 270,  20, 82],       // rising cluster
+          [0.36, -1, 220,  18, 68],       // valley variation
+          [0.40, -1, 290,  26, 128],      // tall iconic tower (center)
+          [0.44, -1, 260,  22, 98],       // secondary peak
+          [0.49, -1, 240,  18, 76],       // descent
+          [0.54, -1, 280,  20, 94],       // mid-band rise
+          [0.59, -1, 225,  16, 72],       // taper
+          [0.64, -1, 285,  24, 110],      // right edge tall
         ];
         for (const [s, side, dist, w, h] of skylineData) {
           building(K(s), side, dist, w, h, w,
-            { wall: AUSTIN_STEEL, window: AUSTIN_WIN, floor: Math.round(h / 12) });
+            { wall: AUSTIN_STEEL, window: AUSTIN_WIN, floor: Math.round(h / 13) });
         }
       }
 
@@ -337,15 +335,17 @@
       grandstand(0.47, -1, 18, 68, [0.38, 0.39, 0.44], [0.50, 0.50, 0.54]);
       grandstand(0.52, 1, 20, 60, [0.36, 0.37, 0.42], [0.52, 0.50, 0.50]);
 
-      // ================= TEXAS VEGETATION — sage scrub + live oaks =================
-      // Outer-side only: olive/sage scrub every ~22 m, with occasional live oak.
-      every(22, (kk) => {
-        const r = hash(kk * 61);
-        if (r > 0.80) return;
-        const d = 18 + r * 22;
-        bush(kk, 1, d, [0.30, 0.38, 0.20]);   // sage scrub, outer side
-        if (hash(kk * 71) > 0.65) {
-          tree(kk, 1, d + 10 + hash(kk * 79) * 14, 5 + hash(kk * 83) * 4, [0.22, 0.36, 0.16]);
+      // ================= TEXAS VEGETATION — scattered scrub + live oak trees =================
+      // Strategic placement: scrub clusters every ~25 m, occasional oak trees for silhouette.
+      every(25, (kk) => {
+        const rVal = hash(kk * 61);
+        if (rVal > 0.78) return;
+        const d = 16 + rVal * 26;
+        // sage/olive scrub clumps
+        bush(kk, 1, d, [0.32, 0.40, 0.22]);
+        // occasional live oak for depth
+        if (hash(kk * 73) > 0.68) {
+          tree(kk, 1, d + 8 + hash(kk * 79) * 12, 6 + hash(kk * 83) * 3.5, [0.24, 0.38, 0.18]);
         }
       });
     },

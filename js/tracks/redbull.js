@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 4.3,
     baseHW: 7,
-    pal: { zenith: [0.26, 0.46, 0.8], horizon: [0.66, 0.76, 0.86], grass: [0.22, 0.52, 0.18], runoff: [0.42, 0.38, 0.3], fogDensity: 0.0012, sunDir: [0.59693248550091, 0.6446870843409829, 0.47754598840072804], sun: [1, 0.94, 0.82], sunColor: [1, 0.92, 0.8] },
+    pal: { zenith: [0.18, 0.35, 0.65], horizon: [0.58, 0.68, 0.82], grass: [0.20, 0.48, 0.15], runoff: [0.44, 0.40, 0.32], fogDensity: 0.0012, sunDir: [0.59693248550091, 0.6446870843409829, 0.47754598840072804], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
     segs: [
       { t: 0, l: 280 }, { t: -90, l: 100, h: 12 }, { t: 90, l: 90 }, { t: -100, l: 110, h: 8 }, { t: 80, l: 90 }, { t: 0, l: 220, h: -10 },
       { t: -70, l: 80 }, { t: 80, l: 90 }, { t: 0, l: 480, h: -10 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 },
@@ -24,82 +24,61 @@
     scenery: function (api) {
       const { out, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt } = api;
 
-      // --- Styrian Alps: an unbroken ring wrapping the whole lap. A forested near
-      // range (light snow on the tops) and a far range of snow-capped grey-blue
-      // peaks. Overlapping organic colour-zoned summits, neighbours touching so the
-      // wall reads as continuous with no gaps. Lower seg keeps the vert budget sane
-      // across many more peaks. Deep forest tones at the near range, lighter greens
-      // and blues as distance increases.
+      // --- Styrian Alps: two concentric rings of organic peaks. Inner ring (210m out)
+      // has denser dark-green foothills with rocky detail and moderate snow. Outer ring
+      // (480m out) has sparser, taller, whiter peaks for the dramatic far Alpine wall.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       const ranges = [
-        { extra: 260, wMin: 180, hMin: 64, hVar: 64, count: 46, seg: 8, opts: { forest: [0.16, 0.30, 0.18], rock: [0.32, 0.32, 0.28], snow: [0.91, 0.93, 0.97], snowline: 0.82, rough: 0.38 } },
-        { extra: 360, wMin: 300, hMin: 130, hVar: 90,  count: 42, seg: 8, opts: { forest: [0.22, 0.36, 0.26], rock: [0.44, 0.46, 0.48], snow: [0.93, 0.94, 0.98], snowline: 0.58, rough: 0.36 } },
-        { extra: 560, wMin: 360, hMin: 180, hVar: 120, count: 36, seg: 7, opts: { forest: [0.28, 0.40, 0.36], rock: [0.50, 0.52, 0.54], snow: [0.94, 0.95, 0.99], snowline: 0.46, rough: 0.34 } },
-        { extra: 800, wMin: 420, hMin: 220, hVar: 140, count: 28, seg: 6, opts: { forest: [0.40, 0.52, 0.46], rock: [0.60, 0.62, 0.64], snow: [0.95, 0.96, 1.0], snowline: 0.34, rough: 0.30 } },
+        { extra: 210, wMin: 160, hMin: 48, hVar: 56, count: 28, seg: 7, opts: { forest: [0.15, 0.28, 0.16], rock: [0.36, 0.34, 0.32], snow: [0.90, 0.92, 0.96], snowline: 0.75, rough: 0.40 } },
+        { extra: 480, wMin: 280, hMin: 140, hVar: 100, count: 22, seg: 6, opts: { forest: [0.28, 0.38, 0.30], rock: [0.48, 0.50, 0.54], snow: [0.94, 0.95, 0.99], snowline: 0.50, rough: 0.32 } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;
-        // chord spacing between neighbours; widen each peak so feet overlap.
         const span = 2 * Math.PI * ring / rg.count;
         for (let i = 0; i < rg.count; i++) {
           const h = hash(i * 7 + rg.extra), j = hash(i * 19 + rg.extra + 3);
-          const a = (i + (j - 0.5) * 0.35) / rg.count * 6.2832;   // jittered angle for an organic skyline
-          const w = Math.max(rg.wMin + h * 130, span * 1.55);     // ensure neighbours touch
+          const a = (i + (j - 0.5) * 0.35) / rg.count * 6.2832;
+          const w = Math.max(rg.wMin + h * 110, span * 1.55);
           mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
                    w, rg.hMin + h * rg.hVar, Object.assign({ seg: rg.seg, seed: i * 13 + rg.extra }, rg.opts));
         }
       }
 
-      // --- Mid/far layered forested ridges between the lap and the high peaks, so
-      // the horizon reads as wave upon wave of Styrian pine slopes. Multiple rings
-      // for depth — dark greens close, hazier lighter greens far.
-      {
-        for (const [ringDist, count, col1, col2] of [
-          [180, 32, [0.14, 0.28, 0.16], [0.18, 0.32, 0.18]],
-          [280, 28, [0.22, 0.36, 0.24], [0.26, 0.40, 0.28]],
-          [420, 24, [0.32, 0.46, 0.36], [0.40, 0.52, 0.44]],
-        ]) {
-          const ringR = rad + ringDist;
-          for (let i = 0; i < count; i++) {
-            const h = hash(i * 23 + 71 + ringDist), a = i / count * 6.2832 + (ringDist * 0.001);
-            const col = h < 0.5 ? col1 : col2;
-            ridge(cx + Math.cos(a) * ringR, cz + Math.sin(a) * ringR, pyMin,
-                  a + 1.5708, 160 + h * 140, 100 + h * 80, 35 + h * 35,
-                  col);
-          }
+      // --- Mid-ground forest ridges: two concentric treelines to frame the lap.
+      // Organic appearance without overwhelming with geometry.
+      for (const [ringDist, count, col] of [
+        [150, 20, [0.16, 0.30, 0.18]],
+        [310, 16, [0.26, 0.40, 0.30]],
+      ]) {
+        const ringR = rad + ringDist;
+        for (let i = 0; i < count; i++) {
+          const h = hash(i * 23 + 71 + ringDist), a = i / count * 6.2832;
+          ridge(cx + Math.cos(a) * ringR, cz + Math.sin(a) * ringR, pyMin,
+                a + 1.5708, 130 + h * 100, 80 + h * 50, 28 + h * 24, col);
         }
       }
 
-      // --- Dense pine forest blanketing the hills, both lining the lap and filling
-      // the slopes behind the near grandstands. Five staggered passes for deep layering,
-      // concentrated on the descending back sector (s~0.25–0.65).
-      every(6, (k) => {
+      // --- Pine forest: three focused passes for depth without overwhelming the landscape.
+      // Near foreground: sparse dense trees (tight clustering).
+      every(7, (k) => {
         const s = hash(k * 41);
-        if (s < 0.15) return;
-        pine(k, s < 0.6 ? -1 : 1, 7 + s * 11, 10 + s * 10, [0.09, 0.24, 0.12]);
+        if (s < 0.28) return;
+        pine(k, s < 0.6 ? -1 : 1, 12 + s * 8, 11 + s * 8, [0.10, 0.25, 0.12]);
       });
-      every(8, (k) => {
-        const s2 = hash(k * 67 + 5);
-        if (s2 > 0.40) pine(k, s2 < 0.7 ? -1 : 1, 18 + s2 * 20, 9 + s2 * 9, [0.12 + s2 * 0.07, 0.29, 0.15]);
-      });
-      every(10, (k) => {
-        const s3 = hash(k * 91 + 13);
-        if (s3 > 0.55) pine(k, s3 < 0.78 ? -1 : 1, 35 + s3 * 28, 12 + s3 * 10, [0.14 + s3 * 0.06, 0.31, 0.16]);
-      });
+      // Mid-distance: sparser, taller trees for layered depth.
       every(12, (k) => {
-        const s4 = hash(k * 113 + 19);
-        if (s4 > 0.62) pine(k, s4 < 0.75 ? -1 : 1, 50 + s4 * 30, 14 + s4 * 8, [0.16 + s4 * 0.08, 0.33, 0.18]);
+        const s2 = hash(k * 67 + 5);
+        if (s2 < 0.35) return;
+        pine(k, s2 < 0.65 ? -1 : 1, 28 + s2 * 18, 14 + s2 * 10, [0.13 + s2 * 0.08, 0.31, 0.16]);
       });
-      // A few broadleaf trees and low bushes near the edges for variety.
-      every(24, (k) => {
-        const s = hash(k * 53 + 9);
-        if (s > 0.48) tree(k, s < 0.75 ? -1 : 1, 13 + s * 9, 7 + s * 6, [0.22 + s * 0.08, 0.44, 0.20]);
-        const sb = hash(k * 31 + 4);
-        if (sb > 0.52) bush(k, sb < 0.76 ? 1 : -1, 7 + sb * 5, [0.22, 0.42, 0.19]);
+      // Scattered broadleaf accent trees for variety.
+      every(28, (k) => {
+        const st = hash(k * 53 + 9);
+        if (st > 0.62) tree(k, st < 0.72 ? -1 : 1, 16 + st * 8, 8 + st * 5, [0.24 + st * 0.06, 0.46, 0.21]);
       });
 
       // ---------------- Track furniture (continuous, both sides) ----------------
@@ -208,61 +187,44 @@
       grandstand(0.92, 1, 9, 28, shell, rbRed);
       grandstand(0.95, 1, 10, 22, shell, rbNavy);
 
-      // --- Meadow clearing foreground: pale gold/tan pastoral hedges both sides ---
-      every(30, (k) => {
+      // --- Meadow foreground: pastoral hedges frame the lap in key zones ---
+      every(36, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 113 + side) > 0.72) continue;
-          const d = 20 + hash(k * 127 + side) * 20;
+          if (hash(k * 113 + side) > 0.68) continue;
+          const d = 22 + hash(k * 127 + side) * 18;
           const p = anchor(k, side, d);
-          if (onTrack(p.c[0], p.c[2], 8)) return;
-          hedge(k / n, k / n + 0.005, side, d, 0.8 + hash(k * 131 + side) * 0.4, [0.66, 0.62, 0.50]);
+          if (onTrack(p.c[0], p.c[2], 10)) return;
+          hedge(k / n, k / n + 0.004, side, d, 0.9 + hash(k * 131 + side) * 0.3, [0.64, 0.60, 0.48]);
         }
       });
 
-      // --- Extra alpine meadow detail: short scattered broadleaf trees and bushes
-      // on the grassy banks, especially on the descending back-sector hills.
-      every(32, (k) => {
-        const s = hash(k * 73 + 7);
-        if (s < 0.25) tree(k, s < 0.5 ? -1 : 1, 12 + s * 10, 8 + s * 5, [0.28, 0.48, 0.20]);
-        const sb = hash(k * 89 + 11);
-        if (sb > 0.5) bush(k, sb < 0.68 ? -1 : 1, 8 + sb * 5, [0.24, 0.44, 0.19]);
-      });
 
-      // --- Remus corner crest landmark tower (s≈0.23) — golden tower, red cap ---
-      // Taller, more prominent golden tower to mark the circuit's high point
+      // --- Remus corner crest landmark tower (s≈0.30) — golden tower marking the descent ---
+      // Positioned at the back-sector high-point crest
       {
-        const rA = anchor(Math.round(n * 0.23) % n, 1, 18);
-        addCyl(out, rA.c, 2.8, 48, [0.96, 0.86, 0.22], 8, [rA.r, rA.u, rA.t]);
-        const rTop = vadd(rA.c, rA.u, 48);
-        addCone(out, rTop, 3.5, 7, [0.92, 0.10, 0.16], 8, [rA.r, rA.u, rA.t]);
-        // Base platform for visual weight
-        addCyl(out, vadd(rA.c, rA.u, -1.5), 4.2, 1.8, [0.60, 0.58, 0.55], 8, [rA.r, rA.u, rA.t]);
+        const rA = anchor(Math.round(n * 0.30) % n, 1, 22);
+        addCyl(out, rA.c, 2.6, 50, [0.96, 0.84, 0.18], 8, [rA.r, rA.u, rA.t]);
+        const rTop = vadd(rA.c, rA.u, 50);
+        addCone(out, rTop, 3.8, 8, [0.90, 0.08, 0.14], 8, [rA.r, rA.u, rA.t]);
+        addCyl(out, vadd(rA.c, rA.u, -1.5), 4.0, 1.5, [0.62, 0.60, 0.56], 8, [rA.r, rA.u, rA.t]);
       }
 
-      // --- Descent ridge emphasis at s=0.28–0.32 (back-sector drop) ---
-      // Layer multiple ridges to emphasize the dramatic long descent through Schlossgold
+      // --- Emphasis on back-sector descent (s≈0.30): the circuit's dramatic low point.
+      // Two ridged slopes frame the drop without clutter.
       {
-        for (let i = 0; i < 8; i++) {
-          const f = 0.26 + i * 0.008;
-          const k = Math.round(f * n) % n;
-          for (const side of [-1, 1]) {
-            const a = anchor(k, side, 50 + i * 12);
-            ridge(a.c[0], a.c[2], pyMin,
-                  Math.atan2(a.t[2], a.t[0]) + 1.5708,
-                  100 + hash(k * 37 + side) * 60, 50 + hash(k * 53 + side) * 35, 22 + hash(k * 71 + side) * 14,
-                  [0.18 + hash(k * 47 + side) * 0.06, 0.32 + hash(k * 59 + side) * 0.06, 0.18 + hash(k * 43 + side) * 0.04]);
-          }
+        const k1 = Math.round(n * 0.30) % n;
+        for (const side of [-1, 1]) {
+          const a = anchor(k1, side, 55);
+          ridge(a.c[0], a.c[2], pyMin, Math.atan2(a.t[2], a.t[0]) + 1.5708,
+                140, 65, 32, [0.20 + hash(k1 * 47 + side) * 0.05, 0.34, 0.20]);
         }
       }
 
-      // --- Alpine green spectator banks on mid-sector hills (s=0.35–0.65) ---
-      // Create the impression of massive grass embankments where crowds gather
-      for (const [sf, bankSide] of [[0.36, -1], [0.52, 1], [0.68, -1]]) {
-        const kBank = Math.round(sf * n) % n;
-        const aBank = anchor(kBank, bankSide, 45);
-        if (!onTrack(aBank.c[0], aBank.c[2], 20)) {
-          addBox(out, vadd(aBank.c, aBank.u, 8), [60, 16, 45], [0.32, 0.56, 0.26], [aBank.r, aBank.u, aBank.t]);
-        }
+      // --- Alpine green spectator banks at select zones (s≈0.52 mid-sector right-hander).
+      const kBank = Math.round(n * 0.52) % n;
+      const aBank = anchor(kBank, 1, 50);
+      if (!onTrack(aBank.c[0], aBank.c[2], 22)) {
+        addBox(out, vadd(aBank.c, aBank.u, 7), [70, 14, 50], [0.30, 0.54, 0.24], [aBank.r, aBank.u, aBank.t]);
       }
 
       // --- Orange Army billboard near stadium bowl (s≈0.87, Dutch orange) ---
@@ -271,14 +233,6 @@
       // --- Styrian Alpine farmhouse silhouette (s≈0.55) ---
       building(Math.round(n * 0.55) % n, -1, 18, 12, 6, 15,
         { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });
-
-      // --- Rocky outcrops: grey rock clusters at s=0.15, 0.40, 0.65 ---
-      for (const [sf, rockSide] of [[0.15, 1], [0.40, -1], [0.65, 1]]) {
-        const kR = Math.round(sf * n) % n;
-        const aR = anchor(kR, rockSide, 30);
-        if (!onTrack(aR.c[0], aR.c[2], 10))
-          addBox(out, vadd(aR.c, aR.u, 1.5), [4, 3, 5], [0.42, 0.40, 0.38], [aR.r, aR.u, aR.t]);
-      }
     },
   }
   );
