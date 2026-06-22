@@ -145,7 +145,11 @@ void main() {
   // a solid slab. Multiplicative, so it darkens as much as it lightens.
   if (uDetail > 0.0) {
     vec2 wp = vWorldPos.xz;
-    float n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40;
+    // Fade the fine high-frequency octave out with distance: at range it aliases
+    // into shimmer (and the texel footprint exceeds its wavelength anyway), so
+    // distant ground settles to flat colour while near ground keeps its grain.
+    float fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
+    float n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40 * fineFade;
     albedo *= 1.0 + (n - 0.5) * uDetail;
     albedo = max(albedo, vec3(0.0));
   }
@@ -207,7 +211,19 @@ void main() {
     color *= mix(0.88, 1.0, ao);
   }
 
-  color = mix(color, albedo, uEmissive);
+  // Emissive: lerp toward unlit albedo (self-illumination, sun-independent) and,
+  // for bright/warm surfaces (lit windows, floodlight lenses, neon), add an extra
+  // additive lift that pushes the value past 1.0 so the bloom bright-pass picks it
+  // up and the surface actually *glows* at night rather than just reading flat.
+  if (uEmissive > 0.0) {
+    color = mix(color, albedo, uEmissive);
+    // Glow weight: how "lamp-like" the albedo is. Bright (high luminance) AND
+    // warm-or-neutral colours qualify; dark/muddy colours get no lift so emissive
+    // walls don't bloom. Uses max channel for brightness, scaled smoothly in.
+    float bright = max(albedo.r, max(albedo.g, albedo.b));
+    float glow = smoothstep(0.55, 0.95, bright) * uEmissive;
+    color += albedo * glow * 0.9;
+  }
 
   // Height-based fog: density falls off exponentially with altitude above eye level.
   // uFogHeight = 0 → uniform (original behaviour); > 0 → pooling fog.
@@ -645,6 +661,21 @@ void main() {}`;
   let _activeProg = null;
   function useProg(p) { if (p !== _activeProg) { gl.useProgram(p); _activeProg = p; } }
 
+  // Per-frame view-projection upload cache for the blob-shadow / skid-mark
+  // programs. uViewProj never changes within a frame, but drawShadow/drawMark are
+  // called dozens of times per frame (one per skid stamp / car shadow), each
+  // re-uploading the same 16-float matrix. Track which program last received the
+  // frame's matrix so the upload happens at most once per program per frame.
+  let _frameToken = 0;
+  let _shadowVPToken = -1, _markVPToken = -1;
+
+  // VAO bind cache — drawElements requires the right VAO, but consecutive draws
+  // of the same mesh (or repeated skid/shadow quads sharing shadowVAO) would
+  // otherwise rebind redundantly. Binding null after every draw also forces a
+  // rebind on the next; instead leave the last VAO bound and skip no-op binds.
+  let _activeVAO = null;
+  function bindVAO(v) { if (v !== _activeVAO) { gl.bindVertexArray(v); _activeVAO = v; } }
+
   // Render-state cache — enable/disable(BLEND) and depthMask are pipeline state
   // changes. Many consecutive draws share the same state (e.g. dozens of skid
   // marks and car shadows per frame), so collapse redundant toggles into no-ops.
@@ -883,6 +914,7 @@ void main() {}`;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
+    _activeVAO = null;   // keep the bind cache in sync with the direct bind above
 
     return { vao, vbo, ib, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
   }
@@ -890,6 +922,7 @@ void main() {}`;
   function begin(frame) {
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
+    _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer.
     if (postEnabled) {
@@ -952,9 +985,8 @@ void main() {}`;
     // so runs of same-state draws collapse to a single real toggle via the cache.
     setDepthMask(true);
     setBlend(alpha < 1);
-    gl.bindVertexArray(mesh.vao);
+    bindVAO(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    gl.bindVertexArray(null);
   }
 
   function drawSky(sky) {
@@ -970,33 +1002,36 @@ void main() {}`;
     gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
     setBlend(false);
     setDepthMask(false);
-    gl.bindVertexArray(skyVAO);
+    bindVAO(skyVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.bindVertexArray(null);
   }
 
   function drawShadow(modelMat, w, l) {
     useProg(shadowProg);
-    gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
+    if (_shadowVPToken !== _frameToken) {
+      gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
+      _shadowVPToken = _frameToken;
+    }
     gl.uniformMatrix4fv(shadowU.uModel, false, modelMat);
     gl.uniform2f(shadowU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    gl.bindVertexArray(shadowVAO);
+    bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    gl.bindVertexArray(null);
   }
 
   function drawMark(modelMat, w, l) {
     useProg(markProg);
-    gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
+    if (_markVPToken !== _frameToken) {
+      gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
+      _markVPToken = _frameToken;
+    }
     gl.uniformMatrix4fv(markU.uModel, false, modelMat);
     gl.uniform2f(markU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    gl.bindVertexArray(shadowVAO);
+    bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    gl.bindVertexArray(null);
   }
 
   // Resolve the HDR scene to the screen: extract bright areas, blur them into a
@@ -1012,7 +1047,7 @@ void main() {}`;
     setBlend(false);
     setDepthMask(true);
     gl.disable(gl.DEPTH_TEST);
-    gl.bindVertexArray(skyVAO);   // reuse the empty VAO for fullscreen triangles
+    bindVAO(skyVAO);   // reuse the empty VAO for fullscreen triangles
 
     // 1) bright-pass scene -> bloom[0] (half res)
     gl.viewport(0, 0, bloomW, bloomH);
@@ -1071,13 +1106,14 @@ void main() {}`;
     gl.uniform1f(compU.uSunShaft, sunShaft);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    gl.bindVertexArray(null);
+    bindVAO(null);
     gl.activeTexture(gl.TEXTURE0);
     gl.enable(gl.DEPTH_TEST);
   }
 
   function freeMesh(mesh) {
     if (!mesh) return;
+    if (_activeVAO === mesh.vao) { gl.bindVertexArray(null); _activeVAO = null; }
     gl.deleteBuffer(mesh.ib);
     gl.deleteBuffer(mesh.vbo);
     gl.deleteVertexArray(mesh.vao);
@@ -1109,7 +1145,7 @@ void main() {}`;
     },
     castShadow(mesh, model) {
       if (!shadowEnabled || !mesh) return;
-      gl.bindVertexArray(mesh.vao);
+      bindVAO(mesh.vao);
       gl.uniformMatrix4fv(depthU.uModel, false, model);
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     },
