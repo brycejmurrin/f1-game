@@ -25,7 +25,7 @@
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop, onTrack,
-              addBox, addCyl, vadd, anchor, along, mountain, pine, tree, bush, hedge,
+              addBox, addCyl, addFrustum, vadd, anchor, along, mountain, pine, tree, bush, hedge,
               grandstand, building, tower, billboard, gantry, marshalPost,
               fence, guardrail, tyreWall } = api;
 
@@ -140,6 +140,8 @@
       grandstand(0.02, -1, 9, 24, shell, [0.20, 0.40, 0.66]);  // La Source inner (blue crowd)
       grandstand(0.07, 1, 8, 34, shell, [0.20, 0.36, 0.62]);   // Eau Rouge / Raidillon
       grandstand(0.09, -1, 9, 26, shell, [0.66, 0.48, 0.16]);  // Raidillon crest, opposite bank
+      // Raidillon crest grandstand + giant screen (s≈0.08, brief requirement)
+      grandstand(0.08, 1, 10, 28, shell, [0.48, 0.50, 0.54]);  // Raidillon crest right (open seating)
       grandstand(0.16, 1, 8, 34, shell, [0.50, 0.52, 0.56]);   // Les Combes
       grandstand(0.55, -1, 9, 24, shell, [0.40, 0.46, 0.52]);  // Pouhon
       grandstand(0.78, 1, 8, 26, shell, [0.46, 0.48, 0.52]);   // Stavelot
@@ -202,6 +204,18 @@
         addBox(out, vadd(a.c, a.u, 11), [1.6, 0.9, 1.2], [0.20, 0.20, 0.22], [a.r, a.u, a.t]);
       });
 
+      // --- Raidillon giant-screen structure (brief: s≈0.08, mid distance).
+      {
+        const k = Math.round(n * 0.08) % n;
+        const a = anchor(k, 1, 18);
+        // Screen frame tower base (tapered column)
+        addFrustum(out, a.c, 3.2, 2.6, 14, [0.50, 0.50, 0.52], 8, [a.r, a.u, a.t]);
+        // Screen panel (large rectangle mounted on top)
+        addBox(out, vadd(a.c, a.u, 15), [8.0, 5.5, 0.6], [0.12, 0.12, 0.14], [a.r, a.u, a.t]);
+        // Cross-beam supports
+        addCyl(out, vadd(a.c, a.u, 12.5), 0.25, 8, [0.45, 0.45, 0.48], 5, [a.r, a.u, a.t]);
+      }
+
       // --- La Source hotel: iconic red-roofed structure at the La Source hairpin.
       building(Math.round(n * 0.01) % n, 1, 35, 10, 12, 30, { wall: [0.74, 0.38, 0.20], window: [0.38, 0.34, 0.28], floor: 2 });
 
@@ -215,6 +229,31 @@
         }
       });
 
+      // --- Dense forest banks at mid-track (s≈0.40): continuous dark-green box masses.
+      // Brief calls for "continuous dark-green box masses hemming the track" at fast forest sweepers.
+      every(42, (k) => {
+        const s = k / n;
+        if (s < 0.35 || s > 0.50) return;  // Pouhon area and approach
+        for (const side of [-1, 1]) {
+          const r = hash(k * 97 + side * 19 + 23);
+          if (r < 0.35) continue;
+          const dist = 18 + r * 32, h = 14 + r * 14;
+          pine(k, side, dist, h, [0.09 + r * 0.04, 0.27, 0.12]);
+        }
+      });
+
+      // --- Extra Blanchimont forest depth (s≈0.80–0.95): tall pines on fast section.
+      every(38, (k) => {
+        const s = k / n;
+        if (s < 0.78 || s > 0.98) return;
+        for (const side of [-1, 1]) {
+          const r = hash(k * 83 + side * 17 + 31);
+          if (r < 0.42) continue;
+          const dist = 16 + r * 28, h = 13 + r * 11;
+          pine(k, side, dist, h, [0.09 + r * 0.05, 0.28, 0.13]);
+        }
+      });
+
       // --- Kemmel Straight billboard: on the uphill Kemmel drag.
       billboard(Math.round(n * 0.12) % n, -1, 8, 10, 3.4, [0.16, 0.42, 0.74]);
 
@@ -225,6 +264,30 @@
 
       // --- Pouhon interior guardrail: mirrored inside line to tighten the corner envelope.
       guardrail(0.50, 0.58, -1, 3.0, [0.66, 0.67, 0.70]);
+
+      // --- Stavelot run-off + barrier boxes (brief: s≈0.78, near distance).
+      // Brief specifies "Stavelot run-off + barrier boxes against treeline".
+      {
+        const k = Math.round(n * 0.78) % n;
+        // Concrete run-off pad
+        place(k, 1, 12, [18, 0.6, 26], [0.56, 0.56, 0.54]);
+        // Barrier boxes at edge of run-off
+        place(k, 1, 24, [8, 1.2, 20], [0.52, 0.52, 0.50]);
+        place(Math.round(n * 0.80) % n, 1, 20, [8, 1.2, 16], [0.54, 0.54, 0.52]);
+      }
+
+      // --- Increase forest barriers around fast sweepers for "hemming" effect.
+      // Tall dark treelines at the edges of Stavelot/Blanchimont (brief: s≈0.40 and beyond).
+      every(48, (k) => {
+        const s = k / n;
+        if ((s < 0.36 || s > 0.52) && (s < 0.75 || s > 0.99)) return;  // Pouhon and Blanchimont sections
+        for (const side of [-1, 1]) {
+          const r = hash(k * 101 + side * 29 + 41);
+          if (r < 0.50) continue;
+          const dist = 30 + r * 40, h = 16 + r * 12;
+          tree(k, side, dist, h, [0.12 + r * 0.06, 0.34, 0.16]);
+        }
+      });
     },
   }
   );

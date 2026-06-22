@@ -30,14 +30,14 @@
               fence, guardrail, tyreWall, wall } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ---- Palette (Imola riverside parkland greens) ----
-      const CANOPY = [0.20, 0.46, 0.22];   // sunlit deciduous canopy
-      const WOODS  = [0.11, 0.30, 0.15];   // shaded woods
-      const BANK   = [0.42, 0.63, 0.30];   // sunlit grass bank
-      const RIVER  = [0.28, 0.42, 0.52];   // blue-green Santerno water
-      const GRAVEL = [0.78, 0.70, 0.52];   // pale tan gravel
-      const RED    = [0.82, 0.16, 0.14];
-      const WHITE  = [0.92, 0.92, 0.90];
+      // ---- Palette (Imola riverside parkland: rich greens, warm Italian earth, Santerno blues) ----
+      const CANOPY = [0.21, 0.48, 0.21];   // sunlit deciduous canopy — warm spring green
+      const WOODS  = [0.10, 0.28, 0.14];   // shaded woods — deep forest
+      const BANK   = [0.44, 0.65, 0.28];   // sunlit grass bank — warm hillside
+      const RIVER  = [0.26, 0.40, 0.54];   // blue-green Santerno water — cooler tone
+      const GRAVEL = [0.80, 0.72, 0.50];   // pale tan gravel — classic pit/runoff
+      const RED    = [0.82, 0.16, 0.14];   // traditional kerb red
+      const WHITE  = [0.92, 0.92, 0.90];   // kerb white
 
       // ---- Encircling WOODED IMOLA HILLS — CONTINUOUS green ring, no snow (snowline > 1) ----
       // Centre-based ring so peaks sit on the horizon, not in the infield.
@@ -77,76 +77,86 @@
       });
 
       // ---- DENSE PARKLAND: deciduous canopy + conifers walling both sides ----
-      every(18, (k) => {
+      // Classic Italian mature parkland: thick mixed broadleaf/conifer walls
+      every(16, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 41 + side);
-          if (s < 0.22) continue;
-          const dist = 9 + s * 20, h = 9 + s * 8;
-          if (s < 0.62) tree(k, side, dist, h, [0.18 + s * 0.06, 0.44, 0.21]);
-          else pine(k, side, dist, h + 2, [0.10 + s * 0.04, 0.30, 0.15]);
+          if (s < 0.18) continue;  // denser placement (reduced skip)
+          const dist = 8 + s * 22, h = 10 + s * 9;
+          if (s < 0.60) tree(k, side, dist, h, [0.17 + s * 0.08, 0.46, 0.20]);
+          else pine(k, side, dist, h + 2, [0.08 + s * 0.05, 0.32, 0.14]);
         }
       });
-      // Second, deeper rank of forest behind the first wall for thickness.
-      every(30, (k) => {
+      // Second, deeper rank of forest behind the first wall — THICKENED for mature woodland effect
+      every(24, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 67 + side * 5);
-          if (s < 0.46) continue;
-          const dist = 30 + s * 26, h = 12 + s * 8;
-          if (s < 0.70) pine(k, side, dist, h + 2, WOODS);
-          else tree(k, side, dist, h, [0.15 + s * 0.05, 0.40, 0.19]);
+          if (s < 0.38) continue;  // denser coverage (reduced skip threshold)
+          const dist = 28 + s * 30, h = 13 + s * 9;
+          if (s < 0.68) pine(k, side, dist, h + 2, WOODS);
+          else tree(k, side, dist, h, [0.14 + s * 0.06, 0.42, 0.18]);
         }
       });
-      // Sunlit broadleaf verge trees scattered between.
-      every(70, (k) => {
+      // Sunlit broadleaf verge trees scattered between — increased frequency
+      every(55, (k) => {
         const h = hash(k * 53 + 9);
-        if (h < 0.45) return;
-        tree(k, h < 0.7 ? -1 : 1, 13 + h * 9, 11 + h * 6, CANOPY);
+        if (h < 0.40) return;
+        tree(k, h < 0.7 ? -1 : 1, 12 + h * 11, 12 + h * 7, [0.19 + h * 0.06, 0.47, 0.21]);
       });
       // Third, far rank: a deep mature woodland mass — clusters of large broadleaf
-      // crowns + the odd tall pine, set well back so the parkland reads as endless.
-      every(40, (k) => {
+      // crowns + the odd tall pine, set well back so the parkland reads as endless and unbroken.
+      every(36, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 91 + side * 13);
-          if (s < 0.5) continue;
-          const dist = 56 + s * 50;
+          if (s < 0.42) continue;  // denser background
+          const dist = 54 + s * 54;
           if (onTrack(px[k], pz[k], 0)) continue; // cheap guard; tree() also guards
-          if (s < 0.78) tree(k, side, dist, 14 + s * 8, [0.13 + s * 0.05, 0.36, 0.18]);
-          else pine(k, side, dist, 16 + s * 8, WOODS);
+          if (s < 0.75) tree(k, side, dist, 15 + s * 10, [0.12 + s * 0.07, 0.38, 0.17]);
+          else pine(k, side, dist, 17 + s * 9, [0.09, 0.28, 0.12]);
         }
       });
-      // Low understory shrubs dotted along the verge for ground texture.
-      every(46, (k) => {
+      // Low understory shrubs dotted along the verge for ground texture — more frequent
+      every(38, (k) => {
         const s = hash(k * 29 + 3);
-        if (s < 0.6) return;
-        bush(k, s < 0.8 ? -1 : 1, 7 + s * 6, [0.18 + s * 0.06, 0.40, 0.20]);
+        if (s < 0.50) return;  // more shrubs
+        bush(k, s < 0.8 ? -1 : 1, 6 + s * 7, [0.17 + s * 0.08, 0.42, 0.19]);
       });
 
-      // ---- Dense forest lining Tamburello approach ----
-      for (let i = 0; i < 28; i++) {
-        const s = i / 28;  // 0.0 → 1.0 full lap but focused on start straight
-        if (s > 0.10 && s < 0.90) continue;  // only start/finish straight approach
+      // ---- Dense forest lining Tamburello approach (s≈0.05-0.10) and turn-in (s≈0.88-0.98) ----
+      // Tamburello is classically a dark, tree-lined corner; emphasize the forest density
+      for (let i = 0; i < 36; i++) {
+        const s = i / 36;  // extended coverage
+        if (s > 0.12 && s < 0.88) continue;  // only start/finish approach + late-lap return
         const kk = K(s);
         for (const side of [-1, 1]) {
           const h2 = hash(kk * 81 + side + i);
-          const dist = 10 + h2 * 10;
-          if (h2 < 0.45) pine(kk, side, dist, 10 + h2 * 6, [0.10, 0.28, 0.14]);
-          else tree(kk, side, dist, 9 + h2 * 5, [0.18, 0.38, 0.20]);
+          if (h2 < 0.30) continue;  // skip some for variation
+          const dist = 9 + h2 * 12;
+          if (h2 < 0.55) pine(kk, side, dist, 11 + h2 * 7, [0.09, 0.26, 0.13]);
+          else tree(kk, side, dist, 10 + h2 * 6, [0.16, 0.40, 0.19]);
         }
       }
 
       // ---- s 0.00 R — Santerno river: CONTINUOUS flat water slab paralleling the river run ----
       // Overlapping slabs from the pit straight through the run to Tosa, no gaps.
-      for (let i = 0; i <= 10; i++) {
-        const s = i * 0.018;            // 0.00 → 0.18, the river-side stretch
+      // Extended river presence from start straight through to Acque Minerali bend
+      for (let i = 0; i <= 12; i++) {
+        const s = i * 0.016;            // 0.00 → 0.19, extended river-side stretch
         groundPlane(K(s), 1, 15, [34, 90], RIVER);
       }
+      // Large river basins to emphasize the Santerno's prominence
       groundPlane(K(0.00), 1, 16, [70, 220], RIVER);
       groundPlane(K(0.05), 1, 18, [60, 180], RIVER);
-      // grassy bank between road and river, running the whole river stretch
+      groundPlane(K(0.09), 1, 17, [55, 160], RIVER);
+      groundPlane(K(0.15), 1, 16, [50, 140], RIVER);
+      // grassy banks between road and river, the characteristic green belt
       groundPlane(K(0.02), 1, 6, [16, 200], BANK);
       groundPlane(K(0.10), 1, 6, [16, 160], BANK);
-      // tree line hugging the back run to Tosa (s≈0.20, right, mid)
-      hedge(0.16, 0.26, 1, 26, 7, WOODS);
+      groundPlane(K(0.17), 1, 7, [14, 120], BANK);
+      // dense river-side tree line hugging the back run to Tosa (s≈0.16-0.28, right, mid)
+      hedge(0.16, 0.28, 1, 26, 8, WOODS);
+      // additional far-bank foliage along the river
+      hedge(0.02, 0.15, 1, 35, 6, [0.12, 0.28, 0.13]);
 
       // ---- s 0.00 L — Old pit building + main grandstand on the pit straight ----
       building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: [0.34, 0.36, 0.40], floor: 5 });
@@ -189,34 +199,46 @@
         pine(K(0.36), side, 24, 12, WOODS);
       }
 
-      // ---- s 0.50 R mid — Acque Minerali right-left in a green hollow: dense trees + fog ----
-      for (let i = 0; i < 6; i++) {
-        const k = K(0.48 + i * 0.012);
-        pine(k, 1, 16 + hash(k * 9) * 14, 12 + hash(k * 5) * 6, WOODS);
-        tree(k, 1, 30 + hash(k * 7) * 16, 11, WOODS);
+      // ---- s 0.48-0.55 R — Acque Minerali right-left in a green hollow: dense trees + valley fog ----
+      // The valley feels enclosed by forest; enhance the dense woodland effect
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.47 + i * 0.010);
+        pine(k, 1, 15 + hash(k * 9) * 16, 13 + hash(k * 5) * 7, [0.08, 0.25, 0.12]);
+        tree(k, 1, 28 + hash(k * 7) * 18, 12 + hash(k * 3) * 4, [0.13, 0.35, 0.15]);
+        if (i > 2) bush(k, 1, 8 + hash(k * 11) * 6, [0.15, 0.38, 0.17]);
       }
-      // thin fog band lingering in the river-valley hollow
-      groundPlane(K(0.50), 1, 10, [40, 60], [0.74, 0.78, 0.74]);
+      // multiple fog bands in the hollow for greater valley atmosphere
+      groundPlane(K(0.49), 1, 10, [45, 70], [0.76, 0.80, 0.76]);
+      groundPlane(K(0.52), 1, 12, [40, 60], [0.74, 0.78, 0.74]);
+      groundPlane(K(0.55), 1, 10, [35, 50], [0.75, 0.79, 0.75]);
 
       // ---- s 0.60 L far — Wooded hills backdrop: tiered dark-green box ridges ----
       for (let i = 0; i < 4; i++) {
         backdrop(K(0.58 + i * 0.012), -1, 100 + i * 18, [120, 26 + i * 6, 80], [0.16, 0.34, 0.18]);
       }
 
-      // ---- s 0.66 L+R near — Variante Alta chicane over a crest: tall sausage kerbs ----
+      // ---- s 0.66 L+R near — Variante Alta chicane over a crest: tall sausage kerbs + vegetation ----
       for (const side of [-1, 1]) {
         place(K(0.66), side, 2, [0.7, 0.5, 8], RED);
         place(K(0.67), side, 2, [0.7, 0.5, 8], WHITE);
       }
       bush(K(0.66), -1, 10, BANK);
+      bush(K(0.66), 1, 12, [0.16, 0.36, 0.18]);
+      // vegetation along the Variante Alta crest area
+      tree(K(0.65), -1, 20, 10, [0.15, 0.40, 0.18]);
+      pine(K(0.68), 1, 18, 11, WOODS);
 
-      // ---- s 0.80 L mid — Rivazza double-left descent: grass banks, gravel, grandstand ----
+      // ---- s 0.78-0.86 L — Rivazza double-left descent: grass banks, gravel, grandstand + wooded sides ----
       grandstand(0.80, -1, 12, 55, [0.52, 0.55, 0.60], RED);
       grandstand(0.84, -1, 12, 48, [0.54, 0.57, 0.61], [0.78, 0.30, 0.22]);
       groundPlane(K(0.80), -1, 6, [30, 50], GRAVEL);
       groundPlane(K(0.81), -1, 14, [40, 60], BANK);
       // shaded fog dip at Rivazza
       groundPlane(K(0.82), -1, 8, [30, 40], [0.74, 0.78, 0.74]);
+      // woody enclosure on the descent
+      pine(K(0.79), -1, 28, 12, WOODS);
+      tree(K(0.82), 1, 25, 11, [0.12, 0.34, 0.16]);
+      tree(K(0.85), 1, 20, 10, WOODS);
 
       // ---- Italian town buildings at Variante Alta / Rivazza (s=0.60–0.80) ----
       const TERRA2  = [0.78, 0.58, 0.42];

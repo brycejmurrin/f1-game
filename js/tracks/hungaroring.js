@@ -99,29 +99,34 @@
       }
 
       // ---- Continuous stepped green crowd banking lining the whole lap ----
-      // Two tiers of banking boxes ring the track so it sits in a grassy bowl,
-      // with the closer tier speckled by crowd-coloured caps (packed spectators).
-      every(40, (kk) => {
+      // Three tiers of banking boxes ring the track so it sits in a grassy bowl,
+      // with multiple levels creating dramatic amphitheatre effect.
+      every(25, (kk) => {
         for (const side of [-1, 1]) {
           const hh = hash(kk * 5 + side);
-          // near grassy banking tier
-          backdrop(kk, side, 78 + hh * 30, [70, 9 + hh * 6, 70], hh < 0.5 ? BANK : GRASS2);
-          // far taller banking tier (the bowl rim)
-          backdrop(kk, side, 150 + hh * 60, [110, 16 + hh * 10, 100], hh < 0.5 ? BANK2 : GRASS);
+          // close inner banking tier (near spectator zone)
+          backdrop(kk, side, 52 + hh * 26, [60, 8 + hh * 5, 60], hh < 0.45 ? BANK : GRASS2);
+          // mid-range banking tier (stepped amphitheatre)
+          backdrop(kk, side, 98 + hh * 48, [90, 13 + hh * 8, 85], hh < 0.5 ? BANK2 : GRASS);
+          // outer tall banking tier (bowl rim)
+          backdrop(kk, side, 160 + hh * 70, [120, 18 + hh * 12, 110], hh < 0.4 ? GRASS : BANK);
         }
       });
 
       // ---- Speckled crowd on the banking: small coloured caps reading as people ----
       // Placed by clearance on the banking slope, off the tarmac, all around the bowl.
-      every(26, (kk) => {
+      // Denser crowd placement for busier Hungarian GP atmosphere.
+      every(18, (kk) => {
         for (const side of [-1, 1]) {
           const hh = hash(kk * 31 + side * 3);
-          if (hh < 0.40) continue;             // gaps in the crowd
-          const base = 30 + hh * 26;
+          if (hh < 0.35) continue;             // smaller gaps in the crowd
+          const base = 25 + hh * 24;
           const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
-          prop(kk, side, base, [12, 1.6 + hh * 1.2, 14], col);
-          if (hh > 0.7) prop(kk, side, base + 16 + hh * 8, [10, 1.4, 12],
+          prop(kk, side, base, [13, 1.7 + hh * 1.3, 15], col);
+          if (hh > 0.6) prop(kk, side, base + 18 + hh * 10, [11, 1.5, 13],
                              CROWD[(kk + 2) % CROWD.length]);
+          if (hh > 0.75) prop(kk, side, base + 35 + hh * 16, [12, 1.6, 14],
+                              CROWD[(kk + 3) % CROWD.length]);
         }
       });
 
@@ -215,44 +220,55 @@
       billboard(k(0.00), 1, 22, 26, 7, RED);                    // big sponsor board above main stand
 
       // ---- Turn 1 (s≈0.06): tall stacked spectator banking + pond in the basin ----
-      grandstand(0.06, 1, 10, 56, SHELL, CROWD[0]);
-      backdrop(k(0.06), 1, 44, [100, 24, 80], BANK);            // tall stepped banking
-      groundPlane(k(0.08), 1, 72, [80, 1.0, 60], WATER);        // small lake in valley floor
-      hedge(0.05, 0.10, 1, 34, 3, TREE);                        // treeline behind the bank
+      grandstand(0.06, 1, 9, 62, SHELL, CROWD[0]);
+      grandstand(0.08, 1, 28, 56, SHELL2, CROWD[1]);            // extra upper-deck stand
+      backdrop(k(0.06), 1, 36, [110, 22, 90], BANK);            // mid tall banking
+      backdrop(k(0.06), 1, 64, [130, 26, 100], BANK2);          // far tall banking
+      groundPlane(k(0.08), 1, 70, [85, 1.0, 65], WATER);        // small lake in valley floor
+      hedge(0.04, 0.11, 1, 32, 4, TREE);                        // treeline behind the banks
 
       // ---- s≈0.12 L: grass amphitheatre hill dotted with tree clumps ----
-      backdrop(k(0.12), -1, 40, [120, 20, 100], BANK);
-      grandstand(0.12, -1, 11, 40, SHELL, CROWD[2]);
-      clump(0.12, -1, 56);
+      backdrop(k(0.12), -1, 35, [110, 18, 95], BANK);
+      grandstand(0.12, -1, 10, 44, SHELL, CROWD[2]);
+      grandstand(0.15, -1, 26, 40, SHELL2, CROWD[3]);           // extra upper stand
+      backdrop(k(0.12), -1, 60, [140, 24, 110], BANK2);         // far banking tier
+      clump(0.12, -1, 50);
+      clump(0.14, -1, 72);
 
       // ---- s≈0.18 R: low grandstand bleacher facing the slow complex ----
       grandstand(0.18, 1, 11, 50, SHELL, CROWD[3]);
       grandstand(0.22, 1, 11, 36, SHELL2, CROWD[1]);
 
       // ---- Twisty middle sector: densely lined with stands + banking ----
-      backdrop(k(0.30), -1, 44, [120, 18, 110], BANK);          // s≈0.30 banking under treeline
-      grandstand(0.32, -1, 11, 40, SHELL, CROWD[1]);
-      grandstand(0.36, -1, 11, 30, SHELL2, CROWD[2]);
-      backdrop(k(0.40), 1, 48, [110, 18, 100], BANK);           // s≈0.40 mid-sector banking
-      grandstand(0.40, 1, 12, 42, SHELL, CROWD[0]);
-      grandstand(0.47, 1, 11, 34, SHELL, CROWD[3]);             // s≈0.47 infill stand
-      backdrop(k(0.50), -1, 42, [110, 18, 100], BANK);
-      grandstand(0.55, -1, 11, 46, SHELL, CROWD[1]);            // s≈0.55 twisty-sector stand
-      grandstand(0.58, 1, 12, 38, SHELL, CROWD[0]);             // s≈0.58 opposite stand
-      clump(0.50, 1, 60);
-      clump(0.58, -1, 64);
-      backdrop(k(0.62), 1, 150, [130, 20, 110], HAZE);          // s≈0.62 distant haze hill
-      grandstand(0.68, -1, 11, 40, SHELL, CROWD[2]);            // s≈0.68 exit-of-sector stand
-      grandstand(0.72, -1, 11, 30, SHELL2, CROWD[1]);
-      clump(0.68, 1, 62);
+      backdrop(k(0.30), -1, 38, [125, 20, 115], BANK);          // s≈0.30 banking under treeline
+      grandstand(0.32, -1, 10, 44, SHELL, CROWD[1]);
+      grandstand(0.35, -1, 26, 40, SHELL2, CROWD[2]);           // upper deck
+      backdrop(k(0.30), -1, 68, [145, 26, 125], BANK2);         // far banking
+      backdrop(k(0.40), 1, 42, [120, 20, 110], BANK);           // s≈0.40 mid-sector banking
+      grandstand(0.40, 1, 11, 46, SHELL, CROWD[0]);
+      grandstand(0.43, 1, 26, 42, SHELL2, CROWD[3]);            // upper deck
+      grandstand(0.47, 1, 10, 38, SHELL, CROWD[3]);             // s≈0.47 infill stand
+      backdrop(k(0.50), -1, 40, [120, 20, 110], BANK);
+      grandstand(0.55, -1, 10, 50, SHELL, CROWD[1]);            // s≈0.55 twisty-sector stand
+      grandstand(0.57, -1, 26, 46, SHELL2, CROWD[0]);           // upper deck
+      grandstand(0.58, 1, 11, 42, SHELL, CROWD[0]);             // s≈0.58 opposite stand
+      clump(0.50, 1, 58);
+      clump(0.58, -1, 62);
+      backdrop(k(0.62), 1, 140, [140, 22, 120], HAZE);          // s≈0.62 distant haze hill
+      grandstand(0.68, -1, 10, 44, SHELL, CROWD[2]);            // s≈0.68 exit-of-sector stand
+      grandstand(0.71, -1, 26, 40, SHELL2, CROWD[1]);           // upper deck
+      clump(0.68, 1, 60);
 
       // ---- s≈0.75 L: open dry-green run-off bank ----
-      backdrop(k(0.75), -1, 36, [120, 14, 100], GRASS);
-      grandstand(0.80, 1, 11, 36, SHELL, CROWD[3]);
+      backdrop(k(0.75), -1, 32, [125, 16, 105], GRASS);
+      backdrop(k(0.75), -1, 70, [145, 22, 120], GRASS2);        // far banking
+      grandstand(0.80, 1, 10, 40, SHELL, CROWD[3]);
+      grandstand(0.83, 1, 24, 36, SHELL2, CROWD[1]);            // upper deck
 
       // ---- s≈0.90 R: approach grandstand leading back to the line ----
-      grandstand(0.90, 1, 11, 58, SHELL, CROWD[0]);
-      grandstand(0.93, 1, 30, 50, SHELL2, CROWD[1]);            // upper deck behind
+      grandstand(0.90, 1, 10, 62, SHELL, CROWD[0]);
+      grandstand(0.92, 1, 28, 54, SHELL2, CROWD[1]);            // upper deck behind
+      backdrop(k(0.90), 1, 60, [130, 22, 110], BANK2);          // backing banking
 
       // ---- Red/white kerb accents + grass framing at key apexes ----
       for (const [s, side] of [[0.06, 1], [0.12, -1], [0.18, 1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
@@ -260,18 +276,19 @@
         place(k(s), side, 7, [10, 0.08, 12], GRASS);
       }
 
-      // ================= DENSE HILLSIDE TREES (every 14 m, both sides) =================
-      // Mix of tree() and pine() at distance 40–80 m on the valley slopes.
+      // ================= DENSE HILLSIDE TREES (every 12 m, both sides) =================
+      // Dense mix of tree() and pine() at distance 35–90 m on the valley slopes,
+      // creating a forested amphitheatre rim effect.
       {
-        const HILL_MID  = [0.20, 0.42, 0.18];
-        const HILL_DARK = [0.14, 0.30, 0.14];
-        every(14, (kk) => {
+        const HILL_MID  = [0.22, 0.44, 0.20];
+        const HILL_DARK = [0.12, 0.28, 0.12];
+        every(12, (kk) => {
           for (const side of [-1, 1]) {
             const h = hash(kk * 37 + side * 5);
-            if (h < 0.30) continue;
-            const dist = 40 + h * 40;
-            const ht = 8 + h * 8;
-            (h < 0.55 ? tree : pine)(kk, side, dist, ht, h < 0.50 ? HILL_DARK : HILL_MID);
+            if (h < 0.25) continue;
+            const dist = 35 + h * 55;
+            const ht = 8 + h * 9;
+            (h < 0.50 ? pine : tree)(kk, side, dist, ht, h < 0.45 ? HILL_DARK : HILL_MID);
           }
         });
       }
@@ -287,28 +304,39 @@
         addCone(out, vadd(a.c, a.u, 22), 2.0, 8, STEEPLE_COL, 8, b);
       }
 
-      // ================= EXTRA GRANDSTANDS at s=0.12 and s=0.65 =================
-      grandstand(0.12, 1, 14, 44, SHELL2, CROWD[2]);
-      grandstand(0.65, -1, 13, 38, SHELL,  CROWD[3]);
+      // ================= EXTRA GRANDSTANDS AT KEY POSITIONS =================
+      // Additional grandstands for denser spectator experience throughout lap
+      grandstand(0.10, 1, 12, 48, SHELL2, CROWD[2]);
+      grandstand(0.22, 1, 11, 42, SHELL, CROWD[1]);             // s≈0.22 additional stand
+      grandstand(0.28, 1, 10, 38, SHELL2, CROWD[0]);            // s≈0.28 high sector stand
+      grandstand(0.65, -1, 12, 42, SHELL, CROWD[3]);
+      grandstand(0.76, 1, 11, 34, SHELL, CROWD[2]);             // s≈0.76 late-lap stand
+      grandstand(0.85, -1, 10, 36, SHELL2, CROWD[0]);           // s≈0.85 back-to-line stand
 
       // ================= HUNGARIAN FLAG ACCENT BILLBOARDS =================
       billboard(k(0.02), -1, 18, 10, 4, [0.20, 0.48, 0.20]);   // green
       billboard(k(0.04), 1,  17, 10, 4, [0.85, 0.20, 0.20]);   // red
 
       // ================= VALLEY BOWL TOPOGRAPHY RIDGES =================
-      // 5 ridge calls at 100–150 m staggered around the circuit, dark forest green.
+      // 7 ridge calls at 100–160 m staggered around the circuit, creating forested
+      // horizon with dark forest green slopes and varied heights.
       {
         const FOREST_SLOPE = [0.12, 0.28, 0.12];
+        const DARK_FOREST = [0.10, 0.24, 0.10];
         const ridgePts = [
-          [0.10, -1, 110],
-          [0.25,  1, 130],
-          [0.42, -1, 100],
-          [0.62,  1, 150],
-          [0.80, -1, 120],
+          [0.08, -1, 100],
+          [0.15,  1, 140],
+          [0.25, -1, 120],
+          [0.42,  1, 130],
+          [0.55, -1, 110],
+          [0.62,  1, 160],
+          [0.80, -1, 125],
         ];
         for (const [s, side, dist] of ridgePts) {
           const a = anchor(k(s), side, dist), b = [a.r, a.u, a.t];
-          addFrustum(out, a.c, 80, 30, 18 + hash(k(s) * 11) * 10, FOREST_SLOPE, 6, b);
+          const col = hash(k(s) * 11) < 0.4 ? DARK_FOREST : FOREST_SLOPE;
+          addFrustum(out, a.c, 90 + hash(k(s) * 7) * 20, 32 + hash(k(s) * 13) * 12,
+                     20 + hash(k(s) * 11) * 14, col, 7, b);
         }
       }
     },

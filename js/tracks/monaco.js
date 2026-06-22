@@ -371,49 +371,194 @@
       }
 
       // ====================================================================
-      // ADDED SCENERY IMPROVEMENTS
+      // MONACO-SPECIFIC SCENERY ENHANCEMENTS
       // ====================================================================
 
-      // 1. Cliff-face apartment tiers behind Casino Square (stacked blocks rising).
-      for (let i = 0; i < 6; i++) {
-        building(K(0.15 + i * 0.02), -1, 90 + i * 12, 28, 55 + i * 8, 18,
-          { wall: [0.88, 0.85, 0.80], window: [0.28, 0.34, 0.38], floor: 11 });
+      // 1. PRINCE'S PALACE / ROCK OF MONACO — the iconic palace structure high on the rock
+      //    Positioned above Casino Square (s=0.20, far left/inland), a tall cream-white
+      //    fortified structure reading as the principality's crowning landmark.
+      {
+        const k = K(0.17), a = anchor(k, -1, 110);
+        if (!onTrack(a.c[0], a.c[2], 20)) {
+          const b = [a.r, a.u, a.t];
+          // Main palace mass — a large tapered tower block
+          addFrustum(out, vadd(a.c, a.u, 28), 24, 16, 50, [0.96, 0.95, 0.92], 8, b);
+          // Castle rampart walls on either side of the main mass
+          addBox(out, vadd(vadd(a.c, a.r, -16), a.u, 20), [6, 38, 36], [0.92, 0.88, 0.82], b);
+          addBox(out, vadd(vadd(a.c, a.r, 16), a.u, 20), [6, 38, 36], [0.92, 0.88, 0.82], b);
+          // Turrets / corner bastions (small cylinders)
+          for (const sd of [-1, 1]) {
+            addCyl(out, vadd(vadd(a.c, a.r, sd * 20), a.u, 48), 2.4, 12, [0.90, 0.88, 0.86], 6, b);
+          }
+          // Palace courtyard / central plaza base — light grey stone
+          addBox(out, vadd(a.c, a.u, 4), [38, 1.2, 40], [0.86, 0.85, 0.82], b);
+        }
       }
 
-      // 2. Terraced mid-level buildings across the Casino-to-Fairmont elevation change.
-      building(K(0.28), -1, 40, 24, 30, 16, { wall: [0.86, 0.82, 0.76], window: WIN, floor: 9 });
-      building(K(0.32), -1, 60, 24, 40, 16, { wall: [0.88, 0.84, 0.78], window: WIN, floor: 9 });
-      building(K(0.36), -1, 80, 24, 50, 16, { wall: [0.85, 0.80, 0.72], window: WIN, floor: 9 });
+      // 2. ULTRA-DENSE TIERED HILLSIDE CITY — multiplied building layers to show steep climb.
+      //    The track climbs a ~42m rocky face packed with apartments. Extend the per-lap
+      //    loop with more vertical tiers and closer spacing to read as a dense Mediterranean
+      //    apartment village.
+      for (let i = 0; i < 80; i++) {  // increased from 56 for denser packing
+        const s = (i / 80);
+        const k = K(s);
+        const side = inland(s);
+        const nearLandmark = (Math.abs(s - 0.17) < 0.025) || (Math.abs(s - 0.20) < 0.025) ||
+                             (Math.abs(s - 0.40) < 0.04) || (s > 0.51 && s < 0.60);
+        const col = PASTELS[(i * 3 + (i & 1)) % PASTELS.length];
+        const r = hash(k * 17 + i), r2 = hash(k * 31 + i * 5), r3 = hash(k * 11 + i * 7);
 
-      // 3. Paddock tech buildings at s=0.88–0.92 with grey industrial palette + control tower.
-      building(K(0.88), 1, 18, 28, 12, 20, { wall: [0.70, 0.68, 0.64], window: [0.30, 0.34, 0.38], floor: 5 });
-      building(K(0.91), 1, 18, 28, 12, 20, { wall: [0.70, 0.68, 0.64], window: [0.30, 0.34, 0.38], floor: 5 });
-      tower(K(0.895), 1, 22, 10, 36, { col: [0.70, 0.68, 0.64], cap: true, capCol: [0.30, 0.34, 0.38], mast: 5 });
+        // Near tier — close to the barrier
+        const dNear = nearLandmark ? 35 : 10 + r * 7;
+        const wNear = 14 + r2 * 14;
+        const hNear = 14 + r * 32;
+        if (!onTrack(anchor(k, side, dNear).c[0], anchor(k, side, dNear).c[2], 6)) {
+          building(k, side, dNear - wNear / 2, wNear, hNear, 12, { wall: col, window: WIN, floor: 9 });
+        }
 
-      // 4. Cypress accent conifers — tall dark-green cylinders at key points.
+        // Mid tier — set back, taller
+        if (i % 2 === 0) {
+          const dm = dNear + 18 + r2 * 12;
+          building(K(s + 0.005), side, dm - (16 + r * 12) / 2, 16 + r * 12, hNear + 14 + r2 * 18, 13,
+                   { wall: PASTELS[(i + 2) % PASTELS.length], window: WIN, floor: 8 });
+        }
+
+        // Far tier — distant tall slabs forming skyline crest
+        if (i % 3 === 0) {
+          const df = dNear + 50 + r * 18;
+          building(K(s + 0.009), side, df - (20 + r2 * 14) / 2, 20 + r2 * 14, hNear + 28 + r * 24, 14,
+                   { wall: PASTELS[(i + 4) % PASTELS.length], window: WIN, floor: 10 });
+        }
+
+        // Extra ultra-far tier for s=0.08–0.30 (Beau Rivage cliff) to emphasize the rock
+        if (s > 0.08 && s < 0.30 && i % 4 === 0) {
+          const dFF = dNear + 80 + r3 * 20;
+          building(K(s + 0.013), side, dFF - (18 + r2 * 10) / 2, 18 + r2 * 10, hNear + 40 + r3 * 20, 15,
+                   { wall: [0.82, 0.78, 0.70], window: WIN, floor: 11 });
+        }
+      }
+
+      // 3. ENHANCED HARBOUR & YACHTS — more boats, breakwater, dock detail.
+      //    s≈0.58→0.99: triple the marina density with additional ranks and a visible harbor wall.
+      for (let i = 0; i < 28; i++) {  // increased from 16
+        const s = 0.58 + i * 0.0141;
+        const k = K(s);
+        const rank = i % 4;  // 0,1,2 near/mid/far, 3 = ultra-far masts
+        const dist = 14 + rank * 18 + hash(k * 7) * 5;
+        const a = anchor(k, -1, dist);
+        if (onTrack(a.c[0], a.c[2], 12)) continue;
+
+        const b = [a.r, a.u, a.t];
+        const sc = 0.6 + hash(k * 9 + i) * 1.1;
+        const hull = (i % 6 === 0) ? [0.22, 0.24, 0.30] : (i % 8 === 0) ? [0.88, 0.90, 0.94] : [0.96, 0.97, 0.99];
+
+        if (rank < 3) {
+          yacht(vadd(a.c, a.r, -3 + (i % 4) * 5), b, a.u, a.r, a.t, sc, hull);
+        } else {
+          // Ultra-far masts only (sparse)
+          addCyl(out, vadd(a.c, a.u, 6), 0.22, 14 + hash(k * 3) * 7, [0.88, 0.88, 0.92], 4, b);
+        }
+
+        // Tender / motorboat on every other yacht
+        if (i % 2 === 0) {
+          const tc = vadd(vadd(a.c, a.r, -16), a.t, 6);
+          addBox(out, vadd(tc, a.u, 0.8), [3.8, 1.3, 7.2], [0.94, 0.54, 0.28], b);
+          addBox(out, vadd(tc, a.u, 1.7), [2.2, 0.9, 3.0], [0.96, 0.96, 0.98], b);
+        }
+      }
+
+      // 4. HARBOUR BREAKWATER & PIER STRUCTURES — a visible stone breakwater arm in the distance.
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.64 + i * 0.025), a = anchor(k, -1, 130);
+        addBox(out, vadd(a.c, a.u, 0.6), [32, 2.8, 6], [0.70, 0.66, 0.58], [a.r, a.u, a.t]);
+      }
+
+      // 5. DENSE DOCK MOORING INFRASTRUCTURE — bollards, rings, massive anchor points.
       {
-        const CYPRESS = [0.18, 0.35, 0.16];
-        for (const sf of [0.10, 0.35, 0.65]) {
-          const k = K(sf);
-          const a = anchor(k, -1, 12);
-          if (!onTrack(a.c[0], a.c[2], 4)) {
-            addCyl(out, vadd(a.c, a.u, 0), 1.5, 16, CYPRESS, 6, [a.r, a.u, a.t]);
-            // small cluster beside
-            const a2 = anchor(k, -1, 15);
-            addCyl(out, vadd(a2.c, a2.u, 0), 1.5, 14, CYPRESS, 6, [a2.r, a2.u, a2.t]);
+        const BOLLARD = [0.74, 0.72, 0.70];
+        const RING = [0.68, 0.65, 0.60];
+        for (let i = 0; i < 12; i++) {
+          const k = K(0.60 + i * 0.008);
+          const a = anchor(k, -1, 5.5 + (i % 2) * 2);
+          if (!onTrack(a.c[0], a.c[2], 3.2)) {
+            // Tall mooring posts
+            addCyl(out, vadd(a.c, a.u, 0), 0.6, 22, BOLLARD, 7, [a.r, a.u, a.t]);
+            // Heavy chain ring (wide flat cylinder)
+            if (i % 3 === 0) {
+              addCyl(out, vadd(a.c, a.u, 16), 0.7, 0.4, RING, 8, [a.r, a.u, a.t]);
+            }
           }
         }
       }
 
-      // 5. Dock mooring bollards at s=0.65 (harbour side, side=-1).
+      // 6. CYPRESS ACCENT TREES — tall columnar dark-green trees at key vista points.
+      //    Position them strategically to frame the harbour view and Casino approach.
       {
-        const BOLLARD = [0.72, 0.70, 0.68];
-        for (let i = 0; i < 5; i++) {
-          const k = K(0.63 + i * 0.005);
-          const a = anchor(k, -1, 4 + i * 2);
-          if (!onTrack(a.c[0], a.c[2], 3)) {
-            addCyl(out, vadd(a.c, a.u, 0), 0.5, 18, BOLLARD, 6, [a.r, a.u, a.t]);
+        const CYPRESS = [0.16, 0.32, 0.14];
+        for (const [sf, cnt] of [[0.12, 3], [0.25, 2], [0.60, 4], [0.75, 2]]) {
+          for (let j = 0; j < cnt; j++) {
+            const k = K(sf + j * 0.008);
+            const side = (j % 2 === 0) ? -1 : 1;
+            const dist = 8 + (j % 2) * 6;
+            const a = anchor(k, side, dist);
+            if (!onTrack(a.c[0], a.c[2], 3)) {
+              addCyl(out, vadd(a.c, a.u, 0), 1.2, 18, CYPRESS, 6, [a.r, a.u, a.t]);
+              // companion smaller cypress
+              if (j % 2 === 0) {
+                const a2 = anchor(k, side, dist + 4);
+                addCyl(out, vadd(a2.c, a2.u, 0), 1.0, 14, [0.20, 0.38, 0.18], 5, [a2.r, a2.u, a2.t]);
+              }
+            }
           }
+        }
+      }
+
+      // 7. WATERFRONT PROMENADE DETAIL — additional palm groves and tiled plaza sections.
+      for (let i = 0; i < 16; i++) {
+        const k = K(0.62 + i * 0.015);
+        const side = -1;  // harbour side
+        palm(k, side, 4.5, 9 + hash(k * 5) * 3.5, [0.24, 0.46, 0.20]);
+      }
+
+      // 8. TUBULAR BANKED SECTION PLANTERS — between the Tabac buildings and the pool.
+      //    Grey stone planter boxes with hedge rows, creating street furniture density.
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.72 + i * 0.015);
+        place(k, 1, 12, [4.2, 1.4, 5], [0.70, 0.68, 0.64]);    // grey stone planter
+        hedge(0.71, 0.77, 1, 13, 1.3, [0.20, 0.40, 0.18]);      // low hedge row in front
+      }
+
+      // 9. CLIFFTOP GARDENS & TERRACES above Casino (Jardin Exotique section).
+      //    Layered rock gardens with cypress accents and formal planter boxes.
+      for (let i = 0; i < 4; i++) {
+        const k = K(0.19 + i * 0.01);
+        const a = anchor(k, -1, 30 + i * 8);
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          const b = [a.r, a.u, a.t];
+          // Terraced planter / garden wall
+          addBox(out, vadd(a.c, a.u, 2), [16 + i * 4, 3.2, 8], [0.86, 0.82, 0.74], b);
+          // Spiky succulents (small cones)
+          for (let j = 0; j < 3; j++) {
+            addCone(out, vadd(vadd(a.c, a.r, (j - 1) * 6), a.u, 3.5), 0.8, 2.4, [0.45, 0.60, 0.35], 5, b);
+          }
+        }
+      }
+
+      // 10. EXTRA GUARDRAIL FEATURE ACCENTS — emphasize tight corners with detail.
+      guardrail(0.15, 0.19, -1, 0.4, ARMCO);   // Beau Rivage hairpin
+      guardrail(0.62, 0.68, -1, 0.4, ARMCO);   // Tunnel exit to harbour
+
+      // 11. PADDOCK ZONE (s=0.88–0.92) — technical facility detail with control tower.
+      building(K(0.88), 1, 16, 30, 14, 22, { wall: [0.68, 0.66, 0.62], window: [0.32, 0.36, 0.40], floor: 6 });
+      building(K(0.91), 1, 16, 32, 14, 22, { wall: [0.68, 0.66, 0.62], window: [0.32, 0.36, 0.40], floor: 6 });
+      tower(K(0.895), 1, 22, 12, 40, { col: [0.68, 0.66, 0.62], cap: true, capCol: [0.32, 0.36, 0.40], mast: 6 });
+
+      // 12. ROOFTOP SIGNAL MASTS — small telecommunications masts on rooftops for realism.
+      for (const sf of [0.18, 0.30, 0.70, 0.85]) {
+        const k = K(sf);
+        const a = anchor(k, -1, 65 + hash(k) * 15);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          addCyl(out, vadd(a.c, a.u, 8), 0.14, 12, [0.82, 0.82, 0.84], 3, [a.r, a.u, a.t]);
         }
       }
     },

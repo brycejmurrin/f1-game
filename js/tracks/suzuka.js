@@ -74,39 +74,50 @@
       // --- Motopia theme park + the giant Ferris wheel: the hero landmark that
       // instantly reads "Suzuka", on the outside of the main straight (Turn 1 side).
       const wheelK = Math.round(n * 0.07) % n;
-      ferrisWheel(wheelK, -1, 52, 30);
-      // Tall support column / observation tower beside the wheel for scale.
-      tower(wheelK, -1, 90, 7, 38, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: [0.85, 0.30, 0.30], mast: 8 });
+      ferrisWheel(wheelK, -1, 52, 32);     // Slightly larger wheel (32m) for more prominence
+      // Tall support columns beside the wheel for structural realism
+      tower(wheelK, -1, 88, 8, 40, { col: [0.80, 0.82, 0.86], seg: 8, cap: true, capCol: [0.88, 0.30, 0.30], mast: 5 });
+      tower(Math.round(n * 0.06) % n, -1, 92, 7, 38, { col: [0.78, 0.80, 0.84], seg: 7, cap: true, capCol: [0.86, 0.28, 0.28], mast: 4 });
 
       // Amusement-park structures clustered behind the wheel: ride towers, a domed
       // pavilion, a carousel canopy, hotel block, colourful pavilions.
       const parkCol = [[0.86, 0.42, 0.40], [0.40, 0.62, 0.82], [0.90, 0.80, 0.36], [0.55, 0.78, 0.55], [0.78, 0.50, 0.82]];
       const parkA = Math.round(n * 0.05) % n;
-      // big leisure-complex hotel block
-      building(parkA, -1, 64, 26, 30, 18, { wall: [0.74, 0.74, 0.78], window: [0.30, 0.42, 0.54], floor: 4, setback: true, roof: true });
-      // drop-tower thrill ride (tall slim spire)
-      tower(Math.round(n * 0.09) % n, -1, 70, 5, 46, { col: [0.85, 0.30, 0.32], seg: 6, cap: true, capCol: [0.95, 0.9, 0.3], mast: 6 });
-      // domed pavilion
+      // big leisure-complex hotel block — Motopia Hotel
+      building(parkA, -1, 66, 28, 32, 20, { wall: [0.75, 0.75, 0.79], window: [0.28, 0.40, 0.52], floor: 4, setback: true, roof: true });
+      // secondary hotel/pavilion building nearby
+      building(Math.round(n * 0.04) % n, -1, 82, 22, 24, 16, { wall: [0.76, 0.76, 0.80], window: [0.32, 0.44, 0.56], floor: 3, roof: true });
+      // drop-tower thrill ride (tall slim spire) — iconic park structure
+      tower(Math.round(n * 0.09) % n, -1, 72, 6, 48, { col: [0.85, 0.30, 0.32], seg: 7, cap: true, capCol: [0.95, 0.9, 0.3], mast: 6 });
+      // second ride tower for visual variety
+      tower(Math.round(n * 0.08) % n, -1, 78, 5, 42, { col: [0.82, 0.28, 0.28], seg: 6, cap: true, capCol: [0.92, 0.88, 0.28], mast: 5 });
+      // domed pavilion / central gathering structure
       {
-        const p = anchor(parkA, -1, 110), b = [p.r, p.u, p.t];
-        addCyl(out, vadd(p.c, p.u, 5), 10, 10, [0.92, 0.92, 0.95], 10, b);
-        addCone(out, vadd(p.c, p.u, 10), 11, 9, [0.85, 0.40, 0.42], 12, b);   // red dome roof
+        const p = anchor(parkA, -1, 112), b = [p.r, p.u, p.t];
+        addCyl(out, vadd(p.c, p.u, 5), 11, 11, [0.93, 0.93, 0.96], 10, b);
+        addCone(out, vadd(p.c, p.u, 11), 12, 10, [0.86, 0.40, 0.41], 12, b);   // red dome roof
       }
       // carousel / pavilion canopies + colourful ride pods near the wheel base
-      for (let i = 0; i < 6; i++) {
-        const kk = (parkA + i * 3) % n;
-        const dist = 40 + (i % 3) * 16;
-        place(kk, -1, dist, [9 + (i % 2) * 3, 5 + (i % 3) * 3, 11], parkCol[i % parkCol.length]);
-        // peaked tent roof on top
-        const p = anchor(kk, -1, dist + 4.5), b = [p.r, p.u, p.t];
-        addCone(out, vadd(p.c, p.u, 7 + (i % 3) * 1.5), 6.5, 4, parkCol[(i + 2) % parkCol.length], 8, b);
-      }
-      // flag-poles / ride masts dotting the park edge
       for (let i = 0; i < 8; i++) {
         const kk = (parkA + i * 2) % n;
-        const p = anchor(kk, -1, 34 + (i % 4) * 5), b = [p.r, p.u, p.t];
-        addCyl(out, p.c, 0.14, 9 + (i % 3) * 2, steel, 4, b);
-        addBox(out, vadd(p.c, p.u, 8 + (i % 3)), [0.1, 1.4, 2.2], parkCol[i % parkCol.length], b);  // pennant
+        const dist = 38 + (i % 4) * 14;
+        place(kk, -1, dist, [10 + (i % 3) * 2, 6 + (i % 2) * 2, 12], parkCol[i % parkCol.length]);
+        // peaked tent roof on top
+        const p = anchor(kk, -1, dist + 5), b = [p.r, p.u, p.t];
+        addCone(out, vadd(p.c, p.u, 8 + (i % 3) * 1.2), 7, 4.5, parkCol[(i + 2) % parkCol.length], 8, b);
+      }
+      // flag-poles / ride masts dotting the park edge — increase number for busier park feel
+      for (let i = 0; i < 12; i++) {
+        const kk = (parkA + i) % n;
+        const p = anchor(kk, -1, 32 + (i % 5) * 4), b = [p.r, p.u, p.t];
+        addCyl(out, p.c, 0.12, 10 + (i % 3) * 2.2, steel, 4, b);
+        addBox(out, vadd(p.c, p.u, 9 + (i % 3)), [0.12, 1.6, 2.4], parkCol[i % parkCol.length], b);  // pennant
+      }
+      // Small vendor pavilions / kiosks scattered through park
+      for (let i = 0; i < 4; i++) {
+        const kk = (parkA + i * 5) % n;
+        const dist = 50 + (i % 2) * 20;
+        place(kk, -1, dist, [8, 4, 8], [0.88, 0.76, 0.54]);  // light beige kiosks
       }
 
       // --- Pit & paddock complex along the main straight (right side, start area).
@@ -166,24 +177,33 @@
 
       // --- Dense conifer stands lining BOTH green zones (proper cone trees) in
       // staggered double rows, with Sakura (cherry-blossom) broadleaves scattered
-      // for seasonal pop against the green. Denser than before.
-      every(18, (k) => {
+      // for seasonal pop against the green. Denser than before for full forest effect.
+      every(16, (k) => {
         const s = hash(k * 41);
-        if (s < 0.18) return;
-        pine(k, -1, 6.8 + s * 10, 9 + s * 8, [0.13 + s * 0.06, 0.34, 0.16]);
-        pine(k, 1, 6.8 + s * 10, 9 + s * 8, [0.12 + s * 0.07, 0.33, 0.15]);
-        if (s > 0.40) {
+        if (s < 0.12) return;
+        pine(k, -1, 6.8 + s * 10, 10 + s * 8, [0.13 + s * 0.07, 0.35, 0.16]);
+        pine(k, 1, 6.8 + s * 10, 10 + s * 8, [0.12 + s * 0.08, 0.34, 0.15]);
+        if (s > 0.38) {
           const b = hash(k * 71);
-          pine(k, b < 0.5 ? -1 : 1, 19 + b * 16, 12 + b * 10, [0.11 + b * 0.05, 0.32, 0.15]);
-          pine(k, b < 0.5 ? 1 : -1, 30 + b * 16, 14 + b * 10, [0.10 + b * 0.05, 0.31, 0.14]);
+          pine(k, b < 0.5 ? -1 : 1, 18 + b * 18, 13 + b * 11, [0.11 + b * 0.06, 0.33, 0.15]);
+          pine(k, b < 0.5 ? 1 : -1, 28 + b * 18, 15 + b * 11, [0.10 + b * 0.06, 0.32, 0.14]);
         }
-        if (s > 0.7) bush(k, s < 0.85 ? -1 : 1, 6 + s * 4, [0.20, 0.40, 0.20]);
+        if (s > 0.65) {
+          bush(k, s < 0.8 ? -1 : 1, 5 + s * 4.5, [0.21, 0.41, 0.21]);
+          bush(k, s > 0.8 ? -1 : 1, 8 + s * 3, [0.19, 0.39, 0.19]);
+        }
       });
-      every(34, (k) => {
+      every(28, (k) => {
         const s = hash(k * 53);
-        if (s < 0.35) return;
-        tree(k, s < 0.7 ? -1 : 1, 10 + s * 8, 6 + s * 4, [0.94, 0.64, 0.72]);  // sakura
-        if (s > 0.6) tree(k, s < 0.7 ? 1 : -1, 14 + s * 6, 5 + s * 3, [0.96, 0.72, 0.80]);
+        if (s < 0.28) return;
+        tree(k, s < 0.7 ? -1 : 1, 11 + s * 9, 7 + s * 5, [0.94, 0.65, 0.73]);  // sakura pink
+        if (s > 0.55) tree(k, s < 0.7 ? 1 : -1, 15 + s * 7, 6 + s * 4, [0.96, 0.73, 0.82]);
+      });
+      // Extra cherry-blossom accent trees for spring atmosphere
+      every(42, (k) => {
+        const s = hash(k * 79);
+        if (s < 0.4) return;
+        tree(k, -1, 9 + s * 6, 5.5 + s * 3, [0.95, 0.68, 0.76]);
       });
 
       // --- Track furniture: catch fences, guardrails, tyre walls, marshal posts.
@@ -210,19 +230,39 @@
       }
 
       // --- Figure-8 bridge structure: Suzuka's iconic crossover at s≈0.81.
+      // The iconic green pedestrian bridge carrying traffic over the main straight.
       {
         const bk = Math.round(n * 0.81) % n;
-        const ab = anchor(bk, -1, 14);
+        const ab = anchor(bk, -1, 16);
         const basis = [ab.r, ab.u, ab.t];
-        const bridgePos = vadd(ab.c, ab.u, 12);
-        // Main bridge beam spanning the crossing
-        addBox(out, bridgePos, [8, 0.8, 30], [0.50, 0.50, 0.55], basis);
-        // Two vertical support columns on either end of the beam
-        addBox(out, vadd(ab.c, ab.u, 6), [1.4, 12, 1.4], [0.46, 0.47, 0.52], basis);
-        addBox(out, vadd(vadd(ab.c, ab.u, 6), ab.t, 14), [1.4, 12, 1.4], [0.46, 0.47, 0.52], basis);
-        // Diagonal cross-bracing: two thin cylinders at ~45 degrees
-        addCyl(out, vadd(ab.c, ab.u, 8), 0.18, 10, [0.44, 0.46, 0.50], 4, basis);
-        addCyl(out, vadd(vadd(ab.c, ab.u, 8), ab.t, 10), 0.18, 10, [0.44, 0.46, 0.50], 4, basis);
+        const bridgePos = vadd(ab.c, ab.u, 14);
+        // Main bridge deck spanning the crossing — bright green for visibility
+        addBox(out, bridgePos, [10, 1.0, 32], [0.26, 0.48, 0.30], basis);
+        // Two robust vertical support columns on either side of the beam
+        addBox(out, vadd(ab.c, ab.u, 7), [1.6, 14, 1.6], [0.48, 0.49, 0.54], basis);
+        addBox(out, vadd(vadd(ab.c, ab.u, 7), ab.t, 16), [1.6, 14, 1.6], [0.48, 0.49, 0.54], basis);
+        // Green overhead canopy / safety netting frame
+        addBox(out, vadd(ab.c, ab.u, 16.5), [11, 0.4, 33], [0.28, 0.50, 0.32], basis);
+        // Diagonal cross-bracing for structural realism
+        addCyl(out, vadd(ab.c, ab.u, 8), 0.20, 11, [0.46, 0.48, 0.52], 5, basis);
+        addCyl(out, vadd(vadd(ab.c, ab.u, 8), ab.t, 11), 0.20, 11, [0.46, 0.48, 0.52], 5, basis);
+        // Railing posts along the deck for safety
+        for (let i = -3; i <= 3; i++) {
+          const off = i * (32 / 7);
+          const c = [ab.c[0] + ab.r[0] * off * 0.2, ab.c[1] + 14.5, ab.c[2] + ab.t[2] * off];
+          addCyl(out, c, 0.08, 1.2, [0.40, 0.42, 0.48], 4, basis);
+        }
+      }
+      // Underpass structure (where track dips under the main straight at s≈0.37)
+      {
+        const uk = Math.round(n * 0.37) % n;
+        const au = anchor(uk, 1, 12);
+        const ubasis = [au.r, au.u, au.t];
+        // Dark recessed underpass frame
+        addBox(out, vadd(au.c, au.u, -2), [12, 4, 28], [0.22, 0.22, 0.24], ubasis);
+        // Support columns for the bridge above
+        addBox(out, vadd(au.c, au.u, 1), [1.4, 3, 1.4], [0.42, 0.43, 0.48], ubasis);
+        addBox(out, vadd(vadd(au.c, au.u, 1), au.t, 13), [1.4, 3, 1.4], [0.42, 0.43, 0.48], ubasis);
       }
 
       // --- Honda orange accent stripe on main grandstand (s≈0.00, R side).
@@ -249,13 +289,16 @@
       }
 
       // --- Grandstands at the signature corners (lap-fractions from the brief).
-      stand(0.00, -1, 9, 70, navy);  // Main grandstand (huge) along start straight
-      stand(0.15, 1, 9, 34);    // Esses
-      stand(0.45, 1, 9, 30);    // Hairpin
-      stand(0.62, -1, 9, 32);   // Spoon
-      stand(0.84, 1, 8, 26);    // 130R
-      stand(0.94, 1, 9, 28);    // Casio Triangle (final chicane) — both sides
-      stand(0.94, -1, 9, 28);
+      stand(0.00, -1, 9, 76, navy);  // Main grandstand (huge) along start straight — iconic blue
+      stand(0.15, 1, 9, 38);    // Esses grandstand — taller section on the climb
+      stand(0.45, 1, 9, 34);    // Hairpin grandstand — compact dense terraces
+      stand(0.62, -1, 9, 36);   // Spoon grandstand — curving low-point structure
+      stand(0.84, 1, 8, 30);    // 130R grandstand — tall bank for flat-out high-speed section
+      stand(0.94, 1, 9, 32);    // Casio Triangle (final chicane) — both sides, extended
+      stand(0.94, -1, 9, 32);
+      // Additional support grandstands
+      stand(0.28, -1, 9, 26);   // Degner approach section
+      stand(0.50, 1, 8, 28);    // Mid-circuit viewing
     },
   }
   );

@@ -42,79 +42,95 @@
       cx /= n; cz /= n;
 
       // ====================================================================
-      // ALBERT PARK LAKE — broad flat steel-blue slab to the L horizon, laid as
-      // a CONTINUOUS water sheet wrapping the whole skyline side (s≈0.30–0.60 L)
+      // ALBERT PARK LAKE — broad expanse of calm water dominating the circuit's
+      // left side (s≈0.27–0.65 L). Multi-layered water planes create depth &
+      // reflective shimmer. Near-shore shallows + mid-lake main body + far horizon.
       // ====================================================================
-      groundPlane(k(0.45), -1, 70, [1100, 4, 1100], WATER);
-      groundPlane(k(0.40), -1, 90, [700, 4, 700], [0.22, 0.47, 0.64]);
-      groundPlane(k(0.55), -1, 80, [700, 4, 700], [0.22, 0.47, 0.64]);
-      // shoreline shimmer band + a couple of moored sail boats near the bank
-      groundPlane(k(0.48), -1, 40, [420, 4, 50], [0.30, 0.55, 0.68]);
-      // ---- Additional lake water planes on infield ----
-      for (let i = 0; i < 5; i++) {
-        groundPlane(k(0.30 + i * 0.04), -1, 100 + i * 10, [200, 4, 150], [0.28, 0.44, 0.58]);
+      // Main far-lake water body (primary vista)
+      groundPlane(k(0.45), -1, 90, [1200, 4, 1200], [0.20, 0.42, 0.60]);
+      groundPlane(k(0.40), -1, 110, [800, 4, 800], [0.22, 0.47, 0.64]);
+      groundPlane(k(0.55), -1, 100, [800, 4, 800], [0.22, 0.47, 0.64]);
+      groundPlane(k(0.35), -1, 85, [600, 4, 600], [0.21, 0.45, 0.62]);
+      groundPlane(k(0.60), -1, 95, [700, 4, 700], [0.22, 0.47, 0.64]);
+      // Foreground shoreline shimmer + ripple bands (water near the track)
+      groundPlane(k(0.48), -1, 35, [450, 4, 55], [0.30, 0.55, 0.68]);
+      groundPlane(k(0.52), -1, 33, [480, 4, 60], [0.28, 0.52, 0.66]);
+      // ---- Infield water planes (Albert Park Lake wraps the track's interior) ----
+      for (let i = 0; i < 6; i++) {
+        const s = 0.28 + (i / 6) * 0.35;
+        groundPlane(k(s), -1, 105 + i * 12, [220, 4, 160], [0.26, 0.42, 0.58]);
       }
-      for (let j = 0; j < 4; j++) {
-        const a = anchor((k(0.46) + j * 20) % n, -1, 48 + hash(j * 5) * 30);
-        if (onTrack(a.c[0], a.c[2], 4)) continue;
-        addBox(out, vadd(a.c, a.u, 1.0), [2.2, 1.4, 6], [0.92, 0.92, 0.94], [a.r, a.u, a.t]); // hull
-        addPrism(out, vadd(a.c, a.u, 5.5), [0.3, 7, 4.5], [0.96, 0.96, 0.97], [a.r, a.u, a.t]); // sail
+      // ---- Moored rowboats + kayaks (s≈0.45–0.55 water edge) ----
+      // Recreational watercraft add authenticity to this active lakeside precinct
+      for (let j = 0; j < 6; j++) {
+        const a = anchor((k(0.47 + j * 0.025) + j * 15) % n, -1, 52 + hash(j * 7) * 35);
+        if (onTrack(a.c[0], a.c[2], 3)) continue;
+        // Small rowing shell hull
+        addBox(out, vadd(a.c, a.u, 0.8), [1.8, 1.0, 8.5], [0.88, 0.85, 0.80], [a.r, a.u, a.t]);
+        // Oar / rigger detail
+        if (hash(j * 11) > 0.5)
+          addCyl(out, vadd(a.c, a.t, -0.5), 0.08, 5.2, [0.40, 0.35, 0.28], 4, [a.r, a.u, a.t]);
       }
 
       // ====================================================================
-      // MELBOURNE CBD SKYLINE — dense band of blue-grey towers far across the
-      // lake (s≈0.20–0.46 R), varied heights / tapers, packed shoulder-to-
-      // shoulder, with a few signature spires and a faint silhouette ridge.
+      // MELBOURNE CBD SKYLINE — dense clustered towers across the lake
+      // (s≈0.19–0.52 R). Iconic landmarks (Eureka Tower, Rialto) rise above
+      // a dense mid-rise base. Blue-grey tones, varied window glazing.
       // ====================================================================
       const CBD_WIN = [0.55, 0.65, 0.80];
-      const CBD_N = 46, CBD_S0 = 0.19, CBD_S1 = 0.47;
+      const CBD_N = 52, CBD_S0 = 0.18, CBD_S1 = 0.53;  // extended span
       for (let i = 0; i < CBD_N; i++) {
         const f = i / (CBD_N - 1);
-        const s = CBD_S0 + f * (CBD_S1 - CBD_S0);     // unbroken span across lake
-        const dist = 195 + hash(i * 7) * 95;          // far behind the lake, layered
-        const w = 13 + hash(i * 3) * 14;              // wide enough to overlap → no gaps
-        const h = 55 + hash(i * 11) * 150;            // tall, varied CBD profile
-        const wallCol = [0.28 + hash(i * 5) * 0.08, 0.34 + hash(i * 2) * 0.05, 0.46];
+        const s = CBD_S0 + f * (CBD_S1 - CBD_S0);
+        const dist = 210 + hash(i * 7) * 110;          // far, layered depth
+        const w = 14 + hash(i * 3) * 16;               // wide, dense packing
+        const h = 60 + hash(i * 11) * 165;             // tall, dramatic skyline
+        const wallCol = [0.30 + hash(i * 5) * 0.10, 0.36 + hash(i * 2) * 0.08, 0.48];
         building(k(s), 1, dist - w / 2, w, h, w, {
           wall: wallCol, window: CBD_WIN, floor: 6,
-          setback: hash(i * 13) > 0.6, roof: hash(i * 17) > 0.7,
+          setback: hash(i * 13) > 0.55, roof: hash(i * 17) > 0.65,
         });
       }
-      // a few taller landmark towers + spires (Eureka/Rialto feel) rising above
+      // Iconic signature towers: Eureka Tower + Rialto prominent on the skyline
       for (const [s, dist, bw, th, mast] of [
-        [0.27, 250, 26, 230, 36], [0.33, 235, 22, 205, 22],
-        [0.39, 270, 24, 215, 0], [0.23, 255, 20, 175, 28]]) {
-        tower(k(s), 1, dist, bw, th, { col: [0.30, 0.38, 0.50], seg: 6,
-          cap: true, capCol: [0.20, 0.28, 0.40], mast });
+        [0.26, 270, 28, 260, 40],   // Eureka-like iconic spire (tallest)
+        [0.34, 250, 24, 220, 24],   // Rialto-like prominent tower
+        [0.41, 275, 26, 240, 0],    // another major landmark
+        [0.21, 260, 22, 190, 32],   // mid-range signature
+        [0.47, 265, 25, 210, 20]    // eastern precinct
+      ]) {
+        tower(k(s), 1, dist, bw, th, { col: [0.32, 0.40, 0.52], seg: 7,
+          cap: true, capCol: [0.22, 0.30, 0.42], mast });
       }
-      // continuous distant silhouette band behind the towers (overlapping → solid)
-      for (let i = 0; i < 26; i++) {
-        const f = i / 25;
-        backdrop(k(CBD_S0 - 0.03 + f * (CBD_S1 - CBD_S0 + 0.06)), 1,
-                 320 + hash(i * 5) * 130,
-                 [30 + hash(i * 9) * 26, 44 + hash(i * 13) * 90, 22], [0.40, 0.46, 0.54]);
+      // Far-horizon silhouette band (hazy, atmospheric depth)
+      for (let i = 0; i < 32; i++) {
+        const f = i / 31;
+        backdrop(k(CBD_S0 - 0.04 + f * (CBD_S1 - CBD_S0 + 0.08)), 1,
+                 350 + hash(i * 5) * 150,
+                 [28 + hash(i * 9) * 30, 48 + hash(i * 13) * 100, 24],
+                 [0.38, 0.44, 0.52]);
       }
-      // a low foreground city block layer across the lake (mid-rise, hazier)
-      for (let i = 0; i < 20; i++) {
-        const f = i / 19;
-        const s = CBD_S0 - 0.01 + f * (CBD_S1 - CBD_S0 + 0.02);
-        const w = 18 + hash(i * 31) * 16, h = 26 + hash(i * 37) * 40;
-        building(k(s), 1, 165 + hash(i * 41) * 25, w, h, w, {
-          wall: [0.40, 0.46, 0.55], window: [0.52, 0.60, 0.72], floor: 5 });
+      // Mid-rise foreground layer across the lake (10–15 storey mix)
+      for (let i = 0; i < 24; i++) {
+        const f = i / 23;
+        const s = CBD_S0 + f * (CBD_S1 - CBD_S0);
+        const w = 20 + hash(i * 31) * 18, h = 32 + hash(i * 37) * 50;
+        building(k(s), 1, 185 + hash(i * 41) * 35, w, h, w, {
+          wall: [0.42, 0.48, 0.58], window: [0.54, 0.64, 0.78], floor: 5 });
       }
-      // ---- Additional Melbourne landmark buildings ----
-      const LMARK_PAIRS = [
-        [0.21, 200, 18, 140, [0.32, 0.40, 0.52]],
-        [0.26, 215, 16, 175, [0.35, 0.42, 0.54]],
-        [0.31, 195, 20, 160, [0.30, 0.38, 0.50]],
-        [0.36, 230, 15, 190, [0.33, 0.41, 0.53]],
-        [0.40, 210, 17, 155, [0.28, 0.36, 0.48]],
-        [0.44, 225, 19, 180, [0.34, 0.42, 0.55]],
-        [0.47, 200, 16, 165, [0.31, 0.39, 0.51]],
-        [0.50, 220, 18, 200, [0.36, 0.44, 0.56]],
+      // ---- Additional landmark cluster (cultural precinct, riverside buildings) ----
+      const CBD_LANDMARKS = [
+        [0.20, 215, 20, 155, [0.34, 0.42, 0.54]],
+        [0.25, 230, 18, 180, [0.37, 0.44, 0.56]],
+        [0.30, 205, 22, 170, [0.32, 0.40, 0.52]],
+        [0.35, 245, 16, 200, [0.35, 0.43, 0.55]],
+        [0.38, 225, 19, 165, [0.30, 0.38, 0.50]],
+        [0.43, 240, 21, 190, [0.36, 0.44, 0.56]],
+        [0.48, 220, 18, 175, [0.33, 0.41, 0.53]],
+        [0.51, 235, 20, 210, [0.38, 0.46, 0.58]],
       ];
-      for (const [s, dist, bw, bh, wc] of LMARK_PAIRS) {
-        building(k(s), 1, dist, bw, bh, bw, { wall: wc, window: [0.55, 0.65, 0.80], floor: 8 });
+      for (const [s, dist, bw, bh, wc] of CBD_LANDMARKS) {
+        building(k(s), 1, dist, bw, bh, bw, { wall: wc, window: [0.56, 0.66, 0.82], floor: 8 });
       }
 
       // ====================================================================
@@ -127,52 +143,64 @@
       });
 
       // ====================================================================
-      // PARKLAND — DENSE broadleaf trees + bushes through the park (both sides)
+      // PARKLAND — lush dense broadleaf canopy + understory bushes
+      // Albert Park is renowned for its leafy green parkland character
       // ====================================================================
-      every(28, (kk) => {
+      every(24, (kk) => {  // tighter spacing for denser feel
         for (const side of [-1, 1]) {
-          if (hash(kk * 21 + side) > 0.78) continue;     // denser fill
-          const dist = 24 + hash(kk * 22 + side) * 62;
-          tree(kk, side, dist, 8 + hash(kk * 24 + side) * 6, TREE);
-          if (hash(kk * 27 + side) > 0.5)               // second tree, staggered
-            tree(kk, side, dist + 14 + hash(kk * 29 + side) * 18,
-                 7 + hash(kk * 33 + side) * 6, TREE);
-          if (hash(kk * 31 + side) > 0.55) bush(kk, side, dist - 5, TREE);
+          if (hash(kk * 21 + side) > 0.72) continue;     // higher fill density
+          const dist = 22 + hash(kk * 22 + side) * 65;
+          tree(kk, side, dist, 9 + hash(kk * 24 + side) * 7, TREE);  // taller trees
+          if (hash(kk * 27 + side) > 0.45)               // more frequent second tree
+            tree(kk, side, dist + 12 + hash(kk * 29 + side) * 20,
+                 8 + hash(kk * 33 + side) * 6, TREE);
+          if (hash(kk * 31 + side) > 0.50) bush(kk, side, dist - 4, [0.18, 0.42, 0.18]);  // darker underbrush
         }
       });
-      // dense tree clusters at signature parkland spots (both sides)
-      for (const [sc, cnt] of [[0.20, 8], [0.36, 7], [0.70, 7], [0.86, 6]]) {
+      // Dense multiplex tree clusters at signature parkland zones (both sides)
+      for (const [sc, cnt] of [[0.15, 9], [0.33, 8], [0.42, 7], [0.68, 8], [0.83, 7]]) {
         for (const side of [-1, 1]) {
           for (let j = 0; j < cnt; j++) {
             const kk = (k(sc) + j) % n;
-            tree(kk, side, 22 + hash(kk * 3 + j + sc * 50) * 26,
-                 8 + hash(kk * 5 + j) * 6, TREE);
-            if (hash(kk * 7 + j) > 0.6) bush(kk, side, 18 + hash(kk * 9 + j) * 10, TREE);
+            tree(kk, side, 20 + hash(kk * 3 + j + sc * 50) * 28,
+                 9 + hash(kk * 5 + j) * 7, [0.19, 0.43, 0.19]);  // warmer, deeper green
+            if (hash(kk * 7 + j) > 0.55)
+              bush(kk, side, 16 + hash(kk * 9 + j) * 12, [0.17, 0.40, 0.17]);  // denser understory
           }
         }
       }
 
       // ---- Palm avenue along the fast Lakeside Drive section (s≈0.50–0.60 L) ----
-      for (let j = 0; j < 18; j++) {
-        const kk = (k(0.49) + j) % n;
-        palm(kk, -1, 16 + hash(kk * 9 + j) * 10, 10 + hash(kk * 12 + j) * 6, [0.20, 0.46, 0.24]);
-        if (hash(kk * 17 + j) > 0.5)
-          palm(kk, -1, 30 + hash(kk * 19 + j) * 12, 9 + hash(kk * 23 + j) * 5, [0.20, 0.46, 0.24]);
+      // Palms frame the dramatic lakeside section; sparser placement for cleaner sightlines
+      for (let j = 0; j < 12; j++) {
+        const kk = (k(0.51) + j * 2) % n;
+        palm(kk, -1, 18 + hash(kk * 9 + j) * 12, 11 + hash(kk * 12 + j) * 5, [0.20, 0.46, 0.24]);
       }
-      // palm clusters by the pits/start and around grandstands as locale flavour
-      for (let j = 0; j < 5; j++) {
-        palm((k(0.0) + j) % n, 1, 16 + j * 6, 11 + hash(j * 3) * 3, [0.20, 0.46, 0.24]);
-        palm((k(0.96) + j) % n, 1, 16 + j * 6, 11 + hash(j * 5) * 3, [0.20, 0.46, 0.24]);
-        palm((k(0.62) + j) % n, 1, 40 + j * 6, 10 + hash(j * 7) * 3, [0.20, 0.46, 0.24]);
+      // palm accent clusters by the pits/start and around key grandstands
+      for (let j = 0; j < 4; j++) {
+        palm((k(0.0) + j * 2) % n, 1, 18 + j * 8, 12 + hash(j * 3) * 4, [0.20, 0.46, 0.24]);
+        palm((k(0.95) + j * 2) % n, 1, 18 + j * 8, 12 + hash(j * 5) * 4, [0.20, 0.46, 0.24]);
+        palm((k(0.62) + j * 2) % n, 1, 42 + j * 8, 11 + hash(j * 7) * 4, [0.20, 0.46, 0.24]);
       }
-      // ---- Lakeside tree line (Morton Bay figs + eucalyptus) ----
-      for (let i = 0; i < 32; i++) {
-        const s = 0.28 + (i / 32) * 0.32;  // s=0.28 to 0.60 — the lake side
+      // ---- Lakeside tree line (Morton Bay figs + eucalyptus) — denser, fuller canopy ----
+      for (let i = 0; i < 40; i++) {
+        const s = 0.27 + (i / 40) * 0.34;  // extended s=0.27 to 0.61 — premium lake-side coverage
         const kk = k(s);
-        const d = 25 + hash(kk * 41 + i) * 25;
-        tree(kk, -1, d, 8 + hash(kk * 43 + i) * 6, [0.20, 0.44, 0.20]);
-        if (hash(kk * 45 + i) > 0.6)
-          tree(kk, -1, d + 14 + hash(kk * 47 + i) * 10, 10 + hash(kk * 49 + i) * 4, [0.20, 0.44, 0.20]);
+        const d = 24 + hash(kk * 41 + i) * 28;
+        tree(kk, -1, d, 9 + hash(kk * 43 + i) * 7, [0.20, 0.44, 0.20]);
+        if (hash(kk * 45 + i) > 0.55)  // increased density
+          tree(kk, -1, d + 16 + hash(kk * 47 + i) * 12, 11 + hash(kk * 49 + i) * 5, [0.20, 0.44, 0.20]);
+      }
+      // ---- Rowing boathouses + aquatic centre structures (s≈0.40 L) ----
+      // Low-rise sports facility cluster on the infield lakeside
+      for (let j = 0; j < 3; j++) {
+        building(k(0.40 + j * 0.03), -1, 50 + j * 15, 16 + j * 2, 7, 28 + j * 3, {
+          wall: [0.88, 0.90, 0.88], window: [0.20, 0.50, 0.70], floor: 3 });
+      }
+      // Lakeside Stadium structures (s≈0.62–0.68 L) — modern mixed-use facility
+      for (let j = 0; j < 2; j++) {
+        building(k(0.63 + j * 0.04), -1, 55 + j * 10, 18 + j * 2, 8, 32, {
+          wall: [0.84, 0.86, 0.88], window: [0.30, 0.55, 0.75], floor: 3 });
       }
 
       // ====================================================================
@@ -290,47 +318,50 @@
       }
 
       // ====================================================================
-      // PARKLAND extras — picnic/park structures, lamp posts, fan-zone tents,
-      // and a sparse second tree layer for depth
+      // PARKLAND AMENITIES — public park facilities, lighting, recreational
+      // infrastructure, and multi-layered forest depth for visual richness
       // ====================================================================
-      // lamp posts along the main straight + pit approach
-      for (let j = 0; j < 8; j++) {
+      // Modern street lights along the main straight + pit approach + spectator routes
+      for (let j = 0; j < 10; j++) {
         for (const side of [-1, 1]) {
-          const a = anchor((k(0.0) + j * 14) % n, side, 8.5);
+          const a = anchor((k(0.0) + j * 12) % n, side, 9);
           if (onTrack(a.c[0], a.c[2], 1)) continue;
-          addCyl(out, a.c, 0.12, 7, [0.30, 0.31, 0.34], 5, [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 7), [0.7, 0.4, 1.6], [0.95, 0.92, 0.7], [a.r, a.u, a.t]);
+          addCyl(out, a.c, 0.13, 7.5, [0.32, 0.32, 0.34], 5, [a.r, a.u, a.t]);  // pole
+          addBox(out, vadd(a.c, a.u, 7.5), [0.8, 0.5, 1.8], [0.96, 0.92, 0.65], [a.r, a.u, a.t]);  // lantern
         }
       }
-      // colourful fan-zone marquees behind the s≈0.62 + s≈0.30 stands
-      for (const [s, side, cnt] of [[0.63, 1, 4], [0.31, -1, 3], [0.88, 1, 3]]) {
+      // Colourful event marquees + hospitality tents behind major grandstands
+      for (const [s, side, cnt] of [[0.64, 1, 4], [0.32, -1, 4], [0.88, 1, 3], [0.12, -1, 3]]) {
         for (let j = 0; j < cnt; j++) {
-          const a = anchor((k(s) + j * 7) % n, side, 38 + j * 9);
-          if (onTrack(a.c[0], a.c[2], 5)) continue;
-          addBox(out, vadd(a.c, a.u, 1.8), [9, 3.6, 9],
-                 [0.92, 0.92, 0.94], [a.r, a.u, a.t]);
-          addPrism(out, vadd(a.c, a.u, 4.4), [9, 1.6, 9],
-                   [[0.85, 0.30, 0.20], [0.20, 0.45, 0.70], [0.90, 0.80, 0.25]][j % 3],
+          const a = anchor((k(s) + j * 6) % n, side, 40 + j * 10);
+          if (onTrack(a.c[0], a.c[2], 6)) continue;
+          // tent body
+          addBox(out, vadd(a.c, a.u, 2.0), [10, 4.0, 10],
+                 [0.94, 0.94, 0.95], [a.r, a.u, a.t]);
+          // tent roof (ridge)
+          addPrism(out, vadd(a.c, a.u, 4.8), [10, 1.8, 10],
+                   [[0.88, 0.32, 0.22], [0.22, 0.48, 0.72], [0.92, 0.82, 0.28]][j % 3],
                    [a.r, a.u, a.t]);
         }
       }
-      // extra broadleaf depth layer further back in the parkland (both sides)
-      every(40, (kk) => {
+      // ---- Far-background forest canopy layer (visual depth, atmospheric) ----
+      every(36, (kk) => {
         for (const side of [-1, 1]) {
-          if (hash(kk * 53 + side) > 0.55) continue;
-          const dist = 70 + hash(kk * 57 + side) * 70;
-          tree(kk, side, dist, 9 + hash(kk * 61 + side) * 7, TREE);
+          if (hash(kk * 53 + side) > 0.50) continue;  // sparser but present
+          const dist = 80 + hash(kk * 57 + side) * 80;
+          tree(kk, side, dist, 10 + hash(kk * 61 + side) * 8, [0.18, 0.40, 0.18]);
         }
       });
-      // ---- Botanical Garden trees (s=0.70–0.80) ----
-      const BOT_GREENS = [[0.18, 0.42, 0.18], [0.22, 0.48, 0.20], [0.14, 0.38, 0.16], [0.20, 0.46, 0.22]];
-      for (let i = 0; i < 8; i++) {
-        const s = 0.70 + (i / 8) * 0.10;
+      // ---- Botanical Garden + Parkland native trees (s=0.68–0.82) ----
+      // This section features distinctive Australian native greenery
+      const NATIVE_GREENS = [[0.20, 0.44, 0.19], [0.22, 0.48, 0.21], [0.16, 0.40, 0.17], [0.21, 0.46, 0.20]];
+      for (let i = 0; i < 12; i++) {
+        const s = 0.68 + (i / 12) * 0.14;
         const kk = k(s);
         const side = (i % 2) ? 1 : -1;
-        tree(kk, side, 30 + hash(kk * 71 + i) * 30, 10 + hash(kk * 73 + i) * 10, BOT_GREENS[i % 4]);
-        if (hash(kk * 75 + i) > 0.5)
-          tree(kk, side, 50 + hash(kk * 77 + i) * 20, 12 + hash(kk * 79 + i) * 8, BOT_GREENS[(i + 1) % 4]);
+        tree(kk, side, 32 + hash(kk * 71 + i) * 32, 11 + hash(kk * 73 + i) * 9, NATIVE_GREENS[i % 4]);
+        if (hash(kk * 75 + i) > 0.52)
+          tree(kk, side, 54 + hash(kk * 77 + i) * 22, 13 + hash(kk * 79 + i) * 7, NATIVE_GREENS[(i + 1) % 4]);
       }
 
       // ====================================================================

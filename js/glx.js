@@ -196,6 +196,8 @@ uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform float uStars;
 uniform float uCloud;
+uniform float uTime;   // seconds, 0 = static/deterministic (backward-compatible)
+uniform float uMoon;   // 0..1 moon visibility (0 = none, backward-compatible)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -228,17 +230,34 @@ void main() {
   // Drives automatic golden-hour / sunset tint without per-track authoring.
   float sunE = clamp(uSunDir.y * 1.4, 0.0, 1.0);
 
+  // Overcast factor: drives grey-shift and corona damping under heavy cloud.
+  float overcast = smoothstep(0.5, 1.0, uCloud);
+
   // --- Sky gradient ---
   vec3 c;
   if (up >= 0.0) {
-    c = mix(uHorizon, uZenith, pow(up, 0.5));
+    // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
+    vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.75);
+    vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.60);
+    c = mix(horizonO, zenithO, pow(up, 0.5));
     // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
     // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
+    // Damped under overcast so heavy cloud doesn't show warm colour.
     float goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE))
-                    * (1.0 - smoothstep(0.0, 0.32, up));
+                    * (1.0 - smoothstep(0.0, 0.32, up))
+                    * (1.0 - overcast * 0.9);
     vec3 goldenColor = mix(vec3(0.70, 0.22, 0.04), vec3(0.92, 0.55, 0.16),
                            clamp(sunE * 2.5, 0.0, 1.0));
     c = mix(c, c * 0.45 + goldenColor * 0.55, goldenAmt * 0.80);
+    // Low-sun horizon band: extra warm band just above the horizon at sunset.
+    // Gives a richer, more saturated glow at the magic hour.
+    float lowBand = (1.0 - smoothstep(0.0, 0.60, sunE))
+                  * (1.0 - smoothstep(0.0, 0.18, up))
+                  * smoothstep(0.01, 0.06, up)
+                  * (1.0 - overcast * 0.85);
+    vec3 lowColor = mix(vec3(0.85, 0.25, 0.02), vec3(0.98, 0.62, 0.08),
+                        clamp(sunE * 3.0, 0.0, 1.0));
+    c = mix(c, lowColor, lowBand * 0.55);
   } else {
     // Below the horizon: dark earth tone, smoothly blended from the horizon colour.
     float gnd = clamp(-up * 5.0, 0.0, 1.0);
@@ -246,30 +265,50 @@ void main() {
   }
 
   // --- Procedural cloud layer ---
-  // Static (no time uniform) so screenshots stay deterministic.
+  // Cloud plane is drifted slowly by uTime (no drift when time=0 → deterministic).
   if (uCloud > 0.001 && up > 0.012) {
     vec2 cp = dir.xz / up * 0.42;
-    float f = fbm(cp);
+    // Drift offset: two independent slow vectors for parallax feel.
+    vec2 drift1 = vec2(uTime * 0.0028, uTime * 0.0011);
+    vec2 drift2 = vec2(uTime * 0.0017, uTime * 0.0023);
+    // Evolution: a very slow warp of the second octave to change cloud shape.
+    float evo = uTime * 0.00035;
+    vec2 cp1 = cp + drift1;
+    vec2 cp2 = cp + drift2;
+    float f = fbm(cp1);
     float cov = smoothstep(0.55 - uCloud * 0.4, 0.92, f);
     cov *= smoothstep(0.012, 0.08, up);
     // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
     // thick billowing regions = shadowed dark underside.
-    float thick = clamp(fbm(cp * 0.55 + vec2(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
+    float thick = clamp(fbm(cp2 * 0.55 + vec2(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
     float sl = pow(sd, 2.0);
     float sunBright = max(uSunColor.r, max(uSunColor.g, uSunColor.b));
+    // Under heavy overcast, clamp sunBright so even a bright sun gives grey clouds.
+    float effectiveSunBright = mix(sunBright, min(sunBright, 0.55), overcast);
     // Sunlit tops: white in daylight, warm-tinted at sunset
     vec3 cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl);
-    cloudTop *= 0.38 + 0.62 * sunBright;
-    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.45, sl * (1.0 - sunE) * 0.55);
+    cloudTop *= 0.38 + 0.62 * effectiveSunBright;
+    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.45, sl * (1.0 - sunE) * 0.55 * (1.0 - overcast));
+    // Under overcast flatten tops toward medium grey.
+    cloudTop = mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast * 0.65);
     // Dark undersides: cooler and dimmer, conveying mass/volume
-    vec3 cloudBot = vec3(0.31, 0.32, 0.38) * (0.28 + 0.48 * sunBright);
+    vec3 cloudBot = vec3(0.31, 0.32, 0.38) * (0.28 + 0.48 * effectiveSunBright);
+    // Under overcast, undersides go darker / more threatening.
+    cloudBot = mix(cloudBot, vec3(0.22, 0.22, 0.25), overcast * 0.55);
     vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
+    // Moon tints nearby clouds faintly blue-silver.
+    if (uMoon > 0.0) {
+      float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
+      lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
+    }
     c = mix(c, lit, cov);
   }
 
   // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
+  // Damped under overcast (corona hidden behind cloud).
   float upPos = max(up, 0.0);
-  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0));
+  float mieDamp = 1.0 - overcast * 0.85;
+  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp);
 
   // --- Horizon glow in the sun's compass direction ---
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
@@ -279,22 +318,54 @@ void main() {
     float dirHLen = length(dirH);
     float hdot = dirHLen > 0.05 ? max(dot(dirH / dirHLen, sunH / sunHLen), 0.0) : 0.0;
     float hband = max(1.0 - abs(up) * 5.0, 0.0);
-    c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen;
+    c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen * mieDamp;
   }
 
-  // --- Sun corona + disc ---
-  c += uSunColor * pow(sd, 20.0) * 0.55;   // outer halo ~15°
-  c += uSunColor * pow(sd, 300.0) * 0.90;  // inner ring ~4°
+  // --- Sun corona + disc (damped under overcast) ---
+  float coronaDamp = 1.0 - overcast * 0.92;
+  c += uSunColor * pow(sd, 20.0) * 0.55 * coronaDamp;   // outer halo ~15°
+  c += uSunColor * pow(sd, 300.0) * 0.90 * coronaDamp;  // inner ring ~4°
   float perp = length(dir - uSunDir * sd);
-  float disc = smoothstep(0.018, 0.006, perp);
+  float disc = smoothstep(0.018, 0.006, perp) * coronaDamp;
   c += mix(uSunColor * 1.6, vec3(1.8, 1.75, 1.5), disc) * disc;
 
   // --- Stars (night tracks) ---
   if (uStars > 0.5 && up > 0.05) {
-    float h = hash3(floor(dir * 180.0));
-    float star = smoothstep(0.9975, 1.0, h);
-    float bright = 0.5 + 0.5 * hash3(floor(dir * 43.0));
-    c += vec3(star * bright);
+    // Cell-based star field with varied brightness and a few "giant" stars.
+    vec3 cell180 = floor(dir * 180.0);
+    float h = hash3(cell180);
+    // Normal stars: sparse
+    float star = smoothstep(0.9970, 1.0, h);
+    // Brightness varies per star; driven by a separate hash.
+    float bright = 0.35 + 0.65 * hash3(floor(dir * 43.0));
+    // Subtle twinkle: hash at coarser cell gives a slow phase offset per star.
+    float phase = hash3(floor(dir * 31.0)) * 6.2832;
+    float twinkle = 0.80 + 0.20 * sin(uTime * 1.4 + phase);
+    // Giant/bright stars: much rarer, extra brightness
+    float giantH = hash3(floor(dir * 55.0));
+    float giant = smoothstep(0.998, 1.0, giantH);
+    float giantBright = 0.7 + 0.5 * hash3(floor(dir * 27.0));
+    float giantTwinkle = 0.75 + 0.25 * sin(uTime * 0.9 + phase * 1.3);
+    c += vec3(star * bright * twinkle + giant * giantBright * giantTwinkle);
+  }
+
+  // --- Moon disc + halo (night tracks) ---
+  if (uMoon > 0.0 && uStars > 0.5) {
+    // Fixed moon direction: high in the sky, to the right of the sun's compass direction.
+    // Using a stable world-space direction so it doesn't follow the camera.
+    vec3 moonDir = normalize(vec3(0.42, 0.72, 0.55));
+    float md = dot(dir, moonDir);
+    float moonPerp = length(dir - moonDir * max(md, 0.0));
+    // Moon disc: crisp soft edge
+    float moonDisc = smoothstep(0.025, 0.010, moonPerp) * uMoon;
+    // Moon halo: broad soft glow
+    float moonHalo = exp(-moonPerp * moonPerp * 140.0) * 0.28 * uMoon;
+    // Moon colour: cool blue-white
+    vec3 moonCol = vec3(0.82, 0.88, 1.00);
+    // The halo should only appear above the horizon and not wash out too much.
+    if (up > 0.0 && md > 0.0) {
+      c += moonCol * (moonDisc * 1.10 + moonHalo);
+    }
   }
 
   outColor = vec4(c, 1.0);
@@ -620,7 +691,7 @@ void main() {}`;
       "uRoughness", "uMetalness", "uSpecular", "uDetail",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
 
@@ -790,6 +861,8 @@ void main() {}`;
     gl.uniform3fv(skyU.uSunColor, sky.sunColor);
     gl.uniform1f(skyU.uStars, sky.stars ? 1 : 0);
     gl.uniform1f(skyU.uCloud, sky.cloud !== undefined ? sky.cloud : 0);
+    gl.uniform1f(skyU.uTime,  sky.time  !== undefined ? sky.time  : 0);
+    gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
     setBlend(false);
     setDepthMask(false);
     gl.bindVertexArray(skyVAO);

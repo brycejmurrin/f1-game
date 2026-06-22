@@ -292,56 +292,110 @@
       billboard(K(0.96), -1, 12, 14, 4, [0.88, 0.82, 0.22]);
 
       // ===================================================================
-      // ADDED SCENERY IMPROVEMENTS
+      // ENHANCED SCENERY — CIRCUIT GILLES VILLENEUVE ACCURACY
       // ===================================================================
 
-      // 1. Mid-stretch trees — varied heights and foliage tones, alternating sides.
-      {
-        const TREE_COLS = [
-          [0.20, 0.42, 0.22], [0.24, 0.48, 0.26], [0.22, 0.50, 0.24]
-        ];
-        const { every: everyFn, onTrack: onTrackFn } = api;
-        everyFn(16, (k) => {
-          const s = k / n;
-          const active = (s > 0.40 && s < 0.65) || (s > 0.78 && s < 0.92);
-          if (!active) return;
-          const h = hash(k * 53 + 19);
-          const side = (Math.round(k * 0.37) % 2) ? 1 : -1;
-          const dist = 15 + h * 15;
-          const col = TREE_COLS[Math.floor(h * 3) % 3];
-          const height = 6 + h * 8;
-          tree(k, side, dist, height, col);
-          if (h > 0.6) tree(k, -side, dist + 8 + h * 4, height - 2, TREE_COLS[(Math.floor(h * 5) + 1) % 3]);
-        });
+      // Water features: enhanced rowing basin + St. Lawrence river bands
+      // The Olympic rowing basin runs alongside the Casino Straight (s 0.60 L)
+      for (let i = 0; i < 6; i++) {
+        groundPlane(K(0.54 + i * 0.018), -1, 12, [220, 2, 280], BASIN);
+      }
+      // Extra water slab: northern shoreline away from the island (s 0.22–0.32)
+      for (let i = 0; i < 4; i++) {
+        groundPlane(K(0.22 + i * 0.025), -1, 200, [280, 2, 200], RIVER);
       }
 
-      // 2. Diverse CBD skyline — 8 glass towers at s=0.30–0.46 on the river side.
-      for (let i = 0; i < 8; i++) {
-        const s = 0.30 + i * (0.16 / 8);
+      // Biosphère dome — geodesic structure via stacked frustums + cone cap
+      // Placed further back (dist ~240) to simulate the landmark's distance across water
+      {
+        const k = K(0.32);
+        const a = anchor(k, -1, 240);
+        const DOME_COL = [0.76, 0.78, 0.82];
+        // 5 rings of decreasing radius to form a geodesic-like bulge
+        const rings = [[48, 42, 16], [42, 32, 16], [32, 20, 15], [20, 10, 14], [10, 2, 12]];
+        let y = 0;
+        for (const [rb, rt, h] of rings) {
+          addFrustum(out, vadd(a.c, a.u, y + h / 2), rb, rt, h, DOME_COL, 14, [a.r, a.u, a.t]);
+          y += h;
+        }
+        // Geodesic dome cap — cone to apex
+        addCone(out, vadd(a.c, a.u, y), 4, 10, DOME_COL, 12, [a.r, a.u, a.t]);
+      }
+
+      // Parkland trees — dense coverage both sides, especially s 0.15–0.35 and s 0.66–0.90
+      // Parc Jean-Drapeau is heavily wooded; trees line the entire circuit.
+      for (let i = 0; i < 58; i++) {
+        const s = 0.11 + i * 0.0042;
+        const side = (i % 2) ? 1 : -1;
+        const h = hash(i * 17 + 39);
+        const height = 5 + h * 7;
+        const dist = 8 + hash(i * 23) * 10;
+        const col = (i % 5) ? FOLIAGE : FOLIAGE2;
+        tree(K(s), side, dist, height, col);
+      }
+
+      // Mid-stretch deciduous trees (Casino Straight, s 0.58–0.75)
+      for (let i = 0; i < 32; i++) {
+        const s = 0.58 + i * 0.0055;
+        const side = (i % 2) ? -1 : 1;
+        const h = hash(i * 31 + 17);
+        const height = 6 + h * 6;
+        const dist = 9 + hash(i * 19) * 8;
+        tree(K(s), side, dist, height, (i % 3) ? FOLIAGE : FOLIAGE2);
+      }
+
+      // Enhanced shrub/bush layer — fine-grained ground-level greenery
+      for (let i = 0; i < 24; i++) {
+        bush(K(0.18 + i * 0.0078), (i % 2) ? 1 : -1, 10 + hash(i * 7) * 5,
+          (i % 3) ? [0.22, 0.42, 0.20] : [0.18, 0.38, 0.18]);
+      }
+
+      // CBD skyline — denser, more varied tower field
+      // Front rank (s 0.30–0.47): tall, dense towers
+      for (let i = 0; i < 35; i++) {
+        const s = 0.30 + (i / 35) * 0.17;
         const k = K(s);
-        const h = hash(k * 23 + i * 7);
-        const ht = 120 + h * 80;
-        const w = 12 + hash(k * 11 + i) * 4;
-        building(k, -1, 280 + i * 18, w, ht, w,
-          { wall: [0.60, 0.65, 0.72], window: [0.28, 0.34, 0.40], floor: 6 });
+        const h = hash(k * 29 + i * 11);
+        const ht = 90 + h * 160;
+        const w = 11 + hash(k * 13 + i * 3) * 8;
+        const d = w + hash(k * 17 + i) * 4;
+        building(k, -1, 230 + i * 12, w, ht, d,
+          { wall: [0.54, 0.58, 0.65], window: [0.64, 0.72, 0.82], floor: 5 });
+      }
+      // Mid rank (s 0.28–0.48): infill behind front rank
+      for (let i = 0; i < 28; i++) {
+        const s = 0.28 + (i / 28) * 0.20;
+        const k = K(s);
+        const h = hash(k * 37 + i * 7);
+        const ht = 70 + h * 100;
+        const w = 13 + hash(k * 19 + i) * 6;
+        building(k, -1, 310 + i * 15, w, ht, w,
+          { wall: [0.50, 0.54, 0.61], window: [0.58, 0.66, 0.76], floor: 5 });
       }
 
-      // 3. Pit paddock detail — hospitality/media buildings at s=0.96–0.99 on side=1.
-      building(K(0.960), 1, 16, 12, 8, 12,
-        { wall: [0.62, 0.64, 0.68], window: [0.42, 0.50, 0.58], floor: 4 });
-      building(K(0.972), 1, 16, 12, 8, 12,
-        { wall: [0.62, 0.64, 0.68], window: [0.42, 0.50, 0.58], floor: 4 });
-      building(K(0.984), 1, 16, 12, 8, 12,
-        { wall: [0.62, 0.64, 0.68], window: [0.42, 0.50, 0.58], floor: 4 });
+      // Pit paddock hospitality blocks — more buildings at s 0.95–1.00 on right side
+      for (let i = 0; i < 5; i++) {
+        const s = 0.955 + i * 0.0078;
+        building(K(s), 1, 14 + i, 14 + i * 2, 9 + i, 13 + i,
+          { wall: [0.64, 0.66, 0.70], window: [0.44, 0.52, 0.60], floor: 4 });
+      }
 
-      // 4. Wall of Champions drama — bold red billboard accent.
-      billboard(K(0.955), 1, 4, 18, 6, [0.85, 0.15, 0.18]);
-      // Red accent stripe at close distance reinforcing the iconic barrier.
+      // Wall of Champions — iconic red stripe paint detail
+      // Main wall is already there; add visual emphasis with red graphic stripe
+      billboard(K(0.955), 1, 3, 20, 5, [0.88, 0.20, 0.16]);
+      // Multilayer red accent on the wall itself
       {
-        const k = K(0.955);
-        const a = anchor(k, 1, 1.5);
-        addBox(out, vadd(a.c, a.u, 1.8), [0.9, 1.2, 22], [0.85, 0.15, 0.18], [a.r, a.u, a.t]);
+        const k = K(0.97);
+        const a = anchor(k, 1, 0.6);
+        // Lower red stripe — bold sponsor marking
+        addBox(out, vadd(a.c, a.u, 1.2), [0.88, 0.5, 20], [0.90, 0.22, 0.20], [a.r, a.u, a.t]);
+        // Upper white/cream stripe
+        addBox(out, vadd(a.c, a.u, 1.8), [0.88, 0.45, 20], [0.94, 0.94, 0.96], [a.r, a.u, a.t]);
       }
+
+      // Extra grandstand detail at final chicane (s 0.90–0.98)
+      grandstand(0.91, -1, 11, 80, [0.47, 0.48, 0.53], [0.58, 0.38, 0.36]);
+      grandstand(0.95, 1, 11, 70, [0.49, 0.50, 0.55], [0.60, 0.36, 0.32]);
     },
   }
   );

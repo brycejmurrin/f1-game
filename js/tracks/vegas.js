@@ -14,7 +14,7 @@
     lengthKm: 6.2,
     baseHW: 7,
     street: true,
-    pal: { horizon: [0.22, 0.08, 0.28], zenith: [0.04, 0.02, 0.10], sunColor: [0.55, 0.45, 0.80], ambientSky: [0.35, 0.22, 0.45], ambientGround: [0.40, 0.18, 0.30], fogColor: [0.18, 0.06, 0.22], fogDensity: 0.0025, sunDir: [0.8, 0.15, 0.1] },
+    pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12] },
     segs: [
       { t: 0, l: 140 }, { t: 90, l: 70 }, { t: -60, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 120 }, { t: -60, l: 60 },
       { t: 70, l: 60 }, { t: -55, l: 60 }, { t: 0, l: 360 }, { t: 90, l: 80 }, { t: -50, l: 70 }, { t: 0, l: 900, t2: 0 },
@@ -29,18 +29,19 @@
         grandstand, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Neon night palette
-      const WARM = [1.0, 0.82, 0.40];     // casino glow / gold
-      const GOLD = [1.0, 0.62, 0.18];     // hot up-light
-      const MAGENTA = [0.95, 0.15, 0.65];
-      const CYAN = [0.15, 0.85, 0.95];
-      const VIOLET = [0.55, 0.25, 0.95];  // neon purple
-      const LIME = [0.55, 0.95, 0.30];    // neon green
-      const ROSE = [0.95, 0.30, 0.55];
-      const BLUE = [0.20, 0.45, 0.95];
-      const LED = [0.95, 0.96, 1.0];      // white LED facade
-      const DARKROCK = [0.18, 0.08, 0.07];
-      const NEON = [MAGENTA, CYAN, VIOLET, LIME, WARM, GOLD, ROSE, BLUE];  // cycle for lit faces
+      // Neon night palette — hyper-saturated Vegas colours
+      const WARM = [1.0, 0.85, 0.45];     // casino gold glow / tungsten uplighting
+      const GOLD = [1.0, 0.70, 0.20];     // hotter gold spotlights
+      const MAGENTA = [1.0, 0.10, 0.70]; // hot neon magenta
+      const CYAN = [0.20, 0.90, 1.00];    // bright neon cyan / aqua
+      const VIOLET = [0.75, 0.20, 1.00];  // vivid neon purple / indigo
+      const LIME = [0.60, 1.00, 0.35];    // neon lime green
+      const ROSE = [1.00, 0.25, 0.55];    // hot rose / pink
+      const BLUE = [0.25, 0.55, 1.00];    // neon blue
+      const RED = [1.00, 0.15, 0.25];     // neon red
+      const LED = [0.98, 0.98, 1.0];      // bright white LED facade / pixel lights
+      const DARKROCK = [0.16, 0.06, 0.05];
+      const NEON = [MAGENTA, CYAN, VIOLET, LIME, WARM, GOLD, ROSE, BLUE, RED];  // expanded palette
 
       // --- Street-circuit furniture: concrete walls, fences, marshal posts ---
       // The engine emits a continuous dark barrier on both edges for street circuits.
@@ -113,36 +114,44 @@
       building(K(0.10), -1, 40, 30, 78, 30, { wall: [0.20, 0.19, 0.22], window: ROSE, floor: 8 });
       building(K(0.14), 1, 36, 26, 64, 26, { wall: [0.22, 0.20, 0.20], window: CYAN, floor: 8 });
 
-      // --- s 0.30 L near: MSG Sphere — big emissive orb faked as a stacked frustum dome ---
+      // --- s 0.30 L near: MSG Sphere — iconic 366-ft LED sphere, the world's largest ---
+      // The Sphere is jaw-dropping at night: a massive glowing orb with cycling colours,
+      // content, and spectacular LED displays. We render it as a large emissive dome
+      // with 10 bands sampled from a perfect sphere profile. Brighter colours + more
+      // varied hues make it read as the iconic landmark it is.
       {
-        const a = anchor(K(0.30), -1, 138);
-        const rad = 62, baseY = a.c[1] + 4;
-        const vc = [[0.20, 0.40, 0.90], [0.90, 0.30, 0.60], MAGENTA, CYAN, WARM, ROSE];
-        // 8 horizontal slabs sampled from a sphere profile → smooth glowing orb,
-        // each a frustum band so the silhouette curves. Cheap + reads as the Sphere.
-        const bands = 8;
+        const a = anchor(K(0.30), -1, 145);
+        const rad = 66, baseY = a.c[1] + 2;
+        // Sphere display palette: blues, magentas, cyans, whites, golds — what you
+        // actually see on the real Sphere's LED facade at night.
+        const sphereColors = [
+          [0.15, 0.25, 0.85],  // deep blue
+          [0.30, 0.55, 1.00],  // bright cyan-blue
+          [0.90, 0.20, 0.70],  // hot magenta
+          [0.15, 0.80, 0.95],  // neon cyan
+          [0.98, 0.75, 0.30],  // bright gold
+          [1.00, 0.95, 0.85],  // almost white
+          [0.95, 0.30, 0.60],  // hot pink
+          [0.25, 0.35, 0.90],  // royal blue
+          [0.85, 0.15, 0.85],  // violet
+          [0.20, 0.90, 0.95],  // aqua
+        ];
+        // 10 horizontal frustum bands from sphere profile—reads as a smooth, seamless dome
+        const bands = 10;
         for (let i = 0; i < bands; i++) {
           const t0 = i / bands, t1 = (i + 1) / bands;
           const phi0 = t0 * Math.PI, phi1 = t1 * Math.PI;
           const rB = rad * Math.sin(phi0), rT = rad * Math.sin(phi1);
           const yB = baseY + rad * (1 - Math.cos(phi0));
           const hB = rad * (Math.cos(phi0) - Math.cos(phi1));
-          addFrustum(out, [a.c[0], yB, a.c[2]], Math.max(rB, 1.5), Math.max(rT, 1.5),
-            Math.max(hB, 0.5), vc[i % vc.length], 16, null);
+          addFrustum(out, [a.c[0], yB, a.c[2]], Math.max(rB, 2), Math.max(rT, 2),
+            Math.max(hB, 1), sphereColors[i % sphereColors.length], 20, null);
         }
-        // a few horizontal "screen content" bands for the colour-wash look
-        for (let i = 0; i < 3; i++) {
-          const yy = baseY + rad * (0.7 + i * 0.35);
-          addCyl(out, [a.c[0], yy, a.c[2]], rad * 0.86, 3.0, vc[(i + 2) % vc.length], 16, null);
-        }
-      }
-      // MSG Sphere — horizontal LED glow bands for screen content illusion
-      {
-        const a = anchor(K(0.30), -1, 138);
-        const vc = [MAGENTA, CYAN, WARM, ROSE];
-        for (let b = 0; b < 4; b++) {
-          const yy = a.c[1] + 20 + b * 12;
-          addCyl(out, [a.c[0], yy, a.c[2]], 65, 2.5, vc[b % vc.length], 16, null);
+        // Bright horizontal content stripes to simulate LED content running across the sphere
+        for (let i = 0; i < 5; i++) {
+          const yy = baseY + rad * (0.5 + i * 0.25);
+          const cylRad = rad * (0.82 - i * 0.05);  // taper toward the top
+          addCyl(out, [a.c[0], yy, a.c[2]], cylRad, 4.0, sphereColors[(i * 2 + 1) % sphereColors.length], 20, null);
         }
       }
 
@@ -154,9 +163,10 @@
       // --- s 0.45 R far: extra red-rock silhouette already handled by ring; add a near low ridge ---
       backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
 
-      // --- s 0.50 L mid: Strip casino wall — Mirage/Caesars stacked warm-glow towers ---
-      building(K(0.50), -1, 57, 46, 120, 40, { wall: [0.30, 0.27, 0.24], window: WARM, floor: 8 });
-      building(K(0.52), -1, 93, 34, 86, 30, { wall: [0.28, 0.26, 0.24], window: WARM, floor: 8 });
+      // --- s 0.50 L mid: Strip casino wall — Mirage/Caesars tall towers with warm interior glow ---
+      // These hotels have warm tungsten-style interior lighting mixed with neon signage accents
+      building(K(0.50), -1, 60, 48, 125, 42, { wall: [0.32, 0.28, 0.26], window: WARM, floor: 9 });
+      building(K(0.52), -1, 96, 36, 92, 32, { wall: [0.30, 0.27, 0.25], window: WARM, floor: 9 });
 
       // --- s 0.58 L mid: Caesars Palace — wide ivory box, gold up-lights ---
       building(K(0.58), -1, 46, 60, 70, 44, { wall: [0.70, 0.66, 0.58], window: WARM, floor: 7 });
@@ -170,26 +180,37 @@
       tower(K(0.64), -1, 60, 26, 138, { col: [0.16, 0.14, 0.12], seg: 4, cap: true, capCol: WARM, mast: true });
       place(K(0.64), -1, 28, [10, 1.6, 10], WARM);  // amber spotlight pool
 
-      // --- s 0.70 R near: High Roller observation wheel + cyan LED rim ---
-      ferrisWheel(K(0.70), 1, 70, 62);
-      billboard(K(0.71), 1, 34, 14, 9, CYAN);
-      // wheel apron lit pool
-      place(K(0.70), 1, 30, [20, 0.6, 20], [0.10, 0.35, 0.55]);
+      // --- s 0.70 R near: High Roller observation wheel (world's tallest) + cyan LED underlit base ---
+      // The High Roller wheel is 550 ft tall and lit up at night. At night it's especially
+      // striking—each cabin glows from within, and the base is lit with cyan/white accents.
+      ferrisWheel(K(0.70), 1, 75, 65);
+      billboard(K(0.71), 1, 36, 16, 10, CYAN);
+      // Wheel base pool lighting (the real wheel sits over a structure with LED pools)
+      place(K(0.70), 1, 32, [24, 0.7, 24], [0.15, 0.45, 0.65]);
+      place(K(0.70), 1, 26, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
-      // --- s 0.74 L mid: Bellagio — long low elegant box + blue fountain-pool strip ---
-      building(K(0.74), -1, 38, 64, 48, 34, { wall: [0.52, 0.50, 0.46], window: WARM, floor: 6 });
-      place(K(0.74), -1, 20, [16, 0.6, 60], [0.10, 0.35, 0.70]);   // fountain pool sheen
-      place(K(0.75), -1, 20, [12, 0.6, 40], [0.12, 0.45, 0.80]);
-      // fountain jets (thin lit verticals)
-      for (let i = 0; i < 5; i++) {
-        const a = anchor(K(0.74 + i * 0.004), -1, 24);
-        addBox(out, vadd(a.c, a.u, 7), [0.6, 14, 0.6], [0.7, 0.85, 1.0], [a.r, a.u, a.t]);
+      // --- s 0.74 L mid: Bellagio Hotel & Casino — iconic fountains with dramatic lighting ---
+      // The Bellagio's famous fountains are lit with multiple colours at night. They're
+      // reflected in the pool water below, creating a spectacular display. We show the
+      // hotel mass and the lit fountain jets.
+      building(K(0.74), -1, 38, 64, 50, 34, { wall: [0.55, 0.52, 0.48], window: WARM, floor: 6 });
+      // Fountain pools—bright with underwater LED lighting (blue/white)
+      place(K(0.74), -1, 22, [18, 0.8, 62], [0.12, 0.40, 0.75]);   // main fountain pool
+      place(K(0.75), -1, 22, [14, 0.6, 44], [0.15, 0.50, 0.85]);   // secondary bright pool
+      // Fountain jet columns (tall thin lit structures simulating water streams + lighting)
+      for (let i = 0; i < 6; i++) {
+        const a = anchor(K(0.74 + i * 0.0035), -1, 26);
+        const jetCol = [CYAN, [0.10, 0.45, 0.85], LED, [0.2, 0.8, 1.0], BLUE, CYAN][i % 6];
+        addBox(out, vadd(a.c, a.u, 8), [0.7, 16, 0.7], jetCol, [a.r, a.u, a.t]);
       }
 
-      // --- s 0.85 both near: Strip-side neon billboards flanking final straight ---
-      for (const [side, col] of [[-1, MAGENTA], [1, CYAN]]) {
-        billboard(K(0.85), side, 26, 16, 10, col);
-        billboard(K(0.87), side, 26, 14, 9, side < 0 ? CYAN : MAGENTA);
+      // --- s 0.85 both near: Final neon gates — vibrant billboards flanking the final straight ---
+      // The approach to the finish is framed by huge neon marquees—classic Vegas style
+      for (const [side, col1, col2] of [[-1, MAGENTA, CYAN], [1, CYAN, MAGENTA]]) {
+        billboard(K(0.85), side, 28, 18, 11, col1);
+        billboard(K(0.87), side, 28, 16, 10, col2);
+        // Extra accent lighting at base level
+        place(K(0.86), side, 18, [8, 1.2, 8], col1);
       }
 
       // --- s 0.95 R near: Harmon Ave chicane grandstands — tiered dark boxes, bright flecks ---
@@ -200,55 +221,59 @@
       grandstand(0.965, 1, 20, 70, [0.18, 0.18, 0.22], [0.50, 0.40, 0.55]);  // chicane main stand
       grandstand(0.90, -1, 22, 60, [0.18, 0.18, 0.22], [0.45, 0.40, 0.55]);  // opposite
 
-      // --- CONTINUOUS STRIP SKYLINE: a packed neon canyon lining BOTH sides of the
-      //     long Strip straight (s ~0.49–0.81). A back wall of lit blocks gives a
-      //     gapless skyline band; a mid row of taller lit casino slabs varies the
-      //     rooftop line; cheap single-box masses keep it dense within the cap. ---
+      // --- CONTINUOUS STRIP SKYLINE CANYON (s ~0.49–0.81): packed neon walls on both sides ---
+      // The Las Vegas Strip is a tight urban canyon at night with towering hotels on both
+      // sides. The F1 car races through what reads as a narrow gap between massive lit
+      // buildings. Far walls form a gapless skyline; mid row of taller casinos varies the
+      // roofline. Heavy neon on every surface — marquees, window bands, signage.
       {
         const s0 = 0.485, s1 = 0.815;
         const span = s1 - s0;
-        const STEP = 0.0058;                 // ~35 m between masses; denser canyon wall
-        const wallCol = [[0.24, 0.22, 0.22], [0.22, 0.21, 0.23], [0.26, 0.23, 0.20]];
+        const STEP = 0.0055;                 // ~30 m between masses; ultra-dense canyon
+        const wallCol = [[0.20, 0.18, 0.20], [0.18, 0.16, 0.20], [0.22, 0.20, 0.18]];
         let idx = 0;
         for (let s = s0; s <= s1; s += STEP, idx++) {
           const k = K(s);
           for (const side of [-1, 1]) {
             const h1 = hash(idx * 5 + (side > 0 ? 13 : 71));
             const h2 = hash(idx * 9 + (side > 0 ? 31 : 7));
-            const neon = NEON[(idx + (side > 0 ? 3 : 0)) % NEON.length];
-            const neon2 = NEON[(idx * 2 + (side > 0 ? 5 : 1)) % NEON.length];
-            // FAR continuous backdrop wall: one tall lit block, varied height — the
-            // gapless skyline silhouette. Wide enough to overlap its neighbours.
-            const fh = 64 + h1 * 110;
-            backdrop(k, side, 178, [56, fh, 30], wallCol[idx % 3]);
-            backdrop(k, side, 172, [58, 6.0, 24], neon);            // crowning neon band
-            backdrop(k, side, 172, [58, 3.0, 24], LED);             // white LED stripe
-            // MID lit casino slab — closer, warm-glow facade, varied rooftop line.
-            const mh = 42 + h2 * 76;
-            place(k, side, 100, [34, mh, 26], [0.20 + h1 * 0.12, 0.18, 0.18]);
-            place(k, side, 94, [36, 5.0, 22], (idx % 2) ? WARM : neon2);  // lit facade band
-            place(k, side, 94, [36, 2.0, 22], LED);                       // LED accent line
+            const neon = NEON[(idx + (side > 0 ? 4 : 1)) % NEON.length];
+            const neon2 = NEON[(idx * 3 + (side > 0 ? 5 : 2)) % NEON.length];
+            // FAR backdrop wall: tall blocks forming a gapless skyline
+            const fh = 70 + h1 * 120;
+            backdrop(k, side, 180, [56, fh, 32], wallCol[idx % 3]);
+            backdrop(k, side, 175, [60, 7.0, 26], neon);             // top neon band (brighter)
+            backdrop(k, side, 175, [60, 3.5, 26], LED);              // bright LED accent
+            // MID lit casino slab — warm casino interiors + neon accents
+            const mh = 46 + h2 * 80;
+            place(k, side, 104, [36, mh, 28], [0.22 + h1 * 0.13, 0.16, 0.16]);
+            place(k, side, 98, [38, 5.5, 24], (idx % 3) ? WARM : neon2);  // varied lighting
+            place(k, side, 98, [38, 2.2, 24], LED);                        // LED line
           }
         }
-        // Sparser taller signature casino towers punched along the canyon (lit grid).
-        for (let j = 0; j < 9; j++) {
-          const s = s0 + (j + 0.5) / 9 * span, side = (j % 2) ? -1 : 1;
-          building(K(s), side, 112, 40, 100 + hash(j * 17) * 70, 30,
-            { wall: [0.22, 0.20, 0.20], window: (j % 2) ? WARM : CYAN, floor: 16 });
+        // Tall signature casino towers punched along the canyon with bright neon windows
+        for (let j = 0; j < 10; j++) {
+          const s = s0 + (j + 0.5) / 10 * span, side = (j % 2) ? -1 : 1;
+          const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
+          building(K(s), side, 115, 42, 110 + hash(j * 17) * 75, 32,
+            { wall: [0.20, 0.18, 0.18], window: windowCol, floor: 18 });
         }
         // Strip-side neon billboards + palms threaded along the canyon edge.
-        for (let j = 0; j < 11; j++) {
-          const s = s0 + (j + 0.3) / 11 * span, side = (j % 2) ? 1 : -1;
-          billboard(K(s), side, 46, 14 + hash(j * 3) * 6, 9, NEON[j % NEON.length]);
-          palm(K(s + 0.004), side, 22, 9 + hash(j * 23) * 4, LIME);
-          palm(K(s - 0.004), -side, 22, 9 + hash(j * 29) * 4, LIME);
+        // Palms are lit with greenish backlight, creating depth and tropical vibes against the neon
+        for (let j = 0; j < 12; j++) {
+          const s = s0 + (j + 0.3) / 12 * span, side = (j % 2) ? 1 : -1;
+          billboard(K(s), side, 48, 16 + hash(j * 3) * 7, 10, NEON[(j + 2) % NEON.length]);
+          // Palms lit with bright green fronds, creating a tropical accent against the neon
+          palm(K(s + 0.004), side, 24, 11 + hash(j * 23) * 5, LIME);
+          palm(K(s - 0.004), -side, 24, 10 + hash(j * 29) * 5, LIME);
         }
-        // Ground-level neon ground-reflection strips (dim emissive slabs near the
-        // barrier) to imply the wet-look Strip shine. Kept off the tarmac via gap.
-        for (let j = 0; j < 14; j++) {
-          const s = s0 + j / 14 * span, side = (j % 2) ? 1 : -1;
-          const a = anchor(K(s), side, 3.0);
-          addBox(out, vadd(a.c, a.u, 0.1), [4, 0.2, 10], NEON[j % NEON.length], [a.r, a.u, a.t]);
+        // Ground-level neon reflection strips (glowing thin slabs near the barrier)
+        // imply the wet-look Strip shine and street-level neon glow from signs/casinos
+        for (let j = 0; j < 16; j++) {
+          const s = s0 + j / 16 * span, side = (j % 2) ? 1 : -1;
+          const a = anchor(K(s), side, 2.8);
+          const groundNeon = NEON[(j * 2 + (side > 0 ? 1 : 0)) % NEON.length];
+          addBox(out, vadd(a.c, a.u, 0.15), [5, 0.25, 12], groundNeon, [a.r, a.u, a.t]);
         }
       }
 
@@ -276,11 +301,14 @@
         if (onTrack(mx, mz, 60)) continue;
         addBox(out, [mx, pyMin + (18 + h * 22) / 2, mz], [180 + h * 140, 18 + h * 22, 140], DARKROCK);
       }
-      // Neon finish arch at s≈0.98
+      // Neon finish arch/halo at s≈0.98 — bright magenta circle framing the finish line
       {
         const k = K(0.98);
         const a = anchor(k, 0, 0);
-        addCyl(out, vadd(a.c, a.u, 8), 8, 0.8, MAGENTA, 12, [a.r, a.u, a.t]);
+        // Main arch ring
+        addCyl(out, vadd(a.c, a.u, 9), 9.5, 1.0, MAGENTA, 14, [a.r, a.u, a.t]);
+        // Secondary accent ring—alternating neon color
+        addCyl(out, vadd(a.c, a.u, 6), 8, 0.6, CYAN, 14, [a.r, a.u, a.t]);
       }
     },
   }

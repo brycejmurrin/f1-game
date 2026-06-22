@@ -58,7 +58,7 @@
       }
       // Near continuous lit-window tower band — varied heights, butted together
       // so the camera never sees empty sky between towers. Cheap floor spacing
-      // keeps the dense ring within the vertex budget.
+      // keeps the dense ring within the vertex budget. Enhanced night palette.
       {
         const N = 70;
         for (let i = 0; i < N; i++) {
@@ -68,41 +68,74 @@
           const w = 18 + hash(i * 3) * 22;
           const h = 55 + hash(i * 11) * 130;             // tall, varied CBD
           const tint = hash(i * 19);
+          const mainWin = tint < 0.15 ? [1.0, 0.82, 0.62] :
+                          tint < 0.35 ? [0.55, 0.8, 1.0] :
+                          tint < 0.65 ? [0.62, 0.75, 0.98] : WIN_BLUE;
           building(k, side, dist - w / 2, w, h, w, {
-            wall: [0.09, 0.11, 0.18],
-            window: tint < 0.2 ? WIN_WARM : (tint < 0.5 ? WIN_CYAN : WIN_BLUE),
-            floor: 22,
+            wall: [0.08, 0.10, 0.16],
+            window: mainWin,
+            floor: 20,
           });
           // a shorter infill tower hard against it on the same side fills any gap
           const w2 = 14 + hash(i * 23) * 14;
           const h2 = 40 + hash(i * 29) * 70;
+          const infillWin = hash(i * 37) < 0.5 ? WIN_CYAN : WIN_BLUE;
           building(k, side, dist + w * 0.6 + w2 * 0.6 + 6 - w2 / 2, w2, h2, w2, {
-            wall: [0.08, 0.1, 0.16], window: WIN_BLUE, floor: 22,
+            wall: [0.07, 0.09, 0.15], window: infillWin, floor: 20,
           });
         }
       }
 
       // ===================================================================
-      // s 0.18 R far — MARINA BAY SANDS: 3 tall towers + roof skypark slab
+      // s 0.18 R far — MARINA BAY SANDS: 3 tall towers + roof skypark slab + detail
       // ===================================================================
       {
         const k = K(0.18);
         const a = anchor(k, 1, 150);
-        const wall = [0.9, 0.9, 0.94], win = [0.7, 0.78, 0.95];
+        const wall = [0.88, 0.88, 0.92], win = [0.65, 0.75, 0.98];
         const H = 215, gap = 34;
         const tops = [];
         for (let t = -1; t <= 1; t++) {
-          // lean the slabs slightly toward the centre by offsetting along right
+          // lean the slabs slightly towards the centre by offsetting along right
           const c = vadd(a.c, a.r, t * gap);
           addBox(out, vadd(c, a.u, H / 2), [16, H, 26], wall, [a.r, a.u, a.t]);
-          // lit window face
+          // lit window face with strong cyan glow
           addBox(out, vadd(c, a.u, H * 0.55), [16.4, H * 0.7, 26.4], win, [a.r, a.u, a.t]);
+          // vertical lit bands on each tower for night detail
+          addBox(out, vadd(c, a.u, H * 0.3), [1.6, H * 0.5, 26.8], [0.35, 0.6, 1.0], [a.r, a.u, a.t]);
+          addBox(out, vadd(c, a.u, H * 0.7), [1.6, H * 0.4, 26.8], [0.4, 0.55, 0.95], [a.r, a.u, a.t]);
           tops.push(vadd(c, a.u, H));
         }
-        // skypark slab bridging the three tops
+        // skypark slab bridging the three tops — the boat-shaped roof
         const mid = tops[1];
-        addBox(out, vadd(mid, a.u, 4), [gap * 2 + 18, 13, 30], [0.85, 0.86, 0.9], [a.r, a.u, a.t]);
-        addBox(out, vadd(mid, a.u, 17), [gap * 2 + 18, 1.5, 30], NEON[1], [a.r, a.u, a.t]); // glowing edge
+        addBox(out, vadd(mid, a.u, 4), [gap * 2 + 18, 13, 30], [0.80, 0.81, 0.88], [a.r, a.u, a.t]);
+        // bright neon rim of skypark, the iconic glow
+        addBox(out, vadd(mid, a.u, 17), [gap * 2 + 18, 1.5, 30], NEON[1], [a.r, a.u, a.t]);
+        // additional skypark detail — central atrium lights
+        addBox(out, vadd(mid, a.u, 10.5), [8, 2.5, 12], [0.9, 0.75, 0.2], [a.r, a.u, a.t]);
+      }
+
+      // ===================================================================
+      // s 0.22 R mid — ARTSCIENCE MUSEUM: white lotus petals (5 shells)
+      // ===================================================================
+      {
+        const k = K(0.22);
+        const a = anchor(k, 1, 85);
+        const petal_h = 22, base_r = 18;
+        // 5 lotus petals (shells) radiating from center
+        for (let i = 0; i < 5; i++) {
+          const ang = (i / 5) * Math.PI * 2 + 0.3;
+          const dx = Math.cos(ang) * base_r * 0.65;
+          const dz = Math.sin(ang) * base_r * 0.65;
+          const petal_c = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
+                           a.c[1],
+                           a.c[2] + a.r[2] * dx + a.t[2] * dz];
+          addCone(out, vadd(petal_c, a.u, petal_h / 2), 7, petal_h, [0.92, 0.93, 0.96], 9, [a.r, a.u, a.t]);
+          // inner lit shell face (warm glow)
+          addCone(out, vadd(petal_c, a.u, petal_h * 0.55), 5.2, petal_h * 0.65, [1.0, 0.90, 0.75], 8, [a.r, a.u, a.t]);
+        }
+        // central stem/podium
+        addCyl(out, vadd(a.c, a.u, 4), 4.5, 8, [0.80, 0.80, 0.84], 7, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
@@ -202,25 +235,67 @@
       place(K(0.70), -1, 46, [70, 1.5, 70], [0.04, 0.08, 0.05]);
 
       // ===================================================================
-      // s 0.80 R mid — HELIX BRIDGE: white spiraling lattice tube arc
+      // s 0.80 R mid — HELIX BRIDGE: white spiraling lattice tube arc + detail
       // ===================================================================
       {
         const k = K(0.80);
         const a = anchor(k, 1, 30);
-        for (let j = 0; j < 14; j++) {
-          const t = j / 13;
+        // main arch spine (16 segments for smoother curve)
+        for (let j = 0; j < 16; j++) {
+          const t = j / 15;
           const ang = t * Math.PI;
           const up = Math.sin(ang) * 12;
-          const c = vadd(vadd(a.c, a.t, (t - 0.5) * 60), a.u, up + 2);
-          addCyl(out, c, 2.2, 4, [0.92, 0.94, 0.98], 6, [a.r, a.u, a.t]);
-          addBox(out, vadd(c, a.r, Math.sin(t * 9) * 5), [1, 1, 1.2], NEON[1], [a.r, a.u, a.t]);
+          const c = vadd(vadd(a.c, a.t, (t - 0.5) * 62), a.u, up + 2);
+          // main tube
+          addCyl(out, c, 2.2, 4.2, [0.90, 0.92, 0.96], 6, [a.r, a.u, a.t]);
+          // lattice detail on tube sides
+          addBox(out, vadd(c, a.r, Math.sin(t * 11) * 5.5), [0.8, 1.2, 1.4], [0.88, 0.90, 0.94], [a.r, a.u, a.t]);
+          // crossbar structure
+          if (j % 2 === 0) {
+            addBox(out, vadd(c, a.t, Math.cos(t * 7) * 3), [0.6, 1.0, 4.8], [0.85, 0.87, 0.92], [a.r, a.u, a.t]);
+          }
+          // night accent lights on the structure
+          if (j % 3 === 0) {
+            addBox(out, vadd(vadd(c, a.r, 3), a.u, 1), [0.4, 0.4, 0.4], NEON[1], [a.r, a.u, a.t]);
+            addBox(out, vadd(vadd(c, a.r, -3), a.u, 1), [0.4, 0.4, 0.4], NEON[1], [a.r, a.u, a.t]);
+          }
         }
       }
 
       // ===================================================================
-      // s 0.86 R near — SINGAPORE FLYER (ferris wheel), cyan-lit rim
+      // s 0.86 R near — SINGAPORE FLYER (ferris wheel), cyan-lit rim + spokes
       // ===================================================================
-      ferrisWheel(K(0.86), 1, 40, 30);
+      {
+        const k = K(0.86);
+        const a = anchor(k, 1, 40);
+        const r = 30, h = 80;
+        // central hub + main axle
+        addCyl(out, vadd(a.c, a.u, h), 2.2, 2, [0.35, 0.35, 0.38], 8, [a.r, a.u, a.t]);
+        // 8 major spokes radiating from hub
+        for (let i = 0; i < 8; i++) {
+          const ang = (i / 8) * Math.PI * 2;
+          const dx = Math.cos(ang) * r;
+          const dz = Math.sin(ang) * r;
+          const rim_c = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
+                         a.c[1] + a.u[1] * h,
+                         a.c[2] + a.r[2] * dx + a.t[2] * dz];
+          addCyl(out, vadd(rim_c, a.u, -h / 2), 0.4, h, [0.55, 0.55, 0.6], 5, [a.r, a.u, a.t]); // spoke
+          // cabin pods along rim
+          addBox(out, rim_c, [3.2, 3.8, 3.2], [0.25, 0.6, 0.95], [a.r, a.u, a.t]);
+        }
+        // rim cylinder (the famous lit necklace of the Flyer)
+        const seg = 32;
+        for (let i = 0; i < seg; i++) {
+          const a0 = (i / seg) * Math.PI * 2, a1 = ((i + 1) / seg) * Math.PI * 2;
+          const p0 = [a.c[0] + a.r[0] * Math.cos(a0) * r + a.t[0] * Math.sin(a0) * r,
+                      a.c[1] + a.u[1] * h,
+                      a.c[2] + a.r[2] * Math.cos(a0) * r + a.t[2] * Math.sin(a0) * r];
+          const p1 = [a.c[0] + a.r[0] * Math.cos(a1) * r + a.t[0] * Math.sin(a1) * r,
+                      a.c[1] + a.u[1] * h,
+                      a.c[2] + a.r[2] * Math.cos(a1) * r + a.t[2] * Math.sin(a1) * r];
+          addBox(out, [(p0[0] + p1[0]) / 2, h + a.c[1], (p0[2] + p1[2]) / 2], [1, 0.8, (r * 2 * Math.PI / seg)], NEON[1], [a.r, a.u, a.t]);
+        }
+      }
 
       // ===================================================================
       // s 0.92 both — illuminated billboards funnel back to start
@@ -254,17 +329,21 @@
 
       // ===================================================================
       // BAY WATER — dark mirror groundPlanes along the open harbour stretches,
-      // with bright coloured reflection streaks of the skyline lights.
+      // with bright coloured reflection streaks of the skyline lights + detail.
       // ===================================================================
-      const BAY = [0.05, 0.08, 0.15];
+      const BAY = [0.04, 0.06, 0.12];  // darker water for night
       for (const s of [0.2, 0.3, 0.4, 0.45, 0.82, 0.86]) {
         groundPlane(K(s), 1, 36, [70, 60], BAY);
       }
-      for (const s of [0.22, 0.32, 0.44, 0.83, 0.87]) {
+      // dense reflection strips — the famous Marina Bay light trails
+      for (const s of [0.20, 0.24, 0.28, 0.32, 0.38, 0.42, 0.46, 0.80, 0.84, 0.88]) {
         const a = anchor(K(s), 1, 42);
-        for (let i = 0; i < 10; i++) {
-          const c = vadd(vadd(a.c, a.t, (i - 2) * 12), a.u, 0.35);
-          addBox(out, c, [8, 0.5, 3.2], NEON[(i + K(s)) % 4], [a.r, a.u, a.t]);
+        for (let i = 0; i < 12; i++) {
+          const c = vadd(vadd(a.c, a.t, (i - 3) * 10), a.u, 0.38);
+          const hue = (i + Math.round(s * 17)) % 4;
+          const intensity = 0.3 + Math.sin(i * 0.8) * 0.2;
+          const col = [NEON[hue][0] * intensity, NEON[hue][1] * intensity, NEON[hue][2] * intensity];
+          addBox(out, c, [6.5, 0.4, 2.8], col, [a.r, a.u, a.t]);
         }
       }
 
@@ -282,27 +361,35 @@
 
       // ===================================================================
       // FLOODLIGHT MASTS — dense banks of tall lighting rigs ringing the lap
-      // (the defining Marina Bay night look). Engine adds basic ones every 70 m;
-      // these are taller hero masts with multi-lamp heads every ~110 m, offset
-      // so they never coincide with the engine set.
+      // (the defining Marina Bay night look). Hero masts with multi-lamp heads,
+      // staggered every ~110 m for dense, dramatic stadium-style lighting.
       // ===================================================================
-      every(110, (k) => {
+      every(90, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 3 + side) < 0.35) return;   // skip some for variation (not on tarmac path)
-          const a = anchor(k, side, 13 + hash(k + side) * 4);
-          const H = 17 + hash(k * 7 + side) * 6;
-          addCyl(out, vadd(a.c, a.u, H / 2), 0.45, H, [0.10, 0.11, 0.14], 6, [a.r, a.u, a.t]); // mast
-          // angled head bar with a row of lamps
+          if (hash(k * 3 + side) < 0.32) return;   // skip some for variation
+          const a = anchor(k, side, 12 + hash(k + side) * 5);
+          const H = 18 + hash(k * 7 + side) * 7;
+          addCyl(out, vadd(a.c, a.u, H / 2), 0.48, H, [0.10, 0.10, 0.13], 6, [a.r, a.u, a.t]); // mast
+          // angled head bar with array of powerful lamps
           const head = vadd(a.c, a.u, H);
-          addBox(out, head, [5.5, 0.8, 1.6], [0.14, 0.14, 0.17], [a.r, a.u, a.t]);
-          for (let j = -2; j <= 2; j++)
-            addBox(out, vadd(head, a.r, j * 1.1), [1.28, 1.28, 0.75], [1.0, 0.96, 0.82], [a.r, a.u, a.t]);
+          addBox(out, head, [6.2, 0.85, 1.8], [0.12, 0.12, 0.15], [a.r, a.u, a.t]);
+          // 5 bright floodlamps along the bar
+          for (let j = -2; j <= 2; j++) {
+            const lampC = vadd(head, a.r, j * 1.2);
+            addBox(out, lampC, [1.35, 1.35, 0.8], [1.0, 0.97, 0.80], [a.r, a.u, a.t]);
+            // extra glow ring around each lamp for night effect
+            if (j % 2 === 0) {
+              addBox(out, vadd(lampC, a.u, 0.7), [1.8, 0.2, 1.1], [0.95, 0.92, 0.75], [a.r, a.u, a.t]);
+            }
+          }
+          // base support strut
+          addBox(out, vadd(a.c, a.u, 1.5), [3.6, 1.2, 2], [0.15, 0.15, 0.18], [a.r, a.u, a.t]);
         }
       });
 
       // ===================================================================
       // MAIN STRAIGHT — pit building (L) + Float@Marina Bay grandstands with
-      // crowds (R), start gantry, marshal posts.
+      // crowds (R), start gantry, marshal posts. Night detail.
       // ===================================================================
       // Pit building — long low garage block on the left of the start straight.
       {
@@ -310,10 +397,14 @@
           const k = K(0.965 + i * 0.012);
           building(k, -1, 9, 16, 9, 12, { wall: [0.16, 0.17, 0.22], window: WIN_WARM, floor: 4 });
         }
-        // pit wall (low) and a lit timing tower
+        // pit wall (low) and a tall lit timing tower — the control center
         const a = anchor(K(0.99), -1, 26);
         addBox(out, vadd(a.c, a.u, 16), [10, 32, 10], [0.13, 0.14, 0.18], [a.r, a.u, a.t]);
+        // bright cyan-lit tower cap visible from all viewing angles
         addBox(out, vadd(a.c, a.u, 22), [10.4, 12, 10.4], WIN_CYAN, [a.r, a.u, a.t]);
+        // vertical accent lights on tower
+        addBox(out, vadd(a.c, a.u, 18), [1.2, 8, 10.8], [0.35, 0.65, 1.0], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 26), [1.2, 6, 10.8], [0.4, 0.6, 0.95], [a.r, a.u, a.t]);
       }
       // Float@Marina Bay grandstands on the right of the main straight — the
       // famous floating platform stands packed with crowd.

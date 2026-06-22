@@ -28,7 +28,7 @@
       const { out, n, px, py, pz, hw, pyMin, place, prop, hash, onTrack,
               mountain, grandstand, building, tower, tree, bush, hedge,
               billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
-              addBox, addCyl, addCone, anchor, vadd } = api;
+              addBox, addCyl, addCone, addPrism, anchor, vadd } = api;
 
       const WHITE = [0.90, 0.92, 0.94], GLASS = [0.62, 0.74, 0.82];
       const CONCRETE = [0.74, 0.75, 0.77], OLIVE = [0.42, 0.48, 0.30];
@@ -305,6 +305,98 @@
       // ── (13) SPANISH COLOUR ACCENT billboards near the pit straight ──
       billboard(Math.round(0.01 * n) % n, 1, 14, 12, 5, [0.85, 0.15, 0.12]);   // Spanish red
       billboard(Math.round(0.04 * n) % n, -1, 12, 12, 5, [0.92, 0.72, 0.08]);  // Spanish gold
+
+      // ── (14) ENHANCED URBAN TOWERS: additional modern Madrid skyline density
+      //     Cuatro Torres-style cluster + secondary ring of mid-rise commercial blocks. ──
+      // Secondary mid-rise ring (40–60 m typical Madrid commercial)
+      {
+        const ring = rad + 450, count = 40;
+        for (let i = 0; i < count; i++) {
+          const a = i / count * 6.2832 + (hash(i * 11) - 0.5) * 0.08;
+          const jr = (hash(i * 13) - 0.5) * 140;
+          const wx = cx + Math.cos(a) * (ring + jr), wz = cz + Math.sin(a) * (ring + jr);
+          if (onTrack(wx, wz, 25)) continue;
+          const h = 32 + hash(i * 6) * 50;
+          const w = 18 + hash(i * 14) * 20;
+          cityTower(wx, wz, w, h, skyPal[(i + 5) % skyPal.length], hash(i * 23) > 0.60);
+        }
+      }
+
+      // ── (15) CASTILIAN BACKGROUND RIDGE: faint far horizon range ~900m back ──
+      // The Sierra de Guadarrama on the far eastern/northern edge, very low detail.
+      for (let i = 0; i < 12; i++) {
+        const ang = i / 12 * 6.2832 + (hash(i * 29) - 0.5) * 0.3;
+        const distRing = rad + 950;
+        const peakx = cx + Math.cos(ang) * distRing;
+        const peakz = cz + Math.sin(ang) * distRing;
+        if (!onTrack(peakx, peakz, 140)) {
+          mountain(peakx, peakz, pyMin - 10,
+                   180 + hash(i * 37) * 140, 240 + hash(i * 41) * 180,
+                   { seg: 4, seed: i * 17, snowline: 1.2, rock: [0.58, 0.60, 0.64],
+                     forest: [0.50, 0.52, 0.50] });
+        }
+      }
+
+      // ── (16) ENHANCED URBAN GREENERY: Madrid plane trees & shrub corners
+      //     Clipped formal hedges marking sector transitions (modern urban design). ──
+      hedge(0.10, 0.25, -1, 8, 1.8, [0.32, 0.44, 0.28]);    // northern approach
+      hedge(0.32, 0.42, 1, 10, 1.8, [0.32, 0.44, 0.28]);     // elevated sector
+      hedge(0.54, 0.62, -1, 9, 1.7, [0.32, 0.44, 0.28]);     // Búnker to Monumental edge
+      // Avenue trees (broader spacing for modern street design)
+      for (let i = 0; i < n; i += 5) {
+        const f = i / n;
+        const inUrban = (f < 0.25) || (f > 0.30 && f < 0.60) || (f > 0.88);
+        if (!inUrban) continue;
+        for (const side of [-1, 1]) {
+          if (hash(i * 11 + side * 5) > 0.65) continue;
+          const d = 12 + hash(i * 6 + side) * 6;
+          if (onTrack(px[i], pz[i], 15)) continue;
+          tree(i, side, d, 6 + hash(i * 4) * 3.5, [0.28, 0.42, 0.24]);
+        }
+      }
+
+      // ── (17) MADRID MODERNIST PAVILION: secondary modern structure s≈0.12–0.18
+      //     Near the pit approach — a glass-fronted pavilion box (modern IFEMA style). ──
+      for (let s = 0.12; s < 0.19; s += 0.025) {
+        const f = s % 1, k = Math.round(f * n) % n;
+        const A = anchor(k, -1, hw[k] + 24);
+        if (!onTrack(A.c[0], A.c[2], 16))
+          addBox(out, vadd(A.c, A.u, 12), [32, 24, 18], [0.75, 0.76, 0.78], [A.r, A.u, A.t]);
+        // front glass curtain
+        if (!onTrack(A.c[0], A.c[2], 10))
+          addBox(out, vadd(vadd(A.c, A.u, 10), A.t, -2), [32, 20, 1.6], [0.35, 0.45, 0.55], [A.r, A.u, A.t]);
+      }
+
+      // ── (18) PARKING & SERVICE AREA GEOMETRY: s≈0.18–0.28
+      //     Flat grey concrete slabs (large surface parking, service roads). ──
+      for (let i = 0; i < 6; i++) {
+        const f = 0.18 + i * 0.015;
+        const k = Math.round(f * n) % n;
+        for (const side of [-1, 1]) {
+          const dist = 35 + i * 2;
+          const A = anchor(k, side, dist);
+          if (!onTrack(A.c[0], A.c[2], 12))
+            addBox(out, vadd(A.c, A.u, 0.1), [70, 0.25, 45], [0.60, 0.60, 0.62], [A.r, A.u, A.t]);
+        }
+      }
+
+      // ── (19) ENHANCED BARRIER CAPS: bright coloured tyre-wall caps at key zones
+      //     Red/yellow paint on the chicanes and technical corners. ──
+      tyreWall(0.077, 0.095, 1, 3, [0.92, 0.28, 0.18]);      // T1 entry—red
+      tyreWall(0.14, 0.17, -1, 3, [0.95, 0.75, 0.15]);       // T2 exit—yellow
+      tyreWall(0.52, 0.56, 1, 3, [0.90, 0.35, 0.22]);        // Búnker mid—red
+      tyreWall(0.72, 0.77, 1, 3, [0.88, 0.32, 0.20]);        // Monumental entry—red
+
+      // ── (20) MODERN ROOF CANOPIES: glass/metal structures over select grandstand areas
+      //     Lightweight contemporary design covering (s≈0.88–0.94). ──
+      for (const frac of [0.88, 0.90, 0.92]) {
+        const k = Math.round(frac * n) % n;
+        const A = anchor(k, 1, hw[k] + 28);
+        if (!onTrack(A.c[0], A.c[2], 20)) {
+          // swept-roof canopy: triangular profile
+          addPrism(out, vadd(A.c, A.u, 8), [35, 4, 32], [0.50, 0.62, 0.72], [A.r, A.u, A.t]);
+        }
+      }
     },
   }
   );

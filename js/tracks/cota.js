@@ -13,7 +13,7 @@
     theme: "green",
     lengthKm: 5.5,
     baseHW: 8,
-    pal: { zenith: [0.24, 0.5, 0.84], horizon: [0.76, 0.7, 0.54], grass: [0.34, 0.4, 0.14], runoff: [0.6, 0.35, 0.2], ambientSky: [0.52, 0.58, 0.68], ambientGround: [0.28, 0.28, 0.24], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
+    pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.36, 0.44, 0.20], runoff: [0.58, 0.38, 0.24], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
     segs: [
       { t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 },
       { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 }, { t: 0, l: 460 },
@@ -76,32 +76,46 @@
       // pit-lane low boundary wall along the straight (inside, R)
       wall(0.92, 0.10, 1, 3, 1.0, [0.90, 0.90, 0.92], 0.5);
 
-      // ---- 76 m Observation Tower — the hero at Turn 1 (s≈0.085, L far) ----
-      // Real COTA tower: tapered concrete shaft + cantilevered ring deck + red mast.
+      // ---- COTA Observation Tower — the iconic 77m red structure at Turn 1 (s≈0.085, L far) ----
+      // Real COTA tower: tapered concrete/steel shaft + broad deck with red railings + viewing platform.
       const kt = K(0.085);
       const at = anchor(kt, -1, 78), tb = [at.r, at.u, at.t];
       const tBase = at.c;
-      // tapered concrete shaft — ~50% taller than original 84 m, now ~126 m
-      addFrustum(out, vadd(tBase, at.u, 0), 6.5, 5.2, 42, [0.86, 0.86, 0.89], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 42), 5.2, 4.2, 42, [0.84, 0.84, 0.88], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 84), 4.2, 3.4, 30, [0.82, 0.82, 0.86], 8, tb);
-      // cantilevered viewing-deck ring near the top — wider platform box
-      addCyl(out, vadd(tBase, at.u, 110), 9, 5, [0.62, 0.64, 0.70], 10, tb);
-      addCyl(out, vadd(tBase, at.u, 111.5), 9.6, 1.6, glass, 10, tb);   // glass band
-      // viewing platform box — wider than the tower shaft
-      addBox(out, vadd(tBase, at.u, 113), [22, 3.5, 22], [0.72, 0.74, 0.78], tb);
-      // lit cap + crown
-      addCone(out, vadd(tBase, at.u, 116), 6, 6, [0.55, 0.57, 0.62], 10, tb);
-      addCyl(out, vadd(tBase, at.u, 122), 0.5, 14, redSteel, 6, tb);    // red mast
-      addBox(out, vadd(tBase, at.u, 135), [1.4, 1.4, 1.4], [1.0, 0.85, 0.4], tb); // lit beacon
-      // small white support facility at the tower base
-      prop(kt, -1, 70, [12, 7, 14], [0.86, 0.86, 0.88]);
-      prop(kt, -1, 88, [10, 5, 10], [0.80, 0.80, 0.83]);
+      // tapered concrete/steel shaft (actual is ~77 m)
+      addFrustum(out, vadd(tBase, at.u, 0), 5.8, 4.6, 35, [0.80, 0.81, 0.85], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 35), 4.6, 3.8, 35, [0.78, 0.79, 0.83], 8, tb);
+      addFrustum(out, vadd(tBase, at.u, 70), 3.8, 3.0, 8, [0.76, 0.77, 0.81], 8, tb);
+      // broad observation deck near the top — iconic RED steel with railings
+      addCyl(out, vadd(tBase, at.u, 75), 8.6, 2.2, redSteel, 10, tb);   // main deck ring
+      addBox(out, vadd(tBase, at.u, 76.5), [18, 1.8, 18], [0.92, 0.92, 0.94], tb);  // deck floor (light grey)
+      // upper viewing platform — slightly raised, open-sided
+      addCyl(out, vadd(tBase, at.u, 78.2), 7.2, 2, [0.74, 0.76, 0.82], 8, tb);
+      // red railing segments around the deck edge (colourful from distance)
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * 6.2832;
+        const ox = Math.cos(ang) * 8.8, oz = Math.sin(ang) * 8.8;
+        addBox(out, vadd(vadd(tBase, at.t, ox), vadd(at.r, [0, 0, 0], oz)),
+               [0.6, 1.2, 1.2], redSteel, tb);
+      }
+      // crown cap
+      addCone(out, vadd(tBase, at.u, 80.2), 4.6, 4, [0.65, 0.66, 0.70], 8, tb);
+      // slender red antenna mast on top
+      addCyl(out, vadd(tBase, at.u, 84.2), 0.35, 12, redSteel, 5, tb);
+      // beacon light at the very top
+      addBox(out, vadd(tBase, at.u, 96.2), [1.0, 1.0, 1.0], [1.0, 0.80, 0.2], tb);
+      // base facilities: small white operator/support buildings at tower base
+      prop(kt, -1, 60, [14, 6, 16], [0.86, 0.86, 0.88]);
+      prop(kt, -1, 80, [11, 5, 12], [0.80, 0.80, 0.83]);
 
-      // ---- Uphill Turn 1: red-soil bank rising at the apex (s≈0.10, R mid) ----
+      // ---- Uphill Turn 1: dramatic red-soil embankment + amphitheatre mounding ----
       const k1 = K(0.10);
       const a1 = anchor(k1, 1, 14), b1 = [a1.r, a1.u, a1.t];
-      addPrism(out, vadd(a1.c, a1.u, 5), [22, 10, 60], redSoil, [a1.t, a1.u, a1.r]);
+      // main ascending earth bank on the inside of the turn
+      addPrism(out, vadd(a1.c, a1.u, 5), [24, 12, 70], redSoil, [a1.t, a1.u, a1.r]);
+      // large outer mound with red earth on the left side of the hill
+      const k1L = K(0.10);
+      const a1L = anchor(k1L, -1, 20), b1L = [a1L.r, a1L.u, a1L.t];
+      addPrism(out, vadd(a1L.c, a1L.u, 4), [32, 8, 80], [0.58, 0.32, 0.22], [a1L.t, a1L.u, a1L.r]);
 
       // ---- Esses spectator mounds flanking the track (s≈0.18, both, far) ----
       const ke = K(0.18);
@@ -223,14 +237,32 @@
         }
       }
 
-      // ---- Texas water tower — a regional silhouette landmark (s≈0.36, R far) ----
-      const kw = K(0.36), aw = anchor(kw, 1, 95), wb = [aw.r, aw.u, aw.t];
-      if (!onTrack(aw.c[0], aw.c[2], 30)) {
-        for (const leg of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) {
-          addCyl(out, vadd(vadd(aw.c, aw.r, leg[0]), aw.t, leg[1]), 0.5, 18, [0.7, 0.72, 0.74], 4, wb);
+      // ---- Velocity Tower — iconic orange/yellow landmark (s≈0.36, R far) ----
+      const kv = K(0.36), av = anchor(kv, 1, 95), vb = [av.r, av.u, av.t];
+      if (!onTrack(av.c[0], av.c[2], 30)) {
+        // steel lattice tower with colored panels — distinctive Austin landmark
+        addFrustum(out, vadd(av.c, av.u, 0), 8, 6.5, 28, [0.32, 0.34, 0.38], 6, vb);
+        // bright orange/yellow band wrapping the tower
+        addFrustum(out, vadd(av.c, av.u, 28), 6.5, 5.5, 4, [0.95, 0.65, 0.15], 8, vb);
+        // continuation of the tower above the band
+        addFrustum(out, vadd(av.c, av.u, 32), 5.5, 4.5, 18, [0.32, 0.34, 0.38], 6, vb);
+        // colored crown cap — red/orange accent
+        addCone(out, vadd(av.c, av.u, 50), 4.5, 6, [0.88, 0.40, 0.20], 8, vb);
+        // antenna spire
+        addCyl(out, vadd(av.c, av.u, 56), 0.3, 8, [0.30, 0.32, 0.36], 4, vb);
+      }
+
+      // ---- Texas water tower — a regional silhouette landmark (s≈0.68, L far) ----
+      const kw = K(0.68), aw = anchor(kw, -1, 110), wb = [aw.r, aw.u, aw.t];
+      if (!onTrack(aw.c[0], aw.c[2], 35)) {
+        // classic elevated water tank on four steel legs
+        for (const leg of [[-3.5, -3.5], [3.5, -3.5], [-3.5, 3.5], [3.5, 3.5]]) {
+          addCyl(out, vadd(vadd(aw.c, aw.r, leg[0]), aw.t, leg[1]), 0.45, 20, [0.68, 0.70, 0.76], 4, wb);
         }
-        addFrustum(out, vadd(aw.c, aw.u, 18), 7, 5, 6, [0.82, 0.84, 0.86], 10, wb);
-        addCone(out, vadd(aw.c, aw.u, 24), 5, 4, [0.6, 0.62, 0.66], 10, wb);
+        // main tank cylinder
+        addFrustum(out, vadd(aw.c, aw.u, 20), 7.5, 7.2, 8, [0.82, 0.84, 0.88], 12, wb);
+        // tank dome cap
+        addCone(out, vadd(aw.c, aw.u, 28), 7.2, 5, [0.72, 0.74, 0.80], 12, wb);
       }
 
       // ---- Texas Hill Country ridgelines — LOW organic hills on the horizon ----
@@ -251,47 +283,59 @@
       }
 
       // CONTINUOUS Texas Hill Country backdrop: three overlapping rings of LOW
-      // organic hills, spaced so wide bases overlap into an unbroken green/tan
-      // band that wraps the WHOLE lap — no gaps, no snow, never tall.
+      // organic rolling hills, spaced for unbroken green/tan visual band around lap.
+      // Emphasizes the dry grassland and cedar/oak coverage of the real venue.
       for (const [extra, wMin, hMin, count, col] of [
-        [160, 220, 26, 44, dryGrass],                 // near continuous dry-green band
-        [340, 280, 38, 38, [0.50, 0.54, 0.42]],       // mid tan-green band
-        [540, 340, 50, 32, [0.46, 0.52, 0.46]],       // far hazed band
+        [150, 240, 28, 48, [0.42, 0.50, 0.28]],          // near ring: dry grass + scrub
+        [340, 300, 42, 42, [0.48, 0.54, 0.40]],          // mid ring: tan-green band
+        [560, 360, 54, 36, [0.44, 0.50, 0.42]],          // far ring: hazy green (depth)
       ]) {
         const ring = rad + extra;
         for (let i = 0; i < count; i++) {
-          // half-step alternation pulls each hill toward its neighbour's gap
+          // half-step offset for seamless coverage
           const a = (i + (i % 2) * 0.5) / count * 6.2832, h = hash(i * 7 + extra);
+          const hillOpts = {
+            seed: i * 3 + extra,
+            snowline: 3,  // never snow (Texas Hill Country)
+            forest: col,
+            rock: [Math.max(0.4, col[0] * 0.88), Math.max(0.35, col[1] * 0.88), Math.max(0.28, col[2] * 0.80)]
+          };
           mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                   wMin + h * 100, hMin + h * 20,
-                   { seed: i * 3 + extra, snowline: 2, forest: col, rock: [col[0] * 0.92, col[1] * 0.9, col[2] * 0.82] });
+                   wMin + h * 110, hMin + h * 24, hillOpts);
         }
       }
 
-      // ================= AUSTIN SKYLINE (s 0.30–0.60, L far) =================
-      // 7 buildings at 200–300 m on side=-1, varying heights 60–120 m.
+      // ================= AUSTIN SKYLINE (s 0.30–0.65, L far) =================
+      // Iconic Austin downtown skyline visible from the south side of the circuit.
+      // 9 buildings at 220–300 m distance, varying heights 60–130 m (modern steel + glass).
       {
-        const AUSTIN_WALL = [0.55, 0.58, 0.62];
-        const AUSTIN_WIN  = [0.35, 0.42, 0.52];
+        const AUSTIN_WALL = [0.52, 0.56, 0.62];
+        const AUSTIN_WIN  = [0.32, 0.40, 0.54];
+        const AUSTIN_STEEL = [0.48, 0.50, 0.58];
         const skylineData = [
-          [0.30, -1, 220,  18, 65],
-          [0.35, -1, 260,  20, 95],
-          [0.40, -1, 200,  16, 75],
-          [0.45, -1, 280,  22, 115],
-          [0.50, -1, 240,  18, 85],
-          [0.55, -1, 210,  20, 60],
-          [0.60, -1, 270,  24, 100],
+          [0.28, -1, 240,  16, 62],       // left edge
+          [0.32, -1, 280,  22, 88],       // rising
+          [0.36, -1, 210,  18, 72],       // variation
+          [0.40, -1, 300,  24, 120],      // tall centerpiece
+          [0.45, -1, 260,  20, 95],       // peak cluster
+          [0.50, -1, 230,  19, 85],       // falling sequence
+          [0.55, -1, 270,  21, 100],
+          [0.60, -1, 220,  18, 78],
+          [0.65, -1, 290,  23, 110],      // right edge tall
         ];
         for (const [s, side, dist, w, h] of skylineData) {
           building(K(s), side, dist, w, h, w,
-            { wall: AUSTIN_WALL, window: AUSTIN_WIN, floor: Math.round(h / 15) });
+            { wall: AUSTIN_STEEL, window: AUSTIN_WIN, floor: Math.round(h / 12) });
         }
       }
 
-      // ================= EXTRA BACK-SECTOR GRANDSTANDS (amphitheatre feel) =================
-      // Two more grandstand calls near s=0.45–0.55 to increase seating density.
-      grandstand(0.47, -1, 18, 66, [0.38, 0.39, 0.44], [0.50, 0.50, 0.54]);
-      grandstand(0.52, 1, 20, 58, [0.36, 0.37, 0.42], [0.52, 0.50, 0.50]);
+      // ================= EXTRA GRANDSTANDS (amphitheatre + field stands) =================
+      // Enhanced T1 hill amphitheatre: three-tier seating on the famous climb
+      grandstand(0.07, -1, 14, 80, [0.42, 0.43, 0.48], [0.50, 0.50, 0.54]);
+      grandstand(0.11, -1, 24, 70, [0.40, 0.41, 0.46], [0.52, 0.50, 0.50]);
+      // back-sector stands for race viewing
+      grandstand(0.47, -1, 18, 68, [0.38, 0.39, 0.44], [0.50, 0.50, 0.54]);
+      grandstand(0.52, 1, 20, 60, [0.36, 0.37, 0.42], [0.52, 0.50, 0.50]);
 
       // ================= TEXAS VEGETATION — sage scrub + live oaks =================
       // Outer-side only: olive/sage scrub every ~22 m, with occasional live oak.
