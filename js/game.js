@@ -2677,7 +2677,8 @@ function firstGesture() {
   GameAudio.init();
   GameAudio.setEnabled(soundOn);
   GameAudio.setMusicEnabled(musicEnabled);
-  enableTilt();
+  // Tilt permission is requested at race start (rs-go click), not here — so the
+  // gyro prompt and button fallback don't appear on the title screen.
   if (soundOn) GameAudio.startMusic(-1);
 }
 let gestured = false;
@@ -3009,7 +3010,9 @@ function setSteerMode(mode) {
   $("pm-steer").textContent = steerLabel();
   $("pm-calib").hidden = mode !== "tilt";
   refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle hides off-tilt
-  showTouchControls(true);
+  // Only refresh touch buttons when in an active race — don't bleed controls onto
+  // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
+  if (state === "race" || state === "count" || state === "pause") showTouchControls(true);
 }
 $("pm-steer").onclick = () => {
   setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);

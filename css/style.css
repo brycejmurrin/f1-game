@@ -759,7 +759,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     align-items: center; align-content: center; justify-items: start;
     gap: 3px 28px; padding: 8px 24px; overflow: hidden;
   }
-  #title { grid-column: 1; font-size: clamp(22px, 6vw, 42px); margin: 0; }
+  #title { grid-column: 1; font-size: clamp(22px, 6vw, 42px); margin: 0; margin-left: clamp(20px, 5vw, 60px); }
   #title::after { height: 3px; }
   #subtitle { grid-column: 1; margin: 3px 0 0; font-size: 11px; }
   #audiostate { grid-column: 1; font-size: 10px; margin-top: 3px; min-height: 0; }
