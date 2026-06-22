@@ -127,27 +127,12 @@ const Input = (function () {
   /* ---------------- tilt ---------------- */
 
   function screenAngle() {
-    let angle = 0;
     if (typeof screen !== "undefined" && screen.orientation &&
         typeof screen.orientation.angle === "number") {
-      angle = screen.orientation.angle;
-    } else if (typeof window.orientation === "number") {
-      angle = window.orientation;
+      return screen.orientation.angle;
     }
-    // CSS software rotation (body.sw-landscape) adds an effective 90° CW rotation
-    // without firing a real orientationchange, so compensate here to keep tilt axes correct.
-    // Only add the +90° when the device itself reports portrait (angle ≈ 0°): if it
-    // already reports landscape (90°), adding another 90° would give 180° and map the
-    // wrong gravity axis — causing steer to read near-zero no matter how the phone is
-    // tilted (the "always follows racing line" bug on devices that retain sw-landscape
-    // in localStorage but then physically rotate to landscape).
-    const normalised = ((angle % 360) + 360) % 360;
-    if (typeof document !== "undefined" && document.body &&
-        document.body.classList.contains("sw-landscape") &&
-        (normalised < 45 || normalised > 315)) {
-      angle = (angle + 90) % 360;
-    }
-    return angle;
+    if (typeof window.orientation === "number") return window.orientation;
+    return 0;
   }
 
   function onOrient(e) {

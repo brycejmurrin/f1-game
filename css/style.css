@@ -929,29 +929,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
   body.in-race #rotate-device { display: flex; }
 }
 
-/* Software landscape rotation — CSS fallback for browsers where Screen Orientation
-   API isn't available (iOS Safari, desktop). Only activates in portrait mode so a
-   device already held in landscape is unaffected.
-   Mechanics: body is given landscape dimensions (width=100vh, height=100vw) and
-   rotated 90°. Because a CSS transform turns body into the fixed-position containing
-   block, all fixed children (canvas, overlays, HUD) inherit the rotated coordinate
-   space and resize to the landscape dimensions automatically. The renderer's resize
-   handler then reads canvas.clientWidth/clientHeight as landscape values and
-   re-renders at the correct resolution. */
-@media (orientation: portrait) {
-  body.sw-landscape {
-    position: fixed;
-    width: 100vh;
-    height: 100vw;
-    top: calc((100vh - 100vw) / 2);
-    left: calc((100vw - 100vh) / 2);
-    transform: rotate(90deg);
-    transform-origin: center center;
-    overflow: hidden;
-  }
-  /* Suppress the "rotate device" overlay — we're already showing landscape. */
-  body.sw-landscape #rotate-device { display: none !important; }
-}
 
 /* ---------- season standings overlay ---------- */
 #standings { max-width: min(92vw, 540px); max-height: 80vh; }

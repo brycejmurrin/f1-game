@@ -141,7 +141,7 @@ let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{i
 
 // ---------- physics constants ----------
 const VMAX = 72;            // m/s base (~259 km/h) — F1 race pace; scales all speeds
-const ACCEL = 10;           // m/s^2 at low speed
+const ACCEL = 7;            // m/s^2 at low speed
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
@@ -219,7 +219,7 @@ const BODY_ROLL_MAX = 0.06;   // rad (~3.4°) max chassis lean at full lateral g
 const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
 const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 18;         // crawl speed on grass
-const DEPLOY_A = 4.0;       // extra accel from electric deploy
+const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
@@ -2706,72 +2706,6 @@ function setMusic(b) {
 }
 $("pm-music").onclick = () => setMusic(!musicEnabled);
 
-// Screen orientation lock: cycles LANDSCAPE → PORTRAIT → AUTO.
-// Primary path: Screen Orientation API + Fullscreen API (requires fullscreen on
-// non-PWA browsers). Fallback path: CSS software rotation (body.sw-landscape)
-// for browsers that don't support the API (iOS Safari, desktop).
-// Tilt steering is compatible: Input.onOrient() reads screen.orientation.angle
-// each sample and remaps gravity axes for all four orientations. The orientation
-// change event in input.js also auto-recalibrates tilt 300 ms after a lock.
-const ORIENT_STATES = [
-  { label: "LANDSCAPE", lock: "landscape" },
-  { label: "PORTRAIT",  lock: "portrait"  },
-  { label: "AUTO",      lock: null        },
-];
-let orientIdx = Math.min(store.get("orientLock", 0), ORIENT_STATES.length - 1);
-function updateOrientBtn() {
-  const st = ORIENT_STATES[orientIdx];
-  const sw = document.body.classList.contains("sw-landscape");
-  $("pm-orient").textContent = "SCREEN: " + st.label + (sw ? " *" : "");
-}
-// Apply CSS software-landscape rotation and notify the renderer of the new size.
-// RAF defers the resize event until after the CSS transform layout pass completes,
-// ensuring canvas.clientWidth/Height reflect the rotated dimensions.
-function applySWLandscape(on) {
-  document.body.classList.toggle("sw-landscape", on);
-  store.set("swLandscape", on ? 1 : 0);
-  requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
-}
-// Restore CSS rotation immediately (no gesture needed).
-if (store.get("swLandscape", 0)) applySWLandscape(true);
-updateOrientBtn();
-async function cycleOrient() {
-  orientIdx = (orientIdx + 1) % ORIENT_STATES.length;
-  store.set("orientLock", orientIdx);
-  const { lock } = ORIENT_STATES[orientIdx];
-  // Always clear CSS rotation first; re-apply below if API lock fails.
-  applySWLandscape(false);
-  if (!lock) {
-    screen.orientation?.unlock?.();
-  } else {
-    let apiOk = false;
-    try {
-      if (!document.fullscreenElement)
-        await document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
-      if (typeof screen.orientation?.lock === "function") {
-        await screen.orientation.lock(lock);
-        apiOk = true;
-      }
-    } catch (e) { /* API unavailable or fullscreen blocked */ }
-    // CSS fallback: software-rotate into landscape when the API can't.
-    if (!apiOk && lock === "landscape") applySWLandscape(true);
-  }
-  updateOrientBtn();
-}
-$("pm-orient").onclick = cycleOrient;
-// Restore API-based lock after the first user gesture (lock requires activation).
-if (orientIdx > 0 && !store.get("swLandscape", 0)) {
-  const saved = ORIENT_STATES[orientIdx].lock;
-  if (saved) {
-    document.addEventListener("pointerdown", async () => {
-      try {
-        if (!document.fullscreenElement)
-          await document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
-        await screen.orientation?.lock?.(saved);
-      } catch (e) {}
-    }, { once: true, capture: true });
-  }
-}
 
 $("mb-race").onclick = () => {
   seasonMode = false; timeTrial = false;
