@@ -1038,12 +1038,17 @@ const Tracks = (function () {
         console.warn(`[scenery] pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
+      // per-instance size jitter so a treeline doesn't read as identical clones
+      const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
+      const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
       addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
       let y = h * 0.3;
-      for (let i = 0; i < 3; i++) {
-        const w = 2.6 * (1 - i * 0.27);
-        addCone(out, vadd(a.c, a.u, y), w, h * 0.34, col, 7, b);
-        y += h * 0.22;
+      // 4 stacked cones (was 3) — adds a fuller silhouette for little cost; the
+      // lowest skirt cone uses a darker shade for depth.
+      for (let i = 0; i < 4; i++) {
+        const w = 2.7 * j * (1 - i * 0.21);
+        addCone(out, vadd(a.c, a.u, y), w, h * 0.32, i === 0 ? c2 : col, 7, b);
+        y += h * 0.18 * j;
       }
     };
     // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
@@ -1053,9 +1058,15 @@ const Tracks = (function () {
         console.warn(`[scenery] tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
+      // per-instance jitter so adjacent broadleaves vary in size/shape
+      const j = 0.85 + hash(k * 2.9 + side * 1.7 + dist) * 0.3;
+      const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
-      addCone(out, vadd(a.c, a.u, h * 0.32), 2.8 + h * 0.12, h * 0.5, col, 8, b);
-      addCone(out, vadd(a.c, a.u, h * 0.62), 1.8 + h * 0.06, h * 0.32, col, 7, b);
+      // three rounded layers (was two): squat base + mid + sunlit cap give the
+      // canopy more volume without a big vertex hit.
+      addCone(out, vadd(a.c, a.u, h * 0.30), (2.9 + h * 0.12) * j, h * 0.46, col, 8, b);
+      addCone(out, vadd(a.c, a.u, h * 0.52), (2.2 + h * 0.08) * j, h * 0.34, col, 7, b);
+      addCone(out, vadd(a.c, a.u, h * 0.74), (1.4 + h * 0.05) * j, h * 0.26, c2, 6, b);
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.
     const palm = (k, side, dist, h, frond) => {
@@ -1213,6 +1224,39 @@ const Tracks = (function () {
         addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, 4.3], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);
       });
     };
+    // forestEdge(): a DENSE treeline (mix of pine/tree) from s0→s1 on `side`,
+    // GUARANTEED not to clip barriers. Foliage is placed so the canopy's INNER
+    // edge stays at least `gap` beyond the road edge — i.e. the per-tree `dist`
+    // accounts for the canopy radius (which grows with tree height), so a tree
+    // called at small gap can never poke its canopy through a wall/hedge/fence.
+    //   opts: { density, hMin, hMax, col, col2, pineFrac }
+    const forestEdge = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const hMin = opts.hMin != null ? opts.hMin : 7;
+      const hMax = opts.hMax != null ? opts.hMax : 13;
+      const pineCol = opts.col || [0.16, 0.36, 0.16];
+      const treeCol = opts.col2 || [0.20, 0.40, 0.16];
+      const pineFrac = opts.pineFrac != null ? opts.pineFrac : 0.55;
+      // density 0..1 → step 7m (sparse) … 3m (dense). Default ~medium-dense.
+      const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.7;
+      const step = 7 - dens * 4;
+      along(s0, s1, step, (k) => {
+        const s = hash(k * 4.3 + side * 1.1);
+        const h = hMin + s * (hMax - hMin);
+        const isPine = hash(k * 6.7 + side * 0.7) < pineFrac;
+        // Canopy outer radius: pine peaks at ~2.7*1.15 (jitter max) for its widest
+        // skirt cone; tree's base cone is (2.9 + h*0.12)*1.15. Add a small margin.
+        const jMax = 1.15;
+        const canopyR = isPine ? 2.7 * jMax + 0.4
+                               : (2.9 + h * 0.12) * jMax + 0.4;
+        // dist so the canopy's inner edge sits `gap` beyond the road edge
+        const dist = gap + canopyR;
+        // stagger a back row slightly for depth on the densest treelines
+        const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopyR * 1.4 : 0;
+        if (isPine) pine(k, side, dist + back, h, pineCol);
+        else        tree(k, side, dist + back, h, treeCol);
+      });
+    };
 
     // ---------- structures ----------
     // Multi-storey building: mass + horizontal window bands + optional setback top.
@@ -1230,15 +1274,57 @@ const Tracks = (function () {
         console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (inner face on track)`);
         return;
       }
-      const body = opts.wall || [0.62, 0.64, 0.68], win = opts.window || [0.18, 0.26, 0.34];
+      const body = opts.wall || [0.62, 0.64, 0.68];
+      // Lit (night) buildings: bright glazing so windows read as illuminated.
+      // A few floors are scattered "dark" (unlit rooms) via hash for realism.
+      // Unlit default: dark glass band, identical to the original behaviour.
+      const litWin = opts.windowCol || [0.95, 0.85, 0.55];   // warm bright default
+      const dark = [0.10, 0.11, 0.15];
+      const win = opts.lit ? litWin : (opts.window || [0.18, 0.26, 0.34]);
       if (addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], body, b) === false) return;  // on-track: dropped whole
       const floors = Math.max(2, Math.round(h / (opts.floor || 4)));
       for (let i = 0; i < floors; i++) {
-        addBox(out, vadd(p.c, p.u, (i + 0.62) * (h / floors)), [w * 1.01, (h / floors) * 0.46, d * 1.01], win, b);  // glazing band
+        // when lit, ~28% of floors stay dark so the facade isn't a uniform glow
+        const wc = (opts.lit && hash(k * 13.7 + i * 5.1 + side * 2.3) < 0.28) ? dark : win;
+        addBox(out, vadd(p.c, p.u, (i + 0.62) * (h / floors)), [w * 1.01, (h / floors) * 0.46, d * 1.01], wc, b);  // glazing band
       }
       if (opts.setback) addBox(out, vadd(p.c, p.u, h + h * 0.1), [w * 0.6, h * 0.22, d * 0.6], body, b);
       if (opts.roof) addBox(out, vadd(p.c, p.u, h + (opts.setback ? h * 0.22 : 0) + 1), [w * 0.3, 2, d * 0.3], [0.3, 0.3, 0.33], b);  // rooftop plant
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
+    };
+    // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
+    // s0→s1 on `side` at clearance `gap`. Steps along the track (~18–26 m) and emits
+    // one building() per step with hash-varied height/width/colour so it reads as a
+    // real facade rather than scattered boxes. The inner face is held at a constant
+    // setback (`gap`) so the row aligns. On night circuits (or opts.lit) windows are
+    // emissive-bright so the skyline is legible after dark. Inherits building()'s
+    // onTrack guard and blockAt() boundary.
+    //   opts: { minH, maxH, depth, palette:[colA,colB,…], lit, windowCol, step }
+    const cityFront = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const minH = opts.minH != null ? opts.minH : 16;
+      const maxH = opts.maxH != null ? opts.maxH : 46;
+      const depth = opts.depth != null ? opts.depth : 22;
+      const lit = opts.lit != null ? opts.lit : !!def.night;
+      const palette = (opts.palette && opts.palette.length) ? opts.palette
+        : (lit ? [[0.17, 0.19, 0.27], [0.20, 0.21, 0.28], [0.15, 0.17, 0.24], [0.22, 0.20, 0.26]]
+               : [[0.60, 0.62, 0.66], [0.66, 0.64, 0.60], [0.56, 0.58, 0.62], [0.70, 0.68, 0.64]]);
+      // alternate window tint per building (warm / cool) when lit for variety
+      const warm = [0.95, 0.85, 0.55], cool = [0.60, 0.75, 1.0];
+      const step = opts.step || 22;
+      let idx = 0;
+      along(s0, s1, step, (k) => {
+        const s = hash(k * 5.3 + side * 0.9);
+        const w = 14 + s * 16;                    // 14–30 m wide facade unit
+        const h = minH + hash(k * 9.1 + side * 1.7) * (maxH - minH);
+        const col = palette[((idx % palette.length) + palette.length) % palette.length];
+        const wcol = lit ? (hash(k * 2.1 + side) < 0.5 ? warm : cool) : undefined;
+        building(k, side, gap, w, h, depth, {
+          wall: col, floor: opts.floor || (4 + s * 3),
+          lit: lit, windowCol: opts.windowCol || wcol,
+        });
+        idx++;
+      });
     };
     // Tapered tower (control tower, spire) + optional antenna mast.
     const tower = (k, side, dist, baseW, h, opts) => {
@@ -1470,9 +1556,9 @@ const Tracks = (function () {
       // richer primitives (world coords): non-cube shapes
       addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
       // landscape + vegetation
-      pine, tree, palm, bush, hedge, peak, mountain, ridge,
+      pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge,
       // structures
-      building, tower, grandstand, billboard, gantry, marshalPost,
+      building, tower, grandstand, billboard, gantry, marshalPost, cityFront,
       // barriers / track furniture
       wall, fence, guardrail, tyreWall, recordBarrier,
     });
