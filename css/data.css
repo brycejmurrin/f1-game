@@ -50,11 +50,15 @@
   display: flex; gap: 6px; padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto; overflow-x: auto; scrollbar-width: none;
-  /* fade hint at right edge to signal more tabs */
+  /* fade hint at right edge — only when tabs might overflow (portrait) */
   -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
   mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
+/* On wider cards all 5 tabs fit — remove the fade mask */
+@media (min-width: 580px) {
+  .dh-tabs { -webkit-mask-image: none; mask-image: none; }
+}
 .dh-tab {
   flex: 0 0 auto;
   background: rgba(255, 255, 255, 0.06);
@@ -118,16 +122,18 @@
 
 /* schedule rows */
 .dh-race {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: flex-start; gap: 10px;
   padding: 9px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.dh-race-round { width: 34px; font-weight: 800; font-style: italic; color: #9a9aa5; flex: 0 0 auto; }
+.dh-race-round { width: 30px; font-weight: 800; font-style: italic; color: #9a9aa5; flex: 0 0 auto; padding-top: 2px; }
 .dh-race-main { flex: 1; min-width: 0; }
-.dh-race-name { font-size: 14px; color: #f2f2f5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.dh-race-sub { font-size: 12px; color: #8a8a95; margin-top: 2px; }
-.dh-race-time { font-size: 11px; color: #7a7a85; margin-top: 2px; }
-.dh-race-date { font-size: 12px; color: #c4c4c8; flex: 0 0 auto; text-align: right; min-width: 56px; }
+.dh-race-name { font-size: 14px; color: #f2f2f5; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; line-height: 1.3; }
+.dh-race-sub { font-size: 11px; color: #8a8a95; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dh-race-time { font-size: 10px; color: #7a7a85; margin-top: 2px; }
+.dh-race-date { font-size: 12px; color: #c4c4c8; flex: 0 0 auto; text-align: right; min-width: 50px; white-space: nowrap; }
+/* Hide local time on very narrow phones to save vertical space */
+@media (max-width: 400px) { .dh-race-time { display: none; } }
 .dh-race-next { background: rgba(225, 6, 0, 0.1); border-radius: 8px; }
 .dh-chip-next { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; background: #e10600; color: #fff; padding: 2px 6px; border-radius: 4px; }
 .dh-chip-sprint { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; background: #4a4a9a; color: #fff; padding: 2px 6px; border-radius: 4px; }
@@ -165,12 +171,14 @@
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
 .dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
 .dh-table td { padding: 7px 6px; vertical-align: middle; }
-.dh-td-pos { width: 28px; text-align: right; color: #8a8a95; flex: 0 0 auto; }
-.dh-td-driver { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dh-td-team { flex: 0 0 auto; color: #8a8a95; font-size: 12px; width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dh-td-grid { width: 32px; text-align: center; color: #8a8a95; flex: 0 0 auto; }
-.dh-td-time { width: 92px; text-align: right; color: #c4c4c8; font-size: 12px; flex: 0 0 auto; }
-.dh-td-pts { width: 36px; text-align: right; font-weight: 700; flex: 0 0 auto; }
+.dh-td-pos { width: 26px; text-align: right; color: #8a8a95; }
+/* chip + driver name side by side in the driver cell */
+.dh-td-driver { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dh-td-driver .dh-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dh-td-team { color: #8a8a95; font-size: 12px; width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
+.dh-td-grid { width: 30px; text-align: center; color: #8a8a95; }
+.dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: 12px; }
+.dh-td-pts  { width: 34px; text-align: right; font-weight: 700; }
 .dh-table tbody tr.dh-lr-p1 { color: #ffd700; background: rgba(255, 215, 0, 0.07); border-left: 3px solid #ffd700; }
 .dh-table tbody tr.dh-lr-p2 { color: #c0c0c0; background: rgba(192, 192, 192, 0.05); border-left: 3px solid #c0c0c0; }
 .dh-table tbody tr.dh-lr-p3 { color: #cd9b5a; background: rgba(205, 155, 90, 0.05); border-left: 3px solid #cd9b5a; }
@@ -190,7 +198,7 @@
 .dh-wx-value { font-size: 16px; font-weight: 700; color: #f2f2f5; margin-top: 2px; }
 
 /* ---------- telemetry tab ---------- */
-.dh-driverpick { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.dh-driverpick { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 10px; }
 .dh-dchip {
   font-size: 12px; font-weight: 800;
   padding: 5px 9px; border-radius: 6px;
@@ -207,8 +215,11 @@
   border-radius: 8px; display: block;
   cursor: ew-resize;
 }
-.dh-canvas.dh-map { cursor: default; }
-.dh-canvas.dh-map { max-width: 320px; margin: 0 auto; aspect-ratio: 1 / 1; }
+.dh-canvas.dh-map { cursor: default; max-width: 320px; margin: 0 auto; aspect-ratio: 1 / 1; }
+/* On landscape phone, cap the track map smaller so content doesn't overflow */
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-canvas.dh-map { max-width: 220px; }
+}
 .dh-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11px; color: #9a9aa5; margin-top: -2px; }
 .dh-legend-item {
   display: inline-flex; align-items: center; gap: 5px;
@@ -222,7 +233,7 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 
 /* ---------- lap-replay transport + gauge dashboard ---------- */
-.dh-transport { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+.dh-transport { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; row-gap: 6px; }
 .dh-tbtn {
   font-size: 12px; font-weight: 800; letter-spacing: 0.05em;
   padding: 7px 14px; border-radius: 999px;
@@ -242,20 +253,22 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 }
 .dh-ratebtn.dh-active { background: rgba(225, 6, 0, 0.18); border-color: var(--red, #e10600); color: #fff; }
 .dh-thint { font-size: 11px; color: #7a7a85; font-style: italic; margin-left: auto; }
+/* On very narrow portrait, hide the scrub hint to keep transport on one row */
+@media (max-width: 420px) { .dh-thint { display: none; } }
 .dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: #fff; }
 .dh-delta { max-width: 600px; height: auto; margin-top: -2px; }
 .dh-sectors { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; color: #b4b4b8; }
 
 .dh-dash {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 10px;
-  margin: 6px 0 8px; padding: 12px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px;
+  margin: 6px 0 8px; padding: 10px 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .dh-glabel { font-size: 9px; letter-spacing: 0.1em; color: #8a8a95; white-space: nowrap; }
-.dh-gval { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
+.dh-gval { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: 4px; transition: width 0.05s linear; }
@@ -289,7 +302,7 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 
 /* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
-  display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end;
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end;
   margin-bottom: 12px; padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -308,7 +321,12 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   background: #15151d; color: #f2f2f5;
   border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px;
   padding: 6px 8px; font: inherit; font-size: 13px;
-  max-width: 220px;
+  max-width: 220px; min-width: 0;
+}
+/* On portrait, selects take full width so they don't truncate meeting/session names */
+@media (max-width: 520px) {
+  .dh-pick-field { width: 100%; }
+  .dh-pick-select { max-width: none; width: 100%; }
 }
 
 /* Slightly smaller pill tabs on very small phones */
@@ -323,10 +341,21 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 @media (max-width: 400px) {
   .dh-th-grid, .dh-td-grid { display: none; }
 }
+/* Landscape phone: also hide team column (card is wide but height is limited) */
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-th-team, .dh-td-team { display: none; }
+}
 
 /* Last Race: tighten table cell padding on portrait */
 @media (max-width: 520px) {
   .dh-table td, .dh-table thead th { padding: 6px 4px; }
   .dh-td-time { width: auto; font-size: 11px; }
   .dh-td-pts { width: 28px; }
+}
+
+/* Standings: in landscape phone the two columns appear side-by-side with tighter rows */
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-row { padding: 4px 4px; font-size: 12px; }
+  .dh-pts { min-width: 36px; }
+  .dh-gap { min-width: 30px; }
 }

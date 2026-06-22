@@ -335,5 +335,35 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitTabLoaded(page);
       await shot(page, `${orient}-26-datahub-lastrace`);
     });
+
+    test("27 data hub live tab", async ({ page }) => {
+      await setupApiMocks(page);
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-data").click();
+      await page.locator("#datahub").waitFor({ state: "visible" });
+      await page.locator(".dh-tab").filter({ hasText: "LIVE" }).click();
+      await waitTabLoaded(page);
+      // Wait for the live classification to populate (refresh fires automatically)
+      await page.waitForFunction(() => !document.querySelector(".dh-spinner"), { timeout: 8_000 }).catch(() => {});
+      await page.waitForTimeout(400);
+      await shot(page, `${orient}-27-datahub-live`);
+    });
+
+    test("28 data hub telemetry tab", async ({ page }) => {
+      await setupApiMocks(page);
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-data").click();
+      await page.locator("#datahub").waitFor({ state: "visible" });
+      await page.locator(".dh-tab").filter({ hasText: "TELEMETRY" }).click();
+      await waitTabLoaded(page);  // waits for sessionDrivers to load (driver chips appear)
+      // Click the first driver chip (NOR)
+      await page.locator(".dh-dchip").first().click();
+      // Wait for telemetry chart to finish loading
+      await page.waitForFunction(() => !document.querySelector(".dh-spinner"), { timeout: 10_000 }).catch(() => {});
+      await page.waitForTimeout(600);
+      await shot(page, `${orient}-28-datahub-telemetry`);
+    });
   });
 }
