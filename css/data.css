@@ -39,27 +39,33 @@
 .dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
 .dh-tabs {
-  display: flex; gap: 4px; padding: 8px 12px 0;
-  border-bottom: none;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.1);
+  display: flex; gap: 6px; padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto; overflow-x: auto; scrollbar-width: none;
+  /* fade hint at right edge to signal more tabs */
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
 .dh-tab {
-  flex: 1 1 0;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  margin-bottom: 0;
-  border-radius: 0;
-  padding: 10px 8px;
-  font-size: 11px; letter-spacing: 0.06em;
-  color: #9a9aa5;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
+  color: #8a8a95;
   white-space: nowrap;
   text-align: center;
-  min-width: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.dh-tab.dh-active { color: #fff; border-bottom-color: #e10600; }
+.dh-tab:hover { background: rgba(255,255,255,0.11); color: #c4c4c8; border-color: rgba(255,255,255,0.22); }
+.dh-tab.dh-active {
+  background: #e10600;
+  border-color: #e10600;
+  color: #fff;
+  font-weight: 800;
+}
 
 .dh-content {
   flex: 1 1 auto;
