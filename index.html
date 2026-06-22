@@ -119,17 +119,32 @@
 <div id="track-detail" hidden>
   <div id="track-detail-header">
     <div id="track-detail-name"></div>
-    <div id="track-detail-meta"></div>
+    <button id="track-detail-close" class="tdc-close-btn" aria-label="Close">&#x2715;</button>
   </div>
   <div id="track-detail-body">
-    <canvas id="track-detail-canvas" width="800" height="560"></canvas>
-    <div id="track-detail-corners">
-      <div class="tdc-title">TURN GUIDE</div>
-      <div id="track-detail-list"></div>
+    <div id="track-detail-canvas-wrap">
+      <canvas id="track-detail-canvas" width="800" height="560"></canvas>
     </div>
-  </div>
-  <div class="sel-actions">
-    <button id="track-detail-close" class="bigbtn">CLOSE</button>
+    <div id="track-detail-panel">
+      <div id="track-detail-meta"></div>
+      <div id="track-detail-flags">
+        <span id="tdf-night" class="tdf-flag" hidden>NIGHT</span>
+        <span id="tdf-street" class="tdf-flag tdf-street" hidden>STREET</span>
+        <span id="tdf-banked" class="tdf-flag tdf-banked" hidden>BANKED</span>
+      </div>
+      <div id="track-detail-elev-wrap" hidden>
+        <div class="tds-subtitle">ELEVATION</div>
+        <canvas id="track-detail-elev" width="240" height="48"></canvas>
+      </div>
+      <div id="track-detail-drs-wrap" hidden>
+        <div class="tds-subtitle">DRS ZONES</div>
+        <div id="track-detail-drs-list"></div>
+      </div>
+      <div id="track-detail-corners">
+        <div class="tdc-title">TURNS</div>
+        <div id="track-detail-list"></div>
+      </div>
+    </div>
   </div>
 </div>
 
