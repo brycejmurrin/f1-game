@@ -783,7 +783,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   display: grid;
   grid-template-columns: max-content 1fr;
   column-gap: 18px;
-  align-items: baseline;
+  align-items: start;
 }
 #howtoplay dt {
   color: var(--red); font-weight: 700; font-size: 12px;
@@ -864,6 +864,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   .rs-row { margin: 6px 0; }
   #race-settings .sel-chip { font-size: 12px; padding: 7px 12px; }
 
+  /* howtoplay: use full landscape height so content doesn't get clipped by DONE button */
+  #howtoplay-inner {
+    max-height: calc(100dvh - var(--sat) - var(--sab) - 16px);
+    width: min(96vw, 700px);
+  }
+
+  /* sectors: smaller in landscape short screens to avoid overlapping cam/pause buttons */
+  #hud-sectors { top: calc(52px + var(--sat)); font-size: 10px; padding: 3px 6px; }
+
   /* advanced panel: two columns of settings so it fits a sideways phone */
   #advanced-inner { width: min(96vw, 820px); }
   #advanced-inner .adv-item {
@@ -915,7 +924,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #sel-preview-info { flex: 1; min-width: 0; max-width: none; }
   #sel-preview-name { font-size: 14px; }
   #sel-preview-gp   { display: inline; margin: 0; font-size: 11px; }
-  #sel-preview-meta, #sel-preview-rec, #sel-preview-elev { display: none; }
+  #sel-preview-meta, #sel-preview-elev { display: none; }
+  #sel-preview-rec { font-size: 10px; margin-top: 3px; }
   #sel-preview-facts { margin-top: 0; gap: 4px; }
   .spf-fact { font-size: 10px; padding: 1px 5px; }
 }
