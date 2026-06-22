@@ -19,9 +19,12 @@ const F1API = (function () {
   const TTL_LATEST = 10 * MINUTE;       // openf1 latest session (and its data)
   const TTL_HISTORIC = 7 * 24 * HOUR;   // openf1 data for finished, non-latest sessions
 
+  const SESSION_FROZEN_MS = 6 * HOUR;   // a weekend session is well over after this
+
   let queue = Promise.resolve();        // promise chain serializing network hits
   let lastNetAt = 0;                    // time of last actual fetch start
   let latestSessionKey = null;          // tracked from latestSession() responses
+  const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
 
   /* ---------- cache ---------- */
 
@@ -193,14 +196,24 @@ const F1API = (function () {
   /* ---------- OpenF1 methods ---------- */
 
   function sessionTtl(sessionKey) {
-    // historical (non-latest) session data is effectively frozen: 7 d.
-    if (latestSessionKey !== null && sessionKey !== latestSessionKey) return TTL_HISTORIC;
+    // The known-latest session is always treated as live.
+    if (sessionKey === latestSessionKey) return TTL_LATEST;
+    // A session we've seen that started comfortably in the past is frozen — its
+    // data never changes, so cache it for a week. This no longer depends on
+    // latestSession() having run first (the old guard left every session on the
+    // 10 min TTL whenever latestSessionKey was still null).
+    const ds = sessionDates[sessionKey];
+    if (ds) {
+      const age = Date.now() - Date.parse(ds);
+      if (isFinite(age) && age > SESSION_FROZEN_MS) return TTL_HISTORIC;
+    }
+    // Unknown recency: stay conservative so genuinely-live data still refreshes.
     return TTL_LATEST;
   }
 
   function mapSession(s) {
     s = s || {};
-    return {
+    const out = {
       sessionKey: (s.session_key !== undefined && s.session_key !== null) ? s.session_key : null,
       meetingKey: (s.meeting_key !== undefined && s.meeting_key !== null) ? s.meeting_key : null,
       year: num(s.year),
@@ -210,6 +223,8 @@ const F1API = (function () {
       country: str(s.country_name),
       dateStart: str(s.date_start)
     };
+    if (out.sessionKey !== null && out.dateStart) sessionDates[out.sessionKey] = out.dateStart;
+    return out;
   }
 
   function latestSession() {

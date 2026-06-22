@@ -469,6 +469,18 @@ void main() {}`;
   let _activeProg = null;
   function useProg(p) { if (p !== _activeProg) { gl.useProgram(p); _activeProg = p; } }
 
+  // Render-state cache — enable/disable(BLEND) and depthMask are pipeline state
+  // changes. Many consecutive draws share the same state (e.g. dozens of skid
+  // marks and car shadows per frame), so collapse redundant toggles into no-ops.
+  // begin() resyncs these to GL defaults each frame; present() restores them.
+  let _blendOn = false, _depthWrite = true;
+  function setBlend(on) {
+    if (on !== _blendOn) { if (on) gl.enable(gl.BLEND); else gl.disable(gl.BLEND); _blendOn = on; }
+  }
+  function setDepthMask(on) {
+    if (on !== _depthWrite) { gl.depthMask(on); _depthWrite = on; }
+  }
+
   function compile(type, src) {
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
@@ -708,6 +720,10 @@ void main() {}`;
       gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
       gl.viewport(0, 0, width, height);
     }
+    // Resync cached render state to GL defaults — depthMask must be on for the
+    // depth buffer to clear, and blend off is the opaque-pass default.
+    gl.disable(gl.BLEND); _blendOn = false;
+    gl.depthMask(true); _depthWrite = true;
     const fc = frame.fogColor;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -756,11 +772,13 @@ void main() {}`;
     if (metalness !== _matMetal)    { gl.uniform1f(litU.uMetalness, metalness); _matMetal    = metalness; }
     if (specular  !== _matSpec)     { gl.uniform1f(litU.uSpecular,  specular);  _matSpec     = specular; }
     if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
-    const blend = alpha < 1;
-    if (blend) gl.enable(gl.BLEND);
+    // Each draw declares the full render state it needs (no restores afterwards),
+    // so runs of same-state draws collapse to a single real toggle via the cache.
+    setDepthMask(true);
+    setBlend(alpha < 1);
     gl.bindVertexArray(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    if (blend) { gl.disable(gl.BLEND); gl.bindVertexArray(null); }
+    gl.bindVertexArray(null);
   }
 
   function drawSky(sky) {
@@ -772,11 +790,11 @@ void main() {}`;
     gl.uniform3fv(skyU.uSunColor, sky.sunColor);
     gl.uniform1f(skyU.uStars, sky.stars ? 1 : 0);
     gl.uniform1f(skyU.uCloud, sky.cloud !== undefined ? sky.cloud : 0);
-    gl.depthMask(false);
+    setBlend(false);
+    setDepthMask(false);
     gl.bindVertexArray(skyVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
-    gl.depthMask(true);
   }
 
   function drawShadow(modelMat, w, l) {
@@ -784,13 +802,11 @@ void main() {}`;
     gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
     gl.uniformMatrix4fv(shadowU.uModel, false, modelMat);
     gl.uniform2f(shadowU.uSize, w, l);
-    gl.enable(gl.BLEND);
-    gl.depthMask(false);
+    setBlend(true);
+    setDepthMask(false);
     gl.bindVertexArray(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(null);
-    gl.depthMask(true);
-    gl.disable(gl.BLEND);
   }
 
   function drawMark(modelMat, w, l) {
@@ -798,13 +814,11 @@ void main() {}`;
     gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
     gl.uniformMatrix4fv(markU.uModel, false, modelMat);
     gl.uniform2f(markU.uSize, w, l);
-    gl.enable(gl.BLEND);
-    gl.depthMask(false);
+    setBlend(true);
+    setDepthMask(false);
     gl.bindVertexArray(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(null);
-    gl.depthMask(true);
-    gl.disable(gl.BLEND);
   }
 
   // Resolve the HDR scene to the screen: extract bright areas, blur them into a
@@ -815,6 +829,10 @@ void main() {}`;
     const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
     const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
 
+    // Fullscreen passes must overwrite (no blend) and write depth normally; draws
+    // above leave state undeclared, so set what we need through the cache.
+    setBlend(false);
+    setDepthMask(true);
     gl.disable(gl.DEPTH_TEST);
     gl.bindVertexArray(skyVAO);   // reuse the empty VAO for fullscreen triangles
 
@@ -896,6 +914,9 @@ void main() {}`;
     present,
     shadowBegin(lightVP) {
       if (!shadowEnabled) return;
+      // Depth must be writable to clear/render the shadow map. This pass runs
+      // before begin(), so declare the state explicitly rather than assuming it.
+      setDepthMask(true);
       shadowLightVP.set(lightVP);
       gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
       gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
