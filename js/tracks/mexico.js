@@ -13,7 +13,7 @@
     theme: "modern",
     lengthKm: 4.3,
     baseHW: 8,
-    pal: { zenith: [0.24, 0.48, 0.88], horizon: [0.72, 0.68, 0.60], grass: [0.28, 0.42, 0.18], runoff: [0.52, 0.38, 0.24], fogDensity: 0.0015, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
+    pal: { zenith: [0.58, 0.74, 0.94], horizon: [0.72, 0.68, 0.60], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fogDensity: 0.0015, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
     segs: [
       { t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 },
       { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 },
@@ -44,16 +44,17 @@
       };
 
       // Dense fan-colour crowd speckle on a raked stand face (small cube rows).
+      // Enhanced for festive density: more rows, smaller boxes, higher colour ratio.
       const crowdSpeckle = (s, side, gap, len, rows, baseH) => {
-        const k = K(s), span = Math.max(1, Math.round(len / 6));
+        const k = K(s), span = Math.max(1, Math.round(len / 5.5));
         for (let i = -span; i <= span; i++) {
           const kk = (k + i + n) % n;
           for (let r = 0; r < rows; r++) {
-            const p = anchor(kk, side, gap + 1.6 + r * 2.4);
+            const p = anchor(kk, side, gap + 1.4 + r * 2.2);
             if (onTrack(p.c[0], p.c[2], 0.5)) continue;
-            const lift = baseH + r * 2.0;
-            const col = hash(kk * 17 + r * 5) > 0.42 ? fiesta[(kk * 3 + r) % 4] : SEATS;
-            addBox(out, vadd(p.c, p.u, lift), [5.4, 1.4, 5.6], col, [p.r, p.u, p.t]);
+            const lift = baseH + r * 1.8;
+            const col = hash(kk * 17 + r * 5) > 0.35 ? fiesta[(kk * 3 + r) % 4] : SEATS;
+            addBox(out, vadd(p.c, p.u, lift), [6.0, 1.6, 6.2], col, [p.r, p.u, p.t]);
           }
         }
       };
@@ -71,11 +72,11 @@
       // --- s=0.00 R near: main grandstand, tall stepped, festive banner trim ---
       grandstand(0.00, 1, 9, 120, SEATS, PINK);
       grandstand(0.00, 1, 24, 120, CONCRETE, GREEN);   // packed second tier behind
-      crowdSpeckle(0.00, 1, 9, 120, 3, 2.5);
+      crowdSpeckle(0.00, 1, 9, 120, 4, 2.5);  // MORE dense rows
       banners(0.00, 1, 8);
       grandstand(0.99, 1, 9, 70, SEATS, ORANGE);   // final-corner stand feeding main straight
       grandstand(0.97, 1, 24, 80, CONCRETE, PINK);
-      crowdSpeckle(0.985, 1, 9, 70, 3, 2.5);
+      crowdSpeckle(0.985, 1, 9, 70, 4, 2.5);  // MORE dense rows
       // start/finish gantry over the line + scoring board behind the main stand
       gantry(0.00, 8.5, [0.14, 0.14, 0.18]);
       billboard(K(0.005), 1, 7, 14, 5, fiesta[0]);
@@ -102,18 +103,20 @@
       tower(K(0.04), -1, 6, 9, 26, { col: [0.82, 0.82, 0.86], cap: true, capCol: [0.20, 0.22, 0.26], mast: 7 });
       marshalPost(K(0.06), 1, 6);
 
-      // --- s=0.06 R far: park tree line along the long straight (denser) ---
-      hedge(0.04, 0.11, 1, 26, 3.0, TREEGRN);
-      for (const s of [0.04, 0.055, 0.07, 0.085, 0.10, 0.115]) {
+      // --- s=0.06 R far: park tree line along the long straight (denser, leafy park) ---
+      hedge(0.04, 0.12, 1, 28, 3.2, TREEGRN);
+      for (const s of [0.04, 0.052, 0.064, 0.076, 0.088, 0.100, 0.112]) {
         const k = K(s);
-        tree(k, 1, 30 + hash(k) * 18, 9 + hash(k * 3) * 5, TREEGRN);
-        tree(k, 1, 50 + hash(k * 5) * 18, 8 + hash(k * 7) * 5, [0.26, 0.44, 0.22]);
-        tree(k, 1, 72 + hash(k * 9) * 20, 8 + hash(k * 11) * 4, TREEGRN);
+        tree(k, 1, 28 + hash(k) * 20, 10 + hash(k * 3) * 6, TREEGRN);
+        tree(k, 1, 48 + hash(k * 5) * 22, 9 + hash(k * 7) * 6, [0.26, 0.44, 0.22]);
+        tree(k, 1, 70 + hash(k * 9) * 24, 8 + hash(k * 11) * 5, TREEGRN);
+        tree(k, 1, 90 + hash(k * 25) * 20, 9 + hash(k * 27) * 5, PARKGRN);  // extra layer
       }
 
       // --- s=0.12 R near: Turn 1 grandstand + bold red/white kerb ---
       grandstand(0.12, 1, 9, 80, SEATS, GREEN);
       grandstand(0.12, 1, 24, 80, CONCRETE, ORANGE);   // packed back tier at Turn 1
+      crowdSpeckle(0.12, 1, 9, 80, 3, 2.5);  // dense crowds at Turn 1
       const kerb = (s, side, len) => {
         const k = K(s);
         place(k, side, 2, [0.5, 0.16, len], [0.82, 0.16, 0.16]);
@@ -121,9 +124,10 @@
       };
       kerb(0.12, 1, 9); kerb(0.115, -1, 8);
 
-      // --- s=0.20 both mid: Moises Solana esses, low thin seating boxes ---
+      // --- s=0.20 both mid: Moises Solana esses, low thin seating boxes + crowds ---
       for (const side of [-1, 1]) {
         grandstand(0.20, side, 8, 48, [0.50, 0.50, 0.54], side < 0 ? ORANGE : PINK);
+        crowdSpeckle(0.20, side, 8, 48, 2, 1.5);  // crowd speckle on Solana stands
       }
       kerb(0.20, -1, 7); kerb(0.205, 1, 7);
 
@@ -156,13 +160,14 @@
       banners(0.42, 1, 6);
 
       // --- s=0.55 both mid: park greenery + sports facility low boxes ---
-      groundPlane(K(0.55), -1, 24, [180, 1.0, 140], PARKGRN);
-      for (const s of [0.515, 0.535, 0.55, 0.565, 0.585]) {
+      groundPlane(K(0.55), -1, 24, [200, 1.2, 160], PARKGRN);  // larger, greener park plane
+      for (const s of [0.510, 0.530, 0.550, 0.570, 0.590]) {
         const k = K(s);
-        building(k, -1, 29 + hash(k) * 30, 22, 8 + hash(k * 3) * 4, 18, { wall: [0.86, 0.86, 0.84],
+        building(k, -1, 28 + hash(k) * 32, 24, 9 + hash(k * 3) * 5, 20, { wall: [0.86, 0.86, 0.84],
                  window: [0.40, 0.46, 0.50], floor: 2 });
-        tree(k, 1, 28 + hash(k * 5) * 20, 8 + hash(k * 7) * 4, TREEGRN);
-        tree(k, 1, 48 + hash(k * 13) * 18, 7 + hash(k * 17) * 4, PARKGRN);
+        tree(k, 1, 26 + hash(k * 5) * 22, 9 + hash(k * 7) * 5, TREEGRN);
+        tree(k, 1, 46 + hash(k * 13) * 20, 8 + hash(k * 17) * 5, PARKGRN);
+        tree(k, 1, 65 + hash(k * 19) * 18, 7 + hash(k * 21) * 4, TREEGRN);  // extra tree layer
       }
 
       // --- s=0.66 R far: lucha-libre tribute statue (masked wrestler box on plinth) ---
@@ -178,41 +183,41 @@
       // ====== HERO: FORO SOL BASEBALL STADIUM (s≈0.72–0.88) ======
       // Tall encircling concrete bowl the track threads through — raked tiers,
       // dense fan-colour crowd, cantilever roof rim, banner ring, floodlights.
-      // Tiers expanded ~30% for greater visual dominance.
+      // The iconic enclosed corridor packed with tens of thousands of fans.
       const stadiumBowl = (s0, s1, side) => {
-        along(s0, s1, 9, (k) => {
-          // 3 raked concrete tiers stepping back & up — 30% bigger
-          for (let t = 0; t < 3; t++) {
-            const sh = anchor(k, side, 13 + t * 9);
+        along(s0, s1, 7, (k) => {
+          // 4 raked concrete tiers stepping back & up — taller & closer together for density
+          for (let t = 0; t < 4; t++) {
+            const sh = anchor(k, side, 11 + t * 7.5);
             if (onTrack(sh.c[0], sh.c[2], 0.5)) continue;
-            addBox(out, vadd(sh.c, sh.u, 8 + t * 9), [16, 20 + t * 3, 14], CONCRETE, [sh.r, sh.u, sh.t]);
+            addBox(out, vadd(sh.c, sh.u, 7 + t * 9.5), [18, 22 + t * 2.5, 14], CONCRETE, [sh.r, sh.u, sh.t]);
           }
-          // dense crowd seat-rows on the rake facing the corridor
-          for (let r = 0; r < 5; r++) {
-            const sp = anchor(k, side, 9.5 + r * 2.6);
+          // VERY dense crowd seat-rows filling the rake facing the corridor
+          for (let r = 0; r < 7; r++) {
+            const sp = anchor(k, side, 9 + r * 2.2);
             if (onTrack(sp.c[0], sp.c[2], 0.5)) continue;
-            const col = hash(k * 19 + r * 7) > 0.40 ? fiesta[(k * 2 + r) % 4] : SEATS;
-            addBox(out, vadd(sp.c, sp.u, 4 + r * 2.4), [6.3, 1.6, 6.0], col, [sp.r, sp.u, sp.t]);
+            const col = hash(k * 19 + r * 7) > 0.38 ? fiesta[(k * 3 + r) % 4] : SEATS;
+            addBox(out, vadd(sp.c, sp.u, 3 + r * 2.1), [7.2, 1.5, 6.5], col, [sp.r, sp.u, sp.t]);
           }
           // cantilever roof rim lip over the top tier
-          const rf = anchor(k, side, 22);
+          const rf = anchor(k, side, 23);
           if (!onTrack(rf.c[0], rf.c[2], 0.5)) {
-            addBox(out, vadd(rf.c, rf.u, 36), [20, 1.2, 14], [0.84, 0.86, 0.90], [rf.r, rf.u, rf.t]);
+            addBox(out, vadd(rf.c, rf.u, 42), [22, 1.4, 14], [0.84, 0.86, 0.90], [rf.r, rf.u, rf.t]);
             // Roof bowl cap: addFrustum closing the bowl ceiling
-            addFrustum(out, vadd(rf.c, rf.u, 37), 9, 6, 3.5, [0.78, 0.80, 0.84], 6, [rf.r, rf.u, rf.t]);
+            addFrustum(out, vadd(rf.c, rf.u, 43.5), 11, 7, 4, [0.78, 0.80, 0.84], 8, [rf.r, rf.u, rf.t]);
           }
         });
       };
       // both bowls hug the slow corridor, threaded by the track
       stadiumBowl(0.72, 0.88, -1);
       stadiumBowl(0.72, 0.88, 1);
-      // floodlight masts crowning the bowl rim, ringing the stadium
-      for (const s of [0.73, 0.78, 0.83, 0.87]) {
-        lightMast(K(s), -1, 26, 34); lightMast(K(s), 1, 26, 34);
+      // floodlight masts crowning the bowl rim, ringing the stadium — taller
+      for (const s of [0.73, 0.77, 0.81, 0.85]) {
+        lightMast(K(s), -1, 27, 42); lightMast(K(s), 1, 27, 42);
       }
-      // festive banner ring + corridor catch fence + apex kerbs
-      for (const s of [0.74, 0.78, 0.82, 0.86]) {
-        banners(s, -1, 9); banners(s, 1, 9);
+      // EXTRA festive banner rings at multiple levels inside the bowl
+      for (const s of [0.72, 0.75, 0.79, 0.83, 0.87]) {
+        banners(s, -1, 10); banners(s, 1, 10);
       }
       fence(0.72, 0.88, -1, 6, 3.4, [0.80, 0.82, 0.85]);
       fence(0.72, 0.88, 1, 6, 3.4, [0.80, 0.82, 0.85]);
@@ -221,15 +226,15 @@
       kerb(0.78, -1, 8); kerb(0.80, 1, 8);
 
       // --- s=0.88 L near: Foro Sol exit gap, bright opening between bowls ---
-      place(K(0.88), -1, 12, [10, 14, 6], [0.98, 0.94, 0.80]);   // bright opening
-      billboard(K(0.88), 1, 8, 12, 5, fiesta[1]);
+      place(K(0.88), -1, 12, [12, 18, 8], [0.98, 0.94, 0.80]);   // bright opening — taller
+      billboard(K(0.88), 1, 8, 14, 6, fiesta[1]);
 
       // --- s=0.92 R near: Peraltada / Estadio stand on faint banked edge ---
       grandstand(0.92, 1, 9, 100, SEATS, PINK);
       grandstand(0.92, 1, 24, 100, CONCRETE, GREEN);   // packed Peraltada back tier
-      crowdSpeckle(0.92, 1, 9, 100, 3, 2.5);
-      lightMast(K(0.91), 1, 30, 32); lightMast(K(0.95), 1, 30, 32);
-      banners(0.92, 1, 8);
+      crowdSpeckle(0.92, 1, 9, 100, 4, 2.5);  // denser crowds
+      lightMast(K(0.91), 1, 32, 38); lightMast(K(0.95), 1, 32, 38);  // taller lights
+      banners(0.92, 1, 9);  // more banners
       // faint banked kerb edge through the Peraltada/Estadio corners
       for (const s of [0.90, 0.93, 0.96]) {
         const k = K(s);
@@ -239,11 +244,8 @@
 
       // --- Catch fence + scattered park trees & festive flags around the lap ---
       fence(0.10, 0.16, 1, 6, 3.2, [0.80, 0.82, 0.84]);
-      // crowd speckle on the Turn-1 and Solana esses stands
-      crowdSpeckle(0.12, 1, 9, 80, 2, 2.5);
-      crowdSpeckle(0.20, -1, 8, 48, 2, 2.0);
-      crowdSpeckle(0.20, 1, 8, 48, 2, 2.0);
-      crowdSpeckle(0.42, 1, 7, 40, 2, 2.0);
+      // enhanced crowd speckle on key stands
+      crowdSpeckle(0.42, 1, 7, 40, 2, 2.0);  // Horquilla hairpin crowds
       // guardrails lining the long start/finish straight + Solana run
       guardrail(0.04, 0.11, 1, 4.5, [0.86, 0.86, 0.90]);
       guardrail(0.04, 0.11, -1, 4.5, [0.86, 0.86, 0.90]);
@@ -278,12 +280,12 @@
         addBox(out, vadd(p.c, p.u, 8), [2.4, 1.4, 0.2], fiesta[k % 4], [p.r, p.u, p.t]);
       });
 
-      // --- Distant hazed skyline ring: CONTINUOUS pale city band (no gaps) ---
-      every(40, (k) => {
+      // --- Distant hazed skyline ring: CONTINUOUS pale washed city band (high-altitude haze) ---
+      every(35, (k) => {
         for (const side of [-1, 1]) {
-          const d = 340 + hash(k * 82 + side) * 90 + (k & 1) * 18;
+          const d = 360 + hash(k * 82 + side) * 110 + (k & 1) * 20;
           backdrop(k, side, d,
-                   [92, 24 + hash(k * 83 + side) * 26, 40], [0.66, 0.68, 0.70]);
+                   [100, 28 + hash(k * 83 + side) * 32, 45], [0.62, 0.65, 0.70]);  // more pale, cooler high-altitude tone
         }
       });
 
@@ -315,18 +317,18 @@
         }
       });
 
-      // --- Mexico City skyline at altitude: 8 buildings at 200–300m distance ---
-      for (let i = 0; i < 8; i++) {
-        const f = i / 8;
+      // --- Mexico City skyline at altitude: 12+ buildings at 220–320m distance for horizon depth ---
+      for (let i = 0; i < 12; i++) {
+        const f = i / 12;
         const k = K(f);
         const side = i % 2 === 0 ? -1 : 1;
-        const d = 200 + hash(i * 29) * 100;
-        const h = 50 + hash(i * 37) * 50;
-        const w = 16 + hash(i * 53) * 14;
+        const d = 240 + hash(i * 29) * 120;
+        const h = 45 + hash(i * 37) * 60;
+        const w = 18 + hash(i * 53) * 16;
         const p = anchor(k, side, d);
-        if (!onTrack(p.c[0], p.c[2], 18))
+        if (!onTrack(p.c[0], p.c[2], 20))
           building(k, side, d - w / 2, w, h, w,
-            { wall: [0.52, 0.54, 0.58], window: [0.30, 0.36, 0.48], floor: 7 });
+            { wall: [0.54, 0.56, 0.62], window: [0.32, 0.38, 0.50], floor: 7 });
       }
 
       // --- Peraltada banked corner Mexican flag strips (s≈0.88–0.95) ---

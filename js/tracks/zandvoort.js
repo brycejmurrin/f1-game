@@ -16,7 +16,7 @@
     // Hugenholtz + Arie Luyendyk: the two steeply banked corners get a raised
     // outer edge (the engine banks the highest-curvature corners).
     banked: true,
-    pal: { zenith: [0.3, 0.44, 0.62], horizon: [0.80, 0.76, 0.66], grass: [0.45, 0.52, 0.28], runoff: [0.62, 0.54, 0.36], fog: [0.72, 0.72, 0.68], fogDensity: 0.0018, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
+    pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
     segs: [
       { t: 0, l: 260 }, { t: 75, l: 120, b: 0.16 }, { t: -50, l: 90 }, { t: 130, l: 150, b: 0.3 }, { t: 0, l: 180, h: 8 }, { t: 40, l: 110, h: -8 },
       { t: 60, l: 100 }, { t: -50, l: 90, h: 4 }, { t: 70, l: 90 }, { t: -60, l: 90 }, { t: 90, l: 90 }, { t: -50, l: 90 },
@@ -30,50 +30,58 @@
               fence, guardrail, tyreWall, billboard, gantry, marshalPost } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // --- North Sea horizon: a single far, low blue water plane behind the
-      // dunes (s≈0.45 L). Settled below grade and pushed way out so it reads as
-      // a hazed sliver, never a wall rising into the cockpit. ---
-      // Computed from the track centre so the sea/beach band sits on ONE far
-      // seaward arc instead of a giant plane that the compact infield rejects.
+      // --- North Sea horizon: coastal water and sandy beach band immediately
+      // adjacent to the circuit (9 km North Sea beach just beyond dunes).
+      // Emphasize the maritime haze (74-81% humidity) with slightly elevated fog.
       let cx0 = 0, cz0 = 0;
       for (let i = 0; i < n; i++) { cx0 += px[i]; cz0 += pz[i]; }
       cx0 /= n; cz0 /= n;
       let lapRad = 0;
       for (let i = 0; i < n; i++) lapRad = Math.max(lapRad, Math.hypot(px[i] - cx0, pz[i] - cz0));
-      // Seaward = the −X arc (where the s≈0.45 L edge faces). Lay a curved band of
-      // flat blue water boxes + a pale beach strip just inside it on the horizon.
-      const seaCol = [0.20, 0.42, 0.58], beachCol = [0.88, 0.82, 0.64];
-      for (let i = 0; i < 14; i++) {
-        const a = Math.PI * 0.55 + (i / 13) * Math.PI * 0.9;  // seaward sweep
-        const bx = cx0 + Math.cos(a) * (lapRad + 560);
-        const bz = cz0 + Math.sin(a) * (lapRad + 560);
-        if (onTrack(bx, bz, 30)) continue;
-        addBox(out, [bx, pyMin - 1.5, bz], [120, 4, 120], seaCol);          // sea
-        const px2 = cx0 + Math.cos(a) * (lapRad + 430);
-        const pz2 = cz0 + Math.sin(a) * (lapRad + 430);
-        if (onTrack(px2, pz2, 30)) continue;
-        addBox(out, [px2, pyMin - 1.0, pz2], [110, 3, 70], beachCol);        // beach
+      // Seaward = the −X arc. Lay expanding bands of sea (far), beach sand (mid),
+      // and dune fringe (near) so the North Sea reads as a continuous coastal strip.
+      const seaCol = [0.18, 0.40, 0.56], beachCol = [0.89, 0.83, 0.66], duneCol = [0.82, 0.76, 0.58];
+      for (let i = 0; i < 16; i++) {
+        const a = Math.PI * 0.55 + (i / 15) * Math.PI * 0.9;  // seaward sweep
+        // Far sea (northernmost)
+        const bx = cx0 + Math.cos(a) * (lapRad + 680);
+        const bz = cz0 + Math.sin(a) * (lapRad + 680);
+        if (!onTrack(bx, bz, 35)) {
+          addBox(out, [bx, pyMin - 2.0, bz], [140, 5, 140], seaCol);
+        }
+        // Mid beach sand band
+        const px2 = cx0 + Math.cos(a) * (lapRad + 520);
+        const pz2 = cz0 + Math.sin(a) * (lapRad + 520);
+        if (!onTrack(px2, pz2, 30)) {
+          addBox(out, [px2, pyMin - 1.2, pz2], [130, 4, 90], beachCol);
+        }
+        // Near dune sand fringe
+        const px3 = cx0 + Math.cos(a) * (lapRad + 380);
+        const pz3 = cz0 + Math.sin(a) * (lapRad + 380);
+        if (!onTrack(px3, pz3, 25)) {
+          addBox(out, [px3, pyMin - 0.8, pz3], [120, 3, 80], duneCol);
+        }
       }
 
-      // --- Low rolling sand dunes hemming the track (the Zandvoort dune belt).
-      // Organic mountain()/peak() kept LOW and sandy, snowline > 1 so NO snow.
+      // --- Prominent rolling sand dunes hemming the track (the Zandvoort dune belt).
+      // The circuit weaves THROUGH the dunes—they're the defining visual feature.
+      // Larger mountains now (8-16m) to convey coastal dune landscape scale.
       // Tan body, marram-green caps via opts.forest skirt + bush/hedge below.
       // A CONTINUOUS, overlapping belt wraps the WHOLE lap on BOTH sides — no
-      // gap-skipping — so the sand reads as an unbroken dune ridge. Low seg (7)
-      // keeps the dense belt affordable. ---
-      const sand = [0.80, 0.74, 0.56], sandDk = [0.70, 0.64, 0.46];
-      const sandLt = [0.86, 0.80, 0.62];
-      const marramG = [0.34, 0.50, 0.26], marramT = [0.66, 0.62, 0.40];
+      // gap-skipping — so the sand reads as an unbroken dune ridge. Seg 8 for detail. ---
+      const sand = [0.81, 0.75, 0.58], sandDk = [0.71, 0.65, 0.48];
+      const sandLt = [0.87, 0.81, 0.64];
+      const marramG = [0.33, 0.49, 0.24], marramT = [0.67, 0.63, 0.41];
       // Inner dune wall: overlapping organic mounds hugging the verge on BOTH
-      // sides the WHOLE lap (no gap-skip) — low seg (7) to afford the belt.
+      // sides the WHOLE lap (no gap-skip) — slightly higher for dune prominence.
       every(32, (k) => {
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 42 + hash(k * 72 + side) * 24);
-          const h = 6 + hash(k * 73 + side) * 9;        // LOW dune mounds
+          const a = anchor(k, side, 45 + hash(k * 72 + side) * 26);
+          const h = 8 + hash(k * 73 + side) * 12;        // TALLER dune mounds (8–20m)
           // forest=tan marram so the verge-side dune base reads SANDY, not a flat
           // green wall when the camera is close on this tight winding circuit.
-          mountain(a.c[0], a.c[2], a.c[1], 30 + hash(k * 74 + side) * 18, h, {
-            seg: 7, seed: k * 13 + side, rough: 0.5, snowline: 2,  // >1 = no snow
+          mountain(a.c[0], a.c[2], a.c[1], 32 + hash(k * 74 + side) * 20, h, {
+            seg: 8, seed: k * 13 + side, rough: 0.5, snowline: 2,  // >1 = no snow
             forest: marramT, rock: sandDk, snow: sand,
           });
         }
@@ -90,56 +98,63 @@
           addCone(out, vadd(a.c, a.u, th * 0.5 + th * 0.55), th * 0.55 + hash(k * 94 + side) * 2, th * 0.6, [0.18, 0.38, 0.14], 6, [a.r, a.u, a.t]);  // pine canopy
         }
       });
-      // Mid dune ridge: a second overlapping band of cheap sandy peaks set back,
+      // Mid dune ridge: a second overlapping band of sandy peaks set back,
       // filling between the inner mounds so the belt never breaks from the
-      // cockpit. peak() (clean pyramid) is far lighter than mountain().
+      // cockpit. Taller peaks now (12–22m) to emphasize dune terrain.
       every(22, (k) => {
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 50 + hash(k * 81 + side) * 30);
-          if (onTrack(a.c[0], a.c[2], 12)) continue;
-          peak(a.c[0], a.c[2], a.c[1], 34 + hash(k * 83 + side) * 24,
-               10 + hash(k * 82 + side) * 12,
+          const a = anchor(k, side, 52 + hash(k * 81 + side) * 32);
+          if (onTrack(a.c[0], a.c[2], 14)) continue;
+          peak(a.c[0], a.c[2], a.c[1], 36 + hash(k * 83 + side) * 26,
+               12 + hash(k * 82 + side) * 14,
                hash(k * 84 + side) < 0.5 ? sand : sandLt);
         }
       });
       // Far dune ridges as a continuous sandy backdrop on the horizon.
+      // More numerous and taller for a continuous dune barrier effect.
       every(48, (k) => {
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 150 + hash(k * 42 + side) * 90);
-          if (onTrack(a.c[0], a.c[2], 14)) continue;
-          peak(a.c[0], a.c[2], pyMin, 60 + hash(k * 43 + side) * 50,
-               14 + hash(k * 44 + side) * 12, sand);
+          const a = anchor(k, side, 160 + hash(k * 42 + side) * 100);
+          if (onTrack(a.c[0], a.c[2], 16)) continue;
+          peak(a.c[0], a.c[2], pyMin, 70 + hash(k * 43 + side) * 60,
+               18 + hash(k * 44 + side) * 16, sand);
         }
       });
       // Marram grass tufts hugging the verge (low organic green/tan greenery).
-      every(13, (k) => {
+      // Denser coverage now to emphasize the coastal dune grass ecosystem.
+      every(11, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 51 + side) > 0.62) continue;
-          bush(k, side, 10 + hash(k * 52 + side) * 16,
+          if (hash(k * 51 + side) > 0.55) continue;  // Increased density (was 0.62)
+          bush(k, side, 9 + hash(k * 52 + side) * 14,
                hash(k * 53 + side) < 0.5 ? marramG : marramT);
         }
       });
-      hedge(0.18, 0.40, 1, 30, 1.4, marramT);   // dune-ridge marram band (Hunserug)
-      hedge(0.32, 0.56, -1, 12, 1.4, marramG);
-      hedge(0.58, 0.78, 1, 11, 1.4, marramG);
-      hedge(0.62, 0.88, -1, 13, 1.4, marramT);
+      // Extended continuous marram hedge bands around the lap.
+      hedge(0.15, 0.42, 1, 28, 1.5, marramT);   // dune-ridge marram band (extended)
+      hedge(0.30, 0.58, -1, 11, 1.5, marramG);  // longer L-side stretch
+      hedge(0.56, 0.80, 1, 10, 1.5, marramG);   // extended R-side
+      hedge(0.60, 0.90, -1, 12, 1.5, marramT);  // extended L-side
 
       // --- Orange-clad Dutch grandstands at the banked corners and pit straight.
-      // crowd colour = fanatic Verstappen orange. ---
+      // crowd colour = "Orange Army" Verstappen fans (300,000+ at Dutch GP).
+      // Expanded to convey the scale of spectator enthusiasm.
       const shell = [0.36, 0.38, 0.42], shellLt = [0.40, 0.41, 0.46];
-      const orange = [0.95, 0.45, 0.05];
-      grandstand(0.02, 1, 11, 30, shellLt, orange); // main stand R (pit straight)
-      grandstand(0.04, 1, 9, 30, shell, orange);    // Tarzan hairpin R
-      grandstand(0.07, -1, 10, 28, shell, orange);  // Tarzan exit L
-      grandstand(0.12, -1, 9, 30, shell, orange);   // Hugenholtz approach L
-      grandstand(0.14, -1, 9, 34, shell, orange);   // Hugenholtz T3 banked L
-      grandstand(0.17, 1, 10, 28, shellLt, orange); // Hugenholtz exit R
-      grandstand(0.50, -1, 22, 30, shell, orange);  // Scheivlak inner L (set back)
-      grandstand(0.88, 1, 10, 30, shell, orange);   // Luyendyk approach R
-      grandstand(0.92, 1, 9, 68, shell, orange);    // Arie Luyendyk final banked R
-      grandstand(0.95, 1, 10, 30, shellLt, orange); // Luyendyk exit R
-      grandstand(0.96, -1, 11, 30, shellLt, orange); // pit-straight L
-      grandstand(0.98, -1, 10, 28, shell, orange);  // pit-straight L exit
+      const orange = [0.95, 0.44, 0.04];  // Slightly deeper Verstappen orange
+      grandstand(0.01, 1, 12, 32, shellLt, orange); // main stand R (pit straight) - larger
+      grandstand(0.04, 1, 10, 32, shell, orange);   // Tarzan hairpin R
+      grandstand(0.07, -1, 11, 30, shell, orange);  // Tarzan exit L
+      grandstand(0.10, -1, 10, 28, shell, orange);  // Hugenholtz approach L early
+      grandstand(0.12, -1, 9, 32, shell, orange);   // Hugenholtz approach L
+      grandstand(0.14, -1, 10, 36, shell, orange);  // Hugenholtz T3 banked L - larger
+      grandstand(0.17, 1, 11, 30, shellLt, orange); // Hugenholtz exit R
+      grandstand(0.48, -1, 24, 32, shell, orange);  // Scheivlak approach L (set back) - larger
+      grandstand(0.52, 1, 14, 26, shell, orange);   // Scheivlak R spectator area (new)
+      grandstand(0.86, 1, 24, 32, shell, orange);   // Luyendyk approach R - larger
+      grandstand(0.90, 1, 11, 30, shell, orange);   // Arie Luyendyk banked approach R (new)
+      grandstand(0.92, 1, 10, 72, shell, orange);   // Arie Luyendyk final banked R - massive
+      grandstand(0.95, 1, 11, 32, shellLt, orange); // Luyendyk exit R - larger
+      grandstand(0.96, -1, 12, 32, shellLt, orange); // pit-straight L - larger
+      grandstand(0.98, -1, 11, 30, shell, orange);  // pit-straight L exit
 
       // --- Pit building: long low white-grey box with repeated garage bays. ---
       (() => {
@@ -235,13 +250,14 @@
       gantry(0.005, 7.5, [0.12, 0.13, 0.16]);
       gantry(0.99, 6.5, [0.14, 0.14, 0.18]);
 
-      // Sea glimpses — blue sliver cresting the dune ridge
+      // Sea glimpses — blue sliver cresting the dune ridge at multiple points
+      // to emphasize proximity to the 9 km North Sea beach.
       {
-        const seaGlimpse = [0.42, 0.58, 0.70];
-        for (const s of [0.42, 0.78]) {
-          const a = anchor(K(s), 1, 180);
-          if (!onTrack(a.c[0], a.c[2], 20)) {
-            addBox(out, vadd(a.c, a.u, 1), [50, 2, 50], seaGlimpse, [a.r, a.u, a.t]);
+        const seaGlimpse = [0.40, 0.57, 0.69];
+        for (const s of [0.35, 0.42, 0.68, 0.78]) {
+          const a = anchor(K(s), 1, 190);
+          if (!onTrack(a.c[0], a.c[2], 22)) {
+            addBox(out, vadd(a.c, a.u, 1.2), [60, 3, 60], seaGlimpse, [a.r, a.u, a.t]);
           }
         }
       }

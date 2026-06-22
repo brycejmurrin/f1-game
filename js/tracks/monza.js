@@ -46,45 +46,53 @@
 
       // =====================================================================
       // 1. ROYAL PARK FOREST — very dense broadleaf + umbrella-pine corridor
-      //    lining nearly the whole lap on BOTH sides, in several staggered ranks
-      //    so the canopy reads as a deep wood, not a thin hedge.
+      //    lining nearly the whole lap on BOTH sides, in several staggered ranks.
+      //    Native trees: umbrella pines, oaks, maples, ashes, elms, chestnuts.
+      //    The canopy reads as a deep wood, not a thin hedge, with chestnut
+      //    forest sections and coniferous mix throughout the 688-hectare park.
       // =====================================================================
-      // Rank A — front pines, close to the verge, almost gapless.
+      // Rank A — front pines, close to the verge, almost gapless (umbrella pines).
       every(13, (k) => {
         const h = hash(k * 31);
-        if (h < 0.12) return;                       // tiny breathing gaps only
+        if (h < 0.08) return;                       // fewer tiny gaps (denser)
         const side = h < 0.5 ? -1 : 1;
         pine(k, side, 9 + h * 6, 18 + h * 13, h < 0.3 ? PINE_D : PINE);
-        // mirror on the other side most of the time → two-sided corridor
-        if (h > 0.4) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
+        // mirror on the other side almost always → two-sided corridor (increased from >0.4)
+        if (h > 0.25) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
       });
-      // Rank B — broadleaf trees interleaved with the pines (warmer, rounder).
+      // Rank B — broadleaf trees (oaks, maples, ashes) interleaved with pines (warmer, rounder).
       every(15, (k) => {
         const h = hash(k * 53 + 9);
-        if (h < 0.2) return;
+        if (h < 0.15) return;                       // tighter, more coverage
         const side = h < 0.5 ? -1 : 1;
         tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
-        if (h > 0.55) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
+        if (h > 0.48) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);  // increased from 0.55
       });
-      // Rank C — set-back interior wall of taller pines (the deep park).
+      // Rank C — set-back interior wall of taller pines + some chestnuts (the deep park).
       every(18, (k) => {
         const h = hash(k * 41 + 3);
-        if (h < 0.28) return;
+        if (h < 0.20) return;                       // denser interior
         const side = h < 0.5 ? -1 : 1;
-        pine(k, side, 24 + h * 18, 22 + h * 16, PINE_D);
-        if (h > 0.6) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
+        // varied heights for depth: some tall pines, some shorter chestnuts
+        const hVar = 22 + h * 16 + (hash(k * 137) > 0.6 ? 4 : 0);
+        pine(k, side, 24 + h * 18, hVar, PINE_D);
+        if (h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
       });
-      // Rank D — outermost broadleaf rank, blends into the backdrop ring.
+      // Rank D — outermost broadleaf rank (oaks, maples, elms), blends to backdrop.
       every(24, (k) => {
         const h = hash(k * 67 + 17);
-        if (h < 0.4) return;
+        if (h < 0.35) return;                       // more coverage at edge
         tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
+        // secondary tree on same node for depth
+        if (h > 0.7) tree(k, h > 0.85 ? -1 : 1, 55 + h * 22, 11 + h * 8, LEAF);
       });
       // Low underbrush / shrubs scattered along the verge for ground texture.
       every(11, (k) => {
         const h = hash(k * 97 + 23);
-        if (h < 0.55) return;
+        if (h < 0.50) return;                       // tighter coverage
         bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4, h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
+        // occasional second bush for density
+        if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
       });
       // Clipped park hedge banding through several sweeps for a manicured edge.
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
@@ -95,27 +103,46 @@
 
       // =====================================================================
       // 2. PIT STRAIGHT / START–FINISH — grandstands, tifosi, podium, pit boxes
+      //    Tribuna Centrale (main historic stand), facing stand, new modernized
+      //    pit building with permanent roof, modernized grandstand islands.
       // =====================================================================
       // Tribuna Centrale — long stepped main grandstand (pit-side, left).
+      // Historic stand built to seat 3000, now modernized with island design.
       grandstand(0.005, -1, 10, 160, [0.55, 0.58, 0.62], [0.74, 0.26, 0.22]);
+      // Secondary lower stand behind Centrale (historic structure).
       grandstand(0.955, -1, 10, 110, [0.55, 0.58, 0.62], [0.70, 0.26, 0.22]);
-      // Facing grandstand across the straight (right side).
+      // Facing grandstand across the straight (right side) — modernized.
       grandstand(0.02, 1, 12, 120, [0.52, 0.55, 0.60], [0.72, 0.28, 0.24]);
-      // Red trim band fronting the main stand.
+      // Red trim band fronting the main stand (Italian colors).
       prop(K(0.01), -1, 8, [2, 1.6, 130], [0.80, 0.16, 0.14]);
+      // Accent green band (park integration) below red trim.
+      prop(K(0.00), -1, 8.3, [1.8, 0.8, 128], [0.30, 0.54, 0.28]);
 
-      // Pit building / garages along the pit wall (right side), with roof banner.
+      // Pit building / garages along the pit wall (right side).
+      // Modernized pit complex: refurbished garages with improved facilities.
       const pitWall = [0.86, 0.86, 0.84];
       for (let i = 0; i < 8; i++) {
         const s = 0.965 + i * 0.0085;
         building(K(s), 1, 14, 16, 9, 11,
-          { wall: pitWall, window: [0.30, 0.34, 0.40], floor: 4.5, roof: false });
+          { wall: pitWall, window: [0.30, 0.34, 0.40], floor: 4.5, roof: true });  // roof: true for modern cover
       }
-      // Long flat pit-roof banner over the garages.
+      // New permanent tensile roofing structure over the pit building (2024+ modernization).
+      // Raised from the old banner height to full-height permanent canopy.
       const aPit = anchor(K(0.99), 1, 18);
-      addBox(aPit.out || api.out, vadd(aPit.c, aPit.u, 10), [4, 0.6, 70], [0.82, 0.20, 0.18], [aPit.r, aPit.u, aPit.t]);
-      // Podium / timing tower at the line — slim white with red cap.
-      tower(K(0.0), 1, 13, 6, 46, { col: [0.92, 0.92, 0.90], cap: true, capCol: [0.78, 0.14, 0.12], mast: 7 });
+      // Main roof panel — permanent hard structure.
+      addBox(aPit.out || api.out, vadd(aPit.c, aPit.u, 11), [5.2, 0.8, 72], [0.84, 0.84, 0.82], [aPit.r, aPit.u, aPit.t]);
+      // Support pillar detail (reinforced structure for modernized roof).
+      for (let j = 0; j < 4; j++) {
+        const s2 = 0.965 + j * 0.025;
+        const a2 = anchor(K(s2), 1, 16);
+        addCyl(a2.out || api.out, [a2.c[0], a2.c[1] + 4, a2.c[2]], 0.35, 8, [0.70, 0.70, 0.68], 8, null);
+      }
+      // Podium / timing tower at the line — iconic white tower with red cap.
+      // Historic 1922 structure, recently modernized. Tall mast for timing/announcements.
+      tower(K(0.0), 1, 13, 6, 46, { col: [0.92, 0.92, 0.90], cap: true, capCol: [0.78, 0.14, 0.12], mast: 8 });
+      // Podium base platform (marble-look step for award ceremony).
+      const aPod = anchor(K(0.0), 1, 11);
+      addBox(aPod.out || api.out, vadd(aPod.c, aPod.u, 1), [14, 0.8, 12], [0.88, 0.88, 0.90], [aPod.r, aPod.u, aPod.t]);
       // Start gantry spanning the straight.
       gantry(0.0, 9, [0.14, 0.14, 0.17]);
       gantry(0.98, 8.5, [0.14, 0.14, 0.17]);
@@ -177,13 +204,15 @@
 
       // =====================================================================
       // 4. SOPRAELEVATA — old steep banked-oval ruin landmark (s~0.50–0.58 L)
-      //    A raised, curved, tilted concrete bank built from a fan of leaning
-      //    prism/box segments, weathered grey with moss-green streaks. Placed
+      //    80% gradient concrete bank built from a fan of leaning prism/box
+      //    segments, weathered grey with cracks and moss-green streaks. Built
+      //    1954, unused for decades, tree roots cracking the surface. Placed
       //    well off-track in the infield/park so it reads as a historic relic.
       // =====================================================================
       (function buildBanking() {
         const out = api.out;
         const conc = [0.64, 0.62, 0.58], concDk = [0.52, 0.50, 0.47], moss = [0.34, 0.46, 0.30];
+        const crackCol = [0.48, 0.46, 0.42]; // darker cracks/shadows
         // Anchor the structure in the park to the LEFT of the Lesmo area.
         const a = anchor(K(0.535), -1, 95);
         // Lay the banking as a gentle arc of N tilted panels.
@@ -200,6 +229,7 @@
           if (onTrack(cx, cz, 18)) continue;
           // tilt the panel so its top leans outward → banked look. Build the
           // tilted "up" by blending world-up with the outward lateral dir.
+          // Steeper tilt (0.65 vs 0.55) to reflect 80% gradient reality.
           const outward = [Math.sin(ang), 0, Math.cos(ang)]; // arc-local outward in r/t
           const ow = [a.r[0] * outward[0] + a.t[0] * outward[1] /*0*/, 0,
                       a.r[2] * outward[0] + a.t[2] * outward[1]];
@@ -208,7 +238,7 @@
           const owz = a.r[2] * Math.sin(ang) + a.t[2] * Math.cos(ang);
           const owl = Math.hypot(owx, owz) || 1;
           const od = [owx / owl, 0, owz / owl];
-          const tilt = 0.55; // lean factor
+          const tilt = 0.65; // increased lean factor (80% gradient)
           const upv = [od[0] * tilt, 1, od[2] * tilt];
           const ul = Math.hypot(upv[0], upv[1], upv[2]);
           const u = [upv[0] / ul, upv[1] / ul, upv[2] / ul];
@@ -222,11 +252,18 @@
           const col = (i % 4 === 0) ? concDk : conc;
           // banked slab
           addBox(out, [cx, baseY + h * 0.42, cz], [8.5, h, 14], col, [rr, u, fw]);
-          // moss streak band on the face
+          // moss streak band on the face (algae from decades of weathering)
           if (i % 2 === 0)
             addBox(out, [cx + od[0] * 0.6, baseY + h * 0.30, cz + od[2] * 0.6], [0.6, h * 0.5, 13], moss, [rr, u, fw]);
+          // weathering cracks: vertical stress lines from tree roots and freeze-thaw
+          if (i % 3 === 1) {
+            const crackW = 0.15, crackH = h * 0.7;
+            addBox(out, [cx + od[0] * 0.3, baseY + h * 0.45, cz + od[2] * 0.3],
+                   [crackW, crackH, 12.5], crackCol, [rr, u, fw]);
+          }
         }
         // Crumbling support pillars along the base of the bank.
+        // Made taller/more prominent to reflect structural importance.
         for (let i = 0; i < N; i += 2) {
           const f = i / (N - 1);
           const ang = -arcSpan / 2 + f * arcSpan;
@@ -234,7 +271,12 @@
           const cx = a.c[0] + a.r[0] * ox + a.t[0] * oz;
           const cz = a.c[2] + a.r[2] * ox + a.t[2] * oz;
           if (onTrack(cx, cz, 6)) continue;
-          addCyl(out, [cx, baseY, cz], 1.0, 6 + (i % 3), concDk, 6, null);
+          const pillarH = 8 + (i % 4) * 1.2;
+          addCyl(out, [cx, baseY - 0.5, cz], 1.2, pillarH, concDk, 8, null);
+          // weathered/crumbling detail on pillar (moss/lichen)
+          if (i % 4 === 0)
+            addCyl(out, [cx + (hash(i) - 0.5) * 0.3, baseY + pillarH * 0.6, cz + (hash(i * 2) - 0.5) * 0.3],
+                   0.3, pillarH * 0.4, moss, 6, null);
         }
       })();
 
@@ -281,15 +323,18 @@
 
       // =====================================================================
       // 7. CONTINUOUS FOREST BACKDROP — unbroken low canopy wall ringing the lap
+      //    Multi-layer forest rings at 120m, 185m, 260m create immersive deep park.
+      //    Represents the 688-hectare Parco di Monza's dense perimeter woodlands.
       // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       // [extraRadius, count, ridgeLen, ridgeW, hMin, hVar, colour]
+      // Denser rings for deeper forest effect
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [120, 58, 92, 26, 10, 6, [0.16, 0.36, 0.20]],   // near treeline, gapless
-        [185, 50, 110, 30, 12, 7, [0.13, 0.33, 0.17]],  // mid forest band
-        [260, 42, 132, 34, 14, 8, [0.11, 0.30, 0.15]],  // far hazed forest wall
+        [120, 65, 92, 26, 10, 6, [0.16, 0.36, 0.20]],   // near treeline, very gapless (was 58)
+        [185, 58, 110, 30, 12, 7, [0.13, 0.33, 0.17]],  // mid forest band (was 50)
+        [260, 50, 132, 34, 14, 8, [0.11, 0.30, 0.15]],  // far hazed forest wall (was 42)
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -300,24 +345,35 @@
         }
       }
       // =====================================================================
-      // 8. ADDED SCENERY IMPROVEMENTS
+      // 8. ENHANCED SCENERY — denser forest, improved landmarks, Italian character
       // =====================================================================
 
-      // 8a. Denser front pine pass — fills the gaps between Rank A pines.
+      // 8a. Ultra-dense front pine pass — nearly fills all gaps between Rank A pines.
+      // Creates immersive "forest corridor" effect on straightaways.
       every(9, (k) => {
         const h = hash(k * 43 + 7);
         const s = k / n;
-        if (h < 0.05) return;                       // only tiny gaps allowed
+        if (h < 0.02) return;                       // only minimal gaps (increased from 0.05)
         const side = h < 0.5 ? -1 : 1;
         pine(k, side, 8 + h * 5, 16 + h * 10, PINE);
-        if (h > 0.45) pine(k, -side, 9 + h * 6, 15 + h * 9, PINE_L);
+        // bilateral pines for full canopy coverage
+        if (h > 0.35) pine(k, -side, 9 + h * 6, 15 + h * 9, PINE_L);
+        // tertiary fill trees for deepest density on straights
+        if (h > 0.75) pine(k, side > 0 ? -1 : 1, 7 + h * 4, 14 + h * 8, PINE_D);
       });
 
       // 8b. Expand Parabolica grandstand — two extra sections widening the arc.
+      // Most iconic turn at Monza with largest crowd presence.
       grandstand(0.875, 1, 14, 80, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
       grandstand(0.935, 1, 14, 80, [0.53, 0.56, 0.60], [0.72, 0.30, 0.26]);
+      // Support structure underneath stands (concrete plinths)
+      for (const s of [0.875, 0.935]) {
+        const as = anchor(K(s), 1, 20);
+        addBox(as.out || api.out, [as.c[0], as.c[1] - 2, as.c[2]], [8, 1.2, 80], [0.58, 0.56, 0.54], [as.r, as.u, as.t]);
+      }
 
-      // 8c. Red/white kerb stripes on start straight (pit-wall side, s=0.0–0.07).
+      // 8c. Red/white Italian kerb stripes on start straight (pit-wall side, s=0.0–0.07).
+      // Traditional F1 pit-lane kerb pattern in Italian colors.
       {
         const kerbR = [0.88, 0.18, 0.14], kerbW = [0.92, 0.92, 0.90];
         for (let i = 0; i < 15; i++) {
@@ -329,17 +385,29 @@
         }
       }
 
-      // 8d. Tifosi banner billboards near the start (side=1, Italian red atmosphere).
+      // 8d. Italian tifosi atmosphere — red banners near the start/finish.
+      // Bright red Italian flags add championship atmosphere.
       billboard(K(0.01), 1, 30, 14, 6, [0.90, 0.15, 0.15]);
       billboard(K(0.02), 1, 30, 14, 6, [0.90, 0.15, 0.15]);
+      billboard(K(0.005), 1, 28, 13, 5.5, [0.92, 0.20, 0.18]);
 
-      // Pine silhouettes breaking the near canopy edge into a tree texture.
-      for (let i = 0; i < 28; i++) {
-        const a = i / 28 * 6.2832, h = hash(i * 11 + 5);
+      // 8e. Dense pine silhouette ring — breaks the near canopy into natural texture.
+      // Forms the immersive first layer of the 688-hectare park forest.
+      for (let i = 0; i < 32; i++) {  // increased from 28 for more density
+        const a = i / 32 * 6.2832, h = hash(i * 11 + 5);
         const r = rad + 100 + h * 55;
         const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
         if (onTrack(tx, tz, 30)) continue;
         ridge(tx, tz, pyMin, a, 20, 20, 15 + h * 11, PINE_D);
+      }
+
+      // 8f. Park furniture details — ornamental elements scattered deep in woods.
+      // Lake-edge vegetation clusters (weeping willows / water plants).
+      for (const [s, sd, colL] of [[0.40, 1, LEAF_L], [0.24, -1, LEAF_L]]) {
+        for (let i = 0; i < 6; i++) {
+          const si = i - 3;
+          tree(K(s + si * 0.008), sd, 75 + i * 6, 14 + i * 0.5, colL);
+        }
       }
     },
   }

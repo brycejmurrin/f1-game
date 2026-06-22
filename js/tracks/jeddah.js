@@ -55,10 +55,19 @@
           addBox(out, vadd(a.c, a.u, 0.65), [0.5, 1.3, 15], BARRIER, b);
         });
       }
+      // Reflective barrier markers/impact strips on barriers (night safety lighting effect)
+      every(16, (k) => {
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, 0.6), b = [a.r, a.u, a.t];
+          addBox(out, vadd(a.c, a.u, 0.9), [0.45, 0.25, 6], [0.70, 0.68, 0.65], b);
+        }
+      });
       // Short debris fence on the tight technical final sector (kept brief for vert budget)
       fence(0.88, 0.95, 1, 1.3, 3.0, [0.50, 0.52, 0.56]);
       // Saudi-green accent stripe on the wall through the T1-3 complex
       place(K(0.05), -1, 4, [4, 0.5, 60], GREEN);
+      // Additional white wall stripe markers in the high-speed esses
+      place(K(0.35), 1, 4, [3.5, 0.4, 50], [0.75, 0.75, 0.78]);
 
       // --- LED light towers ringing the whole lap (dark pole + bright cap pool) ---
       const lightTower = (k, side, dist) => {
@@ -124,18 +133,32 @@
       // placed by anchor() so they only ever project to the R, never overlapping a
       // parallel stretch of the lap (which culled the old symmetric 1000m squares).
       // Sub-grade (settled below pyMin) so it reads as a flat black mirror plane. ---
+      // Three depth layers: near water, mid water, far deep water for continuity
+      for (let i = 0; i < 40; i++) {
+        const k = K(i / 40);
+        const a = anchor(k, 1, 120);              // near water edge
+        const b = [a.r, a.u, a.t];
+        addBox(out, [a.c[0], pyMin - 0.6, a.c[2]], [280, 1.5, 100], SEA, b);
+      }
       for (let i = 0; i < 36; i++) {
         const k = K(i / 36);
         const a = anchor(k, 1, 280);              // centre 280 m out to sea
         const b = [a.r, a.u, a.t];
         addBox(out, [a.c[0], pyMin - 1.2, a.c[2]], [520, 2, 130], SEA, b);
       }
-      // warm + neon reflection spangles dancing on the water (denser)
-      for (let i = 0; i < 26; i++) {
-        const s = (i / 26), side = 1;
-        const a = anchor(K(s), side, 130 + hash(i * 5) * 300);
-        const col = (i % 3 === 0) ? MAGENTA : (i % 3 === 1) ? SPANGLE : LED;
-        addBox(out, [a.c[0], pyMin + 0.6, a.c[2]], [11, 0.4, 11], col);
+      for (let i = 0; i < 28; i++) {
+        const k = K(i / 28);
+        const a = anchor(k, 1, 450);              // far water horizon
+        const b = [a.r, a.u, a.t];
+        addBox(out, [a.c[0], pyMin - 1.4, a.c[2]], [800, 2.5, 160], [0.02, 0.04, 0.09], b);
+      }
+      // warm + neon reflection spangles dancing on the water (denser and more varied)
+      for (let i = 0; i < 32; i++) {
+        const s = (i / 32), side = 1;
+        const dist = 80 + hash(i * 5) * 200;
+        const a = anchor(K(s), side, dist);
+        const col = (i % 4 === 0) ? MAGENTA : (i % 4 === 1) ? SPANGLE : (i % 4 === 2) ? LED : [1.0, 0.90, 0.55];
+        addBox(out, [a.c[0], pyMin + 0.5, a.c[2]], [8 + hash(i * 7) * 6, 0.3, 8 + hash(i * 11) * 6], col);
       }
 
       // --- s 0.20 R far: King Fahd's Fountain — thin tall cool-white jet far offshore ---
@@ -178,6 +201,7 @@
       }
 
       // --- s 0.28 L mid: modern Jeddah skyline — lit-window high-rise cluster ---
+      // Primary cluster of distinctive towers
       building(K(0.26), -1, 53, 34, 143, 34, { wall: [0.20, 0.21, 0.26], window: WINCOOL, floor: 9 });
       building(K(0.28), -1, 40, 40, 114, 36, { wall: [0.22, 0.22, 0.27], window: WINWARM, floor: 8 });
       building(K(0.30), -1, 77, 30, 174, 30, { wall: [0.18, 0.19, 0.24], window: WINCOOL, floor: 10 });
@@ -185,6 +209,10 @@
       building(K(0.27), -1, 62, 32, 156, 32, { wall: [0.19, 0.20, 0.25], window: WINTEAL, floor: 22 });
       building(K(0.31), -1, 38, 36, 125, 34, { wall: [0.21, 0.21, 0.27], window: WINGOLD, floor: 20 });
       tower(K(0.305), -1, 150, 22, 150, { col: [0.15, 0.16, 0.21], seg: 4, cap: true, capCol: MAGENTA, mast: true });
+      // Additional accent towers for skyline depth and verticality
+      tower(K(0.252), -1, 95, 20, 138, { col: [0.17, 0.18, 0.23], seg: 4, cap: true, capCol: LED, mast: false });
+      tower(K(0.285), -1, 75, 24, 156, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: [0.50, 0.80, 1.0], mast: true });
+      tower(K(0.315), -1, 110, 22, 128, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: SPANGLE, mast: false });
 
       // --- s 0.45 R mid: Marina / Jeddah Yacht Club — pontoons + yacht hulls + mast
       // spikes. Placed via anchor() at >30 m out so the seaward footprints clear any
@@ -229,14 +257,26 @@
       tyreWall(0.485, 0.515, -1, 1.8, MAGENTA);
 
       // --- s 0.60 R mid: open Corniche lagoon — warm amber path-lamp dots along the edge ---
-      for (let i = 0; i < 8; i++) {
-        const a = anchor(K(0.58 + i * 0.006), 1, 8);
-        addBox(out, vadd(a.c, a.u, 3.5), [0.8, 0.8, 0.8], SPANGLE);
+      // Lagoon waters and waterfront path lighting
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.55 + i * 0.008);
+        const a = anchor(k, 1, 60);
+        const b = [a.r, a.u, a.t];
+        // Dark lagoon water inline with shoreline
+        addBox(out, [a.c[0], pyMin - 0.5, a.c[2]], [150, 1.2, 50], [0.04, 0.06, 0.12], b);
+      }
+      // Warm amber path-lamp dots along the lagoon edge (brighter density)
+      for (let i = 0; i < 12; i++) {
+        const a = anchor(K(0.56 + i * 0.005), 1, 7);
+        if (!onTrack(a.c[0], a.c[2], 1)) {
+          addBox(out, vadd(a.c, a.u, 2.5), [1.2, 1.0, 1.2], SPANGLE);
+        }
       }
 
-      // --- s 0.70 L mid: mid-rise hotel/apartment boxes + emissive billboards ---
+      // --- s 0.70 L mid: mid-rise hotel/apartment boxes + emissive billboards + accent towers ---
       building(K(0.68), -1, 49, 30, 60, 28, { wall: [0.22, 0.22, 0.26], window: WINWARM, floor: 7 });
       building(K(0.72), -1, 57, 26, 72, 26, { wall: [0.20, 0.21, 0.25], window: WINCOOL, floor: 8 });
+      tower(K(0.70), -1, 85, 20, 92, { col: [0.19, 0.20, 0.25], seg: 4, cap: true, capCol: LED, mast: false });
       billboard(K(0.70), -1, 30, 18, 11, GREEN);
       billboard(K(0.71), -1, 56, 16, 10, SPANGLE);
       billboard(K(0.69), -1, 22, 16, 10, MAGENTA);
@@ -271,11 +311,24 @@
       billboard(K(0.98), 1, 24, 15, 9, WINTEAL);
 
       // --- Red Sea deep water ground plane along the seaward (R) side ---
-      // Additional warm blue ground plane at 120–200m distance to evoke Red Sea
+      // Multiple depth bands in cool/warm blues to evoke the actual Red Sea water
+      // Warm shallow band
+      for (let i = 0; i < 22; i++) {
+        const k = K(i / 22);
+        const a = anchor(k, 1, 180);
+        addBox(out, [a.c[0], pyMin - 0.7, a.c[2]], [350, 1.4, 90], [0.10, 0.15, 0.28], [a.r, a.u, a.t]);
+      }
+      // Mid-depth cooler band
+      for (let i = 0; i < 20; i++) {
+        const k = K(i / 20);
+        const a = anchor(k, 1, 260);
+        addBox(out, [a.c[0], pyMin - 0.9, a.c[2]], [380, 1.6, 100], [0.06, 0.12, 0.24], [a.r, a.u, a.t]);
+      }
+      // Deep water band at horizon
       for (let i = 0; i < 18; i++) {
         const k = K(i / 18);
-        const a = anchor(k, 1, 160);
-        addBox(out, [a.c[0], pyMin - 0.8, a.c[2]], [300, 1.5, 80], [0.08, 0.18, 0.32], [a.r, a.u, a.t]);
+        const a = anchor(k, 1, 380);
+        addBox(out, [a.c[0], pyMin - 1.0, a.c[2]], [450, 1.8, 120], [0.05, 0.10, 0.20], [a.r, a.u, a.t]);
       }
 
       // --- Saturated neon/LED signage billboards: 4 bold signs around the Corniche ---

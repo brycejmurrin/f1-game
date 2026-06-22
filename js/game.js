@@ -301,6 +301,18 @@ let sectorIdx = 0;           // 0, 1, 2 (current sector)
 let sectorBests = [Infinity, Infinity, Infinity];  // best S1/S2/S3 times ever
 let sectorLast = [null, null, null];               // last lap's S1/S2/S3 times
 let frameSky = {}, frame = {};
+// ---------- sky / weather animation state ----------
+// Continuously increasing render clock (seconds) fed to the sky shader each
+// frame so clouds drift and stars twinkle even when the physics are frozen.
+let _skyT = 0;
+// Lightning state: base ambient colours saved from applyRaceSettings(), current
+// flash intensity, remaining flash bright time, and next-flash countdown.
+let _ltBase = null;           // { ambientSky, ambientGround } saved at race start
+let _ltFlash = 0;             // 0..1 current flash intensity (decays each frame)
+let _ltNextT = 0;             // seconds until the next lightning strike
+// Cloud cover target for the current session: set once in applyRaceSettings()
+// and held constant so the sky doesn't shift mid-race (only the shader animates).
+let _cloudBase = 0.4;
 const teamMeshes = {};   // teamId -> GLX mesh
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
@@ -594,6 +606,8 @@ function scheduleFlybyTrack() {
 
 // ---------- race flow ----------
 function applyRaceSettings() {
+  const isNightSession = raceTimeOfDay === "night" ||
+    (raceTimeOfDay === "default" && track && track.def && track.def.night);
   if (raceTimeOfDay !== "default") {
     const night = raceTimeOfDay === "night";
     frameSky.stars = night ? 1 : 0;
@@ -608,41 +622,72 @@ function applyRaceSettings() {
       // When raceTimeOfDay !== "default", sync sky colours to frame too
       frame.skyZenith  = frameSky.zenith;
       frame.skyHorizon = frameSky.horizon;
+      // Moon: high visibility at night to give soft blue fill light
+      frameSky.moon = 0.85;
+      // Night skies: few scattered clouds (don't block stars)
+      _cloudBase = 0.22;
     } else if (raceTimeOfDay === "dusk") {
-      frameSky.zenith = [0.10, 0.12, 0.32];
-      frameSky.horizon = [0.62, 0.30, 0.06];
-      frameSky.sunColor = [1.0, 0.60, 0.22];
-      frameSky.sunDir = V3.norm([0.55, 0.18, 0.25]);
+      // Richer golden hour: deeper indigo zenith, warmer coral/amber horizon,
+      // a sun closer to the deck for that low-angle drama.
+      frameSky.zenith = [0.08, 0.10, 0.28];
+      frameSky.horizon = [0.72, 0.34, 0.08];
+      frameSky.sunColor = [1.0, 0.55, 0.18];
+      frameSky.sunDir = V3.norm([0.50, 0.10, 0.22]);
       frame.sunDir = frameSky.sunDir;
-      frame.sunColor = [1.0, 0.68, 0.28];
-      frame.ambientGround = [0.22, 0.14, 0.08];
-      frame.ambientSky = [0.38, 0.26, 0.16];
-      frame.fogColor = [0.50, 0.24, 0.08];
-      frame.fogDensity = 0.0020;
+      frame.sunColor = [1.0, 0.62, 0.22];
+      // Warm amber ground bounce, cool sky fill from the blue zenith overhead
+      frame.ambientGround = [0.28, 0.16, 0.06];
+      frame.ambientSky = [0.32, 0.22, 0.28];
+      frame.fogColor = [0.58, 0.28, 0.10];
+      frame.fogDensity = 0.0022;
       frame.skyZenith  = frameSky.zenith;
       frame.skyHorizon = frameSky.horizon;
+      frameSky.moon = 0;
+      // Dusk: moderate cloud to catch the orange light nicely
+      _cloudBase = 0.45;
     } else {
-      frameSky.zenith = [0.25, 0.42, 0.80];
-      frameSky.horizon = [0.70, 0.75, 0.82];
-      frame.sunColor = [1.0, 0.95, 0.80];
-      frame.ambientGround = [0.22, 0.20, 0.18];
-      frame.ambientSky = [0.45, 0.48, 0.60];
+      // Bright midday
+      frameSky.zenith = [0.22, 0.40, 0.82];
+      frameSky.horizon = [0.68, 0.74, 0.88];
+      frame.sunColor = [1.0, 0.96, 0.82];
+      frame.ambientGround = [0.24, 0.22, 0.19];
+      frame.ambientSky = [0.46, 0.50, 0.62];
       frame.fogColor = [0.72, 0.72, 0.72];
       frame.fogDensity = 0.0015;
       // When raceTimeOfDay !== "default", sync sky colours to frame too
       frame.skyZenith  = frameSky.zenith;
       frame.skyHorizon = frameSky.horizon;
+      frameSky.moon = 0;
+      // Clear day: light fair-weather clouds
+      _cloudBase = 0.38;
     }
+  } else {
+    // "default" — driven by the track palette; set moon for night tracks
+    frameSky.moon = isNightSession ? 0.85 : 0;
+    _cloudBase = frameSky.cloud !== undefined ? frameSky.cloud
+               : (isNightSession ? 0.22 : 0.4);
   }
   // Wet weather: overcast the sky and flatten the light (soft, diffuse, fewer
   // shadows) — clouds roll in and the sun is muted while ambient lifts.
   if (raceWeather === "wet") {
-    frameSky.cloud = 0.9;
+    // Heavier cloud cover in the rain; cap at 0.96 to let the shader still vary
+    _cloudBase = Math.min(0.96, _cloudBase + 0.52);
+    frameSky.cloud = _cloudBase;
     frame.sunColor = frame.sunColor.map((v) => v * 0.5);
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.65);
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.18));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.18));
+  } else {
+    frameSky.cloud = _cloudBase;
   }
+  // Save base ambient values so the lightning system can restore them each frame
+  _ltBase = {
+    ambientSky:    frame.ambientSky.slice(),
+    ambientGround: frame.ambientGround.slice(),
+  };
+  // Reset lightning timing: first strike after a random 3-8 s delay
+  _ltFlash = 0;
+  _ltNextT = 3 + Math.random() * 5;
 }
 
 function startRace() {
@@ -2012,6 +2057,48 @@ function render(dt) {
     }
   }
 
+  // ── Sky animation & weather FX ──────────────────────────────────────────
+  // Advance the render clock regardless of physics freeze so the sky always
+  // animates (cloud drift, star twinkle).
+  _skyT += dt;
+  frameSky.time = _skyT;
+
+  // Moon: use the value set by applyRaceSettings; pass through for default
+  // night tracks that didn't go through the explicit raceTimeOfDay branch.
+  // (frameSky.moon is already set in applyRaceSettings for non-default modes;
+  // here we make sure default+track.night also gets a moon each frame.)
+  if (raceTimeOfDay === "default" && track && track.def && track.def.night) {
+    frameSky.moon = 0.85;
+  }
+
+  // ── Lightning (wet weather only) ─────────────────────────────────────────
+  const wet = raceWeather === "wet";
+  if (wet && _ltBase) {
+    // Count down to the next strike
+    _ltNextT -= dt;
+    if (_ltNextT <= 0) {
+      // Trigger a new flash: intensity 1 → decays at ~8×/s
+      _ltFlash = 1.0;
+      // Next strike in 4–12 seconds
+      _ltNextT = 4 + Math.random() * 8;
+    }
+    if (_ltFlash > 0.001) {
+      // Decay: fast leading edge, then slow dying glow
+      _ltFlash *= Math.exp(-8 * dt);
+      if (_ltFlash < 0.001) _ltFlash = 0;
+    }
+    if (_ltFlash > 0) {
+      // Spike ambient to a cool blue-white; the decay reads as a natural flash
+      const f = _ltFlash;
+      frame.ambientSky    = _ltBase.ambientSky.map((v)    => Math.min(1, v + 0.55 * f));
+      frame.ambientGround = _ltBase.ambientGround.map((v) => Math.min(1, v + 0.40 * f));
+    } else {
+      // Restore base ambient so normal ticks aren't tinted
+      frame.ambientSky    = _ltBase.ambientSky.slice();
+      frame.ambientGround = _ltBase.ambientGround.slice();
+    }
+  }
+
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
@@ -2023,7 +2110,7 @@ function render(dt) {
   GLX.drawSky(frameSky);
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
-  const wet = raceWeather === "wet";
+  // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
   // mirror-like, cars and barriers pick up sharper reflections.
@@ -2039,10 +2126,16 @@ function render(dt) {
     wet   ? { roughness: 0.16, specular: 0.80, detail: 0 }
           : (night ? { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 }
                    : { roughness: 0.80, specular: 0.22, detail: 0 }));
+  // Floodlights: prop emissive rises as the sun drops below the horizon.
+  // frame.sunDir[1] is the sun's Y (elevation): 1=zenith, ~0=horizon, <0=below.
+  // At night (sunY ≤ 0) full floodlight; during the day emissive stays near 0.
+  const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
+  const _floodEmit = night ? Math.min(0.55, 0.10 + 0.45 * clamp(1 - _sunY * 4, 0, 1))
+                           : 0;
   if (!hideMeshes.props) GLX.draw(track.meshes.props, MAT_IDENT,
-    wet   ? (night ? { emissive: 0.35, roughness: 0.55, specular: 0.38 }
+    wet   ? (night ? { emissive: Math.min(0.40, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
-          : (night ? { emissive: 0.45, roughness: 0.85, specular: 0.20 }
+          : (night ? { emissive: _floodEmit, roughness: 0.85, specular: 0.20 }
                    : { roughness: 0.85, specular: 0.20 }));
   if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
     wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
@@ -2176,7 +2269,17 @@ function render(dt) {
 
   // Resolve the HDR scene (bloom + tonemap + vignette) to the screen.
   GLX.present();
-  if (raceWeather === "wet" && rainDrops.length) drawRain(dt);
+  if (raceWeather === "wet" && rainDrops.length) {
+    drawRain(dt);
+    // Lightning veil: drawn on top of rain drops so it bleaches the rain too
+    if (_ltFlash > 0.001) {
+      rainCtx2d.save();
+      rainCtx2d.globalAlpha = _ltFlash * 0.18;
+      rainCtx2d.fillStyle = "#d8ecff";
+      rainCtx2d.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
+      rainCtx2d.restore();
+    }
+  }
 }
 
 // ---------- HUD ----------

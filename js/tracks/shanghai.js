@@ -50,27 +50,37 @@
       building(K(0.02), -1, 42, 22, 8, 70, { wall: [0.82, 0.83, 0.85], window: [0.30, 0.34, 0.40], floor: 2 });
 
       // The two suspended tower-bridges — the instant Shanghai signature.
-      // Tall slim towers either side of the straight, joined by flat bridge slabs
-      // on thin pillars spanning over the pit straight.
+      // Iconic twin pagoda-like towers soaring over the pit straight, connected by
+      // dramatic skybridges. These are the defining visual landmark of Shanghai.
       (function wingedTowers() {
         const sLap = 0.005;
-        const aL = anchor(K(sLap), -1, 30), bL = [aL.r, aL.u, aL.t];
-        const aR = anchor(K(sLap), 1, 30), bR = [aR.r, aR.u, aR.t];
-        // Two tall tapered towers on the left (pit) side flanking a gap.
-        tower(K(sLap), -1, 30, 7, 56, { col: WHITE, seg: 6, cap: true, capCol: STEEL, mast: 8 });
-        tower(K(0.01), -1, 30, 7, 56, { col: WHITE, seg: 6, cap: true, capCol: STEEL, mast: 8 });
-        // A matching tower across the track on the right to anchor the spanning bridge.
-        tower(K(sLap), 1, 30, 7, 46, { col: WHITE, seg: 6, cap: true, capCol: STEEL });
-        // Suspended bridge slabs spanning over the pit straight on thin pillars.
-        for (const hgt of [34, 44]) {
-          // thin support pillars rising on left tower line
-          addCyl(out, vadd(aL.c, aL.u, 0), 1.1, hgt, STEEL, 6, bL);
-          // flat bridge slab reaching out across the track toward the right
-          addBox(out, vadd(vadd(aL.c, aL.u, hgt), aL.r, 24), [50, 3, 10], WHITE, bL);
-          addBox(out, vadd(vadd(aL.c, aL.u, hgt - 1.6), aL.r, 24), [50, 0.8, 9], STEEL, bL);
+        const aL = anchor(K(sLap), -1, 32), bL = [aL.r, aL.u, aL.t];
+        const aR = anchor(K(sLap), 1, 32), bR = [aR.r, aR.u, aR.t];
+
+        // LEFT SIDE: Two tall tapered pagoda towers flanking a central gap (team buildings).
+        // First tower (left-most, slightly forward)
+        tower(K(sLap), -1, 32, 8.2, 68, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 10 });
+        // Second tower (right-most on left side, slightly back)
+        tower(K(0.008), -1, 32, 8.0, 70, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 10 });
+
+        // RIGHT SIDE: Matching anchoring tower across the track.
+        tower(K(sLap), 1, 32, 7.8, 64, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 9 });
+
+        // SKYBRIDGES: Multiple levels of suspended glass/white bridge decks spanning across.
+        for (const hgt of [36, 48, 58]) {
+          // left side support pillars
+          addCyl(out, vadd(aL.c, aL.u, 0), 1.4, hgt, STEEL, 8, bL);
+          // main bridge deck spanning right, with glass tint
+          const bridgeCol = hgt === 48 ? GLASS : WHITE;
+          addBox(out, vadd(vadd(aL.c, aL.u, hgt), aL.r, 26), [54, 2.8, 12], bridgeCol, bL);
+          // lower structural beam under the deck
+          addBox(out, vadd(vadd(aL.c, aL.u, hgt - 1.8), aL.r, 26), [54, 0.9, 10], STEEL, bL);
+          // right side landing pillars
+          addCyl(out, vadd(aR.c, aR.u, 0), 1.2, hgt - 4, STEEL, 8, bR);
         }
-        // catwalk pillars landing on the right side
-        addCyl(out, vadd(aR.c, aR.u, 0), 1.1, 44, STEEL, 6, bR);
+
+        // ADDITIONAL DETAIL: smaller connector bridge at mid-height
+        addBox(out, vadd(vadd(aL.c, aL.u, 42), aL.r, 28), [48, 1.2, 8], [0.75, 0.78, 0.82], bL);
       })();
 
       // ---- Signature CURVED CANTILEVER MAIN GRANDSTAND + overhanging roof (L) ----
@@ -107,11 +117,15 @@
       billboard(K(0.02), 1, 9, 16, 4.5, RED);
       billboard(K(0.97), 1, 9, 14, 4, YELLOW);
 
-      // ---- LAKE by the pit complex (groundPlane water, L behind paddock) ----
-      groundPlane(K(0.92), -1, 60, [200, 130], WATER);
-      groundPlane(K(0.00), -1, 70, [160, 110], WATER);
-      // small dock / jetty boxes at the water edge
-      place(K(0.95), -1, 56, [10, 1.2, 4], CONC);
+      // ---- LAKES by the pit complex and paddock (groundPlane water, distinctive Shanghai feature) ----
+      // Large water feature behind the pit straight, adding to the modern circuit character.
+      groundPlane(K(0.92), -1, 62, [220, 150], WATER);
+      groundPlane(K(0.00), -1, 75, [180, 130], WATER);
+      // Modern dock/jetty structures and landscaping nodes at the water edge
+      place(K(0.95), -1, 58, [12, 1.4, 5], CONC);
+      place(K(0.01), -1, 76, [14, 1.2, 6], [0.65, 0.68, 0.72]);  // light grey deck
+      // Smaller decorative water feature in the infield beyond T6
+      groundPlane(K(0.32), -1, 180, [120, 80], [0.36, 0.48, 0.56]);
 
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
       grandstand(0.04, -1, 18, 130, [0.44, 0.45, 0.50], SEAT);
@@ -139,57 +153,61 @@
       marshalPost(K(0.08), -1, 14);
 
       // ================= CONTINUOUS HAZY SHANGHAI SKYLINE (wraps whole lap) =================
-      // One unbroken band of haze-greyed buildings ringing the far side of the
-      // entire lap — varied heights, no gaps, receding into a back row.
+      // One unbroken band of haze-greyed modern buildings ringing the entire lap —
+      // varied heights, glass reflections, no gaps, receding into progressively hazier rows.
       (function skylineBand() {
         let sx = 0, sz = 0;
         for (let i = 0; i < n; i++) { sx += px[i]; sz += pz[i]; }
         sx /= n; sz /= n;
         let rd = 0;
         for (let i = 0; i < n; i++) rd = Math.max(rd, Math.hypot(px[i] - sx, pz[i] - sz));
-        // Two concentric rings of tight-packed towers — front sharper, back hazed.
+        // Three concentric rings of tight-packed towers — front sharp, middle mixed, back hazed.
         for (const [extra, cnt, hMin, hVar, col] of [
-          [205, 90, 34, 80, SKY],          // front skyline row
-          [285, 76, 40, 95, SKY_HAZE],     // back hazed row (taller, greyer)
+          [210, 96, 36, 85, GLASS],        // front skyline row (glass-tinted)
+          [290, 82, 42, 100, [0.68, 0.70, 0.73]],  // middle row (mixed glass/grey)
+          [360, 70, 46, 110, SKY_HAZE],    // back hazed row (taller, greyer, foggier)
         ]) {
           const ring = rd + extra;
           for (let i = 0; i < cnt; i++) {
             const a = i / cnt * 6.2832;
-            const jx = (hash(i * 5 + extra) - 0.5) * 18;
-            const jz = (hash(i * 7 + extra) - 0.5) * 18;
+            const jx = (hash(i * 5 + extra) - 0.5) * 20;
+            const jz = (hash(i * 7 + extra) - 0.5) * 20;
             const x = sx + Math.cos(a) * ring + jx;
             const z = sz + Math.sin(a) * ring + jz;
             const h = hMin + hash(i * 11 + extra) * hVar;
-            const w = 12 + hash(i * 13 + extra) * 12;
+            const w = 13 + hash(i * 13 + extra) * 14;
             addBox(out, [x, pyMin + h / 2, z], [w, h, w], col, null);
           }
         }
       })();
       // Denser PUDONG-STYLE feature cluster of tall glass towers behind T6 (s 0.30, L far),
-      // with a pearl-tower-like landmark (twin spheres on a tripod) as the centrepiece.
+      // modern Shanghai skyline with the iconic Pearl Tower landmark as centrepiece.
       (function pudongCluster() {
-        const a = anchor(K(0.30), -1, 220), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.30), -1, 230), b = [a.r, a.u, a.t];
         const u = b[1];
-        for (let i = 0; i < 20; i++) {
-          const off = (i - 10) * 26 + (hash(i * 5) - 0.5) * 16;
-          const depth = 20 + hash(i * 7) * 70;
-          const h = 70 + hash(i * 11) * 140;
-          const w = 11 + hash(i * 13) * 12;
-          const col = depth > 55 ? GLASS_HAZE : GLASS;
-          // tapered glass tower with a spire cap
+        for (let i = 0; i < 24; i++) {
+          const off = (i - 12) * 28 + (hash(i * 5) - 0.5) * 18;
+          const depth = 25 + hash(i * 7) * 80;
+          const h = 75 + hash(i * 11) * 160;
+          const w = 12 + hash(i * 13) * 14;
+          const col = depth > 60 ? GLASS_HAZE : GLASS;
+          // tapered glass tower with a spire cap — more distinct heights
           addFrustum(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0),
-                     w / 2, w / 3.4, h, col, 4, b);
-          if (hash(i * 17) > 0.3)
-            addBox(out, vadd(vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h), u, 6),
-                   [1.2, 12, 1.2], STEEL, b);
+                     w / 2, w / 3.2, h, col, 5, b);
+          if (hash(i * 17) > 0.25)
+            addBox(out, vadd(vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h), u, 7),
+                   [1.4, 14, 1.4], STEEL, b);
         }
-        // Pearl-tower landmark: tripod legs, a big lower sphere, a smaller upper sphere, spire.
-        const pc = vadd(vadd(a.c, a.r, -6), a.t, 30);
-        for (const ld of [-5, 5]) addCyl(out, vadd(pc, a.r, ld), 1.6, 70, PEARL, 6, b);
-        addBox(out, vadd(pc, u, 50), [22, 18, 22], PEARL, b);   // lower sphere (boxy approx)
-        addCyl(out, vadd(pc, u, 60), 2.4, 36, PEARL, 6, b);
-        addBox(out, vadd(pc, u, 100), [14, 14, 14], PEARL, b);  // upper sphere
-        addCone(out, vadd(pc, u, 110), 2.2, 30, [0.86, 0.72, 0.66], 6, b); // spire
+        // PEARL TOWER landmark: The iconic Shanghai symbol.
+        // Tripod support legs, large lower sphere, smaller upper sphere, tall spire.
+        const pc = vadd(vadd(a.c, a.r, 0), a.t, 45);
+        // Three diagonal tripod legs (major support structure)
+        for (const ld of [-8, 0, 8]) addCyl(out, vadd(pc, a.r, ld), 2.2, 84, [0.76, 0.74, 0.72], 8, b);
+        // Main spherical sections with enhanced scale
+        addBox(out, vadd(pc, u, 58), [28, 22, 28], PEARL, b);   // lower main sphere
+        addCyl(out, vadd(pc, u, 72), 3.2, 48, PEARL, 8, b);     // connector column
+        addBox(out, vadd(pc, u, 116), [18, 18, 18], [0.82, 0.68, 0.64], b);  // upper sphere (slightly warmer)
+        addCone(out, vadd(pc, u, 128), 2.8, 36, [0.88, 0.76, 0.70], 8, b); // tall spire cap
       })();
 
       // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
