@@ -34,11 +34,14 @@
 .dh-close {
   width: 34px; height: 34px; flex: 0 0 auto;
   border-radius: 8px; padding: 0; font-size: 16px;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #c4c4c8; cursor: pointer;
 }
+.dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
 .dh-tabs {
-  display: flex; gap: 0; padding: 0 4px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex; gap: 4px; padding: 8px 12px 0;
+  border-bottom: none;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.1);
   flex: 0 0 auto; overflow-x: auto; scrollbar-width: none;
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
@@ -47,6 +50,7 @@
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
+  margin-bottom: 0;
   border-radius: 0;
   padding: 10px 8px;
   font-size: 11px; letter-spacing: 0.06em;
@@ -63,7 +67,7 @@
   padding: 16px 18px;
   -webkit-overflow-scrolling: touch;
 }
-.dh-tabbody { display: flex; flex-direction: column; gap: 6px; }
+.dh-tabbody { display: flex; flex-direction: column; gap: 12px; }
 
 .dh-section {
   font-size: 12px; letter-spacing: 0.14em; color: #e10600;
@@ -72,7 +76,10 @@
 }
 
 /* loading / error / empty */
-.dh-loading, .dh-error { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 48px 12px; color: #9a9aa5; }
+.dh-loading, .dh-error { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 12px; color: #9a9aa5; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .dh-loading, .dh-error { padding: 18px 12px; }
+}
 .dh-spinner {
   width: 34px; height: 34px; border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.15);
@@ -84,7 +91,7 @@
 .dh-error-msg { font-size: 14px; text-align: center; max-width: 360px; }
 .dh-retry { padding: 8px 22px; }
 .dh-empty { padding: 30px 12px; text-align: center; color: #8a8a95; font-size: 14px; }
-.dh-footnote { margin-top: 12px; font-size: 11px; color: #6a6a75; text-align: right; }
+.dh-footnote { margin-top: 16px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 11px; color: #6a6a75; text-align: right; }
 
 /* schedule rows */
 .dh-race {
@@ -112,28 +119,36 @@
   font-size: 11px; font-weight: 800;
   padding: 2px 6px; border-radius: 4px;
   color: #fff; min-width: 38px; text-align: center;
-  border-left: 3px solid rgba(255, 255, 255, 0.4);
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.07);
 }
 .dh-swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dh-wins { font-size: 11px; color: #8a8a95; flex: 0 0 auto; }
-.dh-pts { width: 44px; text-align: right; font-weight: 700; flex: 0 0 auto; }
+.dh-wins { font-size: 11px; color: #f6d200; font-weight: 700; flex: 0 0 auto; }
+.dh-pts { width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; }
 
 /* last race */
 .dh-lr-head { margin-bottom: 12px; }
 .dh-lr-name { font-size: 16px; font-weight: 800; font-style: italic; color: #fff; }
 .dh-lr-meta { font-size: 12px; color: #8a8a95; margin-top: 2px; }
-.dh-table { display: flex; flex-direction: column; }
+.dh-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.dh-table thead th {
+  text-align: left; font-size: 10px; letter-spacing: 0.10em;
+  color: #8a8a95; font-weight: 700; padding: 4px 6px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+.dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+.dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+.dh-table td { padding: 7px 6px; vertical-align: middle; }
 .dh-td-pos { width: 28px; text-align: right; color: #8a8a95; flex: 0 0 auto; }
 .dh-td-driver { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dh-td-team { flex: 0 0 auto; color: #8a8a95; font-size: 12px; width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dh-td-team { flex: 0 0 auto; color: #8a8a95; font-size: 12px; width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-td-grid { width: 32px; text-align: center; color: #8a8a95; flex: 0 0 auto; }
 .dh-td-time { width: 92px; text-align: right; color: #c4c4c8; font-size: 12px; flex: 0 0 auto; }
 .dh-td-pts { width: 36px; text-align: right; font-weight: 700; flex: 0 0 auto; }
 
 /* live */
-.dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: 14px; }
+.dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: 4px; }
 .dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: #fff; }
 .dh-live-type { font-size: 12px; color: #e10600; letter-spacing: 0.08em; }
 .dh-live-sub { font-size: 12px; color: #8a8a95; margin-top: 2px; }
@@ -279,4 +294,8 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px;
   padding: 6px 8px; font: inherit; font-size: 13px;
   max-width: 220px;
+}
+
+@media (max-width: 480px) {
+  .dh-tab { font-size: 10px; letter-spacing: 0.03em; padding: 10px 4px; }
 }
