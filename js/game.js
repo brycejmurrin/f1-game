@@ -2659,10 +2659,17 @@ function steerLabel() {
 function enableTilt() {
   // Must run inside a user gesture for the iOS permission prompt.
   Input.requestGyro().then((ok) => {
-    if (ok) Input.calibrate();
+    if (ok) {
+      Input.calibrate();
+    } else if (Input.gyroDenied) {
+      // Permission denied — fall back to buttons so the player can still steer.
+      // (Staying in tilt mode with no sensor data leaves steer locked at 0 and
+      // the car just follows ROAD_FOLLOW, appearing to "auto-drive" the racing line.)
+      setSteerMode("buttons");
+    }
     $("pm-steer").textContent = steerLabel();
     els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready"
-      : (Input.gyroDenied ? "motion access denied — using touch" : "");
+      : (Input.gyroDenied ? "motion access denied — switched to buttons" : "");
   });
 }
 
