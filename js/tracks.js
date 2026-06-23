@@ -617,7 +617,7 @@ const Tracks = (function () {
           // the ground dips beneath the track instead of bisecting it.
           for (let j = 0; j < n; j++) {
             let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
-            if (dd * ds < 36) continue;                 // skip this vert's own road
+            if (dd * ds < 18) continue;                 // skip this vert's own road; tight enough to still catch hairpin fold-backs
             const ex = wx - px[j], ez = wz - pz[j];
             const reach = hw[j] + 2.5;
             if (ex * ex + ez * ez > reach * reach) continue;
