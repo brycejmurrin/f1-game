@@ -24,7 +24,7 @@ export function scanCircuit(circuit) {
   // BLANK-FRAME detection, not perf benchmarking, so the cap is generous to
   // keep that detection working without false timeouts. (Real GPUs render these
   // frames in well under a millisecond.)
-  test(`blank scan: ${circuit}`, { timeout: 300_000 }, async ({ page }) => {
+  test(`blank scan: ${circuit}`, { timeout: 180_000 }, async ({ page }) => {
     let culled = 0;
     page.on("console", (m) => {
       const mm = m.text().match(new RegExp(`\\[scenery\\] ${circuit}: culled (\\d+)`));

@@ -606,7 +606,24 @@ const Tracks = (function () {
             frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
             by = bankLift * frac * (1 - t);
           }
-          pos.push(px[k] + r[0] * o + u[0] * by, yBase + sag + u[1] * by, pz[k] + r[2] * o + u[2] * by);
+          const wx = px[k] + r[0] * o + u[0] * by;
+          const wz = pz[k] + r[2] * o + u[2] * by;
+          let wy = yBase + sag + u[1] * by;
+          // Clip terrain that would rise OVER another part of the circuit: where
+          // a section runs near a higher one (an elevation change, a crossover, a
+          // hairpin folding back), the ribbon of the high section can otherwise
+          // cover the lower track. If this vert sits over the tarmac of a
+          // non-local node and above that road, drop it just under that road so
+          // the ground dips beneath the track instead of bisecting it.
+          for (let j = 0; j < n; j++) {
+            let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
+            if (dd * ds < 36) continue;                 // skip this vert's own road
+            const ex = wx - px[j], ez = wz - pz[j];
+            const reach = hw[j] + 2.5;
+            if (ex * ex + ez * ez > reach * reach) continue;
+            if (wy > py[j] - 0.4) wy = Math.min(wy, py[j] - 1.6);
+          }
+          pos.push(wx, wy, wz);
           nrm.push(0, 1, 0);
           const nz = (hash(k * 3 + v) - 0.5) * 0.04;
           // gravel/runoff verge at the road edge, grading out to grass (no apron)
@@ -1335,28 +1352,28 @@ const Tracks = (function () {
       // never a hollow glass frame.
       const section = (yBase, sw, sh, sd) => {
         const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], body, b);   // solid wall mass
-        const rows = Math.max(2, Math.min(14, Math.round(sh / floorH)));
+        const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
-        const corn = [body[0] * 0.74, body[1] * 0.74, body[2] * 0.78];   // shaded cornice
-        // Window band per storey (glass, proud) + a thin proud floor cornice
-        // between storeys → strong horizontal storey rhythm + relief.
+        // Window band per storey (glass, slightly proud). Bands give the storey
+        // rhythm; vertical mullions cut them into a grid. Kept to a modest box
+        // count — overlapping proud boxes are pure overdraw, the cost that
+        // matters most for the (software-rendered) scenery pass.
         for (let r = 0; r < rows; r++) {
           const wc = (opts.lit && hash(k * 13.7 + yBase * 0.7 + r * 5.1 + side * 2.3) < 0.22) ? darkW : glass;
-          addBox(out, vadd(p.c, p.u, yBase + (r + 0.52) * fh), [sw * 1.014, fh * 0.5, sd * 1.014], wc, b);
-          if (r > 0) addBox(out, vadd(p.c, p.u, yBase + r * fh), [sw * 1.026, fh * 0.12, sd * 1.026], corn, b);
+          addBox(out, vadd(p.c, p.u, yBase + (r + 0.52) * fh), [sw * 1.01, fh * 0.5, sd * 1.01], wc, b);
         }
-        // Dense vertical wall mullions (~1 per 4 m) cut the bands into a true
-        // window GRID on the long faces — glazing reads as windows, not stripes.
-        const nm = Math.max(2, Math.min(9, Math.round(sd / 4)));
+        // Vertical wall mullions cut the bands into a window GRID on the long
+        // faces (so glazing reads as windows, not glowing floor stripes).
+        const nm = Math.max(2, Math.min(4, Math.round(sd / 6)));
         for (let c = 1; c <= nm; c++) {
           const off = -sd / 2 + (c / (nm + 1)) * sd;
-          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.t, off), [sw * 1.03, sh, 0.5], body, b);
+          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.t, off), [sw * 1.02, sh, 0.5], body, b);
         }
-        // mullions on the end faces too (~1 per 5 m)
-        const nmR = Math.max(1, Math.min(6, Math.round(sw / 5)));
+        // 1–2 on the end faces so those panes aren't floor stripes either
+        const nmR = sw > 18 ? 2 : 1;
         for (let c = 1; c <= nmR; c++) {
           const off = -sw / 2 + (c / (nmR + 1)) * sw;
-          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), [0.5, sh, sd * 1.03], body, b);
+          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), [0.5, sh, sd * 1.02], body, b);
         }
         return ok;
       };
@@ -1372,12 +1389,11 @@ const Tracks = (function () {
       if (arch === "flat") {
         if (section(0, w, h, d) === false) return;
       } else if (arch === "stepped") {
-        // three concentric setback tiers for a proper stepped silhouette
-        const h1 = h * 0.54, rem = h - h1, h2 = rem * 0.6, h3 = rem - h2;
+        // two concentric setback tiers
+        const h1 = h * 0.6, h2 = h - h1;
         if (section(0, w, h1, d) === false) return;
-        section(h1, w * 0.78, h2, d * 0.78);
-        section(h1 + h2, w * 0.56, h3, d * 0.56);
-        topW = w * 0.56; topD = d * 0.56;
+        section(h1, w * 0.72, h2, d * 0.72);
+        topW = w * 0.72; topD = d * 0.72;
       } else if (arch === "tapered") {
         // straight shaft + a frustum crown (sloped glass cap)
         const bh = h * 0.72;
