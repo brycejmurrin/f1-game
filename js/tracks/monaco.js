@@ -53,12 +53,12 @@
 
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
       // Left: stone buildings. Right: pit lane terrace + grandstand.
-      cityFront(0.00, 0.07, -1, 8, {
+      cityFront(0.00, 0.07, -1, 11, {
         minH: 16, maxH: 32, depth: 18, step: 28,
         palette: [CREAM, DUSTY, STONE, OCHRE],
         lit: true, windowCol: WINLIT,
       });
-      cityFront(0.00, 0.07,  1, 8, {
+      cityFront(0.00, 0.07,  1, 11, {
         minH: 14, maxH: 26, depth: 16, step: 30,
         palette: [STONE, CREAM, DUSTY],
         lit: true, windowCol: WINLIT,
@@ -77,12 +77,12 @@
       // The hillside soars steeply on the LEFT (inland rock face). Dense cityFront
       // close in, then green/rocky hillside backdrop mounds, then far towers.
       // RIGHT side is close apartment facades.
-      cityFront(0.08, 0.26, -1, 9, {
+      cityFront(0.08, 0.26, -1, 12, {
         minH: 20, maxH: 44, depth: 20, step: 28,
         palette: [CREAM, OCHRE, TERRA, DUSTY, SAGE],
         lit: true, windowCol: WINLIT,
       });
-      cityFront(0.08, 0.26,  1, 9, {
+      cityFront(0.08, 0.26,  1, 12, {
         minH: 16, maxH: 34, depth: 18, step: 30,
         palette: [STONE, CREAM, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
@@ -113,7 +113,7 @@
 
       // ── CASINO DE MONTE-CARLO (s=0.20, L) ───────────────────────────────
       {
-        const k = K(0.20), a = anchor(k, -1, 22);
+        const k = K(0.20), a = anchor(k, -1, 36);   // dist clears the 44-wide mass off the track (inner face ~14m back)
         if (!onTrack(a.c[0], a.c[2], 26)) {
           const b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
@@ -155,12 +155,12 @@
       }
 
       // ── SECTOR 3 — CASINO / MIRABEAU DESCENT (s=0.26→0.42) ─────────────
-      cityFront(0.26, 0.42, -1, 9, {
+      cityFront(0.26, 0.42, -1, 12, {
         minH: 18, maxH: 40, depth: 20, step: 20,
         palette: [CREAM, DUSTY, OCHRE, TERRA, STONE],
         lit: true, windowCol: WINLIT,
       });
-      cityFront(0.26, 0.42,  1, 9, {
+      cityFront(0.26, 0.42,  1, 12, {
         minH: 16, maxH: 32, depth: 18, step: 22,
         palette: [STONE, OCHRE, CREAM, DUSTY],
         lit: true, windowCol: WINLIT,
@@ -254,7 +254,7 @@
       // ── SECTOR 5 — HARBOUR FRONT (s=0.585→0.98) ─────────────────────────
       // LEFT = harbour/sea. RIGHT = continuous inland apartment facades.
       // Coherent pastel cityFront on the RIGHT (inland side).
-      cityFront(0.585, 0.98, 1, 9, {
+      cityFront(0.585, 0.98, 1, 12, {
         minH: 18, maxH: 38, depth: 20, step: 22,
         palette: [CREAM, DUSTY, OCHRE, TERRA, STONE, SAGE],
         lit: true, windowCol: WINLIT,
