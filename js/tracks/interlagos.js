@@ -207,12 +207,9 @@
         // Near house
         building(k, -1, dist1, w1, h1, w1 * 0.80,
           { wall: FAV_WALL[colIdx], window: LIT_WIN, floor: 2.6, lit: false });
-        // Far house (slightly behind, different colour)
-        if (!onTrack(anchor(k, -1, dist2 + w2 / 2).c[0],
-                     anchor(k, -1, dist2 + w2 / 2).c[2], w2 / 2)) {
-          building(k, -1, dist2, w2, h2, w2 * 0.85,
-            { wall: FAV_WALL[col2], window: LIT_WIN, floor: 2.4, lit: false });
-        }
+        // Far house (slightly behind, different colour) — building() guards internally
+        building(k, -1, dist2, w2, h2, w2 * 0.85,
+          { wall: FAV_WALL[col2], window: LIT_WIN, floor: 2.4, lit: false });
       });
 
       // ---- Favela accent: a few taller landmark buildings on the hillcrest ----
