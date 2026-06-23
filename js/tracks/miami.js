@@ -459,14 +459,14 @@
       // ===================================================================
       for (let i = 0; i < 4; i++) {
         const s = 0.77 + i * 0.025;
-        grandstand(s, -1, 12, 105 + i * 5, GREYWHITE, PASTELS[i % PASTELS.length]);
+        grandstand(s, -1, 20, 80, GREYWHITE, PASTELS[i % PASTELS.length]);   // gap 20 (was 12) so the chase cam never ends up inside the stand; shorter so they don't merge into one long wall
       }
       // Coherent back-straight building facades both sides
-      cityFront(0.76, 0.86, -1, 24, {
+      cityFront(0.76, 0.86, -1, 34, {
         minH: 16, maxH: 38, depth: 22, step: 20,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });
-      cityFront(0.76, 0.86, 1, 22, {
+      cityFront(0.76, 0.86, 1, 34, {
         minH: 12, maxH: 28, depth: 20, step: 22,
         palette: [CORAL, TEAL, PINK, [1.0, 0.85, 0.55], GREYWHITE],
         lit: true, windowCol: WIN_COOL,
