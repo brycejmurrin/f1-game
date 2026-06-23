@@ -29,7 +29,7 @@
               mountain, grandstand, building, tower, tree, bush, hedge,
               billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
               addBox, addCyl, addCone, addPrism, addPyramid, addFrustum,
-              anchor, vadd, cityFront, forestEdge } = api;
+              anchor, vadd, cityFront, forestEdge, backdrop } = api;
 
       // ── PALETTE ──────────────────────────────────────────────────────────────
       // Madrid: bright dry Mediterranean day. Warm whites, pale stone, blue sky,
@@ -46,7 +46,6 @@
       const STONE    = [0.78, 0.76, 0.70];   // Madrid limestone / sandstone
       const AMBER    = [1.00, 0.78, 0.28];   // lamp post head / runway light
       const LAMPGREY = [0.36, 0.38, 0.42];   // lamp post shaft
-      const REDROOF  = [0.55, 0.30, 0.26];   // terracotta tile (historic quarter)
 
       // ── TRACK CENTRE + RADIUS (used for encircling backdrop rings) ────────
       let cx = 0, cz = 0;
@@ -73,83 +72,82 @@
 
       // ── (2) MADRID CITY SKYLINE ─────────────────────────────────────────────
       // Two rings of buildings represent Madrid's urban density, plus the iconic
-      // Cuatro Torres business-district cluster. All buildings use LITWIN window
-      // bands so the skyline glows legibly at dusk.
-      const skyPal = [
-        [0.66, 0.70, 0.76], [0.58, 0.64, 0.72], [0.72, 0.74, 0.76],
-        [0.50, 0.58, 0.66], [0.78, 0.78, 0.80], [0.46, 0.54, 0.62],
-        [0.68, 0.66, 0.62], [0.60, 0.68, 0.74],
-      ];
-      // Inner dense ring — mid-rise urban blocks (rad+440)
+      // Cuatro Torres business-district cluster.
+      //
+      // Inner ring: mid-rise blocks rendered as tapered frustum masses + a
+      // glass-band layer so they read as real buildings not flat slabs.
       {
-        const ring = rad + 440, count = 48;
+        const ring = rad + 440, count = 36;
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832 + (hash(i * 3) - 0.5) * 0.04;
           const jr = (hash(i * 9) - 0.5) * 110;
           const wx = cx + Math.cos(a) * (ring + jr), wz = cz + Math.sin(a) * (ring + jr);
-          if (onTrack(wx, wz, 30)) continue;
-          const h = 28 + hash(i * 7) * 58;
-          const w = 16 + hash(i * 13) * 20;
+          if (onTrack(wx, wz, 28)) continue;
+          const h = 26 + hash(i * 7) * 52;
+          const w = 18 + hash(i * 13) * 16;
           const yb = pyMin;
-          addBox(out, [wx, yb + h / 2, wz], [w, h, w], skyPal[i % skyPal.length]);
-          // lit window banding — LITWIN so windows glow at night/dusk
-          const bands = Math.max(2, Math.floor(h / 12));
-          for (let b = 1; b < bands; b++) {
-            const yy = yb + (b / bands) * h;
-            addBox(out, [wx, yy, wz], [w * 1.01, 1.2, w * 1.01], LITWIN);
+          // Stepped massing: wide base + narrower upper section (less boxy)
+          const h1 = h * 0.65, h2 = h - h1;
+          const col = [0.62 + hash(i * 3) * 0.12, 0.64 + hash(i * 5) * 0.10, 0.68 + hash(i * 7) * 0.08];
+          addFrustum(out, [wx, yb, wz], w * 0.55, w * 0.42, h1, col, 6);
+          // upper setback block
+          if (h2 > 4) {
+            const col2 = [col[0] + 0.04, col[1] + 0.03, col[2] + 0.05];
+            addFrustum(out, [wx, yb + h1, wz], w * 0.38, w * 0.28, h2, col2, 6);
           }
+          // single glass-ribbon face band (much cheaper than per-floor banding)
+          addBox(out, [wx, yb + h * 0.52, wz], [w * 0.62, h * 0.22, w * 0.08], LGLASS);
         }
       }
-      // Outer ring — tall landmark towers (rad+620)
+      // Outer ring: landmark towers with tapered glass profiles
       {
-        const ring = rad + 620, count = 26;
+        const ring = rad + 600, count = 20;
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832 + (hash(i * 17) - 0.5) * 0.06;
-          const jr = (hash(i * 23) - 0.5) * 150;
+          const jr = (hash(i * 23) - 0.5) * 140;
           const wx = cx + Math.cos(a) * (ring + jr), wz = cz + Math.sin(a) * (ring + jr);
-          if (onTrack(wx, wz, 30)) continue;
-          const h = 95 + hash(i * 5) * 140;
-          const w = 22 + hash(i * 11) * 18;
+          if (onTrack(wx, wz, 28)) continue;
+          const h = 90 + hash(i * 5) * 130;
+          const w = 24 + hash(i * 11) * 16;
           const yb = pyMin;
-          addBox(out, [wx, yb + h / 2, wz], [w, h, w], skyPal[(i + 3) % skyPal.length]);
-          const bands = Math.max(3, Math.floor(h / 14));
-          for (let b = 1; b < bands; b++) {
-            const yy = yb + (b / bands) * h;
-            addBox(out, [wx, yy, wz], [w * 1.01, 1.4, w * 1.01], LITWIN);
-          }
-          if (hash(i * 19) > 0.45)
-            addBox(out, [wx, yb + h + 4, wz], [3, 8, 3], [0.85, 0.30, 0.25]);
+          // Core frustum shaft — slight taper gives modern office-block silhouette
+          const col = [0.54 + hash(i * 9) * 0.14, 0.58 + hash(i * 11) * 0.10, 0.64 + hash(i * 13) * 0.10];
+          addFrustum(out, [wx, yb, wz], w * 0.55, w * 0.36, h * 0.82, col, 6);
+          // Tapered glass crown (top 18% of height)
+          addFrustum(out, [wx, yb + h * 0.82, wz], w * 0.36, w * 0.12, h * 0.18, LGLASS, 6);
+          // Red beacon on very tall towers
+          if (hash(i * 19) > 0.50)
+            addCyl(out, [wx, yb + h + 2, wz], 0.22, 6, [0.85, 0.30, 0.25], 4);
         }
       }
+
       // Cuatro Torres — four iconic supertall glass towers on one bearing.
-      // These are the most recognisable element of the Madrid skyline.
+      // Torre PwC 236m, Torre de Cristal 249m, Torre Espacio 224m, Torre Cepsa 248m.
+      // Rendered as frustum shafts + glass facets for a non-boxy silhouette.
       {
         const a = 0.9, ring = rad + 760;
         const bx = cx + Math.cos(a) * ring, bz = cz + Math.sin(a) * ring;
         const perpx = -Math.sin(a), perpz = Math.cos(a);
-        // Heights roughly matching real proportions: Torre PwC 236m, Torre de Cristal 249m,
-        // Torre Espacio 224m, Torre Cepsa 248m
-        const hts = [240, 268, 252, 224];
+        const hts  = [240, 268, 252, 224];
+        const cols = [
+          [0.62, 0.70, 0.78],   // Torre PwC — steel/glass
+          [0.74, 0.80, 0.88],   // Torre de Cristal — all-glass (bright)
+          [0.68, 0.62, 0.58],   // Torre Espacio — warm granite cladding
+          [0.58, 0.64, 0.72],   // Torre Cepsa — dark glass
+        ];
         for (let i = 0; i < 4; i++) {
           const off = (i - 1.5) * 72;
           const wx = bx + perpx * off, wz = bz + perpz * off;
-          const h = hts[i], w = i % 2 ? 26 : 29;
+          const h = hts[i], w = i % 2 ? 24 : 28;
           const yb = pyMin;
-          // main shaft — alternating glass and concrete finishes
-          addBox(out, [wx, yb + h / 2, wz], [w, h, w],
-                 i % 2 ? [0.62, 0.70, 0.78] : [0.72, 0.74, 0.78]);
-          // glazed curtain-wall face (south-facing)
-          addBox(out, [wx, yb + h * 0.55, wz], [w * 1.01, h * 0.78, w * 0.12], LGLASS);
-          // lit window floor-plate banding — warm for even i, cool for odd
-          const bands = Math.max(4, Math.floor(h / 18));
-          const winCol = i % 2 ? [0.60, 0.75, 1.0] : [0.95, 0.85, 0.55];
-          for (let b = 1; b < bands; b++) {
-            const yy = yb + (b / bands) * h;
-            addBox(out, [wx, yy, wz], [w * 1.02, 1.6, w * 1.02], winCol);
-          }
-          // crown
-          addBox(out, [wx, yb + h + 5, wz], [4, 10, 4], [0.85, 0.30, 0.25]);
-          addCyl(out, [wx, yb + h + 15, wz], 0.28, 22, LAMPGREY, 5);
+          // Main shaft as tapered frustum — wider at base, slim at crown
+          addFrustum(out, [wx, yb, wz], w * 0.56, w * 0.28, h * 0.88, cols[i], 8);
+          // Glass crown (top 12%)
+          addFrustum(out, [wx, yb + h * 0.88, wz], w * 0.28, w * 0.06, h * 0.12, LGLASS, 8);
+          // Curtain-wall glass band on the main facade — single ribbon, not per-floor
+          addBox(out, [wx, yb + h * 0.45, wz], [w * 0.58, h * 0.55, w * 0.10], GLASS);
+          // Crown spire/antenna
+          addCyl(out, [wx, yb + h + 1, wz], 0.22, 18, LAMPGREY, 4);
         }
       }
 
@@ -179,21 +177,25 @@
           addBox(out, vadd(base, A.u, 0.05), [14, 0.12, 14], [0.88, 0.82, 0.68], [A.r, A.u, A.t]);
         }
       }
+      // Stadium backdrop — tall grandstand building masses behind the bowl using
+      // backdrop() so they get automatic window bands and a parapet roofline.
+      for (let i = -5; i <= 5; i += 2) {
+        const k = ((kmono + i * step) % n + n) % n;
+        for (const side of [1, -1]) {
+          backdrop(k, side, 64, [36, 48, 8], [0.86, 0.87, 0.90]);
+        }
+      }
 
       // ── (4) IFEMA EXHIBITION HALLS: s≈0.85–0.15 ─────────────────────────────
       // The Feria de Madrid / IFEMA campus sits around the pit-straight and
       // paddock. Large horizontal white halls with glass-ribbon facades — the
-      // defining architectural feature of this circuit. We use cityFront() for
-      // a coherent continuous facade on both sides of the paddock zone, then
-      // place individual landmark exhibition halls as building() anchors.
-      //
-      // IFEMA palette: bright white halls, blue glass, warm lit windows at dusk.
+      // defining architectural feature of this circuit. cityFront() gives a
+      // coherent continuous facade on both sides of the paddock zone.
       const ifemaPal = [WHITE, [0.88, 0.90, 0.92], [0.85, 0.87, 0.90], OFFWHITE];
       const ifemaWin  = [0.70, 0.82, 0.94];   // cool blue glass ribbon (day)
       const ifemaLit  = [0.75, 0.88, 1.00];   // bright lit-glass (dusk/night)
 
       // Continuous IFEMA facade on the outside of the pit straight (right side)
-      // gap=55 keeps it well clear of the street barriers (barrierOffset≈0.35)
       cityFront(0.87, 0.14, 1, 55, {
         minH: 18, maxH: 32, depth: 48,
         palette: ifemaPal,
@@ -208,16 +210,16 @@
         floor: 5, step: 26,
       });
 
-      // Landmark IFEMA signature halls — two extra-wide low halls that read as
-      // the big exhibition pavilions. Gaps are generous to avoid barrier clipping.
+      // Landmark IFEMA signature halls — wide low exhibition pavilions.
+      // building() gives proper massing: plinth, stepped sections, window grid.
       for (const [frac, side, w, h, d, gap] of [
-        [0.93, 1,  90, 18, 120, 64],   // Hall 6 / main congress centre
-        [0.97, 1,  80, 16, 105, 60],   // Hall 8 / north pavilion
-        [0.03, 1,  85, 20, 115, 62],   // Hall 10 / south-east pavilion
-        [0.07, 1,  75, 17,  96, 58],   // Hall 12 / terminal pavilion
-        [0.94, -1, 70, 15,  88, 56],   // Hotel/hospitality on left side
-        [0.98, -1, 75, 16,  92, 54],   // Conference annex
-        [0.04, -1, 68, 18,  85, 52],   // Service building
+        [0.93, 1,  80, 18, 110, 64],   // Hall 6 / main congress centre
+        [0.97, 1,  72, 16,  98, 60],   // Hall 8 / north pavilion
+        [0.03, 1,  78, 20, 108, 62],   // Hall 10 / south-east pavilion
+        [0.07, 1,  68, 17,  90, 58],   // Hall 12 / terminal pavilion
+        [0.94, -1, 64, 15,  82, 56],   // Hotel/hospitality on left side
+        [0.98, -1, 68, 16,  86, 54],   // Conference annex
+        [0.04, -1, 62, 18,  80, 52],   // Service building
       ]) {
         const k = Math.round(frac * n) % n;
         building(k, side, gap, w, h, d, {
@@ -248,7 +250,6 @@
       grandstand(0.97,  1,  11, 44, WHITE, [0.48, 0.30, 0.30]);
 
       // Pit-garage building — long modular structure right of main straight.
-      // gap=hw[k]+17 keeps it clear of the street armco. Modules butt together.
       for (let s = 0.986; s < 1.083; s += 0.011) {
         const f = s % 1;
         const k = Math.round(f * n) % n;
@@ -256,13 +257,13 @@
         if (onTrack(A.c[0], A.c[2], 9)) continue;
         addBox(out, vadd(A.c, A.u, 5.0), [16, 10.0, 25], WHITE,    [A.r, A.u, A.t]);
         addBox(out, vadd(A.c, A.u, 10.2), [16.5, 0.8, 25], STEEL,  [A.r, A.u, A.t]);
-        // glass-fronted team garage doors — lit interior tint
+        // glass-fronted team garage doors
         addBox(out, vadd(vadd(A.c, A.u, 5.4), A.r, -8.2),
                [0.5, 5.8, 23], GLASS, [A.r, A.u, A.t]);
-        // lit upper-floor window strip on garage building
+        // lit upper-floor window strip
         addBox(out, vadd(A.c, A.u, 9.0), [16.2, 1.2, 25.2], ifemaLit, [A.r, A.u, A.t]);
       }
-      // Paddock motorhomes / hospitality behind the pits (right side, further back)
+      // Paddock motorhomes / hospitality behind the pits
       for (let s = 0.992; s < 1.058; s += 0.018) {
         const f = s % 1, k = Math.round(f * n) % n;
         const A = anchor(k, 1, hw[k] + 42);
@@ -271,7 +272,6 @@
         addBox(out, vadd(A.c, A.u, h / 2), [14, h, 18],
                hash(k) > 0.5 ? WHITE : OFFWHITE, [A.r, A.u, A.t]);
         addBox(out, vadd(A.c, A.u, h * 0.56), [14.2, 2.0, 18.2], DKGLASS, [A.r, A.u, A.t]);
-        // lit top-floor strip — warm amber glow (team hospitality branding)
         addBox(out, vadd(A.c, A.u, h * 0.88), [14.4, 1.0, 18.4], LITWIN, [A.r, A.u, A.t]);
       }
 
@@ -280,7 +280,6 @@
       gantry(0.05, 7.5, [0.22, 0.24, 0.28]);
 
       // ── (7) LAMP POSTS — street sectors + pit straight ───────────────────────
-      // Main straight lamp posts (s≈0.97–0.10, both sides, every ~25 m)
       for (let s = 0.970; s < 1.105; s += 0.028) {
         const f = s % 1;
         const k = Math.round(f * n) % n;
@@ -294,7 +293,7 @@
           addBox(out, vadd(A.c, A.u, 0.05), [5, 0.1, 5], [0.86, 0.80, 0.64], [A.r, A.u, A.t]);
         }
       }
-      // Street-sector lamp posts (s≈0.10–0.55, alternating sides every ~30 m)
+      // Street-sector lamp posts (s≈0.10–0.55, alternating sides)
       for (let s = 0.10; s < 0.55; s += 0.032) {
         const f = s % 1;
         const k = Math.round(f * n) % n;
@@ -309,12 +308,10 @@
       }
 
       // ── (8) URBAN STREET CONTEXT (s≈0.10–0.75) ──────────────────────────────
-      // The urban sectors pass through Madrid's street network. cityFront() gives
-      // a coherent aligned street-wall on both sides. Uses generous gap values
-      // (≥28 m from road edge) to stay well clear of barriers and fences.
+      // cityFront() for coherent aligned street-walls, plus backdrop() slabs for
+      // the mid-distance city silhouette behind the facades.
       //
-      // Sector A: turning complex after T1–T3 (s≈0.10–0.28) — tighter streets,
-      // mixed residential/commercial facades.
+      // Sector A: turning complex after T1–T3 (s≈0.10–0.28)
       cityFront(0.10, 0.28,  1, 32, {
         minH: 12, maxH: 28, depth: 20,
         palette: [[0.75, 0.73, 0.69], [0.82, 0.80, 0.76], [0.70, 0.72, 0.68], [0.78, 0.76, 0.72]],
@@ -325,8 +322,7 @@
         palette: [[0.73, 0.71, 0.67], [0.80, 0.78, 0.74], [0.68, 0.70, 0.66], [0.76, 0.74, 0.70]],
         lit: false, step: 18,
       });
-      // Sector B: long urban straight + chicanes (s≈0.30–0.48) — Madrid boulevard
-      // style: taller buildings, regular spacing, stone-clad lower floors.
+      // Sector B: long urban straight + chicanes (s≈0.30–0.48) — boulevard style
       cityFront(0.30, 0.48,  1, 34, {
         minH: 16, maxH: 34, depth: 22,
         palette: [STONE, [0.76, 0.74, 0.70], [0.82, 0.80, 0.76], [0.68, 0.66, 0.62]],
@@ -337,8 +333,7 @@
         palette: [[0.74, 0.72, 0.68], OFFWHITE, [0.80, 0.78, 0.74], [0.70, 0.68, 0.64]],
         lit: false, step: 20,
       });
-      // Sector C: approach to La Monumental bowl (s≈0.55–0.72) — open plaza,
-      // taller blocks receding to reveal the stadium.
+      // Sector C: approach to La Monumental bowl (s≈0.55–0.72)
       cityFront(0.55, 0.70,  1, 38, {
         minH: 18, maxH: 40, depth: 24,
         palette: [[0.66, 0.68, 0.72], [0.72, 0.70, 0.66], [0.64, 0.66, 0.70], [0.78, 0.76, 0.72]],
@@ -350,29 +345,62 @@
         lit: false, step: 22,
       });
 
-      // ── (9) TRACKSIDE BARRIERS & FURNITURE ─────────────────────────────────
-      // Street-sector concrete walls (urban straights, both sides)
+      // Mid-distance city backdrop slabs — seen above the street facades, give
+      // depth to the urban canyon. backdrop() auto-adds window bands + parapet.
+      for (let i = 0; i < n; i += Math.max(1, Math.round(n / 18))) {
+        const f = i / n;
+        const inUrban = (f > 0.10 && f < 0.28) || (f > 0.30 && f < 0.48) || (f > 0.55 && f < 0.72);
+        if (!inUrban) continue;
+        for (const side of [1, -1]) {
+          const bh = 40 + hash(i * 7 + side) * 40;
+          backdrop(i, side, 72, [30, bh, 12], [0.62 + hash(i * 5) * 0.12, 0.64 + hash(i * 9) * 0.08, 0.68 + hash(i * 11) * 0.08]);
+        }
+      }
+
+      // ── (9) NEAR-VENUE URBAN CONTEXT: mid-rise ring at rad+280 ─────────────
+      // Conference buildings + hotels surrounding the IFEMA campus.
+      // Use backdrop() so each mass gets auto window bands — no manual banding.
+      {
+        const ring = rad + 290, count = 24;
+        for (let i = 0; i < count; i++) {
+          const a = i / count * 6.2832 + (hash(i * 7) - 0.5) * 0.08;
+          const jr = (hash(i * 19) - 0.5) * 70;
+          const wx = cx + Math.cos(a) * (ring + jr), wz = cz + Math.sin(a) * (ring + jr);
+          if (onTrack(wx, wz, 20)) continue;
+          const h = 20 + hash(i * 11) * 26;
+          const w = 20 + hash(i * 17) * 14;
+          const yb = pyMin;
+          const col = [0.66 + hash(i * 3) * 0.10, 0.68 + hash(i * 5) * 0.08, 0.70 + hash(i * 7) * 0.08];
+          // Stepped massing: lower plinth + upper tower section
+          addFrustum(out, [wx, yb, wz], w * 0.52, w * 0.40, h * 0.6, col, 5);
+          if (h * 0.4 > 6) {
+            const col2 = [col[0] + 0.05, col[1] + 0.04, col[2] + 0.06];
+            addFrustum(out, [wx, yb + h * 0.6, wz], w * 0.36, w * 0.22, h * 0.4, col2, 5);
+          }
+          // single glass ribbon
+          addBox(out, [wx, yb + h * 0.44, wz], [w * 0.50, h * 0.16, w * 0.06], GLASS);
+        }
+      }
+
+      // ── (10) TRACKSIDE BARRIERS & FURNITURE ─────────────────────────────────
       wall(0.005, 0.087,  1, 1.4, 1.15, CONCRETE, 0.48);
       wall(0.005, 0.087, -1, 1.4, 1.15, CONCRETE, 0.48);
       wall(0.30,  0.40,   1, 1.5, 1.35, CONCRETE, 0.5);
       wall(0.30,  0.40,  -1, 1.5, 1.35, CONCRETE, 0.5);
-      wall(0.47,  0.54,   1, 1.5, 1.4, [0.70, 0.70, 0.72], 0.58);  // El Búnker retaining wall
-      // Catch fences on street sectors
+      wall(0.47,  0.54,   1, 1.5, 1.4, [0.70, 0.70, 0.72], 0.58);
       fence(0.005, 0.087,  1, 3.0, 2.9, [0.62, 0.64, 0.66]);
       fence(0.30,  0.40,  -1, 3.0, 2.9, [0.62, 0.64, 0.66]);
       fence(0.47,  0.54,   1, 3.0, 2.9, [0.62, 0.64, 0.66]);
-      // Permanent-loop guardrails (wider northern run-off sections)
       guardrail(0.54, 0.73,  1, 4.8, [0.80, 0.80, 0.82]);
       guardrail(0.54, 0.73, -1, 4.8, [0.80, 0.80, 0.82]);
       guardrail(0.86, 0.97, -1, 4.8, [0.80, 0.80, 0.82]);
-      // Tyre walls: chicane & corner entries/exits
-      tyreWall(0.075, 0.10,   1, 3, [0.90, 0.30, 0.20]);   // T1 entry — red
-      tyreWall(0.133, 0.162, -1, 3, [0.20, 0.40, 0.85]);   // T2 exit — blue
-      tyreWall(0.50,  0.53,   1, 3, [0.95, 0.80, 0.15]);   // street chicane — yellow
-      tyreWall(0.70,  0.75,   1, 4, [0.90, 0.30, 0.20]);   // Monumental entry — red
-      tyreWall(0.135, 0.165, -1, 3, [0.95, 0.75, 0.15]);   // T2 exit — yellow/gold
+      tyreWall(0.075, 0.10,   1, 3, [0.90, 0.30, 0.20]);
+      tyreWall(0.133, 0.162, -1, 3, [0.20, 0.40, 0.85]);
+      tyreWall(0.50,  0.53,   1, 3, [0.95, 0.80, 0.15]);
+      tyreWall(0.70,  0.75,   1, 4, [0.90, 0.30, 0.20]);
+      tyreWall(0.135, 0.165, -1, 3, [0.95, 0.75, 0.15]);
 
-      // ── (10) BILLBOARDS & MARSHAL POSTS ────────────────────────────────────
+      // ── (11) BILLBOARDS & MARSHAL POSTS ────────────────────────────────────
       const adCols = [[0.90, 0.25, 0.20], [0.15, 0.45, 0.85], [0.95, 0.78, 0.15],
                       [0.20, 0.65, 0.40], [0.85, 0.85, 0.88]];
       for (const [frac, side] of [
@@ -382,9 +410,8 @@
         const k = Math.round(frac * n) % n;
         billboard(k, side, 6, 9.5, 4.8, adCols[k % adCols.length]);
       }
-      // Spanish colour-accent billboards near pit straight
-      billboard(Math.round(0.01 * n) % n,  1, 14, 12, 5, [0.85, 0.15, 0.12]);  // red
-      billboard(Math.round(0.04 * n) % n, -1, 12, 12, 5, [0.92, 0.72, 0.08]); // gold
+      billboard(Math.round(0.01 * n) % n,  1, 14, 12, 5, [0.85, 0.15, 0.12]);
+      billboard(Math.round(0.04 * n) % n, -1, 12, 12, 5, [0.92, 0.72, 0.08]);
       for (const [frac, side] of [
         [0.04, -1], [0.10, 1], [0.18, -1], [0.25, 1], [0.32, -1], [0.40, 1],
         [0.47, -1], [0.56, 1], [0.63, -1], [0.72, 1], [0.80, -1], [0.88, 1], [0.95, -1],
@@ -393,8 +420,7 @@
         marshalPost(k, side, 4);
       }
 
-      // ── (11) URBAN GREENERY: clipped hedges, boulevard trees, forestEdge ──
-      // Hedges: close to track in street sectors (within barrier zone)
+      // ── (12) URBAN GREENERY: clipped hedges, boulevard trees, forestEdge ──
       hedge(0.09, 0.20, -1, 8,  1.6, [0.30, 0.42, 0.26]);
       hedge(0.22, 0.32,  1, 9,  1.6, [0.30, 0.42, 0.26]);
       hedge(0.85, 0.96,  1, 10, 1.6, [0.30, 0.42, 0.26]);
@@ -402,8 +428,7 @@
       hedge(0.32, 0.42,  1, 10, 1.8, [0.32, 0.44, 0.28]);
       hedge(0.54, 0.62, -1, 9,  1.7, [0.32, 0.44, 0.28]);
 
-      // forestEdge() in the open sections between urban zones and the stadium.
-      // gap values large enough to clear all barriers + city-front buildings.
+      // forestEdge() in open sections between urban zones and the stadium.
       forestEdge(0.48, 0.55, -1, 18, {
         density: 0.5, hMin: 6, hMax: 11,
         col: [0.30, 0.42, 0.24], col2: [0.36, 0.46, 0.28], pineFrac: 0.3,
@@ -430,7 +455,7 @@
         }
       }
 
-      // ── (12) DRY CASTILIAN PLAINS filler: straw-tan scrub + olive ───────────
+      // ── (13) DRY CASTILIAN PLAINS filler: straw-tan scrub + olive ───────────
       for (let i = 0; i < n; i += 4) {
         for (const side of [-1, 1]) {
           if (hash(i * 31 + side) > 0.58) continue;
@@ -444,30 +469,7 @@
         }
       }
 
-      // ── (13) NEAR-VENUE URBAN CONTEXT: mid-rise ring at rad+280 ─────────────
-      // Conference buildings + hotels immediately surrounding the IFEMA campus.
-      // Kept modest in height (20–45 m) so they don't compete with grandstands.
-      {
-        const ring = rad + 280, count = 28;
-        for (let i = 0; i < count; i++) {
-          const a = i / count * 6.2832 + (hash(i * 7) - 0.5) * 0.08;
-          const jr = (hash(i * 19) - 0.5) * 80;
-          const wx = cx + Math.cos(a) * (ring + jr), wz = cz + Math.sin(a) * (ring + jr);
-          if (onTrack(wx, wz, 22)) continue;
-          const h = 18 + hash(i * 11) * 28;
-          const w = 18 + hash(i * 17) * 16;
-          const yb = pyMin;
-          addBox(out, [wx, yb + h / 2, wz], [w, h, w], skyPal[(i + 2) % skyPal.length]);
-          const bands = Math.max(2, Math.floor(h / 8));
-          for (let b = 1; b < bands; b++) {
-            const yy = yb + (b / bands) * h;
-            addBox(out, [wx, yy, wz], [w * 1.01, 0.9, w * 1.01], LITWIN);
-          }
-        }
-      }
-
       // ── (14) AIRPORT RUNWAY EDGE LIGHTS: s≈0.0–0.10 ────────────────────────
-      // Slim amber taxi-light posts along the approach to the pit straight.
       for (let i = 0; i < 8; i++) {
         const f = i * 0.012;
         const k = Math.round(f * n) % n;
@@ -479,7 +481,7 @@
       }
 
       // ── (15) WIDE PLAZA PAVING: flat slabs at s≈0.45–0.54 ──────────────────
-      // Open IFEMA plaza. Narrow in radial extent so they can't engulf the road.
+      // Open IFEMA plaza. Low-profile stone pavers well clear of the road.
       for (let i = 0; i < 5; i++) {
         const f = 0.46 + i * 0.022;
         const k = Math.round(f * n) % n;

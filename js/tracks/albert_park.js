@@ -102,13 +102,16 @@
         tower(k(s), 1, dist, bw, th, { col: [0.30, 0.38, 0.50], seg: 8,
           cap: true, capCol: [0.20, 0.28, 0.40], mast });
       }
-      // Far-horizon silhouette band — hazy, atmospheric depth
-      for (let i = 0; i < 24; i++) {
-        const f = i / 23;
+      // Far-horizon silhouette band — distant CBD depth layer (grey-blue so
+      // backdrop() renders them as city towers with window bands, not green mounds)
+      for (let i = 0; i < 20; i++) {
+        const f = i / 19;
+        const bh = 55 + hash(i * 13) * 110;   // 55–165 m tower heights
+        const bw = 28 + hash(i * 9) * 24;      // 28–52 m wide
         backdrop(k(CBD_S0 - 0.03 + f * (CBD_S1 - CBD_S0 + 0.06)), 1,
-                 370 + hash(i * 5) * 140,
-                 [32 + hash(i * 9) * 28, 52 + hash(i * 13) * 90, 28],
-                 [0.38, 0.44, 0.52]);
+                 390 + hash(i * 5) * 120,
+                 [bw, bh, 26],
+                 [0.36 + hash(i * 7) * 0.08, 0.40 + hash(i * 3) * 0.06, 0.52 + hash(i * 11) * 0.06]);
       }
       // Mid-rise foreground layer — lighter, Yarra riverside buildings
       for (let i = 0; i < 18; i++) {
@@ -133,11 +136,21 @@
       }
 
       // ====================================================================
-      // LOW distant Melbourne treeline backdrop, both sides (flat parkland)
+      // PARKLAND HORIZON — rounded green mound backdrop, both sides.
+      // backdrop() auto-detects green-dominant colour → renders as organic
+      // stacked-frustum mounds rather than flat slabs.  Replaces old flat
+      // [120,18,100] slab loop.  Placed at dist 160–240 m so they sit well
+      // behind forestEdge treelines and don't clip them.
       // ====================================================================
-      every(80, (kk) => {
+      every(60, (kk) => {
         for (const side of [-1, 1]) {
-          backdrop(kk, side, 185 + hash(kk * 6 + side) * 65, [120, 18, 100], [0.16, 0.32, 0.18]);
+          // Skip the CBD side (s≈0.19–0.55 R) so mounds don't fight skyline
+          if (side === 1 && kk >= k(0.17) && kk <= k(0.57)) continue;
+          const dist = 165 + hash(kk * 6 + side) * 60;
+          const w    = 110 + hash(kk * 11 + side) * 60;  // 110–170 m footprint
+          const h    =  22 + hash(kk * 17 + side) * 18;  // 22–40 m mound height
+          // Green-dominant: col[1] > col[0] and col[1] > col[2]*1.05
+          backdrop(kk, side, dist, [w, h, 90], [0.18, 0.38 + hash(kk * 23 + side) * 0.06, 0.20]);
         }
       });
 
@@ -289,18 +302,46 @@
       for (let j = 0; j < 3; j++) {
         const a = anchor(k(0.62), 1, 42 + j * 10);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
-        addBox(out, vadd(a.c, a.u, 5), [12, 0.6, 12], WHITE, [a.r, a.u, a.t]);
+        // White tent body + coloured prism ridge roof
+        addBox(out, vadd(a.c, a.u, 2.2), [11.0, 4.0, 11.0], WHITE, [a.r, a.u, a.t]);
+        addPrism(out, vadd(a.c, a.u, 4.8), [11.0, 2.0, 11.0],
+                 [[0.20, 0.44, 0.72], [0.86, 0.28, 0.18], [0.90, 0.78, 0.24]][j % 3],
+                 [a.r, a.u, a.t]);
       }
 
-      // ---- Paddock container-stack boxes near pit entry (s≈0.97 L) ----
+      // ---- Paddock freight containers near pit entry (s≈0.97 L) ----
+      // Stacked containers: each is a solid box with a thin lid strip so they
+      // read as real containers rather than anonymous blocks.
       for (let j = 0; j < 4; j++) {
-        place(k(0.97), -1, 16 + j * 5, [6, 3, 12],
-              [[0.70, 0.30, 0.25], [0.30, 0.40, 0.60], [0.80, 0.78, 0.40], [0.55, 0.55, 0.58]][j]);
+        const gap = 18 + j * 7;
+        const CCOL = [[0.70, 0.28, 0.22], [0.28, 0.38, 0.64], [0.78, 0.76, 0.36], [0.52, 0.53, 0.56]][j];
+        const a = anchor(k(0.97), -1, gap);
+        if (onTrack(a.c[0], a.c[2], 4)) continue;
+        // Main container body
+        addBox(out, vadd(a.c, a.u, 1.5), [6.2, 3.0, 12.2], CCOL, [a.r, a.u, a.t]);
+        // Corrugation cap strip (slightly darker roof)
+        addBox(out, vadd(a.c, a.u, 3.2), [6.4, 0.3, 12.6],
+               [CCOL[0] * 0.8, CCOL[1] * 0.8, CCOL[2] * 0.8], [a.r, a.u, a.t]);
+        // Door-end detail (narrow darker band)
+        addBox(out, vadd(vadd(a.c, a.t, 6.3), a.u, 1.5), [6.2, 3.0, 0.4],
+               [CCOL[0] * 0.7, CCOL[1] * 0.7, CCOL[2] * 0.7], [a.r, a.u, a.t]);
       }
 
       // ---- Lakeside grass fan banking / hill (s≈0.90 R) ----
-      for (let j = 0; j < 4; j++) {
-        place(k(0.90), 1, 25 + j * 8, [30, 2 + j * 1.5, 24], GRASS);
+      // Replaced flat stacked slabs with a frustrated mound that reads as a
+      // grassy hill/embankment.  Outer backdrop mound behind a low foreground ridge.
+      {
+        const a = anchor(k(0.90), 1, 34);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          addFrustum(out, a.c, 18, 8, 6.5, GRASS, 7, [a.r, a.u, a.t]);
+          addCone(out, vadd(a.c, a.u, 6.5), 8, 3.5, [0.26, 0.52, 0.24], 7, [a.r, a.u, a.t]);
+        }
+        // Second slightly-offset mound for depth
+        const a2 = anchor(k(0.91), 1, 42);
+        if (!onTrack(a2.c[0], a2.c[2], 8)) {
+          addFrustum(out, a2.c, 14, 5, 5.0, [0.26, 0.50, 0.24], 7, [a2.r, a2.u, a2.t]);
+          addCone(out, vadd(a2.c, a2.u, 5.0), 5, 2.5, [0.28, 0.54, 0.26], 7, [a2.r, a2.u, a2.t]);
+        }
       }
 
       // ====================================================================
@@ -428,7 +469,7 @@
       gantry(0.0,  7.5, [0.30, 0.32, 0.36]);
       gantry(0.50, 7.0, [0.25, 0.27, 0.32]);
 
-      void prop; void cx; void cz; void WATER;
+      void prop; void cx; void cz; void WATER; void pyMin; void bush; void hedge; void cityFront; void addPyramid;
     },
   }
   );

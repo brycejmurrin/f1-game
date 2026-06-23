@@ -45,52 +45,21 @@
       const GRAVEL = [0.68, 0.60, 0.42];
 
       // =====================================================================
-      // 1. ROYAL PARK FOREST — very dense broadleaf + umbrella-pine corridor
-      //    lining nearly the whole lap on BOTH sides, in several staggered ranks.
-      //    Native trees: umbrella pines, oaks, maples, ashes, elms, chestnuts.
-      //    The canopy reads as a deep wood, not a thin hedge, with chestnut
-      //    forest sections and coniferous mix throughout the 688-hectare park.
+      // 1. ROYAL PARK FOREST — dense broadleaf + umbrella-pine corridor using
+      //    forestEdge() which guarantees canopy clearance from barriers.
+      //    Two rows each side: front mixed (umbrella pine + oak), back taller pines.
+      //    Native species: umbrella pines, oaks, maples, ashes, chestnuts.
       // =====================================================================
-      // Rank A — front pines, close to the verge, almost gapless (umbrella pines).
-      every(13, (k) => {
-        const h = hash(k * 31);
-        if (h < 0.08) return;                       // fewer tiny gaps (denser)
-        const side = h < 0.5 ? -1 : 1;
-        pine(k, side, 9 + h * 6, 18 + h * 13, h < 0.3 ? PINE_D : PINE);
-        // mirror on the other side almost always → two-sided corridor
-        if (h > 0.25) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
-      });
-      // Rank B — broadleaf trees (oaks, maples, ashes) interleaved with pines (warmer, rounder).
-      every(15, (k) => {
-        const h = hash(k * 53 + 9);
-        if (h < 0.15) return;
-        const side = h < 0.5 ? -1 : 1;
-        tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
-        if (h > 0.48) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
-      });
-      // Rank C — set-back interior wall of taller pines + some chestnuts (the deep park).
-      every(18, (k) => {
-        const h = hash(k * 41 + 3);
-        if (h < 0.20) return;
-        const side = h < 0.5 ? -1 : 1;
-        const hVar = 22 + h * 16 + (hash(k * 137) > 0.6 ? 4 : 0);
-        pine(k, side, 24 + h * 18, hVar, PINE_D);
-        if (h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
-      });
-      // Rank D — outermost broadleaf rank (oaks, maples, elms), blends to backdrop.
-      every(24, (k) => {
-        const h = hash(k * 67 + 17);
-        if (h < 0.35) return;
-        tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
-        if (h > 0.7) tree(k, h > 0.85 ? -1 : 1, 55 + h * 22, 11 + h * 8, LEAF);
-      });
-      // Low underbrush / shrubs scattered along the verge for ground texture.
-      every(11, (k) => {
-        const h = hash(k * 97 + 23);
-        if (h < 0.50) return;
-        bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4, h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
-        if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
-      });
+      // Front row — mixed umbrella pine + broadleaf, moderate density.
+      forestEdge(0.0, 1.0, -1, 10, { density: 0.68, hMin: 10, hMax: 22,
+        col: PINE, col2: LEAF, pineFrac: 0.60 });
+      forestEdge(0.0, 1.0,  1, 10, { density: 0.65, hMin: 10, hMax: 20,
+        col: PINE_D, col2: LEAF_D, pineFrac: 0.55 });
+      // Back row — taller set-back pines for the deep-park wall.
+      forestEdge(0.0, 1.0, -1, 26, { density: 0.52, hMin: 18, hMax: 32,
+        col: PINE_D, col2: LEAF_D, pineFrac: 0.70 });
+      forestEdge(0.0, 1.0,  1, 26, { density: 0.50, hMin: 18, hMax: 30,
+        col: PINE_D, col2: LEAF, pineFrac: 0.65 });
       // Clipped park hedge banding through several sweeps for a manicured edge.
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
       hedge(0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]);
@@ -442,19 +411,41 @@
       }
 
       // =====================================================================
-      // 8. ENHANCED SCENERY — denser forest, improved landmarks, Italian character
+      // 8. ENHANCED SCENERY — backdrop wooded hills, improved landmarks, Italian
+      //    character. Section 8a removed (forestEdge() in section 1 now handles
+      //    the full-lap pine corridor more safely with canopy-clearance guarantee).
       // =====================================================================
 
-      // 8a. Dense front pine pass — fills gaps between Rank A pines for corridor effect.
-      every(10, (k) => {
-        const h = hash(k * 43 + 7);
-        const s = k / n;
-        if (h < 0.08) return;
-        const side = h < 0.5 ? -1 : 1;
-        pine(k, side, 8 + h * 5, 16 + h * 10, PINE);
-        if (h > 0.42) pine(k, -side, 9 + h * 6, 15 + h * 9, PINE_L);
-        if (h > 0.80 && s < 0.15) pine(k, side > 0 ? -1 : 1, 7 + h * 4, 14 + h * 8, PINE_D);
-      });
+      // 8a. Backdrop wooded hills — rounded green mounds ringing the park horizon.
+      //     backdrop() detects green colour and renders organic frustum+dome shapes.
+      {
+        const cx2 = px.reduce((a, b) => a + b, 0) / n;
+        const cz2 = pz.reduce((a, b) => a + b, 0) / n;
+        let radB = 0;
+        for (let i = 0; i < n; i++) radB = Math.max(radB, Math.hypot(px[i] - cx2, pz[i] - cz2));
+        // Near treeline backdrop at ~90 m outside track envelope
+        for (let i = 0; i < 18; i++) {
+          const ang = i / 18 * 6.2832;
+          const r = radB + 90 + hash(i * 3 + 1) * 20;
+          const bx = cx2 + Math.cos(ang) * r, bz = cz2 + Math.sin(ang) * r;
+          const k2 = K(i / 18);
+          if (!onTrack(bx, bz, 18))
+            backdrop(k2, hash(i * 7) < 0.5 ? -1 : 1, 88 + hash(i * 5) * 20,
+              [22 + hash(i * 2) * 10, 14 + hash(i * 4) * 6, 20 + hash(i * 6) * 8],
+              [0.14, 0.34, 0.16]);
+        }
+        // Mid-distance band at ~160 m — slightly hazed, darker green
+        for (let i = 0; i < 14; i++) {
+          const ang = (i + 0.5) / 14 * 6.2832;
+          const r = radB + 155 + hash(i * 9 + 2) * 30;
+          const bx = cx2 + Math.cos(ang) * r, bz = cz2 + Math.sin(ang) * r;
+          const k2 = K(i / 14);
+          if (!onTrack(bx, bz, 22))
+            backdrop(k2, hash(i * 11 + 3) < 0.5 ? -1 : 1, 152 + hash(i * 13) * 28,
+              [28 + hash(i * 3) * 12, 16 + hash(i * 5) * 6, 24 + hash(i * 7) * 10],
+              [0.11, 0.29, 0.13]);
+        }
+      }
 
       // 8b. Expand Parabolica grandstand — two extra sections widening the arc.
       // Most iconic turn at Monza with largest crowd presence.

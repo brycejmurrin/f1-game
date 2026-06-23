@@ -119,12 +119,30 @@
       // Marshal posts spaced around the lap
       for (let i = 0; i < 9; i++) marshalPost(K(0.05 + i * 0.105), (i % 2) ? 1 : -1, 3.0);
 
-      // Distant dusk-haze silhouette band — two ranks forming a near-continuous
-      // city silhouette wrap around the lap.
-      for (let i = 0; i < 24; i++) {
-        const k = K(i / 24), side = (i % 2) ? 1 : -1;
-        backdrop(k, side, 150 + hash(i * 5) * 90, [26 + hash(i * 7) * 22, 28 + hash(i * 11) * 50, 20], DARK2);
-        backdrop(k, side, 280 + hash(i * 13) * 170, [32 + hash(i * 17) * 30, 44 + hash(i * 19) * 90, 24], DARK);
+      // Distant haze silhouette — differentiated by circuit section so the
+      // Caspian Sea (L side of seafront) reads dark/blue while the city (R)
+      // always has tall lit building masses.
+      // s 0.0–0.22: start / T1 — dense civic backdrop both sides
+      for (let i = 0; i < 8; i++) {
+        const kC = K(i / 8 * 0.22);
+        backdrop(kC, 1,  140 + hash(i * 5)  * 60,  [28 + hash(i * 7)  * 18, 32 + hash(i * 11) * 44, 22], DARK2);
+        backdrop(kC, -1, 140 + hash(i * 9)  * 60,  [24 + hash(i * 3)  * 16, 28 + hash(i * 13) * 40, 20], DARK2);
+        backdrop(kC, 1,  280 + hash(i * 15) * 120, [32 + hash(i * 17) * 24, 46 + hash(i * 19) * 80, 22], DARK);
+        backdrop(kC, -1, 260 + hash(i * 21) * 110, [30 + hash(i * 23) * 22, 42 + hash(i * 25) * 72, 22], DARK);
+      }
+      // s 0.22–0.58: main straight + old city — glass towers R, open air haze L
+      for (let i = 0; i < 10; i++) {
+        const kM = K(0.22 + i / 10 * 0.36);
+        backdrop(kM, 1,  160 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 44 + hash(i * 11 + 22) * 76, 22], DARK2);
+        backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 26 + hash(i * 13 + 22) * 34, 20], [0.08, 0.09, 0.14]);
+        backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 52 + hash(i * 19 + 22) * 104, 24], DARK);
+      }
+      // s 0.58–0.97: Caspian seafront — city skyline R, dark sea haze L
+      for (let i = 0; i < 12; i++) {
+        const kS = K(0.58 + i / 12 * 0.39);
+        backdrop(kS, 1,  150 + hash(i * 5 + 58) * 70, [28 + hash(i * 7 + 58) * 20, 38 + hash(i * 11 + 58) * 62, 22], DARK2);
+        backdrop(kS, -1, 220 + hash(i * 9 + 58) * 90, [16 + hash(i * 3 + 58) * 8, 12, 16], SEA);
+        backdrop(kS, 1,  320 + hash(i * 15 + 58) * 180, [32 + hash(i * 17 + 58) * 26, 48 + hash(i * 19 + 58) * 92, 24], DARK);
       }
 
       // ===================================================================
@@ -192,9 +210,28 @@
       gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
       billboard(0.01, 1, 9, 14, 5, FLAME);
 
-      // Civic plaza obelisk (L side, gap well behind facade row)
+      // ===================================================================
+      // National flag poles — three tall flagpoles at the civic plaza.
+      // Azerbaijan flag (blue/red/green tricolour) represented as a lit
+      // panel. Placed on the L side behind the facade row.
+      // ===================================================================
       {
-        const a = anchor(K(0.045), -1, 28);
+        const flagOffs = [-12, 0, 12];
+        const flagCols = [AZ_BLUE, [0.80, 0.16, 0.16], [0.14, 0.55, 0.28]];
+        for (let fi = 0; fi < 3; fi++) {
+          const aF = anchor(K(0.045), -1, 28);
+          const b  = [aF.r, aF.u, aF.t];
+          const fc = vadd(aF.c, aF.t, flagOffs[fi]);
+          // Pole
+          addCyl(out, fc, 0.18, 20, [0.72, 0.72, 0.76], 6, b);
+          // Flag panel (3 colour stripes)
+          addBox(out, vadd(fc, aF.u, 17), [0.15, 4, 7], flagCols[fi], b);
+        }
+      }
+
+      // Civic plaza obelisk (L side, further back — gap well behind facade row)
+      {
+        const a = anchor(K(0.045), -1, 44);
         addFrustum(out, vadd(a.c, a.u, 0), 1.4, 0.3, 16, SAND_LIT, 4, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 14), [1.0, 1.0, 1.0], WIN_WARM, [a.r, a.u, a.t]);
       }
@@ -272,11 +309,16 @@
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
 
-      // L side: mixed modern facades (slightly lower — the city middle band)
+      // L side: Baku Boulevard / Caspian corniche hotels and civic buildings
       cityFront(0.22, 0.36, -1, 8, {
-        minH: 20, maxH: 55, depth: 20, step: 20,
-        palette: GLASS_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
+        minH: 18, maxH: 48, depth: 20, step: 20,
+        palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
+      // Boulevard palm row along the Caspian-side of the main straight
+      for (let i = 0; i < 14; i++) {
+        const s = 0.23 + i * 0.009;
+        palm(K(s), -1, 9 + (i % 2), 8 + hash(i * 7) * 3, [0.18, 0.44, 0.24]);
+      }
 
       // ===================================================================
       // s 0.36 R near — OLD CITY WALL: continuous crenellated sandstone
@@ -533,11 +575,39 @@
         building(K(s), -1, 18, 14, 9, 14, { wall: [0.30, 0.34, 0.42], window: WIN_COOL, floor: 3, lit: true });
       }
 
-      // Pier/breakwater structures
+      // Pier/breakwater structures extending into the Caspian
       for (let i = 0; i < 3; i++) {
         const s = 0.68 + i * 0.12;
-        const a = anchor(K(s), -1, 12);
-        addBox(out, vadd(a.c, a.u, 0.5), [2.5, 1.0, 40], [0.55, 0.54, 0.58], [a.r, a.u, a.t]);
+        const a = anchor(K(s), -1, 14);
+        const b = [a.r, a.u, a.t];
+        // Main pier deck
+        addBox(out, vadd(a.c, a.u, 0.5), [2.8, 1.1, 50], [0.52, 0.52, 0.56], b);
+        // Pier lamp posts
+        for (let pl = 0; pl < 3; pl++) {
+          const pc = vadd(a.c, a.t, (pl - 1) * 14);
+          addCyl(out, vadd(pc, a.u, 1.1), 0.12, 4, [0.24, 0.24, 0.28], 4, b);
+          addBox(out, vadd(pc, a.u, 5), [0.7, 0.25, 0.7], LAMP_WARM, b);
+        }
+        // Mooring bollards
+        addCyl(out, vadd(a.c, a.u, 1.1), 0.22, 1.4, [0.34, 0.34, 0.38], 5, b);
+      }
+
+      // ===================================================================
+      // s 0.75 L — Seaside fountain plaza: a circular fountain basin with
+      // a central plume cone (lit in cool white) visible from the straight.
+      // ===================================================================
+      {
+        const aFt = anchor(K(0.75), -1, 24);
+        const b   = [aFt.r, aFt.u, aFt.t];
+        // Basin ring (low wide frustum = pool rim)
+        addFrustum(out, vadd(aFt.c, aFt.u, 0.3), 8, 7, 1.0, [0.38, 0.38, 0.42], 12, b);
+        // Water surface (dark teal flat disc)
+        addFrustum(out, vadd(aFt.c, aFt.u, 0.5), 6.8, 6.8, 0.2, [0.04, 0.12, 0.20], 12, b);
+        // Central fountain plume — narrow tall cone, bright lit
+        addCone(out, vadd(aFt.c, aFt.u, 0.6), 1.2, 7, [0.60, 0.80, 0.95], 8, b);
+        addCone(out, vadd(aFt.c, aFt.u, 5.0), 0.6, 4, WIN_COOL, 6, b);
+        // Uplighting at fountain base
+        addFrustum(out, vadd(aFt.c, aFt.u, 0.4), 7.4, 7.0, 0.5, [0.18, 0.26, 0.36], 12, b);
       }
 
       // Continuous modern Caspian-front skyline R: aligned glass tower facades
@@ -548,9 +618,35 @@
       });
 
       // ===================================================================
+      // s 0.70 R — CRYSTAL HALL: Baku's landmark elliptic concert venue.
+      // An ovoid steel-and-glass shell sitting on a low podium, lit in
+      // blue-white. Approximated with stacked frustums + a wide flat disc
+      // roof ring to suggest the distinctive roof canopy.
+      // ===================================================================
+      {
+        const k  = K(0.70);
+        const aH = anchor(k, 1, 62);
+        const b  = [aH.r, aH.u, aH.t];
+        // Podium base
+        addBox(out, vadd(aH.c, aH.u, 1.8), [48, 3.6, 36], [0.28, 0.28, 0.32], b);
+        // Lower bowl — wide frustum flaring out from podium
+        addFrustum(out, vadd(aH.c, aH.u, 3.6), 10, 20, 14, [0.18, 0.22, 0.32], 10, b);
+        // Upper dome — narrowing frustum
+        addFrustum(out, vadd(aH.c, aH.u, 17.6), 20, 12, 10, [0.20, 0.24, 0.36], 10, b);
+        // Roof canopy disc (wide flat cylinder sitting just above the dome)
+        addFrustum(out, vadd(aH.c, aH.u, 27), 23, 22, 1.8, [0.24, 0.30, 0.44], 10, b);
+        // Glass curtain wall window band (mid-level, emissive cool white)
+        addFrustum(out, vadd(aH.c, aH.u, 9), 20.5, 20.5, 5, WIN_COOL, 10, b);
+        // Crown light ring at apex
+        addFrustum(out, vadd(aH.c, aH.u, 26.5), 13, 12, 1.2, WIN_COOL, 10, b);
+        // Uplit forecourt wash
+        addBox(out, vadd(aH.c, aH.u, 0.1), [54, 0.4, 44], [0.10, 0.12, 0.20], b);
+      }
+
+      // ===================================================================
       // s 0.78–0.86 R mid — prominent glass Caspian-front tower cluster
-      // These landmark towers are placed further back to read as
-      // distinct silhouettes behind the continuous city wall.
+      // Three distinct tower heights (stepped, tapered, tower archetypes)
+      // visible behind the continuous cityFront wall.
       // ===================================================================
       for (let i = 0; i < 9; i++) {
         const k   = K(0.77 + i * 0.011);
@@ -582,14 +678,25 @@
       billboard(K(0.99), -1, 8, 14, 8, WIN_COOL);
 
       // ===================================================================
-      // Waterfront night bar/cafe strip — small lit pavilion boxes with warm windows
+      // Waterfront night bar/cafe strip — pavilion buildings with flat
+      // cantilevered roofs and warm lit interiors. Alternate orientation
+      // (some face the sea, some the road) for variety.
       // ===================================================================
-      for (let i = 0; i < 5; i++) {
-        const s = 0.60 + i * 0.035;
-        const a = anchor(K(s), -1, 9 + (i % 2) * 3);
-        const b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 2), [6, 4, 8], [0.28, 0.30, 0.36], b);
-        addBox(out, vadd(a.c, a.u, 2.5), [6.2, 1.2, 8.2], WIN_WARM, b);  // lit windows
+      for (let i = 0; i < 6; i++) {
+        const s = 0.60 + i * 0.030;
+        const gp = 10 + (i % 3) * 3;
+        const a  = anchor(K(s), -1, gp);
+        const b  = [a.r, a.u, a.t];
+        const wd = 7 + (i % 2) * 3;
+        const dp = 9 + (i % 3) * 2;
+        // Building body
+        addBox(out, vadd(a.c, a.u, 2.2), [wd, 4.4, dp], [0.26, 0.28, 0.34], b);
+        // Warm lit window band
+        addBox(out, vadd(a.c, a.u, 2.8), [wd * 1.02, 1.4, dp * 1.02], WIN_WARM, b);
+        // Cantilevered flat roof overhang (slightly wider than body)
+        addBox(out, vadd(a.c, a.u, 4.6), [wd + 2, 0.35, dp + 2], [0.22, 0.24, 0.30], b);
+        // Outdoor seating area — low flat pad toward the sea side
+        addBox(out, vadd(vadd(a.c, a.r, wd * 0.6), a.u, 0.1), [3, 0.15, dp * 0.7], [0.32, 0.30, 0.28], b);
       }
 
       // Seafront billboard (s≈0.15)
