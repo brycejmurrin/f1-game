@@ -54,12 +54,12 @@
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
       // Left: stone buildings. Right: pit lane terrace + grandstand.
       cityFront(0.00, 0.07, -1, 8, {
-        minH: 16, maxH: 32, depth: 18, step: 20,
+        minH: 16, maxH: 32, depth: 18, step: 28,
         palette: [CREAM, DUSTY, STONE, OCHRE],
         lit: true, windowCol: WINLIT,
       });
       cityFront(0.00, 0.07,  1, 8, {
-        minH: 14, maxH: 26, depth: 16, step: 22,
+        minH: 14, maxH: 26, depth: 16, step: 30,
         palette: [STONE, CREAM, DUSTY],
         lit: true, windowCol: WINLIT,
       });
@@ -78,12 +78,12 @@
       // close in, then green/rocky hillside backdrop mounds, then far towers.
       // RIGHT side is close apartment facades.
       cityFront(0.08, 0.26, -1, 9, {
-        minH: 20, maxH: 44, depth: 20, step: 20,
+        minH: 20, maxH: 44, depth: 20, step: 28,
         palette: [CREAM, OCHRE, TERRA, DUSTY, SAGE],
         lit: true, windowCol: WINLIT,
       });
       cityFront(0.08, 0.26,  1, 9, {
-        minH: 16, maxH: 34, depth: 18, step: 22,
+        minH: 16, maxH: 34, depth: 18, step: 30,
         palette: [STONE, CREAM, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
       });

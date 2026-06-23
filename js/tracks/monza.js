@@ -45,27 +45,62 @@
       const GRAVEL = [0.68, 0.60, 0.42];
 
       // =====================================================================
-      // 1. ROYAL PARK FOREST — dense broadleaf + umbrella-pine corridor using
-      //    forestEdge() which guarantees canopy clearance from barriers.
-      //    Two rows each side: front mixed (umbrella pine + oak), back taller pines.
-      //    Native species: umbrella pines, oaks, maples, ashes, chestnuts.
+      // 1. ROYAL PARK FOREST — broadleaf + umbrella-pine corridor.
+      //    every() node-step approach keeps geometry within SwiftShader budget.
+      //    forestEdge() used only for short corner-specific dense sections.
       // =====================================================================
-      // Front row — mixed umbrella pine + broadleaf, moderate density.
-      forestEdge(0.0, 1.0, -1, 10, { density: 0.55, hMin: 10, hMax: 22,
-        col: PINE, col2: LEAF, pineFrac: 0.60 });
-      forestEdge(0.0, 1.0,  1, 10, { density: 0.52, hMin: 10, hMax: 20,
-        col: PINE_D, col2: LEAF_D, pineFrac: 0.55 });
-      // Back row — taller set-back pines for the deep-park wall.
-      forestEdge(0.0, 1.0, -1, 26, { density: 0.38, hMin: 18, hMax: 30,
-        col: PINE_D, col2: LEAF_D, pineFrac: 0.70 });
-      forestEdge(0.0, 1.0,  1, 26, { density: 0.36, hMin: 18, hMax: 28,
-        col: PINE_D, col2: LEAF, pineFrac: 0.65 });
+      // Rank A — front pines close to verge (umbrella pines).
+      every(13, (k) => {
+        const h = hash(k * 31);
+        if (h < 0.08) return;
+        const side = h < 0.5 ? -1 : 1;
+        pine(k, side, 9 + h * 6, 18 + h * 13, h < 0.3 ? PINE_D : PINE);
+        if (h > 0.25) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
+      });
+      // Rank B — broadleaf trees interleaved with pines (oaks, maples, ashes).
+      every(15, (k) => {
+        const h = hash(k * 53 + 9);
+        if (h < 0.15) return;
+        const side = h < 0.5 ? -1 : 1;
+        tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
+        if (h > 0.48) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
+      });
+      // Rank C — set-back taller pines (deep-park wall).
+      every(18, (k) => {
+        const h = hash(k * 41 + 3);
+        if (h < 0.20) return;
+        const side = h < 0.5 ? -1 : 1;
+        const hVar = 22 + h * 16 + (hash(k * 137) > 0.6 ? 4 : 0);
+        pine(k, side, 24 + h * 18, hVar, PINE_D);
+        if (h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
+      });
+      // Rank D — outermost broadleaf rank blending to backdrop.
+      every(24, (k) => {
+        const h = hash(k * 67 + 17);
+        if (h < 0.35) return;
+        tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
+        if (h > 0.7) tree(k, h > 0.85 ? -1 : 1, 55 + h * 22, 11 + h * 8, LEAF);
+      });
+      // Low underbrush / shrubs along the verge for ground texture.
+      every(11, (k) => {
+        const h = hash(k * 97 + 23);
+        if (h < 0.50) return;
+        bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4,
+             h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
+        if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
+      });
       // Clipped park hedge banding through several sweeps for a manicured edge.
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
       hedge(0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]);
       hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
+      // Lesmo 1 & 2 (s≈0.43–0.54) — famous woodland curves: forestEdge for dense
+      // corner canopy, safe because these are short sections only.
+      forestEdge(0.43, 0.54, -1, 12, { density: 0.60, hMin: 12, hMax: 24,
+        col: PINE_D, col2: LEAF_D, pineFrac: 0.70 });
+      forestEdge(0.43, 0.54,  1, 12, { density: 0.55, hMin: 12, hMax: 22,
+        col: PINE, col2: LEAF, pineFrac: 0.65 });
 
       // =====================================================================
       // 2. PIT STRAIGHT / START–FINISH — grandstands, tifosi, podium, pit boxes
@@ -411,39 +446,32 @@
       }
 
       // =====================================================================
-      // 8. ENHANCED SCENERY — backdrop wooded hills, improved landmarks, Italian
-      //    character. Section 8a removed (forestEdge() in section 1 now handles
-      //    the full-lap pine corridor more safely with canopy-clearance guarantee).
+      // 8. ENHANCED SCENERY — wooded hills backdrop, dense Lesmo canopy,
+      //    improved Parabolica stands, Italian kerb colours, tifosi flags.
       // =====================================================================
 
-      // 8a. Backdrop wooded hills — rounded green mounds ringing the park horizon.
-      //     backdrop() detects green colour and renders organic frustum+dome shapes.
+      // 8a. Extra backdrop wooded hills — two near rings of ridge prisms
+      //     at 80–110 m and 145–185 m beyond the track envelope, staggered
+      //     so the park horizon looks organic and unbroken. Reuses cx/cz/rad
+      //     computed in section 7.
       {
-        const cx2 = px.reduce((a, b) => a + b, 0) / n;
-        const cz2 = pz.reduce((a, b) => a + b, 0) / n;
-        let radB = 0;
-        for (let i = 0; i < n; i++) radB = Math.max(radB, Math.hypot(px[i] - cx2, pz[i] - cz2));
-        // Near treeline backdrop at ~90 m outside track envelope
+        // Near ring — warmer green (80–110 m out)
         for (let i = 0; i < 12; i++) {
-          const ang = i / 12 * 6.2832;
-          const r = radB + 90 + hash(i * 3 + 1) * 20;
-          const bx = cx2 + Math.cos(ang) * r, bz = cz2 + Math.sin(ang) * r;
-          const k2 = K(i / 12);
-          if (!onTrack(bx, bz, 18))
-            backdrop(k2, hash(i * 7) < 0.5 ? -1 : 1, 88 + hash(i * 5) * 20,
-              [24 + hash(i * 2) * 10, 14 + hash(i * 4) * 6, 20 + hash(i * 6) * 8],
-              [0.14, 0.34, 0.16]);
+          const ang = i / 12 * 6.2832, h = hash(i * 3 + 99);
+          const r = rad + 80 + h * 24;
+          const tx = cx + Math.cos(ang) * r, tz = cz + Math.sin(ang) * r;
+          if (onTrack(tx, tz, 28)) continue;
+          ridge(tx, tz, pyMin, ang + 1.5708, 30 + h * 16, 20 + h * 8,
+                14 + h * 8, [0.14, 0.34, 0.16]);
         }
-        // Mid-distance band at ~160 m — slightly hazed, darker green
+        // Mid ring — slightly darker/hazed (145–185 m out)
         for (let i = 0; i < 10; i++) {
-          const ang = (i + 0.5) / 10 * 6.2832;
-          const r = radB + 155 + hash(i * 9 + 2) * 30;
-          const bx = cx2 + Math.cos(ang) * r, bz = cz2 + Math.sin(ang) * r;
-          const k2 = K(i / 10);
-          if (!onTrack(bx, bz, 22))
-            backdrop(k2, hash(i * 11 + 3) < 0.5 ? -1 : 1, 152 + hash(i * 13) * 28,
-              [30 + hash(i * 3) * 12, 16 + hash(i * 5) * 6, 24 + hash(i * 7) * 10],
-              [0.11, 0.29, 0.13]);
+          const ang = (i + 0.5) / 10 * 6.2832, h = hash(i * 7 + 199);
+          const r = rad + 145 + h * 30;
+          const tx = cx + Math.cos(ang) * r, tz = cz + Math.sin(ang) * r;
+          if (onTrack(tx, tz, 32)) continue;
+          ridge(tx, tz, pyMin, ang + 1.5708, 36 + h * 18, 24 + h * 10,
+                16 + h * 10, [0.11, 0.29, 0.13]);
         }
       }
 

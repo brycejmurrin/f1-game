@@ -114,15 +114,19 @@
       {
         // Skyline concentrated in the NE quadrant (behind the main straight)
         // and spread around ~40 % of the lap so every camera angle sees towers.
+        // IMPORTANT: colours must NOT trigger backdrop()'s greenDom path
+        // (greenDom = col[1] > col[0] && col[1] > col[2]*1.05).
+        // Green-dominant colours render as terrain mounds, not skyline towers.
+        // Rule: either r >= g, OR b >= g/1.05 (i.e. b >= g*0.952).
         const SKY_COLS = [
-          [0.62, 0.82, 0.88],   // glass-teal
-          [0.75, 0.86, 0.92],   // pale ice-blue
-          [0.88, 0.76, 0.62],   // warm sandstone
-          [0.76, 0.88, 0.82],   // mint
-          [0.94, 0.82, 0.68],   // peach
-          [0.58, 0.74, 0.90],   // sky-blue glass
-          [0.82, 0.90, 0.76],   // sage
-          [0.68, 0.78, 0.85],   // steel-blue
+          [0.62, 0.82, 0.88],   // glass-teal    (b=0.88>g=0.82/1.05=0.781 → OK)
+          [0.75, 0.86, 0.92],   // pale ice-blue (b=0.92>g: OK)
+          [0.88, 0.76, 0.62],   // warm sandstone (r>g: OK)
+          [0.84, 0.82, 0.90],   // lavender-blue  (b=0.90>g=0.82/1.05=0.781 → OK)
+          [0.94, 0.82, 0.68],   // peach          (r>g: OK)
+          [0.58, 0.74, 0.90],   // sky-blue glass (b=0.90>g=0.74/1.05 → OK)
+          [0.85, 0.82, 0.76],   // warm stone     (r>g: OK)
+          [0.68, 0.78, 0.85],   // steel-blue     (b=0.85>g=0.78/1.05 → OK)
         ];
         // Primary tower ring: tall glass skyscrapers at varying distances
         for (let i = 0; i < 52; i++) {

@@ -83,8 +83,7 @@
       // through the fences all the way around the circuit. Green-dominant
       // colours trigger the ROUNDED ORGANIC MOUND rendering path (frustum+dome
       // cap instead of a flat box), so these read as true hillsides.
-      // Kept to 12 mounds total (same count as original backdrop zones) so
-      // geometry stays performance-safe.
+      // 12 mounds total (same count as original backdrop zones) for perf parity.
       // ====================================================================
       const amphPts = [
         [0.05, 1, 180], [0.15, -1, 195], [0.25, 1, 185],
