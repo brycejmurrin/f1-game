@@ -406,14 +406,15 @@
 
       // ================= MARSH / TREELINE (s 0.58–0.66, L far) =================
       // backdrop() with green colours renders as organic mounds instead of flat slabs.
+      // dist≥90 keeps the mound footprint well off the racing surface.
       for (let i = 0; i < 8; i++) {
         const k = K(0.58 + i * 0.01);
         const h = 6 + hash(i * 7) * 7;
         const w = 50 + hash(i * 11) * 50;
-        backdrop(k, -1, 50 + hash(i * 5) * 30, [w, h, 22], MARSH_N);
+        backdrop(k, -1, 90 + hash(i * 5) * 40, [w, h, 22], MARSH_N);
       }
       // Low ground plane as wetland floor
-      groundPlane(K(0.62), -1, 75, [160, 120], MARSH);
+      groundPlane(K(0.62), -1, 85, [160, 120], MARSH);
       hedge(0.58, 0.66, -1, 24, 3.5, MARSH_N);
 
       // ================= LONG BACK STRAIGHT — open verges (s 0.78, R) =================
@@ -570,12 +571,13 @@
       // ---- Distant low hazy treeline ring — backdrop() renders green as organic mounds ----
       // Green-dominant colours trigger backdrop()'s mound path (addFrustum + dome cap)
       // so the perimeter reads as wooded hills, not boxy slabs.
+      // dist≥170 ensures the mound footprint (~w/2) stays well beyond track envelope.
       for (let i = 0; i < 36; i++) {
         const k = K(i / 36);
         const side = (i % 2) ? 1 : -1;
         const h = 8 + hash(i * 7 + 180) * 8;
         const w = 80 + hash(i * 11 + 180) * 60;
-        backdrop(k, side, 155 + hash(i * 5) * 30,
+        backdrop(k, side, 170 + hash(i * 5) * 40,
           [w, h, 24],
           [MARSH_N[0], MARSH_N[1], MARSH_N[2]]);
       }
@@ -584,7 +586,7 @@
         const side = (i % 2) ? -1 : 1;
         const h = 10 + hash(i * 13 + 240) * 10;
         const w = 100 + hash(i * 17 + 240) * 70;
-        backdrop(k, side, 200 + hash(i * 19) * 40,
+        backdrop(k, side, 220 + hash(i * 19) * 40,
           [w, h, 28],
           [0.26, 0.40, 0.22]);
       }

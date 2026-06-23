@@ -1330,8 +1330,12 @@ const Tracks = (function () {
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       const ifx = p.c[0] - p.r[0] * side * w / 2;
       const ifz = p.c[2] - p.r[2] * side * w / 2;
-      if (onTrack(ifx, ifz, 0)) {
-        console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (inner face on track)`);
+      // Keep the façade clear of the track. Margin accounts for the proud window/
+      // mullion overhang AND, on street circuits, the edge barrier — so buildings
+      // sit BEHIND the wall instead of faces poking through onto the racing line.
+      const clearMargin = def.street ? 3.0 : 1.2;
+      if (onTrack(ifx, ifz, clearMargin)) {
+        console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (too close to track)`);
         return;
       }
       const nightLit = opts.lit || !!def.night;
