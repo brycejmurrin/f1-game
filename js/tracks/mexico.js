@@ -24,9 +24,9 @@
     scenery: function (api) {
       const { out, n, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
-              building, grandstand, billboard, tree, hedge, fence, palm, pine, bush,
+              building, grandstand, billboard, tree, hedge, fence, palm, pine,
               guardrail, tyreWall, marshalPost, tower, gantry,
-              cityFront, forestEdge, mountain, peak } = api;
+              cityFront, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Festive Mexican palette ───────────────────────────────────────────────
@@ -135,9 +135,7 @@
       // s=0.06  PARK TREE-LINE (right side, leafy park — Bosque de Chapultepec feel)
       // ════════════════════════════════════════════════════════════════════════
       hedge(0.04, 0.12, 1, 28, 3.2, TREEGRN);
-      // Bosque de Chapultepec: ancient ahuehuete broadleaf trees, no conifers
-      forestEdge(0.04, 0.12, 1, 30, { density: 0.75, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.04 });
-      forestEdge(0.04, 0.12, 1, 44, { density: 0.35, hMin: 12, hMax: 20, col: PARKGRN, col2: TREEGRN, pineFrac: 0.00 });
+      forestEdge(0.04, 0.12, 1, 30, { density: 0.75, hMin: 8, hMax: 14, col: TREEGRN, col2: PARKGRN, pineFrac: 0.3 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.12  TURN 1 GRANDSTAND
@@ -202,12 +200,9 @@
         building(k, -1, 28 + hash(k) * 32, 24, 9 + hash(k * 3) * 5, 20,
                  { wall: [0.86, 0.86, 0.84], window: [0.40, 0.46, 0.50], floor: 2 });
       }
-      // Park trees both sides of the sports facility section — mostly broadleaf
-      // (Mexican highland parks: ahuehuete cypress, ash, jacaranda — no conifers)
-      forestEdge(0.50, 0.62,  1, 18, { density: 0.60, hMin: 8, hMax: 14, col: TREEGRN, col2: PARKGRN, pineFrac: 0.05 });
-      forestEdge(0.50, 0.62, -1, 50, { density: 0.45, hMin: 9, hMax: 16, col: PARKGRN, col2: TREEGRN, pineFrac: 0.05 });
-      // A second denser broadleaf back-row for depth on the park straight
-      forestEdge(0.52, 0.60,  1, 30, { density: 0.35, hMin: 10, hMax: 18, col: PARKGRN, col2: TREEGRN, pineFrac: 0.00 });
+      // Park trees both sides of the sports facility section
+      forestEdge(0.50, 0.62, 1, 18, { density: 0.65, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
+      forestEdge(0.50, 0.62, -1, 50, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.66  LUCHA-LIBRE TRIBUTE STATUE
@@ -273,8 +268,7 @@
       }
 
       // Festive banners inside the bowl — papel picado at trackside level
-      // Sparse placement so banners read as punctuation, not a wall of confetti.
-      for (const s of [0.73, 0.80, 0.86]) {
+      for (const s of [0.72, 0.74, 0.77, 0.80, 0.83, 0.86]) {
         banners(s, -1, 9); banners(s, 1, 9);
       }
 
@@ -285,19 +279,16 @@
       tyreWall(0.795, 0.815,  1, 5, PINK);
       kerb(0.76, -1, 8); kerb(0.80, 1, 8);
 
-      // Mexican flag colours on the stadium outer wall fascia — three HORIZONTAL
-      // banding stripes at different heights so they're distinct, not z-fighting.
-      // Green (bottom) / White (middle) / Red (top), reading upward like a banner.
-      along(0.72, 0.88, 22, (k) => {
+      // Mexican flag colours on the stadium outer wall fascia (visible from outside)
+      along(0.72, 0.88, 18, (k) => {
+        const s = k / n;
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 56);
+          const a = anchor(k, side, 58);
           if (onTrack(a.c[0], a.c[2], 4)) continue;
-          // Bottom green band
-          addBox(out, vadd(a.c, a.u,  6), [10, 6, 2.0], [0.10, 0.58, 0.26], [a.r, a.u, a.t]);
-          // Middle white band
-          addBox(out, vadd(a.c, a.u, 12), [10, 6, 2.0], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
-          // Top red band
-          addBox(out, vadd(a.c, a.u, 18), [10, 6, 2.0], [0.86, 0.12, 0.16], [a.r, a.u, a.t]);
+          // Three vertical flag stripes on the outer stadium wall
+          addBox(out, vadd(a.c, a.u, 12), [2.5, 22, 2.5], [0.10, 0.58, 0.26], [a.r, a.u, a.t]);
+          addBox(out, vadd(a.c, a.u, 12), [2.5, 22, 2.5], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
+          addBox(out, vadd(a.c, a.u, 12), [2.5, 22, 2.5], [0.86, 0.12, 0.16], [a.r, a.u, a.t]);
         }
       });
 
@@ -422,72 +413,33 @@
 
       // ════════════════════════════════════════════════════════════════════════
       // DISTANT HAZED SKYLINE RING (high-altitude Mexico City, ~2285 m)
-      // Two layers: near grey urban tone + far hazy blue (smog/altitude haze)
+      // Hazy blue-grey tone to suggest thin air / urban smog
       // ════════════════════════════════════════════════════════════════════════
-      every(28, (k) => {
+      every(32, (k) => {
         for (const side of [-1, 1]) {
-          // Near layer: concrete/beige urban mass, 250–450 m out
-          const d1 = 250 + hash(k * 71 + side) * 120;
-          const h1 = 22 + hash(k * 72 + side) * 35;
-          const t1 = 0.62 + hash(k * 73 + side) * 0.09;
-          backdrop(k, side, d1, [90, h1, 40], [t1, t1 * 0.99, t1 * 0.97]);
-          // Far haze layer: taller, cooler blue-grey, 500–700 m out
-          const d2 = 500 + hash(k * 82 + side) * 180;
-          const h2 = 36 + hash(k * 83 + side) * 48;
-          const t2 = 0.66 + hash(k * 84 + side) * 0.08;
-          backdrop(k, side, d2, [130, h2, 55], [t2 * 0.94, t2 * 0.96, t2]);
+          const d = 380 + hash(k * 82 + side) * 130 + (k & 1) * 25;
+          const h = 32 + hash(k * 83 + side) * 40;
+          const tone = 0.63 + hash(k * 84 + side) * 0.11;
+          backdrop(k, side, d, [110, h, 50], [tone, tone * 0.99, tone * 0.98]);
         }
       });
-
-      // ════════════════════════════════════════════════════════════════════════
-      // GREEN ROLLING HILLS — suburban/agricultural halo at ~700–1000 m
-      // Mexico City sits in a highland basin; green hills frame the perimeter.
-      // backdrop() with green-dominant colour renders as rounded organic mounds.
-      // ════════════════════════════════════════════════════════════════════════
-      every(38, (k) => {
-        for (const side of [-1, 1]) {
-          const d = 700 + hash(k * 61 + side) * 250;
-          const h = 45 + hash(k * 62 + side) * 55;
-          // Green-dominant → backdrop() renders as an organic mound, not a box
-          const g = 0.38 + hash(k * 63 + side) * 0.12;
-          backdrop(k, side, d, [180, h, 80], [g * 0.70, g, g * 0.68]);
-        }
-      });
-
-      // ════════════════════════════════════════════════════════════════════════
-      // POPOCATÉPETL & IZTACCÍHUATL — iconic twin volcanic peaks visible from
-      // Mexico City; the circuit sits at 2285 m and the volcanoes peak at 5000 m+.
-      // World-coord placement: to the SE of the track centre (x≈340, z≈-470).
-      // ════════════════════════════════════════════════════════════════════════
-      // Popocatépetl — active, steeper cone, slightly SW
-      mountain(340 - 1600, -470 - 2200, -8, 580, 420,
-               { forest: [0.28, 0.40, 0.22], rock: [0.54, 0.52, 0.48],
-                 snow: [0.92, 0.91, 0.90], snowline: 0.70, seed: 17 });
-      // Iztaccíhuatl — dormant, longer ridge profile, to the E
-      mountain(340 + 800,  -470 - 2000, -8, 700, 390,
-               { forest: [0.26, 0.38, 0.20], rock: [0.56, 0.54, 0.50],
-                 snow: [0.94, 0.93, 0.92], snowline: 0.68, seed: 31 });
-      // A smaller subsidiary ridge connecting them on the horizon
-      mountain(340 - 200, -470 - 2100, -8, 400, 280,
-               { forest: [0.24, 0.36, 0.18], rock: [0.52, 0.50, 0.46],
-                 snow: [0.90, 0.89, 0.88], snowline: 0.72, seed: 43 });
 
       // ════════════════════════════════════════════════════════════════════════
       // MEXICO CITY SKYLINE — distributed mid-distance landmark towers
       // ════════════════════════════════════════════════════════════════════════
-      for (let i = 0; i < 18; i++) {
-        const f = i / 18;
+      for (let i = 0; i < 16; i++) {
+        const f = i / 16;
         const k = K(f);
         const side = i % 2 === 0 ? -1 : 1;
-        const d = 200 + hash(i * 29) * 160 + (i % 3) * 25;
-        const h = 32 + hash(i * 37) * 80;
-        const w = 18 + hash(i * 53) * 20;
+        const d = 260 + hash(i * 29) * 140 + (i % 3) * 30;
+        const h = 38 + hash(i * 37) * 72;
+        const w = 20 + hash(i * 53) * 18;
         const p = anchor(k, side, d);
         if (!onTrack(p.c[0], p.c[2], 20)) {
           const tone = 0.58 + hash(i * 41) * 0.12;
           building(k, side, d - w / 2, w, h, w,
             { wall: [tone, tone * 0.99, tone * 0.98],
-              window: [tone * 0.65, tone * 0.70, tone * 0.82],
+              window: [tone * 0.68, tone * 0.72, tone * 0.82],
               lit: true, windowCol: [0.94, 0.84, 0.54], floor: 8 });
         }
       }
