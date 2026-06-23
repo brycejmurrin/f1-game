@@ -25,9 +25,14 @@
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, place, backdrop,
-              addBox, addCyl, addFrustum, vadd, anchor, along, mountain, pine, tree, hedge,
-              grandstand, building, tower, billboard, gantry, marshalPost,
+              addBox, addCyl, addCone, addFrustum, vadd, anchor, along, mountain, pine, tree, hedge,
+              forestEdge, grandstand, building, tower, billboard, gantry, marshalPost,
               fence, guardrail, tyreWall } = api;
+
+      // Ardennes forest palette — dark damp Belgian conifers
+      const PINE_D  = [0.07, 0.24, 0.10];   // deep Ardennes conifer (spruce/fir)
+      const PINE_M  = [0.09, 0.28, 0.12];   // mid conifer
+      const LEAF    = [0.13, 0.34, 0.15];   // broadleaf accent (beech/oak)
 
       // --- Encircling Ardennes mountains: a near forested range with light snow
       // only on the highest tops, and a far hazed range. Centre-based ring so the
@@ -64,65 +69,47 @@
         }
       }
 
-      // --- Forested ridgelines settling behind the trackside treeline.
-      // 22 m height ≈ tall Ardennes pine — reads as a tree-top horizon, not a
-      // looming wall. 200 m+ keeps the near face >140 m from the road edge.
+      // --- Forested ridgeline backdrop: rolling green Ardennes hills on the horizon.
+      // backdrop() with a green-dominant colour renders as a rounded organic mound,
+      // not a flat slab. Placed every 64 nodes (wide spacing = few boxes total).
       every(64, (k) => {
         for (const side of [-1, 1]) {
           backdrop(k, side, 200 + hash(k * 13 + side) * 100, [110, 22, 90], [0.13, 0.30, 0.16]);
         }
       });
 
-      // --- Continuous dark treeline wall hugging both sides of the track. This
-      // is the read-at-a-glance "wall of forest" the brief calls for: a dense
-      // hedge mass that closes off every grass gap behind the front-rank pines.
-      // Darker, more austere forest green for Ardennes character.
-      hedge(0.0, 1.0, -1, 5, 8.0, [0.08, 0.28, 0.12]);
-      hedge(0.0, 1.0, 1, 5, 8.0, [0.09, 0.29, 0.13]);
+      // --- Ardennes pine forest: forestEdge() guarantees canopy clearance from
+      // barriers and uses per-tree guards to suppress anything on the road.
+      // Spa is 7 km — the LONGEST circuit. Keep total density LOW so SwiftShader
+      // (CPU rasteriser, ~200× slower than GPU) can render all 25 scan frames
+      // within the 180 s blank-scan timeout.
+      //
+      // Full-lap sparse fringe (density 0.12): just enough conifers to read as
+      // an Ardennes forest at distance. Gap 18 m keeps all canopies well clear
+      // of any barrier or grandstand — forestEdge adds the canopy radius on top.
+      forestEdge(0.0, 1.0, -1, 18, { density: 0.12, hMin: 8, hMax: 15, col: PINE_D, col2: LEAF, pineFrac: 0.75 });
+      forestEdge(0.0, 1.0,  1, 18, { density: 0.12, hMin: 8, hMax: 15, col: PINE_D, col2: LEAF, pineFrac: 0.75 });
 
-      // --- Dense Ardennes pine forest walling both sides of the track. Three
-      // staggered ranks give a continuous, multi-deep woodland. The hedge above
-      // already closes the gaps at the very front, so the pines read as the
-      // textured woodland behind it; spacing is tuned to stay within budget.
-      // Front rank (close to the edge), textured woodland just behind the hedge.
-      // Darker, denser Ardennes conifers.
-      every(52, (k) => {
-        for (const side of [-1, 1]) {
-          const s = hash(k * 41 + side * 7);
-          if (s < 0.38) continue;
-          const dist = 7 + s * 11, h = 9 + s * 10;
-          pine(k, side, dist, h, [0.07 + s * 0.04, 0.28, 0.12]);
-        }
-      });
-      // Second rank (mid/deep depth), the looming taller back wall.
-      every(72, (k) => {
-        for (const side of [-1, 1]) {
-          const s = hash(k * 67 + side * 5 + 3);
-          if (s < 0.40) continue;
-          const dist = 20 + s * 26, h = 12 + s * 13;
-          pine(k, side, dist, h, [0.08 + s * 0.05, 0.26, 0.12]);
-        }
-      });
-      // Scattered broadleaf trees breaking up the conifer monotony, mid depth.
-      every(105, (k) => {
-        for (const side of [-1, 1]) {
-          const s = hash(k * 113 + side * 3 + 9);
-          if (s < 0.55) continue;
-          tree(k, side, 14 + s * 24, 7 + s * 7, [0.12 + s * 0.07, 0.34, 0.16]);
-        }
-      });
-      // Hero density at Eau Rouge / Raidillon (s≈0.05–0.10): crowd the climb with pines.
-      // Maximize forest drama through the iconic dip and climb.
-      every(16, (k) => {
-        const s = k / n;
-        if (s < 0.045 || s > 0.12) return;
-        for (const side of [-1, 1]) {
-          const r = hash(k * 53 + side);
-          pine(k, side, 6 + r * 9, 11 + r * 10, [0.07 + r * 0.05, 0.29, 0.13]);
-          if (r > 0.48) pine(k, side, 21 + r * 19, 12 + r * 10, [0.08 + r * 0.04, 0.26, 0.12]);
-          if (r > 0.70) pine(k, side, 36 + r * 14, 10 + r * 8, [0.09 + r * 0.03, 0.27, 0.13]);
-        }
-      });
+      // --- Named Ardennes forest sections — denser where the track is hemmed by
+      // close woodland. Each covers a specific stretch so density can be higher
+      // without blowing the total primitive budget for this 7 km circuit.
+      //
+      // Eau Rouge / Raidillon valley + climb (s≈0.04–0.13):
+      // The iconic forested gorge — tall dark spruce crowding the dip and the climb.
+      forestEdge(0.04, 0.13, -1, 10, { density: 0.42, hMin: 10, hMax: 18, col: PINE_D, col2: PINE_M, pineFrac: 0.85 });
+      forestEdge(0.04, 0.13,  1, 10, { density: 0.42, hMin: 10, hMax: 18, col: PINE_D, col2: PINE_M, pineFrac: 0.85 });
+      // Kemmel Straight + hillside (s≈0.13–0.22):
+      // Tall dark pines on the Kemmel ridge, reads as a forested hillside.
+      forestEdge(0.13, 0.22, -1, 22, { density: 0.32, hMin: 12, hMax: 20, col: PINE_D, col2: LEAF,   pineFrac: 0.70 });
+      forestEdge(0.13, 0.22,  1, 22, { density: 0.32, hMin: 12, hMax: 20, col: PINE_D, col2: LEAF,   pineFrac: 0.70 });
+      // Pouhon / mid-section forest sweepers (s≈0.35–0.55):
+      // Dense pine walls hemming the fast double-apex left-hander.
+      forestEdge(0.35, 0.55, -1, 16, { density: 0.38, hMin: 10, hMax: 16, col: PINE_M, col2: LEAF,   pineFrac: 0.65 });
+      forestEdge(0.35, 0.55,  1, 16, { density: 0.38, hMin: 10, hMax: 16, col: PINE_M, col2: LEAF,   pineFrac: 0.65 });
+      // Blanchimont high-speed section (s≈0.78–0.98):
+      // Towering conifers narrowing the visual channel through the fastest part of the lap.
+      forestEdge(0.78, 0.98, -1, 20, { density: 0.35, hMin: 12, hMax: 20, col: PINE_D, col2: PINE_M, pineFrac: 0.80 });
+      forestEdge(0.78, 0.98,  1, 20, { density: 0.35, hMin: 12, hMax: 20, col: PINE_D, col2: PINE_M, pineFrac: 0.80 });
 
       // --- Modern pit/paddock complex: long low white-grey mass on the pit straight,
       // with a stacked hospitality tier and a control tower at the start.
@@ -316,44 +303,6 @@
       // Warm terracotta walls with deep windows, distinctive landmark on the right.
       building(Math.round(n * 0.01) % n, 1, 35, 10, 12, 30, { wall: [0.76, 0.42, 0.24], window: [0.30, 0.28, 0.24], floor: 2 });
 
-      // --- Denser Eau Rouge forest: extra close pines narrowing the sightline through the dip.
-      // The signature feature — very tall dark pines crowding the apex/dip line.
-      every(6, (k) => {
-        const s = k / n;
-        if (s < 0.04 || s > 0.14) return;
-        for (const side of [-1, 1]) {
-          const r = hash(k * 79 + side * 11 + 17);
-          // Taller, darker pines for drama
-          pine(k, side, 4 + r * 8, 11 + r * 9, [0.07, 0.20, 0.10]);
-          if (r > 0.45) pine(k, side, 14 + r * 20, 12 + r * 10, [0.08, 0.24, 0.11]);
-        }
-      });
-
-      // --- Dense forest banks at mid-track (s≈0.40): continuous dark-green box masses.
-      // Brief calls for "continuous dark-green box masses hemming the track" at fast forest sweepers.
-      every(40, (k) => {
-        const s = k / n;
-        if (s < 0.35 || s > 0.50) return;  // Pouhon area and approach
-        for (const side of [-1, 1]) {
-          const r = hash(k * 97 + side * 19 + 23);
-          if (r < 0.38) continue;
-          const dist = 17 + r * 34, h = 14 + r * 12;
-          pine(k, side, dist, h, [0.08 + r * 0.05, 0.26, 0.11]);
-        }
-      });
-
-      // --- Extra Blanchimont forest depth (s≈0.80–0.95): tall pines on fast section.
-      every(38, (k) => {
-        const s = k / n;
-        if (s < 0.78 || s > 0.98) return;
-        for (const side of [-1, 1]) {
-          const r = hash(k * 83 + side * 17 + 31);
-          if (r < 0.42) continue;
-          const dist = 16 + r * 28, h = 13 + r * 11;
-          pine(k, side, dist, h, [0.09 + r * 0.05, 0.28, 0.13]);
-        }
-      });
-
       // --- Kemmel Straight billboard: on the uphill Kemmel drag.
       billboard(Math.round(n * 0.12) % n, -1, 8, 10, 3.4, [0.16, 0.42, 0.74]);
 
@@ -378,31 +327,6 @@
         place(k78, 1, 22, [8, 1.2, 20], [0.54, 0.54, 0.52]);
         place(k80, 1, 22, [8, 1.2, 16], [0.56, 0.56, 0.54]);
       }
-
-      // --- Kemmel straight backdrop (s≈0.09–0.18): tall distant pines on the climb.
-      every(32, (k) => {
-        const s = k / n;
-        if (s < 0.09 || s > 0.20) return;  // Kemmel ascent
-        for (const side of [-1, 1]) {
-          const r = hash(k * 91 + side * 13 + 37);
-          if (r < 0.48) continue;
-          const dist = 28 + r * 44, h = 14 + r * 10;
-          tree(k, side, dist, h, [0.10 + r * 0.05, 0.31, 0.14]);
-        }
-      });
-
-      // --- Increase forest barriers around fast sweepers for "hemming" effect.
-      // Tall dark treelines at the edges of Stavelot/Blanchimont (brief: s≈0.40 and beyond).
-      every(48, (k) => {
-        const s = k / n;
-        if ((s < 0.36 || s > 0.52) && (s < 0.75 || s > 0.99)) return;  // Pouhon and Blanchimont sections
-        for (const side of [-1, 1]) {
-          const r = hash(k * 101 + side * 29 + 41);
-          if (r < 0.48) continue;
-          const dist = 30 + r * 42, h = 15 + r * 13;
-          tree(k, side, dist, h, [0.11 + r * 0.06, 0.33, 0.15]);
-        }
-      });
     },
   }
   );

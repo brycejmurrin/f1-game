@@ -38,7 +38,7 @@
       const { out, n, hw, px, pz, place, backdrop, groundPlane, groundYAt,
               building, billboard, anchor, along, every, onTrack, addBox, addCyl, addCone,
               addPrism, addPyramid, addFrustum, grandstand, gantry, marshalPost, palm, bush,
-              fence, guardrail, tyreWall, vadd, hash } = api;
+              fence, guardrail, tyreWall, vadd, hash, cityFront, tower } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Night colour palette ----
@@ -66,69 +66,71 @@
       const CONC  = [0.30, 0.31, 0.36];
 
       // ===================================================================
-      // FAR SILHOUETTE BAND — fills sky behind near towers; anchored far
-      // enough that it never overlaps parallel straights. Two passes:
-      // alternating sides to avoid a monotone wall. Colour is dark but
-      // slightly above pure black so the horizon glow still reads.
+      // FAR SILHOUETTE BAND — fills sky behind near facades; anchored far
+      // enough (340+ m) that it never clips near geometry. backdrop()
+      // auto-adds window bands for night circuits so these aren't flat slabs.
+      // Reduced to 48 instances (was 80) since window bands add geometry;
+      // staggered distances give depth layering without redundancy.
       // ===================================================================
       {
-        const N = 80;
+        const N = 48;
         for (let i = 0; i < N; i++) {
           const k  = K(i / N);
           const sd = (i % 2) ? 1 : -1;
-          const w  = 32 + hash(i * 5) * 42;
-          const h  = 60 + hash(i * 9) * 120;
-          // keep far band well back — minimum 320 m so it never clips near band
-          backdrop(k, sd,  340 + hash(i * 13) * 200, [w, h, 30], [0.08, 0.09, 0.18]);
-          // occasional taller spire on opposite side for depth layering
-          if (i % 3 === 0) {
-            backdrop(k, -sd, 360 + hash(i * 17) * 180, [w * 0.8, h * 1.1, 28], [0.07, 0.08, 0.16]);
+          const w  = 34 + hash(i * 5) * 40;
+          const h  = 70 + hash(i * 9) * 130;
+          backdrop(k, sd,  340 + hash(i * 13) * 200, [w, h, 28], [0.08, 0.09, 0.18]);
+          // Mid-distance spire on opposite side — depth layering, 260–360 m band
+          if (i % 4 === 0) {
+            backdrop(k, -sd, 260 + hash(i * 17) * 100, [w * 0.65, h * 1.15, 24], [0.07, 0.08, 0.17]);
           }
         }
       }
 
       // ===================================================================
-      // NEAR CBD TOWER BAND — dense ring of lit-window towers with clean
-      // spacing to prevent intersection. Each tower pair (main + infill)
-      // uses a fixed centre distance + calculated non-overlapping gap.
-      // Wall colour lifted to ~0.20 so towers read as dark glass, not voids.
+      // NEAR CBD FACADE WALLS — cityFront() produces aligned street-canyon
+      // facades that read like the real Marina Bay CBD, with naturally
+      // varying heights including landmark tower spikes. Segmented by track
+      // position so the bay side (R) reads as lit waterfront towers and the
+      // city side (L) as denser colonial/office CBD blocks.
       // ===================================================================
-      {
-        const N = 56;
-        // Step evenly around the lap; stagger distance & side for depth
-        for (let i = 0; i < N; i++) {
-          const k    = K(i / N);
-          const side = (i % 2) ? 1 : -1;
-          // Main tower: width 20-38 m, height 60-180 m
-          const wA   = 20 + hash(i * 3)  * 18;
-          const hA   = 60 + hash(i * 11) * 120;
-          // distance is edge of near band (100-160 m), centred on tower
-          const dA   = 108 + hash(i * 7) * 52;
-          const tintA = hash(i * 19);
-          const winA  = tintA < 0.20 ? WIN_GOLD :
-                        tintA < 0.45 ? WIN_COOL :
-                        tintA < 0.72 ? WIN_CYAN : WIN_WARM;
-          building(k, side, dA - wA * 0.5, wA, hA, wA * 0.9, {
-            wall:   WALL_CBD,
-            window: winA,
-            floor:  18,
-          });
-
-          // Infill tower: placed OUTSIDE the main tower with a 12 m clear gap
-          // between their closest faces, preventing intersection.
-          const wB   = 14 + hash(i * 23) * 12;
-          const hB   = 40 + hash(i * 29) * 80;
-          // inner face of infill = outer face of main + 12 m gap + infill half-width
-          const dBInner = dA + wA * 0.5 + 12;
-          const dBCentre = dBInner + wB * 0.5;
-          const winB  = hash(i * 37) < 0.5 ? WIN_CYAN : WIN_COOL;
-          building(k, side, dBCentre - wB * 0.5, wB, hB, wB * 0.9, {
-            wall:   WALL_LITE,
-            window: winB,
-            floor:  18,
-          });
-        }
-      }
+      // Right side: waterfront offices & hotels (Marina Bay CBD towers)
+      cityFront(0.00, 0.15, 1, 105, {
+        minH: 55, maxH: 160, depth: 32, lit: true,
+        palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
+        windowCol: WIN_CYAN, floor: 18,
+      });
+      cityFront(0.15, 0.35, 1, 110, {
+        minH: 60, maxH: 180, depth: 30, lit: true,
+        palette: [WALL_CBD, WALL_LITE, [0.14, 0.16, 0.24], WALL_CBD],
+        floor: 20,
+      });
+      cityFront(0.50, 0.70, 1, 100, {
+        minH: 50, maxH: 150, depth: 30, lit: true,
+        palette: [WALL_LITE, WALL_CBD, [0.16, 0.18, 0.27], WALL_LITE],
+        windowCol: WIN_COOL, floor: 18,
+      });
+      cityFront(0.70, 0.90, 1, 105, {
+        minH: 50, maxH: 140, depth: 28, lit: true,
+        palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.18, 0.20, 0.28]],
+        floor: 16,
+      });
+      // Left side: colonial district, Chinatown, CBD back-streets — lower, warmer
+      cityFront(0.00, 0.20, -1, 95, {
+        minH: 30, maxH: 100, depth: 26, lit: true,
+        palette: [WALL_WARM, WALL_CBD, [0.20, 0.18, 0.24], WALL_LITE],
+        windowCol: WIN_WARM, floor: 14,
+      });
+      cityFront(0.40, 0.65, -1, 90, {
+        minH: 28, maxH: 90, depth: 24, lit: true,
+        palette: [WALL_WARM, [0.22, 0.20, 0.26], WALL_CBD, WALL_LITE],
+        floor: 14,
+      });
+      cityFront(0.65, 0.92, -1, 95, {
+        minH: 30, maxH: 110, depth: 26, lit: true,
+        palette: [WALL_CBD, WALL_WARM, WALL_LITE, [0.20, 0.19, 0.27]],
+        windowCol: WIN_WARM, floor: 14,
+      });
 
       // ===================================================================
       // s 0.18 R — MARINA BAY SANDS: 3 towers + skypark slab
@@ -248,19 +250,15 @@
       }
 
       // ===================================================================
-      // s 0.45 R — distant skyline across the bay (waterfront towers)
-      // Staggered distances to avoid any mutual intersection.
+      // s 0.43–0.50 R — distant skyline across the bay (waterfront towers).
+      // These are the far-distance buildings seen across Marina Bay itself —
+      // backdrop() puts them at 200+ m so they sit well behind the near
+      // cityFront() facades at 100 m. backdrop() auto-adds window bands
+      // for night circuits so each slab reads as a lit tower face.
       // ===================================================================
       for (let i = 0; i < 6; i++) {
-        const dist = 200 + i * 36;   // stepped distances — no overlap possible
-        backdrop(K(0.45), 1, dist, [40, 55 + hash(i * 13) * 80, 32], [0.09, 0.10, 0.20]);
-        if (i % 2 === 0) {
-          building(K(0.45), 1, dist - 56, 22, 55 + hash(i * 7) * 65, 22, {
-            wall:   WALL_CBD,
-            window: WIN_CYAN,
-            floor:  20,
-          });
-        }
+        const dist = 205 + i * 38;   // stepped 200–410 m — no overlap possible
+        backdrop(K(0.45), 1, dist, [42, 60 + hash(i * 13) * 90, 30], [0.09, 0.10, 0.20]);
       }
 
       // Bay water reflection streaks — flat bright strips just above water level.
@@ -278,16 +276,29 @@
       }
 
       // ===================================================================
-      // s 0.55 L — FULLERTON HOTEL: wide warm-uplit neoclassical block
+      // s 0.55 L — FULLERTON HOTEL: wide warm-uplit neoclassical block.
+      // The real Fullerton is a grand Palladian building (former GPO) with a
+      // wide colonnade base, warm cream-limestone walls and a flat roofline.
+      // building() with arch:"flat" preserves that horizontal massing; warm
+      // window tones reflect the hotel's warm interior lighting.
       // ===================================================================
       {
         const k = K(0.55);
-        // Main body (cream sandstone colour, brighter than before)
-        place(k, -1, 38, [48, 24, 32], [0.88, 0.78, 0.58]);
-        // Warm uplighting base band
-        place(k, -1, 39, [50, 5, 34],  [1.00, 0.82, 0.50]);
-        // Upper cornice highlight
-        place(k, -1, 38, [48,  2, 32], [1.00, 0.90, 0.65]);
+        building(k, -1, 18, 48, 26, 34, {
+          wall:   [0.82, 0.74, 0.56],   // warm limestone/cream façade
+          window: WIN_GOLD,              // hotel interior — warm gold windows
+          floor:  5,                     // tall neoclassical storeys
+          lit:    true,
+          arch:   "flat",               // keep the iconic horizontal roofline
+        });
+        // Ground-level colonnade warm uplighting strip (the Fullerton's signature
+        // amber wash that makes the columns glow at night)
+        {
+          const a = anchor(k, -1, 18);
+          addBox(out, vadd(a.c, a.u, 2.5), [50, 4.5, 36], [1.00, 0.82, 0.50], [a.r, a.u, a.t]);
+          // Upper cornice band — bright cream highlight
+          addBox(out, vadd(a.c, a.u, 26.5), [49, 1.8, 35], [1.00, 0.92, 0.68], [a.r, a.u, a.t]);
+        }
       }
 
       // ===================================================================
@@ -425,7 +436,10 @@
       }
 
       // ===================================================================
-      // s 0.92 both — neon billboard funnel back to start line
+      // s 0.92–0.05 — pit straight: neon billboard funnel back to start,
+      // pit-lane building wall L (Paddock Club / pit hospitality suites),
+      // and pit lane perimeter fencing. cityFront() for the L-side pit
+      // complex gives proper aligned office / hospitality massing.
       // ===================================================================
       {
         billboard(K(0.92),  1,  11, 18, 11, NEON[3]);
@@ -435,10 +449,14 @@
         billboard(K(0.96),  1,  10, 16, 10, NEON[0]);
         billboard(K(0.96), -1,  10, 17, 11, NEON[3]);
         billboard(K(0.98),  1,  10, 15, 10, NEON[2]);
-        // Pit straight low buildings L / stand R
-        building(K(0.00), -1, 15, 30, 18, 22, { wall: WALL_WARM, window: WIN_WARM });
-        building(K(0.02), -1, 21, 26, 24, 22, { wall: WALL_CBD,  window: WIN_COOL, floor: 14 });
       }
+      // Pit straight — left side hospitality / media centre (warm lit suites)
+      cityFront(0.955, 0.04, -1, 12, {
+        minH: 14, maxH: 28, depth: 18, lit: true,
+        palette: [WALL_WARM, [0.24, 0.22, 0.18], WALL_WARM, [0.20, 0.19, 0.16]],
+        windowCol: WIN_WARM, floor: 4,
+        step: 18,
+      });
 
       // Scattered billboard punctuation along the lap
       for (const [s, side, hue] of [
@@ -610,21 +628,29 @@
       }
 
       // ===================================================================
-      // CBD HERO TOWERS — a few extra-tall tapered skyscrapers giving
-      // skyline depth (frustum shaft + lit glazing face + glowing spire).
-      // Placed at 200-280 m to ensure they sit behind the near band.
+      // CBD HERO TOWERS — tall tapered skyscrapers giving skyline depth.
+      // Uses the tower() helper (frustum + cap + antenna mast) at 200–280 m
+      // so they sit behind the cityFront() near facades. windowCol selects
+      // alternating cyan / cool-blue to vary the night appearance.
       // ===================================================================
       for (const [s, side, seedOff] of [
         [0.12, -1, 0], [0.50, -1, 3], [0.58, 1, 6], [0.74, -1, 9], [0.06, 1, 12],
       ]) {
-        const a  = anchor(K(s), side, 210 + hash(K(s) * 3 + seedOff) * 70);
-        const H  = 160 + hash(K(s) * 3 + seedOff + 1) * 100;
-        // Dark glass shaft (frustum — narrows toward top)
-        addFrustum(out, vadd(a.c, a.u, H * 0.5), 18, 10, H, WALL_CBD, 6, [a.r, a.u, a.t]);
-        // Bright glazing face (vivid vertical stripe)
-        addBox(out, vadd(a.c, a.u, H * 0.52), [28, H * 0.65, 6], hash(K(s)) < 0.5 ? WIN_CYAN : WIN_COOL, [a.r, a.u, a.t]);
-        // Glowing antenna spire
-        addCone(out, vadd(a.c, a.u, H + 5), 3.5, 14, NEON[1], 6, [a.r, a.u, a.t]);
+        const dist = 210 + hash(K(s) * 3 + seedOff) * 70;
+        const H    = 160 + hash(K(s) * 3 + seedOff + 1) * 100;
+        const winCol = hash(K(s)) < 0.5 ? WIN_CYAN : WIN_COOL;
+        tower(K(s), side, dist, 28, H, {
+          col:    WALL_CBD,
+          cap:    true,
+          capCol: winCol,
+          mast:   18,
+          seg:    8,
+        });
+        // Glowing antenna tip neon accent (cyan — distinctive Singapore night skyline)
+        {
+          const a = anchor(K(s), side, dist);
+          addCone(out, vadd(a.c, a.u, H + 20), 3.0, 10, NEON[1], 6, [a.r, a.u, a.t]);
+        }
       }
     },
   }

@@ -25,7 +25,7 @@
       const { out, n, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum,
         palm, bush, grandstand, building, cityFront, tower, billboard, gantry, marshalPost,
-        mountain, fence, wall, guardrail, tyreWall, onTrack } = api;
+        mountain, backdrop, fence, wall, guardrail, tyreWall, onTrack } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Desert palette (night race, Sakhir) ──────────────────────────────
@@ -59,6 +59,9 @@
       // Hospitality buildings: sandy desert palette with lit windows
       const HOSP_SAND   = [0.82, 0.78, 0.68];  // sandy beige hospitality exterior
       const HOSP_WARM   = [0.78, 0.74, 0.65];
+      // Desert scrub: dried, dusty vegetation — warm ochre not green
+      const SCRUB_DRY   = [0.46, 0.40, 0.24];  // dried desert scrub / dead grass
+      const SCRUB_MID   = [0.52, 0.44, 0.28];  // mid-tone desert scrub
 
       // ── Continuous dune backdrop ring ────────────────────────────────────
       // Two overlapping rings (near + far) give an unbroken desert horizon.
@@ -94,10 +97,16 @@
         addBox(out, vadd(a.c, a.u, 0.12), [8.0, 0.25, 8.0], POOL, b);
       };
 
-      // ── Sculpted artificial dune wedge ──────────────────────────────────
+      // ── Sculpted organic dune mound (replaces flat frustum wedge) ───────
+      // Uses mountain() for irregular silhouette — more dune-like than a frustum.
+      // gap is road-edge clearance; w/h are footprint/height in metres.
       const duneWedge = (k, side, gap, w, h) => {
-        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        addFrustum(out, a.c, w * 0.6, w * 0.28, h, DUNE, 7, b);
+        const a = anchor(k, side, gap + w * 0.3);
+        mountain(a.c[0], a.c[2], pyMin, w * 0.55, h, {
+          seg: 6, seed: k * 3 + side * 17,
+          rough: 0.32, snowline: 99,
+          forest: DUNE, rock: SAND_DARK, snow: DUNE_LIT,
+        });
       };
 
       // ── Three-pole light bank (cluster of masts) ─────────────────────────
@@ -173,6 +182,12 @@
         lit: true, windowCol: WIN_WARM,
       });
 
+      // ── Desert backdrop slabs on main straight (sand-tone horizon fill) ──
+      // backdrop() places track-aligned wall panels at distance; sand colours
+      // (non-green, sz[1] ≤ sz[2] so isBld=false) render as plain dune masses.
+      backdrop(K(0.00), 1, 160, [280, 16, 14], SAND_DARK);
+      backdrop(K(0.97), 1, 180, [240, 18, 14], SAND);
+
       // ================= TURN 1 (s 0.05) =================
       // T1 is the famous heavy-braking zone into a 90-degree right-hander.
       // Grandstands wrap around the outside on both sides — blue-seated.
@@ -212,8 +227,8 @@
       floodMast(K(0.16), -1, 34, 26);
 
       // ================= SCULPTED DUNES (s 0.28–0.36, L far) =================
-      // Desert dune features on the far left — pushed well back (gap 64+) to avoid
-      // clipping the circuit barriers. Sized as low sandy wedges (~3-6 m high).
+      // Organic desert dune mounds on the far left — pushed well back (gap 64+)
+      // using mountain() for irregular silhouettes instead of flat frustums.
       for (let i = 0; i < 6; i++) {
         const k = (K(0.27) + i * Math.round(n * 0.015)) % n;
         duneWedge(k, -1, 64 + i * 14, 40 + hash(k) * 28, 3.5 + hash(k * 5) * 3);
@@ -234,6 +249,8 @@
       for (let i = 0; i < 3; i++) {
         hospitality((K(0.255) + i * 5) % n, 1, 44 + i * 6, 11, 6, 14);
       }
+      // Desert backdrop slab on the L (infield) side at T3 — fills horizon gap
+      backdrop(K(0.24), -1, 120, [200, 14, 12], SAND_DARK);
 
       // ================= TURNS 5-6-7 SWEEP (s 0.32–0.42) =================
       // This long sweeping section has open desert on the left and a grandstand
@@ -245,9 +262,9 @@
         // Minimum 20m from road edge for palm canopy clearance (fronds ~4m wide)
         const d = 20 + (i % 4) * 8 + hash(k * 7 + i) * 10;
         palm(k, side, d, 7 + hash(k * 11 + i) * 4, [0.16, 0.34, 0.14]);
-        // Bush clusters only where there's ample clearance — min 16m
+        // Dried desert scrub clusters only where there's ample clearance — min 16m
         if (hash(k * 13 + i) > 0.5 && d > 26) {
-          bush((k + 1) % n, side, d - 6, [0.28, 0.31, 0.18]);
+          bush((k + 1) % n, side, d - 6, SCRUB_DRY);
         }
       }
       lightBank(K(0.35), -1, 36);
@@ -269,12 +286,12 @@
       marshalPost(K(0.43), -1, 26);
 
       // ================= OPEN DESERT FLATS (s 0.47–0.56) =================
-      // Wide open desert section — dune wedges pushed far back (90m+) on both sides.
+      // Wide open desert section — organic dune mounds pushed far back (90m+).
       for (let i = 0; i < 3; i++) {
         const k = (K(0.48) + i * Math.round(n * 0.016)) % n;
         for (const side of [-1, 1]) duneWedge(k, side, 96 + i * 18, 48, 3.2);
       }
-      // Sparse dune wedges (mid-lap desert fill) — min gap 48 on far desert side
+      // Sparse organic dune mounds (mid-lap desert fill) — min gap 48 on far side
       for (let i = 0; i < 4; i++) {
         const k = (K(0.49) + Math.round(i * n * 0.014)) % n;
         for (const side of [-1, 1]) {
@@ -293,6 +310,8 @@
       // Desert accessory buildings: sandy compound structures (e.g. TV compound)
       building(K(0.50), -1, 44, 16, 8, 22,
         { wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
+      // Desert backdrop slab behind open section — fills the distant horizon
+      backdrop(K(0.50), -1, 140, [260, 15, 12], SAND);
 
       // ================= TIMING / MARSHAL ZONE (s 0.58–0.67, L) =================
       for (let i = 0; i < 5; i++) {
@@ -349,6 +368,9 @@
         { wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
       building(K(0.90), -1, 46, 12, 8, 18,
         { wall: [0.70, 0.65, 0.54], window: WIN_COOL, lit: true, floor: 2 });
+      // Desert backdrop slabs along the back straight left (desert) side
+      backdrop(K(0.75), -1, 130, [300, 16, 13], SAND_DARK);
+      backdrop(K(0.85), -1, 150, [260, 18, 13], SAND);
 
       // ================= PIT ENTRY (s 0.93–0.99, L) =================
       // Second pit building: media/control centre with cool lit windows
@@ -409,14 +431,16 @@
       }
 
       // ================= DESERT SCRUB / ROCKS (min 16m from road edge) =================
-      // Low scrub and rocks — minimum distance 16m so they sit beyond fencing.
+      // Low dried scrub clumps and sand-coloured rocks — minimum distance 16m.
+      // Scrub colour is warm ochre (dried desert vegetation), not green.
       for (let k = 0; k < n; k += Math.max(1, Math.round(n / 80))) {
         for (const side of [-1, 1]) {
           const r = hash(k * 41 + side * 7);
           if (r > 0.52) continue;
           const d = 16 + hash(k * 43 + side) * 20;
           if (r < 0.26) {
-            bush(k, side, d, [0.32, 0.34, 0.20]);
+            // dried desert scrub — warm ochre, not green
+            bush(k, side, d, hash(k * 71 + side) > 0.5 ? SCRUB_DRY : SCRUB_MID);
           } else {
             // small sand-coloured rock/rubble box
             place(k, side, d,
@@ -442,38 +466,69 @@
       }
 
       // ================= DUNE SILHOUETTE RIDGES (L far, s 0.15–0.75) =================
-      // Low wide ridge frustums representing distant dune formations — pushed far back.
-      {
-        const DUNE_RIDGE = [0.54, 0.43, 0.27];
-        for (const [s, dist] of [[0.20, 130], [0.48, 168], [0.70, 202]]) {
-          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
-          addFrustum(out, a.c, 92, 40, 9 + hash(K(s) * 7) * 5.5, DUNE_RIDGE, 6, b);
-        }
+      // Organic dune formations using mountain() for irregular silhouettes — three
+      // distant ridges at increasing range give a layered desert depth.
+      for (const [s, side, dist, wBase, hBase] of [
+        [0.20, -1, 120, 86, 10],   // T3 infield dune ridge
+        [0.48,  1, 155, 96, 12],   // desert section right-side ridge
+        [0.70, -1, 192, 90, 11],   // back straight left-side ridge
+      ]) {
+        const k = K(s);
+        const a = anchor(k, side, dist + wBase * 0.3);
+        mountain(a.c[0], a.c[2], pyMin, wBase * 0.55 + hash(k * 7) * 30,
+          hBase + hash(k * 11) * 5,
+          { seg: 7, seed: k * 5 + dist, rough: 0.28, snowline: 99,
+            forest: SAND_DARK, rock: SAND, snow: DUNE_LIT });
+      }
+      // Additional dune ridges on the opposite side to balance the horizon
+      for (const [s, side, dist] of [
+        [0.35,  1, 128],
+        [0.60, -1, 148],
+        [0.88,  1, 118],
+      ]) {
+        const k = K(s);
+        const a = anchor(k, side, dist + 24);
+        mountain(a.c[0], a.c[2], pyMin, 44 + hash(k * 9) * 28,
+          8 + hash(k * 13) * 4,
+          { seg: 6, seed: k * 7 + dist, rough: 0.25, snowline: 99,
+            forest: SAND, rock: SAND_LIGHT, snow: DUNE_LIT });
       }
 
       // ================= DISTANT MANAMA CITY GLOW =================
-      // Sparse silhouette ring beyond the dune band with warm lit tops
-      // representing the Manama skyline visible beyond the desert.
+      // Sparse Manama skyline ring beyond the dune band.
+      // Inner ring: medium-height buildings with multi-band window treatment.
+      // Outer ring: taller slender towers for skyline depth + slim antennas.
       const cityRing = rad + 540;
-      for (let i = 0; i < 14; i++) {
-        const a = i / 14 * 6.2832 + 0.3, h = hash(i * 17 + 99);
-        const x = cx + Math.cos(a) * (cityRing + (h - 0.5) * 100);
-        const z = cz + Math.sin(a) * (cityRing + (h - 0.5) * 100);
+      const MANAMA_WALL = [0.18, 0.17, 0.24];
+      const MANAMA_MID  = [0.15, 0.15, 0.21];
+
+      for (let i = 0; i < 18; i++) {
+        const ang = i / 18 * 6.2832 + 0.3, hf = hash(i * 17 + 99);
+        const ringR = cityRing + (hf - 0.5) * 80;
+        const x = cx + Math.cos(ang) * ringR, z = cz + Math.sin(ang) * ringR;
         if (onTrack(x, z, 30)) continue;
-        const bw = 14 + h * 18, bh = 22 + h * 50;
-        addBox(out, [x, pyMin + bh * 0.5, z], [bw, bh, bw], [0.14, 0.14, 0.18]);
-        // Warm amber lit crown — windows glow at night
-        addBox(out, [x, pyMin + bh + 0.8, z], [bw * 0.65, 1.6, bw * 0.65], [0.86, 0.72, 0.40]);
+        const bw = 16 + hf * 20, bh = 24 + hf * 36, bd = bw * 0.7;
+        // Main building mass
+        addBox(out, [x, pyMin + bh * 0.5, z], [bw, bh, bd], MANAMA_WALL);
+        // Two amber window bands — lower and upper thirds light up at night
+        addBox(out, [x, pyMin + bh * 0.28, z], [bw * 1.01, bh * 0.14, bd * 1.01], [0.86, 0.72, 0.42]);
+        addBox(out, [x, pyMin + bh * 0.60, z], [bw * 1.01, bh * 0.12, bd * 1.01], [0.90, 0.78, 0.45]);
+        // Warm amber parapet crown
+        addBox(out, [x, pyMin + bh + 0.7, z], [bw * 0.68, 1.8, bd * 0.68], [0.88, 0.74, 0.40]);
       }
-      // Slim comms/lighting towers on the city ring for skyline variety
-      for (let i = 0; i < 5; i++) {
-        const a = i / 5 * 6.2832 + 1.1, h = hash(i * 23 + 7);
-        const x = cx + Math.cos(a) * (cityRing - 30);
-        const z = cz + Math.sin(a) * (cityRing - 30);
-        if (onTrack(x, z, 20)) continue;
-        const towerH = 68 + h * 46;
-        addCyl(out, [x, pyMin, z], 2.2, towerH, [0.16, 0.16, 0.20], 6, null);
-        addBox(out, [x, pyMin + towerH + 1, z], [3.5, 2.5, 3.5], [0.92, 0.60, 0.22], null);
+      // Outer tower ring — taller slender blocks (44–90 m) for skyline variety
+      for (let i = 0; i < 8; i++) {
+        const ang = i / 8 * 6.2832 + 1.1, hf = hash(i * 23 + 7);
+        const x = cx + Math.cos(ang) * (cityRing + 110), z = cz + Math.sin(ang) * (cityRing + 110);
+        if (onTrack(x, z, 22)) continue;
+        const tw = 8 + hf * 8, th = 44 + hf * 46, td = tw * 0.8;
+        addBox(out, [x, pyMin + th * 0.5, z], [tw, th, td], MANAMA_MID);
+        // Cool blue window band mid-height (office tower feel)
+        addBox(out, [x, pyMin + th * 0.55, z], [tw * 1.02, th * 0.22, td * 1.02], [0.50, 0.68, 0.92]);
+        // Warm amber crown beacon
+        addBox(out, [x, pyMin + th + 1.0, z], [tw * 0.5, 2.4, td * 0.5], [0.95, 0.60, 0.22]);
+        // Slim communication antenna
+        addCyl(out, [x, pyMin + th + 3.4, z], 0.18, 14 + hf * 10, [0.30, 0.30, 0.34], 4, null);
       }
 
     },
