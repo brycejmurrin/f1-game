@@ -55,7 +55,7 @@ test.describe("Budget system — part selection", () => {
   test("selecting race engine (160cr) reduces budget to 440", async ({ page }) => {
     await openSetup(page);
     // Click the Race engine chip
-    await page.locator(".cs-chip").filter({ hasText: /^Race$/ }).first().click();
+    await page.locator(".cs-chip").filter({ hasText: "Race" }).first().click();
     await page.waitForTimeout(200);
     const text = await page.locator("#cs-budget").textContent();
     expect(text).toContain("440");
@@ -64,7 +64,7 @@ test.describe("Budget system — part selection", () => {
 
   test("budget fill bar increases after selecting a paid part", async ({ page }) => {
     await openSetup(page);
-    await page.locator(".cs-chip").filter({ hasText: /^Race$/ }).first().click();
+    await page.locator(".cs-chip").filter({ hasText: "Race" }).first().click();
     await page.waitForTimeout(200);
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
       el.style.transform
@@ -75,11 +75,14 @@ test.describe("Budget system — part selection", () => {
 
   test("parts that exceed budget show over-budget class", async ({ page }) => {
     await openSetup(page);
-    // Select the most expensive ERS (overcharge = 230cr) first
-    await page.locator(".cs-chip").filter({ hasText: /^Overcharge$/ }).first().click();
+    // Spend 450cr: Overcharge ERS (230) + F1 Spec gearbox (180) + High Octane fuel (40)
+    // — with 150cr remaining, expensive options like Race engine (160cr) become over-budget
+    await page.locator(".cs-chip").filter({ hasText: "Overcharge" }).first().click();
+    await page.waitForTimeout(100);
+    await page.locator(".cs-chip").filter({ hasText: "F1 Spec" }).first().click();
+    await page.waitForTimeout(100);
+    await page.locator(".cs-chip").filter({ hasText: "High Octane" }).first().click();
     await page.waitForTimeout(200);
-    // Then active_aero (160cr) + hypersoft tyres (200cr) — some expensive option
-    // should now be over-budget
     const overBudgetCount = await page.locator(".cs-chip.over-budget").count();
     expect(overBudgetCount).toBeGreaterThan(0);
     await page.screenshot({ path: "tests/ui-screenshots/budget-over-budget.png" });
@@ -87,12 +90,17 @@ test.describe("Budget system — part selection", () => {
 
   test("budget label gets 'over' class when spending exceeds 600", async ({ page }) => {
     await openSetup(page);
-    // Select overcharge ERS (230cr) + f1_spec gearbox (180cr) + custom_formula fuel (200cr) = 610
-    await page.locator(".cs-chip").filter({ hasText: /^Overcharge$/ }).first().click();
+    // Use unlimited mode to select a combo totalling 610cr, then disable to reveal "over" state
+    await page.locator("#cs-unlimited").click();
     await page.waitForTimeout(100);
-    await page.locator(".cs-chip").filter({ hasText: /^F1 Spec$/ }).first().click();
+    await page.locator(".cs-chip").filter({ hasText: "Overcharge" }).first().click();
     await page.waitForTimeout(100);
-    await page.locator(".cs-chip").filter({ hasText: /^Custom Formula$/ }).first().click();
+    await page.locator(".cs-chip").filter({ hasText: "F1 Spec" }).first().click();
+    await page.waitForTimeout(100);
+    await page.locator(".cs-chip").filter({ hasText: "Custom Formula" }).first().click();
+    await page.waitForTimeout(100);
+    // Disable unlimited — 610cr > 600 so budget label becomes "over"
+    await page.locator("#cs-unlimited").click();
     await page.waitForTimeout(200);
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");
@@ -138,9 +146,9 @@ test.describe("Budget system — unlimited toggle", () => {
   test("unlimited mode removes over-budget chip classes", async ({ page }) => {
     await openSetup(page);
     // First fill up the budget so something is over-budget
-    await page.locator(".cs-chip").filter({ hasText: /^Overcharge$/ }).first().click();
-    await page.locator(".cs-chip").filter({ hasText: /^F1 Spec$/ }).first().click();
-    await page.locator(".cs-chip").filter({ hasText: /^Custom Formula$/ }).first().click();
+    await page.locator(".cs-chip").filter({ hasText: "Overcharge" }).first().click();
+    await page.locator(".cs-chip").filter({ hasText: "F1 Spec" }).first().click();
+    await page.locator(".cs-chip").filter({ hasText: "Custom Formula" }).first().click();
     await page.waitForTimeout(100);
     // Now enable unlimited
     await page.locator("#cs-unlimited").click();
