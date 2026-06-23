@@ -106,56 +106,49 @@
       };
 
       // ===================================================================
-      // MIAMI DOWNTOWN SKYLINE — backdrop() calls in the NE direction so the
-      // auto-window-band code fires for every tower (isBld: h>26 && h>depth).
-      // Concentrated over ~60 node positions so the cluster reads as a real
-      // downtown block, not a uniform ring.  Much cheaper than 46 raw frustums.
+      // MIAMI DOWNTOWN SKYLINE — backdrop() calls so the auto-window-band
+      // code fires for every tower (isBld: h>26 && h>depth).
+      // Kept to 36 total backdrop calls for SwiftShader performance budget.
+      // COLOUR RULE: no entry may have g > r AND g > b*1.05 — that triggers
+      // backdrop()'s green-terrain mound path instead of the building path.
       // ===================================================================
       {
-        // Skyline concentrated in the NE quadrant (behind the main straight)
-        // and spread around ~40 % of the lap so every camera angle sees towers.
-        // IMPORTANT: colours must NOT trigger backdrop()'s greenDom path
-        // (greenDom = col[1] > col[0] && col[1] > col[2]*1.05).
-        // Green-dominant colours render as terrain mounds, not skyline towers.
-        // Rule: either r >= g, OR b >= g/1.05 (i.e. b >= g*0.952).
         const SKY_COLS = [
-          [0.62, 0.82, 0.88],   // glass-teal    (b=0.88>g=0.82/1.05=0.781 → OK)
-          [0.75, 0.86, 0.92],   // pale ice-blue (b=0.92>g: OK)
+          [0.62, 0.82, 0.88],   // glass-teal    (b>g: OK)
+          [0.75, 0.86, 0.92],   // pale ice-blue (b>g: OK)
           [0.88, 0.76, 0.62],   // warm sandstone (r>g: OK)
-          [0.84, 0.82, 0.90],   // lavender-blue  (b=0.90>g=0.82/1.05=0.781 → OK)
+          [0.84, 0.82, 0.90],   // lavender-blue  (b>g: OK)
           [0.94, 0.82, 0.68],   // peach          (r>g: OK)
-          [0.58, 0.74, 0.90],   // sky-blue glass (b=0.90>g=0.74/1.05 → OK)
+          [0.58, 0.74, 0.90],   // sky-blue glass (b>g: OK)
           [0.85, 0.82, 0.76],   // warm stone     (r>g: OK)
-          [0.68, 0.78, 0.85],   // steel-blue     (b=0.85>g=0.78/1.05 → OK)
+          [0.68, 0.78, 0.85],   // steel-blue     (b>g: OK)
         ];
-        // Primary tower ring: tall glass skyscrapers at varying distances
-        for (let i = 0; i < 52; i++) {
+        // 24 tall skyscrapers — concentrated on main straight + T1 arc (s 0.9→0.2)
+        // where the skyline is most visible. A few scatter around the far side.
+        for (let i = 0; i < 24; i++) {
           const h0 = hash(i * 13.1 + 1), h1 = hash(i * 7.7 + 3), h2 = hash(i * 3.3 + 7);
-          // Concentrate 75 % of towers on the main straight + T1 arc (s 0.9→0.2)
-          // but scatter a ring behind the marina and stadium sections too.
-          const kFrac = (i < 39)
-            ? ((i / 39) * 0.30 + 0.90) % 1.0   // s 0.90 → 0.20
-            : (i - 39) / 13 * 0.40 + 0.30;      // s 0.30 → 0.70
+          const kFrac = (i < 18)
+            ? ((i / 18) * 0.30 + 0.90) % 1.0   // s 0.90 → 0.20 (main straight arc)
+            : (i - 18) / 6 * 0.40 + 0.30;       // s 0.30 → 0.70 (far arc scatter)
           const k = K(kFrac);
-          // Towers alternate sides slightly and push far back
           const side = (i % 3 === 2) ? -1 : 1;
-          const dist = 480 + h0 * 340;           // 480–820 m — truly horizon-far
-          const bW = 20 + h1 * 18;               // 20–38 m wide
-          const bH = 52 + h0 * 110 + (i < 14 ? 60 : 0); // central towers taller
-          const bD = 14 + h2 * 10;               // 14–24 m deep — ensures isBld fires
-          const col = SKY_COLS[i % SKY_COLS.length];
-          backdrop(k, side, dist, [bW, bH, bD], col);
+          const dist = 500 + h0 * 300;           // 500–800 m — truly horizon-far
+          const bW = 22 + h1 * 16;               // 22–38 m wide
+          const bH = 60 + h0 * 100 + (i < 8 ? 60 : 0); // core towers taller
+          const bD = 14 + h2 * 8;                // 14–22 m deep — ensures isBld fires
+          backdrop(k, side, dist, [bW, bH, bD], SKY_COLS[i % SKY_COLS.length]);
         }
-        // Mid-rise pastel ring: wider, shorter buildings — the streetscape skirt
-        for (let i = 0; i < 34; i++) {
+        // 12 mid-rise pastel blocks forming the streetscape skirt below the skyline.
+        // Wider and shorter, positioned at medium distance.
+        for (let i = 0; i < 12; i++) {
           const h0 = hash(i * 9.9 + 11), h1 = hash(i * 4.4 + 13), h2 = hash(i * 6.1 + 17);
-          const kFrac = (i / 34 + 0.85) % 1.0;
+          const kFrac = (i / 12 + 0.85) % 1.0;
           const k = K(kFrac);
           const side = (i % 2) ? 1 : -1;
-          const dist = 340 + h0 * 220;           // 340–560 m
-          const bW = 28 + h1 * 20;               // 28–48 m
-          const bH = 30 + h2 * 46;               // 30–76 m — still isBld if > depth
-          const bD = 18 + h0 * 8;                // 18–26 m (keep bH > bD)
+          const dist = 360 + h0 * 180;           // 360–540 m
+          const bW = 30 + h1 * 18;               // 30–48 m
+          const bH = 32 + h2 * 38;               // 32–70 m (ensure bH > bD for isBld)
+          const bD = 16 + h0 * 8;                // 16–24 m
           const col = PASTELS[(i * 2) % PASTELS.length];
           const lightened = [col[0] * 0.55 + 0.40, col[1] * 0.55 + 0.40, col[2] * 0.55 + 0.40];
           backdrop(k, side, dist, [bW, bH, bD], lightened);

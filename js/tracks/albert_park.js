@@ -104,8 +104,8 @@
       }
       // Far-horizon silhouette band — distant CBD depth layer (grey-blue so
       // backdrop() renders them as city towers with window bands, not green mounds)
-      for (let i = 0; i < 20; i++) {
-        const f = i / 19;
+      for (let i = 0; i < 14; i++) {
+        const f = i / 13;
         const bh = 55 + hash(i * 13) * 110;   // 55–165 m tower heights
         const bw = 28 + hash(i * 9) * 24;      // 28–52 m wide
         backdrop(k(CBD_S0 - 0.03 + f * (CBD_S1 - CBD_S0 + 0.06)), 1,
@@ -142,13 +142,13 @@
       // [120,18,100] slab loop.  Placed at dist 160–240 m so they sit well
       // behind forestEdge treelines and don't clip them.
       // ====================================================================
-      every(60, (kk) => {
+      every(100, (kk) => {
         for (const side of [-1, 1]) {
           // Skip the CBD side (s≈0.19–0.55 R) so mounds don't fight skyline
           if (side === 1 && kk >= k(0.17) && kk <= k(0.57)) continue;
           const dist = 165 + hash(kk * 6 + side) * 60;
-          const w    = 110 + hash(kk * 11 + side) * 60;  // 110–170 m footprint
-          const h    =  22 + hash(kk * 17 + side) * 18;  // 22–40 m mound height
+          const w    = 130 + hash(kk * 11 + side) * 60;  // 130–190 m footprint (wider, fewer)
+          const h    =  24 + hash(kk * 17 + side) * 16;  // 24–40 m mound height
           // Green-dominant: col[1] > col[0] and col[1] > col[2]*1.05
           backdrop(kk, side, dist, [w, h, 90], [0.18, 0.38 + hash(kk * 23 + side) * 0.06, 0.20]);
         }
@@ -242,9 +242,9 @@
       });
 
       // ---- Far-background forest canopy (atmospheric depth, horizon) ----
-      every(40, (kk) => {
+      every(60, (kk) => {
         for (const side of [-1, 1]) {
-          if (hash(kk * 53 + side) > 0.55) continue;
+          if (hash(kk * 53 + side) > 0.45) continue;
           const dist = 92 + hash(kk * 57 + side) * 72;
           tree(kk, side, dist, 12 + hash(kk * 61 + side) * 7, [0.17, 0.38, 0.17]);
         }
