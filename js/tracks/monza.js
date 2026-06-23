@@ -51,14 +51,14 @@
       //    Native species: umbrella pines, oaks, maples, ashes, chestnuts.
       // =====================================================================
       // Front row — mixed umbrella pine + broadleaf, moderate density.
-      forestEdge(0.0, 1.0, -1, 10, { density: 0.68, hMin: 10, hMax: 22,
+      forestEdge(0.0, 1.0, -1, 10, { density: 0.55, hMin: 10, hMax: 22,
         col: PINE, col2: LEAF, pineFrac: 0.60 });
-      forestEdge(0.0, 1.0,  1, 10, { density: 0.65, hMin: 10, hMax: 20,
+      forestEdge(0.0, 1.0,  1, 10, { density: 0.52, hMin: 10, hMax: 20,
         col: PINE_D, col2: LEAF_D, pineFrac: 0.55 });
       // Back row — taller set-back pines for the deep-park wall.
-      forestEdge(0.0, 1.0, -1, 26, { density: 0.52, hMin: 18, hMax: 32,
+      forestEdge(0.0, 1.0, -1, 26, { density: 0.38, hMin: 18, hMax: 30,
         col: PINE_D, col2: LEAF_D, pineFrac: 0.70 });
-      forestEdge(0.0, 1.0,  1, 26, { density: 0.50, hMin: 18, hMax: 30,
+      forestEdge(0.0, 1.0,  1, 26, { density: 0.36, hMin: 18, hMax: 28,
         col: PINE_D, col2: LEAF, pineFrac: 0.65 });
       // Clipped park hedge banding through several sweeps for a manicured edge.
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
@@ -424,25 +424,25 @@
         let radB = 0;
         for (let i = 0; i < n; i++) radB = Math.max(radB, Math.hypot(px[i] - cx2, pz[i] - cz2));
         // Near treeline backdrop at ~90 m outside track envelope
-        for (let i = 0; i < 18; i++) {
-          const ang = i / 18 * 6.2832;
+        for (let i = 0; i < 12; i++) {
+          const ang = i / 12 * 6.2832;
           const r = radB + 90 + hash(i * 3 + 1) * 20;
           const bx = cx2 + Math.cos(ang) * r, bz = cz2 + Math.sin(ang) * r;
-          const k2 = K(i / 18);
+          const k2 = K(i / 12);
           if (!onTrack(bx, bz, 18))
             backdrop(k2, hash(i * 7) < 0.5 ? -1 : 1, 88 + hash(i * 5) * 20,
-              [22 + hash(i * 2) * 10, 14 + hash(i * 4) * 6, 20 + hash(i * 6) * 8],
+              [24 + hash(i * 2) * 10, 14 + hash(i * 4) * 6, 20 + hash(i * 6) * 8],
               [0.14, 0.34, 0.16]);
         }
         // Mid-distance band at ~160 m — slightly hazed, darker green
-        for (let i = 0; i < 14; i++) {
-          const ang = (i + 0.5) / 14 * 6.2832;
+        for (let i = 0; i < 10; i++) {
+          const ang = (i + 0.5) / 10 * 6.2832;
           const r = radB + 155 + hash(i * 9 + 2) * 30;
           const bx = cx2 + Math.cos(ang) * r, bz = cz2 + Math.sin(ang) * r;
-          const k2 = K(i / 14);
+          const k2 = K(i / 10);
           if (!onTrack(bx, bz, 22))
             backdrop(k2, hash(i * 11 + 3) < 0.5 ? -1 : 1, 152 + hash(i * 13) * 28,
-              [28 + hash(i * 3) * 12, 16 + hash(i * 5) * 6, 24 + hash(i * 7) * 10],
+              [30 + hash(i * 3) * 12, 16 + hash(i * 5) * 6, 24 + hash(i * 7) * 10],
               [0.11, 0.29, 0.13]);
         }
       }
