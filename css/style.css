@@ -686,6 +686,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* HUD becomes a short horizontal strip at the very bottom so the big gear
      no longer floats up over the car */
   .hud-bottom { flex-direction: row; align-items: flex-end; gap: 18px; bottom: calc(8px + var(--sab)); }
+  /* Nudge the strip 20px left of centre so OVERTAKE stays clear of BOOST/OT buttons
+     (right:16) which would otherwise overlap the rightmost flex item. */
+  .hud-bottom { left: calc(50% - 20px); }
+  /* In manual mode BOOST/OT move inward to right:100 (x≈668), so shift more. */
+  body.manual .hud-bottom { left: calc(50% - 55px); }
   #hud-gearbox { gap: 3px; }
   #hud-gear { font-size: 48px; }
   #hud-tach { width: 92px; height: 13px; }
@@ -707,6 +712,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.steer-buttons #btn-brake    { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
   body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar));  bottom: calc(100px + var(--sab)); }
   body.steer-buttons #btn-ot       { left: auto; right: calc(100px + var(--sar)); bottom: calc(100px + var(--sab)); }
+  /* Buttons mode: steer arrows occupy the left 192px, action buttons the right 176px.
+     Pin the HUD strip inside that clear zone so OVERTAKE can't bleed into the buttons. */
+  body.steer-buttons .hud-bottom {
+    left: calc(200px + var(--sal));
+    right: calc(180px + var(--sar));
+    transform: none;
+    justify-content: center;
+  }
   /* touch: BRAKE left corner, BOOST/OT right corner */
   body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
   body.steer-touch #btn-boost { right: calc(16px + var(--sar)); bottom: calc(12px + var(--sab)); }
@@ -1136,4 +1149,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
   #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
+}
+
+/* ---------- Portrait-specific HUD fixes ---------- */
+/* CHASE sits at right:58 by default which lands directly on the BEST box in portrait.
+   Stack it below PAUSE (right-aligned) so the full 4-box top bar is clear. */
+@media (orientation: portrait) {
+  #btn-cam {
+    top: calc(55px + var(--sat));
+    right: calc(10px + var(--sar));
+  }
+  /* Move sectors below the repositioned CHASE (55 + 40 + 7 = 102px). */
+  #hud-sectors { top: calc(102px + var(--sat)); }
 }
