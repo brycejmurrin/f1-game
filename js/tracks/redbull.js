@@ -33,8 +33,8 @@
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       const ranges = [
-        { extra: 210, wMin: 160, hMin: 48, hVar: 56, count: 28, seg: 7, opts: { forest: [0.15, 0.28, 0.16], rock: [0.36, 0.34, 0.32], snow: [0.90, 0.92, 0.96], snowline: 0.75, rough: 0.40 } },
-        { extra: 480, wMin: 280, hMin: 140, hVar: 100, count: 22, seg: 6, opts: { forest: [0.28, 0.38, 0.30], rock: [0.48, 0.50, 0.54], snow: [0.94, 0.95, 0.99], snowline: 0.50, rough: 0.32 } },
+        { extra: 210, wMin: 160, hMin: 48, hVar: 56, count: 14, seg: 5, opts: { forest: [0.15, 0.28, 0.16], rock: [0.36, 0.34, 0.32], snow: [0.90, 0.92, 0.96], snowline: 0.75, rough: 0.40 } },
+        { extra: 480, wMin: 280, hMin: 140, hVar: 100, count: 10, seg: 4, opts: { forest: [0.28, 0.38, 0.30], rock: [0.48, 0.50, 0.54], snow: [0.94, 0.95, 0.99], snowline: 0.50, rough: 0.32 } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;

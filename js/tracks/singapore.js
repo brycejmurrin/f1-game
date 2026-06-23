@@ -89,47 +89,27 @@
 
       // ===================================================================
       // NEAR CBD FACADE WALLS — cityFront() produces aligned street-canyon
-      // facades that read like the real Marina Bay CBD, with naturally
-      // varying heights including landmark tower spikes. Segmented by track
-      // position so the bay side (R) reads as lit waterfront towers and the
-      // city side (L) as denser colonial/office CBD blocks.
+      // facades. PERFORMANCE NOTE: SwiftShader (software renderer) is ~200×
+      // slower than GPU. step=44 m and limited coverage keeps building count
+      // comparable to the original loop (~80 buildings vs. 112 in old band).
+      // The far backdrop() layer handles the rest of the horizon.
       // ===================================================================
-      // Right side: waterfront offices & hotels (Marina Bay CBD towers)
-      cityFront(0.00, 0.15, 1, 105, {
-        minH: 55, maxH: 160, depth: 32, lit: true,
+      // Right side: Marina Bay waterfront (main-straight & bay sections)
+      cityFront(0.90, 0.35, 1, 106, {
+        minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
-        windowCol: WIN_CYAN, floor: 18,
+        windowCol: WIN_CYAN, floor: 18, step: 44,
       });
-      cityFront(0.15, 0.35, 1, 110, {
-        minH: 60, maxH: 180, depth: 30, lit: true,
-        palette: [WALL_CBD, WALL_LITE, [0.14, 0.16, 0.24], WALL_CBD],
-        floor: 20,
-      });
-      cityFront(0.50, 0.70, 1, 100, {
-        minH: 50, maxH: 150, depth: 30, lit: true,
-        palette: [WALL_LITE, WALL_CBD, [0.16, 0.18, 0.27], WALL_LITE],
-        windowCol: WIN_COOL, floor: 18,
-      });
-      cityFront(0.70, 0.90, 1, 105, {
-        minH: 50, maxH: 140, depth: 28, lit: true,
-        palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.18, 0.20, 0.28]],
-        floor: 16,
-      });
-      // Left side: colonial district, Chinatown, CBD back-streets — lower, warmer
-      cityFront(0.00, 0.20, -1, 95, {
-        minH: 30, maxH: 100, depth: 26, lit: true,
+      // Left side: colonial district & back-straights
+      cityFront(0.00, 0.20, -1, 94, {
+        minH: 26, maxH: 90, depth: 22, lit: true,
         palette: [WALL_WARM, WALL_CBD, [0.20, 0.18, 0.24], WALL_LITE],
-        windowCol: WIN_WARM, floor: 14,
+        windowCol: WIN_WARM, floor: 14, step: 44,
       });
-      cityFront(0.40, 0.65, -1, 90, {
-        minH: 28, maxH: 90, depth: 24, lit: true,
+      cityFront(0.48, 0.88, -1, 90, {
+        minH: 26, maxH: 95, depth: 22, lit: true,
         palette: [WALL_WARM, [0.22, 0.20, 0.26], WALL_CBD, WALL_LITE],
-        floor: 14,
-      });
-      cityFront(0.65, 0.92, -1, 95, {
-        minH: 30, maxH: 110, depth: 26, lit: true,
-        palette: [WALL_CBD, WALL_WARM, WALL_LITE, [0.20, 0.19, 0.27]],
-        windowCol: WIN_WARM, floor: 14,
+        floor: 14, step: 48,
       });
 
       // ===================================================================
@@ -450,12 +430,12 @@
         billboard(K(0.96), -1,  10, 17, 11, NEON[3]);
         billboard(K(0.98),  1,  10, 15, 10, NEON[2]);
       }
-      // Pit straight — left side hospitality / media centre (warm lit suites)
-      cityFront(0.955, 0.04, -1, 12, {
-        minH: 14, maxH: 28, depth: 18, lit: true,
+      // Pit straight L — Paddock Club / media centre (warm lit suites)
+      // Gap=14m + step=28m keeps buildings clear of the pit lane wall.
+      cityFront(0.955, 0.04, -1, 14, {
+        minH: 12, maxH: 24, depth: 16, lit: true,
         palette: [WALL_WARM, [0.24, 0.22, 0.18], WALL_WARM, [0.20, 0.19, 0.16]],
-        windowCol: WIN_WARM, floor: 4,
-        step: 18,
+        windowCol: WIN_WARM, floor: 4, step: 28,
       });
 
       // Scattered billboard punctuation along the lap

@@ -104,8 +104,8 @@
       }
       // Far-horizon silhouette band — distant CBD depth layer (grey-blue so
       // backdrop() renders them as city towers with window bands, not green mounds)
-      for (let i = 0; i < 14; i++) {
-        const f = i / 13;
+      for (let i = 0; i < 10; i++) {
+        const f = i / 9;
         const bh = 55 + hash(i * 13) * 110;   // 55–165 m tower heights
         const bw = 28 + hash(i * 9) * 24;      // 28–52 m wide
         backdrop(k(CBD_S0 - 0.03 + f * (CBD_S1 - CBD_S0 + 0.06)), 1,
