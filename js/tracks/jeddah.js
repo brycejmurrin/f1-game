@@ -30,369 +30,209 @@
         cityFront, onTrack, hash, every } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ── Night Corniche palette: warm amber floodlights vs cool LED strips ──
-      const SEA       = [0.02, 0.04, 0.08];        // deep black-mirror water
-      const SPANGLE   = [1.0,  0.80, 0.40];        // warm amber reflections / path lamps
-      const LED       = [0.92, 0.96, 1.0 ];        // cool-white LED lamp banks
-      const WINWARM   = [1.0,  0.84, 0.48];        // warm interior windows
-      const WINCOOL   = [0.58, 0.82, 1.0 ];        // cool glass tower windows
-      const WINGOLD   = [1.0,  0.76, 0.28];        // deep sodium / tungsten glow
-      const WINTEAL   = [0.42, 0.96, 0.94];        // bright teal accent glass
-      const GREEN     = [0.10, 0.56, 0.24];        // Saudi-green livery stripe
-      const MAGENTA   = [0.96, 0.28, 0.64];        // neon magenta accent
-      const DARKPOLE  = [0.09, 0.09, 0.12];        // dark lamp-pole shaft
-      const LAMPGLOW  = [1.0,  0.88, 0.52];        // warm sodium lamp head
-      const POOLAMB   = [0.44, 0.38, 0.22];        // muted amber pool on tarmac
+      // ── Night Corniche palette ─────────────────────────────────────────────
+      const SEA     = [0.02, 0.04, 0.08];   // deep black-mirror water
+      const SPANGLE = [1.0,  0.80, 0.40];   // warm amber reflections
+      const LED     = [0.92, 0.96, 1.0 ];   // cool-white LED
+      const WINWARM = [1.0,  0.84, 0.48];   // warm interior windows
+      const WINCOOL = [0.58, 0.82, 1.0 ];   // cool glass tower windows
+      const WINGOLD = [1.0,  0.76, 0.28];   // deep sodium glow
+      const WINTEAL = [0.42, 0.96, 0.94];   // teal accent glass
+      const GREEN   = [0.10, 0.56, 0.24];   // Saudi-green livery stripe
+      const MAGENTA = [0.96, 0.28, 0.64];   // neon magenta accent
+      const DARKPOLE= [0.09, 0.09, 0.12];   // lamp-pole shaft
+      const LAMPGLOW= [1.0,  0.88, 0.52];   // warm sodium lamp head
+      const POOLAMB = [0.44, 0.38, 0.22];   // amber pool on tarmac
 
-      // Window palette for cityFront — cycles warm/cool/gold/teal
-      const WIN_PALETTE = [WINWARM, WINCOOL, WINGOLD, WINTEAL];
+      const WALL_SEA = [[0.20, 0.22, 0.30], [0.18, 0.20, 0.28],
+                        [0.22, 0.22, 0.32], [0.16, 0.18, 0.26]];
+      const WALL_INL = [[0.17, 0.18, 0.23], [0.19, 0.20, 0.25],
+                        [0.15, 0.16, 0.21], [0.21, 0.21, 0.26]];
 
-      // Wall palette — dark blue-grey concrete of modern Jeddah towers
-      const WALL_SEA = [            // seaward (R) — slightly lighter, glass-clad
-        [0.20, 0.22, 0.30],
-        [0.18, 0.20, 0.28],
-        [0.22, 0.22, 0.32],
-        [0.16, 0.18, 0.26],
-      ];
-      const WALL_INL = [            // inland (L) — darker concrete/stone
-        [0.17, 0.18, 0.23],
-        [0.19, 0.20, 0.25],
-        [0.15, 0.16, 0.21],
-        [0.21, 0.21, 0.26],
-      ];
-
-      // ── Helpers ────────────────────────────────────────────────────────────
-      // Corniche lamp post: slim dark shaft, warm glowing head, amber pool at base.
+      // ── Simple helpers ─────────────────────────────────────────────────────
+      // Lamp post: shaft + glowing head only (no pool — saves 1 box each)
       const lampPost = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 2)) return;
         addCyl(out, a.c, 0.12, 8.0, DARKPOLE, 4, b);
-        addBox(out, vadd(a.c, a.u, 8.0), [0.55, 0.55, 0.55], LAMPGLOW, b);
-        addBox(out, vadd(a.c, a.u, 0.12), [2.8, 0.18, 2.8], POOLAMB, b);
+        addBox(out, vadd(a.c, a.u, 8.0), [0.6, 0.6, 0.6], LAMPGLOW, b);
       };
 
-      // Floodlight mast: tall truss tower + bank of LED fixtures + large pool.
+      // Floodlight mast: pole + lamp bar + ambient pool
       const floodMast = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 5)) return;
         addCyl(out, a.c, 0.65, 38, DARKPOLE, 6, b);
-        addBox(out, vadd(a.c, a.u, 34), [8.0, 0.9, 1.6], [0.10, 0.10, 0.14], b);
-        for (let j = -1; j <= 1; j++) {
-          const off = vadd(vadd(a.c, a.u, 35.2), a.r, side * j * 2.6);
-          addBox(out, off, [2.4, 1.8, 1.2], LED, b);
-          addBox(out, vadd(off, a.u, -0.9), [2.2, 0.25, 1.0], [0.7, 0.76, 0.82], b);
-        }
+        addBox(out, vadd(a.c, a.u, 35.5), [8.0, 1.6, 1.0], LED, b);
         addBox(out, vadd(a.c, a.u, 0.20), [5.0, 0.28, 5.0], POOLAMB, b);
-        addBox(out, vadd(a.c, a.u, 0.08), [10.0, 0.14, 10.0], [0.22, 0.18, 0.09], b);
       };
 
-      // LED light tower: medium column, cool lamp head, small pool.
+      // Light tower: slim column + cool LED head
       const lightTower = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 3)) return;
         addCyl(out, a.c, 0.40, 22, DARKPOLE, 5, b);
         addBox(out, vadd(a.c, a.u, 22.0), [3.0, 1.2, 3.0], LED, b);
-        addBox(out, vadd(a.c, a.u, 21.2), [2.6, 0.22, 2.6], [0.55, 0.60, 0.68], b);
-        addBox(out, vadd(a.c, a.u, 0.12), [3.2, 0.20, 3.2], POOLAMB, b);
       };
 
-      // ── Full-lap floodlight masts (ring the entire circuit) ─────────────
-      for (let i = 0; i < 16; i++) {
-        floodMast(K(i / 16 + 0.015), (i % 2) ? -1 : 1, 18 + (i % 3) * 5);
+      // ── Floodlight masts — 8 positions ────────────────────────────────────
+      for (let i = 0; i < 8; i++) {
+        floodMast(K(i / 8 + 0.015), (i % 2) ? -1 : 1, 18 + (i % 3) * 5);
       }
 
-      // ── Supplementary LED light towers between masts ─────────────────────
-      for (let i = 0; i < 24; i++) {
-        lightTower(K(i / 24 + 0.03), (i % 2) ? 1 : -1, 10 + (i % 3) * 2);
+      // ── LED light towers — 8 positions ───────────────────────────────────
+      for (let i = 0; i < 8; i++) {
+        lightTower(K(i / 8 + 0.06), (i % 2) ? 1 : -1, 10 + (i % 3) * 2);
       }
 
-      // ── Corniche lamp posts along both barrier lines ──────────────────────
-      for (let i = 0; i < 42; i++) {
-        lampPost(K(i / 42), 1, 4.5 + (i % 2) * 1.2);
+      // ── Lamp posts — sparse along both sides ──────────────────────────────
+      for (let i = 0; i < 12; i++) {
+        lampPost(K(i / 12), 1, 4.5 + (i % 2) * 1.2);
       }
-      for (let i = 0; i < 28; i++) {
-        lampPost(K(i / 28 + 0.008), -1, 5.0 + (i % 2) * 1.5);
+      for (let i = 0; i < 8; i++) {
+        lampPost(K(i / 8 + 0.01), -1, 5.2 + (i % 2) * 1.5);
       }
 
-      // ── Palm trees: Corniche signature vegetation ─────────────────────────
-      // Seaward row — prominent lit fronds cleared past lamp posts
+      // ── Palm trees: Corniche signature vegetation ──────────────────────────
       const PALMFROND = [0.12, 0.44, 0.19];
-      for (let i = 0; i < 60; i++) {
-        const s = i / 60;
-        const h    = 6.5 + hash(i * 3) * 3.5;
-        const dist = 9 + hash(i * 5) * 4;
-        palm(K(s), 1, dist, h, PALMFROND);
-        if (i % 2 === 0) {
-          const h2 = 7 + hash(i * 11) * 3;
-          palm(K(s + 0.008), -1, 11 + hash(i * 7) * 4, h2, [0.08, 0.36, 0.14]);
-        }
+      for (let i = 0; i < 14; i++) {
+        palm(K(i / 14), 1, 10 + hash(i * 5) * 3, 6 + hash(i * 3) * 3, PALMFROND);
       }
-      // Warm uplight pools at the base of prominent seaward palms
-      for (let i = 0; i < 24; i++) {
-        const a = anchor(K(i / 24), 1, 9);
-        if (onTrack(a.c[0], a.c[2], 1.5)) continue;
-        addBox(out, vadd(a.c, a.u, 0.20), [1.4, 0.32, 1.4], [0.98, 0.78, 0.42], [a.r, a.u, a.t]);
+      for (let i = 0; i < 8; i++) {
+        palm(K(i / 8 + 0.01), -1, 12 + hash(i * 7) * 4, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
       }
 
-      // ── Marshal posts at corner exits ─────────────────────────────────────
+      // ── Marshal posts ─────────────────────────────────────────────────────
       for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],
-        [0.62, -1], [0.74, 1], [0.81, -1], [0.92, 1], [0.97, -1]]) {
+        [0.62, -1], [0.74, 1], [0.81, -1], [0.92, 1]]) {
         marshalPost(K(s), side, 1.8);
       }
 
-      // ── Red Sea: continuous flat dark water, sub-grade ────────────────────
-      for (let i = 0; i < 36; i++) {
-        const k = K(i / 36);
-        const a = anchor(k, 1, 110);
-        const b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 1.8, a.c[2]], [260, 1.2, 95], SEA, b);
+      // ── Red Sea: two near-water planes (reduced from 3 layers × 92 boxes) ─
+      for (let i = 0; i < 10; i++) {
+        const k = K(i / 10);
+        const a = anchor(k, 1, 140);
+        addBox(out, [a.c[0], pyMin - 1.8, a.c[2]], [380, 1.2, 130], SEA, [a.r, a.u, a.t]);
       }
-      for (let i = 0; i < 32; i++) {
-        const k = K(i / 32);
-        const a = anchor(k, 1, 270);
-        const b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 2.2, a.c[2]], [500, 1.6, 125], [0.025, 0.045, 0.095], b);
+      for (let i = 0; i < 8; i++) {
+        const k = K(i / 8);
+        const a = anchor(k, 1, 380);
+        addBox(out, [a.c[0], pyMin - 2.4, a.c[2]], [680, 1.6, 170], [0.018, 0.035, 0.080], [a.r, a.u, a.t]);
       }
-      for (let i = 0; i < 24; i++) {
-        const k = K(i / 24);
-        const a = anchor(k, 1, 430);
-        const b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 2.6, a.c[2]], [750, 2.0, 150], [0.018, 0.035, 0.080], b);
-      }
-      // Reflection spangles on the water surface — warm amber, cool LED, occasional magenta.
-      for (let i = 0; i < 28; i++) {
-        const s = i / 28;
-        const dist = 75 + hash(i * 5) * 180;
-        const a = anchor(K(s), 1, dist);
-        const col = (i % 5 === 0) ? MAGENTA : (i % 5 === 1) ? LED : SPANGLE;
-        addBox(out, [a.c[0], pyMin - 1.2, a.c[2]],
-               [6 + hash(i * 7) * 5, 0.22, 6 + hash(i * 11) * 5], col);
+      // Amber/cool reflection spangles — 8 spots
+      for (let i = 0; i < 8; i++) {
+        const a = anchor(K(i / 8), 1, 90 + hash(i * 5) * 150);
+        const col = (i % 3 === 0) ? MAGENTA : (i % 3 === 1) ? LED : SPANGLE;
+        addBox(out, [a.c[0], pyMin - 1.2, a.c[2]], [7, 0.22, 7], col);
       }
 
-      // ── King Fahd's Fountain — far offshore landmark ──────────────────────
+      // ── King Fahd's Fountain — offshore landmark ──────────────────────────
       {
         const a = anchor(K(0.20), 1, 380);
-        const b = [a.r, a.u, a.t];
-        addCyl(out, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, b);
-        addCone(out, [a.c[0], pyMin + 255, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
-        addCyl(out, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, b);
+        addCyl(out, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, [a.r, a.u, a.t]);
+        addCone(out, [a.c[0], pyMin + 255, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, [a.r, a.u, a.t]);
+        addCyl(out, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, [a.r, a.u, a.t]);
       }
 
       // ── START/FINISH gantries ─────────────────────────────────────────────
       gantry(0.0,   9, [0.12, 0.13, 0.17]);
       gantry(0.012, 7, [0.12, 0.13, 0.17]);
 
-      // ── PIT / PADDOCK — s 0.00 L ─────────────────────────────────────────
-      for (let i = 0; i < 7; i++) {
-        place(K(0.0 + i * 0.011), -1, 16, [12, 8, 28], [0.26, 0.27, 0.30]);
-        place(K(0.0 + i * 0.011), -1, 16, [12.4, 1.0, 29], WINWARM);
-        place(K(0.0 + i * 0.011), -1, 16, [12.4, 0.5, 29], LED);
-      }
-      for (let i = 0; i < 6; i++) {
-        place(K(0.0 + i * 0.012), -1, 3.0, [0.4, 1.1, 26], [0.40, 0.41, 0.44]);
-      }
-      // Paddock motorhomes set well back (38 m+) so they clear garage fascias.
+      // ── PIT BUILDING + MAIN GRANDSTAND — s 0.00 ──────────────────────────
       for (let i = 0; i < 5; i++) {
-        const a = anchor(K(0.0 + i * 0.014), -1, 40), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 14)) continue;
-        addBox(out, vadd(a.c, a.u, 5), [22, 10, 20], [0.20, 0.21, 0.25], b);
-        addBox(out, vadd(a.c, a.u, 5.9), [22.4, 0.9, 20.4], (i % 2) ? WINCOOL : WINWARM, b);
-        addBox(out, vadd(a.c, a.u, 7.2), [22.4, 0.7, 20.4], (i % 2) ? WINWARM : WINCOOL, b);
+        place(K(0.0 + i * 0.012), -1, 16, [12, 8, 28], [0.26, 0.27, 0.30]);
+        place(K(0.0 + i * 0.012), -1, 16, [12.4, 1.0, 29], WINWARM);
       }
-
-      // ── MAIN GRANDSTAND — s 0.00 R ───────────────────────────────────────
       grandstand(0.0,  1, 12, 70, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
       grandstand(0.02, 1, 12, 60, [0.13, 0.14, 0.18], [0.50, 0.42, 0.46]);
-      for (let i = 0; i < 6; i++) {
-        place(K(0.0 + i * 0.012), 1, 13, [12.4, 0.6, 22], LED);
-      }
 
-      // ── CORNICHE WATERFRONT STREET WALL — seaward (R) ────────────────────
-      // The Corniche Promenade: continuous low-to-mid-rise hotels, commercial
-      // buildings and the waterfront highway wall. Gap 18 m clears all palm rows
-      // (which sit at dist 9–13 m) and lamp posts. Buildings 12–28 m tall —
-      // low-rise street-level character, glass-clad in Saudi marble & mirror glass.
-
-      // Main Corniche frontage: s 0.05–0.40 (before marina opens up)
+      // ── CORNICHE STREET WALL — seaward (R), step=55m gives ~28 buildings total
       cityFront(0.05, 0.40, 1, 18, {
-        minH: 12, maxH: 30, depth: 20,
-        palette: WALL_SEA,
-        lit: true,
-        windowCol: WINWARM,   // warm hotel/commercial windows facing the sea
-        step: 20,
-        floor: 4,
-      });
-
-      // After marina (s 0.52–0.55) — Corniche lagoon promenade wall
-      cityFront(0.52, 0.56, 1, 18, {
-        minH: 8, maxH: 20, depth: 16,
-        palette: WALL_SEA,
-        lit: true,
-        windowCol: WINCOOL,
-        step: 18,
-        floor: 3,
-      });
-
-      // Final sector seafront — shorter resort strip s 0.82–0.98
-      cityFront(0.82, 0.98, 1, 18, {
-        minH: 10, maxH: 24, depth: 18,
-        palette: WALL_SEA,
-        lit: true,
-        step: 20,
-        floor: 4,
-      });
-
-      // ── INLAND CITY WALL — left (L) side ─────────────────────────────────
-      // The Jeddah city blocks rising behind the barriers: commercial, mixed-use,
-      // hotel towers. Continuous facade aligned to the barrier line.
-
-      // Sector 1 city wall — inland low-rise s 0.04–0.24 L
-      cityFront(0.04, 0.24, -1, 16, {
-        minH: 14, maxH: 36, depth: 22,
-        palette: WALL_INL,
-        lit: true,
-        step: 22,
-        floor: 5,
-      });
-
-      // Sector 2 city wall — s 0.35–0.48 L (mixed use, some taller)
-      cityFront(0.35, 0.48, -1, 16, {
-        minH: 18, maxH: 42, depth: 22,
-        palette: WALL_INL,
-        lit: true,
-        step: 22,
-        floor: 6,
-      });
-
-      // Sector 3 city wall — s 0.56–0.68 L (hotel district)
-      cityFront(0.56, 0.68, -1, 16, {
-        minH: 16, maxH: 38, depth: 22,
-        palette: WALL_INL,
-        lit: true,
-        windowCol: WINGOLD,   // warm gold tones in hotel district
-        step: 20,
-        floor: 5,
-      });
-
-      // Final sector inland wall — s 0.74–0.82 L (tight technical, slab walls)
-      cityFront(0.74, 0.82, -1, 16, {
         minH: 12, maxH: 28, depth: 18,
-        palette: WALL_INL,
-        lit: true,
-        step: 18,
-        floor: 4,
+        palette: WALL_SEA, lit: true, windowCol: WINWARM,
+        step: 55, floor: 4,
+      });
+      cityFront(0.82, 0.98, 1, 18, {
+        minH: 10, maxH: 22, depth: 16,
+        palette: WALL_SEA, lit: true,
+        step: 55, floor: 4,
       });
 
-      // ── JEDDAH SKYLINE — s 0.26–0.32 L (primary tower cluster) ──────────
-      // Distinguished skyline towers behind the city wall, well set back so
-      // they read as the far skyline rather than road-side buildings.
-      building(K(0.27), -1, 55,  30, 118, 28, { wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8  });
-      building(K(0.26), -1, 72,  26, 147, 26, { wall: [0.20, 0.21, 0.26], window: WINCOOL,  lit: true, floor: 9  });
-      building(K(0.30), -1, 90,  24, 178, 24, { wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 10 });
-      building(K(0.28), -1, 108, 26, 158, 26, { wall: [0.19, 0.20, 0.25], window: WINTEAL,  lit: true, floor: 22 });
-      building(K(0.31), -1, 128, 28, 128, 28, { wall: [0.21, 0.21, 0.27], window: WINGOLD,  lit: true, floor: 20 });
+      // ── INLAND CITY WALL — left (L), step=55m gives ~22 buildings total ──
+      cityFront(0.04, 0.24, -1, 16, {
+        minH: 14, maxH: 34, depth: 20,
+        palette: WALL_INL, lit: true,
+        step: 55, floor: 5,
+      });
+      cityFront(0.35, 0.48, -1, 16, {
+        minH: 18, maxH: 40, depth: 20,
+        palette: WALL_INL, lit: true,
+        step: 55, floor: 5,
+      });
+      cityFront(0.56, 0.74, -1, 16, {
+        minH: 14, maxH: 36, depth: 20,
+        palette: WALL_INL, lit: true, windowCol: WINGOLD,
+        step: 55, floor: 5,
+      });
 
-      // Slender towers: set far behind buildings so they form the background skyline.
-      tower(K(0.29),  -1, 155, 20, 175, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED,     mast: 12 });
-      tower(K(0.305), -1, 180, 18, 154, { col: [0.15, 0.16, 0.21], seg: 4, cap: true, capCol: MAGENTA, mast: 12 });
-      tower(K(0.255), -1, 120, 16, 142, { col: [0.17, 0.18, 0.23], seg: 4, cap: true, capCol: LED,     mast: 8  });
-      tower(K(0.285), -1, 140, 18, 160, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: [0.50, 0.80, 1.0], mast: 10 });
-      tower(K(0.315), -1, 165, 18, 132, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: SPANGLE, mast: 8  });
+      // ── JEDDAH SKYLINE — 3 landmark towers at s 0.27–0.31 L ──────────────
+      building(K(0.27), -1, 55, 28, 115, 26, { wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
+      building(K(0.30), -1, 88, 24, 172, 22, { wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
+      tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
 
-      // Emissive crown strips on the two tallest towers
-      {
-        const a1 = anchor(K(0.30), -1, 90 + 12), b1 = [a1.r, a1.u, a1.t];
-        addBox(out, vadd(a1.c, a1.u, 178 + 2), [24, 0.8, 24], [0.30, 0.42, 0.58], b1);
-        const a2 = anchor(K(0.26), -1, 72 + 13), b2 = [a2.r, a2.u, a2.t];
-        addBox(out, vadd(a2.c, a2.u, 147 + 2), [26, 0.8, 26], [0.38, 0.24, 0.52], b2);
-      }
-
-      // ── MARINA / Jeddah Yacht Club — s 0.41–0.49 R ───────────────────────
-      // 10 yachts at staggered depths (36–60 m). All guarded by onTrack.
-      for (let i = 0; i < 10; i++) {
-        const k   = K(0.41 + i * 0.0075);
-        const dp  = 38 + (i % 3) * 12;
-        const a   = anchor(k, 1, dp), b = [a.r, a.u, a.t];
+      // ── MARINA — 6 yachts at s 0.42–0.48 R ───────────────────────────────
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.42 + i * 0.011);
+        const a = anchor(k, 1, 40 + (i % 3) * 12), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 9)) continue;
-        // Pontoon finger (dock)
-        addBox(out, vadd(a.c, a.u, 0.4), [16, 0.8, 3.5], [0.28, 0.28, 0.30], b);
-        // Sleek hull
-        const hullLen = 6 + (i % 3) * 1.5;
-        addBox(out, vadd(a.c, a.u, 1.3), [2.8, 2.0, hullLen], [0.94, 0.94, 0.96], b);
-        // Deck light strip
-        addBox(out, vadd(a.c, a.u, 2.3), [2.9, 0.32, hullLen], (i % 2) ? SPANGLE : WINCOOL, b);
-        // Mast
-        addCyl(out, vadd(a.c, a.u, 2.5), 0.18, 14, [0.88, 0.88, 0.92], 4, b);
-        // Masthead light
-        addBox(out, vadd(a.c, a.u, 10.2), [0.25, 0.55, 1.2], SPANGLE, b);
+        const hl = 5.5 + (i % 3) * 1.5;
+        addBox(out, vadd(a.c, a.u, 1.3), [2.8, 2.0, hl], [0.94, 0.94, 0.96], b);
+        addBox(out, vadd(a.c, a.u, 2.3), [2.9, 0.3, hl], (i % 2) ? SPANGLE : WINCOOL, b);
+        addCyl(out, vadd(a.c, a.u, 2.5), 0.18, 12, [0.88, 0.88, 0.92], 4, b);
       }
-      // Yacht club main building (78 m out) + annex (60 m out)
+      // Yacht club building
       {
         const a = anchor(K(0.45), 1, 78), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
-          addBox(out, vadd(a.c, a.u, 3.2), [26, 6.0, 11], [0.25, 0.26, 0.29], b);
+          addBox(out, vadd(a.c, a.u, 3), [26, 6, 11], [0.25, 0.26, 0.29], b);
           addBox(out, vadd(a.c, a.u, 4.5), [26.3, 1.0, 11.3], WINWARM, b);
-          addBox(out, vadd(a.c, a.u, 5.6), [26.3, 0.8, 11.3], WINGOLD, b);
-        }
-      }
-      {
-        const a2 = anchor(K(0.47), 1, 60), b2 = [a2.r, a2.u, a2.t];
-        if (!onTrack(a2.c[0], a2.c[2], 13)) {
-          addBox(out, vadd(a2.c, a2.u, 3.5), [20, 7.5, 9], [0.23, 0.24, 0.27], b2);
-          addBox(out, vadd(a2.c, a2.u, 4.8), [20.3, 0.9, 9.3], WINCOOL, b2);
-          addBox(out, vadd(a2.c, a2.u, 6.0), [20.3, 0.7, 9.3], WINWARM, b2);
         }
       }
 
       // ── T13 BANKED SECTOR — s 0.50 ───────────────────────────────────────
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
-      lightTower(K(0.50), -1, 12);
       grandstand(0.50, 1, 14, 55, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
-      for (let i = 0; i < 4; i++) {
-        place(K(0.50 + i * 0.008), 1, 15, [16.4, 0.7, 14], LED);
-      }
       tyreWall(0.485, 0.515, -1, 2.0, MAGENTA);
 
-      // ── CORNICHE LAGOON PROMENADE — s 0.55–0.64 R ────────────────────────
-      // Sheltered lagoon water + lamp posts every ~10 m along the waterfront.
-      for (let i = 0; i < 12; i++) {
-        const k = K(0.55 + i * 0.0075);
-        const a = anchor(k, 1, 65), b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 1.4, a.c[2]], [160, 1.0, 55], [0.05, 0.08, 0.14], b);
+      // ── CORNICHE LAGOON — s 0.55–0.64 R (water + lamp posts) ─────────────
+      for (let i = 0; i < 6; i++) {
+        const a = anchor(K(0.55 + i * 0.015), 1, 65), b = [a.r, a.u, a.t];
+        addBox(out, [a.c[0], pyMin - 1.4, a.c[2]], [200, 1.0, 65], [0.05, 0.08, 0.14], b);
       }
-      // Corniche promenade lamp posts at the water's edge (dist 5–6 m).
-      for (let i = 0; i < 18; i++) {
-        lampPost(K(0.55 + i * 0.005), 1, 5.0 + (i % 2) * 0.8);
+      for (let i = 0; i < 7; i++) {
+        lampPost(K(0.55 + i * 0.012), 1, 5.0 + (i % 2) * 0.8);
       }
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
-      // Set further back than the city wall (dist 60+ m) so they read as
-      // the second tier of development behind the street wall.
-      building(K(0.68), -1, 60, 26, 68, 24, { wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
-      building(K(0.72), -1, 78, 24, 78, 22, { wall: [0.20, 0.21, 0.25], window: WINCOOL, lit: true, floor: 9 });
-      // Accent tower well behind the mid-rise buildings
-      tower(K(0.70), -1, 105, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
+      building(K(0.69), -1, 60, 26, 68, 22, { wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
+      tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
 
-      // Advertising billboards — set at gap values well clear of w/2+1 minimum
+      // Billboards — Corniche signage character
       billboard(K(0.70), -1, 26, 10, 11, GREEN);
-      billboard(K(0.71), -1, 50, 10, 10, SPANGLE);
       billboard(K(0.69), -1, 20, 9,  11, MAGENTA);
       billboard(K(0.73), -1, 24, 9,  10, WINTEAL);
 
       // ── TIGHT TECHNICAL SECTOR — s 0.78–0.84 ─────────────────────────────
       for (const side of [-1, 1]) {
-        for (let i = 0; i < 8; i++) {
-          const col = (i % 2) ? [0.92, 0.08, 0.08] : [0.96, 0.96, 0.97];
-          place(K(0.78 + i * 0.0075), side, 5, [5.5, 0.28, 2.8], col);
+        for (let i = 0; i < 5; i++) {
+          place(K(0.78 + i * 0.010), side, 5, [5.5, 0.28, 2.8],
+                (i % 2) ? [0.92, 0.08, 0.08] : [0.96, 0.96, 0.97]);
         }
       }
 
-      // ── FINAL SECTOR GRANDSTAND + FUNNEL LIGHTS — s 0.89–0.93 R ──────────
+      // ── FINAL SECTOR GRANDSTAND — s 0.89 R ───────────────────────────────
       grandstand(0.89, 1, 14, 60, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
-      for (let i = 0; i < 4; i++) {
-        place(K(0.89 + i * 0.008), 1, 15, [16.4, 0.7, 14], LED);
-      }
       lightTower(K(0.90),  1, 11);
       lightTower(K(0.93), -1, 11);
       floodMast(K(0.91), -1, 24);
@@ -403,50 +243,34 @@
       guardrail(0.34, 0.38, -1, 1.8, [0.55, 0.56, 0.6]);
       guardrail(0.96, 0.99,  1, 1.8, [0.55, 0.56, 0.6]);
 
-      // ── FINAL DRS STRAIGHT SIGNAGE — s 0.94–0.99 ─────────────────────────
+      // ── DRS STRAIGHT + CORNICHE SIGNAGE ──────────────────────────────────
       billboard(K(0.95),  1, 22, 10, 10, GREEN);
       billboard(K(0.96), -1, 22, 10,  9, SPANGLE);
       billboard(K(0.97), -1, 20, 10, 10, MAGENTA);
-      billboard(K(0.98),  1, 20, 10,  9, WINTEAL);
-
-      // ── ACCENT SIGNAGE around the Corniche ───────────────────────────────
-      billboard(K(0.10),  1, 15, 8, 8, [0.12, 0.68, 0.98]);
-      billboard(K(0.30), -1, 18, 8, 8, [0.98, 0.32, 0.12]);
-      billboard(K(0.55),  1, 13, 8, 7, [0.92, 0.12, 0.68]);
-      billboard(K(0.75), -1, 16, 8, 7, [0.12, 0.68, 0.98]);
+      billboard(K(0.10),  1, 15,  8,  8, [0.12, 0.68, 0.98]);
+      billboard(K(0.55),  1, 13,  8,  7, [0.92, 0.12, 0.68]);
 
       // ── CORNICHE MONUMENT — s 0.50 R ─────────────────────────────────────
       {
         const sA = anchor(K(0.50), 1, 42), sBasis = [sA.r, sA.u, sA.t];
         if (!onTrack(sA.c[0], sA.c[2], 10)) {
           addCyl(out, sA.c, 3.2, 22, [0.82, 0.78, 0.68], 8, sBasis);
-          const sTop = vadd(sA.c, sA.u, 22);
-          addCone(out, sTop, 5, 9, [0.94, 0.86, 0.64], 8, sBasis);
-          addBox(out, vadd(sA.c, sA.u, 0.15), [7.0, 0.25, 7.0], [0.55, 0.44, 0.20], sBasis);
+          addCone(out, vadd(sA.c, sA.u, 22), 5, 9, [0.94, 0.86, 0.64], 8, sBasis);
         }
       }
 
-      // ── FAR SKYLINE BACKDROP — continuous silhouette behind towers ────────
-      // Prevents sky gaps and gives the sense of a vast city behind the circuit.
-      for (let i = 0; i < 24; i++) {
-        const s = i / 24;
-        const w = 36 + hash(i * 11) * 24, h = 70 + hash(i * 7) * 90;
-        backdrop(K(s), -1, 280 + (i % 4) * 18, [w, h, w], [0.12, 0.13, 0.18]);
+      // ── FAR SKYLINE BACKDROP — prevents sky gaps ──────────────────────────
+      // Use backdrop() for all distant geometry — far cheaper than building()
+      for (let i = 0; i < 12; i++) {
+        const s = i / 12;
+        const w = 40 + hash(i * 11) * 30, h = 80 + hash(i * 7) * 100;
+        backdrop(K(s), -1, 260 + (i % 4) * 20, [w, h, w], [0.12, 0.13, 0.18]);
       }
-
-      // ── CONTINUOUS JEDDAH FAR HIGH-RISE BAND — behind city wall ──────────
-      // 16 tall towers that form the characteristic Jeddah skyline, staggered
-      // far enough back (140–220 m) that they never clip the street wall.
-      for (let i = 0; i < 16; i++) {
-        const s  = (i + 0.5) / 16;
-        const r1 = hash(i * 17 + 7), r2 = hash(i * 41 + 1);
-        const w    = 18 + r1 * 12;
-        const h    = 90 + r2 * 100;
-        const dist = 150 + i * 5 + r1 * 20;
-        const win  = WIN_PALETTE[(i + 1) % WIN_PALETTE.length];
-        const wall = WALL_INL[(i + 2) % WALL_INL.length];
-        building(K(s), -1, dist, w, h, w * 0.85,
-          { wall, window: win, lit: true, floor: 24 });
+      // A second ring on the seaward side for depth
+      for (let i = 0; i < 8; i++) {
+        const s = i / 8 + 0.04;
+        const w = 35 + hash(i * 13) * 25, h = 60 + hash(i * 9) * 80;
+        backdrop(K(s), 1, 220 + (i % 3) * 25, [w, h, w], [0.14, 0.14, 0.20]);
       }
     },
   }
