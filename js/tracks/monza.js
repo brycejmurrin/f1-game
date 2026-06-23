@@ -47,7 +47,7 @@
       // =====================================================================
       // 1. ROYAL PARK FOREST — broadleaf + umbrella-pine corridor.
       //    every() node-step approach keeps geometry within SwiftShader budget.
-      //    forestEdge() used only for short corner-specific dense sections.
+      //    Ranks A-D provide depth; Lesmo section adds extra close-canopy trees.
       // =====================================================================
       // Rank A — front pines close to verge (umbrella pines).
       every(13, (k) => {
@@ -95,12 +95,18 @@
       hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
-      // Lesmo 1 & 2 (s≈0.43–0.54) — famous woodland curves: forestEdge for dense
-      // corner canopy, safe because these are short sections only.
-      forestEdge(0.43, 0.54, -1, 12, { density: 0.60, hMin: 12, hMax: 24,
-        col: PINE_D, col2: LEAF_D, pineFrac: 0.70 });
-      forestEdge(0.43, 0.54,  1, 12, { density: 0.55, hMin: 12, hMax: 22,
-        col: PINE, col2: LEAF, pineFrac: 0.65 });
+      // Lesmo 1 & 2 (s≈0.43–0.54) — famous woodland curves: extra pines to
+      // reinforce the canopy through these fast sweeps. every(5)≈20m spacing
+      // keeps SwiftShader safe while creating a convincing tree tunnel effect.
+      every(5, (k) => {
+        const s = k / n;
+        if (s < 0.43 || s > 0.54) return;
+        const h = hash(k * 13 + 7);
+        pine(k, -1, 12 + h * 2, 14 + h * 10, PINE_D);
+        pine(k,  1, 11 + h * 2, 13 + h *  9, PINE);
+        if (h > 0.55) tree(k, -1, 16 + h * 3, 13 + h * 9, LEAF_D);
+        if (h > 0.70) tree(k,  1, 15 + h * 3, 12 + h * 8, LEAF);
+      });
 
       // =====================================================================
       // 2. PIT STRAIGHT / START–FINISH — grandstands, tifosi, podium, pit boxes

@@ -145,7 +145,8 @@
       // ===================================================================
 
       // ---- Layer 0: Green wooded hillside backdrop (rounded mounds, NOT flat slabs) ----
-      // backdrop() auto-detects GREEN dominant → renders as rounded organic hill
+      // backdrop() auto-detects GREEN dominant → renders as rounded organic hill.
+      // Kept narrow (≤60 m) and well back (≥110 m) to avoid intersecting the inner loop.
       every(30, (k) => {
         // Only L side (side=-1) for the favela hillside
         const inFavela = (() => {
@@ -157,10 +158,10 @@
         })();
         if (!inFavela) return;
         const hv = hash(k * 17 + 3);
-        // Two distance bands: near ridge (~90 m) and far ridge (~160 m)
-        backdrop(k, -1, 90 + hv * 30, [120, 28 + hv * 18, 80], HILL);
+        // Narrow width (≤60 m) so onTrack(center, sz[0]/2+6=36) catches inner-loop clashes
+        backdrop(k, -1, 110 + hv * 30, [60, 24 + hv * 16, 48], HILL);
         if (hash(k * 23 + 5) > 0.4) {
-          backdrop(k, -1, 150 + hash(k * 29) * 40, [140, 22 + hash(k * 31) * 16, 90], HILL2);
+          backdrop(k, -1, 160 + hash(k * 29) * 30, [70, 20 + hash(k * 31) * 12, 55], HILL2);
         }
       });
 
@@ -393,9 +394,11 @@
         const hv = hash(k * 17 + 91);
         for (const side of [-1, 1]) {
           if (hash(k * 23 + side * 7) > 0.70) continue;   // ~70% fill → natural gaps
-          const d = 80 + hv * 60;
-          const sz1 = 100 + hash(k * 31 + side) * 80;
-          const ht1 = 18 + hash(k * 37 + side) * 22;
+          // Narrow width so onTrack catch threshold (sz[0]/2+6) stays manageable on the
+          // inner-loop layout of Interlagos. Pushed further back (≥130 m) for the same reason.
+          const d = 130 + hv * 50;
+          const sz1 = 55 + hash(k * 31 + side) * 35;     // 55–90 m (was 100–180 m)
+          const ht1 = 18 + hash(k * 37 + side) * 20;
           backdrop(k, side, d, [sz1, ht1, sz1 * 0.55], HILL);
         }
       });
