@@ -22,10 +22,11 @@
     elevations: [{ s: 0.45, halfM: 360, rise: 6 }],
     scenery: function (api) {
       const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,
-        place, prop, backdrop, groundPlane, anchor, addBox, addCyl, addCone,
-        addFrustum, addPrism, addPyramid, along,
-        building, tower, grandstand, billboard, gantry, marshalPost,
-        wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm } = api;
+        place, prop, backdrop, groundPlane, groundYAt, anchor, addBox, addCyl, addCone,
+        addFrustum, addPrism, addPyramid, along, every,
+        building, tower, cityFront, grandstand, billboard, gantry, marshalPost,
+        wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
+        forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
@@ -293,118 +294,106 @@
         }
       })();
 
-      // Denser PUDONG-STYLE feature cluster of tall glass towers behind T6 (s 0.30, L far),
-      // modern Shanghai skyline with the iconic Pearl Tower landmark as centrepiece.
+      // ================= PUDONG SKYLINE CLUSTER (s 0.30, L far) =================
+      // Foreground Pudong towers framing the Pearl Tower landmark; backdrop() gives
+      // them window bands automatically. Further towers use backdrop() only.
       (function pudongCluster() {
         const a = anchor(K(0.30), -1, 260), b = [a.r, a.u, a.t];
         const u = b[1];
-        // Dense pack of towers framing the Pearl Tower
-        for (let i = 0; i < 28; i++) {
-          const off   = (i - 14) * 24 + (hash(i * 5) - 0.5) * 16;
-          const depth = 20 + hash(i * 7) * 90;
-          const h     = 70 + hash(i * 11) * 150;
-          const w     = 11 + hash(i * 13) * 13;
-          const col   = depth > 65 ? SKY_HAZE : (depth > 50 ? GLASS_HAZE : GLASS);
-          // tapered glass tower
+
+        // Foreground layer: 12 tapered glass towers close in (30–90 m depth).
+        // addFrustum gives the tapered Pudong silhouette; kept tight count.
+        for (let i = 0; i < 12; i++) {
+          const off   = (i - 6) * 30 + (hash(i * 5) - 0.5) * 14;
+          const depth = 30 + hash(i * 7) * 60;
+          const h     = 80 + hash(i * 11) * 120;
+          const w     = 12 + hash(i * 13) * 10;
           addFrustum(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0),
-                     w / 2, w / 3.4, h, col, 5, b);
-          // lit window band near top (~75% height)
-          if (hash(i * 17) > 0.35) {
-            const towerBase = vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0);
-            addBox(out, vadd(towerBase, u, h * 0.74), [w * 0.85, h * 0.055, w * 0.85], WIN_TOWER, b);
+                     w / 2, w / 3.8, h, GLASS, 5, b);
+          // window band at 72% height
+          if (hash(i * 17) > 0.4) {
+            const tBase = vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0);
+            addBox(out, vadd(tBase, u, h * 0.72), [w * 0.88, h * 0.052, w * 0.88], WIN_TOWER, b);
           }
-          // occasional glass spire cap — placed at tower apex, not overlapping the frustum
-          if (hash(i * 17) > 0.3) {
-            const towerTop = vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h);
-            addBox(out, vadd(towerTop, u, 6), [1.2, 12, 1.2], STEEL, b);
+          // slim spire on taller towers
+          if (h > 140) {
+            const tTop = vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h);
+            addCyl(out, vadd(tTop, u, 0), 0.6, 14, STEEL, 4, b);
           }
         }
 
-        // ── ORIENTAL PEARL TOWER ────────────────────────────────────────────────
-        // Iconic Shanghai landmark: two main spheres on a tripod of three diagonal
-        // columns, topped by a tall needle spire.
-        //
-        // Real structure layout (simplified):
-        //   • Three angled columns rise from separate ground pads to ~280m height.
-        //     They splay outward at the base and converge toward the top.
-        //     We model them as VERTICAL cylinders spread in a triangle so they are
-        //     clearly separated (no interpenetration) and read as a tripod.
-        //   • Lower observation sphere: large, centred at ~118m.
-        //   • Upper sphere: smaller, centred at ~350m (we scale to ~200m equivalent).
-        //   • Spire: thin needle above the upper sphere.
-        //
-        // Heights and radii are scaled down ~35% to fit the scenery context.
-        //
-        // Clash-prevention strategy:
-        //   - Each column occupies a distinct XZ position so no two overlap.
-        //   - The lower sphere's bounding box starts ABOVE the column tops (we cut
-        //     the columns shorter than the sphere base).
-        //   - The upper sphere starts at a height clearly above the lower sphere top.
-        //   - The connector between the spheres is a slim cylinder occupying only
-        //     the gap between the two sphere edges.
-        //   - The spire starts at the top edge of the upper sphere.
+        // Mid-distance band: backdrop() with glass tones (auto window bands).
+        for (let i = 0; i < 18; i++) {
+          const k2 = K(0.28 + i / 18 * 0.08);
+          const off = (i - 9) * 22;
+          const h   = 60 + hash(i * 19 + 100) * 100;
+          const w   = 24 + hash(i * 23 + 100) * 20;
+          backdrop(k2, -1, 130 + hash(i * 11) * 60 + Math.abs(off) * 0.4,
+            [w, h, 28],
+            [GLASS_HAZE[0] + hash(i * 7) * 0.06, GLASS_HAZE[1] + hash(i * 5) * 0.04, GLASS_HAZE[2]]);
+        }
 
-        // Base centre of the Pearl Tower (placed 50 m in from the Pudong cluster anchor)
+        // ── ORIENTAL PEARL TOWER ─────────────────────────────────────────────
+        // Iconic red-terracotta tripod + two observation spheres + spire.
+        // Anchored 50 m forward from cluster anchor, 2 m in r-offset so it stands
+        // slightly aside from the background tower mass.
         const pc = vadd(vadd(a.c, a.r, -2), a.t, 50);
 
-        // Tripod columns: three cylinders spread in a triangle.
-        // Each column occupies a distinct XZ position (±10 m in r, ±6 m in t).
-        // Height 48 m — they stop BELOW the lower sphere base (sphere base = 54 m).
-        const legH = 48;
-        const legR = 2.2;
-        const legCol = [0.74, 0.72, 0.70];
-        // Three legs in a rough equilateral triangle footprint
-        const legOffsets = [
-          [-10,  0],   // left leg
-          [  5, -9],   // right-front leg
-          [  5,  9],   // right-back leg
-        ];
-        for (const [ro, to] of legOffsets) {
-          const legBase = vadd(vadd(pc, a.r, ro), a.t, to);
-          addCyl(out, legBase, legR, legH, legCol, 8, b);
+        // Tripod legs: three vertical cylinders in a triangular footprint.
+        // All stop at legH=48 m, well below the lower sphere base at 54 m.
+        const legH = 48, legR = 2.2, legCol = [0.74, 0.72, 0.70];
+        for (const [ro, to] of [[-10, 0], [5, -9], [5, 9]]) {
+          addCyl(out, vadd(vadd(pc, a.r, ro), a.t, to), legR, legH, legCol, 8, b);
         }
-
-        // Ground base ring (wide frustum tying the three legs together at the bottom)
+        // Base ring tying the legs
         addFrustum(out, pc, 14, 8, 8, [0.68, 0.66, 0.64], 12, b);
 
-        // Lower observation sphere — bounding box: base at 54m, top at 54+30=84m.
-        // Represented as a sphere-like box with rounded shape implied by the flat-
-        // shader; we use an addBox + two addFrustum slabs to suggest a sphere.
-        // Sphere centre: 69m  (= 54 + 15).
+        // Lower sphere (salmon-pink): frustum sandwich simulating a sphere.
         const lSphBase = 54, lSphR = 15;
-        // Main equatorial band
-        addFrustum(out, vadd(pc, u, lSphBase + 2),         lSphR, lSphR,     lSphR * 1.6, PEARL, 12, b);
-        // Lower cap
-        addFrustum(out, vadd(pc, u, lSphBase),             lSphR * 0.7, lSphR, 4,          PEARL, 12, b);
-        // Upper cap (tapering back in)
-        addFrustum(out, vadd(pc, u, lSphBase + lSphR * 1.6 + 2), lSphR, lSphR * 0.7, 4,   PEARL, 12, b);
-        // Lit observation band (warm window ring around the sphere equator)
+        addFrustum(out, vadd(pc, u, lSphBase),             lSphR * 0.7, lSphR, 4,        PEARL, 12, b);
+        addFrustum(out, vadd(pc, u, lSphBase + 2),         lSphR, lSphR, lSphR * 1.6,   PEARL, 12, b);
+        addFrustum(out, vadd(pc, u, lSphBase + lSphR*1.6+2), lSphR, lSphR*0.7, 4,       PEARL, 12, b);
         addFrustum(out, vadd(pc, u, lSphBase + lSphR * 0.8),
                    lSphR * 1.02, lSphR * 1.02, lSphR * 0.5, WIN_LIT, 12, b);
 
-        // Connector column between the two spheres.
-        // Lower sphere top = lSphBase + lSphR*1.6 + 4 + 4 ≈ 82m.
-        // We start the connector at 84m (clear of the sphere) and end at 108m.
+        // Connector shaft + balcony
         const connBase = 84, connTop = 108;
         addCyl(out, vadd(pc, u, connBase), 3.2, connTop - connBase, [0.80, 0.70, 0.66], 8, b);
-        // Connector balcony ring at mid-point
-        addFrustum(out, vadd(pc, u, connBase + (connTop - connBase) * 0.5 - 1),
+        addFrustum(out, vadd(pc, u, connBase + (connTop-connBase)*0.5 - 1),
                    4.5, 4.5, 2.5, [0.74, 0.66, 0.62], 12, b);
 
-        // Upper observation sphere — base at 108m, top at 108+20=128m.
+        // Upper sphere (slightly deeper terracotta)
         const uSphBase = connTop, uSphR = 10;
-        addFrustum(out, vadd(pc, u, uSphBase + 2),         uSphR, uSphR,     uSphR * 1.6, [0.82, 0.68, 0.62], 10, b);
-        addFrustum(out, vadd(pc, u, uSphBase),             uSphR * 0.7, uSphR, 4,          [0.80, 0.66, 0.60], 10, b);
-        addFrustum(out, vadd(pc, u, uSphBase + uSphR * 1.6 + 2), uSphR, uSphR * 0.7, 4,   [0.80, 0.66, 0.60], 10, b);
-        // Lit ring on the upper sphere
-        addFrustum(out, vadd(pc, u, uSphBase + uSphR * 0.8),
-                   uSphR * 1.03, uSphR * 1.03, uSphR * 0.4, WIN_LIT, 10, b);
+        addFrustum(out, vadd(pc, u, uSphBase),               uSphR*0.7, uSphR, 4,        [0.80, 0.66, 0.60], 10, b);
+        addFrustum(out, vadd(pc, u, uSphBase + 2),           uSphR, uSphR, uSphR*1.6,    [0.82, 0.68, 0.62], 10, b);
+        addFrustum(out, vadd(pc, u, uSphBase+uSphR*1.6+2),   uSphR, uSphR*0.7, 4,        [0.80, 0.66, 0.60], 10, b);
+        addFrustum(out, vadd(pc, u, uSphBase + uSphR*0.8),
+                   uSphR*1.03, uSphR*1.03, uSphR*0.4, WIN_LIT, 10, b);
 
-        // Spire: starts at upper sphere top (~128 + 2 = 130m), rises 40m.
-        // Slim cylinder + thin cone tip.
-        const spireBase = uSphBase + uSphR * 1.6 + 4 + 2;   // clear of upper sphere top cap
+        // Spire: slim cylinder + cone tip
+        const spireBase = uSphBase + uSphR*1.6 + 4 + 2;
         addCyl(out,  vadd(pc, u, spireBase),      0.9, 32, [0.88, 0.78, 0.72], 6, b);
         addCone(out, vadd(pc, u, spireBase + 32), 0.9, 12, [0.90, 0.82, 0.76], 6, b);
+
+        // ── SHANGHAI TOWER (J-shaped twisted supertall, ~55 m to the right) ──
+        // The real tower is 632 m; we scale to ~190 m to fit scenery context.
+        // A tapering frustum shaft reads as a glass spire without explicit twist.
+        const stC = vadd(vadd(a.c, a.r, 55), a.t, 48);
+        addFrustum(out, stC, 11, 6.5, 80, GLASS, 6, b);
+        addFrustum(out, vadd(stC, u, 80), 6.5, 3.2, 60, [0.56, 0.66, 0.76], 6, b);
+        addFrustum(out, vadd(stC, u, 140), 3.2, 1.0, 30, [0.60, 0.70, 0.80], 6, b);
+        addBox(out, vadd(stC, u, 172), [2.5, 22, 2.5], STEEL, b);
+        // Window-band near the mid-section crown
+        addBox(out, vadd(stC, u, 118), [12, 3.5, 12], WIN_TOWER, b);
+
+        // ── JIN MAO TOWER (stepped pagoda-inspired spire, ~30 m left of Pearl) ──
+        const jmC = vadd(vadd(a.c, a.r, -32), a.t, 44);
+        addFrustum(out, jmC, 9.5, 7, 55, [0.72, 0.70, 0.68], 8, b);
+        addFrustum(out, vadd(jmC, u, 55), 7, 4.5, 35, [0.74, 0.72, 0.70], 8, b);
+        addFrustum(out, vadd(jmC, u, 90), 4.5, 1.8, 20, [0.76, 0.74, 0.72], 8, b);
+        addCyl(out, vadd(jmC, u, 110), 0.7, 18, STEEL, 5, b);
+        // Stepped crown band
+        addBox(out, vadd(jmC, u, 88), [14, 3, 14], WIN_TOWER, b);
       })();
 
       // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
@@ -415,18 +404,16 @@
       billboard(K(0.46), 1, 12, 16, 4.5, RED);
       marshalPost(K(0.45), 1, 12);
 
-      // ================= MARSH / TREELINE (s 0.62, L far) =================
-      (function marshline() {
-        const a = anchor(K(0.62), -1, 70), b = [a.r, a.u, a.t];
-        addBox(out, vadd(vadd(a.c, a.u, 0.2), a.r, 30), [60, 0.5, 140], MARSH, b);
-        for (let i = 0; i < 12; i++) {
-          const off  = (hash(i * 7) - 0.5) * 110;
-          const dep  = 10 + hash(i * 5) * 50;
-          const sz   = 3 + hash(i * 3) * 4;
-          addBox(out, vadd(vadd(vadd(a.c, a.r, 30 + (hash(i * 11) - 0.5) * 40), a.t, off),
-                 a.u, sz / 2 + 0.2), [sz, sz, sz], i % 2 ? MARSH_N : MARSH, b);
-        }
-      })();
+      // ================= MARSH / TREELINE (s 0.58–0.66, L far) =================
+      // backdrop() with green colours renders as organic mounds instead of flat slabs.
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.58 + i * 0.01);
+        const h = 6 + hash(i * 7) * 7;
+        const w = 50 + hash(i * 11) * 50;
+        backdrop(k, -1, 50 + hash(i * 5) * 30, [w, h, 22], MARSH_N);
+      }
+      // Low ground plane as wetland floor
+      groundPlane(K(0.62), -1, 75, [160, 120], MARSH);
       hedge(0.58, 0.66, -1, 24, 3.5, MARSH_N);
 
       // ================= LONG BACK STRAIGHT — open verges (s 0.78, R) =================
@@ -469,6 +456,22 @@
       building(K(0.96), 1, 2, 12,  9, 50, { wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
       building(K(0.94), 1, 2, 10,  7, 34, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
       building(K(0.92), -1, 2, 12, 10, 40, { wall: WHITE, window: WIN_LIT, floor: 3 });
+
+      // ================= MODERN BUILDING STRIPS — cityFront facades =================
+      // Shanghai International Circuit sits in a modern commercial district: low-rise
+      // hotels and offices line the far side of the pit straight and the T14 approach.
+      // cityFront() aligns the inner facade cleanly and auto-varies heights/colours.
+      cityFront(0.92, 0.00, 1, 28, {
+        minH: 14, maxH: 38, depth: 26,
+        palette: [WHITE, CONC, [0.82, 0.83, 0.86], [0.78, 0.80, 0.83]],
+        step: 24,
+      });
+      // Far side of the snail zone — low commercial blocks
+      cityFront(0.14, 0.22, -1, 32, {
+        minH: 10, maxH: 28, depth: 22,
+        palette: [[0.80, 0.82, 0.84], CONC, [0.76, 0.78, 0.80]],
+        step: 26,
+      });
 
       // ---- Scattered marsh greenery + low treeline around the flat perimeter ----
       for (let k = 0; k < n; k += Math.max(1, Math.round(n / 50))) {
@@ -564,26 +567,26 @@
         tree(K(avS),  1, 20 + j * 8, 7, [0.20, 0.40, 0.18]);
       }
 
-      // ---- Distant low hazy treeline ring (three overlapping bands, continuous) ----
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      for (const [extra, count, wMin, hMin, hVar, col] of [
-        [180,  52, 100,  7,  6, MARSH_N],
-        [240,  46, 120, 10,  7, [0.26, 0.40, 0.22]],
-        [310,  40, 140, 12,  8, [0.24, 0.38, 0.20]],
-      ]) {
-        const ring = rad + extra;
-        const span = 2 * Math.PI * ring / count;
-        for (let i = 0; i < count; i++) {
-          const a = (i + (hash(i * 3 + extra) - 0.5) * 0.3) / count * 6.2832;
-          const h = hash(i * 7 + extra);
-          const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
-          const w = Math.max(wMin + h * 60, span * 1.5);
-          addBox(out, [x, pyMin + (hMin + h * hVar) / 2, z], [w, hMin + h * hVar, 20], col, null);
-        }
+      // ---- Distant low hazy treeline ring — backdrop() renders green as organic mounds ----
+      // Green-dominant colours trigger backdrop()'s mound path (addFrustum + dome cap)
+      // so the perimeter reads as wooded hills, not boxy slabs.
+      for (let i = 0; i < 36; i++) {
+        const k = K(i / 36);
+        const side = (i % 2) ? 1 : -1;
+        const h = 8 + hash(i * 7 + 180) * 8;
+        const w = 80 + hash(i * 11 + 180) * 60;
+        backdrop(k, side, 155 + hash(i * 5) * 30,
+          [w, h, 24],
+          [MARSH_N[0], MARSH_N[1], MARSH_N[2]]);
+      }
+      for (let i = 0; i < 28; i++) {
+        const k = K(i / 28 + 0.018);
+        const side = (i % 2) ? -1 : 1;
+        const h = 10 + hash(i * 13 + 240) * 10;
+        const w = 100 + hash(i * 17 + 240) * 70;
+        backdrop(k, side, 200 + hash(i * 19) * 40,
+          [w, h, 28],
+          [0.26, 0.40, 0.22]);
       }
     },
   }

@@ -236,11 +236,12 @@
       // Prominent hotel towers either side of the start/finish straight approach
       building(K(0.10), -1, 40, 30, 78, 30, { wall: [0.20, 0.19, 0.22], window: ROSE, floor: 8, lit: true });
       building(K(0.14), 1, 36, 26, 64, 26, { wall: [0.22, 0.20, 0.20], window: CYAN, floor: 8, lit: true });
-      // cityFront fills the T1-T5 approach with a continuous lit casino street-wall
-      // Gap 44: well clear of the pit straight (road ~7 m wide); step 28 m = sparse enough.
-      cityFront(0.06, 0.20, -1, 44, { minH: 28, maxH: 72, depth: 24, step: 28,
+      // cityFront fills the T3-T8 sector with a continuous lit casino street-wall.
+      // Start at 0.12 (after the two explicit buildings at s 0.10/0.14) to avoid
+      // duplicate geometry on the same nodes. Gap 52 safely clears T3 apex.
+      cityFront(0.12, 0.20, -1, 52, { minH: 28, maxH: 72, depth: 22, step: 30,
         palette: [[0.20, 0.18, 0.24], [0.22, 0.20, 0.22]], lit: true, windowCol: ROSE });
-      cityFront(0.08, 0.20,  1, 44, { minH: 24, maxH: 68, depth: 22, step: 28,
+      cityFront(0.12, 0.20,  1, 52, { minH: 24, maxH: 68, depth: 20, step: 30,
         palette: [[0.20, 0.20, 0.22], [0.18, 0.19, 0.24]], lit: true, windowCol: BLUE });
       // Mid-sector buildings around T3-T5 corner
       building(K(0.22), 1, 60, 30, 72, 28, { wall: [0.20, 0.19, 0.22], window: VIOLET, floor: 8, lit: true });
@@ -407,20 +408,20 @@
         }
 
         // NEAR/MID wall: cityFront() replaces the raw boxy place() slabs.
-        // gap=58: inner face 58 m out — clear of the road; buildings are 18–38 m deep
-        // so they reach to ~96 m, forming a solid midground canyon wall either side.
-        // Two passes per side: a shorter foreground row + a taller setback row.
+        // gap 56: inner face 56 m out — clear of the road; buildings 20–30 m deep.
+        // Single pass per side at step=38 (~54 buildings total) keeps geometry lean.
+        // The backdrop loop above provides the far-distance density.
         const casinoPalL = [[0.22, 0.18, 0.22], [0.18, 0.17, 0.24], [0.24, 0.20, 0.20], [0.20, 0.18, 0.26]];
         const casinoPalR = [[0.20, 0.19, 0.26], [0.24, 0.20, 0.22], [0.18, 0.18, 0.22], [0.22, 0.21, 0.20]];
-        // Front row — immediate casino facades (gap 56, depth 26, height 40–80)
-        cityFront(s0, s1, -1, 56, { minH: 40, maxH: 80, depth: 26, step: 30,
+        // Near facade row — primary casino street-wall (gap 56, step 38)
+        cityFront(s0, s1, -1, 56, { minH: 40, maxH: 85, depth: 26, step: 38,
           palette: casinoPalL, lit: true, windowCol: WARM });
-        cityFront(s0, s1,  1, 56, { minH: 40, maxH: 80, depth: 26, step: 30,
+        cityFront(s0, s1,  1, 56, { minH: 40, maxH: 85, depth: 26, step: 38,
           palette: casinoPalR, lit: true, windowCol: CYAN });
-        // Back row — deeper setback facades giving canyon depth (gap 90, depth 24)
-        cityFront(s0, s1, -1, 90, { minH: 55, maxH: 110, depth: 24, step: 36,
+        // Setback taller buildings behind (gap 96, step 50 — sparser, provides depth)
+        cityFront(s0, s1, -1, 96, { minH: 60, maxH: 120, depth: 24, step: 50,
           palette: [[0.20, 0.17, 0.22], [0.17, 0.16, 0.20]], lit: true, windowCol: GOLD });
-        cityFront(s0, s1,  1, 90, { minH: 55, maxH: 110, depth: 24, step: 36,
+        cityFront(s0, s1,  1, 96, { minH: 60, maxH: 120, depth: 24, step: 50,
           palette: [[0.18, 0.17, 0.24], [0.22, 0.18, 0.20]], lit: true, windowCol: VIOLET });
 
         // Tall signature casino towers punched along the canyon (prominent landmarks)
@@ -456,12 +457,16 @@
       billboard(K(0.18), 1, 34, 14, 9, ROSE);
       billboard(K(0.26), -1, 36, 14, 9, BLUE);
 
-      // --- s 0.40 approach to the Sphere: casino building filling the gap ---
+      // --- s 0.38–0.47: Sphere approach + Venetian area background ---
+      // Fill the gap between T8 and the Strip entrance with a casino backdrop wall.
+      // Side -1: left of road heading into the Strip (s 0.38–0.47 only — Venetian
+      //   at s 0.35 on side +1 stays untouched; this only fills the left/far side).
+      // Side +1: right background behind Venetian sector.
+      // Gap 62 gives safe clearance past the Venetian dist-49 building.
       building(K(0.40), -1, 64, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
-      // cityFront along the Sphere approach (s 0.30–0.46): fills the boxy gap sector
-      cityFront(0.28, 0.46, -1, 52, { minH: 30, maxH: 70, depth: 22, step: 30,
+      cityFront(0.38, 0.47, -1, 62, { minH: 30, maxH: 68, depth: 22, step: 32,
         palette: [[0.20, 0.18, 0.24], [0.22, 0.19, 0.22]], lit: true, windowCol: VIOLET });
-      cityFront(0.30, 0.46,  1, 52, { minH: 28, maxH: 65, depth: 22, step: 30,
+      cityFront(0.38, 0.47,  1, 62, { minH: 26, maxH: 60, depth: 20, step: 32,
         palette: [[0.20, 0.20, 0.22], [0.18, 0.18, 0.26]], lit: true, windowCol: GOLD });
 
       // --- Extra near red-rock desert outcrops (dark, denser silhouette layer) ---

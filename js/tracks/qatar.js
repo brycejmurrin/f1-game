@@ -23,15 +23,14 @@
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, vadd, every, onTrack, groundYAt,
         place, prop, backdrop, anchor, addBox, addCyl, addFrustum, addPrism, addPyramid,
-        palm, grandstand, building, fence, wall, mountain, guardrail, tyreWall,
+        palm, grandstand, building, cityFront, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette (NIGHT desert) ----
       const DUNE   = [0.76, 0.64, 0.46], DUNE_N = [0.56, 0.48, 0.36];
       const SAND   = [0.64, 0.52, 0.36], SAND_D = [0.45, 0.36, 0.24];
-      const SEAT   = [0.16, 0.16, 0.19], STEEL = [0.13, 0.13, 0.16];
-      const PALE   = [0.95, 0.95, 0.92];
+      const STEEL  = [0.13, 0.13, 0.16];
       // Floodlight colours: pure bright white lamp boxes, warm off-white truss
       const FLOOD  = [0.98, 0.98, 0.95];   // lamp-box faces — near-white
       const LAMP   = [0.92, 0.92, 0.88];   // truss / bracket — slightly warm
@@ -39,12 +38,10 @@
       // Emissive window tones — warm amber for pit building, cool blue for hospitality
       const WIN_WARM = [0.88, 0.72, 0.32]; // amber lit window strips (pit-lane level)
       const WIN_COOL = [0.52, 0.68, 0.88]; // cool blue glazing (upper hospitality)
-      // Night-skyline palette: silhouettes + warm/cool beacon tips
-      const SKY_A  = [0.42, 0.56, 0.68];  // darker mid-height tower
-      const SKY_B  = [0.52, 0.66, 0.78];  // lighter taller tower
+      // Night-skyline palette: muted dark desert concrete silhouettes
+      const SKY_A  = [0.22, 0.24, 0.30];  // dark blue-grey tower silhouette
+      const SKY_B  = [0.18, 0.20, 0.28];  // deeper tone — varied texture
       const BEACON = [0.72, 0.90, 0.98];  // nav-beacon tip glow
-      const WIN_SKY = [0.88, 0.74, 0.40]; // lit office windows in skyline
-      const GREY   = [0.42, 0.43, 0.47];
       const FROND  = [0.12, 0.28, 0.12];  // dark fronds for night
       const AD = [   // billboard / sponsor hoarding face tones
         [0.85, 0.18, 0.16], [0.16, 0.36, 0.72], [0.92, 0.74, 0.14],
@@ -97,23 +94,16 @@
         addFrustum(out, vadd(vadd(a.c, a.u, h - 1.0), a.r, side * (-2.4)), 0.50, 0.22, 0.5, FLOOD, 7, b);
       };
 
-      // ---- Sand wedge dune: a truncated cone organic dune form. ----
-      const sandWedge = (k, side, gap, w, h) => {
-        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        // Two-tier stacking: wide tan base, slightly darker narrower top
-        addFrustum(out, a.c, w * 0.58, w * 0.22, h, DUNE, 7, b);
-        addFrustum(out, vadd(a.c, a.u, h * 0.46), w * 0.26, w * 0.06, h * 0.54, DUNE_N, 7, b);
-      };
-
       // ---- CONTINUOUS SAND-DUNE RING ----
-      // Three concentric rings of organic dune shapes wrap the entire lap.
+      // Three concentric rings of organic mountain() dune shapes wrap the entire lap.
+      // Using mountain() gives irregular, craggy silhouettes — far less boxy than frustums.
       (function duneRing() {
         let cx = 0, cz = 0;
         for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
         cx /= n; cz /= n;
         let rad = 0;
         for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-        // [extra dist from track edge, base width, base height, count, colours]
+        // [extra dist from track edge, base width, base height, count, forest/rock cols]
         for (const [extra, wMin, hMin, count, sand, dark] of [
           [160, 130, 7,  32, SAND,   SAND_D],
           [290, 175, 12, 28, DUNE,   DUNE_N],
@@ -159,9 +149,18 @@
         });
       })();
 
-      // Start gantry + scoring tower
+      // Paddock / media centre behind pit building: cityFront gives varied massing
+      // (warm-lit windows, desert-concrete tones) instead of uniform flat slabs.
+      cityFront(0.97, 0.07, -1, 32, {
+        minH: 8, maxH: 22, depth: 18, step: 20,
+        palette: [[0.28, 0.26, 0.24], [0.32, 0.30, 0.26], [0.24, 0.22, 0.20]],
+        lit: true, windowCol: WIN_WARM,
+      });
+
+      // Start gantry + timing tower
       gantry(0.012, 7.5, [0.12, 0.12, 0.14]);
-      tower(K(0.985), -1, 8, 26, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
+      // tower(k, side, dist, baseW, h, opts) — fixed: was missing baseW
+      tower(K(0.985), -1, 8, 6, 26, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
       // Main grandstand (R, close): long curved crescent stepped slab.
       // Hero structure — pale curved shell lit from below by floodlights.
@@ -229,10 +228,17 @@
       billboard(K(0.065), 1, 6, 12, 3.8, AD[0]);
 
       // ================= PALM CLUSTER (s 0.10, L far) =================
-      for (let i = 0; i < 14; i++) {
-        const k = (K(0.10) + i * Math.round(n * 0.004)) % n;
-        palm(k, -1, 45 + hash(k * 5) * 28, 8 + hash(k * 9) * 2.5, FROND);
-        if (hash(k * 13) > 0.45) bush(k, -1, 32 + hash(k * 17) * 16, [0.32, 0.34, 0.18]);
+      // Three rows at varying depths — foreground, mid, far — for depth layering.
+      for (let i = 0; i < 18; i++) {
+        const k = (K(0.10) + i * Math.round(n * 0.003)) % n;
+        const depth = 38 + hash(k * 5) * 22;
+        palm(k, -1, depth, 7.5 + hash(k * 9) * 2.5, FROND);
+        if (hash(k * 13) > 0.40) bush(k, -1, depth - 12 + hash(k * 17) * 10, [0.32, 0.34, 0.18]);
+      }
+      // Second row of palms further back — gives receding depth behind T1
+      for (let i = 0; i < 10; i++) {
+        const k = (K(0.09) + i * Math.round(n * 0.005)) % n;
+        palm(k, -1, 68 + hash(k * 7) * 30, 9 + hash(k * 11) * 3, FROND);
       }
 
       // ================= T2/T3 PAIRED GRANDSTANDS (s 0.18, R) =================
@@ -255,20 +261,34 @@
       marshalPost(K(0.19), 1, 6);
       billboard(K(0.21), 1, 6, 11, 3.4, AD[2]);
 
-      // ================= LOW SAND DUNES (s 0.28, L far) =================
-      // Spaced at varying distances so wedges don't overlap each other.
+      // ================= ORGANIC SAND DUNES (s 0.28, L far) =================
+      // mountain() gives irregular craggy silhouettes — more organic than frustum wedges.
+      // Gaps stagger so dunes don't overlap each other or the track.
       for (let i = 0; i < 11; i++) {
         const k = (K(0.28) + i * Math.round(n * 0.007)) % n;
-        // Keep gap large enough (min 56) that wedges clear track/each other
-        sandWedge(k, -1, 56 + i * 16, 44 + hash(k) * 26, 3 + hash(k * 5) * 3);
+        const gap = 52 + i * 14 + hash(k * 3) * 18;
+        const w   = 38 + hash(k * 5) * 22;
+        const h   =  3 + hash(k * 7) * 4;
+        const a = anchor(k, -1, gap + w * 0.62);
+        mountain(a.c[0], a.c[2], pyMin, w, h,
+          { seg: 7, seed: k * 4 + 28, rough: 0.50, snowline: 1.6,
+            forest: DUNE, rock: DUNE_N, snow: DUNE_N });
       }
       marshalPost(K(0.30), -1, 6);
 
       // ================= TURNS 4-6 SWEEP — open desert flats (s 0.40) ===
-      // Widely spaced sand wedges on both sides (larger gaps prevent overlaps)
+      // Organic dune masses on both sides — wider gaps for the corner zone
       for (let i = 0; i < 8; i++) {
         const k = (K(0.36) + i * Math.round(n * 0.010)) % n;
-        for (const side of [-1, 1]) sandWedge(k, side, 96 + i * 22, 50, 3);
+        for (const side of [-1, 1]) {
+          const gap = 82 + i * 18 + hash(k * 7 + side) * 20;
+          const w   = 44 + hash(k * 9 + side) * 20;
+          const h   =  3 + hash(k * 11 + side) * 3.5;
+          const a = anchor(k, side, gap + w * 0.62);
+          mountain(a.c[0], a.c[2], pyMin, w, h,
+            { seg: 7, seed: k * 5 + side * 3 + 40, rough: 0.48, snowline: 1.6,
+              forest: SAND, rock: SAND_D, snow: SAND_D });
+        }
       }
       floodTower(K(0.39), -1, 40, 33);
       floodTower(K(0.41), 1, 40, 33);
@@ -289,49 +309,36 @@
       }
 
       // ================= DISTANT LUSAIL / DOHA SKYLINE (s 0.45–0.60, L far) ====
-      // Three clusters of towers at varying distances. Each tower gets:
-      //   - main slab (SKY_A/SKY_B tones as dark silhouettes)
-      //   - lit window strip bands (warm amber WIN_SKY)
-      //   - tapered spire on tall towers
-      //   - bright beacon at tip
-      // All placed via anchor() to sit on terrain, not floating at absolute Y.
+      // Use backdrop() so towers auto-get window bands (dark-night tower → lit panes).
+      // Three clusters stagger laterally via separate fractions.
+      // Towers pushed 600–760 m out so they never clip dune ring or track.
       (function skyline() {
         for (const sBase of [0.47, 0.51, 0.55]) {
-          for (let i = 0; i < 12; i++) {
-            const off = (i - 6) * 30 + hash(i * 13 + sBase * 100) * 12;
-            // Push towers far enough out (min 580m) that they clear the dune ring
-            const distVar = 600 + hash(i * 5 + sBase * 70) * 160;
-            const a = anchor(K(sBase), -1, distVar);
-            // Build offset in world space using the track basis
-            const c = vadd(a.c, a.r, off);
-            const b = [a.r, a.u, a.t];
-            const w = 4.0 + hash(i * 3 + sBase) * 4.5;
-            const h = 40 + hash(i * 7 + sBase * 30) * 130;
-            const toneToggle = hash(i * 11 + sBase) > 0.5;
-            const mainCol = toneToggle ? SKY_A : SKY_B;
-            // Main tower block — settled at terrain height (anchor already gives ground Y)
-            addBox(out, vadd(c, a.u, h * 0.5), [w, h, w], mainCol, b);
-            // Lit window strips — 3 bands at 25%, 50%, 75% height
-            for (const frac of [0.25, 0.50, 0.75]) {
-              addBox(out, vadd(c, a.u, h * frac), [w * 1.02, h * 0.055, w * 1.02], WIN_SKY, b);
-            }
-            // Tapered spire on tall towers
-            if (h > 100) {
-              addPyramid(out, vadd(c, a.u, h), [w * 0.8, 14, w * 0.8], [0.56, 0.70, 0.82], b);
-            }
-            // Navigation beacon at tip
-            const beaconH = h + (h > 100 ? 14 : 1.0);
-            addBox(out, vadd(c, a.u, beaconH), [1.2, 3.0, 1.2], BEACON, b);
+          for (let i = 0; i < 10; i++) {
+            const hf = hash(i * 7 + sBase * 30);
+            const wf = hash(i * 3 + sBase * 20);
+            // Spread towers laterally: stagger s slightly per tower so they get
+            // separate anchor points and fan out along the horizon.
+            const sFrac = (sBase + (i - 5) * 0.006 + 1) % 1;
+            const dist  = 620 + hash(i * 5 + sBase * 70) * 140;
+            const w = 5 + wf * 6;
+            const h = 38 + hf * 140;
+            const d = w * 1.4;
+            const col = (hash(i * 11 + sBase) > 0.5) ? SKY_A : SKY_B;
+            // backdrop() auto-adds lit window bands for night circuits
+            backdrop(K(sFrac), -1, dist, [w, h, d], col);
+            // Navigation beacon at top — bright spot in the night sky
+            const a = anchor(K(sFrac), -1, dist);
+            addBox(out, vadd(a.c, a.u, h + 2), [1.4, 3.5, 1.4], BEACON, [a.r, a.u, a.t]);
           }
         }
       })();
 
       // ================= MARSHAL / TIMING HUTS (s 0.62, R mid) =================
-      // Spaced 5m increments, raised slightly from the original so they clear terrain.
       for (let i = 0; i < 5; i++) {
         const k = (K(0.62) + i * 2) % n;
-        place(k, 1, 26 + i * 5, [4, 4, 5], PALE);
-        // Red roof cap — slightly taller than the wall box (sits on top, no z-fight)
+        place(k, 1, 26 + i * 5, [4, 4, 5], [0.90, 0.90, 0.88]);
+        // Red roof cap
         place(k, 1, 26 + i * 5, [4.4, 0.65, 5.4], [0.55, 0.18, 0.16]);
         // Lit window on each hut (amber square)
         const a = anchor(k, 1, 26 + i * 5), bv = [a.r, a.u, a.t];

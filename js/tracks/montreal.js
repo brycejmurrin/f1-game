@@ -52,6 +52,15 @@
         addBox(out, vadd(vadd(a.c, a.u, 8.5), a.t, 0.8), [0.5, 0.22, 0.7], [0.98, 0.97, 0.82], b);
       };
 
+      // ── Flag mast helper: slender pole with a coloured pennant box at the top ──
+      const flagMast = (k, side, dist, h, col) => {
+        const a = anchor(k, side, dist);
+        const b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 1.5)) return;
+        addCyl(out, a.c, 0.07, h, [0.30, 0.30, 0.33], 5, b);
+        addBox(out, vadd(a.c, a.u, h - 0.7), [0.04, 1.4, 2.4], col, b);
+      };
+
       // ===================================================================
       // Continuous pale concrete walls lining both edges (FLAT island)
       // ===================================================================
@@ -62,14 +71,20 @@
       fence(0.0, 1.0, -1, 3.4, 3.0, [0.72, 0.74, 0.78]);
       fence(0.0, 1.0,  1, 3.4, 3.0, [0.72, 0.74, 0.78]);
 
-      // Grass strips of parkland just beyond the walls, both sides
-      for (let i = 0; i < n; i += 3) {
-        const side = (i % 2) ? 1 : -1;
-        place(i, side, 7, [10, 0.4, 12], GRASS);
+      // Wide parkland ground planes both sides — groundPlane() aligns to local track
+      // height so patches don't clip through elevated sections.
+      // Right verge: park lawns from Senna S through the Casino complex
+      for (let i = 0; i < 14; i++) {
+        groundPlane(K(0.08 + i * 0.058),  1, 9, [55, 0.6, 52], GRASS);
+      }
+      // Left verge: island interior from basin entry to back straight
+      for (let i = 0; i < 10; i++) {
+        groundPlane(K(0.10 + i * 0.068), -1, 9, [50, 0.6, 48], GRASS);
       }
 
-      // Continuous low clipped hedge / treeline ribbon framing both verges
+      // Continuous low clipped hedge / treeline ribbon framing the verges
       hedge(0.13, 0.24,  1, 9, 1.6, HEDGE);
+      hedge(0.38, 0.50,  1, 9, 1.4, HEDGE);   // mid-island right verge
       hedge(0.62, 0.78, -1, 9, 1.6, HEDGE);
       hedge(0.78, 0.90,  1, 9, 1.6, HEDGE);
 
@@ -99,6 +114,11 @@
       // Start/finish gantry spanning the main straight + a second timing arch
       gantry(0.005, 7.5, [0.14, 0.14, 0.18]);
       gantry(0.97,  6.5, [0.16, 0.16, 0.20]);
+
+      // Flag masts flanking the start/finish line (Canadian red + maple leaf red)
+      flagMast(K(0.005),  1, 10, 12, [0.88, 0.12, 0.16]);
+      flagMast(K(0.005), -1, 10, 12, [0.88, 0.12, 0.16]);
+      flagMast(K(0.999),  1,  9, 11, [0.88, 0.12, 0.16]);
 
       // Pit lane garages / paddock buildings behind the left pit wall (long low row)
       for (let i = 0; i < 6; i++) {
@@ -142,10 +162,28 @@
         density: 0.75, hMin: 9, hMax: 16,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.2
       });
-      // Far bank low treeline backdrop across the water
+      // Far bank low treeline backdrop across the water (green → engine renders as rounded mounds)
       for (let i = 0; i < 12; i++) {
         const k = K(0.08 + (i / 12) * 0.12);
         backdrop(k, -1, 140 + hash(i * 11) * 25, [20, 7 + hash(i * 5) * 5, 20], [0.22, 0.40, 0.22]);
+      }
+
+      // ── s 0.10 L — Rowing regatta spectator platform overlooking the basin ──
+      // A simple concrete deck on stilts — like the permanent grandstand at the
+      // 1976 Olympic rowing venue on the island.
+      {
+        const k = K(0.10);
+        const a = anchor(k, -1, 28);
+        const b = [a.r, a.u, a.t];
+        // Platform deck: 30 m long, 6 m wide, 3 m above ground
+        addBox(out, vadd(a.c, a.u, 3.0), [6, 0.4, 30], [0.76, 0.77, 0.80], b);
+        // Low railing walls along the long edges (track-side and water-side)
+        addBox(out, vadd(vadd(a.c, a.u, 3.5), a.r,  3.1), [0.18, 0.8, 30], [0.72, 0.72, 0.74], b);
+        addBox(out, vadd(vadd(a.c, a.u, 3.5), a.r, -3.1), [0.18, 0.8, 30], [0.72, 0.72, 0.74], b);
+        // Four support columns
+        for (const ot of [-11, -4, 4, 11]) {
+          addCyl(out, vadd(vadd(a.c, a.t, ot), a.u, 0), 0.28, 3.0, [0.68, 0.68, 0.70], 6, b);
+        }
       }
 
       // ===================================================================
@@ -167,6 +205,24 @@
       for (let i = 0; i < 18; i++) {
         bush(K(0.16 + i * 0.0088), (i % 2) ? 1 : -1, 9 + hash(i * 11) * 5,
           (i % 2) ? [0.22, 0.42, 0.20] : [0.18, 0.38, 0.18]);
+      }
+
+      // ===================================================================
+      // s 0.35–0.50 — Mid-island gap: forestEdge (previously bare)
+      // The infield and outer park between the Casino complex and L'Épingle.
+      // ===================================================================
+      forestEdge(0.35, 0.50, 1, 12, {
+        density: 0.65, hMin: 7, hMax: 13,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.12
+      });
+      forestEdge(0.35, 0.48, -1, 12, {
+        density: 0.55, hMin: 7, hMax: 12,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
+      });
+      // Scattered bushes in the mid-island infield near the Casino approach
+      for (let i = 0; i < 10; i++) {
+        bush(K(0.37 + i * 0.012), (i % 2) ? 1 : -1, 10 + hash(i * 7) * 4,
+          (i % 2) ? [0.20, 0.40, 0.18] : [0.24, 0.44, 0.20]);
       }
 
       // ===================================================================
@@ -313,17 +369,22 @@
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
       });
 
+      // ── s 0.65 L — Concrete spectator grandstand on the Casino straight ──
+      // Modelled after the permanent stands that overlook the run between
+      // L'Épingle and the final chicane (the busiest spectator zone on the island).
+      grandstand(0.65, -1, 11, 80, [0.48, 0.50, 0.55], [0.58, 0.36, 0.32]);
+
       // ===================================================================
       // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
       // ===================================================================
       // Grandstand midway on the back straight
       grandstand(0.74, -1, 11, 64, [0.48, 0.49, 0.54], [0.56, 0.40, 0.36]);
 
-      // Canal / water feature off the right verge
+      // Canal / water feature off the right verge — island park internal canal
       for (let i = 0; i < 3; i++) {
         groundPlane(K(0.78 + i * 0.020), 1, 16, [130, 2, 160], RIVER);
       }
-      // Far treeline backdrop on the canal's far bank (behind the water)
+      // Far treeline backdrop on the canal's far bank (green → organic mounds in engine)
       for (let i = 0; i < 8; i++) {
         backdrop(K(0.78 + (i / 8) * 0.08), 1, 135 + hash(i * 11) * 25, [22, 8, 22], [0.20, 0.40, 0.22]);
       }
@@ -339,6 +400,15 @@
         density: 0.60, hMin: 7, hMax: 13,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
       });
+
+      // ── s 0.80 R — Small park pavilion / timing tower beside the back straight ──
+      // Montreal's infield contains several permanent buildings from the 1976 Games
+      // including the lightweight pavilions that now house race infrastructure.
+      {
+        const k = K(0.80);
+        building(k, 1, 28, 18, 12, 16,
+          { wall: [0.74, 0.76, 0.80], window: [0.52, 0.64, 0.76], floor: 3, roof: true });
+      }
 
       // ===================================================================
       // s 0.92 both — Final chicane: tight kerb funnel + tyre walls
