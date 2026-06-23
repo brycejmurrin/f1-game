@@ -22,7 +22,7 @@
     // Turn 1: the calendar's most famous climb — ~30 m up in a few hundred metres.
     elevations: [{ s: 0.06, halfM: 320, rise: 12 }],
     scenery: function (api) {
-      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront } = api;
+      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // -- Palette (Texas Hill Country, DAY) --
@@ -60,17 +60,12 @@
       grandstand(0.24,  1, 18, 54, [0.38, 0.39, 0.44], [0.5, 0.5, 0.54]);
       // Back-straight grandstand (s≈0.46, L)
       grandstand(0.46, -1, 12, 70, [0.40, 0.41, 0.46], [0.5, 0.5, 0.54]);
-      // Second back-straight stand (s≈0.54, L)
-      grandstand(0.54, -1, 14, 60, [0.36, 0.37, 0.42], [0.52, 0.5, 0.5]);
       // Turn-12 hairpin braking-zone stand (s≈0.625, R)
       grandstand(0.625, 1, 14, 70, [0.38, 0.39, 0.44], [0.5, 0.5, 0.54]);
       // Triple-apex sweeper stand (s≈0.83, R)
       grandstand(0.83,  1, 16, 64, [0.40, 0.41, 0.46], [0.5, 0.5, 0.54]);
       // Extra deep main-straight upper tier behind the front stand (s≈0.02, R far)
       grandstand(0.02,  1, 30, 130, [0.30, 0.31, 0.36], [0.48, 0.48, 0.52]);
-      // Back-sector stands for race viewing
-      grandstand(0.47, -1, 18, 68, [0.38, 0.39, 0.44], [0.50, 0.50, 0.54]);
-      grandstand(0.52,  1, 20, 60, [0.36, 0.37, 0.42], [0.52, 0.50, 0.50]);
 
       // ---- Pit/paddock building cluster (s≈0.97–0.05, L) ----
       // long low pit garage block flanking the main straight
@@ -80,7 +75,6 @@
       building(K(0.04), -1, 38, 26,  9, 44, { wall: [0.80, 0.80, 0.83], window: glass, floor: 2 });
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
       building(K(0.05), -1, 16, 16, 18, 22, { wall: cotaBlue, window: glass, floor: 5, roof: darkSteel });
-      // NOTE: no wall() call on the main straight — that created the grey panel eyesore
 
       // ---- COTA Observation Tower — the iconic 77m red structure at Turn 1 (s≈0.085, L far) ----
       // Placed at 78 m from road edge so it never overlaps any parallel segment.
@@ -183,104 +177,95 @@
       }
 
       // ---- Texas Hill Country ridgelines — LOW organic hills on the horizon ----
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      // Use backdrop() for cheap rounded hill mounds instead of full mountain() meshes.
+      // backdrop() auto-detects green-dominant colors and renders as frustum+cone mound,
+      // costing ~2 primitives vs ~80 triangles per mountain() — critical for SwiftShader.
+      // Place ~6 anchor points around the circuit for 3 depth layers.
+      const hillAnchors = [
+        // [s-frac, side, dist, width, height, depth, col]
+        // Near ring — closest visible hills (150–200 m from road edge)
+        [0.10, -1, 165, 280, 42, 60, [0.36, 0.44, 0.26]],
+        [0.25,  1, 155, 260, 38, 55, [0.38, 0.46, 0.28]],
+        [0.40, -1, 170, 300, 44, 65, [0.34, 0.42, 0.24]],
+        [0.55,  1, 160, 270, 40, 58, [0.36, 0.44, 0.26]],
+        [0.70, -1, 175, 290, 46, 62, [0.38, 0.46, 0.28]],
+        [0.85,  1, 150, 260, 38, 55, [0.34, 0.42, 0.24]],
+        // Mid ring — second layer adds depth (280–360 m out)
+        [0.05, -1, 300, 350, 56, 70, [0.40, 0.48, 0.30]],
+        [0.20,  1, 320, 380, 62, 75, [0.42, 0.50, 0.32]],
+        [0.35, -1, 310, 360, 58, 72, [0.40, 0.48, 0.30]],
+        [0.50,  1, 340, 400, 66, 80, [0.44, 0.52, 0.34]],
+        [0.65, -1, 295, 340, 54, 68, [0.40, 0.48, 0.30]],
+        [0.80,  1, 315, 370, 60, 74, [0.42, 0.50, 0.32]],
+        // Far ring — misty horizon haze (480–560 m out)
+        [0.15, -1, 500, 460, 76, 90, [0.44, 0.50, 0.36]],
+        [0.45,  1, 520, 480, 80, 95, [0.46, 0.52, 0.38]],
+        [0.75, -1, 510, 470, 78, 92, [0.44, 0.50, 0.36]],
+      ];
+      for (const [sf, side, dist, w, h, d, col] of hillAnchors) {
+        backdrop(K(sf), side, dist, [w, h, d], col);
+      }
 
-      // T1 hill climb ridge cues: earth mounds framing the famous uphill entry.
+      // ---- T1 hill climb ridge cues: earth mounds framing the famous uphill entry ----
       {
-        const hillGrass = [0.36, 0.44, 0.22];
-        const hillPts = [[0.01, 1], [0.02, -1], [0.035, 1], [0.045, -1]];
-        for (const [sf, side] of hillPts) {
-          const ah = anchor(K(sf), side, 36 + hash(K(sf) * 3) * 18);
-          addPrism(out, ah.c, [28, 10 + hash(K(sf) * 7) * 6, 46], hillGrass,
+        const hillGrass = [0.40, 0.48, 0.26];
+        // Staggered mounds on both sides of the climb — kept close so they read as earthworks
+        for (const [sf, side, gapOff] of [
+          [0.01, 1, 0], [0.02, -1, 4], [0.035, 1, 0], [0.045, -1, 6],
+        ]) {
+          const ah = anchor(K(sf), side, 34 + gapOff + hash(K(sf) * 3) * 14);
+          addPrism(out, ah.c, [26, 9 + hash(K(sf) * 7) * 5, 44], hillGrass,
                    [ah.t, ah.u, ah.r]);
         }
       }
 
-      // CONTINUOUS Texas Hill Country backdrop: three overlapping rings of rolling hills.
-      for (const [extra, wMin, hMin, count, col] of [
-        [150, 220, 24, 44, [0.42, 0.50, 0.28]],
-        [340, 290, 38, 38, [0.48, 0.54, 0.40]],
-        [560, 350, 50, 32, [0.44, 0.50, 0.42]],
-      ]) {
-        const ring = rad + extra;
-        for (let i = 0; i < count; i++) {
-          const a = (i + (i % 2) * 0.5) / count * 6.2832, h = hash(i * 7 + extra);
-          const hillOpts = {
-            seed: i * 3 + extra,
-            snowline: 4,
-            forest: col,
-            rock: [Math.max(0.42, col[0] * 0.87), Math.max(0.37, col[1] * 0.87), Math.max(0.30, col[2] * 0.78)]
-          };
-          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                   wMin + h * 90, hMin + h * 20, hillOpts);
-        }
-      }
-
       // ================= AUSTIN DOWNTOWN SKYLINE (s 0.28–0.65, L far) =================
-      // Iconic downtown Austin skyline visible from the south side of the circuit.
-      // Lit windows {lit:true} for night legibility.
-      {
-        const AUSTIN_WALL  = [0.52, 0.54, 0.62];
-        const AUSTIN_WIN   = [0.34, 0.44, 0.58];
-        const AUSTIN_LIT   = [0.72, 0.76, 0.54];
-        const skylineData = [
-          // [s, side, dist, w, h]
-          [0.29, -1, 260,  14,  58],
-          [0.33, -1, 285,  20,  80],
-          [0.37, -1, 250,  18,  66],
-          [0.41, -1, 295,  26, 125],
-          [0.45, -1, 270,  22,  96],
-          [0.50, -1, 255,  18,  74],
-          [0.55, -1, 290,  20,  92],
-          [0.60, -1, 240,  16,  70],
-          [0.65, -1, 295,  24, 108],
-        ];
-        for (const [s, side, dist, w, h] of skylineData) {
-          const kb = K(s);
-          building(kb, side, dist, w, h, w,
-            { wall: AUSTIN_WALL, window: AUSTIN_WIN, floor: Math.round(h / 12), lit: true, windowCol: AUSTIN_WIN });
-          // Sun-catch accent
-          const ab = anchor(kb, side, dist);
-          if (!onTrack(ab.c[0], ab.c[2], w * 0.6)) {
-            addBox(out, vadd(ab.c, ab.u, h * 0.85), [w * 1.02, h * 0.08, w * 1.02],
-                   AUSTIN_LIT, [ab.r, ab.u, ab.t]);
-          }
-        }
-      }
+      // Use cityFront() — steps efficiently along the track and auto-varies heights/widths.
+      cityFront(0.28, 0.65, -1, 235, {
+        minH: 48,
+        maxH: 115,
+        depth: 22,
+        step: 30,
+        lit: false,
+        palette: [
+          [0.52, 0.54, 0.62],
+          [0.56, 0.58, 0.64],
+          [0.48, 0.50, 0.58],
+          [0.60, 0.60, 0.66],
+          [0.50, 0.52, 0.60],
+        ],
+      });
 
       // ================== COHERENT TREELINES via forestEdge() ==================
       // Replace scattered individual trees with continuous treeline edges.
       // gap values are generous (16–24 m) to clear barriers and grandstands.
       // Colors deliberately muted (dark oak/cedar) — no vivid green.
+      // density kept moderate (0.4–0.55) so step stays ≥4 m and count is bounded.
 
       // Main straight / pit entry approach (right side, back from buildings)
-      forestEdge(0.88, 0.98, 1, 22, { density: 0.55, hMin: 7, hMax: 13, col: cedar, col2: oak, pineFrac: 0.4 });
+      forestEdge(0.88, 0.98,  1, 22, { density: 0.50, hMin: 7, hMax: 13, col: cedar, col2: oak,   pineFrac: 0.4 });
 
       // Turn 1 approach — left side treeline behind grandstands
-      forestEdge(0.06, 0.16, -1, 32, { density: 0.50, hMin: 8, hMax: 14, col: oak, col2: cedar, pineFrac: 0.55 });
+      forestEdge(0.06, 0.16, -1, 32, { density: 0.45, hMin: 8, hMax: 14, col: oak,   col2: cedar, pineFrac: 0.55 });
 
       // Esses sector — both sides, set back behind the guardrails
-      forestEdge(0.16, 0.28, -1, 20, { density: 0.60, hMin: 7, hMax: 12, col: cedar, col2: oak, pineFrac: 0.45 });
-      forestEdge(0.16, 0.28,  1, 20, { density: 0.50, hMin: 6, hMax: 11, col: oak,   col2: cedar, pineFrac: 0.35 });
+      forestEdge(0.16, 0.28, -1, 20, { density: 0.50, hMin: 7, hMax: 12, col: cedar, col2: oak,   pineFrac: 0.45 });
+      forestEdge(0.16, 0.28,  1, 20, { density: 0.45, hMin: 6, hMax: 11, col: oak,   col2: cedar, pineFrac: 0.35 });
 
-      // Mid-circuit sector (s≈0.28–0.40, right side — dry scrub field)
-      forestEdge(0.28, 0.42,  1, 18, { density: 0.40, hMin: 6, hMax: 10, col: [0.22, 0.34, 0.18], col2: [0.26, 0.36, 0.20], pineFrac: 0.30 });
+      // Mid-circuit sector (s≈0.28–0.40, right side — dry Texas scrub)
+      forestEdge(0.28, 0.42,  1, 18, { density: 0.35, hMin: 6, hMax: 10, col: [0.22, 0.34, 0.18], col2: [0.26, 0.36, 0.20], pineFrac: 0.30 });
 
-      // Back straight (s≈0.40–0.62, both sides behind the back straight stands)
-      forestEdge(0.40, 0.55, -1, 24, { density: 0.55, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.50 });
-      forestEdge(0.40, 0.62,  1, 18, { density: 0.45, hMin: 6, hMax: 11, col: cedar, col2: oak,   pineFrac: 0.40 });
+      // Back straight (s≈0.40–0.62, both sides — sparse Texas live oaks)
+      forestEdge(0.40, 0.55, -1, 24, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.50 });
+      forestEdge(0.40, 0.62,  1, 18, { density: 0.40, hMin: 6, hMax: 11, col: cedar, col2: oak,   pineFrac: 0.40 });
 
       // T12 hairpin and amphitheatre approach (s≈0.62–0.72)
-      forestEdge(0.62, 0.74, -1, 18, { density: 0.50, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
-      forestEdge(0.72, 0.84, -1, 16, { density: 0.45, hMin: 6, hMax: 11, col: cedar, col2: oak,   pineFrac: 0.40 });
+      forestEdge(0.62, 0.74, -1, 18, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
+      forestEdge(0.72, 0.84, -1, 16, { density: 0.40, hMin: 6, hMax: 11, col: cedar, col2: oak,   pineFrac: 0.40 });
 
       // Final sweeper sector (s≈0.84–0.96, both sides)
-      forestEdge(0.84, 0.96, -1, 18, { density: 0.50, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
-      forestEdge(0.84, 0.92,  1, 20, { density: 0.40, hMin: 6, hMax: 10, col: cedar, col2: oak,   pineFrac: 0.35 });
+      forestEdge(0.84, 0.96, -1, 18, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
+      forestEdge(0.84, 0.92,  1, 20, { density: 0.35, hMin: 6, hMax: 10, col: cedar, col2: oak,   pineFrac: 0.35 });
 
       // ---- Start/finish gantry over the main straight (s≈0.00) ----
       gantry(0.00, 7.5, darkSteel);
@@ -288,8 +273,8 @@
       gantry(0.50, 7.0, darkSteel);
 
       // ---- Catch fences behind the kerbs ----
-      fence(0.00, 0.06, 1,  5, 3.4, [0.62, 0.64, 0.68]);   // main straight, R
-      fence(0.94, 1.00, 1,  5, 3.4, [0.62, 0.64, 0.68]);   // final corner, R
+      fence(0.00, 0.06,  1, 5, 3.4, [0.62, 0.64, 0.68]);   // main straight, R
+      fence(0.94, 1.00,  1, 5, 3.4, [0.62, 0.64, 0.68]);   // final corner, R
       fence(0.46, 0.62, -1, 6, 3.4, [0.62, 0.64, 0.68]);   // back straight, L
       fence(0.08, 0.14, -1, 8, 3.4, [0.62, 0.64, 0.68]);   // T1 hill, L
 
@@ -347,37 +332,18 @@
         }
       }
 
-      // ================== LAMP POSTS — night-ready circuit lighting ==================
-      // Main straight lamp posts (both sides, every 50 m)
-      along(0.92, 0.10, 50, (k) => {
+      // ================== LAMP POSTS — main straight only (reduced for performance) ==================
+      // COTA is a day-race circuit. Lamp posts are kept to the main straight only —
+      // every 80 m (was 50 m) to reduce addCyl/addBox count under SwiftShader.
+      along(0.94, 0.06, 80, (k) => {
         for (const side of [-1, 1]) {
           const pa = anchor(k, side, 5);
           if (onTrack(pa.c[0], pa.c[2], 1)) return;
           addCyl(out, pa.c, 0.18, 10, lampPost, 5, [pa.r, pa.u, pa.t]);
-          addBox(out, vadd(pa.c, pa.u, 9.5),  [0.14, 0.14, 2.8], lampPost, [pa.r, pa.u, pa.t]);
+          addBox(out, vadd(pa.c, pa.u, 9.5), [0.14, 0.14, 2.8], lampPost, [pa.r, pa.u, pa.t]);
           addBox(out, vadd(vadd(pa.c, pa.t, -side * 1.2), pa.u, 9.0),
                  [0.6, 0.28, 1.2], lampHead, [pa.r, pa.u, pa.t]);
         }
-      });
-
-      // T1 hill lamp posts (left side — the famous lit climb for evening races)
-      along(0.06, 0.15, 55, (k) => {
-        const pa = anchor(k, -1, 6);
-        if (onTrack(pa.c[0], pa.c[2], 1)) return;
-        addCyl(out, pa.c, 0.18, 11, lampPost, 5, [pa.r, pa.u, pa.t]);
-        addBox(out, vadd(pa.c, pa.u, 10.5), [0.14, 0.14, 2.6], lampPost, [pa.r, pa.u, pa.t]);
-        addBox(out, vadd(vadd(pa.c, pa.t, 1.0), pa.u, 10.0),
-               [0.6, 0.28, 1.2], lampHead, [pa.r, pa.u, pa.t]);
-      });
-
-      // Back straight lamp posts (left side)
-      along(0.40, 0.62, 55, (k) => {
-        const pa = anchor(k, -1, 5);
-        if (onTrack(pa.c[0], pa.c[2], 1)) return;
-        addCyl(out, pa.c, 0.18, 10, lampPost, 5, [pa.r, pa.u, pa.t]);
-        addBox(out, vadd(pa.c, pa.u, 9.5),  [0.14, 0.14, 2.6], lampPost, [pa.r, pa.u, pa.t]);
-        addBox(out, vadd(vadd(pa.c, pa.t, 1.0), pa.u, 9.0),
-               [0.6, 0.28, 1.2], lampHead, [pa.r, pa.u, pa.t]);
       });
     },
   }

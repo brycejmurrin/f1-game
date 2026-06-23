@@ -88,13 +88,13 @@
         lit: true, windowCol: WINLIT,
       });
       // Rocky/green hillside above the buildings — backdrop() with green renders
-      // as organic rounded mounds, not boxy slabs. Three tiers for depth.
-      for (let i = 0; i < 9; i++) {
-        const k = K(0.09 + i * 0.019);
+      // as organic rounded mounds, not boxy slabs.
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.09 + i * 0.028);
         const hv = hash(k * 3.1 + 7);
-        backdrop(k, -1, 44 + hv * 16, [55 + hv * 25, 22 + hv * 18, 50],
+        backdrop(k, -1, 44 + hv * 16, [60 + hv * 28, 24 + hv * 18, 52],
                  [0.20 + hv * 0.05, 0.42 + hv * 0.06, 0.22]);
-        backdrop(k, -1, 72 + hv * 20, [65 + hv * 30, 32 + hv * 22, 55],
+        backdrop(k, -1, 78 + hv * 20, [72 + hv * 30, 36 + hv * 22, 58],
                  [0.16 + hv * 0.04, 0.34 + hv * 0.05, 0.18]);
       }
       // Far towers on LEFT — set at 80m+, clear of hillside mounds.
@@ -166,10 +166,10 @@
         lit: true, windowCol: WINLIT,
       });
       // Rocky scrub above the Mirabeau buildings — green/grey hillside backdrop.
-      for (let i = 0; i < 7; i++) {
-        const k = K(0.28 + i * 0.02);
+      for (let i = 0; i < 4; i++) {
+        const k = K(0.29 + i * 0.035);
         const hv = hash(k * 4.1 + 3);
-        backdrop(k, -1, 46 + hv * 18, [60 + hv * 30, 18 + hv * 14, 48],
+        backdrop(k, -1, 46 + hv * 18, [65 + hv * 30, 20 + hv * 14, 50],
                  [0.22 + hv * 0.04, 0.40 + hv * 0.05, 0.24]);
       }
 
@@ -259,13 +259,12 @@
         palette: [CREAM, DUSTY, OCHRE, TERRA, STONE, SAGE],
         lit: true, windowCol: WINLIT,
       });
-      // Far backdrop towers behind harbour apartments — use backdrop() for these
-      // distant landmarks so we get window-banded towers without full cityFront overdraw.
-      for (let i = 0; i < 8; i++) {
-        const k = K(0.60 + i * 0.048);
+      // Distant landmark towers behind harbour apartments.
+      for (let i = 0; i < 5; i++) {
+        const k = K(0.61 + i * 0.076);
         const hv = hash(k * 2.9 + i);
-        const h = 36 + hv * 32;
-        backdrop(k, 1, 46 + hv * 18, [20 + hv * 12, h, 18], PASTELS[(i * 3) % PASTELS.length]);
+        const h = 40 + hv * 30;
+        backdrop(k, 1, 48 + hv * 20, [22 + hv * 12, h, 18], PASTELS[(i * 3) % PASTELS.length]);
       }
 
       // ── HARBOUR WATER & QUAY ─────────────────────────────────────────────
@@ -296,57 +295,27 @@
         addBox(out, vadd(sup, u, 5.9 * sc), [W * 0.75, 0.5 * sc, L * 0.59], WINLIT, b);
       };
 
-      // packed marina rows — three ranks, near/mid/far
-      for (let i = 0; i < 16; i++) {
-        const s = 0.59 + i * 0.0245;
+      // Marina rows — two spaced ranks (reduced count for performance).
+      for (let i = 0; i < 10; i++) {
+        const s = 0.59 + i * 0.038;
         const k = K(s);
-        const rank = i % 3;
-        const dist = 16 + rank * 16 + hash(k * 7) * 4;
+        const rank = i % 2;
+        const dist = 18 + rank * 22 + hash(k * 7) * 4;
         const a = anchor(k, -1, dist);
         if (onTrack(a.c[0], a.c[2], 12)) continue;
         const b = [a.r, a.u, a.t];
-        const sc = 0.7 + hash(k * 9 + i) * 0.9;
+        const sc = 0.75 + hash(k * 9 + i) * 0.8;
         const hull = (i % 5 === 0) ? [0.18, 0.20, 0.26] : (i % 7 === 0) ? [0.85, 0.86, 0.9] : [0.97, 0.97, 0.99];
         yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
-        if (i % 3 === 0) {
-          const tc = vadd(vadd(a.c, a.r, -14), a.t, 8);
-          addBox(out, vadd(tc, a.u, 0.9), [3.2, 1.2, 8], [0.92, 0.5, 0.3], b);
-          addBox(out, vadd(tc, a.u, 1.8), [2.0, 0.8, 3.2], [0.95, 0.95, 0.97], b);
-        }
       }
-      // Additional curated yachts (harbour enhancement)
-      for (let i = 0; i < 12; i++) {
-        const s = 0.62 + i * 0.0205;
-        const k = K(s);
-        const rank = i % 3;
-        const dist = 18 + rank * 20 + hash(k * 7) * 6;
-        const a = anchor(k, -1, dist);
-        if (onTrack(a.c[0], a.c[2], 14)) continue;
-        const b = [a.r, a.u, a.t];
-        const sc = 0.72 + hash(k * 11 + i) * 0.8;
-        if (rank === 0) {
-          const hull = (i % 4 === 0) ? [0.20, 0.22, 0.28] : [0.97, 0.97, 0.99];
-          yacht(vadd(a.c, a.r, -4 + (i % 3) * 5), b, a.u, a.r, a.t, sc, hull);
-          if (i % 2 === 0) {
-            const tc = vadd(vadd(a.c, a.r, -16), a.t, 5);
-            addBox(out, vadd(tc, a.u, 0.8), [3.6, 1.2, 7], [0.94, 0.52, 0.26], b);
-            addBox(out, vadd(tc, a.u, 1.6), [2.1, 0.8, 2.8], [0.96, 0.96, 0.98], b);
-          }
-        } else if (rank === 1) {
-          addBox(out, vadd(a.c, a.u, 4), [6 * sc, 5 * sc, 18 * sc], [0.92, 0.93, 0.96], b);
-          addCyl(out, vadd(a.c, a.u, 10.5 * sc), 0.25 * sc, 6 * sc, [0.88, 0.88, 0.92], 4, b);
-        } else {
-          addCyl(out, vadd(a.c, a.u, 5), 0.2, 12 + hash(k * 5) * 5, [0.89, 0.89, 0.93], 3, b);
-        }
-      }
-      // distant mast cluster + breakwater
-      for (let i = 0; i < 10; i++) {
-        const k = K(0.62 + i * 0.03), a = anchor(k, -1, 95 + hash(k) * 25);
+      // Far mast cluster + breakwater
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.62 + i * 0.05), a = anchor(k, -1, 90 + hash(k) * 22);
         addCyl(out, vadd(a.c, a.u, 5), 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
       }
-      for (let i = 0; i < 6; i++) {
-        const k = K(0.66 + i * 0.032), a = anchor(k, -1, 125);
-        addBox(out, vadd(a.c, a.u, 0.5), [30, 2.6, 7], [0.70, 0.66, 0.58], [a.r, a.u, a.t]);
+      for (let i = 0; i < 4; i++) {
+        const k = K(0.66 + i * 0.05), a = anchor(k, -1, 125);
+        addBox(out, vadd(a.c, a.u, 0.5), [40, 2.6, 8], [0.70, 0.66, 0.58], [a.r, a.u, a.t]);
       }
 
       // ── QUAY BOLLARDS ─────────────────────────────────────────────────────
@@ -408,9 +377,9 @@
         lit: true, windowCol: WINLIT,
       });
 
-      // ── STREET LAMP POSTS (both sides, ~every 35–40m) ────────────────────
-      for (let i = 0; i < 36; i++) {
-        const s = i / 36;
+      // ── STREET LAMP POSTS (~every 55m, staggered) ────────────────────────
+      for (let i = 0; i < 24; i++) {
+        const s = i / 24;
         const k = K(s);
         const side = (i % 2 === 0) ? 1 : -1;
         if (s > 0.50 && s < 0.60) continue; // skip tunnel interior
@@ -419,19 +388,17 @@
         const b = [aL.r, aL.u, aL.t];
         addCyl(out, aL.c, 0.09, 6.5, [0.68, 0.70, 0.72], 5, b);
         addCyl(out, vadd(aL.c, aL.u, 6.3), 0.65, 0.22, LAMP, 7, b);
-        addBox(out, vadd(aL.c, aL.u, 0.1), [1.6, 0.06, 1.6], [0.92, 0.88, 0.72], b);
       }
 
-      // Harbour-side lamp posts along the quay
-      for (let i = 0; i < 14; i++) {
-        const s = 0.585 + i * 0.029;
+      // Harbour-side lamp posts along the quay (sparser)
+      for (let i = 0; i < 8; i++) {
+        const s = 0.585 + i * 0.05;
         const k = K(s);
         const aQ = anchor(k, -1, 2.4);
         if (onTrack(aQ.c[0], aQ.c[2], 1.2)) continue;
         const bQ = [aQ.r, aQ.u, aQ.t];
         addCyl(out, aQ.c, 0.09, 5.8, [0.70, 0.72, 0.74], 5, bQ);
         addCyl(out, vadd(aQ.c, aQ.u, 5.6), 0.55, 0.20, LAMP, 7, bQ);
-        addBox(out, vadd(aQ.c, aQ.u, 0.1), [1.4, 0.06, 1.4], [0.90, 0.86, 0.68], bQ);
       }
 
       // ── PIT WALL & START GRANDSTAND (s=0.03, R) ──────────────────────────
