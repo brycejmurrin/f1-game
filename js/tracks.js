@@ -833,19 +833,30 @@ const Tracks = (function () {
         // Reach to the farthest footprint point: an oriented box can extend to its
         // half-DIAGONAL, not just max(hx,hz), so the prefilter must use the diagonal
         // or it will skip road nodes a large rotated box actually covers.
-        const reach = (rad > 0 ? rad : Math.hypot(hx, hz)) + w + 2;
+        // Far reject: the Minkowski test below expands the footprint by w on each
+        // axis, so the prefilter reach must use the EXPANDED half-extents (a thin
+        // box's hit corner can sit at hypot(hx+w, hz+w) from centre).
+        const reach = (rad > 0 ? rad + w : Math.hypot(hx + w, hz + w)) + 2;
         if (dxc * dxc + dzc * dzc > reach * reach) continue;   // cheap far reject
-        const rkx = track.rx[k], rkz = track.rz[k];
-        // sample five points across the road width and test containment
-        for (let s = -2; s <= 2; s++) {
-          const o = (s / 2) * w * 0.98;
-          const ex = px[k] + rkx * o - cx, ez = pz[k] + rkz * o - cz;
-          if (rad > 0) {
-            if (ex * ex + ez * ez <= rad * rad) return true;
-          } else {
-            const a = Math.abs(ex * arx + ez * arz), b = Math.abs(ex * afx + ez * afz);
-            if (a <= hx && b <= hz) return true;
-          }
+        // Minkowski test: expand the footprint by the road half-width `w` and ask
+        // whether the road CENTRE-line node falls inside it. This catches a prop
+        // overhanging the tarmac even when the prop is THIN and oblique — e.g. a
+        // tall building's narrow side face (0.5 m across) that sweeps over a
+        // CURVING stretch of track. The previous version sampled five points
+        // ACROSS the road and tested point-in-box; a 0.5 m-wide slab crossing the
+        // road between those samples slipped through and walled the track off at
+        // corners (Miami back-straight cityFront, etc.). Expanding the box by the
+        // road radius and testing the single centre point is exact for that case
+        // and cheaper (one test per node instead of five).
+        const ex = px[k] - cx, ez = pz[k] - cz;
+        if (rad > 0) {
+          // circle footprint vs road capsule of radius w
+          const rr = rad + w;
+          if (ex * ex + ez * ez <= rr * rr) return true;
+        } else {
+          // oriented rectangle expanded by w on each axis
+          const a = Math.abs(ex * arx + ez * arz), b = Math.abs(ex * afx + ez * afz);
+          if (a <= hx + w && b <= hz + w) return true;
         }
       }
       return false;
