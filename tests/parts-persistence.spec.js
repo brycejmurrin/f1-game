@@ -151,7 +151,7 @@ test.describe("Parts persistence — survives page reload", () => {
 
     // Select race engine (160cr)
     const engineSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "ENGINE" }) });
-    await engineSection.locator(".cs-chip", { hasText: /^Race$/ }).click();
+    await engineSection.locator(".cs-chip", { hasText: "Race" }).first().click();
     await page.waitForTimeout(300);
 
     await page.reload();

@@ -176,6 +176,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   background: rgba(6, 6, 10, 0.92);
   padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal));
   overflow-y: auto;
+  touch-action: pan-y;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -238,7 +239,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   #sel-preview-elev { height: 22px; margin-top: 4px; }
   #sel-preview-facts { justify-content: flex-start; }
   /* Track list scrolls independently so it's visible without scrolling the whole panel */
-  #sel-tracks { max-height: 220px; overflow-y: auto; }
+  #sel-tracks { max-height: 220px; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 }
 
 /* ---------- track picker: compact text rows (no per-item mini-maps) ---------- */
@@ -329,6 +330,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   position: fixed; inset: 0; z-index: 35;
   background: rgba(6,6,10,0.97);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   display: flex; align-items: flex-start; justify-content: center;
   padding: calc(var(--sat) + 16px) calc(var(--sar) + 16px) calc(var(--sab) + 16px) calc(var(--sal) + 16px);
 }
@@ -383,21 +385,45 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .cs-stat-val.up { color: #4df; }
 .cs-stat-val.down { color: #f90; }
 
-/* four category cards in a 2×2 grid */
+/* Category strips — single column, each strip: label | chips row */
 #cs-body {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .cs-cat-section {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 12px; padding: 16px 18px;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  grid-template-areas: "cat chips" "desc desc";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 0;
 }
-.cs-cat { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--red); margin-bottom: 4px; }
-.cs-desc { font-size: 11px; color: var(--dim); min-height: 24px; margin-bottom: 10px; line-height: 1.4; }
-.cs-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.cs-cat {
+  grid-area: cat;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--red);
+  align-self: center;
+}
+.cs-desc {
+  grid-area: desc;
+  font-size: 10px; color: var(--dim); line-height: 1.3;
+  padding-top: 5px;
+}
+.cs-desc:empty { padding-top: 0; }
+.cs-chips {
+  grid-area: chips;
+  display: flex; flex-wrap: nowrap;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  gap: 6px;
+  scrollbar-width: none;
+  padding-bottom: 1px;
+}
+.cs-chips::-webkit-scrollbar { display: none; }
 .cs-chips .cs-chip {
-  display: inline-block; width: auto; margin: 0;
-  flex: 0 0 auto; font-size: 13px; padding: 8px 14px;
+  flex: 0 0 auto; font-size: 12px; padding: 6px 11px;
   border-radius: 7px; white-space: nowrap;
 }
 .cs-chips .cs-chip.active {
@@ -457,10 +483,10 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   border-color: rgba(0,204,136,0.4);
 }
 
-/* portrait: single-column body, single-column stats */
+/* portrait / narrow: single-column stats, narrower label col */
 @media (max-width: 600px) {
-  #cs-body { grid-template-columns: 1fr; }
   #cs-stats-inner { grid-template-columns: 1fr; }
+  .cs-cat-section { grid-template-columns: 60px 1fr; }
 }
 
 /* car setup: sticky DONE button so it's always reachable without scrolling to end */
@@ -478,9 +504,8 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 /* short landscape (phones): tighten spacing */
 @media (orientation: landscape) and (max-height: 520px) {
   #carsetup { padding-top: calc(var(--sat) + 8px); }
-  #cs-inner { gap: 12px; }
-  .cs-cat-section { padding: 10px 14px; }
-  .cs-desc { min-height: 0; margin-bottom: 6px; }
+  #cs-inner { gap: 10px; }
+  .cs-cat-section { padding: 8px 12px; row-gap: 0; }
 }
 
 /* ---------- HUD ---------- */
