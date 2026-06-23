@@ -122,10 +122,20 @@
           const a = i / skyN * 6.2832, h = hash(i * 11 + 17), h2 = hash(i * 23 + 5);
           const mx = cx + Math.cos(a) * sky, mz = cz + Math.sin(a) * sky;
           if (onTrack(mx, mz, 80)) continue;
-          const bh = 50 + h * 130;
-          addBox(out, [mx, pyMin + bh / 2, mz], [34 + h2 * 30, bh, 34 + h2 * 26], [0.14, 0.13, 0.16]);
-          // lit crown band so the far skyline twinkles
-          addBox(out, [mx, pyMin + bh - 4, mz], [36 + h2 * 30, 5, 36 + h2 * 26], NEON[i % NEON.length]);
+          const bh = 50 + h * 130, bw = 34 + h2 * 30, bd = 34 + h2 * 26;
+          // Tower body lifted off pure black (city ambient/neon spill) so it
+          // reads as a lit highrise, not a black plane.
+          addBox(out, [mx, pyMin + bh / 2, mz], [bw, bh, bd], [0.20, 0.18, 0.26]);
+          // Stacked lit window bands up the whole tower so it glows, not just a
+          // crown — the floors twinkle like a real night skyline.
+          const floors = Math.max(4, Math.round(bh / 12));
+          const fh = bh / floors;
+          const neon = NEON[i % NEON.length];
+          for (let f = 1; f < floors; f++) {
+            const wc = hash(i * 7 + f * 3) < 0.4 ? [0.06, 0.06, 0.09] : neon;
+            addBox(out, [mx, pyMin + (f + 0.5) * fh, mz], [bw * 1.02, fh * 0.5, bd * 1.02], wc);
+          }
+          addBox(out, [mx, pyMin + bh - 3, mz], [bw * 1.03, 5, bd * 1.03], neon);   // bright crown
         }
       }
 
