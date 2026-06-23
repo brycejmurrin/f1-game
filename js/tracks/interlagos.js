@@ -33,6 +33,9 @@
       // Tropical palette constants
       const GREEN  = [0.20, 0.44, 0.20];
       const GREEN2 = [0.24, 0.48, 0.22];
+      // Hill green for backdrop mounds
+      const HILL   = [0.22, 0.46, 0.20];
+      const HILL2  = [0.26, 0.52, 0.22];
       // Lit-window yellow (simulates emissive glow; bright warm amber)
       const LIT_WIN = [0.98, 0.90, 0.38];
       // Dim lamp-head colour (warm white)
@@ -116,7 +119,6 @@
       marshalPost(K(0.085), -1, 8);
 
       // Hero downhill plunge: LUSH tropical greenery framing the Senna S
-      // Use forestEdge to guarantee no clipping through barriers
       forestEdge(0.04, 0.10,  1, 16, { density: 0.6, hMin: 9, hMax: 15,
                                         col: [0.18, 0.42, 0.18], col2: [0.24, 0.48, 0.24], pineFrac: 0.4 });
       forestEdge(0.04, 0.10, -1, 22, { density: 0.4, hMin: 10, hMax: 16,
@@ -130,76 +132,106 @@
 
       // ===================================================================
       // FAVELA HILLSIDE (s≈0.10–0.30, L far)
-      // Colourful stacked houses on the hillside — São Paulo's favelas
-      // anchored individually so each sits on its own terrain height.
-      // Houses are pushed further back (120m+) so they clear the track/barriers.
-      // A forestEdge screens the near ground so boxes don't float visibly.
+      //
+      // Real Interlagos geography: the hillside favela (Paraisópolis / nearby
+      // communities) climbs the green ridge on the L side. Two depth layers:
+      //   1. backdrop() GREEN mounds → organic rounded hill silhouette (no boxy slabs)
+      //   2. building() clusters at 50–120 m in vivid tropical colours, anchored
+      //      per-building so each sits on the sloped terrain — no floating.
+      //
+      // The forestEdge near-screens the base so any slight floating is masked by
+      // the treeline canopy. Houses are NOT floated via raw addBox/addPrism;
+      // building() uses groundYAt() internally so each is properly grounded.
       // ===================================================================
-      const favCol = [
-        [0.88, 0.32, 0.28], [0.96, 0.80, 0.22], [0.28, 0.58, 0.84],
-        [0.92, 0.92, 0.88], [0.62, 0.74, 0.50], [0.88, 0.44, 0.32],
-        [0.94, 0.64, 0.28], [0.38, 0.64, 0.64], [0.82, 0.28, 0.38],
-        [0.86, 0.38, 0.60], [0.80, 0.72, 0.24], [0.44, 0.58, 0.78],
-      ];
 
-      // Dense treeline screens the favela base so boxes sitting on slope are masked
-      forestEdge(0.10, 0.32, -1, 30, { density: 0.75, hMin: 8, hMax: 14,
-                                        col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.3 });
-
-      // Favela houses: clustered in groups, each individually anchored to terrain
-      every(28, (k) => {
-        const side = -1;
-        // Focus density around the middle of the hillside stretch
-        const near = Math.min((k - K(0.18)) + n, (K(0.18) - k + n)) % n < n * 0.10;
-        if (!near && hash(k * 61) > 0.60) return;
-
-        const cols = (near ? 3 : 2) + Math.floor(hash(k * 62) * 2);
-        for (let col = 0; col < cols; col++) {
-          // Push all houses further back: 120m minimum so they clear barriers
-          const baseDist = 120 + col * 24 + hash(k * 63 + col) * 20;
-          const rows = 2 + Math.floor(hash(k * 71 + col) * 2);
-          for (let row = 0; row < rows; row++) {
-            const d = baseDist + row * 16 + hash(k * 72 + col + row * 7) * 10;
-            const p = anchor(k, side, d);
-            if (onTrack(p.c[0], p.c[2], 9)) continue;
-            const hw = 7  + hash(k * 66 + col + row) * 4;
-            const hh = 5  + hash(k * 64 + col + row) * 4;
-            const hd = hw + hash(k * 67 + col + row) * 2;
-            const colIdx = Math.floor(hash(k * 65 + col + row) * 12) % 12;
-            // House body — centre is hh/2 above the terrain at this exact point
-            const centre = vadd(p.c, p.u, hh / 2);
-            addBox(out, centre, [hw, hh, hd], favCol[colIdx], [p.r, p.u, p.t]);
-            // Lit window bands (warm amber — read as emissive at dusk/night)
-            const winH = 0.9;
-            const winW = hw * 0.82;
-            const winD = hd * 1.01;
-            if (hh > 6) {
-              const winC = [0.98, 0.88 + hash(k * 68 + col + row) * 0.08, 0.28];
-              addBox(out, vadd(centre, p.u, hh * 0.26), [winW, winH, winD], winC, [p.r, p.u, p.t]);
-            }
-            // Terracotta-orange A-frame roof prism
-            addPrism(out,
-              vadd(p.c, p.u, hh),
-              [hw * 1.06, hh * 0.25, hd * 1.04],
-              [0.76, 0.38, 0.22],
-              [p.r, p.u, p.t]);
-          }
+      // ---- Layer 0: Green wooded hillside backdrop (rounded mounds, NOT flat slabs) ----
+      // backdrop() auto-detects GREEN dominant → renders as rounded organic hill
+      every(30, (k) => {
+        // Only L side (side=-1) for the favela hillside
+        const inFavela = (() => {
+          // nodes that lie between s=0.08 and s=0.32
+          const k0 = K(0.08), k1 = K(0.32);
+          const span = ((k1 - k0) + n) % n;
+          const off  = ((k  - k0) + n) % n;
+          return off <= span;
+        })();
+        if (!inFavela) return;
+        const hv = hash(k * 17 + 3);
+        // Two distance bands: near ridge (~90 m) and far ridge (~160 m)
+        backdrop(k, -1, 90 + hv * 30, [120, 28 + hv * 18, 80], HILL);
+        if (hash(k * 23 + 5) > 0.4) {
+          backdrop(k, -1, 150 + hash(k * 29) * 40, [140, 22 + hash(k * 31) * 16, 90], HILL2);
         }
       });
 
-      // ---- Favela hillside: taller landmark buildings (s=0.12–0.30) ----
-      // These act as "anchor" accent buildings on the favela hill;
-      // placed at 145–200m clearance so they don't clip the track
-      const FAV_COLS = [
-        [0.84, 0.42, 0.36], [0.36, 0.64, 0.82], [0.88, 0.76, 0.28],
-        [0.82, 0.32, 0.40], [0.92, 0.56, 0.22], [0.32, 0.50, 0.80],
+      // ---- Layer 1: Near treeline screens the favela base ----
+      forestEdge(0.10, 0.32, -1, 30, { density: 0.75, hMin: 8, hMax: 14,
+                                        col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.3 });
+
+      // ---- Layer 2: Favela buildings — building() is properly grounded ----
+      // Vivid tropical palette: terracotta, warm yellow, faded teal, ochre, pink
+      const FAV_WALL = [
+        [0.88, 0.42, 0.30],   // terracotta-red
+        [0.92, 0.78, 0.28],   // warm yellow
+        [0.78, 0.62, 0.48],   // clay tan
+        [0.86, 0.46, 0.34],   // warm orange
+        [0.70, 0.74, 0.54],   // faded sage green
+        [0.90, 0.62, 0.30],   // amber ochre
+        [0.82, 0.46, 0.56],   // dusty rose
+        [0.74, 0.68, 0.54],   // light khaki
+        [0.84, 0.34, 0.30],   // coral red
+        [0.96, 0.84, 0.34],   // sunflower yellow
+        [0.78, 0.56, 0.38],   // warm sand
+        [0.68, 0.78, 0.52],   // tropical light-green
+      ];
+      // Compact near-row: 50–90 m (visible above forestEdge canopy)
+      every(26, (k) => {
+        const inFavela = (() => {
+          const k0 = K(0.10), k1 = K(0.30);
+          const span = ((k1 - k0) + n) % n;
+          const off  = ((k  - k0) + n) % n;
+          return off <= span;
+        })();
+        if (!inFavela) return;
+        if (hash(k * 61) > 0.75) return;   // ~75% coverage → natural gaps
+
+        const colIdx = Math.floor(hash(k * 65) * FAV_WALL.length) % FAV_WALL.length;
+        const col2   = Math.floor(hash(k * 67) * FAV_WALL.length) % FAV_WALL.length;
+        const dist1  = 50 + hash(k * 63) * 28;
+        const dist2  = dist1 + 22 + hash(k * 71) * 18;
+        const h1     =  6 + hash(k * 64) * 5;
+        const h2     =  5 + hash(k * 66) * 5;
+        const w1     = 10 + hash(k * 68) * 6;
+        const w2     =  9 + hash(k * 70) * 5;
+
+        // Near house
+        building(k, -1, dist1, w1, h1, w1 * 0.80,
+          { wall: FAV_WALL[colIdx], window: LIT_WIN, floor: 2.6, lit: false });
+        // Far house (slightly behind, different colour)
+        if (!onTrack(anchor(k, -1, dist2 + w2 / 2).c[0],
+                     anchor(k, -1, dist2 + w2 / 2).c[2], w2 / 2)) {
+          building(k, -1, dist2, w2, h2, w2 * 0.85,
+            { wall: FAV_WALL[col2], window: LIT_WIN, floor: 2.4, lit: false });
+        }
+      });
+
+      // ---- Favela accent: a few taller landmark buildings on the hillcrest ----
+      // Use building() with warm colours so they look like real Brazilian buildings,
+      // not dark silhouette boxes. Spaced so they don't crowd.
+      const LAND_COLS = [
+        [0.84, 0.44, 0.36],   // warm terracotta
+        [0.90, 0.76, 0.32],   // ochre yellow
+        [0.78, 0.56, 0.40],   // tan/clay
+        [0.88, 0.50, 0.28],   // orange
+        [0.76, 0.68, 0.46],   // khaki
+        [0.86, 0.38, 0.44],   // rose
       ];
       for (let i = 0; i < 6; i++) {
-        const s = 0.12 + (i / 6) * 0.18;
-        const dist = 145 + i * 10;
-        const bh = 12 + hash(K(s) * 11 + i) * 14;
+        const s    = 0.12 + (i / 6) * 0.18;
+        const dist = 110 + i * 12;
+        const bh   = 14 + hash(K(s) * 11 + i) * 12;
         building(K(s), -1, dist, 14, bh, 14,
-          { wall: FAV_COLS[i % 6], window: LIT_WIN, floor: 2.8, lit: true });
+          { wall: LAND_COLS[i % 6], window: LIT_WIN, floor: 3.0, lit: false });
       }
 
       // ===================================================================
@@ -270,32 +302,26 @@
         floor: 7,
       });
 
-      // ---- Distant city envelope on the horizon (ring of far silhouette towers) ----
-      // Compute track centroid for the ring anchor
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-
-      // Far-haze horizon ring — haze-toned silhouette towers, 30–60 m heights
-      const ring = rad + 320;
-      for (let i = 0; i < 36; i++) {
-        const a = i / 36 * 6.2832, h = hash(i * 7 + 280);
-        const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
-        if (onTrack(x, z, 10)) continue;
-        const u = [0, 1, 0];
-        const r = [Math.cos(a + 1.5708), 0, Math.sin(a + 1.5708)];
-        const f = [Math.cos(a), 0, Math.sin(a)];
-        const ht = 28 + h * 44, w = 18 + hash(i * 11 + 280) * 14;
-        // Warm grey + slight atmospheric blue-purple haze
-        const base = 0.46 + hash(i * 13 + 280) * 0.08;
-        addBox(out, [x, pyMin + ht / 2, z], [w, ht, w * 0.7],
-               [base, base * 1.00, base * 1.05], [r, u, f]);
-        // Lit window band on each distant building
-        addBox(out, [x, pyMin + ht * 0.60, z], [w * 1.01, ht * 0.05, w * 0.71],
-               LIT_WIN, [r, u, f]);
-      }
+      // ---- Distant SP city silhouette using backdrop() — auto-renders as building with window bands ----
+      // Replaces the old raw addBox horizon ring that looked like floating grey cubes.
+      // backdrop() checks isBld (sz[1]>26 && sz[1]>sz[2]) → adds window bands + parapet.
+      every(36, (k) => {
+        // Only around the R side skyline section (s≈0.40–0.85)
+        const inSky = (() => {
+          const k0 = K(0.40), k1 = K(0.85);
+          const span = ((k1 - k0) + n) % n;
+          const off  = ((k  - k0) + n) % n;
+          return off <= span;
+        })();
+        if (!inSky) return;
+        const hv  = hash(k * 7 + 280);
+        const d   = 300 + hv * 120;
+        const ht  = 32 + hv * 50;
+        const w   = 22 + hash(k * 11 + 280) * 18;
+        const base = 0.46 + hash(k * 13 + 280) * 0.08;
+        // backdrop() with sz[1]>sz[2] triggers isBld → window bands + parapet
+        backdrop(k, 1, d, [w, ht, w * 0.60], [base, base, base * 1.06]);
+      });
 
       // ===================================================================
       // FERRADURA / INFIELD ESSES (s=0.70, L mid): tyre walls + grandstand + trees
@@ -347,18 +373,35 @@
       }
 
       // ===================================================================
-      // GREEN HILLS ringing the park (between track & city backdrop)
-      // Wide low wooded ridges set behind favela/tower bands — green ridgeline
-      // for depth layering.
+      // GREEN HILLS — wooded ridges ringing the park
+      // backdrop() with GREEN dominant auto-renders as rounded organic mounds.
+      // Placed every ~30 m around the track perimeter (skipping favela / skyline
+      // sections which have their own depth layers).
       // ===================================================================
-      for (let i = 0; i < 28; i++) {
-        const a = i / 28 * 6.2832, h = hash(i * 17 + 3);
-        const rng = rad + 260 + h * 100;
-        const x = cx + Math.cos(a) * rng, z = cz + Math.sin(a) * rng;
-        if (onTrack(x, z, 12)) continue;
-        ridge(x, z, pyMin, a + 1.5708, 240 + h * 140, 160 + h * 80, 34 + h * 28,
-              [0.22, 0.43 + h * 0.07, 0.23]);
-      }
+      every(30, (k) => {
+        // Skip the favela hillside (L, s=0.08–0.32) and the SP skyline (R, s=0.40–0.85)
+        // — those sections have dedicated scenery; don't double-up.
+        const inFavela = (() => {
+          const k0 = K(0.08), k1 = K(0.32);
+          const span = ((k1 - k0) + n) % n;
+          return ((k - k0 + n) % n) <= span;
+        })();
+        const inSky = (() => {
+          const k0 = K(0.40), k1 = K(0.85);
+          const span = ((k1 - k0) + n) % n;
+          return ((k - k0 + n) % n) <= span;
+        })();
+        if (inFavela || inSky) return;
+
+        const hv = hash(k * 17 + 91);
+        for (const side of [-1, 1]) {
+          if (hash(k * 23 + side * 7) > 0.70) continue;   // ~70% fill → natural gaps
+          const d = 80 + hv * 60;
+          const sz1 = 100 + hash(k * 31 + side) * 80;
+          const ht1 = 18 + hash(k * 37 + side) * 22;
+          backdrop(k, side, d, [sz1, ht1, sz1 * 0.55], HILL);
+        }
+      });
 
       // ===================================================================
       // PERVASIVE TROPICAL-GREEN VEGETATION around the lap

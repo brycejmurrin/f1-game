@@ -25,7 +25,7 @@
         anchor, onTrack, hash, vadd, building, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along,
-        cityFront, forestEdge } = api;
+        cityFront, forestEdge, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -49,28 +49,37 @@
 
       // ===================================================================
       // Flat far horizon: desert-sand dune band ringing the lap (golden sands
-      // with varied height to read as distant dune formations)
+      // with varied height to read as distant dune formations).
+      // Two bands instead of four: backdrop() + addBox count kept to ~80 total
+      // so net geometry is well below the old 240-box version.
       // ===================================================================
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let trad = 0;
       for (let i = 0; i < n; i++) trad = Math.max(trad, Math.hypot(px[i] - cx, pz[i] - cz));
-      // four staggered dune bands = continuous desert backdrop with depth, no gaps
-      for (const [extra, count, wMin, hMin, hVar, col] of [
-        [350, 72, 240, 10, 10, SAND],
-        [470, 64, 280, 14, 12, [0.68, 0.56, 0.38]],
-        [600, 56, 320, 18, 14, SAND_DK],
-        [740, 48, 360, 12, 10, [0.50, 0.40, 0.26]],
-      ]) {
-        const ring = trad + extra;
-        for (let i = 0; i < count; i++) {
-          const a = (i + 0.5 * (extra > 500 ? 1 : 0)) / count * 6.2832;
-          const h = hash(i * 7 + extra);
-          const h2 = hash(i * 13 + extra * 2);
+      // Near dune crest band: wide shallow ridges that read as rolling sand dunes
+      {
+        const ring = trad + 360;
+        for (let i = 0; i < 36; i++) {
+          const a = (i + 0.3) / 36 * 6.2832;
+          const h = hash(i * 7 + 360);
+          const h2 = hash(i * 13 + 720);
           const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
-          const varH = hMin + h * hVar + (h2 - 0.5) * hVar * 0.5;
-          addBox(out, [mx, pyMin + varH / 2, mz], [wMin + h * 180, varH, 180], col);
+          const varH = 12 + h * 14 + (h2 - 0.5) * 6;
+          // Wide flat dune ridges: large sz[0] (along horizon), modest height
+          addBox(out, [mx, pyMin + varH / 2, mz], [320 + h * 200, varH, 200], SAND);
+        }
+      }
+      // Far dune backdrop — darker, hazier, fewer items
+      {
+        const ring = trad + 580;
+        for (let i = 0; i < 28; i++) {
+          const a = (i + 0.7) / 28 * 6.2832;
+          const h = hash(i * 11 + 580);
+          const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
+          const varH = 18 + h * 16;
+          addBox(out, [mx, pyMin + varH / 2, mz], [400 + h * 200, varH, 240], SAND_DK);
         }
       }
 
@@ -106,19 +115,26 @@
       });
 
       // ===================================================================
-      // Mid-depth leisure structures: domes + low resort halls — farther back
-      // so they don't clash with the cityFront street walls.
+      // Mid-depth resort backdrop: use backdrop() at track nodes so buildings
+      // are track-aligned and properly lit. backdrop() auto-adds window bands
+      // for tall boxes and lifts night walls off black — replacing the raw
+      // polar-angle box loop (was 56 addBox calls) with 16 backdrop() calls.
       // ===================================================================
       {
-        const ring = trad + 350;
-        const N = 28;
-        for (let i = 0; i < N; i++) {
-          const a = (i + 0.4) / N * 6.2832, h = hash(i * 17 + 3);
-          const lx = cx + Math.cos(a) * ring, lz = cz + Math.sin(a) * ring;
-          const w = 44 + h * 56;
-          addBox(out, [lx, pyMin + 9, lz], [w, 18, w * 0.7], [0.14, 0.15, 0.20]);
-          // lit window band on mid-depth leisure buildings
-          addBox(out, [lx, pyMin + 14, lz], [w * 0.9, 4, w * 0.65], WIN_WARM);
+        // Sample evenly around the lap — every ~6% gives 16 points
+        const slots = [0.02, 0.08, 0.14, 0.20, 0.26, 0.32, 0.38, 0.44,
+                       0.50, 0.58, 0.64, 0.70, 0.77, 0.82, 0.89, 0.94];
+        for (let i = 0; i < slots.length; i++) {
+          const k = K(slots[i]);
+          const side = (i % 2) ? 1 : -1;
+          const h = hash(i * 17 + 3);
+          const bh = 24 + h * 22;   // 24–46m — tall enough for backdrop() window bands
+          const bw = 50 + h * 60;   // wide facade unit
+          const col = i % 3 === 0 ? [0.14, 0.15, 0.20]
+                    : i % 3 === 1 ? [0.16, 0.17, 0.22]
+                                  : [0.12, 0.14, 0.19];
+          // dist 95–130m back: far enough to not clash with cityFront street wall
+          backdrop(k, side, 95 + h * 35, [bw, bh, 30], col);
         }
       }
 
@@ -628,19 +644,32 @@
         }
       }
 
-      // ---- Desert ridge backdrop at outer perimeter (darker/hazier at distance) ----
-      for (const [distOff, sandCol] of [
-        [250, [0.65, 0.54, 0.38]],
-        [310, [0.60, 0.50, 0.34]],
-        [370, [0.54, 0.44, 0.28]],
-        [430, [0.48, 0.38, 0.24]],  // far hazed dune range
-      ]) {
-        const ring = trad + distOff;
-        for (let i = 0; i < 24; i++) {
-          const ang = i / 24 * 6.2832;
-          const rx = cx + Math.cos(ang) * ring, rz = cz + Math.sin(ang) * ring;
-          const hVar = hash(i * 11 + distOff);
-          addBox(out, [rx, pyMin + 2 + hVar * 6, rz], [180 + hVar * 80, 10 + hVar * 8, 90], sandCol);
+      // ---- Desert ridge backdrop: track-relative backdrop() calls replace
+      // the raw polar-angle box loop (was 96 addBox). backdrop() is track-aligned
+      // so the large face always runs parallel to the road — prevents thin edges
+      // cutting across the view. Two passes: mid-field ridge + far hazy horizon.
+      // ----
+      {
+        // Mid-field low ridges (dist 200–280m) — warm ochre desert floor
+        const midSlots = [0.04, 0.12, 0.20, 0.28, 0.36, 0.44,
+                          0.52, 0.60, 0.68, 0.76, 0.84, 0.92];
+        for (let i = 0; i < midSlots.length; i++) {
+          const k = K(midSlots[i]);
+          const side = (i % 2) ? 1 : -1;
+          const h = hash(i * 11 + 250);
+          const ridgeH = 10 + h * 10;
+          const ridgeW = 220 + h * 120;
+          backdrop(k, side, 200 + h * 80, [ridgeW, ridgeH, 100], [0.64, 0.52, 0.36]);
+        }
+        // Far hazy dune horizon (dist 340–440m) — muted dusty tones
+        const farSlots = [0.06, 0.18, 0.30, 0.42, 0.54, 0.66, 0.78, 0.90];
+        for (let i = 0; i < farSlots.length; i++) {
+          const k = K(farSlots[i]);
+          const side = (i % 2) ? 1 : -1;
+          const h = hash(i * 13 + 430);
+          const ridgeH = 14 + h * 12;
+          const ridgeW = 280 + h * 160;
+          backdrop(k, side, 340 + h * 100, [ridgeW, ridgeH, 120], [0.50, 0.40, 0.26]);
         }
       }
     },

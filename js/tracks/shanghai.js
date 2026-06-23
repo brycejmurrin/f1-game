@@ -257,35 +257,39 @@
       marshalPost(K(0.08), -1, 14);
 
       // ================= CONTINUOUS HAZY SHANGHAI SKYLINE (wraps whole lap) =================
-      // One unbroken band of haze-greyed modern buildings ringing the entire lap —
-      // varied heights, glass reflections, no gaps, receding into progressively hazier rows.
+      // backdrop() auto-detects tall buildings (sz[1]>26 && sz[1]>sz[2]) and adds
+      // window bands + parapet so the skyline reads as glass towers, not flat planes.
+      // Green-dominant colours render as organic mound silhouettes instead.
       (function skylineBand() {
-        let sx = 0, sz = 0;
-        for (let i = 0; i < n; i++) { sx += px[i]; sz += pz[i]; }
-        sx /= n; sz /= n;
-        let rd = 0;
-        for (let i = 0; i < n; i++) rd = Math.max(rd, Math.hypot(px[i] - sx, pz[i] - sz));
-        // Three concentric rings of tight-packed towers — front sharp, middle mixed, back hazed.
-        for (const [extra, cnt, hMin, hVar, col] of [
-          [210, 96, 36,  85, GLASS],
-          [290, 82, 42, 100, [0.68, 0.70, 0.73]],
-          [360, 70, 46, 110, SKY_HAZE],
-        ]) {
-          const ring = rd + extra;
-          for (let i = 0; i < cnt; i++) {
-            const a  = i / cnt * 6.2832;
-            const jx = (hash(i * 5 + extra) - 0.5) * 20;
-            const jz = (hash(i * 7 + extra) - 0.5) * 20;
-            const x  = sx + Math.cos(a) * ring + jx;
-            const z  = sz + Math.sin(a) * ring + jz;
-            const h  = hMin + hash(i * 11 + extra) * hVar;
-            const w  = 13   + hash(i * 13 + extra) * 14;
-            addBox(out, [x, pyMin + h / 2, z], [w, h, w], col, null);
-            // Emissive lit-window strip on every other tower (mid-height band)
-            if (hash(i * 19 + extra) > 0.55 && extra < 310) {
-              addBox(out, [x, pyMin + h * 0.62, z], [w * 1.02, h * 0.06, w * 1.02], WIN_TOWER, null);
-            }
-          }
+        // Middle ring: foreground glass towers, crisp and blue-grey.
+        for (let i = 0; i < 48; i++) {
+          const k = K(i / 48);
+          const side = (i % 2) ? 1 : -1;
+          const h = 40 + hash(i * 11) * 80;
+          const w = 18 + hash(i * 13) * 16;
+          backdrop(k, side, 190 + hash(i * 5) * 40,
+            [w, h, 22],
+            [GLASS[0] + hash(i * 3) * 0.08, GLASS[1] + hash(i * 7) * 0.06, GLASS[2] + hash(i * 9) * 0.05]);
+        }
+        // Back ring: hazier mid-rise blocks receding into the mist.
+        for (let i = 0; i < 40; i++) {
+          const k = K(i / 40 + 0.013);
+          const side = (i % 2) ? -1 : 1;
+          const h = 38 + hash(i * 17 + 290) * 72;
+          const w = 22 + hash(i * 19 + 290) * 20;
+          backdrop(k, side, 260 + hash(i * 23) * 50,
+            [w, h, 26],
+            [0.65 + hash(i * 5) * 0.08, 0.67 + hash(i * 7) * 0.06, 0.70 + hash(i * 9) * 0.05]);
+        }
+        // Far ring: sky-haze silhouettes almost absorbed by fog.
+        for (let i = 0; i < 32; i++) {
+          const k = K(i / 32 + 0.025);
+          const side = (i % 2) ? 1 : -1;
+          const h = 44 + hash(i * 23 + 360) * 90;
+          const w = 28 + hash(i * 29 + 360) * 24;
+          backdrop(k, side, 330 + hash(i * 31) * 60,
+            [w, h, 30],
+            [SKY_HAZE[0], SKY_HAZE[1], SKY_HAZE[2]]);
         }
       })();
 

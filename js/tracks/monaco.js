@@ -26,7 +26,7 @@
     // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.27, halfM: 340, rise: 18 }, { s: 0.55, halfM: 220, rise: -10 }],
     scenery: function (api) {
-      const { out, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront } = api;
+      const { out, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Colour palette ────────────────────────────────────────────────────
@@ -50,13 +50,6 @@
       wall(0.0, 1.0, -1, 0.4, 0.8, ARMCO, 0.22);
       wall(0.0, 0.48, 1, 0.4, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
-
-      // ── LOW STONE RETAINING BASES ─────────────────────────────────────────
-      // These fill the gap between armco and buildings so facades never float.
-      wall(0.0, 0.53,  -1, 5,  3.5, [0.62, 0.58, 0.50], 1.2);  // hillside climb base
-      wall(0.53, 0.98, -1, 5,  3.5, [0.62, 0.58, 0.50], 1.2);  // post-tunnel left base
-      wall(0.0,  0.53,  1, 5,  3.5, [0.66, 0.62, 0.54], 1.2);  // climb right base
-      wall(0.53, 0.98,  1, 5,  3.5, [0.66, 0.62, 0.54], 1.2);  // harbour right base
 
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
       // Left: stone buildings. Right: pit lane terrace + grandstand.
@@ -82,8 +75,8 @@
 
       // ── SECTOR 2 — BEAU RIVAGE HILLSIDE CLIMB (s=0.08→0.26) ─────────────
       // The hillside soars steeply on the LEFT (inland rock face). Dense cityFront
-      // close in, then a second tier set back 30m+ for the hillside blocks, then
-      // far towers at 60m+. RIGHT side is close apartment facades.
+      // close in, then green/rocky hillside backdrop mounds, then far towers.
+      // RIGHT side is close apartment facades.
       cityFront(0.08, 0.26, -1, 9, {
         minH: 20, maxH: 44, depth: 20, step: 20,
         palette: [CREAM, OCHRE, TERRA, DUSTY, SAGE],
@@ -94,21 +87,24 @@
         palette: [STONE, CREAM, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
       });
-      // Mid tier on LEFT — step back ~32m beyond first row (which is 9+~24=33m out),
-      // so gap=36 keeps a clean clearance with inner face at 36m from road edge.
-      cityFront(0.08, 0.24, -1, 36, {
-        minH: 28, maxH: 52, depth: 22, step: 26,
-        palette: [OCHRE, CREAM, DUSTY, TERRA],
-        lit: true, windowCol: WINLIT,
-      });
-      // Far towers on LEFT — set at 65m, well beyond mid-tier outer face (~36+26=62m).
+      // Rocky/green hillside above the buildings — backdrop() with green renders
+      // as organic rounded mounds, not boxy slabs. Three tiers for depth.
+      for (let i = 0; i < 9; i++) {
+        const k = K(0.09 + i * 0.019);
+        const hv = hash(k * 3.1 + 7);
+        backdrop(k, -1, 44 + hv * 16, [55 + hv * 25, 22 + hv * 18, 50],
+                 [0.20 + hv * 0.05, 0.42 + hv * 0.06, 0.22]);
+        backdrop(k, -1, 72 + hv * 20, [65 + hv * 30, 32 + hv * 22, 55],
+                 [0.16 + hv * 0.04, 0.34 + hv * 0.05, 0.18]);
+      }
+      // Far towers on LEFT — set at 80m+, clear of hillside mounds.
       for (const [sf, ht] of [[0.10, 60], [0.15, 68], [0.20, 56], [0.24, 72]]) {
         const k = K(sf);
-        const a = anchor(k, -1, 66 + hash(k * 5) * 12);
+        const tDist = 84 + hash(k * 5) * 14;
+        const a = anchor(k, -1, tDist);
         if (!onTrack(a.c[0], a.c[2], 10)) {
-          tower(k, -1, 66 + hash(k * 5) * 12, 14 + hash(k * 3) * 4, ht,
+          tower(k, -1, tDist, 14 + hash(k * 3) * 4, ht,
             { col: PASTELS[K(sf) % PASTELS.length], cap: true, capCol: [0.55, 0.58, 0.56], mast: 5 });
-          // lit tower band — emissive at dusk/night
           const bW = 14 + hash(k * 3) * 4;
           addBox(out, vadd(a.c, a.u, ht * 0.62), [bW * 1.15, ht * 0.14, bW * 1.15],
                  WINLIT, [a.r, a.u, a.t]);
@@ -169,6 +165,13 @@
         palette: [STONE, OCHRE, CREAM, DUSTY],
         lit: true, windowCol: WINLIT,
       });
+      // Rocky scrub above the Mirabeau buildings — green/grey hillside backdrop.
+      for (let i = 0; i < 7; i++) {
+        const k = K(0.28 + i * 0.02);
+        const hv = hash(k * 4.1 + 3);
+        backdrop(k, -1, 46 + hv * 18, [60 + hv * 30, 18 + hv * 14, 48],
+                 [0.22 + hv * 0.04, 0.40 + hv * 0.05, 0.24]);
+      }
 
       // ── PRINCE'S PALACE / ROCK OF MONACO ────────────────────────────────
       // Iconic cream fortress at s≈0.17, inland dist=110m. Inner face of each
@@ -250,19 +253,20 @@
 
       // ── SECTOR 5 — HARBOUR FRONT (s=0.585→0.98) ─────────────────────────
       // LEFT = harbour/sea. RIGHT = continuous inland apartment facades.
-      // Coherent pastel cityFront on the RIGHT (inland side) — main fix for the
-      // "scattered boxes on the harbour straight" problem. Dense & lit.
+      // Coherent pastel cityFront on the RIGHT (inland side).
       cityFront(0.585, 0.98, 1, 9, {
-        minH: 18, maxH: 38, depth: 20, step: 20,
+        minH: 18, maxH: 38, depth: 20, step: 22,
         palette: [CREAM, DUSTY, OCHRE, TERRA, STONE, SAGE],
         lit: true, windowCol: WINLIT,
       });
-      // Second tier inland — gap=36 keeps clear of first row outer face (~9+~24=33m)
-      cityFront(0.59, 0.97, 1, 38, {
-        minH: 26, maxH: 50, depth: 22, step: 28,
-        palette: [OCHRE, CREAM, TERRA, DUSTY],
-        lit: true, windowCol: WINLIT,
-      });
+      // Far backdrop towers behind harbour apartments — use backdrop() for these
+      // distant landmarks so we get window-banded towers without full cityFront overdraw.
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.60 + i * 0.048);
+        const hv = hash(k * 2.9 + i);
+        const h = 36 + hv * 32;
+        backdrop(k, 1, 46 + hv * 18, [20 + hv * 12, h, 18], PASTELS[(i * 3) % PASTELS.length]);
+      }
 
       // ── HARBOUR WATER & QUAY ─────────────────────────────────────────────
       const SEA = [0.10, 0.34, 0.55], SEA2 = [0.13, 0.40, 0.60];
@@ -384,11 +388,12 @@
       }
 
       // ── RASCASSE / PADDOCK (s=0.87→0.95, R) ─────────────────────────────
-      for (let i = 0; i < 4; i++) {
-        const k = K(0.87 + i * 0.02);
-        place(k, 1, 14, [12, 7, 16], CREAM);
-        place(k, 1, 14, [12.3, 1.5, 16.3], TERRA);
-      }
+      // Low paddock hospitality buildings — proper massing, not flat boxes.
+      cityFront(0.87, 0.95, 1, 9, {
+        minH: 10, maxH: 18, depth: 14, step: 24,
+        palette: [CREAM, STONE, DUSTY, OCHRE],
+        lit: true, windowCol: WINLIT,
+      });
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
       // ── SECTOR 6 — RETURN / ANTONY NOGHES (s=0.95→1.00) ─────────────────

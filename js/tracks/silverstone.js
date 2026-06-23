@@ -25,7 +25,7 @@
       const { out, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash,
               grandstand, building, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along,
-              tower } = api;
+              tower, forestEdge } = api;
       const k = (s) => Math.round(s * n) % n;
 
       // ---- Palette (English-countryside green / overcast) ----
@@ -93,30 +93,20 @@
       hedge(0.24, 0.34, -1, 160, 2.2, COPSE2);
 
       // ---- Oak copses (Chapel/Cheese Copse, s≈0.15 L; scattered elsewhere) ----
-      const copse = (s, side, dist) => {
-        for (let j = 0; j < 5; j++) {
-          const kk = (k(s) + j) % n;
-          tree(kk, side, dist + hash(kk * 3 + j) * 16, 9 + hash(kk * 5 + j) * 5, COPSE);
-        }
-        bush(k(s), side, dist - 4, COPSE);
-      };
-      copse(0.15, -1, 90);
-      copse(0.62,  1, 75);
-      copse(0.70, -1, 70);
-      copse(0.24,  1, 110);
-      copse(0.45, -1, 100);
-      copse(0.78,  1, 95);
-      copse(0.90, -1, 85);
-      copse(0.35,  1, 120);   // Stowe outfield copse
-      copse(0.58, -1, 110);   // Abbey infield copse
-      // scattered oaks around the airfield perimeter
-      every(95, (kk) => {
-        for (const side of [-1, 1]) {
-          if (hash(kk * 21 + side) > 0.62) continue;
-          tree(kk, side, 55 + hash(kk * 22 + side) * 75, 8 + hash(kk * 24 + side) * 5, COPSE);
-          if (hash(kk * 31 + side) > 0.7) bush(kk, side, 48 + hash(kk * 33 + side) * 20, COPSE);
-        }
-      });
+      // Named Silverstone copses — dense broadleaf patches using forestEdge for
+      // canopy-safe placement. gap = outer clearance; forestEdge adds canopy radius.
+      forestEdge(0.14, 0.17, -1, 84, { density: 0.8, hMin: 9, hMax: 14, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Chapel/Cheese Copse
+      forestEdge(0.61, 0.64,  1, 69, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Abbey-side copse
+      forestEdge(0.69, 0.71, -1, 64, { density: 0.8, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Loop infield copse
+      forestEdge(0.23, 0.26,  1, 104,{ density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Maggotts outfield
+      forestEdge(0.44, 0.47, -1, 94, { density: 0.7, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Stowe far side
+      forestEdge(0.77, 0.80,  1, 89, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Brooklands outer
+      forestEdge(0.89, 0.92, -1, 79, { density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Woodcote area
+      forestEdge(0.34, 0.36,  1, 114,{ density: 0.65,hMin: 8, hMax: 12, col: COPSE,  col2: COPSE2, pineFrac: 0.2  }); // Stowe outfield copse
+      forestEdge(0.57, 0.60, -1, 104,{ density: 0.65,hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Abbey infield copse
+      // sparse scattered broadleaf fringe around the full perimeter (old airfield feel)
+      forestEdge(0.0, 1.0, -1, 48, { density: 0.18, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
+      forestEdge(0.0, 1.0,  1, 48, { density: 0.18, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
 
       // ---- Big grandstands at the signature corners ----
       // Copse corner — large main straight view
@@ -292,37 +282,22 @@
       // ---- Start gantry over start/finish ----
       gantry(0.0, 7.5, [0.28, 0.30, 0.34]);
 
-      // ---- Pine windbreak rows + scattered broadleaf copses (airfield perimeter) ----
-      for (const [s0, s1, side, dist] of [
-        [0.14, 0.24,  1, 130],
-        [0.32, 0.42,  1, 135],
-        [0.58, 0.68, -1, 125],
-        [0.78, 0.90, -1, 130],
-        [0.05, 0.12, -1, 140],  // Maggotts far side windbreak
-        [0.44, 0.52,  1, 145],  // behind The Wing
-      ]) {
-        along(s0, s1, 22, (kk) => {
-          if (hash(kk * 17 + side) > 0.5) {
-            pine(kk, side, dist + hash(kk * 19 + side) * 30, 11 + hash(kk * 23) * 6, PINEG);
-          } else {
-            tree(kk, side, dist + hash(kk * 19 + side) * 30, 10 + hash(kk * 23) * 5, COPSE2);
-          }
-        });
-      }
-      // dense broadleaf copse clumps further out (the named Silverstone copses)
-      const bigCopse = (s, side, dist, count) => {
-        for (let j = 0; j < count; j++) {
-          const kk = (k(s) + j * 2) % n;
-          tree(kk, side, dist + hash(kk * 7 + j) * 22 - 11, 9 + hash(kk * 11 + j) * 6,
-               hash(kk + j) > 0.5 ? COPSE : COPSE2);
-        }
-      };
-      bigCopse(0.18, -1, 120, 7);
-      bigCopse(0.50,  1, 110, 6);
-      bigCopse(0.72,  1, 115, 6);
-      bigCopse(0.62, -1, 130, 5);
-      bigCopse(0.36, -1, 145, 5);  // Stowe outer field copse
-      bigCopse(0.25,  1, 130, 5);  // Maggotts outfield copse
+      // ---- Pine windbreak rows (airfield perimeter) + outer broadleaf copse belts ----
+      // Windbreaks: mix of conifer/broadleaf at mid-distances using forestEdge.
+      // pineFrac=0.6 gives the classic Silverstone mixed-hedgerow/conifer windbreak feel.
+      forestEdge(0.14, 0.24,  1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right
+      forestEdge(0.32, 0.42,  1, 129, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right
+      forestEdge(0.58, 0.68, -1, 119, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left
+      forestEdge(0.78, 0.90, -1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
+      forestEdge(0.05, 0.12, -1, 134, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
+      forestEdge(0.44, 0.52,  1, 139, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
+      // Outer broadleaf copse belts (the named Silverstone landscape copses)
+      forestEdge(0.17, 0.21, -1, 114, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer belt
+      forestEdge(0.49, 0.53,  1, 104, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
+      forestEdge(0.71, 0.75,  1, 109, { density: 0.5,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Loop outer copse
+      forestEdge(0.61, 0.65, -1, 124, { density: 0.45, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Abbey outer belt
+      forestEdge(0.35, 0.39, -1, 139, { density: 0.4,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Stowe outer field copse
+      forestEdge(0.24, 0.28,  1, 124, { density: 0.4,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Maggotts outfield copse
 
       // ---- Low farm sheds / airfield hangars on the flat outfield ----
       for (const [s, side, d, w, h, ln] of [
@@ -408,7 +383,7 @@
       }
 
       // silence unused-guard lint helpers (destructured but not called directly)
-      void GRASS; void STEEL; void TARMAC; void prop; void WHITE; void tower; void addCone;
+      void GRASS; void STEEL; void TARMAC; void prop; void WHITE; void tower; void addCone; void bush;
     },
   }
   );

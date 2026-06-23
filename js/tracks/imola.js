@@ -141,10 +141,13 @@
         col: WOODS, col2: WOODS2, pineFrac: 0.70 });
       forestEdge(0.33, 0.42,  1, 5, { density: 0.88, hMin: 11, hMax: 16,
         col: WOODS, col2: WOODS2, pineFrac: 0.65 });
-      // Piratella hill backdrop boxes (far field dark wooded ridge)
-      for (const side of [-1, 1]) {
-        backdrop(K(0.35), side, 70 + side * 6, [60, 30, 90], [0.14, 0.32, 0.17]);
-      }
+      // Piratella hill-crest far-field: staggered wooded mounds (backdrop auto-rounds
+      // green cols → frustum+cone organic mounds). Widths kept ≤48 m so the frustum
+      // base radius (~24 m) stays compact and doesn't dominate the horizon as a slab.
+      backdrop(K(0.34), -1, 72, [40, 28, 58], [0.14, 0.32, 0.17]);
+      backdrop(K(0.36), -1, 90, [36, 34, 54], [0.12, 0.28, 0.14]);
+      backdrop(K(0.35),  1, 68, [38, 26, 56], [0.15, 0.34, 0.18]);
+      backdrop(K(0.37),  1, 86, [34, 32, 50], [0.13, 0.30, 0.15]);
 
       // ---- Acque Minerali valley (s≈0.46-0.56): misty hollow with deeper forestEdge ----
       // REPLACED individual pine/tree at dist 16-34 (clipping risk) with forestEdge.
@@ -221,10 +224,14 @@
       grandstand(0.31, -1, 12, 50, [0.54, 0.57, 0.61], [0.20, 0.42, 0.72]);
       groundPlane(K(0.28), -1, 6, [34, 40], GRAVEL);
 
-      // ---- s 0.58-0.70 L far — Wooded hills backdrop with the campanile tower rising ----
-      for (let i = 0; i < 4; i++) {
-        backdrop(K(0.58 + i * 0.012), -1, 100 + i * 18, [120, 26 + i * 6, 80], [0.16, 0.34, 0.18]);
-      }
+      // ---- s 0.58-0.70 L far — Wooded hill ridges behind Variante Alta / campanile.
+      //      Four staggered mounds at increasing distance; widths kept ≤52 m so each
+      //      mound reads as a distinct hill rather than a uniform green plane.
+      //      The town buildings (TOWN_POS loop below) sit in front of these ridges.
+      backdrop(K(0.59), -1,  80, [44, 22, 58], [0.16, 0.34, 0.18]);
+      backdrop(K(0.61), -1,  96, [48, 26, 64], [0.14, 0.30, 0.16]);
+      backdrop(K(0.64), -1, 112, [46, 30, 60], [0.15, 0.32, 0.17]);
+      backdrop(K(0.67), -1, 128, [42, 28, 56], [0.13, 0.28, 0.15]);
       // Classic Imola campanile (bell tower) visible above treeline.
       // Placed at dist=120 off-track left; cylinder base sits at ground, cone sits
       // directly atop the cylinder at height=32 (so no gap / no floating spire).

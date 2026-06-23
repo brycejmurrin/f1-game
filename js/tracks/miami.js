@@ -106,73 +106,55 @@
       };
 
       // ===================================================================
-      // FAR HORIZON HAZE BAND — soft pastel ring wrapping the whole lap.
-      // ===================================================================
-      for (let i = 0; i < 96; i++) {
-        const k = K(i / 96);
-        const side = (i % 2) ? 1 : -1;
-        const col = PASTELS[i % PASTELS.length];
-        backdrop(k, side, 540 + hash(i * 5) * 260,
-          [40 + hash(i * 3) * 30, 16 + hash(i * 11) * 30, 30],
-          [col[0] * 0.42 + 0.50, col[1] * 0.42 + 0.50, col[2] * 0.42 + 0.52]);
-      }
-
-      // ===================================================================
-      // MIAMI DOWNTOWN SKYLINE — glass tower cluster far NE of the circuit.
+      // MIAMI DOWNTOWN SKYLINE — backdrop() calls in the NE direction so the
+      // auto-window-band code fires for every tower (isBld: h>26 && h>depth).
+      // Concentrated over ~60 node positions so the cluster reads as a real
+      // downtown block, not a uniform ring.  Much cheaper than 46 raw frustums.
       // ===================================================================
       {
-        const dx = 0.62, dz = -0.78;
-        const ddist = Math.hypot(dx, dz);
-        const ux = dx / ddist, uz = dz / ddist;
-        const vx = -uz, vz = ux;
-        const baseDist = rad + 360;
-        const dcx = cx + ux * baseDist, dcz = cz + uz * baseDist;
-        const TOWER_COLS = [GLASS, [0.62, 0.78, 0.84], [0.50, 0.66, 0.74],
-          [0.72, 0.84, 0.90], [0.45, 0.62, 0.72]];
-        for (let i = 0; i < 46; i++) {
-          const h0 = hash(i * 13.1), h1 = hash(i * 7.7 + 2), h2 = hash(i * 3.3 + 5);
-          const spread = (h1 - 0.5) * 560;
-          const depth  = (h2 - 0.5) * 360;
-          const tx = dcx + vx * spread + ux * depth;
-          const tz = dcz + vz * spread + uz * depth;
-          const central = 1 - Math.min(1, (Math.abs(spread) / 280 + Math.abs(depth) / 220) * 0.5);
-          const th = 70 + central * 150 + h0 * 60;
-          const tw = 22 + h1 * 26;
-          if (onTrack(tx, tz, tw * 0.7)) continue;
-          const col = TOWER_COLS[i % TOWER_COLS.length];
-          const settledY = pyMin - 2;
-          // tapered glass tower
-          addFrustum(out, [tx, settledY, tz], tw * 0.5, tw * 0.34, th, col, 5, null);
-          // darker window-mullion core
-          addBox(out, [tx, settledY + th * 0.5, tz], [tw * 0.6, th, tw * 0.6],
-            [col[0] * 0.78, col[1] * 0.82, col[2] * 0.86], null);
-          // bright glass cap
-          addBox(out, [tx, settledY + th, tz], [tw * 0.42, tw * 0.5, tw * 0.42], WHITE, null);
-          if (th > 150) addCyl(out, [tx, settledY + th + tw * 0.25, tz], 0.6, 16 + h0 * 18,
-            [0.85, 0.85, 0.88], 4, null);
-          // Lit windows — warm amber stripes so skyline reads at dusk/night
-          addBox(out, [tx, settledY + th * 0.55, tz], [tw * 0.62, th * 0.35, tw * 0.12],
-            [WIN_AMBER[0] * 0.9, WIN_AMBER[1] * 0.65, WIN_AMBER[2] * 0.25], null);
-          // Cool-tinted alternating window stripe
-          if (i % 2 === 0)
-            addBox(out, [tx, settledY + th * 0.35, tz], [tw * 0.12, th * 0.28, tw * 0.62],
-              [WIN_COOL[0] * 0.7, WIN_COOL[1] * 0.6, WIN_COOL[2] * 0.4], null);
+        // Skyline concentrated in the NE quadrant (behind the main straight)
+        // and spread around ~40 % of the lap so every camera angle sees towers.
+        const SKY_COLS = [
+          [0.62, 0.82, 0.88],   // glass-teal
+          [0.75, 0.86, 0.92],   // pale ice-blue
+          [0.88, 0.76, 0.62],   // warm sandstone
+          [0.76, 0.88, 0.82],   // mint
+          [0.94, 0.82, 0.68],   // peach
+          [0.58, 0.74, 0.90],   // sky-blue glass
+          [0.82, 0.90, 0.76],   // sage
+          [0.68, 0.78, 0.85],   // steel-blue
+        ];
+        // Primary tower ring: tall glass skyscrapers at varying distances
+        for (let i = 0; i < 52; i++) {
+          const h0 = hash(i * 13.1 + 1), h1 = hash(i * 7.7 + 3), h2 = hash(i * 3.3 + 7);
+          // Concentrate 75 % of towers on the main straight + T1 arc (s 0.9→0.2)
+          // but scatter a ring behind the marina and stadium sections too.
+          const kFrac = (i < 39)
+            ? ((i / 39) * 0.30 + 0.90) % 1.0   // s 0.90 → 0.20
+            : (i - 39) / 13 * 0.40 + 0.30;      // s 0.30 → 0.70
+          const k = K(kFrac);
+          // Towers alternate sides slightly and push far back
+          const side = (i % 3 === 2) ? -1 : 1;
+          const dist = 480 + h0 * 340;           // 480–820 m — truly horizon-far
+          const bW = 20 + h1 * 18;               // 20–38 m wide
+          const bH = 52 + h0 * 110 + (i < 14 ? 60 : 0); // central towers taller
+          const bD = 14 + h2 * 10;               // 14–24 m deep — ensures isBld fires
+          const col = SKY_COLS[i % SKY_COLS.length];
+          backdrop(k, side, dist, [bW, bH, bD], col);
         }
-        // Mid-rise pastel blocks skirting the tower cluster
-        for (let i = 0; i < 26; i++) {
-          const h1 = hash(i * 9.9 + 11), h2 = hash(i * 4.4 + 13);
-          const spread = (h1 - 0.5) * 720;
-          const depth  = 120 + h2 * 200;
-          const tx = dcx + vx * spread - ux * depth;
-          const tz = dcz + vz * spread - uz * depth;
-          const tw = 26 + h1 * 22, th = 30 + h2 * 70;
-          if (onTrack(tx, tz, tw * 0.7)) continue;
+        // Mid-rise pastel ring: wider, shorter buildings — the streetscape skirt
+        for (let i = 0; i < 34; i++) {
+          const h0 = hash(i * 9.9 + 11), h1 = hash(i * 4.4 + 13), h2 = hash(i * 6.1 + 17);
+          const kFrac = (i / 34 + 0.85) % 1.0;
+          const k = K(kFrac);
+          const side = (i % 2) ? 1 : -1;
+          const dist = 340 + h0 * 220;           // 340–560 m
+          const bW = 28 + h1 * 20;               // 28–48 m
+          const bH = 30 + h2 * 46;               // 30–76 m — still isBld if > depth
+          const bD = 18 + h0 * 8;                // 18–26 m (keep bH > bD)
           const col = PASTELS[(i * 2) % PASTELS.length];
-          const bCol = [col[0] * 0.66 + 0.26, col[1] * 0.66 + 0.26, col[2] * 0.66 + 0.26];
-          addBox(out, [tx, pyMin - 2 + th * 0.5, tz], [tw, th, tw * 0.9], bCol, null);
-          // lit window band on each mid-rise for dusk legibility
-          addBox(out, [tx, pyMin - 2 + th * 0.55, tz], [tw * 1.01, th * 0.22, tw * 0.15],
-            [WIN_AMBER[0] * 0.8, WIN_AMBER[1] * 0.6, WIN_AMBER[2] * 0.2], null);
+          const lightened = [col[0] * 0.55 + 0.40, col[1] * 0.55 + 0.40, col[2] * 0.55 + 0.40];
+          backdrop(k, side, dist, [bW, bH, bD], lightened);
         }
       }
 

@@ -22,7 +22,7 @@
     // descent through the back of the lap.
     elevations: [{ s: 0.10, halfM: 240, rise: 10 }, { s: 0.40, halfM: 320, rise: -8 }],
     scenery: function (api) {
-      const { out, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt } = api;
+      const { out, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge } = api;
 
       // --- Styrian Alps: two concentric rings of organic peaks.
       // Inner ring (210m out): dense dark-green foothills with rocky detail, moderate snow.
@@ -48,37 +48,52 @@
         }
       }
 
-      // --- Mid-ground forest ridges: two concentric treelines to frame the lap.
-      for (const [ringDist, count, col] of [
-        [150, 20, [0.16, 0.30, 0.18]],
-        [310, 16, [0.26, 0.40, 0.30]],
-      ]) {
-        const ringR = rad + ringDist;
-        for (let i = 0; i < count; i++) {
-          const h = hash(i * 23 + 71 + ringDist), a = i / count * 6.2832;
-          ridge(cx + Math.cos(a) * ringR, cz + Math.sin(a) * ringR, pyMin,
-                a + 1.5708, 130 + h * 100, 80 + h * 50, 28 + h * 24, col);
-        }
-      }
+      // --- Mid-ground Styrian rolling hills: backdrop() GREEN auto-renders as
+      // organic rounded mounds — replaces the flat ridge() prisms for a softer look.
+      // Two rings: closer foothills (lighter green) + farther wooded hillsides (darker).
+      every(9, (k) => {
+        const hv = hash(k * 31 + 7);
+        if (hv < 0.25) return;
+        // Closer green foothills 80–130 m out, wide and low (Styrian meadow rolls).
+        backdrop(k, hv < 0.55 ? -1 : 1, 80 + hv * 50,
+                 [90 + hv * 70, 28 + hv * 18, 55 + hv * 35],
+                 [0.18 + hv * 0.06, 0.40 + hv * 0.06, 0.18]);
+      });
+      every(14, (k) => {
+        const hv = hash(k * 53 + 19);
+        if (hv < 0.30) return;
+        // Farther wooded hills 160–240 m out, taller for layered Alpine depth.
+        backdrop(k, hv < 0.58 ? -1 : 1, 160 + hv * 80,
+                 [110 + hv * 80, 42 + hv * 28, 70 + hv * 40],
+                 [0.14 + hv * 0.08, 0.32 + hv * 0.08, 0.15]);
+      });
 
-      // --- Pine forest: three passes for layered Alpine depth.
-      // Near foreground: moderate density (dist 12–20 m beyond road edge).
-      every(7, (k) => {
-        const s = hash(k * 41);
-        if (s < 0.28) return;
-        pine(k, s < 0.6 ? -1 : 1, 14 + s * 10, 11 + s * 8, [0.10, 0.25, 0.12]);
-      });
-      // Mid-distance: sparser, taller for layered depth (dist 30–50 m).
-      every(12, (k) => {
-        const s2 = hash(k * 67 + 5);
-        if (s2 < 0.35) return;
-        pine(k, s2 < 0.65 ? -1 : 1, 30 + s2 * 20, 14 + s2 * 10, [0.13 + s2 * 0.08, 0.31, 0.16]);
-      });
-      // Scattered broadleaf accent trees for variety (dist 18–26 m).
-      every(28, (k) => {
-        const st = hash(k * 53 + 9);
-        if (st > 0.62) tree(k, st < 0.72 ? -1 : 1, 18 + st * 8, 8 + st * 5, [0.24 + st * 0.06, 0.46, 0.21]);
-      });
+      // --- Alpine forest edges: forestEdge() replaces raw pine() loops —
+      // canopy-clearance aware so trees never clip through guardrails/fences.
+      // Sector 1 (start straight + T1 climb): left side forest backing the climb.
+      forestEdge(0.0, 0.18, -1, 10, { density: 0.55, hMin: 9, hMax: 16,
+        col: [0.10, 0.26, 0.13], col2: [0.18, 0.38, 0.18], pineFrac: 0.70 });
+      // Right side approach and crest: mixed alpine, sparser to let hills show.
+      forestEdge(0.0, 0.18, 1, 11, { density: 0.42, hMin: 8, hMax: 14,
+        col: [0.12, 0.28, 0.14], col2: [0.20, 0.40, 0.18], pineFrac: 0.65 });
+
+      // Sector 2 (T3 Remus descent + back straight): dense Alpine pine on both sides.
+      forestEdge(0.20, 0.48, -1, 9, { density: 0.65, hMin: 10, hMax: 18,
+        col: [0.09, 0.23, 0.11], col2: [0.16, 0.34, 0.16], pineFrac: 0.75 });
+      forestEdge(0.20, 0.48, 1, 10, { density: 0.50, hMin: 9, hMax: 15,
+        col: [0.11, 0.25, 0.12], col2: [0.18, 0.36, 0.17], pineFrac: 0.68 });
+
+      // Sector 3 (long back straight + stadium): lighter mixed forest, let grandstands show.
+      forestEdge(0.50, 0.70, -1, 10, { density: 0.45, hMin: 8, hMax: 14,
+        col: [0.12, 0.28, 0.14], col2: [0.22, 0.42, 0.20], pineFrac: 0.60 });
+      forestEdge(0.50, 0.70, 1, 10, { density: 0.38, hMin: 8, hMax: 13,
+        col: [0.14, 0.30, 0.15], col2: [0.22, 0.42, 0.20], pineFrac: 0.58 });
+
+      // Final sector / stadium bowl: sparse scattered trees at the margins.
+      forestEdge(0.70, 0.97, -1, 12, { density: 0.30, hMin: 8, hMax: 13,
+        col: [0.13, 0.28, 0.14], col2: [0.22, 0.40, 0.20], pineFrac: 0.60 });
+      forestEdge(0.70, 0.97, 1, 12, { density: 0.25, hMin: 7, hMax: 12,
+        col: [0.14, 0.30, 0.15], col2: [0.24, 0.42, 0.20], pineFrac: 0.55 });
 
       // ---------------- Track furniture (continuous, both sides) ----------------
       // Armco guardrail backed by catch fencing around the whole lap edge.
@@ -268,34 +283,32 @@
         addBox(out, vadd(rA.c, rA.u, 44.5), [6.5, 0.25, 6.5], [1.0, 0.88, 0.50], [rA.r, rA.u, rA.t]);
       }
 
-      // --- Back-sector descent framing ridges (s≈0.30): the circuit's dramatic low point.
+      // --- Back-sector descent framing hills (s≈0.28–0.32): the circuit's dramatic
+      // high point before the long descent — Styrian rolling hills rendered as organic
+      // backdrop() mounds instead of sharp ridge prisms.
       {
-        const k1 = Math.round(n * 0.30) % n;
-        for (const side of [-1, 1]) {
-          const a = anchor(k1, side, 55);
-          ridge(a.c[0], a.c[2], pyMin, Math.atan2(a.t[2], a.t[0]) + 1.5708,
-                140, 65, 32, [0.20 + hash(k1 * 47 + side) * 0.05, 0.34, 0.20]);
+        for (const [sfrac, side, distOff, szW, szH] of [
+          [0.28, -1,  0, 100, 26], [0.28,  1,  0, 90, 22],
+          [0.30, -1, 12, 115, 30], [0.30,  1, 10, 95, 24],
+          [0.32, -1,  0, 100, 28], [0.32,  1,  0, 85, 22],
+        ]) {
+          const kb = Math.round(n * sfrac) % n;
+          backdrop(kb, side, 55 + distOff, [szW, szH, 60], [0.20 + hash(kb * 47 + side) * 0.05, 0.38, 0.20]);
         }
       }
 
-      // --- Alpine green spectator bank (s≈0.52 mid-sector right-hander).
-      // Anchored correctly: addBox center placed at half the box height above ground.
+      // --- Styrian natural spectator hill (s≈0.52 mid-sector right-hander).
+      // The Red Bull Ring's famous grassy spectator hillsides — replaced the flat
+      // boxy bank with backdrop() rounded green mounds for an organic silhouette.
+      // Three staggered mounds: near/mid/far to give the slope real depth.
       {
         const kBank = Math.round(n * 0.52) % n;
-        const aBank = anchor(kBank, 1, 50);
-        if (!onTrack(aBank.c[0], aBank.c[2], 22)) {
-          // Box half-height = 7; center at aBank.c + u*7 → base at ground level.
-          addBox(out, vadd(aBank.c, aBank.u, 7), [70, 14, 50], [0.30, 0.54, 0.24], [aBank.r, aBank.u, aBank.t]);
-          // Surface detail: darker turf strip along the top edge of the bank.
-          addBox(out, vadd(aBank.c, aBank.u, 14.2), [70, 0.6, 50], [0.22, 0.44, 0.18], [aBank.r, aBank.u, aBank.t]);
-          // Row of low bollard posts along the bank's track-facing edge for definition.
-          for (let bi = -3; bi <= 3; bi++) {
-            const bPos = vadd(vadd(aBank.c, aBank.t, bi * 7), aBank.u, 0.5);
-            if (!onTrack(bPos[0], bPos[2], 2)) {
-              addCyl(out, bPos, 0.18, 1.0, [0.80, 0.82, 0.84], 5, [aBank.r, aBank.u, aBank.t]);
-            }
-          }
-        }
+        backdrop(kBank, 1, 32, [80, 18, 55], [0.28, 0.52, 0.22]);   // near bank face
+        backdrop(kBank, 1, 55, [95, 24, 65], [0.22, 0.44, 0.18]);   // mid slope
+        backdrop(kBank, 1, 80, [110, 30, 75], [0.18, 0.38, 0.15]);  // upper hillside
+        // Sparse pines crowning the hilltop behind the bank.
+        forestEdge(0.49, 0.56, 1, 78, { density: 0.35, hMin: 10, hMax: 16,
+          col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 });
       }
 
       // --- Orange Army billboard near stadium bowl (s≈0.87, Dutch orange) ---

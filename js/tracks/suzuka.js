@@ -27,7 +27,7 @@
       const { out, track, n, px, py, pz, hw, pyMin, place, prop, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
               gantry, marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
-              addBox, addCyl, addCone, groundYAt, onTrack } = api;
+              addBox, addCyl, addCone, groundYAt, onTrack, forestEdge, backdrop } = api;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
       const blue      = [0.26, 0.38, 0.64];
@@ -43,6 +43,9 @@
       const neonRed   = [1.00, 0.22, 0.18];
       const neonBlue  = [0.18, 0.72, 1.00];
       const neonYel   = [1.00, 0.95, 0.12];
+      // Sakura / cherry-blossom pinks
+      const sakuraPink  = [0.96, 0.72, 0.80];
+      const sakuraLight = [0.98, 0.80, 0.88];
 
       // ── Grandstand helper: raked crowd + back shell + Honda-blue front band ─
       const stand = (s, side, gap, len, shell) => {
@@ -76,6 +79,18 @@
         }
       }
 
+      // ── Backdrop rounded hills (midground green mounds between track and
+      //    distant mountains — fills the gap between forestEdge and skyline) ───
+      // Near midground: dense green backdrop mounds visible at every corner
+      for (let i = 0; i < 18; i++) {
+        const frac = i / 18;
+        const k = Math.round(frac * n) % n;
+        const side = (i % 2 === 0) ? -1 : 1;
+        const dist = 140 + hash(i * 13.7) * 80;   // 140–220 m — behind forestEdge
+        backdrop(k, side, dist, [90 + hash(i * 5.3) * 40, 38 + hash(i * 7.1) * 22, 60 + hash(i * 9.9) * 30],
+                 [0.22 + hash(i * 3.3) * 0.06, 0.40 + hash(i * 4.7) * 0.06, 0.20 + hash(i * 2.1) * 0.04]);
+      }
+
       // ── Motopia theme park + giant Ferris wheel ──────────────────────────────
       // The wheel is Suzuka's signature landmark. It sits on the outside of the
       // main straight near Turn 1 (s≈0.075). We use the engine's built-in
@@ -91,8 +106,6 @@
       tower(Math.round(n * 0.090) % n, -1, 102, 7, 40, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
 
       // ── Lamp posts ringing the wheel area — warm sodium emissive heads ────────
-      // Posts placed at distinct k-nodes around the park base; dist staggered so
-      // they don't pile on the same world position.
       for (let i = 0; i < 8; i++) {
         const lk = (wheelK + i - 4 + n) % n;
         const ldist = 30 + (i % 4) * 7;   // 30–51 m — well clear of wheel at 58
@@ -104,10 +117,6 @@
       }
 
       // ── Amusement-park complex behind the wheel ───────────────────────────────
-      // Structures are grouped at distinct distances (60–140 m) so nothing
-      // overlaps. The wheel occupies dist 23–93 (dist 58, radius 35), so the
-      // nearest park structure begins at dist 96+ — given as dist 70 but at a
-      // different k-node so world positions don't collide.
       const parkA = Math.round(n * 0.055) % n;
 
       // Motopia Hotel block — 5-storey, at a k well clear of the wheel k
@@ -115,37 +124,32 @@
       // Secondary hotel/pavilion
       building(Math.round(n * 0.038) % n, -1, 88, 26, 28, 18, { wall: [0.76, 0.76, 0.80], window: litWin, floor: 4, roof: true });
 
-      // Drop-tower thrill ride (tall slim) — at yet another k, clear of hotel
+      // Drop-tower thrill ride (tall slim)
       tower(Math.round(n * 0.105) % n, -1, 76, 7, 52, { col: [0.84, 0.28, 0.30], seg: 7, cap: true, capCol: neonYel, mast: 7 });
 
       // Domed pavilion / central gathering structure
       {
         const pk = Math.round(n * 0.048) % n;
         const p = anchor(pk, -1, 118), b = [p.r, p.u, p.t];
-        // Only emit if not on track
         addCyl(out, p.c, 12, 12, [0.92, 0.92, 0.95], 12, b);
         addCone(out, vadd(p.c, p.u, 12), 13, 11, [0.88, 0.36, 0.38], 14, b);
-        // Lit dome ring (emissive strip around base of dome)
         addCyl(out, vadd(p.c, p.u, 11), 12.8, 0.8, neonRed, 14, b);
       }
 
-      // Carousel / pavilion canopies: spread at increasing dist so bodies don't
-      // overlap. Step by 3 nodes AND increase dist per item.
+      // Carousel / pavilion canopies
       for (let i = 0; i < 8; i++) {
         const kk = (parkA + i * 4 + 2) % n;
-        const dist = 50 + i * 9;           // 50 → 113 m, each item clearly separate
+        const dist = 50 + i * 9;
         const sz = [11 + (i % 3) * 2.5, 7 + (i % 2) * 2.5, 13 + (i % 4) * 1.5];
         place(kk, -1, dist, sz, parkCol[i % parkCol.length]);
-        // Peaked tent roof on top — vadd by half-height of body + roof height
         const p = anchor(kk, -1, dist), b = [p.r, p.u, p.t];
-        const roofY = sz[1] + 2;          // top of body box + small gap
+        const roofY = sz[1] + 2;
         addCone(out, vadd(p.c, p.u, roofY), 7.5, 5, parkCol[(i + 2) % parkCol.length], 8, b);
-        // Emissive neon trim ring at roofline
         addCyl(out, vadd(p.c, p.u, roofY - 0.5), sz[0] / 2 + 0.4, 0.6,
                [parkCol[(i + 1) % parkCol.length][0], parkCol[(i + 1) % parkCol.length][1], parkCol[(i + 1) % parkCol.length][2]], 8, b);
       }
 
-      // Flag-poles / ride masts along park perimeter: stagger dist to avoid overlap
+      // Flag-poles / ride masts along park perimeter
       for (let i = 0; i < 10; i++) {
         const kk = (parkA + i * 2 + 1) % n;
         const fdist = 34 + (i % 5) * 5;
@@ -179,7 +183,7 @@
       tower(Math.round(n * 0.995) % n, 1, 22, 9, 30, { col: [0.86, 0.87, 0.90], seg: 6, cap: true, capCol: navy, mast: 7 });
       gantry(0.0, 9, [0.14, 0.14, 0.18]);
 
-      // Pit-straight lamp posts (right side) — warm illumination
+      // Pit-straight lamp posts (right side)
       for (let i = 0; i < 8; i++) {
         const lk3 = Math.round(n * (0.97 + i * 0.007)) % n;
         const lp3 = anchor(lk3, 1, 8), lb3 = [lp3.r, lp3.u, lp3.t];
@@ -193,73 +197,91 @@
       }
 
       // ── Spectator footbridges ─────────────────────────────────────────────────
-      // The green-clad pedestrian overpasses use anchor() for proper ground-
-      // anchoring and vadd() for height offsets. Deck height is measured from the
-      // GROUND at the anchor point, so we raise the deck well above track level
-      // to avoid clipping. Columns span from ground to deckH.
       const footbridge = (s, deckH) => {
         const k = Math.round(s * n) % n;
         const aL = anchor(k, -1, 2), aR = anchor(k, 1, 2);
         const u = aL.u;
         const span = hw[k] * 2 + 14;
-        // Support pylons: bottom at ground, height = deckH
         for (const a of [aL, aR]) {
           const b = [a.r, u, a.t];
           addBox(out, vadd(a.c, u, deckH / 2), [2.2, deckH, 2.6], concrete, b);
-          addBox(out, vadd(a.c, u, deckH + 0.8), [3.4, 1.2, 3.4], steel, b);   // pylon cap
+          addBox(out, vadd(a.c, u, deckH + 0.8), [3.4, 1.2, 3.4], steel, b);
         }
-        // Deck spanning the track — centre of deck at deckH above anchor ground
         const deckC = [px[k], py[k] + deckH, pz[k]];
         addBox(out, deckC, [span, 1.4, 4.5], [0.30, 0.50, 0.34], [aL.r, u, aL.t]);
-        // Green roof canopy 2.6m above deck
         addBox(out, [px[k], py[k] + deckH + 2.6, pz[k]], [span, 0.6, 5.2], [0.24, 0.44, 0.30], [aL.r, u, aL.t]);
-        // Emissive warm strip under the canopy (reads as lit walkway at night)
         addBox(out, [px[k], py[k] + deckH + 2.0, pz[k]], [span * 0.7, 0.18, 4.0], lampWarm, [aL.r, u, aL.t]);
-        // Railing posts along the deck
         for (let i = -4; i <= 4; i++) {
           const off = i * (span / 9);
           const rc = [px[k] + aL.r[0] * off, py[k] + deckH + 1.5, pz[k] + aL.r[2] * off];
           addCyl(out, rc, 0.10, 1.6, steel, 4, [aL.r, u, aL.t]);
         }
       };
-      footbridge(0.135, 9.0);    // spectator overpass near the Esses entry
-      footbridge(0.500, 8.5);    // mid-circuit crossing
+      footbridge(0.135, 9.0);
+      footbridge(0.500, 8.5);
 
       // ── Overhead camera / scoring gantries ───────────────────────────────────
-      gantry(0.30, 8, steel);    // Degner approach
-      gantry(0.86, 8, steel);    // 130R / crossover area
+      gantry(0.30, 8, steel);
+      gantry(0.86, 8, steel);
 
-      // ── Continuous treeline hedges behind outer grass edges ──────────────────
-      hedge(0.16, 0.30,  1, 26, 5, [0.16, 0.34, 0.18]);
-      hedge(0.55, 0.70, -1, 26, 5, [0.17, 0.35, 0.19]);
-      hedge(0.40, 0.48,  1, 24, 4.5, [0.16, 0.33, 0.18]);
+      // ── Hillside forest treelines using forestEdge() — REPLACES raw pine loops
+      //    and hedge slabs. Safe gap ensures no canopy clips barriers/walls.
+      //    Esses sector: dense mixed conifer + broadleaf on both sides ───────────
+      forestEdge(0.10, 0.24,  1, 14, { density: 0.72, hMin: 9, hMax: 16,
+        col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.65 });
+      forestEdge(0.10, 0.24, -1, 14, { density: 0.68, hMin: 8, hMax: 15,
+        col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.60 });
 
-      // ── Dense conifer + cherry-blossom scatter on both grass verges ──────────
-      every(16, (k) => {
-        const s = hash(k * 41);
-        if (s < 0.12) return;
-        pine(k, -1, 6.8 + s * 10, 10 + s * 8, [0.13 + s * 0.07, 0.35, 0.16]);
-        pine(k,  1, 6.8 + s * 10, 10 + s * 8, [0.12 + s * 0.08, 0.34, 0.15]);
-        if (s > 0.38) {
-          const b = hash(k * 71);
-          pine(k, b < 0.5 ? -1 :  1, 18 + b * 18, 13 + b * 11, [0.11 + b * 0.06, 0.33, 0.15]);
-          pine(k, b < 0.5 ?  1 : -1, 28 + b * 18, 15 + b * 11, [0.10 + b * 0.06, 0.32, 0.14]);
-        }
-        if (s > 0.65) {
-          bush(k, s < 0.8 ? -1 : 1, 5 + s * 4.5, [0.21, 0.41, 0.21]);
-          bush(k, s > 0.8 ? -1 : 1, 8 + s * 3,   [0.19, 0.39, 0.19]);
-        }
-      });
+      // Degner / back straight hillside — Japanese cedar + broadleaf mix
+      forestEdge(0.24, 0.40,  1, 12, { density: 0.65, hMin: 8, hMax: 14,
+        col:  [0.12, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.58 });
+      forestEdge(0.24, 0.40, -1, 12, { density: 0.62, hMin: 8, hMax: 14,
+        col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.55 });
+
+      // Hairpin / Spoon sector — denser hillside forest
+      forestEdge(0.40, 0.55,  1, 12, { density: 0.70, hMin: 9, hMax: 15,
+        col:  [0.12, 0.32, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.60 });
+      forestEdge(0.55, 0.72, -1, 12, { density: 0.68, hMin: 8, hMax: 14,
+        col:  [0.13, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.58 });
+
+      // Back straight / 130R / Casio sector
+      forestEdge(0.72, 0.92,  1, 12, { density: 0.65, hMin: 8, hMax: 13,
+        col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.55 });
+      forestEdge(0.72, 0.92, -1, 12, { density: 0.62, hMin: 7, hMax: 13,
+        col:  [0.12, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.52 });
+
+      // Main straight / pit straight back verge (left side, behind grandstands)
+      forestEdge(0.92, 0.10,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
+        col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
+
+      // ── Sakura cherry-blossom trees at signature corners ──────────────────────
+      //    Placed at safe dist (18–28 m) well beyond road + canopy radius.
+      //    Use every(28) for a scattered-but-repeating pattern around the lap.
       every(28, (k) => {
         const s = hash(k * 53);
-        if (s < 0.28) return;
-        tree(k, s < 0.7 ? -1 : 1, 11 + s * 9, 7 + s * 5, [0.94, 0.65, 0.73]);  // sakura pink
-        if (s > 0.55) tree(k, s < 0.7 ? 1 : -1, 15 + s * 7, 6 + s * 4, [0.96, 0.73, 0.82]);
+        if (s < 0.25) return;
+        tree(k, s < 0.6 ? -1 : 1, 20 + s * 10, 7 + s * 4, sakuraPink);
+        if (s > 0.55) tree(k, s < 0.6 ? 1 : -1, 24 + s * 8, 6 + s * 4, sakuraLight);
       });
-      every(42, (k) => {
-        const s = hash(k * 79);
-        if (s < 0.4) return;
-        tree(k, -1, 9 + s * 6, 5.5 + s * 3, [0.95, 0.68, 0.76]);
+
+      // Explicit sakura clusters at Turns 1–8, Degner, Spoon (iconic spots)
+      {
+        const blossomFracs = [0.048, 0.062, 0.078, 0.098, 0.115, 0.145, 0.035, 0.120];
+        const blossomSides = [-1, 1, -1, 1, -1, 1, 1, -1];
+        const blossomDists = [22, 26, 20, 28, 24, 20, 21, 26];
+        for (let i = 0; i < blossomFracs.length; i++) {
+          const bk = Math.round(n * blossomFracs[i]) % n;
+          const bh = 6.5 + hash(bk * 37) * 5;
+          tree(bk, blossomSides[i], blossomDists[i], bh, sakuraPink);
+        }
+      }
+
+      // ── Low shrub clusters at road margin (replaces over-close bush loops) ────
+      every(40, (k) => {
+        const s = hash(k * 61);
+        if (s < 0.5) return;
+        bush(k, s < 0.75 ? -1 : 1, 10 + s * 4, [0.21, 0.41, 0.21]);
+        if (s > 0.72) bush(k, s > 0.75 ? -1 : 1, 12 + s * 3, [0.19, 0.39, 0.19]);
       });
 
       // ── Track furniture: catch fences, guardrails, tyre walls, marshal posts ─
@@ -282,28 +304,16 @@
       }
 
       // ── Figure-8 bridge: the iconic crossover at s≈0.81 ──────────────────────
-      // The elevated road crosses OVER the back section here (see bridges[] above
-      // which raises the track itself +7 m). The scenery bridge is a green-clad
-      // pedestrian/spectator structure alongside the road crossing, not the road
-      // itself. We anchor to the terrain at the crossing point and build upward.
       {
         const bk = Math.round(n * 0.81) % n;
-        // Anchor on the left (outer) side, 14 m clear of road edge
         const ab = anchor(bk, -1, 14);
         const basis = [ab.r, ab.u, ab.t];
-        // Support columns: full height from ground to deck at +14 m.
-        // vadd(ab.c, ab.u, h) gives a point h metres up from the anchor ground point.
         const colH = 14;
         addBox(out, vadd(ab.c, ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
-        // Second column offset along track tangent
         addBox(out, vadd(vadd(ab.c, ab.t, 16), ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
-        // Bridge deck at gy+colH (top of columns)
         addBox(out, vadd(ab.c, ab.u, colH + 0.7), [10, 1.2, 34], [0.25, 0.47, 0.29], basis);
-        // Green overhead canopy 2.4 m above deck
         addBox(out, vadd(ab.c, ab.u, colH + 3.5), [11, 0.5, 35], [0.27, 0.49, 0.31], basis);
-        // Emissive strip under canopy (lit walkway)
         addBox(out, vadd(ab.c, ab.u, colH + 2.8), [8, 0.15, 28], lampWarm, basis);
-        // Railing posts along the deck
         for (let i = -4; i <= 4; i++) {
           const off = i * (34 / 9);
           const rc = [ab.c[0] + ab.t[0] * off, ab.c[1] + colH + 1.4, ab.c[2] + ab.t[2] * off];
@@ -312,22 +322,14 @@
       }
 
       // ── Underpass structure (back loop dips under Esses exit at s≈0.37) ───────
-      // The track itself is at normal elevation here; the overpass road is ~7 m
-      // above. We build visual cues for the tunnel mouth: a dark recessed box and
-      // concrete columns supporting the overhead section. The box is placed LATERAL
-      // (side=1) at a safe clearance so it doesn't clip the racing surface.
       {
         const uk = Math.round(n * 0.37) % n;
         const au = anchor(uk, 1, 12);
         const ubasis = [au.r, au.u, au.t];
-        // Dark tunnel opening — box is 3.5 m tall from ground, 1 m gap at bottom
         addBox(out, vadd(au.c, au.u, 2.5), [12, 5, 28], [0.18, 0.18, 0.20], ubasis);
-        // Concrete support columns (each spans from ground to 7 m to hold overpass)
         addBox(out, vadd(au.c, au.u, 3.5), [1.5, 7, 1.5], concrete, ubasis);
         addBox(out, vadd(vadd(au.c, au.u, 3.5), au.t, 13), [1.5, 7, 1.5], concrete, ubasis);
-        // Top slab (underside of the elevated road)
         addBox(out, vadd(au.c, au.u, 7.2), [13, 0.7, 29], [0.20, 0.20, 0.22], ubasis);
-        // Tunnel-mouth emissive glow strip (warm amber inside the portal)
         addBox(out, vadd(au.c, au.u, 1.5), [11, 0.2, 0.3], litWin, ubasis);
       }
 
@@ -341,13 +343,10 @@
       }
 
       // ── Scenic towers on mid-lap hills (Spoon / back sector) ─────────────────
-      // Placed at a large dist (160+) well off the racing surface on the hillside.
       tower(Math.round(n * 0.50) % n, 1, 160, 6, 19, { col: [0.78, 0.80, 0.84], seg: 6, cap: true, capCol: neonRed, mast: 3 });
       tower(Math.round(n * 0.62) % n, -1, 170, 6, 20, { col: [0.80, 0.82, 0.86], seg: 6, cap: true, capCol: neonBlue, mast: 4 });
 
       // ── Lamp posts along the main straight and key corners ───────────────────
-      // Evenly spaced every 35 m around the full lap on alternating sides, giving
-      // a warm glowing ring of street lights visible from any camera angle.
       every(35, (k) => {
         const side = hash(k * 13) < 0.5 ? -1 : 1;
         const ldist = 10 + hash(k * 37) * 4;
@@ -357,18 +356,6 @@
         addCyl(out, lp4.c, 0.13, 9, steel, 5, lb4);
         addBox(out, vadd(lp4.c, lp4.u, 9.4), [1.6, 0.4, 1.0], lampWarm, lb4);
       });
-
-      // ── Cherry-blossom / sakura tree scatter (Turns 1–8 and Degner) ──────────
-      {
-        const blossomFracs = [0.048, 0.062, 0.078, 0.098, 0.115, 0.145, 0.035, 0.120];
-        const blossomSides = [-1, 1, -1, 1, -1, 1, 1, -1];
-        const blossomDists = [20, 24, 16, 28, 22, 18, 19, 25];
-        for (let i = 0; i < blossomFracs.length; i++) {
-          const bk = Math.round(n * blossomFracs[i]) % n;
-          const bh = 6.5 + hash(bk * 37) * 5;
-          tree(bk, blossomSides[i], blossomDists[i], bh, [0.92, 0.68, 0.78]);
-        }
-      }
 
       // ── Grandstands at all signature corners ─────────────────────────────────
       stand(0.00, -1, 9, 82, navy);  // Main grandstand — dark-blue front terraces
