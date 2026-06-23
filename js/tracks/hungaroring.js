@@ -31,11 +31,9 @@
 
       // ---- Palette: dry Hungarian summer ----
       const GRASS  = [0.42, 0.55, 0.27];    // sun-baked grass
-      const GRASS2 = [0.38, 0.52, 0.24];    // slightly richer mid-green
-      const HILL   = [0.30, 0.48, 0.22];    // dark wooded hillside (strong green dominant)
-      const HILL2  = [0.34, 0.52, 0.24];    // lighter hillside tone
-      const AMPH   = [0.36, 0.50, 0.20];    // amphitheatre grassy banking (green-dom)
-      const AMPH2  = [0.40, 0.54, 0.23];    // sunlit amphitheatre terrace
+      const GRASS2 = [0.38, 0.52, 0.24];    // richer mid-green
+      const AMPH   = [0.32, 0.50, 0.20];    // amphitheatre grassy banking — strongly green-dominant
+      const AMPH2  = [0.36, 0.54, 0.22];    // sunlit terrace variant
       const TREE   = [0.20, 0.34, 0.18];    // dark oak/tree masses
       const TREE2  = [0.26, 0.40, 0.20];    // mid tree green
       const SCRUB  = [0.46, 0.50, 0.28];    // dry scrub bush
@@ -51,7 +49,6 @@
       const LAMP_POST = [0.28, 0.29, 0.30];
       const LAMP_HEAD = [0.96, 0.94, 0.84];
       const LAMP_ARM  = [0.34, 0.35, 0.36];
-      // Crowd seating tints
       const CROWD = [[0.55, 0.32, 0.30], [0.50, 0.52, 0.58], [0.62, 0.58, 0.40], [0.48, 0.50, 0.54]];
       const WIN_WARM = [0.92, 0.78, 0.42];
       const WIN_COOL = [0.78, 0.84, 0.96];
@@ -64,99 +61,77 @@
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
 
       // ====================================================================
-      // DISTANT HORIZON — haze-tinted far hills ring the bowl
+      // DISTANT HORIZON — haze-tinted far peaks ring the bowl
       // ====================================================================
-      // Far ring: pyramid silhouette peaks at ~rad+460
       const ringFar = rad + 460;
-      for (let i = 0; i < 20; i++) {
-        const a = i / 20 * 6.2832, h = hash(i * 13 + 200);
+      for (let i = 0; i < 16; i++) {
+        const a = i / 16 * 6.2832, h = hash(i * 13 + 200);
         peak(cx + Math.cos(a) * ringFar, cz + Math.sin(a) * ringFar, pyMin,
              280 + h * 100, 28 + h * 16, HAZE);
       }
-      // Furthest haze ridges (very low silhouette)
+      // Furthest haze ridges
       const ringHorizon = rad + 640;
-      for (let i = 0; i < 12; i++) {
-        const a = i / 12 * 6.2832, h = hash(i * 17 + 400);
+      for (let i = 0; i < 10; i++) {
+        const a = i / 10 * 6.2832, h = hash(i * 17 + 400);
         ridge(cx + Math.cos(a) * ringHorizon, cz + Math.sin(a) * ringHorizon, pyMin,
               a + Math.PI / 2, 340 + h * 160, 190 + h * 100, 38 + h * 22, HAZE2);
       }
 
       // ====================================================================
-      // MID-DISTANCE AMPHITHEATRE — the natural valley bowl walls
-      // These are placed as backdrop() with green colours so they render as
-      // ROUNDED ORGANIC MOUNDS, not flat boxes. They form the distinctive
-      // green hillsides visible through the catch fences.
+      // AMPHITHEATRE BOWL WALLS — green backdrop() rounded mounds
+      // The Hungaroring's signature feature: natural grassy hillsides visible
+      // through the fences all the way around the circuit. Green-dominant
+      // colours trigger the ROUNDED ORGANIC MOUND rendering path (frustum+dome
+      // cap instead of a flat box), so these read as true hillsides.
+      // Kept to 12 mounds total (same count as original backdrop zones) so
+      // geometry stays performance-safe.
       // ====================================================================
-      // Inner amphitheatre ring: staggered green backdrop mounds at ~rad+190–260
-      // distributed around the circuit so the bowl feels enclosed all the way round.
       const amphPts = [
-        [0.05, 1, 190], [0.10, -1, 210], [0.18, 1, 200], [0.25, -1, 195],
-        [0.32,  1, 215], [0.40, -1, 200], [0.48,  1, 190], [0.55, -1, 205],
-        [0.62,  1, 210], [0.70, -1, 195], [0.78,  1, 200], [0.85, -1, 210],
-        [0.92,  1, 195], [0.97, -1, 200],
+        [0.05, 1, 180], [0.15, -1, 195], [0.25, 1, 185],
+        [0.35, -1, 190], [0.48,  1, 185], [0.58, -1, 195],
+        [0.68,  1, 188], [0.78, -1, 192], [0.88,  1, 180],
+        [0.92, -1, 190], [0.97,  1, 185], [0.02, -1, 195],
       ];
       for (const [s, side, dist] of amphPts) {
         const hh = hash(Math.round(s * n) * 11 + side * 3);
-        // Wide, moderately tall green mounds — the classic Hungaroring hillside terracing.
-        // Green-dominant colour triggers the rounded-hill frustum+dome rendering path.
-        backdrop(K(s), side, dist, [130 + hh * 40, 32 + hh * 14, 120], AMPH);
+        // Strongly green-dominant (G > R and G > B*1.05) → renders as rounded hill
+        backdrop(K(s), side, dist, [120 + hh * 40, 34 + hh * 14, 110], AMPH);
       }
 
-      // Second layer — slightly further back, alternating positions for depth
-      const amphPts2 = [
-        [0.08, 1, 265], [0.15, -1, 270], [0.22, 1, 255], [0.30, -1, 260],
-        [0.38,  1, 270], [0.45, -1, 260], [0.52,  1, 265], [0.60, -1, 255],
-        [0.67,  1, 270], [0.75, -1, 260], [0.82,  1, 255], [0.90, -1, 265],
-      ];
-      for (const [s, side, dist] of amphPts2) {
-        const hh = hash(Math.round(s * n) * 17 + side * 5);
-        backdrop(K(s), side, dist, [100 + hh * 50, 28 + hh * 10, 110], AMPH2);
-      }
-
-      // Outer treeline ridge: dark wooded hillsides that cap the mounds at ~rad+310
-      const outerRidge = rad + 310;
-      for (let i = 0; i < 16; i++) {
-        const a = i / 16 * 6.2832, h = hash(i * 19 + 100);
-        const tx = cx + Math.cos(a) * outerRidge;
-        const tz = cz + Math.sin(a) * outerRidge;
+      // Mid-ring tree-capped mounds at the amphitheatre bowl crest
+      const ringMid = rad + 300;
+      for (let i = 0; i < 14; i++) {
+        const a = i / 14 * 6.2832, h = hash(i * 19 + 100);
+        const tx = cx + Math.cos(a) * ringMid;
+        const tz = cz + Math.sin(a) * ringMid;
         if (onTrack(tx, tz, 14)) continue;
-        // Use addCone for individual tree-mass hilltops at the bowl crest
-        addCone(out, [tx, pyMin, tz], 22 + h * 12, 20 + h * 12,
-                h < 0.45 ? TREE : TREE2, 8, null);
+        addCone(out, [tx, pyMin, tz], 20 + h * 10, 18 + h * 10,
+                h < 0.45 ? TREE : TREE2, 7, null);
       }
 
       // ====================================================================
-      // STADIUM SECTION — Turns 1–4 cluster (the famous big bowl stands)
-      // The Hungaroring's stadium section has huge banked grandstands on
-      // both sides overlooking the hairpin and early corners.
+      // STADIUM SECTION — Turns 1–4 cluster (large natural-bowl grandstands)
+      // The famous Hungaroring stadium section has tiered stands on both sides.
       // ====================================================================
-      // Grid stands (pit straight right, s~0): main T-shaped covered stand
-      grandstand(0.00, 1,  9, 100, SHELL,  CROWD[1]);   // Grid 1 — closest to grid
-      grandstand(0.00, 1, 28,  90, SHELL2, CROWD[0]);   // Grid 2 — behind Grid 1
+      // Grid stands: pit straight right, main covered Tribune
+      grandstand(0.00, 1,  9, 100, SHELL,  CROWD[1]);   // Grid 1 (main straight)
+      grandstand(0.00, 1, 28,  90, SHELL2, CROWD[0]);   // Grid 2 (behind Grid 1)
       billboard(K(0.00), 1, 28, 26, 7, RED);
-      // T1 grandstand: right side, spanning Turn 1 braking zone
-      grandstand(0.06,  1,  9,  80, SHELL,  CROWD[0]);
-      grandstand(0.06,  1, 26,  70, SHELL2, CROWD[2]);  // second tier behind T1
-      // Turn 1 inside (Apex 1/2): classic Hungaroring banked inside stands
-      grandstand(0.10, -1, 10,  60, SHELL,  CROWD[2]);
-      grandstand(0.10, -1, 28,  52, SHELL2, CROWD[3]);  // banking behind apex stands
-      // Turn 2-3 corridor, both sides — the stadium pinch
-      grandstand(0.14,  1, 11,  50, SHELL,  CROWD[1]);
-      grandstand(0.14, -1, 10,  48, SHELL2, CROWD[0]);
-
-      // ====================================================================
-      // SECTOR GRANDSTANDS — scattered stands throughout the back sections
-      // ====================================================================
-      grandstand(0.35, -1, 10, 48, SHELL,  CROWD[1]);   // Twisty sector L (Chicane)
-      grandstand(0.40,  1, 11, 46, SHELL,  CROWD[0]);   // Twisty sector R
-      grandstand(0.55, -1, 10, 50, SHELL,  CROWD[1]);   // Sector exit L
-      grandstand(0.68, -1, 10, 44, SHELL,  CROWD[2]);   // Late-lap L
-      grandstand(0.80,  1, 10, 40, SHELL,  CROWD[3]);   // Final approach R
+      // T1 grandstand group: outside of Turn 1 braking zone
+      grandstand(0.06,  1,  9,  70, SHELL,  CROWD[0]);
+      // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
+      grandstand(0.10, -1, 10,  56, SHELL,  CROWD[2]);
+      // Sector grandstands across the back of the circuit
+      grandstand(0.12, -1, 10, 44, SHELL,  CROWD[2]);
+      grandstand(0.35, -1, 10, 48, SHELL,  CROWD[1]);
+      grandstand(0.40,  1, 11, 46, SHELL,  CROWD[0]);
+      grandstand(0.55, -1, 10, 50, SHELL,  CROWD[1]);
+      grandstand(0.68, -1, 10, 44, SHELL,  CROWD[2]);
+      grandstand(0.80,  1, 10, 40, SHELL,  CROWD[3]);
       grandstand(0.90,  1, 10, 62, SHELL,  CROWD[0]);   // Club stand — final corner
-      grandstand(0.90, -1, 11, 44, SHELL2, CROWD[1]);   // Inside final corner
 
       // ====================================================================
-      // GRANDSTAND ACCENT STRIPS — lit fascia + concourse window detail
+      // GRANDSTAND ACCENT STRIPS — lit fascia + concourse window bands
       // ====================================================================
       const FASCIA  = [0.94, 0.92, 0.84];
       const FASCIA2 = [0.78, 0.80, 0.82];
@@ -169,10 +144,9 @@
       };
       standAccent(0.00, 1, 9,  100);
       standAccent(0.00, 1, 28,  90);
-      standAccent(0.06, 1, 9,   80);
-      standAccent(0.06, 1, 26,  70);
-      standAccent(0.10, -1, 10, 60);
-      standAccent(0.14,  1, 11, 50);
+      standAccent(0.06, 1, 9,   70);
+      standAccent(0.10, -1, 10, 56);
+      standAccent(0.12, -1, 10, 44);
       standAccent(0.35, -1, 10, 48);
       standAccent(0.40,  1, 11, 46);
       standAccent(0.55, -1, 10, 50);
@@ -183,8 +157,8 @@
       // Grandstand lit-window concourse strips
       const gsLit = [
         { s: 0.00, side: 1, gap: 18, len: 96 },
-        { s: 0.06, side: 1, gap: 14, len: 76 },
-        { s: 0.10, side: -1, gap: 15, len: 56 },
+        { s: 0.06, side: 1, gap: 14, len: 66 },
+        { s: 0.10, side: -1, gap: 15, len: 52 },
         { s: 0.35, side: -1, gap: 15, len: 44 },
         { s: 0.55, side: -1, gap: 15, len: 46 },
         { s: 0.90, side: 1, gap: 15, len: 58 },
@@ -197,31 +171,27 @@
       }
 
       // ====================================================================
-      // WOODED HILLSIDE TREELINES — forestEdge() covers the whole circuit
-      // These represent the famous oak/pine hillsides visible from everywhere
-      // on the Hungaroring. Gap=8 keeps all canopy behind the catch fences.
+      // WOODED HILLSIDE TREELINES — forestEdge() covers the full circuit
+      // Gap=8 keeps all canopy safely behind the catch fences.
       // ====================================================================
-      // Outside (side=1): continuous hillside — T1→T4 stadium valley wall
-      forestEdge(0.0,  0.18, 1, 8, { density: 0.60, hMin: 9, hMax: 15,
+      // Outside: continuous hillside, denser in the stadium section
+      forestEdge(0.0,  0.18, 1, 8, { density: 0.58, hMin: 9, hMax: 15,
                                       col: TREE, col2: TREE2, pineFrac: 0.40 });
-      // Outside T4→T7: more open with slightly lighter greens
-      forestEdge(0.18, 0.50, 1, 8, { density: 0.48, hMin: 7, hMax: 13,
+      forestEdge(0.18, 0.50, 1, 8, { density: 0.46, hMin: 7, hMax: 13,
                                       col: TREE2, col2: TREE, pineFrac: 0.32 });
-      // Outside back sector: denser wooded hillside
-      forestEdge(0.50, 1.00, 1, 8, { density: 0.52, hMin: 8, hMax: 14,
-                                      col: TREE, col2: TREE2, pineFrac: 0.42 });
-
-      // Inside (side=-1): tighter valley wall — more pines on inner slopes
-      forestEdge(0.0,  0.12, -1, 8, { density: 0.55, hMin: 7, hMax: 13,
+      forestEdge(0.50, 1.00, 1, 8, { density: 0.50, hMin: 8, hMax: 14,
+                                      col: TREE, col2: TREE2, pineFrac: 0.40 });
+      // Inside: tighter valley wall
+      forestEdge(0.0,  0.12, -1, 8, { density: 0.52, hMin: 7, hMax: 13,
                                        col: TREE, col2: TREE2, pineFrac: 0.55 });
-      forestEdge(0.14, 0.35, -1, 8, { density: 0.46, hMin: 8, hMax: 13,
+      forestEdge(0.14, 0.35, -1, 8, { density: 0.44, hMin: 8, hMax: 13,
                                        col: TREE2, col2: TREE, pineFrac: 0.38 });
-      forestEdge(0.35, 0.55, -1, 8, { density: 0.54, hMin: 8, hMax: 14,
-                                       col: TREE, col2: TREE2, pineFrac: 0.45 });
-      forestEdge(0.55, 1.00, -1, 8, { density: 0.50, hMin: 7, hMax: 12,
+      forestEdge(0.35, 0.55, -1, 8, { density: 0.50, hMin: 8, hMax: 14,
+                                       col: TREE, col2: TREE2, pineFrac: 0.42 });
+      forestEdge(0.55, 1.00, -1, 8, { density: 0.46, hMin: 7, hMax: 12,
                                        col: TREE2, col2: TREE, pineFrac: 0.38 });
 
-      // Dry scrub close to the edge (gap=9, sparse)
+      // Dry scrub spots at the edge (gap=9, sparse)
       every(44, (kk) => {
         for (const side of [-1, 1]) {
           const s = hash(kk * 37 + side * 11);
@@ -269,7 +239,6 @@
       guardrail(0.00, 1.00, -1, 4.5, STEEL);  // inside armco, full lap
       // Catch fences in front of busy spectator zones
       fence(0.95, 0.20,  1, 6.5, 7, STEEL);   // main straight + Turn 1
-      fence(0.05, 0.18, -1, 6.5, 7, STEEL);   // stadium inside apex
       fence(0.30, 0.45, -1, 6.5, 7, STEEL);   // mid-sector inside
       fence(0.52, 0.62,  1, 6.5, 7, STEEL);   // twisty-sector stands
       // Tyre walls at high-risk braking points
@@ -286,9 +255,8 @@
       }
 
       // ====================================================================
-      // PIT COMPLEX (s=0, inside) + MAIN GRANDSTAND (s=0, outside)
+      // PIT COMPLEX (inside, s≈0) + MAIN GRANDSTAND (outside, s≈0)
       // ====================================================================
-      // Main pit building: modern white concrete
       building(K(0.00), -1, 2, 14, 9, 70, { wall: WHITE, window: WIN_WARM, lit: true, floor: 4 });
       groundPlane(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK);
       // Rear hospitality/paddock building
@@ -317,16 +285,15 @@
       }
 
       // ====================================================================
-      // ACCENT FEATURES — water pond, hedge row, Hungarian flags
+      // ACCENT FEATURES — water pond, hedge, Hungarian flags
       // ====================================================================
       // Water feature in the valley floor (gap=75 clears track)
       groundPlane(K(0.08), 1, 75, [80, 1.0, 60], WATER);
-      // Dense hedge row along the pit complex fence line
       hedge(0.04, 0.11, 1, 32, 4, TREE);
 
       // Hungarian tricolour accent billboards (red/white/green)
-      billboard(K(0.02), -1, 22, 10, 4, [0.20, 0.48, 0.20]);   // green band
-      billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red band
+      billboard(K(0.02), -1, 22, 10, 4, [0.20, 0.48, 0.20]);   // green
+      billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red
 
       // ====================================================================
       // KERB ACCENTS at key corners
@@ -338,16 +305,16 @@
 
       // ====================================================================
       // SPARSE CROWD ACCENTS on the natural amphitheatre banking
-      // These small flat props read as spectators on the grass hillsides —
-      // the Hungaroring's famous "free-range" viewing areas on the slopes.
+      // Small flat props representing spectators on the grassy slopes —
+      // the Hungaroring's famous "hill-viewing" areas.
       // ====================================================================
-      every(35, (kk) => {
+      every(30, (kk) => {
         for (const side of [-1, 1]) {
           const hh = hash(kk * 23 + side * 5);
-          if (hh < 0.50) continue;   // sparser than before — hillside not rammed
-          const base = 36 + hh * 24; // pushed further back (hillside distance)
+          if (hh < 0.40) continue;
+          const base = 32 + hh * 22;
           const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
-          prop(kk, side, base, [12, 1.6 + hh * 1.0, 14], col);
+          prop(kk, side, base, [14, 1.8 + hh * 1.2, 16], col);
         }
       });
     },

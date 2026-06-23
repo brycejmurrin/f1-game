@@ -189,8 +189,11 @@
       groundPlane(K(0.02), 1, 9,  [12, 180], BANK);    // start straight bank
       groundPlane(K(0.08), 1, 10, [12, 140], BANK);    // Tamburello bank
       groundPlane(K(0.13), 1, 10, [11, 110], BANK);    // Villeneuve bank
-      // Dense riverside treeline from pit straight to Tosa hairpin
-      hedge(0.02, 0.28, 1, 30, 9, WOODS);
+      // Riverside treeline from pit straight to Tosa — willows & poplars along the
+      // Santerno bank. forestEdge() places organic tree silhouettes; gap=18 keeps
+      // them clear of the bank groundPlanes and the river water.
+      forestEdge(0.02, 0.28, 1, 18, { density: 0.55, hMin: 9, hMax: 14,
+        col: WOODS, col2: [0.16, 0.40, 0.18], pineFrac: 0.25 });
 
       // ---- s 0.00 L — Old pit building + main grandstand on the pit straight ----
       building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });

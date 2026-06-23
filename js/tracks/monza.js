@@ -33,8 +33,8 @@
     elevations: [{ s: 0.55, halfM: 320, rise: 7 }],
     scenery: function (api) {
       const { out, n, ds, pyMin, place, prop, backdrop, groundPlane, groundYAt, every,
-        onTrack, hash, pine, tree, bush, hedge, ridge, building, tower, grandstand,
-        billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
+        onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, tower,
+        grandstand, billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
         addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
         px, pz } = api;
       const K = (s) => Math.round(s * n) % n;

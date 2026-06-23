@@ -27,6 +27,7 @@
       const { out, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
               addBox, addCyl, addPrism, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
               mountain, peak, bush, hedge, grandstand, tower,
+              pine, tree, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -58,31 +59,35 @@
 
       // -----------------------------------------------------------------------
       // North Sea horizon — flat sea / beach / dune-fringe bands.
-      // Anchor tops just BELOW pyMin so they never float on elevated sections.
-      // Box height is generous (6m) so they fill downward and stay visible.
+      // Sea and beach stay as flat slabs (they ARE flat), but the dune-fringe
+      // closest band is replaced with organic mountain() mounds for a sandy
+      // ridge silhouette rather than a uniform boxy shelf.
       // -----------------------------------------------------------------------
-      for (let i = 0; i < 16; i++) {
-        const a = Math.PI * 0.55 + (i / 15) * Math.PI * 0.9;  // seaward arc
+      for (let i = 0; i < 14; i++) {
+        const a = Math.PI * 0.50 + (i / 13) * Math.PI * 1.0;  // seaward arc
         const cosA = Math.cos(a), sinA = Math.sin(a);
 
-        // Far sea — lowest band, deepest blue
-        const sx = cx0 + cosA * (lapRad + 680);
-        const sz = cz0 + sinA * (lapRad + 680);
-        if (!onTrack(sx, sz, 35))
-          addBox(out, [sx, pyMin - 3.0, sz], [140, 6, 140], seaCol);
+        // Far sea — flat water plane, stays as low box
+        const sx = cx0 + cosA * (lapRad + 700);
+        const sz = cz0 + sinA * (lapRad + 700);
+        if (!onTrack(sx, sz, 40))
+          addBox(out, [sx, pyMin - 4.0, sz], [160, 6, 160], seaCol);
 
-        // Mid beach sand band
-        const bx = cx0 + cosA * (lapRad + 500);
-        const bz = cz0 + sinA * (lapRad + 500);
-        if (!onTrack(bx, bz, 30))
-          addBox(out, [bx, pyMin - 2.2, bz], [130, 5, 90], beachCol);
+        // Mid beach sand band — flat (beaches are flat)
+        const bx = cx0 + cosA * (lapRad + 510);
+        const bz = cz0 + sinA * (lapRad + 510);
+        if (!onTrack(bx, bz, 32))
+          addBox(out, [bx, pyMin - 2.5, bz], [140, 5, 100], beachCol);
 
-        // Near dune-sand fringe — topmost, only barely below pyMin so it
-        // reads as a continuous sandy shelf at the dune base
-        const dx = cx0 + cosA * (lapRad + 360);
-        const dz = cz0 + sinA * (lapRad + 360);
-        if (!onTrack(dx, dz, 25))
-          addBox(out, [dx, pyMin - 1.4, dz], [120, 4, 80], duneCol);
+        // Near dune-fringe — organic mounds via peak() so dune shoulder
+        // reads as undulating terrain, not a flat slab
+        const dx = cx0 + cosA * (lapRad + 350);
+        const dz = cz0 + sinA * (lapRad + 350);
+        const dw = 55 + hash(i * 17 + 3) * 40;       // 55–95 m base width
+        const dh = 10 + hash(i * 23 + 7) * 12;       // 10–22 m height
+        if (!onTrack(dx, dz, dw * 0.75))
+          peak(dx, dz, pyMin - 1.0, dw, dh,
+               hash(i * 5) < 0.5 ? sand : sandLt);
       }
 
       // -----------------------------------------------------------------------
@@ -139,35 +144,27 @@
 
       // -----------------------------------------------------------------------
       // COASTAL DUTCH PINES — dark conifers in dense clusters on dune slopes.
-      // Use pine() directly (it places trunk + 3 stacked cones, properly anchored).
-      // But pine() is not in the destructured list so we build manually via
-      // addCyl / addCone — same as previous pass, but with corrected Y offsets:
-      //   trunk center at a.c + u*(th*0.5)  → trunk spans a.c[1] to a.c[1]+th
-      //   bottom canopy cone at a.c + u*(th) → canopy starts exactly at trunk top
-      // This removes the floating-canopy bug where cone was offset by th*1.05.
+      // Use forestEdge() which guarantees no barrier clipping and handles
+      // canopy-radius clearance automatically.
+      // Zandvoort has scattered Scots pine stands on the inland dune backs —
+      // mixed with open sand gaps.  pineFrac=0.85 gives mostly pines with some
+      // broadleaf scrub.  Density 0.45 → sparse/gappy (authentic dune pine).
       // -----------------------------------------------------------------------
-      every(20, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 91 + side * 17) > 0.50) continue;   // ~50% of locations
-          const baseDist = 50 + hash(k * 92 + side) * 40;  // 50–90 m from verge
-          const treeCount = hash(k * 92.5 + side) < 0.5 ? 2 : 3;
-          for (let t = 0; t < treeCount; t++) {
-            const offsetDist = hash(k * 93.2 + side + t * 0.3) * 8 - 4;
-            const dist = baseDist + offsetDist;
-            const a = anchor(k, side, dist);
-            if (onTrack(a.c[0], a.c[2], 10)) continue;
-            const b = [a.r, a.u, a.t];
-            const th = 6 + hash(k * 93.5 + side + t) * 4;   // 6–10 m
-            // Trunk: center at th*0.5 above anchor, height th → base at a.c[1]
-            addCyl(out, vadd(a.c, a.u, th * 0.5), 0.35, th, [0.23, 0.30, 0.18], 5, b);
-            // Bottom canopy layer: base at trunk top (th above ground)
-            const coneH = th * 0.6 + hash(k * 94 + side + t) * 2;
-            addCone(out, vadd(a.c, a.u, th), th * 0.55, coneH, [0.16, 0.36, 0.12], 6, b);
-            // Upper narrower canopy tier
-            addCone(out, vadd(a.c, a.u, th + coneH * 0.55), th * 0.32, coneH * 0.55, [0.14, 0.32, 0.10], 6, b);
-          }
-        }
-      });
+      const pineCol  = [0.16, 0.34, 0.12];   // dark coastal pine
+      const pineCol2 = [0.20, 0.38, 0.14];   // slightly lighter broadleaf scrub
+
+      // Inland-side dune pine belt — sectors where inland forest exists
+      forestEdge(0.22, 0.46,  1, 55, { density: 0.42, hMin: 7, hMax: 13,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.88 });
+      forestEdge(0.22, 0.46, -1, 48, { density: 0.38, hMin: 6, hMax: 12,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.85 });
+      forestEdge(0.56, 0.82,  1, 50, { density: 0.40, hMin: 7, hMax: 14,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.80 });
+      forestEdge(0.56, 0.82, -1, 45, { density: 0.35, hMin: 6, hMax: 11,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.82 });
+      // Thinner pine fringe on the approaches to the grandstand complex
+      forestEdge(0.88, 0.99,  1, 28, { density: 0.30, hMin: 6, hMax: 10,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.75 });
 
       // -----------------------------------------------------------------------
       // MARRAM GRASS — dense tufts along both verges for continuous dune-grass feel.
