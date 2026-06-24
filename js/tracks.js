@@ -1828,6 +1828,40 @@ const Tracks = (function () {
       wall, fence, guardrail, tyreWall, recordBarrier,
     });
 
+    // Generic floodlight masts — EVERY circuit gets them (visible day and night).
+    // Co-located with the point lights (game.js buildTrackLights uses the same
+    // 40 m stride, hw+6 offset and side parity) so each light pool reads as cast
+    // by a real mast. Street/modern circuits get slim lamp posts with an arm over
+    // the track; open circuits get tall floodlight banks. The lens uses a bright
+    // albedo so the prop-emissive (ramped up as the sun drops) makes it glow at
+    // night. Theme tints the lens warm (desert) / cool (street/modern) / neutral.
+    {
+      const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
+      const mastH = stTheme ? 9 : 13;
+      const lensCol = theme === "desert" ? [1.0, 0.84, 0.50]
+                    : stTheme ? [0.90, 0.95, 1.05]
+                    : [1.0, 0.93, 0.78];
+      const poleCol = [0.16, 0.16, 0.19];
+      const mstride = Math.max(1, Math.round(40 / ds));
+      let mi = 0;
+      for (let k = 0; k < n; k += mstride, mi++) {
+        const side = (mi % 2 === 0) ? 1 : -1;
+        const a = anchor(k, side, 6);
+        if (onTrack(a.c[0], a.c[2], 1.2)) continue;
+        const b = [a.r, a.u, a.t];
+        addCyl(out, a.c, 0.17, mastH, poleCol, 6, b);
+        const top = vadd(a.c, a.u, mastH);
+        if (stTheme) {
+          const arm = vadd(top, a.r, -side * 1.0);
+          addBox(out, arm, [2.0, 0.26, 0.45], poleCol, b);
+          addBox(out, vadd(arm, a.r, -side * 0.85), [0.9, 0.42, 0.66], lensCol, b);
+        } else {
+          addBox(out, top, [2.6, 1.0, 1.2], [0.70, 0.70, 0.74], b);
+          addBox(out, vadd(top, a.r, -side * 0.7), [2.2, 0.8, 0.4], lensCol, b);
+        }
+      }
+    }
+
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road
     const brs = def.bridges;
