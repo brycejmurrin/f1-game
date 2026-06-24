@@ -461,15 +461,13 @@
         const s = 0.77 + i * 0.025;
         grandstand(s, -1, 20, 80, GREYWHITE, PASTELS[i % PASTELS.length]);   // gap 20 (was 12) so the chase cam never ends up inside the stand; shorter so they don't merge into one long wall
       }
-      // Coherent back-straight building facades both sides
+      // Back-straight facades on the OUTER (spectator) side only. The +1 side
+      // faces the narrow grass median shared with the final straight (~15 m of
+      // grass), so no tall buildings go there — it would loom over / appear to
+      // cover the parallel track from overhead. Median keeps grass + palms.
       cityFront(0.76, 0.86, -1, 34, {
         minH: 16, maxH: 38, depth: 22, step: 20,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
-      });
-      cityFront(0.76, 0.86, 1, 34, {
-        minH: 12, maxH: 28, depth: 20, step: 22,
-        palette: [CORAL, TEAL, PINK, [1.0, 0.85, 0.55], GREYWHITE],
-        lit: true, windowCol: WIN_COOL,
       });
       for (let i = 0; i < 12; i++) {
         palm(K(0.76 + i * 0.006), (i % 2) ? 1 : -1, 12 + (i % 2) * 4, 8 + hash(i * 5) * 2, PALM_GREEN);
@@ -487,7 +485,10 @@
       // ===================================================================
       // s 0.88–0.96 R — PADDOCK & FINAL CORNER: team buildings + grandstand
       // ===================================================================
-      cityFront(0.87, 0.97, 1, 18, {
+      // Paddock / team buildings sit on the OUTER (-1) side, behind the final-
+      // corner grandstands (gap 22 clears the 14 m stands). The +1 side here
+      // faces the same narrow median as the back straight, so it stays open.
+      cityFront(0.87, 0.97, -1, 22, {
         minH: 10, maxH: 28, depth: 22, step: 18,
         palette: [WHITE, ...SKY_PAL], lit: true, windowCol: WIN_AMBER,
       });
