@@ -180,6 +180,27 @@ const obs = await page.evaluate(() =>
 
 100+ Playwright specs (50+ files). Run groups with `npm run test:<group>` (see Key commands).
 
+**Testing philosophy — debug-hooks first.** Prefer assertions driven by the
+`window.__apex` API and geometric/mesh probes over rendering- or timing-based
+heuristics:
+- Assert **behaviour and geometry**, not brittle magnitudes. A threshold like
+  "speed > 10 after 2 s" goes stale the moment physics is retuned; prefer
+  relative/directional checks ("faster on tarmac than on grass", "heading barely
+  changes off-track with zero steer", "reverses then recovers to forward"). The
+  off-track specs were tightened this way after several thresholds drifted stale.
+- Use the deterministic hooks: `obs()`/`act()`/`reset()` (headless control loop),
+  `step()`+`physState()`/`probe()` (physics), `groundY()`/`Tracks.terrainY()`
+  (rendered-terrain raycast — exact geometry, e.g. `terrain-over-road.spec.js`),
+  `eyeAt()`/`orbit()`/`view()` (deterministic camera framing for screenshots).
+- A few **legacy specs are coarse rendering heuristics** and are inherently
+  flakier: `blank-scan/*` (PNG byte-size thresholds; the geometric
+  `terrain-over-road.spec.js` is the modern successor for the terrain-over-road
+  subclass) and `visual-regression-*` (pixel diff). Keep them, but write *new*
+  checks against hooks/geometry where possible.
+- When a spec fails, first check whether it's a **stale expectation** vs the
+  current intended behaviour (does the assertion still match the design?) before
+  assuming a regression — confirm by reading the actual hook values.
+
 | Spec(s) | What they cover |
 |---|---|
 | `smoke.spec.js` | page loads, `__apex` available, race starts |
