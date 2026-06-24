@@ -172,6 +172,35 @@ __apex.view({ s: 0.16, side: "L", dist: 18, height: 10 }); // survey left-side s
 __apex.view({ eye: [0, 40, 0], yaw: 0, pitch: -90 });      // free-look straight down
 ```
 
+#### Recipe: a full straight-down top-down of the whole circuit
+
+`view({ azimuth, elevation })` caps `elevation` at **85°** — it never looks
+*perfectly* vertical. For a true plan-view map shot, size the altitude from
+`trackBounds()` and pass an explicit `eye`/`target` straight down:
+
+```js
+// 1. render MUST be running — do NOT enable headless() (it freezes the canvas)
+__apex.race("monaco");
+__apex.hud(false);                          // optional: clean map, no HUD
+
+// 2. fit the larger span into the vertical FOV (here 60°), plus a margin
+const b   = __apex.trackBounds();           // {spanX, spanZ, centerFrac, minX..maxZ}
+const cx  = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
+const vf  = 60 * Math.PI / 180, aspect = innerWidth / innerHeight;
+const altZ = (b.spanZ / 2) / Math.tan(vf / 2);
+const altX = (b.spanX / 2) / Math.tan(Math.atan(Math.tan(vf / 2) * aspect));
+const alt  = Math.ceil(Math.max(altZ, altX) * 1.18);   // +18% margin
+
+// 3. eye nudged +5 m in Z so the up-vector isn't degenerate (eye exactly over
+//    target makes worldUp × back collapse → NaN camera)
+__apex.view({ eye: [cx, alt, cz + 5], target: [cx, 0, cz], fov: 60, far: alt * 4, fog: 0 });
+```
+
+Three gotchas this avoids, all of which produce a blank/grey frame:
+**(a)** headless on → render skipped → stale frame; **(b)** `elevation` capped at
+85° so `view({elevation:90})` is never vertical; **(c)** eye placed exactly above
+target → degenerate camera basis.
+
 ### `eyeAt(f, lat?, h?, lookF?, lookLat?, lookH?) → {eye, target}`
 Track-relative free-cam placement — no hand-computed world coords. Eye sits at
 lap-fraction `f`, `lat` m off the centreline (+right), `h` m up (default 2.5),
@@ -609,6 +638,30 @@ const maxY = Math.max(...pts.map(p => p.y));
 const minY = Math.min(...pts.map(p => p.y));
 ```
 
+### `trackBounds() → {minX, maxX, minZ, maxZ, spanX, spanZ, centerFrac} | null`
+World-space bounding box of the loaded circuit (metres) plus `centerFrac`, the
+lap-fraction whose node is closest to the geographic centre. The go-to hook for
+framing whole-track shots — feed `centerFrac` to `orbit()` or compute an altitude
+from `spanX`/`spanZ` for a straight-down `view({eye,target})` (see the top-down
+recipe under `view()`).
+
+```js
+const b = __apex.trackBounds();
+__apex.orbit(b.centerFrac, 0, 85, b.spanZ * 1.1);   // near-top-down (85° cap)
+```
+
+### `mapPts() → [[x, y], …] | null`
+The circuit's 2D minimap polyline — the same `track.map` array used to draw the
+in-game minimap and track-selector preview. Each entry is `[x, y]` **normalised to
+[0,1]**, with `x=0..1` east and `y=0..1` where **0 = north** (top of map). Ideal
+for asserting minimap orientation without a screenshot. `null` if no track.
+
+### `trackShape(n?) → [{frac, x, z, k}, …] | null`
+Sample the centreline at `n` evenly-spaced points (default 200, max 2000). `x`/`z`
+are the world centreline **normalised to [0,1]** and aspect-centred within a unit
+square (handy for plotting a custom 2D layout); `k` is curvature (rad/m) at each
+point.
+
 ---
 
 ## Misc
@@ -651,6 +704,16 @@ no argument returns the current state.
 __apex.headless(true);   // skip render — physics-only loop
 __apex.headless(false);  // restore normal rendering
 ```
+
+> ⚠️ **Headless skips ALL rendering — never combine it with screenshots.**
+> Because `render()` returns early in headless mode, the WebGL canvas is *frozen*
+> on whatever frame was last drawn. Any `view()` / `orbit()` / `camera()` change
+> you make while headless takes effect in the game state but is **never drawn**,
+> so a Playwright `page.screenshot()` captures a **stale frame** — typically the
+> grid/chase view from before you moved the camera (the classic "I framed a
+> beautiful aerial but the PNG shows a grey wall" trap). For any visual capture,
+> leave headless **off** (or call `__apex.headless(false)` first) so the render
+> loop runs. Headless is for the physics-only `obs()`/`act()` loop only.
 
 ### `obs() → observation | null`
 Full debug observation of the current game state — superset of `physState()` and
