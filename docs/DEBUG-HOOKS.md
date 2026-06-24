@@ -12,6 +12,17 @@ line, increasing in the racing direction. Internally that maps to an arc-length
 **`+` = right**, `−` = left. World heading lives in `player.head`; the steering /
 slip convention is `+steer → turns right (+x)`.
 
+**Prefer these hooks for test assertions.** They give deterministic,
+geometry-/physics-grounded checks that don't drift when art or tuning changes:
+`step()`+`physState()`/`probe()` and the `obs()`/`act()`/`reset()` headless loop
+for behaviour; `groundY()` / `Tracks.terrainY()` for exact rendered-terrain
+geometry; `eyeAt()`/`orbit()`/`view()` for reproducible camera framing. Assert
+*behaviour and relative/geometric facts* ("tarmac faster than grass", "no terrain
+above the racing line", "heading barely changes off-track") rather than brittle
+absolute magnitudes, which go stale as physics is retuned. The older
+`blank-scan/*` (PNG byte-size) and `visual-regression-*` (pixel-diff) specs are
+coarser rendering heuristics — keep them, but write new checks against hooks.
+
 ## Catalog & meta
 
 ### `tracks() → [{id, name, i}, …]`
