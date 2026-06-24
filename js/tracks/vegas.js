@@ -106,12 +106,18 @@
       let trad = 0;
       for (let i = 0; i < n; i++) trad = Math.max(trad, Math.hypot(px[i] - cx, pz[i] - cz));
       const ring = trad + 520;
-      const desertN = 20;   // fewer, wider boxes read the same as a distant silhouette
+      const desertN = 22;
       for (let i = 0; i < desertN; i++) {
-        const a = i / desertN * 6.2832, h = hash(i * 7 + 3);
+        const a = i / desertN * 6.2832, h = hash(i * 7 + 3), h2 = hash(i * 13 + 2);
         const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
         if (onTrack(mx, mz, 60)) continue;
-        addBox(out, [mx, pyMin + (24 + h * 30) / 2, mz], [300 + h * 220, 24 + h * 30, 200], DARKROCK);
+        // Distant desert mesa/butte: a broad SLOPED landform (wide base easing to a
+        // flatter top) plus a lower foothill skirt — reads as mountains on the
+        // horizon, not the flat black rectangular prisms boxes used to give.
+        const mh = 34 + h * 56, baseR = 150 + h2 * 130;
+        const rock = [DARKROCK[0] * (0.9 + h * 0.4), DARKROCK[1] * (0.9 + h * 0.4), DARKROCK[2] * (0.95 + h * 0.5)];
+        addFrustum(out, [mx, pyMin - 4, mz], baseR * 1.5, baseR * 0.95, mh * 0.42, [rock[0] * 1.1, rock[1] * 1.1, rock[2] * 1.1], 6);
+        addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
       // --- DISTANT NIGHT SKYLINE RING: a far band of lit highrise blocks all the way
@@ -119,24 +125,36 @@
       {
         const sky = trad + 300;
         const skyN = 56;
+        const SKYTINT = [CYAN, WARM, VIOLET, BLUE, ROSE];
         for (let i = 0; i < skyN; i++) {
           const a = i / skyN * 6.2832, h = hash(i * 11 + 17), h2 = hash(i * 23 + 5);
           const mx = cx + Math.cos(a) * sky, mz = cz + Math.sin(a) * sky;
           if (onTrack(mx, mz, 80)) continue;
           const bh = 50 + h * 130, bw = 34 + h2 * 30, bd = 34 + h2 * 26;
-          // Tower body lifted off pure black (city ambient/neon spill) so it
-          // reads as a lit highrise, not a black plane.
-          addBox(out, [mx, pyMin + bh / 2, mz], [bw, bh, bd], [0.20, 0.18, 0.26]);
-          // Stacked lit window bands up the whole tower so it glows, not just a
-          // crown — the floors twinkle like a real night skyline.
-          const floors = Math.max(4, Math.round(bh / 12));
-          const fh = bh / floors;
-          const neon = NEON[i % NEON.length];
+          const tint = SKYTINT[i % SKYTINT.length];
+          // Glowing glass skin (continuous, not a checker of bands). Kept in a
+          // moderate band: above the shader's emissive glow gate (~0.55) so it
+          // reads as lit, but well below HDR so the distant ring doesn't bloom into
+          // the blown-out pink/cyan blobs it did before.
+          const lvl = 0.6 + h2 * 0.22;
+          const skin = [tint[0] * lvl + 0.06, tint[1] * lvl + 0.06, tint[2] * lvl + 0.08];
+          const baseH = bh * 0.78;
+          addBox(out, [mx, pyMin + baseH / 2, mz], [bw, baseH, bd], skin);
+          // thin dark floor spandrels — storey rhythm without the checker
+          const floors = Math.max(3, Math.round(baseH / 18));
           for (let f = 1; f < floors; f++) {
-            const wc = hash(i * 7 + f * 3) < 0.4 ? [0.06, 0.06, 0.09] : neon;
-            addBox(out, [mx, pyMin + (f + 0.5) * fh, mz], [bw * 1.02, fh * 0.5, bd * 1.02], wc);
+            addBox(out, [mx, pyMin + f * (baseH / floors), mz], [bw * 1.02, 0.9, bd * 1.02], [0.05, 0.05, 0.08]);
           }
-          addBox(out, [mx, pyMin + bh - 3, mz], [bw * 1.03, 5, bd * 1.03], neon);   // bright crown
+          // TAPERED frustum crown → a slim top, not a flat box edge
+          const crownCol = [tint[0] * 0.6 * lvl + 0.05, tint[1] * 0.6 * lvl + 0.05, tint[2] * 0.6 * lvl + 0.07];
+          addFrustum(out, [mx, pyMin + baseH, mz], Math.max(bw, bd) * 0.5, Math.max(bw, bd) * 0.28, bh - baseH, crownCol, 6);
+          const neon = NEON[i % NEON.length];
+          addBox(out, [mx, pyMin + bh - 2, mz], [bw * 0.55, 3, bd * 0.55], neon);   // bright crown band
+          // spires on the taller landmark towers
+          if (h > 0.55) {
+            addCyl(out, [mx, pyMin + bh, mz], 0.4, 6 + h * 16, [0.5, 0.5, 0.56], 4);
+            addBox(out, [mx, pyMin + bh + 6 + h * 16, mz], [1.2, 1.2, 1.2], [3.2, 0.4, 0.3]);  // beacon
+          }
         }
       }
 
