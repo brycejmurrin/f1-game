@@ -614,7 +614,7 @@ function applyRaceSettings() {
     if (night) {
       frameSky.zenith = [0.01, 0.02, 0.05];
       frameSky.horizon = [0.04, 0.03, 0.06];
-      frame.sunColor = [0.3, 0.3, 0.4];
+      frame.sunColor = [0.16, 0.18, 0.26];   // dim moonlight scene sun (floodlights light the track)
       frame.ambientGround = [0.03, 0.03, 0.06];
       frame.ambientSky = [0.08, 0.08, 0.14];
       frame.fogColor = [0.03, 0.03, 0.06];
@@ -695,6 +695,12 @@ function applyRaceSettings() {
   } else {
     // "default" — driven by the track palette; set moon for night tracks
     frameSky.moon = isNightSession ? 0.85 : 0;
+    // Dim the SCENE sun to soft moonlight at night. Many night palettes ship a
+    // bright, near-overhead sun (it drives the sky glow) — left undimmed it lit
+    // the road/scenery like daytime, which is why night looked washed (Singapore).
+    // frameSky.sunColor is left alone so the warm sky/dusk glow survives; the
+    // floodlights (buildTrackLights) now carve out the actually-lit areas.
+    if (isNightSession) frame.sunColor = [0.16, 0.18, 0.26];
     _cloudBase = frameSky.cloud !== undefined ? frameSky.cloud
                : (isNightSession ? 0.22 : 0.4);
 
@@ -704,10 +710,20 @@ function applyRaceSettings() {
     // without touching tracks that are already brighter (a floor, not a
     // multiply — brilliantly-lit street circuits keep their tuned values).
     if (isNightSession && frame.ambientSky && frame.ambientGround) {
-      const floorSky = [0.11, 0.11, 0.17], floorGnd = [0.05, 0.05, 0.09];
+      // Floor: lift very-dark night palettes so the road/scenery always read.
+      // Ceiling: pull DOWN over-bright night palettes so a night race actually
+      // looks like night — the road is up-facing so it's lit mostly by ambSky,
+      // and a value like 0.55 renders it daylight-gray. Neon/floodlights survive
+      // because lit windows etc. use emissive (sun/ambient-independent). Result:
+      // a consistent moody-night ambient band regardless of per-track tuning.
+      // Dark, moody base now that floodlights/street lights carve out the lit
+      // areas (see buildTrackLights). Floor keeps the unlit scene barely legible;
+      // the low cap stops over-bright palettes from washing the night to daylight.
+      const floorSky = [0.045, 0.05, 0.09], floorGnd = [0.02, 0.02, 0.045];
+      const capSky   = [0.13, 0.14, 0.20], capGnd   = [0.06, 0.06, 0.10];
       // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
-      frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.max(v, floorSky[i]));
-      frame.ambientGround = frame.ambientGround.map((v, i) => Math.max(v, floorGnd[i]));
+      frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
+      frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
     }
 
     // ── Per-track atmosphere (default mode only) ──────────────────────────
@@ -2035,6 +2051,59 @@ function coast(c, dt) {
   c.x = damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
 }
 
+// Per-track floodlight / street-light set, built once per track. A pair of lights
+// roughly every ~46 m (alternating sides) at mast height, plus the lit areas the
+// emissive props already imply. Stored as flat [x,y,z, r,g,b, rad, …] septets so
+// the per-frame cull and the GLX upload stay allocation-light. Colour carries the
+// intensity (HDR > 1 so the pools bloom). Generated for every track but only fed
+// to the shader when the session is actually at night.
+function buildTrackLights(track) {
+  const lights = [];
+  const n = track.n, total = track.total, ds = total / n;
+  // Dense light spacing — a pair roughly every ~40 m, capped to the nearest 32 by
+  // the per-frame cull — so night tracks read as brightly lit, not sparse.
+  const stride = Math.max(1, Math.round(40 / ds));
+  const street = track.def.theme === "street_night";
+  // Bright warm floodlights — strongly HDR (>1) so the pools bloom and pop hard
+  // against the dark night ambient. (Perf: up to 32 lights/fragment; dial down if
+  // mobile GPUs struggle.)
+  const col = street ? [6.5, 6.0, 4.8] : [8.0, 7.1, 5.4];
+  const radius = street ? 26 : 42;
+  const height = street ? 8.5 : 12;
+  let i = 0;
+  for (let k = 0; k < n; k += stride, i++) {
+    const side = (i % 2 === 0) ? 1 : -1;
+    const off = (track.hw[k] + 5.5) * side;
+    lights.push(
+      track.px[k] + track.rx[k] * off,
+      track.py[k] + height,
+      track.pz[k] + track.rz[k] * off,
+      col[0], col[1], col[2], radius,
+    );
+  }
+  return lights;
+}
+
+// Cull the track light set to the nearest MAXL=24 to the camera and flatten into
+// `frame.lights`. Called each frame only when the session is at night.
+const _lightCullBuf = [];
+function setFrameLights(eye) {
+  const src = track._lights;
+  if (!src || !src.length) { frame.lights = null; return; }
+  const count = src.length / 7;
+  if (count <= 32) { frame.lights = src; return; }
+  // distance-rank: cheap partial selection of the nearest 24
+  _lightCullBuf.length = 0;
+  for (let i = 0; i < count; i++) {
+    const o = i * 7, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
+    _lightCullBuf.push({ d: dx * dx + dy * dy + dz * dz, o });
+  }
+  _lightCullBuf.sort((a, b) => a.d - b.d);
+  const out = [];
+  for (let i = 0; i < 32; i++) { const o = _lightCullBuf[i].o; for (let j = 0; j < 7; j++) out.push(src[o + j]); }
+  frame.lights = out;
+}
+
 // ---------- render ----------
 function render(dt) {
   if (headlessMode) return;
@@ -2283,6 +2352,15 @@ function render(dt) {
       frame.ambientSky    = _ltBase.ambientSky.slice();
       frame.ambientGround = _ltBase.ambientGround.slice();
     }
+  }
+
+  // Point lights: floodlights / street lights, only when the session is at night.
+  const _nightLit = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
+  if (_nightLit) {
+    if (track._lights === undefined) track._lights = buildTrackLights(track);
+    setFrameLights(camEye);
+  } else {
+    frame.lights = null;
   }
 
   if (dbgCam) {
@@ -4341,6 +4419,16 @@ window.__apex = {
   clearMeshes() { hideMeshes = {}; return hideMeshes; },
 
   // Combined debug snapshot: camera mode, frozen, dbgCam active, weather.
+  // Lighting snapshot — ambient (sky/ground), the scene sun colour, exposure, and
+  // how many point lights (floodlights) are active this frame. Handy for checking
+  // whether a night scene is correctly dark + lit by floodlights vs washed out.
+  lightState: () => ({
+    ambientSky: frame.ambientSky && frame.ambientSky.slice(),
+    ambientGround: frame.ambientGround && frame.ambientGround.slice(),
+    sunColor: frame.sunColor && frame.sunColor.slice(),
+    exposure: frame.exposure != null ? frame.exposure : 1,
+    numLights: frame.lights ? frame.lights.length / 7 : 0,
+  }),
   viewState() {
     return {
       camMode: CAM_MODES[camMode].id, camIndex: camMode,

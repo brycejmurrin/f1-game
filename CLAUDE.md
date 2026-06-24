@@ -58,7 +58,7 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Critical conventions
 
-- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=176).
+- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=184).
   **Always increment N when changing any JS or CSS file** — search `?v=` and replace
   all instances.
 - **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
@@ -104,6 +104,27 @@ under hard braking (`brakeFade`) to kill the turn-in snap.
 
 ---
 
+## Lighting & sky (`js/glx.js` + `applyRaceSettings` in `game.js`)
+
+- **Sun + hemisphere ambient + point lights.** The lit shader = directional sun
+  (with shadow map) + hemisphere ambient (`uAmbSky`/`uAmbGround`, blended by
+  `N.y`) + up to **32 point lights** (`uLightPos/Col/Rad`). The composite pass
+  does ACES tone-map + `colourGrade` (a vibrance/contrast lift — the global lever
+  for the "washed-out" look) + bloom + lens flare + vignette.
+- **Night = dark ambient + floodlights.** `applyRaceSettings` floors AND **caps**
+  night ambient (so over-bright palettes don't wash to daylight) and **dims the
+  scene sun** to moonlight (`frame.sunColor`) — many night palettes ship a bright
+  near-overhead sun for the *sky* glow, which otherwise lit the road like day.
+  `frameSky.sunColor` is left warm so dusk skies survive. `buildTrackLights()`
+  auto-places floodlights along night-track edges (HDR colour so they bloom);
+  `setFrameLights()` culls to the nearest 32 to the camera each frame. Day tracks
+  send no lights (`numLights = 0`, no cost).
+- The sky shader's sun disc uses the same `sunDir` as the lighting, so the bright
+  spot in the sky aligns with where shadows fall. Check the live state with
+  `__apex.lightState()`.
+
+---
+
 ## `window.__apex` dev API
 
 Full reference in `docs/DEBUG-HOOKS.md`. Quick summary:
@@ -128,6 +149,7 @@ __apex.orbit(0.116, 45, 15, 35) // orbit a track point (az,el,dist) — inspect 
 __apex.groundY(0.11, 12)      // rendered terrain height + road height + gap at frac/lat (gap finder)
 __apex.viewState()            // combined scene/camera snapshot
 __apex.camState()             // active camera {eye,tgt,fov,debug} (debug=true under a view() override)
+__apex.lightState()           // lighting snapshot: ambientSky/Ground, sunColor, exposure, numLights
 __apex.setPhysics({pace:0.8}) // override physics params
 __apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
 __apex.physState()            // full state (slip, wrongWay, lap, rescueT)
