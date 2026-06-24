@@ -2580,8 +2580,25 @@ function render(dt) {
     }
   }
 
-  // Resolve the HDR scene (bloom + tonemap + vignette) to the screen.
-  GLX.present({ exposure: frame.exposure });
+  // Per-time cinematic grade + bloom. Night blooms the floodlights into glowy
+  // halos (low threshold, high amount); dusk/dawn get a rich teal-orange split-
+  // tone; bright day a gentle lift so it pops without looking cooked.
+  let _grade, _bloom = 0.55, _thresh = 0.78;
+  if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) {
+    _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
+    _bloom = 0.90; _thresh = 0.56;
+  } else if (raceTimeOfDay === "dusk") {
+    _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
+    _bloom = 0.62; _thresh = 0.68;
+  } else if (raceTimeOfDay === "dawn") {
+    _grade = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0.30 };
+    _bloom = 0.62; _thresh = 0.68;
+  } else {
+    _grade = { shadow: [0.95, 0.99, 1.06], hi: [1.06, 1.01, 0.93], str: 0.15 };
+    _bloom = 0.50; _thresh = 0.80;
+  }
+  // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
+  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too

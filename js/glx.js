@@ -545,6 +545,9 @@ uniform vec2 uSunUV;
 uniform float uFlareStr;
 uniform float uExposure;
 uniform float uSunShaft;
+uniform vec3 uGradeShadow;   // multiplicative tint pulled into shadows  (~1.0 = neutral)
+uniform vec3 uGradeHi;       // multiplicative tint pulled into highlights (~1.0 = neutral)
+uniform float uGradeStr;     // 0 = neutral grade (backward-compatible)
 out vec4 outColor;
 
 // ACES fitted filmic tone-map (Stephen Hill's approximation).
@@ -570,6 +573,13 @@ vec3 colourGrade(vec3 c) {
   float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
   float sat = mx - mn;
   c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.26);
+  // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
+  // other (warm amber), blended by luma. A staple of the teal-orange film look —
+  // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
+  // (default) leaves the image untouched, so day stays neutral unless driven.
+  float gl2 = dot(c, vec3(0.299, 0.587, 0.114));
+  vec3 toneTint = mix(uGradeShadow, uGradeHi, smoothstep(0.0, 0.85, gl2));
+  c = mix(c, c * toneTint, uGradeStr);
   // Slight lift: prevents pure blacks — adds a tiny warm floor
   c = max(c, vec3(0.005, 0.004, 0.003));
   return c;
@@ -768,7 +778,7 @@ void main() {}`;
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     return true;
   }
 
@@ -1158,6 +1168,11 @@ void main() {}`;
     const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
     gl.uniform1f(compU.uExposure, exposure);
     gl.uniform1f(compU.uSunShaft, sunShaft);
+    // Cinematic split-tone grade (neutral by default → existing look unchanged).
+    const grade = opts && opts.grade;
+    gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);
+    gl.uniform3fv(compU.uGradeHi, grade && grade.hi ? grade.hi : [1, 1, 1]);
+    gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     bindVAO(null);
