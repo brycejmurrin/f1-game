@@ -1735,31 +1735,32 @@ const Tracks = (function () {
     // neonFacade() treatment with the building() landmarks. `kind` varies the
     // silhouette (setback / tiered ziggurat / podium-and-tower) so the street wall
     // isn't a row of identical boxes.
-    const neonTower = (k, side, dist, w, h, d, neon, kind) => {
+    const neonTower = (k, side, dist, w, h, d, neon, kind, tone) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const reach = Math.max(w, d);
       const ifx = a.c[0] - a.r[0] * side * reach / 2, ifz = a.c[2] - a.r[2] * side * reach / 2;
       if (onTrack(ifx, ifz, def.street ? 3.0 : 1.2)) return;
-      const bodyCol = NIGHT ? [0.14, 0.14, 0.17] : [0.40, 0.41, 0.44];
+      const bodyCol = NIGHT ? (tone && tone.n || [0.14, 0.14, 0.17]) : (tone && tone.d || [0.40, 0.41, 0.44]);
       const cap = NIGHT ? [0.09, 0.09, 0.12] : [0.31, 0.32, 0.35];
       const neonCity = theme === "street_night";
-      // Day recessed window grid for one section.
-      const dayGrid = (yb, sw, sh, sd) => {
+      // Day recessed window grid around a mass centre.
+      const dayGridAt = (cen, sw, sh, sd) => {
         const cols = Math.max(3, Math.min(7, Math.round(sd / 2.4))), rows = Math.max(4, Math.round(sh / 3.4));
-        const pane = [0.30, 0.31, 0.34];
+        const pane = [bodyCol[0] * 0.78, bodyCol[1] * 0.78, bodyCol[2] * 0.82];
         for (let c = 0; c < cols; c++) {
           const cx = (-0.5 + (c + 0.5) / cols) * sd;
           for (let r = 0; r < rows; r++) {
-            const ry = yb + (r + 0.5) / rows * sh;
-            addBox(out, vadd(vadd(vadd(a.c, a.u, ry), b[2], cx), b[0], -side * 0.02), [sw * 1.02, (sh / rows) * 0.6, (sd / cols) * 0.58], pane, b);
+            const ry = (-0.5 + (r + 0.5) / rows) * sh;
+            addBox(out, vadd(vadd(vadd(cen, b[2], cx), b[1], ry), b[0], -side * 0.02), [sw * 1.02, (sh / rows) * 0.6, (sd / cols) * 0.58], pane, b);
           }
         }
       };
-      // One stacked section: mass + facade (night neon / day grid).
-      const sec = (yb, sw, sh, sd, seed) => {
-        addBox(out, vadd(a.c, a.u, yb + sh / 2), [sw, sh, sd], bodyCol, b);
-        if (NIGHT) neonFacade(vadd(a.c, a.u, yb + sh / 2), b, side, sw, sh, sd, neon, seed, neonCity);
-        else dayGrid(yb, sw, sh, sd);
+      // One stacked section centred at up=yb+sh/2, optionally offset along tangent.
+      const sec = (yb, sw, sh, sd, seed, to) => {
+        const cen = vadd(vadd(a.c, a.u, yb + sh / 2), b[2], to || 0);
+        addBox(out, cen, [sw, sh, sd], bodyCol, b);
+        if (NIGHT) neonFacade(cen, b, side, sw, sh, sd, neon, seed, neonCity);
+        else dayGridAt(cen, sw, sh, sd);
       };
       if (kind === "tiered") {
         let yb = 0, tw = w, td = d;
@@ -1771,6 +1772,55 @@ const Tracks = (function () {
         sec(0, w * 1.35, podH, d * 1.35, k * 3.1 + side);          // wide retail podium
         sec(podH, w * 0.7, h - podH, d * 0.7, k * 5.1 + side * 2);  // slender tower
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.45, 1.0, d * 0.45], cap, b);
+      } else if (kind === "slab") {
+        sec(0, w, h, d, k * 3.7 + side * 1.9);                     // clean tall slab
+        addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.92], cap, b);
+      } else if (kind === "twin") {
+        const td = d * 0.4, off = d * 0.28;
+        for (let i = 0; i < 2; i++) {
+          const o = i === 0 ? -off : off, th = h * (i === 0 ? 1 : 0.82);
+          sec(0, w * 0.9, th, td, k * 3.1 + side + i * 7, o);
+          addBox(out, vadd(vadd(a.c, a.u, th + 0.4), b[2], o), [w * 0.6, 0.8, td * 0.8], cap, b);
+        }
+      } else if (kind === "jenga") {                              // offset stacked boxes
+        const n2 = 4, bh = h / n2;
+        for (let i = 0; i < n2; i++) sec(i * bh, w * 0.86, bh, d * 0.72, k + i * 9.1, (hash(k + i * 5.5) - 0.5) * d * 0.5);
+        addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.5, 1.0, d * 0.5], cap, b);
+      } else if (kind === "cylinder") {                           // round glass tower
+        const R = reach * 0.5, segs = 14;
+        addCyl(out, a.c, R, h, bodyCol, segs, b);
+        const rings = Math.max(3, Math.min(14, Math.round(h / 6)));
+        for (let r = 1; r < rings; r++) {
+          const lit = NIGHT && hash(k + r * 3.3 + side) < (neonCity ? 0.42 : 0.3);
+          addCyl(out, vadd(a.c, a.u, r * (h / rings)), R * 1.01, (h / rings) * (lit ? 0.22 : 0.1), lit ? neon : [0.06, 0.06, 0.09], segs, b);
+        }
+        addCyl(out, vadd(a.c, a.u, h), R * 0.6, 1.4, cap, segs, b);
+      } else if (kind === "spire") {                              // tapered shaft + antenna
+        const bh = h * 0.74, R = reach * 0.5;
+        addFrustum(out, a.c, R, R * 0.42, bh, bodyCol, 8, b);
+        const rings = Math.max(3, Math.round(bh / 7));
+        for (let r = 1; r < rings; r++) {
+          const lit = NIGHT && hash(k + r * 2.1 + side) < 0.4;
+          addCyl(out, vadd(a.c, a.u, r * (bh / rings)), R * (1 - 0.55 * r / rings) * 1.02, (bh / rings) * (lit ? 0.2 : 0.09), lit ? neon : [0.06, 0.06, 0.09], 8, b);
+        }
+        addCyl(out, vadd(a.c, a.u, bh), 0.35, h - bh, NIGHT && neonCity ? neon : [0.4, 0.4, 0.45], 4, b);
+        if (NIGHT) addBox(out, vadd(a.c, a.u, h), [0.9, 0.9, 0.9], [3.0, 0.6, 0.4], b);  // beacon
+      } else if (kind === "pyramid") {                            // Luxor-style taper
+        const R = reach * 0.62;
+        addFrustum(out, a.c, R, R * 0.08, h, bodyCol, 4, b);
+        if (NIGHT) {
+          for (const e of [-1, 1]) addBox(out, vadd(vadd(a.c, a.u, h * 0.5), b[2], e * R * 0.5), [R, h * 0.96, 0.3], [neon[0] * 0.7, neon[1] * 0.7, neon[2] * 0.7], b);
+          addBox(out, vadd(a.c, a.u, h + 1.2), [1.4, 1.4, 1.4], neonCity ? [3.0, 1.6, 0.6] : [3.0, 0.6, 0.4], b);  // apex beacon
+        }
+      } else if (kind === "screen") {                             // giant neon screen building (BRIGHT)
+        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        const sc = NIGHT ? [neon[0] * 1.25, neon[1] * 1.25, neon[2] * 1.25] : [0.30, 0.33, 0.40];
+        addBox(out, vadd(vadd(a.c, a.u, h * 0.56), b[0], -side * (w / 2 + 0.25)), [0.3, h * 0.66, d * 0.82], sc, b);
+        if (NIGHT) addBox(out, vadd(vadd(a.c, a.u, h * 0.56), b[0], -side * (w / 2 + 0.28)), [0.1, h * 0.6, d * 0.74], [neon[0] * 0.4, neon[1] * 0.4, neon[2] * 0.4], b);
+      } else if (kind === "clad") {                               // neon-banded tower (BRIGHT)
+        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (NIGHT) { const bands = Math.max(4, Math.round(h / 5)); for (let i = 1; i < bands; i++) addBox(out, vadd(a.c, a.u, i * (h / bands)), [w * 1.04, (h / bands) * 0.22, d * 1.04], neon, b); }
+        addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
       } else { // setback
         const setH = h * 0.84;
         sec(0, w, setH, d, k * 3.7 + side * 1.9);
@@ -1995,21 +2045,38 @@ const Tracks = (function () {
         }
       });
     } else if (theme === "street_night") {  // Singapore / Vegas / Baku / Jeddah
-      // Inner-ring FILLER between the per-circuit landmarks — a DENSE, VARIED neon
-      // city wall: dark detailed neonTower()s in three silhouettes (setback /
-      // tiered / podium), with a SECOND staggered row set further back so the
-      // skyline has depth, plus sign blades and low retail boxes dressing the gaps.
-      const CITY_NEON = [[0.95, 0.15, 0.55], [0.18, 0.85, 0.98], [0.98, 0.80, 0.20], [0.60, 0.25, 0.98], [0.30, 0.55, 1.0], [0.95, 0.45, 0.10]];
-      const KINDS = ["setback", "setback", "tiered", "podium", "setback", "tiered"];
-      const cn = (k, s) => CITY_NEON[Math.floor(hash(k * 3 + s) * CITY_NEON.length) % CITY_NEON.length];
+      // Inner-ring FILLER — a DENSE, VARIED neon city wall with PER-TRACK character:
+      // each circuit has its own neon palette, building-model mix and concrete tone
+      // so Vegas / Singapore / Baku / Jeddah feel distinct. Two staggered rows give
+      // skyline depth; sign blades + low retail boxes dress the gaps. The model set
+      // mixes "building" silhouettes (setback/slab/cylinder/spire/pyramid/…) with a
+      // few bright "neon" types (screen / clad) so neon reads against architecture.
+      const NC = {
+        mag: [0.95, 0.15, 0.55], cyan: [0.18, 0.85, 0.98], gold: [0.98, 0.80, 0.20],
+        violet: [0.60, 0.25, 0.98], blue: [0.30, 0.55, 1.0], orange: [0.95, 0.45, 0.10],
+        red: [1.0, 0.18, 0.25], teal: [0.15, 0.92, 0.85], white: [0.85, 0.92, 1.0],
+        amber: [1.0, 0.66, 0.22], pink: [1.0, 0.35, 0.6], lime: [0.6, 1.0, 0.35],
+      };
+      const STYLES = {
+        vegas:     { neon: [NC.mag, NC.gold, NC.red, NC.cyan, NC.violet, NC.orange],
+                     kinds: ["setback", "tiered", "podium", "slab", "screen", "clad", "twin", "jenga"], tone: null },
+        singapore: { neon: [NC.cyan, NC.blue, NC.teal, NC.white, NC.violet],
+                     kinds: ["podium", "setback", "cylinder", "spire", "twin", "slab", "cylinder"], tone: { n: [0.12, 0.13, 0.18], d: [0.42, 0.44, 0.48] } },
+        baku:      { neon: [NC.blue, NC.cyan, NC.white, NC.amber, NC.teal],
+                     kinds: ["setback", "tiered", "spire", "pyramid", "slab", "cylinder", "clad"], tone: { n: [0.15, 0.15, 0.17], d: [0.46, 0.45, 0.42] } },
+        jeddah:    { neon: [NC.gold, NC.amber, NC.teal, NC.white, NC.cyan],
+                     kinds: ["setback", "podium", "slab", "cylinder", "pyramid", "screen", "spire"], tone: { n: [0.15, 0.14, 0.16], d: [0.44, 0.43, 0.40] } },
+      };
+      const style = STYLES[def.id] || STYLES.vegas;
+      const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
+      const pick = (k, s) => style.kinds[Math.floor(hash(k * 2.3 + s) * style.kinds.length) % style.kinds.length];
       // Front row — dense.
       every(20, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 17 + side * 4) < 0.12) continue;          // few gaps → dense wall
           const s = hash(k * 5 + side);
           const h = 16 + s * 50, w = 8 + s * 10, d = 8 + hash(k * 9 + side) * 9;
-          const kind = KINDS[Math.floor(hash(k * 2.3 + side) * KINDS.length) % KINDS.length];
-          neonTower(k, side, 13 + s * 12, w, h, d, cn(k, side), kind);
+          neonTower(k, side, 13 + s * 12, w, h, d, cn(k, side), pick(k, side), style.tone);
         }
       });
       // Back row — taller, set further back, staggered, for skyline depth.
@@ -2018,8 +2085,7 @@ const Tracks = (function () {
           if (hash(k * 23 + side * 7) < 0.32) continue;
           const s = hash(k * 11 + side * 2);
           const h = 34 + s * 64, w = 11 + s * 12, d = 11 + s * 10;
-          const kind = KINDS[Math.floor(hash(k * 4.1 + side) * KINDS.length) % KINDS.length];
-          neonTower(k, side, 40 + s * 30, w, h, d, cn(k * 1.7, side), kind);
+          neonTower(k, side, 40 + s * 30, w, h, d, cn(k * 1.7, side), pick(k * 1.9, side), style.tone);
         }
       });
       // Sign blades + low retail boxes dressing the gaps (neon, close to the wall).
