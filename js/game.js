@@ -4138,6 +4138,40 @@ window.__apex = {
     if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);
     return this.tuning();
   },
+
+  // setSpeed(v) — instantly set the player's forward speed (m/s, clamped 0–200).
+  // Handy for scripted scenarios: drive into a corner at a specific entry speed,
+  // test overspeed physics, or freeze the car for a screenshot without cutting
+  // the throttle (which would coast). Does not affect heading or yaw rate.
+  setSpeed(v) {
+    if (!player || player.px == null) return false;
+    player.speed = Math.max(0, Math.min(200, v));
+    return { speed: player.speed };
+  },
+
+  // spin(deg) — add a heading offset to the player (degrees, +CW viewed from above).
+  // Simulates a snap-oversteer or a scripted orientation change. Zeroes lateral
+  // velocity and yaw rate after rotating so the car doesn't immediately un-spin.
+  // Use spin(180) to face the wrong way, spin(-45) for a 45° drift setup.
+  spin(deg) {
+    if (!player || player.px == null) return false;
+    player.head = player.head + deg * Math.PI / 180;
+    player.vLat = 0;
+    player.yawRateCur = 0;
+    return { head: +(player.head * 180 / Math.PI).toFixed(1) + "°" };
+  },
+
+  // nudge(dLat, dSpeed) — add an instantaneous lateral impulse (m/s, +right of
+  // travel) and/or a forward speed delta (m/s).  Good for scripted track
+  // position tests: push the car toward a barrier, simulate a kerb hop, or give
+  // a standing-start bump without calling jump().  Both args default to 0.
+  nudge(dLat = 0, dSpeed = 0) {
+    if (!player || player.px == null) return false;
+    if (dLat)   player.vLat  = (player.vLat || 0) + dLat;
+    if (dSpeed) player.speed = Math.max(0, (player.speed || 0) + dSpeed);
+    return { speed: +(player.speed || 0).toFixed(2), vLat: +(player.vLat || 0).toFixed(2) };
+  },
+
   // Debug free camera for surveying track layouts/scenery — look at anything.
   // Call with no args (or "chase") to restore the chase cam. Option forms:
   //   {}                                       aerial of the whole track
@@ -4226,7 +4260,7 @@ window.__apex = {
   // degrees around (0 = looking from +s/ahead), `el` degrees elevation, `dist` m
   // out, aimed `h` m above the point. Sweep `az` to inspect a spot (a prop, a
   // berm, a suspected gap) from every side without per-shot coord math.
-  orbit(f, az = 35, el = 18, dist = 30, h = 1.5) {
+  orbit(f, az = 35, el = 18, dist = 30, h = 1.5, opts = {}) {
     if (!track) return false;
     Tracks.sample(track, ((f % 1) + 1) % 1 * track.total, smp);
     const cx = smp.p[0], cy = smp.p[1] + h, cz = smp.p[2];
@@ -4235,8 +4269,63 @@ window.__apex = {
     const fwd = [smp.t[0], 0, smp.t[2]], rt = [smp.r[0], 0, smp.r[2]];
     const dir = [Math.cos(a) * fwd[0] + Math.sin(a) * rt[0], 0, Math.cos(a) * fwd[2] + Math.sin(a) * rt[2]];
     const eye = [cx + dir[0] * Math.cos(e) * dist, cy + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
-    dbgCam = { eye, target: [cx, cy, cz], fov: 55, far: 6000 };
-    return { eye, target: [cx, cy, cz] };
+    const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
+    dbgCam = { eye, target: [cx, cy, cz], fov, far: opts.far || 6000, fog: opts.fog };
+    return { eye, target: [cx, cy, cz], fov };
+  },
+
+  // cinematic(frac, opts) — auto outside-of-corner camera.  Reads the local track
+  // curvature to put the camera on the outside of the bend so the car fills the
+  // frame naturally.  Straight sections use a three-quarter chase angle.
+  //   opts.dist  (default 60)   orbit radius
+  //   opts.el    (default 18)   elevation degrees
+  //   opts.h     (default 1.5)  look-at height above road
+  //   opts.fov   (default 52)   field of view degrees
+  //   opts.azOff (default 0)    extra azimuth twist on top of auto angle
+  // Returns the same {eye, target, fov, az} object as orbit() plus the curvature k.
+  cinematic(frac, opts = {}) {
+    if (!track) return false;
+    const fr = ((frac % 1) + 1) % 1;
+    const k = Tracks.curvature(track, fr * track.total);
+    // Outside of a right-hand (k>0) corner is the left side → az negative (cam left)
+    // Outside of a left-hand (k<0) corner is the right side → az positive (cam right)
+    // Strength scales with |k| up to a tight-hairpin cap so the angle doesn't over-rotate.
+    const kAbs = Math.min(Math.abs(k), 0.05);
+    const baseAz = k === 0 ? 35 : -(Math.sign(k)) * (70 + 40 * kAbs / 0.05);
+    const az = baseAz + (opts.azOff || 0);
+    const dist = opts.dist != null ? opts.dist : 60;
+    const el   = opts.el   != null ? opts.el   : 18;
+    const h    = opts.h    != null ? opts.h    : 1.5;
+    const fov  = opts.fov  != null ? opts.fov  : 52;
+    const res  = this.orbit(fr, az, el, dist, h, { fov, far: opts.far, fog: opts.fog });
+    return res ? Object.assign(res, { az: +az.toFixed(1), k: +k.toFixed(5) }) : false;
+  },
+
+  // carOrbit(idx, az, el, dist, h, opts) — orbit the debug free-cam around any
+  // car on the grid (0 = player).  `idx` indexes the same array as __apex.cars().
+  // az/el/dist/h/opts are identical to orbit() but the basis is the car's own
+  // heading rather than the track tangent, so az=0 is always behind the car,
+  // az=180 is head-on.  Returns {eye, target, fov, carIdx, speed}.
+  carOrbit(idx = 0, az = 180, el = 14, dist = 25, h = 1.0, opts = {}) {
+    if (!track || !cars || !cars[idx]) return false;
+    const c = cars[idx];
+    // Derive world position from Frenet coords (s, x) — AI cars don't carry px/pz,
+    // only the player does. This works for all cars.
+    const s = ((c.s % track.total) + track.total) % track.total;
+    Tracks.sample(track, s, smp);
+    const cx = (c.isPlayer && c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
+    const cz = (c.isPlayer && c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
+    const cyf = smp.p[1] + h;
+    // Heading basis: player has a real yaw (c.head); AI cars use the track tangent.
+    const hd = (c.isPlayer && c.head != null) ? c.head : Math.atan2(smp.t[0], smp.t[2]);
+    const fwdX = Math.sin(hd), fwdZ = Math.cos(hd);
+    const rtX  = Math.cos(hd), rtZ  = -Math.sin(hd);
+    const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
+    const dir = [Math.cos(a) * fwdX + Math.sin(a) * rtX, 0, Math.cos(a) * fwdZ + Math.sin(a) * rtZ];
+    const eye = [cx + dir[0] * Math.cos(e) * dist, cyf + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
+    const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
+    dbgCam = { eye, target: [cx, cyf, cz], fov, far: opts.far || 4000, fog: opts.fog };
+    return { eye, target: [cx, cyf, cz], fov, carIdx: idx, speed: +(c.speed || 0).toFixed(1) };
   },
   // dolly(f, fwd, right, up, opts) — place the debug free-cam at a track-relative
   // offset from the centreline at fraction f: `fwd` m along the track tangent
