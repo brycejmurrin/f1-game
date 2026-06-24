@@ -2059,18 +2059,19 @@ function coast(c, dt) {
 
 // Floodlight set for ANY track (every circuit gets them; the caller only feeds
 // them to the shader when the scene is dark — night/dusk/dawn). A light roughly
-// every ~40 m (alternating sides) at mast height, capped to the nearest 32 by the
-// per-frame cull. Flat [x,y,z, r,g,b, rad, …] septets. Colour varies by circuit
-// character: modern/street circuits get cool LED white, deserts warm sodium,
-// classic parkland a neutral warm-white. HDR (>1) so the pools bloom.
+// every ~34 m (alternating sides) at mast height, capped to the nearest 32 by the
+// per-frame cull. Flat [x,y,z, r,g,b, rad, …] septets. Colour, brightness, pool
+// size and mast style all vary by circuit character (see floodColor). HDR (>1)
+// so the pools bloom.
 function floodColor(theme) {
-  // tint (relative RGB) — normalized-ish, intensity applied below
+  // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
+  // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night":
-    case "street_day":
-    case "modern":      return { tint: [0.92, 0.96, 1.08], street: true };   // cool LED white
-    case "desert":      return { tint: [1.28, 1.00, 0.60], street: false };  // warm sodium
-    default:            return { tint: [1.14, 1.06, 0.84], street: false };  // green/classic warm-white
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 7.6, radius: 30, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 7.6, radius: 32, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 7.2, radius: 30, street: true };  // warm street lamps (Monaco/Madrid)
+    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 8.0, radius: 42, street: false }; // warm sodium flood banks
+    default:             return { tint: [1.14, 1.06, 0.84], intensity: 8.8, radius: 44, street: false }; // green/classic warm-white
   }
 }
 function buildTrackLights(track) {
@@ -2081,13 +2082,9 @@ function buildTrackLights(track) {
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
   const ds = total / n;
-  const stride = Math.max(1, Math.round(40 / ds));
-  const { tint, street } = floodColor(track.def.theme);
-  // Strongly HDR so the pools bloom and pop against dark ambient. Street circuits
-  // are tight, so a touch dimmer/tighter to avoid flooding; open circuits brighter.
-  const intensity = street ? 6.6 : 8.0;
+  const stride = Math.max(1, Math.round(34 / ds));   // denser than before so corners don't fall dark
+  const { tint, intensity, radius, street } = floodColor(track.def.theme);
   const col = [tint[0] * intensity, tint[1] * intensity, tint[2] * intensity];
-  const radius = street ? 26 : 42;
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   let i = 0;
   for (let k = 0; k < n; k += stride, i++) {
