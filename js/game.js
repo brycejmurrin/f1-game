@@ -608,10 +608,12 @@ function scheduleFlybyTrack() {
 function applyRaceSettings() {
   const isNightSession = raceTimeOfDay === "night" ||
     (raceTimeOfDay === "default" && track && track.def && track.def.night);
-  // Pre-build the floodlight set at race start so the very first night frame is
-  // never unlit (the render path rebuilds it if empty as a fallback). Forcing
-  // night on a day track builds them on demand here too.
-  if (isNightSession && track && (!track._lights || !track._lights.length)) track._lights = buildTrackLights(track);
+  // Pre-build the floodlight set at race start so the first dark-session frame is
+  // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
+  // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
+  const floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
+    raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && track && track.def && track.def.night);
+  if (floodActive && track && (!track._lights || !track._lights.length)) track._lights = buildTrackLights(track);
   if (raceTimeOfDay !== "default") {
     const night = raceTimeOfDay === "night";
     frameSky.stars = night ? 1 : 0;
@@ -2055,12 +2057,22 @@ function coast(c, dt) {
   c.x = damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
 }
 
-// Per-track floodlight / street-light set, built once per track. A pair of lights
-// roughly every ~46 m (alternating sides) at mast height, plus the lit areas the
-// emissive props already imply. Stored as flat [x,y,z, r,g,b, rad, …] septets so
-// the per-frame cull and the GLX upload stay allocation-light. Colour carries the
-// intensity (HDR > 1 so the pools bloom). Generated for every track but only fed
-// to the shader when the session is actually at night.
+// Floodlight set for ANY track (every circuit gets them; the caller only feeds
+// them to the shader when the scene is dark — night/dusk/dawn). A light roughly
+// every ~40 m (alternating sides) at mast height, capped to the nearest 32 by the
+// per-frame cull. Flat [x,y,z, r,g,b, rad, …] septets. Colour varies by circuit
+// character: modern/street circuits get cool LED white, deserts warm sodium,
+// classic parkland a neutral warm-white. HDR (>1) so the pools bloom.
+function floodColor(theme) {
+  // tint (relative RGB) — normalized-ish, intensity applied below
+  switch (theme) {
+    case "street_night":
+    case "street_day":
+    case "modern":      return { tint: [0.92, 0.96, 1.08], street: true };   // cool LED white
+    case "desert":      return { tint: [1.28, 1.00, 0.60], street: false };  // warm sodium
+    default:            return { tint: [1.14, 1.06, 0.84], street: false };  // green/classic warm-white
+  }
+}
 function buildTrackLights(track) {
   const lights = [];
   const n = track.n, total = track.total;
@@ -2069,20 +2081,18 @@ function buildTrackLights(track) {
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
   const ds = total / n;
-  // Dense light spacing — a pair roughly every ~40 m, capped to the nearest 32 by
-  // the per-frame cull — so night tracks read as brightly lit, not sparse.
   const stride = Math.max(1, Math.round(40 / ds));
-  const street = track.def.theme === "street_night";
-  // Bright warm floodlights — strongly HDR (>1) so the pools bloom and pop hard
-  // against the dark night ambient. (Perf: up to 32 lights/fragment; dial down if
-  // mobile GPUs struggle.)
-  const col = street ? [6.5, 6.0, 4.8] : [8.0, 7.1, 5.4];
+  const { tint, street } = floodColor(track.def.theme);
+  // Strongly HDR so the pools bloom and pop against dark ambient. Street circuits
+  // are tight, so a touch dimmer/tighter to avoid flooding; open circuits brighter.
+  const intensity = street ? 6.6 : 8.0;
+  const col = [tint[0] * intensity, tint[1] * intensity, tint[2] * intensity];
   const radius = street ? 26 : 42;
-  const height = street ? 8.5 : 12;
+  const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   let i = 0;
   for (let k = 0; k < n; k += stride, i++) {
     const side = (i % 2 === 0) ? 1 : -1;
-    const off = (track.hw[k] + 5.5) * side;
+    const off = (track.hw[k] + 6) * side;   // matches the floodlight masts (buildProps)
     lights.push(
       track.px[k] + track.rx[k] * off,
       track.py[k] + height,
@@ -2363,12 +2373,16 @@ function render(dt) {
     }
   }
 
-  // Point lights: floodlights / street lights, only when the session is at night.
-  const _nightLit = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
-  if (_nightLit) {
+  // Floodlights: EVERY track has them (see buildTrackLights); they're fed to the
+  // shader whenever the scene is dark enough to read them — night, dusk, or dawn
+  // on any circuit, or a night-default track in default mode. In bright day the
+  // sun dominates so they're left off (no washed-out daylight pools).
+  const _floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
+    (raceTimeOfDay === "default" && track.def.night);
+  if (_floodActive) {
     // Rebuild if empty (not just undefined): a light set built before the track
-    // centreline finished is empty; retry until it yields lights. Night tracks
-    // always produce a full set once complete, so this self-heals in a frame.
+    // centreline finished is empty; retry until it yields lights. Tracks always
+    // produce a full set once complete, so this self-heals in a frame.
     if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
     setFrameLights(camEye);
   } else {

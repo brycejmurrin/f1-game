@@ -115,10 +115,17 @@ under hard braking (`brakeFade`) to kill the turn-in snap.
   night ambient (so over-bright palettes don't wash to daylight) and **dims the
   scene sun** to moonlight (`frame.sunColor`) — many night palettes ship a bright
   near-overhead sun for the *sky* glow, which otherwise lit the road like day.
-  `frameSky.sunColor` is left warm so dusk skies survive. `buildTrackLights()`
-  auto-places floodlights along night-track edges (HDR colour so they bloom);
-  `setFrameLights()` culls to the nearest 32 to the camera each frame. Day tracks
-  send no lights (`numLights = 0`, no cost).
+  `frameSky.sunColor` is left warm so dusk skies survive.
+- **Floodlights on EVERY circuit.** `buildTrackLights()` (game.js) places point
+  lights every ~40 m along the edges of any track; `setFrameLights()` culls to the
+  nearest 32 to the camera each frame. They're fed to the shader whenever the
+  scene is dark — **night/dusk/dawn on any track**, or a night-default track in
+  default mode — and left off in bright day (sun dominates; `numLights = 0`).
+  Colour varies by `theme` (`floodColor()`): desert = warm sodium, street/modern =
+  cool LED white, classic `green` = neutral warm-white. Matching **floodlight
+  masts** are emitted for every track in `buildProps` (tracks.js) at the same
+  stride/offset/side, so the masts are visible day and night and each light pool
+  reads as cast by a real mast. Check live state with `__apex.lightState()`.
 - The sky shader's sun disc uses the same `sunDir` as the lighting, so the bright
   spot in the sky aligns with where shadows fall. Check the live state with
   `__apex.lightState()`.
