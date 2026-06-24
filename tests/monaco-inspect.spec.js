@@ -11,23 +11,13 @@ test("monaco track shape inspection", async ({ page }) => {
   });
 
   const data = await page.evaluate(() => {
-    // Get 36 points around the track (every 10 degrees of turn)
     const profile = __apex.trackProfile(72);
-
-    // Get corners
+    const shape = __apex.trackShape(120);   // 120 normalised X/Z points
     const corners = __apex.corners();
-
-    // Compute cumulative heading to understand track shape
-    // We'll also sample the raw X/Z positions to see the 2D shape
     const pts = profile.map(p => ({
-      frac: p.frac,
-      y: p.y,
-      slope: p.slope,
-      k: p.k,     // curvature: positive = left turn, negative = right turn (or vice versa)
-      hw: p.hw,
+      frac: p.frac, y: p.y, slope: p.slope, k: p.k,
     }));
-
-    return { profile: pts, corners };
+    return { profile: pts, corners, shape };
   });
 
   // Print the curvature profile - positive k = one direction, negative = other
@@ -41,11 +31,37 @@ test("monaco track shape inspection", async ({ page }) => {
   console.log("\n=== CORNERS (apex fractions) ===");
   console.log(JSON.stringify(data.corners, null, 2));
 
-  // Check sign convention: Monaco T1 Sainte-Devote is a RIGHT turn
-  // If k > 0 at the first corner, positive k = right; if k < 0, positive k = left
+  // ASCII art (80×40 grid)
+  const W = 80, H = 40;
+  const grid = Array.from({length: H}, () => Array(W).fill(' '));
+  data.shape.forEach((p, i) => {
+    const col = Math.min(W - 1, Math.max(0, Math.round(p.x * (W - 1))));
+    const row = Math.min(H - 1, Math.max(0, Math.round(p.z * (H - 1))));
+    const frac = i / data.shape.length;
+    grid[row][col] = frac < 0.008 ? 'S' :
+      (frac > 0.24 && frac < 0.26) ? '1' :
+      (frac > 0.49 && frac < 0.51) ? '2' :
+      (frac > 0.74 && frac < 0.76) ? '3' : '·';
+  });
+  // Mark strongest corner (hairpin)
+  const hairpin = data.profile.reduce((best, p) => Math.abs(p.k) > Math.abs(best.k) ? p : best, {k:0});
+  const hpIdx = Math.round(hairpin.frac * data.shape.length);
+  const hpPt = data.shape[Math.min(hpIdx, data.shape.length-1)];
+  if (hpPt) {
+    const col = Math.min(W-1, Math.max(0, Math.round(hpPt.x * (W-1))));
+    const row = Math.min(H-1, Math.max(0, Math.round(hpPt.z * (H-1))));
+    grid[row][col] = hairpin.k > 0 ? 'R' : 'L';
+  }
+  console.log("\n=== MONACO SHAPE: x→RIGHT, z↓DOWN (S=start,1=25%,2=50%,3=75%, R/L=sharpest corner) ===");
+  console.log("  +" + "─".repeat(W) + "+");
+  grid.forEach(row => console.log("  |" + row.join('') + "|"));
+  console.log("  +" + "─".repeat(W) + "+");
+  console.log(`  Sharpest corner: frac=${hairpin.frac} k=${hairpin.k} (${hairpin.k>0?'RIGHT':'LEFT'}) — real Monaco hairpin is RIGHT`);
+  console.log("");
+
+  // Sign convention check
   const firstCorner = data.profile.find(p => p.frac > 0.02 && Math.abs(p.k) > 0.005);
-  console.log("\nFirst significant corner after start:", firstCorner);
-  console.log("If Sainte-Devote (T1) is a RIGHT turn, k should be:", firstCorner?.k);
+  console.log("First significant corner (k>0=RIGHT per tracks.js):", firstCorner);
 
   expect(data.profile.length).toBeGreaterThan(0);
 });
