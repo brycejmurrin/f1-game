@@ -2104,12 +2104,24 @@ function buildTrackLights(track) {
 // Cull the track light set to the nearest MAXL=24 to the camera and flatten into
 // `frame.lights`. Called each frame only when the session is at night.
 const _lightCullBuf = [];
-function setFrameLights(eye) {
+const _lightScaleBuf = [];
+function setFrameLights(eye, scale) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
+  const s = scale == null ? 1 : scale;
   const count = src.length / 7;
-  if (count <= 32) { frame.lights = src; return; }
-  // distance-rank: cheap partial selection of the nearest 24
+  if (count <= 32) {
+    if (s === 1) { frame.lights = src; return; }
+    // Dim without mutating the cached set: copy and scale only the rgb channels.
+    _lightScaleBuf.length = 0;
+    for (let i = 0; i < src.length; i += 7) {
+      _lightScaleBuf.push(src[i], src[i+1], src[i+2],
+        src[i+3] * s, src[i+4] * s, src[i+5] * s, src[i+6]);
+    }
+    frame.lights = _lightScaleBuf;
+    return;
+  }
+  // distance-rank: cheap partial selection of the nearest 32
   _lightCullBuf.length = 0;
   for (let i = 0; i < count; i++) {
     const o = i * 7, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
@@ -2117,7 +2129,10 @@ function setFrameLights(eye) {
   }
   _lightCullBuf.sort((a, b) => a.d - b.d);
   const out = [];
-  for (let i = 0; i < 32; i++) { const o = _lightCullBuf[i].o; for (let j = 0; j < 7; j++) out.push(src[o + j]); }
+  for (let i = 0; i < 32; i++) {
+    const o = _lightCullBuf[i].o;
+    out.push(src[o], src[o+1], src[o+2], src[o+3] * s, src[o+4] * s, src[o+5] * s, src[o+6]);
+  }
   frame.lights = out;
 }
 
@@ -2382,7 +2397,11 @@ function render(dt) {
     // centreline finished is empty; retry until it yields lights. Tracks always
     // produce a full set once complete, so this self-heals in a frame.
     if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
-    setFrameLights(camEye);
+    // Dawn/dusk still have a warm directional sun and a rich magic-hour sky, so
+    // run the floodlights at a fraction of night intensity — enough to read as
+    // "lights on" near the masts without washing out the golden-hour graphics.
+    const floodScale = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn") ? 0.4 : 1;
+    setFrameLights(camEye, floodScale);
   } else {
     frame.lights = null;
   }
