@@ -443,7 +443,15 @@ const Tracks = (function () {
                     0.30, 0.35,                      // centre line (right half)
                     w - 0.25, w - 0.2, w,            // right step + edge line
                     w + 0.4, w + 2.2];
-      const rise = [0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0];
+      // Grass-border verts (0,1,12,13) slope DOWN from the road edge to meet the
+      // terrain ribbon (whose inner edge sits ~0.3 m below grade at the same
+      // lateral, w+2.2). Keeping the whole border well below the asphalt plane
+      // (asphalt rides at +0.02) guarantees the racing surface occludes it
+      // wherever the inside grass of a corner chords across the tarmac —
+      // otherwise it renders as a green wedge over the racing line (Miami T6,
+      // s≈0.11–0.12). Kept a hair below the asphalt plane to avoid z-fighting at
+      // the verge seam; the real over-tarmac protection is the clip below.
+      const rise = [-0.38, -0.10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.10, -0.38];
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
       // banking: raise each cross-section vert along `up` proportional to how
       // far it sits toward the outer edge (inner edge -> 0, outer edge -> full
@@ -460,7 +468,24 @@ const Tracks = (function () {
           frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
           by = bankLift * frac;
         }
-        pos.push(px[k] + r[0] * o + u[0] * (rise[v] + by), py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02, pz[k] + r[2] * o + u[2] * (rise[v] + by));
+        const wx = px[k] + r[0] * o + u[0] * (rise[v] + by);
+        let   wy = py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02;
+        const wz = pz[k] + r[2] * o + u[2] * (rise[v] + by);
+        // The grass shoulder verts (0,1,12,13) extend ~2 m past the tarmac edge.
+        // On a tight corner the inside shoulder chords across the apex and would
+        // render green OVER the racing line (Miami T6, s≈0.11). Bury any shoulder
+        // vert that lands over ANOTHER node's tarmac just under that road, so the
+        // asphalt always occludes it — mirrors buildTerrain's over-track clip.
+        if (v === 0 || v === 1 || v === 12 || v === 13) {
+          for (let j = 0; j < n; j++) {
+            let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
+            if (dd * ds < 6) continue;
+            const ex = wx - px[j], ez = wz - pz[j];
+            const lim = hw[j] - 0.3;
+            if (ex * ex + ez * ez < lim * lim && wy > py[j] - 0.05) wy = py[j] - 0.05;
+          }
+        }
+        pos.push(wx, wy, wz);
         nrm.push(u[0], u[1], u[2]);
         // The start/finish line is a separate chequered decal mesh (buildStartLine)
         // laid just above the asphalt here at s=0 — far cleaner than painting a
@@ -582,7 +607,15 @@ const Tracks = (function () {
           // the road surface when the road climbs steeply.
           const localGrade = v === 0 ? Math.abs(py[k] - py[(k + 1) % n]) : 0;
           const innerExtra = v === 0 ? Math.min(localGrade * 2, 1.2) : 0;
-          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra;
+          // Near-edge verge verts (the two closest to the road) sit firmly below
+          // the road plane. On the inside of a corner the inner-edge FACE chords
+          // across the racing line; keeping it well under the tarmac means the
+          // asphalt always occludes it (the per-vert over-track clip below only
+          // catches verts that land on the tarmac, not the face between them).
+          // These verts hide under the road's own grass shoulder, so the drop is
+          // invisible from the track. (Miami T6 green wedge, s≈0.11.)
+          const nearDrop = v === 0 ? 0.4 : v === 1 ? 0.15 : 0;
+          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra - nearDrop;
           // inner vert tracks road height; outer verts ease down to the lap's
           // low point (or the flattened bridge ground, whichever is lower). The
           // quadratic ease keeps the run-off apron near track grade and pushes
@@ -624,11 +657,22 @@ const Tracks = (function () {
           for (let j = 0; j < n; j++) {
             let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
             if (dd * ds < 6) continue;                  // always skip the vert's immediate own road
+            const ex = wx - px[j], ez = wz - pz[j];
+            const d2 = ex * ex + ez * ez;
+            // A vert (or the face it anchors) that lands ON another node's tarmac
+            // is buried well under that road UNCONDITIONALLY — heading-independent.
+            // This kills the green wedge where the inside verge of a corner chords
+            // across the racing line (Miami T6, s≈0.11). The same-direction skip
+            // below only protects the apron BAND outside the tarmac; a straight's
+            // own verge sits ~2 m beyond its edge so it never enters this radius.
+            const onEdge = hw[j] - 0.3;
+            if (d2 < onEdge * onEdge) {
+              if (wy > py[j] - 0.5) wy = py[j] - 0.5;
+              continue;
+            }
             const align = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j];
             if (align > 0.55 && dd * ds < 60) continue; // same-direction nearby road: leave the verge
-            const ex = wx - px[j], ez = wz - pz[j];
             const far = hw[j] + 12;
-            const d2 = ex * ex + ez * ez;
             if (d2 > far * far) continue;               // not over/near this node's tarmac
             const near = hw[j] + 1.0;
             const dist = Math.sqrt(d2);
