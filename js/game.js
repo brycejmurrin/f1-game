@@ -4238,6 +4238,89 @@ window.__apex = {
     dbgCam = { eye, target: [cx, cy, cz], fov: 55, far: 6000 };
     return { eye, target: [cx, cy, cz] };
   },
+  // dolly(f, fwd, right, up, opts) — place the debug free-cam at a track-relative
+  // offset from the centreline at fraction f: `fwd` m along the track tangent
+  // (negative = behind), `right` m across (+right of travel), `up` m above the road
+  // surface. Looks toward opts.lookF (default f+0.015) at opts.lookLat m off centre
+  // (default 0) and opts.lookH m up (default 1.5). opts.fov (default 58).
+  // Example: dolly(0.22, -25, 18, 4) — 25 m behind Casino entry, 18 m to the right,
+  // 4 m up, looking forward toward the corner apex.
+  dolly(f, fwd = 0, right = 0, up = 5, opts = {}) {
+    if (!track) return false;
+    const fr = ((f % 1) + 1) % 1;
+    Tracks.sample(track, fr * track.total, smp);
+    const p = smp.p, t = smp.t, r = smp.r;
+    const eye = [
+      p[0] + t[0] * fwd + r[0] * right,
+      p[1] + up,
+      p[2] + t[2] * fwd + r[2] * right,
+    ];
+    const lf = ((((opts.lookF != null ? opts.lookF : f + 0.015) % 1) + 1) % 1);
+    Tracks.sample(track, lf * track.total, smp2);
+    const lr = opts.lookLat || 0, lh = opts.lookH != null ? opts.lookH : 1.5;
+    const tgt = [smp2.p[0] + smp2.r[0] * lr, smp2.p[1] + lh, smp2.p[2] + smp2.r[2] * lr];
+    dbgCam = { eye, target: tgt, fov: Math.min(170, Math.max(1, opts.fov || 58)), far: opts.far || 6000, fog: opts.fog };
+    return { eye, target: tgt };
+  },
+
+  // roadside(f, side, dist, h, opts) — camera standing beside the track at
+  // fraction f, `dist` m from the centreline on `side` (+1 = right of travel,
+  // -1 = left), `h` m above the road surface. opts.look controls aim:
+  //   "fwd"  (default) — look forward in direction of travel
+  //   "back"           — face oncoming traffic
+  //   "in"             — look inward across the track
+  //   "out"            — look outward into the scenery
+  // opts.lookAhead: m ahead (or behind for "back") of the eye position that the
+  //   camera aims at along the track (default 30). opts.fov (default 58).
+  // Example: roadside(0.33, -1, 6, 2, { look:"in" }) — stand 6 m left of the
+  // hairpin entry, 2 m up, looking across at the Armco.
+  roadside(f, side = 1, dist = 10, h = 2.5, opts = {}) {
+    if (!track) return false;
+    const fr = ((f % 1) + 1) % 1;
+    Tracks.sample(track, fr * track.total, smp);
+    const p = smp.p, t = smp.t, r = smp.r;
+    const eye = [p[0] + r[0] * side * dist, p[1] + h, p[2] + r[2] * side * dist];
+    const la = opts.lookAhead != null ? opts.lookAhead : 30;
+    const look = opts.look || "fwd";
+    let tgt;
+    if (look === "in") {
+      tgt = [p[0] - r[0] * side * dist * 0.5, p[1] + 1, p[2] - r[2] * side * dist * 0.5];
+    } else if (look === "out") {
+      tgt = [p[0] + r[0] * side * (dist + 60), p[1] + h * 0.6, p[2] + r[2] * side * (dist + 60)];
+    } else {
+      const sign = look === "back" ? -1 : 1;
+      const lf = ((fr + sign * la / track.total % 1) + 1) % 1;
+      Tracks.sample(track, lf * track.total, smp2);
+      tgt = [smp2.p[0], smp2.p[1] + 1, smp2.p[2]];
+    }
+    dbgCam = { eye, target: tgt, fov: Math.min(170, Math.max(1, opts.fov || 58)), far: opts.far || 6000, fog: opts.fog };
+    return { eye, target: tgt, look };
+  },
+
+  // tourShots(n, opts) — returns n evenly-spaced orbit shot descriptors covering
+  // the full circuit, ready to pass straight to orbit(). Each entry:
+  //   { frac, az, el, dist, label }
+  // opts.dist (default 80), opts.el (default 20), opts.azOffset (default 35)
+  // rotates all azimuths by a fixed angle — useful to swing all shots to one
+  // side to face a specific stand or scenery feature.
+  // Example: for (const s of __apex.tourShots(16)) __apex.orbit(s.frac, s.az, s.el, s.dist)
+  tourShots(n = 12, opts = {}) {
+    if (!track) return [];
+    const dist    = opts.dist     != null ? opts.dist     : 80;
+    const el      = opts.el       != null ? opts.el       : 20;
+    const azOff   = opts.azOffset != null ? opts.azOffset : 35;
+    const shots   = [];
+    for (let i = 0; i < n; i++) {
+      const frac = i / n;
+      // Alternate azimuth side each shot so consecutive frames show the track
+      // from opposite sides — avoids monotonous single-angle tours.
+      const side  = i % 2 === 0 ? 1 : -1;
+      const az    = azOff * side;
+      shots.push({ frac: +frac.toFixed(4), az, el, dist, label: `shot-${String(i).padStart(2, "0")}` });
+    }
+    return shots;
+  },
+
   // Ground/gap probe: the rendered terrain height at a track-relative point
   // (lap-fraction `f`, `lat` m off centre), plus the road surface height and the
   // gap between them. `terrainY` is null if no terrain covers the point. Use it
