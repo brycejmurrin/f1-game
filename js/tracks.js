@@ -1585,17 +1585,31 @@ const Tracks = (function () {
         const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], dayWall, b);   // solid wall mass
         const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
-        for (let r = 0; r < rows; r++) {
-          addBox(out, vadd(p.c, p.u, yBase + (r + 0.52) * fh), [sw * 1.01, fh * 0.5, sd * 1.01], glass, b);
-        }
-        // Mullions are a slightly DARKER SHADE OF THE DAY WALL — not the original
-        // near-black body. Proud dark bars were occluding the lifted grey mass at
-        // grazing angles and turning the tower into a dark-walled box.
+        // Inset-window facade: a proud structural frame surrounds glass set back
+        // near the wall face. Frame protrudes 0.38 m (dayMull shade); glass only
+        // 0.05 m — clear depth difference from any angle so panes read as inset.
         const dayMull = [dayWall[0] * 0.82, dayWall[1] * 0.82, dayWall[2] * 0.82];
+        const frameOut = 0.38;
+        const glassOut = 0.05;
+        const frameT   = 0.30;
+        const glassT   = 0.08;
+        const fR = -side * (sw / 2 + frameOut);
+        const gR = -side * (sw / 2 + glassOut);
+        const fBase = vadd(p.c, p.r, fR);
+        const gBase = vadd(p.c, p.r, gR);
+        const railH = Math.max(0.45, fh * 0.28);
+        for (let r = 0; r <= rows; r++) {
+          addBox(out, vadd(fBase, p.u, yBase + r * fh), [frameT, railH, sd], dayMull, b);
+        }
+        const winH = Math.max(0.6, fh - railH);
+        for (let r = 0; r < rows; r++) {
+          const wc = (opts.lit && hash(k * 13.7 + yBase * 0.7 + r * 5.1 + side * 2.3) < 0.22) ? darkW : glass;
+          addBox(out, vadd(gBase, p.u, yBase + (r + 0.5) * fh), [glassT, winH, sd * 0.94], wc, b);
+        }
         const nm = Math.max(2, Math.min(4, Math.round(sd / 6)));
         for (let c = 1; c <= nm; c++) {
           const off = -sd / 2 + (c / (nm + 1)) * sd;
-          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.t, off), [sw * 1.02, sh, 0.5], dayMull, b);
+          addBox(out, vadd(vadd(fBase, p.u, yBase + sh / 2), p.t, off), [frameT, sh, 0.5], dayMull, b);
         }
         const nmR = sw > 18 ? 2 : 1;
         for (let c = 1; c <= nmR; c++) {
