@@ -903,7 +903,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     align-items: start;
   }
   #race-settings h2 { grid-column: 1 / -1; }
-  #race-settings .sel-actions { grid-column: 1 / -1; margin-top: 6px; }
+  /* TIME OF DAY spans the full width so it sits on its own row directly above
+     the action buttons. grid-row:auto resets the `grid-row:3` that the bare
+     `.sel-actions` rule (meant for #select) below leaks in, which otherwise
+     pins BACK/RACE! above the TIME row. */
+  #race-settings #rs-time-section { grid-column: 1 / -1; }
+  #race-settings .sel-actions { grid-column: 1 / -1; grid-row: auto; margin-top: 6px; }
   .rs-row { margin: 6px 0; }
   #race-settings .sel-chip { font-size: 12px; padding: 7px 12px; }
 
