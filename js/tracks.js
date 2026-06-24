@@ -1507,48 +1507,54 @@ const Tracks = (function () {
     // panes; 1 = a full neon tower (neon-tinted panes + glowing edge lines + a
     // cornice). This lets general buildings and neon buildings share one facade.
     const neonFacade = (mid, bb, side, sw, sh, sd, neon, seed, neonAmt) => {
-      const r = bb[0], u = bb[1], t = bb[2];
+      const u = bb[1];
       const frameCol = [0.12, 0.12, 0.15];                       // dark structural frame
       const dark = [0.035, 0.035, 0.055];                        // unlit glass pane
       const warm = [1.0, 0.80, 0.46];
       const nc = [neon[0] * 0.95, neon[1] * 0.95, neon[2] * 0.95];
-      const rows = Math.max(4, Math.min(15, Math.round(sh / 3.4)));
-      const cols = Math.max(3, Math.min(8, Math.round(sd / 2.6)));
-      const fh = sh / rows;
-      const fBase = vadd(mid, r, -side * (sw / 2 + 0.34));       // proud frame plane
-      const gBase = vadd(mid, r, -side * (sw / 2 + 0.04));       // recessed glass plane
-      const frameT = 0.30, railH = Math.max(0.4, fh * 0.24);
-      // horizontal frame rails at every floor
-      for (let i = 0; i <= rows; i++) {
-        addBox(out, vadd(fBase, u, (i / rows - 0.5) * sh), [frameT, railH, sd * 1.005], frameCol, bb);
-      }
-      // recessed glass panes (mostly dark; a minority lit) between vertical mullions
       const litShare = 0.20 + neonAmt * 0.08, neonShare = neonAmt * 0.7;
-      const winH = Math.max(0.5, fh - railH);
-      for (let c = 0; c < cols; c++) {
-        const cx = (-0.5 + (c + 0.5) / cols) * sd;
-        for (let ri = 0; ri < rows; ri++) {
-          const ry = (-0.5 + (ri + 0.5) / rows) * sh;
-          let col = dark;
-          if (hash(seed + c * 12.9 + ri * 7.3) < litShare) {
-            const tw = 0.65 + hash(seed + c * 5.5 + ri * 2.2) * 0.5;
-            col = hash(seed + c * 3.1 + ri * 1.7) < neonShare
-              ? [nc[0] * tw, nc[1] * tw, nc[2] * tw] : [warm[0] * tw, warm[1] * tw, warm[2] * tw];
+      const rows = Math.max(4, Math.min(15, Math.round(sh / 3.4)));
+      const fh = sh / rows, frameT = 0.30, railH = Math.max(0.4, fh * 0.24), winH = Math.max(0.5, fh - railH);
+      // Draw the inset curtain wall on ONE vertical face. nAxis = outward axis idx
+      // (0=r,2=t), nSign = its sign, nHalf = half-extent along it; wAxis = the
+      // in-plane horizontal axis idx, faceW = that face's width. Box dims are built
+      // per-axis so the same code does the track-facing face AND the two sides.
+      const drawFace = (nAxis, nSign, nHalf, wAxis, faceW, sOff, simple) => {
+        const nVec = bb[nAxis], wVec = bb[wAxis];
+        // SIMPLE sides = a coarse pane grid only (no rails / mullions / neon edges)
+        // so the sides are cheap and the city can stay dense.
+        const cols = simple ? Math.max(2, Math.min(4, Math.round(faceW / 4.2))) : Math.max(2, Math.min(8, Math.round(faceW / 2.6)));
+        const rowN = simple ? Math.max(3, Math.min(9, Math.round(sh / 5.0))) : rows;
+        const fhh = sh / rowN, winHH = Math.max(0.5, fhh - railH);
+        const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
+        const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
+        const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
+        if (!simple) for (let i = 0; i <= rowN; i++) addBox(out, vadd(fBase, u, (i / rowN - 0.5) * sh), dim(frameT, railH, faceW * 1.005), frameCol, bb);
+        for (let c = 0; c < cols; c++) {
+          const cx = (-0.5 + (c + 0.5) / cols) * faceW;
+          for (let ri = 0; ri < rowN; ri++) {
+            const ry = (-0.5 + (ri + 0.5) / rowN) * sh;
+            let col = dark;
+            if (hash(seed + sOff + c * 12.9 + ri * 7.3) < litShare) {
+              const tw = 0.65 + hash(seed + sOff + c * 5.5 + ri * 2.2) * 0.5;
+              col = hash(seed + sOff + c * 3.1 + ri * 1.7) < neonShare
+                ? [nc[0] * tw, nc[1] * tw, nc[2] * tw] : [warm[0] * tw, warm[1] * tw, warm[2] * tw];
+            }
+            addBox(out, vadd(vadd(gBase, wVec, cx), u, ry), dim(0.08, winHH, (faceW / cols) * 0.82), col, bb);
           }
-          addBox(out, vadd(vadd(gBase, t, cx), u, ry), [0.08, winH, (sd / cols) * 0.82], col, bb);
         }
-      }
-      // vertical mullions at frame depth (dark)
-      const nm = Math.max(2, Math.min(5, cols - 1));
-      for (let c = 1; c <= nm; c++) {
-        addBox(out, vadd(fBase, t, (-0.5 + c / (nm + 1)) * sd), [frameT, sh, 0.4], frameCol, bb);
-      }
-      // Neon edge lines + cornice, scaled in only when this is a neon building.
-      if (neonAmt > 0.3) {
-        const ST = Math.min(0.4, sd * 0.04);
-        for (const dir of [-1, 1]) addBox(out, vadd(fBase, t, dir * sd * 0.5), [frameT * 1.05, sh * 0.96, ST], nc, bb);
-        addBox(out, vadd(vadd(mid, r, -side * (sw / 2 + 0.36)), u, sh * 0.48), [frameT * 1.1, Math.min(0.5, sh * 0.018), sd], nc, bb);
-      }
+        if (simple) return;
+        const nm = Math.max(2, Math.min(5, cols - 1));
+        for (let c = 1; c <= nm; c++) addBox(out, vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), dim(frameT, sh, 0.4), frameCol, bb);
+        if (neonAmt > 0.3) {
+          const ST = Math.min(0.4, faceW * 0.04);
+          for (const dr of [-1, 1]) addBox(out, vadd(fBase, wVec, dr * faceW * 0.5), dim(frameT * 1.05, sh * 0.96, ST), nc, bb);
+          addBox(out, vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), nc, bb);
+        }
+      };
+      drawFace(0, -side, sw / 2, 2, sd, 0, false);   // track-facing facade: full detail
+      drawFace(2, 1, sd / 2, 0, sw, 137, true);      // +t side: simple
+      drawFace(2, -1, sd / 2, 0, sw, 311, true);     // -t side: simple
     };
     // Multi-storey building with real MASSING — not a single box. Picks an
     // archetype (flat / stepped / tapered / tower) by hash and stacks setback
@@ -1770,23 +1776,28 @@ const Tracks = (function () {
       // warm-light "Mediterranean" tones (Monaco) instead get small recessed dark
       // windows on the cream wall, so they read as stone apartments, not glass.
       const med = bodyCol[0] > 0.6 && bodyCol[0] > bodyCol[2] + 0.08;   // warm light wall
+      const medWin = [bodyCol[0] * 0.34, bodyCol[1] * 0.30, bodyCol[2] * 0.26];   // dark window reveal
       const dayGridAt = (cen, sw, sh, sd) => {
-        const cols = Math.max(3, Math.min(7, Math.round(sd / 2.4))), rows = Math.max(4, Math.round(sh / 3.4));
-        const medWin = [bodyCol[0] * 0.34, bodyCol[1] * 0.30, bodyCol[2] * 0.26];   // dark window reveal
-        for (let c = 0; c < cols; c++) {
-          const cx = (-0.5 + (c + 0.5) / cols) * sd;
-          for (let r = 0; r < rows; r++) {
-            const ry01 = (r + 0.5) / rows;
-            const ctr = vadd(vadd(vadd(cen, b[2], cx), b[1], (-0.5 + ry01) * sh), b[0], -side * 0.02);
-            if (med) {
-              addBox(out, ctr, [sw * 1.02, (sh / rows) * 0.42, (sd / cols) * 0.42], medWin, b);
-            } else {
-              // base glass tint (the shader adds the sky reflection on top)
-              const t01 = 0.42 + ry01 * 0.16;
-              addBox(glassBuf, ctr, [sw * 1.03, (sh / rows) * 0.62, (sd / cols) * 0.6], [t01 * 0.62, t01 * 0.72, t01 * 0.92], b);
+        const rows = Math.max(4, Math.round(sh / 3.4));
+        // Draw the window grid on one vertical face (track-facing or a side). Same
+        // per-axis box-dim trick as neonFacade so the sides are glazed too.
+        const dface = (nAxis, nSign, nHalf, wAxis, faceW, simple) => {
+          const cols = simple ? Math.max(2, Math.min(4, Math.round(faceW / 4.0))) : Math.max(2, Math.min(7, Math.round(faceW / 2.4)));
+          const rowN = simple ? Math.max(3, Math.min(9, Math.round(sh / 5.0))) : rows;
+          const gB = vadd(cen, b[nAxis], nSign * (nHalf + 0.03));
+          const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
+          for (let c = 0; c < cols; c++) {
+            const cx = (-0.5 + (c + 0.5) / cols) * faceW;
+            for (let r = 0; r < rowN; r++) {
+              const ry01 = (r + 0.5) / rowN, ctr = vadd(vadd(gB, b[wAxis], cx), b[1], (-0.5 + ry01) * sh);
+              if (med) addBox(out, ctr, dim(0.06, (sh / rowN) * 0.42, (faceW / cols) * 0.42), medWin, b);
+              else { const t01 = 0.42 + ry01 * 0.16; addBox(glassBuf, ctr, dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.62, t01 * 0.72, t01 * 0.92], b); }
             }
           }
-        }
+        };
+        dface(0, -side, sw / 2, 2, sd, false);   // track-facing: full
+        dface(2, 1, sd / 2, 0, sw, true);        // +t side: simple
+        dface(2, -1, sd / 2, 0, sw, true);       // -t side: simple
       };
       // One stacked section centred at up=yb+sh/2, optionally offset along tangent.
       const sec = (yb, sw, sh, sd, seed, to) => {
@@ -2127,7 +2138,7 @@ const Tracks = (function () {
         return style.kinds[Math.floor(hash(k * 2.3 + s) * style.kinds.length) % style.kinds.length];
       };
       // Front row — dense.
-      every(22, (k) => {
+      every(18, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 17 + side * 4) < 0.12 || harbourSkip(side, k)) continue;
           const s = hash(k * 5 + side), na = naFor(k, side);
@@ -2136,7 +2147,7 @@ const Tracks = (function () {
         }
       });
       // Back row — taller, set further back, staggered, for skyline depth.
-      every(30, (k) => {
+      every(26, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 23 + side * 7) < 0.34 || harbourSkip(side, k)) continue;
           const s = hash(k * 11 + side * 2), na = naFor(k * 1.3, side);
