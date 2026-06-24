@@ -4710,6 +4710,35 @@ window.__apex = {
     return { lap: player.lap };
   },
 
+  // trackShape(n?) — returns n evenly-spaced 2D centerline points {frac,x,z,k}
+  // normalised so the bounding box fits in [-1,1]×[-1,1]. Useful for comparing
+  // the rendered track outline against a real-world circuit map.
+  // Positive k = left curve, negative k = right curve (matches physics sign).
+  trackShape(n) {
+    if (!track) return null;
+    const steps = Math.max(4, Math.min(2000, n != null ? Math.floor(+n) : 200));
+    const xs = [], zs = [], ks = [], fracs = [];
+    for (let i = 0; i < steps; i++) {
+      const frac = i / steps;
+      const s = frac * track.total;
+      Tracks.sample(track, s, smp2);
+      xs.push(smp2.p[0]);
+      zs.push(smp2.p[2]);
+      ks.push(Tracks.curvature(track, s));
+      fracs.push(frac);
+    }
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+    const scaleX = maxX - minX || 1, scaleZ = maxZ - minZ || 1;
+    const scale = Math.max(scaleX, scaleZ);
+    return fracs.map((f, i) => ({
+      frac: +f.toFixed(4),
+      x: +(((xs[i] - minX) / scale * 2 - scaleX / scale).toFixed(4)),
+      z: +(((zs[i] - minZ) / scale * 2 - scaleZ / scale).toFixed(4)),
+      k: +ks[i].toFixed(5),
+    }));
+  },
+
   // trackProfile(n?) — sample the circuit at n evenly-spaced points (default 100,
   // max 1 000). Returns {frac, y, k, hw, slope} per point — useful for
   // elevation visualisation and curvature analysis without a live race.
@@ -4756,6 +4785,48 @@ window.__apex = {
     player.head = Math.atan2(smp.t[0], smp.t[2]);
     _testInput = null;
     return this.obs();
+  },
+
+  // f1api — raw access to the F1API module (Jolpica + OpenF1) used by the
+  // data hub. Call e.g. __apex.f1api.schedule() or __apex.f1api.lastRace()
+  // from the console; all methods return Promises.
+  f1api: typeof F1API !== "undefined" ? F1API : null,
+
+  // openf1(path) — direct OpenF1 fetch, returns parsed JSON.
+  // Example: __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")
+  //          __apex.openf1("/location?session_key=9149&driver_number=1")
+  openf1(path) {
+    return fetch("https://api.openf1.org/v1" + path).then(r => r.json());
+  },
+
+  // jolpica(path) — direct Jolpica (Ergast-compatible) fetch, returns parsed JSON.
+  // Example: __apex.jolpica("/circuits/monaco.json")
+  //          __apex.jolpica("/2024/5/results.json")  (round 5 = Monaco 2024)
+  jolpica(path) {
+    return fetch("https://api.jolpi.ca/ergast/f1" + path).then(r => r.json());
+  },
+
+  // fetchTrackOutline(sessionKey, driverNumber?) — fetches OpenF1 location data
+  // for a session and returns normalised {x,z}[] track outline points (≤400 pts).
+  // Find sessionKey via: __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")
+  async fetchTrackOutline(sessionKey, driverNumber) {
+    const drv = driverNumber || 1;
+    const rows = await fetch(
+      "https://api.openf1.org/v1/location?session_key=" + sessionKey + "&driver_number=" + drv
+    ).then(r => r.json());
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const xs = rows.map(r => r.x), zs = rows.map(r => r.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+    const scale = Math.max(maxX - minX, maxZ - minZ) || 1;
+    // Downsample to ≤400 points for readability
+    const step = Math.max(1, Math.floor(rows.length / 400));
+    return rows
+      .filter((_, i) => i % step === 0)
+      .map(r => ({
+        x: +((r.x - minX) / scale).toFixed(4),
+        z: +((r.y - minZ) / scale).toFixed(4),
+      }));
   },
 };
 
