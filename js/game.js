@@ -4060,6 +4060,52 @@ window.__apex = {
     dbgCam = { eye, target: [cx, cy, cz], fov: Math.min(170, Math.max(1, opts.fov || 55)), far: Math.max(6000, dist * 4), fog: opts.fog };
     return { eye, target: [cx, cy, cz], span: Math.round(span) };
   },
+  // Place the debug free-cam at a track-relative point and aim it at another —
+  // far easier than hand-computing world coords for view({eye,target}). The eye
+  // sits at lap-fraction `f`, `lat` m off the centreline (+right), `h` m up; it
+  // looks at lap-fraction `lookF` (default f+0.01), `lookLat` off centre, `lookH`
+  // up (default 1). Ideal for inspecting roadside geometry — verges, barriers,
+  // berms — at eye level. e.g. eyeAt(0.116, 0, 2.5) ≈ a driver's-eye look ahead;
+  // eyeAt(0.116, 40, 3, 0.116, 0) stands out in the scenery looking back at the
+  // track edge.
+  eyeAt(f, lat = 0, h = 2.5, lookF, lookLat = 0, lookH = 1) {
+    if (!track) return false;
+    Tracks.sample(track, ((f % 1) + 1) % 1 * track.total, smp);
+    const eye = [smp.p[0] + smp.r[0] * lat, smp.p[1] + h, smp.p[2] + smp.r[2] * lat];
+    const lf = lookF == null ? f + 0.01 : lookF;
+    Tracks.sample(track, ((lf % 1) + 1) % 1 * track.total, smp2);
+    const tgt = [smp2.p[0] + smp2.r[0] * lookLat, smp2.p[1] + lookH, smp2.p[2] + smp2.r[2] * lookLat];
+    dbgCam = { eye, target: tgt, fov: 60, far: 6000 };
+    return { eye, target: tgt };
+  },
+  // Orbit the debug free-cam around a track point at lap-fraction `f`: `az`
+  // degrees around (0 = looking from +s/ahead), `el` degrees elevation, `dist` m
+  // out, aimed `h` m above the point. Sweep `az` to inspect a spot (a prop, a
+  // berm, a suspected gap) from every side without per-shot coord math.
+  orbit(f, az = 35, el = 18, dist = 30, h = 1.5) {
+    if (!track) return false;
+    Tracks.sample(track, ((f % 1) + 1) % 1 * track.total, smp);
+    const cx = smp.p[0], cy = smp.p[1] + h, cz = smp.p[2];
+    const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
+    // basis: track tangent = "ahead", right = smp.r
+    const fwd = [smp.t[0], 0, smp.t[2]], rt = [smp.r[0], 0, smp.r[2]];
+    const dir = [Math.cos(a) * fwd[0] + Math.sin(a) * rt[0], 0, Math.cos(a) * fwd[2] + Math.sin(a) * rt[2]];
+    const eye = [cx + dir[0] * Math.cos(e) * dist, cy + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
+    dbgCam = { eye, target: [cx, cy, cz], fov: 55, far: 6000 };
+    return { eye, target: [cx, cy, cz] };
+  },
+  // Ground/gap probe: the rendered terrain height at a track-relative point
+  // (lap-fraction `f`, `lat` m off centre), plus the road surface height and the
+  // gap between them. `terrainY` is null if no terrain covers the point. Use it
+  // to find where the carved terrain leaves a prop floating: compare a barrier's
+  // base height (≈ road grade + groundYAt) against terrainY just under it.
+  groundY(f, lat = 0) {
+    if (!track) return false;
+    Tracks.sample(track, ((f % 1) + 1) % 1 * track.total, smp);
+    const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
+    const ty = Tracks.terrainY(track, x, z);
+    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +smp.p[1].toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - smp.p[1]).toFixed(3) };
+  },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
   // mid-track straight with overlapping lateral positions and equal speed; every
   // other car (incl. the player) is shoved far away. Returns the two test ids.

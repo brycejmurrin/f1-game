@@ -161,6 +161,36 @@ __apex.view({ s: 0.16, side: "L", dist: 18, height: 10 }); // survey left-side s
 __apex.view({ eye: [0, 40, 0], yaw: 0, pitch: -90 });      // free-look straight down
 ```
 
+### `eyeAt(f, lat?, h?, lookF?, lookLat?, lookH?) → {eye, target}`
+Track-relative free-cam placement — no hand-computed world coords. Eye sits at
+lap-fraction `f`, `lat` m off the centreline (+right), `h` m up (default 2.5),
+looking at lap-fraction `lookF` (default `f+0.01`), `lookLat` off centre, `lookH`
+up (default 1). The fast way to inspect roadside geometry — verges, barriers,
+berms — at a chosen eye height.
+```js
+__apex.eyeAt(0.116, 0, 2.5);              // driver's-eye look ahead
+__apex.eyeAt(0.116, 0, 2.5, 0.116, 30, 2); // stand on the road, look out at the right barrier
+```
+
+### `orbit(f, az?, el?, dist?, h?) → {eye, target}`
+Orbit the free-cam around a track point at lap-fraction `f`: `az` degrees around
+(0 = from ahead/+s), `el` elevation, `dist` m out, aimed `h` m up. Sweep `az` to
+inspect a spot (prop, berm, suspected gap) from every side.
+```js
+for (const a of [0,45,90,135,180]) { __apex.orbit(0.116, a, 15, 35); /* shot */ }
+```
+
+### `groundY(f, lat?) → {x, z, roadY, terrainY, gap}`
+Ground/gap probe: the **rendered terrain height** at a track-relative point
+(lap-fraction `f`, `lat` m off centre — raycast against the actual carved terrain
+mesh), plus the road surface height (`roadY`) and `gap = terrainY − roadY`.
+`terrainY` is `null` if no terrain covers the point. Use it to find where the
+terrain leaves a prop floating, or dips/rises relative to the road, without
+eyeballing — e.g. sweep `lat` across a verge to see the cross-section profile.
+```js
+[8,12,16,20,24,30].map(l => __apex.groundY(0.11, l).terrainY); // verge height profile
+```
+
 ---
 
 ## Telemetry & diagnostics
