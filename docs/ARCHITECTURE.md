@@ -142,8 +142,23 @@ per-slice variation, white edge lines, red/white kerb stripes alternating
 every ~4 m on corner outsides, start/finish checker band at s≈0, grass/runoff
 terrain skirt ~40 m each side, simple themed props (boxes/prisms: grandstands,
 trees, buildings, floodlight poles for night tracks) and a start gantry. Props
-should be ONE merged mesh per track. Road slices: 6 verts
-(grassEdgeL, kerbL, edgeL, edgeR, kerbR, grassEdgeR), kerbs raised 0.04 m.
+should be ONE merged mesh per track. Road slices: 14 verts across the section
+(grass shoulder · kerb · bold edge line · asphalt · dashed centre · asphalt ·
+edge line · kerb · grass shoulder), banked along `up` on banked corners. The
+grass-shoulder verts sit a hair below the asphalt plane and any shoulder vert
+that chords over a nearby node's tarmac (tight-corner inside) is buried under it.
+
+**Terrain ribbon (`buildTerrain`)**: a 5-vert-per-side skirt whose inner edge
+hugs the road and outer edge eases (quadratic) down to the lap low point.
+An **over-track clip** lowers any ribbon vert/face that would render above the
+racing surface — the inside of corners, fold-backs, and the channel cut where an
+elevation mound (e.g. a rise that runs close to a lower part of the lap) bulges
+over the road. The raw geometry is kept on `track.terrainGeo` so `buildProps`'
+`anchor()` can raycast it (`terrainY`) and seat roadside props on the real carved
+ground rather than the closed-form `groundYAt` estimate — no floating/sunk props.
+A whole-circuit audit (`tests/terrain-over-road.spec.js`) asserts nothing renders
+over the racing line; large road-over-road overs are ignored as intentional
+crossovers (Suzuka figure-8).
 
 ## js/car3d.js — `Car3D`
 

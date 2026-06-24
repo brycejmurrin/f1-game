@@ -148,9 +148,11 @@ console or headless harness). Full reference in
 [docs/DEBUG-HOOKS.md](docs/DEBUG-HOOKS.md). Quick example:
 
 ```js
-__apex.race("monza");   // load Monza, skip menus
-__apex.park(0.1);       // stationary at 10% lap for a screenshot
-__apex.probe();         // player telemetry
+__apex.race("monza");        // load Monza, skip menus
+__apex.park(0.1);            // stationary at 10% lap for a screenshot
+__apex.probe();              // player telemetry
+__apex.eyeAt(0.116, 0, 2.5); // track-relative free-cam (frac, lateral, height)
+__apex.groundY(0.11, 12);    // rendered terrain height + gap vs the road at a point
 ```
 
 ## Credits
