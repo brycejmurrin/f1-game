@@ -2097,6 +2097,10 @@ const Tracks = (function () {
                      kinds: ["setback", "slab", "podium", "tiered"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.88, 0.81, 0.66] } },
         madrid:    { neon: [NC.red, NC.gold, NC.white, NC.cyan, NC.violet], bias: 0.28, fh: [14, 38], bh: [30, 70],
                      kinds: ["setback", "slab", "cylinder", "podium", "spire"], neonKinds: ["clad"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] } },
+        shanghai:  { neon: [NC.cyan, NC.blue, NC.white, NC.teal, NC.purple, NC.pink], bias: 0.42, fh: [22, 54], bh: [56, 110],
+                     kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab"], neonKinds: ["clad", "screen"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] } },
+        mexico:    { neon: [NC.pink, NC.green, NC.orange, NC.gold, NC.cyan], bias: 0.34, fh: [12, 34], bh: [28, 64],
+                     kinds: ["setback", "slab", "podium", "cylinder", "tiered"], neonKinds: ["clad"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] } },
         miami:     { neon: [NC.pink, NC.cyan, NC.teal, NC.orange, NC.purple], bias: 0.44, fh: [11, 30], bh: [28, 68],
                      kinds: ["setback", "podium", "slab", "cylinder", "twin"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] } },
       };
