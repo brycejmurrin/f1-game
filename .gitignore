@@ -21,4 +21,5 @@ tests/f1-circuit-directions/
 tests/monaco-cam/
 tests/scenery-shots/
 tests/trackmap-shots/
+tests/hooks-demo/
 tests/monaco-scenery/
