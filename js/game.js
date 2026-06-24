@@ -2468,7 +2468,7 @@ function render(dt) {
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
   if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT,
-    { roughness: 0.10, specular: 0.95, metalness: 0.15 });
+    { roughness: 0.18, specular: 0.68, metalness: 0.10 });
   if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
     wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
         : { roughness: 0.45, metalness: 0.30, specular: 0.50 });

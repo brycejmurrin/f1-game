@@ -1907,6 +1907,27 @@ const Tracks = (function () {
         if (NIGHT) neonFacade(cen2, b, side, w * 0.5, h, d, neon, k * 6.1 + side, na);
         else dayGridAt(cen2, w * 0.5, h, d);
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
+      } else if (kind === "arch") {                              // portal / gateway — two legs + spanning lintel
+        const legW = w * 0.26, gp = w * 0.46, legH = h * 0.78, off = gp / 2 + legW / 2;
+        for (const o3 of [-off, off]) sec(0, legW, legH, d, k * 3.3 + side + o3 * 7, o3);   // legs
+        sec(legH, w, h - legH, d, k * 5.9 + side);                                          // lintel
+        addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.96, 1.0, d * 0.9], cap, b);
+      } else if (kind === "ziggurat") {                          // stepped terrace (many small steps)
+        const steps = 6; let yb = 0, tw = w, td = d;
+        for (let i = 0; i < steps; i++) { const th = h / steps; sec(yb, tw, th, td, k * 2.9 + side + i * 8); yb += th; tw *= 0.82; td *= 0.82; }
+        addBox(out, vadd(a.c, a.u, h + 0.4), [tw, 0.8, td], cap, b);
+      } else if (kind === "drum") {                              // squat arena / stadium drum
+        const R = reach * 0.6, dh = h * 0.5;
+        addCyl(out, a.c, R, dh, bodyCol, 18, b);
+        const ring = NIGHT ? (neonOn ? neon : warm) : [0.30, 0.34, 0.42];
+        addCyl(out, vadd(a.c, a.u, dh * 0.5), R * 1.02, dh * 0.16, ring, 18, b);            // mid neon ring
+        addCyl(out, vadd(a.c, a.u, dh), R * 0.96, 1.2, cap, 18, b);                         // roof rim
+        addCyl(out, vadd(a.c, a.u, dh + 1.0), R * 0.7, 0.8, cap, 18, b);                    // shallow dome hint
+      } else if (kind === "hall") {                              // low wide gabled hall (market / depot)
+        const hh = h * 0.5;
+        sec(0, w, hh * 0.7, d, k * 3.3 + side);                                             // low body
+        addPrism(out, vadd(a.c, a.u, hh * 0.7 + hh * 0.15), [w, hh * 0.3, d], cap, b);      // gable roof
+        if (neonOn) addBox(out, vadd(a.c, a.u, hh * 0.7), [w * 1.02, 0.4, d * 1.02], neon, b);  // eave neon
       } else { // setback
         const setH = h * 0.84;
         sec(0, w, setH, d, k * 3.7 + side * 1.9);
@@ -2131,29 +2152,29 @@ const Tracks = (function () {
         ice: [0.55, 0.82, 1.0], yellow: [1.0, 0.92, 0.25], purple: [0.82, 0.30, 0.96],
         rose: [1.0, 0.45, 0.55], amber: [1.00, 0.55, 0.12],
       };
-      const BLD = ["setback", "tiered", "podium", "slab", "twin", "jenga", "cylinder", "spire", "dome", "chevron", "notch", "fin", "antenna", "cross"];
+      const BLD = ["setback", "tiered", "podium", "slab", "twin", "jenga", "cylinder", "spire", "dome", "chevron", "notch", "fin", "antenna", "cross", "arch", "ziggurat", "drum", "hall"];
       // fh / bh = front / back-row height [min, range]. Real-circuit character:
       // Vegas/Singapore tall; Baku = low sandstone Old City + tall flame towers;
       // Monaco = SHORT tan Mediterranean apartment blocks; Jeddah/Madrid/Miami mid.
       const STYLES = {
         vegas:     { neon: [NC.mag, NC.gold, NC.red, NC.cyan, NC.violet, NC.pink, NC.orange], bias: 0.62, fh: [18, 50], bh: [44, 78],
-                     kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin"], neonKinds: ["screen", "clad", "antenna"], tone: null },
+                     kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null },
         singapore: { neon: [NC.cyan, NC.blue, NC.teal, NC.white, NC.green, NC.violet], bias: 0.42, fh: [20, 52], bh: [48, 88],
-                     kinds: ["podium", "setback", "cylinder", "spire", "twin", "slab", "notch", "fin"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.44, 0.46, 0.50] } },
+                     kinds: ["podium", "setback", "cylinder", "spire", "twin", "slab", "notch", "fin", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.44, 0.46, 0.50] } },
         baku:      { neon: [NC.orange, NC.red, NC.amber, NC.gold, NC.cyan, NC.white], bias: 0.40, fh: [10, 26], bh: [38, 84],
-                     kinds: ["setback", "slab", "tiered", "podium", "spire", "cylinder", "dome", "chevron"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.14, 0.13], d: [0.62, 0.56, 0.46] } },
+                     kinds: ["setback", "slab", "tiered", "podium", "spire", "cylinder", "dome", "chevron", "arch", "hall"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.14, 0.13], d: [0.62, 0.56, 0.46] } },
         jeddah:    { neon: [NC.gold, NC.teal, NC.green, NC.white, NC.cyan, NC.amber], bias: 0.46, fh: [16, 40], bh: [36, 78],
-                     kinds: ["setback", "podium", "slab", "cylinder", "pyramid", "spire", "fin", "antenna"], neonKinds: ["screen", "clad"], tone: { n: [0.15, 0.14, 0.16], d: [0.50, 0.48, 0.42] } },
+                     kinds: ["setback", "podium", "slab", "cylinder", "pyramid", "spire", "fin", "antenna", "arch"], neonKinds: ["screen", "clad"], tone: { n: [0.15, 0.14, 0.16], d: [0.50, 0.48, 0.42] } },
         monaco:    { neon: [NC.gold, NC.teal, NC.white, NC.rose], bias: 0.12, fh: [9, 17], bh: [14, 28],
-                     kinds: ["setback", "slab", "podium", "tiered", "chevron", "dome"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.88, 0.81, 0.66] } },
+                     kinds: ["setback", "slab", "podium", "tiered", "chevron", "dome", "hall"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.88, 0.81, 0.66] } },
         madrid:    { neon: [NC.red, NC.gold, NC.white, NC.cyan, NC.violet], bias: 0.28, fh: [14, 38], bh: [30, 70],
-                     kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] } },
+                     kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron", "arch"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] } },
         shanghai:  { neon: [NC.cyan, NC.blue, NC.white, NC.teal, NC.purple, NC.pink], bias: 0.42, fh: [22, 54], bh: [56, 110],
-                     kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab", "fin", "notch", "antenna"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] } },
+                     kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab", "fin", "notch", "antenna", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] } },
         mexico:    { neon: [NC.pink, NC.green, NC.orange, NC.gold, NC.cyan], bias: 0.34, fh: [12, 34], bh: [28, 64],
-                     kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "cross"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] } },
+                     kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "cross", "ziggurat", "drum"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] } },
         miami:     { neon: [NC.pink, NC.cyan, NC.teal, NC.orange, NC.purple], bias: 0.44, fh: [11, 30], bh: [28, 68],
-                     kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] } },
+                     kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] } },
       };
       const THEME_DEF = {
         street_night: { neon: [NC.mag, NC.cyan, NC.gold, NC.violet, NC.teal], bias: 0.5, fh: [16, 48], bh: [34, 80], kinds: BLD, neonKinds: ["screen", "clad"], tone: null },
