@@ -670,6 +670,24 @@ const Tracks = (function () {
               if (wy > py[j] - 0.5) wy = py[j] - 0.5;
               continue;
             }
+            // Elevated terrain hanging over a LOWER road: an elevation mound
+            // (e.g. Miami's s≈0.42 Hard Rock rise, 280 m radius) bulges over a
+            // flat part of the track that passes near it, covering the racing
+            // line with green from up to ~20 m out — beyond the apron reach
+            // below. Carve the road's channel through it: pull terrain that sits
+            // clearly ABOVE this road down under it near the edge, easing back up
+            // to the mound's natural height further out. Heading-independent, and
+            // gated on wy>py[j]+0.3 so flat verges (always at/below grade) are
+            // untouched.
+            if (wy > py[j] + 0.3) {
+              const fr = hw[j] + 26, nr = hw[j] + 0.5;
+              if (d2 < fr * fr) {
+                const dist = Math.sqrt(d2);
+                const tt = Math.max(0, Math.min(1, (dist - nr) / (fr - nr)));
+                const tgt = (py[j] - 0.4) * (1 - tt * tt) + wy * (tt * tt);
+                if (wy > tgt) wy = tgt;
+              }
+            }
             const align = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j];
             if (align > 0.55 && dd * ds < 60) continue; // same-direction nearby road: leave the verge
             const far = hw[j] + 12;
