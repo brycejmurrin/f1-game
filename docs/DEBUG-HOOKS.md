@@ -493,6 +493,16 @@ Get or set race weather. Called with no argument returns `"dry"` or `"wet"`.
 Setting `"wet"` starts rain audio and changes the road/sky state; `"dry"` stops
 it. The change takes effect immediately without reloading the track.
 
+### `setTimeOfDay(tod?) → "default" | "dawn" | "day" | "dusk" | "night"`
+Get or set the session time of day live, **without reloading track assets**.
+Called with no argument returns the current value. Setting it re-applies lighting
+(sky, sun, floodlights) immediately; geometry is rebuilt only when the night/day
+state flips (`dawn`/`dusk`/`night` share one dark build, `day` is the light
+build), so switching among the three dark times is near-instant and buildings
+correctly swap between day-glass and night-neon. Fast path for time-of-day
+sweeps — e.g. `race("vegas","day")` then `setTimeOfDay("night")` skips a full
+re-race.
+
 ### `resetPlayer() → physState | false`
 Force-rescue the player immediately — same mechanism as the 3-second auto-rescue
 (repositions on the centreline at the nearest safe point). Returns the updated

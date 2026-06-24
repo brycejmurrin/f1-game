@@ -4646,6 +4646,19 @@ window.__apex = {
     return raceWeather;
   },
 
+  // Live time-of-day change without reloading assets. Sets the session time and
+  // re-applies lighting; loadTrack() only rebuilds geometry when the night/day
+  // state actually flips (dawn/dusk/night share one build; day is the other), so
+  // switching among the three dark times is near-instant. Fast path for sweeps.
+  setTimeOfDay(tod) {
+    if (tod === undefined) return raceTimeOfDay;
+    const valid = ["default", "dawn", "day", "dusk", "night"];
+    raceTimeOfDay = valid.indexOf(tod) >= 0 ? tod : "default";
+    loadTrack(trackIdx);
+    applyRaceSettings();
+    return raceTimeOfDay;
+  },
+
   // Force-rescue the player immediately (same as auto-rescue after 3 s stuck).
   // Returns updated physState so the test can confirm repositioning.
   resetPlayer() {
