@@ -1838,11 +1838,16 @@ const Tracks = (function () {
     {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
       const mastH = stTheme ? 9 : 13;
-      const lensCol = theme === "desert" ? [1.0, 0.84, 0.50]
-                    : stTheme ? [0.90, 0.95, 1.05]
-                    : [1.0, 0.93, 0.78];
+      // Lens albedo mirrors floodColor(theme) in game.js so the visible mast glow
+      // matches the colour of the point light it casts: desert warm sodium,
+      // street_night cool LED, modern warm-white, street_day warm, green neutral.
+      const lensCol = theme === "desert"       ? [1.00, 0.84, 0.50]
+                    : theme === "street_night" ? [0.90, 0.95, 1.05]
+                    : theme === "modern"       ? [1.00, 0.97, 0.90]
+                    : theme === "street_day"   ? [1.06, 0.98, 0.82]
+                    : [1.00, 0.93, 0.78];
       const poleCol = [0.16, 0.16, 0.19];
-      const mstride = Math.max(1, Math.round(40 / ds));
+      const mstride = Math.max(1, Math.round(34 / ds));
       let mi = 0;
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
