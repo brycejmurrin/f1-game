@@ -1156,22 +1156,26 @@ const Tracks = (function () {
     // ---------- composite scenery models (beyond single boxes) ----------
     // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
     // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
-    // Drop a prop's ground anchor onto a LOWER road it overhangs. The terrain
-    // ribbon carves a channel where an elevation mound bulges over a lower part
-    // of the track (see buildTerrain); without the same carve here, props
-    // anchored to the mound height (groundYAt) are left floating over the carved
-    // channel (Miami: the s≈0.42 Hard Rock rise runs ~40 m from the s≈0.11 road).
-    // Conservative: only fires when the anchor is clearly (>1 m) above a
-    // non-adjacent road it sits over, so gentle crossovers/banked edges and
-    // legitimate flyover bridges (Suzuka figure-8) are untouched.
+    // Drop a prop's ground anchor onto a LOWER road it overhangs, tracking the
+    // EXACT channel the terrain ribbon carves there (same reach + easing, see
+    // buildTerrain). Without matching, props anchored to the mound height
+    // (groundYAt) float over the carved berm (Miami: the s≈0.42 Hard Rock rise
+    // runs ~40 m from the s≈0.11 road). Gated on the anchor sitting clearly above
+    // a non-adjacent road, so flat verges and gentle crossovers are untouched.
     const groundClip = (baseY, cx, cz, k) => {
       let y = baseY;
       for (let j = 0; j < n; j++) {
-        if (baseY <= py[j] + 1.0) continue;
+        if (baseY <= py[j] + 0.3) continue;
         let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
         if (dd * ds < 30) continue;
-        const ex = cx - px[j], ez = cz - pz[j], reach = hw[j] + 14;
-        if (ex * ex + ez * ez < reach * reach) { const tgt = py[j] - 0.3; if (y > tgt) y = tgt; }
+        const ex = cx - px[j], ez = cz - pz[j], d2 = ex * ex + ez * ez;
+        const fr = hw[j] + 26, nr = hw[j] + 0.5;
+        if (d2 < fr * fr) {
+          const dist = Math.sqrt(d2);
+          const tt = Math.max(0, Math.min(1, (dist - nr) / (fr - nr)));
+          const tgt = (py[j] - 0.4) * (1 - tt * tt) + baseY * (tt * tt);
+          if (y > tgt) y = tgt;
+        }
       }
       return y;
     };
