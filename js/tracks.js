@@ -609,19 +609,32 @@ const Tracks = (function () {
           const wx = px[k] + r[0] * o + u[0] * by;
           const wz = pz[k] + r[2] * o + u[2] * by;
           let wy = yBase + sag + u[1] * by;
-          // Clip terrain that would rise OVER another part of the circuit: where
-          // a section runs near a higher one (an elevation change, a crossover, a
-          // hairpin folding back), the ribbon of the high section can otherwise
-          // cover the lower track. If this vert sits over the tarmac of a
-          // non-local node and above that road, drop it just under that road so
-          // the ground dips beneath the track instead of bisecting it.
+          // Clip terrain that rises OVER the track. The near verge verts sit at
+          // ~road height, so on the INSIDE of a corner (and at crossings / fold-
+          // backs / elevation changes) they can hang over the tarmac of a nearby
+          // node and cover the racing surface with grass. Lower any such vert to
+          // just under that road, easing the dip with distance so it slopes under
+          // rather than stepping.
+          //
+          // Arc distance alone can't tell "my own road continuing straight" (must
+          // leave alone — don't trench the verge) from "the track that curved away
+          // right here" (must clip). The discriminator is HEADING: same tangent =
+          // same road run → skip; diverging tangent = the track bends/folds over
+          // this vert → clip, at ANY arc distance (so tight corners are caught).
           for (let j = 0; j < n; j++) {
             let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
-            if (dd * ds < 18) continue;                 // skip this vert's own road; tight enough to still catch hairpin fold-backs
+            if (dd * ds < 6) continue;                  // always skip the vert's immediate own road
+            const align = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j];
+            if (align > 0.55 && dd * ds < 60) continue; // same-direction nearby road: leave the verge
             const ex = wx - px[j], ez = wz - pz[j];
-            const reach = hw[j] + 2.5;
-            if (ex * ex + ez * ez > reach * reach) continue;
-            if (wy > py[j] - 0.4) wy = Math.min(wy, py[j] - 1.6);
+            const far = hw[j] + 12;
+            const d2 = ex * ex + ez * ez;
+            if (d2 > far * far) continue;               // not over/near this node's tarmac
+            const near = hw[j] + 1.0;
+            const dist = Math.sqrt(d2);
+            const tt = Math.max(0, Math.min(1, (dist - near) / (far - near)));
+            const target = (py[j] - 1.6) + tt * tt * 1.6;   // dip under the road, easing back to grade
+            if (wy > target) wy = target;
           }
           pos.push(wx, wy, wz);
           nrm.push(0, 1, 0);
