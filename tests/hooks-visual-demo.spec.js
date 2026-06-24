@@ -55,7 +55,7 @@ test("cinematic auto-outside-corner — Monaco tour", async ({ page }) => {
   ];
   for (let i = 0; i < fracs.length; i++) {
     const f = fracs[i];
-    const info = await page.evaluate(f => __apex.cinematic(f, { dist: 65, el: 20 }), f);
+    const info = await page.evaluate(f => __apex.cinematic(f, { dist: 160, el: 28, fov: 68 }), f);
     console.log(`  cinematic f=${f} az=${info.az} k=${info.k}`);
     await shot(page, `02-cinematic-${String(i).padStart(2,"0")}-${labels[i]}`,
       `cinematic f=${f} az=${info.az.toFixed(0)}° k=${info.k.toFixed(4)}`);
@@ -174,10 +174,10 @@ test("cinematic vs orbit at same frac", async ({ page }) => {
 
   // Loews hairpin — tightest corner, should show big az difference
   const f = 0.38;
-  await page.evaluate(f => __apex.orbit(f, 35, 20, 60, 1.5, { fov: 55 }), f);
+  await page.evaluate(f => __apex.orbit(f, 35, 28, 160, 1.5, { fov: 68 }), f);
   await shot(page, "08a-orbit-loews-default", "orbit f=0.38 az=35 (manual default)");
 
-  const info = await page.evaluate(f => __apex.cinematic(f, { dist: 60, el: 20 }), f);
+  const info = await page.evaluate(f => __apex.cinematic(f, { dist: 160, el: 28, fov: 68 }), f);
   console.log(`  cinematic at Loews: az=${info.az}, k=${info.k}`);
   await shot(page, "08b-cinematic-loews-auto", `cinematic f=0.38 auto az=${info.az.toFixed(0)}°`);
 });
