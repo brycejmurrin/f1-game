@@ -178,6 +178,7 @@ const Tracks = (function () {
   function build(def) {
     const track = buildCenterline(def);
     if (typeof GLX !== "undefined" && GLX.createMesh) {
+      track.meshes.floor = GLX.createMesh(buildFloor(track));
       track.meshes.road = GLX.createMesh(buildRoad(track));
       const terrainGeo = buildTerrain(track);
       track.terrainGeo = terrainGeo;   // raw geometry kept for the groundY() debug probe
@@ -710,6 +711,42 @@ const Tracks = (function () {
     // no open terrain apron should be visible beside the car.
     if (!isStreet) { ribbon(latsL, false); ribbon(latsR, true); }
     return { pos, nrm, col, idx: idxArr };
+  }
+
+  // A single large flat ground plane under the WHOLE circuit. Street circuits
+  // skip the terrain ribbon (their barriers sit at the road edge), which used to
+  // leave the city band floating over grey void; open circuits have the ribbon
+  // but only out to ~120 m, so a big infield or the far horizon also showed
+  // through. This floor fills both: it sits just below the lap's low point and
+  // every other mesh (road, terrain, props) renders on top of it. It extends far
+  // enough to meet the exp2 fog, so the ground reads continuously to the horizon.
+  function buildFloor(track) {
+    const { n, px, py, pz } = track;
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity, pyMin = Infinity;
+    for (let k = 0; k < n; k++) {
+      if (px[k] < minx) minx = px[k]; if (px[k] > maxx) maxx = px[k];
+      if (pz[k] < minz) minz = pz[k]; if (pz[k] > maxz) maxz = pz[k];
+      if (py[k] < pyMin) pyMin = py[k];
+    }
+    // Reach well past the track so the plane always disappears into fog/horizon
+    // rather than ending in a visible edge, regardless of camera position.
+    const margin = Math.max(1400, (maxx - minx), (maxz - minz));
+    const x0 = minx - margin, x1 = maxx + margin;
+    const z0 = minz - margin, z1 = maxz + margin;
+    const y = pyMin - 0.6;   // just under the lowest terrain so nothing z-fights
+    const pal = track.def.palette;
+    // Match the terrain ribbon's outer colour (grass) so the seam is invisible on
+    // open circuits; on street circuits grass is the neutral urban grey, which
+    // reads fine as paved ground. Darkened slightly so the lit road still pops.
+    const g = pal.grass || [0.30, 0.34, 0.22];
+    const c = [g[0] * 0.88, g[1] * 0.88, g[2] * 0.88];
+    const pos = [x0, y, z0,  x1, y, z0,  x1, y, z1,  x0, y, z1];
+    const nrm = [0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0];
+    const col = [c[0], c[1], c[2],  c[0], c[1], c[2],  c[0], c[1], c[2],  c[0], c[1], c[2]];
+    // Double-sided (both windings) so the up-facing ground is never back-face
+    // culled regardless of the renderer's winding convention.
+    const idx = [0, 1, 2,  0, 2, 3,   0, 2, 1,  0, 3, 2];
+    return { pos, nrm, col, idx };
   }
 
   // oriented box; basis optional [right,up,fwd]

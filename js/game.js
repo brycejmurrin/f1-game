@@ -559,6 +559,7 @@ function loadTrack(idx) {
   const def = Tracks.LIST[idx];
   if (builtTrackId !== def.id) {
     if (track && track.meshes) {
+      GLX.freeMesh(track.meshes.floor);
       GLX.freeMesh(track.meshes.road);
       GLX.freeMesh(track.meshes.terrain);
       GLX.freeMesh(track.meshes.props);
@@ -2401,6 +2402,12 @@ function render(dt) {
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
   // mirror-like, cars and barriers pick up sharper reflections.
+  // Base floor first (under everything) — fills the void on street circuits (no
+  // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
+  // so the huge plane stays flat and recedes into fog.
+  if (!hideMeshes.terrain && track.meshes.floor) GLX.draw(track.meshes.floor, MAT_IDENT,
+    night ? { emissive: 0.14, roughness: 0.98, specular: 0.05 }
+          : { roughness: 0.98, specular: 0.05 });
   if (!hideMeshes.terrain) GLX.draw(track.meshes.terrain, MAT_IDENT,
     night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.35 }
           : { roughness: 0.97, specular: 0.06, detail: 0.35 });
