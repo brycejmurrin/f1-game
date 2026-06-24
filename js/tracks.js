@@ -175,8 +175,11 @@ const Tracks = (function () {
 
   // Full build: centreline + 3D meshes (road/terrain/props/gate) uploaded to the
   // GPU. This is the heavy one — only needed to actually render/drive a circuit.
-  function build(def) {
+  function build(def, opts) {
     const track = buildCenterline(def);
+    // Session darkness drives whether buildings/skyline light their windows.
+    // Falls back to the track's default (def.night) when not specified.
+    track._night = opts && opts.night != null ? !!opts.night : !!def.night;
     if (typeof GLX !== "undefined" && GLX.createMesh) {
       track.meshes.floor = GLX.createMesh(buildFloor(track));
       track.meshes.road = GLX.createMesh(buildRoad(track));
@@ -912,6 +915,10 @@ const Tracks = (function () {
     const { n, px, py, pz, hw } = track;
     const out = { pos: [], nrm: [], col: [], idx: [] };
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
+    // Session darkness (set by Tracks.build from the chosen time of day) drives
+    // window/skyline lighting — so buildings respond to dusk/night even on a
+    // day-default circuit, and stay daytime on a night-default one raced by day.
+    const NIGHT = track._night != null ? track._night : !!def.night;
 
     // Rendered-terrain raycast for exact prop anchoring: anchor-based props
     // (walls, fences, trees) sit on the ACTUAL carved/clipped terrain ribbon
@@ -1209,7 +1216,7 @@ const Tracks = (function () {
       }
       const isBld = sz[1] > 26 && sz[1] > sz[2];
       // Night skyline walls get a small glow floor so they aren't black planes.
-      const bcol = (isBld && def.night)
+      const bcol = (isBld && NIGHT)
         ? [Math.max(col[0], 0.20), Math.max(col[1], 0.19), Math.max(col[2], 0.24)] : col;
       addBox(out, [cx, cy0, cz], sz, bcol, [t, u, r]);
       // If this distant box reads as a BUILDING — tall, taller than it is deep,
@@ -1217,8 +1224,11 @@ const Tracks = (function () {
       // skyline doesn't render as flat dark planes. Wide/low/dune silhouettes
       // (dunes, mesas) are left as plain masses.
       if (isBld) {
-        const lit = !!def.night;
-        const win = lit ? [0.95, 0.86, 0.60]
+        const lit = NIGHT;
+        // Night skyline windows are HDR so the distant towers glow (and bloom)
+        // as a lit skyline rather than dim grey bands — matches the near-building
+        // glass curtain walls. Day keeps a reflective-glass tint.
+        const win = lit ? [1.45, 1.28, 0.84]
                         : [Math.min(1, col[0] * 1.6 + 0.05), Math.min(1, col[1] * 1.6 + 0.05), Math.min(1, col[2] * 1.6 + 0.07)];
         const darkWin = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.6];
         const floors = Math.max(2, Math.min(4, Math.round(sz[1] / 18)));
@@ -1499,93 +1509,210 @@ const Tracks = (function () {
         console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (too close to track)`);
         return;
       }
-      const nightLit = opts.lit || !!def.night;
+      // Lit windows follow the SESSION (NIGHT), not a baked flag — otherwise a
+      // casino marked lit:true glows neon in broad daylight. opts.lit:false can
+      // still force a building to stay unlit even at night.
+      const nightLit = NIGHT && opts.lit !== false;
       let body = opts.wall || [0.62, 0.64, 0.68];
       // Night city-glow floor: ambient + neon spill keep real building walls off
       // pure black at night. Without this, dark-walled night facades (e.g. Vegas
       // [0.20]) read as black silhouettes once the sun is low.
       if (nightLit) body = [Math.max(body[0], 0.26), Math.max(body[1], 0.24), Math.max(body[2], 0.30)];
-      const litWin = opts.windowCol || [1.0, 0.88, 0.55];    // warm bright (night)
-      const darkW = [0.07, 0.08, 0.12];                       // unlit pane at night
-      // Day glass: reflective blue-grey that reads as a WINDOW on the wall, not a
-      // dark void — brighter than the wall so panes pop without hollowing it out.
-      const glass = opts.lit ? litWin : (opts.window || [0.26, 0.34, 0.48]);
+      // HDR-bright lit glazing. The lit shader's emissive term reads the albedo
+      // directly, so window colours >1 glow strongly and trip the bloom threshold
+      // — this is what turns flat dark boxes into a skyline that actually lights
+      // up at night. Day glass stays a reflective blue-grey window panel.
+      const winBase = opts.windowCol || opts.window || [1.0, 0.88, 0.55];
+      const HDR = 1.85;
+      const litGlass = [winBase[0] * HDR, winBase[1] * HDR, winBase[2] * HDR];
+      const darkW = [0.05, 0.06, 0.11];                       // unlit pane at night
+      // Day glazing: a muted, slightly-darker blue-grey window — desaturated so
+      // daytime shows LESS colour (the neon window tint barely reads by day).
+      const dayGlass = opts.window
+        ? [Math.min(0.9, opts.window[0] * 0.25 + 0.30), Math.min(0.9, opts.window[1] * 0.25 + 0.33), Math.min(0.9, opts.window[2] * 0.25 + 0.38)]
+        : [0.34, 0.40, 0.50];
+      const glass = nightLit ? litGlass : dayGlass;
       const floorH = opts.floor || 4.0;
-      // One mass section, yBase → yBase+sh. The SOLID wall is the dominant
-      // surface; windows are short, flush, bright panels set INTO it, divided
-      // into a grid by wall-coloured mullions. Reads as a building with windows —
-      // never a hollow glass frame.
+      // One mass section, yBase → yBase+sh. Two distinct design languages:
+      //  • NIGHT  → a glowing GLASS CURTAIN WALL. The lit skin is the dominant
+      //    surface, broken only by a fine grid of thin dark mullions + floor
+      //    spandrels. No bright-pane-on-dark-wall checker. Some towers stay dark
+      //    for contrast; skin brightness/tint vary per building for skyline depth.
+      //  • DAY    → a solid wall with flush bright window bands set into it.
       const section = (yBase, sw, sh, sd) => {
-        const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], body, b);   // solid wall mass
+        if (nightLit) {
+          // NIGHT = a VISIBLE dark-grey concrete body (reads as a real building
+          // mass under the floodlights) accented by a FEW bright neon strips — the
+          // reference look, not a solid neon block. The body is neutral grey (NOT
+          // the neon window tint) clamped to a dark-but-visible range so it never
+          // vanishes to black nor glows as neon itself.
+          const lum = (body[0] + body[1] + body[2]) / 3;
+          const bv = lum > 0.4 ? 0.32 : 0.21;
+          const bodyTint = [bv, bv, bv * 1.1];
+          const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], bodyTint, b);
+          if (ok === false) return false;
+          // A few thin bright vertical neon strips (not every bay → mostly dark).
+          const nStrips = sd > 18 ? 3 : 2;
+          for (let i = 0; i < nStrips; i++) {
+            if (hash(k * 3.1 + i * 7.7 + side * 2.3) < 0.25) continue;
+            const off = (-0.5 + (i + 0.5) / nStrips) * sd;
+            const tw = 0.8 + hash(k * 5.3 + i * 2.1 + side) * 0.4;
+            addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.t, off),
+              [sw * 1.05, sh * 0.93, sd * 0.07], [glass[0] * tw, glass[1] * tw, glass[2] * tw], b);
+          }
+          // Thin neon cornice near the top — a single bright edge line.
+          addBox(out, vadd(p.c, p.u, yBase + sh * 0.94), [sw * 1.06, sh * 0.025, sd * 1.06], glass, b);
+          // Dim floor spandrels for scale (neutral, below the glow gate).
+          const rows = Math.max(2, Math.min(8, Math.round(sh / (floorH * 1.8))));
+          const fh = sh / rows;
+          for (let r = 1; r < rows; r++) {
+            addBox(out, vadd(p.c, p.u, yBase + r * fh), [sw * 1.03, fh * 0.08, sd * 1.03], bodyTint, b);
+          }
+          return ok;
+        }
+        // DAY: solid wall mass with flush bright window bands cut into a grid.
+        // Walls tuned near-black for night glow look like dark navy boxes in day
+        // (even their lit faces, and especially shadowed sides). So in daylight a
+        // dark night-wall is REPLACED by a light concrete/tan tone (varied per
+        // building); genuinely light facades (cream landmarks) keep their colour.
+        const wallLuma = (body[0] + body[1] + body[2]) / 3;
+        const cv = hash(k * 1.7 + side * 2.9);
+        // Muted, darker daytime concrete (the user wants day darker / less colour);
+        // very light cream landmarks are pulled down a touch too.
+        const dayWall = wallLuma > 0.45
+          ? [body[0] * 0.78, body[1] * 0.78, body[2] * 0.78]
+          : [0.42 + cv * 0.12, 0.42 + cv * 0.11, 0.41 + cv * 0.10];
+        const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], dayWall, b);   // solid wall mass
         const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
-        // Window band per storey (glass, slightly proud). Bands give the storey
-        // rhythm; vertical mullions cut them into a grid. Kept to a modest box
-        // count — overlapping proud boxes are pure overdraw, the cost that
-        // matters most for the (software-rendered) scenery pass.
         for (let r = 0; r < rows; r++) {
-          const wc = (opts.lit && hash(k * 13.7 + yBase * 0.7 + r * 5.1 + side * 2.3) < 0.22) ? darkW : glass;
-          addBox(out, vadd(p.c, p.u, yBase + (r + 0.52) * fh), [sw * 1.01, fh * 0.5, sd * 1.01], wc, b);
+          addBox(out, vadd(p.c, p.u, yBase + (r + 0.52) * fh), [sw * 1.01, fh * 0.5, sd * 1.01], glass, b);
         }
-        // Vertical wall mullions cut the bands into a window GRID on the long
-        // faces (so glazing reads as windows, not glowing floor stripes).
+        // Mullions are a slightly DARKER SHADE OF THE DAY WALL — not the original
+        // near-black body. Proud dark bars were occluding the lifted grey mass at
+        // grazing angles and turning the tower into a dark-walled box.
+        const dayMull = [dayWall[0] * 0.82, dayWall[1] * 0.82, dayWall[2] * 0.82];
         const nm = Math.max(2, Math.min(4, Math.round(sd / 6)));
         for (let c = 1; c <= nm; c++) {
           const off = -sd / 2 + (c / (nm + 1)) * sd;
-          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.t, off), [sw * 1.02, sh, 0.5], body, b);
+          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.t, off), [sw * 1.02, sh, 0.5], dayMull, b);
         }
-        // 1–2 on the end faces so those panes aren't floor stripes either
         const nmR = sw > 18 ? 2 : 1;
         for (let c = 1; c <= nmR; c++) {
           const off = -sw / 2 + (c / (nmR + 1)) * sw;
-          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), [0.5, sh, sd * 1.02], body, b);
+          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), [0.5, sh, sd * 1.02], dayMull, b);
         }
         return ok;
       };
-      // Darker ground-floor plinth so the mass sits grounded.
+      // Ground-floor plinth, grounded but never near-black (day) / glows (night).
       const plH = Math.min(3.2, h * 0.14);
-      addBox(out, vadd(p.c, p.u, plH / 2), [w * 1.02, plH, d * 1.02], [body[0] * 0.5, body[1] * 0.5, body[2] * 0.55], b);
-      // Archetype: short blocks stay simple, tall ones get dramatic massing.
+      const plinth = nightLit ? [body[0] * 0.8, body[1] * 0.8, body[2] * 0.9]
+                              : [Math.max(body[0] * 1.2, 0.40), Math.max(body[1] * 1.2, 0.40), Math.max(body[2] * 1.2, 0.44)];
+      addBox(out, vadd(p.c, p.u, plH / 2), [w * 1.02, plH, d * 1.02], plinth, b);
+      // Archetype: favour slender TAPERED + individually-crowned forms over
+      // stacked rectangular prisms. Short blocks stay simple; mid/tall ones taper
+      // and always get a sculpted crown (never a bare cut-off box top). The crown
+      // colour follows the lit glass at night so the whole tower reads as one form.
+      // Day crowns/caps take the SAME lifted concrete tone as the day walls — not
+      // the dark night body — so from above (and at the roofline) the tops aren't
+      // dark navy caps on an otherwise light tower.
+      const crownCol = nightLit ? [glass[0] * 0.30, glass[1] * 0.30, glass[2] * 0.32]
+                                : [Math.max(body[0] * 1.1, 0.42), Math.max(body[1] * 1.1, 0.42), Math.max(body[2] * 1.1, 0.44)];
       const t = hash(k * 4.1 + side * 2.7);
-      const arch = opts.arch || (h < 22 ? (t < 0.7 ? "flat" : "stepped")
-                                : h < 42 ? (t < 0.45 ? "flat" : t < 0.8 ? "stepped" : "tapered")
-                                : (t < 0.38 ? "stepped" : t < 0.66 ? "tapered" : "tower"));
+      const arch = opts.arch || (h < 20 ? "flat"
+                                : h < 40 ? (t < 0.5 ? "flat" : "taper")
+                                : (t < 0.30 ? "setback" : t < 0.64 ? "taper" : "spire"));
       let topY = h, topW = w, topD = d;
+      const diag = Math.max(w, d);
       if (arch === "flat") {
         if (section(0, w, h, d) === false) return;
-      } else if (arch === "stepped") {
-        // two concentric setback tiers
-        const h1 = h * 0.6, h2 = h - h1;
+      } else if (arch === "setback") {
+        // base + a narrower upper joined by a short tapered collar (not an abrupt
+        // box step) so the setback reads as sculpted massing.
+        const h1 = h * 0.55, collar = h * 0.05;
         if (section(0, w, h1, d) === false) return;
-        section(h1, w * 0.72, h2, d * 0.72);
+        addFrustum(out, vadd(p.c, p.u, h1), diag * 0.5, diag * 0.40, collar, crownCol, 8, b);
+        section(h1 + collar, w * 0.72, h - h1 - collar, d * 0.72);
         topW = w * 0.72; topD = d * 0.72;
-      } else if (arch === "tapered") {
-        // straight shaft + a frustum crown (sloped glass cap)
-        const bh = h * 0.72;
+      } else if (arch === "taper") {
+        // Windowed shaft takes almost the whole height; the frustum is only a SMALL
+        // tapered cap. (A tall frustum was a giant blank angled wall with no window
+        // detail — the "angled wall / blank box" look.) A couple of glazing rings
+        // keep even that small cap from reading blank.
+        const bh = h * 0.90;
         if (section(0, w, bh, d) === false) return;
-        const rB = Math.max(w, d) * 0.5, rT = Math.max(w, d) * 0.27;
-        addFrustum(out, vadd(p.c, p.u, bh), rB, rT, h - bh, body, 8, b);
-        // a couple of glazing rings up the crown
-        addCyl(out, vadd(p.c, p.u, bh + (h - bh) * 0.45), rB * 0.62, (h - bh) * 0.12, glass, 8, b);
-        topW = w * 0.5; topD = d * 0.5;
-      } else { // tower: wide podium base + slender setback shaft
-        const baseH = Math.min(h * 0.24, 10);
-        if (section(0, w, baseH, d) === false) return;
-        section(baseH, w * 0.68, h - baseH, d * 0.68);
-        topW = w * 0.68; topD = d * 0.68;
+        addFrustum(out, vadd(p.c, p.u, bh), diag * 0.5, diag * 0.33, h - bh, crownCol, 8, b);
+        addCyl(out, vadd(p.c, p.u, bh + (h - bh) * 0.4), diag * 0.40, (h - bh) * 0.16, glass, 8, b);
+        topW = w * 0.5; topD = d * 0.5; topY = h;
+      } else { // spire: windowed shaft → a short tapered cap → a tall lit spire
+        const bh = h * 0.86, crownH = h * 0.10;
+        if (section(0, w, bh, d) === false) return;
+        addFrustum(out, vadd(p.c, p.u, bh), diag * 0.5, diag * 0.30, crownH, crownCol, 8, b);
+        topY = bh + crownH; topW = w * 0.36; topD = d * 0.36;
       }
-      // Roofline: parapet + hash-varied silhouette element (no two identical).
-      addBox(out, vadd(p.c, p.u, topY + 0.55), [topW * 1.03, 1.1, topD * 1.03], body, b);
-      if (opts.roof) {
-        addBox(out, vadd(p.c, p.u, topY + 1.6), [topW * 0.3, 2, topD * 0.3], [0.3, 0.3, 0.33], b);  // rooftop plant
-      } else {
+      // Sculpted crown — a short chamfered cap, then a hash-varied finial so no
+      // two rooflines match and none is a flat box edge.
+      {
+        const capR = Math.max(topW, topD) * 0.5, capH = Math.min(3.5, h * 0.07 + 1);
+        addFrustum(out, vadd(p.c, p.u, topY), capR, capR * 0.45, capH, crownCol, 6, b);
+        topY += capH;
         const rt = hash(k * 3.3 + side * 1.9);
-        if (rt < 0.28)      addCyl(out, vadd(p.c, p.u, topY + 1.3), Math.min(topW, topD) * 0.16, 2.0, [0.32, 0.32, 0.36], 6, b);  // water tank
-        else if (rt < 0.5)  addBox(out, vadd(p.c, p.u, topY + 1.4), [topW * 0.3, 2.6, topD * 0.3], [0.30, 0.30, 0.34], b);       // plant housing
-        else if (rt < 0.72) addCyl(out, vadd(p.c, p.u, topY + 3), 0.12, 7, [0.40, 0.40, 0.42], 4, b);                           // antenna mast
-        // else: clean flat roof with just the parapet
+        if (h > 30 && rt < 0.58) {
+          // slim spire/mast — taller on taller towers; lit tip beacon at night
+          const spH = 4 + hash(k * 5.1 + side) * Math.min(20, h * 0.26);
+          addCyl(out, vadd(p.c, p.u, topY), 0.22, spH, [0.5, 0.5, 0.56], 4, b);
+          if (nightLit) addBox(out, vadd(p.c, p.u, topY + spH), [0.9, 0.9, 0.9], [3.2, 0.4, 0.3], b);
+        } else if (rt < 0.82) {
+          addBox(out, vadd(p.c, p.u, topY + 1.3), [topW * 0.32, 2.6, topD * 0.32], [0.30, 0.30, 0.34], b);  // plant housing
+        }
+        // else: clean chamfered cap, no finial
+      }
+      // Night signage: a bright HDR neon band wrapping the crown of lit buildings
+      // — the casino / strip glow. Hue varies per building (warm gold, ice cyan,
+      // hot magenta, electric green). Plus a red aircraft-warning beacon on tall
+      // towers. Both are HDR so they bloom; gated to night-lit buildings only.
+      if (nightLit) {
+        const NEON = [[2.6, 1.5, 0.5], [0.5, 1.9, 2.6], [2.6, 0.6, 1.7], [0.9, 2.4, 0.9], [2.2, 0.9, 2.4]];
+        if (hash(k * 6.7 + side * 1.3) < 0.62) {
+          const neon = NEON[Math.floor(hash(k * 8.9 + side * 2.1) * NEON.length) % NEON.length];
+          const by = topY * (0.5 + hash(k * 2.3 + side) * 0.32);
+          addBox(out, vadd(p.c, p.u, by), [topW * 1.05, 0.7, topD * 1.05], neon, b);
+        }
+        if (h > 38) addBox(out, vadd(p.c, p.u, topY + 2.4), [1.1, 1.1, 1.1], [3.2, 0.4, 0.3], b);  // red beacon
       }
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
+    };
+    // neonTower(): the INNER-ring filler model — a lightweight, dense-friendly
+    // neon tower distinct from the detailed building() landmarks. A VISIBLE dark
+    // concrete block lit only by bright neon EDGE strips (two vertical corner
+    // strips), a top cornice and a base band — i.e. mostly dark with neon outlines
+    // (matches the reference). Day: the concrete block reads as a plain light
+    // tower; the neon edges become subtle trim. Cheap: ~6 boxes vs building()'s ~25.
+    const neonTower = (k, side, dist, w, h, neon) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const ifx = a.c[0] - a.r[0] * side * w / 2, ifz = a.c[2] - a.r[2] * side * w / 2;
+      if (onTrack(ifx, ifz, def.street ? 3.0 : 1.2)) return;
+      // MOSTLY DARK concrete tower with structural detail and only a touch of neon.
+      // Day is a muted dark grey too (less colour, darker — not bright concrete).
+      const bodyCol = NIGHT ? [0.15, 0.15, 0.18] : [0.40, 0.41, 0.44];
+      const lineCol = NIGHT ? [0.09, 0.09, 0.12] : [0.31, 0.32, 0.35];   // darker trim/mullions
+      const setH = h * 0.82;                                              // setback above this
+      addBox(out, vadd(a.c, a.u, setH / 2), [w, setH, w], bodyCol, b);    // main mass
+      // Detail: storey floor lines + a couple of vertical mullions (recessed/dark).
+      const floors = Math.max(3, Math.round(setH / 7)), fh = setH / floors;
+      for (let f = 1; f < floors; f++) addBox(out, vadd(a.c, a.u, f * fh), [w * 1.01, fh * 0.12, w * 1.01], lineCol, b);
+      for (const mx of [-0.26, 0.26]) addBox(out, vadd(vadd(a.c, a.u, setH * 0.5), a.t, mx * w), [w * 1.01, setH * 0.98, w * 0.06], lineCol, b);
+      // Setback upper section (silhouette detail) + roof cap.
+      addBox(out, vadd(a.c, a.u, setH + (h - setH) / 2), [w * 0.74, h - setH, w * 0.74], bodyCol, b);
+      addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.5, 1.0, w * 0.5], lineCol, b);
+      // A TOUCH of neon: one slim vertical accent strip on a front corner + a thin
+      // cornice line. Bright but small-area, so the tower stays mostly dark.
+      if (NIGHT) {
+        const sx = hash(k * 2.7 + side) < 0.5 ? -1 : 1;
+        addBox(out, vadd(vadd(a.c, a.u, setH * 0.5), a.t, sx * w * 0.46), [w * 1.03, setH * 0.9, w * 0.07], neon, b);
+        addBox(out, vadd(a.c, a.u, setH * 0.97), [w * 1.04, setH * 0.022, w * 1.04], neon, b);
+      }
+      blockAt(k, side, dist - w / 2, w / 2);
     };
     // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
     // s0→s1 on `side` at clearance `gap`. Steps along the track (~18–26 m) and emits
@@ -1600,12 +1727,19 @@ const Tracks = (function () {
       const minH = opts.minH != null ? opts.minH : 16;
       const maxH = opts.maxH != null ? opts.maxH : 46;
       const depth = opts.depth != null ? opts.depth : 22;
-      const lit = opts.lit != null ? opts.lit : !!def.night;
+      const lit = opts.lit === false ? false : NIGHT;
       const palette = (opts.palette && opts.palette.length) ? opts.palette
         : (lit ? [[0.17, 0.19, 0.27], [0.20, 0.21, 0.28], [0.15, 0.17, 0.24], [0.22, 0.20, 0.26]]
                : [[0.60, 0.62, 0.66], [0.66, 0.64, 0.60], [0.56, 0.58, 0.62], [0.70, 0.68, 0.64]]);
-      // alternate window tint per building (warm / cool) when lit for variety
-      const warm = [0.95, 0.85, 0.55], cool = [0.60, 0.75, 1.0];
+      // Per-building window tint when lit: a spread of warm office light, cool
+      // daylight-balanced glass and the occasional saturated accent so a long
+      // street wall shimmers with colour instead of one flat hue. HDR-boosted in
+      // building(), so these are kept near 1.0 here.
+      const WINTINTS = [
+        [0.98, 0.86, 0.56], [0.92, 0.82, 0.60],   // warm office
+        [0.62, 0.76, 1.00], [0.72, 0.84, 0.98],   // cool glass
+        [1.00, 0.70, 0.85], [0.70, 0.95, 0.90],   // soft accents
+      ];
       const step = opts.step || 22;
       let idx = 0;
       along(s0, s1, step, (k) => {
@@ -1619,7 +1753,7 @@ const Tracks = (function () {
         let h = minH + (0.6 * hLocal + 0.4 * hCluster) * (maxH - minH);
         if (hash(k * 1.7 + side * 3.1) < 0.10) h = Math.min(maxH * 1.5, h * 1.5);  // landmark tower
         const col = palette[((idx % palette.length) + palette.length) % palette.length];
-        const wcol = lit ? (hash(k * 2.1 + side) < 0.5 ? warm : cool) : undefined;
+        const wcol = lit ? WINTINTS[Math.floor(hash(k * 2.1 + side) * WINTINTS.length) % WINTINTS.length] : undefined;
         building(k, side, gap, w, h, depth + (s - 0.5) * depth * 0.3, {
           wall: col, floor: opts.floor || (4 + s * 3),
           lit: lit, windowCol: opts.windowCol || wcol,
@@ -1785,18 +1919,19 @@ const Tracks = (function () {
           place(k, side, 16 + s * 10, [8, h, 8], col);
         }
       });
-    } else if (theme === "street_night") {  // Singapore / Vegas
-      every(22, (k) => {
+    } else if (theme === "street_night") {  // Singapore / Vegas / Baku / Jeddah
+      // Inner-ring FILLER between the per-circuit landmarks: dense, lightweight
+      // neonTower()s — dark concrete blocks with bright neon edge strips (the
+      // reference "dark building + neon" look), distinct from the detailed
+      // building() landmarks. A hash skip keeps the street rhythm and count sane.
+      const CITY_NEON = [[0.95, 0.15, 0.55], [0.18, 0.85, 0.98], [0.98, 0.80, 0.20], [0.60, 0.25, 0.98], [0.30, 0.55, 1.0]];
+      every(26, (k) => {
         for (const side of [-1, 1]) {
-          const s = hash(k * 5 + side), h = 14 + s * 40;
-          const neon = [[0.9, 0.1, 0.6], [0.1, 0.8, 0.9], [0.95, 0.75, 0.1], [0.5, 0.2, 0.9]][Math.floor(s * 4) % 4];
-          // set taller towers further back so they don't fill the FOV and clip at
-          // the viewport edge as the camera passes; even short blocks must clear
-          // their own half-width plus the barrier so no tower face becomes a wall
-          // beside the car.
-          const dist = 18 + s * 18;
-          place(k, side, dist, [8, h, 8], [0.05, 0.05, 0.08]);
-          place(k, side, dist, [8.2, 2 + s * 3, 8.2], neon);  // glowing band
+          if (hash(k * 17 + side * 4) < 0.20) continue;          // gaps in the street wall
+          const s = hash(k * 5 + side);
+          const h = 16 + s * 48, w = 8 + s * 9;
+          const neon = CITY_NEON[Math.floor(hash(k * 3 + side) * CITY_NEON.length) % CITY_NEON.length];
+          neonTower(k, side, 14 + s * 13, w, h, neon);
         }
       });
       // Illuminated billboards: thin laterally so the face never walls the car,
@@ -1853,6 +1988,9 @@ const Tracks = (function () {
     // Per-circuit bespoke scenery lives in js/tracks/<id>.js (def.scenery).
     if (def.scenery) def.scenery({
       out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
+      // Session darkness (chosen time of day) — lets bespoke scenery render a lit
+      // night version vs a daytime version of the same structure.
+      night: NIGHT,
       place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
       ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
       // richer primitives (world coords): non-cube shapes

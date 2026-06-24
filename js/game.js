@@ -261,7 +261,7 @@ function gripMult() { return raceWeather === "wet" ? 0.72 : 1; }
 
 // ---------- state ----------
 let state = "menu";
-let track = null, builtTrackId = null;
+let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
@@ -557,7 +557,13 @@ async function loadCarModel(url) {
 // ---------- track loading ----------
 function loadTrack(idx) {
   const def = Tracks.LIST[idx];
-  if (builtTrackId !== def.id) {
+  // Buildings light up for the chosen SESSION time, not the track's default:
+  // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
+  // are rebuilt when this flips so a day-default circuit raced at night gets a
+  // glowing skyline, and a night-default circuit raced by day looks like daytime.
+  const sessionDark = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
+    raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && def.night);
+  if (builtTrackId !== def.id || builtTrackNight !== sessionDark) {
     if (track && track.meshes) {
       GLX.freeMesh(track.meshes.floor);
       GLX.freeMesh(track.meshes.road);
@@ -566,8 +572,9 @@ function loadTrack(idx) {
       GLX.freeMesh(track.meshes.gate);
       GLX.freeMesh(track.meshes.startline);
     }
-    track = Tracks.build(def);
+    track = Tracks.build(def, { night: sessionDark });
     builtTrackId = def.id;
+    builtTrackNight = sessionDark;
     Ghost.setTrack(def.id);
     minimapBg = null;           // force minimap redraw for new track
     sectorIdx = 0; sectorStartT = 0;
@@ -2439,12 +2446,18 @@ function render(dt) {
     wet   ? { roughness: 0.16, specular: 0.80, detail: 0 }
           : (night ? { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 }
                    : { roughness: 0.80, specular: 0.22, detail: 0 }));
-  // Floodlights: prop emissive rises as the sun drops below the horizon.
-  // frame.sunDir[1] is the sun's Y (elevation): 1=zenith, ~0=horizon, <0=below.
-  // At night (sunY ≤ 0) full floodlight; during the day emissive stays near 0.
+  // Prop emissive (lit windows / signage / neon) drives how strongly the
+  // buildings glow after dark. A full night session goes to full emissive
+  // REGARDLESS of the palette's sun elevation — many night palettes keep the sun
+  // above the horizon for the sky glow (sunY≈0.25), which previously pinned the
+  // ramp near 0.10 and left the glowing-glass towers reading as dark boxes.
+  // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
   const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
-  const _floodEmit = night ? Math.min(0.55, 0.10 + 0.45 * clamp(1 - _sunY * 4, 0, 1))
-                           : 0;
+  const _floodEmit =
+    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.55
+      : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
+        ? Math.min(0.55, 0.12 + 0.45 * clamp(1 - _sunY * 4, 0, 1))
+        : 0;
   if (!hideMeshes.props) GLX.draw(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: Math.min(0.40, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
@@ -2586,7 +2599,9 @@ function render(dt) {
   let _grade, _bloom = 0.55, _thresh = 0.78;
   if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) {
     _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
-    _bloom = 0.90; _thresh = 0.56;
+    // Moderate bloom + a higher threshold so only the brightest neon strips/signs
+    // bloom — heavy bloom was bleeding every lit strip into a solid wall of neon.
+    _bloom = 0.55; _thresh = 0.70;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     _bloom = 0.62; _thresh = 0.68;
@@ -4666,6 +4681,9 @@ window.__apex = {
     sunColor: frame.sunColor && frame.sunColor.slice(),
     exposure: frame.exposure != null ? frame.exposure : 1,
     numLights: frame.lights ? frame.lights.length / 7 : 0,
+    sunY: frame.sunDir ? frame.sunDir[1] : null,
+    builtNight: builtTrackNight, trackNight: track && track._night,
+    floodEmit: track && track._night ? "dark-session" : "day-session",
   }),
   viewState() {
     return {
