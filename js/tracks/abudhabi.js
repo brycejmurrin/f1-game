@@ -15,8 +15,8 @@
     baseHW: 8,
     pal: { horizon: [0.32, 0.16, 0.08], zenith: [0.10, 0.06, 0.24], sunColor: [0.90, 0.68, 0.38], ambientSky: [0.36, 0.28, 0.24], ambientGround: [0.32, 0.20, 0.12], fogColor: [0.22, 0.12, 0.06], fogDensity: 0.0020, sunDir: [0.55, 0.15, 0.32], concrete: [0.28, 0.27, 0.26], runoff: [0.24, 0.23, 0.22], grass: [0.20, 0.18, 0.14] },
     segs: [
-      { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 400 }, { t: 90, l: 100 }, { t: 0, l: 200 },
-      { t: 60, l: 90 }, { t: 0, l: 300 }, { t: -80, l: 100 }, { t: 60, l: 80 }, { t: 90, l: 100 }, { t: -60, l: 80 },
+      { t: 0, l: 300 }, { t: 60, l: 90 }, { t: -70, l: 80 }, { t: 0, l: 400 }, { t: -90, l: 100 }, { t: 0, l: 200 },
+      { t: -60, l: 90 }, { t: 0, l: 300 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: -90, l: 100 }, { t: 60, l: 80 },
     ],
     // Yas Marina underpass: the circuit dips below the Yas Hotel near the end of the lap.
     elevations: [{ s: 0.88, halfM: 160, rise: -4 }],
