@@ -14,4 +14,9 @@ tests/ui-screenshots/
 
 # generated follow-cam track traces (tests/track-trace.spec.js) — regenerable
 tests/track-trace/
+
+# generated test output directories
+tests/f1-track-accuracy/
+tests/f1-circuit-directions/
+tests/monaco-cam/
 tests/scenery-shots/
