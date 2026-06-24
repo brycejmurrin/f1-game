@@ -608,6 +608,10 @@ function scheduleFlybyTrack() {
 function applyRaceSettings() {
   const isNightSession = raceTimeOfDay === "night" ||
     (raceTimeOfDay === "default" && track && track.def && track.def.night);
+  // Pre-build the floodlight set at race start so the very first night frame is
+  // never unlit (the render path rebuilds it if empty as a fallback). Forcing
+  // night on a day track builds them on demand here too.
+  if (isNightSession && track && (!track._lights || !track._lights.length)) track._lights = buildTrackLights(track);
   if (raceTimeOfDay !== "default") {
     const night = raceTimeOfDay === "night";
     frameSky.stars = night ? 1 : 0;
@@ -2059,7 +2063,12 @@ function coast(c, dt) {
 // to the shader when the session is actually at night.
 function buildTrackLights(track) {
   const lights = [];
-  const n = track.n, total = track.total, ds = total / n;
+  const n = track.n, total = track.total;
+  // Guard against a not-yet-complete track (centreline arrays missing): return
+  // empty so the caller's rebuild-if-empty retries next frame rather than caching
+  // a bad empty result.
+  if (!n || !total || !track.px || !track.rx) return lights;
+  const ds = total / n;
   // Dense light spacing — a pair roughly every ~40 m, capped to the nearest 32 by
   // the per-frame cull — so night tracks read as brightly lit, not sparse.
   const stride = Math.max(1, Math.round(40 / ds));
@@ -2357,7 +2366,10 @@ function render(dt) {
   // Point lights: floodlights / street lights, only when the session is at night.
   const _nightLit = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
   if (_nightLit) {
-    if (track._lights === undefined) track._lights = buildTrackLights(track);
+    // Rebuild if empty (not just undefined): a light set built before the track
+    // centreline finished is empty; retry until it yields lights. Night tracks
+    // always produce a full set once complete, so this self-heals in a frame.
+    if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
     setFrameLights(camEye);
   } else {
     frame.lights = null;
