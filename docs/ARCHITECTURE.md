@@ -58,10 +58,13 @@ GLX.createMesh(data) -> mesh          // data = {pos:Float32Array(3n), nrm:Float
 GLX.begin(frame)                      // clears color+depth, stores frame uniforms:
    frame = { viewProj: mat4, eye:[x,y,z], sunDir:[x,y,z] (normalized, TOWARD sun),
              sunColor:[r,g,b], ambientGround:[r,g,b], ambientSky:[r,g,b],
-             fogColor:[r,g,b], fogDensity: number }   // exp2 fog
+             fogColor:[r,g,b], fogDensity: number,    // exp2 fog
+             lights: [x,y,z, r,g,b, rad, …] }         // optional point lights (≤32)
 GLX.draw(mesh, modelMat, opts)        // opts optional {emissive:0..1, alpha:0..1}
                                       // lit: hemisphere ambient (mix ground/sky by N.y)
-                                      //      + lambert sun; fog by view distance.
+                                      //      + lambert sun + up to 32 point lights
+                                      //      (diffuse, quadratic falloff to radius);
+                                      //      fog by view distance.
                                       // emissive=1 -> full albedo, no lighting (night glow)
 GLX.drawSky(sky)                      // fullscreen triangle via gl_VertexID, depth 1.0
    sky = { invViewProj: mat4, zenith:[r,g,b], horizon:[r,g,b],

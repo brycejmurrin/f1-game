@@ -191,6 +191,17 @@ inspect a spot (prop, berm, suspected gap) from every side.
 for (const a of [0,45,90,135,180]) { __apex.orbit(0.116, a, 15, 35); /* shot */ }
 ```
 
+### `lightState() → {ambientSky, ambientGround, sunColor, exposure, numLights}`
+Lighting snapshot for the current frame: hemisphere ambient (sky/ground), the
+**scene** sun colour (`frameSky.sunColor` may differ — the sky keeps a warm sun
+for dusk glow while the scene sun is dimmed at night), tone-map `exposure`, and
+how many point lights (floodlights) are active. Use it to confirm a night scene
+is actually dark + lit by floodlights rather than washed by a bright sun/ambient.
+```js
+__apex.race("singapore"); __apex.lightState();
+// → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:32, … }
+```
+
 ### `groundY(f, lat?) → {x, z, roadY, terrainY, gap}`
 Ground/gap probe: the **rendered terrain height** at a track-relative point
 (lap-fraction `f`, `lat` m off centre — raycast against the actual carved terrain

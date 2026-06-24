@@ -59,6 +59,13 @@ uniform float uShadowTexel;
 uniform vec3 uSkyZenith;
 uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
+// Point lights (floodlights / street lights — mainly for night tracks). Each is
+// {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
+const int MAX_LIGHTS = 32;
+uniform int uNumLights;
+uniform vec3 uLightPos[MAX_LIGHTS];
+uniform vec3 uLightCol[MAX_LIGHTS];
+uniform float uLightRad[MAX_LIGHTS];
 out vec4 outColor;
 
 const float PI = 3.14159265359;
@@ -164,6 +171,24 @@ void main() {
 
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
   vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - uMetalness));
+
+  // Point lights: floodlights / street lights. Lambert diffuse with smooth
+  // inverse-ish falloff to the radius (cheap, no per-light shadows). A small
+  // up-bias on the light vector keeps near-flat ground (road) catching the pool
+  // even when a mast is almost overhead. Drives the moody night look — the scene
+  // ambient can sit dark and these carve out the lit areas.
+  for (int i = 0; i < MAX_LIGHTS; i++) {
+    if (i >= uNumLights) break;
+    vec3 LP = uLightPos[i] - vWorldPos;
+    float dist = length(LP);
+    float rad = uLightRad[i];
+    if (dist > rad) continue;
+    vec3 Ld = LP / max(dist, 1e-3);
+    float att = clamp(1.0 - dist / rad, 0.0, 1.0);
+    att *= att;                                  // smooth quadratic falloff
+    float lnl = max(dot(N, Ld), 0.0);
+    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
+  }
 
   // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
   float D = D_GGX(NoH, a);
@@ -534,9 +559,17 @@ vec3 acesTonemap(vec3 x) {
 // mid-tones, and boosts green just a hint — gives an F1 broadcast look.
 vec3 colourGrade(vec3 c) {
   // Gain (per-channel linear scale in highlights)
-  c *= vec3(1.01, 1.005, 0.995);
-  // Soft S-curve: darken lower mids, open upper mids
-  c = c * (1.0 + c * 0.08) / (1.0 + c * 0.12);
+  c *= vec3(1.015, 1.008, 0.992);
+  // Soft S-curve: deepen contrast a touch for punch (less washed-out / flat)
+  c = c * (1.0 + c * 0.10) / (1.0 + c * 0.16);
+  // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
+  // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
+  // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
+  // main fix for the "boring / washed-out" daytime look.
+  float luma = dot(c, vec3(0.299, 0.587, 0.114));
+  float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
+  float sat = mx - mn;
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.26);
   // Slight lift: prevents pure blacks — adds a tiny warm floor
   c = max(c, vec3(0.005, 0.004, 0.003));
   return c;
@@ -826,7 +859,8 @@ void main() {}`;
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight"]);
+      "uSkyZenith", "uSkyHorizon", "uFogHeight",
+      "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -960,6 +994,26 @@ void main() {}`;
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
     gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
+    // Point lights (floodlights / street lights). frame.lights is a flat array
+    // [x,y,z, r,g,b, rad, …] of at most MAX_LIGHTS (24) entries, already culled to
+    // the nearest set by the caller. Uploaded once per frame; uNumLights=0 on day.
+    {
+      const L = frame.lights;
+      const nL = L ? Math.min(32, (L.length / 7) | 0) : 0;
+      gl.uniform1i(litU.uNumLights, nL);
+      if (nL > 0) {
+        const pos = new Float32Array(nL * 3), col = new Float32Array(nL * 3), rad = new Float32Array(nL);
+        for (let i = 0; i < nL; i++) {
+          const o = i * 7;
+          pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
+          col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
+          rad[i] = L[o + 6];
+        }
+        gl.uniform3fv(litU["uLightPos[0]"], pos);
+        gl.uniform3fv(litU["uLightCol[0]"], col);
+        gl.uniform1fv(litU["uLightRad[0]"], rad);
+      }
+    }
     _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = -1;
   }
 
