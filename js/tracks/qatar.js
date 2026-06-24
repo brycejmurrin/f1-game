@@ -313,16 +313,17 @@
       // Three clusters stagger laterally via separate fractions.
       // Towers pushed 600–760 m out so they never clip dune ring or track.
       (function skyline() {
-        for (const sBase of [0.47, 0.51, 0.55]) {
-          for (let i = 0; i < 10; i++) {
+        for (const sBase of [0.45, 0.49, 0.53, 0.57]) {
+          for (let i = 0; i < 11; i++) {
             const hf = hash(i * 7 + sBase * 30);
             const wf = hash(i * 3 + sBase * 20);
             // Spread towers laterally: stagger s slightly per tower so they get
-            // separate anchor points and fan out along the horizon.
-            const sFrac = (sBase + (i - 5) * 0.006 + 1) % 1;
-            const dist  = 620 + hash(i * 5 + sBase * 70) * 140;
-            const w = 5 + wf * 6;
-            const h = 38 + hf * 140;
+            // separate anchor points and fan out along the horizon. Lusail's
+            // skyline is closer/taller than a far haze — pulled in so it reads.
+            const sFrac = (sBase + (i - 5) * 0.007 + 1) % 1;
+            const dist  = 430 + hash(i * 5 + sBase * 70) * 170;
+            const w = 6 + wf * 8;
+            const h = 52 + hf * 150;
             const d = w * 1.4;
             const col = (hash(i * 11 + sBase) > 0.5) ? SKY_A : SKY_B;
             // backdrop() auto-adds lit window bands for night circuits

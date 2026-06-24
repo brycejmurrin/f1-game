@@ -87,6 +87,27 @@
         }
       }
 
+      // ── Distant Manama skyline: lit towers on the night horizon ──────────
+      // Sakhir is desert, but the capital's towers glow on one side of the sky.
+      // backdrop() auto-adds lit window bands on night circuits; a few carry red
+      // aircraft beacons. Confined to one arc (a city in one direction) and pushed
+      // well beyond the far dune band so the dunes stay the foreground.
+      const SKY_SIL  = [0.20, 0.22, 0.30];   // dark blue-grey tower silhouette
+      const SKY_SIL2 = [0.16, 0.18, 0.27];   // deeper varied tone
+      (function manamaSkyline() {
+        for (let i = 0; i < 16; i++) {
+          const sFrac = (0.30 + i * 0.016) % 1;            // ~25% arc cluster
+          const hf = hash(i * 7 + 3.1), wf = hash(i * 3 + 9.7);
+          const dist = 470 + hash(i * 5 + 2.3) * 180;
+          const w = 8 + wf * 10, h = 50 + hf * 130, d = w * 1.3;
+          backdrop(K(sFrac), -1, dist, [w, h, d], hash(i * 11) > 0.5 ? SKY_SIL : SKY_SIL2);
+          if (hash(i * 13 + 1.7) > 0.55) {
+            const a = anchor(K(sFrac), -1, dist), bv = [a.r, a.u, a.t];
+            addBox(out, vadd(a.c, a.u, h + 2.5), [1.6, 3.6, 1.6], BEACON_WARM, bv);  // aircraft beacon
+          }
+        }
+      })();
+
       // ── Floodlight mast: dark pole + bright lamp-bank cap + ground pool ──
       // Gap is measured from road edge — always call with gap >= 16 to clear barriers.
       const floodMast = (k, side, gap, h) => {
