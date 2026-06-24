@@ -4754,10 +4754,11 @@ window.__apex = {
     const minZ = Math.min(...zs), maxZ = Math.max(...zs);
     const scaleX = maxX - minX || 1, scaleZ = maxZ - minZ || 1;
     const scale = Math.max(scaleX, scaleZ);
+    const ox = (scale - scaleX) / scale / 2, oz = (scale - scaleZ) / scale / 2;
     return fracs.map((f, i) => ({
       frac: +f.toFixed(4),
-      x: +(((xs[i] - minX) / scale * 2 - scaleX / scale).toFixed(4)),
-      z: +(((zs[i] - minZ) / scale * 2 - scaleZ / scale).toFixed(4)),
+      x: +(ox + (xs[i] - minX) / scale).toFixed(4),
+      z: +(oz + (zs[i] - minZ) / scale).toFixed(4),
       k: +ks[i].toFixed(5),
     }));
   },
