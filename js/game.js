@@ -4802,6 +4802,39 @@ window.__apex = {
     return out;
   },
 
+  // mapPts() — returns the normalised [0,1] centerline pts stored in track.map
+  // (the same array used by the minimap and track-selector canvas). Each entry
+  // is [x, y] where x=0..1 east and y=0..1 with 0=north (top of map).
+  // Useful for asserting minimap orientation without relying on screenshots.
+  mapPts() {
+    return track ? track.map.slice() : null;
+  },
+
+  // trackBounds() — bounding box of the loaded circuit in world metres plus the
+  // frac closest to the geographic centre. Handy for framing top-down orbit()
+  // shots: __apex.orbit(__apex.trackBounds().centerFrac, 0, 85, dist).
+  trackBounds() {
+    if (!track) return null;
+    const px = track.px, pz = track.pz, n = track.n;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (px[i] < minX) minX = px[i]; if (px[i] > maxX) maxX = px[i];
+      if (pz[i] < minZ) minZ = pz[i]; if (pz[i] > maxZ) maxZ = pz[i];
+    }
+    const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+    let bestD = Infinity, bestI = 0;
+    for (let i = 0; i < n; i++) {
+      const d = Math.hypot(px[i] - cx, pz[i] - cz);
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+    return {
+      minX: +minX.toFixed(1), maxX: +maxX.toFixed(1),
+      minZ: +minZ.toFixed(1), maxZ: +maxZ.toFixed(1),
+      spanX: +(maxX - minX).toFixed(1), spanZ: +(maxZ - minZ).toFixed(1),
+      centerFrac: +(bestI / n).toFixed(4),
+    };
+  },
+
   // reset(frac, speed, x) — fast episode reset reusing the loaded track.
   // Reinitialises the grid, repositions the player at lap-fraction frac (0..1),
   // sets state="race" and raceT=0 without reloading assets. Returns initial obs().
