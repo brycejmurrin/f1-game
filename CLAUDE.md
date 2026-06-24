@@ -193,6 +193,7 @@ const obs = await page.evaluate(() =>
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
 | `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
 | `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection |
+| `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 
 **Viewport rules:**
 - Tests that touch `#pm-steer` / `#pm-calib` must use `hasTouch: true` (desktop

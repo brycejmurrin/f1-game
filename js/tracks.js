@@ -443,15 +443,12 @@ const Tracks = (function () {
                     0.30, 0.35,                      // centre line (right half)
                     w - 0.25, w - 0.2, w,            // right step + edge line
                     w + 0.4, w + 2.2];
-      // Grass-border verts (0,1,12,13) slope DOWN from the road edge to meet the
-      // terrain ribbon (whose inner edge sits ~0.3 m below grade at the same
-      // lateral, w+2.2). Keeping the whole border well below the asphalt plane
-      // (asphalt rides at +0.02) guarantees the racing surface occludes it
-      // wherever the inside grass of a corner chords across the tarmac —
-      // otherwise it renders as a green wedge over the racing line (Miami T6,
-      // s≈0.11–0.12). Kept a hair below the asphalt plane to avoid z-fighting at
-      // the verge seam; the real over-tarmac protection is the clip below.
-      const rise = [-0.38, -0.10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.10, -0.38];
+      // Grass-border verts (0,1,12,13) sit a hair below the asphalt plane to
+      // avoid z-fighting at the verge seam. The real over-tarmac protection for
+      // the inside of corners (the green-wedge fix) is the shoulder clip below;
+      // keeping the shoulder only slightly recessed means props (fences, walls)
+      // anchored to the terrain height still meet it with no gap underneath.
+      const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
       // banking: raise each cross-section vert along `up` proportional to how
       // far it sits toward the outer edge (inner edge -> 0, outer edge -> full
@@ -607,15 +604,7 @@ const Tracks = (function () {
           // the road surface when the road climbs steeply.
           const localGrade = v === 0 ? Math.abs(py[k] - py[(k + 1) % n]) : 0;
           const innerExtra = v === 0 ? Math.min(localGrade * 2, 1.2) : 0;
-          // Near-edge verge verts (the two closest to the road) sit firmly below
-          // the road plane. On the inside of a corner the inner-edge FACE chords
-          // across the racing line; keeping it well under the tarmac means the
-          // asphalt always occludes it (the per-vert over-track clip below only
-          // catches verts that land on the tarmac, not the face between them).
-          // These verts hide under the road's own grass shoulder, so the drop is
-          // invisible from the track. (Miami T6 green wedge, s≈0.11.)
-          const nearDrop = v === 0 ? 0.4 : v === 1 ? 0.15 : 0;
-          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra - nearDrop;
+          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra;
           // inner vert tracks road height; outer verts ease down to the lap's
           // low point (or the flattened bridge ground, whichever is lower). The
           // quadratic ease keeps the run-off apron near track grade and pushes
@@ -1167,12 +1156,32 @@ const Tracks = (function () {
     // ---------- composite scenery models (beyond single boxes) ----------
     // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
     // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
+    // Drop a prop's ground anchor onto a LOWER road it overhangs. The terrain
+    // ribbon carves a channel where an elevation mound bulges over a lower part
+    // of the track (see buildTerrain); without the same carve here, props
+    // anchored to the mound height (groundYAt) are left floating over the carved
+    // channel (Miami: the s≈0.42 Hard Rock rise runs ~40 m from the s≈0.11 road).
+    // Conservative: only fires when the anchor is clearly (>1 m) above a
+    // non-adjacent road it sits over, so gentle crossovers/banked edges and
+    // legitimate flyover bridges (Suzuka figure-8) are untouched.
+    const groundClip = (baseY, cx, cz, k) => {
+      let y = baseY;
+      for (let j = 0; j < n; j++) {
+        if (baseY <= py[j] + 1.0) continue;
+        let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
+        if (dd * ds < 30) continue;
+        const ex = cx - px[j], ez = cz - pz[j], reach = hw[j] + 14;
+        if (ex * ex + ez * ez < reach * reach) { const tgt = py[j] - 0.3; if (y > tgt) y = tgt; }
+      }
+      return y;
+    };
     const anchor = (k, side, dist) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
       const o = side * (hw[k] + dist);
-      return { c: [px[k] + r[0] * o, groundYAt(k, dist), pz[k] + r[2] * o], r, u, t };
+      const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+      return { c: [cx, groundClip(groundYAt(k, dist), cx, cz, k), cz], r, u, t };
     };
     // Conifer/pine: tapered trunk + stacked cones. col = needle green.
     const pine = (k, side, dist, h, col) => {

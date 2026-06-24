@@ -133,9 +133,15 @@ __apex.camera(2);           // switch by index → cockpit
 ### `view(opts) → {eye, target, …} | {mode:"chase"} | false`
 Debug **free camera** that overrides the chase cam entirely — instant (no
 damping), uncapped FOV, far plane and fog pushed out — for inspecting whole-track
-layouts and trackside scenery from any angle. Independent of `camera()` (which
-selects among the in-game player cams). Call with no args (or `"chase"`) to
+layouts and trackside scenery from any angle. Call with no args (or `"chase"`) to
 restore the normal cam.
+
+The override is also cleared by `camera(mode)` and `snapCam()` — selecting a game
+camera or snapping it leaves the free-cam. So the common sequence
+`view({eye,target})` to inspect a spot, then `park(f); camera("chase"); snapCam()`
+to grab a driving view, returns to the chase cam as expected (it does not "stick"
+on the last free-cam). `camState()`/`viewState()` report which camera is live
+(`debug: true` while a `view()` override is active).
 
 | Call | Effect |
 |---|---|
@@ -229,11 +235,12 @@ argument returns the player car. Returns `null` for an out-of-range index. Exten
 `cars()` with fields not worth fetching for the whole field: `team`, `finished`,
 `finishT` (finish timestamp), `contactT` (contact timer), `wrongWay`, `rescueT`.
 
-### `camState() → {eye, tgt, fov}`
-Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), and `fov`
-(degrees). Snapshot is taken at the moment of the call from the currently active
-camera (chase, cockpit, hood, or debug free-cam). For the combined scene+camera
-snapshot, prefer `viewState()`.
+### `camState() → {eye, tgt, fov, debug}`
+Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), `fov`
+(degrees), and `debug` (true when a `view()` free-cam is the active camera). The
+geometry reflects whichever camera is actually being rendered — the `view()`
+free-cam when one is set, otherwise the game camera (chase, cockpit, hood, …).
+For the combined scene+camera snapshot, prefer `viewState()`.
 
 ### `viewState() → {camMode, camIndex, frozen, dbgCamActive, skyOverride, weather, state, eye, tgt, fov}`
 Combined scene snapshot: camera mode, frozen/debug flags, weather, the game

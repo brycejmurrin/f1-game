@@ -1672,13 +1672,19 @@ function updateCar(c, dt, ranked) {
     // it only bites on the transient overshoot. This is the right answer to
     // "taper the assist at speed": tie it to actual over-rotation, not raw speed
     // (a blanket speed taper would just make the car understeer wide).
+    // Off-track, fade out the road-following assist so the driver keeps full
+    // manual authority to recover. On grass the car isn't on the racing line, so
+    // steering toward the track's curvature just shoves it one way ("pushed
+    // right / toward the turn"). Full assist on tarmac and kerbs; tapering to
+    // zero ~3 m into the grass.
+    const offAssistFade = c.offroad ? Math.max(0, 1 - (Math.abs(c.x) - hw) / 3) : 1;
     let yawEase = 1;
     const rNeed = c.speed * k;
     if (rNeed !== 0) {
       const ratio = (c.yawRateCur || 0) / rNeed;   // >1 = rotating faster than needed
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
-    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase;
+    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase * offAssistFade;
     const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
@@ -3770,6 +3776,7 @@ window.__apex = {
     if (m == null) return { mode: CAM_MODES[camMode].id, index: camMode, modes: CAM_MODES.map((c) => c.id) };
     let i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
     if (i < 0 || i >= CAM_MODES.length) return false;
+    dbgCam = null;   // switching to a game camera mode leaves any view() free-cam
     setCamMode(i);
     return { mode: CAM_MODES[camMode].id, index: camMode };
   },
@@ -3779,6 +3786,7 @@ window.__apex = {
   // rendered frame shows a clean view. Handles chase, hood, and cockpit modes.
   snapCam() {
     if (!player || !track) return;
+    dbgCam = null;   // snapping the game camera leaves any view() free-cam override
     Tracks.sample(track, player.s, smp);
     const px = player.x;
     const bankCam = Tracks.banking(track, player.s, px);
@@ -3811,7 +3819,12 @@ window.__apex = {
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
   info: () => ({ state, track: (state === "race" || state === "count") ? (track && track.def.id) : null, n: track && track.n, total: track && track.total, timeTrial, seasonMode }),
-  camState: () => ({ eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov }),
+  // Reports the camera ACTUALLY being rendered: the view() debug free-cam when
+  // one is active, otherwise the game camera. `debug` flags which. (Previously
+  // this always returned the game cam, masking an active view() override.)
+  camState: () => dbgCam
+    ? { eye: Array.from(dbgCam.eye), tgt: Array.from(dbgCam.target), fov: dbgCam.fov, debug: true }
+    : { eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov, debug: false },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },
   // Return all track nodes within radius r of world position (wx, wz).
