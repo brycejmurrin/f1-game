@@ -27,9 +27,9 @@
       fogDensity:   0.0018,
     },
     segs: [
-      { t: 0, l: 160 }, { t: 60, l: 70 }, { t: -70, l: 70 }, { t: 55, l: 70 }, { t: 0, l: 220 }, { t: 90, l: 70 },
-      { t: 0, l: 200 }, { t: 95, l: 70 }, { t: -90, l: 80 }, { t: 80, l: 60 }, { t: -60, l: 70 }, { t: 90, l: 90 },
-      { t: 0, l: 180 }, { t: 90, l: 70 }, { t: 90, l: 70 }, { t: -85, l: 60 }, { t: 95, l: 80 },
+      { t: 0, l: 160 }, { t: -60, l: 70 }, { t: 70, l: 70 }, { t: -55, l: 70 }, { t: 0, l: 220 }, { t: -90, l: 70 },
+      { t: 0, l: 200 }, { t: -95, l: 70 }, { t: 90, l: 80 }, { t: -80, l: 60 }, { t: 60, l: 70 }, { t: -90, l: 90 },
+      { t: 0, l: 180 }, { t: -90, l: 70 }, { t: -90, l: 70 }, { t: 85, l: 60 }, { t: -95, l: 80 },
     ],
     // Marina Bay: Anderson Bridge descent into the Padang section, then the climb
     // back up through the Singapore Sling complex — real change ~10 m.

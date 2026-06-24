@@ -16,9 +16,9 @@
     street: true,
     pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12] },
     segs: [
-      { t: 0, l: 140 }, { t: 90, l: 70 }, { t: -60, l: 60 }, { t: 60, l: 60 }, { t: 0, l: 120 }, { t: -60, l: 60 },
-      { t: 70, l: 60 }, { t: -55, l: 60 }, { t: 0, l: 360 }, { t: 90, l: 80 }, { t: -50, l: 70 }, { t: 0, l: 900, t2: 0 },
-      { t: -20, l: 200 }, { t: 90, l: 90 }, { t: -60, l: 60 }, { t: 70, l: 70 }, { t: 65, l: 120 },
+      { t: 0, l: 140 }, { t: -90, l: 70 }, { t: 60, l: 60 }, { t: -60, l: 60 }, { t: 0, l: 120 }, { t: 60, l: 60 },
+      { t: -70, l: 60 }, { t: 55, l: 60 }, { t: 0, l: 360 }, { t: -90, l: 80 }, { t: 50, l: 70 }, { t: 0, l: 900, t2: 0 },
+      { t: 20, l: 200 }, { t: -90, l: 90 }, { t: 60, l: 60 }, { t: -70, l: 70 }, { t: -65, l: 120 },
     ],
     // Las Vegas Strip: the tunnel section under Las Vegas Boulevard dips below
     // road level near the T14 hairpin complex.
