@@ -17,9 +17,20 @@ Trackside helpers take `(k, side, dist, …)`:
 - `side` — `-1` left, `+1` right of the racing direction.
 - `dist` — metres **beyond the road edge**.
 
-All trackside helpers anchor to the **terrain height** at that lateral distance
-(via `groundYAt`), so props sit on the ground on elevated/embanked sections
-instead of floating. World-coord primitives take an explicit `[x,y,z]`.
+All trackside helpers anchor to the **terrain height** at that lateral distance,
+so props sit on the ground on elevated/embanked sections instead of floating.
+World-coord primitives take an explicit `[x,y,z]`.
+
+`anchor()`-based helpers (walls, fences, guardrails, tyre walls, trees …) seat
+on the **actual rendered terrain ribbon** — `anchor()` raycasts the built terrain
+mesh (`terrainY`) and uses that height, falling back to the closed-form
+`groundYAt` estimate only where the ribbon doesn't cover the point (far out, or
+street circuits, which build no ribbon). This matters wherever the ribbon is
+**carved or sags below the flat estimate** — corner-inside verges, and the
+channel cut where an elevation mound bulges over a lower part of the track
+(see `buildTerrain`'s over-track clip): without it, props anchored to `groundYAt`
+float over the lower ground. `place()`/`prop()` still anchor to `groundYAt` and
+sink their base ~0.8 m, which hides the small estimate-vs-ribbon gap.
 
 ## What `api` gives you
 

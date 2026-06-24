@@ -58,7 +58,7 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Critical conventions
 
-- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=118).
+- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=176).
   **Always increment N when changing any JS or CSS file** — search `?v=` and replace
   all instances.
 - **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
@@ -95,6 +95,13 @@ axis of the traction circle. Braking or accelerating consumes longitudinal grip;
 rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
 fields `axEstSm`, `axFrac`, `slipFactor`.
 
+**Road-follow assist + off-track**: the `ROAD_FOLLOW` driving-help assist steers
+toward the track curvature `k`. It **fades to zero off-track** (`offAssistFade`,
+tapering over ~3 m of grass past the edge) so the driver keeps full manual
+authority to recover — otherwise the curvature assist keeps steering toward the
+corner and the car feels "pushed" one way on the grass. The assist also fades
+under hard braking (`brakeFade`) to kill the turn-in snap.
+
 ---
 
 ## `window.__apex` dev API
@@ -114,9 +121,13 @@ __apex.resetPlayer()          // force immediate rescue
 __apex.carAt(idx?)            // detailed telemetry for one car
 __apex.tracks()               // list all circuit ids
 __apex.teams()                // list all teams + engine suppliers
-__apex.camera("cockpit")      // switch camera mode
-__apex.view({ s:0.3, side:"L" }) // free debug camera
+__apex.camera("cockpit")      // switch camera mode (clears any view() free-cam)
+__apex.view({ s:0.3, side:"L" }) // free debug camera (camera()/snapCam() clear it)
+__apex.eyeAt(0.116, 0, 2.5)   // track-relative free-cam: eye at frac/lat/height, look ahead
+__apex.orbit(0.116, 45, 15, 35) // orbit a track point (az,el,dist) — inspect from all sides
+__apex.groundY(0.11, 12)      // rendered terrain height + road height + gap at frac/lat (gap finder)
 __apex.viewState()            // combined scene/camera snapshot
+__apex.camState()             // active camera {eye,tgt,fov,debug} (debug=true under a view() override)
 __apex.setPhysics({pace:0.8}) // override physics params
 __apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
 __apex.physState()            // full state (slip, wrongWay, lap, rescueT)
