@@ -2599,9 +2599,9 @@ function render(dt) {
   let _grade, _bloom = 0.55, _thresh = 0.78;
   if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) {
     _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
-    // Generous bloom so lit windows + neon detailing glow, with a mid threshold so
-    // only the bright lit elements bloom (the dark facade stays dark).
-    _bloom = 0.70; _thresh = 0.66;
+    // Strong bloom so the lit windows + neon edges glow brightly across the dense
+    // skyline, with a mid threshold so only the bright lit elements bloom.
+    _bloom = 0.92; _thresh = 0.62;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     _bloom = 0.62; _thresh = 0.68;
