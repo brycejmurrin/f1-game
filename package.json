@@ -6,25 +6,24 @@
   "scripts": {
     "test": "playwright test",
     "test:update": "playwright test --update-snapshots",
-
-    "test:smoke":     "playwright test tests/smoke.spec.js",
-    "test:api":       "playwright test tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js tests/new-hooks.spec.js",
-    "test:headless":  "playwright test tests/headless-api.spec.js tests/obs-act-edge.spec.js",
-    "test:physics":   "playwright test tests/physics-*.spec.js tests/world-physics.spec.js tests/longitudinal.spec.js tests/elevation-tracks.spec.js",
+    "test:smoke": "playwright test tests/smoke.spec.js",
+    "test:api": "playwright test tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js tests/new-hooks.spec.js",
+    "test:headless": "playwright test tests/headless-api.spec.js tests/obs-act-edge.spec.js",
+    "test:physics": "playwright test tests/physics-*.spec.js tests/world-physics.spec.js tests/longitudinal.spec.js tests/elevation-tracks.spec.js",
     "test:collision": "playwright test tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js",
     "test:behaviour": "playwright test tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js tests/collision-ai-fixes.spec.js",
-    "test:barriers":  "playwright test tests/tracks-walls.spec.js tests/collision-ai-fixes.spec.js",
-    "test:parts":     "playwright test tests/parts-*.spec.js",
-    "test:steering":  "playwright test tests/presets.spec.js tests/sliders.spec.js tests/steering.spec.js",
-    "test:ui":        "playwright test tests/ui-audit.spec.js tests/ui-button-touch.spec.js tests/ui-desktop.spec.js tests/camera.spec.js",
-    "test:visual":    "playwright test tests/visual-regression-*.spec.js",
-    "test:modes":     "playwright test tests/season.spec.js tests/time-trial.spec.js",
-    "test:circuit":   "playwright test tests/tracks-walls.spec.js tests/autopilot.spec.js tests/elevation-tracks.spec.js",
-    "test:fast":      "playwright test tests/smoke.spec.js tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js tests/collision*.spec.js tests/offtrack.spec.js tests/parts-physics.spec.js tests/steering.spec.js"
+    "test:barriers": "playwright test tests/tracks-walls.spec.js tests/collision-ai-fixes.spec.js",
+    "test:parts": "playwright test tests/parts-*.spec.js",
+    "test:steering": "playwright test tests/presets.spec.js tests/sliders.spec.js tests/steering.spec.js",
+    "test:ui": "playwright test tests/ui-audit.spec.js tests/ui-button-touch.spec.js tests/ui-desktop.spec.js tests/camera.spec.js",
+    "test:visual": "playwright test tests/visual-regression-*.spec.js",
+    "test:modes": "playwright test tests/season.spec.js tests/time-trial.spec.js",
+    "test:circuit": "playwright test tests/tracks-walls.spec.js tests/autopilot.spec.js tests/elevation-tracks.spec.js",
+    "test:fast": "playwright test tests/smoke.spec.js tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js tests/collision*.spec.js tests/offtrack.spec.js tests/parts-physics.spec.js tests/steering.spec.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
-    "playwright": "^1.61.0"
+    "playwright": "^1.56.1"
   },
   "description": "**[Play live on GitHub Pages &rarr;](https://brycejmurrin.github.io/f1-game/)**",
   "main": "playwright.config.js",
