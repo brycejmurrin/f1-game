@@ -11,7 +11,9 @@ test("monaco top-down", async ({ page }) => {
     await new Promise(r => setTimeout(r, 500));
     __apex.freeze(true);
     __apex.hud(false);
-    __apex.orbit(0.635, 0, 82, 1400);
+    const b = __apex.trackBounds();
+    const span = Math.max(b.spanX, b.spanZ);
+    __apex.orbit(b.centerFrac, 0, 82, span * 1.45);
   });
 
   await page.setViewportSize({ width: 1400, height: 1050 });
