@@ -1487,43 +1487,58 @@ const Tracks = (function () {
     };
 
     // ---------- structures ----------
-    // neonFacade(): the shared, DETAILED night facade for both building kinds.
-    // Over an already-placed dark body it draws a real LIT-WINDOW GRID — a fine
-    // matrix of small window cells, most dark, a minority lit (warm office light or
-    // the building's neon tint) so the tower reads as a detailed occupied
-    // skyscraper rather than a flat neon panel. Then neon EDGE strips outline the
-    // silhouette and a sign band crowns it. With bloom the lit windows + edges
-    // glow. Window cells are SMALL (≈1 m) so the dark grid between them dominates.
-    //   mid = mass centre, bb = [right, up, tangent] basis, neon = accent colour.
-    const neonFacade = (mid, bb, sw, sh, sd, neon, seed) => {
+    // neonFacade(): the shared, DETAILED night facade for both building kinds —
+    // an INSET-WINDOW curtain wall (the b6fbf4a style) on the track-facing face:
+    // proud dark structural frame rails + vertical mullions, with recessed glass
+    // panes set behind them so the facade reads as a real glazed building from any
+    // angle. Most panes are DARK; only a minority are lit (mostly warm office
+    // light, a few neon) so it stays mostly dark — "less neon, more detail".
+    // Neon is ADDED ONLY on neon-city (street_night) tracks: a couple of thin
+    // edge lines + a slightly higher share of neon-lit panes. Other night tracks
+    // get warm-lit windows and no neon. `side` gives the track-facing direction.
+    const neonFacade = (mid, bb, side, sw, sh, sd, neon, seed, neonCity) => {
+      const r = bb[0], u = bb[1], t = bb[2];
+      const frameCol = [0.12, 0.12, 0.15];                       // dark structural frame
+      const dark = [0.035, 0.035, 0.055];                        // unlit glass pane
+      const warm = [1.0, 0.80, 0.46];
       const nc = [neon[0] * 0.95, neon[1] * 0.95, neon[2] * 0.95];
-      const warm = [1.0, 0.82, 0.5];
-      const dark = [0.05, 0.05, 0.08];                          // unlit pane / reveal
-      // Lit-window grid on the two long faces (cells span the radial depth so they
-      // show front and back). cols along tangent, rows up.
-      const cols = Math.max(3, Math.min(9, Math.round(sd / 2.4)));
-      const rows = Math.max(4, Math.min(16, Math.round(sh / 3.2)));
-      const cw = sd / cols, rh = sh / rows;
+      const rows = Math.max(4, Math.min(15, Math.round(sh / 3.4)));
+      const cols = Math.max(3, Math.min(8, Math.round(sd / 2.6)));
+      const fh = sh / rows;
+      const fBase = vadd(mid, r, -side * (sw / 2 + 0.34));       // proud frame plane
+      const gBase = vadd(mid, r, -side * (sw / 2 + 0.04));       // recessed glass plane
+      const frameT = 0.30, railH = Math.max(0.4, fh * 0.24);
+      // horizontal frame rails at every floor
+      for (let i = 0; i <= rows; i++) {
+        addBox(out, vadd(fBase, u, (i / rows - 0.5) * sh), [frameT, railH, sd * 1.005], frameCol, bb);
+      }
+      // recessed glass panes (mostly dark; a minority lit) between vertical mullions
+      const litShare = neonCity ? 0.26 : 0.20, neonShare = neonCity ? 0.5 : 0.0;
+      const winH = Math.max(0.5, fh - railH);
       for (let c = 0; c < cols; c++) {
         const cx = (-0.5 + (c + 0.5) / cols) * sd;
-        for (let r = 0; r < rows; r++) {
-          const ry = (-0.5 + (r + 0.5) / rows) * sh;
-          const lit = hash(seed + c * 12.9 + r * 7.3);
+        for (let ri = 0; ri < rows; ri++) {
+          const ry = (-0.5 + (ri + 0.5) / rows) * sh;
           let col = dark;
-          if (lit > 0.62) {                                     // ~38% lit, rest dark
-            const useNeon = hash(seed + c * 3.1 + r * 1.7) < 0.45;
-            const tw = 0.7 + hash(seed + c * 5.5 + r * 2.2) * 0.5;
-            col = useNeon ? [nc[0] * tw, nc[1] * tw, nc[2] * tw] : [warm[0] * tw, warm[1] * tw, warm[2] * tw];
+          if (hash(seed + c * 12.9 + ri * 7.3) < litShare) {
+            const tw = 0.65 + hash(seed + c * 5.5 + ri * 2.2) * 0.5;
+            col = hash(seed + c * 3.1 + ri * 1.7) < neonShare
+              ? [nc[0] * tw, nc[1] * tw, nc[2] * tw] : [warm[0] * tw, warm[1] * tw, warm[2] * tw];
           }
-          addBox(out, vadd(vadd(mid, bb[2], cx), bb[1], ry), [sw * 1.02, rh * 0.62, cw * 0.6], col, bb);
+          addBox(out, vadd(vadd(gBase, t, cx), u, ry), [0.08, winH, (sd / cols) * 0.82], col, bb);
         }
       }
-      // Neon EDGE outline: bright vertical strips down both tangent edges + a top
-      // and base cornice — the glowing silhouette.
-      const ST = Math.min(0.5, sd * 0.05);
-      for (const dir of [-1, 1]) addBox(out, vadd(mid, bb[2], dir * sd * 0.5), [sw * 1.05, sh * 0.97, ST], nc, bb);
-      addBox(out, vadd(mid, bb[1], sh * 0.49), [sw * 1.06, Math.min(0.6, sh * 0.02), sd * 1.06], nc, bb);
-      addBox(out, vadd(mid, bb[1], -sh * 0.46), [sw * 1.06, Math.min(0.6, sh * 0.02), sd * 1.06], nc, bb);
+      // vertical mullions at frame depth (dark)
+      const nm = Math.max(2, Math.min(5, cols - 1));
+      for (let c = 1; c <= nm; c++) {
+        addBox(out, vadd(fBase, t, (-0.5 + c / (nm + 1)) * sd), [frameT, sh, 0.4], frameCol, bb);
+      }
+      // Neon ONLY on neon-city tracks: two thin vertical edge lines + a top cornice.
+      if (neonCity) {
+        const ST = Math.min(0.4, sd * 0.04);
+        for (const dir of [-1, 1]) addBox(out, vadd(fBase, t, dir * sd * 0.5), [frameT * 1.05, sh * 0.96, ST], nc, bb);
+        addBox(out, vadd(vadd(mid, r, -side * (sw / 2 + 0.36)), u, sh * 0.48), [frameT * 1.1, Math.min(0.5, sh * 0.018), sd], nc, bb);
+      }
     };
     // Multi-storey building with real MASSING — not a single box. Picks an
     // archetype (flat / stepped / tapered / tower) by hash and stacks setback
@@ -1587,7 +1602,7 @@ const Tracks = (function () {
           const bodyTint = [bv, bv, bv * 1.12];
           const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], bodyTint, b);
           if (ok === false) return false;
-          neonFacade(vadd(p.c, p.u, yBase + sh / 2), b, sw, sh, sd, winBase, k * 7.1 + side * 3.3);
+          neonFacade(vadd(p.c, p.u, yBase + sh / 2), b, side, sw, sh, sd, winBase, k * 7.1 + side * 3.3, theme === "street_night");
           return ok;
         }
         // DAY: solid wall mass with flush bright window bands cut into a grid.
@@ -1732,7 +1747,7 @@ const Tracks = (function () {
       addBox(out, vadd(a.c, a.u, setH + (h - setH) / 2), [w * 0.72, h - setH, w * 0.72], bodyCol, b);
       addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.5, 1.0, w * 0.5], NIGHT ? [0.09, 0.09, 0.12] : [0.31, 0.32, 0.35], b);
       if (NIGHT) {
-        neonFacade(vadd(a.c, a.u, setH * 0.5), b, w, setH, w, neon, k * 3.7 + side * 1.9);
+        neonFacade(vadd(a.c, a.u, setH * 0.5), b, side, w, setH, w, neon, k * 3.7 + side * 1.9, theme === "street_night");
       } else {
         // Day: a plain recessed window grid (dark glass panes + floor lines), no
         // neon and no lit windows — a detailed but muted daytime concrete tower.
