@@ -2152,37 +2152,70 @@ const Tracks = (function () {
         ice: [0.55, 0.82, 1.0], yellow: [1.0, 0.92, 0.25], purple: [0.82, 0.30, 0.96],
         rose: [1.0, 0.45, 0.55], amber: [1.00, 0.55, 0.12],
       };
+      // Daytime facade colours — real building materials so a city in daylight
+      // isn't a wall of grey concrete. Warm stone/terracotta read as masonry
+      // (small punched windows via neonTower's `med` path); cool tones read as
+      // glass. Per-track `dayPal` arrays below pick a varied mix per circuit.
+      const DC = {
+        cream:   [0.86, 0.82, 0.72], sand:    [0.80, 0.71, 0.54], tan:     [0.74, 0.63, 0.47],
+        stone:   [0.78, 0.76, 0.70], terra:   [0.74, 0.46, 0.34], brick:   [0.62, 0.40, 0.34],
+        ochre:   [0.82, 0.63, 0.36], white:   [0.88, 0.88, 0.85], greyblue:[0.56, 0.62, 0.70],
+        slate:   [0.48, 0.53, 0.60], paleblue:[0.66, 0.74, 0.83], teal:    [0.54, 0.70, 0.68],
+        peach:   [0.92, 0.74, 0.61], pink:    [0.90, 0.69, 0.74], mint:    [0.72, 0.86, 0.77],
+        aqua:    [0.62, 0.82, 0.84], lemon:   [0.92, 0.87, 0.62], coral:   [0.88, 0.55, 0.46],
+      };
       const BLD = ["setback", "tiered", "podium", "slab", "twin", "jenga", "cylinder", "spire", "dome", "chevron", "notch", "fin", "antenna", "cross", "arch", "ziggurat", "drum", "hall"];
       // fh / bh = front / back-row height [min, range]. Real-circuit character:
       // Vegas/Singapore tall; Baku = low sandstone Old City + tall flame towers;
       // Monaco = SHORT tan Mediterranean apartment blocks; Jeddah/Madrid/Miami mid.
       const STYLES = {
         vegas:     { neon: [NC.mag, NC.gold, NC.red, NC.cyan, NC.violet, NC.pink, NC.orange], bias: 0.62, fh: [18, 50], bh: [44, 78],
-                     kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null },
+                     kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null,
+                     dayPal: [DC.cream, DC.sand, DC.tan, DC.stone, DC.paleblue, DC.ochre, DC.white, DC.terra] },
         singapore: { neon: [NC.cyan, NC.blue, NC.teal, NC.white, NC.green, NC.violet], bias: 0.42, fh: [20, 52], bh: [48, 88],
-                     kinds: ["podium", "setback", "cylinder", "spire", "twin", "slab", "notch", "fin", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.44, 0.46, 0.50] } },
+                     kinds: ["podium", "setback", "cylinder", "spire", "twin", "slab", "notch", "fin", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.44, 0.46, 0.50] },
+                     dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.teal, DC.stone, DC.mint, DC.cream] },
         baku:      { neon: [NC.orange, NC.red, NC.amber, NC.gold, NC.cyan, NC.white], bias: 0.40, fh: [10, 26], bh: [38, 84],
-                     kinds: ["setback", "slab", "tiered", "podium", "spire", "cylinder", "dome", "chevron", "arch", "hall"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.14, 0.13], d: [0.62, 0.56, 0.46] } },
+                     kinds: ["setback", "slab", "tiered", "podium", "spire", "cylinder", "dome", "chevron", "arch", "hall"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.14, 0.13], d: [0.62, 0.56, 0.46] },
+                     dayPal: [DC.sand, DC.cream, DC.tan, DC.stone, DC.ochre, DC.terra, DC.paleblue] },
         jeddah:    { neon: [NC.gold, NC.teal, NC.green, NC.white, NC.cyan, NC.amber], bias: 0.46, fh: [16, 40], bh: [36, 78],
-                     kinds: ["setback", "podium", "slab", "cylinder", "pyramid", "spire", "fin", "antenna", "arch"], neonKinds: ["screen", "clad"], tone: { n: [0.15, 0.14, 0.16], d: [0.50, 0.48, 0.42] } },
+                     kinds: ["setback", "podium", "slab", "cylinder", "pyramid", "spire", "fin", "antenna", "arch"], neonKinds: ["screen", "clad"], tone: { n: [0.15, 0.14, 0.16], d: [0.50, 0.48, 0.42] },
+                     dayPal: [DC.sand, DC.cream, DC.white, DC.ochre, DC.stone, DC.tan, DC.paleblue] },
         monaco:    { neon: [NC.gold, NC.teal, NC.white, NC.rose], bias: 0.12, fh: [9, 17], bh: [14, 28],
-                     kinds: ["setback", "slab", "podium", "tiered", "chevron", "dome", "hall"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.88, 0.81, 0.66] } },
+                     kinds: ["setback", "slab", "podium", "tiered", "chevron", "dome", "hall"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.88, 0.81, 0.66] },
+                     dayPal: [DC.cream, DC.peach, DC.tan, DC.ochre, DC.terra, DC.pink, DC.sand] },
         madrid:    { neon: [NC.red, NC.gold, NC.white, NC.cyan, NC.violet], bias: 0.28, fh: [14, 38], bh: [30, 70],
-                     kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron", "arch"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] } },
+                     kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron", "arch"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] },
+                     dayPal: [DC.cream, DC.ochre, DC.terra, DC.brick, DC.sand, DC.stone, DC.tan] },
         shanghai:  { neon: [NC.cyan, NC.blue, NC.white, NC.teal, NC.purple, NC.pink], bias: 0.42, fh: [22, 54], bh: [56, 110],
-                     kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab", "fin", "notch", "antenna", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] } },
+                     kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab", "fin", "notch", "antenna", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] },
+                     dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.slate, DC.stone, DC.teal, DC.cream] },
         mexico:    { neon: [NC.pink, NC.green, NC.orange, NC.gold, NC.cyan], bias: 0.34, fh: [12, 34], bh: [28, 64],
-                     kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "cross", "ziggurat", "drum"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] } },
+                     kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "cross", "ziggurat", "drum"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] },
+                     dayPal: [DC.terra, DC.ochre, DC.cream, DC.coral, DC.sand, DC.brick, DC.tan] },
         miami:     { neon: [NC.pink, NC.cyan, NC.teal, NC.orange, NC.purple], bias: 0.44, fh: [11, 30], bh: [28, 68],
-                     kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] } },
+                     kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] },
+                     dayPal: [DC.pink, DC.aqua, DC.mint, DC.peach, DC.lemon, DC.cream, DC.white] },
       };
       const THEME_DEF = {
-        street_night: { neon: [NC.mag, NC.cyan, NC.gold, NC.violet, NC.teal], bias: 0.5, fh: [16, 48], bh: [34, 80], kinds: BLD, neonKinds: ["screen", "clad"], tone: null },
-        street_day:   { neon: [NC.gold, NC.teal, NC.white, NC.rose], bias: 0.16, fh: [9, 19], bh: [14, 30], kinds: ["setback", "slab", "podium", "tiered"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.82, 0.77, 0.66] } },
-        modern:       { neon: [NC.cyan, NC.blue, NC.white, NC.violet, NC.teal], bias: 0.3, fh: [14, 40], bh: [30, 74], kinds: ["setback", "slab", "cylinder", "podium", "spire", "fin", "antenna", "dome"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.62, 0.62, 0.66] } },
+        street_night: { neon: [NC.mag, NC.cyan, NC.gold, NC.violet, NC.teal], bias: 0.5, fh: [16, 48], bh: [34, 80], kinds: BLD, neonKinds: ["screen", "clad"], tone: null,
+                        dayPal: [DC.stone, DC.greyblue, DC.cream, DC.tan, DC.slate, DC.paleblue, DC.sand] },
+        street_day:   { neon: [NC.gold, NC.teal, NC.white, NC.rose], bias: 0.16, fh: [9, 19], bh: [14, 30], kinds: ["setback", "slab", "podium", "tiered"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.82, 0.77, 0.66] },
+                        dayPal: [DC.cream, DC.sand, DC.tan, DC.stone, DC.ochre, DC.terra, DC.peach] },
+        modern:       { neon: [NC.cyan, NC.blue, NC.white, NC.violet, NC.teal], bias: 0.3, fh: [14, 40], bh: [30, 74], kinds: ["setback", "slab", "cylinder", "podium", "spire", "fin", "antenna", "dome"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.62, 0.62, 0.66] },
+                        dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.slate, DC.stone, DC.teal, DC.cream] },
       };
       const style = STYLES[def.id] || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
+      // Per-building tone: keeps the track's single dark NIGHT tone, but picks a
+      // VARIED daytime facade colour from the style's dayPal so the city in
+      // daylight is a mix of stone/cream/terracotta/glass instead of flat grey.
+      const dpal = style.dayPal;
+      const toneFor = (k, s) => {
+        const d = dpal && dpal.length ? dpal[Math.floor(hash(k * 13.7 + s * 4.2) * dpal.length) % dpal.length]
+                                      : (style.tone && style.tone.d);
+        return { n: style.tone && style.tone.n, d: d };
+      };
       const harbourSkip = (side, k) => def.id === "monaco" && side === 1 && k < n * 0.14;
       // neonAmt per building: day = plain; night = neon buildings bright, the rest
       // (general/regular buildings) get just a touch of neon so the city still
@@ -2204,7 +2237,7 @@ const Tracks = (function () {
           if (hash(k * 17 + side * 4) < 0.12 || harbourSkip(side, k)) continue;
           const s = hash(k * 5 + side), na = naFor(k, side);
           const h = style.fh[0] + s * style.fh[1], w = 8 + s * 10, d = 8 + hash(k * 9 + side) * 9;
-          neonTower(k, side, 13 + s * 12, w, h, d, cn(k, side), pickKind(k, side, na), style.tone, na);
+          neonTower(k, side, 13 + s * 12, w, h, d, cn(k, side), pickKind(k, side, na), toneFor(k, side), na);
         }
       });
       // Back row — taller, set further back, staggered, for skyline depth.
@@ -2213,7 +2246,7 @@ const Tracks = (function () {
           if (hash(k * 23 + side * 7) < 0.34 || harbourSkip(side, k)) continue;
           const s = hash(k * 11 + side * 2), na = naFor(k * 1.3, side);
           const h = style.bh[0] + s * style.bh[1], w = 11 + s * 12, d = 11 + s * 10;
-          neonTower(k, side, 40 + s * 30, w, h, d, cn(k * 1.7, side), pickKind(k * 1.9, side, na), style.tone, na);
+          neonTower(k, side, 40 + s * 30, w, h, d, cn(k * 1.7, side), pickKind(k * 1.9, side, na), toneFor(k * 1.7, side), na);
         }
       });
       // Sign blades + low retail boxes dressing the gaps.
@@ -2222,7 +2255,7 @@ const Tracks = (function () {
         if (harbourSkip(side, k)) return;
         const lc = cn(k * 3.3, side);
         if (NIGHT && style.bias > 0.3 && hash(k * 19) < 0.5) neonSign(k, side, 8 + hash(k) * 4, 10 + hash(k * 2) * 10, lc);
-        else { place(k, side, 9, [9, 4 + hash(k) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : [style.tone ? style.tone.d[0] : 0.5, style.tone ? style.tone.d[1] : 0.5, style.tone ? style.tone.d[2] : 0.54]); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3]); }
+        else { const rc = toneFor(k * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(k) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3]); }
       });
       // Occasional illuminated billboard accent (more on high-neon circuits).
       if (style.bias > 0.25) every(80, (k) => {
