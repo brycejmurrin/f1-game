@@ -9,6 +9,10 @@ loaded via `<script>` tags. Static files — runs on GitHub Pages.
 
 ```sh
 npx serve -l 3456 .               # run locally (or: python3 -m http.server 3456)
+node tools/verify-track.cjs <id>  # headless build check (no browser) — catches a
+                                  #   scenery/buildRoad/buildProps THROW that would
+                                  #   strand the game on the menu (e.g. a bad ref).
+                                  #   Fast pre-push guard for tracks.js scenery edits.
 npx playwright test               # run all specs
 npx playwright test tests/<file>.spec.js   # single spec
 npx playwright test tests/ui-audit.spec.js # → tests/ui-screenshots/
@@ -58,9 +62,9 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Critical conventions
 
-- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=184).
+- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=248).
   **Always increment N when changing any JS or CSS file** — search `?v=` and replace
-  all instances.
+  all instances (`sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`).
 - **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
   `import`/`export`.
 - **localStorage keys** are all prefixed `apex26.` (e.g. `apex26.team`,
@@ -129,6 +133,53 @@ under hard braking (`brakeFade`) to kill the turn-in snap.
 - The sky shader's sun disc uses the same `sunDir` as the lighting, so the bright
   spot in the sky aligns with where shadows fall. Check the live state with
   `__apex.lightState()`.
+- **Per-time-of-day atmosphere (the `raceTimeOfDay !== "default"` branch of
+  `applyRaceSettings`).** `dawn`/`dusk` ship rich split-tone skies + low sun;
+  `night` darkens ambient and dims the sun to moonlight; **`day`** is driven
+  per-track by `_trackAtmoBias(def)` (−clear … +overcast): clear circuits get a
+  deep saturated zenith, a low **raking** sun for long shadows (avoids the flat
+  near-overhead look), warm-sun-vs-cool-sky **chiaroscuro** and crisp low haze;
+  humid/overcast circuits pale and haze out. Per-time bloom/grade is set just
+  before `GLX.present()` (day ≈ bloom 0.74, grade str 0.34). Switch live with
+  `__apex.setTimeOfDay()`.
+
+---
+
+## City & scenery dressing (`buildProps` / `buildRoad` in `js/tracks.js`)
+
+Procedural per-circuit dressing layered on top of each track file's own
+`scenery(api)` (see `docs/SCENERY-API.md`). All session-time-aware: built for the
+*chosen* time (`track._night`), rebuilt on a day↔night flip (see `setTimeOfDay`).
+
+- **City generator** (gated to `theme` `street_day`/`street_night`/`modern`).
+  A per-track `STYLES[def.id]` entry drives it: `neon[]` palette, `kinds[]` /
+  `neonKinds[]` (building silhouettes), `tone {n:[night], d:[day]}`, `dayPal[]`
+  (daytime facade colours), `bias` (neon-vs-general fraction), `fh`/`bh` (front/
+  back-row height). Fallback by theme via `THEME_DEF`.
+  - **Buildings**: `neonTower()` (filler towers) and `building()` (landmarks).
+    `neonTower` switches on `kind` — the 18 in `BLD` (setback/tiered/podium/slab/
+    twin/jenga/cylinder/spire/dome/chevron/notch/fin/antenna/cross/arch/ziggurat/
+    drum/hall) plus the bright neon kinds (pyramid/screen/clad). `neonFacade()` is
+    the shared inset-window curtain wall.
+  - **Real reflective glass**: day windows route to a **separate** `glassBuf`
+    mesh (`track.meshes.glass`) drawn with low roughness so the lit shader mirrors
+    the sky (materials are per-draw, hence a second mesh). Warm-stone tones
+    (`med` detection) instead get small punched windows → masonry, not glass.
+  - **Day colours** (`DC` set + per-track `dayPal`, picked by `toneFor()`):
+    clustered into cohesive colour runs biased to each track's signature material
+    (Vegas dark grey glass + metal, Monaco Mediterranean cream/peach, Madrid
+    terracotta, Miami pastels, Singapore/Shanghai cool glass…) — not flat grey.
+- **Barriers** (`BARRIER[def.id]`): each street circuit has a 3-colour armco
+  livery cycled along the wall + a tinted night rail + a themed tyre-stack cap
+  (Monaco red/white/navy, Vegas gold/black/magenta, national colours, etc.).
+- **Furniture** (`FURN[def.id]`, **all 24 tracks**): roadside `tree`
+  (`palm`/`broad`/`fir`(=`conifer`)/`none`) with per-tree colour jitter +
+  occasional autumn accents and clustered forest stands; `streetLamp`
+  (`arm`/`globe`/`post`/`none`) that glows HDR at night. Trees/lamps **never**
+  call `blockAt`/`markBarrier`, so they don't touch the driving boundary.
+- **Road & verge** (`buildRoad`): a stable per-track hash tints the tarmac and
+  grass (cool-dark vs sun-bleached, lush vs dry verge); the racing line is
+  rubbered darker and edges dustier (`wearF`) so the surface reads used.
 
 ---
 
@@ -145,6 +196,7 @@ __apex.finishRace()           // trigger results screen
 __apex.freeze(bool?)          // get/set physics-frozen state
 __apex.hud(show?)             // toggle HUD visibility
 __apex.weather("wet"|"dry")   // live weather change
+__apex.setTimeOfDay("night")  // live dawn|day|dusk|night|default — no asset reload (rebuilds only on day↔dark flip)
 __apex.resetPlayer()          // force immediate rescue
 __apex.carAt(idx?)            // detailed telemetry for one car
 __apex.tracks()               // list all circuit ids

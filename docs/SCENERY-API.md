@@ -10,6 +10,13 @@ The per-circuit visual targets are the briefs in [docs/tracks/](tracks/); this
 is the toolkit for building them. Verify with the `__apex.view` survey camera —
 see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 
+> **Separate from this:** `buildProps` *also* lays down shared, theme/`def.id`-keyed
+> **city dressing** on top of each `scenery(api)` — procedural buildings, armco
+> barrier liveries, roadside trees/lamps, and per-track tarmac/verge tints. That
+> system (the `STYLES` / `BARRIER` / `FURN` maps, `neonTower`, `streetLamp`,
+> `conifer`, …) is summarised in the **City & scenery dressing** section of
+> `CLAUDE.md`. This doc covers only the per-circuit `scenery(api)` toolkit.
+
 ## Positioning model
 
 Trackside helpers take `(k, side, dist, …)`:
