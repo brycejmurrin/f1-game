@@ -689,23 +689,43 @@ function applyRaceSettings() {
       // Low sun energy but rich colour — slightly lifted exposure
       frame.exposure = 1.10;
     } else {
-      // Bright midday
-      frameSky.zenith  = [0.22, 0.40, 0.82];
-      frameSky.horizon = [0.68, 0.74, 0.88];
-      frame.sunColor   = [1.0, 0.96, 0.82];
-      frame.ambientGround = [0.24, 0.22, 0.19];
-      frame.ambientSky    = [0.46, 0.50, 0.62];
-      frame.fogColor      = [0.72, 0.72, 0.72];
-      frame.fogDensity    = 0.0015;
-      // When raceTimeOfDay !== "default", sync sky colours to frame too
+      // Bright day — a deep, saturated sky with PER-TRACK atmosphere so no two
+      // circuits share the same flat blue. `bias` runs -0.55 (clear desert) …
+      // +0.85 (overcast Spa): clear days get a deep saturated zenith, crisp low
+      // haze, a warm punchy sun and long shadows; humid/overcast days pale out,
+      // haze up and flatten. (The old single flat blue at exposure 0.92 is what
+      // read "washed/flat".)
+      const _bias = track && track.def ? _trackAtmoBias(track.def) : 0;
+      const clr = Math.max(0, -_bias);    // 0 … 0.55 clearness
+      const ovc = Math.max(0, _bias);     // 0 … 0.85 overcast
+      // Zenith: a DEEP saturated blue when clear (the visible sky strip read pale
+      // and flat before), washing to flat grey when overcast.
+      frameSky.zenith  = [0.10 - clr * 0.05 + ovc * 0.28, 0.28 - clr * 0.04 + ovc * 0.24, 0.92 - ovc * 0.22];
+      frameSky.horizon = [0.54 + ovc * 0.22, 0.68 + ovc * 0.12, 0.90 - clr * 0.02];
+      // A lower, raking afternoon sun — high overhead light gave almost no shadow
+      // modelling, which is what read "flat". Dropping the elevation casts long
+      // building shadows for depth; azimuth varies per track so shadows fall
+      // differently circuit to circuit. (Track palettes may ship a low/odd sun
+      // tuned for their default ambience — override it for a clean day session.)
+      const _dayAz = _bias * 0.6;
+      frameSky.sunDir = V3.norm([0.46 + _dayAz, 0.58, 0.42]);
+      frame.sunDir    = frameSky.sunDir;
+      frame.sunColor   = [1.05, 0.97 - ovc * 0.06, 0.82 - clr * 0.04 + ovc * 0.06];
+      frameSky.sunColor = [1.0, 0.95, 0.84];
+      // Warm ground bounce on clear days; stronger cool sky fill when overcast.
+      frame.ambientGround = [0.25 + clr * 0.05, 0.22, 0.17];
+      frame.ambientSky    = [0.42 + ovc * 0.10, 0.47 + ovc * 0.08, 0.60 + ovc * 0.05];
+      // Fog: clearer (lower density, sky-matched colour) so distance reads crisp
+      // instead of a flat grey wash; overcast hazes it back up.
+      frame.fogColor      = [0.66 + ovc * 0.08, 0.74 + ovc * 0.05, 0.88 - clr * 0.05];
+      frame.fogDensity    = 0.0008 + ovc * 0.0012;
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
-      // Clear day: light fair-weather clouds
-      _cloudBase = 0.38;
-      // Bright midday is the reference: slightly pulled back so brights
-      // don't clip on desert/concrete surroundings.
-      frame.exposure = 0.92;
+      _cloudBase = 0.22 + ovc * 0.48;     // clear → few clouds; overcast → heavy deck
+      // Brighter, punchier midday (was a flat 0.92). Clear days run a touch
+      // hotter; overcast pulled back so the grey doesn't glare.
+      frame.exposure = 1.06 + clr * 0.05 - ovc * 0.08;
     }
   } else {
     // "default" — driven by the track palette; set moon for night tracks
@@ -2615,8 +2635,11 @@ function render(dt) {
     _grade = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0.30 };
     _bloom = 0.62; _thresh = 0.68;
   } else {
-    _grade = { shadow: [0.95, 0.99, 1.06], hi: [1.06, 1.01, 0.93], str: 0.15 };
-    _bloom = 0.50; _thresh = 0.80;
+    // Bright day: a punchier teal-shadow / warm-highlight split with real bloom
+    // on highlights so chrome, kerbs, glass and bright sky sparkle instead of
+    // reading flat. (Old str 0.15 / bloom 0.50 was the washed-out look.)
+    _grade = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
+    _bloom = 0.74; _thresh = 0.72;
   }
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade });
