@@ -436,7 +436,8 @@ const Tracks = (function () {
     // run a cooler/darker fresh-laid black, others a sun-bleached warmer grey;
     // verges range from lush to dry. Subtle (centred near 1.0) so deliberately
     // tuned palettes stay close to their authored colour.
-    let _idn = 0; for (let _i = 0; _i < def.id.length; _i++) _idn += def.id.charCodeAt(_i) * (_i + 3);
+    const _did = track.def.id || "";
+    let _idn = 0; for (let _i = 0; _i < _did.length; _i++) _idn += _did.charCodeAt(_i) * (_i + 3);
     const _aBri = 0.85 + hash(_idn * 1.3) * 0.32;            // 0.85 … 1.17 brightness
     const _aWarm = (hash(_idn * 2.7) - 0.5) * 0.05;          // warm(+R/−B) ↔ cool skew
     const _bA = pal.asphalt || [0.17, 0.18, 0.21];
