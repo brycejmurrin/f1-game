@@ -1349,6 +1349,17 @@ const Tracks = (function () {
         addPrism(out, fc, [1.6, 0.5, 4.4], frond || [0.18, 0.40, 0.16], [fr, a.u, [-fr[2], 0, fr[0]]]);
       }
     };
+    // Conifer / fir: a tall narrow stack of cones — alpine & northern forest
+    // circuits (Spa, Red Bull Ring, Zandvoort dunes, Montreal).
+    const conifer = (k, side, dist, h, col) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      if (onTrack(a.c[0], a.c[2], 3)) return;
+      const c2 = [col[0] * 0.86, col[1] * 0.92, col[2] * 0.82];
+      addCyl(out, a.c, 0.3, h * 0.20, [0.34, 0.24, 0.15], 5, b);                 // trunk
+      addCone(out, vadd(a.c, a.u, h * 0.14), 2.1 + h * 0.06, h * 0.44, col, 7, b);
+      addCone(out, vadd(a.c, a.u, h * 0.42), 1.6 + h * 0.05, h * 0.38, col, 6, b);
+      addCone(out, vadd(a.c, a.u, h * 0.70), 1.0 + h * 0.04, h * 0.34, c2, 6, b);
+    };
     // Distant mountain peak (world coords), pyramid so it reads as a summit, with
     // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
     // use mountain() for organic, colour-zoned, snow-capped summits.
@@ -1977,6 +1988,32 @@ const Tracks = (function () {
       addBox(out, vadd(a.c, a.u, h * 0.62), [0.9, h * 0.6, 0.35], col, b);                  // vertical blade
       blockAt(k, side, dist - 0.6, 0.6);
     };
+    // streetLamp(): a roadside lamp post with a cantilever arm reaching toward the
+    // track. The lamp head glows HDR at night (per-track tint) and reads as a
+    // painted housing by day. `style` varies the silhouette: "arm" (highway
+    // cantilever), "globe" (heritage twin globes), "post" (simple modern column).
+    const streetLamp = (k, side, dist, head, h, lstyle) => {
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      if (onTrack(a.c[0], a.c[2], 2)) return;
+      const pole = [0.13, 0.13, 0.15];
+      const lit = NIGHT ? [head[0] * 2.4, head[1] * 2.4, head[2] * 2.4]
+                        : [head[0] * 0.72, head[1] * 0.72, head[2] * 0.70];
+      addCyl(out, a.c, 0.18, h, pole, 6, b);                                                 // column
+      if (lstyle === "globe") {                                                              // heritage twin-globe
+        const top = vadd(a.c, a.u, h);
+        for (const e of [-1, 1]) {
+          const gp = vadd(vadd(top, b[2], e * 1.1), a.u, -0.1);
+          addBox(out, vadd(top, b[2], e * 0.55), [0.16, 0.16, 1.1], pole, b);                // bracket
+          addBox(out, gp, [0.7, 0.8, 0.7], lit, b);                                          // glowing globe
+        }
+      } else if (lstyle === "post") {                                                        // simple modern cap
+        addBox(out, vadd(a.c, a.u, h), [0.5, 0.5, 0.5], lit, b);
+      } else {                                                                               // cantilever arm
+        const top = vadd(a.c, a.u, h);
+        addBox(out, vadd(top, b[0], -side * 0.9), [1.9, 0.22, 0.4], pole, b);                // arm over road
+        addBox(out, vadd(vadd(top, b[0], -side * 1.7), a.u, -0.2), [0.85, 0.35, 0.55], lit, b);  // head
+      }
+    };
     // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
     // s0→s1 on `side` at clearance `gap`. Steps along the track (~18–26 m) and emits
     // one building() per step with hash-varied height/width/colour so it reads as a
@@ -2080,9 +2117,32 @@ const Tracks = (function () {
       addCone(out, vadd(p.c, p.u, 0.3), 1.6, 2.2, col || [0.20, 0.38, 0.18], 6, b);
     };
 
+    // Per-circuit barrier identity — each city gets its own armco livery (two
+    // alternating day stripe colours + a tinted night rail) so no two street
+    // walls look alike. Themes nod to each locale: Monaco classic red/white,
+    // Vegas casino gold/black, Madrid & Mexico national colours, Miami pastel
+    // vice, Saudi green at Jeddah, Azerbaijan teal at Baku, etc. `tyre` is the
+    // conveyor-belt cap colour for the corner tyre stacks (Miami/Shanghai/Mexico).
+    // Each theme cycles THREE stripe colours (locale / national palette) for a
+    // richer, more identifiable wall than a two-tone armco. `night` is the
+    // tinted dark rail; `tyre` the conveyor cap for corner tyre stacks.
+    const BARRIER = {
+      monaco:    { a: [0.95, 0.95, 0.96], b: [0.86, 0.16, 0.15], c: [0.13, 0.28, 0.55], night: [0.20, 0.20, 0.24], tyre: [0.86, 0.16, 0.15] },  // red/white + Riviera navy
+      vegas:     { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
+      singapore: { a: [0.92, 0.93, 0.96], b: [0.10, 0.34, 0.74], c: [0.90, 0.12, 0.18], night: [0.12, 0.16, 0.32], tyre: [0.10, 0.34, 0.74] },  // white/blue + flag red
+      baku:      { a: [0.93, 0.94, 0.96], b: [0.00, 0.62, 0.58], c: [0.95, 0.45, 0.08], night: [0.08, 0.22, 0.22], tyre: [0.00, 0.62, 0.58] },  // teal/white + flame orange
+      jeddah:    { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.07, 0.20, 0.13], tyre: [0.05, 0.52, 0.28] },  // Saudi green/white + gold
+      madrid:    { a: [0.90, 0.12, 0.14], b: [0.97, 0.81, 0.12], c: [0.55, 0.12, 0.42], night: [0.26, 0.13, 0.06], tyre: [0.97, 0.81, 0.12] },  // Spain red/gold + crimson-purple
+      miami:     { a: [0.97, 0.32, 0.56], b: [0.08, 0.74, 0.78], c: [0.97, 0.80, 0.22], night: [0.30, 0.10, 0.32], tyre: [0.97, 0.32, 0.56] },  // vice pink/teal + sun gold
+      shanghai:  { a: [0.90, 0.12, 0.14], b: [0.95, 0.95, 0.96], c: [0.97, 0.80, 0.12], night: [0.22, 0.10, 0.13], tyre: [0.90, 0.12, 0.14] },  // China red/white + gold
+      mexico:    { a: [0.05, 0.55, 0.26], b: [0.95, 0.95, 0.96], c: [0.90, 0.12, 0.14], night: [0.09, 0.20, 0.11], tyre: [0.05, 0.55, 0.26] },  // flag green/white/red
+    };
+    const bt = BARRIER[def.id] || { a: [0.92, 0.92, 0.94], b: [0.85, 0.18, 0.16], c: [0.55, 0.57, 0.62], night: [0.18, 0.18, 0.22], tyre: [0.24, 0.22, 0.20] };
+    const btSeq = [bt.a, bt.b, bt.c];
+
     // continuous barrier wall hugging both edges on street circuits — going off
-    // means hitting a wall, not open grass. Day circuits get red/white armco
-    // striping; night circuits get a dark rail.
+    // means hitting a wall, not open grass. Day circuits get the track's armco
+    // livery; dark sessions get its tinted night rail.
     if (def.street) {
       // Barriers are straight panels — span a few nodes each instead of one box
       // per ~4 m node, roughly halving the barrier vertex cost on long street laps.
@@ -2101,9 +2161,7 @@ const Tracks = (function () {
           const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
           const f = norm([bx - ax, by - ay, bz - az]);
           const rr = norm(cross(f, u0));
-          const striped = (Math.floor(k / (STEP * 3)) % 2) === 0;
-          const col = def.night ? [0.18, 0.18, 0.22]
-            : (striped ? [0.92, 0.92, 0.94] : [0.85, 0.18, 0.16]);
+          const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
           addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
         }
       }
@@ -2137,11 +2195,80 @@ const Tracks = (function () {
           const slen = ds * step * 1.1;
           addBox(out, [px[k] + r[0] * o, py[k] + 0.45, pz[k] + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
+          // Themed conveyor-belt cap: a bright coloured stripe along the top of
+          // the tyre stack, giving the city's corner barriers its identity.
+          if (BARRIER[def.id]) addBox(out, [px[k] + r[0] * o, py[k] + 0.94, pz[k] + r[2] * o],
+                 [1.06, 0.18, slen], bt.tyre, [r, u, t]);
           // record the tyre barrier along its span so the car stops just short of it
           for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
         }
       }
     }
+
+    // ── Per-track street / scenery furniture: lamp posts + roadside trees ──
+    // Every circuit — city, desert AND forest/green — gets its own incidental
+    // models so no two tracks share trees and lighting. tree: palm|broad|fir|
+    // none; lamp: arm|globe|post|none with a per-track tint. Green circuits get
+    // distinct foliage tints + species (Spa/Red Bull pine, Monza royal-park deep
+    // green, Zandvoort dune scrub, Interlagos tropical, autumnal mixes) layered
+    // behind their existing scenery. Trees/lamps never call blockAt and respect
+    // onTrack(), so they add depth without touching the driving boundary.
+    const FURN = {
+      monaco:    { tree: "broad", fol: [0.28, 0.44, 0.22], lamp: "globe", lc: [1.0, 0.92, 0.70] },
+      vegas:     { tree: "palm",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
+      singapore: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
+      baku:      { tree: "broad", fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },
+      jeddah:    { tree: "palm",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
+      madrid:    { tree: "broad", fol: [0.30, 0.40, 0.18], lamp: "post",  lc: [1.0, 0.90, 0.66] },
+      miami:     { tree: "palm",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
+      shanghai:  { tree: "broad", fol: [0.24, 0.42, 0.22], lamp: "post",  lc: [0.90, 0.96, 1.0] },
+      mexico:    { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
+      bahrain:   { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.78, 0.42] },
+      qatar:     { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.80, 0.45] },
+      abudhabi:  { tree: "palm",  fol: [0.26, 0.42, 0.20], lamp: "arm",   lc: [1.0, 0.82, 0.50] },
+      spa:         { tree: "fir",   fol: [0.12, 0.30, 0.16], lamp: "none" },
+      silverstone: { tree: "broad", fol: [0.27, 0.43, 0.21], lamp: "none" },
+      monza:       { tree: "broad", fol: [0.15, 0.33, 0.16], lamp: "none" },
+      suzuka:      { tree: "broad", fol: [0.22, 0.45, 0.22], lamp: "none" },
+      interlagos:  { tree: "palm",  fol: [0.20, 0.46, 0.20], lamp: "none" },
+      zandvoort:   { tree: "fir",   fol: [0.34, 0.42, 0.24], lamp: "none" },
+      redbull:     { tree: "fir",   fol: [0.14, 0.32, 0.18], lamp: "none" },
+      imola:       { tree: "broad", fol: [0.24, 0.40, 0.20], lamp: "none" },
+      hungaroring: { tree: "broad", fol: [0.36, 0.40, 0.17], lamp: "none" },
+      cota:        { tree: "broad", fol: [0.31, 0.39, 0.18], lamp: "none" },
+      montreal:    { tree: "fir",   fol: [0.20, 0.40, 0.22], lamp: "none" },
+      albert_park: { tree: "broad", fol: [0.26, 0.44, 0.22], lamp: "none" },
+    };
+    const FURN_DEF = {
+      green:        { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "none" },
+      desert:       { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.80, 0.45] },
+      street_night: { tree: "broad", fol: [0.22, 0.40, 0.20], lamp: "arm",   lc: [0.90, 0.95, 1.0] },
+      street_day:   { tree: "broad", fol: [0.28, 0.44, 0.22], lamp: "globe", lc: [1.0, 0.90, 0.70] },
+      modern:       { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "post",  lc: [0.95, 0.95, 1.0] },
+    };
+    const fz = FURN[def.id] || FURN_DEF[theme] || FURN_DEF.green;
+    const furnHarbour = (side, k) => def.id === "monaco" && side === 1 && k < n * 0.14;  // open water — no props
+    const plantTree = (k, side, dist, h) => {
+      if (fz.tree === "palm") palm(k, side, dist, h, fz.fol);
+      else if (fz.tree === "fir") conifer(k, side, dist, h, fz.fol);
+      else tree(k, side, dist, h, fz.fol);
+    };
+    // Lamp posts — streets / modern / desert. Alternate sides, set behind the
+    // barrier line; the head glows HDR at night via streetLamp().
+    if (fz.lamp && fz.lamp !== "none") every(26, (k) => {
+      for (const side of [-1, 1]) {
+        if (furnHarbour(side, k)) continue;
+        streetLamp(k, side, (def.street ? 3.2 : 6) + hash(k * 7 + side) * 0.8, fz.lc || [1, 0.9, 0.7], def.street ? 7 : 8, fz.lamp);
+      }
+    });
+    // Roadside trees — every circuit, per-track species/tint, set back behind the
+    // edge so they layer as depth rather than crowd the verge.
+    if (fz.tree && fz.tree !== "none") every(def.street ? 32 : 24, (k) => {
+      const side = hash(k * 41) < 0.5 ? -1 : 1;
+      if (furnHarbour(side, k)) return;
+      const dist = (def.street ? 6 : 9) + hash(k * 3 + side) * (def.street ? 4 : 11);
+      plantTree(k, side, dist, (fz.tree === "palm" ? 8 : 6) + hash(k * 5) * 5);
+    });
 
     // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
     if (!def.street) {
@@ -2226,7 +2353,7 @@ const Tracks = (function () {
                      dayPal: [DC.terra, DC.ochre, DC.cream, DC.coral, DC.sand, DC.brick, DC.tan] },
         miami:     { neon: [NC.pink, NC.cyan, NC.teal, NC.orange, NC.purple], bias: 0.44, fh: [11, 30], bh: [28, 68],
                      kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] },
-                     dayPal: [DC.pink, DC.aqua, DC.mint, DC.peach, DC.lemon, DC.cream, DC.white] },
+                     dayPal: [DC.cream, DC.white, DC.peach, DC.pink, DC.aqua, DC.mint, DC.lemon] },
       };
       const THEME_DEF = {
         street_night: { neon: [NC.mag, NC.cyan, NC.gold, NC.violet, NC.teal], bias: 0.5, fh: [16, 48], bh: [34, 80], kinds: BLD, neonKinds: ["screen", "clad"], tone: null,
@@ -2243,9 +2370,14 @@ const Tracks = (function () {
       // daylight is a mix of stone/cream/terracotta/glass instead of flat grey.
       const dpal = style.dayPal;
       const toneFor = (k, s) => {
-        const d = dpal && dpal.length ? dpal[Math.floor(hash(k * 13.7 + s * 4.2) * dpal.length) % dpal.length]
-                                      : (style.tone && style.tone.d);
-        return { n: style.tone && style.tone.n, d: d };
+        if (!(dpal && dpal.length)) return { n: style.tone && style.tone.n, d: style.tone && style.tone.d };
+        // Cluster adjacent buildings into short colour RUNS (floor(k/…)) and bias
+        // the pick toward the palette's leading entries (cl²) so each track reads
+        // as a cohesive place with a signature material plus a few accents,
+        // rather than every building a different random colour.
+        const cl = hash(Math.floor(k / 2.4) * 2.3 + s * 4.2);
+        const idx = Math.floor(cl * cl * dpal.length) % dpal.length;
+        return { n: style.tone && style.tone.n, d: dpal[idx] };
       };
       const harbourSkip = (side, k) => def.id === "monaco" && side === 1 && k < n * 0.14;
       // neonAmt per building: day = plain; night = neon buildings bright, the rest
