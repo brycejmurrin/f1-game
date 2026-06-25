@@ -16,8 +16,8 @@
     baseHW: 7,
     pal: { horizon: [0.20, 0.10, 0.05], zenith: [0.06, 0.05, 0.16], sunColor: [0.80, 0.62, 0.40], ambientSky: [0.30, 0.22, 0.16], ambientGround: [0.28, 0.18, 0.10], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0028, sunDir: [0.5, 0.14, 0.4], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] },
     segs: [
-      { t: 0, l: 520 }, { t: -90, l: 100 }, { t: 40, l: 80 }, { t: -70, l: 90 }, { t: 0, l: 240 }, { t: -80, l: 100 },
-      { t: 30, l: 80 }, { t: -70, l: 100 }, { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 0, l: 120 }, { t: -60, l: 110 },
+      { t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
+      { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300 }, { t: 60, l: 90 }, { t: 0, l: 120 }, { t: 60, l: 110 },
     ],
     // T1 approach descends ~4 m from the start/finish line; mid-lap drops ~7 m
     // further to the lowest point (~15 m total relief on the real circuit).
