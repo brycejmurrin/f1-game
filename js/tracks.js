@@ -1347,11 +1347,15 @@ const Tracks = (function () {
       const j = 0.85 + hash(k * 2.9 + side * 1.7 + dist) * 0.3;
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
-      // three rounded layers (was two): squat base + mid + sunlit cap give the
-      // canopy more volume without a big vertex hit.
-      addCone(out, vadd(a.c, a.u, h * 0.30), (2.9 + h * 0.12) * j, h * 0.46, col, 8, b);
-      addCone(out, vadd(a.c, a.u, h * 0.52), (2.2 + h * 0.08) * j, h * 0.34, col, 7, b);
-      addCone(out, vadd(a.c, a.u, h * 0.74), (1.4 + h * 0.05) * j, h * 0.26, c2, 6, b);
+      // ROUNDED broadleaf canopy: bulges widest in the middle and is capped by a
+      // squat dome — a full, billowing crown that reads clearly as a deciduous
+      // tree rather than the narrow pointed cone-stack of conifer() (the two used
+      // to look near-identical). Top two layers are inverted/short cones so the
+      // crown rounds off instead of tapering to a spike.
+      addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j, h * 0.30, col, 9, b);   // wide skirt
+      addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j, h * 0.26, col, 9, b);   // widest bulge
+      addCone(out, vadd(a.c, a.u, h * 0.66), (2.9 + h * 0.10) * j, h * 0.26, c2, 8, b);    // shoulder
+      addCone(out, vadd(a.c, a.u, h * 0.82), (1.7 + h * 0.06) * j, h * 0.22, c2, 7, b);    // rounded cap
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.
     const palm = (k, side, dist, h, frond) => {
@@ -2273,18 +2277,19 @@ const Tracks = (function () {
     // fraction of broadleaf trees turn autumnal gold/rust — so a stand of trees
     // reads as mixed natural foliage rather than identical clones.
     const folVary = (base, seed) => {
-      const lift = 0.78 + hash(seed * 3.1) * 0.44;        // brightness spread
-      const warm = (hash(seed * 7.7) - 0.45) * 0.16;      // yellow-green ↔ blue-green drift
+      const lift = 0.68 + hash(seed * 3.1) * 0.62;        // WIDE brightness spread (deep shade → bright young)
+      const warm = (hash(seed * 7.7) - 0.45) * 0.24;      // stronger yellow-green ↔ blue-green drift
       return [Math.max(0, Math.min(1, base[0] * lift + warm)),
-              Math.max(0, Math.min(1, base[1] * lift + warm * 0.4)),
+              Math.max(0, Math.min(1, base[1] * lift + warm * 0.3)),
               Math.max(0, Math.min(1, base[2] * lift - warm * 0.7))];
     };
     const plantTree = (k, side, dist, h) => {
       const seed = k * 1.7 + side * 0.9 + dist;
       let col = folVary(fz.fol, seed);
-      // Autumn / flowering accent — occasional gold-rust tree in broadleaf stands.
-      if (fz.tree === "broad" && hash(seed * 5.5) < 0.13)
-        col = [0.62 + hash(seed) * 0.22, 0.38 + hash(seed * 2.1) * 0.18, 0.12 + hash(seed * 3.3) * 0.08];
+      // Autumn / flowering accent — a gold-rust or amber tree dotted through
+      // broadleaf stands (≈22%) so a treeline shows seasonal colour, not one green.
+      if (fz.tree === "broad" && hash(seed * 5.5) < 0.22)
+        col = [0.60 + hash(seed) * 0.28, 0.34 + hash(seed * 2.1) * 0.22, 0.10 + hash(seed * 3.3) * 0.10];
       if (fz.tree === "palm") palm(k, side, dist, h, col);
       else if (fz.tree === "fir") conifer(k, side, dist, h, col);
       else tree(k, side, dist, h, col);
