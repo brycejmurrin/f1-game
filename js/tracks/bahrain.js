@@ -93,18 +93,25 @@
       // backdrop() auto-adds lit window bands on night circuits; a few carry red
       // aircraft beacons. Confined to one arc (a city in one direction) and pushed
       // well beyond the far dune band so the dunes stay the foreground.
-      const SKY_SIL  = [0.20, 0.22, 0.30];   // dark blue-grey tower silhouette
-      const SKY_SIL2 = [0.16, 0.18, 0.27];   // deeper varied tone
+      const SKY_SIL  = [0.26, 0.29, 0.38];   // dark blue-grey tower silhouette (lifted so it reads)
+      const SKY_SIL2 = [0.21, 0.24, 0.34];   // deeper varied tone
       (function manamaSkyline() {
-        for (let i = 0; i < 16; i++) {
-          const sFrac = (0.30 + i * 0.016) % 1;            // ~25% arc cluster
-          const hf = hash(i * 7 + 3.1), wf = hash(i * 3 + 9.7);
-          const dist = 470 + hash(i * 5 + 2.3) * 180;
-          const w = 8 + wf * 10, h = 50 + hf * 130, d = w * 1.3;
-          backdrop(K(sFrac), -1, dist, [w, h, d], hash(i * 11) > 0.5 ? SKY_SIL : SKY_SIL2);
-          if (hash(i * 13 + 1.7) > 0.55) {
-            const a = anchor(K(sFrac), -1, dist), bv = [a.r, a.u, a.t];
-            addBox(out, vadd(a.c, a.u, h + 2.5), [1.6, 3.6, 1.6], BEACON_WARM, bv);  // aircraft beacon
+        // Two clusters on opposite arcs so the capital reads from more of the lap,
+        // plus a couple of taller landmark spires. Pulled closer + taller than
+        // before (towers were too faint/narrow to notice).
+        const clusters = [[0.22, 22, 1], [0.66, 12, -1]];   // [arcStart, count, side]
+        for (const [arc0, count, side] of clusters) {
+          for (let i = 0; i < count; i++) {
+            const sFrac = (arc0 + i * 0.018) % 1;
+            const hf = hash(i * 7 + arc0 * 30), wf = hash(i * 3 + arc0 * 17);
+            const dist = 400 + hash(i * 5 + arc0 * 70) * 170;
+            const landmark = hash(i * 4.4 + arc0) > 0.86;
+            const w = 9 + wf * 12, h = (landmark ? 130 : 58) + hf * 150, d = w * 1.3;
+            backdrop(K(sFrac), side, dist, [w, h, d], hash(i * 11 + arc0) > 0.5 ? SKY_SIL : SKY_SIL2);
+            if (landmark || hash(i * 13 + 1.7) > 0.5) {
+              const a = anchor(K(sFrac), side, dist), bv = [a.r, a.u, a.t];
+              addBox(out, vadd(a.c, a.u, h + 2.5), [1.8, 4.0, 1.8], BEACON_WARM, bv);  // aircraft beacon
+            }
           }
         }
       })();

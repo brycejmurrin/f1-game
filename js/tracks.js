@@ -2255,7 +2255,7 @@ const Tracks = (function () {
       monza:       { tree: "broad", fol: [0.15, 0.33, 0.16], lamp: "none" },
       suzuka:      { tree: "broad", fol: [0.22, 0.45, 0.22], lamp: "none" },
       interlagos:  { tree: "palm",  fol: [0.20, 0.46, 0.20], lamp: "none" },
-      zandvoort:   { tree: "fir",   fol: [0.34, 0.42, 0.24], lamp: "none" },
+      zandvoort:   { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },  // coastal dune scrub — thin + pale
       redbull:     { tree: "fir",   fol: [0.14, 0.32, 0.18], lamp: "none" },
       imola:       { tree: "broad", fol: [0.24, 0.40, 0.20], lamp: "none" },
       hungaroring: { tree: "broad", fol: [0.36, 0.40, 0.17], lamp: "none" },
@@ -2306,16 +2306,21 @@ const Tracks = (function () {
     // edge. Forest/green circuits get a denser stand (a cluster of a few trees at
     // staggered depths, each with its own varied colour) so the treeline reads as
     // real mixed woodland; street circuits keep a sparser line.
-    if (fz.tree && fz.tree !== "none") every(def.street ? 32 : 18, (k) => {
-      const side = hash(k * 41) < 0.5 ? -1 : 1;
-      if (furnHarbour(side, k)) return;
-      const baseH = fz.tree === "palm" ? 8 : 6;
-      const cluster = def.street ? 1 : 2 + Math.floor(hash(k * 13) * 2);   // 2–3 trees per stand off-street
-      for (let i = 0; i < cluster; i++) {
-        const dist = (def.street ? 6 : 8) + hash(k * 3 + side + i * 4.4) * (def.street ? 4 : 14);
-        plantTree(k + (i % 2) - (i > 1 ? 1 : 0), side, dist, baseH + hash(k * 5 + i * 2.7) * 6);
-      }
-    });
+    if (fz.tree && fz.tree !== "none") {
+      const step = fz.sparse ? 30 : (def.street ? 24 : 18);   // street denser than before; sparse = coastal scrub
+      every(step, (k) => {
+        const side = hash(k * 41) < 0.5 ? -1 : 1;
+        if (furnHarbour(side, k)) return;
+        const baseH = fz.tree === "palm" ? 8 : 6;
+        const cluster = fz.sparse ? 1
+          : def.street ? (hash(k * 13) < 0.5 ? 1 : 2)              // streets: 1–2 per stand
+          : 2 + Math.floor(hash(k * 13) * 2);                      // green: 2–3 per stand
+        for (let i = 0; i < cluster; i++) {
+          const dist = (def.street ? 6 : 8) + hash(k * 3 + side + i * 4.4) * (def.street ? 4 : 14);
+          plantTree(k + (i % 2) - (i > 1 ? 1 : 0), side, dist, baseH + hash(k * 5 + i * 2.7) * 6);
+        }
+      });
+    }
 
     // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
     if (!def.street) {
