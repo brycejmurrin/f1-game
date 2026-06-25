@@ -204,7 +204,12 @@ const Tracks = (function () {
     const w = maxx - minx || 1, h = maxz - minz || 1, sc = 1 / Math.max(w, h);
     const ox = (1 - w * sc) / 2, oz = (1 - h * sc) / 2;
     const out = [], step = Math.max(1, Math.floor(n / 200));
-    for (let i = 0; i < n; i += step) out.push([ox + (maxx - px[i]) * sc, oz + (maxz - pz[i]) * sc]);
+    // North-up, EAST-RIGHT (canonical map orientation): x = px-minx (east → right),
+    // y = maxz-pz (north → top on the y-down canvas). px≈east, pz≈north from the
+    // geo-projected trace, so this matches real circuit maps. (An earlier maxx-px
+    // X-flip mirrored every minimap east↔west — removed; lap direction is handled
+    // by the per-track `reverse` flag, not by flipping the map.)
+    for (let i = 0; i < n; i += step) out.push([ox + (px[i] - minx) * sc, oz + (maxz - pz[i]) * sc]);
     return out;
   }
 
