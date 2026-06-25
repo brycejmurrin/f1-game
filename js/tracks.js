@@ -2248,10 +2248,26 @@ const Tracks = (function () {
     };
     const fz = FURN[def.id] || FURN_DEF[theme] || FURN_DEF.green;
     const furnHarbour = (side, k) => def.id === "monaco" && side === 1 && k < n * 0.14;  // open water — no props
+    // Per-tree foliage variation: a real forest is never one flat green. Each
+    // tree gets a jittered brightness + a warm/cool hue drift, and a small
+    // fraction of broadleaf trees turn autumnal gold/rust — so a stand of trees
+    // reads as mixed natural foliage rather than identical clones.
+    const folVary = (base, seed) => {
+      const lift = 0.78 + hash(seed * 3.1) * 0.44;        // brightness spread
+      const warm = (hash(seed * 7.7) - 0.45) * 0.16;      // yellow-green ↔ blue-green drift
+      return [Math.max(0, Math.min(1, base[0] * lift + warm)),
+              Math.max(0, Math.min(1, base[1] * lift + warm * 0.4)),
+              Math.max(0, Math.min(1, base[2] * lift - warm * 0.7))];
+    };
     const plantTree = (k, side, dist, h) => {
-      if (fz.tree === "palm") palm(k, side, dist, h, fz.fol);
-      else if (fz.tree === "fir") conifer(k, side, dist, h, fz.fol);
-      else tree(k, side, dist, h, fz.fol);
+      const seed = k * 1.7 + side * 0.9 + dist;
+      let col = folVary(fz.fol, seed);
+      // Autumn / flowering accent — occasional gold-rust tree in broadleaf stands.
+      if (fz.tree === "broad" && hash(seed * 5.5) < 0.13)
+        col = [0.62 + hash(seed) * 0.22, 0.38 + hash(seed * 2.1) * 0.18, 0.12 + hash(seed * 3.3) * 0.08];
+      if (fz.tree === "palm") palm(k, side, dist, h, col);
+      else if (fz.tree === "fir") conifer(k, side, dist, h, col);
+      else tree(k, side, dist, h, col);
     };
     // Lamp posts — streets / modern / desert. Alternate sides, set behind the
     // barrier line; the head glows HDR at night via streetLamp().
@@ -2262,12 +2278,18 @@ const Tracks = (function () {
       }
     });
     // Roadside trees — every circuit, per-track species/tint, set back behind the
-    // edge so they layer as depth rather than crowd the verge.
-    if (fz.tree && fz.tree !== "none") every(def.street ? 32 : 24, (k) => {
+    // edge. Forest/green circuits get a denser stand (a cluster of a few trees at
+    // staggered depths, each with its own varied colour) so the treeline reads as
+    // real mixed woodland; street circuits keep a sparser line.
+    if (fz.tree && fz.tree !== "none") every(def.street ? 32 : 18, (k) => {
       const side = hash(k * 41) < 0.5 ? -1 : 1;
       if (furnHarbour(side, k)) return;
-      const dist = (def.street ? 6 : 9) + hash(k * 3 + side) * (def.street ? 4 : 11);
-      plantTree(k, side, dist, (fz.tree === "palm" ? 8 : 6) + hash(k * 5) * 5);
+      const baseH = fz.tree === "palm" ? 8 : 6;
+      const cluster = def.street ? 1 : 2 + Math.floor(hash(k * 13) * 2);   // 2–3 trees per stand off-street
+      for (let i = 0; i < cluster; i++) {
+        const dist = (def.street ? 6 : 8) + hash(k * 3 + side + i * 4.4) * (def.street ? 4 : 14);
+        plantTree(k + (i % 2) - (i > 1 ? 1 : 0), side, dist, baseH + hash(k * 5 + i * 2.7) * 6);
+      }
     });
 
     // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
