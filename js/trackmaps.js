@@ -82,8 +82,11 @@ const TrackMaps = (function () {
     return c ? c.py : null;
   }
 
-  // Circuit direction: signed area of the 2D polygon (px, pz).
-  // Positive signed area = counter-clockwise; negative = clockwise.
+  // Circuit direction as it READS on the rendered (north-up) minimap, which is
+  // the ground truth the player sees. Validated against real OpenF1 lap telemetry
+  // for all circuits: positive signed area of (px, pz) renders/drives CLOCKWISE,
+  // negative renders ANTI-CLOCKWISE. (The earlier mapping was inverted, so the
+  // selector preview labelled every clockwise circuit "Anti-clockwise".)
   function circuitDirection(tr) {
     const px = tr.px, pz = tr.pz, n = tr.n;
     let area = 0;
@@ -91,7 +94,7 @@ const TrackMaps = (function () {
       const j = (i + 1) % n;
       area += px[i] * pz[j] - px[j] * pz[i];
     }
-    return area > 0 ? "CCW" : "CW";
+    return area > 0 ? "CW" : "CCW";
   }
 
   // Detect DRS-eligible zones: long runs of very low curvature (straights).
