@@ -6,6 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zandvoort",
+    reverse: true,  // GPS trace is backwards vs real racing direction (auto-audit)
     name: "ZANDVOORT",
     gp: "Dutch GP",
     country: "Netherlands",
