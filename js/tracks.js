@@ -914,11 +914,13 @@ const Tracks = (function () {
   const RAW = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain };
 
   // Wrap a scenery api so a bespoke scenery() authored for the forward lap places
-  // correctly on a REVERSED lap. Transforms: s-fraction s→1-s, node index k→n-k,
-  // side ±1→∓1. Helpers are grouped by their leading-argument signature.
-  function reverseSceneryApi(api, n) {
-    const RK = (k) => (((n - Math.round(k)) % n) + n) % n;   // reversed node index
-    const RS = (s) => 1 - s;                                  // reversed fraction
+  // correctly on a REVERSED lap (optionally with the start rotated to fraction
+  // `phi`). Transforms: s-fraction s→phi-s, node index k→round(phi*n)-k, side
+  // ±1→∓1. Helpers are grouped by their leading-argument signature.
+  function reverseSceneryApi(api, n, phi) {
+    const o = Math.round((phi || 0) * n);
+    const RK = (k) => ((((o - Math.round(k)) % n) + n) % n);   // reversed+rotated node
+    const RS = (s) => ((((phi || 0) - s) % 1) + 1) % 1;        // reversed+rotated fraction
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
     for (const name of ["place", "prop", "backdrop", "anchor", "pine", "tree",
@@ -2514,7 +2516,7 @@ const Tracks = (function () {
       // keeps barriers (recordBarrier fills barR/barL) aligned with the road.
       // Direct px[k]/upOf(k) reads inside scenery (a handful, cosmetic only) are
       // not remapped — they stay internally consistent on the reversed centreline.
-      if (def.reverse) sceneryApi = reverseSceneryApi(sceneryApi, n);
+      if (def.reverse) sceneryApi = reverseSceneryApi(sceneryApi, n, def._startFrac || 0);
       def.scenery(sceneryApi);
     }
 
@@ -2737,18 +2739,26 @@ const Tracks = (function () {
       // the points below and supersedes the authored cosine bumps.
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
       reverse: !!d.reverse,
+      startFrac: d.startFrac || 0,
     };
     def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
-    // Reverse the lap direction: drive the same physical loop the other way.
-    // Keeps the start point (index 0) fixed and flips traversal; elevation and
-    // bridge s-anchors mirror to (1 - s). Scenery/barrier s-coords are flipped
-    // separately when their bespoke scenery() runs (see buildProps).
-    if (def.reverse) {
-      const P = def.points, N = P.length, rev = new Array(N);
-      for (let i = 0; i < N; i++) rev[i] = P[(N - i) % N];
-      def.points = rev;
-      if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: 1 - e.s }));
-      if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: 1 - b.s }));
+    // Lap-direction + start-line transform.
+    //  • `reverse`   flips the traversal so the loop is driven the other way.
+    //  • `startFrac` rotates the start/finish line to a chosen fraction of the
+    //    ORIGINAL trace (0 = the trace's own first point).
+    // The centreline control points and the elevation/bridge s-anchors are
+    // remapped here; the matching scenery/barrier s-remap happens when the
+    // bespoke scenery() runs (buildProps), driven by def._startFrac/_reverse.
+    const phi = (((def.startFrac || 0) % 1) + 1) % 1;
+    if (def.reverse || phi) {
+      const P = def.points, N = P.length, out = new Array(N);
+      const o = (((Math.round(phi * N) % N) + N) % N);
+      for (let i = 0; i < N; i++) out[i] = def.reverse ? P[(((o - i) % N) + N) % N] : P[(i + o) % N];
+      def.points = out;
+      def._startFrac = phi;
+      const fmap = def.reverse ? (s) => (((phi - s) % 1) + 1) % 1 : (s) => (((s - phi) % 1) + 1) % 1;
+      if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: fmap(e.s) }));
+      if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: fmap(b.s) }));
     }
     return def;
   });

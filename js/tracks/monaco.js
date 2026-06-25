@@ -19,6 +19,10 @@
     // (centreline + minimap + scenery/barrier s-coordinates) so the car drives
     // the correct way without re-digitising the trace or re-authoring scenery.
     reverse: true,
+    // Rotate the start/finish line onto the main pit/harbour straight so the lap
+    // begins on the straight with the first corner at its end (fraction of the
+    // original trace; tuned against the reversed layout).
+    startFrac: 0.28,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
     // NOTE: Monaco's geometry comes from the real GPS trace in js/circuits.js
     // (CircuitPaths.monaco); these segs are only a fallback if that trace is
