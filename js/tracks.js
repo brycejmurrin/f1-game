@@ -2250,18 +2250,18 @@ const Tracks = (function () {
       bahrain:   { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.78, 0.42] },
       qatar:     { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.80, 0.45] },
       abudhabi:  { tree: "palm",  fol: [0.26, 0.42, 0.20], lamp: "arm",   lc: [1.0, 0.82, 0.50] },
-      spa:         { tree: "fir",   fol: [0.12, 0.30, 0.16], lamp: "none" },
-      silverstone: { tree: "broad", fol: [0.27, 0.43, 0.21], lamp: "none" },
-      monza:       { tree: "broad", fol: [0.15, 0.33, 0.16], lamp: "none" },
-      suzuka:      { tree: "broad", fol: [0.22, 0.45, 0.22], lamp: "none" },
-      interlagos:  { tree: "palm",  fol: [0.20, 0.46, 0.20], lamp: "none" },
-      zandvoort:   { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },  // coastal dune scrub — thin + pale
-      redbull:     { tree: "fir",   fol: [0.14, 0.32, 0.18], lamp: "none" },
-      imola:       { tree: "broad", fol: [0.24, 0.40, 0.20], lamp: "none" },
-      hungaroring: { tree: "broad", fol: [0.36, 0.40, 0.17], lamp: "none" },
-      cota:        { tree: "broad", fol: [0.31, 0.39, 0.18], lamp: "none" },
-      montreal:    { tree: "fir",   fol: [0.20, 0.40, 0.22], lamp: "none" },
-      albert_park: { tree: "broad", fol: [0.26, 0.44, 0.22], lamp: "none" },
+      spa:         { tree: "fir",   fol: [0.14, 0.31, 0.21], lamp: "none" },                 // dark Ardennes spruce, blue-green
+      silverstone: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "none" },                 // English oak copses, mid-green
+      monza:       { tree: "broad", fol: [0.16, 0.34, 0.17], lamp: "none" },                 // deep royal-park canopy
+      suzuka:      { tree: "broad", fol: [0.24, 0.46, 0.24], lamp: "none" },                 // mixed Japanese hill forest
+      interlagos:  { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "none" },                 // warm subtropical
+      zandvoort:   { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },   // coastal dune scrub — thin + pale
+      redbull:     { tree: "fir",   fol: [0.17, 0.40, 0.22], lamp: "none" },                 // lush emerald alpine spruce
+      imola:       { tree: "broad", fol: [0.24, 0.41, 0.21], lamp: "none" },                 // riverbank poplar/willow/oak
+      hungaroring: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true },   // dry straw-olive, dusty bowl
+      cota:        { tree: "broad", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
+      montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer
+      albert_park: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none" },                 // tidy Melbourne parkland
     };
     const FURN_DEF = {
       green:        { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "none" },
