@@ -913,6 +913,37 @@ const Tracks = (function () {
   // on-track rejection guard below while still reaching the real implementations.
   const RAW = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain };
 
+  // Wrap a scenery api so a bespoke scenery() authored for the forward lap places
+  // correctly on a REVERSED lap. Transforms: s-fraction s→1-s, node index k→n-k,
+  // side ±1→∓1. Helpers are grouped by their leading-argument signature.
+  function reverseSceneryApi(api, n) {
+    const RK = (k) => (((n - Math.round(k)) % n) + n) % n;   // reversed node index
+    const RS = (s) => 1 - s;                                  // reversed fraction
+    const w = Object.assign({}, api);
+    // (k, side, ...rest): index + side based
+    for (const name of ["place", "prop", "backdrop", "anchor", "pine", "tree",
+                        "palm", "building", "tower", "billboard", "marshalPost", "bush"]) {
+      const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), -side, ...r);
+    }
+    // (s, side, ...rest): single fraction + side
+    for (const name of ["grandstand"]) {
+      const f = api[name]; if (f) w[name] = (s, side, ...r) => f(RS(s), -side, ...r);
+    }
+    // (s0, s1, side, ...rest): fraction RANGE + side — swap ends and mirror both
+    for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
+                        "forestEdge", "cityFront", "recordBarrier"]) {
+      const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => f(RS(s1), RS(s0), -side, ...r);
+    }
+    // (s0, s1, stepM, fn): fraction range, no side
+    if (api.along) w.along = (s0, s1, ...r) => api.along(RS(s1), RS(s0), ...r);
+    // (s, h, col): single fraction, no side
+    if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
+    // NOTE: node-index utilities (groundYAt, upOf) and the raw px/py/pz arrays are
+    // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
+    // scenery stay mutually consistent on the reversed centreline (cosmetic only).
+    return w;
+  }
+
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
     const out = { pos: [], nrm: [], col: [], idx: [] };
@@ -2306,22 +2337,32 @@ const Tracks = (function () {
     
 
     // Per-circuit bespoke scenery lives in js/tracks/<id>.js (def.scenery).
-    if (def.scenery) def.scenery({
-      out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
-      // Session darkness (chosen time of day) — lets bespoke scenery render a lit
-      // night version vs a daytime version of the same structure.
-      night: NIGHT,
-      place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
-      ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
-      // richer primitives (world coords): non-cube shapes
-      addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
-      // landscape + vegetation
-      pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge,
-      // structures
-      building, tower, grandstand, billboard, gantry, marshalPost, cityFront,
-      // barriers / track furniture
-      wall, fence, guardrail, tyreWall, recordBarrier,
-    });
+    if (def.scenery) {
+      let sceneryApi = {
+        out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
+        // Session darkness (chosen time of day) — lets bespoke scenery render a lit
+        // night version vs a daytime version of the same structure.
+        night: NIGHT,
+        place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
+        ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
+        // richer primitives (world coords): non-cube shapes
+        addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
+        // landscape + vegetation
+        pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge,
+        // structures
+        building, tower, grandstand, billboard, gantry, marshalPost, cityFront,
+        // barriers / track furniture
+        wall, fence, guardrail, tyreWall, recordBarrier,
+      };
+      // Reversed lap: flip the s-fraction (s → 1-s), node index (k → n-k) and
+      // side (±1 → ∓1) of every placement helper so bespoke scenery authored for
+      // the original direction lands at the correct physical spot and side. This
+      // keeps barriers (recordBarrier fills barR/barL) aligned with the road.
+      // Direct px[k]/upOf(k) reads inside scenery (a handful, cosmetic only) are
+      // not remapped — they stay internally consistent on the reversed centreline.
+      if (def.reverse) sceneryApi = reverseSceneryApi(sceneryApi, n);
+      def.scenery(sceneryApi);
+    }
 
     // Generic floodlight masts — EVERY circuit gets them (visible day and night).
     // Co-located with the point lights (game.js buildTrackLights uses the same
@@ -2541,8 +2582,20 @@ const Tracks = (function () {
       // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
       // the points below and supersedes the authored cosine bumps.
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
+      reverse: !!d.reverse,
     };
     def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
+    // Reverse the lap direction: drive the same physical loop the other way.
+    // Keeps the start point (index 0) fixed and flips traversal; elevation and
+    // bridge s-anchors mirror to (1 - s). Scenery/barrier s-coords are flipped
+    // separately when their bespoke scenery() runs (see buildProps).
+    if (def.reverse) {
+      const P = def.points, N = P.length, rev = new Array(N);
+      for (let i = 0; i < N; i++) rev[i] = P[(N - i) % N];
+      def.points = rev;
+      if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: 1 - e.s }));
+      if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: 1 - b.s }));
+    }
     return def;
   });
 
