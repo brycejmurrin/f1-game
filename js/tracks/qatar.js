@@ -314,24 +314,27 @@
       // Three clusters stagger laterally via separate fractions.
       // Towers pushed 600–760 m out so they never clip dune ring or track.
       (function skyline() {
-        for (const sBase of [0.45, 0.49, 0.53, 0.57]) {
+        // Lifted silhouette tones + a wider arc + occasional landmark spires so
+        // Lusail actually reads on the horizon (it was too dark/narrow before).
+        const LA = [0.30, 0.33, 0.42], LB = [0.24, 0.27, 0.38];
+        for (const sBase of [0.38, 0.43, 0.48, 0.53, 0.58, 0.63]) {
           for (let i = 0; i < 11; i++) {
             const hf = hash(i * 7 + sBase * 30);
             const wf = hash(i * 3 + sBase * 20);
-            // Spread towers laterally: stagger s slightly per tower so they get
-            // separate anchor points and fan out along the horizon. Lusail's
-            // skyline is closer/taller than a far haze — pulled in so it reads.
-            const sFrac = (sBase + (i - 5) * 0.007 + 1) % 1;
-            const dist  = 430 + hash(i * 5 + sBase * 70) * 170;
-            const w = 6 + wf * 8;
-            const h = 52 + hf * 150;
+            const sFrac = (sBase + (i - 5) * 0.008 + 1) % 1;
+            const dist  = 400 + hash(i * 5 + sBase * 70) * 180;
+            const landmark = hash(i * 4.4 + sBase) > 0.85;
+            const w = 6 + wf * 9;
+            const h = (landmark ? 150 : 56) + hf * 150;
             const d = w * 1.4;
-            const col = (hash(i * 11 + sBase) > 0.5) ? SKY_A : SKY_B;
+            const col = (hash(i * 11 + sBase) > 0.5) ? LA : LB;
             // backdrop() auto-adds lit window bands for night circuits
             backdrop(K(sFrac), -1, dist, [w, h, d], col);
             // Navigation beacon at top — bright spot in the night sky
-            const a = anchor(K(sFrac), -1, dist);
-            addBox(out, vadd(a.c, a.u, h + 2), [1.4, 3.5, 1.4], BEACON, [a.r, a.u, a.t]);
+            if (landmark || hash(i * 9.1 + sBase) > 0.45) {
+              const a = anchor(K(sFrac), -1, dist);
+              addBox(out, vadd(a.c, a.u, h + 2), [1.5, 3.8, 1.5], BEACON, [a.r, a.u, a.t]);
+            }
           }
         }
       })();
