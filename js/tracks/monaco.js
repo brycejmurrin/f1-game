@@ -14,7 +14,15 @@
     lengthKm: 3.3,
     baseHW: 5,
     street: true,
+    // The bundled GPS trace (js/circuits.js) runs counter-clockwise; real Monaco
+    // is driven CLOCKWISE. `reverse` flips the lap direction in the engine
+    // (centreline + minimap + scenery/barrier s-coordinates) so the car drives
+    // the correct way without re-digitising the trace or re-authoring scenery.
+    reverse: true,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
+    // NOTE: Monaco's geometry comes from the real GPS trace in js/circuits.js
+    // (CircuitPaths.monaco); these segs are only a fallback if that trace is
+    // absent. Editing them has no effect while the trace is present.
     segs: [
       { t: 0, l: 230 }, { t: -70, l: 75 }, { t: 25, l: 260, h: 14 }, { t: 70, l: 110 }, { t: -80, l: 80, w: 4.8 }, { t: 0, l: 90, h: -6 },
       { t: -80, l: 80, w: 4.8 }, { t: -160, l: 120, w: 4.5, h: -4 }, { t: -55, l: 80 }, { t: -45, l: 80 }, { t: 15, l: 260, h: -4 }, { t: -60, l: 70, w: 4.8 },
