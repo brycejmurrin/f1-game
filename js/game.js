@@ -2711,7 +2711,6 @@ function updateHud(force) {
     els.gapA.textContent = a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
     els.gapB.textContent = b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
   }
-  drawMinimap();
   // Sector split display (top-right)
   if (els.hudSectors) {
     const SC = ["#c084fc", "#e10600", "#a3e635"]; // S1 purple, S2 red, S3 green
