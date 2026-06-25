@@ -710,11 +710,16 @@ function applyRaceSettings() {
       const _dayAz = _bias * 0.6;
       frameSky.sunDir = V3.norm([0.46 + _dayAz, 0.58, 0.42]);
       frame.sunDir    = frameSky.sunDir;
-      frame.sunColor   = [1.05, 0.97 - ovc * 0.06, 0.82 - clr * 0.04 + ovc * 0.06];
+      // Strong WARM sun vs a cooler, slightly darker sky-fill: neutral concrete
+      // then reads with a warm sunlit side and a cool shadow side (chiaroscuro),
+      // which is what lifts a grey city out of "dull/flat". Overcast neutralises
+      // the split toward a flat even grey.
+      frame.sunColor   = [1.12, 0.95 - ovc * 0.05, 0.72 - clr * 0.04 + ovc * 0.10];
       frameSky.sunColor = [1.0, 0.95, 0.84];
-      // Warm ground bounce on clear days; stronger cool sky fill when overcast.
-      frame.ambientGround = [0.25 + clr * 0.05, 0.22, 0.17];
-      frame.ambientSky    = [0.42 + ovc * 0.10, 0.47 + ovc * 0.08, 0.60 + ovc * 0.05];
+      // Warm low ground bounce; cool, restrained sky fill so shadows keep depth
+      // (high flat ambient was washing the modelling out).
+      frame.ambientGround = [0.30 + clr * 0.04, 0.24, 0.15];
+      frame.ambientSky    = [0.32 + ovc * 0.14, 0.40 + ovc * 0.11, 0.58 + ovc * 0.06];
       // Fog: clearer (lower density, sky-matched colour) so distance reads crisp
       // instead of a flat grey wash; overcast hazes it back up.
       frame.fogColor      = [0.66 + ovc * 0.08, 0.74 + ovc * 0.05, 0.88 - clr * 0.05];

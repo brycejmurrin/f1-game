@@ -563,8 +563,8 @@ vec3 acesTonemap(vec3 x) {
 vec3 colourGrade(vec3 c) {
   // Gain (per-channel linear scale in highlights)
   c *= vec3(1.015, 1.008, 0.992);
-  // Soft S-curve: deepen contrast a touch for punch (less washed-out / flat)
-  c = c * (1.0 + c * 0.10) / (1.0 + c * 0.16);
+  // Soft S-curve: deepen contrast for punch (less washed-out / flat)
+  c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
@@ -572,7 +572,7 @@ vec3 colourGrade(vec3 c) {
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
   float sat = mx - mn;
-  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.26);
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.32);
   // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
   // other (warm amber), blended by luma. A staple of the teal-orange film look —
   // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
