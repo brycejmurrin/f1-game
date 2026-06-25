@@ -205,6 +205,26 @@
       forestEdge(0.50, 0.62, 1, 18, { density: 0.65, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
       forestEdge(0.50, 0.62, -1, 50, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
 
+      // Palacio de los Deportes — the landmark copper geodesic dome that sits in
+      // this very sports park. A wide, low hyperbolic-paraboloid roof clad in
+      // oxidised copper-orange sheet; modelled as stacked frustum rings + four
+      // corner pylons hinting the saddle, set well back behind the park buildings.
+      {
+        const k = K(0.575), d = 96;
+        const p = anchor(k, -1, d), bv = [p.r, p.u, p.t];
+        if (!onTrack(p.c[0], p.c[2], 30)) {
+          const COP = [0.66, 0.44, 0.30], COP2 = [0.57, 0.46, 0.35];   // copper sheen + patina
+          const rings = [[40, 35, 5, COP2], [35, 27, 7, COP], [27, 17, 7, COP2], [17, 7, 6, COP]];
+          let y = 0;
+          for (const [rB, rT, h, c] of rings) { addFrustum(out, vadd(p.c, p.u, y), rB, rT, h, c, 12, bv); y += h; }
+          addCone(out, vadd(p.c, p.u, y), 7, 4, COP, 12, bv);          // crown
+          for (const [ex, ez] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+            const cp = vadd(vadd(p.c, p.r, ex * 37), p.t, ez * 37);
+            addBox(out, vadd(cp, p.u, 4.5), [3, 9, 3], [0.50, 0.40, 0.34], bv);   // saddle corner pylon
+          }
+        }
+      }
+
       // ════════════════════════════════════════════════════════════════════════
       // s=0.66  LUCHA-LIBRE TRIBUTE STATUE
       // ════════════════════════════════════════════════════════════════════════
