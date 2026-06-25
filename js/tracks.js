@@ -429,9 +429,25 @@ const Tracks = (function () {
     const idxArr = [];
     const bp = track.bankP;
     const pal = track.def.palette;
-    const ka = pal.kerbA, kb = pal.kerbB, grass = pal.grass;
-    const asphalt = pal.asphalt || [0.17, 0.18, 0.21];
+    const ka = pal.kerbA, kb = pal.kerbB;
     const line = pal.line || [0.95, 0.95, 0.98];
+    // Per-circuit tarmac & verge shade: nudge the base asphalt/grass by a stable
+    // per-track hash so no two circuits share the exact same road tone — some
+    // run a cooler/darker fresh-laid black, others a sun-bleached warmer grey;
+    // verges range from lush to dry. Subtle (centred near 1.0) so deliberately
+    // tuned palettes stay close to their authored colour.
+    let _idn = 0; for (let _i = 0; _i < def.id.length; _i++) _idn += def.id.charCodeAt(_i) * (_i + 3);
+    const _aBri = 0.85 + hash(_idn * 1.3) * 0.32;            // 0.85 … 1.17 brightness
+    const _aWarm = (hash(_idn * 2.7) - 0.5) * 0.05;          // warm(+R/−B) ↔ cool skew
+    const _bA = pal.asphalt || [0.17, 0.18, 0.21];
+    const asphalt = [Math.max(0, _bA[0] * _aBri + _aWarm), _bA[1] * _aBri, Math.max(0, _bA[2] * _aBri - _aWarm)];
+    const _gBri = 0.86 + hash(_idn * 3.9) * 0.30;            // verge lush ↔ dry
+    const _gWarm = (hash(_idn * 4.4) - 0.5) * 0.07;
+    const _bG = pal.grass || [0.30, 0.42, 0.22];
+    const grass = [_bG[0] * _gBri + _gWarm, _bG[1] * _gBri, Math.max(0, _bG[2] * _gBri - _gWarm)];
+    // Within-road wear: the racing line (centre verts) is rubbered darker; the
+    // edges sit dustier/lighter — so the surface reads as used, not flat paint.
+    const wearF = (v) => (v >= 5 && v <= 8) ? 0.86 : (v === 4 || v === 9 ? 1.07 : 1.0);
     const ds = track.total / n;
     // Cross-section, left to right (lateral offset, yRaise). Crisp painted
     // markings come from placing the two verts of each white band at the same
@@ -503,11 +519,12 @@ const Tracks = (function () {
         } else if (v === 2 || v === 3 || v === 10 || v === 11) {
           c = line;    // bold white edge line
         } else if (v === 6 || v === 7) {
-          c = dash ? line : asphalt;   // dashed centre line
+          if (dash) c = line;          // dashed centre line
+          else { const f = wearF(v), g = (hash(k * 13 + v) - 0.5) * 0.016; c = [asphalt[0] * f + g, asphalt[1] * f + g, asphalt[2] * f + g]; }
         } else {
-          // asphalt running surface with subtle aggregate grain
-          const grain = (hash(k * 13 + v) - 0.5) * 0.016;
-          c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
+          // asphalt running surface: racing-line wear + subtle aggregate grain
+          const f = wearF(v), grain = (hash(k * 13 + v) - 0.5) * 0.016;
+          c = [asphalt[0] * f + grain, asphalt[1] * f + grain, asphalt[2] * f + grain];
         }
         col.push(c[0], c[1], c[2]);
       }
@@ -2345,6 +2362,10 @@ const Tracks = (function () {
         slate:   [0.48, 0.53, 0.60], paleblue:[0.66, 0.74, 0.83], teal:    [0.54, 0.70, 0.68],
         peach:   [0.92, 0.74, 0.61], pink:    [0.90, 0.69, 0.74], mint:    [0.72, 0.86, 0.77],
         aqua:    [0.62, 0.82, 0.84], lemon:   [0.92, 0.87, 0.62], coral:   [0.88, 0.55, 0.46],
+        // darker greys + cool glass + muted metals for modern downtown cores
+        concrete:[0.52, 0.53, 0.55], charcoal:[0.34, 0.36, 0.41], graphite:[0.27, 0.29, 0.34],
+        steel:   [0.45, 0.50, 0.57], darkglass:[0.26, 0.34, 0.45], bluglass:[0.34, 0.44, 0.58],
+        bronze:  [0.55, 0.45, 0.33], gold:    [0.72, 0.58, 0.30], copper:  [0.62, 0.42, 0.30],
       };
       const BLD = ["setback", "tiered", "podium", "slab", "twin", "jenga", "cylinder", "spire", "dome", "chevron", "notch", "fin", "antenna", "cross", "arch", "ziggurat", "drum", "hall"];
       // fh / bh = front / back-row height [min, range]. Real-circuit character:
@@ -2353,10 +2374,10 @@ const Tracks = (function () {
       const STYLES = {
         vegas:     { neon: [NC.mag, NC.gold, NC.red, NC.cyan, NC.violet, NC.pink, NC.orange], bias: 0.62, fh: [18, 50], bh: [44, 78],
                      kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null,
-                     dayPal: [DC.cream, DC.sand, DC.tan, DC.stone, DC.paleblue, DC.ochre, DC.white, DC.terra] },
+                     dayPal: [DC.charcoal, DC.graphite, DC.concrete, DC.darkglass, DC.steel, DC.bluglass, DC.gold, DC.bronze, DC.sand] },
         singapore: { neon: [NC.cyan, NC.blue, NC.teal, NC.white, NC.green, NC.violet], bias: 0.42, fh: [20, 52], bh: [48, 88],
                      kinds: ["podium", "setback", "cylinder", "spire", "twin", "slab", "notch", "fin", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.44, 0.46, 0.50] },
-                     dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.teal, DC.stone, DC.mint, DC.cream] },
+                     dayPal: [DC.white, DC.bluglass, DC.greyblue, DC.teal, DC.steel, DC.paleblue, DC.darkglass, DC.stone] },
         baku:      { neon: [NC.orange, NC.red, NC.amber, NC.gold, NC.cyan, NC.white], bias: 0.40, fh: [10, 26], bh: [38, 84],
                      kinds: ["setback", "slab", "tiered", "podium", "spire", "cylinder", "dome", "chevron", "arch", "hall"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.14, 0.13], d: [0.62, 0.56, 0.46] },
                      dayPal: [DC.sand, DC.cream, DC.tan, DC.stone, DC.ochre, DC.terra, DC.paleblue] },
@@ -2371,7 +2392,7 @@ const Tracks = (function () {
                      dayPal: [DC.cream, DC.ochre, DC.terra, DC.brick, DC.sand, DC.stone, DC.tan] },
         shanghai:  { neon: [NC.cyan, NC.blue, NC.white, NC.teal, NC.purple, NC.pink], bias: 0.42, fh: [22, 54], bh: [56, 110],
                      kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab", "fin", "notch", "antenna", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] },
-                     dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.slate, DC.stone, DC.teal, DC.cream] },
+                     dayPal: [DC.steel, DC.bluglass, DC.greyblue, DC.slate, DC.darkglass, DC.white, DC.teal, DC.stone] },
         mexico:    { neon: [NC.pink, NC.green, NC.orange, NC.gold, NC.cyan], bias: 0.34, fh: [12, 34], bh: [28, 64],
                      kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "cross", "ziggurat", "drum"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] },
                      dayPal: [DC.terra, DC.ochre, DC.cream, DC.coral, DC.sand, DC.brick, DC.tan] },
