@@ -7,6 +7,8 @@
 node_modules/
 # scratch screenshot output from tools/apex-capture.mjs (regenerable)
 scratch/
+# survey/inspect screenshot dumps (regenerable)
+.shots/
 test-results/
 playwright-report/
 
