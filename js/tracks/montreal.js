@@ -155,11 +155,11 @@
       // ===================================================================
       // s 0.07–0.20 L — Olympic Basin rowing lake (continuous water band)
       // ===================================================================
-      for (let i = 0; i < 8; i++) {
-        groundPlane(K(0.065 + i * 0.020), -1, 14, [220, 2, 280], BASIN);
+      for (let i = 0; i < 10; i++) {
+        groundPlane(K(0.063 + i * 0.0155), -1, 15, [200, 2, 300], BASIN);
       }
-      // Far bank of the basin: dense broadleaf forestEdge (safe gap behind fence)
-      forestEdge(0.07, 0.21, -1, 18, {
+      // Far bank of the basin: dense broadleaf forestEdge (pushed out across the water)
+      forestEdge(0.07, 0.21, -1, 36, {
         density: 0.75, hMin: 9, hMax: 16,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.2
       });
@@ -246,32 +246,43 @@
 
       // ===================================================================
       // s 0.30 L far — Biosphère geodesic dome (landmark across St. Lawrence)
+      // Bare silver-grey steel lattice sphere (acrylic skin burned off 1976):
+      // ~76 m wide, ~62 m high. Built as a stack of many thin frustum rings
+      // following a near-spherical profile so the silhouette reads as a rounded
+      // open dome, not a tiered tower. 18-sided frusta keep the geodesic feel.
       // ===================================================================
       {
         const k = K(0.30);
-        const a = anchor(k, -1, 220);
-        const DOME   = [0.76, 0.80, 0.84];  // light steel-grey lattice
-        const DOME_D = [0.70, 0.74, 0.78];  // slightly darker lower rings
+        const a = anchor(k, -1, 215);
+        const DOME   = [0.80, 0.83, 0.87];  // bright steel-grey lattice
+        const DOME_D = [0.72, 0.75, 0.79];  // shaded lower rings
 
-        let y = 0;
-        const rings = [
-          [45, 40, 14, DOME_D],   // base skirt
-          [40, 30, 16, DOME_D],   // lower hemisphere
-          [30, 14, 16, DOME],     // upper hemisphere
-          [14,  5, 10, DOME],     // neck
-          [ 5,  5,  6, DOME],     // cupola drum
-        ];
-        for (const [rb, rt, h, col] of rings) {
-          addFrustum(out, vadd(a.c, a.u, y + h / 2), rb, rt, h, col, 14, [a.r, a.u, a.t]);
-          y += h;
+        const R = 38;            // sphere radius → 76 m diameter
+        const Y0 = -8;           // bury the very bottom so it sits like a sphere
+        const STK = 9;           // ring count over the visible hemisphere+
+        let yPrev = Y0;
+        // radius of the sphere at height y (relative to centre at R)
+        const rAt = (y) => {
+          const t = (y - R) / R;            // -1 (bottom) … +1 (top)
+          return R * Math.sqrt(Math.max(0, 1 - t * t));
+        };
+        for (let i = 1; i <= STK; i++) {
+          const yTop = Y0 + ((R * 2 - Y0) * i) / STK;   // climb to ~76 m apex
+          const h = yTop - yPrev;
+          const rb = rAt(yPrev), rt = rAt(yTop);
+          const col = yPrev < R ? DOME_D : DOME;        // lower hemisphere darker
+          addFrustum(out, vadd(a.c, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
+                     Math.max(rt, 1.0), h, col, 18, [a.r, a.u, a.t]);
+          yPrev = yTop;
         }
-        // Small cone cap on top of the cupola (y = 62 after all rings)
-        addCone(out, vadd(a.c, a.u, y), 5, 6, DOME, 10, [a.r, a.u, a.t]);
+        // Faint equatorial belt to read the geodesic banding at the widest point
+        addFrustum(out, vadd(a.c, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 18, [a.r, a.u, a.t]);
       }
 
-      // St. Lawrence water band between island and downtown
-      for (let i = 0; i < 5; i++) {
-        groundPlane(K(0.30 + i * 0.022), -1, 30, [260, 2, 240], RIVER);
+      // St. Lawrence water band between island and downtown (and around the
+      // near island the Biosphère sits on)
+      for (let i = 0; i < 6; i++) {
+        groundPlane(K(0.29 + i * 0.022), -1, 26, [260, 2, 240], RIVER);
       }
 
       // ===================================================================
@@ -353,14 +364,24 @@
       billboard(K(0.58), -1, 11, 12, 4, [0.88, 0.82, 0.22]);
 
       // ===================================================================
-      // s 0.58–0.75 R — Casino Straight: water slab + parkland forestEdge
-      // (old tree() loop with dist 7-17 replaced with forestEdge — no clipping)
+      // s 0.58–0.75 R — Casino/back Straight: the long Olympic Basin flanks the
+      // straight (the island's identity — ~half the lap runs alongside it).
+      // Water slab sits close to the verge so it reads as the immediate flank;
+      // the parkland treeline is pushed out to the far bank behind it.
       // ===================================================================
-      for (let i = 0; i < 6; i++) {
-        groundPlane(K(0.565 + i * 0.019), 1, 14, [200, 2, 260], BASIN);
+      for (let i = 0; i < 9; i++) {
+        groundPlane(K(0.565 + i * 0.0145), 1, 15, [180, 2, 320], BASIN);
       }
-      // Right verge: island parkland trees behind the rowing basin
-      forestEdge(0.575, 0.75, 1, 14, {
+      // Small white regatta lane/start towers standing in the basin water
+      for (const s of [0.60, 0.67, 0.73]) {
+        const a = anchor(K(s), 1, 22);
+        if (onTrack(a.c[0], a.c[2], 2)) continue;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 3.0), [2.0, 6.0, 2.0], [0.86, 0.87, 0.90], b);
+        addBox(out, vadd(a.c, a.u, 6.2), [2.6, 0.5, 2.6], [0.70, 0.72, 0.76], b);
+      }
+      // Right verge: island parkland trees on the FAR bank beyond the basin
+      forestEdge(0.575, 0.75, 1, 30, {
         density: 0.80, hMin: 8, hMax: 15,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.20
       });
@@ -432,6 +453,23 @@
         const k = K(0.97);
         const a = anchor(k, 1, 0.78);
         addBox(out, vadd(a.c, a.u, 1.0), [0.08, 0.50, 18], [0.88, 0.20, 0.18], [a.r, a.u, a.t]);
+      }
+      // "Bonjour Québec" tourism banner above the Wall of Champions — the
+      // defining signage of the final-chicane exit. A long fleur-de-lis blue
+      // billboard panel raised on slim posts just behind the outer wall.
+      {
+        const k = K(0.965);
+        const a = anchor(k, 1, 2.2);
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 2)) {
+          for (const ot of [-9, 9]) {
+            addCyl(out, vadd(a.c, a.t, ot), 0.12, 4.6, [0.30, 0.30, 0.33], 5, b);
+          }
+          // Banner panel: Québec blue field
+          addBox(out, vadd(a.c, a.u, 4.6), [0.12, 1.8, 19], [0.16, 0.34, 0.66], b);
+          // White fleur-de-lis cross band across the panel
+          addBox(out, vadd(vadd(a.c, a.u, 4.6), a.t, 0), [0.16, 0.45, 19], [0.92, 0.93, 0.96], b);
+        }
       }
       // Grandstand viewing the Wall + final chicane
       grandstand(0.97, -1, 12, 90, [0.50, 0.51, 0.56], [0.60, 0.36, 0.30]);
