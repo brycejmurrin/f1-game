@@ -2124,17 +2124,27 @@ function buildTrackLights(track) {
   const ds = total / n;
   const stride = Math.max(1, Math.round(34 / ds));   // denser than before so corners don't fall dark
   const { tint, intensity, radius, street } = floodColor(track.def.theme);
-  const col = [tint[0] * intensity, tint[1] * intensity, tint[2] * intensity];
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
+  // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
+  const lh = (j) => { const x = Math.sin((j + 1) * 127.13) * 43758.5453; return x - Math.floor(x); };
   let i = 0;
   for (let k = 0; k < n; k += stride, i++) {
     const side = (i % 2 === 0) ? 1 : -1;
     const off = (track.hw[k] + 6) * side;   // matches the floodlight masts (buildProps)
+    // Per-lamp VARIANCE: warmth jitter (some sodium-orange, some cool white) and a
+    // brightness jitter, so a row of lamps isn't a uniform clone — reads like real
+    // street lighting where bulbs age/differ. Deterministic per lamp index.
+    const warm = (lh(i) - 0.5) * 0.42;          // -0.21 … +0.21 warm/cool shift
+    const bri  = 0.80 + lh(i + 97) * 0.40;      // 0.80 … 1.20 brightness
+    const e = intensity * bri;
     lights.push(
       track.px[k] + track.rx[k] * off,
       track.py[k] + height,
       track.pz[k] + track.rz[k] * off,
-      col[0], col[1], col[2], radius,
+      Math.max(0, (tint[0] + warm)) * e,
+      tint[1] * e,
+      Math.max(0, (tint[2] - warm)) * e,
+      radius,
     );
   }
   return lights;
@@ -2147,15 +2157,19 @@ const _lightScaleBuf = [];
 function setFrameLights(eye, scale) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
-  const s = scale == null ? 1 : scale;
+  // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
+  // + warmth: dim & warm at twilight, full & neutral at deep night).
+  const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
+  const sg = Array.isArray(scale) ? scale[1] : sr;
+  const sb = Array.isArray(scale) ? scale[2] : sr;
   const count = src.length / 7;
   if (count <= 32) {
-    if (s === 1) { frame.lights = src; return; }
-    // Dim without mutating the cached set: copy and scale only the rgb channels.
+    if (sr === 1 && sg === 1 && sb === 1) { frame.lights = src; return; }
+    // Scale without mutating the cached set: copy and scale only the rgb channels.
     _lightScaleBuf.length = 0;
     for (let i = 0; i < src.length; i += 7) {
       _lightScaleBuf.push(src[i], src[i+1], src[i+2],
-        src[i+3] * s, src[i+4] * s, src[i+5] * s, src[i+6]);
+        src[i+3] * sr, src[i+4] * sg, src[i+5] * sb, src[i+6]);
     }
     frame.lights = _lightScaleBuf;
     return;
@@ -2170,7 +2184,7 @@ function setFrameLights(eye, scale) {
   const out = [];
   for (let i = 0; i < 32; i++) {
     const o = _lightCullBuf[i].o;
-    out.push(src[o], src[o+1], src[o+2], src[o+3] * s, src[o+4] * s, src[o+5] * s, src[o+6]);
+    out.push(src[o], src[o+1], src[o+2], src[o+3] * sr, src[o+4] * sg, src[o+5] * sb, src[o+6]);
   }
   frame.lights = out;
 }
@@ -2478,10 +2492,15 @@ function render(dt) {
     // centreline finished is empty; retry until it yields lights. Tracks always
     // produce a full set once complete, so this self-heals in a frame.
     if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
-    // Dawn/dusk still have a warm directional sun and a rich magic-hour sky, so
-    // run the floodlights at a fraction of night intensity — enough to read as
-    // "lights on" near the masts without washing out the golden-hour graphics.
-    const floodScale = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn") ? 0.4 : 1;
+    // Time-dependent floodlights: brightness + COLOUR ramp with sun elevation.
+    // At twilight (sun near/just below horizon) the lamps are dim and WARM, as if
+    // freshly switched on / still warming up; by deep night they reach full
+    // brightness and cool to their neutral tint. Smooth, no hard dusk/night step.
+    const _sy = frame.sunDir ? frame.sunDir[1] : -1;
+    const nightF = clamp((0.07 - _sy) / 0.22, 0, 1);   // 0 = sun up, 1 = well below horizon
+    const lvl  = 0.34 + 0.66 * nightF;                 // brightness ramp
+    const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
+    const floodScale = [lvl * (1 + warmth * 0.14), lvl, lvl * (1 - warmth * 0.22)];
     setFrameLights(camEye, floodScale);
   } else {
     frame.lights = null;
