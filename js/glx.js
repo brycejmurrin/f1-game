@@ -262,7 +262,14 @@ void main() {
     : 1.0;
   float fd = vDist * uFogDensity * heightAtten;
   float f = 1.0 - exp(-fd * fd);
-  outColor = vec4(mix(color, uFogColor, f), uAlpha);
+  // Sun in-scattering (Inigo Quilez): the fog is NOT a flat colour — when the
+  // view ray points toward the sun, the fog glows toward the sun's colour
+  // (forward Mie scatter), staying neutral away from it. Gives volumetric depth
+  // and makes a low warm sun bleed dramatically through dawn/dusk haze.
+  vec3 rd = normalize(vWorldPos - uEye);
+  float sunAmount = max(dot(rd, uSunDir), 0.0);
+  vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmount, 8.0));
+  outColor = vec4(mix(color, fogCol, f), uAlpha);
 }`;
 
   const SKY_VS = `#version 300 es
