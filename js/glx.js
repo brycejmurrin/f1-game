@@ -657,29 +657,34 @@ void main() {
            + texture(uBloom2, vUV).rgb * 0.20;
   c += bl * uBloomAmt * bloomMask;
 
-  // Sun shafts / god-rays: radial samples from current pixel toward the sun's
-  // screen position, reading the bright-pass (bloom[0] after bright-pass step).
-  // Additively composited. Gated when uSunShaft > 0 (sun on-screen, above horizon).
+  // Volumetric sun shafts: 16-tap radial march from pixel toward sun, sampling
+  // the widest bloom level (diffuse sky light). Mie forward-scatter phase factor
+  // concentrates the effect around the sun direction. Gated when uSunShaft > 0.
   if (uSunShaft > 0.0) {
     vec2 toSun = uSunUV - vUV;
     float dist = length(toSun);
-    // Only cast rays when we're not right on top of the sun (avoid div-zero).
     if (dist > 0.005) {
-      vec2 step = toSun / dist * min(dist, 0.40) / 8.0;
+      // Forward-scatter phase (Mie-like): brighter when looking toward the sun.
+      vec2 vd = normalize(vUV - vec2(0.5));
+      vec2 sd = length(uSunUV - vec2(0.5)) > 0.001
+                  ? normalize(uSunUV - vec2(0.5)) : vec2(0.0, 1.0);
+      float phase = pow(max(dot(vd, sd), 0.0), 3.0) * 0.5 + 0.5; // [0.5, 1.0]
+
+      vec2 step = toSun / dist * min(dist, 0.50) / 16.0;
       vec3 shaft = vec3(0.0);
       vec2 uv = vUV;
-      float decay = 1.0;
-      for (int i = 0; i < 8; i++) {
+      float wt = 1.0, wtSum = 0.0;
+      for (int i = 0; i < 16; i++) {
         uv += step;
-        // Clamp so we don't sample outside 0..1 (avoids edge bleed).
-        vec2 suv = clamp(uv, vec2(0.0), vec2(1.0));
-        shaft += texture(uBloom, suv).rgb * decay;
-        decay *= 0.82;
+        vec2 suv = clamp(uv, vec2(0.01), vec2(0.99));
+        // Wide bloom captures diffuse sky scatter; tight bloom adds hotspot glow.
+        shaft += (texture(uBloom2, suv).rgb * 0.65 + texture(uBloom, suv).rgb * 0.35) * wt;
+        wtSum += wt;
+        wt *= 0.88;
       }
-      shaft /= 8.0;
-      // Radial falloff: strongest near the sun, zero at the edge of the screen.
-      float radial = 1.0 - clamp(dist * 1.8, 0.0, 1.0);
-      c += shaft * uSunShaft * radial * 0.55;
+      shaft /= wtSum;
+      float radial = 1.0 - clamp(dist * 1.5, 0.0, 1.0);
+      c += shaft * uSunShaft * radial * phase * 0.80;
     }
   }
 
