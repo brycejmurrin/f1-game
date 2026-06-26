@@ -617,9 +617,9 @@ vec3 agxTonemap(vec3 color) {
   color = (color - minEv) / (maxEv - minEv);
   color = agxDefaultContrastApprox(color);
   color = AgXOutset * color;
-  // Punchy look: restore saturation for stylised art without losing hue accuracy.
+  // Mild saturation restore: 1.22 keeps colour credible without cartoon oversaturation.
   vec3 luma = vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)));
-  color = mix(luma, color, 1.45);
+  color = mix(luma, color, 1.22);
   return clamp(color, 0.0, 1.0);
 }
 
@@ -731,9 +731,15 @@ void main() {
   }
   c += flare;
 
+  // Film grain: per-pixel pseudo-random noise breaks the "too clean" digital look.
+  // Hash two different frequencies and mix — avoids visible tiling patterns.
+  float g1 = fract(sin(dot(vUV, vec2(12.9898,  78.233))) * 43758.5453);
+  float g2 = fract(sin(dot(vUV, vec2(63.7264, 107.457))) * 28941.3181);
+  c += (mix(g1, g2, 0.5) - 0.5) * 0.028;
+
   vec2 q = vUV - 0.5;
-  float vig = smoothstep(0.95, 0.35, length(q));
-  c *= mix(0.86, 1.0, vig);
+  float vig = smoothstep(0.92, 0.28, length(q));
+  c *= mix(0.76, 1.0, vig);
   outColor = vec4(c, 1.0);
 }`;
 
