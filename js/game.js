@@ -1409,10 +1409,11 @@ function updateCar(c, dt, ranked) {
 
   // --- speed targets ---
   let vmax = VMAX * PACE * (c.isPlayer ? playerMods.speed : TIER_V[c.tier] * c.skill * dd.ai);
-  // rubber band for AI
+  // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
   if (!c.isPlayer) {
     const gap = player.prog - c.prog;
-    if (Math.abs(gap) > 50) vmax *= 1 + clamp(gap / 700, -1, 1) * dd.band;
+    const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
+    vmax *= 1 + bandFactor;
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -1481,7 +1482,9 @@ function updateCar(c, dt, ranked) {
     const look = clamp(c.speed * 1.7, 30, 160);
     let kMax = 0;
     for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
-    const vCorner = Math.sqrt(LAT_MAX * gripMult() / Math.max(kMax, 1e-5)) * c.skill;
+    const _bkIdx = Math.floor(c.s / track.total * track.n) % track.n;
+    const bankMu = 1 + Math.sin(track.bank[_bkIdx] || 0) * 0.8;
+    const vCorner = Math.sqrt(LAT_MAX * bankMu / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
     // queue behind the car blocking our lane (prog-based, so it's immune to the
     // frame-to-frame rank swapping of near-even cars): cap our pace to it and
