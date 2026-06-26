@@ -184,8 +184,13 @@ void main() {
     float rad = uLightRad[i];
     if (dist > rad) continue;
     vec3 Ld = LP / max(dist, 1e-3);
-    float att = clamp(1.0 - dist / rad, 0.0, 1.0);
-    att *= att;                                  // smooth quadratic falloff
+    // Windowed inverse-square falloff: a physical 1/(1+k·s²) hotspot (bright,
+    // concentrated under the lamp, dropping off fast) multiplied by a smooth
+    // window (1-s⁴)² that eases the contribution to exactly 0 at the radius.
+    // Gives tight, defined light pools instead of a soft undefined halo.
+    float s = dist / rad;
+    float win = clamp(1.0 - s * s * s * s, 0.0, 1.0);
+    float att = win * win / (1.0 + 16.0 * s * s);
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
   }
