@@ -34,9 +34,9 @@
 
       // ---- Île Notre-Dame palette (bright June day) ----
       const WALL     = [0.78, 0.79, 0.80];   // pale concrete
-      const RIVER    = [0.16, 0.26, 0.34];   // St. Lawrence — deep river blue-grey
-      const RIVER2   = [0.18, 0.29, 0.38];   // lighter near-shore river
-      const BASIN    = [0.20, 0.34, 0.44];   // Olympic rowing lake (cleaner, slightly bluer)
+      const RIVER    = [0.16, 0.46, 0.52];   // St. Lawrence — vivid turquoise river
+      const RIVER2   = [0.20, 0.52, 0.58];   // lighter near-shore turquoise
+      const BASIN    = [0.13, 0.34, 0.46];   // Olympic rowing lake (deeper clean blue)
       const GRASS    = [0.28, 0.52, 0.26];   // park green
       const FOLIAGE  = [0.20, 0.44, 0.24];   // deep tree green
       const FOLIAGE2 = [0.26, 0.50, 0.26];   // lighter June foliage
@@ -87,18 +87,23 @@
         cx /= n; cz /= n;
         const base = pyMin || 0;
         // (1) One broad flat WATER plane filling the whole world out to the
-        //     horizon. CRITICAL: the engine's universal buildFloor() plane sits at
-        //     pyMin - 0.6 (grass-coloured), so the water surface MUST be ABOVE that
-        //     (here pyMin - 0.4) or the green floor hides the river entirely.
-        const wTop = base - 0.4, TH = 8;
+        //     horizon. CRITICAL: the engine's universal floor plane sits below
+        //     pyMin (≈ pyMin-3), so the water surface (pyMin - 0.45) sits above it
+        //     and reads as the St. Lawrence ringing the island.
+        const wTop = base - 0.45, TH = 8;
         addBox(out, [cx, wTop - TH / 2, cz],
                [(maxx - minx) + 4800, TH, (maxz - minz) + 4800], RIVER);
-        // (2) The flat green ISLAND itself: a solid slab covering the lap
-        //     footprint + a shoreline margin, sitting just ABOVE the water (top at
-        //     pyMin - 0.2) so the lap reads as a green island ringed by river. The
-        //     terrain ribbon and park scenery layer on top; water shows everywhere
-        //     beyond this slab's edge.
-        const M = 95;                        // shoreline margin past the outermost track
+        // (1b) Lighter near-shore turquoise band just inside the broad river, to
+        //      give the water depth gradient seen in the aerial (paler shallows
+        //      hugging the island, deeper river beyond). Sits a hair above (1).
+        addBox(out, [cx, base - 0.42 - TH / 2, cz],
+               [(maxx - minx) + 900, TH, (maxz - minz) + 900], RIVER2);
+        // (2) The flat green ISLAND itself: a NARROW slab hugging the lap footprint
+        //     plus a tight shoreline margin, sitting just ABOVE the water (top at
+        //     pyMin - 0.2). Île Notre-Dame is a thin island, so the margin is kept
+        //     small — river then shows on BOTH long sides right up near the track,
+        //     reading as the narrow island between two channels.
+        const M = 58;                        // tight shoreline margin past the track
         addBox(out, [cx, base - 0.2 - 3, cz],
                [(maxx - minx) + 2 * M, 6, (maxz - minz) + 2 * M], GRASS);
       }
@@ -117,6 +122,34 @@
         addBox(out, vadd(a.c, a.u, -0.3 - H / 2),
                [lenM, H, depth], col || FARBANK, [a.r, a.u, a.t]);
       };
+
+      // ── Inner lagoon + Jean-Doré Beach (per aerial reference) ──────────────
+      // A distinctive irregular lake with a pale tan SAND beach crescent sits in
+      // the island interior. Seated just ABOVE the green island slab (whose top
+      // is pyMin-0.2) so the water reads instead of being hidden by it.
+      {
+        const LAGOON = [0.13, 0.34, 0.42];   // clean blue-green lagoon water
+        const SAND   = [0.88, 0.80, 0.58];   // Jean-Doré beach sand (pale tan)
+        // Anchor the lagoon in the wide infield off the inside of the back straight
+        // (track-aligned basis), so it nests in the island interior at a known spot
+        // and reads from above instead of landing on/near the road centroid.
+        const lk = K(0.65);
+        const a = anchor(lk, -1, 80);        // ~80 m into the infield, track-left
+        const b = [a.r, a.u, a.t];
+        // NOTE: with a track basis [r,u,t], addBox sz maps as
+        // [lateral(r), vertical(u), tangent(t)]. Water = wide+long, thin vertical.
+        // irregular lagoon body — overlapping lobes for an organic shoreline.
+        addBox(out, vadd(a.c, a.u, -1.9),                 [135, 4, 175], LAGOON, b);
+        addBox(out, vadd(vadd(a.c, a.t, 70), a.u, -1.9),  [92,  4, 105], LAGOON, b);
+        addBox(out, vadd(vadd(a.c, a.t, -64), a.u, -1.9), [80,  4, 78],  LAGOON, b);
+        // pale tan SAND beach crescent on the track-facing edge (Jean-Doré),
+        // raised clearly above the water so it reads as the signature beach.
+        addBox(out, vadd(vadd(a.c, a.r, 64), a.u, 0.30),                [38, 0.6, 150], SAND, b);
+        addBox(out, vadd(vadd(vadd(a.c, a.t, 58), a.r, 50), a.u, 0.30), [30, 0.6, 82],  SAND, b);
+        addBox(out, vadd(vadd(vadd(a.c, a.t, -56), a.r, 46), a.u, 0.30),[26, 0.6, 56],  SAND, b);
+        // low green spit poking into the lagoon
+        addBox(out, vadd(vadd(a.c, a.t, -6), a.u, 0.20), [30, 0.7, 44], GRASS, b);
+      }
 
       // ===================================================================
       // Continuous pale concrete walls lining both edges (FLAT island)
@@ -316,13 +349,13 @@
       // ===================================================================
       {
         const k = K(0.30);
-        const a = anchor(k, -1, 235);
-        const DOME   = [0.80, 0.83, 0.87];  // bright steel-grey lattice
-        const DOME_D = [0.72, 0.75, 0.79];  // shaded lower rings
+        const a = anchor(k, -1, 205);
+        const DOME   = [0.86, 0.88, 0.91];  // bright steel-grey lattice
+        const DOME_D = [0.80, 0.82, 0.86];  // very lightly shaded lower rings
 
-        const R = 38;            // sphere radius → 76 m diameter
-        const Y0 = -8;           // bury the very bottom so it sits like a sphere
-        const STK = 9;           // ring count over the visible hemisphere+
+        const R = 40;            // sphere radius → 80 m diameter
+        const Y0 = -6;           // bury just the very bottom so it sits like a sphere
+        const STK = 10;          // ring count over the visible hemisphere+
         let yPrev = Y0;
         // radius of the sphere at height y (relative to centre at R)
         const rAt = (y) => {
@@ -330,10 +363,12 @@
           return R * Math.sqrt(Math.max(0, 1 - t * t));
         };
         for (let i = 1; i <= STK; i++) {
-          const yTop = Y0 + ((R * 2 - Y0) * i) / STK;   // climb to ~76 m apex
+          const yTop = Y0 + ((R * 2 - Y0) * i) / STK;   // climb to ~80 m apex
           const h = yTop - yPrev;
           const rb = rAt(yPrev), rt = rAt(yTop);
-          const col = yPrev < R ? DOME_D : DOME;        // lower hemisphere darker
+          // keep the whole dome bright (only the very base slightly shaded) so the
+          // silhouette reads as a rounded pale sphere, never a dark cone.
+          const col = yPrev < R * 0.45 ? DOME_D : DOME;
           addFrustum(out, vadd(a.c, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
                      Math.max(rt, 1.0), h, col, 18, [a.r, a.u, a.t]);
           yPrev = yTop;
@@ -351,40 +386,31 @@
       // — a downtown across the river, not a wall ringing the lap.
       // ===================================================================
 
-      // Far-bank land the city stands on (beyond the river channel at gap ~470).
-      for (let i = 0; i < 8; i++) {
-        farBank(K(0.28 + i * 0.026), -1, 455, 660, 240, [0.30, 0.36, 0.30]);
+      // Far-bank land the city stands on — pushed VERY far back and confined to a
+      // narrow bearing so downtown reads as a faint hazy cluster on the horizon
+      // (per the aerial, the city is far and small, NOT a near wall of towers).
+      for (let i = 0; i < 4; i++) {
+        farBank(K(0.35 + i * 0.018), -1, 1500, 1760, 320, [0.36, 0.41, 0.40]);
       }
 
-      // Front rank: mid-rise towers (50–130 m), tight step for a dense skyline
-      cityFront(0.30, 0.46, -1, 470, {
-        minH: 50, maxH: 130, depth: 30, step: 18,
+      // A single compact cluster of distant mid-rise towers on a narrow bearing,
+      // pushed far back into the fog so they read as a faint hazy downtown — not
+      // a wall ringing the lap. Tighter s-span, lower, fewer, much farther out.
+      cityFront(0.36, 0.41, -1, 1520, {
+        minH: 55, maxH: 130, depth: 26, step: 30,
         palette: [
-          [0.54, 0.58, 0.64], [0.58, 0.60, 0.66],
-          [0.50, 0.54, 0.60], [0.62, 0.62, 0.68],
+          [0.56, 0.60, 0.66], [0.60, 0.62, 0.68],
+          [0.52, 0.56, 0.62], [0.58, 0.60, 0.66],
         ],
-        lit: true,
-        windowCol: [0.62, 0.78, 0.98],   // cool blue-white reflective glass
+        lit: false,
+        windowCol: [0.64, 0.78, 0.96],
         floor: 6,
       });
-
-      // Mid-rank infill behind the front row — the hero towers up to ~226 m
-      cityFront(0.305, 0.455, -1, 545, {
-        minH: 80, maxH: 226, depth: 32, step: 26,
-        palette: [
-          [0.50, 0.54, 0.60], [0.46, 0.50, 0.56],
-          [0.54, 0.52, 0.58], [0.48, 0.52, 0.58],
-        ],
-        lit: true,
-        windowCol: [0.70, 0.82, 1.0],
-        floor: 5,
-      });
-
-      // Far hazed backdrop rank — silhouetted against the sky behind the city
-      for (let i = 0; i < 18; i++) {
-        const k = K(0.30 + (i / 18) * 0.16);
-        backdrop(k, -1, 640 + hash(i * 19) * 50,
-                 [24, 60 + hash(i * 13) * 90, 24], [0.50, 0.55, 0.62]);
+      // A couple of taller hero towers in the middle of the cluster (René-Lévesque)
+      for (let i = 0; i < 5; i++) {
+        const k = K(0.37 + (i / 5) * 0.03);
+        backdrop(k, -1, 1560 + hash(i * 19) * 70,
+                 [22, 100 + hash(i * 13) * 70, 22], [0.54, 0.58, 0.64]);
       }
 
       // ===================================================================
