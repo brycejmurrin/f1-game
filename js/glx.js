@@ -66,7 +66,8 @@ uniform int uNumLights;
 uniform vec3 uLightPos[MAX_LIGHTS];
 uniform vec3 uLightCol[MAX_LIGHTS];
 uniform float uLightRad[MAX_LIGHTS];
-out vec4 outColor;
+layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outNormal;  // packed world-space normal [0,1] + sentinel w=1
 
 const float PI = 3.14159265359;
 
@@ -282,6 +283,7 @@ void main() {
   float fd = vDist * uFogDensity * heightAtten;
   float f = 1.0 - exp(-fd * fd);
   outColor = vec4(mix(color, uFogColor, f), uAlpha);
+  outNormal = vec4(N * 0.5 + 0.5, 1.0);  // pack world normal; w=1 flags lit geometry
 }`;
 
   const SKY_VS = `#version 300 es
@@ -566,6 +568,7 @@ uniform sampler2D uScene;
 uniform sampler2D uBloom;   // level 0 — W/2 (tight glow)
 uniform sampler2D uBloom1;  // level 1 — W/4 (medium spread)
 uniform sampler2D uBloom2;  // level 2 — W/8 (wide halo)
+uniform sampler2D uSSAO;    // screen-space ambient occlusion
 uniform float uBloomAmt;
 uniform vec2 uSunUV;
 uniform float uFlareStr;
@@ -688,6 +691,10 @@ void main() {
     }
   }
 
+  // SSAO: multiply scene colour by ambient occlusion factor before tonemap.
+  // Applied pre-tonemap so AO darkening is in the same perceptual space as light.
+  c *= texture(uSSAO, vUV).r;
+
   // AgX filmic tone-map — preserves hue into highlights vs ACES.
   c = agxTonemap(c);
   c = colourGrade(c);
@@ -718,6 +725,58 @@ void main() {
   float vig = smoothstep(0.95, 0.35, length(q));
   c *= mix(0.86, 1.0, vig);
   outColor = vec4(c, 1.0);
+}`;
+
+  // Screen-Space Ambient Occlusion (SSAO): 12-tap hemisphere in depth buffer.
+  // Depth is linearised with hardcoded near/far (0.1/2000) matching the game camera.
+  // Normal buffer (w=1 on lit geometry, w=0 on sky) gates the effect.
+  const SSAO_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+uniform sampler2D uNormal;
+uniform sampler2D uDepth;
+uniform vec2 uTexel;
+out vec4 outColor;
+const float NEAR = 0.1, FAR = 2000.0;
+float lin(float d) { return NEAR * FAR / (FAR - d * (FAR - NEAR)); }
+const vec2 K[12] = vec2[12](
+  vec2( 0.000, 1.000), vec2( 0.500, 0.866), vec2( 0.866, 0.500),
+  vec2( 1.000, 0.000), vec2( 0.866,-0.500), vec2( 0.500,-0.866),
+  vec2( 0.000,-1.000), vec2(-0.500,-0.866), vec2(-0.866,-0.500),
+  vec2(-1.000, 0.000), vec2(-0.866, 0.500), vec2(-0.500, 0.866));
+void main() {
+  vec4 nrm = texture(uNormal, vUV);
+  if (nrm.w < 0.5) { outColor = vec4(1.0); return; }  // sky / unlit
+  float d = texture(uDepth, vUV).r;
+  float ld = lin(d);
+  float r = clamp(0.06 / max(ld * 0.004, 1.0), 0.004, 0.055);
+  float ao = 0.0;
+  for (int i = 0; i < 12; i++) {
+    vec2 suv = clamp(vUV + K[i] * r, vec2(0.001), vec2(0.999));
+    float sld = lin(texture(uDepth, suv).r);
+    float diff = ld - sld;
+    float range = smoothstep(r * ld * 3.0, 0.0, abs(diff));
+    ao += step(0.04, diff) * range;
+  }
+  outColor = vec4(vec3(1.0 - clamp(ao / 12.0, 0.0, 1.0) * 0.70), 1.0);
+}`;
+
+  // Bilateral blur for SSAO: separable 5-tap Gaussian.
+  const SSAO_BLUR_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+uniform sampler2D uSSAO;
+uniform vec2 uDir;
+out vec4 outColor;
+void main() {
+  vec2 o1 = uDir * 1.3846153846;
+  vec2 o2 = uDir * 3.2307692308;
+  float s = texture(uSSAO, vUV).r          * 0.2270270270;
+  s += texture(uSSAO, vUV + o1).r          * 0.3162162162;
+  s += texture(uSSAO, vUV - o1).r          * 0.3162162162;
+  s += texture(uSSAO, vUV + o2).r          * 0.0702702703;
+  s += texture(uSSAO, vUV - o2).r          * 0.0702702703;
+  outColor = vec4(s, s, s, 1.0);
 }`;
 
   // Depth-only pass for shadow map — renders world position into depth buffer.
@@ -755,7 +814,12 @@ void main() {}`;
   let brightProg = null, brightU = null;
   let blurProg = null, blurU = null;
   let compProg = null, compU = null;
-  let sceneFBO = null, sceneTex = null, sceneDepth = null;
+  let sceneFBO = null, sceneTex = null;
+  let sceneDepthTex = null;    // depth as readable texture (was renderbuffer)
+  let sceneNormalTex = null;   // G-buffer normals — MRT COLOR_ATTACHMENT1
+  let ssaoProg = null, ssaoU = null;
+  let ssaoBlurProg = null, ssaoBlurU = null;
+  let ssaoFBO = [null,null], ssaoTex = [null,null];
   let bloomFBO = [null, null], bloomTex = [null, null];     // level 0 W/2
   let bloom1FBO = [null, null], bloom1Tex = [null, null];   // level 1 W/4
   let bloom2FBO = [null, null], bloom2Tex = [null, null];   // level 2 W/8
@@ -844,10 +908,14 @@ void main() {}`;
     brightProg = link(POST_VS, BRIGHT_FS);
     blurProg = link(POST_VS, BLUR_FS);
     compProg = link(POST_VS, COMPOSITE_FS);
-    if (!brightProg || !blurProg || !compProg) return false;
+    ssaoProg = link(POST_VS, SSAO_FS);
+    ssaoBlurProg = link(POST_VS, SSAO_BLUR_FS);
+    if (!brightProg || !blurProg || !compProg || !ssaoProg || !ssaoBlurProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
+    ssaoU = locs(ssaoProg, ["uNormal", "uDepth", "uTexel"]);
+    ssaoBlurU = locs(ssaoBlurProg, ["uSSAO", "uDir"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uSSAO", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     return true;
   }
 
@@ -865,17 +933,51 @@ void main() {}`;
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       return tex;
     };
-    // scene target (full res) + depth
+    // G-buffer: color (RGBA16F/RGBA8) + depth texture + normals (RGBA8)
     if (sceneTex) gl.deleteTexture(sceneTex);
-    if (sceneDepth) gl.deleteRenderbuffer(sceneDepth);
+    if (sceneDepthTex) gl.deleteTexture(sceneDepthTex);
+    if (sceneNormalTex) gl.deleteTexture(sceneNormalTex);
     if (!sceneFBO) sceneFBO = gl.createFramebuffer();
     sceneTex = mk(width, height);
-    sceneDepth = gl.createRenderbuffer();
-    gl.bindRenderbuffer(gl.RENDERBUFFER, sceneDepth);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
+    // Depth as TEXTURE (not renderbuffer) so SSAO/SSR can sample it.
+    sceneDepthTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, sceneDepthTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, width, height, 0,
+      gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // Normals MRT: RGBA8 (RGB = packed world normal, A = lit-geometry sentinel)
+    sceneNormalTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, sceneNormalTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, sceneDepth);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, sceneNormalTex, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sceneDepthTex, 0);
+    // Lit geometry writes both attachments; single-output shaders leave normals untouched.
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    // SSAO half-res ping-pong
+    for (let i = 0; i < 2; i++) {
+      if (ssaoTex[i]) gl.deleteTexture(ssaoTex[i]);
+      if (!ssaoFBO[i]) ssaoFBO[i] = gl.createFramebuffer();
+      const at = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, at);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, Math.max(1,width>>1), Math.max(1,height>>1),
+        0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      ssaoTex[i] = at;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[i]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, at, 0);
+    }
     // Multi-scale bloom ping-pong targets: level 0 (W/2), 1 (W/4), 2 (W/8)
     bloomW  = Math.max(1, Math.floor(width  / 2));
     bloomH  = Math.max(1, Math.floor(height / 2));
@@ -1049,6 +1151,9 @@ void main() {}`;
     if (postEnabled) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
       gl.viewport(0, 0, width, height);
+      // G-buffer MRT: lit geometry writes normals to COLOR_ATTACHMENT1.
+      // Single-output shaders (sky, shadow, mark) leave normals untouched.
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     }
     // Resync cached render state to GL defaults — depthMask must be on for the
     // depth buffer to clear, and blend off is the opaque-pass default.
@@ -1207,6 +1312,30 @@ void main() {}`;
       return s; // index of final blurred result
     };
 
+    // 0) SSAO pass — half-res: raw AO → H blur → V blur → ssaoTex[0]
+    {
+      const sw = Math.max(1, width >> 1), sh = Math.max(1, height >> 1);
+      // Raw SSAO
+      gl.viewport(0, 0, sw, sh);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[1]);
+      useProg(ssaoProg);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneNormalTex); gl.uniform1i(ssaoU.uNormal, 0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneDepthTex);  gl.uniform1i(ssaoU.uDepth,  1);
+      gl.uniform2f(ssaoU.uTexel, 1.0 / sw, 1.0 / sh);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Bilateral blur H: [1] → [0]
+      useProg(ssaoBlurProg);
+      gl.uniform1i(ssaoBlurU.uSSAO, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[0]); gl.bindTexture(gl.TEXTURE_2D, ssaoTex[1]); gl.uniform2f(ssaoBlurU.uDir, 1.0/sw, 0.0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Bilateral blur V: [0] → [1]
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[1]); gl.bindTexture(gl.TEXTURE_2D, ssaoTex[0]); gl.uniform2f(ssaoBlurU.uDir, 0.0, 1.0/sh); gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Blit [1] → [0] so ssaoTex[0] is the final blurred result
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, ssaoFBO[1]);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, ssaoFBO[0]);
+      gl.blitFramebuffer(0, 0, sw, sh, 0, 0, sw, sh, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    }
+
     // 1) bright-pass scene → bloom level 0 (W/2)
     gl.viewport(0, 0, bloomW, bloomH);
     gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
@@ -1251,6 +1380,9 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, bloom2Tex[src2]);
     gl.uniform1i(compU.uBloom2, 3);
     gl.uniform1f(compU.uBloomAmt, bloomAmt);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, ssaoTex[0]);
+    gl.uniform1i(compU.uSSAO, 4);
     // Project sun direction to screen UV for lens flare
     let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
     if (frameSunDir && frameViewProj) {
