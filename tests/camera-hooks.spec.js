@@ -66,3 +66,43 @@ test("tourShots() returns n descriptors spanning the full circuit", async ({ pag
   }
   console.log("tourShots sample:", shots.slice(0, 3));
 });
+
+test("tourShots({atCorners}) frames each apex from the outside", async ({ page }) => {
+  await loadMonaco(page);
+  const shots = await page.evaluate(() => __apex.tourShots(8, { atCorners: true }));
+  expect(shots.length).toBeGreaterThan(0);
+  expect(shots.length).toBeLessThanOrEqual(8);
+  // fracs must be in lap order, labelled as corners, az on the outside of the bend
+  let prev = -1;
+  for (const s of shots) {
+    expect(s.frac).toBeGreaterThan(prev);     // strictly increasing = lap order
+    prev = s.frac;
+    expect(s.label).toMatch(/^corner-\d\d$/);
+    expect(Math.abs(s.az)).toBeGreaterThan(40);  // a real corner-framing angle, not head-on
+    const r = await page.evaluate(s => __apex.orbit(s.frac, s.az, s.el, s.dist), s);
+    expect(r).toBeTruthy();
+  }
+  console.log("corner shots:", shots.map(s => `${(s.frac*100).toFixed(0)}%@${s.az}`).join(" "));
+});
+
+test("previewCam() frames any in-game mode without moving the car", async ({ page }) => {
+  await loadMonaco(page);
+  const before = await page.evaluate(() => { const p = __apex.probe(); return p && p.s; });
+  for (const mode of ["chase", "drift", "heli", "bumper", "cinematic"]) {
+    const r = await page.evaluate(m => __apex.previewCam(m, 0.2, 60, 0.5), mode);
+    expect(r, `previewCam(${mode})`).toBeTruthy();
+    expect(r.mode).toBe(mode);
+    expect(r.eye).toHaveLength(3);
+    expect(r.target).toHaveLength(3);
+    expect(typeof r.fov).toBe("number");
+    const d = r.eye.map((v, i) => v - r.target[i]);
+    expect(Math.hypot(...d)).toBeGreaterThan(1);   // eye and target distinct
+    // it's a debug override, and it must NOT have moved the car
+    const cam = await page.evaluate(() => __apex.camState());
+    expect(cam.debug).toBe(true);
+  }
+  const after = await page.evaluate(() => { const p = __apex.probe(); return p && p.s; });
+  expect(after).toBeCloseTo(before, 1);
+  // an unknown mode is rejected, not crashed
+  expect(await page.evaluate(() => __apex.previewCam("banana", 0.2))).toBe(false);
+});

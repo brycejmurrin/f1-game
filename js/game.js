@@ -274,8 +274,10 @@ let headlessMode = false;  // skip render() when true (headless control loop)
 const CAM_MODES = [
   { id: "chase",     label: "CHASE" },
   { id: "far",       label: "FAR" },
+  { id: "drift",     label: "DRIFT" },
   { id: "cockpit",   label: "COCKPIT" },
   { id: "hood",      label: "HOOD" },
+  { id: "bumper",    label: "BUMPER" },
   { id: "overhead",  label: "OVERHEAD" },
   { id: "heli",      label: "HELI" },
   { id: "reverse",   label: "REVERSE" },
@@ -316,6 +318,7 @@ let _cloudBase = 0.4;
 const teamMeshes = {};   // teamId -> GLX mesh
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
+let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
 let paused = false;
@@ -2176,6 +2179,123 @@ function setFrameLights(eye, scale) {
 }
 
 // ---------- render ----------
+// Reusable camera-vantage solver. For a player camera `mode` with the car at arc
+// position `s`, lateral `x`, speed `spd` (m/s) and wall-clock `now` (ms, for the
+// orbiting cinematic cam), returns { eye, tgt, fov } — the exact framing render()
+// drives the live camera with. Centralising it means snapCam() (clean first frame)
+// and the previewCam() debug hook frame EVERY mode the same way, not just the three
+// chase/cockpit/hood cases the old snapCam hand-rolled. `extra` carries player-only
+// spice — { bankDy (banking lift), deploy (ERS FOV kick), slipLat (lateral slip m/s,
+// for the drift cam) } — all optional and treated as 0 when absent.
+const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const cvB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+function camVantage(mode, s, x, spd, now, extra) {
+  extra = extra || {};
+  const bankDy = extra.bankDy || 0;
+  const dep = extra.deploy ? 1 : 0;
+  const spN = clamp(spd / VMAX, 0, 1);
+  Tracks.sample(track, wrapS(s), cvA);
+  const p = [cvA.p[0] + cvA.r[0] * x, cvA.p[1] + bankDy, cvA.p[2] + cvA.r[2] * x];
+  const t = cvA.t, r = cvA.r;
+  // Curved look-ahead: aim at the actual centreline `d` m up the road — it bends
+  // with the corner — instead of a straight tangent extrapolation, so the chase
+  // and onboard cams look INTO the bend rather than out the side of it. `lat`
+  // keeps a fraction of the car's offset so the aim still leads where it's headed.
+  const aheadPt = (d, h, lat) => {
+    Tracks.sample(track, wrapS(s + d), cvB);
+    const lx = lat || 0;
+    return [cvB.p[0] + cvB.r[0] * lx, cvB.p[1] + (h || 0), cvB.p[2] + cvB.r[2] * lx];
+  };
+  // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
+  // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
+  const kA = Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)));
+  let eye, tgt, fov;
+  if (mode === "cockpit" || mode === "hood") {
+    const eyeFwd = mode === "cockpit" ? 0.2 : 1.9;   // hood sits out on the nose
+    const eyeUp  = mode === "cockpit" ? 1.15 : 0.78;
+    eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
+    tgt = aheadPt(30, eyeUp + 1.5, x * 0.6);
+    fov = lerp(64, 78, spN) + dep * 3;               // wider = faster feel
+  } else if (mode === "bumper") {
+    // Road-level splitter cam: mounted at the very front wing, ahead of the
+    // bodywork, skimming the tarmac. Lower and wider than HOOD — a visceral
+    // ground-rush view. (Eye sits forward of the nose so the car never occludes;
+    // the player car is also not drawn for this mode — see hidePlayerCar.)
+    eye = [p[0] + t[0] * 2.7, p[1] + 0.33 + bankDy, p[2] + t[2] * 2.7];
+    tgt = aheadPt(24, 0.65, x * 0.5);
+    fov = lerp(72, 88, spN) + dep * 3;
+  } else if (mode === "overhead") {
+    eye = [p[0] - t[0] * 9, p[1] + 42, p[2] - t[2] * 9];
+    tgt = [p[0] + t[0] * 12, p[1], p[2] + t[2] * 12];
+    fov = 46;
+  } else if (mode === "heli") {
+    // Broadcast helicopter — now corner-aware: hovers on the OUTSIDE of the
+    // upcoming bend so it looks across the apex (was always camera-right).
+    Tracks.sample(track, wrapS(s - 26), cvB);
+    const sgn = kA > 0.001 ? -1 : kA < -0.001 ? 1 : 1;
+    eye = [cvB.p[0] + cvB.r[0] * 18 * sgn, cvB.p[1] + 21 + bankDy, cvB.p[2] + cvB.r[2] * 18 * sgn];
+    tgt = [p[0], p[1] + 0.8, p[2]];
+    fov = 36 + dep * 2;
+  } else if (mode === "reverse") {
+    eye = [p[0] + t[0] * 5.5, p[1] + 1.35, p[2] + t[2] * 5.5];
+    tgt = [p[0] - t[0] * 26, p[1] + 0.9, p[2] - t[2] * 26];
+    fov = lerp(60, 72, spN);
+  } else if (mode === "side") {
+    // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
+    const sgn = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
+    eye = [p[0] + r[0] * sgn * 25, p[1] + 5.5, p[2] + r[2] * sgn * 25];
+    tgt = [p[0], p[1] + 0.8, p[2]];
+    fov = 44;
+  } else if (mode === "cinematic") {
+    // Outside-of-corner cinematic that gently breathes its angle instead of doing
+    // full disorienting loops. Auto-picks the outside of the bend; on a straight it
+    // slowly drifts a three-quarter angle. Angle is measured around the car from
+    // the track tangent, so the framing reads consistently corner to corner.
+    const base = kA === 0 ? 0.6 : (kA > 0 ? -1 : 1) * 1.15;
+    const a = base + Math.sin(now * 0.00022) * 0.5;
+    const od = 15;
+    const dir = [Math.cos(a) * t[0] + Math.sin(a) * r[0], 0, Math.cos(a) * t[2] + Math.sin(a) * r[2]];
+    eye = [p[0] + dir[0] * od, p[1] + 6.5, p[2] + dir[2] * od];
+    tgt = [p[0], p[1] + 0.8, p[2]];
+    fov = lerp(50, 60, spN);
+  } else if (mode === "low") {
+    Tracks.sample(track, wrapS(s - 10), cvB);
+    const cx = x * 0.3;
+    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + 0.45 + bankDy, cvB.p[2] + cvB.r[2] * cx];
+    tgt = [p[0], p[1] + 0.6, p[2]];
+    fov = lerp(55, 68, spN);
+  } else if (mode === "tcam") {
+    eye = [p[0] - t[0] * 0.15, p[1] + 1.3, p[2] - t[2] * 0.15];
+    tgt = aheadPt(25, 0.9, x * 0.5);
+    fov = 40 + dep * 2;
+  } else if (mode === "rear") {
+    eye = [p[0] - t[0] * 0.5, p[1] + 0.85, p[2] - t[2] * 0.5];
+    tgt = [p[0] - t[0] * 22, p[1] + 0.8, p[2] - t[2] * 22];
+    fov = lerp(62, 76, spN) + dep * 2;
+  } else if (mode === "drift") {
+    // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
+    // camera under oversteer, then settles directly behind once the car hooks up.
+    const slipN = clamp((extra.slipLat || 0) / 8, -1, 1);
+    Tracks.sample(track, wrapS(s - 6.2), cvB);
+    const cx = x * 0.5 - slipN * 5.5;
+    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + 2.4 + bankDy, cvB.p[2] + cvB.r[2] * cx];
+    tgt = [p[0], p[1] + 0.75, p[2]];
+    fov = lerp(55, 70, spN) + dep * 3;
+  } else {
+    // chase / far — anchored a FIXED arc-distance behind so the car stays a constant
+    // readable size; the target leads into the curved road ahead.
+    const far = mode === "far";
+    const back  = far ? 10.5 : 5.8;
+    const eyeUp = far ? 4.2 : 2.1;
+    Tracks.sample(track, wrapS(s - back), cvB);
+    const cx = x * 0.5;
+    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
+    tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+    fov = lerp(52, 66, spN) + (far ? 4 : 0) + dep * 3;
+  }
+  return { eye, tgt, fov };
+}
+
 function render(dt) {
   if (headlessMode) return;
   GLX.resize();
@@ -2201,92 +2321,13 @@ function render(dt) {
     // ride the bank with the car so the camera doesn't sink into the banked road
     const bankCam = Tracks.banking(track, pS, px);
     const bankDy = bankCam ? bankCam.dy : 0;
-    const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
-    const spd = clamp(player.speed / VMAX, 0, 1);
     const mode = CAM_MODES[camMode].id;
-    if (mode === "cockpit" || mode === "hood") {
-      // Onboard cams sit ON the car and look down the track ahead. Eye placed at
-      // the car (riding its lateral offset fully) with a forward+up offset; target
-      // far down the road so the horizon reads. Forward is the track tangent
-      // (smooth — using the car's slewing heading here would induce nausea).
-      const eyeFwd = mode === "cockpit" ? 0.2 : 1.9;   // hood sits out on the nose
-      const eyeUp  = mode === "cockpit" ? 1.15 : 0.78;
-      eyeT = [
-        p[0] + smp.t[0] * eyeFwd, p[1] + eyeUp, p[2] + smp.t[2] * eyeFwd,
-      ];
-      tgtT = [p[0] + smp.t[0] * 30, p[1] + eyeUp + 1.5, p[2] + smp.t[2] * 30];
-      fovT = lerp(64, 78, spd) + (player.deploying ? 3 : 0);   // wider = faster feel
-    } else if (mode === "overhead") {
-      // Top-down drone: high above and a touch behind, steeply angled so you see
-      // the car and the road ahead. (Not perfectly vertical — keeps lookAt stable.)
-      eyeT = [p[0] - smp.t[0] * 9, p[1] + 42, p[2] - smp.t[2] * 9];
-      tgtT = [p[0] + smp.t[0] * 12, p[1], p[2] + smp.t[2] * 12];
-      fovT = 46;
-    } else if (mode === "heli") {
-      // Broadcast helicopter: high, behind and off to the side, long lens on the car.
-      Tracks.sample(track, wrapS(pS - 26), smpC);
-      eyeT = [smpC.p[0] + smpC.r[0] * 18, smpC.p[1] + 21 + bankDy, smpC.p[2] + smpC.r[2] * 18];
-      tgtT = [p[0], p[1] + 0.8, p[2]];
-      fovT = 36 + (player.deploying ? 2 : 0);
-    } else if (mode === "reverse") {
-      // Rear-view: mounted just ahead of the car looking back down the track —
-      // watch who's chasing you.
-      eyeT = [p[0] + smp.t[0] * 5.5, p[1] + 1.35, p[2] + smp.t[2] * 5.5];
-      tgtT = [p[0] - smp.t[0] * 26, p[1] + 0.9, p[2] - smp.t[2] * 26];
-      fovT = lerp(60, 72, spd);
-    } else if (mode === "side") {
-      // TV trackside: a panning camera offset to the side, framing the car. Side is
-      // chosen by the corner so it sits on the OUTSIDE looking across the apex.
-      const kHere = Tracks.curvature(track, pS);
-      const sgn = kHere > 0.002 ? 1 : kHere < -0.002 ? -1 : 1;
-      eyeT = [p[0] + smp.r[0] * sgn * 25, p[1] + 5.5, p[2] + smp.r[2] * sgn * 25];
-      tgtT = [p[0], p[1] + 0.8, p[2]];
-      fovT = 44;
-    } else if (mode === "cinematic") {
-      // Free-orbit: the camera circles the car continuously — a cinematic moving
-      // vantage that shows the car and surroundings from every angle.
-      const a = (performance.now() * 0.00035) % (Math.PI * 2);
-      const od = 15;
-      eyeT = [p[0] + Math.cos(a) * od, p[1] + 6.5, p[2] + Math.sin(a) * od];
-      tgtT = [p[0], p[1] + 0.8, p[2]];
-      fovT = lerp(50, 60, spd);
-    } else if (mode === "low") {
-      // Low-angle drama: eye skims the track surface 10 m behind, looks up at the car.
-      // Gives a ground-level perspective with the car silhouetted against the sky.
-      Tracks.sample(track, wrapS(pS - 10), smpC);
-      const cx = px * 0.3;
-      eyeT = [smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + 0.45 + bankDy, smpC.p[2] + smpC.r[2] * cx];
-      tgtT = [p[0], p[1] + 0.6, p[2]];
-      fovT = lerp(55, 68, spd);
-    } else if (mode === "tcam") {
-      // T-cam: broadcast roll-hoop camera, narrow telephoto looking forward.
-      // Mimics the FOM airbox camera — mounted 1.3 m above car, slight tilt down.
-      eyeT = [p[0] - smp.t[0] * 0.15, p[1] + 1.3, p[2] - smp.t[2] * 0.15];
-      tgtT = [p[0] + smp.t[0] * 25, p[1] + 0.9, p[2] + smp.t[2] * 25];
-      fovT = 40 + (player.deploying ? 2 : 0);
-    } else if (mode === "rear") {
-      // Rear-mounted onboard: camera sits at the car's tail looking back down the track —
-      // see who's chasing you. Different from REVERSE which floats ahead of the car.
-      eyeT = [p[0] - smp.t[0] * 0.5, p[1] + 0.85, p[2] - smp.t[2] * 0.5];
-      tgtT = [p[0] - smp.t[0] * 22, p[1] + 0.8, p[2] - smp.t[2] * 22];
-      fovT = lerp(62, 76, spd) + (player.deploying ? 2 : 0);
-    } else {
-      // Chase cams anchor a FIXED distance behind the player along the track
-      // (arc-length), not in world space — so they never lag at high speed and
-      // the car stays a constant, readable size. FAR pulls back and up for race-craft.
-      const back = mode === "far" ? 10.5 : 5.8;
-      const eyeUp = mode === "far" ? 4.2 : 2.1;
-      Tracks.sample(track, wrapS(pS - back), smpC);
-      const cx = px * 0.5;   // partly follow lateral offset; rest shows position
-      eyeT = [
-        smpC.p[0] + smpC.r[0] * cx, smpC.p[1] + eyeUp + bankDy, smpC.p[2] + smpC.r[2] * cx,
-      ];
-      const aheadT = mode === "far" ? 6 : 4;
-      tgtT = [p[0] + smp.t[0] * aheadT, p[1] + (mode === "far" ? 1.0 : 0.7), p[2] + smp.t[2] * aheadT];
-      // closer camera + narrower FOV so the car reads bigger; still widens a bit
-      // with speed for a sense of pace, plus a small boost kick. FAR is a touch wider.
-      fovT = lerp(52, 66, spd) + (mode === "far" ? 4 : 0) + (player.deploying ? 3 : 0);
-    }
+    // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
+    // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
+    const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
+      bankDy, deploy: player.deploying, slipLat: player.vLat || 0,
+    });
+    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
       const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
@@ -2304,17 +2345,21 @@ function render(dt) {
 
   // High lambda in-race: the anchor already follows the car along the track,
   // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
-  // Onboard cams (cockpit/hood) ride ON the car, so they need very high lambda or
-  // the eye lags behind/into the bodywork at speed.
+  // Onboard cams ride ON the car (cockpit/hood/bumper/tcam), so they need very high
+  // lambda or the eye lags behind/into the bodywork at speed.
   const racing = state === "race" || state === "count";
-  const onboard = racing && (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "hood");
-  const lE = onboard ? 40 : racing ? 14 : 1.6;
-  const lT = onboard ? 40 : racing ? 16 : 10;
+  const camId = CAM_MODES[camMode].id;
+  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "bumper" || camId === "tcam");
+  // Just after a cut, ease the external cams in with a gentler lambda so the angle
+  // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
+  const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
+  const lE = onboard ? 40 : (racing ? 14 : 1.6) * cutEase;
+  const lT = onboard ? 40 : (racing ? 16 : 10) * cutEase;
   for (let i = 0; i < 3; i++) {
     camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
     camTgt[i] = damp(camTgt[i], tgtT[i], lT, dt);
   }
-  camFov = damp(camFov, fovT, 4, dt);
+  camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
 
   // Camera roll: lean ~2-4° into corners proportional to lateral slip, like Codemasters F1/GRID
   {
@@ -2515,7 +2560,7 @@ function render(dt) {
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
-    CAM_MODES[camMode].id === "cockpit";   // don't draw the car you're sitting inside
+    (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "bumper");   // don't draw the car you're sitting on/in
   for (const c of cars) {
     if (c.isPlayer && hidePlayerCar) continue;
     if (!c.isPlayer && player) {
@@ -3610,8 +3655,10 @@ function refreshCamBtn() {
   if (b) b.textContent = CAM_MODES[camMode].label;
 }
 function setCamMode(m) {
+  const prev = camMode;
   camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
   store.set("camMode", camMode);
+  if (camMode !== prev) camCutT = 0.35;   // brief eased glide into the new angle
   refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
   return CAM_MODES[camMode].id;
 }
@@ -3979,41 +4026,36 @@ window.__apex = {
     setCamMode(i);
     return { mode: CAM_MODES[camMode].id, index: camMode };
   },
-  // Instantly snap the chase camera to the correct position behind the current
   // Instantly snap the camera to the correct position for the current camera mode,
   // bypassing exponential damping. Call after park()/jump() so the very first
-  // rendered frame shows a clean view. Handles chase, hood, and cockpit modes.
+  // rendered frame shows a clean view. Handles every mode (cockpit/chase/heli/…)
+  // via the shared camVantage() solver.
   snapCam() {
     if (!player || !track) return;
     dbgCam = null;   // snapping the game camera leaves any view() free-cam override
-    Tracks.sample(track, player.s, smp);
-    const px = player.x;
-    const bankCam = Tracks.banking(track, player.s, px);
-    const bankDy  = bankCam ? bankCam.dy : 0;
-    const p = [smp.p[0] + smp.r[0] * px, smp.p[1] + bankDy, smp.p[2] + smp.r[2] * px];
-    const spd = clamp(player.speed / VMAX, 0, 1);
-    const mode = CAM_MODES[camMode].id;
-    if (mode === "cockpit" || mode === "hood") {
-      const eyeFwd = mode === "cockpit" ? 0.2 : 1.9;
-      const eyeUp  = mode === "cockpit" ? 1.15 : 0.78;
-      camEye[0] = p[0] + smp.t[0] * eyeFwd;
-      camEye[1] = p[1] + eyeUp;
-      camEye[2] = p[2] + smp.t[2] * eyeFwd;
-      camTgt[0] = p[0] + smp.t[0] * 30;
-      camTgt[1] = p[1] + eyeUp + 1.5;
-      camTgt[2] = p[2] + smp.t[2] * 30;
-      camFov = lerp(64, 78, spd);
-    } else {
-      Tracks.sample(track, wrapS(player.s - 5.8), smpC);
-      const cx = px * 0.5;
-      camEye[0] = smpC.p[0] + smpC.r[0] * cx;
-      camEye[1] = smpC.p[1] + 2.1 + bankDy;
-      camEye[2] = smpC.p[2] + smpC.r[2] * cx;
-      camTgt[0] = p[0] + smp.t[0] * 4;
-      camTgt[1] = p[1] + 0.7;
-      camTgt[2] = p[2] + smp.t[2] * 4;
-      camFov = lerp(52, 66, spd);
-    }
+    const bankCam = Tracks.banking(track, player.s, player.x);
+    const v = camVantage(CAM_MODES[camMode].id, player.s, player.x, player.speed, 0, {
+      bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
+    });
+    camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
+    camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
+    camFov = v.fov;
+  },
+  // previewCam(mode, frac, speed, lat) — set the debug free-cam to EXACTLY how the
+  // in-game camera `mode` (any of camera().modes: chase/heli/drift/cinematic/…)
+  // would frame the car at lap-fraction `frac`, doing `speed` m/s (default 60),
+  // `lat` m off centre (default 0). Non-destructive: it only positions the debug
+  // cam — the car isn't moved — so you can preview or screenshot any mode's framing
+  // anywhere without driving there. Cleared by camera()/snapCam() like other debug
+  // cams. Returns { eye, target, fov, mode }. e.g. previewCam("drift", 0.21, 65).
+  previewCam(mode, frac = 0, speed = 60, lat = 0) {
+    if (!track) return false;
+    const m = String(mode).toLowerCase();
+    if (!CAM_MODES.some((c) => c.id === m)) return false;
+    const s = (((frac % 1) + 1) % 1) * track.total;
+    const v = camVantage(m, s, lat, speed, 0, {});
+    dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
+    return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
@@ -4441,12 +4483,15 @@ window.__apex = {
     return { eye, target: tgt, look };
   },
 
-  // tourShots(n, opts) — returns n evenly-spaced orbit shot descriptors covering
-  // the full circuit, ready to pass straight to orbit(). Each entry:
-  //   { frac, az, el, dist, label }
+  // tourShots(n, opts) — returns n orbit shot descriptors covering the circuit,
+  // ready to pass straight to orbit(). Each entry: { frac, az, el, dist, label }.
   // opts.dist (default 80), opts.el (default 20), opts.azOffset (default 35)
-  // rotates all azimuths by a fixed angle — useful to swing all shots to one
-  // side to face a specific stand or scenery feature.
+  // rotates all azimuths by a fixed angle — useful to swing every shot to one side
+  // to face a specific stand or feature.
+  // opts.atCorners: true → place the shots ON the detected corner apexes (not even
+  //   spacing) and frame each from the OUTSIDE of the bend, so a tour reads like a
+  //   broadcast corner-by-corner rather than arbitrary slices. `n` then caps how
+  //   many corners (sharpest first, replayed in lap order); omit n for all of them.
   // Example: for (const s of __apex.tourShots(16)) __apex.orbit(s.frac, s.az, s.el, s.dist)
   tourShots(n = 12, opts = {}) {
     if (!track) return [];
@@ -4454,6 +4499,27 @@ window.__apex = {
     const el      = opts.el       != null ? opts.el       : 20;
     const azOff   = opts.azOffset != null ? opts.azOffset : 35;
     const shots   = [];
+    if (opts.atCorners) {
+      // Detect apexes (local curvature maxima) and frame each from the outside.
+      const tn = track.n, total = track.total, kv = [];
+      for (let k = 0; k < tn; k++) kv.push(Tracks.curvature(track, k / tn * total));
+      let apex = [];
+      for (let k = 0; k < tn; k++) {
+        const a = (k - 1 + tn) % tn, b = (k + 1) % tn, ak = Math.abs(kv[k]);
+        if (ak > 0.006 && ak >= Math.abs(kv[a]) && ak > Math.abs(kv[b])) apex.push({ k, ak });
+      }
+      apex.sort((p, q) => q.ak - p.ak);               // sharpest first
+      if (n && apex.length > n) apex = apex.slice(0, n);
+      apex.sort((p, q) => p.k - q.k);                 // then back into lap order
+      apex.forEach((c, i) => {
+        const k = kv[c.k];
+        // Outside of a right-hander (k>0) is camera-left (az<0); left-hander → az>0.
+        // Auto-angle ignores azOffset (the corner geometry dictates the side).
+        const az = -(Math.sign(k)) * (70 + 40 * Math.min(Math.abs(k), 0.05) / 0.05);
+        shots.push({ frac: +(c.k / tn).toFixed(4), az: +az.toFixed(1), el, dist, label: `corner-${String(i + 1).padStart(2, "0")}` });
+      });
+      return shots;
+    }
     for (let i = 0; i < n; i++) {
       const frac = i / n;
       // Alternate azimuth side each shot so consecutive frames show the track

@@ -9,18 +9,37 @@ Verified live against the running game (`tools/apex-eval.mjs`). Two layers: the
 **12 built-in camera modes** (what a player cycles with C / the CAM button) and
 the **free debug camera** (`view()` and friends) that overrides them for framing.
 
-## The 12 camera modes
+## The 14 camera modes
 
 `__apex.camera()` → `{ mode, index, modes:[...] }`. Full list, in cycle order:
 
 ```
-chase  far  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear
+chase  far  drift  cockpit  hood  bumper  overhead  heli  reverse  side  cinematic  low  tcam  rear
 ```
 
-Set by id, label, or index: `__apex.camera("cockpit")` / `__apex.camera(2)`.
-All 12 render non-blank (confirmed via screenshot byte-size). After switching,
-call `__apex.snapCam()` to jump the chase/hood/cockpit rig to position without
-damping (essential before a screenshot). `camera()` clears any active `view()`.
+- **drift** — action chase that swings to the OUTSIDE of a slide so the car's flank
+  faces camera under oversteer; settles behind when gripping.
+- **bumper** — road-level splitter cam, ahead of the nose (player car not drawn);
+  the widest FOV → strongest ground-rush. (cf. **hood**, which sits up on the nose.)
+- **heli/side/cinematic** are corner-aware: they auto-pick the OUTSIDE of the
+  upcoming bend and shoot across the apex (driven by look-ahead curvature).
+- **chase/far/cockpit/hood/bumper/tcam** aim at the *curved* centreline ahead, so
+  they look INTO the corner rather than straight off the car's tail.
+
+Set by id, label, or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
+All 14 render non-blank (confirmed via screenshot byte-size). After switching,
+call `__apex.snapCam()` to jump the rig to position without damping — it now snaps
+**every** mode correctly (essential before a screenshot). `camera()` clears any
+active `view()`. Cuts ease in over ~0.35 s (a brief gentle glide, not a hard pop);
+onboard cams (cockpit/hood/bumper/tcam) lock instantly to the car.
+
+## Preview any in-game mode anywhere (no driving)
+
+`__apex.previewCam(mode, frac, speed, lat)` sets the debug free-cam to EXACTLY how
+the in-game camera `mode` would frame the car at lap-fraction `frac` (speed m/s,
+lat off centre) — without moving the car. Ideal for screenshotting how DRIFT or
+HELI frames a specific corner. Cleared by `camera()`/`snapCam()` like other debug
+cams. e.g. `__apex.previewCam("drift", 0.21, 65)`.
 
 ## Free debug-camera framing hooks
 
@@ -38,7 +57,9 @@ Each returns the resolved `{eye, target, ...}` and sets a debug override
 | `roadside(frac, side, dist, h)` | `{eye,target,look}` | stand beside the track |
 | `dolly(frac, fwd, right, up)` | `{eye,target}` | track-relative offset looking at another point |
 | `carOrbit(idx, az, el, dist)` | `{eye,target,fov,carIdx,speed}` | orbit any car (livery/car3d checks) |
+| `previewCam(mode, frac, speed, lat)` | `{eye,target,fov,mode}` | preview any in-game mode's framing at a point (no driving) |
 | `tourShots(n)` | `Array(n)` shot descriptors | evenly-spaced orbit shots for a tour |
+| `tourShots(n, {atCorners:true})` | `Array` corner shots | one outside-of-apex shot per detected corner (broadcast tour) |
 
 ## Inspectors
 
