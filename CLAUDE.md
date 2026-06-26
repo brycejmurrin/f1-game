@@ -62,7 +62,7 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Critical conventions
 
-- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=248).
+- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=261).
   **Always increment N when changing any JS or CSS file** — search `?v=` and replace
   all instances (`sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`).
 - **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
