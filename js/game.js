@@ -2417,8 +2417,10 @@ function render(dt) {
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
   M4.invertTo(_mInvProj, _mProj);   // for view-space reconstruction in SSAO
+  M4.invertTo(_mInvVP, _mVP);       // for world-space reconstruction in god-rays
   frame.viewProj = _mVP;
   frame.invProj = _mInvProj;
+  frame.invViewProj = _mInvVP;
   frame.eye = camEye;
 
   // Shadow pass — render terrain + road from sun's perspective.
@@ -2726,9 +2728,13 @@ function render(dt) {
     const _gnf = clamp((0.07 - _gsy) / 0.22, 0, 1);
     GLX.drawGlow(frame.lights, 0.06 * (0.30 + 0.70 * _gnf));
   }
+  // Volumetric sun shafts: strongest at dawn/dusk (low sun), moderate by day,
+  // off at night (sun below horizon).
+  const _grSunY = frame.sunDir ? frame.sunDir[1] : -1;
+  const _gr = _grSunY > 0.02 ? (0.20 + 0.25 * clamp(1 - _grSunY * 1.6, 0, 1)) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
-  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85 });
+  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85, godray: _gr });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too

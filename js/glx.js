@@ -645,6 +645,63 @@ void main() {
   outColor = vec4(vec3(ao), 1.0);
 }`;
 
+  // Volumetric sun shafts (world-space): for each pixel, march the ray from the
+  // camera toward the scene point and, at each step, test the SUN SHADOW MAP — lit
+  // steps accumulate in-scattered sunlight, shadowed steps don't. The shafts are
+  // therefore occluded by REAL geometry (grandstands, trees, cars), unlike a flat
+  // screen-space radial blur. Forward Mie phase brightens them toward the sun.
+  // Half-res; the result is added to the scene before tonemap so it blooms.
+  const GODRAY_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uDepth;
+uniform sampler2DShadow uShadowMap;
+uniform mat4 uInvVP;
+uniform mat4 uLightVP;
+uniform vec3 uEye;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform float uStr;
+out vec4 outColor;
+vec3 worldPos(vec2 uv, float d) {
+  vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec4 w = uInvVP * c;
+  return w.xyz / w.w;
+}
+void main() {
+  float d = texture(uDepth, vUV).r;
+  // End point: scene hit, or (for sky) a far point along the view ray.
+  vec3 near = worldPos(vUV, 0.0);
+  vec3 viewDir = normalize(worldPos(vUV, 0.5) - uEye);
+  vec3 endP = (d >= 0.99999) ? uEye + viewDir * 400.0 : worldPos(vUV, d);
+  vec3 ro = uEye;
+  vec3 rd = endP - ro;
+  float dist = length(rd);
+  rd /= max(dist, 1e-4);
+  float march = min(dist, 260.0);          // cap the march length
+  const int N = 24;
+  float stepLen = march / float(N);
+  // Jitter the start with interleaved-gradient noise to hide banding.
+  float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  float t = stepLen * ign;
+  float accum = 0.0;
+  for (int i = 0; i < N; i++) {
+    vec3 p = ro + rd * (t + stepLen * float(i));
+    vec4 lc = uLightVP * vec4(p, 1.0);
+    vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
+    float lit = 1.0;
+    if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
+      lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
+    accum += lit;
+  }
+  accum /= float(N);
+  // Forward Mie phase (Henyey-Greenstein, g=0.76): shafts brighten toward the sun.
+  float cosT = max(dot(rd, uSunDir), 0.0);
+  float g = 0.76;
+  float phase = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosT, 1.5) * 0.08;
+  outColor = vec4(uSunColor * accum * phase * uStr, 1.0);
+}`;
+
   // Composite: scene + bloom, filmic ACES tone-map, colour grading, sun shafts,
   // lens flare, and a soft vignette.
   const COMPOSITE_FS = `#version 300 es
@@ -653,6 +710,7 @@ in vec2 vUV;
 uniform sampler2D uScene;
 uniform sampler2D uBloom;
 uniform sampler2D uSSAO;     // ambient occlusion (1 = unoccluded)
+uniform sampler2D uGodray;   // additive volumetric sun shafts
 uniform float uBloomAmt;
 uniform vec2 uSunUV;
 uniform float uFlareStr;
@@ -705,6 +763,9 @@ void main() {
   // grounding reads in linear light (under cars, barrier feet, kerbs, building
   // bases). 1.0 = no change, so it's a no-op when SSAO is disabled.
   c *= texture(uSSAO, vUV).r;
+
+  // Volumetric sun shafts: additive in-scattered sunlight (0 when disabled).
+  c += texture(uGodray, vUV).rgb;
 
   // Exposure multiply before tone-mapping (default 1.0 = no change).
   c *= uExposure;
@@ -798,8 +859,13 @@ void main() {}`;
   let frameSunDir = null;
   let frameEye = null;
   let frameInvProj = null;
+  let frameInvVP = null;
+  let frameSunColor = null;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
-  let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null;
+  let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null, blackTex = null;
+  let godrayProg = null, godrayU = null, godrayFBO = null, godrayTex = null;
+  let godrayBlurFBO = null, godrayBlurTex = null;
+  let godrayW = 0, godrayH = 0;
 
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
@@ -900,15 +966,23 @@ void main() {}`;
     blurProg = link(POST_VS, BLUR_FS);
     compProg = link(POST_VS, COMPOSITE_FS);
     ssaoProg = link(POST_VS, SSAO_FS);
+    godrayProg = link(POST_VS, GODRAY_FS);
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uTexel", "uStrength"]);
+    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, whiteTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    // 1×1 black texture: the "god-ray off" fallback so the additive term is a no-op.
+    blackTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, blackTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     return true;
@@ -967,6 +1041,21 @@ void main() {}`;
       ssaoBlurTex = mk(width, height);
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoBlurTex, 0);
+    }
+    // God-ray targets (half res): raw shafts + a blurred copy to soften the march.
+    if (godrayProg) {
+      godrayW = Math.max(1, Math.floor(width / 2));
+      godrayH = Math.max(1, Math.floor(height / 2));
+      if (godrayTex) gl.deleteTexture(godrayTex);
+      if (godrayBlurTex) gl.deleteTexture(godrayBlurTex);
+      if (!godrayFBO) godrayFBO = gl.createFramebuffer();
+      if (!godrayBlurFBO) godrayBlurFBO = gl.createFramebuffer();
+      godrayTex = mk(godrayW, godrayH);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayTex, 0);
+      godrayBlurTex = mk(godrayW, godrayH);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
     }
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
       postEnabled = false;     // unsupported combo: fall back to direct rendering
@@ -1132,8 +1221,10 @@ void main() {}`;
   function begin(frame) {
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
+    frameSunColor = frame.sunColor;
     frameEye = frame.eye;
     frameInvProj = frame.invProj || null;
+    frameInvVP = frame.invViewProj || null;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer.
@@ -1350,6 +1441,40 @@ void main() {}`;
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
+    // 0b) Volumetric sun shafts: world-space march of the sun shadow map (half-res)
+    // then a separable blur. Gated on the sun being up (grStr > 0) + shadows on.
+    const grStr = opts && opts.godray !== undefined ? opts.godray : 0;
+    const haveGR = godrayProg && shadowEnabled && grStr > 0 && frameInvVP && godrayFBO;
+    if (haveGR) {
+      gl.viewport(0, 0, godrayW, godrayH);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
+      useProg(godrayProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
+      gl.uniform1i(godrayU.uDepth, 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
+      gl.uniform1i(godrayU.uShadowMap, 1);
+      gl.uniformMatrix4fv(godrayU.uInvVP, false, frameInvVP);
+      gl.uniformMatrix4fv(godrayU.uLightVP, false, shadowLightVP);
+      gl.uniform3fv(godrayU.uEye, frameEye);
+      gl.uniform3fv(godrayU.uSunDir, frameSunDir);
+      gl.uniform3fv(godrayU.uSunColor, frameSunColor || [1, 1, 1]);
+      gl.uniform1f(godrayU.uStr, grStr);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      useProg(blurProg);
+      gl.uniform1i(blurU.uTex, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
+      gl.bindTexture(gl.TEXTURE_2D, godrayTex);
+      gl.uniform2f(blurU.uDir, 1 / godrayW, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
+      gl.bindTexture(gl.TEXTURE_2D, godrayBlurTex);
+      gl.uniform2f(blurU.uDir, 0, 1 / godrayH);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
     // 1) bright-pass scene -> bloom[0] (half res)
     gl.viewport(0, 0, bloomW, bloomH);
     gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
@@ -1390,6 +1515,9 @@ void main() {}`;
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, haveAO ? ssaoTex : whiteTex);
     gl.uniform1i(compU.uSSAO, 2);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
+    gl.uniform1i(compU.uGodray, 3);
     // Project sun direction to screen UV for lens flare
     let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
     if (frameSunDir && frameViewProj) {
