@@ -11,8 +11,7 @@ groups.
 | **bump-cache** | You edited any `js/*.js` or `css/*.css` — increment the `?v=N` cache-bust in `index.html` before committing. |
 | **new-track** | Adding a circuit or editing a track's geometry/metadata in `js/tracks/`. |
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
-| **tune-physics** | A/B testing or tuning the driving physics in `js/game.js` via the headless `obs/act/reset` loop. |
-| **physics-ab-test** | Side-by-side A/B comparison of two physics configs using the headless loop — run both variants, diff the obs output, screenshot the result. |
+| **tune-physics** | A/B testing or tuning the driving physics in `js/game.js` via the headless `obs/act/reset` loop — single-page or a parallel multi-config sweep. |
 | **inspect-scene** | Capturing deterministic screenshots of a track/car/UI to verify a visual change (`shot.mjs` helper). |
 | **check-changes** | Pre-push validation — pick the right `test:<group>`, run `verify-track`, confirm the cache bump. |
 | **debug-cameras** | The 12 camera modes + free debug-camera framing hooks (`view/eyeAt/orbit/cinematic/...`). |

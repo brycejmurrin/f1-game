@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: A/B test and tune the driving physics in js/game.js deterministically, using the __apex headless control loop (obs/act/reset), setPhysics overrides, and step/physState probes. Includes the constant-to-behavior map (WHEELBASE, STEER_*, DRIFT, ROAD_FOLLOW, FRONT_GRIP, LONG_GRIP, PACE, ...) and which test groups to re-run. Use for "the car understeers", "make turn-in snappier", "tune grip", "trail-braking feels wrong", "compare two physics settings".
+description: A/B test and tune the driving physics in js/game.js deterministically, using the __apex headless control loop (obs/act/reset), setPhysics overrides, and step/physState probes — single-page or a parallel multi-page sweep. Includes the constant-to-behavior map (WHEELBASE, STEER_*, DRIFT, ROAD_FOLLOW, FRONT_GRIP, LONG_GRIP, PACE, ...) and which test groups to re-run. Use for "the car understeers", "make turn-in snappier", "tune grip", "trail-braking feels wrong", "compare two physics settings", "A/B physics", "physics sweep", "test ROAD_FOLLOW", "does this feel better".
 ---
 
 # Tune the physics
@@ -58,6 +58,36 @@ __apex.jump(0.0, 60, 0);
 __apex.setInput({ steer: 0, throttle: true }); __apex.step(1/60, 120);
 const p = __apex.physState();          // { s, x, speed, slipFactor, axFrac, wrongWay, ... }
 ```
+
+### Parallel two-page sweep (faster, fully isolated)
+
+For a multi-config sweep, run each config on its **own** headless page in
+parallel — no cross-contamination of physics state, and wall-clock is one trial,
+not N. Same loop as `trial()` above, fanned out with `Promise.all`:
+
+```js
+const CONFIGS = [0.4, 0.6, 0.8, 1.0, 1.2].map(v => ({ label:`rf=${v}`, physics:{ roadFollow:v } }));
+const results = await Promise.all(CONFIGS.map(async cfg => {
+  const page = await browser.newPage({ viewport:{ width:844, height:390 } });
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await page.waitForFunction(() => window.__apex?.info().track != null);  // after race()
+  return page.evaluate(async ({ physics }) => {
+    __apex.headless(true); __apex.setPhysics(physics);
+    let o = __apex.reset(0.30, 60, 0);
+    const slips = [];
+    for (let i = 0; i < 300; i++) { o = __apex.act({ steer:-0.4, throttle:true }, 1/60, 1); slips.push(o.slipFactor ?? 1); }
+    return { finalSpeed:o.speed, avgSlip: slips.reduce((a,b)=>a+b)/slips.length, offT:o.offT, done:o.done };
+  }, cfg).then(r => ({ label: cfg.label, ...r }));
+}));
+console.table(results);   // → finalSpeed / avgSlip / offT / done per config
+```
+
+See the **playwright-probe** skill for the free-port server + `pickChromium()`
+boilerplate that wraps this. Metrics: `finalSpeed` (speed carried), `avgSlip`
+(< 1 = traction consumed, 1 = on the edge), `offT` (off-track time = stability),
+`done` (crashed out). For a harder, adaptive test, run `tests/autopilot.spec.js`
+under each config and compare lap times — it stresses the racing line in a way a
+fixed input sequence can't.
 
 > **Init order:** after `race()` + `go()`, you must `jump()` or `step(1/60,1)`
 > **before** `obs()`/`physState()` — they return null until `player.px` exists.

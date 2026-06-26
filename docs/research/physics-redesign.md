@@ -34,7 +34,7 @@ physics, motion-planning literature):
 
 Sources: Cartesian-vs-Frenet planning papers, ForzaETH race stack, "Autonomous
 Driving on Curvy Roads Without Reliance on Frenet Frame" (IEEE), game physics
-texts. Full citations in `docs/steering-research.md` and the research notes.
+texts. Full citations in `docs/research/steering-research.md` and the research notes.
 
 ## Target model
 

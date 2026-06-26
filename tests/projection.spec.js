@@ -1,7 +1,7 @@
 // @ts-check
 // Phase-1 of the physics redesign: verify the world<->track projection.
 //
-// The migration plan (docs/physics-redesign.md) moves the car physics into
+// The migration plan (docs/research/physics-redesign.md) moves the car physics into
 // Cartesian world space and DERIVES the arc-length s + lateral offset by
 // projecting the world position onto the centreline spline. Before switching any
 // physics over, this proves Tracks.project() is the faithful inverse of the
