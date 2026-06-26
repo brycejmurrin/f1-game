@@ -9,9 +9,9 @@
 
 const GLX = (function () {
   // ── Change 1.1: Pre-allocated light scratch buffers (no per-frame GC) ──
-  const _lPos = new Float32Array(32 * 3);
-  const _lCol = new Float32Array(32 * 3);
-  const _lRad = new Float32Array(32);
+  // UBO data: posRad[32] (128 floats) + col[32] (128 floats) = 1024 bytes
+  const _lightUBOData = new Float32Array(256);
+  let _lightUBO = null;
 
   // ── LIT vertex shader ──
   const LIT_VS = `#version 300 es
@@ -57,9 +57,11 @@ uniform float uEmissive;
 uniform float uAlpha;
 uniform sampler2D uShadowMap;
 uniform int uNumLights;
-uniform vec3 uLightPos[32];
-uniform vec3 uLightCol[32];
-uniform float uLightRad[32];
+// UBO: packed light data. vec4 layout avoids std140 vec3-padding issues.
+layout(std140) uniform Lights {
+  vec4 uLPosRad[32];  // xyz = position, w = radius
+  vec4 uLCol[32];     // xyz = color,    w = unused
+};
 out vec4 outColor;
 float shadow(vec4 lp) {
   vec3 proj = lp.xyz / lp.w * 0.5 + 0.5;
@@ -81,15 +83,15 @@ void main() {
   // Change 1.5: point lights with dist² early-exit guard (no sqrt unless in range)
   for (int i = 0; i < 32; i++) {
     if (i >= uNumLights) break;
-    float rad = uLightRad[i];
-    vec3 LP = uLightPos[i] - vWorldPos;
+    float rad = uLPosRad[i].w;
+    vec3 LP = uLPosRad[i].xyz - vWorldPos;
     float dist2 = dot(LP, LP);
     if (dist2 > rad * rad) continue;
     float dist = sqrt(dist2);
     vec3 Ld = LP / max(dist, 0.001);
     float atten = max(0.0, 1.0 - dist / rad);
     atten *= atten;
-    lit += vCol * uLightCol[i] * max(dot(n, Ld), 0.0) * atten;
+    lit += vCol * uLCol[i].xyz * max(dot(n, Ld), 0.0) * atten;
   }
   vec3 c = mix(lit, vCol, uEmissive);
   float fd = vDist * uFogDensity;
@@ -450,7 +452,7 @@ void main() {
 
     litU = locs(litProg, ["uModel", "uViewProj", "uLightVP", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uShadowMap", "uNumLights", "uLightPos", "uLightCol", "uLightRad"]);
+      "uShadowMap", "uNumLights"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     depthU = locs(depthProg, ["uModel", "uLightVP"]);
@@ -459,6 +461,14 @@ void main() {
     extractU = locs(extractProg, ["uTex", "uThreshold"]);
 
     skyVAO = gl.createVertexArray();
+
+    // UBO for point lights — 1024 bytes: posRad[32] + col[32] as packed vec4 arrays
+    _lightUBO = gl.createBuffer();
+    gl.bindBuffer(gl.UNIFORM_BUFFER, _lightUBO);
+    gl.bufferData(gl.UNIFORM_BUFFER, 1024, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+    const _lightsBlockIdx = gl.getUniformBlockIndex(litProg, 'Lights');
+    gl.uniformBlockBinding(litProg, _lightsBlockIdx, 0);
 
     shadowVAO = gl.createVertexArray();
     gl.bindVertexArray(shadowVAO);
@@ -622,16 +632,17 @@ void main() {
     if (!litProg) return;
     gl.useProgram(litProg);
     gl.uniform1i(litU.uNumLights, numLights);
-    if (numLights === 0) return;
+    // Fill UBO: posRad[32] at offset 0 (indices 0..127), col[32] at offset 512 (indices 128..255)
     for (let i = 0; i < numLights; i++) {
       const L = lights[i];
-      _lPos[i*3]   = L.pos[0]; _lPos[i*3+1] = L.pos[1]; _lPos[i*3+2] = L.pos[2];
-      _lCol[i*3]   = L.col[0]; _lCol[i*3+1] = L.col[1]; _lCol[i*3+2] = L.col[2];
-      _lRad[i]     = L.rad;
+      _lightUBOData[i*4]       = L.pos[0]; _lightUBOData[i*4+1] = L.pos[1];
+      _lightUBOData[i*4+2]     = L.pos[2]; _lightUBOData[i*4+3] = L.rad;
+      _lightUBOData[128+i*4]   = L.col[0]; _lightUBOData[128+i*4+1] = L.col[1];
+      _lightUBOData[128+i*4+2] = L.col[2]; _lightUBOData[128+i*4+3] = 0;
     }
-    gl.uniform3fv(litU.uLightPos, _lPos.subarray(0, numLights * 3));
-    gl.uniform3fv(litU.uLightCol, _lCol.subarray(0, numLights * 3));
-    gl.uniform1fv(litU.uLightRad, _lRad.subarray(0, numLights));
+    gl.bindBuffer(gl.UNIFORM_BUFFER, _lightUBO);
+    gl.bufferSubData(gl.UNIFORM_BUFFER, 0, _lightUBOData);
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, _lightUBO);
   }
 
   function draw(mesh, modelMat, opts) {
