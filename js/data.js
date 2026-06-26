@@ -1589,28 +1589,39 @@ const DataHub = (function () {
   // over any circuits the first pass missed. `log` streams progress to the UI.
   function gatherStartLines(year, log) {
     const out = { year: year, generatedAt: new Date().toISOString(), circuits: {} };
-    const GAP = 700;          // pause between meetings — gentle on the free API
-    const DRIVERS = 5;        // drivers to try per meeting before giving up
+    // 5 s between meetings + 3 s sleeps between each request within a meeting
+    // keeps the rate well under OpenF1's free-tier limit (~20 req/min).
+    const GAP = 5000;
+    const DRIVERS = 3;
 
     // Resolve one meeting → store its trace. Returns true if captured.
-    function tryMeeting(m) {
+    // retrying=true suppresses the 90-second rate-limit wait to avoid double-wait.
+    function tryMeeting(m, retrying) {
       const key = m.circuit || m.name;
       return F1API.sessionsForMeeting(m.meetingKey).then(function (ss) {
         const s = ss.find(function (x) { return /quali/i.test(x.name || ""); }) ||
                   ss.find(function (x) { return /race/i.test(x.name || ""); }) ||
                   ss[ss.length - 1];
         if (!s) { log("· no session: " + key); return false; }
-        return F1API.sessionDrivers(s.sessionKey).then(function (drv) {
+        return sleep(2000).then(function () {
+          return F1API.sessionDrivers(s.sessionKey);
+        }).then(function (drv) {
           if (!drv || !drv.length) { log("· no drivers: " + key); return false; }
           const cand = drv.slice(0, DRIVERS);
           let dc = Promise.resolve(false);
           cand.forEach(function (d) {
             dc = dc.then(function (done) {
               if (done) return true;
-              return F1API.fastestLap(s.sessionKey, d.num).then(function (fl) {
+              // 3 s before each laps request to stay within rate limit
+              return sleep(3000).then(function () {
+                return F1API.fastestLap(s.sessionKey, d.num);
+              }).then(function (fl) {
                 if (!fl || !fl.dateStart) return false;
                 const endISO = new Date(Date.parse(fl.dateStart) + (fl.lapDuration + 1) * 1000).toISOString();
-                return F1API.locationData(s.sessionKey, d.num, fl.dateStart, endISO).then(function (loc) {
+                // 3 s before location (large response — give the server breathing room)
+                return sleep(3000).then(function () {
+                  return F1API.locationData(s.sessionKey, d.num, fl.dateStart, endISO);
+                }).then(function (loc) {
                   if (!loc || loc.length < 20) return false;
                   const step = Math.max(1, Math.floor(loc.length / 240));
                   const trace = loc.filter(function (_, i) { return i % step === 0; })
@@ -1628,7 +1639,13 @@ const DataHub = (function () {
           return dc.then(function (done) { if (!done) log("· no lap/loc: " + key); return done; });
         });
       }).catch(function (e) {
-        log("· skip " + key + ": " + (e && e.message || e));
+        const msg = e && e.message || String(e);
+        // On 429 wait 90 s then retry once — longer than OpenF1's sliding window
+        if (!retrying && /429/.test(msg)) {
+          log("· rate limited for " + key + " — waiting 90 s…");
+          return sleep(90000).then(function () { return tryMeeting(m, true); });
+        }
+        log("· skip " + key + ": " + msg);
         return false;
       });
     }
@@ -1640,18 +1657,18 @@ const DataHub = (function () {
       const missed = [];
       list.forEach(function (m, i) {
         chain = chain.then(function () {
-          return tryMeeting(m).then(function (ok) { if (!ok) missed.push(m); });
+          return tryMeeting(m, false).then(function (ok) { if (!ok) missed.push(m); });
         }).then(function () { return i < list.length - 1 ? sleep(GAP) : null; });
       });
       return chain.then(function () { return missed; });
     }
 
     return F1API.meetings(year).then(function (ms) {
-      log("meetings: " + ms.length + " — gathering (paced, this takes a few min)…");
+      log("meetings: " + ms.length + " — gathering (~10 min, paced to avoid rate limits)…");
       return pass(ms, "pass 1").then(function (missed) {
         if (!missed.length) return;
-        log("retrying " + missed.length + " missed circuit(s) after a short wait…");
-        return sleep(4000).then(function () { return pass(missed, "pass 2"); });
+        log("retrying " + missed.length + " missed circuit(s) — waiting 2 min for rate limit to clear…");
+        return sleep(120000).then(function () { return pass(missed, "pass 2"); });
       });
     }).then(function () {
       log("done — " + Object.keys(out.circuits).length + " circuits captured");
@@ -1754,8 +1771,8 @@ const DataHub = (function () {
     wrap.appendChild(el("div", "dh-export-note",
       "Pulls one fast-lap GPS trace per circuit from OpenF1 (runs in your browser). " +
       "The lap starts at the start/finish line, so it captures where each S/F really is. " +
-      "Pick a season, Gather, then Download a ZIP (traces JSON + a labelled map image " +
-      "per circuit) and send it to me."));
+      "Pick a season, Gather (~10 min — paced to avoid rate limits), then Download a ZIP " +
+      "(traces JSON + a labelled map image per circuit) and send it to me."));
 
     const yearRow = el("div", "dh-pick-years");
     const sel = { year: 2025 };
