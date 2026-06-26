@@ -79,4 +79,25 @@ const results = await Promise.all(ports.map(async (p, i) => {
 Use this to validate work from the camera / track / state debug skills
 (`debug-cameras`, `debug-tracks`, `debug-state`) at scale. For single deterministic
 screenshots, the `inspect-scene` skill's `shot.mjs` is simpler.
+
+## Shared Playwright fixtures (`tests/fixtures.js`)
+
+When writing specs rather than ad-hoc scripts, import from the shared fixtures
+file instead of `@playwright/test` directly — it mocks Jolpica/OpenF1 API calls
+(so tests run offline), injects `window.__TEST_MODE`, and provides two extras:
+
+```js
+import { test, expect } from './fixtures.js';
+
+test('example', async ({ page, pageErrors, racePage }) => {
+  // racePage: page already navigated to '/' with __apex available (saves boilerplate)
+  // pageErrors: string[] of uncaught JS errors — assert .toHaveLength(0) after exercising logic
+  await racePage.evaluate(() => __apex.race('monza'));
+  // ...
+  expect(pageErrors).toHaveLength(0);
+});
+```
+
+`racePage` navigates to `/` and waits for `window.__apex` (10 s timeout) before
+handing the page to the test. `pageErrors` collects every `pageerror` event.
 ```

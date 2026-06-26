@@ -22,6 +22,7 @@ git status --short && git diff --stat
 | `js/tracks.js` (engine) | `node tools/verify-track.cjs <a few ids>` → `npm run test:circuit` |
 | `js/game.js` physics/AI | `npm run test:physics` + `npm run test:behaviour` (+ `test:steering` if steering) |
 | `js/game.js` `__apex` API | `npm run test:api` (dev-tools + headless + obs/act edge + new-hooks) |
+| headless loop only (fast) | `npm run test:headless` (headless-api + obs-act-edge, no render) |
 | `js/parts.js` | `npm run test:parts` |
 | `js/input.js` / steering modes | `npm run test:steering` |
 | `js/glx.js` / lighting / `css/` / UI DOM | `npm run test:ui` (slow) and/or `npm run test:visual` |

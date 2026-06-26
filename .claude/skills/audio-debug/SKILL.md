@@ -32,54 +32,73 @@ gain node.
 ## Quick inspection (browser console)
 
 ```js
-// Is audio context running?
-GameAudio._ctx && GameAudio._ctx.state   // "running" | "suspended" | "closed"
-
-// Resume a suspended context (autoplay policy)
-GameAudio._ctx && GameAudio._ctx.resume()
-
-// Check master gain
-GameAudio._masterGain && GameAudio._masterGain.gain.value
-
-// Force a volume set
-GameAudio.setVolume(0.8)
+// Is the engine enabled?
+GameAudio.enabled()   // true | false
 
 // Mute / unmute without touching the UI
-GameAudio.setVolume(0)
-GameAudio.setVolume(1)
+GameAudio.setEnabled(false)   // mute (master gain → 0)
+GameAudio.setEnabled(true)    // unmute (master gain → 0.8)
+
+// Sample-load status + whether the sample or synth core is active:
+GameAudio.debug()
+// { samplesReady: bool, usingSamples: bool, engineOn: bool,
+//   loop: { s: loopStart, e: loopEnd } | null }
+
+// Current playback-rate (pitch multiplier) of the idle engine sample:
+GameAudio.rate()   // e.g. 1.42 at mid-speed — 0 if synth core or engine off
+
+// Spectral centroid of live engine output in Hz (pitch proxy):
+GameAudio.centroidHz()  // e.g. 340 at idle, higher at speed
+
+// The AudioContext itself is a private var — not directly exposed.
+// Use GameAudio.debug().samplesReady to check if assets loaded,
+// and __apex.timing().raceT to confirm the sim is running.
 ```
 
 ## Tuning the engine pitch curve
 
-The pitch mapping lives in `js/audio.js`.  Search for `enginePitch` or the
-`update(speed, gear, ...)` call.  The curve is typically:
+The pitch mapping lives in `js/audio.js` — search for the `setEngine(speed,
+gear, ...)` function.  The **sample core** sets `playbackRate` proportional to
+RPM (derived from `speed` and the per-gear ratio array near that function).  The
+**synth fallback** sets oscillator frequencies directly.  To shift the tonal
+range, adjust the gear-ratio constants or the RPM→rate mapping in `setEngine`.
 
-```
-freq = BASE_FREQ * (speed / SPEED_REF) * GEAR_RATIOS[gear]
-```
-
-Change `BASE_FREQ`, `SPEED_REF`, or `GEAR_RATIOS[]` to shift the tonal range.
 After editing `js/audio.js`, **bump the cache version** (`bump-cache` skill) and
-reload — WebAudio doesn't hot-reload.
+reload — WebAudio doesn't hot-reload.  Use `GameAudio.rate()` before and after
+to confirm the playback-rate changed at the same speed.
 
 ## Diagnosing silence or flat pitch
 
-1. Check `GameAudio._ctx.state` — if `"suspended"`, the user hasn't interacted
-   yet. Click the `#soundbtn` or call `GameAudio._ctx.resume()`.
-2. Check master gain > 0 and `#soundbtn` isn't in the "OFF" state.
-3. Open the browser's Web Audio Inspector (Chrome DevTools → three-dot → "Web
-   Audio") to see the live node graph and verify oscillators are connected.
-4. Confirm the game loop is running: `__apex.timing().raceT` should be
-   increasing. A frozen sim means `GameAudio.update()` never gets called.
+1. Check `GameAudio.enabled()` — if `false`, call `GameAudio.setEnabled(true)`.
+2. Check `GameAudio.debug().samplesReady` — if `false`, the MP3s haven't decoded
+   yet (network or CORS issue); the synth fallback should be active.  Check
+   `usingSamples` to confirm which core is running.
+3. If the AudioContext is suspended (autoplay policy), clicking `#soundbtn` or
+   any user gesture resumes it.  In the browser console:
+   ```js
+   // Reach the AudioContext indirectly — it's private, but the game's
+   // init() is triggered by user interaction. For a quick test:
+   document.dispatchEvent(new MouseEvent("click"));
+   ```
+4. Open Chrome DevTools → three-dot → **Web Audio** to see the live node graph
+   and verify oscillators / buffer sources are connected to the destination.
+5. Confirm the game loop is running: `__apex.timing().raceT` should be
+   increasing.  A frozen sim means `setEngine()` never gets called and pitch
+   stays at the last value.
 
 ## Testing
 
-No dedicated audio spec exists — the audio engine is integration-tested via the
-smoke suite (`npm run test:smoke` confirms the page loads without JS errors, which
-includes the audio module init).  For a targeted check, load a race in the
-browser and use the DevTools Web Audio panel.
+`tests/audio-smoke.spec.js` covers three checks: `GameAudio` is defined, the
+OfflineAudioContext synthesis pipeline produces non-silent output, and
+`AudioContext.resume()` transitions to `"running"`. Run it with:
 
 ```sh
-npx serve -l 3456 .
+npx playwright test tests/audio-smoke.spec.js
+```
+
+For live inspection, start the dev server and use DevTools Web Audio:
+
+```sh
+python3 -m http.server 3456
 # Open http://localhost:3456, start a race, open DevTools → Web Audio
 ```

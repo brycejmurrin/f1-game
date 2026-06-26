@@ -110,7 +110,7 @@ The `Lights` UBO is **1024 bytes** (256 floats: 32 lights × 8 floats each, plus
 header). Uploading a buffer of the wrong size with `gl.bufferSubData` reads
 beyond the allocation on some drivers and silently produces garbage on others. If
 `numLights` looks correct but light positions are scrambled, verify the upload
-size matches `uboBytes` in `glx.js`.
+size matches the `1024` constant in `glx.js` (`gl.bufferData(..., 1024, ...)`; the allocation is `_lightUBOData = new Float32Array(256)`).
 
 ### Shadow acne
 
