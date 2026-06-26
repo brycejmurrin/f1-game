@@ -7,7 +7,7 @@
   {
     id: "cota",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.5150, // GPS-derived (OpenF1 2025, conf=0.367)
+    startFrac: 0.9675, // GPS-derived & corrected (v12; was 0.5150)
     name: "COTA",
     gp: "United States GP",
     country: "USA",

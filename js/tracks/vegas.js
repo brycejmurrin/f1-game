@@ -7,7 +7,7 @@
   {
     id: "vegas",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.8575, // GPS-derived (OpenF1 2025, conf=0.297)
+    startFrac: 0.9925, // GPS-derived & corrected (overlay: GPS S/F ~49m before CP[0]; was 0.8575)
     name: "LAS VEGAS",
     gp: "Las Vegas GP",
     country: "USA",

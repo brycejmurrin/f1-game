@@ -7,7 +7,7 @@
   {
     id: "mexico",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.6350, // GPS-derived (OpenF1 2025, conf=0.212)
+    startFrac: 0.0, // GPS-derived & corrected (overlay: GPS S/F at CP[0] within 16m; was 0.6350)
     name: "MEXICO CITY",
     gp: "Mexican GP",
     country: "Mexico",

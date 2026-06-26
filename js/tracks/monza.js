@@ -7,7 +7,7 @@
   {
     id: "monza",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.0125, // GPS-derived (OpenF1 2025, conf=0.316)
+    startFrac: 0.9600, // GPS-derived & corrected (Hough+overlay=0.9617; was 0.0125)
     name: "MONZA",
     gp: "Italian GP",
     country: "Italy",

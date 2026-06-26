@@ -7,7 +7,7 @@
   {
     id: "shanghai",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.1525, // GPS-derived (OpenF1 2025, conf=0.117)
+    startFrac: 0.8850, // GPS-derived & corrected (v12; was 0.1525)
     name: "SHANGHAI",
     gp: "Chinese GP",
     country: "China",

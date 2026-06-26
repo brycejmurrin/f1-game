@@ -7,7 +7,7 @@
   {
     id: "zandvoort",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.3275, // GPS-derived (OpenF1 2025, conf=0.265)
+    startFrac: 0.1025, // GPS-derived & corrected (v12; was 0.3275)
     name: "ZANDVOORT",
     gp: "Dutch GP",
     country: "Netherlands",

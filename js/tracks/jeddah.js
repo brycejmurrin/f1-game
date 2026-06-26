@@ -7,7 +7,7 @@
   {
     id: "jeddah",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.9625, // GPS-derived (OpenF1 2025, conf=0.696)
+    startFrac: 0.0, // GPS-derived & corrected (overlay: GPS S/F at CP[0] within 9m; was 0.9625)
     name: "JEDDAH",
     gp: "Saudi Arabian GP",
     country: "Saudi Arabia",

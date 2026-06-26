@@ -7,7 +7,7 @@
   {
     id: "imola",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.4950, // GPS-derived (OpenF1 2025, conf=0.383)
+    startFrac: 0.9950, // GPS-derived & corrected (v12; was 0.4950)
     name: "IMOLA",
     gp: "Emilia Romagna GP",
     country: "Italy",

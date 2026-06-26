@@ -7,7 +7,7 @@
   {
     id: "redbull",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.1875, // GPS-derived (OpenF1 2025, conf=0.310)
+    startFrac: 0.0, // GPS-derived & corrected (v12=1.0000≡0; was 0.1875)
     name: "RED BULL RING",
     gp: "Austrian GP",
     country: "Austria",

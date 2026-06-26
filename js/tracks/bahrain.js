@@ -7,7 +7,7 @@
   {
     id: "bahrain",
     reverse: false,  // driving direction flipped (manual override of the GPS-trace auto-audit)
-    startFrac: 0.2250, // GPS-derived (OpenF1 2025, conf=0.208)
+    startFrac: 0.9825, // GPS-derived & corrected (v12+overlay; was 0.2250)
     name: "BAHRAIN",
     gp: "Bahrain GP",
     country: "Bahrain",
