@@ -5,9 +5,13 @@ description: Inspect and tune the WebAudio synth engine in js/audio.js — engin
 
 # Debug and tune the audio engine
 
-The game uses a WebAudio synth (`js/audio.js` — the `GameAudio` IIFE) with no
-samples: engine drone, gear-shift pops, collision thuds, and ambient music tracks
-are all generated in-browser via oscillators and gain nodes.
+The game uses a WebAudio synth (`js/audio.js` — the `GameAudio` IIFE). The
+engine voice has two layers: a **sample-based core** (CC0 MP3s in
+`assets/sfx/f1_engine.mp3` + `f1_rev.mp3`, pitched via `playbackRate`) and a
+**synth fallback** (detuned sawtooth oscillators + lowpass) that takes over if
+the samples haven't decoded yet. Gear-shift pops, collision thuds, and ambient
+music tracks are separate layers. All audio paths pass through a single `master`
+gain node.
 
 ## Architecture overview
 
@@ -15,12 +19,15 @@ are all generated in-browser via oscillators and gain nodes.
 
 | Layer | What it does |
 |---|---|
-| Engine drone | Sawtooth oscillator pitch-mapped to `speed * gearRatio`; separate hi/lo drone crossfade |
-| Rev limiter pop | Short burst at gear-change boundary |
-| Collision thud | White-noise burst scaled to `dv` (speed delta at impact) |
-| Tyres | Filtered noise proportional to lateral slip |
-| Music | 2-layer pad (harmony + rhythm); BPM locked to a race timer tick |
-| Master gain | `GameAudio.setVolume(0..1)` — wired to the `#soundbtn` toggle |
+| Engine (sample core) | `f1_engine.mp3` (idle loop) + `f1_rev.mp3` (high-rev loop) crossfaded by load; pitch set via `playbackRate` per gear/RPM |
+| Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass; fires until samples are decoded |
+| Turbo whine | Sine oscillator at ~1500 Hz, level tracks throttle |
+| MGU-K harvest whirr | Filtered noise that fades in when decelerating |
+| Rev-limiter / gear-shift pop | Short blip at gear-change boundary; `shift()` call |
+| Collision thud | White-noise burst scaled to impact `dv` |
+| Tyre screech / skid | Filtered noise proportional to lateral slip |
+| Music | Streamed CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()` |
+| Master enable | `GameAudio.setEnabled(bool)` — sets master gain 0 or 0.8; wired to `#soundbtn` |
 
 ## Quick inspection (browser console)
 

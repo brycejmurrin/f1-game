@@ -135,13 +135,24 @@ AI, race logic).
 
 ## Testing & development
 
-The project ships a **Playwright test suite** with 50+ specs covering physics
+The project ships a **Playwright test suite** with 100+ specs covering physics
 regression, AI behaviour, UI screens, and visual regression:
 
 ```sh
+npm run test:fast                            # quick smoke: smoke + api + collision + parts (~3 min)
 npx playwright test                          # run all specs
 npx playwright test tests/autopilot.spec.js  # single file
+node tools/verify-track.cjs --all           # headless build check for all 24 circuits (no browser needed)
 ```
+
+Development server (pick either):
+
+```sh
+python3 -m http.server 3456
+npx serve -l 3456 .
+```
+
+Active development branch: `claude/f1-game-project-26h3ng`.
 
 A debug scripting API — `window.__apex` — is available at runtime (devtools
 console or headless harness). Full reference in

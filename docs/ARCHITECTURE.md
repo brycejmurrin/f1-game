@@ -115,9 +115,11 @@ the OSM trace in `js/circuits.js` or the authored `segs`), samples a closed
 Catmull-Rom spline, and emits meshes.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 12: bahrain, monaco, silverstone, spa, monza,
-                                   // suzuka, singapore, cota, interlagos, vegas,
-                                   // madrid, zandvoort  (+ extended calendar; order = load order)
+Tracks.LIST -> [ trackDef, ... ]   // 24 circuits: bahrain, monaco, silverstone, spa, monza,
+                                   // suzuka, singapore, cota, interlagos, vegas, madrid,
+                                   // zandvoort, imola, baku, jeddah, albert_park, shanghai,
+                                   // miami, mexico, montreal, qatar, redbull, hungaroring,
+                                   // abudhabi  (calendar order = load order)
 trackDef = { id, name:"MONZA", gp:"Italian GP", country:"Italy",
              laps:3, night:false, lengthKm:5.79,
              palette: { zenith,horizon,sun:[r,g,b], grass:[r,g,b], runoff:[r,g,b],
@@ -267,9 +269,12 @@ Points per Teams.POINTS; SEASON mode = 12 races in calendar order, standings
 table between races, saved in `apex26.season`. localStorage: hiscore N/A,
 settings (team, difficulty, tilt, sound), season.
 
-Camera: four player modes cycled with the CAM button / C key (persisted) —
+Camera: 12 player modes cycled with the CAM button / C key (persisted) —
 CHASE (close, behind+above), FAR (pulled back/up), COCKPIT (onboard eye, player
-car hidden), HOOD (nose cam). Chase modes anchor a fixed arc-length behind the
+car hidden), HOOD (nose cam), OVERHEAD (top-down drone), HELI (broadcast heli),
+REVERSE (mounted ahead looking back), TV SIDE (trackside panning), CINEMATIC
+(slow orbit), LOW (surface skimmer), T-CAM (roll-hoop broadcast), REAR CAM
+(tail-mounted looking back). Chase modes anchor a fixed arc-length behind the
 car so they never lag at speed; onboard modes ride ON the car with very high
 damping. fov widens with speed; a debug free camera (`__apex.view`) can override
 all of it.
