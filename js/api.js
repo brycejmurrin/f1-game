@@ -2,8 +2,10 @@
    All methods return Promises of SIMPLIFIED plain objects (see docs/ARCHITECTURE.md).
    Single internal queue (>= 400 ms between real network requests), localStorage
    cache ("apex26.api.<url>" -> {t, data}). 429 / 5xx are retried with backoff
-   (Retry-After honoured) before failing; on final failure serves stale cache if
-   present (with console.warn), else rejects. Never auto-polls.
+   (10 s → 20 s, max 2 retries — long waits avoid consuming more quota; callers
+   that need more can add their own circuit-level retry on top). Retry-After
+   header honoured. On final failure serves stale cache if present (with
+   console.warn), else rejects. Never auto-polls.
    No DOM / localStorage access at module top level. */
 const F1API = (function () {
   "use strict";
@@ -12,9 +14,9 @@ const F1API = (function () {
   const OPENF1 = "https://api.openf1.org/v1";
   const CACHE_PREFIX = "apex26.api.";
   const MIN_GAP_MS = 400;
-  const MAX_RETRY = 5;        // retries on 429 / 5xx before giving up
-  const RETRY_BASE_MS = 1200; // exponential backoff base (×2 per attempt, capped)
-  const RETRY_CAP_MS = 16000;
+  const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
+  const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
+  const RETRY_CAP_MS = 25000;  //   delays only eat more quota, so wait longer
 
   const MINUTE = 60 * 1000;
   const HOUR = 60 * MINUTE;
