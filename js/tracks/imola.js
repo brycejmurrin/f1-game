@@ -6,7 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "imola",
-    reverse: true,  // GPS trace is backwards vs real racing direction (auto-audit)
+    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     name: "IMOLA",
     gp: "Emilia Romagna GP",
     country: "Italy",
