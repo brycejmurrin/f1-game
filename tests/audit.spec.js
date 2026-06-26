@@ -12,6 +12,10 @@ async function race(page, id = "monza") {
 }
 
 test.describe("Apex 26 — audit regressions", () => {
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => window.__apex?.setPhysics({})).catch(() => {});
+  });
+
   test("race start (bunched grid) settles with no NaN or launched cars", async ({ page }) => {
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
