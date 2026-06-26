@@ -400,7 +400,9 @@ void main() {
     // Brighter, more vivid lit tops
     vec3 cloudTop = mix(vec3(0.62, 0.66, 0.74), vec3(1.02, 0.99, 0.94), sl);
     cloudTop *= 0.28 + 0.72 * effectiveSunBright;
-    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.65, sl * (1.0 - sunE) * 0.65 * (1.0 - overcast));
+    // Low-sun clouds catch the warm horizon light strongly — gold/crimson-rimmed
+    // banks at sunrise/sunset are the most dramatic part of the sky.
+    cloudTop = mix(cloudTop, cloudTop * uSunColor * 2.05, sl * (1.0 - sunE) * 0.80 * (1.0 - overcast));
     cloudTop = mix(cloudTop, vec3(0.60, 0.61, 0.63), overcast * 0.60);
     // Much darker, more threatening undersides
     vec3 cloudBot = vec3(0.15, 0.16, 0.21) * (0.18 + 0.55 * effectiveSunBright);
@@ -442,8 +444,9 @@ void main() {
   c += uSunColor * pow(sd, 22.0) * 0.68 * coronaDamp;  // tight corona ring
   c += uSunColor * pow(sd, 380.0) * 1.10 * coronaDamp; // bright disc core
   float perp = length(dir - uSunDir * sd);
-  float disc = smoothstep(0.018, 0.006, perp) * coronaDamp;
-  c += mix(uSunColor * 1.8, vec3(2.0, 1.9, 1.6), disc) * disc;
+  // Slightly larger, brighter disc with a warm-to-white core for a present sun.
+  float disc = smoothstep(0.024, 0.007, perp) * coronaDamp;
+  c += mix(uSunColor * 2.0, vec3(2.2, 2.05, 1.7), disc) * disc;
 
   // --- Stars: denser field with Milky Way band ---
   if (uStars > 0.5 && up > 0.05) {
@@ -630,9 +633,10 @@ vec3 agxTonemap(vec3 color) {
   color = (color - minEv) / (maxEv - minEv);
   color = agxDefaultContrastApprox(color);
   color = AgXOutset * color;
-  // Restrained saturation restore: 1.08 — credible colour, no cartoon pop.
+  // Saturation restore: 1.20 — rich, intense colour (AgX desaturates highlights,
+  // so this brings the punch back) without tipping into cartoon oversaturation.
   vec3 luma = vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)));
-  color = mix(luma, color, 1.08);
+  color = mix(luma, color, 1.20);
   return clamp(color, 0.0, 1.0);
 }
 
@@ -651,9 +655,10 @@ vec3 colourGrade(vec3 c) {
   vec3 sc = clamp(c, 0.0, 1.0);
   sc = sc * sc * (3.0 - 2.0 * sc);
   c = mix(c, sc, 0.42);
-  // Deepen shadows further: square-ish falloff below mid-grey, untouched above.
+  // Deepen shadows gently below mid-grey, untouched above. Eased (0.90 floor) so
+  // daytime midtones stay clean & vibrant — a hard crush here turned day to mud.
   float dl = dot(c, vec3(0.299, 0.587, 0.114));
-  c *= mix(0.82, 1.0, smoothstep(0.0, 0.45, dl));
+  c *= mix(0.90, 1.0, smoothstep(0.0, 0.42, dl));
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
@@ -661,7 +666,7 @@ vec3 colourGrade(vec3 c) {
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
   float sat = mx - mn;
-  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.18);
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.26);
   // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
   // other (warm amber), blended by luma. A staple of the teal-orange film look —
   // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
