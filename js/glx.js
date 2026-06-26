@@ -532,23 +532,33 @@ void main() {
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const attribs = [pos, nrm, col];
+    const bufs = [];
     for (let i = 0; i < 3; i++) {
       const buf = gl.createBuffer();
+      bufs.push(buf);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       gl.bufferData(gl.ARRAY_BUFFER, attribs[i], gl.STATIC_DRAW);
       gl.enableVertexAttribArray(i);
       gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 0, 0);
     }
     const ib = gl.createBuffer();
+    bufs.push(ib);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
 
     return {
       vao,
+      bufs,
       count: idx.length,
       indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
     };
+  }
+
+  function freeMesh(mesh) {
+    if (!mesh || !gl) return;
+    if (mesh.bufs) mesh.bufs.forEach(b => gl.deleteBuffer(b));
+    if (mesh.vao) gl.deleteVertexArray(mesh.vao);
   }
 
   // Compute light-space VP matrix from sun direction + scene centre/radius
@@ -765,6 +775,7 @@ void main() {
     init,
     resize,
     createMesh,
+    freeMesh,
     begin,
     draw,
     drawSky,

@@ -27,7 +27,8 @@ test.describe("WebGL renderer probes", () => {
   test("GLX.hdrMode() returns a boolean", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-    const hdrMode = await page.evaluate(() => window.GLX?.hdrMode?.());
+    // GLX is a top-level const (not window.GLX) — access by name in page scope
+    const hdrMode = await page.evaluate(() => typeof GLX !== "undefined" ? GLX.hdrMode() : undefined);
     // SwiftShader may return false (no HDR), but it must be a boolean either way
     expect(typeof hdrMode).toBe("boolean");
   });
