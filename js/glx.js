@@ -417,17 +417,23 @@ void main() {
     float sunBright = max(uSunColor.r, max(uSunColor.g, uSunColor.b));
     // Under heavy overcast, clamp sunBright so even a bright sun gives grey clouds.
     float effectiveSunBright = mix(sunBright, min(sunBright, 0.55), overcast);
-    // Sunlit tops: white in daylight, warm-tinted at sunset
+    float golden = 1.0 - smoothstep(0.0, 0.45, sunE);   // 1 near horizon, 0 high
+    // Sunlit tops: white in daylight, strongly warm/red-tinted at golden hour.
     vec3 cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl);
     cloudTop *= 0.38 + 0.62 * effectiveSunBright;
-    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.45, sl * (1.0 - sunE) * 0.55 * (1.0 - overcast));
+    cloudTop = mix(cloudTop, cloudTop * uSunColor * mix(1.45, 2.6, golden),
+                   sl * (1.0 - sunE) * (0.55 + golden * 0.40) * (1.0 - overcast));
     // Under overcast flatten tops toward medium grey.
     cloudTop = mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast * 0.65);
-    // Dark undersides: cooler and dimmer, conveying mass/volume
-    vec3 cloudBot = vec3(0.31, 0.32, 0.38) * (0.28 + 0.48 * effectiveSunBright);
-    // Under overcast, undersides go darker / more threatening.
-    cloudBot = mix(cloudBot, vec3(0.22, 0.22, 0.25), overcast * 0.55);
+    // Dark undersides: cooler/dimmer, but pick up a warm pink under-glow at sunset.
+    vec3 cloudBot = vec3(0.26, 0.27, 0.34) * (0.24 + 0.44 * effectiveSunBright);
+    cloudBot += uSunColor * vec3(0.9, 0.42, 0.5) * (0.22 * golden * (1.0 - overcast));
+    cloudBot = mix(cloudBot, vec3(0.19, 0.19, 0.22), overcast * 0.60);
     vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
+    // Silver lining: thin sun-facing cloud edges glow bright (backlit forward scatter),
+    // most intense at golden hour — the defining dramatic-cloud cue.
+    float silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + golden) * (1.0 - overcast * 0.7);
+    lit += uSunColor * silver * 1.3;
     // Moon tints nearby clouds faintly blue-silver.
     if (uMoon > 0.0) {
       float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
@@ -454,12 +460,21 @@ void main() {
   }
 
   // --- Sun corona + disc (damped under overcast) ---
+  // goldenFactor: 1 when the sun is at the horizon, 0 high up — drives reddening,
+  // a broader warm aureole, a vertically flattened disc, and a brighter HDR core.
   float coronaDamp = 1.0 - overcast * 0.92;
-  c += uSunColor * pow(sd, 20.0) * 0.55 * coronaDamp;   // outer halo ~15°
-  c += uSunColor * pow(sd, 300.0) * 0.90 * coronaDamp;  // inner ring ~4°
-  float perp = length(dir - uSunDir * sd);
-  float disc = smoothstep(0.018, 0.006, perp) * coronaDamp;
-  c += mix(uSunColor * 1.6, vec3(1.8, 1.75, 1.5), disc) * disc;
+  float golden = 1.0 - smoothstep(0.0, 0.45, sunE);
+  vec3 sunWarm = mix(uSunColor, uSunColor * vec3(1.18, 0.52, 0.24), golden);
+  // Wide aureole: broader (lower exponent) and stronger at golden hour.
+  c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp;
+  c += sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;   // tight inner ring
+  // Flatten the disc near the horizon (atmospheric refraction squashes it).
+  vec3 dd = dir - uSunDir * sd;
+  float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
+  float disc = smoothstep(mix(0.018, 0.028, golden), 0.006, perp) * coronaDamp;
+  // Bright HDR core (>1) so it blooms into glare; warm-white high, deep amber low.
+  vec3 discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
+  c += discCore * disc;
 
   // --- Stars (night tracks) ---
   if (uStars > 0.5 && up > 0.05) {
@@ -877,10 +892,13 @@ void main() {
   vec3 flare = vec3(0.0);
   if (uFlareStr > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 &&
       uSunUV.y >= 0.0 && uSunUV.y <= 1.0) {
-    // Anamorphic horizontal streak
-    float streakY = exp(-abs(vUV.y - uSunUV.y) * 120.0);
-    float streakX = exp(-abs(vUV.x - uSunUV.x) * 1.8);
-    flare += vec3(0.55, 0.72, 1.0) * streakY * streakX * 0.9;
+    // Anamorphic horizontal streak — warm and wide, the iconic "sun bleeding
+    // across the frame" golden-hour cue (uFlareStr peaks when the sun is low).
+    float streakY = exp(-abs(vUV.y - uSunUV.y) * 110.0);
+    float streakX = exp(-abs(vUV.x - uSunUV.x) * 1.3);
+    flare += vec3(1.0, 0.80, 0.52) * streakY * streakX * 1.25;
+    // A second thinner hot core streak.
+    flare += vec3(1.0, 0.92, 0.78) * exp(-abs(vUV.y - uSunUV.y) * 320.0) * exp(-abs(vUV.x - uSunUV.x) * 2.2) * 0.7;
 
     // Lens ghost circles along sun-to-center axis
     vec2 toCenter = vec2(0.5) - uSunUV;
@@ -1612,7 +1630,12 @@ void main() {}`;
       const cw = vp[3]*s[0] + vp[7]*s[1] + vp[11]*s[2];
       if (cw > 0) {
         sunUV = [cx / cw * 0.5 + 0.5, cy / cw * 0.5 + 0.5];
-        flareStr = Math.max(s[1], 0) * 0.65;
+        // Lens flare peaks at GOLDEN HOUR (low sun), fading as the sun climbs —
+        // the opposite of the old height-scaled version that vanished at sunset.
+        if (s[1] > -0.02) {
+          const golden = 1.0 - Math.min(Math.max(s[1], 0) / 0.45, 1.0);
+          flareStr = 0.30 + golden * 0.55;
+        }
         if (s[1] > 0.05) sunShaft = s[1] * 0.8;
       }
     }
