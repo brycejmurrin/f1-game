@@ -1,22 +1,132 @@
-/* Build one circuit headlessly to verify its js/tracks/<id>.js scenery() runs
- * without throwing (the failure mode that silently strands the game on the menu).
- * Loads ONLY that track's data file + the engine, so it never races other files.
- *   node tools/verify-track.cjs suzuka
- * Exit 0 + "OK ..." on success; exit 1 + the error otherwise. */
-const fs = require("fs"), vm = require("vm"), path = require("path");
-const id = process.argv[2];
-if (!id) { console.log("usage: node tools/verify-track.cjs <id>"); process.exit(1); }
-const root = path.join(__dirname, "..");
-const rd = (p) => fs.readFileSync(path.join(root, p), "utf8");
-const GLX = { createMesh: (d) => ({ verts: (d.pos || []).length / 3 }) };
-const ctx = { window: {}, console, Math, Float32Array, Uint8Array, Uint16Array, Object, Array, JSON, isFinite, performance: { now: () => 0 }, GLX };
-vm.createContext(ctx);
-try {
-  vm.runInContext(rd(`js/tracks/${id}.js`) + "\n" + rd("js/circuits.js") + "\n" + rd("js/tracks.js") + "\nwindow.__T=Tracks;", ctx);
-} catch (e) { console.log(`LOAD FAIL ${id}: ${e.message}`); process.exit(1); }
-const def = (ctx.window.__T.LIST || []).find((d) => d.id === id);
-if (!def) { console.log(`NO DEF for ${id}`); process.exit(1); }
-try {
-  const tr = ctx.window.__T.build(def);
-  console.log(`OK ${id}: props ${tr.meshes.props.verts} verts (road ${tr.meshes.road.verts}, terrain ${tr.meshes.terrain.verts})`);
-} catch (e) { console.log(`BUILD FAIL ${id}: ${e.message}`); process.exit(1); }
+#!/usr/bin/env node
+// verify-track.cjs — headless build check for Apex 26 track definitions.
+// Loads js/tracks.js (+ js/circuits.js) in a Node.js VM, stubs GLX so that
+// buildRoad / buildTerrain / buildProps / buildGate actually run and their
+// vertex counts are captured.  Any THROW during the build is a hard failure —
+// the game would strand on the menu with the same error.
+//
+// Usage:
+//   node tools/verify-track.cjs <trackId>     # verify one track
+//   node tools/verify-track.cjs --all         # verify every track in js/tracks.js
+//
+// Success: prints "OK <id>: props N verts (road Y, terrain Z)"
+// Failure: prints the error and exits 1.
+
+"use strict";
+
+const fs   = require("fs");
+const path = require("path");
+const vm   = require("vm");
+
+const ROOT = path.resolve(__dirname, "..");
+
+// --all mode: run verification for every track id found in Tracks.LIST
+if (process.argv[2] === "--all") {
+  // Extract ids by loading the script once and reading LIST
+  let uniqueIds;
+  try {
+    uniqueIds = loadTrackIds();
+  } catch (e) {
+    console.error("FAIL: could not load track ids:", e.message);
+    process.exit(1);
+  }
+
+  let failures = 0;
+  for (const id of uniqueIds) {
+    try {
+      verifyTrack(id);
+    } catch (e) {
+      failures++;
+      console.error(`FAIL ${id}: ${e.message}`);
+    }
+  }
+  if (failures) {
+    console.error(`\n${failures} track(s) failed`);
+    process.exit(1);
+  } else {
+    console.log(`\nAll ${uniqueIds.length} tracks OK`);
+    process.exit(0);
+  }
+} else {
+  const id = process.argv[2];
+  if (!id) {
+    console.error("Usage: node tools/verify-track.cjs <trackId>  |  --all");
+    process.exit(1);
+  }
+  try {
+    verifyTrack(id);
+  } catch (e) {
+    console.error(`FAIL ${id}: ${e.message}`);
+    if (process.env.VERBOSE) console.error(e.stack);
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+// Build a fresh VM context with GLX stubbed, load circuits + tracks, return Tracks
+function buildContext() {
+  const GLX = {
+    createMesh: function (buf) {
+      const verts    = buf && buf.pos ? buf.pos.length / 3 : 0;
+      const idxCount = buf && buf.idx ? buf.idx.length     : 0;
+      return { verts, idxCount };
+    },
+  };
+
+  const sandbox = {
+    // Browser globals the scripts reference
+    Math, Array, Float32Array, Uint16Array, Uint32Array, Object, JSON,
+    isNaN, isFinite, parseInt, parseFloat,
+    GLX,
+    // console silenced — tracks.js doesn't log in normal operation, but just in case
+    console: { log: () => {}, warn: () => {}, error: () => {} },
+  };
+  // Many IIFEs reference `window.Foo` — make window an alias for the sandbox
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+
+  // Run a source file in the context, converting top-level `const` declarations
+  // to `var` so they become properties on the sandbox (VM const is block-scoped
+  // and NOT visible as ctx.Foo after execution).
+  function runFile(relPath) {
+    const src = fs.readFileSync(path.join(ROOT, relPath), "utf8");
+    // Replace only `const` at the very start of a line (no indent = top-level).
+    const patched = src.replace(/^const\b/gm, "var");
+    vm.runInContext(patched, ctx, { filename: relPath });
+  }
+
+  runFile("js/circuits.js");  // provides CircuitPaths
+  runFile("js/tracks.js");    // provides Tracks (depends on CircuitPaths, GLX)
+
+  const Tracks = ctx.Tracks;
+  if (!Tracks || !Tracks.LIST) {
+    throw new Error("js/tracks.js did not define global Tracks.LIST");
+  }
+  return Tracks;
+}
+
+function loadTrackIds() {
+  const Tracks = buildContext();
+  return Tracks.LIST.map(d => d.id);
+}
+
+function verifyTrack(id) {
+  const Tracks = buildContext();
+
+  const def = Tracks.LIST.find(d => d.id === id);
+  if (!def) {
+    throw new Error(`track id "${id}" not found — available: ${Tracks.LIST.map(d => d.id).join(", ")}`);
+  }
+
+  // Run the full build — exercises buildRoad, buildTerrain, buildProps, buildGate
+  // via the GLX stub.  Any throw here means the game strands on the menu.
+  const track = Tracks.build(def);
+
+  const road    = track.meshes.road    ? track.meshes.road.verts    : 0;
+  const terrain = track.meshes.terrain ? track.meshes.terrain.verts : 0;
+  const props   = track.meshes.props   ? track.meshes.props.verts   : 0;
+  const total   = road + terrain + props;
+
+  console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain}) — ${total} total`);
+}

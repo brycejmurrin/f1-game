@@ -5,18 +5,37 @@
 // Boots a static server, waits for __apex, freezes, frames the camera, writes PNG.
 
 import { spawn } from "node:child_process";
-import { chromium } from "playwright";
-import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
+import { existsSync, mkdirSync } from "node:fs";
+import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
+
+const ROOT = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
+const require = createRequire(ROOT + "/");
+const { chromium } = require("playwright");
 
 const [trackId = "monza", fracArg = "0.1", cam = "orbit", outArg] =
   process.argv.slice(2);
 const frac = parseFloat(fracArg);
 const out = resolve(outArg || `scratch/${trackId}-${Math.round(frac * 100)}-${cam}.png`);
-const PORT = 3457;
-const ROOT = resolve(process.cwd());
 
 mkdirSync(dirname(out), { recursive: true });
+
+function freePort() {
+  return new Promise((res, rej) => {
+    const s = createServer();
+    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
+    s.on("error", rej);
+  });
+}
+
+function pickChromium() {
+  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
+    if (existsSync(p)) return p;
+  return undefined; // fall back to playwright's bundled build
+}
+
+const PORT = await freePort();
 
 // Static server (python3 http.server matches the Playwright config webServer).
 const server = spawn("python3", ["-m", "http.server", String(PORT)], {
@@ -31,12 +50,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 try {
   await sleep(700); // let the server come up
   const browser = await chromium.launch({
+    executablePath: pickChromium(),
     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"],
   });
   const page = await browser.newPage({
     viewport: { width: 1280, height: 720 },
   });
-  await page.goto(`http://localhost:${PORT}/`);
+  await page.goto(`http://127.0.0.1:${PORT}/`);
   await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
 
   await page.evaluate((id) => window.__apex.race(id), trackId);
