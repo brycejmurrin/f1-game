@@ -59,6 +59,8 @@ uniform float uShadowTexel;
 uniform vec3 uSkyZenith;
 uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
+uniform float uTime;        // seconds (drives cloud-shadow drift)
+uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -102,6 +104,22 @@ float vnoise(vec2 p) {
   float a = hash21(i), b = hash21(i + vec2(1.0, 0.0));
   float c = hash21(i + vec2(0.0, 1.0)), d = hash21(i + vec2(1.0, 1.0));
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+// Cloud cover at a world point: project the point up the sun direction to the
+// cloud deck and sample a drifting FBM — gives moving dappled cloud SHADOWS on
+// the ground (the "volumetric shading"). 0 = full sun, 1 = fully shadowed.
+float cloudFBM(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }
+  return s;
+}
+float cloudShadow(vec3 wp) {
+  if (uCloudCover <= 0.001 || uSunDir.y <= 0.06) return 0.0;
+  float cloudY = 360.0;
+  float t = (cloudY - wp.y) / uSunDir.y;          // distance up the sun ray to the deck
+  vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(uTime * 0.012, uTime * 0.005);
+  float c = cloudFBM(cp);
+  return smoothstep(0.54 - uCloudCover * 0.40, 0.92, c) * uCloudCover;
 }
 
 float sampleShadow(vec3 wpos) {
@@ -172,7 +190,9 @@ void main() {
 
   vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
 
-  float shadow = sampleShadow(vWorldPos);
+  // Combine the hard shadow map with soft drifting cloud shadows: the sun is
+  // dimmed where clouds pass overhead, casting moving dappled light on the track.
+  float shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * 0.80);
   float litNoL = NoL * shadow;
 
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
@@ -274,7 +294,11 @@ void main() {
   // and makes a low warm sun bleed dramatically through dawn/dusk haze.
   vec3 rd = normalize(vWorldPos - uEye);
   float sunAmount = max(dot(rd, uSunDir), 0.0);
-  vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmount, 8.0));
+  // Wider exponent (4) = the warm sun-glow in the haze spreads across a broader
+  // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
+  // adds a hot bloom right at the sun.
+  vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmount, 4.0));
+  fogCol += uSunColor * pow(sunAmount, 16.0) * 0.6;
   outColor = vec4(mix(color, fogCol, f), uAlpha);
 }`;
 
@@ -683,11 +707,26 @@ uniform vec3 uEye;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform float uStr;
+uniform float uTime;
+uniform float uCloudCover;
 out vec4 outColor;
 vec3 worldPos(vec2 uv, float d) {
   vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
   vec4 w = uInvVP * c;
   return w.xyz / w.w;
+}
+float gHash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float gNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  float a = gHash(i), b = gHash(i+vec2(1,0)), c = gHash(i+vec2(0,1)), d = gHash(i+vec2(1,1));
+  return mix(mix(a,b,f.x), mix(c,d,f.x), f.y); }
+float gCloudFBM(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<4;i++){ s+=a*gNoise(p); p=p*2.03+1.7; a*=0.5; } return s; }
+// Cloud cover at a world point (same model as the lit shader's cloud shadows) so
+// the shafts are broken by the SAME clouds that dapple the ground.
+float gCloud(vec3 wp){
+  if (uCloudCover <= 0.001 || uSunDir.y <= 0.06) return 0.0;
+  float t = (360.0 - wp.y) / uSunDir.y;
+  vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(uTime * 0.012, uTime * 0.005);
+  return smoothstep(0.54 - uCloudCover * 0.40, 0.92, gCloudFBM(cp)) * uCloudCover;
 }
 void main() {
   float d = texture(uDepth, vUV).r;
@@ -713,13 +752,17 @@ void main() {
     float lit = 1.0;
     if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
       lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
+    lit *= 1.0 - gCloud(p) * 0.9;   // clouds break the shafts into crepuscular rays
     accum += lit;
   }
   accum /= float(N);
-  // Forward Mie phase (Henyey-Greenstein, g=0.76): shafts brighten toward the sun.
+  // Henyey-Greenstein phase (g=0.60 = a wider forward lobe so the shafts read
+  // across a broader arc, not only when staring straight at the sun) + a small
+  // isotropic floor so lit haze glows everywhere, giving an atmospheric volume.
   float cosT = max(dot(rd, uSunDir), 0.0);
-  float g = 0.76;
-  float phase = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosT, 1.5) * 0.08;
+  float g = 0.60;
+  float hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosT, 1.5);
+  float phase = hg * 0.16 + 0.020;
   outColor = vec4(uSunColor * accum * phase * uStr, 1.0);
 }`;
 
@@ -884,6 +927,7 @@ void main() {}`;
   let frameProj = null;
   let frameSunVS = null;
   let frameSunColor = null;
+  let frameTime = 0, frameCloud = 0;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
   let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null, blackTex = null;
   let godrayProg = null, godrayU = null, godrayFBO = null, godrayTex = null;
@@ -995,7 +1039,7 @@ void main() {}`;
     blurU = locs(blurProg, ["uTex", "uDir"]);
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
-    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr"]);
+    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -1133,7 +1177,7 @@ void main() {}`;
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -1250,6 +1294,8 @@ void main() {}`;
     frameInvVP = frame.invViewProj || null;
     frameProj = frame.proj || null;
     frameSunVS = frame.sunViewDir || null;
+    frameTime = frame.time != null ? frame.time : 0;
+    frameCloud = frame.cloud != null ? frame.cloud : 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer.
@@ -1288,6 +1334,8 @@ void main() {}`;
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
     gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
+    gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
+    gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
     // [x,y,z, r,g,b, rad, …] of at most MAX_LIGHTS (24) entries, already culled to
     // the nearest set by the caller. Uploaded once per frame; uNumLights=0 on day.
@@ -1491,6 +1539,8 @@ void main() {}`;
       gl.uniform3fv(godrayU.uSunDir, frameSunDir);
       gl.uniform3fv(godrayU.uSunColor, frameSunColor || [1, 1, 1]);
       gl.uniform1f(godrayU.uStr, grStr);
+      gl.uniform1f(godrayU.uTime, frameTime);
+      gl.uniform1f(godrayU.uCloudCover, frameCloud);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       useProg(blurProg);
       gl.uniform1i(blurU.uTex, 0);

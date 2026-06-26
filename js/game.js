@@ -732,7 +732,7 @@ function applyRaceSettings() {
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
-      _cloudBase = 0.22 + ovc * 0.48;     // clear → few clouds; overcast → heavy deck
+      _cloudBase = 0.40 + ovc * 0.42;     // broken cloud even on clear days → dappled cloud shadows; overcast → heavy deck
       // Brighter, punchier midday (was a flat 0.92). Clear days run a touch
       // hotter; overcast pulled back so the grey doesn't glare.
       frame.exposure = 1.06 + clr * 0.05 - ovc * 0.08;
@@ -2461,6 +2461,9 @@ function render(dt) {
   // animates (cloud drift, star twinkle).
   _skyT += dt;
   frameSky.time = _skyT;
+  // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
+  frame.time = _skyT;
+  frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
 
   // Moon: use the value set by applyRaceSettings; pass through for default
   // night tracks that didn't go through the explicit raceTimeOfDay branch.
@@ -2740,10 +2743,11 @@ function render(dt) {
     const _gnf = clamp((0.07 - _gsy) / 0.22, 0, 1);
     GLX.drawGlow(frame.lights, 0.06 * (0.30 + 0.70 * _gnf));
   }
-  // Volumetric sun shafts: strongest at dawn/dusk (low sun), moderate by day,
-  // off at night (sun below horizon).
+  // Volumetric sun shafts: dramatic at dawn/dusk (low sun), moderate by day,
+  // off at night (sun below horizon). Low-sun factor drives the big boost.
   const _grSunY = frame.sunDir ? frame.sunDir[1] : -1;
-  const _gr = _grSunY > 0.02 ? (0.20 + 0.25 * clamp(1 - _grSunY * 1.6, 0, 1)) : 0;
+  const _grLow = clamp(1 - _grSunY * 1.4, 0, 1);     // ~1 at dawn/dusk, ~0.2 at noon
+  const _gr = _grSunY > 0.02 ? (0.28 + 0.55 * _grLow) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
