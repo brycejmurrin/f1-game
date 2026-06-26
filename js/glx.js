@@ -648,17 +648,14 @@ vec3 colourGrade(vec3 c) {
   c *= vec3(1.015, 1.008, 0.992);
   // Soft S-curve: deepen contrast for punch (less washed-out / flat)
   c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
-  // Dramatic contrast S-curve. A Hermite smoothstep pulls shadows down and rolls
-  // highlights, then an extra shadow-weighted darkening deepens the lower mids so
-  // the image reads moody/chiaroscuro rather than flat & bright. Highlights are
-  // NOT lifted (that was the cartoony look) — only the toe is pulled down.
+  // Light extra contrast on top of ACES (which already has a strong S-curve):
+  // a gentle Hermite deepens shadows for punch without crushing to mud.
   vec3 sc = clamp(c, 0.0, 1.0);
   sc = sc * sc * (3.0 - 2.0 * sc);
-  c = mix(c, sc, 0.42);
-  // Deepen shadows gently below mid-grey, untouched above. Eased (0.90 floor) so
-  // daytime midtones stay clean & vibrant — a hard crush here turned day to mud.
+  c = mix(c, sc, 0.22);
+  // Very gentle shadow deepening below mid-grey for chiaroscuro depth.
   float dl = dot(c, vec3(0.299, 0.587, 0.114));
-  c *= mix(0.90, 1.0, smoothstep(0.0, 0.42, dl));
+  c *= mix(0.93, 1.0, smoothstep(0.0, 0.40, dl));
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
@@ -666,7 +663,7 @@ vec3 colourGrade(vec3 c) {
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
   float sat = mx - mn;
-  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.26);
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.32);
   // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
   // other (warm amber), blended by luma. A staple of the teal-orange film look —
   // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
@@ -736,8 +733,10 @@ void main() {
   vec4 ssr = texture(uSSR, vUV);
   c += ssr.rgb;
 
-  // AgX filmic tone-map — preserves hue into highlights vs ACES.
-  c = agxTonemap(c);
+  // ACES filmic tone-map — punchy, keeps darks dark, holds midtone saturation.
+  // (AgX was intentionally flat/desaturated — that read as the "flat" look; the
+  // certified baseline used ACES and that's the contrast/punch we want back.)
+  c = acesTonemap(c);
   c = colourGrade(c);
 
   // Lens flare: anamorphic streak + ghost circles
