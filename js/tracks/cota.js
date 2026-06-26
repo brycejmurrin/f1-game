@@ -14,6 +14,10 @@
     theme: "green",
     lengthKm: 5.5,
     baseHW: 8,
+    // Push the terrain ribbon far out so the open Blackland Prairie reaches the
+    // horizon — COTA has long flat sightlines, so a short ribbon left a bare grey
+    // void between the trackside and the sky. 420 m fills the orbit-camera frame.
+    terrainOuter: 420,
     pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.48, 0.50, 0.30], runoff: [0.40, 0.33, 0.26], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
     segs: [
       { t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 },
@@ -23,7 +27,7 @@
     // Turn 1: the calendar's most famous climb — ~30 m up in a few hundred metres.
     elevations: [{ s: 0.06, halfM: 320, rise: 12 }],
     scenery: function (api) {
-      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
+      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop, groundPlane } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // -- Palette (Texas Hill Country, DAY) --
@@ -153,7 +157,8 @@
       redFramework(K(0.65), 1, 46);
       redFramework(K(0.65), 1, 78);    // second red stand behind the first
       redFramework(K(0.84), 1, 52);    // red framework at the triple-apex sweeper
-      redFramework(K(0.30), 1, 62);    // red framework over the dry-grass field
+      // (removed the lone red framework over the open s≈0.30 field — with no
+      //  grandstand/structure context it read as a random floating red slab.)
 
       // ---- Grand Plaza reflecting pool — the real water feature on the plaza axis,
       // at the opposite end from the Observation Tower + amphitheatre (s≈0.085, L).
@@ -186,29 +191,82 @@
       // COTA sits on gently rolling-to-flat Blackland Prairie — NOT dramatic
       // mountains.  Heights are kept low (broad shallow swells) so the horizon
       // reads as open Texas prairie, with the far ring just a faint rise.
+      // Prairie-swell greens: kept GREEN-dominant so backdrop() renders them as
+      // rounded organic mounds seated on the terrain (frustum+dome) rather than
+      // pale boxy slabs that read as floating buildings. Heights are low (broad
+      // shallow swells) and the colours sit close to the verge grass so the
+      // swells melt into the prairie ribbon instead of standing off it.
+      const swellNear = [0.40, 0.46, 0.27];
+      const swellMid  = [0.43, 0.48, 0.29];
+      const swellFar  = [0.46, 0.50, 0.32];
       const hillAnchors = [
         // [s-frac, side, dist, width, height, depth, col]
-        // Near ring — gentle swells (150–200 m from road edge)
-        [0.10, -1, 165, 300, 18, 70, [0.42, 0.48, 0.30]],
-        [0.25,  1, 155, 280, 16, 64, [0.44, 0.49, 0.31]],
-        [0.40, -1, 170, 320, 20, 76, [0.41, 0.47, 0.29]],
-        [0.55,  1, 160, 290, 17, 68, [0.42, 0.48, 0.30]],
-        [0.70, -1, 175, 310, 21, 72, [0.44, 0.49, 0.31]],
-        [0.85,  1, 150, 280, 16, 64, [0.41, 0.47, 0.29]],
-        // Mid ring — slightly higher rolling rise (280–360 m out)
-        [0.05, -1, 300, 380, 28, 80, [0.45, 0.50, 0.33]],
-        [0.20,  1, 320, 410, 32, 86, [0.46, 0.51, 0.34]],
-        [0.35, -1, 310, 390, 30, 82, [0.45, 0.50, 0.33]],
-        [0.50,  1, 340, 430, 34, 92, [0.47, 0.52, 0.35]],
-        [0.65, -1, 295, 370, 27, 78, [0.45, 0.50, 0.33]],
-        [0.80,  1, 315, 400, 31, 84, [0.46, 0.51, 0.34]],
-        // Far ring — faint hazy horizon rise (480–560 m out)
-        [0.15, -1, 500, 500, 42, 100, [0.48, 0.52, 0.40]],
-        [0.45,  1, 520, 520, 46, 105, [0.49, 0.53, 0.41]],
-        [0.75, -1, 510, 510, 44, 102, [0.48, 0.52, 0.40]],
+        // Near ring — gentle swells just past the trackside dressing (180–230 m)
+        [0.10, -1, 190, 320, 14, 80, swellNear],
+        [0.25,  1, 200, 300, 13, 76, swellNear],
+        [0.40, -1, 195, 340, 15, 84, swellNear],
+        [0.55,  1, 205, 310, 13, 78, swellNear],
+        [0.70, -1, 210, 330, 15, 82, swellNear],
+        [0.85,  1, 185, 300, 13, 76, swellNear],
+        [0.16,  1, 215, 320, 14, 80, swellNear],
+        [0.62,  1, 220, 320, 14, 80, swellNear],
+        // Mid ring — broad rolling rise (300–360 m out)
+        [0.05, -1, 320, 420, 20, 96, swellMid],
+        [0.20,  1, 340, 440, 22, 100, swellMid],
+        [0.35, -1, 330, 420, 21, 96, swellMid],
+        [0.50,  1, 350, 460, 23, 104, swellMid],
+        [0.65, -1, 315, 410, 20, 94, swellMid],
+        [0.80,  1, 335, 430, 22, 100, swellMid],
+        [0.92, -1, 325, 420, 21, 96, swellMid],
+        // Far ring — faint hazy horizon rise (440–520 m out), still green so it
+        // reads as far prairie, not a building line. Low + broad = a soft rise.
+        [0.12, -1, 470, 560, 30, 120, swellFar],
+        [0.30,  1, 500, 580, 32, 124, swellFar],
+        [0.48, -1, 460, 560, 30, 120, swellFar],
+        [0.68,  1, 490, 580, 31, 122, swellFar],
+        [0.88, -1, 480, 560, 30, 120, swellFar],
       ];
       for (const [sf, side, dist, w, h, d, col] of hillAnchors) {
         backdrop(K(sf), side, dist, [w, h, d], col);
+      }
+
+      // ---- Far horizon swell ring: a dense ring of MODEST-footprint green
+      // swells stepped finely around the lap on BOTH sides. Footprints are kept
+      // small (≤140 m) so the onTrack guard doesn't cull them across COTA's tight
+      // parallel straights (big slabs were suppressed wholesale); the fine step
+      // and overlap still read as a continuous low prairie rise on the outer
+      // horizon, hiding the flat floor-slab band beyond the terrain ribbon. The
+      // survivors land on the genuinely-outer perimeter from every bearing.
+      const horizonGreen = [0.45, 0.49, 0.31];
+      const horizonNear  = [0.47, 0.51, 0.30];
+      for (let i = 0; i < 80; i++) {
+        const sf = i / 80;
+        const side = (i % 2) ? 1 : -1;
+        // near-mid band — bridges the gap between trackside treelines and the far
+        // rise so the immediate mid-ground isn't a flat pale strip (120–200 m).
+        backdrop(K(sf), side, 120 + hash(i * 6.1) * 80,
+                 [90, 12 + hash(i * 7.3) * 8, 90], horizonNear);
+        backdrop(K(sf), side, 240 + hash(i * 2.3) * 200,
+                 [120, 20 + hash(i * 5.1) * 12, 120], horizonGreen);
+        // second, farther, lower band to give the rise depth
+        backdrop(K((sf + 0.5) % 1), -side, 430 + hash(i * 3.7) * 160,
+                 [120, 24 + hash(i * 4.3) * 10, 120], horizonGreen);
+      }
+
+      // ---- Mid-ground prairie fill: broad low ground swells filling the open
+      // flat between the trackside and the swell rings, so there is no bare void
+      // anywhere in the orbit frame. groundPlane seats its top just below local
+      // grade, giving a continuous straw-green prairie carpet that hugs terrain.
+      const prairieFlat = [0.50, 0.55, 0.31];
+      const prairieDry  = [0.54, 0.58, 0.34];
+      // Smaller footprints (≤120 m) so they survive the onTrack guard between
+      // COTA's tight parallel straights, stepped finely on both sides to lay a
+      // continuous straw-green carpet over the near/mid flat next to the track.
+      for (let i = 0; i < 40; i++) {
+        const sf = i / 40;
+        const side = (i % 2) ? 1 : -1;
+        const col = (i % 2) ? prairieDry : prairieFlat;
+        groundPlane(K(sf), side, 50 + hash(i * 2.9) * 40, [110, 2.2, 110], col);
       }
 
       // ---- T1 hill climb ridge cues: earth mounds framing the famous uphill entry ----
@@ -224,24 +282,46 @@
         }
       }
 
-      // ================= AUSTIN DOWNTOWN SKYLINE (s 0.28–0.65, L far) =================
-      // Use cityFront() — steps efficiently along the track and auto-varies heights/widths.
-      // Downtown Austin is ~24 km away — visible only as a distant low cluster
-      // on the horizon, so it's pushed well back and kept lower.
-      cityFront(0.34, 0.60, -1, 360, {
-        minH: 42,
-        maxH: 86,
-        depth: 22,
-        step: 32,
-        lit: false,
-        palette: [
-          [0.52, 0.54, 0.62],
-          [0.56, 0.58, 0.64],
-          [0.48, 0.50, 0.58],
-          [0.60, 0.60, 0.66],
-          [0.50, 0.52, 0.60],
-        ],
-      });
+      // ================= AUSTIN DOWNTOWN SKYLINE — ONE distant cluster =================
+      // Downtown Austin is ~24 km SE — in reality a single tight low cluster on ONE
+      // horizon bearing, NOT buildings ringing the lap. So instead of stepping a
+      // cityFront() along an arc (which wrapped the skyline around the whole
+      // horizon), we plant a tight row of backdrop() towers at ONE fixed anchor
+      // node, all at the same far distance + bearing, packed close together with
+      // a coherent run of heights. backdrop() seats them on the lap baseline so
+      // they sit ON the ground, reading as a faraway downtown.
+      {
+        const kSky = K(0.42);                 // single bearing for the cluster
+        const a0 = anchor(kSky, -1, 760);     // ~760 m back → low on the horizon
+        const skyBase = a0.c, skyB = [a0.r, a0.u, a0.t];
+        // heights tuned so the tallest 2–3 (the Independent/"Jenga", Austonian)
+        // read as a centre spike with a falling shoulder either side.
+        const heights = [44, 58, 72, 96, 116, 132, 104, 84, 66, 50, 40];
+        const skyPal = [
+          [0.55, 0.57, 0.64], [0.58, 0.60, 0.66], [0.52, 0.54, 0.62],
+          [0.60, 0.61, 0.67], [0.54, 0.56, 0.63],
+        ];
+        let off = -((heights.length - 1) * 26) / 2;
+        for (let i = 0; i < heights.length; i++) {
+          const h = heights[i];
+          const w = 22 + hash(i * 3.1) * 16;
+          const col = skyPal[i % skyPal.length];
+          // lateral spread along the track tangent at the fixed anchor → all on
+          // the SAME bearing/distance, so the cluster stays tight and grounded.
+          const c = vadd(skyBase, a0.t, off + i * 26 + (hash(i * 7.7) - 0.5) * 8);
+          const cy = c[1] + h / 2 - 2;
+          addBox(out, [c[0], cy, c[2]], [w, h, 24], col, [a0.t, a0.u, a0.r]);
+          // glass window bands so the towers don't read as flat grey planes
+          const win = [Math.min(1, col[0] * 1.5 + 0.05), Math.min(1, col[1] * 1.5 + 0.05), Math.min(1, col[2] * 1.5 + 0.07)];
+          const floors = Math.max(3, Math.round(h / 22));
+          for (let f = 1; f < floors; f++) {
+            addBox(out, [c[0], cy - h / 2 + (f + 0.5) * (h / floors), c[2]],
+                   [w * 0.97, (h / floors) * 0.5, 25], win, [a0.t, a0.u, a0.r]);
+          }
+          // parapet cap
+          addBox(out, [c[0], cy + h / 2 + 0.6, c[2]], [w * 1.02, 1.2, 25], col, [a0.t, a0.u, a0.r]);
+        }
+      }
 
       // ================== COHERENT TREELINES via forestEdge() ==================
       // Replace scattered individual trees with continuous treeline edges.
@@ -273,6 +353,29 @@
       // Final sweeper sector (s≈0.84–0.96, both sides)
       forestEdge(0.84, 0.96, -1, 18, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
       forestEdge(0.84, 0.92,  1, 20, { density: 0.35, hMin: 6, hMax: 10, col: cedar, col2: oak,   pineFrac: 0.35 });
+
+      // ---- Scattered mid-ground live-oak / mesquite clumps ----
+      // The real COTA infield + outfield is open prairie dotted with isolated
+      // oak/mesquite mottes — NOT a continuous treeline. These clumps push trees
+      // out into the empty mid-distance (40–150 m) so the flat between the
+      // trackside treelines and the swell rings reads as populated savannah, not
+      // bare grass. Hash-jittered count/size/position; bounded (~70 clumps).
+      const clumpCols = [oak, cedar, [0.22, 0.34, 0.18], [0.30, 0.40, 0.22], [0.26, 0.37, 0.20]];
+      for (let i = 0; i < 34; i++) {
+        const sf = (i / 34 + hash(i * 1.7) * 0.02) % 1;
+        const k = K(sf);
+        const side = hash(i * 3.3) < 0.5 ? -1 : 1;
+        const dist = 42 + hash(i * 5.9) * 110;       // 42–152 m out
+        const trees = 2 + Math.floor(hash(i * 7.1) * 3);  // 2–4 trees per motte
+        for (let j = 0; j < trees; j++) {
+          const d = dist + (hash(i * 11 + j * 2.3) - 0.5) * 16;
+          const sj = sf + (hash(i * 13 + j * 3.7) - 0.5) * 0.008;
+          const kk = K(sj);
+          const col = clumpCols[Math.floor(hash(i * 17 + j) * clumpCols.length) % clumpCols.length];
+          const h = 6 + hash(i * 19 + j * 5) * 6;
+          tree(kk, side, d, h, col);
+        }
+      }
 
       // ---- Start/finish gantry over the main straight (s≈0.00) ----
       gantry(0.00, 7.5, darkSteel);
