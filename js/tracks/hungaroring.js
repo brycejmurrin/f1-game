@@ -14,7 +14,7 @@
     theme: "green",
     lengthKm: 4.4,
     baseHW: 7,
-    pal: { zenith: [0.26, 0.44, 0.72], horizon: [0.74, 0.76, 0.76], grass: [0.26, 0.50, 0.22], runoff: [0.48, 0.44, 0.34], fogDensity: 0.0016, sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1, 0.88, 0.66], sunColor: [1, 0.86, 0.64] },
+    pal: { zenith: [0.30, 0.46, 0.70], horizon: [0.80, 0.78, 0.70], grass: [0.56, 0.54, 0.34], runoff: [0.58, 0.50, 0.36], fogDensity: 0.0019, sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1, 0.90, 0.68], sunColor: [1, 0.88, 0.62] },
     segs: [
       { t: 0, l: 300 }, { t: 70, l: 90 }, { t: -50, l: 80 }, { t: 60, l: 80 }, { t: 0, l: 200 }, { t: -80, l: 100 },
       { t: 50, l: 80 }, { t: -60, l: 80 }, { t: 60, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 200 }, { t: -90, l: 100 },
@@ -30,23 +30,28 @@
               forestEdge, along } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ---- Palette: dry Hungarian summer ----
-      const GRASS  = [0.42, 0.55, 0.27];    // sun-baked grass
-      const GRASS2 = [0.38, 0.52, 0.24];    // richer mid-green
-      const AMPH   = [0.32, 0.50, 0.20];    // amphitheatre grassy banking — strongly green-dominant
-      const AMPH2  = [0.36, 0.54, 0.22];    // sunlit terrace variant
-      const TREE   = [0.20, 0.34, 0.18];    // dark oak/tree masses
-      const TREE2  = [0.26, 0.40, 0.20];    // mid tree green
-      const SCRUB  = [0.46, 0.50, 0.28];    // dry scrub bush
-      const HAZE   = [0.60, 0.62, 0.44];    // far haze-tinted hills
-      const HAZE2  = [0.68, 0.68, 0.54];    // furthest hazed ridge
+      // ---- Palette: dry, dusty Pannonian summer (sandy soil, straw grass) ----
+      const GRASS  = [0.56, 0.54, 0.34];    // straw / sun-bleached dry grass
+      const GRASS2 = [0.60, 0.56, 0.36];    // paler dusty patch
+      const DUST   = [0.62, 0.55, 0.40];    // bare sandy/dusty earth
+      // Amphitheatre banks stay barely green-dominant so the engine still renders
+      // them as rounded organic mounds (G > R and G > B*1.05), but desaturated and
+      // dusty so they read as dry summer hillsides, not a wet spring meadow.
+      const AMPH   = [0.46, 0.49, 0.30];    // dry-grass bank (just green-dominant)
+      const AMPH2  = [0.50, 0.52, 0.32];    // sunlit dusty terrace variant
+      const TREE   = [0.30, 0.36, 0.22];    // dusty dry-summer oak canopy
+      const TREE2  = [0.40, 0.42, 0.26];    // yellowing / sun-faded foliage
+      const SCRUB  = [0.54, 0.52, 0.32];    // dry scrub bush
+      const HAZE   = [0.64, 0.62, 0.48];    // far haze-tinted hills
+      const HAZE2  = [0.70, 0.68, 0.56];    // furthest hazed ridge
       const SHELL  = [0.46, 0.47, 0.50];    // grandstand back shell
       const SHELL2 = [0.40, 0.42, 0.46];    // darker shell
       const WHITE  = [0.90, 0.91, 0.93];
       const RED    = [0.82, 0.18, 0.18];
       const STEEL  = [0.66, 0.68, 0.72];
-      const WATER  = [0.14, 0.28, 0.32];
       const PADDOCK = [0.55, 0.55, 0.57];
+      const SENNA_G = [0.16, 0.55, 0.22];   // Senna-tribute kerb green
+      const SENNA_Y = [0.95, 0.82, 0.12];   // Senna-tribute kerb yellow
       const LAMP_POST = [0.28, 0.29, 0.30];
       const LAMP_HEAD = [0.96, 0.94, 0.84];
       const LAMP_ARM  = [0.34, 0.35, 0.36];
@@ -98,15 +103,18 @@
         backdrop(K(s), side, dist, [120 + hh * 40, 34 + hh * 14, 110], AMPH);
       }
 
-      // Mid-ring tree-capped mounds at the amphitheatre bowl crest
+      // Scattered oak woodland on the far bowl crests (sparse, NOT a ring).
+      // Only ~half the slots fire, so open dry-grass banks show between the
+      // wooded patches — the surrounding Gödöllő Hills are oak woods + meadow.
       const ringMid = rad + 300;
       for (let i = 0; i < 14; i++) {
         const a = i / 14 * 6.2832, h = hash(i * 19 + 100);
+        if (h < 0.5) continue;                       // leave big open gaps
         const tx = cx + Math.cos(a) * ringMid;
         const tz = cz + Math.sin(a) * ringMid;
         if (onTrack(tx, tz, 14)) continue;
         addCone(out, [tx, pyMin, tz], 20 + h * 10, 18 + h * 10,
-                h < 0.45 ? TREE : TREE2, 7, null);
+                h < 0.72 ? TREE : TREE2, 7, null);
       }
 
       // ====================================================================
@@ -171,32 +179,55 @@
       }
 
       // ====================================================================
-      // WOODED HILLSIDE TREELINES — forestEdge() covers the full circuit
-      // Gap=8 keeps all canopy safely behind the catch fences.
+      // SPARSE OAK WOODLAND — scattered clumps on the crests, OPEN banks between
+      // The Gödöllő Hills are "oak woods, sandy meadows and wildflowers": NOT a
+      // dense forest wall. We keep small clustered broadleaf (oak) stands on the
+      // hill crests only, set well back (gap≥40) so the spectator-facing dry-grass
+      // amphitheatre banks stay open — the bowl's whole point is ~80% visibility.
+      // Pushed far back behind the stands, the clumps read as woodland on the
+      // surrounding ridges rather than a treeline hugging the fences.
       // ====================================================================
-      // Outside: continuous hillside, denser in the stadium section
-      forestEdge(0.0,  0.18, 1, 8, { density: 0.58, hMin: 9, hMax: 15,
-                                      col: TREE, col2: TREE2, pineFrac: 0.40 });
-      forestEdge(0.18, 0.50, 1, 8, { density: 0.46, hMin: 7, hMax: 13,
-                                      col: TREE2, col2: TREE, pineFrac: 0.32 });
-      forestEdge(0.50, 1.00, 1, 8, { density: 0.50, hMin: 8, hMax: 14,
-                                      col: TREE, col2: TREE2, pineFrac: 0.40 });
-      // Inside: tighter valley wall
-      forestEdge(0.0,  0.12, -1, 8, { density: 0.52, hMin: 7, hMax: 13,
-                                       col: TREE, col2: TREE2, pineFrac: 0.55 });
-      forestEdge(0.14, 0.35, -1, 8, { density: 0.44, hMin: 8, hMax: 13,
-                                       col: TREE2, col2: TREE, pineFrac: 0.38 });
-      forestEdge(0.35, 0.55, -1, 8, { density: 0.50, hMin: 8, hMax: 14,
-                                       col: TREE, col2: TREE2, pineFrac: 0.42 });
-      forestEdge(0.55, 1.00, -1, 8, { density: 0.46, hMin: 7, hMax: 12,
-                                       col: TREE2, col2: TREE, pineFrac: 0.38 });
+      const oakClumps = [
+        // [s, side, gap, count, spread, hMin, hMax]
+        [0.04,  1, 64, 5, 26, 9, 15], [0.16,  1, 58, 4, 22, 8, 13],
+        [0.27,  1, 70, 6, 30, 9, 14], [0.40,  1, 60, 4, 20, 8, 12],
+        [0.52,  1, 66, 5, 26, 9, 14], [0.64,  1, 58, 4, 22, 8, 13],
+        [0.76,  1, 70, 6, 30, 9, 15], [0.88,  1, 60, 4, 22, 8, 13],
+        [0.10, -1, 52, 4, 20, 8, 13], [0.22, -1, 60, 5, 24, 9, 14],
+        [0.33, -1, 50, 4, 20, 8, 12], [0.46, -1, 58, 5, 24, 9, 14],
+        [0.60, -1, 54, 4, 22, 8, 13], [0.72, -1, 60, 5, 26, 9, 14],
+        [0.84, -1, 52, 4, 20, 8, 13], [0.95, -1, 56, 5, 24, 9, 14],
+      ];
+      for (const [s, side, gap, count, spread, hMin, hMax] of oakClumps) {
+        const a = anchor(K(s), side, gap);
+        for (let j = 0; j < count; j++) {
+          const h = hash(K(s) * 53 + side * 17 + j * 7);
+          const h2 = hash(K(s) * 29 + side * 13 + j * 5);
+          // scatter the clump along-track and a little further out
+          const c = vadd(vadd(a.c, a.t, (h - 0.5) * spread), a.r, side * h2 * spread * 0.55);
+          if (onTrack(c[0], c[2], 12)) continue;
+          const ht = hMin + h * (hMax - hMin);
+          const col = h2 < 0.5 ? TREE : TREE2;
+          // broadleaf oak: short trunk + a broad rounded canopy
+          addCyl(out, c, 0.45, ht * 0.42, [0.34, 0.27, 0.18], 5, null);
+          addCone(out, [c[0], c[1] + ht * 0.40, c[2]], ht * 0.62, ht * 0.66, col, 7, null);
+          addCone(out, [c[0], c[1] + ht * 0.72, c[2]], ht * 0.42, ht * 0.40, col, 7, null);
+        }
+      }
 
-      // Dry scrub spots at the edge (gap=9, sparse)
-      every(44, (kk) => {
+      // Occasional lone tree + dry scrub dotting the open meadow banks (sparse)
+      every(70, (kk) => {
         for (const side of [-1, 1]) {
           const s = hash(kk * 37 + side * 11);
-          if (s < 0.62) continue;
-          bush(kk, side, 9 + s * 10, SCRUB);
+          if (s < 0.74) continue;
+          tree(kk, side, 30 + s * 26, 9 + s * 5, s < 0.87 ? TREE2 : TREE);
+        }
+      });
+      every(56, (kk) => {
+        for (const side of [-1, 1]) {
+          const s = hash(kk * 41 + side * 9);
+          if (s < 0.70) continue;
+          bush(kk, side, 11 + s * 14, SCRUB);
         }
       });
 
@@ -285,10 +316,13 @@
       }
 
       // ====================================================================
-      // ACCENT FEATURES — water pond, hedge, Hungarian flags
+      // ACCENT FEATURES — open dusty infield, hedge, Hungarian flags
+      // NOTE: no infield pond/lake. The natural spring was culverted underground
+      // in 1989; the only water (Aquaréna) is a separate waterpark OUTSIDE the
+      // venue. The infield is open dry grass + dusty bare-earth banks instead.
       // ====================================================================
-      // Water feature in the valley floor (gap=75 clears track)
-      groundPlane(K(0.08), 1, 75, [80, 1.0, 60], WATER);
+      // Dusty bare-earth patch on the infield floor (gap=75 clears track)
+      groundPlane(K(0.08), 1, 75, [80, 1.0, 60], DUST);
       hedge(0.04, 0.11, 1, 32, 4, TREE);
 
       // Hungarian tricolour accent billboards (red/white/green)
@@ -296,11 +330,17 @@
       billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red
 
       // ====================================================================
-      // KERB ACCENTS at key corners
+      // KERB ACCENTS at key corners — standard red/white kerbs,
+      // plus the green+yellow Senna-tribute kerb pair at T6–T7.
       // ====================================================================
       for (const [s, side] of [[0.06, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
         place(K(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE);
         place(K(s), side, 7, [10, 0.08, 12], GRASS);
+      }
+      // Senna kerbs (green & yellow, Brazilian colours) at Turns 6–7.
+      for (const [s, side] of [[0.44, -1], [0.49, 1]]) {
+        place(K(s), side, 2,   [0.45, 0.28, 7], SENNA_G);
+        place(K(s), side, 2.6, [0.45, 0.27, 7], SENNA_Y);
       }
 
       // ====================================================================

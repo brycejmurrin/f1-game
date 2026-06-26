@@ -43,37 +43,49 @@
       // Royal-park greens — warm Italian afternoon palette.
       const PINE_D = [0.08, 0.26, 0.12], PINE = [0.10, 0.30, 0.14], PINE_L = [0.13, 0.34, 0.17];
       const LEAF = [0.18, 0.45, 0.20], LEAF_L = [0.24, 0.50, 0.24], LEAF_D = [0.15, 0.38, 0.18];
+      // Deciduous park palette — oak/hornbeam/beech/plane greens with a sparse
+      // early-September bronze/gold accent (the race is late summer, leaves full).
+      const OAK = [0.20, 0.42, 0.18], OAK_D = [0.16, 0.36, 0.16], BEECH = [0.26, 0.46, 0.22];
+      const AUTUMN = [0.62, 0.50, 0.20], AUTUMN_R = [0.58, 0.40, 0.18];
       const GRAVEL = [0.68, 0.60, 0.42];
+      // Pick a broadleaf colour, with a sparse (~7%) early-autumn accent.
+      const leafCol = (h) => h > 0.93 ? AUTUMN : (h > 0.88 ? AUTUMN_R : (h < 0.3 ? OAK_D : (h < 0.6 ? OAK : BEECH)));
 
       // =====================================================================
       // 1. ROYAL PARK FOREST — broadleaf + umbrella-pine corridor.
       //    every() node-step approach keeps geometry within SwiftShader budget.
       //    Ranks A-D provide depth; Lesmo section adds extra close-canopy trees.
       // =====================================================================
-      // Rank A — front pines close to verge (umbrella pines).
+      // Rank A — front broadleaf close to verge (oak/hornbeam/beech). Royal-park
+      // character is deciduous-dominant; pines are now a sparse accent only.
       every(13, (k) => {
         const h = hash(k * 31);
         if (h < 0.08) return;
         const side = h < 0.5 ? -1 : 1;
-        pine(k, side, 9 + h * 6, 18 + h * 13, h < 0.3 ? PINE_D : PINE);
-        if (h > 0.25) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
+        tree(k, side, 9 + h * 6, 13 + h * 9, leafCol(h));
+        if (h > 0.25) tree(k, -side, 10 + h * 7, 12 + h * 8, leafCol(hash(k * 31 + 5)));
+        // Rare tall umbrella-pine accent breaking the canopy (Italian silhouette).
+        if (h > 0.86) pine(k, side, 13 + h * 5, 19 + h * 11, PINE_D);
       });
-      // Rank B — broadleaf trees interleaved with pines (oaks, maples, ashes).
+      // Rank B — second broadleaf rank (plane/maple/ash), fuller crowns.
       every(15, (k) => {
         const h = hash(k * 53 + 9);
         if (h < 0.15) return;
         const side = h < 0.5 ? -1 : 1;
-        tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
-        if (h > 0.48) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
+        tree(k, side, 12 + h * 8, 12 + h * 9, leafCol(hash(k * 53 + 2)));
+        if (h > 0.48) tree(k, -side, 13 + h * 9, 11 + h * 8, leafCol(hash(k * 53 + 21)));
       });
-      // Rank C — set-back taller pines (deep-park wall).
+      // Rank C — set-back tall perimeter rank: mixed broadleaf with pines as the
+      // park-edge accent (the perimeter is where the tall pines belong).
       every(18, (k) => {
         const h = hash(k * 41 + 3);
         if (h < 0.20) return;
         const side = h < 0.5 ? -1 : 1;
-        const hVar = 22 + h * 16 + (hash(k * 137) > 0.6 ? 4 : 0);
-        pine(k, side, 24 + h * 18, hVar, PINE_D);
-        if (h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
+        const hVar = 20 + h * 14 + (hash(k * 137) > 0.6 ? 4 : 0);
+        // ~40% pine accents, the rest tall broadleaf (beech/oak deep-park wall).
+        if (h < 0.45) pine(k, side, 24 + h * 18, hVar + 4, PINE_D);
+        else          tree(k, side, 24 + h * 18, hVar, leafCol(hash(k * 41 + 8)));
+        if (h > 0.55) tree(k, -side, 30 + h * 16, 22 + h * 12, leafCol(hash(k * 41 + 30)));
       });
       // Rank D — outermost broadleaf rank blending to backdrop.
       every(24, (k) => {
@@ -103,11 +115,27 @@
         const s = k / n;
         if (s < 0.43 || s > 0.54) return;
         const h = hash(k * 13 + 7);
-        pine(k, -1, 12 + h * 2, 14 + h * 10, PINE_D);
-        pine(k,  1, 11 + h * 2, 13 + h *  9, PINE);
-        if (h > 0.55) tree(k, -1, 16 + h * 3, 13 + h * 9, LEAF_D);
-        if (h > 0.70) tree(k,  1, 15 + h * 3, 12 + h * 8, LEAF);
+        // Broadleaf canopy forms the tree tunnel; pines only as occasional accent.
+        tree(k, -1, 12 + h * 2, 14 + h * 10, leafCol(hash(k * 13 + 1)));
+        tree(k,  1, 11 + h * 2, 13 + h *  9, leafCol(hash(k * 13 + 4)));
+        if (h > 0.78) pine(k, -1, 16 + h * 3, 17 + h * 9, PINE_D);
+        if (h > 0.88) pine(k,  1, 15 + h * 3, 16 + h * 8, PINE_D);
       });
+
+      // Clipped hornbeam topiary — Monza's signature "Viale dei Carpini" avenue:
+      // small dense rounded crowns in a tidy row through a manicured park stretch.
+      const TOPIARY = [0.16, 0.34, 0.15];
+      for (const [s0, s1, side, gap] of [[0.10, 0.16, -1, 16], [0.34, 0.40, 1, 17]]) {
+        for (let s = s0; s <= s1; s += 0.006) {
+          const k = K(s);
+          if (onTrack(anchor(k, side, gap).c[0], anchor(k, side, gap).c[2], 4)) continue;
+          const ap = anchor(k, side, gap);
+          // short trunk + a tight clipped ball crown
+          addCyl(out, ap.c, 0.18, 1.6, [0.30, 0.22, 0.13], 6, [ap.r, ap.u, ap.t]);
+          addFrustum(out, vadd(ap.c, ap.u, 1.6), 1.5, 0.6, 2.0, TOPIARY, 8, [ap.r, ap.u, ap.t]);
+          addFrustum(out, vadd(ap.c, ap.u, 0.9), 0.7, 1.55, 0.8, TOPIARY, 8, [ap.r, ap.u, ap.t]);
+        }
+      }
 
       // =====================================================================
       // 2. PIT STRAIGHT / START–FINISH — grandstands, tifosi, podium, pit boxes
@@ -126,6 +154,24 @@
       prop(K(0.01), -1, 8, [2, 1.6, 130], [0.80, 0.16, 0.14]);
       // Accent green band (park integration) below red trim.
       prop(K(0.00), -1, 8.3, [1.8, 0.8, 128], [0.30, 0.54, 0.28]);
+
+      // ── Tifosi sea-of-red crowd fill — tilted red bands laid on the seating
+      //    rake of the start/finish stands so the tiers read as packed Ferrari
+      //    red, not bare grey concrete. Stand front sits ~gap+0.5 from edge.
+      const TIFOSI = [0.78, 0.14, 0.12], TIFOSI_L = [0.86, 0.22, 0.18];
+      function crowdFill(s, side, gap, len, rows) {
+        for (let r = 0; r < rows; r++) {
+          const lift = 2.2 + r * 1.9;             // climb the rake
+          const back = gap + 1.0 + r * 1.4;       // step back into the stand
+          const ac = anchor(K(s), side, back);
+          addBox(out, vadd(ac.c, ac.u, lift),
+                 [1.3, 0.7, len], (r % 2 === 0) ? TIFOSI : TIFOSI_L,
+                 [ac.r, ac.u, ac.t]);
+        }
+      }
+      crowdFill(0.005, -1, 10, 150, 5);   // Tribuna Centrale
+      crowdFill(0.02,  1, 12, 112, 5);    // facing stand
+      crowdFill(0.05, -1, 12, 72,  4);    // Rettifilo stand
 
       // ── Lit window strips on the main grandstand back-shell (night-ready) ──
       // These bright amber bands read as interior lighting at dusk/night while
@@ -271,91 +317,109 @@
       //    well off-track in the infield/park so it reads as a historic relic.
       // =====================================================================
       (function buildBanking() {
-        // Refined weathered concrete tones: main grey, darker in shadows, moss-green streaks
-        const conc = [0.66, 0.64, 0.60], concDk = [0.54, 0.52, 0.49], moss = [0.36, 0.48, 0.32];
-        const crackCol = [0.50, 0.48, 0.44]; // darker cracks/shadows
-        // Anchor the structure in the park to the LEFT of the Lesmo area.
-        const a = anchor(K(0.535), -1, 95);
-        // Lay the banking as a gentle arc of N tilted panels.
-        const N = 16, arcSpan = 1.9, radius = 120;
-        // Base Y is the ground level at this anchor point.
-        const baseY = a.c[1];
+        // Weathered concrete tones: main grey, darker in shadow, rust + moss streaks.
+        const conc = [0.62, 0.60, 0.56], concDk = [0.50, 0.49, 0.46];
+        const moss = [0.34, 0.44, 0.30], rust = [0.46, 0.36, 0.28];
+        const crackCol = [0.42, 0.41, 0.39];
 
-        // ── Pillar heights — computed first so we can size panels to clear them ──
-        // Pillars: ground → pillarH. Panels: ground → ground + panelH.
-        // To avoid interpenetration the panel base must sit AT OR ABOVE pillarH,
-        // OR the panel must be positioned so its lowest extent is above pillar top.
-        // Strategy: panels are centered at baseY + h*0.5 (half the slab height),
-        // so their bottom edge is at baseY. Pillars are also baseY-based.
-        // We offset panels upward slightly (baseY + 0.4) so the bottom clears ground
-        // and pillars run from baseY (ground) to pillarH — they share the lower
-        // region but panels are WIDER laterally, not overlapping pillar centres.
-        // Pillars are placed at the arc midpoints between panels (every 2nd i)
-        // at a slight inward offset, so their cylinder footprint doesn't hit panels.
+        // Build one curved banked ruin: a continuous tilted ramp surface made of a
+        // chain of long thin concrete planks laid edge-to-edge along an arc. Each
+        // plank's basis is [slopeDir, normal, alongArc] so the plank lies flat ON
+        // the banked slope (inner-low → outer-high), giving a real ramp face rather
+        // than a row of vertical towers. A retaining toe wall + piers carry it; the
+        // top edge is broken (missing planks, gaps) to read as a crumbling ruin.
+        function bankArc(anch, opts) {
+          const a = anch, baseY = a.c[1];
+          const N = opts.N, arcSpan = opts.arc, radius = opts.radius;
+          const slopeLen = opts.slope, tilt = opts.tilt;     // tilt = tan(bank angle)
+          const rise = slopeLen * tilt / Math.hypot(1, tilt); // vertical gain of ramp
+          const run  = slopeLen / Math.hypot(1, tilt);        // horizontal run of ramp
+          for (let i = 0; i < N; i++) {
+            const f = i / (N - 1);
+            const ang = -arcSpan / 2 + f * arcSpan;
+            // inner (low) edge position of this plank along the arc
+            const ox = Math.sin(ang) * radius, oz = (1 - Math.cos(ang)) * radius;
+            const cx = a.c[0] + a.r[0] * ox + a.t[0] * oz;
+            const cz = a.c[2] + a.r[2] * ox + a.t[2] * oz;
+            // outward radial direction (the bank rises this way)
+            const owx = a.r[0] * Math.sin(ang) + a.t[0] * Math.cos(ang);
+            const owz = a.r[2] * Math.sin(ang) + a.t[2] * Math.cos(ang);
+            const owl = Math.hypot(owx, owz) || 1;
+            const od = [owx / owl, 0, owz / owl];
+            // tangent along the arc (plank length direction)
+            const tfx = a.r[0] * Math.cos(ang) - a.t[0] * Math.sin(ang);
+            const tfz = a.r[2] * Math.cos(ang) - a.t[2] * Math.sin(ang);
+            const tfl = Math.hypot(tfx, tfz) || 1;
+            const fw = [tfx / tfl, 0, tfz / tfl];
+            // slope direction (up the ramp): outward + upward, normalised
+            const sl = [od[0], tilt, od[2]];
+            const sll = Math.hypot(sl[0], sl[1], sl[2]);
+            const slope = [sl[0] / sll, sl[1] / sll, sl[2] / sll];
+            // plank normal = slope × along (points up-and-inward, the road face up)
+            const nx = slope[1] * fw[2] - slope[2] * fw[1];
+            const ny = slope[2] * fw[0] - slope[0] * fw[2];
+            const nz = slope[0] * fw[1] - slope[1] * fw[0];
+            const nl = Math.hypot(nx, ny, nz) || 1;
+            const norm = [nx / nl, ny / nl, nz / nl];
+            // plank centre: half-way up the slope from the inner-low edge
+            const pc = [cx + od[0] * run * 0.5, baseY + rise * 0.5, cz + od[2] * run * 0.5];
+            if (onTrack(pc[0], pc[2], 12)) continue;
+            // crumbling: skip a few planks near the top of the arc ends
+            const hk = hash(i * 7 + opts.seed);
+            const ruined = (f < 0.12 || f > 0.9) && hk > 0.5;
+            if (ruined) continue;
+            // plank length along arc — slightly overlapping neighbours for continuity
+            const plankLen = (arcSpan * radius / (N - 1)) * 1.15;
+            const col = (i % 5 === 0) ? concDk : conc;
+            // basis [slope(=length up ramp), normal(thickness), along-arc]
+            addBox(out, pc, [slopeLen, 0.7, plankLen], col, [slope, norm, fw]);
+            // moss/rust streak running down the ramp face
+            if (i % 2 === 0) {
+              const stc = hk > 0.5 ? moss : rust;
+              addBox(out, vadd(pc, norm, 0.45), [slopeLen * 0.9, 0.12, plankLen * 0.35],
+                     stc, [slope, norm, fw]);
+            }
+            // a broken crack line crossing the ramp
+            if (i % 3 === 1)
+              addBox(out, vadd(pc, norm, 0.45), [slopeLen * 0.95, 0.1, 0.25],
+                     crackCol, [slope, norm, fw]);
 
-        for (let i = 0; i < N; i++) {
-          const f = i / (N - 1);
-          const ang = -arcSpan / 2 + f * arcSpan;
-          // centre of this panel out along the arc (in r/t plane)
-          const ox = Math.sin(ang) * radius, oz = (1 - Math.cos(ang)) * radius;
-          const cx = a.c[0] + a.r[0] * ox + a.t[0] * oz;
-          const cz = a.c[2] + a.r[2] * ox + a.t[2] * oz;
-          if (onTrack(cx, cz, 18)) continue;
-          // tilt the panel so its top leans outward → banked look.
-          const owx = a.r[0] * Math.sin(ang) + a.t[0] * Math.cos(ang);
-          const owz = a.r[2] * Math.sin(ang) + a.t[2] * Math.cos(ang);
-          const owl = Math.hypot(owx, owz) || 1;
-          const od = [owx / owl, 0, owz / owl];
-          const tilt = 0.65; // 80% gradient
-          const upv = [od[0] * tilt, 1, od[2] * tilt];
-          const ul = Math.hypot(upv[0], upv[1], upv[2]);
-          const u = [upv[0] / ul, upv[1] / ul, upv[2] / ul];
-          // forward along the arc (tangent)
-          const tfx = a.r[0] * Math.cos(ang) - a.t[0] * Math.sin(ang);
-          const tfz = a.r[2] * Math.cos(ang) - a.t[2] * Math.sin(ang);
-          const tfl = Math.hypot(tfx, tfz) || 1;
-          const fw = [tfx / tfl, 0, tfz / tfl];
-          const rr = od; // right = outward
-          const h = 11 + (i % 3) * 1.5;
-          const col = (i % 4 === 0) ? concDk : conc;
-          // Banked slab: center elevated to baseY + h*0.5 so bottom sits at baseY.
-          // Shifted up by 0.4 m so the slab bottom clears the ground plane cleanly.
-          addBox(out, [cx, baseY + h * 0.5 + 0.4, cz], [8.5, h, 14], col, [rr, u, fw]);
-          // Moss streak band on the face (algae from decades of weathering).
-          if (i % 2 === 0)
-            addBox(out, [cx + od[0] * 0.7, baseY + h * 0.42 + 0.4, cz + od[2] * 0.7],
-                   [0.8, h * 0.55, 13], moss, [rr, u, fw]);
-          // Weathering cracks: vertical stress lines from tree roots and freeze-thaw.
-          if (i % 3 === 1) {
-            addBox(out, [cx + od[0] * 0.25, baseY + h * 0.5 + 0.4, cz + od[2] * 0.25],
-                   [0.18, h * 0.75, 12.5], crackCol, [rr, u, fw]);
+            // ── retaining toe wall at the low inner edge (vertical lip) ──
+            addBox(out, [cx, baseY + 1.1, cz], [1.4, 2.2, plankLen], concDk, [od, [0, 1, 0], fw]);
+
+            // ── concrete support pier under the outer (high) edge every 2nd plank ──
+            if (i % 2 === 0) {
+              const px2 = cx + od[0] * run, pz2 = cz + od[2] * run;
+              const pierH = rise + 0.4;
+              if (!onTrack(px2, pz2, 5)) {
+                addBox(out, [px2, baseY + pierH * 0.5, pz2], [2.2, pierH, 1.8],
+                       (i % 4 === 0) ? concDk : conc, [od, [0, 1, 0], fw]);
+                // weathered moss foot on the pier
+                if (hk > 0.55)
+                  addBox(out, [px2, baseY + 0.9, pz2], [2.3, 1.8, 1.9], moss, [od, [0, 1, 0], fw]);
+              }
+            }
           }
         }
 
-        // Crumbling support pillars along the base of the bank.
-        // Pillars are placed at every-other arc position, offset INWARD from the
-        // panel face by 1.5 m so they don't interpenetrate the slab bodies.
-        for (let i = 0; i < N; i += 2) {
-          const f = i / (N - 1);
-          const ang = -arcSpan / 2 + f * arcSpan;
-          const ox = Math.sin(ang) * radius, oz = (1 - Math.cos(ang)) * radius;
-          // Inward offset: move the pillar 1.8 m toward the arc centre
-          // so its radius (1.2 m) clears the inner face of the panel slab.
-          const inOx = Math.sin(ang) * (radius - 1.8);
-          const inOz = (1 - Math.cos(ang)) * (radius - 1.8);
-          const cx = a.c[0] + a.r[0] * inOx + a.t[0] * inOz;
-          const cz = a.c[2] + a.r[2] * inOx + a.t[2] * inOz;
-          if (onTrack(cx, cz, 6)) continue;
-          const pillarH = 7 + (i % 4) * 1.0;  // slightly shorter — tops well below slab centre
-          // Start pillar at ground level (baseY) — no negative offset to avoid floating.
-          addCyl(out, [cx, baseY, cz], 1.1, pillarH, concDk, 8, null);
-          // Weathered/crumbling moss detail on pillar — clamped to pillar body.
-          if (i % 4 === 0) {
-            const mossH = pillarH * 0.38;
-            const mossY = baseY + pillarH * 0.58;  // upper third of pillar
-            addCyl(out, [cx + (hash(i) - 0.5) * 0.3, mossY, cz + (hash(i * 2) - 0.5) * 0.3],
-                   0.35, mossH, moss, 6, null);
-          }
+        // (a) Curva Nord ruin — a tall banked arc set back in the park off the LEFT
+        //     of the Lesmo woods. The icon of Monza, glimpsed through the trees.
+        //     Brought in to ~72 m and enlarged so the curved ramp reads clearly.
+        bankArc(anchor(K(0.50), -1, 72), { N: 22, arc: 2.5, radius: 110, slope: 22, tilt: 0.80, seed: 11 });
+
+        // (b) Curva Sud fragment — a shorter, more decayed banked stub behind the
+        //     Parabolica/back-of-paddock field, breaking the far treeline.
+        bankArc(anchor(K(0.88), -1, 100), { N: 13, arc: 1.7, radius: 95, slope: 18, tilt: 0.76, seed: 47 });
+
+        // Screen both ruins with broadleaf + a few pines growing in front of and
+        // through them — the "decaying banking glimpsed through parkland" read.
+        // Kept at a closer band (in FRONT of the bank) so trees veil but don't bury.
+        for (const [s, side, base] of [[0.50, -1, 58], [0.49, -1, 62], [0.51, -1, 54],
+                                       [0.485, -1, 66], [0.515, -1, 60],
+                                       [0.88, -1, 86], [0.872, -1, 92]]) {
+          const h = hash(K(s) * 9 + 3);
+          tree(K(s), side, base, 14 + h * 7, leafCol(h));
+          if (h > 0.45) pine(K(s + 0.004), side, base + 5, 19 + h * 8, PINE_D);
         }
       })();
 
@@ -501,6 +565,11 @@
           addBox(out, vadd(ap.c, ap.u, 10.0), [0.22, 1.3, 94], winPar, [ap.r, ap.u, ap.t]);
         }
       }
+
+      // Tifosi red crowd fill on the big Parabolica + Ascari stands too.
+      crowdFill(0.905, 1, 14, 92, 5);
+      crowdFill(0.875, 1, 14, 78, 4);
+      crowdFill(0.78, -1, 14, 76, 4);
 
       // 8c. Red/white Italian kerb stripes on start straight (pit-wall side, s=0.0–0.07).
       {

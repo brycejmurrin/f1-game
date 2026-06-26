@@ -23,7 +23,7 @@ Status legend: ⬜ not started · 🟦 in progress · ✅ done & screenshot-veri
 | miami | remove downtown skyline; stadium hero + aqua run-off; boats on cradles not floating | ⬜ |
 | madrid | demote Cuatro Torres to far cluster; low wide IFEMA pavilions; keep Monumental bowl | ⬜ |
 | bahrain | remove Manama skyline; Sakhir sail-canopy; pale sand; flat | ⬜ |
-| hungaroring | remove fake infield pond; dry straw palette; open banks not dense forest | ⬜ |
+| hungaroring | remove fake infield pond; dry straw palette; open banks not dense forest | ✅ |
 
 ### Tier 2 — wrong time of day
 | Track | Change | Status |
@@ -37,7 +37,7 @@ Status legend: ⬜ not started · 🟦 in progress · ✅ done & screenshot-veri
 |---|---|---|
 | suzuka | red ~50 m ferris wheel near S/F; figure-8 crossover bridge | ⬜ |
 | montreal | Biosphère steel dome + Olympic Basin + La Ronde wheel; 1m walls; Bonjour Québec | ✅ |
-| monza | ruined banked oval; deciduous-dominant trees; Tifosi red | ⬜ |
+| monza | ruined banked oval; deciduous-dominant trees; Tifosi red | ✅ |
 | imola | seated bronze Senna statue (replace white box); river hugs Tamburello wall | ⬜ |
 | interlagos | mirror Senna statue + Kobra mural; favela close + skyline far; lakes mid/far | ⬜ |
 | jeddah | offshore water-jet fountain; turquoise-dome Floating Mosque; sparse low-rise | ⬜ |
@@ -48,7 +48,7 @@ Status legend: ⬜ not started · 🟦 in progress · ✅ done & screenshot-veri
 |---|---|---|
 | vegas | oblate Sphere; bronze curved towers (Wynn/Encore/RW); themed resort colour clusters | ⬜ |
 | redbull | bull rusted Corten + gold horns, infield; Wing spoiler profile; lower/greener mountains | ⬜ |
-| silverstone | Wing silver not white; flat airfield (remove mountain rings); copses not dense forest | ⬜ |
+| silverstone | Wing silver not white; flat airfield (remove mountain rings); copses not dense forest | ✅ |
 | monaco | Casino trio (Hôtel de Paris + Casino + Café de Paris); green-copper roofs; Tour Odéon | ⬜ |
 | cota | remove fictional Velocity tower; dark-brown clay; rolling prairie not ridges | ✅ |
 | albert_park | Eureka gold crown + 297 m; add Australia 108; skyline across lake; palms+gums | ⬜ |

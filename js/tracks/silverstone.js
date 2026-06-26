@@ -51,26 +51,19 @@
         }
       });
 
-      // two overlapping rings of low green rises — dense enough to read as a wall
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
-        [270, 42, 180, 18, 12, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
-        [370, 36, 220, 22, 12, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
-        [470, 30, 260, 26, 14, [0.12, 0.28, 0.14], [0.18, 0.34, 0.18]],
-      ]) {
-        const ring = rad + extra;
-        const span = 2 * Math.PI * ring / count;
-        for (let i = 0; i < count; i++) {
-          const a = (i / count + hash(i + extra) * 0.05) * 6.2832, h = hash(i * 7 + extra);
-          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
-                   Math.max(wMin + h * 120, span * 1.5), hMin + h * hVar,
-                   { snowline: 2, seg: 7, seed: i * 13 + extra, forest: fc, rock: rc });
+      // ---- FLAT AIRFIELD HORIZON (no mountains — Silverstone is a former RAF
+      // airfield, ~22 m total elevation; the land is genuinely flat). The old
+      // concentric mountain() rings are deliberately removed. The low distant
+      // treeline backdrops above carry the horizon; here we add an even lower,
+      // very distant hedgerow/copse silhouette so the skyline reads as an open
+      // English farmland horizon rather than a bare edge — but never as hills.
+      every(46, (kk) => {
+        for (const side of [-1, 1]) {
+          // very low (8–12 m) far treeline — flat open-airfield horizon
+          backdrop(kk, side, 360 + hash(kk * 11 + side) * 90, [190, 9, 190], [0.13, 0.26, 0.15]);
+          backdrop(kk, side, 460 + hash(kk * 17 + side) * 110, [210, 8, 210], [0.12, 0.24, 0.15]);
         }
-      }
+      });
 
       // ---- Hedgerow-gridded flat farmland + perimeter hedgerows ----
       hedge(0.60, 0.64, -1, 80, 2.6, COPSE);
@@ -130,20 +123,47 @@
       // Chapel corner — fans favourite viewpoint
       grandstand(0.17, -1, 14, 50,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
 
-      // ---- The Wing building (s≈0.45 R) — Silverstone's long white pit/paddock facade ----
-      // Long low white slab. gap=4, w=20 → dist=14 from centre. Height 11m, length 240m.
+      // ---- The Wing building (s≈0.45 R) — Silverstone's long metallic-silver
+      // pit/paddock facade. The real Wing is powder-coated steel in Metallic
+      // Silver (RAL 9006) + Anthracite Grey (RAL 7016) + Graphite Grey (RAL 2074):
+      // a cool silver-grey frontispiece, NOT white masonry. ----
+      const WING_SILVER = [0.66, 0.68, 0.72];  // RAL 9006 metallic silver
+      const WING_ANTHR  = [0.40, 0.42, 0.46];  // RAL 7016 anthracite grey accent
+      const WING_GRAPH  = [0.30, 0.31, 0.34];  // RAL 2074 graphite grey (lower band)
+      // Long low silver slab. gap=4, w=20 → dist=14 from centre. Height 11m, length 240m.
       building(k(0.45), 1, 4, 20, 11, 240, {
-        wall: [0.86, 0.86, 0.88], window: [0.12, 0.16, 0.22], floor: 4 });
+        wall: WING_SILVER, window: [0.12, 0.16, 0.22], floor: 4 });
 
-      // Thin cantilevered roof fin (above building top, anchored at dist=14, elevated to h=11+3=14)
+      // The undulating aerofoil roofline + cladding bands.
       {
         const a = anchor(k(0.45), 1, 14);
-        // roof blade sitting cleanly ON TOP of the 11m building (vadd by 11+1 = 12m, blade is 1.4m tall)
-        addBox(out, vadd(a.c, a.u, 12.7), [26, 1.4, 240], [0.90, 0.92, 0.96], [a.r, a.u, a.t]);
-        // slim glazing strip just below the roof blade — track-facing dark glass (h=3m, sits 7–10m up)
-        addBox(out, vadd(a.c, a.u, 5.0), [20, 6, 242], [0.10, 0.14, 0.22], [a.r, a.u, a.t]);
-        // warm amber lit windows behind the glass (interior band, offset slightly inward)
-        addBox(out, vadd(a.c, a.u, 5.2), [18, 5.4, 238], LIT_WIN, [a.r, a.u, a.t]);
+        // dark anthracite lower cladding band (continuous, wrapping the base)
+        addBox(out, vadd(a.c, a.u, 2.4), [21, 4.4, 241], WING_ANTHR, [a.r, a.u, a.t]);
+        // slim glazing strip just below the roofline — track-facing dark glass
+        addBox(out, vadd(a.c, a.u, 7.6), [20, 5.2, 242], [0.10, 0.14, 0.22], [a.r, a.u, a.t]);
+        // warm amber lit windows behind the glass (interior band, offset inward)
+        addBox(out, vadd(a.c, a.u, 7.7), [18, 4.6, 238], LIT_WIN, [a.r, a.u, a.t]);
+
+        // --- Undulating aerofoil roof: a continuous run of segmented silver
+        // blades whose tops rise & fall like a wing, climbing toward the
+        // last-corner end where the roof "points to the sky". Each segment is a
+        // short box at a wing-profile height; consecutive heights overlap so the
+        // silhouette reads as a smooth undulating ridge, not a flat blade. ---
+        const SEG = 12, segLen = 240 / SEG;
+        for (let i = 0; i < SEG; i++) {
+          const t = i / (SEG - 1);
+          // base climb toward one end + a sinusoidal undulation (the aerofoil waves)
+          const climb = 11.5 + t * 5.5;                       // 11.5 → 17 m base ridge
+          const wave  = Math.sin(t * Math.PI * 3.0) * 1.7;     // ±1.7 m undulation
+          const topH  = climb + wave;
+          const segOff = (i - (SEG - 1) / 2) * segLen;          // centred offset along facade
+          // overlap segments slightly (segLen*1.18) for a continuous ridge
+          addBox(out, vadd(vadd(a.c, a.t, segOff), a.u, topH - 0.9),
+                 [25, 1.8, segLen * 1.18], WING_SILVER, [a.r, a.u, a.t]);
+          // thin graphite underside/shadow line just below each blade
+          addBox(out, vadd(vadd(a.c, a.t, segOff), a.u, topH - 2.0),
+                 [24.2, 0.5, segLen * 1.12], WING_GRAPH, [a.r, a.u, a.t]);
+        }
       }
 
       // Wing grandstand (behind pit building, s≈0.46 R)
@@ -191,6 +211,27 @@
 
       // BRDC clubhouse set back (s≈0.48 R) — pale historical building
       building(k(0.48), 1, 28, 22, 9, 20, { wall: [0.76, 0.76, 0.72], window: [0.18, 0.24, 0.30] });
+
+      // ---- Old Pits / International complex (near Woodcote, Old Pit Straight) ----
+      // Silverstone's two-paddock identity: the original 1950s-era pit & paddock
+      // on the Old Pit Straight, a NEUTRAL-WHITE/concrete contrast to the silver
+      // Wing. A low older pit building + a modest period grandstand.
+      {
+        const OLD_WHITE = [0.84, 0.84, 0.82];   // neutral aged white/concrete
+        const OLD_TRIM  = [0.70, 0.70, 0.68];
+        // long low original pit building (Old Pit Straight, s≈0.88 R)
+        building(k(0.88), 1, 6, 14, 7, 70, { wall: OLD_WHITE, window: [0.22, 0.26, 0.30], floor: 3 });
+        // a simple period grandstand opposite, modest size
+        grandstand(0.88, 1, 9, 55, [0.62, 0.62, 0.60], [0.40, 0.42, 0.48]);
+        // small International race-control box on the old straight
+        const oa = anchor(k(0.90), 1, 16);
+        if (!onTrack(oa.c[0], oa.c[2], 4)) {
+          addBox(out, vadd(oa.c, oa.u, 5), [8, 10, 9], OLD_WHITE, [oa.r, oa.u, oa.t]);
+          addBox(out, vadd(oa.c, oa.u, 8.5), [7, 2.2, 8], [0.14, 0.18, 0.24], [oa.r, oa.u, oa.t]); // glaze band
+          addBox(out, vadd(oa.c, oa.u, 8.6), [6.2, 1.8, 7.2], LIT_WIN, [oa.r, oa.u, oa.t]);
+          void OLD_TRIM;
+        }
+      }
 
       // ---- Lamp posts along the pit straight and around The Wing ----
       // Double-arm floodlight columns — distinctive at circuits (white/silver poles, twin heads)
@@ -283,22 +324,25 @@
       // ---- Start gantry over start/finish ----
       gantry(0.0, 7.5, [0.28, 0.30, 0.34]);
 
-      // ---- Pine windbreak rows (airfield perimeter) + outer broadleaf copse belts ----
-      // Windbreaks: mix of conifer/broadleaf at mid-distances using forestEdge.
-      // pineFrac=0.6 gives the classic Silverstone mixed-hedgerow/conifer windbreak feel.
-      forestEdge(0.14, 0.24,  1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right
-      forestEdge(0.32, 0.42,  1, 129, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right
-      forestEdge(0.58, 0.68, -1, 119, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left
-      forestEdge(0.78, 0.90, -1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
-      forestEdge(0.05, 0.12, -1, 134, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
-      forestEdge(0.44, 0.52,  1, 139, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
-      // Outer broadleaf copse belts (the named Silverstone landscape copses)
-      forestEdge(0.17, 0.21, -1, 114, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer belt
-      forestEdge(0.49, 0.53,  1, 104, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
-      forestEdge(0.71, 0.75,  1, 109, { density: 0.5,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Loop outer copse
-      forestEdge(0.61, 0.65, -1, 124, { density: 0.45, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Abbey outer belt
-      forestEdge(0.35, 0.39, -1, 139, { density: 0.4,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Stowe outer field copse
-      forestEdge(0.24, 0.28,  1, 124, { density: 0.4,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Maggotts outfield copse
+      // ---- Discrete copses + sparse shelterbelt windbreaks (open farmland) ----
+      // Silverstone sits on open airfield farmland — NOT a forest. The long
+      // continuous windbreak belts are deliberately broken into SHORT, sparse
+      // clumps (lower density, narrower fraction spans) so open grass/field gaps
+      // show between them. Hedgerows (above) do most of the boundary work; these
+      // are occasional conifer/broadleaf farm shelterbelts, not a tree wall.
+      forestEdge(0.15, 0.18,  1, 124, { density: 0.24, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right shelterbelt
+      forestEdge(0.34, 0.37,  1, 129, { density: 0.24, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right shelterbelt
+      forestEdge(0.60, 0.63, -1, 119, { density: 0.22, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left clump
+      forestEdge(0.82, 0.85, -1, 124, { density: 0.24, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left clump
+      forestEdge(0.06, 0.09, -1, 134, { density: 0.22, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far-side clump
+      forestEdge(0.46, 0.49,  1, 139, { density: 0.22, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing clump
+      // Outer broadleaf copses (the named Silverstone landscape copses — tight clumps)
+      forestEdge(0.18, 0.20, -1, 114, { density: 0.3,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer copse
+      forestEdge(0.50, 0.52,  1, 104, { density: 0.3,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer copse
+      forestEdge(0.72, 0.74,  1, 109, { density: 0.28, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Loop outer copse
+      forestEdge(0.62, 0.64, -1, 124, { density: 0.26, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Abbey outer copse
+      forestEdge(0.36, 0.38, -1, 139, { density: 0.26, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Stowe outer field copse
+      forestEdge(0.25, 0.27,  1, 124, { density: 0.26, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Maggotts outfield copse
 
       // ---- Low farm sheds / airfield hangars on the flat outfield ----
       for (const [s, side, d, w, h, ln] of [
@@ -385,6 +429,7 @@
 
       // silence unused-guard lint helpers (destructured but not called directly)
       void GRASS; void STEEL; void TARMAC; void prop; void WHITE; void tower; void addCone; void bush;
+      void mountain; void px; void pz; void pyMin; void along; void pine;
     },
   }
   );
