@@ -110,82 +110,35 @@ under hard braking (`brakeFade`) to kill the turn-in snap.
 
 ## Lighting & sky (`js/glx.js` + `applyRaceSettings` in `game.js`)
 
-- **Sun + hemisphere ambient + point lights.** The lit shader = directional sun
-  (with shadow map) + hemisphere ambient (`uAmbSky`/`uAmbGround`, blended by
-  `N.y`) + up to **32 point lights** (`uLightPos/Col/Rad`). The composite pass
-  does ACES tone-map + `colourGrade` (a vibrance/contrast lift — the global lever
-  for the "washed-out" look) + bloom + lens flare + vignette.
-- **Night = dark ambient + floodlights.** `applyRaceSettings` floors AND **caps**
-  night ambient (so over-bright palettes don't wash to daylight) and **dims the
-  scene sun** to moonlight (`frame.sunColor`) — many night palettes ship a bright
-  near-overhead sun for the *sky* glow, which otherwise lit the road like day.
-  `frameSky.sunColor` is left warm so dusk skies survive.
-- **Floodlights on EVERY circuit.** `buildTrackLights()` (game.js) places point
-  lights every ~40 m along the edges of any track; `setFrameLights()` culls to the
-  nearest 32 to the camera each frame. They're fed to the shader whenever the
-  scene is dark — **night/dusk/dawn on any track**, or a night-default track in
-  default mode — and left off in bright day (sun dominates; `numLights = 0`).
-  Colour varies by `theme` (`floodColor()`): desert = warm sodium, street/modern =
-  cool LED white, classic `green` = neutral warm-white. Matching **floodlight
-  masts** are emitted for every track in `buildProps` (tracks.js) at the same
-  stride/offset/side, so the masts are visible day and night and each light pool
-  reads as cast by a real mast. Check live state with `__apex.lightState()`.
-- The sky shader's sun disc uses the same `sunDir` as the lighting, so the bright
-  spot in the sky aligns with where shadows fall. Check the live state with
-  `__apex.lightState()`.
-- **Per-time-of-day atmosphere (the `raceTimeOfDay !== "default"` branch of
-  `applyRaceSettings`).** `dawn`/`dusk` ship rich split-tone skies + low sun;
-  `night` darkens ambient and dims the sun to moonlight; **`day`** is driven
-  per-track by `_trackAtmoBias(def)` (−clear … +overcast): clear circuits get a
-  deep saturated zenith, a low **raking** sun for long shadows (avoids the flat
-  near-overhead look), warm-sun-vs-cool-sky **chiaroscuro** and crisp low haze;
-  humid/overcast circuits pale and haze out. Per-time bloom/grade is set just
-  before `GLX.present()` (day ≈ bloom 0.74, grade str 0.34). Switch live with
-  `__apex.setTimeOfDay()`.
+Lit shader = directional sun (shadow map) + hemisphere ambient (`uAmbSky`/`uAmbGround`)
++ up to 32 point lights (UBO). Composite: ACES tone-map + `colourGrade` + bloom +
+lens flare + vignette. Night: ambient floored+capped, sun dimmed to moonlight,
+floodlights on. Day: `_trackAtmoBias` per circuit. `buildTrackLights()` places
+floodlights every ~40 m; `setFrameLights()` culls to nearest 32 per frame.
+
+```js
+__apex.lightState()           // { ambientSky, ambientGround, sunColor, numLights, … }
+__apex.setTimeOfDay('night')  // 'dawn'|'day'|'dusk'|'night'|'default'
+```
+
+See `docs/LIGHTING-REF.md` for UBO layout, shader uniforms, time-of-day branches, masts.
 
 ---
 
 ## City & scenery dressing (`buildProps` / `buildRoad` in `js/tracks.js`)
 
-Procedural per-circuit dressing layered on top of each track file's own
-`scenery(api)` (see `docs/SCENERY-API.md`). All session-time-aware: built for the
-*chosen* time (`track._night`), rebuilt on a day↔night flip (see `setTimeOfDay`).
+Procedural per-circuit dressing on top of each track's `scenery(api)` callback.
+Session-time-aware (rebuilt on day↔night flip). Street/modern themes get the city
+generator (`STYLES[def.id]`): building silhouettes, neon palettes, reflective glass
+mesh (`track.meshes.glass`). All 24 tracks get furniture (`FURN`): trees and street
+lamps (glow HDR at night). Street circuits get armco barrier liveries (`BARRIER`).
+`buildRoad` tints tarmac/verge via a stable per-track hash.
 
-- **City generator** (gated to `theme` `street_day`/`street_night`/`modern`).
-  A per-track `STYLES[def.id]` entry drives it: `neon[]` palette, `kinds[]` /
-  `neonKinds[]` (building silhouettes), `tone {n:[night], d:[day]}`, `dayPal[]`
-  (daytime facade colours), `bias` (neon-vs-general fraction), `fh`/`bh` (front/
-  back-row height). Fallback by theme via `THEME_DEF`.
-  - **Buildings**: `neonTower()` (filler towers) and `building()` (landmarks).
-    `neonTower` switches on `kind` — the 18 in `BLD` (setback/tiered/podium/slab/
-    twin/jenga/cylinder/spire/dome/chevron/notch/fin/antenna/cross/arch/ziggurat/
-    drum/hall) plus the bright neon kinds (pyramid/screen/clad). `neonFacade()` is
-    the shared inset-window curtain wall.
-  - **Real reflective glass**: day windows route to a **separate** `glassBuf`
-    mesh (`track.meshes.glass`) drawn with low roughness so the lit shader mirrors
-    the sky (materials are per-draw, hence a second mesh). Warm-stone tones
-    (`med` detection) instead get small punched windows → masonry, not glass.
-  - **Day colours** (`DC` set + per-track `dayPal`, picked by `toneFor()`):
-    clustered into cohesive colour runs biased to each track's signature material
-    (Vegas dark grey glass + metal, Monaco Mediterranean cream/peach, Madrid
-    terracotta, Miami pastels, Singapore/Shanghai cool glass…) — not flat grey.
-- **Barriers** (`BARRIER[def.id]`): each street circuit has a 3-colour armco
-  livery cycled along the wall + a tinted night rail + a themed tyre-stack cap
-  (Monaco red/white/navy, Vegas gold/black/magenta, national colours, etc.).
-- **Furniture** (`FURN[def.id]`, **all 24 tracks**): roadside `tree`
-  (`palm`/`broad`/`fir`(=`conifer`)/`none`) with per-tree colour jitter +
-  occasional autumn accents and clustered forest stands; `streetLamp`
-  (`arm`/`globe`/`post`/`none`) that glows HDR at night. Trees/lamps **never**
-  call `blockAt`/`markBarrier`, so they don't touch the driving boundary.
-- **Road & verge** (`buildRoad`): a stable per-track hash tints the tarmac and
-  grass (cool-dark vs sun-bleached, lush vs dry verge); the racing line is
-  rubbered darker and edges dustier (`wearF`) so the surface reads used.
+See `docs/SCENERY-API.md` for the `scenery(api)` reference, building kinds, tables.
 
 ---
 
-## `window.__apex` dev API
-
-Full reference in `docs/DEBUG-HOOKS.md`. Quick summary:
+## `window.__apex` dev API  — see `docs/DEBUG-HOOKS.md` for the full reference.
 
 ```js
 __apex.race("monza")          // load track, skip menus
@@ -236,86 +189,20 @@ __apex.act({steer,throttle,brake}, dt, n) // set input + step n ticks → obs (1
 __apex.reset(frac, speed, x)  // fast episode reset without reloading assets → obs
 ```
 
-**Note:** `obs()` and `physState()` require `player.px` to be initialised (set by `jump()` or one physics tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` before calling these. The game also pre-loads a default track on startup, so `trackProfile()` works without an explicit `race()` call.
-
-### Headless control loop pattern
-```js
-await page.evaluate(async () => {
-  await new Promise(r => { const t = setInterval(() => { if (window.__apex) { clearInterval(t); r(); } }, 50); });
-  __apex.race("monza");
-  await new Promise(r => setTimeout(r, 2000));   // wait for track load
-  __apex.headless(true);
-  __apex.reset(0.1, 30);                         // start at 10% lap, 30 m/s
-});
-
-// control loop: 1 evaluate per decision step
-const obs = await page.evaluate(() =>
-  __apex.act({ steer: -0.3, throttle: true, brake: false }, 1/60, 5)
-);
-// obs.speed, obs.clearR, obs.clearL, obs.scan, obs.done, obs.reward …
-```
+**Note:** `obs()` / `physState()` require `player.px` initialised (`jump()` or one
+tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` first.
 
 ---
 
 ## Testing
 
-100+ Playwright specs (50+ files). Run groups with `npm run test:<group>` (see Key commands).
+100+ Playwright specs (50+ files). Run groups with `npm run test:<group>` (see Key
+commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
+magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
+geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
+`#pm-steer`/`#pm-calib` tests; landscape `{width:844, height:390}` for in-race.
 
-**Testing philosophy — debug-hooks first.** Prefer assertions driven by the
-`window.__apex` API and geometric/mesh probes over rendering- or timing-based
-heuristics:
-- Assert **behaviour and geometry**, not brittle magnitudes. A threshold like
-  "speed > 10 after 2 s" goes stale the moment physics is retuned; prefer
-  relative/directional checks ("faster on tarmac than on grass", "heading barely
-  changes off-track with zero steer", "reverses then recovers to forward"). The
-  off-track specs were tightened this way after several thresholds drifted stale.
-- Use the deterministic hooks: `obs()`/`act()`/`reset()` (headless control loop),
-  `step()`+`physState()`/`probe()` (physics), `groundY()`/`Tracks.terrainY()`
-  (rendered-terrain raycast — exact geometry, e.g. `terrain-over-road.spec.js`),
-  `eyeAt()`/`orbit()`/`view()` (deterministic camera framing for screenshots).
-- A few **legacy specs are coarse rendering heuristics** and are inherently
-  flakier: `blank-scan/*` (PNG byte-size thresholds; the geometric
-  `terrain-over-road.spec.js` is the modern successor for the terrain-over-road
-  subclass) and `visual-regression-*` (pixel diff). Keep them, but write *new*
-  checks against hooks/geometry where possible.
-- When a spec fails, first check whether it's a **stale expectation** vs the
-  current intended behaviour (does the assertion still match the design?) before
-  assuming a regression — confirm by reading the actual hook values.
-
-| Spec(s) | What they cover |
-|---|---|
-| `smoke.spec.js` | page loads, `__apex` available, race starts |
-| `autopilot.spec.js` | closed-loop programmatic driving (monza, suzuka) |
-| `track-*.spec.js` | per-circuit smoke tests |
-| `tracks-walls.spec.js` | barrier geometry on all 24 circuits |
-| `physics-*.spec.js`, `world-physics.spec.js`, `longitudinal.spec.js` | physics regression |
-| `elevation-tracks.spec.js` | slope/gravity, banking grip, road-follow on graded circuits |
-| `collisions*.spec.js`, `drift.spec.js`, `offtrack.spec.js` | behaviour tests |
-| `collision-ai-fixes.spec.js` | regression tests for June 2026 audit: wrong-way threshold/hysteresis, wallT on open circuits, rear-end contactT, 10-car pack separation, AI banking grip, Jeddah barriers |
-| `headless-api.spec.js` | headless control loop: `headless()`, `obs()`, `act()`, `reset()` |
-| `obs-act-edge.spec.js` | edge cases: `act(n=0)`, `reset(0.999)` lap seam, scan wrap-around, `done` semantics, numeric stability |
-| `ui-audit.spec.js` | portrait+landscape screenshots of all 10 screens |
-| `visual-regression-*.spec.js` | pixel-diff regression |
-| `presets.spec.js`, `sliders.spec.js`, `steering.spec.js` | steering parameter tests |
-| `parts-physics.spec.js` | Parts module unit tests (getMods, getCost, statMult) |
-| `parts-budget.spec.js` | budget UI and unlimited toggle |
-| `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
-| `parts-persistence.spec.js` | localStorage persistence across reloads |
-| `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
-| `new-hooks.spec.js` | contract tests for the 8 new hooks: `timing()`, `sectorState()`, `lapHistory()`, `fieldState()`, `aiPlace()`, `setEnergy()`, `setLap()`, `trackProfile()`, `obs().gear` |
-| `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
-| `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
-| `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection |
-| `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
-
-**Viewport rules:**
-- Tests that touch `#pm-steer` / `#pm-calib` must use `hasTouch: true` (desktop
-  adds `body.desktop` which hides those elements).
-- In-race tests use LANDSCAPE viewport `{width:844, height:390}` to avoid the
-  `#rotate-device` overlay.
-
-Playwright config: `playwright.config.js`, baseURL `localhost:3456`, retries 1,
-SwiftShader headless GPU.
+See `docs/TESTING.md` for spec coverage table, fixture docs, and philosophy.
 
 ---
 
