@@ -5,6 +5,8 @@
 
 # Node / Playwright
 node_modules/
+# scratch screenshot output from tools/apex-capture.mjs (regenerable)
+scratch/
 test-results/
 playwright-report/
 
