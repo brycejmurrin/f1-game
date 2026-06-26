@@ -582,25 +582,35 @@ void main() {
 
   let _curFrame = null;
 
-  function begin(frame) {
-    _curFrame = frame;
-    frameViewProj = frame.viewProj;
-
-    // Compute light-space matrix for shadow pass
-    const sd = frame.sunDir || [0, 1, 0];
-    const eye = frame.eye || [0, 0, 0];
-    computeLightVP(sd, eye, 400);
-
-    // ── Shadow pass (depth only) ──
+  // ── Shadow pass API (called by game.js before begin()) ──
+  function shadowBegin(lvp) {
+    if (!shadowFBO) return;
+    lightVP.set(lvp);
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFBO);
     gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
     gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.useProgram(depthProg);
     gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
-    // (meshes are drawn by drawDepth() calls from game.js — see present())
+    gl.disable(gl.CULL_FACE);
+  }
 
-    // ── HDR scene pass: switch to HDR FBO ──
-    // (game.js calls draw() between begin() and present())
+  function castShadow(mesh, model) {
+    if (!shadowFBO || !mesh) return;
+    gl.uniformMatrix4fv(depthU.uModel, false, model);
+    gl.bindVertexArray(mesh.vao);
+    gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    gl.bindVertexArray(null);
+  }
+
+  function shadowEnd() {
+    gl.enable(gl.CULL_FACE);
+  }
+
+  function begin(frame) {
+    _curFrame = frame;
+    frameViewProj = frame.viewProj;
+
+    // ── HDR scene pass ──
     if (!hdrFBO) rebuildPostBuffers(width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, hdrFBO);
     gl.viewport(0, 0, width, height);
@@ -608,6 +618,7 @@ void main() {
     gl.clearColor(fc[0], fc[1], fc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+    const sd = frame.sunDir || [0, 1, 0];
     gl.useProgram(litProg);
     gl.uniformMatrix4fv(litU.uViewProj, false, frame.viewProj);
     gl.uniformMatrix4fv(litU.uLightVP, false, lightVP);
@@ -764,6 +775,9 @@ void main() {
     resize,
     createMesh,
     freeMesh,
+    shadowBegin,
+    castShadow,
+    shadowEnd,
     begin,
     draw,
     drawSky,
@@ -773,6 +787,6 @@ void main() {
     get width()  { return width; },
     get height() { return height; },
     get aspect() { return aspect; },
-    hdrMode: () => hdrOk,  // Change 3.5: expose HDR status
+    hdrMode: () => hdrOk,
   };
 })();
