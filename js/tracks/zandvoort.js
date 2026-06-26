@@ -17,7 +17,7 @@
     // Hugenholtz + Arie Luyendyk: the two steeply banked corners get a raised
     // outer edge (the engine banks the highest-curvature corners).
     banked: true,
-    pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
+    pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.57, 0.55, 0.39], runoff: [0.62, 0.54, 0.36], fog: [0.78, 0.76, 0.71], fogDensity: 0.0026, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
     segs: [
       { t: 0, l: 260 }, { t: 75, l: 120, b: 0.16 }, { t: -50, l: 90 }, { t: 130, l: 150, b: 0.3 }, { t: 0, l: 180, h: 8 }, { t: 40, l: 110, h: -8 },
       { t: 60, l: 100 }, { t: -50, l: 90, h: 4 }, { t: 70, l: 90 }, { t: -60, l: 90 }, { t: 90, l: 90 }, { t: -50, l: 90 },
@@ -38,8 +38,8 @@
       const sand      = [0.81, 0.75, 0.58];
       const sandDk    = [0.71, 0.65, 0.48];
       const sandLt    = [0.87, 0.81, 0.64];
-      const marramG   = [0.33, 0.49, 0.24];   // marram grass green
-      const marramT   = [0.67, 0.63, 0.41];   // marram grass tan
+      const marramG   = [0.45, 0.50, 0.34];   // marram grass — grey-green/silvery tussock
+      const marramT   = [0.69, 0.64, 0.43];   // marram grass tan (bleached)
       const seaCol    = [0.18, 0.40, 0.56];   // North Sea blue-grey
       const beachCol  = [0.89, 0.83, 0.66];   // wet-sand beach
       const duneCol   = [0.82, 0.76, 0.58];   // dry dune fringe
@@ -144,28 +144,36 @@
       });
 
       // -----------------------------------------------------------------------
-      // COASTAL DUTCH PINES — dark conifers in dense clusters on dune slopes.
-      // Use forestEdge() which guarantees no barrier clipping and handles
-      // canopy-radius clearance automatically.
-      // Zandvoort has scattered Scots pine stands on the inland dune backs —
-      // mixed with open sand gaps.  pineFrac=0.85 gives mostly pines with some
-      // broadleaf scrub.  Density 0.45 → sparse/gappy (authentic dune pine).
+      // INLAND DUNE SCRUB — Zandvoort is OPEN GOLDEN DUNE, not a pine forest.
+      // The real circuit weaves through bare blond-sand dunes with grey-green
+      // marram and only OCCASIONAL low scrub/Scots-pine clumps on the inland
+      // backs.  So: drop the dense dark pine belts; keep only very sparse, low,
+      // muted-green clumps set well back, with big open sand gaps between.
       // -----------------------------------------------------------------------
-      const pineCol  = [0.16, 0.34, 0.12];   // dark coastal pine
-      const pineCol2 = [0.20, 0.38, 0.14];   // slightly lighter broadleaf scrub
+      const pineCol  = [0.24, 0.34, 0.22];   // muted dune-pine / scrub (greyed)
+      const pineCol2 = [0.34, 0.40, 0.28];   // dusty broadleaf scrub
 
-      // Inland-side dune pine belt — sectors where inland forest exists
-      forestEdge(0.22, 0.46,  1, 55, { density: 0.42, hMin: 7, hMax: 13,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.88 });
-      forestEdge(0.22, 0.46, -1, 48, { density: 0.38, hMin: 6, hMax: 12,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.85 });
-      forestEdge(0.56, 0.82,  1, 50, { density: 0.40, hMin: 7, hMax: 14,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.80 });
-      forestEdge(0.56, 0.82, -1, 45, { density: 0.35, hMin: 6, hMax: 11,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.82 });
-      // Thinner pine fringe on the approaches to the grandstand complex
-      forestEdge(0.88, 0.99,  1, 28, { density: 0.30, hMin: 6, hMax: 10,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.75 });
+      // A couple of thin, low, gappy inland scrub stands (far back, not a wall)
+      forestEdge(0.30, 0.40,  1, 70, { density: 0.16, hMin: 4, hMax: 7,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.55 });
+      forestEdge(0.62, 0.74, -1, 66, { density: 0.14, hMin: 4, hMax: 7,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.50 });
+
+      // Extra bare dune mounds fill the sectors the pine belts used to occupy,
+      // so the inland backdrop reads as rolling sand rather than empty flat.
+      every(20, (k) => {
+        const lf = k / n;
+        if (!((lf > 0.22 && lf < 0.48) || (lf > 0.56 && lf < 0.84))) return;
+        for (const side of [-1, 1]) {
+          if (hash(k * 91 + side) > 0.5) continue;
+          const dist = 50 + hash(k * 92 + side) * 40;
+          const a = anchor(k, side, dist);
+          if (onTrack(a.c[0], a.c[2], 18)) continue;
+          peak(a.c[0], a.c[2], a.c[1], 30 + hash(k * 93 + side) * 26,
+               11 + hash(k * 94 + side) * 14,
+               hash(k * 95 + side) < 0.5 ? sand : sandLt);
+        }
+      });
 
       // -----------------------------------------------------------------------
       // MARRAM GRASS — dense tufts along both verges for continuous dune-grass feel.
@@ -242,34 +250,8 @@
         addBox(out, vadd(a.c, a.u, 6.3), [8.5, 0.5, 66], [0.80, 0.81, 0.84], b);
       })();
 
-      // -----------------------------------------------------------------------
-      // WIND TURBINES — seaward horizon landmark (North Sea wind farm silhouette).
-      // Fixed: blades are built in track-right (a.r) and track-up (a.u) space
-      // so they orbit the shaft axis correctly and don't lean into the ground.
-      // -----------------------------------------------------------------------
-      for (const s of [0.20, 0.34, 0.50, 0.62, 0.78]) {
-        const k = K(s), a = anchor(k, 1, 300);
-        if (onTrack(a.c[0], a.c[2], 60)) continue;
-        tower(k, 1, 300, 7, 80, { col: [0.92, 0.92, 0.94], seg: 8 });   // white pole
-        const hubPt = vadd(a.c, a.u, 80);                               // nacelle centre
-        const b = [a.r, a.u, a.t];
-        addCyl(out, vadd(hubPt, a.u, -1.2), 1.2, 2.4, [0.90, 0.90, 0.92], 6, b);  // nacelle
-        // Three blades — each offset from hub in the (a.r, a.t) plane
-        // (perpendicular to the tower shaft a.u), so they sit flat and don't clip ground
-        for (let j = 0; j < 3; j++) {
-          const ang = j * 2.0944;            // 0°, 120°, 240°
-          const cs = Math.cos(ang), sn = Math.sin(ang);
-          // blade direction: a mix of track-right and track-forward, both horizontal
-          const bldR = [a.r[0] * cs + a.t[0] * sn,
-                        a.r[1] * cs + a.t[1] * sn,
-                        a.r[2] * cs + a.t[2] * sn];
-          // blade center is 15m out from hub in blade direction
-          const bldC = [hubPt[0] + bldR[0] * 15,
-                        hubPt[1] + bldR[1] * 15,
-                        hubPt[2] + bldR[2] * 15];
-          addBox(out, bldC, [2, 30, 1.5], [0.94, 0.94, 0.96], [bldR, a.u, a.t]);
-        }
-      }
+      // (Wind turbines removed — they aren't a signature Zandvoort feature and
+      //  competed with the authentic dune + beach + North-Sea horizon.)
 
       // -----------------------------------------------------------------------
       // BEACH HUTS — pastel rows clustered at the seaward dune face (s≈0.3–0.7).
