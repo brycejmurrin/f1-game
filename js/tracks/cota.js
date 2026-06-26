@@ -14,7 +14,7 @@
     theme: "green",
     lengthKm: 5.5,
     baseHW: 8,
-    pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.36, 0.44, 0.20], runoff: [0.58, 0.38, 0.24], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
+    pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.48, 0.50, 0.30], runoff: [0.40, 0.33, 0.26], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
     segs: [
       { t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 },
       { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 }, { t: 0, l: 460 },
@@ -31,7 +31,7 @@
       const scrub     = [0.28, 0.38, 0.22];   // muted — avoids vivid green
       const oak       = [0.24, 0.36, 0.18];
       const cedar     = [0.20, 0.30, 0.18];
-      const redSoil   = [0.62, 0.34, 0.24];
+      const redSoil   = [0.34, 0.27, 0.21];   // dark-brown Blackland clay (NOT red dirt)
       const redSteel  = [0.86, 0.20, 0.16];
       const white     = [0.92, 0.92, 0.94];
       const darkSteel = [0.32, 0.34, 0.40];
@@ -120,7 +120,7 @@
       addPrism(out, vadd(a1.c, a1.u, 4), [20, 12, 60], redSoil, [a1.t, a1.u, a1.r]);
       // large outer mound on the left side of the hill
       const a1L = anchor(k1, -1, 26);
-      addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.58, 0.36, 0.26], [a1L.t, a1L.u, a1L.r]);
+      addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.37, 0.29, 0.23], [a1L.t, a1L.u, a1L.r]);
 
       // ---- Esses spectator viewing mounds (s≈0.18, both sides) ----
       const ke = K(0.18);
@@ -155,15 +155,16 @@
       redFramework(K(0.84), 1, 52);    // red framework at the triple-apex sweeper
       redFramework(K(0.30), 1, 62);    // red framework over the dry-grass field
 
-      // ---- Velocity Tower — iconic colourful Austin landmark (s≈0.36, R far) ----
-      const kv = K(0.36), av = anchor(kv, 1, 98), vb = [av.r, av.u, av.t];
-      if (!onTrack(av.c[0], av.c[2], 32)) {
-        addFrustum(out, av.c,                   8.2, 6.5, 26, [0.32, 0.34, 0.38], 6, vb);
-        addFrustum(out, vadd(av.c, av.u, 26),   6.5, 5.8,  6, [0.96, 0.64, 0.12], 8, vb);
-        addFrustum(out, vadd(av.c, av.u, 32),   5.8, 4.0, 18, [0.32, 0.34, 0.38], 6, vb);
-        addCone(out, vadd(av.c, av.u, 50),       4.0, 5.2, [0.84, 0.38, 0.18], 8, vb);
-        addCyl(out, vadd(av.c, av.u, 55.2),     0.28, 6.8, [0.30, 0.32, 0.36], 4, vb);
-        addBox(out, vadd(av.c, av.u, 28),       [13.5, 1.0, 13.5], [1.0, 0.70, 0.20], vb);
+      // ---- Grand Plaza reflecting pool — the real water feature on the plaza axis,
+      // at the opposite end from the Observation Tower + amphitheatre (s≈0.085, L).
+      // (The "Velocity Tower" was removed — no such sculpture exists at COTA; the
+      //  single iconic vertical colour landmark is the red Observation Tower above.)
+      const kpool = K(0.10), apool = anchor(kpool, -1, 120), poolB = [apool.r, apool.u, apool.t];
+      if (!onTrack(apool.c[0], apool.c[2], 30)) {
+        // shallow rectangular reflecting pool (low roughness water tone)
+        addBox(out, vadd(apool.c, apool.u, 0.15), [22, 0.3, 9], [0.30, 0.46, 0.54], poolB);
+        // pale stone coping surround
+        addBox(out, vadd(apool.c, apool.u, 0.05), [24, 0.2, 11], [0.78, 0.77, 0.73], poolB);
       }
 
       // ---- Texas water tower — classic regional silhouette landmark (s≈0.68, L far) ----
@@ -182,26 +183,29 @@
       // backdrop() auto-detects green-dominant colors and renders as frustum+cone mound,
       // costing ~2 primitives vs ~80 triangles per mountain() — critical for SwiftShader.
       // Place ~6 anchor points around the circuit for 3 depth layers.
+      // COTA sits on gently rolling-to-flat Blackland Prairie — NOT dramatic
+      // mountains.  Heights are kept low (broad shallow swells) so the horizon
+      // reads as open Texas prairie, with the far ring just a faint rise.
       const hillAnchors = [
         // [s-frac, side, dist, width, height, depth, col]
-        // Near ring — closest visible hills (150–200 m from road edge)
-        [0.10, -1, 165, 280, 42, 60, [0.36, 0.44, 0.26]],
-        [0.25,  1, 155, 260, 38, 55, [0.38, 0.46, 0.28]],
-        [0.40, -1, 170, 300, 44, 65, [0.34, 0.42, 0.24]],
-        [0.55,  1, 160, 270, 40, 58, [0.36, 0.44, 0.26]],
-        [0.70, -1, 175, 290, 46, 62, [0.38, 0.46, 0.28]],
-        [0.85,  1, 150, 260, 38, 55, [0.34, 0.42, 0.24]],
-        // Mid ring — second layer adds depth (280–360 m out)
-        [0.05, -1, 300, 350, 56, 70, [0.40, 0.48, 0.30]],
-        [0.20,  1, 320, 380, 62, 75, [0.42, 0.50, 0.32]],
-        [0.35, -1, 310, 360, 58, 72, [0.40, 0.48, 0.30]],
-        [0.50,  1, 340, 400, 66, 80, [0.44, 0.52, 0.34]],
-        [0.65, -1, 295, 340, 54, 68, [0.40, 0.48, 0.30]],
-        [0.80,  1, 315, 370, 60, 74, [0.42, 0.50, 0.32]],
-        // Far ring — misty horizon haze (480–560 m out)
-        [0.15, -1, 500, 460, 76, 90, [0.44, 0.50, 0.36]],
-        [0.45,  1, 520, 480, 80, 95, [0.46, 0.52, 0.38]],
-        [0.75, -1, 510, 470, 78, 92, [0.44, 0.50, 0.36]],
+        // Near ring — gentle swells (150–200 m from road edge)
+        [0.10, -1, 165, 300, 18, 70, [0.42, 0.48, 0.30]],
+        [0.25,  1, 155, 280, 16, 64, [0.44, 0.49, 0.31]],
+        [0.40, -1, 170, 320, 20, 76, [0.41, 0.47, 0.29]],
+        [0.55,  1, 160, 290, 17, 68, [0.42, 0.48, 0.30]],
+        [0.70, -1, 175, 310, 21, 72, [0.44, 0.49, 0.31]],
+        [0.85,  1, 150, 280, 16, 64, [0.41, 0.47, 0.29]],
+        // Mid ring — slightly higher rolling rise (280–360 m out)
+        [0.05, -1, 300, 380, 28, 80, [0.45, 0.50, 0.33]],
+        [0.20,  1, 320, 410, 32, 86, [0.46, 0.51, 0.34]],
+        [0.35, -1, 310, 390, 30, 82, [0.45, 0.50, 0.33]],
+        [0.50,  1, 340, 430, 34, 92, [0.47, 0.52, 0.35]],
+        [0.65, -1, 295, 370, 27, 78, [0.45, 0.50, 0.33]],
+        [0.80,  1, 315, 400, 31, 84, [0.46, 0.51, 0.34]],
+        // Far ring — faint hazy horizon rise (480–560 m out)
+        [0.15, -1, 500, 500, 42, 100, [0.48, 0.52, 0.40]],
+        [0.45,  1, 520, 520, 46, 105, [0.49, 0.53, 0.41]],
+        [0.75, -1, 510, 510, 44, 102, [0.48, 0.52, 0.40]],
       ];
       for (const [sf, side, dist, w, h, d, col] of hillAnchors) {
         backdrop(K(sf), side, dist, [w, h, d], col);
@@ -222,11 +226,13 @@
 
       // ================= AUSTIN DOWNTOWN SKYLINE (s 0.28–0.65, L far) =================
       // Use cityFront() — steps efficiently along the track and auto-varies heights/widths.
-      cityFront(0.28, 0.65, -1, 235, {
-        minH: 48,
-        maxH: 115,
+      // Downtown Austin is ~24 km away — visible only as a distant low cluster
+      // on the horizon, so it's pushed well back and kept lower.
+      cityFront(0.34, 0.60, -1, 360, {
+        minH: 42,
+        maxH: 86,
         depth: 22,
-        step: 30,
+        step: 32,
         lit: false,
         palette: [
           [0.52, 0.54, 0.62],

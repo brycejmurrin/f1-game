@@ -33,9 +33,12 @@
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      // Styrian uplands, not the high Alps: modest peak heights and a high snowline
+      // so the rings read as lush green forested foothills with only light caps on
+      // the very tallest far peaks (summer day race).
       const ranges = [
-        { extra: 210, wMin: 160, hMin: 48, hVar: 56, count: 14, seg: 5, opts: { forest: [0.15, 0.28, 0.16], rock: [0.36, 0.34, 0.32], snow: [0.90, 0.92, 0.96], snowline: 0.75, rough: 0.40 } },
-        { extra: 480, wMin: 280, hMin: 140, hVar: 100, count: 10, seg: 4, opts: { forest: [0.28, 0.38, 0.30], rock: [0.48, 0.50, 0.54], snow: [0.94, 0.95, 0.99], snowline: 0.50, rough: 0.32 } },
+        { extra: 210, wMin: 160, hMin: 42, hVar: 46, count: 14, seg: 5, opts: { forest: [0.15, 0.28, 0.16], rock: [0.36, 0.34, 0.32], snow: [0.90, 0.92, 0.96], snowline: 0.90, rough: 0.40 } },
+        { extra: 480, wMin: 280, hMin: 90, hVar: 70, count: 10, seg: 4, opts: { forest: [0.22, 0.36, 0.24], rock: [0.46, 0.48, 0.52], snow: [0.92, 0.94, 0.98], snowline: 0.80, rough: 0.32 } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;
@@ -110,6 +113,18 @@
       tyreWall(0.32, 0.37, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
       tyreWall(0.72, 0.77, -1, 6.0, rbNavy);
 
+      // Signature yellow sausage-kerb blisters on the T1 and T3 exit kerbs —
+      // short rows of rounded yellow boxes just off the track edge (the Red Bull
+      // Ring's notorious track-limit kerbs). Placed on the exit/inside side.
+      for (const [sStart, side] of [[0.115, 1], [0.235, -1]]) {
+        const k0 = Math.round(n * sStart) % n;
+        for (let i = 0; i < 6; i++) {
+          const a = anchor((k0 + i) % n, side, hw + 1.2);
+          if (onTrack(a.c[0], a.c[2], 1)) continue;
+          addBox(out, vadd(a.c, a.u, 0.2), [0.8, 0.35, 1.6], [0.95, 0.80, 0.10], [a.r, a.u, a.t]);
+        }
+      }
+
       // Marshal posts spaced around the lap (orange-roofed huts + flag poles).
       for (const [s, side] of [[0.05, -1], [0.15, 1], [0.27, -1], [0.40, 1], [0.52, -1], [0.66, 1], [0.80, -1], [0.92, 1]]) {
         marshalPost(Math.round(n * s) % n, side, 5.5);
@@ -121,16 +136,28 @@
         [0.44, -1, rbNavy], [0.58, 1, rbRed], [0.68, -1, rbYel], [0.82, 1, rbNavy], [0.88, -1, rbRed],
       ]) billboard(Math.round(n * s) % n, side, 7, 11, 3.4, col);
 
-      // ---------------- The Wing — pit & paddock complex ----------------
-      // Long low white pit building with thin cantilevered roof blade.
+      // ---------------- The voestalpine Wing — pit & paddock complex ----------------
+      // Long low white pit building crowned by an upswept rear-wing/spoiler roof
+      // blade: the leading (track-side) edge sits low, the trailing edge sweeps
+      // up, echoing the >90 m cantilevered voestalpine wing. White steel + glass.
       prop(0, -1, 6, [11, 8, 70], [0.92, 0.93, 0.95]);
       {
         const a = anchor(0, -1, 10);
-        addBox(out, vadd(a.c, a.u, 11), [14, 0.7, 66], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);  // roof blade
-        // slim pillars under the blade — spaced along the building length
-        for (let i = -2; i <= 2; i++) addCyl(out, vadd(a.c, a.t, i * 14), 0.3, 11, [0.70, 0.72, 0.76], 5, [a.r, a.u, a.t]);
-        // night-ready: emissive light strip under the canopy edge (bright warm strip)
-        addBox(out, vadd(vadd(a.c, a.r, -6.5), a.u, 10.4), [0.25, 0.18, 64], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
+        const wingW = [0.92, 0.93, 0.95];
+        // Upswept blade: tilt the roof slab about the track axis (a.t) so its
+        // outboard edge rises. Build a tilted basis: up' = normalize(u + r*tan),
+        // right' = normalize(r - u*tan). tan≈0.32 → ~18° rake.
+        const tan = 0.34, inv = 1 / Math.hypot(1, tan);
+        const upT = [(a.u[0] + a.r[0] * tan) * inv, (a.u[1] + a.r[1] * tan) * inv, (a.u[2] + a.r[2] * tan) * inv];
+        const rtT = [(a.r[0] - a.u[0] * tan) * inv, (a.r[1] - a.u[1] * tan) * inv, (a.r[2] - a.u[2] * tan) * inv];
+        // Raked spoiler blade lifted to ~11 m at its mid, outboard edge rising.
+        addBox(out, vadd(a.c, a.u, 11), [16, 0.7, 72], wingW, [rtT, upT, a.t]);   // main spoiler blade (raked)
+        // Thin glass leading lip under the blade's low (track-side) edge.
+        addBox(out, vadd(vadd(a.c, a.r, -7.5), a.u, 9.4), [3.0, 0.5, 70], [0.40, 0.62, 0.80], [a.r, a.u, a.t]);
+        // Angled support struts (wing endplates/pillars) rising to the raised edge.
+        for (let i = -2; i <= 2; i++) addCyl(out, vadd(a.c, a.t, i * 16), 0.3, 11, [0.70, 0.72, 0.76], 5, [rtT, upT, a.t]);
+        // night-ready: emissive light strip under the canopy's raised trailing edge.
+        addBox(out, vadd(vadd(a.c, a.r, 6.8), a.u, 13.2), [0.25, 0.18, 66], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
       }
       // Paddock hospitality blocks behind the pits.
       building(0, -1, 26, 18, 9, 22, { wall: [0.88, 0.90, 0.93], window: [0.20, 0.30, 0.42], floor: 4, roof: true });
@@ -173,28 +200,30 @@
       });
 
       // ---------------- Signature landmarks ----------------
-      // Giant charging-bull statue on the green hillside above the lower sector,
-      // framed by a tall white archway (the Bull Plaza icon).
+      // Giant charging-bull statue — the rusted-steel Corten bull leaping through
+      // a grey-steel archway, on a rise in the INFIELD by the Mitte/T8 area so it
+      // reads across the bowl over the fast final sector (matches the real site).
+      // Body = oxidised Corten rust; horns = gold-leafed; arch = grey steel.
       // All parts are anchored from ground level (a.c) upward — no floating.
       {
-        const kb = Math.round(n * 0.10) % n, a = anchor(kb, -1, 70);
-        const white = [0.90, 0.90, 0.93], dark = [0.10, 0.10, 0.12];
+        const kb = Math.round(n * 0.66) % n, a = anchor(kb, 1, 64);
+        const steel = [0.50, 0.50, 0.54], corten = [0.45, 0.22, 0.12], gold = [0.83, 0.68, 0.22];
         // Arch posts: center at h/2 = 12 above ground, height 24 → base sits at ground.
-        addBox(out, vadd(vadd(a.c, a.r, -11), a.u, 12), [3, 24, 3], white, [a.r, a.u, a.t]);   // arch post L
-        addBox(out, vadd(vadd(a.c, a.r, 11), a.u, 12), [3, 24, 3], white, [a.r, a.u, a.t]);    // arch post R
-        addBox(out, vadd(a.c, a.u, 24), [26, 3, 4.5], white, [a.r, a.u, a.t]);                  // lintel
+        addBox(out, vadd(vadd(a.c, a.r, -11), a.u, 12), [3, 24, 3], steel, [a.r, a.u, a.t]);   // arch post L
+        addBox(out, vadd(vadd(a.c, a.r, 11), a.u, 12), [3, 24, 3], steel, [a.r, a.u, a.t]);    // arch post R
+        addBox(out, vadd(a.c, a.u, 24), [26, 3, 4.5], steel, [a.r, a.u, a.t]);                  // lintel
         // Pedestal: half-height = 1.5, center at 1.5 → base at ground level (flush).
         addBox(out, vadd(a.c, a.u, 1.5), [12, 3, 7], [0.55, 0.56, 0.58], [a.r, a.u, a.t]);
         // Bull body: top of pedestal = y=3, body half-height=3.25, center at y=6.25.
-        addBox(out, vadd(a.c, a.u, 6.25), [13, 6.5, 5], dark, [a.r, a.u, a.t]);                 // body
+        addBox(out, vadd(a.c, a.u, 6.25), [13, 6.5, 5], corten, [a.r, a.u, a.t]);               // body
         // Head: sits atop the body front; body top = y=9.75, head center ~y=9.
-        addBox(out, vadd(vadd(a.c, a.t, 7), a.u, 9.0), [4.5, 5, 3.5], dark, [a.r, a.u, a.t]);  // head
-        // Horns: above head, head top ≈ y=11.5.
-        addPrism(out, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, -1.4), [1, 2.6, 0.6], white, [a.t, a.u, a.r]); // horn L
-        addPrism(out, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, 1.4), [1, 2.6, 0.6], white, [a.t, a.u, a.r]);  // horn R
+        addBox(out, vadd(vadd(a.c, a.t, 7), a.u, 9.0), [4.5, 5, 3.5], corten, [a.r, a.u, a.t]); // head
+        // Horns: above head, head top ≈ y=11.5 — gold-leafed.
+        addPrism(out, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, -1.4), [1, 2.6, 0.6], gold, [a.t, a.u, a.r]); // horn L
+        addPrism(out, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, 1.4), [1, 2.6, 0.6], gold, [a.t, a.u, a.r]);  // horn R
         // Legs: four pillars from ground (y=0) upward; center at y=2.5, height=5.
         for (const o of [-4, 4]) for (const f of [-3.5, 4.5]) {
-          addBox(out, vadd(vadd(vadd(a.c, a.r, o), a.t, f), a.u, 2.5), [1.4, 5, 1.4], dark, [a.r, a.u, a.t]);
+          addBox(out, vadd(vadd(vadd(a.c, a.r, o), a.t, f), a.u, 2.5), [1.4, 5, 1.4], corten, [a.r, a.u, a.t]);
         }
         // Small night-accent: a golden spotlight on the pedestal face.
         addBox(out, vadd(vadd(a.c, a.t, -4.5), a.u, 3.2), [0.4, 0.3, 0.3], [1.0, 0.88, 0.40], [a.r, a.u, a.t]);
