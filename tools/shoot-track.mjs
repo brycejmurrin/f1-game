@@ -15,14 +15,25 @@ const outdir = process.argv[3] || "/tmp/claude-0/-home-user-f1-game/948d3bdd-9d8
 fs.mkdirSync(outdir, { recursive: true });
 const PORT = process.env.PORT || "3456";
 
-// frac, az(deg), el(deg), dist(m) — a tour around the lap from varied angles.
+// Each shot is either an orbit (az/el/dist around a lap point) or an eye-level
+// ground view (eyeAt: frac/lat/height). A wide tour catches ground gaps, water,
+// floating buildings and blandness from many directions.
+// type "o": [label, "o", frac, az(deg), el(deg), dist(m)]
+// type "e": [label, "e", frac, lat(m), height(m)]
 const SHOTS = [
-  ["q0-orbit",  0.00,  45, 20, 120],
-  ["q1-orbit",  0.25, 135, 18, 130],
-  ["q2-orbit",  0.50, 225, 20, 140],
-  ["q3-orbit",  0.75, 315, 16, 120],
-  ["start-low", 0.00,  20,  6,  70],
-  ["high-wide", 0.50, 180, 45, 320],
+  ["o-f00-a045", "o", 0.00,  45, 18, 120],
+  ["o-f12-a200", "o", 0.12, 200, 16, 130],
+  ["o-f25-a135", "o", 0.25, 135, 20, 140],
+  ["o-f38-a300", "o", 0.38, 300, 16, 120],
+  ["o-f50-a225", "o", 0.50, 225, 22, 150],
+  ["o-f62-a020", "o", 0.62,  20, 16, 130],
+  ["o-f75-a315", "o", 0.75, 315, 18, 120],
+  ["o-f88-a160", "o", 0.88, 160, 20, 140],
+  ["eye-f00",    "e", 0.00,  0,  3.5],
+  ["eye-f30",    "e", 0.30,  0,  3.5],
+  ["eye-f55",    "e", 0.55,  0,  3.5],
+  ["eye-f80",    "e", 0.80,  0,  3.5],
+  ["topdown",    "o", 0.50, 180, 78, 420],
 ];
 
 const browser = await chromium.launch({
@@ -44,13 +55,16 @@ const meta = await page.evaluate(() => {
   try { return { tracks: window.__apex.tracks().length, ok: true }; } catch (e) { return { ok: false, err: String(e) }; }
 });
 
-for (const [label, frac, az, el, dist] of SHOTS) {
+for (const shot of SHOTS) {
+  const [label, type] = shot;
   try {
-    await page.evaluate(([frac, az, el, dist]) => {
+    await page.evaluate((shot) => {
+      const [, type, frac, a, b, c] = shot;
       window.__apex.park(frac);
       window.__apex.hud(false);
-      window.__apex.orbit(frac, az, el, dist);
-    }, [frac, az, el, dist]);
+      if (type === "e") window.__apex.eyeAt(frac, a, b);
+      else window.__apex.orbit(frac, a, b, c);
+    }, shot);
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(outdir, `${id}-${label}.png`) });
   } catch (e) { errors.push(`${label}: ${e}`); }
