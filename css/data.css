@@ -315,6 +315,18 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   color: #f2f2f5;
 }
 .dh-pill.dh-active { background: #e10600; border-color: #e10600; color: #fff; }
+.dh-pill:disabled { opacity: 0.4; cursor: default; }
+/* EXPORT tab — browser-side OpenF1 start-line gathering */
+.dh-export { display: flex; flex-direction: column; gap: 10px; }
+.dh-export-note { font-size: 12px; line-height: 1.5; color: #b6b6c0; }
+.dh-export-row { display: flex; gap: 6px; }
+.dh-export-status {
+  margin: 0; padding: 8px 10px; border-radius: 6px;
+  background: #0d0d13; border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cfcfd6; font-size: 11px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 320px; overflow: auto;
+}
 .dh-pick-field { display: flex; flex-direction: column; gap: 3px; }
 .dh-pick-label { font-size: 9px; letter-spacing: 0.12em; color: #8a8a95; }
 .dh-pick-select {

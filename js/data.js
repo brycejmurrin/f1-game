@@ -12,7 +12,7 @@ const DataHub = (function () {
 
   const MINUTE = 60 * 1000;
   // re-fetch a tab if its rendered content is older than this when shown again
-  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, lastrace: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE };
+  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, lastrace: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE, export: 24 * 60 * MINUTE };
 
   // tyre compound colors
   const COMPOUND = {
@@ -25,7 +25,8 @@ const DataHub = (function () {
     { id: "standings", label: "STANDINGS", load: loadStandings },
     { id: "lastrace", label: "LAST RACE", load: loadLastRace },
     { id: "live", label: "LIVE", load: loadLive },
-    { id: "telemetry", label: "TELEMETRY", load: loadTelemetry }
+    { id: "telemetry", label: "TELEMETRY", load: loadTelemetry },
+    { id: "export", label: "EXPORT", load: loadExport }
   ];
 
   let root = null;
@@ -1571,6 +1572,126 @@ const DataHub = (function () {
       });
       g.textAlign = "left";
     }
+  }
+
+  /* ================= EXPORT tab (dev) =================
+     Runs in the browser (where OpenF1 is reachable) and downloads a JSON file.
+     For each circuit of the chosen season it pulls ONE clean fast-lap location
+     trace. An OpenF1 lap STARTS at the start/finish line, so trace[0] is the
+     real S/F point — used offline to validate/correct each circuit's start
+     line (s=0 / startFrac) against the game's centreline. */
+
+  // Gather {circuit -> {sf, trace, ...}} for a season. Sequential + cached so
+  // it's gentle on the free API. `log` streams progress to the UI.
+  function gatherStartLines(year, log) {
+    const out = { year: year, generatedAt: new Date().toISOString(), circuits: {} };
+    return F1API.meetings(year).then(function (ms) {
+      log("meetings: " + ms.length);
+      let chain = Promise.resolve();
+      ms.forEach(function (m) {
+        chain = chain.then(function () {
+          return F1API.sessionsForMeeting(m.meetingKey).then(function (ss) {
+            // Qualifying gives the cleanest single fast lap; fall back to Race.
+            const s = ss.find(function (x) { return /quali/i.test(x.name || ""); }) ||
+                      ss.find(function (x) { return /race/i.test(x.name || ""); }) ||
+                      ss[ss.length - 1];
+            if (!s) { log("· no session: " + m.circuit); return; }
+            return F1API.sessionDrivers(s.sessionKey).then(function (drv) {
+              if (!drv || !drv.length) { log("· no drivers: " + m.circuit); return; }
+              // try up to 3 drivers until one yields a fast lap + location trace
+              const cand = drv.slice(0, 3);
+              let dc = Promise.resolve(false);
+              cand.forEach(function (d) {
+                dc = dc.then(function (done) {
+                  if (done) return true;
+                  return F1API.fastestLap(s.sessionKey, d.num).then(function (fl) {
+                    if (!fl || !fl.dateStart) return false;
+                    const endISO = new Date(Date.parse(fl.dateStart) + (fl.lapDuration + 1) * 1000).toISOString();
+                    return F1API.locationData(s.sessionKey, d.num, fl.dateStart, endISO).then(function (loc) {
+                      if (!loc || loc.length < 20) return false;
+                      const step = Math.max(1, Math.floor(loc.length / 240));
+                      const trace = loc.filter(function (_, i) { return i % step === 0; })
+                                       .map(function (p) { return [Math.round(p.x), Math.round(p.y)]; });
+                      out.circuits[m.circuit || m.name] = {
+                        circuit: m.circuit, country: m.country, driver: d.code,
+                        lapDur: fl.lapDuration, sf: trace[0], nLoc: loc.length, trace: trace
+                      };
+                      log("✓ " + (m.circuit || m.name) + "  pts=" + trace.length);
+                      return true;
+                    });
+                  }).catch(function () { return false; });
+                });
+              });
+              return dc.then(function (done) { if (!done) log("· no lap/loc: " + m.circuit); });
+            });
+          }).catch(function (e) { log("· skip " + (m.circuit || m.meetingKey) + ": " + (e && e.message || e)); });
+        });
+      });
+      return chain.then(function () { log("done — " + Object.keys(out.circuits).length + " circuits"); return out; });
+    });
+  }
+
+  function loadExport() {
+    const wrap = el("div", "dh-export");
+    wrap.appendChild(el("div", "dh-export-note",
+      "Pulls one fast-lap GPS trace per circuit from OpenF1 (runs in your browser). " +
+      "The lap starts at the start/finish line, so it captures where each S/F really is. " +
+      "Pick a season, Gather, then Download and send me the file."));
+
+    const yearRow = el("div", "dh-pick-years");
+    const sel = { year: 2025 };
+    [2025, 2024, 2023].forEach(function (y) {
+      const b = el("button", "dh-pill" + (y === sel.year ? " dh-active" : ""), String(y));
+      b.addEventListener("click", function () {
+        sel.year = y;
+        for (let i = 0; i < yearRow.children.length; i++)
+          yearRow.children[i].classList.toggle("dh-active", yearRow.children[i] === b);
+      });
+      yearRow.appendChild(b);
+    });
+    wrap.appendChild(yearRow);
+
+    const row = el("div", "dh-export-row");
+    const gatherBtn = el("button", "dh-pill dh-active", "Gather");
+    const dlBtn = el("button", "dh-pill", "Download");
+    dlBtn.disabled = true;
+    row.appendChild(gatherBtn);
+    row.appendChild(dlBtn);
+    wrap.appendChild(row);
+
+    const status = el("pre", "dh-export-status", "Ready.");
+    wrap.appendChild(status);
+
+    let result = null, running = false;
+    const logs = [];
+    const log = function (m) { logs.push(String(m)); status.textContent = logs.slice(-200).join("\n"); status.scrollTop = status.scrollHeight; };
+
+    gatherBtn.addEventListener("click", function () {
+      if (running) return;
+      running = true; result = null; dlBtn.disabled = true; logs.length = 0;
+      gatherBtn.textContent = "Gathering…";
+      log("Gathering " + sel.year + " — this can take a minute…");
+      gatherStartLines(sel.year, log).then(function (res) {
+        result = res; dlBtn.disabled = false;
+        log("Ready to download.");
+      }).catch(function (e) {
+        log("ERROR: " + (e && e.message || e));
+      }).then(function () { running = false; gatherBtn.textContent = "Gather"; });
+    });
+
+    dlBtn.addEventListener("click", function () {
+      if (!result) return;
+      const json = JSON.stringify(result);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "apex-startlines-" + sel.year + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      log("Downloaded apex-startlines-" + sel.year + ".json (" + json.length + " bytes)");
+    });
+
+    return Promise.resolve(wrap);
   }
 
   return { init: init, open: open, close: close, isOpen: isOpen };
