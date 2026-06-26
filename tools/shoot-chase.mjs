@@ -39,8 +39,8 @@ const files = [];
 for (const frac of fracs) {
   try {
     await page.evaluate((frac) => {
-      // dolly: 24 m behind the point, 4.5 m up, looking ~0.02 lap ahead (forward).
-      window.__apex.dolly(frac, -24, 0, 4.5, { lookF: frac + 0.02, lookH: 1.2, fov: 60 });
+      // built-in wall-safe forward chase (centreline-following, clears walls)
+      window.__apex.chase(frac, { back: 22, up: 5, ahead: 42 });
       window.__apex.hud(false);
     }, frac);
     await page.waitForTimeout(350);

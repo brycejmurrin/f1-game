@@ -34,9 +34,9 @@
 
       // ---- Île Notre-Dame palette (bright June day) ----
       const WALL     = [0.78, 0.79, 0.80];   // pale concrete
-      const RIVER    = [0.16, 0.46, 0.52];   // St. Lawrence — vivid turquoise river
-      const RIVER2   = [0.20, 0.52, 0.58];   // lighter near-shore turquoise
-      const BASIN    = [0.13, 0.34, 0.46];   // Olympic rowing lake (deeper clean blue)
+      const RIVER    = [0.16, 0.26, 0.35];   // St. Lawrence — dark slate-grey river
+      const RIVER2   = [0.19, 0.30, 0.40];   // slightly lighter near-shore
+      const BASIN    = [0.11, 0.22, 0.34];   // Olympic rowing lake (dark clean blue)
       const GRASS    = [0.28, 0.52, 0.26];   // park green
       const FOLIAGE  = [0.20, 0.44, 0.24];   // deep tree green
       const FOLIAGE2 = [0.26, 0.50, 0.26];   // lighter June foliage
@@ -128,7 +128,7 @@
       // the island interior. Seated just ABOVE the green island slab (whose top
       // is pyMin-0.2) so the water reads instead of being hidden by it.
       {
-        const LAGOON = [0.13, 0.34, 0.42];   // clean blue-green lagoon water
+        const LAGOON = [0.13, 0.28, 0.38];   // park lagoon water (darker, muted)
         const SAND   = [0.88, 0.80, 0.58];   // Jean-Doré beach sand (pale tan)
         // Anchor the lagoon in the wide infield off the inside of the back straight
         // (track-aligned basis), so it nests in the island interior at a known spot
@@ -431,9 +431,11 @@
       // ===================================================================
       // s 0.45 R far — La Ronde amusement park ferris wheel across the water
       // ===================================================================
-      ferrisWheel(K(0.42), 1, 150, 34);
-      // a couple of fairground towers beside it
-      tower(K(0.40), 1, 175, 14, 46,
+      // La Ronde sits on Île Sainte-Hélène across the water — place on the farBank
+      // strip (near=185) so the bases don't float over open water.
+      ferrisWheel(K(0.42), 1, 200, 34);
+      // fairground tower beside ferris wheel
+      tower(K(0.40), 1, 220, 14, 46,
         { col: [0.78, 0.62, 0.40], seg: 6, cap: true, capCol: [0.8, 0.3, 0.2], mast: 10 });
 
       // ===================================================================

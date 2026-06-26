@@ -4385,19 +4385,50 @@ window.__apex = {
   dolly(f, fwd = 0, right = 0, up = 5, opts = {}) {
     if (!track) return false;
     const fr = ((f % 1) + 1) % 1;
-    Tracks.sample(track, fr * track.total, smp);
-    const p = smp.p, t = smp.t, r = smp.r;
-    const eye = [
-      p[0] + t[0] * fwd + r[0] * right,
-      p[1] + up,
-      p[2] + t[2] * fwd + r[2] * right,
-    ];
+    // The along-track offset `fwd` follows the CENTRELINE — sample the road at the
+    // arc-offset fraction (f + fwd/total) — instead of extrapolating the straight
+    // tangent. On a corner the tangent flings the eye off-track into walls/scenery;
+    // following the centreline keeps it on the road behind/ahead of the point.
+    // opts.tangent:true restores the old straight-line extrapolation if wanted.
+    let p, r, baseY;
+    if (opts.tangent) {
+      Tracks.sample(track, fr * track.total, smp);
+      p = [smp.p[0] + smp.t[0] * fwd, smp.p[1], smp.p[2] + smp.t[2] * fwd];
+      r = smp.r; baseY = smp.p[1];
+    } else {
+      const eyeFrac = ((((fr + fwd / track.total) % 1) + 1) % 1);
+      Tracks.sample(track, eyeFrac * track.total, smp);
+      p = smp.p; r = smp.r; baseY = smp.p[1];
+    }
+    // Minimum vertical clearance so the eye never sinks to grade / into low walls.
+    const eyeY = baseY + Math.max(up, opts.minUp != null ? opts.minUp : 2.5);
+    const eye = [p[0] + r[0] * right, eyeY, p[2] + r[2] * right];
     const lf = ((((opts.lookF != null ? opts.lookF : f + 0.015) % 1) + 1) % 1);
     Tracks.sample(track, lf * track.total, smp2);
     const lr = opts.lookLat || 0, lh = opts.lookH != null ? opts.lookH : 1.5;
     const tgt = [smp2.p[0] + smp2.r[0] * lr, smp2.p[1] + lh, smp2.p[2] + smp2.r[2] * lr];
     dbgCam = { eye, target: tgt, fov: Math.min(170, Math.max(1, opts.fov || 58)), far: opts.far || 6000, fog: opts.fog };
     return { eye, target: tgt };
+  },
+
+  // chase(f, opts) — wall-safe FORWARD chase view at lap-fraction f. Eye sits
+  // `back` m behind ON THE CENTRELINE (follows the track round corners, never
+  // flung into walls), `up` m above the road, looking `ahead` m down the track —
+  // the player's-eye "what's coming" view. Convenience over dolly() with
+  // forward-chase defaults. opts.back (18) up (5) ahead (40) side (0) fov (60).
+  // Example: for (const s of __apex.tourShots(36)) __apex.chase(s.frac)
+  chase(f, opts = {}) {
+    if (!track) return false;
+    const back  = opts.back  != null ? opts.back  : 18;
+    const ahead = opts.ahead != null ? opts.ahead : 40;
+    const up    = opts.up    != null ? opts.up    : 5;
+    const fr = ((f % 1) + 1) % 1;
+    return this.dolly(f, -back, opts.side || 0, up, {
+      lookF: fr + ahead / track.total,
+      lookH: opts.lookH != null ? opts.lookH : 1.2,
+      fov:   opts.fov   != null ? opts.fov   : 60,
+      minUp: 3,
+    });
   },
 
   // roadside(f, side, dist, h, opts) — camera standing beside the track at
@@ -5069,6 +5100,79 @@ window.__apex = {
       spanX: +(maxX - minX).toFixed(1), spanZ: +(maxZ - minZ).toFixed(1),
       centerFrac: +(bestI / n).toFixed(4),
     };
+  },
+
+  // floorY() — returns the lowest road Y on the circuit (pyMin) and the engine
+  // floor-plane Y (pyMin − 0.6). Water/ground planes placed BELOW the floor plane
+  // are hidden by it. Always place water/ground planes at least at floorPlane+0.2.
+  // Example: const { floorPlane } = __apex.floorY()  →  set river plane at floorPlane+0.25
+  floorY() {
+    if (!track) return null;
+    const py = track.py, n = track.n;
+    let pyMin = Infinity;
+    for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
+    return { pyMin: +pyMin.toFixed(3), floorPlane: +(pyMin - 0.6).toFixed(3), waterSafeMin: +(pyMin - 0.38).toFixed(3) };
+  },
+
+  // sceneryInfo() — combined diagnostic snapshot for the loaded track: id, theme,
+  // time-of-day, total length, terrainOuter, floor plane, etc. Use before editing
+  // scenery to understand the current state and key constraints.
+  sceneryInfo() {
+    if (!track) return null;
+    const def = track.def;
+    const py = track.py, n = track.n;
+    let pyMin = Infinity;
+    for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
+    const sessionDark = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
+      raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
+    return {
+      id: def.id, name: def.name || def.id,
+      theme: def.theme || "classic",
+      timeOfDay: raceTimeOfDay,
+      isNight: sessionDark,
+      street: !!def.street,
+      total: +track.total.toFixed(1),
+      terrainOuter: def.terrainOuter || 120,
+      pyMin: +pyMin.toFixed(3),
+      floorPlane: +(pyMin - 0.6).toFixed(3),
+      waterSafeMin: +(pyMin - 0.38).toFixed(3),
+    };
+  },
+
+  // topdown(opts) — top-down orbit shot centred on the whole circuit, auto-sizing
+  // the camera distance from trackBounds() so the whole lap fits in frame.
+  // opts.margin (default 0.55) — fraction of span → dist; opts.el (default 87)
+  // opts.fov (default 72). Returns same {eye, target} as orbit().
+  // Example: __apex.topdown()  →  bird's-eye overview of the whole circuit.
+  topdown(opts = {}) {
+    if (!track) return false;
+    const b = this.trackBounds();
+    const span = Math.max(b.spanX, b.spanZ);
+    const margin = opts.margin != null ? opts.margin : 0.55;
+    const dist   = span * margin;
+    const el     = opts.el  != null ? opts.el  : 87;
+    const fov    = opts.fov != null ? opts.fov : 72;
+    return this.orbit(b.centerFrac, 0, el, dist, 0, { fov });
+  },
+
+  // roadsideTour(n, opts) — returns n evenly-spaced roadside shot descriptors for
+  // the full lap, alternating left/right each step so both sides of barriers/verges
+  // are covered. Each entry: { frac, side, dist, h, look, label }.
+  // Ready to pass straight to roadside(). opts.dist (default 12), opts.h (default 2.5),
+  // opts.look ("fwd"|"in"|"out"|"back", default "fwd"), opts.side (1|-1 force one side).
+  // Example: for (const s of __apex.roadsideTour(18)) __apex.roadside(s.frac, s.side, s.dist, s.h, { look: s.look })
+  roadsideTour(n = 18, opts = {}) {
+    if (!track) return [];
+    const dist = opts.dist != null ? opts.dist : 12;
+    const h    = opts.h    != null ? opts.h    : 2.5;
+    const look = opts.look || "fwd";
+    const shots = [];
+    for (let i = 0; i < n; i++) {
+      const frac = i / n;
+      const side = opts.side != null ? opts.side : (i % 2 === 0 ? 1 : -1);
+      shots.push({ frac: +frac.toFixed(4), side, dist, h, look, label: `rs-${String(i).padStart(2, "0")}-${side > 0 ? "R" : "L"}` });
+    }
+    return shots;
   },
 
   // reset(frac, speed, x) — fast episode reset reusing the loaded track.
