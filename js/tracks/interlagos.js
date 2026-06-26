@@ -24,11 +24,11 @@
     // Climb from the Senna S up to the start/finish (the lap's ~40 m of relief).
     elevations: [{ s: 0.86, halfM: 480, rise: 10 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
+      const { out, n, px, pz, pyMin, pal, place, prop, backdrop, groundPlane, groundYAt,
               addBox, every, onTrack, hash, vadd, anchor, along, building, tower,
               grandstand, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
-              addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront } = api;
+              addCyl, addCone, addPrism, addPyramid, addFrustum, forestEdge, cityFront } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Tropical palette constants
@@ -75,6 +75,43 @@
       gantry(0.005, 8.2, [0.20, 0.22, 0.26]);
       gantry(0.88,  7.0, [0.22, 0.24, 0.28]);
 
+      // ---- "NOSSO SENNA" mirror statue (Sector A grandstand, s≈0.93, R) ----
+      // The 3.5 m, 550 kg faceted MIRROR-ALUMINIUM figure of Ayrton Senna that
+      // stands by the permanent grandstand. Modelled as a stylised faceted human
+      // form (stacked pyramids/prisms) in a bright mirror-silver, on a low plinth.
+      {
+        const ks = K(0.925);
+        const as = anchor(ks, 1, 11);          // on the concourse before the stand
+        const B  = [as.r, as.u, as.t];
+        const SIL = [0.90, 0.92, 0.96];        // mirror-silver (bright, near-white)
+        const SIL2 = [0.80, 0.83, 0.90];       // shaded facet
+        const DARK = [0.40, 0.42, 0.48];       // plinth granite
+        // Tall plinth so the silver figure clears the pit wall and reads from track.
+        addBox(out, vadd(as.c, as.u, 0.9), [3.4, 1.8, 3.4], DARK, B);
+        addBox(out, vadd(as.c, as.u, 1.85), [2.8, 0.2, 2.8], [0.30, 0.31, 0.36], B);
+        const foot = vadd(as.c, as.u, 1.95);   // statue base sits on the plinth
+        // Legs (two tapered facet columns)
+        for (const dx of [-0.5, 0.5]) {
+          addFrustum(out, vadd(foot, as.r, dx), 0.38, 0.24, 1.8, SIL2, 5, B);
+        }
+        // Torso (faceted — a dynamic racing-hero pose)
+        const torso = vadd(foot, as.u, 1.8);
+        addFrustum(out, torso, 0.66, 0.50, 1.7, SIL, 6, B);
+        // Shoulders / upper chest block
+        const sh = vadd(torso, as.u, 1.7);
+        addBox(out, sh, [1.35, 0.55, 0.66], SIL, B);
+        // Head — faceted (octahedral mirror block)
+        const head = vadd(sh, as.u, 0.75);
+        addPyramid(out, head, [0.66, 0.66, 0.66], SIL, B);
+        addPyramid(out, vadd(head, as.u, 0.0), [0.66, -0.42, 0.66], SIL2, B);
+        // Raised arm (helmet-aloft victory gesture) — angled facet prism
+        const arm = vadd(vadd(sh, as.r, 0.85), as.u, 0.35);
+        addFrustum(out, arm, 0.22, 0.14, 1.3, SIL2, 5, [as.u, as.r, as.t]);
+        // Brazilian-green plaque on the plinth front
+        addBox(out, vadd(vadd(as.c, as.u, 0.9), as.t, -1.7), [3.5, 0.6, 0.3],
+          [0.10, 0.52, 0.22], B);
+      }
+
       // ---- Helicopter pad in paddock (s≈0.025) ----
       {
         const ahp = anchor(K(0.025), 1, 40);
@@ -93,6 +130,60 @@
           addCyl(out, anc.c, 0.14, 10, [0.32, 0.32, 0.34], 5, [anc.r, anc.u, anc.t]);
           // lamp head (bright warm disc on top)
           addBox(out, vadd(anc.c, anc.u, 10.3), [2.2, 0.35, 0.7], LAMP, [anc.r, anc.u, anc.t]);
+        }
+      }
+
+      // ===================================================================
+      // EDUARDO KOBRA SENNA MURAL (s≈0.985, R) — the giant 27 m × 10 m vivid
+      // geometric street-art portrait near the entrance tunnel. Modelled as a
+      // tall flat wall plastered with a multicolour geometric patchwork (Kobra's
+      // signature kaleidoscopic triangulated style) facing the track.
+      // ===================================================================
+      {
+        const km = K(0.985);
+        const am = anchor(km, 1, 22);          // set behind the pit-entry wall
+        // Orient so the WIDE mural face (width × height) faces the track laterally:
+        // basis = [tangent, up, right] → sz[0]=mural width (along track), sz[1]=up,
+        // sz[2]=thin lateral depth; the face normal then points across the track.
+        const B = [am.t, am.u, am.r];
+        const MW = 10, MH = 27, MT = 0.8;      // 10 m wide, 27 m tall, slim slab
+        const baseC = vadd(am.c, am.u, MH / 2);
+        // Backing slab (neutral concrete) — the mural's structural wall.
+        addBox(out, baseC, [MW + 1.2, MH + 1.0, MT], [0.74, 0.74, 0.72], B);
+        // Kobra palette — vivid saturated primaries + magenta/teal/orange.
+        // HDR-bright (values >1) so the mural reads its colours even though its
+        // vertical face is lit mostly by the green hemisphere ambient (the sun is
+        // high) — without the boost every panel washes to a muddy ambient green.
+        const KOBRA = [
+          [1.60, 0.30, 0.34], [1.65, 1.25, 0.20], [0.20, 0.95, 1.55],
+          [0.24, 1.20, 0.70], [1.50, 0.42, 1.05], [1.70, 0.80, 0.18],
+          [0.80, 0.48, 1.45], [0.18, 1.30, 1.30],
+        ];
+        // Tile the slab with a grid of colour panels proud of BOTH lateral faces
+        // (double-sided), so the multicolour mural reads from the track no matter
+        // which way the slab faces (the reversed-lap basis can flip the side).
+        // Each panel gets a diagonal accent wedge for the kaleidoscopic Kobra look.
+        // Panels stand clearly PROUD of the slab (offset ≫ slab half-thickness) so
+        // they never z-fight with / hide behind the grey backing — that flush
+        // overlap is what made the mural read as a plain slab before.
+        const inward = MT / 2 + 0.45;
+        const cols = 4, rows = 9;
+        const pw = MW / cols, ph = MH / rows;
+        for (const face of [-1, 1]) {
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const lx = (c + 0.5) / cols - 0.5;     // -0.5..0.5 along the width
+              const ly = (r + 0.5) / rows;           // 0..1 up the height
+              const cen = vadd(vadd(vadd(am.c, am.t, lx * MW), am.u, ly * MH), am.r, face * inward);
+              const ci = Math.floor(hash(km * 3.1 + r * 7 + c * 13) * KOBRA.length) % KOBRA.length;
+              const cj = (ci + 1 + Math.floor(hash(km + r * 5 + c * 3) * (KOBRA.length - 1))) % KOBRA.length;
+              addBox(out, cen, [pw * 0.96, ph * 0.96, 0.5], KOBRA[ci], B);
+              addPrism(out, vadd(cen, am.r, face * 0.3), [pw * 0.86, ph * 0.42, 0.4], KOBRA[cj], B);
+            }
+          }
+          // Dark brow/eye stripe across the upper third — a hint of the portrait.
+          addBox(out, vadd(vadd(am.c, am.u, MH * 0.66), am.r, face * (inward + 0.3)),
+            [MW * 0.98, ph * 0.7, 0.3], [0.06, 0.07, 0.10], B);
         }
       }
 
@@ -242,12 +333,16 @@
       marshalPost(K(0.24), 1, 8);
 
       // ===================================================================
-      // REPRESA DO GUARAPIRANGA — the reservoir / lake (s=0.35, L far)
-      // Water planes pushed well off-track; dense shoreline vegetation with
-      // forestEdge so no foliage pokes through barriers.
+      // REPRESA DO GUARAPIRANGA / BILLINGS — the reservoirs (s=0.33–0.46, L far)
+      // "Interlagos" = "between lakes": large water bodies in the MID/FAR
+      // distance, NOT at the armco. Pushed far enough that they clear the tight
+      // infield loop (the old 300 m planes overlapped a parallel stretch and were
+      // culled, so no water rendered). Smaller footprints + larger gaps survive
+      // the onTrack guard and sit as a distant shoreline beyond the trees.
       // ===================================================================
-      groundPlane(K(0.33), -1, 220, [300, 2, 230], [0.21, 0.41, 0.50]);
-      groundPlane(K(0.42), -1, 230, [260, 2, 200], [0.20, 0.40, 0.48]);
+      groundPlane(K(0.36), -1, 250, [180, 2, 150], [0.21, 0.41, 0.50]);
+      groundPlane(K(0.40), -1, 300, [200, 2, 160], [0.20, 0.40, 0.48]);
+      groundPlane(K(0.44), -1, 270, [170, 2, 140], [0.22, 0.42, 0.52]);
 
       // Dense shoreline forestEdge — guaranteed no barrier clipping
       forestEdge(0.28, 0.48, -1, 28, { density: 0.80, hMin: 10, hMax: 18,
@@ -268,58 +363,54 @@
       marshalPost(K(0.46), -1, 8);
 
       // ===================================================================
-      // SÃO PAULO HIGH-RISE SKYLINE (s=0.48–0.78, R far)
-      // Use cityFront for a coherent, aligned street-wall of towers.
-      // Mid-distance: gap=180 so they sit on the horizon without clipping.
-      // São Paulo typical: mixed heights 40-80m, glass+concrete facades.
-      // lit:true → windows bright amber; night legibility guaranteed.
+      // SÃO PAULO SKYLINE — a LOW, DISTANT northern-horizon band only.
+      //
+      // Real Interlagos sits ~25 km SOUTH of downtown, so the corporate towers
+      // read as a faint, small band far on the horizon — NOT a close encircling
+      // wall (the research flagged the old trackside cityFront as wrong). We
+      // push the skyline well back (≥320 m), shrink it, and atmospherically
+      // pale it toward the fog so it sits on the horizon line.
       // ===================================================================
-      const SP_PALETTE = [
-        [0.50, 0.52, 0.58], [0.54, 0.56, 0.62], [0.46, 0.48, 0.54],
-        [0.60, 0.58, 0.54], [0.52, 0.54, 0.60], [0.48, 0.50, 0.56],
-      ];
-      cityFront(0.48, 0.78, 1, 180, {
-        minH: 40, maxH: 78,
-        depth: 28,
-        palette: SP_PALETTE,
-        lit: true,
-        windowCol: LIT_WIN,
-        step: 20,
-        floor: 8,
-      });
-
-      // Second row of shorter buildings behind the first (depth effect)
-      cityFront(0.50, 0.76, 1, 230, {
-        minH: 24, maxH: 52,
-        depth: 22,
-        palette: [
-          [0.44, 0.46, 0.52], [0.58, 0.56, 0.52], [0.50, 0.48, 0.54],
-        ],
-        lit: true,
-        windowCol: [0.95, 0.82, 0.48],
-        step: 26,
-        floor: 7,
-      });
-
-      // ---- Distant SP city silhouette using backdrop() — auto-renders as building with window bands ----
-      // Replaces the old raw addBox horizon ring that looked like floating grey cubes.
-      // backdrop() checks isBld (sz[1]>26 && sz[1]>sz[2]) → adds window bands + parapet.
-      every(36, (k) => {
-        // Only around the R side skyline section (s≈0.40–0.85)
+      const SP_FOG = pal.fog || [0.52, 0.58, 0.56];
+      // Distant towers via backdrop() (isBld → window bands + parapet). Placed
+      // only on a narrow northern arc and kept short + far so they never loom.
+      every(34, (k) => {
+        // Northern-horizon arc only (s≈0.46–0.80, R) — a single distant band.
         const inSky = (() => {
-          const k0 = K(0.40), k1 = K(0.85);
+          const k0 = K(0.46), k1 = K(0.80);
           const span = ((k1 - k0) + n) % n;
           const off  = ((k  - k0) + n) % n;
           return off <= span;
         })();
         if (!inSky) return;
+        if (hash(k * 53 + 280) > 0.72) return;   // sparse — gaps between clusters
         const hv  = hash(k * 7 + 280);
-        const d   = 300 + hv * 120;
-        const ht  = 32 + hv * 50;
-        const w   = 22 + hash(k * 11 + 280) * 18;
-        const base = 0.46 + hash(k * 13 + 280) * 0.08;
-        // backdrop() with sz[1]>sz[2] triggers isBld → window bands + parapet
-        backdrop(k, 1, d, [w, ht, w * 0.60], [base, base, base * 1.06]);
+        const d   = 330 + hv * 150;              // FAR (was 180–420) → true horizon
+        const ht  = 30 + hv * 34;                // LOWER (was up to 78+50)
+        const w   = 20 + hash(k * 11 + 280) * 16;
+        // Pale toward fog so the band recedes into the haze (atmospheric depth).
+        const g   = 0.50 + hash(k * 13 + 280) * 0.08;
+        const base = [
+          g * 0.45 + SP_FOG[0] * 0.55,
+          g * 0.45 + SP_FOG[1] * 0.55,
+          g * 0.48 + SP_FOG[2] * 0.55,
+        ];
+        backdrop(k, 1, d, [w, ht, w * 0.55], base);
+      });
+      // A faint second, even more distant tier behind the first for skyline depth.
+      every(44, (k) => {
+        const inSky = (() => {
+          const k0 = K(0.48), k1 = K(0.78);
+          const span = ((k1 - k0) + n) % n;
+          return ((k - k0 + n) % n) <= span;
+        })();
+        if (!inSky) return;
+        if (hash(k * 59 + 311) > 0.6) return;
+        const hv = hash(k * 17 + 311);
+        const ht = 24 + hv * 26;
+        const w  = 18 + hash(k * 19 + 311) * 14;
+        backdrop(k, 1, 470 + hv * 130, [w, ht, w * 0.55],
+          [SP_FOG[0] * 0.7 + 0.18, SP_FOG[1] * 0.7 + 0.18, SP_FOG[2] * 0.7 + 0.20]);
       });
 
       // ===================================================================

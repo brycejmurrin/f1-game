@@ -48,9 +48,11 @@
       const PITWALL = [0.86, 0.86, 0.84];
       const TERRA2  = [0.78, 0.58, 0.42];
       const STONE3  = [0.88, 0.82, 0.72];
-      const CROWD_A = [0.62, 0.34, 0.30];
-      const CROWD_B = [0.30, 0.40, 0.66];
-      const CROWD_C = [0.70, 0.62, 0.30];
+      // Tifosi-red crowd: Imola's grandstands are a sea of Ferrari red, so the
+      // dominant crowd tone is warm red, with tricolour green/white accents.
+      const CROWD_A = [0.74, 0.24, 0.20];   // Ferrari red dominant
+      const CROWD_B = [0.66, 0.30, 0.26];   // brick red
+      const CROWD_C = [0.70, 0.34, 0.24];   // warm red-orange
       const WIN_LIT  = [0.94, 0.82, 0.48];
       const LAMP_COL = [0.88, 0.78, 0.50];
 
@@ -78,6 +80,19 @@
                    forest: [0.20, 0.42, 0.22], rock: [0.40, 0.48, 0.40], col: [0.24, 0.42, 0.26] });
       }
 
+      // ---- Monte Castellaccio: forested hill INSIDE the loop ----
+      // The infield is a wooded rise (downy oak + hornbeam), not flat tarmac.
+      // Placed off the centroid toward the Acque Minerali side so it reads behind
+      // the park trees rather than dead-centre. mountain() self-culls if it would
+      // reach the ribbon, so keep it modest and well inside.
+      {
+        const mx = cx + (px[K(0.50)] - cx) * 0.42;
+        const mz = cz + (pz[K(0.50)] - cz) * 0.42;
+        mountain(mx, mz, pyMin, 150, 34,
+                 { seg: 8, seed: 777, snowline: 2,
+                   forest: [0.12, 0.30, 0.15], rock: [0.26, 0.36, 0.22], col: [0.15, 0.34, 0.18] });
+      }
+
       // ---- SECTION-BY-SECTION TREELINE (no global full-circuit passes) ----
       // Each section is covered once per side at moderate density to stay within
       // SwiftShader budget for the 25-frame blank-scan test (180 s total).
@@ -88,11 +103,16 @@
       forestEdge(0.88, 1.00,  1, 8, { density: 0.40, hMin: 9, hMax: 14,
         col: [0.09, 0.26, 0.13], col2: [0.17, 0.40, 0.19], pineFrac: 0.45 });
 
-      // Tamburello chicane through Villeneuve
-      forestEdge(0.00, 0.14, -1, 5, { density: 0.45, hMin: 10, hMax: 16,
-        col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.60 });
-      forestEdge(0.00, 0.14,  1, 5, { density: 0.38, hMin: 9, hMax: 14,
-        col: WOODS, col2: [0.16, 0.40, 0.18], pineFrac: 0.25 });
+      // Tamburello chicane through Villeneuve — mixed park broadleaf (holm/downy
+      // oak, hornbeam) with cedars as tall accents only. The inside treeline is
+      // split to leave a clearing (0.020–0.105) around the Senna memorial, and set
+      // back to dist 18 so the woods frame it rather than bury it.
+      forestEdge(0.00,  0.020, -1, 18, { density: 0.46, hMin: 11, hMax: 18,
+        col: [0.10, 0.26, 0.12], col2: [0.18, 0.40, 0.20], pineFrac: 0.28 });
+      forestEdge(0.105, 0.14,  -1, 18, { density: 0.46, hMin: 11, hMax: 18,
+        col: [0.10, 0.26, 0.12], col2: [0.18, 0.40, 0.20], pineFrac: 0.28 });
+      forestEdge(0.00, 0.14,  1, 5, { density: 0.38, hMin: 10, hMax: 16,
+        col: WOODS, col2: [0.18, 0.40, 0.20], pineFrac: 0.22 });
 
       // Villeneuve to Tosa
       forestEdge(0.14, 0.30, -1, 5, { density: 0.38, hMin: 9, hMax: 14,
@@ -106,11 +126,17 @@
       forestEdge(0.30, 0.42,  1, 5, { density: 0.36, hMin: 10, hMax: 16,
         col: WOODS, col2: WOODS2, pineFrac: 0.55 });
 
-      // Acque Minerali valley
-      forestEdge(0.42, 0.58, -1, 5, { density: 0.38, hMin: 10, hMax: 16,
-        col: [0.08, 0.24, 0.12], col2: [0.13, 0.33, 0.15], pineFrac: 0.55 });
-      forestEdge(0.42, 0.58,  1, 5, { density: 0.42, hMin: 12, hMax: 18,
-        col: [0.07, 0.22, 0.10], col2: [0.12, 0.32, 0.14], pineFrac: 0.65 });
+      // Acque Minerali valley — the famous tree-lined park: mature mixed
+      // broadleaf (downy oak, hornbeam, holm oak) with cedars as tall accents.
+      forestEdge(0.42, 0.58, -1, 5, { density: 0.42, hMin: 12, hMax: 20,
+        col: [0.10, 0.26, 0.12], col2: [0.18, 0.40, 0.20], pineFrac: 0.30 });
+      forestEdge(0.42, 0.58,  1, 5, { density: 0.46, hMin: 13, hMax: 21,
+        col: [0.09, 0.24, 0.11], col2: [0.20, 0.42, 0.20], pineFrac: 0.32 });
+      // Warm ginkgo / liquidambar accents scattered through the park.
+      for (let i = 0; i < 6; i++) {
+        const f = 0.43 + i * 0.024;
+        tree(K(f), (i % 2) ? 1 : -1, 14 + (i % 3) * 4, 13 + (i % 4), [0.55, 0.50, 0.18]);
+      }
 
       // Variante Alta chicane
       forestEdge(0.58, 0.74, -1, 4, { density: 0.38, hMin: 9, hMax: 14,
@@ -124,12 +150,27 @@
       forestEdge(0.74, 0.88,  1, 4, { density: 0.36, hMin: 9, hMax: 15,
         col: WOODS, col2: WOODS2, pineFrac: 0.55 });
 
-      // ---- Santerno river: water basins & grass banks (right of pit straight) ----
-      groundPlane(K(0.00), 1, 20, [60, 200], RIVER);
-      groundPlane(K(0.08), 1, 20, [55, 150], RIVER);
-      groundPlane(K(0.15), 1, 18, [50, 130], RIVER);
-      groundPlane(K(0.02), 1, 9,  [12, 180], BANK);
-      groundPlane(K(0.10), 1, 10, [12, 120], BANK);
+      // ---- Santerno river: a continuous channel hugging the Tamburello wall ----
+      // The real Santerno runs immediately behind the bare concrete wall at
+      // Tamburello (no tyre barrier). Modelled as a narrow water strip pressed
+      // against the wall (side +1), a low grass embankment between, and a
+      // tree-lined FAR bank of broadleaves so it reads as a riverbank, not a lake.
+      const RIVER2 = [0.22, 0.36, 0.50];
+      // Grass embankment hard against the wall.
+      groundPlane(K(0.00), 1, 5, [10, 230], BANK);
+      groundPlane(K(0.08), 1, 5, [10, 200], BANK);
+      groundPlane(K(0.15), 1, 5, [10, 140], BANK);
+      // The water channel just beyond the embankment, kept as a continuous run.
+      groundPlane(K(0.00), 1, 16, [24, 230], RIVER);
+      groundPlane(K(0.08), 1, 16, [22, 200], RIVER2);
+      groundPlane(K(0.15), 1, 15, [20, 140], RIVER);
+      // Far (outer) bank: a slim grass shoulder then a row of riverside broadleaves.
+      groundPlane(K(0.00), 1, 41, [8, 230], BANK);
+      for (let i = 0; i <= 10; i++) {
+        const f = 0.005 + i * 0.014;
+        tree(K(f), 1, 46 + (i % 3) * 4, 12 + (i % 4),
+             (i % 3 === 0) ? [0.12, 0.30, 0.15] : (i % 3 === 1) ? [0.18, 0.40, 0.20] : [0.14, 0.34, 0.17]);
+      }
 
       // ---- Piratella hill-crest backdrop: staggered compact mounds ----
       backdrop(K(0.34), -1, 72, [40, 28, 58], [0.14, 0.32, 0.17]);
@@ -145,20 +186,9 @@
       backdrop(K(0.64), -1, 108, [46, 30, 60], [0.15, 0.32, 0.17]);
       backdrop(K(0.68), -1, 128, [42, 28, 56], [0.13, 0.28, 0.15]);
 
-      // Classic Imola campanile (bell tower) visible above treeline
-      {
-        const ac = anchor(K(0.64), -1, 120);
-        const tH = 30;
-        addCyl(out, ac.c, 2.0, tH, STONE2, 8, [ac.r, ac.u, ac.t]);
-        addBox(out, vadd(ac.c, ac.u, tH), [5.0, 2.4, 5.0], STONE, [ac.r, ac.u, ac.t]);
-        addCone(out, vadd(ac.c, ac.u, tH + 2.4), 2.5, 7, [0.44, 0.34, 0.28], 7, [ac.r, ac.u, ac.t]);
-        for (let qi = 0; qi < 2; qi++) {
-          const ofs = (qi === 0) ? ac.r : ac.t;
-          for (const sg of [-1, 1]) {
-            addBox(out, vadd(vadd(ac.c, ac.u, tH + 0.9), ofs, sg * 2.0), [0.6, 1.2, 0.25], WIN_LIT, [ac.r, ac.u, ac.t]);
-          }
-        }
-      }
+      // (The lone Variante Alta campanile was removed — Imola's bell towers belong
+      //  to the town cluster; the Rocca Sforzesca + church campanile now anchor the
+      //  hillside-town silhouette near T1, see below.)
 
       // ---- Pit building + main grandstand ----
       building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
@@ -169,12 +199,64 @@
 
       // ---- Tamburello chicane + Senna memorial ----
       groundPlane(K(0.05), -1, 8, [26, 30], BANK);
-      place(K(0.05), -1, 14, [2, 3.2, 2], [0.45, 0.40, 0.30]);
       place(K(0.05), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
+      // Tree-shaded clearing on the inside of Tamburello (the Parco delle Acque
+      // Minerali). Park broadleaves set well BACK so they frame, not bury, the
+      // memorial which sits in the open clearing closer to the track.
+      tree(K(0.030), -1, 34, 14, [0.16, 0.38, 0.18]);
+      tree(K(0.095), -1, 36, 15, [0.12, 0.30, 0.15]);
+      tree(K(0.100), -1, 30, 13, [0.20, 0.42, 0.20]);
+      // ---- Ayrton Senna seated bronze statue on a pale marble plinth ----
+      // (Stefano Pierotti, 1997). Seated figure suggested from primitives:
+      // marble plinth → hips/thighs → torso → head → bowed arms. Surrounded by
+      // flowers/flags left by fans.
       {
-        const am = anchor(K(0.07), -1, 8);
-        addBox(out, vadd(am.c, am.u, 1.25), [3, 2.5, 0.4], [0.90, 0.90, 0.88], [am.r, am.u, am.t]);
+        // Bronze reads warm/dark; a touch deeper so the figure separates from the
+        // pale marble and the surrounding grass under the bright spring sun.
+        const BRONZE  = [0.34, 0.24, 0.13];
+        const BRONZE2 = [0.28, 0.20, 0.11];
+        const MARBLE  = [0.88, 0.86, 0.82];
+        const MARBLE2 = [0.82, 0.80, 0.76];
+        const sm = anchor(K(0.06), -1, 10);
+        const b = [sm.r, sm.u, sm.t];
+        // The figure faces the track (+sm.t is "ahead" along the lap; the statue
+        // looks across the road). All box `c` args are CENTRES.
+        const F = (lat, fwd, up) => vadd(vadd(vadd(sm.c, sm.r, lat), sm.t, fwd), sm.u, up);
+        // ---- Two-tier marble plinth: narrow so the figure dominates ----
+        addBox(out, F(0, 0, 0.35), [1.1, 0.70, 1.1], MARBLE2, b);   // base block
+        addBox(out, F(0, 0, 0.80), [0.85, 0.20, 0.85], MARBLE, b);  // cap slab
+        const seat = 0.90;   // marble top — the figure sits here, knees forward (+t)
+        // ---- Seated figure (~2.0 m tall incl. head) ----
+        // Thighs flat on the seat, projecting forward.
+        addBox(out, F(0, 0.22, seat + 0.13), [0.46, 0.24, 0.66], BRONZE, b);
+        // Shins hanging down off the front edge.
+        for (const sg of [-1, 1]) addBox(out, F(sg * 0.13, 0.52, seat - 0.22), [0.18, 0.62, 0.20], BRONZE2, b);
+        // Pelvis / lower torso block sitting on the thighs.
+        addBox(out, F(0, -0.04, seat + 0.42), [0.40, 0.34, 0.34], BRONZE, b);
+        // Upper torso, leaning slightly forward (head bowed, contemplative).
+        addBox(out, F(0, 0.05, seat + 0.78), [0.44, 0.46, 0.32], BRONZE, b);
+        // Shoulders.
+        addBox(out, F(0, 0.07, seat + 1.04), [0.56, 0.16, 0.30], BRONZE2, b);
+        // Arms: upper arms down the sides, forearms reaching forward to rest on knees.
+        for (const sg of [-1, 1]) {
+          addBox(out, F(sg * 0.30, 0.07, seat + 0.78), [0.14, 0.40, 0.16], BRONZE2, b);  // upper arm
+          addBox(out, F(sg * 0.26, 0.30, seat + 0.58), [0.14, 0.14, 0.40], BRONZE2, b);  // forearm to knee
+        }
+        // Neck + bowed head (head pitched forward over the chest).
+        addCyl(out, F(0, 0.06, seat + 1.09), 0.10, 0.08, BRONZE, 7, b);
+        addFrustum(out, F(0, 0.12, seat + 1.17), 0.19, 0.17, 0.24, BRONZE, 9, b);
+        // ---- Tributes at the base: flowers, tricolour + Tifosi-red notes ----
+        const accents = [
+          [ 0.50, 0.42, RED], [-0.50, 0.46, [0.10, 0.45, 0.16]], [ 0.18, 0.60, WHITE],
+          [-0.22, 0.56, RED], [ 0.00, 0.66, [0.86, 0.16, 0.14]], [ 0.34, 0.30, [0.92, 0.86, 0.30]],
+        ];
+        for (const [lat, fwd, col] of accents) addBox(out, F(lat, fwd, 0.85), [0.15, 0.22, 0.15], col, b);
+        // Small Brazilian-flag accent on a thin pole, set back and to the side so
+        // it frames rather than crosses the figure.
+        const pole = vadd(vadd(sm.c, sm.t, -1.15), sm.r, -1.0);
+        addCyl(out, pole, 0.04, 2.6, [0.30, 0.30, 0.32], 5, b);
+        addBox(out, vadd(vadd(pole, sm.u, 2.2), sm.r, -0.48), [0.95, 0.6, 0.05], [0.10, 0.50, 0.22], b);
       }
 
       // ---- Villeneuve chicane kerbs + gravel trap ----
@@ -186,6 +268,16 @@
       grandstand(0.28, -1, 12, 60, [0.52, 0.55, 0.60], RED);
       grandstand(0.31, -1, 12, 50, [0.54, 0.57, 0.61], [0.20, 0.42, 0.72]);
       groundPlane(K(0.28), -1, 6, [34, 40], GRAVEL);
+      // Roland Ratzenberger memorial — a modest stone stele with a bronze plaque,
+      // at the Tosa hairpin infield (not his crash site, as in reality).
+      {
+        const rm = anchor(K(0.285), -1, 18);
+        const rb = [rm.r, rm.u, rm.t];
+        addBox(out, vadd(rm.c, rm.u, 0.20), [1.1, 0.40, 0.9], STONE2, rb);   // base
+        addBox(out, vadd(rm.c, rm.u, 1.10), [0.7, 1.5, 0.30], STONE, rb);     // stele
+        addBox(out, vadd(vadd(rm.c, rm.u, 1.25), rm.t, 0.16), [0.46, 0.66, 0.06], [0.40, 0.30, 0.18], rb); // bronze plaque
+        addBox(out, vadd(vadd(rm.c, rm.u, 0.20), rm.t, 0.6), [0.30, 0.20, 0.30], RED, rb); // floral accent at base
+      }
 
       // ---- Variante Alta kerbs + vegetation ----
       for (const side of [-1, 1]) {
@@ -213,10 +305,16 @@
         building(K(s), side, dist, bw, bh, bw * 0.8, { wall: bh > 20 ? TERRA2 : STONE3, window: WIN_LIT, floor: 3, lit: true });
       }
 
-      // ---- Variante Bassa / pit approach: river returns ----
+      // ---- Variante Bassa / pit approach: Santerno returns alongside the wall ----
       place(K(0.92), 1, 2, [0.4, 0.3, 7], RED);
       place(K(0.93), 1, 2, [0.4, 0.3, 7], WHITE);
-      groundPlane(K(0.92), 1, 22, [44, 110], RIVER);
+      groundPlane(K(0.92), 1, 5,  [10, 120], BANK);
+      groundPlane(K(0.92), 1, 16, [26, 120], RIVER);
+      groundPlane(K(0.92), 1, 43, [8, 120], BANK);
+      for (let i = 0; i <= 5; i++) {
+        tree(K(0.905 + i * 0.013), 1, 48 + (i % 2) * 4, 12 + (i % 3),
+             (i % 2) ? [0.18, 0.40, 0.20] : [0.13, 0.32, 0.16]);
+      }
 
       // ---- Marshal posts ----
       every(110, (k) => {
@@ -276,6 +374,24 @@
         addCone(out, vadd(towerFoot, u, campH + 2.2), 2.8, 8, [0.44, 0.34, 0.28], 7, [r, u, t]);
         for (const sg of [-1, 1]) {
           addBox(out, vadd(vadd(towerFoot, u, campH + 0.8), r, sg * 2.2), [0.5, 1.0, 0.3], WIN_LIT, [r, u, t]);
+        }
+        // Rocca Sforzesca: the town's 14th-century crenellated stone fortress,
+        // a stout battlemented keep with corner towers anchoring the skyline.
+        const ROCCA = [0.74, 0.70, 0.60];
+        const ROCCA2 = [0.68, 0.64, 0.55];
+        const roccaFoot = vadd(vadd(vadd(base, t, -70), r, -64), u, 16);
+        addBox(out, vadd(roccaFoot, u, 9), [22, 18, 22], ROCCA, [r, u, t]);        // keep body
+        // Battlement merlons around the top edge (crenellation).
+        for (let mi = -2; mi <= 2; mi++) {
+          for (const sg of [-1, 1]) {
+            addBox(out, vadd(vadd(vadd(roccaFoot, u, 19), t, mi * 4.4), r, sg * 10), [1.4, 2.4, 1.4], ROCCA2, [r, u, t]);
+          }
+        }
+        // Four round corner towers, taller than the keep.
+        for (const sr of [-1, 1]) for (const st of [-1, 1]) {
+          const tf = vadd(vadd(roccaFoot, r, sr * 11), t, st * 11);
+          addCyl(out, tf, 3.0, 26, ROCCA, 8, [r, u, t]);
+          addCone(out, vadd(tf, u, 26), 3.6, 4.5, TERRA, 8, [r, u, t]);
         }
       }
 

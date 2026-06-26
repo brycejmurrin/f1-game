@@ -92,15 +92,67 @@
                  [0.22 + hash(i * 3.3) * 0.06, 0.40 + hash(i * 4.7) * 0.06, 0.20 + hash(i * 2.1) * 0.04]);
       }
 
-      // ── Motopia theme park + giant Ferris wheel ──────────────────────────────
-      // The wheel is Suzuka's signature landmark. It sits on the outside of the
-      // main straight near Turn 1 (s≈0.075). We use the engine's built-in
-      // ferrisWheel() which places the hub, legs, and cabin ring correctly.
-      // Support accent towers flank the wheel at DIFFERENT distances so they
-      // don't overlap the wheel footprint (wheel dist=58, radius=35 ⟹ edge ≈93 m;
-      // flanking towers at dist=100 and dist=105 are safely clear).
+      // ── Motopia theme park + the iconic RED "Circuit Wheel" Ferris wheel ──────
+      // Suzuka's single most recognisable landmark: a ~50 m BRIGHT RED Ferris
+      // wheel in the Motopia park, sitting behind the finishing straight on the
+      // V-grandstand (left, side=-1) side, near Turn 1 (s≈0.075). The engine's
+      // ferrisWheel() helper hard-codes grey struts, so we build a bespoke red
+      // structure here (red A-frame legs + red hub + red double rim + spokes +
+      // multicoloured cabins) and call the helper only for its drivable-footprint
+      // block. Reads unmistakably red from the pit straight, as on TV.
       const wheelK = Math.round(n * 0.075) % n;
-      ferrisWheel(wheelK, -1, 58, 35);     // 35 m radius — iconic tall silhouette
+      const ferrisRed = [0.86, 0.12, 0.12];   // bright Circuit-Wheel red
+      {
+        const wDist = 58, wRad = 30;
+        const a = anchor(wheelK, -1, wDist);
+        // wheel plane: rim spans the tangent (t) × up (u); legs splay along t
+        const hubY = a.c[1] + wRad + 6;
+        const hub  = [a.c[0], hubY, a.c[2]];
+        const tB = [a.r, a.u, a.t];           // local basis for boxes/cyls
+        // disc-plane unit axes (orthonormal): t = horizontal tangent, u = world up,
+        // nrm = a.r (disc normal, lateral to the road). Cabin/spoke points use
+        // P(ang) = hub + t*cos(ang)*r + u*sin(ang)*r.
+        const tU = a.t, uU = a.u, nU = a.r;
+        const onRim = (ang, rr) => [
+          hub[0] + tU[0] * Math.cos(ang) * rr + uU[0] * Math.sin(ang) * rr,
+          hub[1] + tU[1] * Math.cos(ang) * rr + uU[1] * Math.sin(ang) * rr,
+          hub[2] + tU[2] * Math.cos(ang) * rr + uU[2] * Math.sin(ang) * rr,
+        ];
+        // strut = a red cylinder between two points p0→p1 (its u-axis = the
+        // direction, cross-section spanned by nU and a perpendicular in-plane vec).
+        const strut = (p0, p1, thick, col) => {
+          const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+          const len = Math.hypot(d[0], d[1], d[2]) || 1;
+          const dir = [d[0] / len, d[1] / len, d[2] / len];
+          // perpendiculars: cross(dir, nU) then cross(dir, that)
+          let e0 = [dir[1] * nU[2] - dir[2] * nU[1], dir[2] * nU[0] - dir[0] * nU[2], dir[0] * nU[1] - dir[1] * nU[0]];
+          let el = Math.hypot(e0[0], e0[1], e0[2]) || 1; e0 = [e0[0] / el, e0[1] / el, e0[2] / el];
+          const e1 = [dir[1] * e0[2] - dir[2] * e0[1], dir[2] * e0[0] - dir[0] * e0[2], dir[0] * e0[1] - dir[1] * e0[0]];
+          addCyl(out, p0, thick, len, col, 6, [e0, dir, e1]);
+        };
+        // A-frame support legs (red): two struts from splayed feet up to the hub
+        for (const lo of [-9, 9]) strut(vadd(a.c, a.t, lo), hub, 1.4, ferrisRed);
+        // hub
+        addBox(out, hub, [4.0, 4.0, 4.0], ferrisRed, tB);
+        // double rim: two concentric red rings of struts (visible disc)
+        const seg = 24;
+        for (const rr of [wRad, wRad - 2.2]) {
+          for (let i = 0; i < seg; i++) {
+            strut(onRim((i / seg) * 6.2832, rr), onRim(((i + 1) / seg) * 6.2832, rr), 0.55, ferrisRed);
+          }
+        }
+        // red spokes from hub to rim (full visible web)
+        for (let i = 0; i < seg; i++) strut(hub, onRim((i / seg) * 6.2832, wRad), 0.30, ferrisRed);
+        // multicoloured cabins hanging just inside the rim
+        const cabCol = [[0.95, 0.95, 0.98], [0.35, 0.64, 0.86], [0.92, 0.82, 0.32], [0.52, 0.80, 0.50], [0.80, 0.46, 0.84]];
+        for (let i = 0; i < seg; i++) {
+          const p = onRim((i / seg) * 6.2832, wRad - 0.8);
+          addBox(out, [p[0], p[1] - 1.2, p[2]], [2.6, 2.4, 2.0], cabCol[i % cabCol.length], tB);
+        }
+      }
+      // (No ferrisWheel() helper call: it hard-codes grey struts that would clutter
+      // our bespoke red wheel. The wheel sits 58 m off-track, far past any drivable
+      // surface, so no footprint block is needed.)
 
       // Flanking ride towers: at distinct k-positions AND safe lateral distance
       tower(Math.round(n * 0.062) % n, -1, 98, 8, 44, { col: [0.78, 0.80, 0.84], seg: 8, cap: true, capCol: neonRed, mast: 6 });
@@ -304,22 +356,49 @@
         billboard(Math.round(n * s) % n, sd, 7, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
       }
 
-      // ── Figure-8 bridge: the iconic crossover at s≈0.81 ──────────────────────
+      // ── Figure-8 crossover overpass: the iconic concrete bridge at s≈0.81 ─────
+      // Suzuka's defining piece of architecture — the ~1.2 km back straight runs
+      // OVER the front section on a grey concrete deck carried on heavy piers.
+      // We span the deck across the centreline (perpendicular to the road here),
+      // carried on two big concrete piers set off each side, with solid parapets.
       {
-        const bk = Math.round(n * 0.81) % n;
-        const ab = anchor(bk, -1, 14);
-        const basis = [ab.r, ab.u, ab.t];
-        const colH = 14;
-        addBox(out, vadd(ab.c, ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
-        addBox(out, vadd(vadd(ab.c, ab.t, 16), ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 0.7), [10, 1.2, 34], [0.25, 0.47, 0.29], basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 3.5), [11, 0.5, 35], [0.27, 0.49, 0.31], basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 2.8), [8, 0.15, 28], lampWarm, basis);
-        for (let i = -4; i <= 4; i++) {
-          const off = i * (34 / 9);
-          const rc = [ab.c[0] + ab.t[0] * off, ab.c[1] + colH + 1.4, ab.c[2] + ab.t[2] * off];
-          addCyl(out, rc, 0.10, 1.4, steel, 4, basis);
+        const bk = Math.round(n * 0.811) % n;
+        // The road itself rises to ~5 m here (def.bridges) where the back straight
+        // crosses OVER the front section. Build the concrete carrying structure so
+        // its deck sits just under that elevated road and the piers reach the
+        // lower ground/front-section level — a real overpass, not a floating slab.
+        const colH = 5.0;                        // pier height ≈ road-bump rise
+        const offD = 13;                         // pier set-back from each verge
+        const deckW = 13;                        // deck width along the road
+        // Both side anchors → derive EVERYTHING from anchor coords (raw px[bk] is
+        // NOT remapped under reverse:true, so it would split the deck off the piers).
+        const aL = anchor(bk, -1, offD), aR = anchor(bk, 1, offD);
+        const basis = [aL.r, aL.u, aL.t];
+        // centreline point = midpoint of the two side anchors; span reaches both piers
+        const mid = [(aL.c[0] + aR.c[0]) / 2, (aL.c[1] + aR.c[1]) / 2, (aL.c[2] + aR.c[2]) / 2];
+        const span = Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]) + 6;
+        // u/t come from aL's basis (consistent across the span)
+        const u = aL.u, t = aL.t;
+        const at = (base, h, lat) => [
+          base[0] + u[0] * h + t[0] * lat,
+          base[1] + u[1] * h + t[1] * lat,
+          base[2] + u[2] * h + t[2] * lat,
+        ];
+        // two concrete piers (one just outside each verge)
+        for (const a of [aL, aR]) {
+          const b = [a.r, a.u, a.t];
+          addBox(out, vadd(a.c, a.u, colH / 2), [3.0, colH, 4.5], concrete, b);            // pier shaft
+          addBox(out, vadd(a.c, a.u, colH + 0.5), [4.2, 1.0, 5.2], [0.55, 0.56, 0.60], b); // pier cap
         }
+        // concrete deck spanning side-to-side, carried on the piers
+        addBox(out, at(mid, colH + 1.6, 0), [span, 1.6, deckW], [0.60, 0.61, 0.64], basis);           // deck soffit
+        addBox(out, at(mid, colH + 2.6, 0), [span, 0.5, deckW + 0.4], [0.66, 0.67, 0.70], basis);     // road slab
+        // solid parapets along both deck edges (running across the road)
+        for (const lat of [deckW / 2 - 0.4, -(deckW / 2 - 0.4)]) {
+          addBox(out, at(mid, colH + 3.4, lat), [span, 1.0, 0.5], [0.72, 0.73, 0.76], basis);
+        }
+        // Honda red/white accent stripe on the near parapet
+        addBox(out, at(mid, colH + 3.2, deckW / 2 - 0.2), [span, 0.4, 0.18], ferrisRed, basis);
       }
 
       // ── Underpass structure (back loop dips under Esses exit at s≈0.37) ───────

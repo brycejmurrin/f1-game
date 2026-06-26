@@ -35,11 +35,11 @@ Status legend: ⬜ not started · 🟦 in progress · ✅ done & screenshot-veri
 ### Tier 3 — cheap high-value landmark adds
 | Track | Change | Status |
 |---|---|---|
-| suzuka | red ~50 m ferris wheel near S/F; figure-8 crossover bridge | ⬜ |
+| suzuka | red ~50 m ferris wheel near S/F; figure-8 crossover bridge | ✅ |
 | montreal | Biosphère steel dome + Olympic Basin + La Ronde wheel; 1m walls; Bonjour Québec | ✅✅ |
 | monza | ruined banked oval; deciduous-dominant trees; Tifosi red | ✅ |
-| imola | seated bronze Senna statue (replace white box); river hugs Tamburello wall | ⬜ |
-| interlagos | mirror Senna statue + Kobra mural; favela close + skyline far; lakes mid/far | ⬜ |
+| imola | seated bronze Senna statue (replace white box); river hugs Tamburello wall | ✅ |
+| interlagos | mirror Senna statue + Kobra mural; favela close + skyline far; lakes mid/far | ✅ |
 | jeddah | offshore water-jet fountain; turquoise-dome Floating Mosque; sparse low-rise | ⬜ |
 | singapore | bay landmarks across water; Flyer 150 m; Merlion; taller CBD; reflections | ⬜ |
 
