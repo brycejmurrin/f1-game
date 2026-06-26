@@ -52,6 +52,30 @@ export const test = base.extend({
     await installMocks(context);
     await use(context);
   },
+
+  /**
+   * Collects all uncaught JS exceptions thrown by the page.
+   * Tests can assert `expect(pageErrors).toHaveLength(0)` after exercising
+   * game logic to confirm no silent JS errors occurred.
+   *
+   * @type {string[]}
+   */
+  pageErrors: async ({ page }, use) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await use(errors);
+  },
+
+  /**
+   * Navigates to `/` and waits until `window.__apex` is available (up to
+   * 10 s), then hands the loaded page to the test.  Saves the boilerplate
+   * goto + waitForFunction block that every race-level test needs.
+   */
+  racePage: async ({ page }, use) => {
+    await page.goto('/');
+    await page.waitForFunction(() => window.__apex != null, { timeout: 10000 });
+    await use(page);
+  },
 });
 
 export { expect };

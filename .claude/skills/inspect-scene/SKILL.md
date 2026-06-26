@@ -47,6 +47,11 @@ overlay.
 
 ## Notes
 
+- **Port and browser discovery are automatic.** `shot.mjs` uses `freePort()` to
+  pick an available port at runtime — no manual port configuration needed. It also
+  resolves Chromium from `/opt/pw-browsers/chromium` automatically when present,
+  so there is no need to set `PLAYWRIGHT_BROWSERS_PATH` or pass a browser path by
+  hand.
 - Default output goes under the scratchpad / `scratch/` — don't commit
   throwaway screenshots into the repo. Visual-regression baselines under
   `tests/` are updated only via `npx playwright test --update-snapshots`.

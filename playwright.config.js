@@ -3,7 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
-  fullyParallel: false,
+  globalSetup: './tests/global-setup.js',
+  fullyParallel: true,
+  workers: process.env.CI ? 2 : undefined,
   retries: 1,
   timeout: 120_000,
   use: {
@@ -38,5 +40,9 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 60_000,
   },
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: [
+    ["list"],
+    ["html", { open: "never" }],
+    ["junit", { outputFile: "test-results/junit.xml" }],
+  ],
 });
