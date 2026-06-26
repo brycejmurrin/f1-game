@@ -51,7 +51,7 @@ uniform float uRoughness;
 uniform float uMetalness;
 uniform float uSpecular;
 uniform float uDetail;
-uniform sampler2D uShadowMap;  // raw depth — PCSS reads blocker depth directly
+uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
 uniform float uShadowBias;
 uniform float uShadowStr;
@@ -61,13 +61,12 @@ uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
-const int MAX_LIGHTS = 48;
+const int MAX_LIGHTS = 32;
 uniform int uNumLights;
 uniform vec3 uLightPos[MAX_LIGHTS];
 uniform vec3 uLightCol[MAX_LIGHTS];
 uniform float uLightRad[MAX_LIGHTS];
-layout(location = 0) out vec4 outColor;
-layout(location = 1) out vec4 outNormal;  // packed world-space normal [0,1] + sentinel w=1
+out vec4 outColor;
 
 const float PI = 3.14159265359;
 
@@ -105,60 +104,36 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// PCSS contact-hardening soft shadows.
-// Step 1: blocker search (9 taps) → average blocker depth.
-// Step 2: penumbra width ∝ receiver–blocker gap (contact = sharp, far = soft).
-// Step 3: PCF with variable kernel (16 taps, wider when far from caster).
-const float PCSS_LIGHT = 6.0;   // sun angular size in shadow-texel units
-const float PCSS_SCALE = 280.0; // depth-difference → texel count
-
-// Poisson disk for blocker search
-const vec2 BLKD[9] = vec2[9](
-  vec2(-0.94201624,-0.39906216), vec2( 0.94558609,-0.76890725),
-  vec2(-0.09418410,-0.92938870), vec2( 0.34495938, 0.29387760),
-  vec2(-0.91588581, 0.45771432), vec2(-0.81544232,-0.87912464),
-  vec2(-0.38277543, 0.27676845), vec2( 0.97484398, 0.75648379),
-  vec2( 0.00000000, 0.00000000));
-// Wider Poisson disk for PCF
-const vec2 PCFD[16] = vec2[16](
-  vec2(-0.94201624,-0.39906216), vec2( 0.94558609,-0.76890725),
-  vec2(-0.09418410,-0.92938870), vec2( 0.34495938, 0.29387760),
-  vec2(-0.91588581, 0.45771432), vec2(-0.81544232,-0.87912464),
-  vec2(-0.38277543, 0.27676845), vec2( 0.97484398, 0.75648379),
-  vec2( 0.44323325,-0.97511554), vec2( 0.53742981,-0.47373420),
-  vec2(-0.26496911,-0.41893023), vec2( 0.79197514, 0.19090188),
-  vec2(-0.24188840, 0.99706507), vec2(-0.81409955, 0.91437590),
-  vec2( 0.19984126, 0.78641367), vec2( 0.14383161,-0.14100790));
-
 float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z >= 1.0) return 1.0;
   float t = uShadowTexel;
+  // Slope-scale bias: gentle base + steeper slope term reduces both acne and
+  // peter-panning on angled surfaces (walls, banking kerbs).
   float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.0, 1.0);
   float slopeBias = t * 1.5 * tan(acos(max(cosTheta, 0.05)));
   float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
-
-  // Step 1: blocker search within PCSS_LIGHT-scaled radius
-  float searchR = t * PCSS_LIGHT * 5.0;
-  float sumZ = 0.0; int cnt = 0;
-  for (int i = 0; i < 9; i++) {
-    float d = texture(uShadowMap, sc.xy + BLKD[i] * searchR).r;
-    if (d < z) { sumZ += d; cnt++; }
-  }
-  if (cnt == 0) return 1.0;  // no blocker → fully lit
-
-  // Step 2: penumbra width from average blocker depth
-  float avgZ = sumZ / float(cnt);
-  float penumbraT = clamp((z - avgZ) * PCSS_SCALE, 1.0, 15.0);
-  float pcfR = penumbraT * t;
-
-  // Step 3: 16-tap PCF with variable kernel
-  float s = 0.0;
-  for (int i = 0; i < 16; i++) {
-    s += texture(uShadowMap, sc.xy + PCFD[i] * pcfR).r > z ? 1.0 : 0.0;
-  }
-  return mix(1.0, s * 0.0625, uShadowStr);
+  // 8-tap rotated Poisson disk — balanced coverage, cheap enough for mobile.
+  // Disk radius = 1.4 texels → smooth penumbra without over-blurring.
+  const float R = 1.4;
+  vec2 d0 = vec2(-0.94201624, -0.39906216) * t * R;
+  vec2 d1 = vec2( 0.94558609, -0.76890725) * t * R;
+  vec2 d2 = vec2(-0.09418410, -0.92938870) * t * R;
+  vec2 d3 = vec2( 0.34495938,  0.29387760) * t * R;
+  vec2 d4 = vec2(-0.91588581,  0.45771432) * t * R;
+  vec2 d5 = vec2(-0.81544232, -0.87912464) * t * R;
+  vec2 d6 = vec2(-0.38277543,  0.27676845) * t * R;
+  vec2 d7 = vec2( 0.97484398,  0.75648379) * t * R;
+  float s = texture(uShadowMap, vec3(sc.xy + d0, z))
+          + texture(uShadowMap, vec3(sc.xy + d1, z))
+          + texture(uShadowMap, vec3(sc.xy + d2, z))
+          + texture(uShadowMap, vec3(sc.xy + d3, z))
+          + texture(uShadowMap, vec3(sc.xy + d4, z))
+          + texture(uShadowMap, vec3(sc.xy + d5, z))
+          + texture(uShadowMap, vec3(sc.xy + d6, z))
+          + texture(uShadowMap, vec3(sc.xy + d7, z));
+  return mix(1.0, s * 0.125, uShadowStr);
 }
 
 void main() {
@@ -283,7 +258,6 @@ void main() {
   float fd = vDist * uFogDensity * heightAtten;
   float f = 1.0 - exp(-fd * fd);
   outColor = vec4(mix(color, uFogColor, f), uAlpha);
-  outNormal = vec4(N * 0.5 + 0.5, 1.0);  // pack world normal; w=1 flags lit geometry
 }`;
 
   const SKY_VS = `#version 300 es
@@ -306,9 +280,8 @@ uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform float uStars;
 uniform float uCloud;
-uniform float uTime;
-uniform float uMoon;
-uniform float uLightning;  // 0..1 lightning flash intensity
+uniform float uTime;   // seconds, 0 = static/deterministic (backward-compatible)
+uniform float uMoon;   // 0..1 moon visibility (0 = none, backward-compatible)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -337,154 +310,149 @@ void main() {
   float up = dir.y;
   float sd = max(dot(dir, uSunDir), 0.0);
 
+  // Sun-elevation factor: 0 = sun on/below horizon, 1 = overhead noon.
+  // Drives automatic golden-hour / sunset tint without per-track authoring.
   float sunE = clamp(uSunDir.y * 1.4, 0.0, 1.0);
+
+  // Overcast factor: drives grey-shift and corona damping under heavy cloud.
   float overcast = smoothstep(0.5, 1.0, uCloud);
 
-  // --- Sky gradient: richer Rayleigh look with a 3-stop gradient ---
+  // --- Sky gradient ---
   vec3 c;
   if (up >= 0.0) {
-    vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.78);
-    vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.62);
-    // Shallower exponent = richer blue extends further down from zenith
-    float skyLerp = pow(up, 0.28);
-    c = mix(horizonO, zenithO, skyLerp);
-    // Rayleigh mid-sky peak: slight saturation boost at ~40° elevation (physically accurate)
-    float midPeak = smoothstep(0.0, 0.28, up) * smoothstep(0.75, 0.28, up);
-    c += uZenith * 0.12 * midPeak * (1.0 - overcast * 0.9);
-
-    // Golden-hour: wider and more saturated warm amber/orange overlay near horizon
-    float goldenAmt = (1.0 - smoothstep(0.0, 0.78, sunE))
-                    * (1.0 - smoothstep(0.0, 0.42, up))
-                    * (1.0 - overcast * 0.88);
-    vec3 goldenColor = mix(vec3(0.88, 0.18, 0.02), vec3(0.98, 0.62, 0.14),
+    // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
+    vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.75);
+    vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.60);
+    // pow(up, 0.35): richer blue zenith extends further down, horizon band
+    // narrower — avoids the pale/washed look at mid-sky while keeping the
+    // gradient smooth. (Was 0.5 which mapped too much sky to the horizon tint.)
+    c = mix(horizonO, zenithO, pow(up, 0.35));
+    // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
+    // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
+    // Damped under overcast so heavy cloud doesn't show warm colour.
+    float goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE))
+                    * (1.0 - smoothstep(0.0, 0.32, up))
+                    * (1.0 - overcast * 0.9);
+    vec3 goldenColor = mix(vec3(0.70, 0.22, 0.04), vec3(0.92, 0.55, 0.16),
                            clamp(sunE * 2.5, 0.0, 1.0));
-    c = mix(c, c * 0.35 + goldenColor * 0.65, goldenAmt * 0.90);
-
-    // Twilight band: pink-to-magenta between orange horizon and blue sky at sunset/sunrise
-    float twilightBand = (1.0 - smoothstep(0.0, 0.62, sunE))
-                       * smoothstep(0.10, 0.38, up)
-                       * (1.0 - smoothstep(0.38, 0.68, up))
-                       * (1.0 - overcast * 0.80);
-    vec3 twilightColor = mix(vec3(0.95, 0.22, 0.38), vec3(0.52, 0.20, 0.78),
-                             clamp(sunE * 2.2, 0.0, 1.0));
-    c = mix(c, c * 0.40 + twilightColor * 0.60, twilightBand * 0.70);
-
-    // Low-sun horizon band: super-saturated glow just above the horizon
-    float lowBand = (1.0 - smoothstep(0.0, 0.62, sunE))
-                  * (1.0 - smoothstep(0.0, 0.20, up))
+    c = mix(c, c * 0.45 + goldenColor * 0.55, goldenAmt * 0.80);
+    // Low-sun horizon band: extra warm band just above the horizon at sunset.
+    // Gives a richer, more saturated glow at the magic hour.
+    float lowBand = (1.0 - smoothstep(0.0, 0.60, sunE))
+                  * (1.0 - smoothstep(0.0, 0.18, up))
                   * smoothstep(0.01, 0.06, up)
                   * (1.0 - overcast * 0.85);
-    vec3 lowColor = mix(vec3(0.92, 0.18, 0.01), vec3(1.0, 0.68, 0.06),
+    vec3 lowColor = mix(vec3(0.85, 0.25, 0.02), vec3(0.98, 0.62, 0.08),
                         clamp(sunE * 3.0, 0.0, 1.0));
-    c = mix(c, lowColor, lowBand * 0.70);
+    c = mix(c, lowColor, lowBand * 0.55);
   } else {
+    // Below the horizon: dark earth tone, smoothly blended from the horizon colour.
     float gnd = clamp(-up * 5.0, 0.0, 1.0);
     c = mix(uHorizon * 0.85, vec3(0.035, 0.030, 0.022), gnd * gnd);
   }
 
-  // --- Procedural cloud layer (dramatic contrast + silver lining) ---
+  // --- Procedural cloud layer ---
+  // Cloud plane is drifted slowly by uTime (no drift when time=0 → deterministic).
   if (uCloud > 0.001 && up > 0.012) {
     vec2 cp = dir.xz / up * 0.42;
+    // Drift offset: two independent slow vectors for parallax feel.
     vec2 drift1 = vec2(uTime * 0.0028, uTime * 0.0011);
     vec2 drift2 = vec2(uTime * 0.0017, uTime * 0.0023);
+    // Evolution: a very slow warp of the second octave to change cloud shape.
     float evo = uTime * 0.00035;
     vec2 cp1 = cp + drift1;
     vec2 cp2 = cp + drift2;
     float f = fbm(cp1);
     float cov = smoothstep(0.55 - uCloud * 0.4, 0.92, f);
     cov *= smoothstep(0.012, 0.08, up);
+    // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
+    // thick billowing regions = shadowed dark underside.
     float thick = clamp(fbm(cp2 * 0.55 + vec2(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
     float sl = pow(sd, 2.0);
     float sunBright = max(uSunColor.r, max(uSunColor.g, uSunColor.b));
+    // Under heavy overcast, clamp sunBright so even a bright sun gives grey clouds.
     float effectiveSunBright = mix(sunBright, min(sunBright, 0.55), overcast);
-    // Brighter, more vivid lit tops
-    vec3 cloudTop = mix(vec3(0.62, 0.66, 0.74), vec3(1.02, 0.99, 0.94), sl);
-    cloudTop *= 0.28 + 0.72 * effectiveSunBright;
-    // Low-sun clouds catch the warm horizon light strongly — gold/crimson-rimmed
-    // banks at sunrise/sunset are the most dramatic part of the sky.
-    cloudTop = mix(cloudTop, cloudTop * uSunColor * 2.05, sl * (1.0 - sunE) * 0.80 * (1.0 - overcast));
-    cloudTop = mix(cloudTop, vec3(0.60, 0.61, 0.63), overcast * 0.60);
-    // Much darker, more threatening undersides
-    vec3 cloudBot = vec3(0.15, 0.16, 0.21) * (0.18 + 0.55 * effectiveSunBright);
-    cloudBot = mix(cloudBot, vec3(0.08, 0.08, 0.12), overcast * 0.75);  // near-black storm
-    vec3 lit = mix(cloudBot, cloudTop, clamp(0.12 + (1.0 - thick) * 0.82, 0.0, 1.0));
-    // Silver lining: bright rim on thin cloud edges when backlit by sun
-    float edgeLit = cov * (1.0 - cov) * sl * 5.5 * (1.0 - overcast * 0.8);
-    lit += vec3(0.85, 0.88, 0.92) * edgeLit;
+    // Sunlit tops: white in daylight, warm-tinted at sunset
+    vec3 cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl);
+    cloudTop *= 0.38 + 0.62 * effectiveSunBright;
+    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.45, sl * (1.0 - sunE) * 0.55 * (1.0 - overcast));
+    // Under overcast flatten tops toward medium grey.
+    cloudTop = mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast * 0.65);
+    // Dark undersides: cooler and dimmer, conveying mass/volume
+    vec3 cloudBot = vec3(0.31, 0.32, 0.38) * (0.28 + 0.48 * effectiveSunBright);
+    // Under overcast, undersides go darker / more threatening.
+    cloudBot = mix(cloudBot, vec3(0.22, 0.22, 0.25), overcast * 0.55);
+    vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
+    // Moon tints nearby clouds faintly blue-silver.
     if (uMoon > 0.0) {
-      float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.22;
-      lit = mix(lit, lit + vec3(0.08, 0.10, 0.18), moonLit);
+      float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
+      lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
     }
     c = mix(c, lit, cov);
   }
 
-  // --- Mie forward scatter + dramatic horizon glow ---
+  // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
+  // Damped under overcast (corona hidden behind cloud).
   float upPos = max(up, 0.0);
   float mieDamp = 1.0 - overcast * 0.85;
-  // Stronger forward scatter bloom toward sun
-  c = mix(c, uSunColor * 1.2, pow(sd, 4.5) * 0.28 * max(1.0 - upPos * 1.2, 0.0) * mieDamp);
+  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp);
 
-  // Wider, more dramatic horizon glow in sun's compass direction
+  // --- Horizon glow in the sun's compass direction ---
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
   float sunHLen = length(sunH);
   if (sunHLen > 0.05) {
     vec2 dirH = vec2(dir.x, dir.z);
     float dirHLen = length(dirH);
     float hdot = dirHLen > 0.05 ? max(dot(dirH / dirHLen, sunH / sunHLen), 0.0) : 0.0;
-    float hband = max(1.0 - abs(up) * 4.5, 0.0);
-    // Wide ambient glow
-    c += uSunColor * pow(hdot, 3.5) * hband * hband * 0.38 * sunHLen * mieDamp;
-    // Below-horizon continuation of the glow
-    c += uSunColor * 0.90 * pow(hdot, 2.2) * smoothstep(-0.06, 0.0, -up) * (1.0 - overcast * 0.6);
+    float hband = max(1.0 - abs(up) * 5.0, 0.0);
+    c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen * mieDamp;
   }
 
-  // --- Sun corona + disc (larger outer halo, atmospheric glow ring) ---
+  // --- Sun corona + disc (damped under overcast) ---
   float coronaDamp = 1.0 - overcast * 0.92;
-  c += uSunColor * pow(sd, 7.0) * 0.20 * coronaDamp;   // wide atmospheric glow
-  c += uSunColor * pow(sd, 22.0) * 0.68 * coronaDamp;  // tight corona ring
-  c += uSunColor * pow(sd, 380.0) * 1.10 * coronaDamp; // bright disc core
+  c += uSunColor * pow(sd, 20.0) * 0.55 * coronaDamp;   // outer halo ~15°
+  c += uSunColor * pow(sd, 300.0) * 0.90 * coronaDamp;  // inner ring ~4°
   float perp = length(dir - uSunDir * sd);
-  // Slightly larger, brighter disc with a warm-to-white core for a present sun.
-  float disc = smoothstep(0.024, 0.007, perp) * coronaDamp;
-  c += mix(uSunColor * 2.0, vec3(2.2, 2.05, 1.7), disc) * disc;
+  float disc = smoothstep(0.018, 0.006, perp) * coronaDamp;
+  c += mix(uSunColor * 1.6, vec3(1.8, 1.75, 1.5), disc) * disc;
 
-  // --- Stars: denser field with Milky Way band ---
+  // --- Stars (night tracks) ---
   if (uStars > 0.5 && up > 0.05) {
+    // Cell-based star field with varied brightness and a few "giant" stars.
     vec3 cell180 = floor(dir * 180.0);
     float h = hash3(cell180);
-    float star = smoothstep(0.992, 1.0, h);   // lower threshold = more stars
-    float bright = 0.40 + 0.60 * hash3(floor(dir * 43.0));
+    // Normal stars: sparse
+    float star = smoothstep(0.9970, 1.0, h);
+    // Brightness varies per star; driven by a separate hash.
+    float bright = 0.35 + 0.65 * hash3(floor(dir * 43.0));
+    // Subtle twinkle: hash at coarser cell gives a slow phase offset per star.
     float phase = hash3(floor(dir * 31.0)) * 6.2832;
-    float twinkle = 0.78 + 0.22 * sin(uTime * 1.4 + phase);
+    float twinkle = 0.80 + 0.20 * sin(uTime * 1.4 + phase);
+    // Giant/bright stars: much rarer, extra brightness
     float giantH = hash3(floor(dir * 55.0));
-    float giant = smoothstep(0.997, 1.0, giantH);
-    float giantBright = 0.8 + 0.55 * hash3(floor(dir * 27.0));
-    float giantTwinkle = 0.72 + 0.28 * sin(uTime * 0.9 + phase * 1.3);
+    float giant = smoothstep(0.998, 1.0, giantH);
+    float giantBright = 0.7 + 0.5 * hash3(floor(dir * 27.0));
+    float giantTwinkle = 0.75 + 0.25 * sin(uTime * 0.9 + phase * 1.3);
     c += vec3(star * bright * twinkle + giant * giantBright * giantTwinkle);
-    // Milky Way: diffuse band along a tilted galactic plane
-    float galY = dot(dir, vec3(0.22, 0.94, 0.25));  // tilted galactic equator
-    float galBand  = exp(-galY * galY * 7.0) * 0.55;   // wide glow
-    float galCore  = exp(-galY * galY * 40.0) * 0.30;  // bright core
-    galBand = (galBand + galCore) * smoothstep(0.05, 0.18, up) * (1.0 - overcast);
-    c += vec3(0.22, 0.20, 0.32) * galBand * uStars;  // subtle purple-blue band
   }
 
-  // --- Moon disc + halo ---
+  // --- Moon disc + halo (night tracks) ---
   if (uMoon > 0.0 && uStars > 0.5) {
+    // Fixed moon direction: high in the sky, to the right of the sun's compass direction.
+    // Using a stable world-space direction so it doesn't follow the camera.
     vec3 moonDir = normalize(vec3(0.42, 0.72, 0.55));
     float md = dot(dir, moonDir);
     float moonPerp = length(dir - moonDir * max(md, 0.0));
+    // Moon disc: crisp soft edge
     float moonDisc = smoothstep(0.025, 0.010, moonPerp) * uMoon;
-    float moonHalo = exp(-moonPerp * moonPerp * 110.0) * 0.35 * uMoon;  // larger halo
+    // Moon halo: broad soft glow
+    float moonHalo = exp(-moonPerp * moonPerp * 140.0) * 0.28 * uMoon;
+    // Moon colour: cool blue-white
     vec3 moonCol = vec3(0.82, 0.88, 1.00);
+    // The halo should only appear above the horizon and not wash out too much.
     if (up > 0.0 && md > 0.0) {
-      c += moonCol * (moonDisc * 1.20 + moonHalo);
+      c += moonCol * (moonDisc * 1.10 + moonHalo);
     }
-  }
-
-  // --- Lightning flash: bleach sky toward blue-white ---
-  if (uLightning > 0.001) {
-    c = mix(c, vec3(0.88, 0.92, 1.10) * 2.8, uLightning * 0.40);
   }
 
   outColor = vec4(c, 1.0);
@@ -532,32 +500,19 @@ void main() {
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
-  // Bright-pass: soft-knee threshold prefilter (Jimenez, "Next Generation Post
-  // Processing in Call of Duty: Advanced Warfare"). Instead of a hard cutoff, a
-  // quadratic knee lets pixels near the threshold bloom partially — the glow
-  // ramps in smoothly so highlights bleed dramatically without a hard edge.
-  // uKnee is the half-width of the soft transition band around uThreshold.
+  // Bright-pass: keep only the portion of each pixel above the threshold (the
+  // sun, floodlights, specular hotspots, bright markings) for the bloom blur.
   const BRIGHT_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
 uniform sampler2D uScene;
 uniform float uThreshold;
-uniform float uKnee;
 out vec4 outColor;
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
-  float br = max(max(c.r, c.g), c.b);
-  // Quadratic soft knee: smooth ramp in [T-knee, T+knee], linear above.
-  float kn = max(uKnee, 1e-4);
-  float soft = clamp(br - uThreshold + kn, 0.0, 2.0 * kn);
-  soft = soft * soft / (4.0 * kn + 1e-5);
-  float contrib = max(soft, br - uThreshold) / max(br, 1e-4);
-  // Firefly clamp: cap single-pixel intensity so isolated specular sparks don't
-  // produce flickering blocks once blurred, while still allowing strong glow.
-  vec3 outc = c * contrib;
-  float om = max(max(outc.r, outc.g), outc.b);
-  if (om > 8.0) outc *= 8.0 / om;
-  outColor = vec4(outc, 1.0);
+  float l = max(max(c.r, c.g), c.b);
+  float k = max(0.0, l - uThreshold) / max(l, 1e-4);
+  outColor = vec4(c * k, 1.0);
 }`;
 
   // Separable 5-tap gaussian (uDir = texelSize * axis).
@@ -584,12 +539,7 @@ void main() {
 precision highp float;
 in vec2 vUV;
 uniform sampler2D uScene;
-uniform sampler2D uBloom;   // level 0 — W/2 (tight glow)
-uniform sampler2D uBloom1;  // level 1 — W/4 (medium spread)
-uniform sampler2D uBloom2;  // level 2 — W/8 (wide halo)
-uniform sampler2D uBloom3;  // level 3 — W/16 (ultra-wide atmospheric)
-uniform sampler2D uSSAO;    // screen-space ambient occlusion
-uniform sampler2D uSSR;     // screen-space reflections (pre-multiplied by strength)
+uniform sampler2D uBloom;
 uniform float uBloomAmt;
 uniform vec2 uSunUV;
 uniform float uFlareStr;
@@ -600,44 +550,11 @@ uniform vec3 uGradeHi;       // multiplicative tint pulled into highlights (~1.0
 uniform float uGradeStr;     // 0 = neutral grade (backward-compatible)
 out vec4 outColor;
 
-// ACES fitted filmic tone-map (Stephen Hill's approximation). Kept for reference.
+// ACES fitted filmic tone-map (Stephen Hill's approximation).
+// Preserves colour ratios better than Reinhard; keeps darks dark, rolls off highlights.
 vec3 acesTonemap(vec3 x) {
   const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
-// AgX filmic tone-map (Troy Sobotka / Filament fit). Preserves hue into the
-// highlights far better than ACES — saturated neon, papaya orange and marshal
-// flags roll off to their own bright colour instead of skewing to white. The
-// pipeline is gamma-naive (tonemap output is written straight to the 8-bit
-// canvas), so we skip the linear EOTF and emit the display-referred sigmoid.
-vec3 agxDefaultContrastApprox(vec3 x) {
-  vec3 x2 = x * x;
-  vec3 x4 = x2 * x2;
-  vec3 x6 = x4 * x2;
-  return - 17.86 * x6 * x + 78.01 * x6 - 126.7 * x4 * x + 92.06 * x4
-         - 28.72 * x2 * x + 4.361 * x2 - 0.1718 * x + 0.002857;
-}
-vec3 agxTonemap(vec3 color) {
-  const mat3 AgXInset = mat3(
-    0.856627153315983, 0.137318972929847, 0.11189821299995,
-    0.0951212405381588, 0.761241990602591, 0.0767994186031903,
-    0.0482516061458583, 0.101439036467562, 0.811302368396859);
-  const mat3 AgXOutset = mat3(
-    1.1271005818144368, -0.1413297634984383, -0.14132976349843826,
-    -0.11060664309660323, 1.157823702216272, -0.11060664309660294,
-    -0.016493938717834573, -0.016493938717834257, 1.2519364065950405);
-  const float minEv = -12.47393, maxEv = 4.026069;
-  color = AgXInset * color;
-  color = clamp(log2(max(color, 1e-10)), minEv, maxEv);
-  color = (color - minEv) / (maxEv - minEv);
-  color = agxDefaultContrastApprox(color);
-  color = AgXOutset * color;
-  // Saturation restore: 1.20 — rich, intense colour (AgX desaturates highlights,
-  // so this brings the punch back) without tipping into cartoon oversaturation.
-  vec3 luma = vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)));
-  color = mix(luma, color, 1.20);
-  return clamp(color, 0.0, 1.0);
 }
 
 // Lift-gamma-gain colour grade: very mild S-curve per channel.
@@ -648,14 +565,6 @@ vec3 colourGrade(vec3 c) {
   c *= vec3(1.015, 1.008, 0.992);
   // Soft S-curve: deepen contrast for punch (less washed-out / flat)
   c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
-  // Light extra contrast on top of ACES (which already has a strong S-curve):
-  // a gentle Hermite deepens shadows for punch without crushing to mud.
-  vec3 sc = clamp(c, 0.0, 1.0);
-  sc = sc * sc * (3.0 - 2.0 * sc);
-  c = mix(c, sc, 0.22);
-  // Very gentle shadow deepening below mid-grey for chiaroscuro depth.
-  float dl = dot(c, vec3(0.299, 0.587, 0.114));
-  c *= mix(0.93, 1.0, smoothstep(0.0, 0.40, dl));
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
@@ -682,60 +591,39 @@ void main() {
   // Exposure multiply before tone-mapping (default 1.0 = no change).
   c *= uExposure;
 
-  // Multi-scale bloom: accumulate 3 levels (tight / medium / wide) with a
-  // tone-aware mask that reduces bloom on already-saturated highlights.
-  // Atmospheric bloom: bias toward the WIDE levels (soft halo around real light
-  // sources) and away from tight per-pixel glow that washed the frame. The mask
-  // strongly protects already-bright pixels so highlights stay crisp, not milky.
-  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.55, 0.0, 0.45) / 0.45 * 0.55;
-  vec3 bl = texture(uBloom,  vUV).rgb * 0.22
-           + texture(uBloom1, vUV).rgb * 0.22
-           + texture(uBloom2, vUV).rgb * 0.22
-           + texture(uBloom3, vUV).rgb * 0.18;
-  c += bl * uBloomAmt * bloomMask;
+  // Improved bloom: add with a mild tone-aware mask so it doesn't wash out
+  // already-bright pixels (reduce bloom addition proportionally in highlights).
+  vec3 bloomSample = texture(uBloom, vUV).rgb;
+  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
+  c += bloomSample * uBloomAmt * bloomMask;
 
-  // Volumetric sun shafts: 16-tap radial march from pixel toward sun, sampling
-  // the widest bloom level (diffuse sky light). Mie forward-scatter phase factor
-  // concentrates the effect around the sun direction. Gated when uSunShaft > 0.
+  // Sun shafts / god-rays: radial samples from current pixel toward the sun's
+  // screen position, reading the bright-pass (bloom[0] after bright-pass step).
+  // Additively composited. Gated when uSunShaft > 0 (sun on-screen, above horizon).
   if (uSunShaft > 0.0) {
     vec2 toSun = uSunUV - vUV;
     float dist = length(toSun);
+    // Only cast rays when we're not right on top of the sun (avoid div-zero).
     if (dist > 0.005) {
-      // Forward-scatter phase (Mie-like): brighter when looking toward the sun.
-      vec2 vd = normalize(vUV - vec2(0.5));
-      vec2 sd = length(uSunUV - vec2(0.5)) > 0.001
-                  ? normalize(uSunUV - vec2(0.5)) : vec2(0.0, 1.0);
-      float phase = pow(max(dot(vd, sd), 0.0), 3.0) * 0.5 + 0.5; // [0.5, 1.0]
-
-      vec2 step = toSun / dist * min(dist, 0.50) / 16.0;
+      vec2 step = toSun / dist * min(dist, 0.40) / 8.0;
       vec3 shaft = vec3(0.0);
       vec2 uv = vUV;
-      float wt = 1.0, wtSum = 0.0;
-      for (int i = 0; i < 16; i++) {
+      float decay = 1.0;
+      for (int i = 0; i < 8; i++) {
         uv += step;
-        vec2 suv = clamp(uv, vec2(0.01), vec2(0.99));
-        // Wide bloom captures diffuse sky scatter; tight bloom adds hotspot glow.
-        shaft += (texture(uBloom2, suv).rgb * 0.65 + texture(uBloom, suv).rgb * 0.35) * wt;
-        wtSum += wt;
-        wt *= 0.88;
+        // Clamp so we don't sample outside 0..1 (avoids edge bleed).
+        vec2 suv = clamp(uv, vec2(0.0), vec2(1.0));
+        shaft += texture(uBloom, suv).rgb * decay;
+        decay *= 0.82;
       }
-      shaft /= wtSum;
-      float radial = 1.0 - clamp(dist * 1.5, 0.0, 1.0);
-      c += shaft * uSunShaft * radial * phase * 0.80;
+      shaft /= 8.0;
+      // Radial falloff: strongest near the sun, zero at the edge of the screen.
+      float radial = 1.0 - clamp(dist * 1.8, 0.0, 1.0);
+      c += shaft * uSunShaft * radial * 0.55;
     }
   }
 
-  // SSAO: multiply scene colour by ambient occlusion factor before tonemap.
-  // Applied pre-tonemap so AO darkening is in the same perceptual space as light.
-  c *= texture(uSSAO, vUV).r;
-
-  // SSR: additive screen-space reflection (pre-multiplied by fresnel×confidence).
-  vec4 ssr = texture(uSSR, vUV);
-  c += ssr.rgb;
-
-  // ACES filmic tone-map — punchy, keeps darks dark, holds midtone saturation.
-  // (AgX was intentionally flat/desaturated — that read as the "flat" look; the
-  // certified baseline used ACES and that's the contrast/punch we want back.)
+  // Filmic tone-map (ACES) + colour grading.
   c = acesTonemap(c);
   c = colourGrade(c);
 
@@ -761,259 +649,10 @@ void main() {
   }
   c += flare;
 
-  // Film grain: per-pixel pseudo-random noise breaks the "too clean" digital look.
-  // Hash two different frequencies and mix — avoids visible tiling patterns.
-  float g1 = fract(sin(dot(vUV, vec2(12.9898,  78.233))) * 43758.5453);
-  float g2 = fract(sin(dot(vUV, vec2(63.7264, 107.457))) * 28941.3181);
-  c += (mix(g1, g2, 0.5) - 0.5) * 0.028;
-
   vec2 q = vUV - 0.5;
-  float vig = smoothstep(0.95, 0.22, length(q));
-  c *= mix(0.66, 1.0, vig);
+  float vig = smoothstep(0.95, 0.35, length(q));
+  c *= mix(0.86, 1.0, vig);
   outColor = vec4(c, 1.0);
-}`;
-
-  // Screen-Space Ambient Occlusion (SSAO): 12-tap hemisphere in depth buffer.
-  // Depth is linearised with hardcoded near/far (0.1/2000) matching the game camera.
-  // Normal buffer (w=1 on lit geometry, w=0 on sky) gates the effect.
-  const SSAO_FS = `#version 300 es
-precision mediump float;
-in vec2 vUV;
-uniform sampler2D uNormal;
-uniform sampler2D uDepth;
-uniform vec2 uTexel;
-out vec4 outColor;
-const float NEAR = 0.1, FAR = 2000.0;
-float lin(float d) { return NEAR * FAR / (FAR - d * (FAR - NEAR)); }
-const vec2 K[12] = vec2[12](
-  vec2( 0.000, 1.000), vec2( 0.500, 0.866), vec2( 0.866, 0.500),
-  vec2( 1.000, 0.000), vec2( 0.866,-0.500), vec2( 0.500,-0.866),
-  vec2( 0.000,-1.000), vec2(-0.500,-0.866), vec2(-0.866,-0.500),
-  vec2(-1.000, 0.000), vec2(-0.866, 0.500), vec2(-0.500, 0.866));
-void main() {
-  vec4 nrm = texture(uNormal, vUV);
-  if (nrm.w < 0.5) { outColor = vec4(1.0); return; }  // sky / unlit
-  float d = texture(uDepth, vUV).r;
-  float ld = lin(d);
-  float r = clamp(0.06 / max(ld * 0.004, 1.0), 0.004, 0.055);
-  float ao = 0.0;
-  for (int i = 0; i < 12; i++) {
-    vec2 suv = clamp(vUV + K[i] * r, vec2(0.001), vec2(0.999));
-    float sld = lin(texture(uDepth, suv).r);
-    float diff = ld - sld;
-    float range = smoothstep(r * ld * 3.0, 0.0, abs(diff));
-    ao += step(0.04, diff) * range;
-  }
-  outColor = vec4(vec3(1.0 - clamp(ao / 12.0, 0.0, 1.0) * 0.70), 1.0);
-}`;
-
-  // Bilateral blur for SSAO: separable 5-tap Gaussian.
-  const SSAO_BLUR_FS = `#version 300 es
-precision mediump float;
-in vec2 vUV;
-uniform sampler2D uSSAO;
-uniform vec2 uDir;
-out vec4 outColor;
-void main() {
-  vec2 o1 = uDir * 1.3846153846;
-  vec2 o2 = uDir * 3.2307692308;
-  float s = texture(uSSAO, vUV).r          * 0.2270270270;
-  s += texture(uSSAO, vUV + o1).r          * 0.3162162162;
-  s += texture(uSSAO, vUV - o1).r          * 0.3162162162;
-  s += texture(uSSAO, vUV + o2).r          * 0.0702702703;
-  s += texture(uSSAO, vUV - o2).r          * 0.0702702703;
-  outColor = vec4(s, s, s, 1.0);
-}`;
-
-  // Screen-Space Reflections (SSR): ray march the reflected view vector through NDC,
-  // sampling the scene colour at each hit. Half-res, 24 linear steps + 8-step binary
-  // refine. Fades at screen edges, low-roughness surfaces, and grazing angles.
-  const SSR_FS = `#version 300 es
-precision highp float;
-in vec2 vUV;
-uniform sampler2D uScene;
-uniform sampler2D uNormal;
-uniform sampler2D uDepth;
-uniform mat4 uVP;        // view-projection (for projecting world points to NDC)
-uniform mat4 uInvVP;     // inverse VP (for reconstructing world pos from NDC)
-uniform vec3 uEye;
-uniform vec2 uTexel;     // 1/full-res width,height
-out vec4 outColor;
-
-const float NEAR = 0.1, FAR = 2000.0;
-
-// Reconstruct world-space position from NDC depth sample.
-vec3 worldFromDepth(vec2 uv, float d) {
-  vec4 ndc = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
-  vec4 wp  = uInvVP * ndc;
-  return wp.xyz / wp.w;
-}
-
-void main() {
-  // Sample the G-buffer
-  vec4 nrmSample = texture(uNormal, vUV);
-  if (nrmSample.w < 0.5) { outColor = vec4(0.0); return; }  // sky → no reflection
-  vec3 N = normalize(nrmSample.xyz * 2.0 - 1.0);
-
-  float d = texture(uDepth, vUV).r;
-  if (d >= 0.9999) { outColor = vec4(0.0); return; }         // far plane
-
-  vec3 P = worldFromDepth(vUV, d);
-  vec3 V = normalize(P - uEye);
-  vec3 R = reflect(V, N);
-
-  // Only reflect upward-facing surfaces (floors/track), skip walls/sky-faces
-  if (R.y < 0.0) { outColor = vec4(0.0); return; }
-
-  // Fresnel: reflections strongest at grazing angles (water-on-tarmac look)
-  float fresnel = pow(1.0 - max(dot(-V, N), 0.0), 3.0);
-  // Also modulate by how horizontal the surface is: near-flat = strong, walls = weak
-  float flatness = max(N.y, 0.0);
-  float strength = fresnel * smoothstep(0.05, 0.35, flatness);
-  if (strength < 0.005) { outColor = vec4(0.0); return; }
-
-  // Ray march: 24 linear steps in world space, project each to screen UV
-  const int STEPS = 24;
-  float stepLen = 0.8;  // world metres per step
-  vec3 hit = vec3(0.0);
-  float hitConf = 0.0;
-  vec2 hitUV = vec2(0.0);
-
-  vec3 rp = P + R * 0.12;  // small offset to avoid self-intersection
-  for (int i = 0; i < STEPS; i++) {
-    rp += R * stepLen;
-    stepLen *= 1.12;  // exponential step growth — covers near + far
-
-    // Project to NDC
-    vec4 clip = uVP * vec4(rp, 1.0);
-    if (clip.w <= 0.0) break;
-    vec3 ndc = clip.xyz / clip.w;
-    if (abs(ndc.x) > 1.0 || abs(ndc.y) > 1.0) break;  // left screen
-    vec2 suv = ndc.xy * 0.5 + 0.5;
-
-    // Compare march depth to scene depth
-    float sd = texture(uDepth, suv).r;
-    float marchDepth = ndc.z * 0.5 + 0.5;
-    float diff = sd - marchDepth;
-
-    if (diff > 0.0 && diff < 0.015) {
-      // Hit! Binary refine (8 steps)
-      vec3 lo = rp - R * stepLen / 1.12, hi = rp;
-      for (int b = 0; b < 8; b++) {
-        vec3 mid = (lo + hi) * 0.5;
-        vec4 mc = uVP * vec4(mid, 1.0);
-        vec2 muv = mc.xy / mc.w * 0.5 + 0.5;
-        float md = mc.z / mc.w * 0.5 + 0.5;
-        float ms = texture(uDepth, muv).r;
-        if (ms > md) lo = mid; else hi = mid;
-      }
-      vec4 fc = uVP * vec4((lo + hi) * 0.5, 1.0);
-      hitUV = fc.xy / fc.w * 0.5 + 0.5;
-      hit = texture(uScene, hitUV).rgb;
-      // Confidence: fade at screen edges and far hits
-      float edge = min(min(hitUV.x, 1.0 - hitUV.x), min(hitUV.y, 1.0 - hitUV.y));
-      hitConf = smoothstep(0.0, 0.12, edge) * smoothstep(float(STEPS), 0.0, float(i));
-      break;
-    }
-  }
-
-  outColor = vec4(hit * strength * hitConf, strength * hitConf);
-}`;
-
-  // FXAA (subpixel morphological AA) + chromatic aberration + mild sharpening.
-  // Reads the tonemapped LDR composite output and writes the final screen result.
-  const FXAA_FS = `#version 300 es
-precision highp float;
-in vec2 vUV;
-uniform sampler2D uTex;
-uniform vec2 uTexel;   // 1.0 / [width, height]
-out vec4 outColor;
-
-float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
-
-void main() {
-  vec2 p = uTexel;
-
-  // Chromatic aberration: R shifts outward, B shifts inward (mild cinematic look).
-  float cdist = length(vUV - 0.5);
-  vec2 caOff  = (cdist > 1e-4) ? normalize(vUV - 0.5) * (cdist * 0.0014) : vec2(0.0);
-
-  // 9-tap luma grid for edge detection and subpixel blend.
-  float lC  = luma(texture(uTex, vUV).rgb);
-  float lN  = luma(texture(uTex, vUV + vec2(0,   p.y)).rgb);
-  float lS  = luma(texture(uTex, vUV - vec2(0,   p.y)).rgb);
-  float lE  = luma(texture(uTex, vUV + vec2(p.x, 0  )).rgb);
-  float lW  = luma(texture(uTex, vUV - vec2(p.x, 0  )).rgb);
-  float lNE = luma(texture(uTex, vUV + p).rgb);
-  float lNW = luma(texture(uTex, vUV + vec2(-p.x,  p.y)).rgb);
-  float lSE = luma(texture(uTex, vUV + vec2( p.x, -p.y)).rgb);
-  float lSW = luma(texture(uTex, vUV - p).rgb);
-
-  float lumaMin = min(lC, min(min(lN, lS), min(lE, lW)));
-  float lumaMax = max(lC, max(max(lN, lS), max(lE, lW)));
-  float range   = lumaMax - lumaMin;
-
-  if (range < max(0.0312, lumaMax * 0.063)) {
-    // Flat area: CA + mild sharpening (unsharp mask, ~0.15×).
-    vec3 blur4 = (texture(uTex, vUV + vec2(p.x,0)).rgb
-                + texture(uTex, vUV - vec2(p.x,0)).rgb
-                + texture(uTex, vUV + vec2(0,p.y)).rgb
-                + texture(uTex, vUV - vec2(0,p.y)).rgb) * 0.25;
-    vec3 cen = texture(uTex, vUV).rgb;
-    vec3 sharp = cen + (cen - blur4) * 0.15;
-    outColor = vec4(vec3(
-      texture(uTex, vUV + caOff).r,
-      sharp.g,
-      texture(uTex, vUV - caOff * 0.7).b), 1.0);
-    return;
-  }
-
-  // Edge direction (Sobel).
-  float edgeH = abs(lNW - lSW) + 2.0*abs(lN - lS) + abs(lNE - lSE);
-  float edgeV = abs(lNW - lNE) + 2.0*abs(lW - lE) + abs(lSW - lSE);
-  bool hori   = edgeH >= edgeV;
-
-  // Step perpendicular to edge toward the steeper-gradient side.
-  float lPos = hori ? lN : lE;
-  float lNeg = hori ? lS : lW;
-  bool neg   = abs(lNeg - lC) > abs(lPos - lC);
-  vec2 step  = hori ? (neg ? vec2(0,-p.y) : vec2(0,p.y))
-                    : (neg ? vec2(-p.x,0)  : vec2(p.x,0));
-
-  // Subpixel blend: deviation of centre luma from the local neighbourhood average.
-  float lAvg = (2.0*(lN+lE+lS+lW) + lNE+lNW+lSE+lSW) / 12.0;
-  float sub  = smoothstep(0.0, 1.0, abs(lAvg - lC) / range);
-  sub = sub * sub * 0.75;
-
-  // Walk along the edge (8 × 1.5 px = up to ±12 px) to find its extent.
-  vec2 walkDir = hori ? vec2(p.x,0) : vec2(0,p.y);
-  float lumaMid  = (lC + (neg ? lNeg : lPos)) * 0.5;
-  float stopDelt = 0.25 * range;
-  vec2 posP = vUV + step * 0.5 + walkDir;
-  vec2 posN = vUV + step * 0.5 - walkDir;
-  bool dpDone = false, dnDone = false;
-  for (int i = 0; i < 8; i++) {
-    if (!dpDone) {
-      if (abs(luma(texture(uTex, posP).rgb) - lumaMid) >= stopDelt) dpDone = true;
-      else posP += walkDir * 1.5;
-    }
-    if (!dnDone) {
-      if (abs(luma(texture(uTex, posN).rgb) - lumaMid) >= stopDelt) dnDone = true;
-      else posN -= walkDir * 1.5;
-    }
-  }
-  float dP = hori ? abs(posP.x - vUV.x) : abs(posP.y - vUV.y);
-  float dN = hori ? abs(posN.x - vUV.x) : abs(posN.y - vUV.y);
-  float edgeBlend = max(0.0, 0.5 - min(dP,dN)/(dP+dN));
-
-  float blend  = max(sub, edgeBlend);
-  vec2 blendUV = vUV + step * blend;
-
-  // Sample at blend UV with CA.
-  outColor = vec4(vec3(
-    texture(uTex, blendUV + caOff).r,
-    texture(uTex, blendUV).g,
-    texture(uTex, blendUV - caOff * 0.7).b), 1.0);
 }`;
 
   // Depth-only pass for shadow map — renders world position into depth buffer.
@@ -1036,14 +675,12 @@ void main() {}`;
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
   let frameViewProj = null;
-  let frameInvVP = null;
-  let frameEye = null;
   let frameSunDir = null;
 
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
   let shadowLightVP = new Float32Array(16);
-  const SHADOW_SIZE = 2048;  // 2K shadow map — PCSS quality benefit outweighs cost
+  const SHADOW_SIZE = 1024;
   let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
@@ -1053,26 +690,11 @@ void main() {}`;
   let brightProg = null, brightU = null;
   let blurProg = null, blurU = null;
   let compProg = null, compU = null;
-  let sceneFBO = null, sceneTex = null;
-  let sceneDepthTex = null;    // depth as readable texture (was renderbuffer)
-  let sceneNormalTex = null;   // G-buffer normals — MRT COLOR_ATTACHMENT1
-  let ssaoProg = null, ssaoU = null;
-  let ssaoBlurProg = null, ssaoBlurU = null;
-  let ssaoFBO = [null,null], ssaoTex = [null,null];
-  let ssrProg = null, ssrU = null;
-  let ssrFBO = [null,null], ssrTex = [null,null];
-  let fxaaProg = null, fxaaU = null;
-  let interFBO = null, interTex = null;   // composite output before FXAA
-  let bloomFBO = [null, null], bloomTex = [null, null];     // level 0 W/2
-  let bloom1FBO = [null, null], bloom1Tex = [null, null];   // level 1 W/4
-  let bloom2FBO = [null, null], bloom2Tex = [null, null];   // level 2 W/8
-  let bloom3FBO = [null, null], bloom3Tex = [null, null];   // level 3 W/16 (ultra-wide halo)
+  let sceneFBO = null, sceneTex = null, sceneDepth = null;
+  let bloomFBO = [null, null], bloomTex = [null, null];
   let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
   let bloomW = 0, bloomH = 0;
-  let bloom1W = 0, bloom1H = 0;
-  let bloom2W = 0, bloom2H = 0;
-  let bloom3W = 0, bloom3H = 0;
-  const BLOOM_DIV = 2;         // level-0 bloom at half resolution
+  const BLOOM_DIV = 2;         // bloom buffers at half resolution
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
   let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1;
@@ -1153,18 +775,10 @@ void main() {}`;
     brightProg = link(POST_VS, BRIGHT_FS);
     blurProg = link(POST_VS, BLUR_FS);
     compProg = link(POST_VS, COMPOSITE_FS);
-    ssaoProg = link(POST_VS, SSAO_FS);
-    ssaoBlurProg = link(POST_VS, SSAO_BLUR_FS);
-    ssrProg  = link(POST_VS, SSR_FS);
-    fxaaProg = link(POST_VS, FXAA_FS);
-    if (!brightProg || !blurProg || !compProg || !ssaoProg || !ssaoBlurProg || !ssrProg || !fxaaProg) return false;
-    brightU = locs(brightProg, ["uScene", "uThreshold", "uKnee"]);
+    if (!brightProg || !blurProg || !compProg) return false;
+    brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    ssaoU = locs(ssaoProg, ["uNormal", "uDepth", "uTexel"]);
-    ssaoBlurU = locs(ssaoBlurProg, ["uSSAO", "uDir"]);
-    ssrU = locs(ssrProg, ["uScene", "uNormal", "uDepth", "uVP", "uInvVP", "uEye", "uTexel"]);
-    fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uBloom3", "uSSAO", "uSSR", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     return true;
   }
 
@@ -1182,101 +796,27 @@ void main() {}`;
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       return tex;
     };
-    // G-buffer: color (RGBA16F/RGBA8) + depth texture + normals (RGBA8)
+    // scene target (full res) + depth
     if (sceneTex) gl.deleteTexture(sceneTex);
-    if (sceneDepthTex) gl.deleteTexture(sceneDepthTex);
-    if (sceneNormalTex) gl.deleteTexture(sceneNormalTex);
+    if (sceneDepth) gl.deleteRenderbuffer(sceneDepth);
     if (!sceneFBO) sceneFBO = gl.createFramebuffer();
     sceneTex = mk(width, height);
-    // Depth as TEXTURE (not renderbuffer) so SSAO/SSR can sample it.
-    sceneDepthTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, sceneDepthTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, width, height, 0,
-      gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    // Normals MRT: RGBA8 (RGB = packed world normal, A = lit-geometry sentinel)
-    sceneNormalTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, sceneNormalTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    sceneDepth = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, sceneDepth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, sceneNormalTex, 0);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sceneDepthTex, 0);
-    // Lit geometry writes both attachments; single-output shaders leave normals untouched.
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-    // SSAO half-res ping-pong
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, sceneDepth);
+    // bloom ping-pong targets (half res)
+    bloomW = Math.max(1, Math.floor(width / BLOOM_DIV));
+    bloomH = Math.max(1, Math.floor(height / BLOOM_DIV));
     for (let i = 0; i < 2; i++) {
-      if (ssaoTex[i]) gl.deleteTexture(ssaoTex[i]);
-      if (!ssaoFBO[i]) ssaoFBO[i] = gl.createFramebuffer();
-      const at = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, at);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, Math.max(1,width>>1), Math.max(1,height>>1),
-        0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      ssaoTex[i] = at;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[i]);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, at, 0);
+      if (bloomTex[i]) gl.deleteTexture(bloomTex[i]);
+      if (!bloomFBO[i]) bloomFBO[i] = gl.createFramebuffer();
+      bloomTex[i] = mk(bloomW, bloomH);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[i]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bloomTex[i], 0);
     }
-    // SSR half-res ping-pong (RGBA8: rgb=reflection, a=strength)
-    for (let i = 0; i < 2; i++) {
-      if (ssrTex[i]) gl.deleteTexture(ssrTex[i]);
-      if (!ssrFBO[i]) ssrFBO[i] = gl.createFramebuffer();
-      const st = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, st);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, Math.max(1,width>>1), Math.max(1,height>>1),
-        0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      ssrTex[i] = st;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO[i]);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, st, 0);
-    }
-    // Intermediate full-res LDR target: composite writes here, FXAA reads it → screen.
-    if (interTex) gl.deleteTexture(interTex);
-    if (!interFBO) interFBO = gl.createFramebuffer();
-    interTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, interTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, interFBO);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, interTex, 0);
-    // Multi-scale bloom ping-pong targets: level 0 (W/2), 1 (W/4), 2 (W/8)
-    bloomW  = Math.max(1, Math.floor(width  / 2));
-    bloomH  = Math.max(1, Math.floor(height / 2));
-    bloom1W = Math.max(1, Math.floor(width  / 4));
-    bloom1H = Math.max(1, Math.floor(height / 4));
-    bloom2W = Math.max(1, Math.floor(width  / 8));
-    bloom2H = Math.max(1, Math.floor(height / 8));
-    const mkBloomLevel = (fbos, texs, w, h) => {
-      for (let i = 0; i < 2; i++) {
-        if (texs[i]) gl.deleteTexture(texs[i]);
-        if (!fbos[i]) fbos[i] = gl.createFramebuffer();
-        texs[i] = mk(w, h);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[i]);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texs[i], 0);
-      }
-    };
-    mkBloomLevel(bloomFBO,  bloomTex,  bloomW,  bloomH);
-    mkBloomLevel(bloom1FBO, bloom1Tex, bloom1W, bloom1H);
-    mkBloomLevel(bloom2FBO, bloom2Tex, bloom2W, bloom2H);
-    bloom3W = Math.max(1, Math.floor(width  / 16));
-    bloom3H = Math.max(1, Math.floor(height / 16));
-    mkBloomLevel(bloom3FBO, bloom3Tex, bloom3W, bloom3H);
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
       postEnabled = false;     // unsupported combo: fall back to direct rendering
     }
@@ -1292,11 +832,12 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
       gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
-    // NEAREST + no compare mode: PCSS reads raw depth for blocker search.
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
 
     shadowMapFBO = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
@@ -1330,7 +871,7 @@ void main() {}`;
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uLightning"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
 
@@ -1424,8 +965,6 @@ void main() {}`;
 
   function begin(frame) {
     frameViewProj = frame.viewProj;
-    frameInvVP = M4.invert(frame.viewProj);
-    frameEye = frame.eye;
     frameSunDir = frame.sunDir;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
@@ -1433,9 +972,6 @@ void main() {}`;
     if (postEnabled) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
       gl.viewport(0, 0, width, height);
-      // G-buffer MRT: lit geometry writes normals to COLOR_ATTACHMENT1.
-      // Single-output shaders (sky, shadow, mark) leave normals untouched.
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     }
     // Resync cached render state to GL defaults — depthMask must be on for the
     // depth buffer to clear, and blend off is the opaque-pass default.
@@ -1528,7 +1064,6 @@ void main() {}`;
     gl.uniform1f(skyU.uCloud, sky.cloud !== undefined ? sky.cloud : 0);
     gl.uniform1f(skyU.uTime,  sky.time  !== undefined ? sky.time  : 0);
     gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
-    gl.uniform1f(skyU.uLightning, sky.lightning !== undefined ? sky.lightning : 0);
     setBlend(false);
     setDepthMask(false);
     bindVAO(skyVAO);
@@ -1570,9 +1105,6 @@ void main() {}`;
     if (!postEnabled) return;
     const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
     const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
-    // Soft-knee width: tight knee so only genuinely bright sources bloom (a wide
-    // knee let mid-tones bleed and made the frame milky/cartoony).
-    const knee = opts && opts.knee !== undefined ? opts.knee : Math.max(0.12, threshold * 0.3);
 
     // Fullscreen passes must overwrite (no blend) and write depth normally; draws
     // above leave state undeclared, so set what we need through the cache.
@@ -1581,64 +1113,7 @@ void main() {}`;
     gl.disable(gl.DEPTH_TEST);
     bindVAO(skyVAO);   // reuse the empty VAO for fullscreen triangles
 
-    // Helper: run one H+V Gaussian pass on a ping-pong pair at given size.
-    const blurLevel = (fbos, texs, w, h) => {
-      useProg(blurProg);
-      gl.uniform1i(blurU.uTex, 0);
-      let s = 0;
-      for (const [dx, dy] of [[1/w,0],[0,1/h]]) {
-        const d = 1 - s;
-        gl.viewport(0, 0, w, h);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[d]);
-        gl.bindTexture(gl.TEXTURE_2D, texs[s]);
-        gl.uniform2f(blurU.uDir, dx, dy);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-        s = d;
-      }
-      return s; // index of final blurred result
-    };
-
-    // 0) SSAO pass — half-res: raw AO → H blur → V blur → ssaoTex[0]
-    {
-      const sw = Math.max(1, width >> 1), sh = Math.max(1, height >> 1);
-      // Raw SSAO
-      gl.viewport(0, 0, sw, sh);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[1]);
-      useProg(ssaoProg);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneNormalTex); gl.uniform1i(ssaoU.uNormal, 0);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneDepthTex);  gl.uniform1i(ssaoU.uDepth,  1);
-      gl.uniform2f(ssaoU.uTexel, 1.0 / sw, 1.0 / sh);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      // Bilateral blur H: [1] → [0]
-      useProg(ssaoBlurProg);
-      gl.uniform1i(ssaoBlurU.uSSAO, 0);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[0]); gl.bindTexture(gl.TEXTURE_2D, ssaoTex[1]); gl.uniform2f(ssaoBlurU.uDir, 1.0/sw, 0.0); gl.drawArrays(gl.TRIANGLES, 0, 3);
-      // Bilateral blur V: [0] → [1]
-      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[1]); gl.bindTexture(gl.TEXTURE_2D, ssaoTex[0]); gl.uniform2f(ssaoBlurU.uDir, 0.0, 1.0/sh); gl.drawArrays(gl.TRIANGLES, 0, 3);
-      // Blit [1] → [0] so ssaoTex[0] is the final blurred result
-      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, ssaoFBO[1]);
-      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, ssaoFBO[0]);
-      gl.blitFramebuffer(0, 0, sw, sh, 0, 0, sw, sh, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-    }
-
-    // 0b) SSR pass — half-res: ray-march reflections into ssrTex[0]
-    if (frameViewProj && frameInvVP && frameEye) {
-      const sw = Math.max(1, width >> 1), sh = Math.max(1, height >> 1);
-      gl.viewport(0, 0, sw, sh);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO[0]);
-      useProg(ssrProg);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneTex);      gl.uniform1i(ssrU.uScene,  0);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneNormalTex); gl.uniform1i(ssrU.uNormal, 1);
-      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sceneDepthTex);  gl.uniform1i(ssrU.uDepth,  2);
-      gl.uniformMatrix4fv(ssrU.uVP,    false, frameViewProj);
-      gl.uniformMatrix4fv(ssrU.uInvVP, false, frameInvVP);
-      gl.uniform3fv(ssrU.uEye, frameEye);
-      gl.uniform2f(ssrU.uTexel, 1.0 / width, 1.0 / height);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    }
-
-    // 1) bright-pass scene → bloom level 0 (W/2)
+    // 1) bright-pass scene -> bloom[0] (half res)
     gl.viewport(0, 0, bloomW, bloomH);
     gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
     useProg(brightProg);
@@ -1646,58 +1121,33 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(brightU.uScene, 0);
     gl.uniform1f(brightU.uThreshold, threshold);
-    gl.uniform1f(brightU.uKnee, knee);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // 2) blur level 0
-    let src0 = blurLevel(bloomFBO, bloomTex, bloomW, bloomH);
+    // 2) separable gaussian blur, a couple of ping-pong passes
+    useProg(blurProg);
+    gl.uniform1i(blurU.uTex, 0);
+    const passes = [[1 / bloomW, 0], [0, 1 / bloomH]];
+    let src = 0;
+    for (const [dx, dy] of passes) {
+      const dst = 1 - src;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[dst]);
+      gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
+      gl.uniform2f(blurU.uDir, dx, dy);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      src = dst;
+    }
 
-    // 3) hardware-linear downsample level 0 → level 1 (W/4), then blur
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, bloomFBO[src0]);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, bloom1FBO[0]);
-    gl.blitFramebuffer(0, 0, bloomW, bloomH, 0, 0, bloom1W, bloom1H, gl.COLOR_BUFFER_BIT, gl.LINEAR);
-    let src1 = blurLevel(bloom1FBO, bloom1Tex, bloom1W, bloom1H);
-
-    // 4) downsample level 1 → level 2 (W/8), then blur
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, bloom1FBO[src1]);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, bloom2FBO[0]);
-    gl.blitFramebuffer(0, 0, bloom1W, bloom1H, 0, 0, bloom2W, bloom2H, gl.COLOR_BUFFER_BIT, gl.LINEAR);
-    let src2 = blurLevel(bloom2FBO, bloom2Tex, bloom2W, bloom2H);
-
-    // 5) downsample level 2 → level 3 (W/16), then blur
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, bloom2FBO[src2]);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, bloom3FBO[0]);
-    gl.blitFramebuffer(0, 0, bloom2W, bloom2H, 0, 0, bloom3W, bloom3H, gl.COLOR_BUFFER_BIT, gl.LINEAR);
-    let src3 = blurLevel(bloom3FBO, bloom3Tex, bloom3W, bloom3H);
-
-    const src = src0; // level-0 final index (for god-ray sampling)
-
-    // 6) composite → interFBO (LDR tonemap output; FXAA reads this next step)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, interFBO);
+    // 3) composite to the screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
     useProg(compProg);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(compU.uScene, 0);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, bloomTex[src0]);
+    gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
     gl.uniform1i(compU.uBloom, 1);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, bloom1Tex[src1]);
-    gl.uniform1i(compU.uBloom1, 2);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, bloom2Tex[src2]);
-    gl.uniform1i(compU.uBloom2, 3);
     gl.uniform1f(compU.uBloomAmt, bloomAmt);
-    gl.activeTexture(gl.TEXTURE4);
-    gl.bindTexture(gl.TEXTURE_2D, ssaoTex[0]);
-    gl.uniform1i(compU.uSSAO, 4);
-    gl.activeTexture(gl.TEXTURE5);
-    gl.bindTexture(gl.TEXTURE_2D, ssrTex[0]);
-    gl.uniform1i(compU.uSSR, 5);
-    gl.activeTexture(gl.TEXTURE6);
-    gl.bindTexture(gl.TEXTURE_2D, bloom3Tex[src3]);
-    gl.uniform1i(compU.uBloom3, 6);
     // Project sun direction to screen UV for lens flare
     let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
     if (frameSunDir && frameViewProj) {
@@ -1723,16 +1173,6 @@ void main() {}`;
     gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);
     gl.uniform3fv(compU.uGradeHi, grade && grade.hi ? grade.hi : [1, 1, 1]);
     gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    // 7) FXAA + CA + sharpening: interTex → screen
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, width, height);
-    useProg(fxaaProg);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, interTex);
-    gl.uniform1i(fxaaU.uTex, 0);
-    gl.uniform2f(fxaaU.uTexel, 1.0 / width, 1.0 / height);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     bindVAO(null);
