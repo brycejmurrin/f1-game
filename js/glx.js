@@ -114,25 +114,31 @@ float sampleShadow(vec3 wpos) {
   float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.0, 1.0);
   float slopeBias = t * 1.5 * tan(acos(max(cosTheta, 0.05)));
   float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
-  // 8-tap rotated Poisson disk — balanced coverage, cheap enough for mobile.
-  // Disk radius = 1.4 texels → smooth penumbra without over-blurring.
-  const float R = 1.4;
-  vec2 d0 = vec2(-0.94201624, -0.39906216) * t * R;
-  vec2 d1 = vec2( 0.94558609, -0.76890725) * t * R;
-  vec2 d2 = vec2(-0.09418410, -0.92938870) * t * R;
-  vec2 d3 = vec2( 0.34495938,  0.29387760) * t * R;
-  vec2 d4 = vec2(-0.91588581,  0.45771432) * t * R;
-  vec2 d5 = vec2(-0.81544232, -0.87912464) * t * R;
-  vec2 d6 = vec2(-0.38277543,  0.27676845) * t * R;
-  vec2 d7 = vec2( 0.97484398,  0.75648379) * t * R;
-  float s = texture(uShadowMap, vec3(sc.xy + d0, z))
-          + texture(uShadowMap, vec3(sc.xy + d1, z))
-          + texture(uShadowMap, vec3(sc.xy + d2, z))
-          + texture(uShadowMap, vec3(sc.xy + d3, z))
-          + texture(uShadowMap, vec3(sc.xy + d4, z))
-          + texture(uShadowMap, vec3(sc.xy + d5, z))
-          + texture(uShadowMap, vec3(sc.xy + d6, z))
-          + texture(uShadowMap, vec3(sc.xy + d7, z));
+  // 8-tap Poisson disk, ROTATED per-pixel by interleaved-gradient noise so the
+  // sampling pattern varies every fragment — banding becomes fine noise and the
+  // 8 taps read as a much smoother penumbra. Radius = 2.0 texels (at 2048 the
+  // texel is half the size, so this stays a tight, crisp penumbra).
+  const float R = 2.0;
+  float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  float ang = ign * 6.2831853;
+  float cr = cos(ang), sr = sin(ang);
+  mat2 rot = mat2(cr, -sr, sr, cr) * (t * R);
+  vec2 p0 = rot * vec2(-0.94201624, -0.39906216);
+  vec2 p1 = rot * vec2( 0.94558609, -0.76890725);
+  vec2 p2 = rot * vec2(-0.09418410, -0.92938870);
+  vec2 p3 = rot * vec2( 0.34495938,  0.29387760);
+  vec2 p4 = rot * vec2(-0.91588581,  0.45771432);
+  vec2 p5 = rot * vec2(-0.81544232, -0.87912464);
+  vec2 p6 = rot * vec2(-0.38277543,  0.27676845);
+  vec2 p7 = rot * vec2( 0.97484398,  0.75648379);
+  float s = texture(uShadowMap, vec3(sc.xy + p0, z))
+          + texture(uShadowMap, vec3(sc.xy + p1, z))
+          + texture(uShadowMap, vec3(sc.xy + p2, z))
+          + texture(uShadowMap, vec3(sc.xy + p3, z))
+          + texture(uShadowMap, vec3(sc.xy + p4, z))
+          + texture(uShadowMap, vec3(sc.xy + p5, z))
+          + texture(uShadowMap, vec3(sc.xy + p6, z))
+          + texture(uShadowMap, vec3(sc.xy + p7, z));
   return mix(1.0, s * 0.125, uShadowStr);
 }
 
@@ -798,7 +804,7 @@ void main() {}`;
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
   let shadowLightVP = new Float32Array(16);
-  const SHADOW_SIZE = 1024;
+  const SHADOW_SIZE = 2048;
   let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
