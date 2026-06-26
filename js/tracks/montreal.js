@@ -24,7 +24,7 @@
     // The lap sits on a man-made ISLAND in the St. Lawrence. End the green
     // terrain ribbon at a believable shoreline (~70 m) so river water takes over
     // beyond it — no green extending to infinity, no bare grey void.
-    terrainOuter: 70,
+    terrainOuter: 50,
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, wall, grandstand,
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
@@ -93,19 +93,18 @@
         const wTop = base - 0.45, TH = 8;
         addBox(out, [cx, wTop - TH / 2, cz],
                [(maxx - minx) + 4800, TH, (maxz - minz) + 4800], RIVER);
-        // (1b) Lighter near-shore turquoise band just inside the broad river, to
-        //      give the water depth gradient seen in the aerial (paler shallows
-        //      hugging the island, deeper river beyond). Sits a hair above (1).
+        // (1b) Lighter near-shore band hugging the island — shallower water.
         addBox(out, [cx, base - 0.42 - TH / 2, cz],
-               [(maxx - minx) + 900, TH, (maxz - minz) + 900], RIVER2);
-        // (2) The flat green ISLAND itself: a NARROW slab hugging the lap footprint
-        //     plus a tight shoreline margin, sitting just ABOVE the water (top at
-        //     pyMin - 0.2). Île Notre-Dame is a thin island, so the margin is kept
-        //     small — river then shows on BOTH long sides right up near the track,
-        //     reading as the narrow island between two channels.
-        const M = 58;                        // tight shoreline margin past the track
-        addBox(out, [cx, base - 0.2 - 3, cz],
-               [(maxx - minx) + 2 * M, 6, (maxz - minz) + 2 * M], GRASS);
+               [(maxx - minx) + 700, TH, (maxz - minz) + 700], RIVER2);
+        // (2) The flat green ISLAND slab. Margin M is set to fully cover the
+        //     terrain ribbon (terrainOuter=50 → terrain edge ~57 m from
+        //     centreline) PLUS a shore margin beyond so the island feels wide
+        //     and continuous, not a thin causeway with rocky outer edges.
+        //     Top at pyMin-0.1 (just above water at -0.45, well below road at 0)
+        //     so it reads as flat park grass everywhere the terrain ribbon ends.
+        const M = 95;                        // island margin well past terrain edge
+        addBox(out, [cx, base - 0.1 - 4, cz],
+               [(maxx - minx) + 2 * M, 8, (maxz - minz) + 2 * M], GRASS);
       }
 
       // ── Far-bank land strip: a flat shoreline slab across the water that the
@@ -161,8 +160,14 @@
       fence(0.0, 1.0, -1, 3.4, 3.0, [0.72, 0.74, 0.78]);
       fence(0.0, 1.0,  1, 3.4, 3.0, [0.72, 0.74, 0.78]);
 
-      // Wide parkland ground planes both sides — groundPlane() aligns to local track
-      // height so patches don't clip through elevated sections.
+      // Wide parkland ground planes — fill verges so the island slab shows green
+      // everywhere instead of bare terrain-ribbon steps.
+      // Pit straight + approach: both sides (fraction 0.88–0.08, wrapping through 1)
+      for (let i = 0; i < 8; i++) {
+        const s = (0.88 + i * 0.025) % 1;
+        groundPlane(K(s),  1, 8, [60, 0.6, 55], GRASS);
+        groundPlane(K(s), -1, 8, [55, 0.6, 50], GRASS);
+      }
       // Right verge: park lawns from Senna S through the Casino complex
       for (let i = 0; i < 14; i++) {
         groundPlane(K(0.08 + i * 0.058),  1, 9, [55, 0.6, 52], GRASS);
