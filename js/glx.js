@@ -277,8 +277,11 @@ void main() {
     // warm-or-neutral colours qualify; dark/muddy colours get no lift so emissive
     // walls don't bloom. Uses max channel for brightness, scaled smoothly in.
     float bright = max(albedo.r, max(albedo.g, albedo.b));
-    float glow = smoothstep(0.55, 0.95, bright) * uEmissive;
-    color += albedo * glow * 0.9;
+    float glow = smoothstep(0.50, 0.95, bright) * uEmissive;
+    // Push the glow well PAST 1.0 (HDR) so lit windows / neon / lamp lenses read
+    // as actual light SOURCES — they punch through the dark and bloom into halos,
+    // instead of sitting as flat bright paint.
+    color += albedo * glow * 2.2;
   }
 
   // Height-based fog: density falls off exponentially with altitude above eye level.

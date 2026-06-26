@@ -634,10 +634,13 @@ function applyRaceSettings() {
     if (night) {
       frameSky.zenith = [0.01, 0.02, 0.05];
       frameSky.horizon = [0.04, 0.03, 0.06];
-      frame.sunColor = [0.16, 0.18, 0.26];   // dim moonlight scene sun (floodlights light the track)
-      frame.ambientGround = [0.03, 0.03, 0.06];
-      frame.ambientSky = [0.08, 0.08, 0.14];
-      frame.fogColor = [0.03, 0.03, 0.06];
+      frame.sunColor = [0.10, 0.12, 0.20];   // faint cool moonlight key (lamps light the track)
+      // NEAR-BLACK cool ambient: the world is genuinely dark, the LIGHT SOURCES
+      // (lamps, neon, lit windows) do all the lifting. A high ambient here is the
+      // #1 cause of a flat-grey "night that looks like dim day".
+      frame.ambientGround = [0.008, 0.010, 0.022];
+      frame.ambientSky = [0.020, 0.024, 0.050];
+      frame.fogColor = [0.015, 0.017, 0.035];
       frame.fogDensity = 0.004;
       // When raceTimeOfDay !== "default", sync sky colours to frame too
       frame.skyZenith  = frameSky.zenith;
@@ -646,8 +649,9 @@ function applyRaceSettings() {
       frameSky.moon = 0.85;
       // Night skies: few scattered clouds (don't block stars)
       _cloudBase = 0.22;
-      // Night: lift exposure slightly — otherwise shadow detail is lost
-      frame.exposure = 1.15;
+      // Night: low exposure keeps the dark dark under ACES so the bright lamp
+      // pools and lit windows punch through (raising exposure re-greys the night).
+      frame.exposure = 0.90;
     } else if (raceTimeOfDay === "dawn") {
       // Pre-sunrise: deep teal-indigo zenith fading to a warm peach/rose horizon.
       // Sun is barely above the horizon — very low elevation, coming from the east.
@@ -764,8 +768,10 @@ function applyRaceSettings() {
       // Dark, moody base now that floodlights/street lights carve out the lit
       // areas (see buildTrackLights). Floor keeps the unlit scene barely legible;
       // the low cap stops over-bright palettes from washing the night to daylight.
-      const floorSky = [0.045, 0.05, 0.09], floorGnd = [0.02, 0.02, 0.045];
-      const capSky   = [0.13, 0.14, 0.20], capGnd   = [0.06, 0.06, 0.10];
+      // Near-black cool floor + a LOW cap so over-bright night palettes can't lift
+      // the scene to grey — the floodlights/neon/windows carve out the lit areas.
+      const floorSky = [0.012, 0.014, 0.030], floorGnd = [0.006, 0.007, 0.016];
+      const capSky   = [0.045, 0.050, 0.085], capGnd   = [0.020, 0.022, 0.040];
       // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
       frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
       frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
@@ -793,9 +799,8 @@ function applyRaceSettings() {
       // Exposure: night tracks already bright with floodlights; desert night
       // tracks get a gentle lift; daytime green tracks sit near neutral.
       if (isNightSession) {
-        // Street-night circuits (Las Vegas, Singapore, Baku, Jeddah) are
-        // brilliantly lit — pull exposure down slightly to keep neon readable.
-        frame.exposure = (_def.theme === "street_night") ? 1.05 : 1.18;
+        // Low night exposure so the dark stays dark and the neon/floodlights punch.
+        frame.exposure = (_def.theme === "street_night") ? 0.90 : 0.96;
       } else if (_def.theme === "desert") {
         // Daytime desert: very bright, slight exposure pull-back
         frame.exposure = 0.88;
@@ -2719,9 +2724,10 @@ function render(dt) {
   let _grade, _bloom = 0.55, _thresh = 0.78;
   if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) {
     _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
-    // Strong bloom so the lit windows + neon edges glow brightly across the dense
-    // skyline, with a mid threshold so only the bright lit elements bloom.
-    _bloom = 0.92; _thresh = 0.62;
+    // Strong bloom, HIGH threshold: only the genuinely bright HDR sources (lamps,
+    // neon, lit windows now pushed >1.0) bloom into halos — the dark scene between
+    // them stays dark instead of glowing.
+    _bloom = 1.05; _thresh = 0.85;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     _bloom = 0.62; _thresh = 0.68;
