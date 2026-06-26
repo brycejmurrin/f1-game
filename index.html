@@ -12,18 +12,11 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=265">
-<link rel="stylesheet" href="css/data.css?v=265">
+<link rel="stylesheet" href="css/style.css?v=24">
+<link rel="stylesheet" href="css/data.css?v=24">
 </head>
-<body><canvas id="game"></canvas>
-<!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
-<div id="rotate-device" aria-hidden="true">
-  <div class="rotate-inner">
-    <div class="rotate-icon">&#8635;</div>
-    <p>Rotate to landscape to race</p>
-    <small>Or lock rotation in Control Center&nbsp;/&nbsp;Quick Settings</small>
-  </div>
-</div>
+<body>
+<canvas id="game"></canvas>
 
 <!-- race HUD -->
 <div id="hud" hidden>
@@ -47,7 +40,6 @@
     <div id="hud-ot" class="ot-off">OVERTAKE</div>
   </div>
   <canvas id="minimap" width="140" height="140"></canvas>
-  <div id="hud-sectors"></div>
   <div id="hud-flag" hidden></div>
 </div>
 
@@ -58,40 +50,32 @@
 <div id="announce" hidden></div>
 
 <!-- touch controls -->
-<button id="btn-throttle" class="touchbtn pedal" hidden aria-label="Gas">GAS</button>
-<button id="btn-brake" class="touchbtn pedal" hidden aria-label="Brake">BRAKE</button>
-<button id="btn-boost" class="touchbtn" hidden aria-label="Boost">BOOST</button>
-<button id="btn-ot" class="touchbtn" hidden aria-label="Overtake">OT</button>
-<button id="shift-up" class="touchbtn shiftbtn" hidden aria-label="Shift up">&#9650;<small>UP</small></button>
-<button id="shift-down" class="touchbtn shiftbtn" hidden aria-label="Shift down">&#9660;<small>DN</small></button>
-<button id="btn-steer-left" class="touchbtn steerbtn" hidden aria-label="Steer left">&#9664;</button>
-<button id="btn-steer-right" class="touchbtn steerbtn" hidden aria-label="Steer right">&#9654;</button>
+<button id="btn-throttle" class="touchbtn pedal" hidden>GAS</button>
+<button id="btn-brake" class="touchbtn pedal" hidden>BRAKE</button>
+<button id="btn-boost" class="touchbtn" hidden>BOOST</button>
+<button id="btn-ot" class="touchbtn" hidden>OT</button>
+<button id="shift-up" class="touchbtn shiftbtn" hidden>&#9650;<small>UP</small></button>
+<button id="shift-down" class="touchbtn shiftbtn" hidden>&#9660;<small>DN</small></button>
 
-<button id="btn-cam" hidden aria-label="Camera">CHASE</button>
-<button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
+<button id="pausebtn" hidden>&#10074;&#10074;</button>
 <div id="pausemenu" class="panel" hidden>
   <h2>PAUSED</h2>
   <button id="pm-resume">RESUME</button>
   <button id="pm-restart">RESTART RACE</button>
-  <button id="pm-steer">STEER: TILT</button>
+  <button id="pm-tilt">TILT: ON</button>
   <button id="pm-calib">RECALIBRATE TILT</button>
-  <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
   <button id="pm-gears">GEARS: AUTO</button>
   <button id="pm-sound">SOUND: ON</button>
-  <button id="pm-music">MUSIC: ON</button>
   <button id="pm-quit">QUIT TO MENU</button>
-  <button id="pm-standings" hidden>STANDINGS</button>
 </div>
 
 <!-- main menu -->
 <div id="overlay">
   <h1 id="title">APEX&nbsp;26</h1>
-  <p id="subtitle">2026 grid &middot; 24 real circuits &middot; tilt to steer</p>
+  <p id="subtitle">2026 grid &middot; 12 real circuits &middot; tilt to steer</p>
   <div id="menu-buttons">
     <button id="mb-race" class="bigbtn">RACE</button>
-    <button id="mb-tt" class="bigbtn">TIME TRIAL</button>
     <button id="mb-season" class="bigbtn">SEASON</button>
-    <button id="mb-standings" class="bigbtn alt" hidden>STANDINGS</button>
     <button id="mb-data" class="bigbtn alt">F1 DATA HUB</button>
     <button id="mb-help" class="bigbtn alt">HOW TO PLAY</button>
   </div>
@@ -101,80 +85,13 @@
 
 <!-- select screen -->
 <div id="select" hidden>
-  <div id="sel-inner">
-    <h2 id="select-title">SELECT</h2>
-    <div id="sel-left">
-      <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div><div id="sel-stats" class="cs-stats"></div><div class="sel-edit-row"><button id="sel-customize" class="sel-edit">&#9998; MY TEAM</button><button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button></div></div>
-      <div class="sel-section" id="sel-diff-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
-    </div>
-    <div class="sel-section" id="sel-track-section"><div class="sel-label" id="sel-circuit-label">CIRCUIT</div><div id="sel-track-preview"><canvas id="sel-preview-map" width="520" height="300"></canvas><div id="sel-preview-info"><div id="sel-preview-name"></div><div id="sel-preview-gp"></div><div id="sel-preview-meta"></div><div id="sel-preview-rec"></div><div id="sel-preview-facts"></div><canvas id="sel-preview-elev" width="280" height="36"></canvas></div></div><div id="sel-tracks"></div></div>
-    <div class="sel-actions">
-      <button id="sel-back" class="bigbtn alt">BACK</button>
-      <button id="sel-go" class="bigbtn">START</button>
-    </div>
-  </div>
-</div>
-
-<!-- track detail fullscreen overlay -->
-<div id="track-detail" hidden>
-  <div id="track-detail-header">
-    <div id="track-detail-name"></div>
-    <button id="track-detail-close" class="tdc-close-btn" aria-label="Close">&#x2715;</button>
-  </div>
-  <div id="track-detail-body">
-    <div id="track-detail-canvas-wrap">
-      <canvas id="track-detail-canvas" width="800" height="560"></canvas>
-    </div>
-    <div id="track-detail-panel">
-      <div id="track-detail-meta"></div>
-      <div id="track-detail-flags">
-        <span id="tdf-night" class="tdf-flag" hidden>NIGHT</span>
-        <span id="tdf-street" class="tdf-flag tdf-street" hidden>STREET</span>
-        <span id="tdf-banked" class="tdf-flag tdf-banked" hidden>BANKED</span>
-      </div>
-      <div id="track-detail-elev-wrap" hidden>
-        <div class="tds-subtitle">ELEVATION</div>
-        <canvas id="track-detail-elev" width="240" height="48"></canvas>
-      </div>
-      <div id="track-detail-drs-wrap" hidden>
-        <div class="tds-subtitle">DRS ZONES</div>
-        <div id="track-detail-drs-list"></div>
-      </div>
-      <div id="track-detail-corners">
-        <div class="tdc-title">TURNS</div>
-        <div id="track-detail-list"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- race settings -->
-<div id="race-settings" class="panel" hidden>
-  <h2>RACE SETTINGS</h2>
-  <div class="rs-row">
-    <div class="rs-label">LAPS</div>
-    <div id="rs-laps"></div>
-  </div>
-  <div class="rs-row">
-    <div class="rs-label">WEATHER</div>
-    <div id="rs-weather"></div>
-  </div>
-  <div class="rs-row" id="rs-time-section">
-    <div class="rs-label">TIME OF DAY</div>
-    <div id="rs-time"></div>
-  </div>
+  <h2 id="select-title">SELECT</h2>
+  <div class="sel-section"><div class="sel-label">TEAM</div><div id="sel-teams"></div><div id="sel-driver"></div></div>
+  <div class="sel-section" id="sel-track-section"><div class="sel-label">CIRCUIT</div><div id="sel-tracks"></div></div>
+  <div class="sel-section"><div class="sel-label">DIFFICULTY</div><div id="sel-diff"></div></div>
   <div class="sel-actions">
-    <button id="rs-cancel" class="bigbtn alt">BACK</button>
-    <button id="rs-go" class="bigbtn">RACE!</button>
-  </div>
-</div>
-
-<!-- season standings overlay -->
-<div id="standings" class="panel" hidden>
-  <h2 id="standings-title">CHAMPIONSHIP STANDINGS</h2>
-  <div id="standings-body"></div>
-  <div class="sel-actions" style="margin-top:12px">
-    <button id="standings-close" class="bigbtn">CLOSE</button>
+    <button id="sel-back">BACK</button>
+    <button id="sel-go" class="bigbtn">START</button>
   </div>
 </div>
 
@@ -183,47 +100,8 @@
   <h2 id="results-title">RACE RESULT</h2>
   <div id="results-table"></div>
   <div class="sel-actions">
-    <button id="res-menu" class="bigbtn alt">MENU</button>
+    <button id="res-menu">MENU</button>
     <button id="res-next" class="bigbtn">NEXT</button>
-  </div>
-</div>
-
-<!-- customize my team -->
-<div id="customize" class="panel" hidden>
-  <h2>MY TEAM</h2>
-  <div class="cz-row"><label for="cz-name">TEAM NAME</label><input id="cz-name" type="text" maxlength="22" placeholder="My Team"></div>
-  <div class="cz-row"><label for="cz-short">SHORT CODE</label><input id="cz-short" type="text" maxlength="4" placeholder="YOU"></div>
-  <div class="cz-row"><label for="cz-color">PRIMARY</label><input id="cz-color" type="color"></div>
-  <div class="cz-row"><label for="cz-color2">ACCENT</label><input id="cz-color2" type="color"></div>
-  <div class="cz-row"><label for="cz-driver">DRIVER</label><input id="cz-driver" type="text" maxlength="22" placeholder="Your Name"></div>
-  <div class="cz-row"><label for="cz-code">DRIVER CODE</label><input id="cz-code" type="text" maxlength="3" placeholder="YOU"></div>
-  <div class="cz-row"><label for="cz-num">CAR NUMBER</label><input id="cz-num" type="number" min="0" max="99" placeholder="99"></div>
-  <div id="cz-preview"><span id="cz-swatch1"></span><span id="cz-swatch2"></span><span id="cz-pvtext"></span></div>
-  <div class="sel-actions">
-    <button id="cz-cancel" class="bigbtn alt">CANCEL</button>
-    <button id="cz-save" class="bigbtn">SAVE</button>
-  </div>
-</div>
-
-<!-- car setup — full-screen overlay -->
-<div id="carsetup" hidden>
-  <div id="cs-inner">
-    <div id="cs-header">
-      <div id="cs-title">
-        <h2>CAR SETUP</h2>
-        <div id="cs-team"></div>
-        <div id="cs-budget-wrap">
-          <div id="cs-budget-bar"><div id="cs-budget-fill"></div></div>
-          <div id="cs-budget"></div>
-          <button id="cs-unlimited" class="cs-unlimited-btn">&#8734; FREE BUILD</button>
-        </div>
-      </div>
-      <div id="cs-stats-inner"></div>
-    </div>
-    <div id="cs-body"></div>
-    <div class="sel-actions" style="margin-top:20px">
-      <button id="cs-done" class="bigbtn">DONE</button>
-    </div>
   </div>
 </div>
 
@@ -231,146 +109,17 @@
 <div id="howtoplay" hidden>
   <div id="howtoplay-inner" class="panel">
     <h2>HOW TO PLAY</h2>
+    <button id="htp-close">&#10005;</button>
     <dl>
-      <dt>PC / KEYBOARD</dt>
-      <dd>
-        Steer <span class="key">A</span><span class="key">D</span> or <span class="key">&larr;</span><span class="key">&rarr;</span> &nbsp;
-        Gas <span class="key">W</span> / <span class="key">&uarr;</span> &nbsp;
-        Brake <span class="key">S</span> / <span class="key">&darr;</span> &nbsp;
-        Boost <span class="key">Space</span> &nbsp;
-        Overtake <span class="key">X</span> &nbsp;
-        Camera <span class="key">C</span><br>
-        Shift Up <span class="key">E</span> &nbsp; Shift Down <span class="key">Q</span> / <span class="key">Shift</span> &nbsp;
-        Pause <span class="key">P</span> / <span class="key">Esc</span>
-      </dd>
-      <dt>TOUCH / MOBILE</dt>
-      <dd>Pick <span class="key">STEER</span> in the pause menu: TILT your phone (auto-calibrates at the lights), on-screen BUTTONS, or tap left/right screen HALVES. In button and touch modes the car accelerates for you &mdash; just steer and brake</dd>
-      <dt>&#9889; BOOST</dt>
-      <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
-      <dt>OVERTAKE</dt>
-      <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
-      <dt>GEARS</dt>
-      <dd>Toggle <span class="key">GEARS: MANUAL</span> in the pause menu. Shift up near the redline, down for corner exits. The tachometer + gear indicator sit bottom-centre</dd>
-      <dt>&#127909; CAMERA</dt>
-      <dd>Tap the <span class="key">CAM</span> button (top-right) or press <span class="key">C</span> to cycle CHASE &rarr; FAR &rarr; COCKPIT &rarr; HOOD. Your choice is remembered</dd>
-      <dt>TRACK LIMITS</dt>
-      <dd>Grass is slow. Cutting the track repeatedly earns a +5 s penalty</dd>
-      <dt>RACE</dt>
-      <dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
-      <dt>SEASON</dt>
-      <dd>All 24 circuits in calendar order &mdash; championship standings saved between visits</dd>
-      <dt>TIME TRIAL</dt>
-      <dd>Solo on track, no rivals. Set your fastest lap; your track record is saved and shown on the circuit list</dd>
+      <dt>STEER</dt><dd>Tilt your phone (calibrates at the lights) &mdash; or touch the left/right of the screen / A D</dd>
+      <dt>THROTTLE</dt><dd>Hold <span class="key">GAS</span> / <span class="key">W</span> / <span class="key">&uarr;</span> to accelerate. <span class="key">BRAKE</span>: hold <span class="key">BRAKE</span> / <span class="key">S</span> / <span class="key">&darr;</span></dd>
+      <dt>&#9889; BOOST</dt><dd>Tap <span class="key">BOOST</span> / <span class="key">Space</span> to toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
+      <dt>OVERTAKE</dt><dd>Within 1s of the car ahead the OT light arms. Tap <span class="key">OT</span> / <span class="key">X</span> for 4s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
+      <dt>GEARS</dt><dd>Toggle <span class="key">GEARS: MANUAL</span> in the pause menu. Shift up <span class="key">&#9650;</span> / <span class="key">E</span> near the redline, down <span class="key">&#9660;</span> / <span class="key">Q</span> for corner exits. The tachometer + gear show bottom-centre; auto mode shifts for you</dd>
+      <dt>TRACK LIMITS</dt><dd>Grass is slow. Cutting the track repeatedly earns a +5s penalty</dd>
+      <dt>RACE</dt><dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
+      <dt>SEASON</dt><dd>All 12 circuits in calendar order &mdash; championship standings saved between visits</dd>
     </dl>
-    <div class="sel-actions" style="margin-top:14px">
-      <button id="htp-close" class="bigbtn">DONE</button>
-    </div>
-  </div>
-</div>
-
-<!-- advanced steering options -->
-<div id="advanced" hidden>
-  <div id="advanced-inner" class="panel">
-    <h2>STEERING &amp; ASSISTS</h2>
-    <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Adjust the few controls below to taste, or open <b>Advanced</b> for the full set of knobs. Everything takes effect immediately and is saved.</p>
-
-    <div class="preset-row">
-      <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
-      <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
-      <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
-    </div>
-
-    <!-- simplified, player-facing controls (most players never need more) -->
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">6</b></span>
-        <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="6" aria-label="Tilt sensitivity"></label>
-      <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
-    </div>
-    <div class="adv-item">
-      <span class="tune-label">STEERING</span>
-      <div class="opt-row" role="group" aria-label="Steering feel">
-        <button id="pm-steer-easy" class="opt-btn">SUPER EASY</button>
-        <button id="pm-steer-assist" class="opt-btn">ASSISTED</button>
-        <button id="pm-steer-normal" class="opt-btn">NORMAL</button>
-        <button id="pm-steer-sim" class="opt-btn">SIM</button>
-      </div>
-      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct.</p>
-    </div>
-    <div class="adv-item">
-      <span class="tune-label">DRIVING HELP</span>
-      <div class="opt-row" role="group" aria-label="Driving help">
-        <button id="pm-help-low" class="opt-btn">LOW</button>
-        <button id="pm-help-med" class="opt-btn">MEDIUM</button>
-        <button id="pm-help-high" class="opt-btn">HIGH</button>
-      </div>
-      <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
-    </div>
-    <div class="adv-item">
-      <span class="tune-label">RACING LINE</span>
-      <div class="opt-row" role="group" aria-label="Racing line assist">
-        <button id="pm-line-off" class="opt-btn">OFF</button>
-        <button id="pm-line-corner" class="opt-btn">CORNERS</button>
-        <button id="pm-line-full" class="opt-btn">FULL</button>
-      </div>
-      <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">5</b></span>
-        <input id="pm-pace" type="range" min="1" max="10" step="1" value="5" aria-label="Overall speed"></label>
-      <p class="adv-help">Pace of the whole field &mdash; you and the AI together. Higher = everyone faster; racing stays competitive.</p>
-    </div>
-
-    <button id="adv-more" class="adv-more-btn" aria-expanded="false">ADVANCED &#9662;</button>
-    <div id="adv-extra" hidden>
-    <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
-        <input id="pm-tiltdeg" type="range" min="1" max="10" step="1" value="5" aria-label="Tilt range"></label>
-      <p class="adv-help">The same sensitivity as the top slider, with a finer label: how far you tilt the phone for full lock. Higher = less tilt needed; lower = relaxed, big tilts.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
-        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
-      <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
-    </div>
-
-    <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
-        <input id="pm-help" type="range" min="1" max="10" step="1" value="6"></label>
-      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
-        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
-        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
-        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
-        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
-    </div>
-
-    <h3 class="adv-sec">DRIVER AID</h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
-        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0"></label>
-      <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
-    </div>
-    </div>
-    <div class="sel-actions" style="margin-top:14px">
-      <button id="adv-close" class="bigbtn">DONE</button>
-    </div>
   </div>
 </div>
 
@@ -381,45 +130,16 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=265"></script>
-<script src="js/glx.js?v=265"></script>
-<script src="js/gltf.js?v=265"></script>
-<script src="js/teams.js?v=265"></script>
-<script src="js/circuits.js?v=265"></script>
-<!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=265"></script>
-<script src="js/tracks/monaco.js?v=265"></script>
-<script src="js/tracks/silverstone.js?v=265"></script>
-<script src="js/tracks/spa.js?v=265"></script>
-<script src="js/tracks/monza.js?v=265"></script>
-<script src="js/tracks/suzuka.js?v=265"></script>
-<script src="js/tracks/singapore.js?v=265"></script>
-<script src="js/tracks/cota.js?v=265"></script>
-<script src="js/tracks/interlagos.js?v=265"></script>
-<script src="js/tracks/vegas.js?v=265"></script>
-<script src="js/tracks/madrid.js?v=265"></script>
-<script src="js/tracks/zandvoort.js?v=265"></script>
-<script src="js/tracks/jeddah.js?v=265"></script>
-<script src="js/tracks/albert_park.js?v=265"></script>
-<script src="js/tracks/shanghai.js?v=265"></script>
-<script src="js/tracks/miami.js?v=265"></script>
-<script src="js/tracks/imola.js?v=265"></script>
-<script src="js/tracks/montreal.js?v=265"></script>
-<script src="js/tracks/redbull.js?v=265"></script>
-<script src="js/tracks/hungaroring.js?v=265"></script>
-<script src="js/tracks/baku.js?v=265"></script>
-<script src="js/tracks/mexico.js?v=265"></script>
-<script src="js/tracks/qatar.js?v=265"></script>
-<script src="js/tracks/abudhabi.js?v=265"></script>
-<script src="js/tracks.js?v=265"></script>
-<script src="js/trackmaps.js?v=265"></script>
-<script src="js/car3d.js?v=265"></script>
-<script src="js/input.js?v=265"></script>
-<script src="js/audio.js?v=265"></script>
-<script src="js/api.js?v=265"></script>
-<script src="js/data.js?v=265"></script>
-<script src="js/parts.js?v=265"></script>
-<script src="js/ghost.js?v=265"></script>
-<script src="js/game.js?v=265"></script>
+<script src="js/mat4.js?v=24"></script>
+<script src="js/glx.js?v=24"></script>
+<script src="js/teams.js?v=24"></script>
+<script src="js/circuits.js?v=24"></script>
+<script src="js/tracks.js?v=24"></script>
+<script src="js/car3d.js?v=24"></script>
+<script src="js/input.js?v=24"></script>
+<script src="js/audio.js?v=24"></script>
+<script src="js/api.js?v=24"></script>
+<script src="js/data.js?v=24"></script>
+<script src="js/game.js?v=24"></script>
 </body>
 </html>
