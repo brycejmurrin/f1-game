@@ -569,6 +569,7 @@ uniform sampler2D uBloom;   // level 0 — W/2 (tight glow)
 uniform sampler2D uBloom1;  // level 1 — W/4 (medium spread)
 uniform sampler2D uBloom2;  // level 2 — W/8 (wide halo)
 uniform sampler2D uSSAO;    // screen-space ambient occlusion
+uniform sampler2D uSSR;     // screen-space reflections (pre-multiplied by strength)
 uniform float uBloomAmt;
 uniform vec2 uSunUV;
 uniform float uFlareStr;
@@ -695,6 +696,10 @@ void main() {
   // Applied pre-tonemap so AO darkening is in the same perceptual space as light.
   c *= texture(uSSAO, vUV).r;
 
+  // SSR: additive screen-space reflection (pre-multiplied by fresnel×confidence).
+  vec4 ssr = texture(uSSR, vUV);
+  c += ssr.rgb;
+
   // AgX filmic tone-map — preserves hue into highlights vs ACES.
   c = agxTonemap(c);
   c = colourGrade(c);
@@ -779,6 +784,101 @@ void main() {
   outColor = vec4(s, s, s, 1.0);
 }`;
 
+  // Screen-Space Reflections (SSR): ray march the reflected view vector through NDC,
+  // sampling the scene colour at each hit. Half-res, 24 linear steps + 8-step binary
+  // refine. Fades at screen edges, low-roughness surfaces, and grazing angles.
+  const SSR_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uScene;
+uniform sampler2D uNormal;
+uniform sampler2D uDepth;
+uniform mat4 uVP;        // view-projection (for projecting world points to NDC)
+uniform mat4 uInvVP;     // inverse VP (for reconstructing world pos from NDC)
+uniform vec3 uEye;
+uniform vec2 uTexel;     // 1/full-res width,height
+out vec4 outColor;
+
+const float NEAR = 0.1, FAR = 2000.0;
+
+// Reconstruct world-space position from NDC depth sample.
+vec3 worldFromDepth(vec2 uv, float d) {
+  vec4 ndc = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec4 wp  = uInvVP * ndc;
+  return wp.xyz / wp.w;
+}
+
+void main() {
+  // Sample the G-buffer
+  vec4 nrmSample = texture(uNormal, vUV);
+  if (nrmSample.w < 0.5) { outColor = vec4(0.0); return; }  // sky → no reflection
+  vec3 N = normalize(nrmSample.xyz * 2.0 - 1.0);
+
+  float d = texture(uDepth, vUV).r;
+  if (d >= 0.9999) { outColor = vec4(0.0); return; }         // far plane
+
+  vec3 P = worldFromDepth(vUV, d);
+  vec3 V = normalize(P - uEye);
+  vec3 R = reflect(V, N);
+
+  // Only reflect upward-facing surfaces (floors/track), skip walls/sky-faces
+  if (R.y < 0.0) { outColor = vec4(0.0); return; }
+
+  // Fresnel: reflections strongest at grazing angles (water-on-tarmac look)
+  float fresnel = pow(1.0 - max(dot(-V, N), 0.0), 3.0);
+  // Also modulate by how horizontal the surface is: near-flat = strong, walls = weak
+  float flatness = max(N.y, 0.0);
+  float strength = fresnel * smoothstep(0.05, 0.35, flatness);
+  if (strength < 0.005) { outColor = vec4(0.0); return; }
+
+  // Ray march: 24 linear steps in world space, project each to screen UV
+  const int STEPS = 24;
+  float stepLen = 0.8;  // world metres per step
+  vec3 hit = vec3(0.0);
+  float hitConf = 0.0;
+  vec2 hitUV = vec2(0.0);
+
+  vec3 rp = P + R * 0.12;  // small offset to avoid self-intersection
+  for (int i = 0; i < STEPS; i++) {
+    rp += R * stepLen;
+    stepLen *= 1.12;  // exponential step growth — covers near + far
+
+    // Project to NDC
+    vec4 clip = uVP * vec4(rp, 1.0);
+    if (clip.w <= 0.0) break;
+    vec3 ndc = clip.xyz / clip.w;
+    if (abs(ndc.x) > 1.0 || abs(ndc.y) > 1.0) break;  // left screen
+    vec2 suv = ndc.xy * 0.5 + 0.5;
+
+    // Compare march depth to scene depth
+    float sd = texture(uDepth, suv).r;
+    float marchDepth = ndc.z * 0.5 + 0.5;
+    float diff = sd - marchDepth;
+
+    if (diff > 0.0 && diff < 0.015) {
+      // Hit! Binary refine (8 steps)
+      vec3 lo = rp - R * stepLen / 1.12, hi = rp;
+      for (int b = 0; b < 8; b++) {
+        vec3 mid = (lo + hi) * 0.5;
+        vec4 mc = uVP * vec4(mid, 1.0);
+        vec2 muv = mc.xy / mc.w * 0.5 + 0.5;
+        float md = mc.z / mc.w * 0.5 + 0.5;
+        float ms = texture(uDepth, muv).r;
+        if (ms > md) lo = mid; else hi = mid;
+      }
+      vec4 fc = uVP * vec4((lo + hi) * 0.5, 1.0);
+      hitUV = fc.xy / fc.w * 0.5 + 0.5;
+      hit = texture(uScene, hitUV).rgb;
+      // Confidence: fade at screen edges and far hits
+      float edge = min(min(hitUV.x, 1.0 - hitUV.x), min(hitUV.y, 1.0 - hitUV.y));
+      hitConf = smoothstep(0.0, 0.12, edge) * smoothstep(float(STEPS), 0.0, float(i));
+      break;
+    }
+  }
+
+  outColor = vec4(hit * strength * hitConf, strength * hitConf);
+}`;
+
   // Depth-only pass for shadow map — renders world position into depth buffer.
   const DEPTH_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
@@ -799,6 +899,8 @@ void main() {}`;
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
   let frameViewProj = null;
+  let frameInvVP = null;
+  let frameEye = null;
   let frameSunDir = null;
 
   let depthProg = null, depthU = null;
@@ -820,6 +922,8 @@ void main() {}`;
   let ssaoProg = null, ssaoU = null;
   let ssaoBlurProg = null, ssaoBlurU = null;
   let ssaoFBO = [null,null], ssaoTex = [null,null];
+  let ssrProg = null, ssrU = null;
+  let ssrFBO = [null,null], ssrTex = [null,null];
   let bloomFBO = [null, null], bloomTex = [null, null];     // level 0 W/2
   let bloom1FBO = [null, null], bloom1Tex = [null, null];   // level 1 W/4
   let bloom2FBO = [null, null], bloom2Tex = [null, null];   // level 2 W/8
@@ -910,12 +1014,14 @@ void main() {}`;
     compProg = link(POST_VS, COMPOSITE_FS);
     ssaoProg = link(POST_VS, SSAO_FS);
     ssaoBlurProg = link(POST_VS, SSAO_BLUR_FS);
-    if (!brightProg || !blurProg || !compProg || !ssaoProg || !ssaoBlurProg) return false;
+    ssrProg = link(POST_VS, SSR_FS);
+    if (!brightProg || !blurProg || !compProg || !ssaoProg || !ssaoBlurProg || !ssrProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
     ssaoU = locs(ssaoProg, ["uNormal", "uDepth", "uTexel"]);
     ssaoBlurU = locs(ssaoBlurProg, ["uSSAO", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uSSAO", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
+    ssrU = locs(ssrProg, ["uScene", "uNormal", "uDepth", "uVP", "uInvVP", "uEye", "uTexel"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uSSAO", "uSSR", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     return true;
   }
 
@@ -977,6 +1083,22 @@ void main() {}`;
       ssaoTex[i] = at;
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO[i]);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, at, 0);
+    }
+    // SSR half-res ping-pong (RGBA8: rgb=reflection, a=strength)
+    for (let i = 0; i < 2; i++) {
+      if (ssrTex[i]) gl.deleteTexture(ssrTex[i]);
+      if (!ssrFBO[i]) ssrFBO[i] = gl.createFramebuffer();
+      const st = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, st);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, Math.max(1,width>>1), Math.max(1,height>>1),
+        0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      ssrTex[i] = st;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO[i]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, st, 0);
     }
     // Multi-scale bloom ping-pong targets: level 0 (W/2), 1 (W/4), 2 (W/8)
     bloomW  = Math.max(1, Math.floor(width  / 2));
@@ -1144,6 +1266,8 @@ void main() {}`;
 
   function begin(frame) {
     frameViewProj = frame.viewProj;
+    frameInvVP = M4.invert(frame.viewProj);
+    frameEye = frame.eye;
     frameSunDir = frame.sunDir;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
@@ -1336,6 +1460,22 @@ void main() {}`;
       gl.blitFramebuffer(0, 0, sw, sh, 0, 0, sw, sh, gl.COLOR_BUFFER_BIT, gl.NEAREST);
     }
 
+    // 0b) SSR pass — half-res: ray-march reflections into ssrTex[0]
+    if (frameViewProj && frameInvVP && frameEye) {
+      const sw = Math.max(1, width >> 1), sh = Math.max(1, height >> 1);
+      gl.viewport(0, 0, sw, sh);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO[0]);
+      useProg(ssrProg);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneTex);      gl.uniform1i(ssrU.uScene,  0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneNormalTex); gl.uniform1i(ssrU.uNormal, 1);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sceneDepthTex);  gl.uniform1i(ssrU.uDepth,  2);
+      gl.uniformMatrix4fv(ssrU.uVP,    false, frameViewProj);
+      gl.uniformMatrix4fv(ssrU.uInvVP, false, frameInvVP);
+      gl.uniform3fv(ssrU.uEye, frameEye);
+      gl.uniform2f(ssrU.uTexel, 1.0 / width, 1.0 / height);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
     // 1) bright-pass scene → bloom level 0 (W/2)
     gl.viewport(0, 0, bloomW, bloomH);
     gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
@@ -1383,6 +1523,9 @@ void main() {}`;
     gl.activeTexture(gl.TEXTURE4);
     gl.bindTexture(gl.TEXTURE_2D, ssaoTex[0]);
     gl.uniform1i(compU.uSSAO, 4);
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, ssrTex[0]);
+    gl.uniform1i(compU.uSSR, 5);
     // Project sun direction to screen UV for lens flare
     let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
     if (frameSunDir && frameViewProj) {
