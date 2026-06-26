@@ -879,6 +879,102 @@ void main() {
   outColor = vec4(hit * strength * hitConf, strength * hitConf);
 }`;
 
+  // FXAA (subpixel morphological AA) + chromatic aberration + mild sharpening.
+  // Reads the tonemapped LDR composite output and writes the final screen result.
+  const FXAA_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform vec2 uTexel;   // 1.0 / [width, height]
+out vec4 outColor;
+
+float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+void main() {
+  vec2 p = uTexel;
+
+  // Chromatic aberration: R shifts outward, B shifts inward (mild cinematic look).
+  float cdist = length(vUV - 0.5);
+  vec2 caOff  = (cdist > 1e-4) ? normalize(vUV - 0.5) * (cdist * 0.0014) : vec2(0.0);
+
+  // 9-tap luma grid for edge detection and subpixel blend.
+  float lC  = luma(texture(uTex, vUV).rgb);
+  float lN  = luma(texture(uTex, vUV + vec2(0,   p.y)).rgb);
+  float lS  = luma(texture(uTex, vUV - vec2(0,   p.y)).rgb);
+  float lE  = luma(texture(uTex, vUV + vec2(p.x, 0  )).rgb);
+  float lW  = luma(texture(uTex, vUV - vec2(p.x, 0  )).rgb);
+  float lNE = luma(texture(uTex, vUV + p).rgb);
+  float lNW = luma(texture(uTex, vUV + vec2(-p.x,  p.y)).rgb);
+  float lSE = luma(texture(uTex, vUV + vec2( p.x, -p.y)).rgb);
+  float lSW = luma(texture(uTex, vUV - p).rgb);
+
+  float lumaMin = min(lC, min(min(lN, lS), min(lE, lW)));
+  float lumaMax = max(lC, max(max(lN, lS), max(lE, lW)));
+  float range   = lumaMax - lumaMin;
+
+  if (range < max(0.0312, lumaMax * 0.063)) {
+    // Flat area: CA + mild sharpening (unsharp mask, ~0.15×).
+    vec3 blur4 = (texture(uTex, vUV + vec2(p.x,0)).rgb
+                + texture(uTex, vUV - vec2(p.x,0)).rgb
+                + texture(uTex, vUV + vec2(0,p.y)).rgb
+                + texture(uTex, vUV - vec2(0,p.y)).rgb) * 0.25;
+    vec3 cen = texture(uTex, vUV).rgb;
+    vec3 sharp = cen + (cen - blur4) * 0.15;
+    outColor = vec4(vec3(
+      texture(uTex, vUV + caOff).r,
+      sharp.g,
+      texture(uTex, vUV - caOff * 0.7).b), 1.0);
+    return;
+  }
+
+  // Edge direction (Sobel).
+  float edgeH = abs(lNW - lSW) + 2.0*abs(lN - lS) + abs(lNE - lSE);
+  float edgeV = abs(lNW - lNE) + 2.0*abs(lW - lE) + abs(lSW - lSE);
+  bool hori   = edgeH >= edgeV;
+
+  // Step perpendicular to edge toward the steeper-gradient side.
+  float lPos = hori ? lN : lE;
+  float lNeg = hori ? lS : lW;
+  bool neg   = abs(lNeg - lC) > abs(lPos - lC);
+  vec2 step  = hori ? (neg ? vec2(0,-p.y) : vec2(0,p.y))
+                    : (neg ? vec2(-p.x,0)  : vec2(p.x,0));
+
+  // Subpixel blend: deviation of centre luma from the local neighbourhood average.
+  float lAvg = (2.0*(lN+lE+lS+lW) + lNE+lNW+lSE+lSW) / 12.0;
+  float sub  = smoothstep(0.0, 1.0, abs(lAvg - lC) / range);
+  sub = sub * sub * 0.75;
+
+  // Walk along the edge (8 × 1.5 px = up to ±12 px) to find its extent.
+  vec2 walkDir = hori ? vec2(p.x,0) : vec2(0,p.y);
+  float lumaMid  = (lC + (neg ? lNeg : lPos)) * 0.5;
+  float stopDelt = 0.25 * range;
+  vec2 posP = vUV + step * 0.5 + walkDir;
+  vec2 posN = vUV + step * 0.5 - walkDir;
+  bool dpDone = false, dnDone = false;
+  for (int i = 0; i < 8; i++) {
+    if (!dpDone) {
+      if (abs(luma(texture(uTex, posP).rgb) - lumaMid) >= stopDelt) dpDone = true;
+      else posP += walkDir * 1.5;
+    }
+    if (!dnDone) {
+      if (abs(luma(texture(uTex, posN).rgb) - lumaMid) >= stopDelt) dnDone = true;
+      else posN -= walkDir * 1.5;
+    }
+  }
+  float dP = hori ? abs(posP.x - vUV.x) : abs(posP.y - vUV.y);
+  float dN = hori ? abs(posN.x - vUV.x) : abs(posN.y - vUV.y);
+  float edgeBlend = max(0.0, 0.5 - min(dP,dN)/(dP+dN));
+
+  float blend  = max(sub, edgeBlend);
+  vec2 blendUV = vUV + step * blend;
+
+  // Sample at blend UV with CA.
+  outColor = vec4(vec3(
+    texture(uTex, blendUV + caOff).r,
+    texture(uTex, blendUV).g,
+    texture(uTex, blendUV - caOff * 0.7).b), 1.0);
+}`;
+
   // Depth-only pass for shadow map — renders world position into depth buffer.
   const DEPTH_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
@@ -924,6 +1020,8 @@ void main() {}`;
   let ssaoFBO = [null,null], ssaoTex = [null,null];
   let ssrProg = null, ssrU = null;
   let ssrFBO = [null,null], ssrTex = [null,null];
+  let fxaaProg = null, fxaaU = null;
+  let interFBO = null, interTex = null;   // composite output before FXAA
   let bloomFBO = [null, null], bloomTex = [null, null];     // level 0 W/2
   let bloom1FBO = [null, null], bloom1Tex = [null, null];   // level 1 W/4
   let bloom2FBO = [null, null], bloom2Tex = [null, null];   // level 2 W/8
@@ -1014,13 +1112,15 @@ void main() {}`;
     compProg = link(POST_VS, COMPOSITE_FS);
     ssaoProg = link(POST_VS, SSAO_FS);
     ssaoBlurProg = link(POST_VS, SSAO_BLUR_FS);
-    ssrProg = link(POST_VS, SSR_FS);
-    if (!brightProg || !blurProg || !compProg || !ssaoProg || !ssaoBlurProg || !ssrProg) return false;
+    ssrProg  = link(POST_VS, SSR_FS);
+    fxaaProg = link(POST_VS, FXAA_FS);
+    if (!brightProg || !blurProg || !compProg || !ssaoProg || !ssaoBlurProg || !ssrProg || !fxaaProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
     ssaoU = locs(ssaoProg, ["uNormal", "uDepth", "uTexel"]);
     ssaoBlurU = locs(ssaoBlurProg, ["uSSAO", "uDir"]);
     ssrU = locs(ssrProg, ["uScene", "uNormal", "uDepth", "uVP", "uInvVP", "uEye", "uTexel"]);
+    fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
     compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uSSAO", "uSSR", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     return true;
   }
@@ -1100,6 +1200,18 @@ void main() {}`;
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO[i]);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, st, 0);
     }
+    // Intermediate full-res LDR target: composite writes here, FXAA reads it → screen.
+    if (interTex) gl.deleteTexture(interTex);
+    if (!interFBO) interFBO = gl.createFramebuffer();
+    interTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, interTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, interFBO);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, interTex, 0);
     // Multi-scale bloom ping-pong targets: level 0 (W/2), 1 (W/4), 2 (W/8)
     bloomW  = Math.max(1, Math.floor(width  / 2));
     bloomH  = Math.max(1, Math.floor(height / 2));
@@ -1503,8 +1615,8 @@ void main() {}`;
 
     const src = src0; // level-0 final index (for god-ray sampling)
 
-    // 5) composite to the screen (multi-level bloom + tonemap)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // 5) composite → interFBO (LDR tonemap output; FXAA reads this next step)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, interFBO);
     gl.viewport(0, 0, width, height);
     useProg(compProg);
     gl.activeTexture(gl.TEXTURE0);
@@ -1551,6 +1663,16 @@ void main() {}`;
     gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);
     gl.uniform3fv(compU.uGradeHi, grade && grade.hi ? grade.hi : [1, 1, 1]);
     gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // 6) FXAA + CA + sharpening: interTex → screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);
+    useProg(fxaaProg);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, interTex);
+    gl.uniform1i(fxaaU.uTex, 0);
+    gl.uniform2f(fxaaU.uTexel, 1.0 / width, 1.0 / height);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     bindVAO(null);
