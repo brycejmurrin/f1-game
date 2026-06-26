@@ -51,7 +51,7 @@ Status legend: ⬜ not started · 🟦 in progress · ✅ done & screenshot-veri
 | silverstone | Wing silver not white; flat airfield (remove mountain rings); copses not dense forest | ✅ |
 | monaco | Casino trio (Hôtel de Paris + Casino + Café de Paris); green-copper roofs; Tour Odéon | ⬜ |
 | cota | remove fictional Velocity tower; dark-brown clay; rolling prairie not ridges | ✅ |
-| albert_park | Eureka gold crown + 297 m; add Australia 108; skyline across lake; palms+gums | ⬜ |
+| albert_park | Eureka gold crown + 297 m; add Australia 108; skyline across lake; palms+gums | ✅ |
 | spa | Belgian-flag run-off paint; Wallonia kerbs; pit-straight tower; conifer wall; gravel | ✅ |
 | qatar | 402 m record pit building hero; flat tan plain not dunes; artificial-grass border ring | ⬜ |
 
