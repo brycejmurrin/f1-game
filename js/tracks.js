@@ -611,10 +611,19 @@ const Tracks = (function () {
     // fully hide it and it cannot visually bleed onto the road surface.
     const NTV = 5;
     const isStreet = !!track.def.street;
+    // flatTerrain: a WIDE, dead-flat grass ribbon (a man-made island like Île
+    // Notre-Dame sits ~level with the water, not sloping into it). Spreads the 5
+    // verts evenly out to outerW and skips the lateral sag/ease so trees and props
+    // sit on real ground all the way out instead of floating over a sunk fallback.
+    const flat = !!track.def.flatTerrain;
     const outerW = track.def.terrainOuter || 120;
     const cap = (v) => Math.min(v, outerW);
-    const latsL = isStreet ? [-5.0, -cap(10), -cap(20), -cap(55), -outerW] : [-2.2, -cap(7.0), -cap(14), -cap(48), -outerW];
-    const latsR = isStreet ? [ 5.0,  cap(10),  cap(20),  cap(55),  outerW] : [ 2.2,  cap(7.0),  cap(14),  cap(48),  outerW];
+    const latsL = isStreet ? [-5.0, -cap(10), -cap(20), -cap(55), -outerW]
+                : flat ? [-2.2, -cap(outerW * 0.3), -cap(outerW * 0.55), -cap(outerW * 0.8), -outerW]
+                : [-2.2, -cap(7.0), -cap(14), -cap(48), -outerW];
+    const latsR = isStreet ? [ 5.0,  cap(10),  cap(20),  cap(55),  outerW]
+                : flat ? [ 2.2,  cap(outerW * 0.3),  cap(outerW * 0.55),  cap(outerW * 0.8),  outerW]
+                : [ 2.2,  cap(7.0),  cap(14),  cap(48),  outerW];
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
       const base = pos.length / 3;
@@ -633,7 +642,10 @@ const Tracks = (function () {
           // the road surface when the road climbs steeply.
           const localGrade = v === 0 ? Math.abs(py[k] - py[(k + 1) % n]) : 0;
           const innerExtra = v === 0 ? Math.min(localGrade * 2, 1.2) : 0;
-          const sag = (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra;
+          // flat island: tiny constant sag, no lateral fall-off, so the whole
+          // ribbon stays a level shelf just below road grade out to outerW.
+          const sag = flat ? -0.12
+                    : (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra;
           // inner vert tracks road height; outer verts ease down to the lap's
           // low point (or the flattened bridge ground, whichever is lower). The
           // quadratic ease keeps the run-off apron near track grade and pushes
@@ -647,7 +659,9 @@ const Tracks = (function () {
           const DROP_CAP = 10;
           const rawFloor = Math.min(gY[k], pyMin);
           const floorY = Math.max(py[k] - DROP_CAP, rawFloor);
-          const yBase = py[k] * (1 - ease) + floorY * ease;
+          // flat island keeps every vert at road grade (no quadratic drop-away);
+          // otherwise the outer verts ease down to the lap's low baseline.
+          const yBase = flat ? py[k] : py[k] * (1 - ease) + floorY * ease;
           // match the road's banked outer edge: rise along up by the same lift,
           // tapering across the ribbon (full at inner edge, 0 at outer) so the
           // far ground stays flat. frac uses the same formula as buildRoad.
@@ -1132,11 +1146,15 @@ const Tracks = (function () {
     // to THIS instead of the road height, so on an elevated or embanked section
     // they sit on the sloping ground rather than floating at the old flat grade.
     const isStreetT = !!track.def.street;
+    const flatT = !!track.def.flatTerrain;
     const gLats = isStreetT ? [5, 10, 20, 55, 120] : [2.2, 7, 14, 48, 120];
     const gSag = isStreetT ? -1.5 : -0.3;
     const groundYAt = (k, dist) => {
       const base = py[k];
       if (dist <= 0) return base;
+      // flat island: ground is a level shelf just below road grade everywhere, so
+      // props/trees beyond the rendered ribbon sit on it instead of a sunk slope.
+      if (flatT) return base - 0.12;
       let prevD = 0, prevY = base + gSag;
       for (let v = 0; v < 5; v++) {
         const e = (v / 4) * (v / 4);
@@ -2768,6 +2786,7 @@ const Tracks = (function () {
       street: !!d.street, banked: !!d.banked, bridges: d.bridges || null,
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
+      flatTerrain: !!d.flatTerrain,
       // bespoke per-circuit scenery (js/tracks/<id>.js); run by buildProps
       scenery: d.scenery || null,
       // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
