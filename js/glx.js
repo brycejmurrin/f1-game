@@ -539,7 +539,9 @@ void main() {
 precision highp float;
 in vec2 vUV;
 uniform sampler2D uScene;
-uniform sampler2D uBloom;
+uniform sampler2D uBloom;   // level 0 — W/2 (tight glow)
+uniform sampler2D uBloom1;  // level 1 — W/4 (medium spread)
+uniform sampler2D uBloom2;  // level 2 — W/8 (wide halo)
 uniform float uBloomAmt;
 uniform vec2 uSunUV;
 uniform float uFlareStr;
@@ -623,11 +625,13 @@ void main() {
   // Exposure multiply before tone-mapping (default 1.0 = no change).
   c *= uExposure;
 
-  // Improved bloom: add with a mild tone-aware mask so it doesn't wash out
-  // already-bright pixels (reduce bloom addition proportionally in highlights).
-  vec3 bloomSample = texture(uBloom, vUV).rgb;
+  // Multi-scale bloom: accumulate 3 levels (tight / medium / wide) with a
+  // tone-aware mask that reduces bloom on already-saturated highlights.
   float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
-  c += bloomSample * uBloomAmt * bloomMask;
+  vec3 bl = texture(uBloom,  vUV).rgb * 0.45
+           + texture(uBloom1, vUV).rgb * 0.35
+           + texture(uBloom2, vUV).rgb * 0.20;
+  c += bl * uBloomAmt * bloomMask;
 
   // Sun shafts / god-rays: radial samples from current pixel toward the sun's
   // screen position, reading the bright-pass (bloom[0] after bright-pass step).
@@ -723,10 +727,14 @@ void main() {}`;
   let blurProg = null, blurU = null;
   let compProg = null, compU = null;
   let sceneFBO = null, sceneTex = null, sceneDepth = null;
-  let bloomFBO = [null, null], bloomTex = [null, null];
+  let bloomFBO = [null, null], bloomTex = [null, null];     // level 0 W/2
+  let bloom1FBO = [null, null], bloom1Tex = [null, null];   // level 1 W/4
+  let bloom2FBO = [null, null], bloom2Tex = [null, null];   // level 2 W/8
   let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
   let bloomW = 0, bloomH = 0;
-  const BLOOM_DIV = 2;         // bloom buffers at half resolution
+  let bloom1W = 0, bloom1H = 0;
+  let bloom2W = 0, bloom2H = 0;
+  const BLOOM_DIV = 2;         // level-0 bloom at half resolution
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
   let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1;
@@ -810,7 +818,7 @@ void main() {}`;
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     return true;
   }
 
@@ -839,16 +847,25 @@ void main() {}`;
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, sceneDepth);
-    // bloom ping-pong targets (half res)
-    bloomW = Math.max(1, Math.floor(width / BLOOM_DIV));
-    bloomH = Math.max(1, Math.floor(height / BLOOM_DIV));
-    for (let i = 0; i < 2; i++) {
-      if (bloomTex[i]) gl.deleteTexture(bloomTex[i]);
-      if (!bloomFBO[i]) bloomFBO[i] = gl.createFramebuffer();
-      bloomTex[i] = mk(bloomW, bloomH);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[i]);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bloomTex[i], 0);
-    }
+    // Multi-scale bloom ping-pong targets: level 0 (W/2), 1 (W/4), 2 (W/8)
+    bloomW  = Math.max(1, Math.floor(width  / 2));
+    bloomH  = Math.max(1, Math.floor(height / 2));
+    bloom1W = Math.max(1, Math.floor(width  / 4));
+    bloom1H = Math.max(1, Math.floor(height / 4));
+    bloom2W = Math.max(1, Math.floor(width  / 8));
+    bloom2H = Math.max(1, Math.floor(height / 8));
+    const mkBloomLevel = (fbos, texs, w, h) => {
+      for (let i = 0; i < 2; i++) {
+        if (texs[i]) gl.deleteTexture(texs[i]);
+        if (!fbos[i]) fbos[i] = gl.createFramebuffer();
+        texs[i] = mk(w, h);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[i]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texs[i], 0);
+      }
+    };
+    mkBloomLevel(bloomFBO,  bloomTex,  bloomW,  bloomH);
+    mkBloomLevel(bloom1FBO, bloom1Tex, bloom1W, bloom1H);
+    mkBloomLevel(bloom2FBO, bloom2Tex, bloom2W, bloom2H);
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
       postEnabled = false;     // unsupported combo: fall back to direct rendering
     }
@@ -1145,7 +1162,24 @@ void main() {}`;
     gl.disable(gl.DEPTH_TEST);
     bindVAO(skyVAO);   // reuse the empty VAO for fullscreen triangles
 
-    // 1) bright-pass scene -> bloom[0] (half res)
+    // Helper: run one H+V Gaussian pass on a ping-pong pair at given size.
+    const blurLevel = (fbos, texs, w, h) => {
+      useProg(blurProg);
+      gl.uniform1i(blurU.uTex, 0);
+      let s = 0;
+      for (const [dx, dy] of [[1/w,0],[0,1/h]]) {
+        const d = 1 - s;
+        gl.viewport(0, 0, w, h);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[d]);
+        gl.bindTexture(gl.TEXTURE_2D, texs[s]);
+        gl.uniform2f(blurU.uDir, dx, dy);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        s = d;
+      }
+      return s; // index of final blurred result
+    };
+
+    // 1) bright-pass scene → bloom level 0 (W/2)
     gl.viewport(0, 0, bloomW, bloomH);
     gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
     useProg(brightProg);
@@ -1155,21 +1189,24 @@ void main() {}`;
     gl.uniform1f(brightU.uThreshold, threshold);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // 2) separable gaussian blur, a couple of ping-pong passes
-    useProg(blurProg);
-    gl.uniform1i(blurU.uTex, 0);
-    const passes = [[1 / bloomW, 0], [0, 1 / bloomH]];
-    let src = 0;
-    for (const [dx, dy] of passes) {
-      const dst = 1 - src;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[dst]);
-      gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
-      gl.uniform2f(blurU.uDir, dx, dy);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      src = dst;
-    }
+    // 2) blur level 0
+    let src0 = blurLevel(bloomFBO, bloomTex, bloomW, bloomH);
 
-    // 3) composite to the screen
+    // 3) hardware-linear downsample level 0 → level 1 (W/4), then blur
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, bloomFBO[src0]);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, bloom1FBO[0]);
+    gl.blitFramebuffer(0, 0, bloomW, bloomH, 0, 0, bloom1W, bloom1H, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+    let src1 = blurLevel(bloom1FBO, bloom1Tex, bloom1W, bloom1H);
+
+    // 4) downsample level 1 → level 2 (W/8), then blur
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, bloom1FBO[src1]);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, bloom2FBO[0]);
+    gl.blitFramebuffer(0, 0, bloom1W, bloom1H, 0, 0, bloom2W, bloom2H, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+    let src2 = blurLevel(bloom2FBO, bloom2Tex, bloom2W, bloom2H);
+
+    const src = src0; // level-0 final index (for god-ray sampling)
+
+    // 5) composite to the screen (multi-level bloom + tonemap)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
     useProg(compProg);
@@ -1177,8 +1214,14 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(compU.uScene, 0);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
+    gl.bindTexture(gl.TEXTURE_2D, bloomTex[src0]);
     gl.uniform1i(compU.uBloom, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, bloom1Tex[src1]);
+    gl.uniform1i(compU.uBloom1, 2);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, bloom2Tex[src2]);
+    gl.uniform1i(compU.uBloom2, 3);
     gl.uniform1f(compU.uBloomAmt, bloomAmt);
     // Project sun direction to screen UV for lens flare
     let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
