@@ -404,6 +404,7 @@ const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new Float32Array(16);
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
+const _mInvProj = new Float32Array(16);
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null;
 
@@ -2415,7 +2416,9 @@ function render(dt) {
   }
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
+  M4.invertTo(_mInvProj, _mProj);   // for view-space reconstruction in SSAO
   frame.viewProj = _mVP;
+  frame.invProj = _mInvProj;
   frame.eye = camEye;
 
   // Shadow pass — render terrain + road from sun's perspective.
@@ -2724,7 +2727,8 @@ function render(dt) {
     GLX.drawGlow(frame.lights, 0.06 * (0.30 + 0.70 * _gnf));
   }
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
-  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade });
+  // SSAO grounds the scene (creases/contacts) at every time of day.
+  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85 });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too
