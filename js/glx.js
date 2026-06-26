@@ -51,7 +51,7 @@ uniform float uRoughness;
 uniform float uMetalness;
 uniform float uSpecular;
 uniform float uDetail;
-uniform sampler2DShadow uShadowMap;
+uniform sampler2D uShadowMap;  // raw depth — PCSS reads blocker depth directly
 uniform mat4 uLightVP;
 uniform float uShadowBias;
 uniform float uShadowStr;
@@ -104,36 +104,60 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+// PCSS contact-hardening soft shadows.
+// Step 1: blocker search (9 taps) → average blocker depth.
+// Step 2: penumbra width ∝ receiver–blocker gap (contact = sharp, far = soft).
+// Step 3: PCF with variable kernel (16 taps, wider when far from caster).
+const float PCSS_LIGHT = 6.0;   // sun angular size in shadow-texel units
+const float PCSS_SCALE = 280.0; // depth-difference → texel count
+
+// Poisson disk for blocker search
+const vec2 BLKD[9] = vec2[9](
+  vec2(-0.94201624,-0.39906216), vec2( 0.94558609,-0.76890725),
+  vec2(-0.09418410,-0.92938870), vec2( 0.34495938, 0.29387760),
+  vec2(-0.91588581, 0.45771432), vec2(-0.81544232,-0.87912464),
+  vec2(-0.38277543, 0.27676845), vec2( 0.97484398, 0.75648379),
+  vec2( 0.00000000, 0.00000000));
+// Wider Poisson disk for PCF
+const vec2 PCFD[16] = vec2[16](
+  vec2(-0.94201624,-0.39906216), vec2( 0.94558609,-0.76890725),
+  vec2(-0.09418410,-0.92938870), vec2( 0.34495938, 0.29387760),
+  vec2(-0.91588581, 0.45771432), vec2(-0.81544232,-0.87912464),
+  vec2(-0.38277543, 0.27676845), vec2( 0.97484398, 0.75648379),
+  vec2( 0.44323325,-0.97511554), vec2( 0.53742981,-0.47373420),
+  vec2(-0.26496911,-0.41893023), vec2( 0.79197514, 0.19090188),
+  vec2(-0.24188840, 0.99706507), vec2(-0.81409955, 0.91437590),
+  vec2( 0.19984126, 0.78641367), vec2( 0.14383161,-0.14100790));
+
 float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z >= 1.0) return 1.0;
   float t = uShadowTexel;
-  // Slope-scale bias: gentle base + steeper slope term reduces both acne and
-  // peter-panning on angled surfaces (walls, banking kerbs).
   float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.0, 1.0);
   float slopeBias = t * 1.5 * tan(acos(max(cosTheta, 0.05)));
   float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
-  // 8-tap rotated Poisson disk — balanced coverage, cheap enough for mobile.
-  // Disk radius = 1.4 texels → smooth penumbra without over-blurring.
-  const float R = 1.4;
-  vec2 d0 = vec2(-0.94201624, -0.39906216) * t * R;
-  vec2 d1 = vec2( 0.94558609, -0.76890725) * t * R;
-  vec2 d2 = vec2(-0.09418410, -0.92938870) * t * R;
-  vec2 d3 = vec2( 0.34495938,  0.29387760) * t * R;
-  vec2 d4 = vec2(-0.91588581,  0.45771432) * t * R;
-  vec2 d5 = vec2(-0.81544232, -0.87912464) * t * R;
-  vec2 d6 = vec2(-0.38277543,  0.27676845) * t * R;
-  vec2 d7 = vec2( 0.97484398,  0.75648379) * t * R;
-  float s = texture(uShadowMap, vec3(sc.xy + d0, z))
-          + texture(uShadowMap, vec3(sc.xy + d1, z))
-          + texture(uShadowMap, vec3(sc.xy + d2, z))
-          + texture(uShadowMap, vec3(sc.xy + d3, z))
-          + texture(uShadowMap, vec3(sc.xy + d4, z))
-          + texture(uShadowMap, vec3(sc.xy + d5, z))
-          + texture(uShadowMap, vec3(sc.xy + d6, z))
-          + texture(uShadowMap, vec3(sc.xy + d7, z));
-  return mix(1.0, s * 0.125, uShadowStr);
+
+  // Step 1: blocker search within PCSS_LIGHT-scaled radius
+  float searchR = t * PCSS_LIGHT * 5.0;
+  float sumZ = 0.0; int cnt = 0;
+  for (int i = 0; i < 9; i++) {
+    float d = texture(uShadowMap, sc.xy + BLKD[i] * searchR).r;
+    if (d < z) { sumZ += d; cnt++; }
+  }
+  if (cnt == 0) return 1.0;  // no blocker → fully lit
+
+  // Step 2: penumbra width from average blocker depth
+  float avgZ = sumZ / float(cnt);
+  float penumbraT = clamp((z - avgZ) * PCSS_SCALE, 1.0, 15.0);
+  float pcfR = penumbraT * t;
+
+  // Step 3: 16-tap PCF with variable kernel
+  float s = 0.0;
+  for (int i = 0; i < 16; i++) {
+    s += texture(uShadowMap, sc.xy + PCFD[i] * pcfR).r > z ? 1.0 : 0.0;
+  }
+  return mix(1.0, s * 0.0625, uShadowStr);
 }
 
 void main() {
@@ -716,7 +740,7 @@ void main() {}`;
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
   let shadowLightVP = new Float32Array(16);
-  const SHADOW_SIZE = 1024;
+  const SHADOW_SIZE = 2048;  // 2K shadow map — PCSS quality benefit outweighs cost
   let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
@@ -881,12 +905,11 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
       gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    // NEAREST + no compare mode: PCSS reads raw depth for blocker search.
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
 
     shadowMapFBO = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
