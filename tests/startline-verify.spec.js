@@ -1,4 +1,4 @@
-// One-off: screenshot every track at frac=0 (start/finish) zoomed in close.
+// One-off: screenshot every track at frac=0 (start/finish) with HUD + minimap.
 // Run: npx playwright test tests/startline-verify.spec.js
 // Output: tests/startline-shots/
 import { test } from "@playwright/test";
@@ -19,24 +19,25 @@ test.setTimeout(25000);
 
 for (const trackId of TRACKS) {
   test(`start-line ${trackId}`, async ({ page }) => {
+    // Landscape viewport so #rotate-device overlay doesn't obscure HUD
     await page.setViewportSize({ width: 1200, height: 675 });
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 12000 });
 
-    // Load track, freeze, hide HUD
+    // Load track, start race (places cars at grid / frac=0), then freeze
     await page.evaluate(async (t) => {
       __apex.race(t);
       await new Promise(r => setTimeout(r, 3000));
-      __apex.freeze(true);
-      __apex.hud(false);
+      __apex.go();
     }, trackId);
+    await page.waitForTimeout(400);
 
-    // Park at start (frac=0) then orbit close and slightly overhead from ahead
-    // az=0 = camera placed in "forward" direction from target, looking back at the start
-    // el=40 = 40° above road, dist=45 = 45 m away
+    // Freeze with HUD on so minimap shows car position at start
     await page.evaluate(() => {
-      __apex.park(0);
-      __apex.orbit(0, 0, 40, 45, 1.5, { fov: 42 });
+      __apex.freeze(true);
+      // Tight orbit from slightly behind-and-above so the straight ahead is visible
+      // az=180 = camera behind car, el=20 = low angle, dist=35 = close
+      __apex.orbit(0, 180, 20, 35, 1.5, { fov: 52 });
       __apex.snapCam();
     });
     await page.waitForTimeout(300);
