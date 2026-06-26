@@ -61,7 +61,7 @@ uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
-const int MAX_LIGHTS = 32;
+const int MAX_LIGHTS = 48;
 uniform int uNumLights;
 uniform vec3 uLightPos[MAX_LIGHTS];
 uniform vec3 uLightCol[MAX_LIGHTS];
@@ -529,19 +529,32 @@ void main() {
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
-  // Bright-pass: keep only the portion of each pixel above the threshold (the
-  // sun, floodlights, specular hotspots, bright markings) for the bloom blur.
+  // Bright-pass: soft-knee threshold prefilter (Jimenez, "Next Generation Post
+  // Processing in Call of Duty: Advanced Warfare"). Instead of a hard cutoff, a
+  // quadratic knee lets pixels near the threshold bloom partially — the glow
+  // ramps in smoothly so highlights bleed dramatically without a hard edge.
+  // uKnee is the half-width of the soft transition band around uThreshold.
   const BRIGHT_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
 uniform sampler2D uScene;
 uniform float uThreshold;
+uniform float uKnee;
 out vec4 outColor;
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
-  float l = max(max(c.r, c.g), c.b);
-  float k = max(0.0, l - uThreshold) / max(l, 1e-4);
-  outColor = vec4(c * k, 1.0);
+  float br = max(max(c.r, c.g), c.b);
+  // Quadratic soft knee: smooth ramp in [T-knee, T+knee], linear above.
+  float kn = max(uKnee, 1e-4);
+  float soft = clamp(br - uThreshold + kn, 0.0, 2.0 * kn);
+  soft = soft * soft / (4.0 * kn + 1e-5);
+  float contrib = max(soft, br - uThreshold) / max(br, 1e-4);
+  // Firefly clamp: cap single-pixel intensity so isolated specular sparks don't
+  // produce flickering blocks once blurred, while still allowing strong glow.
+  vec3 outc = c * contrib;
+  float om = max(max(outc.r, outc.g), outc.b);
+  if (om > 8.0) outc *= 8.0 / om;
+  outColor = vec4(outc, 1.0);
 }`;
 
   // Separable 5-tap gaussian (uDir = texelSize * axis).
@@ -617,9 +630,9 @@ vec3 agxTonemap(vec3 color) {
   color = (color - minEv) / (maxEv - minEv);
   color = agxDefaultContrastApprox(color);
   color = AgXOutset * color;
-  // Mild saturation restore: 1.22 keeps colour credible without cartoon oversaturation.
+  // Restrained saturation restore: 1.08 — credible colour, no cartoon pop.
   vec3 luma = vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)));
-  color = mix(luma, color, 1.22);
+  color = mix(luma, color, 1.08);
   return clamp(color, 0.0, 1.0);
 }
 
@@ -631,6 +644,16 @@ vec3 colourGrade(vec3 c) {
   c *= vec3(1.015, 1.008, 0.992);
   // Soft S-curve: deepen contrast for punch (less washed-out / flat)
   c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
+  // Dramatic contrast S-curve. A Hermite smoothstep pulls shadows down and rolls
+  // highlights, then an extra shadow-weighted darkening deepens the lower mids so
+  // the image reads moody/chiaroscuro rather than flat & bright. Highlights are
+  // NOT lifted (that was the cartoony look) — only the toe is pulled down.
+  vec3 sc = clamp(c, 0.0, 1.0);
+  sc = sc * sc * (3.0 - 2.0 * sc);
+  c = mix(c, sc, 0.42);
+  // Deepen shadows further: square-ish falloff below mid-grey, untouched above.
+  float dl = dot(c, vec3(0.299, 0.587, 0.114));
+  c *= mix(0.82, 1.0, smoothstep(0.0, 0.45, dl));
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
@@ -638,7 +661,7 @@ vec3 colourGrade(vec3 c) {
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
   float sat = mx - mn;
-  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.32);
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.18);
   // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
   // other (warm amber), blended by luma. A staple of the teal-orange film look —
   // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
@@ -659,11 +682,14 @@ void main() {
 
   // Multi-scale bloom: accumulate 3 levels (tight / medium / wide) with a
   // tone-aware mask that reduces bloom on already-saturated highlights.
-  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.65, 0.0, 0.35) / 0.35 * 0.45;
-  vec3 bl = texture(uBloom,  vUV).rgb * 0.35
-           + texture(uBloom1, vUV).rgb * 0.28
+  // Atmospheric bloom: bias toward the WIDE levels (soft halo around real light
+  // sources) and away from tight per-pixel glow that washed the frame. The mask
+  // strongly protects already-bright pixels so highlights stay crisp, not milky.
+  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.55, 0.0, 0.45) / 0.45 * 0.55;
+  vec3 bl = texture(uBloom,  vUV).rgb * 0.22
+           + texture(uBloom1, vUV).rgb * 0.22
            + texture(uBloom2, vUV).rgb * 0.22
-           + texture(uBloom3, vUV).rgb * 0.15;
+           + texture(uBloom3, vUV).rgb * 0.18;
   c += bl * uBloomAmt * bloomMask;
 
   // Volumetric sun shafts: 16-tap radial march from pixel toward sun, sampling
@@ -738,8 +764,8 @@ void main() {
   c += (mix(g1, g2, 0.5) - 0.5) * 0.028;
 
   vec2 q = vUV - 0.5;
-  float vig = smoothstep(0.92, 0.28, length(q));
-  c *= mix(0.76, 1.0, vig);
+  float vig = smoothstep(0.95, 0.22, length(q));
+  c *= mix(0.66, 1.0, vig);
   outColor = vec4(c, 1.0);
 }`;
 
@@ -1128,7 +1154,7 @@ void main() {}`;
     ssrProg  = link(POST_VS, SSR_FS);
     fxaaProg = link(POST_VS, FXAA_FS);
     if (!brightProg || !blurProg || !compProg || !ssaoProg || !ssaoBlurProg || !ssrProg || !fxaaProg) return false;
-    brightU = locs(brightProg, ["uScene", "uThreshold"]);
+    brightU = locs(brightProg, ["uScene", "uThreshold", "uKnee"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
     ssaoU = locs(ssaoProg, ["uNormal", "uDepth", "uTexel"]);
     ssaoBlurU = locs(ssaoBlurProg, ["uSSAO", "uDir"]);
@@ -1540,6 +1566,9 @@ void main() {}`;
     if (!postEnabled) return;
     const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
     const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
+    // Soft-knee width: tight knee so only genuinely bright sources bloom (a wide
+    // knee let mid-tones bleed and made the frame milky/cartoony).
+    const knee = opts && opts.knee !== undefined ? opts.knee : Math.max(0.12, threshold * 0.3);
 
     // Fullscreen passes must overwrite (no blend) and write depth normally; draws
     // above leave state undeclared, so set what we need through the cache.
@@ -1613,6 +1642,7 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(brightU.uScene, 0);
     gl.uniform1f(brightU.uThreshold, threshold);
+    gl.uniform1f(brightU.uKnee, knee);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // 2) blur level 0
