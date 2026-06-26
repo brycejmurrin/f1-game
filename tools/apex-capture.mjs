@@ -7,6 +7,7 @@
 //   node tools/apex-capture.mjs cameras [track] [outdir]    # 12 camera modes
 //   node tools/apex-capture.mjs modes   [outdir]            # menu/race day,wet,night/results/timetrial
 //   node tools/apex-capture.mjs tracks  [outdir] [id ...]   # one orbit shot per track (default: all 24)
+//   node tools/apex-capture.mjs lap-tour [track] [speed] [outdir]  # chase-cam at every 5% of a lap (20 shots)
 //
 // A frame under ~5 KB is flagged blank:true. Runs locally and in the web sandbox
 // (Chromium is preinstalled; this picks it via executablePath).
@@ -109,6 +110,32 @@ async function main() {
       await sleep(250);
       return shot(pg, dir, `track-${id}`);
     });
+    kill();
+  } else if (cmd === "lap-tour") {
+    // Chase-camera sweep: jump to every 5% of the lap, snap chase cam, screenshot
+    const track = rest.find((x) => !x.includes("/") && !x.startsWith(".") && !/^\d/.test(x)) || "monza";
+    const speed = parseFloat(rest.find((x) => /^\d+(\.\d+)?$/.test(x)) || "60");
+    const dir = rest.find((x) => x.includes("/") || x.startsWith(".")) || `${ROOT}/scratch/lap-tour`;
+    mkdirSync(dir, { recursive: true });
+    const { ports, kill } = await startServers(1);
+    const page = await open(browser, ports[0]);
+    await race(page, track);
+    await page.evaluate(() => { window.__apex.go(); });
+    await sleep(300);
+    manifest = [];
+    const STEPS = 20; // one shot per 5%
+    for (let i = 0; i < STEPS; i++) {
+      const frac = i / STEPS;
+      const label = String(i + 1).padStart(2, "0");
+      const fracStr = frac.toFixed(2);
+      await page.evaluate(({ f, s }) => {
+        window.__apex.jump(f, s, 0);
+        window.__apex.camera("chase");
+        window.__apex.snapCam && window.__apex.snapCam();
+      }, { f: frac, s: speed });
+      await sleep(220);
+      manifest.push(await shot(page, dir, `${label}-f${fracStr}`));
+    }
     kill();
   } else { // modes
     const dir = (rest[0] || `${ROOT}/scratch/modes`); mkdirSync(dir, { recursive: true });
