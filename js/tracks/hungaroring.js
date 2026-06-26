@@ -7,6 +7,7 @@
   {
     id: "hungaroring",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    startFrac: 0.9825, // GPS-derived (OpenF1 2025, conf=0.185)
     name: "HUNGARORING",
     gp: "Hungarian GP",
     country: "Hungary",

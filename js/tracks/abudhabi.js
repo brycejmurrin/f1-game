@@ -7,6 +7,7 @@
   {
     id: "abudhabi",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    startFrac: 0.0750, // GPS-derived (OpenF1 2025, conf=0.401)
     name: "ABU DHABI",
     gp: "Abu Dhabi GP",
     country: "UAE",
