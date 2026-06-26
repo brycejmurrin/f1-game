@@ -79,8 +79,11 @@ function buildContext() {
     Math, Array, Float32Array, Uint16Array, Uint32Array, Object, JSON,
     isNaN, isFinite, parseInt, parseFloat,
     GLX,
-    // console silenced — tracks.js doesn't log in normal operation, but just in case
-    console: { log: () => {}, warn: () => {}, error: () => {} },
+    // console silenced — a track's scenery() may log; stub every method it might call.
+    console: { log: () => {}, warn: () => {}, error: () => {}, info: () => {},
+               debug: () => {}, trace: () => {}, assert: () => {}, group: () => {},
+               groupEnd: () => {}, table: () => {}, dir: () => {}, count: () => {},
+               time: () => {}, timeEnd: () => {} },
   };
   // Many IIFEs reference `window.Foo` — make window an alias for the sandbox
   sandbox.window = sandbox;
@@ -97,7 +100,15 @@ function buildContext() {
   }
 
   runFile("js/circuits.js");  // provides CircuitPaths
-  runFile("js/tracks.js");    // provides Tracks (depends on CircuitPaths, GLX)
+  // Each circuit's definition lives in js/tracks/<id>.js and pushes itself onto
+  // window.TrackDefs; tracks.js reads that list at load time (DEFS = window.
+  // TrackDefs), so these must run BEFORE it — mirroring the <script> order in
+  // index.html. Without them Tracks.LIST is empty and every id is "not found".
+  for (const f of fs.readdirSync(path.join(ROOT, "js/tracks"))
+                    .filter((f) => f.endsWith(".js")).sort()) {
+    runFile(path.join("js/tracks", f));
+  }
+  runFile("js/tracks.js");    // provides Tracks (reads TrackDefs, depends on GLX)
 
   const Tracks = ctx.Tracks;
   if (!Tracks || !Tracks.LIST) {
