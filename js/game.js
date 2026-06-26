@@ -405,6 +405,7 @@ const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new F
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
+const _sunVS = new Float32Array(3);
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null;
 
@@ -2418,9 +2419,20 @@ function render(dt) {
   M4.mulTo(_mVP, _mProj, _mView);
   M4.invertTo(_mInvProj, _mProj);   // for view-space reconstruction in SSAO
   M4.invertTo(_mInvVP, _mVP);       // for world-space reconstruction in god-rays
+  // Sun direction in VIEW space (for screen-space contact shadows): mat3(view)·sunDir.
+  {
+    const sd = frame.sunDir || [0, 1, 0];
+    let x = _mView[0]*sd[0] + _mView[4]*sd[1] + _mView[8]*sd[2];
+    let y = _mView[1]*sd[0] + _mView[5]*sd[1] + _mView[9]*sd[2];
+    let z = _mView[2]*sd[0] + _mView[6]*sd[1] + _mView[10]*sd[2];
+    const l = Math.hypot(x, y, z) || 1;
+    _sunVS[0] = x/l; _sunVS[1] = y/l; _sunVS[2] = z/l;
+  }
   frame.viewProj = _mVP;
+  frame.proj = _mProj;
   frame.invProj = _mInvProj;
   frame.invViewProj = _mInvVP;
+  frame.sunViewDir = _sunVS;
   frame.eye = camEye;
 
   // Shadow pass — render terrain + road from sun's perspective.
@@ -2734,7 +2746,9 @@ function render(dt) {
   const _gr = _grSunY > 0.02 ? (0.20 + 0.25 * clamp(1 - _grSunY * 1.6, 0, 1)) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
-  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85, godray: _gr });
+  // Contact shadows only when the sun is meaningfully above the horizon.
+  const _cs = _grSunY > 0.05 ? 0.5 : 0;
+  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85, godray: _gr, contact: _cs });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too

@@ -603,8 +603,11 @@ precision highp float;
 in vec2 vUV;
 uniform sampler2D uDepth;
 uniform mat4 uInvProj;
+uniform mat4 uProj;
+uniform vec3 uSunVS;     // sun direction in view space
 uniform vec2 uTexel;
 uniform float uStrength;
+uniform float uContact;  // contact-shadow strength (0 = off)
 out vec4 outColor;
 const float NEARP = 0.1, FARP = 900.0;
 vec3 viewPos(vec2 uv) {
@@ -642,6 +645,24 @@ void main() {
     occ += ndv * range;
   }
   float ao = 1.0 - clamp(occ / 12.0 * 2.4, 0.0, 1.0) * uStrength;
+
+  // Contact shadows: a short ray-march toward the sun in view space, sampling the
+  // depth buffer. If a nearby surface blocks the sun within a small distance, the
+  // pixel is in contact shadow (grounds the car/objects where the sun map's texel
+  // footprint is too coarse). Folded into AO so the composite multiply applies it.
+  if (uContact > 0.0 && uSunVS.z < 0.0) {     // sun in front of the camera-ish
+    float sh = 1.0;
+    for (int i = 1; i <= 8; i++) {
+      vec3 q = P + uSunVS * (0.04 * float(i));   // up to ~0.32 m toward the sun
+      vec4 cp = uProj * vec4(q, 1.0);
+      vec2 quv = cp.xy / cp.w * 0.5 + 0.5;
+      if (quv.x < 0.0 || quv.x > 1.0 || quv.y < 0.0 || quv.y > 1.0) break;
+      float sz = viewPos(quv).z;                 // scene surface depth at that pixel
+      float dz = sz - q.z;                       // >0: surface is in front of the ray
+      if (dz > 0.015 && dz < 0.5) { sh = 1.0 - uContact; break; }
+    }
+    ao *= sh;
+  }
   outColor = vec4(vec3(ao), 1.0);
 }`;
 
@@ -860,6 +881,8 @@ void main() {}`;
   let frameEye = null;
   let frameInvProj = null;
   let frameInvVP = null;
+  let frameProj = null;
+  let frameSunVS = null;
   let frameSunColor = null;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
   let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null, blackTex = null;
@@ -971,7 +994,7 @@ void main() {}`;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
-    if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uTexel", "uStrength"]);
+    if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
@@ -1225,6 +1248,8 @@ void main() {}`;
     frameEye = frame.eye;
     frameInvProj = frame.invProj || null;
     frameInvVP = frame.invViewProj || null;
+    frameProj = frame.proj || null;
+    frameSunVS = frame.sunViewDir || null;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer.
@@ -1427,6 +1452,11 @@ void main() {}`;
       gl.uniformMatrix4fv(ssaoU.uInvProj, false, frameInvProj);
       gl.uniform2f(ssaoU.uTexel, 1 / width, 1 / height);
       gl.uniform1f(ssaoU.uStrength, aoStr);
+      // Contact shadows ride along in the AO pass when proj + view-sun are present.
+      const csOn = (opts && opts.contact > 0) && frameProj && frameSunVS;
+      gl.uniformMatrix4fv(ssaoU.uProj, false, frameProj || frameInvProj);
+      gl.uniform3fv(ssaoU.uSunVS, frameSunVS || [0, 0, -1]);
+      gl.uniform1f(ssaoU.uContact, csOn ? opts.contact : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       // Blur H (ssaoTex -> ssaoBlurFBO) then V (ssaoBlurTex -> ssaoFBO).
       useProg(blurProg);
