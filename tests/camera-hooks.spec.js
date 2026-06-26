@@ -106,3 +106,31 @@ test("previewCam() frames any in-game mode without moving the car", async ({ pag
   // an unknown mode is rejected, not crashed
   expect(await page.evaluate(() => __apex.previewCam("banana", 0.2))).toBe(false);
 });
+
+test("view() with no args frames the whole track (not chase)", async ({ page }) => {
+  await loadMonaco(page);
+  const r = await page.evaluate(() => __apex.view());
+  // documented whole-track aerial: returns a span, and engages the debug cam
+  expect(r).toBeTruthy();
+  expect(r.mode).not.toBe("chase");
+  expect(r.span).toBeGreaterThan(100);
+  const cam = await page.evaluate(() => __apex.camState());
+  expect(cam.debug).toBe(true);
+  // eye is high above the track (aerial)
+  expect(cam.eye[1]).toBeGreaterThan(50);
+  // explicit "chase" still restores the game cam
+  const c = await page.evaluate(() => __apex.view("chase"));
+  expect(c.mode).toBe("chase");
+  expect((await page.evaluate(() => __apex.camState())).debug).toBe(false);
+});
+
+test("orbit() never sinks the eye underground at low/negative elevation", async ({ page }) => {
+  await loadMonaco(page);
+  for (const el of [-20, -10, 0, 5]) {
+    const r = await page.evaluate(el => __apex.orbit(0.2, 90, el, 30), el);
+    expect(r, `orbit el=${el}`).toBeTruthy();
+    // road surface at that point
+    const roadY = await page.evaluate(() => __apex.groundY(0.2, 0).roadY);
+    expect(r.eye[1], `el=${el} eye above road`).toBeGreaterThan(roadY);
+  }
+});

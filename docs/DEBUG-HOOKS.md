@@ -232,7 +232,9 @@ __apex.eyeAt(0.116, 0, 2.5, 0.116, 30, 2); // stand on the road, look out at the
 ### `orbit(f, az?, el?, dist?, h?) → {eye, target}`
 Orbit the free-cam around a track point at lap-fraction `f`: `az` degrees around
 (0 = from ahead/+s), `el` elevation, `dist` m out, aimed `h` m up. Sweep `az` to
-inspect a spot (prop, berm, suspected gap) from every side.
+inspect a spot (prop, berm, suspected gap) from every side. A low or negative `el`
+gives a ground-skimming angle but the eye is floored just above the road, so it
+never sinks under the terrain (which would render the track's underside).
 ```js
 for (const a of [0,45,90,135,180]) { __apex.orbit(0.116, a, 15, 35); /* shot */ }
 ```

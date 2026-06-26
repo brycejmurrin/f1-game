@@ -4007,14 +4007,17 @@ window.__apex = {
   sky(frac, lateral) {
     const r = this.park(frac, lateral);
     if (!r) return false;
+    dbgCam = null;   // sky uses skyViewOverride, which a live view()/orbit() free-cam would otherwise mask
     Tracks.sample(track, player.s, smp);
-    const e = [smp.p[0], smp.p[1] + 7, smp.p[2]];
+    // Stand low and aim STEEPLY up the road so the horizon drops to the lower third
+    // and the frame fills with sky/clouds (was only ~15° up — barely any sky).
+    const e = [smp.p[0], smp.p[1] + 3.5, smp.p[2]];
     const t = [
-      smp.p[0] + smp.t[0] * 25,
-      smp.p[1] + 14,
-      smp.p[2] + smp.t[2] * 25,
+      smp.p[0] + smp.t[0] * 20,
+      smp.p[1] + 34,            // ~58° up over 20 m → horizon low, sky dominant
+      smp.p[2] + smp.t[2] * 20,
     ];
-    skyViewOverride = { eye: e, tgt: t, fov: 75 };
+    skyViewOverride = { eye: e, tgt: t, fov: 78 };
     // snap immediately so the very first rendered frame is correct
     camEye[0] = e[0]; camEye[1] = e[1]; camEye[2] = e[2];
     camTgt[0] = t[0]; camTgt[1] = t[1]; camTgt[2] = t[2];
@@ -4287,7 +4290,11 @@ window.__apex = {
   // Returns the resolved {eye, target, ...}.
   view(opts) {
     if (!track) return false;
-    if (!opts || opts === "chase" || opts.mode === "chase") { dbgCam = null; return { mode: "chase" }; }
+    // Only an explicit "chase" restores the game camera. view() with NO args is the
+    // documented whole-track aerial — fall through to the bbox branch below (it was
+    // wrongly short-circuiting to chase, so view() framed the road instead).
+    if (opts === "chase" || (opts && opts.mode === "chase")) { dbgCam = null; return { mode: "chase" }; }
+    opts = opts || {};
     // free-look: explicit eye, aimed by yaw (0 = -Z, +90 = +X) and pitch (deg)
     if (opts.eye && (opts.yaw != null || opts.pitch != null)) {
       const yaw = (opts.yaw || 0) * Math.PI / 180, pit = Math.min(80, Math.max(-80, opts.pitch || 0)) * Math.PI / 180;
@@ -4372,6 +4379,9 @@ window.__apex = {
     const fwd = [smp.t[0], 0, smp.t[2]], rt = [smp.r[0], 0, smp.r[2]];
     const dir = [Math.cos(a) * fwd[0] + Math.sin(a) * rt[0], 0, Math.cos(a) * fwd[2] + Math.sin(a) * rt[2]];
     const eye = [cx + dir[0] * Math.cos(e) * dist, cy + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
+    // Never let a low/negative elevation sink the eye under the ground (which
+    // renders the track's underside through the terrain). Floor it just above road.
+    eye[1] = Math.max(eye[1], smp.p[1] + 1.2);
     const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
     dbgCam = { eye, target: [cx, cy, cz], fov, far: opts.far || 6000, fog: opts.fog };
     return { eye, target: [cx, cy, cz], fov };
@@ -4426,6 +4436,7 @@ window.__apex = {
     const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
     const dir = [Math.cos(a) * fwdX + Math.sin(a) * rtX, 0, Math.cos(a) * fwdZ + Math.sin(a) * rtZ];
     const eye = [cx + dir[0] * Math.cos(e) * dist, cyf + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
+    eye[1] = Math.max(eye[1], smp.p[1] + 1.2);   // keep the eye above ground (see orbit)
     const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
     dbgCam = { eye, target: [cx, cyf, cz], fov, far: opts.far || 4000, fog: opts.fog };
     return { eye, target: [cx, cyf, cz], fov, carIdx: idx, speed: +(c.speed || 0).toFixed(1) };
