@@ -1,8 +1,12 @@
-# Agent working directories (git worktrees created by background agents)
-.claude/
+# Agent working directories (git worktrees created by background agents) and
+# local Claude settings — but keep the shared developer skills tracked.
+.claude/*
+!.claude/skills/
 
 # Node / Playwright
 node_modules/
+# scratch screenshot output from tools/apex-capture.mjs (regenerable)
+scratch/
 test-results/
 playwright-report/
 
