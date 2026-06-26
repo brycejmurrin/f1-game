@@ -7,6 +7,7 @@ groups.
 
 | Skill | Use it when |
 |---|---|
+| **survey-track** | Making a circuit accurate end-to-end: survey vs real-world reference → diagnose geometry (floating props, channels, terrain-over-road) → edit → verify → ship. Orchestrates the skills below + a lateral ground-profile probe. |
 | **bump-cache** | You edited any `js/*.js` or `css/*.css` — increment the `?v=N` cache-bust in `index.html` before committing. |
 | **new-track** | Adding a circuit or editing a track's geometry/metadata in `js/tracks/`. |
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
