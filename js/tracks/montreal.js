@@ -14,17 +14,19 @@
     theme: "green",
     lengthKm: 4.4,
     baseHW: 7,
-    pal: { zenith: [0.28, 0.44, 0.7], horizon: [0.68, 0.74, 0.8], grass: [0.22, 0.48, 0.18], runoff: [0.42, 0.4, 0.38], fogDensity: 0.0014, sunDir: [0.5134360308102702, 0.6067880364121376, 0.6067880364121376], sun: [1, 0.92, 0.78], sunColor: [1, 0.9, 0.76] },
+    pal: { zenith: [0.28, 0.44, 0.7], horizon: [0.68, 0.74, 0.8], grass: [0.22, 0.48, 0.18], runoff: [0.18, 0.38, 0.16], fogDensity: 0.0014, sunDir: [0.5134360308102702, 0.6067880364121376, 0.6067880364121376], sun: [1, 0.92, 0.78], sunColor: [1, 0.9, 0.76] },
     segs: [
       { t: 0, l: 380 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 0, l: 300 }, { t: 90, l: 90 }, { t: 0, l: 420 },
       { t: -80, l: 90 }, { t: 60, l: 70 }, { t: -60, l: 70 }, { t: 0, l: 220 }, { t: 100, l: 110 }, { t: -100, l: 110 },
     ],
     // Île Notre-Dame: very slight rise through the casino hairpin complex.
     elevations: [{ s: 0.52, halfM: 340, rise: 4 }],
-    // The lap sits on a man-made ISLAND in the St. Lawrence. End the green
-    // terrain ribbon at a believable shoreline (~70 m) so river water takes over
-    // beyond it — no green extending to infinity, no bare grey void.
-    terrainOuter: 50,
+    // Île Notre-Dame is a flat, man-made island sitting ~level with the water.
+    // flatTerrain makes the terrain ribbon a WIDE, dead-level grass shelf so there
+    // is real green land all around the road (trees/props sit on it instead of
+    // floating over a sunk fallback), out to the shoreline ~70 m from the edge.
+    flatTerrain: true,
+    terrainOuter: 70,
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, wall, grandstand,
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
@@ -32,15 +34,27 @@
         ferrisWheel, tower, onTrack, groundYAt, forestEdge, cityFront } = api;
       const K = (s) => Math.round(s * n) % n;
 
+      // ── Island Y-level reference constants ────────────────────────────────
+      // All features are anchored to these absolute Y values so they sit at
+      // the correct height relative to the island slab regardless of how deep
+      // groundYAt() goes for large lateral distances on a flat island.
+      const BASE   = pyMin || 0;
+      // flatTerrain ribbon sits at BASE−0.12; the slab fills BEYOND the ribbon
+      // (infield + out toward the shore) just under it so the two read as one
+      // continuous flat island with no step/channel between them.
+      const SLAB_T = BASE - 0.14;   // island slab surface (just below the −0.12 ribbon)
+      const WATR_S = BASE - 0.06;   // interior water surface, just above the land
+      const BANK_T = BASE - 0.35;   // far-bank shore: above river (−0.45), below main island
+
       // ---- Île Notre-Dame palette (bright June day) ----
       const WALL     = [0.78, 0.79, 0.80];   // pale concrete
       const RIVER    = [0.16, 0.26, 0.35];   // St. Lawrence — dark slate-grey river
       const RIVER2   = [0.19, 0.30, 0.40];   // slightly lighter near-shore
       const BASIN    = [0.11, 0.22, 0.34];   // Olympic rowing lake (dark clean blue)
-      const GRASS    = [0.28, 0.52, 0.26];   // park green
-      const FOLIAGE  = [0.20, 0.44, 0.24];   // deep tree green
-      const FOLIAGE2 = [0.26, 0.50, 0.26];   // lighter June foliage
-      const HEDGE    = [0.20, 0.40, 0.20];   // clipped hedge green
+      const GRASS    = [0.22, 0.43, 0.20];   // park green (muted, avoids neon under sun)
+      const FOLIAGE  = [0.16, 0.34, 0.18];   // deep tree green (darker summer deciduous)
+      const FOLIAGE2 = [0.20, 0.40, 0.20];   // lighter June foliage
+      const HEDGE    = [0.16, 0.32, 0.17];   // clipped hedge green
 
       const KERB_R = [0.82, 0.20, 0.18], KERB_W = [0.90, 0.90, 0.90];
 
@@ -100,10 +114,10 @@
         //     terrain ribbon (terrainOuter=50 → terrain edge ~57 m from
         //     centreline) PLUS a shore margin beyond so the island feels wide
         //     and continuous, not a thin causeway with rocky outer edges.
-        //     Top at pyMin-0.1 (just above water at -0.45, well below road at 0)
+        //     Top at SLAB_T (just under the −0.12 flat ribbon, above water at -0.45)
         //     so it reads as flat park grass everywhere the terrain ribbon ends.
-        const M = 95;                        // island margin well past terrain edge
-        addBox(out, [cx, base - 0.1 - 4, cz],
+        const M = 250;                       // wide margin so slab covers basin area
+        addBox(out, [cx, SLAB_T - 4, cz],
                [(maxx - minx) + 2 * M, 8, (maxz - minz) + 2 * M], GRASS);
       }
 
@@ -116,9 +130,11 @@
         const a = anchor(k, side, (near + far) / 2);
         const depth = far - near;
         const H = 5;
-        // a.c sits on the lap baseline (pyMin) out here; lift the slab so its top
-        // is at pyMin - 0.3, i.e. just proud of the water surface (pyMin - 1.0).
-        addBox(out, vadd(a.c, a.u, -0.3 - H / 2),
+        // Lift so top face is at BANK_T (pyMin−0.35) — above river (−0.45) but
+        // below the main island slab (−0.10), reading as a separate island bank.
+        // anchor().c[1] reflects groundYAt for large dist (≈−2.46), NOT pyMin,
+        // so we must compute the lift explicitly from BANK_T and that value.
+        addBox(out, vadd(a.c, a.u, BANK_T - H / 2 - a.c[1]),
                [lenM, H, depth], col || FARBANK, [a.r, a.u, a.t]);
       };
 
@@ -137,17 +153,22 @@
         const b = [a.r, a.u, a.t];
         // NOTE: with a track basis [r,u,t], addBox sz maps as
         // [lateral(r), vertical(u), tangent(t)]. Water = wide+long, thin vertical.
+        // anchor().c[1] = groundYAt here (flat island ≈ BASE−0.12). The lifts below
+        // subtract a.c[1] so the box TOPS land exactly on WATR_S / SLAB_T regardless.
+        const wLift = WATR_S - 0.5 - a.c[1];        // lagoon water center (top at WATR_S)
+        const sLift = SLAB_T + 0.18 - 0.3 - a.c[1]; // sand center (top at SLAB_T+0.18)
+        const gLift = SLAB_T + 0.12 - 0.35 - a.c[1];// grass spit center
         // irregular lagoon body — overlapping lobes for an organic shoreline.
-        addBox(out, vadd(a.c, a.u, -1.9),                 [135, 4, 175], LAGOON, b);
-        addBox(out, vadd(vadd(a.c, a.t, 70), a.u, -1.9),  [92,  4, 105], LAGOON, b);
-        addBox(out, vadd(vadd(a.c, a.t, -64), a.u, -1.9), [80,  4, 78],  LAGOON, b);
+        addBox(out, vadd(a.c, a.u, wLift),                 [135, 1, 175], LAGOON, b);
+        addBox(out, vadd(vadd(a.c, a.t, 70), a.u, wLift),  [92,  1, 105], LAGOON, b);
+        addBox(out, vadd(vadd(a.c, a.t, -64), a.u, wLift), [80,  1, 78],  LAGOON, b);
         // pale tan SAND beach crescent on the track-facing edge (Jean-Doré),
         // raised clearly above the water so it reads as the signature beach.
-        addBox(out, vadd(vadd(a.c, a.r, 64), a.u, 0.30),                [38, 0.6, 150], SAND, b);
-        addBox(out, vadd(vadd(vadd(a.c, a.t, 58), a.r, 50), a.u, 0.30), [30, 0.6, 82],  SAND, b);
-        addBox(out, vadd(vadd(vadd(a.c, a.t, -56), a.r, 46), a.u, 0.30),[26, 0.6, 56],  SAND, b);
+        addBox(out, vadd(vadd(a.c, a.r, 64), a.u, sLift),                [38, 0.6, 150], SAND, b);
+        addBox(out, vadd(vadd(vadd(a.c, a.t, 58), a.r, 50), a.u, sLift), [30, 0.6, 82],  SAND, b);
+        addBox(out, vadd(vadd(vadd(a.c, a.t, -56), a.r, 46), a.u, sLift),[26, 0.6, 56],  SAND, b);
         // low green spit poking into the lagoon
-        addBox(out, vadd(vadd(a.c, a.t, -6), a.u, 0.20), [30, 0.7, 44], GRASS, b);
+        addBox(out, vadd(vadd(a.c, a.t, -6), a.u, gLift), [30, 0.7, 44], GRASS, b);
       }
 
       // ===================================================================
@@ -249,8 +270,15 @@
       // ===================================================================
       // s 0.07–0.20 L — Olympic Basin rowing lake (continuous water band)
       // ===================================================================
-      for (let i = 0; i < 10; i++) {
-        groundPlane(K(0.063 + i * 0.0155), -1, 15, [200, 2, 300], BASIN);
+      // Olympic Basin water: sit ON TOP of island slab at WATR_S (−0.05).
+      // groundPlane() buries these boxes far below on a flat island — use anchor.
+      { const BH = 0.8;
+        for (let i = 0; i < 12; i++) {
+          const bk = K(0.065 + i * 0.013);
+          const ba = anchor(bk, -1, 115);
+          addBox(out, vadd(ba.c, ba.u, WATR_S - BH / 2 - ba.c[1]),
+                 [200, BH, 240], BASIN, [ba.r, ba.u, ba.t]);
+        }
       }
       // Far bank of the basin: dense broadleaf forestEdge (pushed out across the water)
       forestEdge(0.07, 0.21, -1, 36, {
@@ -260,7 +288,7 @@
       // Far bank low treeline backdrop across the water (green → engine renders as rounded mounds)
       for (let i = 0; i < 12; i++) {
         const k = K(0.08 + (i / 12) * 0.12);
-        backdrop(k, -1, 140 + hash(i * 11) * 25, [20, 7 + hash(i * 5) * 5, 20], [0.22, 0.40, 0.22]);
+        backdrop(k, -1, 140 + hash(i * 11) * 25, [20, 7 + hash(i * 5) * 5, 20], [0.16, 0.30, 0.17]);
       }
 
       // ── s 0.10 L — Rowing regatta spectator platform overlooking the basin ──
@@ -465,8 +493,14 @@
       // Water slab sits close to the verge so it reads as the immediate flank;
       // the parkland treeline is pushed out to the far bank behind it.
       // ===================================================================
-      for (let i = 0; i < 9; i++) {
-        groundPlane(K(0.565 + i * 0.0145), 1, 15, [180, 2, 320], BASIN);
+      // Basin water ON TOP of island slab (anchor+addBox — groundPlane buries on flat island)
+      { const BH = 0.8;
+        for (let i = 0; i < 10; i++) {
+          const bk = K(0.565 + i * 0.017);
+          const ba = anchor(bk, 1, 105);
+          addBox(out, vadd(ba.c, ba.u, WATR_S - BH / 2 - ba.c[1]),
+                 [180, BH, 280], BASIN, [ba.r, ba.u, ba.t]);
+        }
       }
       // Small white regatta lane/start towers standing in the basin water
       for (const s of [0.60, 0.67, 0.73]) {
@@ -499,12 +533,18 @@
       grandstand(0.74, -1, 11, 64, [0.48, 0.49, 0.54], [0.56, 0.40, 0.36]);
 
       // Canal / water feature off the right verge — island park internal canal
-      for (let i = 0; i < 3; i++) {
-        groundPlane(K(0.78 + i * 0.020), 1, 16, [130, 2, 160], RIVER);
+      // Canal water ON TOP of island slab (anchor+addBox — groundPlane buries on flat island)
+      { const CH = 0.8;
+        for (let i = 0; i < 4; i++) {
+          const ck = K(0.78 + i * 0.018);
+          const ca = anchor(ck, 1, 82);
+          addBox(out, vadd(ca.c, ca.u, WATR_S - CH / 2 - ca.c[1]),
+                 [130, CH, 160], RIVER, [ca.r, ca.u, ca.t]);
+        }
       }
       // Far treeline backdrop on the canal's far bank (green → organic mounds in engine)
       for (let i = 0; i < 8; i++) {
-        backdrop(K(0.78 + (i / 8) * 0.08), 1, 135 + hash(i * 11) * 25, [22, 8, 22], [0.20, 0.40, 0.22]);
+        backdrop(K(0.78 + (i / 8) * 0.08), 1, 135 + hash(i * 11) * 25, [22, 8, 22], [0.15, 0.29, 0.16]);
       }
       billboard(K(0.84), -1, 11, 12, 4, [0.86, 0.30, 0.26]);
 
