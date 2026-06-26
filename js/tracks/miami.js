@@ -7,6 +7,7 @@
   {
     id: "miami",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    startFrac: 0.2325, // GPS-derived (OpenF1 2025, conf=0.451)
     name: "MIAMI",
     gp: "Miami GP",
     country: "USA",

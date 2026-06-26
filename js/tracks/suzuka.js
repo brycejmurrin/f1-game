@@ -7,6 +7,7 @@
   {
     id: "suzuka",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    startFrac: 0.6125, // GPS-derived (OpenF1 2025, conf=0.281)
     name: "SUZUKA",
     gp: "Japanese GP",
     country: "Japan",

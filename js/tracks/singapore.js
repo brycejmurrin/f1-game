@@ -7,6 +7,7 @@
   {
     id: "singapore",
     name: "SINGAPORE",
+    startFrac: 0.5075, // GPS-derived (OpenF1 2025, conf=0.566)
     gp: "Singapore GP",
     country: "Singapore",
     night: true,
