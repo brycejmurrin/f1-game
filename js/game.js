@@ -2715,6 +2715,14 @@ function render(dt) {
     _grade = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
     _bloom = 0.74; _thresh = 0.72;
   }
+  // Volumetric light glow: additive beam + halo cones at each lamp, drawn into
+  // the HDR scene so they bloom into god-ray streaks. Strength ramps with the
+  // same sun-elevation factor as the floodlights (faint at dusk, full at night).
+  if (frame.lights && frame.lights.length) {
+    const _gsy = frame.sunDir ? frame.sunDir[1] : -1;
+    const _gnf = clamp((0.07 - _gsy) / 0.22, 0, 1);
+    GLX.drawGlow(frame.lights, 0.06 * (0.30 + 0.70 * _gnf));
+  }
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade });
   if (raceWeather === "wet" && rainDrops.length) {

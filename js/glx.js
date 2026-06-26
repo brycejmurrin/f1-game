@@ -495,6 +495,48 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
+  // ---- Volumetric light glow (floodlight beams + halos) ----
+  // A camera-facing cone billboard per lamp, drawn ADDITIVELY into the HDR scene
+  // before bloom. The bright apex reads as a halo, the cone is the visible beam,
+  // and the bloom blurring the bright shape gives the god-ray streaks — three
+  // effects from one cheap pass. cornerY: 0 = lamp head, 1 = ground.
+  const GLOW_VS = `#version 300 es
+layout(location=0) in vec2 aCorner;   // x in {-1,+1}, y in {0,1}
+layout(location=1) in vec3 aCenter;   // lamp head world position
+layout(location=2) in vec3 aColor;    // HDR lamp colour
+layout(location=3) in float aRadius;  // pool radius
+uniform mat4 uViewProj;
+uniform vec3 uEye;
+out vec2 vUV;
+out vec3 vColor;
+void main() {
+  vec3 up = vec3(0.0, 1.0, 0.0);
+  vec3 toEye = uEye - aCenter;
+  vec3 right = normalize(cross(up, toEye) + vec3(1e-4, 0.0, 0.0));
+  float halfW = mix(aRadius * 0.10, aRadius * 0.52, aCorner.y);  // cone widens downward
+  float drop  = aRadius * 0.95;                                  // beam length to ground
+  vec3 wp = aCenter + right * (aCorner.x * halfW) - up * (aCorner.y * drop);
+  vUV = aCorner;
+  vColor = aColor;
+  gl_Position = uViewProj * vec4(wp, 1.0);
+}`;
+
+  const GLOW_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;        // x in [-1,1] across the cone, y in [0,1] head->ground
+in vec3 vColor;
+uniform float uStr;
+out vec4 outColor;
+void main() {
+  float h = 1.0 - abs(vUV.x);     // horizontal falloff from the cone axis
+  h = h * h;
+  float v = 1.0 - vUV.y;          // vertical: bright at the head, fading to ground
+  v = v * v;
+  float halo = smoothstep(0.45, 1.0, h) * smoothstep(0.40, 0.0, vUV.y);  // hotspot at the lens
+  float a = (h * v * 0.55 + halo * 0.9) * uStr;
+  outColor = vec4(vColor * a, 1.0);   // additive (blendFunc ONE, ONE)
+}`;
+
   // ---- Post-processing (HDR scene target -> bloom -> tonemap + vignette) ----
   // Fullscreen triangle via gl_VertexID; vUV in 0..1.
   const POST_VS = `#version 300 es
@@ -676,11 +718,14 @@ void main() {}`;
   let skyProg = null, skyU = null;
   let shadowProg = null, shadowU = null;
   let markProg = null, markU = null;
+  let glowProg = null, glowU = null, glowVAO = null, glowVBO = null;
+  let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
   let frameViewProj = null;
   let frameSunDir = null;
+  let frameEye = null;
 
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
@@ -865,6 +910,7 @@ void main() {}`;
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
     markProg = link(SHADOW_VS, MARK_FS);
+    glowProg = link(GLOW_VS, GLOW_FS);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
 
     postEnabled = initPost();   // best-effort; false -> render straight to screen
@@ -879,6 +925,20 @@ void main() {}`;
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
+    if (glowProg) {
+      glowU = locs(glowProg, ["uViewProj", "uEye", "uStr"]);
+      // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b, radius] ×6 verts/lamp.
+      glowVAO = gl.createVertexArray();
+      gl.bindVertexArray(glowVAO);
+      glowVBO = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
+      const st = 9 * 4;   // 9 floats per vertex
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, st, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, st, 8);
+      gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, st, 20);
+      gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 32);
+      gl.bindVertexArray(null);
+    }
 
     skyVAO = gl.createVertexArray();
 
@@ -971,6 +1031,7 @@ void main() {}`;
   function begin(frame) {
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
+    frameEye = frame.eye;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer.
@@ -1103,6 +1164,48 @@ void main() {}`;
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
   }
 
+  // Additive volumetric light glow: one cone billboard per lamp (flat
+  // [x,y,z,r,g,b,radius] septets, same layout as frame.lights). Must be called
+  // while the HDR scene target is bound (after drawSky, before present) so the
+  // glow lands in the scene buffer and participates in bloom. `str` scales the
+  // overall beam/halo brightness (0 disables). No-op when unsupported.
+  const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
+  function drawGlow(lights, str) {
+    if (!glowProg || !lights || !lights.length || !(str > 0)) return;
+    const nL = (lights.length / 7) | 0;
+    const floatsPerLamp = 6 * 9;
+    if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
+    let p = 0;
+    for (let i = 0; i < nL; i++) {
+      const o = i * 7;
+      const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
+      const r = lights[o + 3], g = lights[o + 4], b = lights[o + 5], rad = lights[o + 6];
+      for (let v = 0; v < 6; v++) {
+        const c = _glowCorners[v];
+        glowData[p++] = c[0]; glowData[p++] = c[1];
+        glowData[p++] = cx; glowData[p++] = cy; glowData[p++] = cz;
+        glowData[p++] = r; glowData[p++] = g; glowData[p++] = b;
+        glowData[p++] = rad;
+      }
+    }
+    useProg(glowProg);
+    gl.uniformMatrix4fv(glowU.uViewProj, false, frameViewProj);
+    gl.uniform3fv(glowU.uEye, frameEye);
+    gl.uniform1f(glowU.uStr, str);
+    bindVAO(glowVAO);
+    gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, glowData, gl.DYNAMIC_DRAW);
+    // Additive, depth-tested (beams occlude behind walls) but no depth write.
+    setBlend(true);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    setDepthMask(false);
+    gl.disable(gl.CULL_FACE);
+    gl.drawArrays(gl.TRIANGLES, 0, nL * 6);
+    // Restore the default alpha-blend + culling for subsequent passes.
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.CULL_FACE);
+  }
+
   // Resolve the HDR scene to the screen: extract bright areas, blur them into a
   // bloom buffer, then composite scene + bloom with tonemap + vignette. No-op when
   // post is disabled (the scene was drawn straight to the screen already).
@@ -1203,6 +1306,7 @@ void main() {}`;
     drawSky,
     drawShadow,
     drawMark,
+    drawGlow,
     present,
     shadowBegin(lightVP) {
       if (!shadowEnabled) return;
