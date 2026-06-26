@@ -550,11 +550,43 @@ uniform vec3 uGradeHi;       // multiplicative tint pulled into highlights (~1.0
 uniform float uGradeStr;     // 0 = neutral grade (backward-compatible)
 out vec4 outColor;
 
-// ACES fitted filmic tone-map (Stephen Hill's approximation).
-// Preserves colour ratios better than Reinhard; keeps darks dark, rolls off highlights.
+// ACES fitted filmic tone-map (Stephen Hill's approximation). Kept for reference.
 vec3 acesTonemap(vec3 x) {
   const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+// AgX filmic tone-map (Troy Sobotka / Filament fit). Preserves hue into the
+// highlights far better than ACES — saturated neon, papaya orange and marshal
+// flags roll off to their own bright colour instead of skewing to white. The
+// pipeline is gamma-naive (tonemap output is written straight to the 8-bit
+// canvas), so we skip the linear EOTF and emit the display-referred sigmoid.
+vec3 agxDefaultContrastApprox(vec3 x) {
+  vec3 x2 = x * x;
+  vec3 x4 = x2 * x2;
+  vec3 x6 = x4 * x2;
+  return - 17.86 * x6 * x + 78.01 * x6 - 126.7 * x4 * x + 92.06 * x4
+         - 28.72 * x2 * x + 4.361 * x2 - 0.1718 * x + 0.002857;
+}
+vec3 agxTonemap(vec3 color) {
+  const mat3 AgXInset = mat3(
+    0.856627153315983, 0.137318972929847, 0.11189821299995,
+    0.0951212405381588, 0.761241990602591, 0.0767994186031903,
+    0.0482516061458583, 0.101439036467562, 0.811302368396859);
+  const mat3 AgXOutset = mat3(
+    1.1271005818144368, -0.1413297634984383, -0.14132976349843826,
+    -0.11060664309660323, 1.157823702216272, -0.11060664309660294,
+    -0.016493938717834573, -0.016493938717834257, 1.2519364065950405);
+  const float minEv = -12.47393, maxEv = 4.026069;
+  color = AgXInset * color;
+  color = clamp(log2(max(color, 1e-10)), minEv, maxEv);
+  color = (color - minEv) / (maxEv - minEv);
+  color = agxDefaultContrastApprox(color);
+  color = AgXOutset * color;
+  // Punchy look: restore saturation for stylised art without losing hue accuracy.
+  vec3 luma = vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)));
+  color = mix(luma, color, 1.45);
+  return clamp(color, 0.0, 1.0);
 }
 
 // Lift-gamma-gain colour grade: very mild S-curve per channel.
@@ -623,8 +655,8 @@ void main() {
     }
   }
 
-  // Filmic tone-map (ACES) + colour grading.
-  c = acesTonemap(c);
+  // AgX filmic tone-map — preserves hue into highlights vs ACES.
+  c = agxTonemap(c);
   c = colourGrade(c);
 
   // Lens flare: anamorphic streak + ghost circles
