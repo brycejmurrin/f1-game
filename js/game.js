@@ -627,67 +627,67 @@ function applyRaceSettings() {
     const night = raceTimeOfDay === "night";
     frameSky.stars = night ? 1 : 0;
     if (night) {
-      frameSky.zenith = [0.01, 0.02, 0.05];
-      frameSky.horizon = [0.04, 0.03, 0.06];
-      frame.sunColor = [0.16, 0.18, 0.26];   // dim moonlight scene sun (floodlights light the track)
-      frame.ambientGround = [0.03, 0.03, 0.06];
-      frame.ambientSky = [0.08, 0.08, 0.14];
-      frame.fogColor = [0.03, 0.03, 0.06];
-      frame.fogDensity = 0.004;
+      frameSky.zenith = [0.004, 0.007, 0.022];
+      frameSky.horizon = [0.02, 0.015, 0.04];
+      frame.sunColor = [0.10, 0.12, 0.20];   // dim moonlight scene sun (floodlights light the track)
+      frame.ambientGround = [0.02, 0.02, 0.05];
+      frame.ambientSky = [0.06, 0.06, 0.12];
+      frame.fogColor = [0.02, 0.02, 0.05];
+      frame.fogDensity = 0.005;
       // When raceTimeOfDay !== "default", sync sky colours to frame too
       frame.skyZenith  = frameSky.zenith;
       frame.skyHorizon = frameSky.horizon;
       // Moon: high visibility at night to give soft blue fill light
-      frameSky.moon = 0.85;
-      // Night skies: few scattered clouds (don't block stars)
-      _cloudBase = 0.22;
-      // Night: lift exposure slightly — otherwise shadow detail is lost
-      frame.exposure = 1.15;
+      frameSky.moon = 0.92;
+      // Night skies: clear sky for maximum star visibility
+      _cloudBase = 0.16;
+      // Night: lift exposure — otherwise shadow detail is lost
+      frame.exposure = 1.22;
     } else if (raceTimeOfDay === "dawn") {
       // Pre-sunrise: deep teal-indigo zenith fading to a warm peach/rose horizon.
       // Sun is barely above the horizon — very low elevation, coming from the east.
-      frameSky.zenith  = [0.06, 0.10, 0.22];
-      frameSky.horizon = [0.72, 0.40, 0.22];
-      frameSky.sunColor = [1.0, 0.72, 0.38];
+      frameSky.zenith  = [0.04, 0.07, 0.28];
+      frameSky.horizon = [0.88, 0.42, 0.18];
+      frameSky.sunColor = [1.0, 0.68, 0.30];
       frameSky.sunDir  = V3.norm([-0.62, 0.08, 0.28]);
       frame.sunDir     = frameSky.sunDir;
-      frame.sunColor   = [1.0, 0.70, 0.36];
+      frame.sunColor   = [1.0, 0.66, 0.28];
       // Cool teal fill from the sky, very soft warm bounce from the ground
-      frame.ambientGround = [0.18, 0.12, 0.08];
-      frame.ambientSky    = [0.22, 0.26, 0.38];
-      frame.fogColor      = [0.42, 0.30, 0.20];
-      frame.fogDensity    = 0.0028;
+      frame.ambientGround = [0.22, 0.14, 0.08];
+      frame.ambientSky    = [0.24, 0.28, 0.44];
+      frame.fogColor      = [0.55, 0.32, 0.18];
+      frame.fogDensity    = 0.0032;
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0.30;   // fading moon still visible in the pre-dawn sky
-      // Dawn: a few lingering thin clouds catch the first pink light
-      _cloudBase = 0.50;
+      // Dawn: moderate clouds catch the first pink-gold light dramatically
+      _cloudBase = 0.58;
       // Low sun + low ambient → lift exposure so the scene reads
-      frame.exposure = 1.18;
+      frame.exposure = 1.22;
     } else if (raceTimeOfDay === "dusk") {
       // Richer golden hour: deeper indigo zenith, warmer coral/amber horizon,
       // a sun closer to the deck for that low-angle drama.
-      frameSky.zenith  = [0.08, 0.10, 0.28];
-      frameSky.horizon = [0.72, 0.34, 0.08];
-      frameSky.sunColor = [1.0, 0.55, 0.18];
+      frameSky.zenith  = [0.05, 0.07, 0.35];
+      frameSky.horizon = [0.92, 0.28, 0.04];
+      frameSky.sunColor = [1.0, 0.50, 0.14];
       // Sun low in the west; vary azimuth slightly per track so not every
       // circuit has identical low-angle raking light.
       const _duskAz = track && track.def ? ((_trackAtmoBias(track.def) * 0.28) - 0.14) : 0;
       frameSky.sunDir  = V3.norm([0.50 + _duskAz, 0.10, 0.22]);
       frame.sunDir     = frameSky.sunDir;
-      frame.sunColor   = [1.0, 0.62, 0.22];
+      frame.sunColor   = [1.0, 0.55, 0.16];
       // Warm amber ground bounce, cool sky fill from the blue zenith overhead
-      frame.ambientGround = [0.28, 0.16, 0.06];
-      frame.ambientSky    = [0.32, 0.22, 0.28];
-      frame.fogColor      = [0.58, 0.28, 0.10];
-      frame.fogDensity    = 0.0022;
+      frame.ambientGround = [0.32, 0.18, 0.05];
+      frame.ambientSky    = [0.30, 0.20, 0.32];
+      frame.fogColor      = [0.78, 0.32, 0.08];
+      frame.fogDensity    = 0.0028;
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
-      // Dusk: moderate cloud to catch the orange light nicely
-      _cloudBase = 0.45;
-      // Low sun energy but rich colour — slightly lifted exposure
-      frame.exposure = 1.10;
+      // Dusk: heavier cloud to catch the crimson light dramatically
+      _cloudBase = 0.58;
+      // Low sun energy but rich colour — lifted exposure for drama
+      frame.exposure = 1.14;
     } else {
       // Bright day — a deep, saturated sky with PER-TRACK atmosphere so no two
       // circuits share the same flat blue. `bias` runs -0.55 (clear desert) …
@@ -2104,11 +2104,11 @@ function floodColor(theme) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 7.6, radius: 30, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 7.6, radius: 32, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 7.2, radius: 30, street: true };  // warm street lamps (Monaco/Madrid)
-    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 8.0, radius: 42, street: false }; // warm sodium flood banks
-    default:             return { tint: [1.14, 1.06, 0.84], intensity: 8.8, radius: 44, street: false }; // green/classic warm-white
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 14.0, radius: 50, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 14.0, radius: 52, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 12.5, radius: 48, street: true };  // warm street lamps (Monaco/Madrid)
+    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 16.0, radius: 65, street: false }; // warm sodium flood banks
+    default:             return { tint: [1.14, 1.06, 0.84], intensity: 17.0, radius: 68, street: false }; // green/classic warm-white
   }
 }
 function buildTrackLights(track) {
@@ -2119,7 +2119,7 @@ function buildTrackLights(track) {
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
   const ds = total / n;
-  const stride = Math.max(1, Math.round(34 / ds));   // denser than before so corners don't fall dark
+  const stride = Math.max(1, Math.round(24 / ds));   // light every 24 m — denser pools, fewer dark gaps
   const { tint, intensity, radius, street } = floodColor(track.def.theme);
   const col = [tint[0] * intensity, tint[1] * intensity, tint[2] * intensity];
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
@@ -2450,6 +2450,7 @@ function render(dt) {
   } else GLX.begin(frame);
   M4.invertTo(_mInvVP, _mVP);
   frameSky.invViewProj = _mInvVP;
+  frameSky.lightning = _ltFlash || 0;
   GLX.drawSky(frameSky);
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
@@ -2632,22 +2633,19 @@ function render(dt) {
   // tone; bright day a gentle lift so it pops without looking cooked.
   let _grade, _bloom = 0.55, _thresh = 0.78;
   if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) {
-    _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
-    // Strong bloom so the lit windows + neon edges glow brightly across the dense
-    // skyline, with a mid threshold so only the bright lit elements bloom.
-    _bloom = 0.92; _thresh = 0.62;
+    _grade = { shadow: [0.84, 0.93, 1.18], hi: [1.08, 1.00, 0.90], str: 0.35 };
+    // Very strong bloom: floodlights + neon signs bleed into wide halos
+    _bloom = 1.45; _thresh = 0.46;
   } else if (raceTimeOfDay === "dusk") {
-    _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
-    _bloom = 0.62; _thresh = 0.68;
+    _grade = { shadow: [0.86, 0.96, 1.16], hi: [1.16, 1.02, 0.80], str: 0.42 };
+    _bloom = 1.10; _thresh = 0.58;
   } else if (raceTimeOfDay === "dawn") {
-    _grade = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0.30 };
-    _bloom = 0.62; _thresh = 0.68;
+    _grade = { shadow: [0.88, 0.95, 1.14], hi: [1.14, 1.00, 0.86], str: 0.36 };
+    _bloom = 1.05; _thresh = 0.60;
   } else {
-    // Bright day: a punchier teal-shadow / warm-highlight split with real bloom
-    // on highlights so chrome, kerbs, glass and bright sky sparkle instead of
-    // reading flat. (Old str 0.15 / bloom 0.50 was the washed-out look.)
-    _grade = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
-    _bloom = 0.74; _thresh = 0.72;
+    // Bright day: more punch so chrome, kerbs, glass + bright sky really sparkle
+    _grade = { shadow: [0.88, 0.97, 1.16], hi: [1.16, 1.05, 0.84], str: 0.38 };
+    _bloom = 0.98; _thresh = 0.68;
   }
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade });

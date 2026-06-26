@@ -306,8 +306,9 @@ uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform float uStars;
 uniform float uCloud;
-uniform float uTime;   // seconds, 0 = static/deterministic (backward-compatible)
-uniform float uMoon;   // 0..1 moon visibility (0 = none, backward-compatible)
+uniform float uTime;
+uniform float uMoon;
+uniform float uLightning;  // 0..1 lightning flash intensity
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -336,149 +337,151 @@ void main() {
   float up = dir.y;
   float sd = max(dot(dir, uSunDir), 0.0);
 
-  // Sun-elevation factor: 0 = sun on/below horizon, 1 = overhead noon.
-  // Drives automatic golden-hour / sunset tint without per-track authoring.
   float sunE = clamp(uSunDir.y * 1.4, 0.0, 1.0);
-
-  // Overcast factor: drives grey-shift and corona damping under heavy cloud.
   float overcast = smoothstep(0.5, 1.0, uCloud);
 
-  // --- Sky gradient ---
+  // --- Sky gradient: richer Rayleigh look with a 3-stop gradient ---
   vec3 c;
   if (up >= 0.0) {
-    // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
-    vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.75);
-    vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.60);
-    // pow(up, 0.35): richer blue zenith extends further down, horizon band
-    // narrower — avoids the pale/washed look at mid-sky while keeping the
-    // gradient smooth. (Was 0.5 which mapped too much sky to the horizon tint.)
-    c = mix(horizonO, zenithO, pow(up, 0.35));
-    // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
-    // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
-    // Damped under overcast so heavy cloud doesn't show warm colour.
-    float goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE))
-                    * (1.0 - smoothstep(0.0, 0.32, up))
-                    * (1.0 - overcast * 0.9);
-    vec3 goldenColor = mix(vec3(0.70, 0.22, 0.04), vec3(0.92, 0.55, 0.16),
+    vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.78);
+    vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.62);
+    // Shallower exponent = richer blue extends further down from zenith
+    float skyLerp = pow(up, 0.28);
+    c = mix(horizonO, zenithO, skyLerp);
+    // Rayleigh mid-sky peak: slight saturation boost at ~40° elevation (physically accurate)
+    float midPeak = smoothstep(0.0, 0.28, up) * smoothstep(0.75, 0.28, up);
+    c += uZenith * 0.12 * midPeak * (1.0 - overcast * 0.9);
+
+    // Golden-hour: wider and more saturated warm amber/orange overlay near horizon
+    float goldenAmt = (1.0 - smoothstep(0.0, 0.78, sunE))
+                    * (1.0 - smoothstep(0.0, 0.42, up))
+                    * (1.0 - overcast * 0.88);
+    vec3 goldenColor = mix(vec3(0.88, 0.18, 0.02), vec3(0.98, 0.62, 0.14),
                            clamp(sunE * 2.5, 0.0, 1.0));
-    c = mix(c, c * 0.45 + goldenColor * 0.55, goldenAmt * 0.80);
-    // Low-sun horizon band: extra warm band just above the horizon at sunset.
-    // Gives a richer, more saturated glow at the magic hour.
-    float lowBand = (1.0 - smoothstep(0.0, 0.60, sunE))
-                  * (1.0 - smoothstep(0.0, 0.18, up))
+    c = mix(c, c * 0.35 + goldenColor * 0.65, goldenAmt * 0.90);
+
+    // Twilight band: pink-to-magenta between orange horizon and blue sky at sunset/sunrise
+    float twilightBand = (1.0 - smoothstep(0.0, 0.62, sunE))
+                       * smoothstep(0.10, 0.38, up)
+                       * (1.0 - smoothstep(0.38, 0.68, up))
+                       * (1.0 - overcast * 0.80);
+    vec3 twilightColor = mix(vec3(0.95, 0.22, 0.38), vec3(0.52, 0.20, 0.78),
+                             clamp(sunE * 2.2, 0.0, 1.0));
+    c = mix(c, c * 0.40 + twilightColor * 0.60, twilightBand * 0.70);
+
+    // Low-sun horizon band: super-saturated glow just above the horizon
+    float lowBand = (1.0 - smoothstep(0.0, 0.62, sunE))
+                  * (1.0 - smoothstep(0.0, 0.20, up))
                   * smoothstep(0.01, 0.06, up)
                   * (1.0 - overcast * 0.85);
-    vec3 lowColor = mix(vec3(0.85, 0.25, 0.02), vec3(0.98, 0.62, 0.08),
+    vec3 lowColor = mix(vec3(0.92, 0.18, 0.01), vec3(1.0, 0.68, 0.06),
                         clamp(sunE * 3.0, 0.0, 1.0));
-    c = mix(c, lowColor, lowBand * 0.55);
+    c = mix(c, lowColor, lowBand * 0.70);
   } else {
-    // Below the horizon: dark earth tone, smoothly blended from the horizon colour.
     float gnd = clamp(-up * 5.0, 0.0, 1.0);
     c = mix(uHorizon * 0.85, vec3(0.035, 0.030, 0.022), gnd * gnd);
   }
 
-  // --- Procedural cloud layer ---
-  // Cloud plane is drifted slowly by uTime (no drift when time=0 → deterministic).
+  // --- Procedural cloud layer (dramatic contrast + silver lining) ---
   if (uCloud > 0.001 && up > 0.012) {
     vec2 cp = dir.xz / up * 0.42;
-    // Drift offset: two independent slow vectors for parallax feel.
     vec2 drift1 = vec2(uTime * 0.0028, uTime * 0.0011);
     vec2 drift2 = vec2(uTime * 0.0017, uTime * 0.0023);
-    // Evolution: a very slow warp of the second octave to change cloud shape.
     float evo = uTime * 0.00035;
     vec2 cp1 = cp + drift1;
     vec2 cp2 = cp + drift2;
     float f = fbm(cp1);
     float cov = smoothstep(0.55 - uCloud * 0.4, 0.92, f);
     cov *= smoothstep(0.012, 0.08, up);
-    // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
-    // thick billowing regions = shadowed dark underside.
     float thick = clamp(fbm(cp2 * 0.55 + vec2(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
     float sl = pow(sd, 2.0);
     float sunBright = max(uSunColor.r, max(uSunColor.g, uSunColor.b));
-    // Under heavy overcast, clamp sunBright so even a bright sun gives grey clouds.
     float effectiveSunBright = mix(sunBright, min(sunBright, 0.55), overcast);
-    // Sunlit tops: white in daylight, warm-tinted at sunset
-    vec3 cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl);
-    cloudTop *= 0.38 + 0.62 * effectiveSunBright;
-    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.45, sl * (1.0 - sunE) * 0.55 * (1.0 - overcast));
-    // Under overcast flatten tops toward medium grey.
-    cloudTop = mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast * 0.65);
-    // Dark undersides: cooler and dimmer, conveying mass/volume
-    vec3 cloudBot = vec3(0.31, 0.32, 0.38) * (0.28 + 0.48 * effectiveSunBright);
-    // Under overcast, undersides go darker / more threatening.
-    cloudBot = mix(cloudBot, vec3(0.22, 0.22, 0.25), overcast * 0.55);
-    vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
-    // Moon tints nearby clouds faintly blue-silver.
+    // Brighter, more vivid lit tops
+    vec3 cloudTop = mix(vec3(0.62, 0.66, 0.74), vec3(1.02, 0.99, 0.94), sl);
+    cloudTop *= 0.28 + 0.72 * effectiveSunBright;
+    cloudTop = mix(cloudTop, cloudTop * uSunColor * 1.65, sl * (1.0 - sunE) * 0.65 * (1.0 - overcast));
+    cloudTop = mix(cloudTop, vec3(0.60, 0.61, 0.63), overcast * 0.60);
+    // Much darker, more threatening undersides
+    vec3 cloudBot = vec3(0.15, 0.16, 0.21) * (0.18 + 0.55 * effectiveSunBright);
+    cloudBot = mix(cloudBot, vec3(0.08, 0.08, 0.12), overcast * 0.75);  // near-black storm
+    vec3 lit = mix(cloudBot, cloudTop, clamp(0.12 + (1.0 - thick) * 0.82, 0.0, 1.0));
+    // Silver lining: bright rim on thin cloud edges when backlit by sun
+    float edgeLit = cov * (1.0 - cov) * sl * 5.5 * (1.0 - overcast * 0.8);
+    lit += vec3(0.85, 0.88, 0.92) * edgeLit;
     if (uMoon > 0.0) {
-      float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
-      lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
+      float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.22;
+      lit = mix(lit, lit + vec3(0.08, 0.10, 0.18), moonLit);
     }
     c = mix(c, lit, cov);
   }
 
-  // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
-  // Damped under overcast (corona hidden behind cloud).
+  // --- Mie forward scatter + dramatic horizon glow ---
   float upPos = max(up, 0.0);
   float mieDamp = 1.0 - overcast * 0.85;
-  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp);
+  // Stronger forward scatter bloom toward sun
+  c = mix(c, uSunColor * 1.2, pow(sd, 4.5) * 0.28 * max(1.0 - upPos * 1.2, 0.0) * mieDamp);
 
-  // --- Horizon glow in the sun's compass direction ---
+  // Wider, more dramatic horizon glow in sun's compass direction
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
   float sunHLen = length(sunH);
   if (sunHLen > 0.05) {
     vec2 dirH = vec2(dir.x, dir.z);
     float dirHLen = length(dirH);
     float hdot = dirHLen > 0.05 ? max(dot(dirH / dirHLen, sunH / sunHLen), 0.0) : 0.0;
-    float hband = max(1.0 - abs(up) * 5.0, 0.0);
-    c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen * mieDamp;
+    float hband = max(1.0 - abs(up) * 4.5, 0.0);
+    // Wide ambient glow
+    c += uSunColor * pow(hdot, 3.5) * hband * hband * 0.38 * sunHLen * mieDamp;
+    // Below-horizon continuation of the glow
+    c += uSunColor * 0.90 * pow(hdot, 2.2) * smoothstep(-0.06, 0.0, -up) * (1.0 - overcast * 0.6);
   }
 
-  // --- Sun corona + disc (damped under overcast) ---
+  // --- Sun corona + disc (larger outer halo, atmospheric glow ring) ---
   float coronaDamp = 1.0 - overcast * 0.92;
-  c += uSunColor * pow(sd, 20.0) * 0.55 * coronaDamp;   // outer halo ~15°
-  c += uSunColor * pow(sd, 300.0) * 0.90 * coronaDamp;  // inner ring ~4°
+  c += uSunColor * pow(sd, 7.0) * 0.20 * coronaDamp;   // wide atmospheric glow
+  c += uSunColor * pow(sd, 22.0) * 0.68 * coronaDamp;  // tight corona ring
+  c += uSunColor * pow(sd, 380.0) * 1.10 * coronaDamp; // bright disc core
   float perp = length(dir - uSunDir * sd);
   float disc = smoothstep(0.018, 0.006, perp) * coronaDamp;
-  c += mix(uSunColor * 1.6, vec3(1.8, 1.75, 1.5), disc) * disc;
+  c += mix(uSunColor * 1.8, vec3(2.0, 1.9, 1.6), disc) * disc;
 
-  // --- Stars (night tracks) ---
+  // --- Stars: denser field with Milky Way band ---
   if (uStars > 0.5 && up > 0.05) {
-    // Cell-based star field with varied brightness and a few "giant" stars.
     vec3 cell180 = floor(dir * 180.0);
     float h = hash3(cell180);
-    // Normal stars: sparse
-    float star = smoothstep(0.9970, 1.0, h);
-    // Brightness varies per star; driven by a separate hash.
-    float bright = 0.35 + 0.65 * hash3(floor(dir * 43.0));
-    // Subtle twinkle: hash at coarser cell gives a slow phase offset per star.
+    float star = smoothstep(0.992, 1.0, h);   // lower threshold = more stars
+    float bright = 0.40 + 0.60 * hash3(floor(dir * 43.0));
     float phase = hash3(floor(dir * 31.0)) * 6.2832;
-    float twinkle = 0.80 + 0.20 * sin(uTime * 1.4 + phase);
-    // Giant/bright stars: much rarer, extra brightness
+    float twinkle = 0.78 + 0.22 * sin(uTime * 1.4 + phase);
     float giantH = hash3(floor(dir * 55.0));
-    float giant = smoothstep(0.998, 1.0, giantH);
-    float giantBright = 0.7 + 0.5 * hash3(floor(dir * 27.0));
-    float giantTwinkle = 0.75 + 0.25 * sin(uTime * 0.9 + phase * 1.3);
+    float giant = smoothstep(0.997, 1.0, giantH);
+    float giantBright = 0.8 + 0.55 * hash3(floor(dir * 27.0));
+    float giantTwinkle = 0.72 + 0.28 * sin(uTime * 0.9 + phase * 1.3);
     c += vec3(star * bright * twinkle + giant * giantBright * giantTwinkle);
+    // Milky Way: diffuse band along a tilted galactic plane
+    float galY = dot(dir, vec3(0.22, 0.94, 0.25));  // tilted galactic equator
+    float galBand  = exp(-galY * galY * 7.0) * 0.55;   // wide glow
+    float galCore  = exp(-galY * galY * 40.0) * 0.30;  // bright core
+    galBand = (galBand + galCore) * smoothstep(0.05, 0.18, up) * (1.0 - overcast);
+    c += vec3(0.22, 0.20, 0.32) * galBand * uStars;  // subtle purple-blue band
   }
 
-  // --- Moon disc + halo (night tracks) ---
+  // --- Moon disc + halo ---
   if (uMoon > 0.0 && uStars > 0.5) {
-    // Fixed moon direction: high in the sky, to the right of the sun's compass direction.
-    // Using a stable world-space direction so it doesn't follow the camera.
     vec3 moonDir = normalize(vec3(0.42, 0.72, 0.55));
     float md = dot(dir, moonDir);
     float moonPerp = length(dir - moonDir * max(md, 0.0));
-    // Moon disc: crisp soft edge
     float moonDisc = smoothstep(0.025, 0.010, moonPerp) * uMoon;
-    // Moon halo: broad soft glow
-    float moonHalo = exp(-moonPerp * moonPerp * 140.0) * 0.28 * uMoon;
-    // Moon colour: cool blue-white
+    float moonHalo = exp(-moonPerp * moonPerp * 110.0) * 0.35 * uMoon;  // larger halo
     vec3 moonCol = vec3(0.82, 0.88, 1.00);
-    // The halo should only appear above the horizon and not wash out too much.
     if (up > 0.0 && md > 0.0) {
-      c += moonCol * (moonDisc * 1.10 + moonHalo);
+      c += moonCol * (moonDisc * 1.20 + moonHalo);
     }
+  }
+
+  // --- Lightning flash: bleach sky toward blue-white ---
+  if (uLightning > 0.001) {
+    c = mix(c, vec3(0.88, 0.92, 1.10) * 2.8, uLightning * 0.40);
   }
 
   outColor = vec4(c, 1.0);
@@ -568,6 +571,7 @@ uniform sampler2D uScene;
 uniform sampler2D uBloom;   // level 0 — W/2 (tight glow)
 uniform sampler2D uBloom1;  // level 1 — W/4 (medium spread)
 uniform sampler2D uBloom2;  // level 2 — W/8 (wide halo)
+uniform sampler2D uBloom3;  // level 3 — W/16 (ultra-wide atmospheric)
 uniform sampler2D uSSAO;    // screen-space ambient occlusion
 uniform sampler2D uSSR;     // screen-space reflections (pre-multiplied by strength)
 uniform float uBloomAmt;
@@ -655,10 +659,11 @@ void main() {
 
   // Multi-scale bloom: accumulate 3 levels (tight / medium / wide) with a
   // tone-aware mask that reduces bloom on already-saturated highlights.
-  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
-  vec3 bl = texture(uBloom,  vUV).rgb * 0.45
-           + texture(uBloom1, vUV).rgb * 0.35
-           + texture(uBloom2, vUV).rgb * 0.20;
+  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.65, 0.0, 0.35) / 0.35 * 0.45;
+  vec3 bl = texture(uBloom,  vUV).rgb * 0.35
+           + texture(uBloom1, vUV).rgb * 0.28
+           + texture(uBloom2, vUV).rgb * 0.22
+           + texture(uBloom3, vUV).rgb * 0.15;
   c += bl * uBloomAmt * bloomMask;
 
   // Volumetric sun shafts: 16-tap radial march from pixel toward sun, sampling
@@ -1025,10 +1030,12 @@ void main() {}`;
   let bloomFBO = [null, null], bloomTex = [null, null];     // level 0 W/2
   let bloom1FBO = [null, null], bloom1Tex = [null, null];   // level 1 W/4
   let bloom2FBO = [null, null], bloom2Tex = [null, null];   // level 2 W/8
+  let bloom3FBO = [null, null], bloom3Tex = [null, null];   // level 3 W/16 (ultra-wide halo)
   let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
   let bloomW = 0, bloomH = 0;
   let bloom1W = 0, bloom1H = 0;
   let bloom2W = 0, bloom2H = 0;
+  let bloom3W = 0, bloom3H = 0;
   const BLOOM_DIV = 2;         // level-0 bloom at half resolution
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
@@ -1121,7 +1128,7 @@ void main() {}`;
     ssaoBlurU = locs(ssaoBlurProg, ["uSSAO", "uDir"]);
     ssrU = locs(ssrProg, ["uScene", "uNormal", "uDepth", "uVP", "uInvVP", "uEye", "uTexel"]);
     fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uSSAO", "uSSR", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uBloom1", "uBloom2", "uBloom3", "uSSAO", "uSSR", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
     return true;
   }
 
@@ -1231,6 +1238,9 @@ void main() {}`;
     mkBloomLevel(bloomFBO,  bloomTex,  bloomW,  bloomH);
     mkBloomLevel(bloom1FBO, bloom1Tex, bloom1W, bloom1H);
     mkBloomLevel(bloom2FBO, bloom2Tex, bloom2W, bloom2H);
+    bloom3W = Math.max(1, Math.floor(width  / 16));
+    bloom3H = Math.max(1, Math.floor(height / 16));
+    mkBloomLevel(bloom3FBO, bloom3Tex, bloom3W, bloom3H);
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
       postEnabled = false;     // unsupported combo: fall back to direct rendering
     }
@@ -1284,7 +1294,7 @@ void main() {}`;
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
 
@@ -1482,6 +1492,7 @@ void main() {}`;
     gl.uniform1f(skyU.uCloud, sky.cloud !== undefined ? sky.cloud : 0);
     gl.uniform1f(skyU.uTime,  sky.time  !== undefined ? sky.time  : 0);
     gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
+    gl.uniform1f(skyU.uLightning, sky.lightning !== undefined ? sky.lightning : 0);
     setBlend(false);
     setDepthMask(false);
     bindVAO(skyVAO);
@@ -1613,9 +1624,15 @@ void main() {}`;
     gl.blitFramebuffer(0, 0, bloom1W, bloom1H, 0, 0, bloom2W, bloom2H, gl.COLOR_BUFFER_BIT, gl.LINEAR);
     let src2 = blurLevel(bloom2FBO, bloom2Tex, bloom2W, bloom2H);
 
+    // 5) downsample level 2 → level 3 (W/16), then blur
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, bloom2FBO[src2]);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, bloom3FBO[0]);
+    gl.blitFramebuffer(0, 0, bloom2W, bloom2H, 0, 0, bloom3W, bloom3H, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+    let src3 = blurLevel(bloom3FBO, bloom3Tex, bloom3W, bloom3H);
+
     const src = src0; // level-0 final index (for god-ray sampling)
 
-    // 5) composite → interFBO (LDR tonemap output; FXAA reads this next step)
+    // 6) composite → interFBO (LDR tonemap output; FXAA reads this next step)
     gl.bindFramebuffer(gl.FRAMEBUFFER, interFBO);
     gl.viewport(0, 0, width, height);
     useProg(compProg);
@@ -1638,6 +1655,9 @@ void main() {}`;
     gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, ssrTex[0]);
     gl.uniform1i(compU.uSSR, 5);
+    gl.activeTexture(gl.TEXTURE6);
+    gl.bindTexture(gl.TEXTURE_2D, bloom3Tex[src3]);
+    gl.uniform1i(compU.uBloom3, 6);
     // Project sun direction to screen UV for lens flare
     let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
     if (frameSunDir && frameViewProj) {
@@ -1665,7 +1685,7 @@ void main() {}`;
     gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // 6) FXAA + CA + sharpening: interTex → screen
+    // 7) FXAA + CA + sharpening: interTex → screen
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
     useProg(fxaaProg);
