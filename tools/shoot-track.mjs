@@ -13,6 +13,7 @@ const id = process.argv[2];
 if (!id) { console.log("usage: node tools/shoot-track.mjs <id> [outdir]"); process.exit(1); }
 const outdir = process.argv[3] || "/tmp/claude-0/-home-user-f1-game/948d3bdd-9d85-501e-94e5-40b57d4094b5/scratchpad/shots";
 fs.mkdirSync(outdir, { recursive: true });
+const PORT = process.env.PORT || "3456";
 
 // frac, az(deg), el(deg), dist(m) — a tour around the lap from varied angles.
 const SHOTS = [
@@ -32,7 +33,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 
-await page.goto("http://localhost:3456/index.html", { waitUntil: "load" });
+await page.goto(`http://localhost:${PORT}/index.html`, { waitUntil: "load" });
 await page.evaluate(() => new Promise((r) => {
   const t = setInterval(() => { if (window.__apex) { clearInterval(t); r(); } }, 50);
 }));
