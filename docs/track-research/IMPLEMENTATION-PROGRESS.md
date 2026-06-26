@@ -36,7 +36,7 @@ Status legend: ⬜ not started · 🟦 in progress · ✅ done & screenshot-veri
 | Track | Change | Status |
 |---|---|---|
 | suzuka | red ~50 m ferris wheel near S/F; figure-8 crossover bridge | ⬜ |
-| montreal | Biosphère steel dome + Olympic Basin + La Ronde wheel; 1m walls; Bonjour Québec | ✅ |
+| montreal | Biosphère steel dome + Olympic Basin + La Ronde wheel; 1m walls; Bonjour Québec | ✅✅ |
 | monza | ruined banked oval; deciduous-dominant trees; Tifosi red | ✅ |
 | imola | seated bronze Senna statue (replace white box); river hugs Tamburello wall | ⬜ |
 | interlagos | mirror Senna statue + Kobra mural; favela close + skyline far; lakes mid/far | ⬜ |

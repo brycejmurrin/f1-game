@@ -21,8 +21,12 @@
     ],
     // Île Notre-Dame: very slight rise through the casino hairpin complex.
     elevations: [{ s: 0.52, halfM: 340, rise: 4 }],
+    // The lap sits on a man-made ISLAND in the St. Lawrence. End the green
+    // terrain ribbon at a believable shoreline (~70 m) so river water takes over
+    // beyond it — no green extending to infinity, no bare grey void.
+    terrainOuter: 70,
     scenery: function (api) {
-      const { out, n, px, pz, place, prop, backdrop, groundPlane, wall, grandstand,
+      const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, wall, grandstand,
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
         fence, guardrail, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         ferrisWheel, tower, onTrack, groundYAt, forestEdge, cityFront } = api;
@@ -30,8 +34,9 @@
 
       // ---- Île Notre-Dame palette (bright June day) ----
       const WALL     = [0.78, 0.79, 0.80];   // pale concrete
-      const RIVER    = [0.26, 0.46, 0.60];   // St. Lawrence — cool blue-grey
-      const BASIN    = [0.24, 0.50, 0.62];   // Olympic rowing lake (cleaner, slightly deeper)
+      const RIVER    = [0.16, 0.26, 0.34];   // St. Lawrence — deep river blue-grey
+      const RIVER2   = [0.18, 0.29, 0.38];   // lighter near-shore river
+      const BASIN    = [0.20, 0.34, 0.44];   // Olympic rowing lake (cleaner, slightly bluer)
       const GRASS    = [0.28, 0.52, 0.26];   // park green
       const FOLIAGE  = [0.20, 0.44, 0.24];   // deep tree green
       const FOLIAGE2 = [0.26, 0.50, 0.26];   // lighter June foliage
@@ -60,6 +65,57 @@
         if (onTrack(a.c[0], a.c[2], 1.5)) return;
         addCyl(out, a.c, 0.07, h, [0.30, 0.30, 0.33], 5, b);
         addBox(out, vadd(a.c, a.u, h - 0.7), [0.04, 1.4, 2.4], col, b);
+      };
+
+      // ===================================================================
+      // St. Lawrence River — broad water surround framing the whole island.
+      // The lap reads as a flat green island ringed by water; the green
+      // terrain ribbon (terrainOuter) ends at a shoreline ~70 m out and these
+      // big flat slabs take over beyond it, out toward the horizon. Water top
+      // sits just below road grade (pyMin - 1.0) so it never covers the road
+      // but hides the universal green ground-floor, removing the "grass to
+      // infinity" look. Cheap: a handful of very large flat boxes.
+      // ===================================================================
+      {
+        // Lap bounding box in world XZ (centreline extent).
+        let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9, cx = 0, cz = 0;
+        for (let i = 0; i < n; i++) {
+          if (px[i] < minx) minx = px[i]; if (px[i] > maxx) maxx = px[i];
+          if (pz[i] < minz) minz = pz[i]; if (pz[i] > maxz) maxz = pz[i];
+          cx += px[i]; cz += pz[i];
+        }
+        cx /= n; cz /= n;
+        const base = pyMin || 0;
+        // (1) One broad flat WATER plane filling the whole world out to the
+        //     horizon. CRITICAL: the engine's universal buildFloor() plane sits at
+        //     pyMin - 0.6 (grass-coloured), so the water surface MUST be ABOVE that
+        //     (here pyMin - 0.4) or the green floor hides the river entirely.
+        const wTop = base - 0.4, TH = 8;
+        addBox(out, [cx, wTop - TH / 2, cz],
+               [(maxx - minx) + 4800, TH, (maxz - minz) + 4800], RIVER);
+        // (2) The flat green ISLAND itself: a solid slab covering the lap
+        //     footprint + a shoreline margin, sitting just ABOVE the water (top at
+        //     pyMin - 0.2) so the lap reads as a green island ringed by river. The
+        //     terrain ribbon and park scenery layer on top; water shows everywhere
+        //     beyond this slab's edge.
+        const M = 95;                        // shoreline margin past the outermost track
+        addBox(out, [cx, base - 0.2 - 3, cz],
+               [(maxx - minx) + 2 * M, 6, (maxz - minz) + 2 * M], GRASS);
+      }
+
+      // ── Far-bank land strip: a flat shoreline slab across the water that the
+      // downtown skyline / Biosphère / La Ronde stand ON (so they read as a city
+      // and islands ACROSS the river, never floating on water). Raised just above
+      // the water surface; track-aligned so its long face parallels the road.
+      const FARBANK  = [0.34, 0.40, 0.30];   // muted river-bank green-grey
+      const farBank = (k, side, near, far, lenM, col) => {
+        const a = anchor(k, side, (near + far) / 2);
+        const depth = far - near;
+        const H = 5;
+        // a.c sits on the lap baseline (pyMin) out here; lift the slab so its top
+        // is at pyMin - 0.3, i.e. just proud of the water surface (pyMin - 1.0).
+        addBox(out, vadd(a.c, a.u, -0.3 - H / 2),
+               [lenM, H, depth], col || FARBANK, [a.r, a.u, a.t]);
       };
 
       // ===================================================================
@@ -244,6 +300,13 @@
         addBox(out, vadd(a.c, a.u, 72 + 16 + 2 + 6), [18, 12, 18], [0.87, 0.89, 0.93], [a.r, a.u, a.t]);
       }
 
+      // ── Near far-bank (Île Sainte-Hélène) strip across a water channel on the
+      // NW (left) side: the Biosphère + La Ronde stand on THIS, beyond the river
+      // margin, so they read as a neighbouring island across the water. ──
+      for (let i = 0; i < 7; i++) {
+        farBank(K(0.27 + i * 0.030), -1, 185, 320, 220);
+      }
+
       // ===================================================================
       // s 0.30 L far — Biosphère geodesic dome (landmark across St. Lawrence)
       // Bare silver-grey steel lattice sphere (acrylic skin burned off 1976):
@@ -253,7 +316,7 @@
       // ===================================================================
       {
         const k = K(0.30);
-        const a = anchor(k, -1, 215);
+        const a = anchor(k, -1, 235);
         const DOME   = [0.80, 0.83, 0.87];  // bright steel-grey lattice
         const DOME_D = [0.72, 0.75, 0.79];  // shaded lower rings
 
@@ -279,23 +342,23 @@
         addFrustum(out, vadd(a.c, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 18, [a.r, a.u, a.t]);
       }
 
-      // St. Lawrence water band between island and downtown (and around the
-      // near island the Biosphère sits on)
-      for (let i = 0; i < 6; i++) {
-        groundPlane(K(0.29 + i * 0.022), -1, 26, [260, 2, 240], RIVER);
+      // ===================================================================
+      // s 0.28–0.48 L far — Montreal downtown skyline ACROSS the St. Lawrence
+      //
+      // A single cohesive cluster of mid-rise glass towers grounded on a far-bank
+      // strip BEYOND a broad water channel on the NW bearing. Capped ~200–226 m
+      // (1250 René-Lévesque 226 m / 1000 de La Gauchetière 205 m as the tallest)
+      // — a downtown across the river, not a wall ringing the lap.
+      // ===================================================================
+
+      // Far-bank land the city stands on (beyond the river channel at gap ~470).
+      for (let i = 0; i < 8; i++) {
+        farBank(K(0.28 + i * 0.026), -1, 455, 660, 240, [0.30, 0.36, 0.30]);
       }
 
-      // ===================================================================
-      // s 0.30–0.46 L far — Montreal CBD skyline across St. Lawrence
-      //
-      // Three tiers via cityFront() so buildings align and windows are lit.
-      // lit:true ensures glazing reads as bright glass in daylight and emissive
-      // lit windows at dusk / night.
-      // ===================================================================
-
-      // Front rank: mid-rise towers (40–120 m), tight step for a dense skyline
-      cityFront(0.30, 0.46, -1, 200, {
-        minH: 40, maxH: 120, depth: 28, step: 18,
+      // Front rank: mid-rise towers (50–130 m), tight step for a dense skyline
+      cityFront(0.30, 0.46, -1, 470, {
+        minH: 50, maxH: 130, depth: 30, step: 18,
         palette: [
           [0.54, 0.58, 0.64], [0.58, 0.60, 0.66],
           [0.50, 0.54, 0.60], [0.62, 0.62, 0.68],
@@ -305,9 +368,9 @@
         floor: 6,
       });
 
-      // Mid-rank infill behind the front row — slightly taller towers
-      cityFront(0.305, 0.455, -1, 270, {
-        minH: 60, maxH: 200, depth: 30, step: 26,
+      // Mid-rank infill behind the front row — the hero towers up to ~226 m
+      cityFront(0.305, 0.455, -1, 545, {
+        minH: 80, maxH: 226, depth: 32, step: 26,
         palette: [
           [0.50, 0.54, 0.60], [0.46, 0.50, 0.56],
           [0.54, 0.52, 0.58], [0.48, 0.52, 0.58],
@@ -317,11 +380,11 @@
         floor: 5,
       });
 
-      // Far hazed backdrop rank — silhouetted against the sky
-      for (let i = 0; i < 20; i++) {
-        const k = K(0.30 + (i / 20) * 0.17);
-        backdrop(k, -1, 370 + hash(i * 19) * 50,
-                 [24, 50 + hash(i * 13) * 80, 24], [0.50, 0.55, 0.62]);
+      // Far hazed backdrop rank — silhouetted against the sky behind the city
+      for (let i = 0; i < 18; i++) {
+        const k = K(0.30 + (i / 18) * 0.16);
+        backdrop(k, -1, 640 + hash(i * 19) * 50,
+                 [24, 60 + hash(i * 13) * 90, 24], [0.50, 0.55, 0.62]);
       }
 
       // ===================================================================
