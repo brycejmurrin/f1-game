@@ -1,7 +1,8 @@
 /* Apex 26 — F1API: Jolpica (Ergast) + OpenF1 clients.
    All methods return Promises of SIMPLIFIED plain objects (see docs/ARCHITECTURE.md).
    Single internal queue (>= 400 ms between real network requests), localStorage
-   cache ("apex26.api.<url>" -> {t, data}). On failure/429 serves stale cache if
+   cache ("apex26.api.<url>" -> {t, data}). 429 / 5xx are retried with backoff
+   (Retry-After honoured) before failing; on final failure serves stale cache if
    present (with console.warn), else rejects. Never auto-polls.
    No DOM / localStorage access at module top level. */
 const F1API = (function () {
@@ -11,6 +12,9 @@ const F1API = (function () {
   const OPENF1 = "https://api.openf1.org/v1";
   const CACHE_PREFIX = "apex26.api.";
   const MIN_GAP_MS = 400;
+  const MAX_RETRY = 5;        // retries on 429 / 5xx before giving up
+  const RETRY_BASE_MS = 1200; // exponential backoff base (×2 per attempt, capped)
+  const RETRY_CAP_MS = 16000;
 
   const MINUTE = 60 * 1000;
   const HOUR = 60 * MINUTE;
@@ -48,6 +52,26 @@ const F1API = (function () {
 
   /* ---------- queued, cached fetch ---------- */
 
+  // fetch with retry on rate-limit (429) / transient server (5xx) errors. Honours
+  // a Retry-After header when present, else exponential backoff. Each wait happens
+  // inside the shared queue, so a burst self-throttles instead of hammering 429s.
+  function fetchRetry(url, attempt) {
+    lastNetAt = Date.now();
+    return fetch(url).then(function (res) {
+      if ((res.status === 429 || (res.status >= 500 && res.status < 600)) && attempt < MAX_RETRY) {
+        const ra = parseFloat(res.headers && res.headers.get && res.headers.get("retry-after"));
+        const back = isFinite(ra) && ra > 0
+          ? Math.min(ra * 1000, RETRY_CAP_MS)
+          : Math.min(RETRY_BASE_MS * Math.pow(2, attempt), RETRY_CAP_MS);
+        return new Promise(function (r) { setTimeout(r, back); }).then(function () {
+          return fetchRetry(url, attempt + 1);
+        });
+      }
+      if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
+      return res.json();
+    });
+  }
+
   function request(url, ttl) {
     const hit = readCache(url);
     if (hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
@@ -59,12 +83,7 @@ const F1API = (function () {
         return null;
       })
       .then(function () {
-        lastNetAt = Date.now();
-        return fetch(url);
-      })
-      .then(function (res) {
-        if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
-        return res.json();
+        return fetchRetry(url, 0);
       })
       .then(function (json) {
         writeCache(url, json);
