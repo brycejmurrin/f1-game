@@ -47,15 +47,13 @@
 .dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
 .dh-tabs {
-  display: flex; gap: 6px; padding: 10px 14px;
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex: 0 0 auto; overflow-x: auto; scrollbar-width: none;
-  /* fade hint at right edge — only when tabs might overflow (portrait) */
-  -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  flex: 0 0 auto; scrollbar-width: none;
+  /* wrap to a 2nd row on narrow screens so no tab (e.g. EXPORT) is hidden
+     off-screen; on wider cards all tabs fit on one row so no wrap occurs */
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
-/* On wider cards all 5 tabs fit — remove the fade mask */
 @media (min-width: 580px) {
   .dh-tabs { -webkit-mask-image: none; mask-image: none; }
 }
