@@ -51,17 +51,17 @@
       // left side (s≈0.27–0.65 L). Multi-layered water planes with depth
       // and subtle shimmer. Far basin + near-shore ripple edge zones.
       // ====================================================================
-      // Primary far-lake basin — deep water colour, broad expanse
-      groundPlane(k(0.45), -1, 100, [1300, 4, 1300], [0.16, 0.34, 0.52]);
-      groundPlane(k(0.38), -1, 120, [860,  4,  860], [0.18, 0.38, 0.56]);
-      groundPlane(k(0.58), -1, 110, [820,  4,  820], [0.18, 0.38, 0.56]);
+      // Primary far-lake basin — deep water colour, broad expanse (reflective)
+      groundPlane(k(0.45), -1, 100, [1300, 4, 1300], [0.16, 0.34, 0.52], true);
+      groundPlane(k(0.38), -1, 120, [860,  4,  860], [0.18, 0.38, 0.56], true);
+      groundPlane(k(0.58), -1, 110, [820,  4,  820], [0.18, 0.38, 0.56], true);
       // Shoreline transition zones — lighter, shimmer-edge tones
-      groundPlane(k(0.50), -1,  55, [340, 4,  48], [0.26, 0.48, 0.64]);
-      groundPlane(k(0.48), -1,  42, [380, 4,  60], [0.28, 0.52, 0.66]);
+      groundPlane(k(0.50), -1,  55, [340, 4,  48], [0.26, 0.48, 0.64], true);
+      groundPlane(k(0.48), -1,  42, [380, 4,  60], [0.28, 0.52, 0.66], true);
       // Infield water wrap (interior of circuit perimeter) — muted mid-tone
       for (let i = 0; i < 4; i++) {
         const s = 0.30 + (i / 4) * 0.30;
-        groundPlane(k(s), -1, 115 + i * 8, [220, 4, 170], [0.22, 0.38, 0.52]);
+        groundPlane(k(s), -1, 115 + i * 8, [220, 4, 170], [0.22, 0.38, 0.52], true);
       }
 
       // ---- Moored rowboats + kayaks (s≈0.45–0.55 water edge) ----

@@ -338,10 +338,10 @@
       // Painted marina water ground planes — these large slabs define the visual "sea"
       for (let m = 0; m < 5; m++) {
         const k = K(0.27 + m * 0.026);
-        // Outer water slab (dark deep blue)
-        groundPlane(k, 1, 7.0, [200, 180], WATER_DEEP);
-        // Inner shallows / wake (brighter teal)
-        groundPlane(k, 1, 5.5, [160, 140], WATER);
+        // Outer water slab (dark deep blue) — reflective
+        groundPlane(k, 1, 7.0, [200, 180], WATER_DEEP, true);
+        // Inner shallows / wake (brighter teal) — reflective
+        groundPlane(k, 1, 5.5, [160, 140], WATER, true);
         // Pontoon walkway along the marina edge
         groundPlane(k, 1, 4.6, [160, 6], [0.68, 0.68, 0.66]);
       }

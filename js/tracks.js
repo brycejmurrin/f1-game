@@ -192,6 +192,7 @@ const Tracks = (function () {
       // (and only shadow-casting cells inside the light frustum) is the big win.
       track.meshes.props = GLX.createChunkedMesh ? GLX.createChunkedMesh(_props.out, 72) : GLX.createMesh(_props.out);
       track.meshes.glass = GLX.createMesh(_props.glass);
+      track.meshes.water = GLX.createMesh(_props.water);
       track.meshes.gate = GLX.createMesh(buildGate(track));
       track.meshes.startline = GLX.createMesh(buildStartLine(track));
     }
@@ -991,6 +992,11 @@ const Tracks = (function () {
     // with a low-roughness material so the lit shader's env term mirrors the sky
     // (real view-dependent reflection, not a faked colour). Day windows only.
     const glassBuf = { pos: [], nrm: [], col: [], idx: [] };
+    // Separate WATER buffer: lake/sea/marina surfaces emit here and draw with a
+    // low-roughness material so the lit shader's env term mirrors the live sky
+    // (real time-of-day reflection + sun glint), turning flat blue slabs into
+    // reflective water. Flagged via groundPlane(..., water=true).
+    const waterBuf = { pos: [], nrm: [], col: [], idx: [] };
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     // Session darkness (set by Tracks.build from the chosen time of day) drives
     // window/skyline lighting — so buildings respond to dusk/night even on a
@@ -1251,7 +1257,7 @@ const Tracks = (function () {
     // top sits just below the LOCAL track height at k — never the global minimum,
     // which on elevation-changing circuits floats up as a ceiling or rises as a
     // wall. Skipped if it would overlap any stretch of track.
-    const groundPlane = (k, side, gap, sz, col) => {
+    const groundPlane = (k, side, gap, sz, col, water) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const o = side * (hw[k] + gap + sz[0] / 2);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
@@ -1259,7 +1265,8 @@ const Tracks = (function () {
         console.warn(`[scenery] groundPlane SUPPRESSED at k=${k} side=${side}: gap=${gap} sz[0]=${sz[0]} (need gap>4)`);
         return;
       }
-      addBox(out, [cx, groundYAt(k, gap + sz[0] / 2) - sz[1] / 2 - 1.0, cz], sz, col);
+      // water=true → reflective water buffer (mirrors the sky); else matte props.
+      addBox(water ? waterBuf : out, [cx, groundYAt(k, gap + sz[0] / 2) - sz[1] / 2 - 1.0, cz], sz, col);
     };
     // backdrop(): a distant scenery box (skyline, hills, dunes) on the horizon.
     // Tall things go far enough back that they never clip the viewport edge, and
@@ -2638,7 +2645,7 @@ const Tracks = (function () {
     }
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
     if (_culled) console.info(`[scenery] ${def.id}: culled ${_culled} on-track primitive(s)`);
-    return { out, glass: glassBuf };
+    return { out, glass: glassBuf, water: waterBuf };
   }
 
   function buildGate(track) {

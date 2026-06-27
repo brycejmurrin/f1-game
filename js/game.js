@@ -577,6 +577,7 @@ function loadTrack(idx) {
       GLX.freeMesh(track.meshes.terrain);
       if (GLX.freeChunkedMesh) GLX.freeChunkedMesh(track.meshes.props); else GLX.freeMesh(track.meshes.props);
       if (track.meshes.glass) GLX.freeMesh(track.meshes.glass);
+      if (track.meshes.water) GLX.freeMesh(track.meshes.water);
       GLX.freeMesh(track.meshes.gate);
       GLX.freeMesh(track.meshes.startline);
     }
@@ -2687,6 +2688,12 @@ function render(dt) {
   // builds; empty at night (lit windows live in the emissive props mesh).
   if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT,
     { roughness: 0.18, specular: 0.68, metalness: 0.10 });
+  // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
+  // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
+  // A touch glossier (calmer) when not raining; a little rougher in the wet.
+  if (!hideMeshes.props && track.meshes.water) GLX.draw(track.meshes.water, MAT_IDENT,
+    wet ? { roughness: 0.16, specular: 0.85, metalness: 0.05 }
+        : { roughness: 0.10, specular: 0.92, metalness: 0.05 });
   if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
     wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
         : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
