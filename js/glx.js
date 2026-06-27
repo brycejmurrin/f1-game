@@ -245,9 +245,11 @@ void main() {
     // Gives tight, defined light pools instead of a soft undefined halo.
     float s = dist / rad;
     float win = clamp(1.0 - s * s * s * s, 0.0, 1.0);
-    // Softer hotspot (10·s² vs 16) so the pool fills with light across more of
-    // its radius rather than collapsing to a tight bright spot under the mast.
-    float att = win * win / (1.0 + 10.0 * s * s);
+    // Tight hotspot (20·s²): each lamp concentrates into a defined bright circle
+    // under the mast that falls off fast to dark, so the track reads as dark
+    // tarmac punctuated by lamp pools (high contrast) rather than a flat sheet
+    // of overlapping light.
+    float att = win * win / (1.0 + 20.0 * s * s);
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
 
@@ -946,12 +948,12 @@ void main() {
       vec3 V = normalize(-P);
       vec3 R = reflect(-V, Nv);                    // points up toward the city
       vec3 pos = P;
-      float stepLen = 0.7;
+      float stepLen = 0.8;
       vec3 hitCol = vec3(0.0);
       float hit = 0.0;
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < 12; i++) {
         pos += R * stepLen;
-        stepLen *= 1.34;                           // geometric growth → cover depth cheaply
+        stepLen *= 1.42;                           // geometric growth → cover depth cheaply
         vec4 cp = uProj * vec4(pos, 1.0);
         if (cp.w <= 0.0) break;
         vec2 suv = cp.xy / cp.w * 0.5 + 0.5;

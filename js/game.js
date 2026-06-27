@@ -639,8 +639,8 @@ function applyRaceSettings() {
       // NEAR-BLACK cool ambient: the world is genuinely dark, the LIGHT SOURCES
       // (lamps, neon, lit windows) do all the lifting. A high ambient here is the
       // #1 cause of a flat-grey "night that looks like dim day".
-      frame.ambientGround = [0.004, 0.005, 0.013];
-      frame.ambientSky = [0.011, 0.014, 0.030];
+      frame.ambientGround = [0.0012, 0.0015, 0.0045];
+      frame.ambientSky = [0.0034, 0.0046, 0.0110];
       frame.fogColor = [0.015, 0.017, 0.035];
       frame.fogDensity = 0.004;
       // When raceTimeOfDay !== "default", sync sky colours to frame too
@@ -771,8 +771,8 @@ function applyRaceSettings() {
       // the low cap stops over-bright palettes from washing the night to daylight.
       // Near-black cool floor + a LOW cap so over-bright night palettes can't lift
       // the scene to grey — the floodlights/neon/windows carve out the lit areas.
-      const floorSky = [0.007, 0.008, 0.018], floorGnd = [0.003, 0.004, 0.010];
-      const capSky   = [0.028, 0.032, 0.056], capGnd   = [0.012, 0.013, 0.026];
+      const floorSky = [0.0022, 0.0028, 0.0066], floorGnd = [0.0009, 0.0012, 0.0036];
+      const capSky   = [0.012, 0.014, 0.026], capGnd   = [0.0048, 0.0055, 0.0115];
       // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
       frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
       frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
@@ -2115,11 +2115,11 @@ function floodColor(theme) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 26.0, radius: 44, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 25.0, radius: 44, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 19.0, radius: 40, street: true };  // warm street lamps (Monaco/Madrid)
-    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 19.0, radius: 48, street: false }; // warm sodium flood banks
-    default:             return { tint: [1.14, 1.06, 0.84], intensity: 20.0, radius: 50, street: false }; // green/classic warm-white
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 17.0, radius: 32, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 16.0, radius: 32, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 13.0, radius: 30, street: true };  // warm street lamps (Monaco/Madrid)
+    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 15.0, radius: 40, street: false }; // warm sodium flood banks
+    default:             return { tint: [1.14, 1.06, 0.84], intensity: 16.0, radius: 42, street: false }; // green/classic warm-white
   }
 }
 function buildTrackLights(track) {
@@ -2470,7 +2470,10 @@ function render(dt) {
       GLX.shadowBegin(_mLVP);
       GLX.castShadow(track.meshes.terrain, MAT_IDENT);
       GLX.castShadow(track.meshes.road, MAT_IDENT);
-      GLX.castShadow(track.meshes.props, MAT_IDENT);
+      // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
+      // map once the sun is below the horizon — directional sun shadows are
+      // invisible under the dim moonlight, so this is the biggest night saving.
+      if (sd[1] > -0.03) GLX.castShadow(track.meshes.props, MAT_IDENT);
       GLX.shadowEnd();
     }
   }
@@ -2778,7 +2781,11 @@ function render(dt) {
   // scene is dark enough that floodlights/neon are on (frame.lights populated) —
   // that's where the in-shader sky env reflection has nothing to mirror.
   const _ssr = (frame.lights && (frame.wetness || 0) > 0.01) ? frame.wetness : 0;
-  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85, godray: _gr, contact: _cs, reflect: _ssr });
+  // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
+  // the horizon. Night ambient is near-black, so the AO darkening is invisible
+  // anyway — and night street grids are where the frame budget is tightest.
+  const _ao = _grSunY > -0.04 ? 0.85 : 0;
+  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: _ao, godray: _gr, contact: _cs, reflect: _ssr });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too
