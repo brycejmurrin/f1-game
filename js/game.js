@@ -2114,9 +2114,9 @@ function floodColor(theme) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 12.5, radius: 38, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 11.5, radius: 38, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 9.5, radius: 34, street: true };  // warm street lamps (Monaco/Madrid)
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 17.0, radius: 40, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 16.0, radius: 40, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 12.5, radius: 36, street: true };  // warm street lamps (Monaco/Madrid)
     case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 8.0, radius: 42, street: false }; // warm sodium flood banks
     default:             return { tint: [1.14, 1.06, 0.84], intensity: 8.8, radius: 44, street: false }; // green/classic warm-white
   }

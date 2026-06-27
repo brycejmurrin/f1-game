@@ -245,7 +245,9 @@ void main() {
     // Gives tight, defined light pools instead of a soft undefined halo.
     float s = dist / rad;
     float win = clamp(1.0 - s * s * s * s, 0.0, 1.0);
-    float att = win * win / (1.0 + 16.0 * s * s);
+    // Softer hotspot (10·s² vs 16) so the pool fills with light across more of
+    // its radius rather than collapsing to a tight bright spot under the mast.
+    float att = win * win / (1.0 + 10.0 * s * s);
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
 
