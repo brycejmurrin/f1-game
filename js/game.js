@@ -574,7 +574,7 @@ function loadTrack(idx) {
       GLX.freeMesh(track.meshes.floor);
       GLX.freeMesh(track.meshes.road);
       GLX.freeMesh(track.meshes.terrain);
-      GLX.freeMesh(track.meshes.props);
+      if (GLX.freeChunkedMesh) GLX.freeChunkedMesh(track.meshes.props); else GLX.freeMesh(track.meshes.props);
       if (track.meshes.glass) GLX.freeMesh(track.meshes.glass);
       GLX.freeMesh(track.meshes.gate);
       GLX.freeMesh(track.meshes.startline);
@@ -2498,7 +2498,7 @@ function render(dt) {
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
       // map once the sun is below the horizon — directional sun shadows are
       // invisible under the dim moonlight, so this is the biggest night saving.
-      if (sd[1] > -0.03) GLX.castShadow(track.meshes.props, MAT_IDENT);
+      if (sd[1] > -0.03) GLX.castShadowChunked(track.meshes.props, MAT_IDENT);
       GLX.shadowEnd();
     }
   }
@@ -2626,7 +2626,7 @@ function render(dt) {
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
         ? Math.min(0.70, 0.12 + 0.58 * clamp(1 - _sunY * 4, 0, 1))
         : 0;
-  if (!hideMeshes.props) GLX.draw(track.meshes.props, MAT_IDENT,
+  if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: Math.min(0.80, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
           : (night ? { emissive: _floodEmit, roughness: 0.85, specular: 0.20 }

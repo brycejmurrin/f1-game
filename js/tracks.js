@@ -187,7 +187,10 @@ const Tracks = (function () {
       track.terrainGeo = terrainGeo;   // raw geometry kept for the groundY() debug probe
       track.meshes.terrain = GLX.createMesh(terrainGeo);
       const _props = buildProps(track);
-      track.meshes.props = GLX.createMesh(_props.out);
+      // Chunked + frustum-culled: the city/props mesh is huge (up to ~5 M verts),
+      // and most of it is off-screen each frame — drawing only visible XZ cells
+      // (and only shadow-casting cells inside the light frustum) is the big win.
+      track.meshes.props = GLX.createChunkedMesh ? GLX.createChunkedMesh(_props.out, 72) : GLX.createMesh(_props.out);
       track.meshes.glass = GLX.createMesh(_props.glass);
       track.meshes.gate = GLX.createMesh(buildGate(track));
       track.meshes.startline = GLX.createMesh(buildStartLine(track));
