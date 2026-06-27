@@ -945,7 +945,7 @@ void main() {
     }
   }
   accum /= float(N);
-  lampAccum *= uMist * uLampStr * 5.0 / float(N);
+  lampAccum *= uMist * uLampStr * 2.0 / float(N);
   // Henyey-Greenstein phase (g=0.60 = a wider forward lobe so the shafts read
   // across a broader arc, not only when staring straight at the sun) + a small
   // isotropic floor so lit haze glows everywhere, giving an atmospheric volume.

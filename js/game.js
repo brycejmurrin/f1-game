@@ -2872,7 +2872,7 @@ function render(dt) {
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
   // in the shader, so it never greys out the dark night.
-  const _lampVol = (frame.lights && _mist > 0.04) ? clamp(0.25 + 0.85 * _mist, 0, 1.0) : 0;
+  const _lampVol = (frame.lights && _mist > 0.07) ? clamp(0.10 + 0.55 * _mist, 0, 0.75) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
