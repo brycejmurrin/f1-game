@@ -670,6 +670,15 @@ const GameAudio = (function () {
     noise(0.09, 0.05, 320);
   }
 
+  // Thunder: a deep rolling rumble (low-pass noise, long decay) with a closer
+  // crack on top and a long low tail. `near` 0..1 scales loudness + brightness.
+  function thunder(near) {
+    const n = Math.max(0, Math.min(1, near == null ? 0.6 : near));
+    noise(0.10 + n * 0.22, 0.9 + n * 0.7, 170 + n * 150);      // rolling body
+    noise(0.04 + n * 0.12, 0.25, 650 + n * 700, 0.05);          // closer crack
+    noise(0.03 + n * 0.06, 1.7, 85);                            // long low tail
+  }
+
   function lap() {
     blip(988, "square", 0.2, 0.01, 0.1);
     blip(1319, "square", 0.2, 0.01, 0.2, null, 0.1);
@@ -779,6 +788,7 @@ const GameAudio = (function () {
     collision,
     offtrack,
     rumble,
+    thunder,
     lap,
     finish,
     uiTick,

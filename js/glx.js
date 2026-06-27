@@ -60,6 +60,7 @@ uniform float uShadowTexel;
 uniform vec3 uSkyZenith;
 uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
+uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
@@ -374,7 +375,21 @@ void main() {
   // adds a hot bloom right at the sun.
   vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmount, 4.0));
   fogCol += uSunColor * pow(sunAmount, 16.0) * 0.6;
-  outColor = vec4(mix(color, fogCol, f), uAlpha);
+  color = mix(color, fogCol, f);
+  // Low-lying GROUND MIST: a drifting FBM fog that pools near the surface (dawn /
+  // humid / overcast). Densest at a low datum, thinning with altitude and ramping
+  // in with distance; broken by a slow-drifting FBM so it rolls rather than a
+  // flat sheet. Tinted by the fog colour with a warm sun in-scatter.
+  if (uGroundMist > 0.001) {
+    float lowH = max(vWorldPos.y - (uEye.y - 5.0), 0.0);
+    float band = exp(-lowH * 0.30);
+    vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
+    float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
+    float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
+    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0)) * 1.12;
+    color = mix(color, mistCol, clamp(mist, 0.0, 0.72));
+  }
+  outColor = vec4(color, uAlpha);
 }`;
 
   const SKY_VS = `#version 300 es
@@ -1393,7 +1408,7 @@ void main() {}`;
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uTime", "uCloudCover",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightCone[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -1551,6 +1566,7 @@ void main() {}`;
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
     gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
+    gl.uniform1f(litU.uGroundMist,  frame.groundMist != null ? frame.groundMist : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);

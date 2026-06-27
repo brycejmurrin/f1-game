@@ -47,12 +47,12 @@ let rainDrops = [];
 function initRainDrops() {
   rainCanvas.width = window.innerWidth;
   rainCanvas.height = window.innerHeight;
-  rainDrops = Array.from({ length: 220 }, () => ({
+  rainDrops = Array.from({ length: 360 }, () => ({
     x: Math.random() * rainCanvas.width,
     y: Math.random() * rainCanvas.height,
-    len: 12 + Math.random() * 18,
-    speed: 300 + Math.random() * 250,
-    opacity: 0.18 + Math.random() * 0.30,
+    len: 14 + Math.random() * 22,
+    speed: 380 + Math.random() * 360,
+    opacity: 0.16 + Math.random() * 0.34,
   }));
 }
 function drawRain(dt) {
@@ -312,6 +312,7 @@ let _skyT = 0;
 let _ltBase = null;           // { ambientSky, ambientGround } saved at race start
 let _ltFlash = 0;             // 0..1 current flash intensity (decays each frame)
 let _ltNextT = 0;             // seconds until the next lightning strike
+let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 // Cloud cover target for the current session: set once in applyRaceSettings()
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
@@ -862,6 +863,10 @@ function applyRaceSettings() {
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.8);
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.12));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.12));
+    // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
+    // light) so heavy overcast reads atmospheric, not just a flat grey dim.
+    frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
+    if (raceTimeOfDay === "default") frameSky.horizon = [0.74, 0.73, 0.74];
     if (frame.exposure == null || frame.exposure < 1.05) frame.exposure = 1.05;
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
@@ -881,6 +886,21 @@ function applyRaceSettings() {
     frameSky.cloud = _cloudBase;
     // Guarantee frame.exposure always has a value (default = 1.0 if nothing set above)
     if (frame.exposure == null) frame.exposure = 1.0;
+  }
+  // Low-lying ground mist: rolling morning mist at dawn, atmospheric haze in
+  // wet/overcast/fog, a touch at night for mood; a clear day has none. Plus a
+  // per-track lean — humid circuits hold mist, arid deserts stay crisp.
+  {
+    let gm = 0;
+    if (raceTimeOfDay === "dawn") gm = 0.55;
+    else if (raceTimeOfDay === "dusk") gm = 0.28;
+    else if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession)) gm = 0.16;
+    if (raceWeather === "wet") gm = Math.max(gm, 0.30);
+    else if (raceWeather === "overcast") gm = Math.max(gm, 0.34);
+    else if (raceWeather === "fog") gm = Math.max(gm, 0.58);
+    const _mb = track && track.def ? _trackAtmoBias(track.def) : 0;   // +overcast/humid, -arid
+    gm *= 1.0 + clamp(_mb, -0.6, 0.6) * 0.5;
+    frame.groundMist = clamp(gm, 0, 0.7);
   }
   // Save base ambient values so the lightning system can restore them each frame
   _ltBase = {
@@ -2546,6 +2566,15 @@ function render(dt) {
       _ltFlash = 1.0;
       // Next strike in 4–12 seconds
       _ltNextT = 4 + Math.random() * 8;
+      // Queue thunder to lag the flash (sound travels slower than light): a
+      // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
+      _thunderT = 0.3 + Math.random() * 1.7;
+    }
+    if (_thunderT >= 0) {
+      _thunderT -= dt;
+      if (_thunderT < 0 && typeof GameAudio !== "undefined" && GameAudio.thunder) {
+        GameAudio.thunder(clamp(1.0 - (_thunderT + dt) / 2.0, 0.15, 1.0));
+      }
     }
     if (_ltFlash > 0.001) {
       // Decay: fast leading edge, then slow dying glow
@@ -2553,10 +2582,12 @@ function render(dt) {
       if (_ltFlash < 0.001) _ltFlash = 0;
     }
     if (_ltFlash > 0) {
-      // Spike ambient to a cool blue-white; the decay reads as a natural flash
+      // Spike ambient to a cool blue-white; the decay reads as a natural flash.
+      // A brief exposure lift too, so the whole frame bleaches for the strike.
       const f = _ltFlash;
       frame.ambientSky    = _ltBase.ambientSky.map((v)    => Math.min(1, v + 0.55 * f));
       frame.ambientGround = _ltBase.ambientGround.map((v) => Math.min(1, v + 0.40 * f));
+      frame.exposure = (frame.exposure || 1.0) + 0.22 * f;
     } else {
       // Restore base ambient so normal ticks aren't tinted
       frame.ambientSky    = _ltBase.ambientSky.slice();
@@ -2830,11 +2861,12 @@ function render(dt) {
   GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: _ao, godray: _gr, contact: _cs, reflect: _ssr });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
-    // Lightning veil: drawn on top of rain drops so it bleaches the rain too
+    // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
+    // Stronger bleach (was 0.18) so a strike is a real concussive sky-flash.
     if (_ltFlash > 0.001) {
       rainCtx2d.save();
-      rainCtx2d.globalAlpha = _ltFlash * 0.18;
-      rainCtx2d.fillStyle = "#d8ecff";
+      rainCtx2d.globalAlpha = Math.min(0.55, _ltFlash * 0.40);
+      rainCtx2d.fillStyle = "#dcecff";
       rainCtx2d.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
       rainCtx2d.restore();
     }
