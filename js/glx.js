@@ -245,11 +245,21 @@ void main() {
     // Gives tight, defined light pools instead of a soft undefined halo.
     float s = dist / rad;
     float win = clamp(1.0 - s * s * s * s, 0.0, 1.0);
-    // Tight hotspot (20·s²): each lamp concentrates into a defined bright circle
-    // under the mast that falls off fast to dark, so the track reads as dark
-    // tarmac punctuated by lamp pools (high contrast) rather than a flat sheet
-    // of overlapping light.
-    float att = win * win / (1.0 + 20.0 * s * s);
+    // Medium hotspot (9·s²): each lamp lays down a defined bright circle on the
+    // road that falls off to dark before the next lamp, so the track reads as
+    // dark tarmac punctuated by lamp pools (high contrast) rather than either a
+    // flat overlapping sheet (too soft) or a tiny spot (too tight).
+    float att = win * win / (1.0 + 9.0 * s * s);
+    // Downward SPOTLIGHT cone: lamp posts aim at the ground, so gate the pool by
+    // how vertical the surface→lamp direction is (Ld.y). A surface under the lamp
+    // (Ld pointing up, Ld.y≈1) is fully lit; out toward the gap between lamps the
+    // direction tips horizontal (Ld.y→0) and the light cuts off — leaving real
+    // darkness between the pools. This (not intensity/radius) is what makes the
+    // lamps read as distinct circles on the road. The cone is TIGHT (full within
+    // ~21° of straight-down, dark past ~37°) so from a 9-13 m mast the ground
+    // circle is small enough that the gaps between lamps stay dark.
+    float spot = smoothstep(0.80, 0.93, Ld.y);
+    att *= spot;
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
 

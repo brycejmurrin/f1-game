@@ -2115,11 +2115,11 @@ function floodColor(theme) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 22.0, radius: 34, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 21.0, radius: 34, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 17.0, radius: 32, street: true };  // warm street lamps (Monaco/Madrid)
-    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 19.0, radius: 42, street: false }; // warm sodium flood banks
-    default:             return { tint: [1.14, 1.06, 0.84], intensity: 20.0, radius: 44, street: false }; // green/classic warm-white
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 20.0, radius: 26, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 19.0, radius: 26, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 16.0, radius: 24, street: true };  // warm street lamps (Monaco/Madrid)
+    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 18.0, radius: 30, street: false }; // warm sodium flood banks
+    default:             return { tint: [1.14, 1.06, 0.84], intensity: 19.0, radius: 32, street: false }; // green/classic warm-white
   }
 }
 function buildTrackLights(track) {
@@ -2138,7 +2138,11 @@ function buildTrackLights(track) {
   let i = 0;
   for (let k = 0; k < n; k += stride, i++) {
     const side = (i % 2 === 0) ? 1 : -1;
-    const off = (track.hw[k] + 6) * side;   // matches the floodlight masts (buildProps)
+    // The visible mast sits beyond the track edge (hw+6, see buildProps), but the
+    // LIGHT is pulled inward to sit over the road (its arm reaches over the track),
+    // so the pool lands as a bright circle ON the racing surface — alternating
+    // sides down the lap — instead of out on the grass verge.
+    const off = (track.hw[k] * 0.5) * side;
     // Per-lamp VARIANCE: warmth jitter (some sodium-orange, some cool white) and a
     // brightness jitter, so a row of lamps isn't a uniform clone — reads like real
     // street lighting where bulbs age/differ. Deterministic per lamp index.
