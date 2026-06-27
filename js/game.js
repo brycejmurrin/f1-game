@@ -2146,24 +2146,34 @@ function buildTrackLights(track) {
     // Per-lamp VARIANCE: warmth jitter (some sodium-orange, some cool white) and a
     // brightness jitter, so a row of lamps isn't a uniform clone — reads like real
     // street lighting where bulbs age/differ. Deterministic per lamp index.
-    const warm = (lh(i) - 0.5) * 0.52;          // -0.26 … +0.26 warm/cool shift (wide)
     const bri  = 0.70 + lh(i + 97) * 0.62;      // 0.70 … 1.32 brightness (wide)
     const e = intensity * bri;
+    // Per-lamp COLOUR TEMPERATURE variety: orange sodium ↔ warm yellow ↔ cool
+    // white, blended with the theme's base tint so a row of lamps is a believable
+    // mix (some orange, some yellow, some white) rather than one flat colour.
+    const ct = lh(i + 17);
+    let pr, pg, pb;
+    if (ct < 0.34)      { pr = 1.34; pg = 0.70; pb = 0.32; }   // orange sodium
+    else if (ct < 0.68) { pr = 1.16; pg = 1.00; pb = 0.55; }   // warm yellow
+    else                { pr = 0.93; pg = 0.99; pb = 1.15; }   // cool white
+    const mr = tint[0] * 0.38 + pr * 0.62;
+    const mg = tint[1] * 0.38 + pg * 0.62;
+    const mb = tint[2] * 0.38 + pb * 0.62;
     // Per-lamp spotlight variance fed to the lit shader. Street/city circuits
-    // BLEED more — the city skyglow keeps the road lit between pools (Vegas), so
-    // the road reads brighter — while open circuits stay dark between pools.
-    // Edge hardness also varies per lamp so some pools have crisp rims, some soft.
-    const bleedBase = street ? 0.22 : 0.05;
-    const bleedVar  = street ? 0.18 : 0.11;
+    // BLEED more — the city skyglow keeps the road lit between pools (Vegas) —
+    // while open circuits stay darker between (but not pitch-black). Edge hardness
+    // also varies per lamp so some pools have crisp rims, some soft.
+    const bleedBase = street ? 0.24 : 0.10;
+    const bleedVar  = street ? 0.18 : 0.12;
     const bleed = bleedBase + lh(i + 31) * bleedVar;
     const hard  = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
     lights.push(
       track.px[k] + track.rx[k] * off,
       track.py[k] + height,
       track.pz[k] + track.rz[k] * off,
-      Math.max(0, (tint[0] + warm)) * e,
-      tint[1] * e,
-      Math.max(0, (tint[2] - warm)) * e,
+      Math.max(0, mr) * e,
+      Math.max(0, mg) * e,
+      Math.max(0, mb) * e,
       radius,
       bleed, hard,
     );
@@ -2763,11 +2773,10 @@ function render(dt) {
   let _grade, _bloom = 0.55, _thresh = 0.78;
   if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) {
     _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
-    // Strong bloom, HIGH threshold: only the genuinely bright HDR sources (lamps,
-    // neon, lit windows now pushed >1.0) bloom into halos — the dark scene between
-    // them stays dark instead of glowing. Bloom pushed hard so the lamps throw a
-    // big glow against the now-very-dark track.
-    _bloom = 1.55; _thresh = 0.82;
+    // Moderate bloom, HIGH threshold: only the genuinely bright HDR sources
+    // (lamps, neon, lit windows >1.0) bloom into halos — the dark scene between
+    // them stays dark. Dialled back from the previous heavy bloom.
+    _bloom = 1.05; _thresh = 0.86;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     _bloom = 0.62; _thresh = 0.68;

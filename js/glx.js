@@ -260,8 +260,10 @@ void main() {
     // .y = edge hardness (soft, wide falloff ↔ hard, crisp rim). Each lamp differs
     // so a row of lights isn't an identical clone.
     vec2 cn = uLightCone[i];
-    float edgeW = mix(0.30, 0.07, cn.y);            // soft (wide) ↔ hard (narrow) rim
-    float spot = cn.x + (1.0 - cn.x) * smoothstep(0.90 - edgeW, 0.90, Ld.y);
+    float edgeW = mix(0.32, 0.08, cn.y);            // soft (wide) ↔ hard (narrow) rim
+    // Inner cos 0.84 (~33° half-angle) → bigger pools that overlap more, leaving
+    // less darkness between lamps while still reading as pools.
+    float spot = cn.x + (1.0 - cn.x) * smoothstep(0.84 - edgeW, 0.84, Ld.y);
     att *= spot;
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
