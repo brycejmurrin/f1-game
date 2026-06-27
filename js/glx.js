@@ -480,8 +480,13 @@ void main() {
     vec2 cp1 = cp + drift1;
     vec2 cp2 = cp + drift2;
     float f = fbm(cp1);
-    float cov = smoothstep(0.55 - uCloud * 0.4, 0.92, f);
-    cov *= smoothstep(0.012, 0.08, up);
+    // Fuller, more defined clouds: lower the coverage band so puffy cumulus read
+    // clearly instead of faint wisps (was 0.55→0.92, which left clear days plain).
+    float cov = smoothstep(0.50 - uCloud * 0.42, 0.84, f);
+    // Let clouds reach DOWN into the low sky band that gameplay actually sees
+    // above the scenery (they used to fade out below ~5°, leaving that band a
+    // plain pale wash); they bunch toward the horizon like real distant cumulus.
+    cov *= smoothstep(0.013, 0.045, up);
     // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
     // thick billowing regions = shadowed dark underside.
     float thick = clamp(fbm(cp2 * 0.55 + vec2(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);

@@ -737,7 +737,7 @@ function applyRaceSettings() {
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
-      _cloudBase = 0.40 + ovc * 0.42;     // broken cloud even on clear days → dappled cloud shadows; overcast → heavy deck
+      _cloudBase = 0.52 + ovc * 0.40;     // fuller broken cloud even on clear days → dappled shadows; overcast → heavy deck
       // Brighter, punchier midday (was a flat 0.92). Clear days run a touch
       // hotter; overcast pulled back so the grey doesn't glare.
       frame.exposure = 1.06 + clr * 0.05 - ovc * 0.08;
@@ -752,7 +752,7 @@ function applyRaceSettings() {
     // floodlights (buildTrackLights) now carve out the actually-lit areas.
     if (isNightSession) frame.sunColor = [0.16, 0.18, 0.26];
     _cloudBase = frameSky.cloud !== undefined ? frameSky.cloud
-               : (isNightSession ? 0.22 : 0.4);
+               : (isNightSession ? 0.22 : 0.52);   // fuller daytime cloudscape (was 0.4 → plain blue)
 
     // Global night ambient FLOOR: some night tracks ship very dark palette
     // ambients and rely entirely on per-mesh emissive to stay legible. Lift
@@ -2775,8 +2775,12 @@ function render(dt) {
     _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
     // Moderate bloom, HIGH threshold: only the genuinely bright HDR sources
     // (lamps, neon, lit windows >1.0) bloom into halos — the dark scene between
-    // them stays dark. Dialled back from the previous heavy bloom.
-    _bloom = 1.05; _thresh = 0.86;
+    // them stays dark. Dialled back from the previous heavy bloom. Neon-heavy
+    // city circuits (street/modern) get LESS bloom + a higher threshold so the
+    // dense neon doesn't over-glow; open circuits keep more bloom for the lamps.
+    const _neonCity = track.def.theme === "street_night" || track.def.theme === "modern";
+    _bloom = _neonCity ? 0.70 : 1.05;
+    _thresh = _neonCity ? 0.92 : 0.86;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     _bloom = 0.62; _thresh = 0.68;
