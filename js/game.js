@@ -406,6 +406,7 @@ const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = ne
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
+const _upVS = new Float32Array(3);   // world-up expressed in view space (wet-road SSR)
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null;
 
@@ -638,8 +639,8 @@ function applyRaceSettings() {
       // NEAR-BLACK cool ambient: the world is genuinely dark, the LIGHT SOURCES
       // (lamps, neon, lit windows) do all the lifting. A high ambient here is the
       // #1 cause of a flat-grey "night that looks like dim day".
-      frame.ambientGround = [0.008, 0.010, 0.022];
-      frame.ambientSky = [0.020, 0.024, 0.050];
+      frame.ambientGround = [0.004, 0.005, 0.013];
+      frame.ambientSky = [0.011, 0.014, 0.030];
       frame.fogColor = [0.015, 0.017, 0.035];
       frame.fogDensity = 0.004;
       // When raceTimeOfDay !== "default", sync sky colours to frame too
@@ -770,8 +771,8 @@ function applyRaceSettings() {
       // the low cap stops over-bright palettes from washing the night to daylight.
       // Near-black cool floor + a LOW cap so over-bright night palettes can't lift
       // the scene to grey — the floodlights/neon/windows carve out the lit areas.
-      const floorSky = [0.012, 0.014, 0.030], floorGnd = [0.006, 0.007, 0.016];
-      const capSky   = [0.045, 0.050, 0.085], capGnd   = [0.020, 0.022, 0.040];
+      const floorSky = [0.007, 0.008, 0.018], floorGnd = [0.003, 0.004, 0.010];
+      const capSky   = [0.028, 0.032, 0.056], capGnd   = [0.012, 0.013, 0.026];
       // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
       frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
       frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
@@ -2114,11 +2115,11 @@ function floodColor(theme) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 17.0, radius: 40, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 16.0, radius: 40, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 12.5, radius: 36, street: true };  // warm street lamps (Monaco/Madrid)
-    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 8.0, radius: 42, street: false }; // warm sodium flood banks
-    default:             return { tint: [1.14, 1.06, 0.84], intensity: 8.8, radius: 44, street: false }; // green/classic warm-white
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 26.0, radius: 44, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 25.0, radius: 44, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 19.0, radius: 40, street: true };  // warm street lamps (Monaco/Madrid)
+    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 19.0, radius: 48, street: false }; // warm sodium flood banks
+    default:             return { tint: [1.14, 1.06, 0.84], intensity: 20.0, radius: 50, street: false }; // green/classic warm-white
   }
 }
 function buildTrackLights(track) {
@@ -2129,7 +2130,7 @@ function buildTrackLights(track) {
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
   const ds = total / n;
-  const stride = Math.max(1, Math.round(26 / ds));   // denser than before so corners don't fall dark
+  const stride = Math.max(1, Math.round(22 / ds));   // denser than before; matches the masts in buildProps
   const { tint, intensity, radius, street } = floodColor(track.def.theme);
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
@@ -2170,27 +2171,33 @@ function setFrameLights(eye, scale) {
   const sg = Array.isArray(scale) ? scale[1] : sr;
   const sb = Array.isArray(scale) ? scale[2] : sr;
   const count = src.length / 7;
+  const out = _lightScaleBuf;
   if (count <= 32) {
     if (sr === 1 && sg === 1 && sb === 1) { frame.lights = src; return; }
     // Scale without mutating the cached set: copy and scale only the rgb channels.
-    _lightScaleBuf.length = 0;
+    out.length = 0;
     for (let i = 0; i < src.length; i += 7) {
-      _lightScaleBuf.push(src[i], src[i+1], src[i+2],
+      out.push(src[i], src[i+1], src[i+2],
         src[i+3] * sr, src[i+4] * sg, src[i+5] * sb, src[i+6]);
     }
-    frame.lights = _lightScaleBuf;
+    frame.lights = out;
     return;
   }
-  // distance-rank: cheap partial selection of the nearest 32
-  _lightCullBuf.length = 0;
+  // distance-rank: select the nearest 32. Reuse a pooled object array + the
+  // output buffer so a dense night grid doesn't allocate fresh garbage every
+  // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
+  const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
     const o = i * 7, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
-    _lightCullBuf.push({ d: dx * dx + dy * dy + dz * dz, o });
+    const d = dx * dx + dy * dy + dz * dz;
+    const e = buf[i];
+    if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
   }
-  _lightCullBuf.sort((a, b) => a.d - b.d);
-  const out = [];
+  buf.length = count;
+  buf.sort((a, b) => a.d - b.d);
+  out.length = 0;
   for (let i = 0; i < 32; i++) {
-    const o = _lightCullBuf[i].o;
+    const o = buf[i].o;
     out.push(src[o], src[o+1], src[o+2], src[o+3] * sr, src[o+4] * sg, src[o+5] * sb, src[o+6]);
   }
   frame.lights = out;
@@ -2433,11 +2440,18 @@ function render(dt) {
     const l = Math.hypot(x, y, z) || 1;
     _sunVS[0] = x/l; _sunVS[1] = y/l; _sunVS[2] = z/l;
   }
+  // World-up (0,1,0) in VIEW space: the second column of mat3(view). Used by the
+  // wet-road screen-space reflection to pick out up-facing road pixels.
+  {
+    const l = Math.hypot(_mView[4], _mView[5], _mView[6]) || 1;
+    _upVS[0] = _mView[4]/l; _upVS[1] = _mView[5]/l; _upVS[2] = _mView[6]/l;
+  }
   frame.viewProj = _mVP;
   frame.proj = _mProj;
   frame.invProj = _mInvProj;
   frame.invViewProj = _mInvVP;
   frame.sunViewDir = _sunVS;
+  frame.upViewDir = _upVS;
   frame.eye = camEye;
 
   // Shadow pass — render terrain + road from sun's perspective.
@@ -2748,14 +2762,9 @@ function render(dt) {
     _grade = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
     _bloom = 0.74; _thresh = 0.72;
   }
-  // Volumetric light glow: additive beam + halo cones at each lamp, drawn into
-  // the HDR scene so they bloom into god-ray streaks. Strength ramps with the
-  // same sun-elevation factor as the floodlights (faint at dusk, full at night).
-  if (frame.lights && frame.lights.length) {
-    const _gsy = frame.sunDir ? frame.sunDir[1] : -1;
-    const _gnf = clamp((0.07 - _gsy) / 0.22, 0, 1);
-    GLX.drawGlow(frame.lights, 0.06 * (0.30 + 0.70 * _gnf));
-  }
+  // (Lamp volumetric beam/halo cones removed — they read as hazy light shafts;
+  // the lamps now carry the scene through brighter point-light pools instead,
+  // and dropping the per-lamp glow draw saves frame time on dense night grids.)
   // Volumetric sun shafts: dramatic at dawn/dusk (low sun), moderate by day,
   // off at night (sun below horizon). Low-sun factor drives the big boost.
   const _grSunY = frame.sunDir ? frame.sunDir[1] : -1;
@@ -2765,7 +2774,11 @@ function render(dt) {
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
   const _cs = _grSunY > 0.05 ? 0.5 : 0;
-  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85, godray: _gr, contact: _cs });
+  // Wet-road screen-space reflection of the neon city: only when wet AND the
+  // scene is dark enough that floodlights/neon are on (frame.lights populated) —
+  // that's where the in-shader sky env reflection has nothing to mirror.
+  const _ssr = (frame.lights && (frame.wetness || 0) > 0.01) ? frame.wetness : 0;
+  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: 0.85, godray: _gr, contact: _cs, reflect: _ssr });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too

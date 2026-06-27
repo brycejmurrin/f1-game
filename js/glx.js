@@ -857,7 +857,20 @@ uniform float uSunShaft;
 uniform vec3 uGradeShadow;   // multiplicative tint pulled into shadows  (~1.0 = neutral)
 uniform vec3 uGradeHi;       // multiplicative tint pulled into highlights (~1.0 = neutral)
 uniform float uGradeStr;     // 0 = neutral grade (backward-compatible)
+uniform sampler2D uDepth;    // scene depth (for wet-road screen-space reflection)
+uniform mat4 uInvProj;       // clip → view (reconstruct view position from depth)
+uniform mat4 uProj;          // view → clip  (project the marched ray to screen)
+uniform vec3 uUpVS;          // world-up in view space (pick out up-facing road)
+uniform vec2 uReflTexel;     // 1/width, 1/height
+uniform float uReflect;      // wet-road SSR strength (0 = off)
 out vec4 outColor;
+
+// Reconstruct view-space position from the depth buffer at a screen UV.
+vec3 ssrViewPos(vec2 uv) {
+  float d = texture(uDepth, uv).r * 2.0 - 1.0;     // window depth → NDC z
+  vec4 cp = uInvProj * vec4(uv * 2.0 - 1.0, d, 1.0);
+  return cp.xyz / cp.w;
+}
 
 // ACES fitted filmic tone-map (Stephen Hill's approximation).
 // Preserves colour ratios better than Reinhard; keeps darks dark, rolls off highlights.
@@ -904,6 +917,60 @@ void main() {
 
   // Volumetric sun shafts: additive in-scattered sunlight (0 when disabled).
   c += texture(uGodray, vUV).rgb;
+
+  // ── Wet-road screen-space reflection ────────────────────────────────────────
+  // The neon city and lit windows are emissive geometry (not point lights), so
+  // the lit shader can't mirror them on wet tarmac. Here we march the reflected
+  // view ray through the depth buffer and sample the already-lit scene colour,
+  // so the city actually reflects in wet night roads. Gated to wet+dark scenes.
+  // Cheap early-out: the sky sits at the far plane and the upper screen is never
+  // wet road — skip the costly position/normal reconstruction + march there.
+  // Guarded so dry/day frames (uReflect 0, uDepth unbound) never sample depth.
+  if (uReflect > 0.001 && texture(uDepth, vUV).r < 0.9999 && vUV.y < 0.62) {
+    vec3 P = ssrViewPos(vUV);
+    // View-space normal from depth derivatives (cheap; rough at silhouettes, but
+    // the road-mask + march thickness test reject the bad cases).
+    vec3 dpx = ssrViewPos(vUV + vec2(uReflTexel.x, 0.0)) - P;
+    vec3 dpy = ssrViewPos(vUV + vec2(0.0, uReflTexel.y)) - P;
+    vec3 Nv = normalize(cross(dpx, dpy));
+    if (Nv.z < 0.0) Nv = -Nv;                     // face the eye (view space looks down -z)
+    float upDot = dot(Nv, normalize(uUpVS));
+    // Up-facing AND not the very-near cockpit (z near 0). P.z is negative ahead.
+    // Fade out the far field: depth precision + coarse march steps there breed
+    // speckle, and reflections compress to nothing near the horizon anyway — so
+    // keep the clean, high-impact foreground and taper the distance out.
+    float roadMask = smoothstep(0.55, 0.85, upDot)
+                   * smoothstep(-2.5, -7.0, P.z)
+                   * (1.0 - smoothstep(-22.0, -55.0, P.z));
+    if (roadMask > 0.001) {
+      vec3 V = normalize(-P);
+      vec3 R = reflect(-V, Nv);                    // points up toward the city
+      vec3 pos = P;
+      float stepLen = 0.7;
+      vec3 hitCol = vec3(0.0);
+      float hit = 0.0;
+      for (int i = 0; i < 16; i++) {
+        pos += R * stepLen;
+        stepLen *= 1.34;                           // geometric growth → cover depth cheaply
+        vec4 cp = uProj * vec4(pos, 1.0);
+        if (cp.w <= 0.0) break;
+        vec2 suv = cp.xy / cp.w * 0.5 + 0.5;
+        if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
+        float sceneZ = ssrViewPos(suv).z;          // scene depth along the ray
+        // Ray passed just behind a surface → intersection (with a thickness gate
+        // so we don't latch onto the far sky/background).
+        if (pos.z < sceneZ - 0.25 && pos.z > sceneZ - 6.0) {
+          hitCol = texture(uScene, suv).rgb;
+          // Fade as the hit nears the screen edge (no data past the frame).
+          vec2 e = abs(suv - 0.5) * 2.0;
+          hit = (1.0 - pow(max(e.x, e.y), 4.0));
+          break;
+        }
+      }
+      float fres = pow(1.0 - max(dot(Nv, V), 0.0), 4.0);
+      c += hitCol * hit * roadMask * uReflect * (0.30 + 0.9 * fres);
+    }
+  }
 
   // Exposure multiply before tone-mapping (default 1.0 = no change).
   c *= uExposure;
@@ -1003,6 +1070,7 @@ void main() {}`;
   let frameInvVP = null;
   let frameProj = null;
   let frameSunVS = null;
+  let frameUpVS = null;
   let frameSunColor = null;
   let frameTime = 0, frameCloud = 0;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
@@ -1114,7 +1182,7 @@ void main() {}`;
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -1371,6 +1439,7 @@ void main() {}`;
     frameInvVP = frame.invViewProj || null;
     frameProj = frame.proj || null;
     frameSunVS = frame.sunViewDir || null;
+    frameUpVS = frame.upViewDir || null;
     frameTime = frame.time != null ? frame.time : 0;
     frameCloud = frame.cloud != null ? frame.cloud : 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
@@ -1706,6 +1775,19 @@ void main() {}`;
     gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);
     gl.uniform3fv(compU.uGradeHi, grade && grade.hi ? grade.hi : [1, 1, 1]);
     gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
+    // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
+    const reflStr = (opts && opts.reflect) || 0;
+    const haveRefl = reflStr > 0 && frameInvProj && frameProj && frameUpVS;
+    if (haveRefl) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
+      gl.uniform1i(compU.uDepth, 4);
+      gl.uniformMatrix4fv(compU.uInvProj, false, frameInvProj);
+      gl.uniformMatrix4fv(compU.uProj, false, frameProj);
+      gl.uniform3fv(compU.uUpVS, frameUpVS);
+      gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
+    }
+    gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     bindVAO(null);

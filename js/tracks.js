@@ -2575,7 +2575,7 @@ const Tracks = (function () {
 
     // Generic floodlight masts — EVERY circuit gets them (visible day and night).
     // Co-located with the point lights (game.js buildTrackLights uses the same
-    // 40 m stride, hw+6 offset and side parity) so each light pool reads as cast
+    // 22 m stride, hw+6 offset and side parity) so each light pool reads as cast
     // by a real mast. Street/modern circuits get slim lamp posts with an arm over
     // the track; open circuits get tall floodlight banks. The lens uses a bright
     // albedo so the prop-emissive (ramped up as the sun drops) makes it glow at
@@ -2592,7 +2592,7 @@ const Tracks = (function () {
                     : theme === "street_day"   ? [1.06, 0.98, 0.82]
                     : [1.00, 0.93, 0.78];
       const poleCol = [0.16, 0.16, 0.19];
-      const mstride = Math.max(1, Math.round(34 / ds));
+      const mstride = Math.max(1, Math.round(22 / ds));   // matches buildTrackLights stride in game.js
       let mi = 0;
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
