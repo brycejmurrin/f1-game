@@ -2115,11 +2115,11 @@ function floodColor(theme) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 17.0, radius: 32, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 16.0, radius: 32, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 13.0, radius: 30, street: true };  // warm street lamps (Monaco/Madrid)
-    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 15.0, radius: 40, street: false }; // warm sodium flood banks
-    default:             return { tint: [1.14, 1.06, 0.84], intensity: 16.0, radius: 42, street: false }; // green/classic warm-white
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 22.0, radius: 34, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 21.0, radius: 34, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 17.0, radius: 32, street: true };  // warm street lamps (Monaco/Madrid)
+    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 19.0, radius: 42, street: false }; // warm sodium flood banks
+    default:             return { tint: [1.14, 1.06, 0.84], intensity: 20.0, radius: 44, street: false }; // green/classic warm-white
   }
 }
 function buildTrackLights(track) {
@@ -2597,12 +2597,12 @@ function render(dt) {
   // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
   const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
   const _floodEmit =
-    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.70
+    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.92
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.min(0.62, 0.12 + 0.52 * clamp(1 - _sunY * 4, 0, 1))
+        ? Math.min(0.70, 0.12 + 0.58 * clamp(1 - _sunY * 4, 0, 1))
         : 0;
   if (!hideMeshes.props) GLX.draw(track.meshes.props, MAT_IDENT,
-    wet   ? (night ? { emissive: Math.min(0.60, _floodEmit), roughness: 0.55, specular: 0.38 }
+    wet   ? (night ? { emissive: Math.min(0.80, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
           : (night ? { emissive: _floodEmit, roughness: 0.85, specular: 0.20 }
                    : { roughness: 0.85, specular: 0.20 }));
@@ -2750,8 +2750,9 @@ function render(dt) {
     _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
     // Strong bloom, HIGH threshold: only the genuinely bright HDR sources (lamps,
     // neon, lit windows now pushed >1.0) bloom into halos — the dark scene between
-    // them stays dark instead of glowing.
-    _bloom = 1.05; _thresh = 0.85;
+    // them stays dark instead of glowing. Bloom pushed hard so the lamps throw a
+    // big glow against the now-very-dark track.
+    _bloom = 1.55; _thresh = 0.82;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     _bloom = 0.62; _thresh = 0.68;

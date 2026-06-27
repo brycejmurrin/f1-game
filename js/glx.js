@@ -338,7 +338,7 @@ void main() {
     // Push the glow well PAST 1.0 (HDR) so lit windows / neon / lamp lenses read
     // as actual light SOURCES — they punch through the dark and bloom into halos,
     // instead of sitting as flat bright paint.
-    color += albedo * glow * 2.2;
+    color += albedo * glow * 3.2;
   }
 
   // Height-based fog: density falls off exponentially with altitude above eye level.
