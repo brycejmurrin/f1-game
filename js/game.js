@@ -737,7 +737,7 @@ function applyRaceSettings() {
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
-      _cloudBase = 0.52 + ovc * 0.40;     // fuller broken cloud even on clear days → dappled shadows; overcast → heavy deck
+      _cloudBase = 0.44 + ovc * 0.42;     // modest broken cloud (sky shader adds the cumulus richness); overcast → heavy deck
       // Brighter, punchier midday (was a flat 0.92). Clear days run a touch
       // hotter; overcast pulled back so the grey doesn't glare.
       frame.exposure = 1.06 + clr * 0.05 - ovc * 0.08;
@@ -752,7 +752,7 @@ function applyRaceSettings() {
     // floodlights (buildTrackLights) now carve out the actually-lit areas.
     if (isNightSession) frame.sunColor = [0.16, 0.18, 0.26];
     _cloudBase = frameSky.cloud !== undefined ? frameSky.cloud
-               : (isNightSession ? 0.22 : 0.52);   // fuller daytime cloudscape (was 0.4 → plain blue)
+               : (isNightSession ? 0.22 : 0.44);   // modest cover; the sky shader carries the richer cumulus look
 
     // Global night ambient FLOOR: some night tracks ship very dark palette
     // ambients and rely entirely on per-mesh emissive to stay legible. Lift

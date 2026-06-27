@@ -431,6 +431,11 @@ void main() {
   // Drives automatic golden-hour / sunset tint without per-track authoring.
   float sunE = clamp(uSunDir.y * 1.4, 0.0, 1.0);
 
+  // Bright-DAY gate: 1 only when the sun is well up (≈25°+). Isolates day-only
+  // sky enrichments (cumulus definition, horizon cloud-bank, gradient life) so
+  // the dramatic dusk/dawn/night looks that share this shader are untouched.
+  float daytime = smoothstep(0.35, 0.60, sunE);
+
   // Overcast factor: drives grey-shift and corona damping under heavy cloud.
   float overcast = smoothstep(0.5, 1.0, uCloud);
 
@@ -444,6 +449,17 @@ void main() {
     // narrower — avoids the pale/washed look at mid-sky while keeping the
     // gradient smooth. (Was 0.5 which mapped too much sky to the horizon tint.)
     c = mix(horizonO, zenithO, pow(up, 0.35));
+    // Day gradient LIFE: a deeper saturated blue pushed into the low/mid band
+    // (so the gameplay sky strip isn't a flat pale wash) plus a faint azimuthal
+    // variation that breaks the perfectly-smooth gradient. Day-only and faded
+    // under overcast, so dusk/dawn/night and grey days are untouched.
+    {
+      float bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
+      vec3 deepBlue = vec3(0.10, 0.30, 0.72);
+      c = mix(c, mix(c, deepBlue, 0.30), daytime * (1.0 - overcast) * bandLM);
+      float az = vnoise2(vec2(atan(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
+      c *= 1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up));
+    }
     // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
     // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
     // Damped under overcast so heavy cloud doesn't show warm colour.
@@ -480,13 +496,27 @@ void main() {
     vec2 cp1 = cp + drift1;
     vec2 cp2 = cp + drift2;
     float f = fbm(cp1);
-    // Fuller, more defined clouds: lower the coverage band so puffy cumulus read
-    // clearly instead of faint wisps (was 0.55→0.92, which left clear days plain).
-    float cov = smoothstep(0.50 - uCloud * 0.42, 0.84, f);
-    // Let clouds reach DOWN into the low sky band that gameplay actually sees
-    // above the scenery (they used to fade out below ~5°, leaving that band a
-    // plain pale wash); they bunch toward the horizon like real distant cumulus.
-    cov *= smoothstep(0.013, 0.045, up);
+    // Base coverage. Lower band than the old 0.55→0.92 so puffy cumulus read
+    // clearly instead of faint wisps; fade in just above the horizon.
+    float cov = smoothstep(0.50 - uCloud * 0.42, 0.84, f) * smoothstep(0.013, 0.05, up);
+    // ── Daytime cloudscape enrichments (day-gated; dusk/dawn/night unchanged) ──
+    if (daytime > 0.001) {
+      // Billow: a higher-frequency octave carves lumpy cumulus definition so the
+      // puffs read as 3-D cauliflower rather than flat smears.
+      float billow = fbm(cp1 * 2.3 + vec2(11.7, 4.3));
+      float defined = smoothstep(0.42, 0.80, f * 0.6 + billow * 0.45)
+                    * smoothstep(0.013, 0.05, up);
+      cov = mix(cov, max(cov, defined), daytime * 0.85);
+      // Horizon cloud-bank: distant cumulus bunched near the horizon on a
+      // compressed plane, so the LOW gameplay sky band (just above the scenery)
+      // is never a plain wash. Its own coverage + a band fade focused ~1–9°.
+      vec2 bp = dir.xz / max(up, 0.02) * 0.16 + drift1 * 1.4;
+      float bankCov = smoothstep(0.46 - uCloud * 0.30, 0.80, fbm(bp))
+                    * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.09, 0.24, up));
+      cov = max(cov, bankCov * daytime * (1.0 - overcast * 0.5));
+      // Firmer edges so day cumulus look solid, not gauzy.
+      cov = mix(cov, smoothstep(0.18, 0.82, cov), daytime * 0.5);
+    }
     // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
     // thick billowing regions = shadowed dark underside.
     float thick = clamp(fbm(cp2 * 0.55 + vec2(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
@@ -507,6 +537,12 @@ void main() {
     cloudBot += uSunColor * vec3(0.9, 0.42, 0.5) * (0.22 * golden * (1.0 - overcast));
     cloudBot = mix(cloudBot, vec3(0.19, 0.19, 0.22), overcast * 0.60);
     vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
+    // Day: widen the top↔bottom contrast so cumulus get punchy sunlit caps and
+    // shadowed bases (gated; twilight clouds keep their soft warm grading).
+    {
+      float capf = clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0);
+      lit = mix(lit, mix(cloudBot * 0.80, cloudTop * 1.14, capf), daytime * 0.45);
+    }
     // Silver lining: thin sun-facing cloud edges glow bright (backlit forward scatter),
     // most intense at golden hour — the defining dramatic-cloud cue.
     float silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + golden) * (1.0 - overcast * 0.7);
@@ -1061,6 +1097,14 @@ void main() {
   vec2 q = vUV - 0.5;
   float vig = smoothstep(0.95, 0.35, length(q));
   c *= mix(0.86, 1.0, vig);
+
+  // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to
+  // break the 8-bit banding that otherwise stamps visible steps onto smooth sky
+  // and fog gradients (and rescues the RGBA8 fallback path). Two hashes → a
+  // triangular distribution in [-1,1]; cheap, per-pixel.
+  float d0 = fract(sin(dot(vUV, vec2(12.9898, 78.233))) * 43758.5453);
+  float d1 = fract(sin(dot(vUV, vec2(39.3468, 11.135))) * 24634.6345);
+  c += (d0 + d1 - 1.0) / 255.0;
   outColor = vec4(c, 1.0);
 }`;
 
