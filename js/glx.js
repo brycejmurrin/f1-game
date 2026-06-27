@@ -69,6 +69,7 @@ uniform int uNumLights;
 uniform vec3 uLightPos[MAX_LIGHTS];
 uniform vec3 uLightCol[MAX_LIGHTS];
 uniform float uLightRad[MAX_LIGHTS];
+uniform vec2 uLightCone[MAX_LIGHTS];   // per-lamp spotlight: x=bleed floor, y=edge hardness
 out vec4 outColor;
 
 const float PI = 3.14159265359;
@@ -252,12 +253,15 @@ void main() {
     float att = win * win / (1.0 + 9.0 * s * s);
     // Downward SPOTLIGHT cone: lamp posts aim at the ground, so gate the pool by
     // how vertical the surface→lamp direction is (Ld.y). A surface under the lamp
-    // (Ld pointing up, Ld.y≈1) is fully lit; out toward the gap between lamps the
-    // direction tips horizontal (Ld.y→0) and the light fades — so the lamps read
-    // as distinct circles on the road. A soft, wide cone (full within ~32°, fading
-    // to ~57°) with a small floor lets the pools BLEED into each other a little
-    // and keeps a faint wash between them, rather than a hard spotlight cutoff.
-    float spot = 0.06 + 0.94 * smoothstep(0.70, 0.90, Ld.y);
+    // (Ld.y≈1) is fully lit; out toward the gap between lamps the direction tips
+    // horizontal and the light fades — so the lamps read as distinct circles.
+    // Per-lamp variance (uLightCone): .x = bleed floor (how much light spills
+    // between pools — city streets bleed more, open circuits stay dark between),
+    // .y = edge hardness (soft, wide falloff ↔ hard, crisp rim). Each lamp differs
+    // so a row of lights isn't an identical clone.
+    vec2 cn = uLightCone[i];
+    float edgeW = mix(0.30, 0.07, cn.y);            // soft (wide) ↔ hard (narrow) rim
+    float spot = cn.x + (1.0 - cn.x) * smoothstep(0.90 - edgeW, 0.90, Ld.y);
     att *= spot;
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
@@ -1334,7 +1338,7 @@ void main() {}`;
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uTime", "uCloudCover",
-      "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]"]);
+      "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightCone[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -1499,19 +1503,23 @@ void main() {}`;
     // the nearest set by the caller. Uploaded once per frame; uNumLights=0 on day.
     {
       const L = frame.lights;
-      const nL = L ? Math.min(32, (L.length / 7) | 0) : 0;
+      // Flat stride-9 septet+: [x,y,z, r,g,b, rad, coneBleed, coneHardness].
+      const nL = L ? Math.min(32, (L.length / 9) | 0) : 0;
       gl.uniform1i(litU.uNumLights, nL);
       if (nL > 0) {
-        const pos = new Float32Array(nL * 3), col = new Float32Array(nL * 3), rad = new Float32Array(nL);
+        const pos = new Float32Array(nL * 3), col = new Float32Array(nL * 3),
+              rad = new Float32Array(nL), cone = new Float32Array(nL * 2);
         for (let i = 0; i < nL; i++) {
-          const o = i * 7;
+          const o = i * 9;
           pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
           col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
           rad[i] = L[o + 6];
+          cone[i * 2] = L[o + 7]; cone[i * 2 + 1] = L[o + 8];
         }
         gl.uniform3fv(litU["uLightPos[0]"], pos);
         gl.uniform3fv(litU["uLightCol[0]"], col);
         gl.uniform1fv(litU["uLightRad[0]"], rad);
+        gl.uniform2fv(litU["uLightCone[0]"], cone);
       }
     }
     _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = -1;
@@ -1596,12 +1604,12 @@ void main() {}`;
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
     if (!glowProg || !lights || !lights.length || !(str > 0)) return;
-    const nL = (lights.length / 7) | 0;
+    const nL = (lights.length / 9) | 0;   // stride-9 light septets (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
     let p = 0;
     for (let i = 0; i < nL; i++) {
-      const o = i * 7;
+      const o = i * 9;
       const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
       const r = lights[o + 3], g = lights[o + 4], b = lights[o + 5], rad = lights[o + 6];
       for (let v = 0; v < 6; v++) {

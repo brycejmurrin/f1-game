@@ -2146,9 +2146,17 @@ function buildTrackLights(track) {
     // Per-lamp VARIANCE: warmth jitter (some sodium-orange, some cool white) and a
     // brightness jitter, so a row of lamps isn't a uniform clone — reads like real
     // street lighting where bulbs age/differ. Deterministic per lamp index.
-    const warm = (lh(i) - 0.5) * 0.42;          // -0.21 … +0.21 warm/cool shift
-    const bri  = 0.80 + lh(i + 97) * 0.40;      // 0.80 … 1.20 brightness
+    const warm = (lh(i) - 0.5) * 0.52;          // -0.26 … +0.26 warm/cool shift (wide)
+    const bri  = 0.70 + lh(i + 97) * 0.62;      // 0.70 … 1.32 brightness (wide)
     const e = intensity * bri;
+    // Per-lamp spotlight variance fed to the lit shader. Street/city circuits
+    // BLEED more — the city skyglow keeps the road lit between pools (Vegas), so
+    // the road reads brighter — while open circuits stay dark between pools.
+    // Edge hardness also varies per lamp so some pools have crisp rims, some soft.
+    const bleedBase = street ? 0.22 : 0.05;
+    const bleedVar  = street ? 0.18 : 0.11;
+    const bleed = bleedBase + lh(i + 31) * bleedVar;
+    const hard  = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
     lights.push(
       track.px[k] + track.rx[k] * off,
       track.py[k] + height,
@@ -2157,6 +2165,7 @@ function buildTrackLights(track) {
       tint[1] * e,
       Math.max(0, (tint[2] - warm)) * e,
       radius,
+      bleed, hard,
     );
   }
   return lights;
@@ -2174,15 +2183,16 @@ function setFrameLights(eye, scale) {
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
   const sg = Array.isArray(scale) ? scale[1] : sr;
   const sb = Array.isArray(scale) ? scale[2] : sr;
-  const count = src.length / 7;
+  const count = src.length / 9;
   const out = _lightScaleBuf;
   if (count <= 32) {
     if (sr === 1 && sg === 1 && sb === 1) { frame.lights = src; return; }
-    // Scale without mutating the cached set: copy and scale only the rgb channels.
+    // Scale without mutating the cached set: copy and scale only the rgb channels
+    // (position, radius and the two cone params pass through unchanged).
     out.length = 0;
-    for (let i = 0; i < src.length; i += 7) {
+    for (let i = 0; i < src.length; i += 9) {
       out.push(src[i], src[i+1], src[i+2],
-        src[i+3] * sr, src[i+4] * sg, src[i+5] * sb, src[i+6]);
+        src[i+3] * sr, src[i+4] * sg, src[i+5] * sb, src[i+6], src[i+7], src[i+8]);
     }
     frame.lights = out;
     return;
@@ -2192,7 +2202,7 @@ function setFrameLights(eye, scale) {
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
-    const o = i * 7, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
+    const o = i * 9, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
     const d = dx * dx + dy * dy + dz * dz;
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
@@ -2202,7 +2212,8 @@ function setFrameLights(eye, scale) {
   out.length = 0;
   for (let i = 0; i < 32; i++) {
     const o = buf[i].o;
-    out.push(src[o], src[o+1], src[o+2], src[o+3] * sr, src[o+4] * sg, src[o+5] * sb, src[o+6]);
+    out.push(src[o], src[o+1], src[o+2], src[o+3] * sr, src[o+4] * sg, src[o+5] * sb,
+      src[o+6], src[o+7], src[o+8]);
   }
   frame.lights = out;
 }
@@ -4901,7 +4912,7 @@ window.__apex = {
     ambientGround: frame.ambientGround && frame.ambientGround.slice(),
     sunColor: frame.sunColor && frame.sunColor.slice(),
     exposure: frame.exposure != null ? frame.exposure : 1,
-    numLights: frame.lights ? frame.lights.length / 7 : 0,
+    numLights: frame.lights ? frame.lights.length / 9 : 0,
     sunY: frame.sunDir ? frame.sunDir[1] : null,
     builtNight: builtTrackNight, trackNight: track && track._night,
     floodEmit: track && track._night ? "dark-session" : "day-session",
