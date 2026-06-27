@@ -63,7 +63,8 @@ __apex.clearInput();
 Load any circuit and start a normal race, skipping all menus. `trackRef` is a
 circuit **id** (`"monza"`) or its index in `Tracks.LIST`. `timeOfDay` is
 `"day" | "night" | "default"` (default uses the circuit's own setting);
-`weather` is `"dry" | "wet"`. The recommended entry point for any harness.
+`weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` = damp road
+no rain; `"rain"` = wet road + falling rain). The recommended entry point for any harness.
 
 ### `tt(trackRef, timeOfDay?) → {track, timeTrial} | false`
 Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true`).
@@ -536,10 +537,13 @@ Get or set HUD visibility. Called with no argument returns whether the HUD is
 currently visible. Called with a boolean shows (`true`) or hides (`false`) the
 HUD overlay and returns the new state.
 
-### `weather(w?) → "dry" | "wet"`
-Get or set race weather. Called with no argument returns `"dry"` or `"wet"`.
-Setting `"wet"` starts rain audio and changes the road/sky state; `"dry"` stops
-it. The change takes effect immediately without reloading the track.
+### `weather(w?) → "dry" | "wet" | "rain" | "overcast" | "fog"`
+Get or set race weather. Called with no argument returns the current mode.
+`"wet"` = damp track (wet/reflective road, lower grip, no falling rain);
+`"rain"` = active storm (wet road + falling rain + lightning + rain audio);
+`"overcast"`/`"fog"` are dry-grip mood modes. Setting `"rain"` toggles the rain
+layer + audio on; any other value turns them off. Takes effect immediately
+without reloading the track.
 
 ### `setTimeOfDay(tod?) → "default" | "dawn" | "day" | "dusk" | "night"`
 Get or set the session time of day live, **without reloading track assets**.

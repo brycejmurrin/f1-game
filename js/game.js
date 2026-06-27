@@ -257,7 +257,12 @@ const DIFF = {
 };
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
-function gripMult() { return raceWeather === "wet" ? 0.72 : 1; }
+// Weather predicates. "wet" = damp/wet track (wet road, no falling rain);
+// "rain" = active storm (wet road + falling rain + lightning). Both wet the road.
+function isWetRoad() { return raceWeather === "wet" || raceWeather === "rain"; }
+function isRaining() { return raceWeather === "rain"; }
+// A streaming-wet track is slightly more slippery than a merely damp one.
+function gripMult() { return raceWeather === "rain" ? 0.72 : raceWeather === "wet" ? 0.82 : 1; }
 
 // ---------- state ----------
 let state = "menu";
@@ -292,7 +297,7 @@ let seasonMode = false;
 let timeTrial = false;      // solo run against the clock, no AI
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
-let raceWeather = "dry";       // "dry" | "wet"
+let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
 let raceTimeOfDay = "default"; // "default" | "dawn" | "day" | "dusk" | "night"
 let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
 let ttNewRecord = false;    // set when the player takes provisional pole this session
@@ -839,23 +844,26 @@ function applyRaceSettings() {
       }
     }
   }
-  // Wet weather: overcast the sky and flatten the light (soft, diffuse, fewer
-  // shadows) — clouds roll in and the sun is muted while ambient lifts.
-  if (raceWeather === "wet") {
+  // Wet / rain: overcast the sky and flatten the light (soft, diffuse, fewer
+  // shadows) — clouds roll in and the sun is muted while ambient lifts. A full
+  // storm ("rain") rolls in heavier cloud and mutes the sun more than a merely
+  // damp track ("wet"), which sits between clear and storm.
+  if (isWetRoad()) {
+    const _storm = isRaining();
     // Heavier cloud cover in the rain; cap at 0.96 to let the shader still vary
-    _cloudBase = Math.min(0.96, _cloudBase + 0.52);
+    _cloudBase = Math.min(0.96, _cloudBase + (_storm ? 0.52 : 0.32));
     frameSky.cloud = _cloudBase;
-    frame.sunColor = frame.sunColor.map((v) => v * 0.5);
-    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.65);
-    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.18));
-    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.18));
+    frame.sunColor = frame.sunColor.map((v) => v * (_storm ? 0.5 : 0.68));
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * (_storm ? 0.65 : 0.80));
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * (_storm ? 1.18 : 1.12)));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * (_storm ? 1.18 : 1.12)));
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
     // wet NIGHT must stay dark (lifting it to 1.10 greys out the night and kills
     // the lamp-pool contrast), so dark sessions only get a whisker of lift.
     const _wetDark = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession);
     frame.exposure = _wetDark
       ? Math.max(frame.exposure != null ? frame.exposure : 0.90, 0.95)
-      : Math.max(frame.exposure != null ? frame.exposure : 1.0, 1.10);
+      : Math.max(frame.exposure != null ? frame.exposure : 1.0, _storm ? 1.10 : 1.06);
   } else if (raceWeather === "overcast") {
     // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
     _cloudBase = Math.min(0.90, _cloudBase + 0.50);
@@ -896,7 +904,7 @@ function applyRaceSettings() {
     if (raceTimeOfDay === "dawn") gm = 0.40;
     else if (raceTimeOfDay === "dusk") gm = 0.22;
     else if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession)) gm = 0.16;
-    if (raceWeather === "wet") gm = Math.max(gm, 0.18);
+    if (isWetRoad()) gm = Math.max(gm, isRaining() ? 0.18 : 0.12);
     else if (raceWeather === "overcast") gm = Math.max(gm, 0.34);
     else if (raceWeather === "fog") gm = Math.max(gm, 0.58);
     const _mb = track && track.def ? _trackAtmoBias(track.def) : 0;   // +overcast/humid, -arid
@@ -975,7 +983,7 @@ function startRace() {
     lapsTarget = raceLaps;
   }
   applyRaceSettings();
-  if (raceWeather === "wet") {
+  if (raceWeather === "rain") {
     initRainDrops();
     rainCanvas.style.display = "block";
   } else {
@@ -997,7 +1005,7 @@ function startRace() {
   showTouchControls(true);
   Input.calibrate();
   if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
-  if (soundOn && raceWeather === "wet") GameAudio.startRain();
+  if (soundOn && raceWeather === "rain") GameAudio.startRain();
   updateHud(true);
 }
 
@@ -2555,7 +2563,7 @@ function render(dt) {
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   {
-    const wetTarget = (raceWeather === "wet") ? 1.0 : 0.0;
+    const wetTarget = isWetRoad() ? 1.0 : 0.0;
     const cur = frame.wetness || 0;
     frame.wetness = cur + (wetTarget - cur) * Math.min(1, dt * 0.8);
   }
@@ -2568,9 +2576,10 @@ function render(dt) {
     frameSky.moon = 0.85;
   }
 
-  // ── Lightning (wet weather only) ─────────────────────────────────────────
-  const wet = raceWeather === "wet";
-  if (wet && _ltBase) {
+  // ── Lightning (active rain only) ─────────────────────────────────────────
+  const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
+  const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
+  if (raining && _ltBase) {
     // Count down to the next strike
     _ltNextT -= dt;
     if (_ltNextT <= 0) {
@@ -2886,7 +2895,7 @@ function render(dt) {
   // anyway — and night street grids are where the frame budget is tightest.
   const _ao = _grSunY > -0.04 ? 0.85 : 0;
   GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: _ao, godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist });
-  if (raceWeather === "wet" && rainDrops.length) {
+  if (raceWeather === "rain" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
     // Stronger bleach (was 0.18) so a strike is a real concussive sky-flash.
@@ -3677,7 +3686,7 @@ function buildRaceSettings() {
   }
   const weatherEl = $("rs-weather");
   weatherEl.innerHTML = "";
-  for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "🌧"], ["overcast", "CLOUDY", "☁"], ["fog", "FOG", "🌫"]]) {
+  for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "💧"], ["rain", "RAIN", "🌧"], ["overcast", "CLOUDY", "☁"], ["fog", "FOG", "🌫"]]) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (raceWeather === id ? " active" : "");
     b.textContent = icon + " " + label;
@@ -4856,7 +4865,8 @@ window.__apex = {
   },
   // Load any circuit (by index or id, e.g. "monza") and start a normal race,
   // optionally forcing time of day ("day" | "night" | "default") and weather
-  // ("dry" | "wet"). Skips the menus so a harness can grab a render of any track.
+  // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
+  // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
   race(trackRef, timeOfDay, weather) {
     const i = typeof trackRef === "number"
       ? trackRef
@@ -4866,7 +4876,7 @@ window.__apex = {
     seasonMode = false;
     timeTrial = false;
     raceLaps = GAME_LAPS;
-    raceWeather = (weather === "wet" || weather === "overcast" || weather === "fog") ? weather : "dry";
+    raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     raceTimeOfDay = timeOfDay || "default";
     startRace();
     return { track: Tracks.LIST[i].id, timeOfDay: raceTimeOfDay, weather: raceWeather };
@@ -4936,11 +4946,19 @@ window.__apex = {
     return !els.hud.hidden;
   },
 
-  // Get or set race weather ("dry" | "wet" | "overcast" | "fog"). Wet drives rain.
+  // Get or set race weather ("dry" | "wet" | "rain" | "overcast" | "fog").
+  // "wet" = damp track (wet road, no falling rain); "rain" = wet road + falling
+  // rain + lightning. Toggles the rain layer + audio live for mid-race changes.
   weather(w) {
     if (w === undefined) return raceWeather;
-    raceWeather = (w === "wet" || w === "overcast" || w === "fog") ? w : "dry";
-    if (soundOn) { if (raceWeather === "wet") GameAudio.startRain(); else GameAudio.stopRain(); }
+    raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
+    if (raceWeather === "rain") {
+      if (!rainDrops.length) initRainDrops();
+      if (rainCanvas) rainCanvas.style.display = "block";
+    } else if (rainCanvas) {
+      rainCanvas.style.display = "none";
+    }
+    if (soundOn) { if (raceWeather === "rain") GameAudio.startRain(); else GameAudio.stopRain(); }
     return raceWeather;
   },
 
