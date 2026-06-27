@@ -386,8 +386,8 @@ void main() {
     vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
     float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
     float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
-    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0)) * 1.12;
-    color = mix(color, mistCol, clamp(mist, 0.0, 0.72));
+    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0));
+    color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
   }
   outColor = vec4(color, uAlpha);
 }`;

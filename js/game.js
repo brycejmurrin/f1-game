@@ -893,10 +893,10 @@ function applyRaceSettings() {
   // per-track lean — humid circuits hold mist, arid deserts stay crisp.
   {
     let gm = 0;
-    if (raceTimeOfDay === "dawn") gm = 0.55;
-    else if (raceTimeOfDay === "dusk") gm = 0.28;
+    if (raceTimeOfDay === "dawn") gm = 0.40;
+    else if (raceTimeOfDay === "dusk") gm = 0.22;
     else if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession)) gm = 0.16;
-    if (raceWeather === "wet") gm = Math.max(gm, 0.30);
+    if (raceWeather === "wet") gm = Math.max(gm, 0.18);
     else if (raceWeather === "overcast") gm = Math.max(gm, 0.34);
     else if (raceWeather === "fog") gm = Math.max(gm, 0.58);
     const _mb = track && track.def ? _trackAtmoBias(track.def) : 0;   // +overcast/humid, -arid
@@ -2865,14 +2865,14 @@ function render(dt) {
   // dramatic cue (was 0.28); still tapers to a moderate amount by noon.
   // Atmospheric haze gate for volumetric in-scatter (ground mist dominates;
   // wet + cloud add). Sun shafts catch more in haze; lamp beams only show in it.
-  const _mist = clamp((frame.groundMist || 0) * 1.1 + (frame.wetness || 0) * 0.45
+  const _mist = clamp((frame.groundMist || 0) * 0.9 + (frame.wetness || 0) * 0.22
                       + (frame.cloud || 0) * 0.12, 0, 1);
   const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist);
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
   // in the shader, so it never greys out the dark night.
-  const _lampVol = (frame.lights && _mist > 0.07) ? clamp(0.10 + 0.55 * _mist, 0, 0.75) : 0;
+  const _lampVol = (frame.lights && _mist > 0.07) ? clamp(0.10 + 0.55 * _mist, 0, 0.55) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
