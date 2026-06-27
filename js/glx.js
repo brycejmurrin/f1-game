@@ -450,6 +450,9 @@ void main() {
   // sky enrichments (cumulus definition, horizon cloud-bank, gradient life) so
   // the dramatic dusk/dawn/night looks that share this shader are untouched.
   float daytime = smoothstep(0.35, 0.60, sunE);
+  // TWILIGHT gate: ~1 at dawn/dusk (low sun above the horizon), 0 at deep night
+  // and bright day. Drives extra sunset/sunrise cloud presence + warm grading.
+  float twilight = smoothstep(0.02, 0.22, sunE) * (1.0 - daytime);
 
   // Overcast factor: drives grey-shift and corona damping under heavy cloud.
   float overcast = smoothstep(0.5, 1.0, uCloud);
@@ -490,9 +493,9 @@ void main() {
                   * (1.0 - smoothstep(0.0, 0.18, up))
                   * smoothstep(0.01, 0.06, up)
                   * (1.0 - overcast * 0.85);
-    vec3 lowColor = mix(vec3(0.85, 0.25, 0.02), vec3(0.98, 0.62, 0.08),
+    vec3 lowColor = mix(vec3(0.90, 0.26, 0.03), vec3(1.0, 0.66, 0.12),
                         clamp(sunE * 3.0, 0.0, 1.0));
-    c = mix(c, lowColor, lowBand * 0.55);
+    c = mix(c, lowColor, lowBand * 0.70);
   } else {
     // Below the horizon: dark earth tone, smoothly blended from the horizon colour.
     float gnd = clamp(-up * 5.0, 0.0, 1.0);
@@ -514,23 +517,28 @@ void main() {
     // Base coverage. Lower band than the old 0.55→0.92 so puffy cumulus read
     // clearly instead of faint wisps; fade in just above the horizon.
     float cov = smoothstep(0.50 - uCloud * 0.42, 0.84, f) * smoothstep(0.013, 0.05, up);
-    // ── Daytime cloudscape enrichments (day-gated; dusk/dawn/night unchanged) ──
-    if (daytime > 0.001) {
+    // ── Cloudscape enrichments — bright DAY *and* TWILIGHT (sunset/sunrise) get
+    //    extra cumulus definition + a horizon cloud-bank; deep night is untouched.
+    float cloudRich = max(daytime, twilight);
+    if (cloudRich > 0.001) {
       // Billow: a higher-frequency octave carves lumpy cumulus definition so the
       // puffs read as 3-D cauliflower rather than flat smears.
       float billow = fbm(cp1 * 2.3 + vec2(11.7, 4.3));
       float defined = smoothstep(0.42, 0.80, f * 0.6 + billow * 0.45)
                     * smoothstep(0.013, 0.05, up);
-      cov = mix(cov, max(cov, defined), daytime * 0.85);
+      cov = mix(cov, max(cov, defined), cloudRich * 0.85);
       // Horizon cloud-bank: distant cumulus bunched near the horizon on a
       // compressed plane, so the LOW gameplay sky band (just above the scenery)
       // is never a plain wash. Its own coverage + a band fade focused ~1–9°.
+      // Twilight gets a fuller, lower bank so sunset/sunrise has dramatic strata
+      // catching the warm light right where the player looks.
       vec2 bp = dir.xz / max(up, 0.02) * 0.16 + drift1 * 1.4;
-      float bankCov = smoothstep(0.46 - uCloud * 0.30, 0.80, fbm(bp))
-                    * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.09, 0.24, up));
-      cov = max(cov, bankCov * daytime * (1.0 - overcast * 0.5));
-      // Firmer edges so day cumulus look solid, not gauzy.
-      cov = mix(cov, smoothstep(0.18, 0.82, cov), daytime * 0.5);
+      float bankThresh = 0.46 - uCloud * 0.30 - twilight * 0.10;
+      float bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+                    * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
+      cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      // Firmer edges so cumulus look solid, not gauzy.
+      cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
     // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
     // thick billowing regions = shadowed dark underside.
@@ -549,7 +557,7 @@ void main() {
     cloudTop = mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast * 0.65);
     // Dark undersides: cooler/dimmer, but pick up a warm pink under-glow at sunset.
     vec3 cloudBot = vec3(0.26, 0.27, 0.34) * (0.24 + 0.44 * effectiveSunBright);
-    cloudBot += uSunColor * vec3(0.9, 0.42, 0.5) * (0.22 * golden * (1.0 - overcast));
+    cloudBot += uSunColor * vec3(0.9, 0.42, 0.5) * (0.22 * golden * (1.0 - overcast) * (1.0 + twilight * 1.3));
     cloudBot = mix(cloudBot, vec3(0.19, 0.19, 0.22), overcast * 0.60);
     vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
     // Day: widen the top↔bottom contrast so cumulus get punchy sunlit caps and
@@ -559,9 +567,13 @@ void main() {
       lit = mix(lit, mix(cloudBot * 0.80, cloudTop * 1.14, capf), daytime * 0.45);
     }
     // Silver lining: thin sun-facing cloud edges glow bright (backlit forward scatter),
-    // most intense at golden hour — the defining dramatic-cloud cue.
+    // most intense at golden hour — the defining dramatic-cloud cue. Pushed much
+    // harder at twilight so sunset/sunrise clouds get blazing fire-lit rims.
     float silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + golden) * (1.0 - overcast * 0.7);
-    lit += uSunColor * silver * 1.3;
+    lit += uSunColor * silver * (1.3 + twilight * 1.6);
+    // Twilight: a broad warm wash across the sun-facing cloud field (not just the
+    // thin rim) so the whole sky catches fire at the magic hour.
+    lit += uSunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6);
     // Moon tints nearby clouds faintly blue-silver.
     if (uMoon > 0.0) {
       float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;

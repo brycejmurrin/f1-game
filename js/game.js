@@ -675,8 +675,8 @@ function applyRaceSettings() {
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0.30;   // fading moon still visible in the pre-dawn sky
-      // Dawn: a few lingering thin clouds catch the first pink light
-      _cloudBase = 0.50;
+      // Dawn: lingering cloud banks catch the first pink/gold light
+      _cloudBase = 0.56;
       // Low sun + low ambient → lift exposure so the scene reads
       frame.exposure = 1.18;
     } else if (raceTimeOfDay === "dusk") {
@@ -699,8 +699,8 @@ function applyRaceSettings() {
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
-      // Dusk: moderate cloud to catch the orange light nicely
-      _cloudBase = 0.45;
+      // Dusk: plenty of cloud to catch the orange light and set the sky alight
+      _cloudBase = 0.58;
       // Low sun energy but rich colour — slightly lifted exposure
       frame.exposure = 1.10;
     } else {
