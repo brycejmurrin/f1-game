@@ -1135,6 +1135,41 @@ void main() {
   outColor = vec4(c, 1.0);
 }`;
 
+  // FXAA (Timothy Lottes, compact). Edge-detect via luma in a 3×3 neighbourhood,
+  // then blend along the detected edge — kills the jaggies/shimmer on thin
+  // geometry, kerbs, wires and specular highlights that MSAA misses. Runs on the
+  // already-tonemapped LDR image, last, straight to the screen.
+  const FXAA_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform vec2 uTexel;
+out vec4 outColor;
+float fxLuma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+void main() {
+  vec2 t = uTexel;
+  vec3 cM = texture(uTex, vUV).rgb;
+  float lM  = fxLuma(cM);
+  float lNW = fxLuma(texture(uTex, vUV + vec2(-t.x,-t.y)).rgb);
+  float lNE = fxLuma(texture(uTex, vUV + vec2( t.x,-t.y)).rgb);
+  float lSW = fxLuma(texture(uTex, vUV + vec2(-t.x, t.y)).rgb);
+  float lSE = fxLuma(texture(uTex, vUV + vec2( t.x, t.y)).rgb);
+  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+  float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+  // Flat areas (incl. HUD/text) stay pixel-exact.
+  if (lMax - lMin < max(0.04, lMax * 0.125)) { outColor = vec4(cM, 1.0); return; }
+  vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
+  float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
+  float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+  dir = clamp(dir * rcp, -8.0, 8.0) * t;
+  vec3 rA = 0.5 * (texture(uTex, vUV + dir * (-1.0/6.0)).rgb
+                 + texture(uTex, vUV + dir * ( 1.0/6.0)).rgb);
+  vec3 rB = rA * 0.5 + 0.25 * (texture(uTex, vUV + dir * -0.5).rgb
+                             + texture(uTex, vUV + dir *  0.5).rgb);
+  float lB = fxLuma(rB);
+  outColor = vec4((lB < lMin || lB > lMax) ? rA : rB, 1.0);
+}`;
+
   // Depth-only pass for shadow map — renders world position into depth buffer.
   const DEPTH_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
@@ -1172,6 +1207,7 @@ void main() {}`;
   let godrayBlurFBO = null, godrayBlurTex = null;
   let godrayW = 0, godrayH = 0;
   let ssaoW = 0, ssaoH = 0;   // SSAO runs at half res (upscaled in composite)
+  let fxaaProg = null, fxaaU = null, ldrFBO = null, ldrTex = null;   // FXAA pass + its LDR input
 
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
@@ -1273,6 +1309,8 @@ void main() {}`;
     compProg = link(POST_VS, COMPOSITE_FS);
     ssaoProg = link(POST_VS, SSAO_FS);
     godrayProg = link(POST_VS, GODRAY_FS);
+    fxaaProg = link(POST_VS, FXAA_FS);
+    if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
@@ -1366,6 +1404,21 @@ void main() {}`;
       godrayBlurTex = mk(godrayW, godrayH);
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
+    }
+    // LDR target (full res, RGBA8): the composite renders here so the FXAA pass
+    // can edge-detect on the final tonemapped image, then resolve to the screen.
+    if (fxaaProg) {
+      if (ldrTex) gl.deleteTexture(ldrTex);
+      if (!ldrFBO) ldrFBO = gl.createFramebuffer();
+      ldrTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, ldrTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ldrTex, 0);
     }
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
       postEnabled = false;     // unsupported combo: fall back to direct rendering
@@ -1981,8 +2034,10 @@ void main() {}`;
       src = dst;
     }
 
-    // 3) composite to the screen
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // 3) composite — to the LDR target when FXAA is on (it resolves to screen),
+    //    else straight to the screen.
+    const useFxaa = fxaaProg && ldrFBO && ldrTex;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, useFxaa ? ldrFBO : null);
     gl.viewport(0, 0, width, height);
     useProg(compProg);
     gl.activeTexture(gl.TEXTURE0);
@@ -2044,6 +2099,18 @@ void main() {}`;
     }
     gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // 4) FXAA resolve: edge-AA the tonemapped LDR image straight to the screen.
+    if (useFxaa) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, width, height);
+      useProg(fxaaProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, ldrTex);
+      gl.uniform1i(fxaaU.uTex, 0);
+      gl.uniform2f(fxaaU.uTexel, 1 / width, 1 / height);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
 
     bindVAO(null);
     gl.activeTexture(gl.TEXTURE0);
