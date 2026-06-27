@@ -2140,16 +2140,27 @@ function coast(c, dt) {
 // per-frame cull. Flat [x,y,z, r,g,b, rad, …] septets. Colour, brightness, pool
 // size and mast style all vary by circuit character (see floodColor). HDR (>1)
 // so the pools bloom.
-function floodColor(theme) {
+function floodColor(theme, id) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
+  let base;
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 20.0, radius: 26, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 19.0, radius: 26, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 16.0, radius: 24, street: true };  // warm street lamps (Monaco/Madrid)
-    case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 18.0, radius: 30, street: false }; // warm sodium flood banks
-    default:             return { tint: [1.14, 1.06, 0.84], intensity: 19.0, radius: 32, street: false }; // green/classic warm-white
+    case "street_night": base = { tint: [0.92, 0.96, 1.08], intensity: 20.0, radius: 26, street: true }; break;  // cool LED white, city
+    case "modern":       base = { tint: [1.00, 0.98, 0.92], intensity: 19.0, radius: 26, street: true }; break;  // warm-white LED
+    case "street_day":   base = { tint: [1.10, 1.00, 0.80], intensity: 16.0, radius: 24, street: true }; break;  // warm street lamps (Monaco/Madrid)
+    case "desert":       base = { tint: [1.28, 1.00, 0.60], intensity: 18.0, radius: 30, street: false }; break; // warm sodium flood banks
+    default:             base = { tint: [1.14, 1.06, 0.84], intensity: 19.0, radius: 32, street: false }; break; // green/classic warm-white
   }
+  // Per-LOCALE character so night circuits don't all share one tint: humid/warm
+  // cities glow amber (sodium + sea-haze scatter), crisp desert/LED cities stay
+  // cool. Only the tint shifts; intensity/radius/mast style keep the theme tuning.
+  const WARM = { singapore: [1.06, 0.99, 0.88], jeddah: [1.16, 1.02, 0.78],
+                 interlagos: [1.10, 1.01, 0.84], montreal: [1.05, 1.00, 0.90],
+                 baku: [1.08, 1.00, 0.86] };
+  const COOL = { vegas: [0.90, 0.95, 1.10], miami: [0.95, 0.99, 1.10] };
+  if (id && WARM[id]) base.tint = WARM[id];
+  else if (id && COOL[id]) base.tint = COOL[id];
+  return base;
 }
 function buildTrackLights(track) {
   const lights = [];
@@ -2160,7 +2171,7 @@ function buildTrackLights(track) {
   if (!n || !total || !track.px || !track.rx) return lights;
   const ds = total / n;
   const stride = Math.max(1, Math.round(22 / ds));   // denser than before; matches the masts in buildProps
-  const { tint, intensity, radius, street } = floodColor(track.def.theme);
+  const { tint, intensity, radius, street } = floodColor(track.def.theme, track.def.id);
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
   const lh = (j) => { const x = Math.sin((j + 1) * 127.13) * 43758.5453; return x - Math.floor(x); };
