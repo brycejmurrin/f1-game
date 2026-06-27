@@ -51,6 +51,7 @@ uniform float uRoughness;
 uniform float uMetalness;
 uniform float uSpecular;
 uniform float uDetail;
+uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
 uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
 uniform float uShadowBias;
@@ -188,6 +189,31 @@ void main() {
   float a = rough * rough;
   vec3 f0 = mix(vec3(0.08 * uSpecular), albedo, uMetalness);
 
+  // ── Wet surface (rain) ──────────────────────────────────────────────────────
+  // Rain darkens and polishes surfaces. Strongest on up-facing ground (water
+  // pools on flat tarmac); near-vertical walls stay mostly matte. A low-frequency
+  // value-noise mask carves standing puddles in the low spots that go near-mirror.
+  // wet/puddle are reused below to brighten lamp reflections + sky env.
+  float wet = 0.0;
+  float puddle = 0.0;
+  if (uWetness > 0.001) {
+    float upFace = smoothstep(0.50, 0.90, N.y);      // flat ground only
+    wet = uWetness * upFace;
+    float pn = vnoise(vWorldPos.xz * 0.13 + 4.7);
+    puddle = smoothstep(0.56, 0.80, pn) * wet;        // only low spots pool
+    // Water absorbs light: wet asphalt reads notably darker, puddles darker still.
+    albedo *= mix(1.0, 0.42, wet);
+    albedo *= mix(1.0, 0.30, puddle);
+    // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
+    // a perfect mirror except where water actually pools, so the general wet
+    // roughness stays moderate (keeps the sun specular a streak, not a flare).
+    rough = mix(rough, 0.22, wet);
+    rough = mix(rough, 0.05, puddle);
+    a = rough * rough;
+    // Thin water film is a dielectric (~0.03 reflectance) — raise f0 toward it.
+    f0 = mix(f0, vec3(0.04), wet * 0.6);
+  }
+
   vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
 
   // Combine the hard shadow map with soft drifting cloud shadows: the sun is
@@ -197,6 +223,9 @@ void main() {
 
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
   vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - uMetalness));
+
+  // Reflected view ray — reused by the wet-road lamp reflections and the sky env.
+  vec3 Rv = reflect(-V, N);
 
   // Point lights: floodlights / street lights. Lambert diffuse with smooth
   // inverse-ish falloff to the radius (cheap, no per-light shadows). A small
@@ -219,6 +248,19 @@ void main() {
     float att = win * win / (1.0 + 16.0 * s * s);
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
+
+    // Wet road mirrors each lamp: a sharp specular lobe along the reflected view
+    // ray. Sharpness peaks in puddles (mirror), broadens to a sheen on damp
+    // tarmac. A second, far broader lobe fakes the vertical ripple-smear that
+    // gives wet night roads their signature stretched reflections. Reflections
+    // carry farther than direct light, so they use the gentle distance window
+    // (not the tight inverse-square hotspot) — distant lamps still streak.
+    if (wet > 0.001) {
+      float lobe = max(dot(Rv, Ld), 0.0);
+      float sharp = mix(60.0, 1100.0, puddle);
+      float refl = pow(lobe, sharp) + pow(lobe, sharp * 0.14) * 0.28;
+      color += uLightCol[i] * refl * win * wet * 4.5;
+    }
   }
 
   // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
@@ -232,20 +274,31 @@ void main() {
   // Environment reflection: when roughness is very low (wet road / glossy paint),
   // sample the sky gradient in the reflected view direction.
   // Roughness > 0.4 = no visible reflection; < 0.15 = mirror-like sky in road.
+  // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
+  // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
+  envBlend = max(envBlend, wet * 0.45);
   if (envBlend > 0.001) {
-    vec3 R = reflect(-V, N);
+    vec3 R = Rv;
     float skyT = pow(max(R.y, 0.0), 0.5);
     // Tint env sample by sky gradient; also pick up a gentle sun-horizon blush
     // when the reflected direction aligns with the sun (warm chrome/paint sheen).
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
     float envSunAlign = max(dot(R, uSunDir), 0.0);
     envColor = mix(envColor, envColor * uSunColor * 1.3, envSunAlign * envSunAlign * (1.0 - rough));
+    // Wet roads catch a long, bright reflection of a low sun (Fresnel sun glitter).
+    envColor += uSunColor * pow(envSunAlign, 40.0) * wet * 1.5;
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
-    // Fresnel: reflection is strongest at grazing angles
+    // Fresnel: reflection is strongest at grazing angles. On wet ground square
+    // it so the sky sheen concentrates into the far grazing band instead of
+    // flooding the whole low-camera road — near/mid tarmac stays dark and glossy.
+    // Also dim the reflected sky a touch when wet (a wet road is never as bright
+    // as the sky it mirrors).
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
-    color += envColor * envFresnel * envBlend * roughDamp * (1.0 - uMetalness);
+    envFresnel = mix(envFresnel, envFresnel * envFresnel, wet);
+    vec3 envWet = envColor * (1.0 - wet * 0.50);
+    color += envWet * envFresnel * envBlend * roughDamp * (1.0 - uMetalness);
   }
 
   // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,
@@ -716,6 +769,7 @@ void main() {
   // Half-res; the result is added to the scene before tonemap so it blooms.
   const GODRAY_FS = `#version 300 es
 precision highp float;
+precision highp sampler2DShadow;
 in vec2 vUV;
 uniform sampler2D uDepth;
 uniform sampler2DShadow uShadowMap;
@@ -1196,7 +1250,7 @@ void main() {}`;
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]"]);
@@ -1357,6 +1411,7 @@ void main() {}`;
     gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
+    gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
     // [x,y,z, r,g,b, rad, …] of at most MAX_LIGHTS (24) entries, already culled to
     // the nearest set by the caller. Uploaded once per frame; uNumLights=0 on day.

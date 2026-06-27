@@ -2114,9 +2114,9 @@ function floodColor(theme) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   switch (theme) {
-    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 7.6, radius: 30, street: true };  // cool LED white, city
-    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 7.6, radius: 32, street: true };  // warm-white LED
-    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 7.2, radius: 30, street: true };  // warm street lamps (Monaco/Madrid)
+    case "street_night": return { tint: [0.92, 0.96, 1.08], intensity: 12.5, radius: 38, street: true };  // cool LED white, city
+    case "modern":       return { tint: [1.00, 0.98, 0.92], intensity: 11.5, radius: 38, street: true };  // warm-white LED
+    case "street_day":   return { tint: [1.10, 1.00, 0.80], intensity: 9.5, radius: 34, street: true };  // warm street lamps (Monaco/Madrid)
     case "desert":       return { tint: [1.28, 1.00, 0.60], intensity: 8.0, radius: 42, street: false }; // warm sodium flood banks
     default:             return { tint: [1.14, 1.06, 0.84], intensity: 8.8, radius: 44, street: false }; // green/classic warm-white
   }
@@ -2129,7 +2129,7 @@ function buildTrackLights(track) {
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
   const ds = total / n;
-  const stride = Math.max(1, Math.round(34 / ds));   // denser than before so corners don't fall dark
+  const stride = Math.max(1, Math.round(26 / ds));   // denser than before so corners don't fall dark
   const { tint, intensity, radius, street } = floodColor(track.def.theme);
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
@@ -2469,6 +2469,13 @@ function render(dt) {
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
+  // Wet-road material (rain): ramp wetness in/out smoothly so the surface
+  // darkens and starts mirroring lamps/sky over ~1s rather than popping.
+  {
+    const wetTarget = (raceWeather === "wet") ? 1.0 : 0.0;
+    const cur = frame.wetness || 0;
+    frame.wetness = cur + (wetTarget - cur) * Math.min(1, dt * 0.8);
+  }
 
   // Moon: use the value set by applyRaceSettings; pass through for default
   // night tracks that didn't go through the explicit raceTimeOfDay branch.
@@ -2573,12 +2580,12 @@ function render(dt) {
   // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
   const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
   const _floodEmit =
-    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.55
+    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.70
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.min(0.55, 0.12 + 0.45 * clamp(1 - _sunY * 4, 0, 1))
+        ? Math.min(0.62, 0.12 + 0.52 * clamp(1 - _sunY * 4, 0, 1))
         : 0;
   if (!hideMeshes.props) GLX.draw(track.meshes.props, MAT_IDENT,
-    wet   ? (night ? { emissive: Math.min(0.40, _floodEmit), roughness: 0.55, specular: 0.38 }
+    wet   ? (night ? { emissive: Math.min(0.60, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
           : (night ? { emissive: _floodEmit, roughness: 0.85, specular: 0.20 }
                    : { roughness: 0.85, specular: 0.20 }));
