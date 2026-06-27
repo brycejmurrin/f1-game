@@ -1600,7 +1600,7 @@ const Tracks = (function () {
       const warm = [1.0, 0.80, 0.46];
       const nc = [neon[0] * 0.95, neon[1] * 0.95, neon[2] * 0.95];
       const litShare = 0.20 + neonAmt * 0.08, neonShare = neonAmt * 0.7;
-      const rows = Math.max(4, Math.min(15, Math.round(sh / 3.4)));
+      const rows = Math.max(4, Math.min(10, Math.round(sh / 4.4)));   // perf: coarser window grid (was 15 / 3.4)
       const fh = sh / rows, frameT = 0.30, railH = Math.max(0.4, fh * 0.24), winH = Math.max(0.5, fh - railH);
       // Draw the inset curtain wall on ONE vertical face. nAxis = outward axis idx
       // (0=r,2=t), nSign = its sign, nHalf = half-extent along it; wAxis = the
@@ -1610,13 +1610,14 @@ const Tracks = (function () {
         const nVec = bb[nAxis], wVec = bb[wAxis];
         // SIMPLE sides = a coarse pane grid only (no rails / mullions / neon edges)
         // so the sides are cheap and the city can stay dense.
-        const cols = simple ? Math.max(2, Math.min(4, Math.round(faceW / 4.2))) : Math.max(2, Math.min(8, Math.round(faceW / 2.6)));
-        const rowN = simple ? Math.max(3, Math.min(9, Math.round(sh / 5.0))) : rows;
+        // perf: fewer panes per face (was simple 4/4.2, full 8/2.6; rowN 9/5.0)
+        const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.4))) : Math.max(2, Math.min(6, Math.round(faceW / 3.3)));
+        const rowN = simple ? Math.max(2, Math.min(6, Math.round(sh / 6.4))) : rows;
         const fhh = sh / rowN, winHH = Math.max(0.5, fhh - railH);
         const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
-        if (!simple) for (let i = 0; i <= rowN; i++) addBox(out, vadd(fBase, u, (i / rowN - 0.5) * sh), dim(frameT, railH, faceW * 1.005), frameCol, bb);
+        if (!simple) for (let i = 0; i <= rowN; i += 2) addBox(out, vadd(fBase, u, (i / rowN - 0.5) * sh), dim(frameT, railH, faceW * 1.005), frameCol, bb);   // perf: every other rail
         for (let c = 0; c < cols; c++) {
           const cx = (-0.5 + (c + 0.5) / cols) * faceW;
           for (let ri = 0; ri < rowN; ri++) {
@@ -1631,7 +1632,7 @@ const Tracks = (function () {
           }
         }
         if (simple) return;
-        const nm = Math.max(2, Math.min(5, cols - 1));
+        const nm = Math.max(1, Math.min(3, cols - 1));   // perf: fewer mullions (was 5)
         for (let c = 1; c <= nm; c++) addBox(out, vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), dim(frameT, sh, 0.4), frameCol, bb);
         if (neonAmt > 0.3) {
           const ST = Math.min(0.4, faceW * 0.04);
@@ -1865,12 +1866,13 @@ const Tracks = (function () {
       const med = bodyCol[0] > 0.6 && bodyCol[0] > bodyCol[2] + 0.08;   // warm light wall
       const medWin = [bodyCol[0] * 0.34, bodyCol[1] * 0.30, bodyCol[2] * 0.26];   // dark window reveal
       const dayGridAt = (cen, sw, sh, sd) => {
-        const rows = Math.max(4, Math.round(sh / 3.4));
+        const rows = Math.max(4, Math.min(10, Math.round(sh / 4.4)));   // perf: cap + coarser (was uncapped / 3.4)
         // Draw the window grid on one vertical face (track-facing or a side). Same
         // per-axis box-dim trick as neonFacade so the sides are glazed too.
         const dface = (nAxis, nSign, nHalf, wAxis, faceW, simple) => {
-          const cols = simple ? Math.max(2, Math.min(4, Math.round(faceW / 4.0))) : Math.max(2, Math.min(7, Math.round(faceW / 2.4)));
-          const rowN = simple ? Math.max(3, Math.min(9, Math.round(sh / 5.0))) : rows;
+          // perf: fewer panes per face (was simple 4/4.0, full 7/2.4; rowN 9/5.0)
+          const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.2))) : Math.max(2, Math.min(6, Math.round(faceW / 3.1)));
+          const rowN = simple ? Math.max(2, Math.min(6, Math.round(sh / 6.4))) : rows;
           const gB = vadd(cen, b[nAxis], nSign * (nHalf + 0.03));
           const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
           for (let c = 0; c < cols; c++) {
