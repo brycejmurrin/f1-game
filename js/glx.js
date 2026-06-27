@@ -868,6 +868,14 @@ uniform vec3 uSunColor;
 uniform float uStr;
 uniform float uTime;
 uniform float uCloudCover;
+#define GR_MAX_LIGHTS 8
+uniform int uNumLights;
+uniform vec3 uLightPos[GR_MAX_LIGHTS];
+uniform vec3 uLightCol[GR_MAX_LIGHTS];
+uniform float uLightRad[GR_MAX_LIGHTS];
+uniform vec2 uLightCone[GR_MAX_LIGHTS];
+uniform float uMist;       // haze density gate for in-scatter (0 = none)
+uniform float uLampStr;    // night lamp-volumetric strength (0 = off, e.g. day)
 out vec4 outColor;
 vec3 worldPos(vec2 uv, float d) {
   vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
@@ -904,6 +912,7 @@ void main() {
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   float t = stepLen * ign;
   float accum = 0.0;
+  vec3 lampAccum = vec3(0.0);
   for (int i = 0; i < N; i++) {
     vec3 p = ro + rd * (t + stepLen * float(i));
     vec4 lc = uLightVP * vec4(p, 1.0);
@@ -913,8 +922,30 @@ void main() {
       lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
     lit *= 1.0 - gCloud(p) * 0.9;   // clouds break the shafts into crepuscular rays
     accum += lit;
+    // Lamp in-scatter: each nearby lamp casts a beam of light through the haze,
+    // shaped by its downward spot cone + windowed falloff (the same math as the
+    // lit shader's pools). Additive, no shadows (the cone + falloff shape it).
+    if (uLampStr > 0.0) {
+      for (int li = 0; li < GR_MAX_LIGHTS; li++) {
+        if (li >= uNumLights) break;
+        vec3 LP = uLightPos[li] - p;
+        float ld = length(LP);
+        float rad = uLightRad[li];
+        if (ld > rad) continue;
+        vec3 Ld = LP / max(ld, 1e-3);
+        float s = ld / rad;
+        float win = clamp(1.0 - s*s*s*s, 0.0, 1.0);
+        float att = win * win / (1.0 + 9.0 * s * s);
+        float edgeW = mix(0.32, 0.08, uLightCone[li].y);
+        float spot = smoothstep(0.84 - edgeW, 0.84, Ld.y);          // downward cone
+        float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
+        float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
+        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14));
+      }
+    }
   }
   accum /= float(N);
+  lampAccum *= uMist * uLampStr * 5.0 / float(N);
   // Henyey-Greenstein phase (g=0.60 = a wider forward lobe so the shafts read
   // across a broader arc, not only when staring straight at the sun) + a small
   // isotropic floor so lit haze glows everywhere, giving an atmospheric volume.
@@ -922,7 +953,7 @@ void main() {
   float g = 0.60;
   float hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosT, 1.5);
   float phase = hg * 0.16 + 0.020;
-  outColor = vec4(uSunColor * accum * phase * uStr, 1.0);
+  outColor = vec4(uSunColor * accum * phase * uStr + lampAccum, 1.0);
 }`;
 
   // Composite: scene + bloom, filmic ACES tone-map, colour grading, sun shafts,
@@ -1194,6 +1225,10 @@ void main() {}`;
   let frameViewProj = null;
   let frameSunDir = null;
   let frameEye = null;
+  let frameLights = null;
+  let frameGroundMist = 0;
+  const _grPos = new Float32Array(24), _grCol = new Float32Array(24),
+        _grRad = new Float32Array(8), _grCone = new Float32Array(16), _grSel = [];
   let frameInvProj = null;
   let frameInvVP = null;
   let frameProj = null;
@@ -1316,7 +1351,7 @@ void main() {}`;
     blurU = locs(blurProg, ["uTex", "uDir"]);
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
-    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover"]);
+    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightCone[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -1593,6 +1628,8 @@ void main() {}`;
     frameUpVS = frame.upViewDir || null;
     frameTime = frame.time != null ? frame.time : 0;
     frameCloud = frame.cloud != null ? frame.cloud : 0;
+    frameLights = frame.lights || null;
+    frameGroundMist = frame.groundMist != null ? frame.groundMist : 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer.
@@ -1977,7 +2014,9 @@ void main() {}`;
     // 0b) Volumetric sun shafts: world-space march of the sun shadow map (half-res)
     // then a separable blur. Gated on the sun being up (grStr > 0) + shadows on.
     const grStr = opts && opts.godray !== undefined ? opts.godray : 0;
-    const haveGR = godrayProg && shadowEnabled && grStr > 0 && frameInvVP && godrayFBO;
+    const lampVol = (opts && opts.lampVol) || 0;
+    const sunGR = shadowEnabled && grStr > 0;
+    const haveGR = godrayProg && frameInvVP && godrayFBO && (sunGR || lampVol > 0);
     if (haveGR) {
       gl.viewport(0, 0, godrayW, godrayH);
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
@@ -1993,9 +2032,36 @@ void main() {}`;
       gl.uniform3fv(godrayU.uEye, frameEye);
       gl.uniform3fv(godrayU.uSunDir, frameSunDir);
       gl.uniform3fv(godrayU.uSunColor, frameSunColor || [1, 1, 1]);
-      gl.uniform1f(godrayU.uStr, grStr);
+      gl.uniform1f(godrayU.uStr, sunGR ? grStr : 0.0);
       gl.uniform1f(godrayU.uTime, frameTime);
       gl.uniform1f(godrayU.uCloudCover, frameCloud);
+      // Lamp volumetrics: upload the nearest-8 lamps to the eye + the haze gate.
+      let grNL = 0;
+      if (lampVol > 0 && frameLights) {
+        const L = frameLights, total = (L.length / 9) | 0;
+        const ex = frameEye[0], ey = frameEye[1], ez = frameEye[2];
+        for (let i = 0; i < total; i++) {
+          const o = i * 9, dx = L[o] - ex, dy = L[o + 1] - ey, dz = L[o + 2] - ez;
+          const d = dx * dx + dy * dy + dz * dz;
+          const e = _grSel[i]; if (e) { e.d = d; e.o = o; } else _grSel[i] = { d: d, o: o };
+        }
+        _grSel.length = total;
+        _grSel.sort((a, b) => a.d - b.d);
+        grNL = Math.min(8, total);
+        for (let i = 0; i < grNL; i++) {
+          const o = _grSel[i].o;
+          _grPos[i*3]=L[o]; _grPos[i*3+1]=L[o+1]; _grPos[i*3+2]=L[o+2];
+          _grCol[i*3]=L[o+3]; _grCol[i*3+1]=L[o+4]; _grCol[i*3+2]=L[o+5];
+          _grRad[i]=L[o+6]; _grCone[i*2]=L[o+7]; _grCone[i*2+1]=L[o+8];
+        }
+        gl.uniform3fv(godrayU["uLightPos[0]"], _grPos);
+        gl.uniform3fv(godrayU["uLightCol[0]"], _grCol);
+        gl.uniform1fv(godrayU["uLightRad[0]"], _grRad);
+        gl.uniform2fv(godrayU["uLightCone[0]"], _grCone);
+      }
+      gl.uniform1i(godrayU.uNumLights, grNL);
+      gl.uniform1f(godrayU.uLampStr, lampVol);
+      gl.uniform1f(godrayU.uMist, (opts && opts.mist) || 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       useProg(blurProg);
       gl.uniform1i(blurU.uTex, 0);

@@ -2863,7 +2863,16 @@ function render(dt) {
   const _grLow = clamp(1 - _grSunY * 1.4, 0, 1);     // ~1 at dawn/dusk, ~0.2 at noon
   // Stronger base so the low-sun god-ray shafts at dawn/dusk are a signature
   // dramatic cue (was 0.28); still tapers to a moderate amount by noon.
-  const _gr = _grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0;
+  // Atmospheric haze gate for volumetric in-scatter (ground mist dominates;
+  // wet + cloud add). Sun shafts catch more in haze; lamp beams only show in it.
+  const _mist = clamp((frame.groundMist || 0) * 1.1 + (frame.wetness || 0) * 0.45
+                      + (frame.cloud || 0) * 0.12, 0, 1);
+  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist);
+  // Night lamp volumetrics: visible light beams in the air from the lamps when
+  // floodlights are on (frame.lights) and there's haze to catch them. Scales with
+  // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
+  // in the shader, so it never greys out the dark night.
+  const _lampVol = (frame.lights && _mist > 0.04) ? clamp(0.25 + 0.85 * _mist, 0, 1.0) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
@@ -2876,7 +2885,7 @@ function render(dt) {
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.
   const _ao = _grSunY > -0.04 ? 0.85 : 0;
-  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: _ao, godray: _gr, contact: _cs, reflect: _ssr });
+  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: _ao, godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist });
   if (raceWeather === "wet" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
