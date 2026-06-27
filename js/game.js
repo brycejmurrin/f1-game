@@ -635,7 +635,7 @@ function applyRaceSettings() {
     if (night) {
       frameSky.zenith = [0.01, 0.02, 0.05];
       frameSky.horizon = [0.04, 0.03, 0.06];
-      frame.sunColor = [0.10, 0.12, 0.20];   // faint cool moonlight key (lamps light the track)
+      frame.sunColor = [0.12, 0.14, 0.22];   // faint cool moonlight key (unified w/ default-night)
       // NEAR-BLACK cool ambient: the world is genuinely dark, the LIGHT SOURCES
       // (lamps, neon, lit windows) do all the lifting. A high ambient here is the
       // #1 cause of a flat-grey "night that looks like dim day".
@@ -656,16 +656,20 @@ function applyRaceSettings() {
     } else if (raceTimeOfDay === "dawn") {
       // Pre-sunrise: deep teal-indigo zenith fading to a warm peach/rose horizon.
       // Sun is barely above the horizon — very low elevation, coming from the east.
-      frameSky.zenith  = [0.06, 0.10, 0.22];
-      frameSky.horizon = [0.72, 0.40, 0.22];
-      frameSky.sunColor = [1.0, 0.72, 0.38];
+      // Richer pre-sunrise: a deeper teal-indigo zenith over a luminous
+      // pink/coral-magenta horizon (the defining first-light colour), not a muddy
+      // brown-orange. Warm sun, with the DIRECT sun slightly warmer/stronger than
+      // the sky tint (sky is always a touch cooler/dimmer than the key light).
+      frameSky.zenith  = [0.07, 0.12, 0.27];
+      frameSky.horizon = [0.88, 0.50, 0.40];
+      frameSky.sunColor = [1.0, 0.74, 0.44];
       frameSky.sunDir  = V3.norm([-0.62, 0.08, 0.28]);
       frame.sunDir     = frameSky.sunDir;
-      frame.sunColor   = [1.0, 0.70, 0.36];
-      // Cool teal fill from the sky, very soft warm bounce from the ground
-      frame.ambientGround = [0.18, 0.12, 0.08];
-      frame.ambientSky    = [0.22, 0.26, 0.38];
-      frame.fogColor      = [0.42, 0.30, 0.20];
+      frame.sunColor   = [1.0, 0.80, 0.50];
+      // Cool teal fill from the sky, soft warm rose bounce from the ground
+      frame.ambientGround = [0.20, 0.13, 0.10];
+      frame.ambientSky    = [0.22, 0.26, 0.40];
+      frame.fogColor      = [0.52, 0.36, 0.34];
       frame.fogDensity    = 0.0028;
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
@@ -710,7 +714,7 @@ function applyRaceSettings() {
       const ovc = Math.max(0, _bias);     // 0 … 0.85 overcast
       // Zenith: a DEEP saturated blue when clear (the visible sky strip read pale
       // and flat before), washing to flat grey when overcast.
-      frameSky.zenith  = [0.10 - clr * 0.05 + ovc * 0.28, 0.28 - clr * 0.04 + ovc * 0.24, 0.92 - ovc * 0.22];
+      frameSky.zenith  = [0.09 - clr * 0.04 + ovc * 0.28, 0.26 - clr * 0.10 + ovc * 0.26, 0.95 - ovc * 0.24];
       frameSky.horizon = [0.54 + ovc * 0.22, 0.68 + ovc * 0.12, 0.90 - clr * 0.02];
       // A lower, raking afternoon sun — high overhead light gave almost no shadow
       // modelling, which is what read "flat". Dropping the elevation casts long
@@ -724,7 +728,9 @@ function applyRaceSettings() {
       // then reads with a warm sunlit side and a cool shadow side (chiaroscuro),
       // which is what lifts a grey city out of "dull/flat". Overcast neutralises
       // the split toward a flat even grey.
-      frame.sunColor   = [1.12, 0.95 - ovc * 0.05, 0.72 - clr * 0.04 + ovc * 0.10];
+      // Clear days drop the blue channel → warmer key against the cool sky fill
+      // (stronger warm/cool chiaroscuro); overcast lifts blue back toward neutral.
+      frame.sunColor   = [1.13 + clr * 0.04, 0.95 - ovc * 0.05, 0.72 - clr * 0.12 + ovc * 0.12];
       frameSky.sunColor = [1.0, 0.95, 0.84];
       // Warm low ground bounce; cool, restrained sky fill so shadows keep depth
       // (high flat ambient was washing the modelling out).
@@ -750,7 +756,7 @@ function applyRaceSettings() {
     // the road/scenery like daytime, which is why night looked washed (Singapore).
     // frameSky.sunColor is left alone so the warm sky/dusk glow survives; the
     // floodlights (buildTrackLights) now carve out the actually-lit areas.
-    if (isNightSession) frame.sunColor = [0.16, 0.18, 0.26];
+    if (isNightSession) frame.sunColor = [0.12, 0.14, 0.22];   // unified moonlight key (matches explicit-night)
     _cloudBase = frameSky.cloud !== undefined ? frameSky.cloud
                : (isNightSession ? 0.22 : 0.44);   // modest cover; the sky shader carries the richer cumulus look
 
@@ -841,12 +847,13 @@ function applyRaceSettings() {
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.65);
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.18));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.18));
-    // Wet + overcast: lift exposure to keep the scene moody but readable.
-    // Only override exposure if the time-of-day branch didn't already set a
-    // specific wet value (it only sets exposure for dry scenarios, so this is safe).
-    if (frame.exposure == null || frame.exposure <= 1.0) {
-      frame.exposure = Math.max(frame.exposure != null ? frame.exposure : 1.0, 1.10);
-    }
+    // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
+    // wet NIGHT must stay dark (lifting it to 1.10 greys out the night and kills
+    // the lamp-pool contrast), so dark sessions only get a whisker of lift.
+    const _wetDark = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession);
+    frame.exposure = _wetDark
+      ? Math.max(frame.exposure != null ? frame.exposure : 0.90, 0.95)
+      : Math.max(frame.exposure != null ? frame.exposure : 1.0, 1.10);
   } else if (raceWeather === "overcast") {
     // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
     _cloudBase = Math.min(0.90, _cloudBase + 0.50);
@@ -862,7 +869,9 @@ function applyRaceSettings() {
     frame.fogDensity = (frame.fogDensity || 0.0017) * 3.0;
     const fc = [0.74, 0.76, 0.78];
     frame.fogColor = fc;
-    frameSky.horizon = fc.slice();
+    // Don't erase an explicit twilight horizon (dawn magenta / dusk coral) — only
+    // flatten the horizon to fog-grey in default mode.
+    if (raceTimeOfDay === "default") frameSky.horizon = fc.slice();
     frame.sunColor = frame.sunColor.map((v) => v * 0.6);
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.7);
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.10));
@@ -2783,10 +2792,12 @@ function render(dt) {
     _thresh = _neonCity ? 0.92 : 0.86;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
-    _bloom = 0.62; _thresh = 0.68;
+    // Higher threshold so the low sun + lifted exposure + stronger god-rays don't
+    // bloom the whole hazy horizon into a wash — only the sun/glints glow.
+    _bloom = 0.62; _thresh = 0.76;
   } else if (raceTimeOfDay === "dawn") {
     _grade = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0.30 };
-    _bloom = 0.62; _thresh = 0.68;
+    _bloom = 0.62; _thresh = 0.76;
   } else {
     // Bright day: a punchier teal-shadow / warm-highlight split with real bloom
     // on highlights so chrome, kerbs, glass and bright sky sparkle instead of
@@ -2801,7 +2812,9 @@ function render(dt) {
   // off at night (sun below horizon). Low-sun factor drives the big boost.
   const _grSunY = frame.sunDir ? frame.sunDir[1] : -1;
   const _grLow = clamp(1 - _grSunY * 1.4, 0, 1);     // ~1 at dawn/dusk, ~0.2 at noon
-  const _gr = _grSunY > 0.02 ? (0.28 + 0.55 * _grLow) : 0;
+  // Stronger base so the low-sun god-ray shafts at dawn/dusk are a signature
+  // dramatic cue (was 0.28); still tapers to a moderate amount by noon.
+  const _gr = _grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
