@@ -253,12 +253,11 @@ void main() {
     // Downward SPOTLIGHT cone: lamp posts aim at the ground, so gate the pool by
     // how vertical the surface→lamp direction is (Ld.y). A surface under the lamp
     // (Ld pointing up, Ld.y≈1) is fully lit; out toward the gap between lamps the
-    // direction tips horizontal (Ld.y→0) and the light cuts off — leaving real
-    // darkness between the pools. This (not intensity/radius) is what makes the
-    // lamps read as distinct circles on the road. The cone is TIGHT (full within
-    // ~21° of straight-down, dark past ~37°) so from a 9-13 m mast the ground
-    // circle is small enough that the gaps between lamps stay dark.
-    float spot = smoothstep(0.80, 0.93, Ld.y);
+    // direction tips horizontal (Ld.y→0) and the light fades — so the lamps read
+    // as distinct circles on the road. A soft, wide cone (full within ~32°, fading
+    // to ~57°) with a small floor lets the pools BLEED into each other a little
+    // and keeps a faint wash between them, rather than a hard spotlight cutoff.
+    float spot = 0.06 + 0.94 * smoothstep(0.70, 0.90, Ld.y);
     att *= spot;
     float lnl = max(dot(N, Ld), 0.0);
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
