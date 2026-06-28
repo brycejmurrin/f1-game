@@ -247,11 +247,10 @@ void main() {
     // Gives tight, defined light pools instead of a soft undefined halo.
     float s = dist / rad;
     float win = clamp(1.0 - s * s * s * s, 0.0, 1.0);
-    // Medium hotspot (9·s²): each lamp lays down a defined bright circle on the
-    // road that falls off to dark before the next lamp, so the track reads as
-    // dark tarmac punctuated by lamp pools (high contrast) rather than either a
-    // flat overlapping sheet (too soft) or a tiny spot (too tight).
-    float att = win * win / (1.0 + 9.0 * s * s);
+    // Softer hotspot (5·s²): a dimmer centre with a wider, smoother falloff so each
+    // lamp spreads a gentle pool rather than punching a hard bright circle — the
+    // pools overlap into a smooth wash between lamps while the reflection reads.
+    float att = win * win / (1.0 + 5.0 * s * s);
     // Downward SPOTLIGHT cone: lamp posts aim at the ground, so gate the pool by
     // how vertical the surface→lamp direction is (Ld.y). A surface under the lamp
     // (Ld.y≈1) is fully lit; out toward the gap between lamps the direction tips
@@ -261,15 +260,16 @@ void main() {
     // .y = edge hardness (soft, wide falloff ↔ hard, crisp rim). Each lamp differs
     // so a row of lights isn't an identical clone.
     vec2 cn = uLightCone[i];
-    float edgeW = mix(0.32, 0.08, cn.y);            // soft (wide) ↔ hard (narrow) rim
-    // Inner cos 0.84 (~33° half-angle) → bigger pools that overlap more, leaving
-    // less darkness between lamps while still reading as pools.
-    float spot = cn.x + (1.0 - cn.x) * smoothstep(0.84 - edgeW, 0.84, Ld.y);
+    float edgeW = mix(0.46, 0.20, cn.y);            // softer (wider) ↔ hard (narrow) rim
+    // Inner cos 0.80 (~37° half-angle) → bigger pools that overlap more, so the
+    // spread between lamps is a smooth wash rather than punched circles.
+    float spot = cn.x + (1.0 - cn.x) * smoothstep(0.80 - edgeW, 0.80, Ld.y);
     att *= spot;
     float lnl = max(dot(N, Ld), 0.0);
-    // The flat diffuse lamp pool IS the "matte lit circle". Fade it as the road
-    // wets so the glossy mirror reflection (below) reads instead of matte fill.
-    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.6);
+    // The flat diffuse lamp pool IS the "matte lit circle". Turned down (×0.72) so
+    // the circle reads softer and the reflection (below) dominates; fades further as
+    // the road wets so the glossy mirror reflection reads instead of matte fill.
+    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.6) * 0.72;
 
     // Wet road mirrors each lamp: a sharp specular lobe along the reflected view
     // ray. Sharpness peaks in puddles (mirror), broadens to a sheen on damp
@@ -339,9 +339,10 @@ void main() {
     // when the reflected direction aligns with the sun (warm chrome/paint sheen).
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
     float envSunAlign = max(dot(R, uSunDir), 0.0);
-    envColor = mix(envColor, envColor * uSunColor * 1.3, envSunAlign * envSunAlign * (1.0 - rough));
-    // Wet roads catch a long, bright reflection of a low sun (Fresnel sun glitter).
-    envColor += uSunColor * pow(envSunAlign, 40.0) * wet * 1.5;
+    envColor = mix(envColor, envColor * uSunColor * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
+    // Wet roads catch a long reflection of a low sun (Fresnel sun glitter). Kept
+    // modest so a low dusk/dawn sun doesn't blow the whole road to a white sheet.
+    envColor += uSunColor * pow(envSunAlign, 40.0) * wet * 0.5;
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
@@ -355,8 +356,14 @@ void main() {
     // as the sky it mirrors).
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
     envFresnel = mix(envFresnel, envFresnel * envFresnel, wet);
-    vec3 envWet = envColor * (1.0 - wet * 0.50);
-    color += envWet * envFresnel * envBlend * roughDamp * (1.0 - uMetalness);
+    vec3 envWet = envColor * (1.0 - wet * 0.62);
+    // Soft-clip the reflection so a wet road can never blow out to a white sheet
+    // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
+    // Reinhard shoulder on the brightest channel keeps it bright where the scene
+    // is dim and caps it where it would over-saturate.
+    vec3 envAdd = envWet * envFresnel * envBlend * roughDamp * (1.0 - uMetalness);
+    float envM = max(max(envAdd.r, envAdd.g), envAdd.b);
+    color += envAdd / (1.0 + envM);
   }
 
   // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,

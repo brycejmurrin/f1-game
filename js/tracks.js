@@ -2244,7 +2244,7 @@ const Tracks = (function () {
         // HDR-bright lens at night so the floodlight reads as a glowing source AND
         // is mirrored by the wet-road SSR like neon/streetlamps (a real reflected
         // glow, not just the analytic pool). Painted housing by day.
-        const lens = NIGHT ? [2.3, 2.3, 2.2] : [1, 1, 0.95];
+        const lens = NIGHT ? [1.5, 1.5, 1.45] : [1, 1, 0.95];
         addBox(out, [px[k] + r[0] * o, py[k] + 8.6, pz[k] + r[2] * o], [3, 1, 1.4], lens, [r, [0, 1, 0], [track.tx[k], 0, track.tz[k]]]);
       }
     });
