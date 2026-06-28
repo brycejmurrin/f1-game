@@ -683,8 +683,9 @@ function applyRaceSettings() {
       frameSky.moon = 0.30;   // fading moon still visible in the pre-dawn sky
       // Dawn: lingering cloud banks catch the first pink/gold light
       _cloudBase = 0.56;
-      // Low sun + low ambient → lift exposure so the scene reads
-      frame.exposure = 1.18;
+      // Low sun + low ambient → lift exposure so the scene reads (kept moderate for
+      // a realistic, un-washed dawn).
+      frame.exposure = 1.08;
     } else if (raceTimeOfDay === "dusk") {
       // Richer golden hour: deeper indigo zenith, warmer coral/amber horizon,
       // a sun closer to the deck for that low-angle drama.
@@ -707,8 +708,9 @@ function applyRaceSettings() {
       frameSky.moon = 0;
       // Dusk: plenty of cloud to catch the orange light and set the sky alight
       _cloudBase = 0.58;
-      // Low sun energy but rich colour — slightly lifted exposure
-      frame.exposure = 1.10;
+      // Low sun energy but rich colour — slightly lifted exposure (kept moderate
+      // so golden hour reads filmic, not washed).
+      frame.exposure = 1.03;
     } else {
       // Bright day — a deep, saturated sky with PER-TRACK atmosphere so no two
       // circuits share the same flat blue. `bias` runs -0.55 (clear desert) …
@@ -741,8 +743,8 @@ function applyRaceSettings() {
       frameSky.sunColor = [1.0, 0.95, 0.84];
       // Warm low ground bounce; cool, restrained sky fill so shadows keep depth
       // (high flat ambient was washing the modelling out).
-      frame.ambientGround = [0.30 + clr * 0.04, 0.24, 0.15];
-      frame.ambientSky    = [0.32 + ovc * 0.14, 0.40 + ovc * 0.11, 0.58 + ovc * 0.06];
+      frame.ambientGround = [0.24 + clr * 0.04, 0.19, 0.12];
+      frame.ambientSky    = [0.26 + ovc * 0.12, 0.33 + ovc * 0.10, 0.50 + ovc * 0.06];
       // Fog: clearer (lower density, sky-matched colour) so distance reads crisp
       // instead of a flat grey wash; overcast hazes it back up.
       frame.fogColor      = [0.66 + ovc * 0.08, 0.74 + ovc * 0.05, 0.88 - clr * 0.05];
@@ -753,7 +755,7 @@ function applyRaceSettings() {
       _cloudBase = 0.44 + ovc * 0.42;     // modest broken cloud (sky shader adds the cumulus richness); overcast → heavy deck
       // Brighter, punchier midday (was a flat 0.92). Clear days run a touch
       // hotter; overcast pulled back so the grey doesn't glare.
-      frame.exposure = 1.06 + clr * 0.05 - ovc * 0.08;
+      frame.exposure = 0.99 + clr * 0.05 - ovc * 0.08;
     }
   } else {
     // "default" — driven by the track palette; set moon for night tracks
@@ -855,28 +857,28 @@ function applyRaceSettings() {
     frameSky.cloud = _cloudBase;
     frame.sunColor = frame.sunColor.map((v) => v * (_storm ? 0.5 : 0.68));
     frameSky.sunColor = frameSky.sunColor.map((v) => v * (_storm ? 0.65 : 0.80));
-    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * (_storm ? 1.18 : 1.12)));
-    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * (_storm ? 1.18 : 1.12)));
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
     // wet NIGHT must stay dark (lifting it to 1.10 greys out the night and kills
     // the lamp-pool contrast), so dark sessions only get a whisker of lift.
     const _wetDark = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession);
     frame.exposure = _wetDark
       ? Math.max(frame.exposure != null ? frame.exposure : 0.90, 0.95)
-      : Math.max(frame.exposure != null ? frame.exposure : 1.0, _storm ? 1.10 : 1.06);
+      : Math.max(frame.exposure != null ? frame.exposure : 1.0, _storm ? 1.03 : 1.00);
   } else if (raceWeather === "overcast") {
     // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
     _cloudBase = Math.min(0.90, _cloudBase + 0.50);
     frameSky.cloud = _cloudBase;
     frame.sunColor = frame.sunColor.map((v) => v * 0.7);
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.8);
-    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.12));
-    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.12));
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.06));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
     // light) so heavy overcast reads atmospheric, not just a flat grey dim.
     frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
     if (raceTimeOfDay === "default") frameSky.horizon = [0.74, 0.73, 0.74];
-    if (frame.exposure == null || frame.exposure < 1.05) frame.exposure = 1.05;
+    if (frame.exposure == null || frame.exposure < 1.0) frame.exposure = 1.0;
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     frameSky.cloud = Math.min(0.85, _cloudBase + 0.35);
@@ -888,8 +890,8 @@ function applyRaceSettings() {
     if (raceTimeOfDay === "default") frameSky.horizon = fc.slice();
     frame.sunColor = frame.sunColor.map((v) => v * 0.6);
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.7);
-    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.10));
-    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.10));
+    frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.05));
+    frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.05));
     if (frame.exposure == null || frame.exposure < 1.08) frame.exposure = 1.08;
   } else {
     frameSky.cloud = _cloudBase;
@@ -2852,16 +2854,16 @@ function render(dt) {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     // Higher threshold so the low sun + lifted exposure + stronger god-rays don't
     // bloom the whole hazy horizon into a wash — only the sun/glints glow.
-    _bloom = 0.62; _thresh = 0.76;
+    _bloom = 0.52; _thresh = 0.82;
   } else if (raceTimeOfDay === "dawn") {
     _grade = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0.30 };
-    _bloom = 0.62; _thresh = 0.76;
+    _bloom = 0.52; _thresh = 0.82;
   } else {
     // Bright day: a punchier teal-shadow / warm-highlight split with real bloom
     // on highlights so chrome, kerbs, glass and bright sky sparkle instead of
     // reading flat. (Old str 0.15 / bloom 0.50 was the washed-out look.)
     _grade = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
-    _bloom = 0.74; _thresh = 0.72;
+    _bloom = 0.60; _thresh = 0.82;
   }
   // (Lamp volumetric beam/halo cones removed — they read as hazy light shafts;
   // the lamps now carry the scene through brighter point-light pools instead,
@@ -2894,7 +2896,7 @@ function render(dt) {
   // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.
-  const _ao = _grSunY > -0.04 ? 0.85 : 0;
+  const _ao = _grSunY > -0.04 ? 0.95 : 0;
   GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: _ao, godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist });
   if (raceWeather === "rain" && rainDrops.length) {
     drawRain(dt);

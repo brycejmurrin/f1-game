@@ -1048,6 +1048,10 @@ vec3 colourGrade(vec3 c) {
   c *= vec3(1.015, 1.008, 0.992);
   // Soft S-curve: deepen contrast for punch (less washed-out / flat)
   c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
+  // Midtone-darkening contrast for a more realistic, less-bright look: a gentle
+  // gamma deepens the mids/shadows while blacks stay black and the ACES highlight
+  // rolloff is preserved — turns the flat "video-game bright" image filmic.
+  c = pow(c, vec3(1.12));
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
@@ -1055,7 +1059,7 @@ vec3 colourGrade(vec3 c) {
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
   float sat = mx - mn;
-  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.32);
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.20);
   // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
   // other (warm amber), blended by luma. A staple of the teal-orange film look —
   // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
@@ -1199,7 +1203,7 @@ void main() {
 
   vec2 q = vUV - 0.5;
   float vig = smoothstep(0.95, 0.35, length(q));
-  c *= mix(0.86, 1.0, vig);
+  c *= mix(0.80, 1.0, vig);
 
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to
   // break the 8-bit banding that otherwise stamps visible steps onto smooth sky
