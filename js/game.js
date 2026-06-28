@@ -2886,10 +2886,11 @@ function render(dt) {
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
   const _cs = _grSunY > 0.05 ? 0.5 : 0;
-  // Wet-road screen-space reflection of the neon city: only when wet AND the
-  // scene is dark enough that floodlights/neon are on (frame.lights populated) —
-  // that's where the in-shader sky env reflection has nothing to mirror.
-  const _ssr = (frame.lights && (frame.wetness || 0) > 0.01) ? frame.wetness : 0;
+  // Wet-road screen-space reflection of the scene: runs at ALL times of day so a
+  // wet road mirrors the world — buildings/barriers/cars by day, neon + glowing
+  // lamp heads at night — on top of the in-shader sky env reflection. Driven purely
+  // by wetness (road-mask + Fresnel + distance-fade in the shader guard it).
+  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : 0;
   // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.

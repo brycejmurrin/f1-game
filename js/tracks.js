@@ -2241,7 +2241,11 @@ const Tracks = (function () {
         place(k, side, 10, [0.5, 9, 0.5], [0.1, 0.1, 0.12]);
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const o = side * (hw[k] + 10);
-        addBox(out, [px[k] + r[0] * o, py[k] + 8.6, pz[k] + r[2] * o], [3, 1, 1.4], [1, 1, 0.95], [r, [0, 1, 0], [track.tx[k], 0, track.tz[k]]]);
+        // HDR-bright lens at night so the floodlight reads as a glowing source AND
+        // is mirrored by the wet-road SSR like neon/streetlamps (a real reflected
+        // glow, not just the analytic pool). Painted housing by day.
+        const lens = NIGHT ? [2.3, 2.3, 2.2] : [1, 1, 0.95];
+        addBox(out, [px[k] + r[0] * o, py[k] + 8.6, pz[k] + r[2] * o], [3, 1, 1.4], lens, [r, [0, 1, 0], [track.tx[k], 0, track.tz[k]]]);
       }
     });
     // tire barriers at outside of tight corners on permanent (non-street) circuits
