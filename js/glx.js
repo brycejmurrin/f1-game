@@ -202,10 +202,13 @@ void main() {
     float upFace = smoothstep(0.50, 0.90, N.y);      // flat ground only
     wet = uWetness * upFace;
     float pn = vnoise(vWorldPos.xz * 0.13 + 4.7);
-    puddle = smoothstep(0.56, 0.80, pn) * wet;        // only low spots pool
-    // Water absorbs light: wet asphalt reads notably darker, puddles darker still.
+    // Wide, soft puddle edges so pools BLEND into the wet sheet rather than reading
+    // as hard painted ovals.
+    puddle = smoothstep(0.48, 0.88, pn) * wet;        // only low spots pool
+    // Water absorbs light: wet asphalt reads notably darker, puddles a touch darker
+    // (not stark, so they don't read as flat dark blobs).
     albedo *= mix(1.0, 0.42, wet);
-    albedo *= mix(1.0, 0.30, puddle);
+    albedo *= mix(1.0, 0.50, puddle);
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
     // a perfect mirror except where water actually pools, so the general wet
     // roughness stays moderate (keeps the sun specular a streak, not a flare).
@@ -266,10 +269,11 @@ void main() {
     float spot = cn.x + (1.0 - cn.x) * smoothstep(0.80 - edgeW, 0.80, Ld.y);
     att *= spot;
     float lnl = max(dot(N, Ld), 0.0);
-    // The flat diffuse lamp pool IS the "matte lit circle". Turned down (×0.72) so
-    // the circle reads softer and the reflection (below) dominates; fades further as
-    // the road wets so the glossy mirror reflection reads instead of matte fill.
-    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.6) * 0.72;
+    // The flat diffuse lamp pool IS the "matte lit circle". Turned down (×0.72) for
+    // dry, and faded almost to nothing as the road wets (×(1-wet·0.85)) so a wet
+    // surface shows the lamp's REFLECTION (the specular lobe below), not a painted
+    // circle of diffuse fill.
+    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.85) * 0.72;
 
     // Wet road mirrors each lamp: a sharp specular lobe along the reflected view
     // ray. Sharpness peaks in puddles (mirror), broadens to a sheen on damp
@@ -342,7 +346,7 @@ void main() {
     envColor = mix(envColor, envColor * uSunColor * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
     // Wet roads catch a long reflection of a low sun (Fresnel sun glitter). Kept
     // modest so a low dusk/dawn sun doesn't blow the whole road to a white sheet.
-    envColor += uSunColor * pow(envSunAlign, 40.0) * wet * 0.5;
+    envColor += uSunColor * pow(envSunAlign, 40.0) * wet * 0.35;
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
@@ -356,7 +360,7 @@ void main() {
     // as the sky it mirrors).
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
     envFresnel = mix(envFresnel, envFresnel * envFresnel, wet);
-    vec3 envWet = envColor * (1.0 - wet * 0.62);
+    vec3 envWet = envColor * (1.0 - wet * 0.72);
     // Soft-clip the reflection so a wet road can never blow out to a white sheet
     // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
     // Reinhard shoulder on the brightest channel keeps it bright where the scene
