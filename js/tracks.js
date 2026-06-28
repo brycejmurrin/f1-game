@@ -1632,13 +1632,19 @@ const Tracks = (function () {
           const cx = (-0.5 + (c + 0.5) / cols) * faceW;
           for (let ri = 0; ri < rowN; ri++) {
             const ry = (-0.5 + (ri + 0.5) / rowN) * sh;
-            let col = dark;
+            let col = dark, lit = false;
             if (hash(seed + sOff + c * 12.9 + ri * 7.3) < litShare) {
+              lit = true;
               const tw = 0.65 + hash(seed + sOff + c * 5.5 + ri * 2.2) * 0.5;
               col = hash(seed + sOff + c * 3.1 + ri * 1.7) < neonShare
                 ? [nc[0] * tw, nc[1] * tw, nc[2] * tw] : [warm[0] * tw, warm[1] * tw, warm[2] * tw];
             }
-            addBox(out, vadd(vadd(gBase, wVec, cx), u, ry), dim(0.08, winHH, (faceW / cols) * 0.82), col, bb);
+            // Lit panes glow on the emissive props mesh. UNLIT panes on the main
+            // track-facing facade become REFLECTIVE dark glass (routed to glassBuf)
+            // so night windows mirror the floodlights/neon city as live glints —
+            // net-zero geometry (same boxes, redistributed). Simple side faces keep
+            // their panes on props so the unchunked glass draw stays bounded.
+            addBox((!lit && !simple) ? glassBuf : out, vadd(vadd(gBase, wVec, cx), u, ry), dim(0.08, winHH, (faceW / cols) * 0.82), col, bb);
           }
         }
         if (simple) return;
@@ -1762,7 +1768,9 @@ const Tracks = (function () {
             addBox(out, vadd(gBase, p.u, yBase + (r + 0.5) * fh), [glassT, winH, sd * 0.94], [dayWall[0] * 0.34, dayWall[1] * 0.30, dayWall[2] * 0.26], b);
           } else {
             const t01 = 0.42 + ry01 * 0.16;
-            addBox(glassBuf, vadd(gBase, p.u, yBase + (r + 0.5) * fh), [glassT, winH, sd * 0.94], [t01 * 0.62, t01 * 0.72, t01 * 0.92], b);
+            // Darker glass base → the reflected sky/sun has real contrast to read
+            // against (a bright window albedo washes the reflection flat).
+            addBox(glassBuf, vadd(gBase, p.u, yBase + (r + 0.5) * fh), [glassT, winH, sd * 0.94], [t01 * 0.40, t01 * 0.47, t01 * 0.62], b);
           }
         }
         const nm = Math.max(2, Math.min(4, Math.round(sd / 6)));
@@ -1890,7 +1898,7 @@ const Tracks = (function () {
             for (let r = 0; r < rowN; r++) {
               const ry01 = (r + 0.5) / rowN, ctr = vadd(vadd(gB, b[wAxis], cx), b[1], (-0.5 + ry01) * sh);
               if (med) addBox(out, ctr, dim(0.06, (sh / rowN) * 0.42, (faceW / cols) * 0.42), medWin, b);
-              else { const t01 = 0.42 + ry01 * 0.16; addBox(glassBuf, ctr, dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.62, t01 * 0.72, t01 * 0.92], b); }
+              else { const t01 = 0.42 + ry01 * 0.16; addBox(glassBuf, ctr, dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.40, t01 * 0.47, t01 * 0.62], b); }
             }
           }
         };

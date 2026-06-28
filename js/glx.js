@@ -209,7 +209,7 @@ void main() {
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
     // a perfect mirror except where water actually pools, so the general wet
     // roughness stays moderate (keeps the sun specular a streak, not a flare).
-    rough = mix(rough, 0.22, wet);
+    rough = mix(rough, 0.15, wet);
     rough = mix(rough, 0.05, puddle);
     a = rough * rough;
     // Thin water film is a dielectric (~0.03 reflectance) — raise f0 toward it.
@@ -267,7 +267,9 @@ void main() {
     float spot = cn.x + (1.0 - cn.x) * smoothstep(0.84 - edgeW, 0.84, Ld.y);
     att *= spot;
     float lnl = max(dot(N, Ld), 0.0);
-    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness);
+    // The flat diffuse lamp pool IS the "matte lit circle". Fade it as the road
+    // wets so the glossy mirror reflection (below) reads instead of matte fill.
+    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.6);
 
     // Wet road mirrors each lamp: a sharp specular lobe along the reflected view
     // ray. Sharpness peaks in puddles (mirror), broadens to a sheen on damp
@@ -276,10 +278,39 @@ void main() {
     // carry farther than direct light, so they use the gentle distance window
     // (not the tight inverse-square hotspot) — distant lamps still streak.
     if (wet > 0.001) {
-      float lobe = max(dot(Rv, Ld), 0.0);
-      float sharp = mix(60.0, 1100.0, puddle);
-      float refl = pow(lobe, sharp) + pow(lobe, sharp * 0.14) * 0.28;
-      color += uLightCol[i] * refl * win * wet * 4.5;
+      // Anisotropic reflection: a light mirrored on wet tarmac streaks toward the
+      // viewer (a long vertical glint), because micro-ripples scatter the mirror
+      // image along the surface line to the lamp. Build a road-tangent frame
+      // pointing at the lamp's horizontal bearing and stretch the specular lobe
+      // ALONG it (loose) while keeping it tight ACROSS + along the normal — so the
+      // pool elongates into a vertical streak instead of a flat circle.
+      vec3 Traw = Ld - N * dot(Ld, N);                 // in-plane bearing to lamp
+      vec3 Tst  = Traw / max(length(Traw), 1e-3);      // streak axis (safe)
+      vec3 Bst  = cross(N, Tst);                        // across-streak axis
+      vec3 dvec = Rv - Ld;                              // mirror misalignment
+      float along  = dot(dvec, Tst);
+      float across = dot(dvec, Bst);
+      float perp   = dot(dvec, N);
+      float sharp  = mix(60.0, 1100.0, puddle);
+      float k      = sharp * 0.38;                      // broader → more reflective area
+      float stretch = mix(7.0, 12.0, puddle);           // how far the glint smears
+      float q = (across * across + perp * perp) * k + (along * along) * (k / stretch);
+      // exp() streak + a broad glossy halo so the surface AROUND each lamp mirrors
+      // it (not just a thin line), then a strong amplitude so wet tarmac reads as a
+      // bright wet mirror of the lamps rather than matte-lit.
+      float refl = exp(-q) + pow(max(dot(Rv, Ld), 0.0), sharp * 0.14) * 0.34;
+      color += uLightCol[i] * refl * win * wet * 8.0;
+    }
+    // Glossy point-light glint on DRY low-roughness surfaces (building glass,
+    // polished panels): mirror nearby lamps/neon as a sharp highlight so windows
+    // catch the city lights live across every time of day. Uses the soft windowed
+    // falloff WITHOUT the downward spot cone (a window reflects a lamp beside or
+    // above it, not only straight down). The (1-wet) gate hands wet road to the lobe above.
+    float gloss = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular * (1.0 - wet);
+    if (gloss > 0.001) {
+      float glb = max(dot(Rv, Ld), 0.0);
+      float glFall = win * win / (1.0 + 6.0 * s * s);
+      color += uLightCol[i] * pow(glb, mix(40.0, 400.0, gloss)) * glFall * gloss * 2.2 * (1.0 - uMetalness);
     }
   }
 
@@ -297,10 +328,13 @@ void main() {
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
-  envBlend = max(envBlend, wet * 0.45);
+  envBlend = max(envBlend, wet * 0.6);
   if (envBlend > 0.001) {
     vec3 R = Rv;
-    float skyT = pow(max(R.y, 0.0), 0.5);
+    // Lower exponent shows more of the horizon→zenith gradient in the reflection
+    // (vertical glass mostly reflects up into a near-uniform zenith, which reads
+    // flat — this lets the brighter horizon band into the reflected sky).
+    float skyT = pow(max(R.y, 0.0), 0.40);
     // Tint env sample by sky gradient; also pick up a gentle sun-horizon blush
     // when the reflected direction aligns with the sun (warm chrome/paint sheen).
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
@@ -308,6 +342,10 @@ void main() {
     envColor = mix(envColor, envColor * uSunColor * 1.3, envSunAlign * envSunAlign * (1.0 - rough));
     // Wet roads catch a long, bright reflection of a low sun (Fresnel sun glitter).
     envColor += uSunColor * pow(envSunAlign, 40.0) * wet * 1.5;
+    // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
+    // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
+    // night sun is dim moonlight so this is naturally negligible after dark.
+    envColor += uSunColor * pow(envSunAlign, 22.0) * (1.0 - wet) * envBlend * 0.6;
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square

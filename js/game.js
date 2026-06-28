@@ -2696,7 +2696,7 @@ function render(dt) {
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
   if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT,
-    { roughness: 0.18, specular: 0.68, metalness: 0.10 });
+    { roughness: 0.13, specular: 0.82, metalness: 0.12 });
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
