@@ -1142,11 +1142,12 @@ void main() {
       float cover  = found ? hit : 1.0;
       // Clean DARKER MIRROR: substitute the reflected scene into a darkened base
       // (a real wet mirror shows the scene it reflects, not a wash added on top).
-      // Grazing Fresnel keeps near/mid tarmac dark and lights the far grazing band.
-      float fres = pow(1.0 - max(dot(Nv, V), 0.0), 5.0);
-      float strength = roadMask * uReflect * (0.22 + 0.85 * fres);
-      float mixAmt = clamp(strength * cover, 0.0, 0.85);   // never a perfect mirror
-      c = mix(c, c * 0.15 + reflCol * 0.85, mixAmt);
+      // Mirror-like: a high base reflectance (so mid/near tarmac mirrors too, not
+      // just the grazing band) with a gentle Fresnel lift toward the horizon.
+      float fres = pow(1.0 - max(dot(Nv, V), 0.0), 3.0);
+      float strength = roadMask * uReflect * (0.55 + 0.42 * fres);
+      float mixAmt = clamp(strength * cover, 0.0, 0.94);   // near-mirror, keeps a hint of asphalt
+      c = mix(c, c * 0.10 + reflCol * 0.92, mixAmt);
     }
   }
 
