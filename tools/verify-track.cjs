@@ -108,6 +108,11 @@ function buildContext() {
                     .filter((f) => f.endsWith(".js")).sort()) {
     runFile(path.join("js/tracks", f));
   }
+  // The Tracks engine spans four files sharing the TracksKit namespace —
+  // load in the same order as index.html (spline -> mesh -> scenery -> registry).
+  runFile("js/tracks-spline.js");
+  runFile("js/tracks-mesh.js");
+  runFile("js/tracks-scenery.js");
   runFile("js/tracks.js");    // provides Tracks (reads TrackDefs, depends on GLX)
 
   const Tracks = ctx.Tracks;
