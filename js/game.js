@@ -2298,11 +2298,14 @@ function floodColor(theme, id) {
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   let base;
   switch (theme) {
-    case "street_night": base = { tint: [0.92, 0.96, 1.08], intensity: 20.0, radius: 26, street: true }; break;  // cool LED white, city
-    case "modern":       base = { tint: [1.00, 0.98, 0.92], intensity: 19.0, radius: 26, street: true }; break;  // warm-white LED
-    case "street_day":   base = { tint: [1.10, 1.00, 0.80], intensity: 16.0, radius: 24, street: true }; break;  // warm street lamps (Monaco/Madrid)
-    case "desert":       base = { tint: [1.28, 1.00, 0.60], intensity: 18.0, radius: 30, street: false }; break; // warm sodium flood banks
-    default:             base = { tint: [1.14, 1.06, 0.84], intensity: 19.0, radius: 32, street: false }; break; // green/classic warm-white
+    // Radii sized for the raking throw from the verge mast: the pool's far
+    // corner sits 21-25 m from the lens, and the (1-(d/r)^4)^2 window must not
+    // eat it (smaller radii lost up to 31% there).
+    case "street_night": base = { tint: [0.92, 0.96, 1.08], intensity: 20.0, radius: 30, street: true }; break;  // cool LED white, city
+    case "modern":       base = { tint: [1.00, 0.98, 0.92], intensity: 19.0, radius: 30, street: true }; break;  // warm-white LED
+    case "street_day":   base = { tint: [1.10, 1.00, 0.80], intensity: 16.0, radius: 28, street: true }; break;  // warm street lamps (Monaco/Madrid)
+    case "desert":       base = { tint: [1.28, 1.00, 0.60], intensity: 18.0, radius: 34, street: false }; break; // warm sodium flood banks
+    default:             base = { tint: [1.14, 1.06, 0.84], intensity: 19.0, radius: 36, street: false }; break; // green/classic warm-white
   }
   // Per-LOCALE character so night circuits don't all share one tint: humid/warm
   // cities glow amber (sodium + sea-haze scatter), crisp desert/LED cities stay
@@ -2315,6 +2318,24 @@ function floodColor(theme, id) {
   else if (id && COOL[id]) base.tint = COOL[id];
   return base;
 }
+// Per-KIND light parameters. The kind itself is decided ONCE in tracks.js
+// (buildProps mast block) and carried on track.lampPosts, so the painted lens
+// albedo always matches the light emitted here. CCT-authentic palette (HPS
+// sodium 2100K → broadcast flood 5700K). Cones are a tight HOT CORE (the bright
+// pool under the fixture) + a wide soft skirt reaching the far edge; bleed is
+// LOW so the valleys between lamps stay visibly darker than the pools — that
+// pool/valley contrast is what makes the light read as CAST by the fixture
+// instead of an ambient wash.
+const LAMP_KINDS = {
+  flood_bank: { col: [1.02, 1.06, 1.18], eMul: 1.35, cIn: 0.80, cOut: 0.50, blB: 0.08, blV: 0.06, volW: 1.0,  glareW: 1.2, tintMix: 0.12 }, // 5700K broadcast bank
+  halide:     { col: [0.96, 1.03, 1.05], eMul: 1.05, cIn: 0.80, cOut: 0.46, blB: 0.06, blV: 0.06, volW: 0.8,  glareW: 1.0, tintMix: 0.30 }, // 4300K metal halide
+  sodium:     { col: [1.42, 0.72, 0.24], eMul: 0.85, cIn: 0.82, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.9, tintMix: 0.25 }, // 2100K HPS deep amber
+  halogen:    { col: [1.22, 0.98, 0.55], eMul: 0.95, cIn: 0.80, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.55, glareW: 1.0, tintMix: 0.30 }, // 3000K warm white
+  led:        { col: [0.92, 1.00, 1.15], eMul: 1.05, cIn: 0.84, cOut: 0.48, blB: 0.10, blV: 0.08, volW: 0.45, glareW: 0.7, tintMix: 0.30 }, // 5000K crisp LED
+  globe:      { col: [1.30, 0.92, 0.52], eMul: 0.60, cIn: 0.30, cOut: 0.02, blB: 0.16, blV: 0.10, volW: 0.30, glareW: 1.6, tintMix: 0.25 }, // 2700K heritage globe (near-omni)
+  work:       { col: [1.38, 0.74, 0.30], eMul: 0.55, cIn: 0.70, cOut: 0.44, blB: 0.08, blV: 0.06, volW: 0.4,  glareW: 0.8, tintMix: 0.20 }, // orange work lamp
+  fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // 4000K greenish fluorescent
+};
 function buildTrackLights(track) {
   const lights = [];
   const n = track.n, total = track.total;
@@ -2369,23 +2390,31 @@ function buildTrackLights(track) {
       const we = intensity * 0.30 * (4.5 * 4.5) * 0.55;
       lights.push(wx0, wy0, wz0,
         Math.max(0, nc[0]) * we, Math.max(0, nc[1]) * we, Math.max(0, nc[2]) * we,
-        16, wdx, wdy, wdz, 0.55, 0.05, 0.10, 0.35);
+        16, wdx, wdy, wdz, 0.55, 0.05, 0.10, 0.35, 0);
     }
     let eMul = 1.0, coneIn, coneOut, pr, pg, pb, tintMix = 0.38;
-    // Per-type VOLUMETRIC weight: how strongly this lamp's beam shows in the air
-    // (flood banks throw hard shafts, street posts a soft halo, washers a gentle
-    // coloured glow). Carried in the light record as field 14.
-    let volW = 0.55;
-    if (pitStraight) {
-      // Broadcast flood bank: cool white, tight hard beam, brightest.
+    // Per-type VOLUMETRIC weight (record field 13): how strongly this lamp's
+    // beam shows in the air. Per-type GLARE weight (field 14): lens-halo size/
+    // strength in drawGlow (0 = fixture-less light, no halo).
+    let volW = 0.55, glareW = 1.0, bleed;
+    const KP = posts && posts[i].kind ? LAMP_KINDS[posts[i].kind] : null;
+    if (KP) {
+      // KIND path: parameters from the table; the visible lens in tracks.js was
+      // painted with this kind's albedo, so fixture and light always agree.
+      pr = KP.col[0]; pg = KP.col[1]; pb = KP.col[2];
+      eMul = KP.eMul; coneIn = KP.cIn; coneOut = KP.cOut;
+      tintMix = KP.tintMix; volW = KP.volW; glareW = KP.glareW;
+      bleed = KP.blB + lh(i + 31) * KP.blV;
+    } else if (pitStraight) {
+      // Legacy fallback (no lampPosts / unknown kind string): broadcast bank.
       eMul = 1.3; volW = 1.0;
       pr = 1.02; pg = 1.06; pb = 1.18; tintMix = 0.12;
-      coneIn = 0.86; coneOut = 0.68;
+      coneIn = 0.78; coneOut = 0.58;
     } else if (!street && kindRoll < 0.08) {
       // Work lamp: a dimmer, orange aging bulb among the floods.
       eMul = 0.55; volW = 0.4;
       pr = 1.38; pg = 0.74; pb = 0.30; tintMix = 0.2;
-      coneIn = 0.78; coneOut = 0.52;
+      coneIn = 0.70; coneOut = 0.48;
     } else {
       // Standard street post / flood mast: sodium-orange ↔ warm-yellow ↔ cool-white
       // temperature mix so a row of lamps reads like real aged street lighting.
@@ -2393,36 +2422,45 @@ function buildTrackLights(track) {
       if (ct < 0.34)      { pr = 1.34; pg = 0.70; pb = 0.32; }   // orange sodium
       else if (ct < 0.68) { pr = 1.16; pg = 1.00; pb = 0.55; }   // warm yellow
       else                { pr = 0.93; pg = 0.99; pb = 1.15; }   // cool white
-      coneIn  = 0.75 + hard * 0.12;             // 41° → 29.5° inner half-angle
-      coneOut = coneIn - (0.30 - hard * 0.16);  // wide soft edge → tight hard edge
+      coneIn  = 0.66 + hard * 0.10;   // 48.7° → 40.5° inner half-angle
+      coneOut = coneIn - 0.26;        // soft outer skirt
     }
     const mr = tint[0] * tintMix + pr * (1 - tintMix);
     const mg = tint[1] * tintMix + pg * (1 - tintMix);
     const mb = tint[2] * tintMix + pb * (1 - tintMix);
-    // Street/city circuits BLEED more — the city skyglow keeps the road lit
-    // between pools (Vegas) — while open circuits stay darker between.
-    const bleedBase = street ? 0.30 : 0.14;
-    const bleedVar  = street ? 0.18 : 0.12;
-    const bleed = bleedBase + lh(i + 31) * bleedVar;
-    // Beam aim: from the mast lens toward the road centreline at ground level —
-    // real circuit lighting rakes in from the verge.
+    if (bleed == null) {
+      // Legacy bleed: street/city circuits bleed more between pools.
+      const bleedBase = street ? 0.30 : 0.14;
+      const bleedVar  = street ? 0.18 : 0.12;
+      bleed = bleedBase + lh(i + 31) * bleedVar;
+    }
+    // Beam aim: from the mast lens at the CENTRE OF THE NEAR LANE (side·hw/2) —
+    // the pool spans centreline→near edge and sits under/near the fixture, so
+    // the lamp visibly throws its light DOWN onto the road it stands over.
     const lx = posts ? posts[i].x : track.px[k] + track.rx[k] * (track.hw[k] + 6) * side;
     const ly = posts ? posts[i].y : track.py[k] + height;
     const lz = posts ? posts[i].z : track.pz[k] + track.rz[k] * (track.hw[k] + 6) * side;
-    let ax = track.px[k] - lx, ay = track.py[k] - ly, az = track.pz[k] - lz;
+    const nlOff = track.hw[k] * 0.5 * side;
+    let ax = track.px[k] + track.rx[k] * nlOff - lx;
+    let ay = track.py[k] - ly;
+    let az = track.pz[k] + track.rz[k] * nlOff - lz;
     const al = Math.hypot(ax, ay, az) || 1;
     ax /= al; ay /= al; az /= al;
     // Physically-based punctual light: intensity is in inverse-square units (the
-    // shader divides by d²), so scale by the ACTUAL lens→road distance² to land
-    // the intended pool luminance on the racing line.
-    const ePhys = intensity * bri * eMul * (al * al) * 0.55;
+    // shader divides by d²), so scale by the lens→road distance² AND the surface
+    // incidence at the aim point (NoL = h/al for an up-facing road) — a raking
+    // beam needs more flux than a top-down one to land the same pool luminance.
+    // The incidence divisor is CLAMPED so a mast beside banked/elevated road
+    // (lens barely above the aim point) can't blow the energy up.
+    const hAim = Math.max(ly - track.py[k], 1);
+    const ePhys = intensity * bri * eMul * (al * al) * 0.55 / Math.max(hAim / al, 0.35);
     lights.push(
       lx, ly, lz,
       Math.max(0, mr) * ePhys,
       Math.max(0, mg) * ePhys,
       Math.max(0, mb) * ePhys,
       radius,
-      ax, ay, az, coneIn, coneOut, bleed, volW,
+      ax, ay, az, coneIn, coneOut, bleed, volW, glareW,
     );
   }
   // START-GANTRY DOWNLIGHTS: a crisp white bar of light straight down over the
@@ -2435,7 +2473,7 @@ function buildTrackLights(track) {
       lights.push(
         track.px[0] + track.rx[0] * lat, track.py[0] + 8, track.pz[0] + track.rz[0] * lat,
         1.02 * ge, 1.05 * ge, 1.12 * ge,
-        26, 0, -1, 0, 0.92, 0.78, 0.06, 0.9);
+        26, 0, -1, 0, 0.92, 0.78, 0.06, 0.9, 0.3);
     }
   }
   return lights;
@@ -2451,7 +2489,7 @@ function appendCarTailLights() {
   // frame.lights is always the per-frame copy (flicker copies every frame), so
   // appending here never mutates the cached track set.
   if (!L || L === track._lights || !player) return;
-  let budget = 32 - ((L.length / 14) | 0);
+  let budget = 32 - ((L.length / 15) | 0);
   if (budget <= 0) return;
   _tlSel.length = 0;
   for (const c of cars) {
@@ -2473,7 +2511,7 @@ function appendCarTailLights() {
       _tlSmp.p[1] + 0.55,
       _tlSmp.p[2] + _tlSmp.r[2] * c.x - tz * 2.4,
       4.5, 0.14, 0.10,
-      8, dx, dy, dz, 0.5, -0.2, 0.12, 0.25);
+      8, dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
   }
 }
 
@@ -2489,7 +2527,7 @@ function setFrameLights(eye, scale) {
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
   const sg = Array.isArray(scale) ? scale[1] : sr;
   const sb = Array.isArray(scale) ? scale[2] : sr;
-  const count = src.length / 14;
+  const count = src.length / 15;
   const out = _lightScaleBuf;
   // Per-lamp FLICKER, computed CPU-side each frame (zero shader cost): healthy
   // lamps barely breathe (±2%), the occasional aging tube visibly pulses (±10%).
@@ -2505,11 +2543,11 @@ function setFrameLights(eye, scale) {
   if (count <= 32) {
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
     out.length = 0;
-    for (let i = 0; i < src.length; i += 14) {
+    for (let i = 0; i < src.length; i += 15) {
       const f = fl(i);
       out.push(src[i], src[i+1], src[i+2],
         src[i+3] * sr * f, src[i+4] * sg * f, src[i+5] * sb * f, src[i+6],
-        src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13]);
+        src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13], src[i+14]);
     }
     frame.lights = out;
     return;
@@ -2519,7 +2557,7 @@ function setFrameLights(eye, scale) {
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
-    const o = i * 14, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
+    const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
     const d = dx * dx + dy * dy + dz * dz;
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
@@ -2531,7 +2569,7 @@ function setFrameLights(eye, scale) {
     const o = buf[i].o;
     const f = fl(o);
     out.push(src[o], src[o+1], src[o+2], src[o+3] * sr * f, src[o+4] * sg * f, src[o+5] * sb * f,
-      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13]);
+      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13], src[o+14]);
   }
   frame.lights = out;
 }
@@ -5378,7 +5416,7 @@ window.__apex = {
     ambientGround: frame.ambientGround && frame.ambientGround.slice(),
     sunColor: frame.sunColor && frame.sunColor.slice(),
     exposure: frame.exposure != null ? frame.exposure : 1,
-    numLights: frame.lights ? frame.lights.length / 14 : 0,
+    numLights: frame.lights ? frame.lights.length / 15 : 0,
     sunY: frame.sunDir ? frame.sunDir[1] : null,
     builtNight: builtTrackNight, trackNight: track && track._night,
     floodEmit: _lastFloodEmit,   // actual prop-emissive ramp value this frame

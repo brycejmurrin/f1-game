@@ -319,8 +319,10 @@ void main() {
     float spotD = mix(uLightBleed[i], 1.0, beam);
     // …but the REFLECTION doesn't: the glowing lens itself is visible from far
     // outside the beam, so a wet road streaks beneath every lamp you can see —
-    // not only inside its illumination cone. Specular keeps a high floor.
-    float spotS = mix(0.28, 1.0, beam);
+    // not only inside its illumination cone. The floor is wetness-dependent:
+    // high when wet (streaks from every visible lamp), lower when dry so a dry
+    // night road keeps pool/valley contrast instead of a uniform specular sheet.
+    float spotS = mix(mix(0.16, 0.30, wet), 1.0, beam);
     float NoLl = max(dot(N, Ld), 0.0);
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
@@ -1975,20 +1977,21 @@ void main() {}`;
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
-    // [x,y,z, r,g,b, rad, …] of at most MAX_LIGHTS (24) entries, already culled to
-    // the nearest set by the caller. Uploaded once per frame; uNumLights=0 on day.
+    // of at most MAX_LIGHTS (32) entries, already culled to the nearest set by
+    // the caller. Uploaded once per frame; uNumLights=0 on day.
     {
       const L = frame.lights;
-      // Flat stride-14: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
-      // bleed, volW]. volW (volumetric weight) is consumed by the godray pass only.
-      const nL = L ? Math.min(32, (L.length / 14) | 0) : 0;
+      // Flat stride-15: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
+      // bleed, volW, glareW]. volW is consumed by the godray pass only; glareW
+      // (lens-glare halo weight) by drawGlow only.
+      const nL = L ? Math.min(32, (L.length / 15) | 0) : 0;
       gl.uniform1i(litU.uNumLights, nL);
       if (nL > 0) {
         const pos = new Float32Array(nL * 3), col = new Float32Array(nL * 3),
               rad = new Float32Array(nL), dir = new Float32Array(nL * 3),
               cone = new Float32Array(nL * 2), bleed = new Float32Array(nL);
         for (let i = 0; i < nL; i++) {
-          const o = i * 14;
+          const o = i * 15;
           pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
           col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
           rad[i] = L[o + 6];
@@ -2240,20 +2243,26 @@ void main() {}`;
   }
 
   // Additive lens-glare halos: one round billboard per lamp. `lights` is the
-  // stride-14 frame.lights array; only fields 0-6 (position, colour, radius) are
+  // stride-15 frame.lights array; fields 0-6 (position, colour, radius) and 14
+  // (glareW: per-lamp halo weight, 0 = no visible fixture = no halo) are
   // read here. Must be called while the HDR scene target is bound (after
   // drawSky, before present) so the glare lands in the scene buffer and
   // participates in bloom. `str` scales halo brightness (0 disables).
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
     if (!glowProg || !lights || !lights.length || !(str > 0)) return;
-    const nL = (lights.length / 14) | 0;  // stride-14 light records (see frame.lights)
+    const nL = (lights.length / 15) | 0;  // stride-15 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
     let p = 0, nDraw = 0;
     const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
     for (let i = 0; i < nL; i++) {
-      const o = i * 14;
+      const o = i * 15;
+      // Per-lamp glare weight (record field 14): 0 = fixture-less light (edge
+      // washers) that must never paint a floating halo; >1 = big soft glare
+      // (heritage globes, flood banks).
+      const glareW = lights[o + 14];
+      if (!(glareW > 0)) continue;
       const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
       // Lens glare is a NEAR-FIELD veiling effect. Distant sources already read
       // as bloom on their emissive head geometry — a halo billboard out there is
@@ -2267,12 +2276,11 @@ void main() {}`;
       let r = lights[o + 3], g = lights[o + 4], b = lights[o + 5];
       const rad = lights[o + 6];
       const cm = Math.max(r, g, b) || 1;
-      const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade;
+      const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade * glareW;
       r *= csc; g *= csc; b *= csc;
       // Billboard size: a small LENS HALO hugging the lamp head — NOT a beam cone.
-      // Sized to the lens housing (~2 m), so the glare reads as a glow around the
-      // fixture instead of a cotton ball swallowing the mast top.
-      const brad = Math.min(2.2, rad * 0.10);
+      // Sized to the lens housing (~2 m) and scaled by the lamp's glare weight.
+      const brad = Math.min(2.2, rad * 0.10) * (0.7 + 0.6 * Math.min(glareW, 2));
       for (let v = 0; v < 6; v++) {
         const c = _glowCorners[v];
         glowData[p++] = c[0]; glowData[p++] = c[1];
@@ -2385,10 +2393,10 @@ void main() {}`;
       // Lamp volumetrics: upload the nearest-8 lamps to the eye + the haze gate.
       let grNL = 0;
       if (lampVol > 0 && frameLights) {
-        const L = frameLights, total = (L.length / 14) | 0;
+        const L = frameLights, total = (L.length / 15) | 0;
         const ex = frameEye[0], ey = frameEye[1], ez = frameEye[2];
         for (let i = 0; i < total; i++) {
-          const o = i * 14, dx = L[o] - ex, dy = L[o + 1] - ey, dz = L[o + 2] - ez;
+          const o = i * 15, dx = L[o] - ex, dy = L[o + 1] - ey, dz = L[o + 2] - ez;
           const d = dx * dx + dy * dy + dz * dz;
           const e = _grSel[i]; if (e) { e.d = d; e.o = o; } else _grSel[i] = { d: d, o: o };
         }

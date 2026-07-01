@@ -1484,6 +1484,9 @@ const Tracks = (function () {
       // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
       addBox(out, vadd(a.c, a.u, 13), [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+      // Under-roof lighting: a warm emissive strip beneath the roof slab so a
+      // night grandstand reads as a lit, occupied stand instead of a dark hulk.
+      if (NIGHT) addBox(out, vadd(a.c, a.u, 12.35), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
     };
 
     // ---------- linear track furniture (run along the track from s0→s1) ----------
@@ -2150,7 +2153,13 @@ const Tracks = (function () {
         return;
       }
       for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(p.c, p.t, o), 0.12, h, [0.2, 0.2, 0.22], 4, b);
-      addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], col || [0.9, 0.85, 0.2], b);
+      // Backlit at night: trackside advertising is illuminated at real races —
+      // the lifted albedo rides the emissive path so panels glow softly.
+      let face = col || [0.9, 0.85, 0.2];
+      if (NIGHT) face = [Math.min(1.45, face[0] * 1.30 + 0.10),
+                         Math.min(1.45, face[1] * 1.30 + 0.10),
+                         Math.min(1.45, face[2] * 1.30 + 0.10)];
+      addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], face, b);
       blockAt(k, side, gap, w * 0.4);   // posts + panel face → stop before it
     };
     // Overhead gantry spanning the track (start/scoring/DRS): two legs + a beam.
@@ -2158,7 +2167,17 @@ const Tracks = (function () {
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       addCyl(out, aL.c, 0.3, h, c, 6, [aL.r, u, aL.t]); addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
-      addBox(out, [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h], [hw[k] * 2 + 5, 0.9, 1.4], c, [aL.r, u, aL.t]);
+      const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
+      addBox(out, beam, [hw[k] * 2 + 5, 0.9, 1.4], c, [aL.r, u, aL.t]);
+      // Downlight lens fixtures under the beam — the visible sources for the
+      // start-gantry downlights buildTrackLights hangs over the line. Bright
+      // cool-white at night (bloom via the emissive path), muted housings by day.
+      const gl = NIGHT ? [1.28, 1.30, 1.38] : [0.80, 0.81, 0.85];
+      const r0 = [track.rx[k], track.ry[k], track.rz[k]];
+      for (const lat of [-hw[k] * 0.55, 0, hw[k] * 0.55]) {
+        addBox(out, [beam[0] + r0[0] * lat - u[0] * 0.62, beam[1] - u[1] * 0.62 + 0, beam[2] + r0[2] * lat - u[2] * 0.62],
+               [1.1, 0.35, 1.0], gl, [aL.r, u, aL.t]);
+      }
     };
     // Marshal post / flag bunker: a small orange-roofed box with a pole.
     const marshalPost = (k, side, gap) => {
@@ -2170,6 +2189,9 @@ const Tracks = (function () {
       addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
       addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
       addCyl(out, vadd(p.c, p.r, side * 1.4), 0.08, 4, [0.4, 0.4, 0.42], 4, b);
+      // Marshal watch-lamp: a small amber beacon on the flag pole after dark so
+      // the marshal line dots the circuit like real night-race infrastructure.
+      if (NIGHT) addBox(out, vadd(vadd(p.c, p.r, side * 1.4), p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
     };
     // Bush / shrub clump (low rounded greenery).
@@ -2538,6 +2560,13 @@ const Tracks = (function () {
       place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
       place(k, -1, 10, [1.4, 7, 16], crowd);                // tiered seating
       place(k, 1, 12, [7, 5.5, 16], [0.83, 0.83, 0.86]);    // pit building
+      // Pit complex window bands: two glowing glass strips on the track-facing
+      // face after dark — garages work through the night at a race meeting.
+      if (NIGHT) {
+        const pa = anchor(k, 1, 8.35), pb = [pa.r, pa.u, pa.t];
+        addBox(out, vadd(pa.c, pa.u, 2.0), [0.14, 1.3, 13], [1.34, 1.24, 0.96], pb);
+        addBox(out, vadd(pa.c, pa.u, 3.9), [0.14, 0.9, 13], [1.10, 1.14, 1.22], pb);
+      }
     }
 
     // --- iconic landmark: a ferris wheel beside the track (Suzuka, Singapore) ---
@@ -2607,18 +2636,46 @@ const Tracks = (function () {
     {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
       const mastH = stTheme ? 9 : 13;
-      // Lens albedo mirrors floodColor(theme) in game.js so the visible mast glow
-      // matches the colour of the point light it casts: desert warm sodium,
-      // street_night cool LED, modern warm-white, street_day warm, green neutral.
-      const lensCol = theme === "desert"       ? [1.00, 0.84, 0.50]
-                    : theme === "street_night" ? [0.90, 0.95, 1.05]
-                    : theme === "modern"       ? [1.00, 0.97, 0.90]
-                    : theme === "street_day"   ? [1.06, 0.98, 0.82]
-                    : [1.00, 0.93, 0.78];
       const poleCol = [0.16, 0.16, 0.19];
       const mstride = Math.max(1, Math.round(22 / ds));   // matches buildTrackLights stride in game.js
       let mi = 0;
-      // Export the EXACT world position of every visible lens so game.js
+      // ── LAMP KIND — decided HERE, once, per post (single source of truth) ──
+      // The visible lens albedo and the point light game.js emits (colour, cone,
+      // energy, volumetric weight, glare) all key off this kind, so the fixture
+      // you see always matches the light it casts. Authentic CCT spread:
+      // sodium 2100K / halogen 3000K / metal-halide 4300K / LED 5000K /
+      // heritage globe 2700K / broadcast flood bank 5700K / orange work lamp.
+      // Night lens albedos are HDR-ish (>1) so brighter kinds bloom bigger via
+      // the emissive path; day albedos stay ≤~1.05 so sun doesn't blow them out.
+      const LENS_NIGHT = {
+        flood_bank: [1.30, 1.33, 1.40], halide: [1.10, 1.20, 1.18],
+        sodium:     [1.32, 0.86, 0.42], halogen: [1.26, 1.06, 0.62],
+        led:        [1.16, 1.24, 1.36], globe:   [1.28, 1.00, 0.58],
+        work:       [1.12, 0.78, 0.40], fluor:   [1.06, 1.22, 1.02],
+      };
+      const LENS_DAY = {
+        flood_bank: [1.00, 1.01, 1.04], halide: [0.94, 0.99, 0.98],
+        sodium:     [1.04, 0.88, 0.62], halogen: [1.02, 0.94, 0.72],
+        led:        [0.96, 1.00, 1.05], globe:   [1.04, 0.94, 0.70],
+        work:       [0.98, 0.82, 0.58], fluor:   [0.92, 1.00, 0.90],
+      };
+      // Heritage-globe streets (Monaco, Baku) run globes; other cities mix
+      // sodium/LED/halogen; open circuits mix metal-halide/halogen/sodium with
+      // the odd work lamp; the pit straight is always broadcast flood banks.
+      const globeStreet = fz.lamp === "globe";
+      const pickKind = (k, roll) => {
+        const frac = k / n;
+        if (frac < 0.045 || frac > 0.985) return "flood_bank";
+        if (stTheme) {
+          if (globeStreet && roll < 0.55) return "globe";
+          // Modern venues mix in cool-greenish fluorescent service lighting.
+          if (theme === "modern" && roll >= 0.70 && roll < 0.88) return "fluor";
+          return roll < 0.42 ? "sodium" : roll < 0.72 ? "led" : "halogen";
+        }
+        if (roll < 0.07) return "work";
+        return roll < 0.50 ? "halide" : roll < 0.78 ? "halogen" : "sodium";
+      };
+      // Export the EXACT world position + kind of every visible lens so game.js
       // buildTrackLights emits its point light from the real fixture — glare
       // halo, specular streak and volumetric beam all anchor to geometry.
       // onTrack-suppressed masts are simply absent, so no light without a mast.
@@ -2627,11 +2684,19 @@ const Tracks = (function () {
         const side = (mi % 2 === 0) ? 1 : -1;
         const a = anchor(k, side, 6);
         if (onTrack(a.c[0], a.c[2], 1.2)) continue;
+        const kind = pickKind(k, hash(mi * 13.7 + 3.1));
+        const lensCol = (NIGHT ? LENS_NIGHT : LENS_DAY)[kind];
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.17, mastH, poleCol, 6, b);
         const top = vadd(a.c, a.u, mastH);
         let lens;
-        if (stTheme) {
+        if (kind === "globe") {
+          // Heritage twin-globe head: two glowing spheres on a short crossbar.
+          addBox(out, top, [1.6, 0.16, 0.3], poleCol, b);
+          for (const e of [-1, 1])
+            addBox(out, vadd(vadd(top, a.r, -side * 0.2 + e * 0.55), a.u, 0.28), [0.55, 0.6, 0.55], lensCol, b);
+          lens = vadd(vadd(top, a.r, -side * 0.2), a.u, 0.28);
+        } else if (stTheme) {
           const arm = vadd(top, a.r, -side * 1.0);
           addBox(out, arm, [2.0, 0.26, 0.45], poleCol, b);
           lens = vadd(arm, a.r, -side * 0.85);
@@ -2641,7 +2706,7 @@ const Tracks = (function () {
           lens = vadd(top, a.r, -side * 0.7);
           addBox(out, lens, [2.2, 0.8, 0.4], lensCol, b);
         }
-        track.lampPosts.push({ k, side, x: lens[0], y: lens[1], z: lens[2] });
+        track.lampPosts.push({ k, side, x: lens[0], y: lens[1], z: lens[2], kind });
       }
     }
 
