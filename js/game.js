@@ -569,6 +569,19 @@ function getRainLight() {
   rainLightMesh = GLX.createMesh(out);
   return rainLightMesh;
 }
+// Exhaust flame: a tiny HDR-amber quad behind the tailpipe, flickering while
+// the player is on throttle after dark — an arcade heat-glow cue.
+let exhaustMesh = null;
+function getExhaustFlame() {
+  if (exhaustMesh) return exhaustMesh;
+  const R = [2.6, 1.05, 0.25], out = { pos: [], nrm: [], col: [], idx: [] };
+  const w = 0.035, h = 0.030;
+  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
+  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
+  out.idx.push(0, 2, 1, 0, 3, 2);
+  exhaustMesh = GLX.createMesh(out);
+  return exhaustMesh;
+}
 function playerBodyMesh(team) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
   if (!playerBodies[team.id]) playerBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2, { noWheels: true }));
@@ -2061,6 +2074,8 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer) {
     const heating = braking && c.speed > 12;
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
+    // Exhaust glow (render-only): rises on throttle, dies quickly off it.
+    c.exhaustPop = clamp((c.exhaustPop || 0) + (onThrottle && c.speed > 8 ? dt * 5 : -dt * 7), 0, 1);
   }
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
@@ -3007,6 +3022,16 @@ function render(dt) {
       W[13] += W[5] * 0.50 - W[9] * 2.60;
       W[14] += W[6] * 0.50 - W[10] * 2.60;
       GLX.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0 });
+    }
+    // Exhaust heat glow: night-only flicker behind the tailpipe on throttle.
+    if (night && c.isPlayer && (c.exhaustPop || 0) > 0.05) {
+      const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
+      const W = _ringWorld;
+      W.set(tmpMat);
+      W[12] += W[4] * 0.40 - W[8] * 2.24;
+      W[13] += W[5] * 0.40 - W[9] * 2.24;
+      W[14] += W[6] * 0.40 - W[10] * 2.24;
+      GLX.draw(getExhaustFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop });
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;

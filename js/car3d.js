@@ -16,7 +16,7 @@ const Car3D = (function () {
   const DARK   = [0.05, 0.05, 0.05];
   const CARBON = [0.07, 0.07, 0.08];
   const VISOR  = [0.08, 0.08, 0.09];          // tinted visor
-  const PANEL  = [0.93, 0.93, 0.94];          // sponsor / number-plate background
+  const PANEL  = [1.12, 1.12, 1.16];          // sponsor / number plate — slightly HDR so it glows at night
   const TYRE   = [0.06, 0.06, 0.07];
   const RIM    = [0.11, 0.11, 0.13];
   const HUB    = [0.28, 0.28, 0.31];
@@ -211,6 +211,10 @@ const Car3D = (function () {
       addBox(out, s*0.60, 0.10, -0.10, 0.02, 0.08, 0.72, c2);
     }
 
+    // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
+    addLoft(out, 1.60, 0, 0.446, 0.09, 0.022, 2.70, 0, 0.336, 0.05, 0.016, c2);
+    addBox(out, 0, 0.862, -0.42, 0.06, 0.04, 0.52, c2);
+
     // --- Nose number plate + camera pod (sit on the curved nose top) ---
     addBox(out, 0, 0.383, 1.92, 0.18, 0.022, 0.40, PANEL);
     addBox(out, 0, 0.435, 1.60, 0.06, 0.08, 0.15, DARK);
@@ -276,9 +280,10 @@ const Car3D = (function () {
     addLoft(out, -2.7, 0, 0.24, 1.40, 0.36, -1.90, 0, 0.12, 1.05, 0.14,
             [0.06, 0.06, 0.07]);
 
-    // --- Brake duct fairings (in front of each front wheel) ---
+    // --- Brake duct fairings (front + rear wheels) ---
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, 1.89, 0.06, 0.20, 0.13, DARK);
+      addBox(out, s*0.58, 0.30, -1.80, 0.06, 0.18, 0.12, DARK);
     }
 
     // --- Suspension wishbones ---
