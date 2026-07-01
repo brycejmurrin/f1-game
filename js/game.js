@@ -2190,6 +2190,9 @@ function buildTrackLights(track) {
   // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
   const lh = (j) => { const x = Math.sin((j + 1) * 127.13) * 43758.5453; return x - Math.floor(x); };
   let i = 0;
+  // Saturated accent palette for "neon spill" lamps on city circuits — coloured
+  // light washing off signage onto the street (magenta/cyan/lime/red-orange).
+  const NEON_SPILL = [[1.9, 0.25, 1.0], [0.25, 1.5, 1.7], [0.55, 1.7, 0.45], [1.7, 0.42, 0.22]];
   for (let k = 0; k < n; k += stride, i++) {
     const side = (i % 2 === 0) ? 1 : -1;
     // The visible mast sits beyond the track edge (hw+6, see buildProps), but the
@@ -2197,54 +2200,72 @@ function buildTrackLights(track) {
     // so the pool lands as a bright circle ON the racing surface — alternating
     // sides down the lap — instead of out on the grass verge.
     const off = (track.hw[k] * 0.5) * side;
-    // Per-lamp VARIANCE: warmth jitter (some sodium-orange, some cool white) and a
-    // brightness jitter, so a row of lamps isn't a uniform clone — reads like real
-    // street lighting where bulbs age/differ. Deterministic per lamp index.
     const bri  = 0.70 + lh(i + 97) * 0.62;      // 0.70 … 1.32 brightness (wide)
-    const e = intensity * bri;
-    // Per-lamp COLOUR TEMPERATURE variety: orange sodium ↔ warm yellow ↔ cool
-    // white, blended with the theme's base tint so a row of lamps is a believable
-    // mix (some orange, some yellow, some white) rather than one flat colour.
-    const ct = lh(i + 17);
-    let pr, pg, pb;
-    if (ct < 0.34)      { pr = 1.34; pg = 0.70; pb = 0.32; }   // orange sodium
-    else if (ct < 0.68) { pr = 1.16; pg = 1.00; pb = 0.55; }   // warm yellow
-    else                { pr = 0.93; pg = 0.99; pb = 1.15; }   // cool white
-    const mr = tint[0] * 0.38 + pr * 0.62;
-    const mg = tint[1] * 0.38 + pg * 0.62;
-    const mb = tint[2] * 0.38 + pb * 0.62;
-    // Per-lamp spotlight variance fed to the lit shader. Street/city circuits
-    // BLEED more — the city skyglow keeps the road lit between pools (Vegas) —
-    // while open circuits stay darker between (but not pitch-black). Edge hardness
-    // also varies per lamp so some pools have crisp rims, some soft.
+    const hard = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
+    // ── LAMP TYPOLOGY ─────────────────────────────────────────────────────────
+    // Not one kind of lamp: the pit straight runs dense cool-white broadcast
+    // flood banks; city circuits mix sodium street posts with saturated NEON
+    // SPILL (signage light washing the street in colour); permanent circuits are
+    // flood masts with the odd warm "work lamp" (aging bulb). Each kind has its
+    // own height, colour, cone and energy.
+    const frac = k / n;
+    const pitStraight = frac < 0.045 || frac > 0.985;   // start/finish zone
+    const kindRoll = lh(i + 71);
+    let h = height, eMul = 1.0, coneIn, coneOut, pr, pg, pb, tintMix = 0.38;
+    if (pitStraight) {
+      // Broadcast flood bank: tall, cool white, tight hard beam, brightest.
+      h = height + 3; eMul = 1.55;
+      pr = 1.02; pg = 1.06; pb = 1.18; tintMix = 0.12;
+      coneIn = 0.86; coneOut = 0.68;
+    } else if (street && kindRoll < 0.15) {
+      // Neon spill: low, wide, soft, SATURATED colour — signage washing the road.
+      const nc = NEON_SPILL[Math.floor(lh(i + 5) * NEON_SPILL.length) % NEON_SPILL.length];
+      h = 7; eMul = 0.6;
+      pr = nc[0]; pg = nc[1]; pb = nc[2]; tintMix = 0.0;
+      coneIn = 0.68; coneOut = 0.30;
+    } else if (!street && kindRoll < 0.08) {
+      // Work lamp: a dimmer, orange aging bulb among the floods.
+      eMul = 0.55;
+      pr = 1.38; pg = 0.74; pb = 0.30; tintMix = 0.2;
+      coneIn = 0.78; coneOut = 0.52;
+    } else {
+      // Standard street post / flood mast: sodium-orange ↔ warm-yellow ↔ cool-white
+      // temperature mix so a row of lamps reads like real aged street lighting.
+      const ct = lh(i + 17);
+      if (ct < 0.34)      { pr = 1.34; pg = 0.70; pb = 0.32; }   // orange sodium
+      else if (ct < 0.68) { pr = 1.16; pg = 1.00; pb = 0.55; }   // warm yellow
+      else                { pr = 0.93; pg = 0.99; pb = 1.15; }   // cool white
+      coneIn  = 0.75 + hard * 0.12;             // 41° → 29.5° inner half-angle
+      coneOut = coneIn - (0.30 - hard * 0.16);  // wide soft edge → tight hard edge
+    }
+    const mr = tint[0] * tintMix + pr * (1 - tintMix);
+    const mg = tint[1] * tintMix + pg * (1 - tintMix);
+    const mb = tint[2] * tintMix + pb * (1 - tintMix);
+    // Street/city circuits BLEED more — the city skyglow keeps the road lit
+    // between pools (Vegas) — while open circuits stay darker between.
     const bleedBase = street ? 0.24 : 0.10;
     const bleedVar  = street ? 0.18 : 0.12;
     const bleed = bleedBase + lh(i + 31) * bleedVar;
-    const hard  = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
-    // Physically-based punctual light: intensity is in inverse-square units now
-    // (the shader divides by d²), so scale by the mast height² to land the same
-    // pool luminance on the road that the old normalized falloff produced.
-    const ePhys = e * (height * height) * 0.55;
+    // Physically-based punctual light: intensity is in inverse-square units (the
+    // shader divides by d²), so scale by the mast height² to land the intended
+    // pool luminance on the road.
+    const ePhys = intensity * bri * eMul * (h * h) * 0.55;
     // Beam aim: from the lens toward the road centreline at ground level — the
     // mast overhangs the track, so the beam tilts slightly inward like real
-    // circuit lighting (was a hard-coded straight-down cone).
+    // circuit lighting.
     const lx = track.px[k] + track.rx[k] * off;
-    const ly = track.py[k] + height;
+    const ly = track.py[k] + h;
     const lz = track.pz[k] + track.rz[k] * off;
     let ax = track.px[k] - lx, ay = track.py[k] - ly, az = track.pz[k] - lz;
     const al = Math.hypot(ax, ay, az) || 1;
     ax /= al; ay /= al; az /= al;
-    // Per-lamp cone: hard lamps have a tighter beam with a crisp rim, soft lamps
-    // a wider beam with a broad falloff band (cosInner > cosOuter).
-    const cosIn  = 0.75 + hard * 0.12;             // 41° → 29.5° inner half-angle
-    const cosOut = cosIn - (0.30 - hard * 0.16);   // wide soft edge → tight hard edge
     lights.push(
       lx, ly, lz,
       Math.max(0, mr) * ePhys,
       Math.max(0, mg) * ePhys,
       Math.max(0, mb) * ePhys,
       radius,
-      ax, ay, az, cosIn, cosOut, bleed,
+      ax, ay, az, coneIn, coneOut, bleed,
     );
   }
   return lights;
@@ -2264,14 +2285,24 @@ function setFrameLights(eye, scale) {
   const sb = Array.isArray(scale) ? scale[2] : sr;
   const count = src.length / 13;
   const out = _lightScaleBuf;
+  // Per-lamp FLICKER, computed CPU-side each frame (zero shader cost): healthy
+  // lamps barely breathe (±2%), the occasional aging tube visibly pulses (±10%).
+  // Hash on the lamp's stable source offset so the same lamp always flickers the
+  // same way — the night stops being a frozen still.
+  const tNow = performance.now() * 0.001;
+  const fl = (o) => {
+    const x = Math.sin((o + 13) * 91.17) * 43758.5453;
+    const hsh = x - Math.floor(x);
+    const amp = hsh > 0.90 ? 0.10 : 0.02;
+    return 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40);
+  };
   if (count <= 32) {
-    if (sr === 1 && sg === 1 && sb === 1) { frame.lights = src; return; }
-    // Scale without mutating the cached set: copy and scale only the rgb channels
-    // (position, radius, beam direction and cone params pass through unchanged).
+    // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
     out.length = 0;
     for (let i = 0; i < src.length; i += 13) {
+      const f = fl(i);
       out.push(src[i], src[i+1], src[i+2],
-        src[i+3] * sr, src[i+4] * sg, src[i+5] * sb, src[i+6],
+        src[i+3] * sr * f, src[i+4] * sg * f, src[i+5] * sb * f, src[i+6],
         src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12]);
     }
     frame.lights = out;
@@ -2292,7 +2323,8 @@ function setFrameLights(eye, scale) {
   out.length = 0;
   for (let i = 0; i < 32; i++) {
     const o = buf[i].o;
-    out.push(src[o], src[o+1], src[o+2], src[o+3] * sr, src[o+4] * sg, src[o+5] * sb,
+    const f = fl(o);
+    out.push(src[o], src[o+1], src[o+2], src[o+3] * sr * f, src[o+4] * sg * f, src[o+5] * sb * f,
       src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12]);
   }
   frame.lights = out;
@@ -2717,7 +2749,7 @@ function render(dt) {
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
   if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT,
-    { roughness: 0.13, specular: 0.82, metalness: 0.12 });
+    { roughness: 0.13, specular: 0.82, metalness: 0.12, clearcoat: 1.0 });
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
@@ -2902,7 +2934,10 @@ function render(dt) {
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
   // in the shader, so it never greys out the dark night.
-  const _lampVol = (frame.lights && _mist > 0.07) ? clamp(0.10 + 0.55 * _mist, 0, 0.55) : 0;
+  // Always a subtle beam glow whenever lamps are on (clear night air still
+  // scatters a little), swelling with haze/rain into full volumetric shafts —
+  // and coloured per lamp, so neon-spill lights throw coloured beams.
+  const _lampVol = frame.lights ? clamp(0.08 + 0.55 * _mist, 0, 0.55) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
