@@ -44,6 +44,7 @@ rainCanvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;p
 document.body.appendChild(rainCanvas);
 const rainCtx2d = rainCanvas.getContext("2d");
 let rainDrops = [];
+let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug: lightState)
 function initRainDrops() {
   rainCanvas.width = window.innerWidth;
   rainCanvas.height = window.innerHeight;
@@ -742,7 +743,10 @@ function applyRaceSettings() {
       _cloudBase = 0.22;
       // Night: low exposure keeps the dark dark under ACES so the bright lamp
       // pools and lit windows punch through (raising exposure re-greys the night).
-      frame.exposure = 0.86;
+      // Theme-aware to MATCH the default-night path: neon cities carry their own
+      // light (0.86); open/desert circuits lean on the floods alone, so they get
+      // the same gentle lift default mode gives them (0.90).
+      frame.exposure = (track && track.def && track.def.theme === "street_night") ? 0.86 : 0.90;
     } else if (raceTimeOfDay === "dawn") {
       // Pre-sunrise: deep teal-indigo zenith fading to a warm peach/rose horizon.
       // Sun is barely above the horizon — very low elevation, coming from the east.
@@ -867,10 +871,19 @@ function applyRaceSettings() {
       // Dark, moody base now that floodlights/street lights carve out the lit
       // areas (see buildTrackLights). Floor keeps the unlit scene barely legible;
       // the low cap stops over-bright palettes from washing the night to daylight.
-      // Near-black cool floor + a LOW cap so over-bright night palettes can't lift
-      // the scene to grey — the floodlights/neon/windows carve out the lit areas.
-      const floorSky = [0.0022, 0.0028, 0.0066], floorGnd = [0.0009, 0.0012, 0.0036];
-      const capSky   = [0.012, 0.014, 0.026], capGnd   = [0.0048, 0.0055, 0.0115];
+      // Dark floor + a LOW cap so over-bright night palettes can't lift the
+      // scene to grey — the floodlights/neon/windows carve out the lit areas.
+      // (Raised from a near-black band: between-pool road/verge was rendering
+      // pitch black at eye level — night should be dark, not unreadable.)
+      // NEON CITY circuits get a distinctly higher, warm-tinted band: a real
+      // neon canyon is bathed in skyglow bounce off the towers, so its street
+      // never drops to black the way an open desert circuit's verge does.
+      const _neonAmb = track && track.def &&
+        (track.def.theme === "street_night" || track.def.theme === "modern");
+      const floorSky = _neonAmb ? [0.017, 0.017, 0.026] : [0.006, 0.0075, 0.016];
+      const floorGnd = _neonAmb ? [0.009, 0.008, 0.013] : [0.0026, 0.0032, 0.0085];
+      const capSky   = _neonAmb ? [0.048, 0.048, 0.068] : [0.020, 0.023, 0.042];
+      const capGnd   = _neonAmb ? [0.022, 0.020, 0.030] : [0.0085, 0.0098, 0.019];
       // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
       frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
       frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
@@ -975,7 +988,12 @@ function applyRaceSettings() {
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.7);
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.05));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.05));
-    if (frame.exposure == null || frame.exposure < 1.08) frame.exposure = 1.08;
+    // Lift for visibility in the murk — but a NIGHT fog must stay night: forcing
+    // 1.08 over the 0.86-0.90 night base (+25%) grey-washed the dark and killed
+    // the lamp-glow-in-fog mood. Dark sessions get a smaller floor.
+    const _fogDark = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession);
+    const _fogFloor = _fogDark ? 0.95 : 1.08;
+    if (frame.exposure == null || frame.exposure < _fogFloor) frame.exposure = _fogFloor;
   } else {
     frameSky.cloud = _cloudBase;
     // Guarantee frame.exposure always has a value (default = 1.0 if nothing set above)
@@ -2277,21 +2295,21 @@ function buildTrackLights(track) {
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
   const lh = (j) => { const x = Math.sin((j + 1) * 127.13) * 43758.5453; return x - Math.floor(x); };
-  let i = 0;
   // Saturated accent palette for "neon spill" lamps on city circuits — coloured
   // light washing off signage onto the street (magenta/cyan/lime/red-orange).
   // Kept PASTEL and dim — real signage spill is a subtle tint on the street, not
   // a saturated paint-bucket pool.
   const NEON_SPILL = [[1.35, 0.75, 1.1], [0.75, 1.15, 1.3], [0.9, 1.25, 0.85], [1.3, 0.85, 0.65]];
-  for (let k = 0; k < n; k += stride, i++) {
-    const side = (i % 2 === 0) ? 1 : -1;
-    // The LIGHT is emitted from the visible mast lens (buildProps places the mast
-    // at hw+6 with the same 22 m stride and side parity), AIMED at the road
-    // centreline. Emitting from the real lens position keeps every visible cue —
-    // glare halo, specular streak, volumetric beam — anchored to actual geometry;
-    // the old version floated the source over the road, so its lens glare hung in
-    // mid-air as a detached orb.
-    const off = (track.hw[k] + 6) * side;
+  // Every point light is emitted FROM a visible fixture: buildProps exports the
+  // exact world position of each mast lens (track.lampPosts — same 22 m stride,
+  // side parity and onTrack suppression as the drawn masts), so glare halos,
+  // specular streaks, volumetric beams and reflections all anchor to geometry.
+  // Fallback: synthetic stride walk when lampPosts is absent (older track build).
+  const posts = (track.lampPosts && track.lampPosts.length) ? track.lampPosts : null;
+  const nPosts = posts ? posts.length : Math.ceil(n / stride);
+  for (let i = 0; i < nPosts; i++) {
+    const k = posts ? posts[i].k : Math.min(n - 1, i * stride);
+    const side = posts ? posts[i].side : ((i % 2 === 0) ? 1 : -1);
     const bri  = 0.70 + lh(i + 97) * 0.62;      // 0.70 … 1.32 brightness (wide)
     const hard = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
     // ── LAMP TYPOLOGY ─────────────────────────────────────────────────────────
@@ -2299,26 +2317,16 @@ function buildTrackLights(track) {
     // flood banks; city circuits mix sodium street posts with saturated NEON
     // SPILL (signage light washing the street in colour); permanent circuits are
     // flood masts with the odd warm "work lamp" (aging bulb). Each kind has its
-    // own height, colour, cone and energy.
+    // own colour, cone and energy.
     const frac = k / n;
     const pitStraight = frac < 0.045 || frac > 0.985;   // start/finish zone
     const kindRoll = lh(i + 71);
-    let h = height, eMul = 1.0, coneIn, coneOut, pr, pg, pb, tintMix = 0.38;
-    // Per-type VOLUMETRIC weight: how strongly this lamp's beam shows in the air
-    // (flood banks throw hard shafts, street posts a soft halo, washers a gentle
-    // coloured glow). Carried in the light record as field 14.
-    let volW = 0.55;
-    if (pitStraight) {
-      // Broadcast flood bank: cool white, tight hard beam, brightest. Sits at the
-      // mast lens like every other lamp (a taller synthetic height would detach
-      // its glare halo from the visible mast top).
-      eMul = 1.3; volW = 1.0;
-      pr = 1.02; pg = 1.06; pb = 1.18; tintMix = 0.12;
-      coneIn = 0.86; coneOut = 0.68;
-    } else if (street && kindRoll < 0.10) {
+    if (street && kindRoll < 0.10 && !pitStraight) {
       // EDGE WASHER: coloured signage light belongs on WALLS and verges, never on
       // the racing line. A low pastel lamp at the track edge aimed OUTWARD washes
-      // the barrier/building side in colour while the road stays neutral.
+      // the barrier/building side in colour while the road stays neutral. It is
+      // ADDITIONAL to the mast light below — the mast lens above it still glows,
+      // and a glowing lens with no pool reads as broken.
       const nc = NEON_SPILL[Math.floor(lh(i + 5) * NEON_SPILL.length) % NEON_SPILL.length];
       const wx0 = track.px[k] + track.rx[k] * (track.hw[k] + 2.5) * side;
       const wy0 = track.py[k] + 4.5;
@@ -2329,7 +2337,17 @@ function buildTrackLights(track) {
       lights.push(wx0, wy0, wz0,
         Math.max(0, nc[0]) * we, Math.max(0, nc[1]) * we, Math.max(0, nc[2]) * we,
         16, wdx, wdy, wdz, 0.55, 0.05, 0.10, 0.35);
-      continue;
+    }
+    let eMul = 1.0, coneIn, coneOut, pr, pg, pb, tintMix = 0.38;
+    // Per-type VOLUMETRIC weight: how strongly this lamp's beam shows in the air
+    // (flood banks throw hard shafts, street posts a soft halo, washers a gentle
+    // coloured glow). Carried in the light record as field 14.
+    let volW = 0.55;
+    if (pitStraight) {
+      // Broadcast flood bank: cool white, tight hard beam, brightest.
+      eMul = 1.3; volW = 1.0;
+      pr = 1.02; pg = 1.06; pb = 1.18; tintMix = 0.12;
+      coneIn = 0.86; coneOut = 0.68;
     } else if (!street && kindRoll < 0.08) {
       // Work lamp: a dimmer, orange aging bulb among the floods.
       eMul = 0.55; volW = 0.4;
@@ -2350,14 +2368,14 @@ function buildTrackLights(track) {
     const mb = tint[2] * tintMix + pb * (1 - tintMix);
     // Street/city circuits BLEED more — the city skyglow keeps the road lit
     // between pools (Vegas) — while open circuits stay darker between.
-    const bleedBase = street ? 0.24 : 0.10;
+    const bleedBase = street ? 0.30 : 0.14;
     const bleedVar  = street ? 0.18 : 0.12;
     const bleed = bleedBase + lh(i + 31) * bleedVar;
     // Beam aim: from the mast lens toward the road centreline at ground level —
     // real circuit lighting rakes in from the verge.
-    const lx = track.px[k] + track.rx[k] * off;
-    const ly = track.py[k] + h;
-    const lz = track.pz[k] + track.rz[k] * off;
+    const lx = posts ? posts[i].x : track.px[k] + track.rx[k] * (track.hw[k] + 6) * side;
+    const ly = posts ? posts[i].y : track.py[k] + height;
+    const lz = posts ? posts[i].z : track.pz[k] + track.rz[k] * (track.hw[k] + 6) * side;
     let ax = track.px[k] - lx, ay = track.py[k] - ly, az = track.pz[k] - lz;
     const al = Math.hypot(ax, ay, az) || 1;
     ax /= al; ay /= al; az /= al;
@@ -2896,6 +2914,7 @@ function render(dt) {
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
         ? Math.min(0.70, 0.12 + 0.58 * clamp(1 - _sunY * 4, 0, 1))
         : 0;
+  _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
   // light gets a visible halo (colored per lamp) without inflating bloom.
   if (frame.lights) GLX.drawGlow(frame.lights, 0.20);
@@ -5261,7 +5280,7 @@ window.__apex = {
     numLights: frame.lights ? frame.lights.length / 14 : 0,
     sunY: frame.sunDir ? frame.sunDir[1] : null,
     builtNight: builtTrackNight, trackNight: track && track._night,
-    floodEmit: track && track._night ? "dark-session" : "day-session",
+    floodEmit: _lastFloodEmit,   // actual prop-emissive ramp value this frame
   }),
   viewState() {
     return {

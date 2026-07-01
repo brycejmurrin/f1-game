@@ -27,7 +27,11 @@
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop,
-              addBox, vadd, anchor, mountain, pine, grandstand, building, marshalPost } = api;
+              addBox, vadd, anchor, mountain, pine, grandstand, building, marshalPost, gantry } = api;
+
+      // Start gantry over the line (every circuit has one; the start-gantry
+      // downlights in buildTrackLights need this structure to hang from).
+      gantry(0.0, 7.5, [0.26, 0.28, 0.32]);
 
       // --- Encircling Ardennes mountains: a near forested range with light snow
       // only on the highest tops, and a far hazed range. Centre-based ring so the

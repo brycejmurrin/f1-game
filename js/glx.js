@@ -2208,11 +2208,11 @@ void main() {}`;
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
   }
 
-  // Additive volumetric light glow: one cone billboard per lamp (flat
-  // [x,y,z,r,g,b,radius] septets, same layout as frame.lights). Must be called
-  // while the HDR scene target is bound (after drawSky, before present) so the
-  // glow lands in the scene buffer and participates in bloom. `str` scales the
-  // overall beam/halo brightness (0 disables). No-op when unsupported.
+  // Additive lens-glare halos: one round billboard per lamp. `lights` is the
+  // stride-14 frame.lights array; only fields 0-6 (position, colour, radius) are
+  // read here. Must be called while the HDR scene target is bound (after
+  // drawSky, before present) so the glare lands in the scene buffer and
+  // participates in bloom. `str` scales halo brightness (0 disables).
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
     if (!glowProg || !lights || !lights.length || !(str > 0)) return;

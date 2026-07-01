@@ -2618,6 +2618,11 @@ const Tracks = (function () {
       const poleCol = [0.16, 0.16, 0.19];
       const mstride = Math.max(1, Math.round(22 / ds));   // matches buildTrackLights stride in game.js
       let mi = 0;
+      // Export the EXACT world position of every visible lens so game.js
+      // buildTrackLights emits its point light from the real fixture — glare
+      // halo, specular streak and volumetric beam all anchor to geometry.
+      // onTrack-suppressed masts are simply absent, so no light without a mast.
+      track.lampPosts = [];
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
         const a = anchor(k, side, 6);
@@ -2625,14 +2630,18 @@ const Tracks = (function () {
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.17, mastH, poleCol, 6, b);
         const top = vadd(a.c, a.u, mastH);
+        let lens;
         if (stTheme) {
           const arm = vadd(top, a.r, -side * 1.0);
           addBox(out, arm, [2.0, 0.26, 0.45], poleCol, b);
-          addBox(out, vadd(arm, a.r, -side * 0.85), [0.9, 0.42, 0.66], lensCol, b);
+          lens = vadd(arm, a.r, -side * 0.85);
+          addBox(out, lens, [0.9, 0.42, 0.66], lensCol, b);
         } else {
           addBox(out, top, [2.6, 1.0, 1.2], [0.70, 0.70, 0.74], b);
-          addBox(out, vadd(top, a.r, -side * 0.7), [2.2, 0.8, 0.4], lensCol, b);
+          lens = vadd(top, a.r, -side * 0.7);
+          addBox(out, lens, [2.2, 0.8, 0.4], lensCol, b);
         }
+        track.lampPosts.push({ k, side, x: lens[0], y: lens[1], z: lens[2] });
       }
     }
 
