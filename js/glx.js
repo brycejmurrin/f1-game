@@ -293,12 +293,14 @@ void main() {
       float HoB = dot(Hl, Bst);
       // Wet roughness → smoother/longer/sharper in puddles. aT (along) >> aB (across)
       // stretches the highlight into the vertical column.
-      // Across-streak roughness is kept moderate (not a razor mirror) so the column
-      // is a smooth continuous line that catches enough pixels instead of a sparse
-      // sparkle; along-streak is much looser to stretch it into the vertical column.
-      float rw = mix(0.24, 0.12, puddle);
-      float aB = rw * rw;                                   // across-streak (tight-ish)
-      float aT = aB * mix(9.0, 20.0, puddle);              // along-streak (stretched)
+      // A real wet road is a MIX: smooth puddle patches are near-mirrors → sharp,
+      // compact POINT reflections of each lamp; the damp textured tarmac between
+      // them has a rippled water film → softer VERTICAL STREAKS. So puddles get low
+      // roughness + near-ISOTROPIC lobe (a crisp point), while damp tarmac gets a
+      // rougher, strongly ANISOTROPIC lobe stretched toward the lamp (the column).
+      float rw = mix(0.22, 0.07, puddle);                  // damp rougher; puddle a crisp mirror
+      float aB = rw * rw;                                   // across-streak
+      float aT = aB * mix(13.0, 1.4, puddle);              // damp → long streak; puddle → point
       float dd = HoT * HoT / (aT * aT) + HoB * HoB / (aB * aB) + NoHl * NoHl;  // aniso GGX NDF
       float Da  = 1.0 / max(PI * aT * aB * dd * dd, 1e-6);
       float Vis = V_SmithGGX(NoV, NoLl, sqrt(aT * aB));
