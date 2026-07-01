@@ -158,6 +158,8 @@ __apex.camera("cockpit")      // switch camera mode (clears any view() free-cam)
 __apex.view({ s:0.3, side:"L" }) // free debug camera (camera()/snapCam() clear it)
 __apex.eyeAt(0.116, 0, 2.5)   // track-relative free-cam: eye at frac/lat/height, look ahead
 __apex.orbit(0.116, 45, 15, 35) // orbit a track point (az,el,dist) — inspect from all sides
+__apex.carOrbit(0, 40, 10, 4)  // orbit a CAR (idx, az, el, dist) — az 0 = behind, 180 = head-on
+__apex.studio({intensity:3})  // studio light rig around the player car (false = off)
 __apex.groundY(0.11, 12)      // rendered terrain height + road height + gap at frac/lat (gap finder)
 __apex.viewState()            // combined scene/camera snapshot
 __apex.camState()             // active camera {eye,tgt,fov,debug} (debug=true under a view() override)

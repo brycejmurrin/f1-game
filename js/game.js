@@ -273,6 +273,34 @@ let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
+// Studio light rig (__apex.studio): a ring of test lamps that follows the player
+// car — inspect paint/reflection response on any track at any time of day,
+// independent of the session's real lamps. null = off.
+let _studioRig = null;
+const _studioBuf = [];
+function buildStudioRig() {
+  const R = _studioRig;
+  if (!player || player.px == null || !track) return null;
+  const cx = player.px, cz = player.pz;
+  Tracks.sample(track, ((player.s % track.total) + track.total) % track.total, smp);
+  const cy = smp.p[1];
+  _studioBuf.length = 0;
+  for (let i = 0; i < R.n; i++) {
+    const a = (i / R.n) * Math.PI * 2 + (R.spin || 0);
+    const lx = cx + Math.cos(a) * R.dist, lz = cz + Math.sin(a) * R.dist, ly = cy + R.h;
+    let ax = cx - lx, ay = (cy + 0.5) - ly, az = cz - lz;
+    const al = Math.hypot(ax, ay, az) || 1;
+    ax /= al; ay /= al; az /= al;
+    _studioBuf.push(lx, ly, lz,
+      R.color[0] * R.intensity, R.color[1] * R.intensity, R.color[2] * R.intensity,
+      R.radius, ax, ay, az, 0.80, 0.35, 0.20, 0);
+  }
+  // Overhead key: straight-down softbox above the car.
+  _studioBuf.push(cx, cy + R.h + 3, cz,
+    R.color[0] * R.intensity * 1.4, R.color[1] * R.intensity * 1.4, R.color[2] * R.intensity * 1.4,
+    R.radius, 0, -1, 0, 0.75, 0.30, 0.25, 0);
+  return _studioBuf;
+}
 let headlessMode = false;  // skip render() when true (headless control loop)
 // Player camera modes, cycled with the CAM button / C key and persisted. Each is
 // a distinct vantage computed in render(): a close action chase, a higher/wider
@@ -2870,6 +2898,11 @@ function render(dt) {
   } else {
     frame.lights = null;
   }
+  // Studio rig override: replaces the session lamps with the inspection ring.
+  if (_studioRig) {
+    const rig = buildStudioRig();
+    if (rig) frame.lights = rig;
+  }
 
   if (dbgCam) {
     const bf = frame.fogDensity;
@@ -4891,6 +4924,22 @@ window.__apex = {
   // az/el/dist/h/opts are identical to orbit() but the basis is the car's own
   // heading rather than the track tangent, so az=0 is always behind the car,
   // az=180 is head-on.  Returns {eye, target, fov, carIdx, speed}.
+  // studio(opts?) — summon a studio light rig around the player car for paint /
+  // reflection inspection on any track at any time of day. Follows the car.
+  //   studio()                         → default 6-lamp ring + overhead key
+  //   studio({ n, dist, h, intensity, color: [r,g,b], radius, spin })
+  //   studio(false)                    → off (session lamps restored)
+  // Pair with carOrbit(0, az, el, 4) to walk around the lit car.
+  studio(arg = true) {
+    if (arg === false || arg === 0) { _studioRig = null; return false; }
+    const o = typeof arg === "object" && arg ? arg : {};
+    _studioRig = {
+      n: o.n || 6, dist: o.dist || 7, h: o.h != null ? o.h : 4.5,
+      intensity: o.intensity != null ? o.intensity : 3.0,
+      color: o.color || [1, 1, 1], radius: o.radius || 26, spin: o.spin || 0,
+    };
+    return _studioRig;
+  },
   carOrbit(idx = 0, az = 180, el = 14, dist = 25, h = 1.0, opts = {}) {
     if (!track || !cars || !cars[idx]) return false;
     const c = cars[idx];

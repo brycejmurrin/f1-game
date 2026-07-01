@@ -824,3 +824,29 @@ await page.locator("canvas#game").screenshot({ path: "t1.png" });
 
 `race()` is more robust than clicking through the menus and is the recommended
 entry point for any screenshot/verification harness.
+
+---
+
+## `studio(opts?)` — studio light rig around the player car
+
+Summons an inspection lighting rig that FOLLOWS the player car — a ring of
+aimed point lamps plus an overhead key — replacing the session lamps while
+active. Use it to test paint, clearcoat glints and reflections on any track at
+any time of day, independent of the circuit's real lighting.
+
+```js
+__apex.studio()                                  // default: 6-lamp ring + overhead key
+__apex.studio({ n: 8, dist: 6, h: 4, intensity: 4, color: [1, 0.9, 0.8] })
+__apex.studio({ spin: 0.5 })                     // rotate the ring (radians)
+__apex.studio(false)                             // off — session lamps restored
+```
+
+Options: `n` lamps in the ring (6), `dist` m from the car (7), `h` height (4.5),
+`intensity` (3.0), `color` linear RGB ([1,1,1]), `radius` falloff (26), `spin`.
+
+Pair with the car walk-around camera:
+
+```js
+__apex.park(0.3); __apex.studio({ intensity: 4 });
+__apex.carOrbit(0, 40, 8, 4);    // az 0 = behind the car, 180 = head-on
+```
