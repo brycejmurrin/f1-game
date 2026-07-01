@@ -11,6 +11,8 @@ window.AXC = AXC;   // reachable for tools & the game-* module split
 (function () {
 "use strict";
 
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;   // local copy (used by rpmFor)
+
 // ---------- physics constants ----------
 const VMAX = 72;            // m/s base (~259 km/h) — F1 race pace; scales all speeds
 const ACCEL = 7;            // m/s^2 at low speed
