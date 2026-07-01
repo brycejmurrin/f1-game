@@ -2221,15 +2221,30 @@ function buildTrackLights(track) {
     const bleedVar  = street ? 0.18 : 0.12;
     const bleed = bleedBase + lh(i + 31) * bleedVar;
     const hard  = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
+    // Physically-based punctual light: intensity is in inverse-square units now
+    // (the shader divides by d²), so scale by the mast height² to land the same
+    // pool luminance on the road that the old normalized falloff produced.
+    const ePhys = e * (height * height) * 0.55;
+    // Beam aim: from the lens toward the road centreline at ground level — the
+    // mast overhangs the track, so the beam tilts slightly inward like real
+    // circuit lighting (was a hard-coded straight-down cone).
+    const lx = track.px[k] + track.rx[k] * off;
+    const ly = track.py[k] + height;
+    const lz = track.pz[k] + track.rz[k] * off;
+    let ax = track.px[k] - lx, ay = track.py[k] - ly, az = track.pz[k] - lz;
+    const al = Math.hypot(ax, ay, az) || 1;
+    ax /= al; ay /= al; az /= al;
+    // Per-lamp cone: hard lamps have a tighter beam with a crisp rim, soft lamps
+    // a wider beam with a broad falloff band (cosInner > cosOuter).
+    const cosIn  = 0.75 + hard * 0.12;             // 41° → 29.5° inner half-angle
+    const cosOut = cosIn - (0.30 - hard * 0.16);   // wide soft edge → tight hard edge
     lights.push(
-      track.px[k] + track.rx[k] * off,
-      track.py[k] + height,
-      track.pz[k] + track.rz[k] * off,
-      Math.max(0, mr) * e,
-      Math.max(0, mg) * e,
-      Math.max(0, mb) * e,
+      lx, ly, lz,
+      Math.max(0, mr) * ePhys,
+      Math.max(0, mg) * ePhys,
+      Math.max(0, mb) * ePhys,
       radius,
-      bleed, hard,
+      ax, ay, az, cosIn, cosOut, bleed,
     );
   }
   return lights;
@@ -2247,16 +2262,17 @@ function setFrameLights(eye, scale) {
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
   const sg = Array.isArray(scale) ? scale[1] : sr;
   const sb = Array.isArray(scale) ? scale[2] : sr;
-  const count = src.length / 9;
+  const count = src.length / 13;
   const out = _lightScaleBuf;
   if (count <= 32) {
     if (sr === 1 && sg === 1 && sb === 1) { frame.lights = src; return; }
     // Scale without mutating the cached set: copy and scale only the rgb channels
-    // (position, radius and the two cone params pass through unchanged).
+    // (position, radius, beam direction and cone params pass through unchanged).
     out.length = 0;
-    for (let i = 0; i < src.length; i += 9) {
+    for (let i = 0; i < src.length; i += 13) {
       out.push(src[i], src[i+1], src[i+2],
-        src[i+3] * sr, src[i+4] * sg, src[i+5] * sb, src[i+6], src[i+7], src[i+8]);
+        src[i+3] * sr, src[i+4] * sg, src[i+5] * sb, src[i+6],
+        src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12]);
     }
     frame.lights = out;
     return;
@@ -2266,7 +2282,7 @@ function setFrameLights(eye, scale) {
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
-    const o = i * 9, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
+    const o = i * 13, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
     const d = dx * dx + dy * dy + dz * dz;
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
@@ -2277,7 +2293,7 @@ function setFrameLights(eye, scale) {
   for (let i = 0; i < 32; i++) {
     const o = buf[i].o;
     out.push(src[o], src[o+1], src[o+2], src[o+3] * sr, src[o+4] * sg, src[o+5] * sb,
-      src[o+6], src[o+7], src[o+8]);
+      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12]);
   }
   frame.lights = out;
 }
@@ -5021,7 +5037,7 @@ window.__apex = {
     ambientGround: frame.ambientGround && frame.ambientGround.slice(),
     sunColor: frame.sunColor && frame.sunColor.slice(),
     exposure: frame.exposure != null ? frame.exposure : 1,
-    numLights: frame.lights ? frame.lights.length / 9 : 0,
+    numLights: frame.lights ? frame.lights.length / 13 : 0,
     sunY: frame.sunDir ? frame.sunDir[1] : null,
     builtNight: builtTrackNight, trackNight: track && track._night,
     floodEmit: track && track._night ? "dark-session" : "day-session",

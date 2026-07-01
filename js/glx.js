@@ -71,7 +71,9 @@ uniform int uNumLights;
 uniform vec3 uLightPos[MAX_LIGHTS];
 uniform vec3 uLightCol[MAX_LIGHTS];
 uniform float uLightRad[MAX_LIGHTS];
-uniform vec2 uLightCone[MAX_LIGHTS];   // per-lamp spotlight: x=bleed floor, y=edge hardness
+uniform vec3 uLightDir[MAX_LIGHTS];    // per-lamp beam aim (normalized, tilted over the road)
+uniform vec2 uLightCone[MAX_LIGHTS];   // per-lamp spot cone: x=cosInner, y=cosOuter
+uniform float uLightBleed[MAX_LIGHTS]; // out-of-beam floor (city skyglow spill)
 out vec4 outColor;
 
 const float PI = 3.14159265359;
@@ -256,11 +258,14 @@ void main() {
   // Reflected view ray — reused by the wet-road lamp reflections and the sky env.
   vec3 Rv = reflect(-V, N);
 
-  // Point lights: floodlights / street lights. Lambert diffuse with smooth
-  // inverse-ish falloff to the radius (cheap, no per-light shadows). A small
-  // up-bias on the light vector keeps near-flat ground (road) catching the pool
-  // even when a mast is almost overhead. Drives the moody night look — the scene
-  // ambient can sit dark and these carve out the lit areas.
+  // ── Physically-based punctual lights (floodlights / street lamps) ─────────
+  // Each lamp is a REAL spotlight: windowed inverse-square falloff (the standard
+  // punctual-light attenuation), a true AIMED cone (per-lamp beam direction +
+  // inner/outer angles — masts tilt their beams over the road), and the SAME
+  // Cook-Torrance GGX specular the sun uses. Diffuse paints the pool; the GGX
+  // lobe gives physical highlights — elongated wet-road speculars, glass glints,
+  // car-paint sparkle — replacing all the old hand-tuned lobe/glint hacks.
+  // No per-light shadows (cost); the cone shapes the light instead.
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
     vec3 LP = uLightPos[i] - vWorldPos;
@@ -268,52 +273,46 @@ void main() {
     float rad = uLightRad[i];
     if (dist > rad) continue;
     vec3 Ld = LP / max(dist, 1e-3);
-    // Windowed inverse-square falloff: a physical 1/(1+k·s²) hotspot (bright,
-    // concentrated under the lamp, dropping off fast) multiplied by a smooth
-    // window (1-s⁴)² that eases the contribution to exactly 0 at the radius.
-    // Gives tight, defined light pools instead of a soft undefined halo.
-    float s = dist / rad;
-    float win = clamp(1.0 - s * s * s * s, 0.0, 1.0);
-    // Softer hotspot (5·s²): a dimmer centre with a wider, smoother falloff so each
-    // lamp spreads a gentle pool rather than punching a hard bright circle — the
-    // pools overlap into a smooth wash between lamps while the reflection reads.
-    float att = win * win / (1.0 + 5.0 * s * s);
-    // Downward SPOTLIGHT cone: lamp posts aim at the ground, so gate the pool by
-    // how vertical the surface→lamp direction is (Ld.y). A surface under the lamp
-    // (Ld.y≈1) is fully lit; out toward the gap between lamps the direction tips
-    // horizontal and the light fades — so the lamps read as distinct circles.
-    // Per-lamp variance (uLightCone): .x = bleed floor (how much light spills
-    // between pools — city streets bleed more, open circuits stay dark between),
-    // .y = edge hardness (soft, wide falloff ↔ hard, crisp rim). Each lamp differs
-    // so a row of lights isn't an identical clone.
-    vec2 cn = uLightCone[i];
-    float edgeW = mix(0.46, 0.20, cn.y);            // softer (wider) ↔ hard (narrow) rim
-    // Inner cos 0.80 (~37° half-angle) → bigger pools that overlap more, so the
-    // spread between lamps is a smooth wash rather than punched circles.
-    float spot = cn.x + (1.0 - cn.x) * smoothstep(0.80 - edgeW, 0.80, Ld.y);
-    att *= spot;
-    float lnl = max(dot(N, Ld), 0.0);
-    // The flat diffuse lamp pool IS the "matte lit circle". Turned down (×0.72) for
-    // dry, and faded almost to nothing as the road wets (×(1-wet·0.85)) so a wet
-    // surface shows the lamp's REFLECTION (the specular lobe below), not a painted
-    // circle of diffuse fill.
-    color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.85) * 0.72;
-
-    // NOTE: wet-road lamp reflections are handled by the screen-space reflection
-    // (SSR) pass in COMPOSITE_FS, which mirrors the ACTUAL emissive lamp/neon
-    // geometry as a coherent darker mirror. The old analytic per-lamp lobe here
-    // produced scattered fake blobs, so it was removed.
-    // Glossy point-light glint on DRY low-roughness surfaces (building glass,
-    // polished panels): mirror nearby lamps/neon as a sharp highlight so windows
-    // catch the city lights live across every time of day. Uses the soft windowed
-    // falloff WITHOUT the downward spot cone (a window reflects a lamp beside or
-    // above it, not only straight down). The (1-wet) gate hands wet road to the lobe above.
-    float gloss = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular * (1.0 - wet);
-    gloss = max(gloss, uClearcoat * 0.45 * (1.0 - wet));   // lacquer catches lamp/neon glints
-    if (gloss > 0.001) {
-      float glb = max(dot(Rv, Ld), 0.0);
-      float glFall = win * win / (1.0 + 6.0 * s * s);
-      color += uLightCol[i] * pow(glb, mix(40.0, 400.0, gloss)) * glFall * gloss * 2.2 * (1.0 - uMetalness);
+    // Physical 1/d² falloff, eased to exactly 0 at the radius by (1-(d/r)^4)^2.
+    float dn = dist / rad;
+    float win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);
+    float att = (win * win) / (dist * dist + 1.0);
+    if (att < 1e-6) continue;
+    // Aimed spot cone: how deep the surface sits inside the lamp's beam.
+    // uLightDir = beam aim, uLightCone = (cosInner, cosOuter); uLightBleed is the
+    // out-of-beam floor (city skyglow spill between pools).
+    float cd = dot(-Ld, uLightDir[i]);
+    float beam = smoothstep(uLightCone[i].y, uLightCone[i].x, cd);
+    // ILLUMINATION follows the beam (the pool on the road)…
+    float spotD = mix(uLightBleed[i], 1.0, beam);
+    // …but the REFLECTION doesn't: the glowing lens itself is visible from far
+    // outside the beam, so a wet road streaks beneath every lamp you can see —
+    // not only inside its illumination cone. Specular keeps a high floor.
+    float spotS = mix(0.45, 1.0, beam);
+    float NoLl = max(dot(N, Ld), 0.0);
+    // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
+    // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
+    color += albedo * uLightCol[i] * (att * spotD) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
+    // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
+    // wet low-roughness road this physically elongates at grazing angles (the
+    // real wet-night streak); on glass/car paint it's the city-light glint.
+    vec3 Hl = normalize(Ld + V);
+    float NoHl = max(dot(N, Hl), 0.0);
+    float VoHl = max(dot(V, Hl), 0.0);
+    float Dl = D_GGX(NoHl, a);
+    float Vl = V_SmithGGX(NoV, NoLl, a);
+    vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+    vec3 radianceS = uLightCol[i] * (att * spotS);
+    vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+    color += lspec / (1.0 + lspec);
+    // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
+    // car bodies at night, over the softer base-coat highlight.
+    if (uClearcoat > 0.001) {
+      float Dcc = D_GGX(NoHl, 0.01);
+      float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+      float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
+      vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * uClearcoat;
+      color += ccl / (1.0 + ccl);
     }
   }
 
@@ -934,7 +933,8 @@ uniform int uNumLights;
 uniform vec3 uLightPos[GR_MAX_LIGHTS];
 uniform vec3 uLightCol[GR_MAX_LIGHTS];
 uniform float uLightRad[GR_MAX_LIGHTS];
-uniform vec2 uLightCone[GR_MAX_LIGHTS];
+uniform vec3 uLightDir[GR_MAX_LIGHTS];
+uniform vec2 uLightCone[GR_MAX_LIGHTS];   // (cosInner, cosOuter)
 uniform float uMist;       // haze density gate for in-scatter (0 = none)
 uniform float uLampStr;    // night lamp-volumetric strength (0 = off, e.g. day)
 out vec4 outColor;
@@ -994,11 +994,14 @@ void main() {
         float rad = uLightRad[li];
         if (ld > rad) continue;
         vec3 Ld = LP / max(ld, 1e-3);
+        // Physical windowed inverse-square — matches the lit shader's units, so
+        // the in-scatter tracks the lamps' actual (now much larger) intensities.
         float s = ld / rad;
         float win = clamp(1.0 - s*s*s*s, 0.0, 1.0);
-        float att = win * win / (1.0 + 9.0 * s * s);
-        float edgeW = mix(0.32, 0.08, uLightCone[li].y);
-        float spot = smoothstep(0.84 - edgeW, 0.84, Ld.y);          // downward cone
+        float att = win * win / (ld * ld + 1.0);
+        // Real aimed cone: is this air sample inside the lamp's beam?
+        float cd = dot(-Ld, uLightDir[li]);
+        float spot = smoothstep(uLightCone[li].y, uLightCone[li].x, cd);
         float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
         float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
         lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14));
@@ -1331,7 +1334,8 @@ void main() {}`;
   let frameLights = null;
   let frameGroundMist = 0;
   const _grPos = new Float32Array(24), _grCol = new Float32Array(24),
-        _grRad = new Float32Array(8), _grCone = new Float32Array(16), _grSel = [];
+        _grRad = new Float32Array(8), _grDir = new Float32Array(24),
+        _grCone = new Float32Array(16), _grSel = [];
   let frameInvProj = null;
   let frameInvVP = null;
   let frameProj = null;
@@ -1456,7 +1460,7 @@ void main() {}`;
     blurU = locs(blurProg, ["uTex", "uDir"]);
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
-    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightCone[0]", "uMist", "uLampStr"]);
+    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -1614,7 +1618,7 @@ void main() {}`;
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uTime", "uCloudCover",
-      "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightCone[0]"]);
+      "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -1784,23 +1788,28 @@ void main() {}`;
     // the nearest set by the caller. Uploaded once per frame; uNumLights=0 on day.
     {
       const L = frame.lights;
-      // Flat stride-9 septet+: [x,y,z, r,g,b, rad, coneBleed, coneHardness].
-      const nL = L ? Math.min(32, (L.length / 9) | 0) : 0;
+      // Flat stride-13: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter, bleed].
+      const nL = L ? Math.min(32, (L.length / 13) | 0) : 0;
       gl.uniform1i(litU.uNumLights, nL);
       if (nL > 0) {
         const pos = new Float32Array(nL * 3), col = new Float32Array(nL * 3),
-              rad = new Float32Array(nL), cone = new Float32Array(nL * 2);
+              rad = new Float32Array(nL), dir = new Float32Array(nL * 3),
+              cone = new Float32Array(nL * 2), bleed = new Float32Array(nL);
         for (let i = 0; i < nL; i++) {
-          const o = i * 9;
+          const o = i * 13;
           pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
           col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
           rad[i] = L[o + 6];
-          cone[i * 2] = L[o + 7]; cone[i * 2 + 1] = L[o + 8];
+          dir[i * 3] = L[o + 7]; dir[i * 3 + 1] = L[o + 8]; dir[i * 3 + 2] = L[o + 9];
+          cone[i * 2] = L[o + 10]; cone[i * 2 + 1] = L[o + 11];
+          bleed[i] = L[o + 12];
         }
         gl.uniform3fv(litU["uLightPos[0]"], pos);
         gl.uniform3fv(litU["uLightCol[0]"], col);
         gl.uniform1fv(litU["uLightRad[0]"], rad);
+        gl.uniform3fv(litU["uLightDir[0]"], dir);
         gl.uniform2fv(litU["uLightCone[0]"], cone);
+        gl.uniform1fv(litU["uLightBleed[0]"], bleed);
       }
     }
     _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = -1;
@@ -2041,7 +2050,7 @@ void main() {}`;
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
     if (!glowProg || !lights || !lights.length || !(str > 0)) return;
-    const nL = (lights.length / 9) | 0;   // stride-9 light septets (see frame.lights)
+    const nL = (lights.length / 13) | 0;  // stride-13 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
     let p = 0;
@@ -2149,10 +2158,10 @@ void main() {}`;
       // Lamp volumetrics: upload the nearest-8 lamps to the eye + the haze gate.
       let grNL = 0;
       if (lampVol > 0 && frameLights) {
-        const L = frameLights, total = (L.length / 9) | 0;
+        const L = frameLights, total = (L.length / 13) | 0;
         const ex = frameEye[0], ey = frameEye[1], ez = frameEye[2];
         for (let i = 0; i < total; i++) {
-          const o = i * 9, dx = L[o] - ex, dy = L[o + 1] - ey, dz = L[o + 2] - ez;
+          const o = i * 13, dx = L[o] - ex, dy = L[o + 1] - ey, dz = L[o + 2] - ez;
           const d = dx * dx + dy * dy + dz * dz;
           const e = _grSel[i]; if (e) { e.d = d; e.o = o; } else _grSel[i] = { d: d, o: o };
         }
@@ -2163,11 +2172,14 @@ void main() {}`;
           const o = _grSel[i].o;
           _grPos[i*3]=L[o]; _grPos[i*3+1]=L[o+1]; _grPos[i*3+2]=L[o+2];
           _grCol[i*3]=L[o+3]; _grCol[i*3+1]=L[o+4]; _grCol[i*3+2]=L[o+5];
-          _grRad[i]=L[o+6]; _grCone[i*2]=L[o+7]; _grCone[i*2+1]=L[o+8];
+          _grRad[i]=L[o+6];
+          _grDir[i*3]=L[o+7]; _grDir[i*3+1]=L[o+8]; _grDir[i*3+2]=L[o+9];
+          _grCone[i*2]=L[o+10]; _grCone[i*2+1]=L[o+11];
         }
         gl.uniform3fv(godrayU["uLightPos[0]"], _grPos);
         gl.uniform3fv(godrayU["uLightCol[0]"], _grCol);
         gl.uniform1fv(godrayU["uLightRad[0]"], _grRad);
+        gl.uniform3fv(godrayU["uLightDir[0]"], _grDir);
         gl.uniform2fv(godrayU["uLightCone[0]"], _grCone);
       }
       gl.uniform1i(godrayU.uNumLights, grNL);
