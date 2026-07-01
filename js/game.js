@@ -691,6 +691,15 @@ function scheduleFlybyTrack() {
 function applyRaceSettings() {
   const isNightSession = raceTimeOfDay === "night" ||
     (raceTimeOfDay === "default" && track && track.def && track.def.night);
+  // City light-pollution SKYGLOW: at night the lit circuit domes the horizon —
+  // strong + tinted over neon cities, a faint warm haze over flood-lit open
+  // circuits. Cleared here so day/dusk skies never inherit it.
+  if (isNightSession && track && track.def) {
+    const _ct = track.def.theme === "street_night" || track.def.theme === "modern";
+    frameSky.cityGlow = _ct ? [0.050, 0.038, 0.055] : [0.024, 0.018, 0.012];
+  } else {
+    frameSky.cityGlow = null;
+  }
   // Pre-build the floodlight set at race start so the first dark-session frame is
   // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
   // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
@@ -2261,11 +2270,13 @@ function buildTrackLights(track) {
   const NEON_SPILL = [[1.35, 0.75, 1.1], [0.75, 1.15, 1.3], [0.9, 1.25, 0.85], [1.3, 0.85, 0.65]];
   for (let k = 0; k < n; k += stride, i++) {
     const side = (i % 2 === 0) ? 1 : -1;
-    // The visible mast sits beyond the track edge (hw+6, see buildProps), but the
-    // LIGHT is pulled inward to sit over the road (its arm reaches over the track),
-    // so the pool lands as a bright circle ON the racing surface — alternating
-    // sides down the lap — instead of out on the grass verge.
-    const off = (track.hw[k] * 0.5) * side;
+    // The LIGHT is emitted from the visible mast lens (buildProps places the mast
+    // at hw+6 with the same 22 m stride and side parity), AIMED at the road
+    // centreline. Emitting from the real lens position keeps every visible cue —
+    // glare halo, specular streak, volumetric beam — anchored to actual geometry;
+    // the old version floated the source over the road, so its lens glare hung in
+    // mid-air as a detached orb.
+    const off = (track.hw[k] + 6) * side;
     const bri  = 0.70 + lh(i + 97) * 0.62;      // 0.70 … 1.32 brightness (wide)
     const hard = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
     // ── LAMP TYPOLOGY ─────────────────────────────────────────────────────────
@@ -2283,8 +2294,10 @@ function buildTrackLights(track) {
     // coloured glow). Carried in the light record as field 14.
     let volW = 0.55;
     if (pitStraight) {
-      // Broadcast flood bank: tall, cool white, tight hard beam, brightest.
-      h = height + 3; eMul = 1.3; volW = 1.0;
+      // Broadcast flood bank: cool white, tight hard beam, brightest. Sits at the
+      // mast lens like every other lamp (a taller synthetic height would detach
+      // its glare halo from the visible mast top).
+      eMul = 1.3; volW = 1.0;
       pr = 1.02; pg = 1.06; pb = 1.18; tintMix = 0.12;
       coneIn = 0.86; coneOut = 0.68;
     } else if (street && kindRoll < 0.10) {
@@ -2325,19 +2338,18 @@ function buildTrackLights(track) {
     const bleedBase = street ? 0.24 : 0.10;
     const bleedVar  = street ? 0.18 : 0.12;
     const bleed = bleedBase + lh(i + 31) * bleedVar;
-    // Physically-based punctual light: intensity is in inverse-square units (the
-    // shader divides by d²), so scale by the mast height² to land the intended
-    // pool luminance on the road.
-    const ePhys = intensity * bri * eMul * (h * h) * 0.55;
-    // Beam aim: from the lens toward the road centreline at ground level — the
-    // mast overhangs the track, so the beam tilts slightly inward like real
-    // circuit lighting.
+    // Beam aim: from the mast lens toward the road centreline at ground level —
+    // real circuit lighting rakes in from the verge.
     const lx = track.px[k] + track.rx[k] * off;
     const ly = track.py[k] + h;
     const lz = track.pz[k] + track.rz[k] * off;
     let ax = track.px[k] - lx, ay = track.py[k] - ly, az = track.pz[k] - lz;
     const al = Math.hypot(ax, ay, az) || 1;
     ax /= al; ay /= al; az /= al;
+    // Physically-based punctual light: intensity is in inverse-square units (the
+    // shader divides by d²), so scale by the ACTUAL lens→road distance² to land
+    // the intended pool luminance on the racing line.
+    const ePhys = intensity * bri * eMul * (al * al) * 0.55;
     lights.push(
       lx, ly, lz,
       Math.max(0, mr) * ePhys,
@@ -3071,7 +3083,12 @@ function render(dt) {
   // wet + cloud add). Sun shafts catch more in haze; lamp beams only show in it.
   const _mist = clamp((frame.groundMist || 0) * 0.9 + (frame.wetness || 0) * 0.22
                       + (frame.cloud || 0) * 0.12, 0, 1);
-  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist);
+  // Gate by the sun's actual BRIGHTNESS too: at night the key is dim moonlight
+  // held above the horizon for sky glow, and ungated it marched faint stripey
+  // "moon rays" through the cloud gaps.
+  const _sunLumGR = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+  const _sunGateGR = clamp((_sunLumGR - 0.35) / 0.45, 0, 1);
+  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR;
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated

@@ -509,6 +509,7 @@ uniform float uStars;
 uniform float uCloud;
 uniform float uTime;   // seconds, 0 = static/deterministic (backward-compatible)
 uniform float uMoon;   // 0..1 moon visibility (0 = none, backward-compatible)
+uniform vec3 uCityGlow;  // night city light-pollution dome (colour x strength, 0 = none)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -713,22 +714,27 @@ void main() {
 
   // --- Stars (night tracks) ---
   if (uStars > 0.5 && up > 0.05) {
-    // Cell-based star field with varied brightness and a few "giant" stars.
-    vec3 cell180 = floor(dir * 180.0);
-    float h = hash3(cell180);
-    // Normal stars: sparse
-    float star = smoothstep(0.9970, 1.0, h);
-    // Brightness varies per star; driven by a separate hash.
-    float bright = 0.35 + 0.65 * hash3(floor(dir * 43.0));
-    // Subtle twinkle: hash at coarser cell gives a slow phase offset per star.
-    float phase = hash3(floor(dir * 31.0)) * 6.2832;
-    float twinkle = 0.80 + 0.20 * sin(uTime * 1.4 + phase);
-    // Giant/bright stars: much rarer, extra brightness
-    float giantH = hash3(floor(dir * 55.0));
-    float giant = smoothstep(0.998, 1.0, giantH);
-    float giantBright = 0.7 + 0.5 * hash3(floor(dir * 27.0));
-    float giantTwinkle = 0.75 + 0.25 * sin(uTime * 0.9 + phase * 1.3);
-    c += vec3(star * bright * twinkle + giant * giantBright * giantTwinkle);
+    // ROUND point stars. The old version lit whole direction-grid CELLS, which
+    // project as elongated dashes on screen (they read as "tiny rays"), and its
+    // giant stars crossed the bloom threshold and smeared into streaks. Now each
+    // star is a tiny anti-aliased DISC placed inside its cell, with brightness
+    // capped below the bloom threshold so stars can never bloom into rays.
+    float SC = 180.0;
+    vec3 cell = floor(dir * SC);
+    float h = hash3(cell);
+    if (h > 0.9968) {
+      vec3 jit = vec3(hash3(cell + 7.1), hash3(cell + 13.7), hash3(cell + 29.3)) - 0.5;
+      vec3 sdir = normalize((cell + 0.5 + jit * 0.8) / SC);
+      float d = length(dir - sdir);
+      float bright = 0.30 + 0.55 * hash3(cell + 43.0);
+      float phase = hash3(cell + 31.0) * 6.2832;
+      float twinkle = 0.80 + 0.20 * sin(uTime * 1.4 + phase);
+      float giant = step(0.9995, h);                     // rare brighter star
+      float srad = mix(0.0016, 0.0028, giant);
+      float star = smoothstep(srad, srad * 0.35, d)
+                 * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
+      c += vec3(star);
+    }
   }
 
   // --- Moon disc + halo (night tracks) ---
@@ -748,6 +754,14 @@ void main() {
     if (up > 0.0 && md > 0.0) {
       c += moonCol * (moonDisc * 1.10 + moonHalo);
     }
+  }
+
+  // CITY SKYGLOW: light pollution from the lit circuit/city — a warm dome that
+  // hugs the horizon and fades fast with elevation, with a hint of cloud pickup
+  // (clouds over a city glow from below). Zero when uCityGlow is black.
+  if (uCityGlow.r + uCityGlow.g + uCityGlow.b > 0.001) {
+    float horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0);
+    c += uCityGlow * horiz;
   }
 
   outColor = vec4(c, 1.0);
@@ -785,45 +799,44 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
-  // ---- Volumetric light glow (floodlight beams + halos) ----
-  // A camera-facing cone billboard per lamp, drawn ADDITIVELY into the HDR scene
-  // before bloom. The bright apex reads as a halo, the cone is the visible beam,
-  // and the bloom blurring the bright shape gives the god-ray streaks — three
-  // effects from one cheap pass. cornerY: 0 = lamp head, 1 = ground.
+  // ---- Lamp lens glare (round veiling halo at each lamp head) ----
+  // A camera-facing quad per lamp, drawn ADDITIVELY into the HDR scene before
+  // bloom. Purely RADIAL: a hot core + a soft round veil, like real lens glare.
+  // (The old version was a downward cone wedge meant to fake a beam — seen from
+  // below/off-axis it projected as a bright diagonal dash hanging in the sky,
+  // one of the "rays from the sky". Beams in the air are the volumetric godray
+  // pass's job now; this billboard is only the glare around the source itself.)
   const GLOW_VS = `#version 300 es
 layout(location=0) in vec2 aCorner;   // x in {-1,+1}, y in {0,1}
 layout(location=1) in vec3 aCenter;   // lamp head world position
 layout(location=2) in vec3 aColor;    // HDR lamp colour
-layout(location=3) in float aRadius;  // pool radius
+layout(location=3) in float aRadius;  // halo radius (m)
 uniform mat4 uViewProj;
 uniform vec3 uEye;
 out vec2 vUV;
 out vec3 vColor;
 void main() {
-  vec3 up = vec3(0.0, 1.0, 0.0);
-  vec3 toEye = uEye - aCenter;
-  vec3 right = normalize(cross(up, toEye) + vec3(1e-4, 0.0, 0.0));
-  float halfW = mix(aRadius * 0.10, aRadius * 0.52, aCorner.y);  // cone widens downward
-  float drop  = aRadius * 0.95;                                  // beam length to ground
-  vec3 wp = aCenter + right * (aCorner.x * halfW) - up * (aCorner.y * drop);
-  vUV = aCorner;
+  vec3 fwd = normalize(uEye - aCenter);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd) + vec3(1e-4, 0.0, 0.0));
+  vec3 upv = cross(fwd, right);
+  vec2 c = vec2(aCorner.x, aCorner.y * 2.0 - 1.0);   // corner buffer is x±1, y 0..1
+  vec3 wp = aCenter + (right * c.x + upv * c.y) * aRadius;
+  vUV = c;
   vColor = aColor;
   gl_Position = uViewProj * vec4(wp, 1.0);
 }`;
 
   const GLOW_FS = `#version 300 es
 precision highp float;
-in vec2 vUV;        // x in [-1,1] across the cone, y in [0,1] head->ground
+in vec2 vUV;        // -1..1 across the halo quad
 in vec3 vColor;
 uniform float uStr;
 out vec4 outColor;
 void main() {
-  float h = 1.0 - abs(vUV.x);     // horizontal falloff from the cone axis
-  h = h * h;
-  float v = 1.0 - vUV.y;          // vertical: bright at the head, fading to ground
-  v = v * v;
-  float halo = smoothstep(0.45, 1.0, h) * smoothstep(0.40, 0.0, vUV.y);  // hotspot at the lens
-  float a = (h * v * 0.55 + halo * 0.9) * uStr;
+  float r2 = dot(vUV, vUV);
+  float core = exp(-r2 * 28.0);   // hot centre right at the lens
+  float veil = exp(-r2 * 5.0);    // broad soft glare veil (≈0 by the quad edge)
+  float a = (core * 0.75 + veil * 0.28) * uStr;
   outColor = vec4(vColor * a, 1.0);   // additive (blendFunc ONE, ONE)
 }`;
 
@@ -1063,19 +1076,31 @@ void main() {
   float t = stepLen * ign;
   float accum = 0.0;
   vec3 lampAccum = vec3(0.0);
+  // PARTICIPATING MEDIUM: the haze has real structure now —
+  //  • DENSITY hugs the ground (exp height falloff): beams live down where the
+  //    air is, the upper sky holds no medium → no phantom beams in the sky.
+  //  • EXTINCTION (Beer-Lambert transmittance): far scattering fades toward the
+  //    camera, so shafts are strongest near you instead of piling up at range.
+  float trans = 1.0;
+  float groundY = uEye.y - 4.0;               // local ground datum
   for (int i = 0; i < N; i++) {
-    vec3 p = ro + rd * (t + stepLen * float(i));
+    float td = t + stepLen * float(i);        // distance marched from the camera
+    vec3 p = ro + rd * td;
+    trans *= exp(-stepLen * 0.010);
+    float hSun  = exp(-max(p.y - groundY, 0.0) * 0.03);   // sun shafts reach higher
+    float hLamp = exp(-max(p.y - groundY, 0.0) * 0.10);   // lamp haze hugs the road
     vec4 lc = uLightVP * vec4(p, 1.0);
     vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
     float lit = 1.0;
     if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
       lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
-    lit *= 1.0 - gCloud(p) * 0.9;   // clouds break the shafts into crepuscular rays
-    accum += lit;
-    // Lamp in-scatter: each nearby lamp casts a beam of light through the haze,
-    // shaped by its downward spot cone + windowed falloff (the same math as the
-    // lit shader's pools). Additive, no shadows (the cone + falloff shape it).
-    if (uLampStr > 0.0) {
+    lit *= 1.0 - gCloud(p) * 0.62;  // clouds break the shafts into SOFT crepuscular bands (0.9 made thin stripes)
+    accum += lit * hSun * trans;
+    // Lamp in-scatter: each nearby lamp casts a beam through the ground haze,
+    // shaped by its aimed cone + falloff (same math as the lit shader's pools),
+    // weighted per lamp type (uLightVolW). Range-limited: beams read near the
+    // camera; distant cone-crossings were the source of sky-streak noise.
+    if (uLampStr > 0.0 && td < 110.0) {
       for (int li = 0; li < GR_MAX_LIGHTS; li++) {
         if (li >= uNumLights) break;
         vec3 LP = uLightPos[li] - p;
@@ -1083,17 +1108,14 @@ void main() {
         float rad = uLightRad[li];
         if (ld > rad) continue;
         vec3 Ld = LP / max(ld, 1e-3);
-        // Physical windowed inverse-square — matches the lit shader's units, so
-        // the in-scatter tracks the lamps' actual (now much larger) intensities.
         float s = ld / rad;
         float win = clamp(1.0 - s*s*s*s, 0.0, 1.0);
         float att = win * win / (ld * ld + 1.0);
-        // Real aimed cone: is this air sample inside the lamp's beam?
         float cd = dot(-Ld, uLightDir[li]);
         float spot = smoothstep(uLightCone[li].y, uLightCone[li].x, cd);
         float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
         float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
-        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14)) * uLightVolW[li];
+        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14)) * uLightVolW[li] * hLamp * trans;
       }
     }
   }
@@ -1302,19 +1324,26 @@ void main() {
     if (dist > 0.005) {
       vec2 step = toSun / dist * min(dist, 0.40) / 8.0;
       vec3 shaft = vec3(0.0);
-      vec2 uv = vUV;
+      // Interleaved-gradient-noise start jitter: hides the 8-tap quantisation
+      // (without it, a small bright spot smears into a dotted comet dash).
+      float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      vec2 uv = vUV + step * ign;
       float decay = 1.0;
       for (int i = 0; i < 8; i++) {
         uv += step;
         // Clamp so we don't sample outside 0..1 (avoids edge bleed).
         vec2 suv = clamp(uv, vec2(0.0), vec2(1.0));
-        shaft += texture(uBloom, suv).rgb * decay;
+        // Crepuscular rays emanate from the SUN'S OWN glare. Weight each sample
+        // by its proximity to the sun so an isolated bright lamp head or cloud
+        // hotspot elsewhere on screen can never smear into a comet streak.
+        float sw = 1.0 - clamp(length(suv - uSunUV) / 0.32, 0.0, 1.0);
+        shaft += texture(uBloom, suv).rgb * (decay * sw * sw);
         decay *= 0.82;
       }
       shaft /= 8.0;
       // Radial falloff: strongest near the sun, zero at the edge of the screen.
       float radial = 1.0 - clamp(dist * 2.6, 0.0, 1.0);
-      c += shaft * uSunShaft * radial * radial * 0.50;
+      c += shaft * uSunShaft * radial * radial * 0.60;
     }
   }
 
@@ -1753,7 +1782,7 @@ void main() {}`;
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (glowProg) {
@@ -2148,6 +2177,7 @@ void main() {}`;
     gl.uniform1f(skyU.uCloud, sky.cloud !== undefined ? sky.cloud : 0);
     gl.uniform1f(skyU.uTime,  sky.time  !== undefined ? sky.time  : 0);
     gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
+    gl.uniform3fv(skyU.uCityGlow, sky.cityGlow || [0, 0, 0]);
     setBlend(false);
     setDepthMask(false);
     bindVAO(skyVAO);
@@ -2193,20 +2223,29 @@ void main() {}`;
     const nL = (lights.length / 14) | 0;  // stride-14 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
-    let p = 0;
+    let p = 0, nDraw = 0;
+    const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
     for (let i = 0; i < nL; i++) {
       const o = i * 14;
       const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
+      // Lens glare is a NEAR-FIELD veiling effect. Distant sources already read
+      // as bloom on their emissive head geometry — a halo billboard out there is
+      // a detached orb hanging in the sky (elevated flood heads especially).
+      const dxE = cx - ex, dyE = cy - ey, dzE = cz - ez;
+      const dEye = Math.sqrt(dxE * dxE + dyE * dyE + dzE * dzE);
+      const fade = Math.min(1, Math.max(0, (170 - dEye) / 110));
+      if (fade <= 0) continue;
       // Light colours carry PHYSICAL intensities (hundreds, for the inverse-square
       // shader) — normalise to a display-scale corona colour that keeps the hue.
       let r = lights[o + 3], g = lights[o + 4], b = lights[o + 5];
       const rad = lights[o + 6];
       const cm = Math.max(r, g, b) || 1;
-      const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40));
+      const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade;
       r *= csc; g *= csc; b *= csc;
-      // Billboard size: a small LENS HALO at the lamp head — NOT a beam cone.
-      // The raw pool radius (16-34 m) made huge glowing wedges hang in the sky.
-      const brad = Math.min(5, rad * 0.16);
+      // Billboard size: a small LENS HALO hugging the lamp head — NOT a beam cone.
+      // Sized to the lens housing (~2 m), so the glare reads as a glow around the
+      // fixture instead of a cotton ball swallowing the mast top.
+      const brad = Math.min(2.2, rad * 0.10);
       for (let v = 0; v < 6; v++) {
         const c = _glowCorners[v];
         glowData[p++] = c[0]; glowData[p++] = c[1];
@@ -2214,20 +2253,22 @@ void main() {}`;
         glowData[p++] = r; glowData[p++] = g; glowData[p++] = b;
         glowData[p++] = brad;
       }
+      nDraw++;
     }
+    if (!nDraw) return;
     useProg(glowProg);
     gl.uniformMatrix4fv(glowU.uViewProj, false, frameViewProj);
     gl.uniform3fv(glowU.uEye, frameEye);
     gl.uniform1f(glowU.uStr, str);
     bindVAO(glowVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
-    gl.bufferData(gl.ARRAY_BUFFER, glowData, gl.DYNAMIC_DRAW);
-    // Additive, depth-tested (beams occlude behind walls) but no depth write.
+    gl.bufferData(gl.ARRAY_BUFFER, glowData.subarray(0, p), gl.DYNAMIC_DRAW);
+    // Additive, depth-tested (halos occlude behind walls) but no depth write.
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);
     gl.disable(gl.CULL_FACE);
-    gl.drawArrays(gl.TRIANGLES, 0, nL * 6);
+    gl.drawArrays(gl.TRIANGLES, 0, nDraw * 6);
     // Restore the default alpha-blend + culling for subsequent passes.
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.enable(gl.CULL_FACE);
@@ -2350,14 +2391,19 @@ void main() {}`;
       useProg(blurProg);
       gl.uniform1i(blurU.uTex, 0);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
-      gl.bindTexture(gl.TEXTURE_2D, godrayTex);
-      gl.uniform2f(blurU.uDir, 1 / godrayW, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
-      gl.bindTexture(gl.TEXTURE_2D, godrayBlurTex);
-      gl.uniform2f(blurU.uDir, 0, 1 / godrayH);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Double separable blur (H+V twice): the march + shadow slices otherwise
+      // leave thin stripe artifacts that read as "random tiny rays" — two passes
+      // turn the shafts into wide, soft volumes.
+      for (let bp = 0; bp < 2; bp++) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
+        gl.bindTexture(gl.TEXTURE_2D, godrayTex);
+        gl.uniform2f(blurU.uDir, (1 + bp) / godrayW, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
+        gl.bindTexture(gl.TEXTURE_2D, godrayBlurTex);
+        gl.uniform2f(blurU.uDir, 0, (1 + bp) / godrayH);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
     }
 
     // 1) bright-pass scene -> bloom level 0 (half res)
