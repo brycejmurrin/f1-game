@@ -275,43 +275,10 @@ void main() {
     // circle of diffuse fill.
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.85) * 0.72;
 
-    // Wet road mirrors each lamp with a PHYSICAL anisotropic-GGX microfacet lobe
-    // (the same Cook-Torrance BRDF the sun uses, but stretched). On a wet road the
-    // surface is a near-horizontal mirror with fine ripples: at the grazing view
-    // angle the reflected image of a lamp elongates into a long vertical column
-    // toward the viewer. Anisotropic roughness — loose ALONG the in-plane bearing
-    // to the lamp (long column), tight ACROSS (thin line) — reproduces this
-    // exactly, so each lamp casts a real reflected streak instead of a painted blob.
-    if (wet > 0.001) {
-      vec3 Hl   = normalize(Ld + V);
-      float NoHl = max(dot(N, Hl), 0.0);
-      float NoLl = max(dot(N, Ld), 0.0);
-      float VoHl = max(dot(V, Hl), 0.0);
-      vec3 Tst  = normalize(Ld - N * dot(Ld, N) + 1e-5);   // streak axis (→ lamp bearing)
-      vec3 Bst  = cross(N, Tst);                            // across-streak axis
-      float HoT = dot(Hl, Tst);
-      float HoB = dot(Hl, Bst);
-      // Wet roughness → smoother/longer/sharper in puddles. aT (along) >> aB (across)
-      // stretches the highlight into the vertical column.
-      // A real wet road is a MIX: smooth puddle patches are near-mirrors → sharp,
-      // compact POINT reflections of each lamp; the damp textured tarmac between
-      // them has a rippled water film → softer VERTICAL STREAKS. So puddles get low
-      // roughness + near-ISOTROPIC lobe (a crisp point), while damp tarmac gets a
-      // rougher, strongly ANISOTROPIC lobe stretched toward the lamp (the column).
-      float rw = mix(0.22, 0.07, puddle);                  // damp rougher; puddle a crisp mirror
-      float aB = rw * rw;                                   // across-streak
-      float aT = aB * mix(13.0, 1.4, puddle);              // damp → long streak; puddle → point
-      float dd = HoT * HoT / (aT * aT) + HoB * HoB / (aB * aB) + NoHl * NoHl;  // aniso GGX NDF
-      float Da  = 1.0 / max(PI * aT * aB * dd * dd, 1e-6);
-      float Vis = V_SmithGGX(NoV, NoLl, sqrt(aT * aB));
-      vec3  Fl  = F_Schlick(VoHl, f0, 1.0);                 // full grazing Fresnel (water)
-      vec3 spec = (Da * Vis) * Fl * uLightCol[i] * NoLl;
-      spec = spec / (1.0 + spec * 0.6);                     // soft-clip (gentle, keeps columns bright)
-      // Reflections carry FAR (independent of the illumination pool radius): a gentle
-      // inverse-square so distant lamps still streak, and NO downward spot-cone gate.
-      float rfall = 1.0 / (1.0 + 0.0025 * dist * dist);
-      color += spec * rfall * wet * 6.0;
-    }
+    // NOTE: wet-road lamp reflections are handled by the screen-space reflection
+    // (SSR) pass in COMPOSITE_FS, which mirrors the ACTUAL emissive lamp/neon
+    // geometry as a coherent darker mirror. The old analytic per-lamp lobe here
+    // produced scattered fake blobs, so it was removed.
     // Glossy point-light glint on DRY low-roughness surfaces (building glass,
     // polished panels): mirror nearby lamps/neon as a sharp highlight so windows
     // catch the city lights live across every time of day. Uses the soft windowed
@@ -339,7 +306,7 @@ void main() {
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
-  envBlend = max(envBlend, wet * 0.6);
+  envBlend = max(envBlend, wet * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
   if (envBlend > 0.001) {
     vec3 R = Rv;
     // Lower exponent shows more of the horizon→zenith gradient in the reflection
@@ -351,9 +318,7 @@ void main() {
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
     float envSunAlign = max(dot(R, uSunDir), 0.0);
     envColor = mix(envColor, envColor * uSunColor * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
-    // Wet roads catch a long reflection of a low sun (Fresnel sun glitter). Kept
-    // modest so a low dusk/dawn sun doesn't blow the whole road to a white sheet.
-    envColor += uSunColor * pow(envSunAlign, 40.0) * wet * 0.35;
+    // (Wet-road sun-glitter removed — SSR now reflects the real sky/sun on wet roads.)
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
@@ -367,7 +332,7 @@ void main() {
     // as the sky it mirrors).
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
     envFresnel = mix(envFresnel, envFresnel * envFresnel, wet);
-    vec3 envWet = envColor * (1.0 - wet * 0.72);
+    vec3 envWet = envColor * (1.0 - wet * 0.90);   // whisper only on wet; SSR owns the reflection
     // Soft-clip the reflection so a wet road can never blow out to a white sheet
     // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
     // Reinhard shoulder on the brightest channel keeps it bright where the scene
@@ -1035,6 +1000,8 @@ uniform mat4 uProj;          // view → clip  (project the marched ray to scree
 uniform vec3 uUpVS;          // world-up in view space (pick out up-facing road)
 uniform vec2 uReflTexel;     // 1/width, 1/height
 uniform float uReflect;      // wet-road SSR strength (0 = off)
+uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
+uniform vec3 uReflSkyLo;     // zenith sky-glow
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
@@ -1121,30 +1088,65 @@ void main() {
     if (roadMask > 0.001) {
       vec3 V = normalize(-P);
       vec3 R = reflect(-V, Nv);                    // points up toward the city
-      vec3 pos = P;
-      float stepLen = 0.8;
-      vec3 hitCol = vec3(0.0);
+      // Finer refined march: small fixed steps (dense near/mid) so small/distant
+      // emissive lamp heads + neon aren't stepped over (was a coarse 12×1.42 march).
+      vec3 pos = P, prevPos = P;
+      float stepLen = 0.55;
       float hit = 0.0;
-      for (int i = 0; i < 12; i++) {
+      vec2 hitUV = vec2(0.0);
+      bool found = false;
+      for (int i = 0; i < 28; i++) {
+        prevPos = pos;
         pos += R * stepLen;
-        stepLen *= 1.42;                           // geometric growth → cover depth cheaply
+        stepLen *= 1.16;                           // gentle growth
         vec4 cp = uProj * vec4(pos, 1.0);
         if (cp.w <= 0.0) break;
         vec2 suv = cp.xy / cp.w * 0.5 + 0.5;
         if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
-        float sceneZ = ssrViewPos(suv).z;          // scene depth along the ray
-        // Ray passed just behind a surface → intersection (with a thickness gate
-        // so we don't latch onto the far sky/background).
-        if (pos.z < sceneZ - 0.25 && pos.z > sceneZ - 6.0) {
-          hitCol = texture(uScene, suv).rgb;
-          // Fade as the hit nears the screen edge (no data past the frame).
-          vec2 e = abs(suv - 0.5) * 2.0;
-          hit = (1.0 - pow(max(e.x, e.y), 4.0));
+        float dz = ssrViewPos(suv).z - pos.z;      // >0 = ray passed behind a surface
+        if (dz > 0.20 && dz < 5.0) {               // thickness gate (reject far sky)
+          vec3 a = prevPos, b = pos;               // binary-search refine → crisp hit
+          for (int j = 0; j < 5; j++) {
+            vec3 mid = (a + b) * 0.5;
+            vec4 mc = uProj * vec4(mid, 1.0);
+            vec2 muv = mc.xy / mc.w * 0.5 + 0.5;
+            if (ssrViewPos(muv).z - mid.z > 0.20) b = mid; else a = mid;
+          }
+          vec4 fc = uProj * vec4(b, 1.0);
+          hitUV = fc.xy / fc.w * 0.5 + 0.5;
+          vec2 e = abs(hitUV - 0.5) * 2.0;
+          hit = 1.0 - pow(max(e.x, e.y), 4.0);     // screen-edge fade
+          found = true;
           break;
         }
       }
-      float fres = pow(1.0 - max(dot(Nv, V), 0.0), 4.0);
-      c += hitCol * hit * roadMask * uReflect * (0.30 + 0.9 * fres);
+      // Vertical light-smear: real wet roads stretch reflected lights into soft
+      // vertical streaks toward the viewer. Extra HDR taps down/up-screen from the
+      // hit (Gaussian, wetness+grazing-scaled) bloom into the streak naturally.
+      vec3 hitCol = vec3(0.0);
+      if (found) {
+        float streak = uReflect * (0.010 + 0.022 * clamp((0.62 - vUV.y) / 0.62, 0.0, 1.0));
+        float w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
+        hitCol  = texture(uScene, hitUV).rgb * w0;
+        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 0.5)).rgb * w1;
+        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 1.0)).rgb * w2;
+        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 1.6)).rgb * w3;
+        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 2.3)).rgb * w4;
+        hitCol += texture(uScene, hitUV + vec2(0.0,  streak * 0.5)).rgb * w1;
+        hitCol += texture(uScene, hitUV + vec2(0.0,  streak * 1.0)).rgb * w2;
+        hitCol /= (w0 + 2.0 * w1 + 2.0 * w2 + w3 + w4);
+      }
+      // Miss fallback: reflect the dim night sky-glow, never a black hole.
+      vec3 skyRefl = mix(uReflSkyLo, uReflSkyHi, clamp(R.y, 0.0, 1.0));
+      vec3 reflCol = found ? hitCol : skyRefl;
+      float cover  = found ? hit : 1.0;
+      // Clean DARKER MIRROR: substitute the reflected scene into a darkened base
+      // (a real wet mirror shows the scene it reflects, not a wash added on top).
+      // Grazing Fresnel keeps near/mid tarmac dark and lights the far grazing band.
+      float fres = pow(1.0 - max(dot(Nv, V), 0.0), 5.0);
+      float strength = roadMask * uReflect * (0.22 + 0.85 * fres);
+      float mixAmt = clamp(strength * cover, 0.0, 0.85);   // never a perfect mirror
+      c = mix(c, c * 0.15 + reflCol * 0.85, mixAmt);
     }
   }
 
@@ -1294,6 +1296,8 @@ void main() {}`;
   let frameProj = null;
   let frameSunVS = null;
   let frameUpVS = null;
+  let frameSkyHi = null;
+  let frameSkyLo = null;
   let frameSunColor = null;
   let frameTime = 0, frameCloud = 0;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
@@ -1409,7 +1413,7 @@ void main() {}`;
     if (!brightProg || !blurProg || !compProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightCone[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -1686,6 +1690,8 @@ void main() {}`;
     frameProj = frame.proj || null;
     frameSunVS = frame.sunViewDir || null;
     frameUpVS = frame.upViewDir || null;
+    frameSkyHi = frame.skyHorizon || [0.05, 0.06, 0.09];
+    frameSkyLo = frame.skyZenith || [0.02, 0.025, 0.05];
     frameTime = frame.time != null ? frame.time : 0;
     frameCloud = frame.cloud != null ? frame.cloud : 0;
     frameLights = frame.lights || null;
@@ -2222,6 +2228,8 @@ void main() {}`;
       gl.uniformMatrix4fv(compU.uProj, false, frameProj);
       gl.uniform3fv(compU.uUpVS, frameUpVS);
       gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
+      gl.uniform3fv(compU.uReflSkyHi, frameSkyHi || [0.05, 0.06, 0.09]);
+      gl.uniform3fv(compU.uReflSkyLo, frameSkyLo || [0.02, 0.025, 0.05]);
     }
     gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
