@@ -361,10 +361,13 @@ let skidFrameT = 0;           // frame countdown between stamp placements
 // Car paint materials, hoisted to module scope so the render loop reads a shared
 // const per (wet/dry × night/day) combo instead of allocating a fresh object for
 // every car every frame.
-const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70 };
-const PAINT_WET_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.70 };
-const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.38, metalness: 0.10, specular: 0.55 };
-const PAINT_DRY_DAY   = { roughness: 0.38, metalness: 0.10, specular: 0.55 };
+// Cars get a CLEARCOAT: the thin lacquer shell of automotive paint — a second
+// crisp specular lobe + constant sky reflection over the base coat, so liveries
+// read glossy-showroom instead of plastic.
+const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70, clearcoat: 0.9 };
+const PAINT_WET_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.70, clearcoat: 0.9 };
+const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.34, metalness: 0.10, specular: 0.55, clearcoat: 0.75 };
+const PAINT_DRY_DAY   = { roughness: 0.34, metalness: 0.10, specular: 0.55, clearcoat: 0.75 };
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };

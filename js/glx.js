@@ -51,6 +51,7 @@ uniform float uRoughness;
 uniform float uMetalness;
 uniform float uSpecular;
 uniform float uDetail;
+uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specular lobe + env fresnel
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
 uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
@@ -137,9 +138,10 @@ float sampleShadow(vec3 wpos) {
   float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
   // 8-tap Poisson disk, ROTATED per-pixel by interleaved-gradient noise so the
   // sampling pattern varies every fragment — banding becomes fine noise and the
-  // 8 taps read as a much smoother penumbra. Radius = 2.0 texels (at 2048 the
-  // texel is half the size, so this stays a tight, crisp penumbra).
-  const float R = 2.0;
+  // 8 taps read as a much smoother penumbra. Radius 3.0 texels: a visibly SOFT
+  // penumbra (real sun shadows aren't razor-edged) that also stops thin kerb/car
+  // shadows shimmering at the low racing-camera angle.
+  const float R = 3.0;
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   float ang = ign * 6.2831853;
   float cr = cos(ang), sr = sin(ang);
@@ -165,6 +167,22 @@ float sampleShadow(vec3 wpos) {
 
 void main() {
   vec3 N = normalize(vNrm);
+  // Micro-normal relief: perturb the normal with a two-scale noise gradient so
+  // procedurally-textured ground (road/terrain, uDetail > 0) has real surface
+  // bumps — sun glints, lamp speculars and reflections break up over the surface
+  // instead of reading as one uniform polished sheet. Fades with distance (it
+  // would alias to shimmer) and with wetness (the water film levels the surface).
+  if (uDetail > 0.001) {
+    float mnFade = clamp(1.0 - (vDist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - uWetness * 0.75);
+    if (mnFade > 0.01) {
+      vec2 mnp = vWorldPos.xz * 1.7;
+      float e = 0.22;
+      float h0 = vnoise(mnp) * 0.7 + vnoise(mnp * 3.9) * 0.3;
+      float hx = vnoise(mnp + vec2(e, 0.0)) * 0.7 + vnoise(mnp * 3.9 + vec2(e * 3.9, 0.0)) * 0.3;
+      float hz = vnoise(mnp + vec2(0.0, e)) * 0.7 + vnoise(mnp * 3.9 + vec2(0.0, e * 3.9)) * 0.3;
+      N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * ((uDetail * 0.4 * mnFade) / e));
+    }
+  }
   vec3 V = normalize(uEye - vWorldPos);
   vec3 L = uSunDir;
   vec3 H = normalize(L + V);
@@ -188,6 +206,12 @@ void main() {
     albedo = max(albedo, vec3(0.0));
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
+  // Specular anti-aliasing: widen roughness where the normal changes fast in
+  // screen space (geometry edges, micro-normal at distance) so thin bright
+  // highlights sheen smoothly instead of shimmering pixel-to-pixel.
+  vec3 saaDx = dFdx(N), saaDy = dFdy(N);
+  float saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
+  rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
   float a = rough * rough;
   vec3 f0 = mix(vec3(0.08 * uSpecular), albedo, uMetalness);
 
@@ -285,6 +309,7 @@ void main() {
     // falloff WITHOUT the downward spot cone (a window reflects a lamp beside or
     // above it, not only straight down). The (1-wet) gate hands wet road to the lobe above.
     float gloss = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular * (1.0 - wet);
+    gloss = max(gloss, uClearcoat * 0.45 * (1.0 - wet));   // lacquer catches lamp/neon glints
     if (gloss > 0.001) {
       float glb = max(dot(Rv, Ld), 0.0);
       float glFall = win * win / (1.0 + 6.0 * s * s);
@@ -300,6 +325,20 @@ void main() {
   specCol = specCol / (1.0 + specCol);
   color += specCol;
 
+  // Clearcoat: a second, fixed-low-roughness specular lobe over the base coat —
+  // the thin lacquer shell of automotive paint. It keeps a crisp sun highlight
+  // and sky reflection even where the base coat is rougher, which is what gives
+  // cars their glossy showroom read.
+  if (uClearcoat > 0.001) {
+    float ccA = 0.01;                            // clearcoat roughness 0.1
+    float Dc = D_GGX(NoH, ccA);
+    float Vc = V_SmithGGX(NoV, NoL, ccA);
+    float Fc = F_Schlick(VoH, vec3(0.05), 1.0).x;
+    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * litNoL * uClearcoat;
+    ccCol = ccCol / (1.0 + ccCol);
+    color += ccCol;
+  }
+
   // Environment reflection: when roughness is very low (wet road / glossy paint),
   // sample the sky gradient in the reflected view direction.
   // Roughness > 0.4 = no visible reflection; < 0.15 = mirror-like sky in road.
@@ -307,6 +346,7 @@ void main() {
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
   envBlend = max(envBlend, wet * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
+  envBlend = max(envBlend, uClearcoat * 0.5);   // lacquer shell always mirrors the sky
   if (envBlend > 0.001) {
     vec3 R = Rv;
     // Lower exponent shows more of the horizon→zenith gradient in the reflection
@@ -1329,7 +1369,7 @@ void main() {}`;
   const BLOOM_DIV = 2;         // bloom buffers at half resolution
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
-  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1;
+  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1;
 
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
@@ -1571,7 +1611,7 @@ void main() {}`;
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uWetness",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightCone[0]"]);
@@ -1763,7 +1803,7 @@ void main() {}`;
         gl.uniform2fv(litU["uLightCone[0]"], cone);
       }
     }
-    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = -1;
+    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = -1;
   }
 
   function draw(mesh, modelMat, opts) {
@@ -1778,12 +1818,14 @@ void main() {}`;
     const metalness = opts && opts.metalness !== undefined ? opts.metalness : 0.0;
     const specular = opts && opts.specular !== undefined ? opts.specular : 0.5;
     const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
+    const clearcoat = opts && opts.clearcoat !== undefined ? opts.clearcoat : 0.0;
     if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
     if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
     if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
     if (metalness !== _matMetal)    { gl.uniform1f(litU.uMetalness, metalness); _matMetal    = metalness; }
     if (specular  !== _matSpec)     { gl.uniform1f(litU.uSpecular,  specular);  _matSpec     = specular; }
     if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
+    if (clearcoat !== _matCC)       { gl.uniform1f(litU.uClearcoat, clearcoat); _matCC       = clearcoat; }
     // Each draw declares the full render state it needs (no restores afterwards),
     // so runs of same-state draws collapse to a single real toggle via the cache.
     setDepthMask(true);
@@ -1897,12 +1939,14 @@ void main() {}`;
     const metalness = opts && opts.metalness !== undefined ? opts.metalness : 0.0;
     const specular = opts && opts.specular !== undefined ? opts.specular : 0.5;
     const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
+    const clearcoat = opts && opts.clearcoat !== undefined ? opts.clearcoat : 0.0;
     if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
     if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
     if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
     if (metalness !== _matMetal)    { gl.uniform1f(litU.uMetalness, metalness); _matMetal    = metalness; }
     if (specular  !== _matSpec)     { gl.uniform1f(litU.uSpecular,  specular);  _matSpec     = specular; }
     if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
+    if (clearcoat !== _matCC)       { gl.uniform1f(litU.uClearcoat, clearcoat); _matCC       = clearcoat; }
     setDepthMask(true);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);

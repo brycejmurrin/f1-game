@@ -159,6 +159,12 @@ const Car3D = (function () {
     addBox(out, 0, 0.90, -2.46, 1.02, 0.05, 0.26, c2);  // lower element
     addBox(out, 0, 0.64, -2.34, 0.98, 0.04, 0.20, c1);  // beam wing
 
+    // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
+    // structure. The >1 albedo glows through the night emissive path (and blooms),
+    // so every car trails a visible red light after dark / in spray. ---
+    addBox(out, 0, 0.50, -2.52, 0.13, 0.18, 0.10, DARK);
+    addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03, [2.6, 0.08, 0.06]);
+
     // --- Rear diffuser ---
     addLoft(out, -2.6, 0, 0.20, 1.25, 0.28, -1.95, 0, 0.12, 1.0, 0.14,
             [0.06, 0.06, 0.07]);
