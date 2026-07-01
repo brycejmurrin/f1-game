@@ -291,14 +291,16 @@ function buildStudioRig() {
     let ax = cx - lx, ay = (cy + 0.5) - ly, az = cz - lz;
     const al = Math.hypot(ax, ay, az) || 1;
     ax /= al; ay /= al; az /= al;
+    const e = R.intensity * 0.55;   // same physical energy factor as track lamps
     _studioBuf.push(lx, ly, lz,
-      R.color[0] * R.intensity, R.color[1] * R.intensity, R.color[2] * R.intensity,
-      R.radius, ax, ay, az, 0.80, 0.35, 0.20, 0);
+      R.color[0] * e, R.color[1] * e, R.color[2] * e,
+      R.radius, ax, ay, az, 0.88, 0.60, 0.12, 0);
   }
   // Overhead key: straight-down softbox above the car.
+  const ek = R.intensity * 0.55 * 1.4;
   _studioBuf.push(cx, cy + R.h + 3, cz,
-    R.color[0] * R.intensity * 1.4, R.color[1] * R.intensity * 1.4, R.color[2] * R.intensity * 1.4,
-    R.radius, 0, -1, 0, 0.75, 0.30, 0.25, 0);
+    R.color[0] * ek, R.color[1] * ek, R.color[2] * ek,
+    R.radius, 0, -1, 0, 0.80, 0.45, 0.15, 0);
   return _studioBuf;
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
@@ -2953,7 +2955,9 @@ function render(dt) {
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
   // light gets a visible halo (colored per lamp) without inflating bloom.
-  if (frame.lights) GLX.drawGlow(frame.lights, 0.20);
+  // (Skipped for the studio rig — its lamps have no fixtures, and floating
+  // glow-cone billboards ringing the car read as artifacts.)
+  if (frame.lights && !_studioRig) GLX.drawGlow(frame.lights, 0.20);
   if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: Math.min(0.80, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
@@ -4931,18 +4935,46 @@ window.__apex = {
   //   studio(false)                    → off (session lamps restored)
   // Pair with carOrbit(0, az, el, 4) to walk around the lit car.
   studio(arg = true) {
-    if (arg === false || arg === 0) { _studioRig = null; return false; }
+    if (arg === false || arg === 0) {
+      if (_studioRig && _studioRig._ambStash) {   // restore the session ambient
+        frame.ambientSky = _studioRig._ambStash[0];
+        frame.ambientGround = _studioRig._ambStash[1];
+      }
+      _studioRig = null;
+      return false;
+    }
     const o = typeof arg === "object" && arg ? arg : {};
+    if (_studioRig && _studioRig._ambStash) {     // re-config: restore before re-stash
+      frame.ambientSky = _studioRig._ambStash[0];
+      frame.ambientGround = _studioRig._ambStash[1];
+    }
     _studioRig = {
       n: o.n || 6, dist: o.dist || 7, h: o.h != null ? o.h : 4.5,
-      intensity: o.intensity != null ? o.intensity : 3.0,
-      color: o.color || [1, 1, 1], radius: o.radius || 26, spin: o.spin || 0,
+      intensity: o.intensity != null ? o.intensity : 1.6,
+      color: o.color || [1, 1, 1], radius: o.radius || 18, spin: o.spin || 0,
+      fill: o.fill != null ? o.fill : 0.5,
     };
+    // FILL: lift the scene ambient toward a neutral studio level while the rig
+    // is up — at night the ambient is near-black and an unlit car body reads as
+    // a silhouette no matter how many rig lamps hit it. Stashed + restored by
+    // studio(false). (setTimeOfDay() while active rebuilds ambient — call
+    // studio() again after switching time of day.)
+    const f = _studioRig.fill;
+    if (f > 0) {
+      _studioRig._ambStash = [frame.ambientSky, frame.ambientGround];
+      const mixv = (a, b) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+      frame.ambientSky = mixv(frame.ambientSky || [0, 0, 0], [0.30, 0.31, 0.35]);
+      frame.ambientGround = mixv(frame.ambientGround || [0, 0, 0], [0.20, 0.19, 0.18]);
+    }
     return _studioRig;
   },
   carOrbit(idx = 0, az = 180, el = 14, dist = 25, h = 1.0, opts = {}) {
-    if (!track || !cars || !cars[idx]) return false;
-    const c = cars[idx];
+    // idx 0 (or negative) = THE PLAYER, as documented — cars[] is built in
+    // team-list order, so raw index 0 is actually a Mercedes AI; orbiting it
+    // while the player parks elsewhere framed the wrong car entirely.
+    if (!track || !cars || !cars.length) return false;
+    const c = (idx <= 0 || !cars[idx]) ? (player || cars[0]) : cars[idx];
+    if (!c) return false;
     // Derive world position from Frenet coords (s, x) — AI cars don't carry px/pz,
     // only the player does. This works for all cars.
     const s = ((c.s % track.total) + track.total) % track.total;

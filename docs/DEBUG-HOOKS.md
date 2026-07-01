@@ -842,7 +842,19 @@ __apex.studio(false)                             // off — session lamps restor
 ```
 
 Options: `n` lamps in the ring (6), `dist` m from the car (7), `h` height (4.5),
-`intensity` (3.0), `color` linear RGB ([1,1,1]), `radius` falloff (26), `spin`.
+`intensity` (1.6, pre-scaled to the track-lamp energy convention), `color`
+linear RGB ([1,1,1]), `radius` falloff (18), `spin`, and `fill` (0.5) — how far
+the scene ambient is lifted toward a neutral studio level while the rig is up
+(at night the ambient is near-black and an unlit body reads as a silhouette).
+The rig draws no corona/beam billboards (its lamps have no fixtures), and
+`studio(false)` restores the session ambient + lamps. Note: `setTimeOfDay()`
+while active rebuilds the ambient — call `studio()` again after switching.
+
+For a one-command inspection render, use the committed tool:
+
+```sh
+node tools/carshot.mjs 40 night 2    # az, day|dusk|night, team index → ~6 KB crop
+```
 
 Pair with the car walk-around camera:
 
