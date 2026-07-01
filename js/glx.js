@@ -186,6 +186,27 @@ void main() {
       N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * ((uDetail * 0.4 * mnFade) / e));
     }
   }
+  // Car paint micro normal map (orange-peel): the same trick as the ground
+  // relief above, at paint scale. No colour layers — the perturbed normal
+  // feeds every standard lighting/reflection term below, so the surface
+  // ITSELF reflects: the sun streak and sky env break into a live shimmer
+  // that slides across the panels as the car moves.
+  if (uCarPaint > 0.001) {
+    // Two scales: coarse orange-peel waviness + fine metallic-flake sparkle.
+    // Fades with distance so it never aliases to shimmer at range.
+    float pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
+    if (pFade > 0.01) {
+      vec2 puv = vWorldPos.xz * 34.0 + vWorldPos.y * 29.0;
+      vec2 fuv = vWorldPos.xz * 130.0 + vWorldPos.y * 111.0;
+      float pe = 0.09;
+      float pb0 = vnoise(puv) * 0.6 + vnoise(fuv) * 0.4;
+      float pbx = (vnoise(puv + vec2(pe, 0.0)) * 0.6 + vnoise(fuv + vec2(pe * 3.8, 0.0)) * 0.4) - pb0;
+      float pby = (vnoise(puv + vec2(0.0, pe)) * 0.6 + vnoise(fuv + vec2(0.0, pe * 3.8)) * 0.4) - pb0;
+      vec3 pT = normalize(cross(N, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
+      vec3 pB = cross(N, pT);
+      N = normalize(N + (pT * pbx + pB * pby) * (0.7 * uCarPaint * pFade));
+    }
+  }
   vec3 V = normalize(uEye - vWorldPos);
   vec3 L = uSunDir;
   vec3 H = normalize(L + V);
@@ -244,16 +265,6 @@ void main() {
     a = rough * rough;
     // Thin water film is a dielectric (~0.03 reflectance) — raise f0 toward it.
     f0 = mix(f0, vec3(0.04), wet * 0.6);
-  }
-
-  // ── Car paint: DEEP RICH PIGMENT under real scene light ────────────────────
-  // The researched formula for glossy paint: dark saturated albedo + strong
-  // crisp specular CONTRAST, lit by the actual sun/shadow (a studio/matcap
-  // term ignores scene lighting and reads pasted-on/ghostly — removed). The
-  // gamma-deepen saturates the mids and darkens slightly — the livery cannot
-  // bleach — and a gentle grazing duotone darkens the flanks like deep gloss.
-  if (uCarPaint > 0.001) {
-    albedo = mix(albedo, pow(albedo, vec3(1.40)) * 1.05, 0.75 * uCarPaint);
   }
 
   vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
@@ -355,21 +366,6 @@ void main() {
 
   }
 
-  // ── Car paint: PER-FACET environment mirror ─────────────────────────────────
-  // The bodywork is flat-shaded chiseled panels (car3d.js), so this reflection
-  // resolves to ONE clean tone per panel — sky tint on up-angled decks, dark
-  // ground tone on flanks — and whole panels FLASH as the camera or car turns:
-  // the low-poly facet glint. Blended (never added) so it is energy-conserving
-  // and cannot bleach; 45% tinted by the paint so the livery survives, and the
-  // weight rises toward grazing like real Fresnel.
-  if (uCarPaint > 0.001) {
-    float fhoriz = smoothstep(-0.05, 0.08, Rv.y);
-    vec3 fsky = mix(uSkyHorizon, uSkyZenith, pow(max(Rv.y, 0.0), 0.5));
-    vec3 fenv = clamp(mix(uFogColor * 0.40, fsky, fhoriz), vec3(0.0), vec3(1.3));
-    vec3 ftint = mix(fenv, fenv * albedo * 1.9, 0.70);
-    float fw = (0.10 + 0.55 * pow(1.0 - NoV, 3.0)) * uCarPaint * 0.45;
-    color = mix(color, ftint * (0.35 + 0.65 * litNoL + 0.5 * dot(amb, vec3(1.0))), fw);
-  }
 
 
   // Environment reflection: when roughness is very low (wet road / glossy paint),

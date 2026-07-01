@@ -371,10 +371,10 @@ let skidFrameT = 0;           // frame countdown between stamp placements
 // grazing angles darken the livery toward a deep shade of the same hue and the
 // silhouette catches a thin clamped sky rim — deep gloss that cannot bleach.
 // clearcoat keeps the crisp sun + night-lamp glints of the lacquer shell.
-const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.20, metalness: 0.10, specular: 0.75, clearcoat: 1.0, carPaint: 1.0 };
-const PAINT_WET_DAY   = { roughness: 0.20, metalness: 0.10, specular: 0.75, clearcoat: 1.0, carPaint: 1.0 };
-const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.32, metalness: 0.10, specular: 0.60, clearcoat: 1.0, carPaint: 1.0 };
-const PAINT_DRY_DAY   = { roughness: 0.32, metalness: 0.10, specular: 0.60, clearcoat: 1.0, carPaint: 1.0 };
+const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
+const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
+const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.6, carPaint: 1.0 };
+const PAINT_DRY_DAY   = { roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.6, carPaint: 1.0 };
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
