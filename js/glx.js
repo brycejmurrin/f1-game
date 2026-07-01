@@ -275,35 +275,40 @@ void main() {
     // circle of diffuse fill.
     color += albedo * uLightCol[i] * lnl * att * (1.0 - uMetalness) * (1.0 - wet * 0.85) * 0.72;
 
-    // Wet road mirrors each lamp: a sharp specular lobe along the reflected view
-    // ray. Sharpness peaks in puddles (mirror), broadens to a sheen on damp
-    // tarmac. A second, far broader lobe fakes the vertical ripple-smear that
-    // gives wet night roads their signature stretched reflections. Reflections
-    // carry farther than direct light, so they use the gentle distance window
-    // (not the tight inverse-square hotspot) — distant lamps still streak.
+    // Wet road mirrors each lamp with a PHYSICAL anisotropic-GGX microfacet lobe
+    // (the same Cook-Torrance BRDF the sun uses, but stretched). On a wet road the
+    // surface is a near-horizontal mirror with fine ripples: at the grazing view
+    // angle the reflected image of a lamp elongates into a long vertical column
+    // toward the viewer. Anisotropic roughness — loose ALONG the in-plane bearing
+    // to the lamp (long column), tight ACROSS (thin line) — reproduces this
+    // exactly, so each lamp casts a real reflected streak instead of a painted blob.
     if (wet > 0.001) {
-      // Anisotropic reflection: a light mirrored on wet tarmac streaks toward the
-      // viewer (a long vertical glint), because micro-ripples scatter the mirror
-      // image along the surface line to the lamp. Build a road-tangent frame
-      // pointing at the lamp's horizontal bearing and stretch the specular lobe
-      // ALONG it (loose) while keeping it tight ACROSS + along the normal — so the
-      // pool elongates into a vertical streak instead of a flat circle.
-      vec3 Traw = Ld - N * dot(Ld, N);                 // in-plane bearing to lamp
-      vec3 Tst  = Traw / max(length(Traw), 1e-3);      // streak axis (safe)
-      vec3 Bst  = cross(N, Tst);                        // across-streak axis
-      vec3 dvec = Rv - Ld;                              // mirror misalignment
-      float along  = dot(dvec, Tst);
-      float across = dot(dvec, Bst);
-      float perp   = dot(dvec, N);
-      float sharp  = mix(60.0, 1100.0, puddle);
-      float k      = sharp * 0.38;                      // broader → more reflective area
-      float stretch = mix(7.0, 12.0, puddle);           // how far the glint smears
-      float q = (across * across + perp * perp) * k + (along * along) * (k / stretch);
-      // exp() streak + a broad glossy halo so the surface AROUND each lamp mirrors
-      // it (not just a thin line), then a strong amplitude so wet tarmac reads as a
-      // bright wet mirror of the lamps rather than matte-lit.
-      float refl = exp(-q) + pow(max(dot(Rv, Ld), 0.0), sharp * 0.14) * 0.34;
-      color += uLightCol[i] * refl * win * wet * 8.0;
+      vec3 Hl   = normalize(Ld + V);
+      float NoHl = max(dot(N, Hl), 0.0);
+      float NoLl = max(dot(N, Ld), 0.0);
+      float VoHl = max(dot(V, Hl), 0.0);
+      vec3 Tst  = normalize(Ld - N * dot(Ld, N) + 1e-5);   // streak axis (→ lamp bearing)
+      vec3 Bst  = cross(N, Tst);                            // across-streak axis
+      float HoT = dot(Hl, Tst);
+      float HoB = dot(Hl, Bst);
+      // Wet roughness → smoother/longer/sharper in puddles. aT (along) >> aB (across)
+      // stretches the highlight into the vertical column.
+      // Across-streak roughness is kept moderate (not a razor mirror) so the column
+      // is a smooth continuous line that catches enough pixels instead of a sparse
+      // sparkle; along-streak is much looser to stretch it into the vertical column.
+      float rw = mix(0.24, 0.12, puddle);
+      float aB = rw * rw;                                   // across-streak (tight-ish)
+      float aT = aB * mix(9.0, 20.0, puddle);              // along-streak (stretched)
+      float dd = HoT * HoT / (aT * aT) + HoB * HoB / (aB * aB) + NoHl * NoHl;  // aniso GGX NDF
+      float Da  = 1.0 / max(PI * aT * aB * dd * dd, 1e-6);
+      float Vis = V_SmithGGX(NoV, NoLl, sqrt(aT * aB));
+      vec3  Fl  = F_Schlick(VoHl, f0, 1.0);                 // full grazing Fresnel (water)
+      vec3 spec = (Da * Vis) * Fl * uLightCol[i] * NoLl;
+      spec = spec / (1.0 + spec * 0.6);                     // soft-clip (gentle, keeps columns bright)
+      // Reflections carry FAR (independent of the illumination pool radius): a gentle
+      // inverse-square so distant lamps still streak, and NO downward spot-cone gate.
+      float rfall = 1.0 / (1.0 + 0.0025 * dist * dist);
+      color += spec * rfall * wet * 6.0;
     }
     // Glossy point-light glint on DRY low-roughness surfaces (building glass,
     // polished panels): mirror nearby lamps/neon as a sharp highlight so windows
