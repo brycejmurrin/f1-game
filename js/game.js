@@ -361,13 +361,20 @@ let skidFrameT = 0;           // frame countdown between stamp placements
 // Car paint materials, hoisted to module scope so the render loop reads a shared
 // const per (wet/dry × night/day) combo instead of allocating a fresh object for
 // every car every frame.
-// Cars get a CLEARCOAT: the thin lacquer shell of automotive paint — a second
-// crisp specular lobe + constant sky reflection over the base coat, so liveries
-// read glossy-showroom instead of plastic.
-const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.70, clearcoat: 0.9 };
-const PAINT_WET_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.70, clearcoat: 0.9 };
-const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.34, metalness: 0.10, specular: 0.55, clearcoat: 0.75 };
-const PAINT_DRY_DAY   = { roughness: 0.34, metalness: 0.10, specular: 0.55, clearcoat: 0.75 };
+// Car paint is a slightly-metallic gloss through the BASE material path (no
+// clearcoat term — an additive sky layer bleaches the livery on the gently
+// curved tops). Lower roughness gives the crisp GGX sun streak on the smooth
+// bodywork; the mild metalness tints specular + reflections toward the team
+// colour like real metallic flake, and scales the sky env down so the paint
+// stays saturated. Wet adds a water film: glossier and more mirror-like.
+// carPaint drives the duotone-pigment + silhouette-rim paint model (glx.js):
+// grazing angles darken the livery toward a deep shade of the same hue and the
+// silhouette catches a thin clamped sky rim — deep gloss that cannot bleach.
+// clearcoat keeps the crisp sun + night-lamp glints of the lacquer shell.
+const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.20, metalness: 0.10, specular: 0.75, clearcoat: 1.0, carPaint: 1.0 };
+const PAINT_WET_DAY   = { roughness: 0.20, metalness: 0.10, specular: 0.75, clearcoat: 1.0, carPaint: 1.0 };
+const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.32, metalness: 0.10, specular: 0.60, clearcoat: 1.0, carPaint: 1.0 };
+const PAINT_DRY_DAY   = { roughness: 0.32, metalness: 0.10, specular: 0.60, clearcoat: 1.0, carPaint: 1.0 };
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -524,6 +531,44 @@ const WHEELS = [
 ];
 const _wheelLocal = new Float32Array(16);
 const _wheelWorld = new Float32Array(16);
+const _ringWorld = new Float32Array(16);
+
+// Brake-glow ring: a flat emissive annulus (axle-aligned, both windings so it
+// reads from either side) drawn just proud of each wheel face while the discs
+// are hot — the classic F1 glowing-brake cue. Shared by all four wheels.
+let brakeRingMesh = null;
+function getBrakeRing() {
+  if (brakeRingMesh) return brakeRingMesh;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const SEG = 18, R0 = 0.055, R1 = 0.135, HOT = [1.0, 0.38, 0.10];
+  for (let i = 0; i < SEG; i++) {
+    const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+    const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+    const base = out.pos.length / 3;
+    out.pos.push(0, R0 * c0, R0 * s0,  0, R1 * c0, R1 * s0,
+                 0, R1 * c1, R1 * s1,  0, R0 * c1, R0 * s1);
+    for (let v = 0; v < 4; v++) { out.nrm.push(1, 0, 0); out.col.push(HOT[0], HOT[1], HOT[2]); }
+    out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
+                 base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+  brakeRingMesh = GLX.createMesh(out);
+  return brakeRingMesh;
+}
+
+// Rain-light strobe overlay: a small rear-facing HDR-red quad drawn over the
+// baked LED panel while the road is wet, blinking like the real FIA ~4 Hz
+// strobe. Shared by all cars (one draw per car per frame during the on-phase).
+let rainLightMesh = null;
+function getRainLight() {
+  if (rainLightMesh) return rainLightMesh;
+  const R = [2.4, 0.10, 0.08], out = { pos: [], nrm: [], col: [], idx: [] };
+  const w = 0.055, h = 0.07;
+  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
+  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
+  out.idx.push(0, 2, 1, 0, 3, 2);
+  rainLightMesh = GLX.createMesh(out);
+  return rainLightMesh;
+}
 function playerBodyMesh(team) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
   if (!playerBodies[team.id]) playerBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2, { noWheels: true }));
@@ -548,6 +593,19 @@ function drawPlayerWheels(c, base, dt, opt) {
     L[12] = wd.x; L[13] = wd.y; L[14] = wd.z; L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
     GLX.draw(wd.rear ? wheelMeshR : wheelMeshF, _wheelWorld, opt);
+    // Hot brake discs: an emissive ring floating just off the outer wheel face,
+    // ramping with the render-only brakeHeat (bright orange → blooms when hot).
+    const heat = c.brakeHeat || 0;
+    if (heat > 0.05) {
+      const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.015);
+      const W = _ringWorld;
+      W.set(_wheelWorld);
+      W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
+      GLX.draw(getBrakeRing(), W, {
+        emissive: 0.30 + 0.70 * heat, roughness: 0.9, specular: 0,
+        alpha: Math.min(1, 0.25 + heat * 0.9),
+      });
+    }
   }
 }
 
@@ -1989,6 +2047,12 @@ function updateCar(c, dt, ranked) {
     ? (braking ? 0.018 : (onThrottle ? -0.010 : 0))
     : (clamp(-k * c.speed * 0.002, -0.012, 0.012));   // AI: subtle pitch through corners
   c.pitchVis = damp(c.pitchVis ?? 0, pitchTarget, 5, dt);
+  // Brake-disc heat (render-only): glows up while braking at speed, cools after.
+  // Drives the emissive brake-glow rings on the player's wheels.
+  if (c.isPlayer) {
+    const heating = braking && c.speed > 12;
+    c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
+  }
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
@@ -2918,9 +2982,19 @@ function render(dt) {
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
       GLX.draw(body, tmpMat, paint);
-      drawPlayerWheels(c, tmpMat, dt, { roughness: 0.85, metalness: 0.0, specular: 0.12, emissive: night ? 0.12 : 0 });
+      drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0 });
     } else {
       GLX.draw(teamMesh(c.team), tmpMat, paint);
+    }
+    // FIA rain-light strobe: every car flashes its rear LED in the wet (~4 Hz,
+    // 55% duty). Overlaid on the baked LED panel; the HDR-red quad blooms.
+    if (wet && ((raceT * 4.4) % 1) < 0.55) {
+      const W = _ringWorld;
+      W.set(tmpMat);
+      W[12] += W[4] * 0.50 - W[8] * 2.60;
+      W[13] += W[5] * 0.50 - W[9] * 2.60;
+      W[14] += W[6] * 0.50 - W[10] * 2.60;
+      GLX.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0 });
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;

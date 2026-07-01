@@ -51,7 +51,8 @@ uniform float uRoughness;
 uniform float uMetalness;
 uniform float uSpecular;
 uniform float uDetail;
-uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specular lobe + env fresnel
+uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specular lobe
+uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
 uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
@@ -245,6 +246,16 @@ void main() {
     f0 = mix(f0, vec3(0.04), wet * 0.6);
   }
 
+  // ── Car paint: DEEP RICH PIGMENT under real scene light ────────────────────
+  // The researched formula for glossy paint: dark saturated albedo + strong
+  // crisp specular CONTRAST, lit by the actual sun/shadow (a studio/matcap
+  // term ignores scene lighting and reads pasted-on/ghostly — removed). The
+  // gamma-deepen saturates the mids and darkens slightly — the livery cannot
+  // bleach — and a gentle grazing duotone darkens the flanks like deep gloss.
+  if (uCarPaint > 0.001) {
+    albedo = mix(albedo, pow(albedo, vec3(1.40)) * 1.05, 0.75 * uCarPaint);
+  }
+
   vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
 
   // Combine the hard shadow map with soft drifting cloud shadows: the sun is
@@ -308,11 +319,11 @@ void main() {
     // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
     // car bodies at night, over the softer base-coat highlight.
     if (uClearcoat > 0.001) {
-      float Dcc = D_GGX(NoHl, 0.01);
+      float Dcc = D_GGX(NoHl, 0.03);
       float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
       float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
       vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * uClearcoat;
-      color += ccl / (1.0 + ccl);
+      color += 2.2 * ccl / (2.2 + ccl);
     }
   }
 
@@ -326,17 +337,40 @@ void main() {
 
   // Clearcoat: a second, fixed-low-roughness specular lobe over the base coat —
   // the thin lacquer shell of automotive paint. It keeps a crisp sun highlight
-  // and sky reflection even where the base coat is rougher, which is what gives
-  // cars their glossy showroom read.
+  // even where the base coat is rougher, which is what gives cars their glossy
+  // showroom read. The bodywork is smooth-shaded (car3d.js lofts), so the lobe
+  // sweeps across the curved panels per-pixel instead of flashing whole facets.
   if (uClearcoat > 0.001) {
-    float ccA = 0.01;                            // clearcoat roughness 0.1
+    // Roughness ~0.19 (a=0.035): wide enough that the streak is VISIBLE sweeping
+    // the curved panels (at 0.1 the cone is ~2 degrees — sub-pixel, reads matte).
+    // Soft-clipped to a 2.6 HDR ceiling instead of 1.0: the hot core punches past
+    // the bloom threshold, so the highlight GLOWS — the actual "shiny" cue.
+    float ccA = 0.035;
     float Dc = D_GGX(NoH, ccA);
     float Vc = V_SmithGGX(NoV, NoL, ccA);
     float Fc = F_Schlick(VoH, vec3(0.05), 1.0).x;
     vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * litNoL * uClearcoat;
-    ccCol = ccCol / (1.0 + ccCol);
+    ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color += ccCol;
+
   }
+
+  // ── Car paint: PER-FACET environment mirror ─────────────────────────────────
+  // The bodywork is flat-shaded chiseled panels (car3d.js), so this reflection
+  // resolves to ONE clean tone per panel — sky tint on up-angled decks, dark
+  // ground tone on flanks — and whole panels FLASH as the camera or car turns:
+  // the low-poly facet glint. Blended (never added) so it is energy-conserving
+  // and cannot bleach; 45% tinted by the paint so the livery survives, and the
+  // weight rises toward grazing like real Fresnel.
+  if (uCarPaint > 0.001) {
+    float fhoriz = smoothstep(-0.05, 0.08, Rv.y);
+    vec3 fsky = mix(uSkyHorizon, uSkyZenith, pow(max(Rv.y, 0.0), 0.5));
+    vec3 fenv = clamp(mix(uFogColor * 0.40, fsky, fhoriz), vec3(0.0), vec3(1.3));
+    vec3 ftint = mix(fenv, fenv * albedo * 1.9, 0.70);
+    float fw = (0.10 + 0.55 * pow(1.0 - NoV, 3.0)) * uCarPaint * 0.45;
+    color = mix(color, ftint * (0.35 + 0.65 * litNoL + 0.5 * dot(amb, vec3(1.0))), fw);
+  }
+
 
   // Environment reflection: when roughness is very low (wet road / glossy paint),
   // sample the sky gradient in the reflected view direction.
@@ -345,7 +379,6 @@ void main() {
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
   envBlend = max(envBlend, wet * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
-  envBlend = max(envBlend, uClearcoat * 0.5);   // lacquer shell always mirrors the sky
   if (envBlend > 0.001) {
     vec3 R = Rv;
     // Lower exponent shows more of the horizon→zenith gradient in the reflection
@@ -835,6 +868,59 @@ void main() {
   s += texture(uTex, vUV + o2).rgb * 0.0702702703;
   s += texture(uTex, vUV - o2).rgb * 0.0702702703;
   outColor = vec4(s, 1.0);
+}`;
+
+  // Mip-chain bloom downsample: 13-tap filter (Jimenez, SIGGRAPH 2014 "Next
+  // Generation Post Processing in Call of Duty") — a wide, stable kernel that
+  // avoids the pulsing/shimmer a plain box chain shows on small bright sources
+  // (floodlights at distance, specular glints). uTexel = 1/source size.
+  const DOWN_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform vec2 uTexel;
+out vec4 outColor;
+void main() {
+  vec2 t = uTexel;
+  vec3 a = texture(uTex, vUV + t * vec2(-2.0,  2.0)).rgb;
+  vec3 b = texture(uTex, vUV + t * vec2( 0.0,  2.0)).rgb;
+  vec3 c = texture(uTex, vUV + t * vec2( 2.0,  2.0)).rgb;
+  vec3 d = texture(uTex, vUV + t * vec2(-2.0,  0.0)).rgb;
+  vec3 e = texture(uTex, vUV).rgb;
+  vec3 f = texture(uTex, vUV + t * vec2( 2.0,  0.0)).rgb;
+  vec3 g = texture(uTex, vUV + t * vec2(-2.0, -2.0)).rgb;
+  vec3 h = texture(uTex, vUV + t * vec2( 0.0, -2.0)).rgb;
+  vec3 i = texture(uTex, vUV + t * vec2( 2.0, -2.0)).rgb;
+  vec3 j = texture(uTex, vUV + t * vec2(-1.0,  1.0)).rgb;
+  vec3 k = texture(uTex, vUV + t * vec2( 1.0,  1.0)).rgb;
+  vec3 l = texture(uTex, vUV + t * vec2(-1.0, -1.0)).rgb;
+  vec3 m = texture(uTex, vUV + t * vec2( 1.0, -1.0)).rgb;
+  vec3 s = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625
+         + (j + k + l + m) * 0.125;
+  outColor = vec4(s, 1.0);
+}`;
+
+  // Mip-chain bloom upsample: 9-tap tent filter, drawn ADDITIVELY (ONE, ONE) into
+  // the next-larger level so every octave of blur accumulates — a wide, smooth,
+  // banding-free halo instead of the old single-octave gaussian's tight ring.
+  const UP_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform vec2 uTexel;
+out vec4 outColor;
+void main() {
+  vec2 t = uTexel;
+  vec3 s = texture(uTex, vUV + t * vec2(-1.0,  1.0)).rgb
+         + texture(uTex, vUV + t * vec2( 1.0,  1.0)).rgb
+         + texture(uTex, vUV + t * vec2(-1.0, -1.0)).rgb
+         + texture(uTex, vUV + t * vec2( 1.0, -1.0)).rgb
+         + (texture(uTex, vUV + t * vec2( 0.0,  1.0)).rgb
+          + texture(uTex, vUV + t * vec2( 0.0, -1.0)).rgb
+          + texture(uTex, vUV + t * vec2(-1.0,  0.0)).rgb
+          + texture(uTex, vUV + t * vec2( 1.0,  0.0)).rgb) * 2.0
+         + texture(uTex, vUV).rgb * 4.0;
+  outColor = vec4(s / 16.0, 1.0);
 }`;
 
   // SSAO: view-space horizon-style ambient occlusion from the depth texture.
@@ -1368,15 +1454,23 @@ void main() {}`;
   let postEnabled = false;
   let brightProg = null, brightU = null;
   let blurProg = null, blurU = null;
+  let downProg = null, downU = null, upProg = null, upU = null;
   let compProg = null, compU = null;
   let sceneFBO = null, sceneTex = null, sceneDepth = null;
-  let bloomFBO = [null, null], bloomTex = [null, null];
   let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
-  let bloomW = 0, bloomH = 0;
-  const BLOOM_DIV = 2;         // bloom buffers at half resolution
+  // Mip-chain bloom: progressive downsample levels (half res, /4, /8, …), then
+  // additive tent upsample back to level 0 — wide multi-octave glow.
+  const BLOOM_DIV = 2;         // level 0 at half resolution
+  const BLOOM_LEVELS_MAX = 5;
+  let bloomLv = [];            // [{fbo, tex, w, h}] — rebuilt on resize
+  // MSAA scene target: the geometry passes render into multisampled renderbuffers,
+  // resolved (blitFramebuffer) into sceneTex/sceneDepth before post — real edge AA
+  // on the HDR path, with FXAA left to clean up what the resolve misses.
+  let msaaSamples = 0;         // 0/1 = off (render straight into sceneFBO)
+  let msFBO = null, msColorRB = null, msDepthRB = null;
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
-  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1;
+  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1;
 
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
@@ -1453,14 +1547,29 @@ void main() {}`;
 
     brightProg = link(POST_VS, BRIGHT_FS);
     blurProg = link(POST_VS, BLUR_FS);
+    downProg = link(POST_VS, DOWN_FS);
+    upProg = link(POST_VS, UP_FS);
     compProg = link(POST_VS, COMPOSITE_FS);
     ssaoProg = link(POST_VS, SSAO_FS);
     godrayProg = link(POST_VS, GODRAY_FS);
     fxaaProg = link(POST_VS, FXAA_FS);
     if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
-    if (!brightProg || !blurProg || !compProg) return false;
+    if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
+    downU = locs(downProg, ["uTex", "uTexel"]);
+    upU = locs(upProg, ["uTex", "uTexel"]);
+    // MSAA: pick the sample count the HDR colour format actually supports (many
+    // mobile GPUs render RGBA16F but not multisampled RGBA16F — query, don't assume).
+    try {
+      const fmt = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
+      const cs = gl.getInternalformatParameter(gl.RENDERBUFFER, fmt, gl.SAMPLES);
+      const ds = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES);
+      const cMax = cs && cs.length ? cs[0] : 0;
+      const dMax = ds && ds.length ? ds[0] : 0;
+      msaaSamples = Math.min(4, cMax, dMax);
+      if (msaaSamples < 2) msaaSamples = 0;
+    } catch (e) { msaaSamples = 0; }
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
@@ -1510,15 +1619,37 @@ void main() {}`;
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sceneDepth, 0);
-    // bloom ping-pong targets (half res)
-    bloomW = Math.max(1, Math.floor(width / BLOOM_DIV));
-    bloomH = Math.max(1, Math.floor(height / BLOOM_DIV));
-    for (let i = 0; i < 2; i++) {
-      if (bloomTex[i]) gl.deleteTexture(bloomTex[i]);
-      if (!bloomFBO[i]) bloomFBO[i] = gl.createFramebuffer();
-      bloomTex[i] = mk(bloomW, bloomH);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[i]);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bloomTex[i], 0);
+    // MSAA scene target: multisampled colour + depth renderbuffers, resolved into
+    // sceneTex/sceneDepth at present(). Falls back silently (msaaSamples = 0) if
+    // the combo doesn't yield a complete FBO on this driver.
+    if (msaaSamples > 1) {
+      const internalD = gl.DEPTH_COMPONENT24;
+      if (msColorRB) gl.deleteRenderbuffer(msColorRB);
+      if (msDepthRB) gl.deleteRenderbuffer(msDepthRB);
+      if (!msFBO) msFBO = gl.createFramebuffer();
+      msColorRB = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, msColorRB);
+      gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internal, width, height);
+      msDepthRB = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, msDepthRB);
+      gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internalD, width, height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, msFBO);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msColorRB);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msDepthRB);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) msaaSamples = 0;
+    }
+    // bloom mip chain (half res, /4, /8, … — stop once a level gets tiny)
+    for (const lv of bloomLv) { if (lv.tex) gl.deleteTexture(lv.tex); if (lv.fbo) gl.deleteFramebuffer(lv.fbo); }
+    bloomLv = [];
+    let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
+    let bh = Math.max(1, Math.floor(height / BLOOM_DIV));
+    for (let i = 0; i < BLOOM_LEVELS_MAX && bw >= 8 && bh >= 8; i++) {
+      const tex = mk(bw, bh);
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      bloomLv.push({ fbo, tex, w: bw, h: bh });
+      bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
     }
     // SSAO targets (HALF res): raw AO + a blurred copy to denoise the 12-tap pass.
     // AO is low-frequency, so half-res + LINEAR upscale in the composite is ~75%
@@ -1618,7 +1749,7 @@ void main() {}`;
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uWetness",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
@@ -1746,9 +1877,10 @@ void main() {}`;
     frameGroundMist = frame.groundMist != null ? frame.groundMist : 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
-    // straight to the default framebuffer.
+    // straight to the default framebuffer. With MSAA the geometry goes into the
+    // multisampled renderbuffer, resolved into sceneTex/sceneDepth at present().
     if (postEnabled) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, msaaSamples > 1 ? msFBO : sceneFBO);
       gl.viewport(0, 0, width, height);
     }
     // Resync cached render state to GL defaults — depthMask must be on for the
@@ -1816,7 +1948,7 @@ void main() {}`;
         gl.uniform1fv(litU["uLightBleed[0]"], bleed);
       }
     }
-    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = -1;
+    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = -1;
   }
 
   function draw(mesh, modelMat, opts) {
@@ -1832,6 +1964,7 @@ void main() {}`;
     const specular = opts && opts.specular !== undefined ? opts.specular : 0.5;
     const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
     const clearcoat = opts && opts.clearcoat !== undefined ? opts.clearcoat : 0.0;
+    const carPaint = opts && opts.carPaint !== undefined ? opts.carPaint : 0.0;
     if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
     if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
     if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
@@ -1839,6 +1972,7 @@ void main() {}`;
     if (specular  !== _matSpec)     { gl.uniform1f(litU.uSpecular,  specular);  _matSpec     = specular; }
     if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
     if (clearcoat !== _matCC)       { gl.uniform1f(litU.uClearcoat, clearcoat); _matCC       = clearcoat; }
+    if (carPaint  !== _matCP)       { gl.uniform1f(litU.uCarPaint,  carPaint);  _matCP       = carPaint; }
     // Each draw declares the full render state it needs (no restores afterwards),
     // so runs of same-state draws collapse to a single real toggle via the cache.
     setDepthMask(true);
@@ -1953,6 +2087,7 @@ void main() {}`;
     const specular = opts && opts.specular !== undefined ? opts.specular : 0.5;
     const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
     const clearcoat = opts && opts.clearcoat !== undefined ? opts.clearcoat : 0.0;
+    const carPaint = opts && opts.carPaint !== undefined ? opts.carPaint : 0.0;
     if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
     if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
     if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
@@ -1960,6 +2095,7 @@ void main() {}`;
     if (specular  !== _matSpec)     { gl.uniform1f(litU.uSpecular,  specular);  _matSpec     = specular; }
     if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
     if (clearcoat !== _matCC)       { gl.uniform1f(litU.uClearcoat, clearcoat); _matCC       = clearcoat; }
+    if (carPaint  !== _matCP)       { gl.uniform1f(litU.uCarPaint,  carPaint);  _matCP       = carPaint; }
     setDepthMask(true);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
@@ -2105,6 +2241,16 @@ void main() {}`;
     const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
     const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
 
+    // MSAA resolve: average the multisampled scene into sceneTex (and copy depth
+    // into sceneDepth for SSAO/god-rays/SSR) before any post pass samples them.
+    if (msaaSamples > 1) {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msFBO);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFBO);
+      gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height,
+        gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
     // Fullscreen passes must overwrite (no blend) and write depth normally; draws
     // above leave state undeclared, so set what we need through the cache.
     setBlend(false);
@@ -2214,9 +2360,10 @@ void main() {}`;
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
-    // 1) bright-pass scene -> bloom[0] (half res)
-    gl.viewport(0, 0, bloomW, bloomH);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[0]);
+    // 1) bright-pass scene -> bloom level 0 (half res)
+    const nLv = bloomLv.length;
+    gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[0].fbo);
     useProg(brightProg);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
@@ -2224,19 +2371,36 @@ void main() {}`;
     gl.uniform1f(brightU.uThreshold, threshold);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // 2) separable gaussian blur, a couple of ping-pong passes
-    useProg(blurProg);
-    gl.uniform1i(blurU.uTex, 0);
-    const passes = [[1 / bloomW, 0], [0, 1 / bloomH]];
-    let src = 0;
-    for (const [dx, dy] of passes) {
-      const dst = 1 - src;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBO[dst]);
-      gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
-      gl.uniform2f(blurU.uDir, dx, dy);
+    // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
+    //    then additive 9-tap tent upsample back up — each level contributes one
+    //    octave of blur, so bright sources get a tight core AND a wide soft halo.
+    useProg(downProg);
+    gl.uniform1i(downU.uTex, 0);
+    for (let i = 1; i < nLv; i++) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i].fbo);
+      gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
+      gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
+      gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      src = dst;
     }
+    useProg(upProg);
+    gl.uniform1i(upU.uTex, 0);
+    for (let i = nLv - 1; i >= 1; i--) {
+      // Intermediate levels accumulate (ONE, ONE) so every octave sums; the FINAL
+      // pass into level 0 OVERWRITES instead — level 0 still holds the sharp
+      // unblurred bright-pass, and adding onto it would re-inject the scene's
+      // bright areas at full sharpness (large lamp-lit surfaces wash out).
+      const last = i === 1;
+      setBlend(!last);
+      if (!last) gl.blendFunc(gl.ONE, gl.ONE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
+      gl.viewport(0, 0, bloomLv[i - 1].w, bloomLv[i - 1].h);
+      gl.bindTexture(gl.TEXTURE_2D, bloomLv[i].tex);
+      gl.uniform2f(upU.uTexel, 1 / bloomLv[i].w, 1 / bloomLv[i].h);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    setBlend(false);
 
     // 3) composite — to the LDR target when FXAA is on (it resolves to screen),
     //    else straight to the screen.
@@ -2248,9 +2412,12 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(compU.uScene, 0);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, bloomTex[src]);
+    gl.bindTexture(gl.TEXTURE_2D, bloomLv[0].tex);
     gl.uniform1i(compU.uBloom, 1);
-    gl.uniform1f(compU.uBloomAmt, bloomAmt);
+    // Normalise the mip-chain accumulation (level 0 holds nLv-1 summed blur
+    // octaves) so the hand-tuned per-time-of-day bloom amounts keep their overall
+    // energy — same brightness budget, spread over a wider, smoother halo.
+    gl.uniform1f(compU.uBloomAmt, bloomAmt * 1.25 / Math.max(nLv - 1, 1));
     // AO: post-blur result is in ssaoTex; when AO is off bind a white 1×1 so the
     // shader's `c *= texture(uSSAO).r` is a no-op.
     gl.activeTexture(gl.TEXTURE2);
@@ -2375,12 +2542,13 @@ void main() {}`;
     shadowEnd() {
       if (!shadowEnabled) return;
       gl.enable(gl.CULL_FACE);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? sceneFBO : null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       gl.viewport(0, 0, width, height);
     },
     get width() { return width; },
     get height() { return height; },
     get aspect() { return aspect; },
     hdrMode: () => colorType === gl.HALF_FLOAT,
+    msaa: () => msaaSamples,
   };
 })();
