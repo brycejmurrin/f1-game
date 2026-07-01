@@ -5,18 +5,27 @@ Pure JS/CSS/HTML, **no build step, no dependencies**. Served as static files
 (script tags in `index.html`):
 
 ```
-js/mat4.js     -> M4, V3
-js/glx.js      -> GLX        (WebGL2 renderer)
-js/teams.js    -> Teams      (2026 grid data)
-js/tracks/*.js -> TrackDefs   (one file per circuit; registers itself on the list)
-js/tracks.js   -> Tracks     (engine: spline + meshes; reads TrackDefs)
-js/car3d.js    -> Car3D      (procedural F1 car geometry)
-js/input.js    -> Input      (keyboard / touch / tilt)
-js/audio.js    -> GameAudio  (WebAudio synth: engine, sfx, music)
-js/api.js      -> F1API      (Jolpica + OpenF1 clients, cached)
-js/data.js     -> DataHub    (data hub DOM overlay)
-js/game.js     -> (main, self-executing)
+js/mat4.js      -> M4, V3
+js/glx.js       -> GLX          (WebGL2 renderer)
+js/gltf.js      -> GLTF         (binary .glb loader -> {pos,nrm,col,idx})
+js/teams.js     -> Teams        (2026 grid data)
+js/circuits.js  -> CircuitPaths (real circuit centrelines from OSM traces)
+js/tracks/*.js  -> TrackDefs    (one file per circuit; registers itself on the list)
+js/tracks.js    -> Tracks       (engine: spline + meshes; reads TrackDefs)
+js/trackmaps.js -> TrackMaps    (offline 2D circuit outlines for the track picker)
+js/car3d.js     -> Car3D        (procedural F1 car geometry)
+js/input.js     -> Input        (keyboard / gamepad / touch / tilt)
+js/audio.js     -> GameAudio    (WebAudio synth: engine, sfx, music)
+js/api.js       -> F1API        (Jolpica + OpenF1 clients, cached)
+js/data.js      -> DataHub      (data hub DOM overlay)
+js/parts.js     -> Parts        (upgrade catalog: 8 categories, budget, stat mods)
+js/ghost.js     -> Ghost        (time-trial ghost-lap recorder/replay data layer)
+js/game.js      -> (main, self-executing; public surface is window.__apex)
 ```
+
+Full dependency graph + rules for adding a file: [MODULE-GRAPH.md](MODULE-GRAPH.md).
+localStorage key reference: [STORAGE-SCHEMA.md](STORAGE-SCHEMA.md).
+Section-by-section map of game.js: [GAME-JS-MAP.md](GAME-JS-MAP.md).
 
 Conventions: `const` + `camelCase`, constants `UPPER_CASE`, colors are
 `[r,g,b]` floats 0–1, angles in radians, distances in meters, world space is
@@ -77,6 +86,19 @@ Depth test LEQUAL, backface culling CCW, `alpha:false, antialias:true`
 context. The lit fragment shader fades to `fogColor` with
 `1-exp(-(d*fogDensity)^2)`.
 
+## js/gltf.js — `GLTF`
+
+Self-contained binary glTF 2.0 (`.glb`) parser. Bakes a model down to the plain
+mesh data `GLX.createMesh` expects — vertex-colour only (no textures/UVs; each
+material's `baseColorFactor` and any `COLOR_0` attribute is baked into per-vertex
+colour), all primitives merged, node transforms applied.
+
+```
+GLTF.parseGLB(arrayBuffer) -> { json, bin }
+GLTF.toMesh(glb)           -> { pos, nrm, col, idx }
+GLTF.load(url)             -> Promise<mesh data>
+```
+
 ## js/teams.js — `Teams`
 
 2026 grid, hardcoded.
@@ -92,6 +114,13 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
+
+## js/circuits.js — `CircuitPaths`
+
+Data-only: real circuit centrelines projected from OpenStreetMap traces
+(bacinger/f1-circuits, ODbL). `CircuitPaths[id] = { len, pts: [[x,z], …] }` —
+metres, recentred, one open lap. `Tracks.build` snaps a track def to its real
+trace when present.
 
 ## js/tracks/<id>.js — `TrackDefs` (circuit data)
 
@@ -164,6 +193,18 @@ ground rather than the closed-form `groundYAt` estimate — no floating/sunk pro
 A whole-circuit audit (`tests/terrain-over-road.spec.js`) asserts nothing renders
 over the racing line; large road-over-road overs are ignored as intentional
 crossovers (Suzuka figure-8).
+
+## js/trackmaps.js — `TrackMaps`
+
+Offline 2D circuit outlines for the track picker — builds each circuit's
+centreline with the game's own spline engine (no race, no network) and caches
+the normalised minimap polyline + detected corners per track id.
+
+```
+TrackMaps.outline(id)    -> [[x,y], …] normalised    TrackMaps.corners(id)
+TrackMaps.direction(id)  TrackMaps.drsZones(id)      TrackMaps.elevRange(id)
+TrackMaps.elevProfile(id) TrackMaps.themeColor(id)   TrackMaps.draw(ctx, id, opts)
+```
 
 ## js/car3d.js — `Car3D`
 
@@ -248,6 +289,32 @@ Team color chips use `Teams.LIST` colors matched by name substring.
 DataHub.init(rootEl)   DataHub.open()   DataHub.close()   DataHub.isOpen() -> bool
 ```
 Styles in `css/data.css` only (prefix all classes `dh-`).
+
+## js/parts.js — `Parts`
+
+Upgrade catalog: 8 categories (`engine, aero, suspension, brakes, tyres, ers,
+gearbox, fuel`), budget 600 cr (`apex26.unlimitedBudget` removes the cap).
+Supplier-exclusive options only shown when `team.engine` matches.
+
+```
+Parts.CATALOG   Parts.DEFAULTS   Parts.BUDGET
+Parts.getMods(setup, teamEngine) -> { speed, accel, cornering, braking }
+Parts.getCost(setup)             Parts.statMult(stat)
+```
+
+## js/ghost.js — `Ghost`
+
+Pure data layer for the time-trial ghost car: records the player's lap as
+parallel `(t, s, x)` arrays, persists the best per track in localStorage
+(`apex_ghost_v1` — note: NOT `apex26.`-prefixed), and answers "where is the
+ghost at lap-time t". game.js owns the drawing. Also loadable under Node
+(`module.exports`) for unit tests.
+
+```
+Ghost.setTrack(id)  Ghost.setEnabled(b)  Ghost.startLap()  Ghost.record(t, s, x)
+Ghost.finishLap(t)  Ghost.at(t)          Ghost.timeAt(s)   Ghost.hasGhost()
+Ghost.bestTime()    Ghost.clear()
+```
 
 ## js/game.js — main
 
