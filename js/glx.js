@@ -501,7 +501,10 @@ void main() {
     vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0));
     color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
   }
-  outColor = vec4(color, uAlpha);
+  // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
+  // channel is free): the composite SSR pass reflects the real world on car
+  // bodywork every frame — the same world-mirror the wet road gets.
+  outColor = vec4(color, uCarPaint > 0.001 ? 0.35 : uAlpha);
 }`;
 
   const SKY_VS = `#version 300 es
@@ -1240,7 +1243,10 @@ void main() {
   // Cheap early-out: the sky sits at the far plane and the upper screen is never
   // wet road — skip the costly position/normal reconstruction + march there.
   // Guarded so dry/day frames (uReflect 0, uDepth unbound) never sample depth.
-  if (uReflect > 0.001 && texture(uDepth, vUV).r < 0.9999 && vUV.y < 0.62) {
+  // Car-paint pixels (alpha tag < 0.5) reflect the world in EVERY session —
+  // dry or wet — through the same march as the wet road.
+  float carPx = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
+  if ((uReflect > 0.001 || carPx > 0.3) && texture(uDepth, vUV).r < 0.9999 && vUV.y < 0.62) {
     vec3 P = ssrViewPos(vUV);
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
     // the road-mask + march thickness test reject the bad cases).
@@ -1256,7 +1262,13 @@ void main() {
     float roadMask = smoothstep(0.55, 0.85, upDot)
                    * smoothstep(-2.5, -7.0, P.z)
                    * (1.0 - smoothstep(-22.0, -55.0, P.z));
-    if (roadMask > 0.001) {
+    // Car bodywork: up-facing-ish panels, allowed much nearer than the road
+    // (the chase camera sits ~5-8 m behind the car).
+    float carMask = carPx * smoothstep(0.30, 0.65, upDot)
+                  * smoothstep(-1.0, -3.0, P.z)
+                  * (1.0 - smoothstep(-22.0, -55.0, P.z));
+    float ssrGate = max(roadMask * uReflect, carMask * 0.55);
+    if (ssrGate > 0.001) {
       vec3 V = normalize(-P);
       vec3 R = reflect(-V, Nv);                    // points up toward the city
       // Finer refined march: small fixed steps (dense near/mid) so small/distant
@@ -1316,7 +1328,7 @@ void main() {
       // Mirror-like: a high base reflectance (so mid/near tarmac mirrors too, not
       // just the grazing band) with a gentle Fresnel lift toward the horizon.
       float fres = pow(1.0 - max(dot(Nv, V), 0.0), 3.0);
-      float strength = roadMask * uReflect * (0.55 + 0.42 * fres);
+      float strength = ssrGate * (0.55 + 0.42 * fres);
       float mixAmt = clamp(strength * cover, 0.0, 0.94);   // near-mirror, keeps a hint of asphalt
       c = mix(c, c * 0.10 + reflCol * 0.92, mixAmt);
     }
@@ -2527,7 +2539,9 @@ void main() {}`;
     gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
     // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
     const reflStr = (opts && opts.reflect) || 0;
-    const haveRefl = reflStr > 0 && frameInvProj && frameProj && frameUpVS;
+    // SSR inputs bind every frame now — car paint reflects the world even in
+    // dry sessions (the shader's carPx tag gates the work to car pixels).
+    const haveRefl = frameInvProj && frameProj && frameUpVS;
     if (haveRefl) {
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
