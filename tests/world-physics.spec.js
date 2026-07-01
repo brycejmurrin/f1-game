@@ -120,7 +120,9 @@ test.describe("Apex 26 — world-space player physics", () => {
     await startRace(page);
     const r = await page.evaluate(() => {
       window.__apex.setInput({ steer: 0, throttle: true });
-      for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // ~10 s
+      // ~20 s: the grid feeds straight into Monza's first chicane, so the back
+      // of the 22-car field queues nearly stationary for the first ~10 s.
+      for (let i = 0; i < 1200; i++) window.__apex.step(1 / 60, 1);
       window.__apex.clearInput();
       const cars = window.__apex.cars();
       const ai = cars.filter((c) => !c.p);   // the player is hand-driven here

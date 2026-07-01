@@ -131,11 +131,11 @@ test.describe("wall contact penalty on open circuits", () => {
     expect(result.speedAfter).toBeLessThan(result.speedBefore);
   });
 
-  test("barrier contact on Monza triggers rescue faster than open air stop", async ({ page }) => {
+  test("stuck against a barrier rescues; deliberate parking does not", async ({ page }) => {
     await loadRace(page, "monza");
     const result = await page.evaluate(() => {
       window.__apex.headless(true);
-      // Scenario A: car stopped against wall (wallT path → stuck sooner)
+      // Scenario A: car pinned outside the road edge (offroad/wall path) rescues.
       window.__apex.reset(0.05, 0, 0);
       const obs0 = window.__apex.obs();
       window.__apex.jump(0.05, 0, obs0.wallR + 0.2);
@@ -144,7 +144,9 @@ test.describe("wall contact penalty on open circuits", () => {
         window.__apex.act({ steer: 1.0, throttle: false, brake: false }, 1 / 60, 1);
         if (window.__apex.physState().speed > 5) { wallRescueFrame = i; break; }
       }
-      // Scenario B: car stopped in middle of track (stoppedOnTrack path → raceT > 2 needed)
+      // Scenario B: a player who deliberately parks on track (no throttle) is
+      // NEVER auto-rescued — rescue while stopped requires the throttle to be
+      // pressed (the wedged-against-a-wall case). See the stuck logic in game.js.
       window.__apex.reset(0.05, 0, 0);
       let openRescueFrame = -1;
       for (let i = 0; i < 420; i++) {
@@ -154,9 +156,8 @@ test.describe("wall contact penalty on open circuits", () => {
       window.__apex.headless(false);
       return { wallRescueFrame, openRescueFrame };
     });
-    // Both rescues should eventually fire
-    expect(result.wallRescueFrame).toBeGreaterThan(0);
-    expect(result.openRescueFrame).toBeGreaterThan(0);
+    expect(result.wallRescueFrame).toBeGreaterThan(0);   // wall-pinned car recovered
+    expect(result.openRescueFrame).toBe(-1);             // parked car left alone
   });
 });
 
@@ -169,27 +170,36 @@ test.describe("rescue cooldown reset", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("reset() clears rescue grace so re-rescue fires within 6 s", async ({ page }) => {
-    await loadRace(page);
+    await loadRace(page, "monza");
     const rescued = await page.evaluate(() => {
       window.__apex.headless(true);
-      // First episode: let a rescue happen (sit stopped for ~5 s)
-      window.__apex.reset(0.3, 0, 0);
-      for (let i = 0; i < 360; i++) {   // 6 s
-        window.__apex.act({ steer: 0, throttle: false, brake: false }, 1 / 60, 1);
+      // Parking without throttle is deliberately never rescued, so both
+      // episodes use the wall-pinned (offroad) scenario, which is.
+      const pin = () => {
+        const o = window.__apex.obs();
+        window.__apex.jump(0.05, 0, o.wallR + 0.2);
+      };
+      // First episode: pin against the wall until the rescue fires (~3 s).
+      window.__apex.reset(0.05, 0, 0); pin();
+      let first = -1;
+      for (let i = 0; i < 420; i++) {
+        window.__apex.act({ steer: 1.0, throttle: false, brake: false }, 1 / 60, 1);
+        if (window.__apex.physState().speed > 5) { first = i; break; }
       }
-      // reset() — this must clear rescueLastT to -4
-      window.__apex.reset(0.3, 0, 0);
-      // Second episode: sit stopped again; with old bug this would be blocked by 4 s grace
-      let rescueHappened = false;
-      for (let i = 0; i < 420; i++) {   // 7 s window
-        window.__apex.act({ steer: 0, throttle: false, brake: false }, 1 / 60, 1);
-        const ps = window.__apex.physState();
-        if (ps.speed > 5) { rescueHappened = true; break; }   // rescue boosted speed
+      // reset() — this must clear rescueLastT so the 4 s grace doesn't linger.
+      window.__apex.reset(0.05, 0, 0); pin();
+      // Second episode: with the old bug the stale grace blocks accrual and the
+      // re-rescue can't fire this early.
+      let second = -1;
+      for (let i = 0; i < 360; i++) {   // 6 s window
+        window.__apex.act({ steer: 1.0, throttle: false, brake: false }, 1 / 60, 1);
+        if (window.__apex.physState().speed > 5) { second = i; break; }
       }
       window.__apex.headless(false);
-      return rescueHappened;
+      return { first, second };
     });
-    expect(rescued).toBe(true);
+    expect(rescued.first).toBeGreaterThan(0);
+    expect(rescued.second).toBeGreaterThan(0);
   });
 });
 
@@ -278,9 +288,11 @@ test.describe("AI banking grip on banked circuits", () => {
     await loadRace(page, "zandvoort");
     const result = await page.evaluate(() => {
       window.__apex.headless(true);
-      // Banked section is roughly at 0.65–0.75 (Arie Luyendijk turn)
+      // Banked section is roughly at 0.65–0.75 (Arie Luyendijk turn).
+      // ~20 s: the AI field launches from the grid, so it needs time to get up
+      // to racing speed before the average is meaningful.
       window.__apex.reset(0.65, 20, 0);
-      for (let i = 0; i < 480; i++) {  // 8 s
+      for (let i = 0; i < 1200; i++) {
         window.__apex.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 1);
       }
       window.__apex.headless(false);

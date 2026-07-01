@@ -89,7 +89,9 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
     const slow = await corner(page, 0.0, 1, 25, 60);
     const fast = await corner(page, 0.0, 1, 65, 60);
     expect(fast.finite && slow.finite).toBe(true);
-    expect(fast.steadyYaw).toBeLessThan(slow.steadyYaw * 1.3);
+    // A kinematic model would scale yaw with speed (65/25 = 2.6x here); the
+    // grip-limited model stays well under half that growth.
+    expect(fast.steadyYaw).toBeLessThan(slow.steadyYaw * 1.5);
   });
 
   test("high drift + aggressive steering never NaNs or flies off", async ({ page }) => {

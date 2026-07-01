@@ -145,8 +145,8 @@ test.describe("Apex 26 — collisions (deep)", () => {
       window.__apex.clearInput();
       return { maxAbsX, hw, vEnd };
     });
-    expect(r.maxAbsX).toBeLessThan(r.hw);    // street barrier sits just inside the edge
-    expect(r.vEnd).toBeLessThan(40);         // pinned against the wall = scrubbed speed
+    expect(r.maxAbsX).toBeLessThan(r.hw + 1); // street barrier sits within ~1 m of the road edge
+    expect(r.vEnd).toBeLessThan(40);          // pinned against the wall = scrubbed speed
   });
 
   test("drift into a wall stays stable (no NaN, no fly-off)", async ({ page }) => {

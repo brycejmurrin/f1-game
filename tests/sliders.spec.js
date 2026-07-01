@@ -97,7 +97,9 @@ test.describe("Apex 26 — steering sliders", () => {
     const playerTop = (paceSlider) => page.evaluate((sv) => {
       const el = document.getElementById("pm-pace");
       el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
-      window.__apex.jump(0.0, 0, 0);
+      // frac 0.80 = Monza's long straight; s=0 sits on the first chicane and a
+      // steer-locked car would (correctly) run off there.
+      window.__apex.jump(0.80, 0, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       for (let i = 0; i < 420; i++) window.__apex.step(1 / 60, 1);  // ~7 s
       const v = window.__apex.probe().speed;

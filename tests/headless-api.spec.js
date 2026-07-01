@@ -152,12 +152,16 @@ test.describe("__apex.obs()", () => {
     expect(obs.wallR).toBeGreaterThan(obs.x);
   });
 
-  test("wet weather sets gripMult to 0.72", async ({ page }) => {
+  test("wet weather sets gripMult to 0.82 (rain to 0.72)", async ({ page }) => {
+    // Weather was split into WET (damp, 0.82) and RAIN (storm, 0.72).
     await loadRace(page);
     await page.evaluate(() => window.__apex.weather("wet"));
-    const obs = await page.evaluate(() => window.__apex.obs());
-    expect(obs.gripMult).toBeCloseTo(0.72, 2);
+    let obs = await page.evaluate(() => window.__apex.obs());
+    expect(obs.gripMult).toBeCloseTo(0.82, 2);
     expect(obs.weather).toBe("wet");
+    await page.evaluate(() => window.__apex.weather("rain"));
+    obs = await page.evaluate(() => window.__apex.obs());
+    expect(obs.gripMult).toBeCloseTo(0.72, 2);
   });
 });
 
