@@ -2089,9 +2089,12 @@ function updateCar(c, dt, ranked) {
   c.pitchVis = damp(c.pitchVis ?? 0, pitchTarget, 5, dt);
   // Brake-disc heat (render-only): glows up while braking at speed, cools after.
   // Drives the emissive brake-glow rings on the player's wheels.
-  if (c.isPlayer) {
+  {
+    // ALL cars (the AI brake into corners too — a field of glowing discs).
     const heating = braking && c.speed > 12;
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
+  }
+  if (c.isPlayer) {
     // Exhaust glow (render-only): rises on throttle, dies quickly off it.
     c.exhaustPop = clamp((c.exhaustPop || 0) + (onThrottle && c.speed > 8 ? dt * 5 : -dt * 7), 0, 1);
   }
@@ -3031,6 +3034,23 @@ function render(dt) {
       drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0 });
     } else {
       GLX.draw(teamMesh(c.team), tmpMat, paint);
+      // AI brake glow: rings at the four baked wheel positions (outer face).
+      const aiHeat = c.brakeHeat || 0;
+      if (aiHeat > 0.08) {
+        for (let w = 0; w < WHEELS.length; w++) {
+          const wd = WHEELS[w];
+          const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.015);
+          const W = _ringWorld;
+          W.set(tmpMat);
+          W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
+          W[13] += W[1] * tx + W[5] * wd.y + W[9] * wd.z;
+          W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
+          GLX.draw(getBrakeRing(), W, {
+            emissive: 0.30 + 0.70 * aiHeat, roughness: 0.9, specular: 0,
+            alpha: Math.min(1, 0.25 + aiHeat * 0.9),
+          });
+        }
+      }
     }
     // FIA rain-light strobe: every car flashes its rear LED in the wet (~4 Hz,
     // 55% duty). Overlaid on the baked LED panel; the HDR-red quad blooms.

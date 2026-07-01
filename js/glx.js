@@ -224,7 +224,7 @@ void main() {
   float carDeck = 0.0;
   if (uCarPaint > 0.001) {
     carDeck = smoothstep(0.55, 0.85, N.y) * pow(1.0 - NoV, 2.0) * uCarPaint;
-    albedo *= 1.0 - carDeck * 0.45;
+    albedo *= 1.0 - carDeck * 0.38;   // slightly softened: the SSR world-mirror stacks on decks
   }
   // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
   // world position, so flat asphalt/concrete/grass read as a surface rather than
@@ -386,8 +386,6 @@ void main() {
     vec3 addD = envD * carDeck * 0.85;
     color += addD / (1.0 + addD);
   }
-
-
 
   // Environment reflection: when roughness is very low (wet road / glossy paint),
   // sample the sky gradient in the reflected view direction.

@@ -247,22 +247,35 @@ const Car3D = (function () {
     // --- Shark fin + engine-cover accent (flat, team accent colour) ---
     addBox(out, 0, 0.80, -1.20, 0.03, 0.34, 0.85, c2);
 
-    // --- Front wing: main plane + 2 flaps + endplates + dive planes (flat) ---
-    addBox(out, 0, 0.10, 2.46, 1.78, 0.040, 0.50, c2);   // main plane
-    addBox(out, 0, 0.17, 2.36, 1.72, 0.030, 0.30, c2);   // flap 1
-    addBox(out, 0, 0.23, 2.25, 1.65, 0.025, 0.22, c2);   // flap 2
+    // --- Front wing: ANGLED wedge elements in the block language — thin
+    // leading edges rising to thicker trailing edges (real attack angle),
+    // swept endplates that grow rearward, and nose pylons so the wing hangs
+    // from the nose instead of floating. ---
+    addSpan(out, { z: 2.64, y: 0.070, w: 1.80, h: 0.028 },
+                 { z: 2.28, y: 0.105, w: 1.76, h: 0.048 }, c2);   // main plane
+    addSpan(out, { z: 2.36, y: 0.135, w: 1.70, h: 0.024 },
+                 { z: 2.12, y: 0.200, w: 1.66, h: 0.036 }, c2);   // flap 1
+    addSpan(out, { z: 2.20, y: 0.220, w: 1.60, h: 0.022 },
+                 { z: 2.00, y: 0.285, w: 1.56, h: 0.030 }, c2);   // flap 2
     for (const s of [-1, 1]) {
-      addBox(out, s*0.89, 0.19, 2.46, 0.04, 0.27, 0.56, c2); // endplate
-      addBox(out, s*0.72, 0.19, 2.42, 0.04, 0.23, 0.44, c2); // inner dive plane
+      addSpan(out, { z: 2.62, x: s*0.895, y: 0.155, w: 0.035, h: 0.22 },
+                   { z: 2.02, x: s*0.925, y: 0.215, w: 0.035, h: 0.35 }, c2); // swept endplate
+      addSpan(out, { z: 2.50, x: s*0.72, y: 0.145, w: 0.030, h: 0.16 },
+                   { z: 2.16, x: s*0.74, y: 0.215, w: 0.030, h: 0.24 }, c2);  // dive plane
+      addBox(out, s*0.10, 0.20, 2.44, 0.05, 0.17, 0.16, c1);                  // nose pylon
     }
 
     // --- Rear wing: tall endplates + 2-element plane + beam wing (flat) ---
     for (const s of [-1, 1]) {
       addBox(out, s*0.50, 0.82, -2.42, 0.05, 0.62, 0.52, DARK);
     }
-    addBox(out, 0, 1.04, -2.52, 1.02, 0.055, 0.30, c2); // upper element
-    addBox(out, 0, 0.93, -2.46, 1.02, 0.045, 0.24, c2); // mid element
-    addBox(out, 0, 0.83, -2.40, 1.02, 0.040, 0.20, c1); // lower element
+    // Angled rear-wing elements (leading edge low/forward → trailing high/back)
+    addSpan(out, { z: -2.38, y: 1.005, w: 1.02, h: 0.035 },
+                 { z: -2.64, y: 1.075, w: 1.02, h: 0.050 }, c2);  // upper element
+    addSpan(out, { z: -2.34, y: 0.900, w: 1.02, h: 0.030 },
+                 { z: -2.56, y: 0.955, w: 1.02, h: 0.042 }, c2);  // mid element
+    addSpan(out, { z: -2.30, y: 0.805, w: 1.02, h: 0.028 },
+                 { z: -2.50, y: 0.850, w: 1.02, h: 0.038 }, c1);  // lower element
     addBox(out, 0, 1.085, -2.52, 0.10, 0.05, 0.18, DARK); // DRS actuator pod
 
     // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
