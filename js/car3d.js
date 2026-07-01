@@ -4,11 +4,11 @@
  * Local space: +Z forward, +Y up, origin on the ground under the car center.
  * ~1.9 m wide, ~5.4 m long, ~0.95 m tall.
  *
- * The BODYWORK is BOXY and FLAT-SHADED: chiseled octagonal cross-sections
- * lofted into independent flat panels (top deck / shoulder / flank / underside)
- * so each panel catches one clean reflection tone and flashes as a unit — the
- * per-facet glint of the game's low-poly world style. Only the helmet dome and
- * tyre treads stay smooth-shaded (they are genuinely round).
+ * The car is HAND-MODELLED from chiseled hexahedron blocks — nose wedge,
+ * monocoque slab, cockpit collar, airbox trapezoid, engine-cover roof prism,
+ * undercut sidepod slabs — every face flat-shaded, so each panel catches one
+ * clean reflection tone and flashes as a unit (the low-poly facet glint that
+ * matches the game world). Only the helmet dome and tyre treads stay smooth.
  */
 "use strict";
 
@@ -59,47 +59,34 @@ const Car3D = (function () {
     addLoft(out, cz-sz/2, cx, cy, sx, sy, cz+sz/2, cx, cy, sx, sy, col);
   }
 
-  // ── Chiseled facet loft ─────────────────────────────────────────────────────
-  // BOXY, FLAT-SHADED bodywork: each cross-section is a chiseled octagon —
-  // flat top deck, angled shoulder, vertical flank, angled underside — and
-  // every face between stations is emitted as an independent flat-shaded quad
-  // (addQuad). Each panel has ONE normal, so it catches ONE clean reflection /
-  // specular tone and FLASHES as a unit when the camera or sun moves — the
-  // per-facet glint that defines the low-poly look and matches the game world.
-  // stations: FRONT (+Z) → REAR (−Z); each {z, x?, y, w, h, t?, b?} where t/b
-  // are the top/bottom deck widths as fractions of w.
-  function facetPts(st) {
-    const sx = st.x || 0, w2 = st.w / 2, h2 = st.h / 2;
-    const t = (st.t !== undefined ? st.t : 0.6) * w2, b = (st.b !== undefined ? st.b : 0.65) * w2;
-    const yU = st.y + h2 * 0.36, yL = st.y - h2 * 0.36;
+  // ── Hexahedron block ────────────────────────────────────────────────────────
+  // The car is HAND-MODELLED from chiseled blocks: each functional mass (nose
+  // wedge, monocoque slab, engine-cover prism, sidepod slab) is one 8-corner
+  // hexahedron with arbitrary corner positions — tapered wedges, undercuts and
+  // pinched ridges all come out of one primitive, every face flat-shaded.
+  // Corners: [FBL, FBR, FTR, FTL, RBL, RBR, RTR, RTL]  (F = +Z front, B/T =
+  // bottom/top, L/R = -x/+x). Degenerate corners (two at the same point) give
+  // wedges and prisms.
+  function addBlock(out, q, col, colFront) {
+    addQuad(out, q[0], q[1], q[2], q[3], colFront || col);  // front (+Z)
+    addQuad(out, q[5], q[4], q[7], q[6], col);              // rear  (−Z)
+    addQuad(out, q[3], q[2], q[6], q[7], col);              // top   (+Y)
+    addQuad(out, q[1], q[0], q[4], q[5], col);              // bottom(−Y)
+    addQuad(out, q[1], q[5], q[6], q[2], col);              // right (+X)
+    addQuad(out, q[0], q[3], q[7], q[4], col);              // left  (−X)
+  }
+  // Convenience: block from two rectangular end frames {z, x?, y, w, h, t?}
+  // where t narrows the TOP edge (t=0 → roof ridge / wedge).
+  function frame(f) {
+    const w2 = f.w / 2, tw = (f.t !== undefined ? f.t : 1) * w2, x = f.x || 0;
     return [
-      [sx + t,  st.y + h2, st.z], [sx + w2, yU, st.z], [sx + w2, yL, st.z], [sx + b,  st.y - h2, st.z],
-      [sx - b,  st.y - h2, st.z], [sx - w2, yL, st.z], [sx - w2, yU, st.z], [sx - t,  st.y + h2, st.z],
+      [x - w2, f.y - f.h / 2, f.z], [x + w2, f.y - f.h / 2, f.z],
+      [x + tw, f.y + f.h / 2, f.z], [x - tw, f.y + f.h / 2, f.z],
     ];
   }
-  function addFacetLoft(out, stations, col, caps) {
-    const NR = stations.length;
-    let prev = facetPts(stations[0]);
-    for (let r = 1; r < NR; r++) {
-      const cur = facetPts(stations[r]);
-      const cc = stations[r].col || stations[r - 1].col || col;
-      for (let f = 0; f < 8; f++) {
-        const g = (f + 1) % 8;
-        // Outward winding for front(+Z)→rear station order, CCW ring seen from +Z.
-        addQuad(out, prev[f], cur[f], cur[g], prev[g], cc);
-      }
-      prev = cur;
-    }
-    const cap = (st, colC, front) => {
-      const P = facetPts(st), C = [st.x || 0, st.y, st.z];
-      for (let f = 0; f < 8; f++) {
-        const g = (f + 1) % 8;
-        if (front) addTri(out, C, P[f], P[g], colC);
-        else       addTri(out, C, P[g], P[f], colC);
-      }
-    };
-    if (caps && caps.start) cap(stations[0], caps.start, true);
-    if (caps && caps.end)   cap(stations[NR - 1], caps.end, false);
+  function addSpan(out, front, rear, col, colFront) {
+    const F = frame(front), R = frame(rear);
+    addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront);
   }
 
   // Smooth dome (helmet): partial lat-long sphere, analytic normals.
@@ -184,40 +171,48 @@ const Car3D = (function () {
     // --- Floor plank (flat) ---
     addBox(out, 0, 0.07, -0.3, 1.5, 0.06, 3.2, CARBON);
 
-    // --- Fuselage: nose → monocoque → engine cover, ONE chiseled facet loft ---
-    addFacetLoft(out, [
-      { z:  2.75, y: 0.300, w: 0.07, h: 0.055, t: 0.55, b: 0.55 },  // nose tip
-      { z:  2.20, y: 0.300, w: 0.18, h: 0.13,  t: 0.58, b: 0.55 },
-      { z:  1.55, y: 0.320, w: 0.32, h: 0.24,  t: 0.60, b: 0.58 },
-      { z:  0.90, y: 0.350, w: 0.52, h: 0.40,  t: 0.62, b: 0.60 },  // cockpit bulkhead
-      { z:  0.30, y: 0.385, w: 0.62, h: 0.50,  t: 0.60, b: 0.62 },  // cockpit sides
-      { z: -0.35, y: 0.500, w: 0.60, h: 0.70,  t: 0.42, b: 0.62 },  // airbox spine
-      { z: -1.05, y: 0.460, w: 0.44, h: 0.52,  t: 0.40, b: 0.62 },
-      { z: -1.65, y: 0.420, w: 0.26, h: 0.32,  t: 0.45, b: 0.62 },
-      { z: -2.05, y: 0.380, w: 0.12, h: 0.16,  t: 0.50, b: 0.60 },  // tail
-    ], c1, { start: c1, end: DARK });
+    // --- Nose: one crisp tapered wedge, tip to bulkhead ---
+    addSpan(out, { z: 2.65, y: 0.30, w: 0.14, h: 0.09, t: 0.75 },
+                 { z: 1.05, y: 0.34, w: 0.46, h: 0.36, t: 0.80 }, c1);
 
-    // --- Sidepods: boxy chiseled slabs, dark radiator inlet at the front ---
+    // --- Monocoque: slab from bulkhead to cockpit ---
+    addSpan(out, { z: 1.05, y: 0.36, w: 0.46, h: 0.40, t: 0.80 },
+                 { z: 0.05, y: 0.40, w: 0.62, h: 0.50, t: 0.78 }, c1);
+
+    // --- Cockpit surround: raised collar, narrowing rearward ---
+    addSpan(out, { z: 0.05, y: 0.42, w: 0.62, h: 0.46, t: 0.72 },
+                 { z: -0.55, y: 0.44, w: 0.58, h: 0.50, t: 0.60 }, c1);
+
+    // --- Airbox: trapezoid block above the cockpit (dark intake front) ---
+    addSpan(out, { z: -0.28, y: 0.76, w: 0.30, h: 0.20, t: 0.55 },
+                 { z: -0.75, y: 0.74, w: 0.26, h: 0.18, t: 0.55 }, c1, INTAKE);
+
+    // --- Engine cover: roof-ridge prism sloping to the tail ---
+    addSpan(out, { z: -0.55, y: 0.52, w: 0.56, h: 0.62, t: 0.0 },
+                 { z: -2.00, y: 0.42, w: 0.26, h: 0.34, t: 0.0 }, c1, c1);
+
+    // --- Sidepods: rectangular slabs — angled inlet undercut, coke-bottle taper ---
     for (const s of [-1, 1]) {
-      addFacetLoft(out, [
-        { z:  0.70, x: s*0.37, y: 0.30, w: 0.12, h: 0.14, t: 0.72, b: 0.72 },
-        { z:  0.40, x: s*0.45, y: 0.31, w: 0.36, h: 0.32, t: 0.75, b: 0.80 },
-        { z: -0.15, x: s*0.47, y: 0.30, w: 0.40, h: 0.34, t: 0.72, b: 0.80 },
-        { z: -0.85, x: s*0.42, y: 0.27, w: 0.30, h: 0.26, t: 0.70, b: 0.80 },
-        { z: -1.50, x: s*0.30, y: 0.22, w: 0.13, h: 0.13, t: 0.70, b: 0.70 },
-      ], c1, { start: INTAKE, end: DARK });
+      addBlock(out, [
+        [s*0.30, 0.26, 0.55], [s*0.68, 0.26, 0.55], [s*0.68, 0.46, 0.62], [s*0.30, 0.46, 0.62],
+        [s*0.30, 0.10, -0.55], [s*0.70, 0.10, -0.55], [s*0.70, 0.44, -0.55], [s*0.30, 0.44, -0.55],
+      ], c1, INTAKE);
+      addBlock(out, [
+        [s*0.30, 0.10, -0.55], [s*0.70, 0.10, -0.55], [s*0.70, 0.44, -0.55], [s*0.30, 0.44, -0.55],
+        [s*0.24, 0.12, -1.45], [s*0.42, 0.12, -1.45], [s*0.42, 0.30, -1.45], [s*0.24, 0.30, -1.45],
+      ], c1);
       // Sponsor panel decal on the pod flank + floor edge accent strip
       addBox(out, s*0.665, 0.30, -0.12, 0.02, 0.18, 0.55, PANEL);
       addBox(out, s*0.60, 0.10, -0.10, 0.02, 0.08, 0.72, c2);
     }
 
     // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
-    addLoft(out, 1.60, 0, 0.446, 0.09, 0.022, 2.70, 0, 0.336, 0.05, 0.016, c2);
+    addLoft(out, 1.60, 0, 0.475, 0.09, 0.022, 2.66, 0, 0.352, 0.05, 0.016, c2);
     addBox(out, 0, 0.862, -0.42, 0.06, 0.04, 0.52, c2);
 
     // --- Nose number plate + camera pod (sit on the curved nose top) ---
-    addBox(out, 0, 0.383, 1.92, 0.18, 0.022, 0.40, PANEL);
-    addBox(out, 0, 0.435, 1.60, 0.06, 0.08, 0.15, DARK);
+    addBox(out, 0, 0.437, 1.92, 0.18, 0.022, 0.40, PANEL);
+    addBox(out, 0, 0.50, 1.55, 0.06, 0.08, 0.15, DARK);
 
     // --- Cockpit opening (dark) + halo + front pillar ---
     addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05]);

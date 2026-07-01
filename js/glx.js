@@ -216,6 +216,16 @@ void main() {
   float VoH = max(dot(V, H), 0.0);
 
   vec3 albedo = vCol;
+  // Car deck mirror, step 1 — the WET-ROAD recipe on the paint's up-facing
+  // panels: the reflective film ABSORBS first (darkened pigment, energy
+  // conserving) so the sky added below reads as a mirror on a dark gloss,
+  // not a milky layer. Fresnel²-concentrated: strong at grazing deck angles
+  // (chase camera), zero face-on; flanks keep pure livery colour.
+  float carDeck = 0.0;
+  if (uCarPaint > 0.001) {
+    carDeck = smoothstep(0.55, 0.85, N.y) * pow(1.0 - NoV, 2.0) * uCarPaint;
+    albedo *= 1.0 - carDeck * 0.45;
+  }
   // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
   // world position, so flat asphalt/concrete/grass read as a surface rather than
   // a solid slab. Multiplicative, so it darkens as much as it lightens.
@@ -364,6 +374,17 @@ void main() {
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color += ccCol;
 
+  }
+
+  // Car deck mirror, step 2 — the sky reflection over the darkened film,
+  // soft-clipped exactly like the wet road so a bright sky can never blow
+  // the deck to white. On the flat-shaded panels this resolves to one clean
+  // mirror tone per deck facet.
+  if (carDeck > 0.001) {
+    float skyTd = pow(max(Rv.y, 0.0), 0.40);
+    vec3 envD = mix(uSkyHorizon, uSkyZenith, skyTd);
+    vec3 addD = envD * carDeck * 0.85;
+    color += addD / (1.0 + addD);
   }
 
 
