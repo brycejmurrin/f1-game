@@ -662,7 +662,7 @@ function applyRaceSettings() {
       _cloudBase = 0.22;
       // Night: low exposure keeps the dark dark under ACES so the bright lamp
       // pools and lit windows punch through (raising exposure re-greys the night).
-      frame.exposure = 0.90;
+      frame.exposure = 0.86;
     } else if (raceTimeOfDay === "dawn") {
       // Pre-sunrise: deep teal-indigo zenith fading to a warm peach/rose horizon.
       // Sun is barely above the horizon — very low elevation, coming from the east.
@@ -819,7 +819,7 @@ function applyRaceSettings() {
       // tracks get a gentle lift; daytime green tracks sit near neutral.
       if (isNightSession) {
         // Low night exposure so the dark stays dark and the neon/floodlights punch.
-        frame.exposure = (_def.theme === "street_night") ? 0.90 : 0.96;
+        frame.exposure = (_def.theme === "street_night") ? 0.86 : 0.90;
       } else if (_def.theme === "desert") {
         // Daytime desert: very bright, slight exposure pull-back
         frame.exposure = 0.88;
@@ -2192,7 +2192,9 @@ function buildTrackLights(track) {
   let i = 0;
   // Saturated accent palette for "neon spill" lamps on city circuits — coloured
   // light washing off signage onto the street (magenta/cyan/lime/red-orange).
-  const NEON_SPILL = [[1.9, 0.25, 1.0], [0.25, 1.5, 1.7], [0.55, 1.7, 0.45], [1.7, 0.42, 0.22]];
+  // Kept PASTEL and dim — real signage spill is a subtle tint on the street, not
+  // a saturated paint-bucket pool.
+  const NEON_SPILL = [[1.35, 0.75, 1.1], [0.75, 1.15, 1.3], [0.9, 1.25, 0.85], [1.3, 0.85, 0.65]];
   for (let k = 0; k < n; k += stride, i++) {
     const side = (i % 2 === 0) ? 1 : -1;
     // The visible mast sits beyond the track edge (hw+6, see buildProps), but the
@@ -2212,20 +2214,33 @@ function buildTrackLights(track) {
     const pitStraight = frac < 0.045 || frac > 0.985;   // start/finish zone
     const kindRoll = lh(i + 71);
     let h = height, eMul = 1.0, coneIn, coneOut, pr, pg, pb, tintMix = 0.38;
+    // Per-type VOLUMETRIC weight: how strongly this lamp's beam shows in the air
+    // (flood banks throw hard shafts, street posts a soft halo, washers a gentle
+    // coloured glow). Carried in the light record as field 14.
+    let volW = 0.55;
     if (pitStraight) {
       // Broadcast flood bank: tall, cool white, tight hard beam, brightest.
-      h = height + 3; eMul = 1.55;
+      h = height + 3; eMul = 1.3; volW = 1.0;
       pr = 1.02; pg = 1.06; pb = 1.18; tintMix = 0.12;
       coneIn = 0.86; coneOut = 0.68;
-    } else if (street && kindRoll < 0.15) {
-      // Neon spill: low, wide, soft, SATURATED colour — signage washing the road.
+    } else if (street && kindRoll < 0.10) {
+      // EDGE WASHER: coloured signage light belongs on WALLS and verges, never on
+      // the racing line. A low pastel lamp at the track edge aimed OUTWARD washes
+      // the barrier/building side in colour while the road stays neutral.
       const nc = NEON_SPILL[Math.floor(lh(i + 5) * NEON_SPILL.length) % NEON_SPILL.length];
-      h = 7; eMul = 0.6;
-      pr = nc[0]; pg = nc[1]; pb = nc[2]; tintMix = 0.0;
-      coneIn = 0.68; coneOut = 0.30;
+      const wx0 = track.px[k] + track.rx[k] * (track.hw[k] + 2.5) * side;
+      const wy0 = track.py[k] + 4.5;
+      const wz0 = track.pz[k] + track.rz[k] * (track.hw[k] + 2.5) * side;
+      let wdx = track.rx[k] * side * 0.55, wdy = -0.83, wdz = track.rz[k] * side * 0.55;
+      const wdl = Math.hypot(wdx, wdy, wdz) || 1; wdx /= wdl; wdy /= wdl; wdz /= wdl;
+      const we = intensity * 0.30 * (4.5 * 4.5) * 0.55;
+      lights.push(wx0, wy0, wz0,
+        Math.max(0, nc[0]) * we, Math.max(0, nc[1]) * we, Math.max(0, nc[2]) * we,
+        16, wdx, wdy, wdz, 0.55, 0.05, 0.10, 0.35);
+      continue;
     } else if (!street && kindRoll < 0.08) {
       // Work lamp: a dimmer, orange aging bulb among the floods.
-      eMul = 0.55;
+      eMul = 0.55; volW = 0.4;
       pr = 1.38; pg = 0.74; pb = 0.30; tintMix = 0.2;
       coneIn = 0.78; coneOut = 0.52;
     } else {
@@ -2265,10 +2280,59 @@ function buildTrackLights(track) {
       Math.max(0, mg) * ePhys,
       Math.max(0, mb) * ePhys,
       radius,
-      ax, ay, az, coneIn, coneOut, bleed,
+      ax, ay, az, coneIn, coneOut, bleed, volW,
     );
   }
+  // START-GANTRY DOWNLIGHTS: a crisp white bar of light straight down over the
+  // start/finish line from the overhead gantry — marks the line the way
+  // broadcast lighting does.
+  {
+    const hwk = track.hw[0] || 7;
+    const ge = intensity * 1.15 * (8 * 8) * 0.55;
+    for (const lat of [-hwk * 0.55, 0, hwk * 0.55]) {
+      lights.push(
+        track.px[0] + track.rx[0] * lat, track.py[0] + 8, track.pz[0] + track.rz[0] * lat,
+        1.02 * ge, 1.05 * ge, 1.12 * ge,
+        26, 0, -1, 0, 0.92, 0.78, 0.06, 0.9);
+    }
+  }
   return lights;
+}
+
+// Car rain lights as REAL light sources after dark: the nearest few cars carry a
+// small red point light at the tail, so traffic reads as moving light sources —
+// a red glow trailing each car on the road surface.
+const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _tlSel = [];
+function appendCarTailLights() {
+  const L = frame.lights;
+  // frame.lights is always the per-frame copy (flicker copies every frame), so
+  // appending here never mutates the cached track set.
+  if (!L || L === track._lights || !player) return;
+  let budget = 32 - ((L.length / 14) | 0);
+  if (budget <= 0) return;
+  _tlSel.length = 0;
+  for (const c of cars) {
+    const ds = Math.abs(c.s - player.s);
+    const d = Math.min(ds, track.total - ds);
+    if (d < 160) _tlSel.push({ c, d });
+  }
+  _tlSel.sort((a, b) => a.d - b.d);
+  const nT = Math.min(_tlSel.length, Math.min(5, budget));
+  for (let j = 0; j < nT; j++) {
+    const c = _tlSel[j].c;
+    Tracks.sample(track, c.s, _tlSmp);
+    const tx = _tlSmp.t[0], tz = _tlSmp.t[2];
+    // rear-facing, tilted down: the glow lands on the road behind the car
+    let dx = -tx * 0.87, dy = -0.5, dz = -tz * 0.87;
+    const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+    L.push(
+      _tlSmp.p[0] + _tlSmp.r[0] * c.x - tx * 2.4,
+      _tlSmp.p[1] + 0.55,
+      _tlSmp.p[2] + _tlSmp.r[2] * c.x - tz * 2.4,
+      4.5, 0.14, 0.10,
+      8, dx, dy, dz, 0.5, -0.2, 0.12, 0.25);
+  }
 }
 
 // Cull the track light set to the nearest 48 to the camera and flatten into
@@ -2283,7 +2347,7 @@ function setFrameLights(eye, scale) {
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
   const sg = Array.isArray(scale) ? scale[1] : sr;
   const sb = Array.isArray(scale) ? scale[2] : sr;
-  const count = src.length / 13;
+  const count = src.length / 14;
   const out = _lightScaleBuf;
   // Per-lamp FLICKER, computed CPU-side each frame (zero shader cost): healthy
   // lamps barely breathe (±2%), the occasional aging tube visibly pulses (±10%).
@@ -2299,11 +2363,11 @@ function setFrameLights(eye, scale) {
   if (count <= 32) {
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
     out.length = 0;
-    for (let i = 0; i < src.length; i += 13) {
+    for (let i = 0; i < src.length; i += 14) {
       const f = fl(i);
       out.push(src[i], src[i+1], src[i+2],
         src[i+3] * sr * f, src[i+4] * sg * f, src[i+5] * sb * f, src[i+6],
-        src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12]);
+        src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13]);
     }
     frame.lights = out;
     return;
@@ -2313,7 +2377,7 @@ function setFrameLights(eye, scale) {
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
-    const o = i * 13, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
+    const o = i * 14, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
     const d = dx * dx + dy * dy + dz * dz;
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
@@ -2325,7 +2389,7 @@ function setFrameLights(eye, scale) {
     const o = buf[i].o;
     const f = fl(o);
     out.push(src[o], src[o+1], src[o+2], src[o+3] * sr * f, src[o+4] * sg * f, src[o+5] * sb * f,
-      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12]);
+      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13]);
   }
   frame.lights = out;
 }
@@ -2690,6 +2754,7 @@ function render(dt) {
     const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
     const floodScale = [lvl * (1 + warmth * 0.14), lvl, lvl * (1 - warmth * 0.22)];
     setFrameLights(camEye, floodScale);
+    appendCarTailLights();
   } else {
     frame.lights = null;
   }
@@ -2736,10 +2801,13 @@ function render(dt) {
   // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
   const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
   const _floodEmit =
-    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.92
+    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
         ? Math.min(0.70, 0.12 + 0.58 * clamp(1 - _sunY * 4, 0, 1))
         : 0;
+  // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
+  // light gets a visible halo (colored per lamp) without inflating bloom.
+  if (frame.lights) GLX.drawGlow(frame.lights, 0.20);
   if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: Math.min(0.80, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
@@ -2899,8 +2967,8 @@ function render(dt) {
     // city circuits (street/modern) get LESS bloom + a higher threshold so the
     // dense neon doesn't over-glow; open circuits keep more bloom for the lamps.
     const _neonCity = track.def.theme === "street_night" || track.def.theme === "modern";
-    _bloom = _neonCity ? 0.70 : 1.05;
-    _thresh = _neonCity ? 0.92 : 0.86;
+    _bloom = _neonCity ? 0.65 : 0.70;
+    _thresh = 0.93;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     // Higher threshold so the low sun + lifted exposure + stronger god-rays don't
@@ -2937,7 +3005,7 @@ function render(dt) {
   // Always a subtle beam glow whenever lamps are on (clear night air still
   // scatters a little), swelling with haze/rain into full volumetric shafts —
   // and coloured per lamp, so neon-spill lights throw coloured beams.
-  const _lampVol = frame.lights ? clamp(0.08 + 0.55 * _mist, 0, 0.55) : 0;
+  const _lampVol = frame.lights ? clamp(0.05 + 0.55 * _mist, 0, 0.55) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
@@ -2946,7 +3014,9 @@ function render(dt) {
   // wet road mirrors the world — buildings/barriers/cars by day, neon + glowing
   // lamp heads at night — on top of the in-shader sky env reflection. Driven purely
   // by wetness (road-mask + Fresnel + distance-fade in the shader guard it).
-  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : 0;
+  // Wet: full mirror. Dry night: a subtle sheen — clean racing tarmac still
+  // reflects the lamps/neon a little at grazing angles.
+  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : (frame.lights ? 0.16 : 0);
   // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.
@@ -5072,7 +5142,7 @@ window.__apex = {
     ambientGround: frame.ambientGround && frame.ambientGround.slice(),
     sunColor: frame.sunColor && frame.sunColor.slice(),
     exposure: frame.exposure != null ? frame.exposure : 1,
-    numLights: frame.lights ? frame.lights.length / 13 : 0,
+    numLights: frame.lights ? frame.lights.length / 14 : 0,
     sunY: frame.sunDir ? frame.sunDir[1] : null,
     builtNight: builtTrackNight, trackNight: track && track._night,
     floodEmit: track && track._night ? "dark-session" : "day-session",

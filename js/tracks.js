@@ -1696,7 +1696,7 @@ const Tracks = (function () {
       // — this is what turns flat dark boxes into a skyline that actually lights
       // up at night. Day glass stays a reflective blue-grey window panel.
       const winBase = opts.windowCol || opts.window || [1.0, 0.88, 0.55];
-      const HDR = 1.85;
+      const HDR = 1.55;
       const litGlass = [winBase[0] * HDR, winBase[1] * HDR, winBase[2] * HDR];
       const darkW = [0.05, 0.06, 0.11];                       // unlit pane at night
       // Day glazing: a muted, slightly-darker blue-grey window — desaturated so
@@ -2061,7 +2061,7 @@ const Tracks = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 2)) return;
       const pole = [0.13, 0.13, 0.15];
-      const lit = NIGHT ? [head[0] * 2.4, head[1] * 2.4, head[2] * 2.4]
+      const lit = NIGHT ? [head[0] * 1.9, head[1] * 1.9, head[2] * 1.9]
                         : [head[0] * 0.72, head[1] * 0.72, head[2] * 0.70];
       addCyl(out, a.c, 0.18, h, pole, 6, b);                                                 // column
       if (lstyle === "globe") {                                                              // heritage twin-globe
@@ -2244,7 +2244,7 @@ const Tracks = (function () {
         // HDR-bright lens at night so the floodlight reads as a glowing source AND
         // is mirrored by the wet-road SSR like neon/streetlamps (a real reflected
         // glow, not just the analytic pool). Painted housing by day.
-        const lens = NIGHT ? [1.5, 1.5, 1.45] : [1, 1, 0.95];
+        const lens = NIGHT ? [1.18, 1.18, 1.14] : [1, 1, 0.95];
         addBox(out, [px[k] + r[0] * o, py[k] + 8.6, pz[k] + r[2] * o], [3, 1, 1.4], lens, [r, [0, 1, 0], [track.tx[k], 0, track.tz[k]]]);
       }
     });

@@ -288,7 +288,7 @@ void main() {
     // …but the REFLECTION doesn't: the glowing lens itself is visible from far
     // outside the beam, so a wet road streaks beneath every lamp you can see —
     // not only inside its illumination cone. Specular keeps a high floor.
-    float spotS = mix(0.45, 1.0, beam);
+    float spotS = mix(0.28, 1.0, beam);
     float NoLl = max(dot(N, Ld), 0.0);
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
@@ -414,7 +414,9 @@ void main() {
     // Push the glow well PAST 1.0 (HDR) so lit windows / neon / lamp lenses read
     // as actual light SOURCES — they punch through the dark and bloom into halos,
     // instead of sitting as flat bright paint.
-    color += albedo * glow * 3.2;
+    // HDR push kept moderate (was 3.2): windows/heads GLOW, they don't glare —
+    // the night energy budget lives or dies on this multiplier.
+    color += albedo * glow * 2.3;
   }
 
   // Height-based fog: density falls off exponentially with altitude above eye level.
@@ -928,13 +930,14 @@ uniform vec3 uSunColor;
 uniform float uStr;
 uniform float uTime;
 uniform float uCloudCover;
-#define GR_MAX_LIGHTS 8
+#define GR_MAX_LIGHTS 12
 uniform int uNumLights;
 uniform vec3 uLightPos[GR_MAX_LIGHTS];
 uniform vec3 uLightCol[GR_MAX_LIGHTS];
 uniform float uLightRad[GR_MAX_LIGHTS];
 uniform vec3 uLightDir[GR_MAX_LIGHTS];
 uniform vec2 uLightCone[GR_MAX_LIGHTS];   // (cosInner, cosOuter)
+uniform float uLightVolW[GR_MAX_LIGHTS];  // per-lamp volumetric weight (beam character)
 uniform float uMist;       // haze density gate for in-scatter (0 = none)
 uniform float uLampStr;    // night lamp-volumetric strength (0 = off, e.g. day)
 out vec4 outColor;
@@ -1004,7 +1007,7 @@ void main() {
         float spot = smoothstep(uLightCone[li].y, uLightCone[li].x, cd);
         float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
         float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
-        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14));
+        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14)) * uLightVolW[li];
       }
     }
   }
@@ -1224,8 +1227,8 @@ void main() {
       }
       shaft /= 8.0;
       // Radial falloff: strongest near the sun, zero at the edge of the screen.
-      float radial = 1.0 - clamp(dist * 1.8, 0.0, 1.0);
-      c += shaft * uSunShaft * radial * 0.55;
+      float radial = 1.0 - clamp(dist * 2.6, 0.0, 1.0);
+      c += shaft * uSunShaft * radial * radial * 0.50;
     }
   }
 
@@ -1333,9 +1336,9 @@ void main() {}`;
   let frameEye = null;
   let frameLights = null;
   let frameGroundMist = 0;
-  const _grPos = new Float32Array(24), _grCol = new Float32Array(24),
-        _grRad = new Float32Array(8), _grDir = new Float32Array(24),
-        _grCone = new Float32Array(16), _grSel = [];
+  const _grPos = new Float32Array(36), _grCol = new Float32Array(36),
+        _grRad = new Float32Array(12), _grDir = new Float32Array(36),
+        _grCone = new Float32Array(24), _grVolW = new Float32Array(12), _grSel = [];
   let frameInvProj = null;
   let frameInvVP = null;
   let frameProj = null;
@@ -1460,7 +1463,7 @@ void main() {}`;
     blurU = locs(blurProg, ["uTex", "uDir"]);
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
-    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uMist", "uLampStr"]);
+    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -1788,15 +1791,16 @@ void main() {}`;
     // the nearest set by the caller. Uploaded once per frame; uNumLights=0 on day.
     {
       const L = frame.lights;
-      // Flat stride-13: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter, bleed].
-      const nL = L ? Math.min(32, (L.length / 13) | 0) : 0;
+      // Flat stride-14: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
+      // bleed, volW]. volW (volumetric weight) is consumed by the godray pass only.
+      const nL = L ? Math.min(32, (L.length / 14) | 0) : 0;
       gl.uniform1i(litU.uNumLights, nL);
       if (nL > 0) {
         const pos = new Float32Array(nL * 3), col = new Float32Array(nL * 3),
               rad = new Float32Array(nL), dir = new Float32Array(nL * 3),
               cone = new Float32Array(nL * 2), bleed = new Float32Array(nL);
         for (let i = 0; i < nL; i++) {
-          const o = i * 13;
+          const o = i * 14;
           pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
           col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
           rad[i] = L[o + 6];
@@ -2050,20 +2054,29 @@ void main() {}`;
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
     if (!glowProg || !lights || !lights.length || !(str > 0)) return;
-    const nL = (lights.length / 13) | 0;  // stride-13 light records (see frame.lights)
+    const nL = (lights.length / 14) | 0;  // stride-14 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
     let p = 0;
     for (let i = 0; i < nL; i++) {
-      const o = i * 9;
+      const o = i * 14;
       const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
-      const r = lights[o + 3], g = lights[o + 4], b = lights[o + 5], rad = lights[o + 6];
+      // Light colours carry PHYSICAL intensities (hundreds, for the inverse-square
+      // shader) — normalise to a display-scale corona colour that keeps the hue.
+      let r = lights[o + 3], g = lights[o + 4], b = lights[o + 5];
+      const rad = lights[o + 6];
+      const cm = Math.max(r, g, b) || 1;
+      const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40));
+      r *= csc; g *= csc; b *= csc;
+      // Billboard size: a small LENS HALO at the lamp head — NOT a beam cone.
+      // The raw pool radius (16-34 m) made huge glowing wedges hang in the sky.
+      const brad = Math.min(5, rad * 0.16);
       for (let v = 0; v < 6; v++) {
         const c = _glowCorners[v];
         glowData[p++] = c[0]; glowData[p++] = c[1];
         glowData[p++] = cx; glowData[p++] = cy; glowData[p++] = cz;
         glowData[p++] = r; glowData[p++] = g; glowData[p++] = b;
-        glowData[p++] = rad;
+        glowData[p++] = brad;
       }
     }
     useProg(glowProg);
@@ -2158,16 +2171,16 @@ void main() {}`;
       // Lamp volumetrics: upload the nearest-8 lamps to the eye + the haze gate.
       let grNL = 0;
       if (lampVol > 0 && frameLights) {
-        const L = frameLights, total = (L.length / 13) | 0;
+        const L = frameLights, total = (L.length / 14) | 0;
         const ex = frameEye[0], ey = frameEye[1], ez = frameEye[2];
         for (let i = 0; i < total; i++) {
-          const o = i * 13, dx = L[o] - ex, dy = L[o + 1] - ey, dz = L[o + 2] - ez;
+          const o = i * 14, dx = L[o] - ex, dy = L[o + 1] - ey, dz = L[o + 2] - ez;
           const d = dx * dx + dy * dy + dz * dz;
           const e = _grSel[i]; if (e) { e.d = d; e.o = o; } else _grSel[i] = { d: d, o: o };
         }
         _grSel.length = total;
         _grSel.sort((a, b) => a.d - b.d);
-        grNL = Math.min(8, total);
+        grNL = Math.min(12, total);
         for (let i = 0; i < grNL; i++) {
           const o = _grSel[i].o;
           _grPos[i*3]=L[o]; _grPos[i*3+1]=L[o+1]; _grPos[i*3+2]=L[o+2];
@@ -2175,12 +2188,14 @@ void main() {}`;
           _grRad[i]=L[o+6];
           _grDir[i*3]=L[o+7]; _grDir[i*3+1]=L[o+8]; _grDir[i*3+2]=L[o+9];
           _grCone[i*2]=L[o+10]; _grCone[i*2+1]=L[o+11];
+          _grVolW[i]=L[o+13];
         }
         gl.uniform3fv(godrayU["uLightPos[0]"], _grPos);
         gl.uniform3fv(godrayU["uLightCol[0]"], _grCol);
         gl.uniform1fv(godrayU["uLightRad[0]"], _grRad);
         gl.uniform3fv(godrayU["uLightDir[0]"], _grDir);
         gl.uniform2fv(godrayU["uLightCone[0]"], _grCone);
+        gl.uniform1fv(godrayU["uLightVolW[0]"], _grVolW);
       }
       gl.uniform1i(godrayU.uNumLights, grNL);
       gl.uniform1f(godrayU.uLampStr, lampVol);
@@ -2257,11 +2272,17 @@ void main() {}`;
         sunUV = [cx / cw * 0.5 + 0.5, cy / cw * 0.5 + 0.5];
         // Lens flare peaks at GOLDEN HOUR (low sun), fading as the sun climbs —
         // the opposite of the old height-scaled version that vanished at sunset.
+        // Gate flare + shafts by the sun's actual BRIGHTNESS, not just elevation:
+        // at night the key light is dim moonlight kept above the horizon for sky
+        // glow, and without this gate the radial pass streaked every bright lamp
+        // head toward the moon — random "beams from the sky".
+        const _sl = frameSunColor ? Math.max(frameSunColor[0], frameSunColor[1], frameSunColor[2]) : 1;
+        const _sunGate = Math.min(1, Math.max(0, (_sl - 0.35) / 0.45));
         if (s[1] > -0.02) {
           const golden = 1.0 - Math.min(Math.max(s[1], 0) / 0.45, 1.0);
-          flareStr = 0.30 + golden * 0.55;
+          flareStr = (0.30 + golden * 0.55) * _sunGate;
         }
-        if (s[1] > 0.05) sunShaft = s[1] * 0.8;
+        if (s[1] > 0.05) sunShaft = s[1] * 0.8 * _sunGate;
       }
     }
     gl.uniform2fv(compU.uSunUV, sunUV);
