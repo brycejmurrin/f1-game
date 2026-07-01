@@ -8,9 +8,10 @@ test("GameAudio initialises without console errors", async ({ page }) => {
   });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 10000 });
+  // GameAudio is a top-level `const` — visible as a bare global in script
+  // scope, but NOT as a window property.
   const defined = await page.evaluate(
-    () =>
-      typeof window.GameAudio === "object" || typeof window.GameAudio === "function"
+    () => typeof GameAudio === "object" || typeof GameAudio === "function"
   );
   expect(defined).toBe(true);
   const audioErrors = errors.filter(
