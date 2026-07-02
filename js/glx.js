@@ -69,6 +69,13 @@ uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
 uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
 uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
+// Live-tunable constants (LIGHTING TUNER panel / __apex.lightTune) — defaults
+// mirror game.js TUNE_DEFS; uploaded per frame from frame.tune in begin().
+uniform float uBounceK;     // per-lamp bounce-fill strength (was literal 0.04)
+uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
+uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)
+uniform float uGlowAmp;     // emissive HDR glow push (was literal 2.3)
+uniform float uPcssPen;     // PCSS penumbra growth rate (was literal 80.0)
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
@@ -159,7 +166,7 @@ float sampleShadow(vec3 wpos) {
                        texture(uBlockerMap, sc.xy + vec2( bt,  bt)).r),
                    min(texture(uBlockerMap, sc.xy + vec2(-bt, -bt)).r,
                        texture(uBlockerMap, sc.xy + vec2( bt, -bt)).r));
-    float pen = clamp((z - zb) * 80.0, 0.0, 1.0);
+    float pen = clamp((z - zb) * uPcssPen, 0.0, 1.0);
     R = mix(1.5, 6.0, pen);
   }
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -391,7 +398,7 @@ void main() {
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
-    color += albedo * uLightCol[i] * (att * 0.04 * (0.55 + 0.45 * NoLl)) * (1.0 - uMetalness);
+    color += albedo * uLightCol[i] * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - uMetalness);
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
     // real wet-night streak); on glass/car paint it's the city-light glint.
@@ -577,7 +584,7 @@ void main() {
     // instead of sitting as flat bright paint.
     // HDR push kept moderate (was 3.2): windows/heads GLOW, they don't glare —
     // the night energy budget lives or dies on this multiplier.
-    color += albedo * glow * 2.3;
+    color += albedo * glow * uGlowAmp;
   }
 
   // Height-based fog: density falls off exponentially with altitude above eye level.
@@ -608,7 +615,7 @@ void main() {
   vec3 lampFogC = vec3(0.0);
   if (uLampFog > 0.0) {
     vec3 lf = lampFog * uLampFog;
-    lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * 0.7);
+    lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * uLampFogClip);
     fogCol += lampFogC;
   }
   color = mix(color, fogCol, f);
@@ -622,7 +629,7 @@ void main() {
     vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
     float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
     float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
-    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0)) + lampFogC * 1.5;
+    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0)) + lampFogC * uMistShare;
     color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
   }
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
@@ -1623,6 +1630,8 @@ void main() {}`;
   let gl = null;
   let canvas = null;
   let litProg = null, litU = null;
+  // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
+  const _ambScratchG = [0, 0, 0], _ambScratchS = [0, 0, 0];
   let skyProg = null, skyU = null;
   let shadowProg = null, shadowU = null;
   let markProg = null, markU = null;
@@ -2022,6 +2031,7 @@ void main() {
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
+      "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -2166,8 +2176,26 @@ void main() {
     gl.uniform3fv(litU.uEye, frame.eye);
     gl.uniform3fv(litU.uSunDir, frame.sunDir);
     gl.uniform3fv(litU.uSunColor, frame.sunColor);
-    gl.uniform3fv(litU.uAmbGround, frame.ambientGround);
-    gl.uniform3fv(litU.uAmbSky, frame.ambientSky);
+    // Live tunables (LIGHTING TUNER / __apex.lightTune) ride in on frame.tune;
+    // defaults here MUST mirror game.js TUNE_DEFS so a missing tune object
+    // (unit harnesses driving GLX directly) renders the shipped look.
+    const T = frame.tune || null;
+    const _ambM = T && T.ambientMul != null ? T.ambientMul : 1;
+    if (_ambM !== 1) {
+      const g = frame.ambientGround, s = frame.ambientSky;
+      _ambScratchG[0] = g[0] * _ambM; _ambScratchG[1] = g[1] * _ambM; _ambScratchG[2] = g[2] * _ambM;
+      _ambScratchS[0] = s[0] * _ambM; _ambScratchS[1] = s[1] * _ambM; _ambScratchS[2] = s[2] * _ambM;
+      gl.uniform3fv(litU.uAmbGround, _ambScratchG);
+      gl.uniform3fv(litU.uAmbSky, _ambScratchS);
+    } else {
+      gl.uniform3fv(litU.uAmbGround, frame.ambientGround);
+      gl.uniform3fv(litU.uAmbSky, frame.ambientSky);
+    }
+    gl.uniform1f(litU.uBounceK,     T && T.bounceK     != null ? T.bounceK     : 0.04);
+    gl.uniform1f(litU.uMistShare,   T && T.mistShare   != null ? T.mistShare   : 1.5);
+    gl.uniform1f(litU.uLampFogClip, T && T.fogClip     != null ? T.fogClip     : 0.7);
+    gl.uniform1f(litU.uGlowAmp,     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
+    gl.uniform1f(litU.uPcssPen,     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
     gl.uniform1f(litU.uFogDensity, frame.fogDensity);
     if (shadowEnabled) {

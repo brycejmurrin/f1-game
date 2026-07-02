@@ -1363,7 +1363,7 @@ function quitToMenu() {
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
-  $("advanced").hidden = true;
+  $("advanced").hidden = true; $("lighting").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
   rainCanvas.style.display = "none";
@@ -2355,6 +2355,71 @@ function floodColor(theme, id) {
   else if (id && COOL[id]) base.tint = COOL[id];
   return base;
 }
+// ── LIGHT TUNE ──────────────────────────────────────────────────────────────
+// Runtime lighting/rendering tuning registry. Every entry is a live slider in
+// the in-race LIGHTING TUNER panel (pause menu) and settable via
+// __apex.lightTune({id: value}). The `def` values ARE the shipped tuning —
+// the driver code reads LT.<id> instead of a literal, so panel, dev hook and
+// the offline A/B harness (tools/ab-lighting.mjs targets these def values)
+// all move the same single source of truth. Non-default values persist in
+// localStorage (apex26.lightTune). `rebuild: true` entries are baked into the
+// per-track light records — changing one invalidates track._lights so
+// buildTrackLights re-runs on the next frame. `u` entries upload straight to
+// a LIT_FS shader uniform via frame.tune (see glx.js begin()).
+const TUNE_DEFS = [
+  // Night energy budget
+  { id: "exposureMul",  label: "EXPOSURE",        group: "NIGHT ENERGY", min: 0.5,  max: 1.6,  step: 0.01,  def: 1.0,  help: "Master brightness multiplier on the tone-map input (all times of day)." },
+  { id: "bloomMul",     label: "BLOOM AMOUNT",    group: "NIGHT ENERGY", min: 0,    max: 2,    step: 0.05,  def: 1.0,  help: "Halo strength around bright HDR sources (lamps, neon, windows)." },
+  { id: "threshOff",    label: "BLOOM THRESHOLD", group: "NIGHT ENERGY", min: -0.3, max: 0.1,  step: 0.01,  def: 0.0,  help: "Offset on what counts as bright enough to bloom. Lower = mid-tones glow (fog-of-glow)." },
+  { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT ENERGY", min: 0,    max: 1.6,  step: 0.05,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp)." },
+  { id: "glowAmp",      label: "EMISSIVE GLOW",   group: "NIGHT ENERGY", min: 0.5,  max: 4,    step: 0.1,   def: 2.3,  u: "uGlowAmp", help: "HDR push for windows / lenses / neon — roughly half the night frame energy." },
+  // Lamps
+  { id: "lampLevel",    label: "LAMP LEVEL",      group: "LAMPS", min: 0.05, max: 1,   step: 0.01, def: 0.26, help: "Overall floodlight brightness ceiling (on top of the twilight ramp)." },
+  { id: "poolEnergy",   label: "POOL ENERGY",     group: "LAMPS", min: 0.1,  max: 1.2, step: 0.05, def: 0.55, rebuild: true, help: "Per-lamp pool luminance scale (physical energy per fixture)." },
+  { id: "lampRadiusMul",label: "POOL RADIUS",     group: "LAMPS", min: 0.5,  max: 2,   step: 0.05, def: 1.0,  rebuild: true, help: "Reach of each lamp pool. Too small and the far pool corner dies." },
+  { id: "bleedMul",     label: "VALLEY BLEED",    group: "LAMPS", min: 0,    max: 3,   step: 0.1,  def: 1.0,  rebuild: true, help: "Out-of-beam light floor — lifts the dark valleys between pools." },
+  { id: "glareStr",     label: "LENS GLARE",      group: "LAMPS", min: 0,    max: 0.8, step: 0.02, def: 0.12, help: "Lens-halo billboard strength at every active lamp." },
+  // Glowing fog
+  { id: "lampFogBase",  label: "FOG GLOW BASE",   group: "GLOWING FOG", min: 0, max: 1,   step: 0.05, def: 0.45, help: "How strongly lamps tint the distant fog wall on a clear night." },
+  { id: "lampFogHaze",  label: "FOG GLOW HAZE",   group: "GLOWING FOG", min: 0, max: 1.5, step: 0.05, def: 0.6,  help: "Extra lamp-fog glow added as ground mist / fog weather thickens." },
+  { id: "mistShare",    label: "MIST GLOW SHARE", group: "GLOWING FOG", min: 0, max: 4,   step: 0.1,  def: 1.5,  u: "uMistShare", help: "Ground-mist share of the lamp glow vs the air-fog share." },
+  { id: "fogClip",      label: "FOG GLOW CLIP",   group: "GLOWING FOG", min: 0, max: 1.5, step: 0.05, def: 0.7,  u: "uLampFogClip", help: "Soft shoulder stopping lamp clusters pushing the fog wall to white." },
+  // Volumetrics
+  { id: "lampVolBase",  label: "BEAMS (CLEAR)",   group: "VOLUMETRICS", min: 0, max: 0.4, step: 0.01, def: 0.05, help: "Volumetric lamp-beam strength in clear night air." },
+  { id: "lampVolHaze",  label: "BEAMS (HAZE)",    group: "VOLUMETRICS", min: 0, max: 1.5, step: 0.05, def: 0.65, help: "How much haze/rain swells the lamp beams." },
+  { id: "lampVolCap",   label: "BEAM CEILING",    group: "VOLUMETRICS", min: 0, max: 1,   step: 0.05, def: 0.70, help: "Hard cap on volumetric beam strength." },
+  { id: "grMul",        label: "SUN GOD-RAYS",    group: "VOLUMETRICS", min: 0, max: 2.5, step: 0.05, def: 1.0,  help: "Volumetric sun-shaft strength (dawn/dusk drama)." },
+  // Ambient
+  { id: "bounceK",      label: "LAMP BOUNCE",     group: "AMBIENT", min: 0,   max: 0.15, step: 0.005, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam." },
+  { id: "ambientMul",   label: "AMBIENT LEVEL",   group: "AMBIENT", min: 0.3, max: 3,    step: 0.05,  def: 1.0,  help: "Hemisphere ambient multiplier — the unlit-scene readability floor." },
+  // Reflections
+  { id: "ssrWetMul",    label: "WET MIRROR",      group: "REFLECTIONS", min: 0, max: 1.5, step: 0.05, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
+  { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "REFLECTIONS", min: 0, max: 0.5, step: 0.01, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
+  { id: "ssrDryDay",    label: "DRY DAY SHEEN",   group: "REFLECTIONS", min: 0, max: 0.3, step: 0.01, def: 0.07, help: "Faint tower-and-sky mirror on dry day tarmac." },
+  // Shadows & weather
+  { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS & WEATHER", min: 10, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
+  { id: "wetness",      label: "WETNESS",         group: "SHADOWS & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps over ~30 s)." },
+];
+const LT = {};                     // id -> live value (the single source of truth)
+for (const d of TUNE_DEFS) LT[d.id] = d.def;
+{ // restore persisted overrides
+  const saved = store.get("lightTune", null);
+  if (saved && typeof saved === "object") {
+    for (const d of TUNE_DEFS) if (typeof saved[d.id] === "number") LT[d.id] = clamp(saved[d.id], d.min, d.max);
+  }
+}
+function setLightTune(id, v) {
+  const d = TUNE_DEFS.find((t) => t.id === id);
+  if (!d || typeof v !== "number" || !isFinite(v)) return false;
+  LT[id] = clamp(v, d.min, d.max);
+  if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
+  return true;
+}
+function persistLightTune() {
+  const out = {};
+  for (const d of TUNE_DEFS) if (LT[d.id] !== d.def) out[d.id] = LT[d.id];
+  store.set("lightTune", out);
+}
 // Per-KIND light parameters. The kind itself is decided ONCE in tracks.js
 // (buildProps mast block) and carried on track.lampPosts, so the painted lens
 // albedo always matches the light emitted here. CCT-authentic palette (HPS
@@ -2490,14 +2555,14 @@ function buildTrackLights(track) {
     // The incidence divisor is CLAMPED so a mast beside banked/elevated road
     // (lens barely above the aim point) can't blow the energy up.
     const hAim = Math.max(ly - track.py[k], 1);
-    const ePhys = intensity * bri * eMul * (al * al) * 0.55 / Math.max(hAim / al, 0.35);
+    const ePhys = intensity * bri * eMul * (al * al) * LT.poolEnergy / Math.max(hAim / al, 0.35);
     lights.push(
       lx, ly, lz,
       Math.max(0, mr) * ePhys,
       Math.max(0, mg) * ePhys,
       Math.max(0, mb) * ePhys,
-      radius,
-      ax, ay, az, coneIn, coneOut, bleed, volW, glareW,
+      radius * LT.lampRadiusMul,
+      ax, ay, az, coneIn, coneOut, Math.min(0.9, bleed * LT.bleedMul), volW, glareW,
     );
   }
   // START-GANTRY DOWNLIGHTS: a crisp white bar of light straight down over the
@@ -2902,7 +2967,11 @@ function render(dt) {
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
-  {
+  if (LT.wetness >= 0) {
+    // Tuner override: pin the road wetness directly (skips the slow ramp — the
+    // real ramp takes ~30-60 s of session time to saturate after a weather flip).
+    frame.wetness = LT.wetness;
+  } else {
     const wetTarget = isWetRoad() ? 1.0 : 0.0;
     const cur = frame.wetness || 0;
     frame.wetness = cur + (wetTarget - cur) * Math.min(1, dt * 0.8);
@@ -2993,7 +3062,7 @@ function render(dt) {
     // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
     // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
     // on top of the twilight ramp above.
-    const lvl  = (0.05 + 0.95 * nightF) * 0.26;
+    const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
     const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
     const floodScale = [lvl * (1 + warmth * 0.14), lvl, lvl * (1 - warmth * 0.22)];
     setFrameLights(camEye, floodScale);
@@ -3014,7 +3083,9 @@ function render(dt) {
   // glow on top blew the dawn mist band out.
   const _lfSun = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
   const _lfGate = clamp((0.55 - _lfSun) / 0.30, 0, 1);
-  frame.lampFog = frame.lights ? Math.min(0.9, 0.45 + 0.6 * (frame.groundMist || 0)) * _lfGate : 0;
+  frame.lampFog = frame.lights ? Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0)) * _lfGate : 0;
+  // Shader-side tunables ride along on the frame (glx begin() uploads them).
+  frame.tune = LT;
 
   if (dbgCam) {
     const bf = frame.fogDensity;
@@ -3057,11 +3128,11 @@ function render(dt) {
   // ramp near 0.10 and left the glowing-glass towers reading as dark boxes.
   // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
   const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
-  const _floodEmit =
+  const _floodEmit = LT.floodEmitMul * (
     (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
         ? Math.min(0.70, 0.05 + 0.58 * clamp(1 - _sunY * 6, 0, 1))
-        : 0;
+        : 0);
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
   // light gets a visible halo (colored per lamp) without inflating bloom.
@@ -3070,8 +3141,9 @@ function render(dt) {
   // Corona strength trimmed 0.20 -> 0.12: the lens-glare halos are drawn from
   // frame.lights COLOURS (already time-of-day scaled) but the billboard str was
   // an independent knob — with the point-light energy dimmed, the untouched
-  // coronas became the brightest thing left at every mast.
-  if (frame.lights && !_studioRig) GLX.drawGlow(frame.lights, 0.12);
+  // coronas became the brightest thing left at every mast. Now the LENS GLARE
+  // tuner slider (LT.glareStr, default 0.12).
+  if (frame.lights && !_studioRig) GLX.drawGlow(frame.lights, LT.glareStr);
   if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: Math.min(0.80, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
@@ -3337,7 +3409,7 @@ function render(dt) {
   // "moon rays" through the cloud gaps.
   const _sunLumGR = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
   const _sunGateGR = clamp((_sunLumGR - 0.35) / 0.45, 0, 1);
-  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR;
+  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
@@ -3345,7 +3417,7 @@ function render(dt) {
   // Always a subtle beam glow whenever lamps are on (clear night air still
   // scatters a little), swelling with haze/rain into full volumetric shafts —
   // and coloured per lamp, so neon-spill lights throw coloured beams.
-  const _lampVol = frame.lights ? clamp(0.05 + 0.65 * _mist, 0, 0.70) : 0;
+  const _lampVol = frame.lights ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
@@ -3364,12 +3436,16 @@ function render(dt) {
   // Vegas start straight) rendered as a bright silver mirror of the buildings —
   // the single biggest "night is too bright" driver on city circuits. 0.08 keeps
   // a subtle lamp/neon sheen (fade is quadratic below 0.20) without the mirror.
-  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : (frame.lights ? 0.08 : 0.07);
+  // Now the DRY NIGHT SHEEN tuner slider (LT.ssrDryNight, default 0.08).
+  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness * LT.ssrWetMul
+             : (frame.lights ? LT.ssrDryNight : LT.ssrDryDay);
   // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.
   const _ao = _grSunY > -0.04 ? 0.95 : 0;
-  GLX.present({ exposure: frame.exposure, bloom: _bloom, threshold: _thresh, grade: _grade, ssao: _ao, godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist });
+  GLX.present({ exposure: frame.exposure * LT.exposureMul, bloom: _bloom * LT.bloomMul,
+    threshold: clamp(_thresh + LT.threshOff, 0.4, 1.2), grade: _grade, ssao: _ao,
+    godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist });
   if (raceWeather === "rain" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
@@ -3520,7 +3596,12 @@ function tick(now) {
   lastFrame = now;
   Input.poll();   // refresh gamepad state once per frame (before the paused gate
                   // so the Start/Menu button can also un-pause)
-  if (paused) return;
+  if (paused) {
+    // LIGHTING TUNER live preview: keep RENDERING (physics stays paused) while
+    // the panel is open so every slider change shows on the held frame.
+    if ((state === "race" || state === "count") && !$("lighting").hidden) render(Math.min(dt, 1 / 20));
+    return;
+  }
   if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard
   // crash so the impact reads, but keep the camera (render) at full dt so the
@@ -4144,6 +4225,82 @@ $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 // Advanced steering: opened from the pause menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
+// ── LIGHTING TUNER ── opened from the pause menu; the pause menu hides while
+// it's open so the live preview is unobstructed (tick() keeps render() running
+// with physics paused), and DONE returns to the pause menu. Rows are generated
+// once from TUNE_DEFS; values persist via localStorage (apex26.lightTune).
+function fmtTune(d, v) {
+  if (d.fmt === "auto" && v < 0) return "AUTO";
+  const dec = (String(d.step).split(".")[1] || "").length;
+  return v.toFixed(Math.min(dec, 3));
+}
+function buildLightTunePanel() {
+  const host = $("lt-rows");
+  if (!host.dataset.built) {
+    host.dataset.built = "1";
+    let group = null;
+    for (const d of TUNE_DEFS) {
+      if (d.group !== group) {
+        group = d.group;
+        const h = document.createElement("h3");
+        h.className = "adv-sec"; h.textContent = group;
+        host.appendChild(h);
+      }
+      const item = document.createElement("div");
+      item.className = "adv-item";
+      const lab = document.createElement("label"); lab.className = "tune-row";
+      const span = document.createElement("span"); span.className = "tune-label";
+      span.textContent = d.label + " ";
+      const b = document.createElement("b"); b.id = "lt-v-" + d.id;
+      span.appendChild(b);
+      const inp = document.createElement("input");
+      inp.type = "range"; inp.min = d.min; inp.max = d.max; inp.step = d.step;
+      inp.id = "lt-in-" + d.id;
+      inp.setAttribute("aria-label", d.label);
+      inp.oninput = () => {
+        setLightTune(d.id, parseFloat(inp.value));
+        b.textContent = fmtTune(d, LT[d.id]);
+        persistLightTune();
+      };
+      lab.appendChild(span); lab.appendChild(inp);
+      item.appendChild(lab);
+      if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
+      host.appendChild(item);
+    }
+  }
+  refreshLightTunePanel();
+}
+function refreshLightTunePanel() {
+  for (const d of TUNE_DEFS) {
+    const inp = $("lt-in-" + d.id), b = $("lt-v-" + d.id);
+    if (inp) inp.value = LT[d.id];
+    if (b) b.textContent = fmtTune(d, LT[d.id]);
+  }
+}
+$("pm-lighting").onclick = () => {
+  buildLightTunePanel();
+  $("lt-json").hidden = true;
+  $("lighting").hidden = false;
+  els.pausemenu.hidden = true;      // unobstructed live preview
+};
+$("lt-close").onclick = () => {
+  $("lighting").hidden = true;
+  if (paused) els.pausemenu.hidden = false;
+};
+$("lt-reset").onclick = () => {
+  for (const d of TUNE_DEFS) setLightTune(d.id, d.def);
+  persistLightTune();
+  refreshLightTunePanel();
+  $("lt-json").hidden = true;
+};
+$("lt-copy").onclick = () => {
+  const out = {};
+  for (const d of TUNE_DEFS) if (LT[d.id] !== d.def) out[d.id] = LT[d.id];
+  const json = JSON.stringify(out, null, 1);
+  const ta = $("lt-json");
+  ta.value = json; ta.hidden = false; ta.select();
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
+};
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
 els.selPreviewMap.onclick = openTrackDetail;
 $("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
@@ -4313,7 +4470,7 @@ function setPaused(p) {
   paused = p;
   els.pausemenu.hidden = !p;
   if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
-  if (!p) $("advanced").hidden = true;   // never leave the overlay up after resume
+  if (!p) { $("advanced").hidden = true; $("lighting").hidden = true; }   // never leave the overlays up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
@@ -5555,6 +5712,22 @@ window.__apex = {
     builtNight: builtTrackNight, trackNight: track && track._night,
     floodEmit: _lastFloodEmit,   // actual prop-emissive ramp value this frame
   }),
+  // lightTune(o?) — get or set the live lighting-tuner values (same registry as
+  // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
+  // tunable. With an object: merges valid entries (clamped to each slider's
+  // range), persists, invalidates baked light records where needed, and returns
+  // the updated set. lightTune({wetness: 0.8}) pins road wetness instantly;
+  // lightTune({wetness: -0.05}) returns it to the weather-driven ramp.
+  lightTune(o) {
+    if (o && typeof o === "object") {
+      for (const k of Object.keys(o)) setLightTune(k, o[k]);
+      persistLightTune();
+      if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
+    }
+    const out = {};
+    for (const d of TUNE_DEFS) out[d.id] = LT[d.id];
+    return out;
+  },
   viewState() {
     return {
       camMode: CAM_MODES[camMode].id, camIndex: camMode,
