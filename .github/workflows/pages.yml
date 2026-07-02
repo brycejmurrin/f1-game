@@ -10,9 +10,17 @@ permissions:
   pages: write
   id-token: write
 
+# GitHub Pages serves ONE deployment at a time per environment, and the deploy
+# request lives on GitHub's backend independently of this Actions job. Cancelling
+# an in-progress run (cancel-in-progress: true) under a burst of rapid pushes
+# abandons deployments GitHub has already accepted, wedging the single-slot queue
+# so later deploys sit in `deployment_queued` until they hit the deploy-pages
+# 10-min timeout ("Timeout reached, aborting!"). false = a new push WAITS for the
+# in-flight deploy instead of killing it — the config the official Pages workflow
+# ships. Intermediate queued runs are still coalesced; the latest one wins.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
