@@ -187,25 +187,15 @@ const Car3D = (function () {
       const rya1 = cy + rimR*Math.cos(a1), rza1 = cz + rimR*Math.sin(a1);
       const A0=[x0,ya0,za0], A1=[x0,ya1,za1], B0=[x1,ya0,za0], B1=[x1,ya1,za1];
       const R0=[x1,rya0,rza0], R1=[x1,rya1,rza1];
-      // SINGLE outward-facing winding (no coincident duplicate). Double-winding the
-      // sidewall made two faces at the same plane, which z-fights on real mobile
-      // depth precision → the tyre looked translucent (SwiftShader tolerated it, so
-      // it read solid headless). These outward windings are the reverse of the
-      // original see-through ones, so the outer face is opaque with no z-fight.
-      addQuad(out, B0, R0, R1, B1, RC);   // right (+X) sidewall, faces out
-      addTri(out, hub1, R1, R0, HUB);
+      // SINGLE face per wall (no coincident duplicate). The wheel is drawn
+      // CULL-OFF (double-sided, see getPlayerWheelMeshes / the wheel draw opts), so
+      // each single face shows from BOTH sides — opaque from outside, from behind,
+      // and through the spoke gaps — with nothing to z-fight. That was the whole
+      // "translucent tyre" bug: double-wound coincident faces flickering on real
+      // mobile depth precision (SwiftShader tolerated it, so it looked solid headless).
+      addQuad(out, B0, B1, R1, R0, RC); addTri(out, hub1, R0, R1, HUB);   // right (+X)
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
-      addQuad(out, A1, L1, L0, A0, RC);   // left (−X) sidewall, faces out
-      addTri(out, hub0, L0, L1, HUB);
-      // Inner walls a few cm INSIDE each outer face, wound the opposite way (facing
-      // inward). The tyre then reads opaque from behind and through the spoke gaps
-      // too — a closed double wall — with the two faces separated so nothing z-fights.
-      const IWIN = 0.03;
-      const bi = x1 - IWIN, ai = x0 + IWIN;
-      const Bi0=[bi,ya0,za0], Bi1=[bi,ya1,za1], Ri0=[bi,rya0,rza0], Ri1=[bi,rya1,rza1];
-      addQuad(out, Bi0, Bi1, Ri1, Ri0, RC); addTri(out, [bi-0.012,cy,cz], Ri0, Ri1, HUB);   // right inner, faces −X
-      const Ai0=[ai,ya0,za0], Ai1=[ai,ya1,za1], Li0=[ai,rya0,rza0], Li1=[ai,rya1,rza1];
-      addQuad(out, Ai1, Ai0, Li0, Li1, RC); addTri(out, [ai+0.012,cy,cz], Li1, Li0, HUB);   // left inner, faces +X
+      addQuad(out, A0, A1, L1, L0, RC); addTri(out, hub0, L0, L1, HUB);   // left (−X)
     }
     // Pirelli-style compound band: a bright ring on both sidewalls just inside
     // the tread — the classic modern-F1 tyre read (and a colour accent on an
@@ -217,7 +207,7 @@ const Car3D = (function () {
         const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
         const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
         const A = P(r * 0.96, a0), B = P(r * 0.96, a1), C = P(r * 0.87, a1), D = P(r * 0.87, a0);
-        addQuad(out, A, B, C, D, BAND); addQuad(out, A, D, C, B, BAND); // both windings
+        addQuad(out, A, B, C, D, BAND);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
       }
     }
     // Rim spokes: five pale blades proud of the hub fans on each face. They make
@@ -232,7 +222,7 @@ const Car3D = (function () {
         const hw = 0.013, ri = r * 0.10, ro = r * 0.40;
         const P = (rad, s) => [xs, cy + uy * rad + py * hw * s, cz + uz * rad + pz * hw * s];
         const A = P(ri, 1), B = P(ro, 1), C = P(ro, -1), D = P(ri, -1);
-        addQuad(out, A, B, C, D, SPOKE); addQuad(out, A, D, C, B, SPOKE);
+        addQuad(out, A, B, C, D, SPOKE);   // single face (cull-off shows both sides)
       }
     }
     // BRAKES tier 2: a caliper accent peeking through the rim spokes — pure

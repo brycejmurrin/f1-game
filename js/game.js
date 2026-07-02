@@ -465,6 +465,7 @@ function carPaintMat(base) {
   m.emissive  = (base.emissive  || 0) * LT.carGlow;
   m.carPaint  = base.carPaint != null ? base.carPaint : 0;
   m.sparkle   = base.sparkle  != null ? base.sparkle  : 1;   // reset each call so a preview override can't leak in-race
+  m.doubleSided = true;   // cars/wheels use single-winding faces — render both sides so tyres read opaque from every angle
   return m;
 }
 const mm = els.minimap.getContext("2d");
@@ -1033,7 +1034,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
   GLX.draw(cockpitBodyMesh(c.team), base, paint);
-  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true, 0.35, 2.1);
+  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.35, 2.1);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
   // damped steering whatever the input mode). A second, slower damping stage
@@ -3740,7 +3741,10 @@ function render(dt) {
     fovY = Math.min(fovY, fovYCap);
   }
 
-  M4.perspectiveTo(_mProj, fovY, GLX.aspect, 0.1, farPlane);
+  // Near plane 0.2 (not 0.1): the closest geometry in any camera is well beyond
+  // 0.2 m, and doubling the near distance roughly doubles depth-buffer precision
+  // across the scene — the biggest single lever against z-fighting / shadow flicker.
+  M4.perspectiveTo(_mProj, fovY, GLX.aspect, 0.2, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {
@@ -4190,7 +4194,7 @@ function render(dt) {
     if (body) {
       GLX.draw(body, tmpMat, paint);
       drawCarDecals(c.team, tmpMat, night);
-      drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0 });
+      drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
     } else {
       GLX.draw(teamMesh(c.team), tmpMat, paint);
       drawCarDecals(c.team, tmpMat, night);

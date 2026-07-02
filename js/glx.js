@@ -2650,7 +2650,13 @@ void main() {
     // flame blended over the buffer would fake/blur that tag for the composite.
     const noAW = opts && opts.noAlphaWrite;
     if (noAW) gl.colorMask(true, true, true, false);
+    // doubleSided: render back faces too (cull off) — for the wheels + car body,
+    // whose single-winding tyre walls must show from every angle without any
+    // coincident duplicate to z-fight.
+    const dbl = opts && opts.doubleSided;
+    if (dbl) gl.disable(gl.CULL_FACE);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    if (dbl) gl.enable(gl.CULL_FACE);
     if (noAW) gl.colorMask(true, true, true, true);
   }
 
@@ -2849,7 +2855,7 @@ void main() {
     setDepthMask(false);
     // Pull the flat quad toward the camera in depth so it can't z-fight the
     // coplanar road underneath (the "shadow flickering under the car").
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2.0, -4.0);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     gl.disable(gl.POLYGON_OFFSET_FILL);
@@ -2865,7 +2871,7 @@ void main() {
     gl.uniform2f(markU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2.0, -4.0);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     gl.disable(gl.POLYGON_OFFSET_FILL);
@@ -2882,7 +2888,7 @@ void main() {
     gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
     setBlend(true);
     setDepthMask(false);
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2.0, -4.0);   // sit on the road, no z-fight
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
     if (dirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
