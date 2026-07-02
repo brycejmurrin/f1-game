@@ -612,6 +612,17 @@ const _ringWorld = new Float32Array(16);
 // Scratch opts for AI brake rings — mutated in place per frame so the car loop
 // doesn't allocate a fresh literal per ring (up to ~40/frame in a braking pack).
 const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaWrite: true };
+// Deferred blob-shadow batch: instead of interleaving shadow↔body per car (which
+// flips program+VAO+blend+depthMask twice each car), accumulate every drawn car's
+// shadow matrix and flush them all in one state block after the body loop. Shadows
+// are depth-tested but write no depth, so drawing them last is visually identical.
+const _shadowMats = [];   // pool of Float32Array(16), reused across frames
+let _shadowCount = 0;
+// Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
+// one for the render loop (both called once per car per frame) so banking() no
+// longer allocates a fresh object ~23×/frame.
+const _bankScratch = { dy: 0, roll: 0 };
+const _bankScratchP = { dy: 0, roll: 0 };
 
 // Brake-glow ring: a flat emissive annulus (axle-aligned, both windings so it
 // reads from either side) drawn just proud of each wheel face while the discs
@@ -2175,7 +2186,7 @@ function updateCar(c, dt, ranked) {
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   // Banking: computed once, shared between player and AI so both get grip boost.
-  const bankPhys = Tracks.banking(track, c.s, 0);
+  const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
   const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
                             Math.abs(Tracks.bankAngle(track, c.s)));
   const bankMu = 1 + Math.sin(bankRoll) * 0.8;
@@ -3627,6 +3638,7 @@ function render(dt) {
   const paint = carPaintMat(wet
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
+  _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
   for (const c of cars) {
     if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
@@ -3649,7 +3661,7 @@ function render(dt) {
     let renderX = c.xVis;
     // banking: sit the car ON the banked surface (raise it by the local lift)
     // instead of the flat centreline, so it doesn't float/sink in the corner.
-    const bankC = Tracks.banking(track, cS, renderX);
+    const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
     tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
     tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
     tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
@@ -3704,7 +3716,10 @@ function render(dt) {
       }
     }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
-    GLX.drawShadow(tmpMat, 2.4, 5.8);
+    let _sm = _shadowMats[_shadowCount];
+    if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
+    _sm.set(tmpMat);
+    _shadowCount++;
     // Cockpit view: draw the interior with a STABILIZED basis — the plain track
     // tangent/right at the car position (+bank dy already in tmpP), WITHOUT the
     // body's visual yaw/pitch/roll/lean. Those rotate the interior relative to
@@ -3814,6 +3829,10 @@ function render(dt) {
       }
     }
   }
+  // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
+  // depthMask are set once for the whole field instead of ping-ponging with the
+  // lit body program every car.
+  for (let i = 0; i < _shadowCount; i++) GLX.drawShadow(_shadowMats[i], 2.4, 5.8);
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (timeTrial && player && (state === "race" || state === "count")) {
     const g = Ghost.at(player.lapTime);
