@@ -265,9 +265,9 @@ void main() {
   // up-facing panels) was removed — on the dead-flat floor plank / front-wing
   // planes (N.y≈1) it peaked at full strength and read as a chrome "silver plane"
   // under the car, brighter than the actual bodywork. The whole car is now
-  // reflected uniformly by the analytic clearcoat ENV mirror below (every panel,
-  // grazing-weighted) plus SSR, so the reflection is consistent instead of a
-  // flat-panel standout.
+  // reflected uniformly by the VIEW-driven env mirror below (base reflectance on
+  // every panel + grazing rim) plus SSR, so the reflection is consistent across
+  // the body instead of a flat-panel standout.
   // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
   // world position, so flat asphalt/concrete/grass read as a surface rather than
   // a solid slab. Multiplicative, so it darkens as much as it lightens.
@@ -478,21 +478,29 @@ void main() {
   // Analytic clearcoat ENV mirror — the lacquer reflects a procedural sky in the
   // reflected view ray, on EVERY paint pixel including the vertical FLANKS (the
   // carDeck term below only mirrors up-facing decks; SSR can't reach flanks that
-  // reflect off-screen). Strictly a dielectric-clearcoat SPECULAR add: weighted
-  // by fresnel²·(1-rough) so it's ~0 face-on (livery reads pure) and mirror-like
-  // at grazing/silhouette; NEVER multiplies or mixes albedo (that bleached the
-  // paint before), and soft-clipped below the bloom threshold so it can't glare.
+  // reflect off-screen). Now a WHOLE-CAR env mirror: a base reflectance on every
+  // panel + a grazing Fresnel rim, so the entire body reads reflective (not just
+  // the silhouette). VIEW-driven (Fresnel on Ngeo), NOT N.y-driven, so it stays
+  // uniform across panel orientations instead of hot-spotting flat up-facing
+  // panels the way the old deck mirror did (that was the "silver plane" under the
+  // car). Energy-conserving: the base is DARKENED under the mirror weight first,
+  // then the reflected sky is added over it (a mirror on gloss, not a milky wash),
+  // so the livery still reads through it face-on while the car goes mirror-bright.
   if (uCarPaint > 0.001 && uClearcoat > 0.001) {
     vec3 Rg = reflect(-V, Ngeo);
     float NoVc = max(dot(Ngeo, V), 1e-4);
     float ccFb = 1.0 - NoVc; float ccF = ccFb * ccFb;      // fresnel², rim-concentrated (mul not pow(_,2): pow(0,2) NaNs on mobile)
-    float envW = uClearcoat * ccF * (1.0 - rough) * 0.55;
+    // Base reflectance everywhere (0.22) + grazing boost → uniform mirror that
+    // still peaks at the silhouette. (1-rough·0.6) keeps some reflection even on
+    // the rougher dry-day paint. Clamped so it can't fully erase the pigment.
+    float envW = clamp(uClearcoat * (0.22 + 0.78 * ccF) * (1.0 - rough * 0.6) * 0.62, 0.0, 0.85);
     // Hard-ish horizon line: bright sky above, dark ground tone below. The step
     // sweeping across the curved flanks as the car yaws is the "mirror" cue.
     float horiz = smoothstep(-0.03, 0.06, Rg.y);
     vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rg.y, 0.0)));   // sqrt not pow(x,0.5): pow(0.0,0.5) NaNs on mobile
     vec3 envCC = mix(uAmbGround * 0.6, skyR, horiz);
     envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    color *= 1.0 - envW * 0.72;                             // absorb: darken the base under the mirror (energy conserving)
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC);                         // soft-clip < 1.0
   }
