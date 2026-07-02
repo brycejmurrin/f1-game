@@ -8,6 +8,12 @@ const Tracks = (function () {
   const SCALE = 1.45;            // scale authored lengths for arcade racing
   const WORLD_UP = [0, 1, 0];
 
+  // Procedural surface-material ids — stamped per-vertex (out._mat) and textured
+  // in the lit shader's applyMaterial() (js/glx.js). 0 = FLAT (untextured, the
+  // original look). Exposed to per-track scenery() via api.MAT.
+  const MAT = { FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5,
+                FOLIAGE: 6, FABRIC: 7, SAND: 8, GRASS: 9 };
+
   // ---------- small math (self-contained; doesn't depend on M4/V3) ----------
   function cross(a, b) {
     return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -816,12 +822,14 @@ const Tracks = (function () {
       [[-1, 1, -1], [-1, 1, 1], [1, 1, 1], [1, 1, -1], u],
       [[-1, -1, 1], [-1, -1, -1], [1, -1, -1], [1, -1, 1], [-u[0], -u[1], -u[2]]],
     ];
+    const m = out._mat || 0, mm = out.mat;
     for (const fc of faces) {
       const base = out.pos.length / 3;
       const nv = fc[4];
       for (let i = 0; i < 4; i++) {
         const p = corner(fc[i][0], fc[i][1], fc[i][2]);
         out.pos.push(p[0], p[1], p[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]);
+        if (mm) mm.push(m);
       }
       out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
@@ -843,7 +851,8 @@ const Tracks = (function () {
       if (nv[0] * fx + nv[1] * fy + nv[2] * fz < 0) { verts = verts.slice().reverse(); nv = [-nv[0], -nv[1], -nv[2]]; }
     }
     const base = out.pos.length / 3;
-    for (const v of verts) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]); }
+    const m = out._mat || 0, mm = out.mat;
+    for (const v of verts) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]); if (mm) mm.push(m); }
     for (let i = 1; i < verts.length - 1; i++) out.idx.push(base, base + i, base + i + 1);
   }
   const vadd = (p, v, s) => [p[0] + v[0] * s, p[1] + v[1] * s, p[2] + v[2] * s];
@@ -994,16 +1003,20 @@ const Tracks = (function () {
 
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
-    const out = { pos: [], nrm: [], col: [], idx: [] };
+    // `mat` holds a per-vertex procedural-material id (0 = FLAT). `_mat` is the
+    // CURRENT material register: emitters (addBox/emit) stamp it onto every vertex,
+    // so a model sets `out._mat = MAT.BRICK` around a block instead of threading a
+    // param through every call. Untagged geometry stays FLAT (unchanged look).
+    const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
     // Separate GLASS buffer: reflective window panes are emitted here and drawn
     // with a low-roughness material so the lit shader's env term mirrors the sky
     // (real view-dependent reflection, not a faked colour). Day windows only.
-    const glassBuf = { pos: [], nrm: [], col: [], idx: [] };
+    const glassBuf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
     // Separate WATER buffer: lake/sea/marina surfaces emit here and draw with a
     // low-roughness material so the lit shader's env term mirrors the live sky
     // (real time-of-day reflection + sun glint), turning flat blue slabs into
     // reflective water. Flagged via groundPlane(..., water=true).
-    const waterBuf = { pos: [], nrm: [], col: [], idx: [] };
+    const waterBuf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     // Session darkness (set by Tracks.build from the chosen time of day) drives
     // window/skyline lighting — so buildings respond to dusk/night even on a
@@ -1368,12 +1381,14 @@ const Tracks = (function () {
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
+      out._mat = MAT.WOOD;
       addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
       const sparse = vr > 0.82;                          // ~18% thinner 3-tier trees
       const lean = !sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0;   // ~27% windswept lean
       const tiers = sparse ? 3 : 4;
       let y = h * 0.3;
+      out._mat = MAT.FOLIAGE;
       for (let i = 0; i < tiers; i++) {
         const w = (sparse ? 2.3 : 2.7) * j * (1 - i * (sparse ? 0.24 : 0.21));
         let c = vadd(a.c, a.u, y);
@@ -1381,6 +1396,7 @@ const Tracks = (function () {
         addCone(out, c, w, h * 0.32, i === 0 ? c2 : col, 7, b);
         y += h * (sparse ? 0.24 : 0.18) * j;
       }
+      out._mat = 0;
     };
     // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
     // ~9% of instances are a bare DEAD/STORM tree (trunk + thin branch cylinders,
@@ -1400,6 +1416,7 @@ const Tracks = (function () {
         // tilted up-vector (mostly vertical, blended with an outward lean) —
         // not the tree's vertical `a.u`, or the branches would draw straight up.
         const th = h * 0.7;
+        out._mat = MAT.WOOD;
         addCyl(out, a.c, 0.32, th, [0.28, 0.22, 0.16], 6, b);
         const top = vadd(a.c, a.u, th);
         for (let i = 0; i < 3; i++) {
@@ -1409,13 +1426,16 @@ const Tracks = (function () {
           const bu = [a.u[0] * 0.7 + out2[0] * 0.7, a.u[1] * 0.7, a.u[2] * 0.7 + out2[2] * 0.7];
           addCyl(out, vadd(top, a.u, i * 0.25), 0.09, 1.6 + bh * 1.4, [0.30, 0.24, 0.17], 4, [a.r, bu, a.t]);
         }
+        out._mat = 0;
         return;
       }
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const j = 0.85 + hash(k * 2.9 + side * 1.7 + dist) * 0.3;
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;   // asymmetric crown, ~35% of instances
+      out._mat = MAT.WOOD;
       addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
+      out._mat = MAT.FOLIAGE;
       // ROUNDED broadleaf canopy: bulges widest in the middle and is capped by a
       // squat dome — a full, billowing crown that reads clearly as a deciduous
       // tree rather than the narrow pointed cone-stack of conifer() (the two used
@@ -1426,6 +1446,7 @@ const Tracks = (function () {
       addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j, h * 0.26, col, 9, b);   // widest bulge
       addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j, h * 0.26, c2, 8, b);    // shoulder
       addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j, h * 0.22, c2, 7, b);    // rounded cap
+      out._mat = 0;
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.
     const palm = (k, side, dist, h, frond) => {
@@ -1438,12 +1459,14 @@ const Tracks = (function () {
       // (palms arc toward the light) instead of one dead-straight pole.
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
       let base = a.c, seg = h / 3;
+      out._mat = MAT.WOOD;
       for (let t = 0; t < 3; t++) {
         const bend = vadd(a.c, a.r, lean * (t + 1) * (t + 1) * 0.4 * side);
         const c = [bend[0], base[1] + seg / 2, bend[2]];
         addCyl(out, c, 0.34 - t * 0.06, seg, [0.45 - t * 0.03, 0.36, 0.22], 6, b);
         base = vadd(base, a.u, seg);
       }
+      out._mat = MAT.FOLIAGE;
       const top = vadd(vadd(base, a.r, lean * 3.6 * side), a.u, -seg / 2 + 0.2);
       const frCol = frond || [0.18, 0.40, 0.16];
       const frDark = [frCol[0] * 0.8, frCol[1] * 0.82, frCol[2] * 0.78];
@@ -1459,11 +1482,13 @@ const Tracks = (function () {
         addPrism(out, fc, [1.5, 0.45, len], i % 2 ? frCol : frDark, [fr, fu, [-fr[2], 0, fr[0]]]);
       }
       // Coconut cluster tucked under the crown.
+      out._mat = MAT.WOOD;
       for (let i = 0; i < 3; i++) {
         const ang = i / 3 * 6.2832;
         addBox(out, vadd(vadd(top, a.r, Math.cos(ang) * 0.5), a.t, Math.sin(ang) * 0.5),
                [0.34, 0.34, 0.34], [0.32, 0.24, 0.14], b);
       }
+      out._mat = 0;
     };
     // Conifer / fir: a tall narrow stack of cones — alpine & northern forest
     // circuits (Spa, Red Bull Ring, Zandvoort dunes, Montreal).
@@ -1471,10 +1496,13 @@ const Tracks = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 3)) return;
       const c2 = [col[0] * 0.86, col[1] * 0.92, col[2] * 0.82];
+      out._mat = MAT.WOOD;
       addCyl(out, a.c, 0.3, h * 0.20, [0.34, 0.24, 0.15], 5, b);                 // trunk
+      out._mat = MAT.FOLIAGE;
       addCone(out, vadd(a.c, a.u, h * 0.14), 2.1 + h * 0.06, h * 0.44, col, 7, b);
       addCone(out, vadd(a.c, a.u, h * 0.42), 1.6 + h * 0.05, h * 0.38, col, 6, b);
       addCone(out, vadd(a.c, a.u, h * 0.70), 1.0 + h * 0.04, h * 0.34, c2, 6, b);
+      out._mat = 0;
     };
     // Distant mountain peak (world coords), pyramid so it reads as a summit, with
     // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
@@ -1544,7 +1572,9 @@ const Tracks = (function () {
       for (let r = 0; r < rows; r++) {
         const f = (r + 0.5) / rows, up = f * rise, back = f * depth;
         // dark step riser behind each seating row (blocks sky/ground show-through)
+        out._mat = MAT.CONCRETE;
         RAW.addBox(out, vadd(vadd(a.c, a.u, up), a.r, side * back), [1.3, 1.5, len], riser, b);
+        out._mat = MAT.FABRIC;
         for (let s2 = 0; s2 < perRow; s2++) {
           if (s2 % 10 === 9) continue;                       // aisle / vomitory gap
           const h1 = hash(k * 2.7 + r * 5.3 + s2 * 1.9 + side * 3.1);
@@ -1563,6 +1593,7 @@ const Tracks = (function () {
           RAW.addBox(out, c, [0.55, 0.72 + h2 * 0.2, 0.5], col, b);   // torso + head lump
         }
       }
+      out._mat = 0;
     };
     const grandstand = (s, side, gap, len, shell, crowd) => {
       const k = Math.round(s * n) % n;
@@ -1847,6 +1878,10 @@ const Tracks = (function () {
         const dayWall = wallLuma > 0.45
           ? [body[0] * 0.78, body[1] * 0.78, body[2] * 0.78]
           : [0.42 + cv * 0.12, 0.42 + cv * 0.11, 0.41 + cv * 0.10];
+        // Wall material: warm/light facades read as BRICK, cooler/grey as CONCRETE;
+        // reflective window bands carry the GLASS mullion-grid material.
+        const wmat = (dayWall[0] > 0.5 && dayWall[0] > dayWall[2] + 0.03) ? MAT.BRICK : MAT.CONCRETE;
+        out._mat = wmat; glassBuf._mat = MAT.GLASS;
         const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], dayWall, b);   // solid wall mass
         const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
@@ -1873,7 +1908,9 @@ const Tracks = (function () {
         for (let r = 0; r < rows; r++) {
           const ry01 = (r + 0.5) / rows;
           if (dMed) {
+            out._mat = MAT.GLASS;
             addBox(out, vadd(gBase, p.u, yBase + (r + 0.5) * fh), [glassT, winH, sd * 0.94], [dayWall[0] * 0.34, dayWall[1] * 0.30, dayWall[2] * 0.26], b);
+            out._mat = wmat;
           } else {
             const t01 = 0.42 + ry01 * 0.16;
             // Darker glass base → the reflected sky/sun has real contrast to read
@@ -1891,6 +1928,7 @@ const Tracks = (function () {
           const off = -sw / 2 + (c / (nmR + 1)) * sw;
           addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), [0.5, sh, sd * 1.02], dayMull, b);
         }
+        out._mat = 0; glassBuf._mat = 0;
         return ok;
       };
       // Ground-floor plinth, grounded but never near-black (day) / glows (night).
