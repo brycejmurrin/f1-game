@@ -472,60 +472,71 @@ const Car3D = (function () {
       addBox(out, s*0.10, 0.20, 2.44, 0.05, 0.17, 0.16, c1);                  // nose pylon
     }
 
-    // --- Rear wing: tall endplates + 2-element plane + beam wing (flat).
-    // AERO visualTier reshapes endplate height / element count / DRS pod. ---
-    const epSY = aeroT === 0 ? 0.45 : (aeroT === 2 ? 0.72 : 0.62);
-    for (const s of [-1, 1]) {
-      addBox(out, s*0.50, 0.82, -2.42, 0.05, epSY, 0.52, DARK);
-    }
-    // Angled rear-wing elements (leading edge low/forward → trailing high/back)
-    addSpan(out, { z: -2.38, y: 1.005, w: 1.02, h: 0.035 },
-                 { z: -2.64, y: 1.075, w: 1.02, h: 0.050 }, c2);  // upper element
-    if (aeroT !== 0) {
-      addSpan(out, { z: -2.34, y: 0.900, w: 1.02, h: 0.030 },
-                   { z: -2.56, y: 0.955, w: 1.02, h: 0.042 }, c2);  // mid element (dropped at tier 0)
-    }
-    addSpan(out, { z: -2.30, y: 0.805, w: 1.02, h: 0.028 },
-                 { z: -2.50, y: 0.850, w: 1.02, h: 0.038 }, c1);  // lower element
-    const drsSX = aeroT === 2 ? 0.13 : 0.10;
-    addBox(out, 0, 1.085, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
+    // --- Rear assembly: wing, DRS pod, rain light, diffuser, gearbox strakes,
+    // rear brake ducts. ALL of it sits well behind the driver, so the cockpit
+    // build (ckpt) skips the lot — like the airbox/engine cover above, nothing
+    // behind the seat should exist in the first-person body, so no transform
+    // edge case can ever swing rear bodywork across the onboard camera. ---
+    if (!ckpt) {
+      // --- Rear wing: tall endplates + 2-element plane + beam wing (flat).
+      // AERO visualTier reshapes endplate height / element count / DRS pod. ---
+      const epSY = aeroT === 0 ? 0.45 : (aeroT === 2 ? 0.72 : 0.62);
+      for (const s of [-1, 1]) {
+        addBox(out, s*0.50, 0.82, -2.42, 0.05, epSY, 0.52, DARK);
+      }
+      // Angled rear-wing elements (leading edge low/forward → trailing high/back)
+      addSpan(out, { z: -2.38, y: 1.005, w: 1.02, h: 0.035 },
+                   { z: -2.64, y: 1.075, w: 1.02, h: 0.050 }, c2);  // upper element
+      if (aeroT !== 0) {
+        addSpan(out, { z: -2.34, y: 0.900, w: 1.02, h: 0.030 },
+                     { z: -2.56, y: 0.955, w: 1.02, h: 0.042 }, c2);  // mid element (dropped at tier 0)
+      }
+      addSpan(out, { z: -2.30, y: 0.805, w: 1.02, h: 0.028 },
+                   { z: -2.50, y: 0.850, w: 1.02, h: 0.038 }, c1);  // lower element
+      const drsSX = aeroT === 2 ? 0.13 : 0.10;
+      addBox(out, 0, 1.085, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
 
-    // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
-    // structure. The >1 albedo glows through the night emissive path (and blooms),
-    // so every car trails a visible red light after dark / in spray. ---
-    addBox(out, 0, 0.50, -2.52, 0.13, 0.18, 0.10, DARK);
-    addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03, [2.6, 0.08, 0.06]);
+      // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
+      // structure. The >1 albedo glows through the night emissive path (and blooms),
+      // so every car trails a visible red light after dark / in spray. ---
+      addBox(out, 0, 0.50, -2.52, 0.13, 0.18, 0.10, DARK);
+      addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03, [2.6, 0.08, 0.06]);
 
-    // --- Rear diffuser --- AERO visualTier scales width + front kick-up height.
-    const diffW  = aeroT === 0 ? 0.9 : (aeroT === 2 ? 1.15 : 1.0);
-    const diffH1 = aeroT === 0 ? 0.7 : (aeroT === 2 ? 1.3 : 1.0);
-    addLoft(out, -2.7, 0, 0.24, 1.40 * diffW, 0.36, -1.90, 0, 0.12, 1.05 * diffW, 0.14 * diffH1,
-            [0.06, 0.06, 0.07]);
+      // --- Rear diffuser --- AERO visualTier scales width + front kick-up height.
+      const diffW  = aeroT === 0 ? 0.9 : (aeroT === 2 ? 1.15 : 1.0);
+      const diffH1 = aeroT === 0 ? 0.7 : (aeroT === 2 ? 1.3 : 1.0);
+      addLoft(out, -2.7, 0, 0.24, 1.40 * diffW, 0.36, -1.90, 0, 0.12, 1.05 * diffW, 0.14 * diffH1,
+              [0.06, 0.06, 0.07]);
 
-    // --- Gearbox visual tell: thin carbon diffuser strakes (tier 2 only, pure
-    // addition — absent at tier 0/1, matching today's bare diffuser). ---
-    if (tier("gearbox") === 2) {
-      for (const fx of [-0.45, -0.15, 0.15, 0.45]) {
-        addBox(out, fx, 0.20, -2.20, 0.015, 0.08, 0.40, CARBON);
+      // --- Gearbox visual tell: thin carbon diffuser strakes (tier 2 only, pure
+      // addition — absent at tier 0/1, matching today's bare diffuser). ---
+      if (tier("gearbox") === 2) {
+        for (const fx of [-0.45, -0.15, 0.15, 0.45]) {
+          addBox(out, fx, 0.20, -2.20, 0.015, 0.08, 0.40, CARBON);
+        }
       }
     }
 
     // --- Brake duct fairings (front + rear wheels) --- BRAKES tier scales duct size.
+    // Cockpit build keeps only the FRONT ducts (visible beside the front tyres).
     const brakesT = tier("brakes");
     const ductMul = brakesT === 0 ? 0.8 : (brakesT === 2 ? 1.25 : 1.0);
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, 1.89, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
-      addBox(out, s*0.58, 0.30, -1.80, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
+      if (!ckpt) addBox(out, s*0.58, 0.30, -1.80, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
     }
 
     // --- Suspension wishbones --- SUSPENSION tier scales thickness + follows
-    // the ride-height shift from the floor plank above.
+    // the ride-height shift from the floor plank above. Cockpit build keeps
+    // only the FRONT pair (rears sit behind the seat).
     const wbMul = suspT === 0 ? 0.85 : (suspT === 2 ? 1.3 : 1.0);
     for (const s of [-1, 1]) {
       addBox(out, s*0.50, 0.24 + rideDY,  1.70, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front lower
       addBox(out, s*0.50, 0.42 + rideDY,  1.63, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front upper
-      addBox(out, s*0.49, 0.26 + rideDY, -1.60, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear lower
-      addBox(out, s*0.49, 0.44 + rideDY, -1.53, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear upper
+      if (!ckpt) {
+        addBox(out, s*0.49, 0.26 + rideDY, -1.60, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear lower
+        addBox(out, s*0.49, 0.44 + rideDY, -1.53, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear upper
+      }
     }
 
     // --- Wheels --- (skipped for the player car, which draws animated wheels)

@@ -4062,7 +4062,15 @@ function render(dt) {
       tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
       tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
       basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
-      GLX.draw(teamMesh(player.team), tmpMat, { emissive: 0.60, roughness: 0.20, metalness: 0.08, specular: 0.35 });
+      // TRANSLUCENT, like every racing game's ghost. Opaque, it was a solid
+      // car-sized wall: the ghost replays your best lap's position at the same
+      // elapsed time, so it slides through/past you whenever your braking or
+      // acceleration differs from the recorded lap — and side-on at 3-6 m its
+      // carbon floor/tyres/wing filled most of the cockpit view as a black
+      // slab ("black on screen when accelerating or braking" in TT). At 35%
+      // alpha the track stays readable straight through it at any distance,
+      // and the raised emissive keeps it reading as a bright spectre.
+      GLX.draw(teamMesh(player.team), tmpMat, { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true });
       }
     }
   }
