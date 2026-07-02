@@ -292,10 +292,10 @@ const Car3D = (function () {
         // big red bodywork "V" of a real F1 onboard.
         addBlock(out, [
           [s*0.26, 0.40, 1.55], [s*0.56, 0.28, 1.55], [s*0.54, 0.44, 1.52], [s*0.26, 0.50, 1.52],  // front (nose end)
-          [s*0.30, 0.42, 0.12], [s*0.86, 0.30, 0.12], [s*0.84, 0.92, 0.06], [s*0.30, 0.86, 0.06],  // rear (right by the driver)
+          [s*0.28, 0.40, 0.12], [s*0.62, 0.28, 0.12], [s*0.60, 0.62, 0.06], [s*0.28, 0.58, 0.06],  // rear (narrowed + lowered — was ballooning into the onboard FOV)
         ], c1);
         // Accent edge stripe along the shoulder crown.
-        addBox(out, s*0.56, 0.70, 0.70, 0.03, 0.03, 1.5, c2);
+        addBox(out, s*0.44, 0.54, 0.70, 0.025, 0.025, 1.5, c2);
       }
     } else {
       for (const s of [-1, 1]) {

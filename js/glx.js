@@ -1318,6 +1318,7 @@ uniform vec3 uUpVS;          // world-up in view space (pick out up-facing road)
 uniform vec2 uReflTexel;     // 1/width, 1/height
 uniform float uReflect;      // wet-road SSR strength (0 = off)
 uniform float uCarReflect;   // car-bodywork SSR strength (CAR tuner group; default 0.55)
+uniform float uCarGloss;     // car paint gloss (CAR tuner group; default 1.0) — widens the car's SSR streak as it drops
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
 uniform vec3 uReflSkyLo;     // zenith sky-glow
 out vec4 outColor;
@@ -1417,7 +1418,13 @@ void main() {
     float carMask = carPx * smoothstep(0.30, 0.65, upDot)
                   * smoothstep(-1.0, -3.0, P.z)
                   * (1.0 - smoothstep(-22.0, -55.0, P.z));
-    float ssrGate = max(roadMask * uReflect, carMask * uCarReflect);
+    // Reject the noisy car silhouette rim: dpx/dpy (already computed above for Nv)
+    // spike at edge pixels, which is exactly where the cheap upDot normal is worst.
+    float edgeGrad = length(dpx) + length(dpy);
+    carMask *= 1.0 - smoothstep(0.35, 0.9, edgeGrad);
+    float roadTerm = roadMask * uReflect;
+    float carTerm  = carMask  * uCarReflect;
+    float ssrGate  = max(roadTerm, carTerm);
     if (ssrGate > 0.001) {
       vec3 V = normalize(-P);
       vec3 R = reflect(-V, Nv);                    // points up toward the city
@@ -1458,7 +1465,12 @@ void main() {
       // hit (Gaussian, wetness+grazing-scaled) bloom into the streak naturally.
       vec3 hitCol = vec3(0.0);
       if (found) {
-        float streak = uReflect * (0.010 + 0.022 * clamp((0.62 - vUV.y) / 0.62, 0.0, 1.0));
+        // Car reflections get their own blur character (gloss-driven) instead of
+        // inheriting the road's wetness-driven streak spread.
+        float carSoft = clamp((1.4 - uCarGloss) * 0.5, 0.0, 1.0);
+        float streak = (carTerm > roadTerm)
+          ? uCarReflect * (0.006 + 0.030 * carSoft)
+          : uReflect * (0.010 + 0.022 * clamp((0.62 - vUV.y) / 0.62, 0.0, 1.0));
         float w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
         hitCol  = texture(uScene, hitUV).rgb * w0;
         hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 0.5)).rgb * w1;
@@ -1488,8 +1500,11 @@ void main() {
       // The darker-mirror substitution below is tuned for WET roads. At the
       // faint dry levels (uReflect < 0.2: dry-day 0.07 / dry-night 0.16) fade
       // the substitution quadratically so it reads as a subtle sheen instead
-      // of dark towers replacing the sunlit tarmac.
-      strength *= min(uReflect / 0.20, 1.0);
+      // of dark towers replacing the sunlit tarmac. Car-paint pixels damp by
+      // their OWN driving value (uCarReflect), not the road's — otherwise a
+      // dry session silently crushes car reflections regardless of carReflect.
+      float gateSrc = (carTerm > roadTerm) ? uCarReflect : uReflect;
+      strength *= min(gateSrc / 0.20, 1.0);
       // The whole SSR branch above is gated by a HARD "vUV.y < 0.62" cutoff (a
       // cheap early-out — the upper screen is sky, never wet road/car paint).
       // That boolean gate is a step function: reflected pixels just below the
@@ -1814,7 +1829,7 @@ void main() {}`;
       msaaSamples = Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -2843,6 +2858,7 @@ void main() {
     gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
     gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
     gl.uniform1f(compU.uCarReflect, CT && CT.carReflect != null ? CT.carReflect : 0.55);
+    gl.uniform1f(compU.uCarGloss, CT && CT.carGloss != null ? CT.carGloss : 1.0);
     // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
     const reflStr = (opts && opts.reflect) || 0;
     // SSR inputs bind every frame now — car paint reflects the world even in
