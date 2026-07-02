@@ -3068,9 +3068,11 @@ function camVantage(mode, s, x, spd, now, extra) {
       // NOSE points, so the view doesn't swing toward the apex on corner
       // entry. A tiny fraction of the curved look-ahead is kept so it still
       // gently leads into a bend rather than staring rigidly at a fixed point.
-      // Look height kept modest (+0.4) so the frame tilts down onto the wheels.
-      const straight = [p[0] + t[0] * 30, p[1] + eyeUp + 0.4, p[2] + t[2] * 30];
-      const lead = aheadPt(30, eyeUp + 0.4, x * 0.4);
+      // Look height at eye level (tilt slightly DOWN vs the old +0.4) so the
+      // raised hood / nose deck ahead fills the lower-centre of the frame,
+      // while the horizon still sits high enough to read the track ahead.
+      const straight = [p[0] + t[0] * 30, p[1] + eyeUp - 0.15, p[2] + t[2] * 30];
+      const lead = aheadPt(30, eyeUp - 0.15, x * 0.4);
       tgt = [straight[0] * 0.85 + lead[0] * 0.15,
              straight[1] * 0.85 + lead[1] * 0.15,
              straight[2] * 0.85 + lead[2] * 0.15];

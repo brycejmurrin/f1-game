@@ -261,6 +261,28 @@ const Car3D = (function () {
     addSpan(out, kF, kR, c1);
     addTopBevel(out, kF, kR, 0.030, c1);
 
+    // --- Hood / vanity deck: a raised central panel over the monocoque, rising
+    // to a hump right in front of the cockpit. This is the "hood" the driver
+    // looks over in the onboard view (the modern F1 dash bulge / vanity panel);
+    // it also adds a chiselled centre spine to the chase-view silhouette. Runs
+    // from the nose bulkhead back to the dash, cresting at the cockpit. ---
+    const hF = { z: 1.00, y: 0.44, w: 0.34, h: 0.10, t: 0.62 };
+    const hR = { z: 0.10, y: 0.60, w: 0.42, h: 0.16, t: 0.58 };
+    addSpan(out, hF, hR, c1, c1);
+    addTopBevel(out, hF, hR, 0.026, c1);
+    // Accent stripe down the vanity deck crown (team colour).
+    addBox(out, 0, 0.665, 0.45, 0.10, 0.02, 0.80, c2);
+
+    // --- Cockpit-side head-protection bolsters: the raised survival-cell edges
+    // flanking the cockpit opening. They frame the driver's view left/right in
+    // the onboard cam and give the tub real shoulders in chase. ---
+    for (const s of [-1, 1]) {
+      addBlock(out, [
+        [s*0.24, 0.42, 0.14], [s*0.40, 0.42, 0.14], [s*0.40, 0.60, 0.10], [s*0.24, 0.58, 0.10],
+        [s*0.24, 0.44, -0.42], [s*0.40, 0.44, -0.42], [s*0.40, 0.62, -0.44], [s*0.24, 0.60, -0.44],
+      ], c1);
+    }
+
     // --- Airbox: trapezoid block above the cockpit (dark intake front) ---
     addSpan(out, { z: -0.28, y: 0.76, w: 0.30, h: 0.20, t: 0.55 },
                  { z: -0.75, y: 0.74, w: 0.26, h: 0.18, t: 0.55 }, c1, INTAKE);
