@@ -27,7 +27,7 @@
     elevations: [{ s: 0.60, halfM: 300, rise: 12 }, { s: 0.85, halfM: 200, rise: -6 }],
     scenery: function (api) {
       const { out, n, px, py, pz, hw, pyMin, place, prop, hash, onTrack,
-              mountain, grandstand, building, tower, tree, bush, hedge,
+              mountain, grandstand, building, motorhome, tower, tree, bush, hedge,
               billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
               addBox, addCyl, addCone, addPrism, addPyramid, addFrustum,
               anchor, vadd, cityFront, forestEdge, backdrop, groundPlane } = api;
@@ -266,16 +266,14 @@
         // lit upper-floor window strip
         addBox(out, vadd(A.c, A.u, 9.0), [16.2, 1.2, 25.2], ifemaLit, [A.r, A.u, A.t]);
       }
-      // Paddock motorhomes / hospitality behind the pits
+      // Paddock motorhomes / hospitality behind the pits — was a raw 3-box
+      // stack (body/glass-band/lit-window-band); motorhome() gives the real
+      // two-tier team-unit body + awning canopy.
       for (let s = 0.992; s < 1.058; s += 0.018) {
         const f = s % 1, k = Math.round(f * n) % n;
-        const A = anchor(k, 1, hw[k] + 42);
-        if (onTrack(A.c[0], A.c[2], 8)) continue;
         const h = 7.5 + hash(k * 3) * 4.0;
-        addBox(out, vadd(A.c, A.u, h / 2), [14, h, 18],
-               hash(k) > 0.5 ? WHITE : OFFWHITE, [A.r, A.u, A.t]);
-        addBox(out, vadd(A.c, A.u, h * 0.56), [14.2, 2.0, 18.2], DKGLASS, [A.r, A.u, A.t]);
-        addBox(out, vadd(A.c, A.u, h * 0.88), [14.4, 1.0, 18.4], LITWIN, [A.r, A.u, A.t]);
+        motorhome(k, 1, hw[k] + 35, 14, h, 18,
+          { wall: hash(k) > 0.5 ? WHITE : OFFWHITE, window: LITWIN, accent: DKGLASS });
       }
 
       // ── (6) START/SCORING GANTRY + pit-exit timing gantry ───────────────────

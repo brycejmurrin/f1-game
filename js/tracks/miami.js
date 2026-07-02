@@ -238,9 +238,10 @@
       // ===================================================================
       {
         const k = K(0.0);
-        place(k, -1, 24, [22, 9, 120], WHITE);
-        place(k, -1, 14, [1.0, 6, 116], GLASS);
-        place(k, -1, 24, [22.4, 1.5, 120], GREYWHITE);
+        // Pit building — was a raw 3-box stack (body/glass-strip/roof-cap);
+        // building() gives real floors + lit windows, matching the paddock
+        // club terrace right below it.
+        building(k, -1, 13, 22, 9, 120, { wall: WHITE, window: GLASS, lit: true, windowCol: WIN_AMBER });
         // paddock club terrace
         building(k, -1, 42, 26, 22, 120,
           { wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER });

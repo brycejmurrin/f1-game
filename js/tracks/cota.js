@@ -24,7 +24,7 @@
     // Turn 1: the calendar's most famous climb — ~30 m up in a few hundred metres.
     elevations: [{ s: 0.06, halfM: 320, rise: 12 }],
     scenery: function (api) {
-      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
+      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, motorhome, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // -- Palette (Texas Hill Country, DAY) --
@@ -72,9 +72,11 @@
       // ---- Pit/paddock building cluster (s≈0.97–0.05, L) ----
       // long low pit garage block flanking the main straight
       building(K(0.97), -1, 12, 24, 8, 120, { wall: [0.84, 0.84, 0.86], window: glass, floor: 2, roof: [0.55, 0.56, 0.60] });
-      // paddock hospitality / team motorhomes behind the pits
-      building(K(0.99), -1, 40, 30, 11, 60, { wall: [0.88, 0.88, 0.90], window: glass, floor: 3, roof: [0.5, 0.52, 0.56] });
-      building(K(0.04), -1, 38, 26,  9, 44, { wall: [0.80, 0.80, 0.83], window: glass, floor: 2 });
+      // paddock hospitality / team motorhomes behind the pits — was a generic
+      // office-block building() under a "motorhomes" comment; motorhome() is
+      // the purpose-built two-tier team-unit body.
+      motorhome(K(0.99), -1, 40, 30, 8, 60, { wall: [0.88, 0.88, 0.90], window: glass });
+      motorhome(K(0.04), -1, 38, 26, 7, 44, { wall: [0.80, 0.80, 0.83], window: glass });
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
       building(K(0.05), -1, 16, 16, 18, 22, { wall: cotaBlue, window: glass, floor: 5, roof: darkSteel });
 

@@ -25,7 +25,7 @@
     elevations: [{ s: 0.20, halfM: 280, rise: 7 }, { s: 0.55, halfM: 320, rise: -8 }],
     scenery: function (api) {
       const { out, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
-              mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, tower,
+              mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
               billboard, gantry, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, vadd, onTrack, groundYAt,
               forestEdge, along } = api;
@@ -260,8 +260,9 @@
       // ====================================================================
       building(K(0.00), -1, 2, 14, 9, 70, { wall: WHITE, window: WIN_WARM, lit: true, floor: 4 });
       groundPlane(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK);
-      // Rear hospitality/paddock building
-      building(K(0.03), -1, 32, 16, 10, 34, { wall: WHITE, window: WIN_WARM, lit: true, floor: 4 });
+      // Rear hospitality/paddock building — motorhome() reads as a team unit
+      // instead of a generic 4-floor office block.
+      motorhome(K(0.03), -1, 32, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
       // Comms/broadcast tower — vertical landmark
       tower(K(0.02), -1, 44, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: true });
       // Pit wall + kerb trim

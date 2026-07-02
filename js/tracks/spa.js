@@ -27,7 +27,7 @@
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop,
-              addBox, vadd, anchor, mountain, pine, grandstand, building, marshalPost, gantry, billboard } = api;
+              addBox, vadd, anchor, mountain, pine, grandstand, building, motorhome, marshalPost, gantry, billboard } = api;
 
       // Start gantry over the line (every circuit has one; the start-gantry
       // downlights in buildTrackLights need this structure to hang from).
@@ -115,6 +115,12 @@
         const a = anchor(0, -1, 20);
         addBox(out, vadd(a.c, a.u, 12.5), [16, 0.8, 60], [0.82, 0.84, 0.88], [a.r, a.u, a.t]);
       }
+      // Paddock hospitality row set back behind the pit building — Spa's
+      // paddock was missing a team-motorhome row entirely (just the pit slab
+      // + one old building); motorhome() adds the two-tier body + awning.
+      motorhome(Math.round(n * 0.001) % n, -1, 24, 16, 8, 20, { wall: [0.88, 0.89, 0.91], window: [0.30, 0.38, 0.46] });
+      motorhome(Math.round(n * 0.006) % n, -1, 24, 15, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
+      motorhome(Math.round(n * 0.994) % n, -1, 24, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
       building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
 

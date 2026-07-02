@@ -26,7 +26,7 @@
     scenery: function (api) {
       const { out, n, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
-              building, grandstand, billboard, tree, hedge, fence, palm, pine,
+              building, motorhome, grandstand, billboard, tree, hedge, fence, palm, pine,
               guardrail, tyreWall, marshalPost, tower, gantry,
               cityFront, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -123,11 +123,12 @@
       for (const s of [0.005, 0.02, 0.035, 0.05]) {
         building(K(s), -1, 2.5, 7, 5, 14, { wall: [0.93, 0.93, 0.95], window: [0.22, 0.26, 0.30], floor: 2 });
       }
-      // Paddock motorhomes
+      // Paddock motorhomes — was a generic office-block building() under a
+      // "motorhomes" comment; motorhome() is the purpose-built swap.
       for (const s of [0.01, 0.03, 0.05]) {
-        building(K(s), -1, 22, 14, 9 + hash(K(s)) * 4, 16,
+        motorhome(K(s), -1, 22, 14, 9 + hash(K(s)) * 4, 16,
                  { wall: hash(K(s) * 5) > 0.5 ? [0.86, 0.40, 0.30] : [0.30, 0.42, 0.62],
-                   window: [0.55, 0.58, 0.62], floor: 2 });
+                   window: [0.55, 0.58, 0.62] });
       }
       // Control tower at start of pit straight
       tower(K(0.04), -1, 6, 9, 26, { col: [0.82, 0.82, 0.86], cap: true, capCol: [0.20, 0.22, 0.26], mast: 7 });

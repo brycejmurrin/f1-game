@@ -25,7 +25,7 @@
     elevations: [{ s: 0.86, halfM: 480, rise: 10 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
-              addBox, every, onTrack, hash, vadd, anchor, along, building, tower,
+              addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,
               grandstand, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
               addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront } = api;
@@ -57,12 +57,12 @@
                  window: [0.30, 0.34, 0.42], floor: 3.2, roof: [0.52, 0.52, 0.56] });
       }
 
-      // Paddock hospitality / motorhomes behind the pits
+      // Paddock hospitality / motorhomes behind the pits — was a single plain
+      // box per unit; motorhome() adds the two-tier body, awning canopy,
+      // window ribbon and livery stripe.
       for (const s of [0.95, 0.98, 0.02, 0.05]) {
         const k = K(s);
-        const anc = anchor(k, 1, 42 + hash(k) * 16);
-        addBox(out, vadd(anc.c, anc.u, 3), [11, 6, 18],
-               [0.82, 0.84, 0.86], [anc.r, anc.u, anc.t]);
+        motorhome(k, 1, 36 + hash(k) * 16, 11, 7, 18, { wall: [0.82, 0.84, 0.86] });
       }
 
       // Pit wall: solid low concrete barrier on the R of the pit straight

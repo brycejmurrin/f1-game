@@ -24,7 +24,8 @@
     // descent through the back of the lap.
     elevations: [{ s: 0.10, halfM: 240, rise: 10 }, { s: 0.40, halfM: 320, rise: -8 }],
     scenery: function (api) {
-      const { out, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge } = api;
+      const { out, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge } = api;
+      const K = (s) => Math.round(s * n) % n;
 
       // --- Styrian Alps: two concentric rings of organic peaks.
       // Inner ring (210m out): dense dark-green foothills with rocky detail, moderate snow.
@@ -133,10 +134,14 @@
         // night-ready: emissive light strip under the canopy edge (bright warm strip)
         addBox(out, vadd(vadd(a.c, a.r, -6.5), a.u, 10.4), [0.25, 0.18, 64], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
       }
-      // Paddock hospitality blocks behind the pits.
-      building(0, -1, 26, 18, 9, 22, { wall: [0.88, 0.90, 0.93], window: [0.20, 0.30, 0.42], floor: 4, roof: true });
-      building(0.04, -1, 26, 16, 7, 18, { wall: [0.80, 0.82, 0.86], window: [0.22, 0.32, 0.42], floor: 4 });
-      building(0.96, -1, 26, 16, 8, 20, { wall: [0.86, 0.88, 0.92], window: [0.20, 0.30, 0.42], floor: 4, roof: true });
+      // Paddock hospitality blocks behind the pits — motorhome() gives the
+      // real two-tier team-unit body + awning canopy instead of a flat
+      // building() office-block mass. Also fixes k=0.04/0.96 being passed as
+      // raw node indices instead of the fraction they clearly meant (anchor()
+      // indexes track.rx[k] etc. directly, so a non-integer k silently missed).
+      motorhome(K(0), -1, 26, 18, 9, 22, { wall: [0.88, 0.90, 0.93], window: [0.20, 0.30, 0.42] });
+      motorhome(K(0.04), -1, 26, 16, 7, 18, { wall: [0.80, 0.82, 0.86], window: [0.22, 0.32, 0.42] });
+      motorhome(K(0.96), -1, 26, 16, 8, 20, { wall: [0.86, 0.88, 0.92], window: [0.20, 0.30, 0.42] });
       // Race-control / media tower over the start.
       tower(0.01, -1, 18, 9, 26, { col: [0.80, 0.82, 0.86], cap: true, capCol: rbNavy, mast: 7 });
 

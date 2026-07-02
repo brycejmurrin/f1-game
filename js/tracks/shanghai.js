@@ -26,7 +26,7 @@
       const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,
         place, prop, backdrop, groundPlane, groundYAt, anchor, addBox, addCyl, addCone,
         addFrustum, addPrism, addPyramid, along, every,
-        building, tower, cityFront, grandstand, billboard, gantry, marshalPost,
+        building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
         forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -64,10 +64,12 @@
       // Long white pit/control building hugging the main straight.
       building(K(0.00), -1, 2, 18, 14, 150, { wall: WHITE, window: WIN_LIT, floor: 4 });
       building(K(0.98), -1, 2, 16, 11,  90, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
-      // Paddock / hospitality block set further back behind the pit building.
-      building(K(0.99), -1, 40, 26,  9, 110, { wall: [0.80, 0.82, 0.84], window: WIN_LIT, floor: 3 });
-      building(K(0.96), -1, 44, 20, 12,  60, { wall: WHITE, window: WIN_TOWER, floor: 4 });
-      building(K(0.02), -1, 42, 22,  8,  70, { wall: [0.82, 0.83, 0.85], window: WIN_LIT, floor: 2 });
+      // Paddock / hospitality block set further back behind the pit building —
+      // motorhome() gives the real two-tier team-unit body + awning canopy
+      // instead of a flat building() office-block mass.
+      motorhome(K(0.99), -1, 40, 26,  9, 110, { wall: [0.80, 0.82, 0.84], window: WIN_LIT });
+      motorhome(K(0.96), -1, 44, 20, 12,  60, { wall: WHITE, window: WIN_TOWER });
+      motorhome(K(0.02), -1, 42, 22,  8,  70, { wall: [0.82, 0.83, 0.85], window: WIN_LIT });
 
       // =================================================================================
       // SIGNATURE SUSPENDED TOWER-BRIDGES — the iconic Shanghai pit-straight landmark.

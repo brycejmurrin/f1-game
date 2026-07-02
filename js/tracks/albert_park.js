@@ -26,7 +26,7 @@
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
               every, hash, onTrack,
-              grandstand, building, tower, tree, palm, bush, hedge, billboard, gantry,
+              grandstand, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
               forestEdge, cityFront } = api;
@@ -381,12 +381,16 @@
       // ====================================================================
       tower(k(0.02), 1, 26, 12, 26, { col: [0.80, 0.82, 0.85], seg: 4,
         cap: true, capCol: [0.20, 0.24, 0.30], mast: 8 });
+      // Team motorhome row — the comment already called these "motorhomes" but
+      // they were generic office-block building() calls; motorhome() gives the
+      // real two-tier team-unit body + awning canopy.
       for (let j = 0; j < 6; j++) {
         const kk = (k(0.0) + j * 8) % n;
-        building(kk, 1, 34, 12, 7 + hash(j * 3) * 3, 14, {
-          wall: [[0.86, 0.87, 0.88], [0.30, 0.40, 0.60], [0.70, 0.30, 0.25],
-                 [0.80, 0.78, 0.40], [0.55, 0.55, 0.58], [0.20, 0.55, 0.50]][j % 6],
-          window: [0.18, 0.22, 0.28], floor: 4 });
+        const wall = [[0.86, 0.87, 0.88], [0.30, 0.40, 0.60], [0.70, 0.30, 0.25],
+                      [0.80, 0.78, 0.40], [0.55, 0.55, 0.58], [0.20, 0.55, 0.50]][j % 6];
+        const accent = [[0.70, 0.10, 0.10], [0.10, 0.20, 0.55], [0.85, 0.20, 0.15],
+                        [0.75, 0.65, 0.10], [0.35, 0.35, 0.40], [0.10, 0.55, 0.45]][j % 6];
+        motorhome(kk, 1, 34, 12, 7 + hash(j * 3) * 3, 14, { wall, window: [0.18, 0.22, 0.28], accent });
       }
       for (let j = 0; j < 5; j++) {
         const a = anchor((k(0.0) + j * 10) % n, 1, 56 + hash(j * 7) * 8);

@@ -25,7 +25,7 @@
     elevations: [{ s: 0.62, halfM: 360, rise: 9 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash,
-              grandstand, building, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
+              grandstand, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along,
               tower, forestEdge } = api;
       const k = (s) => Math.round(s * n) % n;
@@ -226,12 +226,14 @@
 
       // ---- National pit straight (s≈0.0) garages + pit wall + paddock ----
       building(k(0.97), 1, 6, 12, 8, 90, { wall: [0.82, 0.83, 0.85], window: [0.20, 0.24, 0.28], floor: 4 });
-      // paddock support buildings / hospitality units set back behind the pits
+      // paddock support buildings / hospitality units set back behind the pits —
+      // motorhome() gives the real two-tier team-unit body + awning canopy
+      // instead of a flat building() office-block mass.
       for (const [s, d, w, h, ln, col] of [
         [0.95, 40, 14, 7, 34, [0.76, 0.76, 0.72]],
         [0.99, 44, 16, 6, 30, [0.72, 0.74, 0.76]],
         [0.92, 38, 12, 6, 26, [0.78, 0.77, 0.73]],
-      ]) building(k(s), 1, d, w, h, ln, { wall: col, window: [0.28, 0.32, 0.36] });
+      ]) motorhome(k(s), 1, d, w, h, ln, { wall: col, window: [0.28, 0.32, 0.36] });
       // marquee / hospitality tents (white prism roofs) in the paddock
       for (const [s, d, tCol] of [
         [0.94, 60, [0.92, 0.93, 0.94]],

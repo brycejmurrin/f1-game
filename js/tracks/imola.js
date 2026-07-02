@@ -28,7 +28,7 @@
       const { out, n, px, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               along, mountain, tree, pine, hedge, bush,
-              grandstand, building, tower, billboard, marshalPost, gantry,
+              grandstand, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall,
               forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -313,7 +313,7 @@
       billboard(K(0.95),  1, 16, 12, 5, [0.90, 0.80, 0.20]);
 
       // ---- Trackside hospitality + paddock marquee ----
-      building(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: WIN_LIT, floor: 3, roof: true, lit: true });
+      motorhome(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: WIN_LIT });
       {
         const a = anchor(K(0.92), -1, 30);
         addBox(out, vadd(a.c, a.u, 2.2), [16, 4.4, 12], [0.90, 0.90, 0.88], [a.r, a.u, a.t]);

@@ -235,10 +235,14 @@
       }
 
       // --- s 0.00 R near: pit/paddock — pit garages + grandstand + crew structures + neon accents ---
+      // Garage blocks: was a flat box + a solid neon "sign" box; building()
+      // gives real floors + lit windows tinted by each team's neon colour.
       for (let i = 0; i < 6; i++) {
-        place(K(0.0 + i * 0.011), 1, 13, [10, 7, 24], [0.32, 0.33, 0.38]);   // garage block
-        place(K(0.0 + i * 0.011), 1, 13, [10.6, 1.0, 25], LED);              // bright rim band
-        place(K(0.0 + i * 0.011), 1, 13, [10.4, 4.5, 6], NEON[i % NEON.length]); // team sign (neon colored)
+        building(K(0.0 + i * 0.011), 1, 13, 10, 7, 24, {
+          wall: [0.32, 0.33, 0.38], window: NEON[i % NEON.length], windowCol: NEON[i % NEON.length],
+          floor: 3, lit: true,
+        });
+        place(K(0.0 + i * 0.011), 1, 13, [10.6, 1.0, 25], LED);   // bright fascia rim band
       }
       grandstand(0.035, 1, 28, 82, [0.28, 0.29, 0.34], [0.42, 0.44, 0.58]); // paddock stand (brighter)
       grandstand(0.07, -1, 26, 72, [0.26, 0.27, 0.32], [0.45, 0.40, 0.52]); // opposite stand

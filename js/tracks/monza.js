@@ -35,7 +35,7 @@
     elevations: [{ s: 0.55, halfM: 320, rise: 7 }],
     scenery: function (api) {
       const { out, n, ds, pyMin, place, prop, backdrop, groundPlane, groundYAt, every,
-        onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, tower,
+        onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
         grandstand, billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
         addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
         px, pz } = api;
@@ -393,13 +393,13 @@
           addBox(out, vadd(aP.c, aP.u, 9.5), [0.2, 1.0, 22], winPad, [aP.r, aP.u, aP.t]);
         }
       }
-      // Motorhome / truck row in the paddock (low coloured boxes).
+      // Motorhome row in the paddock (was a single flat coloured box per unit).
       every(40, (k) => {
         const h = hash(k * 71 + 31);
         if (h < 0.5) return;
         const s = k / n;
         if (s > 0.10 && s < 0.90) return;   // only behind pit/paddock
-        prop(k, -1, 55 + h * 10, [10, 4, 6], [0.6 + h * 0.3, 0.6, 0.62]);
+        motorhome(k, -1, 55 + h * 10, 10, 4, 6, { wall: [0.6 + h * 0.3, 0.6, 0.62] });
       });
 
       // Ornamental park lakes (reflective blue slabs).
