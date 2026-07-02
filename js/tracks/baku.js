@@ -25,7 +25,7 @@
     elevations: [{ s: 0.35, halfM: 560, rise: 14 }, { s: 0.58, halfM: 320, rise: -10 }],
     scenery: function (api) {
       const {
-        out, n, place, prop, backdrop, groundPlane, building, tower, wall,
+        out, MAT, n, place, prop, backdrop, groundPlane, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, addPyramid, ferrisWheel, vadd, hash, cityFront,
@@ -730,17 +730,21 @@
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.90, 0.91, 0.94];
         const L = 26 * sc, W = 7 * sc;
+        out._mat = MAT.METAL;
         addBox(out, vadd(a.c, a.u, 1.8 * sc), [W, 3.0 * sc, L * 0.86], HULL, b);
         addPrism(out, vadd(vadd(a.c, a.t, L * 0.47), a.u, 1.8 * sc), [W, 3.0 * sc, L * 0.16], HULL, b);
         addBox(out, vadd(a.c, a.u, 0.5 * sc), [W * 1.02, 0.9 * sc, L * 0.88], [0.06, 0.08, 0.14], b);
         const sup = vadd(a.c, a.t, L * 0.02);
         addBox(out, vadd(sup, a.u, 4.2 * sc), [W * 0.82, 2.4 * sc, L * 0.5], [0.30, 0.34, 0.42], b);
         addBox(out, vadd(sup, a.u, 6.6 * sc), [W * 0.66, 2.0 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
+        out._mat = 0;
         // warm + cool lit cabin bands
         addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.5], WIN_WARM, b);
         addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.32], WIN_COOL, b);
         // radar mast + nav light
+        out._mat = MAT.METAL;
         addCyl(out, vadd(sup, a.u, 8.2 * sc), 0.12 * sc, 4.5 * sc, [0.80, 0.82, 0.86], 4, b);
+        out._mat = 0;
         addBox(out, vadd(sup, a.u, 12.4 * sc), [0.4 * sc, 0.4 * sc, 0.4 * sc], [0.95, 0.30, 0.25], b);
       };
       for (let i = 0; i < 9; i++) {
@@ -766,14 +770,17 @@
         const rollB = [a.r, a.t, a.u];          // cyl 'up' = track tangent → horizontal roll
         const b = [a.r, a.u, a.t];
         // Stone plinth
+        out._mat = MAT.STONE;
         addBox(out, vadd(a.c, a.u, 3), [40, 6, 26], [0.34, 0.32, 0.30], b);
         // Main carpet roll (horizontal cylinder) sitting on the plinth
+        out._mat = MAT.FABRIC;
         addCyl(out, vadd(vadd(a.c, a.t, -16), a.u, 13), 10, 32, [0.62, 0.24, 0.18], 16, rollB);
         // Rolled inner core rings (lighter, at the open end)
         addCyl(out, vadd(vadd(a.c, a.t, 16), a.u, 13), 10.2, 2.0, [0.78, 0.66, 0.40], 16, rollB);
         addCyl(out, vadd(vadd(a.c, a.t, 16), a.u, 13), 6.0, 2.4, [0.85, 0.52, 0.30], 14, rollB);
         // Peeled-back carpet flap draping down the front (a leaning slab)
         addBox(out, vadd(vadd(a.c, a.r, -9), a.u, 9), [1.4, 18, 30], [0.70, 0.28, 0.20], b);
+        out._mat = 0;
         // Warm patterned uplight bands along the roll
         for (let s = -3; s <= 3; s++) {
           addBox(out, vadd(vadd(a.c, a.t, s * 4.2), a.u, 22), [4.0, 0.5, 3.0],

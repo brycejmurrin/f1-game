@@ -24,7 +24,7 @@
     // Turn 1: the calendar's most famous climb — ~30 m up in a few hundred metres.
     elevations: [{ s: 0.06, halfM: 320, rise: 12 }],
     scenery: function (api) {
-      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addPyramid, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, motorhome, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
+      const { out, MAT, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addPyramid, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, motorhome, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ======================= BESPOKE COTA MODELS =======================
@@ -42,8 +42,10 @@
         if (onTrack(a.c[0], a.c[2], 8)) return;
         const bv = [a.r, a.u, a.t], step = 2.5, rise = 1.7;
         // terrace shell (concrete wedge) beneath the crowd
+        out._mat = MAT.CONCRETE;
         addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
                  [rows * step, rows * rise, len], [0.40, 0.41, 0.45], [a.t, a.u, a.r]);
+        out._mat = 0;
         const seats = Math.floor(len / (dens || 2.1));
         for (let r = 0; r < rows; r++) {
           const back = r * step, up = r * rise + 1.1;
@@ -60,22 +62,30 @@
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 40)) return;
         // raised black stage deck
+        out._mat = MAT.CONCRETE;
         addBox(out, vadd(a.c, a.u, 2.4), [28, 4.8, 22], [0.18, 0.18, 0.21], bv);
+        out._mat = 0;
         // fan roof canopy — three tiered arcs stepping back over the stage
+        out._mat = MAT.METAL;
         for (let i = 0; i < 3; i++) {
           addFrustum(out, vadd(vadd(a.c, a.u, 17 + i * 3), a.r, i * 5),
                      27 - i * 5, 23 - i * 5, 2.6, [0.82 - i * 0.06, 0.82 - i * 0.06, 0.86], 18, bv);
         }
+        out._mat = 0;
         // proscenium back wall + big glowing LED video wall
+        out._mat = MAT.CONCRETE;
         addBox(out, vadd(vadd(a.c, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
+        out._mat = 0;
         addBox(out, vadd(vadd(a.c, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
         // PA line-array towers flanking the stage
+        out._mat = MAT.METAL;
         for (const so of [-1, 1]) {
           const base = vadd(a.c, a.t, so * 17);
           addCyl(out, base, 0.55, 20, [0.12, 0.12, 0.14], 4, bv);
           for (let j = 0; j < 5; j++)
             addBox(out, vadd(base, a.u, 11 + j * 1.5), [1.7, 1.3, 2.6], [0.06, 0.06, 0.08], bv);
         }
+        out._mat = 0;
         // packed lawn crowd OUTWARD of the stage (away from the track), speckled
         for (let r = 0; r < 6; r++)
           for (let c = 0; c < 22; c++) {
@@ -144,9 +154,11 @@
       const at = anchor(kt, -1, 78), tb = [at.r, at.u, at.t];
       const tBase = at.c;
       // tapered concrete/steel shaft in 3 stages (total 74 m to deck level)
+      out._mat = MAT.METAL;
       addFrustum(out, tBase,                         5.8, 4.6, 32, [0.80, 0.81, 0.85], 8, tb);
       addFrustum(out, vadd(tBase, at.u, 32),         4.6, 3.8, 32, [0.78, 0.79, 0.83], 8, tb);
       addFrustum(out, vadd(tBase, at.u, 64),         3.8, 2.8, 10, [0.76, 0.77, 0.81], 8, tb);
+      out._mat = 0;
       // iconic multicolour LED ring bands wrapping the shaft (COTA's night signature)
       const ringCols = [[0.90, 0.20, 0.20], [0.95, 0.55, 0.12], [0.95, 0.85, 0.20],
                         [0.20, 0.72, 0.36], [0.18, 0.46, 0.86], [0.56, 0.30, 0.76]];
@@ -157,6 +169,7 @@
       // broad observation deck assembly (the iconic RED feature, r=8.5 m)
       const deckH = 74;
       const deckCen = vadd(tBase, at.u, deckH);
+      out._mat = MAT.METAL;
       addCyl(out, deckCen, 8.5, 2.4, redSteel, 10, tb);             // RED deck ring
       // deck floor: contained inside the ring (14 m < 17 m diameter) — no protrusion
       addBox(out, vadd(tBase, at.u, deckH + 1.2), [14, 1.6, 14], [0.92, 0.92, 0.94], tb);
@@ -177,10 +190,13 @@
         );
         addBox(out, [rPost[0], rPost[1] + 0.8, rPost[2]], [0.5, 1.4, 0.5], redSteel, tb);
       }
+      out._mat = 0;
       // base facilities: control/mechanical room at tower base
       prop(kt, -1, 62, [16, 7, 18], [0.84, 0.84, 0.86]);
       // emissive window strip on the deck band — lit interior (day+night)
+      out._mat = MAT.GLASS;
       addBox(out, vadd(tBase, at.u, deckH + 0.6), [15.5, 0.8, 15.5], litWin, tb);
+      out._mat = 0;
 
       // ---- Uphill Turn 1: dramatic red-soil embankment — the amphitheatre climb ----
       const k1 = K(0.10);

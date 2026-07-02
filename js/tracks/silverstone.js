@@ -24,7 +24,7 @@
     ],
     elevations: [{ s: 0.62, halfM: 360, rise: 9 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash,
+      const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash,
               grandstand, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along,
               tower, forestEdge } = api;
@@ -401,15 +401,19 @@
         const a = anchor(kk, side, dist);
         if (onTrack(a.c[0], a.c[2], Math.max(w, ln) * 0.5 + 6)) return;
         const b = [a.r, a.u, a.t];
+        out._mat = MAT.CONCRETE;
         addBox(out, vadd(a.c, a.u, bodyH / 2), [w, bodyH, ln], [0.60, 0.60, 0.58], b);   // hall
+        out._mat = MAT.RUST;
         addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2), w / 2, ln,
                [0.52, 0.53, 0.55], 8, [a.r, a.t, a.u]);                                   // barrel roof
+        out._mat = MAT.METAL;
         for (const end of [-1, 1]) {
           addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.45), a.t, end * (ln / 2 + 0.05)),
                  [w * 0.9, bodyH * 0.9, 0.3], [0.30, 0.31, 0.33], b);                     // sliding doors
           addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.45), a.t, end * (ln / 2 + 0.12)),
                  [0.2, bodyH * 0.9, 0.1], [0.50, 0.50, 0.52], b);                         // door split
         }
+        out._mat = 0;
       }
 
       // --- Northamptonshire farm barn: barn-red body, pitched roof, hay-loft door
@@ -418,11 +422,16 @@
         const a = anchor(kk, side, dist);
         if (onTrack(a.c[0], a.c[2], 20)) return;
         const b = [a.r, a.u, a.t];
+        out._mat = MAT.WOOD;
         addBox(out, vadd(a.c, a.u, 3), [10, 6, 16], [0.52, 0.24, 0.18], b);              // body
+        out._mat = MAT.RUST;
         addPrism(out, vadd(a.c, a.u, 6), [10.4, 3.4, 16], [0.34, 0.20, 0.16], b);        // pitched roof
+        out._mat = MAT.WOOD;
         addBox(out, vadd(vadd(a.c, a.u, 3.5), a.t, 8.05), [4, 4, 0.3], [0.30, 0.16, 0.12], b); // door
+        out._mat = MAT.METAL;
         addCyl(out, vadd(a.c, a.r, -side * 8), 2.2, 9, [0.72, 0.72, 0.74], 10, b);        // silo
         addCone(out, vadd(vadd(a.c, a.r, -side * 8), a.u, 9), 2.4, 2.2, [0.60, 0.60, 0.62], 10, b);
+        out._mat = 0;
       }
 
       // --- Heritage Spitfire on a plinth: raised fuselage, elliptical wings, nose
@@ -432,13 +441,16 @@
         if (onTrack(a.c[0], a.c[2], 16)) return;
         const b = [a.r, a.u, a.t], green = [0.24, 0.32, 0.20], grey = [0.50, 0.52, 0.55];
         const body = vadd(a.c, a.u, 3.4);
+        out._mat = MAT.METAL;
         addCyl(out, a.c, 0.5, 3.0, grey, 6, b);                                          // plinth pole
         addBox(out, body, [1.4, 1.4, 9], green, b);                                      // fuselage
         addCone(out, vadd(body, a.t, 4.5), 0.7, 2.2, [0.40, 0.16, 0.14], 6, [a.r, a.t, a.u]); // spinner nose
         addBox(out, body, [12, 0.4, 2.6], green, b);                                     // wings
         addBox(out, vadd(vadd(body, a.t, -3.8), a.u, 1.2), [0.3, 2.4, 1.8], green, b);   // tail fin
         addBox(out, vadd(body, a.t, -3.8), [4, 0.3, 1.4], green, b);                     // tailplane
+        out._mat = MAT.GLASS;
         addBox(out, vadd(body, a.u, 1.0), [1.0, 0.7, 2.0], [0.30, 0.42, 0.50], b);       // canopy
+        out._mat = 0;
       }
 
       // --- Start-light gantry cluster spanning the National straight: twin masts,
@@ -446,6 +458,7 @@
       function startGantryCluster(s) {
         const kb = k(s), L = anchor(kb, -1, 4), R = anchor(kb, 1, 4);
         const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]), bL = [L.r, L.u, L.t], H = 8;
+        out._mat = MAT.METAL;
         addCyl(out, L.c, 0.4, H, [0.20, 0.21, 0.24], 6, bL);
         addCyl(out, R.c, 0.4, H, [0.20, 0.21, 0.24], 6, [R.r, R.u, R.t]);
         const beam = vadd(vadd(L.c, L.u, H), L.r, span / 2);
@@ -454,6 +467,7 @@
           addBox(out, vadd(vadd(beam, L.u, -1.6), L.r, (i - 2) * 1.6), [0.9, 1.2, 0.9], [0.65, 0.10, 0.10], bL);
         for (const o of [-span * 0.3, span * 0.3])
           addBox(out, vadd(vadd(beam, L.r, o), L.u, 0.6), [0.8, 0.8, 1.4], [0.10, 0.10, 0.12], bL);
+        out._mat = 0;
       }
 
       // Bespoke arched WWII aircraft hangars on the former-airfield outfield.

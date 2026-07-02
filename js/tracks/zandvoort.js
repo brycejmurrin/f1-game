@@ -26,7 +26,7 @@
     ],
     elevations: [{ s: 0.56, halfM: 300, rise: 8 }],
     scenery: function (api) {
-      const { out, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
+      const { out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
               addBox, addCyl, addPrism, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
               mountain, peak, bush, hedge, grandstand, tower,
               pine, tree, forestEdge,
@@ -446,18 +446,26 @@
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 30)) return;
         const b = [a.r, a.u, a.t], H = 34, bands = 6;
+        out._mat = MAT.CONCRETE;
         for (let i = 0; i < bands; i++) {
           const y0 = i / bands * H, y1 = (i + 1) / bands * H;
           const rB = 4.2 - (y0 / H) * 2.0, rT = 4.2 - (y1 / H) * 2.0;
           addFrustum(out, vadd(a.c, a.u, y0), rB, rT, y1 - y0,
                      i % 2 ? [0.86, 0.20, 0.16] : [0.94, 0.94, 0.95], 10, b);
         }
+        out._mat = MAT.METAL;
         addCyl(out, vadd(a.c, a.u, H), 3.0, 1.2, [0.14, 0.14, 0.16], 10, b);         // gallery ring
+        out._mat = MAT.GLASS;
         addCyl(out, vadd(a.c, a.u, H + 1.2), 2.2, 3.2, [0.30, 0.42, 0.52], 8, b);    // glazed lantern
+        out._mat = 0;
         addCyl(out, vadd(a.c, a.u, H + 1.6), 1.3, 2.2, [1.0, 0.96, 0.72], 8, b);     // emissive lamp
+        out._mat = MAT.METAL;
         addCone(out, vadd(a.c, a.u, H + 4.4), 2.4, 2.6, [0.20, 0.20, 0.22], 8, b);   // dome cap
+        out._mat = MAT.STONE;
         addBox(out, vadd(vadd(a.c, a.t, 8), a.u, 2), [7, 4, 6], [0.92, 0.92, 0.90], b);   // keeper cottage
+        out._mat = MAT.ROOF;
         addPrism(out, vadd(vadd(a.c, a.t, 8), a.u, 4), [7, 2.2, 6], [0.72, 0.28, 0.20], b);
+        out._mat = 0;
       }
 
       // --- Distant seaside town silhouette: a row of varied gabled Dutch houses
@@ -474,11 +482,16 @@
           const h = 5 + hash(k * 7 + i) * 6, w = 5 + hash(k * 11 + i) * 2;
           const c = cols[(hash(k * 13 + i) * cols.length) | 0];
           const bp = vadd(a.c, a.t, off);
+          out._mat = MAT.STONE;
           addBox(out, vadd(bp, a.u, h / 2), [w, h, w], c, b);
+          out._mat = MAT.ROOF;
           addPrism(out, vadd(bp, a.u, h), [w * 1.02, h * 0.4, w], [0.52, 0.26, 0.20], b);
+          out._mat = 0;
         }
         const cs = vadd(a.c, a.t, (hash(k * 5) - 0.5) * width * 0.4);
+        out._mat = MAT.STONE;
         addBox(out, vadd(cs, a.u, 6), [5, 12, 5], [0.82, 0.80, 0.74], b);            // church tower
+        out._mat = 0;
         addCone(out, vadd(cs, a.u, 12), 3.2, 9, [0.36, 0.30, 0.28], 4, b);           // spire
       }
 
@@ -488,15 +501,22 @@
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 16)) return;
         const b = [a.r, a.u, a.t];
+        out._mat = MAT.WOOD;
         addBox(out, vadd(a.c, a.u, 1.4), [14, 0.4, 10], [0.70, 0.58, 0.40], b);      // deck
         for (const ox of [-6, 0, 6]) for (const oz of [-4, 4])
           addCyl(out, vadd(vadd(a.c, a.r, ox), a.t, oz), 0.2, 1.4, [0.5, 0.42, 0.30], 4, b);
+        out._mat = MAT.CONCRETE;
         addBox(out, vadd(a.c, a.u, 3.4), [10, 3.6, 7], [0.90, 0.88, 0.82], b);       // clubhouse
+        out._mat = MAT.ROOF;
         addPrism(out, vadd(a.c, a.u, 5.2), [10.4, 1.8, 7], [0.24, 0.52, 0.68], b);
+        out._mat = 0;
         for (const oz of [-6, -2, 2, 6]) {
+          out._mat = MAT.METAL;
           addCyl(out, vadd(vadd(a.c, a.t, oz), a.r, 8), 0.08, 5, [0.4, 0.4, 0.42], 4, b);
+          out._mat = MAT.FABRIC;
           addBox(out, vadd(vadd(vadd(a.c, a.t, oz), a.r, 8), a.u, 4.4), [0.1, 1.0, 1.6],
                  [0.95, 0.45, 0.05], b);
+          out._mat = 0;
         }
       }
 

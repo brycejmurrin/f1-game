@@ -36,7 +36,7 @@
     // back up through the Singapore Sling complex — real change ~10 m.
     elevations: [{ s: 0.40, halfM: 360, rise: -7 }, { s: 0.65, halfM: 300, rise: 8 }],
     scenery: function (api) {
-      const { out, n, hw, px, pz, place, backdrop, groundPlane, groundYAt,
+      const { out, MAT, n, hw, px, pz, place, backdrop, groundPlane, groundYAt,
               building, billboard, anchor, along, every, onTrack, addBox, addCyl, addCone,
               addPrism, addPyramid, addFrustum, grandstand, gantry, marshalPost, palm, bush,
               fence, guardrail, tyreWall, vadd, hash, cityFront, tower } = api;
@@ -655,6 +655,7 @@
           const WHITE = [0.92, 0.93, 0.95];
           const SHADE = [0.80, 0.82, 0.86];
           // Round plinth in the splash pool
+          out._mat = MAT.CONCRETE;
           addCyl(out, vadd(a.c, a.u, 0.6), 7, 1.2, [0.60, 0.62, 0.66], 12, b);
           // Fish-body base: three stacked scale rings tapering up (curved body)
           addFrustum(out, vadd(a.c, a.u, 1.2), 6.2, 5.0, 5, WHITE, 10, b);
@@ -675,6 +676,7 @@
           }
           // Ears
           for (const o of [-1.6, 1.6]) addCone(out, vadd(vadd(head, a.t, o), a.u, 2.6), 0.7, 1.6, WHITE, 5, b);
+          out._mat = 0;
           // Water jet — a long tapering cyan cone arcing out over the bay
           const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
           addCone(out, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
@@ -688,9 +690,11 @@
       // ── LIT HARBOUR BUMBOATS — small glowing boats on the bay water ──────
       const bumboat = (a, sc, glow) => {
         const b = [a.r, a.u, a.t];
+        out._mat = MAT.WOOD;
         addBox(out, vadd(a.c, a.u, 0.8 * sc), [3.4 * sc, 1.4 * sc, 9 * sc], [0.30, 0.22, 0.16], b);
         addPrism(out, vadd(vadd(a.c, a.t, 4.4 * sc), a.u, 0.8 * sc), [3.4 * sc, 1.4 * sc, 1.6 * sc], [0.34, 0.24, 0.18], b);
         addBox(out, vadd(a.c, a.u, 2.4 * sc), [2.6 * sc, 1.8 * sc, 4 * sc], [0.42, 0.30, 0.20], b);  // cabin
+        out._mat = 0;
         addBox(out, vadd(a.c, a.u, 2.6 * sc), [2.7 * sc, 0.7 * sc, 4.1 * sc], glow, b);              // lit windows
         // string of festive lights along the roofline
         for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 1.4 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);

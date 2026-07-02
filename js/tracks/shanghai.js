@@ -28,7 +28,7 @@
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
-        forestEdge, cross, norm } = api;
+        forestEdge, cross, norm, MAT } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── strut(): thin cylinder between two world points (canopy masts/cables) ──
@@ -234,22 +234,28 @@
           for (let j = 0; j < facets; j++) {
             const tm = (j + 0.5) / facets;
             const c = nodeAt(tm);
+            out._mat = j % 2 ? MAT.METAL : MAT.GLASS;
             addBox(out, c, [span / facets * 1.18, 0.5, 9.6], j % 2 ? WHITE : GLASS_HAZE, b);
           }
           // leading-edge fascia along the outer lip
+          out._mat = MAT.METAL;
           addBox(out, nodeAt(1.0), [1.4, 0.9, 9.8], STEEL, b);
           // masts + fanned cable stays every 4th bay
           if (i % 4 === 0) {
             const mastH = 46;
+            out._mat = MAT.METAL;
             addCyl(out, a.c, 1.0, mastH, WHITE, 8, b);
             const mastTop = vadd(a.c, a.u, mastH);
+            out._mat = 0;
             addCone(out, mastTop, 0.9, 3.2, RED, 6, b);           // mast beacon
+            out._mat = MAT.METAL;
             for (let j = 1; j <= facets; j++) {
               strut(mastTop, nodeAt(j / facets), 0.07, [0.92, 0.93, 0.95], 3);
             }
             // back-stay anchoring the mast to the ground behind the stand
             strut(mastTop, vadd(a.c, a.r, -14), 0.09, STEEL, 3);
           }
+          out._mat = 0;
         }
       })();
 

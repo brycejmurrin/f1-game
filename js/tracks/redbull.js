@@ -24,7 +24,7 @@
     // descent through the back of the lap.
     elevations: [{ s: 0.10, halfM: 240, rise: 10 }, { s: 0.40, halfM: 320, rise: -8 }],
     scenery: function (api) {
-      const { out, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge } = api;
+      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // --- Styrian Alps: two concentric rings of organic peaks.
@@ -357,6 +357,7 @@
       function chairlift(k, side, distNear, distFar, pylons) {
         const near = anchor(k, side, distNear);
         if (onTrack(near.c[0], near.c[2], 8)) return;
+        out._mat = MAT.METAL;
         const seg = (p, q, col) => {
           const dx = q[0] - p[0], dy = q[1] - p[1], dz = q[2] - p[2];
           const L = Math.hypot(dx, dy, dz) || 1, fwd = [dx / L, dy / L, dz / L];
@@ -383,6 +384,7 @@
             addBox(out, vadd(mid, bb[1], -1.9), [1.0, 0.5, 1.4], c ? [0.82, 0.10, 0.16] : [0.10, 0.14, 0.40], bb);
           }
         }
+        out._mat = 0;
       }
 
       // --- Styrian chalet: plastered body, dark-timber upper band, wide low-eave
@@ -391,10 +393,15 @@
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.6 + 3)) return;
         const b = [a.r, a.u, a.t];
+        out._mat = MAT.STONE;
         addBox(out, vadd(a.c, a.u, h / 2), [w, h, d], [0.86, 0.82, 0.74], b);            // plaster body
+        out._mat = MAT.WOOD;
         addBox(out, vadd(a.c, a.u, h * 0.72), [w * 1.02, h * 0.4, d * 1.02], [0.46, 0.30, 0.18], b); // timber band
+        out._mat = MAT.ROOF;
         addPrism(out, vadd(a.c, a.u, h), [w * 1.4, h * 0.55, d * 1.2], [0.40, 0.24, 0.16], b);       // wide eaves
+        out._mat = MAT.WOOD;
         addBox(out, vadd(vadd(a.c, a.u, h * 0.68), a.r, -side * (w * 0.5 + 0.4)), [0.8, 0.12, d * 0.9], [0.34, 0.22, 0.14], b); // balcony
+        out._mat = 0;
         addBox(out, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.05)), [0.1, h * 0.28, d * 0.5], [0.98, 0.86, 0.52], b); // window
       }
 
@@ -407,15 +414,22 @@
         for (let i = 0; i < count; i++) {
           const base = vadd(a.c, a.t, (i - (count - 1) / 2) * 7);
           if (hash(k * 17 + i) < 0.5) {
+            out._mat = MAT.METAL;
             addBox(out, vadd(base, a.u, 1.7), [2.8, 2.4, 5.6], [0.84, 0.85, 0.86], b);
             addBox(out, vadd(base, a.u, 3.0), [2.9, 0.4, 5.6], [0.68, 0.68, 0.70], b);
+            out._mat = 0;
           } else {
+            out._mat = MAT.FABRIC;
             addPrism(out, vadd(base, a.u, 0.2), [3.2, 1.7, 3.8],
                      hash(k * 19 + i) < 0.5 ? [0.80, 0.14, 0.16] : [0.10, 0.14, 0.40], b);
+            out._mat = 0;
           }
         }
+        out._mat = MAT.METAL;
         addCyl(out, vadd(a.c, a.r, -side * 3), 0.12, 11, [0.70, 0.70, 0.72], 5, b);
+        out._mat = MAT.FABRIC;
         addBox(out, vadd(vadd(a.c, a.r, -side * 3), a.u, 9.5), [0.1, 1.8, 3.0], [0.82, 0.10, 0.16], b);
+        out._mat = 0;
       }
 
       // Chairlifts riding the Remus crest and the famous grassy spectator hill.
