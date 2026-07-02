@@ -20,7 +20,9 @@
     "test:visual":    "playwright test tests/visual-regression-*.spec.js",
     "test:modes":     "playwright test tests/season.spec.js tests/time-trial.spec.js",
     "test:circuit":   "playwright test tests/tracks-walls.spec.js tests/autopilot.spec.js tests/elevation-tracks.spec.js",
-    "test:fast":      "playwright test tests/smoke.spec.js tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js tests/collision*.spec.js tests/offtrack.spec.js tests/parts-physics.spec.js tests/steering.spec.js"
+    "test:fast":      "playwright test tests/smoke.spec.js tests/dev-tools.spec.js tests/headless-api.spec.js tests/obs-act-edge.spec.js tests/collision*.spec.js tests/offtrack.spec.js tests/parts-physics.spec.js tests/steering.spec.js",
+    "test:ab":        "playwright test tests/lighting-ab.spec.js",
+    "ab:light":       "node tools/ab-lighting.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
