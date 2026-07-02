@@ -718,12 +718,20 @@ function carDecalData() {
   // The nose block is IDENTICAL in the chase and cockpit builds, so this reads
   // upright from chase, hood AND cockpit cameras (all look forward over the nose).
   quad([[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]], [0, 1, 0.05], R.num);
-  // Nose-rear deck (behind the number) → secondary sponsor. A clean flat station
-  // between the number plate and the cockpit, clear of the hood crown clutter.
-  quad([[-0.14, 0.545, 1.16], [0.14, 0.545, 1.16], [0.14, 0.545, 1.66], [-0.14, 0.545, 1.66]], [0, 1, 0.06], R.titleB);
+  // Nose-rear deck (behind the number) → secondary sponsor. The nose crown SLOPES
+  // UP toward the bulkhead, so the decal quad follows that slope (rear corners
+  // higher than front) — a flat horizontal quad floated/tilted off the surface
+  // and read "detached". Corner heights track the crown so it lies painted-on.
+  quad([[-0.14, 0.556, 1.16], [0.14, 0.556, 1.16], [0.14, 0.504, 1.66], [-0.14, 0.504, 1.66]], [0, 1, 0.10], R.titleB);
   // Sidepod lower flank → long sponsor strip.
   quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
   quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
+  // Rear-wing endplate number boards → the driver number again (classic F1 — the
+  // number reads on the nose AND the rear-wing endplates). Positioned for the
+  // default/medium-aero endplate (y ~0.87); high-DF setups share the same board.
+  const ex = 0.539, eyB = 0.78, eyT = 1.00, ezF = -2.30, ezR = -2.52;
+  quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
+  quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   return out;
 }
 function getCarDecalMesh() {

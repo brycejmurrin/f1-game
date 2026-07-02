@@ -557,15 +557,17 @@ const Car3D = (function () {
       addBox(out, s*0.60, 0.10, -0.10, 0.02, 0.08, 0.72, c2);
     }
 
-    // ERS battery-pack LED strip along the sidepod flanks — per-OPTION colour
+    // ERS battery-pack LED strip along the sidepod SHOULDER — per-OPTION colour
     // (HDR → glows and blooms at night), pack thickness grows with the spec, so
     // every ERS choice reads distinctly. Falls back to the old tier-2 tint.
+    // Runs along the top shoulder crease (y ~0.47), ABOVE the sponsor label band
+    // (titleA sits y 0.19–0.45) so the glow never washes over the wordmark.
     const ersId = T._ids && T._ids.ers;
     const ersStyle = (ersId && ERS_STYLE[ersId]) || null;
     const ersLed = ersStyle ? ersStyle.led : (tier("ers") === 2 ? ersC2 : null);
     const ersPack = ersStyle ? ersStyle.pack : 1.0;
     if (ersLed) {
-      for (const s of [-1, 1]) addBox(out, s*0.688, 0.36, -0.12, 0.02, 0.055 * ersPack, 0.55, ersLed);
+      for (const s of [-1, 1]) addBox(out, s*0.678, 0.475, -0.12, 0.02, 0.03 + 0.02 * ersPack, 0.55, ersLed);
     }
 
     // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
@@ -711,10 +713,11 @@ const Car3D = (function () {
     // carDecalData / the nose number plate below), not blocky 7-seg geometry —
     // so it reads sharply and shows from the chase, hood AND cockpit cameras. ---
 
-    // --- Sponsor boards: white panels on the sidepod flanks + rear-wing endplates ---
+    // --- Sponsor board on the sidepod flank + a base-paint NUMBER BOARD on each
+    // rear-wing endplate (carries the driver-number decal — see carDecalData). ---
     for (const s of [-1, 1]) {
       addBox(out, s*0.700, 0.30, 0.0, 0.020, 0.11, 0.46, PANEL);
-      addBox(out, s*0.528, 0.90, -2.42, 0.012, 0.18, 0.34, PANEL);
+      addBox(out, s*0.527, 0.87, -2.42, 0.012, 0.26, 0.30, c1);
     }
 
     // --- Front wing: ANGLED wedge elements in the block language — thin
