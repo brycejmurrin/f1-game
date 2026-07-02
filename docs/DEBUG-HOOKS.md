@@ -1,6 +1,6 @@
 # Debug & test hooks — `window.__apex`
 
-`js/game.js` exposes a `window.__apex` object: a scripting API for driving the
+`js/game-debug.js` exposes a `window.__apex` object: a scripting API for driving the
 game from the devtools console or a headless (Playwright) harness. It lets you
 jump into any circuit, position the car, frame the camera, pump the physics at a
 fixed timestep, set up collision/AI scenarios, and read telemetry — without

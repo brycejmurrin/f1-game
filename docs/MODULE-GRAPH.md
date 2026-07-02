@@ -37,7 +37,10 @@ js/game-weather.js  → AXWeather  applyRaceSettings + rain  (AXC, AX; .init(dep
 js/game-track.js    → AXTrack    loadTrack + field setup   (AXC, AX; .init(deps))
 js/game-ui.js       → AXUi       menu/panel/slider wiring  (AXC, AX, AXTrack; .init(deps))
 js/game-hud.js      → AXHud      race HUD + minimap        (AXC, AX; .init(deps))
-js/game.js          → (none)     main loop; sets window.__apex (everything above)
+js/game-render.js   → AXRender   camVantage + render, floodlights, car meshes (AXC, AX, AXWeather; no init)
+js/game-physics.js  → AXPhysics  update + updateCar, collisions (AXC, AX, AXUi, AXRender; .init(deps))
+js/game-debug.js    → AXDebug    builds window.__apex       (AXC, AX, every other AX*; .install(deps))
+js/game.js          → (none)     main loop; wires every AX*.init/.install at boot
 ```
 
 ## The `tracks-*` and `game-*` splits
@@ -51,10 +54,20 @@ conventions:
   order.
 - **`AXC` / `AX`** — plain namespaces (`window.AXC`, `window.AX`) holding config
   constants and shared mutable state; every `game-*` file reads them directly.
-  **`AXWeather` / `AXTrack` / `AXUi` / `AXHud`** are IIFEs that expose an
-  `.init(deps)`; `game.js` calls each once at boot, passing its DOM cache and
-  the closures those subsystems need (they never reach back into game.js's
-  scope directly). `game.js` still owns *all* boot-time invocation.
+  **`AXWeather` / `AXTrack` / `AXUi` / `AXHud` / `AXPhysics`** are IIFEs that
+  expose an `.init(deps)`; `game.js` calls each once at boot, passing its DOM
+  cache and the closures those subsystems still need from it (`els`,
+  `announce`, `startRace`, `endRace`, …). **`AXRender`** needs no init — it's
+  fully self-contained (reads `AX`/`AXC` directly, no game.js closures).
+  **`AXDebug`** is the same `.install(deps)` shape, but its job is to *build
+  and assign* `window.__apex` rather than just wire dependencies — `game.js`
+  calls `AXDebug.install({ els, endRace, startRace })` once at the very end
+  of boot. Once all these modules exist as `window` globals, they call each
+  other's exports **directly** (e.g. `AXDebug` calls `AXPhysics.update`,
+  `AXRender.camVantage`, `AXTrack.loadTrack`) — only names `game.js` itself
+  still owns get threaded through an `init`/`install` call. `game.js` still
+  triggers *all* boot-time invocation, but is no longer the sole place that
+  reaches into other modules at runtime.
 
 ## Dependency graph
 
@@ -70,8 +83,9 @@ audio ─────────────────────┤
 api ──► data (DataHub) ────┤
 parts ─────────────────────┤
 ghost ─────────────────────┤
-game-config (AXC) ─► game-state (AX) ─► game-weather/track/ui/hud (AX*)
-                                          └──► game.js ──► window.__apex
+game-config (AXC) ─► game-state (AX) ─► game-weather/track/ui/hud/render/physics (AX*)
+                                          └──► game-debug (AXDebug) ─► window.__apex
+                                          └──► game.js (boot: calls every AX*.init/.install)
 ```
 
 Key edges:
@@ -87,9 +101,16 @@ Key edges:
 - **tracks.js → GLX**: `Tracks.build()` uploads meshes via `GLX.createMesh` /
   `GLX.createChunkedMesh` (guarded by `typeof GLX !== "undefined"` for the
   headless `tools/verify-track.cjs` path, which runs tracks.js without a GL context).
-- **game.js → everything**: the only module that calls other modules at boot.
-  It assigns **no global of its own** — its public surface is `window.__apex`
-  (the debug/test API documented in `docs/DEBUG-HOOKS.md`).
+- **game.js → everything**: drives all boot-time invocation (every `AX*.init`/
+  `.install` call). It assigns **no global of its own** — `window.__apex` is
+  built by `AXDebug.install()` (the debug/test API documented in
+  `docs/DEBUG-HOOKS.md`), called from game.js's boot block.
+- **AXRender / AXPhysics / AXDebug ← each other**: once every module is a
+  `window` global, they call across freely (`AXDebug` → `AXPhysics.update`,
+  `AXRender.camVantage`, `AXTrack.loadTrack`, `AXWeather.applyRaceSettings`,
+  `AXUi.setCamMode`; `game.js`'s main loop → `AXPhysics.update` +
+  `AXRender.render`). No `init(deps)` needed for cross-`AX*` calls — only for
+  the handful of closures `game.js` itself still owns.
 - **DataHub is an island**: DOM overlay + F1API only; the game never depends on it.
 
 ## Rules when adding a file

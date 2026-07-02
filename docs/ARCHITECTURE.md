@@ -30,7 +30,10 @@ js/game-weather.js  -> AXWeather    (applyRaceSettings + rain overlay; .init(dep
 js/game-track.js    -> AXTrack      (loadTrack + makeCars/gridUp; .init(deps))
 js/game-ui.js       -> AXUi         (menus/panels/sliders wiring; .init(deps))
 js/game-hud.js      -> AXHud        (race HUD overlay + minimap; .init(deps))
-js/game.js          -> (main, self-executing; public surface is window.__apex)
+js/game-render.js   -> AXRender     (camVantage + render, floodlights, car meshes; no init — self-contained)
+js/game-physics.js  -> AXPhysics    (update + updateCar, collisions; .init(deps))
+js/game-debug.js    -> AXDebug      (AXDebug.install(deps) builds window.__apex)
+js/game.js          -> (main, self-executing; boot wiring only)
 ```
 
 The former `glx.js`, `tracks.js` and `game.js` monoliths were each split into
@@ -319,7 +322,9 @@ F1API.sessionDrivers(sessionKey) -> [{num, code, name, team, color}] | null
 ## js/data.js — `DataHub`
 
 DOM overlay (`#datahub` in index.html), tabs: SCHEDULE | STANDINGS |
-LAST RACE | LIVE. Builds DOM with createElement (no innerHTML for API data).
+LAST RACE | LIVE | TELEMETRY | EXPORT (dev-only: pulls OpenF1 start-line
+traces per circuit to validate/correct s=0 against the game's centreline).
+Builds DOM with createElement (no innerHTML for API data).
 Loading spinners, stale-data note ("cached Xm ago"), graceful errors.
 Team color chips use `Teams.LIST` colors matched by name substring.
 
@@ -345,8 +350,8 @@ Parts.getCost(setup)             Parts.statMult(stat)
 Pure data layer for the time-trial ghost car: records the player's lap as
 parallel `(t, s, x)` arrays, persists the best per track in localStorage
 (`apex_ghost_v1` — note: NOT `apex26.`-prefixed), and answers "where is the
-ghost at lap-time t". game.js owns the drawing. Also loadable under Node
-(`module.exports`) for unit tests.
+ghost at lap-time t". `js/game-render.js`'s `render()` owns the drawing. Also
+loadable under Node (`module.exports`) for unit tests.
 
 ```
 Ghost.setTrack(id)  Ghost.setEnabled(b)  Ghost.startLap()  Ghost.record(t, s, x)
@@ -354,13 +359,18 @@ Ghost.finishLap(t)  Ghost.at(t)          Ghost.timeAt(s)   Ghost.hasGhost()
 Ghost.bestTime()    Ghost.clear()
 ```
 
-## js/game-config.js · game-state.js · game-weather.js · game-track.js · game-ui.js · game-hud.js
+## js/game-config.js · game-state.js · game-weather.js · game-track.js · game-ui.js · game-hud.js · game-render.js · game-physics.js · game-debug.js
 
-Subsystems extracted from the old `game.js` monolith. Two are plain namespaces
-read directly everywhere; four are IIFEs with an `.init(deps)` that game.js calls
-once at boot (handing over its DOM cache + closures — see the `AX*.init(...)`
-block near game.js's boot). All load *after* the engine modules and *before*
-`game.js`.
+Subsystems extracted from the old `game.js` monolith (~5,400 lines originally,
+now ~580). Two are plain namespaces read directly everywhere; the rest are
+IIFEs. Six expose an `.init(deps)` that game.js calls once at boot, handing
+over its DOM cache + the closures it still owns (see the `AX*.init(...)` /
+`AXDebug.install(...)` block near game.js's boot) — `AXRender` needs no
+init, it's fully self-contained. `AXRender`/`AXPhysics`/`AXDebug` call each
+other's exports directly (`AXDebug` → `AXPhysics.update`, `AXRender.camVantage`,
+etc.) since every `AX*` module is a `window` global by the time any of this
+runs; only names game.js *itself* still owns get threaded through init/install.
+All load *after* the engine modules and *before* `game.js`.
 
 ```
 game-config.js  -> AXC        physics constants, gear table, DIFF tiers, CAM_MODES,
@@ -377,14 +387,27 @@ game-track.js   -> AXTrack    async loadTrack() (build+upload a circuit, menu fl
 game-ui.js      -> AXUi       car-setup panel, select/menu/pause screens, steering presets
                               & sliders, sound/music toggles (all event wiring in .init)
 game-hud.js     -> AXHud      the live race HUD overlay + minimap canvas
+game-render.js  -> AXRender   camVantage() (12 camera-mode framing solver) + render()
+                              (the per-frame camera/shadow/sky/car/post draw), floodlight
+                              building (buildTrackLights/setFrameLights), car-mesh builders
+                              (teamMesh/playerBodyMesh/drawPlayerWheels/loadCarModel)
+game-physics.js -> AXPhysics  update() (field driver: countdown, per-car step, collision
+                              resolution, race-end) + updateCar() (the ~650-line per-car
+                              physics/AI core — see docs/DEBUG-HOOKS.md and CLAUDE.md's
+                              Physics section), rescuePlayer/onTTLap/coast
+game-debug.js   -> AXDebug    AXDebug.install(deps) builds and assigns window.__apex
+                              (~50 methods — see docs/DEBUG-HOOKS.md)
 ```
 
 ## js/game.js — main
 
-Now the orchestrator (~3,590 lines): shared-namespace refs, DOM cache,
-sky/weather animation state, the physics/AI core (`update`/`updateCar`),
-`render` + cameras, the fixed-step main loop, the boot block (`GLX.init` guard +
-`AX*.init(deps)` wiring), and `window.__apex`. Section map:
+Now just the orchestrator (~580 lines): shared-namespace refs at the top
+(destructured from `AXC`/`AX`/every `AX*` module), the DOM cache, sky/weather
+animation state game-render.js reads, race-flow functions no other module
+needed to own (`startRace`/`endRace`/car-setup helpers), the fixed-step main
+loop (`tick()`, which calls `AXPhysics.update` + `AXRender.render`), and the
+boot block (`GLX.init` guard, every `AX*.init(deps)` / `AXDebug.install(deps)`
+call, initial state, `requestAnimationFrame(tick)`). Section map:
 [GAME-JS-MAP.md](GAME-JS-MAP.md).
 
 States: `menu | select | count | race | results | seasonEnd`. Player + 21 AI.

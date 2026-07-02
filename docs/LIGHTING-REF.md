@@ -81,8 +81,8 @@ floodlights are activated.
 
 ## Floodlights
 
-`buildTrackLights()` in `game.js` places one point light every ~40 m along both
-edges of every circuit. Activated whenever the scene is dark:
+`buildTrackLights()` in `js/game-render.js` places one point light every ~40 m
+along both edges of every circuit. Activated whenever the scene is dark:
 
 - Any explicit night/dusk/dawn time-of-day, on any track.
 - Default mode on a track whose `_night` flag is set.
