@@ -29,7 +29,7 @@
               grandstand, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
-              forestEdge, cityFront } = api;
+              forestEdge, cityFront, MAT } = api;
       const k = (s) => Math.round(s * n) % n;
 
       // ---- Palette (Melbourne lakeside parkland, bright day) ----
@@ -84,7 +84,9 @@
         if (onTrack(p.c[0], p.c[2], 6)) return;
         const JET = [0.92, 0.95, 0.99];      // white spray
         // basin ring + inner pool
+        out._mat = MAT.CONCRETE;
         addCyl(out, p.c, 6 * scale, 0.7, [0.82, 0.84, 0.86], 18, b);
+        out._mat = 0;
         addCyl(out, vadd(p.c, p.u, 0.7), 5.2 * scale, 0.35, [0.24, 0.50, 0.66], 18, b);
         // central plume — stacked tapering cones of spray
         addCone(out, vadd(p.c, p.u, 1.0), 1.7 * scale, 11 * scale, JET, 10, b);
@@ -109,10 +111,12 @@
       {
         const a = anchor(k(0.50), -1, 40), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 4)) {
+          out._mat = MAT.WOOD;
           addBox(out, vadd(a.c, a.u, 0.9), [3.2, 0.4, 34], [0.72, 0.66, 0.54], b); // deck
           for (const to of [-15, -5, 5, 15]) {                                     // piles
             addCyl(out, vadd(a.c, a.t, to), 0.16, 1.4, [0.42, 0.36, 0.28], 4, b);
           }
+          out._mat = 0;
           // a rowing scull moored at the pier end
           addBox(out, vadd(vadd(a.c, a.t, 18), a.u, 0.7), [0.9, 0.5, 9], [0.90, 0.88, 0.82], b);
         }

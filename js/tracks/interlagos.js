@@ -24,7 +24,7 @@
     // Climb from the Senna S up to the start/finish (the lap's ~40 m of relief).
     elevations: [{ s: 0.86, halfM: 480, rise: 10 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
+      const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
               addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,
               grandstand, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
@@ -53,6 +53,8 @@
             const h = 4 + hash(k * 7 + r * 11 + c) * 6;
             const w = 5 + hash(k * 9 + c) * 2.6, d = 5 + hash(k * 13 + r) * 2.4;
             const base = vadd(vadd(vadd(a.c, a.r, back), a.u, rise), a.t, off);
+            // stacked cube house walls — rough unfinished concrete block
+            out._mat = MAT.CONCRETE;
             addBox(out, vadd(base, a.u, h / 2), [w, h, d], FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length], bv);
             // stacked upper room (unfinished top floor) on some houses
             if (hash(k * 17 + r + c) > 0.58) {
@@ -60,12 +62,16 @@
               addBox(out, vadd(base, a.u, h + h2 / 2), [w * 0.72, h2, d * 0.72],
                      FAV[(r + c + 1) % FAV.length], bv);
             }
-            // rooftop water tank
-            if (hash(k * 23 + r * 3 + c) > 0.52)
+            // rooftop water tank (caixa d'água) — weathered corrugated tank
+            if (hash(k * 23 + r * 3 + c) > 0.52) {
+              out._mat = MAT.RUST;
               addCyl(out, vadd(base, a.u, h + 0.7), 0.72, 1.3,
                      hash(k + c) > 0.5 ? [0.22, 0.32, 0.58] : [0.12, 0.12, 0.14], 6, bv);
+              out._mat = MAT.CONCRETE;
+            }
           }
         }
+        out._mat = 0;
       };
 
       // -- Bespoke: raked PACKED crowd terrace (steep speckled Interlagos grandstand) --
@@ -77,8 +83,10 @@
         const k = K(s), a = anchor(k, side, gap);
         if (onTrack(a.c[0], a.c[2], 8)) return;
         const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.8, seats = Math.floor(len / 2.0);
+        out._mat = MAT.CONCRETE;
         addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
                  [rows * step, rows * rise, len], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
+        out._mat = 0;
         for (let r = 0; r < rows; r++)
           for (let c = 0; c < seats; c++) {
             const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;

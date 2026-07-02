@@ -24,7 +24,7 @@
     // further to the lowest point (~15 m total relief on the real circuit).
     elevations: [{ s: 0.03, halfM: 260, rise: -4 }, { s: 0.45, halfM: 340, rise: -7 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, hash, vadd,
+      const { out, MAT, n, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
         palm, bush, grandstand, building, cityFront, tower, billboard, gantry, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall, onTrack, every } = api;
@@ -540,6 +540,7 @@
       // barriers (the tower footprint is small).
       const windTower = (k, side, gap, h) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.STONE;
         addFrustum(out, a.c, 2.6, 1.9, h, HOSP_SAND, 4, b);          // tapered shaft
         const top = vadd(a.c, a.u, h);
         // four corner piers framing the wind-catch opening
@@ -547,6 +548,7 @@
           addBox(out, vadd(vadd(vadd(top, a.r, dx), a.t, dz), a.u, 1.5), [0.55, 3.0, 0.55], PIT_CREAM, b);
         }
         addBox(out, vadd(top, a.u, 3.1), [3.6, 0.5, 3.6], STAND_CREAM, b);  // cap slab
+        out._mat = 0;
         addBox(out, vadd(top, a.u, 1.5), [1.5, 1.3, 1.5], WIN_WARM, b);     // warm interior glow
       };
 
@@ -555,6 +557,7 @@
       // Arabesque roofline). gap ≥ 26 keeps it clear of stands/fences.
       const marquee = (k, side, gap, w, len) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.FABRIC;
         addBox(out, vadd(a.c, a.u, 1.7), [w, 3.4, len], PIT_CREAM, b);            // tent walls
         addBox(out, vadd(a.c, a.u, 2.6), [w * 1.02, 0.55, len * 1.005], WIN_WARM, b); // lit window band
         const bays = Math.max(2, Math.round(len / (w * 0.9)));
@@ -563,12 +566,15 @@
           addPyramid(out, vadd(vadd(a.c, a.u, 3.4), a.t, off),
             [w * 0.98, 3.2, (len / bays) * 0.96], STAND_CREAM, b);
         }
+        out._mat = 0;
       };
 
       // ── Desert oasis — dark water pool ringed by palms + scrub ───────────
       const oasis = (k, side, gap, r) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.SAND;
         addBox(out, vadd(a.c, a.u, 0.20), [r * 2.4, 0.30, r * 3.0], SAND_DARK, b);   // sandy rim
+        out._mat = 0;
         addBox(out, vadd(a.c, a.u, 0.26), [r * 2.0, 0.24, r * 2.6], [0.09, 0.20, 0.22], b); // water
         for (let i = 0; i < 6; i++) {
           const kk = (k + (i - 3) + n) % n;
@@ -583,6 +589,7 @@
       // the paddock) so it never intrudes on the track.
       const gateway = (k, side, gap) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.STONE;
         for (const dx of [-7, 7]) {
           const pc = vadd(a.c, a.r, dx);
           addFrustum(out, pc, 2.4, 1.8, 15, PIT_CREAM, 6, b);              // pier
@@ -591,15 +598,20 @@
         }
         addBox(out, vadd(a.c, a.u, 13.5), [14, 2.2, 3.0], STAND_CREAM, b);         // lintel
         addPrism(out, vadd(a.c, a.u, 15.6), [14, 4.0, 3.0], PIT_CREAM, b);         // pointed keel arch
+        out._mat = 0;
         addBox(out, vadd(a.c, a.u, 12.4), [11, 1.0, 2.0], WIN_WARM, b);            // lit soffit
       };
 
       // ── Grandstand video wall — dark frame + bright cool screen face ─────
       const videoWall = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.METAL;
         addBox(out, vadd(a.c, a.u, h / 2 + 5), [0.9, h, w], STEEL, b);                       // frame
+        out._mat = MAT.GLASS;
         addBox(out, vadd(vadd(a.c, a.u, h / 2 + 5), a.r, side * -0.55), [0.4, h * 0.86, w * 0.9], BEACON_COOL, b); // screen
+        out._mat = MAT.METAL;
         for (const dz of [-w * 0.4, w * 0.4]) addBox(out, vadd(vadd(a.c, a.u, 2.5), a.t, dz), [0.55, 5, 0.55], STEEL, b);
+        out._mat = 0;
       };
 
       // ── Placement ────────────────────────────────────────────────────────

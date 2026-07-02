@@ -26,7 +26,7 @@
     // road level near the T14 hairpin complex.
     elevations: [{ s: 0.65, halfM: 240, rise: -4 }],
     scenery: function (api) {
-      const { out, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
+      const { out, MAT, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
         cityFront } = api;
@@ -38,8 +38,10 @@
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
         const baseC = a.c;
+        out._mat = MAT.METAL;
         // Central axle column from ground to hub height
         addCyl(out, baseC, 1.8, radius, [0.20, 0.20, 0.22], 8, b);
+        out._mat = 0;
         // Outer rim ring represented by 16 slim vertical struts around the perimeter
         for (let i = 0; i < 16; i++) {
           const angle = (i / 16) * 6.2832;
@@ -57,6 +59,7 @@
         // Bright white LED rim band at hub height (visible from distance)
         addCyl(out, vadd(baseC, a.u, radius * 0.5), radius * 0.92, 2.0, [0.95, 0.98, 1.00], 20, b);
         // Support legs: two A-frame legs from ground out to base of column
+        out._mat = MAT.METAL;
         for (const legSide of [-1, 1]) {
           const legOff = radius * 0.38;
           const legBase = [
@@ -66,6 +69,7 @@
           ];
           addCyl(out, legBase, 0.9, radius * 0.55, [0.22, 0.22, 0.25], 5, b);
         }
+        out._mat = 0;
       };
 
       // Neon night palette — hyper-saturated Vegas colours
@@ -532,7 +536,9 @@
           const PW = 90, PH = 66;
           const GLASS = [0.06, 0.06, 0.10];
           // Main pyramid mass
+          out._mat = MAT.GLASS;
           addPyramid(out, vadd(a.c, a.u, PH * 0.5), [PW, PH, PW], GLASS, b);
+          out._mat = 0;
           // Glowing edge/light-band tiers up the faces (amber LED ribs)
           for (let i = 1; i <= 5; i++) {
             const fr = i / 6;
@@ -545,10 +551,12 @@
           addCyl(out, vadd(a.c, a.u, PH + 100), 2.4, 200, [1.0, 0.98, 0.85], 10, b);
           addCyl(out, vadd(a.c, a.u, PH + 100), 4.6, 200, [1.0, 0.95, 0.70], 8, b);
           // Sphinx at the entrance (body block + head + paws)
+          out._mat = MAT.STONE;
           const sx = vadd(vadd(a.c, a.r, -PW * 0.5 - 14), a.u, 0);
           addBox(out, vadd(sx, a.u, 5), [10, 10, 26], [0.72, 0.62, 0.40], b);
           addBox(out, vadd(vadd(sx, a.t, 15), a.u, 11), [8, 9, 8], [0.78, 0.66, 0.42], b);   // head
           addBox(out, vadd(vadd(sx, a.t, 15), a.u, 2), [10, 3, 12], [0.70, 0.60, 0.38], b);  // paws
+          out._mat = 0;
           // Palm forecourt + golden ground wash
           addBox(out, vadd(a.c, a.u, 0.1), [PW + 40, 0.4, PW + 40], [0.14, 0.10, 0.06], b);
           for (let p = 0; p < 6; p++) palm(K(0.53 + (p - 3) * 0.004), 1, 96 + (p % 2) * 10, 11 + hash(p * 7) * 4, LIME);
@@ -563,11 +571,13 @@
         if (!onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           // Support poles (splayed A-frame)
+          out._mat = MAT.METAL;
           for (const o of [-4, 4]) addCyl(out, vadd(vadd(a.c, a.t, o), a.u, 0), 0.35, 9, [0.55, 0.50, 0.30], 6, b);
           // Diamond board — two prisms base-to-base making a rotated square
           const dc = vadd(a.c, a.u, 13);
           addPrism(out, vadd(dc, a.u, 2.6), [9, 5.2, 3], [0.98, 0.95, 0.80], [a.r, a.t, a.u]);
           addPrism(out, vadd(dc, a.u, -2.6), [9, 5.2, 3], [0.98, 0.95, 0.80], [a.r, [-a.t[0], -a.t[1], -a.t[2]], a.u]);
+          out._mat = 0;
           // Red "WELCOME" roundel + lit lettering band
           addCyl(out, vadd(dc, a.u, 3.4), 2.2, 0.4, RED, 12, b);
           addBox(out, vadd(dc, a.u, 0.2), [11, 1.6, 0.6], [0.15, 0.35, 0.85], b);       // FABULOUS band (blue)
@@ -596,7 +606,9 @@
         // Piers
         for (const sd of [-1, 1]) {
           const pc = vadd(base, r, sd * (hw[k] + 3.5));
+          out._mat = MAT.METAL;
           addBox(out, vadd(pc, u, 6), [2.6, 12, 2.6], [0.10, 0.10, 0.14], b);
+          out._mat = 0;
           addBox(out, vadd(pc, u, 6), [2.8, 10, 0.8], sd > 0 ? CYAN : MAGENTA, b);   // neon strip
         }
         // Arched neon voussoirs (a fan of glowing boxes over the road)

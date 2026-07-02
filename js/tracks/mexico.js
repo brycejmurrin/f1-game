@@ -24,7 +24,7 @@
     // then climbs back out through the banked Peraltada run — ~12 m real change.
     elevations: [{ s: 0.62, halfM: 260, rise: -7 }, { s: 0.74, halfM: 220, rise: 5 }],
     scenery: function (api) {
-      const { out, n, place, backdrop, groundPlane,
+      const { out, MAT, n, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
               building, motorhome, grandstand, billboard, tree, hedge, fence, palm, pine,
               guardrail, tyreWall, marshalPost, tower, gantry,
@@ -88,8 +88,10 @@
         const k = K(s), a = anchor(k, side, gap);
         if (onTrack(a.c[0], a.c[2], 8)) return;
         const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.9, seats = Math.floor(len / 2.0);
+        out._mat = MAT.CONCRETE;
         addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
                  [rows * step, rows * rise, len], [0.50, 0.49, 0.52], [a.t, a.u, a.r]);
+        out._mat = 0;
         for (let r = 0; r < rows; r++)
           for (let c = 0; c < seats; c++) {
             const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;

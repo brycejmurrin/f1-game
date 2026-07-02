@@ -25,7 +25,7 @@
     // then the descent through the Rivazza.
     elevations: [{ s: 0.28, halfM: 300, rise: -6 }, { s: 0.52, halfM: 300, rise: 10 }, { s: 0.78, halfM: 240, rise: -5 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
+      const { out, MAT, n, px, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               along, mountain, tree, pine, hedge, bush,
               grandstand, building, motorhome, tower, billboard, marshalPost, gantry,
@@ -353,10 +353,13 @@
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
         const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
+        out._mat = MAT.WOOD;
         addCyl(out, a.c, 0.20, h * 0.16, [0.30, 0.22, 0.14], 5, b);
+        out._mat = MAT.FOLIAGE;
         addCone(out, vadd(a.c, a.u, h * 0.10), 1.35, h * 0.58, col, 6, b);
         addCone(out, vadd(a.c, a.u, h * 0.44), 1.00, h * 0.42, col, 6, b);
         addCone(out, vadd(a.c, a.u, h * 0.70), 0.65, h * 0.32, col, 6, b);
+        out._mat = 0;
       }
       // Cypress ranks on the Tosa / Acque Minerali / Piratella wooded slopes.
       for (const [s0, side, gap] of [[0.30, -1, 22], [0.50, 1, 20], [0.64, -1, 30], [0.82, -1, 18]]) {
@@ -370,11 +373,14 @@
         const b = [a.r, a.u, a.t], base = a.c;
         const bronze = [0.34, 0.30, 0.22], stone = [0.80, 0.78, 0.72];
         // Lawn dais the memorial sits on.
+        out._mat = MAT.GRASS;
         addBox(out, vadd(base, a.u, 0.15), [12, 0.3, 12], [0.30, 0.48, 0.24], b);
         // Stepped stone plinth.
+        out._mat = MAT.STONE;
         addBox(out, vadd(base, a.u, 0.75), [4.5, 1.2, 4.5], stone, b);
         addBox(out, vadd(base, a.u, 1.7),  [3.0, 0.9, 3.0], [0.86, 0.83, 0.76], b);
         // Abstract seated bronze figure (Senna, pensive) — legs, torso, head.
+        out._mat = MAT.METAL;
         addBox(out, vadd(base, a.u, 2.5),  [1.8, 0.6, 1.4], bronze, b);
         addBox(out, vadd(base, a.u, 3.3),  [1.2, 1.4, 1.0], bronze, b);
         addCyl(out, vadd(base, a.u, 4.4),  0.42, 0.7, bronze, 7, b);
@@ -382,9 +388,12 @@
         const flagCols = [[0.10, 0.55, 0.24], [0.94, 0.82, 0.16], [0.14, 0.30, 0.62]];
         for (let i = 0; i < 3; i++) {
           const p = vadd(vadd(base, a.t, (i - 1) * 3.0), a.r, -4);
+          out._mat = MAT.METAL;
           addCyl(out, p, 0.12, 9, [0.85, 0.85, 0.87], 6, b);
+          out._mat = MAT.FABRIC;
           addBox(out, vadd(vadd(p, a.u, 7.6), a.t, 1.1), [0.15, 1.3, 2.0], flagCols[i], b);
         }
+        out._mat = 0;
         // Semicircle of floral tributes at the foot.
         for (let i = 0; i < 7; i++) {
           const ang = (i / 6 - 0.5) * Math.PI;
@@ -400,6 +409,7 @@
         const a = anchor(K(0.10), 1, 26);
         const b = [a.r, a.u, a.t], base = a.c;
         const stone = [0.72, 0.68, 0.60];
+        out._mat = MAT.STONE;
         // Two piers straddling the water.
         for (const sg of [-1, 1]) {
           addBox(out, vadd(vadd(base, a.t, sg * 9), a.u, 2), [4, 4, 3], stone, b);
@@ -410,6 +420,7 @@
         // Parapet walls both edges.
         for (const sg of [-1, 1])
           addBox(out, vadd(vadd(base, a.r, sg * 2.2), a.u, 5.4), [0.5, 1.0, 22], [0.80, 0.76, 0.68], b);
+        out._mat = 0;
       })();
 
       // ── Terraced hillside tifosi bowls at Tosa & Rivazza — bespoke stepped
@@ -424,19 +435,26 @@
           const a = anchor(k, side, gap + t * 5.4);
           const b = [a.r, a.u, a.t];
           const h = 2.8 + t * 3.1;
+          out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, h * 0.5), [5.0, h, len], t % 2 ? IM_SHELL_A : IM_SHELL_B, b);
+          out._mat = MAT.FABRIC;
           addBox(out, vadd(a.c, a.u, h + 0.8), [4.3, 1.5, len], IM_CROWD[t % 4], b);
+          out._mat = 0;
           addBox(out, vadd(a.c, a.u, h + 1.75), [4.6, 0.3, len + 1], [0.92, 0.90, 0.82], b);
           const cnt = Math.min(14, Math.floor(len / 6));
+          out._mat = MAT.FABRIC;
           for (let c = 0; c < cnt; c++) {
             if (hash(k * 3 + t * 29 + c) < 0.45) continue;
             const off = (c / (cnt - 1) - 0.5) * (len - 4);
             addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.25), [1.8, 0.6, 1.2], IM_CROWD[(c + t) % 4], b);
           }
+          out._mat = 0;
         }
         const aR = anchor(k, side, gap + (tiers - 0.5) * 5.4);
+        out._mat = MAT.METAL;
         addBox(out, vadd(aR.c, aR.u, 2.8 + tiers * 3.1 + 1.5), [6.8, 0.45, len + 2],
                [0.20, 0.20, 0.24], [aR.r, aR.u, aR.t]);
+        out._mat = 0;
       }
       tieredBowl(0.285, -1, 16, 60, 4);   // Tosa hairpin bank
       tieredBowl(0.82, -1, 16, 58, 4);    // Rivazza descent bank

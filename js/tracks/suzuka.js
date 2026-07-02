@@ -30,7 +30,7 @@
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
               gantry, marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
-              cross, norm } = api;
+              cross, norm, MAT } = api;
 
       // ── strut(): a thin cylinder spanning two arbitrary world points ─────────
       //    Builds an oriented basis from the span direction so cables / diagonal
@@ -192,16 +192,22 @@
         const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 4)) return;
         addCyl(out, p.c, rad + 0.6, 1.1, [0.86, 0.80, 0.62], 16, b);          // platform
+        out._mat = MAT.METAL;
         addCyl(out, vadd(p.c, p.u, 1.1), 0.5, 7.5, [0.90, 0.86, 0.70], 8, b); // centre pole
+        out._mat = MAT.FABRIC;
         addCone(out, vadd(p.c, p.u, 7.5), rad + 1.3, 3.6, neonRed, 16, b);    // canopy
         addCyl(out, vadd(p.c, p.u, 7.5), rad + 1.5, 0.6, neonYel, 16, b);     // valance rim
+        out._mat = MAT.METAL;
         addCone(out, vadd(p.c, p.u, 11.1), 0.8, 1.6, neonBlue, 8, b);         // finial
         for (let i = 0; i < 10; i++) {
           const a = i / 10 * 6.2832;
           const off = vadd(vadd(p.c, p.r, Math.cos(a) * rad), p.t, Math.sin(a) * rad);
+          out._mat = MAT.METAL;
           addCyl(out, vadd(off, p.u, 1.1), 0.08, 6, [0.95, 0.92, 0.80], 4, b);
+          out._mat = 0;
           addBox(out, vadd(off, p.u, 3.2), [0.55, 1.0, 1.4], parkCol[i % parkCol.length], b);
         }
+        out._mat = 0;
       };
 
       // Drop tower: tall gantry mast, corner rails, a passenger gondola ring that
@@ -209,6 +215,7 @@
       const dropRide = (k, side, dist, h) => {
         const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 4)) return;
+        out._mat = MAT.METAL;
         addCyl(out, p.c, 1.3, h, [0.90, 0.90, 0.94], 6, b);              // mast core
         for (const [ro, to] of [[-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]]) {
           addCyl(out, vadd(vadd(p.c, p.r, ro), p.t, to), 0.12, h, steel, 4, b);
@@ -217,7 +224,9 @@
         addCyl(out, vadd(p.c, p.u, gY), 3.1, 1.7, neonBlue, 12, b);      // gondola ring
         addCyl(out, vadd(p.c, p.u, gY - 0.25), 3.3, 0.4, neonYel, 12, b);
         addCone(out, vadd(p.c, p.u, h), 1.7, 3.0, neonRed, 8, b);        // beacon cap
+        out._mat = 0;
         addBox(out, vadd(p.c, p.u, h + 3.0), [0.4, 1.6, 0.4], lampWarm, b);
+        out._mat = 0;
       };
 
       // Chair swing / chair-o-plane: central column, a spun top canopy, and a ring
@@ -225,16 +234,22 @@
       const swingRide = (k, side, dist, h) => {
         const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 4)) return;
+        out._mat = MAT.METAL;
         addCyl(out, p.c, 1.0, h, [0.86, 0.88, 0.92], 8, b);
+        out._mat = MAT.FABRIC;
         addCone(out, vadd(p.c, p.u, h), 6.5, 2.8, parkCol[4], 14, b);    // canopy top
         addCyl(out, vadd(p.c, p.u, h - 0.4), 5.4, 0.5, neonYel, 14, b);
+        out._mat = 0;
         for (let i = 0; i < 12; i++) {
           const a = i / 12 * 6.2832, rTop = 4.6, rBot = 6.6;
           const top = vadd(vadd(vadd(p.c, p.u, h - 0.6), p.r, Math.cos(a) * rTop), p.t, Math.sin(a) * rTop);
           const bot = vadd(vadd(vadd(p.c, p.u, h - 4.4), p.r, Math.cos(a) * rBot), p.t, Math.sin(a) * rBot);
+          out._mat = MAT.METAL;
           strut(top, bot, 0.03, steel, 3);
+          out._mat = 0;
           addBox(out, bot, [0.5, 0.5, 0.7], parkCol[i % parkCol.length], b);
         }
+        out._mat = 0;
       };
 
       // Roller-coaster vertical loop: two support legs and a ring of segments in the
@@ -243,6 +258,7 @@
         const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 5)) return;
         const cen = vadd(p.c, p.u, R + 2);
+        out._mat = MAT.METAL;
         for (const ro of [-R * 0.6, R * 0.6]) addCyl(out, vadd(p.c, p.r, ro), 0.4, R + 2, steel, 5, b);
         const segN = 22;
         for (let i = 0; i < segN; i++) {
@@ -250,6 +266,7 @@
           const pt = vadd(vadd(cen, p.r, Math.cos(a) * R), p.u, Math.sin(a) * R);
           addBox(out, pt, [0.55, 0.9, 0.55], i % 2 ? neonRed : neonYel, b);
         }
+        out._mat = 0;
       };
 
       // Lift hill: a rank of climbing columns capped by rail segments feeding the loop.
@@ -258,8 +275,10 @@
           const p = anchor((k + i) % n, side, dist), b = [p.r, p.u, p.t];
           if (onTrack(p.c[0], p.c[2], 4)) continue;
           const h = 6 + i * 2.4;
+          out._mat = MAT.METAL;
           addCyl(out, p.c, 0.3, h, steel, 4, b);
           addBox(out, vadd(p.c, p.u, h), [0.5, 0.5, 3.4], neonBlue, b);
+          out._mat = 0;
         }
       };
 
@@ -418,13 +437,16 @@
         const basis = [ab.r, ab.u, ab.t];
         const colH = 14, deckLen = 34;
         // support piers
+        out._mat = MAT.CONCRETE;
         addBox(out, vadd(ab.c, ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
         addBox(out, vadd(vadd(ab.c, ab.t, 16), ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
+        out._mat = 0;
         // deck + running surface
         addBox(out, vadd(ab.c, ab.u, colH + 0.7), [10, 1.2, deckLen], [0.25, 0.47, 0.29], basis);
         addBox(out, vadd(ab.c, ab.u, colH + 3.5), [11, 0.5, deckLen + 1], [0.27, 0.49, 0.31], basis);
         addBox(out, vadd(ab.c, ab.u, colH + 2.8), [8, 0.15, 28], lampWarm, basis);
         // parapet rail posts
+        out._mat = MAT.METAL;
         for (let i = -4; i <= 4; i++) {
           const off = i * (deckLen / 9);
           const rc = [ab.c[0] + ab.t[0] * off, ab.c[1] + colH + 1.4, ab.c[2] + ab.t[2] * off];
@@ -446,6 +468,7 @@
             strut(apex, anchorPt, 0.05, [0.94, 0.94, 0.96], 3);
           }
         }
+        out._mat = 0;
       }
 
       // ── Underpass structure (back loop dips under Esses exit at s≈0.37) ───────

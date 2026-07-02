@@ -34,7 +34,7 @@
     // Royal-park circuit is nearly flat — a gentle rise through the Lesmos.
     elevations: [{ s: 0.55, halfM: 320, rise: 7 }],
     scenery: function (api) {
-      const { out, n, ds, pyMin, place, prop, backdrop, groundPlane, groundYAt, every,
+      const { out, MAT, n, ds, pyMin, place, prop, backdrop, groundPlane, groundYAt, every,
         onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
         grandstand, billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
         addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
@@ -567,10 +567,13 @@
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
         const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
+        out._mat = MAT.WOOD;
         addCyl(out, a.c, 0.22, h * 0.16, [0.30, 0.22, 0.14], 5, b);          // slim trunk
+        out._mat = MAT.FOLIAGE;
         addCone(out, vadd(a.c, a.u, h * 0.10), 1.45, h * 0.58, col, 6, b);    // columnar body
         addCone(out, vadd(a.c, a.u, h * 0.44), 1.10, h * 0.42, col, 6, b);
         addCone(out, vadd(a.c, a.u, h * 0.70), 0.70, h * 0.32, col, 6, b);    // pointed crown
+        out._mat = 0;
       }
       // Formal cypress avenue flanking the approach to the Villa Reale (s~0.60).
       for (let i = 0; i < 8; i++) {
@@ -595,11 +598,15 @@
           const a = anchor(k, side, gap + t * 5.6);
           const b = [a.r, a.u, a.t];
           const h = 3 + t * 3.3;
+          out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, h * 0.5), [5.2, h, len], t % 2 ? SHELL_A : SHELL_B, b);      // riser
+          out._mat = MAT.FABRIC;
           addBox(out, vadd(a.c, a.u, h + 0.85), [4.5, 1.6, len], TIFOSI[t % 4], b);               // crowd band
+          out._mat = 0;
           addBox(out, vadd(a.c, a.u, h + 1.85), [4.8, 0.32, len + 1], [0.93, 0.90, 0.80], b);     // fascia
           // Sparse speckle so the band reads as a crowd, not a flat slab.
           const cnt = Math.min(16, Math.floor(len / 6));
+          out._mat = MAT.FABRIC;
           for (let c = 0; c < cnt; c++) {
             const off = (c / (cnt - 1) - 0.5) * (len - 4);
             const hp = hash(k * 3 + t * 31 + c);
@@ -607,11 +614,14 @@
             addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.3), [2.0, 0.7, 1.3],
                    TIFOSI[(c + t) % 4], b);
           }
+          out._mat = 0;
         }
         // Cantilever roof over the top tier.
         const aR = anchor(k, side, gap + (tiers - 0.5) * 5.6);
+        out._mat = MAT.METAL;
         addBox(out, vadd(aR.c, aR.u, 3 + tiers * 3.3 + 1.6), [7.2, 0.5, len + 2],
                [0.19, 0.19, 0.23], [aR.r, aR.u, aR.t]);
+        out._mat = 0;
       }
       // A wall of tifosi at the start/finish and around the iconic Parabolica.
       tieredBowl(0.905, 1, 26, 92, 4);   // Parabolica outer — largest crowd
@@ -627,10 +637,13 @@
         const b = [a.r, a.u, a.t], base = a.c;
         const wall = [0.90, 0.87, 0.78], trim = [0.82, 0.78, 0.68];
         // Main hall block.
+        out._mat = MAT.STONE;
         addBox(out, vadd(base, a.u, 6), [26, 12, 16], wall, b);
         // Pediment roof (triangular prism running along the facade width).
+        out._mat = MAT.CONCRETE;
         addPrism(out, vadd(base, a.u, 13.5), [26, 4, 16], trim, b);
         // Portico: a colonnade of 7 columns fronting the entrance.
+        out._mat = MAT.STONE;
         for (let i = 0; i < 7; i++) {
           const off = (i - 3) * 3.4;
           const cp = vadd(vadd(base, a.t, off), a.r, -9);
@@ -638,11 +651,14 @@
         }
         // Portico entablature + pediment cap over the columns.
         addBox(out, vadd(vadd(base, a.r, -9), a.u, 10), [2.2, 1.4, 25], trim, b);
+        out._mat = MAT.CONCRETE;
         addPrism(out, vadd(vadd(base, a.r, -9), a.u, 12), [2.2, 2.6, 25], wall, b);
+        out._mat = MAT.GLASS;
         // Warm-lit window bays on the hall.
         for (let i = 0; i < 5; i++)
           addBox(out, vadd(vadd(base, a.t, (i - 2) * 4.5), a.u, 6), [0.2, 3, 2.2],
                  [0.96, 0.86, 0.52], [a.r, a.u, a.t]);
+        out._mat = 0;
       })();
     },
   }

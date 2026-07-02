@@ -24,7 +24,7 @@
     // Undulating amphitheatre (~36 m): climb from Turn 1, long descent into the back.
     elevations: [{ s: 0.20, halfM: 280, rise: 7 }, { s: 0.55, halfM: 320, rise: -8 }],
     scenery: function (api) {
-      const { out, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
+      const { out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
               billboard, gantry, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
@@ -345,20 +345,27 @@
           const a = anchor(k, side, gap + t * 5.0);
           const b = [a.r, a.u, a.t];
           const h = 2.6 + t * 2.9;
+          out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, h * 0.5), [4.8, h, len], t % 2 ? HG_SHELL_A : HG_SHELL_B, b);
+          out._mat = MAT.FABRIC;
           addBox(out, vadd(a.c, a.u, h + 0.75), [4.1, 1.4, len], CROWD[t % 4], b);
+          out._mat = 0;
           addBox(out, vadd(a.c, a.u, h + 1.6), [4.4, 0.28, len + 1], [0.92, 0.90, 0.82], b);
           const cnt = Math.min(16, Math.floor(len / 6));
+          out._mat = MAT.FABRIC;
           for (let c = 0; c < cnt; c++) {
             if (hash(k * 3 + t * 23 + c) < 0.45) continue;
             const off = (c / (cnt - 1) - 0.5) * (len - 4);
             addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.2), [1.7, 0.55, 1.1], CROWD[(c + t) % 4], b);
           }
+          out._mat = 0;
         }
         // Slim roof canopy shading the top tier.
         const aR = anchor(k, side, gap + (tiers - 0.5) * 5.0);
+        out._mat = MAT.METAL;
         addBox(out, vadd(aR.c, aR.u, 2.6 + tiers * 2.9 + 1.4), [6.4, 0.42, len + 2],
                [0.22, 0.23, 0.26], [aR.r, aR.u, aR.t]);
+        out._mat = 0;
       }
       // A near-continuous wall of terraced stands ringing the amphitheatre —
       // packed tiers on nearly every sweep, both sides of the bowl.
@@ -380,10 +387,12 @@
         const a = anchor(K(0.55), -1, 30);
         const b = [a.r, a.u, a.t], c = a.c;
         if (onTrack(c[0], c[2], 8)) return;
+        out._mat = MAT.METAL;
         for (const sg of [-1, 1])                                   // two support legs
           addCyl(out, vadd(c, a.t, sg * 4.5), 0.5, 12, [0.24, 0.25, 0.28], 6, b);
         addBox(out, vadd(c, a.u, 12.5), [1.2, 6, 11], [0.20, 0.21, 0.24], b);   // truss frame
-        addBox(out, vadd(vadd(c, a.r, -0.7), a.u, 12.5), [0.4, 5, 9.5], [0.05, 0.07, 0.12], b); // screen
+        out._mat = 0;
+        addBox(out, vadd(vadd(c, a.r, -0.7), a.u, 12.5), [0.4, 5, 9.5], [0.05, 0.07, 0.12], b); // screen — stays FLAT (video screen)
       })();
 
       // ── Budapest countryside — a distant rural cluster (farmhouses + a white
@@ -398,16 +407,24 @@
           const off = (i - 2.5) * 34, out2 = hash(i * 9) * 40;
           const f = vadd(vadd(base, a.t, off), a.r, out2);
           const w = 12 + hash(i * 7) * 6, hh = 7 + hash(i * 5) * 3;
+          out._mat = MAT.STONE;
           addBox(out, vadd(f, a.u, hh * 0.5), [w, hh, w * 0.8], hash(i) < 0.5 ? wallC : [0.76, 0.72, 0.62], b);
+          out._mat = MAT.ROOF;
           addPrism(out, vadd(f, a.u, hh + 1.6), [w, 3.2, w * 0.8], roofC, b);
+          out._mat = 0;
         }
         // Village church: white nave + a tall spire.
         const cf = vadd(vadd(base, a.t, 20), a.r, 60);
+        out._mat = MAT.STONE;
         addBox(out, vadd(cf, a.u, 8), [14, 16, 22], [0.90, 0.88, 0.82], b);
+        out._mat = MAT.ROOF;
         addPrism(out, vadd(cf, a.u, 17), [14, 4, 22], roofC, b);
         const tf = vadd(cf, a.t, 13);
+        out._mat = MAT.STONE;
         addBox(out, vadd(tf, a.u, 13), [5, 26, 5], [0.92, 0.90, 0.84], b);
+        out._mat = MAT.METAL;
         addCone(out, vadd(tf, a.u, 26), 3.4, 12, roofC, 7, b);
+        out._mat = 0;
       })();
       // Sunflower / wheat field patches on the open plain (dusty Hungarian gold).
       for (const [s, side, dist] of [[0.35, 1, 120], [0.45, -1, 130], [0.70, 1, 140], [0.25, -1, 115]]) {

@@ -38,7 +38,7 @@
     // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.27, halfM: 340, rise: 18 }, { s: 0.55, halfM: 220, rise: -10 }],
     scenery: function (api) {
-      const { out, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, groundPlane, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, MAT, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, groundPlane, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Colour palette ────────────────────────────────────────────────────
@@ -292,17 +292,21 @@
       const yacht = (yc, b, u, r, t, sc, hullCol) => {
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const L = 22 * sc, W = 7 * sc;
+        out._mat = MAT.METAL;
         addBox(out, vadd(yc, u, 1.6 * sc), [W, 3.0 * sc, L], HULL, b);
         addBox(out, vadd(yc, u, 0.4 * sc), [W * 0.82, 1.2 * sc, L * 0.96], [0.20, 0.30, 0.40], b);
         addBox(out, vadd(vadd(yc, t, L * 0.46), u, 1.8 * sc), [W * 0.6, 2.0 * sc, L * 0.16], HULL, b);
         const sup = vadd(yc, t, -L * 0.06);
         addBox(out, vadd(sup, u, 4.2 * sc), [W * 0.78, 2.6 * sc, L * 0.55], [0.90, 0.91, 0.94], b);
+        out._mat = MAT.GLASS;
         addBox(out, vadd(sup, u, 5.8 * sc), [W * 0.74, 1.0 * sc, L * 0.58], [0.40, 0.55, 0.70], b);
+        out._mat = MAT.METAL;
         addBox(out, vadd(sup, u, 6.8 * sc), [W * 0.6, 2.2 * sc, L * 0.40], [0.94, 0.95, 0.97], b);
         addBox(out, vadd(sup, u, 9.0 * sc), [W * 0.42, 1.8 * sc, L * 0.26], [0.84, 0.86, 0.90], b);
         addBox(out, vadd(sup, u, 11.6 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
         addCyl(out, vadd(sup, u, 12 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b);
         addBox(out, vadd(vadd(yc, t, L * 0.30), u, 3.4 * sc), [W * 0.7, 0.7 * sc, 0.3 * sc], [0.85, 0.86, 0.9], b);
+        out._mat = 0;
         // lit cabin windows
         addBox(out, vadd(sup, u, 5.9 * sc), [W * 0.75, 0.5 * sc, L * 0.59], WINLIT, b);
       };
@@ -521,29 +525,36 @@
         const NAVY = [0.14, 0.20, 0.30];
         const L = 44 * sc, W = 10 * sc;
         // Hull body + raked bow prism (triangular prism gives the sheer bow)
+        out._mat = MAT.METAL;
         addBox(out, vadd(a.c, a.u, 2.2 * sc), [W, 4.0 * sc, L * 0.86], HULL, b);
         addPrism(out, vadd(vadd(a.c, a.t, L * 0.47), a.u, 2.2 * sc), [W, 4.0 * sc, L * 0.18], HULL, b);
         // Dark waterline / hull stripe
         addBox(out, vadd(a.c, a.u, 0.7 * sc), [W * 1.02, 1.0 * sc, L * 0.88], NAVY, b);
         // Teak swim platform at the stern
+        out._mat = MAT.WOOD;
         addBox(out, vadd(vadd(a.c, a.t, -L * 0.46), a.u, 1.4 * sc), [W * 0.8, 0.4 * sc, L * 0.08], [0.72, 0.58, 0.38], b);
         // Superstructure: three stacked, tapering white decks set forward
+        out._mat = MAT.METAL;
         const sup = vadd(a.c, a.t, L * 0.02);
         addBox(out, vadd(sup, a.u, 5.4 * sc), [W * 0.9, 3.0 * sc, L * 0.5], [0.95, 0.95, 0.97], b);
         addBox(out, vadd(sup, a.u, 8.4 * sc), [W * 0.78, 2.8 * sc, L * 0.4], [0.92, 0.93, 0.96], b);
         addBox(out, vadd(vadd(sup, a.t, L * 0.03), a.u, 11.2 * sc), [W * 0.6, 2.6 * sc, L * 0.28], [0.90, 0.91, 0.95], b);
         // Tinted glazing bands on each deck
+        out._mat = MAT.GLASS;
         for (const [y, ln] of [[5.4, 0.5], [8.4, 0.4], [11.2, 0.28]]) {
           addBox(out, vadd(sup, a.u, (y + 0.2) * sc), [W * 0.92, 0.9 * sc, L * ln * 1.01], [0.18, 0.28, 0.40], b);
         }
         // Radar arch (two legs + crossbar) above the bridge deck
+        out._mat = MAT.METAL;
         for (const o of [-W * 0.28, W * 0.28]) {
           addCyl(out, vadd(vadd(sup, a.r, o), a.u, 13.4 * sc), 0.16 * sc, 2.4 * sc, [0.85, 0.86, 0.90], 5, b);
         }
         addBox(out, vadd(sup, a.u, 14.6 * sc), [W * 0.62, 0.4 * sc, 0.6 * sc], [0.85, 0.86, 0.90], b);
         // Mast + navigation lights
         addCyl(out, vadd(sup, a.u, 14.8 * sc), 0.14 * sc, 5.5 * sc, [0.86, 0.86, 0.90], 4, b);
+        out._mat = 0;
         addBox(out, vadd(sup, a.u, 20.0 * sc), [0.5 * sc, 0.5 * sc, 0.5 * sc], [0.95, 0.30, 0.25], b);
+        out._mat = MAT.METAL;
         // Foredeck helipad — pale disc with an "H" bar
         const heli = vadd(vadd(a.c, a.t, L * 0.34), a.u, 4.0 * sc);
         addCyl(out, heli, W * 0.34, 0.2 * sc, [0.86, 0.86, 0.82], 12, b);
@@ -556,6 +567,7 @@
             addCyl(out, vadd(vadd(vadd(a.c, a.t, s * L * 0.06), a.r, sd * W * 0.5), a.u, 4.6 * sc), 0.05 * sc, 1.0 * sc, [0.86, 0.86, 0.9], 3, b);
           }
         }
+        out._mat = 0;
         // Warm lit interior glow band (evening party lights)
         addBox(out, vadd(sup, a.u, 6.0 * sc), [W * 0.92, 0.4 * sc, L * 0.5], WINLIT, b);
       };
@@ -581,6 +593,7 @@
         const base = [px[k], py[k], pz[k]];
         const b = [r, u, t];
         const span = hw[k] * 2 + 6;
+        out._mat = MAT.STONE;
         // Twin ashlar piers flanking the mouth
         for (const sd of [-1, 1]) {
           const pc = vadd(base, r, sd * (hw[k] + 2.6));
@@ -597,8 +610,11 @@
         // Keystone
         addBox(out, vadd(base, u, 9.6), [1.8, 2.2, 3.2], OCHRE, b);
         // "MONACO" fascia band + rockface above
+        out._mat = MAT.METAL;
         addBox(out, vadd(base, u, 10.8), [span * 0.9, 1.4, 2.2], [0.30, 0.42, 0.30], b);
+        out._mat = MAT.ROCK;
         addBox(out, vadd(base, u, 14), [span * 1.1, 5, 4], [0.34, 0.40, 0.30], b);
+        out._mat = 0;
       }
 
       // ── TIERED PASTEL HILLSIDE TERRACES (Beau Rivage climb, L) ───────────
@@ -610,12 +626,17 @@
         for (let i = 0; i < tiers; i++) {
           const c = vadd(vadd(a.c, a.t, back), a.u, up + 4.5);
           const col = PASTELS[(K(a.c[0] | 0) + i * 3) % PASTELS.length] || baseCol;
+          out._mat = MAT.CONCRETE;
           addBox(out, c, [w, 9, 12], col, b);
           // balcony window band + warm glow
+          out._mat = MAT.GLASS;
           addBox(out, vadd(vadd(a.c, a.t, back), a.u, up + 5.5), [w * 1.01, 2.4, 12.4], WIN, b);
+          out._mat = 0;
           addBox(out, vadd(vadd(a.c, a.t, back), a.u, up + 6.0), [w * 1.02, 0.9, 12.6], WINLIT, b);
           // planter ledge on each terrace
+          out._mat = MAT.FOLIAGE;
           addBox(out, vadd(vadd(a.c, a.t, back + 6), a.u, up + 9.4), [w * 0.9, 0.6, 1.4], [0.30, 0.45, 0.24], b);
+          out._mat = 0;
           up += 8.5; back += 7; w -= 3.2;
         }
       };

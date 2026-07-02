@@ -26,7 +26,7 @@
     // ~26 m of relief: climb toward the high point at Turn 7, drop back to the pits.
     elevations: [{ s: 0.60, halfM: 300, rise: 12 }, { s: 0.85, halfM: 200, rise: -6 }],
     scenery: function (api) {
-      const { out, n, px, py, pz, hw, pyMin, place, prop, hash, onTrack,
+      const { out, MAT, n, px, py, pz, hw, pyMin, place, prop, hash, onTrack,
               mountain, grandstand, building, motorhome, tower, tree, bush, hedge,
               billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
               addBox, addCyl, addCone, addPrism, addPyramid, addFrustum,
@@ -519,14 +519,18 @@
         const b = [A.r, A.u, A.t], c = A.c;
         if (onTrack(c[0], c[2], 6)) return;
         // Lower pier + arcade lintel (arch head suggested by a pointed prism).
+        out._mat = MAT.BRICK;
         addBox(out, vadd(c, A.u, 6.5), [2.4, 13, 2.4], BRICK, b);
         addBox(out, vadd(c, A.u, 13.4), [2.6, 1.6, 7.2], BRICK_L, b);
         addPrism(out, vadd(c, A.u, 14.9), [2.6, 1.5, 7.2], BRICK, b);
         // Warm arcade-glow strip glimpsed through each opening.
+        out._mat = MAT.GLASS;
         addBox(out, vadd(c, A.u, 9), [0.4, 4.5, 5.4], ARC_LANTERN, b);
         // Upper gallery colonnade + cornice.
+        out._mat = MAT.STONE;
         addBox(out, vadd(c, A.u, 17.5), [1.8, 5, 1.8], BRICK_L, b);
         addBox(out, vadd(c, A.u, 20.4), [3.0, 0.9, 7.2], [0.74, 0.66, 0.52], b);
+        out._mat = 0;
       }
       for (let i = -12; i <= 12; i += 2) {
         const k = ((kmono + i * step) % n + n) % n;
@@ -541,18 +545,24 @@
         const b = [A.r, A.u, A.t], c = A.c;
         if (onTrack(c[0], c[2], 20)) return;
         // Main hall mass + a bright glass clerestory band.
+        out._mat = MAT.METAL;
         addBox(out, vadd(c, A.u, h * 0.5), [w, h, d], WHITE, b);
+        out._mat = MAT.GLASS;
         addBox(out, vadd(c, A.u, h - 1.6), [w + 0.4, 2.2, d + 0.4], LGLASS, b);
         // Sawtooth roof: north-lit glazed monitor ridges across the span.
         const teeth = Math.max(4, Math.floor(w / 8));
         for (let t = 0; t < teeth; t++) {
           const off = (t / (teeth - 1) - 0.5) * (w - 4);
+          out._mat = t % 2 ? MAT.METAL : MAT.GLASS;
           addPrism(out, vadd(vadd(c, A.r, off), A.u, h + 1.4), [w / teeth - 0.6, 2.8, d],
                    t % 2 ? STEEL : [0.70, 0.82, 0.94], b);
         }
         // Glass entrance atrium projecting toward the track.
+        out._mat = MAT.GLASS;
         addBox(out, vadd(vadd(c, A.r, side * (w * 0.5 - 3)), A.u, 6), [8, 12, d * 0.5], GLASS, b);
+        out._mat = MAT.METAL;
         addPrism(out, vadd(vadd(c, A.r, side * (w * 0.5 - 3)), A.u, 12.5), [8, 3, d * 0.5], STEEL, b);
+        out._mat = 0;
       }
       expoHall(0.925, 1, hw[Math.round(0.925 * n) % n] + 70, 76, 100, 20);
       expoHall(0.045, 1, hw[Math.round(0.045 * n) % n] + 72, 82, 104, 22);

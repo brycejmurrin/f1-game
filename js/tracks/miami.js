@@ -24,7 +24,7 @@
     elevations: [{ s: 0.42, halfM: 280, rise: 4 }],
     scenery: function (api) {
       const {
-        out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, grandstand,
+        out, MAT, n, px, pz, pyMin, place, prop, backdrop, groundPlane, grandstand,
         building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
         marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
         addCone, addFrustum, vadd, hash, onTrack, every, cityFront, forestEdge,
@@ -74,20 +74,26 @@
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 26)) return;
         // sand deck
+        out._mat = MAT.SAND;
         addBox(out, vadd(a.c, a.u, 0.15), [40, 0.3, 30], [0.92, 0.86, 0.66], bv);
-        // pool (bright teal, non-reflective slab)
+        out._mat = 0;
+        // pool (bright teal, non-reflective slab) — left as water/FLAT
         addBox(out, vadd(vadd(a.c, a.r, 6), a.u, 0.28), [14, 0.5, 8], TEAL, bv);
         addBox(out, vadd(vadd(a.c, a.r, 6), a.u, 0.30), [12, 0.5, 6], [0.30, 0.86, 0.86], bv);
         // DJ cabana with coral awning
         addBox(out, vadd(vadd(a.c, a.t, -14), a.u, 1.7), [6, 3.4, 8], WHITE, bv);
+        out._mat = MAT.FABRIC;
         addBox(out, vadd(vadd(a.c, a.t, -14), a.u, 3.6), [6.6, 0.6, 8.6], CORAL, bv);
+        out._mat = 0;
         // parasols (cone canopies on poles) + sun loungers scattered on the sand
         for (let i = 0; i < 8; i++) {
           const along = (hash(k + i) - 0.5) * 30, out2 = (hash(k * 3 + i) - 0.5) * 18 + 2;
           const base = vadd(vadd(a.c, a.t, along), a.r, out2);
           addCyl(out, base, 0.12, 3, WHITE, 4, bv);
+          out._mat = MAT.FABRIC;
           addCone(out, vadd(base, a.u, 3), 2.2, 1.2,
                   [TEAL, CORAL, PINK, [1.0, 0.85, 0.4]][i % 4], 8, bv);
+          out._mat = 0;
           addBox(out, vadd(base, a.u, 0.3), [0.8, 0.35, 2.0], WHITE, bv);
         }
         // palms framing the deck

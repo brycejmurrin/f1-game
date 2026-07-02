@@ -23,7 +23,7 @@
     // Yas Marina underpass: the circuit dips below the Yas Hotel near the end of the lap.
     elevations: [{ s: 0.88, halfM: 160, rise: -4 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, prop, groundPlane, addBox,
+      const { out, MAT, n, px, pz, pyMin, place, prop, groundPlane, addBox,
         anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along,
@@ -308,21 +308,25 @@
         // Flanking twin curved towers
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 16);
+          out._mat = MAT.GLASS;
           // Tapered tower core — dark glass
           addFrustum(out, a.c, 22, 16, H, [0.10, 0.11, 0.16], 8, [a.r, a.u, a.t]);
           // Dark glass podium base
           addBox(out, vadd(a.c, a.u, 6), [38, 12, 44], [0.08, 0.09, 0.13], [a.r, a.u, a.t]);
+          out._mat = 0;
           // Warm uplit base band
           addBox(out, vadd(a.c, a.u, 1.4), [41, 3.2, 47], [1.0, 0.80, 0.44], [a.r, a.u, a.t]);
           // Plaza light pool under each tower — large glowing oval on the ground
           addCyl(out, vadd(a.c, a.u, 0.12), 18, 0.25, POOL, 12, [a.r, a.u, a.t]);
           addCyl(out, vadd(a.c, a.u, 0.06), 32, 0.10, POOL_SOFT, 12, [a.r, a.u, a.t]);
+          out._mat = MAT.GLASS;
           // Emissive lit floors — bright window bands at several heights
           for (let fl = 0; fl < 6; fl++) {
             const fy = 14 + fl * 14;
             const col = (fl % 2 === 0) ? WIN_EMI : WIN_WARM;
             addBox(out, vadd(a.c, a.u, fy), [36, 4, 42], col, [a.r, a.u, a.t]);
           }
+          out._mat = MAT.METAL;
           // LED grid-shell facing the track — larger, brighter panels
           for (let gy = 0; gy < 10; gy++) for (let gx = 0; gx < 5; gx++) {
             const cc = vadd(vadd(a.c, a.u, 12 + gy * 7), a.t, (gx - 2) * 8.0);
@@ -335,6 +339,7 @@
             const col = LED_CYCLE[(gy + k + 1) % 3];
             addBox(out, vadd(cc, a.t, side * 21.0), [0.8, 5.0, 5.0], col, [a.r, a.u, a.t]);
           }
+          out._mat = 0;
           // Crown cap (bright) + magenta beacon
           addBox(out, vadd(a.c, a.u, H + 2), [20, 4, 24], [1.0, 0.98, 0.88], [a.r, a.u, a.t]);
           addBox(out, vadd(a.c, a.u, H + 6), [5, 6, 5], LED_MAG, [a.r, a.u, a.t]);
@@ -345,6 +350,7 @@
         // Stronger glow: larger node boxes, bright mid-arch strip colour.
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 16);
+          out._mat = MAT.METAL;
           for (let band = -2; band <= 2; band++) {
             const foff = band * 9.0;
             let prevPt = null;
@@ -365,6 +371,7 @@
               prevPt = c;
             }
           }
+          out._mat = 0;
         }
         // Reflecting pool at hotel base
         groundPlane(K(0.87), 1, 12, [80, 1.2, 70], WATER);
@@ -572,9 +579,12 @@
       {
         const k = K(0.28);
         const a = anchor(k, 1, 36);
+        out._mat = MAT.CONCRETE;
         addFrustum(out, a.c, 14, 9, 40, [0.12, 0.13, 0.18], 10, [a.r, a.u, a.t]);
+        out._mat = MAT.GLASS;
         // Glazed observation deck — bright emissive lit glass at night
         addBox(out, vadd(a.c, a.u, 22), [30, 8, 12], WIN_EMI, [a.r, a.u, a.t]);
+        out._mat = 0;
         // Lit crown beacon
         addBox(out, vadd(a.c, a.u, 42), [10, 5, 10], FLOOD, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 47), [4, 4, 4], LED_TEAL, [a.r, a.u, a.t]);
@@ -633,12 +643,14 @@
         // deck lighting accent
         addBox(out, vadd(hc, a.u, 5.5), [2.4, 0.6, 8], [0.85, 0.85, 0.88], [a.r, a.u, a.t]);
         // white luxury pavilion tents (A-frame)
+        out._mat = MAT.FABRIC;
         for (let i = 0; i < 7; i++) {
           const ak = anchor(K(0.56 + i * 0.020), 1, 19);
           addPrism(out, vadd(ak.c, ak.u, 3.5), [7, 4.8, 9], [0.96, 0.96, 0.98], [ak.r, ak.u, ak.t]);
           // tent lighting
           addBox(out, vadd(ak.c, ak.u, 2), [7.2, 0.8, 9.2], [1.0, 0.88, 0.60], [ak.r, ak.u, ak.t]);
         }
+        out._mat = MAT.WOOD;
         // jetty fingers reaching into water
         for (let i = 0; i < 5; i++) {
           const jk = anchor(K(0.55 + i * 0.022), 1, 13);
@@ -647,6 +659,7 @@
           // jetty accent lighting
           addBox(out, vadd(jk.c, jk.t, 0), [1.2, 0.4, 28.2], [0.95, 0.82, 0.55], [jk.r, jk.u, jk.t]);
         }
+        out._mat = 0;
       }
 
       // ---- Desert ridge backdrop: track-relative backdrop() calls replace
@@ -690,6 +703,7 @@
       // track and the Ferrari World roof mass (s 0.18 R).
       const coasterLoop = (k, side, gap) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.METAL;
         const R = 24, base = vadd(a.c, a.u, 2);
         let prev = null;
         for (let i = 0; i <= 26; i++) {
@@ -711,16 +725,21 @@
         // loop support columns
         for (const dz of [-R * 0.5, R * 0.5])
           addCyl(out, vadd(vadd(a.c, a.t, dz), a.u, R), 0.6, R * 2, [0.70, 0.70, 0.72], 6, b);
+        out._mat = 0;
       };
       coasterLoop(K(0.185), 1, 58);
 
       // ── Etihad Arena — low domed entertainment arena ────────────────────
       const arena = (k, side, gap) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.METAL;
         addFrustum(out, a.c, 34, 30, 14, [0.20, 0.22, 0.30], 16, b);                     // drum
+        out._mat = MAT.GLASS;
         addBox(out, vadd(a.c, a.u, 6), [70, 3, 62], WIN_WARM, b);                        // lit facade band
+        out._mat = MAT.METAL;
         addFrustum(out, vadd(a.c, a.u, 14), 30, 11, 10, [0.24, 0.26, 0.34], 16, b);      // dome shoulder
         addCone(out, vadd(a.c, a.u, 24), 12, 6, [0.26, 0.28, 0.36], 16, b);              // dome cap
+        out._mat = 0;
         addBox(out, vadd(a.c, a.u, 30), [3, 3, 3], LED_TEAL, b);                         // beacon
       };
       arena(K(0.50), -1, 110);

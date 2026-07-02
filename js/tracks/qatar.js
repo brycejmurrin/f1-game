@@ -23,7 +23,7 @@
     // Losail: gentle desert undulation through the far hairpin section.
     elevations: [{ s: 0.55, halfM: 380, rise: 5 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, hash, vadd, every, onTrack, groundYAt,
+      const { out, MAT, n, px, pz, pyMin, hash, vadd, every, onTrack, groundYAt,
         place, prop, backdrop, anchor, addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
         palm, grandstand, building, cityFront, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along } = api;
@@ -466,6 +466,7 @@
       // ── Desert hospitality marquee — pointed pyramidal canopy hall ───────
       const marquee = (k, side, gap, w, len) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.FABRIC;
         addBox(out, vadd(a.c, a.u, 1.7), [w, 3.4, len], TENT_PALE, b);
         addBox(out, vadd(a.c, a.u, 2.6), [w * 1.02, 0.55, len * 1.005], WIN_WARM, b);
         const bays = Math.max(2, Math.round(len / (w * 0.9)));
@@ -474,11 +475,13 @@
           addPyramid(out, vadd(vadd(a.c, a.u, 3.4), a.t, off),
             [w * 0.98, 3.2, (len / bays) * 0.96], DOME_PALE, b);
         }
+        out._mat = 0;
       };
 
       // ── Mosque — domed prayer hall + crescent-topped minaret ─────────────
       const mosque = (k, side, gap) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.STONE;
         addBox(out, vadd(a.c, a.u, 4), [16, 8, 16], DOME_PALE, b);            // hall
         addBox(out, vadd(a.c, a.u, 5), [16.3, 3, 16.3], WIN_WARM, b);         // lit arcade
         addFrustum(out, vadd(a.c, a.u, 8), 6.5, 4.0, 4, DOME_PALE, 12, b);    // dome drum
@@ -492,16 +495,20 @@
         addFrustum(out, vadd(mc, a.u, 30), 2.1, 1.1, 3, WIN_WARM, 8, b);      // lit balcony
         addCyl(out, vadd(mc, a.u, 33), 1.0, 6, DOME_PALE, 8, b);
         addCone(out, vadd(mc, a.u, 39), 1.5, 4.5, [0.96, 0.90, 0.66], 8, b);  // lit spire
+        out._mat = 0;
         addBox(out, vadd(mc, a.u, 44), [0.4, 2.2, 0.4], BEACON, b);           // crescent
       };
 
       // ── Aspire Torch — Doha landmark spire on the far horizon ────────────
       (function aspireTorch() {
         const a = anchor(K(0.50), -1, 540), b = [a.r, a.u, a.t];
+        out._mat = MAT.CONCRETE;
         addFrustum(out, a.c, 9, 5, 118, SKY_A, 10, b);                        // sweeping shaft
         addFrustum(out, vadd(a.c, a.u, 118), 5.5, 8.5, 40, SKY_B, 10, b);     // bulging crown
         addFrustum(out, vadd(a.c, a.u, 158), 8.0, 1.5, 32, SKY_B, 10, b);     // tapering top
+        out._mat = MAT.GLASS;
         for (let i = 0; i < 9; i++) addBox(out, vadd(a.c, a.u, 14 + i * 12), [13, 1.6, 13], WIN_COOL, b);
+        out._mat = 0;
         addBox(out, vadd(a.c, a.u, 130), [17.5, 5, 17.5], [0.98, 0.92, 0.66], b); // lit torch bowl
         addBox(out, vadd(a.c, a.u, 192), [2, 6, 2], BEACON, b);               // beacon
       })();
@@ -509,7 +516,9 @@
       // ── Desert oasis — palm grove around a dark water pool ───────────────
       const oasis = (k, side, gap, r) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        out._mat = MAT.SAND;
         addBox(out, vadd(a.c, a.u, 0.18), [r * 2.4, 0.30, r * 3.0], SAND_D, b);       // sandy rim
+        out._mat = 0;
         addBox(out, vadd(a.c, a.u, 0.24), [r * 2.0, 0.24, r * 2.6], [0.08, 0.18, 0.20], b); // water
         for (let i = 0; i < 6; i++) {
           const kk = (k + (i - 3) + n) % n;

@@ -26,7 +26,7 @@
     // then recovers along the seafront — real circuit has ~12 m total change.
     elevations: [{ s: 0.30, halfM: 480, rise: -8 }, { s: 0.62, halfM: 400, rise: 6 }],
     scenery: function (api) {
-      const { out, n, pyMin, place, backdrop,
+      const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, gantry, marshalPost, guardrail, tyreWall, palm,
         cityFront, onTrack, hash, every } = api;
@@ -255,8 +255,10 @@
       {
         const sA = anchor(K(0.50), 1, 42), sBasis = [sA.r, sA.u, sA.t];
         if (!onTrack(sA.c[0], sA.c[2], 10)) {
+          out._mat = MAT.STONE;
           addCyl(out, sA.c, 3.2, 22, [0.82, 0.78, 0.68], 8, sBasis);
           addCone(out, vadd(sA.c, sA.u, 22), 5, 9, [0.94, 0.86, 0.64], 8, sBasis);
+          out._mat = 0;
         }
       }
 
@@ -269,6 +271,7 @@
       const floatingMosque = (k, gap) => {
         const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
         const base = [a.c[0], pyMin - 0.3, a.c[2]];   // sit on the sea plane
+        out._mat = MAT.STONE;
         addBox(out, vadd(base, a.u, 2.0), [26, 4, 26], [0.90, 0.90, 0.86], b);      // podium
         addBox(out, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);           // lit podium rim
         addBox(out, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);      // prayer hall
@@ -287,6 +290,7 @@
         addFrustum(out, vadd(mc, a.u, 28), 2.0, 1.1, 3, WINWARM, 8, b);             // lit balcony
         addCyl(out, vadd(mc, a.u, 31), 1.0, 5, [0.94, 0.94, 0.91], 8, b);
         addCone(out, vadd(mc, a.u, 36), 1.5, 4.5, [0.96, 0.90, 0.66], 8, b);        // lit spire
+        out._mat = 0;
         addBox(out, vadd(mc, a.u, 41), [0.5, 2.2, 0.5], SPANGLE, b);                // crescent finial glow
       };
       floatingMosque(K(0.165), 210);
@@ -294,11 +298,16 @@
       // ── Jeddah Flagpole — the record 171 m mast + giant green flag ───────
       {
         const a = anchor(K(0.30), -1, 130), b = [a.r, a.u, a.t];
+        out._mat = MAT.CONCRETE;
         addFrustum(out, a.c, 4.0, 2.6, 14, [0.55, 0.56, 0.60], 8, b);               // pedestal
+        out._mat = MAT.METAL;
         addCyl(out, vadd(a.c, a.u, 14), 1.15, 152, [0.82, 0.84, 0.88], 8, b);       // mast
+        out._mat = 0;
         addBox(out, vadd(a.c, a.u, 166), [1.2, 0.8, 1.2], SPANGLE, b);              // masthead light
+        out._mat = MAT.FABRIC;
         addBox(out, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.4, 24, 44], GREEN, b);   // giant flag
         addBox(out, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.5, 4, 44], [0.95, 0.96, 0.98], b); // flag emblem band
+        out._mat = 0;
       }
 
       // ── Dhow — traditional lateen-sail boat moored at the waterfront ─────
@@ -306,12 +315,15 @@
         const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 6)) return;
         const hull = [a.c[0], pyMin + 0.4 * sc, a.c[2]];
+        out._mat = MAT.WOOD;
         addBox(out, vadd(hull, a.u, 0.8 * sc), [2.6 * sc, 1.7 * sc, 9 * sc], [0.30, 0.20, 0.11], b);   // dark wood hull
         addBox(out, vadd(hull, a.u, 1.8 * sc), [2.2 * sc, 0.5 * sc, 8 * sc], [0.42, 0.29, 0.16], b);   // gunwale
         const mast = vadd(hull, a.u, 2.0 * sc);
         addCyl(out, mast, 0.13 * sc, 11 * sc, [0.5, 0.36, 0.2], 4, b);                                 // mast
+        out._mat = MAT.FABRIC;
         addPrism(out, vadd(vadd(mast, a.u, 4.5 * sc), a.t, 2.2 * sc),
           [0.3, 8 * sc, 7 * sc], [0.90, 0.88, 0.82], b);                                               // lateen sail
+        out._mat = 0;
         addBox(out, vadd(hull, a.u, 0.1), [3.0 * sc, 0.3, 9.6 * sc], SPANGLE, b);                      // water reflection
       };
       // dhow fleet alongside the marina + Corniche lagoon

@@ -33,7 +33,7 @@
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
         fence, guardrail, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         ferrisWheel, tower, onTrack, groundYAt, forestEdge, cityFront,
-        cross, norm } = api;
+        cross, norm, MAT } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── strut(): thin cylinder between two world points (geodesic lattice) ────
@@ -373,10 +373,12 @@
 
         // Stepped upper blocks placed via anchor, ABOVE the main hall roof.
         const a = anchor(k, 1, 190);
+        out._mat = MAT.CONCRETE;
         // First step: 30×30 × 16 m, rising from height 72 (2 m above roof to avoid z-fight)
         addBox(out, vadd(a.c, a.u, 72 + 8),  [30, 16, 30], [0.84, 0.86, 0.90], [a.r, a.u, a.t]);
         // Second step: 18×18 × 12 m, on top of first step
         addBox(out, vadd(a.c, a.u, 72 + 16 + 2 + 6), [18, 12, 18], [0.87, 0.89, 0.93], [a.r, a.u, a.t]);
+        out._mat = 0;
       }
 
       // ── Near far-bank (Île Sainte-Hélène) strip across a water channel on the
@@ -408,6 +410,7 @@
           const t = (y - R) / R;            // -1 (bottom) … +1 (top)
           return R * Math.sqrt(Math.max(0, 1 - t * t));
         };
+        out._mat = MAT.METAL;
         for (let i = 1; i <= STK; i++) {
           const yTop = Y0 + ((R * 2 - Y0) * i) / STK;   // climb to ~80 m apex
           const h = yTop - yPrev;
@@ -421,6 +424,7 @@
         }
         // Faint equatorial belt to read the geodesic banding at the widest point
         addFrustum(out, vadd(a.c, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 18, [a.r, a.u, a.t]);
+        out._mat = 0;
 
         // ── GEODESIC STRUT LATTICE ──────────────────────────────────────────
         // Meridian ribs + latitude rings + a band of diagonals stretched over the
@@ -431,6 +435,7 @@
                      a.r, rAt(y) * Math.cos(phi)), a.t, rAt(y) * Math.sin(phi));
         const MER = 14, RN = 12;
         const yTopMax = R * 2 - 1.5;                  // stop just shy of the pole
+        out._mat = MAT.METAL;
         // meridian ribs
         for (let m = 0; m < MER; m++) {
           const phi = m / MER * 6.2832;
@@ -461,6 +466,7 @@
             strut(surf(y0, phi0), surf(y1, phi1), 0.16, LAT, 3);
           }
         }
+        out._mat = 0;
       }
 
       // ===================================================================
