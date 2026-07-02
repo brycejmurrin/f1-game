@@ -1579,7 +1579,15 @@ const DataHub = (function () {
      For each circuit of the chosen season it pulls ONE clean fast-lap location
      trace. An OpenF1 lap STARTS at the start/finish line, so trace[0] is the
      real S/F point — used offline to validate/correct each circuit's start
-     line (s=0 / startFrac) against the game's centreline. */
+     line (s=0 / startFrac) against the game's centreline.
+
+     Kept in this file rather than split into its own module: it only touches
+     F1API (global) and the el()/clear()/active shared with every other tab —
+     the same lightweight coupling every tab already has. At ~280 lines in a
+     1,850-line file (each tab already has its own banner-delimited section
+     above), a module split would add an init(deps)-style handoff for those
+     three names with no corresponding benefit — data.js isn't a hot path or
+     a monolith the way game.js/tracks.js/glx.js were. */
 
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 

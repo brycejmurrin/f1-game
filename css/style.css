@@ -1,5 +1,6 @@
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */
 
+/* ---------- base: variables, reset, buttons, panels ---------- */
 :root {
   --red: #e10600;
   --bg: #0a0a0f;
