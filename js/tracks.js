@@ -1498,6 +1498,50 @@ const Tracks = (function () {
     // Uses addBox directly to avoid place()'s per-box onTrack guard, which fires
     // false-positives at hairpins (La Source at Spa, etc.). Single guard uses the
     // crowd inner face — only skips if the seating literally overlaps the tarmac.
+    // Varied spectator clothing for a DAY crowd — a realistic mix of neutrals
+    // (denim, grey, white, khaki) with pops of team colour so a packed stand
+    // reads as thousands of individuals, not a flat painted slab.
+    const CROWD_DAY = [
+      [0.82, 0.82, 0.84], [0.74, 0.72, 0.68], [0.30, 0.34, 0.52], [0.20, 0.24, 0.34],
+      [0.78, 0.20, 0.20], [0.86, 0.52, 0.16], [0.90, 0.82, 0.28], [0.24, 0.48, 0.28],
+      [0.20, 0.44, 0.66], [0.66, 0.24, 0.42], [0.52, 0.54, 0.58], [0.90, 0.90, 0.92],
+      [0.40, 0.26, 0.18], [0.14, 0.16, 0.20], [0.86, 0.40, 0.46], [0.30, 0.62, 0.60],
+    ];
+    // Populate a raked seating bank with speckled spectators. Front row sits at
+    // clearance `gap` beyond the road edge and the bank rises `rise` m over
+    // `depth` m of recede, split into blocks by aisles. Empty seats + a dark
+    // riser behind each row read as shadow, not sky, through the gaps. At night
+    // most bodies go dark with a sparse scatter of phone-lights / camera flashes.
+    // Emitted with RAW.addBox (spectators always sit safely behind the shell, so
+    // the per-box on-road test is skipped for speed).
+    const crowdBank = (k, side, gap, len, rise, depth, riserCol) => {
+      const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+      const rows = Math.max(3, Math.round(rise / 1.4));
+      const perRow = Math.max(6, Math.round(len / 1.15));
+      const riser = riserCol || (NIGHT ? [0.10, 0.10, 0.13] : [0.28, 0.26, 0.27]);
+      for (let r = 0; r < rows; r++) {
+        const f = (r + 0.5) / rows, up = f * rise, back = f * depth;
+        // dark step riser behind each seating row (blocks sky/ground show-through)
+        RAW.addBox(out, vadd(vadd(a.c, a.u, up), a.r, side * back), [1.3, 1.5, len], riser, b);
+        for (let s2 = 0; s2 < perRow; s2++) {
+          if (s2 % 10 === 9) continue;                       // aisle / vomitory gap
+          const h1 = hash(k * 2.7 + r * 5.3 + s2 * 1.9 + side * 3.1);
+          const h2 = hash(k * 1.3 + r * 8.1 + s2 * 4.7 + side * 2.2);
+          if (h2 > 0.86) continue;                            // ~14% empty seats
+          const along = ((s2 + 0.5) / perRow - 0.5) * len + (h1 - 0.5) * 0.45;
+          const c = vadd(vadd(vadd(a.c, a.t, along), a.u, up + 0.55), a.r, side * back);
+          let col;
+          if (NIGHT) {
+            col = h1 > 0.955 ? [2.6, 2.4, 2.0]                // phone light / flash (HDR → blooms)
+                : h1 > 0.55  ? [0.09, 0.10, 0.13]            // dark bodies
+                             : [0.16, 0.16, 0.21];
+          } else {
+            col = CROWD_DAY[Math.floor(h1 * CROWD_DAY.length) % CROWD_DAY.length];
+          }
+          RAW.addBox(out, c, [0.55, 0.72 + h2 * 0.2, 0.5], col, b);   // torso + head lump
+        }
+      }
+    };
     const grandstand = (s, side, gap, len, shell, crowd) => {
       const k = Math.round(s * n) % n;
       const halfFrac = (len / 2) / track.total;
@@ -1516,10 +1560,10 @@ const Tracks = (function () {
       const oShell = side * (hw[k] + gap + 7.5);
       const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + 6 - 0.8, pz[k] + r[2] * oShell];
       addBox(out, cShell, [10, 12, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
-      // Raked crowd — center at gap+4.5 beyond road edge
-      const oCrowd = side * (hw[k] + gap + 4.5);
-      const cCrowd = [px[k] + r[0] * oCrowd, groundYAt(k, gap + 4.5) + 3.5 - 0.8, pz[k] + r[2] * oCrowd];
-      addBox(out, cCrowd, [9, 7, len - 2], crowd || [0.55, 0.32, 0.30], [r, u, t]);
+      // Raked crowd: speckled spectators rising from the front toward the shell.
+      // (`crowd` colour, kept for call-site compatibility, tints the dark risers.)
+      crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2,
+                crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null);
       // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
       addBox(out, vadd(a.c, a.u, 13), [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
@@ -2821,7 +2865,8 @@ const Tracks = (function () {
     for (let i = 0; i < 7; i++) {
       const k = (i * 4) % n;
       place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
-      place(k, -1, 10, [1.4, 7, 16], crowd);                // tiered seating
+      crowdBank(k, -1, 8, 16, 7, 4.2,                        // speckled tiered crowd
+                [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
       place(k, 1, 12, [7, 5.5, 16], [0.83, 0.83, 0.86]);    // pit building
       // Pit complex window bands: two glowing glass strips on the track-facing
       // face after dark — garages work through the night at a race meeting.
