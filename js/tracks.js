@@ -2517,10 +2517,15 @@ const Tracks = (function () {
     // per lap. This was a genuine gap: no signage model existed at all before
     // signBoard() (see the scenery audit).
     {
+      // NOTE: signBoard's `gap` forwards straight to anchor(k,side,gap), which
+      // already adds hw[k] internally (dist = "beyond the edge") — passing
+      // hw[k]+N here would double-count it and place every board ~2x too far
+      // out. Pass the clearance alone, matching every other gap-based call in
+      // this file (building/grandstand/marshalPost/…).
       const laneCorners = findCorners(track, 0.007).slice().sort((a, b) => a.k - b.k);
       laneCorners.forEach((c, idx) => {
         const outside = c.sign > 0 ? -1 : 1;
-        signBoard(c.k, outside, hw[c.k] + 3.5, "corner", idx + 1);
+        signBoard(c.k, outside, 3.5, "corner", idx + 1);
         // Braking trio (3->2->1 stripes counting down to the apex) on roughly
         // half the corners, spaced back along the approach — avoids clutter on
         // every single bend while still reading as a real trackside kit.
@@ -2529,7 +2534,7 @@ const Tracks = (function () {
           const offs = [Math.round(lo * 0.85), Math.round(lo * 0.5), Math.round(lo * 0.18)];
           [3, 2, 1].forEach((stripes, si) => {
             const kk = ((c.k - offs[si]) % n + n) % n;
-            signBoard(kk, outside, hw[kk] + 3.0, "braking", stripes);
+            signBoard(kk, outside, 3.0, "braking", stripes);
           });
         }
       });
@@ -2537,7 +2542,7 @@ const Tracks = (function () {
       // speed-limit signage is mostly a pit-lane feature, not scattered
       // trackside, so a single instance per circuit is the honest amount.
       const spk = Math.round(n * 0.965) % n;
-      signBoard(spk, -1, hw[spk] + 4, "speed", def.street ? 60 : 80);
+      signBoard(spk, -1, 4, "speed", def.street ? 60 : 80);
     }
 
     // ── Per-track street / scenery furniture: lamp posts + roadside trees ──
