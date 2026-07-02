@@ -141,18 +141,19 @@ float sampleShadow(vec3 wpos) {
   if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z >= 1.0) return 1.0;
   float t = uShadowTexel;
   // Slope-scale bias: gentle base + steeper slope term reduces both acne and
-  // peter-panning on angled surfaces (walls, banking kerbs).
-  float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.0, 1.0);
-  float slopeBias = t * 1.5 * tan(acos(max(cosTheta, 0.05)));
+  // peter-panning on angled surfaces (walls, banking kerbs). tan(acos(c)) done
+  // as sqrt(1-c²)/c (same value, no trig).
+  float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.05, 1.0);
+  float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
   float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
-  // 8-tap Poisson disk, ROTATED per-pixel by interleaved-gradient noise so the
-  // sampling pattern varies every fragment — banding becomes fine noise and the
-  // 8 taps read as a much smoother penumbra.
-  // PCSS-lite: a 4-tap blocker search on the low-res min-depth map scales the
-  // Poisson radius by the receiver-blocker gap — crisp right at the contact
-  // point (tyre shadows), soft where the caster is far (wing tips, fences).
+  // Distance LOD: full 8-tap Poisson + PCSS-lite blocker search near the camera
+  // (crisp tyre/kerb contact shadows), a cheap 4-tap disk on distant ground where
+  // the shadow is small on screen. Halves shadow bandwidth over most of the frame.
+  bool near = vDist < 55.0;
   float R = 3.0;
-  if (uPcss > 0.5) {
+  if (near && uPcss > 0.5) {
+    // PCSS-lite: blocker search scales the Poisson radius by the receiver-blocker
+    // gap — crisp at the contact point, soft where the caster is far.
     float bt = 1.5 / 512.0;
     float zb = min(min(texture(uBlockerMap, sc.xy + vec2(-bt,  bt)).r,
                        texture(uBlockerMap, sc.xy + vec2( bt,  bt)).r),
@@ -165,23 +166,23 @@ float sampleShadow(vec3 wpos) {
   float ang = ign * 6.2831853;
   float cr = cos(ang), sr = sin(ang);
   mat2 rot = mat2(cr, -sr, sr, cr) * (t * R);
-  vec2 p0 = rot * vec2(-0.94201624, -0.39906216);
-  vec2 p1 = rot * vec2( 0.94558609, -0.76890725);
-  vec2 p2 = rot * vec2(-0.09418410, -0.92938870);
-  vec2 p3 = rot * vec2( 0.34495938,  0.29387760);
-  vec2 p4 = rot * vec2(-0.91588581,  0.45771432);
-  vec2 p5 = rot * vec2(-0.81544232, -0.87912464);
-  vec2 p6 = rot * vec2(-0.38277543,  0.27676845);
-  vec2 p7 = rot * vec2( 0.97484398,  0.75648379);
-  float s = texture(uShadowMap, vec3(sc.xy + p0, z))
-          + texture(uShadowMap, vec3(sc.xy + p1, z))
-          + texture(uShadowMap, vec3(sc.xy + p2, z))
-          + texture(uShadowMap, vec3(sc.xy + p3, z))
-          + texture(uShadowMap, vec3(sc.xy + p4, z))
-          + texture(uShadowMap, vec3(sc.xy + p5, z))
-          + texture(uShadowMap, vec3(sc.xy + p6, z))
-          + texture(uShadowMap, vec3(sc.xy + p7, z));
-  return mix(1.0, s * 0.125, uShadowStr);
+  // 4 taps always; 4 more only near the camera. Rotated per-pixel so the reduced
+  // count still reads as noise, not banding.
+  float s = texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.94201624, -0.39906216), z))
+          + texture(uShadowMap, vec3(sc.xy + rot * vec2( 0.94558609, -0.76890725), z))
+          + texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.09418410, -0.92938870), z))
+          + texture(uShadowMap, vec3(sc.xy + rot * vec2( 0.34495938,  0.29387760), z));
+  float sh;
+  if (near) {
+    s += texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.91588581,  0.45771432), z))
+       + texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.81544232, -0.87912464), z))
+       + texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.38277543,  0.27676845), z))
+       + texture(uShadowMap, vec3(sc.xy + rot * vec2( 0.97484398,  0.75648379), z));
+    sh = s * 0.125;
+  } else {
+    sh = s * 0.25;
+  }
+  return mix(1.0, sh, uShadowStr);
 }
 
 void main() {
@@ -1746,7 +1747,10 @@ void main() {}`;
       const ds = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES);
       const cMax = cs && cs.length ? cs[0] : 0;
       const dMax = ds && ds.length ? ds[0] : 0;
-      msaaSamples = Math.min(4, cMax, dMax);
+      // 2× (was 4×): halves the multisample colour+depth store and the resolve
+      // blit bandwidth. FXAA (full-res, below) cleans up the specular/edge
+      // shimmer the lower sample count misses, so the perceptual gap is small.
+      msaaSamples = Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
