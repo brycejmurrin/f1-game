@@ -334,6 +334,11 @@ void main() {
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
     color += albedo * uLightCol[i] * (att * spotD) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
+    // Bounce fill: pool light bounced off the road washes nearby surfaces
+    // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
+    // a near-free stand-in for local ambient probes. Soft NoL floor so
+    // surfaces facing away from the lamp still catch a little.
+    color += albedo * uLightCol[i] * (att * 0.04 * (0.55 + 0.45 * NoLl)) * (1.0 - uMetalness);
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
     // real wet-night streak); on glass/car paint it's the city-light glint.

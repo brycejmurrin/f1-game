@@ -917,6 +917,15 @@ function applyRaceSettings() {
       // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
       frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
       frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
+      // Hue the clamped ambient band toward the city glow: neon canyons get a
+      // magenta-warm ambient cast, sodium towns amber. Near energy-neutral
+      // (dominant channel x1.10, others pulled down) so the band stays a band.
+      const _cgA = frameSky.cityGlow;
+      if (_cgA) {
+        const _cgm = Math.max(_cgA[0], _cgA[1], _cgA[2]) || 1;
+        frame.ambientSky    = frame.ambientSky.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
+        frame.ambientGround = frame.ambientGround.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
+      }
     }
 
     // ── Per-track atmosphere (default mode only) ──────────────────────────
