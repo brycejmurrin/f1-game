@@ -2711,12 +2711,30 @@ function camVantage(mode, s, x, spd, now, extra) {
   // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
   // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
   const kA = Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)));
+  // Street-circuit camera corridor: city tracks run a continuous building wall a
+  // few metres past the barriers, and the wide broadcast offsets (15-25 m) put
+  // the eye INSIDE the towers — the whole view fills with a glowing facade
+  // interior. The verge strip just outside the barriers is no better: it's where
+  // the trees and lamp masts stand, so a camera there stares into foliage.
+  // Instead, on street tracks the broadcast cams stay over the ROAD EDGE itself
+  // (furniture is never on the tarmac) and trade the lost width for extra
+  // height — a crane-over-the-circuit shot. Open circuits keep the full framing.
+  const corr = track.def && track.def.street ? Math.max(cvA.hw - 1.0, 4) : Infinity;
   let eye, tgt, fov;
   if (mode === "cockpit" || mode === "hood") {
-    const eyeFwd = mode === "cockpit" ? 0.2 : 1.9;   // hood sits out on the nose
-    const eyeUp  = mode === "cockpit" ? 1.15 : 0.78;
+    // COCKPIT: at the DRIVER's eye — the helmet dome sits at z -0.08 with its
+    // top at ~0.73 m, so the eye rides just above it (0.98) and fractionally
+    // behind the car origin, instead of floating 1.15 m up over the monocoque
+    // ahead of the driver. Low + at the seat = the authentic "barely see over
+    // the nose" F1 sensation, and the ground genuinely rushes.
+    // HOOD: pulled back onto the chassis spine just ahead of the cockpit (was
+    // 1.9 m out — past most of the bodywork, so no car was in frame). From
+    // 0.85 m the nose and front wing read at the bottom of the frame, which
+    // is what makes it a hood cam rather than a floating drone.
+    const eyeFwd = mode === "cockpit" ? -0.05 : 0.85;
+    const eyeUp  = mode === "cockpit" ? 0.98 : 0.92;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
-    tgt = aheadPt(30, eyeUp + 1.5, x * 0.6);
+    tgt = aheadPt(30, eyeUp + 1.2, x * 0.6);
     fov = lerp(64, 78, spN) + dep * 3;               // wider = faster feel
   } else if (mode === "bumper") {
     // Road-level splitter cam: mounted at the very front wing, ahead of the
@@ -2735,7 +2753,8 @@ function camVantage(mode, s, x, spd, now, extra) {
     // upcoming bend so it looks across the apex (was always camera-right).
     Tracks.sample(track, wrapS(s - 26), cvB);
     const sgn = kA > 0.001 ? -1 : kA < -0.001 ? 1 : 1;
-    eye = [cvB.p[0] + cvB.r[0] * 18 * sgn, cvB.p[1] + 21 + bankDy, cvB.p[2] + cvB.r[2] * 18 * sgn];
+    const hl = Math.min(18, corr);              // stay inside the street canyon
+    eye = [cvB.p[0] + cvB.r[0] * hl * sgn, cvB.p[1] + 21 + (18 - hl) * 0.6 + bankDy, cvB.p[2] + cvB.r[2] * hl * sgn];
     tgt = [p[0], p[1] + 0.8, p[2]];
     fov = 36 + dep * 2;
   } else if (mode === "reverse") {
@@ -2745,9 +2764,10 @@ function camVantage(mode, s, x, spd, now, extra) {
   } else if (mode === "side") {
     // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
     const sgn = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
-    eye = [p[0] + r[0] * sgn * 25, p[1] + 5.5, p[2] + r[2] * sgn * 25];
+    const sl = Math.min(25, corr);              // stay inside the street canyon
+    eye = [p[0] + r[0] * sgn * sl, p[1] + 5.5 + (25 - sl) * 0.30, p[2] + r[2] * sgn * sl];
     tgt = [p[0], p[1] + 0.8, p[2]];
-    fov = 44;
+    fov = 44 + (25 - sl) * 0.5;                 // closer eye → widen so framing holds
   } else if (mode === "cinematic") {
     // Outside-of-corner cinematic that gently breathes its angle instead of doing
     // full disorienting loops. Auto-picks the outside of the bend; on a straight it
@@ -2755,9 +2775,12 @@ function camVantage(mode, s, x, spd, now, extra) {
     // the track tangent, so the framing reads consistently corner to corner.
     const base = kA === 0 ? 0.6 : (kA > 0 ? -1 : 1) * 1.15;
     const a = base + Math.sin(now * 0.00022) * 0.5;
-    const od = 15;
+    // Cap the orbit distance so the LATERAL component stays inside the street
+    // canyon (|sin a|·od ≤ corridor); the angle keeps breathing, the eye just
+    // orbits tighter between the walls.
+    const od = Math.min(15, corr / Math.max(Math.abs(Math.sin(a)), 0.25));
     const dir = [Math.cos(a) * t[0] + Math.sin(a) * r[0], 0, Math.cos(a) * t[2] + Math.sin(a) * r[2]];
-    eye = [p[0] + dir[0] * od, p[1] + 6.5, p[2] + dir[2] * od];
+    eye = [p[0] + dir[0] * od, p[1] + 6.5 + (15 - od) * 0.45, p[2] + dir[2] * od];
     tgt = [p[0], p[1] + 0.8, p[2]];
     fov = lerp(50, 60, spN);
   } else if (mode === "low") {
@@ -2771,9 +2794,14 @@ function camVantage(mode, s, x, spd, now, extra) {
     tgt = aheadPt(25, 0.9, x * 0.5);
     fov = 40 + dep * 2;
   } else if (mode === "rear") {
-    eye = [p[0] - t[0] * 0.5, p[1] + 0.85, p[2] - t[2] * 0.5];
-    tgt = [p[0] - t[0] * 22, p[1] + 0.8, p[2] - t[2] * 22];
-    fov = lerp(62, 76, spN) + dep * 2;
+    // Onboard rear-view, remounted: the old eye (0.5 m back at 0.85 up) sat
+    // INSIDE the engine cover with the rear wing (elements 0.8-1.1 m at
+    // z -2.3..-2.6) filling the whole lens. Now perched above the airbox
+    // looking back OVER the wing — wing at the bottom of frame, the road and
+    // the chasing pack actually visible.
+    eye = [p[0] - t[0] * 0.95, p[1] + 1.38, p[2] - t[2] * 0.95];
+    tgt = [p[0] - t[0] * 26, p[1] + 0.7, p[2] - t[2] * 26];
+    fov = lerp(58, 70, spN) + dep * 2;
   } else if (mode === "drift") {
     // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
     // camera under oversteer, then settles directly behind once the car hooks up.
@@ -2835,6 +2863,22 @@ function render(dt) {
       const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
+    }
+    // Onboard speed vibration: a subtle high-frequency buzz on the rigid-mounted
+    // cams (cockpit/hood/bumper/tcam) that grows with speed² — the visceral
+    // "the car is alive under you" cue every onboard broadcast has. Two mixed
+    // sine bands (not random) so it reads as vibration, not noise; tiny target
+    // jitter so the whole frame trembles slightly rather than swimming.
+    if (state === "race" && (mode === "cockpit" || mode === "hood" || mode === "bumper" || mode === "tcam")) {
+      const spV = clamp(player.speed / VMAX, 0, 1);
+      const vAmp = spV * spV * 0.022 + (player.deploying ? 0.008 : 0);
+      if (vAmp > 0.001) {
+        const tv = performance.now() * 0.001;
+        const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;
+        const j2 = Math.sin(tv * 73.0 + 0.9) * 0.6 + Math.sin(tv * 111.0 + 2.3) * 0.4;
+        eyeT[0] += j1 * vAmp; eyeT[1] += j2 * vAmp * 0.7;
+        tgtT[0] += j1 * vAmp * 0.35; tgtT[1] += j2 * vAmp * 0.25;
+      }
     }
   }
   // Sky-view override: __apex.sky() positions the camera to show the horizon
@@ -4491,7 +4535,57 @@ function setCamMode(m) {
   return CAM_MODES[camMode].id;
 }
 function cycleCam() { return setCamMode(camMode + 1); }
-$("btn-cam") && ($("btn-cam").onclick = () => cycleCam());
+// CAM button: quick tap cycles (muscle memory preserved); press-and-hold (or
+// right-click) opens a PICKER GRID of all modes — cycling one-by-one through
+// 14 cameras to reach the one you want was the worst switch in the game.
+const camPicker = (() => {
+  let el = null;
+  const build = () => {
+    el = document.createElement("div");
+    el.id = "campicker";
+    el.hidden = true;
+    for (let i = 0; i < CAM_MODES.length; i++) {
+      const b = document.createElement("button");
+      b.textContent = CAM_MODES[i].label;
+      b.dataset.idx = i;
+      b.onclick = (e) => { e.stopPropagation(); setCamMode(+b.dataset.idx); hide(); };
+      el.appendChild(b);
+    }
+    document.body.appendChild(el);
+  };
+  const sync = () => {
+    for (const b of el.children) b.classList.toggle("active", +b.dataset.idx === camMode);
+  };
+  const show = () => { if (!el) build(); sync(); el.hidden = false; };
+  const hide = () => { if (el) el.hidden = true; };
+  const visible = () => !!el && !el.hidden;
+  return { show, hide, visible };
+})();
+(() => {
+  const b = $("btn-cam");
+  if (!b) return;
+  let holdT = 0, held = false;
+  const HOLD_MS = 340;
+  b.addEventListener("pointerdown", () => {
+    held = false;
+    holdT = setTimeout(() => { held = true; camPicker.show(); }, HOLD_MS);
+  });
+  b.addEventListener("pointerup", () => clearTimeout(holdT));
+  b.addEventListener("pointerleave", () => clearTimeout(holdT));
+  b.addEventListener("contextmenu", (e) => { e.preventDefault(); camPicker.show(); });
+  // Cycle on CLICK (not pointerup): synthetic .click() from tests/assistive tech
+  // works unchanged, and a real tap fires it after pointerup anyway. When the
+  // hold already opened the picker, swallow that one trailing click.
+  b.onclick = () => {
+    if (held) { held = false; return; }
+    if (camPicker.visible()) { camPicker.hide(); return; }
+    cycleCam();
+  };
+  // Tap anywhere outside the grid closes it.
+  document.addEventListener("pointerdown", (e) => {
+    if (camPicker.visible() && e.target !== b && !e.target.closest("#campicker")) camPicker.hide();
+  });
+})();
 refreshCamBtn();
 
 $("pm-resume").onclick = () => setPaused(false);
