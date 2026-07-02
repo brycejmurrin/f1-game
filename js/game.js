@@ -913,7 +913,10 @@ function drawCockpitRig(c, base, dt, paint) {
   GLX.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), _rigB, fx);
   const rpmF = clamp(((c.rpm || IDLE_RPM) - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
   GLX.draw(getLedStrip(Math.round(rpmF * 8)), _rigB, fx);
-  const kmh = Math.min(999, Math.round((c.speed || 0) * 3.6));
+  // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
+  // reversing glitch) would otherwise stringify with a "-" character that
+  // getSpeedDigit can't parse (+"-" is NaN -> SEG7[NaN] -> crash every frame).
+  const kmh = Math.max(0, Math.min(999, Math.round((c.speed || 0) * 3.6)));
   const ds = String(kmh);
   for (let i = 0; i < ds.length; i++) {
     _digT[12] = -0.034 + (i - (ds.length - 1) / 2) * 0.0135; _digT[13] = 0.022; _digT[14] = -0.0335;
@@ -3166,10 +3169,13 @@ function camVantage(mode, s, x, spd, now, extra) {
     // wheels sit further ahead and the view looks down over them enough to see
     // where they meet the track.
     // Cockpit eyeFwd nudged from 0.02 (almost co-located with the shoulder
-    // fairing's tallest point at z 0.12) to 0.32 — past the fairing, so it
-    // recedes into the periphery like a real onboard instead of looming right
-    // next to the camera.
-    const eyeFwd = mode === "cockpit" ? 0.32 : 0.55;
+    // fairing's tallest point at z 0.12) toward the fairing so it recedes into
+    // the periphery instead of looming right next to the camera. Capped at
+    // 0.16 (not further): the steering-wheel rig sits at local z 0.41
+    // (drawCockpitRig's _rigT), and the render's near-clip plane is 0.1 — an
+    // eyeFwd above ~0.31 closes that gap under the clip distance and the
+    // wheel vanishes entirely (regression caught by screenshot verification).
+    const eyeFwd = mode === "cockpit" ? 0.16 : 0.55;
     const eyeUp  = mode === "cockpit" ? 0.99 : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
