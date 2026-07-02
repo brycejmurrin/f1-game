@@ -10,6 +10,7 @@ const GLX = (function () {
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;
 layout(location=2) in vec3 aCol;
+layout(location=3) in float aMat;   // per-vertex material id (0 = FLAT/untextured)
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform vec3 uEye;
@@ -18,12 +19,14 @@ out vec3 vCol;
 out vec3 vWorldPos;
 out vec3 vObjPos;
 out float vDist;
+flat out float vMat;
 void main() {
   vec4 wp = uModel * vec4(aPos, 1.0);
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
   vNrm = mat3(uModel) * aNrm;     // is glued to the panels, not streaming in world.
   vCol = aCol;
+  vMat = aMat;                    // constant across the face (flat) — procedural material key
   vDist = length(wp.xyz - uEye);
   gl_Position = uViewProj * wp;
 }`;
@@ -41,6 +44,7 @@ in vec3 vCol;
 in vec3 vWorldPos;
 in vec3 vObjPos;
 in float vDist;
+flat in float vMat;   // procedural material id (0 = FLAT); textured in applyMaterial()
 uniform vec3 uEye;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
@@ -129,6 +133,67 @@ float vnoise(vec2 p) {
   float a = hash21(i), b = hash21(i + vec2(1.0, 0.0));
   float c = hash21(i + vec2(0.0, 1.0)), d = hash21(i + vec2(1.0, 1.0));
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+// ── Procedural per-material surface texture (triplanar, UV-free) ─────────────
+// Keyed by the flat per-vertex material id (aMat). Modulates albedo + roughness
+// from world/object position so flat boxes read as brick, glass, metal, wood,
+// foliage, fabric, sand or grass — no image textures, no UVs. Distance-faded so
+// distant props pay nothing. Called once per fragment after base albedo/rough.
+void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
+  if (mid == 0) return;
+  float far  = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);   // coarse tint: mid range
+  if (far <= 0.001) return;                                   // too distant to read — skip the noise
+  float near = clamp(1.0 - (vd - 26.0) / 64.0, 0.0, 1.0);    // fine detail: near field only
+  vec3 wp = vWorldPos;
+  vec3 an = abs(normalize(vNrm));
+  bool wall = an.y < 0.6;                          // roughly vertical face
+  float hc = an.x > an.z ? wp.z : wp.x;            // horizontal coord along the wall
+  float y = wp.y;
+  if (mid == 1) {            // CONCRETE — patchy panels + fine speckle + form seams
+    albedo *= 1.0 + (vnoise(wp.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far;
+    albedo *= 1.0 + (vnoise(vec2(hc, y) * 6.0) - 0.5) * 0.10 * near;
+    if (wall) albedo *= 1.0 - smoothstep(0.05, 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near;
+    rough = min(1.0, rough + 0.08 * far);
+  } else if (mid == 2) {     // BRICK — courses + staggered joints + per-brick tint
+    float ch = 0.20, bl = 0.42, mort = 0.06;
+    float row = floor(y / ch);
+    float off = mod(row, 2.0) * 0.5 * bl;
+    float bx = fract((hc + off) / bl), by = fract(y / ch);
+    float joint = max(smoothstep(mort, 0.0, min(bx, 1.0 - bx) * bl),
+                      smoothstep(mort, 0.0, min(by, 1.0 - by) * ch));
+    float bh = vnoise(vec2(floor((hc + off) / bl), row) * 1.3);
+    vec3 brick = albedo * (0.82 + bh * 0.42) * vec3(1.06, 0.99, 0.92);
+    vec3 mortar = mix(albedo, vec3(0.60, 0.58, 0.55), 0.6);
+    albedo = mix(brick, mortar, joint * near);
+    rough = min(1.0, rough + 0.12 * far);
+  } else if (mid == 3) {     // GLASS / CURTAIN WALL — mullion grid + per-pane variation
+    float pw = 1.6, ph = 1.4, mull = 0.11;
+    float gx = fract(hc / pw), gy = fract(y / ph);
+    float bar = max(smoothstep(mull, 0.0, min(gx, 1.0 - gx)),
+                    smoothstep(mull, 0.0, min(gy, 1.0 - gy)));
+    albedo *= 1.0 + (vnoise(vec2(floor(hc / pw), floor(y / ph)) * 1.7) - 0.5) * 0.5 * far;
+    albedo = mix(albedo, albedo * 0.32, bar * near);
+    rough = mix(rough, min(rough, 0.12), near);
+  } else if (mid == 4) {     // METAL — brushed vertical streaks, glossier
+    albedo *= 1.0 + (vnoise(vec2(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * near;
+    rough = clamp(rough - 0.15 * far, 0.05, 1.0);
+  } else if (mid == 5) {     // WOOD — grain lines + plank seams
+    albedo *= 1.0 + (vnoise(vec2(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near;
+    albedo *= 1.0 - smoothstep(0.05, 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near;
+  } else if (mid == 6) {     // FOLIAGE — dapple + green variation, breaks flat canopy
+    float d = vnoise(wp.xz * 2.4 + wp.y * 1.6) * 0.6 + vnoise(wp.xz * 9.0) * 0.4 * near;
+    albedo *= 1.0 + (d - 0.5) * 0.34 * far;
+    albedo.g *= 1.0 + (d - 0.5) * 0.10 * far;
+  } else if (mid == 7) {     // FABRIC / CROWD / TENT — fine weave speckle
+    albedo *= 1.0 + (vnoise(vec2(hc, y) * 26.0) - 0.5) * 0.14 * near;
+  } else if (mid == 8) {     // SAND — fine grain + gentle dune ripple
+    albedo *= 1.0 + (vnoise(wp.xz * 5.0) - 0.5) * 0.12 * near
+                  + sin(wp.x * 0.7 + vnoise(wp.xz * 0.2) * 6.0) * 0.05 * far;
+  } else if (mid == 9) {     // GRASS — bladed clumps + tone variation
+    float g = vnoise(wp.xz * 3.5) * 0.6 + vnoise(wp.xz * 14.0) * 0.4 * near - 0.5;
+    albedo *= 1.0 + g * 0.22 * far;
+    albedo.g *= 1.0 + g * 0.08 * far;
+  }
 }
 // Cloud cover at a world point: project the point up the sun direction to the
 // cloud deck and sample a drifting FBM — gives moving dappled cloud SHADOWS on
@@ -306,6 +371,8 @@ void main() {
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
+  // Procedural per-material surface texture (brick/glass/metal/wood/… ; 0 = FLAT).
+  applyMaterial(int(vMat + 0.5), albedo, rough, vDist);
   // Specular anti-aliasing: widen roughness where the normal changes fast in
   // screen space (geometry edges, micro-normal at distance) so thin bright
   // highlights sheen smoothly instead of shimmering pixel-to-pixel.
@@ -2264,13 +2331,18 @@ void main() {
       idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
     }
 
-    // Interleaved: [x,y,z, nx,ny,nz, r,g,b] per vertex — one buffer, stride=36.
-    // Better GPU cache locality vs 3 separate VBOs.
-    const interleaved = new Float32Array(vCount * 9);
+    // Interleaved: [x,y,z, nx,ny,nz, r,g,b (, mat)] per vertex — one buffer.
+    // Optional per-vertex material id (data.mat) adds a 10th float (attrib 3);
+    // meshes without it stay 9-float and aMat reads the generic default (0=FLAT).
+    const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
+    const fpv = mat ? 10 : 9;
+    const interleaved = new Float32Array(vCount * fpv);
     for (let i = 0; i < vCount; i++) {
-      interleaved[i*9  ] = pos[i*3  ]; interleaved[i*9+1] = pos[i*3+1]; interleaved[i*9+2] = pos[i*3+2];
-      interleaved[i*9+3] = nrm[i*3  ]; interleaved[i*9+4] = nrm[i*3+1]; interleaved[i*9+5] = nrm[i*3+2];
-      interleaved[i*9+6] = col[i*3  ]; interleaved[i*9+7] = col[i*3+1]; interleaved[i*9+8] = col[i*3+2];
+      const o = i * fpv;
+      interleaved[o  ] = pos[i*3  ]; interleaved[o+1] = pos[i*3+1]; interleaved[o+2] = pos[i*3+2];
+      interleaved[o+3] = nrm[i*3  ]; interleaved[o+4] = nrm[i*3+1]; interleaved[o+5] = nrm[i*3+2];
+      interleaved[o+6] = col[i*3  ]; interleaved[o+7] = col[i*3+1]; interleaved[o+8] = col[i*3+2];
+      if (mat) interleaved[o+9] = mat[i];
     }
 
     const vao = gl.createVertexArray();
@@ -2278,10 +2350,11 @@ void main() {
     const vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
-    const stride = 36;
+    const stride = fpv * 4;
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
+    if (mat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
     const ib = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
@@ -2498,11 +2571,15 @@ void main() {
     const srcIdx = data.idx, vCount = pos.length / 3, big = vCount > 65535;
     const triCount = (srcIdx.length / 3) | 0;
     if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
-    const interleaved = new Float32Array(vCount * 9);
+    const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
+    const fpv = mat ? 10 : 9;
+    const interleaved = new Float32Array(vCount * fpv);
     for (let i = 0; i < vCount; i++) {
-      interleaved[i*9  ]=pos[i*3  ]; interleaved[i*9+1]=pos[i*3+1]; interleaved[i*9+2]=pos[i*3+2];
-      interleaved[i*9+3]=nrm[i*3  ]; interleaved[i*9+4]=nrm[i*3+1]; interleaved[i*9+5]=nrm[i*3+2];
-      interleaved[i*9+6]=col[i*3  ]; interleaved[i*9+7]=col[i*3+1]; interleaved[i*9+8]=col[i*3+2];
+      const o = i * fpv;
+      interleaved[o  ]=pos[i*3  ]; interleaved[o+1]=pos[i*3+1]; interleaved[o+2]=pos[i*3+2];
+      interleaved[o+3]=nrm[i*3  ]; interleaved[o+4]=nrm[i*3+1]; interleaved[o+5]=nrm[i*3+2];
+      interleaved[o+6]=col[i*3  ]; interleaved[o+7]=col[i*3+1]; interleaved[o+8]=col[i*3+2];
+      if (mat) interleaved[o+9]=mat[i];
     }
     // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
     // grid is bounded (tracks span a few km), so pack signed cell coords.
@@ -2527,10 +2604,11 @@ void main() {
     const vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
-    const stride = 36;
+    const stride = fpv * 4;
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
+    if (mat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
     const IndexArray = big ? Uint32Array : Uint16Array;
     const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const chunks = [];
