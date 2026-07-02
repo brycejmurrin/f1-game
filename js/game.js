@@ -460,6 +460,7 @@ function basisMat(r, u, f, p, out) {
   return out;
 }
 const tmpMat = new Float32Array(16);
+const _cockMat = new Float32Array(16), _cockU = [0, 1, 0];   // stabilized cockpit-interior basis
 const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
 // Pre-allocated scratch matrices — zero-GC hot-path matrix math.
 const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -3061,7 +3062,7 @@ function camVantage(mode, s, x, spd, now, extra) {
     // that was the "seeing the tail" bug) and raised to 1.06 m, so the forward
     // wheels sit further ahead and the view looks down over them enough to see
     // where they meet the track.
-    const eyeFwd = mode === "cockpit" ? -0.14 : 0.35;
+    const eyeFwd = mode === "cockpit" ? 0.02 : 0.55;
     const eyeUp  = mode === "cockpit" ? 0.99 : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
@@ -3654,9 +3655,21 @@ function render(dt) {
     const paint = carPaintMat(wet
       ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
       : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
-    // Cockpit view: the real car body (minus the helmet the camera sits in) +
-    // slim halo + steering wheel with a live gear display; skip the normal body.
-    if (c.isPlayer && cockpitRigOnly) { drawCockpitRig(c, tmpMat, dt, paint); continue; }
+    // Cockpit view: draw the interior with a STABILIZED basis — the plain track
+    // tangent/right at the car position (+bank dy already in tmpP), WITHOUT the
+    // body's visual yaw/pitch/roll/lean. Those rotate the interior relative to
+    // the fixed onboard camera, swinging dark bodywork across the frame ("black
+    // box when braking/slowing"). This frame matches the camera exactly, so the
+    // cockpit is rock-steady. (Shadow above still uses the real animated tmpMat.)
+    if (c.isPlayer && cockpitRigOnly) {
+      const sR = smp2.r, sF = smp2.t;
+      _cockU[0] = sR[1]*sF[2] - sR[2]*sF[1];
+      _cockU[1] = sR[2]*sF[0] - sR[0]*sF[2];
+      _cockU[2] = sR[0]*sF[1] - sR[1]*sF[0];
+      basisMat(sR, _cockU, sF, tmpP, _cockMat);
+      drawCockpitRig(c, _cockMat, dt, paint);
+      continue;
+    }
     // Player: body-only mesh + animated (spinning/steering) wheels. Others (and
     // the player when a glb model is loaded) draw the full mesh with baked wheels.
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;

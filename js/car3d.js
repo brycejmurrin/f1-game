@@ -243,8 +243,8 @@ const Car3D = (function () {
     // --- Floor plank (flat) ---
     addBox(out, 0, 0.07, -0.3, 1.5, 0.06, 3.2, CARBON);
 
-    // --- Nose: one crisp tapered wedge, tip to bulkhead ---
-    const nF = { z: 2.65, y: 0.30, w: 0.14, h: 0.09, t: 0.75 };
+    // --- Nose: one crisp tapered wedge, tip to bulkhead (lengthened tip) ---
+    const nF = { z: 2.95, y: 0.29, w: 0.13, h: 0.085, t: 0.75 };
     const nR = { z: 1.05, y: 0.34, w: 0.46, h: 0.36, t: 0.80 };
     addSpan(out, nF, nR, c1);
     addTopBevel(out, nF, nR, 0.030, c1);
@@ -269,7 +269,7 @@ const Car3D = (function () {
     // In cockpit view the hood is remodelled LONGER and TALLER so it reads
     // clearly ahead of the driver (a stubby deck disappears under the dash).
     const ckpt = opts && opts.cockpit;
-    const hF = ckpt ? { z: 1.95, y: 0.42, w: 0.30, h: 0.12, t: 0.60 }
+    const hF = ckpt ? { z: 2.35, y: 0.40, w: 0.26, h: 0.11, t: 0.60 }
                     : { z: 1.00, y: 0.44, w: 0.34, h: 0.10, t: 0.62 };
     const hR = ckpt ? { z: 0.10, y: 0.72, w: 0.48, h: 0.22, t: 0.56 }
                     : { z: 0.10, y: 0.60, w: 0.42, h: 0.16, t: 0.58 };
