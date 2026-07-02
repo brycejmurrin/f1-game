@@ -1317,6 +1317,7 @@ uniform mat4 uProj;          // view → clip  (project the marched ray to scree
 uniform vec3 uUpVS;          // world-up in view space (pick out up-facing road)
 uniform vec2 uReflTexel;     // 1/width, 1/height
 uniform float uReflect;      // wet-road SSR strength (0 = off)
+uniform float uCarReflect;   // car-bodywork SSR strength (CAR tuner group; default 0.55)
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
 uniform vec3 uReflSkyLo;     // zenith sky-glow
 out vec4 outColor;
@@ -1416,7 +1417,7 @@ void main() {
     float carMask = carPx * smoothstep(0.30, 0.65, upDot)
                   * smoothstep(-1.0, -3.0, P.z)
                   * (1.0 - smoothstep(-22.0, -55.0, P.z));
-    float ssrGate = max(roadMask * uReflect, carMask * 0.55);
+    float ssrGate = max(roadMask * uReflect, carMask * uCarReflect);
     if (ssrGate > 0.001) {
       vec3 V = normalize(-P);
       vec3 R = reflect(-V, Nv);                    // points up toward the city
@@ -1813,7 +1814,7 @@ void main() {}`;
       msaaSamples = Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -2827,6 +2828,7 @@ void main() {
     gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
     gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
     gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
+    gl.uniform1f(compU.uCarReflect, CT && CT.carReflect != null ? CT.carReflect : 0.55);
     // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
     const reflStr = (opts && opts.reflect) || 0;
     // SSR inputs bind every frame now — car paint reflects the world even in

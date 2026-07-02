@@ -405,6 +405,22 @@ const PAINT_WET_NIGHT = { emissive: 0.12, roughness: 0.16, metalness: 0.12, spec
 const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
 const PAINT_DRY_NIGHT = { emissive: 0.10, roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.9, carPaint: 1.0 };
 const PAINT_DRY_DAY   = { roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.6, carPaint: 1.0 };
+// Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
+// scratch object (GLX.draw consumes the material synchronously, so one scratch
+// is safe across every car in the frame). GLOSS divides roughness (higher =
+// sharper); the rest are straight multipliers. carPaint (the paint MODEL) is
+// left intact — the CAR REFLECTION strength lives in the composite (uCarReflect).
+const _carPaintScratch = {};
+function carPaintMat(base) {
+  const m = _carPaintScratch;
+  m.roughness = clamp((base.roughness != null ? base.roughness : 0.4) / LT.carGloss, 0.02, 1);
+  m.metalness = clamp((base.metalness || 0) * LT.carMetal, 0, 1);
+  m.specular  = (base.specular  || 0) * LT.carSpecular;
+  m.clearcoat = (base.clearcoat || 0) * LT.carClearcoat;
+  m.emissive  = (base.emissive  || 0) * LT.carGlow;
+  m.carPaint  = base.carPaint != null ? base.carPaint : 0;
+  return m;
+}
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -2624,6 +2640,13 @@ const TUNE_DEFS = [
   { id: "ssrWetMul",    label: "WET MIRROR",      group: "REFLECTIONS", min: 0, max: 1.5, step: 0.05, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
   { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "REFLECTIONS", min: 0, max: 0.5, step: 0.01, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
   { id: "ssrDryDay",    label: "DRY DAY SHEEN",   group: "REFLECTIONS", min: 0, max: 0.3, step: 0.01, def: 0.07, help: "Faint tower-and-sky mirror on dry day tarmac." },
+  // Car
+  { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.55, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
+  { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0.3, max: 2.5, step: 0.05, def: 1.0,  help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness)." },
+  { id: "carSpecular",  label: "PAINT SPECULAR",  group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Brightness of the specular highlight rolling over the bodywork." },
+  { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
+  { id: "carMetal",     label: "PAINT METALNESS", group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "How metallic the paint reads — reflection tint and grazing falloff." },
+  { id: "carGlow",      label: "BODY GLOW",       group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "Self-lit body glow after dark (only the night / wet liveries carry it)." },
   // Shadows & weather
   { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS & WEATHER", min: 10, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
   { id: "wetness",      label: "WETNESS",         group: "SHADOWS & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps over ~30 s)." },
@@ -3589,9 +3612,9 @@ function render(dt) {
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     GLX.drawShadow(tmpMat, 2.4, 5.8);
     // Glossy automotive paint; wet adds a water film (sharper highlights, lower roughness).
-    const paint = wet
+    const paint = carPaintMat(wet
       ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
-      : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY);
+      : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
     // Cockpit view: the real car body (minus the helmet the camera sits in) +
     // slim halo + steering wheel with a live gear display; skip the normal body.
     if (c.isPlayer && cockpitRigOnly) { drawCockpitRig(c, tmpMat, dt, paint); continue; }
