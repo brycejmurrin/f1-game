@@ -359,17 +359,24 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .sel-edit-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .sel-edit-row .sel-edit { margin-top: 0; }
 
-/* full-screen overlay — same layering pattern as #select */
+/* Docked to the RIGHT edge with no backdrop, same pattern as #lighting /
+   #lighting-inner: the game keeps rendering behind the panel — here, the
+   live 3D car preview (renderSetupPreview in game.js) — so the left of the
+   screen shows the car updating as parts are picked. */
 #carsetup {
   position: fixed; inset: 0; z-index: 35;
-  background: rgba(6,6,10,0.97);
-  overflow-y: auto; -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  display: flex; align-items: flex-start; justify-content: center;
-  padding: calc(var(--sat) + 16px) calc(var(--sar) + 16px) calc(var(--sab) + 16px) calc(var(--sal) + 16px);
+  background: transparent; pointer-events: none;
+  padding: 0;
 }
 #cs-inner {
-  width: 100%; max-width: 900px;
+  pointer-events: auto;
+  position: fixed;
+  top: calc(var(--sat) + 8px); right: calc(var(--sar) + 8px);
+  bottom: calc(var(--sab) + 8px); left: auto;
+  width: min(88vw, 420px);
+  background: rgba(12, 14, 20, 0.90); border-radius: 10px;
+  padding: 14px 18px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
   display: flex; flex-direction: column; gap: 20px;
 }
 #cs-header {
@@ -535,10 +542,10 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   justify-content: center;
 }
 
-/* short landscape (phones): tighten spacing */
+/* short landscape (phones): tighten spacing, widen the docked panel since
+   there's less vertical room to spread content out */
 @media (orientation: landscape) and (max-height: 520px) {
-  #carsetup { padding-top: calc(var(--sat) + 8px); }
-  #cs-inner { gap: 10px; }
+  #cs-inner { gap: 10px; width: min(92vw, 460px); }
   .cs-cat-section { padding: 8px 12px; row-gap: 0; }
 }
 

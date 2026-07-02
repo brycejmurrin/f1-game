@@ -477,16 +477,34 @@ let _shadowSnapX = null, _shadowSnapZ = null;
 function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
 function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
 
+// partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
+// (e.g. "11111111" = every category at its default/neutral tier). Used to
+// re-key the player/cockpit body mesh caches (and the wheel mesh cache) so a
+// setup change rebuilds the right mesh instead of drawing stale geometry.
+function partsVisualKey(teamId) {
+  const team = teamById(teamId);
+  const vt = Parts.getVisualTiers(getTeamParts(teamId), team ? team.engine : null);
+  return Parts.CATALOG.map((c) => vt[c.id]).join("");
+}
+
+// Resolved tyre/brake visual tiers for the PLAYER's wheel meshes (drawPlayerWheels
+// reads these directly — cheap per-frame variable reads, not a per-frame
+// Parts.getVisualTiers() call). Refreshed whenever parts change (below).
+let playerTyreTier = 1, playerBrakesTier = 1;
+
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(getTeamParts(team.id), team.engine);
+  const setup = getTeamParts(team.id);
+  const mods = Parts.getMods(setup, team.engine);
   playerMods = {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
     cornering: Parts.statMult(stats.cornering) * mods.cornering,
     braking:   Parts.statMult(stats.braking)   * mods.braking,
   };
+  const vt = Parts.getVisualTiers(setup, team.engine);
+  playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
 }
 
 // ---------- car setup ----------
@@ -566,10 +584,9 @@ function teamMesh(team) {
 // Player car gets animated wheels: a body-only mesh + four separate wheel meshes
 // the render layer spins (∝ speed) and steers (fronts). Only for the procedural
 // car — a loaded glb model is one piece, so playerBodyMesh returns null and the
-// player falls back to the full static mesh. Wheels are team-independent (dark
-// tyres), so the two wheel meshes (narrow front, wide rear) are shared/global.
+// player falls back to the full static mesh. Wheel meshes are cached per
+// TYRES/BRAKES visual tier below (getPlayerWheelMeshes), not team-keyed.
 const playerBodies = {};
-let wheelMeshF = null, wheelMeshR = null;
 const WHEELS = [
   { x: -0.79, y: 0.34, z:  1.7, front: true,  rear: false },
   { x:  0.79, y: 0.34, z:  1.7, front: true,  rear: false },
@@ -808,10 +825,12 @@ function getPedalBar(brake) {
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
 const cockpitBodies = {};
 function cockpitBodyMesh(team) {
-  if (!cockpitBodies[team.id])
-    cockpitBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2,
-      { noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num }));
-  return cockpitBodies[team.id];
+  const key = team.id + ":" + partsVisualKey(team.id);
+  if (!cockpitBodies[key])
+    cockpitBodies[key] = GLX.createMesh(Car3D.build(team.color, team.color2,
+      { noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+        parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
+  return cockpitBodies[key];
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
 // steering roll + per-element LCD offsets.
@@ -880,14 +899,34 @@ function drawCockpitRig(c, base, dt, paint) {
 
 function playerBodyMesh(team) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
-  if (!playerBodies[team.id]) playerBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2, { noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num }));
-  return playerBodies[team.id];
+  const key = team.id + ":" + partsVisualKey(team.id);
+  if (!playerBodies[key]) playerBodies[key] = GLX.createMesh(Car3D.build(team.color, team.color2,
+    { noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
+  return playerBodies[key];
+}
+// Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
+// colour + caliper accent) so a parts change rebuilds the right mesh instead
+// of drawing stale geometry. Tier "1:1" (both default) matches today's shared
+// wheelMeshF/wheelMeshR exactly — same team-independent, dark-tyre meshes.
+const wheelMeshCache = {};
+function getPlayerWheelMeshes() {
+  const key = playerTyreTier + ":" + playerBrakesTier;
+  let m = wheelMeshCache[key];
+  if (!m) {
+    const band = Car3D.TYRE_BAND[playerTyreTier], caliper = Car3D.BRAKE_CALIPER[playerBrakesTier];
+    m = wheelMeshCache[key] = {
+      F: GLX.createMesh(Car3D.buildWheel(0.32, band, caliper)),
+      R: GLX.createMesh(Car3D.buildWheel(0.38, band, caliper)),
+    };
+  }
+  return m;
 }
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
 // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
 // straight into a scratch matrix (no per-frame allocation), then into world.
 function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
-  if (!wheelMeshF) { wheelMeshF = GLX.createMesh(Car3D.buildWheel(0.32)); wheelMeshR = GLX.createMesh(Car3D.buildWheel(0.38)); }
+  const wm = getPlayerWheelMeshes();
   c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / WHEEL_R) * dt) % (Math.PI * 2);
   const sp = Math.sin(c.wheelSpin), cp = Math.cos(c.wheelSpin);
   const steerA = clamp(c.steerVis || 0, -1, 1) * WHEEL_STEER_VIS;
@@ -905,7 +944,7 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
     // Push the widened wheels outward so they don't intersect the tub.
     L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
-    GLX.draw(wd.rear ? wheelMeshR : wheelMeshF, _wheelWorld, opt);
+    GLX.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
     // Hot brake discs: an emissive ring floating just off the outer wheel face,
     // ramping with the render-only brakeHeat (bright orange → blooms when hot).
     const heat = c.brakeHeat || 0;
@@ -3062,7 +3101,11 @@ function camVantage(mode, s, x, spd, now, extra) {
     // that was the "seeing the tail" bug) and raised to 1.06 m, so the forward
     // wheels sit further ahead and the view looks down over them enough to see
     // where they meet the track.
-    const eyeFwd = mode === "cockpit" ? 0.02 : 0.55;
+    // Cockpit eyeFwd nudged from 0.02 (almost co-located with the shoulder
+    // fairing's tallest point at z 0.12) to 0.32 — past the fairing, so it
+    // recedes into the periphery like a real onboard instead of looming right
+    // next to the camera.
+    const eyeFwd = mode === "cockpit" ? 0.32 : 0.55;
     const eyeUp  = mode === "cockpit" ? 0.99 : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
@@ -3169,8 +3212,78 @@ function camVantage(mode, s, x, spd, now, extra) {
   return { eye, tgt, fov };
 }
 
+// ---------- car-setup live preview ----------
+// A standalone, non-track, non-player render path for the #carsetup screen:
+// openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
+// so the studio() rig (buildStudioRig, above) can't be reused — it hard-depends
+// on player.px/track. This is the same ring-of-lamps energy math, anchored at
+// the world origin instead of the player's track position.
+let setupPreviewOn = false, setupPreviewAz = 0.6;
+const _spLights = [];
+function buildSetupPreviewLights() {
+  _spLights.length = 0;
+  const n = 6, dist = 6, h = 3.2, intensity = 1.6, radius = 14;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const lx = Math.cos(a) * dist, lz = Math.sin(a) * dist, ly = h;
+    let ax = -lx, ay = 0.5 - ly, az = -lz;
+    const al = Math.hypot(ax, ay, az) || 1; ax /= al; ay /= al; az /= al;
+    const e = intensity * 0.55;   // same physical energy factor as track lamps
+    _spLights.push(lx, ly, lz, e, e, e, radius, ax, ay, az, 0.88, 0.60, 0.12, 0, 1);
+  }
+  const ek = intensity * 0.55 * 1.4;   // overhead key: straight-down softbox
+  _spLights.push(0, h + 2.5, 0, ek, ek, ek, radius, 0, -1, 0, 0.80, 0.45, 0.15, 0, 1);
+  return _spLights;
+}
+// Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
+// mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. GLX.freeMesh
+// releases the previous mesh's GL buffers so repeated chip clicks don't leak.
+let _spMesh = null, _spMeshKey = "";
+function getSetupPreviewMesh() {
+  const team = Teams.LIST[teamIdx];
+  const key = team.id + ":" + partsVisualKey(team.id);
+  if (key !== _spMeshKey) {
+    if (_spMesh) GLX.freeMesh(_spMesh);
+    _spMesh = GLX.createMesh(Car3D.build(team.color, team.color2, {
+      num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine),
+    }));
+    _spMeshKey = key;
+  }
+  return _spMesh;
+}
+const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
+function renderSetupPreview(dt) {
+  GLX.resize();
+  setupPreviewAz += dt * 0.35;   // slow turntable
+  // Pulled back + a touch wider than a "hero shot" distance so the whole
+  // ~5.4 m car (nose to rear wing) clears the frustum at any turntable angle.
+  const eye = [Math.sin(setupPreviewAz) * 8.5, 2.0, Math.cos(setupPreviewAz) * 8.5 - 1.0];
+  M4.perspectiveTo(_spProj, 36 * Math.PI / 180, GLX.aspect, 0.1, 60);
+  // The docked #cs-inner panel covers the right portion of the canvas — an
+  // on-axis camera centers the car behind it, half-cropped. Shift the
+  // frustum horizontally (off-axis / "lens shift") so the car renders
+  // centered in the VISIBLE left region instead. Read the panel's live
+  // pixel width so this tracks every breakpoint/viewport automatically.
+  const canvasEl = $("game"), panelEl = $("cs-inner");
+  if (canvasEl && panelEl && canvasEl.clientWidth > 0) {
+    const panelFrac = clamp(panelEl.getBoundingClientRect().width / canvasEl.clientWidth, 0, 0.85);
+    _spProj[8] = panelFrac;   // see mat4 perspectiveTo layout: col2 row0 shifts NDC.x
+  }
+  M4.lookAtTo(_spView, eye, [0, 0.35, 0], [0, 1, 0]);
+  M4.mulTo(_spVP, _spProj, _spView);
+  GLX.begin({
+    viewProj: _spVP, eye, sunDir: [0.4, 0.8, 0.3], sunColor: [1, 1, 1],
+    ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
+    fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
+  });
+  GLX.draw(getSetupPreviewMesh(), M4.ident(), carPaintMat(PAINT_DRY_DAY));
+  GLX.present();
+}
+
 function render(dt) {
   if (headlessMode) return;
+  if (setupPreviewOn) { renderSetupPreview(dt); return; }
   GLX.resize();
   if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); GLX.present(); return; }
 
@@ -4262,7 +4375,13 @@ function buildSetup() {
 
 function openSetup() {
   buildSetup();
+  // #select sits directly under #carsetup and is nearly opaque (blocks the
+  // live 3D preview behind the now-transparent, docked setup panel) — hide it
+  // while setup is open, same as #overlay is already hidden by the time #select
+  // itself is reached. Restored in the cs-done handler below.
+  els.select.hidden = true;
   $("carsetup").hidden = false;
+  setupPreviewOn = true;
 }
 
 // ---------- UI wiring ----------
@@ -4924,6 +5043,8 @@ els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustom
 $("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
+  els.select.hidden = false;
+  setupPreviewOn = false;
   recomputePlayerMods(); buildSelect();
 };
 $("cs-unlimited").onclick = () => {
