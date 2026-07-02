@@ -261,6 +261,26 @@ const Car3D = (function () {
     qualigum:     [0.62, 0.12, 0.78],   // purple (quali)
     hypersoft:    [0.98, 0.38, 0.62],   // pink
   };
+  // Per-OPTION aero package keyed by resolved aero id: `lvl` is a continuous
+  // downforce level 0 (skinny low-drag) → 4 (towering high-DF) that drives wing
+  // size/height/element-count, plus flags — `beam` (a prominent beam wing) and
+  // `drs` (a slotted DRS gap in the top flap). Distinct silhouette per choice,
+  // not just three tiers. Unmapped ids fall back to the 0/1/2 tier.
+  const AERO_STYLE = {
+    minimal:       { lvl: 0 },
+    le_mans:       { lvl: 0 },
+    low:           { lvl: 1 },
+    s_duct:        { lvl: 1 },
+    medium:        { lvl: 2 },
+    beam_wing:     { lvl: 2, beam: 1 },
+    rake_setup:    { lvl: 3 },
+    diffuser:      { lvl: 3, beam: 1 },
+    high:          { lvl: 3 },
+    underfloor:    { lvl: 3, beam: 1 },
+    extreme:       { lvl: 4 },
+    active_aero:   { lvl: 3, drs: 1 },
+    ground_effect: { lvl: 4, beam: 1 },
+  };
 
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
@@ -395,6 +415,16 @@ const Car3D = (function () {
       for (const s of [-1, 1]) addBox(out, s*0.688, 0.36, -0.12, 0.02, 0.07, 0.55, ersC2);
     }
 
+    // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
+    // the sidepod front, and a row of little floor-edge fences along the floor
+    // — the fiddly ground-effect furniture that reads as a modern car. ---
+    for (const s of [-1, 1]) {
+      addBox(out, s*0.49, 0.30, 0.605, 0.15, 0.11, 0.05, INTAKE);   // inlet mouth
+      for (const fz of [0.42, 0.06, -0.30, -0.66, -1.02]) {
+        addBox(out, s*0.71, 0.135, fz, 0.014, 0.05, 0.13, CARBON);  // floor-edge fence
+      }
+    }
+
     // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
     addLoft(out, 1.60, 0, 0.475, 0.09, 0.022, 2.66, 0, 0.352, 0.05, 0.016, c2);
     addBox(out, 0, 0.862, -0.42, 0.06, 0.04, 0.52, c2);
@@ -499,35 +529,43 @@ const Car3D = (function () {
     // from the nose instead of floating. AERO visualTier reshapes element
     // count / endplate size / dive-plane reach (tier 1 = today's baseline). ---
     const aeroT = tier("aero");
-    const mainWF = aeroT === 0 ? 1.80 * 0.70 : 1.80;
-    const mainWR = aeroT === 0 ? 1.76 * 0.70 : 1.76;
-    addSpan(out, { z: 2.64, y: 0.070, w: mainWF, h: 0.028 },
-                 { z: 2.28, y: 0.105, w: mainWR, h: 0.048 }, c2);   // main plane
-    addSpan(out, { z: 2.36, y: 0.135, w: 1.70, h: 0.024 },
-                 { z: 2.12, y: 0.200, w: 1.66, h: 0.036 }, c2);   // flap 1
-    if (aeroT !== 0) {
+    const aeroId = T._ids && T._ids.aero;
+    const aeroStyle = (aeroId && AERO_STYLE[aeroId]) || null;
+    // Continuous downforce level 0..4 — per-option when the id is known, else
+    // mapped from the coarse 0/1/2 tier (AI / no parts → medium, lvl 2).
+    const aLvl  = aeroStyle ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
+    const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
+    const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
+
+    // Front wing: element count + span + endplate/dive-plane size grow with aLvl.
+    const fwSpan = aLvl <= 0 ? 0.68 : (aLvl === 1 ? 0.86 : 1.0);
+    addSpan(out, { z: 2.64, y: 0.070, w: 1.80 * fwSpan, h: 0.028 },
+                 { z: 2.28, y: 0.105, w: 1.76 * fwSpan, h: 0.048 }, c2);   // main plane
+    addSpan(out, { z: 2.36, y: 0.135, w: 1.70 * fwSpan, h: 0.024 },
+                 { z: 2.12, y: 0.200, w: 1.66 * fwSpan, h: 0.036 }, c2);   // flap 1
+    if (aLvl >= 2) {
       addSpan(out, { z: 2.20, y: 0.220, w: 1.60, h: 0.022 },
-                   { z: 2.00, y: 0.285, w: 1.56, h: 0.030 }, c2);   // flap 2 (dropped at tier 0)
+                   { z: 2.00, y: 0.285, w: 1.56, h: 0.030 }, c2);   // flap 2
     }
-    if (aeroT === 2) {
+    if (aLvl >= 4) {
       addSpan(out, { z: 2.06, y: 0.300, w: 1.50, h: 0.020 },
-                   { z: 1.90, y: 0.362, w: 1.46, h: 0.028 }, c2);   // flap 3 (high-DF stack only)
+                   { z: 1.90, y: 0.362, w: 1.46, h: 0.028 }, c2);   // flap 3 (max DF)
     }
     for (const s of [-1, 1]) {
-      const epW = aeroT === 2 ? 0.060 : (aeroT === 0 ? 0.025 : 0.035);
+      const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.022 : 0.035);
       addSpan(out, { z: 2.62, x: s*0.895, y: 0.155, w: epW, h: 0.22 },
                    { z: 2.02, x: s*0.925, y: 0.215, w: epW, h: 0.35 }, c2); // swept endplate
-      if (aeroT !== 0) {
-        const dpMul = aeroT === 2 ? 1.6 : 1.0;
+      if (aLvl >= 2) {
+        const dpMul = aLvl >= 4 ? 1.6 : (aLvl >= 3 ? 1.3 : 1.0);
         addSpan(out, { z: 2.50, x: s*0.72, y: 0.145, w: 0.030, h: 0.16 * dpMul },
-                     { z: 2.16, x: s*0.74, y: 0.215, w: 0.030, h: 0.24 * dpMul }, c2);  // dive plane (dropped at tier 0)
+                     { z: 2.16, x: s*0.74, y: 0.215, w: 0.030, h: 0.24 * dpMul }, c2);  // dive plane
       }
       addBox(out, s*0.10, 0.20, 2.44, 0.05, 0.17, 0.16, c1);                  // nose pylon
     }
 
     // AERO tier 2 only: bargeboard fences ahead of the sidepods — a busy
-    // "full aero kit" tell, absent at lower tiers. Chase view only.
-    if (!ckpt && aeroT === 2) {
+    // "full aero kit" tell on high-downforce packages. Chase view only.
+    if (!ckpt && aLvl >= 3) {
       for (const s of [-1, 1]) {
         addBox(out, s*0.73, 0.30, 0.98, 0.02, 0.22, 0.34, CARBON);
         addBox(out, s*0.66, 0.26, 0.72, 0.02, 0.17, 0.30, CARBON);
@@ -540,31 +578,41 @@ const Car3D = (function () {
     // behind the seat should exist in the first-person body, so no transform
     // edge case can ever swing rear bodywork across the onboard camera. ---
     if (!ckpt) {
-      // --- Rear wing: the single biggest aero tell. The whole assembly lifts
-      // with tier (rwLift) and the endplates grow, so tier 0 is a low, skinny
-      // low-drag wing and tier 2 a towering high-DF stack (Monza vs Monaco). ---
-      const rwLift = aeroT === 0 ? -0.15 : (aeroT === 2 ? 0.17 : 0);
-      const epSY   = aeroT === 0 ? 0.26  : (aeroT === 2 ? 1.05 : 0.62);
+      // --- Rear wing: the single biggest aero tell. Lift + endplate height scale
+      // continuously with aLvl (lvl 0 = flat low-drag, lvl 4 = towering high-DF),
+      // element count grows, high levels add a swan-neck flap + T-wing, `beam`
+      // options add a beam wing, and `drs` options open a slotted top gap. ---
+      const rwLift = (aLvl - 2) * 0.085;       // lvl0 -0.17 → lvl4 +0.17
+      const epSY   = 0.24 + aLvl * 0.20;        // lvl0 0.24 → lvl4 1.04
       for (const s of [-1, 1]) {
         addBox(out, s*0.50, 0.82 + rwLift, -2.42, 0.05, epSY, 0.52, DARK);
       }
       // Angled rear-wing elements (leading edge low/forward → trailing high/back)
       addSpan(out, { z: -2.38, y: 1.005 + rwLift, w: 1.02, h: 0.035 },
                    { z: -2.64, y: 1.075 + rwLift, w: 1.02, h: 0.050 }, c2);  // upper element
-      if (aeroT !== 0) {
+      if (aLvl >= 2) {
         addSpan(out, { z: -2.34, y: 0.900 + rwLift, w: 1.02, h: 0.030 },
-                     { z: -2.56, y: 0.955 + rwLift, w: 1.02, h: 0.042 }, c2);  // mid element (dropped at tier 0)
+                     { z: -2.56, y: 0.955 + rwLift, w: 1.02, h: 0.042 }, c2);  // mid element
       }
       addSpan(out, { z: -2.30, y: 0.805 + rwLift, w: 1.02, h: 0.028 },
                    { z: -2.50, y: 0.850 + rwLift, w: 1.02, h: 0.038 }, c1);  // lower element
-      if (aeroT === 2) {
-        // High-downforce spec: a swan-neck top flap standing proud above the
-        // main plane + a T-wing ahead of it — the tall-wing Monaco silhouette.
+      if (aLvl >= 4) {
+        // Swan-neck top flap standing proud + a T-wing ahead of it (max-DF look).
         addSpan(out, { z: -2.42, y: 1.170 + rwLift, w: 1.00, h: 0.030 },
                      { z: -2.66, y: 1.250 + rwLift, w: 1.00, h: 0.044 }, c2);  // extra top element
         addBox(out, 0, 1.02, -1.98, 0.34, 0.02, 0.09, c2);            // T-wing
       }
-      const drsSX = aeroT === 2 ? 0.13 : 0.10;
+      if (aBeam) {
+        // Prominent beam wing slung low under the main plane, spanning the crash structure.
+        addSpan(out, { z: -2.36, y: 0.64 + rwLift * 0.4, w: 0.92, h: 0.032 },
+                     { z: -2.58, y: 0.68 + rwLift * 0.4, w: 0.92, h: 0.044 }, c1);
+      }
+      if (aDrs) {
+        // Active-aero DRS: an extra open slot flap proud of the main plane.
+        addSpan(out, { z: -2.44, y: 1.130 + rwLift, w: 0.98, h: 0.022 },
+                     { z: -2.60, y: 1.190 + rwLift, w: 0.98, h: 0.030 }, c2);
+      }
+      const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       addBox(out, 0, 1.085 + rwLift, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
 
       // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
@@ -574,8 +622,8 @@ const Car3D = (function () {
       addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03, [2.6, 0.08, 0.06]);
 
       // --- Rear diffuser --- AERO visualTier scales width + front kick-up height.
-      const diffW  = aeroT === 0 ? 0.8 : (aeroT === 2 ? 1.3 : 1.0);
-      const diffH1 = aeroT === 0 ? 0.5 : (aeroT === 2 ? 1.7 : 1.0);
+      const diffW  = 0.72 + aLvl * 0.145;   // lvl0 0.72 → lvl4 1.30
+      const diffH1 = 0.40 + aLvl * 0.325;   // lvl0 0.40 → lvl4 1.70
       addLoft(out, -2.7, 0, 0.24, 1.40 * diffW, 0.36, -1.90, 0, 0.12, 1.05 * diffW, 0.14 * diffH1,
               [0.06, 0.06, 0.07]);
 
