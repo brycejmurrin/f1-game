@@ -136,10 +136,98 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 // ── Procedural per-material surface texture (triplanar, UV-free) ─────────────
-// Keyed by the flat per-vertex material id (aMat). Modulates albedo + roughness
-// from world/object position so flat boxes read as brick, glass, metal, wood,
-// foliage, fabric, sand or grass — no image textures, no UVs. Distance-faded so
-// distant props pay nothing. Called once per fragment after base albedo/rough.
+// Keyed by the flat per-vertex material id (aMat): brick, glass, concrete,
+// metal, wood, foliage, fabric, sand, grass, rock, snow, roof tile, stone,
+// rust/corrugated. No image textures, no UVs — everything below is world/
+// object-position noise. Two passes:
+//  1) applyMaterialNormal() — a REAL bump: perturbs the shading normal BEFORE
+//     the lighting terms (NoL, shadow, specular) consume it, so mortar grooves,
+//     plank seams, corrugation ridges etc. actually catch and cast light —
+//     not just an albedo tint. Called early in main(), right after the
+//     existing ground/car-paint normal relief.
+//  2) applyMaterial() — albedo + roughness modulation, called after rough is
+//     resolved (unchanged call site from the original single-pass version).
+// Both key off the SAME per-material coordinate convention (hc/y for wall-like
+// materials, wp.xz for organic/horizontal ones) so the bump and the tint line
+// up — recessed mortar reads darker AND indented, not just darker.
+
+// Scalar relief height for material mid at local coords uv (either (hc,y)
+// for wall materials or world (x,z) for horizontal/organic ones — see call
+// sites below). Sampled 3x per fragment (center + 2 offsets) for a gradient.
+float matBumpHeight(int mid, vec2 uv) {
+  float hc = uv.x, y = uv.y;
+  if (mid == 1) {          // CONCRETE: fine aggregate + a shallow form-seam groove
+    float seam = smoothstep(0.05, 0.0, abs(fract(y / 1.25) - 0.5) - 0.46);
+    return vnoise(uv * 6.0) * 0.6 - seam * 0.5;
+  } else if (mid == 2) {   // BRICK: bricks proud, mortar recessed
+    float ch = 0.20, bl = 0.42, mort = 0.06;
+    float row = floor(y / ch), off = mod(row, 2.0) * 0.5 * bl;
+    float bx = fract((hc + off) / bl), by = fract(y / ch);
+    float joint = max(smoothstep(mort, 0.0, min(bx, 1.0 - bx) * bl),
+                      smoothstep(mort, 0.0, min(by, 1.0 - by) * ch));
+    return (1.0 - joint) * 0.5 + vnoise(vec2(floor((hc + off) / bl), row) * 4.0) * 0.10;
+  } else if (mid == 4) {   // METAL: fine brushed streaks along the vertical axis
+    return vnoise(vec2(hc * 55.0, y * 3.0)) * 0.3;
+  } else if (mid == 5) {   // WOOD: plank seams recessed + grain ridges along the board
+    float seam = smoothstep(0.05, 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46);
+    return (1.0 - seam) * 0.4 + vnoise(vec2(hc * 3.0, y * 22.0)) * 0.16;
+  } else if (mid == 6) {   // FOLIAGE: lumpy per-leaf-cluster relief
+    return vnoise(uv * 3.2) * 0.5 + vnoise(uv * 11.0) * 0.3;
+  } else if (mid == 7) {   // FABRIC: woven cross-thread ridges
+    return sin(hc * 38.0) * 0.15 + sin(y * 38.0) * 0.15;
+  } else if (mid == 8) {   // SAND: dune ripple — a real raised ridge, not just shading
+    return sin(hc * 3.0 + vnoise(uv * 0.3) * 6.0) * 0.5 + vnoise(uv * 8.0) * 0.2;
+  } else if (mid == 9) {   // GRASS: fine blade-clump bump
+    return vnoise(uv * 6.0) * 0.4 + vnoise(uv * 20.0) * 0.25;
+  } else if (mid == 10) {  // ROCK: craggy multi-octave relief
+    return vnoise(uv * 1.3) * 0.6 + vnoise(uv * 4.5) * 0.3 + vnoise(uv * 15.0) * 0.15;
+  } else if (mid == 11) {  // SNOW: soft drifts + a fine sparkly crust
+    return vnoise(uv * 1.8) * 0.45 + vnoise(uv * 21.0) * 0.18;
+  } else if (mid == 12) {  // ROOF (terracotta tile): ridged overlapping courses
+    float ty = fract(y / 0.34);
+    return sin(ty * 3.14159) * 0.5 + vnoise(vec2(hc * 2.0, floor(y / 0.34)) * 3.0) * 0.08;
+  } else if (mid == 13) {  // STONE: irregular jittered blocks, deep mortar
+    vec2 cell = floor(uv * 1.3);
+    vec2 f = fract(uv * 1.3) - hash21(cell) * 0.12;
+    float d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+    return smoothstep(0.0, 0.16, d) * 0.55 + vnoise(uv * 5.0) * 0.15;
+  } else if (mid == 14) {  // RUST / CORRUGATED METAL: real sinusoidal corrugation
+    return sin(hc * 7.5) * 0.55 + vnoise(uv * 6.0) * 0.10;
+  }
+  return 0.0;
+}
+// Wall-like materials (coursed/planked/panelled) key off (hc, y): hc runs along
+// the wall's horizontal span, y is world-up. Organic/horizontal materials
+// (foliage, sand, grass, rock, snow) key off world (x, z), matching the
+// existing ground micro-relief above. GLASS (3) is intentionally left flat —
+// bump would blur its mirror-reflection read.
+void applyMaterialNormal(int mid, inout vec3 N, float vd) {
+  if (mid == 0 || mid == 3) return;
+  float bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
+  if (bumpFade <= 0.005) return;
+  bool wallLike = mid == 1 || mid == 2 || mid == 4 || mid == 5 || mid == 7 || mid == 12 || mid == 13 || mid == 14;
+  if (wallLike) {
+    vec3 an = abs(N);
+    float hc = an.x > an.z ? vWorldPos.z : vWorldPos.x;
+    float y = vWorldPos.y;
+    vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
+    float e = 0.05;
+    float h0 = matBumpHeight(mid, vec2(hc, y));
+    float hx = matBumpHeight(mid, vec2(hc + e, y));
+    float hy = matBumpHeight(mid, vec2(hc, y + e));
+    float amt = (mid == 2 || mid == 13) ? 0.10 : (mid == 12 || mid == 14) ? 0.09 : 0.05;
+    N = normalize(N + (T * (h0 - hx) + vec3(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade / e));
+  } else {
+    vec2 p = vWorldPos.xz;
+    float e = 0.22;
+    float h0 = matBumpHeight(mid, p);
+    float hx = matBumpHeight(mid, p + vec2(e, 0.0));
+    float hz = matBumpHeight(mid, p + vec2(0.0, e));
+    float amt = mid == 8 ? 0.16 : mid == 10 ? 0.14 : 0.07;
+    N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade / e));
+  }
+}
+// Albedo + roughness modulation (unchanged call site: after rough is resolved).
 void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
   if (mid == 0) return;
   float far  = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);   // coarse tint: mid range
@@ -194,6 +282,37 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     float g = vnoise(wp.xz * 3.5) * 0.6 + vnoise(wp.xz * 14.0) * 0.4 * near - 0.5;
     albedo *= 1.0 + g * 0.22 * far;
     albedo.g *= 1.0 + g * 0.08 * far;
+  } else if (mid == 10) {    // ROCK — craggy grey-brown, multi-scale tonal variation
+    float r = vnoise(wp.xz * 0.9 + y * 0.6) * 0.6 + vnoise(wp.xz * 4.5) * 0.4 - 0.5;
+    albedo *= 1.0 + r * 0.30 * far;
+    rough = min(1.0, rough + 0.16 * far);
+  } else if (mid == 11) {    // SNOW — bright, soft blue-shaded crevices, sparkle near
+    float s = vnoise(wp.xz * 1.6 + y * 0.4) - 0.5;
+    albedo *= 1.0 + s * 0.10 * far;
+    albedo.b *= 1.0 - s * 0.05 * far;              // shaded drifts read faintly cool
+    albedo *= 1.0 + (vnoise(wp.xz * 24.0) - 0.5) * 0.06 * near;
+    rough = clamp(rough - 0.10 * far, 0.05, 1.0);
+  } else if (mid == 12) {    // ROOF (terracotta tile) — ridged courses, warm tone bands
+    float ty = fract(y / 0.34);
+    float shade = sin(ty * 3.14159);
+    albedo *= 0.88 + shade * 0.16;
+    albedo *= 1.0 + (vnoise(vec2(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near;
+    rough = min(1.0, rough + 0.10 * far);
+  } else if (mid == 13) {    // STONE — irregular jittered blocks, deep mortar
+    vec2 cell = floor(vec2(hc, y) * 1.3);
+    vec2 f = fract(vec2(hc, y) * 1.3) - hash21(cell) * 0.12;
+    float d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+    float joint = smoothstep(0.0, 0.16, d);
+    vec3 block = albedo * (0.80 + hash21(cell) * 0.4);
+    vec3 mortar = mix(albedo, vec3(0.42, 0.40, 0.37), 0.65);
+    albedo = mix(mortar, block, joint * near);
+    rough = min(1.0, rough + 0.18 * far);
+  } else if (mid == 14) {    // RUST / CORRUGATED METAL — ridge shading + rust streaks
+    float ridge = sin(hc * 7.5);
+    albedo *= 0.85 + ridge * 0.18;
+    float rust = smoothstep(0.55, 0.9, vnoise(vec2(hc * 0.8, y * 0.35) + 5.0));
+    albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.28), rust * 0.5 * far);
+    rough = min(1.0, rough + 0.14 * far);
   }
 }
 // Cloud cover at a world point: project the point up the sun direction to the
@@ -318,6 +437,10 @@ void main() {
       N = normalize(N + (pT * pbx + pB * pby) * (0.7 * uCarPaint * pFade));
     }
   }
+  // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
+  // mortar/plank seams/corrugation ridges etc. actually affect the lighting
+  // response, not just an albedo tint applied after the fact.
+  applyMaterialNormal(int(vMat + 0.5), N, vDist);
   vec3 V = normalize(uEye - vWorldPos);
   vec3 L = uSunDir;
   vec3 H = normalize(L + V + vec3(1e-5));   // +eps: normalize(0) NaNs when V==-L
