@@ -119,6 +119,28 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   font-size: 11px; opacity: 0.8; cursor: pointer;
 }
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
+/* Category tabs — split the 80+ sliders into one group at a time. Sticky so the
+   chips stay reachable while scrolling a long group (e.g. IMAGE & COLOUR). */
+.lt-tabs {
+  position: sticky; top: -14px; z-index: 3;
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin: 2px -18px 6px; padding: 6px 18px 8px;
+  background: rgba(12, 14, 20, 0.94);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+#lt-tabs .lt-tab {
+  display: inline-flex; width: auto; margin: 0;
+  padding: 5px 9px; font-size: 10px; letter-spacing: 0.04em;
+  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.72);
+  cursor: pointer; white-space: nowrap; transition: background 0.12s, color 0.12s;
+}
+#lt-tabs .lt-tab:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+#lt-tabs .lt-tab.on { background: var(--red); border-color: var(--red); color: #fff; }
+.lt-group { display: none; }
+.lt-group.active { display: block; }
+/* The active tab already names the group, so drop the in-panel section header. */
+.lt-group .adv-sec { display: none; }
 /* preview time/weather chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 4px; }
 .lt-preview-row .opt-btn { flex: 1 1 auto; min-width: 48px; margin: 0; padding: 6px 4px; font-size: 10.5px; }
