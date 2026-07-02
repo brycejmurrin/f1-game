@@ -23,8 +23,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
+      # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
+      # for a ~14 MB site — slow enough to hit the 10-minute Pages deployment
+      # timeout. The game is static: html + manifest + js/css + icons + assets
+      # is everything the browser ever requests.
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp index.html version.json manifest.json _site/
+          cp -r js css icons assets _site/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

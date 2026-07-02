@@ -3837,9 +3837,17 @@ function render(dt) {
     // visible in ANY camera mode (no mirrors), so skip all their draws (mesh +
     // shadow + brake rings + rain light). ~half the field sits behind you
     // mid-race. Uses the real camera forward, so reverse/side cams are correct.
+    // Near-eye cull: a car whose origin is within ~3.4 m of the camera eye has
+    // geometry reaching THROUGH the near plane (nose is 2.95 m long) — it can
+    // only render as screen-filling clipped black fragments. Grid starts put
+    // the chase eye ~5.5 m behind the player, right at the next row's nose,
+    // and the launch concertina closes the rest ("black clipping at the start
+    // even in chase"). Skip the car entirely until there's real separation.
     if (!c.isPlayer) {
       const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
       if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
+      const dy = tmpP[1] - camEye[1];
+      if (dx * dx + dy * dy + dz * dz < 3.4 * 3.4) continue;
     }
     // yaw the forward/right around up by yawVis
     const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
@@ -4031,12 +4039,18 @@ function render(dt) {
       tmpP[0] = smp2.p[0] + smp2.r[0] * g.x;
       tmpP[1] = smp2.p[1];
       tmpP[2] = smp2.p[2] + smp2.r[2] * g.x;
+      // Near-eye cull, same as AI cars: a ghost trailing a few metres behind
+      // the player sits right AT the chase eye — its geometry crosses the near
+      // plane and fills the frame with clipped fragments.
+      const gdx = tmpP[0] - camEye[0], gdy = tmpP[1] - camEye[1], gdz = tmpP[2] - camEye[2];
+      if (gdx * gdx + gdy * gdy + gdz * gdz < 3.4 * 3.4) { /* skip */ } else {
       for (let i = 0; i < 3; i++) { tmpF[i] = smp2.t[i]; tmpR[i] = smp2.r[i]; }
       tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
       tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
       tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
       basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
       GLX.draw(teamMesh(player.team), tmpMat, { emissive: 0.60, roughness: 0.20, metalness: 0.08, specular: 0.35 });
+      }
     }
   }
 
