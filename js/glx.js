@@ -131,7 +131,7 @@ float vnoise(vec2 p) {
 // the ground (the "volumetric shading"). 0 = full sun, 1 = fully shadowed.
 float cloudFBM(vec2 p) {
   float s = 0.0, a = 0.5;
-  for (int i = 0; i < 3; i++) { s += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }  // 4→3 octaves (soft-thresholded, invisible)
+  for (int i = 0; i < 2; i++) { s += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }  // 4→2 octaves (soft-thresholded, invisible)
   return s;
 }
 float cloudShadow(vec3 wp) {
@@ -686,7 +686,7 @@ float vnoise2(vec2 p) {
 }
 float fbm(vec2 p) {
   float s = 0.0, a = 0.5;
-  for (int i = 0; i < 5; i++) { s += a * vnoise2(p); p *= 2.02; a *= 0.5; }
+  for (int i = 0; i < 4; i++) { s += a * vnoise2(p); p *= 2.02; a *= 0.5; }   // 5→4 octaves
   return s;
 }
 void main() {
@@ -955,6 +955,19 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
+  // Batched skid marks: all live marks baked into one world-space vertex buffer
+  // (pos + uv per vertex) so the whole trail draws in ONE call instead of up to
+  // 120 per-mark drawElements. Same MARK_FS, so the look is identical.
+  const MARK_BATCH_VS = `#version 300 es
+layout(location=0) in vec3 aPos;   // world position (metres)
+layout(location=1) in vec2 aUV;    // -1..1 across the stamp
+uniform mat4 uViewProj;
+out vec2 vUV;
+void main() {
+  vUV = aUV;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}`;
+
   // ---- Lamp lens glare (round veiling halo at each lamp head) ----
   // A camera-facing quad per lamp, drawn ADDITIVELY into the HDR scene before
   // bloom. Purely RADIAL: a hot core + a soft round veil, like real lens glare.
@@ -1133,7 +1146,7 @@ void main() {
   float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
   float ca = cos(a), sa = sin(a);
   float occ = 0.0;
-  for (int i = 0; i < 12; i++) {
+  for (int i = 0; i < 8; i++) {   // 12→8 taps (half-res + blurred)
     vec2 k = vec2(K[i].x * ca - K[i].y * sa, K[i].x * sa + K[i].y * ca);
     vec3 S = viewPos(clamp(vUV + k * scr, vec2(0.001), vec2(0.999)));
     vec3 V = S - P;
@@ -1143,7 +1156,7 @@ void main() {
     float range = smoothstep(radius, radius * 0.4, len);
     occ += ndv * range;
   }
-  float ao = 1.0 - clamp(occ / 12.0 * 2.4, 0.0, 1.0) * uStrength;
+  float ao = 1.0 - clamp(occ / 8.0 * 2.4, 0.0, 1.0) * uStrength;
 
   // Contact shadows: a short ray-march toward the sun in view space, sampling the
   // depth buffer. If a nearby surface blocks the sun within a small distance, the
@@ -1151,7 +1164,7 @@ void main() {
   // footprint is too coarse). Folded into AO so the composite multiply applies it.
   if (uContact > 0.0 && uSunVS.z < 0.0) {     // sun in front of the camera-ish
     float sh = 1.0;
-    for (int i = 1; i <= 8; i++) {
+    for (int i = 1; i <= 5; i++) {   // contact-shadow march 8→5
       vec3 q = P + uSunVS * (0.04 * float(i));   // up to ~0.32 m toward the sun
       vec4 cp = uProj * vec4(q, 1.0);
       vec2 quv = cp.xy / cp.w * 0.5 + 0.5;
@@ -1225,7 +1238,7 @@ void main() {
   float dist = length(rd);
   rd /= max(dist, 1e-4);
   float march = min(dist, 260.0);          // cap the march length
-  const int N = 22;                        // 32→22: jitter + blur hide the coarser step
+  const int N = 16;                        // 32→22→16: jitter + blur hide the coarser step
   float stepLen = march / float(N);
   // Jitter the start with interleaved-gradient noise to hide banding.
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -1257,7 +1270,7 @@ void main() {
     // weighted per lamp type (uLightVolW). Range-limited: beams read near the
     // camera; distant cone-crossings were the source of sky-streak noise.
     if (uLampStr > 0.0 && td < 200.0) {
-      for (int li = 0; li < GR_MAX_LIGHTS; li++) {
+      for (int li = 0; li < 6; li++) {   // nearest-6 lamps for beams (was 12) — nearest-sorted
         if (li >= uNumLights) break;
         vec3 LP = uLightPos[li] - p;
         float ld = length(LP);
@@ -1668,6 +1681,7 @@ void main() {}`;
   let skyProg = null, skyU = null;
   let shadowProg = null, shadowU = null;
   let markProg = null, markU = null;
+  let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null;
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null;
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
@@ -2053,6 +2067,7 @@ void main() {
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
     markProg = link(SHADOW_VS, MARK_FS);
+    markBatchProg = link(MARK_BATCH_VS, MARK_FS);
     glowProg = link(GLOW_VS, GLOW_FS);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
 
@@ -2069,6 +2084,18 @@ void main() {
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
+    if (markBatchProg) {
+      markBatchU = locs(markBatchProg, ["uViewProj"]);
+      // Dynamic interleaved buffer: [posX, posY, posZ, uvX, uvY] per vertex.
+      markBatchVAO = gl.createVertexArray();
+      gl.bindVertexArray(markBatchVAO);
+      markBatchVBO = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
+      const mst = 5 * 4;   // 5 floats per vertex
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, mst, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, mst, 12);
+      gl.bindVertexArray(null);
+    }
     if (glowProg) {
       glowU = locs(glowProg, ["uViewProj", "uEye", "uStr"]);
       // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b, radius] ×6 verts/lamp.
@@ -2544,6 +2571,26 @@ void main() {
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
   }
 
+  // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
+  // vertex, 6 verts/mark); `vertCount` verts are live. When `dirty`, re-upload
+  // the buffer (marks change at most every few frames). One draw for the whole
+  // trail — replaces up to 120 per-mark drawMark calls. Returns false if the
+  // batch path is unavailable (caller falls back to per-mark drawMark).
+  function drawSkidBatch(verts, vertCount, dirty) {
+    if (!markBatchProg || vertCount <= 0) return !markBatchProg ? false : true;
+    useProg(markBatchProg);
+    gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
+    setBlend(true);
+    setDepthMask(false);
+    bindVAO(markBatchVAO);
+    if (dirty) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
+      gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, vertCount * 5), gl.DYNAMIC_DRAW);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, vertCount);
+    return true;
+  }
+
   // Additive lens-glare halos: one round billboard per lamp. `lights` is the
   // stride-15 frame.lights array; fields 0-6 (position, colour, radius) and 14
   // (glareW: per-lamp halo weight, 0 = no visible fixture = no halo) are
@@ -2917,6 +2964,7 @@ void main() {
     drawSky,
     drawShadow,
     drawMark,
+    drawSkidBatch,
     drawGlow,
     present,
     shadowBegin(lightVP) {

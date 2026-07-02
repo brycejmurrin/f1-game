@@ -417,7 +417,10 @@ const Tracks = (function () {
     return track.bank[k] || 0;
   }
 
-  function banking(track, s, x) {
+  // `out` (optional): a reusable { dy, roll } scratch. When supplied it's written
+  // in place and returned, so per-frame callers (once per car) avoid allocating a
+  // fresh object each call. Still returns null on non-banked sections.
+  function banking(track, s, x, out) {
     const bp = track.bankP;
     if (!bp) return null;
     const n = track.n, L = track.total;
@@ -427,7 +430,10 @@ const Tracks = (function () {
     const side = bp.bsign[k], w = track.hw[k];
     let frac = (side * x + w) / (2 * w);
     frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-    return { dy: lift * frac, roll: -side * Math.atan2(lift, 2 * w) };
+    const o = out || {};
+    o.dy = lift * frac;
+    o.roll = -side * Math.atan2(lift, 2 * w);
+    return o;
   }
 
   function buildRoad(track) {

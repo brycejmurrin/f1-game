@@ -387,6 +387,36 @@ const skidMarks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
 let skidActive = 0;           // how many marks are live (grows to MAX_SKID then stays)
 let skidIdx = 0;
 let skidFrameT = 0;           // frame countdown between stamp placements
+// Batched skid trail: all live marks baked into one world-space vertex buffer
+// (pos3 + uv2 per vertex, 6 verts/mark) drawn in a single call. Rebuilt only
+// when a mark is added/evicted (at most every ~5 frames while sliding) instead
+// of issuing up to 120 per-mark draws every frame.
+const _skidVerts = new Float32Array(MAX_SKID * 6 * 5);
+let _skidVertCount = 0;
+let _skidBatchDirty = false;
+const _SKID_W = 0.6, _SKID_L = 2.2;
+// 6 verts (two tris) — matches the shadowVAO quad winding [0,1,2, 0,2,3].
+const _SKID_CORNERS = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
+function rebuildSkidBatch() {
+  const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
+  let o = 0;
+  for (let i = 0; i < cnt; i++) {
+    const M = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
+    const m0 = M[0], m1 = M[1], m2 = M[2], m4 = M[4], m5 = M[5], m6 = M[6],
+          m8 = M[8], m9 = M[9], m10 = M[10], m12 = M[12], m13 = M[13], m14 = M[14];
+    for (let v = 0; v < 6; v++) {
+      const ax = _SKID_CORNERS[v * 2], ay = _SKID_CORNERS[v * 2 + 1];
+      const lx = ax * _SKID_W, lz = ay * _SKID_L;
+      _skidVerts[o++] = m0 * lx + m4 * 0.02 + m8 * lz + m12;
+      _skidVerts[o++] = m1 * lx + m5 * 0.02 + m9 * lz + m13;
+      _skidVerts[o++] = m2 * lx + m6 * 0.02 + m10 * lz + m14;
+      _skidVerts[o++] = ax * 2;
+      _skidVerts[o++] = ay * 2;
+    }
+  }
+  _skidVertCount = cnt * 6;
+  _skidBatchDirty = false;
+}
 
 // Car paint materials, hoisted to module scope so the render loop reads a shared
 // const per (wet/dry × night/day) combo instead of allocating a fresh object for
@@ -596,6 +626,20 @@ const WHEELS = [
 const _wheelLocal = new Float32Array(16);
 const _wheelWorld = new Float32Array(16);
 const _ringWorld = new Float32Array(16);
+// Scratch opts for AI brake rings — mutated in place per frame so the car loop
+// doesn't allocate a fresh literal per ring (up to ~40/frame in a braking pack).
+const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaWrite: true };
+// Deferred blob-shadow batch: instead of interleaving shadow↔body per car (which
+// flips program+VAO+blend+depthMask twice each car), accumulate every drawn car's
+// shadow matrix and flush them all in one state block after the body loop. Shadows
+// are depth-tested but write no depth, so drawing them last is visually identical.
+const _shadowMats = [];   // pool of Float32Array(16), reused across frames
+let _shadowCount = 0;
+// Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
+// one for the render loop (both called once per car per frame) so banking() no
+// longer allocates a fresh object ~23×/frame.
+const _bankScratch = { dy: 0, roll: 0 };
+const _bankScratchP = { dy: 0, roll: 0 };
 
 // Brake-glow ring: a flat emissive annulus (axle-aligned, both windings so it
 // reads from either side) drawn just proud of each wheel face while the discs
@@ -1422,6 +1466,24 @@ function _trackAtmoBias(def) {
   return 0;
 }
 
+// Snap the live camera straight to the current mode's vantage (no damping), so
+// the first rendered frame is already framed correctly. Without this the camera
+// damps out of whatever stale eye/target/fov the previous screen (menu flyby)
+// left behind — and for the onboard cams the slow target/fov damping (λ7/λ4)
+// takes a second-plus to converge, during which a broken projection renders the
+// cockpit bodywork as a black box across the frame at the start ("clips until I
+// throttle past the start"). Shared by startRace() and __apex.snapCam().
+function snapGameCam() {
+  if (!player || !track) return;
+  const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch);
+  const v = camVantage(CAM_MODES[camMode].id, player.s, player.x, player.speed || 0, 0, {
+    bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
+  });
+  camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
+  camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
+  camFov = v.fov;
+}
+
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
@@ -1449,7 +1511,7 @@ function startRace() {
   camRoll = 0;
   sectorIdx = 0; sectorStartT = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
-  skidActive = 0; skidIdx = 0; skidFrameT = 0;
+  skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
@@ -1457,6 +1519,8 @@ function startRace() {
   document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
+  dbgCam = null;              // fresh race — drop any leftover debug free-cam
+  snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && raceWeather === "rain") GameAudio.startRain();
@@ -2181,7 +2245,7 @@ function updateCar(c, dt, ranked) {
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   // Banking: computed once, shared between player and AI so both get grip boost.
-  const bankPhys = Tracks.banking(track, c.s, 0);
+  const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
   const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
                             Math.abs(Tracks.bankAngle(track, c.s)));
   const bankMu = 1 + Math.sin(bankRoll) * 0.8;
@@ -3673,18 +3737,22 @@ function render(dt) {
     wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
         : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
 
-  // skid marks drawn oldest-first (newest on top). When buffer is full the
-  // oldest entry is at skidIdx; before that all live entries are 0..skidActive-1.
-  // Cull marks beyond ~170 m of the camera: once the ring buffer fills this was
-  // 120 draw calls every frame regardless of where the trail sat on the lap.
+  // skid marks — one batched draw for the whole live trail (rebuilt only when a
+  // mark is added/evicted). Was up to 120 per-mark draws every frame once the
+  // ring buffer filled. Falls back to per-mark draws if the batch path is
+  // unavailable (older GPU where the batch program failed to link).
   {
-    const ex = camEye[0], ez = camEye[2], SKID_CULL = 170 * 170;
-    const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
-    for (let i = 0; i < cnt; i++) {
-      const m = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
-      const dx = m[12] - ex, dz = m[14] - ez;
-      if (dx * dx + dz * dz > SKID_CULL) continue;
-      GLX.drawMark(m, 0.6, 2.2);
+    let rebuilt = false;
+    if (_skidBatchDirty) { rebuildSkidBatch(); rebuilt = true; }
+    if (!GLX.drawSkidBatch(_skidVerts, _skidVertCount, rebuilt)) {
+      const ex = camEye[0], ez = camEye[2], SKID_CULL = 170 * 170;
+      const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
+      for (let i = 0; i < cnt; i++) {
+        const m = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
+        const dx = m[12] - ex, dz = m[14] - ez;
+        if (dx * dx + dz * dz > SKID_CULL) continue;
+        GLX.drawMark(m, 0.6, 2.2);
+      }
     }
   }
 
@@ -3694,6 +3762,16 @@ function render(dt) {
   // Cockpit view still draws a first-person RIG (wheel/halo/mirrors) + the car's
   // shadow — only the body mesh is skipped. Bumper hides everything as before.
   const cockpitRigOnly = hidePlayerCar && CAM_MODES[camMode].id === "cockpit";
+  // Camera forward (horizontal) for the behind-camera AI cull below.
+  let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
+  { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
+  // Glossy automotive paint is identical for every car this frame (depends only
+  // on wet/night), and carPaintMat returns a shared scratch — so compute it ONCE
+  // instead of 22× per frame. Wet adds a water film (sharper highlights).
+  const paint = carPaintMat(wet
+    ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
+    : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
+  _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
   for (const c of cars) {
     if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
@@ -3716,10 +3794,18 @@ function render(dt) {
     let renderX = c.xVis;
     // banking: sit the car ON the banked surface (raise it by the local lift)
     // instead of the flat centreline, so it doesn't float/sink in the corner.
-    const bankC = Tracks.banking(track, cS, renderX);
+    const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
     tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
     tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
     tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
+    // Behind-camera cull: AI cars strictly behind the view direction are never
+    // visible in ANY camera mode (no mirrors), so skip all their draws (mesh +
+    // shadow + brake rings + rain light). ~half the field sits behind you
+    // mid-race. Uses the real camera forward, so reverse/side cams are correct.
+    if (!c.isPlayer) {
+      const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
+      if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
+    }
     // yaw the forward/right around up by yawVis
     const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
     for (let i = 0; i < 3; i++) {
@@ -3763,11 +3849,10 @@ function render(dt) {
       }
     }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
-    GLX.drawShadow(tmpMat, 2.4, 5.8);
-    // Glossy automotive paint; wet adds a water film (sharper highlights, lower roughness).
-    const paint = carPaintMat(wet
-      ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
-      : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
+    let _sm = _shadowMats[_shadowCount];
+    if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
+    _sm.set(tmpMat);
+    _shadowCount++;
     // Cockpit view: draw the interior with a STABILIZED basis — the plain track
     // tangent/right at the car position (+bank dy already in tmpP), WITHOUT the
     // body's visual yaw/pitch/roll/lean. Those rotate the interior relative to
@@ -3792,20 +3877,25 @@ function render(dt) {
     } else {
       GLX.draw(teamMesh(c.team), tmpMat, paint);
       // AI brake glow: rings at the four baked wheel positions (outer face).
+      // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
+      // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
       const aiHeat = c.brakeHeat || 0;
       if (aiHeat > 0.08) {
-        for (let w = 0; w < WHEELS.length; w++) {
-          const wd = WHEELS[w];
-          const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
-          const W = _ringWorld;
-          W.set(tmpMat);
-          W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
-          W[13] += W[1] * tx + W[5] * wd.y + W[9] * wd.z;
-          W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
-          GLX.draw(getBrakeRing(), W, {
-            emissive: 0.30 + 0.70 * aiHeat, roughness: 0.9, specular: 0,
-            alpha: Math.min(1, 0.25 + aiHeat * 0.9), noAlphaWrite: true,
-          });
+        const rdx = tmpP[0] - camEye[0], rdy = tmpP[1] - camEye[1], rdz = tmpP[2] - camEye[2];
+        if (rdx * rdx + rdy * rdy + rdz * rdz < 40 * 40) {
+          const ro = _ringOpts;
+          ro.emissive = 0.30 + 0.70 * aiHeat;
+          ro.alpha = Math.min(1, 0.25 + aiHeat * 0.9);
+          for (let w = 0; w < WHEELS.length; w++) {
+            const wd = WHEELS[w];
+            const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
+            const W = _ringWorld;
+            W.set(tmpMat);
+            W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
+            W[13] += W[1] * tx + W[5] * wd.y + W[9] * wd.z;
+            W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
+            GLX.draw(getBrakeRing(), W, ro);
+          }
         }
       }
     }
@@ -3865,12 +3955,17 @@ function render(dt) {
           skidMarks[skidIdx].set(tmpMat);
           skidIdx = (skidIdx + 1) % MAX_SKID;
           if (skidActive < MAX_SKID) skidActive++;
+          _skidBatchDirty = true;   // rebuild the batched trail next render
         }
       } else {
         skidFrameT = 0;
       }
     }
   }
+  // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
+  // depthMask are set once for the whole field instead of ping-ponging with the
+  // lit body program every car.
+  for (let i = 0; i < _shadowCount; i++) GLX.drawShadow(_shadowMats[i], 2.4, 5.8);
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (timeTrial && player && (state === "race" || state === "count")) {
     const g = Ghost.at(player.lapTime);
@@ -5578,14 +5673,8 @@ window.__apex = {
   // via the shared camVantage() solver.
   snapCam() {
     if (!player || !track) return;
-    dbgCam = null;   // snapping the game camera leaves any view() free-cam override
-    const bankCam = Tracks.banking(track, player.s, player.x);
-    const v = camVantage(CAM_MODES[camMode].id, player.s, player.x, player.speed, 0, {
-      bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
-    });
-    camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
-    camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
-    camFov = v.fov;
+    dbgCam = null;   // snapping the game camera clears any view() free-cam override
+    snapGameCam();
   },
   // previewCam(mode, frac, speed, lat) — set the debug free-cam to EXACTLY how the
   // in-game camera `mode` (any of camera().modes: chase/heli/drift/cinematic/…)
