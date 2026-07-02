@@ -141,9 +141,13 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .lt-group.active { display: block; }
 /* The active tab already names the group, so drop the in-panel section header. */
 .lt-group .adv-sec { display: none; }
-/* preview time/weather chips */
-.lt-preview-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 4px; }
-.lt-preview-row .opt-btn { flex: 1 1 auto; min-width: 48px; margin: 0; padding: 6px 4px; font-size: 10.5px; }
+/* panel header: title + FREE CAMERA button on one line */
+#lt-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+#lt-head h2 { margin: 0; }
+/* preview time/weather: one compact line each — small inline label + tight chips */
+.lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
+.lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
 #lighting-inner .sel-actions { display: flex; gap: 8px; }
 #lighting-inner .sel-actions button { margin: 0; }
@@ -879,12 +883,15 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 }
 /* touch: hide the desktop key hint (no keyboard); narrow screens too */
 @media (pointer: coarse), (max-width: 720px) { .pc-hint { display: none; } }
-/* clean scene while flying: hide the race HUD + CHASE/pause buttons (reversible —
-   removing the class restores them to whatever hidden state they had) */
-body.photo-mode #hud,
-body.photo-mode #btn-cam,
-body.photo-mode #pausebtn,
-body.photo-mode #lights { display: none !important; }
+/* while the LIGHTING TUNER is open (free camera or not) hide every in-race
+   overlay underneath it — HUD, start lights, CHASE/pause, and ALL touch driving
+   controls (GAS/BRAKE/BOOST/OT/shift/steer) — so the scene reads clean.
+   Reversible: removing .lt-open restores each to its own hidden state. */
+body.lt-open #hud,
+body.lt-open #lights,
+body.lt-open #btn-cam,
+body.lt-open #pausebtn,
+body.lt-open .touchbtn { display: none !important; }
 
 /* ---------- touch controls ---------- */
 /* Every control button is the same size, with perfectly centred text. */

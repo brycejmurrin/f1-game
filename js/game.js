@@ -1847,6 +1847,7 @@ function quitToMenu() {
   if (photoMode) exitPhotoMode();   // drop the fly-cam override before leaving the race
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
+  document.body.classList.remove("lt-open");
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
@@ -5422,15 +5423,16 @@ function buildLtPreview() {
   const host = $("lt-preview");
   if (host.dataset.built) return;
   host.dataset.built = "1";
+  // Compact one-line-each preset rows: a small inline label + tight chips, so the
+  // condition switchers don't eat the top of the panel.
   const mkGroup = (title, ids, labels, onPick, prefix) => {
-    const sec = document.createElement("h3");
-    sec.className = "adv-sec"; sec.textContent = title;
-    host.appendChild(sec);
     const row = document.createElement("div");
-    row.className = "opt-row lt-preview-row";
+    row.className = "lt-preview-row";
+    const lb = document.createElement("span"); lb.className = "lt-preview-lbl"; lb.textContent = title;
+    row.appendChild(lb);
     ids.forEach((id, i) => {
       const btn = document.createElement("button");
-      btn.className = "opt-btn"; btn.id = prefix + id; btn.textContent = labels[i];
+      btn.className = "opt-btn lt-preview-btn"; btn.id = prefix + id; btn.textContent = labels[i];
       // Switching a condition re-applies that condition's profile (via
       // applyRaceSettings→applyLightTune), so reload the sliders + label too.
       btn.onclick = () => { onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
@@ -5438,14 +5440,10 @@ function buildLtPreview() {
     });
     host.appendChild(row);
   };
-  mkGroup("PREVIEW TIME", LT_TODS, ["DAWN", "DAY", "DUSK", "NIGHT", "TRACK"],
+  mkGroup("TIME", LT_TODS, ["DAWN", "DAY", "DUSK", "NIGHT", "TRACK"],
     (t) => __apex.setTimeOfDay(t), "lt-tod-");
-  mkGroup("PREVIEW WEATHER", LT_WX, ["DRY", "WET", "RAIN", "FOG", "CLOUD"],
+  mkGroup("WEATHER", LT_WX, ["DRY", "WET", "RAIN", "FOG", "CLOUD"],
     (w) => __apex.weather(w), "lt-wx-");
-  const note = document.createElement("p");
-  note.className = "adv-help"; note.style.display = "block";
-  note.textContent = "Switch conditions to tune each one — your edits save to that track+time+weather. The live view snaps back to the race's own conditions on DONE.";
-  host.appendChild(note);
 }
 let _ltActiveGroup = null;   // currently-shown tuner category (tab)
 // Show one tuner category at a time (tab click). Toggles the .active class on the
@@ -5533,6 +5531,7 @@ $("pm-lighting").onclick = () => {
   refreshLtPreviewActive();
   $("lt-json").hidden = true;
   $("lighting").hidden = false;
+  document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pausemenu.hidden = true;      // unobstructed live preview
 };
 $("lt-close").onclick = () => {
@@ -5541,6 +5540,7 @@ $("lt-close").onclick = () => {
   if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
   if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);
   $("lighting").hidden = true;
+  document.body.classList.remove("lt-open");   // restore race HUD + touch controls
   if (paused) els.pausemenu.hidden = false;
 };
 
@@ -5576,7 +5576,7 @@ function updatePhotoCam(dt) {
   const rgt = [Math.cos(photoCam.yaw), 0, Math.sin(photoCam.yaw)];
   // Move: WASD + touch move stick (forward follows the look pitch); R/F + up/down
   // buttons ride the WORLD vertical so you can climb straight up.
-  const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) + photoMove.y;
+  const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y;   // stick UP (dy<0) = forward
   const ms = (photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x;
   const mv = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + photoAlt;
   const k = spd * dt;
