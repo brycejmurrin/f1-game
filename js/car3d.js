@@ -115,6 +115,19 @@ const Car3D = (function () {
     }
   }
 
+  // Thin diagonal strut bar between two points (x0,y0)→(x1,y1) at depth z — a
+  // slim hexahedron with `th` cross-section and `d` z-depth. Used for the
+  // pushrod / pullrod suspension actuators (a diagonal rod, not an axis box).
+  function addStrut(out, x0, y0, x1, y1, z, th, d, col) {
+    const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1;
+    const px = -dy / L * th / 2, py = dx / L * th / 2;
+    const zf = z + d / 2, zr = z - d / 2;
+    addBlock(out, [
+      [x0 - px, y0 - py, zf], [x0 + px, y0 + py, zf], [x1 + px, y1 + py, zf], [x1 - px, y1 - py, zf],
+      [x0 - px, y0 - py, zr], [x0 + px, y0 + py, zr], [x1 + px, y1 + py, zr], [x1 - px, y1 - py, zr],
+    ], col);
+  }
+
   // Smooth dome (helmet): partial lat-long sphere, analytic normals.
   function addDome(out, cx, cy, cz, r, col) {
     const STACKS = 5, SLICES = 12;
@@ -269,36 +282,40 @@ const Car3D = (function () {
   // Per-OPTION aero package keyed by resolved aero id: `lvl` is a continuous
   // downforce level 0 (skinny low-drag) → 4 (towering high-DF) that drives wing
   // size/height/element-count, plus flags — `beam` (a prominent beam wing) and
-  // `drs` (a slotted DRS gap in the top flap). Distinct silhouette per choice,
-  // not just three tiers. Unmapped ids fall back to the 0/1/2 tier.
+  // `drs` (a slotted DRS gap in the top flap), and `vane` (bargeboard / turning-
+  // vane cluster style ahead of the sidepods: 0 none, 1 single fence, 2 twin
+  // fences, 3 curved triple cascade). Distinct silhouette per choice, not just
+  // three tiers. Unmapped ids fall back to the 0/1/2 tier.
   const AERO_STYLE = {
-    minimal:       { lvl: 0 },
-    le_mans:       { lvl: 0 },
-    low:           { lvl: 1 },
-    s_duct:        { lvl: 1 },
-    medium:        { lvl: 2 },
-    beam_wing:     { lvl: 2, beam: 1 },
-    rake_setup:    { lvl: 3 },
-    diffuser:      { lvl: 3, beam: 1 },
-    high:          { lvl: 3 },
-    underfloor:    { lvl: 3, beam: 1 },
-    extreme:       { lvl: 4 },
-    active_aero:   { lvl: 3, drs: 1 },
-    ground_effect: { lvl: 4, beam: 1 },
+    minimal:       { lvl: 0, vane: 0 },
+    le_mans:       { lvl: 0, vane: 1 },   // low DF but Le Mans splitters
+    low:           { lvl: 1, vane: 1 },
+    s_duct:        { lvl: 1, vane: 2 },   // S-duct feeds twin turning vanes
+    medium:        { lvl: 2, vane: 1 },
+    beam_wing:     { lvl: 2, beam: 1, vane: 1 },
+    rake_setup:    { lvl: 3, vane: 2 },
+    diffuser:      { lvl: 3, beam: 1, vane: 2 },
+    high:          { lvl: 3, vane: 2 },
+    underfloor:    { lvl: 3, beam: 1, vane: 3 },  // full ground-effect vane cluster
+    extreme:       { lvl: 4, vane: 3 },
+    active_aero:   { lvl: 3, drs: 1, vane: 2 },
+    ground_effect: { lvl: 4, beam: 1, vane: 3 },
   };
   // Per-OPTION engine airbox: `in` intake-mouth scale, `snork` raised snorkel,
-  // `twin` twin exhaust tips. Keyed by resolved engine id (else the 0/1/2 tier).
+  // `twin` twin exhaust tips, `inlet` sidepod radiator-inlet SHAPE (0 slim
+  // low-drag letterbox, 1 stock rounded mouth, 2 wide high-flow scoop, 3 tall
+  // twin-nostril). Keyed by resolved engine id (else the 0/1/2 tier).
   const ENGINE_STYLE = {
-    stock:        { in: 0.85 }, lean_burn:   { in: 0.72 },
-    performance:  { in: 1.15, twin: 1 }, v_power: { in: 1.10, twin: 1 },
-    turbo:        { in: 1.35, snork: 1 }, highrev: { in: 1.25, snork: 1 },
-    evo_kit:      { in: 1.20, twin: 1 }, sprint:  { in: 1.15, twin: 1 },
-    race:         { in: 1.55, snork: 1, twin: 1 },
-    torque_curve: { in: 1.00 }, hybrid_max: { in: 1.30, snork: 1, twin: 1 },
-    quali_engine: { in: 1.65, snork: 1, twin: 1 },
-    manu_mercedes:{ in: 1.55, snork: 1, twin: 1 }, manu_ferrari: { in: 1.55, snork: 1, twin: 1 },
-    manu_ford:    { in: 1.50, snork: 1, twin: 1 }, manu_honda:   { in: 1.50, snork: 1, twin: 1 },
-    manu_audi:    { in: 1.50, snork: 1, twin: 1 },
+    stock:        { in: 0.85, inlet: 1 }, lean_burn:   { in: 0.72, inlet: 0 },
+    performance:  { in: 1.15, twin: 1, inlet: 2 }, v_power: { in: 1.10, twin: 1, inlet: 2 },
+    turbo:        { in: 1.35, snork: 1, inlet: 2 }, highrev: { in: 1.25, snork: 1, inlet: 3 },
+    evo_kit:      { in: 1.20, twin: 1, inlet: 2 }, sprint:  { in: 1.15, twin: 1, inlet: 3 },
+    race:         { in: 1.55, snork: 1, twin: 1, inlet: 3 },
+    torque_curve: { in: 1.00, inlet: 1 }, hybrid_max: { in: 1.30, snork: 1, twin: 1, inlet: 2 },
+    quali_engine: { in: 1.65, snork: 1, twin: 1, inlet: 3 },
+    manu_mercedes:{ in: 1.55, snork: 1, twin: 1, inlet: 2 }, manu_ferrari: { in: 1.55, snork: 1, twin: 1, inlet: 3 },
+    manu_ford:    { in: 1.50, snork: 1, twin: 1, inlet: 2 }, manu_honda:   { in: 1.50, snork: 1, twin: 1, inlet: 3 },
+    manu_audi:    { in: 1.50, snork: 1, twin: 1, inlet: 2 },
   };
   // Per-OPTION brake package: `cal` caliper accent colour (peeks through the rim
   // spokes), `duct` brake-duct size. Keyed by resolved brake id (else tier).
@@ -320,7 +337,9 @@ const Car3D = (function () {
   BRAKE_STYLE.carbon_mag.rim = [0.48, 0.40, 0.16];   // magnesium bronze
   BRAKE_STYLE.dual_caliper.rim = [0.30, 0.30, 0.34];
   // Per-OPTION suspension: `ride` height offset (m), `arm` wishbone thickness
-  // mult, `push` a visible pushrod strut. Keyed by resolved option id.
+  // mult, `push` a visible actuating strut, `pull` render that strut as a
+  // PULLROD (top-outboard → bottom-inboard diagonal) instead of a pushrod
+  // (bottom-outboard → top-inboard). Keyed by resolved option id.
   const SUSP_STYLE = {
     comfort:         { ride:  0.055, arm: 0.80, push: 0 },   // tall + soft
     standard:        { ride:  0.000, arm: 1.00, push: 0 },
@@ -330,10 +349,10 @@ const Car3D = (function () {
     low_ride:        { ride: -0.035, arm: 1.05, push: 0 },
     racing:          { ride: -0.025, arm: 1.15, push: 1 },
     triple_damper:   { ride: -0.020, arm: 1.20, push: 1 },
-    titanium_spring: { ride: -0.020, arm: 0.85, push: 1 },   // thin Ti arms
-    inboard_dampers: { ride: -0.020, arm: 1.10, push: 1 },
+    titanium_spring: { ride: -0.020, arm: 0.85, push: 1, pull: 1 },   // thin Ti pullrods
+    inboard_dampers: { ride: -0.020, arm: 1.10, push: 1, pull: 1 },   // pullrod, inboard dampers
     track:           { ride: -0.040, arm: 1.30, push: 1 },   // slammed + stiff
-    heave_spring:    { ride: -0.030, arm: 1.20, push: 1 },
+    heave_spring:    { ride: -0.030, arm: 1.20, push: 1, pull: 1 },
     active:          { ride: -0.045, arm: 1.25, push: 1 },   // fully slammed
   };
   // Per-OPTION gearbox: `strakes` diffuser strake count + `fin` a rear crash
@@ -527,13 +546,32 @@ const Car3D = (function () {
     }
 
     // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
-    // the sidepod front, and a row of little floor-edge fences along the floor
-    // — the fiddly ground-effect furniture that reads as a modern car. ---
+    // the sidepod front (SHAPE varies per ENGINE_STYLE.inlet), and a row of
+    // little floor-edge fences — the fiddly ground-effect furniture that reads
+    // as a modern car. Tiny HDR floor-edge LED accents bloom at night. ---
+    const engStyleG = (T._ids && T._ids.engine && ENGINE_STYLE[T._ids.engine]) || null;
+    const engInlet = engStyleG && engStyleG.inlet != null ? engStyleG.inlet
+                   : (tier("engine") === 2 ? 2 : tier("engine") === 0 ? 0 : 1);
+    const floorLed = [0.12, 0.9, 1.9];   // cool-cyan floor-edge marker (HDR → blooms)
     for (const s of [-1, 1]) {
-      addBox(out, s*0.49, 0.30, 0.605, 0.15, 0.11, 0.05, INTAKE);   // inlet mouth
+      // Inlet mouth: 0 slim letterbox · 1 stock rounded · 2 wide high-flow scoop ·
+      // 3 tall twin-nostril. All punched at the same pod-front location.
+      if (engInlet === 0) {
+        addBox(out, s*0.49, 0.29, 0.605, 0.17, 0.06, 0.05, INTAKE);
+      } else if (engInlet === 2) {
+        addBox(out, s*0.49, 0.30, 0.610, 0.21, 0.13, 0.06, INTAKE);
+        addBox(out, s*0.49, 0.30, 0.628, 0.19, 0.10, 0.03, DARK);       // deep scoop lip
+      } else if (engInlet === 3) {
+        for (const dz of [-0.06, 0.06])
+          addBox(out, s*0.49 + dz, 0.30, 0.608, 0.075, 0.15, 0.06, INTAKE); // twin nostrils
+      } else {
+        addBox(out, s*0.49, 0.30, 0.605, 0.15, 0.11, 0.05, INTAKE);     // stock rounded
+      }
       for (const fz of [0.42, 0.06, -0.30, -0.66, -1.02]) {
         addBox(out, s*0.71, 0.135, fz, 0.014, 0.05, 0.13, CARBON);  // floor-edge fence
       }
+      // Floor-edge LED accents between the fences.
+      for (const lz of [0.24, -0.48]) addBox(out, s*0.712, 0.115, lz, 0.012, 0.016, 0.05, floorLed);
     }
 
     // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
@@ -564,10 +602,11 @@ const Car3D = (function () {
     addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
     addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
 
-    // --- Side mirrors ---
+    // --- Side mirrors --- with an HDR marker light on the stalk (blooms at night).
     for (const s of [-1, 1]) {
       addBox(out, s*0.30, 0.72, 0.24, 0.05, 0.03, 0.07, DARK);
       addBox(out, s*0.34, 0.73, 0.24, 0.025, 0.13, 0.10, [0.13, 0.13, 0.14]);
+      addBox(out, s*0.335, 0.695, 0.245, 0.02, 0.014, 0.02, [2.1, 1.2, 0.1]); // stalk marker
     }
 
     // --- Driver helmet: smooth dome + visor + crown stripe ---
@@ -594,6 +633,8 @@ const Car3D = (function () {
     if (!(opts && opts.noDriver)) {
       addBox(out, 0, 0.885, -0.30, 0.035, 0.09, 0.035, DARK);   // stalk
       addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
+      // T-cam status beacon: small HDR green marker atop the mast (blooms at night).
+      addBox(out, 0, 0.988, -0.30, 0.03, 0.02, 0.03, [0.2, 2.2, 0.5]);
     }
 
     // --- Halo: the titanium cockpit-protection hoop (defining modern-F1 read).
@@ -608,6 +649,11 @@ const Car3D = (function () {
         addSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
                      { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 }, HALO); // rear arc to collar
       }
+      // Halo LED strip: FIA-style row of tell-tale lights along the top of the
+      // hoop (HDR team-accent → glows and blooms at night).
+      const haloLed = [Math.min(2.4, c2[0]*1.8 + 0.3), Math.min(2.4, c2[1]*1.8 + 0.15), Math.min(2.4, c2[2]*1.8 + 0.1)];
+      for (const lz of [0.44, 0.30, 0.16, 0.02])
+        addBox(out, 0, 0.842 + (0.49 - lz) * 0.02, lz, 0.05, 0.012, 0.03, haloLed);
       // Wing mirrors on short stalks either side of the cockpit.
       for (const s of [-1, 1]) {
         addBox(out, s*0.37, 0.55, 0.30, 0.13, 0.02, 0.025, DARK);   // stalk
@@ -668,38 +714,70 @@ const Car3D = (function () {
     const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
     const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
 
-    // Front wing: element count + span + endplate/dive-plane size grow with aLvl.
-    const fwSpan = aLvl <= 0 ? 0.68 : (aLvl === 1 ? 0.86 : 1.0);
-    addSpan(out, { z: 2.64, y: 0.070, w: 1.80 * fwSpan, h: 0.028 },
-                 { z: 2.28, y: 0.105, w: 1.76 * fwSpan, h: 0.048 }, c2);   // main plane
-    addSpan(out, { z: 2.36, y: 0.135, w: 1.70 * fwSpan, h: 0.024 },
-                 { z: 2.12, y: 0.200, w: 1.66 * fwSpan, h: 0.036 }, c2);   // flap 1
-    if (aLvl >= 2) {
-      addSpan(out, { z: 2.20, y: 0.220, w: 1.60, h: 0.022 },
-                   { z: 2.00, y: 0.285, w: 1.56, h: 0.030 }, c2);   // flap 2
+    // Front wing: a multi-element CASCADE — a structural main plane plus a stack
+    // of progressively larger flap elements, each a thin wedge (low/forward
+    // leading edge → higher/rearward trailing edge = attack angle) separated by
+    // a visible slot gap. Element count + span + endplate/canard size grow with
+    // aLvl. Half-span reaches the endplate at fwHalf.
+    const fwSpan = aLvl <= 0 ? 0.70 : (aLvl === 1 ? 0.86 : 1.0);
+    const fwHalf = 0.90 * fwSpan;                 // half-span (endplate sits just outside)
+    // [zLead, yLead, zTrail, yTrail, chordWMul, thick, colour] — stacked front→back.
+    const fwElems = [
+      [2.66, 0.055, 2.42, 0.095, 1.00, 0.028, c1],   // main plane (structural, team base)
+      [2.48, 0.100, 2.26, 0.150, 0.98, 0.026, c2],   // flap 1
+    ];
+    if (aLvl >= 1) fwElems.push([2.32, 0.150, 2.12, 0.215, 0.95, 0.024, c2]); // flap 2
+    if (aLvl >= 3) fwElems.push([2.18, 0.215, 2.00, 0.285, 0.92, 0.022, c2]); // flap 3
+    if (aLvl >= 4) fwElems.push([2.06, 0.290, 1.90, 0.360, 0.88, 0.020, c2]); // flap 4 (max DF)
+    for (const e of fwElems) {
+      addSpan(out, { z: e[0], y: e[1], w: 2.0 * fwHalf * e[4], h: e[5] },
+                   { z: e[2], y: e[3], w: 1.96 * fwHalf * e[4], h: e[5] * 1.5 }, e[6]);
     }
-    if (aLvl >= 4) {
-      addSpan(out, { z: 2.06, y: 0.300, w: 1.50, h: 0.020 },
-                   { z: 1.90, y: 0.362, w: 1.46, h: 0.028 }, c2);   // flap 3 (max DF)
+    // Curved-up outer tips: the top flap kicks upward as it meets the endplate.
+    const topE = fwElems[fwElems.length - 1];
+    for (const s of [-1, 1]) {
+      addSpan(out, { z: topE[2], x: s * (fwHalf * topE[4] - 0.02), y: topE[3], w: 0.10, h: topE[5] * 1.4 },
+                   { z: topE[2] - 0.02, x: s * (fwHalf + 0.01), y: topE[3] + 0.075, w: 0.06, h: topE[5] * 1.6 }, topE[6]);
     }
     for (const s of [-1, 1]) {
-      const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.022 : 0.035);
-      addSpan(out, { z: 2.62, x: s*0.895, y: 0.155, w: epW, h: 0.22 },
-                   { z: 2.02, x: s*0.925, y: 0.215, w: epW, h: 0.35 }, c2); // swept endplate
-      if (aLvl >= 2) {
-        const dpMul = aLvl >= 4 ? 1.6 : (aLvl >= 3 ? 1.3 : 1.0);
-        addSpan(out, { z: 2.50, x: s*0.72, y: 0.145, w: 0.030, h: 0.16 * dpMul },
-                     { z: 2.16, x: s*0.74, y: 0.215, w: 0.030, h: 0.24 * dpMul }, c2);  // dive plane
+      const epW = aLvl >= 4 ? 0.055 : (aLvl <= 0 ? 0.024 : 0.038);
+      const epX = s * (fwHalf + 0.02);
+      // Main endplate: tall swept plate that grows rearward.
+      addSpan(out, { z: 2.62, x: epX,          y: 0.155, w: epW, h: 0.22 },
+                   { z: 2.00, x: epX + s*0.03, y: 0.220, w: epW, h: 0.36 }, c2);
+      // Footplate: the horizontal "foot" kicking outward along the endplate base
+      // (the ground-effect seal that reads as a real front-wing foot).
+      addBox(out, epX + s*0.025, 0.055, 2.30, 0.11, 0.014, 0.50, c1);
+      // Canard / dive-plane cascade on the outer face of the endplate — more
+      // planes at higher DF (aLvl 1 → one, 3 → two, 4 → three).
+      const nCan = aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0));
+      for (let i = 0; i < nCan; i++) {
+        const cz = 2.50 - i * 0.17, cy = 0.150 + i * 0.052;
+        addSpan(out, { z: cz,        x: s * (fwHalf - 0.03), y: cy,        w: 0.028, h: 0.11 },
+                     { z: cz - 0.20, x: epX + s*0.035,       y: cy + 0.055, w: 0.028, h: 0.16 }, c1);
       }
+      // Endplate-tip LED marker (HDR amber → glows and blooms at night).
+      addBox(out, epX + s*0.03, 0.375, 2.02, 0.02, 0.02, 0.022, [2.4, 0.55, 0.06]);
       addBox(out, s*0.10, 0.20, 2.44, 0.05, 0.17, 0.16, c1);                  // nose pylon
     }
 
-    // AERO tier 2 only: bargeboard fences ahead of the sidepods — a busy
-    // "full aero kit" tell on high-downforce packages. Chase view only.
-    if (!ckpt && aLvl >= 3) {
+    // Bargeboard / turning-vane cluster ahead of the sidepods — per-OPTION
+    // silhouette via AERO_STYLE.vane (0 none · 1 single fence · 2 twin fences ·
+    // 3 curved triple cascade). Chase view only. Falls back to a level-mapped
+    // vane count when the aero id is unknown.
+    const aVane = aeroStyle && aeroStyle.vane != null ? aeroStyle.vane
+                : (aLvl >= 4 ? 3 : aLvl >= 3 ? 2 : aLvl >= 1 ? 1 : 0);
+    if (!ckpt && aVane > 0) {
       for (const s of [-1, 1]) {
+        // Primary vane — always present.
         addBox(out, s*0.73, 0.30, 0.98, 0.02, 0.22, 0.34, CARBON);
-        addBox(out, s*0.66, 0.26, 0.72, 0.02, 0.17, 0.30, CARBON);
+        if (aVane >= 2) addBox(out, s*0.66, 0.26, 0.72, 0.02, 0.17, 0.30, CARBON);  // inner fence
+        if (aVane >= 3) {
+          // Curved triple cascade: a swept forward vane + a canted footplate vane.
+          addSpan(out, { z: 1.28, x: s*0.70, y: 0.28, w: 0.02, h: 0.20 },
+                       { z: 0.98, x: s*0.62, y: 0.24, w: 0.02, h: 0.26 }, CARBON);
+          addBox(out, s*0.60, 0.19, 0.86, 0.16, 0.014, 0.36, CARBON);   // horizontal turning vane
+        }
       }
     }
 
@@ -715,22 +793,37 @@ const Car3D = (function () {
       // options add a beam wing, and `drs` options open a slotted top gap. ---
       const rwLift = (aLvl - 2) * 0.085;       // lvl0 -0.17 → lvl4 +0.17
       const epSY   = 0.24 + aLvl * 0.20;        // lvl0 0.24 → lvl4 1.04
+      const epCY   = 0.82 + rwLift;             // endplate vertical centre
+      // Tall swept endplates with a louvre cut-out cluster near the rear edge and
+      // a team-colour top-rail highlight strip.
       for (const s of [-1, 1]) {
-        addBox(out, s*0.50, 0.82 + rwLift, -2.42, 0.05, epSY, 0.52, DARK);
+        addBox(out, s*0.50, epCY, -2.42, 0.05, epSY, 0.52, DARK);
+        // Louvre detail: a stack of thin recessed slots near the top-rear corner.
+        for (let i = 0; i < 3; i++)
+          addBox(out, s*0.513, epCY + epSY*0.5 - 0.06 - i*0.06, -2.30, 0.02, 0.016, 0.16, INTAKE);
+        // Top-rail highlight strip (team accent) running the endplate crown.
+        addBox(out, s*0.50, epCY + epSY*0.5, -2.44, 0.055, 0.02, 0.5, c2);
       }
-      // Angled rear-wing elements (leading edge low/forward → trailing high/back)
-      addSpan(out, { z: -2.38, y: 1.005 + rwLift, w: 1.02, h: 0.035 },
-                   { z: -2.64, y: 1.075 + rwLift, w: 1.02, h: 0.050 }, c2);  // upper element
+      // Clean swept two/three-element rear wing (leading edge low/forward →
+      // trailing edge high/back). Main plane sits on the endplate centreline.
+      addSpan(out, { z: -2.30, y: epCY + 0.02, w: 1.02, h: 0.032 },
+                   { z: -2.52, y: epCY + 0.065, w: 1.02, h: 0.044 }, c1);  // main plane
       if (aLvl >= 2) {
-        addSpan(out, { z: -2.34, y: 0.900 + rwLift, w: 1.02, h: 0.030 },
-                     { z: -2.56, y: 0.955 + rwLift, w: 1.02, h: 0.042 }, c2);  // mid element
+        addSpan(out, { z: -2.34, y: epCY + 0.115, w: 1.02, h: 0.030 },
+                     { z: -2.56, y: epCY + 0.170, w: 1.02, h: 0.042 }, c2);  // mid element
       }
-      addSpan(out, { z: -2.30, y: 0.805 + rwLift, w: 1.02, h: 0.028 },
-                   { z: -2.50, y: 0.850 + rwLift, w: 1.02, h: 0.038 }, c1);  // lower element
+      addSpan(out, { z: -2.38, y: epCY + 0.215, w: 1.02, h: 0.035 },
+                   { z: -2.64, y: epCY + 0.290, w: 1.02, h: 0.050 }, c2);  // top flap (swept)
+      // Swan-neck mount: two slim pylons rising from the deck OVER the top of the
+      // main plane (the clean modern over-mount, not a strut hanging beneath).
+      for (const s of [-1, 1]) {
+        addSpan(out, { z: -2.28, x: s*0.17, y: epCY + 0.02, w: 0.035, h: 0.06 },
+                     { z: -2.42, x: s*0.17, y: epCY + 0.24, w: 0.030, h: 0.06 }, DARK);
+      }
       if (aLvl >= 4) {
-        // Swan-neck top flap standing proud + a T-wing ahead of it (max-DF look).
-        addSpan(out, { z: -2.42, y: 1.170 + rwLift, w: 1.00, h: 0.030 },
-                     { z: -2.66, y: 1.250 + rwLift, w: 1.00, h: 0.044 }, c2);  // extra top element
+        // Extra proud top element + a T-wing ahead of it (max-DF look).
+        addSpan(out, { z: -2.42, y: epCY + 0.350, w: 1.00, h: 0.030 },
+                     { z: -2.66, y: epCY + 0.430, w: 1.00, h: 0.044 }, c2);
         addBox(out, 0, 1.02, -1.98, 0.34, 0.02, 0.09, c2);            // T-wing
       }
       if (aBeam) {
@@ -739,22 +832,24 @@ const Car3D = (function () {
                      { z: -2.58, y: 0.68 + rwLift * 0.4, w: 0.92, h: 0.044 }, c1);
       }
       if (aDrs) {
-        // Active-aero DRS: an extra open slot flap proud of the main plane.
-        addSpan(out, { z: -2.44, y: 1.130 + rwLift, w: 0.98, h: 0.022 },
-                     { z: -2.60, y: 1.190 + rwLift, w: 0.98, h: 0.030 }, c2);
+        // Active-aero DRS: an extra open slot flap proud of the top flap.
+        addSpan(out, { z: -2.44, y: epCY + 0.310, w: 0.98, h: 0.022 },
+                     { z: -2.60, y: epCY + 0.370, w: 0.98, h: 0.030 }, c2);
         // DRS-open indicator light on the actuator pod (HDR cyan → blooms).
-        addBox(out, 0, 1.155 + rwLift, -2.50, 0.05, 0.022, 0.03, [0.2, 1.7, 2.3]);
+        addBox(out, 0, epCY + 0.335, -2.50, 0.05, 0.022, 0.03, [0.2, 1.7, 2.3]);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
-      addBox(out, 0, 1.085 + rwLift, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
+      addBox(out, 0, epCY + 0.265, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
       // Rear-wing endplate marker lights (HDR amber) — small blooming tell each side.
-      for (const s of [-1, 1]) addBox(out, s*0.50, 0.82 + rwLift + epSY * 0.42, -2.60, 0.03, 0.03, 0.025, [1.9, 0.95, 0.12]);
+      for (const s of [-1, 1]) addBox(out, s*0.50, epCY + epSY * 0.42, -2.60, 0.03, 0.03, 0.025, [1.9, 0.95, 0.12]);
 
       // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
       // structure. The >1 albedo glows through the night emissive path (and blooms),
-      // so every car trails a visible red light after dark / in spray. ---
+      // so every car trails a visible red light after dark / in spray. A brighter
+      // central brake-light LED sits proud on the same housing. ---
       addBox(out, 0, 0.50, -2.52, 0.13, 0.18, 0.10, DARK);
       addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03, [2.6, 0.08, 0.06]);
+      addBox(out, 0, 0.50, -2.60, 0.04, 0.05, 0.02, [3.4, 0.12, 0.05]);   // brake-light core
 
       // --- Rear diffuser --- AERO visualTier scales width + front kick-up height.
       // Tucked UP and pulled IN (vs. the old low, wide, overhanging slab) so it
@@ -806,14 +901,23 @@ const Car3D = (function () {
     // only the FRONT pair (rears sit behind the seat).
     const wbMul = suspStyle ? suspStyle.arm : (suspT === 0 ? 0.85 : suspT === 2 ? 1.3 : 1.0);
     const wbPush = suspStyle ? suspStyle.push : (suspT === 2 ? 1 : 0);
+    // Pullrod actuator runs the opposite diagonal to a pushrod (top-outboard →
+    // bottom-inboard vs bottom-outboard → top-inboard) — a clear layout tell.
+    const wbPull = suspStyle && suspStyle.pull ? 1 : 0;
     for (const s of [-1, 1]) {
       addBox(out, s*0.50, 0.24 + rideDY,  1.70, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front lower
       addBox(out, s*0.50, 0.42 + rideDY,  1.63, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front upper
-      if (wbPush) addBox(out, s*0.42, 0.34 + rideDY, 1.66, 0.03, 0.16, 0.03, DARK);      // front pushrod strut
+      if (wbPush) {
+        if (wbPull) addStrut(out, s*0.60, 0.44 + rideDY, s*0.32, 0.20 + rideDY, 1.66, 0.032, 0.032, DARK); // front pullrod
+        else        addStrut(out, s*0.60, 0.20 + rideDY, s*0.32, 0.44 + rideDY, 1.66, 0.032, 0.032, DARK); // front pushrod
+      }
       if (!ckpt) {
         addBox(out, s*0.49, 0.26 + rideDY, -1.60, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear lower
         addBox(out, s*0.49, 0.44 + rideDY, -1.53, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear upper
-        if (wbPush) addBox(out, s*0.41, 0.36 + rideDY, -1.56, 0.03, 0.16, 0.03, DARK);     // rear pushrod strut
+        if (wbPush) {
+          if (wbPull) addStrut(out, s*0.58, 0.46 + rideDY, s*0.30, 0.22 + rideDY, -1.56, 0.032, 0.032, DARK); // rear pullrod
+          else        addStrut(out, s*0.58, 0.22 + rideDY, s*0.30, 0.46 + rideDY, -1.56, 0.032, 0.032, DARK); // rear pushrod
+        }
       }
     }
 
