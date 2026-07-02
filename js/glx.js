@@ -955,6 +955,19 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
+  // Batched skid marks: all live marks baked into one world-space vertex buffer
+  // (pos + uv per vertex) so the whole trail draws in ONE call instead of up to
+  // 120 per-mark drawElements. Same MARK_FS, so the look is identical.
+  const MARK_BATCH_VS = `#version 300 es
+layout(location=0) in vec3 aPos;   // world position (metres)
+layout(location=1) in vec2 aUV;    // -1..1 across the stamp
+uniform mat4 uViewProj;
+out vec2 vUV;
+void main() {
+  vUV = aUV;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}`;
+
   // ---- Lamp lens glare (round veiling halo at each lamp head) ----
   // A camera-facing quad per lamp, drawn ADDITIVELY into the HDR scene before
   // bloom. Purely RADIAL: a hot core + a soft round veil, like real lens glare.
@@ -1668,6 +1681,7 @@ void main() {}`;
   let skyProg = null, skyU = null;
   let shadowProg = null, shadowU = null;
   let markProg = null, markU = null;
+  let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null;
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null;
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
@@ -2053,6 +2067,7 @@ void main() {
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
     markProg = link(SHADOW_VS, MARK_FS);
+    markBatchProg = link(MARK_BATCH_VS, MARK_FS);
     glowProg = link(GLOW_VS, GLOW_FS);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
 
@@ -2069,6 +2084,18 @@ void main() {
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
+    if (markBatchProg) {
+      markBatchU = locs(markBatchProg, ["uViewProj"]);
+      // Dynamic interleaved buffer: [posX, posY, posZ, uvX, uvY] per vertex.
+      markBatchVAO = gl.createVertexArray();
+      gl.bindVertexArray(markBatchVAO);
+      markBatchVBO = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
+      const mst = 5 * 4;   // 5 floats per vertex
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, mst, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, mst, 12);
+      gl.bindVertexArray(null);
+    }
     if (glowProg) {
       glowU = locs(glowProg, ["uViewProj", "uEye", "uStr"]);
       // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b, radius] ×6 verts/lamp.
@@ -2544,6 +2571,26 @@ void main() {
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
   }
 
+  // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
+  // vertex, 6 verts/mark); `vertCount` verts are live. When `dirty`, re-upload
+  // the buffer (marks change at most every few frames). One draw for the whole
+  // trail — replaces up to 120 per-mark drawMark calls. Returns false if the
+  // batch path is unavailable (caller falls back to per-mark drawMark).
+  function drawSkidBatch(verts, vertCount, dirty) {
+    if (!markBatchProg || vertCount <= 0) return !markBatchProg ? false : true;
+    useProg(markBatchProg);
+    gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
+    setBlend(true);
+    setDepthMask(false);
+    bindVAO(markBatchVAO);
+    if (dirty) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
+      gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, vertCount * 5), gl.DYNAMIC_DRAW);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, vertCount);
+    return true;
+  }
+
   // Additive lens-glare halos: one round billboard per lamp. `lights` is the
   // stride-15 frame.lights array; fields 0-6 (position, colour, radius) and 14
   // (glareW: per-lamp halo weight, 0 = no visible fixture = no halo) are
@@ -2917,6 +2964,7 @@ void main() {
     drawSky,
     drawShadow,
     drawMark,
+    drawSkidBatch,
     drawGlow,
     present,
     shadowBegin(lightVP) {
