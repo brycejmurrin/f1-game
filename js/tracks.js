@@ -963,7 +963,8 @@ const Tracks = (function () {
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
     for (const name of ["place", "prop", "backdrop", "anchor", "pine", "tree",
-                        "palm", "building", "tower", "billboard", "marshalPost", "bush"]) {
+                        "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
+                        "marshalPost", "bush", "signBoard"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), -side, ...r);
     }
     // (s, side, ...rest): single fraction + side
@@ -1347,7 +1348,11 @@ const Tracks = (function () {
       const ty = terrainYAt(cx, cz);
       return { c: [cx, ty == null ? groundYAt(k, dist) : ty, cz], r, u, t };
     };
-    // Conifer/pine: tapered trunk + stacked cones. col = needle green.
+    // Conifer/pine: tapered trunk + stacked cones. col = needle green. Three
+    // silhouette variants selected per-instance so a treeline doesn't read as
+    // identical clones stretched to different sizes: FULL (dense 4-tier), LEAN
+    // (windswept — each tier offset sideways, increasing with height), SPARSE
+    // (thinner 3-tier, gappy — storm-thinned or younger tree).
     const pine = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 3)) {
@@ -1358,35 +1363,63 @@ const Tracks = (function () {
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
       addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
+      const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
+      const sparse = vr > 0.82;                          // ~18% thinner 3-tier trees
+      const lean = !sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0;   // ~27% windswept lean
+      const tiers = sparse ? 3 : 4;
       let y = h * 0.3;
-      // 4 stacked cones (was 3) — adds a fuller silhouette for little cost; the
-      // lowest skirt cone uses a darker shade for depth.
-      for (let i = 0; i < 4; i++) {
-        const w = 2.7 * j * (1 - i * 0.21);
-        addCone(out, vadd(a.c, a.u, y), w, h * 0.32, i === 0 ? c2 : col, 7, b);
-        y += h * 0.18 * j;
+      for (let i = 0; i < tiers; i++) {
+        const w = (sparse ? 2.3 : 2.7) * j * (1 - i * (sparse ? 0.24 : 0.21));
+        let c = vadd(a.c, a.u, y);
+        if (lean) c = vadd(c, a.r, lean * (y / h) * 1.6 * side);   // tilt away from the road
+        addCone(out, c, w, h * 0.32, i === 0 ? c2 : col, 7, b);
+        y += h * (sparse ? 0.24 : 0.18) * j;
       }
     };
     // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
+    // ~9% of instances are a bare DEAD/STORM tree (trunk + thin branch cylinders,
+    // no canopy) — breaks up monoculture stands and reads as a real weathered
+    // treeline rather than a cloned forest. Living trees get a per-instance
+    // ASYMMETRIC lean on the upper canopy (~35%) so not every crown is a perfect
+    // dome.
     const tree = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 4)) {
         console.warn(`[scenery] tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
+      const vr = hash(k * 8.3 + side * 5.1 + dist + 4.7);
+      if (vr > 0.91) {   // dead/storm tree: bare trunk + a few angled branch stubs.
+        // addCyl extends along basis[1] ("up"), so each branch needs its OWN
+        // tilted up-vector (mostly vertical, blended with an outward lean) —
+        // not the tree's vertical `a.u`, or the branches would draw straight up.
+        const th = h * 0.7;
+        addCyl(out, a.c, 0.32, th, [0.28, 0.22, 0.16], 6, b);
+        const top = vadd(a.c, a.u, th);
+        for (let i = 0; i < 3; i++) {
+          const bh = hash(k * 11 + i * 3.1 + dist);
+          const ang = (i / 3 + bh * 0.4) * 6.2832;
+          const out2 = vadd(vadd([0, 0, 0], a.r, Math.cos(ang)), a.t, Math.sin(ang));
+          const bu = [a.u[0] * 0.7 + out2[0] * 0.7, a.u[1] * 0.7, a.u[2] * 0.7 + out2[2] * 0.7];
+          addCyl(out, vadd(top, a.u, i * 0.25), 0.09, 1.6 + bh * 1.4, [0.30, 0.24, 0.17], 4, [a.r, bu, a.t]);
+        }
+        return;
+      }
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const j = 0.85 + hash(k * 2.9 + side * 1.7 + dist) * 0.3;
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
+      const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;   // asymmetric crown, ~35% of instances
       addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
       // ROUNDED broadleaf canopy: bulges widest in the middle and is capped by a
       // squat dome — a full, billowing crown that reads clearly as a deciduous
       // tree rather than the narrow pointed cone-stack of conifer() (the two used
       // to look near-identical). Top two layers are inverted/short cones so the
-      // crown rounds off instead of tapering to a spike.
+      // crown rounds off instead of tapering to a spike, and lean into `a.r`
+      // increasingly with height on asymmetric instances.
       addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j, h * 0.30, col, 9, b);   // wide skirt
       addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j, h * 0.26, col, 9, b);   // widest bulge
-      addCone(out, vadd(a.c, a.u, h * 0.66), (2.9 + h * 0.10) * j, h * 0.26, c2, 8, b);    // shoulder
-      addCone(out, vadd(a.c, a.u, h * 0.82), (1.7 + h * 0.06) * j, h * 0.22, c2, 7, b);    // rounded cap
+      addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j, h * 0.26, c2, 8, b);    // shoulder
+      addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j, h * 0.22, c2, 7, b);    // rounded cap
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.
     const palm = (k, side, dist, h, frond) => {
@@ -2134,6 +2167,95 @@ const Tracks = (function () {
         idx++;
       });
     };
+    // House: small RESIDENTIAL massing — one box + a gabled/hipped roof + a
+    // chimney + a door and two windows. Deliberately much simpler/cheaper than
+    // building() and uses a warm render/stone/terracotta palette so villages and
+    // farmhouses read as homes, not office towers. (k, side, gap, w, h, d, opts)
+    // matches building()'s signature: w = depth away from the road (along `r`),
+    // d = frontage width parallel to the road (along `t`).
+    const HOUSE_WALLS = [[0.86, 0.80, 0.68], [0.80, 0.62, 0.46], [0.74, 0.72, 0.70], [0.70, 0.50, 0.38]];
+    const HOUSE_ROOFS = [[0.42, 0.20, 0.14], [0.32, 0.32, 0.35], [0.36, 0.24, 0.16]];
+    const house = (k, side, gap, w, h, d, opts) => {
+      opts = opts || {};
+      const dist = gap + w / 2;
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      const ifx = p.c[0] - p.r[0] * side * w / 2, ifz = p.c[2] - p.r[2] * side * w / 2;
+      if (onTrack(ifx, ifz, 2)) {
+        console.warn(`[scenery] house SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
+        return;
+      }
+      const hh = hash(k * 6.7 + side * 3.9 + gap);
+      const wall = opts.wall || HOUSE_WALLS[Math.floor(hh * HOUSE_WALLS.length) % HOUSE_WALLS.length];
+      const roofCol = opts.roof || HOUSE_ROOFS[Math.floor(hash(k * 9.1 + side) * HOUSE_ROOFS.length) % HOUSE_ROOFS.length];
+      const roofType = opts.roofType || (hh > 0.5 ? "hip" : "gable");
+      const nightLit = NIGHT && opts.lit !== false;
+      // Main box mass.
+      addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], wall, b);
+      // Roof — gable (ridge along the frontage) or hip (single apex), a slight
+      // eave overhang so it reads distinct from the wall below.
+      const roofH = h * (0.42 + hash(k * 13.3 + side) * 0.20);
+      const roofSz = [w * 1.10, roofH, d * 1.10];
+      if (roofType === "hip") addPyramid(out, vadd(p.c, p.u, h), roofSz, roofCol, b);
+      else addPrism(out, vadd(p.c, p.u, h), roofSz, roofCol, b);
+      // Chimney on most houses (skip on some for variety).
+      if (hash(k * 17 + side) > 0.3) {
+        const cc = vadd(vadd(vadd(p.c, p.r, w * 0.22 * side), p.t, d * 0.12), p.u, h * 0.65);
+        addCyl(out, cc, 0.32, roofH * 0.95, [0.40, 0.36, 0.34], 4, b);
+      }
+      // Door + two windows on the road-facing wall. Warm HDR glow at night (a lit
+      // cottage window), a plain pale pane by day.
+      const faceOff = -side * (w / 2 + 0.02);
+      const winCol = opts.window || (nightLit ? [1.55, 1.10, 0.55] : [0.72, 0.80, 0.84]);
+      addBox(out, vadd(vadd(p.c, p.r, faceOff), p.u, 1.0), [0.06, 2.0, 1.1], [0.26, 0.18, 0.13], b);
+      for (const wx of [-d * 0.26, d * 0.26]) {
+        addBox(out, vadd(vadd(vadd(p.c, p.r, faceOff), p.t, wx), p.u, h * 0.58), [0.06, 1.1, 1.0], winCol, b);
+      }
+    };
+    // Motorhome / team hospitality unit: a two-tier coach body + a slide-out
+    // AWNING CANOPY on posts (the signature paddock look — every real F1 team
+    // motorhome has one), a window ribbon, a roof AC unit, and a team-colour
+    // accent stripe along the base. Paddock rows on several tracks used to be
+    // 3 stacked plain boxes per unit — this is the purpose-built replacement.
+    // (k, side, gap, w, h, d, opts): w = depth away from the road (along `r`),
+    // d = length along the road (along `t`), matching building()/house().
+    const MOTORHOME_BODY = [[0.90, 0.90, 0.92], [0.85, 0.86, 0.90], [0.94, 0.92, 0.86]];
+    const motorhome = (k, side, gap, w, h, d, opts) => {
+      opts = opts || {};
+      const dist = gap + w / 2;
+      const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+      const ifx = p.c[0] - p.r[0] * side * w / 2, ifz = p.c[2] - p.r[2] * side * w / 2;
+      if (onTrack(ifx, ifz, 2)) {
+        console.warn(`[scenery] motorhome SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
+        return;
+      }
+      const hh = hash(k * 7.3 + side * 4.1 + gap);
+      const body = opts.wall || MOTORHOME_BODY[Math.floor(hh * MOTORHOME_BODY.length) % MOTORHOME_BODY.length];
+      const accent = opts.accent || [0.75, 0.10, 0.10];
+      const nightLit = NIGHT && opts.lit !== false;
+      const winCol = opts.window || (nightLit ? [1.5, 1.3, 0.85] : [0.30, 0.36, 0.42]);
+      // Lower deck (full footprint) + a slightly set-back upper deck — the real
+      // two-tier hospitality-unit silhouette, not a flat single box.
+      const loH = h * 0.56;
+      addBox(out, vadd(p.c, p.u, loH / 2), [w, loH, d], body, b);
+      addBox(out, vadd(p.c, p.u, loH + (h - loH) / 2), [w * 0.86, h - loH, d * 0.90], body, b);
+      // Window ribbon along the lower deck's road-facing wall.
+      const faceOff = -side * (w / 2 + 0.02);
+      addBox(out, vadd(vadd(p.c, p.r, faceOff), p.u, loH * 0.62), [0.05, loH * 0.30, d * 0.82], winCol, b);
+      // Livery accent stripe along the base.
+      addBox(out, vadd(vadd(p.c, p.r, faceOff * 1.001), p.u, loH * 0.12), [0.06, loH * 0.14, d * 0.94], accent, b);
+      // Slide-out awning canopy on two support posts, reaching toward the paddock
+      // walkway (away from the unit, same outward direction as the road-facing
+      // wall) — the classic team-hospitality shade structure.
+      const awnDist = w * 0.42;
+      const awnC = vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.u, loH * 0.92);
+      addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
+      for (const e of [-1, 1]) {
+        const postC = vadd(vadd(awnC, p.t, e * d * 0.42), p.u, -loH * 0.44);
+        addCyl(out, postC, 0.05, loH * 0.82, [0.35, 0.35, 0.38], 4, b);
+      }
+      // Roof AC / satellite unit.
+      if (hh > 0.25) addBox(out, vadd(p.c, p.u, h + 0.3), [w * 0.28, 0.5, d * 0.20], [0.55, 0.56, 0.58], b);
+    };
     // Tapered tower (control tower, spire) + optional antenna mast.
     const tower = (k, side, dist, baseW, h, opts) => {
       opts = opts || {};
@@ -2198,14 +2320,102 @@ const Tracks = (function () {
       if (NIGHT) addBox(out, vadd(vadd(p.c, p.r, side * 1.4), p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
     };
-    // Bush / shrub clump (low rounded greenery).
+    // Trackside SIGNAGE: corner-number boards, circular speed-limit discs, and
+    // diagonal red/white braking-distance boards — the classic FIA trackside
+    // kit. No such model existed anywhere in the codebase before this; every
+    // real circuit is covered in these and their absence was a genuine gap.
+    // 7-segment digit rects in LOCAL unit space [x0,x1,y0,y1] (0..1 square).
+    const SIGN_SEG = {
+      top: [0.16, 0.84, 0.86, 1.00], mid: [0.16, 0.84, 0.44, 0.58], bottom: [0.16, 0.84, 0.00, 0.14],
+      topL: [0.04, 0.20, 0.50, 0.94], topR: [0.80, 0.96, 0.50, 0.94],
+      botL: [0.04, 0.20, 0.06, 0.50], botR: [0.80, 0.96, 0.06, 0.50],
+    };
+    const SIGN_DIGIT = {
+      0: ["top", "topL", "topR", "botL", "botR", "bottom"], 1: ["topR", "botR"],
+      2: ["top", "topR", "mid", "botL", "bottom"], 3: ["top", "topR", "mid", "botR", "bottom"],
+      4: ["topL", "topR", "mid", "botR"], 5: ["top", "topL", "mid", "botR", "bottom"],
+      6: ["top", "topL", "mid", "botL", "botR", "bottom"], 7: ["top", "topR", "botR"],
+      8: ["top", "topL", "topR", "mid", "botL", "botR", "bottom"], 9: ["top", "topL", "topR", "mid", "botR", "bottom"],
+    };
+    // Draw one digit centred at `c`, spanning [w,h] in the (t=horizontal,
+    // u=vertical) plane, raised `proud` along r toward the viewer so the
+    // segments sit visibly above the panel face instead of z-fighting it.
+    const signDigit = (c, r, u, t, w, h, proud, col, digit) => {
+      const segs = SIGN_DIGIT[digit] ?? SIGN_DIGIT[0];
+      const base = vadd(c, r, proud);
+      for (const name of segs) {
+        const [x0, x1, y0, y1] = SIGN_SEG[name];
+        const cc = vadd(vadd(base, t, (x0 + x1) / 2 * w - w / 2), u, (y0 + y1) / 2 * h - h / 2);
+        addBox(out, cc, [0.03, (y1 - y0) * h, (x1 - x0) * w], col, [r, u, t]);
+      }
+    };
+    // signBoard(k, side, gap, kind, value):
+    //   kind: "corner" (value = corner number, 1-99) — white board, black digits.
+    //   kind: "speed" (value = km/h, 10-99) — red-rimmed circular disc, black digits.
+    //   kind: "braking" (value = stripe count, 1-3) — white panel, diagonal red
+    //     stripes counting down to the corner (the real F1 100/50m board style).
+    const signBoard = (k, side, gap, kind, value) => {
+      const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      if (onTrack(p.c[0], p.c[2], 1.5)) {
+        console.warn(`[scenery] signBoard SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        return;
+      }
+      const postH = 1.35;
+      const proud = -side * 0.05;   // segment relief toward the viewer
+      addCyl(out, p.c, 0.06, postH, [0.55, 0.55, 0.58], 4, b);
+      if (kind === "speed") {
+        const R = 0.52, cc = vadd(p.c, p.u, postH + R);
+        addFrustum(out, cc, R, R, 0.05, [0.85, 0.16, 0.14], 12, b);                       // red rim disc
+        addFrustum(out, vadd(cc, p.r, -side * 0.02), R * 0.80, R * 0.80, 0.05, [0.95, 0.95, 0.93], 12, b);  // white face
+        const digs = String(Math.max(10, Math.min(99, value || 80))).split("").map(Number);
+        digs.forEach((d, i) => {
+          const dc = vadd(cc, p.t, (i - (digs.length - 1) / 2) * 0.36);
+          signDigit(dc, p.r, p.u, p.t, 0.34, 0.62, -side * 0.06, [0.10, 0.10, 0.12], d);
+        });
+      } else if (kind === "braking") {
+        const w2 = 1.3, h2 = 0.9, cc = vadd(p.c, p.u, postH + h2 / 2);
+        addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b);   // white panel face
+        const nStripes = Math.max(1, Math.min(3, value || 2));
+        // Diagonal stripes: a proper unit tilt of (u,t) so a thin box reads as a
+        // 45deg diagonal band across the panel, not an axis-aligned rectangle.
+        const diagU = norm([p.u[0] + p.t[0], p.u[1] + p.t[1], p.u[2] + p.t[2]]);
+        for (let i = 0; i < nStripes; i++) {
+          const sx = (i - (nStripes - 1) / 2) * (w2 / (nStripes + 0.4));
+          const sc = vadd(vadd(cc, p.t, sx), p.r, proud);
+          addBox(out, sc, [0.02, h2 * 1.15, 0.16], [0.85, 0.15, 0.13], [p.r, diagU, p.t]);
+        }
+      } else {   // "corner" number board
+        const w2 = 1.0, h2 = 0.85, cc = vadd(p.c, p.u, postH + h2 / 2);
+        addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b);
+        const digs = String(Math.max(1, Math.min(99, value || 1))).split("").map(Number);
+        digs.forEach((d, i) => {
+          const dc = vadd(cc, p.t, (i - (digs.length - 1) / 2) * 0.38);
+          signDigit(dc, p.r, p.u, p.t, 0.36, 0.58, proud, [0.10, 0.10, 0.12], d);
+        });
+      }
+    };
+    // Bush / shrub clump: 2-3 jittered cones offset around a centre so it reads
+    // as an irregular clump of foliage rather than one uniform cone (every bush
+    // on every track used to be geometrically identical).
     const bush = (k, side, dist, col) => {
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], 2)) {
         console.warn(`[scenery] bush SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      addCone(out, vadd(p.c, p.u, 0.3), 1.6, 2.2, col || [0.20, 0.38, 0.18], 6, b);
+      const bc = col || [0.20, 0.38, 0.18];
+      const c2 = [bc[0] * 0.90, bc[1] * 0.94, bc[2] * 0.88];
+      const jh = hash(k * 4.3 + side * 2.1 + dist);
+      const lobes = jh < 0.4 ? 2 : 3;   // most clumps 2-3 lobes, some just 1 big lump
+      for (let i = 0; i < lobes; i++) {
+        const lh = hash(k * 5.9 + side * 3.3 + dist + i * 1.7);
+        const ang = (i / lobes + lh * 0.3) * 6.2832;
+        const off = lobes > 1 ? 0.6 + lh * 0.5 : 0;
+        const lx = Math.cos(ang) * off, lz = Math.sin(ang) * off;
+        const lc = vadd(vadd(p.c, p.r, lx), p.t, lz);
+        const rad = (1.1 + lh * 0.9) * (lobes > 1 ? 0.82 : 1.15);
+        addCone(out, vadd(lc, p.u, 0.25 + lh * 0.2), rad, 1.7 + lh * 1.0, i === 0 ? bc : c2, 6, b);
+      }
     };
 
     // Per-circuit barrier identity — each city gets its own armco livery (two
@@ -2300,6 +2510,36 @@ const Tracks = (function () {
       }
     }
 
+    // ── Trackside SIGNAGE: auto-placed at every detected corner, on EVERY
+    // circuit — no per-track authoring needed. Corner-number boards approximate
+    // real FIA numbering (sequential by lap order); ~half the corners also get
+    // a 3-2-1 braking-distance trio on the approach; one pit-entry speed disc
+    // per lap. This was a genuine gap: no signage model existed at all before
+    // signBoard() (see the scenery audit).
+    {
+      const laneCorners = findCorners(track, 0.007).slice().sort((a, b) => a.k - b.k);
+      laneCorners.forEach((c, idx) => {
+        const outside = c.sign > 0 ? -1 : 1;
+        signBoard(c.k, outside, hw[c.k] + 3.5, "corner", idx + 1);
+        // Braking trio (3->2->1 stripes counting down to the apex) on roughly
+        // half the corners, spaced back along the approach — avoids clutter on
+        // every single bend while still reading as a real trackside kit.
+        if (hash(c.k * 3.1 + 7) > 0.5) {
+          const lo = Math.max(6, c.lo);
+          const offs = [Math.round(lo * 0.85), Math.round(lo * 0.5), Math.round(lo * 0.18)];
+          [3, 2, 1].forEach((stripes, si) => {
+            const kk = ((c.k - offs[si]) % n + n) % n;
+            signBoard(kk, outside, hw[kk] + 3.0, "braking", stripes);
+          });
+        }
+      });
+      // One pit-entry speed-limit disc near the end of the lap — real
+      // speed-limit signage is mostly a pit-lane feature, not scattered
+      // trackside, so a single instance per circuit is the honest amount.
+      const spk = Math.round(n * 0.965) % n;
+      signBoard(spk, -1, hw[spk] + 4, "speed", def.street ? 60 : 80);
+    }
+
     // ── Per-track street / scenery furniture: lamp posts + roadside trees ──
     // Every circuit — city, desert AND forest/green — gets its own incidental
     // models so no two tracks share trees and lighting. tree: palm|broad|fir|
@@ -2366,11 +2606,19 @@ const Tracks = (function () {
       else tree(k, side, dist, h, col);
     };
     // Lamp posts — streets / modern / desert. Alternate sides, set behind the
-    // barrier line; the head glows HDR at night via streetLamp().
+    // barrier line; the head glows HDR at night via streetLamp(). ~12% of posts
+    // roll a DIFFERENT head style than the track's base lamp — real circuits mix
+    // eras/replacements rather than one uniform style down the whole lap (was
+    // every single post on a track using the exact same style).
+    const LAMP_STYLES = ["arm", "globe", "post"];
     if (fz.lamp && fz.lamp !== "none") every(26, (k) => {
       for (const side of [-1, 1]) {
         if (furnHarbour(side, k)) continue;
-        streetLamp(k, side, (def.street ? 3.2 : 6) + hash(k * 7 + side) * 0.8, fz.lc || [1, 0.9, 0.7], def.street ? 7 : 8, fz.lamp);
+        const roll = hash(k * 19 + side * 5.5);
+        const style = roll > 0.88
+          ? LAMP_STYLES[Math.floor(hash(k * 23 + side) * LAMP_STYLES.length) % LAMP_STYLES.length]
+          : fz.lamp;
+        streetLamp(k, side, (def.street ? 3.2 : 6) + hash(k * 7 + side) * 0.8, fz.lc || [1, 0.9, 0.7], def.street ? 7 : 8, style);
       }
     });
     // Roadside trees — every circuit, per-track species/tint, set back behind the
@@ -2614,9 +2862,11 @@ const Tracks = (function () {
         // richer primitives (world coords): non-cube shapes
         addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
         // landscape + vegetation
-        pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge,
+        pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge, conifer,
         // structures
-        building, tower, grandstand, billboard, gantry, marshalPost, cityFront,
+        building, house, motorhome, tower, grandstand, billboard, gantry, marshalPost, cityFront,
+        // signage
+        signBoard,
         // barriers / track furniture
         wall, fence, guardrail, tyreWall, recordBarrier,
       };

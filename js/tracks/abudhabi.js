@@ -24,7 +24,7 @@
     elevations: [{ s: 0.88, halfM: 160, rise: -4 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, groundPlane, addBox,
-        anchor, onTrack, hash, vadd, building, tower, grandstand, billboard,
+        anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along,
         cityFront, forestEdge, backdrop, mountain } = api;
@@ -526,13 +526,14 @@
       {
         // long paddock apron
         place(K(0.02), 1, 40, [130, 0.5, 65], [0.20, 0.21, 0.23]);
-        // team motorhome row (modern two-storey lit hospitality units)
+        // team motorhome row (modern two-storey lit hospitality units) — was 3
+        // stacked raw boxes per unit; now the purpose-built motorhome() model
+        // (slide-out awning, window ribbon, livery accent stripe).
         for (let i = 0; i < 10; i++) {
           const k = K(0.985 + i * 0.010);
           const wc = (i % 2) ? WIN : WIN_WARM;
-          place(k, 1, 44, [16, 10, 18], [0.22, 0.23, 0.28]);
-          place(k, 1, 44, [16.4, 2.6, 18.4], wc);          // lit window band
-          place(k, 1, 44, [17, 1.6, 19], [0.12, 0.13, 0.16]); // roof cap
+          motorhome(k, 1, 36, 14, 8.5, 17, { window: wc, wall: [0.86, 0.87, 0.90],
+            accent: (i % 2) ? [0.75, 0.10, 0.10] : [0.10, 0.30, 0.72] });
         }
         // pit-lane back wall + garage roof line (more prominent)
         for (let i = 0; i < 7; i++) {
