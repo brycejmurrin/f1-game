@@ -714,8 +714,13 @@ function carDecalData() {
   quad([[-0.715, yB, zR], [-0.715, yB, zF], [-0.715, yT, zF], [-0.715, yT, zR]], [-1, 0, 0], R.titleA);
   // Engine-cover top → team crest (reads from the chase cam; top = toward the tail).
   quad([[-0.15, 0.565, -0.62], [0.15, 0.565, -0.62], [0.15, 0.6, -1.28], [-0.15, 0.6, -1.28]], [0, 1, 0.06], R.crest);
-  // Nose top → secondary sponsor (top = toward the nose tip).
-  quad([[-0.13, 0.452, 1.5], [0.13, 0.452, 1.5], [0.11, 0.452, 2.06], [-0.11, 0.452, 2.06]], [0, 1, 0.05], R.titleB);
+  // Nose-top plate → big driver NUMBER (top of the digit toward the nose tip).
+  // The nose block is IDENTICAL in the chase and cockpit builds, so this reads
+  // upright from chase, hood AND cockpit cameras (all look forward over the nose).
+  quad([[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]], [0, 1, 0.05], R.num);
+  // Nose-rear deck (behind the number) → secondary sponsor. A clean flat station
+  // between the number plate and the cockpit, clear of the hood crown clutter.
+  quad([[-0.14, 0.545, 1.16], [0.14, 0.545, 1.16], [0.14, 0.545, 1.66], [-0.14, 0.545, 1.66]], [0, 1, 0.06], R.titleB);
   // Sidepod lower flank → long sponsor strip.
   quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
   quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
@@ -726,21 +731,51 @@ function getCarDecalMesh() {
   if (!_carDecalMesh) _carDecalMesh = GLX.createTexMesh(carDecalData());
   return _carDecalMesh;
 }
+// Cockpit view draws only the FORWARD decals (the nose number), since the
+// engine-cover / sidepod / hood decals sit behind or beside the driver and the
+// ckpt body omits those surfaces. The nose is identical in both builds, so the
+// number lands exactly on the nose plate ahead of the driver.
+let _cockpitDecalMesh = null;
+function getCockpitDecalMesh() {
+  if (typeof LiveryTex === "undefined" || !GLX.createTexMesh) return null;
+  if (!_cockpitDecalMesh) {
+    const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+    const u = { uL: R.num.x / S, uR: (R.num.x + R.num.w) / S, vT: 1 - R.num.y / S, vB: 1 - (R.num.y + R.num.h) / S };
+    // The ckpt hood is now a LOW cowl that stops behind the nose deck, so the
+    // nose number is visible out ahead of the driver — use the same nose-plate
+    // placement as the chase build (nose geometry is identical in both builds).
+    const c = [[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]];
+    const uvs = [[u.uL, u.vB], [u.uR, u.vB], [u.uR, u.vT], [u.uL, u.vT]];
+    const d = { pos: [], nrm: [], uv: [], idx: [] };
+    for (let k = 0; k < 4; k++) { d.pos.push(c[k][0], c[k][1], c[k][2]); d.nrm.push(0, 1, 0.05); d.uv.push(uvs[k][0], uvs[k][1]); }
+    d.idx.push(0, 1, 2, 0, 2, 3);
+    _cockpitDecalMesh = GLX.createTexMesh(d);
+  }
+  return _cockpitDecalMesh;
+}
 const _decalTexCache = {};
-function getCarDecalTexture(team) {
+function getCarDecalTexture(team, num) {
   if (typeof LiveryTex === "undefined" || !GLX.createTexture) return null;
-  const key = team.id + ":" + getLiveryId(team.id);
+  const key = team.id + ":" + getLiveryId(team.id) + ":" + (num == null ? "_" : num);
   if (!(key in _decalTexCache)) {
     let t = null;
-    try { t = GLX.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team))); }
+    try { t = GLX.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num)); }
     catch (e) { t = null; }
     _decalTexCache[key] = t;
   }
   return _decalTexCache[key];
 }
+// Driver number for a car's decal atlas: the car's own number if present, else
+// the team's primary driver (so the setup preview / any numberless call still
+// shows a sensible number).
+function carDecalNum(team, car) {
+  if (car && car.num != null) return car.num;
+  return (team.drivers && team.drivers[0] && team.drivers[0].num != null) ? team.drivers[0].num : null;
+}
 // Draw a car's logo/sponsor decals with the same model matrix as its body.
-function drawCarDecals(team, modelMat, night) {
-  const mesh = getCarDecalMesh(), tex = getCarDecalTexture(team);
+function drawCarDecals(team, modelMat, night, num, cockpit) {
+  const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh();
+  const tex = getCarDecalTexture(team, num);
   if (mesh && tex) GLX.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
 }
 
@@ -1034,7 +1069,10 @@ function drawCockpitRig(c, base, dt, paint) {
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
   GLX.draw(cockpitBodyMesh(c.team), base, paint);
-  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.35, 2.1);
+  // Forward decal: the driver number on the nose plate ahead of the driver (the
+  // nose is identical to the chase build, so this lands exactly on the plate).
+  drawCarDecals(c.team, base, nite, carDecalNum(c.team, c), true);
+  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.30, 1.4);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
   // damped steering whatever the input mode). A second, slower damping stage
@@ -3620,7 +3658,7 @@ function renderSetupPreview(dt) {
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   GLX.draw(getSetupPreviewMesh(), M4.ident(), spMat);
-  drawCarDecals(Teams.LIST[teamIdx], M4.ident(), false);
+  drawCarDecals(Teams.LIST[teamIdx], M4.ident(), false, carDecalNum(Teams.LIST[teamIdx], null));
   GLX.present();
 }
 
@@ -4193,11 +4231,11 @@ function render(dt) {
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
       GLX.draw(body, tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night);
+      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
       drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
     } else {
       GLX.draw(teamMesh(c.team), tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night);
+      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
       // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.

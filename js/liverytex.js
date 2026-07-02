@@ -115,30 +115,59 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Big centred number.
-  function drawNumber(ctx, n, R, ink, accent) {
-    const pad = 12;
+  // Big centred number — bold italic F1-style numeral with an accent outline and
+  // a soft drop shadow for depth. `ink` fills, `accent` haloes, optional `bg`
+  // paints a rounded backing patch (so the number reads on any surface colour,
+  // e.g. the accent-coloured shark fin it sits on).
+  function drawNumber(ctx, n, R, ink, accent, bg) {
+    if (bg) {
+      // Rounded number-board patch: base-paint fill + thin accent keyline.
+      const m = 8, rad = 34;
+      const x0 = R.x + m, y0 = R.y + m, w = R.w - m * 2, h = R.h - m * 2;
+      ctx.beginPath();
+      ctx.moveTo(x0 + rad, y0);
+      ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, rad);
+      ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, rad);
+      ctx.arcTo(x0, y0 + h, x0, y0, rad);
+      ctx.arcTo(x0, y0, x0 + w, y0, rad);
+      ctx.closePath();
+      ctx.fillStyle = css(bg);
+      ctx.fill();
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = cssA(accent, 0.9);
+      ctx.stroke();
+    }
+    const pad = 10;
     const maxH = R.h - pad * 2;
     const maxW = R.w - pad * 2;
-    let size = maxH;
     const text = String(n);
+    const font = (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif";
+    let size = maxH;
     for (; size > 8; size--) {
-      ctx.font = "900 " + size + "px Arial, sans-serif";
+      ctx.font = font(size);
       if (ctx.measureText(text).width <= maxW) break;
     }
     ctx.save();
     ctx.beginPath();
     ctx.rect(R.x, R.y, R.w, R.h);
     ctx.clip();
-    ctx.font = "900 " + size + "px Arial, sans-serif";
+    ctx.font = font(size);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const cx = R.x + R.w / 2, cy = R.y + R.h / 2;
-    // subtle accent outline behind for depth
-    ctx.lineWidth = Math.max(4, size * 0.05);
+    // soft drop shadow (offset dark) for a painted-on depth cue
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.fillText(text, cx + size * 0.03, cy + size * 0.035);
+    // bold accent outline behind the fill
+    ctx.lineWidth = Math.max(6, size * 0.075);
     ctx.strokeStyle = css(accent);
     ctx.lineJoin = "round";
     ctx.strokeText(text, cx, cy);
+    // thin ink keyline hugging the accent for crisp separation
+    ctx.lineWidth = Math.max(2, size * 0.02);
+    ctx.strokeStyle = cssA(ink, 0.55);
+    ctx.strokeText(text, cx, cy);
+    // main fill
     ctx.fillStyle = css(ink);
     ctx.fillText(text, cx, cy);
     ctx.restore();
@@ -594,7 +623,7 @@ const LiveryTex = (function () {
   }
 
   // ── main ─────────────────────────────────────────────────────────────────
-  function buildAtlas(teamId, colors) {
+  function buildAtlas(teamId, colors, numberOverride) {
     const canvas = document.createElement("canvas");
     canvas.width = SIZE;
     canvas.height = SIZE;
@@ -628,9 +657,12 @@ const LiveryTex = (function () {
     drawWordmark(ctx, names[3] + "   " + names[4] + "   " + names[5],
       REGIONS.strip, ink, { align: "center", spacing: 0.04 });
 
-    // Car number.
-    const num = NUMBERS[teamId] != null ? NUMBERS[teamId] : 0;
-    drawNumber(ctx, num, REGIONS.num, ink, accent);
+    // Car number — driver-specific when the caller passes one, else the team's
+    // primary number. Drawn on the base-paint nose flank, so `ink` (chosen to
+    // contrast c1) reads cleanly.
+    const num = numberOverride != null ? numberOverride
+              : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
+    drawNumber(ctx, num, REGIONS.num, ink, accent, c1);
 
     return canvas;
   }

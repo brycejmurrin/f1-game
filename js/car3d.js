@@ -418,15 +418,21 @@ const Car3D = (function () {
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     addBox(out, 0, 0.07 + rideDY, -0.3, 1.5, 0.06, 3.2, CARBON);
 
-    // --- Nose: one crisp tapered wedge, tip to bulkhead (lengthened tip) ---
-    const nF = { z: 2.95, y: 0.29, w: 0.13, h: 0.085, t: 0.75 };
-    const nR = { z: 1.05, y: 0.34, w: 0.46, h: 0.36, t: 0.80 };
-    addSpan(out, nF, nR, c1);
-    addTopBevel(out, nF, nR, 0.030, c1);
+    // --- Nose: a slim 2026-style tip that tapers to a narrow point, widening
+    // back to the bulkhead. Two segments — a low, slender forward tip and a
+    // squarer rear that fairs into the monocoque and carries a FLAT top deck for
+    // the number plate. Slimmer + a touch drooped vs. the old single wedge. ---
+    const nF = { z: 3.18, y: 0.260, w: 0.125, h: 0.080, t: 0.70 };  // slim drooped tip (longer)
+    const nM = { z: 2.00, y: 0.330, w: 0.40, h: 0.255, t: 0.88 };   // wide flat-topped number deck
+    const nR = { z: 1.05, y: 0.365, w: 0.52, h: 0.38, t: 0.84 };    // wider bulkhead
+    addSpan(out, nF, nM, c1);
+    addTopBevel(out, nF, nM, 0.024, c1);
+    addSpan(out, nM, nR, c1);
+    addTopBevel(out, nM, nR, 0.030, c1);
 
     // --- Monocoque: slab from bulkhead to cockpit ---
-    const mF = { z: 1.05, y: 0.36, w: 0.46, h: 0.40, t: 0.80 };
-    const mR = { z: 0.05, y: 0.40, w: 0.62, h: 0.50, t: 0.78 };
+    const mF = { z: 1.05, y: 0.37, w: 0.52, h: 0.40, t: 0.82 };
+    const mR = { z: 0.05, y: 0.40, w: 0.64, h: 0.50, t: 0.78 };
     addSpan(out, mF, mR, c1);
     addTopBevel(out, mF, mR, 0.035, c1);
 
@@ -448,10 +454,15 @@ const Car3D = (function () {
     // stripe + shark fin below) HDR at the top tier — same ">1 albedo glows
     // at night" convention PANEL already uses; plain team colour otherwise.
     const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
-    const hF = ckpt ? { z: 2.35, y: 0.40, w: 0.26, h: 0.11, t: 0.60 }
-                    : { z: 1.00, y: 0.44, w: 0.34, h: 0.10, t: 0.62 };
-    const hR = ckpt ? { z: 0.10, y: 0.72, w: 0.48, h: 0.22, t: 0.56 }
-                    : { z: 0.10, y: 0.60, w: 0.42, h: 0.16, t: 0.58 };
+    // Cockpit view: the hood is a LOW dash cowl that stops BEHIND the nose
+    // number deck (z~1.1) — so the driver looks over the cowl and sees the long
+    // nose stretching out ahead past the steering wheel (with the number on it),
+    // and the raised cockpit shoulders sit either side. A tall/long bulge would
+    // bury the wheel and hide the nose; keep it low and short. Non-ckpt stays sleek.
+    const hF = ckpt ? { z: 1.10, y: 0.44, w: 0.36, h: 0.10, t: 0.66 }
+                    : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
+    const hR = ckpt ? { z: 0.06, y: 0.60, w: 0.54, h: 0.19, t: 0.58 }
+                    : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
     // Accent stripe down the vanity deck crown (team colour).
@@ -465,17 +476,27 @@ const Car3D = (function () {
     // frames a real F1 onboard (see reference). ---
     if (ckpt) {
       for (const s of [-1, 1]) {
-        // A long, wide, sloping shoulder fairing: tallest + widest just IN FRONT
-        // of the driver's eye (z ~0.12, so it frames the lower-left/right of the
-        // onboard view) sweeping down and tapering toward the nose. This is the
-        // big red bodywork "V" of a real F1 onboard.
+        // Survival-cell SIDE WALL: the tall tub edge the driver sits between. It
+        // rises tall right beside/ahead of the eye (z~0.42, framing the wheel
+        // left+right so it reads as a real enclosed cockpit) and tapers DOWN and
+        // outward toward the nose. The rear/headrest portion (z < eye 0.32) sits
+        // behind the camera and never renders, so the visible span is the dash
+        // side that wraps the wheel.
         addBlock(out, [
-          [s*0.26, 0.40, 1.55], [s*0.56, 0.28, 1.55], [s*0.54, 0.44, 1.52], [s*0.26, 0.50, 1.52],  // front (nose end)
-          [s*0.28, 0.40, 0.12], [s*0.62, 0.28, 0.12], [s*0.60, 0.62, 0.06], [s*0.28, 0.58, 0.06],  // rear (narrowed + lowered — was ballooning into the onboard FOV)
+          [s*0.30, 0.34, 1.50], [s*0.56, 0.26, 1.50], [s*0.54, 0.50, 1.46], [s*0.30, 0.56, 1.46],  // front (nose end, low)
+          [s*0.32, 0.44, 0.40], [s*0.55, 0.36, 0.40], [s*0.53, 0.84, 0.34], [s*0.32, 0.88, 0.34],  // rear (beside the wheel, TALL)
         ], c1);
-        // Accent edge stripe along the shoulder crown.
-        addBox(out, s*0.44, 0.54, 0.70, 0.025, 0.025, 1.5, c2);
+        // Crown accent stripe running the top of the tub wall.
+        addBox(out, s*0.45, 0.80, 0.75, 0.03, 0.03, 1.2, c2);
+        // Inner tub wall (dark carbon) facing the driver — the cockpit interior
+        // surface you see on the inside of each side wall.
+        addBox(out, s*0.315, 0.64, 0.52, 0.02, 0.28, 0.60, INTAKE);
       }
+      // Dash coaming: the padded rim across the FRONT of the cockpit opening, just
+      // under the wheel, tying the two side walls together into a tub.
+      addBox(out, 0, 0.62, 0.60, 0.66, 0.14, 0.16, c1);
+      addBox(out, 0, 0.70, 0.56, 0.60, 0.03, 0.05, c2);        // accent lip
+      addBox(out, 0, 0.60, 0.54, 0.52, 0.10, 0.05, INTAKE);    // dark instrument shroud
     } else {
       for (const s of [-1, 1]) {
         addBlock(out, [
@@ -591,9 +612,11 @@ const Car3D = (function () {
       if (!ckpt) addBox(out, 0, 0.55, -1.40, 0.07, 0.02, 0.92, stripeC); // engine-cover tail band
     }
 
-    // --- Nose number plate + camera pod (sit on the curved nose top) ---
-    addBox(out, 0, 0.437, 1.92, 0.18, 0.022, 0.40, PANEL);
-    addBox(out, 0, 0.50, 1.55, 0.06, 0.08, 0.15, DARK);
+    // --- Nose number deck: a flat base-paint panel raised proud of the nose
+    // crown, carrying the driver-number TEXTURE decal (see carDecalData). Base
+    // colour so the decal's own backing/keyline defines it. + a camera pod. ---
+    addBox(out, 0, 0.458, 1.92, 0.34, 0.020, 0.46, c1);
+    addBox(out, 0, 0.52, 1.55, 0.06, 0.08, 0.15, DARK);
 
     // --- Cockpit opening (dark) + halo + front pillar ---
     addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05]);
@@ -604,11 +627,16 @@ const Car3D = (function () {
     addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
     addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
 
-    // --- Side mirrors --- with an HDR marker light on the stalk (blooms at night).
+    // --- Side mirrors --- with an HDR marker light on the stalk (blooms at
+    // night). In cockpit view they're moved FORWARD (ahead of the eye at z0.32)
+    // and out on longer stalks so they read at the sides of the onboard frame
+    // like real F1 wing mirrors; the chase build keeps the tucked position.
+    const mz = ckpt ? 0.62 : 0.24, mx = ckpt ? 0.44 : 0.34, msx = ckpt ? 0.40 : 0.30;
     for (const s of [-1, 1]) {
-      addBox(out, s*0.30, 0.72, 0.24, 0.05, 0.03, 0.07, DARK);
-      addBox(out, s*0.34, 0.73, 0.24, 0.025, 0.13, 0.10, [0.13, 0.13, 0.14]);
-      addBox(out, s*0.335, 0.695, 0.245, 0.02, 0.014, 0.02, [2.1, 1.2, 0.1]); // stalk marker
+      addBox(out, s*msx, 0.72, mz, ckpt ? 0.12 : 0.05, 0.03, 0.07, DARK);   // stalk
+      addBox(out, s*mx, 0.735, mz, 0.03, 0.15, 0.11, [0.13, 0.13, 0.14]);   // housing
+      addBox(out, s*mx, 0.735, mz + 0.06, 0.024, 0.115, 0.02, [0.16, 0.18, 0.24]); // glass
+      addBox(out, s*(mx-0.005), 0.70, mz + 0.005, 0.02, 0.014, 0.02, [2.1, 1.2, 0.1]); // stalk marker
     }
 
     // --- Driver helmet: smooth dome + visor + crown stripe ---
@@ -679,22 +707,9 @@ const Car3D = (function () {
     // Behind the driver — skipped in the cockpit build.
     if (!ckpt) addBox(out, 0, 0.80, -1.20, 0.03, 0.34, 0.85, ersC2);
 
-    // --- Number board: white panel on the shark fin + the driver number in
-    // blocky 7-seg digits, mirrored per side so it reads correctly from both ---
-    const num = (opts && opts.num != null && !ckpt) ? opts.num : null;
-    if (num != null) {
-      addBox(out, 0, 0.82, -1.18, 0.036, 0.22, 0.46, PANEL);
-      const ds = String(Math.abs(num | 0) % 100).split("").map(Number);
-      const pitch = 0.115, dh = 0.15;
-      // m=+1 → the +x (right) face, where a roadside viewer's screen-right is +z;
-      // m=-1 → the -x (left) face (screen-right = -z). Digit layout uses m for
-      // both the reading order and each digit's left/right segments.
-      for (const m of [1, -1]) {
-        const xp = m * 0.022;
-        ds.forEach((d, i) =>
-          addDigit(out, xp, 0.82, -1.18 + m * ((i - (ds.length - 1) / 2) * pitch), dh, m, d, DARK));
-      }
-    }
+    // --- Driver number: now a TEXTURE decal on the nose-top plate (see
+    // carDecalData / the nose number plate below), not blocky 7-seg geometry —
+    // so it reads sharply and shows from the chase, hood AND cockpit cameras. ---
 
     // --- Sponsor boards: white panels on the sidepod flanks + rear-wing endplates ---
     for (const s of [-1, 1]) {
@@ -716,51 +731,57 @@ const Car3D = (function () {
     const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
     const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
 
-    // Front wing: a multi-element CASCADE — a structural main plane plus a stack
-    // of progressively larger flap elements, each a thin wedge (low/forward
-    // leading edge → higher/rearward trailing edge = attack angle) separated by
-    // a visible slot gap. Element count + span + endplate/canard size grow with
-    // aLvl. Half-span reaches the endplate at fwHalf.
-    const fwSpan = aLvl <= 0 ? 0.70 : (aLvl === 1 ? 0.86 : 1.0);
-    const fwHalf = 0.90 * fwSpan;                 // half-span (endplate sits just outside)
+    // Front wing: a multi-element CASCADE — a wide, near-flat structural main
+    // plane plus a stack of progressively larger flap elements, each a thin wedge
+    // (low/forward leading edge → higher/rearward trailing edge = attack angle)
+    // separated by a visible slot gap. The outer thirds sweep UP boldly into tall
+    // arched endplates that flick outboard (2026-style outwash). Element count +
+    // span + endplate/canard size grow with aLvl. Half-span reaches fwHalf.
+    const fwSpan = aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0);
+    const fwHalf = 0.92 * fwSpan;                 // half-span (endplate sits just outside)
     // [zLead, yLead, zTrail, yTrail, chordWMul, thick, colour] — stacked front→back.
     const fwElems = [
-      [2.66, 0.055, 2.42, 0.095, 1.00, 0.028, c1],   // main plane (structural, team base)
-      [2.48, 0.100, 2.26, 0.150, 0.98, 0.026, c2],   // flap 1
+      [2.72, 0.048, 2.40, 0.086, 1.00, 0.032, c1],   // main plane (wide, near-flat, team base)
+      [2.50, 0.092, 2.24, 0.146, 0.98, 0.028, c2],   // flap 1
     ];
-    if (aLvl >= 1) fwElems.push([2.32, 0.150, 2.12, 0.215, 0.95, 0.024, c2]); // flap 2
-    if (aLvl >= 3) fwElems.push([2.18, 0.215, 2.00, 0.285, 0.92, 0.022, c2]); // flap 3
-    if (aLvl >= 4) fwElems.push([2.06, 0.290, 1.90, 0.360, 0.88, 0.020, c2]); // flap 4 (max DF)
+    if (aLvl >= 1) fwElems.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.026, c2]); // flap 2
+    if (aLvl >= 3) fwElems.push([2.20, 0.210, 1.98, 0.282, 0.92, 0.024, c2]); // flap 3
+    if (aLvl >= 4) fwElems.push([2.08, 0.286, 1.88, 0.358, 0.88, 0.022, c2]); // flap 4 (max DF)
     for (const e of fwElems) {
       addSpan(out, { z: e[0], y: e[1], w: 2.0 * fwHalf * e[4], h: e[5] },
                    { z: e[2], y: e[3], w: 1.96 * fwHalf * e[4], h: e[5] * 1.5 }, e[6]);
     }
-    // Curved-up outer tips: the top flap kicks upward as it meets the endplate.
+    // Bold outboard upsweep: the top flap kicks sharply upward as it meets the
+    // endplate — a much more pronounced flick than a flat trailing edge.
     const topE = fwElems[fwElems.length - 1];
     for (const s of [-1, 1]) {
-      addSpan(out, { z: topE[2], x: s * (fwHalf * topE[4] - 0.02), y: topE[3], w: 0.10, h: topE[5] * 1.4 },
-                   { z: topE[2] - 0.02, x: s * (fwHalf + 0.01), y: topE[3] + 0.075, w: 0.06, h: topE[5] * 1.6 }, topE[6]);
+      addSpan(out, { z: topE[2], x: s * (fwHalf * topE[4] - 0.05), y: topE[3], w: 0.16, h: topE[5] * 1.5 },
+                   { z: topE[2] - 0.04, x: s * (fwHalf + 0.02),    y: topE[3] + 0.135, w: 0.09, h: topE[5] * 1.9 }, topE[6]);
     }
     for (const s of [-1, 1]) {
-      const epW = aLvl >= 4 ? 0.055 : (aLvl <= 0 ? 0.024 : 0.038);
-      const epX = s * (fwHalf + 0.02);
-      // Main endplate: tall swept plate that grows rearward.
-      addSpan(out, { z: 2.62, x: epX,          y: 0.155, w: epW, h: 0.22 },
-                   { z: 2.00, x: epX + s*0.03, y: 0.220, w: epW, h: 0.36 }, c2);
+      const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.028 : 0.044);
+      const epX = s * (fwHalf + 0.03);
+      // Main endplate: TALL arched plate that sweeps up and outboard (the outwash
+      // flick) — roughly 1.5× the old height so the wing reads as a real 3-D
+      // structure from any angle rather than a flat slat.
+      addSpan(out, { z: 2.66, x: epX,          y: 0.150, w: epW, h: 0.26 },
+                   { z: 1.98, x: epX + s*0.06, y: 0.300, w: epW, h: 0.52 }, c2);
       // Footplate: the horizontal "foot" kicking outward along the endplate base
       // (the ground-effect seal that reads as a real front-wing foot).
-      addBox(out, epX + s*0.025, 0.055, 2.30, 0.11, 0.014, 0.50, c1);
+      addBox(out, epX + s*0.03, 0.050, 2.30, 0.13, 0.016, 0.54, c1);
       // Canard / dive-plane cascade on the outer face of the endplate — more
       // planes at higher DF (aLvl 1 → one, 3 → two, 4 → three).
       const nCan = aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0));
       for (let i = 0; i < nCan; i++) {
-        const cz = 2.50 - i * 0.17, cy = 0.150 + i * 0.052;
-        addSpan(out, { z: cz,        x: s * (fwHalf - 0.03), y: cy,        w: 0.028, h: 0.11 },
-                     { z: cz - 0.20, x: epX + s*0.035,       y: cy + 0.055, w: 0.028, h: 0.16 }, c1);
+        const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
+        addSpan(out, { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.030, h: 0.12 },
+                     { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.030, h: 0.18 }, c1);
       }
-      // Endplate-tip LED marker (HDR amber → glows and blooms at night).
-      addBox(out, epX + s*0.03, 0.375, 2.02, 0.02, 0.02, 0.022, [2.4, 0.55, 0.06]);
-      addBox(out, s*0.10, 0.20, 2.44, 0.05, 0.17, 0.16, c1);                  // nose pylon
+      // Endplate-crown LED tell-strip: a run of three HDR-amber markers climbing
+      // the swept crown (glows and blooms at night — a clear new light signature).
+      for (let i = 0; i < 3; i++)
+        addBox(out, epX + s*0.05, 0.36 + i*0.075, 2.10 - i*0.06, 0.022, 0.024, 0.03, [2.6, 0.6, 0.06]);
+      addBox(out, s*0.10, 0.19, 2.46, 0.055, 0.20, 0.17, c1);                 // nose pylon
     }
 
     // Bargeboard / turning-vane cluster ahead of the sidepods — per-OPTION
@@ -793,18 +814,21 @@ const Car3D = (function () {
       // continuously with aLvl (lvl 0 = flat low-drag, lvl 4 = towering high-DF),
       // element count grows, high levels add a swan-neck flap + T-wing, `beam`
       // options add a beam wing, and `drs` options open a slotted top gap. ---
-      const rwLift = (aLvl - 2) * 0.085;       // lvl0 -0.17 → lvl4 +0.17
-      const epSY   = 0.24 + aLvl * 0.20;        // lvl0 0.24 → lvl4 1.04
-      const epCY   = 0.82 + rwLift;             // endplate vertical centre
-      // Tall swept endplates with a louvre cut-out cluster near the rear edge and
-      // a team-colour top-rail highlight strip.
+      const rwLift = (aLvl - 2) * 0.095;       // lvl0 -0.19 → lvl4 +0.19 (bolder swing)
+      const epSY   = 0.30 + aLvl * 0.21;        // lvl0 0.30 → lvl4 1.14 (taller plates)
+      const epCY   = 0.86 + rwLift;             // endplate vertical centre
+      // HDR-lit crown accent (team colour pushed >1 so it glows / blooms at night
+      // like a modern rear-wing tell-tale strip).
+      const railLed = [Math.min(2.2, c2[0]*1.7 + 0.25), Math.min(2.2, c2[1]*1.7 + 0.12), Math.min(2.2, c2[2]*1.7 + 0.08)];
+      // Tall SLIM swept endplates with a louvre cut-out cluster near the rear edge
+      // and a glowing top-rail strip along the crown.
       for (const s of [-1, 1]) {
-        addBox(out, s*0.50, epCY, -2.42, 0.05, epSY, 0.52, DARK);
+        addBox(out, s*0.50, epCY, -2.42, 0.045, epSY, 0.54, DARK);
         // Louvre detail: a stack of thin recessed slots near the top-rear corner.
-        for (let i = 0; i < 3; i++)
-          addBox(out, s*0.513, epCY + epSY*0.5 - 0.06 - i*0.06, -2.30, 0.02, 0.016, 0.16, INTAKE);
-        // Top-rail highlight strip (team accent) running the endplate crown.
-        addBox(out, s*0.50, epCY + epSY*0.5, -2.44, 0.055, 0.02, 0.5, c2);
+        for (let i = 0; i < 4; i++)
+          addBox(out, s*0.515, epCY + epSY*0.5 - 0.07 - i*0.06, -2.30, 0.018, 0.016, 0.18, INTAKE);
+        // Glowing top-rail strip (HDR team accent) running the endplate crown.
+        addBox(out, s*0.50, epCY + epSY*0.5, -2.44, 0.050, 0.022, 0.52, railLed);
       }
       // Clean swept two/three-element rear wing (leading edge low/forward →
       // trailing edge high/back). Main plane sits on the endplate centreline.
