@@ -431,9 +431,13 @@ function rebuildSkidBatch() {
 // grazing angles darken the livery toward a deep shade of the same hue and the
 // silhouette catches a thin clamped sky rim — deep gloss that cannot bleach.
 // clearcoat keeps the crisp sun + night-lamp glints of the lacquer shell.
-const PAINT_WET_NIGHT = { emissive: 0.12, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
+// Night emissive 0.20: uEmissive blends toward raw albedo, so this is a 20%
+// self-lit floor on the LIVERY panels — a car seen from behind at night (rear
+// faces get no downward floodlight beam) reads as a car instead of a black
+// void filling the cockpit view. Carbon/tyres (near-black albedo) stay dark.
+const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
 const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
-const PAINT_DRY_NIGHT = { emissive: 0.10, roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.9, carPaint: 1.0 };
+const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.9, carPaint: 1.0 };
 const PAINT_DRY_DAY   = { roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.6, carPaint: 1.0 };
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
 // scratch object (GLX.draw consumes the material synchronously, so one scratch
@@ -491,6 +495,7 @@ function basisMat(r, u, f, p, out) {
 }
 const tmpMat = new Float32Array(16);
 const _cockMat = new Float32Array(16), _cockU = [0, 1, 0];   // stabilized cockpit-interior basis
+const _cockP = [0, 0, 0];   // camera-anchored rig origin (see the cockpit branch)
 const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
 // Pre-allocated scratch matrices — zero-GC hot-path matrix math.
 const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -3056,8 +3061,9 @@ function appendCarTailLights() {
 // Cull the track light set to the nearest 48 to the camera and flatten into
 // `frame.lights`. Called each frame only when the session is at night.
 const _lightCullBuf = [];
+const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
-function setFrameLights(eye, scale) {
+function setFrameLights(eye, scale, fwd) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
@@ -3093,10 +3099,17 @@ function setFrameLights(eye, scale) {
   // distance-rank: select the nearest 32. Reuse a pooled object array + the
   // output buffer so a dense night grid doesn't allocate fresh garbage every
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
+  // Lights BEHIND the camera rank as ~2.5x farther (x6.25 in squared space):
+  // a purely radial nearest-32 wastes half the budget on lamps you can't see,
+  // ending the lit road in a hard dark boundary ~150-250 m ahead that follows
+  // the camera ("hard shadow line that recedes as you approach"). The forward
+  // bias pushes that boundary ~2x further out — past the night fog wall.
+  const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
     const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
-    const d = dx * dx + dy * dy + dz * dz;
+    let d = dx * dx + dy * dy + dz * dz;
+    if (dx * fx + dz * fz < 0) d *= 6.25;
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
   }
@@ -3105,7 +3118,10 @@ function setFrameLights(eye, scale) {
   out.length = 0;
   for (let i = 0; i < 32; i++) {
     const o = buf[i].o;
-    const f = fl(o);
+    // Ease the last-ranked lights toward zero so pools FADE in over ~40 m of
+    // approach instead of popping when a lamp enters/leaves the 32-light set —
+    // the set boundary itself becomes invisible.
+    const f = fl(o) * Math.min(1, (32 - i) / 6);
     out.push(src[o], src[o+1], src[o+2], src[o+3] * sr * f, src[o+4] * sg * f, src[o+5] * sb * f,
       src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13], src[o+14]);
   }
@@ -3123,6 +3139,11 @@ function setFrameLights(eye, scale) {
 // for the drift cam) } — all optional and treated as 0 when absent.
 const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const cvB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+// Cockpit eye offsets from the car origin (fwd along tangent, up in metres).
+// Shared by camVantage() and the camera-anchored cockpit-rig draw in render() —
+// the rig origin is derived by SUBTRACTING these from the live camEye, so the
+// two must stay identical or the driver's eye drifts out of the cockpit.
+const COCKPIT_EYE_FWD = 0.32, COCKPIT_EYE_UP = 0.99;
 function camVantage(mode, s, x, spd, now, extra) {
   extra = extra || {};
   const bankDy = extra.bankDy || 0;
@@ -3169,14 +3190,16 @@ function camVantage(mode, s, x, spd, now, extra) {
     // wheels sit further ahead and the view looks down over them enough to see
     // where they meet the track.
     // Cockpit eyeFwd nudged from 0.02 (almost co-located with the shoulder
-    // fairing's tallest point at z 0.12) toward the fairing so it recedes into
-    // the periphery instead of looming right next to the camera. Capped at
-    // 0.16 (not further): the steering-wheel rig sits at local z 0.41
-    // (drawCockpitRig's _rigT), and the render's near-clip plane is 0.1 — an
-    // eyeFwd above ~0.31 closes that gap under the clip distance and the
-    // wheel vanishes entirely (regression caught by screenshot verification).
-    const eyeFwd = mode === "cockpit" ? 0.16 : 0.55;
-    const eyeUp  = mode === "cockpit" ? 0.99 : 0.95;
+    // fairing's tallest point at z 0.12) to 0.32 — fully past the fairing, so
+    // it recedes into the periphery like a real onboard instead of looming
+    // right next to the camera. The wheel/dash rig moves forward WITH the eye
+    // (_rigT z 0.71, keeping the proven 0.39 m eye-to-wheel gap and clearing
+    // the 0.1 near-clip plane that swallowed the wheel at the old z 0.41).
+    // Value lives in COCKPIT_EYE_FWD/UP — shared with the camera-anchored
+    // cockpit-rig draw, which derives the rig origin from the live camEye
+    // minus these offsets.
+    const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : 0.55;
+    const eyeUp  = mode === "cockpit" ? COCKPIT_EYE_UP : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
       // Face straight FORWARD down the car's own heading (the tangent at the
@@ -3644,7 +3667,9 @@ function render(dt) {
     const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
     const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
     const floodScale = [lvl * (1 + warmth * 0.14), lvl, lvl * (1 - warmth * 0.22)];
-    setFrameLights(camEye, floodScale);
+    // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
+    _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
+    setFrameLights(camEye, floodScale, _lightFwd);
     appendCarTailLights();
   } else {
     frame.lights = null;
@@ -3859,18 +3884,29 @@ function render(dt) {
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
     _sm.set(tmpMat);
     _shadowCount++;
-    // Cockpit view: draw the interior with a STABILIZED basis — the plain track
-    // tangent/right at the car position (+bank dy already in tmpP), WITHOUT the
-    // body's visual yaw/pitch/roll/lean. Those rotate the interior relative to
-    // the fixed onboard camera, swinging dark bodywork across the frame ("black
-    // box when braking/slowing"). This frame matches the camera exactly, so the
-    // cockpit is rock-steady. (Shadow above still uses the real animated tmpMat.)
+    // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
+    // the car's rendered position. Orientation is the stabilized track basis
+    // (plain tangent/right at the car, no visual yaw/pitch/roll/lean), but the
+    // ORIGIN is derived by subtracting the cockpit eye offsets from the live,
+    // final camEye. The eye therefore sits at exactly (COCKPIT_EYE_FWD,
+    // COCKPIT_EYE_UP) in rig space EVERY frame, by construction. Previously the
+    // rig sat at the car's render position while the eye carried collision
+    // SHAKE (±0.45 m on pack contact — race starts, being tapped under braking),
+    // speed vibration, and the damped-lateral (xVis) vs raw-lateral mismatch on
+    // corner entry — any of which shoved the eye inside the black carbon
+    // bodywork ("black box at the start / when braking"). Anchoring the rig to
+    // the eye makes that entire class of clipping impossible: whatever moves
+    // the camera moves the cockpit with it. (Shadow above still uses the real
+    // animated tmpMat at the car's true position.)
     if (c.isPlayer && cockpitRigOnly) {
       const sR = smp2.r, sF = smp2.t;
       _cockU[0] = sR[1]*sF[2] - sR[2]*sF[1];
       _cockU[1] = sR[2]*sF[0] - sR[0]*sF[2];
       _cockU[2] = sR[0]*sF[1] - sR[1]*sF[0];
-      basisMat(sR, _cockU, sF, tmpP, _cockMat);
+      _cockP[0] = camEye[0] - sF[0] * COCKPIT_EYE_FWD;
+      _cockP[1] = camEye[1] - COCKPIT_EYE_UP;
+      _cockP[2] = camEye[2] - sF[2] * COCKPIT_EYE_FWD;
+      basisMat(sR, _cockU, sF, _cockP, _cockMat);
       drawCockpitRig(c, _cockMat, dt, paint);
       continue;
     }
@@ -3905,9 +3941,14 @@ function render(dt) {
         }
       }
     }
-    // FIA rain-light strobe: every car flashes its rear LED in the wet (~4 Hz,
-    // 55% duty). Overlaid on the baked LED panel; the HDR-red quad blooms.
-    if (wet && ((raceT * 4.4) % 1) < 0.55) {
+    // Rear LED: FIA rain-light strobe in the wet (~4 Hz, 55% duty), and STEADY
+    // at night — a car's rear/vertical faces receive none of the downward-aimed
+    // floodlight beams, so from the cockpit a car directly ahead at night was a
+    // pitch-black void filling the windscreen (the "black box at the start /
+    // when braking" — you sit 2 m behind the P11 gearbox on the grid, and you
+    // close right up on the car ahead under braking). The steady red LED gives
+    // every rear an anchor light, like a real night race.
+    if ((wet && ((raceT * 4.4) % 1) < 0.55) || (!wet && night)) {
       const W = _ringWorld;
       W.set(tmpMat);
       // 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight.
