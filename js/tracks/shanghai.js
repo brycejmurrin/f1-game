@@ -264,15 +264,18 @@
       // window bands + parapet so the skyline reads as glass towers, not flat planes.
       // Green-dominant colours render as organic mound silhouettes instead.
       (function skylineBand() {
-        // Middle ring: foreground glass towers, crisp and blue-grey.
-        for (let i = 0; i < 48; i++) {
-          const k = K(i / 48);
+        // Foreground band: LOW hazy mid-rise, greyed toward the sky haze — NOT a
+        // crisp glass metropolis. Real Jiading is suburban; the one sharp skyline
+        // is the distant Pudong cluster (s0.30) below. Shorter, sparser and
+        // pushed back so it reads as a hazy horizon, never looming over the lap.
+        for (let i = 0; i < 26; i++) {
+          const k = K(i / 26);
           const side = (i % 2) ? 1 : -1;
-          const h = 40 + hash(i * 11) * 80;
+          const h = 22 + hash(i * 11) * 30;
           const w = 18 + hash(i * 13) * 16;
-          backdrop(k, side, 190 + hash(i * 5) * 40,
+          backdrop(k, side, 240 + hash(i * 5) * 50,
             [w, h, 22],
-            [GLASS[0] + hash(i * 3) * 0.08, GLASS[1] + hash(i * 7) * 0.06, GLASS[2] + hash(i * 9) * 0.05]);
+            [0.60 + hash(i * 3) * 0.06, 0.63 + hash(i * 7) * 0.05, 0.68 + hash(i * 9) * 0.05]);
         }
         // Back ring: hazier mid-rise blocks receding into the mist.
         for (let i = 0; i < 40; i++) {
@@ -432,9 +435,9 @@
       grandstand(0.845, 1, 28, 60, [0.43, 0.44, 0.49], SEAT);
       // low treeline along the verges behind the stands
       hedge(0.72, 0.88, 1, 55, 3.2, MARSH_N);
-      // sparse green verges
+      // sparse low shrub clumps on the verge (were 0.9 m green box slabs)
       for (let i = 0; i < 4; i++) {
-        place((K(0.74) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, [5, 0.9, 14], MARSH);
+        bush((K(0.74) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, MARSH);
       }
 
       // Lamp posts along the back straight (one side, at regular intervals)
@@ -558,8 +561,10 @@
         const topiarySides = [-1, 1, -1];
         for (let i = 0; i < topiaryFracs.length; i++) {
           const tk = K(topiaryFracs[i]);
-          const at = anchor(tk, topiarySides[i], 50), bt = [at.r, at.u, at.t];
-          addBox(out, vadd(at.c, at.u, 1.2), [5, 3.0, 5], [0.24, 0.38, 0.20], bt);
+          // Rounded clipped topiary shrubs (were 3 m green cubes). A low bush
+          // plus a smaller one set back reads as manicured formal planting.
+          bush(tk, topiarySides[i], 50, [0.22, 0.38, 0.19]);
+          bush(tk, topiarySides[i], 54, [0.24, 0.40, 0.21]);
         }
       })();
 

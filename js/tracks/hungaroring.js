@@ -305,17 +305,24 @@
       }
 
       // ====================================================================
-      // SPARSE CROWD ACCENTS on the natural amphitheatre banking
-      // Small flat props representing spectators on the grassy slopes —
-      // the Hungaroring's famous "hill-viewing" areas.
+      // CROWD ON THE AMPHITHEATRE BANKING — the Hungaroring's famous grassy
+      // "hill-viewing" slopes. Spectators sit ON the banking, so these are LOW
+      // colour patches (a crowd blanket over the grass), NOT tall boxes — the
+      // old 2-3 m slabs read as random blocks littering the hills. Kept sparse
+      // and only on the inner amphitheatre stretches around the stadium/lake.
       // ====================================================================
-      every(30, (kk) => {
+      every(26, (kk) => {
+        const sf = kk / n;
+        // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
+        const inBowl = sf < 0.12 || (sf > 0.32 && sf < 0.62) || sf > 0.88;
+        if (!inBowl) return;
         for (const side of [-1, 1]) {
           const hh = hash(kk * 23 + side * 5);
-          if (hh < 0.40) continue;
-          const base = 32 + hh * 22;
+          if (hh < 0.5) continue;
+          const base = 30 + hh * 18;
           const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
-          prop(kk, side, base, [14, 1.8 + hh * 1.2, 16], col);
+          // Low, wide patch stepping up the slope — a distant crowd, not a slab.
+          prop(kk, side, base, [10 + hh * 8, 0.35 + hh * 0.3, 12 + hh * 6], col);
         }
       });
     },

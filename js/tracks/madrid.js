@@ -30,7 +30,7 @@
               mountain, grandstand, building, tower, tree, bush, hedge,
               billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
               addBox, addCyl, addCone, addPrism, addPyramid, addFrustum,
-              anchor, vadd, cityFront, forestEdge, backdrop } = api;
+              anchor, vadd, cityFront, forestEdge, backdrop, groundPlane } = api;
 
       // ── PALETTE ──────────────────────────────────────────────────────────────
       // Madrid: bright dry Mediterranean day. Warm whites, pale stone, blue sky,
@@ -40,7 +40,9 @@
       const GLASS    = [0.66, 0.78, 0.88];   // sunlit glass curtain wall (ice-blue in sun)
       const LGLASS   = [0.75, 0.85, 0.92];   // brightest highlight glass — reflective facade
       const CONCRETE = [0.74, 0.75, 0.77];   // bare concrete wall / retaining wall
-      const OLIVE    = [0.42, 0.48, 0.30];   // dry Castilian scrub
+      const OLIVE    = [0.42, 0.48, 0.30];   // dry Castilian scrub (olive-green)
+      const STRAW    = [0.78, 0.70, 0.48];   // sun-bleached straw-tan dry plain
+      const STRAW2   = [0.72, 0.64, 0.44];   // deeper straw / turned earth
       const STEEL    = [0.55, 0.58, 0.62];   // galvanised steel / roof beam
       const DKGLASS  = [0.34, 0.44, 0.58];   // deep blue tinted glass — dark faces of towers
       const LITWIN   = [0.80, 0.88, 0.98];   // emissive lit-window tint (near-white blue)
@@ -456,7 +458,19 @@
         }
       }
 
-      // ── (13) DRY CASTILIAN PLAINS filler: straw-tan scrub + olive ───────────
+      // ── (13) DRY CASTILIAN PLAINS: straw-tan open ground + sparse scrub ─────
+      // The defining Madrid contrast is clean white IFEMA boxes against WARM
+      // straw-tan dry plain — not green grass. Lay broad flat straw slabs over
+      // the open stretches (airport plain s≈0.15-0.28, Valdebebas edge s≈0.88-
+      // 0.98) so the ground reads Castilian, then dot it with dry scrub.
+      for (const [f0, f1, side] of [[0.15, 0.28, -1], [0.88, 0.98, -1], [0.20, 0.26, 1]]) {
+        for (let f = f0; f < f1; f += 0.03) {
+          const k = ((Math.round(f * n) % n) + n) % n;
+          const A = anchor(k, side, 40);
+          if (onTrack(A.c[0], A.c[2], 24)) continue;
+          groundPlane(k, side, 24, [70, 90], hash(k * 7) < 0.5 ? STRAW : STRAW2);
+        }
+      }
       for (let i = 0; i < n; i += 4) {
         for (const side of [-1, 1]) {
           if (hash(i * 31 + side) > 0.58) continue;
@@ -465,8 +479,10 @@
           const A = anchor(k, side, d);
           if (onTrack(A.c[0], A.c[2], 20)) continue;
           const r = hash(i * 41 + side);
-          if (r < 0.50) bush(k, side, d, OLIVE);
-          else if (r < 0.78) tree(k, side, d, 5 + hash(i * 53) * 4, OLIVE);
+          // Mostly dry straw-toned scrub; a minority stays olive for variety.
+          const col = r < 0.62 ? [0.62, 0.58, 0.40] : OLIVE;
+          if (r < 0.50) bush(k, side, d, col);
+          else if (r < 0.78) tree(k, side, d, 5 + hash(i * 53) * 4, col);
         }
       }
 

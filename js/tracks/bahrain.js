@@ -100,14 +100,18 @@
         // Two clusters on opposite arcs so the capital reads from more of the lap,
         // plus a couple of taller landmark spires. Pulled closer + taller than
         // before (towers were too faint/narrow to notice).
-        const clusters = [[0.22, 22, 1], [0.66, 12, -1]];   // [arcStart, count, side]
+        // Brief: Sakhir is an ISOLATED desert island — no metropolis. Just a
+        // faint, far hint of the distant capital on ONE arc for the night race,
+        // pushed way back so the dune bands stay the foreground. (Was two dense
+        // 22+12 tower clusters + a full 360 ring — a fabricated skyline.)
+        const clusters = [[0.22, 8, 1]];   // [arcStart, count, side]
         for (const [arc0, count, side] of clusters) {
           for (let i = 0; i < count; i++) {
-            const sFrac = (arc0 + i * 0.018) % 1;
+            const sFrac = (arc0 + i * 0.024) % 1;
             const hf = hash(i * 7 + arc0 * 30), wf = hash(i * 3 + arc0 * 17);
-            const dist = 400 + hash(i * 5 + arc0 * 70) * 170;
+            const dist = 560 + hash(i * 5 + arc0 * 70) * 200;
             const landmark = hash(i * 4.4 + arc0) > 0.86;
-            const w = 9 + wf * 12, h = (landmark ? 130 : 58) + hf * 150, d = w * 1.3;
+            const w = 8 + wf * 9, h = (landmark ? 90 : 40) + hf * 90, d = w * 1.3;
             backdrop(K(sFrac), side, dist, [w, h, d], hash(i * 11 + arc0) > 0.5 ? SKY_SIL : SKY_SIL2);
             if (landmark || hash(i * 13 + 1.7) > 0.5) {
               const a = anchor(K(sFrac), side, dist), bv = [a.r, a.u, a.t];
@@ -524,42 +528,9 @@
             forest: SAND, rock: SAND_LIGHT, snow: DUNE_LIT });
       }
 
-      // ================= DISTANT MANAMA CITY GLOW =================
-      // Sparse Manama skyline ring beyond the dune band.
-      // Inner ring: medium-height buildings with multi-band window treatment.
-      // Outer ring: taller slender towers for skyline depth + slim antennas.
-      const cityRing = rad + 540;
-      const MANAMA_WALL = [0.18, 0.17, 0.24];
-      const MANAMA_MID  = [0.15, 0.15, 0.21];
-
-      for (let i = 0; i < 18; i++) {
-        const ang = i / 18 * 6.2832 + 0.3, hf = hash(i * 17 + 99);
-        const ringR = cityRing + (hf - 0.5) * 80;
-        const x = cx + Math.cos(ang) * ringR, z = cz + Math.sin(ang) * ringR;
-        if (onTrack(x, z, 30)) continue;
-        const bw = 16 + hf * 20, bh = 24 + hf * 36, bd = bw * 0.7;
-        // Main building mass
-        addBox(out, [x, pyMin + bh * 0.5, z], [bw, bh, bd], MANAMA_WALL);
-        // Two amber window bands — lower and upper thirds light up at night
-        addBox(out, [x, pyMin + bh * 0.28, z], [bw * 1.01, bh * 0.14, bd * 1.01], [0.86, 0.72, 0.42]);
-        addBox(out, [x, pyMin + bh * 0.60, z], [bw * 1.01, bh * 0.12, bd * 1.01], [0.90, 0.78, 0.45]);
-        // Warm amber parapet crown
-        addBox(out, [x, pyMin + bh + 0.7, z], [bw * 0.68, 1.8, bd * 0.68], [0.88, 0.74, 0.40]);
-      }
-      // Outer tower ring — taller slender blocks (44–90 m) for skyline variety
-      for (let i = 0; i < 8; i++) {
-        const ang = i / 8 * 6.2832 + 1.1, hf = hash(i * 23 + 7);
-        const x = cx + Math.cos(ang) * (cityRing + 110), z = cz + Math.sin(ang) * (cityRing + 110);
-        if (onTrack(x, z, 22)) continue;
-        const tw = 8 + hf * 8, th = 44 + hf * 46, td = tw * 0.8;
-        addBox(out, [x, pyMin + th * 0.5, z], [tw, th, td], MANAMA_MID);
-        // Cool blue window band mid-height (office tower feel)
-        addBox(out, [x, pyMin + th * 0.55, z], [tw * 1.02, th * 0.22, td * 1.02], [0.50, 0.68, 0.92]);
-        // Warm amber crown beacon
-        addBox(out, [x, pyMin + th + 1.0, z], [tw * 0.5, 2.4, td * 0.5], [0.95, 0.60, 0.22]);
-        // Slim communication antenna
-        addCyl(out, [x, pyMin + th + 3.4, z], 0.18, 14 + hf * 10, [0.30, 0.30, 0.34], 4, null);
-      }
+      // (No encircling Manama city ring: the brief makes Sakhir an isolated
+      // desert island — the mountain() dune bands own the horizon. The single
+      // faint far-capital hint on one arc lives in manamaSkyline() above.)
 
     },
   }

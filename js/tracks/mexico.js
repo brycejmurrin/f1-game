@@ -307,10 +307,13 @@
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 58);
           if (onTrack(a.c[0], a.c[2], 4)) continue;
-          // Three vertical flag stripes on the outer stadium wall
-          addBox(out, vadd(a.c, a.u, 12), [2.5, 22, 2.5], [0.10, 0.58, 0.26], [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 12), [2.5, 22, 2.5], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 12), [2.5, 22, 2.5], [0.86, 0.12, 0.16], [a.r, a.u, a.t]);
+          // Mexican flag: three vertical colour bands SIDE BY SIDE along the
+          // wall (green / white / red). Offset along the tangent so they read as
+          // a striped flag — the old code stacked all three at the same point,
+          // z-fighting into a single colour.
+          const fb = vadd(a.c, a.u, 11);
+          const bands = [[-1, [0.10, 0.58, 0.26]], [0, [0.94, 0.94, 0.92]], [1, [0.86, 0.12, 0.16]]];
+          for (const [j, col] of bands) addBox(out, vadd(fb, a.t, j * 2.4), [1.0, 20, 2.3], col, [a.r, a.u, a.t]);
         }
       });
 
@@ -399,22 +402,23 @@
       });
 
       // ════════════════════════════════════════════════════════════════════════
-      // CACTUS / ARID VEGETATION (saguaro-style, sparse on open sections)
+      // PARKLAND TREES — the Autódromo sits inside the leafy Magdalena Mixhuca
+      // sports park, NOT a desert. Broadleaf park trees on the open sections
+      // (the old code scattered green saguaro cacti — wrong biome, and the
+      // horizontal addBox cross-arm floated as a box).
       // ════════════════════════════════════════════════════════════════════════
-      every(18, (k) => {
+      every(16, (k) => {
         for (const side of [1, -1]) {
           const s = k / n;
-          if (s > 0.04 && s < 0.50) continue;   // park/city section
+          if (s > 0.04 && s < 0.50) continue;   // park/city section handled elsewhere
           if (s > 0.70 && s < 0.90) continue;   // stadium section
           if (hash(k * 57 + side) > 0.62) continue;
-          const d = 32 + hash(k * 63 + side) * 35;
+          const d = 30 + hash(k * 63 + side) * 34;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
-          const h = 4.8 + hash(k * 67 + side) * 3.2;
-          // Saguaro trunk
-          addCyl(out, p.c, 1.3, h, [0.28, 0.40, 0.20], 6, [p.r, p.u, p.t]);
-          // Horizontal cross-arm
-          addBox(out, vadd(p.c, p.u, h * 0.65), [4.8, 1.1, 1.4], [0.28, 0.40, 0.20], [p.r, p.u, p.t]);
+          const r = hash(k * 67 + side);
+          tree(k, side, d, 6.5 + r * 4.5, [0.15 + r * 0.07, 0.34 + r * 0.06, 0.17]);
+          if (r > 0.62) tree(k, side, d + 5 + r * 6, 5 + r * 3, [0.17, 0.32, 0.16]);
         }
       });
 
