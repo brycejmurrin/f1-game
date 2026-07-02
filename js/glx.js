@@ -63,6 +63,7 @@ uniform vec3 uSkyZenith;
 uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
 uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
+uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
@@ -298,6 +299,7 @@ void main() {
   // lobe gives physical highlights — elongated wet-road speculars, glass glints,
   // car-paint sparkle — replacing all the old hand-tuned lobe/glint hacks.
   // No per-light shadows (cost); the cone shapes the light instead.
+  vec3 lampFog = vec3(0.0);
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
     vec3 LP = uLightPos[i] - vWorldPos;
@@ -323,6 +325,11 @@ void main() {
     // high when wet (streaks from every visible lamp), lower when dry so a dry
     // night road keeps pool/valley contrast instead of a uniform specular sheet.
     float spotS = mix(mix(0.16, 0.30, wet), 1.0, beam);
+    // Fog in-scatter: lamp irradiance reaching the fog column at this surface.
+    // Windowed 1/d2 falloff (att) with a partial out-of-beam floor so the lens
+    // glows the fog all around, brightest down the throw. Consumed by the fog
+    // and ground-mist tints below - everything here is already computed.
+    lampFog += uLightCol[i] * (att * mix(0.35, 1.0, beam));
     float NoLl = max(dot(N, Ld), 0.0);
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
@@ -487,6 +494,19 @@ void main() {
   // adds a hot bloom right at the sun.
   vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmount, 4.0));
   fogCol += uSunColor * pow(sunAmount, 16.0) * 0.6;
+  // GLOWING FOG: nearby lamps tint the fog itself, so fog banks glow around
+  // floodlights and neon at night. Soft-clipped so a lamp cluster can never
+  // push the fog wall past the night bloom threshold into a white wash; the
+  // mix by f below gates it, so clear air (f near 0) gets no halo. Energy
+  // split with the godray pass: godray owns the NEAR air column (Beer-Lambert
+  // decay + range gate), this tint owns the DISTANT fog wall (f grows with
+  // distance) - the two never stack in the same regime.
+  vec3 lampFogC = vec3(0.0);
+  if (uLampFog > 0.0) {
+    vec3 lf = lampFog * uLampFog;
+    lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * 0.7);
+    fogCol += lampFogC;
+  }
   color = mix(color, fogCol, f);
   // Low-lying GROUND MIST: a drifting FBM fog that pools near the surface (dawn /
   // humid / overcast). Densest at a low datum, thinning with altitude and ramping
@@ -498,7 +518,7 @@ void main() {
     vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
     float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
     float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
-    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0));
+    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0)) + lampFogC * 1.5;
     color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
   }
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
@@ -1089,7 +1109,7 @@ void main() {
   float dist = length(rd);
   rd /= max(dist, 1e-4);
   float march = min(dist, 260.0);          // cap the march length
-  const int N = 24;
+  const int N = 32;
   float stepLen = march / float(N);
   // Jitter the start with interleaved-gradient noise to hide banding.
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -1108,7 +1128,7 @@ void main() {
     vec3 p = ro + rd * td;
     trans *= exp(-stepLen * 0.010);
     float hSun  = exp(-max(p.y - groundY, 0.0) * 0.03);   // sun shafts reach higher
-    float hLamp = exp(-max(p.y - groundY, 0.0) * 0.10);   // lamp haze hugs the road
+    float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);   // lamp haze hugs the road (taller beams)
     vec4 lc = uLightVP * vec4(p, 1.0);
     vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
     float lit = 1.0;
@@ -1120,7 +1140,7 @@ void main() {
     // shaped by its aimed cone + falloff (same math as the lit shader's pools),
     // weighted per lamp type (uLightVolW). Range-limited: beams read near the
     // camera; distant cone-crossings were the source of sky-streak noise.
-    if (uLampStr > 0.0 && td < 110.0) {
+    if (uLampStr > 0.0 && td < 200.0) {
       for (int li = 0; li < GR_MAX_LIGHTS; li++) {
         if (li >= uNumLights) break;
         vec3 LP = uLightPos[li] - p;
@@ -1809,7 +1829,7 @@ void main() {}`;
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uTime", "uCloudCover",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -1973,6 +1993,7 @@ void main() {}`;
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
     gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
     gl.uniform1f(litU.uGroundMist,  frame.groundMist != null ? frame.groundMist : 0.0);
+    gl.uniform1f(litU.uLampFog,     frame.lampFog != null ? frame.lampFog : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);

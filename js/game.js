@@ -2943,6 +2943,15 @@ function render(dt) {
     const rig = buildStudioRig();
     if (rig) frame.lights = rig;
   }
+  // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
+  // fog-weather night is the money shot while a clear night keeps only a hint.
+  // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
+  // BRIGHTNESS (not elevation - the night key stays above the horizon for sky
+  // glow): at dawn/dusk the sun in-scatter already lights the mist, and lamp
+  // glow on top blew the dawn mist band out.
+  const _lfSun = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+  const _lfGate = clamp((0.55 - _lfSun) / 0.30, 0, 1);
+  frame.lampFog = frame.lights ? Math.min(0.9, 0.45 + 0.6 * (frame.groundMist || 0)) * _lfGate : 0;
 
   if (dbgCam) {
     const bf = frame.fogDensity;
@@ -3235,7 +3244,7 @@ function render(dt) {
   // Always a subtle beam glow whenever lamps are on (clear night air still
   // scatters a little), swelling with haze/rain into full volumetric shafts —
   // and coloured per lamp, so neon-spill lights throw coloured beams.
-  const _lampVol = frame.lights ? clamp(0.05 + 0.55 * _mist, 0, 0.55) : 0;
+  const _lampVol = frame.lights ? clamp(0.05 + 0.65 * _mist, 0, 0.70) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
@@ -5360,6 +5369,11 @@ window.__apex = {
       rainCanvas.style.display = "none";
     }
     if (soundOn) { if (raceWeather === "rain") GameAudio.startRain(); else GameAudio.stopRain(); }
+    // Re-apply the frame lighting NOW: without this a live weather change only
+    // moved the wetness ramp / rain overlay — the cloud cover, muted sun,
+    // ambient lift, fog density and exposure branches in applyRaceSettings
+    // silently kept the previous weather (fog looked like a clear day).
+    if (track) applyRaceSettings();
     return raceWeather;
   },
 
