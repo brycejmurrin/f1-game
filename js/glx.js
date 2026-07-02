@@ -994,6 +994,45 @@ void main() {
   gl_Position = uViewProj * vec4(aPos, 1.0);
 }`;
 
+  // ---- Textured car decals (team logos / sponsors) ----
+  // Flat UV'd quads sitting slightly proud of the bodywork, sampling a canvas-
+  // baked RGBA atlas (transparent where there's no mark). Lit by sun + hemisphere
+  // ambient so a decal sits INTO the paint's shading instead of floating flat;
+  // uDecalGlow lifts bright marks so white sponsors read at night.
+  const DECAL_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec2 aUV;
+uniform mat4 uModel;
+uniform mat4 uViewProj;
+out vec2 vUV;
+out vec3 vNrm;
+void main() {
+  vUV = aUV;
+  vNrm = mat3(uModel) * aNrm;
+  gl_Position = uViewProj * uModel * vec4(aPos, 1.0);
+}`;
+  const DECAL_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+in vec3 vNrm;
+uniform sampler2D uTex;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uAmbSky;
+uniform vec3 uAmbGround;
+uniform float uGlow;
+out vec4 outColor;
+void main() {
+  vec4 t = texture(uTex, vUV);
+  if (t.a < 0.02) discard;
+  vec3 N = normalize(vNrm);
+  float ndl = max(dot(N, uSunDir), 0.0);
+  vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
+  vec3 lit = t.rgb * (amb + uSunColor * ndl) + t.rgb * uGlow;
+  outColor = vec4(lit, t.a);
+}`;
+
   // ---- Lamp lens glare (round veiling halo at each lamp head) ----
   // A camera-facing quad per lamp, drawn ADDITIVELY into the HDR scene before
   // bloom. Purely RADIAL: a hot core + a soft round veil, like real lens glare.
@@ -1778,6 +1817,8 @@ void main() {}`;
   let frameSkyHi = null;
   let frameSkyLo = null;
   let frameSunColor = null;
+  let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal lighting
+  let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
   let frameTime = 0, frameCloud = 0;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
   let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null, blackTex = null;
@@ -2144,6 +2185,8 @@ void main() {
     markProg = link(SHADOW_VS, MARK_FS);
     markBatchProg = link(MARK_BATCH_VS, MARK_FS);
     glowProg = link(GLOW_VS, GLOW_FS);
+    decalProg = link(DECAL_VS, DECAL_FS);
+    decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
 
     postEnabled = initPost();   // best-effort; false -> render straight to screen
@@ -2289,6 +2332,82 @@ void main() {
     return { vao, vbo, ib, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
   }
 
+  // Textured decal mesh: interleaved [x,y,z, nx,ny,nz, u,v], stride 32 (no colour).
+  function createTexMesh(data) {
+    const pos = toF32(data.pos), nrm = toF32(data.nrm), uv = toF32(data.uv);
+    const vCount = pos.length / 3;
+    const big = vCount > 65535;
+    let idx = data.idx;
+    idx = (idx instanceof Uint16Array || idx instanceof Uint32Array)
+      ? (big && idx instanceof Uint16Array ? new Uint32Array(idx) : idx)
+      : (big ? new Uint32Array(idx) : new Uint16Array(idx));
+    const inter = new Float32Array(vCount * 8);
+    for (let i = 0; i < vCount; i++) {
+      inter[i*8  ] = pos[i*3  ]; inter[i*8+1] = pos[i*3+1]; inter[i*8+2] = pos[i*3+2];
+      inter[i*8+3] = nrm[i*3  ]; inter[i*8+4] = nrm[i*3+1]; inter[i*8+5] = nrm[i*3+2];
+      inter[i*8+6] = uv[i*2  ];  inter[i*8+7] = uv[i*2+1];
+    }
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, inter, gl.STATIC_DRAW);
+    const stride = 32;
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 24);
+    const ib = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    _activeVAO = null;
+    return { vao, vbo, ib, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
+  }
+  // Upload a canvas / ImageBitmap / ImageData as an RGBA texture (mipmapped, clamped).
+  function createTexture(src) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return tex;
+  }
+  function freeTexture(t) { if (t) gl.deleteTexture(t); }
+  // Draw textured decals over the just-drawn car body: depth test ON, depth write
+  // OFF (decals are proud of the panel so they never z-fight), alpha-blended, and
+  // the alpha channel is NOT written (the car's SSR paint tag underneath survives).
+  function drawDecal(mesh, modelMat, tex, opts) {
+    if (!decalProg || !mesh || !tex) return;
+    useProg(decalProg);
+    gl.uniformMatrix4fv(decalU.uModel, false, modelMat);
+    gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
+    gl.uniform3fv(decalU.uSunDir, frameSunDir);
+    gl.uniform3fv(decalU.uSunColor, frameSunColor);
+    gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
+    gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
+    gl.uniform1f(decalU.uGlow, (opts && opts.glow) || 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(decalU.uTex, 0);
+    setBlend(true);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    setDepthMask(false);
+    gl.disable(gl.CULL_FACE);                 // decals are single quads — draw both faces
+    gl.colorMask(true, true, true, false);    // keep the SSR alpha tag underneath
+    bindVAO(mesh.vao);
+    gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    gl.colorMask(true, true, true, true);
+    gl.enable(gl.CULL_FACE);
+    setDepthMask(true);
+  }
+
   function begin(frame) {
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
@@ -2301,6 +2420,8 @@ void main() {
     frameUpVS = frame.upViewDir || null;
     frameSkyHi = frame.skyHorizon || [0.05, 0.06, 0.09];
     frameSkyLo = frame.skyZenith || [0.02, 0.025, 0.05];
+    frameAmbSky = frame.ambientSky || [0.3, 0.32, 0.36];
+    frameAmbGround = frame.ambientGround || [0.2, 0.19, 0.18];
     frameTime = frame.time != null ? frame.time : 0;
     frameCloud = frame.cloud != null ? frame.cloud : 0;
     frameLights = frame.lights || null;
@@ -3060,6 +3181,10 @@ void main() {
     init,
     resize,
     createMesh,
+    createTexMesh,
+    createTexture,
+    freeTexture,
+    drawDecal,
     createChunkedMesh,
     freeMesh,
     freeChunkedMesh,

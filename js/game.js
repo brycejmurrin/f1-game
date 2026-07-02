@@ -689,6 +689,60 @@ function teamMesh(team) {
   return teamMeshes[key];
 }
 
+// ---------- Car decals (team logo + sponsor textures on the bodywork) ----------
+// ONE shared decal-quad mesh (fixed panel UVs into the LiveryTex atlas layout);
+// the per-team atlas TEXTURE carries the actual logos/sponsors, so the geometry
+// is team-independent. Drawn over the painted body each frame (GLX.drawDecal).
+let _carDecalMesh = null;
+function carDecalData() {
+  const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+  const out = { pos: [], nrm: [], uv: [], idx: [] };
+  // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
+  const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
+  // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
+  const quad = (c, n, region) => {
+    const u = uvOf(region), i = out.pos.length / 3;
+    const uvs = [[u.uL, u.vB], [u.uR, u.vB], [u.uR, u.vT], [u.uL, u.vT]];
+    for (let k = 0; k < 4; k++) { out.pos.push(c[k][0], c[k][1], c[k][2]); out.nrm.push(n[0], n[1], n[2]); out.uv.push(uvs[k][0], uvs[k][1]); }
+    out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  };
+  // Sidepod flanks → primary sponsor. Right side reads front→back; left mirrors so
+  // the wordmark is upright on both flanks. zF=front(+Z), zR=rear(−Z).
+  const yB = 0.19, yT = 0.45, zF = 0.46, zR = -0.34;
+  quad([[0.715, yB, zF], [0.715, yB, zR], [0.715, yT, zR], [0.715, yT, zF]], [1, 0, 0], R.titleA);
+  quad([[-0.715, yB, zR], [-0.715, yB, zF], [-0.715, yT, zF], [-0.715, yT, zR]], [-1, 0, 0], R.titleA);
+  // Engine-cover top → team crest (reads from the chase cam; top = toward the tail).
+  quad([[-0.15, 0.565, -0.62], [0.15, 0.565, -0.62], [0.15, 0.6, -1.28], [-0.15, 0.6, -1.28]], [0, 1, 0.06], R.crest);
+  // Nose top → secondary sponsor (top = toward the nose tip).
+  quad([[-0.13, 0.452, 1.5], [0.13, 0.452, 1.5], [0.11, 0.452, 2.06], [-0.11, 0.452, 2.06]], [0, 1, 0.05], R.titleB);
+  // Sidepod lower flank → long sponsor strip.
+  quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
+  quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
+  return out;
+}
+function getCarDecalMesh() {
+  if (typeof LiveryTex === "undefined" || !GLX.createTexMesh) return null;
+  if (!_carDecalMesh) _carDecalMesh = GLX.createTexMesh(carDecalData());
+  return _carDecalMesh;
+}
+const _decalTexCache = {};
+function getCarDecalTexture(team) {
+  if (typeof LiveryTex === "undefined" || !GLX.createTexture) return null;
+  const key = team.id + ":" + getLiveryId(team.id);
+  if (!(key in _decalTexCache)) {
+    let t = null;
+    try { t = GLX.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team))); }
+    catch (e) { t = null; }
+    _decalTexCache[key] = t;
+  }
+  return _decalTexCache[key];
+}
+// Draw a car's logo/sponsor decals with the same model matrix as its body.
+function drawCarDecals(team, modelMat, night) {
+  const mesh = getCarDecalMesh(), tex = getCarDecalTexture(team);
+  if (mesh && tex) GLX.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
+}
+
 // Player car gets animated wheels: a body-only mesh + four separate wheel meshes
 // the render layer spins (∝ speed) and steers (fronts). Only for the procedural
 // car — a loaded glb model is one piece, so playerBodyMesh returns null and the
@@ -3565,6 +3619,7 @@ function renderSetupPreview(dt) {
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   GLX.draw(getSetupPreviewMesh(), M4.ident(), spMat);
+  drawCarDecals(Teams.LIST[teamIdx], M4.ident(), false);
   GLX.present();
 }
 
@@ -4134,9 +4189,11 @@ function render(dt) {
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
       GLX.draw(body, tmpMat, paint);
+      drawCarDecals(c.team, tmpMat, night);
       drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0 });
     } else {
       GLX.draw(teamMesh(c.team), tmpMat, paint);
+      drawCarDecals(c.team, tmpMat, night);
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
       // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
