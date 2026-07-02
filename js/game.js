@@ -5607,9 +5607,19 @@ function exitPhotoMode() {
   dbgCam = null;                          // hand the game camera back
   document.body.classList.remove("photo-mode");
   $("photo-controls").hidden = true;
+  $("lighting-inner").hidden = false;     // un-hide the tuner if it was tucked away
+  const pb = $("pc-panel"); if (pb) pb.textContent = "HIDE PANEL";
   const t = $("pc-toggle"); if (t) { t.classList.remove("on"); t.innerHTML = "📷 FREE CAMERA"; }
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
+}
+// Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
+function togglePhotoPanel() {
+  const p = $("lighting-inner"); if (!p) return;
+  const hide = !p.hidden;
+  p.hidden = hide;
+  const pb = $("pc-panel"); if (pb) pb.textContent = hide ? "SHOW PANEL" : "HIDE PANEL";
+  if (soundOn) GameAudio.uiTick();
 }
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
 function photoKeyHandler(e) {
@@ -5682,6 +5692,7 @@ wirePhotoHold("pc-down", () => photoAlt = -1, () => photoAlt = 0);
 }
 $("pc-toggle").onclick = () => { if (soundOn) GameAudio.uiSelect(); photoMode ? exitPhotoMode() : enterPhotoMode(); };
 $("pc-exit").onclick = () => { if (soundOn) GameAudio.uiTick(); exitPhotoMode(); };
+$("pc-panel").onclick = togglePhotoPanel;
 $("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
 $("lt-help-on").onchange = (e) => {
   document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);
