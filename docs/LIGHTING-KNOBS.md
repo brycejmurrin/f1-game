@@ -7,11 +7,32 @@ string, an alternate value, a canonical scene, and an expected metric
 direction.
 
 ```sh
-node tools/ab-lighting.mjs list          # the catalog
+node tools/ab-lighting.mjs list          # the catalog (marks which knobs are value-sweepable)
 node tools/ab-lighting.mjs run all       # render A/B for every knob → scratch/ab/
 node tools/ab-lighting.mjs run lampFog.base pcss.penScale
 npm run test:ab                          # fast invariants + catalog integrity
 ```
+
+## Dialling a value in (the tuning loop)
+
+```sh
+node tools/ab-lighting.mjs sweep lamp.radius 24 30 40   # render candidates → labelled strip + metrics
+node tools/ab-lighting.mjs try lamp.bleed "<full replacement string>"   # structural knobs
+node tools/ab-lighting.mjs apply lamp.radius 40         # adopt the winner
+```
+
+`sweep` works on any knob whose `find`/`b` differ by exactly one number (the
+`list` output marks these `sweepable=<current>`); it renders the scene once
+per candidate and writes a side-by-side strip plus the watched metric for
+each. Structural knobs take `try` with a full replacement string instead.
+
+`apply` is the write step, and it does three things atomically: swaps the
+value into the real source file (only if the find-string is still unique),
+self-syncs this catalog (the applied value becomes the new `find`, the old
+value becomes the new `b`, edits confined to that knob's own entry — so the
+catalog-integrity test stays green and the knob now A/Bs the reverse), and
+bumps the `?v=` cache version in index.html. After applying: re-render the
+knob to confirm, `npm run test:ab`, commit.
 
 The harness serves the repo through an in-memory server and swaps the knob's
 source string for variant B — the working tree is never modified, and the same

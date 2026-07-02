@@ -88,7 +88,9 @@ test("night light budget: lamps on at night, off by day, exposure per table", as
   expect(night.exposure).toBeCloseTo(0.90, 1);   // desert night
   expect(night.floodEmit).toBeCloseTo(0.78, 2);  // prop emissive ramp
   await page.evaluate(() => window.__apex.setTimeOfDay("day"));
-  await page.waitForTimeout(2500);
+  // The night->day flip rebuilds track props; wait on the actual state instead
+  // of a fixed sleep (the rebuild time varies under test-worker contention).
+  await page.waitForFunction(() => window.__apex.lightState().numLights === 0, { timeout: 30000 });
   const day = await page.evaluate(() => window.__apex.lightState());
   expect(day.numLights).toBe(0);
 });

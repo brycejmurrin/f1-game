@@ -345,18 +345,186 @@ async function composite(page, aPath, bPath, outPath, label) {
   writeFileSync(outPath, Buffer.from(buf, "base64"));
 }
 
+// ── Dial-in support ──────────────────────────────────────────────────────────
+// Many knobs differ from their B by exactly ONE number (radius: 34 vs 24).
+// numericSlot() detects that: it splits find/b on numbers and, when the token
+// structure matches with a single differing numeric, returns a template that
+// builds a variant string for ANY candidate value — that's what `sweep` uses.
+const NUM_RE = /-?\d+\.?\d*/g;
+function numericSlot(find, b) {
+  const shape = (s) => s.replace(NUM_RE, "#");
+  if (shape(find) !== shape(b)) return null;              // structural change, not a single value
+  const nf = find.match(NUM_RE) || [], nb = b.match(NUM_RE) || [];
+  const diffs = nf.map((v, i) => (v !== nb[i] ? i : -1)).filter((i) => i >= 0);
+  if (diffs.length !== 1) return null;
+  const slot = diffs[0];
+  const parts = find.split(NUM_RE);
+  return {
+    current: nf[slot],
+    make: (val) => {
+      let out = "", ni = 0;
+      const nums = find.match(NUM_RE);
+      for (let i = 0; i < parts.length; i++) {
+        out += parts[i];
+        if (ni < nums.length) { out += (ni === slot ? String(val) : nums[ni]); ni++; }
+      }
+      return out;
+    },
+  };
+}
+
+// Horizontal comparison strip: baseline + each variant, labelled.
+async function strip(page, entries, outPath) {
+  const imgs = entries.map((e) => ({ b64: readFileSync(e.path).toString("base64"), label: e.label }));
+  const buf = await page.evaluate(async (imgs) => {
+    const load = (s) => { const i = new Image(); i.src = "data:image/jpeg;base64," + s; return i.decode().then(() => i); };
+    const loaded = await Promise.all(imgs.map((e) => load(e.b64)));
+    const w = loaded[0].width, h = loaded[0].height, pad = 6;
+    const c = document.createElement("canvas");
+    c.width = (w + pad) * loaded.length - pad; c.height = h + 24;
+    const cx = c.getContext("2d");
+    cx.fillStyle = "#000"; cx.fillRect(0, 0, c.width, c.height);
+    loaded.forEach((im, i) => {
+      cx.drawImage(im, i * (w + pad), 0);
+      cx.fillStyle = "#fff"; cx.font = "14px sans-serif";
+      cx.fillText(imgs[i].label, i * (w + pad) + 8, h + 17);
+    });
+    return c.toDataURL("image/jpeg", 0.62).split(",")[1];
+  }, imgs);
+  writeFileSync(outPath, Buffer.from(buf, "base64"));
+}
+
+const USAGE = `usage:
+  ab-lighting.mjs list                          knob catalog
+  ab-lighting.mjs run <id...|all> [--out dir]   A/B every listed knob (gated)
+  ab-lighting.mjs sweep <id> <v1> <v2> ...      render the knob at several VALUES
+                                                (single-number knobs) -> strip + metrics
+  ab-lighting.mjs try <id> "<replacement>"      render one custom replacement vs current
+  ab-lighting.mjs apply <id> [value|"<repl>"]   WRITE the chosen value into the source
+                                                file, keep this catalog in sync, and
+                                                bump the index.html cache version`;
+
 async function main() {
   const [cmd = "list", ...rest] = process.argv.slice(2);
   if (cmd === "list") {
-    for (const k of KNOBS) console.log(`${k.id.padEnd(24)} ${k.file.padEnd(12)} scene=${k.scene.padEnd(11)} watch ${(k.expect.region + "." + k.expect.metric).padEnd(14)} ${k.note}`);
-    console.log(`\n${KNOBS.length} knobs. Run: node tools/ab-lighting.mjs run all`);
+    for (const k of KNOBS) {
+      const slot = numericSlot(k.find, k.b);
+      console.log(`${k.id.padEnd(24)} ${k.file.padEnd(12)} scene=${k.scene.padEnd(11)} ${slot ? ("sweepable=" + slot.current).padEnd(15) : "structural     "} ${k.note}`);
+    }
+    console.log(`\n${KNOBS.length} knobs. ` + USAGE.split("\n")[1].trim());
     return;
   }
-  if (cmd !== "run") { console.error("usage: ab-lighting.mjs list | run <id...|all> [--out dir]"); process.exit(2); }
+
+  // ── apply: write a chosen value into the real source + self-sync catalog ──
+  if (cmd === "apply") {
+    const knob = KNOBS.find((k) => k.id === rest[0]);
+    if (!knob) { console.error("unknown knob " + rest[0] + "\n" + USAGE); process.exit(2); }
+    const slot = numericSlot(knob.find, knob.b);
+    let replacement;
+    if (rest[1] == null) replacement = knob.b;
+    else if (slot && /^-?\d+\.?\d*$/.test(rest[1])) replacement = slot.make(rest[1]);
+    else replacement = rest[1];
+    if (replacement === knob.find) { console.log("apply: replacement is identical to current — nothing to do"); return; }
+
+    // 1. Write the game source (find must still be unique).
+    const srcPath = `${ROOT}/${knob.file}`;
+    const src = readFileSync(srcPath, "utf8");
+    const hits = src.split(knob.find).length - 1;
+    if (hits !== 1) { console.error(`apply: find-string matches ${hits}x in ${knob.file} — catalog is stale, fix it first`); process.exit(1); }
+    writeFileSync(srcPath, src.replace(knob.find, replacement));
+
+    // 2. Self-sync THIS catalog: the applied value becomes the new `find`; the
+    //    old value becomes the new `b` (so the knob now A/Bs the reverse) —
+    //    keeping tests/lighting-ab.spec.js catalog-integrity green. All edits
+    //    are confined to THIS knob's own entry (located by its id) so a short
+    //    literal shared with another knob can never be corrupted, and the swap
+    //    happens even when the applied value IS the current b (a placeholder
+    //    keeps the two replacements from colliding).
+    const selfPath = `${ROOT}/tools/ab-lighting.mjs`;
+    const self = readFileSync(selfPath, "utf8");
+    const findLit = JSON.stringify(knob.find), bLit = JSON.stringify(knob.b);
+    const idTag = `id: ${JSON.stringify(knob.id)}`;
+    const iStart = self.indexOf(idTag);
+    let iEnd = self.indexOf("\n  { ", iStart + 1);
+    if (iEnd < 0) iEnd = self.indexOf("\n];", iStart + 1);
+    if (iStart < 0 || iEnd < 0 || !self.slice(iStart, iEnd).includes(findLit)) {
+      console.error("apply: could not locate the knob's catalog entry for self-sync — update it by hand");
+      process.exit(1);
+    }
+    let seg = self.slice(iStart, iEnd).replace(findLit, "\u0001AB_APPLY\u0001");
+    if (seg.includes(bLit)) seg = seg.replace(bLit, findLit);
+    seg = seg.replace("\u0001AB_APPLY\u0001", JSON.stringify(replacement));
+    writeFileSync(selfPath, self.slice(0, iStart) + seg + self.slice(iEnd));
+
+    // 3. Cache-bust: a js/ file changed, so browsers must refetch.
+    const idxPath = `${ROOT}/index.html`;
+    let idx = readFileSync(idxPath, "utf8");
+    const ver = Math.max(...[...idx.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]));
+    idx = idx.replace(/\?v=\d+/g, `?v=${ver + 1}`);
+    writeFileSync(idxPath, idx);
+
+    console.log(`applied ${knob.id}:`);
+    console.log(`  ${knob.file}:  ${knob.find}`);
+    console.log(`  ->             ${replacement}`);
+    console.log(`  catalog self-synced (find<->b swapped); index.html cache ?v=${ver} -> ?v=${ver + 1}`);
+    console.log(`  next: re-render to confirm (run ${knob.id}), then npm run test:ab before committing`);
+    return;
+  }
+
+  if (cmd !== "run" && cmd !== "sweep" && cmd !== "try") { console.error(USAGE); process.exit(2); }
 
   const outIx = rest.indexOf("--out");
   const outDir = outIx >= 0 ? rest.splice(outIx, 2)[1] : `${ROOT}/scratch/ab`;
   mkdirSync(outDir, { recursive: true });
+
+  // ── sweep / try: render one knob at several candidate values ──
+  if (cmd === "sweep" || cmd === "try") {
+    const knob = KNOBS.find((k) => k.id === rest[0]);
+    if (!knob) { console.error("unknown knob " + rest[0] + "\n" + USAGE); process.exit(2); }
+    let variants;   // [{ label, replacement }]
+    if (cmd === "try") {
+      if (!rest[1]) { console.error("try needs a replacement string\n" + USAGE); process.exit(2); }
+      variants = [{ label: "try", replacement: rest[1] }];
+    } else {
+      const slot = numericSlot(knob.find, knob.b);
+      if (!slot) { console.error(`${knob.id} is a STRUCTURAL knob (find/b differ by more than one number) — use try with a full replacement string`); process.exit(2); }
+      const vals = rest.slice(1);
+      if (!vals.length) { console.error("sweep needs candidate values, e.g. sweep lamp.radius 24 30 34 40"); process.exit(2); }
+      variants = vals.map((v) => ({ label: String(v), replacement: slot.make(v) }));
+    }
+    const browser = await chromium.launch({
+      executablePath: chrome(),
+      args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
+    });
+    const meterPage = await browser.newPage();
+    const scene = SCENES[knob.scene];
+    const { srv: baseSrv, port: basePort } = await startServer(null);
+    const basePath = `${outDir}/sweep-${knob.id.replace(/[^a-z0-9.]/gi, "_")}-base.jpg`;
+    await renderScene(browser, basePort, scene, basePath);
+    baseSrv.close();
+    const mBase = await measure(meterPage, basePath);
+    const { region, metric } = knob.expect;
+    const slotInfo = numericSlot(knob.find, knob.b);
+    const entries = [{ path: basePath, label: `current${slotInfo ? " (" + slotInfo.current + ")" : ""}` }];
+    console.log(`${"current".padEnd(10)} ${region}.${metric}=${mBase[region][metric].toFixed(2)}  frame.mean=${mBase.frame.mean.toFixed(2)}`);
+    for (const v of variants) {
+      if (v.replacement === knob.find) { console.log(`${v.label.padEnd(10)} = current, skipped`); continue; }
+      const { srv, port } = await startServer({ [knob.file]: [knob.find, v.replacement] });
+      const p = `${outDir}/sweep-${knob.id.replace(/[^a-z0-9.]/gi, "_")}-${v.label.replace(/[^a-z0-9.-]/gi, "_")}.jpg`;
+      await renderScene(browser, port, scene, p);
+      srv.close();
+      const m = await measure(meterPage, p);
+      const d = await frameDiff(meterPage, basePath, p);
+      entries.push({ path: p, label: v.label });
+      console.log(`${v.label.padEnd(10)} ${region}.${metric}=${m[region][metric].toFixed(2)}  frame.mean=${m.frame.mean.toFixed(2)}  diff-vs-current=${d.toFixed(2)}`);
+    }
+    const stripPath = `${outDir}/sweep-${knob.id.replace(/[^a-z0-9.]/gi, "_")}.jpg`;
+    await strip(meterPage, entries, stripPath);
+    await browser.close();
+    console.log(`\nstrip: ${stripPath}`);
+    console.log(`pick a value, then: node tools/ab-lighting.mjs apply ${knob.id} <value>`);
+    return;
+  }
   const ids = rest.length && rest[0] !== "all" ? rest : KNOBS.map((k) => k.id);
   const knobs = ids.map((id) => KNOBS.find((k) => k.id === id) || (() => { throw new Error("unknown knob " + id); })());
 
