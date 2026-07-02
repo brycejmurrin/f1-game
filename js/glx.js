@@ -146,7 +146,15 @@ float cloudShadow(vec3 wp) {
 float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
-  if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z >= 1.0) return 1.0;
+  if (sc.z >= 1.0) return 1.0;
+  // Edge fade: the shadow map is a ~55 m box snapped to the camera, so a hard
+  // in/out cutoff at its border draws a bright "shadow line" across the road
+  // ~55 m ahead that visibly RECEDES as you drive (the box follows you). Ramp
+  // the shadow contribution to zero over the outer ~12% of the box instead, so
+  // distant shadows dissolve into a soft gradient rather than a moving edge.
+  vec2 ef = smoothstep(0.0, 0.12, sc.xy) * (1.0 - smoothstep(0.88, 1.0, sc.xy));
+  float edgeFade = ef.x * ef.y;
+  if (edgeFade <= 0.0) return 1.0;
   float t = uShadowTexel;
   // Slope-scale bias: gentle base + steeper slope term reduces both acne and
   // peter-panning on angled surfaces (walls, banking kerbs). tan(acos(c)) done
@@ -190,7 +198,7 @@ float sampleShadow(vec3 wpos) {
   } else {
     sh = s * 0.25;
   }
-  return mix(1.0, sh, uShadowStr);
+  return mix(1.0, sh, uShadowStr * edgeFade);
 }
 
 void main() {

@@ -3573,9 +3573,11 @@ function render(dt) {
     if (snapX !== _shadowSnapX || snapZ !== _shadowSnapZ) {
       _shadowSnapX = snapX; _shadowSnapZ = snapZ;
       M4.lookAtTo(_mLView, [snapX + sd[0] * 150, cy + sd[1] * 150, snapZ + sd[2] * 150], [snapX, cy, snapZ], up);
-      // Tighter box than the old 140 m: +27% texel density (5.4 cm/texel) for
-      // crisper contacts; the finer 10 m snap keeps coverage seamless.
-      M4.orthoTo(_mLProj, -55, 55, -55, 55, 1.0, 320);
+      // ±64 m box (128 m): pushes the shadow-coverage boundary further out into
+      // the dusk haze so its soft edge-fade (see sampleShadow) is even less
+      // noticeable, while the 10 m snap keeps coverage seamless. ~6.3 cm/texel —
+      // still crisp contacts, a touch softer than the old ±55 m.
+      M4.orthoTo(_mLProj, -64, 64, -64, 64, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
       GLX.shadowBegin(_mLVP);
       GLX.castShadow(track.meshes.terrain, MAT_IDENT);
