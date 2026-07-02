@@ -692,6 +692,7 @@ function getCockpitWheel() {
     _rigBox(out, bx, by, -0.026, 0.02, 0.02, 0.012, BTN[bi++]);
   _rigBox(out, -0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);  // rotary knobs
   _rigBox(out,  0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);
+  _rigBox(out, 0.098, 0.082, -0.026, 0.022, 0.014, 0.010, [0.05, 0.05, 0.06]);  // OT lamp (off)
   // Shift paddles: wide blades poking out past the rim behind the wheel.
   const PADL = [0.11, 0.11, 0.125];
   _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
@@ -763,6 +764,15 @@ function getErsBar() {
   _ersBarMesh = GLX.createMesh(out);
   return _ersBarMesh;
 }
+let _otArmedMesh = null, _otActiveMesh = null;
+function getOtLamp(active) {
+  if (active ? _otActiveMesh : _otArmedMesh) return active ? _otActiveMesh : _otArmedMesh;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  _rigBox(out, 0.098, 0.082, -0.028, 0.022, 0.014, 0.010, active ? [1.6, 0.5, 2.2] : [1.2, 1.2, 1.3]);
+  const m = GLX.createMesh(out);
+  if (active) _otActiveMesh = m; else _otArmedMesh = m;
+  return m;
+}
 let _thrBarMesh = null, _brkBarMesh = null;
 function getPedalBar(brake) {
   if (brake ? _brkBarMesh : _thrBarMesh) return brake ? _brkBarMesh : _thrBarMesh;
@@ -783,7 +793,7 @@ function cockpitBodyMesh(team) {
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
 // steering roll + per-element LCD offsets.
-const _rigT = new Float32Array([0.92,0,0,0, 0,0.92,0,0, 0,0,0.92,0, 0,0.80,0.41,1]);
+const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.83,0.41,1]);
 const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
 const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -841,6 +851,14 @@ function drawCockpitRig(c, base, dt, paint) {
     GLX.draw(getErsBar(), _digM, c.deploying
       ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.75 + 0.25 * Math.sin(raceT * 22) }
       : fx);
+  }
+  // OVERTAKE lamp on the wheel: white when armed, pulsing purple while active
+  // (the floating HUD OVERTAKE text is hidden in cockpit view).
+  if (c.otT > 0) {
+    GLX.draw(getOtLamp(true), _rigB, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true,
+      alpha: 0.7 + 0.3 * Math.sin(raceT * 18) });
+  } else if (c.otArmed) {
+    GLX.draw(getOtLamp(false), _rigB, fx);
   }
   _digT[12] = _digT[13] = _digT[14] = 0;
 }
