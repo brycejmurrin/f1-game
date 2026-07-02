@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=413">
-<link rel="stylesheet" href="css/data.css?v=413">
+<link rel="stylesheet" href="css/style.css?v=416">
+<link rel="stylesheet" href="css/data.css?v=416">
 <script>
 // ── SHELL VERSION GUARD ──────────────────────────────────────────────────────
 // index.html is the ONE file with no ?v= cache-buster on itself, so an installed
@@ -238,19 +238,22 @@
 <div id="carsetup" hidden>
   <div id="cs-inner">
     <div id="cs-header">
-      <div id="cs-title">
+      <div id="cs-titlebar">
         <h2>CAR SETUP</h2>
         <div id="cs-team"></div>
-        <div id="cs-budget-wrap">
-          <div id="cs-budget-bar"><div id="cs-budget-fill"></div></div>
+      </div>
+      <div id="cs-budget-wrap">
+        <div id="cs-budget-bar"><div id="cs-budget-fill"></div></div>
+        <div id="cs-budget-row">
           <div id="cs-budget"></div>
           <button id="cs-unlimited" class="cs-unlimited-btn">&#8734; FREE BUILD</button>
         </div>
       </div>
       <div id="cs-stats-inner"></div>
     </div>
-    <div id="cs-body"></div>
-    <div class="sel-actions" style="margin-top:20px">
+    <div id="cs-tabs"></div>
+    <div id="cs-options"></div>
+    <div class="sel-actions">
       <button id="cs-done" class="bigbtn">DONE</button>
     </div>
   </div>
@@ -430,46 +433,46 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=413"></script>
-<script src="js/glx.js?v=413"></script>
-<script src="js/gltf.js?v=413"></script>
-<script src="js/teams.js?v=413"></script>
-<script src="js/circuits.js?v=413"></script>
+<script src="js/mat4.js?v=416"></script>
+<script src="js/glx.js?v=416"></script>
+<script src="js/gltf.js?v=416"></script>
+<script src="js/teams.js?v=416"></script>
+<script src="js/circuits.js?v=416"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=413"></script>
-<script src="js/tracks/monaco.js?v=413"></script>
-<script src="js/tracks/silverstone.js?v=413"></script>
-<script src="js/tracks/spa.js?v=413"></script>
-<script src="js/tracks/monza.js?v=413"></script>
-<script src="js/tracks/suzuka.js?v=413"></script>
-<script src="js/tracks/singapore.js?v=413"></script>
-<script src="js/tracks/cota.js?v=413"></script>
-<script src="js/tracks/interlagos.js?v=413"></script>
-<script src="js/tracks/vegas.js?v=413"></script>
-<script src="js/tracks/madrid.js?v=413"></script>
-<script src="js/tracks/zandvoort.js?v=413"></script>
-<script src="js/tracks/jeddah.js?v=413"></script>
-<script src="js/tracks/albert_park.js?v=413"></script>
-<script src="js/tracks/shanghai.js?v=413"></script>
-<script src="js/tracks/miami.js?v=413"></script>
-<script src="js/tracks/imola.js?v=413"></script>
-<script src="js/tracks/montreal.js?v=413"></script>
-<script src="js/tracks/redbull.js?v=413"></script>
-<script src="js/tracks/hungaroring.js?v=413"></script>
-<script src="js/tracks/baku.js?v=413"></script>
-<script src="js/tracks/mexico.js?v=413"></script>
-<script src="js/tracks/qatar.js?v=413"></script>
-<script src="js/tracks/abudhabi.js?v=413"></script>
-<script src="js/tracks.js?v=413"></script>
-<script src="js/trackmaps.js?v=413"></script>
-<script src="js/car3d.js?v=413"></script>
-<script src="js/input.js?v=413"></script>
-<script src="js/audio.js?v=413"></script>
-<script src="js/api.js?v=413"></script>
-<script src="js/data.js?v=413"></script>
-<script src="js/parts.js?v=413"></script>
-<script src="js/ghost.js?v=413"></script>
-<script src="js/light-presets.js?v=413"></script>
-<script src="js/game.js?v=413"></script>
+<script src="js/tracks/bahrain.js?v=416"></script>
+<script src="js/tracks/monaco.js?v=416"></script>
+<script src="js/tracks/silverstone.js?v=416"></script>
+<script src="js/tracks/spa.js?v=416"></script>
+<script src="js/tracks/monza.js?v=416"></script>
+<script src="js/tracks/suzuka.js?v=416"></script>
+<script src="js/tracks/singapore.js?v=416"></script>
+<script src="js/tracks/cota.js?v=416"></script>
+<script src="js/tracks/interlagos.js?v=416"></script>
+<script src="js/tracks/vegas.js?v=416"></script>
+<script src="js/tracks/madrid.js?v=416"></script>
+<script src="js/tracks/zandvoort.js?v=416"></script>
+<script src="js/tracks/jeddah.js?v=416"></script>
+<script src="js/tracks/albert_park.js?v=416"></script>
+<script src="js/tracks/shanghai.js?v=416"></script>
+<script src="js/tracks/miami.js?v=416"></script>
+<script src="js/tracks/imola.js?v=416"></script>
+<script src="js/tracks/montreal.js?v=416"></script>
+<script src="js/tracks/redbull.js?v=416"></script>
+<script src="js/tracks/hungaroring.js?v=416"></script>
+<script src="js/tracks/baku.js?v=416"></script>
+<script src="js/tracks/mexico.js?v=416"></script>
+<script src="js/tracks/qatar.js?v=416"></script>
+<script src="js/tracks/abudhabi.js?v=416"></script>
+<script src="js/tracks.js?v=416"></script>
+<script src="js/trackmaps.js?v=416"></script>
+<script src="js/car3d.js?v=416"></script>
+<script src="js/input.js?v=416"></script>
+<script src="js/audio.js?v=416"></script>
+<script src="js/api.js?v=416"></script>
+<script src="js/data.js?v=416"></script>
+<script src="js/parts.js?v=416"></script>
+<script src="js/ghost.js?v=416"></script>
+<script src="js/light-presets.js?v=416"></script>
+<script src="js/game.js?v=416"></script>
 </body>
 </html>

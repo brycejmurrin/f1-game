@@ -258,7 +258,7 @@ const Car3D = (function () {
     const suspT = tier("suspension");
 
     // --- Floor plank (flat) --- SUSPENSION tier shifts ride height.
-    const rideDY = suspT === 0 ? 0.015 : (suspT === 2 ? -0.012 : 0);
+    const rideDY = suspT === 0 ? 0.060 : (suspT === 2 ? -0.048 : 0);
     addBox(out, 0, 0.07 + rideDY, -0.3, 1.5, 0.06, 3.2, CARBON);
 
     // --- Nose: one crisp tapered wedge, tip to bulkhead (lengthened tip) ---
@@ -335,24 +335,26 @@ const Car3D = (function () {
       // Airbox: trapezoid block above the cockpit (dark intake front).
       // ENGINE tier scales the intake mouth (small/lean at 0, flared at 2).
       const engT = tier("engine");
-      const inW = engT === 0 ? 0.85 : (engT === 2 ? 1.2 : 1.0);
-      const inH = engT === 0 ? 0.85 : (engT === 2 ? 1.15 : 1.0);
+      const inW = engT === 0 ? 0.52 : (engT === 2 ? 1.65 : 1.0);
+      const inH = engT === 0 ? 0.52 : (engT === 2 ? 1.55 : 1.0);
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inW, h: 0.20 * inH, t: 0.55 },
                    { z: -0.75, y: 0.74, w: 0.26 * inW, h: 0.18 * inH, t: 0.55 }, c1, INTAKE);
       // Engine cover: roof-ridge prism sloping to the tail
       addSpan(out, { z: -0.55, y: 0.52, w: 0.56, h: 0.62, t: 0.0 },
                    { z: -2.00, y: 0.42, w: 0.26, h: 0.34, t: 0.0 }, c1, c1);
       if (engT === 2) {
-        // Cooling louvre strips on the engine-cover flanks (pure addition).
-        for (const s of [-1, 1]) {
-          addBox(out, s*0.20, 0.58, -1.10, 0.015, 0.10, 0.60, CARBON);
-        }
+        // Big-spec power unit tells: a raised airbox snorkel cresting behind the
+        // roll hoop + cooling-louvre strips on the engine-cover flanks.
+        addSpan(out, { z: -0.18, y: 0.94, w: 0.13, h: 0.11, t: 0.5 },
+                     { z: -0.62, y: 0.86, w: 0.11, h: 0.09, t: 0.5 }, c1, INTAKE);
+        for (const s of [-1, 1]) addBox(out, s*0.20, 0.58, -1.10, 0.015, 0.10, 0.60, CARBON);
       }
-      // FUEL filler flap: small panel near the airbox intake, drawn at every
-      // tier (colour tells the story — near-invisible dark at low/mid, a
-      // violet accent at top tier) so its presence is a consistent tell.
-      const fuelColor = tier("fuel") === 2 ? [0.55, 0.15, 0.85] : DARK;
-      addBox(out, 0.12, 0.78, -0.58, 0.05, 0.03, 0.08, fuelColor);
+      // FUEL tier 2: a bright HDR-violet filler panel (glows at night) + cap;
+      // plain dark at lower tiers.
+      const fuelHi = tier("fuel") === 2;
+      const fuelColor = fuelHi ? [0.95, 0.28, 1.5] : [0.22, 0.20, 0.26];
+      addBox(out, 0.13, 0.80, -0.55, 0.07, 0.04, 0.15, fuelColor);
+      if (fuelHi) addBox(out, 0.13, 0.86, -0.55, 0.04, 0.03, 0.05, fuelColor);
     }
 
     // --- Sidepods: rectangular slabs — angled inlet undercut, coke-bottle taper ---
@@ -368,6 +370,12 @@ const Car3D = (function () {
       // Sponsor panel decal on the pod flank + floor edge accent strip
       addBox(out, s*0.665, 0.30, -0.12, 0.02, 0.18, 0.55, PANEL);
       addBox(out, s*0.60, 0.10, -0.10, 0.02, 0.08, 0.72, c2);
+    }
+
+    // ERS tier 2: bright battery-pack accent strakes along the sidepod flanks
+    // (HDR accent colour → glows and blooms at night); nothing extra otherwise.
+    if (tier("ers") === 2) {
+      for (const s of [-1, 1]) addBox(out, s*0.688, 0.36, -0.12, 0.02, 0.07, 0.55, ersC2);
     }
 
     // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
@@ -414,8 +422,13 @@ const Car3D = (function () {
       addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
     }
 
-    // --- Exhaust outlet poking from the tail cap ---
-    addBox(out, 0, 0.40, -2.12, 0.07, 0.07, 0.16, [0.16, 0.16, 0.17]);
+    // --- Exhaust outlet poking from the tail cap --- ENGINE tier: a lone slim
+    // pipe at low spec, a fat central tailpipe flanked by two extra tips at top.
+    const exhR = tier("engine") === 0 ? 0.05 : (tier("engine") === 2 ? 0.09 : 0.07);
+    addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17]);
+    if (tier("engine") === 2) {
+      for (const s of [-1, 1]) addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, [0.16, 0.16, 0.17]);
+    }
 
     // --- Shark fin + engine-cover accent (flat, team accent colour) ---
     // Behind the driver — skipped in the cockpit build.
@@ -450,8 +463,8 @@ const Car3D = (function () {
     // from the nose instead of floating. AERO visualTier reshapes element
     // count / endplate size / dive-plane reach (tier 1 = today's baseline). ---
     const aeroT = tier("aero");
-    const mainWF = aeroT === 0 ? 1.80 * 0.85 : 1.80;
-    const mainWR = aeroT === 0 ? 1.76 * 0.85 : 1.76;
+    const mainWF = aeroT === 0 ? 1.80 * 0.70 : 1.80;
+    const mainWR = aeroT === 0 ? 1.76 * 0.70 : 1.76;
     addSpan(out, { z: 2.64, y: 0.070, w: mainWF, h: 0.028 },
                  { z: 2.28, y: 0.105, w: mainWR, h: 0.048 }, c2);   // main plane
     addSpan(out, { z: 2.36, y: 0.135, w: 1.70, h: 0.024 },
@@ -460,16 +473,29 @@ const Car3D = (function () {
       addSpan(out, { z: 2.20, y: 0.220, w: 1.60, h: 0.022 },
                    { z: 2.00, y: 0.285, w: 1.56, h: 0.030 }, c2);   // flap 2 (dropped at tier 0)
     }
+    if (aeroT === 2) {
+      addSpan(out, { z: 2.06, y: 0.300, w: 1.50, h: 0.020 },
+                   { z: 1.90, y: 0.362, w: 1.46, h: 0.028 }, c2);   // flap 3 (high-DF stack only)
+    }
     for (const s of [-1, 1]) {
-      const epW = aeroT === 2 ? 0.045 : 0.035;
+      const epW = aeroT === 2 ? 0.060 : (aeroT === 0 ? 0.025 : 0.035);
       addSpan(out, { z: 2.62, x: s*0.895, y: 0.155, w: epW, h: 0.22 },
                    { z: 2.02, x: s*0.925, y: 0.215, w: epW, h: 0.35 }, c2); // swept endplate
       if (aeroT !== 0) {
-        const dpMul = aeroT === 2 ? 1.3 : 1.0;
+        const dpMul = aeroT === 2 ? 1.6 : 1.0;
         addSpan(out, { z: 2.50, x: s*0.72, y: 0.145, w: 0.030, h: 0.16 * dpMul },
                      { z: 2.16, x: s*0.74, y: 0.215, w: 0.030, h: 0.24 * dpMul }, c2);  // dive plane (dropped at tier 0)
       }
       addBox(out, s*0.10, 0.20, 2.44, 0.05, 0.17, 0.16, c1);                  // nose pylon
+    }
+
+    // AERO tier 2 only: bargeboard fences ahead of the sidepods — a busy
+    // "full aero kit" tell, absent at lower tiers. Chase view only.
+    if (!ckpt && aeroT === 2) {
+      for (const s of [-1, 1]) {
+        addBox(out, s*0.73, 0.30, 0.98, 0.02, 0.22, 0.34, CARBON);
+        addBox(out, s*0.66, 0.26, 0.72, 0.02, 0.17, 0.30, CARBON);
+      }
     }
 
     // --- Rear assembly: wing, DRS pod, rain light, diffuser, gearbox strakes,
@@ -478,23 +504,32 @@ const Car3D = (function () {
     // behind the seat should exist in the first-person body, so no transform
     // edge case can ever swing rear bodywork across the onboard camera. ---
     if (!ckpt) {
-      // --- Rear wing: tall endplates + 2-element plane + beam wing (flat).
-      // AERO visualTier reshapes endplate height / element count / DRS pod. ---
-      const epSY = aeroT === 0 ? 0.45 : (aeroT === 2 ? 0.72 : 0.62);
+      // --- Rear wing: the single biggest aero tell. The whole assembly lifts
+      // with tier (rwLift) and the endplates grow, so tier 0 is a low, skinny
+      // low-drag wing and tier 2 a towering high-DF stack (Monza vs Monaco). ---
+      const rwLift = aeroT === 0 ? -0.15 : (aeroT === 2 ? 0.17 : 0);
+      const epSY   = aeroT === 0 ? 0.26  : (aeroT === 2 ? 1.05 : 0.62);
       for (const s of [-1, 1]) {
-        addBox(out, s*0.50, 0.82, -2.42, 0.05, epSY, 0.52, DARK);
+        addBox(out, s*0.50, 0.82 + rwLift, -2.42, 0.05, epSY, 0.52, DARK);
       }
       // Angled rear-wing elements (leading edge low/forward → trailing high/back)
-      addSpan(out, { z: -2.38, y: 1.005, w: 1.02, h: 0.035 },
-                   { z: -2.64, y: 1.075, w: 1.02, h: 0.050 }, c2);  // upper element
+      addSpan(out, { z: -2.38, y: 1.005 + rwLift, w: 1.02, h: 0.035 },
+                   { z: -2.64, y: 1.075 + rwLift, w: 1.02, h: 0.050 }, c2);  // upper element
       if (aeroT !== 0) {
-        addSpan(out, { z: -2.34, y: 0.900, w: 1.02, h: 0.030 },
-                     { z: -2.56, y: 0.955, w: 1.02, h: 0.042 }, c2);  // mid element (dropped at tier 0)
+        addSpan(out, { z: -2.34, y: 0.900 + rwLift, w: 1.02, h: 0.030 },
+                     { z: -2.56, y: 0.955 + rwLift, w: 1.02, h: 0.042 }, c2);  // mid element (dropped at tier 0)
       }
-      addSpan(out, { z: -2.30, y: 0.805, w: 1.02, h: 0.028 },
-                   { z: -2.50, y: 0.850, w: 1.02, h: 0.038 }, c1);  // lower element
+      addSpan(out, { z: -2.30, y: 0.805 + rwLift, w: 1.02, h: 0.028 },
+                   { z: -2.50, y: 0.850 + rwLift, w: 1.02, h: 0.038 }, c1);  // lower element
+      if (aeroT === 2) {
+        // High-downforce spec: a swan-neck top flap standing proud above the
+        // main plane + a T-wing ahead of it — the tall-wing Monaco silhouette.
+        addSpan(out, { z: -2.42, y: 1.170 + rwLift, w: 1.00, h: 0.030 },
+                     { z: -2.66, y: 1.250 + rwLift, w: 1.00, h: 0.044 }, c2);  // extra top element
+        addBox(out, 0, 1.02, -1.98, 0.34, 0.02, 0.09, c2);            // T-wing
+      }
       const drsSX = aeroT === 2 ? 0.13 : 0.10;
-      addBox(out, 0, 1.085, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
+      addBox(out, 0, 1.085 + rwLift, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
 
       // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
       // structure. The >1 albedo glows through the night emissive path (and blooms),
@@ -503,16 +538,16 @@ const Car3D = (function () {
       addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03, [2.6, 0.08, 0.06]);
 
       // --- Rear diffuser --- AERO visualTier scales width + front kick-up height.
-      const diffW  = aeroT === 0 ? 0.9 : (aeroT === 2 ? 1.15 : 1.0);
-      const diffH1 = aeroT === 0 ? 0.7 : (aeroT === 2 ? 1.3 : 1.0);
+      const diffW  = aeroT === 0 ? 0.8 : (aeroT === 2 ? 1.3 : 1.0);
+      const diffH1 = aeroT === 0 ? 0.5 : (aeroT === 2 ? 1.7 : 1.0);
       addLoft(out, -2.7, 0, 0.24, 1.40 * diffW, 0.36, -1.90, 0, 0.12, 1.05 * diffW, 0.14 * diffH1,
               [0.06, 0.06, 0.07]);
 
-      // --- Gearbox visual tell: thin carbon diffuser strakes (tier 2 only, pure
-      // addition — absent at tier 0/1, matching today's bare diffuser). ---
+      // --- Gearbox visual tell: five taller carbon diffuser strakes (tier 2
+      // only, pure addition — absent at tier 0/1). ---
       if (tier("gearbox") === 2) {
-        for (const fx of [-0.45, -0.15, 0.15, 0.45]) {
-          addBox(out, fx, 0.20, -2.20, 0.015, 0.08, 0.40, CARBON);
+        for (const fx of [-0.50, -0.25, 0, 0.25, 0.50]) {
+          addBox(out, fx, 0.19, -2.20, 0.015, 0.13, 0.42, CARBON);
         }
       }
     }
@@ -520,9 +555,11 @@ const Car3D = (function () {
     // --- Brake duct fairings (front + rear wheels) --- BRAKES tier scales duct size.
     // Cockpit build keeps only the FRONT ducts (visible beside the front tyres).
     const brakesT = tier("brakes");
-    const ductMul = brakesT === 0 ? 0.8 : (brakesT === 2 ? 1.25 : 1.0);
+    const ductMul = brakesT === 0 ? 0.5 : (brakesT === 2 ? 1.9 : 1.0);
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, 1.89, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
+      // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
+      if (brakesT === 2) addBox(out, s*0.65, 0.42, 1.86, 0.11, 0.02, 0.15, CARBON);
       if (!ckpt) addBox(out, s*0.58, 0.30, -1.80, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
     }
 

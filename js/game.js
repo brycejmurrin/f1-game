@@ -4422,6 +4422,7 @@ function renderStatBars(container, team) {
   }
 }
 
+let csActiveCat = null;   // id of the category tab currently open in CAR SETUP
 function buildSetup() {
   const team = Teams.LIST[teamIdx];
   const parts = getTeamParts(team.id);
@@ -4465,93 +4466,113 @@ function buildSetup() {
     unlimitedBtn.className = "cs-unlimited-btn" + (unlimitedBudget ? " on" : "");
   }
 
-  const body = $("cs-body");
-  body.textContent = "";
+  // Which category tab is open — persisted across rebuilds; default to the first.
+  if (!csActiveCat || !Parts.CATALOG.some((c) => c.id === csActiveCat)) csActiveCat = Parts.CATALOG[0].id;
+  const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
 
+  // Resolve the currently-fitted option for a category (respecting supplier lock).
+  const resolveOpt = (cat) => {
+    const id = parts[cat.id] || Parts.DEFAULTS[cat.id];
+    return cat.options.find((o) => o.id === id && (!o.supplier || o.supplier === team.engine))
+        || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
+  };
+
+  // ---- Category tabs (one row, horizontally scrollable) ----
+  const tabs = $("cs-tabs");
+  tabs.textContent = "";
   for (const cat of Parts.CATALOG) {
-    const section = document.createElement("div");
-    section.className = "cs-cat-section";
-
-    const catLbl = document.createElement("div");
-    catLbl.className = "cs-cat";
-    catLbl.textContent = cat.label;
-    section.appendChild(catLbl);
-
-    const desc = document.createElement("div");
-    desc.className = "cs-desc";
-    const curId = parts[cat.id] || Parts.DEFAULTS[cat.id];
-    // Resolve active option respecting supplier lock
-    const curOpt = cat.options.find((o) => o.id === curId && (!o.supplier || o.supplier === team.engine))
-                || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
-    desc.textContent = curOpt ? curOpt.desc : "";
-    section.appendChild(desc);
-
-    const chips = document.createElement("div");
-    chips.className = "cs-chips";
-    for (const opt of cat.options) {
-      // Hide exclusive options belonging to other suppliers
-      if (opt.supplier && opt.supplier !== team.engine) continue;
-
-      const active = curOpt && curOpt.id === opt.id;
-      const curCost = curOpt ? (curOpt.cost || 0) : 0;
-      const costDelta = (opt.cost || 0) - curCost;
-      const wouldExceed = !active && !unlimitedBudget && (spent + costDelta > Parts.BUDGET);
-
-      const chip = document.createElement("button");
-      chip.className = "cs-chip"
-        + (active ? " active" : "")
-        + (wouldExceed ? " over-budget" : "")
-        + (opt.tag ? " exclusive" : "");
-
-      const labelSpan = document.createElement("span");
-      labelSpan.textContent = opt.label;
-      chip.appendChild(labelSpan);
-
-      if (opt.tag) {
-        const tagBadge = document.createElement("span");
-        tagBadge.className = "cs-chip-tag";
-        tagBadge.textContent = opt.tag;
-        chip.appendChild(tagBadge);
-      } else if (opt.cost > 0) {
-        const badge = document.createElement("span");
-        badge.className = "cs-chip-cost";
-        badge.textContent = opt.cost + "cr";
-        chip.appendChild(badge);
-      }
-
-      chip.addEventListener("mouseenter", () => { desc.textContent = opt.desc; });
-      chip.addEventListener("focus",      () => { desc.textContent = opt.desc; });
-      chip.addEventListener("mouseleave", () => {
-        const c = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
-        desc.textContent = c ? c.desc : "";
-      });
-      chip.addEventListener("blur", () => {
-        const c = cat.options.find((o) => o.id === (getTeamParts(team.id)[cat.id] || Parts.DEFAULTS[cat.id]));
-        desc.textContent = c ? c.desc : "";
-      });
-
-      chip.onclick = () => {
-        const p = getTeamParts(team.id);
-        const co = cat.options.find((o) => o.id === (p[cat.id] || Parts.DEFAULTS[cat.id]));
-        const cc = co ? (co.cost || 0) : 0;
-        if (!unlimitedBudget && (Parts.getCost(p, team.engine) - cc + (opt.cost || 0)) > Parts.BUDGET) {
-          chip.classList.add("budget-reject");
-          chip.addEventListener("animationend", () => chip.classList.remove("budget-reject"), { once: true });
-          if (soundOn) GameAudio.uiTick();
-          return;
-        }
-        p[cat.id] = opt.id;
-        saveTeamParts(team.id, p);
-        if (soundOn) GameAudio.uiTick();
-        buildSetup();
-      };
-
-      chips.appendChild(chip);
-    }
-    section.appendChild(chips);
-    body.appendChild(section);
+    const cur = resolveOpt(cat);
+    const upgraded = cur && cur.id !== Parts.DEFAULTS[cat.id];
+    const tab = document.createElement("button");
+    tab.className = "cs-tab" + (cat.id === csActiveCat ? " active" : "") + (upgraded ? " upgraded" : "");
+    const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = cat.label;
+    const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = cur ? cur.label : "";
+    tab.append(lbl, sub);
+    tab.onclick = () => {
+      if (csActiveCat === cat.id) return;
+      csActiveCat = cat.id;
+      if (soundOn) GameAudio.uiTick();
+      buildSetup();
+      const t = $("cs-options"); if (t) t.scrollTop = 0;
+    };
+    tabs.appendChild(tab);
   }
+
+  // ---- Options list for the active category ----
+  const optsEl = $("cs-options");
+  optsEl.textContent = "";
+  const curOpt = resolveOpt(activeCat);
+  const curCost = curOpt ? (curOpt.cost || 0) : 0;
+  for (const opt of activeCat.options) {
+    if (opt.supplier && opt.supplier !== team.engine) continue;   // hide other suppliers' exclusives
+    const active = curOpt && curOpt.id === opt.id;
+    const costDelta = (opt.cost || 0) - curCost;
+    const wouldExceed = !active && !unlimitedBudget && (spent + costDelta > Parts.BUDGET);
+
+    const row = document.createElement("button");
+    row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "") + (opt.tag ? " exclusive" : "");
+
+    const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
+
+    const main = document.createElement("div"); main.className = "cs-opt-main";
+    const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
+    nameRow.appendChild(document.createTextNode(opt.label));
+    if (opt.tag) { const tg = document.createElement("span"); tg.className = "cs-opt-tag"; tg.textContent = opt.tag; nameRow.appendChild(tg); }
+    main.appendChild(nameRow);
+    const deltas = statDeltaChips(opt);
+    if (deltas) main.appendChild(deltas);
+    if (active && opt.desc) { const d = document.createElement("div"); d.className = "cs-opt-desc"; d.textContent = opt.desc; main.appendChild(d); }
+    row.appendChild(main);
+
+    const cost = document.createElement("span");
+    cost.className = "cs-opt-cost" + (opt.cost > 0 ? "" : " free");
+    cost.textContent = opt.cost > 0 ? opt.cost + " cr" : "FREE";
+    row.appendChild(cost);
+
+    row.onclick = () => {
+      if (active) return;
+      const p = getTeamParts(team.id);
+      const co = activeCat.options.find((o) => o.id === (p[activeCat.id] || Parts.DEFAULTS[activeCat.id]));
+      const cc = co ? (co.cost || 0) : 0;
+      if (!unlimitedBudget && (Parts.getCost(p, team.engine) - cc + (opt.cost || 0)) > Parts.BUDGET) {
+        row.classList.add("budget-reject");
+        row.addEventListener("animationend", () => row.classList.remove("budget-reject"), { once: true });
+        if (soundOn) GameAudio.uiTick();
+        return;
+      }
+      p[activeCat.id] = opt.id;
+      saveTeamParts(team.id, p);
+      if (soundOn) GameAudio.uiSelect();
+      buildSetup();
+    };
+    optsEl.appendChild(row);
+  }
+
   renderStatBars($("cs-stats-inner"), team);
+}
+
+// Small ▲/▼ stat-effect chips for an option row — reads the raw physics
+// multipliers off the option (absent field = no change). Purely informational.
+const CS_DELTA_DEFS = [
+  { key: "speed",     label: "TOP" },
+  { key: "accel",     label: "ACCEL" },
+  { key: "cornering", label: "GRIP" },
+  { key: "braking",   label: "BRAKE" },
+];
+function statDeltaChips(opt) {
+  const wrap = document.createElement("div");
+  wrap.className = "cs-opt-deltas";
+  let any = false;
+  for (const d of CS_DELTA_DEFS) {
+    const v = opt[d.key];
+    if (v == null || v === 1) continue;
+    any = true;
+    const chip = document.createElement("span");
+    chip.className = "cs-delta " + (v > 1 ? "up" : "down");
+    chip.textContent = (v > 1 ? "▲" : "▼") + d.label;
+    wrap.appendChild(chip);
+  }
+  return any ? wrap : null;
 }
 
 function openSetup() {
