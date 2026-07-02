@@ -2986,9 +2986,10 @@ function render(dt) {
       : 1;                                              // night / default-night: full ramp
     // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
     // raw physical HDR values (16-20) — at full ceiling they overpowered the
-    // scene (blown-out wet-road SSR mirror, washed neon night city). Cap the
-    // ceiling at 0.78 instead of 1.0, on top of the twilight ramp above.
-    const lvl  = (0.05 + 0.95 * nightF) * 0.35;
+    // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
+    // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
+    // on top of the twilight ramp above.
+    const lvl  = (0.05 + 0.95 * nightF) * 0.26;
     const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
     const floodScale = [lvl * (1 + warmth * 0.14), lvl, lvl * (1 - warmth * 0.22)];
     setFrameLights(camEye, floodScale);

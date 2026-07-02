@@ -355,7 +355,15 @@ void main() {
     // Physical 1/d² falloff, eased to exactly 0 at the radius by (1-(d/r)^4)^2.
     float dn = dist / rad;
     float win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);
-    float att = (win * win) / (dist * dist + 1.0);
+    // Minimum-distance floor: each lamp's raw energy (buildTrackLights) is sized
+    // so its INTENDED aim point (road centre, several metres out) reads as a
+    // nicely bloomed pool. On tight street circuits the mast sits right beside
+    // the barrier wall, much closer than that aim point — the true 1/d² falloff
+    // then overshoots the wall by 10-20x, blowing it to solid white. Clamping
+    // the near-field distance keeps the aim-point pool unchanged (dist there is
+    // already well above the floor) while taming any close-by surface.
+    float distC = max(dist, 4.0);
+    float att = (win * win) / (distC * distC + 1.0);
     if (att < 1e-6) continue;
     // Aimed spot cone: how deep the surface sits inside the lamp's beam.
     // uLightDir = beam aim, uLightCone = (cosInner, cosOuter); uLightBleed is the
@@ -1457,6 +1465,14 @@ void main() {
       // the substitution quadratically so it reads as a subtle sheen instead
       // of dark towers replacing the sunlit tarmac.
       strength *= min(uReflect / 0.20, 1.0);
+      // The whole SSR branch above is gated by a HARD "vUV.y < 0.62" cutoff (a
+      // cheap early-out — the upper screen is sky, never wet road/car paint).
+      // That boolean gate is a step function: reflected pixels just below the
+      // line are full-strength, pixels just above get none, so any noticeable
+      // difference between the mirrored colour and the base scene shows as a
+      // visible seam slicing across the frame. Fade the last few percent out
+      // instead of cutting it off.
+      strength *= 1.0 - smoothstep(0.56, 0.62, vUV.y);
       float mixAmt = clamp(strength * cover, 0.0, 0.94);   // near-mirror, keeps a hint of asphalt
       c = mix(c, c * 0.10 + reflCol * 0.92, mixAmt);
     }
