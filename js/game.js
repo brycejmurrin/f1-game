@@ -1623,6 +1623,7 @@ function updateCar(c, dt, ranked) {
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
   const k = Tracks.curvature(track, c.s);
+  c.kCur = k;   // cache for the render loop's body-lean (avoids a 2nd curvature calc/car/frame)
   const dd = DIFF[difficulty];
 
   // --- speed targets ---
@@ -2940,14 +2941,18 @@ function render(dt) {
     if (_ltFlash > 0) {
       // Spike ambient to a cool blue-white; the decay reads as a natural flash.
       // A brief exposure lift too, so the whole frame bleaches for the strike.
-      const f = _ltFlash;
-      frame.ambientSky    = _ltBase.ambientSky.map((v)    => Math.min(1, v + 0.55 * f));
-      frame.ambientGround = _ltBase.ambientGround.map((v) => Math.min(1, v + 0.40 * f));
+      // Written IN PLACE (no per-frame array allocation — this ran every rain
+      // frame, exactly when the frame is already heaviest).
+      const f = _ltFlash, aS = frame.ambientSky, aG = frame.ambientGround;
+      for (let i = 0; i < 3; i++) {
+        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f);
+        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f);
+      }
       frame.exposure = (frame.exposure || 1.0) + 0.22 * f;
     } else {
-      // Restore base ambient so normal ticks aren't tinted
-      frame.ambientSky    = _ltBase.ambientSky.slice();
-      frame.ambientGround = _ltBase.ambientGround.slice();
+      // Restore base ambient so normal ticks aren't tinted (in place).
+      const aS = frame.ambientSky, aG = frame.ambientGround;
+      for (let i = 0; i < 3; i++) { aS[i] = _ltBase.ambientSky[i]; aG[i] = _ltBase.ambientGround[i]; }
     }
   }
 
@@ -3065,10 +3070,17 @@ function render(dt) {
 
   // skid marks drawn oldest-first (newest on top). When buffer is full the
   // oldest entry is at skidIdx; before that all live entries are 0..skidActive-1.
-  if (skidActive < MAX_SKID) {
-    for (let i = 0; i < skidActive; i++) GLX.drawMark(skidMarks[i], 0.6, 2.2);
-  } else {
-    for (let i = 0; i < MAX_SKID; i++) GLX.drawMark(skidMarks[(skidIdx + i) % MAX_SKID], 0.6, 2.2);
+  // Cull marks beyond ~170 m of the camera: once the ring buffer fills this was
+  // 120 draw calls every frame regardless of where the trail sat on the lap.
+  {
+    const ex = camEye[0], ez = camEye[2], SKID_CULL = 170 * 170;
+    const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
+    for (let i = 0; i < cnt; i++) {
+      const m = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
+      const dx = m[12] - ex, dz = m[14] - ez;
+      if (dx * dx + dz * dz > SKID_CULL) continue;
+      GLX.drawMark(m, 0.6, 2.2);
+    }
   }
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
@@ -3129,7 +3141,7 @@ function render(dt) {
     // racingLine = -k·130 toward the inside — so the AI term is negated to lean
     // outward like the player.)
     const aLat = c.isPlayer ? c.speed * (c.yawRateCur || 0)
-                            : -c.speed * c.speed * Tracks.curvature(track, c.s);
+                            : -c.speed * c.speed * (c.kCur || 0);
     const rollTgt = clamp(aLat / LAT_MAX, -1, 1) * BODY_ROLL_MAX;
     c.rollVis = (c.rollVis === undefined) ? rollTgt : damp(c.rollVis, rollTgt, 6, dt);
     // roll the right/up basis about the forward axis: road bank + cornering lean.

@@ -123,7 +123,7 @@ float vnoise(vec2 p) {
 // the ground (the "volumetric shading"). 0 = full sun, 1 = fully shadowed.
 float cloudFBM(vec2 p) {
   float s = 0.0, a = 0.5;
-  for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }
+  for (int i = 0; i < 3; i++) { s += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }  // 4→3 octaves (soft-thresholded, invisible)
   return s;
 }
 float cloudShadow(vec3 wp) {
@@ -199,14 +199,8 @@ void main() {
       float h0 = vnoise(mnp) * 0.7 + vnoise(mnp * 3.9) * 0.3;
       float hx = vnoise(mnp + vec2(e, 0.0)) * 0.7 + vnoise(mnp * 3.9 + vec2(e * 3.9, 0.0)) * 0.3;
       float hz = vnoise(mnp + vec2(0.0, e)) * 0.7 + vnoise(mnp * 3.9 + vec2(0.0, e * 3.9)) * 0.3;
-      // Third octave: fine aggregate bumps, near-field only (aliases at range).
-      float nf = clamp(1.0 - (vDist - 8.0) / 24.0, 0.0, 1.0);
-      if (nf > 0.01) {
-        vec2 mnp8 = mnp * 4.7;
-        h0 += vnoise(mnp8) * 0.20 * nf;
-        hx += vnoise(mnp8 + vec2(e * 4.7, 0.0)) * 0.20 * nf;
-        hz += vnoise(mnp8 + vec2(0.0, e * 4.7)) * 0.20 * nf;
-      }
+      // (Near-field third octave removed: 3 extra vnoise/fragment over most of
+      // the screen for fine aggregate bumps that are invisible at racing speed.)
       N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * ((uDetail * 0.4 * mnFade) / e));
     }
   }
@@ -1190,7 +1184,7 @@ float gHash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32)
 float gNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   float a = gHash(i), b = gHash(i+vec2(1,0)), c = gHash(i+vec2(0,1)), d = gHash(i+vec2(1,1));
   return mix(mix(a,b,f.x), mix(c,d,f.x), f.y); }
-float gCloudFBM(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<4;i++){ s+=a*gNoise(p); p=p*2.03+1.7; a*=0.5; } return s; }
+float gCloudFBM(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<3;i++){ s+=a*gNoise(p); p=p*2.03+1.7; a*=0.5; } return s; }  // 4→3 octaves
 // Cloud cover at a world point (same model as the lit shader's cloud shadows) so
 // the shafts are broken by the SAME clouds that dapple the ground.
 float gCloud(vec3 wp){
@@ -1210,7 +1204,7 @@ void main() {
   float dist = length(rd);
   rd /= max(dist, 1e-4);
   float march = min(dist, 260.0);          // cap the march length
-  const int N = 32;
+  const int N = 22;                        // 32→22: jitter + blur hide the coarser step
   float stepLen = march / float(N);
   // Jitter the start with interleaved-gradient noise to hide banding.
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -1346,7 +1340,8 @@ vec3 colourGrade(vec3 c) {
 }
 
 void main() {
-  vec3 c = texture(uScene, vUV).rgb;
+  vec4 scn = texture(uScene, vUV);   // one fetch: .rgb colour + .a SSR car tag
+  vec3 c = scn.rgb;
 
   // Ambient occlusion: darken creases/contacts before bloom + tonemap so the
   // grounding reads in linear light (under cars, barrier feet, kerbs, building
@@ -1366,7 +1361,7 @@ void main() {
   // Guarded so dry/day frames (uReflect 0, uDepth unbound) never sample depth.
   // Car-paint pixels (alpha tag < 0.5) reflect the world in EVERY session —
   // dry or wet — through the same march as the wet road.
-  float carPx = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
+  float carPx = 1.0 - smoothstep(0.42, 0.55, scn.a);
   if ((uReflect > 0.001 || carPx > 0.3) && texture(uDepth, vUV).r < 0.9999 && vUV.y < 0.62) {
     vec3 P = ssrViewPos(vUV);
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
@@ -1399,10 +1394,10 @@ void main() {
       float hit = 0.0;
       vec2 hitUV = vec2(0.0);
       bool found = false;
-      for (int i = 0; i < 28; i++) {
-        prevPos = pos;
+      for (int i = 0; i < 20; i++) {               // 28→20: slightly faster growth
+        prevPos = pos;                             // keeps reach at ~30% less fill
         pos += R * stepLen;
-        stepLen *= 1.16;                           // gentle growth
+        stepLen *= 1.22;                           // gentle growth
         vec4 cp = uProj * vec4(pos, 1.0);
         if (cp.w <= 0.0) break;
         vec2 suv = cp.xy / cp.w * 0.5 + 0.5;
@@ -1410,7 +1405,7 @@ void main() {
         float dz = ssrViewPos(suv).z - pos.z;      // >0 = ray passed behind a surface
         if (dz > 0.20 && dz < 5.0) {               // thickness gate (reject far sky)
           vec3 a = prevPos, b = pos;               // binary-search refine → crisp hit
-          for (int j = 0; j < 5; j++) {
+          for (int j = 0; j < 4; j++) {
             vec3 mid = (a + b) * 0.5;
             vec4 mc = uProj * vec4(mid, 1.0);
             vec2 muv = mc.xy / mc.w * 0.5 + 0.5;
