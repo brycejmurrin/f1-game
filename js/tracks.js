@@ -1434,13 +1434,35 @@ const Tracks = (function () {
         console.warn(`[scenery] palm SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      addCyl(out, a.c, 0.3, h, [0.45, 0.36, 0.22], 6, b);
-      const top = vadd(a.c, a.u, h);
-      for (let i = 0; i < 6; i++) {
-        const ang = i / 6 * 6.2832, dir = [Math.cos(ang), 0, Math.sin(ang)];
+      // Gently curved trunk: three tapering segments each leaning a touch further
+      // (palms arc toward the light) instead of one dead-straight pole.
+      const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
+      let base = a.c, seg = h / 3;
+      for (let t = 0; t < 3; t++) {
+        const bend = vadd(a.c, a.r, lean * (t + 1) * (t + 1) * 0.4 * side);
+        const c = [bend[0], base[1] + seg / 2, bend[2]];
+        addCyl(out, c, 0.34 - t * 0.06, seg, [0.45 - t * 0.03, 0.36, 0.22], 6, b);
+        base = vadd(base, a.u, seg);
+      }
+      const top = vadd(vadd(base, a.r, lean * 3.6 * side), a.u, -seg / 2 + 0.2);
+      const frCol = frond || [0.18, 0.40, 0.16];
+      const frDark = [frCol[0] * 0.8, frCol[1] * 0.82, frCol[2] * 0.78];
+      // 9 drooping fronds: each arcs outward then down (own tilted up-vector),
+      // with per-frond length/droop jitter so the crown reads full, not a star.
+      for (let i = 0; i < 9; i++) {
+        const ang = (i / 9 + hash(k + i * 1.7) * 0.06) * 6.2832, dir = [Math.cos(ang), 0, Math.sin(ang)];
         const fr = [dir[0] * a.r[0] + dir[2] * a.t[0], 0, dir[0] * a.r[2] + dir[2] * a.t[2]];
-        const fc = vadd(vadd(top, fr, 2.4), a.u, -0.4);
-        addPrism(out, fc, [1.6, 0.5, 4.4], frond || [0.18, 0.40, 0.16], [fr, a.u, [-fr[2], 0, fr[0]]]);
+        const droop = 0.45 + hash(k * 2.1 + i) * 0.5;            // how far the frond bends down
+        const fu = [fr[0] * droop + a.u[0] * (1 - droop), a.u[1] * (1 - droop * 0.7), fr[2] * droop + a.u[2] * (1 - droop)];
+        const len = 4.2 + hash(k + i * 3.3) * 1.8;
+        const fc = vadd(vadd(top, fr, 2.2), a.u, 0.2);
+        addPrism(out, fc, [1.5, 0.45, len], i % 2 ? frCol : frDark, [fr, fu, [-fr[2], 0, fr[0]]]);
+      }
+      // Coconut cluster tucked under the crown.
+      for (let i = 0; i < 3; i++) {
+        const ang = i / 3 * 6.2832;
+        addBox(out, vadd(vadd(top, a.r, Math.cos(ang) * 0.5), a.t, Math.sin(ang) * 0.5),
+               [0.34, 0.34, 0.34], [0.32, 0.24, 0.14], b);
       }
     };
     // Conifer / fir: a tall narrow stack of cones — alpine & northern forest
@@ -2892,13 +2914,32 @@ const Tracks = (function () {
       }
       addBox(out, hub, [3, 3, 3], [0.3, 0.3, 0.34]);         // hub
       const seg = 16;
-      for (let i = 0; i < seg; i++) {                        // rim of cabins
+      const wheelCol = def.night ? [0.30, 0.31, 0.4] : [0.62, 0.63, 0.68];
+      // Rim points first, so we can lace SPOKES (hub→rim) and a RIM RING (rim→rim)
+      // through them — the wheel now reads as a real structure, not floating cabins.
+      const rim = [];
+      for (let i = 0; i < seg; i++) {
         const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
-        const p = [hub[0] + tn[0] * ca * radius, hub[1] + sa * radius, hub[2] + tn[2] * ca * radius];
+        rim.push([hub[0] + tn[0] * ca * radius, hub[1] + sa * radius, hub[2] + tn[2] * ca * radius]);
+      }
+      const strut = (p0, p1, thick, col) => {
+        const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+        const L = Math.hypot(d[0], d[1], d[2]) || 1;
+        const up = [d[0] / L, d[1] / L, d[2] / L];
+        let rr = norm(cross(up, tn)); if (!isFinite(rr[0])) rr = [1, 0, 0];
+        const ff = norm(cross(up, rr));
+        addBox(out, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2],
+               [thick, L, thick], col, [rr, up, ff]);
+      };
+      for (let i = 0; i < seg; i++) {
+        strut(hub, rim[i], 0.28, wheelCol);                  // spoke
+        strut(rim[i], rim[(i + 1) % seg], 0.34, wheelCol);   // rim segment
+      }
+      for (let i = 0; i < seg; i++) {                        // cabins hung off the rim
         const cab = def.night
           ? [[0.95, 0.2, 0.5], [0.2, 0.85, 0.95], [0.95, 0.8, 0.2]][i % 3]
           : (i % 2 ? [0.9, 0.25, 0.25] : [0.95, 0.95, 0.98]);
-        addBox(out, p, [2.4, 2.4, 2.4], cab);
+        addBox(out, [rim[i][0], rim[i][1] - 1.5, rim[i][2]], [2.4, 2.2, 2.4], cab);
       }
       // solid base (legs + hub footprint) → stop the car before it on open tracks
       blockAt(k, side, dist - 0.8, 4);
