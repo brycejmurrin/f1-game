@@ -123,7 +123,7 @@ catalog to follow.
 | `night.glowAmp` — `glow * 2.3` | Emissive HDR push for windows/lenses/neon. This one constant is ~half the night frame energy; 3.2 was the historical too-bright look. | frame bloomPct |
 | `night.floodEmit` — `0.78` | Prop emissive ramp after dark (how lit the lit geometry is). | frame mean |
 | `night.exposure` — street 0.86 / other 0.90 | The master dark-stays-dark knob (ACES input scale). | frame mean |
-| `night.bloomThresh` — `0.93` (+ bloom 0.65-0.70) | What counts as "bright enough to halo". Lowering it blooms the mid-tones — instant fog-of-glow. | frame bloomPct |
+| `night.bloomThresh` — `0.97` (+ bloom 0.65-0.70) | What counts as "bright enough to halo". Lowering it blooms the mid-tones — instant fog-of-glow. | frame bloomPct |
 
 ## Reading the metrics
 

@@ -201,7 +201,7 @@ const KNOBS = [
     expect: { region: "frame", metric: "mean", dir: "+", minRel: 0.05 },
     note: "explicit-night exposure — the master dark-stays-dark knob" },
   { id: "night.bloomThresh", file: "js/game.js", scene: "vegasNight",
-    find: "_thresh = 0.93;", b: "_thresh = 0.78;",
+    find: "_thresh = 0.97;", b: "_thresh = 0.78;",
     expect: { region: "frame", metric: "bloomPct", dir: "+", minRel: 0.0 },
     note: "night bright-pass threshold; lower = more of the scene blooms" },
 ];
