@@ -16,11 +16,13 @@ uniform vec3 uEye;
 out vec3 vNrm;
 out vec3 vCol;
 out vec3 vWorldPos;
+out vec3 vObjPos;
 out float vDist;
 void main() {
   vec4 wp = uModel * vec4(aPos, 1.0);
   vWorldPos = wp.xyz;
-  vNrm = mat3(uModel) * aNrm;
+  vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
+  vNrm = mat3(uModel) * aNrm;     // is glued to the panels, not streaming in world.
   vCol = aCol;
   vDist = length(wp.xyz - uEye);
   gl_Position = uViewProj * wp;
@@ -37,6 +39,7 @@ precision highp sampler2DShadow;
 in vec3 vNrm;
 in vec3 vCol;
 in vec3 vWorldPos;
+in vec3 vObjPos;
 in float vDist;
 uniform vec3 uEye;
 uniform vec3 uSunDir;
@@ -212,13 +215,19 @@ void main() {
   // feeds every standard lighting/reflection term below, so the surface
   // ITSELF reflects: the sun streak and sky env break into a live shimmer
   // that slides across the panels as the car moves.
+  // Geometric normal, kept UNPERTURBED for the smooth lacquer clearcoat lobe and
+  // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
+  // they must not roughen the mirror shell (that's what read as "ghostly" before).
+  vec3 Ngeo = N;
   if (uCarPaint > 0.001) {
     // Two scales: coarse orange-peel waviness + fine metallic-flake sparkle.
+    // Keyed to OBJECT space so the pattern is glued to the panels instead of
+    // streaming across the bodywork as the car drives (texture-swimming).
     // Fades with distance so it never aliases to shimmer at range.
     float pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
     if (pFade > 0.01) {
-      vec2 puv = vWorldPos.xz * 34.0 + vWorldPos.y * 29.0;
-      vec2 fuv = vWorldPos.xz * 130.0 + vWorldPos.y * 111.0;
+      vec2 puv = vObjPos.xz * 34.0 + vObjPos.y * 29.0;
+      vec2 fuv = vObjPos.xz * 130.0 + vObjPos.y * 111.0;
       float pe = 0.09;
       float pb0 = vnoise(puv) * 0.6 + vnoise(fuv) * 0.4;
       float pbx = (vnoise(puv + vec2(pe, 0.0)) * 0.6 + vnoise(fuv + vec2(pe * 3.8, 0.0)) * 0.4) - pb0;
@@ -421,14 +430,60 @@ void main() {
     // the curved panels (at 0.1 the cone is ~2 degrees — sub-pixel, reads matte).
     // Soft-clipped to a 2.6 HDR ceiling instead of 1.0: the hot core punches past
     // the bloom threshold, so the highlight GLOWS — the actual "shiny" cue.
+    // Uses the GEOMETRIC normal (Ngeo): the lacquer shell is smooth, so the sun
+    // streak stays crisp — the flake micro-normal only roughens the base coat.
+    vec3 Hg = normalize(L + V);
+    float NoHg = max(dot(Ngeo, Hg), 0.0);
+    float NoVg = max(dot(Ngeo, V), 1e-4);
+    float NoLg = max(dot(Ngeo, L), 0.0);
     float ccA = 0.035;
-    float Dc = D_GGX(NoH, ccA);
-    float Vc = V_SmithGGX(NoV, NoL, ccA);
-    float Fc = F_Schlick(VoH, vec3(0.05), 1.0).x;
-    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * litNoL * uClearcoat;
+    float Dc = D_GGX(NoHg, ccA);
+    float Vc = V_SmithGGX(NoVg, NoLg, ccA);
+    float Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), 1.0).x;
+    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uClearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color += ccCol;
+  }
 
+  // Analytic clearcoat ENV mirror — the lacquer reflects a procedural sky in the
+  // reflected view ray, on EVERY paint pixel including the vertical FLANKS (the
+  // carDeck term below only mirrors up-facing decks; SSR can't reach flanks that
+  // reflect off-screen). Strictly a dielectric-clearcoat SPECULAR add: weighted
+  // by fresnel²·(1-rough) so it's ~0 face-on (livery reads pure) and mirror-like
+  // at grazing/silhouette; NEVER multiplies or mixes albedo (that bleached the
+  // paint before), and soft-clipped below the bloom threshold so it can't glare.
+  if (uCarPaint > 0.001 && uClearcoat > 0.001) {
+    vec3 Rg = reflect(-V, Ngeo);
+    float NoVc = max(dot(Ngeo, V), 1e-4);
+    float ccF = pow(1.0 - NoVc, 2.0);                       // fresnel², rim-concentrated
+    float envW = uClearcoat * ccF * (1.0 - rough) * 0.55;
+    // Hard-ish horizon line: bright sky above, dark ground tone below. The step
+    // sweeping across the curved flanks as the car yaws is the "mirror" cue.
+    float horiz = smoothstep(-0.03, 0.06, Rg.y);
+    vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, pow(max(Rg.y, 0.0), 0.5));
+    vec3 envCC = mix(uAmbGround * 0.6, skyR, horiz);
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 0.0), 400.0) * 12.0 * shadow;  // sun disc
+    vec3 addCC = envCC * envW;
+    color += addCC / (1.0 + addCC);                         // soft-clip < 1.0
+  }
+
+  // Metallic-flake SPARKLE — the signature "metallic paint" glitter. Each ~4.5 mm
+  // object-space cell gets a random flake tilt; a flake flashes only when its
+  // facet half-aligns with the sun (view-dependent, so the sparkle field shifts
+  // as the camera moves). HDR gain so flashes bloom. Distance-faded to nothing so
+  // it never aliases at range. Additive white glint — leaves the pigment alone.
+  if (uCarPaint > 0.001 && litNoL > 0.0) {
+    float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0);
+    if (spFade > 0.01) {
+      vec3 cell = floor(vObjPos * 220.0);
+      float h1 = hash21(cell.xy + cell.z * 19.7);
+      float h2 = hash21(cell.yz + cell.x * 7.3);
+      vec3 fT = normalize(cross(Ngeo, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
+      vec3 fB = cross(Ngeo, fT);
+      vec3 gN = normalize(Ngeo + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
+      float glint = smoothstep(0.965, 1.0, dot(gN, H));
+      color += uSunColor * litNoL * glint * 3.0 * uCarPaint * spFade;
+    }
   }
 
   // Car deck mirror, step 2 — the sky reflection over the darkened film,
