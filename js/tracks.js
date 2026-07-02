@@ -12,7 +12,8 @@ const Tracks = (function () {
   // in the lit shader's applyMaterial() (js/glx.js). 0 = FLAT (untextured, the
   // original look). Exposed to per-track scenery() via api.MAT.
   const MAT = { FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5,
-                FOLIAGE: 6, FABRIC: 7, SAND: 8, GRASS: 9 };
+                FOLIAGE: 6, FABRIC: 7, SAND: 8, GRASS: 9, ROCK: 10, SNOW: 11,
+                ROOF: 12, STONE: 13, RUST: 14 };
 
   // ---------- small math (self-contained; doesn't depend on M4/V3) ----------
   function cross(a, b) {
@@ -940,6 +941,17 @@ const Tracks = (function () {
       return [c[0] + rx[0] * Math.cos(a) * rad + fz[0] * Math.sin(a) * rad, c[1] + y, c[2] + rx[2] * Math.cos(a) * rad + fz[2] * Math.sin(a) * rad];
     };
     const ref = [c[0], c[1] + h * 0.4, c[2]];
+    // zoneAt(): the SAME height-fraction test as colAt, returning a procedural
+    // MATERIAL id per zone (forest→FOLIAGE, rock/transition→ROCK, snow→SNOW) so
+    // the mountain's craggy/snowy surface gets a real light-catching bump, not
+    // just the flat colour-zone shading below.
+    const zoneAt = (fy, i) => {
+      const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;
+      if (fr > snowline + 0.04) return MAT.SNOW;
+      if (fr > snowline - 0.16) return MAT.ROCK;
+      if (fr > 0.34) return MAT.ROCK;
+      return MAT.FOLIAGE;
+    };
     const colAt = (fy, i) => {
       const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;                        // ragged zone edges
       if (fr > snowline + 0.04) return snow;
@@ -952,15 +964,20 @@ const Tracks = (function () {
     for (let r = 0; r < rings.length - 1; r++) {
       for (let i = 0; i < seg; i++) {
         const a = V[r][i], b = V[r][(i + 1) % seg], cc = V[r + 1][(i + 1) % seg], d = V[r + 1][i];
-        emit(out, [a, b, cc, d], colAt((a[1] + b[1] + cc[1] + d[1]) / 4 - c[1], i + r), ref);
+        const fy = (a[1] + b[1] + cc[1] + d[1]) / 4 - c[1];
+        out._mat = zoneAt(fy, i + r);
+        emit(out, [a, b, cc, d], colAt(fy, i + r), ref);
       }
     }
     const apex = [c[0] + (h2(1, 1) - 0.5) * baseR * 0.14, c[1] + h * (0.97 + h2(2, 2) * 0.06), c[2] + (h2(3, 3) - 0.5) * baseR * 0.14];
     const tr = rings.length - 1;
     for (let i = 0; i < seg; i++) {
       const a = V[tr][i], b = V[tr][(i + 1) % seg];
-      emit(out, [a, b, apex], colAt((a[1] + b[1] + apex[1]) / 3 - c[1], i), ref);
+      const fy = (a[1] + b[1] + apex[1]) / 3 - c[1];
+      out._mat = zoneAt(fy, i);
+      emit(out, [a, b, apex], colAt(fy, i), ref);
     }
+    out._mat = 0;
   }
 
   // Raw (unguarded) emitters, captured so buildProps can wrap them with the
@@ -1328,7 +1345,9 @@ const Tracks = (function () {
       // Night skyline walls get a small glow floor so they aren't black planes.
       const bcol = (isBld && NIGHT)
         ? [Math.max(col[0], 0.20), Math.max(col[1], 0.19), Math.max(col[2], 0.24)] : col;
-      out._mat = isBld ? MAT.CONCRETE : 0;
+      // Warm/tan, non-building, non-green masses read as desert dunes/mesas.
+      const sandy = !isBld && col[0] > 0.45 && col[0] > col[2] + 0.04 && col[1] > col[2];
+      out._mat = isBld ? MAT.CONCRETE : sandy ? MAT.SAND : 0;
       addBox(out, [cx, cy0, cz], sz, bcol, [t, u, r]);
       out._mat = 0;
       // If this distant box reads as a BUILDING — tall, taller than it is deep,
@@ -1520,8 +1539,10 @@ const Tracks = (function () {
         console.warn(`[scenery] peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
       }
+      out._mat = MAT.ROCK;
       addPyramid(out, [x, baseY, z], [w, h, w], col, null);
       addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
+      out._mat = 0;
     };
     // Organic mountain (world coords): irregular craggy summit with height colour
     // zones (forest → rock → snow). opts passes seed/snowline/colours — see
@@ -3024,6 +3045,12 @@ const Tracks = (function () {
         // Session darkness (chosen time of day) — lets bespoke scenery render a lit
         // night version vs a daytime version of the same structure.
         night: NIGHT,
+        // Procedural surface-material ids (js/glx.js applyMaterial/applyMaterialNormal).
+        // Tag a block of geometry by setting out._mat = MAT.<NAME> before the add*()
+        // calls that should carry it, then out._mat = 0 (MAT.FLAT) to stop. Applies to
+        // BOTH the day/night colour tint AND a real light-catching bump — no images,
+        // no UVs. See docs/SCENERY-API.md.
+        MAT,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
         ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
         // richer primitives (world coords): non-cube shapes
