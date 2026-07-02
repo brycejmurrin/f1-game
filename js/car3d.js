@@ -142,7 +142,8 @@ const Car3D = (function () {
 
   // Wheel: smooth-shaded tyre tread (shared ring verts, radial normals) + flat
   // 2026-style cover disc + hub on both faces.
-  function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor) {
+  function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor) {
+    const RC = rimColor || RIM;
     const SEG = 18;
     const x0 = cx - w/2, x1 = cx + w/2;
     const rimR = r * 0.42;
@@ -173,9 +174,9 @@ const Car3D = (function () {
       const rya1 = cy + rimR*Math.cos(a1), rza1 = cz + rimR*Math.sin(a1);
       const A0=[x0,ya0,za0], A1=[x0,ya1,za1], B0=[x1,ya0,za0], B1=[x1,ya1,za1];
       const R0=[x1,rya0,rza0], R1=[x1,rya1,rza1];
-      addQuad(out, B0, B1, R1, R0, RIM); addTri(out, hub1, R0, R1, HUB);
+      addQuad(out, B0, B1, R1, R0, RC); addTri(out, hub1, R0, R1, HUB);
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
-      addQuad(out, A1, A0, L0, L1, RIM); addTri(out, hub0, L1, L0, HUB);
+      addQuad(out, A1, A0, L0, L1, RC); addTri(out, hub0, L1, L0, HUB);
     }
     // Pirelli-style compound band: a bright ring on both sidewalls just inside
     // the tread — the classic modern-F1 tyre read (and a colour accent on an
@@ -235,9 +236,9 @@ const Car3D = (function () {
   // A single wheel centred on the origin, axle along X — so the render layer can
   // spin it about X (∝ speed) and steer the fronts about Y, then translate it to
   // each corner. Used only for the player car (AI keep the baked static wheels).
-  function buildWheel(w, bandColor, caliperColor) {
+  function buildWheel(w, bandColor, caliperColor, rimColor) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
-    addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor);
+    addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor);
     return out;
   }
 
@@ -308,9 +309,46 @@ const Car3D = (function () {
     ventilated:   { cal: [0.90, 0.15, 0.12], duct: 1.35 },  // red
     carbon_mag:   { cal: [0.85, 0.66, 0.16], duct: 1.45 },  // gold
     regen_brakes: { cal: [0.15, 0.78, 0.38], duct: 1.25 },  // green (energy)
-    ceramic:      { cal: [0.97, 0.10, 0.08], duct: 1.60 },  // bright red
-    brembo_evo:   { cal: [0.98, 0.62, 0.05], duct: 1.75 },  // Brembo gold
+    ceramic:      { cal: [0.97, 0.10, 0.08], duct: 1.60, rim: [0.55, 0.56, 0.60] },  // bright red + pale rim
+    brembo_evo:   { cal: [0.98, 0.62, 0.05], duct: 1.75, rim: [0.42, 0.34, 0.12] },  // Brembo gold + bronze rim
   };
+  // Premium alloy brakes get gold/pale magnesium rims (peek between the spokes).
+  BRAKE_STYLE.carbon_mag.rim = [0.48, 0.40, 0.16];   // magnesium bronze
+  BRAKE_STYLE.dual_caliper.rim = [0.30, 0.30, 0.34];
+  // Per-OPTION suspension: `ride` height offset (m), `arm` wishbone thickness
+  // mult, `push` a visible pushrod strut. Keyed by resolved option id.
+  const SUSP_STYLE = {
+    comfort:         { ride:  0.055, arm: 0.80, push: 0 },   // tall + soft
+    standard:        { ride:  0.000, arm: 1.00, push: 0 },
+    sport:           { ride: -0.010, arm: 1.05, push: 0 },
+    carbon_pushrods: { ride: -0.015, arm: 0.90, push: 1 },
+    kerb_spec:       { ride:  0.010, arm: 1.10, push: 0 },
+    low_ride:        { ride: -0.035, arm: 1.05, push: 0 },
+    racing:          { ride: -0.025, arm: 1.15, push: 1 },
+    triple_damper:   { ride: -0.020, arm: 1.20, push: 1 },
+    titanium_spring: { ride: -0.020, arm: 0.85, push: 1 },   // thin Ti arms
+    inboard_dampers: { ride: -0.020, arm: 1.10, push: 1 },
+    track:           { ride: -0.040, arm: 1.30, push: 1 },   // slammed + stiff
+    heave_spring:    { ride: -0.030, arm: 1.20, push: 1 },
+    active:          { ride: -0.045, arm: 1.25, push: 1 },   // fully slammed
+  };
+  // Per-OPTION gearbox: `strakes` diffuser strake count + `fin` a rear crash
+  // structure fin. Keyed by resolved option id.
+  const GBOX_STYLE = {
+    standard:       { strakes: 0, fin: 0 },
+    close_ratio:    { strakes: 2, fin: 0 },
+    long_ratio:     { strakes: 2, fin: 0 },
+    short_stack:    { strakes: 3, fin: 1 },
+    sequential_pro: { strakes: 4, fin: 1 },
+    carbon_case:    { strakes: 4, fin: 1 },
+    f1_spec:        { strakes: 5, fin: 1 },
+  };
+  // Per-DRIVER helmet crown-stripe palette (indexed by car number) so team-mates
+  // and the field carry distinct helmets.
+  const HELMET_ACCENT = [
+    [0.95, 0.20, 0.15], [0.15, 0.45, 0.95], [0.97, 0.82, 0.10], [0.90, 0.90, 0.95],
+    [0.15, 0.75, 0.35], [0.85, 0.40, 0.90], [0.98, 0.50, 0.10], [0.10, 0.80, 0.80],
+  ];
 
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
@@ -323,9 +361,10 @@ const Car3D = (function () {
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
     const suspT = tier("suspension");
+    const suspStyle = (T._ids && T._ids.suspension && SUSP_STYLE[T._ids.suspension]) || null;
 
-    // --- Floor plank (flat) --- SUSPENSION tier shifts ride height.
-    const rideDY = suspT === 0 ? 0.060 : (suspT === 2 ? -0.048 : 0);
+    // --- Floor plank (flat) --- per-OPTION suspension shifts ride height.
+    const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     addBox(out, 0, 0.07 + rideDY, -0.3, 1.5, 0.06, 3.2, CARBON);
 
     // --- Nose: one crisp tapered wedge, tip to bulkhead (lengthened tip) ---
@@ -484,9 +523,14 @@ const Car3D = (function () {
     // Skipped for the first-person cockpit body (opts.noDriver): the camera
     // sits where the driver's head is.
     if (!(opts && opts.noDriver)) {
+      // Per-driver helmet: dome carries a crown stripe + a nose flash in the
+      // driver's own accent colour (indexed by car number), so team-mates and
+      // the field look distinct rather than all wearing the team colour.
+      const helmC = (opts && opts.num != null) ? HELMET_ACCENT[((opts.num % HELMET_ACCENT.length) + HELMET_ACCENT.length) % HELMET_ACCENT.length] : c2;
       addDome(out, 0, 0.585, -0.08, 0.145, c1);
       addBox(out, 0, 0.64, 0.05, 0.20, 0.075, 0.045, VISOR);  // visor band
-      addBox(out, 0, 0.715, -0.09, 0.10, 0.026, 0.17, c2);    // crown stripe
+      addBox(out, 0, 0.715, -0.09, 0.10, 0.026, 0.17, helmC); // crown stripe (driver accent)
+      addBox(out, 0, 0.60, 0.11, 0.11, 0.05, 0.02, helmC);    // nose flash
     }
 
     // --- Airbox intake above the roll hoop (dark void) ---
@@ -663,13 +707,19 @@ const Car3D = (function () {
       addLoft(out, -2.7, 0, 0.24, 1.40 * diffW, 0.36, -1.90, 0, 0.12, 1.05 * diffW, 0.14 * diffH1,
               [0.06, 0.06, 0.07]);
 
-      // --- Gearbox visual tell: five taller carbon diffuser strakes (tier 2
-      // only, pure addition — absent at tier 0/1). ---
-      if (tier("gearbox") === 2) {
-        for (const fx of [-0.50, -0.25, 0, 0.25, 0.50]) {
-          addBox(out, fx, 0.19, -2.20, 0.015, 0.13, 0.42, CARBON);
+      // --- Gearbox visual tell: per-OPTION diffuser strake count + a rear crash
+      // structure fin (GBOX_STYLE). More strakes = higher-spec 'box. ---
+      const gbId = T._ids && T._ids.gearbox;
+      const gbStyle = (gbId && GBOX_STYLE[gbId]) || null;
+      const gbStrakes = gbStyle ? gbStyle.strakes : (tier("gearbox") === 2 ? 5 : 0);
+      const gbFin = gbStyle ? gbStyle.fin : (tier("gearbox") === 2 ? 1 : 0);
+      if (gbStrakes > 0) {
+        const half = (gbStrakes - 1) / 2;
+        for (let i = 0; i < gbStrakes; i++) {
+          addBox(out, (i - half) * 0.24, 0.19, -2.20, 0.015, 0.13, 0.42, CARBON);
         }
       }
+      if (gbFin) addBox(out, 0, 0.34, -2.30, 0.02, 0.14, 0.28, CARBON);   // crash-structure fin
     }
 
     // --- Brake duct fairings (front + rear wheels) --- per BRAKES option: duct
@@ -688,13 +738,16 @@ const Car3D = (function () {
     // --- Suspension wishbones --- SUSPENSION tier scales thickness + follows
     // the ride-height shift from the floor plank above. Cockpit build keeps
     // only the FRONT pair (rears sit behind the seat).
-    const wbMul = suspT === 0 ? 0.85 : (suspT === 2 ? 1.3 : 1.0);
+    const wbMul = suspStyle ? suspStyle.arm : (suspT === 0 ? 0.85 : suspT === 2 ? 1.3 : 1.0);
+    const wbPush = suspStyle ? suspStyle.push : (suspT === 2 ? 1 : 0);
     for (const s of [-1, 1]) {
       addBox(out, s*0.50, 0.24 + rideDY,  1.70, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front lower
       addBox(out, s*0.50, 0.42 + rideDY,  1.63, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front upper
+      if (wbPush) addBox(out, s*0.42, 0.34 + rideDY, 1.66, 0.03, 0.16, 0.03, DARK);      // front pushrod strut
       if (!ckpt) {
         addBox(out, s*0.49, 0.26 + rideDY, -1.60, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear lower
         addBox(out, s*0.49, 0.44 + rideDY, -1.53, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear upper
+        if (wbPush) addBox(out, s*0.41, 0.36 + rideDY, -1.56, 0.03, 0.16, 0.03, DARK);     // rear pushrod strut
       }
     }
 
@@ -707,9 +760,10 @@ const Car3D = (function () {
       const tyreBand = (tyreId && TYRE_PIRELLI[tyreId]) || TYRE_BAND[tier("tyres")];
       // Per-option caliper accent peeking through the rim spokes, else tier.
       const caliperColor = brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT];
+      const rimColor = brakeStyle && brakeStyle.rim;   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
-        addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32, tyreBand, caliperColor);
-        addWheel(out, s*0.76, 0.34, -1.6, 0.34, 0.38, tyreBand, caliperColor);
+        addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32, tyreBand, caliperColor, rimColor);
+        addWheel(out, s*0.76, 0.34, -1.6, 0.34, 0.38, tyreBand, caliperColor, rimColor);
       }
     }
 

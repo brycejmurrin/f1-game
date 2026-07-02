@@ -995,9 +995,10 @@ function getPlayerWheelMeshes() {
     const band = (Car3D.TYRE_PIRELLI && Car3D.TYRE_PIRELLI[playerTyreId]) || Car3D.TYRE_BAND[playerTyreTier];
     const bs = Car3D.BRAKE_STYLE && Car3D.BRAKE_STYLE[playerBrakeId];
     const caliper = bs ? bs.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
+    const rim = bs && bs.rim;
     m = wheelMeshCache[key] = {
-      F: GLX.createMesh(Car3D.buildWheel(0.32, band, caliper)),
-      R: GLX.createMesh(Car3D.buildWheel(0.38, band, caliper)),
+      F: GLX.createMesh(Car3D.buildWheel(0.32, band, caliper, rim)),
+      R: GLX.createMesh(Car3D.buildWheel(0.38, band, caliper, rim)),
     };
   }
   return m;
