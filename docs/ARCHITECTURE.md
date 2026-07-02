@@ -5,23 +5,39 @@ Pure JS/CSS/HTML, **no build step, no dependencies**. Served as static files
 (script tags in `index.html`):
 
 ```
-js/mat4.js      -> M4, V3
-js/glx.js       -> GLX          (WebGL2 renderer)
-js/gltf.js      -> GLTF         (binary .glb loader -> {pos,nrm,col,idx})
-js/teams.js     -> Teams        (2026 grid data)
-js/circuits.js  -> CircuitPaths (real circuit centrelines from OSM traces)
-js/tracks/*.js  -> TrackDefs    (one file per circuit; registers itself on the list)
-js/tracks.js    -> Tracks       (engine: spline + meshes; reads TrackDefs)
-js/trackmaps.js -> TrackMaps    (offline 2D circuit outlines for the track picker)
-js/car3d.js     -> Car3D        (procedural F1 car geometry)
-js/input.js     -> Input        (keyboard / gamepad / touch / tilt)
-js/audio.js     -> GameAudio    (WebAudio synth: engine, sfx, music)
-js/api.js       -> F1API        (Jolpica + OpenF1 clients, cached)
-js/data.js      -> DataHub      (data hub DOM overlay)
-js/parts.js     -> Parts        (upgrade catalog: 8 categories, budget, stat mods)
-js/ghost.js     -> Ghost        (time-trial ghost-lap recorder/replay data layer)
-js/game.js      -> (main, self-executing; public surface is window.__apex)
+js/mat4.js          -> M4, V3
+js/glx-shaders.js   -> GLXShaders   (18 GLSL shader-source strings; loads before glx.js)
+js/glx.js           -> GLX          (WebGL2 renderer; destructures GLXShaders)
+js/gltf.js          -> GLTF         (binary .glb loader -> {pos,nrm,col,idx})
+js/teams.js         -> Teams        (2026 grid data)
+js/circuits.js      -> CircuitPaths (real circuit centrelines from OSM traces)
+js/tracks/*.js      -> TrackDefs    (one file per circuit; registers itself on the list)
+js/tracks-spline.js -> TracksKit    (spline engine; creates the shared TracksKit namespace)
+js/tracks-mesh.js   -> (TracksKit)  (road/terrain/gate mesh builders; extends TracksKit)
+js/tracks-scenery.js-> (TracksKit)  (procedural scenery + buildProps; extends TracksKit)
+js/tracks.js        -> Tracks       (public engine API: build/sample/curvature; reads TracksKit)
+js/trackmaps.js     -> TrackMaps    (offline 2D circuit outlines for the track picker)
+js/car3d.js         -> Car3D        (procedural F1 car geometry)
+js/input.js         -> Input        (keyboard / gamepad / touch / tilt)
+js/audio.js         -> GameAudio    (WebAudio synth: engine, sfx, music)
+js/api.js           -> F1API        (Jolpica + OpenF1 clients, cached)
+js/data.js          -> DataHub      (data hub DOM overlay)
+js/parts.js         -> Parts        (upgrade catalog: 8 categories, budget, stat mods)
+js/ghost.js         -> Ghost        (time-trial ghost-lap recorder/replay data layer)
+js/game-config.js   -> AXC          (config constants + live-tunable physics knobs)
+js/game-state.js    -> AX           (shared mutable state bag + store/ttBoard)
+js/game-weather.js  -> AXWeather    (applyRaceSettings + rain overlay; .init(deps))
+js/game-track.js    -> AXTrack      (loadTrack + makeCars/gridUp; .init(deps))
+js/game-ui.js       -> AXUi         (menus/panels/sliders wiring; .init(deps))
+js/game-hud.js      -> AXHud        (race HUD overlay + minimap; .init(deps))
+js/game.js          -> (main, self-executing; public surface is window.__apex)
 ```
+
+The former `glx.js`, `tracks.js` and `game.js` monoliths were each split into
+several files (shaders / track-engine stages / game subsystems). The split is
+purely organisational — no build step, no ES modules, still one global per file.
+See [MODULE-GRAPH.md](MODULE-GRAPH.md) for the dependency edges and the
+`AXC`/`AX` namespace + `AX*.init(deps)` boot convention.
 
 Full dependency graph + rules for adding a file: [MODULE-GRAPH.md](MODULE-GRAPH.md).
 localStorage key reference: [STORAGE-SCHEMA.md](STORAGE-SCHEMA.md).
@@ -53,9 +69,18 @@ V3.add(a,b) V3.sub(a,b) V3.scale(a,s) V3.dot(a,b) V3.cross(a,b)
 V3.len(a) V3.norm(a) V3.lerp(a,b,t)   -> [x,y,z] / number
 ```
 
+## js/glx-shaders.js — `GLXShaders`
+
+Pure data: the 18 `#version 300 es` vertex/fragment shader-source strings used
+by the renderer, split out of `glx.js` so the GL logic stays readable. `glx.js`
+destructures `GLXShaders` at module-eval time, so this file **must load first**
+(see load order above). No logic, no deps.
+
 ## js/glx.js — `GLX`
 
-WebGL2 only. One standard lit shader for everything except the sky.
+WebGL2 only. One standard lit shader for everything except the sky. Shader
+sources live in `js/glx-shaders.js` (`GLXShaders`); this file owns the GL
+context, programs, meshes, and draw calls.
 
 ```
 GLX.init(canvasEl) -> boolean         // false if no WebGL2
@@ -137,10 +162,23 @@ def = { id, name, gp, country, night, theme, lengthKm, baseHW,
         elevations?:[ {s,halfM,rise}, ... ] }      // real elevation bumps (terrain follows road)
 ```
 
-## js/tracks.js — `Tracks` (engine)
+## js/tracks-spline.js · tracks-mesh.js · tracks-scenery.js · tracks.js — `Tracks` (engine)
 
-Resolves each `TrackDefs` entry (palette from the `night` flag, geometry from
-the OSM trace in `js/circuits.js` or the authored `segs`), samples a closed
+The track engine is split across four files that share one internal namespace,
+`TracksKit` (created by `tracks-spline.js`, extended by the next two; not a
+public global). They must load in this order (before any consumer):
+
+- **tracks-spline.js** — centreline generation (Catmull-Rom over `segs` or the
+  OSM trace), arc-length sampling, curvature.
+- **tracks-mesh.js** — road ribbon (markings, kerbs), terrain skirt, floor,
+  start gate/line, plus banking/kerb query helpers.
+- **tracks-scenery.js** — primitive emitters, the on-track-rejection scenery
+  API, and `buildProps()` per-circuit dressing (see [SCENERY-API.md](SCENERY-API.md)).
+- **tracks.js** — the public `Tracks` global (`build`/`sample`/`curvature`/`LIST`);
+  ties the stages together.
+
+`Tracks` resolves each `TrackDefs` entry (palette from the `night` flag, geometry
+from the OSM trace in `js/circuits.js` or the authored `segs`), samples a closed
 Catmull-Rom spline, and emits meshes.
 
 ```
@@ -316,7 +354,38 @@ Ghost.finishLap(t)  Ghost.at(t)          Ghost.timeAt(s)   Ghost.hasGhost()
 Ghost.bestTime()    Ghost.clear()
 ```
 
+## js/game-config.js · game-state.js · game-weather.js · game-track.js · game-ui.js · game-hud.js
+
+Subsystems extracted from the old `game.js` monolith. Two are plain namespaces
+read directly everywhere; four are IIFEs with an `.init(deps)` that game.js calls
+once at boot (handing over its DOM cache + closures — see the `AX*.init(...)`
+block near game.js's boot). All load *after* the engine modules and *before*
+`game.js`.
+
+```
+game-config.js  -> AXC        physics constants, gear table, DIFF tiers, CAM_MODES,
+                              and the live-tunable knobs (AXC.PACE/WHEELBASE/… — mutated
+                              by __apex.setPhysics and the pause sliders)
+game-state.js   -> AX         the mutable state bag every game-* module reads/writes
+                              (state machine, track, cars[], race/sector timing, camera,
+                              mode flags) + the `store` localStorage helper (STORAGE-SCHEMA.md)
+                              + `ttBoard` time-trial leaderboard
+game-weather.js -> AXWeather  applyRaceSettings() (TOD/weather → sun/sky/fog/exposure/
+                              floodlights/paint), per-circuit atmo bias, 2D rain overlay
+game-track.js   -> AXTrack    async loadTrack() (build+upload a circuit, menu flyby) and
+                              makeCars()/gridUp() (assemble + place the 22-car field)
+game-ui.js      -> AXUi       car-setup panel, select/menu/pause screens, steering presets
+                              & sliders, sound/music toggles (all event wiring in .init)
+game-hud.js     -> AXHud      the live race HUD overlay + minimap canvas
+```
+
 ## js/game.js — main
+
+Now the orchestrator (~3,590 lines): shared-namespace refs, DOM cache,
+sky/weather animation state, the physics/AI core (`update`/`updateCar`),
+`render` + cameras, the fixed-step main loop, the boot block (`GLX.init` guard +
+`AX*.init(deps)` wiring), and `window.__apex`. Section map:
+[GAME-JS-MAP.md](GAME-JS-MAP.md).
 
 States: `menu | select | count | race | results | seasonEnd`. Player + 21 AI.
 Position model: `s` meters along centerline (wraps), `x` lateral in meters

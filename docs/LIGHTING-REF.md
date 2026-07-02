@@ -1,7 +1,9 @@
 # Lighting & sky reference
 
-`js/glx.js` owns the shaders and UBO; `game.js` (`applyRaceSettings`,
-`buildTrackLights`, `setFrameLights`) drives the per-frame state.
+`js/glx.js` owns the shaders and UBO (shader sources in `js/glx-shaders.js`).
+`js/game-weather.js` (`AXWeather.applyRaceSettings`) sets time-of-day/weather
+atmosphere; `game.js` (`buildTrackLights`, `setFrameLights`) drives the
+per-frame light state.
 
 ---
 

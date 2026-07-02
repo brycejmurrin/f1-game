@@ -2,7 +2,7 @@
 
 Each circuit's bespoke surroundings live in `js/tracks/<id>.js` as a
 `scenery(api)` function (see [ARCHITECTURE.md](ARCHITECTURE.md)). The engine
-(`buildProps` in `js/tracks.js`) calls it once with an `api` of placement
+(`buildProps` in `js/tracks-scenery.js`) calls it once with an `api` of placement
 helpers, geometry primitives, and composite models. Everything emits flat-shaded
 geometry into the track's prop mesh.
 

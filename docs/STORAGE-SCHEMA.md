@@ -1,8 +1,9 @@
 # localStorage schema
 
 All persistent state lives in `localStorage`. Keys are prefixed `apex26.` and
-written through the `store` helper in `js/game.js` (`JSON.stringify`/`parse`,
-silently no-ops on quota errors) — with two exceptions noted at the bottom.
+written through the `store` helper in `js/game-state.js` (exposed as `AX.store`;
+`JSON.stringify`/`parse`, silently no-ops on quota errors) — with two exceptions
+noted at the bottom.
 
 ```js
 const store = {

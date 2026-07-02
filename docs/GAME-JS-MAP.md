@@ -1,37 +1,47 @@
 # game.js — structural map
 
-`js/game.js` (~5,400 lines) is the main game module: one anonymous IIFE that
+`js/game.js` (~3,590 lines) is the main game module: one anonymous IIFE that
 assigns **no global** — its only public surface is `window.__apex` (see
 `docs/DEBUG-HOOKS.md`). This doc is the section-by-section guide. Line numbers
 are approximate anchors — grep the banner comments (`// ---------- X ----------`)
 rather than trusting exact offsets.
 
-Dependencies (globals): `M4, V3, GLX, GLTF, Teams, Tracks, TrackMaps, Car3D,
-Input, GameAudio, F1API, DataHub, Parts, Ghost, CircuitPaths`.
+Dependencies (globals): the engine + data modules `M4, V3, GLX, GLTF, Teams,
+Tracks, TrackMaps, Car3D, Input, GameAudio, F1API, DataHub, Parts, Ghost,
+CircuitPaths`, plus the game-subsystem split: `AXC` (config/knobs), `AX` (shared
+state) — read directly — and `AXWeather / AXTrack / AXUi / AXHud`, wired at boot
+via `.init(deps)`.
 
-## Section index
+## Extracted subsystems (formerly in game.js)
 
-| # | Section | Anchor / lines | What lives here |
-|---|---------|---------------|-----------------|
-| 1 | DOM cache | `// ---------- DOM ----------` (~7–40) | `$()` helper, `els` element cache, canvas |
-| 2 | Rain overlay | ~41–75 | 2D canvas rain animation (`initRainDrops`, `drawRain`) |
-| 3 | Settings & leaderboards | ~76–142 | `store` (localStorage, `apex26.` prefix — see STORAGE-SCHEMA.md), TT leaderboard (`ttlb.<track>`), custom team |
-| 4 | Physics constants | ~143–266 | Tuning knobs (`WHEELBASE`, `STEER_*`, `DRIFT`, `PACE`, `LONG_GRIP` …), gear table, `DIFF` difficulty tiers, `CAM_MODES` |
-| 5 | Shared state | ~267–310 | ~30 module-scoped vars — the glue: `state` ("menu"\|"select"\|"count"\|"race"\|"results"), `track`, `player`, `cars[]`, `raceT`, sector timing, camera (`camEye/camTgt/camFov/camMode/dbgCam`), mode flags (`timeTrial`, `seasonMode`, `frozen`) |
-| 6 | Sky/weather state | ~311–372 | `frame`/`frameSky` lighting state, lightning, clouds, paint materials, scratch sample buffers (`smp/smp2/smpC`) |
-| 7 | Helpers | ~373–418 | `clamp/lerp/damp/fmtTime/wrapS` … |
-| 8 | Parts / player mods | ~419–434 | `playerMods` from `Parts.getMods` |
-| 9 | Car setup | ~435–568 | `makeCars()`, `gridUp()` — build 22-car field, meshes, liveries |
-| 10 | Track loading | ~569–628 | async `loadTrack()`, menu flyby scheduling |
-| 11 | Race flow | ~629–1272 | **`applyRaceSettings()`** (~630–972: time-of-day/weather → lighting, lightning, paint, per-track atmo bias), countdown, start lights, results, season points |
-| 12 | Per-frame update | ~1273–2281 | `update(dt)` field driver + **`updateCar()`** (~1453–2106, the physics/AI core — see below) |
-| 13 | Render | ~2282–2914 | `camVantage()` (12 camera modes), `render()`: camera damping/roll, projection, sky, per-car draw, GLX calls |
-| 14 | HUD | ~2915–3040 | `updateHud()`, `drawMinimap()` |
-| 15 | Main loop | ~3041–3078 | `tick()`: fixed-step physics accumulator (`physAcc`), render interpolation (`rPrevS/rPrevX`), rAF |
-| 16 | Car setup panel | ~3080–3270 | Team/parts selection UI |
-| 17 | UI wiring | ~3271–4129 | All menu/slider/settings `addEventListener` plumbing |
-| 18 | Boot | ~4130–4160 | GLX.init guard, initial state, rAF start |
-| 19 | Debug API | ~4161–end | `window.__apex = { … }` — ~50 methods (race/park/jump/obs/act/…) |
+The old ~5,400-line monolith was split; these now live in sibling files (game.js
+still drives all boot-time invocation). See `docs/MODULE-GRAPH.md` /
+`docs/ARCHITECTURE.md`.
+
+| Was in game.js | Now in | Global |
+|----------------|--------|--------|
+| Physics constants, gear table, `DIFF`, `CAM_MODES`, tunable knobs | `game-config.js` | `AXC` |
+| Shared mutable state, `store`, TT leaderboard, custom team | `game-state.js` | `AX` |
+| `applyRaceSettings()`, per-track atmo bias, rain overlay | `game-weather.js` | `AXWeather` |
+| `loadTrack()`, `makeCars()`, `gridUp()` | `game-track.js` | `AXTrack` |
+| Car-setup panel + all menu/slider/settings wiring | `game-ui.js` | `AXUi` |
+| `updateHud()`, `drawMinimap()` | `game-hud.js` | `AXHud` |
+
+## Section index (current game.js)
+
+| # | Section | Anchor | What lives here |
+|---|---------|--------|-----------------|
+| 1 | Shared namespaces | `// ---------- shared namespaces ----------` (~8) | Destructures constants from `AXC` and state from `AX` into locals |
+| 2 | DOM cache | `// ---------- DOM ----------` (~26) | `$()` helper, `els` element cache, canvas, `mm` minimap ctx |
+| 3 | Sky/weather anim state | `// ---------- sky / weather animation state ----------` (~101) | `frame`/`frameSky` lighting (on `AX`), lightning, clouds, paint materials, scratch sample buffers (`smp/smp2/smpC`) |
+| 4 | Helpers | `// ---------- helpers ----------` (~163) | `clamp/lerp/damp/fmtTime/wrapS/cssCol/smpHw` …, plus closures handed to `AX*.init` |
+| 5 | Parts / player mods | `// ---------- parts / player mods ----------` (~209) | `playerMods` from `Parts.getMods`, `recomputePlayerMods()` |
+| 6 | Race flow | `// ---------- race flow ----------` (~307) | `startRace`, countdown/start lights, results, season points, `quitToMenu` (lighting now in `AXWeather.applyRaceSettings`) |
+| 7 | Per-frame update | `// ---------- per-frame update ----------` (~609) | `update(dt)` field driver (~613) + **`updateCar()`** (~789, the physics/AI core — see below) |
+| 8 | Render | `// ---------- render ----------` (~1618) | `camVantage()` (~1629, 12 camera modes), `render()` (~1736): camera damping/roll, projection, sky, per-car draw, GLX calls |
+| 9 | Main loop | `// ---------- main loop ----------` (~2240) | `tick()` (~2244): fixed-step physics accumulator (`physAcc`), render interpolation (`rPrevS/rPrevX`), rAF |
+| 10 | Boot | `// ---------- boot ----------` (~2279) | `GLX.init` guard, `AXHud/AXWeather/AXTrack/AXUi.init(deps)` wiring, `Input.init`, `DataHub.init`, initial state, rAF start |
+| 11 | Debug API | `// --- debug / test hook ----` (~2310) | `window.__apex = { … }` — ~50 methods (race/park/jump/obs/act/…) |
 
 ## updateCar() sub-steps (in order)
 
