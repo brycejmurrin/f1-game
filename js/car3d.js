@@ -187,13 +187,25 @@ const Car3D = (function () {
       const rya1 = cy + rimR*Math.cos(a1), rza1 = cz + rimR*Math.sin(a1);
       const A0=[x0,ya0,za0], A1=[x0,ya1,za1], B0=[x1,ya0,za0], B1=[x1,ya1,za1];
       const R0=[x1,rya0,rza0], R1=[x1,rya1,rza1];
-      // Double-wound (both faces) so the sidewall + hub disc never cull away and
-      // leave the tyre see-through — same reason the band/spokes below are two-sided.
-      addQuad(out, B0, B1, R1, R0, RC); addQuad(out, B0, R0, R1, B1, RC);
-      addTri(out, hub1, R0, R1, HUB);  addTri(out, hub1, R1, R0, HUB);
+      // SINGLE outward-facing winding (no coincident duplicate). Double-winding the
+      // sidewall made two faces at the same plane, which z-fights on real mobile
+      // depth precision → the tyre looked translucent (SwiftShader tolerated it, so
+      // it read solid headless). These outward windings are the reverse of the
+      // original see-through ones, so the outer face is opaque with no z-fight.
+      addQuad(out, B0, R0, R1, B1, RC);   // right (+X) sidewall, faces out
+      addTri(out, hub1, R1, R0, HUB);
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
-      addQuad(out, A1, A0, L0, L1, RC); addQuad(out, A1, L1, L0, A0, RC);
-      addTri(out, hub0, L1, L0, HUB);  addTri(out, hub0, L0, L1, HUB);
+      addQuad(out, A1, L1, L0, A0, RC);   // left (−X) sidewall, faces out
+      addTri(out, hub0, L0, L1, HUB);
+      // Inner walls a few cm INSIDE each outer face, wound the opposite way (facing
+      // inward). The tyre then reads opaque from behind and through the spoke gaps
+      // too — a closed double wall — with the two faces separated so nothing z-fights.
+      const IWIN = 0.03;
+      const bi = x1 - IWIN, ai = x0 + IWIN;
+      const Bi0=[bi,ya0,za0], Bi1=[bi,ya1,za1], Ri0=[bi,rya0,rza0], Ri1=[bi,rya1,rza1];
+      addQuad(out, Bi0, Bi1, Ri1, Ri0, RC); addTri(out, [bi-0.012,cy,cz], Ri0, Ri1, HUB);   // right inner, faces −X
+      const Ai0=[ai,ya0,za0], Ai1=[ai,ya1,za1], Li0=[ai,rya0,rza0], Li1=[ai,rya1,rza1];
+      addQuad(out, Ai1, Ai0, Li0, Li1, RC); addTri(out, [ai+0.012,cy,cz], Li1, Li0, HUB);   // left inner, faces +X
     }
     // Pirelli-style compound band: a bright ring on both sidewalls just inside
     // the tread — the classic modern-F1 tyre read (and a colour accent on an
