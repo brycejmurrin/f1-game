@@ -1262,4 +1262,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
 /* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating
    HUD duplicates so the view reads like sitting in the car. */
 body.cockpit-cam #hud-gearbox,
-body.cockpit-cam #hud-speed { display: none; }
+body.cockpit-cam #hud-speed,
+body.cockpit-cam #hud-energy { display: none; }

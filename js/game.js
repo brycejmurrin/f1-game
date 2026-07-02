@@ -681,8 +681,6 @@ function getCockpitWheel() {
   _rigBox(out,  0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);
   _rigBox(out, 0, -0.138, 0, 0.17, 0.038, 0.05, CARB);         // bottom bar
   _rigBox(out, 0, 0.0, 0.014, 0.215, 0.16, 0.042, CARB);       // fascia plate
-  _rigBox(out, 0, 0.042, -0.014, 0.145, 0.088, 0.022, [0.025, 0.025, 0.035]); // display bezel
-  _rigBox(out, 0, 0.042, -0.027, 0.125, 0.070, 0.006, [0.012, 0.018, 0.028]); // LCD
   // Button clusters (bright HDR so they read; glow slightly at night).
   const BTN = [[1.5, 0.15, 0.10], [0.15, 0.5, 1.5], [0.15, 1.3, 0.35], [1.35, 1.1, 0.12]];
   let bi = 0;
@@ -690,8 +688,12 @@ function getCockpitWheel() {
     _rigBox(out, bx, by, -0.026, 0.02, 0.02, 0.012, BTN[bi++]);
   _rigBox(out, -0.03, -0.055, -0.026, 0.028, 0.028, 0.014, KNOB);  // rotary knobs
   _rigBox(out,  0.03, -0.055, -0.026, 0.028, 0.028, 0.014, KNOB);
-  _rigBox(out, -0.105, 0.0, 0.048, 0.06, 0.11, 0.012, CARB);   // shift paddles
-  _rigBox(out,  0.105, 0.0, 0.048, 0.06, 0.11, 0.012, CARB);
+  // Shift paddles: wide blades poking out past the rim behind the wheel —
+  // clearly visible flanking the grips from the driver's eye.
+  const PADL = [0.11, 0.11, 0.125];
+  _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
+  _rigBox(out,  0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
+
   cockpitWheelMesh = GLX.createMesh(out);
   return cockpitWheelMesh;
 }
@@ -706,7 +708,7 @@ function getLedStrip(lit) {
   for (let i = 0; i < 8; i++) {
     const on = i < lit;
     const col = on ? COLS[i] : [0.05, 0.05, 0.06];
-    _rigBox(out, -0.084 + i * 0.024, 0.098, -0.026, 0.016, 0.016, 0.010, col);
+    _rigBox(out, -0.084 + i * 0.024, 0.926, 0.424, 0.016, 0.016, 0.010, col);
   }
   _ledMeshes[lit] = GLX.createMesh(out);
   return _ledMeshes[lit];
@@ -723,7 +725,7 @@ function getGearDigit(g) {
   ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const GRN = [0.25, 2.2, 0.55];
-  const h = 0.056, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.042, cz = -0.033;
+  const h = 0.056, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.885, cz = 0.424;
   const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
               [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
   const seg = SEG7[g % 10];
@@ -752,6 +754,14 @@ function getSpeedDigit(d) {
   _spdMeshes[d] = GLX.createMesh(out);
   return _spdMeshes[d];
 }
+let _ersBarMesh = null;
+function getErsBar() {
+  if (_ersBarMesh) return _ersBarMesh;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  _rigBox(out, 0.104, 0, 0, 0.208, 0.009, 0.006, [0.25, 1.9, 0.5]);  // anchored at x=0
+  _ersBarMesh = GLX.createMesh(out);
+  return _ersBarMesh;
+}
 let _thrBarMesh = null, _brkBarMesh = null;
 function getPedalBar(brake) {
   // Unit-height bar anchored at its BOTTOM (y 0..0.052) so a matrix Y-scale
@@ -763,6 +773,19 @@ function getPedalBar(brake) {
   const m = GLX.createMesh(out);
   if (brake) _brkBarMesh = m; else _thrBarMesh = m;
   return m;
+}
+// Physical dash pod ABOVE the wheel (car space — does not rotate with it, like
+// the real column-mounted dash): houses the gear digit, speed, throttle/brake
+// bars, ERS energy bar, and the RPM shift-light strip along its top edge.
+let _dashPodMesh = null;
+function getDashPod() {
+  if (_dashPodMesh) return _dashPodMesh;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  _rigBox(out, 0, 0.893, 0.447, 0.27, 0.105, 0.036, [0.04, 0.04, 0.05]);       // housing
+  _rigBox(out, 0, 0.889, 0.4285, 0.24, 0.080, 0.006, [0.012, 0.018, 0.028]);   // screen
+  _rigBox(out, 0, 0.8555, 0.424, 0.214, 0.012, 0.006, [0.03, 0.035, 0.04]);    // energy slot
+  _dashPodMesh = GLX.createMesh(out);
+  return _dashPodMesh;
 }
 // The cockpit body: the REAL car (livery, nose, mirrors, number board) minus
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
@@ -793,31 +816,40 @@ function drawCockpitRig(c, base, dt, paint) {
   M4.mulTo(_rigA, base, _rigT);
   M4.mulTo(_rigB, _rigA, _rigR);
   GLX.draw(getCockpitWheel(), _rigB, opt);
-  // Live gear digit + RPM shift lights on the wheel (ride the wheel matrix).
+  // Physical dash pod above the wheel: gear, speed, pedals, energy, RPM LEDs.
   const fx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
-  GLX.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), _rigB, fx);
+  GLX.draw(getDashPod(), base, opt);
+  GLX.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), base, fx);
   const rpmF = clamp(((c.rpm || IDLE_RPM) - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  GLX.draw(getLedStrip(Math.round(rpmF * 8)), _rigB, fx);
-  // Speed (km/h) in small cyan digits along the bottom of the LCD — the HUD
-  // speedometer lives IN the car in cockpit view.
+  GLX.draw(getLedStrip(Math.round(rpmF * 8)), base, fx);
+  // Speed (km/h): small cyan digits on the left of the pod screen.
   const kmh = Math.min(999, Math.round((c.speed || 0) * 3.6));
   const ds = String(kmh);
   for (let i = 0; i < ds.length; i++) {
-    _digT[12] = (i - (ds.length - 1) / 2) * 0.021 - 0.028; _digT[13] = 0.016; _digT[14] = -0.033;
-    M4.mulTo(_digM, _rigB, _digT);
+    _digT[12] = -0.085 + (i - (ds.length - 1) / 2) * 0.023; _digT[13] = 0.874; _digT[14] = 0.424;
+    M4.mulTo(_digM, base, _digT);
     GLX.draw(getSpeedDigit(+ds[i]), _digM, fx);
   }
-  // Throttle / brake pedal bars flanking the LCD (green right, red left),
-  // height-scaled by the live inputs.
+  // Throttle / brake bars on the right of the screen (green/red, live).
   const th = _testInput ? (_testInput.throttle ? 1 : 0) : (Input.throttle() ? 1 : 0);
   const br = _testInput ? (_testInput.brake ? 1 : 0) : (Input.braking() ? 1 : 0);
   c._thrVis = damp(c._thrVis == null ? 0 : c._thrVis, th, 12, dt);
   c._brkVis = damp(c._brkVis == null ? 0 : c._brkVis, br, 12, dt);
-  for (const [mesh, v, bx] of [[getPedalBar(false), c._thrVis, 0.052], [getPedalBar(true), c._brkVis, -0.052]]) {
-    _digT[12] = bx; _digT[13] = 0.012; _digT[14] = -0.033;
-    M4.mulTo(_digM, _rigB, _digT);
+  for (const [mesh, v, bx] of [[getPedalBar(false), c._thrVis, 0.100], [getPedalBar(true), c._brkVis, 0.078]]) {
+    _digT[12] = bx; _digT[13] = 0.860; _digT[14] = 0.424;
+    M4.mulTo(_digM, base, _digT);
     _digM[4] *= v; _digM[5] *= v; _digM[6] *= v;   // scale local Y by pedal position
     if (v > 0.03) GLX.draw(mesh, _digM, fx);
+  }
+  // ERS charge fill along the pod's bottom slot; pulses while deploying.
+  const en = clamp(c.energy || 0, 0, 1);
+  if (en > 0.01) {
+    _digT[12] = -0.104; _digT[13] = 0.8555; _digT[14] = 0.421;
+    M4.mulTo(_digM, base, _digT);
+    _digM[0] *= en; _digM[1] *= en; _digM[2] *= en;   // scale local X by charge
+    GLX.draw(getErsBar(), _digM, c.deploying
+      ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.75 + 0.25 * Math.sin(raceT * 22) }
+      : fx);
   }
 }
 
