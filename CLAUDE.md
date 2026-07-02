@@ -64,7 +64,12 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 - **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=263).
   **Always increment N when changing any JS or CSS file** — search `?v=` and replace
-  all instances (`sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`).
+  all instances (`sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`). **Also bump
+  `version.json` `{ "build": N }` to the SAME N** — the shell version guard in
+  `index.html` fetches it (no-store) and force-reloads a stale installed PWA when
+  the deployed build is newer than the cached shell (index.html itself has no
+  `?v=`, so this is the only thing that refreshes the HTML markup — e.g. a new
+  pause-menu button).
 - **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
   `import`/`export`.
 - **localStorage keys** are all prefixed `apex26.` (e.g. `apex26.team`,
