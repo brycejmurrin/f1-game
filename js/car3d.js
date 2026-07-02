@@ -21,6 +21,7 @@ const Car3D = (function () {
   const RIM    = [0.11, 0.11, 0.13];
   const HUB    = [0.28, 0.28, 0.31];
   const INTAKE = [0.03, 0.03, 0.04];          // radiator inlet void
+  const HALO   = [0.17, 0.17, 0.19];          // brushed-titanium cockpit-protection hoop
 
   function addTri(out, a, b, c, col) {
     const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
@@ -244,6 +245,22 @@ const Car3D = (function () {
   // matches today's hardcoded literals so an unmodified car is byte-identical.
   const TYRE_BAND     = { 0: [0.92, 0.92, 0.90], 1: [0.85, 0.10, 0.08], 2: [0.95, 0.15, 0.05] };
   const BRAKE_CALIPER = { 0: null, 1: null, 2: [0.75, 0.08, 0.05] };
+  // Per-COMPOUND sidewall band colour (real Pirelli-style read), keyed by the
+  // resolved tyre option id — so each tyre choice reads distinctly on the car,
+  // not just in three tiers. Falls back to TYRE_BAND[tier] for any unmapped id.
+  const TYRE_PIRELLI = {
+    intermediate: [0.10, 0.72, 0.24],   // green
+    hard:         [0.90, 0.90, 0.93],   // white
+    medium:       [0.96, 0.80, 0.10],   // yellow
+    slick_track:  [0.80, 0.82, 0.88],   // silver slick
+    compound_c4:  [0.95, 0.42, 0.10],   // orange-soft
+    soft:         [0.92, 0.12, 0.10],   // red
+    compound_c5:  [0.97, 0.16, 0.12],   // bright red
+    supersoft:    [0.88, 0.10, 0.30],   // crimson
+    p_zero_red:   [0.97, 0.07, 0.07],   // hot red
+    qualigum:     [0.62, 0.12, 0.78],   // purple (quali)
+    hypersoft:    [0.98, 0.38, 0.62],   // pink
+  };
 
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
@@ -422,6 +439,25 @@ const Car3D = (function () {
       addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
     }
 
+    // --- Halo: the titanium cockpit-protection hoop (defining modern-F1 read).
+    // A central front pillar rising off the chassis, then two tubular arms
+    // arcing up-and-out over the driver and sweeping back down to the collar.
+    // Chase/AI only — the first-person cockpit body (ckpt) has its own framing. ---
+    if (!ckpt) {
+      addBox(out, 0, 0.63, 0.47, 0.035, 0.20, 0.05, HALO);   // front centre pillar
+      for (const s of [-1, 1]) {
+        addSpan(out, { z: 0.49, x: 0,       y: 0.815, w: 0.055, h: 0.055 },
+                     { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 }, HALO);  // front arc
+        addSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
+                     { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 }, HALO); // rear arc to collar
+      }
+      // Wing mirrors on short stalks either side of the cockpit.
+      for (const s of [-1, 1]) {
+        addBox(out, s*0.37, 0.55, 0.30, 0.13, 0.02, 0.025, DARK);   // stalk
+        addBox(out, s*0.47, 0.575, 0.30, 0.035, 0.055, 0.065, c1);  // mirror housing
+      }
+    }
+
     // --- Exhaust outlet poking from the tail cap --- ENGINE tier: a lone slim
     // pipe at low spec, a fat central tailpipe flanked by two extra tips at top.
     const exhR = tier("engine") === 0 ? 0.05 : (tier("engine") === 2 ? 0.09 : 0.07);
@@ -577,9 +613,12 @@ const Car3D = (function () {
     }
 
     // --- Wheels --- (skipped for the player car, which draws animated wheels)
-    // TYRES tier tints the sidewall band; BRAKES tier 2 adds a caliper accent.
+    // Per-compound Pirelli band colour when the resolved tyre id is known
+    // (opts.parts._ids.tyres), else the coarse tier tint. BRAKES tier 2 adds
+    // a caliper accent.
     if (!noWheels) {
-      const tyreBand = TYRE_BAND[tier("tyres")];
+      const tyreId = T._ids && T._ids.tyres;
+      const tyreBand = (tyreId && TYRE_PIRELLI[tyreId]) || TYRE_BAND[tier("tyres")];
       const caliperColor = BRAKE_CALIPER[brakesT];
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32, tyreBand, caliperColor);
@@ -590,5 +629,5 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER };
+  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER, TYRE_PIRELLI };
 })();

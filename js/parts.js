@@ -203,10 +203,16 @@ const Parts = (function () {
   function getVisualTiers(setup, teamEngine) {
     const p = Object.assign({}, DEFAULTS, setup);
     const out = {};
+    const ids = {};
     for (const cat of CATALOG) {
       const opt = _resolve(cat, p, teamEngine);
       out[cat.id] = opt.visualTier != null ? opt.visualTier : 1;
+      ids[cat.id] = opt.id;
     }
+    // Resolved option id per category — lets Car3D drive per-OPTION visuals
+    // (e.g. Pirelli tyre-compound colours) beyond the coarse 0/1/2 tier. The
+    // tier lookups above are unchanged; this rides along under a reserved key.
+    out._ids = ids;
     return out;
   }
 

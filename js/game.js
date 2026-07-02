@@ -521,13 +521,15 @@ function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
 function partsVisualKey(teamId) {
   const team = teamById(teamId);
   const vt = Parts.getVisualTiers(getTeamParts(teamId), team ? team.engine : null);
-  return Parts.CATALOG.map((c) => vt[c.id]).join("");
+  // Tiers + the tyre compound id (per-option colour differs within a tier, so
+  // the mesh cache must re-key on the compound, not just the tyre tier).
+  return Parts.CATALOG.map((c) => vt[c.id]).join("") + ":" + (vt._ids ? vt._ids.tyres : "");
 }
 
 // Resolved tyre/brake visual tiers for the PLAYER's wheel meshes (drawPlayerWheels
 // reads these directly — cheap per-frame variable reads, not a per-frame
 // Parts.getVisualTiers() call). Refreshed whenever parts change (below).
-let playerTyreTier = 1, playerBrakesTier = 1;
+let playerTyreTier = 1, playerBrakesTier = 1, playerTyreId = "medium";
 // Full 8-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
 // once here (parts only change from the setup screen, which calls this on close)
 // so the render loop reads a cached string instead of rebuilding it via
@@ -548,7 +550,8 @@ function recomputePlayerMods() {
   };
   const vt = Parts.getVisualTiers(setup, team.engine);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
-  playerVisualKey = Parts.CATALOG.map((c) => vt[c.id]).join("");
+  playerTyreId = vt._ids ? vt._ids.tyres : "medium";
+  playerVisualKey = Parts.CATALOG.map((c) => vt[c.id]).join("") + ":" + playerTyreId;
 }
 
 // ---------- car setup ----------
@@ -980,10 +983,11 @@ function playerBodyMesh(team) {
 // wheelMeshF/wheelMeshR exactly — same team-independent, dark-tyre meshes.
 const wheelMeshCache = {};
 function getPlayerWheelMeshes() {
-  const key = playerTyreTier + ":" + playerBrakesTier;
+  const key = playerTyreId + ":" + playerBrakesTier;
   let m = wheelMeshCache[key];
   if (!m) {
-    const band = Car3D.TYRE_BAND[playerTyreTier], caliper = Car3D.BRAKE_CALIPER[playerBrakesTier];
+    const band = (Car3D.TYRE_PIRELLI && Car3D.TYRE_PIRELLI[playerTyreId]) || Car3D.TYRE_BAND[playerTyreTier];
+    const caliper = Car3D.BRAKE_CALIPER[playerBrakesTier];
     m = wheelMeshCache[key] = {
       F: GLX.createMesh(Car3D.buildWheel(0.32, band, caliper)),
       R: GLX.createMesh(Car3D.buildWheel(0.38, band, caliper)),
