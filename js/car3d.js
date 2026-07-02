@@ -88,6 +88,31 @@ const Car3D = (function () {
     const F = frame(front), R = frame(rear);
     addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront);
   }
+  // Chamfer the two TOP longitudinal edges of a span with proud 45° strips. A
+  // sharp 90° edge either flashes a razor-thin aliased highlight or nothing; a
+  // 45° facet between the top and side faces catches a clean running specular
+  // line exactly when neither neighbour does — the "expensive-looking car" cue.
+  // The strip sits fractionally proud along its own normal so it never z-fights
+  // the flat faces behind it. b in metres (chamfer width).
+  function addTopBevel(out, front, rear, b, col) {
+    const F = frame(front), R = frame(rear);
+    // corners [2]=top-right (x+tw), [3]=top-left (x-tw); both at y+h/2.
+    for (const side of [1, -1]) {
+      // top corner index: right edge uses [2]/[2], left uses [3]/[3].
+      const ti = side > 0 ? 2 : 3;
+      const fc = F[ti], rc = R[ti];
+      const proud = 0.0006 * side;   // nudge outward in x so the crease wins depth
+      // top-face inset point (move inward in x by b) and side-face inset point
+      // (move down in y by b), for both the front and rear frame.
+      const ft = [fc[0] - side * b + proud, fc[1], fc[2]];
+      const fs = [fc[0] + proud, fc[1] - b, fc[2]];
+      const rt = [rc[0] - side * b + proud, rc[1], rc[2]];
+      const rs = [rc[0] + proud, rc[1] - b, rc[2]];
+      // Wind so the facet normal points up-and-out (toward +y, ±x).
+      if (side > 0) addQuad(out, fs, rs, rt, ft, col);
+      else          addQuad(out, ft, rt, rs, fs, col);
+    }
+  }
 
   // Smooth dome (helmet): partial lat-long sphere, analytic normals.
   function addDome(out, cx, cy, cz, r, col) {
@@ -219,16 +244,22 @@ const Car3D = (function () {
     addBox(out, 0, 0.07, -0.3, 1.5, 0.06, 3.2, CARBON);
 
     // --- Nose: one crisp tapered wedge, tip to bulkhead ---
-    addSpan(out, { z: 2.65, y: 0.30, w: 0.14, h: 0.09, t: 0.75 },
-                 { z: 1.05, y: 0.34, w: 0.46, h: 0.36, t: 0.80 }, c1);
+    const nF = { z: 2.65, y: 0.30, w: 0.14, h: 0.09, t: 0.75 };
+    const nR = { z: 1.05, y: 0.34, w: 0.46, h: 0.36, t: 0.80 };
+    addSpan(out, nF, nR, c1);
+    addTopBevel(out, nF, nR, 0.030, c1);
 
     // --- Monocoque: slab from bulkhead to cockpit ---
-    addSpan(out, { z: 1.05, y: 0.36, w: 0.46, h: 0.40, t: 0.80 },
-                 { z: 0.05, y: 0.40, w: 0.62, h: 0.50, t: 0.78 }, c1);
+    const mF = { z: 1.05, y: 0.36, w: 0.46, h: 0.40, t: 0.80 };
+    const mR = { z: 0.05, y: 0.40, w: 0.62, h: 0.50, t: 0.78 };
+    addSpan(out, mF, mR, c1);
+    addTopBevel(out, mF, mR, 0.035, c1);
 
     // --- Cockpit surround: raised collar, narrowing rearward ---
-    addSpan(out, { z: 0.05, y: 0.42, w: 0.62, h: 0.46, t: 0.72 },
-                 { z: -0.55, y: 0.44, w: 0.58, h: 0.50, t: 0.60 }, c1);
+    const kF = { z: 0.05, y: 0.42, w: 0.62, h: 0.46, t: 0.72 };
+    const kR = { z: -0.55, y: 0.44, w: 0.58, h: 0.50, t: 0.60 };
+    addSpan(out, kF, kR, c1);
+    addTopBevel(out, kF, kR, 0.030, c1);
 
     // --- Airbox: trapezoid block above the cockpit (dark intake front) ---
     addSpan(out, { z: -0.28, y: 0.76, w: 0.30, h: 0.20, t: 0.55 },
