@@ -658,8 +658,7 @@ function getErsLight() {
 
 // ── First-person cockpit rig (COCKPIT cam viewmodel) ─────────────────────────
 // The car body is hidden in cockpit view and has no modelled interior, so the
-// driver's-eye view draws a dedicated rig in CAR space: dash cowl, halo
-// (centre pylon + hoop), cockpit-rim pads, wing mirrors — plus a steering
+// driver's-eye view draws the real car body (minus the helmet + halo) plus a steering
 // wheel drawn separately so it can roll with the smoothed steering input.
 // Everything is metres in car-local coords (+z nose, +y up; driver eye sits
 // at roughly (0, 0.98, -0.05) — see the cockpit camVantage).
@@ -830,7 +829,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
   GLX.draw(cockpitBodyMesh(c.team), base, paint);
-  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true, 0.35, 1.6);
+  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true, 0.35, 2.1);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
   // damped steering whatever the input mode). A second, slower damping stage
@@ -3062,8 +3061,8 @@ function camVantage(mode, s, x, spd, now, extra) {
     // that was the "seeing the tail" bug) and raised to 1.06 m, so the forward
     // wheels sit further ahead and the view looks down over them enough to see
     // where they meet the track.
-    const eyeFwd = mode === "cockpit" ? -0.18 : 0.35;
-    const eyeUp  = mode === "cockpit" ? 1.06 : 0.95;
+    const eyeFwd = mode === "cockpit" ? -0.14 : 0.35;
+    const eyeUp  = mode === "cockpit" ? 0.99 : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
       // Face straight FORWARD down the car's own heading (the tangent at the

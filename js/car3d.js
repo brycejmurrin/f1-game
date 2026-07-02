@@ -280,12 +280,30 @@ const Car3D = (function () {
 
     // --- Cockpit-side head-protection bolsters: the raised survival-cell edges
     // flanking the cockpit opening. They frame the driver's view left/right in
-    // the onboard cam and give the tub real shoulders in chase. ---
-    for (const s of [-1, 1]) {
-      addBlock(out, [
-        [s*0.24, 0.42, 0.14], [s*0.40, 0.42, 0.14], [s*0.40, 0.60, 0.10], [s*0.24, 0.58, 0.10],
-        [s*0.24, 0.44, -0.42], [s*0.40, 0.44, -0.42], [s*0.40, 0.62, -0.44], [s*0.24, 0.60, -0.44],
-      ], c1);
+    // the onboard cam and give the tub real shoulders in chase. In cockpit view
+    // they're remodelled into WIDE, TALL sidepod shoulders that rise beside the
+    // driver and slope down toward the nose — the big red bodywork "V" that
+    // frames a real F1 onboard (see reference). ---
+    if (ckpt) {
+      for (const s of [-1, 1]) {
+        // A long, wide, sloping shoulder fairing: tallest + widest just IN FRONT
+        // of the driver's eye (z ~0.12, so it frames the lower-left/right of the
+        // onboard view) sweeping down and tapering toward the nose. This is the
+        // big red bodywork "V" of a real F1 onboard.
+        addBlock(out, [
+          [s*0.26, 0.40, 1.55], [s*0.56, 0.28, 1.55], [s*0.54, 0.44, 1.52], [s*0.26, 0.50, 1.52],  // front (nose end)
+          [s*0.30, 0.42, 0.12], [s*0.86, 0.30, 0.12], [s*0.84, 0.92, 0.06], [s*0.30, 0.86, 0.06],  // rear (right by the driver)
+        ], c1);
+        // Accent edge stripe along the shoulder crown.
+        addBox(out, s*0.56, 0.70, 0.70, 0.03, 0.03, 1.5, c2);
+      }
+    } else {
+      for (const s of [-1, 1]) {
+        addBlock(out, [
+          [s*0.24, 0.42, 0.14], [s*0.40, 0.42, 0.14], [s*0.40, 0.60, 0.10], [s*0.24, 0.58, 0.10],
+          [s*0.24, 0.44, -0.42], [s*0.40, 0.44, -0.42], [s*0.40, 0.62, -0.44], [s*0.24, 0.60, -0.44],
+        ], c1);
+      }
     }
 
     // --- Airbox: trapezoid block above the cockpit (dark intake front) ---
