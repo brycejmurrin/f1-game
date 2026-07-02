@@ -685,6 +685,7 @@ function getCockpitWheel() {
   _rigBox(out, 0, 0.024, -0.016, 0.125, 0.080, 0.02, [0.025, 0.025, 0.035]);  // display bezel
   _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, [0.012, 0.018, 0.028]); // LCD
   _rigBox(out, 0, -0.004, -0.0295, 0.108, 0.008, 0.004, [0.03, 0.035, 0.04]); // energy slot (LCD bottom)
+  _rigBox(out, 0.008, 0.024, -0.0295, 0.0025, 0.040, 0.004, [0.10, 0.11, 0.13]); // LCD divider
   // Button clusters flanking the screen (bright HDR; glow slightly at night).
   const BTN = [[1.5, 0.15, 0.10], [0.15, 0.5, 1.5], [0.15, 1.3, 0.35], [1.35, 1.1, 0.12]];
   let bi = 0;
@@ -725,12 +726,12 @@ function getGearDigit(g) {
   ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const GRN = [2.2, 0.85, 0.12];   // orange, like the real gear readout
-  const h = 0.023, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.018, cz = -0.033;
+  const h = 0.028, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.024, cz = -0.033;
   const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
               [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
   const seg = SEG7[g % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
-    _rigBox(out, L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
+    _rigBox(out, 0.034 + L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
   _gearMeshes[g] = GLX.createMesh(out);
   return _gearMeshes[g];
 }
@@ -825,7 +826,7 @@ function drawCockpitRig(c, base, dt, paint) {
   const kmh = Math.min(999, Math.round((c.speed || 0) * 3.6));
   const ds = String(kmh);
   for (let i = 0; i < ds.length; i++) {
-    _digT[12] = -0.032 + (i - (ds.length - 1) / 2) * 0.015; _digT[13] = 0.042; _digT[14] = -0.033;
+    _digT[12] = -0.026 + (i - (ds.length - 1) / 2) * 0.016; _digT[13] = 0.024; _digT[14] = -0.033;
     M4.mulTo(_digM, _rigB, _digT);
     GLX.draw(getSpeedDigit(+ds[i]), _digM, fx);
   }
