@@ -464,6 +464,7 @@ function carPaintMat(base) {
   m.clearcoat = (base.clearcoat || 0) * LT.carClearcoat;
   m.emissive  = (base.emissive  || 0) * LT.carGlow;
   m.carPaint  = base.carPaint != null ? base.carPaint : 0;
+  m.sparkle   = base.sparkle  != null ? base.sparkle  : 1;   // reset each call so a preview override can't leak in-race
   return m;
 }
 const mm = els.minimap.getContext("2d");
@@ -3561,7 +3562,9 @@ function renderSetupPreview(dt) {
     ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
     fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
   });
-  GLX.draw(getSetupPreviewMesh(), M4.ident(), carPaintMat(PAINT_DRY_DAY));
+  const spMat = carPaintMat(PAINT_DRY_DAY);
+  spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
+  GLX.draw(getSetupPreviewMesh(), M4.ident(), spMat);
   GLX.present();
 }
 

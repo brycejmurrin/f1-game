@@ -56,6 +56,7 @@ uniform float uSpecular;
 uniform float uDetail;
 uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specular lobe
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
+uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
 uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
@@ -510,8 +511,8 @@ void main() {
   // facet half-aligns with the sun (view-dependent, so the sparkle field shifts
   // as the camera moves). HDR gain so flashes bloom. Distance-faded to nothing so
   // it never aliases at range. Additive white glint — leaves the pigment alone.
-  if (uCarPaint > 0.001 && litNoL > 0.0) {
-    float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0);
+  if (uCarPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
+    float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * uSparkle;
     if (spFade > 0.01) {
       vec3 cell = floor(vObjPos * 220.0);
       float h1 = hash21(cell.xy + cell.z * 19.7);
@@ -1814,7 +1815,7 @@ void main() {}`;
   let msFBO = null, msColorRB = null, msDepthRB = null;
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
-  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1;
+  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1, _matSpark = -1;
 
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
@@ -2150,7 +2151,7 @@ void main() {
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uWetness",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
@@ -2413,7 +2414,7 @@ void main() {
         gl.uniform1fv(litU["uLightBleed[0]"], bleed);
       }
     }
-    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = -1;
+    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = _matSpark = -1;
   }
 
   function draw(mesh, modelMat, opts) {
@@ -2430,6 +2431,7 @@ void main() {
     const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
     const clearcoat = opts && opts.clearcoat !== undefined ? opts.clearcoat : 0.0;
     const carPaint = opts && opts.carPaint !== undefined ? opts.carPaint : 0.0;
+    const sparkle = opts && opts.sparkle !== undefined ? opts.sparkle : 1.0;
     if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
     if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
     if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
@@ -2438,6 +2440,7 @@ void main() {
     if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
     if (clearcoat !== _matCC)       { gl.uniform1f(litU.uClearcoat, clearcoat); _matCC       = clearcoat; }
     if (carPaint  !== _matCP)       { gl.uniform1f(litU.uCarPaint,  carPaint);  _matCP       = carPaint; }
+    if (sparkle   !== _matSpark)    { gl.uniform1f(litU.uSparkle,   sparkle);   _matSpark    = sparkle; }
     // Each draw declares the full render state it needs (no restores afterwards),
     // so runs of same-state draws collapse to a single real toggle via the cache.
     setDepthMask(true);
@@ -2559,6 +2562,7 @@ void main() {
     const detail = opts && opts.detail !== undefined ? opts.detail : 0.0;
     const clearcoat = opts && opts.clearcoat !== undefined ? opts.clearcoat : 0.0;
     const carPaint = opts && opts.carPaint !== undefined ? opts.carPaint : 0.0;
+    const sparkle = opts && opts.sparkle !== undefined ? opts.sparkle : 1.0;
     if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
     if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
     if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
@@ -2567,6 +2571,7 @@ void main() {
     if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
     if (clearcoat !== _matCC)       { gl.uniform1f(litU.uClearcoat, clearcoat); _matCC       = clearcoat; }
     if (carPaint  !== _matCP)       { gl.uniform1f(litU.uCarPaint,  carPaint);  _matCP       = carPaint; }
+    if (sparkle   !== _matSpark)    { gl.uniform1f(litU.uSparkle,   sparkle);   _matSpark    = sparkle; }
     setDepthMask(true);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);

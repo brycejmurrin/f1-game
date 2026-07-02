@@ -174,9 +174,13 @@ const Car3D = (function () {
       const rya1 = cy + rimR*Math.cos(a1), rza1 = cz + rimR*Math.sin(a1);
       const A0=[x0,ya0,za0], A1=[x0,ya1,za1], B0=[x1,ya0,za0], B1=[x1,ya1,za1];
       const R0=[x1,rya0,rza0], R1=[x1,rya1,rza1];
-      addQuad(out, B0, B1, R1, R0, RC); addTri(out, hub1, R0, R1, HUB);
+      // Double-wound (both faces) so the sidewall + hub disc never cull away and
+      // leave the tyre see-through — same reason the band/spokes below are two-sided.
+      addQuad(out, B0, B1, R1, R0, RC); addQuad(out, B0, R0, R1, B1, RC);
+      addTri(out, hub1, R0, R1, HUB);  addTri(out, hub1, R1, R0, HUB);
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
-      addQuad(out, A1, A0, L0, L1, RC); addTri(out, hub0, L1, L0, HUB);
+      addQuad(out, A1, A0, L0, L1, RC); addQuad(out, A1, L1, L0, A0, RC);
+      addTri(out, hub0, L1, L0, HUB);  addTri(out, hub0, L0, L1, HUB);
     }
     // Pirelli-style compound band: a bright ring on both sidewalls just inside
     // the tread — the classic modern-F1 tyre read (and a colour accent on an
@@ -343,6 +347,32 @@ const Car3D = (function () {
     carbon_case:    { strakes: 4, fin: 1 },
     f1_spec:        { strakes: 5, fin: 1 },
   };
+  // Per-OPTION ERS: `led` HDR accent-strip colour (glows/blooms at night) + `pack`
+  // battery-pack size mult. Keyed by resolved ers id (else a tier fallback). Every
+  // ERS choice now reads distinctly — a coloured battery-pack light down the pods.
+  const ERS_STYLE = {
+    standard:       { led: [0.15, 0.55, 1.6],  pack: 1.00 },  // blue
+    regen_plus:     { led: [0.12, 1.5,  0.55], pack: 1.05 },  // green
+    harvest:        { led: [0.18, 1.35, 0.95], pack: 0.95 },  // teal
+    split_deploy:   { led: [0.85, 0.55, 1.7],  pack: 1.10 },  // violet
+    mgu_k_max:      { led: [1.7,  0.95, 0.15], pack: 1.15 },  // amber
+    deploy:         { led: [1.9,  0.4,  0.15], pack: 1.20 },  // orange
+    thermal_max:    { led: [1.95, 0.5,  0.08], pack: 1.05 },  // hot orange
+    torque_fill:    { led: [0.8,  0.3,  1.85], pack: 1.15 },  // purple
+    overtake_focus: { led: [2.05, 0.15, 0.55], pack: 1.20 },  // magenta
+    race_mode:      { led: [0.25, 0.95, 2.05], pack: 1.20 },  // cyan
+    full_attack:    { led: [2.25, 0.22, 0.16], pack: 1.30 },  // red
+    overcharge:     { led: [2.4,  0.75, 0.06], pack: 1.35 },  // gold-hot
+  };
+  // Per-OPTION fuel: filler-cap `cap` colour (HDR on the hot blends → glows).
+  const FUEL_STYLE = {
+    standard:       { cap: [0.22, 0.20, 0.26] },
+    high_octane:    { cap: [1.5,  1.15, 0.18] },   // yellow
+    biofuel:        { cap: [0.18, 1.35, 0.5] },    // green (sustainable)
+    race_blend:     { cap: [1.6,  0.6,  0.14] },   // orange
+    quali_mix:      { cap: [0.95, 0.28, 1.5] },    // violet
+    custom_formula: { cap: [1.9,  0.25, 1.25] },   // magenta
+  };
   // Per-DRIVER helmet crown-stripe palette (indexed by car number) so team-mates
   // and the field carry distinct helmets.
   const HELMET_ACCENT = [
@@ -457,10 +487,15 @@ const Car3D = (function () {
                      { z: -0.62, y: 0.86, w: 0.11, h: 0.09, t: 0.5 }, c1, INTAKE);
         for (const s of [-1, 1]) addBox(out, s*0.20, 0.58, -1.10, 0.015, 0.10, 0.60, CARBON);
       }
-      // FUEL tier 2: a bright HDR-violet filler panel (glows at night) + cap;
-      // plain dark at lower tiers.
-      const fuelHi = tier("fuel") === 2;
-      const fuelColor = fuelHi ? [0.95, 0.28, 1.5] : [0.22, 0.20, 0.26];
+      // Engine-mode indicator LEDs across the airbox intake lip (HDR → bloom at
+      // night): green (economy) → amber (standard) → red (max-attack power unit).
+      const engLed = engT === 2 ? [2.4, 0.28, 0.12] : engT === 0 ? [0.15, 1.8, 0.55] : [1.9, 1.2, 0.15];
+      for (const lx of [-0.06, 0, 0.06]) addBox(out, lx, 0.885, -0.30, 0.02, 0.014, 0.02, engLed);
+      // FUEL: per-OPTION filler cap colour (HDR blends glow at night).
+      const fuelId = T._ids && T._ids.fuel;
+      const fuelStyle = (fuelId && FUEL_STYLE[fuelId]) || null;
+      const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.22, 0.20, 0.26]);
+      const fuelHi = Math.max(fuelColor[0], fuelColor[1], fuelColor[2]) > 1;
       addBox(out, 0.13, 0.80, -0.55, 0.07, 0.04, 0.15, fuelColor);
       if (fuelHi) addBox(out, 0.13, 0.86, -0.55, 0.04, 0.03, 0.05, fuelColor);
     }
@@ -480,10 +515,15 @@ const Car3D = (function () {
       addBox(out, s*0.60, 0.10, -0.10, 0.02, 0.08, 0.72, c2);
     }
 
-    // ERS tier 2: bright battery-pack accent strakes along the sidepod flanks
-    // (HDR accent colour → glows and blooms at night); nothing extra otherwise.
-    if (tier("ers") === 2) {
-      for (const s of [-1, 1]) addBox(out, s*0.688, 0.36, -0.12, 0.02, 0.07, 0.55, ersC2);
+    // ERS battery-pack LED strip along the sidepod flanks — per-OPTION colour
+    // (HDR → glows and blooms at night), pack thickness grows with the spec, so
+    // every ERS choice reads distinctly. Falls back to the old tier-2 tint.
+    const ersId = T._ids && T._ids.ers;
+    const ersStyle = (ersId && ERS_STYLE[ersId]) || null;
+    const ersLed = ersStyle ? ersStyle.led : (tier("ers") === 2 ? ersC2 : null);
+    const ersPack = ersStyle ? ersStyle.pack : 1.0;
+    if (ersLed) {
+      for (const s of [-1, 1]) addBox(out, s*0.688, 0.36, -0.12, 0.02, 0.055 * ersPack, 0.55, ersLed);
     }
 
     // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
@@ -702,9 +742,13 @@ const Car3D = (function () {
         // Active-aero DRS: an extra open slot flap proud of the main plane.
         addSpan(out, { z: -2.44, y: 1.130 + rwLift, w: 0.98, h: 0.022 },
                      { z: -2.60, y: 1.190 + rwLift, w: 0.98, h: 0.030 }, c2);
+        // DRS-open indicator light on the actuator pod (HDR cyan → blooms).
+        addBox(out, 0, 1.155 + rwLift, -2.50, 0.05, 0.022, 0.03, [0.2, 1.7, 2.3]);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       addBox(out, 0, 1.085 + rwLift, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
+      // Rear-wing endplate marker lights (HDR amber) — small blooming tell each side.
+      for (const s of [-1, 1]) addBox(out, s*0.50, 0.82 + rwLift + epSY * 0.42, -2.60, 0.03, 0.03, 0.025, [1.9, 0.95, 0.12]);
 
       // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
       // structure. The >1 albedo glows through the night emissive path (and blooms),
@@ -743,11 +787,18 @@ const Car3D = (function () {
     const brakeId = T._ids && T._ids.brakes;
     const brakeStyle = (brakeId && BRAKE_STYLE[brakeId]) || null;
     const ductMul = brakeStyle ? brakeStyle.duct : (brakesT === 0 ? 0.5 : brakesT === 2 ? 1.9 : 1.0);
+    // Hot-brake glow: high-spec carbon brakes run their discs cherry-red — an HDR
+    // disc peeking through the wheel that intensifies with the brake package.
+    const brakeGlow = ductMul > 1.15 ? [Math.min(2.6, 0.7 + ductMul * 0.9), 0.16 * ductMul, 0.05] : null;
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, 1.89, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
       // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
       if (ductMul >= 1.3) addBox(out, s*0.65, 0.42, 1.86, 0.11, 0.02, 0.15, CARBON);
       if (!ckpt) addBox(out, s*0.58, 0.30, -1.80, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
+      if (brakeGlow) {
+        addBox(out, s*0.71, 0.34, 1.70, 0.02, 0.13, 0.13, brakeGlow);           // front disc
+        if (!ckpt) addBox(out, s*0.69, 0.34, -1.60, 0.02, 0.15, 0.15, brakeGlow); // rear disc
+      }
     }
 
     // --- Suspension wishbones --- SUSPENSION tier scales thickness + follows
