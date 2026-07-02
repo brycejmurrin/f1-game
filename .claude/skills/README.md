@@ -21,6 +21,7 @@ groups.
 | **audio-debug** | Inspect and tune the WebAudio synth engine (`js/audio.js`) — engine pitch curve, sfx triggers, music layers, mute/volume state. |
 | **perf-profile** | Capture a headless V8 CPU flame chart of the game loop via Playwright CDP — diagnose frame-time spikes, GC jitter, or slow track-build times. |
 | **lighting-tuner** | Tune and validate per-time-of-day atmosphere settings in `applyRaceSettings` using live `lightState()` probes and orbit screenshots. |
+| **bake-lighting** | Bake the in-game LIGHTING TUNER's copied `window.LightPresets = {…}` export into the shipped `js/light-presets.js`, bump the cache, and commit + push. |
 | **track-batch-verify** | Run `verify-track` across all 24 circuits in parallel — catch any track that would strand the game on the menu before pushing. |
 | **webgl-debug** | Diagnose WebGL2/GLX renderer issues: UBO binding, std140 padding, shadow acne, bloom, shader compile errors, `GL_INVALID_OPERATION`. |
 

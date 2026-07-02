@@ -18,4 +18,10 @@
 // dawn|day|dusk|night (the session "default" resolves to the track's day/night
 // look); weather is dry|wet|rain|fog|overcast.
 window.LightPresets = {
+  // Red Bull Ring, dusk + wet: the floodlights + wet-road mirror read too bright
+  // against the low golden-hour sky here (reported in tuning). Dim the lamp
+  // ceiling and lens glare a touch and pull the wet mirror back from a full
+  // reflection. Conservative starting point — refine live in the panel.
+  "redbull|dusk|wet":  { lampLevel: 0.20, glareStr: 0.08, ssrWetMul: 0.8 },
+  "redbull|dusk|rain": { lampLevel: 0.20, glareStr: 0.08, ssrWetMul: 0.8 },
 };
