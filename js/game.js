@@ -4499,8 +4499,26 @@ $("lt-copy").onclick = () => {
   for (const k in merged) if (!Object.keys(merged[k]).length) delete merged[k];
   const json = "window.LightPresets = " + JSON.stringify(merged, null, 2) + ";";
   const ta = $("lt-json");
-  ta.value = json; ta.hidden = false; ta.select();
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
+  ta.value = json; ta.hidden = false;
+  ta.focus(); ta.select(); ta.setSelectionRange(0, json.length);   // iOS needs the explicit range
+  const btn = $("lt-copy");
+  const flash = (ok) => {
+    btn.textContent = ok ? "COPIED ✓" : "SELECT & COPY ↑";
+    setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
+  };
+  // Auto-copy: prefer the async Clipboard API (the button click is the required
+  // user gesture); fall back to execCommand on the selected textarea for older
+  // mobile / installed-PWA webviews where navigator.clipboard is unavailable or
+  // rejects. The textarea stays visible either way as a manual fallback.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(json).then(() => flash(true), () => {
+      let ok = false; try { ok = document.execCommand && document.execCommand("copy"); } catch (e) {}
+      flash(ok);
+    });
+  } else {
+    let ok = false; try { ok = document.execCommand && document.execCommand("copy"); } catch (e) {}
+    flash(ok);
+  }
 };
 els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; };
 els.selPreviewMap.onclick = openTrackDetail;
