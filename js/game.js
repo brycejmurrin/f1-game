@@ -2971,9 +2971,24 @@ function render(dt) {
     // At twilight (sun near/just below horizon) the lamps are dim and WARM, as if
     // freshly switched on / still warming up; by deep night they reach full
     // brightness and cool to their neutral tint. Smooth, no hard dusk/night step.
+    // The dusk sky sits at a near-constant ~10-20 degree sun elevation for the
+    // WHOLE session (see the dusk sunDir above) — the old (0.07-sy)/0.22 ramp
+    // pinned at nightF=0 the entire time, floundering at a fixed 0.34 floor no
+    // matter how bright that golden-hour sky still was. Lamps that bright, fed
+    // through the wet-road SSR mirror, blew out the whole reflected scene.
+    // Full "night" sessions deliberately keep sunY slightly positive for the sky
+    // glow (see _floodEmit below) — ramp by elevation ONLY for dusk/dawn, and
+    // stay at full brightness for a real night session, same branching as
+    // _floodEmit uses.
     const _sy = frame.sunDir ? frame.sunDir[1] : -1;
-    const nightF = clamp((0.07 - _sy) / 0.22, 0, 1);   // 0 = sun up, 1 = well below horizon
-    const lvl  = 0.34 + 0.66 * nightF;                 // brightness ramp
+    const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
+      ? clamp(1 - _sy * 6, 0, 1)                       // 0 = bright dusk sky, 1 = sun at/below horizon
+      : 1;                                              // night / default-night: full ramp
+    // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
+    // raw physical HDR values (16-20) — at full ceiling they overpowered the
+    // scene (blown-out wet-road SSR mirror, washed neon night city). Cap the
+    // ceiling at 0.78 instead of 1.0, on top of the twilight ramp above.
+    const lvl  = (0.05 + 0.95 * nightF) * 0.35;
     const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
     const floodScale = [lvl * (1 + warmth * 0.14), lvl, lvl * (1 - warmth * 0.22)];
     setFrameLights(camEye, floodScale);
@@ -3040,7 +3055,7 @@ function render(dt) {
   const _floodEmit =
     (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.min(0.70, 0.12 + 0.58 * clamp(1 - _sunY * 4, 0, 1))
+        ? Math.min(0.70, 0.05 + 0.58 * clamp(1 - _sunY * 6, 0, 1))
         : 0;
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
@@ -3278,8 +3293,8 @@ function render(dt) {
     // city circuits (street/modern) get LESS bloom + a higher threshold so the
     // dense neon doesn't over-glow; open circuits keep more bloom for the lamps.
     const _neonCity = track.def.theme === "street_night" || track.def.theme === "modern";
-    _bloom = _neonCity ? 0.65 : 0.70;
-    _thresh = 0.93;
+    _bloom = _neonCity ? 0.48 : 0.55;
+    _thresh = 0.97;
   } else if (raceTimeOfDay === "dusk") {
     _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
     // Higher threshold so the low sun + lifted exposure + stronger god-rays don't

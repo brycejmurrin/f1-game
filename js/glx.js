@@ -1439,6 +1439,12 @@ void main() {
       // Miss fallback: reflect the dim night sky-glow, never a black hole.
       vec3 skyRefl = mix(uReflSkyLo, uReflSkyHi, clamp(R.y, 0.0, 1.0));
       vec3 reflCol = found ? hitCol : skyRefl;
+      // Soft-clip the reflected colour BEFORE it's substituted in: a bright HDR
+      // hit (neon signage, a lit window, the sun disc, a floodlight lens) was
+      // injected raw, so a handful of very bright reflected pixels could blow
+      // the whole mirror surface toward white. Compressing here caps the mirror
+      // itself at a sane peak while keeping its colour (unlike a post multiply).
+      reflCol = reflCol / (1.0 + reflCol * 0.35);
       float cover  = found ? hit : 1.0;
       // Clean DARKER MIRROR: substitute the reflected scene into a darkened base
       // (a real wet mirror shows the scene it reflects, not a wash added on top).
