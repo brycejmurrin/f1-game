@@ -25,9 +25,9 @@
     elevations: [{ s: 0.03, halfM: 260, rise: -4 }, { s: 0.45, halfM: 340, rise: -7 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, vadd,
-        place, anchor, addBox, addCyl, addCone, addFrustum,
+        place, anchor, addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
         palm, bush, grandstand, building, cityFront, tower, billboard, gantry, marshalPost,
-        mountain, backdrop, fence, wall, guardrail, tyreWall, onTrack } = api;
+        mountain, backdrop, fence, wall, guardrail, tyreWall, onTrack, every } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Desert palette (night race, Sakhir) ──────────────────────────────
@@ -527,6 +527,110 @@
           { seg: 6, seed: k * 7 + dist, rough: 0.25, snowline: 99,
             forest: SAND, rock: SAND_LIGHT, snow: DUNE_LIT });
       }
+
+      // ================= BESPOKE SAKHIR MODELS =============================
+      // Locale-specific landmarks built from primitives: barjeel wind-towers,
+      // Arabesque hospitality marquees, a desert oasis, a ceremonial gateway,
+      // and grandstand video walls. These give Bahrain a distinct Gulf identity
+      // beyond the generic stand/floodlight kit.
+
+      // ── Barjeel wind-tower — traditional Gulf wind-catcher ───────────────
+      // Tapered sand shaft topped by a slotted open crown with a warm interior
+      // glow. Dotted through the paddock/hospitality zones. gap ≥ 30 to clear
+      // barriers (the tower footprint is small).
+      const windTower = (k, side, gap, h) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        addFrustum(out, a.c, 2.6, 1.9, h, HOSP_SAND, 4, b);          // tapered shaft
+        const top = vadd(a.c, a.u, h);
+        // four corner piers framing the wind-catch opening
+        for (const dx of [-1.35, 1.35]) for (const dz of [-1.35, 1.35]) {
+          addBox(out, vadd(vadd(vadd(top, a.r, dx), a.t, dz), a.u, 1.5), [0.55, 3.0, 0.55], PIT_CREAM, b);
+        }
+        addBox(out, vadd(top, a.u, 3.1), [3.6, 0.5, 3.6], STAND_CREAM, b);  // cap slab
+        addBox(out, vadd(top, a.u, 1.5), [1.5, 1.3, 1.5], WIN_WARM, b);     // warm interior glow
+      };
+
+      // ── Arabesque hospitality marquee — the F1 Village tents ─────────────
+      // A lit tent hall roofed by a row of pointed pyramidal canopies (scalloped
+      // Arabesque roofline). gap ≥ 26 keeps it clear of stands/fences.
+      const marquee = (k, side, gap, w, len) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 1.7), [w, 3.4, len], PIT_CREAM, b);            // tent walls
+        addBox(out, vadd(a.c, a.u, 2.6), [w * 1.02, 0.55, len * 1.005], WIN_WARM, b); // lit window band
+        const bays = Math.max(2, Math.round(len / (w * 0.9)));
+        for (let i = 0; i < bays; i++) {
+          const off = (i - (bays - 1) / 2) * (len / bays);
+          addPyramid(out, vadd(vadd(a.c, a.u, 3.4), a.t, off),
+            [w * 0.98, 3.2, (len / bays) * 0.96], STAND_CREAM, b);
+        }
+      };
+
+      // ── Desert oasis — dark water pool ringed by palms + scrub ───────────
+      const oasis = (k, side, gap, r) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.20), [r * 2.4, 0.30, r * 3.0], SAND_DARK, b);   // sandy rim
+        addBox(out, vadd(a.c, a.u, 0.26), [r * 2.0, 0.24, r * 2.6], [0.09, 0.20, 0.22], b); // water
+        for (let i = 0; i < 6; i++) {
+          const kk = (k + (i - 3) + n) % n;
+          palm(kk, side, gap + r + 2 + (i % 2) * 4, 7 + hash(kk * 7 + i) * 4, [0.16, 0.34, 0.14]);
+          if (hash(kk * 11 + i) > 0.5) bush(kk, side, gap + r + 6, SCRUB_MID);
+        }
+      };
+
+      // ── Ceremonial Arabesque gateway — keel-arch landmark ────────────────
+      // Two cream piers capped by small onion domes, joined by a pointed prism
+      // lintel. A hero silhouette behind the pit complex. gap is large (behind
+      // the paddock) so it never intrudes on the track.
+      const gateway = (k, side, gap) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        for (const dx of [-7, 7]) {
+          const pc = vadd(a.c, a.r, dx);
+          addFrustum(out, pc, 2.4, 1.8, 15, PIT_CREAM, 6, b);              // pier
+          addCone(out, vadd(pc, a.u, 15), 2.0, 4.5, TOWER_LED, 8, b);      // lit onion dome
+          addBox(out, vadd(pc, a.u, 14), [3.4, 1.0, 3.4], STAND_CREAM, b); // pier cap
+        }
+        addBox(out, vadd(a.c, a.u, 13.5), [14, 2.2, 3.0], STAND_CREAM, b);         // lintel
+        addPrism(out, vadd(a.c, a.u, 15.6), [14, 4.0, 3.0], PIT_CREAM, b);         // pointed keel arch
+        addBox(out, vadd(a.c, a.u, 12.4), [11, 1.0, 2.0], WIN_WARM, b);            // lit soffit
+      };
+
+      // ── Grandstand video wall — dark frame + bright cool screen face ─────
+      const videoWall = (k, side, gap, w, h) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, h / 2 + 5), [0.9, h, w], STEEL, b);                       // frame
+        addBox(out, vadd(vadd(a.c, a.u, h / 2 + 5), a.r, side * -0.55), [0.4, h * 0.86, w * 0.9], BEACON_COOL, b); // screen
+        for (const dz of [-w * 0.4, w * 0.4]) addBox(out, vadd(vadd(a.c, a.u, 2.5), a.t, dz), [0.55, 5, 0.55], STEEL, b);
+      };
+
+      // ── Placement ────────────────────────────────────────────────────────
+      // Ceremonial gateway on the access road behind the pit complex (hero).
+      gateway(K(0.005), -1, 108);
+      // Barjeel wind-towers around the paddock, hospitality and infield zones.
+      windTower(K(0.985), -1, 52, 16);
+      windTower(K(0.02),  -1, 46, 14);
+      windTower(K(0.255),  1, 60, 13);
+      windTower(K(0.63),  -1, 56, 15);
+      windTower(K(0.80),   1, 58, 14);
+      // F1 Village marquees — back straight + T4 hospitality terrace.
+      marquee(K(0.79),  1, 40, 12, 44);
+      marquee(K(0.83),  1, 40, 11, 36);
+      marquee(K(0.26),  1, 54, 12, 40);
+      marquee(K(0.50), -1, 62, 11, 34);
+      // Desert oasis pools in the open flats (far from the racing line).
+      oasis(K(0.31), -1, 78, 7);
+      oasis(K(0.49),  1, 92, 6);
+      // Video walls facing the main and T1 grandstands.
+      videoWall(K(0.02),  1, 40, 12, 7);
+      videoWall(K(0.055), 1, 46, 11, 6.5);
+      videoWall(K(0.81),  1, 40, 12, 7);
+      videoWall(K(0.42),  1, 40, 11, 6.5);
+
+      // ── Extra floodlit crowd terraces (general-admission mounds) ─────────
+      // Sparse spectator berms of packed dark seating on the desert flats —
+      // grandstand() auto-speckles crowds. Fills quiet stretches of the lap.
+      grandstand(0.68,  1, 26, 46, STAND_CREAM, SEAT_BLUE);
+      grandstand(0.71,  1, 26, 40, [0.80, 0.78, 0.72], SEAT);
+      grandstand(0.335, 1, 28, 42, STAND_CREAM, SEAT_BLUE);
 
       // (No encircling Manama city ring: the brief makes Sakhir an isolated
       // desert island — the mountain() dune bands own the horizon. The single

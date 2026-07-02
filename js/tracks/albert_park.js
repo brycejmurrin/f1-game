@@ -74,6 +74,51 @@
       }
 
       // ====================================================================
+      // BESPOKE ALBERT PARK LAKE FOUNTAIN — the signature central water jet.
+      // A ringed basin with a tall white central plume, a ring of angled spray
+      // jets, and concentric ripple bands spreading across the water. Placed out
+      // on the lake off the lakeside stretch so it reads from the whole L side.
+      // ====================================================================
+      const lakeFountain = (kk, dist, scale) => {
+        const p = anchor(kk, -1, dist), b = [p.r, p.u, p.t];
+        if (onTrack(p.c[0], p.c[2], 6)) return;
+        const JET = [0.92, 0.95, 0.99];      // white spray
+        // basin ring + inner pool
+        addCyl(out, p.c, 6 * scale, 0.7, [0.82, 0.84, 0.86], 18, b);
+        addCyl(out, vadd(p.c, p.u, 0.7), 5.2 * scale, 0.35, [0.24, 0.50, 0.66], 18, b);
+        // central plume — stacked tapering cones of spray
+        addCone(out, vadd(p.c, p.u, 1.0), 1.7 * scale, 11 * scale, JET, 10, b);
+        addCone(out, vadd(p.c, p.u, 8.5 * scale), 0.9 * scale, 7 * scale, JET, 8, b);
+        addCone(out, vadd(p.c, p.u, 13.5 * scale), 0.4 * scale, 4 * scale, JET, 6, b);
+        // ring of angled outer spray jets
+        for (let i = 0; i < 8; i++) {
+          const a = i / 8 * 6.2832, rr = 3.6 * scale;
+          const off = vadd(vadd(p.c, p.r, Math.cos(a) * rr), p.t, Math.sin(a) * rr);
+          addCone(out, vadd(off, p.u, 0.9), 0.55 * scale, (4.5 + (i % 2) * 1.5) * scale, JET, 6, b);
+        }
+        // concentric ripple bands spreading over the water surface
+        for (const rr of [9, 12.5, 16]) {
+          addFrustum(out, vadd(p.c, p.u, 0.35), rr * scale, (rr + 0.5) * scale, 0.14,
+                     [0.32, 0.54, 0.68], 22, b);
+        }
+      };
+      lakeFountain(k(0.46), 96, 1.4);    // hero fountain, mid-lake
+      lakeFountain(k(0.56), 78, 0.85);   // smaller companion jet nearer shore
+
+      // ---- Lakeside jetty / boardwalk pier reaching into the water (s≈0.50 L) ----
+      {
+        const a = anchor(k(0.50), -1, 40), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 4)) {
+          addBox(out, vadd(a.c, a.u, 0.9), [3.2, 0.4, 34], [0.72, 0.66, 0.54], b); // deck
+          for (const to of [-15, -5, 5, 15]) {                                     // piles
+            addCyl(out, vadd(a.c, a.t, to), 0.16, 1.4, [0.42, 0.36, 0.28], 4, b);
+          }
+          // a rowing scull moored at the pier end
+          addBox(out, vadd(vadd(a.c, a.t, 18), a.u, 0.7), [0.9, 0.5, 9], [0.90, 0.88, 0.82], b);
+        }
+      }
+
+      // ====================================================================
       // MELBOURNE CBD SKYLINE — dense layered towers across the lake
       // (s≈0.19–0.52 R). Iconic landmarks dominate; mid-rise base with varied
       // window colour. All towers placed at dist≥190 so they stay well clear.

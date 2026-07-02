@@ -345,6 +345,91 @@
           }
         }
       }
+
+      // =======================================================================
+      // BESPOKE STYRIAN-ALPINE LANDMARKS — local models from raw primitives
+      // =======================================================================
+
+      // --- Alpine chairlift climbing the forested hillside: a radial line of
+      //     A-frame pylons of increasing height, two parallel cables and hanging
+      //     Red-Bull-coloured chairs. A self-contained cable helper orients a thin
+      //     box between two arbitrary world points (no api dep beyond addBox).
+      function chairlift(k, side, distNear, distFar, pylons) {
+        const near = anchor(k, side, distNear);
+        if (onTrack(near.c[0], near.c[2], 8)) return;
+        const seg = (p, q, col) => {
+          const dx = q[0] - p[0], dy = q[1] - p[1], dz = q[2] - p[2];
+          const L = Math.hypot(dx, dy, dz) || 1, fwd = [dx / L, dy / L, dz / L];
+          let up = [0, 1, 0];
+          let rt = [fwd[1] * up[2] - fwd[2] * up[1], fwd[2] * up[0] - fwd[0] * up[2], fwd[0] * up[1] - fwd[1] * up[0]];
+          const rl = Math.hypot(rt[0], rt[1], rt[2]) || 1; rt = [rt[0] / rl, rt[1] / rl, rt[2] / rl];
+          up = [rt[1] * fwd[2] - rt[2] * fwd[1], rt[2] * fwd[0] - rt[0] * fwd[2], rt[0] * fwd[1] - rt[1] * fwd[0]];
+          addBox(out, [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2], [0.12, 0.12, L], col, [rt, up, fwd]);
+        };
+        const tops = [];
+        for (let i = 0; i < pylons; i++) {
+          const f = pylons === 1 ? 0 : i / (pylons - 1);
+          const a = anchor(k, side, distNear + f * (distFar - distNear)), bb = [a.r, a.u, a.t], h = 10 + f * 16;
+          for (const lx of [-1.3, 1.3]) addCyl(out, vadd(a.c, a.t, lx), 0.22, h, [0.60, 0.61, 0.65], 5, bb);
+          addBox(out, vadd(a.c, a.u, h), [0.5, 0.4, 4.2], [0.52, 0.53, 0.57], bb);   // crossarm along tangent
+          tops.push([vadd(vadd(a.c, a.u, h), a.t, -1.8), vadd(vadd(a.c, a.u, h), a.t, 1.8), bb]);
+        }
+        for (let c = 0; c < 2; c++) {
+          for (let i = 0; i < tops.length - 1; i++) {
+            seg(tops[i][c], tops[i + 1][c], [0.12, 0.12, 0.13]);
+            const p = tops[i][c], q = tops[i + 1][c], bb = tops[i][2];
+            const mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2];
+            addCyl(out, vadd(mid, bb[1], -1.4), 0.05, 1.4, [0.2, 0.2, 0.22], 3, bb);
+            addBox(out, vadd(mid, bb[1], -1.9), [1.0, 0.5, 1.4], c ? [0.82, 0.10, 0.16] : [0.10, 0.14, 0.40], bb);
+          }
+        }
+      }
+
+      // --- Styrian chalet: plastered body, dark-timber upper band, wide low-eave
+      //     roof, track-facing balcony rail and warm-lit windows.
+      function alpineChalet(k, side, dist, w, h, d) {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.6 + 3)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, h / 2), [w, h, d], [0.86, 0.82, 0.74], b);            // plaster body
+        addBox(out, vadd(a.c, a.u, h * 0.72), [w * 1.02, h * 0.4, d * 1.02], [0.46, 0.30, 0.18], b); // timber band
+        addPrism(out, vadd(a.c, a.u, h), [w * 1.4, h * 0.55, d * 1.2], [0.40, 0.24, 0.16], b);       // wide eaves
+        addBox(out, vadd(vadd(a.c, a.u, h * 0.68), a.r, -side * (w * 0.5 + 0.4)), [0.8, 0.12, d * 0.9], [0.34, 0.22, 0.14], b); // balcony
+        addBox(out, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.05)), [0.1, h * 0.28, d * 0.5], [0.98, 0.86, 0.52], b); // window
+      }
+
+      // --- Spielberg camping terrace: rows of RVs and ridge tents with a big
+      //     Red Bull flag pole. The famous Austrian GP campground.
+      function campTerrace(k, side, dist, count) {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], 22)) return;
+        const b = [a.r, a.u, a.t];
+        for (let i = 0; i < count; i++) {
+          const base = vadd(a.c, a.t, (i - (count - 1) / 2) * 7);
+          if (hash(k * 17 + i) < 0.5) {
+            addBox(out, vadd(base, a.u, 1.7), [2.8, 2.4, 5.6], [0.84, 0.85, 0.86], b);
+            addBox(out, vadd(base, a.u, 3.0), [2.9, 0.4, 5.6], [0.68, 0.68, 0.70], b);
+          } else {
+            addPrism(out, vadd(base, a.u, 0.2), [3.2, 1.7, 3.8],
+                     hash(k * 19 + i) < 0.5 ? [0.80, 0.14, 0.16] : [0.10, 0.14, 0.40], b);
+          }
+        }
+        addCyl(out, vadd(a.c, a.r, -side * 3), 0.12, 11, [0.70, 0.70, 0.72], 5, b);
+        addBox(out, vadd(vadd(a.c, a.r, -side * 3), a.u, 9.5), [0.1, 1.8, 3.0], [0.82, 0.10, 0.16], b);
+      }
+
+      // Chairlifts riding the Remus crest and the famous grassy spectator hill.
+      chairlift(K(0.30), 1, 44, 150, 5);
+      chairlift(K(0.52), 1, 40, 140, 5);
+      // Styrian chalets scattered on the surrounding meadows.
+      alpineChalet(K(0.18), -1, 60, 10, 6, 12);
+      alpineChalet(K(0.34),  1, 66, 9, 6, 11);
+      alpineChalet(K(0.60), -1, 58, 10, 6, 12);
+      alpineChalet(K(0.78),  1, 70, 9, 6, 10);
+      // Spielberg camping terraces packed on the hillsides.
+      campTerrace(K(0.15),  1, 46, 8);
+      campTerrace(K(0.25), -1, 50, 7);
+      campTerrace(K(0.85), -1, 44, 8);
     },
   }
   );

@@ -507,6 +507,56 @@
             addBox(out, vadd(A.c, A.u, -0.1), [40, 0.25, 34], STONE, [A.r, A.u, A.t]);
         }
       }
+
+      // ── (16) BESPOKE: LA MONUMENTAL ARENA ARCADE — a Las Ventas-inspired
+      //    neo-Mudéjar brick facade ring wrapping the banked stadium bowl:
+      //    a two-tier arcade of horseshoe arches behind the white grandstands.
+      //    LOCAL model, curved to follow the corner. ─────────────────────────
+      const BRICK  = [0.60, 0.33, 0.25], BRICK_L = [0.68, 0.41, 0.31];
+      const ARC_LANTERN = [0.98, 0.80, 0.42];
+      function archBay(k, side, gap) {
+        const A = anchor(k, side, gap);
+        const b = [A.r, A.u, A.t], c = A.c;
+        if (onTrack(c[0], c[2], 6)) return;
+        // Lower pier + arcade lintel (arch head suggested by a pointed prism).
+        addBox(out, vadd(c, A.u, 6.5), [2.4, 13, 2.4], BRICK, b);
+        addBox(out, vadd(c, A.u, 13.4), [2.6, 1.6, 7.2], BRICK_L, b);
+        addPrism(out, vadd(c, A.u, 14.9), [2.6, 1.5, 7.2], BRICK, b);
+        // Warm arcade-glow strip glimpsed through each opening.
+        addBox(out, vadd(c, A.u, 9), [0.4, 4.5, 5.4], ARC_LANTERN, b);
+        // Upper gallery colonnade + cornice.
+        addBox(out, vadd(c, A.u, 17.5), [1.8, 5, 1.8], BRICK_L, b);
+        addBox(out, vadd(c, A.u, 20.4), [3.0, 0.9, 7.2], [0.74, 0.66, 0.52], b);
+      }
+      for (let i = -12; i <= 12; i += 2) {
+        const k = ((kmono + i * step) % n + n) % n;
+        for (const side of [1, -1]) archBay(k, side, hw[k] + 34);
+      }
+
+      // ── (17) BESPOKE: IFEMA CONVENTION-CENTRE HALLS — vast pavilions with the
+      //    distinctive glazed sawtooth roofline + a glass entrance atrium. ────
+      function expoHall(frac, side, gap, w, d, h) {
+        const k = Math.round(frac * n) % n;
+        const A = anchor(k, side, gap);
+        const b = [A.r, A.u, A.t], c = A.c;
+        if (onTrack(c[0], c[2], 20)) return;
+        // Main hall mass + a bright glass clerestory band.
+        addBox(out, vadd(c, A.u, h * 0.5), [w, h, d], WHITE, b);
+        addBox(out, vadd(c, A.u, h - 1.6), [w + 0.4, 2.2, d + 0.4], LGLASS, b);
+        // Sawtooth roof: north-lit glazed monitor ridges across the span.
+        const teeth = Math.max(4, Math.floor(w / 8));
+        for (let t = 0; t < teeth; t++) {
+          const off = (t / (teeth - 1) - 0.5) * (w - 4);
+          addPrism(out, vadd(vadd(c, A.r, off), A.u, h + 1.4), [w / teeth - 0.6, 2.8, d],
+                   t % 2 ? STEEL : [0.70, 0.82, 0.94], b);
+        }
+        // Glass entrance atrium projecting toward the track.
+        addBox(out, vadd(vadd(c, A.r, side * (w * 0.5 - 3)), A.u, 6), [8, 12, d * 0.5], GLASS, b);
+        addPrism(out, vadd(vadd(c, A.r, side * (w * 0.5 - 3)), A.u, 12.5), [8, 3, d * 0.5], STEEL, b);
+      }
+      expoHall(0.925, 1, hw[Math.round(0.925 * n) % n] + 70, 76, 100, 20);
+      expoHall(0.045, 1, hw[Math.round(0.045 * n) % n] + 72, 82, 104, 22);
+      expoHall(0.965, -1, hw[Math.round(0.965 * n) % n] + 66, 64, 88, 18);
     },
   }
   );

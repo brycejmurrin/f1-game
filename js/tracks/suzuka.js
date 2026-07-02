@@ -29,7 +29,21 @@
       const { out, track, n, px, py, pz, hw, pyMin, place, prop, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
               gantry, marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
-              addBox, addCyl, addCone, groundYAt, onTrack, forestEdge, backdrop } = api;
+              addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
+              cross, norm } = api;
+
+      // ── strut(): a thin cylinder spanning two arbitrary world points ─────────
+      //    Builds an oriented basis from the span direction so cables / diagonal
+      //    braces slant correctly (used by the fairground rides + crossover cables).
+      const strut = (a, c, rad, col, seg) => {
+        const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
+        const up = [d[0] / L, d[1] / L, d[2] / L];
+        const ref = Math.abs(up[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+        const right = norm(cross(ref, up));
+        const fwd = norm(cross(up, right));
+        addCyl(out, a, rad, L, col, seg || 4, [right, up, fwd]);
+      };
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
       const blue      = [0.26, 0.38, 0.64];
@@ -166,6 +180,95 @@
         const dist = 55 + i * 14;
         place(kk, -1, dist, [8, 4, 8], [0.88, 0.76, 0.54]);
       }
+
+      // ── BESPOKE MOTOPIA FAIRGROUND RIDES ─────────────────────────────────────
+      //    Hand-built from primitives so the infield behind the wheel reads as a
+      //    real amusement park, not a scatter of boxes. All placed LEFT (park side)
+      //    at safe distances well clear of the wheel footprint & the racing line.
+
+      // Carousel (merry-go-round): striped conical canopy on a central pole, a ring
+      // of horse-poles with painted horses, and a bright valance rim.
+      const carousel = (k, side, dist, rad) => {
+        const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+        if (onTrack(p.c[0], p.c[2], 4)) return;
+        addCyl(out, p.c, rad + 0.6, 1.1, [0.86, 0.80, 0.62], 16, b);          // platform
+        addCyl(out, vadd(p.c, p.u, 1.1), 0.5, 7.5, [0.90, 0.86, 0.70], 8, b); // centre pole
+        addCone(out, vadd(p.c, p.u, 7.5), rad + 1.3, 3.6, neonRed, 16, b);    // canopy
+        addCyl(out, vadd(p.c, p.u, 7.5), rad + 1.5, 0.6, neonYel, 16, b);     // valance rim
+        addCone(out, vadd(p.c, p.u, 11.1), 0.8, 1.6, neonBlue, 8, b);         // finial
+        for (let i = 0; i < 10; i++) {
+          const a = i / 10 * 6.2832;
+          const off = vadd(vadd(p.c, p.r, Math.cos(a) * rad), p.t, Math.sin(a) * rad);
+          addCyl(out, vadd(off, p.u, 1.1), 0.08, 6, [0.95, 0.92, 0.80], 4, b);
+          addBox(out, vadd(off, p.u, 3.2), [0.55, 1.0, 1.4], parkCol[i % parkCol.length], b);
+        }
+      };
+
+      // Drop tower: tall gantry mast, corner rails, a passenger gondola ring that
+      // sits partway up, and a warm beacon at the summit.
+      const dropRide = (k, side, dist, h) => {
+        const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+        if (onTrack(p.c[0], p.c[2], 4)) return;
+        addCyl(out, p.c, 1.3, h, [0.90, 0.90, 0.94], 6, b);              // mast core
+        for (const [ro, to] of [[-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]]) {
+          addCyl(out, vadd(vadd(p.c, p.r, ro), p.t, to), 0.12, h, steel, 4, b);
+        }
+        const gY = h * 0.42;
+        addCyl(out, vadd(p.c, p.u, gY), 3.1, 1.7, neonBlue, 12, b);      // gondola ring
+        addCyl(out, vadd(p.c, p.u, gY - 0.25), 3.3, 0.4, neonYel, 12, b);
+        addCone(out, vadd(p.c, p.u, h), 1.7, 3.0, neonRed, 8, b);        // beacon cap
+        addBox(out, vadd(p.c, p.u, h + 3.0), [0.4, 1.6, 0.4], lampWarm, b);
+      };
+
+      // Chair swing / chair-o-plane: central column, a spun top canopy, and a ring
+      // of chairs hung on slanting chains (drawn with strut() so the chains splay).
+      const swingRide = (k, side, dist, h) => {
+        const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+        if (onTrack(p.c[0], p.c[2], 4)) return;
+        addCyl(out, p.c, 1.0, h, [0.86, 0.88, 0.92], 8, b);
+        addCone(out, vadd(p.c, p.u, h), 6.5, 2.8, parkCol[4], 14, b);    // canopy top
+        addCyl(out, vadd(p.c, p.u, h - 0.4), 5.4, 0.5, neonYel, 14, b);
+        for (let i = 0; i < 12; i++) {
+          const a = i / 12 * 6.2832, rTop = 4.6, rBot = 6.6;
+          const top = vadd(vadd(vadd(p.c, p.u, h - 0.6), p.r, Math.cos(a) * rTop), p.t, Math.sin(a) * rTop);
+          const bot = vadd(vadd(vadd(p.c, p.u, h - 4.4), p.r, Math.cos(a) * rBot), p.t, Math.sin(a) * rBot);
+          strut(top, bot, 0.03, steel, 3);
+          addBox(out, bot, [0.5, 0.5, 0.7], parkCol[i % parkCol.length], b);
+        }
+      };
+
+      // Roller-coaster vertical loop: two support legs and a ring of segments in the
+      // right–up plane — the instantly-readable coaster silhouette.
+      const coasterLoop = (k, side, dist, R) => {
+        const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
+        if (onTrack(p.c[0], p.c[2], 5)) return;
+        const cen = vadd(p.c, p.u, R + 2);
+        for (const ro of [-R * 0.6, R * 0.6]) addCyl(out, vadd(p.c, p.r, ro), 0.4, R + 2, steel, 5, b);
+        const segN = 22;
+        for (let i = 0; i < segN; i++) {
+          const a = i / segN * 6.2832;
+          const pt = vadd(vadd(cen, p.r, Math.cos(a) * R), p.u, Math.sin(a) * R);
+          addBox(out, pt, [0.55, 0.9, 0.55], i % 2 ? neonRed : neonYel, b);
+        }
+      };
+
+      // Lift hill: a rank of climbing columns capped by rail segments feeding the loop.
+      const liftHill = (k, side, dist, cnt) => {
+        for (let i = 0; i < cnt; i++) {
+          const p = anchor((k + i) % n, side, dist), b = [p.r, p.u, p.t];
+          if (onTrack(p.c[0], p.c[2], 4)) continue;
+          const h = 6 + i * 2.4;
+          addCyl(out, p.c, 0.3, h, steel, 4, b);
+          addBox(out, vadd(p.c, p.u, h), [0.5, 0.5, 3.4], neonBlue, b);
+        }
+      };
+
+      carousel(Math.round(n * 0.044) % n, -1, 62, 8);
+      dropRide(Math.round(n * 0.100) % n, -1, 118, 62);   // the tall drop-tower thrill ride
+      swingRide(Math.round(n * 0.070) % n, -1, 132, 26);
+      coasterLoop(Math.round(n * 0.058) % n, -1, 150, 14);
+      coasterLoop(Math.round(n * 0.065) % n, -1, 168, 11);
+      liftHill(Math.round(n * 0.048) % n, -1, 138, 6);
 
       // ── Lamp posts along the park perimeter ─────────────────────────────────
       for (let i = 0; i < 14; i++) {
@@ -305,21 +408,43 @@
         billboard(Math.round(n * s) % n, sd, 7, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
       }
 
-      // ── Figure-8 bridge: the iconic crossover at s≈0.81 ──────────────────────
+      // ── Figure-8 crossover bridge: the iconic span at s≈0.81 ─────────────────
+      //    A cable-stayed deck lifting the racing line over the main straight.
+      //    Two concrete piers carry a green deck; twin A-frame pylons rise above
+      //    the deck and fan diagonal cable stays down to the deck edges.
       {
         const bk = Math.round(n * 0.81) % n;
         const ab = anchor(bk, -1, 14);
         const basis = [ab.r, ab.u, ab.t];
-        const colH = 14;
+        const colH = 14, deckLen = 34;
+        // support piers
         addBox(out, vadd(ab.c, ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
         addBox(out, vadd(vadd(ab.c, ab.t, 16), ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 0.7), [10, 1.2, 34], [0.25, 0.47, 0.29], basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 3.5), [11, 0.5, 35], [0.27, 0.49, 0.31], basis);
+        // deck + running surface
+        addBox(out, vadd(ab.c, ab.u, colH + 0.7), [10, 1.2, deckLen], [0.25, 0.47, 0.29], basis);
+        addBox(out, vadd(ab.c, ab.u, colH + 3.5), [11, 0.5, deckLen + 1], [0.27, 0.49, 0.31], basis);
         addBox(out, vadd(ab.c, ab.u, colH + 2.8), [8, 0.15, 28], lampWarm, basis);
+        // parapet rail posts
         for (let i = -4; i <= 4; i++) {
-          const off = i * (34 / 9);
+          const off = i * (deckLen / 9);
           const rc = [ab.c[0] + ab.t[0] * off, ab.c[1] + colH + 1.4, ab.c[2] + ab.t[2] * off];
           addCyl(out, rc, 0.10, 1.4, steel, 4, basis);
+        }
+        // Twin A-frame pylons rising above the deck at each pier, with fanned stays.
+        const deckTopY = colH + 4.0;
+        for (const tOff of [4, 12]) {
+          const legTop = vadd(vadd(ab.c, ab.t, tOff), ab.u, deckTopY);
+          const apex = vadd(legTop, ab.u, 15);                 // pylon apex 15 m above deck
+          // two splayed legs of the A-frame (across the deck width)
+          const legL = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, -3.5), ab.u, deckTopY);
+          const legR = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, 3.5), ab.u, deckTopY);
+          strut(legL, apex, 0.28, [0.86, 0.87, 0.90], 5);
+          strut(legR, apex, 0.28, [0.86, 0.87, 0.90], 5);
+          // cable stays fanning to the deck edges fore and aft
+          for (const dOff of [-12, -6, 6, 12]) {
+            const anchorPt = vadd(vadd(vadd(ab.c, ab.t, tOff + dOff), ab.r, tOff === 4 ? -4.8 : 4.8), ab.u, deckTopY + 0.3);
+            strut(apex, anchorPt, 0.05, [0.94, 0.94, 0.96], 3);
+          }
         }
       }
 

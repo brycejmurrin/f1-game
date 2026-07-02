@@ -38,7 +38,7 @@
     // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.27, halfM: 340, rise: 18 }, { s: 0.55, halfM: 220, rise: -10 }],
     scenery: function (api) {
-      const { out, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, groundPlane, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Colour palette ────────────────────────────────────────────────────
@@ -499,6 +499,130 @@
       guardrail(0.78, 0.84, -1, 0.5, ARMCO);
       guardrail(0.15, 0.19, -1, 0.4, ARMCO);
       guardrail(0.62, 0.68, -1, 0.4, ARMCO);
+
+      // ═══════════════════════════════════════════════════════════════════
+      // BESPOKE HARBOUR & LANDMARK MODELS
+      // ═══════════════════════════════════════════════════════════════════
+
+      // ── Reflective Mediterranean harbour (groundPlane water:true) ─────────
+      // A true reflective water buffer that mirrors the sky, laid across the
+      // whole harbour basin behind the promenade. Sits below the quay lip.
+      for (let i = 0; i < 5; i++) {
+        const k = K(0.61 + i * 0.07);
+        groundPlane(k, -1, 40, [170, 1.2, 150], SEA, true);
+      }
+
+      // ── FLAGSHIP SUPERYACHT — bespoke multi-deck megayacht ───────────────
+      // Hull prism bow + stacked white superstructure decks + wrap-around
+      // railings + radar arch + mast + helipad disc + tender on the aft deck.
+      const megaYacht = (a, sc, hullCol) => {
+        const b = [a.r, a.u, a.t];
+        const HULL = hullCol || [0.97, 0.97, 0.99];
+        const NAVY = [0.14, 0.20, 0.30];
+        const L = 44 * sc, W = 10 * sc;
+        // Hull body + raked bow prism (triangular prism gives the sheer bow)
+        addBox(out, vadd(a.c, a.u, 2.2 * sc), [W, 4.0 * sc, L * 0.86], HULL, b);
+        addPrism(out, vadd(vadd(a.c, a.t, L * 0.47), a.u, 2.2 * sc), [W, 4.0 * sc, L * 0.18], HULL, b);
+        // Dark waterline / hull stripe
+        addBox(out, vadd(a.c, a.u, 0.7 * sc), [W * 1.02, 1.0 * sc, L * 0.88], NAVY, b);
+        // Teak swim platform at the stern
+        addBox(out, vadd(vadd(a.c, a.t, -L * 0.46), a.u, 1.4 * sc), [W * 0.8, 0.4 * sc, L * 0.08], [0.72, 0.58, 0.38], b);
+        // Superstructure: three stacked, tapering white decks set forward
+        const sup = vadd(a.c, a.t, L * 0.02);
+        addBox(out, vadd(sup, a.u, 5.4 * sc), [W * 0.9, 3.0 * sc, L * 0.5], [0.95, 0.95, 0.97], b);
+        addBox(out, vadd(sup, a.u, 8.4 * sc), [W * 0.78, 2.8 * sc, L * 0.4], [0.92, 0.93, 0.96], b);
+        addBox(out, vadd(vadd(sup, a.t, L * 0.03), a.u, 11.2 * sc), [W * 0.6, 2.6 * sc, L * 0.28], [0.90, 0.91, 0.95], b);
+        // Tinted glazing bands on each deck
+        for (const [y, ln] of [[5.4, 0.5], [8.4, 0.4], [11.2, 0.28]]) {
+          addBox(out, vadd(sup, a.u, (y + 0.2) * sc), [W * 0.92, 0.9 * sc, L * ln * 1.01], [0.18, 0.28, 0.40], b);
+        }
+        // Radar arch (two legs + crossbar) above the bridge deck
+        for (const o of [-W * 0.28, W * 0.28]) {
+          addCyl(out, vadd(vadd(sup, a.r, o), a.u, 13.4 * sc), 0.16 * sc, 2.4 * sc, [0.85, 0.86, 0.90], 5, b);
+        }
+        addBox(out, vadd(sup, a.u, 14.6 * sc), [W * 0.62, 0.4 * sc, 0.6 * sc], [0.85, 0.86, 0.90], b);
+        // Mast + navigation lights
+        addCyl(out, vadd(sup, a.u, 14.8 * sc), 0.14 * sc, 5.5 * sc, [0.86, 0.86, 0.90], 4, b);
+        addBox(out, vadd(sup, a.u, 20.0 * sc), [0.5 * sc, 0.5 * sc, 0.5 * sc], [0.95, 0.30, 0.25], b);
+        // Foredeck helipad — pale disc with an "H" bar
+        const heli = vadd(vadd(a.c, a.t, L * 0.34), a.u, 4.0 * sc);
+        addCyl(out, heli, W * 0.34, 0.2 * sc, [0.86, 0.86, 0.82], 12, b);
+        addBox(out, vadd(heli, a.u, 0.2 * sc), [W * 0.18, 0.1 * sc, W * 0.30], [0.95, 0.20, 0.20], b);
+        // Aft-deck tender (a little boat carried on the stern)
+        addBox(out, vadd(vadd(a.c, a.t, -L * 0.34), a.u, 4.6 * sc), [W * 0.42, 1.0 * sc, L * 0.1], [0.90, 0.90, 0.94], b);
+        // Wrap-around deck railings — a run of thin stanchions each side
+        for (let s = -6; s <= 6; s++) {
+          for (const sd of [-1, 1]) {
+            addCyl(out, vadd(vadd(vadd(a.c, a.t, s * L * 0.06), a.r, sd * W * 0.5), a.u, 4.6 * sc), 0.05 * sc, 1.0 * sc, [0.86, 0.86, 0.9], 3, b);
+          }
+        }
+        // Warm lit interior glow band (evening party lights)
+        addBox(out, vadd(sup, a.u, 6.0 * sc), [W * 0.92, 0.4 * sc, L * 0.5], WINLIT, b);
+      };
+      // Two flagship yachts moored bows-out at prime harbour berths.
+      {
+        const a1 = anchor(K(0.645), -1, 30);
+        if (!onTrack(a1.c[0], a1.c[2], 12)) megaYacht(a1, 0.9, [0.97, 0.97, 0.99]);
+        const a2 = anchor(K(0.71), -1, 34);
+        if (!onTrack(a2.c[0], a2.c[2], 12)) megaYacht(a2, 1.05, [0.20, 0.22, 0.28]);
+        const a3 = anchor(K(0.78), -1, 30);
+        if (!onTrack(a3.c[0], a3.c[2], 12)) megaYacht(a3, 0.8, [0.94, 0.90, 0.82]);
+      }
+
+      // ── MONACO TUNNEL PORTAL — ornate stone arch mouth ──────────────────
+      // A decorative arched portal facade at the harbour-side tunnel exit,
+      // built from a keystone arch of stepped stone voussoir boxes over the
+      // road, faced with cream ashlar piers.
+      {
+        const k = K(0.585);
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const t = [track.tx[k], track.ty[k], track.tz[k]];
+        const u = upOf(track, k);
+        const base = [px[k], py[k], pz[k]];
+        const b = [r, u, t];
+        const span = hw[k] * 2 + 6;
+        // Twin ashlar piers flanking the mouth
+        for (const sd of [-1, 1]) {
+          const pc = vadd(base, r, sd * (hw[k] + 2.6));
+          addBox(out, vadd(pc, u, 4.4), [2.4, 8.8, 3.0], CREAM, b);
+          addBox(out, vadd(pc, u, 9.0), [3.0, 0.8, 3.4], STONE, b);   // cornice cap
+        }
+        // Arched voussoir crown — a shallow fan of stone blocks
+        for (let j = -3; j <= 3; j++) {
+          const ang = j * 0.16;
+          const rise = 8.2 + Math.cos(ang) * 1.4;
+          addBox(out, vadd(vadd(base, r, j * span * 0.13), u, rise), [span * 0.16, 1.6, 3.0],
+                 j % 2 ? STONE : DUSTY, b);
+        }
+        // Keystone
+        addBox(out, vadd(base, u, 9.6), [1.8, 2.2, 3.2], OCHRE, b);
+        // "MONACO" fascia band + rockface above
+        addBox(out, vadd(base, u, 10.8), [span * 0.9, 1.4, 2.2], [0.30, 0.42, 0.30], b);
+        addBox(out, vadd(base, u, 14), [span * 1.1, 5, 4], [0.34, 0.40, 0.30], b);
+      }
+
+      // ── TIERED PASTEL HILLSIDE TERRACES (Beau Rivage climb, L) ───────────
+      // Stepped apartment terraces that rise and set back up the rock face —
+      // the signature Monte-Carlo tiered-hillside silhouette above the road.
+      const terraceStack = (a, tiers, baseCol) => {
+        const b = [a.r, a.u, a.t];
+        let up = 0, back = 0, w = 26;
+        for (let i = 0; i < tiers; i++) {
+          const c = vadd(vadd(a.c, a.t, back), a.u, up + 4.5);
+          const col = PASTELS[(K(a.c[0] | 0) + i * 3) % PASTELS.length] || baseCol;
+          addBox(out, c, [w, 9, 12], col, b);
+          // balcony window band + warm glow
+          addBox(out, vadd(vadd(a.c, a.t, back), a.u, up + 5.5), [w * 1.01, 2.4, 12.4], WIN, b);
+          addBox(out, vadd(vadd(a.c, a.t, back), a.u, up + 6.0), [w * 1.02, 0.9, 12.6], WINLIT, b);
+          // planter ledge on each terrace
+          addBox(out, vadd(vadd(a.c, a.t, back + 6), a.u, up + 9.4), [w * 0.9, 0.6, 1.4], [0.30, 0.45, 0.24], b);
+          up += 8.5; back += 7; w -= 3.2;
+        }
+      };
+      for (const sf of [0.11, 0.16, 0.21]) {
+        const k = K(sf), a = anchor(k, -1, 58 + hash(k) * 10);
+        if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY);
+      }
     },
   }
   );

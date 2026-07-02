@@ -32,8 +32,20 @@
       const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, wall, grandstand,
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
         fence, guardrail, tyreWall, hedge, billboard, gantry, marshalPost, bush,
-        ferrisWheel, tower, onTrack, groundYAt, forestEdge, cityFront } = api;
+        ferrisWheel, tower, onTrack, groundYAt, forestEdge, cityFront,
+        cross, norm } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // ── strut(): thin cylinder between two world points (geodesic lattice) ────
+      const strut = (a, c, rad, col, seg) => {
+        const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
+        const up = [d[0] / L, d[1] / L, d[2] / L];
+        const ref = Math.abs(up[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+        const right = norm(cross(ref, up));
+        const fwd = norm(cross(up, right));
+        addCyl(out, a, rad, L, col, seg || 3, [right, up, fwd]);
+      };
 
       // ── Island Y-level reference constants ────────────────────────────────
       // All features are anchored to these absolute Y values so they sit at
@@ -409,6 +421,46 @@
         }
         // Faint equatorial belt to read the geodesic banding at the widest point
         addFrustum(out, vadd(a.c, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 18, [a.r, a.u, a.t]);
+
+        // ── GEODESIC STRUT LATTICE ──────────────────────────────────────────
+        // Meridian ribs + latitude rings + a band of diagonals stretched over the
+        // frustum shell so the silhouette reads as Buckminster Fuller's open steel
+        // lattice (the acrylic skin burned off in 1976), not a smooth dome.
+        const LAT = [0.60, 0.62, 0.66];               // steel lattice grey
+        const surf = (y, phi) => vadd(vadd(vadd(a.c, a.u, y),
+                     a.r, rAt(y) * Math.cos(phi)), a.t, rAt(y) * Math.sin(phi));
+        const MER = 14, RN = 12;
+        const yTopMax = R * 2 - 1.5;                  // stop just shy of the pole
+        // meridian ribs
+        for (let m = 0; m < MER; m++) {
+          const phi = m / MER * 6.2832;
+          let prev = surf(0.5, phi);
+          for (let j = 1; j <= RN; j++) {
+            const y = 0.5 + (yTopMax - 0.5) * j / RN;
+            const cur = surf(y, phi);
+            strut(prev, cur, 0.28, LAT, 3);
+            prev = cur;
+          }
+        }
+        // latitude rings
+        for (let j = 1; j < RN; j++) {
+          const y = 0.5 + (yTopMax - 0.5) * j / RN;
+          let prev = surf(y, 0);
+          for (let m = 1; m <= MER; m++) {
+            const cur = surf(y, m / MER * 6.2832);
+            strut(prev, cur, 0.24, LAT, 3);
+            prev = cur;
+          }
+        }
+        // diagonal bracing on the mid bands → triangulated geodesic read
+        for (let j = 3; j <= 8; j++) {
+          const y0 = 0.5 + (yTopMax - 0.5) * j / RN;
+          const y1 = 0.5 + (yTopMax - 0.5) * (j + 1) / RN;
+          for (let m = 0; m < MER; m++) {
+            const phi0 = m / MER * 6.2832, phi1 = (m + 1) / MER * 6.2832;
+            strut(surf(y0, phi0), surf(y1, phi1), 0.16, LAT, 3);
+          }
+        }
       }
 
       // ===================================================================

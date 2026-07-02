@@ -28,8 +28,19 @@
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
-        forestEdge } = api;
+        forestEdge, cross, norm } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // ── strut(): thin cylinder between two world points (canopy masts/cables) ──
+      const strut = (a, c, rad, col, seg) => {
+        const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
+        const up = [d[0] / L, d[1] / L, d[2] / L];
+        const ref = Math.abs(up[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+        const right = norm(cross(ref, up));
+        const fwd = norm(cross(up, right));
+        addCyl(out, a, rad, L, col, seg || 4, [right, up, fwd]);
+      };
 
       // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
       const CONC  = [0.70, 0.72, 0.74];
@@ -197,6 +208,48 @@
           addBox(out, vadd(vadd(a.c, a.u, 17.3), a.r, -10.5), [16.5, 1.8, 1.0], STEEL, b);
           // roof rib strip (steel grey perpendicular fin)
           addBox(out, vadd(vadd(a.c, a.u, 19), a.r, 4), [0.4, 2.8, 30], [0.55, 0.58, 0.62], b);
+        }
+      })();
+
+      // =================================================================================
+      // SIGNATURE CABLE-STAYED SWEEPING CANOPY — the great arced wing roof that soars
+      // over the main grandstand and cantilevers toward the pit straight. Built as a
+      // continuous faceted arc ribbon (bay-by-bay so it follows the road), carried on
+      // tall white masts every few bays with fanned cable stays from each mast top to
+      // the roof arc. This is Shanghai's instant architectural read from the straight.
+      // =================================================================================
+      (function cableCanopy() {
+        const bays   = 18;
+        const facets = 6;
+        const span   = 34;    // cross-section reach in +r (toward the track)
+        const rInner = -6;    // starts behind the mast, over the stand
+        const rise   = 13;    // arc crown height above baseY
+        const baseY  = 27;    // roof springing height
+        for (let i = 0; i < bays; i++) {
+          const s = 0.006 + i * 0.0072;              // covers the pit straight
+          const a = anchor(K(s), -1, 26), b = [a.r, a.u, a.t];
+          // arced roof facets (alternating white steel / hazed glass panels)
+          const nodeAt = (t) => vadd(vadd(a.c, a.r, rInner + t * span),
+                                     a.u, baseY + Math.sin(t * Math.PI) * rise);
+          for (let j = 0; j < facets; j++) {
+            const tm = (j + 0.5) / facets;
+            const c = nodeAt(tm);
+            addBox(out, c, [span / facets * 1.18, 0.5, 9.6], j % 2 ? WHITE : GLASS_HAZE, b);
+          }
+          // leading-edge fascia along the outer lip
+          addBox(out, nodeAt(1.0), [1.4, 0.9, 9.8], STEEL, b);
+          // masts + fanned cable stays every 4th bay
+          if (i % 4 === 0) {
+            const mastH = 46;
+            addCyl(out, a.c, 1.0, mastH, WHITE, 8, b);
+            const mastTop = vadd(a.c, a.u, mastH);
+            addCone(out, mastTop, 0.9, 3.2, RED, 6, b);           // mast beacon
+            for (let j = 1; j <= facets; j++) {
+              strut(mastTop, nodeAt(j / facets), 0.07, [0.92, 0.93, 0.95], 3);
+            }
+            // back-stay anchoring the mast to the ground behind the stand
+            strut(mastTop, vadd(a.c, a.r, -14), 0.09, STEEL, 3);
+          }
         }
       })();
 

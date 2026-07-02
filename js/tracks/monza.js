@@ -554,6 +554,96 @@
         // Lamp head — warm white
         addBox(out, vadd(ap.c, ap.u, 10.7), [1.1, 0.5, 0.6], [0.98, 0.94, 0.72], [ap.r, ap.u, ap.t]);
       }
+
+      // =====================================================================
+      // 9. BESPOKE ENRICHMENT — Italian cypress avenues, terraced tifosi bowls,
+      //    Autodromo museum portico. All models are LOCAL to this closure.
+      // =====================================================================
+
+      // ── 9a. Italian cypress — the tall slim dark-green spire that lines
+      //     Italian avenues (distinct columnar form vs. the umbrella pines). ──
+      const CYP = [0.12, 0.29, 0.16], CYP_D = [0.09, 0.23, 0.13];
+      function cypress(k, side, dist, h) {
+        const a = anchor(k, side, dist);
+        const b = [a.r, a.u, a.t];
+        const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
+        addCyl(out, a.c, 0.22, h * 0.16, [0.30, 0.22, 0.14], 5, b);          // slim trunk
+        addCone(out, vadd(a.c, a.u, h * 0.10), 1.45, h * 0.58, col, 6, b);    // columnar body
+        addCone(out, vadd(a.c, a.u, h * 0.44), 1.10, h * 0.42, col, 6, b);
+        addCone(out, vadd(a.c, a.u, h * 0.70), 0.70, h * 0.32, col, 6, b);    // pointed crown
+      }
+      // Formal cypress avenue flanking the approach to the Villa Reale (s~0.60).
+      for (let i = 0; i < 8; i++) {
+        const s = 0.58 + i * 0.007;
+        cypress(K(s), 1, 46 + (i % 2) * 3, 15 + hash(i * 9) * 5);
+      }
+      // Cypress rank punctuating the pit-straight backdrop and Parabolica bank.
+      for (const [s0, side, gap] of [[0.955, -1, 30], [0.02, 1, 40], [0.90, 1, 34]]) {
+        for (let i = 0; i < 5; i++) cypress(K(s0 + i * 0.006), side, gap + (i % 2) * 4, 14 + hash(i * 5 + s0 * 50) * 6);
+      }
+
+      // ── 9b. Terraced tifosi bowl — bespoke multi-tier crowd wall that steps
+      //     up and back, packing spectators into a towering historic tribuna.
+      //     Cheap: a few slabs + a light row of speckle cubes per tier. ──
+      const SHELL_A = [0.57, 0.58, 0.60], SHELL_B = [0.51, 0.52, 0.55];
+      const TIFOSI = [[0.84, 0.26, 0.22], [0.88, 0.86, 0.82], [0.30, 0.40, 0.62], [0.72, 0.63, 0.30]];
+      function tieredBowl(s, side, gap, len, tiers) {
+        const k = K(s);
+        const g0 = anchor(k, side, gap);
+        if (onTrack(g0.c[0], g0.c[2], len * 0.4)) return;
+        for (let t = 0; t < tiers; t++) {
+          const a = anchor(k, side, gap + t * 5.6);
+          const b = [a.r, a.u, a.t];
+          const h = 3 + t * 3.3;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [5.2, h, len], t % 2 ? SHELL_A : SHELL_B, b);      // riser
+          addBox(out, vadd(a.c, a.u, h + 0.85), [4.5, 1.6, len], TIFOSI[t % 4], b);               // crowd band
+          addBox(out, vadd(a.c, a.u, h + 1.85), [4.8, 0.32, len + 1], [0.93, 0.90, 0.80], b);     // fascia
+          // Sparse speckle so the band reads as a crowd, not a flat slab.
+          const cnt = Math.min(16, Math.floor(len / 6));
+          for (let c = 0; c < cnt; c++) {
+            const off = (c / (cnt - 1) - 0.5) * (len - 4);
+            const hp = hash(k * 3 + t * 31 + c);
+            if (hp < 0.45) continue;
+            addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.3), [2.0, 0.7, 1.3],
+                   TIFOSI[(c + t) % 4], b);
+          }
+        }
+        // Cantilever roof over the top tier.
+        const aR = anchor(k, side, gap + (tiers - 0.5) * 5.6);
+        addBox(out, vadd(aR.c, aR.u, 3 + tiers * 3.3 + 1.6), [7.2, 0.5, len + 2],
+               [0.19, 0.19, 0.23], [aR.r, aR.u, aR.t]);
+      }
+      // A wall of tifosi at the start/finish and around the iconic Parabolica.
+      tieredBowl(0.905, 1, 26, 92, 4);   // Parabolica outer — largest crowd
+      tieredBowl(0.02, 1, 40, 84, 4);    // facing the pit straight
+      tieredBowl(0.955, -1, 30, 78, 4);  // behind Tribuna Centrale
+      tieredBowl(0.11, 1, 24, 64, 3);    // Curva Grande sweep
+      tieredBowl(0.78, -1, 30, 70, 3);   // Ascari outer
+
+      // ── 9c. Autodromo museum / podium building — a low classical block with a
+      //     columned portico + pediment, evoking the historic 1922 buildings. ──
+      (function museum() {
+        const a = anchor(K(0.0), 1, 40);
+        const b = [a.r, a.u, a.t], base = a.c;
+        const wall = [0.90, 0.87, 0.78], trim = [0.82, 0.78, 0.68];
+        // Main hall block.
+        addBox(out, vadd(base, a.u, 6), [26, 12, 16], wall, b);
+        // Pediment roof (triangular prism running along the facade width).
+        addPrism(out, vadd(base, a.u, 13.5), [26, 4, 16], trim, b);
+        // Portico: a colonnade of 7 columns fronting the entrance.
+        for (let i = 0; i < 7; i++) {
+          const off = (i - 3) * 3.4;
+          const cp = vadd(vadd(base, a.t, off), a.r, -9);
+          addCyl(out, cp, 0.5, 9.5, [0.94, 0.91, 0.83], 8, b);
+        }
+        // Portico entablature + pediment cap over the columns.
+        addBox(out, vadd(vadd(base, a.r, -9), a.u, 10), [2.2, 1.4, 25], trim, b);
+        addPrism(out, vadd(vadd(base, a.r, -9), a.u, 12), [2.2, 2.6, 25], wall, b);
+        // Warm-lit window bays on the hall.
+        for (let i = 0; i < 5; i++)
+          addBox(out, vadd(vadd(base, a.t, (i - 2) * 4.5), a.u, 6), [0.2, 3, 2.2],
+                 [0.96, 0.86, 0.52], [a.r, a.u, a.t]);
+      })();
     },
   }
   );

@@ -26,8 +26,8 @@
     // road level near the T14 hairpin complex.
     elevations: [{ s: 0.65, halfM: 240, rise: -4 }],
     scenery: function (api) {
-      const { out, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
-        addFrustum, anchor, vadd, onTrack, building, tower, billboard,
+      const { out, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
+        addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
         cityFront } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -511,6 +511,104 @@
         addCyl(out, vadd(a.c, a.u, 9), 9.5, 1.0, MAGENTA, 14, [a.r, a.u, a.t]);
         // Secondary accent ring—alternating neon color
         addCyl(out, vadd(a.c, a.u, 6), 8, 0.6, CYAN, 14, [a.r, a.u, a.t]);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // BESPOKE STRIP LANDMARK MODELS
+      // ═══════════════════════════════════════════════════════════════════
+
+      // ── Reflective Bellagio lake (groundPlane water:true) ────────────────
+      // The fountains dance on a real reflective water buffer that mirrors
+      // the neon skyline, set behind the Bellagio fountain jets (s 0.74 L).
+      groundPlane(K(0.745), -1, 20, [110, 1.2, 44], [0.05, 0.10, 0.18], true);
+
+      // ── LUXOR — black glass pyramid + sphinx + sky beam ─────────────────
+      // The iconic dark pyramid with the brightest light beam on earth firing
+      // straight up from its apex, plus a small sphinx and palm forecourt.
+      {
+        const a = anchor(K(0.53), 1, 130);
+        if (!onTrack(a.c[0], a.c[2], 30)) {
+          const b = [a.r, a.u, a.t];
+          const PW = 90, PH = 66;
+          const GLASS = [0.06, 0.06, 0.10];
+          // Main pyramid mass
+          addPyramid(out, vadd(a.c, a.u, PH * 0.5), [PW, PH, PW], GLASS, b);
+          // Glowing edge/light-band tiers up the faces (amber LED ribs)
+          for (let i = 1; i <= 5; i++) {
+            const fr = i / 6;
+            const w = PW * (1 - fr);
+            addBox(out, vadd(a.c, a.u, fr * PH), [w * 1.005, 0.8, w * 1.005], i % 2 ? GOLD : WARM, b);
+          }
+          // Apex light housing
+          addBox(out, vadd(a.c, a.u, PH), [4, 3, 4], LED, b);
+          // THE sky beam — a long ultra-bright column firing up from the apex
+          addCyl(out, vadd(a.c, a.u, PH + 100), 2.4, 200, [1.0, 0.98, 0.85], 10, b);
+          addCyl(out, vadd(a.c, a.u, PH + 100), 4.6, 200, [1.0, 0.95, 0.70], 8, b);
+          // Sphinx at the entrance (body block + head + paws)
+          const sx = vadd(vadd(a.c, a.r, -PW * 0.5 - 14), a.u, 0);
+          addBox(out, vadd(sx, a.u, 5), [10, 10, 26], [0.72, 0.62, 0.40], b);
+          addBox(out, vadd(vadd(sx, a.t, 15), a.u, 11), [8, 9, 8], [0.78, 0.66, 0.42], b);   // head
+          addBox(out, vadd(vadd(sx, a.t, 15), a.u, 2), [10, 3, 12], [0.70, 0.60, 0.38], b);  // paws
+          // Palm forecourt + golden ground wash
+          addBox(out, vadd(a.c, a.u, 0.1), [PW + 40, 0.4, PW + 40], [0.14, 0.10, 0.06], b);
+          for (let p = 0; p < 6; p++) palm(K(0.53 + (p - 3) * 0.004), 1, 96 + (p % 2) * 10, 11 + hash(p * 7) * 4, LIME);
+        }
+      }
+
+      // ── WELCOME TO FABULOUS LAS VEGAS — the classic diamond sign ─────────
+      // Two angled poles carrying a silver-dollar diamond board topped by a
+      // starburst, the lit "WELCOME" band across its face.
+      {
+        const a = anchor(K(0.83), -1, 20);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const b = [a.r, a.u, a.t];
+          // Support poles (splayed A-frame)
+          for (const o of [-4, 4]) addCyl(out, vadd(vadd(a.c, a.t, o), a.u, 0), 0.35, 9, [0.55, 0.50, 0.30], 6, b);
+          // Diamond board — two prisms base-to-base making a rotated square
+          const dc = vadd(a.c, a.u, 13);
+          addPrism(out, vadd(dc, a.u, 2.6), [9, 5.2, 3], [0.98, 0.95, 0.80], [a.r, a.t, a.u]);
+          addPrism(out, vadd(dc, a.u, -2.6), [9, 5.2, 3], [0.98, 0.95, 0.80], [a.r, [-a.t[0], -a.t[1], -a.t[2]], a.u]);
+          // Red "WELCOME" roundel + lit lettering band
+          addCyl(out, vadd(dc, a.u, 3.4), 2.2, 0.4, RED, 12, b);
+          addBox(out, vadd(dc, a.u, 0.2), [11, 1.6, 0.6], [0.15, 0.35, 0.85], b);       // FABULOUS band (blue)
+          addBox(out, vadd(dc, a.u, -1.8), [10, 1.4, 0.6], LED, b);                     // LAS VEGAS band
+          // Starburst finial on top
+          addBox(out, vadd(dc, a.u, 7.6), [0.4, 3, 0.4], GOLD, b);
+          addCyl(out, vadd(dc, a.u, 9), 1.4, 0.4, LED, 8, b);
+          for (let r = 0; r < 8; r++) {
+            const ang = (r / 8) * Math.PI * 2;
+            addBox(out, vadd(vadd(dc, a.t, Math.cos(ang) * 1.8), a.u, 9 + Math.sin(ang) * 1.8), [0.6, 0.6, 0.3], WARM, b);
+          }
+        }
+      }
+
+      // ── NEON GATEWAY ARCH over the Strip (barrel of light) ──────────────
+      // A grand neon arch spanning the Strip straight, voussoirs cycling
+      // through the Vegas palette — a "Glitter Gulch" gateway.
+      {
+        const k = K(0.66);
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const t = [track.tx[k], track.ty[k], track.tz[k]];
+        const u = upOf(track, k);
+        const base = [px[k], py[k], pz[k]];
+        const b = [r, u, t];
+        const span = hw[k] * 2 + 10;
+        // Piers
+        for (const sd of [-1, 1]) {
+          const pc = vadd(base, r, sd * (hw[k] + 3.5));
+          addBox(out, vadd(pc, u, 6), [2.6, 12, 2.6], [0.10, 0.10, 0.14], b);
+          addBox(out, vadd(pc, u, 6), [2.8, 10, 0.8], sd > 0 ? CYAN : MAGENTA, b);   // neon strip
+        }
+        // Arched neon voussoirs (a fan of glowing boxes over the road)
+        const arcCols = [MAGENTA, CYAN, VIOLET, LIME, GOLD, ROSE, BLUE];
+        for (let j = -5; j <= 5; j++) {
+          const frac = j / 5;
+          const rise = 12.5 + Math.cos(frac * 1.3) * 2.6;
+          addBox(out, vadd(vadd(base, r, frac * span * 0.5 * 0.82), u, rise),
+                 [span * 0.11, 1.4, 1.6], arcCols[(j + 5) % arcCols.length], b);
+        }
+        // Bright LED apex sign panel
+        addBox(out, vadd(base, u, 15.2), [14, 3, 1.0], LED, b);
       }
     },
   }

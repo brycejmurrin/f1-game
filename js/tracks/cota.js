@@ -24,8 +24,66 @@
     // Turn 1: the calendar's most famous climb — ~30 m up in a few hundred metres.
     elevations: [{ s: 0.06, halfM: 320, rise: 12 }],
     scenery: function (api) {
-      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, motorhome, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
+      const { out, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addPyramid, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, motorhome, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // ======================= BESPOKE COTA MODELS =======================
+      // -- Speckled crowd palette (casual Texan race-day colours) --
+      const crowdCols = [
+        [0.86, 0.28, 0.24], [0.24, 0.42, 0.78], [0.94, 0.82, 0.28],
+        [0.90, 0.90, 0.92], [0.26, 0.62, 0.38], [0.82, 0.46, 0.20],
+        [0.52, 0.30, 0.66], [0.16, 0.30, 0.52],
+      ];
+      // -- Bespoke: raked, PACKED crowd terrace on a slope (the amphitheatre hill) --
+      // Stepped rows of speckled spectator boxes rising away from the track on a
+      // concrete terrace shell — reads as a densely packed hillside grandstand.
+      const crowdBank = (s, side, gap, len, rows, dens) => {
+        const k = K(s), a = anchor(k, side, gap);
+        if (onTrack(a.c[0], a.c[2], 8)) return;
+        const bv = [a.r, a.u, a.t], step = 2.5, rise = 1.7;
+        // terrace shell (concrete wedge) beneath the crowd
+        addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
+                 [rows * step, rows * rise, len], [0.40, 0.41, 0.45], [a.t, a.u, a.r]);
+        const seats = Math.floor(len / (dens || 2.1));
+        for (let r = 0; r < rows; r++) {
+          const back = r * step, up = r * rise + 1.1;
+          for (let c = 0; c < seats; c++) {
+            const off = (c - seats / 2) * (dens || 2.1) + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
+            const p = vadd(vadd(vadd(a.c, a.r, back), a.u, up), a.t, off);
+            addBox(out, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
+          }
+        }
+      };
+
+      // -- Bespoke: Austin360 Amphitheater — proscenium shell + PA towers + LED wall + lawn --
+      const amphiStage = (s, side, dist) => {
+        const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 40)) return;
+        // raised black stage deck
+        addBox(out, vadd(a.c, a.u, 2.4), [28, 4.8, 22], [0.18, 0.18, 0.21], bv);
+        // fan roof canopy — three tiered arcs stepping back over the stage
+        for (let i = 0; i < 3; i++) {
+          addFrustum(out, vadd(vadd(a.c, a.u, 17 + i * 3), a.r, i * 5),
+                     27 - i * 5, 23 - i * 5, 2.6, [0.82 - i * 0.06, 0.82 - i * 0.06, 0.86], 18, bv);
+        }
+        // proscenium back wall + big glowing LED video wall
+        addBox(out, vadd(vadd(a.c, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
+        addBox(out, vadd(vadd(a.c, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
+        // PA line-array towers flanking the stage
+        for (const so of [-1, 1]) {
+          const base = vadd(a.c, a.t, so * 17);
+          addCyl(out, base, 0.55, 20, [0.12, 0.12, 0.14], 4, bv);
+          for (let j = 0; j < 5; j++)
+            addBox(out, vadd(base, a.u, 11 + j * 1.5), [1.7, 1.3, 2.6], [0.06, 0.06, 0.08], bv);
+        }
+        // packed lawn crowd OUTWARD of the stage (away from the track), speckled
+        for (let r = 0; r < 6; r++)
+          for (let c = 0; c < 22; c++) {
+            const p = vadd(vadd(vadd(a.c, a.r, 8 + r * 3), a.u, 0.9),
+                           a.t, (c - 11) * 2.1 + (hash(r * 31 + c) - 0.5));
+            addBox(out, p, [0.8, 1.0, 0.7], crowdCols[(r * 7 + c) % crowdCols.length], bv);
+          }
+      };
 
       // -- Palette (Texas Hill Country, DAY) --
       const dryGrass  = [0.55, 0.62, 0.30];
@@ -89,6 +147,13 @@
       addFrustum(out, tBase,                         5.8, 4.6, 32, [0.80, 0.81, 0.85], 8, tb);
       addFrustum(out, vadd(tBase, at.u, 32),         4.6, 3.8, 32, [0.78, 0.79, 0.83], 8, tb);
       addFrustum(out, vadd(tBase, at.u, 64),         3.8, 2.8, 10, [0.76, 0.77, 0.81], 8, tb);
+      // iconic multicolour LED ring bands wrapping the shaft (COTA's night signature)
+      const ringCols = [[0.90, 0.20, 0.20], [0.95, 0.55, 0.12], [0.95, 0.85, 0.20],
+                        [0.20, 0.72, 0.36], [0.18, 0.46, 0.86], [0.56, 0.30, 0.76]];
+      ringCols.forEach((rc, i) => {
+        const ry = 8 + i * 11, rr = 5.6 - (ry / 74) * 2.6;
+        addCyl(out, vadd(tBase, at.u, ry), rr, 1.35, rc, 9, tb);
+      });
       // broad observation deck assembly (the iconic RED feature, r=8.5 m)
       const deckH = 74;
       const deckCen = vadd(tBase, at.u, deckH);
@@ -132,16 +197,16 @@
       const me2 = anchor(ke, 1, 32);
       addPrism(out, vadd(me2.c, me2.u, 2), [34, 6, 64], scrub, [me2.t, me2.u, me2.r]);
 
-      // ---- Austin360 Amphitheater: curved fan canopy behind Turn 12 (s≈0.64, R) ----
-      const ka = K(0.64);
-      const aa = anchor(ka, 1, 62), ab = [aa.r, aa.u, aa.t];
-      if (!onTrack(aa.c[0], aa.c[2], 36)) {
-        addBox(out, vadd(aa.c, aa.u, 12), [52, 22, 28], [0.78, 0.76, 0.72], ab);
-        for (let i = -2; i <= 2; i++) {
-          addPrism(out, vadd(vadd(aa.c, aa.t, i * 11), aa.u, 23 + (2 - Math.abs(i)) * 2),
-                   [14, 3, 24], [0.70, 0.72, 0.76], [aa.r, aa.u, aa.t]);
-        }
-      }
+      // ---- Austin360 Amphitheater: bespoke concert stage behind Turn 12 (s≈0.64, R) ----
+      amphiStage(0.64, 1, 70);
+
+      // ---- Turn-1 amphitheatre crowd hill — PACKED terraced fans on the famous climb ----
+      // Sits behind/above the stock grandstands, reading as the wall of spectators
+      // that lines COTA's Turn-1 hairpin hill.
+      crowdBank(0.095, -1, 40, 110, 7, 2.0);
+      crowdBank(0.135, -1, 46, 70, 6, 2.2);
+      // Final-corner / main-straight packed terrace (s≈0.98, R)
+      crowdBank(0.975, 1, 34, 120, 6, 2.2);
 
       // ---- Red-and-white grandstand framework / tower (s≈0.65, R far) ----
       const redFramework = (k, side, dist) => {

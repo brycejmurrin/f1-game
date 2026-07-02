@@ -633,6 +633,74 @@
           addCone(out, vadd(a.c, a.u, H + 20), 3.0, 10, NEON[1], 6, [a.r, a.u, a.t]);
         }
       }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // BESPOKE MARINA BAY WATERFRONT MODELS
+      // ═══════════════════════════════════════════════════════════════════
+
+      // ── Reflective Marina Bay water (groundPlane water:true) ─────────────
+      // A true reflective buffer mirroring the lit skyline across the bay,
+      // laid along the R (waterfront) side of the bay sections.
+      for (const s of [0.20, 0.30, 0.40, 0.84]) {
+        groundPlane(K(s), 1, 40, [120, 1.2, 90], [0.05, 0.07, 0.13], true);
+      }
+
+      // ── THE MERLION — Singapore's icon: lion head + fish body + water jet ─
+      // Placed on the bayfront (R) facing Marina Bay, spouting a cyan jet.
+      {
+        const a = anchor(K(0.58), 1, 34);
+        if (!onTrack(a.c[0], a.c[2], 12)) {
+          const b   = [a.r, a.u, a.t];
+          const jetB = [a.t, a.r, a.u];    // 'up' slot = a.r → jet fires outward over water
+          const WHITE = [0.92, 0.93, 0.95];
+          const SHADE = [0.80, 0.82, 0.86];
+          // Round plinth in the splash pool
+          addCyl(out, vadd(a.c, a.u, 0.6), 7, 1.2, [0.60, 0.62, 0.66], 12, b);
+          // Fish-body base: three stacked scale rings tapering up (curved body)
+          addFrustum(out, vadd(a.c, a.u, 1.2), 6.2, 5.0, 5, WHITE, 10, b);
+          addFrustum(out, vadd(a.c, a.u, 6.0), 5.0, 4.2, 5, SHADE, 10, b);
+          addFrustum(out, vadd(a.c, a.u, 10.8), 4.2, 3.4, 5, WHITE, 10, b);
+          // Upright chest/torso
+          addBox(out, vadd(a.c, a.u, 16.5), [5.6, 5, 4.6], WHITE, b);
+          // Lion head block + snout jutting toward the bay
+          const head = vadd(a.c, a.u, 20.5);
+          addBox(out, head, [5.2, 4.4, 4.6], WHITE, b);
+          addBox(out, vadd(head, a.r, 3.0), [2.6, 2.4, 2.6], SHADE, b);   // snout
+          // Mane — a ring of short cones around the head
+          for (let m = 0; m < 8; m++) {
+            const ang = (m / 8) * Math.PI * 2;
+            const dx = Math.cos(ang) * 3.2, dz = Math.sin(ang) * 3.2;
+            const mc = [head[0] + a.r[0] * dx + a.t[0] * dz, head[1] + 0.5, head[2] + a.r[2] * dx + a.t[2] * dz];
+            addCone(out, mc, 1.1, 2.4, [0.86, 0.88, 0.92], 5, [a.r, a.u, a.t]);
+          }
+          // Ears
+          for (const o of [-1.6, 1.6]) addCone(out, vadd(vadd(head, a.t, o), a.u, 2.6), 0.7, 1.6, WHITE, 5, b);
+          // Water jet — a long tapering cyan cone arcing out over the bay
+          const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
+          addCone(out, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
+          addCone(out, vadd(mouth, a.r, 16), 1.4, 3, [0.85, 0.95, 1.00], 7, jetB);   // splash burst
+          // Splash pool + reflective disc at the base
+          addCyl(out, vadd(a.c, a.u, 0.2), 12, 0.3, [0.08, 0.16, 0.24], 14, b);
+          addBox(out, vadd(a.c, a.u, 0.4), [22, 0.15, 22], [0.40, 0.55, 0.65], b);
+        }
+      }
+
+      // ── LIT HARBOUR BUMBOATS — small glowing boats on the bay water ──────
+      const bumboat = (a, sc, glow) => {
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.8 * sc), [3.4 * sc, 1.4 * sc, 9 * sc], [0.30, 0.22, 0.16], b);
+        addPrism(out, vadd(vadd(a.c, a.t, 4.4 * sc), a.u, 0.8 * sc), [3.4 * sc, 1.4 * sc, 1.6 * sc], [0.34, 0.24, 0.18], b);
+        addBox(out, vadd(a.c, a.u, 2.4 * sc), [2.6 * sc, 1.8 * sc, 4 * sc], [0.42, 0.30, 0.20], b);  // cabin
+        addBox(out, vadd(a.c, a.u, 2.6 * sc), [2.7 * sc, 0.7 * sc, 4.1 * sc], glow, b);              // lit windows
+        // string of festive lights along the roofline
+        for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 1.4 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);
+      };
+      for (let i = 0; i < 6; i++) {
+        const s = [0.24, 0.33, 0.42, 0.46, 0.83, 0.87][i];
+        const a = anchor(K(s), 1, 30 + (i % 3) * 12 + hash(i * 7) * 8);
+        if (onTrack(a.c[0], a.c[2], 8)) continue;
+        bumboat(a, 1.0 + hash(i * 5) * 0.6, i % 2 ? WIN_WARM : WIN_GOLD);
+      }
     },
   }
   );
