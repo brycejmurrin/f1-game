@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=430">
-<link rel="stylesheet" href="css/data.css?v=430">
+<link rel="stylesheet" href="css/style.css?v=431">
+<link rel="stylesheet" href="css/data.css?v=431">
 <script>
 // ── SHELL VERSION GUARD ──────────────────────────────────────────────────────
 // index.html is the ONE file with no ?v= cache-buster on itself, so an installed
@@ -420,10 +420,35 @@
     <div id="lt-rows"></div>
     <textarea id="lt-json" readonly hidden aria-label="Exported tuning values"></textarea>
     <div class="sel-actions" style="margin-top:12px">
+      <button id="pc-toggle">&#128247; FREE CAMERA</button>
       <button id="lt-reset">RESET ALL</button>
       <button id="lt-copy">COPY VALUES</button>
       <button id="lt-close" class="bigbtn">DONE</button>
     </div>
+  </div>
+</div>
+
+<!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).
+     Desktop uses WASD / R-F / arrows / drag; touch uses the two thumbsticks
+     + the up/down buttons. Container is click-through; only the controls grab
+     pointer events (see .pc-* CSS). -->
+<div id="photo-controls" hidden>
+  <div class="pc-stickwrap pc-move-wrap">
+    <span class="pc-lbl">MOVE</span>
+    <div id="pc-move" class="pc-stick"><div class="pc-nub"></div></div>
+  </div>
+  <div class="pc-altcol">
+    <button id="pc-up" class="pc-btn" aria-label="Up">&#9650;</button>
+    <button id="pc-down" class="pc-btn" aria-label="Down">&#9660;</button>
+  </div>
+  <div class="pc-stickwrap pc-look-wrap">
+    <span class="pc-lbl">LOOK</span>
+    <div id="pc-look" class="pc-stick"><div class="pc-nub"></div></div>
+  </div>
+  <div id="pc-bar">
+    <span class="pc-hint">WASD move&nbsp;&middot;&nbsp;R/F up&middot;down&nbsp;&middot;&nbsp;arrows or drag to look&nbsp;&middot;&nbsp;Shift boost</span>
+    <label class="pc-fovlab">FOV&nbsp;<input id="pc-fov" type="range" min="20" max="110" step="1" value="60"></label>
+    <button id="pc-exit">EXIT</button>
   </div>
 </div>
 
@@ -434,47 +459,47 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script src="js/mat4.js?v=430"></script>
-<script src="js/glx.js?v=430"></script>
-<script src="js/gltf.js?v=430"></script>
-<script src="js/teams.js?v=430"></script>
-<script src="js/circuits.js?v=430"></script>
+<script src="js/mat4.js?v=431"></script>
+<script src="js/glx.js?v=431"></script>
+<script src="js/gltf.js?v=431"></script>
+<script src="js/teams.js?v=431"></script>
+<script src="js/circuits.js?v=431"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script src="js/tracks/bahrain.js?v=430"></script>
-<script src="js/tracks/monaco.js?v=430"></script>
-<script src="js/tracks/silverstone.js?v=430"></script>
-<script src="js/tracks/spa.js?v=430"></script>
-<script src="js/tracks/monza.js?v=430"></script>
-<script src="js/tracks/suzuka.js?v=430"></script>
-<script src="js/tracks/singapore.js?v=430"></script>
-<script src="js/tracks/cota.js?v=430"></script>
-<script src="js/tracks/interlagos.js?v=430"></script>
-<script src="js/tracks/vegas.js?v=430"></script>
-<script src="js/tracks/madrid.js?v=430"></script>
-<script src="js/tracks/zandvoort.js?v=430"></script>
-<script src="js/tracks/jeddah.js?v=430"></script>
-<script src="js/tracks/albert_park.js?v=430"></script>
-<script src="js/tracks/shanghai.js?v=430"></script>
-<script src="js/tracks/miami.js?v=430"></script>
-<script src="js/tracks/imola.js?v=430"></script>
-<script src="js/tracks/montreal.js?v=430"></script>
-<script src="js/tracks/redbull.js?v=430"></script>
-<script src="js/tracks/hungaroring.js?v=430"></script>
-<script src="js/tracks/baku.js?v=430"></script>
-<script src="js/tracks/mexico.js?v=430"></script>
-<script src="js/tracks/qatar.js?v=430"></script>
-<script src="js/tracks/abudhabi.js?v=430"></script>
-<script src="js/tracks.js?v=430"></script>
-<script src="js/trackmaps.js?v=430"></script>
-<script src="js/car3d.js?v=430"></script>
-<script src="js/input.js?v=430"></script>
-<script src="js/audio.js?v=430"></script>
-<script src="js/api.js?v=430"></script>
-<script src="js/data.js?v=430"></script>
-<script src="js/parts.js?v=430"></script>
-<script src="js/liveries.js?v=430"></script>
-<script src="js/ghost.js?v=430"></script>
-<script src="js/light-presets.js?v=430"></script>
-<script src="js/game.js?v=430"></script>
+<script src="js/tracks/bahrain.js?v=431"></script>
+<script src="js/tracks/monaco.js?v=431"></script>
+<script src="js/tracks/silverstone.js?v=431"></script>
+<script src="js/tracks/spa.js?v=431"></script>
+<script src="js/tracks/monza.js?v=431"></script>
+<script src="js/tracks/suzuka.js?v=431"></script>
+<script src="js/tracks/singapore.js?v=431"></script>
+<script src="js/tracks/cota.js?v=431"></script>
+<script src="js/tracks/interlagos.js?v=431"></script>
+<script src="js/tracks/vegas.js?v=431"></script>
+<script src="js/tracks/madrid.js?v=431"></script>
+<script src="js/tracks/zandvoort.js?v=431"></script>
+<script src="js/tracks/jeddah.js?v=431"></script>
+<script src="js/tracks/albert_park.js?v=431"></script>
+<script src="js/tracks/shanghai.js?v=431"></script>
+<script src="js/tracks/miami.js?v=431"></script>
+<script src="js/tracks/imola.js?v=431"></script>
+<script src="js/tracks/montreal.js?v=431"></script>
+<script src="js/tracks/redbull.js?v=431"></script>
+<script src="js/tracks/hungaroring.js?v=431"></script>
+<script src="js/tracks/baku.js?v=431"></script>
+<script src="js/tracks/mexico.js?v=431"></script>
+<script src="js/tracks/qatar.js?v=431"></script>
+<script src="js/tracks/abudhabi.js?v=431"></script>
+<script src="js/tracks.js?v=431"></script>
+<script src="js/trackmaps.js?v=431"></script>
+<script src="js/car3d.js?v=431"></script>
+<script src="js/input.js?v=431"></script>
+<script src="js/audio.js?v=431"></script>
+<script src="js/api.js?v=431"></script>
+<script src="js/data.js?v=431"></script>
+<script src="js/parts.js?v=431"></script>
+<script src="js/liveries.js?v=431"></script>
+<script src="js/ghost.js?v=431"></script>
+<script src="js/light-presets.js?v=431"></script>
+<script src="js/game.js?v=431"></script>
 </body>
 </html>

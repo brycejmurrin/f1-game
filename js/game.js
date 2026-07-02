@@ -273,6 +273,17 @@ let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
+// ---- Photo mode: a free-fly camera launched from the LIGHTING TUNER so the
+// scene can be inspected/photographed from anywhere, not just where the menu was
+// opened. Feeds dbgCam every paused frame (see updatePhotoCam / tick()). ----
+let photoMode = false;
+const photoCam = { pos: [0, 6, 0], yaw: 0, pitch: 0, fov: 60 };
+const photoKeys = { w: false, s: false, a: false, d: false, up: false, dn: false,
+                    pu: false, pd: false, yl: false, yr: false, boost: false };
+const photoMove = { x: 0, y: 0 };   // touch move stick: x=strafe, y=forward (−1..1)
+const photoLook = { x: 0, y: 0 };   // touch look stick: x=yaw, y=pitch (−1..1)
+const photoMouse = { dx: 0, dy: 0, drag: false, px: 0, py: 0 };
+let photoAlt = 0;                    // touch up/down buttons: +1 up, −1 down
 // Studio light rig (__apex.studio): a ring of test lamps that follows the player
 // car — inspect paint/reflection response on any track at any time of day,
 // independent of the session's real lamps. null = off.
@@ -1833,6 +1844,7 @@ function hexToArr(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [
 function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); return "#" + f(a[0]) + f(a[1]) + f(a[2]); }
 
 function quitToMenu() {
+  if (photoMode) exitPhotoMode();   // drop the fly-cam override before leaving the race
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
@@ -4524,7 +4536,10 @@ function tick(now) {
   if (paused) {
     // LIGHTING TUNER live preview: keep RENDERING (physics stays paused) while
     // the panel is open so every slider change shows on the held frame.
-    if ((state === "race" || state === "count") && !$("lighting").hidden) render(Math.min(dt, 1 / 20));
+    if ((state === "race" || state === "count") && !$("lighting").hidden) {
+      if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20));   // fly-cam integrates before the held frame
+      render(Math.min(dt, 1 / 20));
+    }
     return;
   }
   if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
@@ -5521,12 +5536,153 @@ $("pm-lighting").onclick = () => {
   els.pausemenu.hidden = true;      // unobstructed live preview
 };
 $("lt-close").onclick = () => {
+  if (photoMode) exitPhotoMode();
   // Restore the race's real time & weather (preview was transient).
   if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
   if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);
   $("lighting").hidden = true;
   if (paused) els.pausemenu.hidden = false;
 };
+
+// ---------- Photo mode (free-fly camera) ----------
+// Seed the fly-cam from the camera currently on screen so it starts exactly
+// where the user was, then let them fly. yaw/pitch use view()'s convention:
+// dir = (sin yaw·cos pitch, sin pitch, −cos yaw·cos pitch).
+function initPhotoCam() {
+  photoCam.pos[0] = camEye[0]; photoCam.pos[1] = camEye[1]; photoCam.pos[2] = camEye[2];
+  let dx = camTgt[0] - camEye[0], dy = camTgt[1] - camEye[1], dz = camTgt[2] - camEye[2];
+  const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+  photoCam.pitch = Math.asin(Math.max(-1, Math.min(1, dy)));
+  photoCam.yaw = Math.atan2(dx, -dz);
+  photoCam.fov = camFov;
+  const fv = $("pc-fov"); if (fv) fv.value = Math.round(camFov);
+  photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
+  photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoAlt = 0;
+  for (const k in photoKeys) photoKeys[k] = false;
+}
+// Integrate held input into the fly-cam each paused frame and publish dbgCam.
+function updatePhotoCam(dt) {
+  const spd = photoKeys.boost ? 95 : 34;          // m/s (Shift = boost)
+  const lookRate = 1.7;                           // rad/s for key/stick look
+  // Look: arrow keys + touch look stick + mouse drag delta.
+  const yawIn   = (photoKeys.yr ? 1 : 0) - (photoKeys.yl ? 1 : 0) + photoLook.x;
+  const pitchIn = (photoKeys.pu ? 1 : 0) - (photoKeys.pd ? 1 : 0) - photoLook.y;
+  photoCam.yaw   += yawIn * lookRate * dt + photoMouse.dx * 0.0032;
+  photoCam.pitch += pitchIn * lookRate * dt - photoMouse.dy * 0.0032;
+  photoMouse.dx = 0; photoMouse.dy = 0;
+  photoCam.pitch = Math.max(-1.45, Math.min(1.45, photoCam.pitch));
+  const cp = Math.cos(photoCam.pitch), sp = Math.sin(photoCam.pitch);
+  const fwd = [Math.sin(photoCam.yaw) * cp, sp, -Math.cos(photoCam.yaw) * cp];
+  const rgt = [Math.cos(photoCam.yaw), 0, Math.sin(photoCam.yaw)];
+  // Move: WASD + touch move stick (forward follows the look pitch); R/F + up/down
+  // buttons ride the WORLD vertical so you can climb straight up.
+  const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) + photoMove.y;
+  const ms = (photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x;
+  const mv = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + photoAlt;
+  const k = spd * dt;
+  photoCam.pos[0] += (fwd[0] * mf + rgt[0] * ms) * k;
+  photoCam.pos[1] += (fwd[1] * mf + mv) * k;
+  photoCam.pos[2] += (fwd[2] * mf + rgt[2] * ms) * k;
+  const e = photoCam.pos;
+  dbgCam = { eye: [e[0], e[1], e[2]], target: [e[0] + fwd[0] * 100, e[1] + fwd[1] * 100, e[2] + fwd[2] * 100],
+             fov: photoCam.fov, far: 8000 };
+}
+// Free-cam is a sub-mode OF the lighting tuner: the tuner panel stays open (docked
+// right) so sliders can be adjusted while the camera flies, and the effect is seen
+// from any angle. Only the race HUD is hidden (body.photo-mode) to declutter.
+function enterPhotoMode() {
+  if (photoMode) return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  photoMode = true;
+  initPhotoCam();
+  document.body.classList.add("photo-mode");
+  $("photo-controls").hidden = false;
+  const t = $("pc-toggle"); if (t) { t.classList.add("on"); t.innerHTML = "● FREE CAMERA"; }
+  window.addEventListener("keydown", photoKeyHandler, true);
+  window.addEventListener("keyup", photoKeyHandler, true);
+}
+function exitPhotoMode() {
+  if (!photoMode) return;
+  photoMode = false;
+  dbgCam = null;                          // hand the game camera back
+  document.body.classList.remove("photo-mode");
+  $("photo-controls").hidden = true;
+  const t = $("pc-toggle"); if (t) { t.classList.remove("on"); t.innerHTML = "📷 FREE CAMERA"; }
+  window.removeEventListener("keydown", photoKeyHandler, true);
+  window.removeEventListener("keyup", photoKeyHandler, true);
+}
+// Dedicated key handler (not Input.onKey) so photo controls never touch driving.
+function photoKeyHandler(e) {
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;  // typing in a slider
+  const down = e.type === "keydown";
+  let hit = true;
+  switch (e.code) {
+    case "KeyW": photoKeys.w = down; break;
+    case "KeyS": photoKeys.s = down; break;
+    case "KeyA": photoKeys.a = down; break;
+    case "KeyD": photoKeys.d = down; break;
+    case "KeyR": case "Space": photoKeys.up = down; break;
+    case "KeyF": photoKeys.dn = down; break;
+    case "ArrowUp": photoKeys.pu = down; break;
+    case "ArrowDown": photoKeys.pd = down; break;
+    case "ArrowLeft": photoKeys.yl = down; break;
+    case "ArrowRight": photoKeys.yr = down; break;
+    case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
+    case "Escape": if (down) exitPhotoMode(); hit = true; break;
+    default: hit = false;
+  }
+  if (hit) { e.preventDefault(); e.stopPropagation(); }
+}
+// Virtual thumbstick: pointer offset from centre → normalised (−1..1) vector.
+function wirePhotoStick(id, vec) {
+  const el = $(id); if (!el) return;
+  const nub = el.querySelector(".pc-nub");
+  let pid = null;
+  const set = (cx, cy) => {
+    const r = el.getBoundingClientRect();
+    const rad = r.width / 2;
+    let dx = (cx - (r.left + rad)) / rad, dy = (cy - (r.top + rad)) / rad;
+    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    vec.x = dx; vec.y = dy;
+    if (nub) nub.style.transform = "translate(" + (dx * rad * 0.6) + "px," + (dy * rad * 0.6) + "px)";
+  };
+  const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
+  el.addEventListener("pointerdown", (e) => { pid = e.pointerId; el.setPointerCapture(pid); set(e.clientX, e.clientY); e.preventDefault(); });
+  el.addEventListener("pointermove", (e) => { if (e.pointerId === pid) { set(e.clientX, e.clientY); e.preventDefault(); } });
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+}
+function wirePhotoHold(id, on, off) {
+  const el = $(id); if (!el) return;
+  el.addEventListener("pointerdown", (e) => { on(); e.preventDefault(); });
+  el.addEventListener("pointerup", off);
+  el.addEventListener("pointercancel", off);
+  el.addEventListener("pointerleave", off);
+}
+wirePhotoStick("pc-move", photoMove);
+wirePhotoStick("pc-look", photoLook);
+wirePhotoHold("pc-up", () => photoAlt = 1, () => photoAlt = 0);
+wirePhotoHold("pc-down", () => photoAlt = -1, () => photoAlt = 0);
+// Drag anywhere on the scene (outside the sticks) to look — mouse or a spare finger.
+{
+  const canvas = $("game");
+  if (canvas) {
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!photoMode) return;
+      photoMouse.drag = true; photoMouse.px = e.clientX; photoMouse.py = e.clientY;
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!photoMode || !photoMouse.drag) return;
+      photoMouse.dx += e.clientX - photoMouse.px; photoMouse.dy += e.clientY - photoMouse.py;
+      photoMouse.px = e.clientX; photoMouse.py = e.clientY;
+    });
+    window.addEventListener("pointerup", () => { photoMouse.drag = false; });
+  }
+}
+$("pc-toggle").onclick = () => { if (soundOn) GameAudio.uiSelect(); photoMode ? exitPhotoMode() : enterPhotoMode(); };
+$("pc-exit").onclick = () => { if (soundOn) GameAudio.uiTick(); exitPhotoMode(); };
+$("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
 $("lt-help-on").onchange = (e) => {
   document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);
 };

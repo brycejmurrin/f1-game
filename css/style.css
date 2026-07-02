@@ -816,6 +816,75 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   white-space: nowrap;
 }
 
+/* ---------- photo mode (free-fly camera) ---------- */
+/* Full-screen click-through overlay; only the sticks/buttons take pointer input
+   so a drag on the empty scene rotates the look (handled in game.js). */
+#photo-controls {
+  position: fixed; inset: 0; z-index: 44;   /* above the docked tuner panel (42) so sticks stay tappable */
+  pointer-events: none;
+  touch-action: none;
+  font-family: inherit;
+}
+#photo-controls > * { pointer-events: auto; }
+.pc-stickwrap {
+  position: fixed; bottom: calc(20px + var(--sab));
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.pc-move-wrap { left: calc(20px + var(--sal)); }
+.pc-look-wrap { left: calc(168px + var(--sal)); }
+.pc-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
+.pc-stick {
+  position: relative; width: 118px; height: 118px; border-radius: 50%;
+  background: rgba(18,18,26,0.42); border: 1px solid rgba(255,255,255,0.28);
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.4);
+  touch-action: none; cursor: grab;
+}
+.pc-nub {
+  position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+  border-radius: 50%; background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.4);
+  will-change: transform;
+}
+.pc-altcol {
+  position: fixed; bottom: calc(20px + var(--sab)); left: calc(300px + var(--sal));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pc-btn {
+  width: 64px; height: 58px; border-radius: 12px; margin: 0;
+  font-size: 18px; font-weight: 800;
+  background: rgba(20,20,30,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+}
+.pc-btn:active { background: rgba(255,255,255,0.2); }
+#pc-bar {
+  position: fixed; top: calc(14px + var(--sat)); left: calc(20px + var(--sal));
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 14px; border-radius: 12px;
+  background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.14);
+  max-width: min(70vw, 720px);
+}
+.pc-hint { font-size: 11px; color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
+.pc-fovlab { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--dim); }
+.pc-fovlab input[type="range"] { width: 110px; margin-left: 6px; }
+#pc-exit {
+  width: auto; margin: 0; padding: 7px 16px; border-radius: 8px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+  background: var(--red); color: #fff; border: 1px solid var(--red);
+}
+/* the FREE CAMERA launch button in the tuner actions */
+#pc-toggle {
+  width: auto; margin: 0; padding: 9px 14px; border-radius: 8px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.04em;
+  background: rgba(0,140,200,0.2); color: #6cf; border: 1px solid rgba(0,160,220,0.45);
+}
+/* touch: hide the desktop key hint (no keyboard); narrow screens too */
+@media (pointer: coarse), (max-width: 720px) { .pc-hint { display: none; } }
+/* clean scene while flying: hide the race HUD + CHASE/pause buttons (reversible —
+   removing the class restores them to whatever hidden state they had) */
+body.photo-mode #hud,
+body.photo-mode #btn-cam,
+body.photo-mode #pausebtn,
+body.photo-mode #lights { display: none !important; }
+
 /* ---------- touch controls ---------- */
 /* Every control button is the same size, with perfectly centred text. */
 .touchbtn {
