@@ -2393,9 +2393,14 @@ void main() {
     gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
     gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
     gl.uniform1f(decalU.uGlow, (opts && opts.glow) || 0);
-    gl.activeTexture(gl.TEXTURE0);
+    // Bind the decal texture to a SPARE unit (5), NOT unit 0 — the lit pass keeps
+    // the shadow map bound to TEXTURE0 for the whole frame, so clobbering unit 0
+    // here would make every later lit draw (e.g. the player's wheels, drawn right
+    // after these decals) sample this RGBA image as the shadow map → broken/black.
+    gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.uniform1i(decalU.uTex, 0);
+    gl.uniform1i(decalU.uTex, 5);
+    gl.activeTexture(gl.TEXTURE0);   // leave unit 0 active + still bound to the shadow map
     setBlend(true);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     setDepthMask(false);
