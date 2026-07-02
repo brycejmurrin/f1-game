@@ -257,16 +257,13 @@ void main() {
   float VoH = max(dot(V, H), 0.0);
 
   vec3 albedo = vCol;
-  // Car deck mirror, step 1 — the WET-ROAD recipe on the paint's up-facing
-  // panels: the reflective film ABSORBS first (darkened pigment, energy
-  // conserving) so the sky added below reads as a mirror on a dark gloss,
-  // not a milky layer. Fresnel²-concentrated: strong at grazing deck angles
-  // (chase camera), zero face-on; flanks keep pure livery colour.
-  float carDeck = 0.0;
-  if (uCarPaint > 0.001) {
-    float cdF = 1.0 - NoV; carDeck = smoothstep(0.55, 0.85, N.y) * (cdF * cdF) * uCarPaint;
-    albedo *= 1.0 - carDeck * 0.38;   // slightly softened: the SSR world-mirror stacks on decks
-  }
+  // NOTE: the old "car deck mirror" (a sky mirror weighted by N.y that only hit
+  // up-facing panels) was removed — on the dead-flat floor plank / front-wing
+  // planes (N.y≈1) it peaked at full strength and read as a chrome "silver plane"
+  // under the car, brighter than the actual bodywork. The whole car is now
+  // reflected uniformly by the analytic clearcoat ENV mirror below (every panel,
+  // grazing-weighted) plus SSR, so the reflection is consistent instead of a
+  // flat-panel standout.
   // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
   // world position, so flat asphalt/concrete/grass read as a surface rather than
   // a solid slab. Multiplicative, so it darkens as much as it lightens.
@@ -509,16 +506,8 @@ void main() {
     }
   }
 
-  // Car deck mirror, step 2 — the sky reflection over the darkened film,
-  // soft-clipped exactly like the wet road so a bright sky can never blow
-  // the deck to white. On the flat-shaded panels this resolves to one clean
-  // mirror tone per deck facet.
-  if (carDeck > 0.001) {
-    float skyTd = pow(max(Rv.y, 1e-4), 0.40);
-    vec3 envD = mix(uSkyHorizon, uSkyZenith, skyTd);
-    vec3 addD = envD * carDeck * 0.85;
-    color += addD / (1.0 + addD);
-  }
+  // (Car deck mirror step 2 removed — see the note at step 1; the clearcoat ENV
+  //  mirror above now carries the car's reflection uniformly across every panel.)
 
   // Environment reflection: when roughness is very low (wet road / glossy paint),
   // sample the sky gradient in the reflected view direction.
