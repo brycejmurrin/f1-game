@@ -700,7 +700,7 @@ function getCockpitWheel() {
   _rigBox(out, 0, 0.0, 0.014, 0.215, 0.16, 0.042, CARB);       // fascia plate
   _rigBox(out, 0, 0.024, -0.016, 0.125, 0.080, 0.02, [0.025, 0.025, 0.035]);  // display bezel
   _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, [0.012, 0.018, 0.028]); // LCD
-  _rigBox(out, 0.048, 0.018, -0.0295, 0.012, 0.074, 0.003, [0.03, 0.035, 0.04]); // energy slot (vertical, right)
+  _rigBox(out, 0.048, 0.024, -0.0295, 0.012, 0.050, 0.003, [0.03, 0.035, 0.04]); // energy slot (vertical, centred)
   // Aligned display cells on one line: speed (navy) | gear (DARK RED box)
   _rigBox(out, -0.034, 0.022, -0.0292, 0.052, 0.040, 0.003, [0.10, 0.11, 0.13]); // speed cell frame
   _rigBox(out, -0.034, 0.022, -0.0296, 0.047, 0.035, 0.003, [0.010, 0.016, 0.026]); // speed cell face
@@ -713,7 +713,7 @@ function getCockpitWheel() {
     _rigBox(out, bx, by, -0.026, 0.02, 0.02, 0.012, BTN[bi++]);
   _rigBox(out, -0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);  // rotary knobs
   _rigBox(out,  0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);
-  _rigBox(out, 0.098, 0.082, -0.026, 0.022, 0.014, 0.010, [0.05, 0.05, 0.06]);  // OT lamp (off)
+  _rigBox(out, -0.048, 0.024, -0.0295, 0.016, 0.016, 0.003, [0.06, 0.05, 0.08]); // OT lamp (off)
   // Shift paddles: wide blades poking out past the rim behind the wheel.
   const PADL = [0.11, 0.11, 0.125];
   _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
@@ -781,7 +781,7 @@ let _ersBarMesh = null;
 function getErsBar() {
   if (_ersBarMesh) return _ersBarMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  _rigBox(out, 0, 0.034, 0, 0.008, 0.068, 0.004, [0.25, 1.9, 0.5]);  // anchored at y=0
+  _rigBox(out, 0, 0.023, 0, 0.008, 0.046, 0.004, [0.25, 1.9, 0.5]);  // anchored at y=0
   _ersBarMesh = GLX.createMesh(out);
   return _ersBarMesh;
 }
@@ -789,7 +789,7 @@ let _otArmedMesh = null, _otActiveMesh = null;
 function getOtLamp(active) {
   if (active ? _otActiveMesh : _otArmedMesh) return active ? _otActiveMesh : _otArmedMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  _rigBox(out, 0.098, 0.082, -0.028, 0.022, 0.014, 0.010, active ? [1.6, 0.5, 2.2] : [1.2, 1.2, 1.3]);
+  _rigBox(out, -0.048, 0.024, -0.031, 0.016, 0.016, 0.003, active ? [1.6, 0.5, 2.2] : [1.2, 1.2, 1.3]);
   const m = GLX.createMesh(out);
   if (active) _otActiveMesh = m; else _otArmedMesh = m;
   return m;
@@ -853,7 +853,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // ERS charge fill in the slot under the LCD; pulses while deploying.
   const en = clamp(c.energy || 0, 0, 1);
   if (en > 0.01) {
-    _digT[12] = 0.048; _digT[13] = -0.017; _digT[14] = -0.0315;
+    _digT[12] = 0.048; _digT[13] = 0.001; _digT[14] = -0.0315;
     M4.mulTo(_digM, _rigB, _digT);
     _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
     GLX.draw(getErsBar(), _digM, c.deploying
