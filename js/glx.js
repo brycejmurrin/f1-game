@@ -2847,8 +2847,12 @@ void main() {
     gl.uniform2f(shadowU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
+    // Pull the flat quad toward the camera in depth so it can't z-fight the
+    // coplanar road underneath (the "shadow flickering under the car").
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2.0, -4.0);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
   }
 
   function drawMark(modelMat, w, l) {
@@ -2861,8 +2865,10 @@ void main() {
     gl.uniform2f(markU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2.0, -4.0);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
   }
 
   // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
@@ -2876,12 +2882,14 @@ void main() {
     gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
     setBlend(true);
     setDepthMask(false);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2.0, -4.0);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
     if (dirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, vertCount * 5), gl.DYNAMIC_DRAW);
     }
     gl.drawArrays(gl.TRIANGLES, 0, vertCount);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
     return true;
   }
 

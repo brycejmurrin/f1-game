@@ -5645,7 +5645,7 @@ function updatePhotoCam(dt) {
   photoCam.pos[2] += (fwd[2] * mf + rgt[2] * ms) * k;
   const e = photoCam.pos;
   dbgCam = { eye: [e[0], e[1], e[2]], target: [e[0] + fwd[0] * 100, e[1] + fwd[1] * 100, e[2] + fwd[2] * 100],
-             fov: photoCam.fov, far: 8000 };
+             fov: photoCam.fov, far: 2500 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
 }
 // Free-cam is a sub-mode OF the lighting tuner: the tuner panel stays open (docked
 // right) so sliders can be adjusted while the camera flies, and the effect is seen
