@@ -515,11 +515,26 @@ function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
 // ---------- liveries (custom paint jobs) ----------
 function getLiveryId(teamId) { return store.get("livery." + teamId, "default"); }
 function saveLiveryId(teamId, id) { store.set("livery." + teamId, id); }
-// Resolve a team's chosen paint job -> { c1, c2 } bodywork colours (its own team
-// colours for "default"). Everything that builds a car mesh paints with these.
+// Player-created liveries, stored per team as [{id,name,c1,c2,stripe?}].
+function getCustomLiveries(teamId) { return store.get("livery.custom." + teamId, []); }
+function setCustomLiveries(teamId, arr) { store.set("livery.custom." + teamId, arr); }
+// Full paint-job list for a team: catalog (default + specials + universal) + the
+// player's own creations.
+function getLiveries(team) { return Liveries.forTeam(team).concat(getCustomLiveries(team.id)); }
+// Resolve a team's chosen paint job -> { c1, c2, stripe } bodywork colours (its
+// own team colours for "default"). Everything that builds a car mesh paints with
+// these.
+// Transient un-saved paint job previewed live in the creator: { teamId, liv }.
+// Overrides the resolved livery for that one team while the creator is open.
+let livDraftOverride = null;
 function resolveLivery(team) {
-  const liv = Liveries.forTeam(team).find((l) => l.id === getLiveryId(team.id));
-  return liv ? { c1: liv.c1, c2: liv.c2 } : { c1: team.color, c2: team.color2 };
+  if (livDraftOverride && livDraftOverride.teamId === team.id) {
+    const l = livDraftOverride.liv;
+    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null };
+  }
+  const liv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
+  return liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null }
+             : { c1: team.color, c2: team.color2, stripe: null };
 }
 
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
@@ -639,7 +654,7 @@ function buildCarData(team) {
     try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: liv.c1 }); }
     catch (e) { /* any parse trouble: fall through to the procedural car */ }
   }
-  return Car3D.build(liv.c1, liv.c2, { num: team.drivers && team.drivers[0] && team.drivers[0].num });
+  return Car3D.build(liv.c1, liv.c2, { livery: liv, num: team.drivers && team.drivers[0] && team.drivers[0].num });
 }
 
 function teamMesh(team) {
@@ -912,7 +927,7 @@ function cockpitBodyMesh(team) {
   if (!cockpitBodies[key]) {
     const liv = resolveLivery(team);
     cockpitBodies[key] = GLX.createMesh(Car3D.build(liv.c1, liv.c2,
-      { noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      { livery: liv, noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
         parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
   }
   return cockpitBodies[key];
@@ -996,7 +1011,7 @@ function playerBodyMesh(team) {
   const key = team.id + ":" + playerVisualKey;
   const liv = resolveLivery(team);
   if (!playerBodies[key]) playerBodies[key] = GLX.createMesh(Car3D.build(liv.c1, liv.c2,
-    { noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    { livery: liv, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
   return playerBodies[key];
 }
@@ -1759,6 +1774,9 @@ function buildTTResults() {
 }
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
+// Convert between an <input type=color> hex string and a [r,g,b] 0..1 array.
+function hexToArr(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; }
+function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); return "#" + f(a[0]) + f(a[1]) + f(a[2]); }
 
 function quitToMenu() {
   state = "menu"; paused = false;
@@ -3385,6 +3403,7 @@ function getSetupPreviewMesh() {
     if (_spMesh) GLX.freeMesh(_spMesh);
     const liv = resolveLivery(team);
     _spMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, {
+      livery: liv,
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine),
     }));
@@ -4455,6 +4474,8 @@ function renderStatBars(container, team) {
 }
 
 let csActiveCat = null;   // id of the category tab currently open in CAR SETUP
+let csLivCreating = false; // livery creator panel open?
+let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
 function buildSetup() {
   const team = Teams.LIST[teamIdx];
   const parts = getTeamParts(team.id);
@@ -4532,7 +4553,7 @@ function buildSetup() {
   }
   // LIVERY pseudo-tab (paint jobs) — appended after the parts categories.
   {
-    const curLiv = Liveries.forTeam(team).find((l) => l.id === getLiveryId(team.id));
+    const curLiv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
     const painted = getLiveryId(team.id) !== "default";
     const tab = document.createElement("button");
     tab.className = "cs-tab" + (csActiveCat === "livery" ? " active" : "") + (painted ? " upgraded" : "");
@@ -4627,29 +4648,81 @@ function statDeltaChips(opt) {
   return any ? wrap : null;
 }
 
+// A livery swatch: two-tone base + an optional centre racing-stripe band so the
+// picker previews exactly what renders on the car.
+function livSwatch(liv) {
+  const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
+  sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
+  if (liv.stripe) {
+    const st = document.createElement("span"); st.className = "cs-liv-stripe";
+    st.style.background = cssCol(liv.stripe);
+    sw.appendChild(st);
+  }
+  return sw;
+}
+
 // Render the paint-job picker into the options list — each livery as a two-tone
-// swatch + name; clicking repaints the live car preview instantly.
+// (optionally striped) swatch + name; clicking repaints the live car preview
+// instantly. Player-created liveries get a delete affordance; a CREATE row opens
+// the inline creator.
 function buildLiveryOptions(container, team) {
+  if (csLivCreating) { buildLiveryCreator(container, team); return; }
   const cur = getLiveryId(team.id);
-  for (const liv of Liveries.forTeam(team)) {
-    const active = liv.id === cur;
+  const customIds = new Set(getCustomLiveries(team.id).map((l) => l.id));
+
+  // ＋ CREATE row (top so it's always reachable without scrolling the list)
+  {
     const row = document.createElement("button");
-    row.className = "cs-opt cs-liv" + (active ? " active" : "");
+    row.className = "cs-opt cs-liv cs-liv-create";
+    const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
+    const sw = document.createElement("span"); sw.className = "cs-liv-swatch cs-liv-plus"; sw.textContent = "＋"; row.appendChild(sw);
+    const main = document.createElement("div"); main.className = "cs-opt-main";
+    const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name"; nameRow.textContent = "Create livery";
+    main.appendChild(nameRow);
+    row.appendChild(main);
+    const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
+    row.onclick = () => {
+      csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "" };
+      csLivCreating = true;
+      if (soundOn) GameAudio.uiSelect();
+      buildSetup();
+    };
+    container.appendChild(row);
+  }
+
+  for (const liv of getLiveries(team)) {
+    const active = liv.id === cur;
+    const isCustom = customIds.has(liv.id);
+    const row = document.createElement("button");
+    row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
-    const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
-    sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
-    row.appendChild(sw);
+    row.appendChild(livSwatch(liv));
 
     const main = document.createElement("div"); main.className = "cs-opt-main";
-    const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name"; nameRow.textContent = liv.name;
+    const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
+    nameRow.appendChild(document.createTextNode(liv.name));
+    if (isCustom) { const tg = document.createElement("span"); tg.className = "cs-opt-tag"; tg.textContent = "MINE"; nameRow.appendChild(tg); }
     main.appendChild(nameRow);
     row.appendChild(main);
 
-    const tag = document.createElement("span");
-    tag.className = "cs-opt-cost free";
-    tag.textContent = active ? "FITTED" : "PAINT";
-    row.appendChild(tag);
+    if (isCustom) {
+      const del = document.createElement("span");
+      del.className = "cs-liv-del"; del.textContent = "✕"; del.title = "Delete this livery";
+      del.onclick = (e) => {
+        e.stopPropagation();
+        setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
+        if (active) saveLiveryId(team.id, "default");
+        if (soundOn) GameAudio.uiTick();
+        buildSetup();
+      };
+      row.appendChild(del);
+    } else {
+      const tag = document.createElement("span");
+      tag.className = "cs-opt-cost free";
+      tag.textContent = active ? "FITTED" : "PAINT";
+      row.appendChild(tag);
+    }
 
     row.onclick = () => {
       if (active) return;
@@ -4659,6 +4732,88 @@ function buildLiveryOptions(container, team) {
     };
     container.appendChild(row);
   }
+}
+
+// Inline paint-job creator: three colour wells (primary / accent / stripe) + a
+// name field, previewing live on the car as the player drags. SAVE appends to
+// the team's custom list and fits it; CANCEL/back returns to the picker.
+function buildLiveryCreator(container, team) {
+  const d = csLivDraft;   // colours held as hex strings; "" stripe = none
+  const wrap = document.createElement("div");
+  wrap.className = "cs-liv-editor";
+
+  const head = document.createElement("div"); head.className = "cs-liv-ed-head"; head.textContent = "NEW PAINT JOB";
+  wrap.appendChild(head);
+
+  // Live swatch preview of the current draft (built from hex strings directly).
+  const prev = document.createElement("span"); prev.className = "cs-liv-swatch cs-liv-ed-prev";
+  wrap.appendChild(prev);
+
+  const applyPreview = () => {
+    prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
+    prev.textContent = "";
+    if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
+    livePreviewDraft(team, d);
+  };
+
+  const colorRow = (label, key, allowNone) => {
+    const r = document.createElement("label"); r.className = "cs-liv-ed-row";
+    const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
+    const inp = document.createElement("input"); inp.type = "color";
+    inp.value = /^#[0-9a-fA-F]{6}$/.test(d[key]) ? d[key] : "#000000";
+    if (allowNone && !d[key]) inp.classList.add("cs-liv-off");
+    inp.oninput = () => { d[key] = inp.value; inp.classList.remove("cs-liv-off"); applyPreview(); };
+    r.appendChild(inp);
+    if (allowNone) {
+      const off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
+      off.onclick = () => { d[key] = ""; inp.classList.add("cs-liv-off"); applyPreview(); };
+      r.appendChild(off);
+    }
+    return r;
+  };
+  wrap.appendChild(colorRow("PRIMARY", "c1", false));
+  wrap.appendChild(colorRow("ACCENT", "c2", false));
+  wrap.appendChild(colorRow("STRIPE", "stripe", true));
+
+  const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
+  const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
+  const name = document.createElement("input"); name.type = "text"; name.className = "cs-liv-ed-name";
+  name.maxLength = 18; name.placeholder = "My Livery"; name.value = d.name;
+  name.oninput = () => { d.name = name.value; };
+  nameRow.appendChild(name);
+  wrap.appendChild(nameRow);
+
+  const btns = document.createElement("div"); btns.className = "cs-liv-ed-btns";
+  const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cs-liv-ed-cancel"; cancel.textContent = "CANCEL";
+  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; livDraftOverride = null; _spMeshKey = ""; if (soundOn) GameAudio.uiTick(); buildSetup(); };
+  const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
+  save.onclick = () => {
+    const id = "custom_" + livIdCounter();
+    const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
+    if (d.stripe) liv.stripe = hexToArr(d.stripe);
+    setCustomLiveries(team.id, getCustomLiveries(team.id).concat([liv]));
+    saveLiveryId(team.id, id);
+    csLivCreating = false; csLivDraft = null; livDraftOverride = null; _spMeshKey = "";
+    if (soundOn) GameAudio.uiSelect();
+    buildSetup();
+  };
+  btns.append(cancel, save);
+  wrap.appendChild(btns);
+
+  container.appendChild(wrap);
+  applyPreview();
+}
+
+// Monotonic id source for custom liveries (Date.now is fine; avoids collisions
+// within a session even if the clock is coarse).
+let _livSeq = 0;
+function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now()) + _livSeq; }
+
+// Paint the live 3D preview with an uncommitted draft via the transient
+// override (no localStorage writes), then force a mesh rebuild.
+function livePreviewDraft(team, d) {
+  livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null } };
+  _spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
 function openSetup() {

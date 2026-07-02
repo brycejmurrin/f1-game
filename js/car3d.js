@@ -500,6 +500,17 @@ const Car3D = (function () {
     addLoft(out, 1.60, 0, 0.475, 0.09, 0.022, 2.66, 0, 0.352, 0.05, 0.016, c2);
     addBox(out, 0, 0.862, -0.42, 0.06, 0.04, 0.52, c2);
 
+    // --- Paint-job racing stripe: a bold contrasting band down the car's spine
+    // (nose → hood → airbox → engine cover), only when the chosen livery
+    // specifies one (opts.livery.stripe). Follows the bodywork crown line. ---
+    const stripeC = opts && opts.livery && opts.livery.stripe;
+    if (stripeC) {
+      addLoft(out, 1.55, 0, 0.485, 0.15, 0.022, 2.70, 0, 0.352, 0.085, 0.018, stripeC); // nose spine (wide)
+      addBox(out, 0, 0.672, 0.45, 0.13, 0.02, 0.82, stripeC);   // hood crown band
+      addBox(out, 0, 0.872, -0.42, 0.08, 0.02, 0.56, stripeC);  // airbox spine band
+      if (!ckpt) addBox(out, 0, 0.55, -1.40, 0.07, 0.02, 0.92, stripeC); // engine-cover tail band
+    }
+
     // --- Nose number plate + camera pod (sit on the curved nose top) ---
     addBox(out, 0, 0.437, 1.92, 0.18, 0.022, 0.40, PANEL);
     addBox(out, 0, 0.50, 1.55, 0.06, 0.08, 0.15, DARK);
