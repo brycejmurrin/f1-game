@@ -27,7 +27,7 @@
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop,
-              addBox, vadd, anchor, mountain, pine, grandstand, building, marshalPost, gantry } = api;
+              addBox, vadd, anchor, mountain, pine, grandstand, building, marshalPost, gantry, billboard } = api;
 
       // Start gantry over the line (every circuit has one; the start-gantry
       // downlights in buildTrackLights need this structure to hang from).
@@ -123,6 +123,9 @@
       grandstand(0.00, 1, 8, 40, shell, [0.50, 0.52, 0.56]);   // main grandstand, pit straight
       grandstand(0.02, 1, 8, 26, shell, [0.62, 0.16, 0.16]);   // La Source hairpin
       grandstand(0.07, 1, 8, 28, shell, [0.20, 0.36, 0.62]);   // Eau Rouge / Raidillon
+      // Giant screen on the Raidillon climb (a jumbotron beside the stand — a
+      // signature of the Eau Rouge/Raidillon amphitheatre).
+      billboard(Math.round(n * 0.085) % n, 1, 12, 13, 7.5, [0.05, 0.06, 0.09]);
       grandstand(0.16, 1, 8, 30, shell, [0.50, 0.52, 0.56]);   // Les Combes
       grandstand(0.92, 1, 8, 28, shell, [0.46, 0.48, 0.52]);   // Bus Stop chicane
 

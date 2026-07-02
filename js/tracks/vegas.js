@@ -494,7 +494,10 @@
         const a = j / 6 * 6.2832 + 0.4, h = hash(j * 13 + 5);
         const mx = cx + Math.cos(a) * (ring - 180), mz = cz + Math.sin(a) * (ring - 180);
         if (onTrack(mx, mz, 60)) continue;
-        addBox(out, [mx, pyMin + (18 + h * 22) / 2, mz], [180 + h * 140, 18 + h * 22, 140], DARKROCK);
+        // Tapered mesa (was a flat rectangular addBox slab — inconsistent with
+        // the primary addFrustum desert ring; boxy black prisms on the horizon).
+        const mw = 180 + h * 140, mh = 18 + h * 22;
+        addFrustum(out, [mx, pyMin, mz], mw * 0.5, mw * 0.3, mh, DARKROCK, 5, null);
       }
       // Neon finish arch/halo at s≈0.98 — bright magenta circle framing the finish line
       {

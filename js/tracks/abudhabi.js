@@ -27,7 +27,7 @@
         anchor, onTrack, hash, vadd, building, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along,
-        cityFront, forestEdge, backdrop } = api;
+        cityFront, forestEdge, backdrop, mountain } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -60,20 +60,21 @@
       cx /= n; cz /= n;
       let trad = 0;
       for (let i = 0; i < n; i++) trad = Math.max(trad, Math.hypot(px[i] - cx, pz[i] - cz));
-      // Near dune crest band: wide shallow ridges that read as rolling sand dunes
+      // Near dune crest band: organic rounded sand mounds (were flat rectangular
+      // addBox slabs — hard boxy edges on the horizon). mountain() with the sand
+      // colour in both zones + no snow gives smooth overlapping dune crests.
       {
         const ring = trad + 360;
         for (let i = 0; i < 36; i++) {
           const a = (i + 0.3) / 36 * 6.2832;
-          const h = hash(i * 7 + 360);
-          const h2 = hash(i * 13 + 720);
+          const h = hash(i * 7 + 360), h2 = hash(i * 13 + 720);
           const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
           const varH = 12 + h * 14 + (h2 - 0.5) * 6;
-          // Wide flat dune ridges: large sz[0] (along horizon), modest height
-          addBox(out, [mx, pyMin + varH / 2, mz], [320 + h * 200, varH, 200], SAND);
+          mountain(mx, mz, pyMin, 300 + h * 200, varH,
+                   { seg: 6, seed: i * 13 + 360, rough: 0.16, forest: SAND, rock: SAND, snowline: 2 });
         }
       }
-      // Far dune backdrop — darker, hazier, fewer items
+      // Far dune backdrop — darker, hazier, fewer.
       {
         const ring = trad + 580;
         for (let i = 0; i < 28; i++) {
@@ -81,7 +82,8 @@
           const h = hash(i * 11 + 580);
           const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
           const varH = 18 + h * 16;
-          addBox(out, [mx, pyMin + varH / 2, mz], [400 + h * 200, varH, 240], SAND_DK);
+          mountain(mx, mz, pyMin, 380 + h * 220, varH,
+                   { seg: 6, seed: i * 17 + 580, rough: 0.18, forest: SAND_DK, rock: SAND_DK, snowline: 2 });
         }
       }
 

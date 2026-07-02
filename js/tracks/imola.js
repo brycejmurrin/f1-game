@@ -38,7 +38,7 @@
       const WOODS   = [0.10, 0.28, 0.14];
       const WOODS2  = [0.13, 0.32, 0.16];
       const BANK    = [0.44, 0.65, 0.28];
-      const RIVER   = [0.26, 0.40, 0.54];
+      const RIVER   = [0.30, 0.42, 0.34];   // Santerno: muted green-brown, not a blue pool
       const GRAVEL  = [0.80, 0.72, 0.50];
       const RED     = [0.82, 0.16, 0.14];
       const WHITE   = [0.92, 0.92, 0.90];

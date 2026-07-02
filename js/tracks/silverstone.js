@@ -58,10 +58,13 @@
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      // Northamptonshire is FLAT former-airfield land — big sky, low horizon.
+      // These rings read as a distant WOODLAND treeline, not hills, so heights
+      // are kept low (were 18-40 m, which looked like mountains).
       for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
-        [270, 42, 180, 18, 12, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
-        [370, 36, 220, 22, 12, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
-        [470, 30, 260, 26, 14, [0.12, 0.28, 0.14], [0.18, 0.34, 0.18]],
+        [270, 42, 180,  9, 6, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
+        [370, 36, 220, 11, 7, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
+        [470, 30, 260, 14, 8, [0.12, 0.28, 0.14], [0.18, 0.34, 0.18]],
       ]) {
         const ring = rad + extra;
         const span = 2 * Math.PI * ring / count;

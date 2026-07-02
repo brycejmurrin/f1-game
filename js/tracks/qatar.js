@@ -421,10 +421,9 @@
       every(80, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 29 + side * 7) <= 0.48) {
-            const a = anchor(k, side, 32 + hash(k * 31 + side) * 60), b = [a.r, a.u, a.t];
-            const s = 1.8 + hash(k * 37 + side) * 1.6;
+            const dd = 32 + hash(k * 31 + side) * 60;
             const scrubCol = hash(k * 41 + side) < 0.55 ? [0.50, 0.46, 0.32] : [0.30, 0.36, 0.20];
-            addFrustum(out, a.c, s, s * 0.40, s * 0.90, scrubCol, 6, b);
+            bush(k, side, dd, scrubCol);   // rounded desert shrub (was a frustum mound)
           }
         }
       });

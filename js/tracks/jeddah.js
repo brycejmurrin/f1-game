@@ -141,10 +141,9 @@
       gantry(0.012, 7, [0.12, 0.13, 0.17]);
 
       // ── PIT BUILDING + MAIN GRANDSTAND — s 0.00 ──────────────────────────
-      for (let i = 0; i < 5; i++) {
-        place(K(0.0 + i * 0.012), -1, 16, [12, 8, 28], [0.26, 0.27, 0.30]);
-        place(K(0.0 + i * 0.012), -1, 16, [12.4, 1.0, 29], WINWARM);
-      }
+      // One long low pit building with a lit window band (was five stacked raw
+      // place() boxes reading as a row of blocks).
+      building(K(0.0), -1, 16, 62, 8, 28, { wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
       grandstand(0.0,  1, 12, 70, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
       grandstand(0.02, 1, 12, 60, [0.13, 0.14, 0.18], [0.50, 0.42, 0.46]);
 
@@ -266,13 +265,15 @@
       for (let i = 0; i < 12; i++) {
         const s = i / 12;
         const w = 40 + hash(i * 11) * 30, h = 80 + hash(i * 7) * 100;
-        backdrop(K(s), -1, 260 + (i % 4) * 20, [w, h, w], [0.12, 0.13, 0.18]);
+        // Lifted from near-black so the towers register against the night sky
+        // (backdrop() auto-adds lit window bands on tall night silhouettes).
+        backdrop(K(s), -1, 260 + (i % 4) * 20, [w, h, w], [0.22, 0.23, 0.31]);
       }
       // A second ring on the seaward side for depth
       for (let i = 0; i < 8; i++) {
         const s = i / 8 + 0.04;
         const w = 35 + hash(i * 13) * 25, h = 60 + hash(i * 9) * 80;
-        backdrop(K(s), 1, 220 + (i % 3) * 25, [w, h, w], [0.14, 0.14, 0.20]);
+        backdrop(K(s), 1, 220 + (i % 3) * 25, [w, h, w], [0.20, 0.20, 0.27]);
       }
     },
   }

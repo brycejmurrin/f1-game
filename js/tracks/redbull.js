@@ -263,7 +263,7 @@
           const d = 22 + hash(k * 127 + side) * 18;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 10)) return;
-          hedge(k / n, k / n + 0.004, side, d, 0.9 + hash(k * 131 + side) * 0.3, [0.64, 0.60, 0.48]);
+          hedge(k / n, k / n + 0.004, side, d, 0.9 + hash(k * 131 + side) * 0.3, [0.20, 0.44, 0.18]);
         }
       });
 
