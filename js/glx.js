@@ -1514,22 +1514,34 @@ void main() {
       uSunUV.y >= 0.0 && uSunUV.y <= 1.0) {
     // Anamorphic horizontal streak — warm and wide, the iconic "sun bleeding
     // across the frame" golden-hour cue (uFlareStr peaks when the sun is low).
+    // The horizontal falloff (was 1.3) barely decayed across the ENTIRE screen
+    // width (exp(-1.3) ~ 0.27 a full frame-width away), so any golden-hour
+    // driving painted a near-full-width bright band across the whole image,
+    // added AFTER tonemap+grade with no further compression — none of the
+    // exposure/bloom/reflection dampening upstream touched it. Tightened so
+    // the streak stays a contained, elongated highlight near the sun instead
+    // of a screen-wide wash.
     float streakY = exp(-abs(vUV.y - uSunUV.y) * 110.0);
-    float streakX = exp(-abs(vUV.x - uSunUV.x) * 1.3);
-    flare += vec3(1.0, 0.80, 0.52) * streakY * streakX * 1.25;
+    float streakX = exp(-abs(vUV.x - uSunUV.x) * 7.0);
+    flare += vec3(1.0, 0.80, 0.52) * streakY * streakX * 0.75;
     // A second thinner hot core streak.
-    flare += vec3(1.0, 0.92, 0.78) * exp(-abs(vUV.y - uSunUV.y) * 320.0) * exp(-abs(vUV.x - uSunUV.x) * 2.2) * 0.7;
+    float streakX2 = exp(-abs(vUV.x - uSunUV.x) * 10.0);
+    flare += vec3(1.0, 0.92, 0.78) * exp(-abs(vUV.y - uSunUV.y) * 320.0) * streakX2 * 0.5;
 
     // Lens ghost circles along sun-to-center axis
     vec2 toCenter = vec2(0.5) - uSunUV;
     float d0 = length(vUV - (uSunUV + toCenter * 0.5));
-    flare += vec3(1.0, 0.88, 0.65) * smoothstep(0.055, 0.020, d0) * 0.45;
+    flare += vec3(1.0, 0.88, 0.65) * smoothstep(0.055, 0.020, d0) * 0.35;
     float d1 = length(vUV - (uSunUV + toCenter * 1.3));
-    flare += vec3(0.70, 0.60, 1.00) * smoothstep(0.038, 0.012, d1) * 0.35;
+    flare += vec3(0.70, 0.60, 1.00) * smoothstep(0.038, 0.012, d1) * 0.25;
     float d2 = length(vUV - (uSunUV + toCenter * 1.8));
-    flare += vec3(0.50, 1.00, 0.70) * smoothstep(0.028, 0.008, d2) * 0.25;
+    flare += vec3(0.50, 1.00, 0.70) * smoothstep(0.028, 0.008, d2) * 0.18;
 
-    flare = min(flare * uFlareStr, vec3(1.2));
+    // Soft-clip (was a hard clamp to 1.2 — a flat ceiling still let a wide,
+    // near-uniform band sit at 1.2 across the whole streak). Compressing keeps
+    // the hot core near the sun bright while taming the wash further out.
+    flare *= uFlareStr;
+    flare = flare / (1.0 + flare * 0.6);
   }
   c += flare;
 
@@ -2726,7 +2738,11 @@ void main() {
         const _sunGate = Math.min(1, Math.max(0, (_sl - 0.35) / 0.45));
         if (s[1] > -0.02) {
           const golden = 1.0 - Math.min(Math.max(s[1], 0) / 0.45, 1.0);
-          flareStr = (0.30 + golden * 0.55) * _sunGate;
+          // Lower floor + peak (was 0.30 + golden*0.55, peaking ~0.85): combined
+          // with the streak shape above, that washed the whole frame during
+          // ordinary dusk driving. The shader-side soft-clip already taming the
+          // wash, so this just keeps typical dusk flare present but subtle.
+          flareStr = (0.14 + golden * 0.30) * _sunGate;
         }
         if (s[1] > 0.05) sunShaft = s[1] * 0.8 * _sunGate;
       }
