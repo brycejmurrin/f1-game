@@ -810,7 +810,7 @@ const cockpitBodies = {};
 function cockpitBodyMesh(team) {
   if (!cockpitBodies[team.id])
     cockpitBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2,
-      { noWheels: true, noDriver: true, num: team.drivers && team.drivers[0] && team.drivers[0].num }));
+      { noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num }));
   return cockpitBodies[team.id];
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
@@ -830,7 +830,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
   GLX.draw(cockpitBodyMesh(c.team), base, paint);
-  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true, 0.35);
+  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true, 0.35, 1.6);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
   // damped steering whatever the input mode). A second, slower damping stage
@@ -886,21 +886,24 @@ function playerBodyMesh(team) {
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
 // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
 // straight into a scratch matrix (no per-frame allocation), then into world.
-function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset) {
+function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
   if (!wheelMeshF) { wheelMeshF = GLX.createMesh(Car3D.buildWheel(0.32)); wheelMeshR = GLX.createMesh(Car3D.buildWheel(0.38)); }
   c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / WHEEL_R) * dt) % (Math.PI * 2);
   const sp = Math.sin(c.wheelSpin), cp = Math.cos(c.wheelSpin);
   const steerA = clamp(c.steerVis || 0, -1, 1) * WHEEL_STEER_VIS;
+  const ws = wScale || 1;   // widen the tyre along its axle (cockpit view)
   for (let w = 0; w < WHEELS.length; w++) {
     const wd = WHEELS[w];
     if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
     const yaw = wd.front ? steerA : 0;
     const ss = Math.sin(yaw), cs = Math.cos(yaw);
     const L = _wheelLocal;
-    L[0] = cs;    L[1] = 0;   L[2] = -ss;    L[3] = 0;
-    L[4] = ss*sp; L[5] = cp;  L[6] = cs*sp;  L[7] = 0;
-    L[8] = ss*cp; L[9] = -sp; L[10] = cs*cp; L[11] = 0;
-    L[12] = wd.x; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
+    // Local X is the wheel axle (tyre width); scale that column by ws to widen.
+    L[0] = cs*ws;    L[1] = 0;      L[2] = -ss*ws;    L[3] = 0;
+    L[4] = ss*sp;    L[5] = cp;     L[6] = cs*sp;     L[7] = 0;
+    L[8] = ss*cp;    L[9] = -sp;    L[10] = cs*cp;    L[11] = 0;
+    // Push the widened wheels outward so they don't intersect the tub.
+    L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
     GLX.draw(wd.rear ? wheelMeshR : wheelMeshF, _wheelWorld, opt);
     // Hot brake discs: an emissive ring floating just off the outer wheel face,

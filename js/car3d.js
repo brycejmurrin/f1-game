@@ -266,12 +266,17 @@ const Car3D = (function () {
     // looks over in the onboard view (the modern F1 dash bulge / vanity panel);
     // it also adds a chiselled centre spine to the chase-view silhouette. Runs
     // from the nose bulkhead back to the dash, cresting at the cockpit. ---
-    const hF = { z: 1.00, y: 0.44, w: 0.34, h: 0.10, t: 0.62 };
-    const hR = { z: 0.10, y: 0.60, w: 0.42, h: 0.16, t: 0.58 };
+    // In cockpit view the hood is remodelled LONGER and TALLER so it reads
+    // clearly ahead of the driver (a stubby deck disappears under the dash).
+    const ckpt = opts && opts.cockpit;
+    const hF = ckpt ? { z: 1.95, y: 0.42, w: 0.30, h: 0.12, t: 0.60 }
+                    : { z: 1.00, y: 0.44, w: 0.34, h: 0.10, t: 0.62 };
+    const hR = ckpt ? { z: 0.10, y: 0.72, w: 0.48, h: 0.22, t: 0.56 }
+                    : { z: 0.10, y: 0.60, w: 0.42, h: 0.16, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
     // Accent stripe down the vanity deck crown (team colour).
-    addBox(out, 0, 0.665, 0.45, 0.10, 0.02, 0.80, c2);
+    addBox(out, 0, ckpt ? 0.73 : 0.665, ckpt ? 0.90 : 0.45, 0.10, 0.02, ckpt ? 1.75 : 0.80, c2);
 
     // --- Cockpit-side head-protection bolsters: the raised survival-cell edges
     // flanking the cockpit opening. They frame the driver's view left/right in
