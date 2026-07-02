@@ -760,6 +760,10 @@ function scheduleFlybyTrack() {
 
 // ---------- race flow ----------
 function applyRaceSettings() {
+  // Load the lighting-tuner profile for the current (track, time, weather) so
+  // the right per-condition values are live. Cheap (a few dozen assignments);
+  // applyRaceSettings only fires on track load / time / weather change.
+  if (typeof applyLightTune === "function") applyLightTune();
   const isNightSession = raceTimeOfDay === "night" ||
     (raceTimeOfDay === "default" && track && track.def && track.def.night);
   // City light-pollution SKYGLOW: at night the lit circuit domes the horizon —
@@ -2408,26 +2412,91 @@ const TUNE_DEFS = [
   { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS & WEATHER", min: 10, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
   { id: "wetness",      label: "WETNESS",         group: "SHADOWS & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps over ~30 s)." },
 ];
-const LT = {};                     // id -> live value (the single source of truth)
+// LT holds the LIVE values the driver reads every frame. They are resolved from
+// a per-CONDITION profile store: each (track, time-of-day, weather) combination
+// keeps its own set of overrides, so night+wet Monaco and day+dry Monza are
+// tuned independently. Resolution per id: condition profile → migrated legacy
+// global ("*") → TUNE_DEFS default. Only non-default values are stored.
+const LT = {};
 for (const d of TUNE_DEFS) LT[d.id] = d.def;
-{ // restore persisted overrides
+// Profile store shape: { "monza|night|wet": {lampLevel:0.4,…}, "*": {…legacy} }.
+let _ltStore = {};
+{
   const saved = store.get("lightTune", null);
   if (saved && typeof saved === "object") {
-    for (const d of TUNE_DEFS) if (typeof saved[d.id] === "number") LT[d.id] = clamp(saved[d.id], d.min, d.max);
+    const vals = Object.values(saved);
+    // Legacy flat format was {id:number}. New format nests {key:{id:number}}.
+    if (vals.length && vals.every((v) => typeof v === "number")) _ltStore = { "*": saved };
+    else _ltStore = saved;
   }
+}
+// The profile key for the CURRENT session conditions ("default" TOD resolves to
+// the track's actual day/night look so it shares one profile with an explicit
+// pick of the same look).
+function ltKey() {
+  if (!track || !track.def) return null;
+  let tod = raceTimeOfDay;
+  if (tod === "default") tod = track.def.night ? "night" : "day";
+  return track.def.id + "|" + tod + "|" + raceWeather;
+}
+// The resolution layers for the current condition, LOWEST precedence first:
+//   TUNE_DEFS default → file "*" → file "track|tod|wx"
+//     → localStorage "*" → localStorage "track|tod|wx"
+// So a committed js/light-presets.js is the shipped baseline, and a player's
+// local (localStorage) edits always win over it. A missing layer is skipped.
+function ltLayers() {
+  const F = window.LightPresets || null;
+  const key = ltKey();
+  return [
+    F && F["*"], F && key && F[key],
+    _ltStore["*"], key && _ltStore[key],
+  ];
+}
+// What the current knob would resolve to WITHOUT the current condition's local
+// profile — i.e. the value RESET falls back to. Used to decide whether a slider
+// edit needs storing (store only when it differs from this fallback).
+function ltFallback(id) {
+  const d = TUNE_DEFS.find((t) => t.id === id);
+  let v = d.def;
+  const F = window.LightPresets || null, key = ltKey();
+  if (F && F["*"] && typeof F["*"][id] === "number") v = F["*"][id];
+  if (F && key && F[key] && typeof F[key][id] === "number") v = F[key][id];
+  if (_ltStore["*"] && typeof _ltStore["*"][id] === "number") v = _ltStore["*"][id];
+  return clamp(v, d.min, d.max);
+}
+// Rebuild LT for the current conditions. Called whenever the track/time/weather
+// changes (via applyRaceSettings) so the right profile is live for both the
+// tuner panel and actual racing.
+function applyLightTune() {
+  const layers = ltLayers();
+  let rebuilt = false;
+  for (const d of TUNE_DEFS) {
+    let v = d.def;
+    for (const L of layers) if (L && typeof L[d.id] === "number") v = L[d.id];
+    v = clamp(v, d.min, d.max);
+    if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; }
+  }
+  if (rebuilt && track) track._lights = null;
 }
 function setLightTune(id, v) {
   const d = TUNE_DEFS.find((t) => t.id === id);
   if (!d || typeof v !== "number" || !isFinite(v)) return false;
-  LT[id] = clamp(v, d.min, d.max);
+  v = clamp(v, d.min, d.max);
+  LT[id] = v;
+  const key = ltKey();
+  if (key) {
+    const prof = _ltStore[key] || (_ltStore[key] = {});
+    // Store only when the value differs from what it would resolve to anyway
+    // (default / file / legacy global). Storing an explicit value IS required
+    // when it matches the default but the file/global would otherwise win —
+    // that's how a local edit overrides a shipped value back down.
+    if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
+    if (!Object.keys(prof).length) delete _ltStore[key];
+  }
   if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
   return true;
 }
-function persistLightTune() {
-  const out = {};
-  for (const d of TUNE_DEFS) if (LT[d.id] !== d.def) out[d.id] = LT[d.id];
-  store.set("lightTune", out);
-}
+function persistLightTune() { store.set("lightTune", _ltStore); }
 // Per-KIND light parameters. The kind itself is decided ONCE in tracks.js
 // (buildProps mast block) and carried on track.lampPosts, so the painted lens
 // albedo always matches the light emitted here. CCT-authentic palette (HPS
@@ -4303,6 +4372,17 @@ function refreshLtPreviewActive() {
   for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("on", t === tod); }
   for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("on", w === wx); }
 }
+// Show which per-condition profile is being edited, e.g. "MONZA · NIGHT · WET".
+function updateLtProfileLabel() {
+  const host = $("lt-profile"); if (!host) return;
+  const key = ltKey();
+  if (!key) { host.textContent = ""; return; }
+  const [id, tod, wx] = key.split("|");
+  const name = (track && track.def && track.def.name) || id;
+  const nOver = _ltStore[key] ? Object.keys(_ltStore[key]).length : 0;
+  host.textContent = name.toUpperCase() + " · " + tod.toUpperCase() + " · " + wx.toUpperCase() +
+    (nOver ? "  (" + nOver + " tuned)" : "  (defaults)");
+}
 function buildLtPreview() {
   const host = $("lt-preview");
   if (host.dataset.built) return;
@@ -4316,7 +4396,9 @@ function buildLtPreview() {
     ids.forEach((id, i) => {
       const btn = document.createElement("button");
       btn.className = "opt-btn"; btn.id = prefix + id; btn.textContent = labels[i];
-      btn.onclick = () => { onPick(id); refreshLtPreviewActive(); };
+      // Switching a condition re-applies that condition's profile (via
+      // applyRaceSettings→applyLightTune), so reload the sliders + label too.
+      btn.onclick = () => { onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
       row.appendChild(btn);
     });
     host.appendChild(row);
@@ -4327,7 +4409,7 @@ function buildLtPreview() {
     (w) => __apex.weather(w), "lt-wx-");
   const note = document.createElement("p");
   note.className = "adv-help"; note.style.display = "block";
-  note.textContent = "Preview only — restored to the race's own time & weather when you press DONE.";
+  note.textContent = "Switch conditions to tune each one — your edits save to that track+time+weather. The live view snaps back to the race's own conditions on DONE.";
   host.appendChild(note);
 }
 function buildLightTunePanel() {
@@ -4374,6 +4456,7 @@ function refreshLightTunePanel() {
     if (inp) inp.value = LT[d.id];
     if (b) b.textContent = fmtTune(d, LT[d.id]);
   }
+  updateLtProfileLabel();
 }
 $("pm-lighting").onclick = () => {
   buildLightTunePanel();
@@ -4395,15 +4478,26 @@ $("lt-help-on").onchange = (e) => {
   document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);
 };
 $("lt-reset").onclick = () => {
-  for (const d of TUNE_DEFS) setLightTune(d.id, d.def);
+  // Drop this condition's LOCAL edits so it falls back to the shipped file /
+  // defaults (leaves other conditions and the file untouched).
+  const key = ltKey();
+  if (key && _ltStore[key]) delete _ltStore[key];
   persistLightTune();
+  applyLightTune();
   refreshLightTunePanel();
   $("lt-json").hidden = true;
 };
 $("lt-copy").onclick = () => {
-  const out = {};
-  for (const d of TUNE_DEFS) if (LT[d.id] !== d.def) out[d.id] = LT[d.id];
-  const json = JSON.stringify(out, null, 1);
+  // Export the FULL set (shipped file merged with every local edit, local
+  // winning) as the paste-ready body for js/light-presets.js — replace that
+  // file's `window.LightPresets = {…}` literal with this to bake it in.
+  const merged = {};
+  const F = window.LightPresets || {};
+  for (const k in F) merged[k] = Object.assign({}, F[k]);
+  for (const k in _ltStore) merged[k] = Object.assign(merged[k] || {}, _ltStore[k]);
+  // Drop any now-empty condition maps for a clean file.
+  for (const k in merged) if (!Object.keys(merged[k]).length) delete merged[k];
+  const json = "window.LightPresets = " + JSON.stringify(merged, null, 2) + ";";
   const ta = $("lt-json");
   ta.value = json; ta.hidden = false; ta.select();
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});

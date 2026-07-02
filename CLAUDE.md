@@ -51,6 +51,9 @@ js/input.js      Input          keyboard / gamepad / touch / tilt
 js/audio.js      GameAudio      WebAudio synth: engine, sfx, music
 js/api.js        F1API          Jolpica + OpenF1 clients, localStorage cache
 js/data.js       DataHub        data hub DOM overlay
+js/light-presets.js  LightPresets  shipped lighting-tuner values, keyed
+                                  "track|tod|weather" (baked from the in-game
+                                  LIGHTING TUNER panel's COPY VALUES export)
 js/game.js       (main)         game loop, physics, AI, race logic, __apex API
 css/style.css                   all styles
 index.html                      shell — script tags, DOM structure, cache-bust version
@@ -127,6 +130,22 @@ __apex.setTimeOfDay('night')  // 'dawn'|'day'|'dusk'|'night'|'default'
 ```
 
 See `docs/LIGHTING-REF.md` for UBO layout, shader uniforms, time-of-day branches, masts.
+
+### Lighting tuner (`TUNE_DEFS` / `LT` in `game.js`)
+
+The in-game **LIGHTING TUNER** (pause-menu page) exposes every hand-tuned
+lighting/rendering value as a live slider. `TUNE_DEFS` is the registry; the
+driver reads `LT.<id>` each frame instead of a literal (shader-side ones upload
+via `frame.tune`/`opts.tune` — `u:` field names the uniform). Values are stored
+**per (track, time-of-day, weather) profile**. Resolution, lowest→highest
+precedence: `TUNE_DEFS.def` → `LightPresets["*"]` → `LightPresets["track|tod|wx"]`
+→ localStorage `"*"` → localStorage `"track|tod|wx"`. So `js/light-presets.js` is
+the shipped baseline and a player's live edits (localStorage `apex26.lightTune`)
+always win. Panel COPY VALUES exports the merged store as the paste-ready
+`window.LightPresets = {…}` body to bake in. `__apex.lightTune(obj?)` gets/sets
+the current profile. Add a knob: append to `TUNE_DEFS` (+ a shader uniform &
+`frame.tune` upload if not a driver literal); the A/B harness catalog
+(`tools/ab-lighting.mjs`) must point at its new home.
 
 ---
 
