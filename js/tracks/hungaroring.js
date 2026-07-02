@@ -27,7 +27,7 @@
       const { out, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
               billboard, gantry, marshalPost, fence, guardrail, tyreWall,
-              anchor, addBox, addCyl, addCone, addFrustum, vadd, onTrack, groundYAt,
+              anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
               forestEdge, along } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -326,6 +326,96 @@
           prop(kk, side, base, [10 + hh * 8, 0.35 + hh * 0.3, 12 + hh * 6], col);
         }
       });
+
+      // ====================================================================
+      // BESPOKE ENRICHMENT — terraced hillside stands packing the amphitheatre,
+      // a trackside jumbotron, and the Budapest countryside beyond the bowl.
+      // All models are LOCAL to this closure.
+      // ====================================================================
+
+      // ── Terraced hillside stand — the Hungaroring signature: stepped tiers of
+      //    crowd rising up the natural banking, wrapping the bowl. Cheap slabs +
+      //    a sparse speckle so it reads as a packed grandstand, not a block. ──
+      const HG_SHELL_A = [0.48, 0.49, 0.52], HG_SHELL_B = [0.42, 0.43, 0.47];
+      function terracedHillStand(s, side, gap, len, tiers) {
+        const k = K(s);
+        const g0 = anchor(k, side, gap);
+        if (onTrack(g0.c[0], g0.c[2], len * 0.4)) return;
+        for (let t = 0; t < tiers; t++) {
+          const a = anchor(k, side, gap + t * 5.0);
+          const b = [a.r, a.u, a.t];
+          const h = 2.6 + t * 2.9;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [4.8, h, len], t % 2 ? HG_SHELL_A : HG_SHELL_B, b);
+          addBox(out, vadd(a.c, a.u, h + 0.75), [4.1, 1.4, len], CROWD[t % 4], b);
+          addBox(out, vadd(a.c, a.u, h + 1.6), [4.4, 0.28, len + 1], [0.92, 0.90, 0.82], b);
+          const cnt = Math.min(16, Math.floor(len / 6));
+          for (let c = 0; c < cnt; c++) {
+            if (hash(k * 3 + t * 23 + c) < 0.45) continue;
+            const off = (c / (cnt - 1) - 0.5) * (len - 4);
+            addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.2), [1.7, 0.55, 1.1], CROWD[(c + t) % 4], b);
+          }
+        }
+        // Slim roof canopy shading the top tier.
+        const aR = anchor(k, side, gap + (tiers - 0.5) * 5.0);
+        addBox(out, vadd(aR.c, aR.u, 2.6 + tiers * 2.9 + 1.4), [6.4, 0.42, len + 2],
+               [0.22, 0.23, 0.26], [aR.r, aR.u, aR.t]);
+      }
+      // A near-continuous wall of terraced stands ringing the amphitheatre —
+      // packed tiers on nearly every sweep, both sides of the bowl.
+      for (const [s, side, gap, len, tiers] of [
+        [0.06, 1, 22, 70, 5],   // Turn 1 down-hill hillside — the big one
+        [0.12, -1, 20, 56, 4],  // inside the slow complex
+        [0.20, 1, 22, 52, 4],
+        [0.30, -1, 20, 48, 4],
+        [0.40, 1, 22, 50, 4],
+        [0.48, -1, 20, 46, 4],
+        [0.58, 1, 22, 52, 4],
+        [0.68, -1, 20, 48, 4],
+        [0.78, 1, 22, 50, 4],
+        [0.90, 1, 20, 60, 5],   // Club-corner hillside back to the line
+      ]) terracedHillStand(s, side, gap, len, tiers);
+
+      // ── Trackside jumbotron — a big screen on a truss frame facing the bowl. ──
+      (function jumbotron() {
+        const a = anchor(K(0.55), -1, 30);
+        const b = [a.r, a.u, a.t], c = a.c;
+        if (onTrack(c[0], c[2], 8)) return;
+        for (const sg of [-1, 1])                                   // two support legs
+          addCyl(out, vadd(c, a.t, sg * 4.5), 0.5, 12, [0.24, 0.25, 0.28], 6, b);
+        addBox(out, vadd(c, a.u, 12.5), [1.2, 6, 11], [0.20, 0.21, 0.24], b);   // truss frame
+        addBox(out, vadd(vadd(c, a.r, -0.7), a.u, 12.5), [0.4, 5, 9.5], [0.05, 0.07, 0.12], b); // screen
+      })();
+
+      // ── Budapest countryside — a distant rural cluster (farmhouses + a white
+      //    village church with a spire) on a hill beyond the far bank, plus
+      //    dusty sunflower / wheat field patches on the plain. ──
+      (function countryside() {
+        const a = anchor(K(0.62), 1, 260);
+        const b = [a.r, a.u, a.t], base = a.c;
+        const wallC = [0.82, 0.78, 0.68], roofC = [0.56, 0.30, 0.22];
+        // Scatter of farmhouses with pitched roofs.
+        for (let i = 0; i < 6; i++) {
+          const off = (i - 2.5) * 34, out2 = hash(i * 9) * 40;
+          const f = vadd(vadd(base, a.t, off), a.r, out2);
+          const w = 12 + hash(i * 7) * 6, hh = 7 + hash(i * 5) * 3;
+          addBox(out, vadd(f, a.u, hh * 0.5), [w, hh, w * 0.8], hash(i) < 0.5 ? wallC : [0.76, 0.72, 0.62], b);
+          addPrism(out, vadd(f, a.u, hh + 1.6), [w, 3.2, w * 0.8], roofC, b);
+        }
+        // Village church: white nave + a tall spire.
+        const cf = vadd(vadd(base, a.t, 20), a.r, 60);
+        addBox(out, vadd(cf, a.u, 8), [14, 16, 22], [0.90, 0.88, 0.82], b);
+        addPrism(out, vadd(cf, a.u, 17), [14, 4, 22], roofC, b);
+        const tf = vadd(cf, a.t, 13);
+        addBox(out, vadd(tf, a.u, 13), [5, 26, 5], [0.92, 0.90, 0.84], b);
+        addCone(out, vadd(tf, a.u, 26), 3.4, 12, roofC, 7, b);
+      })();
+      // Sunflower / wheat field patches on the open plain (dusty Hungarian gold).
+      for (const [s, side, dist] of [[0.35, 1, 120], [0.45, -1, 130], [0.70, 1, 140], [0.25, -1, 115]]) {
+        const k = K(s);
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], 30)) continue;
+        groundPlane(k, side, dist, [90, 1.0, 80], hash(k * 5) < 0.5 ? [0.78, 0.72, 0.36] : [0.72, 0.66, 0.34]);
+      }
     },
   }
   );

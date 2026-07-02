@@ -27,7 +27,7 @@
         anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along,
-        cityFront, forestEdge, backdrop, mountain } = api;
+        cityFront, forestEdge, backdrop, mountain, ferrisWheel } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -677,6 +677,57 @@
           backdrop(k, side, 340 + h * 100, [ridgeW, ridgeH, 120], [0.50, 0.40, 0.26]);
         }
       }
+
+      // ===================================================================
+      // BESPOKE YAS-ISLAND LEISURE LANDMARKS — Formula Rossa coaster loop at
+      // Ferrari World, the Etihad Arena dome, and an observation wheel. These
+      // give the entertainment-island skyline its unmistakable silhouette.
+      // ===================================================================
+
+      // ── Formula Rossa coaster — red vertical loop + launch ramp ──────────
+      // Built as a ring of red track segments in the vertical (lateral–up)
+      // plane, fed by a rising launch ramp on support pylons. Sits between the
+      // track and the Ferrari World roof mass (s 0.18 R).
+      const coasterLoop = (k, side, gap) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        const R = 24, base = vadd(a.c, a.u, 2);
+        let prev = null;
+        for (let i = 0; i <= 26; i++) {
+          const th = i / 26 * Math.PI * 2;
+          const p = vadd(vadd(base, a.r, Math.sin(th) * R), a.u, R - Math.cos(th) * R);
+          if (prev) {
+            const mid = [(prev[0] + p[0]) / 2, (prev[1] + p[1]) / 2, (prev[2] + p[2]) / 2];
+            addBox(out, mid, [1.3, 1.5, 1.6], FERRARI, b);
+          }
+          prev = p;
+        }
+        // rising launch ramp feeding the loop
+        for (let i = 0; i < 12; i++) {
+          const t = i / 11;
+          const c = vadd(vadd(base, a.t, -34 + t * 28), a.u, t * t * 22);
+          addBox(out, c, [1.5, 1.3, 3.2], FERRARI, b);
+          if (i % 3 === 0) addCyl(out, [c[0], (a.c[1] + c[1]) / 2, c[2]], 0.45, c[1] - a.c[1], [0.70, 0.70, 0.72], 5, b);
+        }
+        // loop support columns
+        for (const dz of [-R * 0.5, R * 0.5])
+          addCyl(out, vadd(vadd(a.c, a.t, dz), a.u, R), 0.6, R * 2, [0.70, 0.70, 0.72], 6, b);
+      };
+      coasterLoop(K(0.185), 1, 58);
+
+      // ── Etihad Arena — low domed entertainment arena ────────────────────
+      const arena = (k, side, gap) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        addFrustum(out, a.c, 34, 30, 14, [0.20, 0.22, 0.30], 16, b);                     // drum
+        addBox(out, vadd(a.c, a.u, 6), [70, 3, 62], WIN_WARM, b);                        // lit facade band
+        addFrustum(out, vadd(a.c, a.u, 14), 30, 11, 10, [0.24, 0.26, 0.34], 16, b);      // dome shoulder
+        addCone(out, vadd(a.c, a.u, 24), 12, 6, [0.26, 0.28, 0.36], 16, b);              // dome cap
+        addBox(out, vadd(a.c, a.u, 30), [3, 3, 3], LED_TEAL, b);                         // beacon
+      };
+      arena(K(0.50), -1, 110);
+
+      // ── Observation wheel — Yas leisure-district landmark ───────────────
+      ferrisWheel(K(0.20), 1, 150, 34);
+      ferrisWheel(K(0.62), 1, 130, 26);
     },
   }
   );

@@ -31,6 +31,62 @@
               addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront } = api;
       const K = (s) => Math.round(s * n) % n;
 
+      // ======================= BESPOKE INTERLAGOS MODELS =======================
+      // Vivid favela palette (terracotta, sunflower, teal, coral, sage, ochre…)
+      const FAV = [
+        [0.88, 0.42, 0.30], [0.94, 0.80, 0.28], [0.30, 0.55, 0.80], [0.86, 0.46, 0.34],
+        [0.70, 0.74, 0.54], [0.90, 0.62, 0.30], [0.82, 0.46, 0.56], [0.74, 0.68, 0.54],
+        [0.84, 0.34, 0.30], [0.96, 0.84, 0.34], [0.42, 0.62, 0.58], [0.90, 0.90, 0.85],
+      ];
+      // -- Bespoke: favela patch — dense cluster of small stacked colourful houses
+      // climbing a green slope, each with a flat laje roof, occasional upper room,
+      // and a rooftop water tank (caixa d'água). Grounded via anchor + slope rise. --
+      const favelaPatch = (s, side, baseDist, rows, colsW, slope) => {
+        const k = K(s), a = anchor(k, side, baseDist);
+        if (onTrack(a.c[0], a.c[2], 22)) return;
+        const bv = [a.r, a.u, a.t];
+        for (let r = 0; r < rows; r++) {
+          const back = r * 7.5, rise = r * slope;
+          for (let c = 0; c < colsW; c++) {
+            if (hash(k * 3 + r * 17 + c * 29) > 0.85) continue;   // alleys / gaps
+            const off = (c - colsW / 2) * 7 + (hash(k + r * 5 + c) - 0.5) * 2.4;
+            const h = 4 + hash(k * 7 + r * 11 + c) * 6;
+            const w = 5 + hash(k * 9 + c) * 2.6, d = 5 + hash(k * 13 + r) * 2.4;
+            const base = vadd(vadd(vadd(a.c, a.r, back), a.u, rise), a.t, off);
+            addBox(out, vadd(base, a.u, h / 2), [w, h, d], FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length], bv);
+            // stacked upper room (unfinished top floor) on some houses
+            if (hash(k * 17 + r + c) > 0.58) {
+              const h2 = 2.4 + hash(k + c * 7) * 2.2;
+              addBox(out, vadd(base, a.u, h + h2 / 2), [w * 0.72, h2, d * 0.72],
+                     FAV[(r + c + 1) % FAV.length], bv);
+            }
+            // rooftop water tank
+            if (hash(k * 23 + r * 3 + c) > 0.52)
+              addCyl(out, vadd(base, a.u, h + 0.7), 0.72, 1.3,
+                     hash(k + c) > 0.5 ? [0.22, 0.32, 0.58] : [0.12, 0.12, 0.14], 6, bv);
+          }
+        }
+      };
+
+      // -- Bespoke: raked PACKED crowd terrace (steep speckled Interlagos grandstand) --
+      const crowdCols = [
+        [0.94, 0.86, 0.20], [0.16, 0.62, 0.34], [0.90, 0.90, 0.92], [0.20, 0.44, 0.82],
+        [0.88, 0.30, 0.26], [0.96, 0.62, 0.16], [0.30, 0.30, 0.34],
+      ];
+      const crowdBank = (s, side, gap, len, rows) => {
+        const k = K(s), a = anchor(k, side, gap);
+        if (onTrack(a.c[0], a.c[2], 8)) return;
+        const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.8, seats = Math.floor(len / 2.0);
+        addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
+                 [rows * step, rows * rise, len], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < seats; c++) {
+            const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
+            const p = vadd(vadd(vadd(a.c, a.r, r * step), a.u, r * rise + 1.1), a.t, off);
+            addBox(out, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
+          }
+      };
+
       // Tropical palette constants
       const GREEN  = [0.20, 0.44, 0.20];
       const GREEN2 = [0.24, 0.48, 0.22];
@@ -103,6 +159,11 @@
       grandstand(0.01, -1, 10, 120, [0.42, 0.43, 0.48], [0.34, 0.54, 0.38]);
       grandstand(0.05, -1, 11,  85, [0.44, 0.45, 0.50], [0.36, 0.56, 0.40]);
       grandstand(0.09, -1, 12,  90, [0.40, 0.41, 0.46], [0.32, 0.52, 0.36]);
+      // Steep PACKED upper terraces rising behind the Curva 1 bowl stands
+      crowdBank(0.02, -1, 30, 130, 8);
+      crowdBank(0.07, -1, 32, 90, 7);
+      // Packed pit-straight opposite terrace (arquibancadas across the S/F line)
+      crowdBank(0.955, 1, 26, 100, 7);
       for (const s of [0.00, 0.04, 0.08]) billboard(K(s), -1, 26, 16, 7, [0.94, 0.92, 0.88]);
 
       // ===================================================================
@@ -170,67 +231,19 @@
       forestEdge(0.10, 0.32, -1, 30, { density: 0.75, hMin: 8, hMax: 14,
                                         col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.3 });
 
-      // ---- Layer 2: Favela buildings — building() is properly grounded ----
-      // Vivid tropical palette: terracotta, warm yellow, faded teal, ochre, pink
-      const FAV_WALL = [
-        [0.88, 0.42, 0.30],   // terracotta-red
-        [0.92, 0.78, 0.28],   // warm yellow
-        [0.78, 0.62, 0.48],   // clay tan
-        [0.86, 0.46, 0.34],   // warm orange
-        [0.70, 0.74, 0.54],   // faded sage green
-        [0.90, 0.62, 0.30],   // amber ochre
-        [0.82, 0.46, 0.56],   // dusty rose
-        [0.74, 0.68, 0.54],   // light khaki
-        [0.84, 0.34, 0.30],   // coral red
-        [0.96, 0.84, 0.34],   // sunflower yellow
-        [0.78, 0.56, 0.38],   // warm sand
-        [0.68, 0.78, 0.52],   // tropical light-green
-      ];
-      // Compact near-row: 50–90 m (visible above forestEdge canopy)
-      every(26, (k) => {
-        const inFavela = (() => {
-          const k0 = K(0.10), k1 = K(0.30);
-          const span = ((k1 - k0) + n) % n;
-          const off  = ((k  - k0) + n) % n;
-          return off <= span;
-        })();
-        if (!inFavela) return;
-        if (hash(k * 61) > 0.75) return;   // ~75% coverage → natural gaps
-
-        const colIdx = Math.floor(hash(k * 65) * FAV_WALL.length) % FAV_WALL.length;
-        const col2   = Math.floor(hash(k * 67) * FAV_WALL.length) % FAV_WALL.length;
-        const dist1  = 50 + hash(k * 63) * 28;
-        const dist2  = dist1 + 22 + hash(k * 71) * 18;
-        const h1     =  6 + hash(k * 64) * 5;
-        const h2     =  5 + hash(k * 66) * 5;
-        const w1     = 10 + hash(k * 68) * 6;
-        const w2     =  9 + hash(k * 70) * 5;
-
-        // Near house
-        building(k, -1, dist1, w1, h1, w1 * 0.80,
-          { wall: FAV_WALL[colIdx], window: LIT_WIN, floor: 2.6, lit: false });
-        // Far house (slightly behind, different colour) — building() guards internally
-        building(k, -1, dist2, w2, h2, w2 * 0.85,
-          { wall: FAV_WALL[col2], window: LIT_WIN, floor: 2.4, lit: false });
-      });
-
-      // ---- Favela accent: a few taller landmark buildings on the hillcrest ----
-      // Use building() with warm colours so they look like real Brazilian buildings,
-      // not dark silhouette boxes. Spaced so they don't crowd.
-      const LAND_COLS = [
-        [0.84, 0.44, 0.36],   // warm terracotta
-        [0.90, 0.76, 0.32],   // ochre yellow
-        [0.78, 0.56, 0.40],   // tan/clay
-        [0.88, 0.50, 0.28],   // orange
-        [0.76, 0.68, 0.46],   // khaki
-        [0.86, 0.38, 0.44],   // rose
-      ];
-      for (let i = 0; i < 6; i++) {
-        const s    = 0.12 + (i / 6) * 0.18;
-        const dist = 110 + i * 12;
-        const bh   = 14 + hash(K(s) * 11 + i) * 12;
-        building(K(s), -1, dist, 14, bh, 14,
-          { wall: LAND_COLS[i % 6], window: LIT_WIN, floor: 3.0, lit: false });
+      // ---- Layer 2: Bespoke favela patches — dense stacked colourful houses ----
+      // Clustered communities climbing the green hillside on the L, each patch a
+      // grid of little cube houses with laje roofs and rooftop water tanks.
+      favelaPatch(0.11, -1, 44, 6, 8, 2.3);
+      favelaPatch(0.15, -1, 40, 7, 8, 2.4);
+      favelaPatch(0.19, -1, 48, 6, 7, 2.2);
+      favelaPatch(0.23, -1, 42, 7, 8, 2.5);
+      favelaPatch(0.27, -1, 46, 6, 7, 2.3);
+      // A couple of taller finished landmark blocks poking above the shanties
+      for (let i = 0; i < 4; i++) {
+        const s = 0.13 + (i / 4) * 0.14;
+        building(K(s), -1, 108 + i * 14, 14, 16 + hash(K(s) * 11 + i) * 12, 14,
+          { wall: FAV[(i * 3) % FAV.length], window: LIT_WIN, floor: 3.0, lit: false });
       }
 
       // ===================================================================

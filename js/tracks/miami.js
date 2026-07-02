@@ -68,6 +68,51 @@
         [0.82, 0.90, 0.76],   // sage
       ];
 
+      // ======================= BESPOKE MIAMI MODELS =======================
+      // -- South-Beach club: sand deck, teal pool, DJ cabana, parasols, loungers --
+      const beachClub = (s, side, dist) => {
+        const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 26)) return;
+        // sand deck
+        addBox(out, vadd(a.c, a.u, 0.15), [40, 0.3, 30], [0.92, 0.86, 0.66], bv);
+        // pool (bright teal, non-reflective slab)
+        addBox(out, vadd(vadd(a.c, a.r, 6), a.u, 0.28), [14, 0.5, 8], TEAL, bv);
+        addBox(out, vadd(vadd(a.c, a.r, 6), a.u, 0.30), [12, 0.5, 6], [0.30, 0.86, 0.86], bv);
+        // DJ cabana with coral awning
+        addBox(out, vadd(vadd(a.c, a.t, -14), a.u, 1.7), [6, 3.4, 8], WHITE, bv);
+        addBox(out, vadd(vadd(a.c, a.t, -14), a.u, 3.6), [6.6, 0.6, 8.6], CORAL, bv);
+        // parasols (cone canopies on poles) + sun loungers scattered on the sand
+        for (let i = 0; i < 8; i++) {
+          const along = (hash(k + i) - 0.5) * 30, out2 = (hash(k * 3 + i) - 0.5) * 18 + 2;
+          const base = vadd(vadd(a.c, a.t, along), a.r, out2);
+          addCyl(out, base, 0.12, 3, WHITE, 4, bv);
+          addCone(out, vadd(base, a.u, 3), 2.2, 1.2,
+                  [TEAL, CORAL, PINK, [1.0, 0.85, 0.4]][i % 4], 8, bv);
+          addBox(out, vadd(base, a.u, 0.3), [0.8, 0.35, 2.0], WHITE, bv);
+        }
+        // palms framing the deck
+        palm(k, side, dist - 6, 10, PALM_GREEN);
+        palm(k, side, dist + 34, 11, PALM_DARK);
+      };
+
+      // -- Campus car-park lot: asphalt pad packed with rows of parked cars --
+      const carPark = (s, side, dist, rows, cols) => {
+        const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 20)) return;
+        addBox(out, vadd(a.c, a.u, 0.1), [rows * 6 + 4, 0.2, cols * 2.6 + 4], [0.30, 0.30, 0.33], bv);
+        // white bay lines
+        for (let c = 0; c <= cols; c++)
+          addBox(out, vadd(vadd(a.c, a.u, 0.2), a.t, (c - cols / 2) * 2.6), [rows * 6, 0.05, 0.12], WHITE, bv);
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < cols; c++) {
+            if (hash(k + r * 13 + c * 7) > 0.82) continue;   // empty bays
+            const p = vadd(vadd(vadd(a.c, a.r, (r - rows / 2) * 6), a.u, 0.75), a.t, (c - cols / 2) * 2.6);
+            const t = hash(k * 5 + r * 11 + c);
+            addBox(out, p, [4.4, 1.4, 2.1],
+                   [0.28 + t * 0.5, 0.30 + hash(c * 3) * 0.4, 0.34 + hash(r * 7) * 0.42], bv);
+          }
+      };
+
       // ===================================================================
       // Shared overpass builder — used at s 0.635 and 0.685 (Turnpike zone).
       // FIXED: pushed both further into the Turnpike zone, away from the
@@ -325,6 +370,8 @@
         palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
         lit: true, windowCol: WIN_AMBER,
       });
+      // Bespoke South-Beach club tucked in the infield here
+      beachClub(0.205, -1, 46);
 
       // ===================================================================
       // s 0.27–0.38 R — MIA MARINA: painted-water "fake marina" + moored yachts.
@@ -422,6 +469,9 @@
         lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 10; i++) palm(K(0.43 + i * 0.005), -1, 12 + (i % 2) * 4, 8 + hash(i * 3) * 2, PALM_GREEN);
+      // Campus stadium car-park lots — the "car-park circuit" signature
+      carPark(0.47, -1, 60, 4, 18);
+      carPark(0.55,  1, 66, 4, 16);
 
       // ===================================================================
       // s 0.50–0.60 R mid — BRAKING ZONE: palms + billboards + cityFront

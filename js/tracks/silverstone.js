@@ -389,8 +389,88 @@
         billboard(k(s), -1, 20, 10, 4.0, col);
       }
 
+      // =======================================================================
+      // BESPOKE AIRFIELD & FARMLAND LANDMARKS — local models from raw primitives
+      // =======================================================================
+
+      // --- WWII curved-roof aircraft hangar: a corrugated barrel roof (a
+      //     horizontal octagon cylinder laid along the tangent, its lower half
+      //     hidden inside the hall) over a rectangular hall with big sliding
+      //     doors on both gable ends. The Silverstone airfield signature.
+      function hangar(kk, side, dist, w, bodyH, ln) {
+        const a = anchor(kk, side, dist);
+        if (onTrack(a.c[0], a.c[2], Math.max(w, ln) * 0.5 + 6)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, bodyH / 2), [w, bodyH, ln], [0.60, 0.60, 0.58], b);   // hall
+        addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2), w / 2, ln,
+               [0.52, 0.53, 0.55], 8, [a.r, a.t, a.u]);                                   // barrel roof
+        for (const end of [-1, 1]) {
+          addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.45), a.t, end * (ln / 2 + 0.05)),
+                 [w * 0.9, bodyH * 0.9, 0.3], [0.30, 0.31, 0.33], b);                     // sliding doors
+          addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.45), a.t, end * (ln / 2 + 0.12)),
+                 [0.2, bodyH * 0.9, 0.1], [0.50, 0.50, 0.52], b);                         // door split
+        }
+      }
+
+      // --- Northamptonshire farm barn: barn-red body, pitched roof, hay-loft door
+      //     and a corrugated grain silo alongside.
+      function barn(kk, side, dist) {
+        const a = anchor(kk, side, dist);
+        if (onTrack(a.c[0], a.c[2], 20)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 3), [10, 6, 16], [0.52, 0.24, 0.18], b);              // body
+        addPrism(out, vadd(a.c, a.u, 6), [10.4, 3.4, 16], [0.34, 0.20, 0.16], b);        // pitched roof
+        addBox(out, vadd(vadd(a.c, a.u, 3.5), a.t, 8.05), [4, 4, 0.3], [0.30, 0.16, 0.12], b); // door
+        addCyl(out, vadd(a.c, a.r, -side * 8), 2.2, 9, [0.72, 0.72, 0.74], 10, b);        // silo
+        addCone(out, vadd(vadd(a.c, a.r, -side * 8), a.u, 9), 2.4, 2.2, [0.60, 0.60, 0.62], 10, b);
+      }
+
+      // --- Heritage Spitfire on a plinth: raised fuselage, elliptical wings, nose
+      //     cone, tail fin/plane and a glazed canopy. RAF-airfield history display.
+      function heritagePlane(kk, side, dist) {
+        const a = anchor(kk, side, dist);
+        if (onTrack(a.c[0], a.c[2], 16)) return;
+        const b = [a.r, a.u, a.t], green = [0.24, 0.32, 0.20], grey = [0.50, 0.52, 0.55];
+        const body = vadd(a.c, a.u, 3.4);
+        addCyl(out, a.c, 0.5, 3.0, grey, 6, b);                                          // plinth pole
+        addBox(out, body, [1.4, 1.4, 9], green, b);                                      // fuselage
+        addCone(out, vadd(body, a.t, 4.5), 0.7, 2.2, [0.40, 0.16, 0.14], 6, [a.r, a.t, a.u]); // spinner nose
+        addBox(out, body, [12, 0.4, 2.6], green, b);                                     // wings
+        addBox(out, vadd(vadd(body, a.t, -3.8), a.u, 1.2), [0.3, 2.4, 1.8], green, b);   // tail fin
+        addBox(out, vadd(body, a.t, -3.8), [4, 0.3, 1.4], green, b);                     // tailplane
+        addBox(out, vadd(body, a.u, 1.0), [1.0, 0.7, 2.0], [0.30, 0.42, 0.50], b);       // canopy
+      }
+
+      // --- Start-light gantry cluster spanning the National straight: twin masts,
+      //     a top beam, the five red start-light boxes and two TV-camera pods.
+      function startGantryCluster(s) {
+        const kb = k(s), L = anchor(kb, -1, 4), R = anchor(kb, 1, 4);
+        const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]), bL = [L.r, L.u, L.t], H = 8;
+        addCyl(out, L.c, 0.4, H, [0.20, 0.21, 0.24], 6, bL);
+        addCyl(out, R.c, 0.4, H, [0.20, 0.21, 0.24], 6, [R.r, R.u, R.t]);
+        const beam = vadd(vadd(L.c, L.u, H), L.r, span / 2);
+        addBox(out, beam, [span, 0.7, 1.4], [0.16, 0.17, 0.20], bL);
+        for (let i = 0; i < 5; i++)
+          addBox(out, vadd(vadd(beam, L.u, -1.6), L.r, (i - 2) * 1.6), [0.9, 1.2, 0.9], [0.65, 0.10, 0.10], bL);
+        for (const o of [-span * 0.3, span * 0.3])
+          addBox(out, vadd(vadd(beam, L.r, o), L.u, 0.6), [0.8, 0.8, 1.4], [0.10, 0.10, 0.12], bL);
+      }
+
+      // Bespoke arched WWII aircraft hangars on the former-airfield outfield.
+      hangar(k(0.20), -1, 150, 26, 7, 34);
+      hangar(k(0.52),  1, 150, 24, 7, 32);
+      hangar(k(0.72),  1, 155, 22, 7, 30);
+      // Northamptonshire farm barns + grain silos gridding the fields.
+      barn(k(0.30), -1, 165);
+      barn(k(0.62), -1, 170);
+      barn(k(0.86),  1, 160);
+      // Heritage Spitfire on a plinth — airfield history display near the paddock.
+      heritagePlane(k(0.50), 1, 120);
+      // Rich start-light gantry cluster spanning the National straight.
+      startGantryCluster(0.995);
+
       // silence unused-guard lint helpers (destructured but not called directly)
-      void GRASS; void STEEL; void TARMAC; void prop; void WHITE; void tower; void addCone; void bush;
+      void GRASS; void STEEL; void TARMAC; void prop; void WHITE; void tower; void bush;
     },
   }
   );

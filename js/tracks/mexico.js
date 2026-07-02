@@ -80,6 +80,39 @@
         place(k, side, 3.4, [2.6, 0.16, len], [0.94, 0.94, 0.94]);
       };
 
+      // ════════════ BESPOKE FORO SOL CROWD-BOWL MODELS ════════════
+      const crowdCols = [PINK, ORANGE, GREEN, [0.98, 0.82, 0.10],
+                         [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24]];
+      // Steep raked PACKED crowd terrace on a concrete wedge (dense speckled fans)
+      const crowdBank = (s, side, gap, len, rows) => {
+        const k = K(s), a = anchor(k, side, gap);
+        if (onTrack(a.c[0], a.c[2], 8)) return;
+        const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.9, seats = Math.floor(len / 2.0);
+        addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
+                 [rows * step, rows * rise, len], [0.50, 0.49, 0.52], [a.t, a.u, a.r]);
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < seats; c++) {
+            const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
+            const p = vadd(vadd(vadd(a.c, a.r, r * step), a.u, r * rise + 1.2), a.t, off);
+            addBox(out, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
+          }
+      };
+      // Curved raked crowd END-CAP wrapping a stadium corner (closes the horseshoe).
+      // Semicircular wall bulging AWAY from the track so it never intrudes.
+      const foroSolCap = (s, side, dist, span, rows, cnt) => {
+        const k = K(s), a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], 26)) return;
+        const bv = [a.r, a.u, a.t], arcR = 32;
+        for (let r = 0; r < rows; r++) {
+          const rr = arcR + r * 2.6, up = r * 1.9 + 1.2;
+          for (let i = 0; i < cnt; i++) {
+            const ang = -span / 2 + (i / (cnt - 1)) * span;
+            const p = vadd(vadd(vadd(a.c, a.t, Math.sin(ang) * rr), a.r, Math.cos(ang) * rr), a.u, up);
+            addBox(out, p, [0.9, 1.1, 0.9], crowdCols[(r * 3 + i) % crowdCols.length], bv);
+          }
+        }
+      };
+
       // ════════════════════════════════════════════════════════════════════════
       // s=0.00  MAIN GRANDSTAND + START/FINISH STRAIGHT
       // ════════════════════════════════════════════════════════════════════════
@@ -271,6 +304,19 @@
       grandstand(0.72, -1, 44, 340, [0.58, 0.56, 0.54], SEATS);
       grandstand(0.72,  1, 44, 340, [0.58, 0.56, 0.54], SEATS);
 
+      // Bespoke steep PACKED speckled upper terraces cresting the rim (both sides,
+      // stepped along the stadium run) — turns the tiers into a wall of close fans.
+      for (const s of [0.735, 0.775, 0.815, 0.855]) {
+        crowdBank(s, -1, 60, 88, 8);
+        crowdBank(s,  1, 60, 88, 8);
+      }
+      // Curved crowd END-CAPS closing the horseshoe at the entry and exit ends —
+      // wrap around behind the track so the bowl reads as fully enclosed.
+      foroSolCap(0.715, -1, 66, Math.PI, 7, 24);
+      foroSolCap(0.715,  1, 66, Math.PI, 7, 24);
+      foroSolCap(0.875, -1, 66, Math.PI, 7, 24);
+      foroSolCap(0.875,  1, 66, Math.PI, 7, 24);
+
       // Foro Sol floodlight masts — ring the outer rim, tall enough to overtop
       for (const s of [0.73, 0.76, 0.79, 0.82, 0.85, 0.87]) {
         lightMast(K(s), -1, 58, 52);
@@ -329,6 +375,8 @@
       // ════════════════════════════════════════════════════════════════════════
       grandstand(0.92, 1,  9, 100, SEATS,    PINK);
       grandstand(0.92, 1, 24, 100, CONCRETE, GREEN);
+      // Packed upper terrace behind the banked Peraltada/Estadio stand
+      crowdBank(0.92, 1, 40, 110, 7);
       // Taller floodlights flanking the Peraltada
       lightMast(K(0.90), 1, 32, 44);
       lightMast(K(0.94), 1, 32, 44);

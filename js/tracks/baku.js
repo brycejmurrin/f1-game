@@ -28,7 +28,7 @@
         out, n, place, prop, backdrop, groundPlane, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
-        addFrustum, vadd, hash, cityFront,
+        addFrustum, addPyramid, ferrisWheel, vadd, hash, cityFront,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -702,6 +702,86 @@
 
       // Seafront billboard (s≈0.15)
       billboard(K(0.15), -1, 20, 14, 5, [0.85, 0.35, 0.10]);
+
+      // ═══════════════════════════════════════════════════════════════════
+      // BESPOKE CASPIAN WATERFRONT MODELS
+      // ═══════════════════════════════════════════════════════════════════
+
+      // ── Reflective Caspian Sea (groundPlane water:true) ─────────────────
+      // A genuine reflective water buffer mirroring the night sky/skyline,
+      // laid across the seafront left of the long straight.
+      for (let i = 0; i < 6; i++) {
+        groundPlane(K(0.62 + i * 0.06), -1, 26, [280, 1.2, 240], SEA, true);
+      }
+
+      // ── BAKU EYE — Ferris wheel on the Caspian boulevard (seafront L) ────
+      ferrisWheel(K(0.80), -1, 46, 34);
+      // Warm/cool cabin accent ring + lit base plaza under the Baku Eye
+      {
+        const a = anchor(K(0.80), -1, 46);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.2), [40, 0.5, 40], [0.16, 0.14, 0.20], b);
+        addCyl(out, vadd(a.c, a.u, 34), 3.6, 3.4, WIN_COOL, 16, b);   // lit hub ring
+      }
+
+      // ── CASPIAN MARINA — moored night yachts (bespoke builder) ──────────
+      // Sleek hull + navy waterline + two glowing cabin decks + radar mast.
+      const nightYacht = (a, sc, hullCol) => {
+        const b = [a.r, a.u, a.t];
+        const HULL = hullCol || [0.90, 0.91, 0.94];
+        const L = 26 * sc, W = 7 * sc;
+        addBox(out, vadd(a.c, a.u, 1.8 * sc), [W, 3.0 * sc, L * 0.86], HULL, b);
+        addPrism(out, vadd(vadd(a.c, a.t, L * 0.47), a.u, 1.8 * sc), [W, 3.0 * sc, L * 0.16], HULL, b);
+        addBox(out, vadd(a.c, a.u, 0.5 * sc), [W * 1.02, 0.9 * sc, L * 0.88], [0.06, 0.08, 0.14], b);
+        const sup = vadd(a.c, a.t, L * 0.02);
+        addBox(out, vadd(sup, a.u, 4.2 * sc), [W * 0.82, 2.4 * sc, L * 0.5], [0.30, 0.34, 0.42], b);
+        addBox(out, vadd(sup, a.u, 6.6 * sc), [W * 0.66, 2.0 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
+        // warm + cool lit cabin bands
+        addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.5], WIN_WARM, b);
+        addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.32], WIN_COOL, b);
+        // radar mast + nav light
+        addCyl(out, vadd(sup, a.u, 8.2 * sc), 0.12 * sc, 4.5 * sc, [0.80, 0.82, 0.86], 4, b);
+        addBox(out, vadd(sup, a.u, 12.4 * sc), [0.4 * sc, 0.4 * sc, 0.4 * sc], [0.95, 0.30, 0.25], b);
+      };
+      for (let i = 0; i < 9; i++) {
+        const k = K(0.60 + i * 0.035);
+        const a = anchor(k, -1, 16 + (i % 3) * 8 + hash(k * 7) * 4);
+        if (onTrack(a.c[0], a.c[2], 10)) continue;
+        const hull = (i % 4 === 0) ? [0.12, 0.14, 0.22] : (i % 3 === 0) ? [0.85, 0.86, 0.90] : [0.70, 0.72, 0.78];
+        nightYacht(a, 0.8 + hash(k * 9) * 0.7, hull);
+      }
+      // Slim moored mast cluster further out on the water
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.63 + i * 0.04), a = anchor(k, -1, 60 + hash(k) * 30);
+        addCyl(out, vadd(a.c, a.u, 6), 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
+      }
+
+      // ── CARPET MUSEUM — iconic rolled-carpet building (seafront L) ───────
+      // Baku's museum is shaped like a giant rolled-up carpet. Built as a
+      // horizontal cylinder (the roll) on a plinth, with a peeled-back flap
+      // and warm patterned glow bands. Cylinder axis runs along the track
+      // tangent by swapping the up-slot of the basis to a.t.
+      {
+        const a = anchor(K(0.72), -1, 40);
+        const rollB = [a.r, a.t, a.u];          // cyl 'up' = track tangent → horizontal roll
+        const b = [a.r, a.u, a.t];
+        // Stone plinth
+        addBox(out, vadd(a.c, a.u, 3), [40, 6, 26], [0.34, 0.32, 0.30], b);
+        // Main carpet roll (horizontal cylinder) sitting on the plinth
+        addCyl(out, vadd(vadd(a.c, a.t, -16), a.u, 13), 10, 32, [0.62, 0.24, 0.18], 16, rollB);
+        // Rolled inner core rings (lighter, at the open end)
+        addCyl(out, vadd(vadd(a.c, a.t, 16), a.u, 13), 10.2, 2.0, [0.78, 0.66, 0.40], 16, rollB);
+        addCyl(out, vadd(vadd(a.c, a.t, 16), a.u, 13), 6.0, 2.4, [0.85, 0.52, 0.30], 14, rollB);
+        // Peeled-back carpet flap draping down the front (a leaning slab)
+        addBox(out, vadd(vadd(a.c, a.r, -9), a.u, 9), [1.4, 18, 30], [0.70, 0.28, 0.20], b);
+        // Warm patterned uplight bands along the roll
+        for (let s = -3; s <= 3; s++) {
+          addBox(out, vadd(vadd(a.c, a.t, s * 4.2), a.u, 22), [4.0, 0.5, 3.0],
+                 s % 2 ? [0.90, 0.55, 0.20] : WIN_WARM, b);
+        }
+        // Uplit forecourt wash
+        addBox(out, vadd(a.c, a.u, 0.1), [48, 0.5, 34], [0.20, 0.14, 0.08], b);
+      }
     },
   }
   );

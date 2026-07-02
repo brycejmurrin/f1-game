@@ -340,6 +340,107 @@
         addCyl(out, p.c, 0.12, 8.0, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
         addBox(out, vadd(p.c, p.u, 8.0), [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
       });
+
+      // ====================================================================
+      // BESPOKE ENRICHMENT — Ayrton Senna memorial, Italian cypress, a stone
+      // Santerno footbridge and terraced hillside stands. LOCAL to this closure.
+      // ====================================================================
+
+      // ── Italian cypress — the tall dark columnar spire that flanks Imola's
+      //    wooded hillsides and the memorial park. ──
+      const CYP = [0.11, 0.28, 0.15], CYP_D = [0.08, 0.22, 0.12];
+      function cypress(k, side, dist, h) {
+        const a = anchor(k, side, dist);
+        const b = [a.r, a.u, a.t];
+        const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
+        addCyl(out, a.c, 0.20, h * 0.16, [0.30, 0.22, 0.14], 5, b);
+        addCone(out, vadd(a.c, a.u, h * 0.10), 1.35, h * 0.58, col, 6, b);
+        addCone(out, vadd(a.c, a.u, h * 0.44), 1.00, h * 0.42, col, 6, b);
+        addCone(out, vadd(a.c, a.u, h * 0.70), 0.65, h * 0.32, col, 6, b);
+      }
+      // Cypress ranks on the Tosa / Acque Minerali / Piratella wooded slopes.
+      for (const [s0, side, gap] of [[0.30, -1, 22], [0.50, 1, 20], [0.64, -1, 30], [0.82, -1, 18]]) {
+        for (let i = 0; i < 5; i++) cypress(K(s0 + i * 0.008), side, gap + (i % 2) * 3, 13 + hash(i * 5 + s0 * 40) * 6);
+      }
+
+      // ── Ayrton Senna memorial park (Tamburello, s~0.07 L) — bronze figure on
+      //    a stone plinth, three tricolour flag poles, a semicircle of tributes. ──
+      (function sennaMemorial() {
+        const a = anchor(K(0.075), -1, 20);
+        const b = [a.r, a.u, a.t], base = a.c;
+        const bronze = [0.34, 0.30, 0.22], stone = [0.80, 0.78, 0.72];
+        // Lawn dais the memorial sits on.
+        addBox(out, vadd(base, a.u, 0.15), [12, 0.3, 12], [0.30, 0.48, 0.24], b);
+        // Stepped stone plinth.
+        addBox(out, vadd(base, a.u, 0.75), [4.5, 1.2, 4.5], stone, b);
+        addBox(out, vadd(base, a.u, 1.7),  [3.0, 0.9, 3.0], [0.86, 0.83, 0.76], b);
+        // Abstract seated bronze figure (Senna, pensive) — legs, torso, head.
+        addBox(out, vadd(base, a.u, 2.5),  [1.8, 0.6, 1.4], bronze, b);
+        addBox(out, vadd(base, a.u, 3.3),  [1.2, 1.4, 1.0], bronze, b);
+        addCyl(out, vadd(base, a.u, 4.4),  0.42, 0.7, bronze, 7, b);
+        // Three flag poles — Brazilian tricolour (green / yellow / blue).
+        const flagCols = [[0.10, 0.55, 0.24], [0.94, 0.82, 0.16], [0.14, 0.30, 0.62]];
+        for (let i = 0; i < 3; i++) {
+          const p = vadd(vadd(base, a.t, (i - 1) * 3.0), a.r, -4);
+          addCyl(out, p, 0.12, 9, [0.85, 0.85, 0.87], 6, b);
+          addBox(out, vadd(vadd(p, a.u, 7.6), a.t, 1.1), [0.15, 1.3, 2.0], flagCols[i], b);
+        }
+        // Semicircle of floral tributes at the foot.
+        for (let i = 0; i < 7; i++) {
+          const ang = (i / 6 - 0.5) * Math.PI;
+          const p = vadd(vadd(base, a.t, Math.sin(ang) * 4), a.r, -Math.cos(ang) * 4 + 3);
+          addBox(out, vadd(p, a.u, 0.5), [0.7, 0.4, 0.7],
+                 [[0.86, 0.20, 0.18], WHITE, [0.90, 0.80, 0.24]][i % 3], b);
+        }
+      })();
+
+      // ── Stone footbridge over the Santerno (riverside, s~0.10 R) — piers,
+      //    an arched deck prism and low parapet walls. ──
+      (function santernoBridge() {
+        const a = anchor(K(0.10), 1, 26);
+        const b = [a.r, a.u, a.t], base = a.c;
+        const stone = [0.72, 0.68, 0.60];
+        // Two piers straddling the water.
+        for (const sg of [-1, 1]) {
+          addBox(out, vadd(vadd(base, a.t, sg * 9), a.u, 2), [4, 4, 3], stone, b);
+        }
+        // Arched deck (triangular prism gives a humped span).
+        addPrism(out, vadd(base, a.u, 4.4), [5, 1.6, 22], [0.78, 0.74, 0.66], b);
+        addBox(out, vadd(base, a.u, 4.2), [5, 0.6, 22], stone, b);
+        // Parapet walls both edges.
+        for (const sg of [-1, 1])
+          addBox(out, vadd(vadd(base, a.r, sg * 2.2), a.u, 5.4), [0.5, 1.0, 22], [0.80, 0.76, 0.68], b);
+      })();
+
+      // ── Terraced hillside tifosi bowls at Tosa & Rivazza — bespoke stepped
+      //    crowd walls stacking up the natural banking (cheap slab + speckle). ──
+      const IM_SHELL_A = [0.53, 0.55, 0.59], IM_SHELL_B = [0.48, 0.50, 0.55];
+      const IM_CROWD = [[0.82, 0.24, 0.20], [0.86, 0.84, 0.80], [0.24, 0.42, 0.70], [0.72, 0.62, 0.30]];
+      function tieredBowl(s, side, gap, len, tiers) {
+        const k = K(s);
+        const g0 = anchor(k, side, gap);
+        if (onTrack(g0.c[0], g0.c[2], len * 0.4)) return;
+        for (let t = 0; t < tiers; t++) {
+          const a = anchor(k, side, gap + t * 5.4);
+          const b = [a.r, a.u, a.t];
+          const h = 2.8 + t * 3.1;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [5.0, h, len], t % 2 ? IM_SHELL_A : IM_SHELL_B, b);
+          addBox(out, vadd(a.c, a.u, h + 0.8), [4.3, 1.5, len], IM_CROWD[t % 4], b);
+          addBox(out, vadd(a.c, a.u, h + 1.75), [4.6, 0.3, len + 1], [0.92, 0.90, 0.82], b);
+          const cnt = Math.min(14, Math.floor(len / 6));
+          for (let c = 0; c < cnt; c++) {
+            if (hash(k * 3 + t * 29 + c) < 0.45) continue;
+            const off = (c / (cnt - 1) - 0.5) * (len - 4);
+            addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.25), [1.8, 0.6, 1.2], IM_CROWD[(c + t) % 4], b);
+          }
+        }
+        const aR = anchor(k, side, gap + (tiers - 0.5) * 5.4);
+        addBox(out, vadd(aR.c, aR.u, 2.8 + tiers * 3.1 + 1.5), [6.8, 0.45, len + 2],
+               [0.20, 0.20, 0.24], [aR.r, aR.u, aR.t]);
+      }
+      tieredBowl(0.285, -1, 16, 60, 4);   // Tosa hairpin bank
+      tieredBowl(0.82, -1, 16, 58, 4);    // Rivazza descent bank
+      tieredBowl(0.51, 1, 20, 52, 3);     // Acque Minerali
     },
   }
   );

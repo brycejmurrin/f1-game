@@ -27,7 +27,10 @@
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, hash, every, prop, place, backdrop,
-              addBox, vadd, anchor, mountain, pine, grandstand, building, motorhome, marshalPost, gantry, billboard } = api;
+              addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor, onTrack,
+              mountain, pine, tree, forestEdge, grandstand, building, motorhome,
+              marshalPost, gantry, billboard, fence, guardrail, tyreWall } = api;
+      const K = (s) => Math.round(s * n) % n;
 
       // Start gantry over the line (every circuit has one; the start-gantry
       // downlights in buildTrackLights need this structure to hang from).
@@ -149,6 +152,119 @@
         const kw = Math.round(n * 0.06) % n;
         place(kw, -1, 4, [1.0, 1.4, 22], [0.55, 0.55, 0.52]);
       }
+
+      // ======================================================================
+      // BESPOKE ARDENNES LANDMARKS — local models built from raw primitives
+      // ======================================================================
+
+      // --- Ardennes stone chalet: rendered body + steep slate A-frame roof +
+      //     stone chimney + a warm-lit gable window. The regional forest farmhouse.
+      function chalet(k, side, dist, w, h, d, wallCol, roofCol) {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.6 + 3)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, h / 2), [w, h, d], wallCol, b);                  // body
+        addPrism(out, vadd(a.c, a.u, h), [w * 1.05, h * 0.7, d], roofCol, b);       // steep roof
+        addBox(out, vadd(vadd(vadd(a.c, a.u, h + h * 0.5), a.t, d * 0.28), a.r, w * 0.26),
+               [w * 0.16, h * 0.85, w * 0.16], [0.42, 0.40, 0.38], b);              // stone chimney
+        addBox(out, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.06)),
+               [0.12, h * 0.34, d * 0.42], [0.98, 0.85, 0.50], b);                  // warm-lit window
+      }
+
+      // --- Forest campsite / RV village: the campervans + ridge tents that pack
+      //     the Ardennes hillsides above Eau Rouge on race weekend — rows of
+      //     little caravans and tents, a shared awning and a glowing campfire.
+      function rvCamp(k, side, dist, count) {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], 24)) return;
+        const b = [a.r, a.u, a.t];
+        const vanCols = [[0.86, 0.87, 0.88], [0.80, 0.44, 0.26], [0.72, 0.74, 0.78], [0.60, 0.66, 0.58]];
+        const tentCols = [[0.78, 0.30, 0.24], [0.24, 0.44, 0.62], [0.86, 0.74, 0.30], [0.40, 0.56, 0.34]];
+        for (let i = 0; i < count; i++) {
+          const row = i % 2, col = (i / 2) | 0;
+          const off = (col - count / 4) * 9;
+          const base = vadd(vadd(a.c, a.t, off), a.r, -side * (row * 9));
+          if (hash(k * 3 + i) < 0.55) {
+            const vc = vanCols[(hash(k * 7 + i) * 4) | 0];
+            addBox(out, vadd(base, a.u, 1.9), [3.0, 2.6, 6.2], vc, b);              // caravan body
+            addBox(out, vadd(base, a.u, 3.3), [3.1, 0.5, 6.2],
+                   [vc[0] * 0.8, vc[1] * 0.8, vc[2] * 0.8], b);                     // roof cap
+          } else {
+            const tc = tentCols[(hash(k * 11 + i) * 4) | 0];
+            addPrism(out, vadd(base, a.u, 0.2), [3.4, 1.9, 4.2], tc, b);            // ridge tent
+          }
+        }
+        addBox(out, vadd(a.c, a.u, 2.6), [7, 0.15, 5], [0.90, 0.90, 0.86], b);      // shared awning
+        addCone(out, a.c, 0.6, 1.0, [0.95, 0.55, 0.15], 5, b);                      // campfire glow
+      }
+
+      // --- Historic Spa timing / control tower: a stepped stack (office box →
+      //     tapered shaft → glazed timing box) with a clock face and flag mast.
+      function timingTower(k, side, dist) {
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 6), [8, 12, 8], [0.80, 0.78, 0.72], b);          // base office
+        addFrustum(out, vadd(a.c, a.u, 12), 3.4, 2.6, 10, [0.84, 0.82, 0.76], 6, b);// shaft
+        addBox(out, vadd(a.c, a.u, 23), [5.5, 3.2, 5.5], [0.18, 0.22, 0.28], b);    // glazed timing box
+        addBox(out, vadd(a.c, a.u, 23), [5.6, 1.6, 5.6], [0.90, 0.92, 0.86], b);    // lit interior band
+        addBox(out, vadd(a.c, a.u, 26.6), [6, 0.6, 6], [0.30, 0.30, 0.34], b);      // roof slab
+        addCyl(out, vadd(a.c, a.u, 27), 0.12, 6, [0.42, 0.42, 0.46], 4, b);         // flag mast
+        addBox(out, vadd(vadd(a.c, a.u, 18), a.r, -side * 4.05), [0.2, 2.4, 2.4],
+               [0.94, 0.93, 0.88], b);                                             // trackside clock face
+      }
+
+      // --- Spectator footbridge spanning the track: two stair towers + a decked
+      //     walkway with railings — one of Spa's forest crossings.
+      function footbridge(s, deckCol) {
+        const kb = K(s);
+        const L = anchor(kb, -1, 3), R = anchor(kb, 1, 3);
+        const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]);
+        const bL = [L.r, L.u, L.t], bR = [R.r, R.u, R.t], h = 6.5;
+        addBox(out, vadd(L.c, L.u, h / 2), [3, h, 3], [0.55, 0.56, 0.58], bL);      // stair tower L
+        addBox(out, vadd(R.c, R.u, h / 2), [3, h, 3], [0.55, 0.56, 0.58], bR);      // stair tower R
+        const mid = vadd(vadd(L.c, L.u, h), L.r, span / 2);
+        addBox(out, mid, [span, 0.5, 3.4], deckCol, bL);                           // deck
+        for (const t of [1.6, -1.6])                                               // railings
+          addBox(out, vadd(vadd(mid, L.u, 0.9), L.t, t), [span, 0.12, 0.12], [0.30, 0.30, 0.32], bL);
+      }
+
+      // Ardennes chalets tucked on the wooded hillsides around the lap.
+      chalet(K(0.13), -1, 55, 8, 5, 12, [0.80, 0.78, 0.72], [0.34, 0.20, 0.16]);
+      chalet(K(0.30),  1, 62, 7, 5, 11, [0.78, 0.76, 0.70], [0.32, 0.22, 0.18]);
+      chalet(K(0.55), -1, 58, 8, 5, 12, [0.82, 0.80, 0.74], [0.30, 0.20, 0.16]);
+      chalet(K(0.72),  1, 66, 7, 5, 10, [0.80, 0.77, 0.71], [0.34, 0.22, 0.16]);
+
+      // Forest campsites on the Eau Rouge/Raidillon banking and Kemmel hillside.
+      rvCamp(K(0.075), 1, 40, 8);
+      rvCamp(K(0.10), -1, 46, 7);
+      rvCamp(K(0.135), 1, 52, 8);
+      rvCamp(K(0.48), -1, 48, 6);
+      rvCamp(K(0.82),  1, 44, 6);
+
+      // Historic timing tower behind the pit straight; spectator footbridges.
+      timingTower(K(0.985), -1, 30);
+      footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
+      footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
+
+      // Deeper forest ranks for an even denser Ardennes wall in the mid sectors.
+      forestEdge(0.18, 0.45, -1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
+      forestEdge(0.55, 0.88,  1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
+      // A few broadleaf oaks softening the pit-straight and Les Combes verges.
+      for (const [s, side] of [[0.01, 1], [0.16, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
+        for (let j = 0; j < 3; j++) tree(K(s) + j, side, 18 + hash(K(s) * 5 + j) * 14, 10 + hash(K(s) * 9 + j) * 5, [0.13, 0.34, 0.16]);
+      }
+
+      // --- Barriers: catch fence at the packed stands, armco on the fast forest
+      //     sweepers, tyre stacks at the heavy braking zones.
+      fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
+      fence(0.06, 0.10, 1, 7, 4.4, [0.74, 0.76, 0.80]);       // Raidillon stand
+      fence(0.15, 0.18, 1, 7, 4.2, [0.74, 0.76, 0.80]);       // Les Combes
+      fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
+      guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep
+      guardrail(0.80, 0.90,  1, 3.4, [0.84, 0.85, 0.88]);     // Blanchimont
+      tyreWall(0.015, 0.03,  1, 4.4, [0.78, 0.12, 0.12]);     // La Source
+      tyreWall(0.155, 0.175, 1, 4.6, [0.20, 0.36, 0.62]);     // Les Combes
+      tyreWall(0.46, 0.49,  -1, 4.6, [0.55, 0.55, 0.52]);     // Pouhon
+      tyreWall(0.905, 0.925, 1, 4.4, [0.78, 0.12, 0.12]);     // Bus Stop
     },
   }
   );
