@@ -1284,7 +1284,7 @@ void main() {
     // Fade out the far field: depth precision + coarse march steps there breed
     // speckle, and reflections compress to nothing near the horizon anyway — so
     // keep the clean, high-impact foreground and taper the distance out.
-    float roadMask = smoothstep(0.55, 0.85, upDot)
+    float roadMask = smoothstep(0.40, 0.75, upDot)
                    * smoothstep(-2.5, -7.0, P.z)
                    * (1.0 - smoothstep(-22.0, -55.0, P.z));
     // Car bodywork: up-facing-ish panels, allowed much nearer than the road
@@ -1354,6 +1354,11 @@ void main() {
       // just the grazing band) with a gentle Fresnel lift toward the horizon.
       float fres = pow(1.0 - max(dot(Nv, V), 0.0), 3.0);
       float strength = ssrGate * (0.55 + 0.42 * fres);
+      // The darker-mirror substitution below is tuned for WET roads. At the
+      // faint dry levels (uReflect < 0.2: dry-day 0.07 / dry-night 0.16) fade
+      // the substitution quadratically so it reads as a subtle sheen instead
+      // of dark towers replacing the sunlit tarmac.
+      strength *= min(uReflect / 0.20, 1.0);
       float mixAmt = clamp(strength * cover, 0.0, 0.94);   // near-mirror, keeps a hint of asphalt
       c = mix(c, c * 0.10 + reflCol * 0.92, mixAmt);
     }

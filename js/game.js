@@ -3264,7 +3264,10 @@ function render(dt) {
   // by wetness (road-mask + Fresnel + distance-fade in the shader guard it).
   // Wet: full mirror. Dry night: a subtle sheen — clean racing tarmac still
   // reflects the lamps/neon a little at grazing angles.
-  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : (frame.lights ? 0.16 : 0);
+  // Wet: full mirror. Dry night: lamp/neon sheen. Dry DAY: a faint floor so
+  // clean tarmac still mirrors towers and sky (real asphalt is never fully
+  // matte at grazing angles).
+  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : (frame.lights ? 0.16 : 0.07);
   // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.
