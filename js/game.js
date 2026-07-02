@@ -313,7 +313,6 @@ const CAM_MODES = [
   { id: "drift",     label: "DRIFT" },
   { id: "cockpit",   label: "COCKPIT" },
   { id: "hood",      label: "HOOD" },
-  { id: "bumper",    label: "BUMPER" },
   { id: "overhead",  label: "OVERHEAD" },
   { id: "heli",      label: "HELI" },
   { id: "reverse",   label: "REVERSE" },
@@ -640,6 +639,188 @@ function getErsLight() {
   ersMesh = GLX.createMesh(out);
   return ersMesh;
 }
+
+// ── First-person cockpit rig (COCKPIT cam viewmodel) ─────────────────────────
+// The car body is hidden in cockpit view and has no modelled interior, so the
+// driver's-eye view draws a dedicated rig in CAR space: dash cowl, halo
+// (centre pylon + hoop), cockpit-rim pads, wing mirrors — plus a steering
+// wheel drawn separately so it can roll with the smoothed steering input.
+// Everything is metres in car-local coords (+z nose, +y up; driver eye sits
+// at roughly (0, 0.98, -0.05) — see the cockpit camVantage).
+function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
+  const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2;
+  const F = [
+    [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1],[0,0,1]],
+    [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],[0,0,-1]],
+    [[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0],[0,1,0]],
+    [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[0,-1,0]],
+    [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[1,0,0]],
+    [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],[-1,0,0]],
+  ];
+  for (const f of F) {
+    const b = out.pos.length / 3, n = f[4];
+    for (let i = 0; i < 4; i++) { const v = f[i]; out.pos.push(v[0], v[1], v[2]); out.nrm.push(n[0], n[1], n[2]); out.col.push(col[0], col[1], col[2]); }
+    out.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  }
+}
+let cockpitWheelMesh = null;
+function getCockpitWheel() {
+  if (cockpitWheelMesh) return cockpitWheelMesh;
+  // A real modern F1 wheel: rounded-rect rim with rubber hand grips, carbon
+  // fascia, big central display bezel, coloured button clusters, rotary knobs
+  // and shift paddles. Built centred on the hub (origin), wheel plane in XY
+  // facing the driver (-z side); rolled about Z by the draw call.
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const CARB = [0.04, 0.04, 0.05], RUB = [0.085, 0.085, 0.095], KNOB = [0.75, 0.72, 0.15];
+  _rigBox(out, -0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);        // hand grips
+  _rigBox(out,  0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);
+  _rigBox(out, -0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);     // upper corners
+  _rigBox(out,  0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);
+  _rigBox(out, 0, 0.128, 0, 0.18, 0.038, 0.05, CARB);          // top bar
+  _rigBox(out, -0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);   // lower corners
+  _rigBox(out,  0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);
+  _rigBox(out, 0, -0.138, 0, 0.17, 0.038, 0.05, CARB);         // bottom bar
+  _rigBox(out, 0, 0.0, 0.014, 0.215, 0.16, 0.042, CARB);       // fascia plate
+  _rigBox(out, 0, 0.042, -0.014, 0.145, 0.088, 0.022, [0.025, 0.025, 0.035]); // display bezel
+  _rigBox(out, 0, 0.042, -0.027, 0.125, 0.070, 0.006, [0.012, 0.018, 0.028]); // LCD
+  // Button clusters (bright HDR so they read; glow slightly at night).
+  const BTN = [[1.5, 0.15, 0.10], [0.15, 0.5, 1.5], [0.15, 1.3, 0.35], [1.35, 1.1, 0.12]];
+  let bi = 0;
+  for (const bx of [-0.083, 0.083]) for (const by of [-0.018, -0.052])
+    _rigBox(out, bx, by, -0.026, 0.02, 0.02, 0.012, BTN[bi++]);
+  _rigBox(out, -0.03, -0.055, -0.026, 0.028, 0.028, 0.014, KNOB);  // rotary knobs
+  _rigBox(out,  0.03, -0.055, -0.026, 0.028, 0.028, 0.014, KNOB);
+  _rigBox(out, -0.105, 0.0, 0.048, 0.06, 0.11, 0.012, CARB);   // shift paddles
+  _rigBox(out,  0.105, 0.0, 0.048, 0.06, 0.11, 0.012, CARB);
+  cockpitWheelMesh = GLX.createMesh(out);
+  return cockpitWheelMesh;
+}
+// Shift-light LED strip across the top of the fascia — LIVE, keyed to RPM like
+// the real wheel: greens first, then reds, then the blue "shift now" pair.
+// One cached mesh per lit-count (9 tiny meshes total).
+const _ledMeshes = {};
+function getLedStrip(lit) {
+  if (_ledMeshes[lit]) return _ledMeshes[lit];
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const COLS = [[0.2,1.8,0.4],[0.2,1.8,0.4],[0.2,1.8,0.4],[1.8,0.9,0.15],[1.8,0.9,0.15],[1.9,0.2,0.15],[1.9,0.2,0.15],[0.9,0.4,2.2]];
+  for (let i = 0; i < 8; i++) {
+    const on = i < lit;
+    const col = on ? COLS[i] : [0.05, 0.05, 0.06];
+    _rigBox(out, -0.084 + i * 0.024, 0.098, -0.026, 0.016, 0.016, 0.010, col);
+  }
+  _ledMeshes[lit] = GLX.createMesh(out);
+  return _ledMeshes[lit];
+}
+// Live GEAR readout on the wheel display: one tiny 7-seg mesh per gear, drawn
+// over the display bezel with the wheel matrix so it rotates with the wheel
+// (the real F1 LCD is on the wheel). HDR green so it glows day and night.
+const _gearMeshes = {};
+function getGearDigit(g) {
+  if (_gearMeshes[g]) return _gearMeshes[g];
+  const SEG7 = [
+    [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
+    [1,0,1,1,0,1,1],[1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],[1,1,1,1,0,1,1],
+  ];
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const GRN = [0.25, 2.2, 0.55];
+  const h = 0.056, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.042, cz = -0.033;
+  const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
+              [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
+  const seg = SEG7[g % 10];
+  for (let i = 0; i < 7; i++) if (seg[i])
+    _rigBox(out, L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
+  _gearMeshes[g] = GLX.createMesh(out);
+  return _gearMeshes[g];
+}
+// Small 7-seg digits for the wheel LCD speed readout (cached 0-9), plus unit
+// bar meshes for live throttle/brake — heights scaled per frame via the matrix.
+const _spdMeshes = {};
+function getSpeedDigit(d) {
+  if (_spdMeshes[d]) return _spdMeshes[d];
+  const SEG7 = [
+    [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
+    [1,0,1,1,0,1,1],[1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],[1,1,1,1,0,1,1],
+  ];
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const CYN = [0.3, 1.6, 2.0];
+  const h = 0.026, w = h * 0.55, t = h * 0.18, q = h / 4;
+  const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
+              [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
+  const seg = SEG7[d % 10];
+  for (let i = 0; i < 7; i++) if (seg[i])
+    _rigBox(out, L[i][1], L[i][0], 0, L[i][2], L[i][3], 0.006, CYN);
+  _spdMeshes[d] = GLX.createMesh(out);
+  return _spdMeshes[d];
+}
+let _thrBarMesh = null, _brkBarMesh = null;
+function getPedalBar(brake) {
+  // Unit-height bar anchored at its BOTTOM (y 0..0.052) so a matrix Y-scale
+  // reads as a pedal-position fill.
+  const key = brake ? "_brkBarMesh" : "_thrBarMesh";
+  if (brake ? _brkBarMesh : _thrBarMesh) return brake ? _brkBarMesh : _thrBarMesh;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  _rigBox(out, 0, 0.026, 0, 0.013, 0.052, 0.008, brake ? [1.9, 0.2, 0.15] : [0.2, 1.8, 0.4]);
+  const m = GLX.createMesh(out);
+  if (brake) _brkBarMesh = m; else _thrBarMesh = m;
+  return m;
+}
+// The cockpit body: the REAL car (livery, nose, mirrors, number board) minus
+// the driver helmet the camera sits inside. Cached per team like playerBodies.
+const cockpitBodies = {};
+function cockpitBodyMesh(team) {
+  if (!cockpitBodies[team.id])
+    cockpitBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2,
+      { noWheels: true, noDriver: true, num: team.drivers && team.drivers[0] && team.drivers[0].num }));
+  return cockpitBodies[team.id];
+}
+// Wheel hub position in car space + scratch matrices for the roll compose.
+const _rigT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0.775,0.415,1]);
+const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
+const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+const _digM = new Float32Array(16);
+function drawCockpitRig(c, base, dt, paint) {
+  const nite = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
+  const opt = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: nite ? 0.16 : 0 };
+  // The actual car around you: body (minus helmet) with the real paint, plus
+  // the steering/spinning front wheels.
+  GLX.draw(cockpitBodyMesh(c.team), base, paint);
+  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 });
+  // Roll the wheel about the (car-local) column axis by the smoothed steering.
+  const a = clamp(c.steerVis || 0, -1, 1) * 1.55;   // ~±89° visual lock
+  const ca = Math.cos(a), sa = Math.sin(a);
+  _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
+  M4.mulTo(_rigA, base, _rigT);
+  M4.mulTo(_rigB, _rigA, _rigR);
+  GLX.draw(getCockpitWheel(), _rigB, opt);
+  // Live gear digit + RPM shift lights on the wheel (ride the wheel matrix).
+  const fx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
+  GLX.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), _rigB, fx);
+  const rpmF = clamp(((c.rpm || IDLE_RPM) - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
+  GLX.draw(getLedStrip(Math.round(rpmF * 8)), _rigB, fx);
+  // Speed (km/h) in small cyan digits along the bottom of the LCD — the HUD
+  // speedometer lives IN the car in cockpit view.
+  const kmh = Math.min(999, Math.round((c.speed || 0) * 3.6));
+  const ds = String(kmh);
+  for (let i = 0; i < ds.length; i++) {
+    _digT[12] = (i - (ds.length - 1) / 2) * 0.021 - 0.028; _digT[13] = 0.016; _digT[14] = -0.033;
+    M4.mulTo(_digM, _rigB, _digT);
+    GLX.draw(getSpeedDigit(+ds[i]), _digM, fx);
+  }
+  // Throttle / brake pedal bars flanking the LCD (green right, red left),
+  // height-scaled by the live inputs.
+  const th = _testInput ? (_testInput.throttle ? 1 : 0) : (Input.throttle() ? 1 : 0);
+  const br = _testInput ? (_testInput.brake ? 1 : 0) : (Input.braking() ? 1 : 0);
+  c._thrVis = damp(c._thrVis == null ? 0 : c._thrVis, th, 12, dt);
+  c._brkVis = damp(c._brkVis == null ? 0 : c._brkVis, br, 12, dt);
+  for (const [mesh, v, bx] of [[getPedalBar(false), c._thrVis, 0.052], [getPedalBar(true), c._brkVis, -0.052]]) {
+    _digT[12] = bx; _digT[13] = 0.012; _digT[14] = -0.033;
+    M4.mulTo(_digM, _rigB, _digT);
+    _digM[4] *= v; _digM[5] *= v; _digM[6] *= v;   // scale local Y by pedal position
+    if (v > 0.03) GLX.draw(mesh, _digM, fx);
+  }
+}
+
 function playerBodyMesh(team) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
   if (!playerBodies[team.id]) playerBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2, { noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num }));
@@ -2808,19 +2989,11 @@ function camVantage(mode, s, x, spd, now, extra) {
     // 1.9 m out — past most of the bodywork, so no car was in frame). From
     // 0.85 m the nose and front wing read at the bottom of the frame, which
     // is what makes it a hood cam rather than a floating drone.
-    const eyeFwd = mode === "cockpit" ? -0.05 : 0.85;
-    const eyeUp  = mode === "cockpit" ? 0.98 : 0.92;
+    const eyeFwd = mode === "cockpit" ? -0.05 : 0.35;
+    const eyeUp  = mode === "cockpit" ? 0.98 : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     tgt = aheadPt(30, eyeUp + 1.2, x * 0.6);
     fov = lerp(64, 78, spN) + dep * 3;               // wider = faster feel
-  } else if (mode === "bumper") {
-    // Road-level splitter cam: mounted at the very front wing, ahead of the
-    // bodywork, skimming the tarmac. Lower and wider than HOOD — a visceral
-    // ground-rush view. (Eye sits forward of the nose so the car never occludes;
-    // the player car is also not drawn for this mode — see hidePlayerCar.)
-    eye = [p[0] + t[0] * 2.7, p[1] + 0.33 + bankDy, p[2] + t[2] * 2.7];
-    tgt = aheadPt(24, 0.65, x * 0.5);
-    fov = lerp(72, 88, spN) + dep * 3;
   } else if (mode === "overhead") {
     eye = [p[0] - t[0] * 9, p[1] + 42, p[2] - t[2] * 9];
     tgt = [p[0] + t[0] * 12, p[1], p[2] + t[2] * 12];
@@ -2867,9 +3040,13 @@ function camVantage(mode, s, x, spd, now, extra) {
     tgt = [p[0], p[1] + 0.6, p[2]];
     fov = lerp(55, 68, spN);
   } else if (mode === "tcam") {
-    eye = [p[0] - t[0] * 0.15, p[1] + 1.3, p[2] - t[2] * 0.15];
-    tgt = aheadPt(25, 0.9, x * 0.5);
-    fov = 40 + dep * 2;
+    // Broadcast T-cam: perched on the T-bar above/behind the driver, tilted
+    // DOWN enough that the helmet, airbox and nose fill the lower frame — the
+    // signature F1 onboard. (The old mount looked level 25 m ahead, so none of
+    // the car was in frame and it read as a floating drone.)
+    eye = [p[0] - t[0] * 0.52, p[1] + 1.46, p[2] - t[2] * 0.52];
+    tgt = aheadPt(20, 0.35, x * 0.5);
+    fov = 46 + dep * 2;
   } else if (mode === "rear") {
     // Onboard rear-view, remounted: the old eye (0.5 m back at 0.85 up) sat
     // INSIDE the engine cover with the rear wing (elements 0.8-1.1 m at
@@ -2942,11 +3119,11 @@ function render(dt) {
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
     // Onboard speed vibration: a subtle high-frequency buzz on the rigid-mounted
-    // cams (cockpit/hood/bumper/tcam) that grows with speed² — the visceral
+    // cams (cockpit/hood/tcam) that grows with speed² — the visceral
     // "the car is alive under you" cue every onboard broadcast has. Two mixed
     // sine bands (not random) so it reads as vibration, not noise; tiny target
     // jitter so the whole frame trembles slightly rather than swimming.
-    if (state === "race" && (mode === "cockpit" || mode === "hood" || mode === "bumper" || mode === "tcam")) {
+    if (state === "race" && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
       const spV = clamp(player.speed / VMAX, 0, 1);
       const vAmp = spV * spV * 0.022 + (player.deploying ? 0.008 : 0);
       if (vAmp > 0.001) {
@@ -2968,11 +3145,11 @@ function render(dt) {
 
   // High lambda in-race: the anchor already follows the car along the track,
   // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
-  // Onboard cams ride ON the car (cockpit/hood/bumper/tcam), so they need very high
+  // Onboard cams ride ON the car (cockpit/hood/tcam), so they need very high
   // lambda or the eye lags behind/into the bodywork at speed.
   const racing = state === "race" || state === "count";
   const camId = CAM_MODES[camMode].id;
-  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "bumper" || camId === "tcam");
+  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "tcam");
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
   const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
@@ -3302,9 +3479,12 @@ function render(dt) {
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
-    (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "bumper");   // don't draw the car you're sitting on/in
+    CAM_MODES[camMode].id === "cockpit";   // don't draw the car you're sitting in
+  // Cockpit view still draws a first-person RIG (wheel/halo/mirrors) + the car's
+  // shadow — only the body mesh is skipped. Bumper hides everything as before.
+  const cockpitRigOnly = hidePlayerCar && CAM_MODES[camMode].id === "cockpit";
   for (const c of cars) {
-    if (c.isPlayer && hidePlayerCar) continue;
+    if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
@@ -3377,6 +3557,9 @@ function render(dt) {
     const paint = wet
       ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
       : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY);
+    // Cockpit view: the real car body (minus the helmet the camera sits in) +
+    // slim halo + steering wheel with a live gear display; skip the normal body.
+    if (c.isPlayer && cockpitRigOnly) { drawCockpitRig(c, tmpMat, dt, paint); continue; }
     // Player: body-only mesh + animated (spinning/steering) wheels. Others (and
     // the player when a glb model is loaded) draw the full mesh with baked wheels.
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
@@ -4700,6 +4883,9 @@ els.pausebtn.onclick = () => setPaused(true);
 function refreshCamBtn() {
   const b = $("btn-cam");
   if (b) b.textContent = CAM_MODES[camMode].label;
+  // Cockpit view: the gear/speed/rpm live ON the wheel LCD — hide the floating
+  // HUD duplicates (CSS keys off this class).
+  document.body.classList.toggle("cockpit-cam", CAM_MODES[camMode].id === "cockpit");
 }
 function setCamMode(m) {
   const prev = camMode;

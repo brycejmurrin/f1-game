@@ -128,7 +128,6 @@ returning `{ mode, index }`; an unknown mode returns `false`.
 | `drift` | DRIFT | Action chase that swings to the OUTSIDE of a slide so the car's flank faces camera under oversteer; settles directly behind when gripping |
 | `cockpit` | COCKPIT | Driver's-eye onboard; the player car mesh is hidden |
 | `hood` | HOOD | Nose/bonnet onboard, looking down the road |
-| `bumper` | BUMPER | Road-level splitter cam ahead of the nose (player car not drawn) — widest FOV, strongest ground-rush |
 | `overhead` | OVERHEAD | Top-down drone, high above and slightly behind — steeply angled to show the car and road ahead |
 | `heli` | HELI | Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the upcoming bend, long-lens telephoto across the apex |
 | `reverse` | REVERSE | Mounted just ahead of the car looking back down the track — watch who's chasing you |
@@ -139,14 +138,14 @@ returning `{ mode, index }`; an unknown mode returns `false`.
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","bumper","overhead","heli","reverse","side","cinematic","low","tcam","rear"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:12 }
 __apex.camera(3);           // switch by index → cockpit
 ```
 
 A camera cut eases in over ~0.35 s (a brief gentle glide); onboard cams
-(cockpit/hood/bumper/tcam) lock instantly to the car so they never lag into the
+(cockpit/hood/tcam) lock instantly to the car so they never lag into the
 bodywork.
 
 ### `previewCam(mode, frac, speed, lat) → {eye, target, fov, mode} | false`

@@ -308,9 +308,13 @@ const Car3D = (function () {
     }
 
     // --- Driver helmet: smooth dome + visor + crown stripe ---
-    addDome(out, 0, 0.585, -0.08, 0.145, c1);
-    addBox(out, 0, 0.64, 0.05, 0.20, 0.075, 0.045, VISOR);  // visor band
-    addBox(out, 0, 0.715, -0.09, 0.10, 0.026, 0.17, c2);    // crown stripe
+    // Skipped for the first-person cockpit body (opts.noDriver): the camera
+    // sits where the driver's head is.
+    if (!(opts && opts.noDriver)) {
+      addDome(out, 0, 0.585, -0.08, 0.145, c1);
+      addBox(out, 0, 0.64, 0.05, 0.20, 0.075, 0.045, VISOR);  // visor band
+      addBox(out, 0, 0.715, -0.09, 0.10, 0.026, 0.17, c2);    // crown stripe
+    }
 
     // --- Airbox intake above the roll hoop (dark void) ---
     addBox(out, 0, 0.76, -0.24, 0.15, 0.09, 0.13, INTAKE);

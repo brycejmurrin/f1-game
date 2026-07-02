@@ -1,7 +1,7 @@
 // @ts-check
 // Player camera modes: cycling via the __apex.camera hook + the CAM button,
 // persistence, and that every mode renders a valid, distinct frame without crashing.
-// Modes: chase, far, drift, cockpit, hood, bumper, overhead, heli, reverse, side,
+// Modes: chase, far, drift, cockpit, hood, overhead, heli, reverse, side,
 //        cinematic, low, tcam, rear.
 import { test, expect } from "@playwright/test";
 
@@ -23,7 +23,7 @@ test.describe("Apex 26 — player camera modes", () => {
       const bad = window.__apex.camera("banana");
       return { init, byId, byIdx, bad };
     });
-    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "bumper", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear"]);
+    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear"]);
     expect(r.byId.mode).toBe("cockpit");
     expect(r.byIdx.mode).toBe("chase");
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
@@ -42,7 +42,7 @@ test.describe("Apex 26 — player camera modes", () => {
       }
       return out;
     });
-    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "bumper", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "chase"]);
+    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "chase"]);
   });
 
   test("camera choice persists across a reload", async ({ page }) => {
@@ -59,7 +59,7 @@ test.describe("Apex 26 — player camera modes", () => {
     await startRace(page);
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const shots = {};
-    for (const mode of ["chase", "far", "drift", "cockpit", "hood", "bumper", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear"]) {
+    for (const mode of ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear"]) {
       await page.evaluate((m) => window.__apex.camera(m), mode);
       // let the camera damp toward the new vantage and render a few frames
       await page.evaluate(() => { for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1); });

@@ -88,7 +88,7 @@ test("tourShots({atCorners}) frames each apex from the outside", async ({ page }
 test("previewCam() frames any in-game mode without moving the car", async ({ page }) => {
   await loadMonaco(page);
   const before = await page.evaluate(() => { const p = __apex.probe(); return p && p.s; });
-  for (const mode of ["chase", "drift", "heli", "bumper", "cinematic"]) {
+  for (const mode of ["chase", "drift", "heli", "tcam", "cinematic"]) {
     const r = await page.evaluate(m => __apex.previewCam(m, 0.2, 60, 0.5), mode);
     expect(r, `previewCam(${mode})`).toBeTruthy();
     expect(r.mode).toBe(mode);
