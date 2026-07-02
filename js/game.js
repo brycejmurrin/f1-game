@@ -700,12 +700,12 @@ function getCockpitWheel() {
   _rigBox(out, 0, 0.0, 0.014, 0.215, 0.16, 0.042, CARB);       // fascia plate
   _rigBox(out, 0, 0.024, -0.016, 0.125, 0.080, 0.02, [0.025, 0.025, 0.035]);  // display bezel
   _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, [0.012, 0.018, 0.028]); // LCD
-  _rigBox(out, 0, -0.004, -0.0295, 0.108, 0.008, 0.004, [0.03, 0.035, 0.04]); // energy slot (LCD bottom)
-  // Bezeled display cells: a small speed box (top-left) and a centred gear box
-  _rigBox(out, -0.030, 0.040, -0.0292, 0.058, 0.026, 0.003, [0.10, 0.11, 0.13]); // speed cell frame
-  _rigBox(out, -0.030, 0.040, -0.0296, 0.053, 0.021, 0.003, [0.010, 0.016, 0.026]); // speed cell face
-  _rigBox(out, 0, 0.012, -0.0292, 0.040, 0.048, 0.003, [0.10, 0.11, 0.13]);      // gear cell frame
-  _rigBox(out, 0, 0.012, -0.0296, 0.035, 0.043, 0.003, [0.010, 0.016, 0.026]);   // gear cell face
+  _rigBox(out, 0.048, 0.018, -0.0295, 0.012, 0.074, 0.003, [0.03, 0.035, 0.04]); // energy slot (vertical, right)
+  // Aligned display cells on one line: speed (navy) | gear (DARK RED box)
+  _rigBox(out, -0.028, 0.022, -0.0292, 0.062, 0.044, 0.003, [0.10, 0.11, 0.13]); // speed cell frame
+  _rigBox(out, -0.028, 0.022, -0.0296, 0.057, 0.039, 0.003, [0.010, 0.016, 0.026]); // speed cell face
+  _rigBox(out, 0.024, 0.022, -0.0292, 0.034, 0.044, 0.003, [0.38, 0.07, 0.06]);  // gear cell frame (red)
+  _rigBox(out, 0.024, 0.022, -0.0296, 0.029, 0.039, 0.003, [0.16, 0.025, 0.03]); // gear cell face (dark red)
   // Button clusters flanking the screen (bright HDR; glow slightly at night).
   const BTN = [[1.5, 0.15, 0.10], [0.15, 0.5, 1.5], [0.15, 1.3, 0.35], [1.35, 1.1, 0.12]];
   let bi = 0;
@@ -746,12 +746,12 @@ function getGearDigit(g) {
   ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const GRN = [2.2, 0.85, 0.12];   // orange, like the real gear readout
-  const h = 0.030, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.012, cz = -0.0335;
+  const h = 0.026, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.022, cz = -0.0335;
   const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
               [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
   const seg = SEG7[g % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
-    _rigBox(out, L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
+    _rigBox(out, 0.024 + L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
   _gearMeshes[g] = GLX.createMesh(out);
   return _gearMeshes[g];
 }
@@ -766,7 +766,7 @@ function getSpeedDigit(d) {
   ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const CYN = [0.3, 1.6, 2.0];
-  const h = 0.014, w = h * 0.55, t = h * 0.18, q = h / 4;
+  const h = 0.020, w = h * 0.55, t = h * 0.18, q = h / 4;
   const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
               [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
   const seg = SEG7[d % 10];
@@ -781,7 +781,7 @@ let _ersBarMesh = null;
 function getErsBar() {
   if (_ersBarMesh) return _ersBarMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  _rigBox(out, 0.052, 0, 0, 0.104, 0.006, 0.004, [0.25, 1.9, 0.5]);  // anchored at x=0
+  _rigBox(out, 0, 0.034, 0, 0.008, 0.068, 0.004, [0.25, 1.9, 0.5]);  // anchored at y=0
   _ersBarMesh = GLX.createMesh(out);
   return _ersBarMesh;
 }
@@ -846,16 +846,16 @@ function drawCockpitRig(c, base, dt, paint) {
   const kmh = Math.min(999, Math.round((c.speed || 0) * 3.6));
   const ds = String(kmh);
   for (let i = 0; i < ds.length; i++) {
-    _digT[12] = -0.030 + (i - (ds.length - 1) / 2) * 0.0115; _digT[13] = 0.040; _digT[14] = -0.0335;
+    _digT[12] = -0.028 + (i - (ds.length - 1) / 2) * 0.016; _digT[13] = 0.022; _digT[14] = -0.0335;
     M4.mulTo(_digM, _rigB, _digT);
     GLX.draw(getSpeedDigit(+ds[i]), _digM, fx);
   }
   // ERS charge fill in the slot under the LCD; pulses while deploying.
   const en = clamp(c.energy || 0, 0, 1);
   if (en > 0.01) {
-    _digT[12] = -0.052; _digT[13] = -0.004; _digT[14] = -0.0315;
+    _digT[12] = 0.048; _digT[13] = -0.017; _digT[14] = -0.0315;
     M4.mulTo(_digM, _rigB, _digT);
-    _digM[0] *= en; _digM[1] *= en; _digM[2] *= en;
+    _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
     GLX.draw(getErsBar(), _digM, c.deploying
       ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.75 + 0.25 * Math.sin(raceT * 22) }
       : fx);
