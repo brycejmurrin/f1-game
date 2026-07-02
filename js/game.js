@@ -5432,18 +5432,37 @@ function buildLtPreview() {
   note.textContent = "Switch conditions to tune each one — your edits save to that track+time+weather. The live view snaps back to the race's own conditions on DONE.";
   host.appendChild(note);
 }
+let _ltActiveGroup = null;   // currently-shown tuner category (tab)
+// Show one tuner category at a time (tab click). Toggles the .active class on the
+// matching group wrapper + its tab chip so only that group's sliders render —
+// the panel was an 82-slider scroll before this split it into 12 tabs.
+function setLtTab(group) {
+  _ltActiveGroup = group;
+  const rows = $("lt-rows"), tabs = $("lt-tabs");
+  if (rows) for (const g of rows.children) g.classList.toggle("active", g.dataset.group === group);
+  if (tabs) for (const t of tabs.children) {
+    const on = t.dataset.group === group;
+    t.classList.toggle("on", on);
+    t.setAttribute("aria-selected", on ? "true" : "false");
+  }
+  if (rows) rows.scrollTop = 0;
+}
 function buildLightTunePanel() {
   buildLtPreview();
-  const host = $("lt-rows");
+  const host = $("lt-rows"), tabs = $("lt-tabs");
   if (!host.dataset.built) {
     host.dataset.built = "1";
-    let group = null;
+    const groups = [];      // ordered distinct group names
+    let group = null, wrap = null;
     for (const d of TUNE_DEFS) {
       if (d.group !== group) {
-        group = d.group;
+        group = d.group; groups.push(group);
+        wrap = document.createElement("div");
+        wrap.className = "lt-group"; wrap.dataset.group = group;
         const h = document.createElement("h3");
         h.className = "adv-sec"; h.textContent = group;
-        host.appendChild(h);
+        wrap.appendChild(h);
+        host.appendChild(wrap);
       }
       const item = document.createElement("div");
       item.className = "adv-item";
@@ -5464,10 +5483,24 @@ function buildLightTunePanel() {
       lab.appendChild(span); lab.appendChild(inp);
       item.appendChild(lab);
       if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
-      host.appendChild(item);
+      wrap.appendChild(item);
     }
+    // Build one tab chip per group.
+    if (tabs) {
+      tabs.textContent = "";
+      for (const g of groups) {
+        const t = document.createElement("button");
+        t.type = "button"; t.className = "lt-tab"; t.dataset.group = g;
+        t.textContent = g; t.setAttribute("role", "tab");
+        t.onclick = () => setLtTab(g);
+        tabs.appendChild(t);
+      }
+    }
+    _ltActiveGroup = groups[0];
   }
   document.getElementById("lighting-inner").classList.toggle("lt-show-help", $("lt-help-on").checked);
+  // Restore the last-viewed category (or default to the first).
+  setLtTab(_ltActiveGroup || (TUNE_DEFS[0] && TUNE_DEFS[0].group));
   refreshLightTunePanel();
 }
 function refreshLightTunePanel() {
