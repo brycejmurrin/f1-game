@@ -713,9 +713,13 @@ const Car3D = (function () {
       addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03, [2.6, 0.08, 0.06]);
 
       // --- Rear diffuser --- AERO visualTier scales width + front kick-up height.
+      // Tucked UP and pulled IN (vs. the old low, wide, overhanging slab) so it
+      // reads as a diffuser ramp under the crash structure instead of a big flat
+      // reflective "shelf" sticking out behind the tail — the underbody now
+      // mirrors the sky/road, and a broad down-facing plane there caught it.
       const diffW  = 0.72 + aLvl * 0.145;   // lvl0 0.72 → lvl4 1.30
       const diffH1 = 0.40 + aLvl * 0.325;   // lvl0 0.40 → lvl4 1.70
-      addLoft(out, -2.7, 0, 0.24, 1.40 * diffW, 0.36, -1.90, 0, 0.12, 1.05 * diffW, 0.14 * diffH1,
+      addLoft(out, -2.52, 0, 0.34, 1.12 * diffW, 0.30, -1.90, 0, 0.17, 0.92 * diffW, 0.14 * diffH1,
               [0.06, 0.06, 0.07]);
 
       // --- Gearbox visual tell: per-OPTION diffuser strake count + a rear crash
