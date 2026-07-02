@@ -6237,7 +6237,7 @@ window.__apex = {
       contactT: +(c.contactT || 0).toFixed(3),
       wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
       energy: +(c.energy || 0).toFixed(3), boostOn: !!c.boostOn,
-      brakeHeat: +(c.brakeHeat || 0).toFixed(2),
+      brakeHeat: +(c.brakeHeat || 0).toFixed(2), gear: c.gear || 1,
     };
   },
 

@@ -306,13 +306,17 @@ const Car3D = (function () {
       }
     }
 
-    // --- Airbox: trapezoid block above the cockpit (dark intake front) ---
-    addSpan(out, { z: -0.28, y: 0.76, w: 0.30, h: 0.20, t: 0.55 },
-                 { z: -0.75, y: 0.74, w: 0.26, h: 0.18, t: 0.55 }, c1, INTAKE);
-
-    // --- Engine cover: roof-ridge prism sloping to the tail ---
-    addSpan(out, { z: -0.55, y: 0.52, w: 0.56, h: 0.62, t: 0.0 },
-                 { z: -2.00, y: 0.42, w: 0.26, h: 0.34, t: 0.0 }, c1, c1);
+    // --- Airbox + engine cover: sit BEHIND the driver, so they're skipped in
+    // the cockpit build (ckpt) — under brake pitch they'd otherwise swing up
+    // into the top/back of the onboard frame ("the thing behind us cutting in").
+    if (!ckpt) {
+      // Airbox: trapezoid block above the cockpit (dark intake front)
+      addSpan(out, { z: -0.28, y: 0.76, w: 0.30, h: 0.20, t: 0.55 },
+                   { z: -0.75, y: 0.74, w: 0.26, h: 0.18, t: 0.55 }, c1, INTAKE);
+      // Engine cover: roof-ridge prism sloping to the tail
+      addSpan(out, { z: -0.55, y: 0.52, w: 0.56, h: 0.62, t: 0.0 },
+                   { z: -2.00, y: 0.42, w: 0.26, h: 0.34, t: 0.0 }, c1, c1);
+    }
 
     // --- Sidepods: rectangular slabs — angled inlet undercut, coke-bottle taper ---
     for (const s of [-1, 1]) {
@@ -377,11 +381,12 @@ const Car3D = (function () {
     addBox(out, 0, 0.40, -2.12, 0.07, 0.07, 0.16, [0.16, 0.16, 0.17]);
 
     // --- Shark fin + engine-cover accent (flat, team accent colour) ---
-    addBox(out, 0, 0.80, -1.20, 0.03, 0.34, 0.85, c2);
+    // Behind the driver — skipped in the cockpit build.
+    if (!ckpt) addBox(out, 0, 0.80, -1.20, 0.03, 0.34, 0.85, c2);
 
     // --- Number board: white panel on the shark fin + the driver number in
     // blocky 7-seg digits, mirrored per side so it reads correctly from both ---
-    const num = opts && opts.num != null ? opts.num : null;
+    const num = (opts && opts.num != null && !ckpt) ? opts.num : null;
     if (num != null) {
       addBox(out, 0, 0.82, -1.18, 0.036, 0.22, 0.46, PANEL);
       const ds = String(Math.abs(num | 0) % 100).split("").map(Number);
