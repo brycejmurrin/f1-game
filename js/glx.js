@@ -2096,10 +2096,16 @@ void main() {
     return true;
   }
 
+  // Adaptive render scale: the whole 3D pipeline (scene + every post FBO) sizes
+  // off width/height, and the canvas CSS size is fixed — so scaling the backing
+  // store down and letting the browser upscale is a single knob that trades
+  // sharpness for fill-rate. The HUD is a DOM overlay, so only the 3D view
+  // softens. setRenderScale() drives it from the frame-time governor in game.js.
+  let renderScale = 1;
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale));
     const changed = canvas.width !== w || canvas.height !== h;
     if (changed) {
       canvas.width = w;
@@ -2112,6 +2118,14 @@ void main() {
     aspect = w / h;
     if (changed || first) createTargets();   // (re)allocate HDR + bloom targets
   }
+  function setRenderScale(s) {
+    s = Math.max(0.5, Math.min(1, s));
+    if (Math.abs(s - renderScale) < 0.02) return false;
+    renderScale = s;
+    resize();
+    return true;
+  }
+  function getRenderScale() { return renderScale; }
 
   function toF32(a) {
     return a instanceof Float32Array ? a : new Float32Array(a);
@@ -2935,5 +2949,6 @@ void main() {
     hdrMode: () => colorType === gl.HALF_FLOAT,
     msaa: () => msaaSamples,
     pcss: () => pcssEnabled,
+    setRenderScale, getRenderScale,
   };
 })();

@@ -4010,11 +4010,34 @@ function drawMinimap() {
 // ---------- main loop ----------
 let physAcc = 0;                 // leftover sim time carried between frames
 let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
+// ── Adaptive-resolution governor ─────────────────────────────────────────────
+// Holds framerate by scaling the 3D render resolution (GLX.setRenderScale) when
+// frames run slow, restoring sharpness when there's headroom. Conservative:
+// only downscales when clearly missing 60 fps (>19 ms EMA) so a healthy
+// vsync-capped display never degrades; upscales slowly to avoid oscillation.
+let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true;
+function perfGovernor(dtMs) {
+  if (!_autoRes) return;
+  // Ignore huge spikes (tab resume, GC): they'd yank the scale.
+  if (dtMs < 100) _frameEMA += (dtMs - _frameEMA) * 0.1;
+  if (_govCool > 0) { _govCool--; return; }
+  if (++_govT < 45) return;   // evaluate ~every 45 frames
+  _govT = 0;
+  const cur = GLX.getRenderScale ? GLX.getRenderScale() : 1;
+  if (_frameEMA > 19 && cur > 0.5) {          // <~53 fps: drop resolution
+    if (GLX.setRenderScale(cur - 0.1)) _govCool = 30;
+  } else if (_frameEMA < 14 && cur < 1) {     // >~71 fps headroom: restore
+    if (GLX.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30;
+  }
+}
 const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
   requestAnimationFrame(tick);
   let dt = Math.min((now - lastFrame) / 1000, 1 / 4);   // clamp big gaps (tab resume)
+  const _dtMs = now - lastFrame;
   lastFrame = now;
+  // Adaptive resolution: only govern while actively rendering a race.
+  if (!paused && (state === "race" || state === "count")) perfGovernor(_dtMs);
   Input.poll();   // refresh gamepad state once per frame (before the paused gate
                   // so the Start/Menu button can also un-pause)
   if (paused) {
@@ -6316,6 +6339,16 @@ window.__apex = {
     if (on === undefined) return headlessMode;
     headlessMode = !!on;
     return headlessMode;
+  },
+
+  // renderScale(v?) — adaptive-resolution control. No arg: report current state
+  // { scale, fps, auto }. Number: pin the 3D render scale (0.5–1) and disable
+  // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
+  // win (softer 3D view; HUD stays crisp).
+  renderScale(v) {
+    if (v === undefined) return { scale: GLX.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes };
+    if (v === true) { _autoRes = true; return this.renderScale(); }
+    _autoRes = false; GLX.setRenderScale(+v); return this.renderScale();
   },
 
   // obs() — full debug observation of the current game state. Superset of
