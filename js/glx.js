@@ -76,6 +76,7 @@ uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
 uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)
 uniform float uGlowAmp;     // emissive HDR glow push (was literal 2.3)
 uniform float uPcssPen;     // PCSS penumbra growth rate (was literal 80.0)
+uniform float uKeyMul;      // direct sun/key-light intensity multiplier (default 1)
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
@@ -335,7 +336,11 @@ void main() {
   // Combine the hard shadow map with soft drifting cloud shadows: the sun is
   // dimmed where clouds pass overhead, casting moving dappled light on the track.
   float shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * 0.80);
-  float litNoL = NoL * shadow;
+  // uKeyMul (KEY LIGHT tuner slider, default 1.0) scales all DIRECT sun lighting
+  // — diffuse, GGX spec, clearcoat glint, car-paint glint — without touching
+  // ambient fill, fog in-scatter or the env-sky reflection (those keep the
+  // scene coherent when the key is dialled down).
+  float litNoL = NoL * shadow * uKeyMul;
 
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
   vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - uMetalness));
@@ -1299,6 +1304,13 @@ uniform float uSunShaft;
 uniform vec3 uGradeShadow;   // multiplicative tint pulled into shadows  (~1.0 = neutral)
 uniform vec3 uGradeHi;       // multiplicative tint pulled into highlights (~1.0 = neutral)
 uniform float uGradeStr;     // 0 = neutral grade (backward-compatible)
+// Live colour-grade tunables (IMAGE & COLOUR tuner group); defaults reproduce
+// the shipped look so a missing tune object is a no-op.
+uniform float uContrast;     // midtone-contrast gamma (default 1.12)
+uniform float uVibrance;     // selective saturation of dull pixels (default 0.20)
+uniform float uSaturation;   // global saturation (1 = unchanged)
+uniform float uTint;         // warm(+)/cool(-) white-balance shift, -1..1 (default 0)
+uniform float uVignette;     // corner-darkening floor: 1 = none, lower = stronger (default 0.80)
 uniform sampler2D uDepth;    // scene depth (for wet-road screen-space reflection)
 uniform mat4 uInvProj;       // clip → view (reconstruct view position from depth)
 uniform mat4 uProj;          // view → clip  (project the marched ray to screen)
@@ -1334,7 +1346,7 @@ vec3 colourGrade(vec3 c) {
   // Midtone-darkening contrast for a more realistic, less-bright look: a gentle
   // gamma deepens the mids/shadows while blacks stay black and the ACES highlight
   // rolloff is preserved — turns the flat "video-game bright" image filmic.
-  c = pow(c, vec3(1.12));
+  c = pow(c, vec3(uContrast));
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
@@ -1342,7 +1354,12 @@ vec3 colourGrade(vec3 c) {
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
   float sat = mx - mn;
-  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * 0.20);
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * uVibrance);
+  // Global saturation (uniform, after vibrance): a plain luma<->colour lerp.
+  c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, uSaturation);
+  // White-balance tint: warm tilts red up / blue down, cool the reverse. Subtle
+  // per-unit so the full -1..1 range stays natural rather than a colour cast.
+  c *= vec3(1.0 + 0.07 * uTint, 1.0, 1.0 - 0.07 * uTint);
   // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
   // other (warm amber), blended by luma. A staple of the teal-orange film look —
   // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
@@ -1570,7 +1587,7 @@ void main() {
 
   vec2 q = vUV - 0.5;
   float vig = smoothstep(0.95, 0.35, length(q));
-  c *= mix(0.80, 1.0, vig);
+  c *= mix(uVignette, 1.0, vig);
 
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to
   // break the 8-bit banding that otherwise stamps visible steps onto smooth sky
@@ -1796,7 +1813,7 @@ void main() {}`;
       msaaSamples = Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -2031,7 +2048,7 @@ void main() {
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
-      "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen",
+      "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -2196,6 +2213,7 @@ void main() {
     gl.uniform1f(litU.uLampFogClip, T && T.fogClip     != null ? T.fogClip     : 0.7);
     gl.uniform1f(litU.uGlowAmp,     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
     gl.uniform1f(litU.uPcssPen,     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
+    gl.uniform1f(litU.uKeyMul,      T && T.keyMul      != null ? T.keyMul      : 1.0);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
     gl.uniform1f(litU.uFogDensity, frame.fogDensity);
     if (shadowEnabled) {
@@ -2801,6 +2819,14 @@ void main() {
     gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);
     gl.uniform3fv(compU.uGradeHi, grade && grade.hi ? grade.hi : [1, 1, 1]);
     gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
+    // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
+    // shipped grade so a missing tune object changes nothing.
+    const CT = opts && opts.tune || null;
+    gl.uniform1f(compU.uContrast,   CT && CT.contrast   != null ? CT.contrast   : 1.12);
+    gl.uniform1f(compU.uVibrance,   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
+    gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
+    gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
+    gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
     // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
     const reflStr = (opts && opts.reflect) || 0;
     // SSR inputs bind every frame now — car paint reflects the world even in

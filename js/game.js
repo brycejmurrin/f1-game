@@ -2389,9 +2389,17 @@ const TUNE_DEFS = [
   { id: "lampVolHaze",  label: "BEAMS (HAZE)",    group: "VOLUMETRICS", min: 0, max: 1.5, step: 0.05, def: 0.65, help: "How much haze/rain swells the lamp beams." },
   { id: "lampVolCap",   label: "BEAM CEILING",    group: "VOLUMETRICS", min: 0, max: 1,   step: 0.05, def: 0.70, help: "Hard cap on volumetric beam strength." },
   { id: "grMul",        label: "SUN GOD-RAYS",    group: "VOLUMETRICS", min: 0, max: 2.5, step: 0.05, def: 1.0,  help: "Volumetric sun-shaft strength (dawn/dusk drama)." },
-  // Ambient
-  { id: "bounceK",      label: "LAMP BOUNCE",     group: "AMBIENT", min: 0,   max: 0.15, step: 0.005, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam." },
-  { id: "ambientMul",   label: "AMBIENT LEVEL",   group: "AMBIENT", min: 0.3, max: 3,    step: 0.05,  def: 1.0,  help: "Hemisphere ambient multiplier — the unlit-scene readability floor." },
+  // Base light
+  { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "BASE LIGHT", min: 0,   max: 2.5,  step: 0.05,  def: 1.0,  help: "Direct sun/moon intensity — diffuse + speculars + shadows. Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed." },
+  { id: "ambientMul",   label: "AMBIENT FILL",    group: "BASE LIGHT", min: 0.3, max: 3,    step: 0.05,  def: 1.0,  help: "Hemisphere ambient multiplier — the shadow/unlit fill and night readability floor." },
+  { id: "bounceK",      label: "LAMP BOUNCE",     group: "BASE LIGHT", min: 0,   max: 0.15, step: 0.005, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam cone." },
+  // Image & colour
+  { id: "gradeStr",     label: "GRADE STRENGTH",  group: "IMAGE & COLOUR", min: 0, max: 2.5, step: 0.05, def: 1.0, help: "Cinematic split-tone amount (teal shadows / warm highlights). 0 = neutral, higher = stronger film look." },
+  { id: "vibrance",     label: "VIBRANCE",        group: "IMAGE & COLOUR", min: 0, max: 0.8, step: 0.02, def: 0.20, u: "uVibrance", help: "Selective saturation — lifts dull/washed pixels (hazy sky, grass, tarmac) without over-cooking neon or kerbs." },
+  { id: "saturation",   label: "SATURATION",      group: "IMAGE & COLOUR", min: 0, max: 2,   step: 0.05, def: 1.0, u: "uSaturation", help: "Overall colour intensity. 0 = greyscale, 1 = as-shipped, >1 = punchier." },
+  { id: "contrast",     label: "CONTRAST",        group: "IMAGE & COLOUR", min: 0.7, max: 1.6, step: 0.02, def: 1.12, u: "uContrast", help: "Midtone-darkening gamma. Higher = deeper, filmic shadows; lower = flatter and brighter." },
+  { id: "tint",         label: "WARM / COOL",     group: "IMAGE & COLOUR", min: -1, max: 1, step: 0.05, def: 0.0, u: "uTint", fmt: "signed", help: "White-balance shift. + warms (amber, sunny), − cools (blue, overcast/night)." },
+  { id: "vignette",     label: "VIGNETTE",        group: "IMAGE & COLOUR", min: 0.4, max: 1, step: 0.02, def: 0.80, u: "uVignette", help: "Corner darkening. 1 = none, lower = stronger frame vignette." },
   // Reflections
   { id: "ssrWetMul",    label: "WET MIRROR",      group: "REFLECTIONS", min: 0, max: 1.5, step: 0.05, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
   { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "REFLECTIONS", min: 0, max: 0.5, step: 0.01, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
@@ -3487,9 +3495,10 @@ function render(dt) {
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.
   const _ao = _grSunY > -0.04 ? 0.95 : 0;
+  if (_grade) _grade.str = (_grade.str || 0) * LT.gradeStr;   // GRADE STRENGTH tuner slider
   GLX.present({ exposure: frame.exposure * LT.exposureMul, bloom: _bloom * LT.bloomMul,
     threshold: clamp(_thresh + LT.threshOff, 0.4, 1.2), grade: _grade, ssao: _ao,
-    godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist });
+    godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist, tune: LT });
   if (raceWeather === "rain" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
@@ -4276,9 +4285,53 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 function fmtTune(d, v) {
   if (d.fmt === "auto" && v < 0) return "AUTO";
   const dec = (String(d.step).split(".")[1] || "").length;
-  return v.toFixed(Math.min(dec, 3));
+  const s = v.toFixed(Math.min(dec, 3));
+  return d.fmt === "signed" && v > 0 ? "+" + s : s;
+}
+// PREVIEW conditions: the tuner tunes GLOBAL values that only take visible
+// effect under the right conditions (night sliders do nothing on a day track,
+// wet reflections need a wet road). So a track with a FIXED time/weather could
+// hide half the controls. These buttons flip the live session's time-of-day and
+// weather so every value can be dialled in on any circuit; the original race
+// settings are captured on open and restored on DONE, so previewing never
+// changes the race you go back to.
+let _ltPrevTOD = null, _ltPrevWx = null;
+const LT_TODS = ["dawn", "day", "dusk", "night", "default"];
+const LT_WX = ["dry", "wet", "rain", "fog", "overcast"];
+function refreshLtPreviewActive() {
+  const tod = __apex.setTimeOfDay(), wx = __apex.weather();
+  for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("on", t === tod); }
+  for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("on", w === wx); }
+}
+function buildLtPreview() {
+  const host = $("lt-preview");
+  if (host.dataset.built) return;
+  host.dataset.built = "1";
+  const mkGroup = (title, ids, labels, onPick, prefix) => {
+    const sec = document.createElement("h3");
+    sec.className = "adv-sec"; sec.textContent = title;
+    host.appendChild(sec);
+    const row = document.createElement("div");
+    row.className = "opt-row lt-preview-row";
+    ids.forEach((id, i) => {
+      const btn = document.createElement("button");
+      btn.className = "opt-btn"; btn.id = prefix + id; btn.textContent = labels[i];
+      btn.onclick = () => { onPick(id); refreshLtPreviewActive(); };
+      row.appendChild(btn);
+    });
+    host.appendChild(row);
+  };
+  mkGroup("PREVIEW TIME", LT_TODS, ["DAWN", "DAY", "DUSK", "NIGHT", "TRACK"],
+    (t) => __apex.setTimeOfDay(t), "lt-tod-");
+  mkGroup("PREVIEW WEATHER", LT_WX, ["DRY", "WET", "RAIN", "FOG", "CLOUD"],
+    (w) => __apex.weather(w), "lt-wx-");
+  const note = document.createElement("p");
+  note.className = "adv-help"; note.style.display = "block";
+  note.textContent = "Preview only — restored to the race's own time & weather when you press DONE.";
+  host.appendChild(note);
 }
 function buildLightTunePanel() {
+  buildLtPreview();
   const host = $("lt-rows");
   if (!host.dataset.built) {
     host.dataset.built = "1";
@@ -4312,6 +4365,7 @@ function buildLightTunePanel() {
       host.appendChild(item);
     }
   }
+  document.getElementById("lighting-inner").classList.toggle("lt-show-help", $("lt-help-on").checked);
   refreshLightTunePanel();
 }
 function refreshLightTunePanel() {
@@ -4323,13 +4377,22 @@ function refreshLightTunePanel() {
 }
 $("pm-lighting").onclick = () => {
   buildLightTunePanel();
+  _ltPrevTOD = __apex.setTimeOfDay();   // capture the race's real conditions
+  _ltPrevWx = __apex.weather();
+  refreshLtPreviewActive();
   $("lt-json").hidden = true;
   $("lighting").hidden = false;
   els.pausemenu.hidden = true;      // unobstructed live preview
 };
 $("lt-close").onclick = () => {
+  // Restore the race's real time & weather (preview was transient).
+  if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
+  if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);
   $("lighting").hidden = true;
   if (paused) els.pausemenu.hidden = false;
+};
+$("lt-help-on").onchange = (e) => {
+  document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);
 };
 $("lt-reset").onclick = () => {
   for (const d of TUNE_DEFS) setLightTune(d.id, d.def);

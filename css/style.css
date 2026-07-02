@@ -112,9 +112,17 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   padding: 14px 18px;
 }
 #lighting-inner .adv-item { margin: 7px 0; }
-#lighting-inner .adv-help { display: none; }        /* keep rows dense on phones… */
-#lighting-inner .adv-item:hover .adv-help,
-#lighting-inner .adv-item:focus-within .adv-help { display: block; }  /* …reveal on touch/hover */
+#lighting-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
+#lighting-inner.lt-show-help .adv-help { display: block; }   /* …then every row explains itself */
+.lt-help-toggle {
+  display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
+  font-size: 11px; opacity: 0.8; cursor: pointer;
+}
+.lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
+/* preview time/weather chips */
+.lt-preview-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 4px; }
+.lt-preview-row .opt-btn { flex: 1 1 auto; min-width: 48px; margin: 0; padding: 6px 4px; font-size: 10.5px; }
+.lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
 #lighting-inner .sel-actions { display: flex; gap: 8px; }
 #lighting-inner .sel-actions button { margin: 0; }
 #lt-json {
