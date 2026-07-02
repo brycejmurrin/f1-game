@@ -2364,7 +2364,7 @@ function floodColor(theme, id) {
 // pool/valley contrast is what makes the light read as CAST by the fixture
 // instead of an ambient wash.
 const LAMP_KINDS = {
-  flood_bank: { col: [1.02, 1.06, 1.18], eMul: 1.35, cIn: 0.80, cOut: 0.50, blB: 0.08, blV: 0.06, volW: 1.0,  glareW: 1.2, tintMix: 0.12 }, // 5700K broadcast bank
+  flood_bank: { col: [1.02, 1.06, 1.18], eMul: 1.00, cIn: 0.80, cOut: 0.50, blB: 0.08, blV: 0.06, volW: 1.0,  glareW: 1.2, tintMix: 0.12 }, // 5700K broadcast bank (eMul 1.35 stacked too hot on the pit straight)
   halide:     { col: [0.96, 1.03, 1.05], eMul: 1.05, cIn: 0.80, cOut: 0.46, blB: 0.06, blV: 0.06, volW: 0.8,  glareW: 1.0, tintMix: 0.30 }, // 4300K metal halide
   sodium:     { col: [1.42, 0.72, 0.24], eMul: 0.85, cIn: 0.82, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.9, tintMix: 0.25 }, // 2100K HPS deep amber
   halogen:    { col: [1.22, 0.98, 0.55], eMul: 0.95, cIn: 0.80, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.55, glareW: 1.0, tintMix: 0.30 }, // 3000K warm white
@@ -2505,7 +2505,11 @@ function buildTrackLights(track) {
   // broadcast lighting does.
   {
     const hwk = track.hw[0] || 7;
-    const ge = intensity * 1.15 * (8 * 8) * 0.55;
+    // Halved (1.15 -> 0.55 weight): three of these stack right over the grid, on
+    // top of the flood_bank pit-straight lamps — the start line was the hottest
+    // spot on every night circuit, blowing the road out exactly where every race
+    // (and the player's first impression of the night lighting) begins.
+    const ge = intensity * 0.55 * (8 * 8) * 0.55;
     for (const lat of [-hwk * 0.55, 0, hwk * 0.55]) {
       lights.push(
         track.px[0] + track.rx[0] * lat, track.py[0] + 8, track.pz[0] + track.rz[0] * lat,
@@ -3063,7 +3067,11 @@ function render(dt) {
   // light gets a visible halo (colored per lamp) without inflating bloom.
   // (Skipped for the studio rig — its lamps have no fixtures, and floating
   // glow-cone billboards ringing the car read as artifacts.)
-  if (frame.lights && !_studioRig) GLX.drawGlow(frame.lights, 0.20);
+  // Corona strength trimmed 0.20 -> 0.12: the lens-glare halos are drawn from
+  // frame.lights COLOURS (already time-of-day scaled) but the billboard str was
+  // an independent knob — with the point-light energy dimmed, the untouched
+  // coronas became the brightest thing left at every mast.
+  if (frame.lights && !_studioRig) GLX.drawGlow(frame.lights, 0.12);
   if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
     wet   ? (night ? { emissive: Math.min(0.80, _floodEmit), roughness: 0.55, specular: 0.38 }
                    : { roughness: 0.55, specular: 0.38 })
@@ -3351,7 +3359,12 @@ function render(dt) {
   // Wet: full mirror. Dry night: lamp/neon sheen. Dry DAY: a faint floor so
   // clean tarmac still mirrors towers and sky (real asphalt is never fully
   // matte at grazing angles).
-  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : (frame.lights ? 0.16 : 0.07);
+  // Dry-night floor lowered 0.16 -> 0.08: at 0.16 the mirror substitution ran at
+  // ~80% of full wet strength, so a DRY night road flanked by lit towers (Baku /
+  // Vegas start straight) rendered as a bright silver mirror of the buildings —
+  // the single biggest "night is too bright" driver on city circuits. 0.08 keeps
+  // a subtle lamp/neon sheen (fade is quadratic below 0.20) without the mirror.
+  const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness : (frame.lights ? 0.08 : 0.07);
   // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.

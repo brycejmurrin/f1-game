@@ -2064,7 +2064,11 @@ const Tracks = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 2)) return;
       const pole = [0.13, 0.13, 0.15];
-      const lit = NIGHT ? [head[0] * 1.9, head[1] * 1.9, head[2] * 1.9]
+      // Night head albedo trimmed 1.9x -> 1.4x: the emissive path pushes bright
+      // albedo a further ~2.3x past 1.0 for bloom, so 1.9 stacked to ~5x HDR and
+      // the mast heads stayed glaring even after the point-light energy was
+      // dimmed (the head geometry glow is independent of the light scale).
+      const lit = NIGHT ? [head[0] * 1.4, head[1] * 1.4, head[2] * 1.4]
                         : [head[0] * 0.72, head[1] * 0.72, head[2] * 0.70];
       addCyl(out, a.c, 0.18, h, pole, 6, b);                                                 // column
       if (lstyle === "globe") {                                                              // heritage twin-globe
