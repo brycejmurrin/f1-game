@@ -725,7 +725,7 @@ function getGearDigit(g) {
   ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const GRN = [2.2, 0.85, 0.12];   // orange, like the real gear readout
-  const h = 0.030, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.020, cz = -0.033;
+  const h = 0.023, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.018, cz = -0.033;
   const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
               [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
   const seg = SEG7[g % 10];
@@ -828,19 +828,6 @@ function drawCockpitRig(c, base, dt, paint) {
     _digT[12] = -0.032 + (i - (ds.length - 1) / 2) * 0.015; _digT[13] = 0.042; _digT[14] = -0.033;
     M4.mulTo(_digM, _rigB, _digT);
     GLX.draw(getSpeedDigit(+ds[i]), _digM, fx);
-  }
-  // Throttle / brake bars on the right half of the LCD; height = live input.
-  // autoThrottle() covers the touch/buttons auto-gas modes (same expression the
-  // physics uses), so the bar tracks what the engine actually gets.
-  const th = _testInput ? (_testInput.throttle ? 1 : 0) : ((autoThrottle() || Input.throttle()) ? 1 : 0);
-  const br = _testInput ? (_testInput.brake ? 1 : 0) : (Input.braking() ? 1 : 0);
-  c._thrVis = damp(c._thrVis == null ? 0 : c._thrVis, th, 12, dt);
-  c._brkVis = damp(c._brkVis == null ? 0 : c._brkVis, br, 12, dt);
-  for (const p of [[getPedalBar(false), c._thrVis, 0.046], [getPedalBar(true), c._brkVis, 0.033]]) {
-    _digT[12] = p[2]; _digT[13] = 0.002; _digT[14] = -0.033;
-    M4.mulTo(_digM, _rigB, _digT);
-    _digM[4] *= p[1]; _digM[5] *= p[1]; _digM[6] *= p[1];
-    if (p[1] > 0.03) GLX.draw(p[0], _digM, fx);
   }
   // ERS charge fill in the slot under the LCD; pulses while deploying.
   const en = clamp(c.energy || 0, 0, 1);
