@@ -3581,6 +3581,9 @@ function render(dt) {
   // Cockpit view still draws a first-person RIG (wheel/halo/mirrors) + the car's
   // shadow — only the body mesh is skipped. Bumper hides everything as before.
   const cockpitRigOnly = hidePlayerCar && CAM_MODES[camMode].id === "cockpit";
+  // Camera forward (horizontal) for the behind-camera AI cull below.
+  let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
+  { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
   for (const c of cars) {
     if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
@@ -3607,6 +3610,14 @@ function render(dt) {
     tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
     tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
     tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
+    // Behind-camera cull: AI cars strictly behind the view direction are never
+    // visible in ANY camera mode (no mirrors), so skip all their draws (mesh +
+    // shadow + brake rings + rain light). ~half the field sits behind you
+    // mid-race. Uses the real camera forward, so reverse/side cams are correct.
+    if (!c.isPlayer) {
+      const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
+      if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
+    }
     // yaw the forward/right around up by yawVis
     const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
     for (let i = 0; i < 3; i++) {
