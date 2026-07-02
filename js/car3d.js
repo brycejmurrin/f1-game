@@ -151,6 +151,53 @@ const Car3D = (function () {
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
       addQuad(out, A1, A0, L0, L1, RIM); addTri(out, hub0, L1, L0, HUB);
     }
+    // Pirelli-style compound band: a bright ring on both sidewalls just inside
+    // the tread — the classic modern-F1 tyre read (and a colour accent on an
+    // otherwise all-dark corner of the car).
+    const BAND = [0.85, 0.10, 0.08];
+    for (const bs of [[x0, -1], [x1, 1]]) {
+      const xb = bs[0] + bs[1] * 0.004;
+      for (let i = 0; i < SEG; i++) {
+        const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+        const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+        const A = P(r * 0.96, a0), B = P(r * 0.96, a1), C = P(r * 0.87, a1), D = P(r * 0.87, a0);
+        addQuad(out, A, B, C, D, BAND); addQuad(out, A, D, C, B, BAND); // both windings
+      }
+    }
+    // Rim spokes: five pale blades proud of the hub fans on each face. They make
+    // wheel ROTATION actually visible (the tread/rim are rotationally uniform)
+    // and read as a machined wheel instead of a flat disc.
+    const SPOKE = [0.55, 0.55, 0.62];
+    for (const ss of [[x0, -1], [x1, 1]]) {
+      const xs = ss[0] + ss[1] * 0.020;
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2 + 0.3;
+        const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
+        const hw = 0.013, ri = r * 0.10, ro = r * 0.40;
+        const P = (rad, s) => [xs, cy + uy * rad + py * hw * s, cz + uz * rad + pz * hw * s];
+        const A = P(ri, 1), B = P(ro, 1), C = P(ro, -1), D = P(ri, -1);
+        addQuad(out, A, B, C, D, SPOKE); addQuad(out, A, D, C, B, SPOKE);
+      }
+    }
+  }
+
+  // 7-segment digit built from thin boxes, proud of a vertical x = const surface.
+  // m = +1 renders for a viewer on the car's LEFT side (screen-right = +z there),
+  // m = -1 for the RIGHT side — so the number reads correctly from both sides.
+  const SEG7 = [
+    [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
+    [1,0,1,1,0,1,1],[1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],[1,1,1,1,0,1,1],
+  ];
+  function addDigit(out, xp, cy, cz, h, m, d, col) {
+    const w = h * 0.55, t = h * 0.14, q = h / 4, z2 = (w / 2) * m;
+    const L = [                       // [dy, dz, sy, sz] for segments A..G
+      [ h/2,  0,  t,   w ], [ q,  z2, h/2, t ], [ -q,  z2, h/2, t ],
+      [-h/2,  0,  t,   w ], [-q, -z2, h/2, t ], [  q, -z2, h/2, t ],
+      [ 0,    0,  t,   w ],
+    ];
+    const s = SEG7[d] || SEG7[8];
+    for (let i = 0; i < 7; i++) if (s[i])
+      addBox(out, xp, cy + L[i][0], cz + L[i][1], 0.004, L[i][2], L[i][3], col);
   }
 
   // A single wheel centred on the origin, axle along X — so the render layer can
@@ -246,6 +293,29 @@ const Car3D = (function () {
 
     // --- Shark fin + engine-cover accent (flat, team accent colour) ---
     addBox(out, 0, 0.80, -1.20, 0.03, 0.34, 0.85, c2);
+
+    // --- Number board: white panel on the shark fin + the driver number in
+    // blocky 7-seg digits, mirrored per side so it reads correctly from both ---
+    const num = opts && opts.num != null ? opts.num : null;
+    if (num != null) {
+      addBox(out, 0, 0.82, -1.18, 0.036, 0.22, 0.46, PANEL);
+      const ds = String(Math.abs(num | 0) % 100).split("").map(Number);
+      const pitch = 0.115, dh = 0.15;
+      // m=+1 → the +x (right) face, where a roadside viewer's screen-right is +z;
+      // m=-1 → the -x (left) face (screen-right = -z). Digit layout uses m for
+      // both the reading order and each digit's left/right segments.
+      for (const m of [1, -1]) {
+        const xp = m * 0.022;
+        ds.forEach((d, i) =>
+          addDigit(out, xp, 0.82, -1.18 + m * ((i - (ds.length - 1) / 2) * pitch), dh, m, d, DARK));
+      }
+    }
+
+    // --- Sponsor boards: white panels on the sidepod flanks + rear-wing endplates ---
+    for (const s of [-1, 1]) {
+      addBox(out, s*0.700, 0.30, 0.0, 0.020, 0.11, 0.46, PANEL);
+      addBox(out, s*0.528, 0.90, -2.42, 0.012, 0.18, 0.34, PANEL);
+    }
 
     // --- Front wing: ANGLED wedge elements in the block language — thin
     // leading edges rising to thicker trailing edges (real attack angle),

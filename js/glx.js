@@ -2169,7 +2169,13 @@ void main() {
     setDepthMask(true);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
+    // Blended FX quads (flames, glow rings) must not write the alpha channel —
+    // scene alpha is the SSR car-paint tag (see LIT_FS outColor); a low-alpha
+    // flame blended over the buffer would fake/blur that tag for the composite.
+    const noAW = opts && opts.noAlphaWrite;
+    if (noAW) gl.colorMask(true, true, true, false);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    if (noAW) gl.colorMask(true, true, true, true);
   }
 
   // ── Frustum-culled chunked meshes (used for the heavy city/props geometry) ────

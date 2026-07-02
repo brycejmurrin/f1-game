@@ -402,9 +402,9 @@ let skidFrameT = 0;           // frame countdown between stamp placements
 // grazing angles darken the livery toward a deep shade of the same hue and the
 // silhouette catches a thin clamped sky rim — deep gloss that cannot bleach.
 // clearcoat keeps the crisp sun + night-lamp glints of the lacquer shell.
-const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
+const PAINT_WET_NIGHT = { emissive: 0.12, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
 const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
-const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.6, carPaint: 1.0 };
+const PAINT_DRY_NIGHT = { emissive: 0.10, roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.9, carPaint: 1.0 };
 const PAINT_DRY_DAY   = { roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.6, carPaint: 1.0 };
 const mm = els.minimap.getContext("2d");
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
@@ -539,7 +539,7 @@ function buildCarData(team) {
     try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: team.color }); }
     catch (e) { /* any parse trouble: fall through to the procedural car */ }
   }
-  return Car3D.build(team.color, team.color2);
+  return Car3D.build(team.color, team.color2, { num: team.drivers && team.drivers[0] && team.drivers[0].num });
 }
 
 function teamMesh(team) {
@@ -571,7 +571,7 @@ let brakeRingMesh = null;
 function getBrakeRing() {
   if (brakeRingMesh) return brakeRingMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  const SEG = 18, R0 = 0.055, R1 = 0.135, HOT = [1.0, 0.38, 0.10];
+  const SEG = 18, R0 = 0.045, R1 = 0.160, HOT = [1.6, 0.50, 0.12];
   for (let i = 0; i < SEG; i++) {
     const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
     const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
@@ -596,7 +596,7 @@ function getRainLight() {
   const w = 0.055, h = 0.07;
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2);
+  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
   rainLightMesh = GLX.createMesh(out);
   return rainLightMesh;
 }
@@ -609,13 +609,40 @@ function getExhaustFlame() {
   const w = 0.035, h = 0.030;
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2);
+  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
   exhaustMesh = GLX.createMesh(out);
   return exhaustMesh;
 }
+// Boost flame: a larger blue-white plasma quad behind the tailpipe while ERS
+// boost is deploying — visible at every time of day.
+let boostMesh = null;
+function getBoostFlame() {
+  if (boostMesh) return boostMesh;
+  const R = [0.65, 1.7, 3.0], out = { pos: [], nrm: [], col: [], idx: [] };
+  const w = 0.070, h = 0.055;
+  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
+  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
+  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
+  boostMesh = GLX.createMesh(out);
+  return boostMesh;
+}
+// ERS indicator: a thin cyan strip on the rear crash structure above the rain
+// light — dim when boost is ARMED, bright strobing while DEPLOYING (the field
+// reads your energy state the way real ERS boards do).
+let ersMesh = null;
+function getErsLight() {
+  if (ersMesh) return ersMesh;
+  const R = [0.25, 2.2, 2.0], out = { pos: [], nrm: [], col: [], idx: [] };
+  const w = 0.075, h = 0.014;
+  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
+  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
+  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
+  ersMesh = GLX.createMesh(out);
+  return ersMesh;
+}
 function playerBodyMesh(team) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
-  if (!playerBodies[team.id]) playerBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2, { noWheels: true }));
+  if (!playerBodies[team.id]) playerBodies[team.id] = GLX.createMesh(Car3D.build(team.color, team.color2, { noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num }));
   return playerBodies[team.id];
 }
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
@@ -641,13 +668,13 @@ function drawPlayerWheels(c, base, dt, opt) {
     // ramping with the render-only brakeHeat (bright orange → blooms when hot).
     const heat = c.brakeHeat || 0;
     if (heat > 0.05) {
-      const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.015);
+      const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
       const W = _ringWorld;
       W.set(_wheelWorld);
       W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
       GLX.draw(getBrakeRing(), W, {
         emissive: 0.30 + 0.70 * heat, roughness: 0.9, specular: 0,
-        alpha: Math.min(1, 0.25 + heat * 0.9),
+        alpha: Math.min(1, 0.25 + heat * 0.9), noAlphaWrite: true,
       });
     }
   }
@@ -3134,7 +3161,7 @@ function render(dt) {
       if (aiHeat > 0.08) {
         for (let w = 0; w < WHEELS.length; w++) {
           const wd = WHEELS[w];
-          const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.015);
+          const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
           const W = _ringWorld;
           W.set(tmpMat);
           W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
@@ -3142,7 +3169,7 @@ function render(dt) {
           W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
           GLX.draw(getBrakeRing(), W, {
             emissive: 0.30 + 0.70 * aiHeat, roughness: 0.9, specular: 0,
-            alpha: Math.min(1, 0.25 + aiHeat * 0.9),
+            alpha: Math.min(1, 0.25 + aiHeat * 0.9), noAlphaWrite: true,
           });
         }
       }
@@ -3152,20 +3179,47 @@ function render(dt) {
     if (wet && ((raceT * 4.4) % 1) < 0.55) {
       const W = _ringWorld;
       W.set(tmpMat);
-      W[12] += W[4] * 0.50 - W[8] * 2.60;
-      W[13] += W[5] * 0.50 - W[9] * 2.60;
-      W[14] += W[6] * 0.50 - W[10] * 2.60;
-      GLX.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0 });
+      // 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight.
+      W[12] += W[4] * 0.50 - W[8] * 2.615;
+      W[13] += W[5] * 0.50 - W[9] * 2.615;
+      W[14] += W[6] * 0.50 - W[10] * 2.615;
+      GLX.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true });
+    }
+    // BOOST: blue-white plasma flame + strobing rear ERS strip while deploying
+    // (any time of day); the strip glows steady dim while boost is armed.
+    if (c.isPlayer && c.boostOn) {
+      const dep = c.energy > 0.01;
+      const fl = 0.65 + 0.35 * Math.sin(raceT * 47.0 + Math.sin(raceT * 19.0) * 4.0);
+      const W = _ringWorld;
+      if (dep && c.speed > 5) {
+        // In the clear "pocket" between the rain-light LED plane (z -2.60) and
+        // the diffuser rear face (z -2.70): nothing occludes it from any rear
+        // camera — the housing/pipe are all forward of it, the diffuser is a
+        // backdrop behind it.
+        W.set(tmpMat);
+        W[12] += W[4] * 0.40 - W[8] * 2.66;
+        W[13] += W[5] * 0.40 - W[9] * 2.66;
+        W[14] += W[6] * 0.40 - W[10] * 2.66;
+        GLX.draw(getBoostFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: 0.45 + 0.5 * fl, noAlphaWrite: true });
+      }
+      W.set(tmpMat);
+      W[12] += W[4] * 0.605 - W[8] * 2.615;
+      W[13] += W[5] * 0.605 - W[9] * 2.615;
+      W[14] += W[6] * 0.605 - W[10] * 2.615;
+      GLX.draw(getErsLight(), W, { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true,
+        alpha: dep ? (0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2)) : 0.35 });
     }
     // Exhaust heat glow: night-only flicker behind the tailpipe on throttle.
     if (night && c.isPlayer && (c.exhaustPop || 0) > 0.05) {
       const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
       const W = _ringWorld;
       W.set(tmpMat);
-      W[12] += W[4] * 0.40 - W[8] * 2.24;
-      W[13] += W[5] * 0.40 - W[9] * 2.24;
-      W[14] += W[6] * 0.40 - W[10] * 2.24;
-      GLX.draw(getExhaustFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop });
+      // 3 cm forward of the boost quad in the same clear pocket (see above) —
+      // the old z -2.24 was hidden behind the rain-light housing from chase cam.
+      W[12] += W[4] * 0.40 - W[8] * 2.63;
+      W[13] += W[5] * 0.40 - W[9] * 2.63;
+      W[14] += W[6] * 0.40 - W[10] * 2.63;
+      GLX.draw(getExhaustFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
@@ -5048,7 +5102,10 @@ window.__apex = {
     const fwdX = Math.sin(hd), fwdZ = Math.cos(hd);
     const rtX  = Math.cos(hd), rtZ  = -Math.sin(hd);
     const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
-    const dir = [Math.cos(a) * fwdX + Math.sin(a) * rtX, 0, Math.cos(a) * fwdZ + Math.sin(a) * rtZ];
+    // az 0 = camera BEHIND the car (eye along -forward), az 180 = head-on,
+    // az 90 = off the car's right side — matches the documented convention
+    // (the pre-fix implementation had az 0 ahead of the car).
+    const dir = [-Math.cos(a) * fwdX + Math.sin(a) * rtX, 0, -Math.cos(a) * fwdZ + Math.sin(a) * rtZ];
     const eye = [cx + dir[0] * Math.cos(e) * dist, cyf + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
     eye[1] = Math.max(eye[1], smp.p[1] + 1.2);   // keep the eye above ground (see orbit)
     const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
@@ -5329,7 +5386,13 @@ window.__apex = {
   clearInput() { _testInput = null; },
   step(dt, n) {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
-    for (let i = 0; i < count; i++) update(d);
+    for (let i = 0; i < count; i++) {
+      // Keep the render-interpolation anchors in sync (the render-driven loop
+      // snapshots these before each step; a manual pump must too, or a frozen
+      // render afterwards lerps toward a stale pre-teleport position).
+      for (let j = 0; j < cars.length; j++) { const c = cars[j]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      update(d);
+    }
   },
   // Deterministic tilt emulation for the autopilot harness. `step(deg, dt)` runs a
   // raw tilt angle (deg) through the real tilt pipeline (One-Euro filter + dead
@@ -5423,6 +5486,8 @@ window.__apex = {
       finished: !!c.finished, finishT: c.finishT != null ? +c.finishT.toFixed(2) : null,
       contactT: +(c.contactT || 0).toFixed(3),
       wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
+      energy: +(c.energy || 0).toFixed(3), boostOn: !!c.boostOn,
+      brakeHeat: +(c.brakeHeat || 0).toFixed(2),
     };
   },
 
@@ -5590,7 +5655,10 @@ window.__apex = {
     }
     if (input !== undefined) _testInput = input || null;
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
-    for (let i = 0; i < count; i++) update(d);
+    for (let i = 0; i < count; i++) {
+      for (let j = 0; j < cars.length; j++) { const c = cars[j]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      update(d);
+    }
     return this.obs();
   },
 
@@ -5690,6 +5758,8 @@ window.__apex = {
   },
 
   // setEnergy(v) — set player ERS charge (0..1). Clamps silently.
+  // setBoost(on) — toggle the player's ERS boost (for tests/screenshots).
+  setBoost(on) { if (player) player.boostOn = !!on; return player ? player.boostOn : false; },
   setEnergy(v) {
     if (!player) return false;
     player.energy = Math.max(0, Math.min(1, +v || 0));
@@ -5811,6 +5881,7 @@ window.__apex = {
     player.px   = smp.p[0] + smp.r[0] * player.x;
     player.pz   = smp.p[2] + smp.r[2] * player.x;
     player.head = Math.atan2(smp.t[0], smp.t[2]);
+    player.rPrevS = player.s; player.rPrevX = player.x;   // sync render anchors (see jump)
     _testInput = null;
     return this.obs();
   },
