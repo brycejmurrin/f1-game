@@ -3054,11 +3054,13 @@ function camVantage(mode, s, x, spd, now, extra) {
     // 1.9 m out — past most of the bodywork, so no car was in frame). From
     // 0.85 m the nose and front wing read at the bottom of the frame, which
     // is what makes it a hood cam rather than a floating drone.
-    // Cockpit eye at the driver's head (z +0.05). Pulling it back into the tub
-    // put it BEHIND the roll hoop / airbox so the rear structure wrapped into
-    // frame ("seeing the tail") — kept at the seat facing forward instead.
-    const eyeFwd = mode === "cockpit" ? 0.05 : 0.35;
-    const eyeUp  = mode === "cockpit" ? 0.98 : 0.95;
+    // Cockpit eye: pulled back to z -0.18 (still IN FRONT of the airbox front
+    // at z -0.28, so the roll hoop / rear structure never wraps into frame —
+    // that was the "seeing the tail" bug) and raised to 1.06 m, so the forward
+    // wheels sit further ahead and the view looks down over them enough to see
+    // where they meet the track.
+    const eyeFwd = mode === "cockpit" ? -0.18 : 0.35;
+    const eyeUp  = mode === "cockpit" ? 1.06 : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
       // Face straight FORWARD down the car's own heading (the tangent at the
@@ -3066,8 +3068,9 @@ function camVantage(mode, s, x, spd, now, extra) {
       // NOSE points, so the view doesn't swing toward the apex on corner
       // entry. A tiny fraction of the curved look-ahead is kept so it still
       // gently leads into a bend rather than staring rigidly at a fixed point.
-      const straight = [p[0] + t[0] * 30, p[1] + eyeUp + 0.9, p[2] + t[2] * 30];
-      const lead = aheadPt(30, eyeUp + 0.9, x * 0.4);
+      // Look height kept modest (+0.4) so the frame tilts down onto the wheels.
+      const straight = [p[0] + t[0] * 30, p[1] + eyeUp + 0.4, p[2] + t[2] * 30];
+      const lead = aheadPt(30, eyeUp + 0.4, x * 0.4);
       tgt = [straight[0] * 0.85 + lead[0] * 0.15,
              straight[1] * 0.85 + lead[1] * 0.15,
              straight[2] * 0.85 + lead[2] * 0.15];
