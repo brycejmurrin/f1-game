@@ -3761,7 +3761,13 @@ function render(dt) {
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (timeTrial && player && (state === "race" || state === "count")) {
     const g = Ghost.at(player.lapTime);
-    if (g && !g.done) {
+    // Skip the ghost while it overlaps the player — at the lap start it sits on
+    // your exact grid position, and in the cockpit/onboard cams its bodywork
+    // fills the camera as a black box until you pull away ("starts dark, clears
+    // after throttle"). Once there's real separation it draws normally.
+    let gDs = Infinity;
+    if (g && !g.done) { const d = Math.abs(g.s - player.s); gDs = Math.min(d, track.total - d); }
+    if (g && !g.done && gDs > 3.0) {
       Tracks.sample(track, g.s, smp2);
       tmpP[0] = smp2.p[0] + smp2.r[0] * g.x;
       tmpP[1] = smp2.p[1];
