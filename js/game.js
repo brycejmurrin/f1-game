@@ -702,10 +702,10 @@ function getCockpitWheel() {
   _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, [0.012, 0.018, 0.028]); // LCD
   _rigBox(out, 0.048, 0.018, -0.0295, 0.012, 0.074, 0.003, [0.03, 0.035, 0.04]); // energy slot (vertical, right)
   // Aligned display cells on one line: speed (navy) | gear (DARK RED box)
-  _rigBox(out, -0.028, 0.022, -0.0292, 0.062, 0.044, 0.003, [0.10, 0.11, 0.13]); // speed cell frame
-  _rigBox(out, -0.028, 0.022, -0.0296, 0.057, 0.039, 0.003, [0.010, 0.016, 0.026]); // speed cell face
-  _rigBox(out, 0.024, 0.022, -0.0292, 0.034, 0.044, 0.003, [0.38, 0.07, 0.06]);  // gear cell frame (red)
-  _rigBox(out, 0.024, 0.022, -0.0296, 0.029, 0.039, 0.003, [0.16, 0.025, 0.03]); // gear cell face (dark red)
+  _rigBox(out, -0.034, 0.022, -0.0292, 0.052, 0.040, 0.003, [0.10, 0.11, 0.13]); // speed cell frame
+  _rigBox(out, -0.034, 0.022, -0.0296, 0.047, 0.035, 0.003, [0.010, 0.016, 0.026]); // speed cell face
+  _rigBox(out, 0.014, 0.022, -0.0292, 0.034, 0.044, 0.003, [0.38, 0.07, 0.06]);  // gear cell frame (red)
+  _rigBox(out, 0.014, 0.022, -0.0296, 0.029, 0.039, 0.003, [0.16, 0.025, 0.03]); // gear cell face (dark red)
   // Button clusters flanking the screen (bright HDR; glow slightly at night).
   const BTN = [[1.5, 0.15, 0.10], [0.15, 0.5, 1.5], [0.15, 1.3, 0.35], [1.35, 1.1, 0.12]];
   let bi = 0;
@@ -751,7 +751,7 @@ function getGearDigit(g) {
               [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
   const seg = SEG7[g % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
-    _rigBox(out, 0.024 + L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
+    _rigBox(out, 0.014 + L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
   _gearMeshes[g] = GLX.createMesh(out);
   return _gearMeshes[g];
 }
@@ -766,7 +766,7 @@ function getSpeedDigit(d) {
   ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const CYN = [0.3, 1.6, 2.0];
-  const h = 0.020, w = h * 0.55, t = h * 0.18, q = h / 4;
+  const h = 0.017, w = h * 0.55, t = h * 0.18, q = h / 4;
   const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
               [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
   const seg = SEG7[d % 10];
@@ -846,7 +846,7 @@ function drawCockpitRig(c, base, dt, paint) {
   const kmh = Math.min(999, Math.round((c.speed || 0) * 3.6));
   const ds = String(kmh);
   for (let i = 0; i < ds.length; i++) {
-    _digT[12] = -0.028 + (i - (ds.length - 1) / 2) * 0.016; _digT[13] = 0.022; _digT[14] = -0.0335;
+    _digT[12] = -0.034 + (i - (ds.length - 1) / 2) * 0.0135; _digT[13] = 0.022; _digT[14] = -0.0335;
     M4.mulTo(_digM, _rigB, _digT);
     GLX.draw(getSpeedDigit(+ds[i]), _digM, fx);
   }
