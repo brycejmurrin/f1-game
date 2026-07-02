@@ -1318,15 +1318,19 @@ const Tracks = (function () {
         const H = sz[1] * (0.9 + hash(k * 3.7 + side * 1.3) * 0.35);
         const c1 = [col[0], col[1], col[2]];
         const c3 = [col[0] * 0.92, col[1] * 0.94, col[2] * 0.92];   // shaded crown
+        out._mat = MAT.FOLIAGE;
         addFrustum(out, [cx, foot, cz], R, R * 0.5, H * 0.5, c1, 7);  // rounded base
         addCone(out,    [cx, foot + H * 0.5, cz], R * 0.5, H * 0.5, c3, 7);  // dome cap
+        out._mat = 0;
         return;
       }
       const isBld = sz[1] > 26 && sz[1] > sz[2];
       // Night skyline walls get a small glow floor so they aren't black planes.
       const bcol = (isBld && NIGHT)
         ? [Math.max(col[0], 0.20), Math.max(col[1], 0.19), Math.max(col[2], 0.24)] : col;
+      out._mat = isBld ? MAT.CONCRETE : 0;
       addBox(out, [cx, cy0, cz], sz, bcol, [t, u, r]);
+      out._mat = 0;
       // If this distant box reads as a BUILDING — tall, taller than it is deep,
       // and not green terrain — give it window bands + a parapet so a city
       // skyline doesn't render as flat dark planes. Wide/low/dune silhouettes
@@ -1342,13 +1346,16 @@ const Tracks = (function () {
         const floors = Math.max(2, Math.min(4, Math.round(sz[1] / 18)));
         const fh = sz[1] / floors;
         const base = cy0 - sz[1] / 2;
+        out._mat = MAT.GLASS;
         for (let i = 1; i < floors; i++) {
           const wc = (lit && hash(k * 7.7 + i * 3.3 + dist * 0.1) < 0.34) ? darkWin : win;
           // band on the camera-facing (u × sz2) face; thin in up, proud in sz2
           addBox(out, [cx, base + (i + 0.5) * fh, cz], [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
         }
         // parapet cap so the roofline isn't a bare slab edge
+        out._mat = MAT.METAL;
         addBox(out, [cx, base + sz[1] + 0.6, cz], [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
+        out._mat = 0;
       }
     };
 
@@ -1766,6 +1773,7 @@ const Tracks = (function () {
         const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
+        out._mat = MAT.METAL;
         if (!simple) for (let i = 0; i <= rowN; i += 2) addBox(out, vadd(fBase, u, (i / rowN - 0.5) * sh), dim(frameT, railH, faceW * 1.005), frameCol, bb);   // perf: every other rail
         for (let c = 0; c < cols; c++) {
           const cx = (-0.5 + (c + 0.5) / cols) * faceW;
@@ -1783,10 +1791,14 @@ const Tracks = (function () {
             // so night windows mirror the floodlights/neon city as live glints —
             // net-zero geometry (same boxes, redistributed). Simple side faces keep
             // their panes on props so the unchunked glass draw stays bounded.
-            addBox((!lit && !simple) ? glassBuf : out, vadd(vadd(gBase, wVec, cx), u, ry), dim(0.08, winHH, (faceW / cols) * 0.82), col, bb);
+            const toGlass = !lit && !simple;
+            if (toGlass) glassBuf._mat = MAT.GLASS; else out._mat = 0;   // lit panes stay untextured (pure emissive read)
+            addBox(toGlass ? glassBuf : out, vadd(vadd(gBase, wVec, cx), u, ry), dim(0.08, winHH, (faceW / cols) * 0.82), col, bb);
+            if (toGlass) glassBuf._mat = 0;
           }
         }
-        if (simple) return;
+        out._mat = MAT.METAL;
+        if (simple) { out._mat = 0; return; }
         const nm = Math.max(1, Math.min(3, cols - 1));   // perf: fewer mullions (was 5)
         for (let c = 1; c <= nm; c++) addBox(out, vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), dim(frameT, sh, 0.4), frameCol, bb);
         if (neonAmt > 0.3) {
@@ -1794,6 +1806,7 @@ const Tracks = (function () {
           for (const dr of [-1, 1]) addBox(out, vadd(fBase, wVec, dr * faceW * 0.5), dim(frameT * 1.05, sh * 0.96, ST), nc, bb);
           addBox(out, vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), nc, bb);
         }
+        out._mat = 0;
       };
       drawFace(0, -side, sw / 2, 2, sd, 0, false);   // track-facing facade: full detail
       drawFace(2, 1, sd / 2, 0, sw, 137, true);      // +t side: simple
@@ -2043,8 +2056,10 @@ const Tracks = (function () {
             const cx = (-0.5 + (c + 0.5) / cols) * faceW;
             for (let r = 0; r < rowN; r++) {
               const ry01 = (r + 0.5) / rowN, ctr = vadd(vadd(gB, b[wAxis], cx), b[1], (-0.5 + ry01) * sh);
-              if (med) addBox(out, ctr, dim(0.06, (sh / rowN) * 0.42, (faceW / cols) * 0.42), medWin, b);
-              else { const t01 = 0.42 + ry01 * 0.16; addBox(glassBuf, ctr, dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.40, t01 * 0.47, t01 * 0.62], b); }
+              // NOTE: out._mat / glassBuf._mat are separate registers — addBox reads
+              // whichever buffer object is actually passed as its first argument.
+              if (med) { out._mat = MAT.GLASS; addBox(out, ctr, dim(0.06, (sh / rowN) * 0.42, (faceW / cols) * 0.42), medWin, b); out._mat = 0; }
+              else { const t01 = 0.42 + ry01 * 0.16; glassBuf._mat = MAT.GLASS; addBox(glassBuf, ctr, dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.40, t01 * 0.47, t01 * 0.62], b); glassBuf._mat = 0; }
             }
           }
         };
@@ -2052,13 +2067,27 @@ const Tracks = (function () {
         dface(2, 1, sd / 2, 0, sw, true);        // +t side: simple
         dface(2, -1, sd / 2, 0, sw, true);       // -t side: simple
       };
+      // Body material: night masses read as CONCRETE (grey structural mass under
+      // the neon skin); day facades split BRICK (warm masonry) / CONCRETE (cool)
+      // by tone, same rule as building().
+      const bmat = NIGHT ? MAT.CONCRETE
+        : (bodyCol[0] > 0.5 && bodyCol[0] > bodyCol[2] + 0.03) ? MAT.BRICK : MAT.CONCRETE;
       // One stacked section centred at up=yb+sh/2, optionally offset along tangent.
+      // Restores the CALLER's material (not a hard 0) so a MAT.METAL default set
+      // around the whole kind-dispatch below survives between/after sec() calls —
+      // that's what tags every cap/antenna/trim box without touching each one.
       const sec = (yb, sw, sh, sd, seed, to) => {
         const cen = vadd(vadd(a.c, a.u, yb + sh / 2), b[2], to || 0);
+        const prevMat = out._mat;
+        out._mat = bmat;
         addBox(out, cen, [sw, sh, sd], bodyCol, b);
+        out._mat = prevMat;
         if (NIGHT) neonFacade(cen, b, side, sw, sh, sd, neon, seed, na);
         else dayGridAt(cen, sw, sh, sd);
       };
+      // Caps / antennas / trim below default to METAL (roofline plant, masts,
+      // beacons) unless a branch overrides it locally.
+      out._mat = MAT.METAL;
       if (kind === "tiered") {
         let yb = 0, tw = w, td = d;
         const frac = [0.46, 0.32, 0.22];
@@ -2184,9 +2213,12 @@ const Tracks = (function () {
       } else { // setback
         const setH = h * 0.84;
         sec(0, w, setH, d, k * 3.7 + side * 1.9);
+        out._mat = bmat;
         addBox(out, vadd(a.c, a.u, setH + (h - setH) / 2), [w * 0.72, h - setH, d * 0.72], bodyCol, b);
+        out._mat = MAT.METAL;
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.5, 1.0, d * 0.5], cap, b);
       }
+      out._mat = 0;
       blockAt(k, side, dist - reach / 2, reach / 2);
     };
     // neonSign(): a tall thin illuminated sign blade beside the track — vertical
