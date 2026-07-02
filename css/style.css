@@ -550,10 +550,44 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 
 /* short landscape (phones): tighten spacing, widen the docked panel since
    there's less vertical room to spread content out */
-@media (orientation: landscape) and (max-height: 520px) {
-  #cs-inner { gap: 9px; width: min(94vw, 470px); }
-  #cs-stats-inner { padding: 5px 12px; }
+/* landscape / short height: two-pane setup — a compact header across the top, a
+   vertical category rail on the LEFT, and the options list filling the full
+   panel height on the RIGHT, so many options are visible at once instead of one
+   at a time. Portrait keeps the stacked layout above. */
+@media (orientation: landscape) and (max-height: 600px) {
+  #cs-inner {
+    width: min(82vw, 620px);
+    padding: 12px 16px; gap: 8px 16px;
+    display: grid;
+    grid-template-columns: 190px 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "header header"
+      "tabs   options"
+      "done   done";
+  }
+  #cs-header {
+    grid-area: header;
+    flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 16px;
+  }
+  #cs-titlebar { flex: 0 0 auto; }
+  #cs-titlebar h2 { font-size: 18px; }
+  #cs-budget-wrap { flex: 1 1 160px; min-width: 140px; }
+  #cs-stats-inner { flex: 2 1 280px; padding: 4px 12px; }
+  #cs-stats-inner .cs-stat-row { margin: 3px 0; }
+  #cs-tabs {
+    grid-area: tabs; min-height: 0;
+    flex-direction: column; flex-wrap: nowrap;
+    overflow-y: auto; overflow-x: hidden; gap: 5px; padding-bottom: 0;
+  }
+  .cs-tab {
+    width: 100%; min-width: 0;
+    flex-direction: row; align-items: baseline; justify-content: space-between; gap: 8px;
+  }
+  .cs-tab-cur { max-width: 92px; }
+  #cs-options { grid-area: options; min-height: 0; margin: 0; }
   .cs-opt { padding: 8px 11px; }
+  #carsetup .sel-actions { grid-area: done; margin: 0; padding-top: 2px; }
 }
 
 /* ---------- HUD ---------- */
