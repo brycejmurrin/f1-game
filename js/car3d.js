@@ -281,6 +281,36 @@ const Car3D = (function () {
     active_aero:   { lvl: 3, drs: 1 },
     ground_effect: { lvl: 4, beam: 1 },
   };
+  // Per-OPTION engine airbox: `in` intake-mouth scale, `snork` raised snorkel,
+  // `twin` twin exhaust tips. Keyed by resolved engine id (else the 0/1/2 tier).
+  const ENGINE_STYLE = {
+    stock:        { in: 0.85 }, lean_burn:   { in: 0.72 },
+    performance:  { in: 1.15, twin: 1 }, v_power: { in: 1.10, twin: 1 },
+    turbo:        { in: 1.35, snork: 1 }, highrev: { in: 1.25, snork: 1 },
+    evo_kit:      { in: 1.20, twin: 1 }, sprint:  { in: 1.15, twin: 1 },
+    race:         { in: 1.55, snork: 1, twin: 1 },
+    torque_curve: { in: 1.00 }, hybrid_max: { in: 1.30, snork: 1, twin: 1 },
+    quali_engine: { in: 1.65, snork: 1, twin: 1 },
+    manu_mercedes:{ in: 1.55, snork: 1, twin: 1 }, manu_ferrari: { in: 1.55, snork: 1, twin: 1 },
+    manu_ford:    { in: 1.50, snork: 1, twin: 1 }, manu_honda:   { in: 1.50, snork: 1, twin: 1 },
+    manu_audi:    { in: 1.50, snork: 1, twin: 1 },
+  };
+  // Per-OPTION brake package: `cal` caliper accent colour (peeks through the rim
+  // spokes), `duct` brake-duct size. Keyed by resolved brake id (else tier).
+  const BRAKE_STYLE = {
+    standard:     { cal: null,               duct: 0.55 },
+    drilled:      { cal: null,               duct: 0.72 },
+    sport:        { cal: [0.95, 0.45, 0.05], duct: 0.95 },  // orange
+    titanium:     { cal: [0.70, 0.72, 0.78], duct: 0.85 },  // silver
+    endurance:    { cal: [0.95, 0.80, 0.10], duct: 1.05 },  // yellow
+    dual_caliper: { cal: [0.95, 0.72, 0.08], duct: 1.15 },  // amber
+    carbon:       { cal: [0.85, 0.12, 0.10], duct: 1.25 },  // red
+    ventilated:   { cal: [0.90, 0.15, 0.12], duct: 1.35 },  // red
+    carbon_mag:   { cal: [0.85, 0.66, 0.16], duct: 1.45 },  // gold
+    regen_brakes: { cal: [0.15, 0.78, 0.38], duct: 1.25 },  // green (energy)
+    ceramic:      { cal: [0.97, 0.10, 0.08], duct: 1.60 },  // bright red
+    brembo_evo:   { cal: [0.98, 0.62, 0.05], duct: 1.75 },  // Brembo gold
+  };
 
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
@@ -369,17 +399,19 @@ const Car3D = (function () {
     // the cockpit build (ckpt) — under brake pitch they'd otherwise swing up
     // into the top/back of the onboard frame ("the thing behind us cutting in").
     if (!ckpt) {
-      // Airbox: trapezoid block above the cockpit (dark intake front).
-      // ENGINE tier scales the intake mouth (small/lean at 0, flared at 2).
+      // Airbox: trapezoid block above the cockpit (dark intake front). Per-OPTION
+      // via ENGINE_STYLE: intake-mouth scale, a raised snorkel, cover louvres.
       const engT = tier("engine");
-      const inW = engT === 0 ? 0.52 : (engT === 2 ? 1.65 : 1.0);
-      const inH = engT === 0 ? 0.52 : (engT === 2 ? 1.55 : 1.0);
-      addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inW, h: 0.20 * inH, t: 0.55 },
-                   { z: -0.75, y: 0.74, w: 0.26 * inW, h: 0.18 * inH, t: 0.55 }, c1, INTAKE);
+      const engId = T._ids && T._ids.engine;
+      const engStyle = (engId && ENGINE_STYLE[engId]) || null;
+      const inScale = engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0);
+      const engSnork = engStyle ? !!engStyle.snork : engT === 2;
+      addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
+                   { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, c1, INTAKE);
       // Engine cover: roof-ridge prism sloping to the tail
       addSpan(out, { z: -0.55, y: 0.52, w: 0.56, h: 0.62, t: 0.0 },
                    { z: -2.00, y: 0.42, w: 0.26, h: 0.34, t: 0.0 }, c1, c1);
-      if (engT === 2) {
+      if (engSnork) {
         // Big-spec power unit tells: a raised airbox snorkel cresting behind the
         // roll hoop + cooling-louvre strips on the engine-cover flanks.
         addSpan(out, { z: -0.18, y: 0.94, w: 0.13, h: 0.11, t: 0.5 },
@@ -488,11 +520,15 @@ const Car3D = (function () {
       }
     }
 
-    // --- Exhaust outlet poking from the tail cap --- ENGINE tier: a lone slim
-    // pipe at low spec, a fat central tailpipe flanked by two extra tips at top.
-    const exhR = tier("engine") === 0 ? 0.05 : (tier("engine") === 2 ? 0.09 : 0.07);
+    // --- Exhaust outlet poking from the tail cap --- per ENGINE option: a lone
+    // slim pipe at low spec, a fat central tailpipe flanked by two extra tips
+    // for the `twin` engines (see ENGINE_STYLE).
+    const exhStyle = (T._ids && T._ids.engine && ENGINE_STYLE[T._ids.engine]) || null;
+    const exhTwin = exhStyle ? !!exhStyle.twin : tier("engine") === 2;
+    const exhR = exhStyle ? (exhStyle.twin ? 0.09 : (exhStyle.in < 0.9 ? 0.05 : 0.07))
+                          : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
     addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17]);
-    if (tier("engine") === 2) {
+    if (exhTwin) {
       for (const s of [-1, 1]) addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, [0.16, 0.16, 0.17]);
     }
 
@@ -636,14 +672,16 @@ const Car3D = (function () {
       }
     }
 
-    // --- Brake duct fairings (front + rear wheels) --- BRAKES tier scales duct size.
-    // Cockpit build keeps only the FRONT ducts (visible beside the front tyres).
+    // --- Brake duct fairings (front + rear wheels) --- per BRAKES option: duct
+    // size + a big-brake winglet. Cockpit build keeps only the FRONT ducts.
     const brakesT = tier("brakes");
-    const ductMul = brakesT === 0 ? 0.5 : (brakesT === 2 ? 1.9 : 1.0);
+    const brakeId = T._ids && T._ids.brakes;
+    const brakeStyle = (brakeId && BRAKE_STYLE[brakeId]) || null;
+    const ductMul = brakeStyle ? brakeStyle.duct : (brakesT === 0 ? 0.5 : brakesT === 2 ? 1.9 : 1.0);
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, 1.89, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
       // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
-      if (brakesT === 2) addBox(out, s*0.65, 0.42, 1.86, 0.11, 0.02, 0.15, CARBON);
+      if (ductMul >= 1.3) addBox(out, s*0.65, 0.42, 1.86, 0.11, 0.02, 0.15, CARBON);
       if (!ckpt) addBox(out, s*0.58, 0.30, -1.80, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
     }
 
@@ -667,7 +705,8 @@ const Car3D = (function () {
     if (!noWheels) {
       const tyreId = T._ids && T._ids.tyres;
       const tyreBand = (tyreId && TYRE_PIRELLI[tyreId]) || TYRE_BAND[tier("tyres")];
-      const caliperColor = BRAKE_CALIPER[brakesT];
+      // Per-option caliper accent peeking through the rim spokes, else tier.
+      const caliperColor = brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT];
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32, tyreBand, caliperColor);
         addWheel(out, s*0.76, 0.34, -1.6, 0.34, 0.38, tyreBand, caliperColor);
@@ -677,5 +716,5 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER, TYRE_PIRELLI };
+  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER, TYRE_PIRELLI, BRAKE_STYLE };
 })();
