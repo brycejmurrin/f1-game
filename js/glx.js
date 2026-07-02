@@ -79,6 +79,10 @@ uniform float uPcssPen;     // PCSS penumbra growth rate (was literal 80.0)
 uniform float uKeyMul;      // direct sun/key-light intensity multiplier (default 1)
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
+uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distance haze
+uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
+uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
+uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -326,8 +330,9 @@ void main() {
     // as hard painted ovals.
     puddle = smoothstep(0.48, 0.88, pn) * wet;        // only low spots pool
     // Water absorbs light: wet asphalt reads notably darker, puddles a touch darker
-    // (not stark, so they don't read as flat dark blobs).
-    albedo *= mix(1.0, 0.42, wet);
+    // (not stark, so they don't read as flat dark blobs). WET ROAD DARKEN knob
+    // scales the absorption (uWetDark 1 = shipped 0.42 floor, 0 = no darkening).
+    albedo *= mix(1.0, clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0), wet);
     albedo *= mix(1.0, 0.50, puddle);
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
     // a perfect mirror except where water actually pools, so the general wet
@@ -352,6 +357,11 @@ void main() {
 
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
   vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - uMetalness));
+  // SHADOW COOLNESS: bias sun-starved (shadowed / ambient-only) pixels toward a
+  // cool blue for a sunny-day contrast look. 0 = neutral (shipped).
+  if (uShadowTintAmt > 0.001) {
+    color *= mix(vec3(1.0), vec3(0.90, 0.96, 1.12), uShadowTintAmt * clamp(1.0 - litNoL, 0.0, 1.0));
+  }
 
   // Reflected view ray — reused by the wet-road lamp reflections and the sky env.
   vec3 Rv = reflect(-V, N);
@@ -619,6 +629,10 @@ void main() {
   float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
   vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmt, 4.0));
   fogCol += uSunColor * pow(sunAmt, 16.0) * 0.6;
+  // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
+  fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
+                 1.0 - abs(uFogTint) * 0.02,
+                 1.0 - max(uFogTint, 0.0) * 0.25 + max(-uFogTint, 0.0) * 0.18);
   // GLOWING FOG: nearby lamps tint the fog itself, so fog banks glow around
   // floodlights and neon at night. Soft-clipped so a lamp cluster can never
   // push the fog wall past the night bloom threshold into a white wash; the
@@ -639,7 +653,8 @@ void main() {
   // flat sheet. Tinted by the fog colour with a warm sun in-scatter.
   if (uGroundMist > 0.001) {
     float lowH = max(vWorldPos.y - (uEye.y - 5.0), 0.0);
-    float band = exp(-lowH * 0.30);
+    // MIST HEIGHT BAND: taller band (bigger uMistHeight) = slower vertical falloff.
+    float band = exp(-lowH * (0.09 / max(uMistHeight, 0.05)));
     vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
     float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
     float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
@@ -675,6 +690,8 @@ uniform float uCloud;
 uniform float uTime;   // seconds, 0 = static/deterministic (backward-compatible)
 uniform float uMoon;   // 0..1 moon visibility (0 = none, backward-compatible)
 uniform vec3 uCityGlow;  // night city light-pollution dome (colour x strength, 0 = none)
+uniform float uStarBright; // star-field intensity multiplier (def 1.0)
+uniform float uCloudSpeed; // cloud drift/evolution rate multiplier (def 1.0)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -767,11 +784,13 @@ void main() {
   // Cloud plane is drifted slowly by uTime (no drift when time=0 → deterministic).
   if (uCloud > 0.001 && up > 0.012) {
     vec2 cp = dir.xz / up * 0.42;
-    // Drift offset: two independent slow vectors for parallax feel.
-    vec2 drift1 = vec2(uTime * 0.0028, uTime * 0.0011);
-    vec2 drift2 = vec2(uTime * 0.0017, uTime * 0.0023);
+    // Drift offset: two independent slow vectors for parallax feel. CLOUD SPEED
+    // knob scales the drift/evolution rate (uCloudSpeed 1 = shipped, 0 = frozen).
+    float cT = uTime * uCloudSpeed;
+    vec2 drift1 = vec2(cT * 0.0028, cT * 0.0011);
+    vec2 drift2 = vec2(cT * 0.0017, cT * 0.0023);
     // Evolution: a very slow warp of the second octave to change cloud shape.
-    float evo = uTime * 0.00035;
+    float evo = cT * 0.00035;
     vec2 cp1 = cp + drift1;
     vec2 cp2 = cp + drift2;
     float f = fbm(cp1);
@@ -898,7 +917,7 @@ void main() {
       float srad = mix(0.0016, 0.0028, giant);
       float star = smoothstep(srad, srad * 0.35, d)
                  * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
-      c += vec3(star);
+      c += vec3(star) * uStarBright;   // STAR BRIGHTNESS knob
     }
   }
 
@@ -1099,9 +1118,10 @@ precision highp float;
 in vec2 vUV;
 uniform sampler2D uTex;
 uniform vec2 uTexel;
+uniform float uSpread;   // BLOOM SPREAD: scales the tent-tap radius (def 1.0)
 out vec4 outColor;
 void main() {
-  vec2 t = uTexel;
+  vec2 t = uTexel * uSpread;
   vec3 s = texture(uTex, vUV + t * vec2(-1.0,  1.0)).rgb
          + texture(uTex, vUV + t * vec2( 1.0,  1.0)).rgb
          + texture(uTex, vUV + t * vec2(-1.0, -1.0)).rgb
@@ -1129,6 +1149,7 @@ uniform vec3 uSunVS;     // sun direction in view space
 uniform vec2 uTexel;
 uniform float uStrength;
 uniform float uContact;  // contact-shadow strength (0 = off)
+uniform float uRadius;   // AO world-space sample reach (def 0.6)
 out vec4 outColor;
 const float NEARP = 0.1, FARP = 900.0;
 vec3 viewPos(vec2 uv) {
@@ -1149,7 +1170,7 @@ void main() {
   vec3 N = normalize(cross(dFdx(P), dFdy(P)));
   // Screen-space sample radius shrinks with distance so the world radius (~0.6 m)
   // stays roughly constant; clamp so near/far stay sane.
-  float radius = 0.6;
+  float radius = uRadius;
   float scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
   // Per-pixel rotation to turn banding into noise.
   float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
@@ -1343,6 +1364,13 @@ uniform float uCarReflect;   // car-bodywork SSR strength (CAR tuner group; defa
 uniform float uCarGloss;     // car paint gloss (CAR tuner group; default 1.0) — widens the car's SSR streak as it drops
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
 uniform vec3 uReflSkyLo;     // zenith sky-glow
+uniform float uSsrThick;     // wet-road SSR depth thickness gate (def 0.20)
+uniform float uChromAb;      // chromatic aberration toward frame edges (def 0)
+uniform float uGrain;        // per-pixel film grain amount (def 0)
+uniform float uSharpen;      // unsharp-mask crispness (def 0)
+uniform float uBlackLift;    // raised black floor (def 0.005)
+uniform float uWhitePoint;   // highlight roll-off knee (def 1.0)
+uniform float uSpeedBlur;    // radial speed blur amount, 0 = off
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
@@ -1391,14 +1419,46 @@ vec3 colourGrade(vec3 c) {
   float gl2 = dot(c, vec3(0.299, 0.587, 0.114));
   vec3 toneTint = mix(uGradeShadow, uGradeHi, smoothstep(0.0, 0.85, gl2));
   c = mix(c, c * toneTint, uGradeStr);
-  // Slight lift: prevents pure blacks — adds a tiny warm floor
-  c = max(c, vec3(0.005, 0.004, 0.003));
+  // BLACK LIFT: raised (slightly warm) black floor — prevents pure blacks and,
+  // pushed up, gives a matte faded-film base. Default 0.005 = the shipped floor.
+  c = max(c, vec3(uBlackLift, uBlackLift * 0.8, uBlackLift * 0.6));
   return c;
 }
 
 void main() {
   vec4 scn = texture(uScene, vUV);   // one fetch: .rgb colour + .a SSR car tag
   vec3 c = scn.rgb;
+  vec2 caDir = vUV - 0.5;
+
+  // CHROMATIC ABERRATION: split the R/B channels radially — the fringe grows
+  // quadratically toward the frame corners (real lens dispersion). 0 = off.
+  if (uChromAb > 0.001) {
+    float caAmt = uChromAb * 0.004 * dot(caDir, caDir);
+    c.r = texture(uScene, vUV + caDir * caAmt).r;
+    c.b = texture(uScene, vUV - caDir * caAmt).b;
+  }
+
+  // SPEED BLUR: radial smear from the frame centre outward, growing with the
+  // car's velocity (uSpeedBlur folds speed × the tuner amount). 0 = off.
+  if (uSpeedBlur > 0.001) {
+    vec3 acc = c; float wsum = 1.0;
+    for (int i = 1; i <= 4; i++) {
+      float t = float(i) / 4.0 * uSpeedBlur * 0.05;
+      acc += texture(uScene, vUV - caDir * t).rgb;
+      wsum += 1.0;
+    }
+    c = acc / wsum;
+  }
+
+  // SHARPEN: unsharp mask against a 4-tap neighbour blur (uReflTexel is uploaded
+  // every frame). Recovers kerb/wire crispness FXAA softens. 0 = off.
+  if (uSharpen > 0.001) {
+    vec3 bl = (texture(uScene, vUV + vec2(uReflTexel.x, 0.0)).rgb
+             + texture(uScene, vUV - vec2(uReflTexel.x, 0.0)).rgb
+             + texture(uScene, vUV + vec2(0.0, uReflTexel.y)).rgb
+             + texture(uScene, vUV - vec2(0.0, uReflTexel.y)).rgb) * 0.25;
+    c += (c - bl) * uSharpen * 0.9;
+  }
 
   // Ambient occlusion: darken creases/contacts before bloom + tonemap so the
   // grounding reads in linear light (under cars, barrier feet, kerbs, building
@@ -1466,7 +1526,7 @@ void main() {
         vec2 suv = cp.xy / cp.w * 0.5 + 0.5;
         if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
         float dz = ssrViewPos(suv).z - pos.z;      // >0 = ray passed behind a surface
-        if (dz > 0.20 && dz < 5.0) {               // thickness gate (reject far sky)
+        if (dz > uSsrThick && dz < 5.0) {          // SSR THICKNESS gate (reject far sky)
           vec3 a = prevPos, b = pos;               // binary-search refine → crisp hit
           for (int j = 0; j < 4; j++) {
             vec3 mid = (a + b) * 0.5;
@@ -1582,8 +1642,9 @@ void main() {
     }
   }
 
-  // Filmic tone-map (ACES) + colour grading.
-  c = acesTonemap(c);
+  // Filmic tone-map (ACES) + colour grading. WHITE POINT scales the input knee:
+  // lower clips highlights sooner (punchy), higher preserves highlight detail.
+  c = acesTonemap(c / uWhitePoint);
   c = colourGrade(c);
 
   // Lens flare: anamorphic streak + ghost circles
@@ -1634,6 +1695,13 @@ void main() {
   float d0 = fract(sin(dot(vUV, vec2(12.9898, 78.233))) * 43758.5453);
   float d1 = fract(sin(dot(vUV, vec2(39.3468, 11.135))) * 24634.6345);
   c += (d0 + d1 - 1.0) / 255.0;
+  // FILM GRAIN: luminance-weighted per-pixel noise (mid-tones grain most, blacks
+  // and clipped whites least — where real sensor grain lives). 0 = off.
+  if (uGrain > 0.001) {
+    float gn = fract(sin(dot(vUV, vec2(93.9898, 47.233))) * 61237.312) - 0.5;
+    float gLuma = dot(c, vec3(0.299, 0.587, 0.114));
+    c += gn * uGrain * (1.0 - abs(gLuma - 0.5) * 1.4);
+  }
   outColor = vec4(c, 1.0);
 }`;
 
@@ -1837,7 +1905,7 @@ void main() {}`;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
     downU = locs(downProg, ["uTex", "uTexel"]);
-    upU = locs(upProg, ["uTex", "uTexel"]);
+    upU = locs(upProg, ["uTex", "uTexel", "uSpread"]);
     // MSAA: pick the sample count the HDR colour format actually supports (many
     // mobile GPUs render RGBA16F but not multisampled RGBA16F — query, don't assume).
     try {
@@ -1852,8 +1920,8 @@ void main() {}`;
       msaaSamples = Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo"]);
-    if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
+    if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
@@ -2089,8 +2157,9 @@ void main() {
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
+      "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (markBatchProg) {
@@ -2280,8 +2349,13 @@ void main() {
     gl.uniform1f(litU.uGlowAmp,     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
     gl.uniform1f(litU.uPcssPen,     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
     gl.uniform1f(litU.uKeyMul,      T && T.keyMul      != null ? T.keyMul      : 1.0);
+    gl.uniform1f(litU.uFogTint,     T && T.fogTint     != null ? T.fogTint     : 0.0);
+    gl.uniform1f(litU.uMistHeight,  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
+    gl.uniform1f(litU.uShadowTintAmt, T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
+    gl.uniform1f(litU.uWetDark,     T && T.wetDark     != null ? T.wetDark     : 1.0);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
-    gl.uniform1f(litU.uFogDensity, frame.fogDensity);
+    // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
+    gl.uniform1f(litU.uFogDensity, frame.fogDensity * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
     if (shadowEnabled) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
@@ -2294,16 +2368,19 @@ void main() {
       }
       gl.uniform1f(litU.uPcss, pcssEnabled ? 1.0 : 0.0);
       gl.uniformMatrix4fv(litU.uLightVP, false, shadowLightVP);
-      gl.uniform1f(litU.uShadowBias, 0.001);
-      gl.uniform1f(litU.uShadowStr, 1.0);
+      // SHADOW BIAS / DARKNESS knobs (repair + artistic; defaults mirror TUNE_DEFS).
+      gl.uniform1f(litU.uShadowBias, T && T.shadowBias != null ? T.shadowBias : 0.001);
+      gl.uniform1f(litU.uShadowStr, T && T.shadowStr != null ? T.shadowStr : 1.0);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHADOW_SIZE);
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);
     }
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
-    gl.uniform1f(litU.uFogHeight,   frame.fogHeight  != null ? frame.fogHeight : 0.0);
-    gl.uniform1f(litU.uGroundMist,  frame.groundMist != null ? frame.groundMist : 0.0);
+    // FOG HEIGHT FALLOFF knob (absolute; def 0.018 matches the shipped palette).
+    gl.uniform1f(litU.uFogHeight,   T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
+    // GROUND MIST knob: scale the per-condition mist amount (multiplier, def 1).
+    gl.uniform1f(litU.uGroundMist,  (frame.groundMist != null ? frame.groundMist : 0.0) * (T && T.mistDensity != null ? T.mistDensity : 1));
     gl.uniform1f(litU.uLampFog,     frame.lampFog != null ? frame.lampFog : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
@@ -2546,6 +2623,8 @@ void main() {
     gl.uniform1f(skyU.uTime,  sky.time  !== undefined ? sky.time  : 0);
     gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
     gl.uniform3fv(skyU.uCityGlow, sky.cityGlow || [0, 0, 0]);
+    gl.uniform1f(skyU.uStarBright, sky.starBright !== undefined ? sky.starBright : 1);
+    gl.uniform1f(skyU.uCloudSpeed, sky.cloudSpeed !== undefined ? sky.cloudSpeed : 1);
     setBlend(false);
     setDepthMask(false);
     bindVAO(skyVAO);
@@ -2705,6 +2784,8 @@ void main() {
       gl.uniformMatrix4fv(ssaoU.uInvProj, false, frameInvProj);
       gl.uniform2f(ssaoU.uTexel, 1 / ssaoW, 1 / ssaoH);
       gl.uniform1f(ssaoU.uStrength, aoStr);
+      // AO RADIUS knob: world-space sampling reach (def 0.6).
+      gl.uniform1f(ssaoU.uRadius, opts && opts.tune && opts.tune.ssaoRadius != null ? opts.tune.ssaoRadius : 0.6);
       // Contact shadows ride along in the AO pass when proj + view-sun are present.
       const csOn = (opts && opts.contact > 0) && frameProj && frameSunVS;
       gl.uniformMatrix4fv(ssaoU.uProj, false, frameProj || frameInvProj);
@@ -2824,6 +2905,8 @@ void main() {
     }
     useProg(upProg);
     gl.uniform1i(upU.uTex, 0);
+    // BLOOM SPREAD knob: widen/tighten every octave's tent radius uniformly.
+    gl.uniform1f(upU.uSpread, opts && opts.tune && opts.tune.bloomSpread != null ? opts.tune.bloomSpread : 1);
     for (let i = nLv - 1; i >= 1; i--) {
       // Intermediate levels accumulate (ONE, ONE) so every octave sums; the FINAL
       // pass into level 0 OVERWRITES instead — level 0 still holds the sharp
@@ -2896,7 +2979,8 @@ void main() {
       }
     }
     gl.uniform2fv(compU.uSunUV, sunUV);
-    gl.uniform1f(compU.uFlareStr, flareStr);
+    // LENS FLARE knob scales the whole sun/lamp flare + ghost stack (def 1).
+    gl.uniform1f(compU.uFlareStr, flareStr * (opts && opts.flareMul != null ? opts.flareMul : 1));
     const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
     gl.uniform1f(compU.uExposure, exposure);
     gl.uniform1f(compU.uSunShaft, sunShaft);
@@ -2915,6 +2999,17 @@ void main() {
     gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
     gl.uniform1f(compU.uCarReflect, CT && CT.carReflect != null ? CT.carReflect : 0.55);
     gl.uniform1f(compU.uCarGloss, CT && CT.carGloss != null ? CT.carGloss : 1.0);
+    // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).
+    gl.uniform1f(compU.uChromAb,    CT && CT.chromAb    != null ? CT.chromAb    : 0.0);
+    gl.uniform1f(compU.uGrain,      CT && CT.grain      != null ? CT.grain      : 0.0);
+    gl.uniform1f(compU.uSharpen,    CT && CT.sharpen    != null ? CT.sharpen    : 0.0);
+    gl.uniform1f(compU.uBlackLift,  CT && CT.blackLift  != null ? CT.blackLift  : 0.005);
+    gl.uniform1f(compU.uWhitePoint, CT && CT.whitePoint != null ? CT.whitePoint : 1.0);
+    gl.uniform1f(compU.uSpeedBlur,  opts && opts.speedBlur != null ? opts.speedBlur : 0.0);
+    gl.uniform1f(compU.uSsrThick,   CT && CT.ssrThick   != null ? CT.ssrThick   : 0.20);
+    // uReflTexel drives both SSR and SHARPEN, so upload it every frame (not only
+    // inside the haveRefl block) — otherwise sharpen samples with a stale texel.
+    gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
     // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
     const reflStr = (opts && opts.reflect) || 0;
     // SSR inputs bind every frame now — car paint reflects the world even in

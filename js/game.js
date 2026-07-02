@@ -48,10 +48,10 @@ let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug:
 function initRainDrops() {
   rainCanvas.width = window.innerWidth;
   rainCanvas.height = window.innerHeight;
-  rainDrops = Array.from({ length: 360 }, () => ({
+  rainDrops = Array.from({ length: Math.round(LT.rainCount) }, () => ({
     x: Math.random() * rainCanvas.width,
     y: Math.random() * rainCanvas.height,
-    len: 14 + Math.random() * 22,
+    len: (14 + Math.random() * 22) * LT.rainStreak,
     speed: 380 + Math.random() * 360,
     opacity: 0.16 + Math.random() * 0.34,
   }));
@@ -62,13 +62,13 @@ function drawRain(dt) {
   rainCtx2d.lineWidth = 1;
   for (const d of rainDrops) {
     d.y += d.speed * dt;
-    d.x += d.speed * dt * 0.18;
-    if (d.y - d.len > h || d.x > w) { d.y = -d.len; d.x = Math.random() * w; }
+    d.x += d.speed * dt * LT.rainWind;
+    if (d.y - d.len > h || d.x > w || d.x < 0) { d.y = -d.len; d.x = Math.random() * w; }
     rainCtx2d.globalAlpha = d.opacity;
     rainCtx2d.strokeStyle = "#afc8e8";
     rainCtx2d.beginPath();
     rainCtx2d.moveTo(d.x, d.y);
-    rainCtx2d.lineTo(d.x + d.len * 0.18, d.y + d.len);
+    rainCtx2d.lineTo(d.x + d.len * LT.rainWind, d.y + d.len);
     rainCtx2d.stroke();
   }
   rainCtx2d.globalAlpha = 1;
@@ -463,6 +463,20 @@ const smpC = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // camera anc
 // ---------- helpers ----------
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
+// Rotate an RGB grade-tint's HUE around the luminance axis by `deg`. Tints sit
+// near [1,1,1]; we rotate the chroma OFFSET from grey so a neutral tint stays
+// neutral. Standard NTSC-luma hue matrix. Used by SHADOW/HIGHLIGHT TINT HUE.
+function hueRotateTint(rgb, deg) {
+  if (!deg || !rgb) return rgb;
+  const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;  // luma (grey anchor)
+  const r = rgb[0] - m, g = rgb[1] - m, b = rgb[2] - m;        // chroma offset
+  return [
+    m + (r * (0.213 + c * 0.787 - s * 0.213) + g * (0.715 - c * 0.715 - s * 0.715) + b * (0.072 - c * 0.072 + s * 0.928)),
+    m + (r * (0.213 - c * 0.213 + s * 0.143) + g * (0.715 + c * 0.285 + s * 0.140) + b * (0.072 - c * 0.072 - s * 0.283)),
+    m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072)),
+  ];
+}
 const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 function fmtTime(t) {
   if (!isFinite(t) || t <= 0) return "-";
@@ -506,7 +520,7 @@ const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
 const _upVS = new Float32Array(3);   // world-up expressed in view space (wet-road SSR)
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
-let _shadowSnapX = null, _shadowSnapZ = null;
+let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 
 // ---------- parts / player mods ----------
 function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
@@ -1445,6 +1459,46 @@ function applyRaceSettings() {
     const _mb = track && track.def ? _trackAtmoBias(track.def) : 0;   // +overcast/humid, -arid
     gm *= 1.0 + clamp(_mb, -0.6, 0.6) * 0.5;
     frame.groundMist = clamp(gm, 0, 0.7);
+  }
+  // ── Live lighting-tuner overrides on the CONDITION-derived values ──
+  // Re-derived fresh from the branch values every call (applyRaceSettings re-runs
+  // whenever one of these knobs changes — see _APPLY_RACE_IDS), so they never
+  // compound. All default to a no-op.
+  {
+    // SUN / MOON WARMTH — white-balance the final direct key colour.
+    const st = LT.sunTemp || 0;
+    if (st && frame.sunColor) {
+      const sr = 1 + Math.max(0, -st) * 0.18 - Math.max(0, st) * 0.12;
+      const sb = 1 - Math.max(0, -st) * 0.30 + Math.max(0, st) * 0.20;
+      frame.sunColor = [frame.sunColor[0] * sr, frame.sunColor[1] * (1 - Math.abs(st) * 0.02), frame.sunColor[2] * sb];
+    }
+    // SUN ELEVATION / AZIMUTH offset — rebuild sunDir from the default direction.
+    if ((LT.sunElev || LT.sunAzim) && frame.sunDir) {
+      const d = frame.sunDir;
+      let el = Math.asin(clamp(d[1], -1, 1)) + (LT.sunElev || 0) * Math.PI / 180;
+      let az = Math.atan2(d[0], d[2]) + (LT.sunAzim || 0) * Math.PI / 180;
+      el = clamp(el, -1.54, 1.54);
+      const ce = Math.cos(el), nd = [ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)];
+      frame.sunDir = nd; frameSky.sunDir = nd;
+    }
+    // CLOUD COVER offset (also drives cloud shadows via uCloudCover).
+    if (LT.cloudCover) frameSky.cloud = clamp((frameSky.cloud != null ? frameSky.cloud : 0) + LT.cloudCover, 0, 1);
+    // MOON BRIGHTNESS.
+    if (frameSky.moon) frameSky.moon *= LT.moonBright;
+    // CITY SKYGLOW (fresh array — never mutate the palette in place).
+    if (frameSky.cityGlow && LT.cityGlowMul !== 1) frameSky.cityGlow = frameSky.cityGlow.map((v) => v * LT.cityGlowMul);
+    // AMBIENT WARMTH + SKY/GROUND FILL BALANCE — white-balance the hemisphere
+    // fill and tip its energy toward sky dome (+) or ground bounce (−). Fresh
+    // arrays; both default to a no-op.
+    const at = LT.ambTemp || 0, ab = LT.ambBalance || 0;
+    if ((at || ab) && frame.ambientSky && frame.ambientGround) {
+      const ar = 1 + Math.max(0, -at) * 0.16 - Math.max(0, at) * 0.10;
+      const ag = 1 - Math.abs(at) * 0.02;
+      const abb = 1 - Math.max(0, -at) * 0.24 + Math.max(0, at) * 0.16;
+      const skyG = 1 + Math.max(0, ab) * 0.5, grdG = 1 + Math.max(0, -ab) * 0.5;
+      frame.ambientSky = [frame.ambientSky[0] * ar * skyG, frame.ambientSky[1] * ag * skyG, frame.ambientSky[2] * abb * skyG];
+      frame.ambientGround = [frame.ambientGround[0] * ar * grdG, frame.ambientGround[1] * ag * grdG, frame.ambientGround[2] * abb * grdG];
+    }
   }
   // Save base ambient values so the lightning system can restore them each frame
   _ltBase = {
@@ -2759,12 +2813,19 @@ const TUNE_DEFS = [
   { id: "threshOff",    label: "BLOOM THRESHOLD", group: "NIGHT ENERGY", min: -0.3, max: 0.1,  step: 0.01,  def: 0.0,  help: "Offset on what counts as bright enough to bloom. Lower = mid-tones glow (fog-of-glow)." },
   { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT ENERGY", min: 0,    max: 1.6,  step: 0.05,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp)." },
   { id: "glowAmp",      label: "EMISSIVE GLOW",   group: "NIGHT ENERGY", min: 0.5,  max: 4,    step: 0.1,   def: 2.3,  u: "uGlowAmp", help: "HDR push for windows / lenses / neon — roughly half the night frame energy." },
+  { id: "moonBright",   label: "MOON BRIGHTNESS", group: "NIGHT ENERGY", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Moon disc/halo + its soft blue fill on the night sky." },
+  { id: "cityGlowMul",  label: "CITY SKYGLOW",    group: "NIGHT ENERGY", min: 0, max: 3,   step: 0.1,  def: 1.0, help: "Light-pollution dome hugging the horizon over lit circuits/cities." },
+  { id: "bloomSpread",  label: "BLOOM SPREAD",    group: "NIGHT ENERGY", min: 0.5, max: 2.5, step: 0.05, def: 1.0, help: "Halo WIDTH, independent of amount. Higher = wider, dreamier glow; lower = tight core." },
   // Lamps
   { id: "lampLevel",    label: "LAMP LEVEL",      group: "LAMPS", min: 0.05, max: 1,   step: 0.01, def: 0.26, help: "Overall floodlight brightness ceiling (on top of the twilight ramp)." },
   { id: "poolEnergy",   label: "POOL ENERGY",     group: "LAMPS", min: 0.1,  max: 1.2, step: 0.05, def: 0.55, rebuild: true, help: "Per-lamp pool luminance scale (physical energy per fixture)." },
   { id: "lampRadiusMul",label: "POOL RADIUS",     group: "LAMPS", min: 0.5,  max: 2,   step: 0.05, def: 1.0,  rebuild: true, help: "Reach of each lamp pool. Too small and the far pool corner dies." },
   { id: "bleedMul",     label: "VALLEY BLEED",    group: "LAMPS", min: 0,    max: 3,   step: 0.1,  def: 1.0,  rebuild: true, help: "Out-of-beam light floor — lifts the dark valleys between pools." },
   { id: "glareStr",     label: "LENS GLARE",      group: "LAMPS", min: 0,    max: 0.8, step: 0.02, def: 0.12, help: "Lens-halo billboard strength at every active lamp." },
+  { id: "lampTemp",     label: "LAMP TEMPERATURE",group: "LAMPS", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of ALL floodlights/street lamps. − warms toward sodium/amber, + cools toward LED/broadcast white. Layers over each lamp's own colour." },
+  { id: "lampFlicker",  label: "LAMP FLICKER",    group: "LAMPS", min: 0, max: 0.3, step: 0.01, def: 0.10, help: "How much aging lamps pulse. 0 = rock-steady, higher = strong buzz on the odd tube." },
+  { id: "tailLightMul", label: "TAIL-LIGHT GLOW", group: "LAMPS", min: 0, max: 3, step: 0.1, def: 1.0, help: "Brightness of the red glow trailing nearby cars after dark." },
+  { id: "beamCone",     label: "BEAM CONE WIDTH", group: "LAMPS", min: 0.7, max: 1.5, step: 0.05, def: 1.0, rebuild: true, help: "Width of every floodlight's illuminated cone. Wider = softer spread, narrower = tight hotspots." },
   // Glowing fog
   { id: "lampFogBase",  label: "FOG GLOW BASE",   group: "GLOWING FOG", min: 0, max: 1,   step: 0.05, def: 0.45, help: "How strongly lamps tint the distant fog wall on a clear night." },
   { id: "lampFogHaze",  label: "FOG GLOW HAZE",   group: "GLOWING FOG", min: 0, max: 1.5, step: 0.05, def: 0.6,  help: "Extra lamp-fog glow added as ground mist / fog weather thickens." },
@@ -2779,6 +2840,11 @@ const TUNE_DEFS = [
   { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "BASE LIGHT", min: 0,   max: 2.5,  step: 0.05,  def: 1.0,  help: "Direct sun/moon intensity — diffuse + speculars + shadows. Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed." },
   { id: "ambientMul",   label: "AMBIENT FILL",    group: "BASE LIGHT", min: 0.3, max: 3,    step: 0.05,  def: 1.0,  help: "Hemisphere ambient multiplier — the shadow/unlit fill and night readability floor." },
   { id: "bounceK",      label: "LAMP BOUNCE",     group: "BASE LIGHT", min: 0,   max: 0.15, step: 0.005, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam cone." },
+  { id: "sunTemp",      label: "SUN / MOON WARMTH", group: "BASE LIGHT", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of the direct key light (sun by day, moonlight at night). − warm sunrise/sodium, + cool overcast/moonlight." },
+  { id: "ambTemp",      label: "AMBIENT WARMTH",  group: "BASE LIGHT", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of the hemisphere fill (shadow/unlit areas). − warm bounce, + cool sky fill." },
+  { id: "ambBalance",   label: "SKY / GROUND FILL", group: "BASE LIGHT", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "Tips ambient toward ground bounce (−) or sky dome (+) — which side of shadows reads warm vs cool." },
+  { id: "sunElev",      label: "SUN ELEVATION",   group: "BASE LIGHT", min: -40, max: 40, step: 1, def: 0, fmt: "signed", help: "Sun/moon height offset from the time-of-day default (deg). − lowers it for longer raking shadows + more god-rays. 0 = as-shipped." },
+  { id: "sunAzim",      label: "SUN AZIMUTH",     group: "BASE LIGHT", min: -180, max: 180, step: 5, def: 0, fmt: "signed", help: "Rotates the key-light compass direction from the default — swings shadow direction across the track. 0 = as-shipped." },
   // Image & colour
   { id: "gradeStr",     label: "GRADE STRENGTH",  group: "IMAGE & COLOUR", min: 0, max: 2.5, step: 0.05, def: 1.0, help: "Cinematic split-tone amount (teal shadows / warm highlights). 0 = neutral, higher = stronger film look." },
   { id: "vibrance",     label: "VIBRANCE",        group: "IMAGE & COLOUR", min: 0, max: 0.8, step: 0.02, def: 0.20, u: "uVibrance", help: "Selective saturation — lifts dull/washed pixels (hazy sky, grass, tarmac) without over-cooking neon or kerbs." },
@@ -2786,10 +2852,22 @@ const TUNE_DEFS = [
   { id: "contrast",     label: "CONTRAST",        group: "IMAGE & COLOUR", min: 0.7, max: 1.6, step: 0.02, def: 1.12, u: "uContrast", help: "Midtone-darkening gamma. Higher = deeper, filmic shadows; lower = flatter and brighter." },
   { id: "tint",         label: "WARM / COOL",     group: "IMAGE & COLOUR", min: -1, max: 1, step: 0.05, def: 0.0, u: "uTint", fmt: "signed", help: "White-balance shift. + warms (amber, sunny), − cools (blue, overcast/night)." },
   { id: "vignette",     label: "VIGNETTE",        group: "IMAGE & COLOUR", min: 0.4, max: 1, step: 0.02, def: 0.80, u: "uVignette", help: "Corner darkening. 1 = none, lower = stronger frame vignette." },
+  { id: "chromAb",      label: "CHROMATIC AB.",   group: "IMAGE & COLOUR", min: 0, max: 3, step: 0.05, def: 0.0, u: "uChromAb", help: "Lens colour-fringing toward the frame edges — RGB split. Subtle = filmic, high = arcade." },
+  { id: "grain",        label: "FILM GRAIN",      group: "IMAGE & COLOUR", min: 0, max: 0.15, step: 0.005, def: 0.0, u: "uGrain", help: "Per-pixel sensor noise. A little sells the cinematic night-camera look." },
+  { id: "flareMul",     label: "LENS FLARE",      group: "IMAGE & COLOUR", min: 0, max: 2, step: 0.05, def: 1.0, help: "Sun/lamp anamorphic streak + ghost strength. 0 = off, 1 = as-shipped." },
+  { id: "sharpen",      label: "SHARPEN",         group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSharpen", help: "Crispness recovered after FXAA — counteracts softening on kerbs, wires and distant detail." },
+  { id: "blackLift",    label: "BLACK LIFT",      group: "IMAGE & COLOUR", min: 0, max: 0.08, step: 0.005, def: 0.005, u: "uBlackLift", help: "Raises the darkest blacks toward a faded film base. 0 = pure black, higher = matte shadows." },
+  { id: "whitePoint",   label: "WHITE POINT",     group: "IMAGE & COLOUR", min: 0.6, max: 2, step: 0.05, def: 1.0, u: "uWhitePoint", help: "Highlight roll-off knee. Lower clips highlights sooner (punchy), higher preserves highlight detail (filmic)." },
+  { id: "shadowHue",    label: "SHADOW TINT HUE", group: "IMAGE & COLOUR", min: -180, max: 180, step: 5, def: 0.0, fmt: "signed", help: "Rotates the split-tone SHADOW colour (default cool teal) around the hue wheel." },
+  { id: "hiHue",        label: "HIGHLIGHT TINT HUE", group: "IMAGE & COLOUR", min: -180, max: 180, step: 5, def: 0.0, fmt: "signed", help: "Rotates the split-tone HIGHLIGHT colour (default warm amber) around the hue wheel." },
+  { id: "speedBlur",    label: "SPEED BLUR",      group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSpeedBlur", help: "Radial blur from screen centre that grows with car speed — a velocity cue at high speed." },
   // Reflections
   { id: "ssrWetMul",    label: "WET MIRROR",      group: "REFLECTIONS", min: 0, max: 1.5, step: 0.05, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
   { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "REFLECTIONS", min: 0, max: 0.5, step: 0.01, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
   { id: "ssrDryDay",    label: "DRY DAY SHEEN",   group: "REFLECTIONS", min: 0, max: 0.3, step: 0.01, def: 0.07, help: "Faint tower-and-sky mirror on dry day tarmac." },
+  { id: "roadRough",    label: "TARMAC ROUGHNESS",group: "REFLECTIONS", min: 0.4, max: 1.4, step: 0.05, def: 1.0, help: "Scales dry-tarmac roughness — lower = glossier asphalt with a tighter sun streak." },
+  { id: "surfDetail",   label: "SURFACE DETAIL",  group: "REFLECTIONS", min: 0, max: 2, step: 0.05, def: 1.0, help: "Road/terrain procedural grain + micro-normal relief (aggregate, patches, cracks). 0 = flat." },
+  { id: "ssrThick",     label: "SSR THICKNESS",   group: "REFLECTIONS", min: 0.05, max: 1, step: 0.05, def: 0.20, u: "uSsrThick", help: "Depth tolerance for a wet-road reflection hit. Lower = crisper but more gaps; higher = fewer holes, more smear." },
   // Car
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.55, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
   { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0.3, max: 2.5, step: 0.05, def: 1.0,  help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness)." },
@@ -2800,6 +2878,29 @@ const TUNE_DEFS = [
   // Shadows & weather
   { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS & WEATHER", min: 10, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
   { id: "wetness",      label: "WETNESS",         group: "SHADOWS & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps over ~30 s)." },
+  { id: "shadowStr",    label: "SHADOW DARKNESS", group: "SHADOWS & WEATHER", min: 0, max: 1, step: 0.05, def: 1.0, u: "uShadowStr", help: "How much direct sun the cast shadow removes. 1 = full shadow, lower lifts shadows toward ambient fill." },
+  { id: "aoStr",        label: "AMBIENT OCCLUSION", group: "SHADOWS & WEATHER", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Crease/contact darkening (SSAO). 0 = off." },
+  { id: "ssaoRadius",   label: "AO RADIUS",       group: "SHADOWS & WEATHER", min: 0.2, max: 2, step: 0.05, def: 0.6, u: "uRadius", help: "World-space reach of the AO sampling. Small = tight contact shading; large = broad soft occlusion." },
+  { id: "contactStr",   label: "CONTACT SHADOW",  group: "SHADOWS & WEATHER", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Grounding shadow under the car/props where the sun map can't reach." },
+  { id: "shadowBias",   label: "SHADOW BIAS",     group: "SHADOWS & WEATHER", min: 0, max: 0.005, step: 0.0002, def: 0.001, u: "uShadowBias", help: "Depth offset. Too low = shadow acne (self-shadow shimmer); too high = shadows detach from feet. Repair tool." },
+  { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS & WEATHER", min: 32, max: 96, step: 4, def: 64, rebuild: true, help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading." },
+  { id: "shadowTintAmt",label: "SHADOW COOLNESS", group: "SHADOWS & WEATHER", min: 0, max: 1, step: 0.05, def: 0.0, u: "uShadowTintAmt", help: "Tints shadowed / ambient-only areas cool blue for a sunny-day contrast look. 0 = neutral." },
+  { id: "wetDark",      label: "WET ROAD DARKEN", group: "SHADOWS & WEATHER", min: 0, max: 1.3, step: 0.05, def: 1.0, u: "uWetDark", help: "How much darker wet asphalt reads (water absorption). Independent of the wetness amount." },
+  // ── Atmosphere (fog / haze / mist) ──
+  { id: "fogDensityMul",label: "FOG DENSITY",     group: "ATMOSPHERE", min: 0, max: 3, step: 0.05, def: 1.0, u: "uFogDensity", help: "Scales atmospheric haze depth — how fast distance fades into fog. 1 = as-shipped." },
+  { id: "fogHeight",    label: "FOG HEIGHT FALLOFF", group: "ATMOSPHERE", min: 0, max: 0.12, step: 0.002, def: 0.018, u: "uFogHeight", help: "How fast fog thins with altitude. 0 = uniform wall; higher = fog pools low and clears overhead." },
+  { id: "fogTint",      label: "FOG WARM / COOL", group: "ATMOSPHERE", min: -1, max: 1, step: 0.05, def: 0.0, u: "uFogTint", fmt: "signed", help: "White-balance of the distance haze. + warm (amber/dusty), − cool (blue/overcast)." },
+  { id: "mistDensity",  label: "GROUND MIST",     group: "ATMOSPHERE", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uGroundMist", help: "Amount of low-lying drifting ground mist (dawn/humid/fog). 0 = none, higher = thick rolling bank." },
+  { id: "mistHeight",   label: "MIST HEIGHT BAND",group: "ATMOSPHERE", min: 0.08, max: 0.8, step: 0.02, def: 0.30, u: "uMistHeight", help: "How tall the ground-mist layer stands. Low = ankle fog, high = deep bank up to the eyeline." },
+  // ── Sky ──
+  { id: "cloudCover",   label: "CLOUD COVER",     group: "SKY", min: -0.5, max: 0.5, step: 0.02, def: 0.0, fmt: "signed", help: "Shifts cloud amount up/down from the weather default (also drives cloud shadows). 0 = as-shipped." },
+  { id: "starBright",   label: "STAR BRIGHTNESS", group: "SKY", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uStars", help: "Night star intensity. 0 = washed sky, higher = vivid starfield." },
+  { id: "cloudSpeed",   label: "CLOUD SPEED",     group: "SKY", min: 0, max: 4, step: 0.1, def: 1.0, u: "uCloudSpeed", help: "How fast clouds drift and evolve. 0 = frozen sky, higher = fast-moving weather." },
+  // ── Rain ──
+  { id: "rainCount",    label: "RAIN INTENSITY",  group: "RAIN", min: 60, max: 900, step: 20, def: 360, reinitRain: true, help: "Number of falling rain streaks (storm density)." },
+  { id: "rainStreak",   label: "RAIN STREAK LEN", group: "RAIN", min: 0.4, max: 2.5, step: 0.1, def: 1.0, reinitRain: true, help: "Length of rain streaks — short spits vs long driving streaks." },
+  { id: "rainWind",     label: "RAIN WIND",       group: "RAIN", min: -0.8, max: 0.8, step: 0.02, def: 0.18, fmt: "signed", help: "Horizontal wind slant on the rain (angle of the streaks)." },
+  { id: "lightning",    label: "LIGHTNING FREQ",  group: "RAIN", min: 0, max: 3, step: 0.1, def: 1.0, help: "Storm lightning strike rate. 0 = off, higher = more frequent flashes." },
 ];
 // LT holds the LIVE values the driver reads every frame. They are resolved from
 // a per-CONDITION profile store: each (track, time-of-day, weather) combination
@@ -2856,16 +2957,22 @@ function ltFallback(id) {
 // Rebuild LT for the current conditions. Called whenever the track/time/weather
 // changes (via applyRaceSettings) so the right profile is live for both the
 // tuner panel and actual racing.
+// Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
+// (not read per-frame in render). Changing one re-runs applyRaceSettings so it
+// updates live — safe because that function re-derives from the branch values.
+const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "ambTemp", "ambBalance"]);
 function applyLightTune() {
   const layers = ltLayers();
-  let rebuilt = false;
+  let rebuilt = false, reapply = false, reinit = false;
   for (const d of TUNE_DEFS) {
     let v = d.def;
     for (const L of layers) if (L && typeof L[d.id] === "number") v = L[d.id];
     v = clamp(v, d.min, d.max);
-    if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; }
+    if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
   }
   if (rebuilt && track) track._lights = null;
+  if (reapply && track && state !== "menu" && state !== "select") applyRaceSettings();
+  if (reinit && isRaining()) initRainDrops();
 }
 function setLightTune(id, v) {
   const d = TUNE_DEFS.find((t) => t.id === id);
@@ -2883,6 +2990,8 @@ function setLightTune(id, v) {
     if (!Object.keys(prof).length) delete _ltStore[key];
   }
   if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
+  if (d.reinitRain && isRaining()) initRainDrops();   // re-seed the rain field with the new count/length
+  if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
   return true;
 }
 function persistLightTune() { store.set("lightTune", _ltStore); }
@@ -2993,6 +3102,9 @@ function buildTrackLights(track) {
       coneIn  = 0.66 + hard * 0.10;   // 48.7° → 40.5° inner half-angle
       coneOut = coneIn - 0.26;        // soft outer skirt
     }
+    // BEAM CONE WIDTH knob: scale the soft-skirt angular width (coneIn−coneOut).
+    // >1 widens the illuminated cone (lower outer cos), <1 tightens the hotspot.
+    coneOut = coneIn - (coneIn - coneOut) * (LT.beamCone || 1);
     const mr = tint[0] * tintMix + pr * (1 - tintMix);
     const mg = tint[1] * tintMix + pg * (1 - tintMix);
     const mb = tint[2] * tintMix + pb * (1 - tintMix);
@@ -3082,7 +3194,7 @@ function appendCarTailLights() {
       _tlSmp.p[0] + _tlSmp.r[0] * c.x - tx * 2.4,
       _tlSmp.p[1] + 0.55,
       _tlSmp.p[2] + _tlSmp.r[2] * c.x - tz * 2.4,
-      4.5, 0.14, 0.10,
+      4.5 * LT.tailLightMul, 0.14 * LT.tailLightMul, 0.10 * LT.tailLightMul,
       8, dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
   }
 }
@@ -3110,7 +3222,7 @@ function setFrameLights(eye, scale, fwd) {
   const fl = (o) => {
     const x = Math.sin((o + 13) * 91.17) * 43758.5453;
     const hsh = x - Math.floor(x);
-    const amp = hsh > 0.90 ? 0.10 : 0.02;
+    const amp = hsh > 0.90 ? LT.lampFlicker : LT.lampFlicker * 0.2;
     return 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40);
   };
   if (count <= 32) {
@@ -3570,14 +3682,16 @@ function render(dt) {
     const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
     const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
     const snapX = Math.round(cx / 10) * 10, snapZ = Math.round(cz / 10) * 10;
-    if (snapX !== _shadowSnapX || snapZ !== _shadowSnapZ) {
-      _shadowSnapX = snapX; _shadowSnapZ = snapZ;
+    // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
+    // only on the 10 m position snap), so the slider responds without driving.
+    const sBox = LT.shadowRange || 64;
+    if (snapX !== _shadowSnapX || snapZ !== _shadowSnapZ || sBox !== _shadowBox) {
+      _shadowSnapX = snapX; _shadowSnapZ = snapZ; _shadowBox = sBox;
       M4.lookAtTo(_mLView, [snapX + sd[0] * 150, cy + sd[1] * 150, snapZ + sd[2] * 150], [snapX, cy, snapZ], up);
-      // ±64 m box (128 m): pushes the shadow-coverage boundary further out into
-      // the dusk haze so its soft edge-fade (see sampleShadow) is even less
-      // noticeable, while the 10 m snap keeps coverage seamless. ~6.3 cm/texel —
-      // still crisp contacts, a touch softer than the old ±55 m.
-      M4.orthoTo(_mLProj, -64, 64, -64, 64, 1.0, 320);
+      // Half-size box (default ±64 m / 128 m) snapped to the camera; the soft
+      // edge-fade in sampleShadow dissolves its boundary into the haze. Bigger =
+      // more reach, smaller = crisper contacts (texel density = 2048/box).
+      M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
       GLX.shadowBegin(_mLVP);
       GLX.castShadow(track.meshes.terrain, MAT_IDENT);
@@ -3595,6 +3709,9 @@ function render(dt) {
   // animates (cloud drift, star twinkle).
   _skyT += dt;
   frameSky.time = _skyT;
+  // STAR BRIGHTNESS / CLOUD SPEED tuner knobs ride on the sky object.
+  frameSky.starBright = LT.starBright;
+  frameSky.cloudSpeed = LT.cloudSpeed;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -3615,20 +3732,20 @@ function render(dt) {
   // (frameSky.moon is already set in applyRaceSettings for non-default modes;
   // here we make sure default+track.night also gets a moon each frame.)
   if (raceTimeOfDay === "default" && track && track.def && track.def.night) {
-    frameSky.moon = 0.85;
+    frameSky.moon = 0.85 * LT.moonBright;
   }
 
   // ── Lightning (active rain only) ─────────────────────────────────────────
   const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
   const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
-  if (raining && _ltBase) {
+  if (raining && _ltBase && LT.lightning > 0) {
     // Count down to the next strike
     _ltNextT -= dt;
     if (_ltNextT <= 0) {
       // Trigger a new flash: intensity 1 → decays at ~8×/s
       _ltFlash = 1.0;
-      // Next strike in 4–12 seconds
-      _ltNextT = 4 + Math.random() * 8;
+      // Next strike in 4–12 s, scaled by the LIGHTNING FREQ knob (higher = sooner).
+      _ltNextT = (4 + Math.random() * 8) / LT.lightning;
       // Queue thunder to lag the flash (sound travels slower than light): a
       // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
       _thunderT = 0.3 + Math.random() * 1.7;
@@ -3697,7 +3814,14 @@ function render(dt) {
     // on top of the twilight ramp above.
     const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
     const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
-    const floodScale = [lvl * (1 + warmth * 0.14), lvl, lvl * (1 - warmth * 0.22)];
+    // LAMP TEMPERATURE: a signed white-balance layered over each lamp's own
+    // colour + the automatic twilight warmth ramp. −1 warm (sodium ~2700K),
+    // +1 cool (LED/broadcast ~6500K). Green held near-constant; red↑/blue↓ warm.
+    const _lt = LT.lampTemp || 0;
+    const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
+    const _ltg = 1 - Math.abs(_lt) * 0.02;
+    const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
+    const floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
     // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
     setFrameLights(camEye, floodScale, _lightFwd);
@@ -3744,14 +3868,17 @@ function render(dt) {
   if (!hideMeshes.terrain && track.meshes.floor) GLX.draw(track.meshes.floor, MAT_IDENT,
     night ? { emissive: 0.14, roughness: 0.98, specular: 0.05 }
           : { roughness: 0.98, specular: 0.05 });
+  // TARMAC ROUGHNESS / SURFACE DETAIL knobs: rr scales dry-tarmac roughness
+  // (glossier asphalt); sd scales the procedural grain/relief (0 = flat).
+  const _rr = LT.roadRough, _sd = LT.surfDetail;
   if (!hideMeshes.terrain) GLX.draw(track.meshes.terrain, MAT_IDENT,
-    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.42 }
-          : { roughness: 0.97, specular: 0.06, detail: 0.42 });
+    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.42 * _sd }
+          : { roughness: 0.97, specular: 0.06, detail: 0.42 * _sd });
   if (!hideMeshes.road) GLX.draw(track.meshes.road, MAT_IDENT,
-    wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 }
-                   : { roughness: 0.14, specular: 0.85, detail: 0.06 })
-          : (night ? { emissive: 0.09, roughness: 0.85, specular: 0.20, detail: 0.22 }
-                   : { roughness: 0.85, specular: 0.20, detail: 0.22 }));
+    wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 * _sd }
+                   : { roughness: 0.14, specular: 0.85, detail: 0.06 * _sd })
+          : (night ? { emissive: 0.09, roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }
+                   : { roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }));
   if (!hideMeshes.startline && track.meshes.startline) GLX.draw(track.meshes.startline, MAT_IDENT,
     wet   ? { roughness: 0.16, specular: 0.80, detail: 0 }
           : (night ? { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 }
@@ -4149,7 +4276,7 @@ function render(dt) {
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the sun is meaningfully above the horizon.
-  const _cs = _grSunY > 0.05 ? 0.5 : 0;
+  const _cs = _grSunY > 0.05 ? clamp(0.5 * LT.contactStr, 0, 1.5) : 0;
   // Wet-road screen-space reflection of the scene: runs at ALL times of day so a
   // wet road mirrors the world — buildings/barriers/cars by day, neon + glowing
   // lamp heads at night — on top of the in-shader sky env reflection. Driven purely
@@ -4170,11 +4297,20 @@ function render(dt) {
   // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
   // the horizon. Night ambient is near-black, so the AO darkening is invisible
   // anyway — and night street grids are where the frame budget is tightest.
-  const _ao = _grSunY > -0.04 ? 0.95 : 0;
-  if (_grade) _grade.str = (_grade.str || 0) * LT.gradeStr;   // GRADE STRENGTH tuner slider
+  const _ao = _grSunY > -0.04 ? 0.95 * LT.aoStr : 0;
+  if (_grade) {
+    _grade.str = (_grade.str || 0) * LT.gradeStr;   // GRADE STRENGTH tuner slider
+    // SHADOW / HIGHLIGHT TINT HUE knobs: rotate the split-tone colours in place.
+    if (LT.shadowHue) _grade.shadow = hueRotateTint(_grade.shadow, LT.shadowHue);
+    if (LT.hiHue)     _grade.hi     = hueRotateTint(_grade.hi, LT.hiHue);
+  }
+  // SPEED BLUR: fold the car's velocity into the tuner amount so the radial
+  // smear only appears at speed (zero when parked; ramps in above ~40% of VMAX).
+  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / VMAX - 0.4) / 0.5, 0, 1) : 0;
   GLX.present({ exposure: frame.exposure * LT.exposureMul, bloom: _bloom * LT.bloomMul,
     threshold: clamp(_thresh + LT.threshOff, 0.4, 1.2), grade: _grade, ssao: _ao,
-    godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist, tune: LT });
+    godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist,
+    flareMul: LT.flareMul, speedBlur: _spd, tune: LT });
   if (raceWeather === "rain" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
