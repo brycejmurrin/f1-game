@@ -2987,8 +2987,8 @@ function render(dt) {
     night ? { emissive: 0.14, roughness: 0.98, specular: 0.05 }
           : { roughness: 0.98, specular: 0.05 });
   if (!hideMeshes.terrain) GLX.draw(track.meshes.terrain, MAT_IDENT,
-    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.35 }
-          : { roughness: 0.97, specular: 0.06, detail: 0.35 });
+    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.42 }
+          : { roughness: 0.97, specular: 0.06, detail: 0.42 });
   if (!hideMeshes.road) GLX.draw(track.meshes.road, MAT_IDENT,
     wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 }
                    : { roughness: 0.14, specular: 0.85, detail: 0.06 })

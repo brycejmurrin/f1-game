@@ -196,6 +196,14 @@ void main() {
       float h0 = vnoise(mnp) * 0.7 + vnoise(mnp * 3.9) * 0.3;
       float hx = vnoise(mnp + vec2(e, 0.0)) * 0.7 + vnoise(mnp * 3.9 + vec2(e * 3.9, 0.0)) * 0.3;
       float hz = vnoise(mnp + vec2(0.0, e)) * 0.7 + vnoise(mnp * 3.9 + vec2(0.0, e * 3.9)) * 0.3;
+      // Third octave: fine aggregate bumps, near-field only (aliases at range).
+      float nf = clamp(1.0 - (vDist - 8.0) / 24.0, 0.0, 1.0);
+      if (nf > 0.01) {
+        vec2 mnp8 = mnp * 4.7;
+        h0 += vnoise(mnp8) * 0.20 * nf;
+        hx += vnoise(mnp8 + vec2(e * 4.7, 0.0)) * 0.20 * nf;
+        hz += vnoise(mnp8 + vec2(0.0, e * 4.7)) * 0.20 * nf;
+      }
       N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * ((uDetail * 0.4 * mnFade) / e));
     }
   }
@@ -242,6 +250,7 @@ void main() {
   // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
   // world position, so flat asphalt/concrete/grass read as a surface rather than
   // a solid slab. Multiplicative, so it darkens as much as it lightens.
+  float patchM = 0.5;
   if (uDetail > 0.0) {
     vec2 wp = vWorldPos.xz;
     // Fade the fine high-frequency octave out with distance: at range it aliases
@@ -250,9 +259,29 @@ void main() {
     float fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
     float n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40 * fineFade;
     albedo *= 1.0 + (n - 0.5) * uDetail;
+    // Repair patches: low-frequency resurfaced blotches darken the albedo a
+    // few percent (patchM also nudges roughness below - fresh asphalt is
+    // smoother and darker than the weathered surface around it).
+    patchM = vnoise(wp * 0.055 + 9.1);
+    float pm = smoothstep(0.52, 0.72, patchM);
+    albedo *= 1.0 - pm * 0.05 * min(uDetail * 4.0, 1.0);
+    // Sparse cracks: thin ridge-noise lines, masked by a low-frequency zone
+    // gate so only some stretches are cracked; near-field only, and the
+    // uDetail*4 gate means a wet road (detail 0.06) fades them to ~24%
+    // (the water film hides them).
+    float crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
+    if (crackFade > 0.01) {
+      float cr = abs(vnoise(wp * 0.9 + 3.3) * 2.0 - 1.0);
+      float crack = (1.0 - smoothstep(0.015, 0.075, cr))
+                  * smoothstep(0.40, 0.70, vnoise(wp * 0.11 + 7.7));
+      albedo *= 1.0 - crack * 0.30 * crackFade * min(uDetail * 4.0, 1.0);
+    }
     albedo = max(albedo, vec3(0.0));
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
+  // Repair patches read glossier: fold the patch mask into roughness (max
+  // +-0.08) before the specular AA below widens it.
+  if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
   // Specular anti-aliasing: widen roughness where the normal changes fast in
   // screen space (geometry edges, micro-normal at distance) so thin bright
   // highlights sheen smoothly instead of shimmering pixel-to-pixel.
