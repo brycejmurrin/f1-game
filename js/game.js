@@ -513,9 +513,11 @@ function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
 function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
 
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
-// (e.g. "11111111" = every category at its default/neutral tier). Used to
-// re-key the player/cockpit body mesh caches (and the wheel mesh cache) so a
-// setup change rebuilds the right mesh instead of drawing stale geometry.
+// (e.g. "11111111" = every category at its default/neutral tier). Used by the
+// setup-screen live preview (getSetupPreviewMesh), which re-keys its mesh every
+// frame so the turntable updates as parts are picked (parts change live there,
+// with no recomputePlayerMods() call). The in-race player/cockpit meshes instead
+// read the cached playerVisualKey (refreshed in recomputePlayerMods) below.
 function partsVisualKey(teamId) {
   const team = teamById(teamId);
   const vt = Parts.getVisualTiers(getTeamParts(teamId), team ? team.engine : null);
@@ -526,6 +528,12 @@ function partsVisualKey(teamId) {
 // reads these directly — cheap per-frame variable reads, not a per-frame
 // Parts.getVisualTiers() call). Refreshed whenever parts change (below).
 let playerTyreTier = 1, playerBrakesTier = 1;
+// Full 8-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
+// once here (parts only change from the setup screen, which calls this on close)
+// so the render loop reads a cached string instead of rebuilding it via
+// partsVisualKey() → getVisualTiers() every frame. Overwritten before the first
+// race render by startRace()'s recomputePlayerMods() call.
+let playerVisualKey = "11111111";
 
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
@@ -540,6 +548,7 @@ function recomputePlayerMods() {
   };
   const vt = Parts.getVisualTiers(setup, team.engine);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
+  playerVisualKey = Parts.CATALOG.map((c) => vt[c.id]).join("");
 }
 
 // ---------- car setup ----------
@@ -874,7 +883,9 @@ function getPedalBar(brake) {
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
 const cockpitBodies = {};
 function cockpitBodyMesh(team) {
-  const key = team.id + ":" + partsVisualKey(team.id);
+  // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
+  // is always this team's key — no per-frame partsVisualKey() rebuild.
+  const key = team.id + ":" + playerVisualKey;
   if (!cockpitBodies[key])
     cockpitBodies[key] = GLX.createMesh(Car3D.build(team.color, team.color2,
       { noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
@@ -955,7 +966,9 @@ function drawCockpitRig(c, base, dt, paint) {
 
 function playerBodyMesh(team) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
-  const key = team.id + ":" + partsVisualKey(team.id);
+  // Player-only draw path, so the cached playerVisualKey is always this team's
+  // key — no per-frame partsVisualKey() rebuild.
+  const key = team.id + ":" + playerVisualKey;
   if (!playerBodies[key]) playerBodies[key] = GLX.createMesh(Car3D.build(team.color, team.color2,
     { noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
