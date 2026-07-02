@@ -713,7 +713,8 @@ function getCockpitWheel() {
     _rigBox(out, bx, by, -0.026, 0.02, 0.02, 0.012, BTN[bi++]);
   _rigBox(out, -0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);  // rotary knobs
   _rigBox(out,  0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);
-  _rigBox(out, -0.048, 0.024, -0.0295, 0.016, 0.016, 0.003, [0.06, 0.05, 0.08]); // OT lamp (off)
+  _rigBox(out, -0.082, 0.024, -0.0290, 0.024, 0.024, 0.003, [0.10, 0.11, 0.13]); // OT lamp bezel
+  _rigBox(out, -0.082, 0.024, -0.0294, 0.019, 0.019, 0.003, [0.06, 0.05, 0.08]);  // OT lamp (off)
   // Shift paddles: wide blades poking out past the rim behind the wheel.
   const PADL = [0.11, 0.11, 0.125];
   _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
@@ -789,7 +790,7 @@ let _otArmedMesh = null, _otActiveMesh = null;
 function getOtLamp(active) {
   if (active ? _otActiveMesh : _otArmedMesh) return active ? _otActiveMesh : _otArmedMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  _rigBox(out, -0.048, 0.024, -0.031, 0.016, 0.016, 0.003, active ? [1.6, 0.5, 2.2] : [1.2, 1.2, 1.3]);
+  _rigBox(out, -0.082, 0.024, -0.031, 0.019, 0.019, 0.003, active ? [1.6, 0.5, 2.2] : [1.2, 1.2, 1.3]);
   const m = GLX.createMesh(out);
   if (active) _otActiveMesh = m; else _otArmedMesh = m;
   return m;
@@ -829,8 +830,11 @@ function drawCockpitRig(c, base, dt, paint) {
   drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
-  // damped steering whatever the input mode).
-  const a = clamp(c.steerVis || 0, -1, 1) * 1.55;   // ~±89° visual lock
+  // damped steering whatever the input mode). A second, slower damping stage
+  // gives the wheel visual WEIGHT (it settles rather than flicking), the lock
+  // is modest (~±46°), and the sign is flipped — it was rotating backwards.
+  c._whlVis = damp(c._whlVis == null ? 0 : c._whlVis, clamp(c.steerVis || 0, -1, 1), 6, dt);
+  const a = -c._whlVis * 0.80;
   const ca = Math.cos(a), sa = Math.sin(a);
   _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
   M4.mulTo(_rigA, base, _rigT);
@@ -3211,8 +3215,12 @@ function render(dt) {
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
   const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
-  const lE = onboard ? 40 : (racing ? 14 : 1.6) * cutEase;
-  const lT = onboard ? 40 : (racing ? 16 : 10) * cutEase;
+  // Onboard cams LOCK to the car (λ400 ≈ instant): at λ40 the exponential
+  // smoothing left a steady-state lag of ~0.7-1 m at top speed, which slid the
+  // cockpit eye backwards INSIDE the engine cover / shark fin — the "black
+  // rectangle fills the screen at sustained speed" bug.
+  const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
+  const lT = onboard ? 400 : (racing ? 16 : 10) * cutEase;
   for (let i = 0; i < 3; i++) {
     camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
     camTgt[i] = damp(camTgt[i], tgtT[i], lT, dt);

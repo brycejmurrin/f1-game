@@ -320,8 +320,13 @@ const Car3D = (function () {
     addBox(out, 0, 0.76, -0.24, 0.15, 0.09, 0.13, INTAKE);
 
     // --- T-cam mast above the airbox (the broadcast camera "T") ---
-    addBox(out, 0, 0.885, -0.30, 0.035, 0.09, 0.035, DARK);   // stalk
-    addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
+    // Skipped in the cockpit body: it sits right at the driver's eye height
+    // 0.25 m behind the camera, and any camera transient turned it into a
+    // giant black rectangle filling the frame.
+    if (!(opts && opts.noDriver)) {
+      addBox(out, 0, 0.885, -0.30, 0.035, 0.09, 0.035, DARK);   // stalk
+      addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
+    }
 
     // --- Exhaust outlet poking from the tail cap ---
     addBox(out, 0, 0.40, -2.12, 0.07, 0.07, 0.16, [0.16, 0.16, 0.17]);
