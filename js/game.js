@@ -825,9 +825,12 @@ function drawCockpitRig(c, base, dt, paint) {
   const opt = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: nite ? 0.16 : 0 };
   // The actual car around you: body (minus helmet) with the real paint, plus
   // the steering/spinning FRONT wheels (the rears sit right beside the camera
-  // in the wide FOV and blob the bottom corners — skipped).
+  // in the wide FOV and blob the bottom corners — skipped). Nudged 0.35 m
+  // forward of their real physics position so they read further out ahead of
+  // the driver instead of hugging the cockpit edge (cosmetic-only offset —
+  // the actual wheel/contact-patch physics is untouched).
   GLX.draw(cockpitBodyMesh(c.team), base, paint);
-  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true);
+  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0 }, true, 0.35);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
   // damped steering whatever the input mode). A second, slower damping stage
@@ -883,7 +886,7 @@ function playerBodyMesh(team) {
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
 // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
 // straight into a scratch matrix (no per-frame allocation), then into world.
-function drawPlayerWheels(c, base, dt, opt, frontsOnly) {
+function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset) {
   if (!wheelMeshF) { wheelMeshF = GLX.createMesh(Car3D.buildWheel(0.32)); wheelMeshR = GLX.createMesh(Car3D.buildWheel(0.38)); }
   c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / WHEEL_R) * dt) % (Math.PI * 2);
   const sp = Math.sin(c.wheelSpin), cp = Math.cos(c.wheelSpin);
@@ -897,7 +900,7 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly) {
     L[0] = cs;    L[1] = 0;   L[2] = -ss;    L[3] = 0;
     L[4] = ss*sp; L[5] = cp;  L[6] = cs*sp;  L[7] = 0;
     L[8] = ss*cp; L[9] = -sp; L[10] = cs*cp; L[11] = 0;
-    L[12] = wd.x; L[13] = wd.y; L[14] = wd.z; L[15] = 1;
+    L[12] = wd.x; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
     GLX.draw(wd.rear ? wheelMeshR : wheelMeshF, _wheelWorld, opt);
     // Hot brake discs: an emissive ring floating just off the outer wheel face,
@@ -3051,10 +3054,26 @@ function camVantage(mode, s, x, spd, now, extra) {
     // 1.9 m out — past most of the bodywork, so no car was in frame). From
     // 0.85 m the nose and front wing read at the bottom of the frame, which
     // is what makes it a hood cam rather than a floating drone.
-    const eyeFwd = mode === "cockpit" ? -0.05 : 0.35;
+    // Cockpit eye at the driver's head (z +0.05). Pulling it back into the tub
+    // put it BEHIND the roll hoop / airbox so the rear structure wrapped into
+    // frame ("seeing the tail") — kept at the seat facing forward instead.
+    const eyeFwd = mode === "cockpit" ? 0.05 : 0.35;
     const eyeUp  = mode === "cockpit" ? 0.98 : 0.95;
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
-    tgt = aheadPt(30, eyeUp + (mode === "cockpit" ? 1.0 : 1.2), x * 0.6);
+    if (mode === "cockpit") {
+      // Face straight FORWARD down the car's own heading (the tangent at the
+      // car, not the curved centreline ahead) — the driver looks where the
+      // NOSE points, so the view doesn't swing toward the apex on corner
+      // entry. A tiny fraction of the curved look-ahead is kept so it still
+      // gently leads into a bend rather than staring rigidly at a fixed point.
+      const straight = [p[0] + t[0] * 30, p[1] + eyeUp + 0.9, p[2] + t[2] * 30];
+      const lead = aheadPt(30, eyeUp + 0.9, x * 0.4);
+      tgt = [straight[0] * 0.85 + lead[0] * 0.15,
+             straight[1] * 0.85 + lead[1] * 0.15,
+             straight[2] * 0.85 + lead[2] * 0.15];
+    } else {
+      tgt = aheadPt(30, eyeUp + 1.2, x * 0.6);
+    }
     fov = lerp(64, 78, spN) + dep * 3;               // wider = faster feel
   } else if (mode === "overhead") {
     eye = [p[0] - t[0] * 9, p[1] + 42, p[2] - t[2] * 9];
@@ -3218,9 +3237,14 @@ function render(dt) {
   // Onboard cams LOCK to the car (λ400 ≈ instant): at λ40 the exponential
   // smoothing left a steady-state lag of ~0.7-1 m at top speed, which slid the
   // cockpit eye backwards INSIDE the engine cover / shark fin — the "black
-  // rectangle fills the screen at sustained speed" bug.
+  // rectangle fills the screen at sustained speed" bug. The EYE must stay
+  // locked, but the look-AHEAD target (camVantage curves it toward upcoming
+  // corners) locking too made the head "snap" toward every apex instead of
+  // panning — cockpit/hood ease the target gently, like a driver's eyes
+  // leading into a corner rather than their whole head whipping around.
   const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
-  const lT = onboard ? 400 : (racing ? 16 : 10) * cutEase;
+  const gentleHead = onboard && (camId === "cockpit" || camId === "hood");
+  const lT = gentleHead ? 7 : onboard ? 400 : (racing ? 16 : 10) * cutEase;
   for (let i = 0; i < 3; i++) {
     camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
     camTgt[i] = damp(camTgt[i], tgtT[i], lT, dt);
