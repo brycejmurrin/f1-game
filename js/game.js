@@ -883,7 +883,11 @@ function cockpitBodyMesh(team) {
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
 // steering roll + per-element LCD offsets.
-const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.83,0.41,1]);
+// Wheel/dash hub at z 0.71: the cockpit eye moved fwd 0.02 → 0.32 (past the
+// shoulder fairing), so the rig moves with it to keep the proven eye-to-wheel
+// distance of 0.39 m — at the old z 0.41 the fascia sat 9 cm from the eye and
+// filled the frame as an unfocused black mass.
+const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.83,0.71,1]);
 const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
 const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
