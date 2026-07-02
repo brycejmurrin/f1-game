@@ -91,7 +91,7 @@ catalog to follow.
 
 | Knob | What it changes | Watch |
 |---|---|---|
-| `detail.thirdOctave` — `*0.20*nf` | Near-field aggregate bumps (fades 8→32 m so it can't shimmer at range). | near edgeE |
+| `detail.reliefStrength` — `uDetail*0.4*mnFade` | Micro-normal relief strength: two-octave asphalt/verge bumpiness (fades 25→95 m and with wetness). B flattens it. | near edgeE |
 | `detail.crackStrength` — `crack*0.30` (+ zone gate 0.40-0.70) | Crack line darkness and which stretches are cracked. Auto-fades to ~24% on wet roads (`min(uDetail*4,1)` with wet detail 0.06). | near p10 |
 | `detail.patch` — `pm*0.05` albedo + `±0.08` roughness | Repair-patch visibility: fresh asphalt darker AND glossier than the weathered surround. | near mean |
 

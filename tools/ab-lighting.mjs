@@ -174,10 +174,10 @@ const KNOBS = [
     expect: { region: "road", metric: "mean", dir: "+", minRel: 0.0 },
     note: "acne-vs-peter-panning bias; larger bias lightens (shadows detach/shrink)" },
   // ── Surface detail ──
-  { id: "detail.thirdOctave", file: "js/glx.js", scene: "silvDay",
-    find: "h0 += vnoise(mnp8) * 0.20 * nf;", b: "h0 += vnoise(mnp8) * 0.00 * nf;",
+  { id: "detail.reliefStrength", file: "js/glx.js", scene: "silvDay",
+    find: "(uDetail * 0.4 * mnFade) / e", b: "(uDetail * 0.0 * mnFade) / e",
     minVisible: 0.2, expect: { region: "near", metric: "edgeE", dir: "-", minRel: 0.0 },
-    note: "near-field aggregate bumps (relief octave 3); B removes the fine sparkle" },
+    note: "micro-normal relief strength (two-octave asphalt/verge bumpiness); B flattens it" },
   { id: "detail.crackStrength", file: "js/glx.js", scene: "silvDay",
     find: "albedo *= 1.0 - crack * 0.30 * crackFade", b: "albedo *= 1.0 - crack * 0.80 * crackFade",
     minVisible: 0.2, expect: { region: "near", metric: "p10", dir: "-", minRel: 0.0 },
