@@ -64,6 +64,8 @@ uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
 uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
 uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
+uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
+uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
@@ -142,10 +144,20 @@ float sampleShadow(vec3 wpos) {
   float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
   // 8-tap Poisson disk, ROTATED per-pixel by interleaved-gradient noise so the
   // sampling pattern varies every fragment — banding becomes fine noise and the
-  // 8 taps read as a much smoother penumbra. Radius 3.0 texels: a visibly SOFT
-  // penumbra (real sun shadows aren't razor-edged) that also stops thin kerb/car
-  // shadows shimmering at the low racing-camera angle.
-  const float R = 3.0;
+  // 8 taps read as a much smoother penumbra.
+  // PCSS-lite: a 4-tap blocker search on the low-res min-depth map scales the
+  // Poisson radius by the receiver-blocker gap — crisp right at the contact
+  // point (tyre shadows), soft where the caster is far (wing tips, fences).
+  float R = 3.0;
+  if (uPcss > 0.5) {
+    float bt = 1.5 / 512.0;
+    float zb = min(min(texture(uBlockerMap, sc.xy + vec2(-bt,  bt)).r,
+                       texture(uBlockerMap, sc.xy + vec2( bt,  bt)).r),
+                   min(texture(uBlockerMap, sc.xy + vec2(-bt, -bt)).r,
+                       texture(uBlockerMap, sc.xy + vec2( bt, -bt)).r));
+    float pen = clamp((z - zb) * 80.0, 0.0, 1.0);
+    R = mix(1.5, 6.0, pen);
+  }
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   float ang = ign * 6.2831853;
   float cr = cos(ang), sr = sin(ang);
@@ -1792,6 +1804,24 @@ void main() {}`;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
+  // Min-of-4 downsample of the shadow depth map (conservative nearest-blocker
+  // per cell) - the PCSS-lite blocker-search source.
+  const BLOCKER_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uDepthTex;
+out vec4 o;
+void main() {
+  vec2 t = vec2(1.0 / 512.0);
+  float d0 = texture(uDepthTex, vUV + t * vec2(-0.25, -0.25)).r;
+  float d1 = texture(uDepthTex, vUV + t * vec2( 0.25, -0.25)).r;
+  float d2 = texture(uDepthTex, vUV + t * vec2(-0.25,  0.25)).r;
+  float d3 = texture(uDepthTex, vUV + t * vec2( 0.25,  0.25)).r;
+  o = vec4(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
+}`;
+  let blockerProg = null, blockerU = null, blockerTex = null, blockerFBO = null,
+      blockerSampler = null, pcssEnabled = false;
+
   function initShadowMap() {
     depthProg = link(DEPTH_VS, DEPTH_FS);
     if (!depthProg) return false;
@@ -1801,8 +1831,10 @@ void main() {}`;
     gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
       gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    // LINEAR + COMPARE_REF_TO_TEXTURE = guaranteed hardware 2x2 PCF per tap in
+    // ES 3.0 (was NEAREST: every Poisson tap was a single hard compare).
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
@@ -1813,6 +1845,39 @@ void main() {}`;
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowMapTex, 0);
     const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    // ── PCSS-lite blocker map: a 512-square R16F min-depth downsample of the
+    // shadow map, rebuilt only when the shadow map re-renders (the snap-grid
+    // cache means once per ~10 m of travel, not per frame). LIT_FS samples it
+    // as a plain sampler2D for the blocker search; the depth texture itself
+    // stays a sampler2DShadow. A compare-off SAMPLER OBJECT lets the blocker
+    // pass read the same depth texture without compare mode - the legal WebGL2
+    // way to view a depth texture two different ways.
+    pcssEnabled = false;
+    if (ok) {
+      blockerProg = link(POST_VS, BLOCKER_FS);
+      if (blockerProg) {
+        blockerU = locs(blockerProg, ["uDepthTex"]);
+        blockerTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, blockerTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, 512, 512, 0, gl.RED, gl.HALF_FLOAT, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        blockerFBO = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blockerTex, 0);
+        pcssEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        if (pcssEnabled) {
+          blockerSampler = gl.createSampler();
+          gl.samplerParameteri(blockerSampler, gl.TEXTURE_COMPARE_MODE, gl.NONE);
+          gl.samplerParameteri(blockerSampler, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+          gl.samplerParameteri(blockerSampler, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        }
+      }
+    }
     return ok;
   }
 
@@ -1839,7 +1904,7 @@ void main() {}`;
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uWetness",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uTime", "uCloudCover",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -1992,6 +2057,13 @@ void main() {}`;
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
       gl.uniform1i(litU.uShadowMap, 0);
+      if (pcssEnabled) {
+        gl.activeTexture(gl.TEXTURE7);
+        gl.bindTexture(gl.TEXTURE_2D, blockerTex);
+        gl.uniform1i(litU.uBlockerMap, 7);
+        gl.activeTexture(gl.TEXTURE0);
+      }
+      gl.uniform1f(litU.uPcss, pcssEnabled ? 1.0 : 0.0);
       gl.uniformMatrix4fv(litU.uLightVP, false, shadowLightVP);
       gl.uniform1f(litU.uShadowBias, 0.001);
       gl.uniform1f(litU.uShadowStr, 1.0);
@@ -2656,6 +2728,21 @@ void main() {}`;
     shadowEnd() {
       if (!shadowEnabled) return;
       gl.enable(gl.CULL_FACE);
+      // Refresh the PCSS blocker map from the just-rendered shadow depth.
+      // Zero per-frame cost: shadowEnd only runs when the snap cell changed.
+      if (pcssEnabled) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
+        gl.viewport(0, 0, 512, 512);
+        useProg(blockerProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
+        gl.bindSampler(0, blockerSampler);
+        gl.uniform1i(blockerU.uDepthTex, 0);
+        gl.disable(gl.DEPTH_TEST); setBlend(false);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindSampler(0, null);
+        gl.enable(gl.DEPTH_TEST);
+      }
       gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       gl.viewport(0, 0, width, height);
     },
@@ -2664,5 +2751,6 @@ void main() {}`;
     get aspect() { return aspect; },
     hdrMode: () => colorType === gl.HALF_FLOAT,
     msaa: () => msaaSamples,
+    pcss: () => pcssEnabled,
   };
 })();

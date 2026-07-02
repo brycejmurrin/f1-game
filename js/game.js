@@ -2835,17 +2835,19 @@ function render(dt) {
   frame.eye = camEye;
 
   // Shadow pass — render terrain + road from sun's perspective.
-  // Snap the frustum centre to a 15 m grid so the shadow map only re-renders
+  // Snap the frustum centre to a 10 m grid so the shadow map only re-renders
   // when the camera moves enough to shift the snapped cell.
   if (track) {
     const sd = frame.sunDir;
     const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
     const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
-    const snapX = Math.round(cx / 15) * 15, snapZ = Math.round(cz / 15) * 15;
+    const snapX = Math.round(cx / 10) * 10, snapZ = Math.round(cz / 10) * 10;
     if (snapX !== _shadowSnapX || snapZ !== _shadowSnapZ) {
       _shadowSnapX = snapX; _shadowSnapZ = snapZ;
       M4.lookAtTo(_mLView, [snapX + sd[0] * 150, cy + sd[1] * 150, snapZ + sd[2] * 150], [snapX, cy, snapZ], up);
-      M4.orthoTo(_mLProj, -70, 70, -70, 70, 1.0, 320);
+      // Tighter box than the old 140 m: +27% texel density (5.4 cm/texel) for
+      // crisper contacts; the finer 10 m snap keeps coverage seamless.
+      M4.orthoTo(_mLProj, -55, 55, -55, 55, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
       GLX.shadowBegin(_mLVP);
       GLX.castShadow(track.meshes.terrain, MAT_IDENT);
