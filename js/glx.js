@@ -242,7 +242,7 @@ void main() {
   }
   vec3 V = normalize(uEye - vWorldPos);
   vec3 L = uSunDir;
-  vec3 H = normalize(L + V);
+  vec3 H = normalize(L + V + vec3(1e-5));   // +eps: normalize(0) NaNs when V==-L
   float NoL = max(dot(N, L), 0.0);
   float NoV = max(dot(N, V), 1e-4);
   float NoH = max(dot(N, H), 0.0);
@@ -256,7 +256,7 @@ void main() {
   // (chase camera), zero face-on; flanks keep pure livery colour.
   float carDeck = 0.0;
   if (uCarPaint > 0.001) {
-    carDeck = smoothstep(0.55, 0.85, N.y) * pow(1.0 - NoV, 2.0) * uCarPaint;
+    float cdF = 1.0 - NoV; carDeck = smoothstep(0.55, 0.85, N.y) * (cdF * cdF) * uCarPaint;
     albedo *= 1.0 - carDeck * 0.38;   // slightly softened: the SSR world-mirror stacks on decks
   }
   // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
@@ -470,14 +470,14 @@ void main() {
   if (uCarPaint > 0.001 && uClearcoat > 0.001) {
     vec3 Rg = reflect(-V, Ngeo);
     float NoVc = max(dot(Ngeo, V), 1e-4);
-    float ccF = pow(1.0 - NoVc, 2.0);                       // fresnel², rim-concentrated
+    float ccFb = 1.0 - NoVc; float ccF = ccFb * ccFb;      // fresnel², rim-concentrated (mul not pow(_,2): pow(0,2) NaNs on mobile)
     float envW = uClearcoat * ccF * (1.0 - rough) * 0.55;
     // Hard-ish horizon line: bright sky above, dark ground tone below. The step
     // sweeping across the curved flanks as the car yaws is the "mirror" cue.
     float horiz = smoothstep(-0.03, 0.06, Rg.y);
-    vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, pow(max(Rg.y, 0.0), 0.5));
+    vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rg.y, 0.0)));   // sqrt not pow(x,0.5): pow(0.0,0.5) NaNs on mobile
     vec3 envCC = mix(uAmbGround * 0.6, skyR, horiz);
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 0.0), 400.0) * 12.0 * shadow;  // sun disc
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC);                         // soft-clip < 1.0
   }
@@ -506,7 +506,7 @@ void main() {
   // the deck to white. On the flat-shaded panels this resolves to one clean
   // mirror tone per deck facet.
   if (carDeck > 0.001) {
-    float skyTd = pow(max(Rv.y, 0.0), 0.40);
+    float skyTd = pow(max(Rv.y, 1e-4), 0.40);
     vec3 envD = mix(uSkyHorizon, uSkyZenith, skyTd);
     vec3 addD = envD * carDeck * 0.85;
     color += addD / (1.0 + addD);
@@ -524,7 +524,7 @@ void main() {
     // Lower exponent shows more of the horizon→zenith gradient in the reflection
     // (vertical glass mostly reflects up into a near-uniform zenith, which reads
     // flat — this lets the brighter horizon band into the reflected sky).
-    float skyT = pow(max(R.y, 0.0), 0.40);
+    float skyT = pow(max(R.y, 1e-4), 0.40);
     // Tint env sample by sky gradient; also pick up a gentle sun-horizon blush
     // when the reflected direction aligns with the sun (warm chrome/paint sheen).
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
@@ -534,7 +534,7 @@ void main() {
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
-    envColor += uSunColor * pow(envSunAlign, 22.0) * (1.0 - wet) * envBlend * 0.6;
+    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wet) * envBlend * 0.6;
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square
@@ -558,7 +558,7 @@ void main() {
   // tinted by the horizon sky colour. Gives edges a little 'air' without
   // making surfaces look wet or plastic. Damped by roughness.
   {
-    float rimFresnel = pow(1.0 - NoV, 3.0);
+    float rf = 1.0 - NoV; float rimFresnel = rf * rf * rf;
     float rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18;
     color += uSkyHorizon * rimAmt;
   }
@@ -569,7 +569,7 @@ void main() {
   // This is already partially handled by hemisphere ambient (N.y), but a
   // gentle extra crush in the darkest zones adds perceived depth.
   {
-    float ao = pow(N.y * 0.5 + 0.5, 0.35);
+    float ao = pow(max(N.y * 0.5 + 0.5, 1e-4), 0.35);
     color *= mix(0.88, 1.0, ao);
   }
 
@@ -608,8 +608,9 @@ void main() {
   // Wider exponent (4) = the warm sun-glow in the haze spreads across a broader
   // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
   // adds a hot bloom right at the sun.
-  vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmount, 4.0));
-  fogCol += uSunColor * pow(sunAmount, 16.0) * 0.6;
+  float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
+  vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmt, 4.0));
+  fogCol += uSunColor * pow(sunAmt, 16.0) * 0.6;
   // GLOWING FOG: nearby lamps tint the fog itself, so fog banks glow around
   // floodlights and neon at night. Soft-clipped so a lamp cluster can never
   // push the fog wall past the night bloom threshold into a white wash; the
@@ -634,7 +635,7 @@ void main() {
     vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
     float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
     float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
-    vec3 mistCol = mix(uFogColor, uSunColor, pow(sunAmount, 3.0)) + lampFogC * uMistShare;
+    vec3 mistCol = mix(uFogColor, uSunColor, pow(max(sunAmount, 1e-4), 3.0)) + lampFogC * uMistShare;
     color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
   }
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
