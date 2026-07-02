@@ -512,6 +512,16 @@ let _shadowSnapX = null, _shadowSnapZ = null;
 function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
 function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
 
+// ---------- liveries (custom paint jobs) ----------
+function getLiveryId(teamId) { return store.get("livery." + teamId, "default"); }
+function saveLiveryId(teamId, id) { store.set("livery." + teamId, id); }
+// Resolve a team's chosen paint job -> { c1, c2 } bodywork colours (its own team
+// colours for "default"). Everything that builds a car mesh paints with these.
+function resolveLivery(team) {
+  const liv = Liveries.forTeam(team).find((l) => l.id === getLiveryId(team.id));
+  return liv ? { c1: liv.c1, c2: liv.c2 } : { c1: team.color, c2: team.color2 };
+}
+
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
 // (e.g. "11111111" = every category at its default/neutral tier). Used by the
 // setup-screen live preview (getSetupPreviewMesh), which re-keys its mesh every
@@ -525,8 +535,9 @@ function partsVisualKey(teamId) {
   // visual (engine airbox, aero package, brake ducts/caliper, tyre compound all
   // vary per option now, not just per tier), so the mesh cache rebuilds whenever
   // any choice changes.
-  return vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
-                 : Parts.CATALOG.map((c) => vt[c.id]).join("");
+  const parts = vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
+                        : Parts.CATALOG.map((c) => vt[c.id]).join("");
+  return parts + "|L:" + getLiveryId(teamId);   // livery repaints the mesh too
 }
 
 // Resolved tyre/brake visual tiers for the PLAYER's wheel meshes (drawPlayerWheels
@@ -555,9 +566,10 @@ function recomputePlayerMods() {
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
   playerTyreId = vt._ids ? vt._ids.tyres : "medium";
   playerBrakeId = vt._ids ? vt._ids.brakes : "standard";
-  // Key on the full set of resolved option ids (see partsVisualKey).
-  playerVisualKey = vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
-                            : Parts.CATALOG.map((c) => vt[c.id]).join("");
+  // Key on the full set of resolved option ids + the chosen livery (see partsVisualKey).
+  playerVisualKey = (vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
+                             : Parts.CATALOG.map((c) => vt[c.id]).join(""))
+                    + "|L:" + getLiveryId(team.id);
 }
 
 // ---------- car setup ----------
@@ -622,16 +634,18 @@ let carModelBuf = null;
 const CAR_MODEL_SCALE = 1;
 
 function buildCarData(team) {
+  const liv = resolveLivery(team);   // chosen paint job (else team colours)
   if (carModelBuf) {
-    try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: team.color }); }
+    try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: liv.c1 }); }
     catch (e) { /* any parse trouble: fall through to the procedural car */ }
   }
-  return Car3D.build(team.color, team.color2, { num: team.drivers && team.drivers[0] && team.drivers[0].num });
+  return Car3D.build(liv.c1, liv.c2, { num: team.drivers && team.drivers[0] && team.drivers[0].num });
 }
 
 function teamMesh(team) {
-  if (!teamMeshes[team.id]) teamMeshes[team.id] = GLX.createMesh(buildCarData(team));
-  return teamMeshes[team.id];
+  const key = team.id + ":" + getLiveryId(team.id);   // rebuild when the paint job changes
+  if (!teamMeshes[key]) teamMeshes[key] = GLX.createMesh(buildCarData(team));
+  return teamMeshes[key];
 }
 
 // Player car gets animated wheels: a body-only mesh + four separate wheel meshes
@@ -895,10 +909,12 @@ function cockpitBodyMesh(team) {
   // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
   // is always this team's key — no per-frame partsVisualKey() rebuild.
   const key = team.id + ":" + playerVisualKey;
-  if (!cockpitBodies[key])
-    cockpitBodies[key] = GLX.createMesh(Car3D.build(team.color, team.color2,
+  if (!cockpitBodies[key]) {
+    const liv = resolveLivery(team);
+    cockpitBodies[key] = GLX.createMesh(Car3D.build(liv.c1, liv.c2,
       { noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
         parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
+  }
   return cockpitBodies[key];
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
@@ -978,7 +994,8 @@ function playerBodyMesh(team) {
   // Player-only draw path, so the cached playerVisualKey is always this team's
   // key — no per-frame partsVisualKey() rebuild.
   const key = team.id + ":" + playerVisualKey;
-  if (!playerBodies[key]) playerBodies[key] = GLX.createMesh(Car3D.build(team.color, team.color2,
+  const liv = resolveLivery(team);
+  if (!playerBodies[key]) playerBodies[key] = GLX.createMesh(Car3D.build(liv.c1, liv.c2,
     { noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
   return playerBodies[key];
@@ -3366,7 +3383,8 @@ function getSetupPreviewMesh() {
   const key = team.id + ":" + partsVisualKey(team.id);
   if (key !== _spMeshKey) {
     if (_spMesh) GLX.freeMesh(_spMesh);
-    _spMesh = GLX.createMesh(Car3D.build(team.color, team.color2, {
+    const liv = resolveLivery(team);
+    _spMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, {
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine),
     }));
@@ -4481,7 +4499,8 @@ function buildSetup() {
   }
 
   // Which category tab is open — persisted across rebuilds; default to the first.
-  if (!csActiveCat || !Parts.CATALOG.some((c) => c.id === csActiveCat)) csActiveCat = Parts.CATALOG[0].id;
+  // "livery" is a valid pseudo-category (the paint-job picker).
+  if (!csActiveCat || (csActiveCat !== "livery" && !Parts.CATALOG.some((c) => c.id === csActiveCat))) csActiveCat = Parts.CATALOG[0].id;
   const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
 
   // Resolve the currently-fitted option for a category (respecting supplier lock).
@@ -4511,10 +4530,29 @@ function buildSetup() {
     };
     tabs.appendChild(tab);
   }
+  // LIVERY pseudo-tab (paint jobs) — appended after the parts categories.
+  {
+    const curLiv = Liveries.forTeam(team).find((l) => l.id === getLiveryId(team.id));
+    const painted = getLiveryId(team.id) !== "default";
+    const tab = document.createElement("button");
+    tab.className = "cs-tab" + (csActiveCat === "livery" ? " active" : "") + (painted ? " upgraded" : "");
+    const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = "LIVERY";
+    const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = curLiv ? curLiv.name : "Team";
+    tab.append(lbl, sub);
+    tab.onclick = () => {
+      if (csActiveCat === "livery") return;
+      csActiveCat = "livery";
+      if (soundOn) GameAudio.uiTick();
+      buildSetup();
+      const t = $("cs-options"); if (t) t.scrollTop = 0;
+    };
+    tabs.appendChild(tab);
+  }
 
   // ---- Options list for the active category ----
   const optsEl = $("cs-options");
   optsEl.textContent = "";
+  if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
   for (const opt of activeCat.options) {
@@ -4587,6 +4625,40 @@ function statDeltaChips(opt) {
     wrap.appendChild(chip);
   }
   return any ? wrap : null;
+}
+
+// Render the paint-job picker into the options list — each livery as a two-tone
+// swatch + name; clicking repaints the live car preview instantly.
+function buildLiveryOptions(container, team) {
+  const cur = getLiveryId(team.id);
+  for (const liv of Liveries.forTeam(team)) {
+    const active = liv.id === cur;
+    const row = document.createElement("button");
+    row.className = "cs-opt cs-liv" + (active ? " active" : "");
+
+    const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
+    const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
+    sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
+    row.appendChild(sw);
+
+    const main = document.createElement("div"); main.className = "cs-opt-main";
+    const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name"; nameRow.textContent = liv.name;
+    main.appendChild(nameRow);
+    row.appendChild(main);
+
+    const tag = document.createElement("span");
+    tag.className = "cs-opt-cost free";
+    tag.textContent = active ? "FITTED" : "PAINT";
+    row.appendChild(tag);
+
+    row.onclick = () => {
+      if (active) return;
+      saveLiveryId(team.id, liv.id);
+      if (soundOn) GameAudio.uiSelect();
+      buildSetup();
+    };
+    container.appendChild(row);
+  }
 }
 
 function openSetup() {

@@ -466,6 +466,13 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 }
 .cs-opt-main { flex: 1 1 auto; min-width: 0; }
 .cs-opt-name { font-size: 13px; font-weight: 700; color: var(--text); }
+/* paint-job swatch (two-tone) in the LIVERY tab */
+.cs-liv-swatch {
+  flex: 0 0 auto; width: 38px; height: 24px; border-radius: 6px; align-self: center;
+  border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: inset 0 0 6px rgba(0,0,0,0.35);
+}
+.cs-liv .cs-opt-main { align-self: center; }
 .cs-opt-deltas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .cs-delta {
   font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
