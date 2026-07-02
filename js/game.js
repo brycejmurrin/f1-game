@@ -1427,6 +1427,24 @@ function _trackAtmoBias(def) {
   return 0;
 }
 
+// Snap the live camera straight to the current mode's vantage (no damping), so
+// the first rendered frame is already framed correctly. Without this the camera
+// damps out of whatever stale eye/target/fov the previous screen (menu flyby)
+// left behind — and for the onboard cams the slow target/fov damping (λ7/λ4)
+// takes a second-plus to converge, during which a broken projection renders the
+// cockpit bodywork as a black box across the frame at the start ("clips until I
+// throttle past the start"). Shared by startRace() and __apex.snapCam().
+function snapGameCam() {
+  if (!player || !track) return;
+  const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch);
+  const v = camVantage(CAM_MODES[camMode].id, player.s, player.x, player.speed || 0, 0, {
+    bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
+  });
+  camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
+  camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
+  camFov = v.fov;
+}
+
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
@@ -1462,6 +1480,8 @@ function startRace() {
   document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
+  dbgCam = null;              // fresh race — drop any leftover debug free-cam
+  snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && raceWeather === "rain") GameAudio.startRain();
@@ -5532,14 +5552,8 @@ window.__apex = {
   // via the shared camVantage() solver.
   snapCam() {
     if (!player || !track) return;
-    dbgCam = null;   // snapping the game camera leaves any view() free-cam override
-    const bankCam = Tracks.banking(track, player.s, player.x);
-    const v = camVantage(CAM_MODES[camMode].id, player.s, player.x, player.speed, 0, {
-      bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
-    });
-    camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
-    camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
-    camFov = v.fov;
+    dbgCam = null;   // snapping the game camera clears any view() free-cam override
+    snapGameCam();
   },
   // previewCam(mode, frac, speed, lat) — set the debug free-cam to EXACTLY how the
   // in-game camera `mode` (any of camera().modes: chase/heli/drift/cinematic/…)
