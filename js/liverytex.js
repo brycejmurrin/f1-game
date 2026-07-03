@@ -36,17 +36,17 @@ const LiveryTex = (function () {
   // Invented, plausible fake sponsor wordmarks per team (titleA, titleB, wing,
   // strip get the first four; strip repeats a couple for a long thin band).
   const SPONSORS = {
-    mercedes:    ["VOLTARC", "KRYOTECH", "MERIDIAN", "HELIXBANK", "NOVASTREAM", "QUANTA"],
-    ferrari:     ["ROSSFIN", "MARANELLO", "AURELIO", "FERROGRID", "SCUDERA", "VITELLI"],
-    mclaren:     ["HYPERGRID", "PAPAYA", "ZENON", "BRITEL", "WOKING", "FLUXCORE"],
-    redbull:     ["TAURON", "ADRENALYN", "SKYBOLT", "VELOCITA", "REDLINE", "OBLIVAN"],
-    alpine:      ["ALPIQ", "CHAMONIX", "BLUEROC", "GAULOISE", "ESPRIT", "MISTRAL"],
-    racingbulls: ["TORINO", "VISIONE", "FALCARO", "TAURINI", "MILANO", "RAPIDO"],
-    haas:        ["IRONGATE", "MACHINA", "STELLAR", "GEARWORKS", "APEXFIN", "FORGE"],
-    williams:    ["ATLASOL", "GROVE", "DURACELL", "STRATOS", "OXFORD", "IONWORKS"],
-    audi:        ["VORSPRUNG", "INGOLTECH", "QUATTRA", "BAVARIS", "AKKUMA", "NEUERON"],
-    astonmartin: ["ARAMONT", "VANTAGE", "GAYDONE", "BRITANNA", "WINGCO", "REGALIS"],
-    cadillac:    ["CRESTLINE", "DETROX", "LIBERTY", "AMERIGO", "GENERAX", "MOTORCITY"],
+    redbull:     ["SKYSTRIKE", "ADRENYX", "VOLTRUSH", "AEROBOLT", "NITROX", "THUNDERA"],
+    racingbulls: ["STRADALE", "VELOCE", "URBANO", "SCATTO", "NEONVIA", "RAGAZZO"],
+    ferrari:     ["CAVALLO", "MODENESE", "AURELIO", "PRECISO", "SCUDERA", "HERALDO"],
+    mclaren:     ["AEROCORE", "PIXLBYTE", "BRITECH", "ORBITAL", "NIMBUS", "QUANTIC"],
+    mercedes:    ["VELTRA", "PRAZIS", "AUTOBAHN", "KELVIQ", "STROMTEK", "DIAMYX"],
+    alpine:      ["CHAMONIX", "AZURELLE", "ALPIQ", "ESPRIT", "MISTRAL", "BLEUROC"],
+    williams:    ["GROVEX", "ALBION", "STRATON", "OXFORD", "IRONOAK", "MERIDEN"],
+    haas:        ["IRONGATE", "MILLWORX", "CARBIDE", "FORGECO", "TORQUEX", "RIVETON"],
+    audi:        ["VORSPRUN", "ELEKTRA", "PRAZION", "INGOLTEK", "VOLTKERN", "NEURON"],
+    astonmartin: ["ARAMONT", "GAYDONA", "AVIONNE", "REGALIS", "WINGCRAFT", "SAVILE"],
+    cadillac:    ["DETROX", "CRESTLIN", "LIBERTA", "AMERIGO", "MOTORCTY", "GRANDEUR"],
   };
 
   // ── colour helpers ─────────────────────────────────────────────────────────
@@ -627,71 +627,76 @@ const LiveryTex = (function () {
   // reads as a real designed livery panel (à la the Red Bull tail) rather than a
   // logo floating on flat paint. Style varies per team so each tail is distinct.
   const TAIL_STYLE = {
-    redbull:     { kind: "diag",    a: 0.72 },   // charging diagonal slash
-    racingbulls: { kind: "diag",    a: 0.62 },
-    ferrari:     { kind: "sweep",   a: 0.60 },   // low sweeping curve
-    mclaren:     { kind: "chevron", a: 0.68 },   // speed chevrons
-    mercedes:    { kind: "streak",  a: 0.55 },   // fine parallel streaks
-    williams:    { kind: "streak",  a: 0.58 },
-    alpine:      { kind: "sweep",   a: 0.58 },
-    audi:        { kind: "chevron", a: 0.64 },
-    astonmartin: { kind: "sweep",   a: 0.56 },
-    haas:        { kind: "diag",    a: 0.60 },
-    cadillac:    { kind: "streak",  a: 0.55 },
+    redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
+    racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
+    ferrari:     { kind: "sweep",   a: 0.66 },   // low sweeping curve
+    mclaren:     { kind: "chevron", a: 0.74 },   // aero speed chevrons
+    mercedes:    { kind: "streak",  a: 0.62 },   // fine parallel streaks
+    williams:    { kind: "chevron", a: 0.62 },   // engineering chevrons
+    alpine:      { kind: "sweep",   a: 0.64 },   // chic flowing curve
+    audi:        { kind: "streak",  a: 0.60 },   // precise fine lines
+    astonmartin: { kind: "sweep",   a: 0.62 },   // graceful wing sweep
+    haas:        { kind: "diag",    a: 0.68 },   // industrial hard slash
+    cadillac:    { kind: "chevron", a: 0.60 },   // bold Detroit chevrons
   };
   function drawTailGraphic(ctx, teamId, R, c1, c2, stripe) {
     const st = TAIL_STYLE[teamId] || { kind: "diag", a: 0.6 };
     const acc = stripe || c2;
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
-    // 1) directional accent wash across the panel.
+    // 1) directional accent wash across the panel — a firmer diagonal band so the
+    //    tail carries a clear designed base tint before the motif strokes land.
     const g = ctx.createLinearGradient(X, Y + H, X + W, Y);
     g.addColorStop(0.0, cssA(acc, 0));
-    g.addColorStop(0.55, cssA(acc, st.a * 0.7));
+    g.addColorStop(0.5, cssA(acc, st.a * 0.85));
     g.addColorStop(1.0, cssA(acc, 0));
     ctx.fillStyle = g;
     ctx.fillRect(X, Y, W, H);
-    // 2) bold motif strokes per style.
+    // 2) bold motif strokes per style — cleaner shapes, crisper falloff.
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (st.kind === "chevron") {
-      ctx.lineWidth = W * 0.075;
+      // Nested arrowheads pointing forward — bold at front, fading rearward.
+      ctx.lineWidth = W * 0.085;
       for (let i = 0; i < 4; i++) {
-        const o = X + W * (0.14 + i * 0.22), a2 = st.a * (1 - i * 0.14);
+        const o = X + W * (0.16 + i * 0.20), a2 = st.a * (1 - i * 0.20);
         ctx.strokeStyle = cssA(acc, a2);
         ctx.beginPath();
-        ctx.moveTo(o - W * 0.14, Y + H * 0.14);
+        ctx.moveTo(o - W * 0.16, Y + H * 0.10);
         ctx.lineTo(o, Y + H * 0.5);
-        ctx.lineTo(o - W * 0.14, Y + H * 0.86);
+        ctx.lineTo(o - W * 0.16, Y + H * 0.90);
         ctx.stroke();
       }
     } else if (st.kind === "sweep") {
-      ctx.lineWidth = W * 0.10;
+      // A few clean stacked curves sweeping low-to-high across the panel.
+      ctx.lineWidth = W * 0.115;
       for (let i = 0; i < 3; i++) {
-        ctx.strokeStyle = cssA(acc, st.a * (1 - i * 0.22));
+        ctx.strokeStyle = cssA(acc, st.a * (1 - i * 0.26));
         ctx.beginPath();
-        ctx.moveTo(X - W * 0.05, Y + H * (0.66 + i * 0.12));
-        ctx.quadraticCurveTo(X + W * 0.5, Y + H * (0.1 + i * 0.12), X + W * 1.05, Y + H * (0.5 + i * 0.12));
+        ctx.moveTo(X - W * 0.08, Y + H * (0.72 + i * 0.11));
+        ctx.quadraticCurveTo(X + W * 0.5, Y + H * (0.04 + i * 0.11), X + W * 1.08, Y + H * (0.46 + i * 0.11));
         ctx.stroke();
       }
     } else if (st.kind === "streak") {
-      ctx.lineWidth = W * 0.03;
-      for (let i = 0; i < 7; i++) {
-        ctx.strokeStyle = cssA(acc, st.a * (0.5 + 0.5 * (1 - i / 7)));
-        const o = X + W * (0.06 + i * 0.13);
+      // Fine, evenly spaced parallel racing lines raked forward.
+      ctx.lineWidth = W * 0.032;
+      for (let i = 0; i < 8; i++) {
+        ctx.strokeStyle = cssA(acc, st.a * (0.45 + 0.55 * (1 - i / 8)));
+        const o = X + W * (0.05 + i * 0.115);
         ctx.beginPath();
         ctx.moveTo(o, Y + H);
-        ctx.lineTo(o + W * 0.4, Y);
+        ctx.lineTo(o + W * 0.42, Y);
         ctx.stroke();
       }
     } else { // diag slash
-      ctx.lineWidth = W * 0.14;
+      // Bold parallel slashes charging up to the right — hero stroke leads.
+      ctx.lineWidth = W * 0.15;
       for (let i = 0; i < 3; i++) {
-        ctx.strokeStyle = cssA(acc, st.a * (1 - i * 0.28));
-        const o = X + W * (0.1 + i * 0.28);
+        ctx.strokeStyle = cssA(acc, st.a * (1 - i * 0.32));
+        const o = X + W * (0.08 + i * 0.30);
         ctx.beginPath();
-        ctx.moveTo(o, Y + H * 1.05);
-        ctx.lineTo(o + W * 0.55, Y - H * 0.05);
+        ctx.moveTo(o, Y + H * 1.08);
+        ctx.lineTo(o + W * 0.58, Y - H * 0.08);
         ctx.stroke();
       }
     }

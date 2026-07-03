@@ -620,6 +620,16 @@ const Car3D = (function () {
     addBox(out, 0, 0.458, 1.92, 0.34, 0.020, 0.46, c1);
     addBox(out, 0, 0.52, 1.55, 0.06, 0.08, 0.15, DARK);
 
+    // --- Nose headlights: a pair of subtle HDR white running lights (DRL /
+    // marker style) low on the nose sides near the tip. F1 doesn't really have
+    // them, but the >1 albedo blooms at night for a stylish forward glow. A
+    // thin HDR accent line links the pair across the nose front. ---
+    const drlC = [2.4, 2.4, 2.7];
+    for (const s of [-1, 1]) {
+      addBox(out, s*0.14, 0.30, 2.62, 0.05, 0.05, 0.05, drlC);   // side marker light
+    }
+    addBox(out, 0, 0.288, 2.70, 0.22, 0.012, 0.024, drlC);       // thin accent link line
+
     // --- Cockpit opening (dark) + halo + front pillar ---
     addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05]);
     for (const s of [-1, 1]) {
@@ -636,8 +646,9 @@ const Car3D = (function () {
     const mz = ckpt ? 0.62 : 0.24, mx = ckpt ? 0.44 : 0.34, msx = ckpt ? 0.40 : 0.30;
     for (const s of [-1, 1]) {
       addBox(out, s*msx, 0.72, mz, ckpt ? 0.12 : 0.05, 0.03, 0.07, DARK);   // stalk
-      addBox(out, s*mx, 0.735, mz, 0.03, 0.15, 0.11, [0.13, 0.13, 0.14]);   // housing
-      addBox(out, s*mx, 0.735, mz + 0.06, 0.024, 0.115, 0.02, [0.16, 0.18, 0.24]); // glass
+      addBox(out, s*mx, 0.735, mz, 0.032, 0.155, 0.115, [0.09, 0.09, 0.11]); // cleaner dark carbon housing
+      addBox(out, s*mx, 0.735, mz + 0.062, 0.020, 0.135, 0.024, [0.10, 0.11, 0.14]); // glass bezel / surround
+      addBox(out, s*mx, 0.735, mz + 0.066, 0.024, 0.108, 0.018, [0.46, 0.56, 0.78]); // brighter blue reflective glass
       addBox(out, s*(mx-0.005), 0.70, mz + 0.005, 0.02, 0.014, 0.02, [2.1, 1.2, 0.1]); // stalk marker
     }
 
@@ -701,8 +712,15 @@ const Car3D = (function () {
     const exhR = exhStyle ? (exhStyle.twin ? 0.09 : (exhStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
     addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17]);
+    // Heat-glazed tailpipe mouth: a dark bore with a faint warm ember at the tip
+    // (mildly HDR so it reads as a hot exhaust glow after dark).
+    addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04]);
+    addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012, [1.15, 0.42, 0.14]);
     if (exhTwin) {
-      for (const s of [-1, 1]) addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, [0.16, 0.16, 0.17]);
+      for (const s of [-1, 1]) {
+        addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, [0.16, 0.16, 0.17]);
+        addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012, [1.05, 0.38, 0.12]); // twin-tip ember
+      }
     }
 
     // --- Shark fin + engine-cover accent (flat, team accent colour) ---

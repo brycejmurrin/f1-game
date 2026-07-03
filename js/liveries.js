@@ -19,6 +19,14 @@ const Liveries = (function () {
     { id: "camo",     name: "Camo",       c1: [0.24, 0.28, 0.19],    c2: [0.46, 0.42, 0.30] },
     { id: "midnight", name: "Midnight",   c1: [0.04, 0.05, 0.12],    c2: [0.30, 0.45, 0.85], stripe: [0.55, 0.75, 1.0] },
     { id: "flame",    name: "Flame",      c1: [0.08, 0.07, 0.07],    c2: [0.98, 0.35, 0.03], stripe: [0.98, 0.72, 0.10] },
+    // Stripe-forward graphic schemes — the bold centreline spine is the point.
+    { id: "arrowhead", name: "Arrowhead", c1: [0.09, 0.09, 0.11],    c2: [1.0, 0.85, 0.0],   stripe: [1.0, 0.90, 0.06] },
+    { id: "splitshot", name: "Split Shot", c1: [0.80, 0.08, 0.12],   c2: [0.05, 0.09, 0.26],  stripe: [0.95, 0.96, 0.98] },
+    { id: "candyflip", name: "Candy Flip", c1: [0.86, 0.10, 0.55],   c2: [0.34, 0.09, 0.70],  stripe: [0.12, 0.86, 0.92] },
+    { id: "lemans",    name: "Le Mans Hoops", c1: [0.05, 0.20, 0.72], c2: [0.95, 0.96, 0.98], stripe: [0.98, 0.55, 0.05] },
+    { id: "twinbolt",  name: "Twin Bolt",  c1: [0.93, 0.94, 0.96],   c2: [0.05, 0.05, 0.07],  stripe: [0.90, 0.10, 0.12] },
+    { id: "slipstream", name: "Slipstream", c1: [0.04, 0.20, 0.22],  c2: [1.0, 0.45, 0.0],    stripe: [1.0, 0.60, 0.05] },
+    { id: "torch",     name: "Torch",      c1: [0.10, 0.04, 0.10],   c2: [0.98, 0.24, 0.42],  stripe: [1.0, 0.74, 0.16] },
   ];
   // Per-team heritage / concept schemes.
   const BY_TEAM = {
@@ -56,6 +64,7 @@ const Liveries = (function () {
       { id: "alp_tricolore", name: "Tricolore", c1: [0.0, 0.22, 0.62], c2: [0.86, 0.10, 0.16], stripe: [0.96, 0.96, 0.98] },
       { id: "alp_neon",  name: "Neon Azur",     c1: [0.0, 0.58, 0.80], c2: [1.0, 0.53, 0.74] },
       { id: "alp_carbon", name: "Enstone Dark", c1: [0.07, 0.09, 0.13], c2: [0.0, 0.58, 0.80], stripe: [1.0, 0.53, 0.74] },
+      { id: "alp_azur",  name: "Azur Rose",     c1: [0.0, 0.42, 0.85], c2: [1.0, 0.53, 0.74], stripe: [0.95, 0.96, 0.98] },
     ],
     racingbulls: [
       { id: "rbv_galaxy", name: "Galaxy",     c1: [0.06, 0.08, 0.22], c2: [0.086, 0.20, 0.80], stripe: [0.75, 0.45, 1.0] },
@@ -63,6 +72,7 @@ const Liveries = (function () {
       { id: "rbv_purple", name: "Ultraviolet", c1: [0.10, 0.12, 0.42], c2: [0.086, 0.20, 0.80], stripe: [0.85, 0.14, 0.18] },
       { id: "rbv_navy",   name: "Navy Cadet", c1: [0.086, 0.20, 0.80], c2: [0.95, 0.94, 0.92], stripe: [0.85, 0.14, 0.18] },
       { id: "rbv_scarlet", name: "Scarlet Flash", c1: [0.95, 0.94, 0.92], c2: [0.85, 0.14, 0.18], stripe: [0.086, 0.20, 0.80] },
+      { id: "rbv_hardline", name: "Hardline",   c1: [0.94, 0.95, 0.97], c2: [0.07, 0.13, 0.42], stripe: [0.88, 0.12, 0.16] },
     ],
     haas: [
       { id: "haas_black", name: "Blackout",  c1: [0.06, 0.06, 0.07], c2: [0.85, 0.16, 0.11], stripe: [0.90, 0.92, 0.94] },
@@ -77,6 +87,7 @@ const Liveries = (function () {
       { id: "wil_martini",  name: "Martini",       c1: [0.94, 0.95, 0.97], c2: [0.06, 0.24, 0.79], stripe: [0.82, 0.10, 0.18] },
       { id: "wil_navy",     name: "Deep Navy",     c1: [0.04, 0.10, 0.30], c2: [0.06, 0.24, 0.79], stripe: [0.55, 0.70, 0.92] },
       { id: "wil_camo",     name: "Blue Camo",     c1: [0.06, 0.24, 0.79], c2: [0.55, 0.70, 0.92] },
+      { id: "wil_azzurro",  name: "Azzurro",       c1: [0.03, 0.14, 0.52], c2: [0.95, 0.96, 0.98], stripe: [0.12, 0.55, 0.95] },
     ],
     audi: [
       { id: "audi_black", name: "Vorsprung", c1: [0.06, 0.06, 0.07], c2: [0.96, 0.02, 0.22], stripe: [0.70, 0.71, 0.74] },
@@ -98,6 +109,7 @@ const Liveries = (function () {
       { id: "cad_gold",  name: "Gold Luxe", c1: [0.05, 0.05, 0.06], c2: [0.80, 0.66, 0.30], stripe: [0.88, 0.78, 0.42] },
       { id: "cad_black", name: "Onyx",      c1: [0.03, 0.03, 0.04], c2: [0.80, 0.66, 0.30], stripe: [0.86, 0.88, 0.92] },
       { id: "cad_liberty", name: "Liberty", c1: [0.90, 0.92, 0.95], c2: [0.10, 0.18, 0.50], stripe: [0.86, 0.12, 0.16] },
+      { id: "cad_champagne", name: "Champagne", c1: [0.04, 0.05, 0.08], c2: [0.83, 0.69, 0.34], stripe: [0.94, 0.94, 0.96] },
     ],
   };
 
