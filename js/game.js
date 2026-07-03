@@ -6026,14 +6026,10 @@ function enterPhotoMode() {
   // Lock resolution while flying (no governor stepping — every scale change
   // reallocates the whole post chain). The previous scale is restored on exit
   // (NOT a snap to full res, which was a reallocation burst at the worst moment).
+  // Follows the user's RESOLUTION setting as-is — no forced downgrade; the
+  // far-plane clamp in updatePhotoCam is what bounds draw volume/GPU cost.
   _autoRes = false;
   _photoPrevScale = GLX.getRenderScale ? GLX.getRenderScale() : 1;
-  // On the memory-safe STANDARD mobile tier, cap free-cam resolution — but only
-  // DOWNWARD: if the user already runs below the cap (e.g. RESOLUTION: LOW), keep
-  // their lower scale, never raise it. GRAPHICS: HIGH phones and desktop keep
-  // full resolution (the far-plane clamp in updatePhotoCam still bounds draw
-  // volume on ALL phones, which is the real free-cam safety).
-  if (GLX.mobileTier && GLX.setRenderScale) GLX.setRenderScale(Math.min(_photoPrevScale, 0.55));
   initPhotoCam();
   document.body.classList.add("photo-mode");
   $("photo-controls").hidden = false;
