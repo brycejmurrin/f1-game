@@ -277,6 +277,7 @@ let dbgCam = null;   // debug free camera override (set via __apex.view); null =
 // scene can be inspected/photographed from anywhere, not just where the menu was
 // opened. Feeds dbgCam every paused frame (see updatePhotoCam / tick()). ----
 let photoMode = false;
+let _photoPrevScale = 1;   // render scale to restore when leaving photo mode
 const photoCam = { pos: [0, 6, 0], yaw: 0, pitch: 0, fov: 60 };
 const photoKeys = { w: false, s: false, a: false, d: false, up: false, dn: false,
                     pu: false, pd: false, yl: false, yr: false, boost: false };
@@ -4743,11 +4744,10 @@ function tickBody(now) {
     // LIGHTING TUNER live preview: keep RENDERING (physics stays paused) while
     // the panel is open so every slider change shows on the held frame.
     if ((state === "race" || state === "count") && !$("lighting").hidden) {
-      // Governor must run HERE too: the free-cam / tuner preview renders every
-      // frame while paused, and without this it stays pinned at full resolution
-      // — on a memory-limited mobile GPU that sustained full-res load (with the
-      // reflection stack) can exhaust the context and drop it. Let it adapt down.
-      perfGovernor(_dtMs);
+      // NO governor here: paused preview frames are vsync-cheap, so the governor
+      // only ever stepped the scale UP toward full res — each step a complete
+      // render-target reallocation. The scale simply stays where the race left it
+      // (and photo mode pins its own — see enterPhotoMode).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20));   // fly-cam integrates before the held frame
       render(Math.min(dt, 1 / 20));
     }
@@ -5796,8 +5796,15 @@ function updatePhotoCam(dt) {
   photoCam.pos[1] += (fwd[1] * mf + mv) * k;
   photoCam.pos[2] += (fwd[2] * mf + rgt[2] * ms) * k;
   const e = photoCam.pos;
+  // far: the far plane is the game's ONLY distance cull (chunk AABBs test against
+  // the frustum incl. far; fog never culls). 2500 m from altitude framed EVERY
+  // chunk of a street circuit — ~1.1 M tris / ~970 draw calls per frame on Vegas,
+  // which overflows a mobile TBDR tiler and gets the web app jetsam-killed. Keep
+  // 1100 m on mobile (fog hides the edge); desktop can afford the full vista.
+  // fog: 1.0 — the 0.15× default at the dbgCam branch was meant for the dev
+  // view() hook; the tuner preview should show the REAL race fog anyway.
   dbgCam = { eye: [e[0], e[1], e[2]], target: [e[0] + fwd[0] * 100, e[1] + fwd[1] * 100, e[2] + fwd[2] * 100],
-             fov: photoCam.fov, far: 2500 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
+             fov: photoCam.fov, far: GLX.isMobile ? 1100 : 2500, fog: 1.0 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
 }
 // Free-cam is a sub-mode OF the lighting tuner: the tuner panel stays open (docked
 // right) so sliders can be adjusted while the camera flies, and the effect is seen
@@ -5806,12 +5813,13 @@ function enterPhotoMode() {
   if (photoMode) return;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   photoMode = true;
-  // Proactively drop render resolution and LOCK it (no auto-upscale): the free-cam
-  // can fly up and frame the WHOLE track (no fog culling), a big fill-rate spike,
-  // and the HDR render targets at full res blow a memory-limited mobile GPU's
-  // budget (hard WebView crash). Half resolution ≈ quarter the target memory.
+  // Lock resolution while flying (no governor stepping — every scale change
+  // reallocates the whole post chain). Mobile additionally drops to 0.55 for
+  // fill-rate headroom; the previous scale is restored on exit (NOT a snap to
+  // full res, which was a reallocation burst at the worst possible moment).
   _autoRes = false;
-  if (GLX.setRenderScale) GLX.setRenderScale(0.55);
+  _photoPrevScale = GLX.getRenderScale ? GLX.getRenderScale() : 1;
+  if (GLX.isMobile && GLX.setRenderScale) GLX.setRenderScale(0.55);
   initPhotoCam();
   document.body.classList.add("photo-mode");
   $("photo-controls").hidden = false;
@@ -5831,7 +5839,7 @@ function exitPhotoMode() {
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
   _autoRes = true;   // hand resolution control back to the frame-time governor
-  if (GLX.setRenderScale) GLX.setRenderScale(1);
+  if (GLX.setRenderScale) GLX.setRenderScale(_photoPrevScale || 1);
 }
 // Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
 function togglePhotoPanel() {

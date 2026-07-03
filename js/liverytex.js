@@ -6,6 +6,11 @@
 // these are recognisable-in-silhouette homages, NOT exact trademark repros.
 const LiveryTex = (function () {
   const SIZE = 1024;
+  // Mobile tier (must match glx.js): upload atlases at half size — 22 cars ×
+  // 1024² RGBA + mips was ~117 MB of GPU memory, the biggest consumer on iOS
+  // web apps, whose jetsam budget counts GPU allocations.
+  const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
 
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
   // maps panel UVs to these rects. Do NOT change these numbers — the geometry
@@ -768,6 +773,16 @@ const LiveryTex = (function () {
               : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
     drawNumber(ctx, num, REGIONS.num, ink, accent, c1);
 
+    // Mobile tier: upload at 512² instead of 1024². All layout stays authored at
+    // SIZE (UVs are FRACTIONS of the atlas — resolution-independent), only the
+    // uploaded texture shrinks: 5.3 MB → 1.3 MB per atlas, ×22 cars ≈ −88 MB —
+    // the single biggest GPU consumer on iOS web apps (tight jetsam budget).
+    if (IS_MOBILE) {
+      const small = document.createElement("canvas");
+      small.width = SIZE / 2; small.height = SIZE / 2;
+      small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
+      return small;
+    }
     return canvas;
   }
 

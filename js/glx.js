@@ -2028,6 +2028,12 @@ void main() {}`;
 
   let gl = null;
   let canvas = null;
+  // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
+  // budget that GPU/IOSurface allocations count against — a hard kill, no JS
+  // error, no contextlost event. Shrink every discretionary GPU allocation on
+  // phones/tablets. (iPadOS 13+ masquerades as Mac; catch it via touch points.)
+  const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
   let litProg = null, litU = null;
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
@@ -2088,7 +2094,7 @@ void main() {}`;
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
   let shadowLightVP = new Float32Array(16);
-  const SHADOW_SIZE = 2048;
+  const SHADOW_SIZE = IS_MOBILE ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier
   let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
@@ -2213,7 +2219,9 @@ void main() {}`;
       // 2× (was 4×): halves the multisample colour+depth store and the resolve
       // blit bandwidth. FXAA (full-res, below) cleans up the specular/edge
       // shimmer the lower sample count misses, so the perceptual gap is small.
-      msaaSamples = Math.min(2, cMax, dMax);
+      // Mobile tier: no MSAA at all — two extra full-res multisampled surfaces
+      // (~20-30 MB) against a tight jetsam budget; FXAA alone carries the AA.
+      msaaSamples = IS_MOBILE ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
@@ -2250,9 +2258,15 @@ void main() {}`;
     };
     // scene target (full res) + depth as a SAMPLEABLE texture (enables SSAO and
     // any depth-aware post; same pattern already used for the shadow map).
+    // NOTE (every block below): bind the FBO BEFORE deleting its old attachments.
+    // Deleting a texture only auto-detaches it from the CURRENTLY BOUND
+    // framebuffer — deleted-while-attached-elsewhere keeps the storage resident,
+    // so old + new full-size target sets were transiently alive together
+    // (~tens of MB per setRenderScale call): a jetsam kill on mobile web apps.
+    if (!sceneFBO) sceneFBO = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
     if (sceneTex) gl.deleteTexture(sceneTex);
     if (sceneDepth) gl.deleteTexture(sceneDepth);
-    if (!sceneFBO) sceneFBO = gl.createFramebuffer();
     sceneTex = mk(width, height);
     sceneDepth = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
@@ -2270,19 +2284,27 @@ void main() {}`;
     // the combo doesn't yield a complete FBO on this driver.
     if (msaaSamples > 1) {
       const internalD = gl.DEPTH_COMPONENT24;
+      if (!msFBO) msFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, msFBO);   // bound → deletes auto-detach (frees NOW)
       if (msColorRB) gl.deleteRenderbuffer(msColorRB);
       if (msDepthRB) gl.deleteRenderbuffer(msDepthRB);
-      if (!msFBO) msFBO = gl.createFramebuffer();
       msColorRB = gl.createRenderbuffer();
       gl.bindRenderbuffer(gl.RENDERBUFFER, msColorRB);
       gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internal, width, height);
       msDepthRB = gl.createRenderbuffer();
       gl.bindRenderbuffer(gl.RENDERBUFFER, msDepthRB);
       gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internalD, width, height);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, msFBO);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msColorRB);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msDepthRB);
-      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) msaaSamples = 0;
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        // Bail cleanly: without this the two just-allocated multisampled
+        // surfaces (~30 MB at full res) stayed attached to msFBO forever.
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, null);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, null);
+        gl.deleteRenderbuffer(msColorRB); gl.deleteRenderbuffer(msDepthRB);
+        msColorRB = null; msDepthRB = null;
+        msaaSamples = 0;
+      }
     }
     // bloom mip chain (half res, /4, /8, … — stop once a level gets tiny)
     for (const lv of bloomLv) { if (lv.tex) gl.deleteTexture(lv.tex); if (lv.fbo) gl.deleteFramebuffer(lv.fbo); }
@@ -2303,13 +2325,15 @@ void main() {}`;
     if (ssaoProg) {
       ssaoW = Math.max(1, Math.floor(width / 2));
       ssaoH = Math.max(1, Math.floor(height / 2));
-      if (ssaoTex) gl.deleteTexture(ssaoTex);
-      if (ssaoBlurTex) gl.deleteTexture(ssaoBlurTex);
       if (!ssaoFBO) ssaoFBO = gl.createFramebuffer();
       if (!ssaoBlurFBO) ssaoBlurFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
+      if (ssaoTex) gl.deleteTexture(ssaoTex);
       ssaoTex = mk(ssaoW, ssaoH);
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoTex, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
+      if (ssaoBlurTex) gl.deleteTexture(ssaoBlurTex);
       ssaoBlurTex = mk(ssaoW, ssaoH);
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoBlurTex, 0);
@@ -2318,13 +2342,15 @@ void main() {}`;
     if (godrayProg) {
       godrayW = Math.max(1, Math.floor(width / 2));
       godrayH = Math.max(1, Math.floor(height / 2));
-      if (godrayTex) gl.deleteTexture(godrayTex);
-      if (godrayBlurTex) gl.deleteTexture(godrayBlurTex);
       if (!godrayFBO) godrayFBO = gl.createFramebuffer();
       if (!godrayBlurFBO) godrayBlurFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
+      if (godrayTex) gl.deleteTexture(godrayTex);
       godrayTex = mk(godrayW, godrayH);
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayTex, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
+      if (godrayBlurTex) gl.deleteTexture(godrayBlurTex);
       godrayBlurTex = mk(godrayW, godrayH);
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
@@ -2332,8 +2358,9 @@ void main() {}`;
     // LDR target (full res, RGBA8): the composite renders here so the FXAA pass
     // can edge-detect on the final tonemapped image, then resolve to the screen.
     if (fxaaProg) {
-      if (ldrTex) gl.deleteTexture(ldrTex);
       if (!ldrFBO) ldrFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
+      if (ldrTex) gl.deleteTexture(ldrTex);
       ldrTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, ldrTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -2430,7 +2457,11 @@ void main() {
   function init(canvasEl) {
     canvas = canvasEl;
     gl = canvas.getContext("webgl2", {
-      antialias: true,
+      // antialias:true makes the BROWSER allocate its own multisampled backbuffer
+      // (Apple GPUs round the request up to 4×) — pure waste on the post path,
+      // which renders offscreen and only blits a resolved image to the screen.
+      // On the memory-tight mobile tier that's ~40-50 MB of IOSurface for nothing.
+      antialias: !IS_MOBILE,
       alpha: false,
       powerPreference: "high-performance",
     });
@@ -2535,7 +2566,10 @@ void main() {
   // softens. setRenderScale() drives it from the frame-time governor in game.js.
   let renderScale = 1;
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
+    // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
+    // a ~6" screen, and it multiplies with every other saving.
+    const dpr = Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.5 : 2);
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale));
     const h = Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale));
     const changed = canvas.width !== w || canvas.height !== h;
@@ -3660,5 +3694,6 @@ void main() {
     msaa: () => msaaSamples,
     pcss: () => pcssEnabled,
     setRenderScale, getRenderScale,
+    isMobile: IS_MOBILE,
   };
 })();
