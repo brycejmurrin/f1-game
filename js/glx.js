@@ -86,6 +86,7 @@ uniform float uPcssPen;     // PCSS penumbra growth rate (was literal 80.0)
 uniform float uKeyMul;      // direct sun/key-light intensity multiplier (default 1)
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
+uniform float uCloudSpeed;  // cloud drift-rate multiplier (matches SKY uCloudSpeed; 0 = frozen)
 uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distance haze
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
@@ -330,7 +331,11 @@ float cloudShadow(vec3 wp) {
   if (uCloudCover <= 0.001 || uSunDir.y <= 0.06) return 0.0;
   float cloudY = 360.0;
   float t = (cloudY - wp.y) / uSunDir.y;          // distance up the sun ray to the deck
-  vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(uTime * 0.012, uTime * 0.005);
+  // Drift scaled by uCloudSpeed so the ground dapple freezes/slows in lockstep
+  // with the SKY clouds (which use the same knob). Was raw uTime, so "0 = frozen
+  // sky" still left the ground shadows crawling.
+  float cT = uTime * uCloudSpeed;
+  vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(cT * 0.012, cT * 0.005);
   float c = cloudFBM(cp);
   return smoothstep(0.54 - uCloudCover * 0.40, 0.92, c) * uCloudCover;
 }
@@ -1528,6 +1533,7 @@ uniform vec3 uSunColor;
 uniform float uStr;
 uniform float uTime;
 uniform float uCloudCover;
+uniform float uCloudSpeed;  // cloud drift-rate multiplier (matches SKY/LIT; 0 = frozen)
 #define GR_MAX_LIGHTS 12
 uniform int uNumLights;
 uniform vec3 uLightPos[GR_MAX_LIGHTS];
@@ -1554,7 +1560,8 @@ float gCloudFBM(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<3;i++){ s+=a*gNoise(p)
 float gCloud(vec3 wp){
   if (uCloudCover <= 0.001 || uSunDir.y <= 0.06) return 0.0;
   float t = (360.0 - wp.y) / uSunDir.y;
-  vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(uTime * 0.012, uTime * 0.005);
+  float cT = uTime * uCloudSpeed;   // lockstep with SKY/LIT cloud drift
+  vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(cT * 0.012, cT * 0.005);
   return smoothstep(0.54 - uCloudCover * 0.40, 0.92, gCloudFBM(cp)) * uCloudCover;
 }
 void main() {
@@ -2138,7 +2145,7 @@ void main() {}`;
   let frameSunColor = null;
   let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal lighting
   let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
-  let frameTime = 0, frameCloud = 0;
+  let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
   let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null, blackTex = null;
   let godrayProg = null, godrayU = null, godrayFBO = null, godrayTex = null;
@@ -2282,7 +2289,7 @@ void main() {}`;
     } catch (e) { msaaSamples = 0; }
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
-    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
+    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -2556,7 +2563,7 @@ void main() {
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
@@ -2886,6 +2893,7 @@ void main() {
     frameAmbGround = frame.ambientGround || [0.2, 0.19, 0.18];
     frameTime = frame.time != null ? frame.time : 0;
     frameCloud = frame.cloud != null ? frame.cloud : 0;
+    frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
     frameLights = frame.lights || null;
     frameGroundMist = frame.groundMist != null ? frame.groundMist : 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
@@ -2979,6 +2987,7 @@ void main() {
     gl.uniform1f(litU.uLampFog,     frame.lampFog != null ? frame.lampFog : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
+    gl.uniform1f(litU.uCloudSpeed,  frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
     // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
@@ -3504,6 +3513,7 @@ void main() {
       gl.uniform1f(godrayU.uStr, sunGR ? grStr : 0.0);
       gl.uniform1f(godrayU.uTime, frameTime);
       gl.uniform1f(godrayU.uCloudCover, frameCloud);
+      gl.uniform1f(godrayU.uCloudSpeed, frameCloudSpeed);
       // Lamp volumetrics: upload the nearest-8 lamps to the eye + the haze gate.
       let grNL = 0;
       if (lampVol > 0 && frameLights) {
