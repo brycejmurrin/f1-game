@@ -1872,7 +1872,12 @@ void main() {
         hitCol /= (w0 + 2.0 * w1 + 2.0 * w2 + w3 + w4);
       }
       // Miss fallback: reflect the dim night sky-glow, never a black hole.
-      vec3 skyRefl = mix(uReflSkyLo, uReflSkyHi, clamp(R.y, 0.0, 1.0));
+      // R.y is the reflection's up-ness: grazing rays (R.y→0, far road) should
+      // show the HORIZON glow, steep rays (R.y→1, road right under the camera)
+      // the ZENITH — matching the lit shader's analytic env mix(horizon,zenith)
+      // and physical wet-road reflection. Was mix(zenith,horizon), inverted, so
+      // the reflected sky bands ran upside-down vs the road's own paint mirror.
+      vec3 skyRefl = mix(uReflSkyHi, uReflSkyLo, clamp(R.y, 0.0, 1.0));
       vec3 reflCol = found ? hitCol : skyRefl;
       // Soft-clip the reflected colour BEFORE it's substituted in: a bright HDR
       // hit (neon signage, a lit window, the sun disc, a floodlight lens) was
