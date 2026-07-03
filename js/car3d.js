@@ -753,14 +753,24 @@ const Car3D = (function () {
     }
 
     // --- BODY stripe (livery.stripe): a bold contrasting band down the car's
-    // full spine (nose → hood → airbox → engine cover), only when the chosen
-    // livery specifies one. Follows the bodywork crown line. ---
+    // full spine — nose tip → nose → monocoque → hood crest, then (past the
+    // open cockpit) airbox → engine-cover ridge to the tail. Previously four
+    // DISCONNECTED segments (it stopped 0.45 m short of the tip, skipped the
+    // monocoque entirely, and the flat hood band floated above the sloping
+    // deck); now each piece is a crown-following loft that meets the next, so
+    // the stripe reads continuous from every camera. Only the cockpit opening
+    // legitimately interrupts it. ---
     const stripeC = liv.stripe || null;
     if (stripeC) {
-      addLoft(out, 1.55, 0, 0.485, 0.15, 0.022, 2.70, 0, 0.352, 0.085, 0.018, stripeC); // nose spine (wide)
-      addBox(out, 0, 0.672, 0.45, 0.13, 0.02, 0.82, stripeC);   // hood crown band
+      addLoft(out, 2.70, 0, 0.352, 0.085, 0.018, 3.14, 0, 0.296, 0.045, 0.014, stripeC); // nose tip
+      addLoft(out, 1.55, 0, 0.485, 0.15, 0.022, 2.70, 0, 0.352, 0.085, 0.018, stripeC);  // nose spine (wide)
+      addLoft(out, 1.05, 0, 0.545, 0.13, 0.022, 1.55, 0, 0.494, 0.15, 0.022, stripeC);   // bulkhead connector
+      addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
       addBox(out, 0, 0.872, -0.42, 0.08, 0.02, 0.56, stripeC);  // airbox spine band
-      if (!ckpt) addBox(out, 0, 0.55, -1.40, 0.07, 0.02, 0.92, stripeC); // engine-cover tail band
+      if (!ckpt) {
+        addLoft(out, -0.94, 0, 0.775, 0.075, 0.02, -0.70, 0, 0.868, 0.08, 0.02, stripeC); // airbox → cover ridge drop
+        addLoft(out, -1.95, 0, 0.600, 0.060, 0.02, -0.94, 0, 0.775, 0.075, 0.02, stripeC); // engine-cover ridge run to the tail
+      }
     }
     // --- NOSE stripe (livery.noseStripe): a classic painted band running the
     // nose crown ONLY — very tip → bulkhead — independent of the full-length

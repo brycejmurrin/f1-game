@@ -2,7 +2,8 @@
 /* Apex 26 — custom paint jobs (liveries).
    Each livery: { id, name, c1:[r,g,b] primary bodywork, c2:[r,g,b] accent/stripe,
    stripe?:[r,g,b] optional bold centreline BODY stripe — runs the car's full
-     spine (nose → hood → airbox → engine cover),
+     spine continuously (nose tip → monocoque → hood → airbox → engine-cover
+     ridge), broken only by the open cockpit,
    noseStripe?:[r,g,b] optional NOSE stripe — a classic band down the nose crown
      only (very tip → bulkhead). Independent of `stripe`; layers on top of it,
    accent?:[r,g,b] optional TERTIARY paint colour — a distinct third colour used to
