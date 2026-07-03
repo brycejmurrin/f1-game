@@ -53,10 +53,10 @@
  *   - MSAA: msaa() stays 1 (a multisampled scene + resolve needs a sampleable
  *     single-sample depth for SSAO — depth resolve is not in core WebGPU; see
  *     docs/WEBGPU-PHASE4-NOTES.md).
- *   - Env probe (envFaceBegin/envFaceEnd): still no-op; the LIT env-mirror term
- *     remains deferred (see notes for exactly what a cube-face probe needs).
- *   - COMPOSITE SSR / speed-blur / chromatic aberration are DEFERRED in the
- *     shader port itself (wgsl-post.js), so nothing here drives them.
+ *   - Env probe (envFaceBegin/envFaceEnd): still no-op — but the LIT env-mirror
+ *     term (carReflect) is LIVE via an ANALYTIC sky-gradient reflection (no 6-face
+ *     probe capture), matching GLX's default carEnvCube=0. A real captured cube is
+ *     only needed for mirroring scene geometry (deferred; see notes).
  *   - Instancing (Phase 5) needs game.js to supply instance data (out of scope).
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
