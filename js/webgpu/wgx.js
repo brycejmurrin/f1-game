@@ -445,7 +445,23 @@ const WGX = (function () {
         };
         pBloomDown = fsPipe(_Post.BLOOM_DOWN, SCENE_FORMAT, null);
         pBloomUp   = fsPipe(_Post.BLOOM_UP,   SCENE_FORMAT, ADD_BLEND);   // additive accumulate
-        pSSAO      = fsPipe(_Post.SSAO,       SSAO_FORMAT,  null);
+        // SSAO samples a DEPTH texture — "auto" layout infers a *filtering*
+        // sampler slot, which WebGPU rejects for depth. Build an explicit layout
+        // with a non-filtering sampler (pointSampler is nearest = non-filtering).
+        {
+          const ssaoG0 = device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+          ] });
+          const ssaoMod = device.createShaderModule({ code: _Post.SSAO });
+          pSSAO = device.createRenderPipeline({
+            layout: device.createPipelineLayout({ bindGroupLayouts: [ssaoG0] }),
+            vertex: { module: ssaoMod, entryPoint: "vs_main" },
+            fragment: { module: ssaoMod, entryPoint: "fs_main", targets: [{ format: SSAO_FORMAT }] },
+            primitive: { topology: "triangle-list" },
+          });
+        }
         pGodray    = fsPipe(_Post.GODRAY,     SCENE_FORMAT, null);
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
         pFXAA      = fsPipe(_Post.FXAA,       format,        null);
@@ -497,7 +513,7 @@ const WGX = (function () {
             attributes: [
               { shaderLocation: 0, offset: 0,  format: "float32x3" },
               { shaderLocation: 1, offset: 12, format: "float32x2" },
-              { shaderLocation: 2, offset: 24, format: "float32x4" },
+              { shaderLocation: 2, offset: 20, format: "float32x4" },
             ] }] },
           fragment: { module: skidMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
           primitive: { topology: "triangle-list", cullMode: "none" },

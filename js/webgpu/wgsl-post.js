@@ -234,7 +234,7 @@ ${fullscreenTri}
 ${POST_VS}
 
 fn ssaoViewPos(uv : vec2<f32>) -> vec3<f32> {
-  let d = textureSampleLevel(depthTex, depthSamp, uv, 0.0);
+  let d = textureSampleLevel(depthTex, depthSamp, uv, 0i);
   // Texture-space uv -> WebGPU NDC (y flip), depth already 0..1.
   let ndc = vec3<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d);
   let v = U.invProj * vec4<f32>(ndc, 1.0);
@@ -248,11 +248,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let contact  = U.p0.w;
   let radius   = U.p1.x;
 
-  let dCentre = textureSampleLevel(depthTex, depthSamp, in.uv, 0.0);
-  if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
-
+  // Derivatives (dpdx/dpdy) MUST run in uniform control flow, so compute the
+  // view-space position + normal BEFORE the sky early-out (an early conditional
+  // return makes everything after it non-uniform).
   let P = ssaoViewPos(in.uv);
   let N = normalize(cross(dpdx(P), dpdy(P)));
+  let dCentre = textureSampleLevel(depthTex, depthSamp, in.uv, 0i);
+  if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
   // Screen-space radius shrinks with distance so world reach stays ~constant.
   let scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
   // Per-pixel rotation turns banding into noise (uses the frag coord).
