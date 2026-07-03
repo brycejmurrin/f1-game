@@ -41,8 +41,16 @@ jobs:
           mkdir -p _site
           cp index.html version.json manifest.json _site/
           cp -r js css icons assets _site/
+      # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across
+      # re-run attempts of the same run, so a re-run after a failed deploy left
+      # multiple artifacts named "github-pages" in the run and deploy-pages@v4
+      # aborted with "Multiple artifacts named github-pages were unexpectedly
+      # found". A per-attempt name keeps every attempt's upload unique.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+          name: github-pages-${{ github.run_attempt }}
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
