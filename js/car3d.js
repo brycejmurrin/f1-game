@@ -69,6 +69,18 @@ const Car3D = (function () {
   // bottom/top, L/R = -x/+x). Degenerate corners (two at the same point) give
   // wedges and prisms.
   function addBlock(out, q, col, colFront) {
+    // Mirrored call sites (x → s*x for the left-hand copy of a part) reverse
+    // the corner winding, which inverts every face normal: the part then lights
+    // as an away-facing surface (flat grey, no sun) and back-face culling makes
+    // it SEE-THROUGH in race. Detect the flipped handedness — front-face normal
+    // pointing toward the rear frame — and re-wind so both sides shade alike.
+    {
+      const ax = q[1][0]-q[0][0], ay = q[1][1]-q[0][1], az = q[1][2]-q[0][2];
+      const bx = q[3][0]-q[0][0], by = q[3][1]-q[0][1], bz = q[3][2]-q[0][2];
+      const nx = ay*bz - az*by, ny = az*bx - ax*bz, nz = ax*by - ay*bx;
+      const dx = q[4][0]-q[0][0], dy = q[4][1]-q[0][1], dz = q[4][2]-q[0][2];
+      if (nx*dx + ny*dy + nz*dz > 0) q = [q[1], q[0], q[3], q[2], q[5], q[4], q[7], q[6]];
+    }
     addQuad(out, q[0], q[1], q[2], q[3], colFront || col);  // front (+Z)
     addQuad(out, q[5], q[4], q[7], q[6], col);              // rear  (−Z)
     addQuad(out, q[3], q[2], q[6], q[7], col);              // top   (+Y)
@@ -458,7 +470,10 @@ const Car3D = (function () {
 
     // --- Floor plank (flat) --- per-OPTION suspension shifts ride height.
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
-    addBox(out, 0, 0.07 + rideDY, -0.3, 1.5, 0.06, 3.2, CARBON);
+    // Clamp so the plank's UNDERSIDE never reaches the tarmac: the slammed
+    // options (ride -0.04..-0.048) pushed the bottom face below y=0, which
+    // z-fights the road plane under the car.
+    addBox(out, 0, Math.max(0.07 + rideDY, 0.052), -0.3, 1.5, 0.06, 3.2, CARBON);
 
     // --- Nose: a slim 2026-style tip that tapers to a narrow point, widening
     // back to the bulkhead. Two segments — a low, slender forward tip and a

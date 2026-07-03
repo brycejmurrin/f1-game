@@ -434,7 +434,10 @@ void main() {
       float pby = (vnoise(puv + vec2(0.0, pe)) * 0.6 + vnoise(fuv + vec2(0.0, pe * 3.8)) * 0.4) - pb0;
       vec3 pT = normalize(cross(N, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
       vec3 pB = cross(N, pT);
-      N = normalize(N + (pT * pbx + pB * pby) * (0.7 * uCarPaint * pFade));
+      // 0.22 (was 0.7): at 0.7 the perturbation broke the base-coat specular into
+      // per-pixel noise and the paint read sandy/matte — keep a whisper of live
+      // shimmer, let the clearcoat lobe + env mirror carry the gloss.
+      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * uCarPaint * pFade));
     }
   }
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
@@ -685,9 +688,12 @@ void main() {
     // still peaks at the silhouette. (1-rough·0.6) keeps some reflection even on
     // the rougher dry-day paint. Clamped so it can't fully erase the pigment.
     float envW = clamp(uClearcoat * (0.22 + 0.78 * ccF) * (1.0 - rough * 0.6) * 0.62, 0.0, 0.85);
-    // Hard-ish horizon line: bright sky above, dark ground tone below. The step
-    // sweeping across the curved flanks as the car yaws is the "mirror" cue.
-    float horiz = smoothstep(-0.03, 0.06, Rg.y);
+    // Soft horizon: bright sky above, dark ground tone below. Was a hard step
+    // (-0.03..0.06) — on the faceted engine cover / sidepod shoulders adjacent
+    // facets straddled the line and flipped between "sky" and "ground", reading
+    // as an arbitrary light/dark panel patchwork instead of a reflection. A wide
+    // band keeps the sweep cue but blends across facet seams.
+    float horiz = smoothstep(-0.12, 0.30, Rg.y);
     vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rg.y, 0.0)));   // sqrt not pow(x,0.5): pow(0.0,0.5) NaNs on mobile
     vec3 envCC = mix(uAmbGround * 0.6, skyR, horiz);
     envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
@@ -703,6 +709,10 @@ void main() {
   // it never aliases at range. Additive white glint — leaves the pigment alone.
   if (uCarPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
     float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * uSparkle;
+    // Flakes live in the COLOUR coat: near-black albedo (tyres, carbon floor,
+    // wings, trim) has no metallic pigment, so gate the glitter out there — the
+    // dense white speckle on the dark parts read as dust, not sparkle.
+    spFade *= smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b)));
     if (spFade > 0.01) {
       vec3 cell = floor(vObjPos * 220.0);
       float h1 = hash21(cell.xy + cell.z * 19.7);
@@ -710,8 +720,11 @@ void main() {
       vec3 fT = normalize(cross(Ngeo, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
       vec3 fB = cross(Ngeo, fT);
       vec3 gN = normalize(Ngeo + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
-      float glint = smoothstep(0.965, 1.0, dot(gN, H));
-      color += uSunColor * litNoL * glint * 3.0 * uCarPaint * spFade;
+      // Tighter alignment window + lower gain than the original (0.965 / 3.0):
+      // sparse individual glints that flash as the view moves, instead of a
+      // dense sand-grain field that made the paint read dirty/matte.
+      float glint = smoothstep(0.990, 1.0, dot(gN, H));
+      color += uSunColor * litNoL * glint * 1.6 * uCarPaint * spFade;
     }
   }
 
@@ -1799,20 +1812,32 @@ void main() {
       // the whole mirror surface toward white. Compressing here caps the mirror
       // itself at a sane peak while keeping its colour (unlike a post multiply).
       reflCol = reflCol / (1.0 + reflCol * 0.35);
-      float cover  = found ? hit : 1.0;
+      bool carDom = carTerm > roadTerm;
+      // Car paint: a march MISS means "nothing on-screen mirrors here" — fall
+      // through to the lit shader's analytic env mirror instead of substituting
+      // the fallback sky over the livery. Up-facing panels miss constantly (the
+      // reflected ray exits the screen), so the old full-cover fallback replaced
+      // whole decks with flat sky — the "translucent car" read. The road keeps
+      // its fallback: a wet road always mirrors SOMETHING, never a black hole.
+      float cover  = found ? hit : (carDom ? 0.0 : 1.0);
       // Clean DARKER MIRROR: substitute the reflected scene into a darkened base
       // (a real wet mirror shows the scene it reflects, not a wash added on top).
       // Mirror-like: a high base reflectance (so mid/near tarmac mirrors too, not
       // just the grazing band) with a gentle Fresnel lift toward the horizon.
       float fres = pow(1.0 - max(dot(Nv, V), 0.0), 3.0);
-      float strength = ssrGate * (0.55 + 0.42 * fres);
+      // Car SSR is a DETAIL layer over the clearcoat (the analytic env mirror in
+      // the lit shader owns the base reflective read): much weaker face-on and
+      // Fresnel-leaning, so the world streaks along grazing panels instead of
+      // repainting whole decks.
+      float strength = ssrGate * (carDom ? (0.22 + 0.55 * fres)
+                                         : (0.55 + 0.42 * fres));
       // The darker-mirror substitution below is tuned for WET roads. At the
       // faint dry levels (uReflect < 0.2: dry-day 0.07 / dry-night 0.16) fade
       // the substitution quadratically so it reads as a subtle sheen instead
       // of dark towers replacing the sunlit tarmac. Car-paint pixels damp by
       // their OWN driving value (uCarReflect), not the road's — otherwise a
       // dry session silently crushes car reflections regardless of carReflect.
-      float gateSrc = (carTerm > roadTerm) ? uCarReflect : uReflect;
+      float gateSrc = carDom ? uCarReflect : uReflect;
       strength *= min(gateSrc / 0.20, 1.0);
       // The whole SSR branch above is gated by a HARD "vUV.y < 0.62" cutoff (a
       // cheap early-out — the upper screen is sky, never wet road/car paint).
@@ -1822,8 +1847,13 @@ void main() {
       // visible seam slicing across the frame. Fade the last few percent out
       // instead of cutting it off.
       strength *= 1.0 - smoothstep(0.56, 0.62, vUV.y);
-      float mixAmt = clamp(strength * cover, 0.0, 0.94);   // near-mirror, keeps a hint of asphalt
-      c = mix(c, c * 0.10 + reflCol * 0.92, mixAmt);
+      float mixAmt = clamp(strength * cover, 0.0, carDom ? 0.60 : 0.94);   // near-mirror, keeps a hint of asphalt
+      // Car pixels keep the paint legible under the mirror (a lacquered livery
+      // shows THROUGH its own reflection); the wet road stays a near-full
+      // darker-mirror substitution.
+      vec3 mirrored = carDom ? c * 0.55 + reflCol * 0.70
+                             : c * 0.10 + reflCol * 0.92;
+      c = mix(c, mirrored, mixAmt);
     }
   }
 
