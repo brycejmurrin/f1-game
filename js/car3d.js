@@ -228,15 +228,35 @@ const Car3D = (function () {
     // BRAKES tier 2: a caliper accent peeking through the rim spokes — pure
     // addition, absent (caliperColor null) at every other tier.
     if (caliperColor) {
-      const xc = x0 - 0.02, cr = r * 0.33, cm = 0.35 * Math.PI;
-      // A proper radial caliper straddling the disc rim over a short arc: two
-      // brake PADS set a touch apart with a connecting bridge spanning them —
-      // reads as a machined monobloc caliper peeking through the spokes.
-      for (const da of [-0.12, 0.12]) {
-        const ca = cm + da;
-        addBox(out, xc, cy + Math.cos(ca) * cr, cz + Math.sin(ca) * cr, 0.05, 0.07, 0.05, caliperColor); // pad
+      // A chunky MONOBLOC brake caliper clamping the disc over a short arc at the
+      // top crown (just trailing of 12 o'clock). It's centred on the disc plane
+      // and kept inside the rim face (radius < rimR) so it sits in the open
+      // inner-disc region and reads clearly through the spokes from the side /
+      // 3-4 views — a machined body hugging the rim, not a floating box.
+      const discR = r * 0.34;                 // radius of the clamped disc arc (< rimR)
+      const cm    = -0.14 * Math.PI;          // crown, just trailing of top
+      const arc   = 0.64;                      // angular span (~37°)
+      const bodyX = w * 0.52;                  // axial width straddling the disc
+      const NS    = 4;                         // arc segments
+      const padCol = [caliperColor[0]*0.28, caliperColor[1]*0.28, caliperColor[2]*0.28];
+      // (1) Monobloc body: chunky segments stepped along the disc arc so the mass
+      // curves with the rim instead of reading as one straight bar.
+      for (let i = 0; i < NS; i++) {
+        const a = cm + (i / (NS - 1) - 0.5) * arc;
+        addBox(out, cx, cy + Math.cos(a) * discR, cz + Math.sin(a) * discR,
+               bodyX, 0.056, 0.050, caliperColor);
       }
-      addBox(out, xc - 0.006, cy + Math.cos(cm) * (cr + 0.008), cz + Math.sin(cm) * (cr + 0.008), 0.038, 0.045, 0.15, caliperColor); // bridge
+      // (2) Bridge rib arching over the disc crown — the machined top that ties the
+      // two caliper halves into one monobloc (slightly proud, spans axially).
+      addBox(out, cx, cy + Math.cos(cm) * (discR + 0.020), cz + Math.sin(cm) * (discR + 0.020),
+             bodyX * 1.04, 0.024, 0.12, caliperColor);
+      // (3) Two brake PADS clamping the disc faces — darker plates set at each
+      // caliper half so they read as separate pads through the spokes.
+      for (const sgn of [-1, 1]) {
+        addBox(out, cx + sgn * (bodyX * 0.42),
+               cy + Math.cos(cm) * discR, cz + Math.sin(cm) * discR,
+               0.014, 0.05, 0.13, padCol);
+      }
     }
   }
 
@@ -827,7 +847,7 @@ const Car3D = (function () {
     const topE = fwElems[fwElems.length - 1];
     for (const s of [-1, 1]) {
       addSpan(out, { z: topE[2], x: s * (fwHalf * topE[4] - 0.05), y: topE[3], w: 0.16, h: topE[5] * 1.5 },
-                   { z: topE[2] - 0.04, x: s * (fwHalf + 0.02),    y: topE[3] + 0.135, w: 0.09, h: topE[5] * 1.9 }, topE[6]);
+                   { z: topE[2] - 0.04, x: s * (fwHalf + 0.02),    y: topE[3] + 0.085, w: 0.09, h: topE[5] * 1.6 }, topE[6]);
     }
     for (const s of [-1, 1]) {
       const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.028 : 0.044);
@@ -885,9 +905,14 @@ const Car3D = (function () {
       // continuously with aLvl (lvl 0 = flat low-drag, lvl 4 = towering high-DF),
       // element count grows, high levels add a swan-neck flap + T-wing, `beam`
       // options add a beam wing, and `drs` options open a slotted top gap. ---
-      const rwLift = (aLvl - 2) * 0.070;       // lvl0 -0.14 → lvl4 +0.14 (gentler)
-      const epSY   = 0.26 + aLvl * 0.145;       // lvl0 0.26 → lvl4 0.84 (shorter plates)
-      const epCY   = 0.72 + rwLift;             // endplate vertical centre (LOWER — sits on the car)
+      const aN     = aLvl / 4;                  // 0..1 normalized downforce level
+      const rwLift = (aLvl - 2) * 0.045;        // gentler vertical shift (beam-wing ref)
+      // Concave (square-rootish) growth so the wing DOESN'T tower at high DF: both
+      // the endplate height (epSY) and its vertical centre (epCY) rise quickly at
+      // low DF then flatten toward max — aLvl4 lands only ~0.07 above aLvl2 (roll-
+      // hoop / airbox level) instead of spiking a third higher than the car.
+      const epSY   = 0.28 + 0.30 * Math.pow(aN, 0.7);   // lvl0 0.28 → lvl2 0.47 → lvl4 0.58 (capped)
+      const epCY   = 0.60 + 0.20 * Math.pow(aN, 0.7);   // lvl0 0.60 → lvl2 0.72 → lvl4 0.80 (slow rise)
       // HDR-lit crown accent (team colour pushed >1 so it glows / blooms at night
       // like a modern rear-wing tell-tale strip).
       const railLed = [Math.min(2.2, c2[0]*1.7 + 0.25), Math.min(2.2, c2[1]*1.7 + 0.12), Math.min(2.2, c2[2]*1.7 + 0.08)];
@@ -923,9 +948,9 @@ const Car3D = (function () {
                    { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount
       if (aLvl >= 4) {
         // Extra proud top element + a T-wing ahead of it (max-DF look).
-        addSpan(out, { z: -2.42, y: epCY + 0.350, w: 1.00, h: 0.030 },
-                     { z: -2.66, y: epCY + 0.430, w: 1.00, h: 0.044 }, c2);
-        addBox(out, 0, 1.02, -1.98, 0.34, 0.02, 0.09, c2);            // T-wing
+        addSpan(out, { z: -2.42, y: epCY + 0.250, w: 1.00, h: 0.030 },
+                     { z: -2.66, y: epCY + 0.310, w: 1.00, h: 0.044 }, c2);   // topmost flap (kept near the crown, not spiking)
+        addBox(out, 0, epCY + 0.20, -1.98, 0.34, 0.02, 0.09, c2);     // T-wing (tracks the lowered wing)
       }
       if (aBeam) {
         // Prominent beam wing slung low under the main plane, spanning the crash structure.
