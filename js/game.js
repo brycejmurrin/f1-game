@@ -618,7 +618,8 @@ function resolveLivery(team) {
   if (livDraftOverride && livDraftOverride.teamId === team.id) {
     const l = livDraftOverride.liv;
     return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
-             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null };
+             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
+             noseStripe: l.noseStripe || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -626,7 +627,8 @@ function resolveLivery(team) {
   // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
   // — additive, so an unmodified livery still resolves to today's exact object shape.
   const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
-                      nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null }
+                      nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
+                      noseStripe: liv.noseStripe || null }
                   : { c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -5252,7 +5254,7 @@ function buildLiveryOptions(container, team) {
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
-                     nose: "", pod: "", wing: "", halo: "" };
+                     noseStripe: "", nose: "", pod: "", wing: "", halo: "" };
       csLivCreating = true;
       if (soundOn) GameAudio.uiSelect();
       buildSetup();
@@ -5343,7 +5345,8 @@ function buildLiveryCreator(container, team) {
   };
   wrap.appendChild(colorRow("PRIMARY", "c1", false));
   wrap.appendChild(colorRow("ACCENT", "c2", false));
-  wrap.appendChild(colorRow("STRIPE", "stripe", true));
+  wrap.appendChild(colorRow("BODY STRIPE", "stripe", true));      // full spine: nose → engine cover
+  wrap.appendChild(colorRow("NOSE STRIPE", "noseStripe", true));  // nose crown only: tip → bulkhead
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
   // Optional detail-part colours (see liveries.js header): nose-tip cap, sidepod
   // panel, wing flap elements, halo hoop tint. NONE = today's default look.
@@ -5368,6 +5371,7 @@ function buildLiveryCreator(container, team) {
     const id = "custom_" + livIdCounter();
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     if (d.stripe) liv.stripe = hexToArr(d.stripe);
+    if (d.noseStripe) liv.noseStripe = hexToArr(d.noseStripe);
     if (d.accent) liv.accent = hexToArr(d.accent);
     if (d.nose) liv.nose = hexToArr(d.nose);
     if (d.pod)  liv.pod  = hexToArr(d.pod);
@@ -5395,7 +5399,8 @@ function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now
 // override (no localStorage writes), then force a mesh rebuild.
 function livePreviewDraft(team, d) {
   livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null, accent: d.accent ? hexToArr(d.accent) : null,
-    nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null } };
+    nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null,
+    noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null } };
   _spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 

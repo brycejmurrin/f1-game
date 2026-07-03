@@ -752,15 +752,25 @@ const Car3D = (function () {
       addBox(out, s*0.688, 0.43, 0.20, 0.012, 0.035, 0.45, accentC);   // sidepod-shoulder flash
     }
 
-    // --- Paint-job racing stripe: a bold contrasting band down the car's spine
-    // (nose → hood → airbox → engine cover), only when the chosen livery
-    // specifies one (opts.livery.stripe). Follows the bodywork crown line. ---
-    const stripeC = opts && opts.livery && opts.livery.stripe;
+    // --- BODY stripe (livery.stripe): a bold contrasting band down the car's
+    // full spine (nose → hood → airbox → engine cover), only when the chosen
+    // livery specifies one. Follows the bodywork crown line. ---
+    const stripeC = liv.stripe || null;
     if (stripeC) {
       addLoft(out, 1.55, 0, 0.485, 0.15, 0.022, 2.70, 0, 0.352, 0.085, 0.018, stripeC); // nose spine (wide)
       addBox(out, 0, 0.672, 0.45, 0.13, 0.02, 0.82, stripeC);   // hood crown band
       addBox(out, 0, 0.872, -0.42, 0.08, 0.02, 0.56, stripeC);  // airbox spine band
       if (!ckpt) addBox(out, 0, 0.55, -1.40, 0.07, 0.02, 0.92, stripeC); // engine-cover tail band
+    }
+    // --- NOSE stripe (livery.noseStripe): a classic painted band running the
+    // nose crown ONLY — very tip → bulkhead — independent of the full-length
+    // body stripe. Sits a hair prouder (+0.004 y) and slightly narrower than
+    // the body stripe's nose section, so specifying BOTH layers the nose band
+    // crisply on top instead of z-fighting. ---
+    const noseStripeC = liv.noseStripe || null;
+    if (noseStripeC) {
+      addLoft(out, 1.55, 0, 0.489, 0.13, 0.022, 2.70, 0, 0.356, 0.072, 0.018, noseStripeC); // bulkhead → mid-nose
+      addLoft(out, 2.70, 0, 0.356, 0.072, 0.018, 3.14, 0, 0.300, 0.042, 0.014, noseStripeC); // mid-nose → tip
     }
 
     // --- Livery `nose` tip cap: a painted band wrapping the slim nose tip, sitting

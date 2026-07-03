@@ -213,7 +213,8 @@
     const list = liveryList(team);
     const l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
     return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
-             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null };
+             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
+             noseStripe: l.noseStripe || null };
   }
   function driverNum(team) {
     if (S.num != null) return parseInt(S.num, 10) || 0;

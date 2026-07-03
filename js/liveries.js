@@ -1,7 +1,10 @@
 "use strict";
 /* Apex 26 — custom paint jobs (liveries).
    Each livery: { id, name, c1:[r,g,b] primary bodywork, c2:[r,g,b] accent/stripe,
-   stripe?:[r,g,b] optional bold centreline racing stripe,
+   stripe?:[r,g,b] optional bold centreline BODY stripe — runs the car's full
+     spine (nose → hood → airbox → engine cover),
+   noseStripe?:[r,g,b] optional NOSE stripe — a classic band down the nose crown
+     only (very tip → bulkhead). Independent of `stripe`; layers on top of it,
    accent?:[r,g,b] optional TERTIARY paint colour — a distinct third colour used to
      pick out secondary accent parts (sidepod flash, halo trim, nose flash,
      engine-cover pinstripe) SEPARATELY from the main accent c2. When absent the
@@ -45,7 +48,9 @@ const Liveries = (function () {
     { id: "apexworks", name: "Apex Works",  c1: [0.05, 0.06, 0.09], c2: [0.98, 0.62, 0.02], stripe: [1.0, 0.72, 0.10], accent: [0.0, 0.66, 0.90],
       nose: [0.98, 0.62, 0.02], pod: [0.0, 0.66, 0.90], wing: [0.98, 0.62, 0.02], halo: [0.90, 0.78, 0.30] },
     { id: "duotone",   name: "Duo-Tone",    c1: [0.90, 0.92, 0.95], c2: [0.06, 0.20, 0.55], stripe: [0.90, 0.14, 0.18], accent: [0.90, 0.14, 0.18],
-      nose: [0.06, 0.20, 0.55], pod: [0.90, 0.14, 0.18], wing: [0.06, 0.20, 0.55] },
+      nose: [0.06, 0.20, 0.55], pod: [0.90, 0.14, 0.18], wing: [0.06, 0.20, 0.55], noseStripe: [0.90, 0.92, 0.95] },
+    { id: "speararrow", name: "Spear",      c1: [0.93, 0.94, 0.96], c2: [0.06, 0.06, 0.08], accent: [0.90, 0.14, 0.18],
+      noseStripe: [0.90, 0.14, 0.18], nose: [0.06, 0.06, 0.08] },
     { id: "neonpod",   name: "Neon Pod",    c1: [0.05, 0.05, 0.07], c2: [0.10, 0.90, 0.55], stripe: [0.12, 1.0, 0.60], accent: [0.95, 0.20, 0.60],
       pod: [0.95, 0.20, 0.60], wing: [0.10, 0.90, 0.55], halo: [0.10, 0.90, 0.55] },
     { id: "goldcrest", name: "Gold Crest",  c1: [0.04, 0.05, 0.08], c2: [0.85, 0.68, 0.28], stripe: [0.96, 0.86, 0.48], accent: [0.96, 0.86, 0.48],
