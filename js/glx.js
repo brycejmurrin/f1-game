@@ -394,6 +394,14 @@ float sampleShadow(vec3 wpos) {
 
 void main() {
   vec3 N = normalize(vNrm);
+  // Two-sided lighting: cull-off single-face geometry (the wheels — tyre bands,
+  // sidewall discs, hub fans — are drawn double-sided with one face per wall)
+  // shows its BACK side through spoke gaps and on the car's far wheels. Without
+  // this the back face keeps the front normal and shades inverted, so the same
+  // part reads bright on one side of the car and dark on the other. Flip N to
+  // face the viewer on back fragments. No-op for culled meshes (their back faces
+  // are discarded before shading), so only the double-sided draws are affected.
+  if (!gl_FrontFacing) N = -N;
   // Micro-normal relief: perturb the normal with a two-scale noise gradient so
   // procedurally-textured ground (road/terrain, uDetail > 0) has real surface
   // bumps — sun glints, lamp speculars and reflections break up over the surface

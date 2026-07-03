@@ -47,6 +47,7 @@
   <div class="row"><span class="k">ERS</span><select id="ui-ers"></select></div>
   <div class="row"><span class="k">Light</span><select id="ui-tod"></select></div>
   <div class="row"><span class="k">Rig</span><select id="ui-rig"></select></div>
+  <div class="row"><span class="k">Reflect</span><input id="ui-refl" type="range" min="0" max="1" step="0.05" style="width:120px"></div>
 </div>
 <div id="tip">drag orbit · wheel zoom · 1-5 tod · +/− exposure · ,/. intensity · l sweep · r reset</div>
 <div id="err"></div>
@@ -170,6 +171,7 @@
     rig: qp("rig", qp("studio", "1") !== "0" ? "studio" : "none"),        // lighting rig preset
     intensity: Q.has("intensity") ? parseFloat(qp("intensity")) : null,   // null = tod default
     exp: parseFloat(qp("exp", "1")),                                       // tonemap exposure
+    refl: parseFloat(qp("refl", "0.85")),   // env-mirror strength 0..1 (0 = matte paint, no chrome)
     lights: plights,                                                       // extra movable point lights
     bg: qp("bg", null),
     hud: qp("hud", "1") !== "0",
@@ -209,7 +211,11 @@
     if (GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData(Car3D.aeroLevelOf(tiers)));
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
-    paint = { roughness: 0.22, metalness: 0.35, specular: 0.85, clearcoat: 0.9, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true, carEnvCube: 0.85 };
+    // clearcoat + carEnvCube both scale the env mirror, so refl drives both:
+    // refl 0 = matte team paint (no chrome), refl 1 = full glossy mirror. (Kept
+    // live per-frame in frame() so CARVIEW.set({refl}) / the ?refl= param respond
+    // without a rebuild.)
+    paint = { roughness: 0.22, metalness: 0.35, specular: 0.85, clearcoat: 0.9 * S.refl, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true, carEnvCube: S.refl };
   }
 
   function camera() {
@@ -271,6 +277,7 @@
     const pk = S.tod;
     if (pk !== _probedKey) { probeEnv(frameParams, t); _probedKey = pk; }
     GLX.begin(frameParams);
+    if (paint) { paint.clearcoat = 0.9 * S.refl; paint.carEnvCube = S.refl; }   // live reflection strength
     if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
     if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
     GLX.present({ exposure: S.exp });
@@ -302,6 +309,7 @@
     }
     opt(document.getElementById("ui-tod"), Object.keys(TOD).map(k => ({ id: k, name: k })), S.tod);
     opt(document.getElementById("ui-rig"), RIGS.map(k => ({ id: k, name: k })), S.rig);
+    document.getElementById("ui-refl").value = S.refl;
   }
   document.getElementById("ui-team").onchange = e => { S.team = e.target.value; S.livery = null; buildUI(); rebuild(); };
   document.getElementById("ui-livery").onchange = e => { S.livery = e.target.value; rebuild(); };
@@ -309,6 +317,7 @@
     document.getElementById("ui-" + cat).onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
   document.getElementById("ui-tod").onchange = e => { S.tod = e.target.value; };
   document.getElementById("ui-rig").onchange = e => { S.rig = e.target.value; };
+  document.getElementById("ui-refl").oninput = e => { S.refl = parseFloat(e.target.value); };
 
   // ---- mouse / keys ----
   let drag = null;

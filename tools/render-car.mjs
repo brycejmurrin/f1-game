@@ -30,6 +30,7 @@
 //   --studio=1            studio rig on (default; ignored if --rig given). --studio=0 = none
 //   --intensity=1.8       light strength (default: per-tod)
 //   --exp=1.1             tonemap exposure / overall brightness (default 1.0)
+//   --refl=0.2            env-mirror strength 0..1 (0 = matte paint, 0.85 = default chrome)
 //   --bg=101014           background hex (overrides tod bg)
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views)
 //   --out=DIR             output dir. Default: tools/render-out/<team>
@@ -83,6 +84,7 @@ const STUDIO = arg('studio', '1') !== '0';
 const SWEEP  = arg('sweep', null);
 const INTEN  = arg('intensity', null);
 const EXP    = arg('exp', null);
+const REFL   = arg('refl', null);   // env-mirror strength 0..1 (0 = matte paint, no chrome)
 const BG     = arg('bg', null);
 const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.slice('--plight='.length));
 // A custom --az/--el/--dist renders a single ad-hoc view instead of the presets.
@@ -118,6 +120,7 @@ if (RIG) qs.set('rig', RIG); else qs.set('studio', STUDIO ? '1' : '0');
 if (SWEEP != null) qs.set('sweep', SWEEP);
 if (BG) qs.set('bg', BG);
 if (INTEN != null) qs.set('intensity', INTEN); if (EXP != null) qs.set('exp', EXP);
+if (REFL != null) qs.set('refl', REFL);
 for (const pl of PLIGHTS) qs.append('plight', pl);
 for (const [k, v] of Object.entries(parts)) qs.set(k, v);
 const pageUrl = `${URL}/tools/carview.html?${qs.toString()}`;
