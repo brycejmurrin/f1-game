@@ -5806,11 +5806,12 @@ function enterPhotoMode() {
   if (photoMode) return;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   photoMode = true;
-  // Proactively drop render resolution: the free-cam can fly up and frame the
-  // WHOLE track (no fog culling), a big fill-rate/draw spike. The paused governor
-  // reacts within ~45 frames — too late to stop a first-frame GPU blowout on a
-  // memory-limited device — so cap up front; the governor adapts from here.
-  if (GLX.setRenderScale) GLX.setRenderScale(0.7);
+  // Proactively drop render resolution and LOCK it (no auto-upscale): the free-cam
+  // can fly up and frame the WHOLE track (no fog culling), a big fill-rate spike,
+  // and the HDR render targets at full res blow a memory-limited mobile GPU's
+  // budget (hard WebView crash). Half resolution ≈ quarter the target memory.
+  _autoRes = false;
+  if (GLX.setRenderScale) GLX.setRenderScale(0.55);
   initPhotoCam();
   document.body.classList.add("photo-mode");
   $("photo-controls").hidden = false;
@@ -5829,6 +5830,8 @@ function exitPhotoMode() {
   const t = $("pc-toggle"); if (t) { t.classList.remove("on"); t.innerHTML = "📷 FREE CAMERA"; }
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
+  _autoRes = true;   // hand resolution control back to the frame-time governor
+  if (GLX.setRenderScale) GLX.setRenderScale(1);
 }
 // Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
 function togglePhotoPanel() {
