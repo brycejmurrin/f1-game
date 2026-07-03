@@ -3629,7 +3629,7 @@ void main() {
     gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
     gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
     gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
-    gl.uniform1f(compU.uCarReflect, CT && CT.carReflect != null ? CT.carReflect : 0.55);
+    gl.uniform1f(compU.uCarReflect, CT && CT.carReflect != null ? CT.carReflect : 0.05);
     gl.uniform1f(compU.uCarGloss, CT && CT.carGloss != null ? CT.carGloss : 1.0);
     // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).
     gl.uniform1f(compU.uChromAb,    CT && CT.chromAb    != null ? CT.chromAb    : 0.0);
