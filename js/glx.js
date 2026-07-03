@@ -358,6 +358,13 @@ float sampleShadow(vec3 wpos) {
   float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.05, 1.0);
   float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
   float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
+  // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
+  // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
+  // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
+  // casters (lamp posts, kerbs) out to lit. Scale the kernel by 64/box (clamped to
+  // 1 so the crisp look at/below the default box is unchanged) to hold the world
+  // penumbra ~constant as the box grows.
+  float boxK = min(1.0, 64.0 / uShadowRange);
   // Distance LOD: full 8-tap Poisson + PCSS-lite blocker search near the camera
   // (crisp tyre/kerb contact shadows), a cheap 4-tap disk on distant ground where
   // the shadow is small on screen. Halves shadow bandwidth over most of the frame.
@@ -366,7 +373,7 @@ float sampleShadow(vec3 wpos) {
   if (near && uPcss > 0.5) {
     // PCSS-lite: blocker search scales the Poisson radius by the receiver-blocker
     // gap — crisp at the contact point, soft where the caster is far.
-    float bt = 1.5 / 512.0;
+    float bt = (1.5 / 512.0) * boxK;
     float zb = min(min(texture(uBlockerMap, sc.xy + vec2(-bt,  bt)).r,
                        texture(uBlockerMap, sc.xy + vec2( bt,  bt)).r),
                    min(texture(uBlockerMap, sc.xy + vec2(-bt, -bt)).r,
@@ -377,7 +384,7 @@ float sampleShadow(vec3 wpos) {
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   float ang = ign * 6.2831853;
   float cr = cos(ang), sr = sin(ang);
-  mat2 rot = mat2(cr, -sr, sr, cr) * (t * R);
+  mat2 rot = mat2(cr, -sr, sr, cr) * (t * R * boxK);
   // 4 taps always; 4 more only near the camera. Rotated per-pixel so the reduced
   // count still reads as noise, not banding.
   float s = texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.94201624, -0.39906216), z))

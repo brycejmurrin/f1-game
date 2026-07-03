@@ -1045,7 +1045,14 @@ const WGX = (function () {
       // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
       // carReflect/ssrStrength are forced 0 until the env-probe / SSR passes bind
       // real resources (the frame group holds 1×1 placeholders for now).
-      d[80] = (T && T.pcssPen != null) ? T.pcssPen : 0.30;
+      // pcssPen is a GLX PENUMBRA-RATE knob (default 80, range 10-300) that GLX
+      // feeds into `clamp((z-zb)*pcssPen,0,1)` → a 1.5-6 texel radius. The WGSL
+      // shadow shader instead uses it DIRECTLY as `pcfStep = texel*(1+params4.x)`,
+      // which was authored around ~0.3 (see the 0.30 fallback). Feeding the raw 80
+      // gave an ~81-texel (~10 m) box-blur that smeared every WebGPU shadow to a
+      // wash. Remap to the shader's units so pcssPen=80 → the intended ~0.30 step
+      // (≈1.3 texels), scaling with the knob and capped so it can't blow out again.
+      d[80] = Math.min(2.0, ((T && T.pcssPen != null) ? T.pcssPen : 80) * 0.00375);
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
       d[82] = _envReady ? ((T && T.carReflect != null) ? T.carReflect : 0.0) : 0.0;
       d[83] = _ssrReady ? ((T && T.ssrStrength != null) ? T.ssrStrength : 0.0) : 0.0;
