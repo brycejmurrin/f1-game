@@ -5560,6 +5560,31 @@ function setMusic(b) {
 }
 $("pm-music").onclick = () => setMusic(!musicEnabled);
 
+// Render resolution setting: AUTO = the frame-time governor adapts the scale;
+// LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
+// the choice). LOW is also the safe pick on older phones — smaller render
+// targets mean more GPU-memory headroom, not just more fps. Persisted.
+const RES_MODES = [
+  { id: "auto", label: "AUTO" },
+  { id: "low",  label: "LOW",  v: 0.5  },
+  { id: "med",  label: "MED",  v: 0.75 },
+  { id: "high", label: "HIGH", v: 1.0  },
+];
+let resMode = store.get("resMode", "auto");
+function applyResMode() {
+  const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
+  const btn = $("pm-res"); if (btn) btn.textContent = "RESOLUTION: " + m.label;
+  if (m.v != null) { _autoRes = false; if (GLX.setRenderScale) GLX.setRenderScale(m.v); }
+  else _autoRes = true;   // governor takes over from wherever the scale sits now
+}
+$("pm-res").onclick = () => {
+  resMode = RES_MODES[(RES_MODES.findIndex((r) => r.id === resMode) + 1) % RES_MODES.length].id;
+  store.set("resMode", resMode);
+  applyResMode();
+  if (soundOn) GameAudio.uiSelect();
+};
+applyResMode();
+
 
 $("mb-race").onclick = () => {
   seasonMode = false; timeTrial = false;
@@ -5838,8 +5863,10 @@ function exitPhotoMode() {
   const t = $("pc-toggle"); if (t) { t.classList.remove("on"); t.innerHTML = "📷 FREE CAMERA"; }
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
-  _autoRes = true;   // hand resolution control back to the frame-time governor
+  // Restore the pre-photo scale, then re-apply the user's RESOLUTION setting
+  // (fixed modes re-pin their scale + keep the governor off; AUTO re-enables it).
   if (GLX.setRenderScale) GLX.setRenderScale(_photoPrevScale || 1);
+  applyResMode();
 }
 // Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
 function togglePhotoPanel() {
