@@ -1452,6 +1452,12 @@ function applyRaceSettings() {
       const _npal = track && track.def && track.def.palette;
       frame.sunDir = V3.norm(_npal && _npal.sunDir ? _npal.sunDir.slice() : [0.42, 0.66, 0.36]);
       frameSky.sunDir = frame.sunDir;
+      // Re-derive the SKY sun tint from a stable base EVERY call (like dawn/dusk/
+      // day do). This branch never set it, so the wet/overcast/fog multipliers
+      // below (frameSky.sunColor *= 0.8/0.7) compounded on their own previous
+      // output — dragging any night slider in a wet/foggy night race decayed the
+      // moon/cloud/horizon tint toward black. Same palette base loadTrack uses.
+      frameSky.sunColor = _npal && _npal.sun ? _npal.sun.slice() : [1.0, 0.95, 0.84];
       // NEAR-BLACK cool ambient: the world is genuinely dark, the LIGHT SOURCES
       // (lamps, neon, lit windows) do all the lifting. A high ambient here is the
       // #1 cause of a flat-grey "night that looks like dim day".
@@ -1588,6 +1594,14 @@ function applyRaceSettings() {
       if (_bp.ambientSky)    frame.ambientSky = _bp.ambientSky.slice();
       if (_bp.ambientGround) frame.ambientGround = _bp.ambientGround.slice();
       if (_bp.sun)           frameSky.sunColor = _bp.sun.slice();
+      // Sky dome zenith/horizon too: the overcast/fog weather branches below
+      // OVERWRITE frameSky.horizon to grey, and nothing restored it on the way
+      // back to clear (only loadTrack set it) — so a clear→fog→clear cycle left
+      // the horizon band + every reflection (frame.skyHorizon at 1603 feeds the
+      // LIT env mirror / SSR fallback) stuck fog-grey under a correct blue
+      // zenith. Re-derive from the palette each call, same base loadTrack uses.
+      if (_bp.zenith)        frameSky.zenith  = _bp.zenith.slice();
+      if (_bp.horizon)       frameSky.horizon = _bp.horizon.slice();
       frameSky.cloud = _bp.cloud !== undefined ? _bp.cloud : (isNightSession ? 0.22 : 0.4);
       // Fog too (mirrors the sun/ambient reset above): the weather branches below
       // MULTIPLY frame.fogDensity in place, so without a fresh base HERE every

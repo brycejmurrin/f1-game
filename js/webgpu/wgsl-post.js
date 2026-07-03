@@ -520,7 +520,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Bloom: tone-aware mask so already-bright pixels don't over-wash.
   let bloomSample = textureSampleLevel(bloomTex, samp, in.uv, 0.0).rgb;
   let bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
-  c = c + bloomSample * bloomAmt * bloomMask;
+  // Scale by exposure to match the scene (parity with GLX): the bright-pass is
+  // pre-exposure, but the scene above is already * exposure — so a driven
+  // exposure would otherwise leave the halos over-strong.
+  c = c + bloomSample * bloomAmt * bloomMask * exposure;
 
   // Filmic tonemap (shared leaf) + colour grade. White point scales the knee.
   c = acesTonemap(c / max(whitePoint, 1e-3));
@@ -547,9 +550,15 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     c = c + flare;
   }
 
-  // Vignette.
-  let q = in.uv - vec2<f32>(0.5);
-  let vig = smoothstep(0.95, 0.35, length(q));
+  // Vignette — aspect-corrected (parity with GLX) so it's circular in screen
+  // space, not an ellipse over-darkening top/bottom on a wide viewport. texel =
+  // (1/width,1/height), so texel.y/texel.x = aspect; renormalise the corner to
+  // the tuned 0.707 radius (identity at 1:1).
+  var q = in.uv - vec2<f32>(0.5);
+  let vAspect = select(1.0, texel.y / texel.x, texel.x > 0.0);
+  q.x = q.x * vAspect;
+  let vr = length(q) * 0.70710678 / length(vec2<f32>(0.5 * vAspect, 0.5));
+  let vig = smoothstep(0.95, 0.35, vr);
   c = c * mix(vignette, 1.0, vig);
 
   // Triangular-PDF dither (breaks 8-bit banding in sky/fog gradients).
@@ -557,9 +566,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let dh1 = fract(sin(dot(in.uv, vec2<f32>(39.3468, 11.135))) * 24634.6345);
   c = c + vec3<f32>((dh0 + dh1 - 1.0) / 255.0);
 
-  // Film grain: luma-weighted (mids grain most). 0 = off.
+  // Film grain: luma-weighted (mids grain most). 0 = off. Animated per frame via
+  // U.fx.z (time) so it isn't a frozen speckle welded to the panel (parity with
+  // GLX) — the time offset re-randomises the hash each frame.
   if (grain > 0.001) {
-    let gn = fract(sin(dot(in.uv, vec2<f32>(93.9898, 47.233))) * 61237.312) - 0.5;
+    let gTime = U.fx.z;
+    let gUV = in.uv + vec2<f32>(fract(gTime * 1.37), fract(gTime * 0.61)) * 3.17;
+    let gn = fract(sin(dot(gUV, vec2<f32>(93.9898, 47.233))) * 61237.312) - 0.5;
     let gLuma = dot(c, vec3<f32>(0.299, 0.587, 0.114));
     c = c + vec3<f32>(gn * grain * (1.0 - abs(gLuma - 0.5) * 1.4));
   }
