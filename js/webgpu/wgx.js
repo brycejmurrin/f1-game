@@ -432,7 +432,10 @@ const WGX = (function () {
         layout: device.createPipelineLayout({ bindGroupLayouts: [shadowG0Layout, shadowG1Layout] }),
         vertex: { module: shadowModule, entryPoint: "vs_main", buffers: [SHADOW_VERTEX_LAYOUT] },
         // No fragment stage — depth-only. Slope-scaled bias fights shadow acne.
-        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        // GLX renders the shadow depth with CULLING OFF ("render back faces to avoid
+        // peter-panning", glx.js:3739), so match that with cullMode:"none" — winding is
+        // then moot and both faces cast, exactly like GLX.
+        primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less",
           depthBias: 2, depthBiasSlopeScale: 3, depthBiasClamp: 0 },
       });
@@ -644,9 +647,16 @@ const WGX = (function () {
         layout: litLayout,
         vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT] },
         fragment: { module: litModule, entryPoint: "fs_main", targets: [target] },
-        // GLX default: CCW front, cull back; alpha draws still write depth
-        // (GLX draw() sets depthMask(true) unconditionally).
-        primitive: { topology: "triangle-list", cullMode: dbl ? "none" : "back", frontFace: "ccw" },
+        // GLX default: CCW front, cull back. But WebGPU flips NDC-Y → framebuffer-Y
+        // relative to WebGL (framebuffer origin is top-left, y-down), which REVERSES
+        // the apparent triangle winding vs GLX. The scene matrices carry no Y-flip
+        // (Z01 only remaps z), so GLX's CCW-front meshes present as CW here — declaring
+        // frontFace:"cw" restores GLX's exact face selection. Without it, cull:back
+        // removes the faces you should see and keeps the interior back faces, so solid
+        // boxes (buildings) render hollow — you see through the front wall to the inside.
+        // It also fixes the fs_main @builtin(front_facing) two-sided normal flip, which
+        // was inverted for the same reason. alpha draws still write depth.
+        primitive: { topology: "triangle-list", cullMode: dbl ? "none" : "back", frontFace: "cw" },
         depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less-equal" },
       });
       _litPipelines.set(key, p);
