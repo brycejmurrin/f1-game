@@ -5856,7 +5856,7 @@ function exitPhotoMode() {
   if (!photoMode) return;
   photoMode = false;
   dbgCam = null;                          // hand the game camera back
-  document.body.classList.remove("photo-mode");
+  document.body.classList.remove("photo-mode", "pc-nopanel", "pc-uihidden");
   $("photo-controls").hidden = true;
   $("lighting-inner").hidden = false;     // un-hide the tuner if it was tucked away
   const pb = $("pc-panel"); if (pb) pb.textContent = "HIDE PANEL";
@@ -5869,11 +5869,21 @@ function exitPhotoMode() {
   applyResMode();
 }
 // Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
+// With the panel gone the right half of the screen frees up, so body.pc-nopanel
+// relocates the LOOK stick + up/down column to the bottom-right corner (classic
+// dual-stick ergonomics); showing the panel again moves them back left.
 function togglePhotoPanel() {
   const p = $("lighting-inner"); if (!p) return;
   const hide = !p.hidden;
   p.hidden = hide;
+  document.body.classList.toggle("pc-nopanel", hide);
   const pb = $("pc-panel"); if (pb) pb.textContent = hide ? "SHOW PANEL" : "HIDE PANEL";
+  if (soundOn) GameAudio.uiTick();
+}
+// Photo-mode HIDE HUD: hide every control (bar, sticks, tuner panel) for a
+// clean frame; the tiny top-right eye brings it all back. Keys keep flying.
+function setPhotoUiHidden(hide) {
+  document.body.classList.toggle("pc-uihidden", hide);
   if (soundOn) GameAudio.uiTick();
 }
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
@@ -5948,6 +5958,8 @@ wirePhotoHold("pc-down", () => photoAlt = -1, () => photoAlt = 0);
 $("pc-toggle").onclick = () => { if (soundOn) GameAudio.uiSelect(); photoMode ? exitPhotoMode() : enterPhotoMode(); };
 $("pc-exit").onclick = () => { if (soundOn) GameAudio.uiTick(); exitPhotoMode(); };
 $("pc-panel").onclick = togglePhotoPanel;
+$("pc-hud").onclick = () => setPhotoUiHidden(true);
+$("pc-restore").onclick = () => setPhotoUiHidden(false);
 $("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
 $("lt-help-on").onchange = (e) => {
   document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);

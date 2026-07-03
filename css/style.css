@@ -869,18 +869,41 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 .pc-hint { font-size: 11px; color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
 .pc-fovlab { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--dim); }
 .pc-fovlab input[type="range"] { width: 110px; margin-left: 6px; }
-#pc-exit, #pc-panel {
+#pc-exit, #pc-panel, #pc-hud {
   width: auto; margin: 0; padding: 7px 16px; border-radius: 8px;
   font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
-#pc-panel { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.22); }
+#pc-panel, #pc-hud { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.22); }
 /* the FREE CAMERA launch button in the tuner actions */
 #pc-toggle {
   width: auto; margin: 0; padding: 9px 14px; border-radius: 8px;
   font-size: 12px; font-weight: 800; letter-spacing: 0.04em;
   background: rgba(0,140,200,0.2); color: #6cf; border: 1px solid rgba(0,160,220,0.45);
 }
+/* Tuner panel tucked away (body.pc-nopanel) → the right half of the screen is
+   free, so switch to a classic dual-stick layout: LOOK stick under the right
+   thumb in the bottom-right corner, up/down column just inboard of it. */
+body.pc-nopanel .pc-look-wrap { left: auto; right: calc(20px + var(--sar)); }
+body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar)); }
+/* Photo-mode HIDE HUD (body.pc-uihidden): clean unobstructed frame — every
+   photo control (bar, sticks, buttons) and the docked tuner panel disappear;
+   only the tiny restore eye stays. Keyboard flying keeps working. */
+body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
+body.pc-uihidden #lighting-inner { display: none !important; }
+#pc-restore {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  width: 36px; height: 36px;
+  padding: 0; margin: 0;
+  border-radius: 8px;
+  font-size: 16px; line-height: 1;
+  opacity: 0.5;
+  display: none;            /* only visible while the photo UI is hidden */
+}
+#pc-restore:hover, #pc-restore:active { opacity: 0.95; }
+body.pc-uihidden #pc-restore { display: block; }
 /* touch: hide the desktop key hint (no keyboard); narrow screens too */
 @media (pointer: coarse), (max-width: 720px) { .pc-hint { display: none; } }
 /* while the LIGHTING TUNER is open (free camera or not) hide every in-race
