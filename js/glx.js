@@ -686,10 +686,11 @@ void main() {
     vec3 Rg = reflect(-V, Ngeo);
     float NoVc = max(dot(Ngeo, V), 1e-4);
     float ccFb = 1.0 - NoVc; float ccF = ccFb * ccFb;      // fresnel², rim-concentrated (mul not pow(_,2): pow(0,2) NaNs on mobile)
-    // Base reflectance everywhere (0.22) + grazing boost → uniform mirror that
-    // still peaks at the silhouette. (1-rough·0.6) keeps some reflection even on
-    // the rougher dry-day paint. Clamped so it can't fully erase the pigment.
-    float envW = clamp(uClearcoat * (0.22 + 0.78 * ccF) * (1.0 - rough * 0.6) * 0.62, 0.0, 0.85);
+    // High base reflectance everywhere (0.72) + grazing boost → a strong, near-
+    // uniform mirror that reads reflective face-on, not only at the silhouette.
+    // (1-rough·0.25) keeps most of the mirror even on rougher paint. Clamped high
+    // so the car goes genuinely chrome-bright while a hint of pigment survives.
+    float envW = clamp(uClearcoat * (0.72 + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     // Soft horizon: bright sky above, dark ground tone below. Was a hard step
     // (-0.03..0.06) — on the faceted engine cover / sidepod shoulders adjacent
     // facets straddled the line and flipped between "sky" and "ground", reading
@@ -705,13 +706,15 @@ void main() {
     // a blurred world. uEnvStr fades analytic → real, so the first frames (and
     // the probe-less setup viewer) keep the gradient fallback.
     if (uEnvStr > 0.001) {
-      vec3 envReal = textureLod(uEnvCube, Rg, rough * 6.0).rgb;
+      // Sharp mip (rough·2.5, was ·6.0): a crisp mirror so buildings/trees
+      // read as themselves rather than a blurred smear.
+      vec3 envReal = textureLod(uEnvCube, Rg, rough * 2.5).rgb;
       envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
     }
     envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
-    color *= 1.0 - envW * 0.72;                             // absorb: darken the base under the mirror (energy conserving)
+    color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
-    color += addCC / (1.0 + addCC);                         // soft-clip < 1.0
+    color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
   }
 
   // Metallic-flake SPARKLE — the signature "metallic paint" glitter. Each ~4.5 mm

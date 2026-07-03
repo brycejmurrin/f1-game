@@ -448,8 +448,11 @@ function rebuildSkidBatch() {
 // void filling the cockpit view. Carbon/tyres (near-black albedo) stay dark.
 const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
 const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
-const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.9, carPaint: 1.0 };
-const PAINT_DRY_DAY   = { roughness: 0.36, metalness: 0.12, specular: 0.75, clearcoat: 0.6, carPaint: 1.0 };
+// Dry paint roughness dropped 0.36 → 0.22 and clearcoat raised so the base coat
+// is glossy all the time (sharper GGX highlight + a crisper env-cube mirror),
+// not just when wet — a showroom lacquer read.
+const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
+const PAINT_DRY_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 0.9, carPaint: 1.0 };
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
 // scratch object (GLX.draw consumes the material synchronously, so one scratch
 // is safe across every car in the frame). GLOSS divides roughness (higher =

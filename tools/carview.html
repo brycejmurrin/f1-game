@@ -203,7 +203,7 @@
     if (!decalMesh && GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData());
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
-    paint = { roughness: 0.32, metalness: 0.35, specular: 0.55, clearcoat: 0.55, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true };
+    paint = { roughness: 0.22, metalness: 0.35, specular: 0.85, clearcoat: 0.9, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true };
   }
 
   function camera() {
