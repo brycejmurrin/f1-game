@@ -46,7 +46,18 @@ let gfx = null;
 try {
   let optIn = false;
   try { optIn = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
-  if (optIn && typeof Gfx !== "undefined" && navigator.gpu) gfx = await Gfx.create(canvas, {});
+  if (optIn && typeof Gfx !== "undefined" && navigator.gpu) {
+    const wgx = await Gfx.create(canvas, {});
+    if (wgx) {
+      // Route EVERY renderer call site onto the WebGPU backend — not just game.js
+      // but the other modules that call the GLX global directly (tracks.js mesh
+      // build, car3d.js, liverytex.js, ghost.js). Copy WGX's methods + live
+      // getters (width/height/aspect) onto the GLX object so `GLX.foo()` anywhere
+      // delegates to WebGPU. GLX's own WebGL context is never initialised here.
+      try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(wgx)); gfx = GLX; }
+      catch (_) { gfx = null; }
+    }
+  }
 } catch (_) { gfx = null; }
 if (!gfx) { if (!GLX.init(canvas)) { $("nogl").hidden = false; return; } gfx = GLX; }
 
