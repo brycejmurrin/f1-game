@@ -171,7 +171,7 @@
     rig: qp("rig", qp("studio", "1") !== "0" ? "studio" : "none"),        // lighting rig preset
     intensity: Q.has("intensity") ? parseFloat(qp("intensity")) : null,   // null = tod default
     exp: parseFloat(qp("exp", "1")),                                       // tonemap exposure
-    refl: parseFloat(qp("refl", "0.85")),   // env-mirror strength 0..1 (0 = matte paint, no chrome)
+    refl: parseFloat(qp("refl", "0.2")),   // env-mirror strength 0..1 (0 = matte paint, no chrome). Low default so renders read as team paint, not chrome.
     lights: plights,                                                       // extra movable point lights
     bg: qp("bg", null),
     hud: qp("hud", "1") !== "0",
@@ -215,7 +215,7 @@
     // refl 0 = matte team paint (no chrome), refl 1 = full glossy mirror. (Kept
     // live per-frame in frame() so CARVIEW.set({refl}) / the ?refl= param respond
     // without a rebuild.)
-    paint = { roughness: 0.22, metalness: 0.35, specular: 0.85, clearcoat: 0.9 * S.refl, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true, carEnvCube: S.refl };
+    paint = { roughness: 0.34, metalness: 0.28, specular: 0.6, clearcoat: 0.5 * S.refl, emissive: 0, carPaint: 1, sparkle: 0.1, doubleSided: true, carEnvCube: S.refl };
   }
 
   function camera() {
@@ -277,7 +277,7 @@
     const pk = S.tod;
     if (pk !== _probedKey) { probeEnv(frameParams, t); _probedKey = pk; }
     GLX.begin(frameParams);
-    if (paint) { paint.clearcoat = 0.9 * S.refl; paint.carEnvCube = S.refl; }   // live reflection strength
+    if (paint) { paint.clearcoat = 0.5 * S.refl; paint.carEnvCube = S.refl; }   // live reflection strength
     if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
     if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
     GLX.present({ exposure: S.exp });
