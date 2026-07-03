@@ -218,11 +218,17 @@ const WGX = (function () {
       return null;
     }
 
-    // device-lost -> reload (mirror GLX's context-restore policy).
+    // Device-lost recovery. An unexpected loss (memory pressure, GPU reset) on
+    // this opt-in/experimental path FALLS BACK to WebGL2 rather than reloading
+    // straight back into WebGPU — otherwise a device that loses under the race
+    // load would reload → lose → reload in a loop. Clearing the opt-in flag makes
+    // the reload boot the stable WebGL2 backend; the user can re-enable via the
+    // RENDERER toggle. ("destroyed" is our own teardown — ignore it.)
     let _lost = false;
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
       _lost = true;
+      try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
       try { location.reload(); } catch (_) {}
     });
 
