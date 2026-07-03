@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apex 26 — Car Viewer</title>
+<!--
+  Standalone, ISOLATED car viewer (no track / no game.js). Renders the procedural
+  Car3D on a plain studio backdrop using the real GLX renderer + LiveryTex decals.
+  Meant as a dev/inspection tool: pick team / livery / parts / lighting / angle and
+  see just the car, fast.
+
+  Drive it by URL params (headless-friendly) or by mouse/keys:
+    ?team=ferrari&livery=fer_matte&num=16
+    &engine=race&aero=high_downforce&brakes=ceramic&gearbox=f1_spec&tyres=soft&ers=full_attack
+    &az=40&el=16&dist=4.6&tod=day&studio=1&bg=101014
+  Mouse: drag = orbit, wheel = zoom.  Keys: 1-5 tod presets, [ ] spin, r reset.
+
+  Headless API (window.CARVIEW):
+    CARVIEW.set({team,livery,num,parts,az,el,dist,tod,studio,bg})  -> rebuilds + renders
+    CARVIEW.angle(az,el,dist)                                       -> just re-aims camera
+    CARVIEW.ready  (bool)                                           -> first frame drawn
+-->
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0e;overflow:hidden;font:12px/1.4 system-ui,sans-serif;color:#cdd}
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  #hud{position:fixed;left:10px;top:10px;background:rgba(10,10,14,.72);border:1px solid #222;border-radius:8px;
+       padding:8px 10px;max-width:230px;backdrop-filter:blur(3px)}
+  #hud b{color:#fff;letter-spacing:.06em;text-transform:uppercase;font-size:11px}
+  #hud .row{margin-top:6px;display:flex;gap:6px;align-items:center;justify-content:space-between}
+  #hud select{background:#15151b;color:#cdd;border:1px solid #333;border-radius:4px;padding:2px 4px;max-width:130px}
+  #hud .k{color:#89a}
+  #tip{position:fixed;right:10px;bottom:10px;color:#667;font-size:11px}
+  #err{position:fixed;inset:0;display:none;place-items:center;color:#f88;font-size:14px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="hud">
+  <b>Car Viewer</b>
+  <div class="row"><span class="k">Team</span><select id="ui-team"></select></div>
+  <div class="row"><span class="k">Livery</span><select id="ui-livery"></select></div>
+  <div class="row"><span class="k">Engine</span><select id="ui-engine"></select></div>
+  <div class="row"><span class="k">Aero</span><select id="ui-aero"></select></div>
+  <div class="row"><span class="k">Brakes</span><select id="ui-brakes"></select></div>
+  <div class="row"><span class="k">Gearbox</span><select id="ui-gearbox"></select></div>
+  <div class="row"><span class="k">ERS</span><select id="ui-ers"></select></div>
+  <div class="row"><span class="k">Light</span><select id="ui-tod"></select></div>
+  <div class="row"><span class="k">Rig</span><select id="ui-rig"></select></div>
+</div>
+<div id="tip">drag orbit · wheel zoom · 1-5 tod · +/− exposure · ,/. intensity · l sweep · r reset</div>
+<div id="err"></div>
+
+<script src="../js/mat4.js"></script>
+<script src="../js/glx.js"></script>
+<script src="../js/teams.js"></script>
+<script src="../js/parts.js"></script>
+<script src="../js/car3d.js"></script>
+<script src="../js/liveries.js"></script>
+<script src="../js/liverytex.js"></script>
+<script>
+"use strict";
+(function () {
+  const canvas = document.getElementById("view");
+  const errEl = document.getElementById("err");
+  const fail = (m) => { errEl.style.display = "grid"; errEl.textContent = m; };
+  if (!GLX.init(canvas)) { fail("WebGL2 unavailable"); return; }
+
+  // Car is drawn through an X-reflection: the in-race car model matrix is a
+  // reflection (det −1), and the decal UVs are authored for that handedness, so
+  // we must match it here or the sponsor/number text would read mirrored.
+  const REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+  const CENTER = [0, 0.45, 0];
+
+  // ---- URL params ----
+  const Q = new URLSearchParams(location.search);
+  const qp = (k, d) => Q.has(k) ? Q.get(k) : d;
+
+  // ---- decal mesh (mirrors game.js carDecalData; U pre-flipped for REFLECT_X) ----
+  function carDecalData() {
+    const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+    const out = { pos: [], nrm: [], uv: [], idx: [] };
+    const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
+    const quad = (c, n, region) => {
+      const u = uvOf(region), i = out.pos.length / 3;
+      const uvs = [[u.uR, u.vB], [u.uL, u.vB], [u.uL, u.vT], [u.uR, u.vT]];
+      for (let k = 0; k < 4; k++) { out.pos.push(c[k][0], c[k][1], c[k][2]); out.nrm.push(n[0], n[1], n[2]); out.uv.push(uvs[k][0], uvs[k][1]); }
+      out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+    };
+    const yB = 0.19, yT = 0.45, zF = 0.46, zR = -0.34;
+    quad([[0.715, yB, zF], [0.715, yB, zR], [0.715, yT, zR], [0.715, yT, zF]], [1, 0, 0], R.titleA);
+    quad([[-0.715, yB, zR], [-0.715, yB, zF], [-0.715, yT, zF], [-0.715, yT, zR]], [-1, 0, 0], R.titleA);
+    quad([[-0.15, 0.565, -0.62], [0.15, 0.565, -0.62], [0.15, 0.6, -1.28], [-0.15, 0.6, -1.28]], [0, 1, 0.06], R.crest);
+    const fX = 0.023, fyB = 0.655, fyT = 0.945, fzF = -0.82, fzR = -1.56;
+    quad([[fX, fyB, fzF], [fX, fyB, fzR], [fX, fyT, fzR], [fX, fyT, fzF]], [1, 0, 0], R.fin);
+    quad([[-fX, fyB, fzR], [-fX, fyB, fzF], [-fX, fyT, fzF], [-fX, fyT, fzR]], [-1, 0, 0], R.fin);
+    quad([[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]], [0, 1, 0.05], R.num);
+    quad([[-0.14, 0.556, 1.16], [0.14, 0.556, 1.16], [0.14, 0.504, 1.66], [-0.14, 0.504, 1.66]], [0, 1, 0.10], R.titleB);
+    quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
+    quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
+    const ex = 0.539, eyB = 0.78, eyT = 1.00, ezF = -2.30, ezR = -2.52;
+    quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
+    quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
+    return out;
+  }
+
+  // ---- lighting rigs + point lights ----
+  // Light record layout (15 floats): pos(3) energy(3) radius dir(3) cone(3) spot on
+  // A POINT light (spot=0) — bright, coloured, with a falloff radius. Great for
+  // watching the clearcoat/specular reflections move across the bodywork.
+  function pt(L, pos, col, intensity, radius) {
+    const e0 = col[0] * intensity, e1 = col[1] * intensity, e2 = col[2] * intensity;
+    L.push(pos[0], pos[1], pos[2], e0, e1, e2, radius || 16, 0, -1, 0, col[0], col[1], col[2], 0, 1);
+  }
+  function studioRing(L, intensity) {
+    const n = 6, dist = 6, h = 3.2, radius = 16;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, e = intensity * 0.55;
+      pt(L, [Math.cos(a) * dist, h, Math.sin(a) * dist], [1, 0.95, 0.85], e, radius);
+    }
+    pt(L, [0, h + 2.5, 0], [1, 0.92, 0.82], intensity * 0.55 * 1.4, radius);   // overhead key
+  }
+  // Named rigs — 'studio' soft even, '3point' classic key/fill/rim, 'rim' hard
+  // back-light for edge reflections, 'topdown' single softbox, 'none' ambient only.
+  const RIGS = ["studio", "3point", "rim", "topdown", "none"];
+  function rigLights(rig, I) {
+    const L = [];
+    if (rig === "none") return L;
+    if (rig === "3point") {
+      pt(L, [5, 4, 5],  [1.0, 0.98, 0.94], I * 1.3, 22);   // key (warm)
+      pt(L, [-5, 3, 3], [0.72, 0.82, 1.0], I * 0.7, 22);   // fill (cool)
+      pt(L, [0, 4.5, -6],[1.0, 0.96, 0.9], I * 1.1, 22);   // rim (back)
+    } else if (rig === "rim") {
+      pt(L, [4.5, 3, -5], [1, 1, 1], I * 1.5, 20);
+      pt(L, [-4.5, 3, -5],[1, 1, 1], I * 1.5, 20);
+      pt(L, [0, 5, 5],    [1, 0.98, 0.95], I * 0.5, 20);
+    } else if (rig === "topdown") {
+      pt(L, [0, 6.5, 0],  [1, 1, 1], I * 1.8, 24);
+      pt(L, [0, 2, 5],    [0.9, 0.92, 1.0], I * 0.4, 20);
+    } else {
+      studioRing(L, I);
+    }
+    return L;
+  }
+  const TOD = {
+    day:   { sunDir: [0.4, 0.82, 0.35], sunColor: [1.05, 1.02, 0.96], ambSky: [0.30, 0.33, 0.38], ambGnd: [0.20, 0.19, 0.18], bg: [0.09, 0.10, 0.12], studioI: 1.4 },
+    dusk:  { sunDir: [0.5, 0.28, -0.2], sunColor: [1.15, 0.62, 0.36], ambSky: [0.22, 0.20, 0.26], ambGnd: [0.16, 0.13, 0.14], bg: [0.10, 0.07, 0.10], studioI: 1.8 },
+    dawn:  { sunDir: [-0.4, 0.30, 0.4], sunColor: [0.95, 0.75, 0.72], ambSky: [0.24, 0.24, 0.30], ambGnd: [0.16, 0.15, 0.16], bg: [0.09, 0.09, 0.12], studioI: 1.7 },
+    night: { sunDir: [0.3, 0.7, 0.2],   sunColor: [0.18, 0.20, 0.30], ambSky: [0.05, 0.06, 0.10], ambGnd: [0.03, 0.035, 0.05], bg: [0.02, 0.02, 0.035], studioI: 2.6 },
+    void:  { sunDir: [0.35, 0.8, 0.3],  sunColor: [0.9, 0.9, 0.92],  ambSky: [0.10, 0.11, 0.13], ambGnd: [0.06, 0.06, 0.07], bg: [0.0, 0.0, 0.0], studioI: 2.2 },
+  };
+
+  // ---- state ----
+  // Custom point lights from repeatable ?plight=x,y,z,r,g,b,intensity,radius
+  const plights = Q.getAll("plight").map(s => {
+    const n = s.split(",").map(Number);
+    return { pos: [n[0] || 0, n[1] || 3, n[2] || 0], col: [n[3] != null ? n[3] : 1, n[4] != null ? n[4] : 1, n[5] != null ? n[5] : 1], intensity: n[6] != null ? n[6] : 2, radius: n[7] != null ? n[7] : 16 };
+  });
+  const S = {
+    team: qp("team", "mclaren"),
+    livery: qp("livery", null),
+    num: qp("num", null),
+    parts: {},
+    az: parseFloat(qp("az", "35")), el: parseFloat(qp("el", "14")), dist: parseFloat(qp("dist", "6.2")),
+    tod: qp("tod", "day"),
+    rig: qp("rig", qp("studio", "1") !== "0" ? "studio" : "none"),        // lighting rig preset
+    intensity: Q.has("intensity") ? parseFloat(qp("intensity")) : null,   // null = tod default
+    exp: parseFloat(qp("exp", "1")),                                       // tonemap exposure
+    lights: plights,                                                       // extra movable point lights
+    bg: qp("bg", null),
+    hud: qp("hud", "1") !== "0",
+    spin: qp("spin", "0") !== "0",
+    sweep: qp("sweep", "0") !== "0",     // a bright point light orbiting the car (reflection test)
+  };
+  let sweepA = 0;
+  for (const cat of ["engine", "aero", "brakes", "gearbox", "tyres", "ers", "suspension", "fuel"]) {
+    if (Q.has(cat)) S.parts[cat] = Q.get(cat);
+  }
+  if (!S.hud) document.getElementById("hud").style.display = "none";
+
+  const _proj = new Float32Array(16), _view = new Float32Array(16), _vp = new Float32Array(16);
+  let carMesh = null, decalMesh = null, decalTex = null, paint = null;
+
+  function teamObj() { return Teams.LIST.find(t => t.id === S.team) || Teams.LIST[0]; }
+  function liveryList(team) { return Liveries.forTeam(team); }
+  function resolveLiv(team) {
+    const list = liveryList(team);
+    const l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
+    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null };
+  }
+  function driverNum(team) {
+    if (S.num != null) return parseInt(S.num, 10) || 0;
+    return (team.drivers && team.drivers[0] && team.drivers[0].num) || 0;
+  }
+
+  function rebuild() {
+    const team = teamObj();
+    const liv = resolveLiv(team);
+    const tiers = Parts.getVisualTiers(S.parts, team.engine);
+    const num = driverNum(team);
+    if (carMesh) GLX.freeMesh(carMesh);
+    carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
+    if (!decalMesh && GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData());
+    if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
+    try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
+    paint = { roughness: 0.32, metalness: 0.35, specular: 0.55, clearcoat: 0.55, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true };
+  }
+
+  function camera() {
+    const a = S.az * Math.PI / 180, e = S.el * Math.PI / 180;
+    // az 0 = behind the car (rear), 180 = head-on; el = elevation.
+    const eye = [
+      CENTER[0] + S.dist * Math.cos(e) * Math.sin(a),
+      CENTER[1] + S.dist * Math.sin(e),
+      CENTER[2] - S.dist * Math.cos(e) * Math.cos(a),
+    ];
+    const asp = canvas.width / Math.max(1, canvas.height);
+    M4.perspectiveTo(_proj, 34 * Math.PI / 180, asp, 0.1, 60);
+    M4.lookAtTo(_view, eye, CENTER, [0, 1, 0]);
+    M4.mulTo(_vp, _proj, _view);
+    return eye;
+  }
+
+  let ready = false;
+  function frame() {
+    GLX.resize();
+    if (S.spin) S.az = (S.az + 0.4) % 360;
+    const eye = camera();
+    const t = TOD[S.tod] || TOD.day;
+    const bg = S.bg ? [parseInt(S.bg.slice(0,2),16)/255, parseInt(S.bg.slice(2,4),16)/255, parseInt(S.bg.slice(4,6),16)/255] : t.bg;
+    const I = S.intensity != null ? S.intensity : t.studioI;
+    const L = rigLights(S.rig, I);
+    for (const pl of S.lights) pt(L, pl.pos, pl.col, pl.intensity, pl.radius);   // extra probe lights
+    if (S.sweep) { sweepA = (sweepA + 0.03) % (Math.PI * 2); pt(L, [Math.cos(sweepA) * 4.5, 2.6, Math.sin(sweepA) * 4.5], [1, 1, 1], I * 2.4, 16); }
+    GLX.begin({
+      viewProj: _vp, eye,
+      sunDir: t.sunDir, sunColor: t.sunColor,
+      ambientSky: t.ambSky, ambientGround: t.ambGnd,
+      fogColor: bg, fogDensity: 0,
+      lights: L.length ? L : null,
+    });
+    if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
+    if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
+    GLX.present({ exposure: S.exp });
+    ready = true;
+    requestAnimationFrame(frame);
+  }
+
+  // ---- UI ----
+  function opt(sel, items, val, label) {
+    sel.innerHTML = "";
+    for (const it of items) {
+      const o = document.createElement("option");
+      o.value = it.id; o.textContent = label ? label(it) : (it.label || it.name || it.id);
+      if (it.id === val) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+  function partOptions(catId) {
+    const cat = Parts.CATALOG.find(c => c.id === catId);
+    return cat ? cat.options : [];
+  }
+  function buildUI() {
+    const team = teamObj();
+    opt(document.getElementById("ui-team"), Teams.LIST, S.team);
+    opt(document.getElementById("ui-livery"), liveryList(team), S.livery || "default");
+    for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"]) {
+      const cur = S.parts[cat] || (Parts.DEFAULTS && Parts.DEFAULTS[cat]) || "";
+      opt(document.getElementById("ui-" + cat), partOptions(cat), cur);
+    }
+    opt(document.getElementById("ui-tod"), Object.keys(TOD).map(k => ({ id: k, name: k })), S.tod);
+    opt(document.getElementById("ui-rig"), RIGS.map(k => ({ id: k, name: k })), S.rig);
+  }
+  document.getElementById("ui-team").onchange = e => { S.team = e.target.value; S.livery = null; buildUI(); rebuild(); };
+  document.getElementById("ui-livery").onchange = e => { S.livery = e.target.value; rebuild(); };
+  for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"])
+    document.getElementById("ui-" + cat).onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
+  document.getElementById("ui-tod").onchange = e => { S.tod = e.target.value; };
+  document.getElementById("ui-rig").onchange = e => { S.rig = e.target.value; };
+
+  // ---- mouse / keys ----
+  let drag = null;
+  canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, az: S.az, el: S.el }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointermove", e => { if (!drag) return; S.az = drag.az - (e.clientX - drag.x) * 0.4; S.el = Math.max(-15, Math.min(80, drag.el + (e.clientY - drag.y) * 0.3)); });
+  canvas.addEventListener("pointerup", () => { drag = null; });
+  canvas.addEventListener("wheel", e => { e.preventDefault(); S.dist = Math.max(2.4, Math.min(12, S.dist + Math.sign(e.deltaY) * 0.3)); }, { passive: false });
+  addEventListener("keydown", e => {
+    const map = { "1": "day", "2": "dusk", "3": "dawn", "4": "night", "5": "void" };
+    if (map[e.key]) S.tod = map[e.key];
+    else if (e.key === "[") S.az -= 15; else if (e.key === "]") S.az += 15;
+    else if (e.key === "=" || e.key === "+") S.exp = Math.min(3, S.exp + 0.1);
+    else if (e.key === "-" || e.key === "_") S.exp = Math.max(0.2, S.exp - 0.1);
+    else if (e.key === "." ) S.intensity = (S.intensity != null ? S.intensity : 1.6) + 0.3;
+    else if (e.key === "," ) S.intensity = Math.max(0, (S.intensity != null ? S.intensity : 1.6) - 0.3);
+    else if (e.key === "l") S.sweep = !S.sweep;
+    else if (e.key === "r") { S.az = 35; S.el = 14; S.dist = 6.2; S.exp = 1; S.intensity = null; }
+    else if (e.key === " ") S.spin = !S.spin;
+    if (document.getElementById("ui-tod")) document.getElementById("ui-tod").value = S.tod;
+    if (document.getElementById("ui-rig")) document.getElementById("ui-rig").value = S.rig;
+  });
+
+  // ---- headless API ----
+  window.CARVIEW = {
+    get ready() { return ready; },
+    angle(az, el, dist) { if (az != null) S.az = az; if (el != null) S.el = el; if (dist != null) S.dist = dist; },
+    // Add a point light for reflection testing: addLight([x,y,z], [r,g,b], intensity, radius)
+    addLight(pos, col, intensity, radius) { S.lights.push({ pos, col: col || [1, 1, 1], intensity: intensity != null ? intensity : 2, radius: radius || 16 }); },
+    clearLights() { S.lights.length = 0; },
+    set(o) {
+      o = o || {};
+      let reb = false;
+      for (const k of ["team", "livery", "num"]) if (o[k] !== undefined) { S[k] = o[k]; reb = true; }
+      if (o.parts) { Object.assign(S.parts, o.parts); reb = true; }
+      if (o.lights !== undefined) S.lights = o.lights || [];
+      for (const k of ["az", "el", "dist", "tod", "rig", "intensity", "exp", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
+      if (reb) { buildUI(); rebuild(); }
+      return true;
+    },
+  };
+
+  buildUI();
+  rebuild();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

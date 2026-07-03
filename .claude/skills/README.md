@@ -13,6 +13,7 @@ groups.
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
 | **tune-physics** | A/B testing or tuning the driving physics in `js/game.js` via the headless `obs/act/reset` loop — single-page or a parallel multi-config sweep. |
 | **inspect-scene** | Capturing deterministic screenshots of a track/car/UI to verify a visual change (`shot.mjs` helper). |
+| **car-viewer** | Inspecting the car in ISOLATION (no track) from any angle/livery/parts/lighting — the standalone `tools/carview.html` photo studio + `tools/render-car.mjs` batch renderer, with point-light rigs for reflection tests. |
 | **check-changes** | Pre-push validation — pick the right `test:<group>`, run `verify-track`, confirm the cache bump. |
 | **debug-cameras** | The 12 camera modes + free debug-camera framing hooks (`view/eyeAt/orbit/cinematic/...`). |
 | **debug-tracks** | Track geometry/surface/barrier query hooks + the parallel multi-track sweep. |

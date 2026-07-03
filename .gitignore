@@ -31,3 +31,4 @@ tests/hooks-demo/
 tests/monaco-scenery/
 tests/all-tracks-buildings/
 tests/monaco-tour/
+tools/render-out/
