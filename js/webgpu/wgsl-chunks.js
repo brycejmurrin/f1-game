@@ -410,16 +410,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color + ccCol;
   }
 
-  // [Block 7] ENV-CUBE car-paint reflection (F.params4.z = carReflect; mirrors GLX
-  // uCarReflect env-mirror). On lacquered surfaces (car-paint or clearcoat) sample
-  // the environment probe cube along the view-reflection vector and add it, weighted
-  // by a grazing Fresnel so the mirror strengthens toward the edges. carReflect=0 or
-  // a 1×1 placeholder cube (no probe captured) makes this a no-op. textureSampleLevel
-  // (explicit LOD) so the cube sample is legal inside this non-uniform branch.
+  // [Block 7] ANALYTIC-SKY car-paint reflection (F.params4.z = carReflect; mirrors GLX
+  // uCarReflect env-mirror). On lacquered surfaces (car-paint or clearcoat) reflect the
+  // sky gradient (skyHorizon↔skyZenith along the reflected ray's Y, same convention as
+  // the wet-road sheen Block 5b) along the view-reflection vector and add it, weighted by
+  // a grazing Fresnel so the mirror strengthens toward the edges. No probe cube needed —
+  // matches GLX's default (carEnvCube=0 ⇒ analytic sky). carReflect=0 makes this a no-op.
   let carReflect = max(F.params4.z, 0.0);
   if (carReflect > 0.001 && (carPaint > 0.001 || clearcoat > 0.001)) {
     let R = reflect(-V, Ngeo);
-    let envCol = textureSampleLevel(envCube, envSamp, R, 0.0).rgb;
+    let skyRT = pow(max(R.y, 1e-4), 0.40);
+    let envCol = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyRT);
     let envF = F_Schlick(NoV, f0, clamp(1.0 - rough, 0.0, 1.0));
     let refl = envCol * envF * carReflect * (1.0 - rough * 0.5);
     color = color + refl;

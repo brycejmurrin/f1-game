@@ -267,7 +267,7 @@ const WGX = (function () {
     // Shadow-pass objects (Phase 3).
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
-    let _envReady = false, _ssrReady = false; // flip true once real env-cube / SSR resources are bound
+    let _envReady = true, _ssrReady = false;  // env reflection is analytic-sky (no probe needed); SSR flips true once its pass runs
     let shadowUBO, shadowModelUBO, shadowG0Layout, shadowG1Layout, shadowModule,
         shadowPipeline, shadowG0BindGroup, shadowModelBindGroup;
     let _shadowRendered = false, _shadowLightVP = null;
