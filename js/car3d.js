@@ -210,53 +210,56 @@ const Car3D = (function () {
         addQuad(out, A, B, C, D, BAND);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
       }
     }
-    // Rim spokes: five pale blades proud of the hub fans on each face. They make
-    // wheel ROTATION actually visible (the tread/rim are rotationally uniform)
-    // and read as a machined wheel instead of a flat disc.
-    const SPOKE = [0.55, 0.55, 0.62];
+    // --- Modern covered-wheel FACE: the flat disc above IS the aero cover (solid,
+    // opaque, single-face). On top of it, proud detail: machined cover vanes (so
+    // rotation reads), a raised hub cap + a bright wheel-nut centre, and the brake
+    // caliper clamped at the top edge where it actually peeks out past the cover.
+    // Everything here is additive/proud, so the opaque tyre structure is untouched.
+
+    // Cover vanes: six slim recessed-look blades sweeping out from the hub — subtle
+    // but enough to read the wheel ROTATION (tread/cover are rotationally uniform).
+    const VANE = [0.26, 0.26, 0.30];
     for (const ss of [[x0, -1], [x1, 1]]) {
-      const xs = ss[0] + ss[1] * 0.020;
-      for (let k = 0; k < 5; k++) {
-        const a = (k / 5) * Math.PI * 2 + 0.3;
+      const xs = ss[0] + ss[1] * 0.014;
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2 + 0.25;
         const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
-        const hw = 0.013, ri = r * 0.10, ro = r * 0.40;
+        const hw = 0.010, ri = rimR * 0.46, ro = rimR * 0.98;
         const P = (rad, s) => [xs, cy + uy * rad + py * hw * s, cz + uz * rad + pz * hw * s];
-        const A = P(ri, 1), B = P(ro, 1), C = P(ro, -1), D = P(ri, -1);
-        addQuad(out, A, B, C, D, SPOKE);   // single face (cull-off shows both sides)
+        addQuad(out, P(ri, 1), P(ro, 1), P(ro, -1), P(ri, -1), VANE);
       }
     }
-    // BRAKES tier 2: a caliper accent peeking through the rim spokes — pure
-    // addition, absent (caliperColor null) at every other tier.
+    // Raised hub cap: a proud gunmetal centre disc + a bright wheel-nut cap (the
+    // brake package's accent colour, else the tyre band) — the modern F1 wheel
+    // centre and the one bright focal point on an otherwise dark corner.
+    const HUBCAP = [0.15, 0.15, 0.18];
+    const NUT = caliperColor || bandColor || [0.85, 0.72, 0.10];
+    for (const ss of [[x0, -1], [x1, 1]]) {
+      const dir = ss[1], xc0 = ss[0] + dir * 0.020, hcR = rimR * 0.46, ctr = [xc0, cy, cz];
+      for (let i = 0; i < SEG; i++) {
+        const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+        addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
+                         [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP);   // single face (cull-off → opaque both sides)
+      }
+      // rim of the hub cap (thin bright ring), then the proud wheel-nut cap.
+      addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, NUT);
+    }
+    // Brake caliper: a compact monobloc clamped at the TOP of the disc (12 o'clock)
+    // where a covered-wheel caliper actually peeks out above the cover. Straddles
+    // the wheel width and sits proud on both faces so it reads from the side/3-4,
+    // in the brake package's accent colour with darker pad plates.
     if (caliperColor) {
-      // A chunky MONOBLOC brake caliper clamping the disc over a short arc at the
-      // top crown (just trailing of 12 o'clock). It's centred on the disc plane
-      // and kept inside the rim face (radius < rimR) so it sits in the open
-      // inner-disc region and reads clearly through the spokes from the side /
-      // 3-4 views — a machined body hugging the rim, not a floating box.
-      const discR = r * 0.34;                 // radius of the clamped disc arc (< rimR)
-      const cm    = -0.14 * Math.PI;          // crown, just trailing of top
-      const arc   = 0.64;                      // angular span (~37°)
-      const bodyX = w * 0.52;                  // axial width straddling the disc
-      const NS    = 4;                         // arc segments
-      const padCol = [caliperColor[0]*0.28, caliperColor[1]*0.28, caliperColor[2]*0.28];
-      // (1) Monobloc body: chunky segments stepped along the disc arc so the mass
-      // curves with the rim instead of reading as one straight bar.
-      for (let i = 0; i < NS; i++) {
-        const a = cm + (i / (NS - 1) - 0.5) * arc;
-        addBox(out, cx, cy + Math.cos(a) * discR, cz + Math.sin(a) * discR,
-               bodyX, 0.056, 0.050, caliperColor);
+      const cr = r * 0.78;                     // top edge, just inside the tread band
+      const padCol = [caliperColor[0]*0.30, caliperColor[1]*0.30, caliperColor[2]*0.30];
+      for (let i = 0; i < 3; i++) {
+        const a = (i - 1) * 0.17;              // ~±10° arc around the crown
+        addBox(out, cx, cy + Math.cos(a) * cr, cz + Math.sin(a) * cr,
+               w * 1.06, 0.052, 0.055, caliperColor);   // spans the width, proud past both faces
       }
-      // (2) Bridge rib arching over the disc crown — the machined top that ties the
-      // two caliper halves into one monobloc (slightly proud, spans axially).
-      addBox(out, cx, cy + Math.cos(cm) * (discR + 0.020), cz + Math.sin(cm) * (discR + 0.020),
-             bodyX * 1.04, 0.024, 0.12, caliperColor);
-      // (3) Two brake PADS clamping the disc faces — darker plates set at each
-      // caliper half so they read as separate pads through the spokes.
-      for (const sgn of [-1, 1]) {
-        addBox(out, cx + sgn * (bodyX * 0.42),
-               cy + Math.cos(cm) * discR, cz + Math.sin(cm) * discR,
-               0.014, 0.05, 0.13, padCol);
-      }
+      // pad plates hugging each disc face + the machined bridge over the crown
+      for (const sgn of [-1, 1])
+        addBox(out, cx + sgn * (w * 0.52 + 0.006), cy + cr, cz, 0.02, 0.05, 0.11, padCol);
+      addBox(out, cx, cy + cr + 0.04, cz, w * 1.0, 0.02, 0.10, caliperColor);   // bridge rib
     }
   }
 
