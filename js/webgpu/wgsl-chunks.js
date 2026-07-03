@@ -151,7 +151,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 336 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 352 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -171,7 +171,8 @@ struct FrameU {
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
-};                            // size 336
+  params5    : vec4<f32>,     // off 336  (envProbeStr, _, _, _) — real env-cube probe strength (0 = analytic sky only)
+};                            // size 352
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -410,19 +411,34 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color + ccCol;
   }
 
-  // [Block 7] ANALYTIC-SKY car-paint reflection (F.params4.z = carReflect; mirrors GLX
-  // uCarReflect env-mirror). On lacquered surfaces (car-paint or clearcoat) reflect the
-  // sky gradient (skyHorizon↔skyZenith along the reflected ray's Y, same convention as
-  // the wet-road sheen Block 5b) along the view-reflection vector and add it, weighted by
-  // a grazing Fresnel so the mirror strengthens toward the edges. No probe cube needed —
-  // matches GLX's default (carEnvCube=0 ⇒ analytic sky). carReflect=0 makes this a no-op.
-  let carReflect = max(F.params4.z, 0.0);
-  if (carReflect > 0.001 && (carPaint > 0.001 || clearcoat > 0.001)) {
+  // [Block 7] ENV car-paint reflection (mirrors GLX uCarReflect env-mirror). On
+  // lacquered surfaces (car-paint or clearcoat) reflect the environment along the
+  // view-reflection vector, weighted by a grazing Fresnel so the mirror strengthens
+  // toward the edges. TWO sources, matching GLX:
+  //   • carReflect (F.params4.z): the ANALYTIC sky gradient (skyHorizon↔skyZenith by
+  //     the reflected ray's Y, same convention as the wet-road sheen Block 5b). Always
+  //     available, cheap — the default (carEnvCube=0) and the mobile-safe path.
+  //   • envProbeStr (F.params5.x): the REAL live cube probe (wgx.js envFaceBegin/End).
+  //     Non-zero only after a full 6-face capture cycle when the CAR ENV REFLECTION
+  //     tuner is on — then the paint mirrors actual surroundings (trees, buildings,
+  //     everything behind the camera SSR can't see). Supersedes the analytic sky.
+  // textureSampleLevel (explicit LOD 0) keeps the cube sample legal in this branch.
+  let carReflect  = max(F.params4.z, 0.0);
+  let envProbeStr = max(F.params5.x, 0.0);
+  if ((carReflect > 0.001 || envProbeStr > 0.001) && (carPaint > 0.001 || clearcoat > 0.001)) {
     let R = reflect(-V, Ngeo);
-    let skyRT = pow(max(R.y, 1e-4), 0.40);
-    let envCol = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyRT);
+    var envCol : vec3<f32>;
+    var strength : f32;
+    if (envProbeStr > 0.001) {
+      envCol = textureSampleLevel(envCube, envSamp, R, 0.0).rgb;
+      strength = envProbeStr;
+    } else {
+      let skyRT = pow(max(R.y, 1e-4), 0.40);
+      envCol = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyRT);
+      strength = carReflect;
+    }
     let envF = F_Schlick(NoV, f0, clamp(1.0 - rough, 0.0, 1.0));
-    let refl = envCol * envF * carReflect * (1.0 - rough * 0.5);
+    let refl = envCol * envF * strength * (1.0 - rough * 0.5);
     color = color + refl;
   }
 
@@ -787,7 +803,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 336,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4)
+    FRAME_UNIFORM_BYTES: 352,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4 +params5)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

@@ -53,10 +53,11 @@
  *   - MSAA: msaa() stays 1 (a multisampled scene + resolve needs a sampleable
  *     single-sample depth for SSAO — depth resolve is not in core WebGPU; see
  *     docs/WEBGPU-PHASE4-NOTES.md).
- *   - Env probe (envFaceBegin/envFaceEnd): still no-op — but the LIT env-mirror
- *     term (carReflect) is LIVE via an ANALYTIC sky-gradient reflection (no 6-face
- *     probe capture), matching GLX's default carEnvCube=0. A real captured cube is
- *     only needed for mirroring scene geometry (deferred; see notes).
+ *   - Env probe: FULLY WIRED (envFaceBegin/End render a real RGBA16F cube one face/
+ *     frame; Block 7 samples it once a 6-face cycle completes). Default reflection is
+ *     still the cheap ANALYTIC sky gradient (carReflect); the real cube only kicks in
+ *     when the CAR ENV REFLECTION tuner (carEnvCube) is turned up. No mip chain — the
+ *     probe is sampled at LOD 0 (WebGPU has no generateMipmap; the paint is glossy).
  *   - Instancing (Phase 5) needs game.js to supply instance data (out of scope).
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
@@ -268,6 +269,25 @@ const WGX = (function () {
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
     let _envReady = true, _ssrReady = false;  // env reflection is analytic-sky (no probe needed); SSR flips true once its pass runs
+    // ── Live env-cube probe (Phase-4b): a real RGBA16F cube captured one face/frame,
+    //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
+    //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
+    const ENV_SIZE = 64;
+    const ENV_FACES = [
+      [[ 1, 0, 0], [0, -1, 0]], [[-1, 0, 0], [0, -1, 0]],
+      [[ 0, 1, 0], [0, 0,  1]], [[ 0, -1, 0], [0, 0, -1]],
+      [[ 0, 0, 1], [0, -1, 0]], [[ 0, 0, -1], [0, -1, 0]],
+    ];
+    let _envPlaceView = null;                 // 1×1×6 placeholder cube view (feedback-safe during env render)
+    let envCubeTex = null, envSampleView = null, envFaceViews = null;   // real probe cube + per-face render views
+    let envDepthTex = null, envDepthView = null;
+    let _envFrameBG = null;                    // frame group with binding4 = placeholder (used WHILE rendering the cube)
+    let _activeFrameBG = null;                 // frame group draw()/drawChunked bind (main = real cube once live; env = placeholder)
+    let _envProbeLive = false, _envFacesMask = 0, _envStr = 0;   // _envStr = carEnvCube once a full cycle is captured
+    let _envEncoder = null;                    // the env face's own command encoder (submitted in envFaceEnd)
+    const _envView = new Float32Array(16), _envProj = new Float32Array(16),
+          _envVP = new Float32Array(16), _envVPGpu = new Float32Array(16), _envInvVP = new Float32Array(16);
+    const _envTgt = [0, 0, 0];
     let shadowUBO, shadowModelUBO, shadowG0Layout, shadowG1Layout, shadowModule,
         shadowPipeline, shadowG0BindGroup, shadowModelBindGroup;
     let _shadowRendered = false, _shadowLightVP = null;
@@ -324,7 +344,8 @@ const WGX = (function () {
       // views later. carReflect/ssrStrength stay 0 until then, so these are no-ops.
       const _envPlace = device.createTexture({ size: [1, 1, 6], dimension: "2d",
         format: SCENE_FORMAT, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
-      envCubeView = _envPlace.createView({ dimension: "cube" });
+      _envPlaceView = _envPlace.createView({ dimension: "cube" });
+      envCubeView = _envPlaceView;
       const _ssrPlace = device.createTexture({ size: [1, 1], format: SCENE_FORMAT,
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
       ssrView = _ssrPlace.createView();
@@ -654,18 +675,24 @@ const WGX = (function () {
     // from placeholder to real when the probe runs.
     function _rebuildFrameBG() {
       if (!g0Layout || !frameUBO) return;
-      frameBindGroup = device.createBindGroup({
+      const base = (cubeView) => ({
         layout: g0Layout,
         entries: [
           { binding: 0, resource: { buffer: frameUBO } },
           { binding: 1, resource: { buffer: lightSBO } },
           { binding: 2, resource: shadowView },
           { binding: 3, resource: shadowSampler },
-          { binding: 4, resource: envCubeView },
+          { binding: 4, resource: cubeView },
           { binding: 5, resource: linearSampler },
           { binding: 6, resource: ssrView },
         ],
       });
+      // Main group binds the real cube once the probe is live; the env-render group
+      // ALWAYS binds the placeholder so a face is never sampled while it is the render
+      // target (read/write feedback — undefined behaviour). draw() picks via _activeFrameBG.
+      frameBindGroup = device.createBindGroup(base(envCubeView));
+      _envFrameBG = device.createBindGroup(base(_envPlaceView || envCubeView));
+      if (!_activeFrameBG || _activeFrameBG !== _envFrameBG) _activeFrameBG = frameBindGroup;
     }
 
     function ensureTargets() {
@@ -1012,6 +1039,11 @@ const WGX = (function () {
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
       d[82] = _envReady ? ((T && T.carReflect != null) ? T.carReflect : 0.0) : 0.0;
       d[83] = _ssrReady ? ((T && T.ssrStrength != null) ? T.ssrStrength : 0.0) : 0.0;
+      // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
+      // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
+      // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
+      d[84] = (_envProbeLive && T && T.carEnvCube != null) ? T.carEnvCube : 0.0;
+      d[85] = 0; d[86] = 0; d[87] = 0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1069,6 +1101,7 @@ const WGX = (function () {
       currentView = tex.createView();
       _drawSlot = 0;
       _fxQuadSlot = 0; _fxDecalSlot = 0;
+      _activeFrameBG = frameBindGroup;   // main pass samples the real probe cube once live
       _writeFrame(frame || {});
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       encoder = device.createCommandEncoder();
@@ -1117,7 +1150,7 @@ const WGX = (function () {
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, opts);
       litPass.setPipeline(_litPipeline(opts));
-      litPass.setBindGroup(0, frameBindGroup);
+      litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       litPass.setVertexBuffer(0, mesh.vbuf);
@@ -1131,7 +1164,7 @@ const WGX = (function () {
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, opts);
       litPass.setPipeline(_litPipeline(opts));
-      litPass.setBindGroup(0, frameBindGroup);
+      litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       litPass.setVertexBuffer(0, mesh.vbuf);
@@ -1176,6 +1209,89 @@ const WGX = (function () {
       encoder.beginRenderPass({
         colorAttachments: [{ view, clearValue: { r, g, b, a: 1 }, loadOp: "clear", storeOp: "store" }],
       }).end();
+    }
+
+    // ── Live env-cube probe ────────────────────────────────────────────────────
+    // GLX parity (js/glx.js envFaceBegin/End): capture ONE cube face of the world
+    // around the player car per frame into a real RGBA16F cube; after a full 6-face
+    // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
+    // the world draws (drawSky + track meshes, NO cars) between begin/end — they record
+    // into the face's own pass via litPass, so every lighting uniform matches the frame.
+    function envInit() {
+      if (envCubeTex) return;
+      envCubeTex = device.createTexture({
+        size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      envSampleView = envCubeTex.createView({ dimension: "cube" });
+      envFaceViews = [];
+      for (let f = 0; f < 6; f++)
+        envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1 }));
+      envDepthTex = device.createTexture({
+        size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      envDepthView = envDepthTex.createView();
+    }
+
+    // Open the pass for one cube face: set the face camera, upload it as the frame
+    // uniforms, and point litPass at the face target. Returns the face's RAW invViewProj
+    // for drawSky. The env-render frame group binds the PLACEHOLDER cube so the face
+    // being written is never simultaneously sampled (feedback). Runs BEFORE begin(), so
+    // it uses its own encoder, submitted in envFaceEnd — fully isolated from the frame.
+    function envFaceBegin(face, eye, frame) {
+      if (_lost || !skyPipeline) return null;
+      if (!envCubeTex) envInit();
+      const F = ENV_FACES[face];
+      _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
+      M4.lookAtTo(_envView, eye, _envTgt, F[1]);
+      M4.perspectiveTo(_envProj, Math.PI / 2, 1, 0.4, 900);
+      M4.mulTo(_envVP, _envProj, _envView);   // raw GL view-proj
+      M4.invertTo(_envInvVP, _envVP);          // for drawSky ray reconstruction (raw, pre-Z01)
+      // Upload the face's frame (viewProj gets the Z01 remap inside _writeFrame). No
+      // radial cull for the probe — it must capture the full surroundings.
+      const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
+      frame.viewProj = _envVP; frame.eye = eye; frame.cullDist = 0;
+      _writeFrame(frame);
+      frame.viewProj = svVP; frame.eye = svEye; frame.cullDist = svCull;
+      const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
+      _envEncoder = device.createCommandEncoder();
+      litPass = _envEncoder.beginRenderPass({
+        colorAttachments: [{ view: envFaceViews[face], clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
+          loadOp: "clear", storeOp: "store" }],
+        depthStencilAttachment: { view: envDepthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
+      });
+      encoder = _envEncoder;
+      _drawSlot = 0; _fxQuadSlot = 0; _fxDecalSlot = 0;
+      _activeFrameBG = _envFrameBG;   // placeholder cube while rendering into the real one
+      return _envInvVP;
+    }
+
+    // Close + submit the face pass. After all six faces the probe goes live: the main
+    // frame group is rebuilt to sample the real cube (no mipmaps — Block 7 reads LOD 0,
+    // a sharp reflection; WebGPU has no generateMipmap and the car's clearcoat is glossy).
+    function envFaceEnd(face) {
+      if (!envCubeTex || !litPass || !_envEncoder) return;
+      litPass.end();
+      device.queue.submit([_envEncoder.finish()]);
+      litPass = null; encoder = null; _envEncoder = null;
+      _activeFrameBG = frameBindGroup;
+      _envFacesMask |= 1 << face;
+      if (_envFacesMask === 63) {
+        _envFacesMask = 0;
+        if (!_envProbeLive) {
+          _envProbeLive = true;
+          envCubeView = envSampleView;   // main frame group now mirrors the real world
+          _rebuildFrameBG();
+        }
+      }
+    }
+
+    // Reset the probe to the placeholder (track change / camera reset) so a stale cube
+    // from another location never mirrors onto the paint until a fresh cycle completes.
+    function envProbeReset() {
+      _envFacesMask = 0; _envProbeLive = false;
+      envCubeView = _envPlaceView || envCubeView;
+      _rebuildFrameBG();
     }
 
     // Project the (infinitely distant) sun to a texture-space UV + derive the GLX
@@ -1610,11 +1726,11 @@ const WGX = (function () {
       castShadowChunked,
       shadowEnd,
 
-      // ── Env probe (Phase 3) ──
-      envFaceBegin: noop,
-      envFaceEnd: noop,
-      envProbeReady() { return false; },
-      envProbeReset: noop,
+      // ── Env probe (Phase 4b) ──
+      envFaceBegin,
+      envFaceEnd,
+      envProbeReady() { return _envProbeLive; },
+      envProbeReset,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",
