@@ -3794,9 +3794,10 @@ function renderSetupPreview(dt) {
   spMat.carEnvCube = 0;
   // The wheels are baked into this single mesh (Car3D.build) and drawn with the
   // SAME paint material — the env/clearcoat sheen reads as an ugly grey gloss on
-  // the near-black tyres. Drop clearcoat/specular (both scale that sheen) so the
-  // rubber goes matte; the bodywork keeps enough gloss to read as painted.
-  spMat.clearcoat = 0.18; spMat.specular = 0.35;
+  // the near-black tyres. Kill clearcoat entirely (no reflective lacquer coat in
+  // the menu preview) and drop specular so the rubber goes matte; the bodywork
+  // still reads as painted via its base colour + the reduced specular.
+  spMat.clearcoat = 0; spMat.specular = 0.35;
   GLX.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
   GLX.present();
