@@ -9,8 +9,10 @@ const LiveryTex = (function () {
   // Mobile tier (must match glx.js): upload atlases at half size — 22 cars ×
   // 1024² RGBA + mips was ~117 MB of GPU memory, the biggest consumer on iOS
   // web apps, whose jetsam budget counts GPU allocations.
-  const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+  let _gfxHigh = false;
+  try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  const IS_MOBILE = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))) && !_gfxHigh;
 
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
   // maps panel UVs to these rects. Do NOT change these numbers — the geometry

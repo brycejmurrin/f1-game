@@ -2034,6 +2034,14 @@ void main() {}`;
   // phones/tablets. (iPadOS 13+ masquerades as Mac; catch it via touch points.)
   const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+  // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
+  // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
+  // Default OFF — the safe tier is what keeps memory-limited devices alive.
+  let _gfxHigh = false;
+  try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
+  // key off this, so HIGH restores full quality (a reload re-runs init with it).
+  const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
   let litProg = null, litU = null;
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
@@ -2094,7 +2102,7 @@ void main() {}`;
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
   let shadowLightVP = new Float32Array(16);
-  const SHADOW_SIZE = IS_MOBILE ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier
+  const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier
   let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
@@ -2221,7 +2229,7 @@ void main() {}`;
       // shimmer the lower sample count misses, so the perceptual gap is small.
       // Mobile tier: no MSAA at all — two extra full-res multisampled surfaces
       // (~20-30 MB) against a tight jetsam budget; FXAA alone carries the AA.
-      msaaSamples = IS_MOBILE ? 0 : Math.min(2, cMax, dMax);
+      msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
     compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
@@ -2461,7 +2469,7 @@ void main() {
       // (Apple GPUs round the request up to 4×) — pure waste on the post path,
       // which renders offscreen and only blits a resolved image to the screen.
       // On the memory-tight mobile tier that's ~40-50 MB of IOSurface for nothing.
-      antialias: !IS_MOBILE,
+      antialias: !MOBILE_TIER,
       alpha: false,
       powerPreference: "high-performance",
     });
@@ -2571,7 +2579,7 @@ void main() {
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
-    const dpr = Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.5 : 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale));
     const h = Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale));
     const changed = canvas.width !== w || canvas.height !== h;

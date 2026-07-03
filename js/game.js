@@ -5585,6 +5585,28 @@ $("pm-res").onclick = () => {
 };
 applyResMode();
 
+// GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
+// defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade
+// quality for capable phones. These are decided at renderer INIT, so the toggle
+// persists and reloads. Shown only on mobile — desktop is always full quality.
+if (GLX.isMobile) {
+  const gfxBtn = $("pm-gfx");
+  if (gfxBtn) {
+    gfxBtn.hidden = false;
+    const gfxHigh = () => { try { return localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) { return false; } };
+    gfxBtn.textContent = "GRAPHICS: " + (gfxHigh() ? "HIGH" : "STANDARD");
+    gfxBtn.onclick = () => {
+      const next = !gfxHigh();
+      try { localStorage.setItem("apex26.gfxHigh", next ? "1" : "0"); } catch (_) {}
+      gfxBtn.textContent = "GRAPHICS: " + (next ? "HIGH" : "STANDARD") + " — reloading…";
+      if (soundOn) GameAudio.uiSelect();
+      // Reload so the renderer re-inits at the new tier (context AA, target
+      // formats, atlas sizes are all fixed at startup).
+      setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
+    };
+  }
+}
+
 
 $("mb-race").onclick = () => {
   seasonMode = false; timeTrial = false;
