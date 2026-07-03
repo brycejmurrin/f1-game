@@ -1,5 +1,6 @@
 /*
- * Apex 26 — WebGPU renderer backend (WGX). Migration Phase 2 + 3 (sun shadows).
+ * Apex 26 — WebGPU renderer backend (WGX). Migration Phase 2 + 3 + 4
+ * (post chain + foreground FX).
  *
  * A second implementer of the GLX draw-API contract (the ~35-method object
  * returned by js/glx.js:3693-3769). See docs/WEBGPU-MIGRATION.md,
@@ -30,10 +31,33 @@
  * sampler) and modulates the sun diffuse+spec. Also fixes a latent GL→WebGPU
  * clip-space z bug (Z01 remap) that would have half-clipped ALL geometry.
  *
- * WHAT IS STUBBED (later phases) — env probe, decals, skid/glow FX, and the full
- * post chain (bloom/SSAO/godray/SSR/flare/FXAA + MSAA). Each stub is a safe no-op
- * tagged with its migration phase; the frame still renders lit geometry + sky +
- * sun shadows + tonemap without them.
+ * PHASE 4 (this pass): the post-processing chain + foreground FX.
+ *   - present() now runs the WGSLPost chain (js/webgpu/wgsl-post.js) in its
+ *     documented PASS_ORDER: SSAO (half-res) -> GODRAY (half-res, screen-space
+ *     radial) -> BLOOM down/up mip chain (rgba16f, additive up) -> COMPOSITE
+ *     (scene * AO + godray, exposure, bloom, ACES, colour grade, lens flare,
+ *     vignette, grain, dither) into an LDR target -> FXAA to the swapchain. Every
+ *     uniform is driven from the present `opts` (exposure/bloom/threshold/ssao/
+ *     contact/godray/grade/tune/flareMul), matching GLX present() field names.
+ *     Aux targets are cleared (AO->white, godray/bloom->black) when a pass is
+ *     skipped so the composite never samples a stale frame. If the post
+ *     pipelines/targets are unavailable, present() FALLS BACK to the Phase-2
+ *     tonemap blit (no crash).
+ *   - FX (js/webgpu/wgsl-fx.js): drawShadow/drawMark (blob + skid stamps),
+ *     drawSkidBatch (batched trail), drawGlow (additive HDR halos), drawDecal
+ *     (textured atlas) — all recorded INTO the open lit pass so they interleave
+ *     with draw()/drawSky() exactly as game.js expects. createTexMesh/createTexture
+ *     are real (GPUTexture upload) so decals have an atlas.
+ *
+ * WHAT IS STILL STUBBED/REDUCED (tagged inline):
+ *   - MSAA: msaa() stays 1 (a multisampled scene + resolve needs a sampleable
+ *     single-sample depth for SSAO — depth resolve is not in core WebGPU; see
+ *     docs/WEBGPU-PHASE4-NOTES.md).
+ *   - Env probe (envFaceBegin/envFaceEnd): still no-op; the LIT env-mirror term
+ *     remains deferred (see notes for exactly what a cube-face probe needs).
+ *   - COMPOSITE SSR / speed-blur / chromatic aberration are DEFERRED in the
+ *     shader port itself (wgsl-post.js), so nothing here drives them.
+ *   - Instancing (Phase 5) needs game.js to supply instance data (out of scope).
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
  * WGSL lives as inline template strings (js/webgpu/wgsl-chunks.js).
@@ -60,10 +84,25 @@ const WGX = (function () {
   // clipped. Column-major of row-basis diag(1,1,·)+row2=(0,0,.5,.5). Applied to the
   // uploaded viewProj (lit) and lightVP (shadow); NOT to invViewProj (sky rays).
   const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
+  // Inverse of Z01 (column-major): maps a WebGPU clip (z 0..1) back to GL clip
+  // (z -1..1). Needed to build the SSAO invProj: the depth buffer stores
+  // Z01·viewProj z, so reconstructing view pos from it uses
+  // invProjW = invProj_gl · Z01INV (see _writeFrame). Row2 inverse of
+  // z'=0.5z+0.5w is z=2z'-w.
+  const Z01INV = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,2,0, 0,0,-1,1]);
+
+  // Phase-4 post shader/FX registries (separate files; may be absent when the
+  // backend is loaded standalone — post/FX then stay disabled and the frame
+  // falls back to the tonemap blit rather than failing WGX.create()).
+  const _Post = (typeof window !== "undefined" && window.WGSLPost) || null;
+  const _Fx   = (typeof window !== "undefined" && window.WGSLFx)   || null;
 
   // ── render-target formats ──
   const SCENE_FORMAT = "rgba16float";   // HDR scene (core-renderable/blendable)
   const DEPTH_FORMAT = "depth24plus";
+  const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
+  const SSAO_FORMAT  = "rgba8unorm";    // AO half-res (composite samples .r)
+  const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
   const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 224
@@ -202,6 +241,15 @@ const WGX = (function () {
 
     // Culling frame state.
     let frameViewProj = null, frameEye = null, frameCullDist = 0;
+    // Phase-4 frame extras (post chain + FX). frameVPGpu is the Z01-remapped
+    // view-proj the depth buffer was rasterised with — every FX embeds it so its
+    // clip-z matches the scene depth; frameInvProjW is the WebGPU-convention
+    // inverse projection for SSAO view-pos reconstruction.
+    const frameVPGpu = new Float32Array(16);
+    const frameInvProjW = new Float32Array(16);
+    let frameSunDir = null, frameSunColor = null, frameProjRaw = null,
+        frameSunVS = null, frameHaveProj = false, frameTime = 0,
+        frameAmbSky = null, frameAmbGround = null;
 
     // GPU objects assembled below (fail -> return null).
     let g0Layout, g1Layout, litLayout, litModule, skyModule, blitModule;
@@ -220,7 +268,35 @@ const WGX = (function () {
 
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
-        blitBindGroup = null, _texW = 0, _texH = 0;
+        depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0;
+
+    // ── Phase-4 post targets/pipelines (size-independent pipelines built once in
+    //    _buildPost; size-dependent targets + bind groups (re)built in
+    //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
+    let _postReady = false, _fxReady = false;
+    let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
+        ldrTex = null, ldrView = null;
+    let bloomLv = [];                 // [{tex, view, w, h}]
+    let bloomDownUBO = [], bloomUpUBO = [], bloomDownBG = [], bloomUpBG = [];
+    let ssaoUBO, godrayUBO, compositeUBO, fxaaUBO;
+    let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null;
+    let pBloomDown, pBloomUp, pSSAO, pGodray, pComposite, pFXAA, pointSampler;
+    // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
+    const postScratch = new Float32Array(64);
+
+    // ── Phase-4 foreground FX (blob shadow / skid / glow / decal). ──
+    let quadFxVBO = null, quadFxUBO = null, quadFxBG = null, fxQuadLayout = null;
+    let pBlob = null, pMark = null;
+    let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
+        _skidCap = 0, _skidScratch = null;
+    let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
+        _glowCap = 0, _glowScratch = null;
+    let pDecal = null, decalUBO = null, fxDecalLayout = null;
+    let _fxQuadSlot = 0, _fxDecalSlot = 0;
+    const FX_QUAD_SLOTS = 64, FX_DECAL_SLOTS = 128, FX_STRIDE = 256;
+    const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4
+    // Camera-facing glow billboard corner template (mirror GLX _glowCorners).
+    const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
 
     try {
       linearSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
@@ -334,6 +410,146 @@ const WGX = (function () {
       return null;   // any pipeline/buffer build failure -> fall back to GLX
     }
 
+    // ── Phase-4 post-processing pipelines (size-independent; targets/BGs are
+    //    built per-size in _allocPostTargets). A failure here only disables the
+    //    post chain (present falls back to the tonemap blit) — it does NOT fail
+    //    WGX.create(), so lit+sky+shadow still render. ──
+    const _UCD = GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST;
+    const ALPHA_BLEND = {
+      color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+      alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
+    };
+    const ADD_BLEND = {
+      color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+      alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
+    };
+    function _buildPost() {
+      if (!_Post) return;
+      try {
+        pointSampler = device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+        const fsPipe = (code, fmt, blend) => {
+          const mod = device.createShaderModule({ code });
+          const target = blend ? { format: fmt, blend } : { format: fmt };
+          return device.createRenderPipeline({
+            layout: "auto",
+            vertex: { module: mod, entryPoint: "vs_main" },
+            fragment: { module: mod, entryPoint: "fs_main", targets: [target] },
+            primitive: { topology: "triangle-list" },
+          });
+        };
+        pBloomDown = fsPipe(_Post.BLOOM_DOWN, SCENE_FORMAT, null);
+        pBloomUp   = fsPipe(_Post.BLOOM_UP,   SCENE_FORMAT, ADD_BLEND);   // additive accumulate
+        pSSAO      = fsPipe(_Post.SSAO,       SSAO_FORMAT,  null);
+        pGodray    = fsPipe(_Post.GODRAY,     SCENE_FORMAT, null);
+        pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
+        pFXAA      = fsPipe(_Post.FXAA,       format,        null);
+        ssaoUBO      = device.createBuffer({ size: _Post.SSAO_UNIFORM_BYTES,      usage: _UCD });
+        godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
+        compositeUBO = device.createBuffer({ size: _Post.COMPOSITE_UNIFORM_BYTES, usage: _UCD });
+        fxaaUBO      = device.createBuffer({ size: _Post.FXAA_UNIFORM_BYTES,      usage: _UCD });
+      } catch (_) { pComposite = null; }   // disable post; ensureTargets stays inert
+    }
+
+    // ── Phase-4 foreground-FX pipelines (blob shadow / skid / glow / decal). A
+    //    failure leaves _fxReady false and the FX methods no-op. ──
+    function _buildFx() {
+      if (!_Fx) return;
+      try {
+        // Shared unit quad (BLOB_SHADOW + MARK), aPos in -0.5..0.5 (x,z).
+        const quad = new Float32Array([-0.5,-0.5, 0.5,-0.5, 0.5,0.5, -0.5,-0.5, 0.5,0.5, -0.5,0.5]);
+        quadFxVBO = _mkBuffer(quad, GPUBufferUsage.VERTEX);
+        const quadVL = { arrayStride: _Fx.QUAD_VERTEX_BYTES,
+          attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] };
+        // Blob + mark share a dynamic-offset uniform ring (both are 144 B).
+        fxQuadLayout = device.createBindGroupLayout({
+          entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: _Fx.BLOB_SHADOW_UNIFORM_BYTES } }],
+        });
+        quadFxUBO = device.createBuffer({ size: FX_QUAD_SLOTS * FX_STRIDE, usage: _UCD });
+        quadFxBG = device.createBindGroup({ layout: fxQuadLayout,
+          entries: [{ binding: 0, resource: { buffer: quadFxUBO, offset: 0, size: _Fx.BLOB_SHADOW_UNIFORM_BYTES } }] });
+        const stampPipe = (code) => {
+          const mod = device.createShaderModule({ code });
+          return device.createRenderPipeline({
+            layout: device.createPipelineLayout({ bindGroupLayouts: [fxQuadLayout] }),
+            vertex: { module: mod, entryPoint: "vs_main", buffers: [quadVL] },
+            fragment: { module: mod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+            primitive: { topology: "triangle-list", cullMode: "none" },
+            // Coplanar road decals: bias toward the camera (GL polygonOffset(-4,-8)).
+            depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal",
+              depthBias: -2, depthBiasSlopeScale: -2, depthBiasClamp: 0 },
+          });
+        };
+        pBlob = stampPipe(_Fx.BLOB_SHADOW);
+        pMark = stampPipe(_Fx.MARK);
+
+        // Skid: single batched draw, prebuilt world-space vertex buffer (stride 36).
+        const skidMod = device.createShaderModule({ code: _Fx.SKID });
+        pSkid = device.createRenderPipeline({
+          layout: "auto",
+          vertex: { module: skidMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.SKID_VERTEX_BYTES,
+            attributes: [
+              { shaderLocation: 0, offset: 0,  format: "float32x3" },
+              { shaderLocation: 1, offset: 12, format: "float32x2" },
+              { shaderLocation: 2, offset: 24, format: "float32x4" },
+            ] }] },
+          fragment: { module: skidMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+          primitive: { topology: "triangle-list", cullMode: "none" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal",
+            depthBias: -2, depthBiasSlopeScale: -2, depthBiasClamp: 0 },
+        });
+        skidUBO = device.createBuffer({ size: _Fx.SKID_UNIFORM_BYTES, usage: _UCD });
+        skidFxBG = device.createBindGroup({ layout: pSkid.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer: skidUBO } }] });
+
+        // Glow: additive camera-facing halos, rebuilt each frame (stride 36).
+        const glowMod = device.createShaderModule({ code: _Fx.GLOW });
+        pGlow = device.createRenderPipeline({
+          layout: "auto",
+          vertex: { module: glowMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.GLOW_VERTEX_BYTES,
+            attributes: [
+              { shaderLocation: 0, offset: 0,  format: "float32x2" },
+              { shaderLocation: 1, offset: 8,  format: "float32x3" },
+              { shaderLocation: 2, offset: 20, format: "float32x3" },
+              { shaderLocation: 3, offset: 32, format: "float32" },
+            ] }] },
+          fragment: { module: glowMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND }] },
+          primitive: { topology: "triangle-list", cullMode: "none" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },   // no bias
+        });
+        glowUBO = device.createBuffer({ size: _Fx.GLOW_UNIFORM_BYTES, usage: _UCD });
+        glowFxBG = device.createBindGroup({ layout: pGlow.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer: glowUBO } }] });
+
+        // Decal: textured atlas quad; dynamic-offset uniform ring + per-texture BG.
+        fxDecalLayout = device.createBindGroupLayout({
+          entries: [
+            { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+              buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: _Fx.DECAL_UNIFORM_BYTES } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+          ],
+        });
+        const decalMod = device.createShaderModule({ code: _Fx.DECAL });
+        pDecal = device.createRenderPipeline({
+          layout: device.createPipelineLayout({ bindGroupLayouts: [fxDecalLayout] }),
+          vertex: { module: decalMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.DECAL_VERTEX_BYTES,
+            attributes: [
+              { shaderLocation: 0, offset: 0,  format: "float32x3" },
+              { shaderLocation: 1, offset: 12, format: "float32x3" },
+              { shaderLocation: 2, offset: 24, format: "float32x2" },
+            ] }] },
+          fragment: { module: decalMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+          primitive: { topology: "triangle-list", cullMode: "none" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
+        });
+        decalUBO = device.createBuffer({ size: FX_DECAL_SLOTS * FX_STRIDE, usage: _UCD });
+        _fxReady = true;
+      } catch (_) { _fxReady = false; }
+    }
+    _buildPost();
+    _buildFx();
+
     // ── Lit pipeline variants (blend / cull / alpha-write), built & cached lazily.
     function _litPipeline(opts) {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
@@ -391,12 +607,16 @@ const WGX = (function () {
         size: [width, height], format: SCENE_FORMAT,
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
+      // depthTex gains TEXTURE_BINDING (Phase 4) so SSAO can sample it as a
+      // texture_depth_2d — the depth buffer stores WebGPU-convention z (0..1)
+      // because the lit pass rasterises with the Z01-remapped view-proj.
       depthTex = device.createTexture({
         size: [width, height], format: DEPTH_FORMAT,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
       sceneView = sceneTex.createView();
       depthView = depthTex.createView();
+      depthSampleView = depthTex.createView({ aspect: "depth-only" });
       blitBindGroup = device.createBindGroup({
         layout: blitPipeline.getBindGroupLayout(0),
         entries: [
@@ -406,6 +626,112 @@ const WGX = (function () {
         ],
       });
       _texW = width; _texH = height;
+      _allocPostTargets();
+    }
+
+    // Allocate the Phase-4 post targets + their (size-dependent) bind groups.
+    // Destroy-before-recreate; runs from ensureTargets on every size change.
+    // No-op (leaving _postReady false for this frame's present) if the post
+    // pipelines never built.
+    function _allocPostTargets() {
+      if (!pComposite) return;
+      const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
+      try {
+        if (ssaoTex) ssaoTex.destroy();
+        if (godrayTex) godrayTex.destroy();
+        if (ldrTex) ldrTex.destroy();
+        for (let i = 0; i < bloomLv.length; i++) bloomLv[i].tex.destroy();
+        bloomLv = []; bloomDownUBO = []; bloomUpUBO = []; bloomDownBG = []; bloomUpBG = [];
+
+        ssaoTex = device.createTexture({ size: [halfW, halfH], format: SSAO_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+        godrayTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+        ldrTex = device.createTexture({ size: [width, height], format: LDR_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+        ssaoView = ssaoTex.createView();
+        godrayView = godrayTex.createView();
+        ldrView = ldrTex.createView();
+
+        // Bloom mip chain: mip0 = half-res, each subsequent level halved, capped
+        // at BLOOM_MAX_LEVELS and stopping before a dimension drops below 4 px.
+        let bw = halfW, bh = halfH;
+        for (let i = 0; i < BLOOM_MAX_LEVELS; i++) {
+          if (i > 0) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); }
+          if (i > 0 && (bw < 4 || bh < 4)) break;
+          const tex = device.createTexture({ size: [bw, bh], format: SCENE_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          bloomLv.push({ tex, view: tex.createView(), w: bw, h: bh });
+        }
+        const nLv = bloomLv.length;
+        // Down UBOs/BGs: mip0 reads scene (threshold gate), mip i>0 reads mip i-1.
+        for (let i = 0; i < nLv; i++) {
+          const ubo = device.createBuffer({ size: _Post.BLOOM_DOWN_UNIFORM_BYTES,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+          bloomDownUBO.push(ubo);
+          bloomDownBG.push(device.createBindGroup({
+            layout: pBloomDown.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: i === 0 ? sceneView : bloomLv[i - 1].view },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: ubo } },
+            ],
+          }));
+        }
+        // Up UBOs/BGs: target level i (0..nLv-2) reads the smaller source i+1.
+        for (let i = 0; i < nLv - 1; i++) {
+          const ubo = device.createBuffer({ size: _Post.BLOOM_UP_UNIFORM_BYTES,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+          bloomUpUBO.push(ubo);
+          bloomUpBG.push(device.createBindGroup({
+            layout: pBloomUp.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: bloomLv[i + 1].view },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: ubo } },
+            ],
+          }));
+        }
+
+        ssaoBG = device.createBindGroup({
+          layout: pSSAO.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: depthSampleView },
+            { binding: 1, resource: pointSampler },
+            { binding: 2, resource: { buffer: ssaoUBO } },
+          ],
+        });
+        godrayBG = device.createBindGroup({
+          layout: pGodray.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: sceneView },
+            { binding: 1, resource: linearSampler },
+            { binding: 2, resource: { buffer: godrayUBO } },
+          ],
+        });
+        compositeBG = device.createBindGroup({
+          layout: pComposite.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: sceneView },
+            { binding: 1, resource: bloomLv[0].view },
+            { binding: 2, resource: ssaoView },
+            { binding: 3, resource: godrayView },
+            { binding: 4, resource: linearSampler },
+            { binding: 5, resource: { buffer: compositeUBO } },
+          ],
+        });
+        fxaaBG = device.createBindGroup({
+          layout: pFXAA.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: ldrView },
+            { binding: 1, resource: linearSampler },
+            { binding: 2, resource: { buffer: fxaaUBO } },
+          ],
+        });
+        _postReady = true;
+      } catch (_) {
+        _postReady = false;
+      }
     }
 
     // ── buffer helper: create a GPUBuffer initialised from a typed array ──
@@ -447,9 +773,27 @@ const WGX = (function () {
       const ibuf = _mkBuffer(b.idx,  GPUBufferUsage.INDEX);
       return { _wgx: "mesh", vbuf, ibuf, count: b.count, indexFormat: b.indexFormat, chunks: null };
     }
-    // Textured decal mesh — Phase 4 (decal atlas pipeline). Return a mesh-shaped
-    // token so freeMesh/drawDecal hold a handle without throwing.
-    function createTexMesh(_data) { return { _wgx: "texmesh", _phase: 4 }; }
+    // Textured decal mesh (Phase 4): interleave pos3+nrm3+uv2 -> stride-32 vbuf +
+    // index buffer, matching the DECAL shader vertex layout (js/webgpu/wgsl-fx.js).
+    function createTexMesh(data) {
+      if (!data || !data.pos || !data.nrm || !data.uv) return { _wgx: "texmesh", _phase: 4 };
+      const pos = toF32(data.pos), nrm = toF32(data.nrm), uv = toF32(data.uv);
+      const vCount = pos.length / 3, big = vCount > 65535;
+      let idx = data.idx;
+      if (idx instanceof Uint16Array || idx instanceof Uint32Array) {
+        if (big && idx instanceof Uint16Array) idx = new Uint32Array(idx);
+      } else idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
+      const inter = new Float32Array(vCount * 8);
+      for (let i = 0; i < vCount; i++) {
+        const o = i * 8;
+        inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
+        inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
+        inter[o+6] = uv[i*2];    inter[o+7] = uv[i*2+1];
+      }
+      const vbuf = _mkBuffer(inter, GPUBufferUsage.VERTEX);
+      const ibuf = _mkBuffer(idx, GPUBufferUsage.INDEX);
+      return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16" };
+    }
 
     // Chunked prop mesh: ONE shared vertex buffer + per spatial XZ cell index
     // buffer, each with an AABB (port of GLX createChunkedMesh, js/glx.js:3078).
@@ -488,8 +832,25 @@ const WGX = (function () {
       });
       return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
-    // 2D texture (decals) — Phase 4. Token only; drawDecal is stubbed.
-    function createTexture(_src) { return { _wgx: "texture", _phase: 4 }; }
+    // 2D texture (decal atlas, Phase 4): upload an ImageBitmap/canvas/ImageData
+    // (via copyExternalImageToTexture, flipY to match GLX's UNPACK_FLIP_Y) or raw
+    // RGBA bytes (via writeTexture). Returns { texture, view } or an inert token.
+    function createTexture(src) {
+      try {
+        const w = src ? (src.width | 0) : 0, h = src ? (src.height | 0) : 0;
+        if (!w || !h) return { _wgx: "texture", _phase: 4 };
+        const tex = device.createTexture({
+          size: [w, h], format: "rgba8unorm",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        if (src instanceof Uint8Array || src instanceof Uint8ClampedArray) {
+          device.queue.writeTexture({ texture: tex }, src, { bytesPerRow: w * 4, rowsPerImage: h }, [w, h]);
+        } else {
+          device.queue.copyExternalImageToTexture({ source: src, flipY: true }, { texture: tex }, [w, h]);
+        }
+        return { _wgx: "texture", texture: tex, view: tex.createView() };
+      } catch (_) { return { _wgx: "texture", _phase: 4 }; }
+    }
 
     function freeMesh(m) { if (!m) return; if (m.vbuf) m.vbuf.destroy(); if (m.ibuf) m.ibuf.destroy(); }
     function freeChunkedMesh(m) {
@@ -498,7 +859,7 @@ const WGX = (function () {
       if (m.ibuf) m.ibuf.destroy();
       if (m.chunks) for (let i = 0; i < m.chunks.length; i++) m.chunks[i].ibuf.destroy();
     }
-    function freeTexture(_t) { /* Phase 4 */ }
+    function freeTexture(t) { if (t && t.texture) t.texture.destroy(); }
 
     // ── frame uniform + light storage upload (mirror GLX begin(), js/glx.js:2838) ──
     function _writeFrame(f) {
@@ -506,10 +867,20 @@ const WGX = (function () {
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
       _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
       d.set(_vpGpu, 0);
+      frameVPGpu.set(_vpGpu);   // persistent copy for the FX passes (post/fx)
       const eye = f.eye || [0,0,0], sd = f.sunDir || [0.3,0.6,0.5], sc = f.sunColor || [1,0.95,0.9];
+      // Phase-4 post/FX frame extras.
+      frameSunDir = f.sunDir || null;
+      frameSunColor = f.sunColor || null;
+      frameProjRaw = f.proj || null;
+      frameSunVS = f.sunViewDir || null;
+      frameTime = f.time != null ? f.time : 0;
+      if (f.invProj && f.invProj.length >= 16) { _mul4(frameInvProjW, f.invProj, Z01INV); frameHaveProj = true; }
+      else frameHaveProj = false;
       const T = f.tune || null;
       const ambM = T && T.ambientMul != null ? T.ambientMul : 1;
       const as = f.ambientSky || [0.3,0.32,0.36], ag = f.ambientGround || [0.2,0.19,0.18];
+      frameAmbSky = as; frameAmbGround = ag;
       const skz = f.skyZenith || [0.18,0.40,0.78], skh = f.skyHorizon || [0.62,0.74,0.88];
       const fc = f.fogColor || [0.5,0.6,0.7];
       d[16]=eye[0]; d[17]=eye[1]; d[18]=eye[2]; d[19]=0;
@@ -596,6 +967,7 @@ const WGX = (function () {
       try { tex = ctx.getCurrentTexture(); } catch (_) { return false; }
       currentView = tex.createView();
       _drawSlot = 0;
+      _fxQuadSlot = 0; _fxDecalSlot = 0;
       _writeFrame(frame || {});
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       encoder = device.createCommandEncoder();
@@ -681,23 +1053,178 @@ const WGX = (function () {
       }
     }
 
-    // ── present(opts): close the lit pass, tonemap-blit to the swapchain ──
-    function present(opts) {
-      if (_lost || !encoder) return;
-      if (litPass) { litPass.end(); litPass = null; }
-      const exposure = (opts && opts.exposure != null) ? opts.exposure : 1.0;
+    // Fallback path: the Phase-2 tonemap blit (HDR scene -> swapchain). Used when
+    // the post chain never built or a target is missing this frame.
+    function _tonemapBlit(exposure) {
       blitData[0] = exposure; blitData[1] = 0; blitData[2] = 0; blitData[3] = 0;
       device.queue.writeBuffer(blitUBO, 0, blitData);
       const bp = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: currentView, clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: "clear", storeOp: "store",
-        }],
+        colorAttachments: [{ view: currentView, clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: "clear", storeOp: "store" }],
       });
       bp.setPipeline(blitPipeline);
       bp.setBindGroup(0, blitBindGroup);
       bp.draw(3, 1, 0, 0);
       bp.end();
+    }
+
+    // A clear-only render pass — used to reset an aux target (SSAO->white,
+    // godray/bloom->black) so the composite never samples a stale frame when a
+    // pass is skipped, mirroring GLX binding whiteTex/blackTex in those cases.
+    function _clearTarget(view, r, g, b) {
+      encoder.beginRenderPass({
+        colorAttachments: [{ view, clearValue: { r, g, b, a: 1 }, loadOp: "clear", storeOp: "store" }],
+      }).end();
+    }
+
+    // Project the (infinitely distant) sun to a texture-space UV + derive the GLX
+    // lens-flare / sun-shaft strengths. Returns null when the sun is behind the
+    // camera. Uses the RAW GL view-proj (Z01 changes only clip z, not x/y/w).
+    function _sunScreen() {
+      const s = frameSunDir, vp = frameViewProj;
+      if (!s || !vp) return null;
+      const cx = vp[0]*s[0] + vp[4]*s[1] + vp[8]*s[2];
+      const cy = vp[1]*s[0] + vp[5]*s[1] + vp[9]*s[2];
+      const cw = vp[3]*s[0] + vp[7]*s[1] + vp[11]*s[2];
+      if (!(cw > 0)) return null;
+      const ndcx = cx / cw, ndcy = cy / cw;
+      // GL NDC (y-up) -> texture-space uv (y-down), matching POST_VS.
+      const ux = ndcx * 0.5 + 0.5, uy = 0.5 - ndcy * 0.5;
+      const sl = frameSunColor ? Math.max(frameSunColor[0], frameSunColor[1], frameSunColor[2]) : 1;
+      const gate = Math.min(1, Math.max(0, (sl - 0.35) / 0.45));
+      let flare = 0, shaft = 0;
+      if (s[1] > -0.02) { const golden = 1 - Math.min(Math.max(s[1], 0) / 0.45, 1); flare = (0.14 + golden * 0.30) * gate; }
+      if (s[1] > 0.05) shaft = s[1] * 0.8 * gate;
+      return { ux, uy, flare, shaft, onScreen: ux >= 0 && ux <= 1 && uy >= 0 && uy <= 1 };
+    }
+
+    // ── present(opts): close the lit pass, run the Phase-4 post chain
+    //    (SSAO -> godray -> bloom -> composite -> FXAA), fall back to the blit. ──
+    function present(opts) {
+      if (_lost || !encoder) return;
+      if (litPass) { litPass.end(); litPass = null; }
+      const o = opts || {};
+      const exposure = o.exposure != null ? o.exposure : 1.0;
+
+      // Fallback: post disabled / targets absent -> tonemap blit, exactly as Phase 2.
+      if (!_postReady || !pComposite || !ldrView || bloomLv.length === 0) {
+        _tonemapBlit(exposure);
+        device.queue.submit([encoder.finish()]);
+        encoder = null; currentView = null;
+        return;
+      }
+
+      const T = o.tune || null;
+      const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
+      const sun = _sunScreen();
+      const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
+
+      // ── 0) SSAO (half-res) into ssaoTex, or clear it to white when unavailable.
+      const aoStr = o.ssao != null ? o.ssao : 0;
+      const contact = (o.contact > 0 && frameSunVS) ? o.contact : 0;
+      const haveAO = frameHaveProj && ssaoBG && aoStr > 0;
+      if (haveAO) {
+        const s = postScratch;
+        s.set(frameInvProjW, 0);
+        s.set(frameProjRaw && frameProjRaw.length >= 16 ? frameProjRaw : IDENT, 16);
+        s[32] = frameSunVS ? frameSunVS[0] : 0; s[33] = frameSunVS ? frameSunVS[1] : 0;
+        s[34] = frameSunVS ? frameSunVS[2] : -1; s[35] = 0;
+        s[36] = 1 / halfW; s[37] = 1 / halfH; s[38] = aoStr; s[39] = contact;
+        s[40] = (T && T.ssaoRadius != null) ? T.ssaoRadius : 0.6; s[41] = 0.4; s[42] = 900; s[43] = 0;
+        device.queue.writeBuffer(ssaoUBO, 0, s, 0, _Post.SSAO_UNIFORM_BYTES / 4);
+        const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssaoView, loadOp: "clear",
+          clearValue: { r: 1, g: 1, b: 1, a: 1 }, storeOp: "store" }] });
+        p.setPipeline(pSSAO); p.setBindGroup(0, ssaoBG); p.draw(3, 1, 0, 0); p.end();
+      } else {
+        _clearTarget(ssaoView, 1, 1, 1);
+      }
+
+      // ── 1) GODRAY (half-res) — screen-space radial shafts toward the sun,
+      //    reading the scene HDR as the bright source; else clear to black.
+      const grStr = o.godray != null ? o.godray : 0;
+      const haveGR = godrayBG && grStr > 0 && sun && sun.onScreen && sun.shaft > 0;
+      if (haveGR) {
+        const s = postScratch;
+        s[0] = sunUVx; s[1] = sunUVy; s[2] = grStr; s[3] = 1.1;   // radialScale
+        const sc = frameSunColor || [1, 0.95, 0.85];
+        s[4] = sc[0]; s[5] = sc[1]; s[6] = sc[2]; s[7] = 0.85;    // per-step decay
+        device.queue.writeBuffer(godrayUBO, 0, s, 0, _Post.GODRAY_UNIFORM_BYTES / 4);
+        const p = encoder.beginRenderPass({ colorAttachments: [{ view: godrayView, loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+        p.setPipeline(pGodray); p.setBindGroup(0, godrayBG); p.draw(3, 1, 0, 0); p.end();
+      } else {
+        _clearTarget(godrayView, 0, 0, 0);
+      }
+
+      // ── 2+3) BLOOM mip chain (down bright-pass+blur, then additive up).
+      const bloomAmt = o.bloom != null ? o.bloom : 0.55;
+      const threshold = o.threshold != null ? o.threshold : 0.75;
+      const spread = (T && T.bloomSpread != null) ? T.bloomSpread : 1;
+      const nLv = bloomLv.length;
+      if (bloomAmt > 0) {
+        // Downsample: mip0 bright-pass gates the scene; mips 1..N plain downsample.
+        for (let i = 0; i < nLv; i++) {
+          const src = i === 0 ? { w: width, h: height } : bloomLv[i - 1];
+          const s = postScratch;
+          s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = 0;
+          device.queue.writeBuffer(bloomDownUBO[i], 0, s, 0, _Post.BLOOM_DOWN_UNIFORM_BYTES / 4);
+          const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
+            loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+          p.setPipeline(pBloomDown); p.setBindGroup(0, bloomDownBG[i]); p.draw(3, 1, 0, 0); p.end();
+        }
+        // Upsample: from the smallest level down to mip0, additive (load) blend.
+        for (let i = nLv - 2; i >= 0; i--) {
+          const s = postScratch;
+          s[0] = 1 / bloomLv[i + 1].w; s[1] = 1 / bloomLv[i + 1].h; s[2] = spread; s[3] = 0;
+          device.queue.writeBuffer(bloomUpUBO[i], 0, s, 0, _Post.BLOOM_UP_UNIFORM_BYTES / 4);
+          const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
+            loadOp: "load", storeOp: "store" }] });
+          p.setPipeline(pBloomUp); p.setBindGroup(0, bloomUpBG[i]); p.draw(3, 1, 0, 0); p.end();
+        }
+      } else {
+        _clearTarget(bloomLv[0].view, 0, 0, 0);   // composite reads zero bloom
+      }
+
+      // ── 4) COMPOSITE (full-res) -> LDR intermediate.
+      {
+        const s = postScratch;
+        // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
+        const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(nLv - 1, 1) : 0;
+        const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
+        s[0] = exposure; s[1] = bloomNorm; s[2] = haveGR ? 1.0 : 0.0; s[3] = flareStr;   // p0
+        s[4] = sunUVx; s[5] = sunUVy;
+        s[6] = (T && T.whitePoint != null) ? T.whitePoint : 1.0;
+        s[7] = (T && T.blackLift != null) ? T.blackLift : 0.005;                          // sunUV
+        s[8]  = (T && T.contrast   != null) ? T.contrast   : 1.12;
+        s[9]  = (T && T.vibrance   != null) ? T.vibrance   : 0.20;
+        s[10] = (T && T.saturation != null) ? T.saturation : 1.0;
+        s[11] = (T && T.tint       != null) ? T.tint       : 0.0;                         // grade
+        s[12] = (T && T.vignette   != null) ? T.vignette   : 0.80;
+        s[13] = (T && T.grain      != null) ? T.grain      : 0.0;
+        s[14] = frameTime; s[15] = 0;                                                     // fx
+        const grade = o.grade || null;
+        const gsh = grade && grade.shadow ? grade.shadow : [1, 1, 1];
+        const ghi = grade && grade.hi ? grade.hi : [1, 1, 1];
+        s[16] = gsh[0]; s[17] = gsh[1]; s[18] = gsh[2];
+        s[19] = grade && grade.str != null ? grade.str : 0;                              // gradeShadow (w=str)
+        s[20] = ghi[0]; s[21] = ghi[1]; s[22] = ghi[2]; s[23] = 0;                        // gradeHi
+        s[24] = 1 / width; s[25] = 1 / height; s[26] = 0; s[27] = 0;                      // texel
+        device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
+        const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+        p.setPipeline(pComposite); p.setBindGroup(0, compositeBG); p.draw(3, 1, 0, 0); p.end();
+      }
+
+      // ── 5) FXAA (full-res) -> swapchain.
+      {
+        const s = postScratch;
+        s[0] = 1 / width; s[1] = 1 / height; s[2] = 0; s[3] = 0;
+        device.queue.writeBuffer(fxaaUBO, 0, s, 0, _Post.FXAA_UNIFORM_BYTES / 4);
+        const p = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+        p.setPipeline(pFXAA); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0); p.end();
+      }
+
       device.queue.submit([encoder.finish()]);
       encoder = null; currentView = null;
     }
@@ -769,6 +1296,147 @@ const WGX = (function () {
       _shadowRendered = true;
     }
 
+    // ── Phase-4 foreground FX (recorded INTO the open lit pass, matching how
+    //    game.js interleaves them with draw()/drawSky() before present()). ──
+
+    // Blob shadow + skid stamp share the unit quad + dynamic-offset uniform ring.
+    // size = (w, l, p2, p3): BLOB -> (w,l, softInner 0.25, peakAlpha 0.45);
+    // MARK -> (w,l, peakAlpha 0.38, 0).
+    function _writeQuadFx(slot, model, w, l, p2, p3) {
+      const s = fxScratch;
+      s.set(frameVPGpu, 0);
+      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 16);
+      s[32] = w; s[33] = l; s[34] = p2; s[35] = p3;
+      device.queue.writeBuffer(quadFxUBO, slot * FX_STRIDE, s, 0, 36);
+    }
+    function _drawQuadStamp(pipeline, model, w, l, p2, p3) {
+      if (!_fxReady || !litPass || !pipeline) return;
+      const slot = _fxQuadSlot++;
+      if (slot >= FX_QUAD_SLOTS) return;
+      _writeQuadFx(slot, model, w, l, p2, p3);
+      litPass.setPipeline(pipeline);
+      litPass.setBindGroup(0, quadFxBG, [slot * FX_STRIDE]);
+      litPass.setVertexBuffer(0, quadFxVBO);
+      litPass.draw(6, 1, 0, 0);
+    }
+    function drawShadow(model, w, l) { _drawQuadStamp(pBlob, model, w, l, 0.25, 0.45); }
+    function drawMark(model, w, l)   { _drawQuadStamp(pMark, model, w, l, 0.38, 0.0); }
+
+    // Batched skid trail: game.js supplies interleaved pos3+uv2 (stride 20, GL
+    // layout); the SKID shader wants stride 36 (pos3+uv2+rgba), so expand with a
+    // black opaque colour (0,0,0,1) to reproduce the exact GL look, then upload.
+    function drawSkidBatch(verts, vertCount, dirty) {
+      if (!_fxReady || !litPass || !pSkid) return false;
+      if (!(vertCount > 0)) return true;
+      const floats9 = vertCount * 9;
+      if (!_skidScratch || _skidScratch.length < floats9) _skidScratch = new Float32Array(floats9);
+      const dst = _skidScratch;
+      for (let v = 0; v < vertCount; v++) {
+        const si = v * 5, di = v * 9;
+        dst[di] = verts[si]; dst[di+1] = verts[si+1]; dst[di+2] = verts[si+2];
+        dst[di+3] = verts[si+3]; dst[di+4] = verts[si+4];
+        dst[di+5] = 0; dst[di+6] = 0; dst[di+7] = 0; dst[di+8] = 1;
+      }
+      const bytes = floats9 * 4;
+      if (!skidVBO || _skidCap < bytes) {
+        if (skidVBO) skidVBO.destroy();
+        _skidCap = Math.max(bytes, 4096);
+        skidVBO = device.createBuffer({ size: (_skidCap + 3) & ~3, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+        dirty = true;
+      }
+      if (dirty) device.queue.writeBuffer(skidVBO, 0, dst, 0, floats9);
+      device.queue.writeBuffer(skidUBO, 0, frameVPGpu);
+      litPass.setPipeline(pSkid);
+      litPass.setBindGroup(0, skidFxBG);
+      litPass.setVertexBuffer(0, skidVBO);
+      litPass.draw(vertCount, 1, 0, 0);
+      return true;
+    }
+
+    // Additive lamp-glare halos — CPU billboard build ported verbatim from GLX
+    // drawGlow (js/glx.js:3309), emitting stride-36 (corner2, center3, color3,
+    // radius1) verts, then one additive draw into the HDR scene target.
+    function drawGlow(lights, str) {
+      if (!_fxReady || !litPass || !pGlow || !lights || !lights.length || !(str > 0)) return;
+      const nL = (lights.length / 15) | 0, floatsPerLamp = 6 * 9;
+      if (!_glowScratch || _glowScratch.length < nL * floatsPerLamp) _glowScratch = new Float32Array(nL * floatsPerLamp);
+      const gd = _glowScratch;
+      const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
+      let p = 0, nDraw = 0;
+      for (let i = 0; i < nL; i++) {
+        const o = i * 15, glareW = lights[o + 14];
+        if (!(glareW > 0)) continue;
+        const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
+        const dxE = cx - ex, dyE = cy - ey, dzE = cz - ez, dEye = Math.sqrt(dxE*dxE + dyE*dyE + dzE*dzE);
+        const fade = Math.min(1, Math.max(0, (170 - dEye) / 110));
+        if (fade <= 0) continue;
+        let r = lights[o + 3], g = lights[o + 4], b = lights[o + 5];
+        const rad = lights[o + 6], cm = Math.max(r, g, b) || 1;
+        const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade * glareW;
+        r *= csc; g *= csc; b *= csc;
+        const brad = Math.min(2.2, rad * 0.10) * (0.7 + 0.6 * Math.min(glareW, 2));
+        for (let v = 0; v < 6; v++) {
+          const c = _glowCorners[v];
+          gd[p++] = c[0]; gd[p++] = c[1]; gd[p++] = cx; gd[p++] = cy; gd[p++] = cz;
+          gd[p++] = r; gd[p++] = g; gd[p++] = b; gd[p++] = brad;
+        }
+        nDraw++;
+      }
+      if (!nDraw) return;
+      const bytes = p * 4;
+      if (!glowVBO || _glowCap < bytes) {
+        if (glowVBO) glowVBO.destroy();
+        _glowCap = Math.max(bytes, 4096);
+        glowVBO = device.createBuffer({ size: (_glowCap + 3) & ~3, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+      }
+      device.queue.writeBuffer(glowVBO, 0, gd, 0, p);
+      const gu = fxScratch;
+      gu.set(frameVPGpu, 0);
+      gu[16] = ex; gu[17] = ey; gu[18] = ez; gu[19] = str;
+      device.queue.writeBuffer(glowUBO, 0, gu, 0, 20);
+      litPass.setPipeline(pGlow);
+      litPass.setBindGroup(0, glowFxBG);
+      litPass.setVertexBuffer(0, glowVBO);
+      litPass.draw(nDraw * 6, 1, 0, 0);
+    }
+
+    // Textured team/sponsor decal over the car body (createTexMesh + createTexture).
+    // opts: { glow, uvRect:[u0,v0,uScale,vScale], tint:[r,g,b] }.
+    function drawDecal(mesh, model, tex, opts) {
+      if (!_fxReady || !litPass || !pDecal || !mesh || !mesh.vbuf || !tex || !tex.view) return;
+      const slot = _fxDecalSlot++;
+      if (slot >= FX_DECAL_SLOTS) return;
+      const s = fxScratch, o = opts || {};
+      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
+      s.set(frameVPGpu, 16);
+      const sd = frameSunDir || [0.3,0.6,0.5], sc = frameSunColor || [1,0.95,0.9];
+      const asky = frameAmbSky || [0.3,0.32,0.36], agr = frameAmbGround || [0.2,0.19,0.18];
+      s[32] = sd[0]; s[33] = sd[1]; s[34] = sd[2]; s[35] = 0;
+      s[36] = sc[0]; s[37] = sc[1]; s[38] = sc[2]; s[39] = 0;
+      s[40] = asky[0]; s[41] = asky[1]; s[42] = asky[2]; s[43] = 0;
+      s[44] = agr[0];  s[45] = agr[1];  s[46] = agr[2];  s[47] = 0;
+      const uvr = o.uvRect || null;
+      s[48] = uvr ? uvr[0] : 0; s[49] = uvr ? uvr[1] : 0; s[50] = uvr ? uvr[2] : 1; s[51] = uvr ? uvr[3] : 1;
+      const tint = o.tint || null;
+      s[52] = tint ? tint[0] : 1; s[53] = tint ? tint[1] : 1; s[54] = tint ? tint[2] : 1;
+      s[55] = o.glow || 0;
+      device.queue.writeBuffer(decalUBO, slot * FX_STRIDE, s, 0, 56);
+      let bg = tex._wgxDecalBG;
+      if (!bg) {
+        bg = device.createBindGroup({ layout: fxDecalLayout, entries: [
+          { binding: 0, resource: { buffer: decalUBO, offset: 0, size: _Fx.DECAL_UNIFORM_BYTES } },
+          { binding: 1, resource: tex.view },
+          { binding: 2, resource: linearSampler },
+        ] });
+        tex._wgxDecalBG = bg;
+      }
+      litPass.setPipeline(pDecal);
+      litPass.setBindGroup(0, bg, [slot * FX_STRIDE]);
+      litPass.setVertexBuffer(0, mesh.vbuf);
+      litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
+      litPass.drawIndexed(mesh.count);
+    }
+
     const noop = function () {};
 
     return {
@@ -780,8 +1448,9 @@ const WGX = (function () {
       get width() { return width; },
       get height() { return height; },
       get aspect() { return aspect; },
-      hdrMode: () => true,           // Phase 2: RGBA16F scene target is live
-      msaa: () => 1,                 // Phase 4: pipeline.multisample resolveTarget
+      hdrMode: () => true,           // Phase 2: RGBA16F scene target + Phase 4 post chain
+      msaa: () => 1,                 // Phase 4: still 1 — needs sampleable single-sample
+                                     //   depth for SSAO (depth resolve absent in core WebGPU)
       pcss: () => true,              // Phase 3: comparison-sampler 3×3 PCF sun shadows
       isMobile: IS_MOBILE,
       mobileTier: MOBILE_TIER,
@@ -801,11 +1470,11 @@ const WGX = (function () {
       draw,
       drawChunked,
       drawSky,
-      drawShadow: noop,              // Phase 3 (blob shadow quad)
-      drawMark: noop,                // Phase 4 (skid-mark stamp)
-      drawSkidBatch: noop,           // Phase 4/5 (batched skid marks)
-      drawGlow: noop,                // Phase 4/5 (additive lamp-glare billboards)
-      drawDecal: noop,               // Phase 4 (team/sponsor decal atlas)
+      drawShadow,                    // Phase 4 (blob shadow quad, in lit pass)
+      drawMark,                      // Phase 4 (single skid-mark stamp)
+      drawSkidBatch,                 // Phase 4 (batched skid trail, one draw)
+      drawGlow,                      // Phase 4 (additive lamp-glare billboards, HDR)
+      drawDecal,                     // Phase 4 (team/sponsor decal atlas)
 
       // ── Shadow pass (Phase 3) ──
       shadowBegin,
