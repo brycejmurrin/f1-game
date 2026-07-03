@@ -62,6 +62,8 @@ uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specu
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
+uniform samplerCube uEnvCube;  // live 64px env probe around the player car (one face/frame)
+uniform float uEnvStr;         // 0 until the probe's first full 6-face cycle; then the CAR tuner's envCube strength
 uniform sampler2DShadow uShadowMap;
 uniform mat4 uLightVP;
 uniform float uShadowBias;
@@ -696,6 +698,16 @@ void main() {
     float horiz = smoothstep(-0.12, 0.30, Rg.y);
     vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rg.y, 0.0)));   // sqrt not pow(x,0.5): pow(0.0,0.5) NaNs on mobile
     vec3 envCC = mix(uAmbGround * 0.6, skyR, horiz);
+    // LIVE env probe: when the cubemap around the player car is warm, the
+    // lacquer mirrors the REAL surroundings (trees, buildings, track, sky —
+    // including everything behind the camera that SSR can never see) instead of
+    // the analytic gradient above. Roughness picks the mip so rough paint sees
+    // a blurred world. uEnvStr fades analytic → real, so the first frames (and
+    // the probe-less setup viewer) keep the gradient fallback.
+    if (uEnvStr > 0.001) {
+      vec3 envReal = textureLod(uEnvCube, Rg, rough * 6.0).rgb;
+      envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
+    }
     envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.72;                             // absorb: darken the base under the mirror (energy conserving)
     vec3 addCC = envCC * envW;
@@ -2021,6 +2033,23 @@ void main() {}`;
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
+  // ── Live environment probe ──────────────────────────────────────────────────
+  // A small cubemap rendered around the player car (one face per frame — full
+  // refresh every 6 frames) that the car-paint clearcoat samples for REAL
+  // reflections of the surrounding world. 64px RGBA8 faces + mips: reflections
+  // are blurred by paint roughness anyway, so tiny faces read perfectly.
+  const ENV_SIZE = 64;
+  let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
+  let envFacesMask = 0, envReady = false, _envActive = false;
+  const _envView = new Float32Array(16), _envProj = new Float32Array(16),
+        _envVP = new Float32Array(16), _envInvVP = new Float32Array(16),
+        _envTgt = [0, 0, 0];
+  // Cubemap face orientations (forward, up) — WebGL cube-face convention.
+  const ENV_FACES = [
+    [[ 1, 0, 0], [0, -1, 0]], [[-1, 0, 0], [0, -1, 0]],
+    [[ 0, 1, 0], [0, 0,  1]], [[ 0, -1, 0], [0, 0, -1]],
+    [[ 0, 0, 1], [0, -1, 0]], [[ 0, 0, -1], [0, -1, 0]],
+  ];
   let frameViewProj = null;
   let frameSunDir = null;
   let frameEye = null;
@@ -2414,7 +2443,7 @@ void main() {
 
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
@@ -2639,6 +2668,72 @@ void main() {
     setDepthMask(true);
   }
 
+  function envInit() {
+    envTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex);
+    for (let f = 0; f < 6; f++)
+      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA8, ENV_SIZE, ENV_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.generateMipmap(gl.TEXTURE_CUBE_MAP);   // texture-complete (black) from frame 0
+    // 1px dummy cube: bound to the env unit while rendering INTO the real cube,
+    // so the sampler never references its own render target (feedback loop).
+    envDummyTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, envDummyTex);
+    for (let f = 0; f < 6; f++)
+      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+    envDepthRB = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, envDepthRB);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, ENV_SIZE, ENV_SIZE);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    envFBO = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, envDepthRB);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  // Render one probe face: caller re-issues the world draws (sky + track meshes,
+  // no cars) between envFaceBegin and envFaceEnd. Reuses begin() with the face's
+  // camera so every lighting uniform (sun, shadow map, ambient, fog, tune)
+  // matches the main frame exactly. Returns the face's invViewProj for drawSky.
+  function envFaceBegin(face, eye, frame) {
+    if (!gl) return null;
+    if (!envTex) envInit();
+    _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
+    const F = ENV_FACES[face];
+    _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
+    M4.lookAtTo(_envView, eye, _envTgt, F[1]);
+    M4.perspectiveTo(_envProj, Math.PI / 2, 1, 0.4, 900);
+    M4.mulTo(_envVP, _envProj, _envView);
+    M4.invertTo(_envInvVP, _envVP);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, envTex, 0);
+    const svVP = frame.viewProj, svEye = frame.eye;
+    frame.viewProj = _envVP; frame.eye = eye;
+    begin(frame);
+    frame.viewProj = svVP; frame.eye = svEye;
+    return _envInvVP;
+  }
+  function envFaceEnd(face) {
+    if (!gl || !envTex) return;
+    _envActive = false;
+    envFacesMask |= 1 << face;
+    if (envFacesMask === 63) {         // full cycle → refresh mips, probe is live
+      envFacesMask = 0; envReady = true;
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex);
+      gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);  // restore for the (non-post) main pass
+  }
+
   function begin(frame) {
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
@@ -2661,7 +2756,11 @@ void main() {
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the
     // multisampled renderbuffer, resolved into sceneTex/sceneDepth at present().
-    if (postEnabled) {
+    // An env-probe face (envFaceBegin) instead targets the probe cubemap FBO.
+    if (_envActive) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
+      gl.viewport(0, 0, ENV_SIZE, ENV_SIZE);
+    } else if (postEnabled) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, msaaSamples > 1 ? msFBO : sceneFBO);
       gl.viewport(0, 0, width, height);
     }
@@ -2735,6 +2834,20 @@ void main() {
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
+    // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). While a
+    // probe face is being RENDERED the dummy cube is bound instead — the real
+    // cube is the current render target and must never also be sampled.
+    // uEnvStr stays 0 until the first full 6-face cycle (probe still black).
+    if (envTex) {
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, _envActive ? envDummyTex : envTex);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform1i(litU.uEnvCube, 6);
+      gl.uniform1f(litU.uEnvStr, (envReady && !_envActive)
+        ? (T && T.carEnvCube != null ? T.carEnvCube : 1.0) : 0.0);
+    } else {
+      gl.uniform1f(litU.uEnvStr, 0.0);
+    }
     // Point lights (floodlights / street lights). frame.lights is a flat array
     // of at most MAX_LIGHTS (32) entries, already culled to the nearest set by
     // the caller. Uploaded once per frame; uNumLights=0 on day.
@@ -3448,6 +3561,12 @@ void main() {
     drawSkidBatch,
     drawGlow,
     present,
+    envFaceBegin,
+    envFaceEnd,
+    envProbeReady() { return envReady; },
+    // New track/session: the cube still holds the OLD circuit — hold the
+    // analytic fallback until a fresh 6-face cycle has re-rendered the world.
+    envProbeReset() { envFacesMask = 0; envReady = false; },
     shadowBegin(lightVP) {
       if (!shadowEnabled) return;
       // Depth must be writable to clear/render the shadow map. This pass runs

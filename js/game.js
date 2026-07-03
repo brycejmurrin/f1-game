@@ -1260,6 +1260,9 @@ function loadTrack(idx) {
     track = Tracks.build(def, { night: sessionDark });
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
+    // Env probe still holds the previous circuit — fall back to the analytic
+    // sky until a fresh 6-face cycle has captured the new one.
+    if (GLX.envProbeReset) GLX.envProbeReset();
     Ghost.setTrack(def.id);
     minimapBg = null;           // force minimap redraw for new track
     sectorIdx = 0; sectorStartT = 0;
@@ -3038,6 +3041,7 @@ const TUNE_DEFS = [
   { id: "ssrThick",     label: "SSR THICKNESS",   group: "REFLECTIONS", min: 0.05, max: 1, step: 0.05, def: 0.20, u: "uSsrThick", help: "Depth tolerance for a wet-road reflection hit. Lower = crisper but more gaps; higher = fewer holes, more smear." },
   // Car
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.55, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
+  { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.05, def: 1.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). 0 = off (analytic sky fallback, no probe pass)." },
   { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0.3, max: 2.5, step: 0.05, def: 1.0,  help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness)." },
   { id: "carSpecular",  label: "PAINT SPECULAR",  group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Brightness of the specular highlight rolling over the bodywork." },
   { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
@@ -3688,6 +3692,60 @@ function renderSetupPreview(dt) {
   GLX.present();
 }
 
+// Static world draws (floor → terrain → road → startline → [lamp glow] → props
+// → glass → water → gate), shared verbatim by the MAIN camera pass and the
+// live env-probe faces (which re-render the world around the player car so the
+// paint mirrors the real surroundings). Cars/skids/rain are main-pass only.
+let _envFace = -1;   // probe face cursor: one of the 6 cube faces per frame
+function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
+  // Base floor first (under everything) — fills the void on street circuits (no
+  // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
+  // so the huge plane stays flat and recedes into fog.
+  if (!hideMeshes.terrain && track.meshes.floor) GLX.draw(track.meshes.floor, MAT_IDENT,
+    night ? { emissive: 0.14, roughness: 0.98, specular: 0.05 }
+          : { roughness: 0.98, specular: 0.05 });
+  // TARMAC ROUGHNESS / SURFACE DETAIL knobs: rr scales dry-tarmac roughness
+  // (glossier asphalt); sd scales the procedural grain/relief (0 = flat).
+  const _rr = LT.roadRough, _sd = LT.surfDetail;
+  if (!hideMeshes.terrain) GLX.draw(track.meshes.terrain, MAT_IDENT,
+    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.42 * _sd }
+          : { roughness: 0.97, specular: 0.06, detail: 0.42 * _sd });
+  if (!hideMeshes.road) GLX.draw(track.meshes.road, MAT_IDENT,
+    wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 * _sd }
+                   : { roughness: 0.14, specular: 0.85, detail: 0.06 * _sd })
+          : (night ? { emissive: 0.09, roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }
+                   : { roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }));
+  if (!hideMeshes.startline && track.meshes.startline) GLX.draw(track.meshes.startline, MAT_IDENT,
+    wet   ? { roughness: 0.16, specular: 0.80, detail: 0 }
+          : (night ? { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 }
+                   : { roughness: 0.80, specular: 0.22, detail: 0 }));
+  // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
+  // light gets a visible halo (colored per lamp) without inflating bloom.
+  // (Skipped for the studio rig — its lamps have no fixtures, and floating
+  // glow-cone billboards ringing the car read as artifacts. Skipped in the env
+  // probe too: 64px additive halos just smear the reflection.)
+  if (withGlow && frame.lights && !_studioRig) GLX.drawGlow(frame.lights, LT.glareStr);
+  if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
+    wet   ? (night ? { emissive: Math.min(0.80, floodEmit), roughness: 0.55, specular: 0.38 }
+                   : { roughness: 0.55, specular: 0.38 })
+          : (night ? { emissive: floodEmit, roughness: 0.85, specular: 0.20 }
+                   : { roughness: 0.85, specular: 0.20 }));
+  // Building glass: a low-roughness reflective pass so the lit shader mirrors the
+  // sky in the windows (real, view-dependent reflection). Only populated for day
+  // builds; empty at night (lit windows live in the emissive props mesh).
+  if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT,
+    { roughness: 0.13, specular: 0.82, metalness: 0.12, clearcoat: 1.0 });
+  // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
+  // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
+  // A touch glossier (calmer) when not raining; a little rougher in the wet.
+  if (!hideMeshes.props && track.meshes.water) GLX.draw(track.meshes.water, MAT_IDENT,
+    wet ? { roughness: 0.16, specular: 0.85, metalness: 0.05 }
+        : { roughness: 0.10, specular: 0.92, metalness: 0.05 });
+  if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
+    wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
+        : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
+}
+
 function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
@@ -4022,6 +4080,40 @@ function render(dt) {
   // Shader-side tunables ride along on the frame (glx begin() uploads them).
   frame.tune = LT;
 
+  const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
+  // Prop emissive (lit windows / signage / neon) drives how strongly the
+  // buildings glow after dark. A full night session goes to full emissive
+  // REGARDLESS of the palette's sun elevation — many night palettes keep the sun
+  // above the horizon for the sky glow (sunY≈0.25), which previously pinned the
+  // ramp near 0.10 and left the glowing-glass towers reading as dark boxes.
+  // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
+  // (Hoisted above the env probe so both world passes share it.)
+  const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
+  const _floodEmit = LT.floodEmitMul * (
+    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
+      : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
+        ? Math.min(0.70, 0.05 + 0.58 * clamp(1 - _sunY * 6, 0, 1))
+        : 0);
+  _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
+  frameSky.lightning = _ltFlash || 0;
+  // ── Live env probe: render ONE 64px cubemap face of the world around the
+  // player car per frame (full refresh every 6 frames). The car-paint clearcoat
+  // samples it for REAL reflections of the surroundings — trees, buildings,
+  // track, sky — including everything behind the camera that SSR can't see.
+  // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
+  if (player && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+    _envFace = (_envFace + 1) % 6;
+    Tracks.sample(track, player.s, smp2);
+    const _pex = smp2.p[0] + smp2.r[0] * player.x,
+          _pez = smp2.p[2] + smp2.r[2] * player.x;
+    const _envInv = GLX.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
+    if (_envInv) {
+      frameSky.invViewProj = _envInv;
+      GLX.drawSky(frameSky);
+      drawWorldMeshes(frame, night, wet, _floodEmit, false);
+      GLX.envFaceEnd(_envFace);
+    }
+  }
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
@@ -4030,77 +4122,16 @@ function render(dt) {
   } else GLX.begin(frame);
   M4.invertTo(_mInvVP, _mVP);
   frameSky.invViewProj = _mInvVP;
-  frameSky.lightning = _ltFlash || 0;
   GLX.drawSky(frameSky);
-
-  const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
   // mirror-like, cars and barriers pick up sharper reflections.
-  // Base floor first (under everything) — fills the void on street circuits (no
-  // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
-  // so the huge plane stays flat and recedes into fog.
-  if (!hideMeshes.terrain && track.meshes.floor) GLX.draw(track.meshes.floor, MAT_IDENT,
-    night ? { emissive: 0.14, roughness: 0.98, specular: 0.05 }
-          : { roughness: 0.98, specular: 0.05 });
-  // TARMAC ROUGHNESS / SURFACE DETAIL knobs: rr scales dry-tarmac roughness
-  // (glossier asphalt); sd scales the procedural grain/relief (0 = flat).
-  const _rr = LT.roadRough, _sd = LT.surfDetail;
-  if (!hideMeshes.terrain) GLX.draw(track.meshes.terrain, MAT_IDENT,
-    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.42 * _sd }
-          : { roughness: 0.97, specular: 0.06, detail: 0.42 * _sd });
-  if (!hideMeshes.road) GLX.draw(track.meshes.road, MAT_IDENT,
-    wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 * _sd }
-                   : { roughness: 0.14, specular: 0.85, detail: 0.06 * _sd })
-          : (night ? { emissive: 0.09, roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }
-                   : { roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }));
-  if (!hideMeshes.startline && track.meshes.startline) GLX.draw(track.meshes.startline, MAT_IDENT,
-    wet   ? { roughness: 0.16, specular: 0.80, detail: 0 }
-          : (night ? { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 }
-                   : { roughness: 0.80, specular: 0.22, detail: 0 }));
-  // Prop emissive (lit windows / signage / neon) drives how strongly the
-  // buildings glow after dark. A full night session goes to full emissive
-  // REGARDLESS of the palette's sun elevation — many night palettes keep the sun
-  // above the horizon for the sky glow (sunY≈0.25), which previously pinned the
-  // ramp near 0.10 and left the glowing-glass towers reading as dark boxes.
-  // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
-  const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
-  const _floodEmit = LT.floodEmitMul * (
-    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
-      : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.min(0.70, 0.05 + 0.58 * clamp(1 - _sunY * 6, 0, 1))
-        : 0);
-  _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
-  // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
-  // light gets a visible halo (colored per lamp) without inflating bloom.
-  // (Skipped for the studio rig — its lamps have no fixtures, and floating
-  // glow-cone billboards ringing the car read as artifacts.)
-  // Corona strength trimmed 0.20 -> 0.12: the lens-glare halos are drawn from
-  // frame.lights COLOURS (already time-of-day scaled) but the billboard str was
-  // an independent knob — with the point-light energy dimmed, the untouched
-  // coronas became the brightest thing left at every mast. Now the LENS GLARE
-  // tuner slider (LT.glareStr, default 0.12).
-  if (frame.lights && !_studioRig) GLX.drawGlow(frame.lights, LT.glareStr);
-  if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
-    wet   ? (night ? { emissive: Math.min(0.80, _floodEmit), roughness: 0.55, specular: 0.38 }
-                   : { roughness: 0.55, specular: 0.38 })
-          : (night ? { emissive: _floodEmit, roughness: 0.85, specular: 0.20 }
-                   : { roughness: 0.85, specular: 0.20 }));
-  // Building glass: a low-roughness reflective pass so the lit shader mirrors the
-  // sky in the windows (real, view-dependent reflection). Only populated for day
-  // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT,
-    { roughness: 0.13, specular: 0.82, metalness: 0.12, clearcoat: 1.0 });
-  // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
-  // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
-  // A touch glossier (calmer) when not raining; a little rougher in the wet.
-  if (!hideMeshes.props && track.meshes.water) GLX.draw(track.meshes.water, MAT_IDENT,
-    wet ? { roughness: 0.16, specular: 0.85, metalness: 0.05 }
-        : { roughness: 0.10, specular: 0.92, metalness: 0.05 });
-  if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
-    wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
-        : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
+  // (Floor → gate draws live in drawWorldMeshes, shared with the env probe.
+  //  Corona strength note: the lens-glare halos are drawn from frame.lights
+  //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
+  //  LT.glareStr, default 0.12.)
+  drawWorldMeshes(frame, night, wet, _floodEmit, true);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
