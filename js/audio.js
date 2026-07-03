@@ -113,7 +113,9 @@ const GameAudio = (function () {
     master.connect(ctx.destination);
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
-    if (ctx.state !== "running") ctx.resume();
+    // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
+    // the edge of a gesture — an unhandled rejection would surface as a crash.
+    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(function () {}); }
     loadEngineSamples();
     return true;
   }
@@ -751,7 +753,7 @@ const GameAudio = (function () {
     musicOn = true;
     currentUrl = url;
     const token = ++musicToken;
-    if (ctx.state !== "running") ctx.resume();
+    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(function () {}); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
     fetch(url)
       .then(function (r) { return r.arrayBuffer(); })

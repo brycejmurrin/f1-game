@@ -751,7 +751,9 @@ function carDecalData(aLvl) {
   // TRACKS the wing: Car3D.numberBoard(aLvl) is the SAME function the car mesh
   // uses to place the physical board, so the digit lands on it at every downforce
   // level (mesh is cached per aLvl — see getCarDecalMesh).
-  const nb = Car3D.numberBoard(aLvl == null ? 2 : aLvl);
+  // Defensive: fall back to the old fixed board if a stale car3d.js bundle lacks
+  // numberBoard (never white-screen the race over a decal position).
+  const nb = (Car3D.numberBoard ? Car3D.numberBoard(aLvl == null ? 2 : aLvl) : { cy: 0.62, h: 0.20 });
   const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
@@ -810,6 +812,7 @@ function carDecalNum(team, car) {
 // to draw. getVisualTiers is a small 8-category loop and the resulting mesh is
 // cached per level, so resolving this per car/frame is negligible.
 function teamAeroLevel(team) {
+  if (!Car3D.aeroLevelOf) return 2;   // stale-bundle guard → medium-DF board
   return Car3D.aeroLevelOf(Parts.getVisualTiers(getTeamParts(team.id), team.engine));
 }
 function drawCarDecals(team, modelMat, night, num, cockpit) {
@@ -3712,6 +3715,11 @@ function renderSetupPreview(dt) {
 // live env-probe faces (which re-render the world around the player car so the
 // paint mirrors the real surroundings). Cars/skids/rain are main-pass only.
 let _envFace = -1;   // probe face cursor: one of the 6 cube faces per frame
+// Set by GLX's webglcontextlost handler (persisted) — once a device has lost the
+// context we skip the extra per-frame env-probe pass on every subsequent load so
+// the reflection feature can't keep exhausting a memory-constrained GPU.
+let _envProbeOff = false;
+try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
 function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Base floor first (under everything) — fills the void on street circuits (no
   // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
@@ -4116,7 +4124,7 @@ function render(dt) {
   // samples it for REAL reflections of the surroundings — trees, buildings,
   // track, sky — including everything behind the camera that SSR can't see.
   // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
-  if (player && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && !_envProbeOff && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -4701,6 +4709,17 @@ function perfGovernor(dtMs) {
 const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
   requestAnimationFrame(tick);
+  try { tickBody(now); }
+  catch (e) {
+    // Report the REAL error once (cross-origin window.onerror shows only a bare
+    // "Script error."). rAF above already re-scheduled, so this won't spin-crash.
+    if (!tick._reported && typeof window.__apexReportError === "function") {
+      tick._reported = true; window.__apexReportError("tick", e);
+    }
+    throw e;
+  }
+}
+function tickBody(now) {
   let dt = Math.min((now - lastFrame) / 1000, 1 / 4);   // clamp big gaps (tab resume)
   const _dtMs = now - lastFrame;
   lastFrame = now;

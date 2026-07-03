@@ -2024,6 +2024,7 @@ void main() {}`;
 
   let gl = null;
   let canvas = null;
+  let _ctxLost = false;   // true between webglcontextlost and the reload on restore
   let litProg = null, litU = null;
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
   const _ambScratchG = [0, 0, 0], _ambScratchS = [0, 0, 0];
@@ -2431,6 +2432,20 @@ void main() {
     });
     if (!gl) return false;
 
+    // WebGL context-loss recovery. Mobile tile GPUs can drop the context under
+    // memory pressure (the per-frame env-probe cube adds load). Without a handler
+    // the loss is permanent and later gl calls cascade into errors. preventDefault
+    // lets the GPU restore; on restore we reload to cleanly rebuild every GL
+    // resource (programs, FBOs, textures, meshes) rather than track them all.
+    canvas.addEventListener("webglcontextlost", function (e) {
+      e.preventDefault(); _ctxLost = true;
+      // Persist an opt-out so the post-restore reload does NOT re-arm whatever
+      // exhausted the GPU (the per-frame env probe) — otherwise lose→reload→lose
+      // could loop. game.js honours this to skip the probe pass on the next load.
+      try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) {}
+    }, false);
+    canvas.addEventListener("webglcontextrestored", function () { try { location.reload(); } catch (_) {} }, false);
+
     litProg = link(LIT_VS, LIT_FS);
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
@@ -2712,7 +2727,7 @@ void main() {
   // camera so every lighting uniform (sun, shadow map, ambient, fog, tune)
   // matches the main frame exactly. Returns the face's invViewProj for drawSky.
   function envFaceBegin(face, eye, frame) {
-    if (!gl) return null;
+    if (!gl || _ctxLost || (gl.isContextLost && gl.isContextLost())) return null;
     if (!envTex) envInit();
     _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
     const F = ENV_FACES[face];
@@ -2734,6 +2749,14 @@ void main() {
     if (!gl || !envTex) return;
     _envActive = false;
     envFacesMask |= 1 << face;
+    // Unbind the probe FBO FIRST. generateMipmap below must NOT run while envTex
+    // is still the COLOR_ATTACHMENT0 of the bound framebuffer — that read/write
+    // feedback is GL_INVALID_OPERATION (or a context loss) on strict/mobile
+    // drivers, though SwiftShader silently tolerates it. Detaching + unbinding
+    // before the mip pass removes the hazard.
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, null, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);  // restore for the (non-post) main pass
     if (envFacesMask === 63) {         // full cycle → refresh mips, probe is live
       envFacesMask = 0; envReady = true;
       gl.activeTexture(gl.TEXTURE6);
@@ -2741,11 +2764,10 @@ void main() {
       gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
       gl.activeTexture(gl.TEXTURE0);
     }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, width, height);  // restore for the (non-post) main pass
   }
 
   function begin(frame) {
+    if (_ctxLost || (gl && gl.isContextLost && gl.isContextLost())) return false;
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
     frameSunColor = frame.sunColor;
