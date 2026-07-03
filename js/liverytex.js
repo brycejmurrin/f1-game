@@ -554,7 +554,11 @@ const LiveryTex = (function () {
   }
 
   // Cadillac — a crest/shield with a laurel wreath + geometric quarters.
-  function crestCadillac(ctx, R, ink, accent) {
+  // `bare` (fin mode): skip the wreath + gold shield plate — a solid heraldic
+  // rectangle looks like a stuck-on badge sticker on a painted tail — and just
+  // paint the crown + quartered emblem straight onto the fin, echoing the
+  // ferrari/redbull/racingbulls fin treatment (motif only, no backing plate).
+  function crestCadillac(ctx, R, ink, accent, bare) {
     const f = fit(R, 0.08);
     const shield = () => {
       ctx.beginPath();
@@ -566,6 +570,27 @@ const LiveryTex = (function () {
       ctx.closePath();
     };
     ctx.save();
+    if (bare) {
+      // Crown bars, enlarged and centred (no shield/wreath beneath them).
+      ctx.fillStyle = css(BRAND.cadGold);
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(f.X(0.29 + i * 0.115), f.Y(0.28), f.S(0.055), f.S(0.16));
+      }
+      // Two accent diamonds echoing the shield's heraldic quarters.
+      ctx.fillStyle = css(accent);
+      for (let s = -1; s <= 1; s += 2) {
+        const cx = f.X(0.5 + s * 0.16), cy = f.Y(0.62);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - f.S(0.1));
+        ctx.lineTo(cx + f.S(0.08), cy);
+        ctx.lineTo(cx, cy + f.S(0.1));
+        ctx.lineTo(cx - f.S(0.08), cy);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
     // laurel wreath — two arcs of leaves either side of the shield
     ctx.fillStyle = css(BRAND.cadGold);
     for (let s = -1; s <= 1; s += 2) {

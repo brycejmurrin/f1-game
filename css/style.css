@@ -866,6 +866,27 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.14);
   max-width: min(70vw, 720px);
 }
+/* The tuner panel stays docked right while free-cam flies (see enterPhotoMode
+   in game.js), so on narrow/landscape screens the 720px-wide fly-cam bar can
+   run out past the panel's left edge and render OVER its title/EXIT — keep it
+   clipped to the gap left of the panel (mirrors #lighting-inner's own
+   right:8px + min(88vw,380px) sizing) so the two never overlap. Only while the
+   panel is actually showing (pc-nopanel tucks it away and frees the width). */
+body.lt-open:not(.pc-nopanel) #pc-bar {
+  max-width: max(160px, min(70vw, 720px, calc(100vw - min(88vw, 380px) - 40px - var(--sal))));
+  gap: 8px; padding: 6px 10px;
+}
+/* Same context: the tuner panel already carries plenty of on-screen text, so
+   drop the keyboard hint and shrink the FOV slider/buttons — a compact bar
+   reads cleaner next to the panel than the full touch-sized controls. */
+body.lt-open:not(.pc-nopanel) .pc-hint { display: none; }
+body.lt-open:not(.pc-nopanel) .pc-fovlab { font-size: 10px; }
+body.lt-open:not(.pc-nopanel) .pc-fovlab input[type="range"] { width: 70px; }
+body.lt-open:not(.pc-nopanel) #pc-exit,
+body.lt-open:not(.pc-nopanel) #pc-panel,
+body.lt-open:not(.pc-nopanel) #pc-hud {
+  padding: 5px 10px; font-size: 10.5px;
+}
 .pc-hint { font-size: 11px; color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
 .pc-fovlab { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--dim); }
 .pc-fovlab input[type="range"] { width: 110px; margin-left: 6px; }
