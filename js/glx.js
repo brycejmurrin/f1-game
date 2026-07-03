@@ -2474,10 +2474,12 @@ void main() {
     // resource (programs, FBOs, textures, meshes) rather than track them all.
     canvas.addEventListener("webglcontextlost", function (e) {
       e.preventDefault(); _ctxLost = true;
-      // Persist an opt-out so the post-restore reload does NOT re-arm whatever
-      // exhausted the GPU (the per-frame env probe) — otherwise lose→reload→lose
-      // could loop. game.js honours this to skip the probe pass on the next load.
-      try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) {}
+      // Only downgrade quality on a loss that happened while VISIBLE — that's the
+      // memory-pressure signal. iOS also drops the context on backgrounding
+      // (document.hidden), a benign transient loss that shouldn't permanently
+      // disable the env probe. Persisting the opt-out otherwise stops a
+      // lose→reload→lose loop on genuinely memory-tight devices.
+      if (!document.hidden) { try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) {} }
     }, false);
     canvas.addEventListener("webglcontextrestored", function () { try { location.reload(); } catch (_) {} }, false);
 
@@ -3327,6 +3329,10 @@ void main() {
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFBO);
       gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height,
         gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+      // The multisampled surfaces are consumed — discard them so a tiled (mobile)
+      // GPU never writes them back to memory (MDN WebGL best-practice; big
+      // bandwidth/tile-store win, esp. for the multisampled DEPTH).
+      if (gl.invalidateFramebuffer) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
@@ -3610,6 +3616,18 @@ void main() {
     bindVAO(null);
     gl.activeTexture(gl.TEXTURE0);
     gl.enable(gl.DEPTH_TEST);
+
+    // Discard depth buffers we never read across frames (regenerated every frame
+    // by the geometry pass). On tiled mobile GPUs this frees the tiler from
+    // storing depth back to memory each frame — pure bandwidth/tile-memory saving
+    // with no visual effect. sceneDepth was already consumed by SSAO/SSR/god-ray
+    // above; the default framebuffer's depth is unused (post is a fullscreen blit).
+    if (gl.invalidateFramebuffer) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
+      gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH_ATTACHMENT]);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
+    }
   }
 
   function freeMesh(mesh) {
