@@ -90,6 +90,7 @@ uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distanc
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
+uniform float uShadowRange; // sun shadow box half-size (m, def 64) — drives the receiver-distance shadow fade
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -338,13 +339,17 @@ float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.z >= 1.0) return 1.0;
-  // Edge fade: the shadow map is a ~55 m box snapped to the camera, so a hard
-  // in/out cutoff at its border draws a bright "shadow line" across the road
-  // ~55 m ahead that visibly RECEDES as you drive (the box follows you). Ramp
-  // the shadow contribution to zero over the outer ~12% of the box instead, so
-  // distant shadows dissolve into a soft gradient rather than a moving edge.
+  // Distance fade: dissolve shadows by RECEIVER distance from the camera, well
+  // inside the shadow box (uShadowRange = box half-size, def ±64 m). Anchored
+  // to the camera, this front glides smoothly as you drive — the old UV-space
+  // border fade was anchored to the BOX, which recentres in sBox/4 jumps, so
+  // the fade band visibly JUMPED forward every recentre at racing speed.
+  float edgeFade = 1.0 - smoothstep(uShadowRange * 0.54, uShadowRange * 0.72, vDist);
+  // UV border fade kept as a safety clamp for the worst-case box alignments
+  // (camera up to sBox/8 off-centre) where the border can undercut the
+  // distance fade — the residual moving band is small and far away.
   vec2 ef = smoothstep(0.0, 0.12, sc.xy) * (1.0 - smoothstep(0.88, 1.0, sc.xy));
-  float edgeFade = ef.x * ef.y;
+  edgeFade *= ef.x * ef.y;
   if (edgeFade <= 0.0) return 1.0;
   float t = uShadowTexel;
   // Slope-scale bias: gentle base + steeper slope term reduces both acne and
@@ -674,7 +679,10 @@ void main() {
     float Dc = D_GGX(NoHg, ccA);
     float Vc = V_SmithGGX(NoVg, NoLg, ccA);
     float Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), 1.0).x;
-    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uClearcoat;
+    // uKeyMul included so KEY LIGHT dims this lobe with the rest of the direct
+    // sun (it was the one direct term missing it — a keyMul of 0 left every
+    // clearcoated car with a full-brightness sun streak).
+    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uKeyMul * uClearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color += ccCol;
   }
@@ -1627,7 +1635,7 @@ uniform mat4 uProj;          // view → clip  (project the marched ray to scree
 uniform vec3 uUpVS;          // world-up in view space (pick out up-facing road)
 uniform vec2 uReflTexel;     // 1/width, 1/height
 uniform float uReflect;      // wet-road SSR strength (0 = off)
-uniform float uCarReflect;   // car-bodywork SSR strength (CAR tuner group; default 0.55)
+uniform float uCarReflect;   // car-bodywork SSR strength (CAR tuner group; default 0.05)
 uniform float uCarGloss;     // car paint gloss (CAR tuner group; default 1.0) — widens the car's SSR streak as it drops
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
 uniform vec3 uReflSkyLo;     // zenith sky-glow
@@ -2522,7 +2530,7 @@ void main() {
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
-      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel",
+      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
@@ -2922,7 +2930,17 @@ void main() {
       gl.uniformMatrix4fv(litU.uLightVP, false, shadowLightVP);
       // SHADOW BIAS / DARKNESS knobs (repair + artistic; defaults mirror TUNE_DEFS).
       gl.uniform1f(litU.uShadowBias, T && T.shadowBias != null ? T.shadowBias : 0.001);
-      gl.uniform1f(litU.uShadowStr, T && T.shadowStr != null ? T.shadowStr : 1.0);
+      // Fade the cast shadow out as the sun sinks through the horizon: props stop
+      // casting into the map below sunY -0.03 (game.js shadow-pass perf skip), so
+      // without this ramp their shadows POPPED off in one frame when the SUN
+      // ELEVATION slider (or an animated time-of-day flip) crossed the threshold.
+      const _sunY2 = frame.sunDir ? frame.sunDir[1] : 1;
+      let _hf = (_sunY2 + 0.03) / 0.05;
+      _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
+      _hf = _hf * _hf * (3 - 2 * _hf);
+      gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.0) * _hf);
+      // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
+      gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 64.0);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHADOW_SIZE);
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);
@@ -2952,8 +2970,10 @@ void main() {
     // frame.noEnv forces it off for probe-less views (the SETUP MENU preview)
     // even when a stale cube lingers from a prior race — so the menu car reads
     // matte (gentle analytic sheen) instead of mirroring last race's scene.
+    // Fallback mirrors the TUNE_DEFS carEnvCube default (0 = probe OFF); the old
+    // 1.0 fallback inverted the shipped default for any caller with no tune obj.
     gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive && !frame.noEnv)
-      ? (T && T.carEnvCube != null ? T.carEnvCube : 1.0) : 0.0);
+      ? (T && T.carEnvCube != null ? T.carEnvCube : 0.0) : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
     // of at most MAX_LIGHTS (32) entries, already culled to the nearest set by
     // the caller. Uploaded once per frame; uNumLights=0 on day.
@@ -3396,8 +3416,14 @@ void main() {
     bindVAO(skyVAO);   // reuse the empty VAO for fullscreen triangles
 
     const aoStr = opts && opts.ssao !== undefined ? opts.ssao : 0;
+    const contactStr = opts && opts.contact !== undefined ? opts.contact : 0;
     // 0) SSAO: raw AO from the depth texture, then a separable blur to denoise.
-    const haveAO = ssaoProg && aoStr > 0 && frameInvProj && ssaoFBO;
+    // Runs when EITHER knob is live: contact shadows ride in this pass, and
+    // gating on AO alone silently killed the independent-looking CONTACT
+    // SHADOW slider whenever AMBIENT OCCLUSION was dialled to 0. uStrength=0
+    // yields ao=1 in the shader, so an AO-off/contact-on pass darkens only
+    // the sun-blocked contact pixels.
+    const haveAO = ssaoProg && (aoStr > 0 || contactStr > 0) && frameInvProj && ssaoFBO;
     if (haveAO) {
       gl.viewport(0, 0, ssaoW, ssaoH);
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
@@ -3411,10 +3437,10 @@ void main() {
       // AO RADIUS knob: world-space sampling reach (def 0.6).
       gl.uniform1f(ssaoU.uRadius, opts && opts.tune && opts.tune.ssaoRadius != null ? opts.tune.ssaoRadius : 0.6);
       // Contact shadows ride along in the AO pass when proj + view-sun are present.
-      const csOn = (opts && opts.contact > 0) && frameProj && frameSunVS;
+      const csOn = contactStr > 0 && frameProj && frameSunVS;
       gl.uniformMatrix4fv(ssaoU.uProj, false, frameProj || frameInvProj);
       gl.uniform3fv(ssaoU.uSunVS, frameSunVS || [0, 0, -1]);
-      gl.uniform1f(ssaoU.uContact, csOn ? opts.contact : 0);
+      gl.uniform1f(ssaoU.uContact, csOn ? contactStr : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       // Blur H (ssaoTex -> ssaoBlurFBO) then V (ssaoBlurTex -> ssaoFBO). Half res.
       useProg(blurProg);

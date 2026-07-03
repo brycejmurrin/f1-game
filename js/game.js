@@ -591,6 +591,7 @@ const _sunVS = new Float32Array(3);
 const _upVS = new Float32Array(3);   // world-up expressed in view space (wet-road SSR)
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
+let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
 
 // ---------- parts / player mods ----------
 function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
@@ -1390,7 +1391,10 @@ function applyRaceSettings() {
   // Load the lighting-tuner profile for the current (track, time, weather) so
   // the right per-condition values are live. Cheap (a few dozen assignments);
   // applyRaceSettings only fires on track load / time / weather change.
-  if (typeof applyLightTune === "function") applyLightTune();
+  // `true` = called from inside applyRaceSettings: suppresses applyLightTune's
+  // own reapply-on-change call back into this function (this run derives from
+  // the fresh LT values anyway — the re-entrant call ran everything twice).
+  if (typeof applyLightTune === "function") applyLightTune(true);
   const isNightSession = raceTimeOfDay === "night" ||
     (raceTimeOfDay === "default" && track && track.def && track.def.night);
   // City light-pollution SKYGLOW: at night the lit circuit domes the horizon —
@@ -1415,6 +1419,15 @@ function applyRaceSettings() {
       frameSky.zenith = [0.01, 0.02, 0.05];
       frameSky.horizon = [0.04, 0.03, 0.06];
       frame.sunColor = [0.12, 0.14, 0.22];   // faint cool moonlight key (unified w/ default-night)
+      // MOON key-light direction: reset from the shipped palette (or a fixed
+      // high default) EVERY call. This branch previously never set sunDir, so it
+      // inherited whatever direction the previous time-of-day left behind — and
+      // the sunElev/sunAzim tuner offsets applied further down COMPOUNDED on
+      // each re-run (applyRaceSettings fires on every slider tick) instead of
+      // offsetting a stable baseline, so the moon ran away while dragging.
+      const _npal = track && track.def && track.def.palette;
+      frame.sunDir = V3.norm(_npal && _npal.sunDir ? _npal.sunDir.slice() : [0.42, 0.66, 0.36]);
+      frameSky.sunDir = frame.sunDir;
       // NEAR-BLACK cool ambient: the world is genuinely dark, the LIGHT SOURCES
       // (lamps, neon, lit windows) do all the lifting. A high ambient here is the
       // #1 cause of a flat-grey "night that looks like dim day".
@@ -1772,9 +1785,12 @@ function applyRaceSettings() {
     ambientSky:    frame.ambientSky.slice(),
     ambientGround: frame.ambientGround.slice(),
   };
-  // Reset lightning timing: first strike after a random 3-8 s delay
-  _ltFlash = 0;
-  _ltNextT = 3 + Math.random() * 5;
+  // Arm lightning timing (first strike after a random 3-8 s delay) — but only
+  // when no countdown is already pending: applyRaceSettings re-runs on EVERY
+  // tuner drag tick for the _APPLY_RACE_IDS knobs, and unconditionally
+  // re-arming here kept pushing the strike 3-8 s away, so lightning never
+  // fired while a sun/ambient slider was being dragged in the rain.
+  if (!(_ltNextT > 0)) { _ltFlash = 0; _ltNextT = 3 + Math.random() * 5; }
 }
 
 // ── Per-track atmosphere bias ─────────────────────────────────────────────────
@@ -3120,8 +3136,8 @@ const TUNE_DEFS = [
   { id: "ambBalance",   label: "SKY / GROUND FILL", group: "AMBIENT & BOUNCE", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "Tips ambient toward ground bounce (−) or sky dome (+) — which side of shadows reads warm vs cool." },
   { id: "bounceK",      label: "LAMP BOUNCE",     group: "AMBIENT & BOUNCE", min: 0,   max: 0.15, step: 0.005, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam cone." },
   // ── SHADOWS ──
-  { id: "shadowStr",    label: "SHADOW DARKNESS", group: "SHADOWS", min: 0, max: 1, step: 0.05, def: 1.0, u: "uShadowStr", help: "How much direct sun the cast shadow removes. 1 = full shadow, lower lifts shadows toward ambient fill." },
-  { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS", min: 32, max: 96, step: 4, def: 64, help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading." },
+  { id: "shadowStr",    label: "SHADOW DARKNESS", group: "SHADOWS", min: 0, max: 1, step: 0.05, def: 1.0, u: "uShadowStr", help: "How much direct sun the cast shadow removes. 1 = full shadow (ambient fill only inside it), 0 = shadows gone — full sun bleeds back in." },
+  { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS", min: 32, max: 96, step: 4, def: 64, u: "uShadowRange", help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading." },
   { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS", min: 10, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
   { id: "shadowBias",   label: "SHADOW BIAS",     group: "SHADOWS", min: 0, max: 0.005, step: 0.0002, def: 0.001, u: "uShadowBias", help: "Depth offset. Too low = shadow acne (self-shadow shimmer); too high = shadows detach from feet. Repair tool." },
   { id: "shadowTintAmt",label: "SHADOW COOLNESS", group: "SHADOWS", min: 0, max: 1, step: 0.05, def: 0.0, u: "uShadowTintAmt", help: "Tints shadowed / ambient-only areas cool blue for a sunny-day contrast look. 0 = neutral." },
@@ -3177,8 +3193,8 @@ const TUNE_DEFS = [
   // ── SKY & WEATHER ──
   { id: "cloudCover",   label: "CLOUD COVER",     group: "SKY & WEATHER", min: -0.5, max: 0.5, step: 0.02, def: 0.0, fmt: "signed", help: "Shifts cloud amount up/down from the weather default (also drives cloud shadows). 0 = as-shipped." },
   { id: "cloudSpeed",   label: "CLOUD SPEED",     group: "SKY & WEATHER", min: 0, max: 4, step: 0.1, def: 1.0, u: "uCloudSpeed", help: "How fast clouds drift and evolve. 0 = frozen sky, higher = fast-moving weather." },
-  { id: "starBright",   label: "STAR BRIGHTNESS", group: "SKY & WEATHER", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uStars", help: "Night star intensity. 0 = washed sky, higher = vivid starfield." },
-  { id: "wetness",      label: "WETNESS",         group: "SKY & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps over ~30 s)." },
+  { id: "starBright",   label: "STAR BRIGHTNESS", group: "SKY & WEATHER", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uStarBright", help: "Night star intensity. 0 = washed sky, higher = vivid starfield." },
+  { id: "wetness",      label: "WETNESS",         group: "SKY & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps in over a few seconds after a weather flip)." },
   { id: "rainCount",    label: "RAIN INTENSITY",  group: "SKY & WEATHER", min: 60, max: 900, step: 20, def: 360, reinitRain: true, help: "Number of falling rain streaks (storm density)." },
   { id: "rainStreak",   label: "RAIN STREAK LEN", group: "SKY & WEATHER", min: 0.4, max: 2.5, step: 0.1, def: 1.0, reinitRain: true, help: "Length of rain streaks — short spits vs long driving streaks." },
   { id: "rainWind",     label: "RAIN WIND",       group: "SKY & WEATHER", min: -0.8, max: 0.8, step: 0.02, def: 0.18, fmt: "signed", help: "Horizontal wind slant on the rain (angle of the streaks)." },
@@ -3264,7 +3280,7 @@ function ltFallback(id) {
 // (not read per-frame in render). Changing one re-runs applyRaceSettings so it
 // updates live — safe because that function re-derives from the branch values.
 const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "ambTemp", "ambBalance"]);
-function applyLightTune() {
+function applyLightTune(fromApplyRace) {
   const layers = ltLayers();
   let rebuilt = false, reapply = false, reinit = false;
   for (const d of TUNE_DEFS) {
@@ -3274,7 +3290,10 @@ function applyLightTune() {
     if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
   }
   if (rebuilt && track) track._lights = null;
-  if (reapply && track && state !== "menu" && state !== "select") applyRaceSettings();
+  // Skip the reapply when applyRaceSettings itself invoked us (it derives from
+  // the fresh LT values right after this returns) — re-entering ran the whole
+  // sky/ambient/fog derivation twice per track/time/weather transition.
+  if (reapply && !fromApplyRace && track && state !== "menu" && state !== "select") applyRaceSettings();
   if (reinit && isRaining()) initRainDrops();
 }
 function setLightTune(id, v) {
@@ -3375,9 +3394,13 @@ function buildTrackLights(track) {
       let wdx = track.rx[k] * side * 0.55, wdy = -0.83, wdz = track.rz[k] * side * 0.55;
       const wdl = Math.hypot(wdx, wdy, wdz) || 1; wdx /= wdl; wdy /= wdl; wdz /= wdl;
       const we = intensity * 0.30 * (4.5 * 4.5) * 0.55;
+      // POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply to these washer
+      // lights too (their help text promises "each/every lamp") — same maths as
+      // the mast lamps below.
       lights.push(wx0, wy0, wz0,
         Math.max(0, nc[0]) * we, Math.max(0, nc[1]) * we, Math.max(0, nc[2]) * we,
-        16, wdx, wdy, wdz, 0.55, 0.05, 0.10, 0.35, 0);
+        16 * LT.lampRadiusMul, wdx, wdy, wdz,
+        0.55, 0.55 - 0.50 * (LT.beamCone || 1), Math.min(0.9, 0.10 * LT.bleedMul), 0.35, 0);
     }
     let eMul = 1.0, coneIn, coneOut, pr, pg, pb, tintMix = 0.38;
     // Per-type VOLUMETRIC weight (record field 13): how strongly this lamp's
@@ -3463,11 +3486,14 @@ function buildTrackLights(track) {
     // spot on every night circuit, blowing the road out exactly where every race
     // (and the player's first impression of the night lighting) begins.
     const ge = intensity * 0.55 * (8 * 8) * 0.55;
+    // POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply here too — the
+    // gantry bar previously ignored all three ("every floodlight" per help text).
     for (const lat of [-hwk * 0.55, 0, hwk * 0.55]) {
       lights.push(
         track.px[0] + track.rx[0] * lat, track.py[0] + 8, track.pz[0] + track.rz[0] * lat,
         1.02 * ge, 1.05 * ge, 1.12 * ge,
-        26, 0, -1, 0, 0.92, 0.78, 0.06, 0.9, 0.3);
+        26 * LT.lampRadiusMul, 0, -1, 0,
+        0.92, 0.92 - 0.14 * (LT.beamCone || 1), Math.min(0.9, 0.06 * LT.bleedMul), 0.9, 0.3);
     }
   }
   return lights;
@@ -3844,9 +3870,8 @@ function renderSetupPreview(dt) {
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Menu car reads as team livery, not the in-race chrome mirror. The frame's
-  // noEnv flag (above) already drops the probe-less env term to a gentle sheen;
-  // keep the env-cube kill as belt-and-suspenders so a stale race cube can't leak.
-  spMat.carEnvCube = 0;
+  // noEnv flag (above) drops the probe-less env term to a gentle sheen even
+  // when a stale race cube lingers (per-draw material opts carry no env knob).
   // The wheels are baked into this single mesh (Car3D.build) and drawn with the
   // SAME paint material — the env/clearcoat sheen reads as an ugly grey gloss on
   // the near-black tyres. Kill clearcoat entirely (no reflective lacquer coat in
@@ -4127,22 +4152,45 @@ function render(dt) {
   frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
 
   // Shadow pass — render terrain + road from sun's perspective.
-  // Snap the frustum centre to a 16 m grid so the shadow map only re-renders
-  // when the camera moves enough to shift the snapped cell (coarser than 10 m so
-  // the heavy chunked-city re-raster fires far less often at racing speed).
+  // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
+  // (16 m at the default 64 m box) so the map only re-renders when the camera
+  // moves a cell — and so each recentre shifts the box by an exact whole number
+  // of shadow texels (sBox/4 is SHADOW_SIZE/8 texels for any pow-2 map size).
+  // The old snap was on a world-XZ grid with an unsnapped camera HEIGHT: those
+  // axes don't match the sun-rotated texel grid, so every recentre re-rasterised
+  // all shadow edges at a new sub-texel phase — a visible shimmer/jump of every
+  // shadow edge each 16 m of driving.
   if (track) {
     const sd = frame.sunDir;
     const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
+    // Light basis exactly as lookAtTo derives it: z = sd, x = norm(up×z), y = z×x.
+    const zx = sd[0], zy = sd[1], zz = sd[2];
+    let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+    const xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
     const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
-    const snapX = Math.round(cx / 16) * 16, snapZ = Math.round(cz / 16) * 16;
     // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
-    // only on the 16 m position snap), so the slider responds without driving.
+    // only on the position snap), so the slider responds without driving.
     const sBox = LT.shadowRange || 64;
-    if (snapX !== _shadowSnapX || snapZ !== _shadowSnapZ || sBox !== _shadowBox) {
-      _shadowSnapX = snapX; _shadowSnapZ = snapZ; _shadowBox = sBox;
-      M4.lookAtTo(_mLView, [snapX + sd[0] * 150, cy + sd[1] * 150, snapZ + sd[2] * 150], [snapX, cy, snapZ], up);
-      // Half-size box (default ±64 m / 128 m) snapped to the camera; the soft
-      // edge-fade in sampleShadow dissolves its boundary into the haze. Bigger =
+    const step = sBox / 4;
+    const lu = Math.round((xx * cx + xy * cy + xz * cz) / step) * step;
+    const lv = Math.round((yx * cx + yy * cy + yz * cz) / step) * step;
+    // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
+    // sliders, a time-of-day flip) previously left the map STALE until the next
+    // cell crossing — shadows looked dead while dragging, then all jumped at once.
+    if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
+        sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
+      _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
+      _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
+      // Rebuild the snapped centre in world space. The along-sun component needs
+      // no snap — it only shifts depth values, which the bias absorbs.
+      const lw = zx * cx + zy * cy + zz * cz;
+      const wx = xx * lu + yx * lv + zx * lw;
+      const wy = xy * lu + yy * lv + zy * lw;
+      const wz = xz * lu + yz * lv + zz * lw;
+      M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
+      // Half-size box (default ±64 m / 128 m) snapped to the camera; sampleShadow
+      // fades shadows out by camera distance well inside its border. Bigger =
       // more reach, smaller = crisper contacts (texel density = 2048/box).
       M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
@@ -4171,8 +4219,8 @@ function render(dt) {
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {
-    // Tuner override: pin the road wetness directly (skips the slow ramp — the
-    // real ramp takes ~30-60 s of session time to saturate after a weather flip).
+    // Tuner override: pin the road wetness directly (skips the auto ramp, which
+    // saturates a few seconds after a weather flip — rate 0.8/s below).
     frame.wetness = LT.wetness;
   } else {
     const wetTarget = isWetRoad() ? 1.0 : 0.0;
@@ -4295,7 +4343,11 @@ function render(dt) {
   // glow on top blew the dawn mist band out.
   const _lfSun = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
   const _lfGate = clamp((0.55 - _lfSun) / 0.30, 0, 1);
-  frame.lampFog = frame.lights ? Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0)) * _lfGate : 0;
+  // The GROUND MIST knob scales here too — the shader-side mist band already
+  // rides uGroundMist * LT.mistDensity, so the lamp-fog swell must follow the
+  // same tuned amount (reading the raw value left lamps glowing "in mist" with
+  // the mist slider at 0, and refusing to swell with it turned up).
+  frame.lampFog = frame.lights ? Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0) * LT.mistDensity) * _lfGate : 0;
   // Shader-side tunables ride along on the frame (glx begin() uploads them).
   frame.tune = LT;
 
@@ -4692,7 +4744,9 @@ function render(dt) {
   // dramatic cue (was 0.28); still tapers to a moderate amount by noon.
   // Atmospheric haze gate for volumetric in-scatter (ground mist dominates;
   // wet + cloud add). Sun shafts catch more in haze; lamp beams only show in it.
-  const _mist = clamp((frame.groundMist || 0) * 0.9 + (frame.wetness || 0) * 0.22
+  // GROUND MIST knob applied here as well as at the uGroundMist upload, so the
+  // god-ray / lamp-beam haze response tracks the mist the player actually sees.
+  const _mist = clamp((frame.groundMist || 0) * LT.mistDensity * 0.9 + (frame.wetness || 0) * 0.22
                       + (frame.cloud || 0) * 0.12, 0, 1);
   // Gate by the sun's actual BRIGHTNESS too: at night the key is dim moonlight
   // held above the horizon for sky glow, and ungated it marched faint stripey
