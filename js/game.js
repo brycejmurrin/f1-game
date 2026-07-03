@@ -4240,6 +4240,9 @@ function render(dt) {
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
+  // Same cloud-speed knob the SKY uses, so the ground cloud-shadow dapple + the
+  // godray shafts freeze/slow in lockstep with the visible sky (0 = frozen sky).
+  frame.cloudSpeed = LT.cloudSpeed;
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {
