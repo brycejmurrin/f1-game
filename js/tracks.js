@@ -1098,6 +1098,15 @@ const Tracks = (function () {
 
   function buildProps(track) {
     const { n, px, py, pz, hw } = track;
+    // Mobile geometry LOD: the street-circuit city facade is the single biggest GPU
+    // allocation (the props VBO is ~88 MB on Vegas, ~73 on Baku), and the detailed
+    // window-pane grid dominates it. On memory-limited phones (mobileTier = a phone
+    // NOT opted into GRAPHICS: HIGH) coarsen that grid, cutting ~20-24% of the props
+    // verts on the dense street tracks that OOM-crash iOS — the exact jetsam trigger.
+    // CITY_LOD = 1 on desktop and HIGH-tier phones ⇒ geometry is byte-identical there;
+    // `lod()` only ever shrinks a count and never below its floor.
+    const CITY_LOD = (typeof GLX !== "undefined" && GLX.mobileTier) ? 0.72 : 1;
+    const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
     // `mat` holds a per-vertex procedural-material id (0 = FLAT). `_mat` is the
     // CURRENT material register: emitters (addBox/emit) stamp it onto every vertex,
     // so a model sets `out._mat = MAT.BRICK` around a block instead of threading a
@@ -1876,7 +1885,7 @@ const Tracks = (function () {
       const warm = [1.0, 0.80, 0.46];
       const nc = [neon[0] * 0.95, neon[1] * 0.95, neon[2] * 0.95];
       const litShare = 0.20 + neonAmt * 0.08, neonShare = neonAmt * 0.7;
-      const rows = Math.max(4, Math.min(10, Math.round(sh / 4.4)));   // perf: coarser window grid (was 15 / 3.4)
+      const rows = lod(Math.max(4, Math.min(10, Math.round(sh / 4.4))), 3);   // perf: coarser window grid (was 15 / 3.4); mobile LOD via lod()
       const fh = sh / rows, frameT = 0.30, railH = Math.max(0.4, fh * 0.24), winH = Math.max(0.5, fh - railH);
       // Draw the inset curtain wall on ONE vertical face. nAxis = outward axis idx
       // (0=r,2=t), nSign = its sign, nHalf = half-extent along it; wAxis = the
@@ -1887,8 +1896,8 @@ const Tracks = (function () {
         // SIMPLE sides = a coarse pane grid only (no rails / mullions / neon edges)
         // so the sides are cheap and the city can stay dense.
         // perf: fewer panes per face (was simple 4/4.2, full 8/2.6; rowN 9/5.0)
-        const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.4))) : Math.max(2, Math.min(6, Math.round(faceW / 3.3)));
-        const rowN = simple ? Math.max(2, Math.min(6, Math.round(sh / 6.4))) : rows;
+        const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.4))) : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.3))), 2);
+        const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
         const fhh = sh / rowN, winHH = Math.max(0.5, fhh - railH);
         const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
@@ -2163,13 +2172,13 @@ const Tracks = (function () {
       const med = bodyCol[0] > 0.6 && bodyCol[0] > bodyCol[2] + 0.08;   // warm light wall
       const medWin = [bodyCol[0] * 0.34, bodyCol[1] * 0.30, bodyCol[2] * 0.26];   // dark window reveal
       const dayGridAt = (cen, sw, sh, sd) => {
-        const rows = Math.max(4, Math.min(10, Math.round(sh / 4.4)));   // perf: cap + coarser (was uncapped / 3.4)
+        const rows = lod(Math.max(4, Math.min(10, Math.round(sh / 4.4))), 3);   // perf: cap + coarser (was uncapped / 3.4); mobile LOD via lod()
         // Draw the window grid on one vertical face (track-facing or a side). Same
         // per-axis box-dim trick as neonFacade so the sides are glazed too.
         const dface = (nAxis, nSign, nHalf, wAxis, faceW, simple) => {
           // perf: fewer panes per face (was simple 4/4.0, full 7/2.4; rowN 9/5.0)
-          const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.2))) : Math.max(2, Math.min(6, Math.round(faceW / 3.1)));
-          const rowN = simple ? Math.max(2, Math.min(6, Math.round(sh / 6.4))) : rows;
+          const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.2))) : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.1))), 2);
+          const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
           const gB = vadd(cen, b[nAxis], nSign * (nHalf + 0.03));
           const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
           for (let c = 0; c < cols; c++) {
