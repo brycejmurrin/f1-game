@@ -699,6 +699,11 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
 
   let sunE = clamp(sunDir.y * 1.4, 0.0, 1.0);
   let daytime = smoothstep(0.35, 0.60, sunE);
+  // NIGHT gate (parity with GLX): at night sunDir stays HIGH as the moon
+  // key-light direction, which the sunElevation math reads as midday and paints
+  // a bright white sun disc among the stars. Suppress the sun corona/disc at
+  // night; the moon disc below is drawn separately.
+  let nightSky = step(0.5, stars);
 
   // --- Sky gradient ---
   var c : vec3<f32>;
@@ -738,12 +743,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let upPos = max(up, 0.0);
   c = mix(c, sunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0));
   let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
+  let coronaDamp = 1.0 - nightSky;
   let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
-  c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55);
-  c = c + sunWarm * pow(sd, 300.0) * 0.95;
+  c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp;
+  c = c + sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;
   let dd = dir - sunDir * sd;
   let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
-  let disc = smoothstep(mix(0.018, 0.028, golden), 0.006, perp);
+  let disc = smoothstep(mix(0.018, 0.028, golden), 0.006, perp) * coronaDamp;
   let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
   c = c + discCore * disc;
 
