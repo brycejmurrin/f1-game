@@ -3107,68 +3107,66 @@ function floodColor(theme, id) {
 // buildTrackLights re-runs on the next frame. `u` entries upload straight to
 // a LIT_FS shader uniform via frame.tune (see glx.js begin()).
 const TUNE_DEFS = [
-  // Night energy budget
-  { id: "exposureMul",  label: "EXPOSURE",        group: "NIGHT ENERGY", min: 0.5,  max: 1.6,  step: 0.01,  def: 1.0,  help: "Master brightness multiplier on the tone-map input (all times of day)." },
-  { id: "bloomMul",     label: "BLOOM AMOUNT",    group: "NIGHT ENERGY", min: 0,    max: 2,    step: 0.05,  def: 1.0,  help: "Halo strength around bright HDR sources (lamps, neon, windows)." },
-  { id: "threshOff",    label: "BLOOM THRESHOLD", group: "NIGHT ENERGY", min: -0.3, max: 0.1,  step: 0.01,  def: 0.0,  help: "Offset on what counts as bright enough to bloom. Lower = mid-tones glow (fog-of-glow)." },
-  { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT ENERGY", min: 0,    max: 1.6,  step: 0.05,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp)." },
-  { id: "glowAmp",      label: "EMISSIVE GLOW",   group: "NIGHT ENERGY", min: 0.5,  max: 4,    step: 0.1,   def: 2.3,  u: "uGlowAmp", help: "HDR push for windows / lenses / neon — roughly half the night frame energy." },
-  { id: "moonBright",   label: "MOON BRIGHTNESS", group: "NIGHT ENERGY", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Moon disc/halo + its soft blue fill on the night sky." },
-  { id: "cityGlowMul",  label: "CITY SKYGLOW",    group: "NIGHT ENERGY", min: 0, max: 3,   step: 0.1,  def: 1.0, help: "Light-pollution dome hugging the horizon over lit circuits/cities." },
-  { id: "bloomSpread",  label: "BLOOM SPREAD",    group: "NIGHT ENERGY", min: 0.5, max: 2.5, step: 0.05, def: 1.0, help: "Halo WIDTH, independent of amount. Higher = wider, dreamier glow; lower = tight core." },
-  // Lamps
-  { id: "lampLevel",    label: "LAMP LEVEL",      group: "LAMPS", min: 0.05, max: 1,   step: 0.01, def: 0.26, help: "Overall floodlight brightness ceiling (on top of the twilight ramp)." },
-  { id: "poolEnergy",   label: "POOL ENERGY",     group: "LAMPS", min: 0.1,  max: 1.2, step: 0.05, def: 0.55, rebuild: true, help: "Per-lamp pool luminance scale (physical energy per fixture)." },
-  { id: "lampRadiusMul",label: "POOL RADIUS",     group: "LAMPS", min: 0.5,  max: 2,   step: 0.05, def: 1.0,  rebuild: true, help: "Reach of each lamp pool. Too small and the far pool corner dies." },
-  { id: "bleedMul",     label: "VALLEY BLEED",    group: "LAMPS", min: 0,    max: 3,   step: 0.1,  def: 1.0,  rebuild: true, help: "Out-of-beam light floor — lifts the dark valleys between pools." },
-  { id: "glareStr",     label: "LENS GLARE",      group: "LAMPS", min: 0,    max: 0.8, step: 0.02, def: 0.12, help: "Lens-halo billboard strength at every active lamp." },
-  { id: "lampTemp",     label: "LAMP TEMPERATURE",group: "LAMPS", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of ALL floodlights/street lamps. − warms toward sodium/amber, + cools toward LED/broadcast white. Layers over each lamp's own colour." },
-  { id: "lampFlicker",  label: "LAMP FLICKER",    group: "LAMPS", min: 0, max: 0.3, step: 0.01, def: 0.10, help: "How much aging lamps pulse. 0 = rock-steady, higher = strong buzz on the odd tube." },
-  { id: "tailLightMul", label: "TAIL-LIGHT GLOW", group: "LAMPS", min: 0, max: 3, step: 0.1, def: 1.0, help: "Brightness of the red glow trailing nearby cars after dark." },
-  { id: "beamCone",     label: "BEAM CONE WIDTH", group: "LAMPS", min: 0.7, max: 1.5, step: 0.05, def: 1.0, rebuild: true, help: "Width of every floodlight's illuminated cone. Wider = softer spread, narrower = tight hotspots." },
-  // Glowing fog
-  { id: "lampFogBase",  label: "FOG GLOW BASE",   group: "GLOWING FOG", min: 0, max: 1,   step: 0.05, def: 0.45, help: "How strongly lamps tint the distant fog wall on a clear night." },
-  { id: "lampFogHaze",  label: "FOG GLOW HAZE",   group: "GLOWING FOG", min: 0, max: 1.5, step: 0.05, def: 0.6,  help: "Extra lamp-fog glow added as ground mist / fog weather thickens." },
-  { id: "mistShare",    label: "MIST GLOW SHARE", group: "GLOWING FOG", min: 0, max: 4,   step: 0.1,  def: 1.5,  u: "uMistShare", help: "Ground-mist share of the lamp glow vs the air-fog share." },
-  { id: "fogClip",      label: "FOG GLOW CLIP",   group: "GLOWING FOG", min: 0, max: 1.5, step: 0.05, def: 0.7,  u: "uLampFogClip", help: "Soft shoulder stopping lamp clusters pushing the fog wall to white." },
-  // Volumetrics
-  { id: "lampVolBase",  label: "BEAMS (CLEAR)",   group: "VOLUMETRICS", min: 0, max: 0.4, step: 0.01, def: 0.05, help: "Volumetric lamp-beam strength in clear night air." },
-  { id: "lampVolHaze",  label: "BEAMS (HAZE)",    group: "VOLUMETRICS", min: 0, max: 1.5, step: 0.05, def: 0.65, help: "How much haze/rain swells the lamp beams." },
-  { id: "lampVolCap",   label: "BEAM CEILING",    group: "VOLUMETRICS", min: 0, max: 1,   step: 0.05, def: 0.70, help: "Hard cap on volumetric beam strength." },
-  { id: "grMul",        label: "SUN GOD-RAYS",    group: "VOLUMETRICS", min: 0, max: 2.5, step: 0.05, def: 1.0,  help: "Volumetric sun-shaft strength (dawn/dusk drama)." },
-  // Base light
-  { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "BASE LIGHT", min: 0,   max: 2.5,  step: 0.05,  def: 1.0,  help: "Direct sun/moon intensity — diffuse + speculars + shadows. Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed." },
-  { id: "ambientMul",   label: "AMBIENT FILL",    group: "BASE LIGHT", min: 0.3, max: 3,    step: 0.05,  def: 1.0,  help: "Hemisphere ambient multiplier — the shadow/unlit fill and night readability floor." },
-  { id: "bounceK",      label: "LAMP BOUNCE",     group: "BASE LIGHT", min: 0,   max: 0.15, step: 0.005, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam cone." },
-  { id: "sunTemp",      label: "SUN / MOON WARMTH", group: "BASE LIGHT", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of the direct key light (sun by day, moonlight at night). − warm sunrise/sodium, + cool overcast/moonlight." },
-  { id: "ambTemp",      label: "AMBIENT WARMTH",  group: "BASE LIGHT", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of the hemisphere fill (shadow/unlit areas). − warm bounce, + cool sky fill." },
-  { id: "ambBalance",   label: "SKY / GROUND FILL", group: "BASE LIGHT", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "Tips ambient toward ground bounce (−) or sky dome (+) — which side of shadows reads warm vs cool." },
-  { id: "sunElev",      label: "SUN ELEVATION",   group: "BASE LIGHT", min: -40, max: 40, step: 1, def: 0, fmt: "signed", help: "Sun/moon height offset from the time-of-day default (deg). − lowers it for longer raking shadows + more god-rays. 0 = as-shipped." },
-  { id: "sunAzim",      label: "SUN AZIMUTH",     group: "BASE LIGHT", min: -180, max: 180, step: 5, def: 0, fmt: "signed", help: "Rotates the key-light compass direction from the default — swings shadow direction across the track. 0 = as-shipped." },
-  // Image & colour
-  { id: "gradeStr",     label: "GRADE STRENGTH",  group: "IMAGE & COLOUR", min: 0, max: 2.5, step: 0.05, def: 1.0, help: "Cinematic split-tone amount (teal shadows / warm highlights). 0 = neutral, higher = stronger film look." },
-  { id: "vibrance",     label: "VIBRANCE",        group: "IMAGE & COLOUR", min: 0, max: 0.8, step: 0.02, def: 0.20, u: "uVibrance", help: "Selective saturation — lifts dull/washed pixels (hazy sky, grass, tarmac) without over-cooking neon or kerbs." },
-  { id: "saturation",   label: "SATURATION",      group: "IMAGE & COLOUR", min: 0, max: 2,   step: 0.05, def: 1.0, u: "uSaturation", help: "Overall colour intensity. 0 = greyscale, 1 = as-shipped, >1 = punchier." },
-  { id: "contrast",     label: "CONTRAST",        group: "IMAGE & COLOUR", min: 0.7, max: 1.6, step: 0.02, def: 1.12, u: "uContrast", help: "Midtone-darkening gamma. Higher = deeper, filmic shadows; lower = flatter and brighter." },
-  { id: "tint",         label: "WARM / COOL",     group: "IMAGE & COLOUR", min: -1, max: 1, step: 0.05, def: 0.0, u: "uTint", fmt: "signed", help: "White-balance shift. + warms (amber, sunny), − cools (blue, overcast/night)." },
-  { id: "vignette",     label: "VIGNETTE",        group: "IMAGE & COLOUR", min: 0.4, max: 1, step: 0.02, def: 0.80, u: "uVignette", help: "Corner darkening. 1 = none, lower = stronger frame vignette." },
-  { id: "chromAb",      label: "CHROMATIC AB.",   group: "IMAGE & COLOUR", min: 0, max: 3, step: 0.05, def: 0.0, u: "uChromAb", help: "Lens colour-fringing toward the frame edges — RGB split. Subtle = filmic, high = arcade." },
-  { id: "grain",        label: "FILM GRAIN",      group: "IMAGE & COLOUR", min: 0, max: 0.15, step: 0.005, def: 0.0, u: "uGrain", help: "Per-pixel sensor noise. A little sells the cinematic night-camera look." },
-  { id: "flareMul",     label: "LENS FLARE",      group: "IMAGE & COLOUR", min: 0, max: 2, step: 0.05, def: 1.0, help: "Sun/lamp anamorphic streak + ghost strength. 0 = off, 1 = as-shipped." },
-  { id: "sharpen",      label: "SHARPEN",         group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSharpen", help: "Crispness recovered after FXAA — counteracts softening on kerbs, wires and distant detail." },
-  { id: "blackLift",    label: "BLACK LIFT",      group: "IMAGE & COLOUR", min: 0, max: 0.08, step: 0.005, def: 0.005, u: "uBlackLift", help: "Raises the darkest blacks toward a faded film base. 0 = pure black, higher = matte shadows." },
-  { id: "whitePoint",   label: "WHITE POINT",     group: "IMAGE & COLOUR", min: 0.6, max: 2, step: 0.05, def: 1.0, u: "uWhitePoint", help: "Highlight roll-off knee. Lower clips highlights sooner (punchy), higher preserves highlight detail (filmic)." },
-  { id: "shadowHue",    label: "SHADOW TINT HUE", group: "IMAGE & COLOUR", min: -180, max: 180, step: 5, def: 0.0, fmt: "signed", help: "Rotates the split-tone SHADOW colour (default cool teal) around the hue wheel." },
-  { id: "hiHue",        label: "HIGHLIGHT TINT HUE", group: "IMAGE & COLOUR", min: -180, max: 180, step: 5, def: 0.0, fmt: "signed", help: "Rotates the split-tone HIGHLIGHT colour (default warm amber) around the hue wheel." },
-  { id: "speedBlur",    label: "SPEED BLUR",      group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSpeedBlur", help: "Radial blur from screen centre that grows with car speed — a velocity cue at high speed." },
-  // Reflections
+  // ── SUN & MOON ──
+  { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "SUN & MOON", min: 0,   max: 2.5,  step: 0.05,  def: 1.0,  help: "Direct sun/moon intensity — diffuse + speculars + shadows. Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed." },
+  { id: "sunTemp",      label: "SUN / MOON WARMTH", group: "SUN & MOON", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of the direct key light (sun by day, moonlight at night). − warm sunrise/sodium, + cool overcast/moonlight." },
+  { id: "sunElev",      label: "SUN ELEVATION",   group: "SUN & MOON", min: -40, max: 40, step: 1, def: 0, fmt: "signed", help: "Sun/moon height offset from the time-of-day default (deg). − lowers it for longer raking shadows + more god-rays. 0 = as-shipped." },
+  { id: "sunAzim",      label: "SUN AZIMUTH",     group: "SUN & MOON", min: -180, max: 180, step: 5, def: 0, fmt: "signed", help: "Rotates the key-light compass direction from the default — swings shadow direction across the track. 0 = as-shipped." },
+  { id: "moonBright",   label: "MOON BRIGHTNESS", group: "SUN & MOON", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Moon disc/halo + its soft blue fill on the night sky." },
+  { id: "grMul",        label: "SUN GOD-RAYS",    group: "SUN & MOON", min: 0, max: 2.5, step: 0.05, def: 1.0,  help: "Volumetric sun-shaft strength (dawn/dusk drama)." },
+  // ── AMBIENT & BOUNCE ──
+  { id: "ambientMul",   label: "AMBIENT FILL",    group: "AMBIENT & BOUNCE", min: 0.3, max: 3,    step: 0.05,  def: 1.0,  help: "Hemisphere ambient multiplier — the shadow/unlit fill and night readability floor." },
+  { id: "ambTemp",      label: "AMBIENT WARMTH",  group: "AMBIENT & BOUNCE", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of the hemisphere fill (shadow/unlit areas). − warm bounce, + cool sky fill." },
+  { id: "ambBalance",   label: "SKY / GROUND FILL", group: "AMBIENT & BOUNCE", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "Tips ambient toward ground bounce (−) or sky dome (+) — which side of shadows reads warm vs cool." },
+  { id: "bounceK",      label: "LAMP BOUNCE",     group: "AMBIENT & BOUNCE", min: 0,   max: 0.15, step: 0.005, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam cone." },
+  // ── SHADOWS ──
+  { id: "shadowStr",    label: "SHADOW DARKNESS", group: "SHADOWS", min: 0, max: 1, step: 0.05, def: 1.0, u: "uShadowStr", help: "How much direct sun the cast shadow removes. 1 = full shadow, lower lifts shadows toward ambient fill." },
+  { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS", min: 32, max: 96, step: 4, def: 64, help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading." },
+  { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS", min: 10, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
+  { id: "shadowBias",   label: "SHADOW BIAS",     group: "SHADOWS", min: 0, max: 0.005, step: 0.0002, def: 0.001, u: "uShadowBias", help: "Depth offset. Too low = shadow acne (self-shadow shimmer); too high = shadows detach from feet. Repair tool." },
+  { id: "shadowTintAmt",label: "SHADOW COOLNESS", group: "SHADOWS", min: 0, max: 1, step: 0.05, def: 0.0, u: "uShadowTintAmt", help: "Tints shadowed / ambient-only areas cool blue for a sunny-day contrast look. 0 = neutral." },
+  { id: "aoStr",        label: "AMBIENT OCCLUSION", group: "SHADOWS", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Crease/contact darkening (SSAO). 0 = off." },
+  { id: "ssaoRadius",   label: "AO RADIUS",       group: "SHADOWS", min: 0.2, max: 2, step: 0.05, def: 0.6, u: "uRadius", help: "World-space reach of the AO sampling. Small = tight contact shading; large = broad soft occlusion." },
+  { id: "contactStr",   label: "CONTACT SHADOW",  group: "SHADOWS", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Grounding shadow under the car/props where the sun map can't reach." },
+  // ── FLOODLIGHTS ──
+  { id: "lampLevel",    label: "LAMP LEVEL",      group: "FLOODLIGHTS", min: 0.05, max: 1,   step: 0.01, def: 0.26, help: "Overall floodlight brightness ceiling (on top of the twilight ramp)." },
+  { id: "poolEnergy",   label: "POOL ENERGY",     group: "FLOODLIGHTS", min: 0.1,  max: 1.2, step: 0.05, def: 0.55, rebuild: true, help: "Per-lamp pool luminance scale (physical energy per fixture)." },
+  { id: "lampRadiusMul",label: "POOL RADIUS",     group: "FLOODLIGHTS", min: 0.5,  max: 2,   step: 0.05, def: 1.0,  rebuild: true, help: "Reach of each lamp pool. Too small and the far pool corner dies." },
+  { id: "bleedMul",     label: "VALLEY BLEED",    group: "FLOODLIGHTS", min: 0,    max: 3,   step: 0.1,  def: 1.0,  rebuild: true, help: "Out-of-beam light floor — lifts the dark valleys between pools." },
+  { id: "glareStr",     label: "LENS GLARE",      group: "FLOODLIGHTS", min: 0,    max: 0.8, step: 0.02, def: 0.12, help: "Lens-halo billboard strength at every active lamp." },
+  { id: "lampTemp",     label: "LAMP TEMPERATURE",group: "FLOODLIGHTS", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of ALL floodlights/street lamps. − warms toward sodium/amber, + cools toward LED/broadcast white. Layers over each lamp's own colour." },
+  { id: "lampFlicker",  label: "LAMP FLICKER",    group: "FLOODLIGHTS", min: 0, max: 0.3, step: 0.01, def: 0.10, help: "How much aging lamps pulse. 0 = rock-steady, higher = strong buzz on the odd tube." },
+  { id: "tailLightMul", label: "TAIL-LIGHT GLOW", group: "FLOODLIGHTS", min: 0, max: 3, step: 0.1, def: 1.0, help: "Brightness of the red glow trailing nearby cars after dark." },
+  { id: "beamCone",     label: "BEAM CONE WIDTH", group: "FLOODLIGHTS", min: 0.7, max: 1.5, step: 0.05, def: 1.0, rebuild: true, help: "Width of every floodlight's illuminated cone. Wider = softer spread, narrower = tight hotspots." },
+  // ── NIGHT GLOW & BLOOM ──
+  { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT GLOW & BLOOM", min: 0,    max: 1.6,  step: 0.05,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp)." },
+  { id: "glowAmp",      label: "EMISSIVE GLOW",   group: "NIGHT GLOW & BLOOM", min: 0.5,  max: 4,    step: 0.1,   def: 2.3,  u: "uGlowAmp", help: "HDR push for windows / lenses / neon — roughly half the night frame energy." },
+  { id: "cityGlowMul",  label: "CITY SKYGLOW",    group: "NIGHT GLOW & BLOOM", min: 0, max: 3,   step: 0.1,  def: 1.0, help: "Light-pollution dome hugging the horizon over lit circuits/cities." },
+  { id: "bloomMul",     label: "BLOOM AMOUNT",    group: "NIGHT GLOW & BLOOM", min: 0,    max: 2,    step: 0.05,  def: 1.0,  help: "Halo strength around bright HDR sources (lamps, neon, windows)." },
+  { id: "bloomSpread",  label: "BLOOM SPREAD",    group: "NIGHT GLOW & BLOOM", min: 0.5, max: 2.5, step: 0.05, def: 1.0, help: "Halo WIDTH, independent of amount. Higher = wider, dreamier glow; lower = tight core." },
+  { id: "threshOff",    label: "BLOOM THRESHOLD", group: "NIGHT GLOW & BLOOM", min: -0.3, max: 0.1,  step: 0.01,  def: 0.0,  help: "Offset on what counts as bright enough to bloom. Lower = mid-tones glow (fog-of-glow)." },
+  // ── ATMOSPHERE ──
+  { id: "fogDensityMul",label: "FOG DENSITY",     group: "ATMOSPHERE", min: 0, max: 3, step: 0.05, def: 1.0, u: "uFogDensity", help: "Scales atmospheric haze depth — how fast distance fades into fog. 1 = as-shipped." },
+  { id: "fogHeight",    label: "FOG HEIGHT FALLOFF", group: "ATMOSPHERE", min: 0, max: 0.12, step: 0.002, def: 0.018, u: "uFogHeight", help: "How fast fog thins with altitude. 0 = uniform wall; higher = fog pools low and clears overhead." },
+  { id: "fogTint",      label: "FOG WARM / COOL", group: "ATMOSPHERE", min: -1, max: 1, step: 0.05, def: 0.0, u: "uFogTint", fmt: "signed", help: "White-balance of the distance haze. + warm (amber/dusty), − cool (blue/overcast)." },
+  { id: "mistDensity",  label: "GROUND MIST",     group: "ATMOSPHERE", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uGroundMist", help: "Amount of low-lying drifting ground mist (dawn/humid/fog). 0 = none, higher = thick rolling bank." },
+  { id: "mistHeight",   label: "MIST HEIGHT BAND",group: "ATMOSPHERE", min: 0.08, max: 0.8, step: 0.02, def: 0.30, u: "uMistHeight", help: "How tall the ground-mist layer stands. Low = ankle fog, high = deep bank up to the eyeline." },
+  { id: "lampFogBase",  label: "FOG GLOW BASE",   group: "ATMOSPHERE", min: 0, max: 1,   step: 0.05, def: 0.45, help: "How strongly lamps tint the distant fog wall on a clear night." },
+  { id: "lampFogHaze",  label: "FOG GLOW HAZE",   group: "ATMOSPHERE", min: 0, max: 1.5, step: 0.05, def: 0.6,  help: "Extra lamp-fog glow added as ground mist / fog weather thickens." },
+  { id: "mistShare",    label: "MIST GLOW SHARE", group: "ATMOSPHERE", min: 0, max: 4,   step: 0.1,  def: 1.5,  u: "uMistShare", help: "Ground-mist share of the lamp glow vs the air-fog share." },
+  { id: "fogClip",      label: "FOG GLOW CLIP",   group: "ATMOSPHERE", min: 0, max: 1.5, step: 0.05, def: 0.7,  u: "uLampFogClip", help: "Soft shoulder stopping lamp clusters pushing the fog wall to white." },
+  { id: "lampVolBase",  label: "BEAMS (CLEAR)",   group: "ATMOSPHERE", min: 0, max: 0.4, step: 0.01, def: 0.05, help: "Volumetric lamp-beam strength in clear night air." },
+  { id: "lampVolHaze",  label: "BEAMS (HAZE)",    group: "ATMOSPHERE", min: 0, max: 1.5, step: 0.05, def: 0.65, help: "How much haze/rain swells the lamp beams." },
+  { id: "lampVolCap",   label: "BEAM CEILING",    group: "ATMOSPHERE", min: 0, max: 1,   step: 0.05, def: 0.70, help: "Hard cap on volumetric beam strength." },
+  // ── REFLECTIONS ──
   { id: "ssrWetMul",    label: "WET MIRROR",      group: "REFLECTIONS", min: 0, max: 1.5, step: 0.05, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
   { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "REFLECTIONS", min: 0, max: 0.5, step: 0.01, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
   { id: "ssrDryDay",    label: "DRY DAY SHEEN",   group: "REFLECTIONS", min: 0, max: 0.3, step: 0.01, def: 0.07, help: "Faint tower-and-sky mirror on dry day tarmac." },
   { id: "roadRough",    label: "TARMAC ROUGHNESS",group: "REFLECTIONS", min: 0.4, max: 1.4, step: 0.05, def: 1.0, help: "Scales dry-tarmac roughness — lower = glossier asphalt with a tighter sun streak." },
   { id: "surfDetail",   label: "SURFACE DETAIL",  group: "REFLECTIONS", min: 0, max: 2, step: 0.05, def: 1.0, help: "Road/terrain procedural grain + micro-normal relief (aggregate, patches, cracks). 0 = flat." },
   { id: "ssrThick",     label: "SSR THICKNESS",   group: "REFLECTIONS", min: 0.05, max: 1, step: 0.05, def: 0.20, u: "uSsrThick", help: "Depth tolerance for a wet-road reflection hit. Lower = crisper but more gaps; higher = fewer holes, more smear." },
-  // Car
+  { id: "wetDark",      label: "WET ROAD DARKEN", group: "REFLECTIONS", min: 0, max: 1.3, step: 0.05, def: 1.0, u: "uWetDark", help: "How much darker wet asphalt reads (water absorption). Independent of the wetness amount." },
+  // ── CAR ──
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.05, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
   { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.05, def: 0.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). OFF by default — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass)." },
   { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0.3, max: 2.5, step: 0.05, def: 1.0,  help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness)." },
@@ -3176,38 +3174,40 @@ const TUNE_DEFS = [
   { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 2,   step: 0.05, def: 0.05, help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
   { id: "carMetal",     label: "PAINT METALNESS", group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "How metallic the paint reads — reflection tint and grazing falloff." },
   { id: "carGlow",      label: "BODY GLOW",       group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "Self-lit body glow after dark (only the night / wet liveries carry it)." },
-  // Shadows & weather
-  { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS & WEATHER", min: 10, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
-  { id: "wetness",      label: "WETNESS",         group: "SHADOWS & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps over ~30 s)." },
-  { id: "shadowStr",    label: "SHADOW DARKNESS", group: "SHADOWS & WEATHER", min: 0, max: 1, step: 0.05, def: 1.0, u: "uShadowStr", help: "How much direct sun the cast shadow removes. 1 = full shadow, lower lifts shadows toward ambient fill." },
-  { id: "aoStr",        label: "AMBIENT OCCLUSION", group: "SHADOWS & WEATHER", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Crease/contact darkening (SSAO). 0 = off." },
-  { id: "ssaoRadius",   label: "AO RADIUS",       group: "SHADOWS & WEATHER", min: 0.2, max: 2, step: 0.05, def: 0.6, u: "uRadius", help: "World-space reach of the AO sampling. Small = tight contact shading; large = broad soft occlusion." },
-  { id: "contactStr",   label: "CONTACT SHADOW",  group: "SHADOWS & WEATHER", min: 0, max: 1.5, step: 0.05, def: 1.0, help: "Grounding shadow under the car/props where the sun map can't reach." },
-  { id: "shadowBias",   label: "SHADOW BIAS",     group: "SHADOWS & WEATHER", min: 0, max: 0.005, step: 0.0002, def: 0.001, u: "uShadowBias", help: "Depth offset. Too low = shadow acne (self-shadow shimmer); too high = shadows detach from feet. Repair tool." },
-  { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS & WEATHER", min: 32, max: 96, step: 4, def: 64, rebuild: true, help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading." },
-  { id: "shadowTintAmt",label: "SHADOW COOLNESS", group: "SHADOWS & WEATHER", min: 0, max: 1, step: 0.05, def: 0.0, u: "uShadowTintAmt", help: "Tints shadowed / ambient-only areas cool blue for a sunny-day contrast look. 0 = neutral." },
-  { id: "wetDark",      label: "WET ROAD DARKEN", group: "SHADOWS & WEATHER", min: 0, max: 1.3, step: 0.05, def: 1.0, u: "uWetDark", help: "How much darker wet asphalt reads (water absorption). Independent of the wetness amount." },
-  // ── Atmosphere (fog / haze / mist) ──
-  { id: "fogDensityMul",label: "FOG DENSITY",     group: "ATMOSPHERE", min: 0, max: 3, step: 0.05, def: 1.0, u: "uFogDensity", help: "Scales atmospheric haze depth — how fast distance fades into fog. 1 = as-shipped." },
-  { id: "fogHeight",    label: "FOG HEIGHT FALLOFF", group: "ATMOSPHERE", min: 0, max: 0.12, step: 0.002, def: 0.018, u: "uFogHeight", help: "How fast fog thins with altitude. 0 = uniform wall; higher = fog pools low and clears overhead." },
-  { id: "fogTint",      label: "FOG WARM / COOL", group: "ATMOSPHERE", min: -1, max: 1, step: 0.05, def: 0.0, u: "uFogTint", fmt: "signed", help: "White-balance of the distance haze. + warm (amber/dusty), − cool (blue/overcast)." },
-  { id: "mistDensity",  label: "GROUND MIST",     group: "ATMOSPHERE", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uGroundMist", help: "Amount of low-lying drifting ground mist (dawn/humid/fog). 0 = none, higher = thick rolling bank." },
-  { id: "mistHeight",   label: "MIST HEIGHT BAND",group: "ATMOSPHERE", min: 0.08, max: 0.8, step: 0.02, def: 0.30, u: "uMistHeight", help: "How tall the ground-mist layer stands. Low = ankle fog, high = deep bank up to the eyeline." },
-  // ── Sky ──
-  { id: "cloudCover",   label: "CLOUD COVER",     group: "SKY", min: -0.5, max: 0.5, step: 0.02, def: 0.0, fmt: "signed", help: "Shifts cloud amount up/down from the weather default (also drives cloud shadows). 0 = as-shipped." },
-  { id: "starBright",   label: "STAR BRIGHTNESS", group: "SKY", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uStars", help: "Night star intensity. 0 = washed sky, higher = vivid starfield." },
-  { id: "cloudSpeed",   label: "CLOUD SPEED",     group: "SKY", min: 0, max: 4, step: 0.1, def: 1.0, u: "uCloudSpeed", help: "How fast clouds drift and evolve. 0 = frozen sky, higher = fast-moving weather." },
-  // ── Rain ──
-  { id: "rainCount",    label: "RAIN INTENSITY",  group: "RAIN", min: 60, max: 900, step: 20, def: 360, reinitRain: true, help: "Number of falling rain streaks (storm density)." },
-  { id: "rainStreak",   label: "RAIN STREAK LEN", group: "RAIN", min: 0.4, max: 2.5, step: 0.1, def: 1.0, reinitRain: true, help: "Length of rain streaks — short spits vs long driving streaks." },
-  { id: "rainWind",     label: "RAIN WIND",       group: "RAIN", min: -0.8, max: 0.8, step: 0.02, def: 0.18, fmt: "signed", help: "Horizontal wind slant on the rain (angle of the streaks)." },
-  { id: "lightning",    label: "LIGHTNING FREQ",  group: "RAIN", min: 0, max: 3, step: 0.1, def: 1.0, help: "Storm lightning strike rate. 0 = off, higher = more frequent flashes." },
+  // ── SKY & WEATHER ──
+  { id: "cloudCover",   label: "CLOUD COVER",     group: "SKY & WEATHER", min: -0.5, max: 0.5, step: 0.02, def: 0.0, fmt: "signed", help: "Shifts cloud amount up/down from the weather default (also drives cloud shadows). 0 = as-shipped." },
+  { id: "cloudSpeed",   label: "CLOUD SPEED",     group: "SKY & WEATHER", min: 0, max: 4, step: 0.1, def: 1.0, u: "uCloudSpeed", help: "How fast clouds drift and evolve. 0 = frozen sky, higher = fast-moving weather." },
+  { id: "starBright",   label: "STAR BRIGHTNESS", group: "SKY & WEATHER", min: 0, max: 2.5, step: 0.05, def: 1.0, u: "uStars", help: "Night star intensity. 0 = washed sky, higher = vivid starfield." },
+  { id: "wetness",      label: "WETNESS",         group: "SKY & WEATHER", min: -0.05, max: 1, step: 0.05, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps over ~30 s)." },
+  { id: "rainCount",    label: "RAIN INTENSITY",  group: "SKY & WEATHER", min: 60, max: 900, step: 20, def: 360, reinitRain: true, help: "Number of falling rain streaks (storm density)." },
+  { id: "rainStreak",   label: "RAIN STREAK LEN", group: "SKY & WEATHER", min: 0.4, max: 2.5, step: 0.1, def: 1.0, reinitRain: true, help: "Length of rain streaks — short spits vs long driving streaks." },
+  { id: "rainWind",     label: "RAIN WIND",       group: "SKY & WEATHER", min: -0.8, max: 0.8, step: 0.02, def: 0.18, fmt: "signed", help: "Horizontal wind slant on the rain (angle of the streaks)." },
+  { id: "lightning",    label: "LIGHTNING FREQ",  group: "SKY & WEATHER", min: 0, max: 3, step: 0.1, def: 1.0, help: "Storm lightning strike rate. 0 = off, higher = more frequent flashes." },
+  // ── IMAGE & COLOUR ──
+  { id: "exposureMul",  label: "EXPOSURE",        group: "IMAGE & COLOUR", min: 0.5,  max: 1.6,  step: 0.01,  def: 1.0,  help: "Master brightness multiplier on the tone-map input (all times of day)." },
+  { id: "contrast",     label: "CONTRAST",        group: "IMAGE & COLOUR", min: 0.7, max: 1.6, step: 0.02, def: 1.12, u: "uContrast", help: "Midtone-darkening gamma. Higher = deeper, filmic shadows; lower = flatter and brighter." },
+  { id: "saturation",   label: "SATURATION",      group: "IMAGE & COLOUR", min: 0, max: 2,   step: 0.05, def: 1.0, u: "uSaturation", help: "Overall colour intensity. 0 = greyscale, 1 = as-shipped, >1 = punchier." },
+  { id: "vibrance",     label: "VIBRANCE",        group: "IMAGE & COLOUR", min: 0, max: 0.8, step: 0.02, def: 0.20, u: "uVibrance", help: "Selective saturation — lifts dull/washed pixels (hazy sky, grass, tarmac) without over-cooking neon or kerbs." },
+  { id: "tint",         label: "WARM / COOL",     group: "IMAGE & COLOUR", min: -1, max: 1, step: 0.05, def: 0.0, u: "uTint", fmt: "signed", help: "White-balance shift. + warms (amber, sunny), − cools (blue, overcast/night)." },
+  { id: "gradeStr",     label: "GRADE STRENGTH",  group: "IMAGE & COLOUR", min: 0, max: 2.5, step: 0.05, def: 1.0, help: "Cinematic split-tone amount (teal shadows / warm highlights). 0 = neutral, higher = stronger film look." },
+  { id: "shadowHue",    label: "SHADOW TINT HUE", group: "IMAGE & COLOUR", min: -180, max: 180, step: 5, def: 0.0, fmt: "signed", help: "Rotates the split-tone SHADOW colour (default cool teal) around the hue wheel." },
+  { id: "hiHue",        label: "HIGHLIGHT TINT HUE", group: "IMAGE & COLOUR", min: -180, max: 180, step: 5, def: 0.0, fmt: "signed", help: "Rotates the split-tone HIGHLIGHT colour (default warm amber) around the hue wheel." },
+  { id: "vignette",     label: "VIGNETTE",        group: "IMAGE & COLOUR", min: 0.4, max: 1, step: 0.02, def: 0.80, u: "uVignette", help: "Corner darkening. 1 = none, lower = stronger frame vignette." },
+  { id: "blackLift",    label: "BLACK LIFT",      group: "IMAGE & COLOUR", min: 0, max: 0.08, step: 0.005, def: 0.005, u: "uBlackLift", help: "Raises the darkest blacks toward a faded film base. 0 = pure black, higher = matte shadows." },
+  { id: "whitePoint",   label: "WHITE POINT",     group: "IMAGE & COLOUR", min: 0.6, max: 2, step: 0.05, def: 1.0, u: "uWhitePoint", help: "Highlight roll-off knee. Lower clips highlights sooner (punchy), higher preserves highlight detail (filmic)." },
+  { id: "chromAb",      label: "CHROMATIC AB.",   group: "IMAGE & COLOUR", min: 0, max: 3, step: 0.05, def: 0.0, u: "uChromAb", help: "Lens colour-fringing toward the frame edges — RGB split. Subtle = filmic, high = arcade." },
+  { id: "grain",        label: "FILM GRAIN",      group: "IMAGE & COLOUR", min: 0, max: 0.15, step: 0.005, def: 0.0, u: "uGrain", help: "Per-pixel sensor noise. A little sells the cinematic night-camera look." },
+  { id: "flareMul",     label: "LENS FLARE",      group: "IMAGE & COLOUR", min: 0, max: 2, step: 0.05, def: 1.0, help: "Sun/lamp anamorphic streak + ghost strength. 0 = off, 1 = as-shipped." },
+  { id: "sharpen",      label: "SHARPEN",         group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSharpen", help: "Crispness recovered after FXAA — counteracts softening on kerbs, wires and distant detail." },
+  { id: "speedBlur",    label: "SPEED BLUR",      group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSpeedBlur", help: "Radial blur from screen centre that grows with car speed — a velocity cue at high speed." },
 ];
-// LT holds the LIVE values the driver reads every frame. They are resolved from
-// a per-CONDITION profile store: each (track, time-of-day, weather) combination
-// keeps its own set of overrides, so night+wet Monaco and day+dry Monza are
-// tuned independently. Resolution per id: condition profile → migrated legacy
-// global ("*") → TUNE_DEFS default. Only non-default values are stored.
+// LT holds the LIVE values the driver reads every frame. Slider edits are GLOBAL
+// — stored in the "*" profile so ONE setting applies across every time-of-day and
+// weather (the shipped js/light-presets.js may still carry per-condition baselines
+// that a player's global edit overrides). Resolution per id, lowest→highest:
+//   TUNE_DEFS default → file "*" → file "track|tod|wx" → local "*" (player edits).
+// Legacy per-condition local profiles are still honoured if present, but new edits
+// go to "*" and clear any stale per-condition entry for that knob.
 const LT = {};
 for (const d of TUNE_DEFS) LT[d.id] = d.def;
 // Profile store shape: { "monza|night|wet": {lampLevel:0.4,…}, "*": {…legacy} }.
@@ -3252,7 +3252,9 @@ function ltFallback(id) {
   const F = window.LightPresets || null, key = ltKey();
   if (F && F["*"] && typeof F["*"][id] === "number") v = F["*"][id];
   if (F && key && F[key] && typeof F[key][id] === "number") v = F[key][id];
-  if (_ltStore["*"] && typeof _ltStore["*"][id] === "number") v = _ltStore["*"][id];
+  // NB: the player's own global ("*") edit is deliberately NOT folded in here —
+  // this is exactly the shipped baseline a slider RESETS to, i.e. the value left
+  // once the global override is cleared.
   return clamp(v, d.min, d.max);
 }
 // Rebuild LT for the current conditions. Called whenever the track/time/weather
@@ -3280,15 +3282,22 @@ function setLightTune(id, v) {
   if (!d || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
   LT[id] = v;
-  const key = ltKey();
-  if (key) {
-    const prof = _ltStore[key] || (_ltStore[key] = {});
-    // Store only when the value differs from what it would resolve to anyway
-    // (default / file / legacy global). Storing an explicit value IS required
-    // when it matches the default but the file/global would otherwise win —
-    // that's how a local edit overrides a shipped value back down.
-    if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
-    if (!Object.keys(prof).length) delete _ltStore[key];
+  // Sliders tune ONE GLOBAL value that applies across EVERY time-of-day and
+  // weather — written to the "*" profile — so a setting dialled in at day/dry
+  // also takes effect at night/rain (the TIME/WEATHER chips just PREVIEW how it
+  // looks). Store only when it differs from the shipped baseline (default →
+  // file "*" → file "track|tod|wx"); an explicit value equal to the default is
+  // still kept when needed to override a shipped preset back down.
+  const g = _ltStore["*"] || (_ltStore["*"] = {});
+  if (v === ltFallback(id)) delete g[id]; else g[id] = v;
+  if (!Object.keys(g).length) delete _ltStore["*"];
+  // Drop any legacy per-condition override of this knob so the new global value
+  // isn't shadowed by an older localStorage profile (per-condition entries out-
+  // rank "*" in the resolution order).
+  for (const k of Object.keys(_ltStore)) {
+    if (k === "*" || !_ltStore[k] || _ltStore[k][id] === undefined) continue;
+    delete _ltStore[k][id];
+    if (!Object.keys(_ltStore[k]).length) delete _ltStore[k];
   }
   if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
   if (d.reinitRain && isRaining()) initRainDrops();   // re-seed the rain field with the new count/length
@@ -5910,16 +5919,17 @@ function refreshLtPreviewActive() {
   for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("on", t === tod); }
   for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("on", w === wx); }
 }
-// Show which per-condition profile is being edited, e.g. "MONZA · NIGHT · WET".
+// Edits are GLOBAL now (one value across all times/weather), so the label shows
+// what's being PREVIEWED plus the global tuned-count — not a per-condition profile.
 function updateLtProfileLabel() {
   const host = $("lt-profile"); if (!host) return;
   const key = ltKey();
   if (!key) { host.textContent = ""; return; }
   const [id, tod, wx] = key.split("|");
   const name = (track && track.def && track.def.name) || id;
-  const nOver = _ltStore[key] ? Object.keys(_ltStore[key]).length : 0;
-  host.textContent = name.toUpperCase() + " · " + tod.toUpperCase() + " · " + wx.toUpperCase() +
-    (nOver ? "  (" + nOver + " tuned)" : "  (defaults)");
+  const nOver = _ltStore["*"] ? Object.keys(_ltStore["*"]).length : 0;
+  host.textContent = "PREVIEW " + tod.toUpperCase() + " · " + wx.toUpperCase() +
+    " — TUNING APPLIES TO ALL" + (nOver ? "  (" + nOver + " tuned)" : "  (defaults)");
 }
 function buildLtPreview() {
   const host = $("lt-preview");
@@ -6230,10 +6240,10 @@ $("lt-help-on").onchange = (e) => {
   document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);
 };
 $("lt-reset").onclick = () => {
-  // Drop this condition's LOCAL edits so it falls back to the shipped file /
-  // defaults (leaves other conditions and the file untouched).
-  const key = ltKey();
-  if (key && _ltStore[key]) delete _ltStore[key];
+  // Sliders tune GLOBAL values, so RESET drops the global ("*") edits and any
+  // leftover per-condition overrides, falling every knob back to the shipped
+  // file / defaults across all times and weather.
+  _ltStore = {};
   persistLightTune();
   applyLightTune();
   refreshLightTunePanel();
