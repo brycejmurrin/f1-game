@@ -1526,6 +1526,22 @@ function applyRaceSettings() {
       frame.exposure = 0.99 + clr * 0.05 - ovc * 0.08;
     }
   } else {
+    // "default" — the base sun/ambient come from the track palette (set ONCE at
+    // load). Re-derive them from the palette HERE, every call, so the live tuner
+    // offsets applied further down (sunElev/sunAzim/sunTemp/ambTemp/ambBalance/
+    // cloudCover) never COMPOUND: applyRaceSettings fires on every slider input
+    // event, and without this reset each event stacked its offset on the previous
+    // result, so those knobs ran away in one direction regardless of drag
+    // direction. The explicit-time branches above already rebuild their base.
+    if (track && track.def && track.def.palette) {
+      const _bp = track.def.palette;
+      if (_bp.sunDir)        { frame.sunDir = V3.norm(_bp.sunDir); frameSky.sunDir = frame.sunDir; }
+      if (_bp.sunColor)      frame.sunColor = _bp.sunColor.slice();
+      if (_bp.ambientSky)    frame.ambientSky = _bp.ambientSky.slice();
+      if (_bp.ambientGround) frame.ambientGround = _bp.ambientGround.slice();
+      if (_bp.sun)           frameSky.sunColor = _bp.sun.slice();
+      frameSky.cloud = _bp.cloud !== undefined ? _bp.cloud : (isNightSession ? 0.22 : 0.4);
+    }
     // "default" — driven by the track palette; set moon for night tracks
     frameSky.moon = isNightSession ? 0.85 : 0;
     // Dim the SCENE sun to soft moonlight at night. Many night palettes ship a
