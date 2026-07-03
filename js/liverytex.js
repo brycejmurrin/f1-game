@@ -622,6 +622,89 @@ const LiveryTex = (function () {
     else crestGeneric(ctx, R, ink, accent, teamId);
   }
 
+  // Per-team livery GRAPHIC backdrop painted behind the crest — an accent wash +
+  // bold flowing streaks (edges faded to transparent) so the engine cover / tail
+  // reads as a real designed livery panel (à la the Red Bull tail) rather than a
+  // logo floating on flat paint. Style varies per team so each tail is distinct.
+  const TAIL_STYLE = {
+    redbull:     { kind: "diag",    a: 0.72 },   // charging diagonal slash
+    racingbulls: { kind: "diag",    a: 0.62 },
+    ferrari:     { kind: "sweep",   a: 0.60 },   // low sweeping curve
+    mclaren:     { kind: "chevron", a: 0.68 },   // speed chevrons
+    mercedes:    { kind: "streak",  a: 0.55 },   // fine parallel streaks
+    williams:    { kind: "streak",  a: 0.58 },
+    alpine:      { kind: "sweep",   a: 0.58 },
+    audi:        { kind: "chevron", a: 0.64 },
+    astonmartin: { kind: "sweep",   a: 0.56 },
+    haas:        { kind: "diag",    a: 0.60 },
+    cadillac:    { kind: "streak",  a: 0.55 },
+  };
+  function drawTailGraphic(ctx, teamId, R, c1, c2, stripe) {
+    const st = TAIL_STYLE[teamId] || { kind: "diag", a: 0.6 };
+    const acc = stripe || c2;
+    const X = R.x, Y = R.y, W = R.w, H = R.h;
+    ctx.save();
+    // 1) directional accent wash across the panel.
+    const g = ctx.createLinearGradient(X, Y + H, X + W, Y);
+    g.addColorStop(0.0, cssA(acc, 0));
+    g.addColorStop(0.55, cssA(acc, st.a * 0.7));
+    g.addColorStop(1.0, cssA(acc, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(X, Y, W, H);
+    // 2) bold motif strokes per style.
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (st.kind === "chevron") {
+      ctx.lineWidth = W * 0.075;
+      for (let i = 0; i < 4; i++) {
+        const o = X + W * (0.14 + i * 0.22), a2 = st.a * (1 - i * 0.14);
+        ctx.strokeStyle = cssA(acc, a2);
+        ctx.beginPath();
+        ctx.moveTo(o - W * 0.14, Y + H * 0.14);
+        ctx.lineTo(o, Y + H * 0.5);
+        ctx.lineTo(o - W * 0.14, Y + H * 0.86);
+        ctx.stroke();
+      }
+    } else if (st.kind === "sweep") {
+      ctx.lineWidth = W * 0.10;
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = cssA(acc, st.a * (1 - i * 0.22));
+        ctx.beginPath();
+        ctx.moveTo(X - W * 0.05, Y + H * (0.66 + i * 0.12));
+        ctx.quadraticCurveTo(X + W * 0.5, Y + H * (0.1 + i * 0.12), X + W * 1.05, Y + H * (0.5 + i * 0.12));
+        ctx.stroke();
+      }
+    } else if (st.kind === "streak") {
+      ctx.lineWidth = W * 0.03;
+      for (let i = 0; i < 7; i++) {
+        ctx.strokeStyle = cssA(acc, st.a * (0.5 + 0.5 * (1 - i / 7)));
+        const o = X + W * (0.06 + i * 0.13);
+        ctx.beginPath();
+        ctx.moveTo(o, Y + H);
+        ctx.lineTo(o + W * 0.4, Y);
+        ctx.stroke();
+      }
+    } else { // diag slash
+      ctx.lineWidth = W * 0.14;
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = cssA(acc, st.a * (1 - i * 0.28));
+        const o = X + W * (0.1 + i * 0.28);
+        ctx.beginPath();
+        ctx.moveTo(o, Y + H * 1.05);
+        ctx.lineTo(o + W * 0.55, Y - H * 0.05);
+        ctx.stroke();
+      }
+    }
+    // 3) fade the panel edges to transparent so it blends into the bodywork.
+    const rg = ctx.createRadialGradient(X + W / 2, Y + H / 2, W * 0.34, X + W / 2, Y + H / 2, W * 0.72);
+    rg.addColorStop(0, "rgba(0,0,0,0)");
+    rg.addColorStop(1, "rgba(0,0,0,1)");
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = rg;
+    ctx.fillRect(X, Y, W, H);
+    ctx.restore();
+  }
+
   // ── main ─────────────────────────────────────────────────────────────────
   function buildAtlas(teamId, colors, numberOverride) {
     const canvas = document.createElement("canvas");
@@ -645,7 +728,9 @@ const LiveryTex = (function () {
     // second-colour details don't vanish.
     if (Math.abs(lum(accent) - lum(ink)) < 0.15) accent = (lum(ink) > 0.5) ? c1 : c2;
 
-    // Crest.
+    // Tail livery graphic (accent wash + motif streaks) THEN the crest on top —
+    // together they make the engine cover / shark fin read as a designed panel.
+    drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
     drawCrest(ctx, teamId, REGIONS.crest, ink, accent);
 
     // Sponsor wordmarks.
