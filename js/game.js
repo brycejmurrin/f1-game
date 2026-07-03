@@ -1775,10 +1775,15 @@ function applyRaceSettings() {
       frame.ambientGround = [frame.ambientGround[0] * ar * grdG, frame.ambientGround[1] * ag * grdG, frame.ambientGround[2] * abb * grdG];
     }
   }
-  // Save base ambient values so the lightning system can restore them each frame
+  // Save base ambient + exposure so the lightning system can restore them each
+  // frame. Exposure matters: the flash SETS frame.exposure from this base — the
+  // old `frame.exposure +=` compounded ~+1.65 per strike and never restored, so
+  // every strike left the whole scene permanently brighter (a stormy race washed
+  // out to white over a few minutes).
   _ltBase = {
     ambientSky:    frame.ambientSky.slice(),
     ambientGround: frame.ambientGround.slice(),
+    exposure:      frame.exposure != null ? frame.exposure : 1.0,
   };
   // Arm lightning timing (first strike after a random 3-8 s delay) — but only
   // when no countdown is already pending: applyRaceSettings re-runs on EVERY
@@ -3567,11 +3572,20 @@ function setFrameLights(eye, scale, fwd) {
   // the camera ("hard shadow line that recedes as you approach"). The forward
   // bias pushes that boundary ~2x further out — past the night fog wall.
   const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
+  const flen = Math.hypot(fx, fz) || 1;
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
     const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
     let d = dx * dx + dy * dy + dz * dz;
-    if (dx * fx + dz * fz < 0) d *= 6.25;
+    // Behind-camera penalty RAMPED in over ~14° past the camera plane (was a hard
+    // sign test ×6.25: the instant a lamp crossed the plane its rank leapt several
+    // places in ONE frame, stepping its pool's brightness — and a fast chase-cam
+    // yaw flipped the half-space for many lamps at once, a whole-field shudder).
+    const b = dx * fx + dz * fz;
+    if (b < 0) {
+      const dl = Math.sqrt(dx * dx + dz * dz) || 1;
+      d *= 1 + 5.25 * Math.min(1, (-b) / (flen * dl * 0.25));
+    }
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
   }
@@ -3591,17 +3605,25 @@ function setFrameLights(eye, scale, fwd) {
       for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < 32 && heap[l].d > heap[lg].d) lg = l; if (rr < 32 && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
     }
   }
-  // Sort just those 32 ascending so the last-ranked fade still eases the farthest of the set.
+  // Sort just those 32 ascending so the tail fade eases the farthest of the set.
   heap.sort((a, b) => a.d - b.d);
+  // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
+  // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
+  // visible stepping as the set shifted at speed). Fading by closeness to the set
+  // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
+  // membership changes are invisible.
+  const dEdge = heap[31].d || 1;
   out.length = 0;
   for (let i = 0; i < 32; i++) {
-    const o = heap[i].o;
-    // Ease the last-ranked lights toward zero so pools FADE in over ~40 m of
-    // approach instead of popping when a lamp enters/leaves the 32-light set —
-    // the set boundary itself becomes invisible.
-    const f = fl(o) * Math.min(1, (32 - i) / 6);
+    const e = heap[i], o = e.o;
+    const cullF = Math.max(0, Math.min(1, (dEdge - e.d) / (dEdge * 0.35)));
+    const f = fl(o) * cullF;
     out.push(src[o], src[o+1], src[o+2], src[o+3] * sr * f, src[o+4] * sg * f, src[o+5] * sb * f,
-      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13], src[o+14]);
+      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13],
+      // glareW fades with the cull too: drawGlow normalises the lamp colour, so a
+      // colour-only fade barely dims the halo — it blinked off at ~full brightness
+      // when the lamp left the set.
+      src[o+14] * cullF);
   }
   frame.lights = out;
 }
@@ -4262,12 +4284,22 @@ function render(dt) {
         aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f);
         aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f);
       }
-      frame.exposure = (frame.exposure || 1.0) + 0.22 * f;
+      // SET from the saved base (was `+=`: it accumulated every frame of the
+      // ~0.9 s flash and was never restored — each strike permanently brightened
+      // the scene by ~+1.65 exposure, washing a stormy race out to white).
+      frame.exposure = _ltBase.exposure + 0.22 * f;
     } else {
-      // Restore base ambient so normal ticks aren't tinted (in place).
+      // Restore base ambient + exposure so normal ticks aren't tinted (in place).
       const aS = frame.ambientSky, aG = frame.ambientGround;
       for (let i = 0; i < 3; i++) { aS[i] = _ltBase.ambientSky[i]; aG[i] = _ltBase.ambientGround[i]; }
+      frame.exposure = _ltBase.exposure;
     }
+  } else if (_ltFlash > 0) {
+    // Weather flipped dry mid-flash: the decay above is inside the raining gate,
+    // so without this the flash froze >0 and frameSky.lightning (set uncondition-
+    // ally each frame) kept the sky partially bleached until the next storm.
+    _ltFlash *= Math.exp(-8 * dt);
+    if (_ltFlash < 0.001) _ltFlash = 0;
   }
 
   // Floodlights: EVERY track has them (see buildTrackLights); they're fed to the

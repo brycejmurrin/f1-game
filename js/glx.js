@@ -381,11 +381,16 @@ float sampleShadow(vec3 wpos) {
     float pen = clamp((z - zb) * uPcssPen, 0.0, 1.0);
     R = mix(1.5, 6.0, pen);
   }
-  float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  // Dither anchored to the SHADOW-MAP TEXEL GRID, not gl_FragCoord: screen-keyed
+  // noise re-rolls every world point's rotation each frame while driving (no TAA
+  // here to average it), boiling the penumbra — the visible "shadow flicker at
+  // speed". sc.xy is stable between recentres (the light VP is texel-snapped) and
+  // shifts by whole texels on a recentre, so this pattern is glued to the ground.
+  float ign = fract(52.9829189 * fract(dot(floor(sc.xy / t), vec2(0.06711056, 0.00583715))));
   float ang = ign * 6.2831853;
   float cr = cos(ang), sr = sin(ang);
   mat2 rot = mat2(cr, -sr, sr, cr) * (t * R * boxK);
-  // 4 taps always; 4 more only near the camera. Rotated per-pixel so the reduced
+  // 4 taps always; 4 more only near the camera. Rotated per-texel so the reduced
   // count still reads as noise, not banding.
   float s = texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.94201624, -0.39906216), z))
           + texture(uShadowMap, vec3(sc.xy + rot * vec2( 0.94558609, -0.76890725), z))
