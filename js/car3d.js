@@ -228,8 +228,15 @@ const Car3D = (function () {
     // BRAKES tier 2: a caliper accent peeking through the rim spokes — pure
     // addition, absent (caliperColor null) at every other tier.
     if (caliperColor) {
-      const ca = 0.35 * Math.PI, cr = r * 0.30;
-      addBox(out, x0 - 0.02, cy + Math.cos(ca) * cr, cz + Math.sin(ca) * cr, 0.05, 0.09, 0.09, caliperColor);
+      const xc = x0 - 0.02, cr = r * 0.33, cm = 0.35 * Math.PI;
+      // A proper radial caliper straddling the disc rim over a short arc: two
+      // brake PADS set a touch apart with a connecting bridge spanning them —
+      // reads as a machined monobloc caliper peeking through the spokes.
+      for (const da of [-0.12, 0.12]) {
+        const ca = cm + da;
+        addBox(out, xc, cy + Math.cos(ca) * cr, cz + Math.sin(ca) * cr, 0.05, 0.07, 0.05, caliperColor); // pad
+      }
+      addBox(out, xc - 0.006, cy + Math.cos(cm) * (cr + 0.008), cz + Math.sin(cm) * (cr + 0.008), 0.038, 0.045, 0.15, caliperColor); // bridge
     }
   }
 
@@ -306,18 +313,20 @@ const Car3D = (function () {
   // Per-OPTION engine airbox: `in` intake-mouth scale, `snork` raised snorkel,
   // `twin` twin exhaust tips, `inlet` sidepod radiator-inlet SHAPE (0 slim
   // low-drag letterbox, 1 stock rounded mouth, 2 wide high-flow scoop, 3 tall
-  // twin-nostril). Keyed by resolved engine id (else the 0/1/2 tier).
+  // twin-nostril), `outlet` engine-cover hot-air cooling exit FORM (0 sealed
+  // low-drag deck, 1 slim gill pair, 2 broad shark-gill louvre bank + tail vent,
+  // 3 twin chimney stacks). Keyed by resolved engine id (else the 0/1/2 tier).
   const ENGINE_STYLE = {
-    stock:        { in: 0.85, inlet: 1 }, lean_burn:   { in: 0.72, inlet: 0 },
-    performance:  { in: 1.15, twin: 1, inlet: 2 }, v_power: { in: 1.10, twin: 1, inlet: 2 },
-    turbo:        { in: 1.35, snork: 1, inlet: 2 }, highrev: { in: 1.25, snork: 1, inlet: 3 },
-    evo_kit:      { in: 1.20, twin: 1, inlet: 2 }, sprint:  { in: 1.15, twin: 1, inlet: 3 },
-    race:         { in: 1.55, snork: 1, twin: 1, inlet: 3 },
-    torque_curve: { in: 1.00, inlet: 1 }, hybrid_max: { in: 1.30, snork: 1, twin: 1, inlet: 2 },
-    quali_engine: { in: 1.65, snork: 1, twin: 1, inlet: 3 },
-    manu_mercedes:{ in: 1.55, snork: 1, twin: 1, inlet: 2 }, manu_ferrari: { in: 1.55, snork: 1, twin: 1, inlet: 3 },
-    manu_ford:    { in: 1.50, snork: 1, twin: 1, inlet: 2 }, manu_honda:   { in: 1.50, snork: 1, twin: 1, inlet: 3 },
-    manu_audi:    { in: 1.50, snork: 1, twin: 1, inlet: 2 },
+    stock:        { in: 0.85, inlet: 1, outlet: 1 }, lean_burn:   { in: 0.72, inlet: 0, outlet: 0 },
+    performance:  { in: 1.15, twin: 1, inlet: 2, outlet: 1 }, v_power: { in: 1.10, twin: 1, inlet: 2, outlet: 1 },
+    turbo:        { in: 1.35, snork: 1, inlet: 2, outlet: 2 }, highrev: { in: 1.25, snork: 1, inlet: 3, outlet: 2 },
+    evo_kit:      { in: 1.20, twin: 1, inlet: 2, outlet: 1 }, sprint:  { in: 1.15, twin: 1, inlet: 3, outlet: 2 },
+    race:         { in: 1.55, snork: 1, twin: 1, inlet: 3, outlet: 3 },
+    torque_curve: { in: 1.00, inlet: 1, outlet: 1 }, hybrid_max: { in: 1.30, snork: 1, twin: 1, inlet: 2, outlet: 2 },
+    quali_engine: { in: 1.65, snork: 1, twin: 1, inlet: 3, outlet: 3 },
+    manu_mercedes:{ in: 1.55, snork: 1, twin: 1, inlet: 2, outlet: 2 }, manu_ferrari: { in: 1.55, snork: 1, twin: 1, inlet: 3, outlet: 3 },
+    manu_ford:    { in: 1.50, snork: 1, twin: 1, inlet: 2, outlet: 2 }, manu_honda:   { in: 1.50, snork: 1, twin: 1, inlet: 3, outlet: 3 },
+    manu_audi:    { in: 1.50, snork: 1, twin: 1, inlet: 2, outlet: 2 },
   };
   // Per-OPTION brake package: `cal` caliper accent colour (peeks through the rim
   // spokes), `duct` brake-duct size. Keyed by resolved brake id (else tier).
@@ -357,16 +366,20 @@ const Car3D = (function () {
     heave_spring:    { ride: -0.030, arm: 1.20, push: 1, pull: 1 },
     active:          { ride: -0.045, arm: 1.25, push: 1 },   // fully slammed
   };
-  // Per-OPTION gearbox: `strakes` diffuser strake count + `fin` a rear crash
-  // structure fin. Keyed by resolved option id.
+  // Per-OPTION gearbox: `strakes` diffuser strake count, `strakeH` strake height,
+  // `fin` a rear crash-structure fin with `finSY`/`finSZ` size, `casing`
+  // bellhousing/gearbox-case bulge form (0 none · 1 slim · 2 ribbed tail case ·
+  // 3 broad carbon case with side plates), `louvres` cooling-louvre count on the
+  // case flanks, `heat` a titanium heat-shield plate over the 'box. Keyed by
+  // resolved option id — so every spec reads with a distinct rear silhouette.
   const GBOX_STYLE = {
-    standard:       { strakes: 0, fin: 0 },
-    close_ratio:    { strakes: 2, fin: 0 },
-    long_ratio:     { strakes: 2, fin: 0 },
-    short_stack:    { strakes: 3, fin: 1 },
-    sequential_pro: { strakes: 4, fin: 1 },
-    carbon_case:    { strakes: 4, fin: 1 },
-    f1_spec:        { strakes: 5, fin: 1 },
+    standard:       { strakes: 0, fin: 0, strakeH: 0.13, casing: 0, louvres: 0, heat: 0 },
+    close_ratio:    { strakes: 2, fin: 0, strakeH: 0.13, casing: 1, louvres: 2, heat: 0 },
+    long_ratio:     { strakes: 2, fin: 0, strakeH: 0.16, casing: 1, louvres: 0, heat: 1 },
+    short_stack:    { strakes: 3, fin: 1, strakeH: 0.15, finSY: 0.11, finSZ: 0.22, casing: 2, louvres: 3, heat: 0 },
+    sequential_pro: { strakes: 4, fin: 1, strakeH: 0.17, finSY: 0.17, finSZ: 0.32, casing: 2, louvres: 4, heat: 1 },
+    carbon_case:    { strakes: 4, fin: 1, strakeH: 0.19, finSY: 0.15, finSZ: 0.30, casing: 3, louvres: 0, heat: 1 },
+    f1_spec:        { strakes: 5, fin: 1, strakeH: 0.22, finSY: 0.22, finSZ: 0.40, casing: 3, louvres: 5, heat: 1 },
   };
   // Per-OPTION ERS: `led` HDR accent-strip colour (glows/blooms at night) + `pack`
   // battery-pack size mult. Keyed by resolved ers id (else a tier fallback). Every
@@ -406,6 +419,10 @@ const Car3D = (function () {
     const out = { pos: [], nrm: [], col: [], idx: [] };
     const c1 = color  || [0.8, 0.05, 0.05];
     const c2 = color2 || [0.9, 0.9, 0.1];
+    // Optional separate livery ACCENT colour for the extra paint-detail flashes
+    // (sidepod flash, nose flash, engine-cover pinstripe). Falls back to c2 so a
+    // livery without an explicit accent still gets tasteful team-colour detailing.
+    const accentC = (opts && opts.livery && opts.livery.accent) || c2;
     // Parts-driven visual identity: opts.parts is { categoryId: 0|1|2 } (see
     // Parts.getVisualTiers in parts.js). Every lookup defaults to 1 (neutral/
     // today's-baseline) when absent, so AI/no-parts builds are unaffected.
@@ -522,12 +539,37 @@ const Car3D = (function () {
       // Engine cover: roof-ridge prism sloping to the tail
       addSpan(out, { z: -0.55, y: 0.52, w: 0.56, h: 0.62, t: 0.0 },
                    { z: -2.00, y: 0.42, w: 0.26, h: 0.34, t: 0.0 }, c1, c1);
+      // Livery-ACCENT pinstripe: a slim painted line running each engine-cover
+      // flank (accentC, falls back to c2) — a subtle length-wise paint detail.
+      for (const s of [-1, 1]) addBox(out, s*0.11, 0.46, -1.25, 0.010, 0.012, 0.85, accentC);
       if (engSnork) {
         // Big-spec power unit tells: a raised airbox snorkel cresting behind the
-        // roll hoop + cooling-louvre strips on the engine-cover flanks.
-        addSpan(out, { z: -0.18, y: 0.94, w: 0.13, h: 0.11, t: 0.5 },
-                     { z: -0.62, y: 0.86, w: 0.11, h: 0.09, t: 0.5 }, c1, INTAKE);
+        // roll hoop + cooling-louvre strips on the engine-cover flanks. Snorkel
+        // scale tracks the intake size so a quali PU snorkel dwarfs a turbo's.
+        const sk = 0.78 + inScale * 0.32;
+        addSpan(out, { z: -0.18, y: 0.94, w: 0.13 * sk, h: 0.11 * sk, t: 0.5 },
+                     { z: -0.62, y: 0.86, w: 0.11 * sk, h: 0.09 * sk, t: 0.5 }, c1, INTAKE);
         for (const s of [-1, 1]) addBox(out, s*0.20, 0.58, -1.10, 0.015, 0.10, 0.60, CARBON);
+      }
+      // Engine-cover hot-air cooling exit — FORM varies per PU spec (ENGINE_STYLE
+      // .outlet): 0 sealed low-drag deck, 1 slim gill pair, 2 broad shark-gill
+      // louvre bank + a central tail vent, 3 twin chimney stacks. A clear extra
+      // per-engine read on the cover flanks that a sealed deck (lean_burn) lacks.
+      const engOutlet = engStyle && engStyle.outlet != null ? engStyle.outlet
+                      : (engT === 2 ? 2 : engT === 0 ? 0 : 1);
+      if (engOutlet >= 1) {
+        for (const s of [-1, 1]) {
+          if (engOutlet === 3) {
+            addBox(out, s*0.11, 0.60, -1.42, 0.07, 0.11, 0.15, INTAKE);   // twin chimney stack
+            addBox(out, s*0.11, 0.665, -1.42, 0.05, 0.02, 0.11, CARBON);  // chimney lip
+          } else {
+            const n = engOutlet === 2 ? 4 : 2;
+            for (let i = 0; i < n; i++)
+              addBox(out, s*0.16, 0.535 - i*0.048, -1.30, 0.02, 0.018, 0.34, engOutlet === 2 ? DARK : CARBON);
+          }
+        }
+        // Central hot-air vent slot at the tail of the cover (broad-cooling specs).
+        if (engOutlet >= 2) addBox(out, 0, 0.49, -1.72, 0.13, 0.05, 0.18, INTAKE);
       }
       // Engine-mode indicator LEDs across the airbox intake lip (HDR → bloom at
       // night): green (economy) → amber (standard) → red (max-attack power unit).
@@ -602,6 +644,14 @@ const Car3D = (function () {
     // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
     addLoft(out, 1.60, 0, 0.475, 0.09, 0.022, 2.66, 0, 0.352, 0.05, 0.016, c2);
     addBox(out, 0, 0.862, -0.42, 0.06, 0.04, 0.52, c2);
+
+    // --- Extra paint detail: thin livery-ACCENT flashes (accentC, falls back to
+    // c2). Subtle strips of "paint" that catch the light without adding mass: a
+    // flash along each nose flank and a slim flash along each sidepod shoulder. ---
+    for (const s of [-1, 1]) {
+      addBox(out, s*0.15, 0.315, 2.30, 0.012, 0.040, 0.55, accentC);   // nose-flank flash
+      addBox(out, s*0.688, 0.43, 0.20, 0.012, 0.035, 0.45, accentC);   // sidepod-shoulder flash
+    }
 
     // --- Paint-job racing stripe: a bold contrasting band down the car's spine
     // (nose → hood → airbox → engine cover), only when the chosen livery
@@ -725,7 +775,7 @@ const Car3D = (function () {
 
     // --- Shark fin + engine-cover accent (flat, team accent colour) ---
     // Behind the driver — skipped in the cockpit build.
-    if (!ckpt) addBox(out, 0, 0.80, -1.20, 0.03, 0.34, 0.85, ersC2);
+    if (!ckpt) addBox(out, 0, 0.80, -1.20, 0.03, 0.34, 0.85, c2);
 
     // --- Driver number: now a TEXTURE decal on the nose-top plate (see
     // carDecalData / the nose number plate below), not blocky 7-seg geometry —
@@ -918,13 +968,35 @@ const Car3D = (function () {
       const gbStyle = (gbId && GBOX_STYLE[gbId]) || null;
       const gbStrakes = gbStyle ? gbStyle.strakes : (tier("gearbox") === 2 ? 5 : 0);
       const gbFin = gbStyle ? gbStyle.fin : (tier("gearbox") === 2 ? 1 : 0);
+      const gbStrakeH = gbStyle && gbStyle.strakeH ? gbStyle.strakeH : 0.13;
+      const gbCasing  = gbStyle ? (gbStyle.casing  || 0) : (tier("gearbox") === 2 ? 3 : 0);
+      const gbLouvres = gbStyle ? (gbStyle.louvres || 0) : 0;
+      const gbHeat    = gbStyle ? (gbStyle.heat    || 0) : 0;
+      const gbFinSY   = gbStyle && gbStyle.finSY ? gbStyle.finSY : 0.14;
+      const gbFinSZ   = gbStyle && gbStyle.finSZ ? gbStyle.finSZ : 0.28;
       if (gbStrakes > 0) {
+        // Diffuser strakes — count AND height vary per spec (taller = higher-DF 'box).
         const half = (gbStrakes - 1) / 2;
         for (let i = 0; i < gbStrakes; i++) {
-          addBox(out, (i - half) * 0.24, 0.19, -2.20, 0.015, 0.13, 0.42, CARBON);
+          addBox(out, (i - half) * 0.24, 0.13 + gbStrakeH / 2, -2.20, 0.015, gbStrakeH, 0.42, CARBON);
         }
       }
-      if (gbFin) addBox(out, 0, 0.34, -2.30, 0.02, 0.14, 0.28, CARBON);   // crash-structure fin
+      // Gearbox casing bulge behind the engine cover — a bellhousing form that
+      // grows and gains structure with the spec (slim → ribbed tail case → broad
+      // carbon case with side plates), so each 'box shows a distinct rear mass.
+      if (gbCasing > 0) {
+        const cw = 0.15 + gbCasing * 0.05, ch = 0.13 + gbCasing * 0.03;
+        addBox(out, 0, 0.44, -2.02, cw, ch, 0.26, CARBON);                    // bellhousing bulge
+        if (gbCasing >= 2) addBox(out, 0, 0.42, -2.17, cw * 0.78, ch * 0.78, 0.11, DARK); // tapered tail case
+        if (gbCasing >= 3) for (const s of [-1, 1])
+          addBox(out, s * (cw * 0.5 + 0.012), 0.44, -2.02, 0.02, ch * 0.9, 0.24, [0.09, 0.09, 0.10]); // carbon side plate
+      }
+      // Cooling-louvre bank on the casing flanks — count varies per spec.
+      if (gbLouvres > 0) for (const s of [-1, 1]) for (let i = 0; i < gbLouvres; i++)
+        addBox(out, s * 0.135, 0.50 - i * 0.042, -2.02, 0.03, 0.013, 0.20, INTAKE);
+      // Titanium heat-shield plate over the top of the 'box (higher specs).
+      if (gbHeat) addBox(out, 0, 0.55, -2.06, 0.19, 0.014, 0.28, [0.30, 0.30, 0.34]);
+      if (gbFin) addBox(out, 0, 0.27 + gbFinSY / 2, -2.30, 0.02, gbFinSY, gbFinSZ, CARBON);   // crash-structure fin
     }
 
     // --- Brake duct fairings (front + rear wheels) --- per BRAKES option: duct
@@ -934,16 +1006,24 @@ const Car3D = (function () {
     const brakeStyle = (brakeId && BRAKE_STYLE[brakeId]) || null;
     const ductMul = brakeStyle ? brakeStyle.duct : (brakesT === 0 ? 0.5 : brakesT === 2 ? 1.9 : 1.0);
     // Hot-brake glow: high-spec carbon brakes run their discs cherry-red — an HDR
-    // disc peeking through the wheel that intensifies with the brake package.
-    const brakeGlow = ductMul > 1.15 ? [Math.min(2.6, 0.7 + ductMul * 0.9), 0.16 * ductMul, 0.05] : null;
+    // disc peeking through the wheel that intensifies with the brake package. The
+    // hotter the spec (higher ductMul), the brighter AND whiter-orange the glow
+    // (green channel climbs so the top brakes read as glazed orange-white heat),
+    // and the disc itself grows a touch — a clear staged brake-temperature read.
+    const brakeGlow = ductMul > 1.15 ? [
+      Math.min(3.2, 0.5 + ductMul * 1.25),
+      Math.min(1.1, 0.10 * ductMul + (ductMul - 1.15) * 0.85),
+      0.05,
+    ] : null;
+    const glowScale = 1 + (ductMul - 1.15) * 0.5;   // disc grows with the package
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, 1.89, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
       // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
       if (ductMul >= 1.3) addBox(out, s*0.65, 0.42, 1.86, 0.11, 0.02, 0.15, CARBON);
       if (!ckpt) addBox(out, s*0.58, 0.30, -1.80, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
       if (brakeGlow) {
-        addBox(out, s*0.71, 0.34, 1.70, 0.02, 0.13, 0.13, brakeGlow);           // front disc
-        if (!ckpt) addBox(out, s*0.69, 0.34, -1.60, 0.02, 0.15, 0.15, brakeGlow); // rear disc
+        addBox(out, s*0.71, 0.34, 1.70, 0.02, 0.13 * glowScale, 0.13 * glowScale, brakeGlow);           // front disc
+        if (!ckpt) addBox(out, s*0.69, 0.34, -1.60, 0.02, 0.15 * glowScale, 0.15 * glowScale, brakeGlow); // rear disc
       }
     }
 

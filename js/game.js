@@ -526,6 +526,12 @@ const _cockP = [0, 0, 0];   // camera-anchored rig origin (see the cockpit branc
 const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
 // Pre-allocated scratch matrices — zero-GC hot-path matrix math.
 const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+// The in-race car model matrix is a REFLECTION (det −1, see basisMat/tmpU). The
+// setup-preview car is otherwise drawn at identity (det +1), which would render
+// the U-pre-flipped decal text mirrored. Draw the preview through this X-reflection
+// so its handedness matches in-race and the flipped-U decals read correctly (the
+// symmetric body is visually unchanged).
+const MAT_REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new Float32Array(16);
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
@@ -557,11 +563,11 @@ let livDraftOverride = null;
 function resolveLivery(team) {
   if (livDraftOverride && livDraftOverride.teamId === team.id) {
     const l = livDraftOverride.liv;
-    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null };
+    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null };
   }
   const liv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
-  return liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null }
-             : { c1: team.color, c2: team.color2, stripe: null };
+  return liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null }
+             : { c1: team.color, c2: team.color2, stripe: null, accent: null };
 }
 
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
@@ -701,9 +707,13 @@ function carDecalData() {
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
+  // NOTE: the in-race car model matrix is a REFLECTION (det −1: tmpU = tmpR×tmpF,
+  // so [r,u,f] is left-handed — the symmetric body hides it, asymmetric decal text
+  // does not). U is pre-flipped here (uR↔uL) so the reflection un-mirrors the text
+  // back to readable. The setup-preview car is drawn with a matching x-reflection.
   const quad = (c, n, region) => {
     const u = uvOf(region), i = out.pos.length / 3;
-    const uvs = [[u.uL, u.vB], [u.uR, u.vB], [u.uR, u.vT], [u.uL, u.vT]];
+    const uvs = [[u.uR, u.vB], [u.uL, u.vB], [u.uL, u.vT], [u.uR, u.vT]];
     for (let k = 0; k < 4; k++) { out.pos.push(c[k][0], c[k][1], c[k][2]); out.nrm.push(n[0], n[1], n[2]); out.uv.push(uvs[k][0], uvs[k][1]); }
     out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
   };
@@ -760,7 +770,8 @@ function getCockpitDecalMesh() {
     // nose number is visible out ahead of the driver — use the same nose-plate
     // placement as the chase build (nose geometry is identical in both builds).
     const c = [[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]];
-    const uvs = [[u.uL, u.vB], [u.uR, u.vB], [u.uR, u.vT], [u.uL, u.vT]];
+    // U pre-flipped to compensate the det −1 car model matrix (see quad() above).
+    const uvs = [[u.uR, u.vB], [u.uL, u.vB], [u.uL, u.vT], [u.uR, u.vT]];
     const d = { pos: [], nrm: [], uv: [], idx: [] };
     for (let k = 0; k < 4; k++) { d.pos.push(c[k][0], c[k][1], c[k][2]); d.nrm.push(0, 1, 0.05); d.uv.push(uvs[k][0], uvs[k][1]); }
     d.idx.push(0, 1, 2, 0, 2, 3);
@@ -3672,8 +3683,8 @@ function renderSetupPreview(dt) {
   });
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
-  GLX.draw(getSetupPreviewMesh(), M4.ident(), spMat);
-  drawCarDecals(Teams.LIST[teamIdx], M4.ident(), false, carDecalNum(Teams.LIST[teamIdx], null));
+  GLX.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
+  drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
   GLX.present();
 }
 
@@ -4951,7 +4962,7 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
-      csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "" };
+      csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "" };
       csLivCreating = true;
       if (soundOn) GameAudio.uiSelect();
       buildSetup();
@@ -5043,6 +5054,7 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("PRIMARY", "c1", false));
   wrap.appendChild(colorRow("ACCENT", "c2", false));
   wrap.appendChild(colorRow("STRIPE", "stripe", true));
+  wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
@@ -5060,6 +5072,7 @@ function buildLiveryCreator(container, team) {
     const id = "custom_" + livIdCounter();
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     if (d.stripe) liv.stripe = hexToArr(d.stripe);
+    if (d.accent) liv.accent = hexToArr(d.accent);
     setCustomLiveries(team.id, getCustomLiveries(team.id).concat([liv]));
     saveLiveryId(team.id, id);
     csLivCreating = false; csLivDraft = null; livDraftOverride = null; _spMeshKey = "";
@@ -5081,7 +5094,7 @@ function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now
 // Paint the live 3D preview with an uncommitted draft via the transient
 // override (no localStorage writes), then force a mesh rebuild.
 function livePreviewDraft(team, d) {
-  livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null } };
+  livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null, accent: d.accent ? hexToArr(d.accent) : null } };
   _spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
