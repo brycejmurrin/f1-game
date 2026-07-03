@@ -4136,7 +4136,7 @@ function render(dt) {
   // samples it for REAL reflections of the surroundings — trees, buildings,
   // track, sky — including everything behind the camera that SSR can't see.
   // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
-  if (player && !_envProbeOff && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && !_envProbeOff && !paused && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -4743,6 +4743,11 @@ function tickBody(now) {
     // LIGHTING TUNER live preview: keep RENDERING (physics stays paused) while
     // the panel is open so every slider change shows on the held frame.
     if ((state === "race" || state === "count") && !$("lighting").hidden) {
+      // Governor must run HERE too: the free-cam / tuner preview renders every
+      // frame while paused, and without this it stays pinned at full resolution
+      // — on a memory-limited mobile GPU that sustained full-res load (with the
+      // reflection stack) can exhaust the context and drop it. Let it adapt down.
+      perfGovernor(_dtMs);
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20));   // fly-cam integrates before the held frame
       render(Math.min(dt, 1 / 20));
     }
@@ -5801,6 +5806,11 @@ function enterPhotoMode() {
   if (photoMode) return;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   photoMode = true;
+  // Proactively drop render resolution: the free-cam can fly up and frame the
+  // WHOLE track (no fog culling), a big fill-rate/draw spike. The paused governor
+  // reacts within ~45 frames — too late to stop a first-frame GPU blowout on a
+  // memory-limited device — so cap up front; the governor adapts from here.
+  if (GLX.setRenderScale) GLX.setRenderScale(0.7);
   initPhotoCam();
   document.body.classList.add("photo-mode");
   $("photo-controls").hidden = false;
