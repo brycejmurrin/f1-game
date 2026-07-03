@@ -1386,6 +1386,30 @@ function scheduleFlybyTrack() {
   }, 120);
 }
 
+// Night ambient band: floor/cap the (up-facing-dominant) hemisphere ambient into
+// a moody-night range, then hue it toward the city glow. Applied for BOTH the
+// default-night path AND explicit setTimeOfDay("night") — previously this lived
+// only in the default branch, so explicit-night rendered ~5× darker with no neon
+// cast than the same track at default-night (they even share a tuner profile).
+// Mutates frame.ambientSky/Ground (already fresh arrays by call time).
+function _nightAmbientBand() {
+  if (!frame.ambientSky || !frame.ambientGround) return;
+  const _neonAmb = track && track.def &&
+    (track.def.theme === "street_night" || track.def.theme === "modern");
+  const floorSky = _neonAmb ? [0.017, 0.017, 0.026] : [0.006, 0.0075, 0.016];
+  const floorGnd = _neonAmb ? [0.009, 0.008, 0.013] : [0.0026, 0.0032, 0.0085];
+  const capSky   = _neonAmb ? [0.048, 0.048, 0.068] : [0.020, 0.023, 0.042];
+  const capGnd   = _neonAmb ? [0.022, 0.020, 0.030] : [0.0085, 0.0098, 0.019];
+  frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
+  frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
+  const _cgA = frameSky.cityGlow;
+  if (_cgA) {
+    const _cgm = Math.max(_cgA[0], _cgA[1], _cgA[2]) || 1;
+    frame.ambientSky    = frame.ambientSky.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
+    frame.ambientGround = frame.ambientGround.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
+  }
+}
+
 // ---------- race flow ----------
 function applyRaceSettings() {
   // Load the lighting-tuner profile for the current (track, time, weather) so
@@ -1433,6 +1457,10 @@ function applyRaceSettings() {
       // #1 cause of a flat-grey "night that looks like dim day".
       frame.ambientGround = [0.0012, 0.0015, 0.0045];
       frame.ambientSky = [0.0034, 0.0046, 0.0110];
+      // Same moody-night floor/cap + city-glow hue the default-night path applies,
+      // so explicit setTimeOfDay("night") matches default-night (was ~5× darker,
+      // no neon cast). cityGlow is already set above (before this branch).
+      _nightAmbientBand();
       frame.fogColor = [0.015, 0.017, 0.035];
       frame.fogDensity = 0.004;
       // When raceTimeOfDay !== "default", sync sky colours to frame too
@@ -1578,42 +1606,9 @@ function applyRaceSettings() {
     // any night track up to a baseline so the road and scenery always read,
     // without touching tracks that are already brighter (a floor, not a
     // multiply — brilliantly-lit street circuits keep their tuned values).
-    if (isNightSession && frame.ambientSky && frame.ambientGround) {
-      // Floor: lift very-dark night palettes so the road/scenery always read.
-      // Ceiling: pull DOWN over-bright night palettes so a night race actually
-      // looks like night — the road is up-facing so it's lit mostly by ambSky,
-      // and a value like 0.55 renders it daylight-gray. Neon/floodlights survive
-      // because lit windows etc. use emissive (sun/ambient-independent). Result:
-      // a consistent moody-night ambient band regardless of per-track tuning.
-      // Dark, moody base now that floodlights/street lights carve out the lit
-      // areas (see buildTrackLights). Floor keeps the unlit scene barely legible;
-      // the low cap stops over-bright palettes from washing the night to daylight.
-      // Dark floor + a LOW cap so over-bright night palettes can't lift the
-      // scene to grey — the floodlights/neon/windows carve out the lit areas.
-      // (Raised from a near-black band: between-pool road/verge was rendering
-      // pitch black at eye level — night should be dark, not unreadable.)
-      // NEON CITY circuits get a distinctly higher, warm-tinted band: a real
-      // neon canyon is bathed in skyglow bounce off the towers, so its street
-      // never drops to black the way an open desert circuit's verge does.
-      const _neonAmb = track && track.def &&
-        (track.def.theme === "street_night" || track.def.theme === "modern");
-      const floorSky = _neonAmb ? [0.017, 0.017, 0.026] : [0.006, 0.0075, 0.016];
-      const floorGnd = _neonAmb ? [0.009, 0.008, 0.013] : [0.0026, 0.0032, 0.0085];
-      const capSky   = _neonAmb ? [0.048, 0.048, 0.068] : [0.020, 0.023, 0.042];
-      const capGnd   = _neonAmb ? [0.022, 0.020, 0.030] : [0.0085, 0.0098, 0.019];
-      // Replace (not mutate) — frame.ambient* alias the shared palette arrays.
-      frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
-      frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
-      // Hue the clamped ambient band toward the city glow: neon canyons get a
-      // magenta-warm ambient cast, sodium towns amber. Near energy-neutral
-      // (dominant channel x1.10, others pulled down) so the band stays a band.
-      const _cgA = frameSky.cityGlow;
-      if (_cgA) {
-        const _cgm = Math.max(_cgA[0], _cgA[1], _cgA[2]) || 1;
-        frame.ambientSky    = frame.ambientSky.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
-        frame.ambientGround = frame.ambientGround.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
-      }
-    }
+    // Moody-night ambient floor/cap + city-glow hue (shared with explicit-night
+    // via _nightAmbientBand so the two night paths match).
+    if (isNightSession) _nightAmbientBand();
 
     // ── Per-track atmosphere (default mode only) ──────────────────────────
     // Nudge cloud cover and fog to give circuits a characteristic sky
@@ -3943,8 +3938,14 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   if (withGlow && frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
   if (!hideMeshes.props) {
     let m;
-    if (wet) { if (night) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
-    else { if (night) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
+    // Lit windows / signage / neon glow whenever the session is dark enough to
+    // emit (night AND dusk/dawn — floodEmit>0), not only at full night. Gating on
+    // `night` alone left the emissive (which the mesh WAS built with, via
+    // sessionDark) discarded at dusk/dawn, so the LIT GEOMETRY slider did nothing
+    // there. The *N props materials differ from *D only by this emissive field.
+    const _lit = floodEmit > 0;
+    if (wet) { if (_lit) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
+    else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     gfx.drawChunked(track.meshes.props, MAT_IDENT, m);
   }
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
@@ -4294,8 +4295,12 @@ function render(dt) {
     // stay at full brightness for a real night session, same branching as
     // _floodEmit uses.
     const _sy = frame.sunDir ? frame.sunDir[1] : -1;
+    // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
+    // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
+    // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
+    // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
     const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-      ? clamp(1 - _sy * 6, 0, 1)                       // 0 = bright dusk sky, 1 = sun at/below horizon
+      ? Math.max(0.30, clamp(1 - _sy * 6, 0, 1))       // 0.30 = bright twilight floor, 1 = sun at/below horizon
       : 1;                                              // night / default-night: full ramp
     // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
     // raw physical HDR values (16-20) — at full ceiling they overpowered the
@@ -4352,7 +4357,7 @@ function render(dt) {
   const _floodEmit = LT.floodEmitMul * (
     (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.min(0.70, 0.05 + 0.58 * clamp(1 - _sunY * 6, 0, 1))
+        ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - _sunY * 6, 0, 1)))
         : 0);
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
