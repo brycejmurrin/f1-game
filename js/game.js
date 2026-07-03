@@ -3798,6 +3798,12 @@ function renderSetupPreview(dt) {
   // the menu preview) and drop specular so the rubber goes matte; the bodywork
   // still reads as painted via its base colour + the reduced specular.
   spMat.clearcoat = 0; spMat.specular = 0.35;
+  // clearcoat isn't the only reflection source: the lit shader has a SEPARATE
+  // analytic sky-mirror gated purely by roughness (glx.js envBlend, active
+  // below ~0.40) — PAINT_DRY_DAY's 0.22 sails right through it regardless of
+  // clearcoat/carEnvCube, which is what kept reading as a residual sheen. Push
+  // roughness past that cutoff so this preview has NO reflection source at all.
+  spMat.roughness = 0.55;
   GLX.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
   GLX.present();
