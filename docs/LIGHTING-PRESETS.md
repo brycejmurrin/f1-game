@@ -164,30 +164,30 @@ Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 
 | Track | id | theme | default | status |
 |---|---|---|---|---|
-| Abu Dhabi | `abudhabi` | desert | night | ⬜ |
-| Albert Park | `albert_park` | green | day | ⬜ |
-| Bahrain | `bahrain` | desert | night | ⬜ |
-| Baku | `baku` | street_night | night | ⬜ |
-| COTA | `cota` | green | day | ⬜ |
-| Hungaroring | `hungaroring` | green | day | ⬜ |
-| Imola | `imola` | green | day | ⬜ |
-| Interlagos | `interlagos` | green | day | ⬜ |
-| Jeddah | `jeddah` | street_night | night | ⬜ |
-| Madrid | `madrid` | modern | day | ⬜ |
-| Mexico City | `mexico` | modern | day | ⬜ |
-| Miami | `miami` | modern | day | ⬜ |
-| Monaco | `monaco` | street_day | day | ⬜ |
-| Montreal | `montreal` | green | day | ⬜ |
-| Monza | `monza` | green | day | ⬜ |
-| Qatar | `qatar` | desert | night | ⬜ |
-| Red Bull Ring | `redbull` | green | day | ⬜ |
-| Shanghai | `shanghai` | modern | day | ⬜ |
-| Silverstone | `silverstone` | green | day | ⬜ |
-| Singapore | `singapore` | street_night | night | ⬜ |
-| Spa | `spa` | green | day | ⬜ |
-| Suzuka | `suzuka` | green | day | ⬜ |
-| Las Vegas | `vegas` | street_night | night | ⬜ |
-| Zandvoort | `zandvoort` | green | day | ⬜ |
+| Abu Dhabi | `abudhabi` | desert | night | ✅ |
+| Albert Park | `albert_park` | green | day | ✅ |
+| Bahrain | `bahrain` | desert | night | ✅ |
+| Baku | `baku` | street_night | night | ✅ |
+| COTA | `cota` | green | day | ✅ |
+| Hungaroring | `hungaroring` | green | day | ✅ |
+| Imola | `imola` | green | day | ✅ |
+| Interlagos | `interlagos` | green | day | ✅ |
+| Jeddah | `jeddah` | street_night | night | ✅ |
+| Madrid | `madrid` | modern | day | ✅ |
+| Mexico City | `mexico` | modern | day | ✅ |
+| Miami | `miami` | modern | day | ✅ |
+| Monaco | `monaco` | street_day | day | ✅ |
+| Montreal | `montreal` | green | day | ✅ |
+| Monza | `monza` | green | day | ✅ |
+| Qatar | `qatar` | desert | night | ✅ |
+| Red Bull Ring | `redbull` | green | day | ✅ |
+| Shanghai | `shanghai` | modern | day | ✅ |
+| Silverstone | `silverstone` | green | day | ✅ |
+| Singapore | `singapore` | street_night | night | ✅ |
+| Spa | `spa` | green | day | ✅ |
+| Suzuka | `suzuka` | green | day | ✅ |
+| Las Vegas | `vegas` | street_night | night | ✅ |
+| Zandvoort | `zandvoort` | green | day | ✅ |
 
 ---
 
