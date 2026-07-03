@@ -3721,5 +3721,6 @@ void main() {
     pcss: () => pcssEnabled,
     setRenderScale, getRenderScale,
     isMobile: IS_MOBILE,
+    mobileTier: MOBILE_TIER,   // phone NOT opted into GRAPHICS: HIGH → memory-safe caps apply
   };
 })();
