@@ -138,14 +138,20 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //      * [Block 5/5b] wet-road response: lower roughness + grazing Fresnel sheen
   //        (wetness = params1.z ; GLX js/glx.js:519-546, 761-801)
   //      * [Block 6]    lamp-fog glow + low ground-mist  (GLX js/glx.js:864-891)
-  //    STILL DEFERRED: env-cube + analytic sky mirror + rim/AO (Phase 3 probe);
+  //    PHASE 4 (deferred features, this file): PCSS-style shadow penumbra +
+  //    cool shadow tint (params4.x/.y consumed in the shadow block);
+  //      * [Block 7]    env-cube car-paint reflection (carReflect = params4.z ;
+  //        group0 @binding 4/5 env cube+sampler ; mirrors GLX uCarReflect)
+  //      * [Block 8]    wet-road SSR consumption (ssrStrength = params4.w ;
+  //        group0 @binding 6 SSR-result texture from wgsl-post.js)
+  //    STILL DEFERRED: analytic sky mirror + rim/AO (Phase 3 probe);
   //    per-material applyMaterial* bump/tint (brick/glass/metal/wood — the "14
-  //    procedural materials"); full wet-road SSR (folds into the Phase-4 composite).
+  //    procedural materials").
   //
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 224 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 336 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -164,7 +170,8 @@ struct FrameU {
   lightVP    : mat4x4<f32>,   // off 224  sun light-space view-proj (shadow, Phase 3)
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
-};                            // size 320
+  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
+};                            // size 336
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -181,6 +188,17 @@ struct DrawU {
 @group(0) @binding(1) var<storage, read> lights : array<Light, 32>;
 @group(0) @binding(2) var shadowTex  : texture_depth_2d;
 @group(0) @binding(3) var shadowSamp : sampler_comparison;
+// ── Phase-4 deferred bindings (wgx.js binds real resources; placeholders are safe) ──
+//   @binding(4) envCube   : texture_cube<f32>  — environment reflection probe
+//                           (mirrors GLX uCarReflect env-mirror). 1×1 placeholder
+//                           when no probe is captured; carReflect=0 makes it a no-op.
+//   @binding(5) envSamp   : sampler            — filtering sampler for envCube (and SSR).
+//   @binding(6) ssrTex    : texture_2d<f32>    — screen-space-reflection result
+//                           (Phase-4 post pass, wgsl-post.js). 1×1 placeholder is safe;
+//                           ssrStrength=0 or non-up/dry surfaces make it a no-op.
+@group(0) @binding(4) var envCube : texture_cube<f32>;
+@group(0) @binding(5) var envSamp : sampler;
+@group(0) @binding(6) var ssrTex  : texture_2d<f32>;
 @group(1) @binding(0) var<uniform> D : DrawU;
 ${hash}
 ${vnoise}
@@ -332,6 +350,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // then 3×3-PCF compare against the depth map (WebGPU NDC z is already [0,1], so
   // no -1..1 remap). shadowSamp is a comparison sampler — Level variant is legal
   // in non-uniform control flow. shadow = fraction lit (1 = fully lit).
+  //
+  // PHASE 4: PCSS-STYLE PENUMBRA (F.params4.x = pcssPen) widens the PCF sample
+  // radius so contact edges stay crisp while the body softens — a fixed-kernel
+  // approximation of PCSS (no blocker search; pcssPen scales the filter step).
+  // pcssPen=0 keeps the exact Phase-3 1-texel 3×3 kernel (byte-for-byte no-op).
   var shadow = 1.0;
   if (F.params2.x > 0.5) {
     let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
@@ -339,19 +362,25 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && ndc.z <= 1.0) {
       let refD = ndc.z - max(F.params2.w, 0.0);   // SHADOW BIAS knob (params2.w)
-      let texel = F.params2.z;     // 1 / shadowMapSize
+      // PENUMBRA: pcfStep = texel * (1 + pcssPen). pcssPen=0 -> unchanged.
+      let pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0));   // params2.z = 1/shadowMapSize
       var s = 0.0;
       for (var oy = -1; oy <= 1; oy = oy + 1) {
         for (var ox = -1; ox <= 1; ox = ox + 1) {
           s = s + textureSampleCompareLevel(shadowTex, shadowSamp,
-                    suv + vec2<f32>(f32(ox), f32(oy)) * texel, refD);
+                    suv + vec2<f32>(f32(ox), f32(oy)) * pcfStep, refD);
         }
       }
       shadow = mix(1.0, s / 9.0, F.params2.y);   // params2.y = shadow strength
     }
   }
   let litNoL = NoL * keyMul * shadow;
-  var color = albedo * (amb + F.sunColor.xyz * litNoL * (1.0 - metalness));
+  // SHADOW TINT (F.params4.y = shadowTintAmt): push shadowed regions toward a cool
+  // colour (sky-fill bias), applied to the hemisphere ambient so cast shadows read
+  // as cool ambient occlusion. shadowTintAmt=0 -> tintMul is 1 (no-op).
+  let shadowTintAmt = max(F.params4.y, 0.0);
+  let tintMul = mix(vec3<f32>(1.0), vec3<f32>(0.80, 0.88, 1.08), (1.0 - shadow) * shadowTintAmt);
+  var color = albedo * (amb * tintMul + F.sunColor.xyz * litNoL * (1.0 - metalness));
 
   // Cook-Torrance sun specular, soft-clipped so highlights sheen not clip.
   let Dg = D_GGX(NoH, a);
@@ -379,6 +408,21 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color = color + ccCol;
+  }
+
+  // [Block 7] ENV-CUBE car-paint reflection (F.params4.z = carReflect; mirrors GLX
+  // uCarReflect env-mirror). On lacquered surfaces (car-paint or clearcoat) sample
+  // the environment probe cube along the view-reflection vector and add it, weighted
+  // by a grazing Fresnel so the mirror strengthens toward the edges. carReflect=0 or
+  // a 1×1 placeholder cube (no probe captured) makes this a no-op. textureSampleLevel
+  // (explicit LOD) so the cube sample is legal inside this non-uniform branch.
+  let carReflect = max(F.params4.z, 0.0);
+  if (carReflect > 0.001 && (carPaint > 0.001 || clearcoat > 0.001)) {
+    let R = reflect(-V, Ngeo);
+    let envCol = textureSampleLevel(envCube, envSamp, R, 0.0).rgb;
+    let envF = F_Schlick(NoV, f0, clamp(1.0 - rough, 0.0, 1.0));
+    let refl = envCol * envF * carReflect * (1.0 - rough * 0.5);
+    color = color + refl;
   }
 
   // Physically-based punctual lights (floodlights / street lamps) — verbatim
@@ -462,6 +506,20 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let envAdd = envColor * envFresnel * wet * 0.9 * (1.0 - metalness);
     let envM = max(max(envAdd.r, envAdd.g), envAdd.b);
     color = color + envAdd / (1.0 + envM);
+  }
+
+  // [Block 8] SSR consumption (F.params4.w = ssrStrength). On up-facing WET ground
+  // blend in the screen-space-reflection result (computed by the Phase-4 post pass,
+  // wgsl-post.js) scaled by wetness * ssrStrength — a real mirror where puddles pool.
+  // Screen uv comes from the fragment framebuffer position / SSR texture size
+  // (textureDimensions), so it stays aligned without a resolution uniform. Reuses
+  // envSamp (clamped). A 1×1 placeholder or ssrStrength=0 makes this a no-op.
+  let ssrStrength = max(F.params4.w, 0.0);
+  if (wet > 0.001 && ssrStrength > 0.001) {
+    let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
+    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0).rgb;
+    let ssrK = clamp(wet * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
+    color = mix(color, ssr, ssrK);
   }
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
@@ -728,7 +786,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 320,   // FrameU (Phase 3: +lightVP +params2; tune: +params3)
+    FRAME_UNIFORM_BYTES: 336,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

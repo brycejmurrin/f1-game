@@ -266,6 +266,8 @@ const WGX = (function () {
 
     // Shadow-pass objects (Phase 3).
     let shadowTex = null, shadowView = null, shadowSampler = null;
+    let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
+    let _envReady = false, _ssrReady = false; // flip true once real env-cube / SSR resources are bound
     let shadowUBO, shadowModelUBO, shadowG0Layout, shadowG1Layout, shadowModule,
         shadowPipeline, shadowG0BindGroup, shadowModelBindGroup;
     let _shadowRendered = false, _shadowLightVP = null;
@@ -317,6 +319,16 @@ const WGX = (function () {
       shadowView = shadowTex.createView();
       shadowSampler = device.createSampler({ compare: "less", magFilter: "linear", minFilter: "linear" });
 
+      // Placeholder env-cube (1×1×6) + SSR (1×1) so the LIT frame bind group's new
+      // bindings 4/5/6 are always valid; the env probe / SSR pass swap in real
+      // views later. carReflect/ssrStrength stay 0 until then, so these are no-ops.
+      const _envPlace = device.createTexture({ size: [1, 1, 6], dimension: "2d",
+        format: SCENE_FORMAT, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
+      envCubeView = _envPlace.createView({ dimension: "cube" });
+      const _ssrPlace = device.createTexture({ size: [1, 1], format: SCENE_FORMAT,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
+      ssrView = _ssrPlace.createView();
+
       // Explicit bind-group layouts (needed for the dynamic-offset draw UBO).
       g0Layout = device.createBindGroupLayout({
         entries: [
@@ -328,6 +340,12 @@ const WGX = (function () {
             texture: { sampleType: "depth" } },
           { binding: 3, visibility: GPUShaderStage.FRAGMENT,
             sampler: { type: "comparison" } },
+          { binding: 4, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "float", viewDimension: "cube" } },   // env probe
+          { binding: 5, visibility: GPUShaderStage.FRAGMENT,
+            sampler: { type: "filtering" } },                            // env/SSR sampler
+          { binding: 6, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "float" } },                          // SSR result
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -355,6 +373,9 @@ const WGX = (function () {
           { binding: 1, resource: { buffer: lightSBO } },
           { binding: 2, resource: shadowView },
           { binding: 3, resource: shadowSampler },
+          { binding: 4, resource: envCubeView },
+          { binding: 5, resource: linearSampler },
+          { binding: 6, resource: ssrView },
         ],
       });
       drawBindGroup = device.createBindGroup({
@@ -938,6 +959,13 @@ const WGX = (function () {
       d[77] = (T && T.fogTint     != null) ? T.fogTint     : 0.0;   // FOG TINT (-1..1)
       d[78] = (T && T.mistDensity != null) ? T.mistDensity : 0.0;   // GROUND MIST amount
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
+      // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
+      // carReflect/ssrStrength are forced 0 until the env-probe / SSR passes bind
+      // real resources (the frame group holds 1×1 placeholders for now).
+      d[80] = (T && T.pcssPen != null) ? T.pcssPen : 0.30;
+      d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
+      d[82] = _envReady ? ((T && T.carReflect != null) ? T.carReflect : 0.0) : 0.0;
+      d[83] = _ssrReady ? ((T && T.ssrStrength != null) ? T.ssrStrength : 0.0) : 0.0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1236,6 +1264,11 @@ const WGX = (function () {
         s[19] = grade && grade.str != null ? grade.str : 0;                              // gradeShadow (w=str)
         s[20] = ghi[0]; s[21] = ghi[1]; s[22] = ghi[2]; s[23] = 0;                        // gradeHi
         s[24] = 1 / width; s[25] = 1 / height; s[26] = 0; s[27] = 0;                      // texel
+        // imgFx (off 112): chromatic aberration, sharpen, speed-blur (all 0 = no-op).
+        s[28] = (T && T.chromAb != null) ? T.chromAb : 0.0;
+        s[29] = (T && T.sharpen != null) ? T.sharpen : 0.0;
+        s[30] = (o.speedBlur != null) ? o.speedBlur : ((T && T.speedBlur != null) ? T.speedBlur : 0.0);
+        s[31] = 0;
         device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
