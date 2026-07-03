@@ -92,6 +92,246 @@ fn fsTriNDC(vi: u32) -> vec2<f32> {
   return vec2<f32>(x, y) * 2.0 - vec2<f32>(1.0);
 }`;
 
+  // ── brdf: the Cook-Torrance GGX trio shared by the Lit sun + point lights.
+  //    Verbatim port of GLX's D_GGX / V_SmithGGX / F_Schlick (js/glx.js:107-125),
+  //    the single-source math leaf the migration plan names (§2a). Any future
+  //    edit to the microfacet model happens here, mirrored into the GLSL leaf.
+  const brdf = `
+const PI : f32 = 3.14159265359;
+fn D_GGX(NoH: f32, a: f32) -> f32 {
+  let a2 = a * a;
+  let d = (NoH * NoH) * (a2 - 1.0) + 1.0;
+  return a2 / max(PI * d * d, 1e-6);
+}
+// Height-correlated Smith visibility (folds in the 1/(4 NoL NoV) denominator).
+fn V_SmithGGX(NoV: f32, NoL: f32, a: f32) -> f32 {
+  let a2 = a * a;
+  let gv = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
+  let gl = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+  return 0.5 / max(gv + gl, 1e-5);
+}
+// Roughness-aware Schlick (f90 = 1-roughness, Frostbite grazing cap).
+fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
+  let v = 1.0 - VoH; let v2 = v * v;
+  return f0 + (vec3<f32>(f90) - f0) * (v2 * v2 * v);
+}`;
+
+  // ── LIT: a FAITHFUL-BUT-REDUCED WGSL port of GLX's Lit program
+  //    (LIT_VS js/glx.js:9, LIT_FS js/glx.js:39-896). It renders the BASE PBR
+  //    that carries the scene read: hemisphere ambient + Lambert sun diffuse +
+  //    Cook-Torrance sun specular (soft-clipped), the 32 aimed point lights
+  //    (windowed 1/d² falloff + spot cone + diffuse + GGX spec), emissive HDR
+  //    glow, and height fog with sun in-scatter.
+  //
+  //    DEFERRED (clearly-marked TODOs, later phases — each an isolated block in
+  //    GLX main() that this port drops):
+  //      * shadow map / cloud shadow  (Phase 3 — needs the depth pass + compare sampler)
+  //      * env-cube + analytic sky mirror + rim/AO  (Phase 3)
+  //      * wet-road / puddle model  (Phase 4 — folds into the SSR composite)
+  //      * per-material procedural bump + albedo (applyMaterial*), ground detail
+  //        micro-normal, car-paint orange-peel, clearcoat 2nd lobe, sparkle
+  //        (Phase 4 — the "14 procedural materials" half of LIT_FS)
+  //      * lamp-fog / ground-mist volumetrics  (Phase 4)
+  //    The material scalars for those (detail, clearcoat, carPaint, sparkle,
+  //    wetness) still arrive in the uniform blocks so no re-plumbing is needed
+  //    when the blocks land; they are simply not consumed yet.
+  //
+  //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
+  //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
+  //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
+  //      FrameU  : 224 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
+  //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
+  const LIT = `
+struct FrameU {
+  viewProj   : mat4x4<f32>,   // off   0
+  eye        : vec4<f32>,     // off  64  (xyz eye)
+  sunDir     : vec4<f32>,     // off  80
+  sunColor   : vec4<f32>,     // off  96
+  ambSky     : vec4<f32>,     // off 112
+  ambGround  : vec4<f32>,     // off 128
+  skyZenith  : vec4<f32>,     // off 144
+  skyHorizon : vec4<f32>,     // off 160
+  fogColor   : vec4<f32>,     // off 176
+  params0    : vec4<f32>,     // off 192  (fogDensity, fogHeight, time, numLights)
+  params1    : vec4<f32>,     // off 208  (keyMul, glowAmp, wetness, cloud)
+};                            // size 224
+struct Light {
+  posRad   : vec4<f32>,       // xyz pos, w radius
+  colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
+  dirVol   : vec4<f32>,       // xyz beam aim, w volW (godray — unused here)
+  cone     : vec4<f32>,       // x cosInner, y cosOuter, z glareW (unused), w pad
+};                            // size 64
+struct DrawU {
+  model : mat4x4<f32>,        // off  0
+  mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
+  mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
+  mat2  : vec4<f32>,          // off 96  (sparkle, _, _, _)
+};                            // size 112
+@group(0) @binding(0) var<uniform> F : FrameU;
+@group(0) @binding(1) var<storage, read> lights : array<Light, 32>;
+@group(1) @binding(0) var<uniform> D : DrawU;
+${brdf}
+
+struct VSOut {
+  @builtin(position) clip  : vec4<f32>,
+  @location(0)       nrm   : vec3<f32>,
+  @location(1)       col   : vec3<f32>,
+  @location(2)       wpos  : vec3<f32>,
+  @location(3)       dist  : f32,
+  @location(4) @interpolate(flat) matId : f32,
+};
+
+@vertex
+fn vs_main(
+  @location(0) aPos : vec3<f32>,
+  @location(1) aNrm : vec3<f32>,
+  @location(2) aCol : vec3<f32>,
+  @location(3) aMat : f32,
+) -> VSOut {
+  var o : VSOut;
+  let wp = D.model * vec4<f32>(aPos, 1.0);
+  // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
+  let nm = mat3x3<f32>(D.model[0].xyz, D.model[1].xyz, D.model[2].xyz);
+  o.nrm  = nm * aNrm;
+  o.col  = aCol;
+  o.wpos = wp.xyz;
+  o.dist = length(wp.xyz - F.eye.xyz);
+  o.matId = aMat;               // flat — procedural material key (Phase 4)
+  o.clip = F.viewProj * wp;
+  return o;
+}
+
+@fragment
+fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f32> {
+  var N = normalize(in.nrm);
+  // Two-sided lighting: flip N to face the viewer on back faces (double-sided
+  // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/glx.js:404).
+  if (!ff) { N = -N; }
+  let V = normalize(F.eye.xyz - in.wpos);
+  let L = F.sunDir.xyz;
+  let H = normalize(L + V + vec3<f32>(1e-5));   // +eps: normalize(0) NaNs at V==-L
+  let NoL = max(dot(N, L), 0.0);
+  let NoV = max(dot(N, V), 1e-4);
+  let NoH = max(dot(N, H), 0.0);
+  let VoH = max(dot(V, H), 0.0);
+
+  let albedo    = in.col;
+  let emissive  = D.mat0.x;
+  let alpha     = D.mat0.y;
+  let metalness = D.mat0.w;
+  let specular  = D.mat1.x;
+  let rough     = clamp(D.mat0.z, 0.04, 1.0);
+  let a  = rough * rough;
+  let f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
+  let keyMul = F.params1.x;
+
+  // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
+  let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
+  let litNoL = NoL * keyMul;   // TODO(Phase 3): * shadow * (1 - cloudShadow)
+  var color = albedo * (amb + F.sunColor.xyz * litNoL * (1.0 - metalness));
+
+  // Cook-Torrance sun specular, soft-clipped so highlights sheen not clip.
+  let Dg = D_GGX(NoH, a);
+  let Vg = V_SmithGGX(NoV, NoL, a);
+  let Fg = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
+  var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * litNoL;
+  specCol = specCol / (1.0 + specCol);
+  color = color + specCol;
+
+  // Physically-based punctual lights (floodlights / street lamps) — verbatim
+  // math from GLX LIT_FS (js/glx.js:579-647): windowed 1/d² falloff, aimed spot
+  // cone, diffuse pool + GGX spec. No per-light shadows (cost); the cone shapes
+  // the light. (Bounce-fill + per-lamp clearcoat glint deferred to Phase 4.)
+  let nL = i32(F.params0.w);
+  for (var i = 0; i < nL; i = i + 1) {
+    let LP = lights[i].posRad.xyz - in.wpos;
+    let dist = length(LP);
+    let rad = lights[i].posRad.w;
+    if (dist > rad) { continue; }
+    let Ld = LP / max(dist, 1e-3);
+    let dn = dist / rad;
+    let win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);
+    let distC = max(dist, 4.0);
+    let att = (win * win) / (distC * distC + 1.0);
+    if (att < 1e-6) { continue; }
+    let lcol  = lights[i].colBleed.xyz;
+    let bleed = lights[i].colBleed.w;
+    let cd = dot(-Ld, lights[i].dirVol.xyz);
+    let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
+    let spotD = mix(bleed, 1.0, beam);
+    let NoLl = max(dot(N, Ld), 0.0);
+    color = color + albedo * lcol * (att * spotD) * NoLl * (1.0 - metalness);
+    // GGX specular from the lamp (same microfacet BRDF as the sun).
+    let Hl = normalize(Ld + V);
+    let NoHl = max(dot(N, Hl), 0.0);
+    let VoHl = max(dot(V, Hl), 0.0);
+    let Dl = D_GGX(NoHl, a);
+    let Vl = V_SmithGGX(NoV, NoLl, a);
+    let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+    let radianceS = lcol * att;   // spotS floor (wet/dry) deferred with the wet model
+    var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+    lspec = lspec / (1.0 + lspec);
+    color = color + lspec;
+  }
+
+  // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
+  // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/glx.js:826-839).
+  if (emissive > 0.0) {
+    color = mix(color, albedo, emissive);
+    let bright = max(albedo.r, max(albedo.g, albedo.b));
+    let glow = smoothstep(0.50, 0.95, bright) * emissive;
+    color = color + albedo * glow * F.params1.y;   // params1.y = uGlowAmp
+  }
+
+  // Height-based fog + sun in-scatter (GLX LIT_FS js/glx.js:841-877; lamp-fog /
+  // ground-mist volumetrics deferred to Phase 4).
+  let fogDensity = F.params0.x;
+  let fogHeight  = F.params0.y;
+  var heightAtten = 1.0;
+  if (fogHeight > 0.0) {
+    heightAtten = exp(-max(in.wpos.y - F.eye.y, 0.0) * fogHeight);
+  }
+  let fd = in.dist * fogDensity * heightAtten;
+  let fAmt = 1.0 - exp(-fd * fd);
+  let rd = normalize(in.wpos - F.eye.xyz);
+  let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
+  var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
+  fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * 0.6;
+  color = mix(color, fogCol, fAmt);
+
+  return vec4<f32>(color, alpha);
+}`;
+
+  // ── BLIT: the present() resolve. Samples the RGBA16F scene target, applies
+  //    exposure + the shared ACES tonemap leaf, writes the LDR swapchain. A
+  //    stand-in for the full Phase-4 post chain (bloom/SSAO/godray/SSR/grade/
+  //    flare/FXAA). Fullscreen triangle; uv flips Y into texture space.
+  const BLIT = `
+struct BlitU { params : vec4<f32> };   // x = exposure
+@group(0) @binding(0) var srcTex  : texture_2d<f32>;
+@group(0) @binding(1) var srcSamp : sampler;
+@group(0) @binding(2) var<uniform> B : BlitU;
+${fullscreenTri}
+${tonemap}
+struct VOut {
+  @builtin(position) pos : vec4<f32>,
+  @location(0)       uv  : vec2<f32>,
+};
+@vertex
+fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
+  var o : VOut;
+  let p = fsTriNDC(vi);
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>((p.x + 1.0) * 0.5, (1.0 - p.y) * 0.5);
+  return o;
+}
+@fragment
+fn fs_main(in : VOut) -> @location(0) vec4<f32> {
+  let hdr = textureSampleLevel(srcTex, srcSamp, in.uv, 0.0).rgb * B.params.x;
+  return vec4<f32>(acesTonemap(hdr), 1.0);
+}`;
+
   // ── SKY: the first real WGSL shader. A *reduced but faithful* port of SKY_FS
   //    (js/glx.js:901) — gradient (zenith/horizon), golden-hour horizon warmth,
   //    a basic procedural cloud layer, Mie sun corona + disc, stars, moon, and
@@ -246,10 +486,20 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     vnoise,
     tonemap,
     fullscreenTri,
-    // first real shader, pre-composed from the leaves above
+    brdf,
+    // real shaders, pre-composed from the leaves above
     SKY,
+    LIT,
+    BLIT,
     // byte size of the SkyU uniform block (mat4 64 + 7*vec4 112 = 176)
     SKY_UNIFORM_BYTES: 176,
+    // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
+    // writers in wgx.js MUST agree with these).
+    FRAME_UNIFORM_BYTES: 224,   // FrameU
+    LIGHT_STRIDE_BYTES: 64,     // one Light
+    MAX_LIGHTS: 32,
+    DRAW_UNIFORM_BYTES: 112,    // DrawU used bytes (dynamic-offset stride is 256)
+    BLIT_UNIFORM_BYTES: 16,     // BlitU
   };
 })();
 
