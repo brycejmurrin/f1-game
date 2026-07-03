@@ -110,7 +110,9 @@ function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
+  if (teamMeshes.custom && GLX.freeMesh) GLX.freeMesh(teamMeshes.custom);   // free the old GPU buffers first
   delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
+  if (playerBodies.custom && GLX.freeMesh) GLX.freeMesh(playerBodies.custom);
   delete playerBodies.custom; // and the body-only (animated-wheel) variant
 }
 function hexToRgb(h) {
@@ -1250,8 +1252,8 @@ async function loadCarModel(url) {
     const buf = await res.arrayBuffer();
     GLTF.toMesh(buf, { scale: CAR_MODEL_SCALE });   // validate before adopting
     carModelBuf = buf;
-    for (const k in teamMeshes) delete teamMeshes[k];  // force rebuild from model
-    for (const k in playerBodies) delete playerBodies[k];
+    for (const k in teamMeshes) { if (GLX.freeMesh) GLX.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
+    for (const k in playerBodies) { if (GLX.freeMesh) GLX.freeMesh(playerBodies[k]); delete playerBodies[k]; }
     return true;
   } catch (e) { return false; }
 }
@@ -3943,6 +3945,13 @@ function render(dt) {
   frame.sunViewDir = _sunVS;
   frame.upViewDir = _upVS;
   frame.eye = camEye;
+  // Mobile free-cam draw-distance cap: the far plane is the chunked scenery's ONLY
+  // distance cull, so an altitude/wide vantage with the pushed-out photo-mode far
+  // plane can frame an entire street circuit's ~5 M-vert city in one frame and
+  // jetsam-kill the tab. Cap the RADIAL draw distance on mobile (fog hides the
+  // edge) so the chunk count stays bounded no matter how high or wide the free
+  // camera flies. 0 = disabled (normal play + desktop keep the full vista).
+  frame.cullDist = (dbgCam && GLX.isMobile) ? 700 : 0;
 
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre to a 10 m grid so the shadow map only re-renders
@@ -4137,7 +4146,11 @@ function render(dt) {
   // samples it for REAL reflections of the surroundings — trees, buildings,
   // track, sky — including everything behind the camera that SSR can't see.
   // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
-  if (player && !_envProbeOff && !paused && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Skip it under a free/debug camera (dbgCam): the probe re-draws the whole world
+  // a second time each frame and is anchored to the player car, which isn't the
+  // subject while flying the lighting-tuner free camera — dropping it here removes
+  // the biggest per-frame load multiplier during the exact mode that OOM-crashes.
+  if (player && !_envProbeOff && !paused && !dbgCam && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,

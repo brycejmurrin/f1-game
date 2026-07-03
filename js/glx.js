@@ -2075,6 +2075,7 @@ void main() {}`;
   let frameViewProj = null;
   let frameSunDir = null;
   let frameEye = null;
+  let frameCullDist = 0;   // >0: radial draw-distance cap for chunked scenery (mobile free-cam) — bounds chunk count when the far plane is pushed out
   let frameLights = null;
   let frameGroundMist = 0;
   const _grPos = new Float32Array(36), _grCol = new Float32Array(36),
@@ -2826,6 +2827,7 @@ void main() {
     frameSunDir = frame.sunDir;
     frameSunColor = frame.sunColor;
     frameEye = frame.eye;
+    frameCullDist = frame.cullDist || 0;
     frameInvProj = frame.invProj || null;
     frameInvVP = frame.invViewProj || null;
     frameProj = frame.proj || null;
@@ -3047,6 +3049,13 @@ void main() {
     }
     return true;
   }
+  // Squared distance from point (ex,ey,ez) to the nearest point on an AABB.
+  function _aabbDist2(mn, mx, ex, ey, ez) {
+    const dx = ex < mn[0] ? mn[0] - ex : ex > mx[0] ? ex - mx[0] : 0;
+    const dy = ey < mn[1] ? mn[1] - ey : ey > mx[1] ? ey - mx[1] : 0;
+    const dz = ez < mn[2] ? mn[2] - ez : ez > mx[2] ? ez - mx[2] : 0;
+    return dx * dx + dy * dy + dz * dz;
+  }
 
   // Build a chunked mesh: ONE shared VBO/VAO + one index buffer per spatial XZ
   // cell (cellSize metres), each with an AABB over the verts it references. Index
@@ -3144,9 +3153,16 @@ void main() {
     if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
     _extractPlanes(frameViewProj, _fcPlanes);
     const chunks = mesh.chunks;
+    // Radial draw-distance cap: the frustum's far plane is the only distance cull,
+    // so when it's pushed out (free camera) a high/wide vantage admits the whole
+    // ~5 M-vert city at once — a mobile-tiler OOM. When frameCullDist is set, also
+    // skip any chunk whose nearest point is beyond it (fog hides the edge).
+    const cd = frameCullDist, cd2 = cd * cd,
+          ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
     for (let i = 0; i < chunks.length; i++) {
       const ch = chunks[i];
       if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
+      if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ibo);
       gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, 0);
     }
