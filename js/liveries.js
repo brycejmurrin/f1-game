@@ -5,7 +5,13 @@
    accent?:[r,g,b] optional TERTIARY paint colour — a distinct third colour used to
      pick out secondary accent parts (sidepod flash, halo trim, nose flash,
      engine-cover pinstripe) SEPARATELY from the main accent c2. When absent the
-     car falls back to c2 for those parts, so it is fully optional and additive. }.
+     car falls back to c2 for those parts, so it is fully optional and additive.
+   nose?:[r,g,b] optional painted NOSE-TIP cap — a distinct-colour nose cone.
+   pod?:[r,g,b]  optional bold SIDEPOD panel — the two-tone sidepod look.
+   wing?:[r,g,b] optional FRONT+REAR WING flap colour (defaults to c2 = today's look).
+   halo?:[r,g,b] optional cockpit-HALO hoop tint (defaults to brushed titanium).
+     All four are additive and fully optional — a livery without them renders
+     exactly as before. }.
    UNIVERSAL apply to every team; BY_TEAM are team-specific specials. A team's own
    colours are the synthesized "default" livery. Consumed by game.js
    (resolveLivery + the LIVERY tab in car setup). Colours are [r,g,b] 0..1. */
@@ -35,6 +41,15 @@ const Liveries = (function () {
     { id: "tricircuit", name: "Tri-Circuit", c1: [0.06, 0.07, 0.10], c2: [0.0, 0.72, 0.86], stripe: [0.98, 0.96, 0.94], accent: [1.0, 0.42, 0.08] },
     { id: "prism",      name: "Prism",       c1: [0.10, 0.06, 0.20], c2: [0.95, 0.20, 0.55], stripe: [0.20, 0.80, 0.95], accent: [1.0, 0.86, 0.20] },
     { id: "tricolora",  name: "Tricolora",   c1: [0.95, 0.96, 0.98], c2: [0.90, 0.10, 0.14], stripe: [0.06, 0.55, 0.30], accent: [0.10, 0.30, 0.80] },
+    // Detail showcases — exercise the optional nose / pod / wing / halo fields.
+    { id: "apexworks", name: "Apex Works",  c1: [0.05, 0.06, 0.09], c2: [0.98, 0.62, 0.02], stripe: [1.0, 0.72, 0.10], accent: [0.0, 0.66, 0.90],
+      nose: [0.98, 0.62, 0.02], pod: [0.0, 0.66, 0.90], wing: [0.98, 0.62, 0.02], halo: [0.90, 0.78, 0.30] },
+    { id: "duotone",   name: "Duo-Tone",    c1: [0.90, 0.92, 0.95], c2: [0.06, 0.20, 0.55], stripe: [0.90, 0.14, 0.18], accent: [0.90, 0.14, 0.18],
+      nose: [0.06, 0.20, 0.55], pod: [0.90, 0.14, 0.18], wing: [0.06, 0.20, 0.55] },
+    { id: "neonpod",   name: "Neon Pod",    c1: [0.05, 0.05, 0.07], c2: [0.10, 0.90, 0.55], stripe: [0.12, 1.0, 0.60], accent: [0.95, 0.20, 0.60],
+      pod: [0.95, 0.20, 0.60], wing: [0.10, 0.90, 0.55], halo: [0.10, 0.90, 0.55] },
+    { id: "goldcrest", name: "Gold Crest",  c1: [0.04, 0.05, 0.08], c2: [0.85, 0.68, 0.28], stripe: [0.96, 0.86, 0.48], accent: [0.96, 0.86, 0.48],
+      nose: [0.85, 0.68, 0.28], halo: [0.85, 0.68, 0.28], wing: [0.85, 0.68, 0.28] },
   ];
   // Per-team heritage / concept schemes.
   const BY_TEAM = {
@@ -51,6 +66,8 @@ const Liveries = (function () {
       { id: "fer_matte",   name: "Matte Nero",   c1: [0.06, 0.06, 0.07], c2: [0.86, 0.0, 0.0], accent: [0.90, 0.78, 0.10] },
       { id: "fer_giallo",  name: "Giallo Modena", c1: [0.97, 0.80, 0.0], c2: [0.86, 0.0, 0.0], stripe: [0.90, 0.0, 0.0], accent: [0.06, 0.06, 0.08] },
       { id: "fer_scud",    name: "Scuderia",     c1: [0.78, 0.0, 0.0],   c2: [0.05, 0.05, 0.06], stripe: [0.97, 0.83, 0.0], accent: [0.95, 0.95, 0.97] },
+      { id: "fer_evo",     name: "Rosso Evo",    c1: [0.86, 0.0, 0.0],   c2: [0.05, 0.05, 0.06], accent: [0.97, 0.83, 0.0],
+        nose: [0.05, 0.05, 0.06], pod: [0.97, 0.83, 0.0], wing: [0.05, 0.05, 0.06], halo: [0.86, 0.0, 0.0] },
     ],
     mclaren: [
       { id: "mcl_papaya",  name: "Papaya",        c1: [1.0, 0.50, 0.0],  c2: [0.10, 0.11, 0.13], stripe: [0.05, 0.05, 0.06], accent: [0.0, 0.62, 0.86] },
@@ -58,6 +75,8 @@ const Liveries = (function () {
       { id: "mcl_chrome",  name: "Chrome Papaya", c1: [0.80, 0.82, 0.86], c2: [1.0, 0.50, 0.0], accent: [0.10, 0.11, 0.13] },
       { id: "mcl_rocket",  name: "Rocket Red",    c1: [0.90, 0.06, 0.05], c2: [1.0, 0.50, 0.0], stripe: [0.10, 0.10, 0.12], accent: [0.98, 0.90, 0.30] },
       { id: "mcl_gulf",    name: "Gulf",          c1: [0.42, 0.74, 0.88], c2: [0.98, 0.45, 0.02], stripe: [1.0, 0.50, 0.05], accent: [0.06, 0.16, 0.34] },
+      { id: "mcl_works",   name: "Papaya Works",  c1: [1.0, 0.50, 0.0],   c2: [0.10, 0.11, 0.13], accent: [0.0, 0.62, 0.86],
+        nose: [0.10, 0.11, 0.13], pod: [0.0, 0.62, 0.86], wing: [0.10, 0.11, 0.13], halo: [0.10, 0.11, 0.13] },
     ],
     redbull: [
       { id: "rb_matte",  name: "Matte Navy",  c1: [0.06, 0.10, 0.22], c2: [0.95, 0.78, 0.0], stripe: [0.82, 0.10, 0.14], accent: [0.90, 0.92, 0.95] },

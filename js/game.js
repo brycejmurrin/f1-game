@@ -617,12 +617,16 @@ const _livResolveCache = new Map();
 function resolveLivery(team) {
   if (livDraftOverride && livDraftOverride.teamId === team.id) {
     const l = livDraftOverride.liv;
-    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null };
+    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
+             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
   const liv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
-  const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null }
+  // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
+  // — additive, so an unmodified livery still resolves to today's exact object shape.
+  const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
+                      nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null }
                   : { c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -1251,9 +1255,10 @@ function getPlayerWheelMeshes() {
     const bs = Car3D.BRAKE_STYLE && Car3D.BRAKE_STYLE[playerBrakeId];
     const caliper = bs ? bs.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
     const rim = bs && bs.rim;
+    const grooved = playerTyreId === "intermediate";
     m = wheelMeshCache[key] = {
-      F: gfx.createMesh(Car3D.buildWheel(0.32, band, caliper, rim)),
-      R: gfx.createMesh(Car3D.buildWheel(0.38, band, caliper, rim)),
+      F: gfx.createMesh(Car3D.buildWheel(0.32, band, caliper, rim, grooved)),
+      R: gfx.createMesh(Car3D.buildWheel(0.38, band, caliper, rim, grooved)),
     };
   }
   return m;
