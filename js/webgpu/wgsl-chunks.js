@@ -162,8 +162,9 @@ struct FrameU {
   params0    : vec4<f32>,     // off 192  (fogDensity, fogHeight, time, numLights)
   params1    : vec4<f32>,     // off 208  (keyMul, glowAmp, wetness, cloud)
   lightVP    : mat4x4<f32>,   // off 224  sun light-space view-proj (shadow, Phase 3)
-  params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, _)
-};                            // size 304
+  params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
+  params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
+};                            // size 320
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -325,7 +326,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let a = rough * rough;
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
-  let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
+  // BOUNCE knob (params3.x) scales the ground-fill contribution (default 1).
+  let amb = mix(F.ambGround.xyz * F.params3.x, F.ambSky.xyz, N.y * 0.5 + 0.5);
   // Sun shadow (Phase 3): project the world pos into the sun's light-space clip,
   // then 3×3-PCF compare against the depth map (WebGPU NDC z is already [0,1], so
   // no -1..1 remap). shadowSamp is a comparison sampler — Level variant is legal
@@ -336,7 +338,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let ndc = sc.xyz / sc.w;
     let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && ndc.z <= 1.0) {
-      let refD = ndc.z - 0.0015;   // constant depth bias vs surface acne
+      let refD = ndc.z - max(F.params2.w, 0.0);   // SHADOW BIAS knob (params2.w)
       let texel = F.params2.z;     // 1 / shadowMapSize
       var s = 0.0;
       for (var oy = -1; oy <= 1; oy = oy + 1) {
@@ -485,6 +487,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
   var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
   fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * 0.6;
+  // FOG TINT knob (params3.y, -1..1): warm (+) or cool (-) the distance haze.
+  let fTint = F.params3.y;
+  fogCol = fogCol * vec3<f32>(1.0 + fTint * 0.16, 1.0 - abs(fTint) * 0.02, 1.0 - fTint * 0.16);
   // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
   // glows around the lamps at night (mirrors GLX LIT_FS js/glx.js:864-877, reduced:
   // fixed soft-clip, no uLampFog knob). lampFog is 0 with no lamps, so it is a no-op
@@ -498,14 +503,19 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // GLX LIT_FS js/glx.js:878-891, reduced). GLX gates on a uGroundMist uniform we
   // cannot add (no new uniform fields), so we reuse fogDensity as the proxy gate and
   // keep the amount small — subtle, and a no-op in clear air (fogDensity ~ 0).
-  if (fogDensity > 0.0) {
+  // GROUND MIST knob (params3.z) sets the amount, MIST HEIGHT (params3.w) the
+  // vertical falloff. Falls back to a faint fogDensity-driven haze so misty
+  // weather still reads when the knob is 0.
+  let mistK = max(F.params3.z, fogDensity * 0.5);
+  if (mistK > 0.0) {
+    let mh = max(F.params3.w, 0.05);
     let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
-    let band = exp(-lowH * 0.30);
+    let band = exp(-lowH / (mh * 20.0));
     let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
     let dRamp = clamp((in.dist - 8.0) / 45.0, 0.0, 1.0);
-    let mistAmt = fogDensity * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp * 0.5;
+    let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp * 0.5;
     let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * 1.5;
-    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.30));
+    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.35));
   }
 
   return vec4<f32>(color, alpha);
@@ -718,7 +728,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 304,   // FrameU (Phase 3: +lightVP mat4 +params2 vec4)
+    FRAME_UNIFORM_BYTES: 320,   // FrameU (Phase 3: +lightVP +params2; tune: +params3)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

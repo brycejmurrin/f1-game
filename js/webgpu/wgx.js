@@ -930,9 +930,14 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      d[73] = 1.0;                // shadow strength
+      d[73] = (T && T.shadowStr != null) ? T.shadowStr : 1.0;       // SHADOW STRENGTH knob
       d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
-      d[75] = 0;
+      d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.0015;  // SHADOW BIAS knob
+      // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
+      d[76] = (T && T.bounceK     != null) ? T.bounceK     : 1.0;   // BOUNCE (ambient ground-fill)
+      d[77] = (T && T.fogTint     != null) ? T.fogTint     : 0.0;   // FOG TINT (-1..1)
+      d[78] = (T && T.mistDensity != null) ? T.mistDensity : 0.0;   // GROUND MIST amount
+      d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
