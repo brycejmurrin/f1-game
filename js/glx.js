@@ -1674,6 +1674,7 @@ uniform vec3 uReflSkyLo;     // zenith sky-glow
 uniform float uSsrThick;     // wet-road SSR depth thickness gate (def 0.20)
 uniform float uChromAb;      // chromatic aberration toward frame edges (def 0)
 uniform float uGrain;        // per-pixel film grain amount (def 0)
+uniform float uGrainTime;    // seconds — animates the grain so it isn't a frozen speckle
 uniform float uSharpen;      // unsharp-mask crispness (def 0)
 uniform float uBlackLift;    // raised black floor (def 0.005)
 uniform float uWhitePoint;   // highlight roll-off knee (def 1.0)
@@ -1931,7 +1932,11 @@ void main() {
   // already-bright pixels (reduce bloom addition proportionally in highlights).
   vec3 bloomSample = texture(uBloom, vUV).rgb;
   float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
-  c += bloomSample * uBloomAmt * bloomMask;
+  // Scale by uExposure to match the scene: the bright-pass samples the RAW
+  // pre-exposure HDR target, but the scene above is already multiplied by
+  // uExposure. Without this, a driven exposure (0.86–0.90 at night) dimmed the
+  // scene while the halos kept full pre-exposure energy — over-strong bloom.
+  c += bloomSample * uBloomAmt * bloomMask * uExposure;
 
   // Sun shafts / god-rays: radial samples from current pixel toward the sun's
   // screen position, reading the bright-pass (bloom[0] after bright-pass step).
@@ -1973,7 +1978,15 @@ void main() {
 
   // Lens flare: anamorphic streak + ghost circles
   vec3 flare = vec3(0.0);
-  if (uFlareStr > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 &&
+  // OCCLUSION: the streaks + ghosts below are PURELY procedural (screen position
+  // vs sun UV) with no scene sampling, so without this they bleed straight
+  // through a grandstand/building/hill the sun sits behind. Scene depth is 1.0
+  // (far) on open sky and < 1.0 wherever geometry covers the sun's screen point,
+  // so sample it at uSunUV and fade the flare when the sun is hidden. (The
+  // god-ray shaft above self-occludes: it samples the dark-behind-geometry
+  // bright-pass.) uDepth is bound to the scene depth every frame (SSR inputs).
+  float sunVis = smoothstep(0.9990, 0.9999, texture(uDepth, uSunUV).r);
+  if (uFlareStr > 0.0 && sunVis > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 &&
       uSunUV.y >= 0.0 && uSunUV.y <= 1.0) {
     // Anamorphic horizontal streak — warm and wide, the iconic "sun bleeding
     // across the frame" golden-hour cue (uFlareStr peaks when the sun is low).
@@ -2003,13 +2016,22 @@ void main() {
     // Soft-clip (was a hard clamp to 1.2 — a flat ceiling still let a wide,
     // near-uniform band sit at 1.2 across the whole streak). Compressing keeps
     // the hot core near the sun bright while taming the wash further out.
-    flare *= uFlareStr;
+    flare *= uFlareStr * sunVis;
     flare = flare / (1.0 + flare * 0.6);
   }
   c += flare;
 
+  // Vignette — aspect-corrected so the darkening is circular in SCREEN space,
+  // not an ellipse. The old length(vUV-0.5) treated one UV unit of width like
+  // one of height, so on the wide race viewport (~2.16:1) it over-darkened the
+  // top/bottom into horizontal bands. Scale x by aspect (from uReflTexel =
+  // 1/width,1/height) then renormalise so the frame CORNER still maps to the
+  // same 0.707 radius the tuned thresholds expect (identity at 1:1).
   vec2 q = vUV - 0.5;
-  float vig = smoothstep(0.95, 0.35, length(q));
+  float vAspect = uReflTexel.x > 0.0 ? uReflTexel.y / uReflTexel.x : 1.0;   // width/height
+  q.x *= vAspect;
+  float vr = length(q) * 0.70710678 / length(vec2(0.5 * vAspect, 0.5));
+  float vig = smoothstep(0.95, 0.35, vr);
   c *= mix(uVignette, 1.0, vig);
 
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to
@@ -2022,7 +2044,11 @@ void main() {
   // FILM GRAIN: luminance-weighted per-pixel noise (mid-tones grain most, blacks
   // and clipped whites least — where real sensor grain lives). 0 = off.
   if (uGrain > 0.001) {
-    float gn = fract(sin(dot(vUV, vec2(93.9898, 47.233))) * 61237.312) - 0.5;
+    // Per-frame animated: without a time term the "grain" is welded to the
+    // panel — a frozen dirty-lens speckle, not moving sensor noise. Offset the
+    // sample point by a time-varying jitter so each frame re-randomises.
+    vec2 gUV = vUV + vec2(fract(uGrainTime * 1.37), fract(uGrainTime * 0.61)) * 3.17;
+    float gn = fract(sin(dot(gUV, vec2(93.9898, 47.233))) * 61237.312) - 0.5;
     float gLuma = dot(c, vec3(0.299, 0.587, 0.114));
     c += gn * uGrain * (1.0 - abs(gLuma - 0.5) * 1.4);
   }
@@ -2287,7 +2313,7 @@ void main() {}`;
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -3695,6 +3721,7 @@ void main() {
     // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).
     gl.uniform1f(compU.uChromAb,    CT && CT.chromAb    != null ? CT.chromAb    : 0.0);
     gl.uniform1f(compU.uGrain,      CT && CT.grain      != null ? CT.grain      : 0.0);
+    gl.uniform1f(compU.uGrainTime,  frameTime);
     gl.uniform1f(compU.uSharpen,    CT && CT.sharpen    != null ? CT.sharpen    : 0.0);
     gl.uniform1f(compU.uBlackLift,  CT && CT.blackLift  != null ? CT.blackLift  : 0.005);
     gl.uniform1f(compU.uWhitePoint, CT && CT.whitePoint != null ? CT.whitePoint : 1.0);
