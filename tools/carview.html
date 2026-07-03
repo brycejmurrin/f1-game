@@ -70,7 +70,7 @@
   // reflection (det −1), and the decal UVs are authored for that handedness, so
   // we must match it here or the sponsor/number text would read mirrored.
   const REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  const CENTER = [0, 0.45, 0];
+  const CENTER = [0, 0.45, 0];   // orbit look-target; `look` param shifts it in z (−rear / +nose)
 
   // ---- URL params ----
   const Q = new URLSearchParams(location.search);
