@@ -123,18 +123,24 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    (windowed 1/d² falloff + spot cone + diffuse + GGX spec), emissive HDR
   //    glow, and height fog with sun in-scatter.
   //
-  //    DEFERRED (clearly-marked TODOs, later phases — each an isolated block in
-  //    GLX main() that this port drops):
-  //      * shadow map / cloud shadow  (Phase 3 — needs the depth pass + compare sampler)
-  //      * env-cube + analytic sky mirror + rim/AO  (Phase 3)
-  //      * wet-road / puddle model  (Phase 4 — folds into the SSR composite)
-  //      * per-material procedural bump + albedo (applyMaterial*), ground detail
-  //        micro-normal, car-paint orange-peel, clearcoat 2nd lobe, sparkle
-  //        (Phase 4 — the "14 procedural materials" half of LIT_FS)
-  //      * lamp-fog / ground-mist volumetrics  (Phase 4)
-  //    The material scalars for those (detail, clearcoat, carPaint, sparkle,
-  //    wetness) still arrive in the uniform blocks so no re-plumbing is needed
-  //    when the blocks land; they are simply not consumed yet.
+  //    PHASE 3 (landed): sun shadow map (3×3-PCF compare, see the shadow block).
+  //    PHASE 4 (landed): the deferred MATERIAL blocks now consume the plumbed
+  //    scalars — each gated on its scalar so a 0 value is a no-op and the existing
+  //    Phase-2/3 looks are byte-for-byte unchanged. Faithful-but-reduced ports:
+  //      * [Block 1a/1b] ground/terrain detail micro-normal + procedural albedo
+  //        grain  (detail = mat1.y ; GLX LIT_FS js/glx.js:405-422, 473-507)
+  //      * [Block 2]    clearcoat 2nd low-roughness spec lobe (sun + lamp glints)
+  //        (clearcoat = mat1.z ; GLX js/glx.js:657-680, 638-646)
+  //      * [Block 3a]   car-paint orange-peel micro-normal
+  //        (carPaint = mat1.w ; GLX js/glx.js:432-452)
+  //      * [Block 4]    metallic-flake sparkle (view-dependent glint, paint-only)
+  //        (sparkle = mat2.x, gated on carPaint ; GLX js/glx.js:732-756)
+  //      * [Block 5/5b] wet-road response: lower roughness + grazing Fresnel sheen
+  //        (wetness = params1.z ; GLX js/glx.js:519-546, 761-801)
+  //      * [Block 6]    lamp-fog glow + low ground-mist  (GLX js/glx.js:864-891)
+  //    STILL DEFERRED: env-cube + analytic sky mirror + rim/AO (Phase 3 probe);
+  //    per-material applyMaterial* bump/tint (brick/glass/metal/wood — the "14
+  //    procedural materials"); full wet-road SSR (folds into the Phase-4 composite).
   //
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
@@ -175,6 +181,8 @@ struct DrawU {
 @group(0) @binding(2) var shadowTex  : texture_depth_2d;
 @group(0) @binding(3) var shadowSamp : sampler_comparison;
 @group(1) @binding(0) var<uniform> D : DrawU;
+${hash}
+${vnoise}
 ${brdf}
 
 struct VSOut {
@@ -212,6 +220,56 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/glx.js:404).
   if (!ff) { N = -N; }
+
+  // ── Deferred material scalars (Phase 4) — all read from the already-plumbed
+  //    DrawU/FrameU fields; a 0 value makes each block below a no-op so existing
+  //    looks are unchanged. detail=mat1.y, clearcoat=mat1.z, carPaint=mat1.w,
+  //    sparkle=mat2.x, wetness=F.params1.z.
+  let detail    = D.mat1.y;
+  let clearcoat = D.mat1.z;
+  let carPaint  = D.mat1.w;
+  let sparkle   = D.mat2.x;
+  let wetness   = F.params1.z;
+
+  // [Block 1a] Ground/terrain detail MICRO-NORMAL (mirrors GLX LIT_FS js/glx.js:405-422).
+  // Two-scale value-noise gradient perturbs N so procedurally-textured ground gets
+  // real bumps (sun/lamp glints break up over the surface instead of one polished
+  // sheet). Distance-faded (would alias to shimmer) and wetness-faded (the water
+  // film levels the surface).
+  if (detail > 0.001) {
+    let mnFade = clamp(1.0 - (in.dist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
+    if (mnFade > 0.01) {
+      let mnp = in.wpos.xz * 1.7;
+      let e = 0.22;
+      let h0 = vnoise(mnp) * 0.7 + vnoise(mnp * 3.9) * 0.3;
+      let hx = vnoise(mnp + vec2<f32>(e, 0.0)) * 0.7 + vnoise(mnp * 3.9 + vec2<f32>(e * 3.9, 0.0)) * 0.3;
+      let hz = vnoise(mnp + vec2<f32>(0.0, e)) * 0.7 + vnoise(mnp * 3.9 + vec2<f32>(0.0, e * 3.9)) * 0.3;
+      N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * ((detail * 0.4 * mnFade) / e));
+    }
+  }
+  // Geometric normal snapshot for the smooth clearcoat lobe + flake tangent frame:
+  // orange-peel/flake live UNDER the lacquer, so they must not roughen the mirror
+  // shell (GLX LIT_FS js/glx.js:431).
+  let Ngeo = N;
+  // [Block 3a] Car-paint ORANGE-PEEL micro-normal (mirrors GLX LIT_FS js/glx.js:432-452).
+  // Coarse waviness + fine flake wobble perturb N so the sun streak / sky reflection
+  // shimmer live on the panels. GLX keys this to OBJECT space (vObjPos); WGSL has no
+  // object-position varying yet, so we key to world pos — faithful-but-reduced (a
+  // touch of texture-swim, invisible at the 0.22 amplitude). Distance-faded.
+  if (carPaint > 0.001) {
+    let pFade = clamp(1.0 - (in.dist - 18.0) / 50.0, 0.0, 1.0);
+    if (pFade > 0.01) {
+      let puv = in.wpos.xz * 34.0 + in.wpos.y * 29.0;
+      let fuv = in.wpos.xz * 130.0 + in.wpos.y * 111.0;
+      let pe = 0.09;
+      let pb0 = vnoise(puv) * 0.6 + vnoise(fuv) * 0.4;
+      let pbx = (vnoise(puv + vec2<f32>(pe, 0.0)) * 0.6 + vnoise(fuv + vec2<f32>(pe * 3.8, 0.0)) * 0.4) - pb0;
+      let pby = (vnoise(puv + vec2<f32>(0.0, pe)) * 0.6 + vnoise(fuv + vec2<f32>(0.0, pe * 3.8)) * 0.4) - pb0;
+      let pT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+      let pB = cross(N, pT);
+      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
+    }
+  }
   let V = normalize(F.eye.xyz - in.wpos);
   let L = F.sunDir.xyz;
   let H = normalize(L + V + vec3<f32>(1e-5));   // +eps: normalize(0) NaNs at V==-L
@@ -220,15 +278,51 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let NoH = max(dot(N, H), 0.0);
   let VoH = max(dot(V, H), 0.0);
 
-  let albedo    = in.col;
+  var albedo    = in.col;
   let emissive  = D.mat0.x;
   let alpha     = D.mat0.y;
   let metalness = D.mat0.w;
   let specular  = D.mat1.x;
-  let rough     = clamp(D.mat0.z, 0.04, 1.0);
-  let a  = rough * rough;
-  let f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
-  let keyMul = F.params1.x;
+  var rough     = clamp(D.mat0.z, 0.04, 1.0);
+  let keyMul    = F.params1.x;
+
+  // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/glx.js:473-507,
+  // reduced: coarse+fine value-noise grain + repair-patch tint/roughness; the sparse
+  // crack lines are dropped). Multiplicative, so it darkens as much as it lightens.
+  var patchM = 0.5;
+  if (detail > 0.0) {
+    let wp = in.wpos.xz;
+    let fineFade = clamp(1.0 - (in.dist - 35.0) / 90.0, 0.0, 1.0);
+    let n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40 * fineFade;
+    albedo = albedo * (1.0 + (n - 0.5) * detail);
+    patchM = vnoise(wp * 0.055 + vec2<f32>(9.1));
+    let pm = smoothstep(0.52, 0.72, patchM);
+    albedo = albedo * (1.0 - pm * 0.05 * min(detail * 4.0, 1.0));
+    albedo = max(albedo, vec3<f32>(0.0));
+    rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
+  }
+
+  var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
+
+  // [Block 5] WET-ROAD material response (mirrors GLX LIT_FS js/glx.js:519-546). Rain
+  // darkens + polishes up-facing ground; a value-noise mask pools puddles that go
+  // near-mirror. Lowers effective roughness and lifts f0 toward a water film so the
+  // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Full
+  // SSR + puddle reflection is Phase-4 wgx-side; here just the material response.
+  var wet = 0.0;
+  if (wetness > 0.001) {
+    let upFace = smoothstep(0.50, 0.90, N.y);   // flat ground only
+    wet = wetness * upFace;
+    let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
+    let puddle = smoothstep(0.48, 0.88, pn) * wet;
+    albedo = albedo * mix(1.0, 0.42, wet);      // wet asphalt absorbs light (uWetDark=1 floor)
+    albedo = albedo * mix(1.0, 0.50, puddle);
+    rough = mix(rough, 0.15, wet);
+    rough = mix(rough, 0.05, puddle);
+    f0 = mix(f0, vec3<f32>(0.04), wet * 0.6);    // thin water film dielectric
+  }
+
+  let a = rough * rough;
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
   let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
@@ -265,10 +359,31 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   specCol = specCol / (1.0 + specCol);
   color = color + specCol;
 
+  // [Block 2] CLEARCOAT 2nd specular lobe (mirrors GLX LIT_FS js/glx.js:657-680). A
+  // second, fixed low-roughness (a=0.035) GGX lobe over the base coat catches a crisp
+  // sun glint on the smooth lacquer even where the base coat is rough — the glossy
+  // showroom read. Uses the UNPERTURBED geometric normal (Ngeo) so the flake wobble
+  // roughens only the base coat and this streak stays sharp. Soft-clipped to a 2.6
+  // HDR ceiling so the hot core punches past the bloom threshold.
+  if (clearcoat > 0.001) {
+    let Hg = normalize(L + V);
+    let NoHg = max(dot(Ngeo, Hg), 0.0);
+    let NoVg = max(dot(Ngeo, V), 1e-4);
+    let NoLg = max(dot(Ngeo, L), 0.0);
+    let ccA = 0.035;
+    let Dc = D_GGX(NoHg, ccA);
+    let Vc = V_SmithGGX(NoVg, NoLg, ccA);
+    let Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3<f32>(0.05), 1.0).x;
+    var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * clearcoat;
+    ccCol = 2.6 * ccCol / (2.6 + ccCol);
+    color = color + ccCol;
+  }
+
   // Physically-based punctual lights (floodlights / street lamps) — verbatim
   // math from GLX LIT_FS (js/glx.js:579-647): windowed 1/d² falloff, aimed spot
   // cone, diffuse pool + GGX spec. No per-light shadows (cost); the cone shapes
   // the light. (Bounce-fill + per-lamp clearcoat glint deferred to Phase 4.)
+  var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
   let nL = i32(F.params0.w);
   for (var i = 0; i < nL; i = i + 1) {
     let LP = lights[i].posRad.xyz - in.wpos;
@@ -285,6 +400,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let bleed = lights[i].colBleed.w;
     let cd = dot(-Ld, lights[i].dirVol.xyz);
     let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
+    lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter (GLX js/glx.js:616)
     let spotD = mix(bleed, 1.0, beam);
     let NoLl = max(dot(N, Ld), 0.0);
     color = color + albedo * lcol * (att * spotD) * NoLl * (1.0 - metalness);
@@ -299,6 +415,51 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
     lspec = lspec / (1.0 + lspec);
     color = color + lspec;
+    // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
+    // crisp low-roughness lens glint over the softer base highlight (GLX js/glx.js:638-646).
+    if (clearcoat > 0.001) {
+      let Dcc = D_GGX(NoHl, 0.03);
+      let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+      let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
+      var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+      color = color + 2.2 * ccl / (2.2 + ccl);
+    }
+  }
+
+  // [Block 4] Metallic-flake SPARKLE (mirrors GLX LIT_FS js/glx.js:732-756). A
+  // view-dependent micro-glint: each tiny cell gets a random flake tilt and flashes
+  // only when its facet half-aligns with the sun. sparkle DEFAULTS TO 1, so the
+  // effect is gated on carPaint>0 AND on a non-dark albedo — non-paint meshes
+  // (carPaint=0) and the dark carbon/tyre parts stay untouched. GLX cells in object
+  // space (vObjPos); reduced to world space here (no object-pos varying yet).
+  if (carPaint > 0.001 && litNoL > 0.0 && sparkle > 0.001) {
+    var spFade = clamp(1.0 - (in.dist - 14.0) / 30.0, 0.0, 1.0) * sparkle;
+    spFade = spFade * smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b)));
+    if (spFade > 0.01) {
+      let cell = floor(in.wpos * 45.0);
+      let h1 = hash3(cell);
+      let h2 = hash3(cell + vec3<f32>(19.7, 7.3, 3.1));
+      let fT = normalize(cross(Ngeo, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+      let fB = cross(Ngeo, fT);
+      let gN = normalize(Ngeo + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
+      let glint = smoothstep(0.990, 1.0, dot(gN, H));
+      color = color + F.sunColor.xyz * litNoL * glint * 1.6 * carPaint * spFade;
+    }
+  }
+
+  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/glx.js:761-801, reduced
+  // to the material response — full SSR is Phase-4 wgx-side). On wet up-facing ground
+  // a boosted grazing Fresnel tints the surface with the sky gradient reflected in the
+  // view ray, so the tarmac mirrors a faint sky band at the far grazing edge.
+  if (wet > 0.001) {
+    let Rw = reflect(-V, N);
+    let skyT = pow(max(Rw.y, 1e-4), 0.40);
+    let envColor = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyT);
+    let ef = 1.0 - max(dot(N, V), 0.0);
+    let envFresnel = ef * ef * ef * ef * ef;   // 5th power: concentrate into the grazing band
+    let envAdd = envColor * envFresnel * wet * 0.9 * (1.0 - metalness);
+    let envM = max(max(envAdd.r, envAdd.g), envAdd.b);
+    color = color + envAdd / (1.0 + envM);
   }
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
@@ -324,7 +485,28 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
   var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
   fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * 0.6;
+  // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
+  // glows around the lamps at night (mirrors GLX LIT_FS js/glx.js:864-877, reduced:
+  // fixed soft-clip, no uLampFog knob). lampFog is 0 with no lamps, so it is a no-op
+  // by day; the mix by fAmt gates it so clear near air gets no halo.
+  let lf = lampFog * 0.6;
+  let lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b));
+  fogCol = fogCol + lampFogC;
   color = mix(color, fogCol, fAmt);
+
+  // [Block 6 — ground mist] Low drifting FBM haze pooling near the surface (mirrors
+  // GLX LIT_FS js/glx.js:878-891, reduced). GLX gates on a uGroundMist uniform we
+  // cannot add (no new uniform fields), so we reuse fogDensity as the proxy gate and
+  // keep the amount small — subtle, and a no-op in clear air (fogDensity ~ 0).
+  if (fogDensity > 0.0) {
+    let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
+    let band = exp(-lowH * 0.30);
+    let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
+    let dRamp = clamp((in.dist - 8.0) / 45.0, 0.0, 1.0);
+    let mistAmt = fogDensity * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp * 0.5;
+    let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * 1.5;
+    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.30));
+  }
 
   return vec4<f32>(color, alpha);
 }`;
