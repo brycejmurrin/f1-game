@@ -71,7 +71,7 @@
   // reflection (det −1), and the decal UVs are authored for that handedness, so
   // we must match it here or the sponsor/number text would read mirrored.
   const REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  const CENTER = [0, 0.45, 0];   // orbit look-target; `look` param shifts it in z (−rear / +nose)
+  const CENTER = [0, 0.45, 0];   // base orbit look-target (car centre, ~hip height)
 
   // ---- URL params ----
   const Q = new URLSearchParams(location.search);
@@ -167,6 +167,8 @@
     num: qp("num", null),
     parts: {},
     az: parseFloat(qp("az", "35")), el: parseFloat(qp("el", "14")), dist: parseFloat(qp("dist", "6.2")),
+    look: parseFloat(qp("look", "0")),   // orbit-target Z offset (+nose / −rear) — lets a close dist frame ONE end (a wheel corner, the wing) without cropping it by centring the target off the car's midpoint
+    lookX: parseFloat(qp("lookx", "0")), // orbit-target X offset (+right / −left) — frames one wheel side, not the car spine
     tod: qp("tod", "day"),
     rig: qp("rig", qp("studio", "1") !== "0" ? "studio" : "none"),        // lighting rig preset
     intensity: Q.has("intensity") ? parseFloat(qp("intensity")) : null,   // null = tod default
@@ -186,6 +188,24 @@
 
   const _proj = new Float32Array(16), _view = new Float32Array(16), _vp = new Float32Array(16);
   let carMesh = null, decalMesh = null, decalTex = null, paint = null;
+
+  // REFL is a single matte<->glossy dial: it must scale EVERY shine-producing
+  // term, not just the env-mirror. Leaving `specular` fixed while only zeroing
+  // clearcoat/carEnvCube was the earlier bug — the base GGX highlight from the
+  // rig's point lights stayed hot regardless of the slider. roughness also
+  // widens at low refl so what specular remains is a soft sheen, not a hot dot
+  // (this matters most up close, where a detail-preset shot fills the frame
+  // with one curved panel and any hotspot reads as "glossy paint").
+  function paintFromRefl(refl) {
+    return {
+      roughness: 0.52 - 0.20 * refl,      // 0.52 matte .. 0.32 glossy
+      metalness: 0.22 + 0.10 * refl,
+      specular:  0.22 + 0.38 * refl,      // 0.22 matte .. 0.60 glossy (was FIXED at 0.6)
+      clearcoat: 0.5 * refl,              // 0 matte .. 0.5 full chrome
+      emissive: 0, carPaint: 1, sparkle: 0.06 + 0.06 * refl,
+      doubleSided: true, carEnvCube: refl,
+    };
+  }
 
   function teamObj() { return Teams.LIST.find(t => t.id === S.team) || Teams.LIST[0]; }
   function liveryList(team) { return Liveries.forTeam(team); }
@@ -211,24 +231,25 @@
     if (GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData(Car3D.aeroLevelOf(tiers)));
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
-    // clearcoat + carEnvCube both scale the env mirror, so refl drives both:
-    // refl 0 = matte team paint (no chrome), refl 1 = full glossy mirror. (Kept
-    // live per-frame in frame() so CARVIEW.set({refl}) / the ?refl= param respond
-    // without a rebuild.)
-    paint = { roughness: 0.34, metalness: 0.28, specular: 0.6, clearcoat: 0.5 * S.refl, emissive: 0, carPaint: 1, sparkle: 0.1, doubleSided: true, carEnvCube: S.refl };
+    paint = paintFromRefl(S.refl);   // kept live in frame() too, so CARVIEW.set({refl}) responds without a rebuild
   }
 
   function camera() {
     const a = S.az * Math.PI / 180, e = S.el * Math.PI / 180;
+    // Look-target: car centre + S.look/S.lookX offset. A tight --dist on the
+    // dead-centre target crops BOTH ends of the ~5.4 m car out of frame; shifting
+    // the target toward one wheel/corner lets a close shot fill the frame with
+    // that part while the rest of the car still reads around it.
+    const tgt = [CENTER[0] + S.lookX, CENTER[1], CENTER[2] + S.look];
     // az 0 = behind the car (rear), 180 = head-on; el = elevation.
     const eye = [
-      CENTER[0] + S.dist * Math.cos(e) * Math.sin(a),
-      CENTER[1] + S.dist * Math.sin(e),
-      CENTER[2] - S.dist * Math.cos(e) * Math.cos(a),
+      tgt[0] + S.dist * Math.cos(e) * Math.sin(a),
+      tgt[1] + S.dist * Math.sin(e),
+      tgt[2] - S.dist * Math.cos(e) * Math.cos(a),
     ];
     const asp = canvas.width / Math.max(1, canvas.height);
     M4.perspectiveTo(_proj, 34 * Math.PI / 180, asp, 0.1, 60);
-    M4.lookAtTo(_view, eye, CENTER, [0, 1, 0]);
+    M4.lookAtTo(_view, eye, tgt, [0, 1, 0]);
     M4.mulTo(_vp, _proj, _view);
     return eye;
   }
@@ -277,7 +298,7 @@
     const pk = S.tod;
     if (pk !== _probedKey) { probeEnv(frameParams, t); _probedKey = pk; }
     GLX.begin(frameParams);
-    if (paint) { paint.clearcoat = 0.5 * S.refl; paint.carEnvCube = S.refl; }   // live reflection strength
+    if (paint) Object.assign(paint, paintFromRefl(S.refl));   // live reflection strength (sparkle/doubleSided untouched by draw, harmless to reassign)
     if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
     if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
     GLX.present({ exposure: S.exp });
@@ -353,7 +374,7 @@
       for (const k of ["team", "livery", "num"]) if (o[k] !== undefined) { S[k] = o[k]; reb = true; }
       if (o.parts) { Object.assign(S.parts, o.parts); reb = true; }
       if (o.lights !== undefined) S.lights = o.lights || [];
-      for (const k of ["az", "el", "dist", "tod", "rig", "intensity", "exp", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
+      for (const k of ["az", "el", "dist", "look", "lookX", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
       if (reb) { buildUI(); rebuild(); }
       return true;
     },

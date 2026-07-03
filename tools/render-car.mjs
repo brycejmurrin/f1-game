@@ -17,13 +17,27 @@
 //   turntable  = front,frontquarter,side,rearquarter,rear
 //   all        = every view above
 //
+// Presets (--preset=<name>): purpose-built 3-shot sets for reviewing a specific
+// part or aspect, reusing the exact angles already validated for that purpose
+// (see tools/audit-parts.mjs / tools/audit-aero.mjs) instead of hand-picking
+// az/el/dist each time. Overrides --views.
+//   wing (alias aero)   behind / front / front-3-quarter — endplate + rear wing
+//   engine, suspension, brakes, tyres, ers, gearbox, fuel
+//                       each category's audited best angle + two ±36° offsets
+//   livery              side / front-3-quarter / rear-3-quarter — paint & sponsors
+// List all: node tools/render-car.mjs --preset=list
+//
+// --lightset=day,dusk,night  render EVERY shot at each listed tod (fans out the
+//   shot count ×N) and lays out the contact sheet as a grid (rows = shot,
+//   columns = tod) — for comparing how a part/livery reads across lighting.
+//
 // Options:
 //   --team=mclaren        team id (js/teams.js). Default: mclaren
 //   --livery=mcl_gulf     livery id (js/liveries.js). Default: team default
 //   --num=4               driver number override
 //   --engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=
 //                         force a part option id (see js/parts.js) to inspect its look
-//   --tod=day             day|dusk|dawn|night|void. Default: day
+//   --tod=day             day|dusk|dawn|night|void. Default: day (per-shot presets may override)
 //   --rig=3point          lighting rig: studio|3point|rim|topdown|none (reflection tests)
 //   --plight=x,y,z,r,g,b,i,rad   add a point light (repeatable) — watch specular/reflections
 //   --sweep=1             add a bright point light orbiting the car (reflection sweep)
@@ -32,7 +46,7 @@
 //   --exp=1.1             tonemap exposure / overall brightness (default 1.0)
 //   --refl=0.2            env-mirror strength 0..1 (0 = matte paint, 0.85 = default chrome)
 //   --bg=101014           background hex (overrides tod bg)
-//   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views)
+//   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
 //   --out=DIR             output dir. Default: tools/render-out/<team>
 //   --w=900 --h=680       viewport size
 //   --url=...             base URL. Default http://127.0.0.1:3456
@@ -42,6 +56,9 @@
 //   node tools/render-car.mjs --team=redbull --views=all --tod=night --exp=1.2
 //   node tools/render-car.mjs --team=haas --gearbox=f1_spec --brakes=ceramic --views=tail,side
 //   node tools/render-car.mjs --team=ferrari --az=205 --el=18 --dist=3.8 --intensity=2
+//   node tools/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic     # 3 shots, one part
+//   node tools/render-car.mjs --team=mclaren --preset=wing --aero=extreme         # 3 shots, one wing
+//   node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
 
 let chromium;
 try { ({ chromium } = await import('playwright')); }
@@ -75,6 +92,47 @@ const GROUPS = {
   all:       Object.keys(VIEWS),
 };
 
+// Named PRESET shot-sets: 3 purpose-built {label, az, el, dist, look?, tod?,
+// intensity?} angles per review purpose.
+//  - `wing` is the exact 3-view spread from tools/audit-aero.mjs (behind/front/
+//    front-3-quarter, confirmed to clear the endplate at every downforce level).
+//  - Part-detail presets (engine/suspension/brakes/tyres/ers/gearbox/fuel) use a
+//    CLOSE distance + a `look` target offset toward the actual part instead of
+//    the car's dead centre — front axle z=+1.7, rear axle z=-1.6 (see
+//    js/car3d.js:1162-1163) — so a close shot fills the frame with that part
+//    instead of cropping both ends of the car. They also dial the light rig
+//    down (lower --intensity) since a close-up otherwise catches a hot,
+//    distracting specular blowout off the bodywork that the wider stock views
+//    don't show at all.
+//  - `livery` reuses the standard turntable quarter-angles (wide enough to read
+//    sponsor placement across the whole flank).
+const FRONT_AXLE = 1.7, REAR_AXLE = -1.6;
+const detail = (v) => [
+  { label: 'main',  az: v.az,      el: v.el, dist: v.dist, look: v.look, tod: v.tod, intensity: v.intensity },
+  { label: 'left',  az: v.az - 30, el: v.el, dist: v.dist, look: v.look, tod: v.tod, intensity: v.intensity },
+  { label: 'right', az: v.az + 30, el: v.el, dist: v.dist, look: v.look, tod: v.tod, intensity: v.intensity },
+];
+const PRESETS = {
+  wing: [
+    { label: 'behind',     az: 0,   el: 15, dist: 5.0 },
+    { label: 'front',      az: 180, el: 15, dist: 5.2 },
+    { label: 'frontside',  az: 150, el: 15, dist: 4.8 },
+  ],
+  engine:     detail({ az: 322, el: 20, dist: 3.6, look: REAR_AXLE * 0.4, tod: 'day',  intensity: 1.0 }),
+  suspension: detail({ az: 152, el: 10, dist: 3.4, look: FRONT_AXLE,      tod: 'day',  intensity: 1.0 }),
+  brakes:     detail({ az: 104, el: 10, dist: 3.2, look: FRONT_AXLE,      tod: 'day',  intensity: 1.0 }),
+  tyres:      detail({ az: 96,  el: 8,  dist: 3.2, look: FRONT_AXLE,      tod: 'day',  intensity: 1.0 }),
+  ers:        detail({ az: 322, el: 12, dist: 3.6, look: 0,               tod: 'dusk', intensity: 1.2 }),
+  gearbox:    detail({ az: 26,  el: 18, dist: 3.4, look: REAR_AXLE,       tod: 'day',  intensity: 1.0 }),
+  fuel:       detail({ az: 6,   el: 14, dist: 3.4, look: REAR_AXLE,       tod: 'dusk', intensity: 1.2 }),
+  livery: [
+    { label: 'side',         az: 90,  el: 8,  dist: 6.0 },
+    { label: 'frontquarter', az: 145, el: 16, dist: 6.4 },
+    { label: 'rearquarter',  az: 320, el: 16, dist: 6.4 },
+  ],
+};
+PRESETS.aero = PRESETS.wing;   // alias — both names read naturally depending on intent
+
 const TEAM   = arg('team', 'mclaren');
 const LIVERY = arg('livery', null);
 const NUM    = arg('num', null);
@@ -86,6 +144,8 @@ const INTEN  = arg('intensity', null);
 const EXP    = arg('exp', null);
 const REFL   = arg('refl', null);   // env-mirror strength 0..1 (0 = matte paint, no chrome)
 const BG     = arg('bg', null);
+const PRESET = arg('preset', null);
+const LIGHTSET = arg('lightset', null);   // e.g. "day,dusk,night" — fan out every shot across these tod values
 const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.slice('--plight='.length));
 // A custom --az/--el/--dist renders a single ad-hoc view instead of the presets.
 const CUSTOM = (arg('az', null) != null || arg('el', null) != null || arg('dist', null) != null);
@@ -99,16 +159,38 @@ const PART_CATS = ['engine', 'aero', 'brakes', 'gearbox', 'ers', 'tyres', 'suspe
 const parts = {};
 for (const c of PART_CATS) if (arg(c, null) != null) parts[c] = arg(c, null);
 
-let want;
-if (CUSTOM) {
-  VIEWS.custom = { az: parseFloat(arg('az', '35')), el: parseFloat(arg('el', '14')), dist: parseFloat(arg('dist', '4.6')) };
-  want = ['custom'];
-} else {
-  want = String(arg('views', 'hero')).split(',').map(s => s.trim()).filter(Boolean);
-  want = want.flatMap(v => GROUPS[v] || [v]);
+if (PRESET === 'list') {
+  console.log('Available presets:', Object.keys(PRESETS).join(', '));
+  process.exit(0);
 }
-const bad = want.filter(v => !VIEWS[v]);
-if (bad.length) { console.error(`Unknown view(s): ${bad.join(', ')}\nAvailable: ${Object.keys(VIEWS).concat(Object.keys(GROUPS)).join(', ')}`); process.exit(1); }
+
+// Unify every source (--preset / --views / --az&co) into one shotDefs list of
+// {label, az, el, dist, tod}. tod is null unless the preset pins one (e.g. `ers`
+// defaults to dusk to show its glow) — null means "use the global --tod".
+let shotDefs;
+if (CUSTOM) {
+  shotDefs = [{ label: 'custom', az: parseFloat(arg('az', '35')), el: parseFloat(arg('el', '14')), dist: parseFloat(arg('dist', '4.6')), tod: null }];
+} else if (PRESET) {
+  const p = PRESETS[PRESET];
+  if (!p) { console.error(`Unknown preset "${PRESET}". Available: ${Object.keys(PRESETS).join(', ')}`); process.exit(1); }
+  shotDefs = p.map((s) => ({ ...s, tod: s.tod || null }));
+} else {
+  let want = String(arg('views', 'hero')).split(',').map(s => s.trim()).filter(Boolean);
+  want = want.flatMap(v => GROUPS[v] || [v]);
+  const bad = want.filter(v => !VIEWS[v]);
+  if (bad.length) { console.error(`Unknown view(s): ${bad.join(', ')}\nAvailable: ${Object.keys(VIEWS).concat(Object.keys(GROUPS)).join(', ')}`); process.exit(1); }
+  shotDefs = want.map((name) => ({ label: name, ...VIEWS[name], tod: null }));
+}
+
+// --lightset fans every shot out across each listed tod (3 shots x 3 tods = 9),
+// overriding whatever tod the shot/preset/--tod would otherwise use, and tags
+// each with its tod so the contact sheet can grid rows=shot / cols=tod.
+const lightTods = LIGHTSET ? LIGHTSET.split(',').map(s => s.trim()).filter(Boolean) : null;
+if (lightTods) {
+  shotDefs = shotDefs.flatMap((s) => lightTods.map((tod) => ({ ...s, tod, group: s.label })));
+} else {
+  shotDefs = shotDefs.map((s) => ({ ...s, tod: s.tod || TOD, group: s.label }));
+}
 
 mkdirSync(OUT, { recursive: true });
 
@@ -134,35 +216,55 @@ try {
   const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15000 }).then(() => true).catch(() => false);
   if (!ok) { console.error('carview did not become ready — is the server running and the car building?'); process.exit(2); }
 
-  for (const name of want) {
-    const v = VIEWS[name];
-    await page.evaluate((p) => window.CARVIEW.angle(p.az, p.el, p.dist), v);
-    await page.waitForTimeout(260);   // let a couple of frames render at the new angle
-    const file = `${name}.png`;
+  for (const s of shotDefs) {
+    await page.evaluate((p) => window.CARVIEW.set(p), { az: s.az, el: s.el, dist: s.dist, look: s.look || 0, tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
+    await page.waitForTimeout(260);   // let a couple of frames render at the new angle/lighting
+    const file = lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
     await page.screenshot({ path: resolve(OUT, file) });
-    shots.push({ file, label: name });
-    console.log(`  ✓ ${name}`);
+    shots.push({ file, label: s.label, group: s.group, tod: s.tod });
+    console.log(`  ✓ ${file}`);
   }
 
-  const cards = shots.map(s => `<figure><img src="${s.file}" alt="${s.label}"><figcaption>${s.label}</figcaption></figure>`).join('\n');
-  writeFileSync(resolve(OUT, 'index.html'), `<!doctype html><meta charset="utf8">
-<title>${TEAM} — render sheet</title>
-<style>
-  body{margin:0;background:#111;color:#ccc;font:14px system-ui,sans-serif;padding:16px}
+  const metaLine = `${PRESET ? 'preset=' + PRESET + ' · ' : ''}${lightTods ? lightTods.join('/') : TOD}${STUDIO ? ' · studio' : ''}${Object.keys(parts).length ? ' · ' + Object.entries(parts).map(([k, v]) => k + '=' + v).join(' ') : ''}`;
+  const style = `body{margin:0;background:#111;color:#ccc;font:14px system-ui,sans-serif;padding:16px}
   h1{font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:#fff}
   .meta{color:#888;margin:-8px 0 16px}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
   figure{margin:0;background:#000;border:1px solid #222;border-radius:8px;overflow:hidden}
   img{display:block;width:100%;height:auto}
   figcaption{padding:6px 8px;color:#9ab;font-size:12px;text-transform:capitalize}
+  table{border-collapse:collapse}
+  th{color:#fff;text-align:left;padding:6px 10px;font:600 12px system-ui;text-transform:uppercase;letter-spacing:.04em}
+  td{padding:4px}
+  td img{width:260px;border:1px solid #222;border-radius:6px;display:block}`;
+
+  let body;
+  if (lightTods) {
+    // Grid: one row per shot (preset label), one column per tod — the layout
+    // that makes a lighting comparison actually scannable at a glance.
+    const groups = [...new Set(shots.map(s => s.group))];
+    const rows = groups.map(g => {
+      const cells = lightTods.map(tod => {
+        const s = shots.find(x => x.group === g && x.tod === tod);
+        return `<td>${s ? `<img src="${s.file}" alt="${g} ${tod}">` : ''}</td>`;
+      }).join('');
+      return `<tr><th>${g}</th>${cells}</tr>`;
+    }).join('\n');
+    body = `<table><thead><tr><th></th>${lightTods.map(t => `<th>${t}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  } else {
+    body = `<div class="grid">\n${shots.map(s => `<figure><img src="${s.file}" alt="${s.label}"><figcaption>${s.label}</figcaption></figure>`).join('\n')}\n</div>`;
+  }
+
+  writeFileSync(resolve(OUT, 'index.html'), `<!doctype html><meta charset="utf8">
+<title>${TEAM} — render sheet</title>
+<style>
+  ${style}
 </style>
 <h1>${TEAM}${LIVERY ? ' · ' + LIVERY : ''}</h1>
-<div class="meta">${TOD}${STUDIO ? ' · studio' : ''}${Object.keys(parts).length ? ' · ' + Object.entries(parts).map(([k, v]) => k + '=' + v).join(' ') : ''}</div>
-<div class="grid">
-${cards}
-</div>`);
+<div class="meta">${metaLine}</div>
+${body}`);
 
-  console.log(`Rendered ${shots.length} view(s) -> ${OUT}`);
+  console.log(`Rendered ${shots.length} shot(s) -> ${OUT}`);
   console.log(`Contact sheet: ${resolve(OUT, 'index.html')}`);
 } finally {
   await browser.close();
