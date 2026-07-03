@@ -719,8 +719,8 @@ function carDecalData() {
   // "tail wrap" à la a real F1 shark fin). Fin is ~0.03 wide on x=0; sit the decal
   // just proud of each face. Front→back reading, mirrored per side.
   const fX = 0.023, fyB = 0.655, fyT = 0.945, fzF = -0.82, fzR = -1.56;
-  quad([[fX, fyB, fzF], [fX, fyB, fzR], [fX, fyT, fzR], [fX, fyT, fzF]], [1, 0, 0], R.crest);
-  quad([[-fX, fyB, fzR], [-fX, fyB, fzF], [-fX, fyT, fzF], [-fX, fyT, fzR]], [-1, 0, 0], R.crest);
+  quad([[fX, fyB, fzF], [fX, fyB, fzR], [fX, fyT, fzR], [fX, fyT, fzF]], [1, 0, 0], R.fin);
+  quad([[-fX, fyB, fzR], [-fX, fyB, fzF], [-fX, fyT, fzF], [-fX, fyT, fzR]], [-1, 0, 0], R.fin);
   // Nose-top plate → big driver NUMBER (top of the digit toward the nose tip).
   // The nose block is IDENTICAL in the chase and cockpit builds, so this reads
   // upright from chase, hood AND cockpit cameras (all look forward over the nose).

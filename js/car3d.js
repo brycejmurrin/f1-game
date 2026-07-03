@@ -782,11 +782,11 @@ const Car3D = (function () {
     for (const s of [-1, 1]) {
       const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.028 : 0.044);
       const epX = s * (fwHalf + 0.03);
-      // Main endplate: TALL arched plate that sweeps up and outboard (the outwash
-      // flick) — roughly 1.5× the old height so the wing reads as a real 3-D
-      // structure from any angle rather than a flat slat.
-      addSpan(out, { z: 2.66, x: epX,          y: 0.150, w: epW, h: 0.26 },
-                   { z: 1.98, x: epX + s*0.06, y: 0.300, w: epW, h: 0.52 }, c2);
+      // Main endplate: a swept plate rising up-and-outboard (the outwash flick) —
+      // moderated in height so it reads as a real 3-D structure without towering
+      // over the wing (it was ~1.5× too tall and looked detached from the plane).
+      addSpan(out, { z: 2.66, x: epX,          y: 0.135, w: epW, h: 0.22 },
+                   { z: 1.98, x: epX + s*0.06, y: 0.245, w: epW, h: 0.40 }, c2);
       // Footplate: the horizontal "foot" kicking outward along the endplate base
       // (the ground-effect seal that reads as a real front-wing foot).
       addBox(out, epX + s*0.03, 0.050, 2.30, 0.13, 0.016, 0.54, c1);
@@ -801,7 +801,7 @@ const Car3D = (function () {
       // Endplate-crown LED tell-strip: a run of three HDR-amber markers climbing
       // the swept crown (glows and blooms at night — a clear new light signature).
       for (let i = 0; i < 3; i++)
-        addBox(out, epX + s*0.05, 0.36 + i*0.075, 2.10 - i*0.06, 0.022, 0.024, 0.03, [2.6, 0.6, 0.06]);
+        addBox(out, epX + s*0.05, 0.30 + i*0.058, 2.10 - i*0.06, 0.022, 0.022, 0.03, [2.6, 0.6, 0.06]);
       addBox(out, s*0.10, 0.19, 2.46, 0.055, 0.20, 0.17, c1);                 // nose pylon
     }
 
@@ -835,9 +835,9 @@ const Car3D = (function () {
       // continuously with aLvl (lvl 0 = flat low-drag, lvl 4 = towering high-DF),
       // element count grows, high levels add a swan-neck flap + T-wing, `beam`
       // options add a beam wing, and `drs` options open a slotted top gap. ---
-      const rwLift = (aLvl - 2) * 0.095;       // lvl0 -0.19 → lvl4 +0.19 (bolder swing)
-      const epSY   = 0.30 + aLvl * 0.21;        // lvl0 0.30 → lvl4 1.14 (taller plates)
-      const epCY   = 0.86 + rwLift;             // endplate vertical centre
+      const rwLift = (aLvl - 2) * 0.070;       // lvl0 -0.14 → lvl4 +0.14 (gentler)
+      const epSY   = 0.26 + aLvl * 0.145;       // lvl0 0.26 → lvl4 0.84 (shorter plates)
+      const epCY   = 0.72 + rwLift;             // endplate vertical centre (LOWER — sits on the car)
       // HDR-lit crown accent (team colour pushed >1 so it glows / blooms at night
       // like a modern rear-wing tell-tale strip).
       const railLed = [Math.min(2.2, c2[0]*1.7 + 0.25), Math.min(2.2, c2[1]*1.7 + 0.12), Math.min(2.2, c2[2]*1.7 + 0.08)];
@@ -861,12 +861,16 @@ const Car3D = (function () {
       }
       addSpan(out, { z: -2.38, y: epCY + 0.215, w: 1.02, h: 0.035 },
                    { z: -2.64, y: epCY + 0.290, w: 1.02, h: 0.050 }, c2);  // top flap (swept)
-      // Swan-neck mount: two slim pylons rising from the deck OVER the top of the
-      // main plane (the clean modern over-mount, not a strut hanging beneath).
+      // Swan-neck mount: slim pylons sweeping UP and BACK from the rear crash
+      // structure to the underside of the main plane — this is what visually hangs
+      // the wing off the car (previously the mount sat above the plane, so the
+      // whole wing read as detached/floating). A central pylon reinforces it.
       for (const s of [-1, 1]) {
-        addSpan(out, { z: -2.28, x: s*0.17, y: epCY + 0.02, w: 0.035, h: 0.06 },
-                     { z: -2.42, x: s*0.17, y: epCY + 0.24, w: 0.030, h: 0.06 }, DARK);
+        addSpan(out, { z: -1.98, x: s*0.14, y: 0.46, w: 0.05, h: 0.13 },
+                     { z: -2.34, x: s*0.14, y: epCY + 0.01, w: 0.042, h: 0.10 }, DARK);
       }
+      addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
+                   { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount
       if (aLvl >= 4) {
         // Extra proud top element + a T-wing ahead of it (max-DF look).
         addSpan(out, { z: -2.42, y: epCY + 0.350, w: 1.00, h: 0.030 },

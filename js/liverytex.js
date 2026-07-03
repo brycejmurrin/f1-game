@@ -17,6 +17,7 @@ const LiveryTex = (function () {
     wing:   { x: 40,  y: 520, w: 620, h: 150 },  // rear-wing sponsor band
     num:    { x: 700, y: 420, w: 284, h: 284 },  // large car number
     strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
+    fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: painted motif (no badge) + graphic
   };
 
   // Primary driver number per team.
@@ -263,21 +264,25 @@ const LiveryTex = (function () {
   }
 
   // Ferrari — rearing prancing horse, black on a yellow shield hint.
-  function crestFerrari(ctx, R, ink, accent) {
+  function crestFerrari(ctx, R, ink, accent, bare) {
     const f = fit(R, 0.06);
     ctx.save();
-    // yellow shield
-    ctx.fillStyle = css(BRAND.ferYellow);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.16), f.Y(0.06));
-    ctx.lineTo(f.X(0.84), f.Y(0.06));
-    ctx.lineTo(f.X(0.84), f.Y(0.6));
-    ctx.quadraticCurveTo(f.X(0.84), f.Y(0.9), f.X(0.5), f.Y(1.0));
-    ctx.quadraticCurveTo(f.X(0.16), f.Y(0.9), f.X(0.16), f.Y(0.6));
-    ctx.closePath();
-    ctx.fill();
-    // prancing horse silhouette (rearing on hind legs, facing left, tail up)
-    ctx.fillStyle = css([0.05, 0.05, 0.06]);
+    // yellow shield (skipped in `bare` mode — e.g. the shark fin wants just the
+    // horse painted on the bodywork, not a badge)
+    if (!bare) {
+      ctx.fillStyle = css(BRAND.ferYellow);
+      ctx.beginPath();
+      ctx.moveTo(f.X(0.16), f.Y(0.06));
+      ctx.lineTo(f.X(0.84), f.Y(0.06));
+      ctx.lineTo(f.X(0.84), f.Y(0.6));
+      ctx.quadraticCurveTo(f.X(0.84), f.Y(0.9), f.X(0.5), f.Y(1.0));
+      ctx.quadraticCurveTo(f.X(0.16), f.Y(0.9), f.X(0.16), f.Y(0.6));
+      ctx.closePath();
+      ctx.fill();
+    }
+    // prancing horse silhouette (rearing on hind legs, facing left, tail up).
+    // In bare mode paint it in ink so it reads on the team-colour fin.
+    ctx.fillStyle = bare ? css(ink) : css([0.05, 0.05, 0.06]);
     ctx.beginPath();
     ctx.moveTo(f.X(0.40), f.Y(0.20));                              // ear
     ctx.lineTo(f.X(0.36), f.Y(0.13));                              // pointed ear tip
@@ -332,15 +337,19 @@ const LiveryTex = (function () {
   }
 
   // Red Bull — two charging bulls facing off over a gold disc.
-  function crestRedbull(ctx, R, ink, accent) {
+  function crestRedbull(ctx, R, ink, accent, bare) {
     const f = fit(R, 0.06);
     const cx = f.X(0.5), cy = f.Y(0.46);
     ctx.save();
-    // gold sun disc
-    ctx.fillStyle = css(BRAND.rbGold);
-    ctx.beginPath(); ctx.arc(cx, cy, f.S(0.3), 0, Math.PI * 2); ctx.fill();
-    // two red bulls charging toward each other (horns meeting at centre top)
-    const red = css(BRAND.rbRed);
+    // gold sun disc (skipped in bare/fin mode — just the charging bulls painted on)
+    if (!bare) {
+      ctx.fillStyle = css(BRAND.rbGold);
+      ctx.beginPath(); ctx.arc(cx, cy, f.S(0.3), 0, Math.PI * 2); ctx.fill();
+    }
+    // two red bulls charging toward each other (horns meeting at centre top).
+    // Keep the bulls red on the gold disc, but on the bare fin use the gold so
+    // the silhouette pops against the (usually dark) team paint.
+    const red = css(bare ? BRAND.rbGold : BRAND.rbRed);
     drawBull(ctx, f, 0.02, 0.16, 0.5, 0.62, +1, red);   // left bull, head to right
     drawBull(ctx, f, 0.48, 0.16, 0.5, 0.62, -1, red);   // right bull, head to left
     ctx.restore();
@@ -394,19 +403,21 @@ const LiveryTex = (function () {
   }
 
   // Racing Bulls — compact bull head with horns + "RB" energy mark.
-  function crestRacingbulls(ctx, R, ink, accent) {
+  function crestRacingbulls(ctx, R, ink, accent, bare) {
     const f = fit(R, 0.08);
     ctx.save();
-    // shield-ish rounded plate
-    ctx.fillStyle = cssA(BRAND.rbNavy, 0.9);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.1), f.Y(0.12));
-    ctx.lineTo(f.X(0.9), f.Y(0.12));
-    ctx.lineTo(f.X(0.9), f.Y(0.56));
-    ctx.lineTo(f.X(0.5), f.Y(0.94));
-    ctx.lineTo(f.X(0.1), f.Y(0.56));
-    ctx.closePath();
-    ctx.fill();
+    // shield-ish rounded plate (skipped in bare/fin mode)
+    if (!bare) {
+      ctx.fillStyle = cssA(BRAND.rbNavy, 0.9);
+      ctx.beginPath();
+      ctx.moveTo(f.X(0.1), f.Y(0.12));
+      ctx.lineTo(f.X(0.9), f.Y(0.12));
+      ctx.lineTo(f.X(0.9), f.Y(0.56));
+      ctx.lineTo(f.X(0.5), f.Y(0.94));
+      ctx.lineTo(f.X(0.1), f.Y(0.56));
+      ctx.closePath();
+      ctx.fill();
+    }
     // bold front-facing bull head with sweeping horns
     ctx.fillStyle = css(BRAND.rbRed);
     ctx.beginPath();
@@ -616,9 +627,9 @@ const LiveryTex = (function () {
     cadillac: crestCadillac,
   };
 
-  function drawCrest(ctx, teamId, R, ink, accent) {
+  function drawCrest(ctx, teamId, R, ink, accent, bare) {
     const fn = CRESTS[teamId];
-    if (fn) fn(ctx, R, ink, accent);
+    if (fn) fn(ctx, R, ink, accent, bare);
     else crestGeneric(ctx, R, ink, accent, teamId);
   }
 
@@ -733,10 +744,13 @@ const LiveryTex = (function () {
     // second-colour details don't vanish.
     if (Math.abs(lum(accent) - lum(ink)) < 0.15) accent = (lum(ink) > 0.5) ? c1 : c2;
 
-    // Tail livery graphic (accent wash + motif streaks) THEN the crest on top —
-    // together they make the engine cover / shark fin read as a designed panel.
+    // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
     drawCrest(ctx, teamId, REGIONS.crest, ink, accent);
+    // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
+    // so the fin reads as a painted tail, not a floating badge.
+    drawTailGraphic(ctx, teamId, REGIONS.fin, c1, c2, stripe);
+    drawCrest(ctx, teamId, REGIONS.fin, ink, accent, true);
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
