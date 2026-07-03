@@ -3136,7 +3136,6 @@ const TUNE_DEFS = [
   { id: "glareStr",     label: "LENS GLARE",      group: "FLOODLIGHTS", min: 0,    max: 0.8, step: 0.02, def: 0.12, help: "Lens-halo billboard strength at every active lamp." },
   { id: "lampTemp",     label: "LAMP TEMPERATURE",group: "FLOODLIGHTS", min: -1, max: 1, step: 0.05, def: 0.0, fmt: "signed", help: "White-balance of ALL floodlights/street lamps. − warms toward sodium/amber, + cools toward LED/broadcast white. Layers over each lamp's own colour." },
   { id: "lampFlicker",  label: "LAMP FLICKER",    group: "FLOODLIGHTS", min: 0, max: 0.3, step: 0.01, def: 0.10, help: "How much aging lamps pulse. 0 = rock-steady, higher = strong buzz on the odd tube." },
-  { id: "tailLightMul", label: "TAIL-LIGHT GLOW", group: "FLOODLIGHTS", min: 0, max: 3, step: 0.1, def: 1.0, help: "Brightness of the red glow trailing nearby cars after dark." },
   { id: "beamCone",     label: "BEAM CONE WIDTH", group: "FLOODLIGHTS", min: 0.7, max: 1.5, step: 0.05, def: 1.0, rebuild: true, help: "Width of every floodlight's illuminated cone. Wider = softer spread, narrower = tight hotspots." },
   // ── NIGHT GLOW & BLOOM ──
   { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT GLOW & BLOOM", min: 0,    max: 1.6,  step: 0.05,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp)." },
@@ -3159,13 +3158,13 @@ const TUNE_DEFS = [
   { id: "lampVolHaze",  label: "BEAMS (HAZE)",    group: "ATMOSPHERE", min: 0, max: 1.5, step: 0.05, def: 0.65, help: "How much haze/rain swells the lamp beams." },
   { id: "lampVolCap",   label: "BEAM CEILING",    group: "ATMOSPHERE", min: 0, max: 1,   step: 0.05, def: 0.70, help: "Hard cap on volumetric beam strength." },
   // ── REFLECTIONS ──
-  { id: "ssrWetMul",    label: "WET MIRROR",      group: "REFLECTIONS", min: 0, max: 1.5, step: 0.05, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
-  { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "REFLECTIONS", min: 0, max: 0.5, step: 0.01, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
-  { id: "ssrDryDay",    label: "DRY DAY SHEEN",   group: "REFLECTIONS", min: 0, max: 0.3, step: 0.01, def: 0.07, help: "Faint tower-and-sky mirror on dry day tarmac." },
-  { id: "roadRough",    label: "TARMAC ROUGHNESS",group: "REFLECTIONS", min: 0.4, max: 1.4, step: 0.05, def: 1.0, help: "Scales dry-tarmac roughness — lower = glossier asphalt with a tighter sun streak." },
-  { id: "surfDetail",   label: "SURFACE DETAIL",  group: "REFLECTIONS", min: 0, max: 2, step: 0.05, def: 1.0, help: "Road/terrain procedural grain + micro-normal relief (aggregate, patches, cracks). 0 = flat." },
-  { id: "ssrThick",     label: "SSR THICKNESS",   group: "REFLECTIONS", min: 0.05, max: 1, step: 0.05, def: 0.20, u: "uSsrThick", help: "Depth tolerance for a wet-road reflection hit. Lower = crisper but more gaps; higher = fewer holes, more smear." },
-  { id: "wetDark",      label: "WET ROAD DARKEN", group: "REFLECTIONS", min: 0, max: 1.3, step: 0.05, def: 1.0, u: "uWetDark", help: "How much darker wet asphalt reads (water absorption). Independent of the wetness amount." },
+  { id: "ssrWetMul",    label: "WET MIRROR",      group: "ROAD & REFLECTIONS", min: 0, max: 1.5, step: 0.05, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
+  { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "ROAD & REFLECTIONS", min: 0, max: 0.5, step: 0.01, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
+  { id: "ssrDryDay",    label: "DRY DAY SHEEN",   group: "ROAD & REFLECTIONS", min: 0, max: 0.3, step: 0.01, def: 0.07, help: "Faint tower-and-sky mirror on dry day tarmac." },
+  { id: "roadRough",    label: "TARMAC ROUGHNESS",group: "ROAD & REFLECTIONS", min: 0.4, max: 1.4, step: 0.05, def: 1.0, help: "Scales dry-tarmac roughness — lower = glossier asphalt with a tighter sun streak." },
+  { id: "surfDetail",   label: "SURFACE DETAIL",  group: "ROAD & REFLECTIONS", min: 0, max: 2, step: 0.05, def: 1.0, help: "Road/terrain procedural grain + micro-normal relief (aggregate, patches, cracks). 0 = flat." },
+  { id: "ssrThick",     label: "SSR THICKNESS",   group: "ROAD & REFLECTIONS", min: 0.05, max: 1, step: 0.05, def: 0.20, u: "uSsrThick", help: "Depth tolerance for a wet-road reflection hit. Lower = crisper but more gaps; higher = fewer holes, more smear." },
+  { id: "wetDark",      label: "WET ROAD DARKEN", group: "ROAD & REFLECTIONS", min: 0, max: 1.3, step: 0.05, def: 1.0, u: "uWetDark", help: "How much darker wet asphalt reads (water absorption). Independent of the wetness amount." },
   // ── CAR ──
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.05, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
   { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.05, def: 0.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). OFF by default — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass)." },
@@ -3174,6 +3173,7 @@ const TUNE_DEFS = [
   { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 2,   step: 0.05, def: 0.05, help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
   { id: "carMetal",     label: "PAINT METALNESS", group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "How metallic the paint reads — reflection tint and grazing falloff." },
   { id: "carGlow",      label: "BODY GLOW",       group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "Self-lit body glow after dark (only the night / wet liveries carry it)." },
+  { id: "tailLightMul", label: "TAIL-LIGHT GLOW", group: "CAR", min: 0, max: 3, step: 0.1, def: 1.0, help: "Brightness of the red glow trailing nearby cars after dark." },
   // ── SKY & WEATHER ──
   { id: "cloudCover",   label: "CLOUD COVER",     group: "SKY & WEATHER", min: -0.5, max: 0.5, step: 0.02, def: 0.0, fmt: "signed", help: "Shifts cloud amount up/down from the weather default (also drives cloud shadows). 0 = as-shipped." },
   { id: "cloudSpeed",   label: "CLOUD SPEED",     group: "SKY & WEATHER", min: 0, max: 4, step: 0.1, def: 1.0, u: "uCloudSpeed", help: "How fast clouds drift and evolve. 0 = frozen sky, higher = fast-moving weather." },
