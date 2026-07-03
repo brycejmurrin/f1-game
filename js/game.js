@@ -3201,13 +3201,11 @@ const TUNE_DEFS = [
   { id: "sharpen",      label: "SHARPEN",         group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSharpen", help: "Crispness recovered after FXAA — counteracts softening on kerbs, wires and distant detail." },
   { id: "speedBlur",    label: "SPEED BLUR",      group: "IMAGE & COLOUR", min: 0, max: 1, step: 0.05, def: 0.0, u: "uSpeedBlur", help: "Radial blur from screen centre that grows with car speed — a velocity cue at high speed." },
 ];
-// LT holds the LIVE values the driver reads every frame. Slider edits are GLOBAL
-// — stored in the "*" profile so ONE setting applies across every time-of-day and
-// weather (the shipped js/light-presets.js may still carry per-condition baselines
-// that a player's global edit overrides). Resolution per id, lowest→highest:
-//   TUNE_DEFS default → file "*" → file "track|tod|wx" → local "*" (player edits).
-// Legacy per-condition local profiles are still honoured if present, but new edits
-// go to "*" and clear any stale per-condition entry for that knob.
+// LT holds the LIVE values the driver reads every frame. They are resolved from
+// a per-CONDITION profile store: each (track, time-of-day, weather) combination
+// keeps its own set of overrides, so night+wet Monaco and day+dry Monza are
+// tuned independently. Resolution per id: condition profile → migrated legacy
+// global ("*") → TUNE_DEFS default. Only non-default values are stored.
 const LT = {};
 for (const d of TUNE_DEFS) LT[d.id] = d.def;
 // Profile store shape: { "monza|night|wet": {lampLevel:0.4,…}, "*": {…legacy} }.
@@ -3252,9 +3250,7 @@ function ltFallback(id) {
   const F = window.LightPresets || null, key = ltKey();
   if (F && F["*"] && typeof F["*"][id] === "number") v = F["*"][id];
   if (F && key && F[key] && typeof F[key][id] === "number") v = F[key][id];
-  // NB: the player's own global ("*") edit is deliberately NOT folded in here —
-  // this is exactly the shipped baseline a slider RESETS to, i.e. the value left
-  // once the global override is cleared.
+  if (_ltStore["*"] && typeof _ltStore["*"][id] === "number") v = _ltStore["*"][id];
   return clamp(v, d.min, d.max);
 }
 // Rebuild LT for the current conditions. Called whenever the track/time/weather
@@ -3282,22 +3278,15 @@ function setLightTune(id, v) {
   if (!d || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
   LT[id] = v;
-  // Sliders tune ONE GLOBAL value that applies across EVERY time-of-day and
-  // weather — written to the "*" profile — so a setting dialled in at day/dry
-  // also takes effect at night/rain (the TIME/WEATHER chips just PREVIEW how it
-  // looks). Store only when it differs from the shipped baseline (default →
-  // file "*" → file "track|tod|wx"); an explicit value equal to the default is
-  // still kept when needed to override a shipped preset back down.
-  const g = _ltStore["*"] || (_ltStore["*"] = {});
-  if (v === ltFallback(id)) delete g[id]; else g[id] = v;
-  if (!Object.keys(g).length) delete _ltStore["*"];
-  // Drop any legacy per-condition override of this knob so the new global value
-  // isn't shadowed by an older localStorage profile (per-condition entries out-
-  // rank "*" in the resolution order).
-  for (const k of Object.keys(_ltStore)) {
-    if (k === "*" || !_ltStore[k] || _ltStore[k][id] === undefined) continue;
-    delete _ltStore[k][id];
-    if (!Object.keys(_ltStore[k]).length) delete _ltStore[k];
+  const key = ltKey();
+  if (key) {
+    const prof = _ltStore[key] || (_ltStore[key] = {});
+    // Store only when the value differs from what it would resolve to anyway
+    // (default / file / legacy global). Storing an explicit value IS required
+    // when it matches the default but the file/global would otherwise win —
+    // that's how a local edit overrides a shipped value back down.
+    if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
+    if (!Object.keys(prof).length) delete _ltStore[key];
   }
   if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
   if (d.reinitRain && isRaining()) initRainDrops();   // re-seed the rain field with the new count/length
@@ -5919,17 +5908,16 @@ function refreshLtPreviewActive() {
   for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("on", t === tod); }
   for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("on", w === wx); }
 }
-// Edits are GLOBAL now (one value across all times/weather), so the label shows
-// what's being PREVIEWED plus the global tuned-count — not a per-condition profile.
+// Show which per-condition profile is being edited, e.g. "MONZA · NIGHT · WET".
 function updateLtProfileLabel() {
   const host = $("lt-profile"); if (!host) return;
   const key = ltKey();
   if (!key) { host.textContent = ""; return; }
   const [id, tod, wx] = key.split("|");
   const name = (track && track.def && track.def.name) || id;
-  const nOver = _ltStore["*"] ? Object.keys(_ltStore["*"]).length : 0;
-  host.textContent = "PREVIEW " + tod.toUpperCase() + " · " + wx.toUpperCase() +
-    " — TUNING APPLIES TO ALL" + (nOver ? "  (" + nOver + " tuned)" : "  (defaults)");
+  const nOver = _ltStore[key] ? Object.keys(_ltStore[key]).length : 0;
+  host.textContent = name.toUpperCase() + " · " + tod.toUpperCase() + " · " + wx.toUpperCase() +
+    (nOver ? "  (" + nOver + " tuned)" : "  (defaults)");
 }
 function buildLtPreview() {
   const host = $("lt-preview");
@@ -6240,10 +6228,10 @@ $("lt-help-on").onchange = (e) => {
   document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);
 };
 $("lt-reset").onclick = () => {
-  // Sliders tune GLOBAL values, so RESET drops the global ("*") edits and any
-  // leftover per-condition overrides, falling every knob back to the shipped
-  // file / defaults across all times and weather.
-  _ltStore = {};
+  // Drop this condition's LOCAL edits so it falls back to the shipped file /
+  // defaults (leaves other conditions and the file untouched).
+  const key = ltKey();
+  if (key && _ltStore[key]) delete _ltStore[key];
   persistLightTune();
   applyLightTune();
   refreshLightTunePanel();
