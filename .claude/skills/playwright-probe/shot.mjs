@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Deterministic scene screenshot via __apex camera hooks + headless Chromium.
-// Usage: node .claude/skills/inspect-scene/shot.mjs <trackId> <frac> [cam] [out.png]
+// Usage: node .claude/skills/playwright-probe/shot.mjs <trackId> <frac> [cam] [out.png]
 //   cam = park | eye | orbit | cinematic | trackside   (default: orbit)
 // Boots a static server, waits for __apex, freezes, frames the camera, writes PNG.
 

@@ -26,16 +26,25 @@ only docs, tests, tools, or `index.html`'s non-asset markup, you do NOT need to 
    ```sh
    sed -i -E 's/\?v=[0-9]+/?v=NEW/g' index.html   # NEW = current + 1
    ```
-3. Verify the replacement is uniform (one distinct version, no stragglers):
+3. **Sync `version.json` to the SAME number** — this is NOT optional:
    ```sh
-   grep -o '?v=[0-9]\+' index.html | sort -u
+   echo '{ "build": NEW }' > version.json
    ```
-   This must print exactly one line. If it prints two, a manual edit left a
-   stale tag — re-run step 2.
+   The shell version guard in `index.html` fetches `version.json` (no-store) and
+   force-reloads a stale installed PWA when the deployed build is newer than the
+   cached shell. `index.html` itself has no `?v=`, so this is the ONLY thing
+   that refreshes the HTML markup for installed-app users.
+4. Verify both are uniform (one distinct version, matching build):
+   ```sh
+   grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
+   ```
+   The grep must print exactly one line, and the build number must equal it. If
+   the grep prints two lines, a manual edit left a stale tag — re-run step 2.
 
 ## Notes
 
-- Bump by exactly **+1** per logical change set; don't jump numbers.
+- Bump by exactly **+1** per logical change set; don't jump numbers. If a merge
+  finds the other side already at a higher N, resolve to max(both)+1 in BOTH files.
 - The number in `CLAUDE.md` ("currently v=N") is documentation only and is often
   behind the real value — trust `index.html`, and don't churn CLAUDE.md for this.
 - This pairs with the `check-changes` skill, which reminds you to bump as part of

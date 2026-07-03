@@ -5,9 +5,11 @@ description: Bake the in-game LIGHTING TUNER's copied settings into the shipped 
 
 # Bake copied LIGHTING TUNER settings and push
 
-The in-game **LIGHTING TUNER** (pause-menu page) stores per-`(track, time-of-day,
-weather)` values in localStorage and its **COPY VALUES** button exports the
-file+local merge as a `window.LightPresets = {…}` blob. This skill takes that
+The in-game **LIGHTING TUNER** (pause-menu page) stores the player's slider
+edits in localStorage — new edits go to the GLOBAL `"*"` profile (one value
+across every time-of-day/weather; legacy per-condition profiles are still
+honoured) — and its **COPY VALUES** button exports the file+local merge as a
+`window.LightPresets = {…}` blob. This skill takes that
 blob, writes it into the committed `js/light-presets.js` (the shipped baseline
 everyone sees), bumps the cache version, and commits + pushes — the "apply" step
 that turns a personal tuning session into the deployed look.

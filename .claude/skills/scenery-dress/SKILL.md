@@ -75,7 +75,7 @@ scenery: function (api) {
 node tools/verify-track.cjs <id>     # must print OK ...; catches any throw in scenery()
 ```
 Then bump the cache version (`bump-cache` skill — you edited a JS file) and eyeball
-it with the `inspect-scene` skill:
+it with the `playwright-probe` skill's `shot.mjs`:
 ```js
 __apex.race("<id>"); __apex.orbit(0.1, 60, 20, 60);   // sweep the dressing from outside
 __apex.eyeAt(0.1, 0, 2.5);                              // driver's-eye — does it read right at speed?

@@ -16,7 +16,7 @@ A track-free way to look at just the car. Two front-ends over the same page:
 It uses the real `GLX` renderer + `Car3D.build` + `LiveryTex` atlas, so what you
 see is what races. No track/scene loads, so it's much faster than an in-race
 `__apex.carOrbit` shot — prefer it for car-only checks. (For cockpit/hood cameras
-or the car on a real circuit, use the `inspect-scene` skill instead.)
+or the car on a real circuit, use the `playwright-probe` skill's `shot.mjs` instead.)
 
 ## Prereq
 

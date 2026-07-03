@@ -1,6 +1,6 @@
 ---
 name: survey-track
-description: End-to-end playbook for making a circuit look accurate — survey the in-game scene against real-world reference, diagnose geometry problems (floating props, channels/steps, sunk water, terrain over the road), edit the scenery/terrain, then verify and ship. Orchestrates the component skills (scenery-dress, debug-tracks, inspect-scene, track-batch-verify, check-changes) into one loop and adds a lateral ground-profile probe. Use for "survey Monza", "make Spa more accurate", "do an accuracy pass on this track", "the trees are floating / there's a gap beside the road", "improve a circuit's realism".
+description: End-to-end playbook for making a circuit look accurate — survey the in-game scene against real-world reference, diagnose geometry problems (floating props, channels/steps, sunk water, terrain over the road), edit the scenery/terrain, then verify and ship. Orchestrates the component skills (scenery-dress, debug-tracks, playwright-probe, check-changes) into one loop and adds a lateral ground-profile probe. Use for "survey Monza", "make Spa more accurate", "do an accuracy pass on this track", "the trees are floating / there's a gap beside the road", "improve a circuit's realism".
 ---
 
 # Survey & update a track
@@ -12,8 +12,8 @@ tool. Work one circuit at a time; the same loop applies to all 24.
 > **One command does the survey** — `node tools/survey-track.mjs <id>` self-boots the
 > game and emits the screenshots + the flagged ground-profile probe in one pass (no
 > server, one output folder). The focused skills handle the rest: **scenery-dress**
-> (edit `scenery(api)`), **debug-tracks** (deeper geometry hooks), **inspect-scene**
-> (one bespoke shot), **track-batch-verify** / **check-changes** (ship).
+> (edit `scenery(api)`), **debug-tracks** (deeper geometry hooks), **playwright-probe**
+> (one bespoke shot via `shot.mjs`), **check-changes** (ship).
 
 ## Where the truth lives
 
@@ -53,7 +53,7 @@ This self-boots the game (no server needed) and produces, in one boot:
 Add fractions or a label as needed: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 For a quick numbers-only re-probe (no screenshots) use
 `node .claude/skills/survey-track/ground-profile.mjs <id>`. For one bespoke framing
-use `inspect-scene`'s `shot.mjs`. Deeper geometry hooks (`scan`, `wallStats`,
+use `playwright-probe`'s `shot.mjs`. Deeper geometry hooks (`scan`, `wallStats`,
 `groundY`) live in **debug-tracks**; `tests/terrain-over-road.spec.js` catches the
 terrain-over-road class.
 
@@ -77,8 +77,8 @@ terrain-over-road class.
 ```sh
 node tools/verify-track.cjs <id>     # headless build check — catches a scenery THROW
 ```
-A `THROW` here strands the game on the menu. For a sweep across all circuits use
-**track-batch-verify**.
+A `THROW` here strands the game on the menu. For a sweep across all circuits run
+`node tools/verify-track.cjs --all` (~30 s; see **check-changes**).
 
 ### 5 · Re-survey
 Re-run the one survey command with an `after` label — same framings + probe, so you

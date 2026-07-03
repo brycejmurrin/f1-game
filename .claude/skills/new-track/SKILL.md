@@ -75,7 +75,7 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
    node index out of range, or bad track data.
 4. **Bump the cache version** (use the `bump-cache` skill) — you edited
    `index.html` and/or a JS file.
-5. **Visual check** — load and screenshot it (use the `inspect-scene` skill):
+5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js
    __apex.race("<id>"); __apex.park(0.1);          // stationary at 10% lap
    __apex.orbit(0.1, 45, 15, 40);                  // inspect from all sides

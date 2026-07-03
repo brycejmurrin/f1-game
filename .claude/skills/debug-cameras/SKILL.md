@@ -1,37 +1,36 @@
 ---
 name: debug-cameras
-description: Drive the camera via the __apex debug hooks — the 12 in-game camera modes plus the free debug-camera framing hooks (view/eyeAt/orbit/cinematic/roadside/dolly/carOrbit/tourShots) and the camState/viewState inspectors. Use to frame a corner, switch camera mode, set up a cinematic/orbit shot, or check where the camera is. Triggers - "switch to cockpit cam", "orbit this corner", "what camera modes are there", "frame the chicane", "cinematic shot of turn 1".
+description: Drive the camera via the __apex debug hooks — the 13 in-game camera modes plus the free debug-camera framing hooks (view/eyeAt/orbit/cinematic/roadside/dolly/carOrbit/tourShots) and the camState/viewState inspectors. Use to frame a corner, switch camera mode, set up a cinematic/orbit shot, or check where the camera is. Triggers - "switch to cockpit cam", "orbit this corner", "what camera modes are there", "frame the chicane", "cinematic shot of turn 1".
 ---
 
 # Camera debug hooks
 
 Verified live against the running game (`tools/apex-eval.mjs`). Two layers: the
-**12 built-in camera modes** (what a player cycles with C / the CAM button) and
+**13 built-in camera modes** (what a player cycles with C / the CAM button) and
 the **free debug camera** (`view()` and friends) that overrides them for framing.
 
-## The 14 camera modes
+## The 13 camera modes
 
-`__apex.camera()` → `{ mode, index, modes:[...] }`. Full list, in cycle order:
+`__apex.camera()` → `{ mode, index, modes:[...] }`. Full list, in cycle order
+(`CAM_MODES` in game.js):
 
 ```
-chase  far  drift  cockpit  hood  bumper  overhead  heli  reverse  side  cinematic  low  tcam  rear
+chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear
 ```
 
 - **drift** — action chase that swings to the OUTSIDE of a slide so the car's flank
   faces camera under oversteer; settles behind when gripping.
-- **bumper** — road-level splitter cam, ahead of the nose (player car not drawn);
-  the widest FOV → strongest ground-rush. (cf. **hood**, which sits up on the nose.)
 - **heli/side/cinematic** are corner-aware: they auto-pick the OUTSIDE of the
   upcoming bend and shoot across the apex (driven by look-ahead curvature).
-- **chase/far/cockpit/hood/bumper/tcam** aim at the *curved* centreline ahead, so
+- **chase/far/cockpit/hood/tcam** aim at the *curved* centreline ahead, so
   they look INTO the corner rather than straight off the car's tail.
 
 Set by id, label, or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
-All 14 render non-blank (confirmed via screenshot byte-size). After switching,
+All 13 render non-blank (confirmed via screenshot byte-size). After switching,
 call `__apex.snapCam()` to jump the rig to position without damping — it now snaps
 **every** mode correctly (essential before a screenshot). `camera()` clears any
 active `view()`. Cuts ease in over ~0.35 s (a brief gentle glide, not a hard pop);
-onboard cams (cockpit/hood/bumper/tcam) lock instantly to the car.
+onboard cams (cockpit/hood/tcam) lock instantly to the car.
 
 ## Preview any in-game mode anywhere (no driving)
 
@@ -85,7 +84,7 @@ node tools/apex-capture.mjs lap-tour spa 70 /tmp/spa # custom outdir
 // in a Playwright page or the dev console — frame + freeze + (screenshot):
 __apex.race("monaco"); __apex.park(0.18);   // stationary + frozen
 __apex.orbit(0.18, 60, 20, 40);             // orbit the chicane
-// for a PNG, use the inspect-scene skill's shot.mjs (cam = orbit|eye|cinematic|trackside)
+// for a PNG, use the playwright-probe skill's shot.mjs (cam = orbit|eye|cinematic|trackside)
 
 // manual chase-cam snap (the lap-tour pattern in bare JS):
 __apex.jump(0.35, 60, 0);   // teleport to 35% of lap at 60 m/s
@@ -93,6 +92,6 @@ __apex.camera("chase");     // switch to chase mode
 __apex.snapCam();           // snap rig without damping — essential before a screenshot
 ```
 
-To capture a single framed shot, use the **inspect-scene** skill (`shot.mjs`).
-For a full lap in order, use `apex-capture.mjs lap-tour` (above).
-For parallel multi-shot/multi-track sweeps, see **playwright-probe**.
+To capture a single framed shot, a full lap tour, or a parallel multi-track
+sweep, see **playwright-probe** (owns `shot.mjs`, `apex-eval.mjs`,
+`apex-capture.mjs` and all Playwright/Chromium mechanics).

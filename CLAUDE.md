@@ -65,7 +65,7 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Critical conventions
 
-- **Cache busting**: `index.html` uses `?v=N` on every asset URL (currently v=263).
+- **Cache busting**: `index.html` uses `?v=N` on every asset URL (check `index.html` for the current N).
   **Always increment N when changing any JS or CSS file** — search `?v=` and replace
   all instances (`sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`). **Also bump
   `version.json` `{ "build": N }` to the SAME N** — the shell version guard in
@@ -119,7 +119,7 @@ under hard braking (`brakeFade`) to kill the turn-in snap.
 ## Lighting & sky (`js/glx.js` + `applyRaceSettings` in `game.js`)
 
 Lit shader = directional sun (shadow map) + hemisphere ambient (`uAmbSky`/`uAmbGround`)
-+ up to 32 point lights (UBO). Composite: ACES tone-map + `colourGrade` + bloom +
++ up to 32 point lights (uniform arrays, 15 floats per light). Composite: ACES tone-map + `colourGrade` + bloom +
 lens flare + vignette. Night: ambient floored+capped, sun dimmed to moonlight,
 floodlights on. Day: `_trackAtmoBias` per circuit. `buildTrackLights()` places
 floodlights every ~40 m; `setFrameLights()` culls to nearest 32 per frame.
@@ -129,7 +129,7 @@ __apex.lightState()           // { ambientSky, ambientGround, sunColor, numLight
 __apex.setTimeOfDay('night')  // 'dawn'|'day'|'dusk'|'night'|'default'
 ```
 
-See `docs/LIGHTING-REF.md` for UBO layout, shader uniforms, time-of-day branches, masts.
+See `docs/LIGHTING-REF.md` for the light-record layout, shader uniforms, time-of-day branches, masts.
 
 ### Lighting tuner (`TUNE_DEFS` / `LT` in `game.js`)
 

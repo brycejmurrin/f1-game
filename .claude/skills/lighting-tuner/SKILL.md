@@ -1,9 +1,27 @@
 ---
 name: lighting-tuner
-description: Tune and validate per-time-of-day atmosphere settings in applyRaceSettings (game.js) using live lightState() probes and orbit() screenshots — no guesswork. Use when "night looks washed out", "dawn sun is too high", "floodlights aren't firing on this track", "day scene is flat", or validating a lighting change before committing. Triggers - "lighting", "night looks wrong", "floodlights", "ambient", "sun colour", "time of day", "dawn", "dusk", "applyRaceSettings".
+description: Tune and validate scene lighting — the TUNE_DEFS slider knobs (via __apex.lightTune), the applyRaceSettings time-of-day branches, live lightState() probes and orbit() screenshots — no guesswork. Use when "night looks washed out", "dawn sun is too high", "floodlights aren't firing on this track", "day scene is flat", or validating a lighting change before committing. Triggers - "lighting", "night looks wrong", "floodlights", "ambient", "sun colour", "time of day", "dawn", "dusk", "applyRaceSettings", "lightTune", "lighting slider".
 ---
 
 # Tune and validate scene lighting via __apex probes
+
+**Reach for the tuner knobs FIRST.** Nearly every hand-tuned lighting value is a
+live `TUNE_DEFS` knob (game.js) read via `LT.<id>` each frame — sun/ambient,
+shadows, floodlights, bloom, fog/mist, reflections, car paint, image grade.
+Prefer adjusting a knob over editing a literal in `applyRaceSettings`:
+
+```js
+__apex.lightTune()                    // current resolved knob values
+__apex.lightTune({ lampLevel: 0.4 })  // set knobs live (same as the panel sliders)
+```
+
+Knob resolution, lowest→highest precedence: `TUNE_DEFS.def` → shipped
+`js/light-presets.js` `"*"` → shipped `"track|tod|weather"` → localStorage
+`"*"` (player's GLOBAL slider edits) → legacy localStorage per-condition.
+Slider edits write the global `"*"` profile; ship a look by baking the panel's
+COPY VALUES export into `js/light-presets.js` (see the **bake-lighting**
+skill). Edit `applyRaceSettings` only for STRUCTURAL changes (new branch
+logic, per-theme behavior) — not for values a knob already owns.
 
 `lightState()` returns the full resolved lighting snapshot *after*
 `applyRaceSettings` has run.  Compare before/after any change to confirm it
@@ -75,11 +93,12 @@ __apex.orbit(0.15, 45, 20, 60);  // frame turn 1
 
 | Symptom | Field to check | Likely fix |
 |---|---|---|
-| "Night looks like day" | `ambientSky` too bright, `numLights` = 0 | `applyRaceSettings` not flooring night ambient, or track doesn't trigger dark rebuild |
-| "Floodlights not firing" | `numLights === 0` on a dark track | `buildTrackLights` guard condition — check `track._night` flag |
-| "Floodlight masts invisible" | `floodEmit === 0` | Night emissive not applied in `buildProps` |
-| "Dawn sun too high" | `sunY` close to 1.0 | Lower the dawn sun elevation in `applyRaceSettings` |
-| "Scene washed out" | `exposure` too high or `ambientGround` too bright | Cap ambient in the night branch |
+| "Night looks like day" | `ambientSky` too bright, `numLights` = 0 | `lightTune({ambientMul})` / night ambient cap in `applyRaceSettings`, or track doesn't trigger dark rebuild |
+| "Floodlights not firing" | `numLights === 0` on a dark track | `buildTrackLights` guard condition — check `track.def.night` flag |
+| "Floodlight masts invisible" | `floodEmit === 0` | Night emissive not applied in `buildProps`; check `lightTune({floodEmitMul})` |
+| "Dawn sun too high" | `sunY` close to 1.0 | `lightTune({sunElev: -N})` (deg offset); structural default lives in `applyRaceSettings` |
+| "Scene washed out" | `exposure` too high or `ambientGround` too bright | `lightTune({exposureMul, ambientMul})`; night branch caps ambient |
+| "Lamps too bright / too dim" | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
 
 ## Writing a lightstate contract test
 

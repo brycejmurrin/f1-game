@@ -1,6 +1,6 @@
 # Lighting & sky reference
 
-`js/glx.js` owns the shaders and UBO; `game.js` (`applyRaceSettings`,
+`js/glx.js` owns the shaders and light upload; `game.js` (`applyRaceSettings`,
 `buildTrackLights`, `setFrameLights`) drives the per-frame state.
 
 ---
@@ -13,7 +13,7 @@ The lit shader combines three sources:
 |---|---|---|
 | Directional sun | `uSunDir`, `uSunColor` | With shadow map |
 | Hemisphere ambient | `uAmbSky`, `uAmbGround` | Blended by surface normal Y component |
-| Point lights (up to 32) | UBO — see below | Floodlights, emissives |
+| Point lights (up to 32) | uniform arrays — see below | Floodlights, emissives |
 
 The composite pass then applies: ACES tone-map → `colourGrade` (vibrance/contrast
 lift — the main "washed-out" lever) → bloom → lens flare → vignette.
@@ -23,23 +23,21 @@ bright spot in the sky always aligns with where shadows fall.
 
 ---
 
-## Point-light UBO
+## Point-light upload — uniform arrays
 
-`_lightUBOData` is a `Float32Array(256)` (1024 bytes) bound to UBO slot 0:
+There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 
 ```
-bindBufferBase(UNIFORM_BUFFER, 0, buf)
+[x, y, z,  r, g, b,  radius,  aimX, aimY, aimZ,  coneIn, coneOut,  bleed, volW, glareW]
 ```
 
-Layout (std140, 32 slots):
+GLX uploads plain uniform arrays per frame — `uLightPos[i]` (xyz + radius),
+`uLightCol[i]`, `uNumLights`, plus per-lamp aim/cone/bleed/volumetric/glare
+arrays consumed by the lit shader and the god-ray pass. Every
+`lights.push(...)` in `buildTrackLights` must be exactly 15 values.
 
-| Range | Name | Meaning |
-|---|---|---|
-| `[0..127]` (4 floats × 32) | `uLPosRad[32]` | xyz = world position, w = radius (metres) |
-| `[128..255]` (4 floats × 32) | `uLCol[32]` | xyz = linear-space RGB colour, w = unused |
-
-`setFrameLights()` re-uploads the buffer every frame: it sorts all active
-floodlights by distance to camera and keeps the nearest 32.
+`setFrameLights()` re-uploads every frame: it sorts all active floodlights by
+distance to camera and keeps the nearest 32 (`MAX_LIGHTS`).
 
 ---
 
@@ -98,7 +96,7 @@ position using the same stride/offset/side — masts are visible day and night, 
 each light pool reads as physically cast by a real structure.
 
 `setFrameLights()` culls the full list to the nearest 32 to camera each frame and
-uploads the UBO. When the sun dominates (bright day) it sets `numLights = 0` and
+uploads the light uniforms. When the sun dominates (bright day) it sets `numLights = 0` and
 skips the upload.
 
 ---

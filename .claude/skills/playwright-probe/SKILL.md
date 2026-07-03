@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: Drive the game headless with Playwright to validate cameras, game modes, tracks, and physics at scale — starting multiple static servers in parallel and fanning pages across them for fast probing + screenshot capture. Covers the two committed tools (apex-eval for one-off __apex expressions, apex-capture for parallel screenshot validation) and the environment gotchas (preinstalled Chromium executablePath, project-resolved playwright, free-port servers). Use for "test a bunch of stuff", "screenshot all camera modes / tracks", "validate game modes", "run a parallel sweep", "exercise the debug hooks".
+description: Drive the game headless with Playwright — single deterministic screenshots (shot.mjs) through parallel multi-server sweeps (apex-eval for one-off __apex expressions, apex-capture for parallel screenshot validation), plus the environment gotchas (preinstalled Chromium executablePath, project-resolved playwright, free-port servers). Use to visually verify a scenery/livery/lighting/track change, frame a corner, or validate at scale. Triggers - "show me the track", "screenshot Monaco at the chicane", "does this look right", "before/after of my change", "screenshot all camera modes / tracks", "validate game modes", "run a parallel sweep", "exercise the debug hooks".
 ---
 
 # Headless Playwright probing (parallel)
@@ -19,10 +19,39 @@ node tools/apex-eval.mjs monaco "a.camera()"
 node tools/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
-node tools/apex-capture.mjs cameras [track] [outdir]   # 12 camera modes
+node tools/apex-capture.mjs cameras [track] [outdir]   # camera-mode sweep (12 of the game's 13 modes)
 node tools/apex-capture.mjs modes   [outdir]           # menu / race day,wet,night / results / time-trial
 node tools/apex-capture.mjs tracks  [outdir] [id ...]  # one orbit shot per circuit
 ```
+
+## Single framed screenshot (`shot.mjs`)
+
+For ONE deterministic shot, use the helper in this skill folder — it boots a
+server, waits for `__apex`, freezes the scene, frames the camera, writes a PNG:
+
+```sh
+node .claude/skills/playwright-probe/shot.mjs <trackId> <frac> [cam] [out.png]
+# cam = orbit | eye | cinematic | trackside | park
+node .claude/skills/playwright-probe/shot.mjs monaco 0.18 orbit  scratch/monaco-chicane.png
+node .claude/skills/playwright-probe/shot.mjs spa    0.07 eye    scratch/eau-rouge.png
+```
+
+A blank/dark canvas comes out < ~5 KB; a real 3D frame is tens of KB (the
+suite's non-blank heuristic). For the full camera-hook reference
+(park/freeze/eyeAt/orbit/view/cinematic/carOrbit/previewCam) see
+**debug-cameras**; add `setTimeOfDay`/`weather` calls for lighting variants.
+For before/after: capture with the same `(track, frac, cam)` args on each side
+of the change so only the pixels you care about differ. Output goes under
+`scratch/` — don't commit throwaway screenshots; visual-regression baselines
+under `tests/` are updated only via `npx playwright test --update-snapshots`.
+
+## UI screens (DOM, not canvas)
+
+The menu/setup/results screens are DOM — follow the `tests/ui-audit.spec.js`
+pattern (navigate the menus, `page.screenshot` to `tests/ui-screenshots/`) and
+use `tests/f1-api-mock.js` so the data hub renders without network egress.
+Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
+`{width:844,height:390}` to avoid the `#rotate-device` overlay.
 
 `apex-capture` exits non-zero and lists any shot that came back `blank:true`
 (< ~5 KB) — so a broken render fails CI-style without opening every file. Both
@@ -77,8 +106,8 @@ const results = await Promise.all(ports.map(async (p, i) => {
 ```
 
 Use this to validate work from the camera / track / state debug skills
-(`debug-cameras`, `debug-tracks`, `debug-state`) at scale. For single deterministic
-screenshots, the `inspect-scene` skill's `shot.mjs` is simpler.
+(`debug-cameras`, `debug-tracks`, `debug-state`) at scale. For single
+deterministic screenshots, `shot.mjs` (above) is simpler.
 
 ## Shared Playwright fixtures (`tests/fixtures.js`)
 

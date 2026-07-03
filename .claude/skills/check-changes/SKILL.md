@@ -19,7 +19,8 @@ git status --short && git diff --stat
 |---|---|
 | `js/tracks/<id>.js` (geometry/metadata) | `node tools/verify-track.cjs <id>` → `npm run test:circuit` → `npm run test:barriers` |
 | a track's `scenery(...)` | `node tools/verify-track.cjs <id>` → (full suite's `terrain-over-road.spec.js` for terrain) |
-| `js/tracks.js` (engine) | `node tools/verify-track.cjs <a few ids>` → `npm run test:circuit` |
+| `js/tracks.js` (engine) or many tracks | `node tools/verify-track.cjs --all` (all 24 circuits, ~30 s) → `npm run test:circuit` |
+| collision / drift / off-track only | `npm run test:collision` (narrower than `test:behaviour`) |
 | `js/game.js` physics/AI | `npm run test:physics` + `npm run test:behaviour` (+ `test:steering` if steering) |
 | `js/game.js` `__apex` API | `npm run test:api` (dev-tools + headless + obs/act edge + new-hooks) |
 | headless loop only (fast) | `npm run test:headless` (headless-api + obs-act-edge, no render) |
@@ -31,15 +32,19 @@ git status --short && git diff --stat
 
 ## Universal guards (always, before push)
 
-1. **Build guard for any track touched** — must print `OK <id>: ...`:
+1. **Build guard for any track touched** — must print `OK <id>: ...`
+   (`FAIL <id>: <msg>` means the game would strand on the menu — non-negotiable):
    ```sh
-   node tools/verify-track.cjs <id>
+   node tools/verify-track.cjs <id>     # one circuit
+   node tools/verify-track.cjs --all    # all 24 (tracks.js engine edits)
    ```
-   A throw here means the game would strand on the menu. Non-negotiable.
-2. **Cache version bumped?** If you changed any `js/*.js` or `css/*.css`, the
-   `?v=N` in `index.html` must be incremented (use the `bump-cache` skill):
+2. **Cache version bumped — BOTH files?** If you changed any `js/*.js` or
+   `css/*.css`, the `?v=N` in `index.html` must be incremented AND
+   `version.json`'s `build` must equal the same N (it force-reloads stale
+   installed PWAs — see the `bump-cache` skill):
    ```sh
-   grep -o '?v=[0-9]\+' index.html | sort -u   # must be exactly ONE line
+   grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
+   # exactly ONE ?v= line, and version.json build == that N
    ```
    Forgetting this ships a change users never see (stale CDN/browser cache).
 3. **Smoke** if you touched load order, `index.html`, or a core module:
