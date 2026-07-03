@@ -60,24 +60,46 @@ function drawRain(dt) {
   const w = rainCanvas.width, h = rainCanvas.height;
   rainCtx2d.clearRect(0, 0, w, h);
   rainCtx2d.lineWidth = 1;
+  // Constant colour + a single averaged alpha so every drop rides ONE batched path
+  // (one beginPath/stroke instead of one per drop). The blur/motion of a rain field
+  // hides that the per-drop opacity is now uniform.
+  rainCtx2d.strokeStyle = "#afc8e8";
+  rainCtx2d.globalAlpha = 0.25;   // ~mean of the 0.16..0.50 per-drop range
+  const wind = LT.rainWind;
+  rainCtx2d.beginPath();
   for (const d of rainDrops) {
     d.y += d.speed * dt;
-    d.x += d.speed * dt * LT.rainWind;
+    d.x += d.speed * dt * wind;
     if (d.y - d.len > h || d.x > w || d.x < 0) { d.y = -d.len; d.x = Math.random() * w; }
-    rainCtx2d.globalAlpha = d.opacity;
-    rainCtx2d.strokeStyle = "#afc8e8";
-    rainCtx2d.beginPath();
     rainCtx2d.moveTo(d.x, d.y);
-    rainCtx2d.lineTo(d.x + d.len * LT.rainWind, d.y + d.len);
-    rainCtx2d.stroke();
+    rainCtx2d.lineTo(d.x + d.len * wind, d.y + d.len);
   }
+  rainCtx2d.stroke();
   rainCtx2d.globalAlpha = 1;
 }
 
 // ---------- settings ----------
 const store = {
-  get(k, d) { try { const v = localStorage.getItem("apex26." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem("apex26." + k, JSON.stringify(v)); } catch (e) {} },
+  _cache: new Map(),   // full-key -> parsed value; kills per-frame getItem + JSON.parse in the render loop
+  rev: 0,              // bumped on every set — memo caches key off this to self-invalidate
+  get(k, d) {
+    const key = "apex26." + k;
+    let v = this._cache.get(key);
+    if (v === undefined && !this._cache.has(key)) {
+      try { const raw = localStorage.getItem(key); v = raw === null ? undefined : JSON.parse(raw); }
+      catch (e) { return d; }
+      this._cache.set(key, v);
+    }
+    // Callers treat hot-path results as read-only; menu callers that mutate a
+    // returned object always saveTeamParts()/store.set() after, re-caching the ref.
+    return v === undefined ? d : v;
+  },
+  set(k, v) {
+    const key = "apex26." + k;
+    try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {}
+    this._cache.set(key, v);
+    this.rev++;
+  },
 };
 
 /// Per-track time-trial leaderboard: top 10 laps ever, each tagged with the
@@ -566,14 +588,21 @@ function getLiveries(team) { return Liveries.forTeam(team).concat(getCustomLiver
 // Transient un-saved paint job previewed live in the creator: { teamId, liv }.
 // Overrides the resolved livery for that one team while the creator is open.
 let livDraftOverride = null;
+// Memoized per team.id, invalidated by store.rev — during a race this resolves to
+// a cached object with zero localStorage access and zero per-frame allocation.
+const _livResolveCache = new Map();
 function resolveLivery(team) {
   if (livDraftOverride && livDraftOverride.teamId === team.id) {
     const l = livDraftOverride.liv;
     return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null };
   }
+  const c = _livResolveCache.get(team.id);
+  if (c && c.rev === store.rev) return c.val;
   const liv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
-  return liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null }
-             : { c1: team.color, c2: team.color2, stripe: null, accent: null };
+  const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null }
+                  : { c1: team.color, c2: team.color2, stripe: null, accent: null };
+  _livResolveCache.set(team.id, { val, rev: store.rev });
+  return val;
 }
 
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
@@ -814,9 +843,14 @@ function carDecalNum(team, car) {
 // A team's rear-wing downforce level (0..4), driving which endplate-number mesh
 // to draw. getVisualTiers is a small 8-category loop and the resulting mesh is
 // cached per level, so resolving this per car/frame is negligible.
+const _aeroLevelCache = new Map();   // team.id -> {val, rev}; invalidated by store.rev
 function teamAeroLevel(team) {
   if (!Car3D.aeroLevelOf) return 2;   // stale-bundle guard → medium-DF board
-  return Car3D.aeroLevelOf(Parts.getVisualTiers(getTeamParts(team.id), team.engine));
+  const c = _aeroLevelCache.get(team.id);
+  if (c && c.rev === store.rev) return c.val;
+  const val = Car3D.aeroLevelOf(Parts.getVisualTiers(getTeamParts(team.id), team.engine));
+  _aeroLevelCache.set(team.id, { val, rev: store.rev });
+  return val;
 }
 function drawCarDecals(team, modelMat, night, num, cockpit) {
   // Cockpit build draws only the forward (nose) number — the rear wing is behind
@@ -2280,11 +2314,25 @@ function updateCar(c, dt, ranked) {
     const edge = track.street ? hw - 0.8 : hw + 5;
     roomL = edge + c.x;            // clearance to the left edge from our position
     roomR = edge - c.x;            // clearance to the right edge
-    for (let j = 0; j < ranked.length; j++) {
-      const o = ranked[j];
-      if (o === c) continue;
+    // Walk OUTWARD from our rank in the prog-sorted field, breaking once the prog
+    // delta leaves the [-6, +18] window — same neighbours as scanning all of ranked,
+    // without the O(n) per-car pass (mirrors resolveCollisions' break pattern).
+    const ci = (c.rank || 1) - 1;
+    for (let up = ci - 1; up >= 0; up--) {    // ahead of us: prog rises, dprog rises
+      const o = ranked[up];
       const dprog = o.prog - c.prog;          // >0 = ahead of us
-      if (dprog < -6 || dprog > 18) continue;
+      if (dprog > 18) break;
+      const dx = o.x - c.x;
+      if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
+        if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
+        else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
+      }
+      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
+    }
+    for (let dn = ci + 1; dn < ranked.length; dn++) {   // behind us: prog falls, dprog falls
+      const o = ranked[dn];
+      const dprog = o.prog - c.prog;          // <0 = behind us
+      if (dprog < -6) break;
       const dx = o.x - c.x;
       if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
@@ -2494,11 +2542,23 @@ function updateCar(c, dt, ranked) {
     // oscillation, and it doesn't fight the collision push (same direction).
     const MIN_GAP = 2.8;
     let sep = 0;
-    for (let j = 0; j < ranked.length; j++) {
-      const o = ranked[j];
-      if (o === c) continue;
-      const dp = Math.abs(o.prog - c.prog);
-      if (dp > 6.5) continue;                 // only cars roughly alongside
+    // Walk OUTWARD from our rank; break once |prog delta| exceeds 6.5 (prog-sorted,
+    // so the window is a contiguous index range — same neighbours, no full-field scan).
+    const ci2 = (c.rank || 1) - 1;
+    for (let up = ci2 - 1; up >= 0; up--) {   // ahead of us
+      const o = ranked[up];
+      const dp = o.prog - c.prog;             // >0
+      if (dp > 6.5) break;                    // only cars roughly alongside
+      const dx = c.x - o.x, adx = Math.abs(dx);
+      const deficit = MIN_GAP - adx;
+      if (deficit <= 0) continue;             // already spaced — leave alone
+      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
+    }
+    for (let dn = ci2 + 1; dn < ranked.length; dn++) {   // behind us
+      const o = ranked[dn];
+      const dpr = o.prog - c.prog;            // <0
+      if (dpr < -6.5) break;                  // only cars roughly alongside
+      const dp = -dpr;                        // |prog delta|
       const dx = c.x - o.x, adx = Math.abs(dx);
       const deficit = MIN_GAP - adx;
       if (deficit <= 0) continue;             // already spaced — leave alone
@@ -3399,6 +3459,7 @@ function appendCarTailLights() {
 const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
+const _lightHeap = [];         // pooled max-heap (≤32 entries) for the nearest-32 partial selection
 function setFrameLights(eye, scale, fwd) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
@@ -3450,10 +3511,26 @@ function setFrameLights(eye, scale, fwd) {
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
   }
   buf.length = count;
-  buf.sort((a, b) => a.d - b.d);
+  // Partial selection: keep only the nearest 32 in a max-heap instead of sorting
+  // all ~count entries every frame (O(count·log32) vs O(count·log count)). Same
+  // nearest-32 set as the old full .sort()+slice, just cheaper on a dense grid.
+  const heap = _lightHeap; heap.length = 0;
+  for (let i = 0; i < count; i++) {
+    const e = buf[i];
+    if (heap.length < 32) {
+      let ci = heap.length; heap.push(e);
+      while (ci > 0) { const pi = (ci - 1) >> 1; if (heap[pi].d < heap[ci].d) { const t = heap[pi]; heap[pi] = heap[ci]; heap[ci] = t; ci = pi; } else break; }
+    } else if (e.d < heap[0].d) {
+      heap[0] = e;
+      let pi = 0;
+      for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < 32 && heap[l].d > heap[lg].d) lg = l; if (rr < 32 && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
+    }
+  }
+  // Sort just those 32 ascending so the last-ranked fade still eases the farthest of the set.
+  heap.sort((a, b) => a.d - b.d);
   out.length = 0;
   for (let i = 0; i < 32; i++) {
-    const o = buf[i].o;
+    const o = heap[i].o;
     // Ease the last-ranked lights toward zero so pools FADE in over ~40 m of
     // approach instead of popping when a lamp enters/leaves the 32-light set —
     // the set boundary itself becomes invisible.
@@ -3730,65 +3807,99 @@ function renderSetupPreview(dt) {
 // live env-probe faces (which re-render the world around the player car so the
 // paint mirrors the real surroundings). Cars/skids/rain are main-pass only.
 let _envFace = -1;   // probe face cursor: one of the 6 cube faces per frame
+let _frameNo = 0;    // render frame counter (env-probe cadence, etc.)
 // Set by GLX's webglcontextlost handler (persisted) — once a device has lost the
 // context we skip the extra per-frame env-probe pass on every subsequent load so
 // the reflection feature can't keep exhausting a memory-constrained GPU.
 let _envProbeOff = false;
 try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
+// Hoisted material-option objects for drawWorldMeshes — the function runs up to
+// 2×/frame (main pass + env probe) and previously allocated ~9 literals each call.
+// Pure night/wet variants are constants; the few with live-tunable fields (detail
+// from LT.surfDetail, roughness from LT.roadRough, emissive from floodEmit) are
+// per-variant reused objects mutated in place each call (never a stale key).
+const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05 };
+const _wmFloorD = { roughness: 0.98, specular: 0.05 };
+const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0 };
+const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0 };
+const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0 };
+const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0 };
+const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0 };
+const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0 };
+const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0 };
+const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 };
+const _wmStartD = { roughness: 0.80, specular: 0.22, detail: 0 };
+const _wmPropsWetN = { emissive: 0, roughness: 0.55, specular: 0.38 };
+const _wmPropsWetD = { roughness: 0.55, specular: 0.38 };
+const _wmPropsDryN = { emissive: 0, roughness: 0.85, specular: 0.20 };
+const _wmPropsDryD = { roughness: 0.85, specular: 0.20 };
+const _wmGlass = { roughness: 0.13, specular: 0.82, metalness: 0.12, clearcoat: 1.0 };
+const _wmWaterWet = { roughness: 0.16, specular: 0.85, metalness: 0.05 };
+const _wmWaterDry = { roughness: 0.10, specular: 0.92, metalness: 0.05 };
+const _wmGateWet = { roughness: 0.32, metalness: 0.35, specular: 0.65 };
+const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
 function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Base floor first (under everything) — fills the void on street circuits (no
   // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
   // so the huge plane stays flat and recedes into fog.
   if (!hideMeshes.terrain && track.meshes.floor) GLX.draw(track.meshes.floor, MAT_IDENT,
-    night ? { emissive: 0.14, roughness: 0.98, specular: 0.05 }
-          : { roughness: 0.98, specular: 0.05 });
+    night ? _wmFloorN : _wmFloorD);
   // TARMAC ROUGHNESS / SURFACE DETAIL knobs: rr scales dry-tarmac roughness
   // (glossier asphalt); sd scales the procedural grain/relief (0 = flat).
   const _rr = LT.roadRough, _sd = LT.surfDetail;
-  if (!hideMeshes.terrain) GLX.draw(track.meshes.terrain, MAT_IDENT,
-    night ? { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0.42 * _sd }
-          : { roughness: 0.97, specular: 0.06, detail: 0.42 * _sd });
-  if (!hideMeshes.road) GLX.draw(track.meshes.road, MAT_IDENT,
-    wet   ? (night ? { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0.06 * _sd }
-                   : { roughness: 0.14, specular: 0.85, detail: 0.06 * _sd })
-          : (night ? { emissive: 0.09, roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }
-                   : { roughness: clamp(0.85 * _rr, 0.04, 1), specular: 0.20, detail: 0.22 * _sd }));
+  if (!hideMeshes.terrain) {
+    const m = night ? _wmTerrainN : _wmTerrainD; m.detail = 0.42 * _sd;
+    GLX.draw(track.meshes.terrain, MAT_IDENT, m);
+  }
+  if (!hideMeshes.road) {
+    let m;
+    if (wet) { m = night ? _wmRoadWetN : _wmRoadWetD; m.detail = 0.06 * _sd; }
+    else { m = night ? _wmRoadDryN : _wmRoadDryD; m.detail = 0.22 * _sd; m.roughness = clamp(0.85 * _rr, 0.04, 1); }
+    GLX.draw(track.meshes.road, MAT_IDENT, m);
+  }
   if (!hideMeshes.startline && track.meshes.startline) GLX.draw(track.meshes.startline, MAT_IDENT,
-    wet   ? { roughness: 0.16, specular: 0.80, detail: 0 }
-          : (night ? { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 }
-                   : { roughness: 0.80, specular: 0.22, detail: 0 }));
+    wet ? _wmStartWet : (night ? _wmStartN : _wmStartD));
   // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
   // light gets a visible halo (colored per lamp) without inflating bloom.
   // (Skipped for the studio rig — its lamps have no fixtures, and floating
   // glow-cone billboards ringing the car read as artifacts. Skipped in the env
   // probe too: 64px additive halos just smear the reflection.)
   if (withGlow && frame.lights && !_studioRig) GLX.drawGlow(frame.lights, LT.glareStr);
-  if (!hideMeshes.props) GLX.drawChunked(track.meshes.props, MAT_IDENT,
-    wet   ? (night ? { emissive: Math.min(0.80, floodEmit), roughness: 0.55, specular: 0.38 }
-                   : { roughness: 0.55, specular: 0.38 })
-          : (night ? { emissive: floodEmit, roughness: 0.85, specular: 0.20 }
-                   : { roughness: 0.85, specular: 0.20 }));
+  if (!hideMeshes.props) {
+    let m;
+    if (wet) { if (night) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
+    else { if (night) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
+    GLX.drawChunked(track.meshes.props, MAT_IDENT, m);
+  }
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT,
-    { roughness: 0.13, specular: 0.82, metalness: 0.12, clearcoat: 1.0 });
+  if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT, _wmGlass);
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
   if (!hideMeshes.props && track.meshes.water) GLX.draw(track.meshes.water, MAT_IDENT,
-    wet ? { roughness: 0.16, specular: 0.85, metalness: 0.05 }
-        : { roughness: 0.10, specular: 0.92, metalness: 0.05 });
+    wet ? _wmWaterWet : _wmWaterDry);
   if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
-    wet ? { roughness: 0.32, metalness: 0.35, specular: 0.65 }
-        : { roughness: 0.45, metalness: 0.30, specular: 0.50 });
+    wet ? _wmGateWet : _wmGateDry);
 }
 
+// Colour-grade split-tone bases per time-of-day (constant); the per-frame tuner
+// mutation (gradeStr / hue rotation) writes into the reused _gradeOut so the base
+// str never compounds across frames. Reused present-options object too — both
+// avoid a fresh object literal every render frame.
+const _gradeNight = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
+const _gradeDusk  = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
+const _gradeDawn  = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0.30 };
+const _gradeDay   = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
+const _gradeOut = { shadow: null, hi: null, str: 0 };
+const _presentOpts = {};
 function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   GLX.resize();
   if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); GLX.present(); return; }
+  _frameNo++;
 
   // camera
   let eyeT, tgtT, fovT;
@@ -3954,15 +4065,16 @@ function render(dt) {
   frame.cullDist = (dbgCam && GLX.isMobile) ? 700 : 0;
 
   // Shadow pass — render terrain + road from sun's perspective.
-  // Snap the frustum centre to a 10 m grid so the shadow map only re-renders
-  // when the camera moves enough to shift the snapped cell.
+  // Snap the frustum centre to a 16 m grid so the shadow map only re-renders
+  // when the camera moves enough to shift the snapped cell (coarser than 10 m so
+  // the heavy chunked-city re-raster fires far less often at racing speed).
   if (track) {
     const sd = frame.sunDir;
     const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
     const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
-    const snapX = Math.round(cx / 10) * 10, snapZ = Math.round(cz / 10) * 10;
+    const snapX = Math.round(cx / 16) * 16, snapZ = Math.round(cz / 16) * 16;
     // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
-    // only on the 10 m position snap), so the slider responds without driving.
+    // only on the 16 m position snap), so the slider responds without driving.
     const sBox = LT.shadowRange || 64;
     if (snapX !== _shadowSnapX || snapZ !== _shadowSnapZ || sBox !== _shadowBox) {
       _shadowSnapX = snapX; _shadowSnapZ = snapZ; _shadowBox = sBox;
@@ -4150,7 +4262,10 @@ function render(dt) {
   // a second time each frame and is anchored to the player car, which isn't the
   // subject while flying the lighting-tuner free camera — dropping it here removes
   // the biggest per-frame load multiplier during the exact mode that OOM-crashes.
-  if (player && !_envProbeOff && !paused && !dbgCam && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
+  // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
+  // for a 64px blurred reflection probe).
+  if (player && !_envProbeOff && !paused && !dbgCam && (_frameNo & 1) === 0 && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -4480,7 +4595,7 @@ function render(dt) {
   // teal-orange split-tone gives cinematic colour separation without brightening.
   let _grade, _bloom = 0.55, _thresh = 0.78;
   if (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) {
-    _grade = { shadow: [0.86, 0.94, 1.14], hi: [1.07, 1.00, 0.92], str: 0.30 };
+    _grade = _gradeNight;
     // Moderate bloom, HIGH threshold: only the genuinely bright HDR sources
     // (lamps, neon, lit windows >1.0) bloom into halos — the dark scene between
     // them stays dark. Dialled back from the previous heavy bloom. Neon-heavy
@@ -4490,18 +4605,18 @@ function render(dt) {
     _bloom = _neonCity ? 0.48 : 0.55;
     _thresh = 0.97;
   } else if (raceTimeOfDay === "dusk") {
-    _grade = { shadow: [0.88, 0.97, 1.12], hi: [1.13, 1.02, 0.84], str: 0.36 };
+    _grade = _gradeDusk;
     // Higher threshold so the low sun + lifted exposure + stronger god-rays don't
     // bloom the whole hazy horizon into a wash — only the sun/glints glow.
     _bloom = 0.52; _thresh = 0.82;
   } else if (raceTimeOfDay === "dawn") {
-    _grade = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0.30 };
+    _grade = _gradeDawn;
     _bloom = 0.52; _thresh = 0.82;
   } else {
     // Bright day: a punchier teal-shadow / warm-highlight split with real bloom
     // on highlights so chrome, kerbs, glass and bright sky sparkle instead of
     // reading flat. (Old str 0.15 / bloom 0.50 was the washed-out look.)
-    _grade = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
+    _grade = _gradeDay;
     _bloom = 0.60; _thresh = 0.82;
   }
   // (Lamp volumetric beam/halo cones removed — they read as hazy light shafts;
@@ -4557,18 +4672,24 @@ function render(dt) {
   // anyway — and night street grids are where the frame budget is tightest.
   const _ao = _grSunY > -0.04 ? 0.95 * LT.aoStr : 0;
   if (_grade) {
-    _grade.str = (_grade.str || 0) * LT.gradeStr;   // GRADE STRENGTH tuner slider
-    // SHADOW / HIGHLIGHT TINT HUE knobs: rotate the split-tone colours in place.
-    if (LT.shadowHue) _grade.shadow = hueRotateTint(_grade.shadow, LT.shadowHue);
-    if (LT.hiHue)     _grade.hi     = hueRotateTint(_grade.hi, LT.hiHue);
+    // Read from the constant base, write to the reused output — the base str never
+    // compounds frame-to-frame.
+    _gradeOut.str = (_grade.str || 0) * LT.gradeStr;   // GRADE STRENGTH tuner slider
+    // SHADOW / HIGHLIGHT TINT HUE knobs: rotate the split-tone colours (hueRotateTint
+    // allocates only when a hue is set; otherwise share the base array, read-only).
+    _gradeOut.shadow = LT.shadowHue ? hueRotateTint(_grade.shadow, LT.shadowHue) : _grade.shadow;
+    _gradeOut.hi     = LT.hiHue     ? hueRotateTint(_grade.hi, LT.hiHue)         : _grade.hi;
+    _grade = _gradeOut;
   }
   // SPEED BLUR: fold the car's velocity into the tuner amount so the radial
   // smear only appears at speed (zero when parked; ramps in above ~40% of VMAX).
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / VMAX - 0.4) / 0.5, 0, 1) : 0;
-  GLX.present({ exposure: frame.exposure * LT.exposureMul, bloom: _bloom * LT.bloomMul,
-    threshold: clamp(_thresh + LT.threshOff, 0.4, 1.2), grade: _grade, ssao: _ao,
-    godray: _gr, contact: _cs, reflect: _ssr, lampVol: _lampVol, mist: _mist,
-    flareMul: LT.flareMul, speedBlur: _spd, tune: LT });
+  const po = _presentOpts;
+  po.exposure = frame.exposure * LT.exposureMul; po.bloom = _bloom * LT.bloomMul;
+  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade; po.ssao = _ao;
+  po.godray = _gr; po.contact = _cs; po.reflect = _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
+  GLX.present(po);
   if (raceWeather === "rain" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
@@ -4584,29 +4705,54 @@ function render(dt) {
 }
 
 // ---------- HUD ----------
+// HUD write-caches: skip the DOM mutation when the value hasn't changed (the panel
+// ticks ~10Hz but most fields hold steady between updates). Keyed per element.
+const _hudTxt = new WeakMap();   // el -> last textContent
+const _hudSty = new WeakMap();   // el -> { prop: lastVal }
+const _hudCls = new WeakMap();   // el -> last className
+const _hudTog = new WeakMap();   // el -> { cls: lastBool }
+function hText(el, v) { if (!el) return; if (_hudTxt.get(el) !== v) { _hudTxt.set(el, v); el.textContent = v; } }
+function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); } if (m[prop] !== v) { m[prop] = v; el.style[prop] = v; } }
+function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
+function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
+// Sector row: cached span nodes (built once), textContent-updated each tick — no
+// per-tick innerHTML re-parse.
+let _secRows = null;
+function buildSecRows() {
+  const SC = ["#c084fc", "#e10600", "#a3e635"], labels = ["S1", "S2", "S3"];
+  els.hudSectors.textContent = "";
+  _secRows = [];
+  for (let i = 0; i < 3; i++) {
+    const row = document.createElement("div"); row.className = "sec-row";
+    const lbl = document.createElement("span"); lbl.className = "sec-lbl"; lbl.style.color = SC[i]; lbl.textContent = labels[i];
+    const val = document.createElement("span"); val.className = "sec-val"; val.textContent = "--";
+    row.appendChild(lbl); row.appendChild(val); els.hudSectors.appendChild(row);
+    _secRows.push(val);
+  }
+}
 function updateHud(force) {
   if (!player) return;
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
-  els.pos.textContent = timeTrial ? "TT" : (player.rank || "-") + "/" + cars.length;
-  els.lap.textContent = Math.min(player.lap || 1, lapsTarget) + "/" + lapsTarget;
-  els.time.textContent = fmtTime(player.lapTime);
-  els.best.textContent = isFinite(player.best) ? fmtTime(player.best) : "-";
-  els.speed.textContent = Math.round(player.speed * 3.6);
-  els.energy.style.width = (player.energy * 100).toFixed(0) + "%";
+  hText(els.pos, timeTrial ? "TT" : (player.rank || "-") + "/" + cars.length);
+  hText(els.lap, Math.min(player.lap || 1, lapsTarget) + "/" + lapsTarget);
+  hText(els.time, fmtTime(player.lapTime));
+  hText(els.best, isFinite(player.best) ? fmtTime(player.best) : "-");
+  hText(els.speed, "" + Math.round(player.speed * 3.6));
+  hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   // gear + tachometer
-  els.gear.textContent = player.gear;
+  hText(els.gear, "" + player.gear);
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  els.rpmFill.style.width = (rpmFrac * 100).toFixed(0) + "%";
-  els.tach.classList.toggle("redline", player.rpm > MAX_RPM * 0.92);
+  hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%");
+  hToggle(els.tach, "redline", player.rpm > MAX_RPM * 0.92);
   // toggle-button states
-  els.btnBoost.classList.toggle("on", player.boostOn);
-  els.btnOT.classList.toggle("on", player.otT > 0);
-  els.btnOT.classList.toggle("armed", player.otArmed && player.otT <= 0);
+  hToggle(els.btnBoost, "on", player.boostOn);
+  hToggle(els.btnOT, "on", player.otT > 0);
+  hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
-  els.ot.className = ot;
-  els.ot.textContent = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE";
+  hClass(els.ot, ot);
+  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE");
   if (timeTrial) {
     // no rivals — show ghost delta (or last lap) and the record to chase instead of gaps
     if (Ghost.hasGhost()) {
@@ -4614,34 +4760,31 @@ function updateHud(force) {
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
         const sign = delta >= 0 ? "+" : "";
-        els.gapA.textContent = "GHOST " + sign + delta.toFixed(3) + "s";
-        els.gapA.style.color = delta <= 0 ? "#a3e635" : "#e10600";
+        hText(els.gapA, "GHOST " + sign + delta.toFixed(3) + "s");
+        hStyle(els.gapA, "color", delta <= 0 ? "#a3e635" : "#e10600");
       } else {
-        els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
-        els.gapA.style.color = "";
+        hText(els.gapA, player.lastLap ? "LAST " + fmtTime(player.lastLap) : "");
+        hStyle(els.gapA, "color", "");
       }
     } else {
-      els.gapA.textContent = player.lastLap ? "LAST " + fmtTime(player.lastLap) : "";
-      els.gapA.style.color = "";
+      hText(els.gapA, player.lastLap ? "LAST " + fmtTime(player.lastLap) : "");
+      hStyle(els.gapA, "color", "");
     }
-    els.gapB.textContent = isFinite(ttRecord) ? "REC " + fmtTime(ttRecord) : "REC —";
+    hText(els.gapB, isFinite(ttRecord) ? "REC " + fmtTime(ttRecord) : "REC —");
   } else {
-    // gaps
-    const ranked = cars.slice().sort((a, b) => b.prog - a.prog);
+    // gaps — reuse the module-scope prog-sorted field from the update loop
     const i = ranked.indexOf(player);
     const a = ranked[i - 1], b = ranked[i + 1];
-    els.gapA.textContent = a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
-    els.gapB.textContent = b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "";
+    hText(els.gapA, a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "");
+    hText(els.gapB, b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "");
   }
-  // Sector split display (top-right)
+  // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
-    const SC = ["#c084fc", "#e10600", "#a3e635"]; // S1 purple, S2 red, S3 green
-    const labels = ["S1", "S2", "S3"];
-    els.hudSectors.innerHTML = labels.map((lbl, i) => {
+    if (!_secRows) buildSecRows();
+    for (let i = 0; i < 3; i++) {
       const t = sectorLast[i];
-      const val = t == null ? "--" : t.toFixed(3);
-      return `<div class="sec-row"><span class="sec-lbl" style="color:${SC[i]}">${lbl}</span><span class="sec-val">${val}</span></div>`;
-    }).join("");
+      hText(_secRows[i], t == null ? "--" : t.toFixed(3));
+    }
   }
   drawMinimap();
 }
@@ -4688,7 +4831,7 @@ function drawMinimap() {
   for (const c of cars) {
     if (c === player) continue;
     const p = map[Math.floor(c.s / track.total * n) % n];
-    mm.fillStyle = cssCol(c.team.color);
+    mm.fillStyle = c.team._cssColor || (c.team._cssColor = cssCol(c.team.color));   // team colours are static — compute once
     mm.fillRect(6 + p[0] * (W - 16), 6 + p[1] * (H - 16), 4, 4);
   }
   // ghost replay marker (time trial): where your best lap is right now

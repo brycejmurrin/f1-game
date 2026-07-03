@@ -429,6 +429,11 @@ const Input = (function () {
   //   btn 4 LB shift down               btn 5 RB shift up
   //   btn 8 View/Back  camera           btn 9 Menu/Start  pause
   function pollGamepad() {
+    // Skip the whole poll when nothing is connected. navigator.getGamepads()
+    // allocates a fresh GamepadList every call, so calling it each frame with no
+    // pad present is pure garbage. gamepadconnected flips padConnected true and
+    // resumes polling; gamepaddisconnected (and the null branch below) clears it.
+    if (!padConnected) return;
     const pad = activePad();
     if (!pad) {
       padConnected = false;

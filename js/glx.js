@@ -2089,6 +2089,12 @@ void main() {}`;
   const _grPos = new Float32Array(36), _grCol = new Float32Array(36),
         _grRad = new Float32Array(12), _grDir = new Float32Array(36),
         _grCone = new Float32Array(24), _grVolW = new Float32Array(12), _grSel = [];
+  // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
+  // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
+  // typed-array allocs (GC jitter on dense night grids). Mirrors _gr* above.
+  const _luPos = new Float32Array(32 * 3), _luCol = new Float32Array(32 * 3),
+        _luRad = new Float32Array(32), _luDir = new Float32Array(32 * 3),
+        _luCone = new Float32Array(32 * 2), _luBleed = new Float32Array(32);
   let frameInvProj = null;
   let frameInvVP = null;
   let frameProj = null;
@@ -2959,9 +2965,8 @@ void main() {
       const nL = L ? Math.min(32, (L.length / 15) | 0) : 0;
       gl.uniform1i(litU.uNumLights, nL);
       if (nL > 0) {
-        const pos = new Float32Array(nL * 3), col = new Float32Array(nL * 3),
-              rad = new Float32Array(nL), dir = new Float32Array(nL * 3),
-              cone = new Float32Array(nL * 2), bleed = new Float32Array(nL);
+        const pos = _luPos, col = _luCol, rad = _luRad, dir = _luDir,
+              cone = _luCone, bleed = _luBleed;
         for (let i = 0; i < nL; i++) {
           const o = i * 15;
           pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
@@ -2971,12 +2976,12 @@ void main() {
           cone[i * 2] = L[o + 10]; cone[i * 2 + 1] = L[o + 11];
           bleed[i] = L[o + 12];
         }
-        gl.uniform3fv(litU["uLightPos[0]"], pos);
-        gl.uniform3fv(litU["uLightCol[0]"], col);
-        gl.uniform1fv(litU["uLightRad[0]"], rad);
-        gl.uniform3fv(litU["uLightDir[0]"], dir);
-        gl.uniform2fv(litU["uLightCone[0]"], cone);
-        gl.uniform1fv(litU["uLightBleed[0]"], bleed);
+        gl.uniform3fv(litU["uLightPos[0]"], pos.subarray(0, nL * 3));
+        gl.uniform3fv(litU["uLightCol[0]"], col.subarray(0, nL * 3));
+        gl.uniform1fv(litU["uLightRad[0]"], rad.subarray(0, nL));
+        gl.uniform3fv(litU["uLightDir[0]"], dir.subarray(0, nL * 3));
+        gl.uniform2fv(litU["uLightCone[0]"], cone.subarray(0, nL * 2));
+        gl.uniform1fv(litU["uLightBleed[0]"], bleed.subarray(0, nL));
       }
     }
     _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = _matSpark = -1;
@@ -3072,13 +3077,14 @@ void main() {
   // (top-level vao/vbo/ib/count) so a stray draw()/castShadow() won't crash.
   function createChunkedMesh(data, cellSize) {
     const cell = cellSize > 0 ? cellSize : 72;
-    const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
+    let pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
     const srcIdx = data.idx, vCount = pos.length / 3, big = vCount > 65535;
     const triCount = (srcIdx.length / 3) | 0;
     if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
-    const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
-    const fpv = mat ? 10 : 9;
-    const interleaved = new Float32Array(vCount * fpv);
+    let mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
+    const hasMat = mat != null;
+    const fpv = hasMat ? 10 : 9;
+    let interleaved = new Float32Array(vCount * fpv);
     for (let i = 0; i < vCount; i++) {
       const o = i * fpv;
       interleaved[o  ]=pos[i*3  ]; interleaved[o+1]=pos[i*3+1]; interleaved[o+2]=pos[i*3+2];
@@ -3086,6 +3092,13 @@ void main() {
       interleaved[o+6]=col[i*3  ]; interleaved[o+7]=col[i*3+1]; interleaved[o+8]=col[i*3+2];
       if (mat) interleaved[o+9]=mat[i];
     }
+    // Interleave done: normals/colours/materials are now baked into `interleaved`
+    // and never read again. Drop them (both the toF32 copies and the source refs)
+    // so ~half the source arrays can be GC'd before the bucket index arrays are
+    // built — lowers the transient peak on ~5 M-vert street props. `pos` is still
+    // needed below for triangle centroids/AABBs, so it's nulled after the bins.
+    nrm = col = mat = null;
+    data.nrm = data.col = data.mat = null;
     // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
     // grid is bounded (tracks span a few km), so pack signed cell coords.
     const buckets = new Map();
@@ -3104,22 +3117,29 @@ void main() {
       if (bx<mn[0])mn[0]=bx; if (bx>mx[0])mx[0]=bx; if (by<mn[1])mn[1]=by; if (by>mx[1])mx[1]=by; if (bz<mn[2])mn[2]=bz; if (bz>mx[2])mx[2]=bz;
       if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
     }
+    // Positions are now only referenced by the growable `bk.idx` arrays (as
+    // indices, not coords) — drop the vertex coordinate copies before the
+    // per-bucket IndexArray allocations below.
+    pos = null; data.pos = null;
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
+    interleaved = null;   // uploaded to the VBO — drop the CPU copy
     const stride = fpv * 4;
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
-    if (mat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
+    if (hasMat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
     const IndexArray = big ? Uint32Array : Uint16Array;
     const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const chunks = [];
     let firstIb = null;
     buckets.forEach((bk) => {
       const arr = new IndexArray(bk.idx);
+      bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
+                       // don't all stay resident while the rest are converted
       const ibo = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, arr, gl.STATIC_DRAW);
@@ -3484,49 +3504,55 @@ void main() {
       }
     }
 
-    // 1) bright-pass scene -> bloom level 0 (half res)
+    // 1+2) bright-pass + mip-chain bloom. The whole ~10-14 fullscreen-pass chain
+    //    only feeds the composite's bloom sampler, which is scaled by bloomAmt —
+    //    so when bloom is off (bloomAmt <= 0) skip it all and let the composite
+    //    read blackTex (bound below) for a zero contribution.
     const nLv = bloomLv.length;
-    gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[0].fbo);
-    useProg(brightProg);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, sceneTex);
-    gl.uniform1i(brightU.uScene, 0);
-    gl.uniform1f(brightU.uThreshold, threshold);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (bloomAmt > 0) {
+      // 1) bright-pass scene -> bloom level 0 (half res)
+      gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[0].fbo);
+      useProg(brightProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+      gl.uniform1i(brightU.uScene, 0);
+      gl.uniform1f(brightU.uThreshold, threshold);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
-    //    then additive 9-tap tent upsample back up — each level contributes one
-    //    octave of blur, so bright sources get a tight core AND a wide soft halo.
-    useProg(downProg);
-    gl.uniform1i(downU.uTex, 0);
-    for (let i = 1; i < nLv; i++) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i].fbo);
-      gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
-      gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
-      gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
+      //    then additive 9-tap tent upsample back up — each level contributes one
+      //    octave of blur, so bright sources get a tight core AND a wide soft halo.
+      useProg(downProg);
+      gl.uniform1i(downU.uTex, 0);
+      for (let i = 1; i < nLv; i++) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i].fbo);
+        gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
+        gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
+        gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      useProg(upProg);
+      gl.uniform1i(upU.uTex, 0);
+      // BLOOM SPREAD knob: widen/tighten every octave's tent radius uniformly.
+      gl.uniform1f(upU.uSpread, opts && opts.tune && opts.tune.bloomSpread != null ? opts.tune.bloomSpread : 1);
+      for (let i = nLv - 1; i >= 1; i--) {
+        // Intermediate levels accumulate (ONE, ONE) so every octave sums; the FINAL
+        // pass into level 0 OVERWRITES instead — level 0 still holds the sharp
+        // unblurred bright-pass, and adding onto it would re-inject the scene's
+        // bright areas at full sharpness (large lamp-lit surfaces wash out).
+        const last = i === 1;
+        setBlend(!last);
+        if (!last) gl.blendFunc(gl.ONE, gl.ONE);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
+        gl.viewport(0, 0, bloomLv[i - 1].w, bloomLv[i - 1].h);
+        gl.bindTexture(gl.TEXTURE_2D, bloomLv[i].tex);
+        gl.uniform2f(upU.uTexel, 1 / bloomLv[i].w, 1 / bloomLv[i].h);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      setBlend(false);
     }
-    useProg(upProg);
-    gl.uniform1i(upU.uTex, 0);
-    // BLOOM SPREAD knob: widen/tighten every octave's tent radius uniformly.
-    gl.uniform1f(upU.uSpread, opts && opts.tune && opts.tune.bloomSpread != null ? opts.tune.bloomSpread : 1);
-    for (let i = nLv - 1; i >= 1; i--) {
-      // Intermediate levels accumulate (ONE, ONE) so every octave sums; the FINAL
-      // pass into level 0 OVERWRITES instead — level 0 still holds the sharp
-      // unblurred bright-pass, and adding onto it would re-inject the scene's
-      // bright areas at full sharpness (large lamp-lit surfaces wash out).
-      const last = i === 1;
-      setBlend(!last);
-      if (!last) gl.blendFunc(gl.ONE, gl.ONE);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
-      gl.viewport(0, 0, bloomLv[i - 1].w, bloomLv[i - 1].h);
-      gl.bindTexture(gl.TEXTURE_2D, bloomLv[i].tex);
-      gl.uniform2f(upU.uTexel, 1 / bloomLv[i].w, 1 / bloomLv[i].h);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    }
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    setBlend(false);
 
     // 3) composite — to the LDR target when FXAA is on (it resolves to screen),
     //    else straight to the screen.
@@ -3538,7 +3564,9 @@ void main() {
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(compU.uScene, 0);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, bloomLv[0].tex);
+    // When bloom is off the mip chain was skipped and bloomLv[0] holds a stale
+    // frame — bind the 1×1 black source so the composite reads zero contribution.
+    gl.bindTexture(gl.TEXTURE_2D, bloomAmt > 0 ? bloomLv[0].tex : blackTex);
     gl.uniform1i(compU.uBloom, 1);
     // Normalise the mip-chain accumulation (level 0 holds nLv-1 summed blur
     // octaves) so the hand-tuned per-time-of-day bloom amounts keep their overall

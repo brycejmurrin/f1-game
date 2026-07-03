@@ -174,6 +174,10 @@ const Tracks = (function () {
 
     const track = { def, total, n, px, py, pz, tx, ty, tz, rx, ry, rz, hw, bank, street: !!def.street, meshes: {}, map: null };
     track.map = buildMap(px, pz, n);
+    // Bake the static curvature LUT (rad/m per node) BEFORE anything derives from
+    // it — findCorners/bankingProfile call curvature(), which now indexes this.
+    track.curv = new Float32Array(n);
+    { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
     // Banking profile (outer-edge lift per node). Computed once and shared by the
     // road/terrain meshes and the car/camera placement in game.js.
     track.bankP = bankingProfile(track);
@@ -241,10 +245,12 @@ const Tracks = (function () {
     return out;
   }
 
-  // Hot path: called several times per car per physics step. Inlined (no inner
-  // closure / array allocation) so it produces zero garbage while keeping the
-  // exact same math as before.
-  function curvature(track, s) {
+  // Direct curvature from the centreline heading over a ±12 m window. This is a
+  // STATIC per-position quantity, so it's baked once into track.curv at build
+  // (see buildCenterline) and read via O(1) index+lerp in curvature() below.
+  // Kept as the source of the LUT and as a fallback for tracks built before the
+  // field existed.
+  function curvatureRaw(track, s) {
     const n = track.n, L = track.total, w = 12;
     const tx = track.tx, tz = track.tz;
     let fi = (((s + w) % L + L) % L) / L * n;
@@ -257,6 +263,21 @@ const Tracks = (function () {
     while (d > Math.PI) d -= 2 * Math.PI;
     while (d < -Math.PI) d += 2 * Math.PI;
     return d / (2 * w);   // rad per meter, + = right
+  }
+
+  // Hot path: the AI calls this ~500× per physics substep. Curvature is static,
+  // so read the baked per-node LUT (track.curv) with the same index+lerp math as
+  // sample()/bankAngle() — zero garbage, no atan2s. Node-aligned samples (k*ds,
+  // e.g. findCorners) return the exact baked value. Falls back to the direct
+  // computation for any track built before the LUT existed. Signature unchanged.
+  function curvature(track, s) {
+    const cv = track.curv;
+    if (!cv) return curvatureRaw(track, s);
+    const n = track.n, L = track.total;
+    s %= L; if (s < 0) s += L;
+    const fi = s / L * n;
+    const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
+    return cv[i] + (cv[j] - cv[i]) * f;
   }
 
   // ---------- mesh helpers ----------
@@ -443,11 +464,56 @@ const Tracks = (function () {
     return o;
   }
 
+  // Coarse XZ bucket of road-centreline node indices, built once per track and
+  // shared by buildRoad's shoulder clip, buildTerrain's over-track clip and
+  // buildProps' onRoadHit/onTrack guards. Each of those used to scan ALL n nodes
+  // per emitted vertex/primitive (O(prims·n) — tens of millions of checks on the
+  // city meshes); with the grid a query visits only the handful of nodes whose
+  // footprint can reach the query point. The accept/reject maths in each caller
+  // is unchanged — the grid only narrows the candidate SET to a superset of every
+  // node that could pass, so the resulting geometry is identical.
+  function nodeGrid(track) {
+    if (track._nodeGrid) return track._nodeGrid;
+    const n = track.n, px = track.px, pz = track.pz, hw = track.hw;
+    const CELL = 10, OFFSET = 2048, STRIDE = 4096;   // numeric packed key, cf. glx.createChunkedMesh
+    const map = new Map();
+    let maxHw = 0;
+    for (let k = 0; k < n; k++) {
+      if (hw[k] > maxHw) maxHw = hw[k];
+      const key = (Math.floor(px[k] / CELL) + OFFSET) * STRIDE + (Math.floor(pz[k] / CELL) + OFFSET);
+      let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(k);
+    }
+    const grid = { maxHw };
+    // Write every node index whose cell lies within radius R of (x,z) into `out`,
+    // returning the count. A node within R of (x,z) is within R on both axes, so
+    // its (single) cell falls in the scanned cell rectangle — the candidate set is
+    // always a superset of the nodes any caller's inner test could accept. When
+    // `doSort` is set the indices are returned ascending, so a clip loop that
+    // reads `wy` mid-iteration reproduces the original 0..n-1 sequencing exactly.
+    grid.query = (x, z, R, out, doSort) => {
+      let cnt = 0;
+      const x0 = Math.floor((x - R) / CELL), x1 = Math.floor((x + R) / CELL);
+      const z0 = Math.floor((z - R) / CELL), z1 = Math.floor((z + R) / CELL);
+      for (let cx = x0; cx <= x1; cx++)
+        for (let cz = z0; cz <= z1; cz++) {
+          const arr = map.get((cx + OFFSET) * STRIDE + (cz + OFFSET));
+          if (!arr) continue;
+          for (let a = 0; a < arr.length; a++) out[cnt++] = arr[a];
+        }
+      if (doSort) for (let a = 1; a < cnt; a++) { const v = out[a]; let b = a - 1; while (b >= 0 && out[b] > v) { out[b + 1] = out[b]; b--; } out[b + 1] = v; }
+      return cnt;
+    };
+    track._nodeGrid = grid;
+    return grid;
+  }
+
   function buildRoad(track) {
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [];
     const idxArr = [];
     const bp = track.bankP;
+    const grid = nodeGrid(track);              // shared node grid (also used by buildTerrain/buildProps)
+    const _cand = new Array(n);                // reusable candidate scratch for the shoulder clip
     const pal = track.def.palette;
     const ka = pal.kerbA, kb = pal.kerbB;
     const line = pal.line || [0.95, 0.95, 0.98];
@@ -519,7 +585,11 @@ const Tracks = (function () {
         // vert that lands over ANOTHER node's tarmac just under that road, so the
         // asphalt always occludes it — mirrors buildTerrain's over-track clip.
         if (v === 0 || v === 1 || v === 12 || v === 13) {
-          for (let j = 0; j < n; j++) {
+          // Only nodes within hw[j]-0.3 (< maxHw) of the vert can clip it — query
+          // the shared grid instead of scanning all n. Pure min op, no ordering.
+          const _cn = grid.query(wx, wz, grid.maxHw + 0.5, _cand, false);
+          for (let _ci = 0; _ci < _cn; _ci++) {
+            const j = _cand[_ci];
             let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
             if (dd * ds < 6) continue;
             const ex = wx - px[j], ez = wz - pz[j];
@@ -570,6 +640,8 @@ const Tracks = (function () {
     const pal = track.def.palette, grass = pal.grass, runoff = pal.runoff;
     const bp = track.bankP;
     const ds = total / n;
+    const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
+    const _cand = new Array(n);                // reusable candidate scratch for the over-track clip
     // Run-off aprons on permanent (non-street) circuits: a wide tan gravel/tarmac
     // band where cars actually run wide — fast corners (high |curvature|) and the
     // braking zone at the end of a straight (curvature rising ahead). Street
@@ -703,7 +775,13 @@ const Tracks = (function () {
           // right here" (must clip). The discriminator is HEADING: same tangent =
           // same road run → skip; diverging tangent = the track bends/folds over
           // this vert → clip, at ANY arc distance (so tight corners are caught).
-          for (let j = 0; j < n; j++) {
+          // Only nodes within hw[j]+26 (the widest clip radius, the channel carve)
+          // of this vert can lower it — query the shared grid instead of all n.
+          // Sorted ascending so the `wy`-dependent gates evaluate in the original
+          // 0..n-1 order (this clip reads/updates `wy` as it iterates).
+          const _cn = grid.query(wx, wz, grid.maxHw + 27, _cand, true);
+          for (let _ci = 0; _ci < _cn; _ci++) {
+            const j = _cand[_ci];
             let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
             if (dd * ds < 6) continue;                  // always skip the vert's immediate own road
             const ex = wx - px[j], ez = wz - pz[j];
@@ -1048,7 +1126,11 @@ const Tracks = (function () {
     // coarse XZ grid so each lookup is ~O(1); huge distant triangles are skipped
     // (props are never that far out — those fall back to groundYAt).
     const _tg = track.terrainGeo;
-    const _CELL = 6; let _grid = null;
+    // Numeric packed cell key (no per-triangle/per-lookup string garbage), same
+    // scheme as glx.createChunkedMesh: (cx+OFFSET)*STRIDE + (cz+OFFSET).
+    const _CELL = 6, _GOFF = 2048, _GSTR = 4096;
+    const _gkey = (cx, cz) => (cx + _GOFF) * _GSTR + (cz + _GOFF);
+    let _grid = null;
     const _buildGrid = () => {
       _grid = new Map(); const pos = _tg.pos, idx = _tg.idx;
       for (let t = 0; t < idx.length; t += 3) {
@@ -1058,14 +1140,14 @@ const Tracks = (function () {
         if (mxx - mnx > 30 || mxz - mnz > 30) continue;
         for (let cx = Math.floor(mnx / _CELL); cx <= Math.floor(mxx / _CELL); cx++)
           for (let cz = Math.floor(mnz / _CELL); cz <= Math.floor(mxz / _CELL); cz++) {
-            const key = cx + "," + cz; let arr = _grid.get(key); if (!arr) { arr = []; _grid.set(key, arr); } arr.push(t);
+            const key = _gkey(cx, cz); let arr = _grid.get(key); if (!arr) { arr = []; _grid.set(key, arr); } arr.push(t);
           }
       }
     };
     const terrainYAt = (x, z) => {
       if (!_tg || !_tg.idx) return null;
       if (!_grid) _buildGrid();
-      const arr = _grid.get(Math.floor(x / _CELL) + "," + Math.floor(z / _CELL));
+      const arr = _grid.get(_gkey(Math.floor(x / _CELL), Math.floor(z / _CELL)));
       if (!arr) return null;
       const pos = _tg.pos; let best = null;
       for (const t of arr) {
@@ -1094,11 +1176,21 @@ const Tracks = (function () {
     // ground floor) sit below road level and are exempt via the topY check.
     // ===================================================================
     let _culled = 0;
+    const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
+    const _hitCand = new Array(n), _trkCand = new Array(n);   // reusable query scratch
     // True if a footprint covers the tarmac at any node it rises above. A
     // circular footprint is given by rad>0 at (cx,cz); otherwise an oriented
     // rectangle with unit XZ axes (arx,arz)/(afx,afz) and half-extents hx,hz.
     const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz) => {
-      for (let k = 0; k < n; k++) {
+      // Only nodes within the footprint's max reach (evaluated at maxHw) can be
+      // covered — query the shared grid instead of scanning all n nodes. This is
+      // the O(prims·n) hot path (one call per emitted city pane). OR semantics,
+      // so candidate order is irrelevant; the per-node test below is unchanged.
+      const mh = grid.maxHw;
+      const R = (rad > 0 ? rad + mh : Math.hypot(hx + mh, hz + mh)) + 2;
+      const _cn = grid.query(cx, cz, R, _hitCand, false);
+      for (let _ci = 0; _ci < _cn; _ci++) {
+        const k = _hitCand[_ci];
         if (topY < py[k] - 0.3) continue;                 // sits below road here
         const w = hw[k];
         const dxc = px[k] - cx, dzc = pz[k] - cz;
@@ -1232,7 +1324,14 @@ const Tracks = (function () {
     // perpendicular distance) rather than per-node circles, so hairpin interiors
     // don't create false-positive blobs that swallow outside-of-corner scenery.
     const onTrack = (x, z, margin) => {
-      for (let i = 0; i < n; i++) {
+      // A segment can only pass if one of its endpoints is within maxHw+margin+
+      // segLen (a chord ≤ ds) of (x,z); query that neighbourhood of the shared
+      // grid and test each candidate's forward segment. OR semantics — order
+      // irrelevant; the per-segment test is unchanged.
+      const R = grid.maxHw + margin + ds + 1;
+      const _cn = grid.query(x, z, R, _trkCand, false);
+      for (let _ci = 0; _ci < _cn; _ci++) {
+        const i = _trkCand[_ci];
         const j = (i + 1) % n;
         const dx = px[j] - px[i], dz = pz[j] - pz[i];
         const len2 = dx * dx + dz * dz;
