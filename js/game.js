@@ -1,7 +1,7 @@
 /* Apex 26 — main game: state machine, physics, AI, race logic, HUD.
    Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks,
    Car3D,Input,GameAudio,F1API,DataHub. */
-(function () {
+(async function () {
 "use strict";
 
 // ---------- DOM ----------
@@ -36,7 +36,19 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-if (!GLX.init(canvas)) { $("nogl").hidden = false; return; }
+// Renderer selection. WebGPU is OPT-IN: only tried when the user set
+// apex26.gfxBackend=webgpu AND the browser exposes WebGPU. Anything else — and
+// ANY WebGPU init failure — uses the WebGL2 backend (GLX) exactly as before, so
+// the default path stays byte-for-byte identical (this async IIFE only actually
+// awaits when opted in; otherwise it runs fully synchronously). `gfx` is the
+// handle every later renderer call goes through; on the default path gfx===GLX.
+let gfx = null;
+try {
+  let optIn = false;
+  try { optIn = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
+  if (optIn && typeof Gfx !== "undefined" && navigator.gpu) gfx = await Gfx.create(canvas, {});
+} catch (_) { gfx = null; }
+if (!gfx) { if (!GLX.init(canvas)) { $("nogl").hidden = false; return; } gfx = GLX; }
 
 // ---------- rain overlay ----------
 const rainCanvas = document.createElement("canvas");
@@ -132,9 +144,9 @@ function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
-  if (teamMeshes.custom && GLX.freeMesh) GLX.freeMesh(teamMeshes.custom);   // free the old GPU buffers first
+  if (teamMeshes.custom && gfx.freeMesh) gfx.freeMesh(teamMeshes.custom);   // free the old GPU buffers first
   delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
-  if (playerBodies.custom && GLX.freeMesh) GLX.freeMesh(playerBodies.custom);
+  if (playerBodies.custom && gfx.freeMesh) gfx.freeMesh(playerBodies.custom);
   delete playerBodies.custom; // and the body-only (animated-wheel) variant
 }
 function hexToRgb(h) {
@@ -479,7 +491,7 @@ const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clea
 const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
 const PAINT_DRY_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 0.9, carPaint: 1.0 };
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
-// scratch object (GLX.draw consumes the material synchronously, so one scratch
+// scratch object (gfx.draw consumes the material synchronously, so one scratch
 // is safe across every car in the frame). GLOSS divides roughness (higher =
 // sharper); the rest are straight multipliers. carPaint (the paint MODEL) is
 // left intact — the CAR REFLECTION strength lives in the composite (uCarReflect).
@@ -727,14 +739,14 @@ function buildCarData(team) {
 
 function teamMesh(team) {
   const key = team.id + ":" + getLiveryId(team.id);   // rebuild when the paint job changes
-  if (!teamMeshes[key]) teamMeshes[key] = GLX.createMesh(buildCarData(team));
+  if (!teamMeshes[key]) teamMeshes[key] = gfx.createMesh(buildCarData(team));
   return teamMeshes[key];
 }
 
 // ---------- Car decals (team logo + sponsor textures on the bodywork) ----------
 // ONE shared decal-quad mesh (fixed panel UVs into the LiveryTex atlas layout);
 // the per-team atlas TEXTURE carries the actual logos/sponsors, so the geometry
-// is team-independent. Drawn over the painted body each frame (GLX.drawDecal).
+// is team-independent. Drawn over the painted body each frame (gfx.drawDecal).
 const _carDecalMeshes = {};   // keyed by downforce level (rear-wing number tracks it)
 function carDecalData(aLvl) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
@@ -792,9 +804,9 @@ function carDecalData(aLvl) {
   return out;
 }
 function getCarDecalMesh(aLvl) {
-  if (typeof LiveryTex === "undefined" || !GLX.createTexMesh) return null;
+  if (typeof LiveryTex === "undefined" || !gfx.createTexMesh) return null;
   const k = (aLvl == null ? 2 : aLvl) | 0;   // one mesh per downforce level (endplate number height)
-  if (!_carDecalMeshes[k]) _carDecalMeshes[k] = GLX.createTexMesh(carDecalData(k));
+  if (!_carDecalMeshes[k]) _carDecalMeshes[k] = gfx.createTexMesh(carDecalData(k));
   return _carDecalMeshes[k];
 }
 // Cockpit view draws only the FORWARD decals (the nose number), since the
@@ -803,7 +815,7 @@ function getCarDecalMesh(aLvl) {
 // number lands exactly on the nose plate ahead of the driver.
 let _cockpitDecalMesh = null;
 function getCockpitDecalMesh() {
-  if (typeof LiveryTex === "undefined" || !GLX.createTexMesh) return null;
+  if (typeof LiveryTex === "undefined" || !gfx.createTexMesh) return null;
   if (!_cockpitDecalMesh) {
     const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
     const u = { uL: R.num.x / S, uR: (R.num.x + R.num.w) / S, vT: 1 - R.num.y / S, vB: 1 - (R.num.y + R.num.h) / S };
@@ -816,17 +828,17 @@ function getCockpitDecalMesh() {
     const d = { pos: [], nrm: [], uv: [], idx: [] };
     for (let k = 0; k < 4; k++) { d.pos.push(c[k][0], c[k][1], c[k][2]); d.nrm.push(0, 1, 0.05); d.uv.push(uvs[k][0], uvs[k][1]); }
     d.idx.push(0, 1, 2, 0, 2, 3);
-    _cockpitDecalMesh = GLX.createTexMesh(d);
+    _cockpitDecalMesh = gfx.createTexMesh(d);
   }
   return _cockpitDecalMesh;
 }
 const _decalTexCache = {};
 function getCarDecalTexture(team, num) {
-  if (typeof LiveryTex === "undefined" || !GLX.createTexture) return null;
+  if (typeof LiveryTex === "undefined" || !gfx.createTexture) return null;
   const key = team.id + ":" + getLiveryId(team.id) + ":" + (num == null ? "_" : num);
   if (!(key in _decalTexCache)) {
     let t = null;
-    try { t = GLX.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num)); }
+    try { t = gfx.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num)); }
     catch (e) { t = null; }
     _decalTexCache[key] = t;
   }
@@ -857,7 +869,7 @@ function drawCarDecals(team, modelMat, night, num, cockpit) {
   // the camera — so aero level is irrelevant there.
   const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh(teamAeroLevel(team));
   const tex = getCarDecalTexture(team, num);
-  if (mesh && tex) GLX.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
+  if (mesh && tex) gfx.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
 }
 
 // Player car gets animated wheels: a body-only mesh + four separate wheel meshes
@@ -908,7 +920,7 @@ function getBrakeRing() {
     out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
                  base, base + 2, base + 1, base, base + 3, base + 2);
   }
-  brakeRingMesh = GLX.createMesh(out);
+  brakeRingMesh = gfx.createMesh(out);
   return brakeRingMesh;
 }
 
@@ -923,7 +935,7 @@ function getRainLight() {
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  rainLightMesh = GLX.createMesh(out);
+  rainLightMesh = gfx.createMesh(out);
   return rainLightMesh;
 }
 // Exhaust flame: a tiny HDR-amber quad behind the tailpipe, flickering while
@@ -936,7 +948,7 @@ function getExhaustFlame() {
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  exhaustMesh = GLX.createMesh(out);
+  exhaustMesh = gfx.createMesh(out);
   return exhaustMesh;
 }
 // Boost flame: a larger blue-white plasma quad behind the tailpipe while ERS
@@ -949,7 +961,7 @@ function getBoostFlame() {
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  boostMesh = GLX.createMesh(out);
+  boostMesh = gfx.createMesh(out);
   return boostMesh;
 }
 // ERS indicator: a thin cyan strip on the rear crash structure above the rain
@@ -963,7 +975,7 @@ function getErsLight() {
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  ersMesh = GLX.createMesh(out);
+  ersMesh = gfx.createMesh(out);
   return ersMesh;
 }
 
@@ -1029,7 +1041,7 @@ function getCockpitWheel() {
   const PADL = [0.11, 0.11, 0.125];
   _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
   _rigBox(out,  0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
-  cockpitWheelMesh = GLX.createMesh(out);
+  cockpitWheelMesh = gfx.createMesh(out);
   return cockpitWheelMesh;
 }
 // Shift-light LED strip across the top of the wheel fascia — LIVE, keyed to
@@ -1044,7 +1056,7 @@ function getLedStrip(lit) {
     const col = i < lit ? COLS[i] : [0.05, 0.05, 0.06];
     _rigBox(out, -0.070 + i * 0.020, 0.082, -0.026, 0.013, 0.013, 0.010, col);
   }
-  _ledMeshes[lit] = GLX.createMesh(out);
+  _ledMeshes[lit] = gfx.createMesh(out);
   return _ledMeshes[lit];
 }
 // 7-seg GEAR digit, wheel-local on the LCD centre (cached per gear).
@@ -1063,7 +1075,7 @@ function getGearDigit(g) {
   const seg = SEG7[g % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
     _rigBox(out, 0.014 + L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
-  _gearMeshes[g] = GLX.createMesh(out);
+  _gearMeshes[g] = gfx.createMesh(out);
   return _gearMeshes[g];
 }
 // Small 7-seg digits for the LCD speed readout (cached 0-9, origin-centred —
@@ -1083,7 +1095,7 @@ function getSpeedDigit(d) {
   const seg = SEG7[d % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
     _rigBox(out, L[i][1], L[i][0], 0, L[i][2], L[i][3], 0.006, CYN);
-  _spdMeshes[d] = GLX.createMesh(out);
+  _spdMeshes[d] = gfx.createMesh(out);
   return _spdMeshes[d];
 }
 // Live ERS fill (anchored LEFT for matrix X-scale) + pedal bars (anchored
@@ -1093,7 +1105,7 @@ function getErsBar() {
   if (_ersBarMesh) return _ersBarMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
   _rigBox(out, 0, 0.023, 0, 0.008, 0.046, 0.004, [0.25, 1.9, 0.5]);  // anchored at y=0
-  _ersBarMesh = GLX.createMesh(out);
+  _ersBarMesh = gfx.createMesh(out);
   return _ersBarMesh;
 }
 let _otArmedMesh = null, _otActiveMesh = null;
@@ -1101,7 +1113,7 @@ function getOtLamp(active) {
   if (active ? _otActiveMesh : _otArmedMesh) return active ? _otActiveMesh : _otArmedMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
   _rigBox(out, -0.082, 0.024, -0.031, 0.019, 0.019, 0.003, active ? [1.6, 0.5, 2.2] : [1.2, 1.2, 1.3]);
-  const m = GLX.createMesh(out);
+  const m = gfx.createMesh(out);
   if (active) _otActiveMesh = m; else _otArmedMesh = m;
   return m;
 }
@@ -1110,7 +1122,7 @@ function getPedalBar(brake) {
   if (brake ? _brkBarMesh : _thrBarMesh) return brake ? _brkBarMesh : _thrBarMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
   _rigBox(out, 0, 0.026, 0, 0.009, 0.052, 0.006, brake ? [1.9, 0.2, 0.15] : [0.2, 1.8, 0.4]);
-  const m = GLX.createMesh(out);
+  const m = gfx.createMesh(out);
   if (brake) _brkBarMesh = m; else _thrBarMesh = m;
   return m;
 }
@@ -1123,7 +1135,7 @@ function cockpitBodyMesh(team) {
   const key = team.id + ":" + playerVisualKey;
   if (!cockpitBodies[key]) {
     const liv = resolveLivery(team);
-    cockpitBodies[key] = GLX.createMesh(Car3D.build(liv.c1, liv.c2,
+    cockpitBodies[key] = gfx.createMesh(Car3D.build(liv.c1, liv.c2,
       { livery: liv, noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
         parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
   }
@@ -1149,7 +1161,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // forward of their real physics position so they read further out ahead of
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
-  GLX.draw(cockpitBodyMesh(c.team), base, paint);
+  gfx.draw(cockpitBodyMesh(c.team), base, paint);
   // Forward decal: the driver number on the nose plate ahead of the driver (the
   // nose is identical to the chase build, so this lands exactly on the plate).
   drawCarDecals(c.team, base, nite, carDecalNum(c.team, c), true);
@@ -1165,14 +1177,14 @@ function drawCockpitRig(c, base, dt, paint) {
   _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
   M4.mulTo(_rigA, base, _rigT);
   M4.mulTo(_rigB, _rigA, _rigR);
-  GLX.draw(getCockpitWheel(), _rigB, opt);
+  gfx.draw(getCockpitWheel(), _rigB, opt);
   // Live telemetry ON the wheel (all ride the wheel matrix, like the real LCD):
   // gear (auto or manual — c.gear is maintained by both paths), RPM shift
   // lights, speed, pedal bars, ERS energy.
   const fx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
-  GLX.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), _rigB, fx);
+  gfx.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), _rigB, fx);
   const rpmF = clamp(((c.rpm || IDLE_RPM) - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  GLX.draw(getLedStrip(Math.round(rpmF * 8)), _rigB, fx);
+  gfx.draw(getLedStrip(Math.round(rpmF * 8)), _rigB, fx);
   // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
   // reversing glitch) would otherwise stringify with a "-" character that
   // getSpeedDigit can't parse (+"-" is NaN -> SEG7[NaN] -> crash every frame).
@@ -1181,7 +1193,7 @@ function drawCockpitRig(c, base, dt, paint) {
   for (let i = 0; i < ds.length; i++) {
     _digT[12] = -0.034 + (i - (ds.length - 1) / 2) * 0.0135; _digT[13] = 0.022; _digT[14] = -0.0335;
     M4.mulTo(_digM, _rigB, _digT);
-    GLX.draw(getSpeedDigit(+ds[i]), _digM, fx);
+    gfx.draw(getSpeedDigit(+ds[i]), _digM, fx);
   }
   // ERS charge fill in the slot under the LCD; pulses while deploying.
   const en = clamp(c.energy || 0, 0, 1);
@@ -1189,17 +1201,17 @@ function drawCockpitRig(c, base, dt, paint) {
     _digT[12] = 0.048; _digT[13] = 0.001; _digT[14] = -0.0315;
     M4.mulTo(_digM, _rigB, _digT);
     _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
-    GLX.draw(getErsBar(), _digM, c.deploying
+    gfx.draw(getErsBar(), _digM, c.deploying
       ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.75 + 0.25 * Math.sin(raceT * 22) }
       : fx);
   }
   // OVERTAKE lamp on the wheel: white when armed, pulsing purple while active
   // (the floating HUD OVERTAKE text is hidden in cockpit view).
   if (c.otT > 0) {
-    GLX.draw(getOtLamp(true), _rigB, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true,
+    gfx.draw(getOtLamp(true), _rigB, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true,
       alpha: 0.7 + 0.3 * Math.sin(raceT * 18) });
   } else if (c.otArmed) {
-    GLX.draw(getOtLamp(false), _rigB, fx);
+    gfx.draw(getOtLamp(false), _rigB, fx);
   }
   _digT[12] = _digT[13] = _digT[14] = 0;
 }
@@ -1210,7 +1222,7 @@ function playerBodyMesh(team) {
   // key — no per-frame partsVisualKey() rebuild.
   const key = team.id + ":" + playerVisualKey;
   const liv = resolveLivery(team);
-  if (!playerBodies[key]) playerBodies[key] = GLX.createMesh(Car3D.build(liv.c1, liv.c2,
+  if (!playerBodies[key]) playerBodies[key] = gfx.createMesh(Car3D.build(liv.c1, liv.c2,
     { livery: liv, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
   return playerBodies[key];
@@ -1229,8 +1241,8 @@ function getPlayerWheelMeshes() {
     const caliper = bs ? bs.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
     const rim = bs && bs.rim;
     m = wheelMeshCache[key] = {
-      F: GLX.createMesh(Car3D.buildWheel(0.32, band, caliper, rim)),
-      R: GLX.createMesh(Car3D.buildWheel(0.38, band, caliper, rim)),
+      F: gfx.createMesh(Car3D.buildWheel(0.32, band, caliper, rim)),
+      R: gfx.createMesh(Car3D.buildWheel(0.38, band, caliper, rim)),
     };
   }
   return m;
@@ -1257,7 +1269,7 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
     // Push the widened wheels outward so they don't intersect the tub.
     L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
-    GLX.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
+    gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
     // Hot brake discs: an emissive ring floating just off the outer wheel face,
     // ramping with the render-only brakeHeat (bright orange → blooms when hot).
     const heat = c.brakeHeat || 0;
@@ -1266,7 +1278,7 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       const W = _ringWorld;
       W.set(_wheelWorld);
       W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
-      GLX.draw(getBrakeRing(), W, {
+      gfx.draw(getBrakeRing(), W, {
         emissive: 0.30 + 0.70 * heat, roughness: 0.9, specular: 0,
         alpha: Math.min(1, 0.25 + heat * 0.9), noAlphaWrite: true,
       });
@@ -1286,8 +1298,8 @@ async function loadCarModel(url) {
     const buf = await res.arrayBuffer();
     GLTF.toMesh(buf, { scale: CAR_MODEL_SCALE });   // validate before adopting
     carModelBuf = buf;
-    for (const k in teamMeshes) { if (GLX.freeMesh) GLX.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
-    for (const k in playerBodies) { if (GLX.freeMesh) GLX.freeMesh(playerBodies[k]); delete playerBodies[k]; }
+    for (const k in teamMeshes) { if (gfx.freeMesh) gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
+    for (const k in playerBodies) { if (gfx.freeMesh) gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
     return true;
   } catch (e) { return false; }
 }
@@ -1303,21 +1315,21 @@ function loadTrack(idx) {
     raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && def.night);
   if (builtTrackId !== def.id || builtTrackNight !== sessionDark) {
     if (track && track.meshes) {
-      GLX.freeMesh(track.meshes.floor);
-      GLX.freeMesh(track.meshes.road);
-      GLX.freeMesh(track.meshes.terrain);
-      if (GLX.freeChunkedMesh) GLX.freeChunkedMesh(track.meshes.props); else GLX.freeMesh(track.meshes.props);
-      if (track.meshes.glass) GLX.freeMesh(track.meshes.glass);
-      if (track.meshes.water) GLX.freeMesh(track.meshes.water);
-      GLX.freeMesh(track.meshes.gate);
-      GLX.freeMesh(track.meshes.startline);
+      gfx.freeMesh(track.meshes.floor);
+      gfx.freeMesh(track.meshes.road);
+      gfx.freeMesh(track.meshes.terrain);
+      if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
+      if (track.meshes.glass) gfx.freeMesh(track.meshes.glass);
+      if (track.meshes.water) gfx.freeMesh(track.meshes.water);
+      gfx.freeMesh(track.meshes.gate);
+      gfx.freeMesh(track.meshes.startline);
     }
     track = Tracks.build(def, { night: sessionDark });
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
-    if (GLX.envProbeReset) GLX.envProbeReset();
+    if (gfx.envProbeReset) gfx.envProbeReset();
     Ghost.setTrack(def.id);
     minimapBg = null;           // force minimap redraw for new track
     sectorIdx = 0; sectorStartT = 0;
@@ -3742,16 +3754,16 @@ function buildSetupPreviewLights() {
   return _spLights;
 }
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
-// mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. GLX.freeMesh
+// mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. gfx.freeMesh
 // releases the previous mesh's GL buffers so repeated chip clicks don't leak.
 let _spMesh = null, _spMeshKey = "";
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   const key = team.id + ":" + partsVisualKey(team.id);
   if (key !== _spMeshKey) {
-    if (_spMesh) GLX.freeMesh(_spMesh);
+    if (_spMesh) gfx.freeMesh(_spMesh);
     const liv = resolveLivery(team);
-    _spMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, {
+    _spMesh = gfx.createMesh(Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine),
@@ -3762,12 +3774,12 @@ function getSetupPreviewMesh() {
 }
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 function renderSetupPreview(dt) {
-  GLX.resize();
+  gfx.resize();
   setupPreviewAz += dt * 0.35;   // slow turntable
   // Pulled back + a touch wider than a "hero shot" distance so the whole
   // ~5.4 m car (nose to rear wing) clears the frustum at any turntable angle.
   const eye = [Math.sin(setupPreviewAz) * 8.5, 2.0, Math.cos(setupPreviewAz) * 8.5 - 1.0];
-  M4.perspectiveTo(_spProj, 36 * Math.PI / 180, GLX.aspect, 0.1, 60);
+  M4.perspectiveTo(_spProj, 36 * Math.PI / 180, gfx.aspect, 0.1, 60);
   // The docked #cs-inner panel covers the right portion of the canvas — an
   // on-axis camera centers the car behind it, half-cropped. Shift the
   // frustum horizontally (off-axis / "lens shift") so the car renders
@@ -3780,7 +3792,7 @@ function renderSetupPreview(dt) {
   }
   M4.lookAtTo(_spView, eye, [0, 0.35, 0], [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
-  GLX.begin({
+  gfx.begin({
     viewProj: _spVP, eye, sunDir: [0.4, 0.8, 0.3], sunColor: [1, 1, 1],
     ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
     fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
@@ -3804,9 +3816,9 @@ function renderSetupPreview(dt) {
   // clearcoat/carEnvCube, which is what kept reading as a residual sheen. Push
   // roughness past that cutoff so this preview has NO reflection source at all.
   spMat.roughness = 0.55;
-  GLX.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
+  gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
-  GLX.present();
+  gfx.present();
 }
 
 // Static world draws (floor → terrain → road → startline → [lamp glow] → props
@@ -3849,45 +3861,45 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Base floor first (under everything) — fills the void on street circuits (no
   // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
   // so the huge plane stays flat and recedes into fog.
-  if (!hideMeshes.terrain && track.meshes.floor) GLX.draw(track.meshes.floor, MAT_IDENT,
+  if (!hideMeshes.terrain && track.meshes.floor) gfx.draw(track.meshes.floor, MAT_IDENT,
     night ? _wmFloorN : _wmFloorD);
   // TARMAC ROUGHNESS / SURFACE DETAIL knobs: rr scales dry-tarmac roughness
   // (glossier asphalt); sd scales the procedural grain/relief (0 = flat).
   const _rr = LT.roadRough, _sd = LT.surfDetail;
   if (!hideMeshes.terrain) {
     const m = night ? _wmTerrainN : _wmTerrainD; m.detail = 0.42 * _sd;
-    GLX.draw(track.meshes.terrain, MAT_IDENT, m);
+    gfx.draw(track.meshes.terrain, MAT_IDENT, m);
   }
   if (!hideMeshes.road) {
     let m;
     if (wet) { m = night ? _wmRoadWetN : _wmRoadWetD; m.detail = 0.06 * _sd; }
     else { m = night ? _wmRoadDryN : _wmRoadDryD; m.detail = 0.22 * _sd; m.roughness = clamp(0.85 * _rr, 0.04, 1); }
-    GLX.draw(track.meshes.road, MAT_IDENT, m);
+    gfx.draw(track.meshes.road, MAT_IDENT, m);
   }
-  if (!hideMeshes.startline && track.meshes.startline) GLX.draw(track.meshes.startline, MAT_IDENT,
+  if (!hideMeshes.startline && track.meshes.startline) gfx.draw(track.meshes.startline, MAT_IDENT,
     wet ? _wmStartWet : (night ? _wmStartN : _wmStartD));
   // Per-lamp lens CORONAS: soft additive billboards at every active lamp — each
   // light gets a visible halo (colored per lamp) without inflating bloom.
   // (Skipped for the studio rig — its lamps have no fixtures, and floating
   // glow-cone billboards ringing the car read as artifacts. Skipped in the env
   // probe too: 64px additive halos just smear the reflection.)
-  if (withGlow && frame.lights && !_studioRig) GLX.drawGlow(frame.lights, LT.glareStr);
+  if (withGlow && frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
   if (!hideMeshes.props) {
     let m;
     if (wet) { if (night) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
     else { if (night) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
-    GLX.drawChunked(track.meshes.props, MAT_IDENT, m);
+    gfx.drawChunked(track.meshes.props, MAT_IDENT, m);
   }
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass) GLX.draw(track.meshes.glass, MAT_IDENT, _wmGlass);
+  if (!hideMeshes.props && track.meshes.glass) gfx.draw(track.meshes.glass, MAT_IDENT, _wmGlass);
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
-  if (!hideMeshes.props && track.meshes.water) GLX.draw(track.meshes.water, MAT_IDENT,
+  if (!hideMeshes.props && track.meshes.water) gfx.draw(track.meshes.water, MAT_IDENT,
     wet ? _wmWaterWet : _wmWaterDry);
-  if (!hideMeshes.gate) GLX.draw(track.meshes.gate, MAT_IDENT,
+  if (!hideMeshes.gate) gfx.draw(track.meshes.gate, MAT_IDENT,
     wet ? _wmGateWet : _wmGateDry);
 }
 
@@ -3904,8 +3916,8 @@ const _presentOpts = {};
 function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
-  GLX.resize();
-  if (!track) { GLX.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); GLX.present(); return; }
+  gfx.resize();
+  if (!track) { gfx.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); gfx.present(); return; }
   _frameNo++;
 
   // camera
@@ -4015,14 +4027,14 @@ function render(dt) {
     // readable size; portrait (narrow) is unaffected.
     fovY = camFov * Math.PI / 180;
     const HFOV_MAX = 86 * Math.PI / 180;
-    const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(GLX.aspect, 0.0001));
+    const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
     fovY = Math.min(fovY, fovYCap);
   }
 
   // Near plane 0.2 (not 0.1): the closest geometry in any camera is well beyond
   // 0.2 m, and doubling the near distance roughly doubles depth-buffer precision
   // across the scene — the biggest single lever against z-fighting / shadow flicker.
-  M4.perspectiveTo(_mProj, fovY, GLX.aspect, 0.2, farPlane);
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, 0.2, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {
@@ -4069,7 +4081,7 @@ function render(dt) {
   // jetsam-kill the tab. Cap the RADIAL draw distance on mobile (fog hides the
   // edge) so the chunk count stays bounded no matter how high or wide the free
   // camera flies. 0 = disabled (normal play + desktop keep the full vista).
-  frame.cullDist = (dbgCam && GLX.isMobile) ? 700 : 0;
+  frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
 
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre to a 16 m grid so the shadow map only re-renders
@@ -4091,14 +4103,14 @@ function render(dt) {
       // more reach, smaller = crisper contacts (texel density = 2048/box).
       M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
-      GLX.shadowBegin(_mLVP);
-      GLX.castShadow(track.meshes.terrain, MAT_IDENT);
-      GLX.castShadow(track.meshes.road, MAT_IDENT);
+      gfx.shadowBegin(_mLVP);
+      gfx.castShadow(track.meshes.terrain, MAT_IDENT);
+      gfx.castShadow(track.meshes.road, MAT_IDENT);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
       // map once the sun is below the horizon — directional sun shadows are
       // invisible under the dim moonlight, so this is the biggest night saving.
-      if (sd[1] > -0.03) GLX.castShadowChunked(track.meshes.props, MAT_IDENT);
-      GLX.shadowEnd();
+      if (sd[1] > -0.03) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      gfx.shadowEnd();
     }
   }
 
@@ -4272,28 +4284,28 @@ function render(dt) {
   // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
   // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
   // for a 64px blurred reflection probe).
-  if (player && !_envProbeOff && !paused && !dbgCam && (_frameNo & 1) === 0 && GLX.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && !_envProbeOff && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
           _pez = smp2.p[2] + smp2.r[2] * player.x;
-    const _envInv = GLX.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
+    const _envInv = gfx.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
     if (_envInv) {
       frameSky.invViewProj = _envInv;
-      GLX.drawSky(frameSky);
+      gfx.drawSky(frameSky);
       drawWorldMeshes(frame, night, wet, _floodEmit, false);
-      GLX.envFaceEnd(_envFace);
+      gfx.envFaceEnd(_envFace);
     }
   }
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
-    GLX.begin(frame);
+    gfx.begin(frame);
     frame.fogDensity = bf;
-  } else GLX.begin(frame);
+  } else gfx.begin(frame);
   M4.invertTo(_mInvVP, _mVP);
   frameSky.invViewProj = _mInvVP;
-  GLX.drawSky(frameSky);
+  gfx.drawSky(frameSky);
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
@@ -4311,14 +4323,14 @@ function render(dt) {
   {
     let rebuilt = false;
     if (_skidBatchDirty) { rebuildSkidBatch(); rebuilt = true; }
-    if (!GLX.drawSkidBatch(_skidVerts, _skidVertCount, rebuilt)) {
+    if (!gfx.drawSkidBatch(_skidVerts, _skidVertCount, rebuilt)) {
       const ex = camEye[0], ez = camEye[2], SKID_CULL = 170 * 170;
       const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
       for (let i = 0; i < cnt; i++) {
         const m = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
         const dx = m[12] - ex, dz = m[14] - ez;
         if (dx * dx + dz * dz > SKID_CULL) continue;
-        GLX.drawMark(m, 0.6, 2.2);
+        gfx.drawMark(m, 0.6, 2.2);
       }
     }
   }
@@ -4458,11 +4470,11 @@ function render(dt) {
     // the player when a glb model is loaded) draw the full mesh with baked wheels.
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
-      GLX.draw(body, tmpMat, paint);
+      gfx.draw(body, tmpMat, paint);
       drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
       drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
     } else {
-      GLX.draw(teamMesh(c.team), tmpMat, paint);
+      gfx.draw(teamMesh(c.team), tmpMat, paint);
       drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
@@ -4482,7 +4494,7 @@ function render(dt) {
             W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
             W[13] += W[1] * tx + W[5] * wd.y + W[9] * wd.z;
             W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
-            GLX.draw(getBrakeRing(), W, ro);
+            gfx.draw(getBrakeRing(), W, ro);
           }
         }
       }
@@ -4501,7 +4513,7 @@ function render(dt) {
       W[12] += W[4] * 0.50 - W[8] * 2.615;
       W[13] += W[5] * 0.50 - W[9] * 2.615;
       W[14] += W[6] * 0.50 - W[10] * 2.615;
-      GLX.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true });
+      gfx.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true });
     }
     // BOOST: blue-white plasma flame + strobing rear ERS strip while deploying
     // (any time of day); the strip glows steady dim while boost is armed.
@@ -4518,13 +4530,13 @@ function render(dt) {
         W[12] += W[4] * 0.40 - W[8] * 2.66;
         W[13] += W[5] * 0.40 - W[9] * 2.66;
         W[14] += W[6] * 0.40 - W[10] * 2.66;
-        GLX.draw(getBoostFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: 0.45 + 0.5 * fl, noAlphaWrite: true });
+        gfx.draw(getBoostFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: 0.45 + 0.5 * fl, noAlphaWrite: true });
       }
       W.set(tmpMat);
       W[12] += W[4] * 0.605 - W[8] * 2.615;
       W[13] += W[5] * 0.605 - W[9] * 2.615;
       W[14] += W[6] * 0.605 - W[10] * 2.615;
-      GLX.draw(getErsLight(), W, { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true,
+      gfx.draw(getErsLight(), W, { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true,
         alpha: dep ? (0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2)) : 0.35 });
     }
     // Exhaust heat glow: night-only flicker behind the tailpipe on throttle.
@@ -4537,7 +4549,7 @@ function render(dt) {
       W[12] += W[4] * 0.40 - W[8] * 2.63;
       W[13] += W[5] * 0.40 - W[9] * 2.63;
       W[14] += W[6] * 0.40 - W[10] * 2.63;
-      GLX.draw(getExhaustFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
+      gfx.draw(getExhaustFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
@@ -4558,7 +4570,7 @@ function render(dt) {
   // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
   // depthMask are set once for the whole field instead of ping-ponging with the
   // lit body program every car.
-  for (let i = 0; i < _shadowCount; i++) GLX.drawShadow(_shadowMats[i], 2.4, 5.8);
+  for (let i = 0; i < _shadowCount; i++) gfx.drawShadow(_shadowMats[i], 2.4, 5.8);
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (timeTrial && player && (state === "race" || state === "count")) {
     const g = Ghost.at(player.lapTime);
@@ -4591,7 +4603,7 @@ function render(dt) {
       // slab ("black on screen when accelerating or braking" in TT). At 35%
       // alpha the track stays readable straight through it at any distance,
       // and the raised emissive keeps it reading as a bright spectre.
-      GLX.draw(teamMesh(player.team), tmpMat, { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true });
+      gfx.draw(teamMesh(player.team), tmpMat, { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true });
       }
     }
   }
@@ -4696,7 +4708,7 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade; po.ssao = _ao;
   po.godray = _gr; po.contact = _cs; po.reflect = _ssr; po.lampVol = _lampVol; po.mist = _mist;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
-  GLX.present(po);
+  gfx.present(po);
   if (raceWeather === "rain" && rainDrops.length) {
     drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
@@ -4863,7 +4875,7 @@ function drawMinimap() {
 let physAcc = 0;                 // leftover sim time carried between frames
 let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
 // ── Adaptive-resolution governor ─────────────────────────────────────────────
-// Holds framerate by scaling the 3D render resolution (GLX.setRenderScale) when
+// Holds framerate by scaling the 3D render resolution (gfx.setRenderScale) when
 // frames run slow, restoring sharpness when there's headroom. Conservative:
 // only downscales when clearly missing 60 fps (>19 ms EMA) so a healthy
 // vsync-capped display never degrades; upscales slowly to avoid oscillation.
@@ -4875,11 +4887,11 @@ function perfGovernor(dtMs) {
   if (_govCool > 0) { _govCool--; return; }
   if (++_govT < 45) return;   // evaluate ~every 45 frames
   _govT = 0;
-  const cur = GLX.getRenderScale ? GLX.getRenderScale() : 1;
+  const cur = gfx.getRenderScale ? gfx.getRenderScale() : 1;
   if (_frameEMA > 19 && cur > 0.5) {          // <~53 fps: drop resolution
-    if (GLX.setRenderScale(cur - 0.1)) _govCool = 30;
+    if (gfx.setRenderScale(cur - 0.1)) _govCool = 30;
   } else if (_frameEMA < 14 && cur < 1) {     // >~71 fps headroom: restore
-    if (GLX.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30;
+    if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30;
   }
 }
 const PHYS_DT = 1 / 60;          // fixed physics step
@@ -5737,7 +5749,7 @@ let resMode = store.get("resMode", "auto");
 function applyResMode() {
   const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
   const btn = $("pm-res"); if (btn) btn.textContent = "RESOLUTION: " + m.label;
-  if (m.v != null) { _autoRes = false; if (GLX.setRenderScale) GLX.setRenderScale(m.v); }
+  if (m.v != null) { _autoRes = false; if (gfx.setRenderScale) gfx.setRenderScale(m.v); }
   else _autoRes = true;   // governor takes over from wherever the scale sits now
 }
 $("pm-res").onclick = () => {
@@ -5748,11 +5760,30 @@ $("pm-res").onclick = () => {
 };
 applyResMode();
 
+// RENDERER toggle (WebGL2 / WebGPU) — shown only when the browser exposes
+// WebGPU. WebGPU is opt-in and browser-untested, so the default stays WebGL2;
+// flipping writes apex26.gfxBackend (the raw key gfx.js reads) and reloads so
+// Gfx.create() re-runs the backend selection at boot.
+(function () {
+  const rb = $("pm-renderer");
+  if (!rb || typeof navigator === "undefined" || !navigator.gpu) return;
+  const read = () => { try { return localStorage.getItem("apex26.gfxBackend") === "webgpu" ? "webgpu" : "webgl2"; } catch (_) { return "webgl2"; } };
+  rb.hidden = false;
+  rb.textContent = "RENDERER: " + read().toUpperCase();
+  rb.onclick = () => {
+    if (soundOn) GameAudio.uiSelect();
+    const next = read() === "webgpu" ? "webgl2" : "webgpu";
+    try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
+    rb.textContent = "RENDERER: " + next.toUpperCase() + " — RELOADING…";
+    setTimeout(() => location.reload(), 350);
+  };
+})();
+
 // GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
 // defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade
 // quality for capable phones. These are decided at renderer INIT, so the toggle
 // persists and reloads. Shown only on mobile — desktop is always full quality.
-if (GLX.isMobile) {
+if (gfx.isMobile) {
   const gfxBtn = $("pm-gfx");
   if (gfxBtn) {
     gfxBtn.hidden = false;
@@ -6014,7 +6045,7 @@ function updatePhotoCam(dt) {
   // fog: 1.0 — the 0.15× default at the dbgCam branch was meant for the dev
   // view() hook; the tuner preview should show the REAL race fog anyway.
   dbgCam = { eye: [e[0], e[1], e[2]], target: [e[0] + fwd[0] * 100, e[1] + fwd[1] * 100, e[2] + fwd[2] * 100],
-             fov: photoCam.fov, far: GLX.isMobile ? 1100 : 2500, fog: 1.0 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
+             fov: photoCam.fov, far: gfx.isMobile ? 1100 : 2500, fog: 1.0 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
 }
 // Free-cam is a sub-mode OF the lighting tuner: the tuner panel stays open (docked
 // right) so sliders can be adjusted while the camera flies, and the effect is seen
@@ -6029,7 +6060,7 @@ function enterPhotoMode() {
   // Follows the user's RESOLUTION setting as-is — no forced downgrade; the
   // far-plane clamp in updatePhotoCam is what bounds draw volume/GPU cost.
   _autoRes = false;
-  _photoPrevScale = GLX.getRenderScale ? GLX.getRenderScale() : 1;
+  _photoPrevScale = gfx.getRenderScale ? gfx.getRenderScale() : 1;
   initPhotoCam();
   document.body.classList.add("photo-mode");
   $("photo-controls").hidden = false;
@@ -6050,7 +6081,7 @@ function exitPhotoMode() {
   window.removeEventListener("keyup", photoKeyHandler, true);
   // Restore the pre-photo scale, then re-apply the user's RESOLUTION setting
   // (fixed modes re-pin their scale + keep the governor off; AUTO re-enables it).
-  if (GLX.setRenderScale) GLX.setRenderScale(_photoPrevScale || 1);
+  if (gfx.setRenderScale) gfx.setRenderScale(_photoPrevScale || 1);
   applyResMode();
 }
 // Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
@@ -6739,7 +6770,7 @@ refreshGearsBtn();
 setSound(soundOn);
 setMusic(musicEnabled);
 loadTrack(trackIdx);
-window.addEventListener("resize", () => GLX.resize());
+window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);
 
@@ -7708,9 +7739,9 @@ window.__apex = {
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
   // win (softer 3D view; HUD stays crisp).
   renderScale(v) {
-    if (v === undefined) return { scale: GLX.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes };
     if (v === true) { _autoRes = true; return this.renderScale(); }
-    _autoRes = false; GLX.setRenderScale(+v); return this.renderScale();
+    _autoRes = false; gfx.setRenderScale(+v); return this.renderScale();
   },
 
   // obs() — full debug observation of the current game state. Superset of
