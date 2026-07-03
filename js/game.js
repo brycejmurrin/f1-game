@@ -3059,7 +3059,7 @@ const TUNE_DEFS = [
   { id: "ssrThick",     label: "SSR THICKNESS",   group: "REFLECTIONS", min: 0.05, max: 1, step: 0.05, def: 0.20, u: "uSsrThick", help: "Depth tolerance for a wet-road reflection hit. Lower = crisper but more gaps; higher = fewer holes, more smear." },
   // Car
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.55, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
-  { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.05, def: 1.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). 0 = off (analytic sky fallback, no probe pass)." },
+  { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.05, def: 0.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). OFF by default — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass)." },
   { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0.3, max: 2.5, step: 0.05, def: 1.0,  help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness)." },
   { id: "carSpecular",  label: "PAINT SPECULAR",  group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Brightness of the specular highlight rolling over the bodywork." },
   { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
@@ -3710,6 +3710,11 @@ function renderSetupPreview(dt) {
   // noEnv flag (above) already drops the probe-less env term to a gentle sheen;
   // keep the env-cube kill as belt-and-suspenders so a stale race cube can't leak.
   spMat.carEnvCube = 0;
+  // The wheels are baked into this single mesh (Car3D.build) and drawn with the
+  // SAME paint material — the env/clearcoat sheen reads as an ugly grey gloss on
+  // the near-black tyres. Drop clearcoat/specular (both scale that sheen) so the
+  // rubber goes matte; the bodywork keeps enough gloss to read as painted.
+  spMat.clearcoat = 0.18; spMat.specular = 0.35;
   GLX.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
   GLX.present();
