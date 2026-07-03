@@ -1790,6 +1790,7 @@ function startRace() {
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
+  setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
   els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
   document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
@@ -1989,6 +1990,7 @@ function quitToMenu() {
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
   document.body.classList.remove("lt-open");
+  setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
@@ -6122,6 +6124,22 @@ function setPaused(p) {
   lastFrame = performance.now();
 }
 els.pausebtn.onclick = () => setPaused(true);
+
+// ---- Hide-HUD (clean-screen) mode ----
+// "HIDE HUD" (pause menu) strips every overlay via a body class (see style.css)
+// for a cinematic/clean view; the small #hud-restore eye is the only thing left
+// and brings it all back. Session-only — reset to shown on each race start.
+function setHudUserHidden(v) {
+  document.body.classList.toggle("hud-hidden", !!v);
+  const btn = $("pm-hidehud");
+  if (btn) btn.textContent = v ? "SHOW HUD" : "HIDE HUD";
+}
+$("pm-hidehud").onclick = () => {
+  const willHide = !document.body.classList.contains("hud-hidden");
+  setHudUserHidden(willHide);
+  if (willHide) setPaused(false);   // clean screen — drop the menu so you can actually see it
+};
+$("hud-restore").onclick = () => setHudUserHidden(false);
 
 // ---- player camera modes (CAM button / C key) ----
 function refreshCamBtn() {
