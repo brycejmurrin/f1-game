@@ -980,6 +980,16 @@ void main() {
   // and bright day. Drives extra sunset/sunrise cloud presence + warm grading.
   float twilight = smoothstep(0.02, 0.22, sunE) * (1.0 - daytime);
 
+  // NIGHT gate: uStars>0.5 marks a night session. At night the scene keeps
+  // uSunDir pointing HIGH (it doubles as the moon key-light direction), which
+  // fools the sunElevation math above into reading midday — painting a bright
+  // white sun disc + puffy daytime cumulus + a blue day gradient among the
+  // stars. Zero the sun-driven day/twilight ENRICHMENTS here (the horizon
+  // warm-glow terms below are already up-faded to the horizon, so they stay).
+  float nightSky = step(0.5, uStars);
+  daytime  *= (1.0 - nightSky);
+  twilight *= (1.0 - nightSky);
+
   // Overcast factor: drives grey-shift and corona damping under heavy cloud.
   float overcast = smoothstep(0.5, 1.0, uCloud);
 
@@ -1130,7 +1140,10 @@ void main() {
   // --- Sun corona + disc (damped under overcast) ---
   // goldenFactor: 1 when the sun is at the horizon, 0 high up — drives reddening,
   // a broader warm aureole, a vertically flattened disc, and a brighter HDR core.
-  float coronaDamp = 1.0 - overcast * 0.92;
+  // coronaDamp folds in the NIGHT gate: the sun disc + corona + inner ring all
+  // multiply by this, so a night session (sunDir high as the moon key) can never
+  // paint a daytime sun disc up among the stars. The moon disc is drawn separately.
+  float coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);
   float golden = 1.0 - smoothstep(0.0, 0.45, sunE);
   vec3 sunWarm = mix(uSunColor, uSunColor * vec3(1.18, 0.52, 0.24), golden);
   // Wide aureole: broader (lower exponent) and stronger at golden hour.

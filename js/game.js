@@ -7853,6 +7853,9 @@ window.__apex = {
     fogColor: frame.fogColor && frame.fogColor.slice(),
     skyHorizon: frame.skyHorizon && frame.skyHorizon.slice(),
     frameSkyHorizon: frameSky.horizon && frameSky.horizon.slice(),
+    skySunColor: frameSky.sunColor && frameSky.sunColor.slice(),
+    skySunDir: frameSky.sunDir && frameSky.sunDir.slice(),
+    skyStars: frameSky.stars, skyMoon: frameSky.moon,
   }),
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
