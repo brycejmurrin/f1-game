@@ -48,12 +48,56 @@ don't commit it.
 `top`. Groups: `--views=turntable` (5 around) or `--views=all`.
 Or one ad-hoc angle: `--az=<deg> --el=<deg> --dist=<m>` (overrides `--views`).
 
+### Named preset SHOT SETS (`--preset=<name>`) — for reviewing one part/aspect
+3 purpose-built shots per preset (overrides `--views`), each already dialled in
+(angle + distance + look-target + lighting) for that job — no more hand-picking
+az/el/dist per category. `--preset=list` prints all names.
+
+- `wing` (alias `aero`) — behind / front / front-3-quarter. Validated to clear
+  the rear-wing endplate at every downforce level.
+- `engine` `brakes` `tyres` `ers` `gearbox` — a close, part-focused shot (main +
+  ±30° flanking angles), aimed via a `look` target offset at the actual part
+  instead of the car's centre (front axle z≈+1.7 / rear axle z≈-1.6, see
+  `js/car3d.js` `addWheel` calls) so it fills the frame instead of the whole car.
+  `ers`/`fuel` default to dusk to show their glow.
+- `suspension` `fuel` — kept at a WIDER contextual distance on purpose: the
+  wishbones are thin/dark and sit inboard of the (much bigger) wheel, and the
+  fuel system's two tells (airbox collar vs. exhaust ember) are too far apart
+  to both fill one close frame. A tight crop on either loses the part rather
+  than showing it better — don't re-tighten these without re-checking.
+- `livery` — side / front-3-quarter / rear-3-quarter, wide enough to read
+  sponsor placement across the whole flank.
+
+```sh
+node tools/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic   # 3 shots, one part
+node tools/render-car.mjs --team=mclaren --preset=wing --aero=extreme       # 3 shots, one wing
+```
+
+### Lighting comparison (`--lightset=day,dusk,night`)
+Renders EVERY shot (from `--preset` or `--views`) at each listed time-of-day and
+lays the contact sheet out as a grid — rows = shot, columns = tod — instead of a
+flat list, so a lighting change is actually scannable at a glance:
+```sh
+node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night   # 3x3 grid
+```
+
 ### Options
 - Car: `--team=` `--livery=` `--num=` and any part to inspect its geometry:
   `--engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=`
   (option ids are in `js/parts.js`).
 - Lighting: `--tod=day|dusk|dawn|night|void` · `--rig=studio|3point|rim|topdown|none`
   · `--intensity=<n>` · `--exp=<n>` (exposure/brightness) · `--bg=RRGGBB`.
+- Reflection: `--refl=<0..1>` scales EVERYTHING shine-related together — roughness,
+  metalness, specular, clearcoat, sparkle, and the env-mirror (`carEnvCube`) — as
+  one matte↔glossy dial. Default `0.2` (mostly matte, reads as team paint); raise
+  it to check clearcoat/reflection behaviour, `0` for flat paint, up to `1` for
+  full chrome. (Scaling only clearcoat/carEnvCube and leaving `specular` fixed
+  was an earlier bug — a hot point-light highlight stayed regardless of the
+  slider. `paintFromRefl()` in carview.html now derives every term from one value.)
+- Look target: `--look=<m>` shifts the orbit target along Z (+nose / −rear),
+  `--lookx=<m>` along X (+right / −left) — lets a close `--dist` frame ONE
+  corner (a wheel, an axle) instead of cropping both ends of the car when
+  centred on the middle. The preset shot-sets already set this per category.
 - Reflection tests: `--rig=rim` or `--rig=3point` throw hard speculars across the
   clearcoat; `--plight=x,y,z,r,g,b,intensity,radius` adds a point light (repeatable);
   `--sweep=1` orbits a bright light around the car so highlights sweep.
@@ -71,10 +115,12 @@ Headless JS API on the page (used by the batch tool, handy from Playwright):
 ```js
 CARVIEW.ready                              // true once the first frame drew
 CARVIEW.angle(az, el, dist)                // re-aim the camera
-CARVIEW.set({team, livery, num, parts:{gearbox:'f1_spec'}, tod, rig, intensity, exp, bg, sweep})
+CARVIEW.set({team, livery, num, parts:{gearbox:'f1_spec'}, tod, rig, intensity, exp, refl, look, lookX, bg, sweep})
 CARVIEW.addLight([x,y,z], [r,g,b], intensity, radius)   // probe light for reflections
 CARVIEW.clearLights()
 ```
+`refl`/`look`/`lookX` all take effect live (no rebuild) — safe to change every
+frame in a loop, e.g. fanning one shot across `--lightset`.
 
 ## Notes / gotchas
 

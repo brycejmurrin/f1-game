@@ -106,6 +106,12 @@ const GROUPS = {
 //    don't show at all.
 //  - `livery` reuses the standard turntable quarter-angles (wide enough to read
 //    sponsor placement across the whole flank).
+//  - `suspension`/`fuel` are the two exceptions kept at a wider CONTEXTUAL
+//    distance rather than a tight macro: the wishbones are thin, dark, and
+//    inboard of the (much bigger, occluding) wheel, and the fuel system's two
+//    tells — the airbox collar (z=-0.5) and the exhaust ember (z=-2.2) — are
+//    too far apart to both fill a close frame. A macro crop on either loses
+//    the part rather than showing it better; verified by rendering both ways.
 const FRONT_AXLE = 1.7, REAR_AXLE = -1.6;
 const detail = (v) => [
   { label: 'main',  az: v.az,      el: v.el, dist: v.dist, look: v.look, tod: v.tod, intensity: v.intensity },
@@ -119,12 +125,12 @@ const PRESETS = {
     { label: 'frontside',  az: 150, el: 15, dist: 4.8 },
   ],
   engine:     detail({ az: 322, el: 20, dist: 3.6, look: REAR_AXLE * 0.4, tod: 'day',  intensity: 1.0 }),
-  suspension: detail({ az: 152, el: 10, dist: 3.4, look: FRONT_AXLE,      tod: 'day',  intensity: 1.0 }),
+  suspension: detail({ az: 152, el: 8,  dist: 4.6, look: 0.6,             tod: 'day',  intensity: 1.0 }),
   brakes:     detail({ az: 104, el: 10, dist: 3.2, look: FRONT_AXLE,      tod: 'day',  intensity: 1.0 }),
   tyres:      detail({ az: 96,  el: 8,  dist: 3.2, look: FRONT_AXLE,      tod: 'day',  intensity: 1.0 }),
   ers:        detail({ az: 322, el: 12, dist: 3.6, look: 0,               tod: 'dusk', intensity: 1.2 }),
   gearbox:    detail({ az: 26,  el: 18, dist: 3.4, look: REAR_AXLE,       tod: 'day',  intensity: 1.0 }),
-  fuel:       detail({ az: 6,   el: 14, dist: 3.4, look: REAR_AXLE,       tod: 'dusk', intensity: 1.2 }),
+  fuel:       detail({ az: 6,   el: 15, dist: 4.8, look: -1.0,            tod: 'dusk', intensity: 1.2 }),
   livery: [
     { label: 'side',         az: 90,  el: 8,  dist: 6.0 },
     { label: 'frontquarter', az: 145, el: 16, dist: 6.4 },
