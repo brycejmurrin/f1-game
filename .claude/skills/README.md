@@ -23,6 +23,8 @@ groups.
 | **lighting-tuner** | Tune and validate scene lighting — TUNE_DEFS knobs via `__apex.lightTune`, `applyRaceSettings` branches, live `lightState()` probes and orbit screenshots. |
 | **bake-lighting** | Bake the in-game LIGHTING TUNER's copied `window.LightPresets = {…}` export into the shipped `js/light-presets.js`, bump the cache, and commit + push. |
 | **webgl-debug** | Diagnose WebGL2/GLX renderer issues: uniform-array light upload, shadow acne/shimmer, bloom, shader compile errors, `GL_INVALID_OPERATION`. |
+| **game-feel** | Juice/feedback craft (vendored, Apache-2.0): trauma-based screen shake, hit-stop, eased motion, feedback bundles by importance tier — with an Apex 26 mapping section. |
+| **hermes** | Vehicle-dynamics audit council (vendored): Pacejka/Milliken-grade review of tire models, load transfer, friction-ellipse, racing lines — pairs with tune-physics for A/B validation. |
 
 The debug-* skills are grounded in **verified live return shapes** (probed via
 `tools/apex-eval.mjs` against the running game) and pair with screenshot capture
