@@ -686,11 +686,15 @@ void main() {
     vec3 Rg = reflect(-V, Ngeo);
     float NoVc = max(dot(Ngeo, V), 1e-4);
     float ccFb = 1.0 - NoVc; float ccF = ccFb * ccFb;      // fresnel², rim-concentrated (mul not pow(_,2): pow(0,2) NaNs on mobile)
-    // High base reflectance everywhere (0.72) + grazing boost → a strong, near-
-    // uniform mirror that reads reflective face-on, not only at the silhouette.
-    // (1-rough·0.25) keeps most of the mirror even on rougher paint. Clamped high
-    // so the car goes genuinely chrome-bright while a hint of pigment survives.
-    float envW = clamp(uClearcoat * (0.72 + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
+    // Mirror strength scales with a LIVE probe (uEnvStr>0). Probe-less views —
+    // the in-game SETUP MENU preview and the car-viewer with no world — have no
+    // real surroundings to mirror, so a strong analytic mirror there just washes
+    // the livery flat grey. Those keep only a gentle grazing sheen (base 0.14);
+    // in-race the live cube drives a strong, near-uniform mirror (base 0.72).
+    // The grazing Fresnel rim (0.28·ccF) stays in both — a subtle edge, not a wash.
+    float probeLive = clamp(uEnvStr, 0.0, 1.0);
+    float baseRefl = mix(0.14, 0.72, probeLive);
+    float envW = clamp(uClearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     // Soft horizon: bright sky above, dark ground tone below. Was a hard step
     // (-0.03..0.06) — on the faceted engine cover / sidepod shoulders adjacent
     // facets straddled the line and flipped between "sky" and "ground", reading
@@ -1840,11 +1844,11 @@ void main() {
       // Mirror-like: a high base reflectance (so mid/near tarmac mirrors too, not
       // just the grazing band) with a gentle Fresnel lift toward the horizon.
       float fres = pow(1.0 - max(dot(Nv, V), 0.0), 3.0);
-      // Car SSR is a DETAIL layer over the clearcoat (the analytic env mirror in
-      // the lit shader owns the base reflective read): much weaker face-on and
-      // Fresnel-leaning, so the world streaks along grazing panels instead of
-      // repainting whole decks.
-      float strength = ssrGate * (carDom ? (0.22 + 0.55 * fres)
+      // Car SSR reflects the on-screen HDR scene — sharp, bright light sources
+      // (neon, lit windows, floodlights) that punch through and bloom like the
+      // wet road mirrors them. Strong face-on (the env cube owns the off-screen/
+      // sky read; SSR owns the crisp on-screen lights + nearby geometry).
+      float strength = ssrGate * (carDom ? (0.50 + 0.45 * fres)
                                          : (0.55 + 0.42 * fres));
       // The darker-mirror substitution below is tuned for WET roads. At the
       // faint dry levels (uReflect < 0.2: dry-day 0.07 / dry-night 0.16) fade
@@ -1862,11 +1866,11 @@ void main() {
       // visible seam slicing across the frame. Fade the last few percent out
       // instead of cutting it off.
       strength *= 1.0 - smoothstep(0.56, 0.62, vUV.y);
-      float mixAmt = clamp(strength * cover, 0.0, carDom ? 0.60 : 0.94);   // near-mirror, keeps a hint of asphalt
-      // Car pixels keep the paint legible under the mirror (a lacquered livery
-      // shows THROUGH its own reflection); the wet road stays a near-full
-      // darker-mirror substitution.
-      vec3 mirrored = carDom ? c * 0.55 + reflCol * 0.70
+      float mixAmt = clamp(strength * cover, 0.0, carDom ? 0.85 : 0.94);   // near-mirror, keeps a hint of pigment/asphalt
+      // Near-full darker-mirror substitution — the car mirrors the scene it
+      // reflects (bright on-screen lights punch through), keeping a whisper of
+      // pigment so the livery still tints the reflection.
+      vec3 mirrored = carDom ? c * 0.22 + reflCol * 0.88
                              : c * 0.10 + reflCol * 0.92;
       c = mix(c, mirrored, mixAmt);
     }
@@ -2703,10 +2707,16 @@ void main() {
   }
 
   function envInit() {
+    // HDR cube (RGBA16F) when float buffers are renderable — so emissive light
+    // sources (neon, lit windows, floodlights, the sun) keep their >1 brightness
+    // in the reflection and bloom on the paint, like the wet road's SSR. Falls
+    // back to 8-bit (LDR, lights clamp to white) where float isn't renderable.
+    const envInternal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
+    const envType = colorType === gl.HALF_FLOAT ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
     envTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex);
     for (let f = 0; f < 6; f++)
-      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA8, ENV_SIZE, ENV_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, envInternal, ENV_SIZE, ENV_SIZE, 0, gl.RGBA, envType, null);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -2878,8 +2888,11 @@ void main() {
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, (envTex && !_envActive) ? envTex : envDummyTex);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(litU.uEnvCube, 6);
-    // uEnvStr stays 0 until the first full 6-face cycle (probe still black).
-    gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive)
+    // uEnvStr stays 0 until the first full 6-face cycle (probe still black), and
+    // frame.noEnv forces it off for probe-less views (the SETUP MENU preview)
+    // even when a stale cube lingers from a prior race — so the menu car reads
+    // matte (gentle analytic sheen) instead of mirroring last race's scene.
+    gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive && !frame.noEnv)
       ? (T && T.carEnvCube != null ? T.carEnvCube : 1.0) : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
     // of at most MAX_LIGHTS (32) entries, already culled to the nearest set by

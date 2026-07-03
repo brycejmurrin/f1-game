@@ -3702,6 +3702,7 @@ function renderSetupPreview(dt) {
     viewProj: _spVP, eye, sunDir: [0.4, 0.8, 0.3], sunColor: [1, 1, 1],
     ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
     fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
+    noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   });
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
