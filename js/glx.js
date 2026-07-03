@@ -2122,6 +2122,17 @@ void main() {}`;
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
+
+  // ── GPU frame timer (opt-in via gpuTimer(true); __apex.gpuTimer()) ──
+  // EXT_disjoint_timer_query_webgl2 measures GPU-side frame cost — the thing a
+  // CPU flame chart (perf-profile skill) literally can't see, and the number the
+  // "are night-track spikes GPU-bound?" / WebGL2-vs-WebGPU question turns on.
+  // Results are async (ready a few frames after endQuery), so we keep a small
+  // ring of queries and only read one whose result is available. No-op (and
+  // gpuMs() returns -1) when the extension is missing — notably iOS Safari,
+  // where it's unreliable/absent, so this is a Chrome/Android profiling aid.
+  let _gpuTimerExt = null, _gpuTimerOn = false, _gpuQPending = [], _gpuMs = -1;
+  let _gpuQActive = null;   // query open between begin() and present() this frame
   let litProg = null, litU = null;
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
   const _ambScratchG = [0, 0, 0], _ambScratchS = [0, 0, 0];
@@ -2561,6 +2572,10 @@ void main() {
     });
     if (!gl) return false;
 
+    // GPU timer extension (Chrome/Android; absent on iOS Safari). Acquired once;
+    // actual querying is gated behind gpuTimer(true).
+    try { _gpuTimerExt = gl.getExtension("EXT_disjoint_timer_query_webgl2"); } catch (_) { _gpuTimerExt = null; }
+
     // WebGL context-loss recovery. Mobile tile GPUs can drop the context under
     // memory pressure (the per-frame env-probe cube adds load). Without a handler
     // the loss is permanent and later gl calls cascade into errors. preventDefault
@@ -2906,8 +2921,46 @@ void main() {
     }
   }
 
+  // Open a GPU timer query for this frame (if timing is on and none is already
+  // open). Called from begin(); the matching endQuery is in present().
+  function _gpuTimerBegin() {
+    if (!_gpuTimerOn || !_gpuTimerExt || _gpuQActive) return;
+    const q = gl.createQuery();
+    if (!q) return;
+    gl.beginQuery(_gpuTimerExt.TIME_ELAPSED_EXT, q);
+    _gpuQActive = q;
+  }
+
+  // Close the frame's query and harvest any completed result. GPU_DISJOINT means
+  // the GPU was interrupted (e.g. power-state change) and every in-flight timing
+  // is invalid — drop them. Keeps at most a few queries in flight.
+  function _gpuTimerEnd() {
+    if (!_gpuTimerExt) return;
+    if (_gpuQActive) {
+      gl.endQuery(_gpuTimerExt.TIME_ELAPSED_EXT);
+      _gpuQPending.push(_gpuQActive);
+      _gpuQActive = null;
+    }
+    const disjoint = gl.getParameter(_gpuTimerExt.GPU_DISJOINT_EXT);
+    if (disjoint) {
+      for (let i = 0; i < _gpuQPending.length; i++) gl.deleteQuery(_gpuQPending[i]);
+      _gpuQPending.length = 0;
+      return;
+    }
+    while (_gpuQPending.length) {
+      const q = _gpuQPending[0];
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+      _gpuMs = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;   // ns → ms
+      gl.deleteQuery(q);
+      _gpuQPending.shift();
+    }
+    // Backstop: never let the ring grow unbounded if results stall.
+    while (_gpuQPending.length > 4) { gl.deleteQuery(_gpuQPending.shift()); }
+  }
+
   function begin(frame) {
     if (_ctxLost || (gl && gl.isContextLost && gl.isContextLost())) return false;
+    _gpuTimerBegin();
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
     frameSunColor = frame.sunColor;
@@ -3455,7 +3508,7 @@ void main() {
   // bloom buffer, then composite scene + bloom with tonemap + vignette. No-op when
   // post is disabled (the scene was drawn straight to the screen already).
   function present(opts) {
-    if (!postEnabled) return;
+    if (!postEnabled) { _gpuTimerEnd(); return; }
     const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
     const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
 
@@ -3781,6 +3834,8 @@ void main() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
     }
+
+    _gpuTimerEnd();
   }
 
   function freeMesh(mesh) {
@@ -3865,6 +3920,21 @@ void main() {
     msaa: () => msaaSamples,
     pcss: () => pcssEnabled,
     setRenderScale, getRenderScale,
+    // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
+    // supported + on); gpuTimer() reads state. gpuMs() returns the most recent
+    // GPU frame time in ms, or -1 if unsupported / no result yet.
+    gpuTimer(on) {
+      if (on !== undefined) {
+        _gpuTimerOn = !!on && !!_gpuTimerExt;
+        if (!_gpuTimerOn) {
+          if (_gpuQActive) { try { gl.endQuery(_gpuTimerExt.TIME_ELAPSED_EXT); gl.deleteQuery(_gpuQActive); } catch (_) {} _gpuQActive = null; }
+          for (let i = 0; i < _gpuQPending.length; i++) gl.deleteQuery(_gpuQPending[i]);
+          _gpuQPending.length = 0; _gpuMs = -1;
+        }
+      }
+      return { supported: !!_gpuTimerExt, on: _gpuTimerOn };
+    },
+    gpuMs() { return _gpuMs; },
     isMobile: IS_MOBILE,
     mobileTier: MOBILE_TIER,   // phone NOT opted into GRAPHICS: HIGH → memory-safe caps apply
   };

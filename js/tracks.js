@@ -1707,9 +1707,15 @@ const Tracks = (function () {
       const riser = riserCol || (NIGHT ? [0.10, 0.10, 0.13] : [0.28, 0.26, 0.27]);
       for (let r = 0; r < rows; r++) {
         const f = (r + 0.5) / rows, up = f * rise, back = f * depth;
-        // dark step riser behind each seating row (blocks sky/ground show-through)
+        // dark step riser behind each seating row (blocks sky/ground show-through).
+        // Guarded (unlike the tiny spectator boxes): the riser is a wide flat slab,
+        // so a mis-placed bank whose front row creeps toward the tarmac would
+        // otherwise overhang the road here — the exact bypass this RAW path used to
+        // leave open. rejBox drops only a riser actually over the road; a bank
+        // safely behind the shell never trips it, so intended crowds are unchanged.
         out._mat = MAT.CONCRETE;
-        RAW.addBox(out, vadd(vadd(a.c, a.u, up), a.r, side * back), [1.3, 1.5, len], riser, b);
+        const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
+        if (!rejBox(riserC, [1.3, 1.5, len], b)) RAW.addBox(out, riserC, [1.3, 1.5, len], riser, b);
         out._mat = MAT.FABRIC;
         for (let s2 = 0; s2 < perRow; s2++) {
           if (s2 % 10 === 9) continue;                       // aisle / vomitory gap

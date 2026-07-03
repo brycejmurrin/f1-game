@@ -7874,6 +7874,18 @@ window.__apex = {
     skySunDir: frameSky.sunDir && frameSky.sunDir.slice(),
     skyStars: frameSky.stars, skyMoon: frameSky.moon,
   }),
+  // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer
+  // extension). gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
+  // reads the latest sample: { supported, on, ms } where ms is the GPU cost of a
+  // recent frame (-1 until a result lands, a few frames after enabling). This is
+  // the GPU-side counterpart to the CPU flame chart — use it to tell whether
+  // night-track spikes are GPU-bound (fragment/fill) before deciding on
+  // instancing vs shader work vs WebGPU.
+  gpuTimer: (on) => {
+    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1 };
+    const st = gfx.gpuTimer(on);
+    return { supported: st.supported, on: st.on, ms: gfx.gpuMs ? gfx.gpuMs() : -1 };
+  },
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
   // tunable. With an object: merges valid entries (clamped to each slider's
