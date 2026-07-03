@@ -254,7 +254,7 @@ const WGX = (function () {
     const frameVPGpu = new Float32Array(16);
     const frameInvProjW = new Float32Array(16);
     let frameSunDir = null, frameSunColor = null, frameProjRaw = null,
-        frameSunVS = null, frameHaveProj = false, frameTime = 0,
+        frameSunVS = null, frameUpVS = null, frameHaveProj = false, frameTime = 0,
         frameAmbSky = null, frameAmbGround = null;
 
     // GPU objects assembled below (fail -> return null).
@@ -283,12 +283,12 @@ const WGX = (function () {
     //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
     let _postReady = false, _fxReady = false;
     let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
-        ldrTex = null, ldrView = null;
+        ldrTex = null, ldrView = null, ssrTex = null;
     let bloomLv = [];                 // [{tex, view, w, h}]
     let bloomDownUBO = [], bloomUpUBO = [], bloomDownBG = [], bloomUpBG = [];
-    let ssaoUBO, godrayUBO, compositeUBO, fxaaUBO;
-    let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null;
-    let pBloomDown, pBloomUp, pSSAO, pGodray, pComposite, pFXAA, pointSampler;
+    let ssaoUBO, godrayUBO, compositeUBO, fxaaUBO, ssrUBO;
+    let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null;
+    let pBloomDown, pBloomUp, pSSAO, pGodray, pComposite, pFXAA, pointSampler, pSSR;
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
     const postScratch = new Float32Array(64);
 
@@ -366,18 +366,7 @@ const WGX = (function () {
       blitUBO  = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       skyUBO   = device.createBuffer({ size: WGSLChunks.SKY_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
-      frameBindGroup = device.createBindGroup({
-        layout: g0Layout,
-        entries: [
-          { binding: 0, resource: { buffer: frameUBO } },
-          { binding: 1, resource: { buffer: lightSBO } },
-          { binding: 2, resource: shadowView },
-          { binding: 3, resource: shadowSampler },
-          { binding: 4, resource: envCubeView },
-          { binding: 5, resource: linearSampler },
-          { binding: 6, resource: ssrView },
-        ],
-      });
+      _rebuildFrameBG();
       drawBindGroup = device.createBindGroup({
         layout: g1Layout,
         // size = the DrawU slice; the dynamic offset selects the slot at draw time.
@@ -483,6 +472,24 @@ const WGX = (function () {
             primitive: { topology: "triangle-list" },
           });
         }
+        // SSR — reads scene colour + depth (depth via a NON-filtering sampler);
+        // explicit layout like SSAO. Output rgba16float reflection buffer.
+        {
+          const ssrG0 = device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+            { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
+            { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+          ] });
+          const ssrMod = device.createShaderModule({ code: _Post.SSR });
+          pSSR = device.createRenderPipeline({
+            layout: device.createPipelineLayout({ bindGroupLayouts: [ssrG0] }),
+            vertex: { module: ssrMod, entryPoint: "vs_main" },
+            fragment: { module: ssrMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
+            primitive: { topology: "triangle-list" },
+          });
+        }
         pGodray    = fsPipe(_Post.GODRAY,     SCENE_FORMAT, null);
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
         pFXAA      = fsPipe(_Post.FXAA,       format,        null);
@@ -490,6 +497,7 @@ const WGX = (function () {
         godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
         compositeUBO = device.createBuffer({ size: _Post.COMPOSITE_UNIFORM_BYTES, usage: _UCD });
         fxaaUBO      = device.createBuffer({ size: _Post.FXAA_UNIFORM_BYTES,      usage: _UCD });
+        ssrUBO       = device.createBuffer({ size: _Post.SSR_UNIFORM_BYTES,       usage: _UCD });
       } catch (_) { pComposite = null; }   // disable post; ensureTargets stays inert
     }
 
@@ -641,6 +649,25 @@ const WGX = (function () {
     }
 
     // (Re)allocate the HDR scene target + depth on size change.
+    // Frame bind group (group 0 for the LIT pass) — rebuilt whenever a bound view
+    // changes: the SSR result texture is resize-dependent, and the env cube swaps
+    // from placeholder to real when the probe runs.
+    function _rebuildFrameBG() {
+      if (!g0Layout || !frameUBO) return;
+      frameBindGroup = device.createBindGroup({
+        layout: g0Layout,
+        entries: [
+          { binding: 0, resource: { buffer: frameUBO } },
+          { binding: 1, resource: { buffer: lightSBO } },
+          { binding: 2, resource: shadowView },
+          { binding: 3, resource: shadowSampler },
+          { binding: 4, resource: envCubeView },
+          { binding: 5, resource: linearSampler },
+          { binding: 6, resource: ssrView },
+        ],
+      });
+    }
+
     function ensureTargets() {
       if (width < 1 || height < 1) return;
       if (sceneTex && _texW === width && _texH === height) return;
@@ -683,6 +710,7 @@ const WGX = (function () {
         if (ssaoTex) ssaoTex.destroy();
         if (godrayTex) godrayTex.destroy();
         if (ldrTex) ldrTex.destroy();
+        if (ssrTex) ssrTex.destroy();
         for (let i = 0; i < bloomLv.length; i++) bloomLv[i].tex.destroy();
         bloomLv = []; bloomDownUBO = []; bloomUpUBO = []; bloomDownBG = []; bloomUpBG = [];
 
@@ -695,6 +723,9 @@ const WGX = (function () {
         ssaoView = ssaoTex.createView();
         godrayView = godrayTex.createView();
         ldrView = ldrTex.createView();
+        ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+        ssrView = ssrTex.createView();
 
         // Bloom mip chain: mip0 = half-res, each subsequent level halved, capped
         // at BLOOM_MAX_LEVELS and stopping before a dimension drops below 4 px.
@@ -771,6 +802,20 @@ const WGX = (function () {
             { binding: 2, resource: { buffer: fxaaUBO } },
           ],
         });
+        if (pSSR) {
+          ssrBG = device.createBindGroup({
+            layout: pSSR.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: sceneView },
+              { binding: 1, resource: depthSampleView },
+              { binding: 2, resource: linearSampler },
+              { binding: 3, resource: pointSampler },
+              { binding: 4, resource: { buffer: ssrUBO } },
+            ],
+          });
+          _ssrReady = true;
+          _rebuildFrameBG();   // frame group binding 6 now points at the real SSR texture
+        }
         _postReady = true;
       } catch (_) {
         _postReady = false;
@@ -917,6 +962,7 @@ const WGX = (function () {
       frameSunColor = f.sunColor || null;
       frameProjRaw = f.proj || null;
       frameSunVS = f.sunViewDir || null;
+      frameUpVS = f.upViewDir || null;
       frameTime = f.time != null ? f.time : 0;
       if (f.invProj && f.invProj.length >= 16) { _mul4(frameInvProjW, f.invProj, Z01INV); frameHaveProj = true; }
       else frameHaveProj = false;
@@ -1173,6 +1219,28 @@ const WGX = (function () {
       const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
       const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
+
+      // ── SSR (full-res) — wet-road reflections into ssrTex, consumed by the LIT
+      //    pass NEXT frame (frame binding 6, 1-frame lag). Skipped when dry; the
+      //    LIT wet-gate (wet=0) no-ops any stale content, so no clear is needed.
+      const _wet = (lastFrame && lastFrame.wetness) || 0;
+      if (_ssrReady && ssrBG && frameHaveProj && _wet > 0.01) {
+        const s = postScratch;
+        s.set(frameInvProjW, 0);
+        s.set(frameProjRaw && frameProjRaw.length >= 16 ? frameProjRaw : IDENT, 16);
+        const up = frameUpVS || [0, 1, 0];
+        s[32] = up[0]; s[33] = up[1]; s[34] = up[2]; s[35] = 0;
+        const ssrThick = (T && T.ssrThick != null) ? T.ssrThick : 0.20;
+        s[36] = 1 / width; s[37] = 1 / height; s[38] = ssrThick; s[39] = 1.0;   // texel, thick, strength
+        const skz = (lastFrame && lastFrame.skyZenith) || [0.18, 0.40, 0.78];
+        const skh = (lastFrame && lastFrame.skyHorizon) || [0.62, 0.74, 0.88];
+        s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = 0.62;   // reflSkyLo + upper-screen cutoff
+        s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = 0;      // reflSkyHi
+        device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
+        const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });
+        p.setPipeline(pSSR); p.setBindGroup(0, ssrBG); p.draw(3, 1, 0, 0); p.end();
+      }
 
       // ── 0) SSAO (half-res) into ssaoTex, or clear it to white when unavailable.
       const aoStr = o.ssao != null ? o.ssao : 0;
