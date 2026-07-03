@@ -18,6 +18,9 @@
 // dawn|day|dusk|night (the session "default" resolves to the track's day/night
 // look); weather is dry|wet|rain|fog|overcast.
 window.LightPresets = {
+  "*": {
+    "carGloss": 0.35
+  },
   "redbull|dusk|wet": {
     "lampLevel": 0.2,
     "glareStr": 0.08,
