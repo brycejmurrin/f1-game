@@ -421,14 +421,16 @@ const Car3D = (function () {
     full_attack:    { led: [2.25, 0.22, 0.16], pack: 1.30 },  // red
     overcharge:     { led: [2.4,  0.75, 0.06], pack: 1.35 },  // gold-hot
   };
-  // Per-OPTION fuel: filler-cap `cap` colour (HDR on the hot blends → glows).
+  // Per-OPTION fuel: filler-cap `cap` colour (a fuel-grade collar on the airbox)
+  // + `flame` — the HDR exhaust-ember tint at the tailpipes, so the fuel BLEND
+  // shows as the colour of the car's exhaust glow (what you see racing behind it).
   const FUEL_STYLE = {
-    standard:       { cap: [0.22, 0.20, 0.26] },
-    high_octane:    { cap: [1.5,  1.15, 0.18] },   // yellow
-    biofuel:        { cap: [0.18, 1.35, 0.5] },    // green (sustainable)
-    race_blend:     { cap: [1.6,  0.6,  0.14] },   // orange
-    quali_mix:      { cap: [0.95, 0.28, 1.5] },    // violet
-    custom_formula: { cap: [1.9,  0.25, 1.25] },   // magenta
+    standard:       { cap: [0.55, 0.52, 0.60], flame: [1.15, 0.42, 0.14] },  // neutral / warm orange
+    high_octane:    { cap: [1.5,  1.15, 0.18], flame: [1.75, 1.40, 0.45] },  // yellow / yellow-white flame
+    biofuel:        { cap: [0.18, 1.35, 0.5],  flame: [0.35, 1.65, 0.42] },  // green
+    race_blend:     { cap: [1.6,  0.6,  0.14], flame: [1.95, 0.72, 0.14] },  // orange
+    quali_mix:      { cap: [0.95, 0.28, 1.5],  flame: [1.25, 0.35, 1.75] },  // violet
+    custom_formula: { cap: [1.9,  0.25, 1.25], flame: [1.85, 0.25, 1.40] },  // magenta
   };
   // Per-DRIVER helmet crown-stripe palette (indexed by car number) so team-mates
   // and the field carry distinct helmets.
@@ -601,10 +603,12 @@ const Car3D = (function () {
       // FUEL: per-OPTION filler cap colour (HDR blends glow at night).
       const fuelId = T._ids && T._ids.fuel;
       const fuelStyle = (fuelId && FUEL_STYLE[fuelId]) || null;
-      const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.22, 0.20, 0.26]);
-      const fuelHi = Math.max(fuelColor[0], fuelColor[1], fuelColor[2]) > 1;
-      addBox(out, 0.13, 0.80, -0.55, 0.07, 0.04, 0.15, fuelColor);
-      if (fuelHi) addBox(out, 0.13, 0.86, -0.55, 0.04, 0.03, 0.05, fuelColor);
+      const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
+      // Fuel filler on the airbox shoulder: a dark housing ringed by a bright
+      // fuel-grade COLLAR in the blend colour + a cap dot — a clear grade placard.
+      addBox(out, 0.12, 0.795, -0.50, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12]);   // housing
+      addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelColor);            // collar ring (proud)
+      addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelColor);            // cap dot
     }
 
     // --- Sidepods: rectangular slabs — angled inlet undercut, coke-bottle taper ---
@@ -622,17 +626,27 @@ const Car3D = (function () {
       addBox(out, s*0.60, 0.10, -0.10, 0.02, 0.08, 0.72, c2);
     }
 
-    // ERS battery-pack LED strip along the sidepod SHOULDER — per-OPTION colour
-    // (HDR → glows and blooms at night), pack thickness grows with the spec, so
-    // every ERS choice reads distinctly. Falls back to the old tier-2 tint.
-    // Runs along the top shoulder crease (y ~0.47), ABOVE the sponsor label band
-    // (titleA sits y 0.19–0.45) so the glow never washes over the wordmark.
+    // ERS: a glowing ENERGY-CELL CONDUIT sweeping up from the sidepod shoulder
+    // onto the engine-cover flank — per-OPTION colour (HDR → blooms at night). The
+    // number of lit cells + a battery-pack bulge grow with the pack spec, so every
+    // ERS choice reads distinctly at a glance (the old thin strip was too subtle).
+    // Runs ABOVE the sponsor band (titleA y 0.19–0.45) so it never washes the wordmark.
     const ersId = T._ids && T._ids.ers;
     const ersStyle = (ersId && ERS_STYLE[ersId]) || null;
     const ersLed = ersStyle ? ersStyle.led : (tier("ers") === 2 ? ersC2 : null);
     const ersPack = ersStyle ? ersStyle.pack : 1.0;
     if (ersLed) {
-      for (const s of [-1, 1]) addBox(out, s*0.678, 0.475, -0.12, 0.02, 0.03 + 0.02 * ersPack, 0.55, ersLed);
+      // ERS energy glow tucked into the coke-bottle shoulder at the sidepod REAR
+      // (back + inboard, toward the engine cover), recessed in a dark housing so the
+      // HDR strip GLOWS and BLOOMS at night. Per-OPTION colour; length + a battery
+      // module grow with the pack spec.
+      const half = 0.16 + (ersPack - 0.9) * 0.09;
+      const g = 1.7;                                    // glow boost so it blooms
+      const ersGlow = [Math.min(2.9, ersLed[0]*g), Math.min(2.9, ersLed[1]*g), Math.min(2.9, ersLed[2]*g)];
+      for (const s of [-1, 1]) {
+        addBox(out, s*0.455, 0.505, -0.58, 0.06, 0.06, 2*half + 0.05, [0.03, 0.03, 0.04]);  // dark recess (proud of the pod top)
+        addBox(out, s*0.455, 0.545, -0.58, 0.05, 0.03, 2*half, ersGlow);                      // glowing strip on top
+      }
     }
 
     // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
@@ -785,14 +799,17 @@ const Car3D = (function () {
     const exhR = exhStyle ? (exhStyle.twin ? 0.09 : (exhStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
     addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17]);
-    // Heat-glazed tailpipe mouth: a dark bore with a faint warm ember at the tip
-    // (mildly HDR so it reads as a hot exhaust glow after dark).
+    // Heat-glazed tailpipe mouth: a dark bore with an HDR ember at the tip TINTED
+    // BY THE FUEL BLEND (see FUEL_STYLE.flame) — so the exhaust glow is the fuel's
+    // signature colour (green biofuel, violet quali mix, …), read racing behind it.
+    const fuelFlame = (T._ids && T._ids.fuel && FUEL_STYLE[T._ids.fuel] && FUEL_STYLE[T._ids.fuel].flame) || [1.15, 0.42, 0.14];
+    const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04]);
-    addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012, [1.15, 0.42, 0.14]);
+    addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012, fuelFlame);
     if (exhTwin) {
       for (const s of [-1, 1]) {
         addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, [0.16, 0.16, 0.17]);
-        addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012, [1.05, 0.38, 0.12]); // twin-tip ember
+        addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012, fTwin); // twin-tip ember
       }
     }
 
