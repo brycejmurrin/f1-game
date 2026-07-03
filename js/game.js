@@ -3706,6 +3706,10 @@ function renderSetupPreview(dt) {
   });
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
+  // Menu car reads as team livery, not the in-race chrome mirror. The frame's
+  // noEnv flag (above) already drops the probe-less env term to a gentle sheen;
+  // keep the env-cube kill as belt-and-suspenders so a stale race cube can't leak.
+  spMat.carEnvCube = 0;
   GLX.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
   GLX.present();
