@@ -35,5 +35,5 @@ tools/render-out/
 
 # transient headless probe/screenshot scripts (agents & local debugging)
 tools/_*.mjs
-tools/probe-*.mjs
-tools/shot-*.mjs
+tools/*probe*.mjs
+tools/*shot*.mjs
