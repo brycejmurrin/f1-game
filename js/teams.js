@@ -6,7 +6,7 @@ const Teams = (function () {
   const LIST = [
     {
       id: "mercedes", name: "Mercedes-AMG Petronas", short: "MER",
-      color: [0.769, 0.769, 0.769], color2: [0.0, 0.631, 0.608],   /* silver #C4C4C4 / teal #00A19B */
+      color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671],   /* black #0B0E10 / Petronas teal #00B4AB (2026 black car) */
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
       drivers: [
@@ -66,7 +66,7 @@ const Teams = (function () {
     },
     {
       id: "haas", name: "Haas", short: "HAA",
-      color: [1.0, 1.0, 1.0], color2: [0.855, 0.161, 0.11],        /* white #FFFFFF / red #DA291C (TGR) */
+      color: [0.075, 0.078, 0.086], color2: [0.855, 0.161, 0.11],  /* dark graphite #131416 / red #DA291C (2026 dark car, white+red accents) */
       engine: "Ferrari", tier: 3,
       stats: { speed: 80, accel: 79, cornering: 79, braking: 79 },
       drivers: [
@@ -86,7 +86,7 @@ const Teams = (function () {
     },
     {
       id: "audi", name: "Audi", short: "AUD",
-      color: [0.851, 0.851, 0.851], color2: [0.961, 0.02, 0.216],  /* silver #D9D9D9 / red #F50537 */
+      color: [0.055, 0.058, 0.065], color2: [0.98, 0.28, 0.05],    /* black #0E0F10 / Audi red-orange #FA4700 (2026 black car, red-orange + titanium) */
       engine: "Audi", tier: 4,
       stats: { speed: 76, accel: 74, cornering: 75, braking: 73 },
       drivers: [
