@@ -1589,7 +1589,18 @@ function applyRaceSettings() {
       if (_bp.ambientGround) frame.ambientGround = _bp.ambientGround.slice();
       if (_bp.sun)           frameSky.sunColor = _bp.sun.slice();
       frameSky.cloud = _bp.cloud !== undefined ? _bp.cloud : (isNightSession ? 0.22 : 0.4);
+      // Fog too (mirrors the sun/ambient reset above): the weather branches below
+      // MULTIPLY frame.fogDensity in place, so without a fresh base HERE every
+      // weather() flip or _APPLY_RACE_IDS slider drag compounded it (fog raced to
+      // white after a few ticks) and it stayed STUCK tripled after switching back
+      // to dry. Re-derive from the palette each call — same base loadTrack sets.
+      if (_bp.fog) frame.fogColor = _bp.fog.slice();
+      frame.fogDensity = _bp.fogDensity != null ? _bp.fogDensity : (isNightSession ? 0.004 : 0.0012);
     }
+    // Keep the REFLECTED sky (frame.skyZenith/Horizon → LIT env/rim/SSR fallback)
+    // in sync with the sky dome so glass/wet-road/clearcoat mirror the sky the
+    // player actually sees (the weather post-modifiers below re-sync on their side).
+    frame.skyZenith = frameSky.zenith; frame.skyHorizon = frameSky.horizon;
     // "default" — driven by the track palette; set moon for night tracks
     frameSky.moon = isNightSession ? 0.85 : 0;
     // Dim the SCENE sun to soft moonlight at night. Many night palettes ship a
@@ -1694,7 +1705,7 @@ function applyRaceSettings() {
     // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
     // light) so heavy overcast reads atmospheric, not just a flat grey dim.
     frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
-    if (raceTimeOfDay === "default") frameSky.horizon = [0.74, 0.73, 0.74];
+    if (raceTimeOfDay === "default") { frameSky.horizon = [0.74, 0.73, 0.74]; frame.skyHorizon = frameSky.horizon; }
     if (frame.exposure == null || frame.exposure < 1.0) frame.exposure = 1.0;
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
@@ -1703,8 +1714,9 @@ function applyRaceSettings() {
     const fc = [0.74, 0.76, 0.78];
     frame.fogColor = fc;
     // Don't erase an explicit twilight horizon (dawn magenta / dusk coral) — only
-    // flatten the horizon to fog-grey in default mode.
-    if (raceTimeOfDay === "default") frameSky.horizon = fc.slice();
+    // flatten the horizon to fog-grey in default mode. Sync frame.skyHorizon so
+    // reflections (glass/wet road/clearcoat) match the grey dome, not a stale blue.
+    if (raceTimeOfDay === "default") { frameSky.horizon = fc.slice(); frame.skyHorizon = frameSky.horizon; }
     frame.sunColor = frame.sunColor.map((v) => v * 0.6);
     frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.7);
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.05));
@@ -7837,6 +7849,10 @@ window.__apex = {
     builtNight: builtTrackNight, trackNight: track && track._night,
     floodEmit: _lastFloodEmit,   // actual prop-emissive ramp value this frame
     envProbe: (gfx && gfx.envProbeReady) ? gfx.envProbeReady() : null,  // live env-cube captured?
+    fogDensity: frame.fogDensity,
+    fogColor: frame.fogColor && frame.fogColor.slice(),
+    skyHorizon: frame.skyHorizon && frame.skyHorizon.slice(),
+    frameSkyHorizon: frameSky.horizon && frameSky.horizon.slice(),
   }),
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
