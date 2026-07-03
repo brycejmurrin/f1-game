@@ -703,8 +703,8 @@ function teamMesh(team) {
 // ONE shared decal-quad mesh (fixed panel UVs into the LiveryTex atlas layout);
 // the per-team atlas TEXTURE carries the actual logos/sponsors, so the geometry
 // is team-independent. Drawn over the painted body each frame (GLX.drawDecal).
-let _carDecalMesh = null;
-function carDecalData() {
+const _carDecalMeshes = {};   // keyed by downforce level (rear-wing number tracks it)
+function carDecalData(aLvl) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
@@ -747,17 +747,21 @@ function carDecalData() {
   quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
   quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
   // Rear-wing endplate number boards → the driver number again (classic F1 — the
-  // number reads on the nose AND the rear-wing endplates). Positioned for the
-  // default/medium-aero endplate (y ~0.87); high-DF setups share the same board.
-  const ex = 0.539, eyB = 0.78, eyT = 1.00, ezF = -2.30, ezR = -2.52;
+  // number reads on the nose AND the rear-wing endplates). The board height/pos
+  // TRACKS the wing: Car3D.numberBoard(aLvl) is the SAME function the car mesh
+  // uses to place the physical board, so the digit lands on it at every downforce
+  // level (mesh is cached per aLvl — see getCarDecalMesh).
+  const nb = Car3D.numberBoard(aLvl == null ? 2 : aLvl);
+  const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   return out;
 }
-function getCarDecalMesh() {
+function getCarDecalMesh(aLvl) {
   if (typeof LiveryTex === "undefined" || !GLX.createTexMesh) return null;
-  if (!_carDecalMesh) _carDecalMesh = GLX.createTexMesh(carDecalData());
-  return _carDecalMesh;
+  const k = (aLvl == null ? 2 : aLvl) | 0;   // one mesh per downforce level (endplate number height)
+  if (!_carDecalMeshes[k]) _carDecalMeshes[k] = GLX.createTexMesh(carDecalData(k));
+  return _carDecalMeshes[k];
 }
 // Cockpit view draws only the FORWARD decals (the nose number), since the
 // engine-cover / sidepod / hood decals sit behind or beside the driver and the
@@ -802,8 +806,16 @@ function carDecalNum(team, car) {
   return (team.drivers && team.drivers[0] && team.drivers[0].num != null) ? team.drivers[0].num : null;
 }
 // Draw a car's logo/sponsor decals with the same model matrix as its body.
+// A team's rear-wing downforce level (0..4), driving which endplate-number mesh
+// to draw. getVisualTiers is a small 8-category loop and the resulting mesh is
+// cached per level, so resolving this per car/frame is negligible.
+function teamAeroLevel(team) {
+  return Car3D.aeroLevelOf(Parts.getVisualTiers(getTeamParts(team.id), team.engine));
+}
 function drawCarDecals(team, modelMat, night, num, cockpit) {
-  const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh();
+  // Cockpit build draws only the forward (nose) number — the rear wing is behind
+  // the camera — so aero level is irrelevant there.
+  const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh(teamAeroLevel(team));
   const tex = getCarDecalTexture(team, num);
   if (mesh && tex) GLX.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
 }

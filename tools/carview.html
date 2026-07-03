@@ -77,7 +77,7 @@
   const qp = (k, d) => Q.has(k) ? Q.get(k) : d;
 
   // ---- decal mesh (mirrors game.js carDecalData; U pre-flipped for REFLECT_X) ----
-  function carDecalData() {
+  function carDecalData(aLvl) {
     const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
     const out = { pos: [], nrm: [], uv: [], idx: [] };
     const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
@@ -98,7 +98,8 @@
     quad([[-0.14, 0.556, 1.16], [0.14, 0.556, 1.16], [0.14, 0.504, 1.66], [-0.14, 0.504, 1.66]], [0, 1, 0.10], R.titleB);
     quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
     quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
-    const ex = 0.539, eyB = 0.78, eyT = 1.00, ezF = -2.30, ezR = -2.52;
+    const nb = Car3D.numberBoard(aLvl == null ? 2 : aLvl);   // tracks the rear wing (mirrors game.js)
+    const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
     quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
     quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
     return out;
@@ -142,12 +143,15 @@
     }
     return L;
   }
+  // zenith/horizon feed the live env-probe (drawn into the reflection cube) AND
+  // drawSky. Kept a touch brighter than the bg so the paint has something warm to
+  // mirror. void = a neutral grey studio dome (still reflective, just no colour).
   const TOD = {
-    day:   { sunDir: [0.4, 0.82, 0.35], sunColor: [1.05, 1.02, 0.96], ambSky: [0.30, 0.33, 0.38], ambGnd: [0.20, 0.19, 0.18], bg: [0.09, 0.10, 0.12], studioI: 1.4 },
-    dusk:  { sunDir: [0.5, 0.28, -0.2], sunColor: [1.15, 0.62, 0.36], ambSky: [0.22, 0.20, 0.26], ambGnd: [0.16, 0.13, 0.14], bg: [0.10, 0.07, 0.10], studioI: 1.8 },
-    dawn:  { sunDir: [-0.4, 0.30, 0.4], sunColor: [0.95, 0.75, 0.72], ambSky: [0.24, 0.24, 0.30], ambGnd: [0.16, 0.15, 0.16], bg: [0.09, 0.09, 0.12], studioI: 1.7 },
-    night: { sunDir: [0.3, 0.7, 0.2],   sunColor: [0.18, 0.20, 0.30], ambSky: [0.05, 0.06, 0.10], ambGnd: [0.03, 0.035, 0.05], bg: [0.02, 0.02, 0.035], studioI: 2.6 },
-    void:  { sunDir: [0.35, 0.8, 0.3],  sunColor: [0.9, 0.9, 0.92],  ambSky: [0.10, 0.11, 0.13], ambGnd: [0.06, 0.06, 0.07], bg: [0.0, 0.0, 0.0], studioI: 2.2 },
+    day:   { sunDir: [0.4, 0.82, 0.35], sunColor: [1.05, 1.02, 0.96], ambSky: [0.30, 0.33, 0.38], ambGnd: [0.20, 0.19, 0.18], bg: [0.09, 0.10, 0.12], studioI: 1.4, zenith: [0.20, 0.42, 0.80], horizon: [0.70, 0.80, 0.92] },
+    dusk:  { sunDir: [0.5, 0.28, -0.2], sunColor: [1.15, 0.62, 0.36], ambSky: [0.22, 0.20, 0.26], ambGnd: [0.16, 0.13, 0.14], bg: [0.10, 0.07, 0.10], studioI: 1.8, zenith: [0.12, 0.10, 0.26], horizon: [0.92, 0.45, 0.28] },
+    dawn:  { sunDir: [-0.4, 0.30, 0.4], sunColor: [0.95, 0.75, 0.72], ambSky: [0.24, 0.24, 0.30], ambGnd: [0.16, 0.15, 0.16], bg: [0.09, 0.09, 0.12], studioI: 1.7, zenith: [0.16, 0.20, 0.38], horizon: [0.86, 0.66, 0.58] },
+    night: { sunDir: [0.3, 0.7, 0.2],   sunColor: [0.18, 0.20, 0.30], ambSky: [0.05, 0.06, 0.10], ambGnd: [0.03, 0.035, 0.05], bg: [0.02, 0.02, 0.035], studioI: 2.6, zenith: [0.01, 0.02, 0.05], horizon: [0.05, 0.06, 0.12], stars: 1 },
+    void:  { sunDir: [0.35, 0.8, 0.3],  sunColor: [0.9, 0.9, 0.92],  ambSky: [0.10, 0.11, 0.13], ambGnd: [0.06, 0.06, 0.07], bg: [0.0, 0.0, 0.0], studioI: 2.2, zenith: [0.14, 0.15, 0.17], horizon: [0.30, 0.31, 0.34] },
   };
 
   // ---- state ----
@@ -200,10 +204,12 @@
     const num = driverNum(team);
     if (carMesh) GLX.freeMesh(carMesh);
     carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
-    if (!decalMesh && GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData());
+    // Rebuild the decal mesh every time — the rear-wing number height tracks aero.
+    if (decalMesh && GLX.freeMesh) GLX.freeMesh(decalMesh);
+    if (GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData(Car3D.aeroLevelOf(tiers)));
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
-    paint = { roughness: 0.22, metalness: 0.35, specular: 0.85, clearcoat: 0.9, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true };
+    paint = { roughness: 0.22, metalness: 0.35, specular: 0.85, clearcoat: 0.9, emissive: 0, carPaint: 1, sparkle: 0.12, doubleSided: true, carEnvCube: 0.85 };
   }
 
   function camera() {
@@ -221,6 +227,26 @@
     return eye;
   }
 
+  // Render the surrounding environment (sky + sun) into the reflection cube so
+  // the car paint MIRRORS a real world, not a flat/black fallback. There's no
+  // track geometry here, so the cube is the sky dome — but that's exactly what a
+  // glossy F1 shell reflects, and it moves correctly as you orbit. Re-probed only
+  // when the environment (time-of-day) changes; the sky is otherwise static.
+  let _probedKey = "";
+  const _sky = {};
+  function probeEnv(frameParams, t) {
+    if (!GLX.envFaceBegin || !GLX.drawSky) return;
+    _sky.zenith = t.zenith || [0.10, 0.11, 0.13];
+    _sky.horizon = t.horizon || [0.22, 0.23, 0.26];
+    _sky.sunDir = t.sunDir; _sky.sunColor = t.sunColor;
+    _sky.stars = t.stars ? 1 : 0; _sky.cloud = 0.32;
+    if (GLX.envProbeReset) GLX.envProbeReset();
+    for (let f = 0; f < 6; f++) {
+      const inv = GLX.envFaceBegin(f, CENTER, frameParams);   // probe centred on the car
+      if (inv) { _sky.invViewProj = inv; GLX.drawSky(_sky); GLX.envFaceEnd(f); }
+    }
+  }
+
   let ready = false;
   function frame() {
     GLX.resize();
@@ -232,13 +258,19 @@
     const L = rigLights(S.rig, I);
     for (const pl of S.lights) pt(L, pl.pos, pl.col, pl.intensity, pl.radius);   // extra probe lights
     if (S.sweep) { sweepA = (sweepA + 0.03) % (Math.PI * 2); pt(L, [Math.cos(sweepA) * 4.5, 2.6, Math.sin(sweepA) * 4.5], [1, 1, 1], I * 2.4, 16); }
-    GLX.begin({
+    const frameParams = {
       viewProj: _vp, eye,
       sunDir: t.sunDir, sunColor: t.sunColor,
       ambientSky: t.ambSky, ambientGround: t.ambGnd,
+      skyZenith: t.zenith, skyHorizon: t.horizon,
       fogColor: bg, fogDensity: 0,
       lights: L.length ? L : null,
-    });
+    };
+    // Refresh the reflection cube when the environment changes (tod), before the
+    // visible pass so uEnvStr is live when the car draws.
+    const pk = S.tod;
+    if (pk !== _probedKey) { probeEnv(frameParams, t); _probedKey = pk; }
+    GLX.begin(frameParams);
     if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
     if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
     GLX.present({ exposure: S.exp });

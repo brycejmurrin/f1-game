@@ -2671,6 +2671,22 @@ void main() {
     setDepthMask(true);
   }
 
+  // 1px black dummy cube — a COMPLETE samplerCube target for the env unit
+  // whenever the real probe isn't live (menu / setup viewer / probe-less tools)
+  // OR while rendering INTO the real cube (feedback-loop guard). Minted on demand
+  // so the probe-less path never leaves uEnvCube pointing at an incomplete unit
+  // (which renders the whole car black on strict drivers like SwiftShader).
+  function ensureEnvDummy() {
+    if (envDummyTex) return;
+    envDummyTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, envDummyTex);
+    for (let f = 0; f < 6; f++)
+      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+  }
+
   function envInit() {
     envTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex);
@@ -2681,15 +2697,7 @@ void main() {
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.generateMipmap(gl.TEXTURE_CUBE_MAP);   // texture-complete (black) from frame 0
-    // 1px dummy cube: bound to the env unit while rendering INTO the real cube,
-    // so the sampler never references its own render target (feedback loop).
-    envDummyTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, envDummyTex);
-    for (let f = 0; f < 6; f++)
-      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+    ensureEnvDummy();
     envDepthRB = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, envDepthRB);
     gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, ENV_SIZE, ENV_SIZE);
@@ -2837,20 +2845,20 @@ void main() {
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
-    // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). While a
-    // probe face is being RENDERED the dummy cube is bound instead — the real
-    // cube is the current render target and must never also be sampled.
+    // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
+    // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
+    // probe (menu / setup viewer / tools) — otherwise the samplerCube defaults to
+    // unit 0 (a 2D texture), which is incomplete and renders the car black on
+    // strict drivers. Bind the real cube only when it's live and not the current
+    // render target (feedback guard); the dummy covers every other case.
+    ensureEnvDummy();
+    gl.activeTexture(gl.TEXTURE6);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, (envTex && !_envActive) ? envTex : envDummyTex);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(litU.uEnvCube, 6);
     // uEnvStr stays 0 until the first full 6-face cycle (probe still black).
-    if (envTex) {
-      gl.activeTexture(gl.TEXTURE6);
-      gl.bindTexture(gl.TEXTURE_CUBE_MAP, _envActive ? envDummyTex : envTex);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.uniform1i(litU.uEnvCube, 6);
-      gl.uniform1f(litU.uEnvStr, (envReady && !_envActive)
-        ? (T && T.carEnvCube != null ? T.carEnvCube : 1.0) : 0.0);
-    } else {
-      gl.uniform1f(litU.uEnvStr, 0.0);
-    }
+    gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive)
+      ? (T && T.carEnvCube != null ? T.carEnvCube : 1.0) : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
     // of at most MAX_LIGHTS (32) entries, already culled to the nearest set by
     // the caller. Uploaded once per frame; uNumLights=0 on day.

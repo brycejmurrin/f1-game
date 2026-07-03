@@ -345,6 +345,33 @@ const Car3D = (function () {
     active_aero:   { lvl: 3, drs: 1, vane: 2 },
     ground_effect: { lvl: 4, beam: 1, vane: 3 },
   };
+  // Rear-wing endplate geometry as a function of downforce level (0..4). SINGLE
+  // SOURCE OF TRUTH — the wing build below AND the driver-number decal in game.js
+  // (via Car3D.endplate / Car3D.numberBoard) both read this, so the endplate
+  // number tracks the plate at every downforce setting instead of a fixed height
+  // that only fits one wing. Concave (pow 0.7) growth: rises fast at low DF then
+  // flattens so max-DF doesn't tower. cy = vertical centre, sy = full height.
+  function endplateGeom(aLvl) {
+    const aN = (aLvl || 0) / 4;
+    return { cy: 0.60 + 0.20 * Math.pow(aN, 0.7), sy: 0.28 + 0.30 * Math.pow(aN, 0.7) };
+  }
+  // The driver-number board on the endplate: a fixed-height board anchored LOW,
+  // its bottom a small gap above the plate base. The plate base barely moves with
+  // DF (~0.46 → 0.51) while the top shoots up, so a low anchor reads grounded on
+  // the short low-DF plate and low-on-a-tall-plate for max DF — never floating.
+  function numberBoard(aLvl) {
+    const ep = endplateGeom(aLvl), h = 0.20;
+    return { cy: ep.cy - ep.sy * 0.5 + 0.05 + h * 0.5, h };
+  }
+  // Resolve the continuous 0..4 downforce level from a getVisualTiers() object
+  // (per-option when the aero id is known, else mapped from the coarse 0/1/2
+  // tier — AI / no-parts → medium, lvl 2). Mirrors the in-build derivation.
+  function aeroLevelOf(T) {
+    const aeroId = T && T._ids && T._ids.aero;
+    const st = (aeroId && AERO_STYLE[aeroId]) || null;
+    const aeroT = (T && T.aero != null) ? T.aero : 1;
+    return st ? st.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
+  }
   // Per-OPTION engine airbox: `in` intake-mouth scale, `snork` raised snorkel,
   // `twin` twin exhaust tips, `inlet` sidepod radiator-inlet SHAPE (0 slim
   // low-drag letterbox, 1 stock rounded mouth, 2 wide high-flow scoop, 3 tall
@@ -837,10 +864,23 @@ const Car3D = (function () {
     // so it reads sharply and shows from the chase, hood AND cockpit cameras. ---
 
     // --- Sponsor board on the sidepod flank + a base-paint NUMBER BOARD on each
-    // rear-wing endplate (carries the driver-number decal — see carDecalData). ---
+    // Downforce level 0..4 — resolved up here (before the number board) so the
+    // board tracks the rear-wing endplate for THIS aero setup. Per-option when
+    // the aero id is known, else mapped from the coarse 0/1/2 tier (AI / no
+    // parts → medium, lvl 2). See endplateGeom / numberBoard (single source of
+    // truth, shared with the game.js number decal via Car3D.*).
+    const aeroT = tier("aero");
+    const aeroId = T._ids && T._ids.aero;
+    const aeroStyle = (aeroId && AERO_STYLE[aeroId]) || null;
+    const aLvl  = aeroStyle ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
+
+    // rear-wing endplate driver-number BOARD — placed by numberBoard(aLvl) so it
+    // sits low on the plate at every downforce level (the game.js number decal
+    // reads the SAME function, so the digit lands exactly on this board). ---
+    const nb = numberBoard(aLvl);
     for (const s of [-1, 1]) {
       addBox(out, s*0.700, 0.30, 0.0, 0.020, 0.11, 0.46, PANEL);
-      addBox(out, s*0.527, 0.87, -2.42, 0.012, 0.26, 0.30, c1);
+      addBox(out, s*0.527, nb.cy, -2.42, 0.012, nb.h, 0.30, c1);
     }
 
     // --- Front wing: ANGLED wedge elements in the block language — thin
@@ -848,12 +888,6 @@ const Car3D = (function () {
     // swept endplates that grow rearward, and nose pylons so the wing hangs
     // from the nose instead of floating. AERO visualTier reshapes element
     // count / endplate size / dive-plane reach (tier 1 = today's baseline). ---
-    const aeroT = tier("aero");
-    const aeroId = T._ids && T._ids.aero;
-    const aeroStyle = (aeroId && AERO_STYLE[aeroId]) || null;
-    // Continuous downforce level 0..4 — per-option when the id is known, else
-    // mapped from the coarse 0/1/2 tier (AI / no parts → medium, lvl 2).
-    const aLvl  = aeroStyle ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
     const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
     const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
 
@@ -946,8 +980,10 @@ const Car3D = (function () {
       // the endplate height (epSY) and its vertical centre (epCY) rise quickly at
       // low DF then flatten toward max — aLvl4 lands only ~0.07 above aLvl2 (roll-
       // hoop / airbox level) instead of spiking a third higher than the car.
-      const epSY   = 0.28 + 0.30 * Math.pow(aN, 0.7);   // lvl0 0.28 → lvl2 0.47 → lvl4 0.58 (capped)
-      const epCY   = 0.60 + 0.20 * Math.pow(aN, 0.7);   // lvl0 0.60 → lvl2 0.72 → lvl4 0.80 (slow rise)
+      // Shared with the number board + game.js decal (endplateGeom, above).
+      const _ep    = endplateGeom(aLvl);
+      const epSY   = _ep.sy;   // lvl0 0.28 → lvl2 0.47 → lvl4 0.58 (capped)
+      const epCY   = _ep.cy;   // lvl0 0.60 → lvl2 0.72 → lvl4 0.80 (slow rise)
       // HDR-lit crown accent (team colour pushed >1 so it glows / blooms at night
       // like a modern rear-wing tell-tale strip).
       const railLed = [Math.min(2.2, c2[0]*1.7 + 0.25), Math.min(2.2, c2[1]*1.7 + 0.12), Math.min(2.2, c2[2]*1.7 + 0.08)];
@@ -1131,5 +1167,6 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER, TYRE_PIRELLI, BRAKE_STYLE };
+  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER, TYRE_PIRELLI, BRAKE_STYLE,
+           endplate: endplateGeom, numberBoard, aeroLevelOf };
 })();
