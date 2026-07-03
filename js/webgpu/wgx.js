@@ -1,5 +1,5 @@
 /*
- * Apex 26 — WebGPU renderer backend (WGX). Migration Phase 2.
+ * Apex 26 — WebGPU renderer backend (WGX). Migration Phase 2 + 3 (sun shadows).
  *
  * A second implementer of the GLX draw-API contract (the ~35-method object
  * returned by js/glx.js:3693-3769). See docs/WEBGPU-MIGRATION.md,
@@ -24,10 +24,16 @@
  *     (ported _extractPlanes / _aabbInFrustum / _aabbDist2).
  *   - present() tonemaps (ACES + exposure) the HDR scene target to the swapchain.
  *
- * WHAT IS STUBBED (later phases) — shadow pass, env probe, decals, skid/glow FX,
- * and the full post chain (bloom/SSAO/godray/SSR/flare/FXAA + MSAA). Each stub is
- * a safe no-op tagged with its migration phase; the frame still renders lit
- * geometry + sky + tonemap without them.
+ * PHASE 3 (this pass): sun shadow map. A depth-only caster pass (shadowBegin /
+ * castShadow / castShadowChunked / shadowEnd) rasterises the scene from the sun
+ * into a depth texture; the LIT shader 3×3-PCF-compares against it (comparison
+ * sampler) and modulates the sun diffuse+spec. Also fixes a latent GL→WebGPU
+ * clip-space z bug (Z01 remap) that would have half-clipped ALL geometry.
+ *
+ * WHAT IS STUBBED (later phases) — env probe, decals, skid/glow FX, and the full
+ * post chain (bloom/SSAO/godray/SSR/flare/FXAA + MSAA). Each stub is a safe no-op
+ * tagged with its migration phase; the frame still renders lit geometry + sky +
+ * sun shadows + tonemap without them.
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
  * WGSL lives as inline template strings (js/webgpu/wgsl-chunks.js).
@@ -47,6 +53,13 @@ const WGX = (function () {
 
   // Identity mat4 (column-major) fallback.
   const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+  // GL→WebGPU clip-space depth remap. game.js builds GL-convention projections
+  // (NDC z ∈ [-1,1]); WebGPU rasterises z ∈ [0,1]. Left-multiplying a view-proj by
+  // Z01 maps clip_z' = 0.5*clip_z + 0.5*clip_w so the near half of the scene isn't
+  // clipped. Column-major of row-basis diag(1,1,·)+row2=(0,0,.5,.5). Applied to the
+  // uploaded viewProj (lit) and lightVP (shadow); NOT to invViewProj (sky rays).
+  const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
 
   // ── render-target formats ──
   const SCENE_FORMAT = "rgba16float";   // HDR scene (core-renderable/blendable)
@@ -68,6 +81,11 @@ const WGX = (function () {
   const MAX_DRAWS = 4096;                               // per-frame draw slots
   const BLIT_BYTES = WGSLChunks.BLIT_UNIFORM_BYTES;     // 16
 
+  // ── shadow map (Phase 3) ──
+  const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;        // sun depth-map resolution
+  const SHADOW_SLOTS = 16;                              // caster draws per shadow pass
+  const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
+
   // ── vertex layout: interleaved [pos3, nrm3, col3, mat1], stride 40 ──
   // NB: unlike GLX (which keeps mat-less meshes at stride 36), WGX ALWAYS stores
   // the 10th float (mat, default 0) so a single pipeline vertex layout serves
@@ -81,8 +99,25 @@ const WGX = (function () {
       { shaderLocation: 3, offset: 36, format: "float32" },
     ],
   };
+  // Shadow pass consumes only position (location 0) from the same interleaved VBO.
+  const SHADOW_VERTEX_LAYOUT = {
+    arrayStride: 40,
+    attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
+  };
 
   function toF32(a) { return a instanceof Float32Array ? a : new Float32Array(a); }
+
+  // Column-major 4×4 multiply: out = a · b (out must not alias a or b).
+  function _mul4(out, a, b) {
+    for (let c = 0; c < 4; c++) {
+      const b0 = b[c*4], b1 = b[c*4+1], b2 = b[c*4+2], b3 = b[c*4+3];
+      out[c*4]   = a[0]*b0 + a[4]*b1 + a[8]*b2  + a[12]*b3;
+      out[c*4+1] = a[1]*b0 + a[5]*b1 + a[9]*b2  + a[13]*b3;
+      out[c*4+2] = a[2]*b0 + a[6]*b1 + a[10]*b2 + a[14]*b3;
+      out[c*4+3] = a[3]*b0 + a[7]*b1 + a[11]*b2 + a[15]*b3;
+    }
+    return out;
+  }
 
   // ── Frustum cull helpers — ported verbatim from GLX (js/glx.js:3038-3071).
   //    Gribb–Hartmann from a COLUMN-MAJOR view-proj; inside = a*x+b*y+c*z+d >= 0.
@@ -162,6 +197,7 @@ const WGX = (function () {
     const drawData  = new Float32Array(DRAW_FLOATS);
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
+    const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
     const _dynOff = [0];   // single-element dynamic-offset scratch
 
     // Culling frame state.
@@ -174,12 +210,30 @@ const WGX = (function () {
     let skyPipeline, blitPipeline, linearSampler;
     const _litPipelines = new Map();
 
+    // Shadow-pass objects (Phase 3).
+    let shadowTex = null, shadowView = null, shadowSampler = null;
+    let shadowUBO, shadowModelUBO, shadowG0Layout, shadowG1Layout, shadowModule,
+        shadowPipeline, shadowG0BindGroup, shadowModelBindGroup;
+    let _shadowRendered = false, _shadowLightVP = null;
+    const shadowLVPData = new Float32Array(16), shadowModelData = new Float32Array(16);
+    let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
+
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
         blitBindGroup = null, _texW = 0, _texH = 0;
 
     try {
       linearSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+
+      // Sun shadow map: a depth texture rendered from the sun's POV, sampled by
+      // the LIT shader through a comparison sampler (PCF). Fixed size, created
+      // once so frameBindGroup can bind its view at init.
+      shadowTex = device.createTexture({
+        size: [SHADOW_SIZE, SHADOW_SIZE], format: DEPTH_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      shadowView = shadowTex.createView();
+      shadowSampler = device.createSampler({ compare: "less", magFilter: "linear", minFilter: "linear" });
 
       // Explicit bind-group layouts (needed for the dynamic-offset draw UBO).
       g0Layout = device.createBindGroupLayout({
@@ -188,6 +242,10 @@ const WGX = (function () {
             buffer: { type: "uniform" } },
           { binding: 1, visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: "read-only-storage" } },
+          { binding: 2, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "depth" } },
+          { binding: 3, visibility: GPUShaderStage.FRAGMENT,
+            sampler: { type: "comparison" } },
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -213,6 +271,8 @@ const WGX = (function () {
         entries: [
           { binding: 0, resource: { buffer: frameUBO } },
           { binding: 1, resource: { buffer: lightSBO } },
+          { binding: 2, resource: shadowView },
+          { binding: 3, resource: shadowSampler },
         ],
       });
       drawBindGroup = device.createBindGroup({
@@ -242,6 +302,33 @@ const WGX = (function () {
         vertex: { module: blitModule, entryPoint: "vs_main" },
         fragment: { module: blitModule, entryPoint: "fs_main", targets: [{ format }] },
         primitive: { topology: "triangle-list" },
+      });
+
+      // ── Shadow pass pipeline (Phase 3): vertex-only depth render from the sun.
+      shadowUBO = device.createBuffer({ size: WGSLChunks.SHADOW_LVP_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      shadowModelUBO = device.createBuffer({ size: SHADOW_SLOTS * SHADOW_MODEL_STRIDE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      shadowG0Layout = device.createBindGroupLayout({
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } }],
+      });
+      shadowG1Layout = device.createBindGroupLayout({
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX,
+          buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: WGSLChunks.SHADOW_MODEL_BYTES } }],
+      });
+      shadowModule = device.createShaderModule({ code: WGSLChunks.SHADOW });
+      shadowPipeline = device.createRenderPipeline({
+        layout: device.createPipelineLayout({ bindGroupLayouts: [shadowG0Layout, shadowG1Layout] }),
+        vertex: { module: shadowModule, entryPoint: "vs_main", buffers: [SHADOW_VERTEX_LAYOUT] },
+        // No fragment stage — depth-only. Slope-scaled bias fights shadow acne.
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less",
+          depthBias: 2, depthBiasSlopeScale: 3, depthBiasClamp: 0 },
+      });
+      shadowG0BindGroup = device.createBindGroup({
+        layout: shadowG0Layout, entries: [{ binding: 0, resource: { buffer: shadowUBO } }],
+      });
+      shadowModelBindGroup = device.createBindGroup({
+        layout: shadowG1Layout,
+        entries: [{ binding: 0, resource: { buffer: shadowModelUBO, offset: 0, size: WGSLChunks.SHADOW_MODEL_BYTES } }],
       });
     } catch (_) {
       return null;   // any pipeline/buffer build failure -> fall back to GLX
@@ -416,8 +503,9 @@ const WGX = (function () {
     // ── frame uniform + light storage upload (mirror GLX begin(), js/glx.js:2838) ──
     function _writeFrame(f) {
       const d = frameData;
-      const vp = f.viewProj || IDENT;
-      d.set(vp.length >= 16 ? (vp.subarray ? vp.subarray(0, 16) : vp) : IDENT, 0);
+      const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
+      _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+      d.set(_vpGpu, 0);
       const eye = f.eye || [0,0,0], sd = f.sunDir || [0.3,0.6,0.5], sc = f.sunColor || [1,0.95,0.9];
       const T = f.tune || null;
       const ambM = T && T.ambientMul != null ? T.ambientMul : 1;
@@ -441,6 +529,17 @@ const WGX = (function () {
       d[53]=T && T.glowAmp != null ? T.glowAmp : 2.3;
       d[54]=f.wetness != null ? f.wetness : 0;
       d[55]=f.cloud != null ? f.cloud : 0;
+      // lightVP (floats 56..71) — the Z01-remapped sun view-proj, identical to the
+      // matrix the depth map was rasterised with in shadowBegin (so refD matches).
+      d.set(_shadowRendered ? shadowLVPData : IDENT, 56);
+      // params2 (floats 72..75): shadowOn, strength, texel, _. Sun below the
+      // horizon (sunDir.y < -0.05) forces shadows off so a stale daytime depth
+      // map can't leak shadows into a night scene.
+      const sunUp = !sd || sd[1] > -0.05;
+      d[72] = (_shadowRendered && sunUp) ? 1 : 0;
+      d[73] = 1.0;                // shadow strength
+      d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
+      d[75] = 0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -603,6 +702,73 @@ const WGX = (function () {
       encoder = null; currentView = null;
     }
 
+    // ── Shadow pass (Phase 3): sun depth map ──────────────────────────────
+    // Runs BEFORE begin() each frame (matches game.js render order): its own
+    // command encoder, submitted in shadowEnd() so the depth map is ready for
+    // the later lit pass that samples it. All current casters use MAT_IDENT, but
+    // model is honoured via a dynamic-offset ring (one slot per castShadow* call).
+    function _writeShadowModel(slot, model) {
+      shadowModelData.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
+      device.queue.writeBuffer(shadowModelUBO, slot * SHADOW_MODEL_STRIDE, shadowModelData, 0, 16);
+    }
+    function _shadowSetModel(model) {
+      const slot = _shadowSlot++;
+      if (slot >= SHADOW_SLOTS) return -1;
+      _writeShadowModel(slot, model);
+      shadowPass.setBindGroup(1, shadowModelBindGroup, [slot * SHADOW_MODEL_STRIDE]);
+      return slot;
+    }
+    function shadowBegin(lightVP) {
+      if (_lost || !shadowView) return;
+      _shadowLightVP = (lightVP && lightVP.length >= 16) ? lightVP : IDENT;  // raw — CPU chunk cull
+      _mul4(shadowLVPData, Z01, _shadowLightVP);   // Z01-remapped — depth store + LIT lookup
+      device.queue.writeBuffer(shadowUBO, 0, shadowLVPData);
+      _shadowSlot = 0;
+      shadowEncoder = device.createCommandEncoder();
+      shadowPass = shadowEncoder.beginRenderPass({
+        colorAttachments: [],
+        depthStencilAttachment: { view: shadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
+      });
+      shadowPass.setPipeline(shadowPipeline);
+      shadowPass.setBindGroup(0, shadowG0BindGroup);
+      if (lightVP) _extractPlanes(lightVP, _fcPlanes);   // light frustum for chunk cull
+    }
+    function castShadow(mesh, model) {
+      if (!shadowPass || !mesh || !mesh.vbuf) return;
+      if (_shadowSetModel(model) < 0) return;
+      shadowPass.setVertexBuffer(0, mesh.vbuf);
+      if (mesh.chunks) {   // a chunked mesh cast without cull — draw every chunk
+        for (let i = 0; i < mesh.chunks.length; i++) {
+          const ch = mesh.chunks[i];
+          shadowPass.setIndexBuffer(ch.ibuf, ch.indexFormat);
+          shadowPass.drawIndexed(ch.count);
+        }
+        return;
+      }
+      shadowPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
+      shadowPass.drawIndexed(mesh.count);
+    }
+    function castShadowChunked(mesh, model) {
+      if (!shadowPass || !mesh || !mesh.vbuf) return;
+      if (_shadowSetModel(model) < 0) return;
+      shadowPass.setVertexBuffer(0, mesh.vbuf);
+      if (!mesh.chunks) { shadowPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat); shadowPass.drawIndexed(mesh.count); return; }
+      const cull = !!_shadowLightVP;   // planes were extracted into _fcPlanes in shadowBegin
+      for (let i = 0; i < mesh.chunks.length; i++) {
+        const ch = mesh.chunks[i];
+        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
+        shadowPass.setIndexBuffer(ch.ibuf, ch.indexFormat);
+        shadowPass.drawIndexed(ch.count);
+      }
+    }
+    function shadowEnd() {
+      if (!shadowPass) return;
+      shadowPass.end(); shadowPass = null;
+      device.queue.submit([shadowEncoder.finish()]);
+      shadowEncoder = null;
+      _shadowRendered = true;
+    }
+
     const noop = function () {};
 
     return {
@@ -616,7 +782,7 @@ const WGX = (function () {
       get aspect() { return aspect; },
       hdrMode: () => true,           // Phase 2: RGBA16F scene target is live
       msaa: () => 1,                 // Phase 4: pipeline.multisample resolveTarget
-      pcss: () => false,             // Phase 3: comparison-sampler PCF / PCSS-lite
+      pcss: () => true,              // Phase 3: comparison-sampler 3×3 PCF sun shadows
       isMobile: IS_MOBILE,
       mobileTier: MOBILE_TIER,
 
@@ -642,10 +808,10 @@ const WGX = (function () {
       drawDecal: noop,               // Phase 4 (team/sponsor decal atlas)
 
       // ── Shadow pass (Phase 3) ──
-      shadowBegin: noop,
-      castShadow: noop,
-      castShadowChunked: noop,
-      shadowEnd: noop,
+      shadowBegin,
+      castShadow,
+      castShadowChunked,
+      shadowEnd,
 
       // ── Env probe (Phase 3) ──
       envFaceBegin: noop,

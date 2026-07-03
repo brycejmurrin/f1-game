@@ -155,7 +155,9 @@ struct FrameU {
   fogColor   : vec4<f32>,     // off 176
   params0    : vec4<f32>,     // off 192  (fogDensity, fogHeight, time, numLights)
   params1    : vec4<f32>,     // off 208  (keyMul, glowAmp, wetness, cloud)
-};                            // size 224
+  lightVP    : mat4x4<f32>,   // off 224  sun light-space view-proj (shadow, Phase 3)
+  params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, _)
+};                            // size 304
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -170,6 +172,8 @@ struct DrawU {
 };                            // size 112
 @group(0) @binding(0) var<uniform> F : FrameU;
 @group(0) @binding(1) var<storage, read> lights : array<Light, 32>;
+@group(0) @binding(2) var shadowTex  : texture_depth_2d;
+@group(0) @binding(3) var shadowSamp : sampler_comparison;
 @group(1) @binding(0) var<uniform> D : DrawU;
 ${brdf}
 
@@ -228,7 +232,29 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
   let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
-  let litNoL = NoL * keyMul;   // TODO(Phase 3): * shadow * (1 - cloudShadow)
+  // Sun shadow (Phase 3): project the world pos into the sun's light-space clip,
+  // then 3×3-PCF compare against the depth map (WebGPU NDC z is already [0,1], so
+  // no -1..1 remap). shadowSamp is a comparison sampler — Level variant is legal
+  // in non-uniform control flow. shadow = fraction lit (1 = fully lit).
+  var shadow = 1.0;
+  if (F.params2.x > 0.5) {
+    let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
+    let ndc = sc.xyz / sc.w;
+    let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && ndc.z <= 1.0) {
+      let refD = ndc.z - 0.0015;   // constant depth bias vs surface acne
+      let texel = F.params2.z;     // 1 / shadowMapSize
+      var s = 0.0;
+      for (var oy = -1; oy <= 1; oy = oy + 1) {
+        for (var ox = -1; ox <= 1; ox = ox + 1) {
+          s = s + textureSampleCompareLevel(shadowTex, shadowSamp,
+                    suv + vec2<f32>(f32(ox), f32(oy)) * texel, refD);
+        }
+      }
+      shadow = mix(1.0, s / 9.0, F.params2.y);   // params2.y = shadow strength
+    }
+  }
+  let litNoL = NoL * keyMul * shadow;
   var color = albedo * (amb + F.sunColor.xyz * litNoL * (1.0 - metalness));
 
   // Cook-Torrance sun specular, soft-clipped so highlights sheen not clip.
@@ -301,6 +327,20 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   color = mix(color, fogCol, fAmt);
 
   return vec4<f32>(color, alpha);
+}`;
+
+  // ── SHADOW: depth-only sun-shadow caster pass (Phase 3). Vertex-only pipeline
+  //    (no fragment stage) — rasterises clip-space depth into the shadow map from
+  //    the sun's POV. Model rides a dynamic-offset uniform so terrain / road /
+  //    props share one buffer (one slot per castShadow* call).
+  const SHADOW = `
+struct ShadowU { lightVP : mat4x4<f32> };
+struct ShadowModel { model : mat4x4<f32> };
+@group(0) @binding(0) var<uniform> S : ShadowU;
+@group(1) @binding(0) var<uniform> M : ShadowModel;
+@vertex
+fn vs_main(@location(0) aPos : vec3<f32>) -> @builtin(position) vec4<f32> {
+  return S.lightVP * (M.model * vec4<f32>(aPos, 1.0));
 }`;
 
   // ── BLIT: the present() resolve. Samples the RGBA16F scene target, applies
@@ -491,11 +531,14 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY,
     LIT,
     BLIT,
+    SHADOW,
     // byte size of the SkyU uniform block (mat4 64 + 7*vec4 112 = 176)
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 224,   // FrameU
+    FRAME_UNIFORM_BYTES: 304,   // FrameU (Phase 3: +lightVP mat4 +params2 vec4)
+    SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
+    SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
     MAX_LIGHTS: 32,
     DRAW_UNIFORM_BYTES: 112,    // DrawU used bytes (dynamic-offset stride is 256)
