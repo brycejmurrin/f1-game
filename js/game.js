@@ -3146,11 +3146,11 @@ const TUNE_DEFS = [
   { id: "surfDetail",   label: "SURFACE DETAIL",  group: "REFLECTIONS", min: 0, max: 2, step: 0.05, def: 1.0, help: "Road/terrain procedural grain + micro-normal relief (aggregate, patches, cracks). 0 = flat." },
   { id: "ssrThick",     label: "SSR THICKNESS",   group: "REFLECTIONS", min: 0.05, max: 1, step: 0.05, def: 0.20, u: "uSsrThick", help: "Depth tolerance for a wet-road reflection hit. Lower = crisper but more gaps; higher = fewer holes, more smear." },
   // Car
-  { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.55, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
+  { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 1.5, step: 0.05, def: 0.05, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
   { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.05, def: 0.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). OFF by default — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass)." },
   { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0.3, max: 2.5, step: 0.05, def: 1.0,  help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness)." },
   { id: "carSpecular",  label: "PAINT SPECULAR",  group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Brightness of the specular highlight rolling over the bodywork." },
-  { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 2,   step: 0.05, def: 1.0,  help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
+  { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 2,   step: 0.05, def: 0.05, help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
   { id: "carMetal",     label: "PAINT METALNESS", group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "How metallic the paint reads — reflection tint and grazing falloff." },
   { id: "carGlow",      label: "BODY GLOW",       group: "CAR", min: 0,   max: 3,   step: 0.05, def: 1.0,  help: "Self-lit body glow after dark (only the night / wet liveries carry it)." },
   // Shadows & weather
