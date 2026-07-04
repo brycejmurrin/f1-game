@@ -1768,72 +1768,81 @@ const Tracks = (function () {
     };
 
     // ---------- linear track furniture (run along the track from s0→s1) ----------
-    // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart.
+    // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart. Passes the
+    // ACTUAL along-track spacing used (stepM rounds to a whole number of nodes,
+    // so the real gap between consecutive k's is `step*ds`, not the requested
+    // stepM) — callers that emit a full solid box per node MUST size its
+    // tangent-axis length to this, not a padded constant. A fixed constant
+    // larger than the true spacing (the old pattern: box length > stepM "to
+    // avoid gaps on curves") makes adjacent full-solid boxes share real 3D
+    // volume — on straights that's near-coincident z-fighting, on curves
+    // (worst on tight hairpins) the boxes are rotated relative to each other so
+    // the shared volume shows as visible interpenetration/clipping.
     const along = (s0, s1, stepM, fn) => {
       const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
       const span = ((k1 - k0) + n) % n || n, step = Math.max(1, Math.round(stepM / ds));
-      for (let i = 0; i <= span; i += step) fn((k0 + i) % n);
+      for (let i = 0; i <= span; i += step) fn((k0 + i) % n, step * ds);
     };
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick) => {
       const a = thick || 0.5;
       recordBarrier(s0, s1, side, gap);
-      along(s0, s1, 6, (k) => {
+      along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], a / 2)) {
           console.warn(`[scenery] wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addBox(out, vadd(p.c, p.u, h / 2), [a, h, 6.3], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, h / 2), [a, h, spacing], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]);
       });
     };
     // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
     const fence = (s0, s1, side, gap, h, col) => {
-      along(s0, s1, 5, (k) => {
+      along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
           console.warn(`[scenery] fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         addCyl(out, p.c, 0.13, h, [0.28, 0.28, 0.30], 5, [p.r, p.u, p.t]);          // post
-        addBox(out, vadd(p.c, p.u, h * 0.55), [0.05, h * 0.9, 5.2], col || [0.72, 0.74, 0.78], [p.r, p.u, p.t]);  // mesh
+        addBox(out, vadd(p.c, p.u, h * 0.55), [0.05, h * 0.9, spacing], col || [0.72, 0.74, 0.78], [p.r, p.u, p.t]);  // mesh
       });
     };
     // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
     const guardrail = (s0, s1, side, gap, col) => {
       recordBarrier(s0, s1, side, gap);
-      along(s0, s1, 4, (k) => {
+      along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
           console.warn(`[scenery] guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         addCyl(out, p.c, 0.09, 0.7, [0.5, 0.5, 0.52], 4, [p.r, p.u, p.t]);
-        addBox(out, vadd(p.c, p.u, 0.7), [0.18, 0.45, 4.2], col || [0.82, 0.82, 0.85], [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 0.7), [0.18, 0.45, spacing], col || [0.82, 0.82, 0.85], [p.r, p.u, p.t]);
       });
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
     const tyreWall = (s0, s1, side, gap, capCol) => {
       recordBarrier(s0, s1, side, gap);
-      along(s0, s1, 3.4, (k) => {
+      along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
           console.warn(`[scenery] tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         addCyl(out, p.c, 1.0, 0.9, [0.10, 0.10, 0.11], 7, [p.r, p.u, p.t]);
-        addBox(out, vadd(p.c, p.u, 0.95), [2.0, 0.3, 3.6], capCol || [0.9, 0.9, 0.92], [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, 0.95), [2.0, 0.3, spacing], capCol || [0.9, 0.9, 0.92], [p.r, p.u, p.t]);
       });
     };
     // Low clipped hedge / continuous treeline.
     const hedge = (s0, s1, side, gap, h, col) => {
-      along(s0, s1, 4, (k) => {
+      along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.2)) {
           console.warn(`[scenery] hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, 4.3], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, spacing], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);
       });
     };
     // forestEdge(): a DENSE treeline (mix of pine/tree) from s0→s1 on `side`,
