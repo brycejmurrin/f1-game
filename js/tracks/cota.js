@@ -21,8 +21,9 @@
       { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 }, { t: 0, l: 460 },
       { t: -150, l: 130 }, { t: 70, l: 70 }, { t: -60, l: 70 }, { t: 80, l: 90 }, { t: 90, l: 160 }, { t: -130, l: 110 },
     ],
-    // Turn 1: the calendar's most famous climb — ~30 m up in a few hundred metres.
-    elevations: [{ s: 0.06, halfM: 320, rise: 12 }],
+    // Turn 1: the calendar's most famous climb — kept as the circuit's signature
+    // rise but eased to ~3.2% grade so the chase-cam doesn't read it as a wall.
+    elevations: [{ s: 0.06, halfM: 340, rise: 7 }],
     scenery: function (api) {
       const { out, MAT, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addPyramid, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, motorhome, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
