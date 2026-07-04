@@ -901,6 +901,20 @@ const Tracks = (function () {
       [[-1, 1, -1], [-1, 1, 1], [1, 1, 1], [1, 1, -1], u],
       [[-1, -1, 1], [-1, -1, -1], [1, -1, -1], [1, -1, 1], [-u[0], -u[1], -u[2]]],
     ];
+    // The face table above is wound CCW-outward for a RIGHT-handed [r,u,f] basis
+    // (the default axes give r×u = +f). But callers on the track frame pass
+    // r = cross(t,up), u = cross(r,t) — a LEFT-handed basis (r×u = -t) — so every
+    // face there winds backward: GL back-face culling then drops the OUTWARD face
+    // and keeps the interior one, and the whole box renders SEE-THROUGH (you see
+    // the textured inside of the far wall — the "translucent buildings" bug on
+    // Madrid/Monaco/every day-lit city facade, which are all addBox masses on the
+    // track basis). Detect the basis handedness and reverse the triangle order
+    // when it's left-handed so the outward face always survives culling. Face
+    // NORMALS (nv) are the true outward world directions either way, so only the
+    // winding flips. (addCyl/addCone/etc. avoid this via emit()'s ref-based
+    // auto-orient; addBox is the only fixed-winding primitive.)
+    const cr = cross(r, u);
+    const flip = (cr[0] * f[0] + cr[1] * f[1] + cr[2] * f[2]) < 0;
     const m = out._mat || 0, mm = out.mat;
     for (const fc of faces) {
       const base = out.pos.length / 3;
@@ -910,7 +924,8 @@ const Tracks = (function () {
         out.pos.push(p[0], p[1], p[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]);
         if (mm) mm.push(m);
       }
-      out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      if (flip) out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      else out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
   }
 
