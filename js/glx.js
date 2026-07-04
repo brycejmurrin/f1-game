@@ -282,7 +282,8 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     albedo = mix(albedo, albedo * 0.32, bar * near);
     rough = mix(rough, min(rough, 0.12), near);
   } else if (mid == 4) {     // METAL — brushed vertical streaks, glossier
-    albedo *= 1.0 + (vnoise(vec2(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * near;
+    float brushFade = clamp(1.0 - (vd - 26.0) / 29.0, 0.0, 1.0);   // fade 40-cycle brushing over 26-55m (tighter than 'near') so it stops sparkling
+    albedo *= 1.0 + (vnoise(vec2(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade;
     rough = clamp(rough - 0.15 * far, 0.05, 1.0);
   } else if (mid == 5) {     // WOOD — grain lines + plank seams
     albedo *= 1.0 + (vnoise(vec2(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near;
@@ -293,7 +294,8 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     albedo *= 1.0 + (d - 0.5) * 0.34 * far;
     albedo.g *= 1.0 + (d - 0.5) * 0.10 * far;
   } else if (mid == 7) {     // FABRIC / CROWD / TENT — fine weave speckle
-    albedo *= 1.0 + (vnoise(vec2(hc, y) * 26.0) - 0.5) * 0.14 * near;
+    float weaveFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);   // fade 26-cycle weave over 26-60m so it stops crawling mid-range
+    albedo *= 1.0 + (vnoise(vec2(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade;
   } else if (mid == 8) {     // SAND — fine grain + gentle dune ripple
     albedo *= 1.0 + (vnoise(wp.xz * 5.0) - 0.5) * 0.12 * near
                   + sin(wp.x * 0.7 + vnoise(wp.xz * 0.2) * 6.0) * 0.05 * far;
@@ -309,11 +311,13 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     float s = vnoise(wp.xz * 1.6 + y * 0.4) - 0.5;
     albedo *= 1.0 + s * 0.10 * far;
     albedo.b *= 1.0 - s * 0.05 * far;              // shaded drifts read faintly cool
-    albedo *= 1.0 + (vnoise(wp.xz * 24.0) - 0.5) * 0.06 * near;
+    float sparkleFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);  // fade 24-cycle snow sparkle over 26-60m so it stops shimmering
+    albedo *= 1.0 + (vnoise(wp.xz * 24.0) - 0.5) * 0.06 * sparkleFade;
     rough = clamp(rough - 0.10 * far, 0.05, 1.0);
   } else if (mid == 12) {    // ROOF (terracotta tile) — ridged courses, warm tone bands
     float ty = fract(y / 0.34);
-    float shade = sin(ty * 3.14159);
+    float shadeAA = clamp(1.0 - fwidth(ty) * 6.0, 0.0, 1.0);           // fade tile-ridge sine when a pixel covers >~1/6 of a tile → no shimmer
+    float shade = sin(ty * 3.14159) * shadeAA;
     albedo *= 0.88 + shade * 0.16;
     albedo *= 1.0 + (vnoise(vec2(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near;
     rough = min(1.0, rough + 0.10 * far);
@@ -330,7 +334,9 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     albedo = mix(mortar, block, joint * near);
     rough = min(1.0, rough + 0.18 * far);
   } else if (mid == 14) {    // RUST / CORRUGATED METAL — ridge shading + rust streaks
-    float ridge = sin(hc * 7.5);
+    float ridgePhase = hc * 7.5;
+    float ridgeAA = clamp(1.0 - fwidth(ridgePhase) * 3.0, 0.0, 1.0);   // fade the corrugation sine as a pixel spans >~1/3 cycle → no crawl at distance
+    float ridge = sin(ridgePhase) * ridgeAA;
     albedo *= 0.85 + ridge * 0.18;
     float rust = smoothstep(0.55, 0.9, vnoise(vec2(hc * 0.8, y * 0.35) + 5.0));
     albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.28), rust * 0.5 * far);

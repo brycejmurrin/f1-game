@@ -4144,10 +4144,13 @@ function render(dt) {
     fovY = Math.min(fovY, fovYCap);
   }
 
-  // Near plane 0.2 (not 0.1): the closest geometry in any camera is well beyond
-  // 0.2 m, and doubling the near distance roughly doubles depth-buffer precision
-  // across the scene — the biggest single lever against z-fighting / shadow flicker.
-  M4.perspectiveTo(_mProj, fovY, gfx.aspect, 0.2, farPlane);
+  // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
+  // precision across the scene — the biggest single lever against z-fighting /
+  // shadow flicker. Capped at 0.3 (not higher): the cockpit rig keeps the wheel /
+  // dash fascia a proven 0.39 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
+  // still clears it with ~9 cm to spare while raising the far/near precision
+  // floor ~1.5x vs 0.2.
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, 0.3, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {

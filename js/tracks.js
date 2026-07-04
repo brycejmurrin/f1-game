@@ -893,7 +893,7 @@ const Tracks = (function () {
     const margin = Math.max(1400, (maxx - minx), (maxz - minz));
     const x0 = minx - margin, x1 = maxx + margin;
     const z0 = minz - margin, z1 = maxz + margin;
-    const y = pyMin - 0.6;   // just under the lowest terrain so nothing z-fights
+    const y = pyMin - 1.0;   // well under the lowest terrain so nothing z-fights even at far draw distance (was 0.6)
     const pal = track.def.palette;
     // Match the terrain ribbon's outer colour (grass) so the seam is invisible on
     // open circuits; on street circuits grass is the neutral urban grey, which
