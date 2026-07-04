@@ -1340,10 +1340,20 @@ const Tracks = (function () {
     const groundYAt = (k, dist) => {
       const base = py[k];
       if (dist <= 0) return base;
-      // flat island / street: ground is a level shelf tracking the local road grade
-      // (matches buildTerrain's levelShelf branch), so props/trees sit on it up a
-      // climb instead of over a sunk slope. Mirror the ribbon's gentle sag exactly.
-      if (flatT || isStreetT) return base - 0.12 - Math.min(dist, outerWT) * 0.004;
+      // flat island / street: WITHIN the ribbon (dist <= outerWT) sit on the level
+      // shelf tracking the local road grade (matches buildTerrain's levelShelf).
+      // BEYOND the ribbon there is no ribbon geometry — only the flat buildFloor
+      // slab at pyMin-0.6 — so a prop out there (a far skyline building, the city
+      // gen's back row) must anchor to the SLAB, not road grade, or it floats by
+      // (roadY - slabY). This is the fix for the airborne-city bug that the narrow
+      // street ribbon exposed. Blend over the last few metres so the seam is smooth.
+      if (flatT || isStreetT) {
+        const shelf = base - 0.12 - Math.min(dist, outerWT) * 0.004;
+        const slab = pyMin - 0.6;
+        if (dist <= outerWT) return shelf;
+        const bt = Math.min(1, (dist - outerWT) / 20);   // ease shelf→slab over 20 m
+        return shelf * (1 - bt) + slab * bt;
+      }
       let prevD = 0, prevY = base + gSag;
       for (let v = 0; v < 5; v++) {
         const e = (v / 4) * (v / 4);
