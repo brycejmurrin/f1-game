@@ -535,7 +535,17 @@ void main() {
     float crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
     if (crackFade > 0.01) {
       float cr = abs(vnoise(wp * 0.9 + 3.3) * 2.0 - 1.0);
-      float crack = (1.0 - smoothstep(0.015, 0.075, cr))
+      // AA the crack-ridge threshold — same missing-derivative bug as the
+      // building-material seams (fixed elsewhere in this file): the fixed
+      // 0.015..0.075 band is a THRESHOLD ON cr, not a world-space distance, so
+      // once a screen pixel's footprint changes cr by more than that band per
+      // pixel, the ridge line pops in/out of existence per-frame instead of
+      // fading — right in the driver's near field (crackFade only applies
+      // <~63m), reading as thin dark stripes streaming under the car as it
+      // moves through world space. fwidth(cr) widens the falloff edge to
+      // match; the fixed 0.015 inner edge (solid ridge core) is kept as-is.
+      float crAA = max(0.075, 0.015 + fwidth(cr));
+      float crack = (1.0 - smoothstep(0.015, crAA, cr))
                   * smoothstep(0.40, 0.70, vnoise(wp * 0.11 + 7.7));
       albedo *= 1.0 - crack * 0.30 * crackFade * min(uDetail * 4.0, 1.0);
     }

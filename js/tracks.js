@@ -3267,7 +3267,18 @@ const Tracks = (function () {
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));
         const lensCol = (NIGHT ? LENS_NIGHT : LENS_DAY)[kind];
         const b = [a.r, a.u, a.t];
-        addCyl(out, a.c, 0.17, mastH, poleCol, 6, b);
+        // Radius bumped 0.17->0.26: at the shadow map's default texel density
+        // (~0.03-0.09m/texel across the 32-96m SHADOW DISTANCE range) a 0.34m
+        // pole was only ~3.6-11 texels wide — thin enough that its shadow
+        // silhouette pops in/out as it crosses texel boundaries while driving
+        // past, and masts repeat every ~22m (buildTrackLights' stride), so the
+        // aliasing reads as a regular "picket fence" of stripes sweeping toward
+        // the camera. Widening the footprint (~1.5x) reduces how often a
+        // texel-boundary crossing flips the whole silhouette; the visible pole
+        // is only modestly thicker (barely perceptible at driving distance).
+        // Does not fully eliminate thin-caster aliasing — a proper fix would
+        // need a separate, shadow-only fatter proxy mesh.
+        addCyl(out, a.c, 0.26, mastH, poleCol, 6, b);
         const top = vadd(a.c, a.u, mastH);
         let lens;
         if (kind === "globe") {
