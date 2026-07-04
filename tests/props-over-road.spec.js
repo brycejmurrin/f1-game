@@ -46,8 +46,12 @@ const CEIL = 5.0;
 const BASELINE = {
   miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
   mexico: 2.7, mexico_note: "Foro Sol stadium — track runs through by design",
-  baku: 1.3, jeddah: 1.3, hungaroring: 0.9, abudhabi: 0.8,
-  albert_park: 0.7, monaco: 0.7,
+  // street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
+  // road edge (the track boundary the car stays inside), now sitting on the real
+  // terrain ribbon added for these tracks — verified via driver-eye as the wall,
+  // not a lane obstruction. Bumped from the pre-ribbon caps accordingly.
+  monaco: 1.4, singapore: 1.3, vegas: 1.3, baku: 1.3, jeddah: 1.3,
+  hungaroring: 0.9, abudhabi: 0.8, albert_park: 0.7,
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 

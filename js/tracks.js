@@ -705,12 +705,20 @@ const Tracks = (function () {
     // verts evenly out to outerW and skips the lateral sag/ease so trees and props
     // sit on real ground all the way out instead of floating over a sunk fallback.
     const flat = !!track.def.flatTerrain;
-    const outerW = track.def.terrainOuter || 120;
+    // Street ribbon is NARROW (out to ~street width, def.terrainOuter or 28 m) —
+    // a city street's ground only reaches the buildings, and the flat buildFloor
+    // slab fills everything beyond. A wide street ribbon at road grade chords over
+    // PARALLEL straights running close in world space (Monaco out-and-back, Jeddah)
+    // — the over-track clip skips same-direction neighbours, so it can't carve
+    // those, and green pokes over the far straight. Keeping it narrow avoids ever
+    // reaching a parallel road. Open/flat circuits keep the wide 120 m ribbon.
+    const streetOuter = track.def.terrainOuter || 28;
+    const outerW = isStreet ? streetOuter : (track.def.terrainOuter || 120);
     const cap = (v) => Math.min(v, outerW);
-    const latsL = isStreet ? [-5.0, -cap(10), -cap(20), -cap(55), -outerW]
+    const latsL = isStreet ? [-5.0, -cap(10), -cap(16), -cap(22), -outerW]
                 : flat ? [-2.2, -cap(outerW * 0.3), -cap(outerW * 0.55), -cap(outerW * 0.8), -outerW]
                 : [-2.2, -cap(7.0), -cap(14), -cap(48), -outerW];
-    const latsR = isStreet ? [ 5.0,  cap(10),  cap(20),  cap(55),  outerW]
+    const latsR = isStreet ? [ 5.0,  cap(10),  cap(16),  cap(22),  outerW]
                 : flat ? [ 2.2,  cap(outerW * 0.3),  cap(outerW * 0.55),  cap(outerW * 0.8),  outerW]
                 : [ 2.2,  cap(7.0),  cap(14),  cap(48),  outerW];
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
@@ -731,10 +739,14 @@ const Tracks = (function () {
           // the road surface when the road climbs steeply.
           const localGrade = v === 0 ? Math.abs(py[k] - py[(k + 1) % n]) : 0;
           const innerExtra = v === 0 ? Math.min(localGrade * 2, 1.2) : 0;
-          // flat island: tiny constant sag, no lateral fall-off, so the whole
-          // ribbon stays a level shelf just below road grade out to outerW.
-          const sag = flat ? -0.12
-                    : (isStreet ? -1.5 : -0.3) - Math.abs(lats[v]) * 0.018 - innerExtra;
+          // flat island / street: tiny constant sag, no lateral fall-off, so the
+          // ground stays a level shelf just below road grade out to outerW. Real
+          // city streets are level with the roadway (pavement, not a graded verge),
+          // so a steep sag would sink the ground away under the close-set buildings
+          // and float them. Open circuits keep the graded verge → distant sag.
+          const levelShelf = flat || isStreet;
+          const sag = levelShelf ? -0.12 - Math.abs(lats[v]) * 0.004
+                    : -0.3 - Math.abs(lats[v]) * 0.018 - innerExtra;
           // inner vert tracks road height; outer verts ease down to the lap's
           // low point (or the flattened bridge ground, whichever is lower). The
           // quadratic ease keeps the run-off apron near track grade and pushes
@@ -748,9 +760,11 @@ const Tracks = (function () {
           const DROP_CAP = 10;
           const rawFloor = Math.min(gY[k], pyMin);
           const floorY = Math.max(py[k] - DROP_CAP, rawFloor);
-          // flat island keeps every vert at road grade (no quadratic drop-away);
-          // otherwise the outer verts ease down to the lap's low baseline.
-          const yBase = flat ? py[k] : py[k] * (1 - ease) + floorY * ease;
+          // flat island / street keep every vert at the local road grade (no
+          // quadratic drop-away) so the ground follows the road up a climb (Baku
+          // castle, Monaco hills) and props sit on it; open circuits ease the
+          // outer verts down to the lap's low baseline for embankment relief.
+          const yBase = levelShelf ? py[k] : py[k] * (1 - ease) + floorY * ease;
           // match the road's banked outer edge: rise along up by the same lift,
           // tapering across the ribbon (full at inner edge, 0 at outer) so the
           // far ground stays flat. frac uses the same formula as buildRoad.
@@ -816,7 +830,12 @@ const Tracks = (function () {
               }
             }
             const align = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j];
-            if (align > 0.55 && dd * ds < 60) continue; // same-direction nearby road: leave the verge
+            // Same-direction nearby road: normally leave the verge (it's this
+            // straight's own apron). But on STREET circuits a narrow flat shelf at
+            // road grade beside one straight chords over a PARALLEL same-direction
+            // straight running close by (Monaco/Jeddah) — so still carve there when
+            // the neighbour is a genuinely separate road (well beyond this verge).
+            if (align > 0.55 && dd * ds < 60 && !(isStreet && d2 > (hw[j] + 6) * (hw[j] + 6))) continue;
             const far = hw[j] + 12;
             if (d2 > far * far) continue;               // not over/near this node's tarmac
             const near = hw[j] + 1.0;
@@ -844,7 +863,13 @@ const Tracks = (function () {
     }
     // Street circuits have barriers and buildings right at the road edge —
     // no open terrain apron should be visible beside the car.
-    if (!isStreet) { ribbon(latsL, false); ribbon(latsR, true); }
+    // Street circuits now get the ribbon too (street lats above start at ±5 m so
+    // the barrier still hides the seam). Previously they were skipped and relied
+    // on the flat buildFloor slab at the lap's low point — which left a grey void
+    // and floating props anywhere the road rose above that baseline (Baku castle
+    // climb, Monaco's hills). The ribbon tracks the road height per node, so props
+    // anchored via anchor()/groundYAt sit on real ground along the whole lap.
+    ribbon(latsL, false); ribbon(latsR, true);
     return { pos, nrm, col, idx: idxArr };
   }
 
@@ -1294,14 +1319,16 @@ const Tracks = (function () {
     // they sit on the sloping ground rather than floating at the old flat grade.
     const isStreetT = !!track.def.street;
     const flatT = !!track.def.flatTerrain;
+    const outerWT = track.def.terrainOuter || 120;
     const gLats = isStreetT ? [5, 10, 20, 55, 120] : [2.2, 7, 14, 48, 120];
     const gSag = isStreetT ? -1.5 : -0.3;
     const groundYAt = (k, dist) => {
       const base = py[k];
       if (dist <= 0) return base;
-      // flat island: ground is a level shelf just below road grade everywhere, so
-      // props/trees beyond the rendered ribbon sit on it instead of a sunk slope.
-      if (flatT) return base - 0.12;
+      // flat island / street: ground is a level shelf tracking the local road grade
+      // (matches buildTerrain's levelShelf branch), so props/trees sit on it up a
+      // climb instead of over a sunk slope. Mirror the ribbon's gentle sag exactly.
+      if (flatT || isStreetT) return base - 0.12 - Math.min(dist, outerWT) * 0.004;
       let prevD = 0, prevY = base + gSag;
       for (let v = 0; v < 5; v++) {
         const e = (v / 4) * (v / 4);
