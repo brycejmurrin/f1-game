@@ -329,7 +329,16 @@ float cloudFBM(vec2 p) {
 float cloudShadow(vec3 wp) {
   if (uCloudCover <= 0.001 || uSunDir.y <= 0.06) return 0.0;
   float cloudY = 360.0;
-  float t = (cloudY - wp.y) / uSunDir.y;          // distance up the sun ray to the deck
+  // Floor the divisor well above the 0.06 cutoff: near that cutoff the sun ray
+  // to the cloud deck is almost grazing, so t (and the resulting cp) grows huge
+  // for a barely-changed wp — a tiny change in receiver height/position (e.g.
+  // the road's own elevation profile, or the ground point sweeping under a
+  // moving camera) gets amplified into many cycles of the cloud noise. That
+  // over-sampling of a fast-varying signal is exactly what reads as noisy
+  // "stripes" dappling the ground at dawn/dusk instead of smooth cloud shadows.
+  // Capping the amplification (rather than raising the 0.06 cutoff itself)
+  // keeps the shadow visible right down to that cutoff, just less jittery.
+  float t = (cloudY - wp.y) / max(uSunDir.y, 0.15);
   vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(uTime * 0.012, uTime * 0.005);
   float c = cloudFBM(cp);
   return smoothstep(0.54 - uCloudCover * 0.40, 0.92, c) * uCloudCover;
@@ -1538,7 +1547,12 @@ float gCloudFBM(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<3;i++){ s+=a*gNoise(p)
 // the shafts are broken by the SAME clouds that dapple the ground.
 float gCloud(vec3 wp){
   if (uCloudCover <= 0.001 || uSunDir.y <= 0.06) return 0.0;
-  float t = (360.0 - wp.y) / uSunDir.y;
+  // Same amplification floor as cloudShadow() in the lit shader (see its
+  // comment): near the 0.06 cutoff, dividing by uSunDir.y blows up how fast cp
+  // sweeps per metre of march-step height, aliasing under this pass's 16-tap
+  // integration — this is the "0.9 made thin stripes" behaviour noted below,
+  // now capped instead of only dimmed.
+  float t = (360.0 - wp.y) / max(uSunDir.y, 0.15);
   vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(uTime * 0.012, uTime * 0.005);
   return smoothstep(0.54 - uCloudCover * 0.40, 0.92, gCloudFBM(cp)) * uCloudCover;
 }
