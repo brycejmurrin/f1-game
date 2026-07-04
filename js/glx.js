@@ -213,13 +213,26 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
     vec3 an = abs(N);
     float hc = an.x > an.z ? vWorldPos.z : vWorldPos.x;
     float y = vWorldPos.y;
+    // Fade the bump by the per-pixel WORLD FOOTPRINT of the (hc,y) coord, not
+    // just camera distance. The height gradient below is a fixed-epsilon
+    // (0.05 m) 3-tap probe; when a pixel spans more than the finest brick/stone
+    // feature (~0.06 m) — which happens at a GRAZING viewing angle even up
+    // close, from foreshortening — those three taps land at effectively random
+    // points in the pattern and the perturbed normal aliases into a swirling
+    // moiré ("wavy" sheen on the shallow-angle side of a facade). fwidth()
+    // catches the grazing stretch that the distance-only bumpFade cannot; as
+    // the footprint grows the relief flattens toward the interpolated N, the
+    // normal-map analog of mip-fading high-frequency texture detail.
+    float fp = max(fwidth(hc), fwidth(y));
+    float aaFade = clamp(1.0 - (fp - 0.04) / 0.22, 0.0, 1.0);
+    if (aaFade <= 0.005) return;
     vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
     float e = 0.05;
     float h0 = matBumpHeight(mid, vec2(hc, y));
     float hx = matBumpHeight(mid, vec2(hc + e, y));
     float hy = matBumpHeight(mid, vec2(hc, y + e));
     float amt = (mid == 2 || mid == 13) ? 0.10 : (mid == 12 || mid == 14) ? 0.09 : 0.05;
-    N = normalize(N + (T * (h0 - hx) + vec3(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade / e));
+    N = normalize(N + (T * (h0 - hx) + vec3(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade * aaFade / e));
   } else {
     vec2 p = vWorldPos.xz;
     float e = 0.22;
