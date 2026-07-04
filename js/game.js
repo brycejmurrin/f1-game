@@ -3776,10 +3776,17 @@ function camVantage(mode, s, x, spd, now, extra) {
     // the track tangent, so the framing reads consistently corner to corner.
     const base = kA === 0 ? 0.6 : (kA > 0 ? -1 : 1) * 1.15;
     const a = base + Math.sin(now * 0.00022) * 0.5;
-    // Cap the orbit distance so the LATERAL component stays inside the street
-    // canyon (|sin a|·od ≤ corridor); the angle keeps breathing, the eye just
-    // orbits tighter between the walls.
-    const od = Math.min(15, corr / Math.max(Math.abs(Math.sin(a)), 0.25));
+    // Cap the WHOLE orbit radius at the street-canyon corridor — capping only
+    // the lateral (|sin a|·od) component left the TANGENT-axis reach unbounded:
+    // whenever the breathing angle drifted near a multiple where sin(a) was
+    // small, od grew toward its 15 m ceiling almost entirely along the tangent
+    // axis, which the corridor was never designed to constrain. On a tight,
+    // twisty street circuit (Monaco, Madrid) that reach was enough to put the
+    // eye geometrically INSIDE a building's solid wall — its near face then
+    // culls as backfacing (you're now behind it) while the far interior face
+    // doesn't, reading as "the wall is translucent, windows fine." Since
+    // |cos a|,|sin a| ≤ 1, capping od itself bounds BOTH axes by the corridor.
+    const od = Math.min(15, corr);
     const dir = [Math.cos(a) * t[0] + Math.sin(a) * r[0], 0, Math.cos(a) * t[2] + Math.sin(a) * r[2]];
     eye = [p[0] + dir[0] * od, p[1] + 6.5 + (15 - od) * 0.45, p[2] + dir[2] * od];
     tgt = [p[0], p[1] + 0.8, p[2]];
