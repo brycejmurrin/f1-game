@@ -28,6 +28,16 @@
     var link = document.querySelector('link[href*="style.css?v="]');
     var m = link && link.href.match(/[?&]v=(\d+)/);
     var loaded = m ? parseInt(m[1], 10) : 0;
+    // OFFLINE CACHE: register the service worker (sw.js) so the game installs
+    // and plays offline after one visit. The ?v= query mirrors the same build
+    // number this guard just parsed — a new deploy is therefore a genuinely
+    // different registration URL, which makes the browser check for an updated
+    // worker right away instead of waiting up to 24h on the spec's periodic
+    // byte-diff. sw.js itself derives its cache generation from version.json,
+    // so this is just about prompting a timely update check, not correctness.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
+    }
     if (!loaded) return;
     fetch("version.json?_=" + Date.now(), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
