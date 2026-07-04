@@ -137,41 +137,41 @@
       }
 
       // ── START/FINISH gantries ─────────────────────────────────────────────
-      gantry(0.0,   9, [0.12, 0.13, 0.17]);
-      gantry(0.012, 7, [0.12, 0.13, 0.17]);
+      gantry(0.0,   13, [0.12, 0.13, 0.17]);
+      gantry(0.012, 11, [0.12, 0.13, 0.17]);
 
       // ── PIT BUILDING + MAIN GRANDSTAND — s 0.00 ──────────────────────────
       // One long low pit building with a lit window band (was five stacked raw
       // place() boxes reading as a row of blocks).
       building(K(0.0), -1, 16, 62, 8, 28, { wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
-      grandstand(0.0,  1, 12, 70, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
-      grandstand(0.02, 1, 12, 60, [0.13, 0.14, 0.18], [0.50, 0.42, 0.46]);
+      grandstand(0.0,  1, 15, 60, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
+      grandstand(0.02, 1, 15, 50, [0.13, 0.14, 0.18], [0.50, 0.42, 0.46]);
 
       // ── CORNICHE STREET WALL — seaward (R), step=55m gives ~28 buildings total
-      cityFront(0.05, 0.40, 1, 18, {
-        minH: 12, maxH: 28, depth: 18,
+      cityFront(0.05, 0.40, 1, 20, {
+        minH: 12, maxH: 28, depth: 16,
         palette: WALL_SEA, lit: true, windowCol: WINWARM,
         step: 55, floor: 4,
       });
-      cityFront(0.82, 0.98, 1, 18, {
-        minH: 10, maxH: 22, depth: 16,
+      cityFront(0.82, 0.98, 1, 20, {
+        minH: 10, maxH: 22, depth: 14,
         palette: WALL_SEA, lit: true,
         step: 55, floor: 4,
       });
 
       // ── INLAND CITY WALL — left (L), step=55m gives ~22 buildings total ──
-      cityFront(0.04, 0.24, -1, 16, {
-        minH: 14, maxH: 34, depth: 20,
+      cityFront(0.04, 0.24, -1, 22, {
+        minH: 14, maxH: 34, depth: 16,
         palette: WALL_INL, lit: true,
         step: 55, floor: 5,
       });
-      cityFront(0.35, 0.48, -1, 16, {
-        minH: 18, maxH: 40, depth: 20,
+      cityFront(0.35, 0.48, -1, 18, {
+        minH: 18, maxH: 40, depth: 18,
         palette: WALL_INL, lit: true,
         step: 55, floor: 5,
       });
-      cityFront(0.56, 0.74, -1, 16, {
-        minH: 14, maxH: 36, depth: 20,
+      cityFront(0.56, 0.74, -1, 18, {
+        minH: 14, maxH: 36, depth: 18,
         palette: WALL_INL, lit: true, windowCol: WINGOLD,
         step: 55, floor: 5,
       });
@@ -203,7 +203,7 @@
       // ── T13 BANKED SECTOR — s 0.50 ───────────────────────────────────────
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
-      grandstand(0.50, 1, 14, 55, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
+      grandstand(0.50, 1, 18, 40, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
       tyreWall(0.485, 0.515, -1, 2.0, MAGENTA);
 
       // ── CORNICHE LAGOON — s 0.55–0.64 R (water + lamp posts) ─────────────
@@ -233,7 +233,7 @@
       }
 
       // ── FINAL SECTOR GRANDSTAND — s 0.89 R ───────────────────────────────
-      grandstand(0.89, 1, 14, 60, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
+      grandstand(0.89, 1, 16, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
       lightTower(K(0.90),  1, 11);
       lightTower(K(0.93), -1, 11);
       floodMast(K(0.91), -1, 24);
@@ -293,7 +293,7 @@
         out._mat = 0;
         addBox(out, vadd(mc, a.u, 41), [0.5, 2.2, 0.5], SPANGLE, b);                // crescent finial glow
       };
-      floatingMosque(K(0.165), 210);
+      floatingMosque(K(0.165), 230);
 
       // ── Jeddah Flagpole — the record 171 m mast + giant green flag ───────
       {

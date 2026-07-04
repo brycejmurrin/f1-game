@@ -152,15 +152,15 @@
       // with the iconic Government House palace set back as the centrepiece.
       // ===================================================================
 
-      // Continuous civic facade — R side (gap=8 keeps it behind the concrete wall)
-      cityFront(0.0, 0.12, 1, 8, {
-        minH: 14, maxH: 28, depth: 20, step: 20,
+      // Continuous civic facade — R side (gap=14 keeps it behind the concrete wall)
+      cityFront(0.0, 0.12, 1, 14, {
+        minH: 14, maxH: 28, depth: 18, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
 
       // Continuous civic facade — L side of start straight
-      cityFront(0.0, 0.12, -1, 8, {
-        minH: 12, maxH: 24, depth: 18, step: 20,
+      cityFront(0.0, 0.12, -1, 14, {
+        minH: 12, maxH: 24, depth: 16, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
 
@@ -241,12 +241,12 @@
       // s 0.12–0.22 — T1/T2 STREET CANYON: both sides aligned city facades
       // Replaces the old scattered `place()` flat boxes at this turn complex.
       // ===================================================================
-      cityFront(0.12, 0.22, 1, 8, {
-        minH: 18, maxH: 40, depth: 20, step: 18,
+      cityFront(0.12, 0.22, 1, 14, {
+        minH: 18, maxH: 40, depth: 18, step: 18,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
-      cityFront(0.12, 0.22, -1, 8, {
-        minH: 14, maxH: 30, depth: 18, step: 18,
+      cityFront(0.12, 0.22, -1, 14, {
+        minH: 14, maxH: 30, depth: 16, step: 18,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 3.5,
       });
 
@@ -305,14 +305,14 @@
       // ===================================================================
 
       // R side: tall glass high-rises (the financial district facing the corniche)
-      cityFront(0.22, 0.36, 1, 8, {
-        minH: 30, maxH: 80, depth: 22, step: 22,
+      cityFront(0.22, 0.36, 1, 14, {
+        minH: 30, maxH: 80, depth: 20, step: 22,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
 
       // L side: Baku Boulevard / Caspian corniche hotels and civic buildings
-      cityFront(0.22, 0.36, -1, 8, {
-        minH: 18, maxH: 48, depth: 20, step: 20,
+      cityFront(0.22, 0.36, -1, 14, {
+        minH: 18, maxH: 48, depth: 18, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
       // Boulevard palm row along the Caspian-side of the main straight
@@ -326,15 +326,13 @@
       // rampart. The merlon boxes are placed AT wall height to avoid
       // clipping into the wall body below. Dense old-town behind it.
       // ===================================================================
-      wall(0.36, 0.56, 1, 10, 9, SAND, 1.2);  // the main unbroken rampart
+      wall(0.36, 0.56, 1, 20, 9, SAND, 1.2);  // the main unbroken rampart
 
       // Crenellations — placed at y = wall height (9m top), so they sit
       // ON TOP of the wall, never through it. Each segment has its own anchor.
       for (let p = 0; p < 10; p++) {
         const k = K(0.36 + p * 0.020);
-        const a = anchor(k, 1, 10);
-        // Uplit footing band at the base of the wall (y = 0 to 2.5)
-        addBox(out, vadd(a.c, a.u, 1.2), [4.2, 2.5, 40], SAND_LIT, [a.r, a.u, a.t]);
+        const a = anchor(k, 1, 20);
         // Merlons ON TOP of the 9m wall: y offset = 9 (top face) + 0.9 (half of merlon h)
         for (let j = 0; j < 14; j++) {
           if (j % 2 === 0) {
@@ -344,12 +342,11 @@
         }
       }
 
-      // Dense sandstone old-town behind the rampart — ALIGNED cityFront facade
-      // (gap=18 keeps it well behind the 9m wall at gap=10, so depth 16 never clips)
-      cityFront(0.36, 0.56, 1, 18, {
-        minH: 6, maxH: 18, depth: 14, step: 16,
-        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
-      });
+      // Dense sandstone old-town behind the rampart — DISABLED FOR DEBUGGING
+      // cityFront(0.36, 0.56, 1, 24, {
+      //   minH: 6, maxH: 18, depth: 12, step: 16,
+      //   palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+      // });
 
       // Old-town minaret shafts — slim cylinders + domed cap, spaced
       // with enough distance so they don't overlap the rampart.
@@ -378,21 +375,19 @@
       // s 0.36–0.56 L side — Old-town street facade (inside of the circuit)
       // Continuous low sandstone buildings on the left of the old city section
       // ===================================================================
-      cityFront(0.36, 0.42, -1, 8, {
-        minH: 6, maxH: 14, depth: 12, step: 14,
+      cityFront(0.36, 0.42, -1, 16, {
+        minH: 6, maxH: 14, depth: 10, step: 14,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
       });
 
       // ===================================================================
       // s 0.42–0.50 — CASTLE SECTION: tall walls both sides, crenellated
       // ===================================================================
-      wall(0.42, 0.50, -1, 1.5, 11, SAND, 1.4);
-      wall(0.42, 0.50,  1, 1.5, 11, SAND, 1.4);
+      wall(0.42, 0.50, -1, 3.5, 11, SAND, 1.4);
+      wall(0.42, 0.50,  1, 3.5, 11, SAND, 1.4);
       for (const side of [-1, 1]) {
-        const a = anchor(K(0.44), side, 1.5);
+        const a = anchor(K(0.44), side, 3.5);
         const b = [a.r, a.u, a.t];
-        // Uplit base band (y=0 to 2.0, doesn't clip wall top at y=11)
-        addBox(out, vadd(a.c, a.u, 1.0), [2.2, 2.0, 20], SAND_LIT, b);
         // Merlons on top of the 11m wall: y = 11 + 0.7 (half merlon)
         for (let j = 0; j < 8; j++) {
           if (j % 2 === 0) {
@@ -521,9 +516,9 @@
       {
         const STONE = [0.58, 0.52, 0.42];
         const oldCityData = [
-          [0.51, 1, 20, 10, 10, 14],
-          [0.54, 1, 22, 12, 12, 12],
-          [0.56, 1, 18, 14,  8, 16],
+          [0.51, 1, 24, 10, 10, 14],
+          [0.54, 1, 26, 12, 12, 12],
+          [0.56, 1, 22, 14,  8, 16],
         ];
         for (const [s, side, dist, w, h, d] of oldCityData) {
           building(K(s), side, dist, w, h, d, { wall: STONE, window: WIN_WARM, floor: 3, lit: true });
@@ -546,10 +541,10 @@
         const s = 0.58 + i * 0.018;
         palm(K(s), -1, 8 + (i % 3) * 2, 9 + hash(i * 3) * 3.5, [0.18, 0.44, 0.24]);
       }
-      // Seafront boulevard pavilion buildings (low, gap=12 behind palms)
+      // Seafront boulevard pavilion buildings (low, gap=18 behind palms)
       for (let i = 0; i < 6; i++) {
         const s = 0.58 + i * 0.025;
-        building(K(s), -1, 14, 14, 5 + i, 12, { wall: [0.38, 0.36, 0.34], window: WIN_WARM, floor: 2.5, lit: true });
+        building(K(s), -1, 18, 14, 5 + i, 12, { wall: [0.38, 0.36, 0.34], window: WIN_WARM, floor: 2.5, lit: true });
       }
 
       // ===================================================================
@@ -573,7 +568,7 @@
       // Waterfront pavilion buildings (L side, modest gap past balustrade)
       for (let i = 0; i < 4; i++) {
         const s = 0.66 + i * 0.075;
-        building(K(s), -1, 18, 14, 9, 14, { wall: [0.30, 0.34, 0.42], window: WIN_COOL, floor: 3, lit: true });
+        building(K(s), -1, 22, 14, 9, 14, { wall: [0.30, 0.34, 0.42], window: WIN_COOL, floor: 3, lit: true });
       }
 
       // Pier/breakwater structures extending into the Caspian
@@ -612,9 +607,9 @@
       }
 
       // Continuous modern Caspian-front skyline R: aligned glass tower facades
-      // (gap=8 keeps towers behind armco/fence combo at this section)
-      cityFront(0.63, 0.95, 1, 8, {
-        minH: 40, maxH: 100, depth: 22, step: 20,
+      // (gap=14 keeps towers behind armco/fence combo at this section)
+      cityFront(0.63, 0.95, 1, 14, {
+        minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
 

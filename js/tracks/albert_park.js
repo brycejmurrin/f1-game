@@ -329,7 +329,7 @@
       // ====================================================================
       // GRANDSTANDS — main straight + signature corners (crowd-tinted)
       // ====================================================================
-      grandstand(0.00, -1, 12, 90, SHELL, CROWD);   // main grandstand, pit straight L
+      grandstand(0.00, -1, 14, 90, SHELL, CROWD);   // main grandstand, pit straight L
       grandstand(0.07, -1, 14, 60, SHELL, CROWD);   // extended pit-straight bank L
       grandstand(0.04,  1, 14, 55, SHELL, CROWD);   // Turn 1-2 sweep R
       grandstand(0.12,  1, 16, 48, SHELL, CROWD);   // Turn 3 exit bank R
@@ -339,7 +339,7 @@
       grandstand(0.66,  1, 16, 45, SHELL, CROWD);   // adjoining spectator bank R
       grandstand(0.78, -1, 14, 45, SHELL, CROWD);   // chicane complex L
       grandstand(0.90,  1, 18, 50, SHELL, CROWD);   // fan-hill grandstand R
-      grandstand(0.95, -1, 14, 48, SHELL, CROWD);   // pit-approach bank L
+      grandstand(0.95, -1, 16, 48, SHELL, CROWD);   // pit-approach bank L
       grandstand(0.20,  1, 16, 46, SHELL, CROWD);   // fast section R
       grandstand(0.45, -1, 16, 44, SHELL, CROWD);   // lakeside bank L
 

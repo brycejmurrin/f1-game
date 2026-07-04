@@ -119,8 +119,8 @@
       // s=0.00  MAIN GRANDSTAND + START/FINISH STRAIGHT
       // ════════════════════════════════════════════════════════════════════════
       // Two-tier main grandstand (right side, s/f straight)
-      grandstand(0.00, 1,  9, 120, SEATS,    PINK);
-      grandstand(0.00, 1, 22, 120, CONCRETE, GREEN);
+      grandstand(0.00, 1, 11, 120, SEATS,    PINK);  // pushed out 9→11 to clear roof overhang
+      grandstand(0.00, 1, 24, 120, CONCRETE, GREEN);  // pushed out 22→24 to match inner tier shift
 
       grandstand(0.99, 1,  9,  70, SEATS,    ORANGE);
       grandstand(0.97, 1, 22,  80, CONCRETE, PINK);
@@ -132,13 +132,15 @@
       gantry(0.00, 8.5, [0.14, 0.14, 0.18]);
       billboard(K(0.005), 1, 7, 14, 5, fiesta[0]);
       {
-        const a = anchor(K(0.00), 1, 40);
-        // Scoreboard mast
-        addBox(out, vadd(a.c, a.u, 8),  [1.2, 16, 1.2], [0.28, 0.28, 0.32], [a.r, a.u, a.t]);
-        // Big screen panel
-        addBox(out, vadd(a.c, a.u, 19), [24, 11, 1.8], [0.06, 0.06, 0.08],  [a.r, a.u, a.t]);
-        // Screen surround frame
-        addBox(out, vadd(a.c, a.u, 19), [25, 11.8, 1.0], [0.26, 0.28, 0.32], [a.r, a.u, a.t]);
+        const a = anchor(K(0.00), 1, 50);  // pushed out 40→50 m to clear wide screen overhang
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          // Scoreboard mast
+          addBox(out, vadd(a.c, a.u, 8),  [1.2, 16, 1.2], [0.28, 0.28, 0.32], [a.r, a.u, a.t]);
+          // Big screen panel
+          addBox(out, vadd(a.c, a.u, 19), [24, 11, 1.8], [0.06, 0.06, 0.08],  [a.r, a.u, a.t]);
+          // Screen surround frame
+          addBox(out, vadd(a.c, a.u, 19), [25, 11.8, 1.0], [0.26, 0.28, 0.32], [a.r, a.u, a.t]);
+        }
       }
 
       // Lamp posts on the main straight
@@ -295,22 +297,24 @@
       // ════════════════════════════════════════════════════════════════════════
 
       // FORO SOL — inner tier (closest to track, most visible crowd)
-      grandstand(0.72, -1, 10, 340, CONCRETE, fiesta[0]);   // pink crowd
-      grandstand(0.72,  1, 10, 340, CONCRETE, fiesta[1]);   // orange crowd
+      // len reduced 340→180 to prevent roof/shell overhang on curved stadium section
+      grandstand(0.72, -1, 10, 180, CONCRETE, fiesta[0]);   // pink crowd
+      grandstand(0.72,  1, 10, 180, CONCRETE, fiesta[1]);   // orange crowd
 
       // Middle tier — wider shell, different crowd colour for visual variety
-      grandstand(0.72, -1, 26, 340, [0.66, 0.64, 0.62], fiesta[2]);  // green
-      grandstand(0.72,  1, 26, 340, [0.66, 0.64, 0.62], fiesta[3]);  // yellow
+      grandstand(0.72, -1, 26, 180, [0.66, 0.64, 0.62], fiesta[2]);  // green
+      grandstand(0.72,  1, 26, 180, [0.66, 0.64, 0.62], fiesta[3]);  // yellow
 
       // Outer tier — tallest, forms stadium rim silhouette
-      grandstand(0.72, -1, 44, 340, [0.58, 0.56, 0.54], SEATS);
-      grandstand(0.72,  1, 44, 340, [0.58, 0.56, 0.54], SEATS);
+      grandstand(0.72, -1, 44, 180, [0.58, 0.56, 0.54], SEATS);
+      grandstand(0.72,  1, 44, 180, [0.58, 0.56, 0.54], SEATS);
 
       // Bespoke steep PACKED speckled upper terraces cresting the rim (both sides,
       // stepped along the stadium run) — turns the tiers into a wall of close fans.
+      // len reduced 88→60 to prevent tangential overhang into curved track sections
       for (const s of [0.735, 0.775, 0.815, 0.855]) {
-        crowdBank(s, -1, 60, 88, 8);
-        crowdBank(s,  1, 60, 88, 8);
+        crowdBank(s, -1, 60, 60, 8);
+        crowdBank(s,  1, 60, 60, 8);
       }
       // Curved crowd END-CAPS closing the horseshoe at the entry and exit ends —
       // wrap around behind the track so the bowl reads as fully enclosed.
@@ -329,11 +333,11 @@
       {
         const k = K(0.80);
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 62);
-          if (!onTrack(a.c[0], a.c[2], 6)) {
-            // Big jumbotron screen
-            addBox(out, vadd(a.c, a.u, 28), [36, 14, 2.0], [0.04, 0.04, 0.06],  [a.r, a.u, a.t]);
-            addBox(out, vadd(a.c, a.u, 28), [38, 15, 1.0], [0.24, 0.26, 0.30],  [a.r, a.u, a.t]);
+          const a = anchor(k, side, 90);  // pushed out 62→76→90 m to fully clear wide jumbotron
+          if (!onTrack(a.c[0], a.c[2], 25)) {
+            // Big jumbotron screen (narrowed from 36/38 to 32/34 to reduce overhang)
+            addBox(out, vadd(a.c, a.u, 28), [32, 14, 2.0], [0.04, 0.04, 0.06],  [a.r, a.u, a.t]);
+            addBox(out, vadd(a.c, a.u, 28), [34, 15, 1.0], [0.24, 0.26, 0.30],  [a.r, a.u, a.t]);
           }
         }
       }

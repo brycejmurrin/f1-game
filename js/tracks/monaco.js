@@ -65,16 +65,19 @@
 
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
       // Left: stone buildings. Right: pit lane terrace + grandstand.
-      cityFront(0.00, 0.07, -1, 11, {
-        minH: 16, maxH: 32, depth: 18, step: 28,
-        palette: [CREAM, DUSTY, STONE, OCHRE],
-        lit: true, windowCol: WINLIT,
-      });
-      cityFront(0.00, 0.07,  1, 11, {
-        minH: 14, maxH: 26, depth: 16, step: 30,
-        palette: [STONE, CREAM, DUSTY],
-        lit: true, windowCol: WINLIT,
-      });
+      // cityFront disabled: Monaco's tight parallel streets (20-30m apart) cause
+      // buildings on one section to wrap around and intrude on nearby track even
+      // with minimal depth=5m. Tested depth 5-18m, all intrude.
+      // cityFront(0.00, 0.07, -1, 11, {
+      //   minH: 14, maxH: 24, depth: 5, step: 12,
+      //   palette: [CREAM, DUSTY, STONE, OCHRE],
+      //   lit: true, windowCol: WINLIT,
+      // });
+      // cityFront(0.00, 0.07,  1, 11, {
+      //   minH: 12, maxH: 22, depth: 5, step: 14,
+      //   palette: [STONE, CREAM, DUSTY],
+      //   lit: true, windowCol: WINLIT,
+      // });
 
       // Sainte Devote chapel (s=0.05, R mid)
       {
@@ -89,16 +92,17 @@
       // The hillside soars steeply on the LEFT (inland rock face). Dense cityFront
       // close in, then green/rocky hillside backdrop mounds, then far towers.
       // RIGHT side is close apartment facades.
-      cityFront(0.08, 0.26, -1, 12, {
-        minH: 20, maxH: 44, depth: 20, step: 28,
-        palette: [CREAM, OCHRE, TERRA, DUSTY, SAGE],
-        lit: true, windowCol: WINLIT,
-      });
-      cityFront(0.08, 0.26,  1, 12, {
-        minH: 16, maxH: 34, depth: 18, step: 30,
-        palette: [STONE, CREAM, DUSTY, OCHRE],
-        lit: true, windowCol: WINLIT,
-      });
+      // cityFront disabled: intrusions persist even at depth=5m.
+      // cityFront(0.08, 0.26, -1, 12, {
+      //   minH: 16, maxH: 34, depth: 5, step: 12,
+      //   palette: [CREAM, OCHRE, TERRA, DUSTY, SAGE],
+      //   lit: true, windowCol: WINLIT,
+      // });
+      // cityFront(0.08, 0.26,  1, 12, {
+      //   minH: 14, maxH: 30, depth: 5, step: 14,
+      //   palette: [STONE, CREAM, DUSTY, OCHRE],
+      //   lit: true, windowCol: WINLIT,
+      // });
       // Rocky/green hillside above the buildings — backdrop() with green renders
       // as organic rounded mounds, not boxy slabs.
       for (let i = 0; i < 6; i++) {
@@ -167,16 +171,17 @@
       }
 
       // ── SECTOR 3 — CASINO / MIRABEAU DESCENT (s=0.26→0.42) ─────────────
-      cityFront(0.26, 0.42, -1, 12, {
-        minH: 18, maxH: 40, depth: 20, step: 20,
-        palette: [CREAM, DUSTY, OCHRE, TERRA, STONE],
-        lit: true, windowCol: WINLIT,
-      });
-      cityFront(0.26, 0.42,  1, 12, {
-        minH: 16, maxH: 32, depth: 18, step: 22,
-        palette: [STONE, OCHRE, CREAM, DUSTY],
-        lit: true, windowCol: WINLIT,
-      });
+      // cityFront disabled: intrusions persist even at depth=5m.
+      // cityFront(0.26, 0.42, -1, 12, {
+      //   minH: 16, maxH: 32, depth: 5, step: 12,
+      //   palette: [CREAM, DUSTY, OCHRE, TERRA, STONE],
+      //   lit: true, windowCol: WINLIT,
+      // });
+      // cityFront(0.26, 0.42,  1, 12, {
+      //   minH: 14, maxH: 28, depth: 5, step: 14,
+      //   palette: [STONE, OCHRE, CREAM, DUSTY],
+      //   lit: true, windowCol: WINLIT,
+      // });
       // Rocky scrub above the Mirabeau buildings — green/grey hillside backdrop.
       for (let i = 0; i < 4; i++) {
         const k = K(0.29 + i * 0.035);
@@ -266,11 +271,12 @@
       // ── SECTOR 5 — HARBOUR FRONT (s=0.585→0.98) ─────────────────────────
       // LEFT = harbour/sea. RIGHT = continuous inland apartment facades.
       // Coherent pastel cityFront on the RIGHT (inland side).
-      cityFront(0.585, 0.98, 1, 12, {
-        minH: 18, maxH: 38, depth: 20, step: 22,
-        palette: [CREAM, DUSTY, OCHRE, TERRA, STONE, SAGE],
-        lit: true, windowCol: WINLIT,
-      });
+      // cityFront disabled: intrusions persist even at depth=5m.
+      // cityFront(0.585, 0.98, 1, 12, {
+      //   minH: 16, maxH: 32, depth: 5, step: 14,
+      //   palette: [CREAM, DUSTY, OCHRE, TERRA, STONE, SAGE],
+      //   lit: true, windowCol: WINLIT,
+      // });
       // Distant landmark towers behind harbour apartments.
       for (let i = 0; i < 5; i++) {
         const k = K(0.61 + i * 0.076);
@@ -375,23 +381,24 @@
       // ── RASCASSE / PADDOCK (s=0.87→0.95, R) ─────────────────────────────
       // Low paddock hospitality buildings — proper massing, not flat boxes.
       cityFront(0.87, 0.95, 1, 9, {
-        minH: 10, maxH: 18, depth: 14, step: 24,
+        minH: 10, maxH: 16, depth: 7, step: 18,
         palette: [CREAM, STONE, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
       });
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
       // ── SECTOR 6 — RETURN / ANTONY NOGHES (s=0.95→1.00) ─────────────────
-      cityFront(0.95, 1.00, -1, 9, {
-        minH: 16, maxH: 30, depth: 18, step: 20,
-        palette: [CREAM, DUSTY, STONE],
-        lit: true, windowCol: WINLIT,
-      });
-      cityFront(0.95, 1.00, 1, 9, {
-        minH: 14, maxH: 26, depth: 16, step: 22,
-        palette: [STONE, CREAM, OCHRE],
-        lit: true, windowCol: WINLIT,
-      });
+      // cityFront disabled: intrusions persist even at depth=5m.
+      // cityFront(0.95, 1.00, -1, 9, {
+      //   minH: 14, maxH: 26, depth: 5, step: 12,
+      //   palette: [CREAM, DUSTY, STONE],
+      //   lit: true, windowCol: WINLIT,
+      // });
+      // cityFront(0.95, 1.00, 1, 9, {
+      //   minH: 12, maxH: 22, depth: 5, step: 14,
+      //   palette: [STONE, CREAM, OCHRE],
+      //   lit: true, windowCol: WINLIT,
+      // });
 
       // ── STREET LAMP POSTS (~every 55m, staggered) ────────────────────────
       for (let i = 0; i < 24; i++) {
@@ -419,7 +426,7 @@
 
       // ── PIT WALL & START GRANDSTAND (s=0.03, R) ──────────────────────────
       wall(0.0, 0.06, 1, 1.5, 1.0, [0.66, 0.67, 0.69], 0.6);
-      place(K(0.03), 1, 10, [7, 9, 40], [0.55, 0.56, 0.60]);
+      place(K(0.03), 1, 12, [7, 9, 35], [0.55, 0.56, 0.60]);
       for (let i = 0; i < 5; i++) {
         const k = (K(0.02) + i * 2) % n;
         place(k, 1, 4, [0.4, 1.1, 5], [0.80, 0.80, 0.82]);
@@ -478,11 +485,11 @@
       }
 
       // ── TRACK FURNITURE ───────────────────────────────────────────────────
-      gantry(0.0, 7.0, [0.20, 0.22, 0.26]);
-      gantry(0.235, 6.4, [0.22, 0.24, 0.28]);
+      gantry(0.0, 8.2, [0.20, 0.22, 0.26]);
+      gantry(0.235, 8.0, [0.22, 0.24, 0.28]);
 
-      grandstand(0.64, -1, 8, 60, [0.55, 0.56, 0.60], [0.85, 0.30, 0.28]);
-      grandstand(0.78, -1, 8, 48, [0.54, 0.55, 0.58], [0.30, 0.45, 0.80]);
+      grandstand(0.64, -1, 9, 60, [0.55, 0.56, 0.60], [0.85, 0.30, 0.28]);
+      grandstand(0.78, -1, 9, 48, [0.54, 0.55, 0.58], [0.30, 0.45, 0.80]);
       grandstand(0.25,  1, 7, 40, [0.56, 0.57, 0.60], [0.90, 0.80, 0.30]);
       grandstand(0.72,  1, 9, 36, [0.55, 0.55, 0.58], [0.85, 0.85, 0.88]);
 

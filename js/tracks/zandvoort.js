@@ -108,7 +108,7 @@
       // 1. Inner dune mounds — organic, rough, close
       every(24, (k) => {
         for (const side of [-1, 1]) {
-          const dist = 40 + hash(k * 72 + side) * 30;   // 40–70 m from verge
+          const dist = 80 + hash(k * 72 + side) * 30;   // 80–110 m from verge
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 18)) continue;
           const h = 9 + hash(k * 73 + side) * 13;       // 9–22 m
@@ -123,7 +123,7 @@
       // 2. Mid dune ridge band — slightly larger, set back further
       every(18, (k) => {
         for (const side of [-1, 1]) {
-          const dist = 60 + hash(k * 81 + side) * 38;   // 60–98 m
+          const dist = 120 + hash(k * 81 + side) * 38;  // 120–158 m
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 18)) continue;
           const w = 32 + hash(k * 83 + side) * 28;      // 32–60 m
@@ -177,7 +177,7 @@
       every(6, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 61 + side * 5) > 0.40) continue;   // ~60% density
-          const baseX = 5 + hash(k * 62 + side) * 8;      // 5–13 m from verge
+          const baseX = 10 + hash(k * 62 + side) * 8;     // 10–18 m from verge
           const a = anchor(k, side, baseX);
           if (onTrack(a.c[0], a.c[2], 3)) continue;
           const tuft = hash(k * 63 + side) < 0.5 ? marramG : marramT;
@@ -197,11 +197,11 @@
       // MARRAM HEDGE BANDS — continuous clipped dune-grass fringe along the verge.
       // Gap = 22 etc. means inner face is that far from road edge — safe clearance.
       // -----------------------------------------------------------------------
-      hedge(0.10, 0.50, 1,  22, 1.8, marramT);
-      hedge(0.20, 0.60, -1, 16, 1.8, marramG);
-      hedge(0.55, 0.85, 1,  18, 1.8, marramG);
-      hedge(0.65, 0.98, -1, 14, 1.8, marramT);
-      hedge(0.80, 0.95, 1,  20, 1.8, marramG);
+      hedge(0.10, 0.50, 1,  26, 1.8, marramT);
+      hedge(0.20, 0.60, -1, 22, 1.8, marramG);
+      hedge(0.55, 0.85, 1,  24, 1.8, marramG);
+      hedge(0.65, 0.98, -1, 20, 1.8, marramT);
+      hedge(0.80, 0.95, 1,  26, 1.8, marramG);
 
       // -----------------------------------------------------------------------
       // BUSH CLUMPS — low dune shrubs between tufts and hedges
@@ -218,17 +218,17 @@
       // GRANDSTANDS — Orange Army Verstappen fans; Dutch GP sells out every year.
       // Positions chosen to not cluster (different s fractions, no duplicates).
       // -----------------------------------------------------------------------
-      grandstand(0.01,  1,  12, 36, shellLt, orange); // main pit straight R (largest)
-      grandstand(0.05,  1,   9, 28, shell,   orange); // Tarzan hairpin R
-      grandstand(0.09, -1,  10, 26, shell,   orange); // Tarzan exit L
-      grandstand(0.135,-1,  10, 40, shell,   orange); // Hugenholtz banked L
-      grandstand(0.18,  1,  11, 32, shellLt, orange); // Hugenholtz exit R
-      grandstand(0.48, -1,  24, 34, shell,   orange); // Scheivlak approach L
-      grandstand(0.53,  1,  14, 28, shell,   orange); // Scheivlak R
-      grandstand(0.865, 1,  22, 36, shell,   orange); // Luyendyk approach R
-      grandstand(0.915, 1,  10, 80, shell,   orange); // Arie Luyendyk banked R (massive)
-      grandstand(0.96,  1,  11, 32, shellLt, orange); // Luyendyk exit R
-      grandstand(0.97, -1,  12, 34, shellLt, orange); // pit straight L
+      grandstand(0.01,  1,  16, 36, shellLt, orange); // main pit straight R (largest)
+      grandstand(0.05,  1,  14, 28, shell,   orange); // Tarzan hairpin R
+      grandstand(0.09, -1,  14, 26, shell,   orange); // Tarzan exit L
+      grandstand(0.135,-1,  22, 40, shell,   orange); // Hugenholtz banked L
+      grandstand(0.18,  1,  16, 32, shellLt, orange); // Hugenholtz exit R
+      grandstand(0.48, -1,  28, 34, shell,   orange); // Scheivlak approach L
+      grandstand(0.53,  1,  18, 28, shell,   orange); // Scheivlak R
+      grandstand(0.865, 1,  36, 36, shell,   orange); // Luyendyk approach R
+      grandstand(0.915, 1,  22, 80, shell,   orange); // Arie Luyendyk banked R (massive)
+      grandstand(0.96,  1,  22, 32, shellLt, orange); // Luyendyk exit R
+      grandstand(0.97, -1,  22, 34, shellLt, orange); // pit straight L
 
       // -----------------------------------------------------------------------
       // PIT BUILDING — long low white-grey structure with garage bay accents
@@ -315,21 +315,21 @@
       // -----------------------------------------------------------------------
 
       // Catch / debris fencing in front of grandstands
-      fence(0.00, 0.10, 1,  6.0, 4.2, fenceCol);
-      fence(0.04, 0.09, -1, 6.0, 4.2, fenceCol);
-      fence(0.11, 0.19, -1, 5.5, 4.2, fenceCol);
-      fence(0.15, 0.19, 1,  5.5, 4.0, fenceCol);
-      fence(0.48, 0.54, -1, 6.5, 4.0, fenceCol);
-      fence(0.86, 0.99, 1,  6.0, 4.4, fenceCol);
-      fence(0.94, 1.00, -1, 6.0, 4.2, fenceCol);
+      fence(0.00, 0.10, 1,  8.0, 4.2, fenceCol);
+      fence(0.04, 0.09, -1, 8.0, 4.2, fenceCol);
+      fence(0.11, 0.19, -1, 8.0, 4.2, fenceCol);
+      fence(0.15, 0.19, 1,  8.0, 4.0, fenceCol);
+      fence(0.48, 0.54, -1, 9.0, 4.0, fenceCol);
+      fence(0.86, 0.99, 1,  8.0, 4.4, fenceCol);
+      fence(0.94, 1.00, -1, 8.0, 4.2, fenceCol);
 
       // Steel armco guardrail on fast dune stretches
-      guardrail(0.21, 0.33, 1,  4.0, railRW);
-      guardrail(0.22, 0.31, -1, 4.0, [0.85, 0.86, 0.88]);
-      guardrail(0.36, 0.47, 1,  4.0, [0.85, 0.86, 0.88]);
-      guardrail(0.57, 0.66, -1, 4.0, railRW);
-      guardrail(0.68, 0.80, 1,  4.0, [0.85, 0.86, 0.88]);
-      guardrail(0.80, 0.86, -1, 4.0, railRW);
+      guardrail(0.21, 0.33, 1,  5.0, railRW);
+      guardrail(0.22, 0.31, -1, 5.0, [0.85, 0.86, 0.88]);
+      guardrail(0.36, 0.47, 1,  6.0, [0.85, 0.86, 0.88]);
+      guardrail(0.57, 0.66, -1, 5.0, railRW);
+      guardrail(0.68, 0.80, 1,  5.0, [0.85, 0.86, 0.88]);
+      guardrail(0.80, 0.86, -1, 5.0, railRW);
 
       // Tyre walls at corner exits (Tarzan, Hugenholtz, Scheivlak, Luyendyk)
       tyreWall(0.025, 0.065, 1,  4.6, [0.88, 0.42, 0.06]);
@@ -345,7 +345,7 @@
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 16);
           if (onTrack(a.c[0], a.c[2], 9)) continue;
-          billboard(k, side, 14, 12, 4, adCols[(adI++) % adCols.length]);
+          billboard(k, side, 24, 12, 4, adCols[(adI++) % adCols.length]);
         }
       });
 
@@ -363,7 +363,7 @@
       // VERSTAPPEN-ORANGE BUNTING — bright capsules on major grandstand fronts
       // -----------------------------------------------------------------------
       for (const [s, side] of [[0.01, 1], [0.135, -1], [0.915, 1], [0.97, -1]]) {
-        const a = anchor(K(s), side, 8);
+        const a = anchor(K(s), side, 16);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
         const buntingCol = [0.96, 0.40, 0.02];
@@ -388,17 +388,17 @@
         const armCol    = [0.32, 0.32, 0.36];
         every(35, (k) => {
           for (const side of [-1, 1]) {
-            const dist = 8.5;
+            const dist = 12;
             const a = anchor(k, side, dist);
             if (onTrack(a.c[0], a.c[2], 3)) continue;
             const b = [a.r, a.u, a.t];
             // Pole — 9m tall, rooted at terrain
             addCyl(out, a.c, 0.14, 9, lampCol, 5, b);
             // Horizontal arm extending inward over the road
-            addBox(out, vadd(vadd(a.c, a.u, 9), a.r, -side * 1.2),
-                   [2.4, 0.16, 0.16], armCol, b);
+            addBox(out, vadd(vadd(a.c, a.u, 9), a.r, -side * 0.8),
+                   [1.6, 0.16, 0.16], armCol, b);
             // Luminaire head — bright warm-white box at arm end
-            addBox(out, vadd(vadd(a.c, a.u, 8.7), a.r, -side * 2.2),
+            addBox(out, vadd(vadd(a.c, a.u, 8.7), a.r, -side * 1.4),
                    [0.9, 0.3, 0.6], lightHead, b);
           }
         });
@@ -416,10 +416,10 @@
 
         // Pit straight main stand (s≈0.01, side=1, gap=12, len=36)
         for (const [s, side, gap, len] of [
-          [0.01,  1,  12, 36],   // pit straight main R
-          [0.135,-1,  10, 40],   // Hugenholtz banked L
-          [0.915, 1,  10, 80],   // Arie Luyendyk massive R
-          [0.865, 1,  22, 36],   // Luyendyk approach R
+          [0.01,  1,  16, 36],   // pit straight main R
+          [0.135,-1,  22, 40],   // Hugenholtz banked L
+          [0.915, 1,  22, 80],   // Arie Luyendyk massive R
+          [0.865, 1,  36, 36],   // Luyendyk approach R
         ]) {
           const k = K(s), a = anchor(k, side, gap + 5);
           const b = [a.r, a.u, a.t];

@@ -150,8 +150,8 @@
         place(K(0.0 + i * 0.012), 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
         place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD);          // lit fascia band
       }
-      grandstand(0.0, -1, 6, 120, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
-      grandstand(0.02, -1, 6, 90, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
+      grandstand(0.0, -1, 9, 90, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
+      grandstand(0.02, -1, 9, 70, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
       gantry(0.0, 9, DARK);
 
       // ===================================================================
@@ -277,11 +277,12 @@
       // Each post is anchored individually so they sit on the ground correctly.
       // Light pools on the quayside below each lamp.
       // ===================================================================
-      grandstand(0.70, 1, 8, 80, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
+      grandstand(0.69, 1, 14, 35, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
+      grandstand(0.72, 1, 14, 35, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
       for (let i = 0; i < 10; i++) {
         // Space posts along the track using slightly different K values
         const lampK = K(0.68 + i * 0.004);
-        const a = anchor(lampK, 1, 7);
+        const a = anchor(lampK, 1, 11);
         // Dark steel post
         addCyl(out, a.c, 0.14, 5.5, [0.28, 0.24, 0.17], 4, [a.r, a.u, a.t]);
         // Warm amber lantern head
@@ -397,7 +398,7 @@
       // ===================================================================
       billboard(K(0.95), 1, 9, 16, 10, LED_MAG);
       billboard(K(0.95), -1, 9, 16, 10, LED_TEAL);
-      grandstand(0.96, -1, 6, 80, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
+      grandstand(0.96, -1, 8, 80, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
 
       // extra grandstands ringing T1/T5/T9/T11 (makes the seating bowl complete)
       grandstand(0.08, -1, 8, 70, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
@@ -407,7 +408,7 @@
       grandstand(0.48, -1, 8, 60, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
       grandstand(0.56, 1, 8, 70, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
       grandstand(0.83, -1, 8, 60, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      grandstand(0.92, -1, 8, 80, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
+      grandstand(0.92, -1, 8, 60, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
 
       // Second hotel group at s 0.44 R (Radisson / Abu Dhabi circuit area)
       // Using lit:true for proper night window glow
@@ -457,9 +458,9 @@
       // Bare palm() calls only where dist is safely large (20m+).
       // ===================================================================
       // Marina-facing palm avenue: forestEdge() handles barrier-safe placement.
-      // gap=14 keeps canopy inner edge well clear of any barrier at ~4-5m.
-      forestEdge(0.50, 0.74, 1, 14, {
-        density: 0.55, hMin: 8, hMax: 13,
+      // gap=20 keeps canopy inner edge well clear of any barrier at ~4-5m.
+      forestEdge(0.50, 0.74, 1, 20, {
+        density: 0.45, hMin: 7, hMax: 11,
         col: [0.25, 0.55, 0.20], col2: [0.28, 0.57, 0.22],
         pineFrac: 0.0,  // all palms (broadleaf trees look like palms at distance)
       });

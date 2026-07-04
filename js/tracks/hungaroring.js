@@ -115,17 +115,17 @@
       // The famous Hungaroring stadium section has tiered stands on both sides.
       // ====================================================================
       // Grid stands: pit straight right, main covered Tribune
-      grandstand(0.00, 1,  9, 100, SHELL,  CROWD[1]);   // Grid 1 (main straight)
-      grandstand(0.00, 1, 28,  90, SHELL2, CROWD[0]);   // Grid 2 (behind Grid 1)
+      grandstand(0.00, 1, 12, 100, SHELL,  CROWD[1]);   // Grid 1 (main straight)
+      grandstand(0.00, 1, 31,  90, SHELL2, CROWD[0]);   // Grid 2 (behind Grid 1)
       billboard(K(0.00), 1, 28, 26, 7, RED);
       // T1 grandstand group: outside of Turn 1 braking zone
-      grandstand(0.06,  1,  9,  70, SHELL,  CROWD[0]);
+      grandstand(0.06,  1, 11,  70, SHELL,  CROWD[0]);
       // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
       grandstand(0.10, -1, 10,  56, SHELL,  CROWD[2]);
       // Sector grandstands across the back of the circuit
       grandstand(0.12, -1, 10, 44, SHELL,  CROWD[2]);
-      grandstand(0.35, -1, 10, 48, SHELL,  CROWD[1]);
-      grandstand(0.40,  1, 11, 46, SHELL,  CROWD[0]);
+      grandstand(0.35, -1, 12, 48, SHELL,  CROWD[1]);
+      grandstand(0.40,  1, 13, 46, SHELL,  CROWD[0]);
       grandstand(0.55, -1, 10, 50, SHELL,  CROWD[1]);
       grandstand(0.68, -1, 10, 44, SHELL,  CROWD[2]);
       grandstand(0.80,  1, 10, 40, SHELL,  CROWD[3]);
@@ -143,13 +143,13 @@
         addBox(out, vadd(a.c, a.u, 13.15), [0.3, 0.5, len + 2], FASCIA, b);
         addBox(out, vadd(a.c, a.u, 7.5), [0.2, 0.6, len - 2], FASCIA2, b);
       };
-      standAccent(0.00, 1, 9,  100);
-      standAccent(0.00, 1, 28,  90);
-      standAccent(0.06, 1, 9,   70);
+      standAccent(0.00, 1, 12,  100);
+      standAccent(0.00, 1, 31,  90);
+      standAccent(0.06, 1, 11,   70);
       standAccent(0.10, -1, 10, 56);
       standAccent(0.12, -1, 10, 44);
-      standAccent(0.35, -1, 10, 48);
-      standAccent(0.40,  1, 11, 46);
+      standAccent(0.35, -1, 12, 48);
+      standAccent(0.40,  1, 13, 46);
       standAccent(0.55, -1, 10, 50);
       standAccent(0.68, -1, 10, 44);
       standAccent(0.80,  1, 10, 40);
@@ -157,10 +157,10 @@
 
       // Grandstand lit-window concourse strips
       const gsLit = [
-        { s: 0.00, side: 1, gap: 18, len: 96 },
-        { s: 0.06, side: 1, gap: 14, len: 66 },
+        { s: 0.00, side: 1, gap: 21, len: 96 },
+        { s: 0.06, side: 1, gap: 18, len: 66 },
         { s: 0.10, side: -1, gap: 15, len: 52 },
-        { s: 0.35, side: -1, gap: 15, len: 44 },
+        { s: 0.35, side: -1, gap: 17, len: 44 },
         { s: 0.55, side: -1, gap: 15, len: 46 },
         { s: 0.90, side: 1, gap: 15, len: 58 },
       ];
@@ -208,7 +208,7 @@
         for (const side of [-1, 1]) {
           const hh = hash(kk * 31 + side * 7);
           if (hh < 0.15) continue;
-          const a = anchor(kk, side, 5);
+          const a = anchor(kk, side, 6);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
           addCyl(out, a.c, 0.12, 10, LAMP_POST, 5, b);
@@ -224,7 +224,7 @@
         const kEnd = K(s1), step = Math.max(1, Math.round(50 / ds));
         for (let iter = 0; iter < n; iter++, kk = (kk + step) % n) {
           if (kk === kEnd) break;
-          const a = anchor(kk, side, 5);
+          const a = anchor(kk, side, 6);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
           addCyl(out, a.c, 0.12, 10, LAMP_POST, 5, b);
@@ -370,12 +370,12 @@
       // A near-continuous wall of terraced stands ringing the amphitheatre —
       // packed tiers on nearly every sweep, both sides of the bowl.
       for (const [s, side, gap, len, tiers] of [
-        [0.06, 1, 22, 70, 5],   // Turn 1 down-hill hillside — the big one
+        [0.06, 1, 24, 70, 5],   // Turn 1 down-hill hillside — the big one
         [0.12, -1, 20, 56, 4],  // inside the slow complex
-        [0.20, 1, 22, 52, 4],
-        [0.30, -1, 20, 48, 4],
-        [0.40, 1, 22, 50, 4],
-        [0.48, -1, 20, 46, 4],
+        [0.20, 1, 24, 48, 4],
+        [0.30, -1, 24, 44, 4],
+        [0.40, 1, 26, 46, 4],
+        [0.48, -1, 22, 46, 4],
         [0.58, 1, 22, 52, 4],
         [0.68, -1, 20, 48, 4],
         [0.78, 1, 22, 50, 4],

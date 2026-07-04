@@ -340,14 +340,14 @@
         const s    = 0.05 + i * 0.015;
         const side = (i % 2) ? 1 : -1;
         const col  = [TEAL, CORAL, PINK, [0.90, 0.50, 0.70]][i];
-        grandstand(s, side, 11, 95 + i * 5, GREYWHITE, col);
+        grandstand(s, side, 18, 95 + i * 5, GREYWHITE, col);
       }
       // Coherent pastel street facade on the right — hospitality buildings
-      cityFront(0.04, 0.12, 1, 26, {
+      cityFront(0.04, 0.12, 1, 30, {
         minH: 12, maxH: 32, depth: 22, step: 20,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });
-      for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 11 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
+      for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 14 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
 
       // ===================================================================
       // s 0.13–0.19 — concrete barriers + debris fence + forestEdge backing
@@ -366,18 +366,18 @@
       // ===================================================================
       for (let i = 0; i < 18; i++) {
         const k = K(0.18 + (i % 6) * 0.004);
-        palm(k, -1, 12 + (i % 4) * 7 + hash(i) * 4,   8 + hash(i * 7) * 5,
+        palm(k, -1, 28 + (i % 4) * 7 + hash(i) * 4,   8 + hash(i * 7) * 5,
           (i % 2) ? PALM_GREEN : PALM_DARK);
-        palm(K(0.18 + (i % 6) * 0.005), 1, 14 + (i % 3) * 6, 8 + hash(i * 3) * 4,
+        palm(K(0.18 + (i % 6) * 0.005), 1, 28 + (i % 3) * 6, 8 + hash(i * 3) * 4,
           (i % 2) ? PALM_DARK : PALM_GREEN);
       }
-      cityFront(0.18, 0.26, -1, 28, {
-        minH: 10, maxH: 26, depth: 20, step: 18,
+      cityFront(0.18, 0.26, -1, 42, {
+        minH: 10, maxH: 26, depth: 16, step: 18,
         palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
         lit: true, windowCol: WIN_AMBER,
       });
       // Bespoke South-Beach club tucked in the infield here
-      beachClub(0.205, -1, 46);
+      beachClub(0.205, -1, 60);
 
       // ===================================================================
       // s 0.27–0.38 R — MIA MARINA: painted-water "fake marina" + moored yachts.
@@ -466,7 +466,7 @@
       // s 0.43–0.52 L mid — STADIUM-LOT ZONE: grandstands + cityFront + palms
       // ===================================================================
       for (let i = 0; i < 3; i++) {
-        grandstand(0.43 + i * 0.035, -1, 13, 85 + i * 10, GREYWHITE,
+        grandstand(0.43 + i * 0.035, -1, 16, 85 + i * 10, GREYWHITE,
           [PINK, TEAL, CORAL][i]);
       }
       cityFront(0.42, 0.53, -1, 24, {
@@ -546,17 +546,17 @@
       // s 0.88–0.96 R — PADDOCK & FINAL CORNER: team buildings + grandstand
       // ===================================================================
       // Paddock / team buildings sit on the OUTER (-1) side, behind the final-
-      // corner grandstands (gap 22 clears the 14 m stands). The +1 side here
+      // corner grandstands (gap 26 clears the 18 m stands). The +1 side here
       // faces the same narrow median as the back straight, so it stays open.
-      cityFront(0.87, 0.97, -1, 22, {
+      cityFront(0.87, 0.97, -1, 26, {
         minH: 10, maxH: 28, depth: 22, step: 18,
         palette: [WHITE, ...SKY_PAL], lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 2; i++) {
-        grandstand(0.88 + i * 0.035, -1, 14, 80, GREYWHITE, [CORAL, TEAL][i]);
+        grandstand(0.88 + i * 0.035, -1, 18, 80, GREYWHITE, [CORAL, TEAL][i]);
       }
       for (let i = 0; i < 14; i++) {
-        palm(K(0.88 + i * 0.006), (i % 2) ? 1 : -1, 12 + (i % 3) * 5, 8 + hash(i * 4) * 2,
+        palm(K(0.88 + i * 0.006), (i % 2) ? 1 : -1, 16 + (i % 3) * 5, 8 + hash(i * 4) * 2,
           (i % 2) ? PALM_GREEN : PALM_DARK);
       }
 
@@ -593,7 +593,7 @@
       for (let i = 0; i < 24; i++) {
         const s = i / 24;
         const side = (i % 2) ? 1 : -1;
-        palm(K(s + 0.002), side, 16 + hash(i * 31) * 14, 7 + hash(i * 13) * 4,
+        palm(K(s + 0.002), side, 24 + hash(i * 31) * 14, 7 + hash(i * 13) * 4,
           (i % 2) ? PALM_GREEN : PALM_DARK);
       }
 
@@ -604,17 +604,17 @@
         const s = k / n;
         if (s >= 0.26 && s <= 0.38) {
           const h = hash(k * 41 + 13);
-          palm(k, -1, 11 + h * 8, 8 + h * 4, (h < 0.4) ? PALM_GREEN : PALM_DARK);
-          palm(k,  1, 13 + h * 7, 8 + h * 4, (h < 0.6) ? PALM_GREEN : PALM_DARK);
-          if (h < 0.7) palm(k, (h < 0.35) ? -1 : 1, 18 + h * 5, 7 + h * 3, PALM_GREEN);
+          palm(k, -1, 14 + h * 8, 8 + h * 4, (h < 0.4) ? PALM_GREEN : PALM_DARK);
+          palm(k,  1, 16 + h * 7, 8 + h * 4, (h < 0.6) ? PALM_GREEN : PALM_DARK);
+          if (h < 0.7) palm(k, (h < 0.35) ? -1 : 1, 20 + h * 5, 7 + h * 3, PALM_GREEN);
         }
       });
       every(16, (k) => {
         const s = k / n;
         if (s >= 0.72 && s <= 0.88) {
           const h = hash(k * 43 + 17);
-          palm(k, -1, 10 + h * 6, 8 + h * 4, (h < 0.5) ? PALM_GREEN : PALM_DARK);
-          palm(k,  1, 12 + h * 5, 7 + h * 3, PALM_GREEN);
+          palm(k, -1, 14 + h * 6, 8 + h * 4, (h < 0.5) ? PALM_GREEN : PALM_DARK);
+          palm(k,  1, 15 + h * 5, 7 + h * 3, PALM_GREEN);
         }
       });
       every(25, (k) => {
@@ -622,7 +622,7 @@
         const inTech    = (k / n > 0.60 && k / n < 0.75);
         const onStretch = (k / n < 0.12 || (k / n > 0.38 && k / n < 0.55));
         if (inTech || onStretch || h > 0.45) {
-          palm(k, (h < 0.5) ? -1 : 1, 11 + h * 10, 8 + h * 4,
+          palm(k, (h < 0.5) ? -1 : 1, 18 + h * 10, 8 + h * 4,
             (h < 0.5) ? PALM_GREEN : PALM_DARK);
         }
       });

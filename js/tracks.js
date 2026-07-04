@@ -2172,9 +2172,18 @@ const Tracks = (function () {
     // isn't a row of identical boxes.
     const neonTower = (k, side, dist, w, h, d, neon, kind, tone, neonAmt) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const reach = Math.max(w, d);
-      const ifx = a.c[0] - a.r[0] * side * reach / 2, ifz = a.c[2] - a.r[2] * side * reach / 2;
-      if (onTrack(ifx, ifz, def.street ? 3.0 : 1.2)) return;
+      const reach = Math.max(w, d);   // used below for cylinder/dome/drum radii
+      // Footprint guard: test the tower's FULL oriented w×d footprint against the
+      // tarmac, not just its inner-face centre point. The old single-point test
+      // missed a tower that, on a CURVING street where the track doubles back,
+      // sweeps its body over a NEARBY stretch of road the point never sampled —
+      // the dominant "building over the racing line" bug on Baku/Miami/Jeddah/etc.
+      // rejBox runs the same Minkowski (footprint ⊕ road half-width) test the
+      // guarded addBox wrapper uses, over every node within reach, so it catches
+      // the doubling-back case exactly. Some kinds widen the base (podium ×1.35,
+      // tiered), so pad the tested extents to the widest section.
+      const gw = reach * 1.4;
+      if (rejBox(a.c, [gw, h, gw], b)) return;
       const bodyCol = NIGHT ? (tone && tone.n || [0.14, 0.14, 0.17]) : (tone && tone.d || [0.40, 0.41, 0.44]);
       const cap = NIGHT ? [0.09, 0.09, 0.12] : [0.31, 0.32, 0.35];
       const na = neonAmt == null ? (theme === "street_night" ? 1 : 0) : neonAmt;  // 0=general … 1=neon

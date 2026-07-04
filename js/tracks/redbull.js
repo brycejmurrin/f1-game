@@ -77,7 +77,7 @@
       forestEdge(0.0, 0.18, -1, 10, { density: 0.55, hMin: 9, hMax: 16,
         col: [0.10, 0.26, 0.13], col2: [0.18, 0.38, 0.18], pineFrac: 0.70 });
       // Right side approach and crest: mixed alpine, sparser to let hills show.
-      forestEdge(0.0, 0.18, 1, 11, { density: 0.42, hMin: 8, hMax: 14,
+      forestEdge(0.0, 0.18, 1, 16, { density: 0.42, hMin: 8, hMax: 14,
         col: [0.12, 0.28, 0.14], col2: [0.20, 0.40, 0.18], pineFrac: 0.65 });
 
       // Sector 2 (T3 Remus descent + back straight): dense Alpine pine on both sides.
@@ -225,10 +225,10 @@
       // sweepers and the final stadium bowl. Red Bull red/navy seat blocks.
       const shell = [0.40, 0.41, 0.46];
       // Main straight (Stehtribüne / start) — a long banked run of stands.
-      grandstand(0.985, 1, 8, 40, shell, rbRed);
-      grandstand(0.005, 1, 8, 40, shell, rbNavy);
-      grandstand(0.04, 1, 9, 30, shell, rbRed);
-      grandstand(0.07, 1, 10, 26, shell, rbNavy);
+      grandstand(0.985, 1, 24, 30, shell, rbRed);
+      grandstand(0.005, 1, 24, 30, shell, rbNavy);
+      grandstand(0.04, 1, 17, 30, shell, rbRed);
+      grandstand(0.07, 1, 14, 26, shell, rbNavy);
       // Turn 1 / Niki Lauda climb.
       grandstand(0.11, 1, 9, 26, shell, rbRed);
       // Turn 3 (Remus) crest — the high point.
@@ -250,13 +250,13 @@
 
       // Emissive grandstand fascia strips — bright warm accent on roof slab
       // underside so stands read lit from the trackside camera at dusk/night.
-      for (const [s, side] of [
-        [0.985, 1], [0.005, 1], [0.04, 1], [0.07, 1],
-        [0.11, 1], [0.21, 1], [0.25, 1],
-        [0.70, 1], [0.72, -1], [0.76, -1], [0.88, 1], [0.92, 1], [0.95, 1],
+      for (const [s, side, gap] of [
+        [0.985, 1, 24], [0.005, 1, 24], [0.04, 1, 17], [0.07, 1, 14],
+        [0.11, 1, 13], [0.21, 1, 13], [0.25, 1, 13],
+        [0.70, 1, 13], [0.72, -1, 13], [0.76, -1, 13], [0.88, 1, 13], [0.92, 1, 13], [0.95, 1, 13],
       ]) {
         const k = Math.round(n * s) % n;
-        const a = anchor(k, side, 13);
+        const a = anchor(k, side, gap);
         // Slim bright strip just below the roof edge — warm amber/white.
         addBox(out, vadd(a.c, a.u, 12.6), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
       }
