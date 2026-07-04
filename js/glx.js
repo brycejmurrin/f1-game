@@ -1519,9 +1519,21 @@ void main() {
       vec4 cp = uProj * vec4(q, 1.0);
       vec2 quv = cp.xy / cp.w * 0.5 + 0.5;
       if (quv.x < 0.0 || quv.x > 1.0 || quv.y < 0.0 || quv.y > 1.0) break;
-      float sz = viewPos(quv).z;                 // scene surface depth at that pixel
-      float dz = sz - q.z;                       // >0: surface is in front of the ray
-      if (dz > 0.015 && dz < 0.5) { sh = 1.0 - uContact; break; }
+      vec3 B = viewPos(quv);                     // blocker view position
+      float dz = B.z - q.z;                       // >0: surface is in front of the ray
+      // Reject the receiver's OWN near-coplanar surface as a false occluder. On a
+      // flat road at a grazing angle the point sampled ahead is almost coplanar
+      // with this pixel, so the raw depth test (dz in 0.015..0.5) fires on the
+      // road itself — and being screen-space it SWIMS across the tarmac as the
+      // camera moves ("wavy moving shadows that vanish when contact shadow is
+      // off"). A genuine grounding occluder (wheel, barrier foot, kerb) rises
+      // clearly above the receiver's tangent plane; the coplanar road does not.
+      // Gate on that height so real contacts still darken but the road can't
+      // self-shadow. Bias scales with distance so a distant road pixel (whose
+      // whole ~0.3 m march projects into a pixel or two) isn't over-rejected.
+      float above = dot(N, B - P);
+      float aboveBias = 0.05 + 0.01 * max(-P.z - 6.0, 0.0);
+      if (dz > 0.015 && dz < 0.5 && above > aboveBias) { sh = 1.0 - uContact; break; }
     }
     ao *= sh;
   }
