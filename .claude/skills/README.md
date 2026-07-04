@@ -18,6 +18,7 @@ groups.
 | **debug-tracks** | Track geometry/surface/barrier query hooks + the parallel multi-track sweep. |
 | **debug-state** | Live race/physics/lighting telemetry hooks + the headless `act/obs/reset` loop. |
 | **playwright-probe** | Drive the game headless — single deterministic screenshots (`shot.mjs`) through parallel multi-server sweeps; `tools/apex-eval.mjs` & `tools/apex-capture.mjs`. |
+| **motion-capture** | Capture RENDERED MOTION headless to catch temporal artifacts screenshots can't — z-fighting/clipping flicker, shadow crawl, geometry pop-in, texture shimmer "while driving" — and A/B-verify a renderer fix reduces flicker (`tools/motion-capture.mjs`). |
 | **audio-debug** | Inspect and tune the WebAudio synth engine (`js/audio.js`) — engine pitch curve, sfx triggers, music layers, mute/volume state. |
 | **perf-profile** | Capture a headless V8 CPU flame chart of the game loop via Playwright CDP — diagnose frame-time spikes, GC jitter, or slow track-build times. |
 | **lighting-tuner** | Tune and validate scene lighting — TUNE_DEFS knobs via `__apex.lightTune`, `applyRaceSettings` branches, live `lightState()` probes and orbit screenshots. |
