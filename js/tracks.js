@@ -1452,8 +1452,14 @@ const Tracks = (function () {
         console.warn(`[scenery] groundPlane SUPPRESSED at k=${k} side=${side}: gap=${gap} sz[0]=${sz[0]} (need gap>4)`);
         return;
       }
-      // water=true → reflective water buffer (mirrors the sky); else matte props.
-      addBox(water ? waterBuf : out, [cx, groundYAt(k, gap + sz[0] / 2) - sz[1] / 2 - 1.0, cz], sz, col);
+      // Height. WATER finds its own level: a harbour/lake/sea sits at the lap's
+      // LOW point (pyMin), not the local road grade — otherwise on an elevation-
+      // changing or street circuit (where groundYAt now tracks the road up a climb)
+      // the plane rises with the road and floats above the actual low water basin
+      // (Monaco harbour, Baku, Miami). Land planes (sand/paddock) still follow the
+      // local ground so they sit flush beside the road.
+      const topY = water ? (pyMin - 0.8) : (groundYAt(k, gap + sz[0] / 2) - 1.0);
+      addBox(water ? waterBuf : out, [cx, topY - sz[1] / 2, cz], sz, col);
     };
     // backdrop(): a distant scenery box (skyline, hills, dunes) on the horizon.
     // Tall things go far enough back that they never clip the viewport edge, and
