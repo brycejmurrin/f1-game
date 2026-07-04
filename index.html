@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=531">
-<link rel="stylesheet" href="css/data.css?v=531">
+<link rel="stylesheet" href="css/style.css?v=532">
+<link rel="stylesheet" href="css/data.css?v=532">
 <script>
 // ── SHELL VERSION GUARD ──────────────────────────────────────────────────────
 // index.html is the ONE file with no ?v= cache-buster on itself, so an installed
@@ -28,6 +28,16 @@
     var link = document.querySelector('link[href*="style.css?v="]');
     var m = link && link.href.match(/[?&]v=(\d+)/);
     var loaded = m ? parseInt(m[1], 10) : 0;
+    // OFFLINE CACHE: register the service worker (sw.js) so the game installs
+    // and plays offline after one visit. The ?v= query mirrors the same build
+    // number this guard just parsed — a new deploy is therefore a genuinely
+    // different registration URL, which makes the browser check for an updated
+    // worker right away instead of waiting up to 24h on the spec's periodic
+    // byte-diff. sw.js itself derives its cache generation from version.json,
+    // so this is just about prompting a timely update check, not correctness.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
+    }
     if (!loaded) return;
     fetch("version.json?_=" + Date.now(), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -508,55 +518,55 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script crossorigin="anonymous" src="js/mat4.js?v=531"></script>
-<script crossorigin="anonymous" src="js/glx.js?v=531"></script>
+<script crossorigin="anonymous" src="js/mat4.js?v=532"></script>
+<script crossorigin="anonymous" src="js/glx.js?v=532"></script>
 <!-- WebGPU backend (opt-in; inert unless apex26.gfxBackend=webgpu). Load order:
      chunks -> post -> fx -> wgx (consumes them) -> gfx (selects backend). -->
-<script crossorigin="anonymous" src="js/webgpu/wgsl-chunks.js?v=531"></script>
-<script crossorigin="anonymous" src="js/webgpu/wgsl-post.js?v=531"></script>
-<script crossorigin="anonymous" src="js/webgpu/wgsl-fx.js?v=531"></script>
-<script crossorigin="anonymous" src="js/webgpu/wgx.js?v=531"></script>
-<script crossorigin="anonymous" src="js/gfx.js?v=531"></script>
-<script crossorigin="anonymous" src="js/gltf.js?v=531"></script>
-<script crossorigin="anonymous" src="js/teams.js?v=531"></script>
-<script crossorigin="anonymous" src="js/circuits.js?v=531"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgsl-chunks.js?v=532"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgsl-post.js?v=532"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgsl-fx.js?v=532"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgx.js?v=532"></script>
+<script crossorigin="anonymous" src="js/gfx.js?v=532"></script>
+<script crossorigin="anonymous" src="js/gltf.js?v=532"></script>
+<script crossorigin="anonymous" src="js/teams.js?v=532"></script>
+<script crossorigin="anonymous" src="js/circuits.js?v=532"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script crossorigin="anonymous" src="js/tracks/bahrain.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/monaco.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/silverstone.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/spa.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/monza.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/suzuka.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/singapore.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/cota.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/interlagos.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/vegas.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/madrid.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/zandvoort.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/jeddah.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/albert_park.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/shanghai.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/miami.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/imola.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/montreal.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/redbull.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/hungaroring.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/baku.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/mexico.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/qatar.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks/abudhabi.js?v=531"></script>
-<script crossorigin="anonymous" src="js/tracks.js?v=531"></script>
-<script crossorigin="anonymous" src="js/trackmaps.js?v=531"></script>
-<script crossorigin="anonymous" src="js/car3d.js?v=531"></script>
-<script crossorigin="anonymous" src="js/input.js?v=531"></script>
-<script crossorigin="anonymous" src="js/audio.js?v=531"></script>
-<script crossorigin="anonymous" src="js/api.js?v=531"></script>
-<script crossorigin="anonymous" src="js/data.js?v=531"></script>
-<script crossorigin="anonymous" src="js/parts.js?v=531"></script>
-<script crossorigin="anonymous" src="js/liveries.js?v=531"></script>
-<script crossorigin="anonymous" src="js/liverytex.js?v=531"></script>
-<script crossorigin="anonymous" src="js/ghost.js?v=531"></script>
-<script crossorigin="anonymous" src="js/light-presets.js?v=531"></script>
-<script crossorigin="anonymous" src="js/game.js?v=531"></script>
+<script crossorigin="anonymous" src="js/tracks/bahrain.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/monaco.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/silverstone.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/spa.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/monza.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/suzuka.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/singapore.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/cota.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/interlagos.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/vegas.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/madrid.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/zandvoort.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/jeddah.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/albert_park.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/shanghai.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/miami.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/imola.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/montreal.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/redbull.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/hungaroring.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/baku.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/mexico.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/qatar.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks/abudhabi.js?v=532"></script>
+<script crossorigin="anonymous" src="js/tracks.js?v=532"></script>
+<script crossorigin="anonymous" src="js/trackmaps.js?v=532"></script>
+<script crossorigin="anonymous" src="js/car3d.js?v=532"></script>
+<script crossorigin="anonymous" src="js/input.js?v=532"></script>
+<script crossorigin="anonymous" src="js/audio.js?v=532"></script>
+<script crossorigin="anonymous" src="js/api.js?v=532"></script>
+<script crossorigin="anonymous" src="js/data.js?v=532"></script>
+<script crossorigin="anonymous" src="js/parts.js?v=532"></script>
+<script crossorigin="anonymous" src="js/liveries.js?v=532"></script>
+<script crossorigin="anonymous" src="js/liverytex.js?v=532"></script>
+<script crossorigin="anonymous" src="js/ghost.js?v=532"></script>
+<script crossorigin="anonymous" src="js/light-presets.js?v=532"></script>
+<script crossorigin="anonymous" src="js/game.js?v=532"></script>
 </body>
 </html>
