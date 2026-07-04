@@ -161,9 +161,14 @@ elevation mound (e.g. a rise that runs close to a lower part of the lap) bulges
 over the road. The raw geometry is kept on `track.terrainGeo` so `buildProps`'
 `anchor()` can raycast it (`terrainY`) and seat roadside props on the real carved
 ground rather than the closed-form `groundYAt` estimate — no floating/sunk props.
-A whole-circuit audit (`tests/terrain-over-road.spec.js`) asserts nothing renders
-over the racing line; large road-over-road overs are ignored as intentional
-crossovers (Suzuka figure-8).
+Two whole-circuit audits assert nothing renders over the racing line:
+`tests/terrain-over-road.spec.js` for terrain/road faces (large road-over-road
+overs ignored as intentional crossovers, e.g. Suzuka figure-8), and
+`tests/props-over-road.spec.js` for scenery props (roofs/canopies/buildings/
+crowds). The prop guard itself lives in `buildProps`: every primitive emitter is
+wrapped in a full-footprint Minkowski test (`rejBox`/`onRoadHit`) against the road
+half-width, so `building()`/`neonTower`/floodlight masts drop any part that would
+overhang the tarmac on a curving stretch — not just their inner-face point.
 
 ## js/car3d.js — `Car3D`
 

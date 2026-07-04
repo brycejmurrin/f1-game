@@ -250,6 +250,21 @@ __apex.race("singapore"); __apex.lightState();
 // → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:32, … }
 ```
 
+### `gpuTimer(on?) → {supported, on, ms}`
+Opt-in GPU frame timer (`EXT_disjoint_timer_query_webgl2`). `gpuTimer(true)`
+starts timing, `gpuTimer(false)` stops, `gpuTimer()` reads the latest sample.
+`ms` is the GPU-side cost of a recent frame (`-1` until a result lands, a few
+frames after enabling, or when unsupported). This is the GPU-side counterpart to
+the `perf-profile` CPU flame chart — use it to tell whether a spike is GPU-bound
+(fill/fragment) or CPU-bound before optimising. **Chrome/Android only**: the
+extension is absent on iOS Safari (`supported:false`) and yields garbage under
+SwiftShader (CI), where GPU_DISJOINT stays set and readings are dropped to `-1`.
+```js
+__apex.race("vegas"); __apex.gpuTimer(true);
+// drive a few frames on a busy night circuit, then:
+__apex.gpuTimer();   // → { supported:true, on:true, ms:6.2 }
+```
+
 ### `groundY(f, lat?) → {x, z, roadY, terrainY, gap}`
 Ground/gap probe: the **rendered terrain height** at a track-relative point
 (lap-fraction `f`, `lat` m off centre — raycast against the actual carved terrain

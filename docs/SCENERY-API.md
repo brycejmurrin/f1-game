@@ -111,6 +111,19 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 > Verify a track builds: `node tools/verify-track.cjs <id>` (catches a scenery
 > that throws — which silently strands the game on the menu).
 
+## On-track guard — props must never sit on/above the racing line
+
+Every primitive emitter (`addBox`/`addCyl`/…) is wrapped in a **full-footprint**
+Minkowski test (`rejBox`/`onRoadHit`) against the road half-width at each node it
+rises above. If any part of a prop's oriented `w×d` footprint covers tarmac, the
+whole shape is dropped (`[scenery] ... SUPPRESSED at k=...`). Composite helpers
+(`building`, `neonTower`, floodlight masts) guard their full box up front — do the
+same for any new composite (`rejBox(centre,[w,h,d],basis)`), never a single
+`onTrack()` point, which misses a long/deep model swinging over a curving stretch.
+`RAW.*` emissions (crowd spectators) skip the guard for speed — keep them behind a
+shell. `tests/props-over-road.spec.js` audits all 24 circuits and fails on any new
+intrusion; measure one with `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.
+
 ## Pattern: an encircling mountain range
 
 Place peaks/ridges in a ring computed from the track centre — far cleaner than

@@ -188,6 +188,7 @@ __apex.groundY(0.11, 12)      // rendered terrain height + road height + gap at 
 __apex.viewState()            // combined scene/camera snapshot
 __apex.camState()             // active camera {eye,tgt,fov,debug} (debug=true under a view() override)
 __apex.lightState()           // lighting snapshot: ambientSky/Ground, sunColor, exposure, numLights
+__apex.gpuTimer(on?)          // GPU frame timer {supported,on,ms} — Chrome/Android only (no iOS Safari/SwiftShader); GPU-side counterpart to perf-profile
 __apex.setPhysics({pace:0.8}) // override physics params
 __apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
 __apex.physState()            // full state (slip, wrongWay, lap, rescueT)

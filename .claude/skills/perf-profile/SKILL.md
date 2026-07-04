@@ -103,3 +103,13 @@ If `Minor GC` appears frequently during a Vegas/Singapore session, the cause is
 almost certainly per-frame `new Float32Array(...)` in the light-upload path.
 Check `GLX.hdrMode()` returns `true` (RGBA16F FBO active) — RGBA8 fallback does
 additional intermediate copies.
+
+## CPU-bound vs GPU-bound: the GPU timer
+
+A CPU flame chart shows only main-thread cost — it **cannot** see a fill-/
+fragment-bound frame (heavy shader, big bloom mip chain, many lit pixels), where
+the JS is idle but the GPU is the bottleneck. Confirm which side is limiting with
+`__apex.gpuTimer(true)` then `__apex.gpuTimer().ms` (see DEBUG-HOOKS.md): if GPU
+ms ≈ frame budget while the flame chart is mostly idle, it's GPU-bound and the fix
+is shader/fill work, not the JS loop. Chrome/Android only (absent on iOS Safari;
+`-1` under SwiftShader/CI).

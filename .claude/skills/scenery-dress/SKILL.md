@@ -52,12 +52,28 @@ scenery: function (api) {
 
 ## Hard rules
 
-- **On-track rejection guard.** Every emitter is wrapped in a Minkowski test
-  against the road half-width at each node. If a prop's footprint covers tarmac at
-  **any** node, the **entire shape is dropped** (logged as
+- **On-track rejection guard.** Every primitive emitter (`addBox`/`addCyl`/…) is
+  wrapped in a Minkowski test against the road half-width at each node (`rejBox`/
+  `onRoadHit` in `js/tracks.js`). If a prop's **full oriented footprint** covers
+  tarmac at **any** node it rises above, the **entire shape is dropped** (logged as
   `[scenery] ... SUPPRESSED at k=...`). So props never half-clip the track — but a
   too-close prop silently vanishes. If something you placed isn't showing, check
   the console for SUPPRESSED and increase `dist`/`gap`.
+  - **Composite helpers must guard their whole footprint, not one point.** The
+    footprint test only works if the *thing you test* covers the whole model. The
+    "props over the racing line" bug came from `building()`/`neonTower`/floodlight
+    masts testing a single inner-face **point** with `onTrack(x,z,margin)` — a
+    long/deep model on a curving street then swept its body over a nearby
+    doubling-back stretch the point never sampled. Both are now fixed to test the
+    full `w×d` box via `rejBox`. If you add a new composite emitter, guard it with
+    `rejBox(centre, [w,h,d], basis)` over its widest section — NOT a single
+    `onTrack()` point — or it will re-introduce that class of bug.
+  - **`RAW.*` bypasses the guard.** Crowd spectators are emitted via `RAW.addBox`
+    for speed and are NOT footprint-tested; only place them safely BEHIND a shell.
+  - **Regression coverage:** `tests/props-over-road.spec.js` audits all 24 circuits
+    in 3D and fails if any prop sits on/above the racing line beyond its documented
+    `BASELINE` cap. Run it after scenery edits; measure a single track with
+    `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.
 - **Terrain anchoring.** `place`/`prop`/`anchor` sit on the actual raycast terrain
   when available, else fall back to a closed-form `groundYAt` estimate. Props set
   far out (>120 m) or on street circuits can float/sink where the estimate
