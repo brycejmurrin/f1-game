@@ -245,15 +245,24 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
   if (mid == 1) {            // CONCRETE — patchy panels + fine speckle + form seams
     albedo *= 1.0 + (vnoise(wp.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far;
     albedo *= 1.0 + (vnoise(vec2(hc, y) * 6.0) - 0.5) * 0.10 * near;
-    if (wall) albedo *= 1.0 - smoothstep(0.05, 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near;
+    // AA the seam: fwidth() on the PRE-fract coordinate (fract() itself has a
+    // hard C0 seam that would spike the derivative) widens the transition band
+    // once a screen pixel spans more world-units than the seam's fixed 0.05 —
+    // otherwise the line strobes between "on/off" as the camera moves (the
+    // reported building-texture shimmer).
+    if (wall) albedo *= 1.0 - smoothstep(max(0.05, fwidth(y / 1.25)), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near;
     rough = min(1.0, rough + 0.08 * far);
   } else if (mid == 2) {     // BRICK — courses + staggered joints + per-brick tint
     float ch = 0.20, bl = 0.42, mort = 0.06;
     float row = floor(y / ch);
     float off = mod(row, 2.0) * 0.5 * bl;
     float bx = fract((hc + off) / bl), by = fract(y / ch);
-    float joint = max(smoothstep(mort, 0.0, min(bx, 1.0 - bx) * bl),
-                      smoothstep(mort, 0.0, min(by, 1.0 - by) * ch));
+    // mort is a WORLD-space distance (min(bx,1-bx)*bl converts back to metres),
+    // so the AA width is the raw per-pixel footprint of hc/y — see the seam
+    // note above for why this must scale with distance/viewing angle.
+    float mortAA = max(mort, max(fwidth(hc), fwidth(y)));
+    float joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
+                      smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
     float bh = vnoise(vec2(floor((hc + off) / bl), row) * 1.3);
     vec3 brick = albedo * (0.82 + bh * 0.42) * vec3(1.06, 0.99, 0.92);
     vec3 mortar = mix(albedo, vec3(0.60, 0.58, 0.55), 0.6);
@@ -262,8 +271,13 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
   } else if (mid == 3) {     // GLASS / CURTAIN WALL — mullion grid + per-pane variation
     float pw = 1.6, ph = 1.4, mull = 0.11;
     float gx = fract(hc / pw), gy = fract(y / ph);
-    float bar = max(smoothstep(mull, 0.0, min(gx, 1.0 - gx)),
-                    smoothstep(mull, 0.0, min(gy, 1.0 - gy)));
+    // mull compares against a NORMALIZED (0..1 pane-fraction) distance here —
+    // unlike brick's mort above, gx/gy are never scaled back to metres — so the
+    // AA width must be fwidth() of the pre-fract NORMALIZED coordinate, not the
+    // raw world-space one.
+    float mullAA = max(mull, max(fwidth(hc / pw), fwidth(y / ph)));
+    float bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
+                    smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
     albedo *= 1.0 + (vnoise(vec2(floor(hc / pw), floor(y / ph)) * 1.7) - 0.5) * 0.5 * far;
     albedo = mix(albedo, albedo * 0.32, bar * near);
     rough = mix(rough, min(rough, 0.12), near);
@@ -272,7 +286,8 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     rough = clamp(rough - 0.15 * far, 0.05, 1.0);
   } else if (mid == 5) {     // WOOD — grain lines + plank seams
     albedo *= 1.0 + (vnoise(vec2(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near;
-    albedo *= 1.0 - smoothstep(0.05, 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near;
+    // Same normalized-space AA correction as glass's mullion grid above.
+    albedo *= 1.0 - smoothstep(max(0.05, fwidth(hc / 0.35)), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near;
   } else if (mid == 6) {     // FOLIAGE — dapple + green variation, breaks flat canopy
     float d = vnoise(wp.xz * 2.4 + wp.y * 1.6) * 0.6 + vnoise(wp.xz * 9.0) * 0.4 * near;
     albedo *= 1.0 + (d - 0.5) * 0.34 * far;
@@ -306,7 +321,10 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     vec2 cell = floor(vec2(hc, y) * 1.3);
     vec2 f = fract(vec2(hc, y) * 1.3) - hash21(cell) * 0.12;
     float d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
-    float joint = smoothstep(0.0, 0.16, d);
+    // Normalized-space AA (same correction as glass/wood above): d lives in the
+    // *1.3 fract domain, so widen by fwidth() of that same pre-fract coordinate.
+    float jointAA = max(0.16, max(fwidth(hc * 1.3), fwidth(y * 1.3)));
+    float joint = smoothstep(0.0, jointAA, d);
     vec3 block = albedo * (0.80 + hash21(cell) * 0.4);
     vec3 mortar = mix(albedo, vec3(0.42, 0.40, 0.37), 0.65);
     albedo = mix(mortar, block, joint * near);
