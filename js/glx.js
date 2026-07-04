@@ -477,6 +477,19 @@ void main() {
   // would alias to shimmer) and with wetness (the water film levels the surface).
   if (uDetail > 0.001) {
     float mnFade = clamp(1.0 - (vDist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - uWetness * 0.75);
+    // Footprint fade: the relief below is a fixed-epsilon (0.22 m) world-space
+    // noise-gradient normal perturbation. On the ROAD/terrain — viewed at a
+    // grazing angle while driving — one screen pixel spans many metres, so
+    // neighbouring pixels sample the gradient at unrelated noise phases and the
+    // perturbed normal aliases; because the noise is world-locked the aliased
+    // pattern CRAWLS under the car as you move, and since it feeds N·L it reads
+    // as wavy "shadows" streaming across the tarmac. The distance fade alone
+    // misses this — a grazing patch can be close (high mnFade) yet still have a
+    // metre-wide footprint — so also fade the relief out once the per-pixel
+    // footprint outgrows the ~0.2 m noise-feature scale (the same fwidth() AA
+    // used for the wall bump maps and albedo seams).
+    float mnFp = max(fwidth(vWorldPos.x), fwidth(vWorldPos.z));
+    mnFade *= clamp(1.0 - (mnFp - 0.15) / 0.70, 0.0, 1.0);
     if (mnFade > 0.01) {
       vec2 mnp = vWorldPos.xz * 1.7;
       float e = 0.22;
