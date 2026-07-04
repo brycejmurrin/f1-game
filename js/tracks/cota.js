@@ -346,8 +346,8 @@
       forestEdge(0.40, 0.62,  1, 18, { density: 0.40, hMin: 6, hMax: 11, col: cedar, col2: oak,   pineFrac: 0.40 });
 
       // T12 hairpin and amphitheatre approach (s≈0.62–0.72)
-      forestEdge(0.62, 0.74, -1, 18, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
-      forestEdge(0.72, 0.84, -1, 16, { density: 0.40, hMin: 6, hMax: 11, col: cedar, col2: oak,   pineFrac: 0.40 });
+      forestEdge(0.62, 0.74, -1, 20, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
+      forestEdge(0.72, 0.84, -1, 20, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
 
       // Final sweeper sector (s≈0.84–0.96, both sides)
       forestEdge(0.84, 0.96, -1, 18, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });

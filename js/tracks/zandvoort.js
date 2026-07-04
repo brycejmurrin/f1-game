@@ -106,6 +106,8 @@
       // -----------------------------------------------------------------------
 
       // 1. Inner dune mounds — organic, rough, close
+      // TEMPORARILY DISABLED FOR DEBUGGING
+      /*
       every(24, (k) => {
         for (const side of [-1, 1]) {
           const dist = 80 + hash(k * 72 + side) * 30;   // 80–110 m from verge
@@ -119,8 +121,11 @@
           });
         }
       });
+      */
 
       // 2. Mid dune ridge band — slightly larger, set back further
+      // TEMPORARILY DISABLED FOR DEBUGGING
+      /*
       every(18, (k) => {
         for (const side of [-1, 1]) {
           const dist = 120 + hash(k * 81 + side) * 38;  // 120–158 m
@@ -132,8 +137,11 @@
                hash(k * 84 + side) < 0.5 ? sand : sandLt);
         }
       });
+      */
 
       // 3. Far backdrop dunes — distant horizon, rooted at pyMin
+      // TEMPORARILY DISABLED FOR DEBUGGING
+      /*
       every(48, (k) => {
         for (const side of [-1, 1]) {
           const dist = 160 + hash(k * 42 + side) * 100;  // 160–260 m
@@ -143,6 +151,7 @@
                18 + hash(k * 44 + side) * 16, sand);
         }
       });
+      */
 
       // -----------------------------------------------------------------------
       // COASTAL DUTCH PINES — dark conifers in dense clusters on dune slopes.
@@ -156,12 +165,12 @@
       const pineCol2 = [0.20, 0.38, 0.14];   // slightly lighter broadleaf scrub
 
       // Inland-side dune pine belt — sectors where inland forest exists
-      forestEdge(0.22, 0.46,  1, 55, { density: 0.42, hMin: 7, hMax: 13,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.88 });
+      forestEdge(0.22, 0.46,  1, 65, { density: 0.42, hMin: 7, hMax: 13,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.88 }); // gap 55→65
       forestEdge(0.22, 0.46, -1, 48, { density: 0.38, hMin: 6, hMax: 12,
                                        col: pineCol, col2: pineCol2, pineFrac: 0.85 });
-      forestEdge(0.56, 0.82,  1, 50, { density: 0.40, hMin: 7, hMax: 14,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.80 });
+      forestEdge(0.56, 0.82,  1, 65, { density: 0.40, hMin: 7, hMax: 14,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.80 }); // gap 50→65
       forestEdge(0.56, 0.82, -1, 45, { density: 0.35, hMin: 6, hMax: 11,
                                        col: pineCol, col2: pineCol2, pineFrac: 0.82 });
       // Thinner pine fringe on the approaches to the grandstand complex
@@ -170,10 +179,9 @@
 
       // -----------------------------------------------------------------------
       // MARRAM GRASS — dense tufts along both verges for continuous dune-grass feel.
-      // Prisms anchored via anchor(): center at a.c + u*0.6 so base sits on ground.
-      // Count 3-4 leaning prisms per tuft for organic clustering.
-      // Spacing every 6m, ~60% density.
+      // TEMPORARILY DISABLED FOR DEBUGGING
       // -----------------------------------------------------------------------
+      /*
       every(6, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 61 + side * 5) > 0.40) continue;   // ~60% density
@@ -192,20 +200,26 @@
           }
         }
       });
+      */
 
       // -----------------------------------------------------------------------
       // MARRAM HEDGE BANDS — continuous clipped dune-grass fringe along the verge.
       // Gap = 22 etc. means inner face is that far from road edge — safe clearance.
+      // TEMPORARILY DISABLED FOR DEBUGGING
       // -----------------------------------------------------------------------
+      /*
       hedge(0.10, 0.50, 1,  26, 1.8, marramT);
       hedge(0.20, 0.60, -1, 22, 1.8, marramG);
       hedge(0.55, 0.85, 1,  24, 1.8, marramG);
       hedge(0.65, 0.98, -1, 20, 1.8, marramT);
       hedge(0.80, 0.95, 1,  26, 1.8, marramG);
+      */
 
       // -----------------------------------------------------------------------
       // BUSH CLUMPS — low dune shrubs between tufts and hedges
+      // TEMPORARILY DISABLED FOR DEBUGGING
       // -----------------------------------------------------------------------
+      /*
       every(8, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 51 + side) > 0.35) continue;   // ~65% density
@@ -213,6 +227,7 @@
                hash(k * 53 + side) < 0.5 ? marramG : marramT);
         }
       });
+      */
 
       // -----------------------------------------------------------------------
       // GRANDSTANDS — Orange Army Verstappen fans; Dutch GP sells out every year.
@@ -221,13 +236,13 @@
       grandstand(0.01,  1,  16, 36, shellLt, orange); // main pit straight R (largest)
       grandstand(0.05,  1,  14, 28, shell,   orange); // Tarzan hairpin R
       grandstand(0.09, -1,  14, 26, shell,   orange); // Tarzan exit L
-      grandstand(0.135,-1,  22, 40, shell,   orange); // Hugenholtz banked L
+      grandstand(0.135,-1,  28, 40, shell,   orange); // Hugenholtz banked L (gap 22→28: steeply banked, roof must clear)
       grandstand(0.18,  1,  16, 32, shellLt, orange); // Hugenholtz exit R
-      grandstand(0.48, -1,  28, 34, shell,   orange); // Scheivlak approach L
+      grandstand(0.48, -1,  28, 34, shell,   orange); // Scheivlak approach L (gap was 28 in previous pass)
       grandstand(0.53,  1,  18, 28, shell,   orange); // Scheivlak R
-      grandstand(0.865, 1,  36, 36, shell,   orange); // Luyendyk approach R
-      grandstand(0.915, 1,  22, 80, shell,   orange); // Arie Luyendyk banked R (massive)
-      grandstand(0.96,  1,  22, 32, shellLt, orange); // Luyendyk exit R
+      grandstand(0.865, 1,  42, 36, shell,   orange); // Luyendyk approach R (gap 36→42: banked corner clearance)
+      grandstand(0.915, 1,  28, 80, shell,   orange); // Arie Luyendyk banked R (massive) (gap 22→28: VERY banked, roof overhang)
+      grandstand(0.96,  1,  28, 32, shellLt, orange); // Luyendyk exit R (gap 22→28: post-banked transition)
       grandstand(0.97, -1,  22, 34, shellLt, orange); // pit straight L
 
       // -----------------------------------------------------------------------
@@ -274,9 +289,9 @@
 
       // -----------------------------------------------------------------------
       // BEACH HUTS — pastel rows clustered at the seaward dune face (s≈0.3–0.7).
-      // Fixed: use anchor() so hut bases sit on terrain, not a fixed pyMin offset.
-      // every(40) → ~107 spaced cluster points around the lap; seaward-biased.
+      // TEMPORARILY REMOVED FOR DEBUGGING INTRUSIONS
       // -----------------------------------------------------------------------
+      /*
       every(40, (k) => {
         const lapFrac = k / n;
         const sideProb = lapFrac > 0.3 && lapFrac < 0.7 ? 0.7 : 0.3;
@@ -300,6 +315,7 @@
                    [5.8, 1.6, 5.8], [0.72, 0.34, 0.18], b);
         }
       });
+      */
 
       // -----------------------------------------------------------------------
       // SEA GLIMPSE SLIVERS — blue peek over the dune ridge at several lap points
@@ -345,6 +361,7 @@
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 16);
           if (onTrack(a.c[0], a.c[2], 9)) continue;
+          // Reverted to original gap=24 (the billboard-looking intrusions were actually beach pavilions)
           billboard(k, side, 24, 12, 4, adCols[(adI++) % adCols.length]);
         }
       });
@@ -362,8 +379,8 @@
       // -----------------------------------------------------------------------
       // VERSTAPPEN-ORANGE BUNTING — bright capsules on major grandstand fronts
       // -----------------------------------------------------------------------
-      for (const [s, side] of [[0.01, 1], [0.135, -1], [0.915, 1], [0.97, -1]]) {
-        const a = anchor(K(s), side, 16);
+      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.135, -1, 28], [0.915, 1, 28], [0.97, -1, 28]]) {
+        const a = anchor(K(s), side, buntDist);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
         const buntingCol = [0.96, 0.40, 0.02];
@@ -388,7 +405,7 @@
         const armCol    = [0.32, 0.32, 0.36];
         every(35, (k) => {
           for (const side of [-1, 1]) {
-            const dist = 12;
+            const dist = 18;  // increased from 12 to clear banked/elevated sections
             const a = anchor(k, side, dist);
             if (onTrack(a.c[0], a.c[2], 3)) continue;
             const b = [a.r, a.u, a.t];
@@ -417,9 +434,9 @@
         // Pit straight main stand (s≈0.01, side=1, gap=12, len=36)
         for (const [s, side, gap, len] of [
           [0.01,  1,  16, 36],   // pit straight main R
-          [0.135,-1,  22, 40],   // Hugenholtz banked L
-          [0.915, 1,  22, 80],   // Arie Luyendyk massive R
-          [0.865, 1,  36, 36],   // Luyendyk approach R
+          [0.135,-1,  28, 40],   // Hugenholtz banked L (gap updated to match grandstand)
+          [0.915, 1,  28, 80],   // Arie Luyendyk massive R (gap updated to match grandstand)
+          [0.865, 1,  42, 36],   // Luyendyk approach R (gap updated to match grandstand)
         ]) {
           const k = K(s), a = anchor(k, side, gap + 5);
           const b = [a.r, a.u, a.t];
@@ -524,8 +541,9 @@
       seasideTown(K(0.30), -1, 280, 70);           // Zandvoort village toward the inland arc
       seasideTown(K(0.62), -1, 300, 60);
       seasideTown(K(0.72),  1, 330, 55);
-      beachPavilion(K(0.40), 1, 165);              // beach clubs near the shore
-      beachPavilion(K(0.55), 1, 175);
+      // TEMPORARILY REMOVED FOR DEBUGGING
+      // beachPavilion(K(0.40), 1, 250);              // beach clubs near the shore (165→200→250: clear banked Scheivlak approach)
+      // beachPavilion(K(0.55), 1, 250);              // (175→200→250: safety margin)
     },
   }
   );

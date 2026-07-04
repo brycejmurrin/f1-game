@@ -1968,14 +1968,16 @@ const Tracks = (function () {
         console.warn(`[scenery] building: w=${w} >> d=${d} at k=${k} — dimensions likely swapped`);
       const dist = gap + w / 2;
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
-      const ifx = p.c[0] - p.r[0] * side * w / 2;
-      const ifz = p.c[2] - p.r[2] * side * w / 2;
-      // Keep the façade clear of the track. Margin accounts for the proud window/
-      // mullion overhang AND, on street circuits, the edge barrier — so buildings
-      // sit BEHIND the wall instead of faces poking through onto the racing line.
+      // Keep the whole footprint clear of the track — not just the inner-face
+      // centre point. A w×d building at a curve (esp. a long cityFront row) sweeps
+      // its body over a NEARBY doubling-back stretch of tarmac even when the single
+      // inner-face point clears; that single-point test was the dominant residual
+      // "building over the racing line" bug (Baku/Montreal/Zandvoort). rejBox runs
+      // the full oriented-footprint Minkowski test over every node within reach.
+      // clearMargin pads the street-circuit barrier allowance into the box.
       const clearMargin = def.street ? 3.0 : 1.2;
-      if (onTrack(ifx, ifz, clearMargin)) {
-        console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (too close to track)`);
+      if (rejBox(p.c, [w + clearMargin * 2, h, d + clearMargin * 2], b)) {
+        console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (footprint over track)`);
         return;
       }
       // Lit windows follow the SESSION (NIGHT), not a baked flag — otherwise a

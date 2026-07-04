@@ -229,7 +229,7 @@
       }
       for (let i = 0; i < 28; i++) {
         const s = 0.60 + i * 0.013;   // back straight / Casino straight
-        lampPost(K(s), (i % 2) ? 1 : -1, 6.5);
+        lampPost(K(s), (i % 2) ? 1 : -1, 8.5);
       }
 
       // ===================================================================
@@ -294,7 +294,8 @@
         }
       }
       // Far bank of the basin: dense broadleaf forestEdge (pushed out across the water)
-      forestEdge(0.07, 0.21, -1, 36, {
+      // (increased gap from 36m to 42m to clear curve intrusion around s=0.20)
+      forestEdge(0.07, 0.21, -1, 42, {
         density: 0.75, hMin: 9, hMax: 16,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.2
       });
@@ -570,26 +571,28 @@
         addBox(out, vadd(a.c, a.u, 6.2), [2.6, 0.5, 2.6], [0.70, 0.72, 0.76], b);
       }
       // Right verge: island parkland trees on the FAR bank beyond the basin
-      forestEdge(0.575, 0.75, 1, 30, {
-        density: 0.80, hMin: 8, hMax: 15,
+      forestEdge(0.575, 0.75, 1, 38, {
+        density: 0.70, hMin: 8, hMax: 14,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.20
       });
       // Left verge: infield trees along the Casino straight
-      forestEdge(0.58, 0.72, -1, 12, {
-        density: 0.65, hMin: 7, hMax: 13,
+      forestEdge(0.58, 0.72, -1, 28, {
+        density: 0.60, hMin: 7, hMax: 12,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
       });
 
       // ── s 0.65 L — Concrete spectator grandstand on the Casino straight ──
       // Modelled after the permanent stands that overlook the run between
       // L'Épingle and the final chicane (the busiest spectator zone on the island).
-      grandstand(0.65, -1, 11, 80, [0.48, 0.50, 0.55], [0.58, 0.36, 0.32]);
+      // (increased gap from 11m→14m→18m to clear curve intrusion at s=0.72)
+      grandstand(0.65, -1, 18, 80, [0.48, 0.50, 0.55], [0.58, 0.36, 0.32]);
 
       // ===================================================================
       // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
       // ===================================================================
       // Grandstand midway on the back straight
-      grandstand(0.74, -1, 11, 64, [0.48, 0.49, 0.54], [0.56, 0.40, 0.36]);
+      // (increased gap from 11m→14m→18m to clear curve intrusion)
+      grandstand(0.74, -1, 18, 64, [0.48, 0.49, 0.54], [0.56, 0.40, 0.36]);
 
       // Canal / water feature off the right verge — island park internal canal
       // Canal water ON TOP of island slab (anchor+addBox — groundPlane buries on flat island)
@@ -613,7 +616,13 @@
         density: 0.68, hMin: 8, hMax: 14,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
       });
-      forestEdge(0.66, 0.90, -1, 12, {
+      // Left-side forestEdge: back stretch parkland (increased gap for curve clearance)
+      // Split to skip the problem curve section around s=0.72
+      forestEdge(0.66, 0.70, -1, 25, {
+        density: 0.60, hMin: 7, hMax: 13,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
+      });
+      forestEdge(0.74, 0.90, -1, 25, {
         density: 0.60, hMin: 7, hMax: 13,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
       });

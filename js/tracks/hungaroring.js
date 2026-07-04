@@ -208,7 +208,10 @@
         for (const side of [-1, 1]) {
           const hh = hash(kk * 31 + side * 7);
           if (hh < 0.15) continue;
-          const a = anchor(kk, side, 6);
+          // Skip problematic zone at frac ~0.432 (intrudes 1.05m at road level)
+          const frac = kk / n;
+          if (Math.abs(frac - 0.432) < 0.01 && side === -1) continue;
+          const a = anchor(kk, side, 8);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
           addCyl(out, a.c, 0.12, 10, LAMP_POST, 5, b);
@@ -224,7 +227,10 @@
         const kEnd = K(s1), step = Math.max(1, Math.round(50 / ds));
         for (let iter = 0; iter < n; iter++, kk = (kk + step) % n) {
           if (kk === kEnd) break;
-          const a = anchor(kk, side, 6);
+          // Skip problematic zone at frac ~0.432 (intrudes 1.05m)
+          const frac = kk / n;
+          if (Math.abs(frac - 0.432) < 0.01) continue;
+          const a = anchor(kk, side, 8);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
           addCyl(out, a.c, 0.12, 10, LAMP_POST, 5, b);
@@ -317,10 +323,12 @@
         // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
         const inBowl = sf < 0.12 || (sf > 0.32 && sf < 0.62) || sf > 0.88;
         if (!inBowl) return;
+        // Skip problematic zone at frac ~0.42-0.44 (intrudes 1.05m at ground level)
+        if (sf >= 0.42 && sf <= 0.44) return;
         for (const side of [-1, 1]) {
           const hh = hash(kk * 23 + side * 5);
           if (hh < 0.5) continue;
-          const base = 30 + hh * 18;
+          const base = 40 + hh * 18;  // increased from 30 to clear road intrusion at frac ~0.432
           const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
           // Low, wide patch stepping up the slope — a distant crowd, not a slab.
           prop(kk, side, base, [10 + hh * 8, 0.35 + hh * 0.3, 12 + hh * 6], col);

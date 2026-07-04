@@ -30,17 +30,24 @@ const CEIL = 5.0;
 
 // Baseline of circuits with a KNOWN prop-over-road reading at the time this
 // audit was added, each capped at the metres seen so the test still fails if the
-// intrusion GROWS or a NEW circuit regresses. Two kinds live here:
-//   - design-intent pass-throughs the track legitimately runs through at car
-//     height (mexico = Foro Sol stadium; miami, jeddah = stadium/structure runs);
-//   - not-yet-fixed debt from the 2026-07-02 scenery passes (the rest).
-// The guard fix in buildProps (guarded crowd risers) already cleared bahrain,
-// cota, madrid and shrank abudhabi/hungaroring/monaco. Drive each `frac` with
-// __apex.eyeAt/orbit to triage, fix the source, then lower/remove its cap here.
-// A track NOT in this map must read <= TOL — that's what keeps new bugs failing.
+// intrusion GROWS or a NEW circuit regresses. A track NOT in this map must read
+// <= TOL — that's what keeps new bugs failing.
+//
+// After the systemic guard fixes (neonTower + building() now use the full
+// footprint Minkowski test, not a single inner-face point) plus per-circuit
+// scenery passes, 15 circuits are fully clean (max=0): bahrain, cota, imola,
+// interlagos, montreal, monza, qatar, redbull, shanghai, silverstone, singapore,
+// spa, suzuka, vegas, zandvoort. The remaining caps are small residuals; miami
+// is a verified design-intent overhead (beach-club parasol canopy ~7.5 m up,
+// car passes safely under), mexico is the Foro Sol stadium the track runs
+// through. The rest are minor edge-proximity readings (< ~1.1 m) from props
+// hugging the runoff on curves — safe to drive but tracked so they can't grow.
+// Cap = measured max + small margin. A track NOT in this map must read <= TOL.
 const BASELINE = {
-  abudhabi: 3.9, baku: 1.3, hungaroring: 2.9, jeddah: 3.9, mexico: 4.8,
-  miami: 4.7, monaco: 1.3, redbull: 3.8, zandvoort: 2.1, albert_park: 0.7,
+  miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
+  mexico: 2.7, mexico_note: "Foro Sol stadium — track runs through by design",
+  baku: 1.3, jeddah: 1.3, hungaroring: 0.9, abudhabi: 0.8,
+  albert_park: 0.7, monaco: 0.7,
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 

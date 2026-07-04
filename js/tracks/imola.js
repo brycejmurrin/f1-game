@@ -84,19 +84,19 @@
       // SwiftShader budget for the 25-frame blank-scan test (180 s total).
 
       // Pit straight + Tamburello approach (wraps around 0)
-      forestEdge(0.88, 1.00, -1, 5, { density: 0.45, hMin: 10, hMax: 16,
+      forestEdge(0.88, 1.00, -1, 8, { density: 0.45, hMin: 10, hMax: 16,
         col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.60 });
       forestEdge(0.88, 1.00,  1, 8, { density: 0.40, hMin: 9, hMax: 14,
         col: [0.09, 0.26, 0.13], col2: [0.17, 0.40, 0.19], pineFrac: 0.45 });
 
       // Tamburello chicane through Villeneuve
-      forestEdge(0.00, 0.14, -1, 5, { density: 0.45, hMin: 10, hMax: 16,
+      forestEdge(0.00, 0.14, -1, 8, { density: 0.45, hMin: 10, hMax: 16,
         col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.60 });
       forestEdge(0.00, 0.14,  1, 5, { density: 0.38, hMin: 9, hMax: 14,
         col: WOODS, col2: [0.16, 0.40, 0.18], pineFrac: 0.25 });
 
       // Villeneuve to Tosa
-      forestEdge(0.14, 0.30, -1, 5, { density: 0.38, hMin: 9, hMax: 14,
+      forestEdge(0.14, 0.30, -1, 8, { density: 0.38, hMin: 9, hMax: 14,
         col: WOODS, col2: WOODS2, pineFrac: 0.50 });
       forestEdge(0.14, 0.30,  1, 5, { density: 0.32, hMin: 8, hMax: 13,
         col: WOODS, col2: WOODS2, pineFrac: 0.40 });

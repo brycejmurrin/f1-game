@@ -98,20 +98,20 @@
       // =================================================================================
       (function wingedTowers() {
         const sLap  = 0.005;
-        // Ground anchors on each side — dist=28 puts towers well behind the pit wall.
-        const aL = anchor(K(sLap), -1, 28), bL = [aL.r, aL.u, aL.t];
-        const aR = anchor(K(sLap),  1, 28), bR = [aR.r, aR.u, aR.t];
+        // Ground anchors on each side — dist=36 puts towers well behind the pit wall.
+        const aL = anchor(K(sLap), -1, 36), bL = [aL.r, aL.u, aL.t];
+        const aR = anchor(K(sLap),  1, 36), bR = [aR.r, aR.u, aR.t];
 
         // ── LEFT SIDE: primary tower (the taller of the pair) ──────────────────
         // tower() places a tapered frustum column with optional cap + mast.
-        tower(K(sLap), -1, 28, 7.0, 70, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 10 });
+        tower(K(sLap), -1, 36, 7.0, 70, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 10 });
 
         // ── LEFT SIDE: secondary tower staggered 12 m further back along the track ──
         // (uses a different node so anchor() places it correctly downstream)
-        tower(K(0.008), -1, 28, 6.6, 66, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast:  8 });
+        tower(K(0.008), -1, 36, 6.6, 66, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast:  8 });
 
         // ── RIGHT SIDE: single matching pier tower ──────────────────────────────
-        tower(K(sLap),  1, 28, 6.4, 62, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast:  6 });
+        tower(K(sLap),  1, 36, 6.4, 62, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast:  6 });
 
         // ── SKYBRIDGES ──────────────────────────────────────────────────────────
         // Bridge deck spans from just outside the left tower to just outside the
@@ -194,7 +194,7 @@
         const segN = 9;            // segments stepping along the straight
         for (let i = 0; i < segN; i++) {
           const s = 0.018 + i * 0.012;
-          const a = anchor(K(s), -1, 16), b = [a.r, a.u, a.t];
+          const a = anchor(K(s), -1, 22), b = [a.r, a.u, a.t];
           // raked seating block
           addBox(out, vadd(vadd(a.c, a.u, 5), a.r, 7), [16, 11, 18], SEAT, b);
           addBox(out, vadd(vadd(a.c, a.u, 8.5), a.r, 1), [16, 3.5, 6], CROWD, b);
@@ -227,7 +227,7 @@
         const baseY  = 27;    // roof springing height
         for (let i = 0; i < bays; i++) {
           const s = 0.006 + i * 0.0072;              // covers the pit straight
-          const a = anchor(K(s), -1, 26), b = [a.r, a.u, a.t];
+          const a = anchor(K(s), -1, 34), b = [a.r, a.u, a.t];
           // arced roof facets (alternating white steel / hazed glass panels)
           const nodeAt = (t) => vadd(vadd(a.c, a.r, rInner + t * span),
                                      a.u, baseY + Math.sin(t * Math.PI) * rise);
@@ -266,8 +266,8 @@
       wall(0.965, 0.05, 1, 3, 1.1, WHITE);
       place(K(0.99), 1, 10, [5, 2.4, 40], CONC);
       place(K(0.99), 1, 10, [5, 0.6, 40], RED);
-      billboard(K(0.02), 1, 11, 16, 4.5, RED);
-      billboard(K(0.97), 1, 11, 14, 4.0, YELLOW);
+      billboard(K(0.02), 1, 18, 16, 4.5, RED);
+      billboard(K(0.97), 1, 18, 14, 4.0, YELLOW);
 
       // ---- Lamp posts down the pit straight — warm sodium heads ----
       along(0.00, 0.04, 18, (k) => {
@@ -528,7 +528,7 @@
       // Shanghai International Circuit sits in a modern commercial district: low-rise
       // hotels and offices line the far side of the pit straight and the T14 approach.
       // cityFront() aligns the inner facade cleanly and auto-varies heights/colours.
-      cityFront(0.92, 0.00, 1, 28, {
+      cityFront(0.92, 0.00, 1, 48, {
         minH: 14, maxH: 38, depth: 26,
         palette: [WHITE, CONC, [0.82, 0.83, 0.86], [0.78, 0.80, 0.83]],
         step: 24,
