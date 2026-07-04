@@ -286,11 +286,11 @@
       // Olympic Basin water: sit ON TOP of island slab at WATR_S (−0.05).
       // groundPlane() buries these boxes far below on a flat island — use anchor.
       { const BH = 0.8;
-        for (let i = 0; i < 12; i++) {
-          const bk = K(0.065 + i * 0.013);
+        for (let i = 0; i < 10; i++) {
+          const bk = K(0.065 + i * 0.015);
           const ba = anchor(bk, -1, 115);
           addBox(out, vadd(ba.c, ba.u, WATR_S - BH / 2 - ba.c[1]),
-                 [200, BH, 240], BASIN, [ba.r, ba.u, ba.t]);
+                 [200, BH, 260], BASIN, [ba.r, ba.u, ba.t]);
         }
       }
       // Far bank of the basin: dense broadleaf forestEdge (pushed out across the water)
@@ -482,8 +482,9 @@
       // Far-bank land the city stands on — pushed VERY far back and confined to a
       // narrow bearing so downtown reads as a faint hazy cluster on the horizon
       // (per the aerial, the city is far and small, NOT a near wall of towers).
-      for (let i = 0; i < 4; i++) {
-        farBank(K(0.35 + i * 0.018), -1, 1500, 1760, 320, [0.36, 0.41, 0.40]);
+      // Widened s-span (0.32→0.43) to fully cover the skyline placement below.
+      for (let i = 0; i < 6; i++) {
+        farBank(K(0.32 + i * 0.019), -1, 1500, 1760, 320, [0.36, 0.41, 0.40]);
       }
 
       // A single compact cluster of distant mid-rise towers on a narrow bearing,
@@ -555,11 +556,11 @@
       // ===================================================================
       // Basin water ON TOP of island slab (anchor+addBox — groundPlane buries on flat island)
       { const BH = 0.8;
-        for (let i = 0; i < 10; i++) {
-          const bk = K(0.565 + i * 0.017);
+        for (let i = 0; i < 9; i++) {
+          const bk = K(0.565 + i * 0.019);
           const ba = anchor(bk, 1, 105);
           addBox(out, vadd(ba.c, ba.u, WATR_S - BH / 2 - ba.c[1]),
-                 [180, BH, 280], BASIN, [ba.r, ba.u, ba.t]);
+                 [180, BH, 300], BASIN, [ba.r, ba.u, ba.t]);
         }
       }
       // Small white regatta lane/start towers standing in the basin water
@@ -597,11 +598,11 @@
       // Canal / water feature off the right verge — island park internal canal
       // Canal water ON TOP of island slab (anchor+addBox — groundPlane buries on flat island)
       { const CH = 0.8;
-        for (let i = 0; i < 4; i++) {
-          const ck = K(0.78 + i * 0.018);
+        for (let i = 0; i < 3; i++) {
+          const ck = K(0.78 + i * 0.023);
           const ca = anchor(ck, 1, 82);
           addBox(out, vadd(ca.c, ca.u, WATR_S - CH / 2 - ca.c[1]),
-                 [130, CH, 160], RIVER, [ca.r, ca.u, ca.t]);
+                 [130, CH, 180], RIVER, [ca.r, ca.u, ca.t]);
         }
       }
       // Far treeline backdrop on the canal's far bank (green → organic mounds in engine)

@@ -213,17 +213,22 @@
       // Anchor pushed to dist=100 (was 96) so the bowl edge stays well clear
       // of the start gantry legs (which sit at dist≈1.5 on each side).
       // Floodlight masts at the same ellipse ring, so they're also clear.
+      // FIXED: stadium floor now anchors to ground level using pyMin instead
+      // of the mid-track anchor Y (which left a 2-3 m gap beneath the bowl).
       // ===================================================================
       {
         const a = anchor(K(0.0), 1, 100);
         const r = a.r, u = a.u, t = a.t;
         const RA = 125, RB = 95;
-        const segC = 48, by = a.c[1];
+        const segC = 48;
+        // Stadium floor base — use the ground minimum Y from the area instead
+        // of the track anchor Y, so the bowl sits flush on the terrain.
+        const stadiumFloorY = pyMin;
         for (let i = 0; i < segC; i++) {
           const ang = i / segC * 6.2832;
           const ca = Math.cos(ang), sa = Math.sin(ang);
           const ex = ca * RA, ez = sa * RB;
-          const c = vadd(vadd([a.c[0], by, a.c[2]], t, ex), r, ez);
+          const c = vadd(vadd([a.c[0], stadiumFloorY, a.c[2]], t, ex), r, ez);
           const nx = t[0] * (ca * RB) + r[0] * (sa * RA);
           const nz = t[2] * (ca * RB) + r[2] * (sa * RA);
           const nl = Math.hypot(nx, nz) || 1;
@@ -255,7 +260,7 @@
         for (let i = 0; i < 6; i++) {
           const ang = (i + 0.5) / 6 * 6.2832;
           const ex = Math.cos(ang) * RA, ez = Math.sin(ang) * RB;
-          const c = vadd(vadd([a.c[0], by, a.c[2]], t, ex), r, ez);
+          const c = vadd(vadd([a.c[0], stadiumFloorY, a.c[2]], t, ex), r, ez);
           addCyl(out, vadd(c, u, 0),  1.0, 64, GREYWHITE, 6, [r, u, t]); // mast shaft
           addBox(out, vadd(c, u, 64), [12, 3.6, 4], WHITE, [r, u, t]);    // crossbeam
           // Light ring — warm-white emissive tone for day and night reads
@@ -264,21 +269,21 @@
           addBox(out, vadd(c, u, 0.05), [18, 0.2, 18], [0.96, 0.96, 0.88], [r, u, t]);
         }
         // Massive curved roof cap
-        addFrustum(out, vadd([a.c[0], by, a.c[2]], u, 50), 110, 70, 16,
+        addFrustum(out, vadd([a.c[0], stadiumFloorY, a.c[2]], u, 50), 110, 70, 16,
           [0.82, 0.84, 0.86], 48, [r, u, t]);
         // Roof underside shadow stripe
-        addFrustum(out, vadd([a.c[0], by, a.c[2]], u, 49), 112, 72, 0.8,
+        addFrustum(out, vadd([a.c[0], stadiumFloorY, a.c[2]], u, 49), 112, 72, 0.8,
           [0.55, 0.55, 0.57], 48, [r, u, t]);
         // Concourse level: a ring of teal hospitality units around the base
         for (let i = 0; i < 8; i++) {
           const ang = i / 8 * 6.2832;
           const ex = Math.cos(ang) * (RA - 20), ez = Math.sin(ang) * (RB - 20);
-          const hc = vadd(vadd([a.c[0], by, a.c[2]], t, ex), r, ez);
+          const hc = vadd(vadd([a.c[0], stadiumFloorY, a.c[2]], t, ex), r, ez);
           if (onTrack(hc[0], hc[2], 8)) continue;
-          addBox(out, [hc[0], by + 5, hc[2]], [14, 10, 14],
+          addBox(out, [hc[0], stadiumFloorY + 5, hc[2]], [14, 10, 14],
             (i % 2) ? TEAL : CORAL, null);
           // lit awning band
-          addBox(out, [hc[0], by + 10.5, hc[2]], [14.2, 1.0, 14.2],
+          addBox(out, [hc[0], stadiumFloorY + 10.5, hc[2]], [14.2, 1.0, 14.2],
             [WIN_AMBER[0] * 0.65, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], null);
         }
       }

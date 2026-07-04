@@ -487,6 +487,9 @@
 
       // --- Distant seaside town silhouette: a row of varied gabled Dutch houses
       //     with terracotta roofs and a church spire poking above the rooftops.
+      //     Fixed: anchor to pyMin (horizon baseline) like other distant backdrop
+      //     elements (sea/beach bands), not to anchor() terrain which floats over
+      //     banked sections. Towns are 280-330m out — far backdrop, not trackside.
       function seasideTown(k, side, dist, width) {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], width * 0.5)) return;
@@ -498,18 +501,26 @@
           const off = (i - (rows - 1) / 2) * 8 + (hash(k * 3 + i) - 0.5) * 2;
           const h = 5 + hash(k * 7 + i) * 6, w = 5 + hash(k * 11 + i) * 2;
           const c = cols[(hash(k * 13 + i) * cols.length) | 0];
-          const bp = vadd(a.c, a.t, off);
+          // Distant horizon building: use a.c X/Z but pyMin for Y baseline
+          const bp = [a.c[0] + a.t[0] * off, pyMin, a.c[2] + a.t[2] * off];
           out._mat = MAT.STONE;
+          // House body: center at pyMin + h/2 (base sits at pyMin, horizon level)
           addBox(out, vadd(bp, a.u, h / 2), [w, h, w], c, b);
           out._mat = MAT.ROOF;
+          // Roof apex at pyMin + h
           addPrism(out, vadd(bp, a.u, h), [w * 1.02, h * 0.4, w], [0.52, 0.26, 0.20], b);
           out._mat = 0;
         }
-        const cs = vadd(a.c, a.t, (hash(k * 5) - 0.5) * width * 0.4);
+        // Church tower: also anchored to pyMin baseline
+        const cs = [a.c[0] + a.t[0] * ((hash(k * 5) - 0.5) * width * 0.4),
+                    pyMin,
+                    a.c[2] + a.t[2] * ((hash(k * 5) - 0.5) * width * 0.4)];
         out._mat = MAT.STONE;
-        addBox(out, vadd(cs, a.u, 6), [5, 12, 5], [0.82, 0.80, 0.74], b);            // church tower
+        // Tower: 12m tall, center at pyMin + 6
+        addBox(out, vadd(cs, a.u, 6), [5, 12, 5], [0.82, 0.80, 0.74], b);
         out._mat = 0;
-        addCone(out, vadd(cs, a.u, 12), 3.2, 9, [0.36, 0.30, 0.28], 4, b);           // spire
+        // Spire base at pyMin + 12
+        addCone(out, vadd(cs, a.u, 12), 3.2, 9, [0.36, 0.30, 0.28], 4, b);
       }
 
       // --- Beach club pavilion on stilts over the sand: raised boardwalk deck,
