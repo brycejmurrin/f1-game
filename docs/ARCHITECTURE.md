@@ -268,6 +268,16 @@ F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per d
 F1API.sessionDrivers(sessionKey) -> [{num, code, name, team, color}] | null
 ```
 
+## js/data-telemetry.js — `DataTelemetry` / js/data-export.js — `DataExport`
+
+The data hub's two big tabs, split out of data.js. Each exposes
+`create(ctx) -> { load<Tab>, … }`; the DataHub shell instantiates them once
+with the helpers they need (`el`/`clear`/`spinner`/`emptyMsg` DOM builders,
+`ensureSession`/`buildPicker`/`invalidateOther` session plumbing, `COMPOUND`,
+`findTeam`/`cssColor`, `NO_TELEM_MSG`). Both use the `F1API` global directly.
+DataTelemetry also returns `closeTelemPopup` (the shell closes the popup on
+tab switch / hub close). Load before data.js.
+
 ## js/data.js — `DataHub`
 
 DOM overlay (`#datahub` in index.html), tabs: SCHEDULE | STANDINGS |

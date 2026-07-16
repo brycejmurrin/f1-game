@@ -105,7 +105,11 @@ js/car3d.js      Car3D          procedural F1 car geometry + liveries
 js/input.js      Input          keyboard / gamepad / touch / tilt
 js/audio.js      GameAudio      WebAudio synth: engine, sfx, music
 js/api.js        F1API          Jolpica + OpenF1 clients, localStorage cache
-js/data.js       DataHub        data hub DOM overlay
+js/data-telemetry.js  DataTelemetry  data hub TELEMETRY tab (trace viewer/map/playback);
+                                  instantiated by data.js via DataTelemetry.create(ctx)
+js/data-export.js     DataExport     data hub EXPORT dev tool (GPS traces → ZIP)
+js/data.js       DataHub        data hub DOM overlay (shell + schedule/standings/
+                                  last-race/live tabs + shared session plumbing)
 js/light-presets.js  LightPresets  shipped lighting-tuner values, keyed
                                   "track|tod|weather" (baked from the in-game
                                   LIGHTING TUNER panel's COPY VALUES export)
