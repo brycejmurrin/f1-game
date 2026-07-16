@@ -372,6 +372,11 @@ const Input = (function () {
     if (!el) return;
     const ids = new Set();
     el.addEventListener("pointerdown", function (e) {
+      // Capture the pointer so the hold survives the finger/cursor drifting off
+      // the button — without this a tiny move fires pointerleave and drops the
+      // press the instant you start holding (gas "won't stay on" until settled).
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
       ids.add(e.pointerId);
       apply(true);
     });
@@ -381,6 +386,8 @@ const Input = (function () {
     }
     el.addEventListener("pointerup", release);
     el.addEventListener("pointercancel", release);
+    // With pointer capture, pointerleave no longer fires mid-hold; it stays as a
+    // fallback for the (rare) case where capture couldn't be acquired.
     el.addEventListener("pointerleave", release);
   }
 

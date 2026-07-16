@@ -1664,7 +1664,8 @@ void main() {
     gl.uniform1f(compU.uFlareStr, flareStr * (opts && opts.flareMul != null ? opts.flareMul : 1));
     const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
     gl.uniform1f(compU.uExposure, exposure);
-    gl.uniform1f(compU.uSunShaft, sunShaft);
+    // SCREEN SUN-SHAFT knob scales the radial crepuscular pass (def 1 = as-shipped).
+    gl.uniform1f(compU.uSunShaft, sunShaft * (opts && opts.tune && opts.tune.sunShaftMul != null ? opts.tune.sunShaftMul : 1));
     // Cinematic split-tone grade (neutral by default → existing look unchanged).
     const grade = opts && opts.grade;
     gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);

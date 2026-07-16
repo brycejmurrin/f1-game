@@ -1038,10 +1038,15 @@ function _nightAmbientBand() {
   if (!frame.ambientSky || !frame.ambientGround) return;
   const _neonAmb = track && track.def &&
     (track.def.theme === "street_night" || track.def.theme === "modern");
-  const floorSky = _neonAmb ? [0.017, 0.017, 0.026] : [0.006, 0.0075, 0.016];
-  const floorGnd = _neonAmb ? [0.009, 0.008, 0.013] : [0.0026, 0.0032, 0.0085];
-  const capSky   = _neonAmb ? [0.048, 0.048, 0.068] : [0.020, 0.023, 0.042];
-  const capGnd   = _neonAmb ? [0.022, 0.020, 0.030] : [0.0085, 0.0098, 0.019];
+  // NIGHT AMBIENT knob scales the floor AND cap band directly — the "how dark is
+  // night" master. 0 crushes the band to black (only lamps/neon read), 1 = as
+  // shipped, >1 lifts the whole night. Applied to floor+cap together so the clamp
+  // window slides as one.
+  const _naL = LT.nightAmbLift != null ? LT.nightAmbLift : 1;
+  const floorSky = (_neonAmb ? [0.017, 0.017, 0.026] : [0.006, 0.0075, 0.016]).map((v) => v * _naL);
+  const floorGnd = (_neonAmb ? [0.009, 0.008, 0.013] : [0.0026, 0.0032, 0.0085]).map((v) => v * _naL);
+  const capSky   = (_neonAmb ? [0.048, 0.048, 0.068] : [0.020, 0.023, 0.042]).map((v) => v * _naL);
+  const capGnd   = (_neonAmb ? [0.022, 0.020, 0.030] : [0.0085, 0.0098, 0.019]).map((v) => v * _naL);
   frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
   frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
   const _cgA = frameSky.cityGlow;
@@ -1069,6 +1074,18 @@ function applyRaceSettings() {
   if (isNightSession && track && track.def) {
     const _ct = track.def.theme === "street_night" || track.def.theme === "modern";
     frameSky.cityGlow = _ct ? [0.050, 0.038, 0.055] : [0.024, 0.018, 0.012];
+    // SKYGLOW WARMTH knob: white-balance the glow dome (and, via _nightAmbientBand's
+    // hue-mix, the warm cast it throws into the night ambient). + warm sodium,
+    // − cool LED/mercury. Unclamped-style mix, floored at 0.
+    const _cgw = LT.cityGlowWarm || 0;
+    if (_cgw) {
+      const g = frameSky.cityGlow;
+      frameSky.cityGlow = [
+        Math.max(0, g[0] * (1 + 0.20 * _cgw)),
+        Math.max(0, g[1] * (1 - 0.02 * Math.abs(_cgw))),
+        Math.max(0, g[2] * (1 - 0.30 * _cgw)),
+      ];
+    }
   } else {
     frameSky.cityGlow = null;
   }
@@ -1282,7 +1299,9 @@ function applyRaceSettings() {
     // without overriding any explicit raceWeather or raceTimeOfDay choice.
     if (track && track.def) {
       const _def  = track.def;
-      const _pal  = _def.pal || {};
+      const _pal  = _def.palette || {};   // built def carries `palette` (not `pal`);
+                                          // the old `_def.pal` was always undefined,
+                                          // silently disabling the fog/sunDir nudges below.
       const _bias = _trackAtmoBias(_def);   // -1 (clear) … +1 (overcast)
 
       // Cloud cover: start from the existing base then nudge by the bias.
@@ -1334,13 +1353,19 @@ function applyRaceSettings() {
   // shadows) — clouds roll in and the sun is muted while ambient lifts. A full
   // storm ("rain") rolls in heavier cloud and mutes the sun more than a merely
   // damp track ("wet"), which sits between clear and storm.
+  // WEATHER SUN MUTE knob: scale how deeply bad weather dims the direct sun.
+  // Each branch below mutes the sun by a fixed factor f (<1); _mute reshapes that
+  // as 1−(1−f)·knob so 0 = weather never mutes the sun, 1 = as-shipped, >1 = deeper
+  // murk (floored at 0). No-op in clear/dry weather (branches skipped).
+  const _wsm = LT.weatherSunMute != null ? LT.weatherSunMute : 1;
+  const _mute = (f) => Math.max(0, 1 - (1 - f) * _wsm);
   if (isWetRoad()) {
     const _storm = isRaining();
     // Heavier cloud cover in the rain; cap at 0.96 to let the shader still vary
     _cloudBase = Math.min(0.96, _cloudBase + (_storm ? 0.52 : 0.32));
     frameSky.cloud = _cloudBase;
-    frame.sunColor = frame.sunColor.map((v) => v * (_storm ? 0.5 : 0.68));
-    frameSky.sunColor = frameSky.sunColor.map((v) => v * (_storm ? 0.65 : 0.80));
+    frame.sunColor = frame.sunColor.map((v) => v * _mute(_storm ? 0.5 : 0.68));
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * _mute(_storm ? 0.65 : 0.80));
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
@@ -1354,15 +1379,20 @@ function applyRaceSettings() {
     // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
     _cloudBase = Math.min(0.90, _cloudBase + 0.50);
     frameSky.cloud = _cloudBase;
-    frame.sunColor = frame.sunColor.map((v) => v * 0.7);
-    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.8);
+    frame.sunColor = frame.sunColor.map((v) => v * _mute(0.7));
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * _mute(0.8));
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.06));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
     // light) so heavy overcast reads atmospheric, not just a flat grey dim.
     frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
     if (raceTimeOfDay === "default") { frameSky.horizon = [0.74, 0.73, 0.74]; frame.skyHorizon = frameSky.horizon; }
-    if (frame.exposure == null || frame.exposure < 1.0) frame.exposure = 1.0;
+    // A night session must stay dark under overcast too — same guard the wet/fog
+    // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
+    // greying out the night and killing lamp-pool contrast.
+    const _ovcDark = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession);
+    const _ovcFloor = _ovcDark ? 0.95 : 1.0;
+    if (frame.exposure == null || frame.exposure < _ovcFloor) frame.exposure = _ovcFloor;
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     frameSky.cloud = Math.min(0.85, _cloudBase + 0.35);
@@ -1373,8 +1403,8 @@ function applyRaceSettings() {
     // flatten the horizon to fog-grey in default mode. Sync frame.skyHorizon so
     // reflections (glass/wet road/clearcoat) match the grey dome, not a stale blue.
     if (raceTimeOfDay === "default") { frameSky.horizon = fc.slice(); frame.skyHorizon = frameSky.horizon; }
-    frame.sunColor = frame.sunColor.map((v) => v * 0.6);
-    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.7);
+    frame.sunColor = frame.sunColor.map((v) => v * _mute(0.6));
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * _mute(0.7));
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.05));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.05));
     // Lift for visibility in the murk — but a NIGHT fog must stay night: forcing
@@ -2864,8 +2894,6 @@ function appendCarTailLights() {
   // frame.lights is always the per-frame copy (flicker copies every frame), so
   // appending here never mutates the cached track set.
   if (!L || L === track._lights || !player) return;
-  let budget = 32 - ((L.length / 15) | 0);
-  if (budget <= 0) return;
   _tlSel.length = 0;
   for (const c of cars) {
     const ds = Math.abs(c.s - player.s);
@@ -2873,7 +2901,17 @@ function appendCarTailLights() {
     if (d < 160) _tlSel.push({ c, d });
   }
   _tlSel.sort((a, b) => a.d - b.d);
-  const nT = Math.min(_tlSel.length, Math.min(5, budget));
+  const nT = Math.min(_tlSel.length, 5);
+  if (nT <= 0) return;
+  // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
+  // grid (Singapore/Vegas/Baku) the floodlights alone fill the 32-light cap, so
+  // simply appending here overflowed past 32 and the shader dropped the appended
+  // tail-lights — the red glow trailing nearby traffic vanished exactly where
+  // night traffic is most visible. Evict that many of the FARTHEST floods instead
+  // (setFrameLights sorts the dense-grid set ascending by distance, so the tail
+  // end is the farthest) — a flood 250 m back matters far less than a car ahead.
+  const room = 32 - ((L.length / 15) | 0);
+  if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   for (let j = 0; j < nT; j++) {
     const c = _tlSel[j].c;
     Tracks.sample(track, c.s, _tlSmp);
@@ -2890,8 +2928,8 @@ function appendCarTailLights() {
   }
 }
 
-// Cull the track light set to the nearest 48 to the camera and flatten into
-// `frame.lights`. Called each frame only when the session is at night.
+// Cull the track light set to the nearest 32 (MAX_LIGHTS) to the camera and
+// flatten into `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
@@ -3586,9 +3624,14 @@ function render(dt) {
       gfx.castShadow(track.meshes.terrain, MAT_IDENT);
       gfx.castShadow(track.meshes.road, MAT_IDENT);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
-      // map once the sun is below the horizon — directional sun shadows are
-      // invisible under the dim moonlight, so this is the biggest night saving.
-      if (sd[1] > -0.03) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      // map at NIGHT — directional sun shadows are invisible under the dim
+      // moonlight, so this is the biggest night saving. Gate on the KEY's actual
+      // BRIGHTNESS, not sunDir.y: the night moon-key is deliberately held high
+      // (sunDir.y ≈ 0.97) to drive the sky glow, so an elevation test never fired
+      // at night and the whole city rasterised into the shadow map every recentre.
+      // Matches the god-ray/flare brightness gate (max(sunColor) below ~0.35 = dark).
+      const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+      if (_shKey > 0.35) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
   }
@@ -3684,10 +3727,15 @@ function render(dt) {
   // Floodlights: EVERY track has them (see buildTrackLights); they're fed to the
   // shader whenever the scene is dark enough to read them — night, dusk, or dawn
   // on any circuit, or a night-default track in default mode. In bright day the
-  // sun dominates so they're left off (no washed-out daylight pools).
+  // sun dominates so they're normally left off (no washed-out daylight pools) —
+  // UNLESS the DAYTIME FLOODS knob (LT.floodDay) is turned up, which lights the
+  // pools under a blue sky for a lit-stadium look (handled in the else-branch).
   const _floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
     (raceTimeOfDay === "default" && track.def.night);
-  if (_floodActive) {
+  // Daytime floods: only when the session isn't already a dark one AND the knob is
+  // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
+  const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
+  if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
     // produce a full set once complete, so this self-heals in a frame.
@@ -3705,33 +3753,44 @@ function render(dt) {
     // glow (see _floodEmit below) — ramp by elevation ONLY for dusk/dawn, and
     // stay at full brightness for a real night session, same branching as
     // _floodEmit uses.
-    const _sy = frame.sunDir ? frame.sunDir[1] : -1;
-    // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
-    // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
-    // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
-    // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
-    const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-      ? Math.max(0.30, clamp(1 - _sy * 6, 0, 1))       // 0.30 = bright twilight floor, 1 = sun at/below horizon
-      : 1;                                              // night / default-night: full ramp
-    // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
-    // raw physical HDR values (16-20) — at full ceiling they overpowered the
-    // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
-    // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
-    // on top of the twilight ramp above.
-    const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
-    const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
     // LAMP TEMPERATURE: a signed white-balance layered over each lamp's own
     // colour + the automatic twilight warmth ramp. −1 warm (sodium ~2700K),
     // +1 cool (LED/broadcast ~6500K). Green held near-constant; red↑/blue↓ warm.
+    // Shared by the night and daytime-flood paths.
     const _lt = LT.lampTemp || 0;
     const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
     const _ltg = 1 - Math.abs(_lt) * 0.02;
     const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
-    const floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
+    let floodScale;
+    if (_floodActive) {
+      const _sy = frame.sunDir ? frame.sunDir[1] : -1;
+      // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
+      // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
+      // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
+      // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
+      const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
+        ? Math.max(0.30, clamp(1 - _sy * 6, 0, 1))       // 0.30 = bright twilight floor, 1 = sun at/below horizon
+        : 1;                                              // night / default-night: full ramp
+      // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
+      // raw physical HDR values (16-20) — at full ceiling they overpowered the
+      // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
+      // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
+      // on top of the twilight ramp above.
+      const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
+      const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
+      floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
+    } else {
+      // DAYTIME FLOODS: pools lit under a blue sky. No twilight warmth ramp (the
+      // "just switched on" amber glow is a dusk cue) — neutral white scaled by
+      // DAYTIME FLOODS × LAMP LEVEL, still honouring LAMP TEMPERATURE.
+      const lvl = _floodDayLvl * LT.lampLevel;
+      floodScale = [lvl * _ltr, lvl * _ltg, lvl * _ltb];
+    }
     // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
     setFrameLights(camEye, floodScale, _lightFwd);
-    appendCarTailLights();
+    // Car tail-lights are an after-dark cue only — skip them under daytime floods.
+    if (_floodActive) appendCarTailLights();
   } else {
     frame.lights = null;
   }
@@ -4166,11 +4225,16 @@ function render(dt) {
   // Always a subtle beam glow whenever lamps are on (clear night air still
   // scatters a little), swelling with haze/rain into full volumetric shafts —
   // and coloured per lamp, so neon-spill lights throw coloured beams.
-  const _lampVol = frame.lights ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
+  // Gated to dark sessions (key below ~0.45): visible lamp beams in daylight (the
+  // DAYTIME FLOODS knob also sets frame.lights) would read as odd haze shafts.
+  const _lampVol = (frame.lights && _sunLumGR < 0.45) ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
-  // Contact shadows only when the sun is meaningfully above the horizon.
-  const _cs = _grSunY > 0.05 ? clamp(0.5 * LT.contactStr, 0, 1.5) : 0;
+  // Contact shadows only when the KEY is bright enough to cast them (day/dusk/dawn).
+  // Gate on key brightness, not sunDir.y — the night moon-key sits high (y≈0.97)
+  // so the old elevation test ran contact shadows all night for a black-ambient
+  // scene where they're invisible (wasted work). Matches _sunGateGR above.
+  const _cs = _sunLumGR > 0.35 ? clamp(0.5 * LT.contactStr, 0, 1.5) : 0;
   // Wet-road screen-space reflection of the scene: runs at ALL times of day so a
   // wet road mirrors the world — buildings/barriers/cars by day, neon + glowing
   // lamp heads at night — on top of the in-shader sky env reflection. Driven purely
@@ -4188,10 +4252,13 @@ function render(dt) {
   // Now the DRY NIGHT SHEEN tuner slider (LT.ssrDryNight, default 0.08).
   const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness * LT.ssrWetMul
              : (frame.lights ? LT.ssrDryNight : LT.ssrDryDay);
-  // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
-  // the horizon. Night ambient is near-black, so the AO darkening is invisible
-  // anyway — and night street grids are where the frame budget is tightest.
-  const _ao = _grSunY > -0.04 ? 0.95 * LT.aoStr : 0;
+  // Perf: skip the SSAO pass (+ its two blur passes) at NIGHT. Night ambient is
+  // near-black, so the AO darkening is invisible anyway — and night street grids
+  // are where the frame budget is tightest. Gate on key BRIGHTNESS, not sunDir.y:
+  // the night moon-key is held high (y≈0.97), so the old elevation test kept SSAO
+  // (and its two blurs) running every night frame for no visible gain. Matches the
+  // contact-shadow + god-ray brightness gates.
+  const _ao = _sunLumGR > 0.35 ? 0.95 * LT.aoStr : 0;
   if (_grade) {
     // Read from the constant base, write to the reused output — the base str never
     // compounds frame-to-frame.
