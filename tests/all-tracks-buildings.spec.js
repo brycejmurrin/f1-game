@@ -55,6 +55,9 @@ const CIRCUITS = [
 ];
 
 test.describe.configure({ mode: "serial" });
+// The FIRST test pays the one-time page load + first city rebuild + SwiftShader
+// screenshots; under a loaded box that can exceed the default 120s.
+test.beforeEach(async () => { test.setTimeout(300_000); });
 
 let page;
 test.beforeAll(async ({ browser }) => {

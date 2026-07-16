@@ -142,14 +142,7 @@ function ttBoardAdd(trackId, entry) {
   return b;
 }
 
-// Custom "MY TEAM": a player-defined team injected into Teams.LIST. It only
-// joins the grid when the player actually selects it (see makeCars).
-const DEFAULT_CUSTOM = {
-  id: "custom", name: "My Team", short: "YOU", engine: "Custom", tier: 2, custom: true,
-  color: [0.13, 0.79, 0.85], color2: [0.96, 0.86, 0.0],
-  stats: { speed: 84, accel: 82, cornering: 83, braking: 81 },
-  drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
-};
+const { DEFAULT_CUSTOM } = GameTables;
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
 function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
@@ -272,16 +265,14 @@ const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
-const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
+const { TIER_V } = GameTables;
 // 6-speed gearbox with realistic PROGRESSIVE ratios (research: real/F1 gearboxes
 // space the ratios so the steps shrink in the higher gears). So an upshift drops
 // the revs a lot in the low gears and less up top, and every shift lands back in
 // the ~8.7-11.3k power band (F1's optimal ~8-12k) before climbing to the limit —
 // rather than dropping to idle or barely dropping at all. Top speed fraction of VMAX.
 // F1-authentic 8 gears.
-const GEARS = 8;
-const GEAR_TOP = [0.095, 0.16, 0.25, 0.36, 0.50, 0.66, 0.83, 1.0];
-const IDLE_RPM = 5000, MAX_RPM = 15000;   // F1 V6 turbo: idle ~5k, rev limit 15k
+const { GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM } = GameTables;
 function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
 function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
 function naturalGear(speed) {
@@ -298,11 +289,7 @@ function rpmFor(gear, speed) {
   const rpm = MAX_RPM * (speed / Math.max(hi, 1));
   return clamp(rpm, IDLE_RPM, MAX_RPM * 1.04);
 }
-const DIFF = {
-  easy:   { ai: 0.86, band: 0.18 },
-  normal: { ai: 0.92, band: 0.08 },
-  hard:   { ai: 0.99, band: 0.03 },
-};
+const { DIFF } = GameTables;
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
 // Weather predicates. "wet" = damp/wet track (wet road, no falling rain);
@@ -363,24 +350,7 @@ function buildStudioRig() {
   return _studioBuf;
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
-// Player camera modes, cycled with the CAM button / C key and persisted. Each is
-// a distinct vantage computed in render(): a close action chase, a higher/wider
-// chase for race-craft, an in-cockpit eye, and a nose/hood cam. Index into CAM_MODES.
-const CAM_MODES = [
-  { id: "chase",     label: "CHASE" },
-  { id: "far",       label: "FAR" },
-  { id: "drift",     label: "DRIFT" },
-  { id: "cockpit",   label: "COCKPIT" },
-  { id: "hood",      label: "HOOD" },
-  { id: "overhead",  label: "OVERHEAD" },
-  { id: "heli",      label: "HELI" },
-  { id: "reverse",   label: "REVERSE" },
-  { id: "side",      label: "TV SIDE" },
-  { id: "cinematic", label: "CINEMATIC" },
-  { id: "low",       label: "LOW" },
-  { id: "tcam",      label: "T-CAM" },
-  { id: "rear",      label: "REAR CAM" },
-];
+const { CAM_MODES } = GameTables;  // player camera modes (see js/game/tables.js)
 let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
 let seasonMode = false;
 let timeTrial = false;      // solo run against the clock, no AI
@@ -477,30 +447,7 @@ function rebuildSkidBatch() {
   _skidBatchDirty = false;
 }
 
-// Car paint materials, hoisted to module scope so the render loop reads a shared
-// const per (wet/dry × night/day) combo instead of allocating a fresh object for
-// every car every frame.
-// Car paint is a slightly-metallic gloss through the BASE material path (no
-// clearcoat term — an additive sky layer bleaches the livery on the gently
-// curved tops). Lower roughness gives the crisp GGX sun streak on the smooth
-// bodywork; the mild metalness tints specular + reflections toward the team
-// colour like real metallic flake, and scales the sky env down so the paint
-// stays saturated. Wet adds a water film: glossier and more mirror-like.
-// carPaint drives the duotone-pigment + silhouette-rim paint model (glx.js):
-// grazing angles darken the livery toward a deep shade of the same hue and the
-// silhouette catches a thin clamped sky rim — deep gloss that cannot bleach.
-// clearcoat keeps the crisp sun + night-lamp glints of the lacquer shell.
-// Night emissive 0.20: uEmissive blends toward raw albedo, so this is a 20%
-// self-lit floor on the LIVERY panels — a car seen from behind at night (rear
-// faces get no downward floodlight beam) reads as a car instead of a black
-// void filling the cockpit view. Carbon/tyres (near-black albedo) stay dark.
-const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
-const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
-// Dry paint roughness dropped 0.36 → 0.22 and clearcoat raised so the base coat
-// is glossy all the time (sharper GGX highlight + a crisper env-cube mirror),
-// not just when wet — a showroom lacquer read.
-const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
-const PAINT_DRY_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 0.9, carPaint: 1.0 };
+const { PAINT_WET_NIGHT, PAINT_WET_DAY, PAINT_DRY_NIGHT, PAINT_DRY_DAY } = GameTables;  // car paint materials (see js/game/tables.js)
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
 // scratch object (gfx.draw consumes the material synchronously, so one scratch
 // is safe across every car in the frame). GLOSS divides roughness (higher =
