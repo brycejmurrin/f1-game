@@ -81,6 +81,11 @@ run, `--workers=N` raises Playwright's per-run pool (default: half the cores).
 IMPORTANT: tests serve `js/`/`css/` straight from the working tree — don't edit
 source files while a run is in flight, or its later specs load mixed versions.
 
+Killing a Playwright run orphans its `python3 -m http.server <port>` child; the
+next run on that port then fails with "Process from config.webServer was not
+able to start". Clean up with `pkill -f 'http.server <port>'` (check first with
+`pgrep -fa http.server` — don't kill a port a live run is still using).
+
 ---
 
 ## File layout
