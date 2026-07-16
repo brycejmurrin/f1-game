@@ -1,6 +1,12 @@
 // Screenshot tour of all 24 circuits — cinematic camera aimed at buildings/scenery.
 // Outputs to tests/all-tracks-buildings/  (gitignored).
 // Run: npx playwright test tests/all-tracks-buildings.spec.js
+//
+// PERF: the suite is SERIAL on one shared page — the game is loaded once and
+// tracks are switched in-place with __apex.race(id) (a synchronous rebuild,
+// same idiom as tracks-walls.spec.js). The old shape — a fresh page.goto plus
+// fixed 4.4s of sleeps per circuit — cost 15-20s of pure overhead per track
+// under SwiftShader (~24x that per run); this one pays the page load once.
 
 import { test } from "@playwright/test";
 import fs from "fs";
@@ -9,19 +15,6 @@ const OUT = "tests/all-tracks-buildings";
 fs.mkdirSync(OUT, { recursive: true });
 
 const VIEWPORT = { width: 1200, height: 675 };  // 16:9
-
-async function load(page, trackId) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex, { timeout: 15000 });
-  await page.evaluate(async t => {
-    __apex.race(t);
-    await new Promise(r => setTimeout(r, 4000));
-    __apex.go();
-    await new Promise(r => setTimeout(r, 400));
-    __apex.freeze(true);
-    __apex.hud(false);
-  }, trackId);
-}
 
 async function shot(page, name) {
   await page.waitForTimeout(150);
@@ -61,10 +54,28 @@ const CIRCUITS = [
   ["zandvoort",    0.10,    55,  20,  160,  62,  "dune grandstands"],
 ];
 
+test.describe.configure({ mode: "serial" });
+
+let page;
+test.beforeAll(async ({ browser }) => {
+  page = await browser.newPage({ viewport: VIEWPORT });
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex, { timeout: 30000 });
+});
+test.afterAll(async () => { await page?.close(); });
+
 for (const [id, frac, az, el, dist, fov, label] of CIRCUITS) {
-  test(`${id} — ${label}`, async ({ page }) => {
-    await page.setViewportSize(VIEWPORT);
-    await load(page, id);
+  test(`${id} — ${label}`, async () => {
+    // In-place track switch: race() rebuilds synchronously; short settles let
+    // the first frames render before the camera work + frozen screenshots.
+    await page.evaluate(async (t) => {
+      __apex.race(t);
+      await new Promise((r) => setTimeout(r, 500));
+      __apex.go();
+      await new Promise((r) => setTimeout(r, 300));
+      __apex.freeze(true);
+      __apex.hud(false);
+    }, id);
 
     // Primary shot — cinematic auto-corner
     const info = await page.evaluate(
