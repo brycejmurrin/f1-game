@@ -9,8 +9,9 @@ node_modules/
 scratch/
 # survey/inspect screenshot dumps (regenerable)
 .shots/
-test-results/
-playwright-report/
+# default + APEX_PORT-suffixed variants (test-results-3461/ etc.)
+test-results*/
+playwright-report*/
 
 # regenerable screenshot dumps written via page.screenshot()/fs.writeFileSync
 # (lap-audit, baku-audit, ui/parts/dev-tools captures). These are human-review

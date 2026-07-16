@@ -35,6 +35,30 @@ npm run test:circuit    # walls + autopilot + elevation (all circuit-level tests
 npm run test:fast       # curated fast subset: smoke + api + collision + parts (~3 min)
 ```
 
+### Running tests without stalls (background + logs, parallel ports)
+
+Playwright runs are slow (UI groups ~5 min) and look "stuck" when run silently in
+the foreground. Instead, **run them in the background with `--reporter=line` piped
+to a log file, and tail the log** to watch progress:
+
+```sh
+npx playwright test tests/foo.spec.js --reporter=line > /tmp/foo.log 2>&1 &
+tail -f /tmp/foo.log
+```
+
+To run **several test invocations concurrently**, give each its own server port
+with `APEX_PORT` (playwright.config.js derives the static-server port, baseURL,
+and report/artifact dirs from it — without it, run B reuses run A's port-3456
+server, which dies with net::ERR_CONNECTION_REFUSED when run A finishes):
+
+```sh
+APEX_PORT=3461 npx playwright test tests/a.spec.js --reporter=line > /tmp/a.log 2>&1 &
+APEX_PORT=3462 npx playwright test tests/b.spec.js --reporter=line > /tmp/b.log 2>&1 &
+```
+
+Reports land in `playwright-report-<port>/`, artifacts in `test-results-<port>/`
+(both gitignored). Default port 3456 with unsuffixed dirs when APEX_PORT is unset.
+
 ---
 
 ## File layout
