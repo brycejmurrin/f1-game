@@ -2,19 +2,19 @@
 // Tests for the window.__apex dev/test API — verifies every method returns the
 // correct shape, handles edge-cases, and actually mutates game state as described.
 // These double as living documentation: if a method's contract changes this file breaks.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function load(page, trackId = "monza") {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+async function load(racePage, trackId = "monza") {
+  const page = racePage;
   await page.evaluate((id) => window.__apex.race(id), trackId);
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
 }
 
-async function loadParked(page, frac = 0.1, trackId = "monza") {
-  await load(page, trackId);
+async function loadParked(racePage, frac = 0.1, trackId = "monza") {
+  await load(racePage, trackId);
+  const page = racePage;
   await page.evaluate((f) => window.__apex.park(f), frac);
   await page.waitForTimeout(200);
 }
@@ -107,7 +107,8 @@ test.describe("__apex.race()", () => {
 test.describe("__apex.finishRace()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("transitions state to results and shows results panel", async ({ page }) => {
+  test("transitions state to results and shows results panel", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const r = await page.evaluate(() => window.__apex.finishRace());
     expect(r).not.toBe(false);
@@ -124,7 +125,8 @@ test.describe("__apex.finishRace()", () => {
     expect(r).toBe(false);
   });
 
-  test("results table is populated after finishRace()", async ({ page }) => {
+  test("results table is populated after finishRace()", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     await page.evaluate(() => window.__apex.finishRace());
     await page.locator("#results").waitFor({ state: "visible" });
@@ -143,7 +145,8 @@ test.describe("__apex.info()", () => {
     expect(info.track).toBeNull();
   });
 
-  test("returns track id and total after race starts", async ({ page }) => {
+  test("returns track id and total after race starts", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.track).toBe("monza");
@@ -151,7 +154,8 @@ test.describe("__apex.info()", () => {
     expect(info.n).toBeGreaterThan(0);
   });
 
-  test("state changes after finishRace()", async ({ page }) => {
+  test("state changes after finishRace()", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     await page.evaluate(() => window.__apex.finishRace());
     await page.locator("#results").waitFor({ state: "visible" });
@@ -159,7 +163,8 @@ test.describe("__apex.info()", () => {
     expect(info.state).toBe("results");
   });
 
-  test("timeTrial and seasonMode are false in normal race", async ({ page }) => {
+  test("timeTrial and seasonMode are false in normal race", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.timeTrial).toBe(false);
@@ -182,7 +187,8 @@ test.describe("__apex.info()", () => {
 test.describe("__apex.camera()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns current mode and available modes list", async ({ page }) => {
+  test("returns current mode and available modes list", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const cam = await page.evaluate(() => window.__apex.camera());
     expect(typeof cam.mode).toBe("string");
@@ -191,20 +197,23 @@ test.describe("__apex.camera()", () => {
     expect(cam.modes).toContain("cockpit");
   });
 
-  test("can switch to cockpit mode", async ({ page }) => {
+  test("can switch to cockpit mode", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.camera("cockpit"));
     expect(r.mode).toBe("cockpit");
   });
 
-  test("can switch back to chase mode", async ({ page }) => {
+  test("can switch back to chase mode", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.camera("cockpit"));
     const r = await page.evaluate(() => window.__apex.camera("chase"));
     expect(r.mode).toBe("chase");
   });
 
-  test("returns false for unknown mode", async ({ page }) => {
+  test("returns false for unknown mode", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.camera("unknown_mode"));
     expect(r).toBe(false);
@@ -214,7 +223,8 @@ test.describe("__apex.camera()", () => {
 test.describe("__apex.camState()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns eye, tgt arrays and fov number", async ({ page }) => {
+  test("returns eye, tgt arrays and fov number", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const s = await page.evaluate(() => window.__apex.camState());
     expect(Array.isArray(s.eye)).toBe(true);
@@ -228,7 +238,8 @@ test.describe("__apex.camState()", () => {
 test.describe("__apex.viewState()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns camMode, frozen, weather, state", async ({ page }) => {
+  test("returns camMode, frozen, weather, state", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const v = await page.evaluate(() => window.__apex.viewState());
     expect(typeof v.camMode).toBe("string");
@@ -238,20 +249,23 @@ test.describe("__apex.viewState()", () => {
     expect(typeof v.dbgCamActive).toBe("boolean");
   });
 
-  test("frozen is true after park()", async ({ page }) => {
+  test("frozen is true after park()", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const v = await page.evaluate(() => window.__apex.viewState());
     expect(v.frozen).toBe(true);
   });
 
-  test("dbgCamActive is true after view({})", async ({ page }) => {
+  test("dbgCamActive is true after view({})", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     await page.evaluate(() => window.__apex.view({}));
     const v = await page.evaluate(() => window.__apex.viewState());
     expect(v.dbgCamActive).toBe(true);
   });
 
-  test("dbgCamActive is false after view('chase')", async ({ page }) => {
+  test("dbgCamActive is false after view('chase')", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     await page.evaluate(() => window.__apex.view({}));
     await page.evaluate(() => window.__apex.view("chase"));
@@ -265,13 +279,15 @@ test.describe("__apex.viewState()", () => {
 test.describe("__apex.freeze()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns current frozen state when called with no args", async ({ page }) => {
+  test("returns current frozen state when called with no args", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const f = await page.evaluate(() => window.__apex.freeze());
     expect(typeof f).toBe("boolean");
   });
 
-  test("freeze(false) unfreezes; freeze(true) refreezes", async ({ page }) => {
+  test("freeze(false) unfreezes; freeze(true) refreezes", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     expect(await page.evaluate(() => window.__apex.freeze())).toBe(true);
     await page.evaluate(() => window.__apex.freeze(false));
@@ -284,7 +300,8 @@ test.describe("__apex.freeze()", () => {
 test.describe("__apex.hud()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns true when HUD is visible during a race", async ({ page }) => {
+  test("returns true when HUD is visible during a race", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.go());
     await page.waitForTimeout(300);
@@ -292,7 +309,8 @@ test.describe("__apex.hud()", () => {
     expect(visible).toBe(true);
   });
 
-  test("hud(false) hides the HUD element", async ({ page }) => {
+  test("hud(false) hides the HUD element", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.hud(false));
@@ -300,7 +318,8 @@ test.describe("__apex.hud()", () => {
     await page.screenshot({ path: "tests/ui-screenshots/dev-tools-hud-hidden.png" });
   });
 
-  test("hud(true) restores the HUD element", async ({ page }) => {
+  test("hud(true) restores the HUD element", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.hud(false));
@@ -314,20 +333,23 @@ test.describe("__apex.hud()", () => {
 test.describe("__apex.weather()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns current weather string with no arg", async ({ page }) => {
+  test("returns current weather string with no arg", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const w = await page.evaluate(() => window.__apex.weather());
     expect(["dry", "wet"]).toContain(w);
   });
 
-  test("setting 'wet' returns 'wet'", async ({ page }) => {
+  test("setting 'wet' returns 'wet'", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const w = await page.evaluate(() => window.__apex.weather("wet"));
     expect(w).toBe("wet");
     expect(await page.evaluate(() => window.__apex.weather())).toBe("wet");
   });
 
-  test("toggling back to dry works", async ({ page }) => {
+  test("toggling back to dry works", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.weather("wet"));
     const w = await page.evaluate(() => window.__apex.weather("dry"));
@@ -340,7 +362,8 @@ test.describe("__apex.weather()", () => {
 test.describe("__apex.probe()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns x, angle, k, hw, speed, s after park()", async ({ page }) => {
+  test("returns x, angle, k, hw, speed, s after park()", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const p = await page.evaluate(() => window.__apex.probe());
     expect(p).not.toBeNull();
@@ -352,7 +375,8 @@ test.describe("__apex.probe()", () => {
     expect(typeof p.s).toBe("number");
   });
 
-  test("player is near centreline after park(0.1, 0)", async ({ page }) => {
+  test("player is near centreline after park(0.1, 0)", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page, 0.1);
     const p = await page.evaluate(() => window.__apex.probe());
     expect(Math.abs(p.x)).toBeLessThan(1.0);
@@ -362,7 +386,8 @@ test.describe("__apex.probe()", () => {
 test.describe("__apex.physState()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns required fields including lap and wrongWay", async ({ page }) => {
+  test("returns required fields including lap and wrongWay", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const ps = await page.evaluate(() => window.__apex.physState());
     expect(ps).not.toBeNull();
@@ -374,7 +399,8 @@ test.describe("__apex.physState()", () => {
     expect(typeof ps.rescueT).toBe("number");
   });
 
-  test("exposes combined-slip traction circle fields", async ({ page }) => {
+  test("exposes combined-slip traction circle fields", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const ps = await page.evaluate(() => window.__apex.physState());
     expect(typeof ps.axEstSm).toBe("number");
@@ -385,7 +411,8 @@ test.describe("__apex.physState()", () => {
     expect(ps.slipFactor).toBeCloseTo(1, 1);
   });
 
-  test("slipFactor drops when braking hard", async ({ page }) => {
+  test("slipFactor drops when braking hard", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page, 0.2, "bahrain");
     // Teleport to mid-lap at high speed then brake hard
     await page.evaluate(() => window.__apex.jump(0.2, 70, 0));
@@ -405,7 +432,8 @@ test.describe("__apex.physState()", () => {
 test.describe("__apex.carAt()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns player car data when called with no index", async ({ page }) => {
+  test("returns player car data when called with no index", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const c = await page.evaluate(() => window.__apex.carAt());
     expect(c).not.toBeNull();
@@ -415,20 +443,23 @@ test.describe("__apex.carAt()", () => {
     expect(typeof c.wrongWay).toBe("boolean");
   });
 
-  test("carAt(0) returns first car in cars list", async ({ page }) => {
+  test("carAt(0) returns first car in cars list", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const c = await page.evaluate(() => window.__apex.carAt(0));
     expect(c).not.toBeNull();
     expect(c.id).toBe(0);
   });
 
-  test("carAt(999) returns null for out-of-range index", async ({ page }) => {
+  test("carAt(999) returns null for out-of-range index", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const c = await page.evaluate(() => window.__apex.carAt(999));
     expect(c).toBeNull();
   });
 
-  test("finished field is false during a live race", async ({ page }) => {
+  test("finished field is false during a live race", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const c = await page.evaluate(() => window.__apex.carAt());
     expect(c.finished).toBe(false);
@@ -438,14 +469,16 @@ test.describe("__apex.carAt()", () => {
 test.describe("__apex.cars()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns array with at least 2 entries", async ({ page }) => {
+  test("returns array with at least 2 entries", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const c = await page.evaluate(() => window.__apex.cars());
     expect(Array.isArray(c)).toBe(true);
     expect(c.length).toBeGreaterThanOrEqual(2);
   });
 
-  test("exactly one car has p: true (the player)", async ({ page }) => {
+  test("exactly one car has p: true (the player)", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const c = await page.evaluate(() => window.__apex.cars());
     expect(c.filter((x) => x.p).length).toBe(1);
@@ -457,7 +490,8 @@ test.describe("__apex.cars()", () => {
 test.describe("__apex.corners()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns array of fractions for Monza", async ({ page }) => {
+  test("returns array of fractions for Monza", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const c = await page.evaluate(() => window.__apex.corners());
     expect(Array.isArray(c)).toBe(true);
@@ -469,7 +503,8 @@ test.describe("__apex.corners()", () => {
 test.describe("__apex.nodeAt()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns world coords and tangent for fraction 0.5", async ({ page }) => {
+  test("returns world coords and tangent for fraction 0.5", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const n = await page.evaluate(() => window.__apex.nodeAt(0.5));
     expect(typeof n.x).toBe("number");
@@ -483,7 +518,8 @@ test.describe("__apex.nodeAt()", () => {
 test.describe("__apex.wallStats()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns barrier stats without NaN for Monza", async ({ page }) => {
+  test("returns barrier stats without NaN for Monza", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const s = await page.evaluate(() => window.__apex.wallStats());
     expect(s).not.toBeNull();
@@ -498,7 +534,8 @@ test.describe("__apex.wallStats()", () => {
 test.describe("__apex.resetPlayer()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("repositions player car and returns physState", async ({ page }) => {
+  test("repositions player car and returns physState", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.jump(0.2, 60, 8)); // push to edge
@@ -514,7 +551,8 @@ test.describe("__apex.resetPlayer()", () => {
 test.describe("__apex.clearMeshes()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("returns empty object after clearing", async ({ page }) => {
+  test("returns empty object after clearing", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     await page.evaluate(() => window.__apex.meshToggle({ props: true }));
     const cleared = await page.evaluate(() => window.__apex.clearMeshes());
@@ -527,7 +565,8 @@ test.describe("__apex.clearMeshes()", () => {
 test.describe("__apex.jump()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("teleports player to the given lap fraction", async ({ page }) => {
+  test("teleports player to the given lap fraction", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.jump(0.75, 40, 0));
@@ -541,7 +580,8 @@ test.describe("__apex.jump()", () => {
 test.describe("__apex.aim()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("180° aim sets the car pointing backwards", async ({ page }) => {
+  test("180° aim sets the car pointing backwards", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.jump(0.2, 0, 0));
@@ -557,14 +597,16 @@ test.describe("__apex.aim()", () => {
 test.describe("__apex.scan()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("single distance returns one reading", async ({ page }) => {
+  test("single distance returns one reading", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const s = await page.evaluate(() => window.__apex.scan(50));
     expect(typeof s.k).toBe("number");
     expect(typeof s.hw).toBe("number");
   });
 
-  test("array of distances returns one reading per entry", async ({ page }) => {
+  test("array of distances returns one reading per entry", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const r = await page.evaluate(() => window.__apex.scan([10, 30, 60, 100]));
     expect(Array.isArray(r)).toBe(true);
@@ -577,7 +619,8 @@ test.describe("__apex.scan()", () => {
 test.describe("__apex.setPhysics() / tuning()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("setPhysics changes a param visible in tuning()", async ({ page }) => {
+  test("setPhysics changes a param visible in tuning()", async ({ racePage }) => {
+    const page = racePage;
     await loadParked(page);
     const before = await page.evaluate(() => window.__apex.tuning());
     await page.evaluate(() => window.__apex.setPhysics({ pace: 0.5 }));
@@ -586,7 +629,8 @@ test.describe("__apex.setPhysics() / tuning()", () => {
     expect(after.wheelbase).toBeCloseTo(before.wheelbase, 2); // unchanged
   });
 
-  test("setInput and clearInput work together", async ({ page }) => {
+  test("setInput and clearInput work together", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.setInput({ steer: 0.5, throttle: true, brake: false }));

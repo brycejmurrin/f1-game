@@ -2,11 +2,10 @@
 // Preset tests. The three named presets (RELAX / STANDARD / PRO) must each push
 // a coherent bundle of values into the live sim, mark themselves active, persist,
 // and a manual slider edit must drop the "named preset" state back to custom.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
-async function load(page) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+async function load(racePage) {
+  return racePage;
 }
 const clickPreset = (page, name) =>
   page.evaluate((n) => document.getElementById("pm-preset-" + n).click(), name);
@@ -16,7 +15,8 @@ const activeName = (page) => page.evaluate(() =>
   ["relax", "standard", "pro"].find((n) => document.getElementById("pm-preset-" + n).classList.contains("active")) || null);
 
 test.describe("Apex 26 — presets", () => {
-  test("RELAX is more forgiving than PRO (more help, calmer steering)", async ({ page }) => {
+  test("RELAX is more forgiving than PRO (more help, calmer steering)", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await clickPreset(page, "relax");
     const relax = await tuning(page);
@@ -30,14 +30,16 @@ test.describe("Apex 26 — presets", () => {
     expect(pro.raceLineAssist).toBe(0);
   });
 
-  test("clicking a preset marks it active and persists", async ({ page }) => {
+  test("clicking a preset marks it active and persists", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await clickPreset(page, "relax");
     expect(await activeName(page)).toBe("relax");
     expect(await stored(page, "preset")).toBe("relax");
   });
 
-  test("STANDARD reproduces the original default feel", async ({ page }) => {
+  test("STANDARD reproduces the original default feel", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await clickPreset(page, "standard");
     const t = await tuning(page);
@@ -46,7 +48,8 @@ test.describe("Apex 26 — presets", () => {
     expect(t.roadFollow).toBeCloseTo(0.50, 1); // DRIVING HELP 6 (grip-limited assist gain)
   });
 
-  test("a manual slider edit drops the preset back to custom", async ({ page }) => {
+  test("a manual slider edit drops the preset back to custom", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await clickPreset(page, "relax");
     expect(await activeName(page)).toBe("relax");

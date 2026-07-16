@@ -4,14 +4,13 @@
 // persists to storage — and (2) actually change the car's behaviour. Physics
 // sliders are checked by driving the sim; tilt sliders by their mapped values
 // plus one end-to-end tilt-input check.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
-async function load(page) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+async function load(racePage) {
+  return racePage;
 }
-async function startRace(page) {
-  await load(page);
+async function startRace(racePage) {
+  const page = racePage;
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
@@ -42,7 +41,8 @@ const SLIDERS = [
 
 test.describe("Apex 26 — steering sliders", () => {
   for (const s of SLIDERS) {
-    test(`${s.id} is wired: changes its value the right way, label + storage`, async ({ page }) => {
+    test(`${s.id} is wired: changes its value the right way, label + storage`, async ({ racePage }) => {
+      const page = racePage;
       await load(page);
       await setSlider(page, s.id, s.min);
       const lo = (await tuning(page))[s.key];
@@ -70,8 +70,9 @@ test.describe("Apex 26 — steering sliders", () => {
     return Math.abs(a1 - a0);
   }, { steer, ticks, speed });
 
-  test("LINEARITY: higher slider (more linear) turns more for the same part-input", async ({ page }) => {
-    await startRace(page);
+  test("LINEARITY: higher slider (more linear) turns more for the same part-input", async ({ racePage }) => {
+    const page = racePage;
+    await startRace(racePage);
     await setSlider(page, "pm-expo", 2);
     const expoLow = await turnBurst(page, 0.4);   // strong expo: gentle near centre
     await setSlider(page, "pm-expo", 9);
@@ -79,8 +80,9 @@ test.describe("Apex 26 — steering sliders", () => {
     expect(expoHigh).toBeGreaterThan(expoLow * 1.2);
   });
 
-  test("STEER LOCK: higher slider allows a larger max turn at full lock", async ({ page }) => {
-    await startRace(page);
+  test("STEER LOCK: higher slider allows a larger max turn at full lock", async ({ racePage }) => {
+    const page = racePage;
+    await startRace(racePage);
     // Measured at low speed, where the tyres aren't yet grip-limited, so a bigger
     // road-wheel lock genuinely tightens the turn (at racing speed the friction
     // limit caps it — correct, but not what this slider is for).
@@ -91,8 +93,9 @@ test.describe("Apex 26 — steering sliders", () => {
     expect(lockHigh).toBeGreaterThan(lockLow * 1.15);
   });
 
-  test("OVERALL SPEED lifts BOTH the player's and the AI's top speed", async ({ page }) => {
-    await startRace(page);
+  test("OVERALL SPEED lifts BOTH the player's and the AI's top speed", async ({ racePage }) => {
+    const page = racePage;
+    await startRace(racePage);
     // Top speed reached flat-out on the straight at a given pace, for the player.
     const playerTop = (paceSlider) => page.evaluate((sv) => {
       const el = document.getElementById("pm-pace");
@@ -146,7 +149,8 @@ const hidden = (page, id) =>
 const num = async (page, key) => Number(await stored(page, key));
 
 test.describe("Apex 26 — simplified controls", () => {
-  test("STEERING levels fan out to the cornering keys and mirror active state", async ({ page }) => {
+  test("STEERING levels fan out to the cornering keys and mirror active state", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await click(page, "pm-steer-sim");
     expect(await num(page, "steerRate")).toBe(7);
@@ -162,7 +166,8 @@ test.describe("Apex 26 — simplified controls", () => {
     expect(await isActive(page, "pm-steer-sim")).toBe(false);
   });
 
-  test("TILT SENSITIVITY macro drives tiltDeg / maxTilt", async ({ page }) => {
+  test("TILT SENSITIVITY macro drives tiltDeg / maxTilt", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await setSlider(page, "pm-tiltsimple", 2);
     const lo = (await tuning(page)).maxTilt;
@@ -172,7 +177,8 @@ test.describe("Apex 26 — simplified controls", () => {
     expect(await num(page, "tiltDeg")).toBe(9);
   });
 
-  test("DRIVING HELP and RACING LINE buttons set their store keys", async ({ page }) => {
+  test("DRIVING HELP and RACING LINE buttons set their store keys", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await click(page, "pm-help-high");
     expect(await num(page, "drivingHelp")).toBe(9);
@@ -186,7 +192,8 @@ test.describe("Apex 26 — simplified controls", () => {
     expect(await isActive(page, "pm-line-off")).toBe(true);
   });
 
-  test("presets light up the matching simplified controls", async ({ page }) => {
+  test("presets light up the matching simplified controls", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await click(page, "pm-preset-pro");
     expect(await isActive(page, "pm-steer-sim")).toBe(true);   // PRO → sim
@@ -196,7 +203,8 @@ test.describe("Apex 26 — simplified controls", () => {
     expect(await isActive(page, "pm-steer-normal")).toBe(true);// STANDARD → normal
   });
 
-  test("ADVANCED toggle shows and hides the granular sliders", async ({ page }) => {
+  test("ADVANCED toggle shows and hides the granular sliders", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     expect(await hidden(page, "adv-extra")).toBe(true);
     await click(page, "adv-more");
@@ -205,7 +213,8 @@ test.describe("Apex 26 — simplified controls", () => {
     expect(await hidden(page, "adv-extra")).toBe(true);
   });
 
-  test("editing a granular Advanced slider updates the simplified view", async ({ page }) => {
+  test("editing a granular Advanced slider updates the simplified view", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await click(page, "pm-preset-standard");
     expect(await isActive(page, "pm-steer-normal")).toBe(true);

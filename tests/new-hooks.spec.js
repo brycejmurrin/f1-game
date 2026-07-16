@@ -2,13 +2,12 @@
 // Contract tests for the 8 new __apex hooks added in the tracks-refactor-elevation session:
 //   timing(), sectorState(), lapHistory(), fieldState(), aiPlace(),
 //   setEnergy(), setLap(), trackProfile(), and obs().gear
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function load(page, trackId = "monza") {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+async function load(racePage, trackId = "monza") {
+  const page = racePage;
   await page.evaluate((id) => window.__apex.race(id), trackId);
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
   // go() advances past countdown; jump() initialises player.px so obs()/physState() work
@@ -30,7 +29,8 @@ test.describe("__apex.timing()", () => {
     expect(result).toBeNull();
   });
 
-  test("returns an object with all expected fields", async ({ page }) => {
+  test("returns an object with all expected fields", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const t = await page.evaluate(() => window.__apex.timing());
     expect(typeof t.raceT).toBe("number");
@@ -50,7 +50,8 @@ test.describe("__apex.timing()", () => {
     expect(t.gapBehind === null || typeof t.gapBehind === "number").toBe(true);
   });
 
-  test("pos is between 1 and total", async ({ page }) => {
+  test("pos is between 1 and total", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const t = await page.evaluate(() => window.__apex.timing());
     expect(t.pos).toBeGreaterThanOrEqual(1);
@@ -58,27 +59,31 @@ test.describe("__apex.timing()", () => {
     expect(t.total).toBeGreaterThan(1);
   });
 
-  test("sector is 1, 2, or 3", async ({ page }) => {
+  test("sector is 1, 2, or 3", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const t = await page.evaluate(() => window.__apex.timing());
     expect([1, 2, 3]).toContain(t.sector);
   });
 
-  test("gear is between 1 and 8", async ({ page }) => {
+  test("gear is between 1 and 8", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const t = await page.evaluate(() => window.__apex.timing());
     expect(t.gear).toBeGreaterThanOrEqual(1);
     expect(t.gear).toBeLessThanOrEqual(8);
   });
 
-  test("energy is between 0 and 1", async ({ page }) => {
+  test("energy is between 0 and 1", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const t = await page.evaluate(() => window.__apex.timing());
     expect(t.energy).toBeGreaterThanOrEqual(0);
     expect(t.energy).toBeLessThanOrEqual(1);
   });
 
-  test("raceT advances after stepping physics", async ({ page }) => {
+  test("raceT advances after stepping physics", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const before = await page.evaluate(() => window.__apex.timing().raceT);
     await page.evaluate(() => window.__apex.step(1 / 60, 30));
@@ -99,7 +104,8 @@ test.describe("__apex.sectorState()", () => {
     expect(result).toBeNull();
   });
 
-  test("returns idx, elapsed, bests, last", async ({ page }) => {
+  test("returns idx, elapsed, bests, last", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const s = await page.evaluate(() => window.__apex.sectorState());
     expect([0, 1, 2]).toContain(s.idx);
@@ -110,7 +116,8 @@ test.describe("__apex.sectorState()", () => {
     expect(s.last.length).toBe(3);
   });
 
-  test("bests are null before first lap completes", async ({ page }) => {
+  test("bests are null before first lap completes", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     // jump to start, lap=0, no completed laps yet
     await page.evaluate(() => { window.__apex.jump(0.01, 0, 0); });
@@ -121,7 +128,8 @@ test.describe("__apex.sectorState()", () => {
     }
   });
 
-  test("sector index is 0 in S1 and 1 in S2", async ({ page }) => {
+  test("sector index is 0 in S1 and 1 in S2", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     // Place in S1 (10%), step to let physics update sectorIdx
     await page.evaluate(() => { window.__apex.jump(0.10, 40, 0); window.__apex.step(1 / 60, 3); });
@@ -146,7 +154,8 @@ test.describe("__apex.lapHistory()", () => {
     expect(result).toBeNull();
   });
 
-  test("returns mode, laps, best, lastLap in race mode", async ({ page }) => {
+  test("returns mode, laps, best, lastLap in race mode", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const h = await page.evaluate(() => window.__apex.lapHistory());
     expect(h.mode).toBe("race");
@@ -179,14 +188,16 @@ test.describe("__apex.fieldState()", () => {
     expect(result).toBeNull();
   });
 
-  test("returns an array with one entry per car", async ({ page }) => {
+  test("returns an array with one entry per car", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const field = await page.evaluate(() => window.__apex.fieldState());
     expect(Array.isArray(field)).toBe(true);
     expect(field.length).toBeGreaterThan(1);
   });
 
-  test("each entry has required fields", async ({ page }) => {
+  test("each entry has required fields", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const field = await page.evaluate(() => window.__apex.fieldState());
     for (const c of field) {
@@ -203,14 +214,16 @@ test.describe("__apex.fieldState()", () => {
     }
   });
 
-  test("exactly one entry is the player", async ({ page }) => {
+  test("exactly one entry is the player", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const field = await page.evaluate(() => window.__apex.fieldState());
     const players = field.filter((c) => c.isPlayer);
     expect(players.length).toBe(1);
   });
 
-  test("pos is sequential 1..n and leader has gap 0", async ({ page }) => {
+  test("pos is sequential 1..n and leader has gap 0", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const field = await page.evaluate(() => window.__apex.fieldState());
     expect(field[0].pos).toBe(1);
@@ -218,7 +231,8 @@ test.describe("__apex.fieldState()", () => {
     for (let i = 0; i < field.length; i++) expect(field[i].pos).toBe(i + 1);
   });
 
-  test("frac values are in [0, 1)", async ({ page }) => {
+  test("frac values are in [0, 1)", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const field = await page.evaluate(() => window.__apex.fieldState());
     for (const c of field) {
@@ -240,7 +254,8 @@ test.describe("__apex.aiPlace()", () => {
     expect(result).toBe(false);
   });
 
-  test("returns false when called on the player car", async ({ page }) => {
+  test("returns false when called on the player car", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     // Find the player car index
     const result = await page.evaluate(() => {
@@ -251,13 +266,15 @@ test.describe("__apex.aiPlace()", () => {
     expect(result).toBe(false);
   });
 
-  test("returns false for out-of-range index", async ({ page }) => {
+  test("returns false for out-of-range index", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const result = await page.evaluate(() => window.__apex.aiPlace(999, 0.5));
     expect(result).toBe(false);
   });
 
-  test("places an AI car at the specified fraction", async ({ page }) => {
+  test("places an AI car at the specified fraction", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const result = await page.evaluate(() => {
       const cars = window.__apex.cars();
@@ -270,7 +287,8 @@ test.describe("__apex.aiPlace()", () => {
     expect(result.x).toBeCloseTo(0, 1);
   });
 
-  test("aiPlace result is reflected in fieldState", async ({ page }) => {
+  test("aiPlace result is reflected in fieldState", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => {
       const cars = window.__apex.cars();
@@ -295,7 +313,8 @@ test.describe("__apex.setEnergy()", () => {
     expect(await page.evaluate(() => window.__apex.setEnergy(0.5))).toBe(false);
   });
 
-  test("sets energy to the given value", async ({ page }) => {
+  test("sets energy to the given value", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.setEnergy(0.42));
     expect(r.energy).toBeCloseTo(0.42, 2);
@@ -303,19 +322,22 @@ test.describe("__apex.setEnergy()", () => {
     expect(obs.energy).toBeCloseTo(0.42, 2);
   });
 
-  test("clamps to 0", async ({ page }) => {
+  test("clamps to 0", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.setEnergy(-5));
     expect(r.energy).toBe(0);
   });
 
-  test("clamps to 1", async ({ page }) => {
+  test("clamps to 1", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.setEnergy(99));
     expect(r.energy).toBe(1);
   });
 
-  test("energy is visible in timing() after setEnergy()", async ({ page }) => {
+  test("energy is visible in timing() after setEnergy()", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.setEnergy(0.25));
     const t = await page.evaluate(() => window.__apex.timing());
@@ -334,7 +356,8 @@ test.describe("__apex.setLap()", () => {
     expect(await page.evaluate(() => window.__apex.setLap(3))).toBe(false);
   });
 
-  test("sets the player lap counter", async ({ page }) => {
+  test("sets the player lap counter", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.setLap(4));
     expect(r.lap).toBe(4);
@@ -342,19 +365,22 @@ test.describe("__apex.setLap()", () => {
     expect(info).toBe(4);
   });
 
-  test("clamps negative to 0", async ({ page }) => {
+  test("clamps negative to 0", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.setLap(-1));
     expect(r.lap).toBe(0);
   });
 
-  test("floors fractional input", async ({ page }) => {
+  test("floors fractional input", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const r = await page.evaluate(() => window.__apex.setLap(2.9));
     expect(r.lap).toBe(2);
   });
 
-  test("lap change is visible in timing()", async ({ page }) => {
+  test("lap change is visible in timing()", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => window.__apex.setLap(5));
     const t = await page.evaluate(() => window.__apex.timing());
@@ -376,25 +402,29 @@ test.describe("__apex.trackProfile()", () => {
     expect(pts.length).toBe(10);
   });
 
-  test("default returns 100 entries", async ({ page }) => {
+  test("default returns 100 entries", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const pts = await page.evaluate(() => window.__apex.trackProfile());
     expect(pts.length).toBe(100);
   });
 
-  test("respects custom n", async ({ page }) => {
+  test("respects custom n", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const pts = await page.evaluate(() => window.__apex.trackProfile(36));
     expect(pts.length).toBe(36);
   });
 
-  test("clamps n to max 1000", async ({ page }) => {
+  test("clamps n to max 1000", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const pts = await page.evaluate(() => window.__apex.trackProfile(9999));
     expect(pts.length).toBe(1000);
   });
 
-  test("each entry has frac, y, k, hw, slope", async ({ page }) => {
+  test("each entry has frac, y, k, hw, slope", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const pts = await page.evaluate(() => window.__apex.trackProfile(10));
     for (const p of pts) {
@@ -406,26 +436,30 @@ test.describe("__apex.trackProfile()", () => {
     }
   });
 
-  test("fracs run from 0 up to just below 1", async ({ page }) => {
+  test("fracs run from 0 up to just below 1", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const pts = await page.evaluate(() => window.__apex.trackProfile(50));
     expect(pts[0].frac).toBeCloseTo(0, 3);
     expect(pts[pts.length - 1].frac).toBeLessThan(1);
   });
 
-  test("all y values are finite numbers", async ({ page }) => {
+  test("all y values are finite numbers", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const pts = await page.evaluate(() => window.__apex.trackProfile(100));
     for (const p of pts) expect(isFinite(p.y)).toBe(true);
   });
 
-  test("hw (half-width) is positive everywhere", async ({ page }) => {
+  test("hw (half-width) is positive everywhere", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const pts = await page.evaluate(() => window.__apex.trackProfile(100));
     for (const p of pts) expect(p.hw).toBeGreaterThan(0);
   });
 
-  test("Spa has measurable elevation change (>10 m)", async ({ page }) => {
+  test("Spa has measurable elevation change (>10 m)", async ({ racePage }) => {
+    const page = racePage;
     await load(page, "spa");
     const pts = await page.evaluate(() => window.__apex.trackProfile(360));
     const maxY = Math.max(...pts.map((p) => p.y));
@@ -439,7 +473,8 @@ test.describe("__apex.trackProfile()", () => {
 test.describe("obs().gear", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("gear field is present and in 1-8 range", async ({ page }) => {
+  test("gear field is present and in 1-8 range", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const obs = await page.evaluate(() => window.__apex.obs());
     expect(obs).not.toBeNull();
@@ -448,13 +483,15 @@ test.describe("obs().gear", () => {
     expect(obs.gear).toBeLessThanOrEqual(8);
   });
 
-  test("gear matches timing().gear", async ({ page }) => {
+  test("gear matches timing().gear", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const [obs, t] = await page.evaluate(() => [window.__apex.obs(), window.__apex.timing()]);
     expect(obs.gear).toBe(t.gear);
   });
 
-  test("gear increases at high speed after stepping physics", async ({ page }) => {
+  test("gear increases at high speed after stepping physics", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     await page.evaluate(() => {
       window.__apex.jump(0.05, 80, 0);

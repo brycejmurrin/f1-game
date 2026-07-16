@@ -15,11 +15,10 @@
 // returns metrics: completion, lap time, average speed, how far/often it ran past
 // the road edge, and the worst barrier overshoot. Sweeping setPhysics() and
 // comparing those metrics is how we test a steering setting end-to-end.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
-async function load(page, id) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+async function load(racePage, id) {
+  const page = racePage;
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
@@ -173,7 +172,8 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // by a naive centreline follower — that needs a path-planning driver, which is a
   // separate effort. Full-lap completion is therefore not asserted here.)
   for (const id of ["monza", "suzuka"]) {
-    test(`autopilot drives safely and makes progress at ${id}`, async ({ page }) => {
+    test(`autopilot drives safely and makes progress at ${id}`, async ({ racePage }) => {
+      const page = racePage;
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await load(page, id);
@@ -190,7 +190,8 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // slew). It's laggier than direct input, so the line is looser — but a sane tilt
   // setup must still drive safely (no barrier clip / NaN) and make progress. Each
   // lap reloads a fresh page so runs don't inherit one another's end state.
-  test("can drive safely via emulated tilt input", async ({ page }) => {
+  test("can drive safely via emulated tilt input", async ({ racePage }) => {
+    const page = racePage;
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
     await load(page, "monza");
@@ -216,7 +217,8 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // its slider→physics maps and its reliance on full-lap completion no longer match
   // the new model (a naive driver doesn't complete the tightest tracks). Rework it
   // around the new feel levers + a path-planning driver before re-enabling.
-  test.skip("tunes all steering sliders and recommends defaults", async ({ page }) => {
+  test.skip("tunes all steering sliders and recommends defaults", async ({ racePage }) => {
+    const page = racePage;
     test.setTimeout(1_600_000);   // ~27 min — 2-run avg per candidate (monza, two tremor seeds)
     // slider integer (1..10) -> physics value, mirroring js/game.js maps exactly.
     const MAP = {

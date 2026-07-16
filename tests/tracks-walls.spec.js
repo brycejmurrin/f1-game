@@ -3,16 +3,16 @@
 // finite driving boundary (derived from where solid barriers/grandstands sit),
 // so you can't clip into models or drive off forever — and you can always
 // recover. Street circuits should be tight; open circuits keep some runoff.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
-async function load(page) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+async function load(racePage) {
+  return racePage;
 }
 const trackIds = (page) => page.evaluate(() => Tracks.LIST.map((t) => t.id));
 
 test.describe("Apex 26 — track boundaries", () => {
-  test("every track has a finite, sane driving boundary on both sides", async ({ page }) => {
+  test("every track has a finite, sane driving boundary on both sides", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const ids = await trackIds(page);
     expect(ids.length).toBeGreaterThan(10);
@@ -30,7 +30,8 @@ test.describe("Apex 26 — track boundaries", () => {
     }
   });
 
-  test("street circuits are walled tight; open circuits keep runoff", async ({ page }) => {
+  test("street circuits are walled tight; open circuits keep runoff", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     const ids = await trackIds(page);
     const stats = {};
@@ -48,7 +49,8 @@ test.describe("Apex 26 — track boundaries", () => {
     }
   });
 
-  test("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {
+  test("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ racePage }) => {
+    const page = racePage;
     await load(page);
     for (const id of ["monaco", "monza", "baku", "spa"]) {
       const r = await page.evaluate((tid) => {

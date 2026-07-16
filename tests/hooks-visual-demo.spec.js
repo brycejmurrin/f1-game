@@ -2,7 +2,7 @@
 // Outputs shots to tests/hooks-demo/  (gitignored).
 // Run: npx playwright test tests/hooks-visual-demo.spec.js
 
-import { test } from "@playwright/test";
+import { test } from "./fixtures.js";
 import fs from "fs";
 
 const OUT = "tests/hooks-demo";
@@ -10,9 +10,8 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const VIEWPORT = { width: 1200, height: 675 };  // 16:9
 
-async function load(page, trackId = "monaco") {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex, { timeout: 15000 });
+async function load(racePage, trackId = "monaco") {
+  const page = racePage;
   await page.evaluate(async t => {
     __apex.race(t);
     await new Promise(r => setTimeout(r, 3500));
@@ -30,7 +29,8 @@ async function shot(page, name, label) {
 }
 
 // ── 1. orbit() fov comparison ─────────────────────────────────────────────────
-test("orbit fov comparison — Casino corner Monaco", async ({ page }) => {
+test("orbit fov comparison — Casino corner Monaco", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monaco");
 
@@ -43,7 +43,8 @@ test("orbit fov comparison — Casino corner Monaco", async ({ page }) => {
 });
 
 // ── 2. cinematic() — 10 spots around Monaco ──────────────────────────────────
-test("cinematic auto-outside-corner — Monaco tour", async ({ page }) => {
+test("cinematic auto-outside-corner — Monaco tour", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monaco");
 
@@ -63,7 +64,8 @@ test("cinematic auto-outside-corner — Monaco tour", async ({ page }) => {
 });
 
 // ── 3. carOrbit() — player at different azimuths ─────────────────────────────
-test("carOrbit player — 8 azimuths", async ({ page }) => {
+test("carOrbit player — 8 azimuths", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monaco");
 
@@ -87,7 +89,8 @@ test("carOrbit player — 8 azimuths", async ({ page }) => {
 });
 
 // ── 4. carOrbit() — AI car ────────────────────────────────────────────────────
-test("carOrbit AI cars — head-on and chase", async ({ page }) => {
+test("carOrbit AI cars — head-on and chase", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monza");
 
@@ -103,7 +106,8 @@ test("carOrbit AI cars — head-on and chase", async ({ page }) => {
 });
 
 // ── 5. setSpeed() visual — player at different speeds with cockpit cam ────────
-test("setSpeed — freeze at 0 / 80 / 160 kph", async ({ page }) => {
+test("setSpeed — freeze at 0 / 80 / 160 kph", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monza");
 
@@ -128,7 +132,8 @@ test("setSpeed — freeze at 0 / 80 / 160 kph", async ({ page }) => {
 });
 
 // ── 6. spin() — player heading ────────────────────────────────────────────────
-test("spin() — 0 / 90 / 180 / 270 degrees", async ({ page }) => {
+test("spin() — 0 / 90 / 180 / 270 degrees", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monza");
 
@@ -148,7 +153,8 @@ test("spin() — 0 / 90 / 180 / 270 degrees", async ({ page }) => {
 });
 
 // ── 7. nudge() — lateral push toward barrier ──────────────────────────────────
-test("nudge() — lateral impulse steps", async ({ page }) => {
+test("nudge() — lateral impulse steps", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monza");
 
@@ -168,7 +174,8 @@ test("nudge() — lateral impulse steps", async ({ page }) => {
 });
 
 // ── 8. cinematic() vs orbit() same spot — side-by-side comparison ─────────────
-test("cinematic vs orbit at same frac", async ({ page }) => {
+test("cinematic vs orbit at same frac", async ({ racePage }) => {
+  const page = racePage;
   await page.setViewportSize(VIEWPORT);
   await load(page, "monaco");
 

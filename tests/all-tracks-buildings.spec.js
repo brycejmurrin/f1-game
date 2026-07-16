@@ -2,7 +2,7 @@
 // Outputs to tests/all-tracks-buildings/  (gitignored).
 // Run: npx playwright test tests/all-tracks-buildings.spec.js
 
-import { test } from "@playwright/test";
+import { test } from "./fixtures.js";
 import fs from "fs";
 
 const OUT = "tests/all-tracks-buildings";
@@ -10,9 +10,8 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const VIEWPORT = { width: 1200, height: 675 };  // 16:9
 
-async function load(page, trackId) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex, { timeout: 15000 });
+async function load(racePage, trackId) {
+  const page = racePage;
   await page.evaluate(async t => {
     __apex.race(t);
     await new Promise(r => setTimeout(r, 4000));
@@ -62,7 +61,8 @@ const CIRCUITS = [
 ];
 
 for (const [id, frac, az, el, dist, fov, label] of CIRCUITS) {
-  test(`${id} — ${label}`, async ({ page }) => {
+  test(`${id} — ${label}`, async ({ racePage }) => {
+    const page = racePage;
     await page.setViewportSize(VIEWPORT);
     await load(page, id);
 
