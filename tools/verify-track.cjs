@@ -99,7 +99,9 @@ function buildContext() {
     vm.runInContext(patched, ctx, { filename: relPath });
   }
 
-  runFile("js/circuits.js");  // provides CircuitPaths
+  runFile("js/circuits.js");    // provides CircuitPaths
+  runFile("js/track-geom.js");  // provides TrackGeom (emitters; tracks.js destructures it)
+  runFile("js/track-scenery-data.js");  // provides TrackSceneryData (buildProps tables)
   // Each circuit's definition lives in js/tracks/<id>.js and pushes itself onto
   // window.TrackDefs; tracks.js reads that list at load time (DEFS = window.
   // TrackDefs), so these must run BEFORE it — mirroring the <script> order in

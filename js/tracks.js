@@ -8,21 +8,13 @@ const Tracks = (function () {
   const SCALE = 1.45;            // scale authored lengths for arcade racing
   const WORLD_UP = [0, 1, 0];
 
-  // Procedural surface-material ids — stamped per-vertex (out._mat) and textured
-  // in the lit shader's applyMaterial() (js/glx.js). 0 = FLAT (untextured, the
-  // original look). Exposed to per-track scenery() via api.MAT.
-  const MAT = { FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5,
-                FOLIAGE: 6, FABRIC: 7, SAND: 8, GRASS: 9, ROCK: 10, SNOW: 11,
-                ROOF: 12, STONE: 13, RUST: 14 };
-
-  // ---------- small math (self-contained; doesn't depend on M4/V3) ----------
-  function cross(a, b) {
-    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-  }
-  function norm(a) {
-    const l = Math.hypot(a[0], a[1], a[2]) || 1;
-    return [a[0] / l, a[1] / l, a[2] / l];
-  }
+  // Geometry primitives + the MAT material-id map live in js/track-geom.js
+  // (global TrackGeom, loaded before this file — index.html and
+  // tools/verify-track.cjs). MAT is re-exposed to per-track scenery() via
+  // api.MAT; buildProps shadows the raw emitters with on-track rejection
+  // guards (see RAW below).
+  const { MAT, cross, norm, vadd, emit, addBox, addPrism, addPyramid,
+          addCone, addCyl, addFrustum, addMountain } = TrackGeom;
   const lerp = (a, b, t) => a + (b - a) * t;
 
   // ---------- authoring: segment list -> closed control points ----------
@@ -909,194 +901,6 @@ const Tracks = (function () {
     return { pos, nrm, col, idx };
   }
 
-  // oriented box; basis optional [right,up,fwd]
-  function addBox(out, c, sz, col, basis) {
-    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-    const hx = sz[0] / 2, hy = sz[1] / 2, hz = sz[2] / 2;
-    const corner = (sx, sy, sz2) => [
-      c[0] + r[0] * sx * hx + u[0] * sy * hy + f[0] * sz2 * hz,
-      c[1] + r[1] * sx * hx + u[1] * sy * hy + f[1] * sz2 * hz,
-      c[2] + r[2] * sx * hx + u[2] * sy * hy + f[2] * sz2 * hz,
-    ];
-    const faces = [
-      [[-1, 1, 1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], f],
-      [[1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1], [-f[0], -f[1], -f[2]]],
-      [[1, 1, 1], [1, -1, 1], [1, -1, -1], [1, 1, -1], r],
-      [[-1, 1, -1], [-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-r[0], -r[1], -r[2]]],
-      [[-1, 1, -1], [-1, 1, 1], [1, 1, 1], [1, 1, -1], u],
-      [[-1, -1, 1], [-1, -1, -1], [1, -1, -1], [1, -1, 1], [-u[0], -u[1], -u[2]]],
-    ];
-    // The face table above is wound CCW-outward for a RIGHT-handed [r,u,f] basis
-    // (the default axes give r×u = +f). But callers on the track frame pass
-    // r = cross(t,up), u = cross(r,t) — a LEFT-handed basis (r×u = -t) — so every
-    // face there winds backward: GL back-face culling then drops the OUTWARD face
-    // and keeps the interior one, and the whole box renders SEE-THROUGH (you see
-    // the textured inside of the far wall — the "translucent buildings" bug on
-    // Madrid/Monaco/every day-lit city facade, which are all addBox masses on the
-    // track basis). Detect the basis handedness and reverse the triangle order
-    // when it's left-handed so the outward face always survives culling. Face
-    // NORMALS (nv) are the true outward world directions either way, so only the
-    // winding flips. (addCyl/addCone/etc. avoid this via emit()'s ref-based
-    // auto-orient; addBox is the only fixed-winding primitive.)
-    const cr = cross(r, u);
-    const flip = (cr[0] * f[0] + cr[1] * f[1] + cr[2] * f[2]) < 0;
-    const m = out._mat || 0, mm = out.mat;
-    for (const fc of faces) {
-      const base = out.pos.length / 3;
-      const nv = fc[4];
-      for (let i = 0; i < 4; i++) {
-        const p = corner(fc[i][0], fc[i][1], fc[i][2]);
-        out.pos.push(p[0], p[1], p[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]);
-        if (mm) mm.push(m);
-      }
-      if (flip) out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
-      else out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-    }
-  }
-
-  // ---------- richer primitives (beyond the box) ----------
-  // Emit one flat convex polygon (3+ coplanar verts in perimeter order), fan-
-  // triangulated, auto-oriented so its face points AWAY from `ref` (an interior
-  // point) — so callers never have to reason about CCW winding under backface
-  // culling. Normal is the face normal (flat shading, matches the box look).
-  function emit(out, verts, col, ref) {
-    let nv = norm(cross(
-      [verts[1][0] - verts[0][0], verts[1][1] - verts[0][1], verts[1][2] - verts[0][2]],
-      [verts[2][0] - verts[0][0], verts[2][1] - verts[0][1], verts[2][2] - verts[0][2]]));
-    if (ref) {
-      let fx = 0, fy = 0, fz = 0;
-      for (const v of verts) { fx += v[0]; fy += v[1]; fz += v[2]; }
-      fx = fx / verts.length - ref[0]; fy = fy / verts.length - ref[1]; fz = fz / verts.length - ref[2];
-      if (nv[0] * fx + nv[1] * fy + nv[2] * fz < 0) { verts = verts.slice().reverse(); nv = [-nv[0], -nv[1], -nv[2]]; }
-    }
-    const base = out.pos.length / 3;
-    const m = out._mat || 0, mm = out.mat;
-    for (const v of verts) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]); if (mm) mm.push(m); }
-    for (let i = 1; i < verts.length - 1; i++) out.idx.push(base, base + i, base + i + 1);
-  }
-  const vadd = (p, v, s) => [p[0] + v[0] * s, p[1] + v[1] * s, p[2] + v[2] * s];
-
-  // Triangular prism / ridge: base sz[0] wide × sz[2] long, rising to a ridge
-  // line along the LENGTH at height sz[1]. A-frame roofs, mountain ridges.
-  function addPrism(out, c, sz, col, basis) {
-    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-    const hx = sz[0] / 2, hl = sz[2] / 2, h = sz[1], ref = vadd(c, u, h * 0.4);
-    const b0 = vadd(vadd(c, r, -hx), f, -hl), b1 = vadd(vadd(c, r, hx), f, -hl);
-    const b2 = vadd(vadd(c, r, hx), f, hl), b3 = vadd(vadd(c, r, -hx), f, hl);
-    const p0 = vadd(vadd(c, u, h), f, -hl), p1 = vadd(vadd(c, u, h), f, hl);
-    emit(out, [b0, b1, p0], col, ref); emit(out, [b3, b2, p1], col, ref);  // gables
-    emit(out, [b1, b2, p1, p0], col, ref); emit(out, [b0, p0, p1, b3], col, ref);  // slopes
-  }
-
-  // Pyramid: base sz[0]×sz[2] up to a single apex at height sz[1]. Peaks, spires.
-  function addPyramid(out, c, sz, col, basis) {
-    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-    const hx = sz[0] / 2, hl = sz[2] / 2, ref = vadd(c, u, sz[1] * 0.35);
-    const b0 = vadd(vadd(c, r, -hx), f, -hl), b1 = vadd(vadd(c, r, hx), f, -hl);
-    const b2 = vadd(vadd(c, r, hx), f, hl), b3 = vadd(vadd(c, r, -hx), f, hl);
-    const ap = vadd(c, u, sz[1]);
-    emit(out, [b0, b1, ap], col, ref); emit(out, [b1, b2, ap], col, ref);
-    emit(out, [b2, b3, ap], col, ref); emit(out, [b3, b0, ap], col, ref);
-  }
-
-  // Cone: n-gon base radius `rad` up to an apex at `h`. Conifers, spires, towers.
-  function addCone(out, c, rad, h, col, seg, basis) {
-    seg = seg || 8;
-    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-    const ap = vadd(c, u, h), ref = vadd(c, u, h * 0.35);
-    const ring = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
-    for (let i = 0; i < seg; i++) emit(out, [ring(i / seg * 6.2832), ring((i + 1) / seg * 6.2832), ap], col, ref);
-  }
-
-  // Cylinder: n-gon column radius `rad`, height `h` (+ top cap). Trunks, towers.
-  function addCyl(out, c, rad, h, col, seg, basis) {
-    seg = seg || 8;
-    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-    const ref = vadd(c, u, h * 0.5), top = vadd(c, u, h);
-    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
-    for (let i = 0; i < seg; i++) {
-      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
-      emit(out, [lo(a0), lo(a1), vadd(lo(a1), u, h), vadd(lo(a0), u, h)], col, ref);
-      emit(out, [vadd(lo(a0), u, h), vadd(lo(a1), u, h), top], col, ref);
-    }
-  }
-
-  // Frustum: n-gon truncated cone, base radius `rBase` → top radius `rTop` over
-  // height `h`. Stack these for colour-banded mountains (forest → rock → snow).
-  function addFrustum(out, c, rBase, rTop, h, col, seg, basis) {
-    seg = seg || 8;
-    const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-    const ref = vadd(c, u, h * 0.5);
-    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rBase), f, Math.sin(a) * rBase);
-    const hi = (a) => vadd(vadd(vadd(c, u, h), r, Math.cos(a) * rTop), f, Math.sin(a) * rTop);
-    for (let i = 0; i < seg; i++) {
-      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
-      emit(out, [lo(a0), lo(a1), hi(a1), hi(a0)], col, ref);
-    }
-  }
-
-  // Organic mountain at world `c`, base radius `baseR`, height `h`. A radial mesh
-  // of stacked rings whose per-angle radius is perturbed (vertical ridges/gullies)
-  // and whose apex is jittered off-centre, so no two read as the same symmetric
-  // cone. Faces are coloured by height — forested base → rock → ragged snow cap.
-  // opts: { seg, seed, rough, forest, rock, snow, snowline, right, fwd }.
-  function addMountain(out, c, baseR, h, opts) {
-    opts = opts || {};
-    const seg = opts.seg || 10, seed = opts.seed || 0, rough = opts.rough != null ? opts.rough : 0.34;
-    const forest = opts.forest || [0.22, 0.38, 0.22];
-    const rock = opts.rock || [0.40, 0.38, 0.36];
-    const snow = opts.snow || [0.93, 0.95, 0.99];
-    const snowline = opts.snowline != null ? opts.snowline : 0.62;
-    const rx = opts.right || [1, 0, 0], fz = opts.fwd || [0, 0, 1];
-    const h2 = (a, b) => { const x = Math.sin(a * 12.9898 + b * 78.233 + seed * 0.137) * 43758.5453; return x - Math.floor(x); };
-    const ridgeOff = [];
-    for (let i = 0; i < seg; i++) ridgeOff.push(h2(i, 7) - 0.5);            // shared down each ridge
-    const rings = [[0, 1], [0.38, 0.64], [0.70, 0.34]];                    // [heightFrac, radiusFrac]
-    const pt = (hf, rf, i) => {
-      const a = i / seg * 6.2832;
-      const rad = baseR * rf * (1 + ridgeOff[i] * rough * 1.4) * (1 + (h2(i, hf * 97 + 3) - 0.5) * rough * 0.7);
-      const y = h * (hf + (h2(i, hf * 97 + 9) - 0.5) * rough * 0.12);
-      return [c[0] + rx[0] * Math.cos(a) * rad + fz[0] * Math.sin(a) * rad, c[1] + y, c[2] + rx[2] * Math.cos(a) * rad + fz[2] * Math.sin(a) * rad];
-    };
-    const ref = [c[0], c[1] + h * 0.4, c[2]];
-    // zoneAt(): the SAME height-fraction test as colAt, returning a procedural
-    // MATERIAL id per zone (forest→FOLIAGE, rock/transition→ROCK, snow→SNOW) so
-    // the mountain's craggy/snowy surface gets a real light-catching bump, not
-    // just the flat colour-zone shading below.
-    const zoneAt = (fy, i) => {
-      const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;
-      if (fr > snowline + 0.04) return MAT.SNOW;
-      if (fr > snowline - 0.16) return MAT.ROCK;
-      if (fr > 0.34) return MAT.ROCK;
-      return MAT.FOLIAGE;
-    };
-    const colAt = (fy, i) => {
-      const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;                        // ragged zone edges
-      if (fr > snowline + 0.04) return snow;
-      if (fr > snowline - 0.16) return [(rock[0] + snow[0]) / 2, (rock[1] + snow[1]) / 2, (rock[2] + snow[2]) / 2];
-      if (fr > 0.34) return rock;
-      const j = 0.88 + 0.24 * h2(i, 21);
-      return [forest[0] * j, forest[1] * j, forest[2] * j];
-    };
-    const V = rings.map(([hf, rf]) => { const row = []; for (let i = 0; i < seg; i++) row.push(pt(hf, rf, i)); return row; });
-    for (let r = 0; r < rings.length - 1; r++) {
-      for (let i = 0; i < seg; i++) {
-        const a = V[r][i], b = V[r][(i + 1) % seg], cc = V[r + 1][(i + 1) % seg], d = V[r + 1][i];
-        const fy = (a[1] + b[1] + cc[1] + d[1]) / 4 - c[1];
-        out._mat = zoneAt(fy, i + r);
-        emit(out, [a, b, cc, d], colAt(fy, i + r), ref);
-      }
-    }
-    const apex = [c[0] + (h2(1, 1) - 0.5) * baseR * 0.14, c[1] + h * (0.97 + h2(2, 2) * 0.06), c[2] + (h2(3, 3) - 0.5) * baseR * 0.14];
-    const tr = rings.length - 1;
-    for (let i = 0; i < seg; i++) {
-      const a = V[tr][i], b = V[tr][(i + 1) % seg];
-      const fy = (a[1] + b[1] + apex[1]) / 3 - c[1];
-      out._mat = zoneAt(fy, i);
-      emit(out, [a, b, apex], colAt(fy, i), ref);
-    }
-    out._mat = 0;
-  }
 
   // Raw (unguarded) emitters, captured so buildProps can wrap them with the
   // on-track rejection guard below while still reaching the real implementations.
@@ -1137,6 +941,11 @@ const Tracks = (function () {
   }
 
   function buildProps(track) {
+    // Static dressing tables (barrier liveries, furniture, crowd/sign/city
+    // palettes, building styles) live in js/track-scenery-data.js.
+    const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
+            MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF,
+            STYLES, THEME_DEF } = TrackSceneryData;
     const { n, px, py, pz, hw } = track;
     // Mobile geometry LOD: the street-circuit city facade is the single biggest GPU
     // allocation (the props VBO is ~88 MB on Vegas, ~73 on Baku), and the detailed
@@ -1737,20 +1546,6 @@ const Tracks = (function () {
       const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
       addPrism(out, [x, baseY, z], [w, h, len], col, [r, [0, 1, 0], f]);
     };
-    // Tiered grandstand running along the track: a raked seating wedge (prism on
-    // its side reads as a rake), a back shell and a flat roof slab on posts.
-    // Uses addBox directly to avoid place()'s per-box onTrack guard, which fires
-    // false-positives at hairpins (La Source at Spa, etc.). Single guard uses the
-    // crowd inner face — only skips if the seating literally overlaps the tarmac.
-    // Varied spectator clothing for a DAY crowd — a realistic mix of neutrals
-    // (denim, grey, white, khaki) with pops of team colour so a packed stand
-    // reads as thousands of individuals, not a flat painted slab.
-    const CROWD_DAY = [
-      [0.82, 0.82, 0.84], [0.74, 0.72, 0.68], [0.30, 0.34, 0.52], [0.20, 0.24, 0.34],
-      [0.78, 0.20, 0.20], [0.86, 0.52, 0.16], [0.90, 0.82, 0.28], [0.24, 0.48, 0.28],
-      [0.20, 0.44, 0.66], [0.66, 0.24, 0.42], [0.52, 0.54, 0.58], [0.90, 0.90, 0.92],
-      [0.40, 0.26, 0.18], [0.14, 0.16, 0.20], [0.86, 0.40, 0.46], [0.30, 0.62, 0.60],
-    ];
     // Populate a raked seating bank with speckled spectators. Front row sits at
     // clearance `gap` beyond the road edge and the bank rises `rise` m over
     // `depth` m of recede, split into blocks by aisles. Empty seats + a dark
@@ -2491,15 +2286,6 @@ const Tracks = (function () {
       const palette = (opts.palette && opts.palette.length) ? opts.palette
         : (lit ? [[0.17, 0.19, 0.27], [0.20, 0.21, 0.28], [0.15, 0.17, 0.24], [0.22, 0.20, 0.26]]
                : [[0.60, 0.62, 0.66], [0.66, 0.64, 0.60], [0.56, 0.58, 0.62], [0.70, 0.68, 0.64]]);
-      // Per-building window tint when lit: a spread of warm office light, cool
-      // daylight-balanced glass and the occasional saturated accent so a long
-      // street wall shimmers with colour instead of one flat hue. HDR-boosted in
-      // building(), so these are kept near 1.0 here.
-      const WINTINTS = [
-        [0.98, 0.86, 0.56], [0.92, 0.82, 0.60],   // warm office
-        [0.62, 0.76, 1.00], [0.72, 0.84, 0.98],   // cool glass
-        [1.00, 0.70, 0.85], [0.70, 0.95, 0.90],   // soft accents
-      ];
       const step = opts.step || 22;
       let idx = 0;
       along(s0, s1, step, (k) => {
@@ -2522,14 +2308,6 @@ const Tracks = (function () {
         idx++;
       });
     };
-    // House: small RESIDENTIAL massing — one box + a gabled/hipped roof + a
-    // chimney + a door and two windows. Deliberately much simpler/cheaper than
-    // building() and uses a warm render/stone/terracotta palette so villages and
-    // farmhouses read as homes, not office towers. (k, side, gap, w, h, d, opts)
-    // matches building()'s signature: w = depth away from the road (along `r`),
-    // d = frontage width parallel to the road (along `t`).
-    const HOUSE_WALLS = [[0.86, 0.80, 0.68], [0.80, 0.62, 0.46], [0.74, 0.72, 0.70], [0.70, 0.50, 0.38]];
-    const HOUSE_ROOFS = [[0.42, 0.20, 0.14], [0.32, 0.32, 0.35], [0.36, 0.24, 0.16]];
     const house = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
       const dist = gap + w / 2;
@@ -2566,14 +2344,6 @@ const Tracks = (function () {
         addBox(out, vadd(vadd(vadd(p.c, p.r, faceOff), p.t, wx), p.u, h * 0.58), [0.06, 1.1, 1.0], winCol, b);
       }
     };
-    // Motorhome / team hospitality unit: a two-tier coach body + a slide-out
-    // AWNING CANOPY on posts (the signature paddock look — every real F1 team
-    // motorhome has one), a window ribbon, a roof AC unit, and a team-colour
-    // accent stripe along the base. Paddock rows on several tracks used to be
-    // 3 stacked plain boxes per unit — this is the purpose-built replacement.
-    // (k, side, gap, w, h, d, opts): w = depth away from the road (along `r`),
-    // d = length along the road (along `t`), matching building()/house().
-    const MOTORHOME_BODY = [[0.90, 0.90, 0.92], [0.85, 0.86, 0.90], [0.94, 0.92, 0.86]];
     const motorhome = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
       const dist = gap + w / 2;
@@ -2675,23 +2445,6 @@ const Tracks = (function () {
       if (NIGHT) addBox(out, vadd(vadd(p.c, p.r, side * 1.4), p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
     };
-    // Trackside SIGNAGE: corner-number boards, circular speed-limit discs, and
-    // diagonal red/white braking-distance boards — the classic FIA trackside
-    // kit. No such model existed anywhere in the codebase before this; every
-    // real circuit is covered in these and their absence was a genuine gap.
-    // 7-segment digit rects in LOCAL unit space [x0,x1,y0,y1] (0..1 square).
-    const SIGN_SEG = {
-      top: [0.16, 0.84, 0.86, 1.00], mid: [0.16, 0.84, 0.44, 0.58], bottom: [0.16, 0.84, 0.00, 0.14],
-      topL: [0.04, 0.20, 0.50, 0.94], topR: [0.80, 0.96, 0.50, 0.94],
-      botL: [0.04, 0.20, 0.06, 0.50], botR: [0.80, 0.96, 0.06, 0.50],
-    };
-    const SIGN_DIGIT = {
-      0: ["top", "topL", "topR", "botL", "botR", "bottom"], 1: ["topR", "botR"],
-      2: ["top", "topR", "mid", "botL", "bottom"], 3: ["top", "topR", "mid", "botR", "bottom"],
-      4: ["topL", "topR", "mid", "botR"], 5: ["top", "topL", "mid", "botR", "bottom"],
-      6: ["top", "topL", "mid", "botL", "botR", "bottom"], 7: ["top", "topR", "botR"],
-      8: ["top", "topL", "topR", "mid", "botL", "botR", "bottom"], 9: ["top", "topL", "topR", "mid", "botR", "bottom"],
-    };
     // Draw one digit centred at `c`, spanning [w,h] in the (t=horizontal,
     // u=vertical) plane, raised `proud` along r toward the viewer so the
     // segments sit visibly above the panel face instead of z-fighting it.
@@ -2773,26 +2526,6 @@ const Tracks = (function () {
       }
     };
 
-    // Per-circuit barrier identity — each city gets its own armco livery (two
-    // alternating day stripe colours + a tinted night rail) so no two street
-    // walls look alike. Themes nod to each locale: Monaco classic red/white,
-    // Vegas casino gold/black, Madrid & Mexico national colours, Miami pastel
-    // vice, Saudi green at Jeddah, Azerbaijan teal at Baku, etc. `tyre` is the
-    // conveyor-belt cap colour for the corner tyre stacks (Miami/Shanghai/Mexico).
-    // Each theme cycles THREE stripe colours (locale / national palette) for a
-    // richer, more identifiable wall than a two-tone armco. `night` is the
-    // tinted dark rail; `tyre` the conveyor cap for corner tyre stacks.
-    const BARRIER = {
-      monaco:    { a: [0.95, 0.95, 0.96], b: [0.86, 0.16, 0.15], c: [0.13, 0.28, 0.55], night: [0.20, 0.20, 0.24], tyre: [0.86, 0.16, 0.15] },  // red/white + Riviera navy
-      vegas:     { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
-      singapore: { a: [0.92, 0.93, 0.96], b: [0.10, 0.34, 0.74], c: [0.90, 0.12, 0.18], night: [0.12, 0.16, 0.32], tyre: [0.10, 0.34, 0.74] },  // white/blue + flag red
-      baku:      { a: [0.93, 0.94, 0.96], b: [0.00, 0.62, 0.58], c: [0.95, 0.45, 0.08], night: [0.08, 0.22, 0.22], tyre: [0.00, 0.62, 0.58] },  // teal/white + flame orange
-      jeddah:    { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.07, 0.20, 0.13], tyre: [0.05, 0.52, 0.28] },  // Saudi green/white + gold
-      madrid:    { a: [0.90, 0.12, 0.14], b: [0.97, 0.81, 0.12], c: [0.55, 0.12, 0.42], night: [0.26, 0.13, 0.06], tyre: [0.97, 0.81, 0.12] },  // Spain red/gold + crimson-purple
-      miami:     { a: [0.97, 0.32, 0.56], b: [0.08, 0.74, 0.78], c: [0.97, 0.80, 0.22], night: [0.30, 0.10, 0.32], tyre: [0.97, 0.32, 0.56] },  // vice pink/teal + sun gold
-      shanghai:  { a: [0.90, 0.12, 0.14], b: [0.95, 0.95, 0.96], c: [0.97, 0.80, 0.12], night: [0.22, 0.10, 0.13], tyre: [0.90, 0.12, 0.14] },  // China red/white + gold
-      mexico:    { a: [0.05, 0.55, 0.26], b: [0.95, 0.95, 0.96], c: [0.90, 0.12, 0.14], night: [0.09, 0.20, 0.11], tyre: [0.05, 0.55, 0.26] },  // flag green/white/red
-    };
     const bt = BARRIER[def.id] || { a: [0.92, 0.92, 0.94], b: [0.85, 0.18, 0.16], c: [0.55, 0.57, 0.62], night: [0.18, 0.18, 0.22], tyre: [0.24, 0.22, 0.20] };
     const btSeq = [bt.a, bt.b, bt.c];
 
@@ -2900,47 +2633,6 @@ const Tracks = (function () {
       signBoard(spk, -1, 4, "speed", def.street ? 60 : 80);
     }
 
-    // ── Per-track street / scenery furniture: lamp posts + roadside trees ──
-    // Every circuit — city, desert AND forest/green — gets its own incidental
-    // models so no two tracks share trees and lighting. tree: palm|broad|fir|
-    // none; lamp: arm|globe|post|none with a per-track tint. Green circuits get
-    // distinct foliage tints + species (Spa/Red Bull pine, Monza royal-park deep
-    // green, Zandvoort dune scrub, Interlagos tropical, autumnal mixes) layered
-    // behind their existing scenery. Trees/lamps never call blockAt and respect
-    // onTrack(), so they add depth without touching the driving boundary.
-    const FURN = {
-      monaco:    { tree: "broad", fol: [0.28, 0.44, 0.22], lamp: "globe", lc: [1.0, 0.92, 0.70] },
-      vegas:     { tree: "palm",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
-      singapore: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
-      baku:      { tree: "broad", fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },
-      jeddah:    { tree: "palm",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
-      madrid:    { tree: "broad", fol: [0.30, 0.40, 0.18], lamp: "post",  lc: [1.0, 0.90, 0.66] },
-      miami:     { tree: "palm",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
-      shanghai:  { tree: "broad", fol: [0.24, 0.42, 0.22], lamp: "post",  lc: [0.90, 0.96, 1.0] },
-      mexico:    { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
-      bahrain:   { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.78, 0.42] },
-      qatar:     { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.80, 0.45] },
-      abudhabi:  { tree: "palm",  fol: [0.26, 0.42, 0.20], lamp: "arm",   lc: [1.0, 0.82, 0.50] },
-      spa:         { tree: "fir",   fol: [0.14, 0.31, 0.21], lamp: "none" },                 // dark Ardennes spruce, blue-green
-      silverstone: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "none" },                 // English oak copses, mid-green
-      monza:       { tree: "broad", fol: [0.16, 0.34, 0.17], lamp: "none" },                 // deep royal-park canopy
-      suzuka:      { tree: "broad", fol: [0.24, 0.46, 0.24], lamp: "none" },                 // mixed Japanese hill forest
-      interlagos:  { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "none" },                 // warm subtropical
-      zandvoort:   { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },   // coastal dune scrub — thin + pale
-      redbull:     { tree: "fir",   fol: [0.17, 0.40, 0.22], lamp: "none" },                 // lush emerald alpine spruce
-      imola:       { tree: "broad", fol: [0.24, 0.41, 0.21], lamp: "none" },                 // riverbank poplar/willow/oak
-      hungaroring: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true },   // dry straw-olive, dusty bowl
-      cota:        { tree: "broad", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
-      montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer
-      albert_park: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none" },                 // tidy Melbourne parkland
-    };
-    const FURN_DEF = {
-      green:        { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "none" },
-      desert:       { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.80, 0.45] },
-      street_night: { tree: "broad", fol: [0.22, 0.40, 0.20], lamp: "arm",   lc: [0.90, 0.95, 1.0] },
-      street_day:   { tree: "broad", fol: [0.28, 0.44, 0.22], lamp: "globe", lc: [1.0, 0.90, 0.70] },
-      modern:       { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "post",  lc: [0.95, 0.95, 1.0] },
-    };
     const fz = FURN[def.id] || FURN_DEF[theme] || FURN_DEF.green;
     const furnHarbour = (side, k) => def.id === "monaco" && side === 1 && k < n * 0.14;  // open water — no props
     // Per-tree foliage variation: a real forest is never one flat green. Each
@@ -3027,77 +2719,6 @@ const Tracks = (function () {
     } else if (theme === "desert") {
       every(34, (k) => { for (const side of [-1, 1]) if (hash(k + side) > 0.6) place(k, side, 8 + hash(k) * 10, [2 + hash(k) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
-      // UNIFIED CITY GENERATOR — every city circuit gets its own character via a
-      // per-track STYLE: a distinct neon palette, a building-MODEL mix (regular
-      // building silhouettes + a few bright "neon" types), a concrete tone, and a
-      // neonBias (how many buildings are neon vs plain). At night EVERY building
-      // gets at least a touch of neon; by day they're plain detailed concrete. Two
-      // staggered rows give depth; sign blades + retail boxes dress the gaps.
-      const NC = {
-        mag: [0.95, 0.15, 0.55], cyan: [0.18, 0.85, 0.98], gold: [1.00, 0.78, 0.12],
-        violet: [0.62, 0.22, 1.0], blue: [0.22, 0.48, 1.0], orange: [1.00, 0.42, 0.08],
-        red: [1.0, 0.16, 0.22], teal: [0.0, 0.92, 0.78], white: [0.86, 0.92, 1.0],
-        green: [0.25, 1.0, 0.45], pink: [1.0, 0.30, 0.62], lime: [0.66, 1.0, 0.22],
-        ice: [0.55, 0.82, 1.0], yellow: [1.0, 0.92, 0.25], purple: [0.82, 0.30, 0.96],
-        rose: [1.0, 0.45, 0.55], amber: [1.00, 0.55, 0.12],
-      };
-      // Daytime facade colours — real building materials so a city in daylight
-      // isn't a wall of grey concrete. Warm stone/terracotta read as masonry
-      // (small punched windows via neonTower's `med` path); cool tones read as
-      // glass. Per-track `dayPal` arrays below pick a varied mix per circuit.
-      const DC = {
-        cream:   [0.86, 0.82, 0.72], sand:    [0.80, 0.71, 0.54], tan:     [0.74, 0.63, 0.47],
-        stone:   [0.78, 0.76, 0.70], terra:   [0.74, 0.46, 0.34], brick:   [0.62, 0.40, 0.34],
-        ochre:   [0.82, 0.63, 0.36], white:   [0.88, 0.88, 0.85], greyblue:[0.56, 0.62, 0.70],
-        slate:   [0.48, 0.53, 0.60], paleblue:[0.66, 0.74, 0.83], teal:    [0.54, 0.70, 0.68],
-        peach:   [0.92, 0.74, 0.61], pink:    [0.90, 0.69, 0.74], mint:    [0.72, 0.86, 0.77],
-        aqua:    [0.62, 0.82, 0.84], lemon:   [0.92, 0.87, 0.62], coral:   [0.88, 0.55, 0.46],
-        // darker greys + cool glass + muted metals for modern downtown cores
-        concrete:[0.52, 0.53, 0.55], charcoal:[0.34, 0.36, 0.41], graphite:[0.27, 0.29, 0.34],
-        steel:   [0.45, 0.50, 0.57], darkglass:[0.26, 0.34, 0.45], bluglass:[0.34, 0.44, 0.58],
-        bronze:  [0.55, 0.45, 0.33], gold:    [0.72, 0.58, 0.30], copper:  [0.62, 0.42, 0.30],
-      };
-      const BLD = ["setback", "tiered", "podium", "slab", "twin", "jenga", "cylinder", "spire", "dome", "chevron", "notch", "fin", "antenna", "cross", "arch", "ziggurat", "drum", "hall"];
-      // fh / bh = front / back-row height [min, range]. Real-circuit character:
-      // Vegas/Singapore tall; Baku = low sandstone Old City + tall flame towers;
-      // Monaco = SHORT tan Mediterranean apartment blocks; Jeddah/Madrid/Miami mid.
-      const STYLES = {
-        vegas:     { neon: [NC.mag, NC.gold, NC.red, NC.cyan, NC.violet, NC.pink, NC.orange], bias: 0.62, fh: [18, 50], bh: [44, 78],
-                     kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null,
-                     dayPal: [DC.charcoal, DC.graphite, DC.concrete, DC.darkglass, DC.steel, DC.bluglass, DC.gold, DC.bronze, DC.sand] },
-        singapore: { neon: [NC.cyan, NC.blue, NC.teal, NC.white, NC.green, NC.violet], bias: 0.42, fh: [20, 52], bh: [48, 88],
-                     kinds: ["podium", "setback", "cylinder", "spire", "twin", "slab", "notch", "fin", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.44, 0.46, 0.50] },
-                     dayPal: [DC.white, DC.bluglass, DC.greyblue, DC.teal, DC.steel, DC.paleblue, DC.darkglass, DC.stone] },
-        baku:      { neon: [NC.orange, NC.red, NC.amber, NC.gold, NC.cyan, NC.white], bias: 0.40, fh: [10, 26], bh: [38, 84],
-                     kinds: ["setback", "slab", "tiered", "podium", "spire", "cylinder", "dome", "chevron", "arch", "hall"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.14, 0.13], d: [0.62, 0.56, 0.46] },
-                     dayPal: [DC.sand, DC.cream, DC.tan, DC.stone, DC.ochre, DC.terra, DC.paleblue] },
-        jeddah:    { neon: [NC.gold, NC.teal, NC.green, NC.white, NC.cyan, NC.amber], bias: 0.46, fh: [16, 40], bh: [36, 78],
-                     kinds: ["setback", "podium", "slab", "cylinder", "pyramid", "spire", "fin", "antenna", "arch"], neonKinds: ["screen", "clad"], tone: { n: [0.15, 0.14, 0.16], d: [0.50, 0.48, 0.42] },
-                     dayPal: [DC.sand, DC.cream, DC.white, DC.ochre, DC.stone, DC.tan, DC.paleblue] },
-        monaco:    { neon: [NC.gold, NC.teal, NC.white, NC.rose], bias: 0.12, fh: [9, 17], bh: [14, 28],
-                     kinds: ["setback", "slab", "podium", "tiered", "chevron", "dome", "hall"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.88, 0.81, 0.66] },
-                     dayPal: [DC.cream, DC.peach, DC.tan, DC.ochre, DC.terra, DC.pink, DC.sand] },
-        madrid:    { neon: [NC.red, NC.gold, NC.white, NC.cyan, NC.violet], bias: 0.28, fh: [14, 38], bh: [30, 70],
-                     kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron", "arch"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] },
-                     dayPal: [DC.cream, DC.ochre, DC.terra, DC.brick, DC.sand, DC.stone, DC.tan] },
-        shanghai:  { neon: [NC.cyan, NC.blue, NC.white, NC.teal, NC.purple, NC.pink], bias: 0.42, fh: [22, 54], bh: [56, 110],
-                     kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab", "fin", "notch", "antenna", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] },
-                     dayPal: [DC.steel, DC.bluglass, DC.greyblue, DC.slate, DC.darkglass, DC.white, DC.teal, DC.stone] },
-        mexico:    { neon: [NC.pink, NC.green, NC.orange, NC.gold, NC.cyan], bias: 0.34, fh: [12, 34], bh: [28, 64],
-                     kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "cross", "ziggurat", "drum"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] },
-                     dayPal: [DC.terra, DC.ochre, DC.cream, DC.coral, DC.sand, DC.brick, DC.tan] },
-        miami:     { neon: [NC.pink, NC.cyan, NC.teal, NC.orange, NC.purple], bias: 0.44, fh: [11, 30], bh: [28, 68],
-                     kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] },
-                     dayPal: [DC.cream, DC.white, DC.peach, DC.pink, DC.aqua, DC.mint, DC.lemon] },
-      };
-      const THEME_DEF = {
-        street_night: { neon: [NC.mag, NC.cyan, NC.gold, NC.violet, NC.teal], bias: 0.5, fh: [16, 48], bh: [34, 80], kinds: BLD, neonKinds: ["screen", "clad"], tone: null,
-                        dayPal: [DC.stone, DC.greyblue, DC.cream, DC.tan, DC.slate, DC.paleblue, DC.sand] },
-        street_day:   { neon: [NC.gold, NC.teal, NC.white, NC.rose], bias: 0.16, fh: [9, 19], bh: [14, 30], kinds: ["setback", "slab", "podium", "tiered"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.82, 0.77, 0.66] },
-                        dayPal: [DC.cream, DC.sand, DC.tan, DC.stone, DC.ochre, DC.terra, DC.peach] },
-        modern:       { neon: [NC.cyan, NC.blue, NC.white, NC.violet, NC.teal], bias: 0.3, fh: [14, 40], bh: [30, 74], kinds: ["setback", "slab", "cylinder", "podium", "spire", "fin", "antenna", "dome"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.62, 0.62, 0.66] },
-                        dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.slate, DC.stone, DC.teal, DC.cream] },
-      };
       const style = STYLES[def.id] || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
       // Per-building tone: keeps the track's single dark NIGHT tone, but picks a
