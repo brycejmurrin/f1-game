@@ -105,7 +105,7 @@ const KNOBS = [
     note: "per-lamp lens-glare halo brightness (drawGlow)" },
   // ── Glowing fog / volumetrics ──
   { id: "lampFog.base", file: "js/game.js", scene: "bahFog",
-    find: "Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0))", b: "0.0",
+    find: "Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0) * LT.mistDensity)", b: "0.0",
     expect: { region: "fogwall", metric: "mean", dir: "-", minRel: 0.04 },
     note: "how strongly lamps tint the fog wall (the glowing-fog amount) — B fully kills it for a stark before/after" },
   { id: "lampFog.softClip", file: "js/game/lighting.js", scene: "bahFog",
@@ -149,7 +149,7 @@ const KNOBS = [
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.25 },
     note: "dry-NIGHT scene-mirror floor (TUNE_DEFS ssrDryNight; the day floor is its own ssrDryDay slider); B = fully matte" },
   { id: "ssr.sheenFade", file: "js/shaders/glx-shaders.js", scene: "monzaDay",
-    find: "strength *= min(uReflect / 0.20, 1.0);", b: "strength *= 1.0;",
+    find: "strength *= min(gateSrc / 0.20, 1.0);", b: "strength *= 1.0;",
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.25 },
     note: "low-strength sheen fade; B = full darker-mirror even at faint levels" },
   { id: "ssr.roadMask", file: "js/shaders/glx-shaders.js", scene: "zandRain",
@@ -166,7 +166,7 @@ const KNOBS = [
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "contact-hardening range; B is a dramatic uniform blur (4x the old max) for a visible before/after" },
   { id: "shadow.box", file: "js/game.js", scene: "monzaDay",
-    find: "M4.orthoTo(_mLProj, -55, 55, -55, 55, 1.0, 320);", b: "M4.orthoTo(_mLProj, -110, 110, -110, 110, 1.0, 320);",
+    find: "M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);", b: "M4.orthoTo(_mLProj, -sBox * 2.0, sBox * 2.0, -sBox * 2.0, sBox * 2.0, 1.0, 320);",
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "light-box size; doubling it halves texel density (softer, muddier edges)" },
   { id: "shadow.biasClamp", file: "js/shaders/glx-shaders.js", scene: "monzaDay",
@@ -210,7 +210,7 @@ const KNOBS = [
 // per-lamp flicker so night scenes are deterministic — otherwise the ±2/10%
 // lamp breathing (performance.now-driven) adds ~1 luma of A-vs-B noise that
 // has nothing to do with the knob under test.
-const FREEZE_FLICKER = ["const amp = hsh > 0.90 ? 0.10 : 0.02;", "const amp = 0.0;"];
+const FREEZE_FLICKER = ["const amp = hsh > 0.90 ? LT.lampFlicker : LT.lampFlicker * 0.2;", "const amp = 0.0;"];
 
 // ── Static server: serves ROOT, applying {file → [find,replace]} overrides ──
 function startServer(overrides) {
@@ -590,4 +590,4 @@ if (process.argv[1] && process.argv[1].endsWith("ab-lighting.mjs")) {
   main().catch((e) => { console.error("FATAL", e); process.exit(1); });
 }
 
-export { KNOBS, SCENES, REGIONS };
+export { KNOBS, SCENES, REGIONS, FREEZE_FLICKER };
