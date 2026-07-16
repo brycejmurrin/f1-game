@@ -44,9 +44,17 @@ V3.add(a,b) V3.sub(a,b) V3.scale(a,s) V3.dot(a,b) V3.cross(a,b)
 V3.len(a) V3.norm(a) V3.lerp(a,b,t)   -> [x,y,z] / number
 ```
 
+## js/shaders/glx-shaders.js — `GLXShaders`
+
+All GLSL sources for the renderer (LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post
+chain, SSAO/GODRAY/COMPOSITE/FXAA/DEPTH) as template-literal strings with no
+interpolation — pure data. `glx.js` destructures it at the top of its IIFE, so
+this file must load first (see index.html).
+
 ## js/glx.js — `GLX`
 
 WebGL2 only. One standard lit shader for everything except the sky.
+Shader source strings live in `js/shaders/glx-shaders.js` (global `GLXShaders`).
 
 ```
 GLX.init(canvasEl) -> boolean         // false if no WebGL2
@@ -92,6 +100,24 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
+
+## js/track-geom.js — `TrackGeom`
+
+The pure geometry emitters shared by the road/terrain builders and buildProps:
+`addBox, emit, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain`
+plus the vec helpers (`cross`, `norm`, `vadd`) and the `MAT` material-id map.
+Each `add*(out, …)` pushes pos/nrm/col/idx into the caller's accumulator;
+stateless, renderer-free (loads under verify-track's bare VM). tracks.js
+destructures it and buildProps re-wraps the emitters with the on-track
+rejection guard (`RAW`).
+
+## js/track-scenery-data.js — `TrackSceneryData`
+
+The static dressing tables hoisted out of buildProps: `BARRIER` (armco
+liveries), `FURN`/`FURN_DEF` (per-track trees + lamps), `CROWD_DAY`,
+`WINTINTS`, `HOUSE_*`, `MOTORHOME_BODY`, `SIGN_SEG`/`SIGN_DIGIT`, and the city
+generator's `NC`/`DC`/`BLD`/`STYLES`/`THEME_DEF`. Pure constants — anything
+that closes over buildProps state stays in tracks.js.
 
 ## js/tracks/<id>.js — `TrackDefs` (circuit data)
 
@@ -253,6 +279,33 @@ Team color chips use `Teams.LIST` colors matched by name substring.
 DataHub.init(rootEl)   DataHub.open()   DataHub.close()   DataHub.isOpen() -> bool
 ```
 Styles in `css/data.css` only (prefix all classes `dh-`).
+
+## js/game/tables.js — `GameTables`
+
+Static gameplay/render data destructured by game.js at the original sites:
+`DEFAULT_CUSTOM` (the custom team), `TIER_V` (AI tier speeds), `GEARS`/
+`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` (gearbox), `DIFF` (difficulty), `CAM_MODES`
+(player camera list) and the `PAINT_*` car-paint material constants.
+
+## js/game/lighting.js — `LightTune`
+
+The lighting-tuner core: `TUNE_DEFS` (slider registry — the `def` values ARE
+the shipped tuning), the live `LT` value object (a plain object mutated in
+place by game.js's profile resolution and `__apex.lightTune`), `floodColor` +
+`LAMP_KINDS` (per-theme/fixture light character) and `buildTrackLights(track)`
+(bakes the per-track light records). Profile persistence and the
+(track, time-of-day, weather) resolution stay in game.js — they read live
+session state.
+
+## js/game/carmesh.js — `CarMesh`
+
+Car decal-quad geometry (`carDecalData` + the shared decal meshes), the effect
+quads (brake-glow ring, rain light, exhaust/boost flames, ERS strip) and the
+cockpit-rig instrument builders (wheel, LED strip, gear/speed digits, ERS and
+pedal bars, OT lamp), with their memo caches. Only dependency is the renderer
+handle, injected once at boot: `CarMesh.init(gfx)`. State-coupled car drawing
+(teamMesh, playerBodyMesh, cockpitBodyMesh, drawCockpitRig, decal textures)
+stays in game.js.
 
 ## js/game.js — main
 

@@ -92,10 +92,14 @@ able to start". Clean up with `pkill -f 'http.server <port>'` (check first with
 
 ```
 js/mat4.js       M4, V3         matrix math
+js/shaders/glx-shaders.js  GLXShaders  all GLSL sources (pure data; loads before glx.js)
 js/glx.js        GLX            WebGL2 renderer
 js/teams.js      Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
+js/track-geom.js TrackGeom      pure geometry emitters (addBox/emit/addCyl/…) + MAT ids
+js/track-scenery-data.js  TrackSceneryData  static buildProps tables (BARRIER, FURN,
+                                  city palettes/styles) — data only, no placement logic
 js/tracks/*.js   TrackDefs      24 circuits (one file each, registers on Tracks.LIST)
-js/tracks.js     Tracks         spline engine, mesh builder
+js/tracks.js     Tracks         spline engine, mesh builder, prop placement
 js/parts.js      Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
 js/car3d.js      Car3D          procedural F1 car geometry + liveries
 js/input.js      Input          keyboard / gamepad / touch / tilt
@@ -105,6 +109,12 @@ js/data.js       DataHub        data hub DOM overlay
 js/light-presets.js  LightPresets  shipped lighting-tuner values, keyed
                                   "track|tod|weather" (baked from the in-game
                                   LIGHTING TUNER panel's COPY VALUES export)
+js/game/tables.js    GameTables  static game data (CAM_MODES, DIFF, gears, paints)
+js/game/lighting.js  LightTune   TUNE_DEFS registry, live LT values, floodColor,
+                                  LAMP_KINDS, buildTrackLights (profile store stays
+                                  in game.js — it reads live track/tod/weather state)
+js/game/carmesh.js   CarMesh     car decal/effect/cockpit-instrument geometry
+                                  (renderer handle injected via CarMesh.init(gfx))
 js/game.js       (main)         game loop, physics, AI, race logic, __apex API
 css/style.css                   all styles
 index.html                      shell — script tags, DOM structure, cache-bust version
@@ -182,10 +192,12 @@ __apex.setTimeOfDay('night')  // 'dawn'|'day'|'dusk'|'night'|'default'
 
 See `docs/LIGHTING-REF.md` for the light-record layout, shader uniforms, time-of-day branches, masts.
 
-### Lighting tuner (`TUNE_DEFS` / `LT` in `game.js`)
+### Lighting tuner (`TUNE_DEFS` / `LT` in `js/game/lighting.js`)
 
 The in-game **LIGHTING TUNER** (pause-menu page) exposes every hand-tuned
-lighting/rendering value as a live slider. `TUNE_DEFS` is the registry; the
+lighting/rendering value as a live slider. `TUNE_DEFS` is the registry and `LT`
+the live values (both in `js/game/lighting.js`, global `LightTune`; the profile
+store/resolution lives in game.js because it reads live track/tod/weather); the
 driver reads `LT.<id>` each frame instead of a literal (shader-side ones upload
 via `frame.tune`/`opts.tune` — `u:` field names the uniform). Values are stored
 **per (track, time-of-day, weather) profile**. Resolution, lowest→highest
