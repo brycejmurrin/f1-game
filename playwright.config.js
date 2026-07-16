@@ -50,9 +50,16 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: true,
     timeout: 60_000,
+    // python http.server logs every GET to stderr — hundreds of noise lines
+    // per test that drown the reporter output in piped logs. Server startup
+    // failures still surface as the webServer timeout error.
+    stdout: "ignore",
+    stderr: "ignore",
   },
   reporter: [
-    ["list"],
+    // Live tail-able progress (see tests/live-reporter.js): timestamped
+    // start/end line per test, written immediately — `tail -f` friendly.
+    ["./tests/live-reporter.js"],
     ["html", { open: "never", outputFolder: `playwright-report${SUF}` }],
     ["junit", { outputFile: `test-results${SUF}/junit.xml` }],
   ],

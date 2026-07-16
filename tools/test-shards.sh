@@ -41,7 +41,7 @@ for g in "${IN[@]}"; do
     if [ "$SPLIT" -gt 1 ]; then name="$g.$k-of-$SPLIT"; sharding=(--shard="$k/$SPLIT"); fi
     log="$LOGDIR/$name.log"
     echo "> test:$g ${sharding[*]:-}  port=$port  workers=$WORKERS  log=$log"
-    APEX_PORT=$port npm run --silent "test:$g" -- --reporter=line --workers="$WORKERS" "${sharding[@]}" >"$log" 2>&1 &
+    APEX_PORT=$port npm run --silent "test:$g" -- --workers="$WORKERS" "${sharding[@]}" >"$log" 2>&1 &
     pids+=($!); names+=("$name"); i=$((i + 1))
   done
 done
@@ -51,7 +51,7 @@ for j in "${!pids[@]}"; do
   wait "${pids[$j]}"; code=$?
   # last "N passed/failed" style line, with the line-reporter's \r progress
   # unrolled so grep sees real lines
-  summary=$(tr '\r' '\n' < "$LOGDIR/${names[$j]}.log" | grep -aE '[0-9]+ (passed|failed|flaky|skipped)' | tail -2 | tr '\n' ' ')
+  summary=$(grep -aE '= run (passed|failed|timedout|interrupted)|x FAIL' "$LOGDIR/${names[$j]}.log" | tail -3 | tr '\n' ' ')
   printf '%-12s exit=%-3s %s\n' "${names[$j]}" "$code" "${summary:-<no summary — check log>}"
   [ "$code" -ne 0 ] && fail=1
 done

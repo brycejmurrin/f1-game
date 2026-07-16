@@ -38,11 +38,15 @@ npm run test:fast       # curated fast subset: smoke + api + collision + parts (
 ### Running tests without stalls (background + logs, parallel ports)
 
 Playwright runs are slow (UI groups ~5 min) and look "stuck" when run silently in
-the foreground. Instead, **run them in the background with `--reporter=line` piped
-to a log file, and tail the log** to watch progress:
+the foreground. The default reporter is `tests/live-reporter.js`: one timestamped,
+immediately-flushed line per test **start** and **end** (`> start` / `+ pass` /
+`x FAIL`, with duration), so a piped log is genuinely tail-able and a hung test is
+identifiable — it's the one with a `> start` line and no end line. The webServer's
+per-request stderr spam is suppressed in playwright.config.js. Run in the
+background and tail:
 
 ```sh
-npx playwright test tests/foo.spec.js --reporter=line > /tmp/foo.log 2>&1 &
+npx playwright test tests/foo.spec.js > /tmp/foo.log 2>&1 &
 tail -f /tmp/foo.log
 ```
 
