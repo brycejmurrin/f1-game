@@ -61,10 +61,12 @@ __apex.clearInput();
 
 ### `race(trackRef, timeOfDay?, weather?) → {track, timeOfDay, weather} | false`
 Load any circuit and start a normal race, skipping all menus. `trackRef` is a
-circuit **id** (`"monza"`) or its index in `Tracks.LIST`. `timeOfDay` is
-`"day" | "night" | "default"` (default uses the circuit's own setting);
-`weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` = damp road
-no rain; `"rain"` = wet road + falling rain). The recommended entry point for any harness.
+circuit **id** (`"monza"`) or its index in `Tracks.LIST`. `timeOfDay` is passed
+straight through to `setTimeOfDay()`, so it accepts any of
+`"dawn" | "day" | "dusk" | "night" | "default"` (default uses the circuit's own
+setting); `weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` =
+damp road no rain; `"rain"` = wet road + falling rain). The recommended entry
+point for any harness.
 
 ### `tt(trackRef, timeOfDay?) → {track, timeTrial} | false`
 Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true`).
@@ -104,7 +106,8 @@ wrong-way / spin / rescue tests. Position and progress are unchanged.
 
 ### `sky(frac, lateral?) → {s, total} | false`
 Like `park()`, but tilts the camera toward the horizon so sky/clouds are clearly
-visible. Eye 7 m up, target 25 m ahead and 14 m higher (~24° up).
+visible. Eye 3.5 m up, target 20 m ahead and 34 m higher (~58° up) so the horizon
+drops to the lower third and the frame fills with sky.
 
 ### `snapCam() → void`
 Instantly snap the camera to the current mode's vantage (no damping) — every mode,
@@ -239,6 +242,27 @@ never sinks under the terrain (which would render the track's underside).
 for (const a of [0,45,90,135,180]) { __apex.orbit(0.116, a, 15, 35); /* shot */ }
 ```
 
+### `dolly(f, fwd?, right?, up?, opts?) → {eye, target} | false`
+Track-relative free-cam placed by an **offset from the centreline** at
+lap-fraction `f`: `fwd` m along the tangent (negative = behind), `right` m across
+(+right of travel), `up` m above the road (default 5). Looks toward `opts.lookF`
+(default `f+0.015`) at `opts.lookLat` m off centre and `opts.lookH` m up (default
+1.5); `opts.fov` default 58. Like `eyeAt()` but framed in tangent/right metres —
+handy for "N m behind and M m beside" broadcast setups.
+```js
+__apex.dolly(0.22, -25, 18, 4);   // 25 m behind, 18 m right, 4 m up, looking ahead
+```
+
+### `tourShots(n?, opts?) → [{frac, az, el, dist, label}, …]`
+Returns `n` (default 12) orbit-shot descriptors covering the circuit, each ready
+to spread into `orbit()`. `opts.dist` (80), `opts.el` (20), and `opts.azOffset`
+(35) tune framing; `opts.atCorners:true` places the shots on detected corner
+apexes (sharpest first, replayed in lap order) and frames each from the outside
+of the bend. Pure data — no camera change until you call `orbit()`.
+```js
+for (const s of __apex.tourShots(16)) { __apex.orbit(s.frac, s.az, s.el, s.dist); /* shot */ }
+```
+
 ### `lightState() → {ambientSky, ambientGround, sunColor, exposure, numLights}`
 Lighting snapshot for the current frame: hemisphere ambient (sky/ground), the
 **scene** sun colour (`frameSky.sunColor` may differ — the sky keeps a warm sun
@@ -248,6 +272,18 @@ is actually dark + lit by floodlights rather than washed by a bright sun/ambient
 ```js
 __apex.race("singapore"); __apex.lightState();
 // → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:32, … }
+```
+
+### `lightTune(o?) → {id: value, …}`
+Get or set the live **lighting-tuner** values — the same registry (`TUNE_DEFS`)
+the pause-menu LIGHTING TUNER panel exposes. No arg: returns `{id: value}` for
+every tunable. With an object: merges the given entries (each clamped to its
+slider's range), persists to `localStorage` (`apex26.lightTune`), invalidates any
+baked light records that depend on them, and returns the updated set. Values are
+stored per (track, time-of-day, weather) profile.
+```js
+__apex.lightTune({ wetness: 0.8 });    // pin road wetness instantly
+__apex.lightTune({ wetness: -0.05 });  // back to the weather-driven ramp
 ```
 
 ### `gpuTimer(on?) → {supported, on, ms}`
@@ -438,6 +474,16 @@ physics branches (cornering grip, top-speed boost) and the energy HUD element.
 __apex.setEnergy(0);    // empty — no ERS boost
 __apex.setEnergy(1);    // full charge
 ```
+
+### `setSpeed(v) → {speed} | false`
+Instantly set the player's forward speed (m/s, clamped `[0, 200]`) without
+cutting the throttle (which would coast). Handy for scripted entry-speed tests
+and overspeed physics. Does not touch heading or yaw rate. Returns `false` if the
+player isn't initialised yet.
+
+### `setBoost(on) → boolean`
+Toggle the player's ERS boost flag (`player.boostOn`) for tests/screenshots.
+Returns the new boost state, or `false` if no player is loaded.
 
 ### `setLap(n) → {lap} | false`
 Override the player's lap counter (integer ≥ 0) without resetting lap time or
@@ -722,6 +768,46 @@ __apex.clearMeshes();                      // restore all meshes
 Reset all `meshToggle()` overrides, restoring every mesh to its default visibility
 state. Companion to `meshToggle()` — call this between tests so toggled meshes
 don't bleed into later screenshots.
+
+### `renderScale(v?) → {scale, fps, auto}`
+Adaptive-resolution control. No arg: report the current `{ scale, fps, auto }`.
+A number pins the 3D render scale (clamped `0.5–1`) and disables the auto-governor
+— a big fill-rate win (softer 3D; the HUD stays crisp). `true` re-enables the
+auto-governor.
+```js
+__apex.renderScale(0.6);   // pin 60% 3D scale
+__apex.renderScale(true);  // hand back to the auto governor
+```
+
+### `f1api → F1API | null`
+Raw handle to the `F1API` module (the cached Jolpica + OpenF1 client the data hub
+uses); `null` if `F1API` didn't load. All methods return Promises.
+```js
+await __apex.f1api.schedule();
+await __apex.f1api.lastRace();
+```
+
+### `openf1(path) → Promise<json>`
+Direct OpenF1 fetch — GETs `https://api.openf1.org/v1` + `path` and returns the
+parsed JSON (uncached, bypasses the F1API queue).
+```js
+await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024");
+```
+
+### `jolpica(path) → Promise<json>`
+Direct Jolpica (Ergast-compatible) fetch — GETs `https://api.jolpi.ca/ergast/f1`
++ `path` and returns the parsed JSON (uncached).
+```js
+await __apex.jolpica("/circuits/monaco.json");
+```
+
+### `fetchTrackOutline(sessionKey, driverNumber?) → Promise<[{x, z}, …] | null>`
+Fetch OpenF1 GPS `location` data for a session/driver (`driverNumber` default 1)
+and return a normalised, downsampled (≤400 pts) `{x, z}` track outline. `null` if
+the session has no location rows. Find a `sessionKey` via `openf1()`.
+```js
+await __apex.fetchTrackOutline(9149, 1);
+```
 
 ---
 

@@ -269,6 +269,7 @@ const WGX = (function () {
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
     let _envReady = true, _ssrReady = false;  // env reflection is analytic-sky (no probe needed); SSR flips true once its pass runs
+    let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect / game.js po.reflect); captured each present(), consumed by the NEXT begin()/_writeFrame to line up with the 1-frame ssrTex lag
     // ── Live env-cube probe (Phase-4b): a real RGBA16F cube captured one face/frame,
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
@@ -1038,9 +1039,12 @@ const WGX = (function () {
       d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
       d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.0015;  // SHADOW BIAS knob
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
-      d[76] = (T && T.bounceK     != null) ? T.bounceK     : 1.0;   // BOUNCE (ambient ground-fill)
+      d[76] = (T && T.bounceK     != null) ? T.bounceK     : 0.04;  // BOUNCE (per-lamp bounce-fill strength, == GLX uBounceK; NOT ambient)
       d[77] = (T && T.fogTint     != null) ? T.fogTint     : 0.0;   // FOG TINT (-1..1)
-      d[78] = (T && T.mistDensity != null) ? T.mistDensity : 0.0;   // GROUND MIST amount
+      // GROUND MIST amount = frame.groundMist × mistDensity (matches GLX
+      // uGroundMist = (frame.groundMist||0) * (T.mistDensity??1), js/glx.js:974) —
+      // so mist is 0 unless the frame actually requests it, not an absolute knob.
+      d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
       // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
       // carReflect/ssrStrength are forced 0 until the env-probe / SSR passes bind
@@ -1055,7 +1059,7 @@ const WGX = (function () {
       d[80] = Math.min(2.0, ((T && T.pcssPen != null) ? T.pcssPen : 80) * 0.00375);
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
       d[82] = _envReady ? ((T && T.carReflect != null) ? T.carReflect : 0.0) : 0.0;
-      d[83] = _ssrReady ? ((T && T.ssrStrength != null) ? T.ssrStrength : 0.0) : 0.0;
+      d[83] = _ssrReady ? _frameReflect : 0.0;   // wet-road SSR strength = present opts.reflect (GLX), 0 until the SSR pass is ready
       // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
@@ -1338,6 +1342,11 @@ const WGX = (function () {
       if (_lost || !encoder) return;
       if (litPass) { litPass.end(); litPass = null; }
       const o = opts || {};
+      // Capture the wet-road SSR strength GLX consumes as opts.reflect (game.js
+      // po.reflect = _ssr). Stored for the NEXT frame's _writeFrame (params4.w),
+      // matching the 1-frame lag: this present() writes ssrTex, the next lit pass
+      // both samples it AND scales it by this same reflect value.
+      _frameReflect = (o.reflect != null ? o.reflect : 0);
       const exposure = o.exposure != null ? o.exposure : 1.0;
 
       // Fallback: post disabled / targets absent -> tonemap blit, exactly as Phase 2.

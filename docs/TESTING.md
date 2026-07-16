@@ -1,8 +1,13 @@
 # Testing reference
 
-100+ Playwright specs across 50+ files. The suite covers physics, behaviour,
-geometry, UI, parts, steering, timing/field hooks, headless RL, and per-circuit
-blank-frame detection.
+~90 root Playwright spec files (`tests/*.spec.js`), plus a 24-file
+`tests/blank-scan/` per-circuit blank-frame suite and a 24-file `tests/inspect/`
+suite. **`inspect/**` and `blank-scan/**` are excluded from default test
+discovery** via `testIgnore` in `playwright.config.js`, so a bare
+`npx playwright test` runs the ~90 root specs only; run the excluded suites by
+naming them explicitly. The suite covers physics, behaviour, geometry, cameras,
+UI, parts, steering, lighting, scenery, gamepad, timing/field hooks, headless RL,
+and per-circuit blank-frame detection.
 
 ---
 
@@ -32,7 +37,8 @@ npx playwright test tests/visual-regression-*.spec.js      # pixel-diff regressi
 | `visual` | pixel-diff visual regression (slow) |
 | `modes` | season + time-trial game modes |
 | `circuit` | walls + autopilot + elevation (all circuit-level tests) |
-| `fast` | curated fast subset: smoke + api + collision + parts (~3 min) |
+| `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min) |
+| `ab` | lighting A/B pixel comparison (`lighting-ab.spec.js`) |
 
 ---
 
@@ -133,10 +139,20 @@ hook values.
 | `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
-| `new-hooks.spec.js` | contract tests for the 8 new hooks: `timing()`, `sectorState()`, `lapHistory()`, `fieldState()`, `aiPlace()`, `setEnergy()`, `setLap()`, `trackProfile()`, `obs().gear` |
+| `new-hooks.spec.js` | contract tests for the timing/field/energy hooks: `timing()`, `sectorState()`, `lapHistory()`, `fieldState()`, `aiPlace()`, `setEnergy()`, `setLap()`, `trackProfile()`, and `obs().gear` |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
 | `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
-| `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection |
+| `ui-desktop.spec.js` | desktop-mode layout (`body.desktop`), keyboard controls, non-touch UI |
+| `camera.spec.js`, `camera-hooks.spec.js`, `camera-driving-hooks.spec.js` | all 13 camera modes, `camera()`/`previewCam()`/`view()`/`orbit()`/`eyeAt()` framing, driving-camera behaviour |
+| `hud-audit.spec.js`, `hud-modes.spec.js` | HUD layout screenshots + mode-dependent HUD elements |
+| `map-hooks.spec.js`, `map-orientation.spec.js` | minimap polyline (`mapPts()`) + north-up orientation |
+| `lighting-ab.spec.js` | lighting A/B pixel comparison (the `test:ab` group) |
+| `scenery-audit.spec.js`, `scenery-angles.spec.js` | trackside scenery placement audits from survey cameras |
+| `gamepad.spec.js` | gamepad mapping (steer/throttle/brake/boost/overtake/camera) |
+| `webgl-probes.spec.js` | renderer/GL capability probes |
+| `monaco-*.spec.js` | Monaco deep-dives: camera tour, scenery tour, top-down, full tour, inspect |
+| `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection (**excluded from default discovery** via `testIgnore`; run explicitly) |
+| `inspect/*.spec.js` | 24 per-circuit inspection/screenshot specs (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line (roofs, canopies, buildings, crowds). Same point-in-triangle method against the props mesh, in 3D (0.2–5 m band above the road). Per-track `BASELINE` caps document justified overheads (Miami beach canopy, Mexico Foro Sol pass-through, gantries) and small tracked residuals; any new/worsened intrusion on a clean track fails. Measure one track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots` |
 

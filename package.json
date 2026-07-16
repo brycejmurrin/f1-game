@@ -12,7 +12,7 @@
     "test:headless":  "playwright test tests/headless-api.spec.js tests/obs-act-edge.spec.js",
     "test:physics":   "playwright test tests/physics-*.spec.js tests/world-physics.spec.js tests/longitudinal.spec.js tests/elevation-tracks.spec.js",
     "test:collision": "playwright test tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js",
-    "test:behaviour": "playwright test tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js tests/collision-ai-fixes.spec.js",
+    "test:behaviour": "playwright test tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js",
     "test:barriers":  "playwright test tests/tracks-walls.spec.js tests/collision-ai-fixes.spec.js",
     "test:parts":     "playwright test tests/parts-*.spec.js",
     "test:steering":  "playwright test tests/presets.spec.js tests/sliders.spec.js tests/steering.spec.js",

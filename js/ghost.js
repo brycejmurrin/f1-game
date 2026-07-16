@@ -13,9 +13,24 @@
 "use strict";
 
 const Ghost = (function () {
-  const KEY = "apex_ghost_v1";
+  const KEY = "apex26.ghost.v1";
+  const OLD_KEY = "apex_ghost_v1";   // pre-convention key; migrated once on load
   const HZ = 20;                 // samples per second while recording
   const MIN_SAMPLES = 8;         // ignore degenerate "laps"
+
+  // One-time migration: adopt any store saved under the old, non-conforming key.
+  (function migrateKey() {
+    try {
+      if (typeof localStorage === "undefined") return;
+      if (localStorage.getItem(KEY) === null) {
+        const old = localStorage.getItem(OLD_KEY);
+        if (old !== null) {
+          localStorage.setItem(KEY, old);
+          localStorage.removeItem(OLD_KEY);
+        }
+      }
+    } catch (e) { /* storage disabled — nothing to migrate */ }
+  })();
 
   let trackId = null;
   let best = null;               // { time, t:[], s:[], x:[] } for current track

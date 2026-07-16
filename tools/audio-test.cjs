@@ -18,8 +18,7 @@
  *   - gears 1-3 read lower than 4-8 (deeper low-gear launch)
  *   - boost adds a few percent
  */
-const PW = "/opt/node22/lib/node_modules/playwright";
-const { chromium } = require(PW);
+const { chromium } = require("playwright");
 const BASE = process.argv[2] || "http://localhost:8099";
 
 (async () => {

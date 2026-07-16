@@ -1,15 +1,17 @@
 # WebGPU Phase 2 — real geometry + the lit shading pipeline — build notes
 
-Status: **implemented, additive, not yet wired in.** Extends the Phase 0/1
-scaffold (`docs/WEBGPU-PHASE0-NOTES.md`) with real mesh GPUBuffers, a `FRAME`
-uniform buffer + a 32-light storage buffer + a dynamic-offset per-draw uniform
-buffer, a base-PBR lit render pipeline into an RGBA16F HDR scene target, and a
-tonemap blit to the swapchain. Per the plan (`docs/WEBGPU-MIGRATION.md` §Phase 2).
+Status: **implemented, additive, and since wired in (opt-in, now at Phase 4b).**
+Extends the Phase 0/1 scaffold (`docs/WEBGPU-PHASE0-NOTES.md`) with real mesh
+GPUBuffers, a `FRAME` uniform buffer + a 32-light storage buffer + a
+dynamic-offset per-draw uniform buffer, a base-PBR lit render pipeline into an
+RGBA16F HDR scene target, and a tonemap blit to the swapchain. Per the plan
+(`docs/WEBGPU-MIGRATION.md` §Phase 2).
 
-**Nothing here is loaded by `index.html`.** Feature-detected and inert on
-unsupported browsers (`WGX.create()` returns `null` → caller falls back to GLX).
-Files changed: `js/webgpu/wgx.js`, `js/webgpu/wgsl-chunks.js`. `js/gfx.js` is
-unchanged (the seam already forwards every method). All pass `node --check`.
+The backend is now loaded by `index.html` but stays **opt-in**
+(`localStorage apex26.gfxBackend = "webgpu"`); it is feature-detected and inert
+otherwise (`WGX.create()` returns `null` → caller falls back to GLX). Files:
+`js/webgpu/wgx.js`, `js/webgpu/wgsl-chunks.js`. `js/gfx.js` is the seam and
+forwards every method. All pass `node --check`.
 
 ---
 

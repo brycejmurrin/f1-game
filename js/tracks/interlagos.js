@@ -7,6 +7,7 @@
   {
     id: "interlagos",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    // TODO: startFrac not GPS-calibrated (defaults to 0)
     name: "INTERLAGOS",
     gp: "São Paulo GP",
     country: "Brazil",

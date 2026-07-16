@@ -2082,12 +2082,16 @@ function updateCar(c, dt, ranked) {
   c.otCool = Math.max(0, c.otCool - dt);
   if (c.otT > 0) c.otT -= dt;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
-  const wantBoost = c.isPlayer ? c.boostOn
-    : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25);
+  const wantBoost = (c.isPlayer ? c.boostOn
+    : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
+    || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   if (wantBoost && c.energy > 0) {
     const taper = c.otT > 0 ? 1 : clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
     deploy = DEPLOY_A * taper;
-    c.energy = Math.max(0, c.energy - DRAIN * dt);
+    // Only drain the battery when deploy actually produces thrust. Above the taper
+    // band (with no OT active) deploy is 0, so holding BOOST there must not silently
+    // waste ERS for zero benefit.
+    if (deploy > 0) c.energy = Math.max(0, c.energy - DRAIN * dt);
     c.deploying = deploy > 0.4;
     if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
   } else c.deploying = false;
@@ -2401,7 +2405,9 @@ function updateCar(c, dt, ranked) {
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
     const axEstTarget = braking ? -BRAKE
-      : (onThrottle ? DEPLOY_A * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) : -COAST_DRAG);
+      : (onThrottle
+          ? ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
@@ -2639,13 +2645,17 @@ function updateCar(c, dt, ranked) {
     const sFrac = c.s / track.total;
     const newSector = sFrac < 1/3 ? 0 : sFrac < 2/3 ? 1 : 2;
     if (newSector !== sectorIdx) {
-      if (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0)) {
-        // completed the current sector
+      if (ds > 0 && (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0))) {
+        // completed the current sector (forward progress only — a backward crossing
+        // of the start/finish line must not record a bogus sector time)
         const elapsed = c.lapTime - sectorStartT;
         const prevSector = sectorIdx;
+        const prevBest = sectorBests[prevSector];
         sectorLast[prevSector] = elapsed;
-        if (elapsed < sectorBests[prevSector]) sectorBests[prevSector] = elapsed;
-        const delta = elapsed - (sectorBests[prevSector] < Infinity ? sectorBests[prevSector] : elapsed);
+        // Delta is measured against the PREVIOUS best, before this split updates it,
+        // so a new personal best shows the actual improvement (not 0.000).
+        const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
+        if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
         if (elapsed >= 2) {
           const sign = delta <= 0 ? "▼ S" : "▲ S";
           announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
@@ -6291,8 +6301,11 @@ window.__apex = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
     if (!player || !track) return false;
-    player.s = wrapS(frac * track.total);
-    player.prog = frac * track.total;
+    // Normalize frac to [0,1) so s (wrapped) and prog stay coupled even if the
+    // caller passes a value outside the unit range.
+    const f01 = (((frac || 0) % 1) + 1) % 1;
+    player.s = wrapS(f01 * track.total);
+    player.prog = f01 * track.total;
     player.angle = 0;   // teleport aligns the car with the track (deterministic)
     if (lateral !== undefined) player.x = lateral;
     if (speed !== undefined) player.speed = speed;
@@ -6935,6 +6948,7 @@ window.__apex = {
     const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
     const prog = f * track.total, s = wrapS(prog);
     const ai = cars.filter((c) => !c.isPlayer);
+    if (ai.length < 2) return false;   // needs ≥2 AI cars — unavailable in time trial
     const a = ai[0], b = ai[1];
     [a, b].forEach((c, i) => {
       c.prog = prog; c.s = s; c.speed = v;
@@ -7310,7 +7324,10 @@ window.__apex = {
     const rivalBehind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
 
     const inp = _testInput || {};
-    const done = !!player.wrongWay || (player.rescueT || 0) > 8;
+    // A rescue teleport resets rescueT to 0 the instant it fires (threshold >3), so
+    // the old rescueT>8 test could never trip. Signal "done" briefly after a rescue.
+    const done = !!player.wrongWay ||
+      (player.rescueLastT != null && (raceT - player.rescueLastT) < 0.5);
 
     return {
       // ── position & progress ──
@@ -7485,8 +7502,9 @@ window.__apex = {
     if (!track || !cars[idx]) return false;
     const c = cars[idx];
     if (c.isPlayer) return false;
-    c.s    = wrapS((frac != null ? frac : 0) * track.total);
-    c.prog = (c.lap || 0) * track.total + (frac != null ? frac : 0) * track.total;
+    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
+    c.s    = wrapS(f01 * track.total);
+    c.prog = (c.lap || 0) * track.total + f01 * track.total;
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
@@ -7607,8 +7625,9 @@ window.__apex = {
     state = "race"; raceT = 0;
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
-    player.s     = wrapS((frac  != null ? frac  : 0) * track.total);
-    player.prog  = (frac != null ? frac : 0) * track.total;
+    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
+    player.s     = wrapS(f01 * track.total);
+    player.prog  = f01 * track.total;
     player.speed = speed != null ? speed : 0;
     player.x     = x     != null ? x     : 0;
     player.xVis  = player.x;

@@ -9,6 +9,14 @@ so a future WebGPU port is cheaper?"*
 itself. All line citations are against the tree as read on 2026-07-03
 (`js/glx.js` = 3770 lines, `js/game.js` = 8002 lines, `js/tracks.js` = 3465).
 
+> **Status update:** the review below treats the WebGPU backend (roadmap steps
+> 8-12) as gated future work. It has since been **built and wired in, opt-in,
+> through Phase 4b** — `index.html` loads `js/webgpu/wgx.js` (+ the WGSL chunk /
+> post / fx files) and `js/gfx.js`, activated only via
+> `localStorage apex26.gfxBackend = "webgpu"` with WebGL2/GLX as the default
+> fallback. The maintainability arguments here still stand; treat the "if
+> committing to WebGPU" framing as historical.
+
 ---
 
 ## A. Critique of the migration plan
@@ -277,7 +285,7 @@ Each entry: **what**, **why it helps maintenance today**, **effort (S/M/L)**,
 - **Risk:** **Med** — pure mechanical move, but the shared-closure refactor can
   introduce load-order bugs; guard with the full visual suite. No-build means
   script-tag order in `index.html` matters (cache-bust bump required).
-- **De-risks port:** **Yes** — `js/wgx.js` mirrors `passes.js`/`targets.js`
+- **De-risks port:** **Yes** — `js/webgpu/wgx.js` mirrors `passes.js`/`targets.js`
   cleanly when they're already separated by concern; the port becomes
   "reimplement three cohesive modules" not "re-derive one 3,700-line blob."
 
@@ -397,7 +405,7 @@ tracks.js touch). Every JS/CSS edit requires the `?v=N` + `version.json` bump
 | — | ↓↓↓ everything below is **only if committing to WebGPU** ↓↓↓ | | | | |
 | 8 | **`Gfx` façade + async-safe boot** (WebGL2 synchronous on the default path; only opt-in WebGPU awaits). Route the 109 `GLX.` sites through the handle. Expose `__apex.gfxBackend()`. | Plan Phase 0 | M | WebGPU-only | `test:fast` + `test:visual` zero delta on the WebGL2 path. |
 | 9 | **WGSL chunk siblings** for the shared math (`.wgsl` constants paired with step 2's names). | B.3 | S-M | WebGPU-only | N/A until a WebGPU pass exists. |
-| 10 | **WebGPU device/clear/swapchain stub** (`js/wgx.js`). | Plan Phase 1 | M | WebGPU-only | iOS 26/Chrome boots + clears; old iOS still WebGL2. |
+| 10 | **WebGPU device/clear/swapchain stub** (`js/webgpu/wgx.js`). | Plan Phase 1 | M | WebGPU-only | iOS 26/Chrome boots + clears; old iOS still WebGL2. |
 | 11 | **Lit + Sky WebGPU pass** (buffers from step 3's layout, pipelines from step 4's combos, dynamic-offset per-draw). | Plan Phase 2 | XL | WebGPU-only | Side-by-side `__apex.park()` screenshots, 5 tracks day+night. |
 | 12 | **Shadow + env probe**, then **post chain**, then **instancing/perf**. | Plan Phase 3-5 | L+XL+L | WebGPU-only | Per-backend golden images; `perf-profile`. |
 

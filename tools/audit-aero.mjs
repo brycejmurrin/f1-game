@@ -1,9 +1,7 @@
 // audit-aero.mjs — render EVERY aero option from the 3 level wing views
 // (behind / front / front-side, slightly raised) into one comparison sheet.
 //   node tools/audit-aero.mjs [--team=mclaren]
-let chromium;
-try { ({ chromium } = await import('playwright')); }
-catch { ({ chromium } = await import('/opt/node22/lib/node_modules/playwright/index.mjs')); }
+import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,14 +9,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const h = process.argv.find(a => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };
 const TEAM = arg('team', 'mclaren');
 const URL = arg('url', 'http://127.0.0.1:3456');
-const EXE = process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium';
+const EXE = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
 const VIEWS = [
   { name: 'behind',    az: 0,   el: 15, dist: 5.0 },
   { name: 'front',     az: 180, el: 15, dist: 5.2 },
   { name: 'frontside', az: 150, el: 15, dist: 4.8 },
 ];
 const dir = resolve(HERE, 'render-out/aero-audit'); mkdirSync(dir, { recursive: true });
-const browser = await chromium.launch({ executablePath: EXE, args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
 try {
   const page = await browser.newPage({ viewport: { width: 640, height: 500 } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));

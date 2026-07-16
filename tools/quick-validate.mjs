@@ -13,9 +13,9 @@ const errors = [];
 let browser;
 try {
   await new Promise((r) => setTimeout(r, 800));
+  const EXEC = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
   browser = await chromium.launch({
-    // pre-installed browser (see playwright.config.js) — avoids "npx playwright install"
-    executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+    ...(EXEC ? { executablePath: EXEC } : {}),
     args: ["--use-angle=swiftshader"],
   });
   const page = await browser.newPage({ viewport: { width: 844, height: 390 } });

@@ -345,8 +345,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let a = rough * rough;
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
-  // BOUNCE knob (params3.x) scales the ground-fill contribution (default 1).
-  let amb = mix(F.ambGround.xyz * F.params3.x, F.ambSky.xyz, N.y * 0.5 + 0.5);
+  // Ground fill is NOT scaled by anything — matches GLX js/glx.js:639
+  // amb = mix(uAmbGround, uAmbSky, N.y*0.5+0.5). BOUNCE (params3.x) is the
+  // per-lamp bounce-fill strength (== GLX uBounceK), consumed in the lamp loop below.
+  let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
   // Sun shadow (Phase 3): project the world pos into the sun's light-space clip,
   // then 3×3-PCF compare against the depth map (WebGPU NDC z is already [0,1], so
   // no -1..1 remap). shadowSamp is a comparison sampler — Level variant is legal
@@ -467,6 +469,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let spotD = mix(bleed, 1.0, beam);
     let NoLl = max(dot(N, Ld), 0.0);
     color = color + albedo * lcol * (att * spotD) * NoLl * (1.0 - metalness);
+    // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
+    // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
+    // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
+    // js/glx.js:716; BOUNCE = params3.x = uBounceK, default 0.04).
+    color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
     // GGX specular from the lamp (same microfacet BRDF as the sun).
     let Hl = normalize(Ld + V);
     let NoHl = max(dot(N, Hl), 0.0);
@@ -575,14 +582,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   color = mix(color, fogCol, fAmt);
 
   // [Block 6 — ground mist] Low drifting FBM haze pooling near the surface (mirrors
-  // GLX LIT_FS js/glx.js:878-891, reduced). GLX gates on a uGroundMist uniform we
-  // cannot add (no new uniform fields), so we reuse fogDensity as the proxy gate and
-  // keep the amount small — subtle, and a no-op in clear air (fogDensity ~ 0).
-  // GROUND MIST knob (params3.z) sets the amount, MIST HEIGHT (params3.w) the
-  // vertical falloff. Falls back to a faint fogDensity-driven haze so misty
-  // weather still reads when the knob is 0.
-  let mistK = max(F.params3.z, fogDensity * 0.5);
-  if (mistK > 0.0) {
+  // GLX LIT_FS js/glx.js:976-985). GROUND MIST (params3.z) carries frame.groundMist ×
+  // mistDensity (uploaded wgx.js d[78], == GLX uGroundMist) and gates the whole block
+  // exactly like GLX (if uGroundMist > 0.001) — no fogDensity proxy, so clear/dry
+  // air is a true no-op. MIST HEIGHT (params3.w) sets the vertical falloff.
+  let mistK = max(F.params3.z, 0.0);
+  if (mistK > 0.001) {
     let mh = max(F.params3.w, 0.05);
     let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
     let band = exp(-lowH / (mh * 20.0));

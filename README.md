@@ -50,8 +50,9 @@ run under floodlights.
   **Y** overtake, **RB**/**LB** shift up/down, **View/Back** camera,
   **Menu/Start** pause. Supported pads also rumble on contact and kerbs.
 - **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
-  cycle four views — **CHASE** (close), **FAR** (pulled back), **COCKPIT**
-  (onboard driver's eye), and **HOOD** (nose cam). Your choice is remembered.
+  cycle through **13 camera modes** — **CHASE** (close), **FAR** (pulled back),
+  **DRIFT**, **COCKPIT** (onboard driver's eye), **HOOD** (nose cam), and more
+  (overhead, heli, trackside, cinematic, T-cam…). Your choice is remembered.
 
 Throttle is manual — hold GAS to accelerate. BOOST and OVERTAKE are taps that
 toggle/activate rather than buttons you hold.
@@ -139,7 +140,7 @@ The project ships a **Playwright test suite** with 100+ specs covering physics
 regression, AI behaviour, UI screens, and visual regression:
 
 ```sh
-npm run test:fast                            # quick smoke: smoke + api + collision + parts (~3 min)
+npm run test:fast                            # quick subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min)
 npx playwright test                          # run all specs
 npx playwright test tests/autopilot.spec.js  # single file
 node tools/verify-track.cjs --all           # headless build check for all 24 circuits (no browser needed)

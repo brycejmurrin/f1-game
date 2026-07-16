@@ -12,10 +12,26 @@ code but are *not* a description of current behaviour.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module layout, the game loop, how the pieces fit. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (CLAUDE.md has the short list). |
 | [SCENERY-API.md](SCENERY-API.md) | The `scenery(api)` callback — buildings, props, barriers, terrain anchoring. |
-| [LIGHTING-REF.md](LIGHTING-REF.md) | UBO layout, shader uniforms, time-of-day branches, floodlight masts. |
+| [LIGHTING-REF.md](LIGHTING-REF.md) | Light-record layout, shader uniforms, time-of-day branches, floodlight masts. |
+| [LIGHTING-KNOBS.md](LIGHTING-KNOBS.md) | Every hand-tuned lighting constant, what it does, and how to A/B it (mirrors `tools/ab-lighting.mjs`). |
+| [LIGHTING-PRESETS.md](LIGHTING-PRESETS.md) | Per-track × time-of-day × weather lighting presets baked into `js/light-presets.js`. |
 | [TESTING.md](TESTING.md) | Spec coverage table, fixtures, the test philosophy. |
 | [iOS-OPTIMIZATION.md](iOS-OPTIMIZATION.md) | Mobile/iOS perf and Safari quirks. |
 | [tracks/](tracks/) | Per-circuit reference material. |
+
+### WebGPU backend (opt-in)
+
+The additive WebGPU renderer (loaded by `index.html`, activated only via
+`localStorage apex26.gfxBackend=webgpu`, WebGL2/GLX fallback on any failure).
+
+| Doc | Covers |
+|---|---|
+| [WEBGPU-MIGRATION.md](WEBGPU-MIGRATION.md) | The original migration plan: renderer inventory, WebGL2→WebGPU concept map, the `Gfx` seam, phased roadmap. |
+| [WEBGPU-MAINTAINABILITY.md](WEBGPU-MAINTAINABILITY.md) | Companion review: shader-chunk sharing + the "do anyway" refactor roadmap. |
+| [WEBGPU-PHASE0-NOTES.md](WEBGPU-PHASE0-NOTES.md) | Phase 0/1 build notes: the `Gfx` seam + device/clear/sky skeleton. |
+| [WEBGPU-PHASE2-NOTES.md](WEBGPU-PHASE2-NOTES.md) | Phase 2: real geometry + the lit shading pipeline. |
+| [WEBGPU-PHASE3-NOTES.md](WEBGPU-PHASE3-NOTES.md) | Phase 3: sun shadow map + comparison-sampler PCF. |
+| [WEBGPU-PHASE4-NOTES.md](WEBGPU-PHASE4-NOTES.md) | Phase 4/4b: post chain, foreground FX, SSR, env probe. |
 
 ## Research (historical — not current behaviour)
 

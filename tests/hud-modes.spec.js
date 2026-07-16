@@ -15,9 +15,9 @@ async function captureHudForMode(page, modeName) {
   // Wait for track to load
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
   
-  // Set steer mode via the game's public API
+  // Set steer mode via the global Input module (js/input.js)
   await page.evaluate((mode) => {
-    window.__apex.input.setSteerMode(mode);
+    window.Input.setSteerMode(mode);
   }, modeName);
   
   // Park car at 0.1 (ensures HUD is fully visible and car is stationary)

@@ -1,10 +1,10 @@
 import { chromium } from "playwright";
 
-const EXEC = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const EXEC = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
 const BASE = "http://localhost:3456";
 
 const browser = await chromium.launch({
-  executablePath: EXEC,
+  ...(EXEC ? { executablePath: EXEC } : {}),
   args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"],
 });
 

@@ -32,7 +32,9 @@ npm run test:ui         # all UI screenshots (slow, ~5 min)
 npm run test:visual     # pixel-diff visual regression (slow)
 npm run test:modes      # season + time-trial game modes
 npm run test:circuit    # walls + autopilot + elevation (all circuit-level tests)
-npm run test:fast       # curated fast subset: smoke + api + collision + parts (~3 min)
+npm run test:fast       # curated fast subset: smoke + api + collision + offtrack +
+                        #   parts-physics + steering (~3 min)
+npm run test:ab         # lighting A/B pixel comparison (tests/lighting-ab.spec.js)
 ```
 
 ### Running tests without stalls (background + logs, parallel ports)
@@ -122,7 +124,7 @@ js/game/carmesh.js   CarMesh     car decal/effect/cockpit-instrument geometry
 js/game.js       (main)         game loop, physics, AI, race logic, __apex API
 css/style.css                   all styles
 index.html                      shell — script tags, DOM structure, cache-bust version
-tests/*.spec.js                 Playwright test suite (50+ files)
+tests/*.spec.js                 Playwright test suite (90+ specs)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -149,8 +151,9 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Parts system (`js/parts.js`)
 
-`Parts.CATALOG` — 8 categories: `engine`, `aero`, `suspension`, `brakes`, `tyres`,
-`ers`, `gearbox`, `fuel`. Each option has
+`Parts.CATALOG` — an **array** of 8 category objects (ordered, not keyed by id):
+`engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`. Each
+category is `{ id, label, options:[…] }`; each option has
 `{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
 Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
 `{speed, accel, cornering, braking}` multipliers. Supplier-exclusive options
@@ -186,8 +189,9 @@ under hard braking (`brakeFade`) to kill the turn-in snap.
 Lit shader = directional sun (shadow map) + hemisphere ambient (`uAmbSky`/`uAmbGround`)
 + up to 32 point lights (uniform arrays, 15 floats per light). Composite: ACES tone-map + `colourGrade` + bloom +
 lens flare + vignette. Night: ambient floored+capped, sun dimmed to moonlight,
-floodlights on. Day: `_trackAtmoBias` per circuit. `buildTrackLights()` places
-floodlights every ~40 m; `setFrameLights()` culls to nearest 32 per frame.
+floodlights on. Day: `_trackAtmoBias` per circuit. `buildTrackLights()` (in
+`js/game/lighting.js`) places floodlights every ~22 m; `setFrameLights()` culls
+to nearest 32 per frame.
 
 ```js
 __apex.lightState()           // { ambientSky, ambientGround, sunColor, numLights, … }
@@ -290,7 +294,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-100+ Playwright specs (50+ files). Run groups with `npm run test:<group>` (see Key
+90+ Playwright specs. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
@@ -303,8 +307,9 @@ See `docs/TESTING.md` for spec coverage table, fixture docs, and philosophy.
 ## Steering modes
 
 `steerMode`: `"tilt"` | `"buttons"` | `"touch"`. Set via `#pm-steer` in pause
-menu. `autoThrottle()` returns true when mode is `"buttons"` or `"touch"` (hides
-the gas pedal). Calibrate button (`#pm-calib`) hidden unless mode is `"tilt"`.
+menu. `autoThrottle()` returns true **only** in `"touch"` mode (hides the gas
+pedal); `"buttons"` mode gets an explicit GAS control. Calibrate button
+(`#pm-calib`) hidden unless mode is `"tilt"`.
 
 ---
 

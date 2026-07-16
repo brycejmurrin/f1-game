@@ -162,7 +162,7 @@ const Parts = (function () {
   function _resolve(cat, setup, teamEngine) {
     const selId = setup[cat.id] !== undefined ? setup[cat.id] : DEFAULTS[cat.id];
     let opt = cat.options.find((o) => o.id === selId);
-    if (opt && opt.supplier && teamEngine && opt.supplier !== teamEngine) opt = null;
+    if (opt && opt.supplier && opt.supplier !== teamEngine) opt = null;
     return opt || cat.options.find((o) => o.id === DEFAULTS[cat.id]) || cat.options[0];
   }
 

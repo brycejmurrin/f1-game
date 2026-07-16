@@ -1,17 +1,17 @@
 /*
- * GameAudio: WebAudio synth for Apex 26 — engine drone, race SFX and a
- * small looping soundtrack. Everything is generated, no audio assets.
- * init() must be called from a user gesture so the context can start.
+ * GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice
+ * and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a
+ * user gesture so the context can start.
  *
  * Engine voice models the 2026 hybrid turbo V6: two detuned saws + a
  * square through a speed-tracking lowpass, a faint high sine for the
  * turbo whine, and a filtered-noise layer that fades IN when the car is
- * slowing — the MGU-K harvesting whirr.
+ * slowing — the MGU-K harvesting whirr. Real CC0 engine recordings
+ * (assets/sfx/) are pitched + crossfaded when decoded, with the synth as
+ * a fallback.
  *
- * Music uses a lookahead sequencer: notes are scheduled on the WebAudio
- * clock up to 300 ms ahead, pumped from BOTH a 60 ms timer and a rAF
- * loop — iOS throttles whichever one it feels like, but rarely both at
- * once, and the wide lookahead rides out the gaps.
+ * Music is streamed from prebaked audio files (assets/music/), lazy-loaded,
+ * decoded once and cached per context, then looped — no runtime sequencer.
  */
 "use strict";
 
@@ -54,9 +54,9 @@ const GameAudio = (function () {
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
   const MENU_TRACK = "assets/music/menu.mp3";
   const RACE_TRACKS = [
-    "assets/music/menu.mp3",
-    "assets/music/menu.mp3",
-    "assets/music/menu.mp3",
+    "assets/music/race_a.wav",   // bs-mm-metal (CC0)
+    "assets/music/race_b.wav",   // bs-p1-ps-md (CC0)
+    "assets/music/night.wav",    // bs-cyb-city-night — race / night circuits (CC0)
   ];
 
   let listenersAttached = false;

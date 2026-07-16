@@ -7,6 +7,7 @@
   {
     id: "baku",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    // TODO: startFrac not GPS-calibrated (defaults to 0)
     name: "BAKU",
     gp: "Azerbaijan GP",
     country: "Azerbaijan",
@@ -342,11 +343,11 @@
         }
       }
 
-      // Dense sandstone old-town behind the rampart — DISABLED FOR DEBUGGING
-      // cityFront(0.36, 0.56, 1, 24, {
-      //   minH: 6, maxH: 18, depth: 12, step: 16,
-      //   palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
-      // });
+      // Dense sandstone old-town behind the rampart
+      cityFront(0.36, 0.56, 1, 24, {
+        minH: 6, maxH: 18, depth: 12, step: 16,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+      });
 
       // Old-town minaret shafts — slim cylinders + domed cap, spaced
       // with enough distance so they don't overlap the rampart.

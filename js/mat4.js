@@ -201,7 +201,13 @@ const M4 = (function () {
     const b06=a20*a31-a21*a30,b07=a20*a32-a22*a30,b08=a20*a33-a23*a30;
     const b09=a21*a32-a22*a31,b10=a21*a33-a23*a31,b11=a22*a33-a23*a32;
     let det=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
-    if (!det) { out.set(m); return out; }
+    if (!det) {
+      out[0]=1;out[1]=0;out[2]=0;out[3]=0;
+      out[4]=0;out[5]=1;out[6]=0;out[7]=0;
+      out[8]=0;out[9]=0;out[10]=1;out[11]=0;
+      out[12]=0;out[13]=0;out[14]=0;out[15]=1;
+      return out;
+    }
     det=1/det;
     out[0]=(a11*b11-a12*b10+a13*b09)*det;out[1]=(a02*b10-a01*b11-a03*b09)*det;
     out[2]=(a31*b05-a32*b04+a33*b03)*det;out[3]=(a22*b04-a21*b05-a23*b03)*det;

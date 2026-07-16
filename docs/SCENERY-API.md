@@ -93,7 +93,7 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 ### Composite models — structures
 | Model | Builds |
 |---|---|
-| `building(k, side, dist, w, h, d, opts)` | mass + window bands; `opts:{wall,window,floor,setback,roof}` |
+| `building(k, side, gap, w, h, d, opts)` | mass + window bands; 3rd arg is **clearance** `gap` (metres beyond the road edge; the emitter computes `dist = gap + w/2` so the inner face sits `gap` off the edge). `opts:{wall,window,floor,setback,roof}` |
 | `tower(k, side, dist, baseW, h, opts)` | tapered tower; `opts:{col,seg,cap,capCol,mast}` |
 | `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof |
 | `billboard(k, side, gap, w, h, col)` | advertising hoarding on two posts |

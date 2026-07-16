@@ -16,8 +16,13 @@
     lengthKm: 4.3,
     baseHW: 7,
     // Hugenholtz + Arie Luyendyk: the two steeply banked corners get a raised
-    // outer edge (the engine banks the highest-curvature corners).
+    // outer edge. Authored as explicit fraction windows so the bank lands on the
+    // real corners (banked:true auto-pick kept as a fallback for other tracks).
     banked: true,
+    bankZones: [
+      { frac: 0.135, angleDeg: 18, widthM: 40 },   // Hugenholtz banked hairpin
+      { frac: 0.915, angleDeg: 19, widthM: 40 },    // Arie Luyendyk banked final turn
+    ],
     pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
     segs: [
       { t: 0, l: 260 }, { t: 75, l: 120, b: 0.16 }, { t: -50, l: 90 }, { t: 130, l: 150, b: 0.3 }, { t: 0, l: 180, h: 8 }, { t: 40, l: 110, h: -8 },
@@ -106,8 +111,6 @@
       // -----------------------------------------------------------------------
 
       // 1. Inner dune mounds — organic, rough, close
-      // TEMPORARILY DISABLED FOR DEBUGGING
-      /*
       every(24, (k) => {
         for (const side of [-1, 1]) {
           const dist = 80 + hash(k * 72 + side) * 30;   // 80–110 m from verge
@@ -121,11 +124,8 @@
           });
         }
       });
-      */
 
       // 2. Mid dune ridge band — slightly larger, set back further
-      // TEMPORARILY DISABLED FOR DEBUGGING
-      /*
       every(18, (k) => {
         for (const side of [-1, 1]) {
           const dist = 120 + hash(k * 81 + side) * 38;  // 120–158 m
@@ -137,11 +137,8 @@
                hash(k * 84 + side) < 0.5 ? sand : sandLt);
         }
       });
-      */
 
       // 3. Far backdrop dunes — distant horizon, rooted at pyMin
-      // TEMPORARILY DISABLED FOR DEBUGGING
-      /*
       every(48, (k) => {
         for (const side of [-1, 1]) {
           const dist = 160 + hash(k * 42 + side) * 100;  // 160–260 m
@@ -151,7 +148,6 @@
                18 + hash(k * 44 + side) * 16, sand);
         }
       });
-      */
 
       // -----------------------------------------------------------------------
       // COASTAL DUTCH PINES — dark conifers in dense clusters on dune slopes.
@@ -179,9 +175,7 @@
 
       // -----------------------------------------------------------------------
       // MARRAM GRASS — dense tufts along both verges for continuous dune-grass feel.
-      // TEMPORARILY DISABLED FOR DEBUGGING
       // -----------------------------------------------------------------------
-      /*
       every(6, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 61 + side * 5) > 0.40) continue;   // ~60% density
@@ -200,26 +194,20 @@
           }
         }
       });
-      */
 
       // -----------------------------------------------------------------------
       // MARRAM HEDGE BANDS — continuous clipped dune-grass fringe along the verge.
       // Gap = 22 etc. means inner face is that far from road edge — safe clearance.
-      // TEMPORARILY DISABLED FOR DEBUGGING
       // -----------------------------------------------------------------------
-      /*
       hedge(0.10, 0.50, 1,  26, 1.8, marramT);
       hedge(0.20, 0.60, -1, 22, 1.8, marramG);
       hedge(0.55, 0.85, 1,  24, 1.8, marramG);
       hedge(0.65, 0.98, -1, 20, 1.8, marramT);
       hedge(0.80, 0.95, 1,  26, 1.8, marramG);
-      */
 
       // -----------------------------------------------------------------------
       // BUSH CLUMPS — low dune shrubs between tufts and hedges
-      // TEMPORARILY DISABLED FOR DEBUGGING
       // -----------------------------------------------------------------------
-      /*
       every(8, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 51 + side) > 0.35) continue;   // ~65% density
@@ -227,7 +215,6 @@
                hash(k * 53 + side) < 0.5 ? marramG : marramT);
         }
       });
-      */
 
       // -----------------------------------------------------------------------
       // GRANDSTANDS — Orange Army Verstappen fans; Dutch GP sells out every year.
@@ -289,9 +276,7 @@
 
       // -----------------------------------------------------------------------
       // BEACH HUTS — pastel rows clustered at the seaward dune face (s≈0.3–0.7).
-      // TEMPORARILY REMOVED FOR DEBUGGING INTRUSIONS
       // -----------------------------------------------------------------------
-      /*
       every(40, (k) => {
         const lapFrac = k / n;
         const sideProb = lapFrac > 0.3 && lapFrac < 0.7 ? 0.7 : 0.3;
@@ -315,7 +300,6 @@
                    [5.8, 1.6, 5.8], [0.72, 0.34, 0.18], b);
         }
       });
-      */
 
       // -----------------------------------------------------------------------
       // SEA GLIMPSE SLIVERS — blue peek over the dune ridge at several lap points
@@ -552,9 +536,8 @@
       seasideTown(K(0.30), -1, 280, 70);           // Zandvoort village toward the inland arc
       seasideTown(K(0.62), -1, 300, 60);
       seasideTown(K(0.72),  1, 330, 55);
-      // TEMPORARILY REMOVED FOR DEBUGGING
-      // beachPavilion(K(0.40), 1, 250);              // beach clubs near the shore (165→200→250: clear banked Scheivlak approach)
-      // beachPavilion(K(0.55), 1, 250);              // (175→200→250: safety margin)
+      beachPavilion(K(0.40), 1, 250);              // beach clubs near the shore (165→200→250: clear banked Scheivlak approach)
+      beachPavilion(K(0.55), 1, 250);              // (175→200→250: safety margin)
     },
   }
   );

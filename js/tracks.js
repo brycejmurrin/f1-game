@@ -309,31 +309,55 @@ const Tracks = (function () {
     return corners;
   }
 
-  // Zandvoort-style banked corners. Returns null for every circuit except
-  // Zandvoort; otherwise per-node arrays describing how much the OUTER road
-  // edge rises (metres) and which side that outer edge is on. The lift is
-  // cosine-ramped to zero over the corner span plus a few run-in/out nodes,
-  // exactly like the localized BRIDGES bump on py — so the rest of the lap
-  // stays dead flat (no global tilt). buildRoad and buildTerrain both read this
-  // so the banked road edge and the terrain that meets it rise together.
+  // Author-driven banked corners. A track def can bank its corners two ways:
+  //   • `bankZones: [{ frac, angleDeg, widthM }]` — bank explicit fraction
+  //     windows at authored angles (used by Zandvoort's Hugenholtz/Luyendyk and
+  //     Madrid's La Monumental), OR
+  //   • `banked: true` — auto-pick the two highest-curvature corners and bank
+  //     them at ~18° (legacy fallback for any track without bankZones).
+  // Returns null when neither is present; otherwise per-node arrays describing how
+  // much the OUTER road edge rises (metres) and which side that outer edge is on.
+  // The lift is cosine-ramped to zero over the corner span, exactly like the
+  // localized BRIDGES bump on py — so the rest of the lap stays dead flat (no
+  // global tilt). buildRoad and buildTerrain both read this so the banked road
+  // edge and the terrain that meets it rise together; game.js makes the car,
+  // shadow and camera ride the banked surface (height + roll) so nothing floats.
   function bankingProfile(track) {
-    // Opt-in per circuit via the `banked` data flag. The road/terrain mesh raises
-    // its outer edge here; game.js makes the car, shadow and camera ride the
-    // banked surface (height + roll) so nothing floats. The terrain ribbon's bank
-    // lift already tapers to zero at its far edge (see buildTerrain), so the
-    // distant ground stays flat.
-    if (!track.def.banked) return null;
+    const def = track.def;
+    const zones = def.bankZones;
+    if (!def.banked && !(zones && zones.length)) return null;
     const n = track.n;
+    const ds = track.total / n;
+    const lift = new Float32Array(n);
+    const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
+
+    // Explicit authored zones take precedence over the curvature auto-pick.
+    if (zones && zones.length) {
+      for (const z of zones) {
+        const frac = (((z.frac || 0) % 1) + 1) % 1;
+        const kc = Math.round(frac * n) % n;
+        const tanA = Math.tan((z.angleDeg || 18) * Math.PI / 180);
+        const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
+        // outer edge is opposite the turn centre at the zone apex (curv + = right)
+        const outer = curvature(track, kc * ds) >= 0 ? -1 : 1;
+        for (let i = -half; i <= half; i++) {
+          const k = (kc + i + n) % n;
+          // cosine window: 1 at apex, 0 at the span edges
+          const t = 1 - Math.abs(i) / half;
+          const w = 0.5 * (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t))));
+          const add = 2 * track.hw[k] * tanA * w;
+          if (add > lift[k]) { lift[k] = add; bsign[k] = outer; }
+        }
+      }
+      return { lift, bsign };
+    }
+
+    // Legacy auto-pick: the two highest-curvature corners, banked at 18°.
     const corners = findCorners(track, 0.006);
     if (!corners.length) return null;
-    // pick the two highest-curvature corners (apex |curvature|)
-    const ds = track.total / n;
     const scored = corners.map((c) => ({ c, k: Math.abs(curvature(track, c.k * ds)) }));
     scored.sort((a, b) => b.k - a.k);
     const picks = scored.slice(0, 2).map((s) => s.c);
-
-    const lift = new Float32Array(n);
-    const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
     const TAN18 = Math.tan(18 * Math.PI / 180);
     const RUN = 6;                       // extra run-in/out nodes each side
     for (const c of picks) {
@@ -916,9 +940,9 @@ const Tracks = (function () {
     const RS = (s) => ((((phi || 0) - s) % 1) + 1) % 1;        // reversed+rotated fraction
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
-    for (const name of ["place", "prop", "backdrop", "anchor", "pine", "tree",
+    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
-                        "marshalPost", "bush", "signBoard"]) {
+                        "marshalPost", "bush", "signBoard", "ferrisWheel"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), -side, ...r);
     }
     // (s, side, ...rest): single fraction + side
@@ -3153,7 +3177,7 @@ const Tracks = (function () {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
-      street: !!d.street, banked: !!d.banked, bridges: d.bridges || null,
+      street: !!d.street, banked: !!d.banked, bankZones: d.bankZones || null, bridges: d.bridges || null,
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
       flatTerrain: !!d.flatTerrain,

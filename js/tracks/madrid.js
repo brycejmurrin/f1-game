@@ -7,6 +7,7 @@
   {
     id: "madrid",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    // TODO: startFrac not GPS-calibrated (defaults to 0)
     name: "MADRID",
     gp: "Spanish GP",
     country: "Spain",
@@ -14,8 +15,13 @@
     theme: "modern",
     lengthKm: 5.5,
     baseHW: 7,
-    // La Monumental: the signature ~24% banked stadium curve.
+    // La Monumental: the signature ~24° banked stadium curve. Authored as an
+    // explicit fraction window (matches the seg b:0.42 rad ≈ 24°) so the bank
+    // lands on the stadium bowl (banked:true auto-pick kept as a fallback).
     banked: true,
+    bankZones: [
+      { frac: 0.75, angleDeg: 24, widthM: 60 },   // La Monumental banked stadium curve
+    ],
     street: true,
     pal: { zenith: [0.22, 0.48, 0.82], horizon: [0.74, 0.74, 0.72], grass: [0.3, 0.42, 0.2], sunDir: [0.12094709553657013, 0.967576764292561, 0.22173634181704524], sun: [1.0, 0.90, 0.65], sunColor: [1, 0.98, 0.94] },
     segs: [

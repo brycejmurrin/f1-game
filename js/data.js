@@ -302,7 +302,10 @@ const DataHub = (function () {
         if (place) subParts.push(place);
         main.appendChild(el("div", "dh-race-sub", subParts.join(" · ") || "—"));
         if (r.time) {
-          const t = new Date("1970-01-01T" + r.time);
+          // Combine with the real race date (not a fixed 1970 epoch) so the
+          // local time AND its zone label reflect that day's actual UTC offset
+          // (DST-aware). r.time is UTC ("HH:MM:SSZ" from the API).
+          const t = new Date((r.date ? r.date : "1970-01-01") + "T" + r.time);
           if (!isNaN(t.getTime())) {
             main.appendChild(el("div", "dh-race-time", t.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })));
           }

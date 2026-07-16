@@ -1,4 +1,7 @@
 // Close-camera photo session across lighting/tracks. Small JPEGs.
+// NON-PORTABLE ONE-SHOT: hardcodes a Linux-sandbox repo path (/home/user/f1-game)
+// and a /tmp scratchpad output dir. Left as-is intentionally — not part of the
+// portable tool set; edit NEW/OUT/exe by hand before re-running elsewhere.
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
