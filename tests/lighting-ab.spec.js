@@ -32,8 +32,14 @@ async function boot(page, track, tod, wx, frac) {
 }
 
 // Mean luminance of a fractional region of the game canvas, decoded in-page.
+// PAGE screenshot, not locator("canvas#game").screenshot(): the element variant
+// adds a stability wait that never settles when a heavy scene saturates the
+// main thread (software-GL runners render Singapore-night at <1 FPS, so the
+// compositor is starved and the capture times the whole test out). The canvas
+// fills the viewport, so the page capture is the same image — callers hide the
+// HUD first so DOM overlays can't pollute the sampled region.
 async function regionMean(page, fx, fy, fw, fh) {
-  const buf = await page.locator("canvas#game").screenshot({ type: "jpeg", quality: 70 });
+  const buf = await page.screenshot({ type: "jpeg", quality: 70, timeout: 60_000 });
   return page.evaluate(async ({ b64, fx, fy, fw, fh }) => {
     const img = new Image(); img.src = "data:image/jpeg;base64," + b64; await img.decode();
     const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
@@ -76,7 +82,12 @@ test("weather() applies lighting live (fog mutes sun + lifts exposure)", async (
 
 test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)", async ({ page }) => {
   test.setTimeout(180_000);
+  // Small viewport: the assertion is a region MEAN (resolution-independent),
+  // and Singapore night at 720p renders too slowly on software-GL runners for
+  // any screenshot to complete — 360p keeps each capture inside its timeout.
+  await page.setViewportSize({ width: 640, height: 360 });
   await boot(page, "singapore", "night", "dry", 0.35);
+  await page.evaluate(() => window.__apex.hud(false));
   const dry = await regionMean(page, 0.34, 0.38, 0.32, 0.16);
   await page.evaluate(() => window.__apex.weather("fog"));
   await page.waitForTimeout(2000);
