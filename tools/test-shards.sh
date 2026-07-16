@@ -26,13 +26,24 @@ LOGDIR="${LOGDIR:-test-logs}"
 BASEPORT="${BASEPORT:-3461}"
 mkdir -p "$LOGDIR"
 
+# SPLIT=N additionally fans EACH group out over N Playwright shards
+# (--shard=k/N), each shard on its own port with its own log — so one big
+# group like `circuit` can occupy N servers instead of one. Total browser
+# processes = groups x SPLIT x WORKERS; size to your core count.
+SPLIT="${SPLIT:-1}"
+
 pids=(); names=()
 i=0
 for g in "${IN[@]}"; do
-  port=$((BASEPORT + i)); log="$LOGDIR/$g.log"
-  echo "> test:$g  port=$port  workers=$WORKERS  log=$log"
-  APEX_PORT=$port npm run --silent "test:$g" -- --reporter=line --workers="$WORKERS" >"$log" 2>&1 &
-  pids+=($!); names+=("$g"); i=$((i + 1))
+  for ((k = 1; k <= SPLIT; k++)); do
+    port=$((BASEPORT + i))
+    name="$g"; sharding=()
+    if [ "$SPLIT" -gt 1 ]; then name="$g.$k-of-$SPLIT"; sharding=(--shard="$k/$SPLIT"); fi
+    log="$LOGDIR/$name.log"
+    echo "> test:$g ${sharding[*]:-}  port=$port  workers=$WORKERS  log=$log"
+    APEX_PORT=$port npm run --silent "test:$g" -- --reporter=line --workers="$WORKERS" "${sharding[@]}" >"$log" 2>&1 &
+    pids+=($!); names+=("$name"); i=$((i + 1))
+  done
 done
 
 fail=0

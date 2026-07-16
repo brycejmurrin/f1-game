@@ -65,6 +65,8 @@ one port + log per group, with a pass/fail summary at the end:
 ```sh
 tools/test-shards.sh smoke api collision        # 3 groups at once
 WORKERS=2 tools/test-shards.sh circuit barriers # workers per group (default 2)
+SPLIT=3 tools/test-shards.sh circuit            # 1 group fanned over 3 servers
+                                                #   via Playwright --shard=k/3
 tail -f test-logs/smoke.log                     # watch one group live
 ```
 
