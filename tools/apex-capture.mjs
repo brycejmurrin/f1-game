@@ -24,6 +24,11 @@ const { chromium } = require("playwright");
 const [cmd = "modes", ...rest] = process.argv.slice(2);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAND = { width: 844, height: 390 };
+// Progress goes to stderr, timestamped — stdout stays clean JSON (the final
+// manifest), while a redirected/tailed log shows every server/browser/shot
+// event live instead of nothing until the whole run finishes.
+const _t0 = Date.now();
+const log = (msg) => process.stderr.write(`[+${((Date.now() - _t0) / 1000).toFixed(1)}s] ${msg}\n`);
 
 function chrome() {
   for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
@@ -38,6 +43,7 @@ function freePort() {
   });
 }
 async function startServers(n) {
+  log(`starting ${n} static server(s)…`);
   const ports = [];
   const procs = [];
   for (let i = 0; i < n; i++) {
@@ -46,21 +52,27 @@ async function startServers(n) {
     ports.push(port);
   }
   await sleep(700);
+  log(`servers up on ports: ${ports.join(", ")}`);
   return { ports, kill: () => procs.forEach((p) => { try { p.kill(); } catch {} }) };
 }
 async function open(browser, port, viewport = LAND) {
   const page = await browser.newPage({ viewport });
   await page.goto(`http://127.0.0.1:${port}/`);
   await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+  log(`page ready on :${port}`);
   return page;
 }
 async function race(page, track) {
+  log(`loading track "${track}"…`);
   await page.evaluate((t) => window.__apex.race(t), track);
   await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 15000 });
   await sleep(1600);
+  log(`track "${track}" loaded`);
 }
 async function shot(page, dir, name, sel = "canvas#game") {
   const buf = await page.locator(sel).screenshot({ path: `${dir}/${name}.png` });
+  const flag = buf.length < 5000 ? "  ⚠ blank" : "";
+  log(`shot ${name} (${(buf.length / 1024).toFixed(1)} KB)${flag}`);
   return { name, bytes: buf.length, blank: buf.length < 5000 };
 }
 
@@ -77,7 +89,9 @@ async function fanout(pages, jobs, run) {
 }
 
 async function main() {
+  log(`cmd=${cmd} args=[${rest.join(", ")}]`);
   const CAMS = ["chase","far","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"];
+  log(`launching chromium (${chrome() || "bundled playwright build"})`);
   const browser = await chromium.launch({
     executablePath: chrome(),
     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
@@ -171,6 +185,7 @@ async function main() {
   }
 
   await browser.close();
+  log(`done: ${manifest.length} shot(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   console.log(JSON.stringify({ cmd, ms: Date.now() - t0, shots: manifest }, null, 2));
   const bad = manifest.filter((m) => m.blank || m.err);
   if (bad.length) { console.error(`\n⚠ ${bad.length} blank/failed:`, bad.map((b) => b.name || b.job).join(", ")); process.exitCode = 1; }

@@ -43,6 +43,11 @@ function pickChromium() {
   return undefined; // fall back to playwright's bundled build
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Progress goes to stderr (timestamped, flushes immediately) so stdout stays
+// clean JSON for callers piping/parsing the result, and `tail -f` on a
+// redirected log shows live progress instead of nothing until the very end.
+const t0 = Date.now();
+const log = (msg) => process.stderr.write(`[+${((Date.now() - t0) / 1000).toFixed(1)}s] ${msg}\n`);
 
 const SHAPE = function () {
   window.__shape = function (v, d = 0) {
@@ -65,7 +70,9 @@ const SHAPE = function () {
 };
 
 (async () => {
+  log(`picking a free port…`);
   const port = await freePort();
+  log(`starting static server on :${port}`);
   const server = spawn("python3", ["-m", "http.server", String(port)], { cwd: ROOT, stdio: "ignore" });
   const cleanup = () => { try { server.kill(); } catch {} };
   process.on("exit", cleanup);
@@ -73,18 +80,24 @@ const SHAPE = function () {
   let browser;
   try {
     await sleep(600);
+    log(`launching chromium (${pickChromium() || "bundled playwright build"})`);
     browser = await chromium.launch({
       executablePath: pickChromium(),
       args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
     });
     const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
+    log(`navigating to http://127.0.0.1:${port}/`);
     await page.goto(`http://127.0.0.1:${port}/`);
+    log(`waiting for window.__apex…`);
     await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
     await page.evaluate(SHAPE);
+    log(`loading track "${track}"…`);
     await page.evaluate((t) => window.__apex.race(t), track);
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15000 });
+    log(`track loaded, settling ~1.6s for mesh build…`);
     await sleep(1600); // mesh build
 
+    log(`evaluating: ${expr}`);
     const result = await page.evaluate(async ({ expr, raw }) => {
       try {
         const a = window.__apex;
@@ -94,9 +107,11 @@ const SHAPE = function () {
       } catch (e) { return { err: String((e && e.message) || e) }; }
     }, { expr, raw });
 
+    log(`done, writing result to stdout`);
     console.log(JSON.stringify(result.ok ? result.val : result, null, 2));
     await browser.close();
   } catch (e) {
+    log(`FAILED: ${e.message}`);
     console.error("apex-eval failed:", e.message);
     process.exitCode = 1;
   } finally {
