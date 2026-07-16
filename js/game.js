@@ -1876,7 +1876,7 @@ function update(dt) {
 
   for (const c of cars) updateCar(c, dt, ranked);
 
-  resolveCollisions(ranked);
+  resolveCollisions(ranked, dt);
 
   // race ends when the player finishes, or shortly after the winner does, or
   // at a hard time cap so it can never hang
@@ -1920,8 +1920,12 @@ function collideFx(a, b, impact) {
 // track, transfer speed rear->front). Mass-weighted, several relaxation passes
 // to settle clusters, then a hard min-separation pass so cars can never render
 // merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
-function resolveCollisions(ranked) {
+function resolveCollisions(ranked, dt) {
   const LCAR = 4.8, WCAR = 2.0, PASSES = 4;
+  // Side-rub speed scrub as a RATE: 0.995/frame was authored at the fixed
+  // 1/60 step (identical there: 0.995^1), but the headless harness steps at
+  // arbitrary dt — unscaled, a rub scrubbed per CALL, not per second.
+  const rubScrub = Math.pow(0.995, (dt || 1 / 60) * 60);
   for (let pass = 0; pass < PASSES; pass++) {
     const last = pass === PASSES - 1;
     const fwd = (pass & 1) === 0;
@@ -1947,7 +1951,7 @@ function resolveCollisions(ranked) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= 0.995; b.speed *= 0.995;   // barely scrub speed on a side rub
+          a.speed *= rubScrub; b.speed *= rubScrub;   // barely scrub speed on a side rub
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
@@ -2068,7 +2072,7 @@ function updateCar(c, dt, ranked) {
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
       }
-      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
+      // (no blocker test here — dprog <= 0 for everything behind us)
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
     const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
@@ -2113,9 +2117,13 @@ function updateCar(c, dt, ranked) {
     const look = clamp(c.speed * 1.7, 30, 160);
     let kMax = 0;
     for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
-    const _bkIdx = Math.floor(c.s / track.total * track.n) % track.n;
-    const bankMu = 1 + Math.sin(track.bank[_bkIdx] || 0) * 0.8;
-    const vCorner = Math.sqrt(LAT_MAX * bankMu / Math.max(kMax, 1e-5)) * c.skill;
+    // Bank sampled mid-LOOKAHEAD (the corner being braked for), via the same
+    // wrap-safe helper the grip model uses — not a raw node read at the car.
+    const bankMu = 1 + Math.sin(Tracks.bankAngle(track, wrapS(c.s + look * 0.5))) * 0.8;
+    // gripMult(): the AI's lateral authority is weather-cut (see the c.x +=
+    // step below), so its corner-speed decision must budget for the same wet
+    // grip — otherwise it carries dry entry speed and runs wide in the rain.
+    const vCorner = Math.sqrt(LAT_MAX * bankMu * gripMult() / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
     // queue behind the car blocking our lane (prog-based, so it's immune to the
     // frame-to-frame rank swapping of near-even cars): cap our pace to it and
@@ -2447,7 +2455,9 @@ function updateCar(c, dt, ranked) {
     const cosD = Math.cos(delta);
     // --- rigid-body equations of motion (per unit mass). kz2 = yaw inertia/mass.
     const ay = Fyf * cosD + Fyr;                         // body lateral accel
-    const kz2 = af * ar * YAW_INERTIA;                   // yaw inertia / mass (scaled)
+    // Floored: setPhysics({yawInertia:0}) would otherwise make the rdot below
+    // divide by zero and NaN the whole car state.
+    const kz2 = Math.max(1e-3, af * ar * YAW_INERTIA);   // yaw inertia / mass (scaled)
     // Under hard braking the front axle is heavily loaded and the rear goes light,
     // so the yaw moment (af·Fyf − ar·Fyr) drives the nose into the corner faster
     // than the baseline damping can check — that's the "snap to the inside" on a
@@ -2639,20 +2649,28 @@ function updateCar(c, dt, ranked) {
     const sFrac = c.s / track.total;
     const newSector = sFrac < 1/3 ? 0 : sFrac < 2/3 ? 1 : 2;
     if (newSector !== sectorIdx) {
-      if (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0)) {
+      // Exactly one sector forward (0→1→2→0). `sectorIdx < newSector` alone
+      // also matched 0→2, i.e. REVERSING across the start line.
+      const forward = newSector === sectorIdx + 1 || (sectorIdx === 2 && newSector === 0);
+      if (forward) {
         // completed the current sector
         const elapsed = c.lapTime - sectorStartT;
         const prevSector = sectorIdx;
         sectorLast[prevSector] = elapsed;
+        // Delta vs the best BEFORE recording this run — updating first made
+        // delta = elapsed - min(best, elapsed), i.e. always >= 0, so the
+        // "▼ faster" arrow only ever fired on a new best (magnitude lost).
+        const delta = sectorBests[prevSector] < Infinity ? elapsed - sectorBests[prevSector] : 0;
         if (elapsed < sectorBests[prevSector]) sectorBests[prevSector] = elapsed;
-        const delta = elapsed - (sectorBests[prevSector] < Infinity ? sectorBests[prevSector] : elapsed);
         if (elapsed >= 2) {
           const sign = delta <= 0 ? "▼ S" : "▲ S";
           announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
         }
+        // Only a FORWARD crossing starts the next split — a spin/reverse across
+        // the boundary must not reset sectorStartT (bogus next-sector time).
+        sectorIdx = newSector;
+        sectorStartT = c.lapTime;
       }
-      sectorIdx = newSector;
-      sectorStartT = c.lapTime;
     }
   }
 
