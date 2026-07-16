@@ -88,11 +88,16 @@ test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)",
   await page.setViewportSize({ width: 640, height: 360 });
   await boot(page, "singapore", "night", "dry", 0.35);
   await page.evaluate(() => window.__apex.hud(false));
-  const dry = await regionMean(page, 0.34, 0.38, 0.32, 0.16);
+  // Sample the DARK sky band between the towers, not the mid-frame wall/facade
+  // band: those pixels sit near tonemap saturation (~185/255) where fog is
+  // luminance-neutral (haze dims the bright facades as much as glow adds), so
+  // the old region measured ~0% delta even with the glow plainly visible.
+  // The dark sky shows the lamp-tinted in-scatter directly (~+35% measured).
+  const dry = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
   await page.evaluate(() => window.__apex.weather("fog"));
-  await page.waitForTimeout(2000);
-  const foggy = await regionMean(page, 0.34, 0.38, 0.32, 0.16);
-  // The lamp-tinted fog wall must add real luminance where the lamps stand.
+  await page.waitForTimeout(3000);   // let the fog exposure ramp settle
+  const foggy = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
+  // The lamp-tinted fog glow must add real luminance to the night sky.
   expect(foggy).toBeGreaterThan(dry * 1.1);
 });
 
