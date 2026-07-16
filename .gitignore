@@ -12,6 +12,8 @@ scratch/
 # default + APEX_PORT-suffixed variants (test-results-3461/ etc.)
 test-results*/
 playwright-report*/
+# per-group logs written by tools/test-shards.sh
+test-logs/
 
 # regenerable screenshot dumps written via page.screenshot()/fs.writeFileSync
 # (lap-audit, baku-audit, ui/parts/dev-tools captures). These are human-review

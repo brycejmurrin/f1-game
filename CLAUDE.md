@@ -59,6 +59,22 @@ APEX_PORT=3462 npx playwright test tests/b.spec.js --reporter=line > /tmp/b.log 
 Reports land in `playwright-report-<port>/`, artifacts in `test-results-<port>/`
 (both gitignored). Default port 3456 with unsuffixed dirs when APEX_PORT is unset.
 
+**`tools/test-shards.sh`** wraps all of this — run whole npm groups concurrently,
+one port + log per group, with a pass/fail summary at the end:
+
+```sh
+tools/test-shards.sh smoke api collision        # 3 groups at once
+WORKERS=2 tools/test-shards.sh circuit barriers # workers per group (default 2)
+tail -f test-logs/smoke.log                     # watch one group live
+```
+
+Sizing: total browsers = groups × WORKERS, and rendering is SwiftShader (CPU),
+so on a small box 2-3 groups × 2 workers is the sweet spot. Within a single
+run, `--workers=N` raises Playwright's per-run pool (default: half the cores).
+
+IMPORTANT: tests serve `js/`/`css/` straight from the working tree — don't edit
+source files while a run is in flight, or its later specs load mixed versions.
+
 ---
 
 ## File layout
