@@ -1,7 +1,8 @@
 # Lighting & sky reference
 
 `js/glx.js` owns the shaders and light upload; `game.js` (`applyRaceSettings`,
-`buildTrackLights`, `setFrameLights`) drives the per-frame state.
+`setFrameLights`) and `js/game/lighting.js` (`buildTrackLights`) drive the
+per-frame state.
 
 ---
 
@@ -34,7 +35,8 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 GLX uploads plain uniform arrays per frame — `uLightPos[i]` (xyz + radius),
 `uLightCol[i]`, `uNumLights`, plus per-lamp aim/cone/bleed/volumetric/glare
 arrays consumed by the lit shader and the god-ray pass. Every
-`lights.push(...)` in `buildTrackLights` must be exactly 15 values.
+`lights.push(...)` in `buildTrackLights` (`js/game/lighting.js`) must be
+exactly 15 values.
 
 `setFrameLights()` re-uploads every frame: it sorts all active floodlights by
 distance to camera and keeps the nearest 32 (`MAX_LIGHTS`).
@@ -77,8 +79,8 @@ floodlights are activated.
 
 ## Floodlights
 
-`buildTrackLights()` in `game.js` places one point light every ~40 m along both
-edges of every circuit. Activated whenever the scene is dark:
+`buildTrackLights()` in `js/game/lighting.js` places one point light every ~40 m
+along both edges of every circuit. Activated whenever the scene is dark:
 
 - Any explicit night/dusk/dawn time-of-day, on any track.
 - Default mode on a track whose `_night` flag is set.

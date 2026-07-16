@@ -356,7 +356,7 @@ const DataHub = (function () {
           const row = el("div", "dh-row");
           row.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
           const ct = findTeam(s.name);
-          row.appendChild(teamChip(ct ? ct.short : s.name.slice(0, 3).toUpperCase(), s.name));
+          row.appendChild(teamChip(ct ? ct.short : (s.name ? s.name.slice(0, 3).toUpperCase() : "?"), s.name));
           row.appendChild(el("span", "dh-name", s.name || "—"));
           if (s.wins > 0) row.appendChild(el("span", "dh-wins", s.wins + "W"));
           row.appendChild(el("span", "dh-pts", s.points));
@@ -731,7 +731,7 @@ const DataHub = (function () {
   /* ================= TELEMETRY ================= */
   // Implementation: js/data-telemetry.js.
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
-    el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner,
+    el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
     ensureSession: ensureSession, buildPicker: buildPicker,
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
     cssColor: cssColor, NO_TELEM_MSG: NO_TELEM_MSG });

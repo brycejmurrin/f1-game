@@ -1,14 +1,15 @@
 /* Apex 26 — the data hub's TELEMETRY tab (trace viewer, delta, map, playback).
    Split out of js/data.js; instantiated once by the DataHub shell via
    DataTelemetry.create(ctx) with the shell helpers it needs (el/clear/
-   emptyMsg/spinner DOM builders, ensureSession/buildPicker/invalidateOther
-   session plumbing, COMPOUND, findTeam). Uses the F1API global directly.
+   emptyMsg/spinner DOM builders, sel selection state, ensureSession/
+   buildPicker/invalidateOther session plumbing, COMPOUND, findTeam).
+   Uses the F1API global directly.
    Must load BEFORE js/data.js (see index.html). */
 const DataTelemetry = (function () {
   "use strict";
 
   function create(ctx) {
-    const { el, clear, emptyMsg, spinner, ensureSession, buildPicker,
+    const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
             invalidateOther, COMPOUND, findTeam, cssColor, NO_TELEM_MSG } = ctx;
 
 

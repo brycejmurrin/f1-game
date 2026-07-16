@@ -12,7 +12,7 @@ per-track subagents read it, and it tracks which tracks are done.
 TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localStorage
 ```
 
-- `js/game.js` `TUNE_DEFS` holds each knob's factory **default**.
+- `js/game/lighting.js` `TUNE_DEFS` holds each knob's factory **default**.
 - `js/light-presets.js` `window.LightPresets` holds the shipped overrides:
   - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35`, near-matte paint).
   - `"track|tod|wx"` — a per-condition override that wins over `"*"`.
@@ -66,7 +66,7 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
 
 ## Knob reference (id · range · default · effect)
 
-_(from `TUNE_DEFS` in `js/game.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
+_(from `TUNE_DEFS` in `js/game/lighting.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
 
 ### SUN & MOON
 - `keyMul` [0..2.5] def 1.0 — direct sun/moon intensity (diffuse+spec+shadows)
