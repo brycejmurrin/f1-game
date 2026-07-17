@@ -7,6 +7,7 @@
   {
     id: "interlagos",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    sceneryCoordinates: "racing",
     // TODO: startFrac not GPS-calibrated (defaults to 0)
     name: "INTERLAGOS",
     gp: "São Paulo GP",
@@ -16,21 +17,28 @@
     lengthKm: 4.3,
     baseHW: 7,
     terrainOuter: 45,
+    dressingExclusions: [
+      // Bespoke forests, palms and skyline already cover the full lap; suppress
+      // generic layers so they do not obscure the reservoir and hero sightlines.
+      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+    ],
     pal: { zenith: [0.34, 0.54, 0.78], horizon: [0.64, 0.72, 0.62], grass: [0.30, 0.55, 0.26], fog: [0.56, 0.62, 0.56], fogDensity: 0.0018, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
     segs: [
       { t: 0, l: 240, h: 8 }, { t: -55, l: 100, h: -10 }, { t: 40, l: 90, h: -6 }, { t: -20, l: 400, h: -4 }, { t: -60, l: 110 }, { t: -50, l: 100, h: 6 },
       { t: 70, l: 100 }, { t: -80, l: 110 }, { t: 0, l: 160 }, { t: -90, l: 100 }, { t: 60, l: 90 }, { t: -70, l: 100 },
       { t: -110, l: 140, h: 6 }, { t: -20, l: 440, h: 18 },
     ],
-    // Climb from Junção / Subida dos Boxes up to the start/finish — exaggerate
-    // the lap's second elevation beat so the banked drag reads at race speed.
-    elevations: [{ s: 0.86, halfM: 520, rise: 16 }],
+    // Real Interlagos spans roughly 43 m. The crest straddles the start/finish
+    // plateau, then drops through the Senna S; the same wrapped hill creates the
+    // long climb from Junção through Subida dos Boxes.
+    elevations: [{ s: 0.97, halfM: 650, rise: 43 }],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
               addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,
               grandstand, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
-              addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront } = api;
+              addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront,
+              modelGroup, waterSurface, groundPatch } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ======================= BESPOKE INTERLAGOS MODELS =======================
@@ -45,36 +53,37 @@
       // and a rooftop water tank (caixa d'água). Grounded via anchor + slope rise. --
       const favelaPatch = (s, side, baseDist, rows, colsW, slope) => {
         const k = K(s), a = anchor(k, side, baseDist);
-        if (onTrack(a.c[0], a.c[2], 22)) return;
         const bv = [a.r, a.u, a.t];
-        for (let r = 0; r < rows; r++) {
-          const back = r * 7.5, rise = r * slope;
-          for (let c = 0; c < colsW; c++) {
-            if (hash(k * 3 + r * 17 + c * 29) > 0.85) continue;   // alleys / gaps
-            const off = (c - colsW / 2) * 7 + (hash(k + r * 5 + c) - 0.5) * 2.4;
-            // Taller houses so fewer rows still punch a clear colourful silhouette
-            const h = 5.5 + hash(k * 7 + r * 11 + c) * 7.5;
-            const w = 5 + hash(k * 9 + c) * 2.6, d = 5 + hash(k * 13 + r) * 2.4;
-            const base = vadd(vadd(vadd(a.c, a.r, back), a.u, rise), a.t, off);
-            // stacked cube house walls — rough unfinished concrete block
-            out._mat = MAT.CONCRETE;
-            addBox(out, vadd(base, a.u, h / 2), [w, h, d], FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length], bv);
-            // stacked upper room (unfinished top floor) on some houses
-            if (hash(k * 17 + r + c) > 0.50) {
-              const h2 = 2.8 + hash(k + c * 7) * 2.6;
-              addBox(out, vadd(base, a.u, h + h2 / 2), [w * 0.72, h2, d * 0.72],
-                     FAV[(r + c + 1) % FAV.length], bv);
-            }
-            // rooftop water tank (caixa d'água) — weathered corrugated tank
-            if (hash(k * 23 + r * 3 + c) > 0.48) {
-              out._mat = MAT.RUST;
-              addCyl(out, vadd(base, a.u, h + 0.7), 0.72, 1.3,
-                     hash(k + c) > 0.5 ? [0.22, 0.32, 0.58] : [0.12, 0.12, 0.14], 6, bv);
-              out._mat = MAT.CONCRETE;
+        const depth = rows * 7.5 + 8, width = colsW * 7 + 9;
+        const center = vadd(vadd(a.c, a.r, depth / 2 - 4), a.u, 18);
+        modelGroup(`interlagos-favela-${Math.round(s * 100)}`, {
+          center, size: [depth, 38, width], basis: bv,
+        }, (stage) => {
+          for (let r = 0; r < rows; r++) {
+            const back = r * 7.5, rise = r * slope;
+            for (let c = 0; c < colsW; c++) {
+              if (hash(k * 3 + r * 17 + c * 29) > 0.85) continue;   // alleys / gaps
+              const off = (c - colsW / 2) * 7 + (hash(k + r * 5 + c) - 0.5) * 2.4;
+              const h = 5.5 + hash(k * 7 + r * 11 + c) * 7.5;
+              const w = 5 + hash(k * 9 + c) * 2.6, d = 5 + hash(k * 13 + r) * 2.4;
+              const base = vadd(vadd(vadd(a.c, a.r, back), a.u, rise), a.t, off);
+              stage._mat = MAT.CONCRETE;
+              addBox(stage, vadd(base, a.u, h / 2), [w, h, d], FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length], bv);
+              if (hash(k * 17 + r + c) > 0.50) {
+                const h2 = 2.8 + hash(k + c * 7) * 2.6;
+                addBox(stage, vadd(base, a.u, h + h2 / 2), [w * 0.72, h2, d * 0.72],
+                       FAV[(r + c + 1) % FAV.length], bv);
+              }
+              if (hash(k * 23 + r * 3 + c) > 0.48) {
+                stage._mat = MAT.RUST;
+                addCyl(stage, vadd(base, a.u, h + 0.7), 0.72, 1.3,
+                       hash(k + c) > 0.5 ? [0.22, 0.32, 0.58] : [0.12, 0.12, 0.14], 6, bv);
+                stage._mat = MAT.CONCRETE;
+              }
             }
           }
-        }
-        out._mat = 0;
+          stage._mat = 0;
+        }, { required: s === 0.13 });
       };
 
       // -- Bespoke: raked PACKED crowd terrace — Brazilian yellow/green bias --
@@ -85,40 +94,46 @@
       ];
       const crowdBank = (s, side, gap, len, rows) => {
         const k = K(s), a = anchor(k, side, gap);
-        if (onTrack(a.c[0], a.c[2], 8)) return;
         const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.8, seats = Math.floor(len / 2.0);
-        out._mat = MAT.CONCRETE;
-        addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
-                 [rows * step, rows * rise, len], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
-        out._mat = 0;
-        for (let r = 0; r < rows; r++)
-          for (let c = 0; c < seats; c++) {
-            const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
-            const p = vadd(vadd(vadd(a.c, a.r, r * step), a.u, r * rise + 1.1), a.t, off);
-            addBox(out, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
-          }
+        modelGroup(`interlagos-crowd-${k}`, {
+          center: vadd(vadd(a.c, a.r, rows * step / 2), a.u, rows * rise / 2),
+          size: [len + 3, rows * rise + 3, rows * step + 3],
+          basis: [a.t, a.u, a.r],
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addPrism(stage, vadd(a.c, a.u, rows * rise * 0.5),
+                   [rows * step, rows * rise, len], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
+          stage._mat = 0;
+          for (let r = 0; r < rows; r++)
+            for (let c = 0; c < seats; c++) {
+              const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
+              const p = vadd(vadd(vadd(a.c, a.r, r * step), a.u, r * rise + 1.1), a.t, off);
+              addBox(stage, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
+            }
+        });
       };
 
       // -- Bespoke: Interlagos control / pit tower — tall concrete slab with
       // stacked dark window-band boxes (brief landmark, not a generic frustum). --
       const pitTower = (s, side, gap) => {
         const k = K(s), a = anchor(k, side, gap + 7);
-        if (onTrack(a.c[0], a.c[2], 10)) return;
         const bv = [a.r, a.u, a.t];
         const W = 14, D = 11, H = 44;
         const CONC = [0.56, 0.56, 0.58], WIN = [0.20, 0.28, 0.38], CAP = [0.42, 0.44, 0.48];
-        out._mat = MAT.CONCRETE;
-        addBox(out, vadd(a.c, a.u, H / 2), [W, H, D], CONC, bv);
-        // Stacked window bands — the silhouette that reads as a race-control tower
-        for (let i = 0; i < 9; i++) {
-          const y = 3.5 + i * 4.4;
-          addBox(out, vadd(a.c, a.u, y), [W * 1.04, 1.7, D * 1.04], WIN, bv);
-        }
-        // Control-room cap + antenna mast
-        addBox(out, vadd(a.c, a.u, H + 1.8), [W * 0.88, 3.6, D * 0.88], CAP, bv);
-        addBox(out, vadd(a.c, a.u, H + 1.8), [W * 0.94, 2.0, D * 0.94], [0.28, 0.36, 0.46], bv);
-        out._mat = 0;
-        addCyl(out, vadd(a.c, a.u, H + 3.6), 0.18, 14, [0.30, 0.30, 0.32], 4, bv);
+        modelGroup("interlagos-pit-tower", {
+          center: vadd(a.c, a.u, 27), size: [16, 58, 14], basis: bv,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, H / 2), [W, H, D], CONC, bv);
+          for (let i = 0; i < 9; i++) {
+            const y = 3.5 + i * 4.4;
+            addBox(stage, vadd(a.c, a.u, y), [W * 1.04, 1.7, D * 1.04], WIN, bv);
+          }
+          addBox(stage, vadd(a.c, a.u, H + 1.8), [W * 0.88, 3.6, D * 0.88], CAP, bv);
+          addBox(stage, vadd(a.c, a.u, H + 1.8), [W * 0.94, 2.0, D * 0.94], [0.28, 0.36, 0.46], bv);
+          stage._mat = 0;
+          addCyl(stage, vadd(a.c, a.u, H + 3.6), 0.18, 14, [0.30, 0.30, 0.32], 4, bv);
+        }, { required: true });
       };
 
       // Tropical palette constants
@@ -162,9 +177,9 @@
       // Pit-straight grandstand — Brazilian yellow/green crowd bias
       grandstand(0.94, 1, 9, 80, [0.48, 0.49, 0.54], [0.94, 0.84, 0.22]);
 
-      // Start/finish gantry + second timing gantry
+      // Start/finish gantry. The former low gantry on the steep Subida approach
+      // lost clearance against the rising road and is intentionally omitted.
       gantry(0.005, 8.2, [0.20, 0.22, 0.26]);
-      gantry(0.88,  7.0, [0.22, 0.24, 0.28]);
 
       // ---- Helicopter pad in paddock (s≈0.025) ----
       {
@@ -197,9 +212,6 @@
       grandstand(0.09, -1, 12,  90, [0.40, 0.41, 0.46], [0.92, 0.82, 0.20]);
       // Steep PACKED upper terraces rising behind the Curva 1 bowl stands
       crowdBank(0.02, -1, 30, 130, 8);
-      crowdBank(0.07, -1, 32, 90, 7);
-      // Packed pit-straight opposite terrace (arquibancadas across the S/F line)
-      crowdBank(0.955, 1, 26, 100, 7);
       for (const s of [0.00, 0.04, 0.08]) billboard(K(s), -1, 26, 16, 7, [0.94, 0.92, 0.88]);
 
       // ===================================================================
@@ -258,7 +270,7 @@
       // ---- Layer 0: Green wooded hillside backdrop (rounded mounds, NOT flat slabs) ----
       // backdrop() auto-detects GREEN dominant → renders as rounded organic hill.
       // Kept narrow (≤60 m) and well back (≥110 m) to avoid intersecting the inner loop.
-      every(30, (k) => {
+      every(120, (k) => {
         // Only L side (side=-1) for the favela hillside
         const inFavela = (() => {
           // nodes that lie between s=0.08 and s=0.32
@@ -283,9 +295,9 @@
       // ---- Layer 2: Fewer, taller, closer favela patches — punch São Paulo colour ----
       // Three dense climbing communities (was five shorter/farther ones). baseDist
       // ~36–40 m, rows 8–9, steeper slope so the silhouette reads at race speed.
-      favelaPatch(0.13, -1, 38, 8, 7, 2.6);
-      favelaPatch(0.17, -1, 36, 9, 7, 2.7);
-      favelaPatch(0.22, -1, 40, 8, 6, 2.5);
+      favelaPatch(0.13, -1, 72, 8, 7, 2.6);
+      favelaPatch(0.17, -1, 68, 9, 7, 2.7);
+      favelaPatch(0.22, -1, 72, 8, 6, 2.5);
       // A couple of taller finished landmark blocks poking above the shanties
       for (let i = 0; i < 3; i++) {
         const s = 0.14 + (i / 3) * 0.10;
@@ -306,8 +318,10 @@
       // Water planes pushed well off-track; dense shoreline vegetation with
       // forestEdge so no foliage pokes through barriers.
       // ===================================================================
-      groundPlane(K(0.33), -1, 220, [300, 2, 230], [0.21, 0.41, 0.50]);
-      groundPlane(K(0.42), -1, 230, [260, 2, 200], [0.20, 0.40, 0.48]);
+      waterSurface(K(0.42), -1, 430, [260, 2, 230], [0.21, 0.41, 0.50],
+                   { id: "interlagos-guarapiranga-near", required: true });
+      waterSurface(K(0.42), -1, 700, [260, 2, 200], [0.20, 0.40, 0.48],
+                   { id: "interlagos-guarapiranga-far", required: true });
 
       // Dense shoreline forestEdge — guaranteed no barrier clipping
       forestEdge(0.28, 0.48, -1, 28, { density: 0.80, hMin: 10, hMax: 18,
@@ -322,7 +336,8 @@
       // ===================================================================
       // DESCIDA DO LAGO (s=0.45, both mid): gravel trap + hedge + tyre wall
       // ===================================================================
-      groundPlane(K(0.45), 1, 6, [40, 1.2, 30], [0.62, 0.56, 0.40]);
+      groundPatch(K(0.45), 1, 6, [40, 1.2, 30], [0.62, 0.56, 0.40],
+                  { id: "interlagos-descida-gravel", samples: 6 });
       hedge(0.42, 0.50, -1, 14, 2.0, GREEN);
       tyreWall(0.44, 0.48, 1, 5, [0.85, 0.30, 0.30]);
       marshalPost(K(0.46), -1, 8);
@@ -338,36 +353,23 @@
         [0.50, 0.52, 0.58], [0.54, 0.56, 0.62], [0.46, 0.48, 0.54],
         [0.60, 0.58, 0.54], [0.52, 0.54, 0.60], [0.48, 0.50, 0.56],
       ];
-      cityFront(0.48, 0.78, 1, 180, {
+      cityFront(0.52, 0.69, 1, 180, {
         minH: 40, maxH: 78,
         depth: 28,
         palette: SP_PALETTE,
         lit: true,
         windowCol: LIT_WIN,
-        step: 20,
+        step: 110,
         floor: 8,
-      });
-
-      // Second row of shorter buildings behind the first (depth effect)
-      cityFront(0.50, 0.76, 1, 230, {
-        minH: 24, maxH: 52,
-        depth: 22,
-        palette: [
-          [0.44, 0.46, 0.52], [0.58, 0.56, 0.52], [0.50, 0.48, 0.54],
-        ],
-        lit: true,
-        windowCol: [0.95, 0.82, 0.48],
-        step: 26,
-        floor: 7,
       });
 
       // ---- Distant SP city silhouette using backdrop() — auto-renders as building with window bands ----
       // Replaces the old raw addBox horizon ring that looked like floating grey cubes.
       // backdrop() checks isBld (sz[1]>26 && sz[1]>sz[2]) → adds window bands + parapet.
-      every(36, (k) => {
+      every(180, (k) => {
         // Only around the R side skyline section (s≈0.40–0.85)
         const inSky = (() => {
-          const k0 = K(0.40), k1 = K(0.85);
+          const k0 = K(0.40), k1 = K(0.78);
           const span = ((k1 - k0) + n) % n;
           const off  = ((k  - k0) + n) % n;
           return off <= span;
@@ -402,32 +404,14 @@
       const kj = K(0.82);
       place(kj, -1, 2,   [0.5, 0.18, 9], [0.80, 0.18, 0.18]);
       place(kj, -1, 4.2, [3.0, 0.18, 9], [0.92, 0.92, 0.92]);
-      tyreWall(0.80, 0.84, -1, 5, [0.30, 0.55, 0.85]);
-      grandstand(0.84, 1, 11, 58, [0.41, 0.42, 0.47], [0.30, 0.52, 0.34]);
       marshalPost(K(0.82), 1, 9);
-      for (const s of [0.84, 0.86]) billboard(K(s), 1, 11, 13, 5, [0.92, 0.90, 0.86]);
 
       // ===================================================================
       // CLIMB TO S/F — Subida dos Boxes (s=0.88–0.98, both mid)
-      // Banked grey retaining slabs + pit-wall faces so the climb reads as a
-      // rising concrete corridor into the distinctive control tower.
+      // Keep this steep, folded sector visually open: the elevation and pit
+      // tower carry the identity without long legacy slabs chord-cutting the road.
       // ===================================================================
-      // Continuous low pit-side retaining wall up the climb
-      wall(0.88, 0.98, 1, 2.8, 1.35, [0.78, 0.78, 0.80], 0.5);
-      // Stepped banked concrete slabs — height grows toward the plateau
-      for (const s of [0.88, 0.90, 0.92, 0.94, 0.96, 0.98]) {
-        const k = K(s);
-        const climb = (s - 0.88) / 0.10;          // 0 → 1 along the climb
-        const h1 = 1.2 + climb * 1.6;
-        const h2 = 2.0 + climb * 2.4;
-        place(k, 1, 3.2, [1.5, h1, 14], [0.74, 0.74, 0.76]);
-        place(k, 1, 5.8, [2.2, h2, 12], [0.68, 0.68, 0.70]);
-        // Outer green bank selling the camber
-        place(k, -1, 4.0, [2.5, 1.0 + climb * 1.2, 12], HILL);
-      }
-      grandstand(0.90, -1, 10, 70, [0.42, 0.43, 0.48], [0.94, 0.84, 0.22]);
-      // Yellow/green crowd bank halfway up the climb
-      crowdBank(0.93, -1, 28, 80, 6);
+      billboard(K(0.92), -1, 18, 13, 5, [0.92, 0.90, 0.86]);
 
       // ===================================================================
       // CONTINUOUS TRACK FURNITURE — fences, armco, guardrails
@@ -440,57 +424,16 @@
       guardrail(0.50, 0.66,  1, 3.0, [0.74, 0.74, 0.78]);
 
       // Marshal posts spaced around the lap (orange roofs)
-      for (const s of [0.12, 0.20, 0.34, 0.56, 0.62, 0.76, 0.90]) {
+      for (const s of [0.12, 0.20, 0.34, 0.56, 0.62, 0.76]) {
         marshalPost(K(s), (hash(K(s)) > 0.5 ? 1 : -1), 7);
       }
-
-      // ===================================================================
-      // GREEN HILLS — wooded ridges ringing the park
-      // backdrop() with GREEN dominant auto-renders as rounded organic mounds.
-      // Placed every ~30 m around the track perimeter (skipping favela / skyline
-      // sections which have their own depth layers).
-      // ===================================================================
-      every(30, (k) => {
-        // Skip the favela hillside (L, s=0.08–0.32) and the SP skyline (R, s=0.40–0.85)
-        // — those sections have dedicated scenery; don't double-up.
-        const inFavela = (() => {
-          const k0 = K(0.08), k1 = K(0.32);
-          const span = ((k1 - k0) + n) % n;
-          return ((k - k0 + n) % n) <= span;
-        })();
-        const inSky = (() => {
-          const k0 = K(0.40), k1 = K(0.85);
-          const span = ((k1 - k0) + n) % n;
-          return ((k - k0 + n) % n) <= span;
-        })();
-        if (inFavela || inSky) return;
-
-        const hv = hash(k * 17 + 91);
-        for (const side of [-1, 1]) {
-          if (hash(k * 23 + side * 7) > 0.70) continue;   // ~70% fill → natural gaps
-          // Narrow width so onTrack catch threshold (sz[0]/2+6) stays manageable on the
-          // inner-loop layout of Interlagos. Pushed further back (≥130 m) for the same reason.
-          const d = 130 + hv * 50;
-          const sz1 = 55 + hash(k * 31 + side) * 35;     // 55–90 m (was 100–180 m)
-          const ht1 = 18 + hash(k * 37 + side) * 20;
-          backdrop(k, side, d, [sz1, ht1, sz1 * 0.55], HILL);
-        }
-      });
 
       // ===================================================================
       // PERVASIVE TROPICAL-GREEN VEGETATION around the lap
       // Use forestEdge for the main track perimeter (no clipping guaranteed)
       // ===================================================================
-      // Selective forest sections — avoid favela and skyline sections
-      forestEdge(0.10, 0.20,  1, 20, { density: 0.50, hMin: 8, hMax: 14,
-                                        col: GREEN, col2: GREEN2, pineFrac: 0.4 });
-      forestEdge(0.48, 0.66, -1, 20, { density: 0.45, hMin: 9, hMax: 15,
-                                        col: GREEN, col2: GREEN2, pineFrac: 0.35 });
-      forestEdge(0.76, 0.88,  1, 16, { density: 0.50, hMin: 8, hMax: 13,
-                                        col: GREEN, col2: GREEN2, pineFrac: 0.45 });
-
       // Supplemental scattered trees (not near favela/skyline strips)
-      every(22, (k) => {
+      every(90, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 91 + side) > 0.48) continue;
           const d = 30 + hash(k * 92 + side) * 60;

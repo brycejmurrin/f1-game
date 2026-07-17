@@ -84,6 +84,76 @@ Use `required: true` only for a hero model whose absence must fail
 `verify-track`. Invalid or suppressed groups are skipped instead of uploading
 malformed buffers and appear in `__apex.modelDiagnostics()`.
 
+### Scenery themes and reusable kits
+
+Every `scenery(api)` receives `sceneryTheme`, `landmarkKit`, and `circuitKit`.
+Binding them never places geometry: a track must explicitly call a helper.
+Definitions may opt in with:
+
+```js
+sceneryTheme: "street",
+sceneryThemeOverrides: {
+  palette: { accent: [0.1, 0.8, 1.0] },
+  budgets: { facility: 18000 },
+},
+```
+
+Theme names are `permanent`, `street`, `desert`, `park`, and `night-event`.
+Resolution precedence, lowest to highest, is neutral defaults, the named theme,
+then `sceneryThemeOverrides`; the session context is applied last (currently
+dark sessions brighten the resolved window colour). Without an explicit name,
+street definitions use `street`, definitions whose legacy `theme` is `desert`
+use `desert`, and all others use `permanent`. Unknown names resolve to
+`neutral`. Resolution is deterministic for the same definition, time, weather,
+and overrides.
+
+All LandmarkKit forms have signature `(stage, spec) -> boolean`. `spec` requires
+finite `center:[x,y,z]` and positive `size:[w,h,d]`; `color` and `basis` pass
+through to the primitive emitters.
+
+| LandmarkKit helper | Form and bounded options |
+|---|---|
+| `roof(stage, spec)` | flat/cantilever box, or prism when `kind:"sawtooth"` |
+| `facade(stage, spec)` | separated facade bays; `bays` defaults to 6 and is capped at 24 |
+| `tower(stage, spec)` | tapered stacked tower; `levels` defaults to 4 and is capped at 12 |
+| `stadiumSection(stage, spec)` | raked seating section; `rows` defaults to 8 and is capped at 16 |
+| `arch(stage, spec)` | two posts and a lintel; optional positive `postWidth` |
+| `canopy(stage, spec)` | eight-sided mast plus roof slab; optional `mastColor` |
+
+CircuitKit helpers accept a spec containing stable `id`, racing-lap `frac`,
+`side` (`-1` or `1`), and non-negative `gap`; `size:[w,h,d]`, `required`, and
+`style` are optional. IDs are diagnostic and persistence identities: make them
+unique, stable across builds, and conventionally prefix track-owned additions
+with `kit:<track>:`. Do not derive IDs from loop order that may change.
+
+| CircuitKit helper | Facility and options |
+|---|---|
+| `pitBuilding(spec)` | garage bays plus roof; `garages` defaults to 12, maximum 24 |
+| `hospitality(spec)` | alternating modules plus canopy; `modules` defaults to 4, maximum 12 |
+| `raceControl(spec)` | six-level tower using the hero budget |
+| `pedestrianBridge(spec)` | one atomic overhead span; `clearance` defaults to 5.5 m and cannot be below 4.8 m; optional positive `span`, `thickness`, `depth` |
+| `cameraCrane(spec)` | mast and camera boom |
+| `marshalShelter(spec)` | compact shelter with roof |
+| `recoveryBay(spec)` | service pad with canopy |
+| `serviceCompound(spec)` | bounded vehicle grid; `vehicles` defaults to 6, maximum 16 |
+| `trackSigns(spec)` | repeated sign slabs; `count` defaults to 8, maximum 64 |
+
+Complete grounded facilities emit through exactly one
+`TrackModels.modelGroup`; bridges delegate through exactly one
+`TrackModels.overheadSpan`. Staging is atomic: a rejected footprint, malformed
+or empty geometry, primitive/helper failure, exception, or exceeded vertex
+budget returns `false` and commits none of that model. Missing kit globals or
+dependencies also fail closed without preventing legacy scenery from building.
+Repeated loops are capped; no helper performs unbounded per-node emission.
+
+Default maximums are 50,000 vertices for a hero, 25,000 for a facility, and
+10,000 for repeated furniture in one sector. `raceControl` uses the hero
+budget; pit buildings, hospitality, and service compounds use the facility
+budget; camera cranes, marshal shelters, recovery bays, and track signs use the
+repeated budget. A definition can lower these through
+`sceneryThemeOverrides.budgets`; exceeding one rejects the complete staged
+model and records `reason: "vertex budget exceeded"`.
+
 ### Shared dressing exclusions
 
 Generic city, foliage, lamps, and floodlights can be disabled by racing-lap
@@ -101,7 +171,8 @@ dressingExclusions: [
 
 ### Context
 `out` (mesh accumulator), `track`, `def`, `theme`, `pal`, `n`, `ds`,
-`px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point).
+`px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
+`sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
 ### Placement helpers (box-based, terrain-anchored)
 | Helper | Use |

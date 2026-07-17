@@ -1,15 +1,15 @@
 # Testing reference
 
-52 root Playwright spec files (`tests/*.spec.js`), plus 24-file
+69 root Playwright spec files (`tests/*.spec.js`), plus 24-file
 `tests/blank-scan/` and `tests/inspect/` per-circuit suites and explicit-path
 helpers under `tests/galleries/`. **`inspect/**`, `blank-scan/**`, and
 `galleries/**` are excluded from default test discovery** via `testIgnore` in
-`playwright.config.js`, so a bare `npx playwright test` runs the 52 root specs
+`playwright.config.js`, so a bare `npx playwright test` runs the 69 root specs
 only; run the excluded suites by naming them explicitly. The suite covers
 physics, behaviour, geometry, cameras, UI, parts, steering, lighting, scenery,
 gamepad, timing/field hooks, headless RL, and per-circuit blank-frame detection.
 
-The 52 root specs are split into two Playwright projects (see
+The 69 root specs are split into two Playwright projects (see
 `playwright.config.js`): a **`headless`** project (physics/geometry/hook specs,
 no GPU — the default) and a **`render`** project (screenshot/pixel-diff/GL specs
 in `RENDER_SPECS`, run at `--workers=4` to cap SwiftShader concurrency). The old
@@ -56,6 +56,7 @@ node tools/verify-track.cjs --all
 | `modes` | season + time-trial game modes |
 | `map` | minimap hooks |
 | `circuit` | walls + autopilot + elevation + audit (all circuit-level) |
+| `tooling` | Node tooling/foundation contracts, including scenery themes and kits |
 | `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min) |
 | `ab` | lighting A/B pixel comparison (`lighting-ab.spec.js`) |
 | `audit` | coverage guard: every spec must belong to ≥1 group (`tools/test-coverage-audit.mjs`) |
@@ -206,6 +207,8 @@ hook values.
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line (roofs, canopies, buildings, crowds). Same point-in-triangle method against the props mesh, in 3D (0.2–5 m band above the road). Per-track `BASELINE` caps document justified overheads (Miami beach canopy, Mexico Foro Sol pass-through, gantries) and small tracked residuals; any new/worsened intrusion on a clean track fails. Measure one track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots` |
 | `track-foundation.test.mjs` | pure Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, and mesh validation |
+| `scenery-kits.test.mjs` | pure Node contracts for deterministic themes, all LandmarkKit forms, all CircuitKit facilities, bounded counts, budgets, atomic routing, and fail-closed behavior |
+| `scenery-kits.spec.js` | browser runtime binding of resolved theme/LandmarkKit/CircuitKit into Silverstone `scenery(api)`, plus finite geometry and no required model-diagnostic failures |
 
 ---
 

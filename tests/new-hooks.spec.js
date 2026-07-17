@@ -441,6 +441,26 @@ test.describe("__apex.trackProfile()", () => {
     const minY = Math.min(...pts.map((p) => p.y));
     expect(maxY - minY).toBeGreaterThan(10);
   });
+
+  test("Shanghai stays nearly flat with two subtle rises", async ({ page }) => {
+    await load(page, "shanghai");
+    const result = await page.evaluate(() => {
+      const pts = window.__apex.trackProfile(400);
+      const at = (frac) => pts.reduce((best, point) =>
+        Math.abs(point.frac - frac) < Math.abs(best.frac - frac) ? point : best);
+      const minY = Math.min(...pts.map((point) => point.y));
+      const maxY = Math.max(...pts.map((point) => point.y));
+      return {
+        range: maxY - minY,
+        turnOneRise: at(0.06).y - minY,
+        turnSixRise: at(0.30).y - minY,
+      };
+    });
+    expect(result.range).toBeGreaterThanOrEqual(0.5);
+    expect(result.range).toBeLessThanOrEqual(2);
+    expect(result.turnOneRise).toBeGreaterThan(0.35);
+    expect(result.turnSixRise).toBeGreaterThan(0.35);
+  });
 });
 
 // ── obs().gear ──────────────────────────────────────────────────────────────
@@ -482,6 +502,68 @@ test.describe("obs().gear", () => {
 test.describe("shared track foundation diagnostics", () => {
   test.use({ viewport: LANDSCAPE });
 
+  test("Silverstone uses grounded required landmarks and airfield-scale terrain", async ({ page }) => {
+    await load(page, "silverstone");
+    const result = await page.evaluate(() => {
+      const profile = window.__apex.trackProfile(400);
+      const peak = profile.reduce((a, b) => b.y > a.y ? b : a);
+      const trough = profile.reduce((a, b) => b.y < a.y ? b : a);
+      const ground = [0.04, 0.12, 0.45, 0.55, 0.85].flatMap((frac) =>
+        [-30, 0, 30].map((lat) => ({
+          lat, sample: window.__apex.groundY(frac, lat),
+        }))
+      );
+      return {
+        elevationRange: peak.y - trough.y,
+        peakFrac: peak.frac,
+        troughFrac: trough.frac,
+        ground,
+        walls: window.__apex.wallStats(),
+        models: window.__apex.modelDiagnostics(),
+        geometry: window.__apex.geometryDiagnostics(),
+      };
+    });
+
+    expect(result.elevationRange).toBeGreaterThanOrEqual(10);
+    expect(result.elevationRange).toBeLessThanOrEqual(20);
+    expect(Math.abs(result.peakFrac - 0.12)).toBeLessThan(0.03);
+    expect(Math.abs(result.troughFrac - 0.55)).toBeLessThan(0.03);
+    expect(result.ground.every(({ lat, sample }) =>
+      (lat === 0 || sample.terrainY != null) &&
+      (sample.gap == null || sample.gap <= 0.18)
+    )).toBe(true);
+    expect(result.walls.anyNaN).toBe(false);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.15);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+
+    const requiredIds = result.models.emitted
+      .filter((entry) => entry.required)
+      .map((entry) => entry.id);
+    expect(requiredIds).toEqual(expect.arrayContaining([
+      "silverstone-control-tower",
+      "silverstone-start-gantry",
+    ]));
+    const wingSegments = result.models.emitted
+      .filter((entry) => entry.id.startsWith("silverstone-wing-facade-"));
+    expect(wingSegments.map((entry) => entry.id)).toEqual([
+      "silverstone-wing-facade-1",
+      "silverstone-wing-facade-2",
+      "silverstone-wing-facade-3",
+      "silverstone-wing-facade-4",
+    ]);
+    expect(wingSegments.every((entry) =>
+      entry.required && entry.vertices >= 96
+    )).toBe(true);
+    const hard = [
+      ...result.models.invalid,
+      ...result.models.suppressed,
+      ...result.models.unsafe,
+    ].filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+    for (const span of result.models.emitted.filter((entry) => entry.overhead))
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+  });
+
   test("reports finite geometry and structured model outcomes", async ({ page }) => {
     await load(page, "cota");
     const result = await page.evaluate(() => ({
@@ -501,6 +583,90 @@ test.describe("shared track foundation diagnostics", () => {
       expect(span.clearance).toBeGreaterThanOrEqual(4.8);
   });
 
+  test("Miami emits validated water, grouped heroes, and safe overpasses", async ({ page }) => {
+    test.slow();
+    await load(page, "miami");
+    const result = await page.evaluate(() => ({
+      geometry: window.__apex.geometryDiagnostics(),
+      models: window.__apex.modelDiagnostics(),
+      profile: window.__apex.trackProfile(240),
+      walls: window.__apex.wallStats(),
+      groundGaps: [0.20, 0.42, 0.66].flatMap((frac) =>
+        [-6, 0, 6].map((lat) => window.__apex.groundY(frac, lat).gap)),
+    }));
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    const hard = [...result.models.invalid, ...result.models.suppressed, ...result.models.unsafe]
+      .filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+    const ids = new Set(result.models.emitted.map((entry) => entry.id));
+    for (const id of [
+      "beach-club-sand", "beach-club-pool", "beach-club-cabana",
+      "mia-marina-water-0", "mia-marina-water-1", "mia-marina-water-2",
+      "msc-yacht-club",
+    ]) expect(ids.has(id), id).toBe(true);
+    const spans = result.models.emitted.filter((entry) => entry.id.startsWith("turnpike-overpass-"));
+    expect(spans).toHaveLength(2);
+    expect(spans.every((entry) => entry.overhead && entry.clearance >= 4.8)).toBe(true);
+    const peak = result.profile.reduce((best, point) => point.y > best.y ? point : best);
+    expect(Math.abs(peak.frac - 0.66)).toBeLessThan(0.04);
+    expect(peak.y).toBeGreaterThan(3);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.35);
+    expect(result.groundGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
+  });
+
+  test("Jeddah declares its migrated waterfront foundation contracts", async ({ page }) => {
+    await load(page, "jeddah");
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((entry) => entry.id === "jeddah");
+      const profile = window.__apex.trackProfile(360);
+      const terrainGaps = [];
+      for (let i = 0; i < 72; i++) {
+        for (const lat of [-6, -3, 0, 3, 6]) {
+          const gap = window.__apex.groundY(i / 72, lat).gap;
+          if (gap != null) terrainGaps.push(gap);
+        }
+      }
+      return {
+        def: {
+          sceneryCoordinates: def.sceneryCoordinates,
+          terrainOuter: def.terrainOuter,
+          dressingExclusions: def.dressingExclusions,
+        },
+        elevationRange: Math.max(...profile.map((entry) => entry.y)) -
+          Math.min(...profile.map((entry) => entry.y)),
+        maxTerrainGap: Math.max(...terrainGaps),
+        walls: window.__apex.wallStats(),
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+      };
+    });
+
+    expect(result.def.sceneryCoordinates).toBe("racing");
+    expect(result.def.terrainOuter).toBe(28);
+    expect(result.def.dressingExclusions).toEqual(expect.arrayContaining([
+      { kind: "city", s0: 0, s1: 1 },
+      { kind: "lamps", s0: 0, s1: 1 },
+      { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
+    ]));
+    expect(result.elevationRange).toBeLessThanOrEqual(3);
+    expect(result.maxTerrainGap).toBeLessThanOrEqual(0.18);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.99);
+    expect(result.walls.minOverHw).toBeGreaterThanOrEqual(0);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
+    const required = result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id);
+    expect(required).toEqual(expect.arrayContaining([
+      "jeddah-fountain", "jeddah-floating-mosque", "jeddah-flagpole",
+    ]));
+    const hard = [...result.models.invalid, ...result.models.suppressed, ...result.models.unsafe]
+      .filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+    const overhead = result.models.emitted.filter((entry) => entry.overhead);
+    expect(overhead).toHaveLength(2);
+    for (const span of overhead)
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+  });
+
   test("night rebuilds expose a distinct validated props manifest", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
@@ -514,5 +680,159 @@ test.describe("shared track foundation diagnostics", () => {
     expect(counts.day).toBeGreaterThan(0);
     expect(counts.night).toBeGreaterThan(0);
     expect(counts.night).not.toBe(counts.day);
+  });
+
+  test("Singapore migration keeps models, walls, terrain, and elevation intentional", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const result = await page.evaluate(() => {
+      window.__apex.race("singapore", "day", "dry");
+      const day = {
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+      };
+      window.__apex.race("singapore", "night", "dry");
+      const geometry = window.__apex.geometryDiagnostics();
+      const models = window.__apex.modelDiagnostics();
+      const profile = window.__apex.trackProfile(720);
+      const low = profile.reduce((a, b) => b.y < a.y ? b : a);
+      const high = profile.reduce((a, b) => b.y > a.y ? b : a);
+      const terrainGaps = [];
+      for (let i = 0; i < 120; i++) {
+        for (const lat of [-6, 0, 6])
+          terrainGaps.push(window.__apex.groundY(i / 120, lat).gap);
+      }
+      return {
+        day, geometry,
+        models,
+        walls: window.__apex.wallStats(),
+        props: geometry.find((entry) => entry.name === "props")?.vertices,
+        elevation: { range: high.y - low.y, lowFrac: low.frac, highFrac: high.frac },
+        terrainGaps,
+      };
+    });
+
+    expect(result.day.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.day.models.invalid).toEqual([]);
+    expect(result.day.models.suppressed).toEqual([]);
+    expect(result.day.models.unsafe).toEqual([]);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.props).toBeGreaterThan(0);
+    expect(result.props).toBeLessThan(700_000);
+    expect(result.models.invalid).toEqual([]);
+    expect(result.models.suppressed).toEqual([]);
+    expect(result.models.unsafe).toEqual([]);
+    const emitted = new Set(result.models.emitted.map((entry) => entry.id));
+    for (const id of [
+      "marina-bay-sands", "marina-water-30", "marina-water-84",
+      "sheares-deck-0", "finish-underpass-deck-2", "start-light-cluster",
+    ]) expect(emitted.has(id), id).toBe(true);
+    for (const span of result.models.emitted.filter((entry) => entry.overhead))
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+    expect(result.walls.tightFrac).toBe(1);
+    expect(result.walls.minOverHw).toBeGreaterThanOrEqual(0);
+    expect(result.terrainGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
+    expect(result.elevation.range).toBeGreaterThan(4);
+    expect(result.elevation.range).toBeLessThan(6);
+    expect(result.elevation.lowFrac).toBeCloseTo(0.10, 1);
+    expect(result.elevation.highFrac).toBeCloseTo(0.62, 1);
+  });
+});
+
+test.describe("Madrid track foundation migration", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("owns safe grounded scenery with the intended urban elevation profile", async ({ page }) => {
+    test.setTimeout(300000);
+    await load(page, "madrid");
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((track) => track.id === "madrid");
+      const profile = window.__apex.trackProfile(240);
+      const min = profile.reduce((a, b) => a.y < b.y ? a : b);
+      const max = profile.reduce((a, b) => a.y > b.y ? a : b);
+      return {
+        sceneryCoordinates: def.sceneryCoordinates,
+        terrainOuter: def.terrainOuter,
+        dressingExclusions: def.dressingExclusions,
+        elevation: { range: max.y - min.y, maxFrac: max.frac },
+        walls: window.__apex.wallStats(),
+        day: {
+          geometry: window.__apex.geometryDiagnostics(),
+          models: window.__apex.modelDiagnostics(),
+        },
+      };
+    });
+
+    expect(result.sceneryCoordinates).toBe("racing");
+    expect(result.terrainOuter).toBeGreaterThanOrEqual(48);
+    expect(result.dressingExclusions).toContainEqual(
+      expect.objectContaining({ kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 }),
+    );
+    expect(result.elevation.range).toBeGreaterThanOrEqual(20);
+    expect(result.elevation.range).toBeLessThanOrEqual(32);
+    expect(result.elevation.maxFrac).toBeGreaterThan(0.30);
+    expect(result.elevation.maxFrac).toBeLessThan(0.50);
+    expect(result.walls.anyNaN).toBe(false);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.90);
+
+    const assertSession = (session) => {
+      expect(session.geometry.every((entry) => entry.ok)).toBe(true);
+      expect(session.geometry.find((entry) => entry.name === "props").vertices).toBeLessThan(250000);
+      const hard = [...session.models.invalid, ...session.models.suppressed, ...session.models.unsafe]
+        .filter((entry) => entry.required);
+      expect(hard).toEqual([]);
+      const ids = session.models.emitted.map((entry) => entry.id);
+      expect(ids).toEqual(expect.arrayContaining([
+        "madrid-ifema-hall",
+        "madrid-monumental",
+        "madrid-motorway-overpass",
+      ]));
+      for (const span of session.models.emitted.filter((entry) => entry.overhead))
+        expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+    };
+    assertSession(result.day);
+
+    const night = await page.evaluate(() => {
+      window.__apex.race("madrid", "night", "dry");
+      return {
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+      };
+    });
+    assertSession(night);
+  });
+
+  test("Shanghai declares safe required heroes and reflective water", async ({ page }) => {
+    await load(page, "shanghai");
+    const sessions = await page.evaluate(() => {
+      const inspect = () => ({
+        models: window.__apex.modelDiagnostics(),
+        geometry: window.__apex.geometryDiagnostics(),
+        walls: window.__apex.wallStats(),
+        ground: [0, 0.06, 0.30, 0.62, 0.90].flatMap((frac) =>
+          [-6, 0, 6].map((lat) => window.__apex.groundY(frac, lat).gap)),
+      });
+      const day = inspect();
+      window.__apex.race("shanghai", "night", "dry");
+      return { day, night: inspect() };
+    });
+    for (const [time, state] of Object.entries(sessions)) {
+      const diagnostics = state.models;
+      const emitted = new Map(diagnostics.emitted.map((entry) => [entry.id, entry]));
+      for (const id of ["shanghai-wing-east", "shanghai-wing-west", "shanghai-pudong"])
+        expect(emitted.get(id)?.required, `${time}: ${id}`).toBe(true);
+      expect([...emitted.values()].filter((entry) =>
+        entry.overhead && entry.id.startsWith("shanghai-wing-"))).toHaveLength(2);
+      for (const id of ["shanghai-yu-lake-south", "shanghai-yu-lake-north", "shanghai-marsh-pool"])
+        expect(emitted.get(id)?.water, `${time}: ${id}`).toBe(true);
+      expect([...diagnostics.invalid, ...diagnostics.suppressed, ...diagnostics.unsafe]
+        .filter((entry) => entry.required)).toEqual([]);
+      expect(state.geometry.every((entry) => entry.ok)).toBe(true);
+      expect(state.walls.anyNaN).toBe(false);
+      expect(state.walls.minB).toBeGreaterThan(1);
+      expect(state.walls.maxB).toBeLessThan(60);
+      expect(state.walls.minOverHw).toBeGreaterThan(-1.5);
+      expect(state.ground.every((gap) => gap == null || gap <= 0.18)).toBe(true);
+    }
   });
 });

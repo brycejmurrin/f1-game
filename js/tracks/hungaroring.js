@@ -15,6 +15,12 @@
     theme: "green",
     lengthKm: 4.4,
     baseHW: 7,
+    sceneryCoordinates: "racing",
+    // Bespoke treelines and circuit lamps own the bowl; suppress generic copies
+    // that crowd the pit sightline and duplicate the day-only lighting furniture.
+    dressingExclusions: [
+      { kinds: ["foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+    ],
     // Keep the terrain ribbon inside the compact foldbacks. The default 120 m
     // outer span chords from the raised T3 approach across the lower T2 basin.
     terrainOuter: 90,
@@ -35,9 +41,10 @@
     scenery: function (api) {
       const { out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
-              billboard, gantry, marshalPost, fence, guardrail, tyreWall,
+              billboard, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
-              forestEdge, along, pal, ATM } = api;
+              forestEdge, along, modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
+              recordBarrier, pal, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // 1. Dry dusty Hungarian bowl — straw-olive grass/runoff, warm haze.
@@ -245,23 +252,26 @@
       // ====================================================================
       // TRACK FURNITURE — guardrails, catch fences, tyre walls
       // ====================================================================
-      guardrail(0.00, 1.00,  1, 4.5, STEEL);  // outside armco, full lap
-      guardrail(0.00, 1.00, -1, 4.5, STEEL);  // inside armco, full lap
+      // Permanent-circuit armco sits behind meaningful grass/asphalt runoff and
+      // only protects occupied spectator sectors; the remaining bowl stays open.
+      guardrail(0.95, 0.20,  1, 8, STEEL);  // main straight + Turn 1
+      guardrail(0.30, 0.45, -1, 8, STEEL);  // mid-sector inside
+      guardrail(0.52, 0.62,  1, 8, STEEL);  // twisty-sector stands
       // Catch fences in front of busy spectator zones
-      fence(0.95, 0.20,  1, 6.5, 7, STEEL);   // main straight + Turn 1
-      fence(0.30, 0.45, -1, 6.5, 7, STEEL);   // mid-sector inside
-      fence(0.52, 0.62,  1, 6.5, 7, STEEL);   // twisty-sector stands
+      fence(0.95, 0.20,  1, 10, 7, STEEL);   // main straight + Turn 1
+      fence(0.30, 0.45, -1, 10, 7, STEEL);   // mid-sector inside
+      fence(0.52, 0.62,  1, 10, 7, STEEL);   // twisty-sector stands
       // Tyre walls at high-risk braking points
-      tyreWall(0.045, 0.075,  1, 5.5, RED);
-      tyreWall(0.14,  0.17,  -1, 5.5, [0.95, 0.85, 0.15]);
-      tyreWall(0.54,  0.57,   1, 5.5, [0.20, 0.40, 0.85]);
+      tyreWall(0.045, 0.075,  1, 9, RED);
+      tyreWall(0.14,  0.17,  -1, 9, [0.95, 0.85, 0.15]);
+      tyreWall(0.54,  0.57,   1, 9, [0.20, 0.40, 0.85]);
 
       // ====================================================================
       // MARSHAL POSTS
       // ====================================================================
       for (const [s, side] of [[0.05, 1], [0.12, -1], [0.16, -1], [0.30, -1],
                                 [0.42, 1], [0.55, -1], [0.68, 1], [0.80, -1], [0.92, 1]]) {
-        marshalPost(K(s), side, 5);
+        marshalPost(K(s), side, 8);
       }
 
       // ====================================================================
@@ -269,72 +279,99 @@
       // ====================================================================
       // Long low white/grey pit slab + tiered VIP terrace stacked on top (L).
       (function modernPit() {
-        const a = anchor(K(0.00), -1, 11);
-        if (onTrack(a.c[0], a.c[2], 20)) return;
+        const a = anchor(K(0.00), -1, 20);
         const b = [a.r, a.u, a.t];
-        out._mat = MAT.CONCRETE;
-        // Garage body — long low slab
-        addBox(out, vadd(a.c, a.u, 3.4), [11, 6.8, 78], WHITE, b);
-        // Garage-door rhythm (dark bays)
-        for (let i = -4; i <= 4; i++)
-          addBox(out, vadd(vadd(a.c, a.u, 2.6), a.t, i * 8.2), [11.4, 4.0, 1.1], [0.28, 0.30, 0.34], b);
-        // Mid cladding band
-        addBox(out, vadd(a.c, a.u, 6.0), [11.6, 0.45, 78], GREY, b);
-        // VIP terrace stacked on top
-        addBox(out, vadd(a.c, a.u, 8.6), [9.5, 3.6, 68], [0.88, 0.89, 0.92], b);
-        out._mat = MAT.METAL;
-        addBox(out, vadd(a.c, a.u, 10.7), [10.5, 0.4, 70], GREY, b);           // terrace roof
-        // Pit-lane canopy overhang toward the track (+r from left side)
-        addBox(out, vadd(vadd(a.c, a.r, 5.5), a.u, 7.0), [8, 0.4, 76], [0.82, 0.84, 0.88], b);
-        out._mat = 0;
-        // Warm VIP glass strip facing the straight
-        addBox(out, vadd(vadd(a.c, a.r, 4.6), a.u, 9.0), [0.2, 1.8, 60], WIN_WARM, b);
-        addBox(out, vadd(vadd(a.c, a.r, 4.6), a.u, 4.2), [0.2, 1.4, 64], WIN_COOL, b);
+        modelGroup("hungaroring-pit-complex", {
+          center: vadd(a.c, a.u, 7), size: [24, 15, 82], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          // Garage body — long low slab
+          addBox(stage, vadd(a.c, a.u, 3.4), [11, 6.8, 78], WHITE, b);
+          // Garage-door rhythm (dark bays)
+          for (let i = -4; i <= 4; i++)
+            addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, i * 8.2), [11.4, 4.0, 1.1], [0.28, 0.30, 0.34], b);
+          // Mid cladding band
+          addBox(stage, vadd(a.c, a.u, 6.0), [11.6, 0.45, 78], GREY, b);
+          // VIP terrace stacked on top
+          addBox(stage, vadd(a.c, a.u, 8.6), [9.5, 3.6, 68], [0.88, 0.89, 0.92], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 10.7), [10.5, 0.4, 70], GREY, b);
+          // Pit-lane canopy overhang toward the track (+r from left side)
+          addBox(stage, vadd(vadd(a.c, a.r, 5.5), a.u, 7.0), [8, 0.4, 76], [0.82, 0.84, 0.88], b);
+          stage._mat = 0;
+          // Warm VIP glass strip facing the straight
+          addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 9.0), [0.2, 1.8, 60], WIN_WARM, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 4.2), [0.2, 1.4, 64], WIN_COOL, b);
+        }, { required: true });
       })();
-      groundPlane(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK);
+      groundPatch(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK,
+                  { id: "hungaroring-paddock", samples: 8 });
       // Rear hospitality — motorhome row behind the pit slab
       motorhome(K(0.03), -1, 34, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
-      tower(K(0.02), -1, 46, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: true });
+      tower(K(0.02), -1, 46, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: 8 });
       // Pit wall + kerb trim
-      place(K(0.02), -1, 3, [0.8, 1.3, 70], WHITE);
-      place(K(0.02), -1, 2, [0.4, 0.3, 70], RED);
-      gantry(0.005, 7.5, [0.30, 0.32, 0.36]);
+      const pitWallPoints = [];
+      for (let i = 0; i <= 28; i++) {
+        const s = (0.985 + i * 0.0025) % 1;
+        pitWallPoints.push({ k: K(s), side: -1, dist: 8 });
+      }
+      groundedSegments({
+        id: "hungaroring-pit-wall", points: pitWallPoints,
+        width: 0.8, height: 1.3, color: WHITE,
+      });
+      groundedSegments({
+        id: "hungaroring-pit-wall-trim",
+        points: pitWallPoints.map((point) => Object.assign({}, point, { dist: 7.5 })),
+        width: 0.35, height: 0.3, color: RED,
+      });
+      recordBarrier(0.985, 0.055, -1, 8);
+      overheadSpan({
+        id: "hungaroring-start-gantry", frac: 0.005, clearance: 7.05,
+        thickness: 0.9, depth: 1.4, supportGap: 2.5,
+        color: [0.30, 0.32, 0.36], required: true,
+      });
 
       // Covered main tribune — big stepped wedge + dark roof box over pale seating (R).
       (function coveredMainTribune() {
         const len = 96;
-        for (let t = 0; t < 5; t++) {
-          const a = anchor(K(0.00), 1, 12 + t * 4.2);
-          if (t === 0 && onTrack(a.c[0], a.c[2], len * 0.35)) return;
-          const b = [a.r, a.u, a.t];
-          const h = 2.4 + t * 2.6;
-          out._mat = MAT.CONCRETE;
-          addBox(out, vadd(a.c, a.u, h * 0.5), [5.2, h, len - t * 2], t % 2 ? SHELL : SHELL2, b);
-          out._mat = MAT.FABRIC;
-          addBox(out, vadd(a.c, a.u, h + 0.65), [4.6, 1.2, len - t * 2 - 2], CROWD[t % 4], b);
-          out._mat = 0;
-          addBox(out, vadd(a.c, a.u, h + 1.4), [4.9, 0.25, len - t * 2], [0.90, 0.88, 0.80], b);
-        }
-        // Dark roof canopy covering the wedge (cantilever toward track)
-        const aR = anchor(K(0.00), 1, 20);
-        out._mat = MAT.METAL;
-        addBox(out, vadd(aR.c, aR.u, 16.2), [20, 0.9, len + 4], ROOF_DK, [aR.r, aR.u, aR.t]);
-        // Leading-edge fascia
-        addBox(out, vadd(vadd(aR.c, aR.r, -8), aR.u, 15.4), [1.2, 1.6, len + 2], [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
-        // Back shell wall behind the top tier
-        const aB = anchor(K(0.00), 1, 34);
-        out._mat = MAT.CONCRETE;
-        addBox(out, vadd(aB.c, aB.u, 9), [3.5, 18, len], SHELL2, [aB.r, aB.u, aB.t]);
-        out._mat = 0;
-        // Under-roof warm strip (reads occupied even in day)
-        addBox(out, vadd(aR.c, aR.u, 15.5), [14, 0.22, len - 4], [1.15, 1.00, 0.72], [aR.r, aR.u, aR.t]);
+        const boundsAnchor = anchor(K(0.00), 1, 56);
+        const boundsBasis = [boundsAnchor.r, boundsAnchor.u, boundsAnchor.t];
+        modelGroup("hungaroring-main-tribune", {
+          center: vadd(boundsAnchor.c, boundsAnchor.u, 9), size: [28, 20, len + 6], basis: boundsBasis,
+        }, (stage) => {
+          for (let t = 0; t < 5; t++) {
+            const a = anchor(K(0.00), 1, 45 + t * 4.2);
+            const b = [a.r, a.u, a.t];
+            const h = 2.4 + t * 2.6;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, h * 0.5), [5.2, h, len - t * 2], t % 2 ? SHELL : SHELL2, b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(a.c, a.u, h + 0.65), [4.6, 1.2, len - t * 2 - 2], CROWD[t % 4], b);
+            stage._mat = 0;
+            addBox(stage, vadd(a.c, a.u, h + 1.4), [4.9, 0.25, len - t * 2], [0.90, 0.88, 0.80], b);
+          }
+          // Dark roof canopy covering the wedge (cantilever toward track)
+          const aR = anchor(K(0.00), 1, 53);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(aR.c, aR.u, 16.2), [20, 0.9, len + 4], ROOF_DK, [aR.r, aR.u, aR.t]);
+          // Leading-edge fascia
+          addBox(stage, vadd(vadd(aR.c, aR.r, -8), aR.u, 15.4), [1.2, 1.6, len + 2], [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
+          // Back shell wall behind the top tier
+          const aB = anchor(K(0.00), 1, 67);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aB.c, aB.u, 9), [3.5, 18, len], SHELL2, [aB.r, aB.u, aB.t]);
+          stage._mat = 0;
+          // Under-roof warm strip (reads occupied even in day)
+          addBox(stage, vadd(aR.c, aR.u, 15.5), [14, 0.22, len - 4], [1.15, 1.00, 0.72], [aR.r, aR.u, aR.t]);
+        }, { required: true });
       })();
 
       // ====================================================================
       // ACCENT FEATURES — water pond, hedge, Hungarian flags
       // ====================================================================
-      // Water feature in the valley floor (gap=75 clears track)
-      groundPlane(K(0.08), 1, 75, [80, 1.0, 60], WATER);
+      // Water feature in the valley floor, beyond the compact T1/T2 foldback.
+      waterSurface(K(0.08), 1, 75, [40, 1.0, 32], WATER,
+                   { id: "hungaroring-lake", required: true });
       hedge(0.04, 0.11, 1, 32, 4, TREE);
 
       // Hungarian tricolour accent billboards (red/white/green)
@@ -345,8 +382,10 @@
       // KERB ACCENTS at key corners
       // ====================================================================
       for (const [s, side] of [[0.06, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
-        place(K(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE);
-        place(K(s), side, 7, [10, 0.08, 12], GRASS);
+        groundPatch(K(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE,
+                    { id: `hungaroring-kerb-${s}`, samples: 2 });
+        groundPatch(K(s), side, 7, [10, 0.08, 12], GRASS,
+                    { id: `hungaroring-runoff-${s}`, samples: 4 });
       }
 
       // ====================================================================
@@ -477,7 +516,9 @@
         const k = K(s);
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 30)) continue;
-        groundPlane(k, side, dist, [90, 1.0, 80], hash(k * 5) < 0.5 ? [0.78, 0.72, 0.36] : [0.72, 0.66, 0.34]);
+        groundPatch(k, side, dist, [90, 1.0, 80],
+                    hash(k * 5) < 0.5 ? [0.78, 0.72, 0.36] : [0.72, 0.66, 0.34],
+                    { id: `hungaroring-field-${s}`, samples: 6 });
       }
     },
   }

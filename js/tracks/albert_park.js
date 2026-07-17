@@ -13,24 +13,46 @@
     country: "Australia",
     night: false,
     theme: "green",
+    sceneryTheme: "park",
     lengthKm: 5.3,
     baseHW: 7,
+    sceneryCoordinates: "racing",
+    flatTerrain: true,
+    terrainOuter: 120,
+    dressingExclusions: [
+      { kinds: ["foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+    ],
     pal: { zenith: [0.22, 0.44, 0.82], horizon: [0.76, 0.79, 0.82], grass: [0.28, 0.50, 0.24], runoff: [0.48, 0.42, 0.32], fogDensity: 0.0012, sunDir: [0.6666666666666667, 0.6666666666666667, 0.33333333333333337], sun: [1, 0.95, 0.8], sunColor: [1, 0.93, 0.78] },
     segs: [
       { t: 0, l: 300 }, { t: 50, l: 100 }, { t: -50, l: 90 }, { t: 65, l: 80 }, { t: 0, l: 200 }, { t: 80, l: 90 },
       { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 260 }, { t: 80, l: 90 }, { t: 0, l: 200 }, { t: 70, l: 80 },
     ],
-    // Gentle parkland undulation: slight rise through the T11-T15 lakeside section,
-    // then a dip back through the T1-T4 approach — mirrors Melbourne's actual terrain.
-    elevations: [{ s: 0.12, halfM: 340, rise: 7 }, { s: 0.55, halfM: 300, rise: -5 }],
+    // Source-trace fractions. Sub-metre relief preserves measurable grade for
+    // physics without turning the essentially-flat lakeside park into hills.
+    elevations: [{ s: 0.2125, halfM: 340, rise: 0.6 }, { s: 0.6425, halfM: 300, rise: -0.4 }],
     scenery: function (api) {
-      const { out, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
+      const { out, n, px, pz, pyMin, place, prop, backdrop, waterSurface, groundPatch, modelGroup, groundYAt,
               every, hash, onTrack,
               grandstand, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
-              forestEdge, cityFront, MAT } = api;
+              forestEdge, cityFront, MAT, circuitKit } = api;
       const k = (s) => Math.round(s * n) % n;
+
+      if (circuitKit) {
+        circuitKit.marshalShelter({
+          id: "kit:albert_park:marshal-shelter", frac: 0.72,
+          side: 1, gap: 35, size: [6, 3, 5], required: true,
+        });
+        circuitKit.recoveryBay({
+          id: "kit:albert_park:recovery-bay", frac: 0.70,
+          side: 1, gap: 55, size: [12, 5, 18], required: true,
+        });
+        circuitKit.trackSigns({
+          id: "kit:albert_park:track-signs", frac: 0.88,
+          side: 1, gap: 45, size: [3, 3, 42], count: 6, required: true,
+        });
+      }
 
       // ---- Palette (Melbourne lakeside parkland, bright day) ----
       const GRASS  = [0.32, 0.62, 0.28];
@@ -47,17 +69,21 @@
       // left side (s≈0.27–0.65 L). Multi-layered water planes with depth
       // and subtle shimmer. Far basin + near-shore ripple edge zones.
       // ====================================================================
-      // Primary far-lake basin — deep water colour, broad expanse (reflective)
-      groundPlane(k(0.45), -1, 100, [1300, 4, 1300], [0.16, 0.34, 0.52], true);
-      groundPlane(k(0.38), -1, 120, [860,  4,  860], [0.18, 0.38, 0.56], true);
-      groundPlane(k(0.58), -1, 110, [820,  4,  820], [0.18, 0.38, 0.56], true);
+      // Split the basin into typed surfaces that stay clear of the foldback road.
+      waterSurface(k(0.38), -1, 120, [860, 0.2, 860], [0.18, 0.38, 0.56],
+                   { id: "albert-lake-west" });
+      waterSurface(k(0.58), -1, 110, [820, 0.2, 820], [0.18, 0.38, 0.56],
+                   { id: "albert-lake-east" });
       // Shoreline transition zones — lighter, shimmer-edge tones
-      groundPlane(k(0.50), -1,  55, [340, 4,  48], [0.26, 0.48, 0.64], true);
-      groundPlane(k(0.48), -1,  42, [380, 4,  60], [0.28, 0.52, 0.66], true);
+      waterSurface(k(0.50), -1, 55, [340, 0.12, 48], [0.26, 0.48, 0.64],
+                   { id: "albert-shore-east" });
+      waterSurface(k(0.48), -1, 42, [380, 0.12, 60], [0.28, 0.52, 0.66],
+                   { id: "albert-shore-west" });
       // Infield water wrap (interior of circuit perimeter) — muted mid-tone
       for (let i = 0; i < 4; i++) {
         const s = 0.30 + (i / 4) * 0.30;
-        groundPlane(k(s), -1, 115 + i * 8, [220, 4, 170], [0.22, 0.38, 0.52], true);
+        waterSurface(k(s), -1, 115 + i * 8, [220, 0.16, 170], [0.22, 0.38, 0.52],
+                     { id: `albert-lake-infield-${i}` });
       }
 
       // ---- Moored rowboats + kayaks (s≈0.45–0.55 water edge) ----
@@ -78,27 +104,31 @@
       const lakeFountain = (kk, dist, scale) => {
         const p = anchor(kk, -1, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 6)) return;
+        const c = [p.c[0], pyMin - 0.8, p.c[2]];
         const JET = [0.92, 0.95, 0.99];      // white spray
-        // basin ring + inner pool
-        out._mat = MAT.CONCRETE;
-        addCyl(out, p.c, 6 * scale, 0.7, [0.82, 0.84, 0.86], 18, b);
-        out._mat = 0;
-        addCyl(out, vadd(p.c, p.u, 0.7), 5.2 * scale, 0.35, [0.24, 0.50, 0.66], 18, b);
-        // central plume — stacked tapering cones of spray
-        addCone(out, vadd(p.c, p.u, 1.0), 1.7 * scale, 11 * scale, JET, 10, b);
-        addCone(out, vadd(p.c, p.u, 8.5 * scale), 0.9 * scale, 7 * scale, JET, 8, b);
-        addCone(out, vadd(p.c, p.u, 13.5 * scale), 0.4 * scale, 4 * scale, JET, 6, b);
-        // ring of angled outer spray jets
-        for (let i = 0; i < 8; i++) {
-          const a = i / 8 * 6.2832, rr = 3.6 * scale;
-          const off = vadd(vadd(p.c, p.r, Math.cos(a) * rr), p.t, Math.sin(a) * rr);
-          addCone(out, vadd(off, p.u, 0.9), 0.55 * scale, (4.5 + (i % 2) * 1.5) * scale, JET, 6, b);
-        }
-        // concentric ripple bands spreading over the water surface
-        for (const rr of [9, 12.5, 16]) {
-          addFrustum(out, vadd(p.c, p.u, 0.35), rr * scale, (rr + 0.5) * scale, 0.14,
-                     [0.32, 0.54, 0.68], 22, b);
-        }
+        modelGroup(`albert-lake-fountain-${kk}`, {
+          center: vadd(c, p.u, 9 * scale),
+          size: [34 * scale, 19 * scale, 34 * scale],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addCyl(stage, c, 6 * scale, 0.7, [0.82, 0.84, 0.86], 18, b);
+          stage._mat = 0;
+          addCyl(stage, vadd(c, p.u, 0.7), 5.2 * scale, 0.35, [0.24, 0.50, 0.66], 18, b);
+          addCone(stage, vadd(c, p.u, 1.0), 1.7 * scale, 11 * scale, JET, 10, b);
+          addCone(stage, vadd(c, p.u, 8.5 * scale), 0.9 * scale, 7 * scale, JET, 8, b);
+          addCone(stage, vadd(c, p.u, 13.5 * scale), 0.4 * scale, 4 * scale, JET, 6, b);
+          for (let i = 0; i < 8; i++) {
+            const a = i / 8 * 6.2832, rr = 3.6 * scale;
+            const off = vadd(vadd(c, p.r, Math.cos(a) * rr), p.t, Math.sin(a) * rr);
+            addCone(stage, vadd(off, p.u, 0.9), 0.55 * scale,
+                    (4.5 + (i % 2) * 1.5) * scale, JET, 6, b);
+          }
+          for (const rr of [9, 12.5, 16]) {
+            addFrustum(stage, vadd(c, p.u, 0.35), rr * scale, (rr + 0.5) * scale, 0.14,
+                       [0.32, 0.54, 0.68], 22, b);
+          }
+        }, { required: true });
       };
       lakeFountain(k(0.46), 96, 1.4);    // hero fountain, mid-lake
       lakeFountain(k(0.56), 78, 0.85);   // smaller companion jet nearer shore
@@ -370,11 +400,13 @@
       // Lighter mid-lap apex flashes + grass run-off framing
       for (const [s, side] of [[0.30, 1], [0.62, 1], [0.97, 1]]) {
         place(k(s), side, 2, [0.5, 0.25, 6], side > 0 ? RED : WHITE);
-        place(k(s), side, 7, [10, 0.1, 12], GRASS);
+        groundPatch(k(s), side, 2, [10, 0.1, 12], GRASS,
+                    { id: `albert-runoff-${s}-${side}`, samples: 5 });
       }
       // Grass run-off pads at T1 / chicane exits
       for (const [s, side] of [[0.04, 1], [0.06, -1], [0.78, -1], [0.78, 1], [0.80, -1]]) {
-        place(k(s), side, 7, [10, 0.1, 12], GRASS);
+        groundPatch(k(s), side, 2, [10, 0.1, 12], GRASS,
+                    { id: `albert-runoff-${s}-${side}`, samples: 5 });
       }
 
       // ====================================================================

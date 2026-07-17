@@ -14,6 +14,16 @@
     lengthKm: 3.3,
     baseHW: 5,
     street: true,
+    terrainOuter: 28,
+    sceneryCoordinates: "source",
+    dressingExclusions: [
+      // Keep generic city furniture out of the tunnel and the Casino sightline.
+      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.50, s1: 0.60 },
+      { kind: "city", s0: 0.17, s1: 0.24 },
+      // Exclusions are always racing-space, even though bespoke scenery is source-space.
+      // The harbour occupies the right side of the racing lap from Portier to Rascasse.
+      { kinds: ["city", "foliage", "lamps"], s0: 0.29, s1: 0.70, side: 1 },
+    ],
     // The bundled GPS trace (js/circuits.js) runs counter-clockwise; real Monaco
     // is driven CLOCKWISE. `reverse` flips the lap direction in the engine
     // (centreline + minimap + scenery/barrier s-coordinates) so the car drives
@@ -36,10 +46,12 @@
     // Climb to Casino Square, then the plunge down through Mirabeau and the
     // tunnel toward the harbour (~42 m top-to-bottom). Street circuit: barriers,
     // not a wide terrain ribbon, so elevation was always safe here.
-    elevations: [{ s: 0.27, halfM: 340, rise: 18 }, { s: 0.55, halfM: 220, rise: -10 }],
+    elevations: [{ s: 0.10, halfM: 340, rise: 30 }, { s: 0.55, halfM: 220, rise: -10 }],
     scenery: function (api) {
-      const { out, MAT, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, groundPlane, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
+      const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
+      const racingSide = (side) => def.reverse ? -side : side;
 
       // ── Colour palette ────────────────────────────────────────────────────
       // Mediterranean pastels: cream, terracotta, ochre, dusty rose, stone
@@ -63,8 +75,10 @@
       const { pastelStreetRow } = api;
 
       // ── Continuous Armco lining both sides — tight street feel ───────────
-      wall(0.0, 1.0, -1, 0.4, 0.8, ARMCO, 0.22);
-      wall(0.0, 0.48, 1, 0.4, 0.8, ARMCO, 0.22);
+      // 1.2 m leaves the collision limit just outside the authored 5 m road,
+      // instead of narrowing the usable tarmac while remaining Monaco-tight.
+      wall(0.0, 1.0, -1, 1.2, 0.8, ARMCO, 0.22);
+      wall(0.0, 1.0, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
@@ -86,10 +100,13 @@
       // Sainte Devote chapel (s=0.05, R mid)
       {
         const k = K(0.05), a = anchor(k, 1, 18);
-        if (!onTrack(a.c[0], a.c[2], 8)) {
-          addBox(out, vadd(a.c, a.u, 4), [9, 8, 11], CREAM, [a.r, a.u, a.t]);
-          addPrism(out, vadd(a.c, a.u, 9.2), [9.4, 3.2, 11.2], [0.32, 0.22, 0.20], [a.r, a.u, a.t]);
-        }
+        const b = [a.r, a.u, a.t];
+        modelGroup("monaco-sainte-devote", {
+          center: vadd(a.c, a.u, 5.6), size: [9.4, 11.2, 11.2], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 4), [9, 8, 11], CREAM, b);
+          addPrism(stage, vadd(a.c, a.u, 9.2), [9.4, 3.2, 11.2], [0.32, 0.22, 0.20], b);
+        }, { required: true });
       }
 
       // ── SECTOR 2 — BEAU RIVAGE HILLSIDE CLIMB (s=0.08→0.26) ─────────────
@@ -280,7 +297,11 @@
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const cw = hw[k] * 2 + 5;
-          addBox(out, vadd([px[k], py[k], pz[k]], u, 6.4), [cw, 1.2, ds * step * 1.05], DARK, [r, u, t]);
+          overheadSpan({
+            id: `monaco-tunnel-roof-${k}`, frac: k / n, clearance: 5.8,
+            thickness: 1.2, depth: ds * step * 1.05, span: cw,
+            color: DARK, supports: false, required: true,
+          });
           for (const sd of [-1, 1]) {
             const o = sd * (hw[k] + 1.5);
             addBox(out, vadd([px[k] + r[0] * o, py[k], pz[k] + r[2] * o], u, 3.2), [1.4, 6.4, ds * step * 1.05], [0.30, 0.29, 0.33], [r, u, t]);
@@ -295,7 +316,11 @@
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
-          addBox(out, vadd([px[k], py[k], pz[k]], u, 3.8), [hw[k] * 2 + 7, 7.6, 1.8], [0.32, 0.31, 0.36], [r, u, t]);
+          overheadSpan({
+            id: `monaco-tunnel-portal-${k}`, frac: k / n, clearance: 6.2,
+            thickness: 1.4, depth: 1.8, span: hw[k] * 2 + 7,
+            color: [0.32, 0.31, 0.36], supports: false, required: true,
+          });
         }
       }
 
@@ -318,10 +343,6 @@
 
       // ── HARBOUR WATER & QUAY ─────────────────────────────────────────────
       const SEA = [0.10, 0.34, 0.55], SEA2 = [0.13, 0.40, 0.60];
-      for (let i = 0; i < 6; i++) {
-        const k = K(0.60 + i * 0.062), a = anchor(k, -1, 70);
-        addBox(out, vadd(a.c, a.u, -1.2), [150, 0.8, 120], i % 2 ? SEA2 : SEA, [a.r, a.u, a.t]);
-      }
       // Low stone quay wall between track and water
       wall(0.585, 0.99, -1, 1.0, 1.4, [0.74, 0.70, 0.62], 1.0);
 
@@ -411,11 +432,14 @@
           addBox(out, vadd(vadd(a.c, a.r, 7.4), a.u, 2.2), [1.4, 0.4, 4], [0.85, 0.86, 0.88], b);
         }
       }
-      // Waterfront terrace lips on Tabac stretch (behind façades)
-      for (let i = 0; i < 5; i++) {
-        const k = K(0.71 + i * 0.02);
-        place(k, 1, 18, [20, 0.8, 1.2], [0.88, 0.86, 0.80]);
-      }
+      // Waterfront terrace lip follows the sloping ground at every segment.
+      groundedSegments({
+        id: "monaco-tabac-terrace",
+        points: Array.from({ length: 6 }, (_, i) => ({
+          k: KR(0.71 + i * 0.02), side: racingSide(1), dist: 18,
+        })),
+        width: 0.8, height: 0.8, color: [0.88, 0.86, 0.80],
+      });
 
       // ── RASCASSE / PADDOCK (s=0.87→0.95, R) ─────────────────────────────
       // Low paddock hospitality buildings — proper massing, not flat boxes.
@@ -557,9 +581,16 @@
       // ── Reflective Mediterranean harbour (groundPlane water:true) ─────────
       // A true reflective water buffer that mirrors the sky, laid across the
       // whole harbour basin behind the promenade. Sits below the quay lip.
-      for (let i = 0; i < 5; i++) {
-        const k = K(0.61 + i * 0.07);
-        groundPlane(k, -1, 40, [170, 1.2, 150], SEA, true);
+      // Three longitudinal stations × eight outward ranks form a bounded tiled
+      // basin. Individual 46×48 m panels cannot chord across Monaco's foldbacks.
+      const harbourStations = [0.365, 0.545, 0.59]; // racing fractions
+      const harbourRanks = [22, 68, 114, 252, 298, 344, 390, 436];
+      for (let station = 0; station < harbourStations.length; station++) {
+        for (let rank = 0; rank < harbourRanks.length; rank++) {
+          waterSurface(K(harbourStations[station]), 1, harbourRanks[rank],
+            [46, 0.35, 48], (station + rank) % 2 ? SEA2 : SEA,
+            { id: `monaco-harbour-water-${station}-${rank}`, required: true });
+        }
       }
 
       // ── FLAGSHIP SUPERYACHT — bespoke multi-deck megayacht ───────────────
@@ -646,20 +677,17 @@
           addBox(out, vadd(pc, u, 4.4), [2.4, 8.8, 3.0], CREAM, b);
           addBox(out, vadd(pc, u, 9.0), [3.0, 0.8, 3.4], STONE, b);   // cornice cap
         }
-        // Arched voussoir crown — a shallow fan of stone blocks
-        for (let j = -3; j <= 3; j++) {
-          const ang = j * 0.16;
-          const rise = 8.2 + Math.cos(ang) * 1.4;
-          addBox(out, vadd(vadd(base, r, j * span * 0.13), u, rise), [span * 0.16, 1.6, 3.0],
-                 j % 2 ? STONE : DUSTY, b);
-        }
-        // Keystone
-        addBox(out, vadd(base, u, 9.6), [1.8, 2.2, 3.2], OCHRE, b);
-        // "MONACO" fascia band + rockface above
-        out._mat = MAT.METAL;
-        addBox(out, vadd(base, u, 10.8), [span * 0.9, 1.4, 2.2], [0.30, 0.42, 0.30], b);
-        out._mat = MAT.ROCK;
-        addBox(out, vadd(base, u, 14), [span * 1.1, 5, 4], [0.34, 0.40, 0.30], b);
+        // Typed overhead crown: explicit clearance keeps the portal intentional.
+        overheadSpan({
+          id: "monaco-ornate-portal-crown", frac: k / n, clearance: 8.0,
+          thickness: 2.8, depth: 3.2, span: span * 0.92,
+          color: DUSTY, supports: false, required: true,
+        });
+        overheadSpan({
+          id: "monaco-ornate-portal-rock", frac: k / n, clearance: 11.0,
+          thickness: 5.0, depth: 4.0, span: span * 1.1,
+          color: [0.34, 0.40, 0.30], supports: false, required: true,
+        });
         out._mat = 0;
       }
 

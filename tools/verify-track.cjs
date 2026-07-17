@@ -112,6 +112,9 @@ function buildContext() {
   runFile("js/track-space.js");         // explicit source/racing coordinate transforms
   runFile("js/track-surface.js");       // shared terrain + grounding profile
   runFile("js/track-models.js");        // atomic/overhead/water model helpers
+  runFile("js/scenery-themes.js");      // deterministic resolved scenery styles
+  runFile("js/landmark-kit.js");        // staged architectural forms
+  runFile("js/circuit-kit.js");         // complete facilities through TrackModels
   // Each circuit's definition lives in js/tracks/<id>.js and pushes itself onto
   // window.TrackDefs; tracks.js reads that list at load time (DEFS = window.
   // TrackDefs), so these must run BEFORE it — mirroring the <script> order in

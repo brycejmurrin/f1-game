@@ -92,11 +92,16 @@ function initRainDrops() {
   // field — light precipitation that reads as drizzle, not a downpour. "rain"
   // keeps the full storm density.
   const drizzle = isWetRoad() && !isRaining();
-  rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? 0.3 : 1)) }, () => ({
+  // DRIZZLE ratios: count/length/fall-speed of a WET-road drizzle relative to a
+  // full storm, each a live knob (defs 0.3/0.5/0.6 reproduce the shipped drizzle).
+  const dzCount = LT.drizzleCount != null ? LT.drizzleCount : 0.3;
+  const dzLen   = LT.drizzleLen   != null ? LT.drizzleLen   : 0.5;
+  const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6;
+  rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? dzCount : 1)) }, () => ({
     x: Math.random() * rainCanvas.width,
     y: Math.random() * rainCanvas.height,
-    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? 0.5 : 1),
-    speed: (380 + Math.random() * 360) * (drizzle ? 0.6 : 1),
+    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? dzLen : 1),
+    speed: (380 + Math.random() * 360) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
     opacity: 0.16 + Math.random() * 0.34,
   }));
 }
@@ -108,13 +113,17 @@ function drawRain(dt) {
   // (one beginPath/stroke instead of one per drop). The blur/motion of a rain field
   // hides that the per-drop opacity is now uniform. Drizzle draws fainter.
   rainCtx2d.strokeStyle = "#afc8e8";
-  rainCtx2d.globalAlpha = isRaining() ? 0.25 : 0.16;   // ~mean of the 0.16..0.50 per-drop range
+  // RAIN OPACITY knob (def 1) scales the streak-layer alpha; def reproduces the
+  // shipped 0.25/0.16 exactly. Clamped to canvas' valid 0..1 globalAlpha range.
+  rainCtx2d.globalAlpha = clamp((isRaining() ? 0.25 : 0.16) * (LT.rainOpacity != null ? LT.rainOpacity : 1), 0, 1);   // ~mean of the 0.16..0.50 per-drop range
   // SPEED-REACTIVE streaks: at speed the rain shears toward the camera's motion
   // and stretches into driving streaks (apparent velocity = fall + car speed).
   // Render-only — reads player.speed, never writes physics state.
   const vk = clamp(((player && player.speed) || 0) / 90, 0, 1);
-  const wind = LT.rainWind + vk * 0.9;
-  const lenMul = 1 + vk * 2;
+  // RAIN SPEED SHEAR: how much apparent wind slants (rainShearWind) and stretches
+  // (rainShearLen) the streaks at speed. Defs 0.9/2 reproduce the shipped shear.
+  const wind = LT.rainWind + vk * (LT.rainShearWind != null ? LT.rainShearWind : 0.9);
+  const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
   rainCtx2d.beginPath();
   for (const d of rainDrops) {
     d.y += d.speed * dt;
@@ -669,7 +678,14 @@ function hueRotateTint(rgb, deg) {
 function satAdjust(rgb, amt) {
   if (!rgb || amt === 1) return rgb;
   const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;   // luma (grey anchor)
-  return [m + (rgb[0] - m) * amt, m + (rgb[1] - m) * amt, m + (rgb[2] - m) * amt];
+  // Clamp to >=0: at amt>1 a channel below the grey anchor can overshoot past
+  // black into negative radiance, which then subtracts in the additive sky/fog/
+  // reflection mixes (skyZenith/Horizon + fogColor feed the dome, glass, wet
+  // road and SSR fallback) and inverts hue. Default amt===1 early-returns above,
+  // so this stays byte-identical at the shipped setting.
+  return [Math.max(0, m + (rgb[0] - m) * amt),
+          Math.max(0, m + (rgb[1] - m) * amt),
+          Math.max(0, m + (rgb[2] - m) * amt)];
 }
 const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 function fmtTime(t) {
@@ -1671,7 +1687,7 @@ function applyRaceSettings() {
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
     // light) so heavy overcast reads atmospheric, not just a flat grey dim.
-    frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
+    frame.fogDensity = (frame.fogDensity || 0.0016) * (LT.overcastFogMul != null ? LT.overcastFogMul : 1.7);
     if (raceTimeOfDay === "default") { frameSky.horizon = [0.74, 0.73, 0.74]; frame.skyHorizon = frameSky.horizon; }
     // A night session must stay dark under overcast too — same guard the wet/fog
     // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
@@ -1682,7 +1698,7 @@ function applyRaceSettings() {
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     frameSky.cloud = Math.min(0.85, _cloudBase + 0.35);
-    frame.fogDensity = (frame.fogDensity || 0.0017) * 3.0;
+    frame.fogDensity = (frame.fogDensity || 0.0017) * (LT.fogWxMul != null ? LT.fogWxMul : 3.0);
     const fc = [0.74, 0.76, 0.78];
     frame.fogColor = fc;
     // Don't erase an explicit twilight horizon (dawn magenta / dusk coral) — only
@@ -4219,6 +4235,16 @@ function render(dt) {
   frameSky.cloudSilver   = LT.cloudSilver;
   frameSky.coronaAureole = LT.coronaAureole;
   frameSky.sunDiscSize   = LT.sunDiscSize;
+  // STAR SIZE / TWINKLE, MOON DISC SIZE / HALO, SUN CORONA / SQUASH, CITY GLOW
+  // REACH and CLOUD DEFINITION knobs also ride the sky object (sky pass).
+  frameSky.starSize      = LT.starSize;
+  frameSky.starTwinkle   = LT.starTwinkle;
+  frameSky.moonDiscSize  = LT.moonDiscSize;
+  frameSky.moonHalo      = LT.moonHalo;
+  frameSky.sunCorona     = LT.sunCorona;
+  frameSky.sunSquash     = LT.sunSquash;
+  frameSky.cityGlowReach = LT.cityGlowReach;
+  frameSky.cloudDef      = LT.cloudDef;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -4267,24 +4293,27 @@ function render(dt) {
       }
     }
     if (_ltFlash > 0.001) {
-      // Decay: fast leading edge, then slow dying glow
-      _ltFlash *= Math.exp(-8 * dt);
+      // Decay: fast leading edge, then slow dying glow (LIGHTNING DECAY, def 8).
+      _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
       if (_ltFlash < 0.001) _ltFlash = 0;
     }
     if (_ltFlash > 0) {
       // Spike ambient to a cool blue-white; the decay reads as a natural flash.
       // A brief exposure lift too, so the whole frame bleaches for the strike.
       // Written IN PLACE (no per-frame array allocation — this ran every rain
-      // frame, exactly when the frame is already heaviest).
+      // frame, exactly when the frame is already heaviest). LIGHTNING FLASH (def
+      // 1) scales the ambient spike + exposure lift together; def reproduces the
+      // shipped 0.55/0.40/0.22 exactly.
+      const lf = LT.lightningFlash != null ? LT.lightningFlash : 1;
       const f = _ltFlash, aS = frame.ambientSky, aG = frame.ambientGround;
       for (let i = 0; i < 3; i++) {
-        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f);
-        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f);
+        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f * lf);
+        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f * lf);
       }
       // SET from the saved base (was `+=`: it accumulated every frame of the
       // ~0.9 s flash and was never restored — each strike permanently brightened
       // the scene by ~+1.65 exposure, washing a stormy race out to white).
-      frame.exposure = _ltBase.exposure + 0.22 * f;
+      frame.exposure = _ltBase.exposure + 0.22 * f * lf;
     } else {
       // Restore base ambient + exposure so normal ticks aren't tinted (in place).
       const aS = frame.ambientSky, aG = frame.ambientGround;
@@ -4295,7 +4324,7 @@ function render(dt) {
     // Weather flipped dry mid-flash: the decay above is inside the raining gate,
     // so without this the flash froze >0 and frameSky.lightning (set uncondition-
     // ally each frame) kept the sky partially bleached until the next storm.
-    _ltFlash *= Math.exp(-8 * dt);
+    _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
     if (_ltFlash < 0.001) _ltFlash = 0;
   }
 
@@ -4966,9 +4995,10 @@ function render(dt) {
   const _sunLumGR = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
   const _sunGateGR = clamp((_sunLumGR - 0.35) / 0.45, 0, 1);
   // GOD-RAY LOW-SUN DRAMA knob (def 0.55) scales only the low-sun boost added on
-  // top of the flat 0.38 base; SUN GOD-RAYS (LT.grMul) scales the whole thing.
+  // top of the flat GOD-RAY BASE (def 0.38); SUN GOD-RAYS (LT.grMul) scales the whole thing.
   const _grLowBoost = LT.godrayLowBoost != null ? LT.godrayLowBoost : 0.55;
-  const _gr = (_grSunY > 0.02 ? (0.38 + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  const _grBase     = LT.godrayBase != null ? LT.godrayBase : 0.38;
+  const _gr = (_grSunY > 0.02 ? (_grBase + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
