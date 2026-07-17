@@ -103,7 +103,7 @@ uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distanc
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
-uniform float uShadowRange; // sun shadow box half-size (m, def 64) — drives the receiver-distance shadow fade
+uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -403,7 +403,7 @@ float sampleShadow(vec3 wpos) {
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.z >= 1.0) return 1.0;
   // Distance fade: dissolve shadows by RECEIVER distance from the camera, well
-  // inside the shadow box (uShadowRange = box half-size, def ±64 m). Anchored
+  // inside the shadow box (uShadowRange = box half-size, def ±80 m). Anchored
   // to the camera, this front glides smoothly as you drive — the old UV-space
   // border fade was anchored to the BOX, which recentres in sBox/4 jumps, so
   // the fade band visibly JUMPED forward every recentre at racing speed.
@@ -424,10 +424,10 @@ float sampleShadow(vec3 wpos) {
   // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
   // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
   // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
-  // casters (lamp posts, kerbs) out to lit. Scale the kernel by 64/box (clamped to
+  // casters (lamp posts, kerbs) out to lit. Scale the kernel by 80/box (clamped to
   // 1 so the crisp look at/below the default box is unchanged) to hold the world
-  // penumbra ~constant as the box grows.
-  float boxK = min(1.0, 64.0 / uShadowRange);
+  // penumbra ~constant as the box grows. Anchor tracks the shadowRange def.
+  float boxK = min(1.0, 80.0 / uShadowRange);
   // Distance LOD: full 8-tap Poisson + PCSS-lite blocker search near the camera
   // (crisp tyre/kerb contact shadows), a cheap 4-tap disk on distant ground where
   // the shadow is small on screen. Halves shadow bandwidth over most of the frame.
@@ -436,8 +436,8 @@ float sampleShadow(vec3 wpos) {
   // 55 m, so a fixed cutoff parked a hard 8-tap→4-tap / PCSS-off quality ring in the
   // MIDDLE of still-strong shadows — and, anchored to the camera, that ring swept across
   // the ground as you drove. 0.86 places the switch just past the 0.72 fade-out at every
-  // range, so it always lands where shadows are already faint (invisible), and is
-  // byte-identical to the old 55 m at the default box (0.86*64 ≈ 55).
+  // range, so it always lands where shadows are already faint (invisible); at the
+  // old 64 m box it matched the original fixed 55 m cutoff (0.86*64 ≈ 55).
   bool near = vDist < uShadowRange * 0.86;
   float R = 3.0;
   if (near && uPcss > 0.5) {

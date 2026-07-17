@@ -1035,7 +1035,7 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      d[73] = (T && T.shadowStr != null) ? T.shadowStr : 1.0;       // SHADOW STRENGTH knob
+      d[73] = (T && T.shadowStr != null) ? T.shadowStr : 1.15;      // SHADOW STRENGTH knob
       d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
       d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.0015;  // SHADOW BIAS knob
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.

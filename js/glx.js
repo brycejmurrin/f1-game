@@ -1060,9 +1060,9 @@ const GLX = (function () {
       let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
-      gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.0) * _hf);
+      gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
-      gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 64.0);
+      gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 80.0);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHADOW_SIZE);
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);

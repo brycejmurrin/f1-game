@@ -3855,7 +3855,7 @@ function render(dt) {
 
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
-  // (16 m at the default 64 m box) so the map only re-renders when the camera
+  // (20 m at the default 80 m box) so the map only re-renders when the camera
   // moves a cell — and so each recentre shifts the box by an exact whole number
   // of shadow texels (sBox/4 is SHADOW_SIZE/8 texels for any pow-2 map size).
   // The old snap was on a world-XZ grid with an unsnapped camera HEIGHT: those
@@ -3891,7 +3891,7 @@ function render(dt) {
       const wy = xy * lu + yy * lv + zy * lw;
       const wz = xz * lu + yz * lv + zz * lw;
       M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
-      // Half-size box (default ±64 m / 128 m) snapped to the camera; sampleShadow
+      // Half-size box (default ±80 m / 160 m) snapped to the camera; sampleShadow
       // fades shadows out by camera distance well inside its border. Bigger =
       // more reach, smaller = crisper contacts (texel density = 2048/box).
       M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
