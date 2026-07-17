@@ -51,11 +51,12 @@ const BASELINE = {
   bahrain: 4.8,
   miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
   mexico: 4.1, mexico_note: "Foro Sol stadium — track runs through by design",
-  // street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
+  // Unmigrated street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
   // road edge (the track boundary the car stays inside), now sitting on the real
   // terrain ribbon added for these tracks — verified via driver-eye as the wall,
-  // not a lane obstruction. Bumped from the pre-ribbon caps accordingly.
-  monaco: 1.4, singapore: 1.3, vegas: 1.3, baku: 1.7, jeddah: 1.4,
+  // not a lane obstruction. Vegas moved its wall outward during its track-owned
+  // migration and is clean, so it no longer carries a raised baseline.
+  monaco: 1.4, singapore: 1.3, baku: 1.7, jeddah: 1.4,
   abudhabi: 1.2, albert_park: 0.7, zandvoort: 0.8,
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
