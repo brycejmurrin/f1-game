@@ -171,7 +171,7 @@ struct FrameU {
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
-  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, _, _) — env-cube probe strength (0 = analytic sky only) + cloud-shadow drift rate
+  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, _) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, _, _) — wet darkening + car-shadow arm flag
   carLightVP : mat4x4<f32>,   // off 384  Z01-remapped car-shadow view-proj (per-frame car-only map)
@@ -203,7 +203,8 @@ struct DrawU {
 @group(0) @binding(4) var envCube : texture_cube<f32>;
 @group(0) @binding(5) var envSamp : sampler;
 @group(0) @binding(6) var ssrTex  : texture_2d<f32>;
-@group(0) @binding(7) var carShadowTex : texture_depth_2d;   // per-frame car-only shadow map (shares shadowSamp)
+@group(0) @binding(7) var blockerTex : texture_2d<f32>;      // PCSS-lite min-depth blocker map (512², r16float)
+@group(0) @binding(8) var carShadowTex : texture_depth_2d;   // per-frame car-only shadow map (shares shadowSamp)
 @group(1) @binding(0) var<uniform> D : DrawU;
 ${hash}
 ${vnoise}
@@ -230,6 +231,14 @@ fn cloudShadow(wp: vec3<f32>) -> f32 {
   let cT = F.params0.z * F.params5.y;
   let cp = (wp.xz + F.sunDir.xz * t) * 0.0052 + vec2<f32>(cT * 0.012, cT * 0.005);
   return smoothstep(0.54 - cover * 0.40, 0.92, cloudFBM(cp)) * cover;
+}
+
+fn findBlocker(suv : vec2<f32>, bt : f32) -> f32 {
+  let d0 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>(-bt,  bt), 0.0).r;
+  let d1 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>( bt,  bt), 0.0).r;
+  let d2 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>(-bt, -bt), 0.0).r;
+  let d3 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>( bt, -bt), 0.0).r;
+  return min(min(d0, d1), min(d2, d3));
 }
 
 struct VSOut {
@@ -411,8 +420,19 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
       let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
       let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
-      // PENUMBRA: pcfStep = texel * (1 + pcssPen). pcssPen=0 -> unchanged.
-      let pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0));   // params2.z = 1/shadowMapSize
+      // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
+      let aDist = distance(in.wpos, F.shadowCtr.xyz);
+      let near = aDist < shRange * 0.80;
+      var pcfStep = F.params2.z;
+      if (near && F.params4.x > 0.0) {
+        let boxK = min(1.0, 64.0 / F.shadowCtr.w);
+        let bt = (1.5 / 512.0) * boxK;
+        let zb = findBlocker(suv, bt);
+        let pen = clamp((refD - zb) * (F.params4.x * 266.666), 0.0, 1.0);
+        pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0) * pen);
+      } else {
+        pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0));
+      }
       var s = 0.0;
       for (var oy = -1; oy <= 1; oy = oy + 1) {
         for (var ox = -1; ox <= 1; ox = ox + 1) {
@@ -449,7 +469,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Cloud dapple multiplies the cast shadow exactly like GLX (LIT_FS composite):
   // applied outside the depth-map gate, so broken cloud still shades the ground
   // even where/when the sun shadow map is off.
-  shadow = shadow * (1.0 - cloudShadow(in.wpos) * 0.80);
+  // CLOUD SHADOW DEPTH knob (F.params5.z; GLX parity). _writeFrame always packs
+  // the resolved value (0.80 default), so 0 here means a real "no cloud shade".
+  shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z);
   let litNoL = NoL * keyMul * shadow;
   // SHADOW TINT (F.params4.y = shadowTintAmt): push shadowed regions toward a cool
   // colour (sky-fill bias), applied to the hemisphere ambient so cast shadows read
@@ -744,7 +766,7 @@ struct SkyU {
   sunColor    : vec4<f32>,     // xyz
   cityGlow    : vec4<f32>,     // xyz night light-pollution dome
   p0          : vec4<f32>,     // (stars, cloud, time, moon)
-  p1          : vec4<f32>,     // (starBright, cloudSpeed, _, _)
+  p1          : vec4<f32>,     // (starBright, cloudSpeed, skyGrad, starDensity)
 };
 @group(0) @binding(0) var<uniform> U : SkyU;
 ${hash}
@@ -780,6 +802,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let moon = U.p0.w;
   let starBright = U.p1.x;
   let cloudSpeed = U.p1.y;
+  // SKY GRADIENT / STAR DENSITY knobs (GLX parity). Defaults reproduce shipped.
+  let skyGrad = select(0.35, U.p1.z, U.p1.z > 0.0);
+  let starDensity = select(1.0, U.p1.w, U.p1.w > 0.0);
 
   let sunE = clamp(sunDir.y * 1.4, 0.0, 1.0);
   let daytime = smoothstep(0.35, 0.60, sunE);
@@ -792,7 +817,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // --- Sky gradient ---
   var c : vec3<f32>;
   if (up >= 0.0) {
-    c = mix(U.horizon.xyz, U.zenith.xyz, pow(max(up, 0.0), 0.35));
+    c = mix(U.horizon.xyz, U.zenith.xyz, pow(max(up, 0.0), skyGrad));
     // Golden-hour warm band near the horizon when the sun is low.
     let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up));
     let goldenColor = mix(vec3<f32>(0.70, 0.22, 0.04), vec3<f32>(0.92, 0.55, 0.16),
@@ -842,7 +867,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let SC = 180.0;
     let cell = floor(dir * SC);
     let h = hash3(cell);
-    if (h > 0.9968) {
+    // STAR DENSITY knob (GLX parity): scale the (1 - threshold) spawn window,
+    // clamped below 1 so a huge density can't reject every cell to a blank sky.
+    if (h > min(0.9994, 1.0 - (1.0 - 0.9968) * starDensity)) {
       let jit = vec3<f32>(hash3(cell + 7.1), hash3(cell + 13.7), hash3(cell + 29.3)) - 0.5;
       let sdir = normalize((cell + 0.5 + jit * 0.8) / SC);
       let dstar = length(dir - sdir);

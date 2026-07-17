@@ -1044,7 +1044,7 @@ const GLX = (function () {
     gl.uniform3fv(litU.uSunDir, frame.sunDir);
     gl.uniform3fv(litU.uSunColor, frame.sunColor);
     // Live tunables (LIGHTING TUNER / __apex.lightTune) ride in on frame.tune;
-    // defaults here MUST mirror game.js TUNE_DEFS so a missing tune object
+    // defaults here MUST mirror LightTune.TUNE_DEFS (js/game/lighting.js) so a missing tune object
     // (unit harnesses driving GLX directly) renders the shipped look.
     const T = frame.tune || null;
     const _ambM = T && T.ambientMul != null ? T.ambientMul : 1;
@@ -1744,6 +1744,10 @@ const GLX = (function () {
       gl.uniform1i(godrayU.uNumLights, grNL);
       gl.uniform1f(godrayU.uLampStr, lampVol);
       gl.uniform1f(godrayU.uMist, (opts && opts.mist) || 0);
+      // GOD-RAY FOCUS / HAZE knobs (defaults reproduce the shipped shaft phase).
+      const GT = opts && opts.tune || null;
+      gl.uniform1f(godrayU.uHgAniso, GT && GT.godrayAniso != null ? GT.godrayAniso : 0.60);
+      gl.uniform1f(godrayU.uHgFloor, GT && GT.godrayFloor != null ? GT.godrayFloor : 0.020);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       useProg(blurProg);
       gl.uniform1i(blurU.uTex, 0);

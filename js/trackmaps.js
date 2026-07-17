@@ -1,7 +1,7 @@
 /* Apex 26 — TrackMaps: offline 2D circuit outlines for the track picker.
    Builds each circuit's centreline from the game's own spline engine (no race,
-   no network) and caches the normalised minimap polyline + detected corners per
-   track id. */
+   no network) and caches the normalised minimap polyline + corners (curated
+   CircuitMarkings turns when present, else curvature-detected) per track id. */
 const TrackMaps = (function () {
   "use strict";
 

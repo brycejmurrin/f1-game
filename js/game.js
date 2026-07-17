@@ -646,6 +646,7 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
+// Curated CircuitMarkings splits when present; equal thirds only as fallback.
 function sectorAt(s) {
   const frac = wrapS(s) / track.total;
   const sec = track.def && track.def.sectors;
@@ -2187,7 +2188,9 @@ function update(dt) {
   ranked.length = 0;
   for (const c of cars) ranked.push(c);
   ranked.sort((a, b) => b.prog - a.prog);
-  ranked.forEach((c, i) => { c.rank = i + 1; });
+  for (let i = 0; i < ranked.length; i++) {
+    ranked[i].rank = i + 1;
+  }
 
   for (const c of cars) updateCar(c, dt, ranked);
 
@@ -2253,9 +2256,11 @@ function resolveCollisions(ranked, dt) {
       const a = ranked[i];
       for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
         const b = ranked[j];               // a is ahead (higher prog), b behind
-        const dProg = a.prog - b.prog;
+        let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
-        if (dProg > LCAR) break;            // sorted by prog: the rest are farther
+        const L = track.total;
+        dProg = ((dProg + L / 2) % L + L) % L - L / 2;
+        if (Math.abs(dProg) > LCAR) continue;            // sorted by prog: the rest are farther
         const dX = a.x - b.x;
         if (!Number.isFinite(dX)) continue;
         const penLong = LCAR - Math.abs(dProg);
@@ -2276,14 +2281,20 @@ function resolveCollisions(ranked, dt) {
         } else {
           // rear-end: separate along the track and nudge speeds together (gentle,
           // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
+          const sgn = dProg >= 0 ? 1 : -1;
           const corr = Math.max(penLong - 0.05, 0) * 0.4;
-          shiftLong(a, corr * (iA / iSum));
-          shiftLong(b, -corr * (iB / iSum));
-          const relV = b.speed - a.speed;   // >0 means the rear car is closing
+          shiftLong(a, sgn * corr * (iA / iSum));
+          shiftLong(b, -sgn * corr * (iB / iSum));
+          const relV = sgn >= 0 ? b.speed - a.speed : a.speed - b.speed;   // >0 means the rear car is closing
           if (relV > 0) {
             const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
-            b.speed = Math.max(0, b.speed - iB * jImp);
-            a.speed += iA * jImp * 0.8;
+            if (sgn >= 0) {
+              b.speed = Math.max(0, b.speed - iB * jImp);
+              a.speed += iA * jImp * 0.8;
+            } else {
+              a.speed = Math.max(0, a.speed - iA * jImp);
+              b.speed += iB * jImp * 0.8;
+            }
             a.contactT = b.contactT = 0.22;
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           }
@@ -2300,9 +2311,11 @@ function resolveCollisions(ranked, dt) {
     const a = ranked[i];
     for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
       const b = ranked[j];
-      const dProg = a.prog - b.prog;
+      let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
-      if (dProg > LCAR) break;
+      const L = track.total;
+      dProg = ((dProg + L / 2) % L + L) % L - L / 2;
+      if (Math.abs(dProg) > LCAR) continue;
       const dX = a.x - b.x;
       if (!Number.isFinite(dX)) continue;
       const penLong = LCAR - Math.abs(dProg);
@@ -2318,8 +2331,9 @@ function resolveCollisions(ranked, dt) {
       } else {
         const c = Math.max(penLong - SLOP, 0) * 0.6;
         if (c <= 0) continue;
-        shiftLong(a, c * (iA / iSum));
-        shiftLong(b, -c * (iB / iSum));
+        const sgn = dProg >= 0 ? 1 : -1;
+        shiftLong(a, sgn * c * (iA / iSum));
+        shiftLong(b, -sgn * c * (iB / iSum));
       }
     }
   }
@@ -2339,7 +2353,7 @@ function resolveCollisions(ranked, dt) {
 }
 
 function updateCar(c, dt, ranked) {
-  if (c.finished) { coast(c, dt); return; }
+  if (c.finished) { coast(c, dt); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -2370,28 +2384,20 @@ function updateCar(c, dt, ranked) {
     // Walk OUTWARD from our rank in the prog-sorted field, breaking once the prog
     // delta leaves the [-6, +18] window — same neighbours as scanning all of ranked,
     // without the O(n) per-car pass (mirrors resolveCollisions' break pattern).
-    const ci = (c.rank || 1) - 1;
-    for (let up = ci - 1; up >= 0; up--) {    // ahead of us: prog rises, dprog rises
-      const o = ranked[up];
-      const dprog = o.prog - c.prog;          // >0 = ahead of us
-      if (dprog > 18) break;
+    const L = track.total;
+    for (let i = 0; i < ranked.length; i++) {
+      const o = ranked[i];
+      if (o === c) continue;
+      let dprog = o.prog - c.prog;
+      if (!Number.isFinite(dprog)) continue;
+      dprog = ((dprog + L / 2) % L + L) % L - L / 2;
+      if (dprog < -6 || dprog > 18) continue;
       const dx = o.x - c.x;
       if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
       }
       if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
-    }
-    for (let dn = ci + 1; dn < ranked.length; dn++) {   // behind us: prog falls, dprog falls
-      const o = ranked[dn];
-      const dprog = o.prog - c.prog;          // <0 = behind us
-      if (dprog < -6) break;
-      const dx = o.x - c.x;
-      if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
-        if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
-        else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
-      }
-      // (no blocker test here — dprog <= 0 for everything behind us)
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
     const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
@@ -2542,10 +2548,10 @@ function updateCar(c, dt, ranked) {
       c.cuts++;
       // Penalty applies to EVERY car (it feeds race classification) so the AI
       // can't cut corners for free; only the player gets the on-screen cues.
-      if (c.cuts >= 4 && c.penalty === 0) {
-        c.penalty = 5;
+      if (c.cuts >= 4) {
+        c.penalty += 5;
         if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2); if (soundOn) GameAudio.penalty(); }
-      } else if (c.cuts < 4 && c.isPlayer) {
+      } else if (c.isPlayer) {
         announce("TRACK LIMITS " + c.cuts + "/4", 1.2);
         if (soundOn) GameAudio.offtrack();
       }
@@ -2815,7 +2821,6 @@ function updateCar(c, dt, ranked) {
     // desync from a separate world position.
     let tX = smp.t[0], tZ = smp.t[2]; const tL = Math.hypot(tX, tZ) || 1; tX /= tL; tZ /= tL;
     let rX = smp.r[0], rZ = smp.r[2]; const rL = Math.hypot(rX, rZ) || 1; rX /= rL; rZ /= rL;
-    c._prevS = c.s;
     c.s = wrapS(c.s + (vWx * tX + vWz * tZ) * dt);   // progress = velocity · tangent
     c.x += (vWx * rX + vWz * rZ) * dt;               // lateral  = velocity · right
     steer = clamp(shaped, -1, 1);   // steer vis = driver input only, not assist
@@ -2938,7 +2943,7 @@ function updateCar(c, dt, ranked) {
 
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
-  const oldS = c.isPlayer ? (c._prevS ?? c.s) : c.s;
+  const oldS = c._prevS ?? c.s;
   if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
   // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
@@ -2958,8 +2963,8 @@ function updateCar(c, dt, ranked) {
   c.lapTime += dt;
   c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
 
-  // Sector detection: thirds of track. This must run before finish-line timing
-  // resets so a forward S3→S1 crossing records the completed S3 split.
+  // Sector detection (curated splits via sectorAt). Must run before finish-line
+  // timing resets so a forward S3→S1 crossing records the completed S3 split.
   if (c.isPlayer && state === "race" && track) {
     const newSector = sectorAt(c.s);
     if (newSector !== sectorIdx) {
@@ -3056,6 +3061,7 @@ function updateCar(c, dt, ranked) {
       c.rescueT = 0; c.offT = 0; c.stuckT = 0;
     }
   }
+  c._prevS = c.s;
 }
 
 // Put the player back on the racing line at its CURRENT progress, facing forward
@@ -3220,12 +3226,10 @@ function appendCarTailLights() {
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
-  // grid (Singapore/Vegas/Baku) the floodlights alone fill the 32-light cap, so
-  // simply appending here overflowed past 32 and the shader dropped the appended
-  // tail-lights — the red glow trailing nearby traffic vanished exactly where
-  // night traffic is most visible. Evict that many of the FARTHEST floods instead
-  // (setFrameLights sorts the dense-grid set ascending by distance, so the tail
-  // end is the farthest) — a flood 250 m back matters far less than a car ahead.
+  // grid the floodlights alone can fill the shader's 32-light cap (or the tighter
+  // lampCull CAP from setFrameLights), so appending overflowed and the shader
+  // dropped the tail-lights. Evict that many of the FARTHEST floods instead
+  // (setFrameLights sorts ascending by distance, so the tail end is farthest).
   const room = 32 - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
@@ -3254,13 +3258,13 @@ function appendCarTailLights() {
   }
 }
 
-// Cull the track light set to the nearest lamps (32 shader slots, minus a
-// small reservation for car tail lights in traffic) and flatten into
+// Cull the track light set to the nearest CAP lamps (shader max 32; traffic uses
+// LT.lampCull, def 28, leaving room for car tail lights) and flatten into
 // `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
-const _lightHeap = [];         // pooled max-heap (≤32 entries) for the nearest-32 partial selection
+const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
@@ -3268,10 +3272,8 @@ function setFrameLights(eye, scale, fwd) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
-  // cull, and with a full 32-lamp selection its budget was always zero on
-  // dense city night grids — exactly the traffic-glow scenario it was built
-  // for. Four lamps out of 32, ranked farthest-of-set, are visually covered
-  // by the distance tail-fade below.
+  // cull. With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader
+  // slots stay free; solo runs use the full 32.
   const CAP = cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32;
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
@@ -3334,16 +3336,15 @@ function setFrameLights(eye, scale, fwd) {
     frame.lights = out;
     return;
   }
-  // distance-rank: select the nearest 32. Reuse a pooled object array + the
+  // Distance-rank: select the nearest CAP. Reuse a pooled object array + the
   // output buffer so a dense night grid doesn't allocate fresh garbage every
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
-  // Lights BEHIND the camera rank as ~2.5x farther (x6.25 in squared space):
-  // a purely radial nearest-32 wastes half the budget on lamps you can't see,
-  // ending the lit road in a hard dark boundary ~150-250 m ahead that follows
-  // the camera ("hard shadow line that recedes as you approach"). The forward
-  // bias pushes that boundary ~2x further out — past the night fog wall.
+  // Lights BEHIND the camera rank farther: a purely radial nearest-N wastes
+  // half the budget on lamps you can't see, ending the lit road in a hard dark
+  // boundary ahead. The forward bias (LT.lampBehindBias) pushes that boundary
+  // further out — past the night fog wall.
   const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
-  const flen = Math.hypot(fx, fz) || 1;
+  const flen2 = fx * fx + fz * fz || 1;
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
     const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
@@ -3354,18 +3355,18 @@ function setFrameLights(eye, scale, fwd) {
     // yaw flipped the half-space for many lamps at once, a whole-field shudder).
     const b = dx * fx + dz * fz;
     if (b < 0) {
-      const dl = Math.sqrt(dx * dx + dz * dz) || 1;
+      const dl2 = dx * dx + dz * dz || 1;
+      const ratio2 = (b * b) / (flen2 * dl2 * 0.0625);
       // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
       // nearest-N rank (def 5.25 = as-shipped forward push).
-      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, (-b) / (flen * dl * 0.25));
+      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, ratio2);
     }
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
   }
   buf.length = count;
-  // Partial selection: keep only the nearest 32 in a max-heap instead of sorting
-  // all ~count entries every frame (O(count·log32) vs O(count·log count)). Same
-  // nearest-32 set as the old full .sort()+slice, just cheaper on a dense grid.
+  // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
+  // all ~count entries every frame (O(count·log CAP) vs O(count·log count)).
   const heap = _lightHeap; heap.length = 0;
   for (let i = 0; i < count; i++) {
     const e = buf[i];
@@ -4072,6 +4073,10 @@ function render(dt) {
   // STAR BRIGHTNESS / CLOUD SPEED tuner knobs ride on the sky object.
   frameSky.starBright = LT.starBright;
   frameSky.cloudSpeed = LT.cloudSpeed;
+  // SKY GRADIENT / STAR DENSITY / DAY SKY BLUE knobs also ride the sky object.
+  frameSky.skyGrad     = LT.skyGrad;
+  frameSky.starDensity = LT.starDensity;
+  frameSky.daySkyBlue  = LT.daySkyBlue;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -4948,7 +4953,7 @@ function drawMinimap() {
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
     const SC = ["rgba(192,132,252,0.8)", "rgba(225,6,0,0.8)", "rgba(163,230,53,0.8)"];
-    // Same curated splits as TrackMaps.draw / sectorAt (equal thirds fallback).
+    // Same CircuitMarkings splits as TrackMaps.draw / sectorAt (thirds if missing).
     const sec = track.def && track.def.sectors;
     const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
     for (let s = 0; s < 3; s++) {
@@ -5951,20 +5956,21 @@ applyResMode();
 // WebGPU. WebGPU is opt-in and browser-untested, so the default stays WebGL2;
 // flipping writes apex26.gfxBackend (the raw key gfx.js reads) and reloads so
 // Gfx.create() re-runs the backend selection at boot.
-(function () {
+{
   const rb = $("pm-renderer");
-  if (!rb || typeof navigator === "undefined" || !navigator.gpu) return;
-  const read = () => { try { return localStorage.getItem("apex26.gfxBackend") === "webgpu" ? "webgpu" : "webgl2"; } catch (_) { return "webgl2"; } };
-  rb.hidden = false;
-  rb.textContent = "RENDERER: " + read().toUpperCase();
-  rb.onclick = () => {
-    if (soundOn) GameAudio.uiSelect();
-    const next = read() === "webgpu" ? "webgl2" : "webgpu";
-    try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
-    rb.textContent = "RENDERER: " + next.toUpperCase() + " — RELOADING…";
-    setTimeout(() => location.reload(), 350);
-  };
-})();
+  if (rb && typeof navigator !== "undefined" && navigator.gpu) {
+    const read = () => { try { return localStorage.getItem("apex26.gfxBackend") === "webgpu" ? "webgpu" : "webgl2"; } catch (_) { return "webgl2"; } };
+    rb.hidden = false;
+    rb.textContent = "RENDERER: " + read().toUpperCase();
+    rb.onclick = () => {
+      if (soundOn) GameAudio.uiSelect();
+      const next = read() === "webgpu" ? "webgl2" : "webgpu";
+      try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
+      rb.textContent = "RENDERER: " + next.toUpperCase() + " — RELOADING…";
+      setTimeout(() => location.reload(), 350);
+    };
+  }
+}
 
 // GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
 // defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade
@@ -7096,6 +7102,7 @@ window.__apex = {
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
+  // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.
   info: () => ({
     state, track: (state === "race" || state === "count") ? (track && track.def.id) : null,
     n: track && track.n, total: track && track.total, timeTrial, seasonMode,
@@ -7742,7 +7749,9 @@ window.__apex = {
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
   })),
-  // lap fractions of corner apexes (local maxima of |curvature|), for parking
+  // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
+  // Distinct from curated FIA turns on track.def.turns / info().turns — use those
+  // for official turn counts; this hook is for physics/parking at sharp bends.
   corners() {
     if (!track) return [];
     const n = track.n, total = track.total, kv = [];
@@ -7819,7 +7828,6 @@ window.__apex = {
   // ── New dev / test helpers ─────────────────────────────────────────────────
 
   // Trigger the race-results screen cleanly, as if all cars crossed the line.
-  // Fixes the fallback-DOM-hack in ui-audit.spec.js (finishRace was missing).
   finishRace() {
     if (!track || state === "results" || state === "menu") return false;
     const order = cars.slice().sort((a, b) => b.prog - a.prog);
@@ -8126,10 +8134,10 @@ window.__apex = {
 
   // ── Timing & field hooks ──────────────────────────────────────────────────
 
-  // sectorState() — live S1/S2/S3 timing.
-  // idx: current sector (0=S1, 1=S2, 2=S3). elapsed: seconds into it.
-  // bests: personal-best times per sector (null until first completed lap).
-  // last: sector times from the most recently completed lap.
+  // sectorState() — live S1/S2/S3 timing (boundaries from CircuitMarkings via
+  // sectorAt). idx: current sector (0=S1, 1=S2, 2=S3). elapsed: seconds into it.
+  // bests: PB per sector (null until that sector is completed with lap ≥ 1).
+  // last: times from the most recently completed sector crossings.
   sectorState() {
     if (!player || !track) return null;
     const elapsed = (player.lapTime || 0) - sectorStartT;
