@@ -140,6 +140,14 @@
 @media (min-width: 620px) { .dh-standings { flex-direction: row; align-items: flex-start; } }
 .dh-standings-col { flex: 1; min-width: 0; }
 .dh-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 13px; }
+.dh-row-cons { flex-wrap: wrap; }
+.dh-cons-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+.dh-h2h-wrap { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 140px; align-items: flex-end; }
+.dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: 4px; }
+.dh-h2h-fill { height: 100%; background: #fff; transition: width 0.3s; }
+.dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
+.dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: 9px; color: #8a8a95; font-weight: 700; letter-spacing: 0.05em; }
+
 .dh-pos { width: 24px; text-align: right; color: #8a8a95; flex: 0 0 auto; }
 .dh-codechip {
   flex: 0 0 auto;
@@ -186,6 +194,10 @@
 .dh-live-type { font-size: 12px; color: #e10600; letter-spacing: 0.08em; }
 .dh-live-sub { font-size: 12px; color: #8a8a95; margin-top: 2px; }
 .dh-live-team { color: #8a8a95; font-size: 12px; }
+.dh-live-row-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
+.dh-live-gapwrap { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 100px; justify-content: flex-end; }
+.dh-live-gapbar { height: 4px; border-radius: 2px; max-width: 80px; }
+.dh-live-gaplbl { font-size: 10px; color: #8a8a95; font-variant-numeric: tabular-nums; width: 45px; text-align: right; }
 
 /* weather */
 .dh-weather { margin: 6px 0 12px; }

@@ -34,18 +34,59 @@ const DataStandings = (function () {
         if (!cons.length) {
           cSec.appendChild(emptyMsg("No constructor standings yet."));
         } else {
+          // Group drivers by team for H2H
+          const teamDrivers = {};
+          drivers.forEach(d => {
+            if (!teamDrivers[d.team]) teamDrivers[d.team] = [];
+            teamDrivers[d.team].push(d);
+          });
+
           const cLeaderPts = cons.length > 0 && cons[0].pos === 1 ? cons[0].points : null;
           cons.forEach(s => {
-            const row = el("div", "dh-row");
-            row.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
+            const row = el("div", "dh-row dh-row-cons");
+            
+            const mainInfo = el("div", "dh-cons-main");
+            mainInfo.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
             const ct = findTeam(s.name);
-            row.appendChild(teamChip(ct ? ct.short : (s.name ? s.name.slice(0, 3).toUpperCase() : "?"), s.name));
-            row.appendChild(el("span", "dh-name", s.name || "—"));
-            if (s.wins > 0) row.appendChild(el("span", "dh-wins", s.wins + "W"));
-            row.appendChild(el("span", "dh-pts", s.points));
+            mainInfo.appendChild(teamChip(ct ? ct.short : (s.name ? s.name.slice(0, 3).toUpperCase() : "?"), s.name));
+            mainInfo.appendChild(el("span", "dh-name", s.name || "—"));
+            if (s.wins > 0) mainInfo.appendChild(el("span", "dh-wins", s.wins + "W"));
+            mainInfo.appendChild(el("span", "dh-pts", s.points));
             if (cLeaderPts !== null && s.pos !== 1) {
-              row.appendChild(el("span", "dh-gap", "−" + (cLeaderPts - s.points)));
+              mainInfo.appendChild(el("span", "dh-gap", "−" + (cLeaderPts - s.points)));
             }
+            row.appendChild(mainInfo);
+
+            // Head-to-Head bar
+            const myDrivers = teamDrivers[s.name] || [];
+            if (myDrivers.length >= 2 && s.points > 0) {
+              // sort to keep bar consistent (e.g. driver with more points first, or alphabetical)
+              myDrivers.sort((a, b) => b.points - a.points);
+              const h2h = el("div", "dh-h2h-bar");
+              const d1 = myDrivers[0], d2 = myDrivers[1];
+              const p1 = (d1.points / s.points) * 100;
+              
+              const p1Fill = el("div", "dh-h2h-fill");
+              p1Fill.style.width = p1 + "%";
+              p1Fill.title = (d1.code || d1.name) + ": " + d1.points + " pts";
+              
+              const p2Fill = el("div", "dh-h2h-fill dh-h2h-alt");
+              p2Fill.style.width = (100 - p1) + "%";
+              p2Fill.title = (d2.code || d2.name) + ": " + d2.points + " pts";
+              
+              h2h.appendChild(p1Fill);
+              h2h.appendChild(p2Fill);
+              
+              const labels = el("div", "dh-h2h-labels");
+              labels.appendChild(el("span", null, d1.code || d1.name.slice(0, 3).toUpperCase()));
+              labels.appendChild(el("span", null, d2.code || d2.name.slice(0, 3).toUpperCase()));
+              
+              const h2hWrap = el("div", "dh-h2h-wrap");
+              h2hWrap.appendChild(h2h);
+              h2hWrap.appendChild(labels);
+              row.appendChild(h2hWrap);
+            }
+
             cSec.appendChild(row);
           });
         }

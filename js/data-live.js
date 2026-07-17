@@ -158,10 +158,20 @@ const DataLive = (function () {
         } else {
           list.sort((a, b) => posOf(a) - posOf(b));
         }
+
+        let maxGap = 0;
+        if (liveOpts.sort === "pos" && list.length > 0) {
+          list.forEach(p => {
+            if (p.timeDiff && p.timeDiff > maxGap) maxGap = p.timeDiff;
+          });
+        }
+
         list.forEach(p => {
           const d = byNum[p.num] || {};
           const row = el("div", "dh-row");
-          row.appendChild(el("span", "dh-pos", p.pos !== null && p.pos !== undefined ? p.pos : "—"));
+          
+          const mainInfo = el("div", "dh-live-row-main");
+          mainInfo.appendChild(el("span", "dh-pos", p.pos !== null && p.pos !== undefined ? p.pos : "—"));
           const chip = el("span", "dh-codechip", d.code || (p.num !== null && p.num !== undefined ? "#" + p.num : "—"));
           let col = null;
           if (d.color && /^[0-9a-fA-F]{6}$/.test(d.color)) {
@@ -174,9 +184,22 @@ const DataLive = (function () {
           }
           chip.style.background = cssColor(col);
           chip.style.color = textColorOn(col);
-          row.appendChild(chip);
-          row.appendChild(el("span", "dh-name", d.name || "—"));
-          row.appendChild(el("span", "dh-td-team dh-live-team", d.team || ""));
+          mainInfo.appendChild(chip);
+          mainInfo.appendChild(el("span", "dh-name", d.name || "—"));
+          mainInfo.appendChild(el("span", "dh-td-team dh-live-team", d.team || ""));
+          row.appendChild(mainInfo);
+
+          if (liveOpts.sort === "pos" && p.pos !== 1 && p.timeDiff && maxGap > 0) {
+            const gapWrap = el("div", "dh-live-gapwrap");
+            const gapBar = el("div", "dh-live-gapbar");
+            gapBar.style.width = Math.min(100, (p.timeDiff / maxGap) * 100) + "%";
+            gapBar.style.backgroundColor = cssColor(col);
+            gapWrap.appendChild(gapBar);
+            const gapLbl = el("span", "dh-live-gaplbl", "+" + p.timeDiff.toFixed(3));
+            gapWrap.appendChild(gapLbl);
+            row.appendChild(gapWrap);
+          }
+
           rows.appendChild(row);
         });
       }
