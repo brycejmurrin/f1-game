@@ -1117,6 +1117,11 @@ const GLX = (function () {
       let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
+      // Clear-night moon shadows: floor the key-dim fade with the MOON SHADOWS
+      // knob scaled by the clear-night factor (game.js frame.moonK — bright
+      // moon, low cloud, dry road, no fog). 0 = old fade-to-nothing night.
+      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonK || 0);
+      if (_mSh > _hf) _hf = _mSh;
       gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
       gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 80.0);

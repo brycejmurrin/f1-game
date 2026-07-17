@@ -3859,6 +3859,25 @@ function render(dt) {
   // camera flies. 0 = disabled (normal play + desktop keep the full vista).
   frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
 
+  // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
+  // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
+  // glx.js floors its key-dim shadow fade with LT.moonShadow * frame.moonK, so
+  // moonlight casts soft shadows on clear nights only — fog/overcast/rain
+  // nights stay shadowless. Computed BEFORE the shadow pass because the prop
+  // and car caster gates below feed the snap-cached map from it. Mirrors the
+  // frameSky.moon / frame.cloud plumbing further down (values persist across
+  // frames, so first-frame staleness only delays the gate by one recentre).
+  {
+    const _mAmt = (raceTimeOfDay === "default" && track && track.def && track.def.night)
+      ? 0.85 * LT.moonBright : (frameSky.moon || 0);
+    const _mCl = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
+    let _cf = (_mCl - 0.35) / 0.25;                    // smoothstep(0.35, 0.6, cloud)
+    _cf = _cf < 0 ? 0 : _cf > 1 ? 1 : _cf;
+    _cf = _cf * _cf * (3 - 2 * _cf);
+    frame.moonK = raceWeather === "fog" ? 0
+      : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
+  }
+
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
   // (20 m at the default 80 m box) so the map only re-renders when the camera
@@ -3913,7 +3932,10 @@ function render(dt) {
       // at night and the whole city rasterised into the shadow map every recentre.
       // Matches the god-ray/flare brightness gate (max(sunColor) below ~0.35 = dark).
       const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-      if (_shKey > 0.35) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      // Clear-night moon shadows re-open the gate: props must be in the map for
+      // the moonlight floor to have anything to cast (snap-cached, so the night
+      // saving only goes when MOON SHADOWS is active and the sky is clear).
+      if (_shKey > 0.35 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
   }
@@ -3926,10 +3948,11 @@ function render(dt) {
   // there); blob shadows also stay ON for everyone as the contact/ambient term.
   if (track && gfx.shadowCasters && !gfx.mobileTier) {
     let _cCount = 0;
-    // Same key-brightness visibility gate as the prop pass above: don't pay for
-    // silhouettes the shadow fade has already dissolved to nothing.
+    // Same visibility gate as the prop pass above (key brightness, or the
+    // clear-night moon-shadow floor): don't pay for silhouettes the shadow
+    // fade has already dissolved to nothing.
     const _cKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-    if (_cKey > 0.35) {
+    if (_cKey > 0.35 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) {
       // Pick the nearest casters inside the shadow box (cap 8 — car shadows past
       // the receiver-distance fade would cost silhouettes nobody can see).
       const _cRange = LT.shadowRange || 80, _cR2 = _cRange * _cRange;
