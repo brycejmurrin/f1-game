@@ -99,6 +99,7 @@ uniform float uKeyMul;      // direct sun/key-light intensity multiplier (defaul
 uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 uniform float uCloudSpeed;  // cloud drift-rate multiplier (matches SKY uCloudSpeed; 0 = frozen)
+uniform float uCloudShadowDim; // how darkly cloud shadows dim the sun (def 0.80)
 uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distance haze
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
@@ -701,7 +702,7 @@ void main() {
 
   // Combine the hard shadow map with soft drifting cloud shadows: the sun is
   // dimmed where clouds pass overhead, casting moving dappled light on the track.
-  float shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * 0.80);
+  float shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * uCloudShadowDim);
   // uKeyMul (KEY LIGHT tuner slider, default 1.0) scales all DIRECT sun lighting
   // — diffuse, GGX spec, clearcoat glint, car-paint glint — without touching
   // ambient fill, fog in-scatter or the env-sky reflection (those keep the
@@ -1089,6 +1090,9 @@ uniform float uMoon;   // 0..1 moon visibility (0 = none, backward-compatible)
 uniform vec3 uCityGlow;  // night city light-pollution dome (colour x strength, 0 = none)
 uniform float uStarBright; // star-field intensity multiplier (def 1.0)
 uniform float uCloudSpeed; // cloud drift/evolution rate multiplier (def 1.0)
+uniform float uSkyGrad;    // horizon→zenith gradient exponent (def 0.35)
+uniform float uStarDensity;// star-field spawn-window multiplier (def 1.0)
+uniform float uDaySkyBlue; // day deep-blue mid-band strength (def 1.0)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -1148,10 +1152,11 @@ void main() {
     // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
     vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.75);
     vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.60);
-    // pow(up, 0.35): richer blue zenith extends further down, horizon band
+    // pow(up, uSkyGrad): richer blue zenith extends further down, horizon band
     // narrower — avoids the pale/washed look at mid-sky while keeping the
     // gradient smooth. (Was 0.5 which mapped too much sky to the horizon tint.)
-    c = mix(horizonO, zenithO, pow(up, 0.35));
+    // SKY GRADIENT knob (def 0.35 = as-shipped); lower = richer dome, higher = paler mid.
+    c = mix(horizonO, zenithO, pow(up, uSkyGrad));
     // Day gradient LIFE: a deeper saturated blue pushed into the low/mid band
     // (so the gameplay sky strip isn't a flat pale wash) plus a faint azimuthal
     // variation that breaks the perfectly-smooth gradient. Day-only and faded
@@ -1159,7 +1164,9 @@ void main() {
     {
       float bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
       vec3 deepBlue = vec3(0.10, 0.30, 0.72);
-      c = mix(c, mix(c, deepBlue, 0.30), daytime * (1.0 - overcast) * bandLM);
+      // DAY SKY BLUE knob (def 1.0 = as-shipped) scales the band strength; clamp
+      // keeps the blend valid when the knob pushes past 1.
+      c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * uDaySkyBlue, 0.0, 1.0));
       float az = vnoise2(vec2(atan(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
       c *= 1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up));
     }
@@ -1322,7 +1329,9 @@ void main() {
     float SC = 180.0;
     vec3 cell = floor(dir * SC);
     float h = hash3(cell);
-    if (h > 0.9968) {
+    // STAR DENSITY knob (def 1.0 = as-shipped): scale the (1 - threshold) spawn
+    // window, clamped below 1 so a huge density can't reject every cell to blank.
+    if (h > min(0.9994, 1.0 - (1.0 - 0.9968) * uStarDensity)) {
       vec3 jit = vec3(hash3(cell + 7.1), hash3(cell + 13.7), hash3(cell + 29.3)) - 0.5;
       vec3 sdir = normalize((cell + 0.5 + jit * 0.8) / SC);
       float d = length(dir - sdir);
@@ -1764,6 +1773,8 @@ uniform vec2 uLightCone[GR_MAX_LIGHTS];   // (cosInner, cosOuter)
 uniform float uLightVolW[GR_MAX_LIGHTS];  // per-lamp volumetric weight (beam character)
 uniform float uMist;       // haze density gate for in-scatter (0 = none)
 uniform float uLampStr;    // night lamp-volumetric strength (0 = off, e.g. day)
+uniform float uHgAniso;    // god-ray forward-scatter anisotropy g (def 0.60)
+uniform float uHgFloor;    // god-ray isotropic scatter floor (def 0.020)
 out vec4 outColor;
 vec3 worldPos(vec2 uv, float d) {
   vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
@@ -1856,9 +1867,11 @@ void main() {
   // across a broader arc, not only when staring straight at the sun) + a small
   // isotropic floor so lit haze glows everywhere, giving an atmospheric volume.
   float cosT = max(dot(rd, uSunDir), 0.0);
-  float g = 0.60;
+  // GOD-RAY FOCUS knob (def 0.60 = as-shipped); clamped <0.95 to keep the HG
+  // denominator well-behaved. GOD-RAY HAZE knob (def 0.020) is the isotropic floor.
+  float g = clamp(uHgAniso, 0.0, 0.95);
   float hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosT, 1.5);
-  float phase = hg * 0.16 + 0.020;
+  float phase = hg * 0.16 + uHgFloor;
   outColor = vec4(uSunColor * accum * phase * uStr + lampAccum, 1.0);
 }`;
 
@@ -1912,6 +1925,8 @@ uniform float uLensDirt;     // lens-dirt veil strength (IMAGE & COLOUR knob, de
 uniform vec2 uHazeUV;        // player tailpipe screen UV (heat-haze plume anchor)
 uniform float uHazeStr;      // exhaust heat-haze strength (0 = off; boost pushes ~1)
 uniform float uHazeTime;     // seconds — scrolls the shimmer upward
+uniform float uShaftDecay;   // screen-space sun-shaft per-tap falloff (def 0.82)
+uniform float uFlareStreak;  // anamorphic flare horizontal tightness (def 7.0)
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
@@ -2254,7 +2269,7 @@ void main() {
         // hotspot elsewhere on screen can never smear into a comet streak.
         float sw = 1.0 - clamp(length(suv - uSunUV) / 0.32, 0.0, 1.0);
         shaft += texture(uBloom, suv).rgb * (decay * sw * sw);
-        decay *= 0.82;
+        decay *= uShaftDecay;   // SUN-SHAFT REACH knob (def 0.82 = as-shipped)
       }
       shaft /= 8.0;
       // Radial falloff: strongest near the sun, zero at the edge of the screen.
@@ -2290,7 +2305,7 @@ void main() {
     // the streak stays a contained, elongated highlight near the sun instead
     // of a screen-wide wash.
     float streakY = exp(-abs(vUV.y - uSunUV.y) * 110.0);
-    float streakX = exp(-abs(vUV.x - uSunUV.x) * 7.0);
+    float streakX = exp(-abs(vUV.x - uSunUV.x) * uFlareStreak);   // FLARE STREAK knob (def 7.0)
     flare += vec3(1.0, 0.80, 0.52) * streakY * streakX * 0.75;
     // A second thinner hot core streak.
     float streakX2 = exp(-abs(vUV.x - uSunUV.x) * 10.0);
