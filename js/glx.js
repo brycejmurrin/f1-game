@@ -587,7 +587,7 @@ const GLX = (function () {
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
-      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange",
+      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
@@ -1063,6 +1063,10 @@ const GLX = (function () {
       gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.0) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
       gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 64.0);
+      // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
+      // snapped around (game.js shadow pass). It glides continuously with the
+      // camera, so the fade front never jumps on a box recentre.
+      gl.uniform3fv(litU.uShadowCtr, frame.shadowCtr || frame.eye || [0, 0, 0]);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHADOW_SIZE);
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);

@@ -151,7 +151,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 352 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 368 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -172,7 +172,8 @@ struct FrameU {
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
   params5    : vec4<f32>,     // off 336  (envProbeStr, _, _, _) — real env-cube probe strength (0 = analytic sky only)
-};                            // size 352
+  shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
+};                            // size 368
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -363,7 +364,19 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
     let ndc = sc.xyz / sc.w;
     let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && ndc.z <= 1.0) {
+    // Distance + border fade (GLX sampleShadow parity, js/shaders/glx-shaders.js).
+    // Dissolve shadows by receiver distance from the UNSNAPPED box anchor
+    // (F.shadowCtr.xyz, glides with the camera) instead of hard-cutting at the
+    // box border: the box recentres in sBox/4 = 16 m snaps (game.js shadow pass),
+    // so an unfaded border made the whole shadow field's edge JUMP 16 m at a time
+    // while driving. The UV border fade stays as a safety clamp for worst-case
+    // box alignments. shadowCtr.w = shadowRange (box half-size, m).
+    let shRange = max(F.shadowCtr.w, 1.0);
+    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, F.shadowCtr.xyz));
+    let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
+           * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
+    edgeFade = edgeFade * ef.x * ef.y;
+    if (edgeFade > 0.0 && ndc.z <= 1.0) {
       let refD = ndc.z - max(F.params2.w, 0.0);   // SHADOW BIAS knob (params2.w)
       // PENUMBRA: pcfStep = texel * (1 + pcssPen). pcssPen=0 -> unchanged.
       let pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0));   // params2.z = 1/shadowMapSize
@@ -374,7 +387,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
                     suv + vec2<f32>(f32(ox), f32(oy)) * pcfStep, refD);
         }
       }
-      shadow = mix(1.0, s / 9.0, F.params2.y);   // params2.y = shadow strength
+      // Clamped like GLX: SHADOW DARKNESS reaches 2.0 and mix() extrapolates
+      // above t=1 — unclamped, sh~0 went NEGATIVE (negative light -> psychedelic
+      // grade output in shadowed areas).
+      shadow = max(0.0, mix(1.0, s / 9.0, F.params2.y * edgeFade));   // params2.y = shadow strength
     }
   }
   let litNoL = NoL * keyMul * shadow;
@@ -814,7 +830,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 352,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4 +params5)
+    FRAME_UNIFORM_BYTES: 368,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4 +params5; +shadowCtr)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

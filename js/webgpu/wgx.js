@@ -106,7 +106,7 @@ const WGX = (function () {
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
-  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 224
+  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 368
   const FRAME_FLOATS = FRAME_BYTES / 4;                 // 56
   const LIGHT_STRIDE = WGSLChunks.LIGHT_STRIDE_BYTES;   // 64
   const MAX_LIGHTS = WGSLChunks.MAX_LIGHTS;             // 32
@@ -1065,6 +1065,14 @@ const WGX = (function () {
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
       d[84] = (_envProbeLive && T && T.carEnvCube != null) ? T.carEnvCube : 0.0;
       d[85] = 0; d[86] = 0; d[87] = 0;
+      // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
+      // the shadow box is snapped around (game.js shadow pass; glides with the
+      // camera so the LIT distance fade never jumps on a box recentre), w =
+      // shadowRange (SHADOW DISTANCE knob, box half-size in m — same 64 fallback
+      // as GLX uShadowRange).
+      const sctr = f.shadowCtr || f.eye || [0, 0, 0];
+      d[88] = sctr[0]; d[89] = sctr[1]; d[90] = sctr[2];
+      d[91] = (T && T.shadowRange != null) ? T.shadowRange : 64.0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).

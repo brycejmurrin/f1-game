@@ -633,6 +633,7 @@ const _upVS = new Float32Array(3);   // world-up expressed in view space (wet-ro
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
+const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
 // ---------- parts / player mods ----------
 function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
@@ -3870,11 +3871,27 @@ function render(dt) {
     let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
     const xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
     const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
-    const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
     // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
     // only on the position snap), so the slider responds without driving.
     const sBox = LT.shadowRange || 64;
     const step = sBox / 4;
+    // Forward-biased CAMERA anchor, not the raw player position: the box budget
+    // goes where you look. Centred on the car, up to sBox/8 of snap slack plus
+    // the ~10 m chase-cam offset sat BEHIND the camera, so the shader's fade had
+    // to dissolve shadows by 0.72·range (≈46 m at the default 64) to stay inside
+    // the worst-case border — the "shadow horizon" ~46 m ahead. Anchoring at
+    // camera + a forward bias makes the safe radius symmetric around the view
+    // (0.875·sBox from the anchor), letting the fade reach ~0.84·range — shadows
+    // hold ~74 m ahead of the camera at the same texel density. Height comes from
+    // the LOOK TARGET (subject/ground level — right for chase, cockpit, TV and
+    // orbit/aerial debug cams alike), NOT the camera eye: fading by eye distance
+    // erased ALL shadows from any high/aerial camera (vDist ≥ altitude).
+    let fbx = camTgt[0] - camEye[0], fbz = camTgt[2] - camEye[2];
+    const fbl = Math.hypot(fbx, fbz), fBias = Math.min(20, sBox * 0.3);
+    if (fbl > 1e-6) { fbx = fbx / fbl * fBias; fbz = fbz / fbl * fBias; } else { fbx = 0; fbz = 0; }
+    _shadowCtr[0] = camEye[0] + fbx; _shadowCtr[1] = camTgt[1]; _shadowCtr[2] = camEye[2] + fbz;
+    frame.shadowCtr = _shadowCtr;
+    const cx = _shadowCtr[0], cy = _shadowCtr[1], cz = _shadowCtr[2];
     const lu = Math.round((xx * cx + xy * cy + xz * cz) / step) * step;
     const lv = Math.round((yx * cx + yy * cy + yz * cz) / step) * step;
     // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
@@ -3891,9 +3908,10 @@ function render(dt) {
       const wy = xy * lu + yy * lv + zy * lw;
       const wz = xz * lu + yz * lv + zz * lw;
       M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
-      // Half-size box (default ±64 m / 128 m) snapped to the camera; sampleShadow
-      // fades shadows out by camera distance well inside its border. Bigger =
-      // more reach, smaller = crisper contacts (texel density = 2048/box).
+      // Half-size box (default ±64 m / 128 m) snapped around the anchor;
+      // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
+      // inside its border. Bigger = more reach, smaller = crisper contacts
+      // (texel density = 2048/box).
       M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
       gfx.shadowBegin(_mLVP);
