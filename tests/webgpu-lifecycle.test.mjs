@@ -254,16 +254,18 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*wetDark/);
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*448/);
-  assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*240/);
+  assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*464/);
+  assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
+  assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 448);
-  const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 240);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 464);
+  const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
   // params6 = (wetDark, carShadowOn, carSparkle, fogSunCore). Car shadow is
@@ -274,6 +276,13 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(frame[93], 0, "car-shadow unarmed in params6.y (float 93)");
   assert.ok(Math.abs(frame[94] - 1.6) < 1e-6, "carSparkle default in params6.z (float 94)");
   assert.ok(Math.abs(frame[95] - 0.6) < 1e-6, "fogSunCore default in params6.w (float 95)");
+  // params7 = (fogClip, carSunGlint, neonBoost, _pad) — GLX-parity lit knobs at
+  // off 448 = floats 112..115. Defaults reproduce the shipped GLX look. (f32
+  // rounding: 0.7/12.0/0.6 aren't exactly representable, so compare with a tol.)
+  assert.ok(Math.abs(frame[112] - 0.7) < 1e-6, "fogClip default in params7.x (float 112)");
+  assert.ok(Math.abs(frame[113] - 12.0) < 1e-6, "carSunGlint default in params7.y (float 113)");
+  assert.ok(Math.abs(frame[114] - 0.6) < 1e-6, "neonBoost default in params7.z (float 114)");
+  assert.equal(frame[115], 0, "params7.w pad must be 0 (float 115)");
   let composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 0.5);
   assert.ok(Math.abs(composite[32] - 0.35) < 1e-6);
@@ -292,12 +301,18 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   for (let i = 0; i < 4; i++) {
     assert.ok(Math.abs(composite[56 + i] - ACES_DEF[i]) < 1e-6, `ACES tone-curve default float ${56 + i}`);
   }
+  // dirtFx = (lensDirt, _pad, _pad, _pad) at off 240 = floats 60..63. Default
+  // 0.15 reproduces the shipped GLX lens-dirt strength. (f32 rounding: 0.15 isn't
+  // exactly representable, so compare with a tol; the pads are exact zeros.)
+  assert.ok(Math.abs(composite[60] - 0.15) < 1e-6, "lensDirt default in dirtFx.x (float 60)");
+  assert.deepEqual(composite.slice(61, 64), [0, 0, 0], "dirtFx pads must be 0 (floats 61..63)");
 
   // Extreme upload: powers-of-two fractions (0.25/0.75/3.5 …) are exactly f32-
   // representable, so these lanes can be compared exactly. carSparkle/fogSunCore
   // live in the FRAME uniform (params6, written at begin()); flareStreak2/aces*
   // and the HDR grade live in the COMPOSITE uniform (written at present()).
-  assert.equal(gfx.begin({ tune: { wetDark: -7, carSparkle: 0.25, fogSunCore: 0.75 }, shadowCtr: [44, 55, 66] }), true);
+  assert.equal(gfx.begin({ tune: { wetDark: -7, carSparkle: 0.25, fogSunCore: 0.75,
+    fogClip: 0.5, carSunGlint: 3.5, neonBoost: 0.75 }, shadowCtr: [44, 55, 66] }), true);
   gfx.present({ tune: {
     bloomKnee: 4.25, vignetteSoft: -2.5,
     flareStreak2: 1.75, flareStreak: 3.5,
@@ -307,12 +322,17 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
     liftR: 8, liftG: 9, liftB: 10,
     gammaR: 11, gammaG: 12, gammaB: 13,
     gainR: 14, gainG: 15, gainB: 16,
+    lensDirt: 0.75,
   } });
   frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [44, 55, 66, 80], "wetDark must not overwrite shadowCtr");
   assert.equal(frame[92], -7);
   assert.equal(frame[94], 0.25, "carSparkle must occupy params6.z (float 94)");
   assert.equal(frame[95], 0.75, "fogSunCore must occupy params6.w (float 95)");
+  assert.equal(frame[112], 0.5, "fogClip must occupy params7.x (float 112)");
+  assert.equal(frame[113], 3.5, "carSunGlint must occupy params7.y (float 113)");
+  assert.equal(frame[114], 0.75, "neonBoost must occupy params7.z (float 114)");
+  assert.equal(frame[115], 0, "params7.w pad must stay 0 (float 115)");
   composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 4.25);
   assert.equal(composite[32], -2.5);
@@ -320,6 +340,8 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(composite[34], 0.5, "acesE must occupy tuneFx.z (float 34)");
   assert.equal(composite[35], 3.5, "flareStreak must occupy tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(56, 60), [3, 0.25, 3.5, 0.75], "aces a,b,c,d must occupy floats 56..59");
+  assert.equal(composite[60], 0.75, "lensDirt must occupy dirtFx.x (float 60)");
+  assert.deepEqual(composite.slice(61, 64), [0, 0, 0], "dirtFx pads must stay 0 (floats 61..63)");
   assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
   assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 0], "tone1 must occupy floats 40..43");
   assert.deepEqual(composite.slice(44, 48), [8, 9, 10, 0], "lift must occupy floats 44..47");

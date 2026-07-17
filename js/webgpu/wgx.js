@@ -106,8 +106,8 @@ const WGX = (function () {
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
-  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 448
-  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 96
+  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 464
+  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 116
   const LIGHT_STRIDE = WGSLChunks.LIGHT_STRIDE_BYTES;   // 64
   const MAX_LIGHTS = WGSLChunks.MAX_LIGHTS;             // 32
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 2048
@@ -304,6 +304,12 @@ const WGX = (function () {
     let blockerTex = null, blockerView = null, blockerSampler = null;
     let blockerUBO = null, blockerBG = null, blockerPipeline = null, blockerG0Layout = null;
 
+    // LENS DIRT grime map: a deterministic 256×256 grime texture sampled by the
+    // composite pass (GLX parity). Built once at init; the composite bind group's
+    // binding 6 always references it (black 1×1 fallback when there's no canvas),
+    // so the group stays valid and the knob simply no-ops.
+    let _dirtView = null;
+
     // TAA Halton Jitter state.
     let _taaFrameIndex = 0;
 
@@ -385,6 +391,13 @@ const WGX = (function () {
       const _ssrPlace = device.createTexture({ size: [1, 1], format: SCENE_FORMAT,
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
       ssrView = _ssrPlace.createView();
+
+      // LENS DIRT grime map (mirror GLX.makeDirtTex): a deterministic 256×256 2D-
+      // canvas grime texture the composite pass samples. Built once here so the
+      // composite bind group's binding 6 is always valid. On any failure (no
+      // document/canvas — e.g. the node test harness) fall back to a black 1×1 so
+      // the sample reads 0 and the LENS DIRT knob becomes a clean no-op.
+      _dirtView = _makeDirtView();
 
       // Explicit bind-group layouts (needed for the dynamic-offset draw UBO).
       g0Layout = device.createBindGroupLayout({
@@ -921,6 +934,7 @@ const WGX = (function () {
               { binding: 3, resource: next.godrayView },
               { binding: 4, resource: linearSampler },
               { binding: 5, resource: { buffer: compositeUBO } },
+              { binding: 6, resource: _dirtView },   // LENS DIRT grime map (built once at init)
             ],
           });
           next.fxaaBG = device.createBindGroup({
@@ -1078,6 +1092,82 @@ const WGX = (function () {
       });
       return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
+    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/glx.js): a
+    // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
+    // streaks, uploaded as an rgba8unorm texture the composite samples (.r). Same
+    // seeded PRNG + draw ops as GLX, so the WebGPU grime matches the WebGL2 look.
+    // Falls back to a black 1×1 (knob no-op) when there's no document/canvas.
+    function _makeDirtView() {
+      const _blackFallback = () => {
+        try {
+          const tex = device.createTexture({
+            size: [1, 1], format: "rgba8unorm",
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+          });
+          device.queue.writeTexture({ texture: tex }, new Uint8Array([0, 0, 0, 255]),
+            { bytesPerRow: 4, rowsPerImage: 1 }, [1, 1]);
+          return tex.createView();
+        } catch (_) { return null; }
+      };
+      try {
+        if (typeof document === "undefined" || !document.createElement) return _blackFallback();
+        const S = 256;
+        const cv = document.createElement("canvas");
+        cv.width = cv.height = S;
+        const c2 = cv.getContext("2d");
+        if (!c2) return _blackFallback();
+        let seed = 0x9e3779b9;
+        const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+        c2.fillStyle = "#000"; c2.fillRect(0, 0, S, S);
+        // value-noise base: coarse random luminance grid, bilinearly upscaled
+        const N = 16;
+        const nc = document.createElement("canvas");
+        nc.width = nc.height = N;
+        const n2 = nc.getContext("2d");
+        const img = n2.createImageData(N, N);
+        for (let i = 0; i < N * N; i++) {
+          const v = (rnd() * 42) | 0;
+          img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+          img.data[i * 4 + 3] = 255;
+        }
+        n2.putImageData(img, 0, 0);
+        c2.imageSmoothingEnabled = true;
+        c2.globalCompositeOperation = "lighter";
+        c2.drawImage(nc, 0, 0, N, N, 0, 0, S, S);
+        // soft grime blobs (the "smudge" body)
+        for (let i = 0; i < 130; i++) {
+          const x = rnd() * S, y = rnd() * S, r = 3 + rnd() * rnd() * 30;
+          const a = 0.03 + rnd() * rnd() * 0.12;
+          const g = c2.createRadialGradient(x, y, 0, x, y, r);
+          g.addColorStop(0, "rgba(255,255,255," + a.toFixed(3) + ")");
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          c2.fillStyle = g;
+          c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
+        }
+        // bright dust specks
+        for (let i = 0; i < 70; i++) {
+          const x = rnd() * S, y = rnd() * S, r = 0.6 + rnd() * 1.7;
+          c2.fillStyle = "rgba(255,255,255," + (0.10 + rnd() * 0.28).toFixed(3) + ")";
+          c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
+        }
+        // faint diagonal wipe streaks
+        for (let i = 0; i < 9; i++) {
+          const x = rnd() * S, y = rnd() * S, len = 30 + rnd() * 100, ang = rnd() * 6.2832;
+          c2.strokeStyle = "rgba(255,255,255," + (0.02 + rnd() * 0.05).toFixed(3) + ")";
+          c2.lineWidth = 1 + rnd() * 3;
+          c2.beginPath(); c2.moveTo(x, y);
+          c2.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+          c2.stroke();
+        }
+        const tex = device.createTexture({
+          size: [S, S], format: "rgba8unorm",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        device.queue.copyExternalImageToTexture({ source: cv, flipY: true }, { texture: tex }, [S, S]);
+        return tex.createView();
+      } catch (_) { return _blackFallback(); }
+    }
+
     // 2D texture (decal atlas, Phase 4): upload an ImageBitmap/canvas/ImageData
     // (via copyExternalImageToTexture, flipY to match GLX's UNPACK_FLIP_Y) or raw
     // RGBA bytes (via writeTexture). Returns { texture, view } or an inert token.
@@ -1251,6 +1341,14 @@ const WGX = (function () {
       // carLightVP (floats 96..111): the Z01-remapped matrix the car map was
       // rasterised with this frame (stale values are harmless — gated by d[93]).
       d.set(carShadowLVPData, 96);
+      // params7 (floats 112..115): GLX-parity lit-shader knobs — FOG LAMP CLIP (.x,
+      // uLampFogClip def 0.7), CAR SUN GLINT (.y, uCarSunGlint def 12.0), NEON BOOST
+      // (.z, uBloomBoost def 0.6). Always pack the resolved value; WGSL reads these
+      // lanes directly, so 0 is a real "off", not an unset slot. (.w pad.)
+      d[112] = (T && T.fogClip != null) ? T.fogClip : 0.7;
+      d[113] = (T && T.carSunGlint != null) ? T.carSunGlint : 12.0;
+      d[114] = (T && T.neonBoost != null) ? T.neonBoost : 0.6;
+      d[115] = 0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1302,6 +1400,10 @@ const WGX = (function () {
       skyData[45]=f.cloudSilver   != null ? f.cloudSilver   : 1;
       skyData[46]=f.coronaAureole != null ? f.coronaAureole : 1;
       skyData[47]=f.sunDiscSize   != null ? f.sunDiscSize   : 1;
+      // p3.x: DAY SKY BLUE knob (GLX parity, def 1.0 = as-shipped). Always pack the
+      // resolved value — WGSL reads the lane directly (0 is a valid "no band").
+      skyData[48]=f.daySkyBlue    != null ? f.daySkyBlue    : 1;
+      skyData[49]=0; skyData[50]=0; skyData[51]=0;
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
@@ -1717,6 +1819,10 @@ const WGX = (function () {
         s[57] = (T && T.acesB != null) ? T.acesB : 0.03;
         s[58] = (T && T.acesC != null) ? T.acesC : 2.43;
         s[59] = (T && T.acesD != null) ? T.acesD : 0.59;
+        // dirtFx (off 240): LENS DIRT (.x; GLX parity, def 0.15). Always packed —
+        // the WGSL reads the lane directly (0 = clean lens is a real value).
+        s[60] = (T && T.lensDirt != null) ? T.lensDirt : 0.15;
+        s[61] = 0; s[62] = 0; s[63] = 0;
         device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });

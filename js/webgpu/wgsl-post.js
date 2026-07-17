@@ -387,7 +387,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(3) godrayTex : texture_2d<f32>   additive shafts
   //      @binding(4) samp      : sampler           linear clamp (all four)
   //      @binding(5) U         : uniform  CompositeU
-  //    UNIFORM CompositeU (240 B):
+  //    UNIFORM CompositeU (256 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
   //      grade       : vec4<f32>  off  32   (contrast, vibrance, saturation, tint)
@@ -411,6 +411,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      aces        : vec4<f32>  off 224   (acesA, acesB, acesC, acesD) — ACES
   //                                          TONE CURVE knobs; defaults 2.51/0.03/
   //                                          2.43/0.59 (+ acesE 0.14 in tuneFx.z)
+  //      dirtFx      : vec4<f32>  off 240   (lensDirt, _pad, _pad, _pad) — LENS
+  //                                          DIRT veil + flare blotch (def 0.15);
+  //                                          samples binding(6) dirtTex grime map
   //    NOTE: sunShaft (p0.z) here is an extra scalar multiplier on the godray
   //    contribution; the godray strength itself lives in the GODRAY uniform.
   // ════════════════════════════════════════════════════════════════════════
@@ -431,6 +434,7 @@ struct CompositeU {
   gamma       : vec4<f32>,
   gain        : vec4<f32>,
   aces        : vec4<f32>,
+  dirtFx      : vec4<f32>,     // off 240   (lensDirt, _pad, _pad, _pad) — LENS DIRT knob
 };
 @group(0) @binding(0) var sceneTex  : texture_2d<f32>;
 @group(0) @binding(1) var bloomTex  : texture_2d<f32>;
@@ -438,6 +442,7 @@ struct CompositeU {
 @group(0) @binding(3) var godrayTex : texture_2d<f32>;
 @group(0) @binding(4) var samp      : sampler;
 @group(0) @binding(5) var<uniform> U : CompositeU;
+@group(0) @binding(6) var dirtTex   : texture_2d<f32>;   // LENS DIRT grime map (linear clamp via samp)
 ${fullscreenTri}
 ${tonemap}
 ${POST_VS}
@@ -540,6 +545,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // streak's horizontal tightness — the uploader packs the resolved value; the
   // default reproduces the literal 7.0 this pass used before, so byte-identical.
   let flareStreak = U.tuneFx.w;
+  // LENS DIRT knob (U.dirtFx.x; GLX parity, def 0.15). Grime on the lens scatters
+  // bright energy into a smudgy veil + breaks the clean flare into blotches. Read
+  // directly — 0 is a valid "clean lens", so the uploader always packs the value.
+  let lensDirt = U.dirtFx.x;
   let texel      = U.texel.xy;
 
   var c = textureSampleLevel(sceneTex, samp, in.uv, 0.0).rgb;
@@ -594,6 +603,17 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // exposure would otherwise leave the halos over-strong.
   c = c + bloomSample * bloomAmt * bloomMask * exposure;
 
+  // LENS DIRT veil (GLX js/shaders/glx-shaders.js:2420-2428): grime on the lens
+  // scatters incoming light into a smudgy film. Driven by the blurred bright-pass
+  // (bloomSample), so it only appears where the frame carries bright energy (sun,
+  // floodlights, neon) — a dark scene stays clean. The dirt value is reused by the
+  // flare modulation below (declared here so it stays in scope).
+  var dirt = 0.0;
+  if (lensDirt > 0.001) {
+    dirt = textureSampleLevel(dirtTex, samp, in.uv, 0.0).r;
+    c = c + bloomSample * exposure * dirt * lensDirt * 2.2;
+  }
+
   // Professional HDR grade runs after linear-light composition and before ACES.
   c = applyHdrGrade(c);
 
@@ -620,6 +640,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     let d2 = length(in.uv - (sunUV + toCenter * 1.8));
     flare = flare + vec3<f32>(0.50, 1.00, 0.70) * smoothstep(0.028, 0.008, d2) * 0.18;
     flare = flare * flareStr;
+    // LENS DIRT breaks the clean procedural flare into a blotchy, smudged one —
+    // bright spots where grime catches the glare, dimmer in the clean patches
+    // (GLX js/shaders/glx-shaders.js:2515). Reuses the dirt sample from the veil.
+    if (lensDirt > 0.001) {
+      flare = flare * mix(vec3<f32>(1.0), vec3<f32>(0.35 + dirt * 2.2), clamp(lensDirt * 2.0, 0.0, 0.85));
+    }
     flare = flare / (1.0 + flare * 0.6);
     c = c + flare;
   }
@@ -894,7 +920,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     BLOOM_UP_UNIFORM_BYTES: 16,     // BloomUpU
     SSAO_UNIFORM_BYTES: 176,        // SsaoU  (2×mat4 128 + 3×vec4 48)
     GODRAY_UNIFORM_BYTES: 32,       // GodrayU (2×vec4)
-    COMPOSITE_UNIFORM_BYTES: 240,   // CompositeU (15×vec4) — +HDR grading + ACES tone curve
+    COMPOSITE_UNIFORM_BYTES: 256,   // CompositeU (16×vec4) — +HDR grading + ACES tone curve + LENS DIRT
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
     SSR_UNIFORM_BYTES: 192,         // SsrU  (2×mat4 128 + 4×vec4 64)
     // chain description
