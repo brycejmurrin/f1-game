@@ -137,10 +137,14 @@
       const GOLD3 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 3 mass
       grandstand(0.00, 1, 8, 40, shell, [0.50, 0.52, 0.56]);   // main grandstand, pit straight
       grandstand(0.02, 1, 8, 26, shell, [0.62, 0.16, 0.16]);   // La Source hairpin
-      // 2. Raidillon amphitheatre hero (Gold 3 scale) — bulky concrete stand + screen
-      // dominating the climb at s≈0.07–0.09 R.
-      grandstand(0.078, 1, 8, 52, GOLD3, [0.20, 0.36, 0.62]);
-      grandstand(0.088, 1, 9, 36, GOLD3, [0.18, 0.32, 0.58]);  // second bay up the crest
+      // 2. Raidillon amphitheatre (Gold 3) — stepped SHORT bays climbing the crest
+      // at s≈0.07–0.10 R. Kept short + individually re-anchored: a single long
+      // stand lays its crowd along ONE node's flat tangent, so on this steep,
+      // curved climb the far rows flung up into the air / over the track. Short
+      // bays each seat on their own local slope, so the crowd stays grounded.
+      for (const [s, gp] of [[0.070, 8], [0.079, 8], [0.088, 9], [0.097, 9]]) {
+        grandstand(s, 1, gp, 18, GOLD3, [0.20, 0.36, 0.62]);
+      }
       billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
       // Stepped banking slabs climbing the R hillside behind/beside the stands.
       place(K(0.072), 1, 22, [10, 2.4, 16], GOLD3);
