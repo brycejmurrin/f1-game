@@ -105,6 +105,11 @@ uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only 
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
 uniform float uShadowRange; // sun shadow box half-size (m, def 64) — drives the receiver-distance shadow fade
 uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
+// Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
+// map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor.
+uniform highp sampler2DShadow uCarShadowMap;
+uniform mat4 uCarLightVP;
+uniform float uCarShadowOn;
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -430,7 +435,11 @@ float sampleShadow(vec3 wpos) {
   // as sqrt(1-c²)/c (same value, no trig).
   float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.05, 1.0);
   float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
-  float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
+  // Shared by the static map below AND the car map at the bottom — the A/B
+  // harness (tools/ab-lighting.mjs shadow.biasClamp) pins this pattern to ONE
+  // site, so keep the bias term factored here rather than repeating the clamp.
+  float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
+  float z = sc.z - biasTerm;
   // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
   // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
   // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
@@ -486,6 +495,24 @@ float sampleShadow(vec3 wpos) {
     sh = s * 0.125;
   } else {
     sh = s * 0.25;
+  }
+  // Dynamic CAR shadows: min-combine with the per-frame car-only map so cars
+  // cast real sun-projected shadows (direction/length correct, car-on-car
+  // works) on top of the cached static map. Same slope/constant bias; a small
+  // fixed 4-tap PCF (the map is tiny and its content moves every frame, so the
+  // static map's dither/PCSS machinery buys nothing here).
+  if (uCarShadowOn > 0.5) {
+    vec4 cc = uCarLightVP * vec4(wpos, 1.0);
+    vec3 cs = cc.xyz * 0.5 + 0.5;
+    if (cs.x > 0.0 && cs.x < 1.0 && cs.y > 0.0 && cs.y < 1.0 && cs.z < 1.0) {
+      float cz = cs.z - biasTerm;
+      float ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
+      float csh = ( texture(uCarShadowMap, vec3(cs.xy + vec2(-ct, -ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2( ct, -ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2(-ct,  ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2( ct,  ct), cz)) ) * 0.25;
+      sh = min(sh, csh);
+    }
   }
   // Clamped: SHADOW DARKNESS goes to 2.0 and mix() EXTRAPOLATES above t=1 —
   // at sh~0 the lighting factor hit -1, i.e. negative light, which the

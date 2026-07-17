@@ -95,6 +95,7 @@ per-condition preset — focus on the ones the intent notes above call out._
 - `pcssPen` [5..500] def 80 — how fast shadows soften with caster distance
 - `shadowBias` [0..0.01] def 0.001 — depth offset (acne vs peter-pan)
 - `shadowTintAmt` [0..1.5] def 0 — cool-blue tint on shadowed areas (sunny-day look)
+- `carShadow` [0..1] def 1 — real sun-projected car shadows (per-frame car-only map; desktop WebGL2 tier)
 - `aoStr` [0..3] def 1 — SSAO crease/contact darkening
 - `ssaoRadius` [0.1..4] def 0.6 — world-space reach of AO sampling
 - `contactStr` [0..3] def 1 — grounding shadow under car/props

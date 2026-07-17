@@ -665,6 +665,8 @@ const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const MAT_REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new Float32Array(16);
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
+// Dynamic car shadow pass scratches (per-frame car-only depth map).
+const _mCView = new Float32Array(16), _mCProj = new Float32Array(16), _mCVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
@@ -925,6 +927,7 @@ const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaW
 // shadow matrix and flush them all in one state block after the body loop. Shadows
 // are depth-tested but write no depth, so drawing them last is visually identical.
 const _shadowMats = [];   // pool of Float32Array(16), reused across frames
+const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shadow caster pass
 let _shadowCount = 0;
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
 // one for the render loop (both called once per car per frame) so banking() no
@@ -3992,6 +3995,29 @@ function render(dt) {
       if (_shKey > 0.28) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
+    // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
+    // the snap-cached static map above; that's why cars only had blob shadows).
+    // Casts LAST frame's pooled car matrices (_shadowMats/_shadowTeams fill
+    // during the car draw loop later this frame): a one-frame lag, ≤1.3 m at
+    // top speed, on a shadow that moves with its caster — invisible. ±42 m box
+    // on the same gliding anchor (a car shadow beyond that is sub-pixel), same
+    // depth program and key-luminance gate as the props above. Guards: WGX has
+    // no carShadowBegin yet (blob-only there); menu/select skip (the car loop
+    // doesn't run, so the pooled matrices would be stale race positions).
+    if (gfx.carShadowBegin && LT.carShadow && _shadowCount > 0 && player &&
+        state !== "menu" && state !== "select") {
+      const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+      if (_ck > 0.28) {
+        M4.lookAtTo(_mCView,
+          [_shadowCtr[0] + sd[0] * 150, _shadowCtr[1] + sd[1] * 150, _shadowCtr[2] + sd[2] * 150],
+          _shadowCtr, up);
+        M4.orthoTo(_mCProj, -42, 42, -42, 42, 1.0, 320);
+        M4.mulTo(_mCVP, _mCProj, _mCView);
+        gfx.carShadowBegin(_mCVP);
+        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        gfx.carShadowEnd();
+      }
+    }
   }
 
   // ── Sky animation & weather FX ──────────────────────────────────────────
@@ -4355,6 +4381,7 @@ function render(dt) {
     let _sm = _shadowMats[_shadowCount];
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
     _sm.set(tmpMat);
+    _shadowTeams[_shadowCount] = c.team;   // for next frame's car-shadow caster pass
     _shadowCount++;
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the stabilized track basis
