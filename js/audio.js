@@ -533,8 +533,13 @@ const GameAudio = (function () {
 
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
 
-  function startRain() {
-    if (!sfxOk() || rainSrc || rainStopping) return;
+  function startRain(gain) {
+    // Optional gain: the drizzle weather tier passes a low level (soft patter);
+    // undefined keeps the full storm loudness. Re-targets live if already
+    // running, so a mid-race wet↔rain flip fades the loop instead of sticking.
+    const g = gain == null ? 0.065 : gain;
+    if (rainSrc) { if (rainGain) rainGain.gain.setTargetAtTime(g, now(), 0.8); return; }
+    if (!sfxOk() || rainStopping) return;
     const dur = 4;
     const buf = noiseBuf(dur);
     rainSrc = ctx.createBufferSource();
@@ -551,7 +556,7 @@ const GameAudio = (function () {
     rainGain.gain.value = 0;
     rainSrc.connect(rainHp).connect(rainLp).connect(rainGain).connect(master);
     rainSrc.start();
-    rainGain.gain.setTargetAtTime(0.065, now(), 1.2);
+    rainGain.gain.setTargetAtTime(g, now(), 1.2);
   }
 
   function stopRain() {

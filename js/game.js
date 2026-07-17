@@ -71,11 +71,15 @@ let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug:
 function initRainDrops() {
   rainCanvas.width = window.innerWidth;
   rainCanvas.height = window.innerHeight;
-  rainDrops = Array.from({ length: Math.round(LT.rainCount) }, () => ({
+  // DRIZZLE tier: "wet" (damp track, no storm) gets a sparse, shorter, slower
+  // field — light precipitation that reads as drizzle, not a downpour. "rain"
+  // keeps the full storm density.
+  const drizzle = isWetRoad() && !isRaining();
+  rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? 0.3 : 1)) }, () => ({
     x: Math.random() * rainCanvas.width,
     y: Math.random() * rainCanvas.height,
-    len: (14 + Math.random() * 22) * LT.rainStreak,
-    speed: 380 + Math.random() * 360,
+    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? 0.5 : 1),
+    speed: (380 + Math.random() * 360) * (drizzle ? 0.6 : 1),
     opacity: 0.16 + Math.random() * 0.34,
   }));
 }
@@ -85,20 +89,105 @@ function drawRain(dt) {
   rainCtx2d.lineWidth = 1;
   // Constant colour + a single averaged alpha so every drop rides ONE batched path
   // (one beginPath/stroke instead of one per drop). The blur/motion of a rain field
-  // hides that the per-drop opacity is now uniform.
+  // hides that the per-drop opacity is now uniform. Drizzle draws fainter.
   rainCtx2d.strokeStyle = "#afc8e8";
-  rainCtx2d.globalAlpha = 0.25;   // ~mean of the 0.16..0.50 per-drop range
-  const wind = LT.rainWind;
+  rainCtx2d.globalAlpha = isRaining() ? 0.25 : 0.16;   // ~mean of the 0.16..0.50 per-drop range
+  // SPEED-REACTIVE streaks: at speed the rain shears toward the camera's motion
+  // and stretches into driving streaks (apparent velocity = fall + car speed).
+  // Render-only — reads player.speed, never writes physics state.
+  const vk = clamp(((player && player.speed) || 0) / 90, 0, 1);
+  const wind = LT.rainWind + vk * 0.9;
+  const lenMul = 1 + vk * 2;
   rainCtx2d.beginPath();
   for (const d of rainDrops) {
     d.y += d.speed * dt;
     d.x += d.speed * dt * wind;
     if (d.y - d.len > h || d.x > w || d.x < 0) { d.y = -d.len; d.x = Math.random() * w; }
     rainCtx2d.moveTo(d.x, d.y);
-    rainCtx2d.lineTo(d.x + d.len * wind, d.y + d.len);
+    rainCtx2d.lineTo(d.x + d.len * lenMul * wind, d.y + d.len * lenMul);
   }
   rainCtx2d.stroke();
   rainCtx2d.globalAlpha = 1;
+}
+
+// ---------- visor / windscreen rain (cockpit + hood cams) ----------
+// In the onboard views the falling-streak field reads as "outside the car";
+// what sells rain from the driver's seat is water ON the glass: beading
+// droplets that cling and slowly slide, cleared by a periodic wiper sweep.
+// Drawn on the same rainCanvas 2D ctx, replacing the streak field there.
+const visorDrops = [];
+let _visorSpawn = 0;      // fractional spawn accumulator
+let _wiperPhase = 999;    // seconds into the current wiper cycle (starts parked)
+function drawVisorRain(dt) {
+  const w = rainCanvas.width, h = rainCanvas.height;
+  const ctx = rainCtx2d;
+  ctx.clearRect(0, 0, w, h);
+  const storm = isRaining();
+  const vk = clamp(((player && player.speed) || 0) / 90, 0, 1);
+  const scale = Math.min(w, h) / 390;           // device-independent drop sizes
+  // ── spawn: heavier in a storm, more hits at speed ──
+  const maxDrops = storm ? 90 : 28;
+  const mkDrop = () => visorDrops.push({
+    x: Math.random() * w,
+    y: Math.random() * h * 0.9,
+    r: (1.4 + Math.random() * 3.0) * scale,
+    wob: Math.random() * 6.28,
+  });
+  // First wet frame in an onboard view: pre-seed part of the field so the glass
+  // doesn't start bone-dry and trickle in one bead at a time.
+  if (!visorDrops.length) for (let i = 0; i < maxDrops * 0.4; i++) mkDrop();
+  _visorSpawn += (storm ? 30 : 5.5) * (0.55 + 0.45 * vk) * dt;
+  while (_visorSpawn >= 1) {
+    _visorSpawn -= 1;
+    if (visorDrops.length < maxDrops) mkDrop();
+  }
+  // ── wiper cycle: sweep out-and-back, then park ──
+  const period = storm ? 2.4 : 5.5;
+  _wiperPhase += dt;
+  if (_wiperPhase >= period) _wiperPhase = 0;
+  const sweepT = 1.1;
+  const swing = _wiperPhase < sweepT
+    ? (_wiperPhase < sweepT * 0.5 ? _wiperPhase / (sweepT * 0.5) : 2 - _wiperPhase / (sweepT * 0.5))
+    : -1;                                        // parked
+  const pvx = w * 0.5, pvy = h * 1.25, R = h * 1.05;
+  const a0 = -Math.PI / 2 - 0.85;                // sweep start (left)
+  const bladeAng = a0 + swing * 1.7;             // → right and back
+  // ── update + draw droplets (beads slide slowly; big drops run faster) ──
+  ctx.fillStyle = "rgba(175,200,232,0.42)";
+  for (let i = visorDrops.length - 1; i >= 0; i--) {
+    const d = visorDrops[i];
+    d.wob += dt * 3;
+    d.y += (d.r * 6 + 4) * (0.4 + vk * 1.6) * dt * (scale || 1);
+    d.x += Math.sin(d.wob) * 2 * dt;
+    if (d.y > h + 4) { visorDrops.splice(i, 1); continue; }
+    // wiper clearance: inside the blade's swept sector this frame → gone
+    if (swing >= 0) {
+      const ang = Math.atan2(d.y - pvy, d.x - pvx);
+      const rr = Math.hypot(d.x - pvx, d.y - pvy);
+      if (rr < R && Math.abs(ang - bladeAng) < 0.09) { visorDrops.splice(i, 1); continue; }
+    }
+    // bead: a soft disc with a short slide-trail and a bright crown highlight
+    ctx.globalAlpha = 0.30;
+    ctx.fillRect(d.x - d.r * 0.35, d.y - d.r * 4, d.r * 0.7, d.r * 4);   // trail
+    ctx.globalAlpha = 0.42;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 6.2832); ctx.fill();
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.arc(d.x - d.r * 0.3, d.y - d.r * 0.35, d.r * 0.32, 0, 6.2832);
+    ctx.fillStyle = "rgba(235,244,255,0.75)"; ctx.fill();
+    ctx.fillStyle = "rgba(175,200,232,0.42)";
+  }
+  // ── draw the wiper blade mid-sweep ──
+  if (swing >= 0) {
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = "rgba(16,20,26,0.9)";
+    ctx.lineWidth = Math.max(4, 5 * scale);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(pvx + Math.cos(bladeAng) * R * 0.35, pvy + Math.sin(bladeAng) * R * 0.35);
+    ctx.lineTo(pvx + Math.cos(bladeAng) * R, pvy + Math.sin(bladeAng) * R);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 }
 
 // ---------- settings ----------
@@ -1585,7 +1674,7 @@ function startRace() {
     lapsTarget = raceLaps;
   }
   applyRaceSettings();
-  if (raceWeather === "rain") {
+  if (isWetRoad()) {           // "rain" = storm field; "wet" = sparse drizzle tier
     initRainDrops();
     rainCanvas.style.display = "block";
   } else {
@@ -1611,7 +1700,7 @@ function startRace() {
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
-  if (soundOn && raceWeather === "rain") GameAudio.startRain();
+  if (soundOn && isWetRoad()) GameAudio.startRain(isRaining() ? undefined : 0.022);   // drizzle = low-gain patter
   updateHud(true);
 }
 
@@ -2899,7 +2988,7 @@ function applyLightTune(fromApplyRace) {
   // the fresh LT values right after this returns) — re-entering ran the whole
   // sky/ambient/fog derivation twice per track/time/weather transition.
   if (reapply && !fromApplyRace && track && state !== "menu" && state !== "select") applyRaceSettings();
-  if (reinit && isRaining()) initRainDrops();
+  if (reinit && isWetRoad()) initRainDrops();
 }
 function setLightTune(id, v) {
   const d = TUNE_DEFS.find((t) => t.id === id);
@@ -2917,7 +3006,7 @@ function setLightTune(id, v) {
     if (!Object.keys(prof).length) delete _ltStore[key];
   }
   if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
-  if (d.reinitRain && isRaining()) initRainDrops();   // re-seed the rain field with the new count/length
+  if (d.reinitRain && isWetRoad()) initRainDrops();   // re-seed the rain field with the new count/length
   if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
   return true;
 }
@@ -4417,8 +4506,12 @@ function render(dt) {
   po.godray = _gr; po.contact = _cs; po.reflect = _ssr; po.lampVol = _lampVol; po.mist = _mist;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
   gfx.present(po);
-  if (raceWeather === "rain" && rainDrops.length) {
-    drawRain(dt);
+  if (isWetRoad() && rainDrops.length) {
+    // Onboard views get water ON the glass (beading drops + wiper) instead of
+    // the outside-the-car falling-streak field.
+    const _rainCam = CAM_MODES[camMode].id;
+    if (_rainCam === "cockpit" || _rainCam === "hood") drawVisorRain(dt);
+    else drawRain(dt);
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
     // Stronger bleach (was 0.18) so a strike is a real concussive sky-flash.
     if (_ltFlash > 0.001) {
@@ -7397,13 +7490,13 @@ window.__apex = {
   weather(w) {
     if (w === undefined) return raceWeather;
     raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
-    if (raceWeather === "rain") {
-      if (!rainDrops.length) initRainDrops();
+    if (isWetRoad()) {
+      initRainDrops();   // always re-seed: the drizzle↔storm tiers differ in density
       if (rainCanvas) rainCanvas.style.display = "block";
     } else if (rainCanvas) {
       rainCanvas.style.display = "none";
     }
-    if (soundOn) { if (raceWeather === "rain") GameAudio.startRain(); else GameAudio.stopRain(); }
+    if (soundOn) { if (isWetRoad()) GameAudio.startRain(isRaining() ? undefined : 0.022); else GameAudio.stopRain(); }
     // Re-apply the frame lighting NOW: without this a live weather change only
     // moved the wetness ramp / rain overlay — the cloud cover, muted sun,
     // ambient lift, fog density and exposure branches in applyRaceSettings
