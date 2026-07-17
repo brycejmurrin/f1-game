@@ -3,17 +3,17 @@
 .claude/*
 !.claude/skills/
 
-# Node / Playwright
+# Node
 node_modules/
-# scratch screenshot output from tools/apex-capture.mjs (regenerable)
+
+# ── Regenerable output — two standard dirs (see CLAUDE.md "Output dirs") ──
+# scratch/    interactive screenshot galleries from tools (survey, aerial,
+#             apex-capture, ab-lighting) — human review, regenerate on demand.
+# artifacts/  all batch/test output: Playwright test-results[-port]/ +
+#             report[-port]/ + junit, test-shards logs/, and the tmp/ scratchpad
+#             (replaces /tmp for tool log/screenshot dumps).
 scratch/
-# survey/inspect screenshot dumps (regenerable)
-.shots/
-# default + APEX_PORT-suffixed variants (test-results-3461/ etc.)
-test-results*/
-playwright-report*/
-# per-group logs written by tools/test-shards.sh
-test-logs/
+artifacts/
 
 # regenerable screenshot dumps written via page.screenshot()/fs.writeFileSync
 # (lap-audit, baku-audit, ui/parts/dev-tools captures). These are human-review

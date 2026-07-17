@@ -108,8 +108,8 @@ clouds. On a browser **without** WebGPU, `Gfx.create` resolves to `null` and the
 page prints the fallback message (in the real game that branch runs `GLX`).
 
 > Do **not** commit this harness as a shipped HTML file — it's a throwaway probe.
-> Later, the existing Playwright screenshot harness (`inspect-scene` /
-> `playwright-probe`) drives both backends via a `apex26.gfxBackend` switch.
+> Later, the existing `playwright-probe` screenshot harness drives both backends
+> via an `apex26.gfxBackend` switch.
 
 ---
 

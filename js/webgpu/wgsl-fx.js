@@ -13,12 +13,12 @@
  * are simple enough that none of the shared math leaves are needed; they are pure
  * geometry quads with radial/atlas falloff, so nothing is concatenated here).
  *
- * PORTED FROM (GL reference — cite for the wgx.js wiring agent):
- *  - BLOB_SHADOW : js/glx.js:1182 SHADOW_VS + :1194 SHADOW_FS  (drawShadow :3246)
- *  - MARK        : js/glx.js:1182 SHADOW_VS + :1205 MARK_FS    (drawMark   :3264)
- *  - SKID        : js/glx.js:1217 MARK_BATCH_VS + :1205 MARK_FS(drawSkidBatch :3285)
- *  - GLOW        : js/glx.js:1273 GLOW_VS + :1293 GLOW_FS      (drawGlow   :3309)
- *  - DECAL       : js/glx.js:1232 DECAL_VS + :1245 DECAL_FS    (drawDecal  :2722)
+ * PORTED FROM (stable GLX shader/function names):
+ *  - BLOB_SHADOW : SHADOW_VS + SHADOW_FS (GLX.drawShadow)
+ *  - MARK        : SHADOW_VS + MARK_FS (GLX.drawMark)
+ *  - SKID        : MARK_BATCH_VS + MARK_FS (GLX.drawSkidBatch)
+ *  - GLOW        : GLOW_VS + GLOW_FS (GLX.drawGlow)
+ *  - DECAL       : DECAL_VS + DECAL_FS (GLX.drawDecal)
  *
  * WGSL-vs-GLSL gotchas applied (same list as wgsl-chunks.js header):
  *  - texture(s,uv)        -> textureSample(t, s, uv)  (texture + sampler split)

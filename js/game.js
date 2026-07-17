@@ -1,6 +1,6 @@
 /* Apex 26 — main game: state machine, physics, AI, race logic, HUD.
    Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks,
-   Car3D,Input,GameAudio,F1API,DataHub. */
+   Car3D,Input,GameAudio,F1API,DataHub; optionally Gfx/WGX for WebGPU. */
 (async function () {
 "use strict";
 
@@ -148,6 +148,7 @@ function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
+  invalidateDecalTextures("custom");
   if (teamMeshes.custom && gfx.freeMesh) gfx.freeMesh(teamMeshes.custom);   // free the old GPU buffers first
   delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
   if (playerBodies.custom && gfx.freeMesh) gfx.freeMesh(playerBodies.custom);
@@ -380,7 +381,7 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 // Cloud cover target for the current session: set once in applyRaceSettings()
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
-const teamMeshes = {};   // teamId -> GLX mesh
+const teamMeshes = {};   // teamId -> renderer mesh handle
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -721,6 +722,15 @@ const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, getPedalBar } = CarMesh;
 const _decalTexCache = {};
+function invalidateDecalTextures(teamId) {
+  const prefix = teamId + ":";
+  Object.keys(_decalTexCache).forEach(function (key) {
+    if (key.indexOf(prefix) !== 0) return;
+    const tex = _decalTexCache[key];
+    if (tex && gfx.freeTexture) gfx.freeTexture(tex);
+    delete _decalTexCache[key];
+  });
+}
 function getCarDecalTexture(team, num) {
   if (typeof LiveryTex === "undefined" || !gfx.createTexture) return null;
   const key = team.id + ":" + getLiveryId(team.id) + ":" + (num == null ? "_" : num);
@@ -5374,7 +5384,10 @@ function setSound(b) {
   els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
   $("pm-sound").textContent = "SOUND: " + (b ? "ON" : "OFF");
   if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
-  else { if (state === "menu") GameAudio.startMusic(-1); }
+  else {
+    if (state === "menu") GameAudio.startMusic(-1);
+    else if (state === "race") GameAudio.startMusic(trackIdx);
+  }
 }
 els.soundbtn.onclick = () => setSound(!soundOn);
 

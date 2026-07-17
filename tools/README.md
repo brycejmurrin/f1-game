@@ -6,12 +6,12 @@ to use them) — this index is the quick map. Run from the repo root.
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **verify-track.cjs** | Headless build guard — loads the track defs + engine in a VM, runs `buildRoad/Terrain/Props/Gate`, fails on any THROW. `verify-track.cjs <id>` or `--all`. The fast pre-push check for any `js/tracks/*` edit. | track-batch-verify |
+| **verify-track.cjs** | Headless build guard — loads the track defs + engine in a VM, runs `buildRoad/Terrain/Props/Gate`, fails on any THROW. `verify-track.cjs <id>` or `--all`. The fast pre-push check for any `js/tracks/*` edit. | debug-tracks |
 | **apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON. `apex-eval.mjs '__apex.corners()'`. | playwright-probe |
 | **apex-capture.mjs** | Parallel headless screenshot capture across cameras/tracks/modes for visual validation. | playwright-probe |
 | **motion-capture.mjs** | Capture RENDERED MOTION (screenshots can't — headless rAF is frozen at 0 fps). Records a driven clip via `recordVideo` (which ticks the loop), extracts frames, scores per-frame flicker. For temporal artifacts (z-fight/clipping flicker, shadow crawl, pop-in) and A/B-verifying a renderer fix. `motion-capture.mjs <track> [sec] [speed]`. | motion-capture |
 | **survey-track.mjs** | One-command circuit survey — self-boots the game and emits screenshots (aerial + orbit + driver's-eye per spot → `scratch/survey-<id>/`) **and** a lateral ground-profile probe table with auto-flagged holes/steps. `survey-track.mjs <id> [label] [fracs]`. | survey-track |
-| **shot-car.mjs** | Screenshot a car / livery via the orbit camera. | inspect-scene |
+| **shot-car.mjs** | Screenshot a car / livery via the orbit camera. | playwright-probe |
 | **check-bank.mjs**, **check-grip.mjs**, **check-roadfollow.mjs**, **check-steer.mjs** | Physics stability probes — verify no-NaN / forward-motion / banking grip / steering authority via the headless loop. | tune-physics |
 | **audio-test.cjs** | Objective engine-audio pitch test (we can't listen headless). | audio-debug |
 | **bake-elevation.mjs** | Offline elevation baker — precompute per-track elevation profiles. | new-track |
@@ -20,7 +20,7 @@ to use them) — this index is the quick map. Run from the repo root.
 ## Conventions
 
 - **Surveying a track:** `survey-track.mjs <id>` is the one-stop pass (shots +
-  flagged probe). For a one-off framed shot use `.claude/skills/inspect-scene/shot.mjs`;
+  flagged probe). For a one-off framed shot use `.claude/skills/playwright-probe/shot.mjs`;
   for a parallel multi-track screenshot sweep use `apex-capture.mjs`; for a quick
   numbers-only terrain re-probe use `.claude/skills/survey-track/ground-profile.mjs`.
 - **Chromium:** scripts auto-pick `/opt/pw-browsers/...`; `playwright` resolves

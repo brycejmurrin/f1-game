@@ -48,22 +48,22 @@ per-request stderr spam is suppressed in playwright.config.js. Run in the
 background and tail:
 
 ```sh
-npx playwright test tests/foo.spec.js > /tmp/foo.log 2>&1 &
-tail -f /tmp/foo.log
+npm test -- tests/foo.spec.js > artifacts/tmp/foo.log 2>&1 &
+tail -f artifacts/tmp/foo.log
 ```
 
-To run **several test invocations concurrently**, give each its own server port
-with `APEX_PORT` (playwright.config.js derives the static-server port, baseURL,
-and report/artifact dirs from it — without it, run B reuses run A's port-3456
-server, which dies with net::ERR_CONNECTION_REFUSED when run A finishes):
+The npm scripts use `tools/run-playwright.mjs`, which allocates a free port and
+port-suffixed report/artifact paths for every invocation. Independent npm test
+commands can therefore run concurrently without sharing and tearing down each
+other's web server:
 
 ```sh
-APEX_PORT=3461 npx playwright test tests/a.spec.js --reporter=line > /tmp/a.log 2>&1 &
-APEX_PORT=3462 npx playwright test tests/b.spec.js --reporter=line > /tmp/b.log 2>&1 &
+npm test -- tests/a.spec.js > artifacts/tmp/a.log 2>&1 &
+npm test -- tests/b.spec.js > artifacts/tmp/b.log 2>&1 &
 ```
 
-Reports land in `playwright-report-<port>/`, artifacts in `test-results-<port>/`
-(both gitignored). Default port 3456 with unsuffixed dirs when APEX_PORT is unset.
+Reports land in `artifacts/report-<port>/`, artifacts in `artifacts/test-results-<port>/`
+(both gitignored). Direct `npx playwright test` still uses port 3456; prefer npm.
 
 **`tools/test-shards.sh`** wraps all of this — run whole npm groups concurrently,
 one port + log per group, with a pass/fail summary at the end:
@@ -71,22 +71,39 @@ one port + log per group, with a pass/fail summary at the end:
 ```sh
 tools/test-shards.sh smoke api collision        # 3 groups at once
 WORKERS=2 tools/test-shards.sh circuit barriers # workers per group (default 2)
-SPLIT=3 tools/test-shards.sh circuit            # 1 group fanned over 3 servers
-                                                #   via Playwright --shard=k/3
-tail -f test-logs/smoke.log                     # watch one group live
+tail -f artifacts/logs/smoke.log                # watch one group live
 ```
 
 Sizing: total browsers = groups × WORKERS, and rendering is SwiftShader (CPU),
-so on a small box 2-3 groups × 2 workers is the sweet spot. Within a single
-run, `--workers=N` raises Playwright's per-run pool (default: half the cores).
+so on a small box 2-3 groups × 2 workers is the sweet spot. A single local run
+defaults to at most 4 workers (`APEX_WORKERS=N` overrides it). Playwright shards
+are for distributing CI work across machines; local `SPLIT` multiplies browser
+pools and usually makes this software-rendered suite slower.
 
 IMPORTANT: tests serve `js/`/`css/` straight from the working tree — don't edit
 source files while a run is in flight, or its later specs load mixed versions.
 
-Killing a Playwright run orphans its `python3 -m http.server <port>` child; the
-next run on that port then fails with "Process from config.webServer was not
-able to start". Clean up with `pkill -f 'http.server <port>'` (check first with
-`pgrep -fa http.server` — don't kill a port a live run is still using).
+The npm wrapper owns its static server in-process and forwards termination
+signals to Playwright so browser children shut down. Direct CLI/sharded runs
+still use Python; after an uncatchable SIGKILL, check for an orphan with
+`pgrep -fa http.server` before removing it.
+
+### Output dirs (standard)
+
+All regenerable output lives in **two** top-level gitignored dirs — never `/tmp`,
+never scattered at the repo root:
+
+- **`scratch/`** — interactive screenshot galleries from tools (`survey-track`,
+  aerial dumps, `apex-capture`, `ab-lighting`). Human-review, regenerate on demand.
+- **`artifacts/`** — batch/test output. Subdirs: `test-results[-port]/` +
+  `report[-port]/` + junit (Playwright, via `playwright.config.js`), `logs/`
+  (`test-shards.sh`), and `tmp/` (the `/tmp` replacement for tool log/screenshot
+  scratch, e.g. `measure-props-over-road --shots`, `photoshoot`).
+
+Both are created on demand. `tools/render-out/` (car/parts render sheets) and the
+`tests/*` gallery dirs stay where they are (namespaced, separately ignored). The
+golden visual-regression baselines in `tests/*-snapshots/` are **tracked** — never
+delete those.
 
 ---
 

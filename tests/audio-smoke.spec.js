@@ -22,6 +22,31 @@ test("GameAudio initialises without console errors", async ({ page }) => {
   expect(audioErrors).toHaveLength(0);
 });
 
+test("re-enabling sound during a race restarts race music", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 10000 });
+  const monzaIdx = await page.evaluate(() => {
+    const calls = [];
+    const startMusic = GameAudio.startMusic;
+    GameAudio.startMusic = function (trackIdx) {
+      calls.push(trackIdx);
+      return startMusic.apply(this, arguments);
+    };
+    window.__raceMusicCalls = calls;
+    window.__apex.headless(true);
+    window.__apex.race("monza");
+    window.__apex.go();
+    calls.length = 0;
+    return window.__apex.tracks().find((track) => track.id === "monza").i;
+  });
+
+  await page.locator("#pm-sound").evaluate((button) => button.click());
+  await page.locator("#pm-sound").evaluate((button) => button.click());
+
+  const calls = await page.evaluate(() => window.__raceMusicCalls);
+  expect(calls).toEqual([monzaIdx]);
+});
+
 test("OfflineAudioContext synthesis produces non-silent output", async ({
   page,
 }) => {

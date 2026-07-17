@@ -1,5 +1,6 @@
 /* Apex 26 — DataHub: F1 data overlay (#datahub).
-   Tabs: SCHEDULE | STANDINGS | LAST RACE | LIVE. All API-derived DOM is built
+   Tabs: SCHEDULE | STANDINGS | LAST RACE | LIVE | TELEMETRY | EXPORT.
+   All API-derived DOM is built
    with createElement/textContent (never innerHTML with API strings).
    Styles live in css/data.css (every class prefixed dh-). */
 const DataHub = (function () {
@@ -434,6 +435,7 @@ const DataHub = (function () {
 
   const YEARS = [2026, 2025, 2024, 2023];   // OpenF1 data starts in 2023
   const sel = { year: null, meetingKey: null, sessionKey: null, meta: null };
+  let pickerGen = 0;
 
   function ensureSession() {
     if (sel.sessionKey !== null) return Promise.resolve(sel.meta);
@@ -518,20 +520,27 @@ const DataHub = (function () {
     });
 
     function loadGPs(userChanged) {
+      const myGen = ++pickerGen;
       ph(gpSel, "loading…"); ph(sesSel, "—");
       F1API.meetings(sel.year).then(function (ms) {
+        if (myGen !== pickerGen) return;
         if (!ms.length) { ph(gpSel, "no data"); return; }
         if (sel.meetingKey === null) sel.meetingKey = ms[ms.length - 1].meetingKey;
         setSelectOptions(gpSel, ms.map(function (m) {
           return { value: m.meetingKey, label: m.name || m.circuit || "Round" };
         }), sel.meetingKey);
         loadSessions(userChanged);
-      }, function () { ph(gpSel, "error"); });
+      }, function () {
+        if (myGen !== pickerGen) return;
+        ph(gpSel, "error");
+      });
     }
 
     function loadSessions(userChanged) {
+      const myGen = ++pickerGen;
       ph(sesSel, "loading…");
       F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
+        if (myGen !== pickerGen) return;
         sesIndex = {};
         ss.forEach(function (s) { sesIndex[s.sessionKey] = s; });
         if (!ss.length) { ph(sesSel, "no data"); return; }
@@ -544,7 +553,10 @@ const DataHub = (function () {
           return { value: s.sessionKey, label: s.name || s.type || "Session" };
         }), sel.sessionKey);
         if (userChanged) onPick(sel.meta);
-      }, function () { ph(sesSel, "error"); });
+      }, function () {
+        if (myGen !== pickerGen) return;
+        ph(sesSel, "error");
+      });
     }
 
     loadGPs(false);   // reflect current selection without firing onPick
