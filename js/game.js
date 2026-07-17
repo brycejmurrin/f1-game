@@ -2385,9 +2385,14 @@ function updateCar(c, dt, ranked) {
     // Off-track, fade out the road-following assist so the driver keeps full
     // manual authority to recover. On grass the car isn't on the racing line, so
     // steering toward the track's curvature just shoves it one way ("pushed
-    // right / toward the turn"). Full assist on tarmac and kerbs; tapering to
-    // zero ~3 m into the grass.
-    const offAssistFade = c.offroad ? Math.max(0, 1 - (Math.abs(c.x) - hw) / 3) : 1;
+    // right / toward the turn"). Full assist on tarmac, tapering to zero ~3 m
+    // past the road edge. CONTINUOUS in |x| — the old form gated on c.offroad
+    // (which excludes the kerb), so leaving the kerb outer edge started the
+    // ramp partway down: a step loss of ~kerbWidth/3 of the steering help in a
+    // single tick, felt as a snap. Now the ramp begins at the road edge and
+    // crosses the kerb smoothly (slightly less assist ON the kerb — more
+    // manual authority there, which kerb-riding wants anyway).
+    const offAssistFade = Math.max(0, 1 - Math.max(0, Math.abs(c.x) - hw) / 3);
     let yawEase = 1;
     const rNeed = c.speed * k;
     if (rNeed !== 0) {
@@ -2432,6 +2437,10 @@ function updateCar(c, dt, ranked) {
     // hard mid-corner understeers wide, while trail-braking (easing off as you
     // turn in) progressively returns grip to the front tyres and rotates the car.
     // Weather thins the longitudinal budget too, so braking bites grip in the wet.
+    // NOTE (deliberate asymmetry): the on-throttle axEst uses the DEPLOY_A-scale
+    // accel, not the full engine ACCEL, so power-on costs far less cornering
+    // grip than braking does — arcade forgiveness on corner exits. Making the
+    // circle symmetric (power-limited exits) is a feel/design change, not a fix.
     const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
     // --- friction limit per axle (the grip circle). Everything scales with the
