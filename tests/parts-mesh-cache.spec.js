@@ -353,4 +353,51 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     expect(stats.oldestPairEvicted).toBe(true);
     expect(stats.newestPairLive).toBe(true);
   });
+
+  test("player wheel centres stay on the road while the chassis pitches under braking", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => {
+      const rotatingData = new WeakSet();
+      const rotatingMeshes = new WeakSet();
+      const centres = [];
+      const buildLayers = Car3D.buildWheelLayers;
+      const createMesh = GLX.createMesh;
+      const draw = GLX.draw;
+      Car3D.buildWheelLayers = function () {
+        const layers = buildLayers.apply(this, arguments);
+        rotatingData.add(layers.rotating);
+        return layers;
+      };
+      GLX.createMesh = function (data) {
+        const mesh = createMesh(data);
+        if (rotatingData.has(data)) rotatingMeshes.add(mesh);
+        return mesh;
+      };
+      GLX.draw = function (mesh, matrix) {
+        if (rotatingMeshes.has(mesh)) {
+          centres.push([matrix[12], matrix[13], matrix[14]]);
+          if (centres.length > 32) centres.splice(0, centres.length - 32);
+        }
+        return draw.apply(this, arguments);
+      };
+      window.__wheelGroundProbe = centres;
+    });
+
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track === "monza", { timeout: 15_000 });
+    await page.evaluate(() => {
+      window.__apex.go();
+      window.__apex.jump(0.10, 35, 0);
+      window.__apex.setInput({ throttle: false, brake: true, steer: 0 });
+      window.__apex.step(1 / 60, 90);
+      window.__wheelGroundProbe.length = 0;
+    });
+    await page.waitForFunction(() => window.__wheelGroundProbe.length >= 4, { timeout: 10_000 });
+
+    const centreYs = await page.evaluate(() =>
+      window.__wheelGroundProbe.slice(-4).map((centre) => centre[1]));
+    expect(Math.max(...centreYs) - Math.min(...centreYs)).toBeLessThan(0.005);
+    for (const y of centreYs) expect(y).toBeCloseTo(0.34, 2);
+  });
 });

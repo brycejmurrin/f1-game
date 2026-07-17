@@ -733,9 +733,11 @@ function basisMat(r, u, f, p, out) {
   return out;
 }
 const tmpMat = new Float32Array(16);
+const _groundMat = new Float32Array(16);
 const _cockMat = new Float32Array(16), _cockU = [0, 1, 0];   // stabilized cockpit-interior basis
 const _cockP = [0, 0, 0];   // camera-anchored rig origin (see the cockpit branch)
 const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
+const _groundR = [0, 0, 0], _groundF = [0, 0, 0], _groundU = [0, 1, 0];
 // Pre-allocated scratch matrices — zero-GC hot-path matrix math.
 const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 // The in-race car model matrix is a REFLECTION (det −1, see basisMat/tmpU). The
@@ -1043,6 +1045,11 @@ let _shadowCount = 0;
 const _bankScratch = { dy: 0, roll: 0 };
 const _bankScratchP = { dy: 0, roll: 0 };
 
+function cameraFollowsBank(mode) {
+  return mode === "chase" || mode === "far" || mode === "drift" ||
+         mode === "cockpit" || mode === "hood" || mode === "reverse" ||
+         mode === "low" || mode === "tcam" || mode === "rear";
+}
 
 // The cockpit body: the REAL car (livery, nose, mirrors, number board) minus
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
@@ -1891,12 +1898,14 @@ function _trackAtmoBias(def) {
 function snapGameCam() {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch);
-  const v = camVantage(CAM_MODES[camMode].id, player.s, player.x, player.speed || 0, 0, {
+  const mode = CAM_MODES[camMode].id;
+  const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
   });
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
+  camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
 }
 
 function startRace() {
@@ -3941,7 +3950,7 @@ function render(dt) {
   _frameNo++;
 
   // camera
-  let eyeT, tgtT, fovT;
+  let eyeT, tgtT, fovT, roadCamRoll = 0;
   if (state === "menu" || state === "select") {
     // slow flyby
     const s = wrapS((performance.now() * 0.012) % track.total);
@@ -3961,6 +3970,7 @@ function render(dt) {
     const bankCam = Tracks.banking(track, pS, px);
     const bankDy = bankCam ? bankCam.dy : 0;
     const mode = CAM_MODES[camMode].id;
+    roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
@@ -4025,10 +4035,13 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
 
-  // Camera roll: lean ~2-4° into corners proportional to lateral slip, like Codemasters F1/GRID
+  // Car-follow cameras counter-rotate by the road bank so the car and asphalt
+  // read level while the horizon carries the banking cue. Slip adds a small
+  // dynamic lean on top; broadcast/debug cameras remain world-level.
   {
     const slip = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
-    camRoll += (clamp(slip, -1, 1) * 0.07 - camRoll) * Math.min(1, dt / 0.15);
+    const targetRoll = roadCamRoll + clamp(slip, -1, 1) * 0.07;
+    camRoll += (targetRoll - camRoll) * Math.min(1, dt / 0.15);
   }
 
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
@@ -4638,6 +4651,21 @@ function render(dt) {
     tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
     tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
     tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+    // Grounded assembly basis: follows track slope, yaw, and road banking, but
+    // excludes chassis-only brake dive/throttle squat and cornering lean. Those
+    // animations must not lift a wheel centre away from its contact patch.
+    for (let i = 0; i < 3; i++) {
+      _groundR[i] = tmpR[i]; _groundF[i] = tmpF[i]; _groundU[i] = tmpU[i];
+    }
+    if (bankC && bankC.roll) {
+      const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
+      for (let i = 0; i < 3; i++) {
+        const r = _groundR[i], u = _groundU[i];
+        _groundR[i] = r * cr + u * sr;
+        _groundU[i] = u * cr - r * sr;
+      }
+    }
+    basisMat(_groundR, _groundU, _groundF, tmpP, _groundMat);
     // Pitch: rotate forward+up around the right axis by pitchVis (positive = nose up).
     // This gives throttle-squat (nose lifts) and brake-dive (nose dips) without
     // moving the contact point — it's purely a mesh animation.
@@ -4674,7 +4702,7 @@ function render(dt) {
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     let _sm = _shadowMats[_shadowCount];
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
-    _sm.set(tmpMat);
+    _sm.set(_groundMat);
     _shadowTeams[_shadowCount] = c.team;   // for next frame's car-shadow caster pass
     _shadowCount++;
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
@@ -4709,10 +4737,11 @@ function render(dt) {
     if (body) {
       gfx.draw(body, tmpMat, paint);
       drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c), false, true);
-      drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
+      drawPlayerWheels(c, _groundMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
     } else {
-      gfx.draw(teamMesh(c.team), tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c), false, c.isPlayer);
+      const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
+      gfx.draw(teamMesh(c.team), wholeCarMat, paint);
+      drawCarDecals(c.team, wholeCarMat, night, carDecalNum(c.team, c), false, c.isPlayer);
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
       // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
@@ -4727,7 +4756,7 @@ function render(dt) {
             const wd = WHEELS[w];
             const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
             const W = _ringWorld;
-            W.set(tmpMat);
+            W.set(wholeCarMat);
             W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
             W[13] += W[1] * tx + W[5] * wd.y + W[9] * wd.z;
             W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
@@ -7376,8 +7405,8 @@ window.__apex = {
   // one is active, otherwise the game camera. `debug` flags which. (Previously
   // this always returned the game cam, masking an active view() override.)
   camState: () => dbgCam
-    ? { eye: Array.from(dbgCam.eye), tgt: Array.from(dbgCam.target), fov: dbgCam.fov, debug: true }
-    : { eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov, debug: false },
+    ? { eye: Array.from(dbgCam.eye), tgt: Array.from(dbgCam.target), fov: dbgCam.fov, roll: camRoll, debug: true }
+    : { eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov, roll: camRoll, debug: false },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },
   // Return all track nodes within radius r of world position (wx, wz).

@@ -20,7 +20,7 @@
     terrainOuter: 56,
     banked: true,
     bankZones: [
-      { frac: 0.75, angleDeg: 24, widthM: 180 },
+      { frac: 0.75, angleDeg: 13.5, widthM: 180 }, // 24% grade = atan(0.24)
     ],
     // Madrid owns its venue dressing. Generic city blocks and furniture obscure
     // the IFEMA/Monumental sightlines and were the source of the old road overlap.

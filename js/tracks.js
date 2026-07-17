@@ -603,10 +603,9 @@ const Tracks = (function () {
       // anchored to the terrain height still meet it with no gap underneath.
       const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
       const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
-      // banking: raise each cross-section vert along `up` proportional to how
-      // far it sits toward the outer edge (inner edge -> 0, outer edge -> full
-      // lift). Verts past the edges clamp to 0/full so kerbs/shoulder ride up
-      // with the road edge rather than tearing away from it.
+      // Banking pivots each cross-section around its centreline (inner edge
+      // -> -lift/2, outer edge -> +lift/2). Verts past the road clamp to those
+      // edge heights so kerbs/shoulders ride with it rather than tearing away.
       const bankLift = bp ? bp.lift[k] : 0;
       const bankSide = bp ? bp.bsign[k] : 0;
       for (let v = 0; v < V; v++) {
