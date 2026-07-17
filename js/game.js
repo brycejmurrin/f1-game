@@ -2898,7 +2898,8 @@ function appendCarTailLights() {
   }
 }
 
-// Cull the track light set to the nearest 48 to the camera and flatten into
+// Cull the track light set to the nearest lamps (32 shader slots, minus a
+// small reservation for car tail lights in traffic) and flatten into
 // `frame.lights`. Called each frame only when the session is at night.
 const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
@@ -2907,6 +2908,12 @@ const _lightHeap = [];         // pooled max-heap (≤32 entries) for the neares
 function setFrameLights(eye, scale, fwd) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
+  // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
+  // cull, and with a full 32-lamp selection its budget was always zero on
+  // dense city night grids — exactly the traffic-glow scenario it was built
+  // for. Four lamps out of 32, ranked farthest-of-set, are visually covered
+  // by the distance tail-fade below.
+  const CAP = cars.length > 1 ? 28 : 32;
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
@@ -2970,13 +2977,13 @@ function setFrameLights(eye, scale, fwd) {
   const heap = _lightHeap; heap.length = 0;
   for (let i = 0; i < count; i++) {
     const e = buf[i];
-    if (heap.length < 32) {
+    if (heap.length < CAP) {
       let ci = heap.length; heap.push(e);
       while (ci > 0) { const pi = (ci - 1) >> 1; if (heap[pi].d < heap[ci].d) { const t = heap[pi]; heap[pi] = heap[ci]; heap[ci] = t; ci = pi; } else break; }
     } else if (e.d < heap[0].d) {
       heap[0] = e;
       let pi = 0;
-      for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < 32 && heap[l].d > heap[lg].d) lg = l; if (rr < 32 && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
+      for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < CAP && heap[l].d > heap[lg].d) lg = l; if (rr < CAP && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
     }
   }
   // Sort just those 32 ascending so the tail fade eases the farthest of the set.
@@ -2986,9 +2993,9 @@ function setFrameLights(eye, scale, fwd) {
   // visible stepping as the set shifted at speed). Fading by closeness to the set
   // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
   // membership changes are invisible.
-  const dEdge = heap[31].d || 1;
+  const dEdge = heap[heap.length - 1].d || 1;
   out.length = 0;
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
     const cullF = Math.max(0, Math.min(1, (dEdge - e.d) / (dEdge * 0.35)));
     const f = fl(o) * cullF;

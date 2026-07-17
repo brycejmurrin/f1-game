@@ -11,8 +11,8 @@ const LightTune = (function () {
 
 // Floodlight set for ANY track (every circuit gets them; the caller only feeds
 // them to the shader when the scene is dark — night/dusk/dawn). A light roughly
-// every ~24 m (alternating sides) at mast height, capped to the nearest 48 by the
-// per-frame cull. Flat [x,y,z, r,g,b, rad, …] septets. Colour, brightness, pool
+// every ~24 m (alternating sides) at mast height, capped to the 32 shader slots
+// (minus a small tail-light reservation in traffic) by the per-frame cull. Flat [x,y,z, r,g,b, rad, …] septets. Colour, brightness, pool
 // size and mast style all vary by circuit character (see floodColor). HDR (>1)
 // so the pools bloom.
 function floodColor(theme, id) {
@@ -53,7 +53,7 @@ function floodColor(theme, id) {
 // a LIT_FS shader uniform via frame.tune (see glx.js begin()).
 const TUNE_DEFS = [
   // ── SUN & MOON ──
-  { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "SUN & MOON", min: 0,   max: 4,  step: 0.02,  def: 1.0,  help: "Direct sun/moon intensity — diffuse + speculars + shadows. Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed. Floor stays 0 (already fully off); headroom is on the bright end." },
+  { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "SUN & MOON", min: 0,   max: 4,  step: 0.02,  def: 1.0,  u: "uKeyMul", help: "Direct sun/moon intensity — diffuse + speculars + shadows. Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed. Floor stays 0 (already fully off); headroom is on the bright end." },
   { id: "sunTemp",      label: "SUN / MOON WARMTH", group: "SUN & MOON", min: -2, max: 2, step: 0.02, def: 0.0, fmt: "signed", help: "White-balance of the direct key light (sun by day, moonlight at night). − warm sunrise/sodium, + cool overcast/moonlight. The tint math is a plain unclamped mix, so both ends scale evenly past the old ±1." },
   { id: "sunElev",      label: "SUN ELEVATION",   group: "SUN & MOON", min: -60, max: 60, step: 1, def: 0, fmt: "signed", help: "Sun/moon height offset from the time-of-day default (deg). − lowers it for longer raking shadows + more god-rays. 0 = as-shipped. Capped at ±60° — the renderer clamps elevation to ±88° internally, so a wider slider would just hit that ceiling once combined with the time-of-day base." },
   { id: "sunAzim",      label: "SUN AZIMUTH",     group: "SUN & MOON", min: -180, max: 180, step: 2, def: 0, fmt: "signed", help: "Rotates the key-light compass direction from the default — swings shadow direction across the track. 0 = as-shipped. Already a full compass turn; only the step got finer." },
@@ -113,7 +113,7 @@ const TUNE_DEFS = [
   // ── CAR ──
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 2.5, step: 0.02, def: 0.05, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
   { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.02, def: 0.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). OFF by default — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass). It's a 0..1 cross-fade so the range is already exact — only the step got finer." },
-  { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0, max: 1.6, step: 0.02, def: 1.0,  help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness). Range now tracks the SSR-streak formula's own clamp window (roughly 0..1.4): below 0 or above ~1.4 the old slider was pushing a value the shader already saturates on." },
+  { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0, max: 1.6, step: 0.02, def: 1.0,  u: "uCarGloss", help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness). Range now tracks the SSR-streak formula's own clamp window (roughly 0..1.4): below 0 or above ~1.4 the old slider was pushing a value the shader already saturates on." },
   { id: "carSpecular",  label: "PAINT SPECULAR",  group: "CAR", min: 0,   max: 3.5,   step: 0.02, def: 1.0,  help: "Brightness of the specular highlight rolling over the bodywork." },
   { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 3.5,   step: 0.02, def: 0.05, help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },
   { id: "carMetal",     label: "PAINT METALNESS", group: "CAR", min: 0,   max: 5,   step: 0.02, def: 1.0,  help: "How metallic the paint reads — reflection tint and grazing falloff." },
@@ -223,10 +223,11 @@ function buildTrackLights(track) {
       const wz0 = track.pz[k] + track.rz[k] * (track.hw[k] + 2.5) * side;
       let wdx = track.rx[k] * side * 0.55, wdy = -0.83, wdz = track.rz[k] * side * 0.55;
       const wdl = Math.hypot(wdx, wdy, wdz) || 1; wdx /= wdl; wdy /= wdl; wdz /= wdl;
-      const we = intensity * 0.30 * (4.5 * 4.5) * 0.55;
-      // POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply to these washer
-      // lights too (their help text promises "each/every lamp") — same maths as
-      // the mast lamps below.
+      const we = intensity * 0.30 * (4.5 * 4.5) * LT.poolEnergy;
+      // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
+      // to these washer lights too (their help text promises "each/every lamp")
+      // — same maths as the mast lamps below. (The energy factor was a 0.55
+      // literal — poolEnergy's default — so the shipped look is identical.)
       lights.push(wx0, wy0, wz0,
         Math.max(0, nc[0]) * we, Math.max(0, nc[1]) * we, Math.max(0, nc[2]) * we,
         16 * LT.lampRadiusMul, wdx, wdy, wdz,
@@ -315,9 +316,10 @@ function buildTrackLights(track) {
     // top of the flood_bank pit-straight lamps — the start line was the hottest
     // spot on every night circuit, blowing the road out exactly where every race
     // (and the player's first impression of the night lighting) begins.
-    const ge = intensity * 0.55 * (8 * 8) * 0.55;
-    // POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply here too — the
-    // gantry bar previously ignored all three ("every floodlight" per help text).
+    const ge = intensity * 0.55 * (8 * 8) * LT.poolEnergy;
+    // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
+    // here too — the gantry bar previously ignored them ("every floodlight" per
+    // help text; the energy factor was a 0.55 literal = poolEnergy's default).
     for (const lat of [-hwk * 0.55, 0, hwk * 0.55]) {
       lights.push(
         track.px[0] + track.rx[0] * lat, track.py[0] + 8, track.pz[0] + track.rz[0] * lat,

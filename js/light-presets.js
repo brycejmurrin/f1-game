@@ -1682,12 +1682,6 @@ window.LightPresets = {
   },
   "redbull|day|dry": {
     "keyMul": 1.55,
-    "lampVolHaze": 0.9,
-    "lampVolBase": 0.21,
-    "lampFogHaze": 0.45,
-    "glareStr": 0.64,
-    "bleedMul": 1.6,
-    "lampRadiusMul": 1.35,
     "glowAmp": 1.2,
     "threshOff": -0.14,
     "exposureMul": 1.02
