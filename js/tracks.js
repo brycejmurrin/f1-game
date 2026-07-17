@@ -2454,9 +2454,9 @@ const Tracks = (function () {
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
       RAW.addBox(out, beam, [hw[k] * 2 + 5, 0.9, 1.4], c, b);
-      // Downlight lens fixtures under the beam — the visible sources for the
-      // start-gantry downlights buildTrackLights hangs over the line. Bright
-      // cool-white at night (bloom via the emissive path), muted housings by day.
+      // Visual lens fixtures under the beam. Matching point lights are placed
+      // near s=0 in buildTrackLights (js/game/lighting.js) — not parented to
+      // this mesh. Bright cool-white at night (emissive bloom), muted by day.
       const gl = NIGHT ? [1.28, 1.30, 1.38] : [0.80, 0.81, 0.85];
       const r0 = [track.rx[k], track.ry[k], track.rz[k]];
       for (const lat of [-hw[k] * 0.55, 0, hw[k] * 0.55]) {
@@ -2662,8 +2662,9 @@ const Tracks = (function () {
     }
 
     // ── Trackside SIGNAGE: corner-number boards + braking markers + pit speed.
-    // Prefer curated FIA turn apexes (def.turns from CircuitMarkings); fall back
-    // to curvature-peak detection when a circuit has no markings table.
+    // Prefer curated FIA turn apexes (def.turns from CircuitMarkings; all 24
+    // shipped circuits have a table). Fall back to curvature-peak detection
+    // only if a def somehow lacks turns.
     {
       // NOTE: signBoard's `gap` forwards straight to anchor(k,side,gap), which
       // already adds hw[k] internally (dist = "beyond the edge") — passing
@@ -3290,10 +3291,10 @@ const Tracks = (function () {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
       const mastH = stTheme ? 9 : 13;
       const poleCol = [0.16, 0.16, 0.19];
-      const mstride = Math.max(1, Math.round(22 / ds));   // matches buildTrackLights stride in game.js
+      const mstride = Math.max(1, Math.round(22 / ds));   // matches buildTrackLights stride in lighting.js
       let mi = 0;
       // ── LAMP KIND — decided HERE, once, per post (single source of truth) ──
-      // The visible lens albedo and the point light game.js emits (colour, cone,
+      // The visible lens albedo and the point light buildTrackLights emits (colour, cone,
       // energy, volumetric weight, glare) all key off this kind, so the fixture
       // you see always matches the light it casts. Authentic CCT spread:
       // sodium 2100K / halogen 3000K / metal-halide 4300K / LED 5000K /
@@ -3400,6 +3401,8 @@ const Tracks = (function () {
 
   function buildGate(track) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
+    // Always-on red-leg start/finish arch (drawn every circuit). Per-track
+    // gantry() calls are separate scenery — both can coexist at the line.
     // Sit the gate ~15 m BEFORE the start/finish along the lap centreline —
     // NOT along node-0's tangent chord. On a curved pit straight the chord
     // drifts off the racing line (COTA/Shanghai/Jeddah were 4–8 m sideways,
@@ -3429,9 +3432,7 @@ const Tracks = (function () {
 
   // Chequered start/finish line: a grid of black/white squares laid as a thin
   // decal across the road at s=0, sitting a hair above the asphalt and following
-  // the local road basis (so it banks/slopes with the surface). Real circuits
-  // paint a proper chequered line here — far cleaner than the old solid-white
-  // band that filled a whole ~4 m road segment and looked sprayed on.
+  // the local road basis (so it banks/slopes with the surface).
   function buildStartLine(track) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
     const r = [track.rx[0], track.ry[0], track.rz[0]];

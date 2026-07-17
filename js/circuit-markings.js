@@ -1,8 +1,9 @@
 /* Apex 26 — CircuitMarkings: curated FIA-aligned sector splits + turn apexes.
    Fractions are in RACING-LAP space (s=0 at the start/finish after startFrac/
-   reverse remapping). Consumed by Tracks.LIST, game.js sectorAt, TrackMaps.draw,
-   and buildProps corner boards. Best-effort vs this game's centreline — not GPS
-   timing-loop coordinates.
+   reverse remapping). Consumed by Tracks.LIST, game.js sectorAt, HUD/selector
+   maps (TrackMaps + drawMinimap), and buildProps corner boards. Not used by
+   __apex.corners() (that still returns curvature peaks). Best-effort vs this
+   game's centreline — not GPS timing-loop coordinates.
    sectors: [s1End, s2End] with 0 < s1 < s2 < 1; S3 wraps through the line.
    turns: apex fractions T1..Tn in driving order (length = official turn count).
 */

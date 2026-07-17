@@ -73,12 +73,14 @@ Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true
 Same `trackRef` and `timeOfDay` semantics as `race()`. Use this instead of `race()`
 when testing TT-specific behaviour (ghost delta, TT results, sector splits).
 
-### `info() → {state, track, n, total, timeTrial, seasonMode}`
+### `info() → {state, track, n, total, timeTrial, seasonMode, sectors, turns}`
 Snapshot of state: `state` is the state-machine value
 (`menu｜select｜count｜race｜results｜…`), `track` the loaded circuit id, `n` the
 sample count, `total` the lap length (m). `timeTrial` and `seasonMode` reflect the
-active game mode. Returns `track: null` if no circuit is loaded — poll this to
-know when a track has finished building.
+active game mode. `sectors` is `[s1End, s2End]` racing-lap fractions from
+`CircuitMarkings` (or `null`); `turns` is the curated FIA turn count (or `null`).
+Returns `track: null` if no circuit is loaded — poll this to know when a track
+has finished building.
 
 ### `go() → state`
 Skip the countdown but leave the grid intact, so the whole field races and packs
@@ -423,8 +425,9 @@ single call to check "what is the scene doing right now" before taking a
 screenshot — avoids calling `info()`, `camera()`, and `probe()` separately.
 
 ### `corners() → [number, …]`
-Lap-fractions of the corner apexes (local maxima of `|curvature|`). Handy for
-parking at each corner in turn: `corners().forEach(s => …)`.
+Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Handy
+for parking at sharp bends. This is **not** the curated FIA turn list — that lives
+on `info().turns` / `track.def.turns` from `js/circuit-markings.js`.
 
 ### `nodeAt(frac) → {k, frac, x, y, z, tx, tz, rx, rz} | null`
 World position and orientation of the track node closest to lap-fraction `frac`
@@ -697,9 +700,11 @@ loaded.
 | `sectorElapsed` | Seconds spent in the current sector so far |
 
 ### `sectorState() → {idx, elapsed, bests, last} | null`
-Live S1/S2/S3 timing. `idx` = current sector (0–2). `elapsed` = seconds into it.
-`bests[i]` = personal-best for sector i (`null` until a lap is completed).
-`last[i]` = sector i time from the most recently completed lap.
+Live S1/S2/S3 timing. Boundaries come from curated `CircuitMarkings` via
+`sectorAt` (equal thirds only if a track has no `sectors` table). `idx` = current
+sector (0–2). `elapsed` = seconds into it. `bests[i]` = personal-best for sector i
+(`null` until that sector is completed with `lap ≥ 1` — formation-lap S3 is not
+recorded). `last[i]` = most recent completed time for sector i.
 
 ```js
 const s = __apex.sectorState();

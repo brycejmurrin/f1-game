@@ -231,7 +231,7 @@ Lit shader = directional sun (shadow map) + hemisphere ambient (`uAmbSky`/`uAmbG
 lens flare + vignette. Night: ambient floored+capped, sun dimmed to moonlight,
 floodlights on. Day: `_trackAtmoBias` per circuit. `buildTrackLights()` (in
 `js/game/lighting.js`) places floodlights every ~22 m; `setFrameLights()` culls
-to nearest 32 per frame.
+to nearest CAP per frame (`LT.lampCull` def 28 with traffic, else 32 solo; shader max 32).
 
 ```js
 __apex.lightState()           // { ambientSky, ambientGround, sunColor, numLights, … }

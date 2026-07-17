@@ -345,8 +345,8 @@ function buildTrackLights(track) {
     );
   }
   // START-GANTRY DOWNLIGHTS: a crisp white bar of light straight down over the
-  // start/finish line from the overhead gantry — marks the line the way
-  // broadcast lighting does.
+  // start/finish at node 0 (typical gantry height) — marks the line the way
+  // broadcast lighting does. Placement is independent of the scenery gantry mesh.
   {
     const hwk = track.hw[0] || 7;
     // Halved (1.15 -> 0.55 weight): three of these stack right over the grid, on

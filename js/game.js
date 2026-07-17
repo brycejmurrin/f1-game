@@ -629,6 +629,7 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
+// Curated CircuitMarkings splits when present; equal thirds only as fallback.
 function sectorAt(s) {
   const frac = wrapS(s) / track.total;
   const sec = track.def && track.def.sectors;
@@ -2941,8 +2942,8 @@ function updateCar(c, dt, ranked) {
   c.lapTime += dt;
   c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
 
-  // Sector detection: thirds of track. This must run before finish-line timing
-  // resets so a forward S3→S1 crossing records the completed S3 split.
+  // Sector detection (curated splits via sectorAt). Must run before finish-line
+  // timing resets so a forward S3→S1 crossing records the completed S3 split.
   if (c.isPlayer && state === "race" && track) {
     const newSector = sectorAt(c.s);
     if (newSector !== sectorIdx) {
@@ -3203,12 +3204,10 @@ function appendCarTailLights() {
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
-  // grid (Singapore/Vegas/Baku) the floodlights alone fill the 32-light cap, so
-  // simply appending here overflowed past 32 and the shader dropped the appended
-  // tail-lights — the red glow trailing nearby traffic vanished exactly where
-  // night traffic is most visible. Evict that many of the FARTHEST floods instead
-  // (setFrameLights sorts the dense-grid set ascending by distance, so the tail
-  // end is the farthest) — a flood 250 m back matters far less than a car ahead.
+  // grid the floodlights alone can fill the shader's 32-light cap (or the tighter
+  // lampCull CAP from setFrameLights), so appending overflowed and the shader
+  // dropped the tail-lights. Evict that many of the FARTHEST floods instead
+  // (setFrameLights sorts ascending by distance, so the tail end is farthest).
   const room = 32 - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
@@ -3237,13 +3236,13 @@ function appendCarTailLights() {
   }
 }
 
-// Cull the track light set to the nearest lamps (32 shader slots, minus a
-// small reservation for car tail lights in traffic) and flatten into
+// Cull the track light set to the nearest CAP lamps (shader max 32; traffic uses
+// LT.lampCull, def 28, leaving room for car tail lights) and flatten into
 // `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
-const _lightHeap = [];         // pooled max-heap (≤32 entries) for the nearest-32 partial selection
+const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
@@ -3251,10 +3250,8 @@ function setFrameLights(eye, scale, fwd) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
-  // cull, and with a full 32-lamp selection its budget was always zero on
-  // dense city night grids — exactly the traffic-glow scenario it was built
-  // for. Four lamps out of 32, ranked farthest-of-set, are visually covered
-  // by the distance tail-fade below.
+  // cull. With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader
+  // slots stay free; solo runs use the full 32.
   const CAP = cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32;
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
@@ -3317,14 +3314,13 @@ function setFrameLights(eye, scale, fwd) {
     frame.lights = out;
     return;
   }
-  // distance-rank: select the nearest 32. Reuse a pooled object array + the
+  // Distance-rank: select the nearest CAP. Reuse a pooled object array + the
   // output buffer so a dense night grid doesn't allocate fresh garbage every
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
-  // Lights BEHIND the camera rank as ~2.5x farther (x6.25 in squared space):
-  // a purely radial nearest-32 wastes half the budget on lamps you can't see,
-  // ending the lit road in a hard dark boundary ~150-250 m ahead that follows
-  // the camera ("hard shadow line that recedes as you approach"). The forward
-  // bias pushes that boundary ~2x further out — past the night fog wall.
+  // Lights BEHIND the camera rank farther: a purely radial nearest-N wastes
+  // half the budget on lamps you can't see, ending the lit road in a hard dark
+  // boundary ahead. The forward bias (LT.lampBehindBias) pushes that boundary
+  // further out — past the night fog wall.
   const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
   const flen = Math.hypot(fx, fz) || 1;
   const buf = _lightCullBuf;
@@ -3346,9 +3342,8 @@ function setFrameLights(eye, scale, fwd) {
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
   }
   buf.length = count;
-  // Partial selection: keep only the nearest 32 in a max-heap instead of sorting
-  // all ~count entries every frame (O(count·log32) vs O(count·log count)). Same
-  // nearest-32 set as the old full .sort()+slice, just cheaper on a dense grid.
+  // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
+  // all ~count entries every frame (O(count·log CAP) vs O(count·log count)).
   const heap = _lightHeap; heap.length = 0;
   for (let i = 0; i < count; i++) {
     const e = buf[i];
@@ -4055,6 +4050,10 @@ function render(dt) {
   // STAR BRIGHTNESS / CLOUD SPEED tuner knobs ride on the sky object.
   frameSky.starBright = LT.starBright;
   frameSky.cloudSpeed = LT.cloudSpeed;
+  // SKY GRADIENT / STAR DENSITY / DAY SKY BLUE knobs also ride the sky object.
+  frameSky.skyGrad     = LT.skyGrad;
+  frameSky.starDensity = LT.starDensity;
+  frameSky.daySkyBlue  = LT.daySkyBlue;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -4931,7 +4930,7 @@ function drawMinimap() {
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
     const SC = ["rgba(192,132,252,0.8)", "rgba(225,6,0,0.8)", "rgba(163,230,53,0.8)"];
-    // Same curated splits as TrackMaps.draw / sectorAt (equal thirds fallback).
+    // Same CircuitMarkings splits as TrackMaps.draw / sectorAt (thirds if missing).
     const sec = track.def && track.def.sectors;
     const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
     for (let s = 0; s < 3; s++) {
@@ -7079,6 +7078,7 @@ window.__apex = {
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
+  // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.
   info: () => ({
     state, track: (state === "race" || state === "count") ? (track && track.def.id) : null,
     n: track && track.n, total: track && track.total, timeTrial, seasonMode,
@@ -7725,7 +7725,9 @@ window.__apex = {
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
   })),
-  // lap fractions of corner apexes (local maxima of |curvature|), for parking
+  // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
+  // Distinct from curated FIA turns on track.def.turns / info().turns — use those
+  // for official turn counts; this hook is for physics/parking at sharp bends.
   corners() {
     if (!track) return [];
     const n = track.n, total = track.total, kv = [];
@@ -7802,7 +7804,6 @@ window.__apex = {
   // ── New dev / test helpers ─────────────────────────────────────────────────
 
   // Trigger the race-results screen cleanly, as if all cars crossed the line.
-  // Fixes the fallback-DOM-hack in ui-audit.spec.js (finishRace was missing).
   finishRace() {
     if (!track || state === "results" || state === "menu") return false;
     const order = cars.slice().sort((a, b) => b.prog - a.prog);
@@ -8109,10 +8110,10 @@ window.__apex = {
 
   // ── Timing & field hooks ──────────────────────────────────────────────────
 
-  // sectorState() — live S1/S2/S3 timing.
-  // idx: current sector (0=S1, 1=S2, 2=S3). elapsed: seconds into it.
-  // bests: personal-best times per sector (null until first completed lap).
-  // last: sector times from the most recently completed lap.
+  // sectorState() — live S1/S2/S3 timing (boundaries from CircuitMarkings via
+  // sectorAt). idx: current sector (0=S1, 1=S2, 2=S3). elapsed: seconds into it.
+  // bests: PB per sector (null until that sector is completed with lap ≥ 1).
+  // last: times from the most recently completed sector crossings.
   sectorState() {
     if (!player || !track) return null;
     const elapsed = (player.lapTime || 0) - sectorStartT;
