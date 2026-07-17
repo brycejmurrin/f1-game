@@ -1118,6 +1118,10 @@ void main() {
 
   // --- Procedural cloud layer ---
   // Cloud plane is drifted slowly by uTime (no drift when time=0 → deterministic).
+  // Coverage/thickness seen along this ray, exported for the city-glow cloud
+  // pickup below (clouds over a lit city catch the uplight on their bellies).
+  float cityCov = 0.0;
+  float cityThick = 0.0;
   if (uCloud > 0.001 && up > 0.012) {
     vec2 cp = dir.xz / up * 0.42;
     // Drift offset: two independent slow vectors for parallax feel. CLOUD SPEED
@@ -1196,6 +1200,8 @@ void main() {
       lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
     }
     c = mix(c, lit, cov);
+    cityCov = cov;
+    cityThick = thick;
   }
 
   // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
@@ -1285,6 +1291,13 @@ void main() {
   if (uCityGlow.r + uCityGlow.g + uCityGlow.b > 0.001) {
     float horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0);
     c += uCityGlow * horiz;
+    // Cloud pickup: the cloud deck over a lit city glows from BELOW — thick
+    // bellies catch the most uplight, and the effect eases off toward the
+    // zenith (the dome's energy is strongest near the horizon). Kept subtle
+    // (×0.45) so heavy cover reads as a warm overcast lid, not banding.
+    float pickup = cityCov * (0.35 + 0.65 * cityThick)
+                 * clamp(1.0 - dir.y * 1.6, 0.0, 1.0);
+    c += uCityGlow * pickup * 0.45;
   }
 
   outColor = vec4(c, 1.0);

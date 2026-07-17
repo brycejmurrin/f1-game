@@ -128,6 +128,7 @@ const TUNE_DEFS = [
   { id: "carMetal",     label: "PAINT METALNESS", group: "CAR", min: 0,   max: 5,   step: 0.02, def: 1.0,  help: "How metallic the paint reads — reflection tint and grazing falloff." },
   { id: "carGlow",      label: "BODY GLOW",       group: "CAR", min: 0,   max: 5,   step: 0.02, def: 1.0,  help: "Self-lit body glow after dark (only the night / wet liveries carry it)." },
   { id: "tailLightMul", label: "TAIL-LIGHT GLOW", group: "CAR", min: 0, max: 5, step: 0.05, def: 1.0, help: "Brightness of the red glow trailing nearby cars after dark." },
+  { id: "brakeGlowMul", label: "BRAKE FLARE",     group: "CAR", min: 0, max: 3, step: 0.05, def: 1.0, help: "How hard the tail-light glow surges while a car is braking (scales the brake-heat flare on top of TAIL-LIGHT GLOW). 0 = steady tail light, no flare." },
   // ── SKY & WEATHER ──
   { id: "cloudCover",   label: "CLOUD COVER",     group: "SKY & WEATHER", min: -1, max: 1, step: 0.01, def: 0.0, fmt: "signed", help: "Shifts cloud amount up/down from the weather default (also drives cloud shadows). 0 = as-shipped. Capped at ±1 — the underlying cloud amount is itself clamped to 0..1, so a full ±1 swing already overrides any base value to clear or overcast; more range would be a no-op." },
   { id: "cloudSpeed",   label: "CLOUD SPEED",     group: "SKY & WEATHER", min: 0, max: 8, step: 0.05, def: 1.0, u: "uCloudSpeed", help: "How fast clouds drift and evolve. 0 = frozen sky, higher = fast-moving weather." },

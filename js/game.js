@@ -3048,12 +3048,17 @@ function appendCarTailLights() {
     // rear-facing, tilted down: the glow lands on the road behind the car
     let dx = -tx * 0.87, dy = -0.5, dz = -tz * 0.87;
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+    // BRAKE FLARE: the tail glow surges while the car is braking. brakeHeat is
+    // the render-only 0..1 disc-heat ramp every car already tracks (rises under
+    // braking, cools after) — read-only here, physics untouched.
+    const bAmt = clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul;
+    const tlm = LT.tailLightMul * (1 + bAmt * 1.6);
     L.push(
       _tlSmp.p[0] + _tlSmp.r[0] * c.x - tx * 2.4,
       _tlSmp.p[1] + 0.55,
       _tlSmp.p[2] + _tlSmp.r[2] * c.x - tz * 2.4,
-      4.5 * LT.tailLightMul, 0.14 * LT.tailLightMul, 0.10 * LT.tailLightMul,
-      8, dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
+      4.5 * tlm, 0.14 * tlm, 0.10 * tlm,
+      8 * (1 + bAmt * 0.45), dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
   }
 }
 
@@ -3064,6 +3069,9 @@ const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
 const _lightHeap = [];         // pooled max-heap (≤32 entries) for the nearest-32 partial selection
+let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
+let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
+const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
 function setFrameLights(eye, scale, fwd) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
@@ -3085,11 +3093,30 @@ function setFrameLights(eye, scale, fwd) {
   // Hash on the lamp's stable source offset so the same lamp always flickers the
   // same way — the night stops being a frozen still.
   const tNow = performance.now() * 0.001;
+  // WARMUP: when the floods switch on (race start on a night track, a live
+  // day→night flip) discharge lamps don't snap to full — they run slightly dim
+  // and sodium-warm and settle to their true colour over a few seconds, each
+  // lamp on its own stagger. A >1 s gap since the last copy means the floods
+  // were off, so this frame is a fresh switch-on. Per-frame copy only — the
+  // baked track records are never touched.
+  if (tNow - _lampLastT > 1.0) _lampWarmT0 = tNow;
+  _lampLastT = tNow;
   const fl = (o) => {
     const x = Math.sin((o + 13) * 91.17) * 43758.5453;
     const hsh = x - Math.floor(x);
     const amp = hsh > 0.90 ? LT.lampFlicker : LT.lampFlicker * 0.2;
-    return 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40);
+    // Fast flicker (the odd aging tube) + a slow BREATHE every lamp carries
+    // (mains/arc drift, ~±1.5% at the default knob). Both scale with the LAMP
+    // FLICKER knob so 0 still means rock-steady.
+    let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
+              + LT.lampFlicker * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
+    const wu = Math.min(1, Math.max(0, (tNow - _lampWarmT0) / (4 + hsh * 4)));
+    f *= 0.70 + 0.30 * wu;
+    const cold = 1 - wu;   // 1 = just struck (dim, sodium-orange), 0 = settled
+    _flScr[0] = f * (1 + cold * 0.22);
+    _flScr[1] = f * (1 - cold * 0.10);
+    _flScr[2] = f * (1 - cold * 0.38);
+    return _flScr;
   };
   if (count <= 32) {
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
@@ -3097,7 +3124,7 @@ function setFrameLights(eye, scale, fwd) {
     for (let i = 0; i < src.length; i += 15) {
       const f = fl(i);
       out.push(src[i], src[i+1], src[i+2],
-        src[i+3] * sr * f, src[i+4] * sg * f, src[i+5] * sb * f, src[i+6],
+        src[i+3] * sr * f[0], src[i+4] * sg * f[1], src[i+5] * sb * f[2], src[i+6],
         src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13], src[i+14]);
     }
     frame.lights = out;
@@ -3157,8 +3184,9 @@ function setFrameLights(eye, scale, fwd) {
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
     const cullF = Math.max(0, Math.min(1, (dEdge - e.d) / (dEdge * 0.35)));
-    const f = fl(o) * cullF;
-    out.push(src[o], src[o+1], src[o+2], src[o+3] * sr * f, src[o+4] * sg * f, src[o+5] * sb * f,
+    const f = fl(o);
+    out.push(src[o], src[o+1], src[o+2],
+      src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
       src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13],
       // glareW fades with the cull too: drawGlow normalises the lamp colour, so a
       // colour-only fade barely dims the halo — it blinked off at ~full brightness
