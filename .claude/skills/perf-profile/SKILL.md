@@ -6,7 +6,8 @@ description: Capture a headless V8 CPU flame chart of the game loop via Playwrig
 # Headless CPU profiling via Playwright + CDP
 
 Captures a V8 `.cpuprofile` of the running game loop without opening a browser
-manually.  Uses Playwright's `newCDPSession()` to drive the built-in V8 profiler.
+manually. Uses Playwright's `newCDPSession()` to drive the built-in V8 profiler and
+writes the default capture to `scratch/profiles/gameloop.cpuprofile`.
 
 ## Quick capture (copy-paste harness)
 
@@ -15,7 +16,7 @@ manually.  Uses Playwright's `newCDPSession()` to drive the built-in V8 profiler
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { writeFileSync, existsSync } from "node:fs";
+import { writeFileSync, existsSync, mkdirSync } from "node:fs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
@@ -60,7 +61,9 @@ await page.evaluate(() => {
 });
 
 const { profile } = await cdp.send("Profiler.stop");
-const outPath = ROOT + "/scratch/gameloop.cpuprofile";
+const outDir = ROOT + "/scratch/profiles";
+mkdirSync(outDir, { recursive: true });
+const outPath = outDir + "/gameloop.cpuprofile";
 writeFileSync(outPath, JSON.stringify(profile));
 console.log("Profile written to", outPath);
 console.log("Open in Chrome DevTools: Performance tab → Load profile");
@@ -71,7 +74,7 @@ server.kill();
 
 ## Reading the flame chart
 
-Open `scratch/gameloop.cpuprofile` in Chrome DevTools → **Performance** tab →
+Open `scratch/profiles/gameloop.cpuprofile` in Chrome DevTools → **Performance** tab →
 **Load profile** button.  Key functions to look for:
 
 | Function | What it means |

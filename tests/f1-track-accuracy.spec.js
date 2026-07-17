@@ -9,8 +9,9 @@ import { test, expect } from "@playwright/test";
 import https from "https";
 import fs from "fs";
 import path from "path";
+import { galleryDir } from "./output-paths.js";
 
-const OUT = path.join(import.meta.dirname, "f1-track-accuracy");
+const OUT = galleryDir("f1-track-accuracy");
 
 // game circuit id → bacinger/f1-circuits feature id
 const CIRCUIT_MAP = {

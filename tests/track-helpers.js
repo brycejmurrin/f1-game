@@ -59,27 +59,28 @@ async function resetScene(page) {
   });
 }
 
-// Builds the LAP_FRACTIONS-position visual regression suite for one circuit:
-// a forward-facing chase-cam view at each fraction, pixel-diffed against a golden.
+// One test per circuit, not one test per fraction. Playwright can distribute
+// circuits across workers while each worker pays the expensive page/track build
+// cost only once, then captures all six positions from the same scene.
 export function describeTrack(circuit) {
   test.describe(circuit, () => {
+    test(`${circuit} - geometry/colors/clipping`, async ({ page }) => {
+      await goToRace(page, circuit);
+
     for (const frac of LAP_FRACTIONS) {
-      test(`${circuit} @${(frac * 100).toFixed(0)}% - geometry/colors/clipping`, async ({
-        page,
-      }) => {
-        await goToRace(page, circuit);
+        const label = (frac * 100).toFixed(0);
         await snapForward(page, frac);
 
         const info = await page.evaluate(() => window.__apex.info());
-        expect(info.state).toBe("race");
+        expect.soft(info.state, `${circuit} @${label}% remains in race`).toBe("race");
 
-        await expect(page.locator("canvas#game")).toHaveScreenshot(
-          `${circuit}-${(frac * 100).toFixed(0)}.png`,
+        await expect.soft(page.locator("canvas#game")).toHaveScreenshot(
+          `${circuit}-${label}.png`,
           { maxDiffPixelRatio: 0.10, timeout: 15000 }
         );
 
         await resetScene(page);
-      });
-    }
+      }
+    });
   });
 }

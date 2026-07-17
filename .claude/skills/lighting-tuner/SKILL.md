@@ -59,25 +59,25 @@ node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw
 
 ```sh
 # 1. Capture baseline
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > /tmp/before.json
+node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 
 # 2. Edit applyRaceSettings in js/game.js (or a TUNE_DEFS default in js/game/lighting.js)
 # 3. Bump cache version, reload
 
 # 4. Capture after
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > /tmp/after.json
+node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 
 # 5. Diff
-diff /tmp/before.json /tmp/after.json
+diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```
 
 ## Visual validation with orbit()
 
 ```sh
 # Screenshot the same corner in day vs night to compare visually
-node tools/apex-capture.mjs cameras monza scratch/lighting-before
+node tools/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-before
 # (edit applyRaceSettings)
-node tools/apex-capture.mjs cameras monza scratch/lighting-after
+node tools/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-after
 ```
 
 Or via `apex-eval` in a single script:

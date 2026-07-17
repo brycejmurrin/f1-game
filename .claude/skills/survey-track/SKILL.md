@@ -34,10 +34,10 @@ table and palette (what's missing, wrong-coloured, wrong-shaped, or floating).
 ### 2 · Survey the current scene — **one command**
 Don't guess: screenshot the real game and probe its geometry in a single pass.
 ```sh
-node tools/survey-track.mjs <id> before     # → scratch/survey-<id>/ + a flagged probe table
+node tools/survey-track.mjs <id> before     # → scratch/captures/survey-track/<id>/ + a flagged probe table
 ```
 This self-boots the game (no server needed) and produces, in one boot:
-- **screenshots** in `scratch/survey-<id>/` — a whole-track aerial plus an **orbit**
+- **screenshots** in `scratch/captures/survey-track/<id>/` — a whole-track aerial plus an **orbit**
   and a **driver's-eye** shot at 0/25/50/75 % (the EYE shots are what expose
   floating props and gaps). **Read the PNGs** against the brief.
 - the **lateral ground-profile probe** as a table, with the classic failure modes
@@ -86,15 +86,15 @@ get a clean before/after and confirm the flags cleared:
 ```sh
 node tools/survey-track.mjs <id> after
 ```
-Compare `scratch/survey-<id>/before-*.png` vs `after-*.png`; confirm the probe table
+Compare `scratch/captures/survey-track/<id>/before-*.png` vs `after-*.png`; confirm the probe table
 is now flag-free and the eye shots show props on real ground.
 
 ### 6 · Test & ship
 - Geometry guards: `npx playwright test tests/terrain-over-road.spec.js tests/tracks-walls.spec.js`
-- Per-track visual regression: `npx playwright test tests/track-<id>.spec.js`
-  — if your change is **intentional**, the pixel baselines must be regenerated:
-  `npx playwright test tests/track-<id>.spec.js --update-snapshots` (then eyeball
-  the new `*-snapshots/*.png`).
+- Visual regression (all circuits): `npm run test:visual`
+  — if your change is **intentional**, regenerate baselines with:
+  `npm run test:update -- tests/tracks-visual.spec.js` (then eyeball
+  `tests/tracks-visual.spec.js-snapshots/`). Prefer Linux/SwiftShader for CI-matching goldens.
 - **bump-cache**: increment `?v=N` in `index.html` (every `js/*`/`css/*` edit).
   See the **bump-cache** skill / `sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`.
 - Commit with a message that says the *why*, and push. Pick the test group with
@@ -122,15 +122,15 @@ The exact shape of a survey+update pass:
    the slab just under the ribbon.
 4. **Verify/re-survey/ship**: `verify-track montreal` clean; `survey-track.mjs
    montreal after` showed a flat, flag-free profile and props on real ground;
-   `terrain-over-road` + `tracks-walls` pass; regenerated the 25 `track-montreal`
-   snapshots; bumped `?v=`; committed.
+   `terrain-over-road` + `tracks-walls` pass; regenerated the montreal
+   `tracks-visual` baselines; bumped `?v=`; committed.
 
 ## Gotchas
 - **Trees/lamps must never call `blockAt`/`markBarrier`** — they'd shrink the
   driving boundary. Keep furniture clear of the collision edge (see scenery-dress).
 - **Probe both sides** — `ground-profile.mjs` reports whichever side has rendered
   terrain; a one-sided lake means one side reads `--` legitimately.
-- **Intentional visual change ≠ regression** — when a `track-<id>` snapshot fails
-  after a deliberate edit, regenerate it; don't chase the diff.
+- **Intentional visual change ≠ regression** — when `tracks-visual` baselines fail
+  after a deliberate edit, regenerate them; don't chase the diff.
 - **One circuit at a time, picture-driven** — assert with screenshots + the probe,
   not by reasoning about coordinates.

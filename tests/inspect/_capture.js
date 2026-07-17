@@ -4,9 +4,7 @@
 // on-track intrusions (which the blank scan can't catch). One spec per circuit.
 import { test } from "@playwright/test";
 import fs from "fs";
-import path from "path";
-
-const OUTROOT = path.join(import.meta.dirname, "..", "ui-screenshots", "inspect");
+import { galleryPath, galleryUrl } from "../output-paths.js";
 
 async function loadTrack(page, circuit) {
   await page.goto("/");
@@ -17,9 +15,6 @@ async function loadTrack(page, circuit) {
 
 export function captureCircuit(circuit) {
   test(`inspect ${circuit}`, { timeout: 90_000 }, async ({ page }) => {
-    const dir = path.join(OUTROOT, circuit);
-    fs.mkdirSync(dir, { recursive: true });
-
     await loadTrack(page, circuit);
     await page.evaluate(() => window.__apex.park(0));
     const box = await page.locator("canvas#game").boundingBox();
@@ -31,14 +26,14 @@ export function captureCircuit(circuit) {
       await page.evaluate(([f]) => { window.__apex.jump(f, 55, 0); window.__apex.snapCam(); }, [frac]);
       await page.waitForTimeout(230);
       const buf = await page.screenshot({ clip: box });
-      fs.writeFileSync(path.join(dir, `${circuit}-${pct}.png`), buf);
+      fs.writeFileSync(galleryPath("inspect", circuit, `${circuit}-${pct}.png`), buf);
       labels.push(pct);
     }
 
     // Composite into a 5×5 contact sheet via a served-HTML grid + screenshot.
     const cells = labels.map((pct) => `
       <div class="cell">
-        <img src="/tests/ui-screenshots/inspect/${circuit}/${circuit}-${pct}.png">
+        <img src="${galleryUrl("inspect", circuit, `${circuit}-${pct}.png`)}">
         <span>${pct}%</span>
       </div>`).join("");
     const html = `<!doctype html><html><head><style>
@@ -50,11 +45,11 @@ export function captureCircuit(circuit) {
       .cell span{position:absolute;top:1px;left:2px;background:#000a;padding:0 3px;color:#0ff}
     </style></head><body><div class="grid">${cells}</div></body></html>`;
     await page.setViewportSize({ width: 1290, height: 740 });
-    await page.setContent(html, { baseURL: "http://localhost:3456" });
+    await page.setContent(html);
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(300);
     const sheet = await page.locator(".grid").screenshot();
-    fs.writeFileSync(path.join(OUTROOT, `${circuit}-sheet.png`), sheet);
+    fs.writeFileSync(galleryPath("inspect", `${circuit}-sheet.png`), sheet);
     console.log(`${circuit}: sheet saved`);
   });
 }

@@ -11,7 +11,7 @@ A track-free way to look at just the car. Two front-ends over the same page:
   to zoom, dropdowns for team/livery/parts/lighting, keys for tod/exposure.
 - **Headless (what you'll usually use):** `tools/render-car.mjs` loads that page,
   screenshots it from named preset angles (or a custom one), and writes a PNG per
-  view + an `index.html` contact sheet under `tools/render-out/<team>/`.
+  view + an `index.html` contact sheet under `scratch/renders/cars/<team>/`.
 
 It uses the real `GLX` renderer + `Car3D.build` + `LiveryTex` atlas, so what you
 see is what races. No track/scene loads, so it's much faster than an in-race
@@ -38,9 +38,9 @@ node tools/render-car.mjs --team=haas --gearbox=f1_spec --brakes=ceramic --views
 node tools/render-car.mjs --team=mclaren --az=205 --el=18 --dist=6 --rig=rim   # custom angle + lighting
 ```
 
-Then **Read the PNG(s)** it prints (e.g. `tools/render-out/ferrari/side.png`) to
-look at the result. Output lives under `tools/render-out/<team>/` — throwaway,
-don't commit it.
+Then **Read the PNG(s)** it prints (e.g. `scratch/renders/cars/ferrari/side.png`) to
+look at the result. Output lives under `scratch/renders/cars/<team>/` — throwaway,
+don't commit it. For the batch audits, `audit-parts.mjs` writes `scratch/renders/parts/<category>/` and `audit-aero.mjs` writes `scratch/renders/aero/`.
 
 ### Preset views (orbit az: 0 = behind, 180 = head-on)
 `hero` (rear-3/4, default) · `front` · `rear` · `side` · `frontquarter` ·

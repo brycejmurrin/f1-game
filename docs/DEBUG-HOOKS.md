@@ -20,8 +20,8 @@ geometry; `eyeAt()`/`orbit()`/`view()` for reproducible camera framing. Assert
 *behaviour and relative/geometric facts* ("tarmac faster than grass", "no terrain
 above the racing line", "heading barely changes off-track") rather than brittle
 absolute magnitudes, which go stale as physics is retuned. The older
-`blank-scan/*` (PNG byte-size) and `visual-regression-*` (pixel-diff) specs are
-coarser rendering heuristics — keep them, but write new checks against hooks.
+`blank-scan/*` (PNG byte-size) and `tracks-visual.spec.js` (per-circuit pixel-diff)
+specs are coarser rendering heuristics — keep them, but write new checks against hooks.
 
 ## Catalog & meta
 
@@ -261,6 +261,29 @@ apexes (sharpest first, replayed in lap order) and frames each from the outside
 of the bend. Pure data — no camera change until you call `orbit()`.
 ```js
 for (const s of __apex.tourShots(16)) { __apex.orbit(s.frac, s.az, s.el, s.dist); /* shot */ }
+```
+
+### `roadside(f, side?, dist?, h?, opts?) → {eye, target, look} | false`
+Free-cam standing **beside** the track at lap-fraction `f`: `dist` m from the
+centreline on `side` (+1 = right of travel, −1 = left, default +1), `h` m above
+the road (default 2.5). `opts.look` aims the camera — `"fwd"` (default, look
+along travel), `"back"` (face oncoming), `"in"` (across the track), `"out"` (into
+the scenery). `opts.lookAhead` m ahead/behind for fwd/back (default 30);
+`opts.fov` default 58. The framed-shot companion to `eyeAt()`/`dolly()` for
+inspecting barriers, verges and grandstands from track level.
+```js
+__apex.roadside(0.33, -1, 6, 2, { look:"in" }); // 6 m left of the hairpin, look across at the Armco
+```
+
+### `cinematic(frac, opts?) → {eye, target, fov, az, k} | false`
+Auto **outside-of-corner** camera: reads the local curvature `k` at `frac` and
+puts the free-cam on the outside of the bend so the car fills the frame; straight
+sections fall back to a three-quarter chase angle. `opts.dist` (60), `opts.el`
+(18°), `opts.h` (1.5 m look-at height), `opts.fov` (52), `opts.azOff` (extra
+azimuth twist). Returns `orbit()`'s framing plus the chosen `az` and curvature
+`k`. (Distinct from the `"cinematic"` **camera mode** in `camera()`.)
+```js
+__apex.cinematic(0.22, { dist: 80 }); // outside-of-corner framing at 22%
 ```
 
 ### `lightState() → {ambientSky, ambientGround, sunColor, exposure, numLights}`
@@ -919,7 +942,8 @@ const out = await page.evaluate(() => {
 // screenshot of a corner from a chosen camera
 await page.evaluate(() => { window.__apex.park(0.06); window.__apex.view({ s: 0.06, radius: 220 }); });
 await page.waitForTimeout(400);             // let a few frames flush
-await page.locator("canvas#game").screenshot({ path: "t1.png" });
+await (await import("node:fs/promises")).mkdir("artifacts/tmp", { recursive: true });
+await page.locator("canvas#game").screenshot({ path: "artifacts/tmp/t1.png" });
 ```
 
 `race()` is more robust than clicking through the menus and is the recommended

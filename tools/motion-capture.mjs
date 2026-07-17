@@ -11,9 +11,9 @@
 //
 // Usage:
 //   node tools/motion-capture.mjs <track> [seconds] [speed] [outdir]
-//     writes scratch/motion-<track>/clip.webm + f_*.png frames, prints a flicker report.
+//     writes scratch/captures/motion-capture/<track>/clip.webm + f_*.png frames, prints a flicker report.
 //   node tools/motion-capture.mjs monaco 4 50
-//   node tools/motion-capture.mjs spa 6 60 scratch/spa-eau-rouge
+//   node tools/motion-capture.mjs spa 6 60 scratch/captures/custom/spa-eau-rouge
 //
 // A/B a rendering change: run once on your branch, revert the change, run again,
 // compare the p90 flicker (the typical-frame floor — more stable than the mean,
@@ -30,19 +30,46 @@
 
 import { createRequire } from "node:module";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+} from "node:fs";
 import { createServer } from "node:net";
+import { join, resolve } from "node:path";
+import {
+  assertSafePathToken,
+  resolveContainedChild,
+  resolveRepoDefault,
+} from "./output-paths.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
 const { chromium } = require("playwright");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const [track = "monaco", secArg = "4", speedArg = "50", outArg] = process.argv.slice(2);
+const [trackArg = "monaco", secArg = "4", speedArg = "50", outArg] = process.argv.slice(2);
+const track = assertSafePathToken(trackArg, "track");
 const SEC = +secArg, SPEED = +speedArg;
-const vdir = outArg || `${ROOT}/scratch/motion-${track}`;
-rmSync(vdir, { recursive: true, force: true });
+const vdir = outArg
+  ? resolve(outArg)
+  : resolveRepoDefault(ROOT, "scratch", "captures", "motion-capture", track);
+const clipPath = resolveContainedChild(vdir, "clip.webm", "motion capture clip");
+const videoDir = resolveContainedChild(vdir, ".motion-capture-video", "video temp dir");
 mkdirSync(vdir, { recursive: true });
+rmSync(videoDir, { recursive: true, force: true });
+mkdirSync(videoDir, { recursive: true });
+rmSync(clipPath, { force: true });
+for (const file of readdirSync(vdir)) {
+  if (/^f_\d+\.png$/.test(file)) {
+    rmSync(resolveContainedChild(vdir, file, "motion capture frame"), {
+      force: true,
+    });
+  }
+}
 
 // ffmpeg: bundled with Playwright (stripped build — see note above).
 function ffmpeg() {
@@ -63,7 +90,10 @@ await sleep(700);
 
 // ── record a driven clip ─────────────────────────────────────────────────────
 const browser = await chromium.launch({ executablePath: chrome(), args: ["--use-angle=swiftshader"] });
-const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, recordVideo: { dir: vdir, size: { width: 844, height: 390 } } });
+const ctx = await browser.newContext({
+  viewport: { width: 844, height: 390 },
+  recordVideo: { dir: videoDir, size: { width: 844, height: 390 } },
+});
 const pg = await ctx.newPage();
 await pg.goto(`http://127.0.0.1:${PORT}/`);
 await pg.waitForFunction(() => window.__apex != null, { timeout: 20000 });
@@ -77,9 +107,11 @@ await pg.evaluate(() => window.__apex.clearInput());
 await ctx.close(); await browser.close();   // video is flushed on context close
 
 // ── extract frames (webm → png; ffmpeg has no png demuxer, only encoder) ──────
-const webm = readdirSync(vdir).find((f) => f.endsWith(".webm"));
+const webm = readdirSync(videoDir).find((f) => f.endsWith(".webm"));
 if (!webm) { console.error("no video recorded — recordVideo failed"); process.exit(1); }
-spawnSync(ffmpeg(), ["-i", `${vdir}/${webm}`, `${vdir}/f_%04d.png`], { stdio: "ignore" });
+renameSync(resolveContainedChild(videoDir, webm, "recorded video"), clipPath);
+rmSync(videoDir, { recursive: true, force: true });
+spawnSync(ffmpeg(), ["-i", clipPath, join(vdir, "f_%04d.png")], { stdio: "ignore" });
 const pngs = readdirSync(vdir).filter((f) => /^f_\d+\.png$/.test(f)).sort();
 
 // ── decode pngs → gray arrays in a second Chromium page ───────────────────────
@@ -107,5 +139,5 @@ console.log(`\n=== ${track} motion-capture: ${SEC}s @ ${SPEED} m/s ===`);
 console.log(`  ${pngs.length} video frames, ${drive.length} driving-window frames; car s advanced to ${lastS.toFixed(0)} m`);
 console.log(`  flicker (hard-flip %/frame):  mean ${mean.toFixed(2)}   p90 ${p90.toFixed(2)}   max ${max.toFixed(2)}`);
 console.log(`  → for A/B, compare p90 (stable typical-frame floor); mean & max are dominated by scene-change spikes`);
-console.log(`  clip: ${vdir}/${webm}`);
-console.log(`  frames: ${vdir}/f_*.png`);
+console.log(`  clip: ${clipPath}`);
+console.log(`  frames: ${join(vdir, "f_*.png")}`);

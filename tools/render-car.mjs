@@ -47,7 +47,7 @@
 //   --refl=0.2            env-mirror strength 0..1 (0 = matte paint, 0.85 = default chrome)
 //   --bg=101014           background hex (overrides tod bg)
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
-//   --out=DIR             output dir. Default: tools/render-out/<team>
+//   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
 //   --url=...             base URL. Default http://127.0.0.1:3456
 //
@@ -64,8 +64,14 @@ import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  assertSafePathToken,
+  resolveContainedChild,
+  resolveRepoDefault,
+} from './output-paths.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, '..');
 const arg = (k, d) => {
   const hit = process.argv.find(a => a === `--${k}` || a.startsWith(`--${k}=`));
   if (!hit) return d;
@@ -137,7 +143,7 @@ const PRESETS = {
 };
 PRESETS.aero = PRESETS.wing;   // alias — both names read naturally depending on intent
 
-const TEAM   = arg('team', 'mclaren');
+const TEAM   = assertSafePathToken(arg('team', 'mclaren'), 'team');
 const LIVERY = arg('livery', null);
 const NUM    = arg('num', null);
 const TOD    = arg('tod', 'day');
@@ -156,7 +162,10 @@ const CUSTOM = (arg('az', null) != null || arg('el', null) != null || arg('dist'
 const W      = parseInt(arg('w', '900'), 10);
 const H      = parseInt(arg('h', '680'), 10);
 const URL    = arg('url', 'http://127.0.0.1:3456');
-const OUT    = resolve(HERE, arg('out', `render-out/${TEAM}`));
+const OUTARG = arg('out', null);
+const OUT    = OUTARG != null
+  ? resolve(HERE, OUTARG)
+  : resolveRepoDefault(ROOT, 'scratch', 'renders', 'cars', TEAM);
 const EXE    = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
 
 const PART_CATS = ['engine', 'aero', 'brakes', 'gearbox', 'ers', 'tyres', 'suspension', 'fuel'];
@@ -224,7 +233,7 @@ try {
     await page.evaluate((p) => window.CARVIEW.set(p), { az: s.az, el: s.el, dist: s.dist, look: s.look || 0, tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
     await page.waitForTimeout(260);   // let a couple of frames render at the new angle/lighting
     const file = lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
-    await page.screenshot({ path: resolve(OUT, file) });
+    await page.screenshot({ path: resolveContainedChild(OUT, file, 'render output path') });
     shots.push({ file, label: s.label, group: s.group, tod: s.tod });
     console.log(`  ✓ ${file}`);
   }
@@ -259,7 +268,7 @@ try {
     body = `<div class="grid">\n${shots.map(s => `<figure><img src="${s.file}" alt="${s.label}"><figcaption>${s.label}</figcaption></figure>`).join('\n')}\n</div>`;
   }
 
-  writeFileSync(resolve(OUT, 'index.html'), `<!doctype html><meta charset="utf8">
+  writeFileSync(resolveContainedChild(OUT, 'index.html', 'render contact sheet path'), `<!doctype html><meta charset="utf8">
 <title>${TEAM} — render sheet</title>
 <style>
   ${style}
@@ -269,7 +278,7 @@ try {
 ${body}`);
 
   console.log(`Rendered ${shots.length} shot(s) -> ${OUT}`);
-  console.log(`Contact sheet: ${resolve(OUT, 'index.html')}`);
+  console.log(`Contact sheet: ${resolveContainedChild(OUT, 'index.html', 'render contact sheet path')}`);
 } finally {
   await browser.close();
 }

@@ -3,6 +3,7 @@
 // correct shape, handles edge-cases, and actually mutates game state as described.
 // These double as living documentation: if a method's contract changes this file breaks.
 import { test, expect } from "@playwright/test";
+import { galleryPath } from "./output-paths.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -114,7 +115,7 @@ test.describe("__apex.finishRace()", () => {
     await page.locator("#results").waitFor({ state: "visible" });
     const infoState = await page.evaluate(() => window.__apex.info().state);
     expect(infoState).toBe("results");
-    await page.screenshot({ path: "tests/ui-screenshots/dev-tools-finish-race.png" });
+    await page.screenshot({ path: galleryPath("dev-tools", "dev-tools-finish-race.png") });
   });
 
   test("returns false when no race is loaded", async ({ page }) => {
@@ -316,7 +317,7 @@ test.describe("__apex.hud()", () => {
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.hud(false));
     await expect(page.locator("#hud")).toBeHidden();
-    await page.screenshot({ path: "tests/ui-screenshots/dev-tools-hud-hidden.png" });
+    await page.screenshot({ path: galleryPath("dev-tools", "dev-tools-hud-hidden.png") });
   });
 
   test("hud(true) restores the HUD element", async ({ page }) => {

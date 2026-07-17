@@ -3,43 +3,15 @@
 .claude/*
 !.claude/skills/
 
-# Node / Playwright
+# Node
 node_modules/
-# scratch screenshot output from tools/apex-capture.mjs (regenerable)
+
+# Regenerable output
 scratch/
-# survey/inspect screenshot dumps (regenerable)
-.shots/
-# default + APEX_PORT-suffixed variants (test-results-3461/ etc.)
-test-results*/
-playwright-report*/
-# per-group logs written by tools/test-shards.sh
-test-logs/
+artifacts/
 
-# regenerable screenshot dumps written via page.screenshot()/fs.writeFileSync
-# (lap-audit, baku-audit, ui/parts/dev-tools captures). These are human-review
-# galleries with NO toHaveScreenshot assertions — regenerate on demand. The
-# golden visual-regression baselines live in tests/*-snapshots/ and stay tracked.
-tests/ui-screenshots/
-
-# generated follow-cam track traces (tests/track-trace.spec.js) — regenerable
-tests/track-trace/
-
-# generated test output directories
-tests/f1-track-accuracy/
-tests/f1-circuit-directions/
-tests/monaco-cam/
-tests/scenery-shots/
-tests/trackmap-shots/
-tests/hooks-demo/
-tests/monaco-scenery/
-tests/all-tracks-buildings/
-tests/monaco-tour/
-tools/render-out/
-
-# transient headless probe/screenshot scripts (agents & local debugging)
+# Transient agent/debug scripts must be underscore-prefixed.
 tools/_*.mjs
-tools/*probe*.mjs
-tools/*shot*.mjs
 
 # git worktrees for isolated agent work
 .worktrees/

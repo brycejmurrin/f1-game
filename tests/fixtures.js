@@ -76,6 +76,47 @@ export const test = base.extend({
     await page.waitForFunction(() => window.__apex != null, { timeout: 10000 });
     await use(page);
   },
+
+  /**
+   * Returns `loadTrack(id, tod, wx)` — the race-setup block ~54 specs hand-roll:
+   * goto → wait __apex → race(id,tod,wx) → wait track built → go(). Unifies the
+   * drifted 8000/10000 ms timeouts and gives every caller the free pageErrors
+   * guard + on-failure state dump. Call it once at the top of a test.
+   *
+   *   const { test, expect } = require('./fixtures.js');
+   *   test('...', async ({ loadTrack, page }) => { await loadTrack('monza'); ... });
+   */
+  loadTrack: async ({ page }, use) => {
+    await use(async (id = "monza", tod = "day", wx = "dry") => {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10000 });
+      await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15000 });
+      await page.evaluate(() => window.__apex.go());
+      return page;
+    });
+  },
+});
+
+// On any failure, attach a compact __apex telemetry snapshot so live-reporter.js
+// echoes WHY the car was where it was (physState + timing + lightState), turning a
+// bare "expected X < Y" into an actionable dump. No cost on passing tests.
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  try {
+    const snap = await page.evaluate(() => {
+      const a = window.__apex; if (!a) return null;
+      const pick = (fn) => { try { return fn(); } catch (_) { return undefined; } };
+      return {
+        phys: pick(() => a.physState && a.physState()),
+        probe: pick(() => a.probe && a.probe()),
+        timing: pick(() => a.timing && a.timing()),
+        light: pick(() => a.lightState && a.lightState()),
+        info: pick(() => a.info && a.info()),
+      };
+    });
+    if (snap) await testInfo.attach("apex-state", { body: JSON.stringify(snap), contentType: "application/json" });
+  } catch (_) { /* page may be closed / __apex absent — best-effort only */ }
 });
 
 export { expect };

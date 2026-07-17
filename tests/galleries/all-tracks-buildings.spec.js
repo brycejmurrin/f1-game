@@ -1,6 +1,6 @@
 // Screenshot tour of all 24 circuits — cinematic camera aimed at buildings/scenery.
-// Outputs to tests/all-tracks-buildings/  (gitignored).
-// Run: npx playwright test tests/all-tracks-buildings.spec.js
+// npm test -- tests/galleries/all-tracks-buildings.spec.js
+// Output: artifacts/galleries-<port>/all-tracks-buildings/
 //
 // PERF: the suite is SERIAL on one shared page — the game is loaded once and
 // tracks are switched in-place with __apex.race(id) (a synchronous rebuild,
@@ -9,10 +9,9 @@
 // under SwiftShader (~24x that per run); this one pays the page load once.
 
 import { test } from "@playwright/test";
-import fs from "fs";
+import { galleryDir } from "../output-paths.js";
 
-const OUT = "tests/all-tracks-buildings";
-fs.mkdirSync(OUT, { recursive: true });
+const OUT = galleryDir("all-tracks-buildings");
 
 const VIEWPORT = { width: 1200, height: 675 };  // 16:9
 

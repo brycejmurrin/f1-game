@@ -31,6 +31,8 @@ The debug-* skills are grounded in **verified live return shapes** (probed via
 `tools/apex-eval.mjs` against the running game) and pair with screenshot capture
 (`tools/apex-capture.mjs`) so changes are validated visually, not just asserted.
 
+Output paths follow the shared contract in `CLAUDE.md`: batch/test output under `artifacts/`, human-reviewed captures/renders/profiles under `scratch/`.
+
 Design principles these encode (from `CLAUDE.md`):
 - **No build step** — pure IIFE modules; always bump `?v=N` + `version.json` on asset edits.
 - **Debug-hooks first** — assert behaviour/geometry via `__apex`, not brittle magnitudes.

@@ -93,7 +93,7 @@ test.describe("Apex 26 — rendering", () => {
   // These are SMOKE checks: confirm the WebGL scene actually renders a non-blank
   // frame, not a pixel-exact regression (the scene has procedural scenery /
   // time-of-day variation, so it differs 10-30% run-to-run under SwiftShader —
-  // pixel comparison belongs in the dedicated visual-regression-*.spec.js suite).
+  // pixel comparison belongs in tests/tracks-visual.spec.js).
   // A rendered 3D scene PNG is tens of KB; a blank/solid canvas is < ~2 KB.
   test("grid start renders a non-blank frame", async ({ page }) => {
     const errors = [];
@@ -127,10 +127,12 @@ test.describe("Apex 26 — rendering", () => {
     await page.waitForTimeout(100);
 
     const info = await page.evaluate(() => window.__apex.info());
+    const probe = await page.evaluate(() => window.__apex.probe());
     expect(info.state).toBe("race");
-    // Player should now be near 50% of the lap
-    // (can't read player.s directly but track total is available)
     expect(info.total).toBeGreaterThan(0);
+    expect(probe.s / info.total).toBeCloseTo(0.5, 2);
+    expect(probe.speed).toBeCloseTo(60, 1);
+    expect(probe.x).toBeCloseTo(2, 1);
   });
 });
 

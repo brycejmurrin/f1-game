@@ -32,8 +32,8 @@ server, waits for `__apex`, freezes the scene, frames the camera, writes a PNG:
 ```sh
 node .claude/skills/playwright-probe/shot.mjs <trackId> <frac> [cam] [out.png]
 # cam = orbit | eye | cinematic | trackside | park
-node .claude/skills/playwright-probe/shot.mjs monaco 0.18 orbit  scratch/monaco-chicane.png
-node .claude/skills/playwright-probe/shot.mjs spa    0.07 eye    scratch/eau-rouge.png
+node .claude/skills/playwright-probe/shot.mjs monaco 0.18 orbit  scratch/captures/playwright-probe/monaco-chicane.png
+node .claude/skills/playwright-probe/shot.mjs spa    0.07 eye    scratch/captures/playwright-probe/eau-rouge.png
 ```
 
 A blank/dark canvas comes out < ~5 KB; a real 3D frame is tens of KB (the
@@ -41,14 +41,13 @@ suite's non-blank heuristic). For the full camera-hook reference
 (park/freeze/eyeAt/orbit/view/cinematic/carOrbit/previewCam) see
 **debug-cameras**; add `setTimeOfDay`/`weather` calls for lighting variants.
 For before/after: capture with the same `(track, frac, cam)` args on each side
-of the change so only the pixels you care about differ. Output goes under
-`scratch/` — don't commit throwaway screenshots; visual-regression baselines
+of the change so only the pixels you care about differ. Output goes under `scratch/captures/playwright-probe/` by default (and `apex-capture` defaults to `scratch/captures/apex-capture/<purpose>/`) — don't commit throwaway screenshots; visual-regression baselines
 under `tests/` are updated only via `npx playwright test --update-snapshots`.
 
 ## UI screens (DOM, not canvas)
 
 The menu/setup/results screens are DOM — follow the `tests/ui-audit.spec.js`
-pattern (navigate the menus, `page.screenshot` to `tests/ui-screenshots/`) and
+pattern (navigate the menus, `page.screenshot` to `artifacts/galleries-<port>/<suite>/`) and
 use `tests/f1-api-mock.js` so the data hub renders without network egress.
 Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
 `{width:844,height:390}` to avoid the `#rotate-device` overlay.

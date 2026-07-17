@@ -1,25 +1,24 @@
 /*
  * Apex 26 — Gfx: the renderer backend seam (WebGPU migration, Phase 0).
  *
- * `Gfx.create(canvas, opts)` feature-detects WebGPU and, if available and not
- * opted out, returns a WebGPU backend (js/webgpu/wgx.js, WGX) that implements
- * the renderer interface below. On absence or ANY failure it returns `null`, and
- * THE CALLER is responsible for falling back to the existing WebGL2 renderer
- * (GLX). This module deliberately does NOT reference GLX — keeping the fallback
- * decision in game.js avoids coupling the two backends here and keeps the
- * default (WebGL2) path fully synchronous.
+ * WebGL2 (GLX) is the default renderer. game.js uses this selection seam only
+ * when `apex26.gfxBackend=webgpu` explicitly opts into WebGPU; `Gfx.create()`
+ * then feature-detects WebGPU and returns a WGX backend implementing the
+ * interface below. On absence or ANY failure it returns `null`, and THE CALLER
+ * falls back to GLX. This module deliberately does NOT reference GLX — keeping
+ * the fallback decision in game.js avoids coupling the two backends here.
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `Gfx`.
- * Load order in index.html (a LATER integration step, not done here):
+ * Load order in index.html:
  *     wgsl-chunks.js -> wgx.js -> gfx.js -> ... -> game.js
  * `Gfx` is inert until game.js calls it; nothing here runs at load time.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * THE BACKEND INTERFACE CONTRACT (the "seam")
  * ─────────────────────────────────────────────────────────────────────────────
- * Both GLX (js/glx.js return object, ~lines 3693-3769) and WGX (js/webgpu/wgx.js)
- * expose the SAME ~35-method surface. game.js talks to the renderer only through
- * these methods (~109 call sites). This is transcribed from the real GLX object.
+ * Both the backend object returned by GLX and the backend returned by
+ * WGX.create() expose the SAME renderer surface. game.js talks to the selected
+ * renderer through these methods. This is transcribed from the real GLX object.
  *
  * Lifecycle / capability:
  *   init(canvas) -> bool       acquire context/programs (GLX: sync). WGX is
@@ -55,8 +54,7 @@
  *   drawGlow(lights, str) / drawDecal(mesh, model, tex, opts)
  *   present(opts)            resolve MSAA + run post chain + blit to screen.
  *
- * `frame` object consumed by begin() (all optional unless noted; see
- * js/glx.js:2830-2978):
+ * `frame` object consumed by begin() (all optional unless noted; see GLX.begin):
  *   viewProj:Float32Array(16)      REQUIRED  view-projection matrix
  *   eye:vec3                        REQUIRED  camera world position
  *   sunDir:vec3, sunColor:vec3      REQUIRED  directional sun
@@ -69,19 +67,19 @@
  *   cullDist:number                far cull distance
  *   noEnv:bool                     disable env-cube sheen (menu preview)
  *   tune:object                    live LIGHTING TUNER knobs (LT.*); defaults in
- *                                  the backend MUST mirror game.js TUNE_DEFS
+ *                                  the backend MUST mirror LightTune.TUNE_DEFS
  *   lights:Float32Array            flat stride-15 point lights, pre-culled <=32:
  *     [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner,cosOuter, bleed, volW, glareW]
  *
- * `sky` object consumed by drawSky() (see js/glx.js:3218-3236):
+ * `sky` object consumed by drawSky() (see GLX.drawSky):
  *   invViewProj, zenith:vec3, horizon:vec3, sunDir:vec3, sunColor:vec3,
  *   stars:bool, cloud, time, moon, cityGlow:vec3, starBright, cloudSpeed
  *
- * `opts` object consumed by draw()/drawChunked() (see js/glx.js:2982-3021):
+ * `opts` object consumed by draw()/drawChunked() (see GLX.draw/GLX.drawChunked):
  *   emissive, alpha, roughness, metalness, specular, detail, clearcoat,
  *   carPaint, sparkle : material scalars ; noAlphaWrite:bool ; doubleSided:bool
  *
- * `opts` object consumed by present() (see js/glx.js:3364-3367):
+ * `opts` object consumed by present() (see GLX.present):
  *   exposure, bloom, ssao, contact, threshold, tune, ...
  * ─────────────────────────────────────────────────────────────────────────────
  */

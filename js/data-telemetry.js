@@ -81,13 +81,18 @@ const DataTelemetry = (function () {
     });
   }
 
+  let driverGen = 0;
+
   function renderTelemetryBody(meta, leftPane, rightPane) {
+    const myDriverGen = ++driverGen;
+    ++telGen;
     // Keep the picker (first child of leftPane); remove everything appended after it
     while (leftPane.children.length > 1) leftPane.removeChild(leftPane.lastChild);
     clear(rightPane);
     rightPane.appendChild(spinner());
 
     F1API.sessionDrivers(meta.sessionKey).catch(function () { return null; }).then(function (drivers) {
+      if (myDriverGen !== driverGen) return;
       // Session info → left pane
       const info = el("div", "dh-livecard");
       const title = el("div", "dh-live-title");
@@ -134,6 +139,7 @@ const DataTelemetry = (function () {
       detail.appendChild(emptyMsg("← Pick a driver to load their fastest lap."));
       rightPane.appendChild(detail);
     }, function () {
+      if (myDriverGen !== driverGen) return;
       clear(rightPane); rightPane.appendChild(emptyMsg(NO_TELEM_MSG));
     });
   }

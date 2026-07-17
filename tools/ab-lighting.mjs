@@ -5,12 +5,12 @@
 // from memory — the working tree is never touched). It then measures both
 // frames (whole-frame + per-region luminance stats), gates on whether the swap
 // produced a VISIBLE whole-frame change, and writes a side-by-side composite +
-// metrics JSON to scratch/ab/.
+// metrics JSON to scratch/captures/ab-lighting/.
 //
 //   node tools/ab-lighting.mjs list                    # print the knob catalog
 //   node tools/ab-lighting.mjs run all                 # A/B every knob
 //   node tools/ab-lighting.mjs run lampFog.base pcss.penScale ...
-//   node tools/ab-lighting.mjs run all --out /tmp/ab   # custom output dir
+//   node tools/ab-lighting.mjs run all --out scratch/captures/custom-ab # custom output dir
 //
 // Exit code 1 if any knob produces NO visible change — "this constant no
 // longer does anything" is a caught regression, not a silent one. Per-lamp
@@ -474,7 +474,7 @@ async function main() {
   if (cmd !== "run" && cmd !== "sweep" && cmd !== "try") { console.error(USAGE); process.exit(2); }
 
   const outIx = rest.indexOf("--out");
-  const outDir = outIx >= 0 ? rest.splice(outIx, 2)[1] : `${ROOT}/scratch/ab`;
+  const outDir = outIx >= 0 ? rest.splice(outIx, 2)[1] : `${ROOT}/scratch/captures/ab-lighting`;
   mkdirSync(outDir, { recursive: true });
 
   // ── sweep / try: render one knob at several candidate values ──

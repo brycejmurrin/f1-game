@@ -1,14 +1,15 @@
 // Close-camera photo session across lighting/tracks. Small JPEGs.
-// NON-PORTABLE ONE-SHOT: hardcodes a Linux-sandbox repo path (/home/user/f1-game)
-// and a /tmp scratchpad output dir. Left as-is intentionally — not part of the
-// portable tool set; edit NEW/OUT/exe by hand before re-running elsewhere.
+// Output goes to the in-project artifacts/tmp/shoot scratchpad (gitignored).
+// The Chromium executable is auto-detected across the common preinstalled
+// paths; override with the CHROME env var if yours lives elsewhere.
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
+import path from "node:path";
 
-const NEW = "/home/user/f1-game";
-const OUT = "/tmp/claude-0/-home-user-f1-game/b17a0e49-28c1-58ee-b7dd-0da154666824/scratchpad/shoot";
+const NEW = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const OUT = path.join(NEW, "artifacts", "tmp", "shoot");
 mkdirSync(OUT, { recursive: true });
 const require = createRequire(NEW + "/");
 const { chromium } = require("playwright");
@@ -19,7 +20,11 @@ const port = await new Promise((res) => {
 });
 const srv = spawn("npx", ["serve", "-l", String(port), "."], { cwd: NEW, stdio: "ignore" });
 await sleep(1500);
-const exe = ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"].find(existsSync);
+const exe = [
+  process.env.CHROME,
+  "/opt/pw-browsers/chromium",
+  "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+].find((p) => p && existsSync(p));
 const browser = await chromium.launch({ executablePath: exe, args: ["--use-gl=angle"] });
 
 async function session(teamIdx, tag, track, cases) {

@@ -2,8 +2,8 @@
  * Apex 26 — WebGPU renderer backend (WGX). Migration Phase 2 + 3 + 4
  * (post chain + foreground FX).
  *
- * A second implementer of the GLX draw-API contract (the ~35-method object
- * returned by js/glx.js:3693-3769). See docs/WEBGPU-MIGRATION.md,
+ * A second implementer of the GLX draw-API contract (the renderer object
+ * returned by the GLX IIFE). See docs/WEBGPU-MIGRATION.md,
  * docs/WEBGPU-PHASE0-NOTES.md, docs/WEBGPU-PHASE2-NOTES.md and js/gfx.js for the
  * interface contract and the frame/opts object shapes.
  *
@@ -69,7 +69,7 @@
 "use strict";
 
 const WGX = (function () {
-  // Mirror GLX's mobile-tier detection (js/glx.js:2035-2044).
+  // Mirror GLX's mobile-tier detection (IS_MOBILE/MOBILE_TIER).
   const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
   let _gfxHigh = false;
@@ -159,7 +159,7 @@ const WGX = (function () {
     return out;
   }
 
-  // ── Frustum cull helpers — ported verbatim from GLX (js/glx.js:3038-3071).
+  // ── Frustum cull helpers — ported verbatim from GLX's frustum helpers.
   //    Gribb–Hartmann from a COLUMN-MAJOR view-proj; inside = a*x+b*y+c*z+d >= 0.
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
@@ -922,7 +922,7 @@ const WGX = (function () {
     }
 
     // Chunked prop mesh: ONE shared vertex buffer + per spatial XZ cell index
-    // buffer, each with an AABB (port of GLX createChunkedMesh, js/glx.js:3078).
+    // buffer, each with an AABB (port of GLX.createChunkedMesh).
     function createChunkedMesh(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
       const pos = toF32(data.pos);
@@ -987,7 +987,7 @@ const WGX = (function () {
     }
     function freeTexture(t) { if (t && t.texture) t.texture.destroy(); }
 
-    // ── frame uniform + light storage upload (mirror GLX begin(), js/glx.js:2838) ──
+    // ── frame uniform + light storage upload (mirror GLX.begin) ──
     function _writeFrame(f) {
       const d = frameData;
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
@@ -1042,7 +1042,7 @@ const WGX = (function () {
       d[76] = (T && T.bounceK     != null) ? T.bounceK     : 0.04;  // BOUNCE (per-lamp bounce-fill strength, == GLX uBounceK; NOT ambient)
       d[77] = (T && T.fogTint     != null) ? T.fogTint     : 0.0;   // FOG TINT (-1..1)
       // GROUND MIST amount = frame.groundMist × mistDensity (matches GLX
-      // uGroundMist = (frame.groundMist||0) * (T.mistDensity??1), js/glx.js:974) —
+      // uGroundMist = (frame.groundMist||0) * (T.mistDensity??1), in GLX.begin —
       // so mist is 0 unless the frame actually requests it, not an absolute knob.
       d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
@@ -1624,7 +1624,7 @@ const WGX = (function () {
     }
 
     // Additive lamp-glare halos — CPU billboard build ported verbatim from GLX
-    // drawGlow (js/glx.js:3309), emitting stride-36 (corner2, center3, color3,
+    // Mirror GLX.drawGlow, emitting stride-36 (corner2, center3, color3,
     // radius1) verts, then one additive draw into the HDR scene target.
     function drawGlow(lights, str) {
       if (!_fxReady || !litPass || !pGlow || !lights || !lights.length || !(str > 0)) return;

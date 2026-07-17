@@ -2,7 +2,7 @@
 // One-command track survey for scenery/geometry work. Self-booting: no server, no
 // manual setup. Boots the game headless ONCE and produces everything an agent needs
 // to judge a circuit's scenery in a single pass:
-//   • screenshots → scratch/survey-<id>/   (aerial + orbit + driver's-eye per spot)
+//   • screenshots → scratch/captures/survey-track/<id>/   (aerial + orbit + driver's-eye per spot)
 //   • lateral ground-profile probe, printed as a table with auto-flagged problems
 //     (floating props / channels / sagging ribbon) so you don't have to eyeball it
 //   • a one-line verdict + any page errors
@@ -19,16 +19,23 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
+import {
+  assertSafePathToken,
+  resolveContainedChild,
+  resolveRepoDefault,
+} from "./output-paths.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
 const { chromium } = require("playwright");
 
-const [id, label = "survey", fracsArg] = process.argv.slice(2);
-if (!id) { console.error("usage: survey-track.mjs <id> [label] [fracs]"); process.exit(2); }
+const [idArg, labelArg = "survey", fracsArg] = process.argv.slice(2);
+if (!idArg) { console.error("usage: survey-track.mjs <id> [label] [fracs]"); process.exit(2); }
+const id = assertSafePathToken(idArg, "track id");
+const label = assertSafePathToken(labelArg, "label");
 const FRACS = (fracsArg || "0,0.25,0.5,0.75").split(",").map(Number);
 const LATS = [8, 12, 20, 30, 45, 70, 110];   // lateral metres for the ground probe
-const OUT = `${ROOT}/scratch/survey-${id}`;
+const OUT = resolveRepoDefault(ROOT, "scratch", "captures", "survey-track", id);
 mkdirSync(OUT, { recursive: true });
 
 const freePort = () => new Promise((res, rej) => {
@@ -52,8 +59,9 @@ try {
   const browser = await chromium.launch({ executablePath: pickChromium(), args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
+  page.setDefaultTimeout(60000);
   await page.goto(`http://127.0.0.1:${PORT}/`);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 12000 });
+  await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
 
   // race the track (retry once if a concurrent edit briefly broke the page)
   let ok = false;
@@ -66,11 +74,22 @@ try {
   await sleep(1400);
   await page.evaluate(() => window.__apex.hud(false));
 
+  // page.screenshot({ clip }) grabs the current framebuffer via CDP directly and
+  // SKIPS Playwright's element-actionability/stability checks — those never settle
+  // on a continuously-animating WebGL canvas (and time out hard under the heavy
+  // SwiftShader/CPU load of several surveys running at once).
   async function shot(name, fn, arg) {
     await page.evaluate(fn, arg);
     await sleep(220);
-    const path = `${OUT}/${label}-${name}.png`;
-    const buf = await page.locator("canvas#game").screenshot({ path });
+    const path = resolveContainedChild(
+      OUT,
+      `${label}-${name}.png`,
+      "survey screenshot path"
+    );
+    const box = await page.locator("canvas#game").boundingBox();
+    const buf = box
+      ? await page.screenshot({ path, clip: box, timeout: 60000 })
+      : await page.screenshot({ path, timeout: 60000 });
     shots.push({ name: `${label}-${name}.png`, kb: +(buf.length / 1024).toFixed(0), blank: buf.length < 30000 });
   }
 
@@ -104,7 +123,7 @@ try {
 
 // ---- report -------------------------------------------------------------
 console.log(`\n=== SURVEY ${id} (${label}) ===`);
-console.log(`shots → scratch/survey-${id}/`);
+console.log(`shots → scratch/captures/survey-track/${id}/`);
 for (const s of shots) console.log(`  ${s.blank ? "⚠ BLANK " : "        "}${s.name.padEnd(22)} ${s.kb}KB`);
 
 // ground-profile table with auto-flagging of the classic failure modes

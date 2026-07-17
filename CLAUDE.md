@@ -15,26 +15,34 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
                                   #   Fast pre-push guard for tracks.js scenery edits.
 npx playwright test               # run all specs
 npx playwright test tests/<file>.spec.js   # single spec
-npx playwright test tests/ui-audit.spec.js # → tests/ui-screenshots/
-npx playwright test tests/visual-regression-*.spec.js  # pixel-diff regression
+npx playwright test tests/ui-audit.spec.js # → artifacts/galleries-<port>/ui-audit/
+npx playwright test tests/tracks-visual.spec.js  # per-circuit pixel-diff regression
 
 # Named test groups (via npm run <script>):
+npm run test:headless   # the whole headless project (all non-render specs, no GPU)
+npm run test:render     # the render project only (screenshots/pixel/GL) at --workers=4
 npm run test:smoke      # page load + __apex available
-npm run test:api        # __apex contract: dev-tools + headless + obs/act edge cases
-npm run test:headless   # headless control loop only (fast, no rendering)
-npm run test:physics    # physics regression + elevation
+npm run test:api        # __apex contract: dev-tools + headless + obs/act + new-hooks
+npm run test:hooks      # camera/driving/map/new __apex hook contracts
+npm run test:physics    # physics regression + elevation + projection
 npm run test:collision  # collision, drift, offtrack
-npm run test:behaviour  # collision + drift + offtrack + collision-ai-fixes (all behaviour)
+npm run test:behaviour  # collision + drift + offtrack + world-physics + physics-fixes
 npm run test:barriers   # track wall geometry + AI-fixes barrier tests
 npm run test:parts      # parts catalog, budget, persistence, physics
-npm run test:steering   # presets, sliders, steering modes
-npm run test:ui         # all UI screenshots (slow, ~5 min)
-npm run test:visual     # pixel-diff visual regression (slow)
+npm run test:steering   # presets, sliders, steering modes, gamepad
+npm run test:camera     # camera modes + camera hooks + driving hooks
+npm run test:ui         # UI screenshots: audit + button-touch + desktop + hud (slow)
+npm run test:visual     # pixel-diff visual regression (tracks-visual, slow)
+npm run test:scenery    # props/terrain over road + f1-track-accuracy
+npm run test:webgl      # webgl-probes + lighting-ab
+npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial game modes
-npm run test:circuit    # walls + autopilot + elevation (all circuit-level tests)
+npm run test:map        # minimap hooks
+npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
 npm run test:fast       # curated fast subset: smoke + api + collision + offtrack +
                         #   parts-physics + steering (~3 min)
 npm run test:ab         # lighting A/B pixel comparison (tests/lighting-ab.spec.js)
+npm run test:audit      # coverage guard: every spec must belong to ≥1 group
 ```
 
 ### Running tests without stalls (background + logs, parallel ports)
@@ -48,22 +56,30 @@ per-request stderr spam is suppressed in playwright.config.js. Run in the
 background and tail:
 
 ```sh
-npx playwright test tests/foo.spec.js > /tmp/foo.log 2>&1 &
-tail -f /tmp/foo.log
+npm test -- tests/foo.spec.js > artifacts/tmp/foo.log 2>&1 &
+tail -f artifacts/tmp/foo.log
 ```
 
-To run **several test invocations concurrently**, give each its own server port
-with `APEX_PORT` (playwright.config.js derives the static-server port, baseURL,
-and report/artifact dirs from it — without it, run B reuses run A's port-3456
-server, which dies with net::ERR_CONNECTION_REFUSED when run A finishes):
+The npm scripts use `tools/run-playwright.mjs`, which allocates a free port and
+port-suffixed report/artifact paths for every invocation. Independent npm test
+commands can therefore run concurrently without sharing and tearing down each
+other's web server:
 
 ```sh
-APEX_PORT=3461 npx playwright test tests/a.spec.js --reporter=line > /tmp/a.log 2>&1 &
-APEX_PORT=3462 npx playwright test tests/b.spec.js --reporter=line > /tmp/b.log 2>&1 &
+npm test -- tests/a.spec.js > artifacts/tmp/a.log 2>&1 &
+npm test -- tests/b.spec.js > artifacts/tmp/b.log 2>&1 &
 ```
 
-Reports land in `playwright-report-<port>/`, artifacts in `test-results-<port>/`
-(both gitignored). Default port 3456 with unsuffixed dirs when APEX_PORT is unset.
+Reports land in `artifacts/report-<port>/`, artifacts in `artifacts/test-results-<port>/`
+(both gitignored). Direct `npx playwright test` still uses port 3456; prefer npm.
+
+**Two projects, not one.** `playwright.config.js` splits the suite into a
+`headless` project (physics/geometry/hook specs — the default, no GPU) and a
+`render` project (screenshot/pixel-diff/GL specs, listed in `RENDER_SPECS`). The
+old single `chromium` project is gone — target `--project=headless` or
+`--project=render` when filtering, not `--project=chromium`. `npm run test:render`
+runs the render project at `--workers=4` to cap SwiftShader (CPU-GL) concurrency;
+`npm run test:headless` runs everything else and can use more workers safely.
 
 **`tools/test-shards.sh`** wraps all of this — run whole npm groups concurrently,
 one port + log per group, with a pass/fail summary at the end:
@@ -71,22 +87,42 @@ one port + log per group, with a pass/fail summary at the end:
 ```sh
 tools/test-shards.sh smoke api collision        # 3 groups at once
 WORKERS=2 tools/test-shards.sh circuit barriers # workers per group (default 2)
-SPLIT=3 tools/test-shards.sh circuit            # 1 group fanned over 3 servers
-                                                #   via Playwright --shard=k/3
-tail -f test-logs/smoke.log                     # watch one group live
+tail -f artifacts/logs/smoke.log                # watch one group live
 ```
 
 Sizing: total browsers = groups × WORKERS, and rendering is SwiftShader (CPU),
-so on a small box 2-3 groups × 2 workers is the sweet spot. Within a single
-run, `--workers=N` raises Playwright's per-run pool (default: half the cores).
+so on a small box 2-3 groups × 2 workers is the sweet spot. A single local run
+defaults to at most 4 workers (`APEX_WORKERS=N` overrides it). Playwright shards
+are for distributing CI work across machines; local `SPLIT` multiplies browser
+pools and usually makes this software-rendered suite slower.
 
 IMPORTANT: tests serve `js/`/`css/` straight from the working tree — don't edit
 source files while a run is in flight, or its later specs load mixed versions.
 
-Killing a Playwright run orphans its `python3 -m http.server <port>` child; the
-next run on that port then fails with "Process from config.webServer was not
-able to start". Clean up with `pkill -f 'http.server <port>'` (check first with
-`pgrep -fa http.server` — don't kill a port a live run is still using).
+The npm wrapper owns its static server in-process and forwards termination
+signals to Playwright so browser children shut down. Direct CLI/sharded runs
+still use Python; after an uncatchable SIGKILL, check for an orphan with
+`pgrep -fa http.server` before removing it.
+
+### Output dirs (standard)
+
+All regenerable output lives in **two** top-level gitignored dirs — never `/tmp`,
+never scattered at the repo root:
+
+- **`artifacts/test-results-<port>/`** — test failures, traces, attachments, JUnit
+- **`artifacts/report-<port>/`** — HTML report
+- **`artifacts/logs/`** — shard and batch logs
+- **`artifacts/galleries-<port>/`** — test-emitted screenshots/reports
+- **`artifacts/tmp/`** — one-off batch probes
+- **`scratch/captures/`** — interactive tool captures
+- **`scratch/renders/`** — car/parts/aero review sheets
+- **`scratch/profiles/`** — CPU/GPU profiles
+
+Both roots are created on demand. `assets/`, committed generated sources, and the
+tracked golden baselines in `tests/*-snapshots/` stay outside these roots. The
+current consolidated visual suite has no tracked replacement baselines yet; do the
+Linux/SwiftShader regeneration as a separate required operation before treating
+`npm run test:visual` as a reliable regression gate.
 
 ---
 
@@ -96,6 +132,10 @@ able to start". Clean up with `pkill -f 'http.server <port>'` (check first with
 js/mat4.js       M4, V3         matrix math
 js/shaders/glx-shaders.js  GLXShaders  all GLSL sources (pure data; loads before glx.js)
 js/glx.js        GLX            WebGL2 renderer
+js/gfx.js        Gfx            renderer façade — selects GLX (WebGL2) or WGX (WebGPU),
+                                  both expose the same surface to game.js
+js/webgpu/*.js   WGX            WebGPU backend (wgx.js) + WGSL sources
+                                  (wgsl-chunks/-post/-fx.js); feature-detected, GLX fallback
 js/teams.js      Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
 js/track-geom.js TrackGeom      pure geometry emitters (addBox/emit/addCyl/…) + MAT ids
 js/track-scenery-data.js  TrackSceneryData  static buildProps tables (BARRIER, FURN,
@@ -124,7 +164,7 @@ js/game/carmesh.js   CarMesh     car decal/effect/cockpit-instrument geometry
 js/game.js       (main)         game loop, physics, AI, race logic, __apex API
 css/style.css                   all styles
 index.html                      shell — script tags, DOM structure, cache-bust version
-tests/*.spec.js                 Playwright test suite (90+ specs)
+tests/*.spec.js                 Playwright test suite (45 specs)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -294,7 +334,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-90+ Playwright specs. Run groups with `npm run test:<group>` (see Key
+45 Playwright specs. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

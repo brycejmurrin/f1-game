@@ -1,7 +1,7 @@
 // Top-down + high-oblique aerial survey of ONE circuit, for spotting floor gaps,
 // floating models, terrain holes, and props sitting off the ground.
 // Usage: TRACK=monaco PORT=3510 node tools/aerial-survey.mjs [label]
-// Writes to scratch/aerial-<track>/:
+// Writes to scratch/captures/aerial-survey/<track>/:
 //   <label>-topdown.png        straight-down plan view of the whole circuit
 //   <label>-obliqueN/E/S/W.png four high oblique aerials (45° elevation) — these
 //                              reveal vertical gaps (a prop hovering, a void under
@@ -10,35 +10,47 @@
 // so an agent can reason about scale.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  assertSafePathToken,
+  resolveContainedChild,
+  resolveRepoDefault,
+} from "./output-paths.mjs";
 
 const TRACK = process.env.TRACK;
 const PORT = +(process.env.PORT || 3510);
-const LABEL = process.argv[2] || "survey";
+const LABEL = assertSafePathToken(process.argv[2] || "survey", "label");
 if (!TRACK) { console.error("set TRACK=<id>"); process.exit(2); }
+const safeTrack = assertSafePathToken(TRACK, "track id");
 
-const CHROME = process.env.CHROME ||
-  "/Users/bmurrin/Library/Caches/ms-playwright/chromium-1179/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const OUT = path.join(ROOT, "scratch", `aerial-${TRACK}`);
+// Prefer CHROME / PW_CHROMIUM; else sandbox paths; else Playwright's bundled browser.
+const CHROME = process.env.CHROME || process.env.PW_CHROMIUM ||
+  ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"]
+    .find(existsSync);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const OUT = resolveRepoDefault(ROOT, "scratch", "captures", "aerial-survey", safeTrack);
 mkdirSync(OUT, { recursive: true });
 
 const srv = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, stdio: "ignore" });
 await new Promise((r) => setTimeout(r, 1200));
 
 try {
-  const b = await chromium.launch({ executablePath: CHROME, args: ["--use-angle=swiftshader"] });
+  const b = await chromium.launch({
+    ...(CHROME ? { executablePath: CHROME } : {}),
+    args: ["--use-angle=swiftshader"],
+  });
   const p = await b.newPage({ viewport: { width: 1100, height: 780 } });
   await p.goto(`http://localhost:${PORT}/`);
   await p.waitForFunction(() => window.__apex?.race, null, { timeout: 30000 });
-  await p.evaluate((t) => __apex.race(t, "day", "dry"), TRACK);
+  await p.evaluate((t) => __apex.race(t, "day", "dry"), safeTrack);
   await p.waitForFunction(() => __apex.info().track != null, null, { timeout: 30000 });
   await p.evaluate(() => __apex.hud(false));
   await p.waitForTimeout(1200);
 
   const bounds = await p.evaluate(() => __apex.trackBounds());
-  console.log(`bounds ${TRACK}: ${JSON.stringify(bounds)}`);
+  console.log(`bounds ${safeTrack}: ${JSON.stringify(bounds)}`);
   const cx = (bounds.minX + bounds.maxX) / 2, cz = (bounds.minZ + bounds.maxZ) / 2;
   const cy = bounds.minY != null ? bounds.minY : 0;
   const span = Math.max(bounds.spanX, bounds.spanZ);
@@ -53,7 +65,10 @@ try {
     __apex.view({ eye: [cx, cy + alt, cz + 0.1], target: [cx, cy, cz] });
   }, { cx, cy, cz, span });
   await p.waitForTimeout(500);
-  await p.screenshot({ path: path.join(OUT, `${LABEL}-topdown.png`), timeout: 60000 });
+  await p.screenshot({
+    path: resolveContainedChild(OUT, `${LABEL}-topdown.png`, "aerial topdown path"),
+    timeout: 60000,
+  });
 
   // 2) four high oblique aerials (45° elevation) from N/E/S/W — the vertical angle
   //    exposes FLOATING models (a shadow gap under them) and voids the top-down hides.
@@ -67,7 +82,14 @@ try {
       __apex.view({ eye: [ex, cy + h + 20, ez], target: [cx, cy + 5, cz] });
     }, { cx, cy, cz, dist, el, az });
     await p.waitForTimeout(400);
-    await p.screenshot({ path: path.join(OUT, `${LABEL}-oblique${name}.png`), timeout: 60000 });
+    await p.screenshot({
+      path: resolveContainedChild(
+        OUT,
+        `${LABEL}-oblique${name}.png`,
+        "aerial oblique path"
+      ),
+      timeout: 60000,
+    });
   }
 
   await b.close();

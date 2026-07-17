@@ -20,6 +20,8 @@ class LiveReporter {
   onBegin(config, suite) {
     this.total = suite.allTests().length;
     this.done = 0;
+    this.durations = [];   // {name, dur} per completed test — for the slowest-N summary
+    this.flaky = 0;        // tests that FAILED then PASSED on retry (hidden flakiness)
     this.write(`[${ts()}] = run start: ${this.total} tests, ${config.workers} worker(s)`);
   }
 
@@ -40,6 +42,22 @@ class LiveReporter {
       const msg = (result.error.message || String(result.error)).split("\n").slice(0, 4).join("\n           ");
       this.write(`           ${msg}`);
     }
+    // On the FINAL result for a test, record its wall time (for the slowest-N
+    // summary) and flag it flaky if it only went green after a retry.
+    if (result.status === "passed" || result.status === "skipped" ||
+        test.results.length > test.retries) {
+      this.durations.push({ name: this.name(test), dur: result.duration });
+      if (test.outcome && test.outcome() === "flaky") this.flaky++;
+    }
+    // On-failure __apex state dump: any spec that attaches "apex-state" (see the
+    // afterEach in tests/fixtures.js) has its telemetry echoed inline so a failure
+    // shows WHY, not just the bare assertion.
+    if (result.status !== "passed" && result.status !== "skipped") {
+      const st = (result.attachments || []).find((a) => a.name === "apex-state");
+      if (st && st.body) {
+        this.write(`           apex-state: ${st.body.toString().slice(0, 400)}`);
+      }
+    }
   }
 
   onError(error) {
@@ -47,6 +65,13 @@ class LiveReporter {
   }
 
   onEnd(result) {
+    // Slowest 10 tests — the fastest way to spot the per-test reload/render hogs.
+    const slow = this.durations.sort((a, b) => b.dur - a.dur).slice(0, 10);
+    if (slow.length) {
+      this.write(`[${ts()}] = slowest ${slow.length}:`);
+      for (const s of slow) this.write(`             ${(s.dur / 1000).toFixed(1)}s  ${s.name}`);
+    }
+    if (this.flaky) this.write(`[${ts()}] = FLAKY: ${this.flaky} test(s) passed only on retry (deterministic suite — investigate)`);
     this.write(`[${ts()}] = run ${result.status}`);
   }
 

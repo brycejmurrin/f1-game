@@ -1,8 +1,10 @@
 // @ts-check
 // UI audit — captures every screen/menu in portrait and landscape.
-// Run with: npx playwright test ui-audit --update-snapshots
+// Run with: npm test -- tests/ui-audit.spec.js
+// Output: artifacts/galleries-<port>/ui-audit/
 import { test, expect } from "@playwright/test";
 import { setupApiMocks } from "./f1-api-mock.js";
+import { galleryPath } from "./output-paths.js";
 
 const PORTRAIT  = { width: 390, height: 844 };   // iPhone 14
 const LANDSCAPE = { width: 844, height: 390 };   // same rotated
@@ -19,7 +21,7 @@ async function waitTabLoaded(page) {
 
 async function shot(page, name) {
   await page.waitForTimeout(300);
-  await page.screenshot({ path: `tests/ui-screenshots/${name}.png`, fullPage: false });
+  await page.screenshot({ path: galleryPath("ui-audit", `${name}.png`), fullPage: false });
 }
 
 for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {

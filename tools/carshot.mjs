@@ -5,7 +5,7 @@
 // model without a full-frame screenshot pipeline.
 //
 //   node tools/carshot.mjs [az] [tod] [teamIdx] [outPath]
-//   node tools/carshot.mjs 40 night 2 /tmp/car.jpg
+//   node tools/carshot.mjs 40 night 2 artifacts/tmp/car.jpg
 //   node tools/carshot.mjs 130 day 1          # ferrari, day, default out
 //
 // az: orbit azimuth (0 = behind, 180 = head-on). tod: day|dusk|night|default.
@@ -13,8 +13,9 @@
 
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
+import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
@@ -24,7 +25,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const az = Number(process.argv[2] ?? 40);
 const tod = process.argv[3] || "day";
 const teamIdx = Number(process.argv[4] ?? 2);
-const out = process.argv[5] || "/tmp/carshot.jpg";
+const defaultOut = join(ROOT, "artifacts", "tmp", "carshot.jpg");
+mkdirSync(join(ROOT, "artifacts", "tmp"), { recursive: true });
+const out = process.argv[5] || defaultOut;
 
 const port = await new Promise((res) => {
   const s = createServer();
