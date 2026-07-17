@@ -104,6 +104,12 @@ test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)",
 test("night light budget: lamps on at night, off by day, exposure per table", async ({ page }) => {
   test.setTimeout(180_000);
   await boot(page, "qatar", "night", "dry", 0.4);
+  // frame.lights is written by the RENDER pass, and setTimeOfDay's rebuild can
+  // outlast boot's fixed sleeps on a loaded software-GL runner — wait on the
+  // actual state (same pattern as the day-flip below) instead of racing the
+  // first post-rebuild frame. A genuine lights-out regression still fails here,
+  // as the timeout.
+  await page.waitForFunction(() => window.__apex.lightState().numLights > 0, { timeout: 60000 });
   const night = await page.evaluate(() => window.__apex.lightState());
   expect(night.numLights).toBeGreaterThan(0);
   expect(night.numLights).toBeLessThanOrEqual(32);
