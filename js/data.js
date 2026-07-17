@@ -22,10 +22,13 @@ const DataHub = (function () {
   };
 
   const TABS = [
-    { id: "schedule", label: "SCHEDULE", load: loadSchedule },
-    { id: "standings", label: "STANDINGS", load: loadStandings },
-    { id: "lastrace", label: "LAST RACE", load: loadLastRace },
-    { id: "live", label: "LIVE", load: loadLive },
+    // Lazy closures: the tab loaders are consts destructured from the split
+    // Data* modules further down, so a direct reference here is a TDZ throw
+    // that kills the whole DataHub IIFE at load.
+    { id: "schedule", label: "SCHEDULE", load: function () { return loadSchedule(); } },
+    { id: "standings", label: "STANDINGS", load: function () { return loadStandings(); } },
+    { id: "lastrace", label: "LAST RACE", load: function () { return loadLastRace(); } },
+    { id: "live", label: "LIVE", load: function () { return loadLive(); } },
     { id: "telemetry", label: "TELEMETRY", load: function () { return loadTelemetry(); } },
     { id: "export", label: "EXPORT", load: function () { return loadExport(); } }
   ];

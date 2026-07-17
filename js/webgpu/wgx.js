@@ -1179,13 +1179,17 @@ const WGX = (function () {
       // drives the sky glow), so the binary sunUp gate above never fires at
       // night — without this fade WebGPU kept full-strength terrain/road sun
       // shadows under moonlight, and prop shadows POPPED when the day↔night
-      // key crossed the game.js cast gate (max(sunColor) > 0.35) instead of
-      // fading through dusk in lockstep with it.
+      // key crossed the game.js cast gate instead of fading through dusk in
+      // lockstep with it.
       const _kl = f.sunColor ? Math.max(f.sunColor[0], f.sunColor[1], f.sunColor[2]) : 1;
       let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
-      d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.0) * _hf;
+      // Clear-night moon shadows (GLX parity): floor the key-dim fade with the
+      // MOON SHADOWS knob scaled by the clear-night factor (game.js frame.moonK).
+      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonK || 0);
+      if (_mSh > _hf) _hf = _mSh;
+      d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.15) * _hf;
       d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
       d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.001;   // SHADOW BIAS knob (same 0.001 fallback as GLX)
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
@@ -1229,7 +1233,7 @@ const WGX = (function () {
       // as GLX uShadowRange).
       const sctr = f.shadowCtr || f.eye || [0, 0, 0];
       d[88] = sctr[0]; d[89] = sctr[1]; d[90] = sctr[2];
-      d[91] = (T && T.shadowRange != null) ? T.shadowRange : 64.0;
+      d[91] = (T && T.shadowRange != null) ? T.shadowRange : 80.0;   // same fallback as GLX uShadowRange
       // params6 (floats 92..95): wet-surface darkening parity with GLX (.x),
       // car-shadow arm flag (.y — set only on frames where the car caster pass
       // ran; reset each present so a stale map can't keep shadowing).

@@ -63,7 +63,8 @@
  *   invViewProj:Float32Array(16)   sky ray reconstruction
  *   invProj / proj / sunViewDir / upViewDir  view-space helpers (post)
  *   skyZenith:vec3, skyHorizon:vec3          sky/atmosphere colours
- *   fogDensity, fogHeight, groundMist, lampFog, wetness, time, cloud  scalars
+ *   fogDensity, fogHeight, groundMist, lampFog, wetness, time, cloud,
+ *   moonK (clear-night moon factor for the MOON SHADOWS floor)  scalars
  *   cullDist:number                far cull distance
  *   noEnv:bool                     disable env-cube sheen (menu preview)
  *   tune:object                    live LIGHTING TUNER knobs (LT.*); defaults in

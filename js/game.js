@@ -2267,7 +2267,16 @@ function resolveCollisions(ranked, dt) {
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
         const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-        if (penLat < penLong) {
+        // Closing into a nest at the lateral slop must be rear-end. Least-
+        // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
+        // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
+        // Scoped to player contacts + near-slop nests so AI↔AI packs don't
+        // dump momentum on every mild close.
+        const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
+        const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
+        const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+        const sideContact = penLat < penLong && !forceRear;
+        if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
           // both cars "in contact" so the AI eases off steering this way and
           // stops fighting the push (the cause of the side-by-side vibration).
@@ -2275,7 +2284,9 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= rubScrub; b.speed *= rubScrub;   // barely scrub speed on a side rub
+          // Only scrub when we actually pushed — at-slop contact with corr=0 used
+          // to bleed speed forever while cars stayed longitudinally nested.
+          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
@@ -2322,7 +2333,12 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-      if (penLat < penLong) {
+      // Match the relaxation pass for player nest-edge contacts.
+      const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
+      const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
+      const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+      const sideContact = penLat < penLong && !forceRear;
+      if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
@@ -2943,17 +2959,23 @@ function updateCar(c, dt, ranked) {
 
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
-  const oldS = c._prevS ?? c.s;
+  let oldS = c._prevS ?? c.s;
   if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
   // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
   // coupled to s, and going backwards (a spin/reverse) correctly DECREASES prog
   // instead of cheating progress forward.
   const L = track.total;
-  let ds;
+  let ds = c.s - oldS;
+  if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap
+  
+  // If ds is huge, the car was teleported (jump/park). Reset to prevent glitches.
+  if (Math.abs(ds) > 20) {
+    ds = c.speed * dt;
+    oldS = wrapS(c.s - ds);
+  }
+
   if (c.isPlayer) {
-    ds = c.s - oldS;
-    if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap
     c.prog += ds;
   } else {
     ds = c.speed * dt;
@@ -3962,9 +3984,28 @@ function render(dt) {
   // camera flies. 0 = disabled (normal play + desktop keep the full vista).
   frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
 
+  // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
+  // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
+  // glx.js floors its key-dim shadow fade with LT.moonShadow * frame.moonK, so
+  // moonlight casts soft shadows on clear nights only — fog/overcast/rain
+  // nights stay shadowless. Computed BEFORE the shadow pass because the prop
+  // and car caster gates below feed the snap-cached map from it. Mirrors the
+  // frameSky.moon / frame.cloud plumbing further down (values persist across
+  // frames, so first-frame staleness only delays the gate by one recentre).
+  {
+    const _mAmt = (raceTimeOfDay === "default" && track && track.def && track.def.night)
+      ? 0.85 * LT.moonBright : (frameSky.moon || 0);
+    const _mCl = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
+    let _cf = (_mCl - 0.35) / 0.25;                    // smoothstep(0.35, 0.6, cloud)
+    _cf = _cf < 0 ? 0 : _cf > 1 ? 1 : _cf;
+    _cf = _cf * _cf * (3 - 2 * _cf);
+    frame.moonK = raceWeather === "fog" ? 0
+      : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
+  }
+
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
-  // (16 m at the default 64 m box) so the map only re-renders when the camera
+  // (20 m at the default 80 m box) so the map only re-renders when the camera
   // moves a cell — and so each recentre shifts the box by an exact whole number
   // of shadow texels (sBox/4 is SHADOW_SIZE/8 texels for any pow-2 map size).
   // The old snap was on a world-XZ grid with an unsnapped camera HEIGHT: those
@@ -4016,7 +4057,7 @@ function render(dt) {
       const wy = xy * lu + yy * lv + zy * lw;
       const wz = xz * lu + yz * lv + zz * lw;
       M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
-      // Half-size box (default ±64 m / 128 m) snapped around the anchor;
+      // Half-size box (default ±80 m / 160 m) snapped around the anchor;
       // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
       // inside its border. Bigger = more reach, smaller = crisper contacts
       // (texel density = 2048/box).
@@ -4037,7 +4078,10 @@ function render(dt) {
       // the MIDDLE of that band, so prop shadows popped out at ~50% strength on
       // a dusk→night flip / SUN ELEVATION drag while terrain shadows lingered.
       const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-      if (_shKey > 0.28) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      // Clear-night moon shadows re-open the gate: props must be in the map for
+      // the moonlight floor to have anything to cast (snap-cached, so the night
+      // saving only goes when MOON SHADOWS is active and the sky is clear).
+      if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
     // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
@@ -4052,7 +4096,10 @@ function render(dt) {
     if (gfx.carShadowBegin && LT.carShadow && _shadowCount > 0 && player &&
         state !== "menu" && state !== "select") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-      if (_ck > 0.28) {
+      // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
+      // the moonlight floor active (game.js frame.moonK), cars keep casting so
+      // they throw faint moon shadows too instead of popping to blob-only.
+      if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) {
         M4.lookAtTo(_mCView,
           [_shadowCtr[0] + sd[0] * 150, _shadowCtr[1] + sd[1] * 150, _shadowCtr[2] + sd[2] * 150],
           _shadowCtr, up);
