@@ -1934,6 +1934,11 @@ uniform float uGrainTime;    // seconds — animates the grain so it isn't a fro
 uniform float uSharpen;      // unsharp-mask crispness (def 0)
 uniform float uBlackLift;    // raised black floor (def 0.005)
 uniform float uWhitePoint;   // highlight roll-off knee (def 1.0)
+uniform float uAcesA;        // ACES curve num-quad coeff a (def 2.51)
+uniform float uAcesB;        // ACES curve num-lin  coeff b (def 0.03)
+uniform float uAcesC;        // ACES curve den-quad coeff c (def 2.43)
+uniform float uAcesD;        // ACES curve den-lin  coeff d (def 0.59)
+uniform float uAcesE;        // ACES curve den-const coeff e (def 0.14, floored >0)
 uniform float uSpeedBlur;    // radial speed blur amount, 0 = off
 uniform sampler2D uDirt;     // procedural lens-dirt smudge map (generated at init)
 uniform float uLensDirt;     // lens-dirt veil strength (IMAGE & COLOUR knob, def 0.15)
@@ -1972,8 +1977,12 @@ vec3 caScene(vec2 uv) {
 // presets and the pixel-diff baselines — is hand-calibrated on top of that direct
 // output. Adding a gamma encode here is therefore a deliberate, all-baselines-
 // regenerating change, not a drop-in fix; leave it unless re-grading the game.
+// Coefficients come from the TONE CURVE tuner knobs (uAcesA..E). Their defaults
+// (2.51/0.03/2.43/0.59/0.14) reproduce the shipped Narkowicz curve byte-for-byte
+// — same values, same expression, so the default output is bit-identical. e is
+// floored >0 by the slider min so the denominator can't reach 0 for x>=0.
 vec3 acesTonemap(vec3 x) {
-  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  float a = uAcesA, b = uAcesB, c = uAcesC, d = uAcesD, e = uAcesE;
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 

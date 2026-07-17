@@ -1648,10 +1648,17 @@ const WGX = (function () {
         s[30] = (o.speedBlur != null) ? o.speedBlur : ((T && T.speedBlur != null) ? T.speedBlur : 0.0);
         s[31] = (T && T.bloomKnee != null) ? T.bloomKnee : 0.5;
         // tuneFx (off 128): vignette reach + FLARE CORE STREAK (def 0.5; GLX
-        // parity, read directly so 0 is a real "off"). s[34]/s[35] reserved.
+        // parity, read directly so 0 is a real "off") + ACES curve coeff e in .z.
         s[32] = (T && T.vignetteSoft != null) ? T.vignetteSoft : 0.35;
         s[33] = (T && T.flareStreak2 != null) ? T.flareStreak2 : 0.5;
-        s[34] = 0; s[35] = 0;
+        s[34] = (T && T.acesE != null) ? T.acesE : 0.14;   // tuneFx.z = ACES e
+        s[35] = 0;
+        // aces (off 144): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
+        // defaults reproduce the shipped Narkowicz curve byte-for-byte.
+        s[36] = (T && T.acesA != null) ? T.acesA : 2.51;
+        s[37] = (T && T.acesB != null) ? T.acesB : 0.03;
+        s[38] = (T && T.acesC != null) ? T.acesC : 2.43;
+        s[39] = (T && T.acesD != null) ? T.acesD : 0.59;
         device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });

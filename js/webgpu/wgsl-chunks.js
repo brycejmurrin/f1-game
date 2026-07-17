@@ -71,13 +71,12 @@ fn fbm(p_in: vec2<f32>) -> f32 {
   //    of the "single-source" candidates (acesTonemap, js/glx.js:1644). Not used
   //    by the sky (which outputs HDR straight to an LDR swapchain here), but
   //    included as the seed of the shared post-math the Composite port will use.
+  // Coefficients are passed in (TONE CURVE knobs on the composite path; the BLIT
+  // stand-in passes the shipped defaults). Defaults 2.51/0.03/2.43/0.59/0.14
+  // reproduce the Narkowicz curve byte-for-byte. e is floored >0 by the slider
+  // min so the denominator can't reach 0 for x>=0.
   const tonemap = `
-fn acesTonemap(x: vec3<f32>) -> vec3<f32> {
-  let a = 2.51;
-  let b = 0.03;
-  let c = 2.43;
-  let d = 0.59;
-  let e = 0.14;
+fn acesTonemap(x: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f32> {
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }`;
 
@@ -724,7 +723,9 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let hdr = textureSampleLevel(srcTex, srcSamp, in.uv, 0.0).rgb * B.params.x;
-  return vec4<f32>(acesTonemap(hdr), 1.0);
+  // Stand-in resolve: fixed shipped ACES coefficients (the TONE CURVE knobs only
+  // reach the full composite path, not this fallback blit).
+  return vec4<f32>(acesTonemap(hdr, 2.51, 0.03, 2.43, 0.59, 0.14), 1.0);
 }`;
 
   // ── SKY: the first real WGSL shader. A *reduced but faithful* port of SKY_FS

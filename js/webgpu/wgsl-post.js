@@ -387,7 +387,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(3) godrayTex : texture_2d<f32>   additive shafts
   //      @binding(4) samp      : sampler           linear clamp (all four)
   //      @binding(5) U         : uniform  CompositeU
-  //    UNIFORM CompositeU (144 B):
+  //    UNIFORM CompositeU (160 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
   //      grade       : vec4<f32>  off  32   (contrast, vibrance, saturation, tint)
@@ -402,7 +402,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          sharpen  = unsharp-mask crispness
   //                                          speedBlur= radial centre->edge smear
   //                                                     (GLX folds car speed in)
-  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, _pad, _pad)
+  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, acesE, _pad)
+  //      aces        : vec4<f32>  off 144   (acesA, acesB, acesC, acesD) — ACES
+  //                                          TONE CURVE knobs; defaults 2.51/0.03/
+  //                                          2.43/0.59 (+ acesE 0.14 in tuneFx.z)
   //    NOTE: sunShaft (p0.z) here is an extra scalar multiplier on the godray
   //    contribution; the godray strength itself lives in the GODRAY uniform.
   // ════════════════════════════════════════════════════════════════════════
@@ -417,6 +420,7 @@ struct CompositeU {
   texel       : vec4<f32>,
   imgFx       : vec4<f32>,
   tuneFx      : vec4<f32>,
+  aces        : vec4<f32>,
 };
 @group(0) @binding(0) var sceneTex  : texture_2d<f32>;
 @group(0) @binding(1) var bloomTex  : texture_2d<f32>;
@@ -534,7 +538,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   c = c + bloomSample * bloomAmt * bloomMask * exposure;
 
   // Filmic tonemap (shared leaf) + colour grade. White point scales the knee.
-  c = acesTonemap(c / max(whitePoint, 1e-3));
+  // ACES TONE CURVE knobs (aces.xyzw = a,b,c,d; tuneFx.z = e). Defaults reproduce
+  // the shipped Narkowicz coefficients; the JS uploader always packs them.
+  c = acesTonemap(c / max(whitePoint, 1e-3), U.aces.x, U.aces.y, U.aces.z, U.aces.w, U.tuneFx.z);
   c = colourGrade(c);
 
   // Lens flare: anamorphic streak + ghost circles (GLX js/glx.js:1934).
@@ -828,7 +834,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     BLOOM_UP_UNIFORM_BYTES: 16,     // BloomUpU
     SSAO_UNIFORM_BYTES: 176,        // SsaoU  (2×mat4 128 + 3×vec4 48)
     GODRAY_UNIFORM_BYTES: 32,       // GodrayU (2×vec4)
-    COMPOSITE_UNIFORM_BYTES: 144,   // CompositeU (9×vec4) — +imgFx/tuneFx controls
+    COMPOSITE_UNIFORM_BYTES: 160,   // CompositeU (10×vec4) — +imgFx/tuneFx + aces curve
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
     SSR_UNIFORM_BYTES: 192,         // SsrU  (2×mat4 128 + 4×vec4 64)
     // chain description
