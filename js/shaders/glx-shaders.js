@@ -94,6 +94,7 @@ uniform float uBounceK;     // per-lamp bounce-fill strength (was literal 0.04)
 uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
 uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)
 uniform float uGlowAmp;     // emissive HDR glow push (was literal 2.3)
+uniform float uBloomBoost;  // extra HDR push per unit of OVER-WHITE albedo (neon/lens tag)
 uniform float uPcssPen;     // PCSS penumbra growth rate (was literal 80.0)
 uniform float uKeyMul;      // direct sun/key-light intensity multiplier (default 1)
 uniform float uTime;        // seconds (drives cloud-shadow drift)
@@ -107,13 +108,21 @@ uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distanc
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
-uniform float uShadowRange; // sun shadow box half-size (m, def 64) — drives the receiver-distance shadow fade
+uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
 uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
 // Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
 // map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor.
 uniform highp sampler2DShadow uCarShadowMap;
 uniform mat4 uCarLightVP;
 uniform float uCarShadowOn;
+// Nearest-FLOODLIGHT spot shadow (night, desktop): a 512² depth map rendered
+// per frame from the single nearest lamp to the camera (perspective VP down its
+// beam). Only the light-loop slot uLampShadowIdx pays the 4-tap PCF — every
+// other lamp skips the branch, so the whole feature costs one lamp's shadow.
+uniform highp sampler2DShadow uLampShadowMap;
+uniform mat4 uLampShadowVP;
+uniform float uLampShadowOn;
+uniform int uLampShadowIdx;
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -419,8 +428,9 @@ float sampleShadow(vec3 wpos) {
   // a time while driving — the visible shadow pop/jump at racing speed). The box
   // is guaranteed to cover 0.875·range from the anchor (snap slack = range/8),
   // so completing the fade at 0.84·range retains shadows to ~74 m ahead of the
-  // camera at the default 64 m box — vs 46 m when this faded from the eye, which
-  // had to absorb the chase-cam offset AND the snap slack in one worst case.
+  // camera at a 64 m box (the shipped default is 80 m, which reaches further
+  // still) — vs 46 m when this faded from the eye, which had to absorb the
+  // chase-cam offset AND the snap slack in one worst case.
   // (Camera-height-independent too: fading by eye distance erased every shadow
   // from high/aerial cameras, where vDist ≥ altitude for the whole ground.)
   float aDist = distance(wpos, uShadowCtr);
@@ -447,10 +457,10 @@ float sampleShadow(vec3 wpos) {
   // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
   // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
   // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
-  // casters (lamp posts, kerbs) out to lit. Scale the kernel by 64/box (clamped to
+  // casters (lamp posts, kerbs) out to lit. Scale the kernel by 80/box (clamped to
   // 1 so the crisp look at/below the default box is unchanged) to hold the world
-  // penumbra ~constant as the box grows.
-  float boxK = min(1.0, 64.0 / uShadowRange);
+  // penumbra ~constant as the box grows. Anchor tracks the shadowRange def.
+  float boxK = min(1.0, 80.0 / uShadowRange);
   // Distance LOD: full 8-tap Poisson + PCSS-lite blocker search near the camera
   // (crisp tyre/kerb contact shadows), a cheap 4-tap disk on distant ground where
   // the shadow is small on screen. Halves shadow bandwidth over most of the frame.
@@ -771,9 +781,33 @@ void main() {
     // and ground-mist tints below - everything here is already computed.
     lampFog += uLightCol[i] * (att * mix(0.35, 1.0, beam));
     float NoLl = max(dot(N, Ld), 0.0);
+    // Per-lamp SHADOW for the one mapped floodlight: cars/walls between this
+    // surface and the lamp block its pool — the radial shadow swinging around
+    // a car as it passes under a mast is the marquee night cue the sun map
+    // can't provide (no per-light shadows elsewhere; the cone shapes those).
+    // Direct terms only (diffuse pool + GGX/clearcoat specular below): the
+    // bounce fill and fog in-scatter stay unshadowed — they are indirect.
+    float lampSh = 1.0;
+    if (uLampShadowOn > 0.5 && i == uLampShadowIdx) {
+      vec4 lpc = uLampShadowVP * vec4(vWorldPos, 1.0);
+      if (lpc.w > 0.0) {
+        vec3 lps = lpc.xyz / lpc.w * 0.5 + 0.5;
+        if (lps.x > 0.002 && lps.x < 0.998 && lps.y > 0.002 && lps.y < 0.998 && lps.z < 1.0) {
+          // Perspective depth is nonlinear (most precision at the lens), so the
+          // receiver — the road, near the far plane — needs a slope-boosted
+          // constant bias against acne rather than the sun map's texel-scaled one.
+          float lpz = lps.z - (0.0012 + 0.004 * (1.0 - NoLl));
+          float lpt = 1.5 / 512.0;
+          lampSh = ( texture(uLampShadowMap, vec3(lps.xy + vec2(-lpt, -lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2( lpt, -lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2(-lpt,  lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2( lpt,  lpt), lpz)) ) * 0.25;
+        }
+      }
+    }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * uLightCol[i] * (att * spotD) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
+    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
@@ -788,7 +822,7 @@ void main() {
     float Dl = D_GGX(NoHl, a);
     float Vl = V_SmithGGX(NoV, NoLl, a);
     vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-    vec3 radianceS = uLightCol[i] * (att * spotS);
+    vec3 radianceS = uLightCol[i] * (att * spotS * lampSh);
     vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
     color += lspec / (1.0 + lspec);
     // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
@@ -1009,7 +1043,16 @@ void main() {
     // instead of sitting as flat bright paint.
     // HDR push kept moderate (was 3.2): windows/heads GLOW, they don't glare —
     // the night energy budget lives or dies on this multiplier.
-    color += albedo * glow * uGlowAmp;
+    // PER-MATERIAL bloom weight: albedos authored ABOVE white (the neon crown
+    // bands at ~2.5, neon-tinted panes, the LENS_NIGHT lamp albedos at
+    // 1.06-1.40 — see tracks.js) are the scenery's "this surface IS a light
+    // source" tag, while generic emissive (lit concrete, night road/terrain
+    // glow, warm office panes) sits at or under 1.0. Scaling an extra push by
+    // how far past white the albedo is lets neon/signage/lenses bloom harder
+    // WITHOUT raising uGlowAmp or lowering the global bloom threshold (both of
+    // which drag every emissive surface — and the fog — up with them).
+    float hdrTag = max(bright - 1.0, 0.0);
+    color += albedo * glow * uGlowAmp * (1.0 + hdrTag * uBloomBoost);
   }
 
   // Height-based fog: density falls off exponentially with altitude above eye level.
@@ -1790,6 +1833,13 @@ uniform float uMist;       // haze density gate for in-scatter (0 = none)
 uniform float uLampStr;    // night lamp-volumetric strength (0 = off, e.g. day)
 uniform float uHgAniso;    // god-ray forward-scatter anisotropy g (def 0.60)
 uniform float uHgFloor;    // god-ray isotropic scatter floor (def 0.020)
+// Nearest-floodlight spot shadow map (same 512² map the lit pass PCF-tests):
+// beam steps that the lamp can't see stay dark, so the volumetric shaft is
+// carved by cars/walls instead of glowing straight through them. uLampShadowIdx
+// is the lamp's slot in THIS pass's nearest-N selection (-1 = no mapped lamp).
+uniform sampler2DShadow uLampShadowMap;
+uniform mat4 uLampShadowVP;
+uniform int uLampShadowIdx;
 out vec4 outColor;
 vec3 worldPos(vec2 uv, float d) {
   vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
@@ -1872,7 +1922,20 @@ void main() {
         float spot = smoothstep(uLightCone[li].y, uLightCone[li].x, cd);
         float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
         float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
-        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14)) * uLightVolW[li] * hLamp * trans;
+        // Shadowed shaft: test this march step against the mapped lamp's depth
+        // map — an occluded step contributes no in-scatter, so the beam shows
+        // the silhouette of whatever blocks the lamp (one tap × 16 steps,
+        // and only for the single mapped lamp).
+        float lampLit = 1.0;
+        if (li == uLampShadowIdx) {
+          vec4 lq = uLampShadowVP * vec4(p, 1.0);
+          if (lq.w > 0.0) {
+            vec3 lqs = lq.xyz / lq.w * 0.5 + 0.5;
+            if (lqs.x > 0.002 && lqs.x < 0.998 && lqs.y > 0.002 && lqs.y < 0.998 && lqs.z < 1.0)
+              lampLit = texture(uLampShadowMap, vec3(lqs.xy, lqs.z - 0.004));
+          }
+        }
+        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14) * lampLit) * uLightVolW[li] * hLamp * trans;
       }
     }
   }
@@ -1898,6 +1961,7 @@ in vec2 vUV;
 uniform sampler2D uScene;
 uniform sampler2D uBloom;
 uniform sampler2D uSSAO;     // ambient occlusion (1 = unoccluded)
+uniform vec2 uAOTexel;       // 1/ssaoW, 1/ssaoH (half-res grid) — 0 when AO is off
 uniform sampler2D uGodray;   // additive volumetric sun shafts
 uniform float uBloomAmt;
 uniform float uBloomKnee;    // how much bloom is suppressed over bright pixels (def 0.5)
@@ -1916,6 +1980,11 @@ uniform float uSaturation;   // global saturation (1 = unchanged)
 uniform float uTint;         // warm(+)/cool(-) white-balance shift, -1..1 (default 0)
 uniform float uVignette;     // corner-darkening floor: 1 = none, lower = stronger (default 0.80)
 uniform float uVigSoft;      // vignette inner-edge radius / reach (default 0.35)
+uniform vec4 uTone0;         // blacks, shadows, midtones, highlights (stops)
+uniform vec4 uTone1;         // whites (stops), toe, shoulder, padding
+uniform vec3 uLift;          // per-channel lift (0 = neutral)
+uniform vec3 uGamma;         // per-channel gamma (1 = neutral)
+uniform vec3 uGain;          // per-channel gain (1 = neutral)
 uniform sampler2D uDepth;    // scene depth (for wet-road screen-space reflection)
 uniform mat4 uInvProj;       // clip → view (reconstruct view position from depth)
 uniform mat4 uProj;          // view → clip  (project the marched ray to screen)
@@ -1966,6 +2035,45 @@ vec3 caScene(vec2 uv) {
   vec2 d = uv - 0.5;
   float a = uChromAb * 0.004 * dot(d, d);
   return vec3(texture(uScene, uv + d * a).r, texture(uScene, uv).g, texture(uScene, uv - d * a).b);
+}
+
+// Five overlapping exposure masks in log2 stops around 18% middle grey.
+void gradeZoneWeights(float y, out vec4 w0, out float wWhite) {
+  float z = log2(max(y, 1e-6) / 0.18);
+  w0.x = 1.0 - smoothstep(-5.0, -2.5, z);
+  w0.y = smoothstep(-5.0, -2.5, z) * (1.0 - smoothstep(-1.5, 0.0, z));
+  w0.z = smoothstep(-2.5, -0.5, z) * (1.0 - smoothstep(0.5, 2.5, z));
+  w0.w = smoothstep(0.0, 1.5, z) * (1.0 - smoothstep(3.0, 5.0, z));
+  wWhite = smoothstep(2.5, 5.0, z);
+}
+
+// Monotonic power curves pivoted at middle grey. Toe affects only luminance
+// below the pivot; shoulder affects only luminance above it. RGB is rescaled by
+// the luminance ratio, preserving hue and making zero on both controls identity.
+vec3 applyToeShoulder(vec3 c, float toe, float shoulder) {
+  c = max(c, vec3(0.0));
+  float oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6);
+  float exponent = oldY < 0.18
+    ? exp2(clamp(toe, -1.0, 1.0))
+    : exp2(clamp(-shoulder, -1.0, 1.0));
+  float newY = 0.18 * pow(oldY / 0.18, exponent);
+  return c * (newY / max(oldY, 1e-6));
+}
+
+vec3 applyHdrGrade(vec3 c) {
+  vec3 lift = uLift;
+  vec3 gain = max(uGain, vec3(1e-3));
+  vec3 invGamma = 1.0 / max(uGamma, vec3(1e-3));
+  c = lift + (gain - lift) * pow(max(c, vec3(0.0)), invGamma);
+
+  float y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 1e-6);
+  vec4 w0; float wWhite;
+  gradeZoneWeights(y, w0, wWhite);
+  float stops = dot(w0, uTone0) + wWhite * uTone1.x;
+  c *= exp2(clamp(stops, -4.0, 4.0));
+
+  c = applyToeShoulder(c, uTone1.y, uTone1.z);
+  return max(c, vec3(0.0));
 }
 
 // ACES fitted filmic tone-map (Krzysztof Narkowicz's approximation — the
@@ -2029,13 +2137,20 @@ void main() {
   // player's tailpipe screen position — refracts (UV-warps) the scene fetch
   // inside a soft elliptical region. Gaussian falloff keeps the warp local;
   // the travelling phase (uHazeTime) makes it boil upward frame to frame.
+  // Skip the warp on car-paint pixels (SSR alpha tag): from chase cam the
+  // plume sits on the rear body, and warping those UVs made the car look
+  // wavy whenever throttle was held (exhaustPop > 0). Air/road behind still
+  // shimmers.
   vec2 hazeUV = vUV;
   if (uHazeStr > 0.002) {
-    vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.045)) * vec2(2.4, 1.1);   // tall plume, centred above the pipe
-    float hm = exp(-dot(hd, hd) * 55.0) * uHazeStr;
-    if (hm > 0.003) {
-      float hp = vUV.y * 90.0 - uHazeTime * 11.0;
-      hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+    float carHere = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
+    if (carHere < 0.25) {
+      vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.08)) * vec2(3.2, 1.0);   // tall plume, centred above the pipe
+      float hm = exp(-dot(hd, hd) * 70.0) * uHazeStr;
+      if (hm > 0.003) {
+        float hp = vUV.y * 90.0 - uHazeTime * 11.0;
+        hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+      }
     }
   }
   vec4 scn = texture(uScene, hazeUV);   // one fetch: .rgb colour + .a SSR car tag
@@ -2075,7 +2190,41 @@ void main() {
   // Ambient occlusion: darken creases/contacts before bloom + tonemap so the
   // grounding reads in linear light (under cars, barrier feet, kerbs, building
   // bases). 1.0 = no change, so it's a no-op when SSAO is disabled.
-  c *= texture(uSSAO, vUV).r;
+  // The AO buffer is HALF resolution — a plain bilinear fetch averages AO
+  // straight across depth discontinuities, so the dark crease AO hugging a near
+  // surface bleeds onto the far side of every silhouette (a soft grey halo
+  // tracing the car roofline / wing tips against sky and road). Depth-aware
+  // 4-tap bilateral upsample instead: the four half-res texels around this
+  // pixel keep their bilinear weights, re-weighted by how close each tap's
+  // depth is to THIS pixel's full-res depth — taps that belong to the other
+  // side of an edge lose their vote, so AO stays pinned to its own surface.
+  // uAOTexel is zeroed when AO is off (1×1 white bound): plain fetch, no cost.
+  float aoV = 1.0;
+  if (uAOTexel.x > 0.0) {
+    float aoDc = texture(uDepth, vUV).r;
+    vec2 aoG = vUV / uAOTexel - 0.5;
+    vec2 aoF = fract(aoG);
+    vec2 aoB = (floor(aoG) + 0.5) * uAOTexel;
+    float aoSum = 0.0, aoW = 0.0;
+    for (int ai = 0; ai < 4; ai++) {
+      vec2 auv = aoB + vec2(ai == 1 || ai == 3 ? uAOTexel.x : 0.0,
+                            ai >= 2 ? uAOTexel.y : 0.0);
+      float bw = (ai == 0 ? (1.0 - aoF.x) * (1.0 - aoF.y)
+                : ai == 1 ? aoF.x * (1.0 - aoF.y)
+                : ai == 2 ? (1.0 - aoF.x) * aoF.y
+                          : aoF.x * aoF.y) + 1e-4;
+      // Depth similarity as a ratio weight: silhouettes are big steps in window
+      // depth, same-surface slope is tiny, so no linearisation is needed — the
+      // scale cancels in the normalisation below.
+      float w = bw / (1e-4 + abs(aoDc - texture(uDepth, auv).r) * 30.0);
+      aoSum += texture(uSSAO, auv).r * w;
+      aoW += w;
+    }
+    aoV = aoSum / aoW;
+  } else {
+    aoV = texture(uSSAO, vUV).r;
+  }
+  c *= aoV;
 
   // Volumetric sun shafts: additive in-scattered sunlight (0 when disabled).
   c += texture(uGodray, vUV).rgb;
@@ -2194,6 +2343,14 @@ void main() {
       // the reflected sky bands ran upside-down vs the road's own paint mirror.
       vec3 skyRefl = mix(uReflSkyHi, uReflSkyLo, clamp(R.y, 0.0, 1.0));
       vec3 reflCol = found ? hitCol : skyRefl;
+      // SPECULAR OCCLUSION: the diffuse AO above never touched the reflection
+      // terms, so a mirrored wet road / glossy deck inside an occluded crease
+      // (under the car, wheel wells, barrier feet) still GLOWED with reflected
+      // scene/sky — bright streaks exactly where the surface should be buried.
+      // Lagarde-style ao² (specular visibility shrinks faster than diffuse)
+      // on the reflected colour keeps open road untouched (ao ≈ 1) while
+      // creases keep their darkness through the mirror substitution.
+      reflCol *= aoV * aoV;
       // Soft-clip the reflected colour BEFORE it's substituted in: a bright HDR
       // hit (neon signage, a lit window, the sun disc, a floodlight lens) was
       // injected raw, so a handful of very bright reflected pixels could blow
@@ -2302,6 +2459,10 @@ void main() {
       c += shaft * uSunShaft * radial * radial * 0.60;
     }
   }
+
+  // Professional HDR grade runs after all linear-light bloom/shaft composition
+  // and before the display-referred ACES curve.
+  c = applyHdrGrade(c);
 
   // Filmic tone-map (ACES) + colour grading. WHITE POINT scales the input knee:
   // lower clips highlights sooner (punchy), higher preserves highlight detail.

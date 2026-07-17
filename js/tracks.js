@@ -4,6 +4,7 @@
    Depends on globals TrackDefs + CircuitPaths (data) and GLX (mesh upload). */
 const Tracks = (function () {
   "use strict";
+  let keepGeometry = false;
 
   const SCALE = 1.45;            // scale authored lengths for arcade racing
   const WORLD_UP = [0, 1, 0];
@@ -180,24 +181,45 @@ const Tracks = (function () {
   // GPU. This is the heavy one — only needed to actually render/drive a circuit.
   function build(def, opts) {
     const track = buildCenterline(def);
+    // One profile drives terrain generation, floor blending, and scenery
+    // grounding. Keeping it on the track also makes diagnostics deterministic.
+    track.surface = TrackSurface.profile(def, track);
     // Session darkness drives whether buildings/skyline light their windows.
     // Falls back to the track's default (def.night) when not specified.
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
     if (typeof GLX !== "undefined" && GLX.createMesh) {
-      track.meshes.floor = GLX.createMesh(buildFloor(track));
-      track.meshes.road = GLX.createMesh(buildRoad(track));
+      track.geometryDiagnostics = [];
+      const safe = (name, geo) => {
+        const result = TrackModels.validateGeometry(geo);
+        track.geometryDiagnostics.push(Object.assign({ name }, result));
+        if (result.ok) return geo;
+        console.warn(`[geometry] ${def.id}/${name} skipped: ${result.reason}`);
+        return { pos: [], nrm: [], col: [], idx: [], mat: [] };
+      };
+      track.meshes.floor = GLX.createMesh(safe("floor", buildFloor(track)));
+      const roadGeo = safe("road", buildRoad(track));
+      track.roadGeo = roadGeo;
+      track.meshes.road = GLX.createMesh(roadGeo);
       const terrainGeo = buildTerrain(track);
-      track.terrainGeo = terrainGeo;   // raw geometry kept for the groundY() debug probe
-      track.meshes.terrain = GLX.createMesh(terrainGeo);
+      const terrainSafe = safe("terrain", terrainGeo);
+      track.terrainGeo = terrainSafe;   // validated raw geometry kept for the groundY() debug probe
+      track.meshes.terrain = GLX.createMesh(terrainSafe);
       const _props = buildProps(track);
       // Chunked + frustum-culled: the city/props mesh is huge (up to ~5 M verts),
       // and most of it is off-screen each frame — drawing only visible XZ cells
       // (and only shadow-casting cells inside the light frustum) is the big win.
-      track.meshes.props = GLX.createChunkedMesh ? GLX.createChunkedMesh(_props.out, 72) : GLX.createMesh(_props.out);
-      track.meshes.glass = GLX.createMesh(_props.glass);
-      track.meshes.water = GLX.createMesh(_props.water);
-      track.meshes.gate = GLX.createMesh(buildGate(track));
-      track.meshes.startline = GLX.createMesh(buildStartLine(track));
+      const propsGeo = safe("props", _props.out);
+      track.propsGeo = propsGeo;
+      propsGeo._keepPositions = keepGeometry;
+      track.meshes.props = GLX.createChunkedMesh ? GLX.createChunkedMesh(propsGeo, 72) : GLX.createMesh(propsGeo);
+      const glassGeo = safe("glass", _props.glass);
+      const waterGeo = safe("water", _props.water);
+      track.glassGeo = glassGeo;
+      track.waterGeo = waterGeo;
+      track.meshes.glass = GLX.createMesh(glassGeo);
+      track.meshes.water = GLX.createMesh(waterGeo);
+      track.meshes.gate = GLX.createMesh(safe("gate", buildGate(track)));
+      track.meshes.startline = GLX.createMesh(safe("startline", buildStartLine(track)));
     }
     return track;
   }
@@ -709,12 +731,13 @@ const Tracks = (function () {
         }
       }
     }
-    // Five lateral verts per side: a gravel/runoff verge at the road edge graded
+    // Adaptive lateral verts per side: a gravel/runoff verge at the road edge graded
     // out to grass. The old bright concrete apron has been removed — it read as a
     // glaring light slab flanking the track — so the verge is gravel, not tarmac.
     // Street circuits push the ribbon further from the road edge so barriers
     // fully hide it and it cannot visually bleed onto the road surface.
-    const NTV = 5;
+    const surface = track.surface || TrackSurface.profile(track.def, track);
+    const NTV = surface.rails.length;
     const isStreet = !!track.def.street;
     // flatTerrain: a WIDE, dead-flat grass ribbon (a man-made island like Île
     // Notre-Dame sits ~level with the water, not sloping into it). Spreads the 5
@@ -728,15 +751,9 @@ const Tracks = (function () {
     // — the over-track clip skips same-direction neighbours, so it can't carve
     // those, and green pokes over the far straight. Keeping it narrow avoids ever
     // reaching a parallel road. Open/flat circuits keep the wide 120 m ribbon.
-    const streetOuter = track.def.terrainOuter || 28;
-    const outerW = isStreet ? streetOuter : (track.def.terrainOuter || 120);
-    const cap = (v) => Math.min(v, outerW);
-    const latsL = isStreet ? [-5.0, -cap(10), -cap(16), -cap(22), -outerW]
-                : flat ? [-2.2, -cap(outerW * 0.3), -cap(outerW * 0.55), -cap(outerW * 0.8), -outerW]
-                : [-2.2, -cap(7.0), -cap(14), -cap(48), -outerW];
-    const latsR = isStreet ? [ 5.0,  cap(10),  cap(16),  cap(22),  outerW]
-                : flat ? [ 2.2,  cap(outerW * 0.3),  cap(outerW * 0.55),  cap(outerW * 0.8),  outerW]
-                : [ 2.2,  cap(7.0),  cap(14),  cap(48),  outerW];
+    const outerW = surface.outerW;
+    const latsL = surface.rails.map((d) => -d);
+    const latsR = surface.rails.slice();
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
       const base = pos.length / 3;
@@ -750,37 +767,8 @@ const Tracks = (function () {
         const bankSide = bp ? bp.bsign[k] : 0;
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
-          // Sag: push terrain below road level. Inner vertex gets extra sag on
-          // elevation-change sections so the terrain face doesn't visually clip
-          // the road surface when the road climbs steeply.
-          const localGrade = v === 0 ? Math.abs(py[k] - py[(k + 1) % n]) : 0;
-          const innerExtra = v === 0 ? Math.min(localGrade * 2, 1.2) : 0;
-          // flat island / street: tiny constant sag, no lateral fall-off, so the
-          // ground stays a level shelf just below road grade out to outerW. Real
-          // city streets are level with the roadway (pavement, not a graded verge),
-          // so a steep sag would sink the ground away under the close-set buildings
-          // and float them. Open circuits keep the graded verge → distant sag.
-          const levelShelf = flat || isStreet;
-          const sag = levelShelf ? -0.12 - Math.abs(lats[v]) * 0.004
-                    : -0.3 - Math.abs(lats[v]) * 0.018 - innerExtra;
-          // inner vert tracks road height; outer verts ease down to the lap's
-          // low point (or the flattened bridge ground, whichever is lower). The
-          // quadratic ease keeps the run-off apron near track grade and pushes
-          // the drop out to the distant grass, so a raised corner reads as an
-          // embankment rather than a high plateau hanging over the rest of the lap.
-          // Cap the lateral drop so elevated sections look like natural slopes
-          // rather than cliff walls (without the cap, a 15 m elevation above pyMin
-          // produces a 12.5 % lateral grade — visually a near-vertical wall).
-          const t = v / (NTV - 1);
-          const ease = t * t;
-          const DROP_CAP = 10;
-          const rawFloor = Math.min(gY[k], pyMin);
-          const floorY = Math.max(py[k] - DROP_CAP, rawFloor);
-          // flat island / street keep every vert at the local road grade (no
-          // quadratic drop-away) so the ground follows the road up a climb (Baku
-          // castle, Monaco hills) and props sit on it; open circuits ease the
-          // outer verts down to the lap's low baseline for embankment relief.
-          const yBase = levelShelf ? py[k] : py[k] * (1 - ease) + floorY * ease;
+          const t = NTV <= 1 ? 1 : v / (NTV - 1);
+          const yBase = surface.heightAt(k, Math.abs(lats[v]));
           // match the road's banked outer edge: rise along up by the same lift,
           // tapering across the ribbon (full at inner edge, 0 at outer) so the
           // far ground stays flat. frac uses the same formula as buildRoad.
@@ -792,7 +780,7 @@ const Tracks = (function () {
           }
           const wx = px[k] + r[0] * o + u[0] * by;
           const wz = pz[k] + r[2] * o + u[2] * by;
-          let wy = yBase + sag + u[1] * by;
+          let wy = yBase + u[1] * by;
           // Clip terrain that rises OVER the track. The near verge verts sit at
           // ~road height, so on the INSIDE of a corner (and at crossings / fold-
           // backs / elevation changes) they can hang over the tarmac of a nearby
@@ -869,11 +857,29 @@ const Tracks = (function () {
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
         }
       }
+      const faceSafe = (ia, ib, ic) => {
+        const ax = pos[ia * 3], ay = pos[ia * 3 + 1], az = pos[ia * 3 + 2];
+        const bx = pos[ib * 3], by = pos[ib * 3 + 1], bz = pos[ib * 3 + 2];
+        const cx = pos[ic * 3], cy = pos[ic * 3 + 1], cz = pos[ic * 3 + 2];
+        const x = (ax + bx + cx) / 3, y = (ay + by + cy) / 3, z = (az + bz + cz) / 3;
+        const cn = grid.query(x, z, grid.maxHw + 1, _cand, false);
+        for (let qi = 0; qi < cn; qi++) {
+          const j = _cand[qi], ex = x - px[j], ez = z - pz[j], lim = hw[j] - 0.15;
+          if (ex * ex + ez * ez < lim * lim && y > py[j] + 0.12) return false;
+        }
+        return true;
+      };
+      const tri = (a, b, c) => { if (faceSafe(a, b, c)) idxArr.push(a, b, c); };
       for (let k = 0; k < n; k++) {
         const a = base + k * NTV, b = base + ((k + 1) % n) * NTV;
         for (let v = 0; v < NTV - 1; v++) {
-          if (flip) idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
-          else idxArr.push(a + v, b + v, a + v + 1, a + v + 1, b + v, b + v + 1);
+          if (flip) {
+            tri(a + v, a + v + 1, b + v);
+            tri(a + v + 1, b + v + 1, b + v);
+          } else {
+            tri(a + v, b + v, a + v + 1);
+            tri(a + v + 1, b + v, b + v + 1);
+          }
         }
       }
     }
@@ -909,7 +915,7 @@ const Tracks = (function () {
     const margin = Math.max(1400, (maxx - minx), (maxz - minz));
     const x0 = minx - margin, x1 = maxx + margin;
     const z0 = minz - margin, z1 = maxz + margin;
-    const y = pyMin - 1.0;   // well under the lowest terrain so nothing z-fights even at far draw distance (was 0.6)
+    const y = track.surface ? track.surface.floorY : pyMin - 1.0;
     const pal = track.def.palette;
     // Match the terrain ribbon's outer colour (grass) so the seam is invisible on
     // open circuits; on street circuits grass is the neutral urban grey, which
@@ -934,29 +940,35 @@ const Tracks = (function () {
   // correctly on a REVERSED lap (optionally with the start rotated to fraction
   // `phi`). Transforms: s-fraction s→phi-s, node index k→round(phi*n)-k, side
   // ±1→∓1. Helpers are grouped by their leading-argument signature.
-  function reverseSceneryApi(api, n, phi) {
-    const o = Math.round((phi || 0) * n);
-    const RK = (k) => ((((o - Math.round(k)) % n) + n) % n);   // reversed+rotated node
-    const RS = (s) => ((((phi || 0) - s) % 1) + 1) % 1;        // reversed+rotated fraction
+  function transformSceneryApi(api, def, n) {
+    const RK = (k) => TrackSpace.sceneryNode(def, k, n);
+    const RS = (s) => TrackSpace.sceneryFrac(def, s);
+    const SIDE = (side) => def.reverse ? -side : side;
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
     for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
                         "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron"]) {
-      const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), -side, ...r);
+      const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
     }
     // (s, side, ...rest): single fraction + side
     for (const name of ["grandstand"]) {
-      const f = api[name]; if (f) w[name] = (s, side, ...r) => f(RS(s), -side, ...r);
+      const f = api[name]; if (f) w[name] = (s, side, ...r) => f(RS(s), SIDE(side), ...r);
     }
     // (s0, s1, side, ...rest): fraction RANGE + side — swap ends and mirror both
     for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
                         "forestEdge", "cityFront", "recordBarrier", "concreteCanyon",
                         "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow"]) {
-      const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => f(RS(s1), RS(s0), -side, ...r);
+      const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => {
+        const range = TrackSpace.range(def, s0, s1, "source");
+        return f(range.s0, range.s1, SIDE(side), ...r);
+      };
     }
     // (s0, s1, stepM, fn): fraction range, no side
-    if (api.along) w.along = (s0, s1, ...r) => api.along(RS(s1), RS(s0), ...r);
+    if (api.along) w.along = (s0, s1, ...r) => {
+      const range = TrackSpace.range(def, s0, s1, "source");
+      return api.along(range.s0, range.s1, ...r);
+    };
     // (s, …): single fraction, no side (gantry / underpass portal)
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
     if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);
@@ -1061,6 +1073,11 @@ const Tracks = (function () {
     // ground floor) sit below road level and are exempt via the topY check.
     // ===================================================================
     let _culled = 0;
+    const diagnostics = track.modelDiagnostics = {
+      emitted: [], suppressed: [], invalid: [], unsafe: [],
+    };
+    const finiteVec = (v, len, positive) =>
+      Array.isArray(v) && v.length === len && v.every((x) => Number.isFinite(x) && (!positive || x > 0));
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _hitCand = new Array(n), _trkCand = new Array(n);   // reusable query scratch
     // True if a footprint covers the tarmac at any node it rises above. A
@@ -1123,13 +1140,38 @@ const Tracks = (function () {
     // Guarded wrappers shadow the raw emitter names for the whole of buildProps
     // (helpers + the api passed to def.scenery). Each returns false when dropped
     // so a caller can also skip its barrier record (e.g. place/building).
-    const addBox = (o, c, sz, col, basis) => { if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addBox(o, c, sz, col, basis); return true; };
-    const addCyl = (o, c, rad, h, col, seg, basis) => { if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCyl(o, c, rad, h, col, seg, basis); return true; };
-    const addCone = (o, c, rad, h, col, seg, basis) => { if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCone(o, c, rad, h, col, seg, basis); return true; };
-    const addFrustum = (o, c, rB, rT, h, col, seg, basis) => { if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; } RAW.addFrustum(o, c, rB, rT, h, col, seg, basis); return true; };
-    const addPrism = (o, c, sz, col, basis) => { if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPrism(o, c, sz, col, basis); return true; };
-    const addPyramid = (o, c, sz, col, basis) => { if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPyramid(o, c, sz, col, basis); return true; };
-    const addMountain = (o, c, baseR, h, opts) => { if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; } RAW.addMountain(o, c, baseR, h, opts); return true; };
+    const badPrimitive = (kind, c, size) => {
+      diagnostics.invalid.push({ id: kind, reason: "non-finite primitive dimensions", center: c, size });
+      return false;
+    };
+    const addBox = (o, c, sz, col, basis) => {
+      if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("box", c, sz);
+      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addBox(o, c, sz, col, basis); return true;
+    };
+    const addCyl = (o, c, rad, h, col, seg, basis) => {
+      if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cylinder", c, [rad, h]);
+      if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCyl(o, c, rad, h, col, seg, basis); return true;
+    };
+    const addCone = (o, c, rad, h, col, seg, basis) => {
+      if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cone", c, [rad, h]);
+      if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCone(o, c, rad, h, col, seg, basis); return true;
+    };
+    const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
+      if (!finiteVec(c, 3, false) || !Number.isFinite(rB) || rB <= 0 || !Number.isFinite(rT) || rT <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("frustum", c, [rB, rT, h]);
+      if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; } RAW.addFrustum(o, c, rB, rT, h, col, seg, basis); return true;
+    };
+    const addPrism = (o, c, sz, col, basis) => {
+      if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("prism", c, sz);
+      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPrism(o, c, sz, col, basis); return true;
+    };
+    const addPyramid = (o, c, sz, col, basis) => {
+      if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("pyramid", c, sz);
+      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPyramid(o, c, sz, col, basis); return true;
+    };
+    const addMountain = (o, c, baseR, h, opts) => {
+      if (!finiteVec(c, 3, false) || !Number.isFinite(baseR) || baseR <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("mountain", c, [baseR, h]);
+      if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; } RAW.addMountain(o, c, baseR, h, opts); return true;
+    };
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
     // barrier (wall/guardrail/tyre wall/grandstand) is actually placed, so the car
@@ -1168,36 +1210,9 @@ const Tracks = (function () {
     // ones ease (quadratically) down to the lap's low point. Roadside props anchor
     // to THIS instead of the road height, so on an elevated or embanked section
     // they sit on the sloping ground rather than floating at the old flat grade.
-    const isStreetT = !!track.def.street;
-    const flatT = !!track.def.flatTerrain;
-    const outerWT = track.def.terrainOuter || 120;
-    const gLats = isStreetT ? [5, 10, 20, 55, 120] : [2.2, 7, 14, 48, 120];
-    const gSag = isStreetT ? -1.5 : -0.3;
+    const surface = track.surface || TrackSurface.profile(track.def, track);
     const groundYAt = (k, dist) => {
-      const base = py[k];
-      if (dist <= 0) return base;
-      // flat island / street: WITHIN the ribbon (dist <= outerWT) sit on the level
-      // shelf tracking the local road grade (matches buildTerrain's levelShelf).
-      // BEYOND the ribbon there is no ribbon geometry — only the flat buildFloor
-      // slab at pyMin-0.6 — so a prop out there (a far skyline building, the city
-      // gen's back row) must anchor to the SLAB, not road grade, or it floats by
-      // (roadY - slabY). This is the fix for the airborne-city bug that the narrow
-      // street ribbon exposed. Blend over the last few metres so the seam is smooth.
-      if (flatT || isStreetT) {
-        const shelf = base - 0.12 - Math.min(dist, outerWT) * 0.004;
-        const slab = pyMin - 0.6;
-        if (dist <= outerWT) return shelf;
-        const bt = Math.min(1, (dist - outerWT) / 20);   // ease shelf→slab over 20 m
-        return shelf * (1 - bt) + slab * bt;
-      }
-      let prevD = 0, prevY = base + gSag;
-      for (let v = 0; v < 5; v++) {
-        const e = (v / 4) * (v / 4);
-        const y = base * (1 - e) + pyMin * e + (gSag - gLats[v] * 0.018);
-        if (dist <= gLats[v]) return prevY + (y - prevY) * ((dist - prevD) / (gLats[v] - prevD || 1));
-        prevD = gLats[v]; prevY = y;
-      }
-      return prevY;   // beyond the last vert: the lap's low baseline
+      return surface.heightAt(k, dist);
     };
     // Universal ground floor: one big flat slab at the lap's low point, sized to
     // reach well past the farthest scenery. The terrain ribbon only extends ~120 m
@@ -1241,13 +1256,101 @@ const Tracks = (function () {
       }
       return false;
     };
+    const models = TrackModels.create({
+      out, water: waterBuf, diagnostics,
+      preflight: (bounds) => !rejBox(bounds.center, bounds.size, bounds.basis),
+      emitBox: (buf, c, size, col, basis) => RAW.addBox(buf, c, size, col, basis),
+      frameAt: (frac) => {
+        const k = Math.round(TrackSpace.wrap01(frac) * n) % n;
+        return {
+          k, c: [px[k], py[k], pz[k]],
+          r: [track.rx[k], track.ry[k], track.rz[k]],
+          u: upOf(track, k),
+          t: [track.tx[k], track.ty[k], track.tz[k]],
+          hw: hw[k],
+        };
+      },
+      supportClear: (frame, spec) => {
+        if (spec.supports === false) return true;
+        const gap = spec.supportGap != null ? spec.supportGap : 1.5;
+        const width = spec.supportWidth != null ? spec.supportWidth : 0.8;
+        const height = Math.max(1, spec.clearance || 5);
+        for (const side of [-1, 1]) {
+          const o = side * (frame.hw + gap + width / 2);
+          const c = [
+            frame.c[0] + frame.r[0] * o + frame.u[0] * height / 2,
+            frame.c[1] + frame.r[1] * o + frame.u[1] * height / 2,
+            frame.c[2] + frame.r[2] * o + frame.u[2] * height / 2,
+          ];
+          if (rejBox(c, [width, height, spec.depth || 1.4], [frame.r, frame.u, frame.t])) return false;
+        }
+        return true;
+      },
+      groundHeight: groundYAt,
+      groundPoint: (k, side, dist, y) => {
+        const i = ((Math.round(k) % n) + n) % n;
+        const r = [track.rx[i], track.ry[i], track.rz[i]];
+        const o = side * (hw[i] + dist);
+        return [px[i] + r[0] * o, y, pz[i] + r[2] * o];
+      },
+    });
+    const modelGroup = (id, bounds, emit, opts) => models.modelGroup(id, bounds, emit, opts);
+    const overheadSpan = (spec) => models.overheadSpan(spec);
+    const waterSurface = (k, side, gap, sz, col, opts) => {
+      opts = opts || {};
+      if (!finiteVec(sz, 3, true)) {
+        diagnostics.invalid.push({ id: opts.id || "water", reason: "invalid water dimensions", size: sz });
+        return false;
+      }
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const o = side * (hw[k] + gap + sz[0] / 2);
+      const center = [px[k] + r[0] * o, pyMin - 0.8 - sz[1] / 2, pz[k] + r[2] * o];
+      if (onTrack(center[0], center[2], sz[0] / 2 + 4)) {
+        diagnostics.suppressed.push({ id: opts.id || "water", required: !!opts.required, reason: "footprint rejected" });
+        return false;
+      }
+      return models.waterSurface({ id: opts.id || `water-${k}`, center, size: sz, color: col, required: opts.required });
+    };
+    const groundPatch = (k, side, gap, sz, col, opts) => {
+      opts = opts || {};
+      if (!finiteVec(sz, 3, true)) {
+        diagnostics.invalid.push({ id: opts.id || "ground-patch", reason: "invalid ground-patch dimensions", size: sz });
+        return false;
+      }
+      const r = [track.rx[k], track.ry[k], track.rz[k]], u = upOf(track, k);
+      const t = [track.tx[k], track.ty[k], track.tz[k]], pieces = Math.max(2, Math.round(opts.samples || 4));
+      const midDist = gap + sz[0] / 2;
+      const mid = [px[k] + r[0] * side * (hw[k] + midDist), groundYAt(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
+      const emitted = modelGroup(opts.id || `ground-patch-${k}`, {
+        center: mid, size: sz, basis: [r, u, t],
+      }, (stage) => {
+        const partW = sz[0] / pieces;
+        for (let i = 0; i < pieces; i++) {
+          const dist = gap + partW * (i + 0.5);
+          const c = [
+            px[k] + r[0] * side * (hw[k] + dist),
+            groundYAt(k, dist) - sz[1] / 2,
+            pz[k] + r[2] * side * (hw[k] + dist),
+          ];
+          RAW.addBox(stage, c, [partW, sz[1], sz[2]], col, [r, u, t]);
+        }
+      }, opts);
+      if (emitted && opts.collision) {
+        const halfFrac = (sz[2] / 2) / track.total;
+        recordBarrier(k / n - halfFrac, k / n + halfFrac, side, gap);
+      }
+      return emitted;
+    };
+    const groundedSegments = (spec) => models.groundedSegments(spec);
     // Tighten the driving boundary along a solid barrier placed from lap-fraction
     // s0→s1 on `side` at clearance `gap` beyond the road edge. Skips nodes where
     // the barrier geometry would be suppressed (a parallel stretch of track), so
     // we never raise a phantom wall the player can't see.
     const recordBarrier = (s0, s1, side, gap) => {
       const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
-      const span = ((k1 - k0) + n) % n;
+      // 0→1 denotes a complete lap. Modulo node conversion maps both endpoints
+      // to zero, so preserve the authored full-range intent before wrapping.
+      const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       const arr = side > 0 ? track.barR : track.barL;
       for (let i = 0; i <= span; i++) {
         const k = (k0 + i) % n;
@@ -1279,6 +1382,22 @@ const Tracks = (function () {
       blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
+    const dressingExcluded = (kind, k, side) => {
+      const rules = def.dressingExclusions;
+      if (!rules || !rules.length) return false;
+      const frac = (((k % n) + n) % n) / n;
+      for (const rule of rules) {
+        const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
+        if (!kinds.includes("all") && !kinds.includes(kind)) continue;
+        if (rule.side != null && side != null && Number(rule.side) !== Number(side)) continue;
+        const s0 = TrackSpace.wrap01(rule.s0 == null ? 0 : rule.s0);
+        const s1 = TrackSpace.wrap01(rule.s1 == null ? 1 : rule.s1);
+        const full = rule.s0 == null || rule.s1 == null || Math.abs(Number(rule.s1) - Number(rule.s0)) >= 1 - 1e-9;
+        const inside = full || (s1 < s0 ? frac >= s0 || frac <= s1 : frac >= s0 && frac <= s1);
+        if (inside) return true;
+      }
+      return false;
+    };
 
     // --- safe-placement helpers (the rules learned from Monaco/Vegas walls) ---
     // prop(): place a roadside object by CLEARANCE. `gap` is how far the box's
@@ -1291,21 +1410,9 @@ const Tracks = (function () {
     // which on elevation-changing circuits floats up as a ceiling or rises as a
     // wall. Skipped if it would overlap any stretch of track.
     const groundPlane = (k, side, gap, sz, col, water) => {
-      const r = [track.rx[k], track.ry[k], track.rz[k]];
-      const o = side * (hw[k] + gap + sz[0] / 2);
-      const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-      if (onTrack(cx, cz, sz[0] / 2 + 4)) {
-        console.warn(`[scenery] groundPlane SUPPRESSED at k=${k} side=${side}: gap=${gap} sz[0]=${sz[0]} (need gap>4)`);
-        return;
-      }
-      // Height. WATER finds its own level: a harbour/lake/sea sits at the lap's
-      // LOW point (pyMin), not the local road grade — otherwise on an elevation-
-      // changing or street circuit (where groundYAt now tracks the road up a climb)
-      // the plane rises with the road and floats above the actual low water basin
-      // (Monaco harbour, Baku, Miami). Land planes (sand/paddock) still follow the
-      // local ground so they sit flush beside the road.
-      const topY = water ? (pyMin - 0.8) : (groundYAt(k, gap + sz[0] / 2) - 1.0);
-      addBox(water ? waterBuf : out, [cx, topY - sz[1] / 2, cz], sz, col);
+      return water
+        ? waterSurface(k, side, gap, sz, col, { id: `ground-plane-water-${k}` })
+        : groundPatch(k, side, gap, sz, col, { id: `ground-plane-${k}`, samples: 4 });
     };
     // backdrop(): a distant scenery box (skyline, hills, dunes) on the horizon.
     // Tall things go far enough back that they never clip the viewport edge, and
@@ -2453,7 +2560,11 @@ const Tracks = (function () {
       addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
-      RAW.addBox(out, beam, [hw[k] * 2 + 5, 0.9, 1.4], c, b);
+      overheadSpan({
+        id: `gantry-${k}`, frac: s, clearance: h - 0.45,
+        thickness: 0.9, depth: 1.4, span: hw[k] * 2 + 5,
+        color: c,
+      });
       // Visual lens fixtures under the beam. Matching point lights are placed
       // near s=0 in buildTrackLights (js/game/lighting.js) — not parented to
       // this mesh. Bright cool-white at night (emissive bloom), muted by day.
@@ -2622,19 +2733,9 @@ const Tracks = (function () {
       const off = def.barrierGap != null ? def.barrierGap : (def.id === "monaco" ? 2.0 : 0.35);
       for (let k = 0; k < n; k++) { markBarrier(k, -1, off); markBarrier(k, 1, off); }
     }
-    // floodlights for night tracks
-    if (def.night) every(70, (k) => {
-      for (const side of [-1, 1]) {
-        place(k, side, 10, [0.5, 9, 0.5], [0.1, 0.1, 0.12]);
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const o = side * (hw[k] + 10);
-        // HDR-bright lens at night so the floodlight reads as a glowing source AND
-        // is mirrored by the wet-road SSR like neon/streetlamps (a real reflected
-        // glow, not just the analytic pool). Painted housing by day.
-        const lens = NIGHT ? [1.18, 1.18, 1.14] : [1, 1, 0.95];
-        addBox(out, [px[k] + r[0] * o, py[k] + 8.6, pz[k] + r[2] * o], [3, 1, 1.4], lens, [r, [0, 1, 0], [track.tx[k], 0, track.tz[k]]]);
-      }
-    });
+    // floodlights for night tracks: generic mast ring (~22 m) covers these —
+    // the old every-70 poles duplicated geometry on Bahrain/Singapore/etc.
+    // (kept marker so night tracks still opt into buildTrackLights via def.night)
     // tire barriers at outside of tight corners on permanent (non-street) circuits
     if (!def.street) {
       for (const c of findCorners(track, 0.014)) {
@@ -2735,7 +2836,7 @@ const Tracks = (function () {
     const LAMP_STYLES = ["arm", "globe", "post"];
     if (fz.lamp && fz.lamp !== "none") every(26, (k) => {
       for (const side of [-1, 1]) {
-        if (furnHarbour(side, k)) continue;
+        if (furnHarbour(side, k) || dressingExcluded("lamps", k, side)) continue;
         const roll = hash(k * 19 + side * 5.5);
         const style = roll > 0.88
           ? LAMP_STYLES[Math.floor(hash(k * 23 + side) * LAMP_STYLES.length) % LAMP_STYLES.length]
@@ -2751,7 +2852,7 @@ const Tracks = (function () {
       const step = fz.sparse ? 30 : (def.street ? 24 : 18);   // street denser than before; sparse = coastal scrub
       every(step, (k) => {
         const side = hash(k * 41) < 0.5 ? -1 : 1;
-        if (furnHarbour(side, k)) return;
+        if (furnHarbour(side, k) || dressingExcluded("foliage", k, side)) return;
         const baseH = fz.tree === "palm" ? 8 : 6;
         const cluster = fz.sparse ? 1
           : def.street ? (hash(k * 13) < 0.5 ? 1 : 2)              // streets: 1–2 per stand
@@ -2767,23 +2868,13 @@ const Tracks = (function () {
     if (!def.street) {
       every(270, (k) => {
         const side = hash(k * 7) < 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
-        place(k, side, hw[k] + 25, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
+        place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+        place(k, side, 25, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
       });
     }
 
     if (theme === "green") {
-      every(26, (k) => {
-        const s = hash(k);
-        for (const side of [-1, 1]) {
-          if (hash(k * 2 + side) < 0.5) continue;
-          const h = 5 + s * 6, d = 9 + s * 8;
-          place(k, side, d, [1.2, 1.4, 1.2], [0.32, 0.22, 0.12]);   // trunk
-          place(k, side, d, [3.5, h, 3.5], [0.12 + s * 0.06, 0.36, 0.14]);  // canopy
-        }
-      });
-      // denser forest for Spa (Ardennes forest setting)
-      
+      // FURN already plants real trees; legacy box trunk/canopy forest removed.
       // occasional grandstand
       every(140, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
     } else if (theme === "desert") {
@@ -2823,7 +2914,7 @@ const Tracks = (function () {
       // Front row — dense.
       every(18, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 17 + side * 4) < 0.12 || harbourSkip(side, k)) continue;
+          if (hash(k * 17 + side * 4) < 0.12 || harbourSkip(side, k) || dressingExcluded("city", k, side)) continue;
           const s = hash(k * 5 + side), na = naFor(k, side);
           const h = style.fh[0] + s * style.fh[1], w = 8 + s * 10, d = 8 + hash(k * 9 + side) * 9;
           neonTower(k, side, 13 + s * 12, w, h, d, cn(k, side), pickKind(k, side, na), toneFor(k, side), na);
@@ -2832,7 +2923,7 @@ const Tracks = (function () {
       // Back row — taller, set further back, staggered, for skyline depth.
       every(26, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 23 + side * 7) < 0.34 || harbourSkip(side, k)) continue;
+          if (hash(k * 23 + side * 7) < 0.34 || harbourSkip(side, k) || dressingExcluded("city", k, side)) continue;
           const s = hash(k * 11 + side * 2), na = naFor(k * 1.3, side);
           const h = style.bh[0] + s * style.bh[1], w = 11 + s * 12, d = 11 + s * 10;
           neonTower(k, side, 40 + s * 30, w, h, d, cn(k * 1.7, side), pickKind(k * 1.9, side, na), toneFor(k * 1.7, side), na);
@@ -2841,7 +2932,7 @@ const Tracks = (function () {
       // Sign blades + low retail boxes dressing the gaps.
       every(34, (k) => {
         const side = hash(k * 13) < 0.5 ? -1 : 1;
-        if (harbourSkip(side, k)) return;
+        if (harbourSkip(side, k) || dressingExcluded("city", k, side)) return;
         const lc = cn(k * 3.3, side);
         if (NIGHT && style.bias > 0.3 && hash(k * 19) < 0.5) neonSign(k, side, 8 + hash(k) * 4, 10 + hash(k * 2) * 10, lc);
         else { const rc = toneFor(k * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(k) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3]); }
@@ -2849,7 +2940,7 @@ const Tracks = (function () {
       // Occasional illuminated billboard accent (more on high-neon circuits).
       if (style.bias > 0.25) every(80, (k) => {
         const side = hash(k * 31) < 0.5 ? -1 : 1;
-        if (harbourSkip(side, k)) return;
+        if (harbourSkip(side, k) || dressingExcluded("city", k, side)) return;
         const neon = cn(k * 5.5, side);
         prop(k, side, 6, [1.0, 6, 1.0], [0.10, 0.10, 0.12]);
         prop(k, side, 6, [1.2, 3.4, 5], NIGHT ? neon : [neon[0] * 0.5 + 0.25, neon[1] * 0.5 + 0.25, neon[2] * 0.5 + 0.25]);
@@ -2910,7 +3001,10 @@ const Tracks = (function () {
       const slabC = [px[k] + u[0] * (clearH + thick / 2),
                      py[k] + u[1] * (clearH + thick / 2),
                      pz[k] + u[2] * (clearH + thick / 2)];
-      RAW.addBox(out, slabC, [span, thick, depth], col, b);
+      overheadSpan({
+        id: `underpass-${k}`, frac: s, clearance: clearH,
+        thickness: thick, depth, span, color: col,
+      });
       // Underside soffit — slightly lighter so the portal mouth reads.
       const soff = [Math.min(1, col[0] * 1.35 + 0.04), Math.min(1, col[1] * 1.35 + 0.04), Math.min(1, col[2] * 1.4 + 0.05)];
       RAW.addBox(out, [px[k] + u[0] * (clearH + 0.12), py[k] + u[1] * (clearH + 0.12), pz[k] + u[2] * (clearH + 0.12)],
@@ -3254,6 +3348,8 @@ const Tracks = (function () {
         // Named atmosphere / colour packs (js/track-scenery-data.js)
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
+        modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
+        modelDiagnostics: diagnostics,
         ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
         // richer primitives (world coords): non-cube shapes
         addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
@@ -3276,7 +3372,8 @@ const Tracks = (function () {
       // keeps barriers (recordBarrier fills barR/barL) aligned with the road.
       // Direct px[k]/upOf(k) reads inside scenery (a handful, cosmetic only) are
       // not remapped — they stay internally consistent on the reversed centreline.
-      if (def.reverse) sceneryApi = reverseSceneryApi(sceneryApi, n, def._startFrac || 0);
+      if (def.reverse || def.sceneryCoordinates === "source")
+        sceneryApi = transformSceneryApi(sceneryApi, def, n);
       def.scenery(sceneryApi);
     }
 
@@ -3336,6 +3433,7 @@ const Tracks = (function () {
       track.lampPosts = [];
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
+        if (dressingExcluded("floodlights", k, side)) continue;
         const a = anchor(k, side, 6);
         if (onTrack(a.c[0], a.c[2], 1.2)) continue;
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));
@@ -3481,6 +3579,8 @@ const Tracks = (function () {
       ambientSky: [0.45, 0.52, 0.62], ambientGround: [0.22, 0.22, 0.18],
       sunColor: [1, 0.95, 0.82], sunDir: [0.4, 0.72, 0.3],
     }, o);
+    // Tracks historically authored fogColor; runtime reads fog.
+    if (o && o.fogColor && o.fog == null) p.fog = o.fogColor;
     p.sunDir = norm(p.sunDir);   // data files store raw sunDir; normalize here
     return p;
   }
@@ -3493,6 +3593,7 @@ const Tracks = (function () {
       ambientSky: [0.62, 0.64, 0.76], ambientGround: [0.44, 0.44, 0.48],
       sunColor: [0.7, 0.72, 0.8], sunDir: [0.1, 0.9, 0.2],
     }, o);
+    if (o && o.fogColor && o.fog == null) p.fog = o.fogColor;
     p.sunDir = norm(p.sunDir);
     return p;
   }
@@ -3596,6 +3697,8 @@ const Tracks = (function () {
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
       flatTerrain: !!d.flatTerrain,
+      sceneryCoordinates: d.sceneryCoordinates || "legacy",
+      dressingExclusions: d.dressingExclusions || null,
       // bespoke per-circuit scenery (js/tracks/<id>.js); run by buildProps
       scenery: d.scenery || null,
       // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
@@ -3618,22 +3721,20 @@ const Tracks = (function () {
     // The centreline control points and the elevation/bridge s-anchors are
     // remapped here; the matching scenery/barrier s-remap happens when the
     // bespoke scenery() runs (buildProps), driven by def._startFrac/_reverse.
-    const phi = (((def.startFrac || 0) % 1) + 1) % 1;
+    const phi = TrackSpace.wrap01(def.startFrac || 0);
     if (def.reverse || phi) {
       const P = def.points, N = P.length, out = new Array(N);
-      const o = (((Math.round(phi * N) % N) + N) % N);
-      for (let i = 0; i < N; i++) out[i] = def.reverse ? P[(((o - i) % N) + N) % N] : P[(i + o) % N];
+      for (let i = 0; i < N; i++) out[i] = P[TrackSpace.racingNodeToSource(def, i, N)];
       def.points = out;
       def._startFrac = phi;
-      const fmap = def.reverse ? (s) => (((phi - s) % 1) + 1) % 1 : (s) => (((s - phi) % 1) + 1) % 1;
+      const fmap = (s) => TrackSpace.toRacingFrac(def, s);
       if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: fmap(e.s) }));
       if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: fmap(b.s) }));
       if (def.hwZones) {
         // Reverse flips endpoint order — swap so [s0,s1] stays a short forward arc
         // (otherwise s1 < s0 wraps and the zone covers most of the lap).
         def.hwZones = def.hwZones.map((z) => {
-          const a = fmap(z.s0), b = fmap(z.s1);
-          return Object.assign({}, z, def.reverse ? { s0: b, s1: a } : { s0: a, s1: b });
+          return Object.assign({}, z, TrackSpace.range(def, z.s0, z.s1, "source"));
         });
       }
     }
@@ -3740,5 +3841,10 @@ const Tracks = (function () {
     return best;
   }
 
-  return { LIST, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY };
+  function setKeepGeometry(value) {
+    keepGeometry = !!value;
+    return keepGeometry;
+  }
+
+  return { LIST, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry };
 })();

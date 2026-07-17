@@ -53,6 +53,50 @@ channel cut where an elevation mound bulges over a lower part of the track
 float over the lower ground. `place()`/`prop()` still anchor to `groundYAt` and
 sink their base ~0.8 m, which hides the small estimate-vs-ribbon gap.
 
+### Coordinate contract
+
+`TrackSpace` distinguishes source-trace fractions from racing-lap fractions:
+
+```js
+TrackSpace.toRacingFrac(def, sourceFrac);
+TrackSpace.toSourceFrac(def, racingFrac);
+TrackSpace.sourceNodeToRacing(def, sourceNode, nodeCount);
+TrackSpace.sampleSource(def, racingFrac, sourceSampler);
+```
+
+Legacy scenery remains unchanged. New migrations should set
+`sceneryCoordinates: "source"` when authored against the original trace, or
+`sceneryCoordinates: "racing"` when authored after `startFrac`/`reverse`.
+Elevations, bridges, and half-width zones use source coordinates; curated
+sectors and turns remain racing-lap data.
+
+### Intentional and atomic models
+
+| Helper | Contract |
+|---|---|
+| `modelGroup(id, bounds, emit, opts?)` | preflights one complete footprint and commits staged geometry atomically; `emit(stage)` must produce a finite, non-empty group |
+| `overheadSpan(spec)` | intentional cross-track span with explicit `clearance` (minimum 4.8 m) and support-footprint checks |
+| `waterSurface(k, side, gap, size, col, opts?)` | typed water emission to the reflective water buffer |
+| `groundPatch(k, side, gap, size, col, opts?)` | subdivided terrain-conforming patch; `opts.collision` optionally registers its visual boundary |
+| `groundedSegments(spec)` | multi-sample connected model segments grounded at every endpoint |
+
+Use `required: true` only for a hero model whose absence must fail
+`verify-track`. Invalid or suppressed groups are skipped instead of uploading
+malformed buffers and appear in `__apex.modelDiagnostics()`.
+
+### Shared dressing exclusions
+
+Generic city, foliage, lamps, and floodlights can be disabled by racing-lap
+sector and side without changing defaults:
+
+```js
+dressingExclusions: [
+  { kinds: ["city", "lamps"], s0: 0.12, s1: 0.24, side: 1 },
+  { kind: "foliage", s0: 0.92, s1: 0.08 }, // wraparound, both sides
+  { kind: "floodlights", s0: 0, s1: 1 },
+]
+```
+
 ## What `api` gives you
 
 ### Context

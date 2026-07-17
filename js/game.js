@@ -59,7 +59,24 @@ try {
     }
   }
 } catch (_) { gfx = null; }
-if (!gfx) { if (!GLX.init(canvas)) { $("nogl").hidden = false; return; } gfx = GLX; }
+if (!gfx) {
+  if (!GLX.init(canvas)) {
+    // A failed WebGPU opt-in may have already CLAIMED the canvas (getContext
+    // "webgpu" succeeded before init died) — then getContext("webgl2") can
+    // never attach on this load and the old path dead-ended at "needs WebGL2"
+    // forever. Clear the opt-in and reload once, the same recovery WGX's
+    // device-lost handler uses; the reset flag guarantees no reload loop.
+    let webgpuTried = false;
+    try { webgpuTried = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
+    if (webgpuTried) {
+      try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
+      try { location.reload(); } catch (_) {}
+      return;
+    }
+    $("nogl").hidden = false; return;
+  }
+  gfx = GLX;
+}
 
 // ---------- rain overlay ----------
 const rainCanvas = document.createElement("canvas");
@@ -681,6 +698,8 @@ const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new F
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
 // Dynamic car shadow pass scratches (per-frame car-only depth map).
 const _mCView = new Float32Array(16), _mCProj = new Float32Array(16), _mCVP = new Float32Array(16);
+// Nearest-floodlight spot-shadow pass scratches (per-frame 512² lamp depth map).
+const _mFlView = new Float32Array(16), _mFlProj = new Float32Array(16), _mFlVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
@@ -2219,10 +2238,13 @@ function update(dt) {
   }
 }
 
-// Shift a car along the track. prog (cumulative) and s (wrapped, used for
-// rendering/curvature) advance together, so a longitudinal collision push must
-// move BOTH or the visible car won't budge.
-function shiftLong(c, d) { c.prog += d; c.s = wrapS(c.s + d); }
+// Shift a car along the track. AI prog and s advance together. Player prog is
+// derived from Δs each frame after collisions, so only move s here — otherwise
+// the push is counted twice (shiftLong.prog + next-tick ds).
+function shiftLong(c, d) {
+  c.s = wrapS(c.s + d);
+  if (!c.isPlayer) c.prog += d;
+}
 
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
@@ -2261,13 +2283,15 @@ function resolveCollisions(ranked, dt) {
     for (let ii = 0; ii < ranked.length; ii++) {
       const i = fwd ? ii : ranked.length - 1 - ii;
       const a = ranked[i];
-      for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
-        const b = ranked[j];               // a is ahead (higher prog), b behind
+      // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
+      // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
+      for (let j = i + 1; j < ranked.length; j++) {
+        const b = ranked[j];
         let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
         const L = track.total;
         dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-        if (Math.abs(dProg) > LCAR) continue;            // sorted by prog: the rest are farther
+        if (Math.abs(dProg) > LCAR) continue;
         const dX = a.x - b.x;
         if (!Number.isFinite(dX)) continue;
         const penLong = LCAR - Math.abs(dProg);
@@ -2277,11 +2301,11 @@ function resolveCollisions(ranked, dt) {
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
-        // Scoped to player contacts + near-slop nests so AI↔AI packs don't
-        // dump momentum on every mild close.
+        // Only when the PLAYER is the rear car closing: applying this to every
+        // player↔AI touch (e.g. grid pack with throttle held) drained the field.
         const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
         const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-        const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+        const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
         const sideContact = penLat < penLong && !forceRear;
         if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -2291,8 +2315,8 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          // Only scrub when we actually pushed — at-slop contact with corr=0 used
-          // to bleed speed forever while cars stayed longitudinally nested.
+          // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
+          // side contact was draining speed without separating the cars.
           if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
@@ -2327,7 +2351,7 @@ function resolveCollisions(ranked, dt) {
   const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
-    for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
+    for (let j = i + 1; j < ranked.length; j++) {
       const b = ranked[j];
       let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
@@ -2340,10 +2364,10 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-      // Match the relaxation pass for player nest-edge contacts.
+      // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-      const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+      const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
       const sideContact = penLat < penLong && !forceRear;
       if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
@@ -2520,8 +2544,9 @@ function updateCar(c, dt, ranked) {
     }
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else if (!onThrottle) {
-    // coasting: gentle engine-braking/drag, plus a little energy recovery
-    c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0)
+    if (c.speed > 0) c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    else if (c.speed < 0) c.speed = Math.min(0, c.speed + COAST_DRAG * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
     const a = (ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
@@ -2632,27 +2657,22 @@ function updateCar(c, dt, ranked) {
     // oscillation, and it doesn't fight the collision push (same direction).
     const MIN_GAP = 2.8;
     let sep = 0;
-    // Walk OUTWARD from our rank; break once |prog delta| exceeds 6.5 (prog-sorted,
-    // so the window is a contiguous index range — same neighbours, no full-field scan).
+    // Full field with wrapped Δprog — rank-neighbour walks miss lapped cars
+    // that share the same stretch of track.
     const ci2 = (c.rank || 1) - 1;
-    for (let up = ci2 - 1; up >= 0; up--) {   // ahead of us
-      const o = ranked[up];
-      const dp = o.prog - c.prog;             // >0
-      if (dp > 6.5) break;                    // only cars roughly alongside
+    const Ltrk = track.total;
+    for (let k = 0; k < ranked.length; k++) {
+      if (k === ci2) continue;
+      const o = ranked[k];
+      let dp = o.prog - c.prog;
+      if (!Number.isFinite(dp)) continue;
+      dp = ((dp + Ltrk / 2) % Ltrk + Ltrk) % Ltrk - Ltrk / 2;
+      const adp = Math.abs(dp);
+      if (adp > 6.5) continue;
       const dx = c.x - o.x, adx = Math.abs(dx);
       const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
-    }
-    for (let dn = ci2 + 1; dn < ranked.length; dn++) {   // behind us
-      const o = ranked[dn];
-      const dpr = o.prog - c.prog;            // <0
-      if (dpr < -6.5) break;                  // only cars roughly alongside
-      const dp = -dpr;                        // |prog delta|
-      const dx = c.x - o.x, adx = Math.abs(dx);
-      const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
+      if (deficit <= 0) continue;
+      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
     // clamp the combined target to the drivable surface so overtake/unstuck/
@@ -2676,7 +2696,7 @@ function updateCar(c, dt, ranked) {
   // that isn't moving can't be steered sideways, so tilting while stopped no
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
-  const latFac = clamp(c.speed / 18, 0, 1);
+  const latFac = clamp(Math.abs(c.speed) / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   // Banking: computed once, shared between player and AI so both get grip boost.
@@ -2705,12 +2725,12 @@ function updateCar(c, dt, ranked) {
     }
     // Fade the lateral model out toward a standstill so a parked car can't be
     // spun by steering (slip angle is undefined at zero speed).
-    const sp = clamp(c.speed / 3, 0, 1);
+    const sp = clamp(Math.abs(c.speed) / 3, 0, 1);
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     // --- road-wheel steer angle: driver lock (eased a little at speed) + the
     // DRIVING-HELP assist that steers toward the road curvature for you. Both
     // act through the front tyre below, so neither can exceed available grip.
-    const lockTaper = Math.max(0.4, 1 - c.speed / STEER_SPEED_REF);
+    const lockTaper = Math.max(0.4, 1 - Math.abs(c.speed) / STEER_SPEED_REF);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
@@ -2806,7 +2826,9 @@ function updateCar(c, dt, ranked) {
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
     // well-conditioned at low speed.
-    const vx = Math.max(c.speed, 4);
+    // Signed longitudinal speed (floored away from 0) so reverse slip angles
+    // stay well-conditioned instead of collapsing to +4 m/s forward.
+    const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
@@ -2906,7 +2928,9 @@ function updateCar(c, dt, ranked) {
       // driver input (sign = turn direction); `into` is ±1 for the wall side.
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
-        c.speed = Math.max(0, c.speed - pushIn * (track.street ? 40 : 16) * dt);
+        const scrub = pushIn * (track.street ? 40 : 16) * dt;
+        if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
+        else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
         c.wallT = 0.35;     // brief auto-throttle suppress
       }
       // Nose/steer pointing AWAY = peeling off: speed and heading left alone so
@@ -3991,9 +4015,28 @@ function render(dt) {
   // camera flies. 0 = disabled (normal play + desktop keep the full vista).
   frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
 
+  // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
+  // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
+  // glx.js floors its key-dim shadow fade with LT.moonShadow * frame.moonK, so
+  // moonlight casts soft shadows on clear nights only — fog/overcast/rain
+  // nights stay shadowless. Computed BEFORE the shadow pass because the prop
+  // and car caster gates below feed the snap-cached map from it. Mirrors the
+  // frameSky.moon / frame.cloud plumbing further down (values persist across
+  // frames, so first-frame staleness only delays the gate by one recentre).
+  {
+    const _mAmt = (raceTimeOfDay === "default" && track && track.def && track.def.night)
+      ? 0.85 * LT.moonBright : (frameSky.moon || 0);
+    const _mCl = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
+    let _cf = (_mCl - 0.35) / 0.25;                    // smoothstep(0.35, 0.6, cloud)
+    _cf = _cf < 0 ? 0 : _cf > 1 ? 1 : _cf;
+    _cf = _cf * _cf * (3 - 2 * _cf);
+    frame.moonK = raceWeather === "fog" ? 0
+      : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
+  }
+
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
-  // (16 m at the default 64 m box) so the map only re-renders when the camera
+  // (20 m at the default 80 m box) so the map only re-renders when the camera
   // moves a cell — and so each recentre shifts the box by an exact whole number
   // of shadow texels (sBox/4 is SHADOW_SIZE/8 texels for any pow-2 map size).
   // The old snap was on a world-XZ grid with an unsnapped camera HEIGHT: those
@@ -4045,7 +4088,7 @@ function render(dt) {
       const wy = xy * lu + yy * lv + zy * lw;
       const wz = xz * lu + yz * lv + zz * lw;
       M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
-      // Half-size box (default ±64 m / 128 m) snapped around the anchor;
+      // Half-size box (default ±80 m / 160 m) snapped around the anchor;
       // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
       // inside its border. Bigger = more reach, smaller = crisper contacts
       // (texel density = 2048/box).
@@ -4066,7 +4109,10 @@ function render(dt) {
       // the MIDDLE of that band, so prop shadows popped out at ~50% strength on
       // a dusk→night flip / SUN ELEVATION drag while terrain shadows lingered.
       const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-      if (_shKey > 0.28) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      // Clear-night moon shadows re-open the gate: props must be in the map for
+      // the moonlight floor to have anything to cast (snap-cached, so the night
+      // saving only goes when MOON SHADOWS is active and the sky is clear).
+      if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
     // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
@@ -4081,7 +4127,10 @@ function render(dt) {
     if (gfx.carShadowBegin && LT.carShadow && _shadowCount > 0 && player &&
         state !== "menu" && state !== "select") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-      if (_ck > 0.28) {
+      // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
+      // the moonlight floor active (game.js frame.moonK), cars keep casting so
+      // they throw faint moon shadows too instead of popping to blob-only.
+      if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) {
         M4.lookAtTo(_mCView,
           [_shadowCtr[0] + sd[0] * 150, _shadowCtr[1] + sd[1] * 150, _shadowCtr[2] + sd[2] * 150],
           _shadowCtr, up);
@@ -4269,6 +4318,59 @@ function render(dt) {
   if (_studioRig) {
     const rig = buildStudioRig();
     if (rig) frame.lights = rig;
+  }
+  // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
+  // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
+  // per-frame 512² depth map (perspective, looking down its beam) so the car
+  // driving under it throws a radial shadow away from the mast and walls carve
+  // its pool + volumetric shaft. The other 31 lamps stay cone-shaped (no
+  // per-light shadow cost). Casters: last frame's pooled car matrices (same
+  // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
+  // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
+  // has no lampShadowBegin, the mobile tier never creates the map.
+  if (gfx.lampShadowBegin && LT.lampShadow && frame.lights && !_studioRig &&
+      player && state !== "menu" && state !== "select") {
+    // Gate on the KEY being dim (true night): by day/dusk the sun owns the
+    // shadows, and a daytime-floods pool shadow would fight the sun's.
+    const _flk = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+    if (_flk <= 0.30) {
+      const L = frame.lights, nRec = (L.length / 15) | 0;
+      let flBest = -1, flScore = Infinity;
+      for (let i = 0; i < nRec; i++) {
+        const o = i * 15;
+        if (L[o + 6] < 12) continue;   // skip small movers (car tail-lights, washers)
+        const dx = L[o] - camEye[0], dy = L[o + 1] - camEye[1], dz = L[o + 2] - camEye[2];
+        // Nearest-strongest: distance² over luminance, so a bright flood bank
+        // beats a dim work lamp at similar range.
+        const s = (dx * dx + dy * dy + dz * dz) /
+                  Math.max(Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
+        if (s < flScore) { flScore = s; flBest = i; }
+      }
+      if (flBest >= 0) {
+        const o = flBest * 15;
+        const rad = L[o + 6];
+        // Perspective frustum down the beam: fov spans the OUTER cone (plus
+        // margin for the soft skirt), capped where 512² texel density and
+        // perspective-depth precision still hold up; far = the lamp radius
+        // (nothing beyond it receives this light anyway).
+        const fov = Math.min(2.6, 2 * Math.acos(clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
+        const up = Math.abs(L[o + 8]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
+        M4.lookAtTo(_mFlView, [L[o], L[o + 1], L[o + 2]],
+          [L[o] + L[o + 7], L[o + 1] + L[o + 8], L[o + 2] + L[o + 9]], up);
+        // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
+        // lamp position IS the visible lens box, with the head/arm right beside
+        // it, all part of the props caster mesh) — a closer near plane renders
+        // the fixture into the map and it eclipses its own beam, blacking out
+        // the whole pool. 2.5 m clips the fixture; every real occluder (cars,
+        // walls, the mast pole below the head) is farther out than that.
+        M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
+        M4.mulTo(_mFlVP, _mFlProj, _mFlView);
+        gfx.lampShadowBegin(_mFlVP, flBest);
+        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+        gfx.lampShadowEnd();
+      }
+    }
   }
   // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
   // fog-weather night is the money shot while a clear night keeps only a hint.
@@ -4595,15 +4697,17 @@ function render(dt) {
     // strength for this frame (projected to screen UV just before present()).
     // Any time of day, throttle-driven via exhaustPop, strongest under active
     // boost. Skipped on memory-limited phones (mobileTier — same gate as the
-    // other post extras).
+    // other post extras). Anchor is pushed well behind/above the body so the
+    // composite warp (which already skips car-paint pixels) sits in the air
+    // wake rather than on the rear wing from chase cam.
     if (c.isPlayer) {
       const _hzDep = c.boostOn && c.energy > 0.01 && c.speed > 5;
       _hazeStr = gfx.mobileTier ? 0 : (c.exhaustPop || 0) * (_hzDep ? 1.0 : 0.45);
       if (_hazeStr > 0.02) {
-        // Just behind/above the tailpipe (up +0.55, fwd −2.9 on the car frame).
-        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.55 - tmpMat[8] * 2.9;
-        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.55 - tmpMat[9] * 2.9;
-        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.55 - tmpMat[10] * 2.9;
+        // Behind/above the tailpipe (up +0.85, fwd −3.5 on the car frame).
+        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.85 - tmpMat[8] * 3.5;
+        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.85 - tmpMat[9] * 3.5;
+        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.85 - tmpMat[10] * 3.5;
       }
     }
     if (c.isPlayer && state === "race") {
@@ -6154,16 +6258,24 @@ function buildLightTunePanel() {
   if (!host.dataset.built) {
     host.dataset.built = "1";
     const groups = [];      // ordered distinct group names
-    let group = null, wrap = null;
+    let group = null, section = null, wrap = null;
     for (const d of TUNE_DEFS) {
       if (d.group !== group) {
         group = d.group; groups.push(group);
+        section = null;
         wrap = document.createElement("div");
         wrap.className = "lt-group"; wrap.dataset.group = group;
         const h = document.createElement("h3");
         h.className = "adv-sec"; h.textContent = group;
         wrap.appendChild(h);
         host.appendChild(wrap);
+      }
+      if (d.section && d.section !== section) {
+        section = d.section;
+        const sh = document.createElement("h4");
+        sh.className = "lt-section";
+        sh.textContent = section;
+        wrap.appendChild(sh);
       }
       const item = document.createElement("div");
       item.className = "adv-item";
@@ -7281,14 +7393,32 @@ window.__apex = {
   // For verifying every track keeps the car off the models and is recoverable.
   wallStats() {
     if (!track || !track.barR) return null;
-    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false;
+    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0;
     for (let k = 0; k < track.n; k++) {
       const r = track.barR[k], l = track.barL[k];
       if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
       minB = Math.min(minB, r, l); maxB = Math.max(maxB, r, l);
       minOverHw = Math.min(minOverHw, r - track.hw[k], l - track.hw[k]);
+      if (r < track.hw[k] + 8.99) tightSides++;
+      if (l < track.hw[k] + 8.99) tightSides++;
     }
-    return { minB, maxB, minOverHw, anyNaN, street: !!track.street, n: track.n };
+    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / (track.n * 2), street: !!track.street, n: track.n };
+  },
+  modelDiagnostics() {
+    if (!track || !track.modelDiagnostics) return null;
+    return JSON.parse(JSON.stringify(track.modelDiagnostics));
+  },
+  geometryDiagnostics() {
+    if (!track || !track.geometryDiagnostics) return null;
+    return JSON.parse(JSON.stringify(track.geometryDiagnostics));
+  },
+  trackGeometry(keep) {
+    if (typeof keep === "boolean") Tracks.setKeepGeometry(keep);
+    if (!track || !track.roadGeo || !track.terrainGeo) return null;
+    return {
+      road: track.roadGeo, terrain: track.terrainGeo,
+      props: track.propsGeo, glass: track.glassGeo, water: track.waterGeo,
+    };
   },
   // Largest amount any (non-finished) car is currently OUTSIDE its per-side
   // barrier — should stay ~0, proving nothing (player or AI) clips through a wall.

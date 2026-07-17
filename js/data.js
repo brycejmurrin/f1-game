@@ -22,10 +22,13 @@ const DataHub = (function () {
   };
 
   const TABS = [
-    { id: "schedule", label: "SCHEDULE", load: loadSchedule },
-    { id: "standings", label: "STANDINGS", load: loadStandings },
-    { id: "lastrace", label: "LAST RACE", load: loadLastRace },
-    { id: "live", label: "LIVE", load: loadLive },
+    // Lazy closures: the tab loaders are consts destructured from the split
+    // Data* modules further down, so a direct reference here is a TDZ throw
+    // that kills the whole DataHub IIFE at load.
+    { id: "schedule", label: "SCHEDULE", load: function () { return loadSchedule(); } },
+    { id: "standings", label: "STANDINGS", load: function () { return loadStandings(); } },
+    { id: "lastrace", label: "LAST RACE", load: function () { return loadLastRace(); } },
+    { id: "live", label: "LIVE", load: function () { return loadLive(); } },
     { id: "telemetry", label: "TELEMETRY", load: function () { return loadTelemetry(); } },
     { id: "export", label: "EXPORT", load: function () { return loadExport(); } }
   ];
@@ -293,7 +296,7 @@ const DataHub = (function () {
       state[id] = null;
       if (openFlag && active === id) {
         clear(contentEl);
-        contentEl.appendChild(errorBlock(id));
+        contentEl.appendChild(errorBlock(id, err));
       }
     });
   }
@@ -305,9 +308,13 @@ const DataHub = (function () {
     return w;
   }
 
-  function errorBlock(id) {
+  function errorBlock(id, err) {
     const w = el("div", "dh-error");
-    w.appendChild(el("div", "dh-error-msg", "Couldn't load data. Check your connection and try again."));
+    let msg = "Couldn't load data. Check your connection and try again.";
+    if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
+      msg = err.message;
+    }
+    w.appendChild(el("div", "dh-error-msg", msg));
     const retry = el("button", "dh-retry", "RETRY");
     retry.type = "button";
     retry.addEventListener("click", function () { loadTab(id); });
@@ -482,7 +489,7 @@ const DataHub = (function () {
     el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
     ensureSession: ensureSession, buildPicker: buildPicker,
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
-    cssColor: cssColor, NO_TELEM_MSG: NO_TELEM_MSG });
+    cssColor: cssColor, textColorOn: textColorOn, NO_TELEM_MSG: NO_TELEM_MSG });
   /* ================= EXPORT tab (dev) ================= */
   // Implementation: js/data-export.js.
   const { loadExport } = DataExport.create({ el: el, clear: clear });

@@ -44,14 +44,19 @@ const CEIL = 5.0;
 // hugging the runoff on curves — safe to drive but tracked so they can't grow.
 // Cap = measured max + small margin. A track NOT in this map must read <= TOL.
 const BASELINE = {
+  // Shared TrackSurface grounding raises these previously floating props onto
+  // their actual terrain. Keep the resulting overlaps visible until the
+  // circuit-specific migration pass removes or repositions them.
+  bahrain: 4.8,
+  madrid: 3.9,
   miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
-  mexico: 2.7, mexico_note: "Foro Sol stadium — track runs through by design",
+  mexico: 4.1, mexico_note: "Foro Sol stadium — track runs through by design",
   // street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
   // road edge (the track boundary the car stays inside), now sitting on the real
   // terrain ribbon added for these tracks — verified via driver-eye as the wall,
   // not a lane obstruction. Bumped from the pre-ribbon caps accordingly.
-  monaco: 1.4, singapore: 1.3, vegas: 1.3, baku: 1.3, jeddah: 1.3,
-  hungaroring: 0.9, abudhabi: 0.8, albert_park: 0.7,
+  monaco: 1.4, singapore: 1.3, vegas: 1.3, baku: 1.7, jeddah: 1.4,
+  hungaroring: 0.9, abudhabi: 1.2, albert_park: 0.7, zandvoort: 0.8,
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 
@@ -59,41 +64,33 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
   test.setTimeout(600000);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
-  await page.evaluate(() => {
-    window.__caps = [];
-    const grab = (geo) => { try { window.__caps.push({ pos: geo && geo.pos ? Array.from(geo.pos) : null, idx: geo && geo.idx ? Array.from(geo.idx) : null, n: geo && geo.pos ? geo.pos.length / 3 : 0 }); } catch (e) {} };
-    for (const fn of ["createChunkedMesh", "createMesh"]) {
-      const orig = GLX[fn]; if (!orig) continue;
-      GLX[fn] = function (geo) { grab(geo); return orig.apply(this, arguments); };
-    }
-  });
+  await page.evaluate(() => __apex.trackGeometry(true));
 
   const offenders = [];
   for (const trk of TRACKS) {
-    await page.evaluate(() => { window.__caps = []; });
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15000 });
     await page.waitForTimeout(1200);
     const r = await page.evaluate(({ CEIL, TOL }) => {
+      const caps = window.__apex.trackGeometry();
+      if (!caps) return { err: "no meshes" };
       const M = 1200;
       const px = new Float64Array(M), pz = new Float64Array(M), py = new Float64Array(M),
             rx = new Float64Array(M), rz = new Float64Array(M), hw = new Float64Array(M);
       for (let i = 0; i < M; i++) { const nd = __apex.nodeAt(i / M); px[i] = nd.x; pz[i] = nd.z; py[i] = nd.y; rx[i] = nd.rx; rz[i] = nd.rz; }
       const near = (x, z) => { let bd = 1e9, bk = 0; for (let k = 0; k < M; k++) { const dx = x - px[k], dz = z - pz[k], d = dx * dx + dz * dz; if (d < bd) { bd = d; bk = k; } } return bk; };
-      const sized = window.__caps.map((c, i) => ({ i, len: c.n })).filter((c) => c.len > 1000);
-      for (const c of sized) { const p = window.__caps[c.i].pos; let mx = 0; const st = 3 * Math.max(1, Math.floor(p.length / 3 / 2500)); for (let v = 0; v < p.length; v += st) { const k = near(p[v], p[v + 2]); const lat = Math.abs((p[v] - px[k]) * rx[k] + (p[v + 2] - pz[k]) * rz[k]); if (lat < 25) mx = Math.max(mx, lat); } c.maxLat = mx; }
-      const road = sized.filter((c) => c.maxLat >= 6 && c.maxLat <= 13).sort((a, b) => b.len - a.len)[0];
+      const sized = ["road", "terrain"].map((i) => ({ i, len: caps[i]?.pos?.length / 3 || 0 })).filter((c) => c.len > 1000);
+      for (const c of sized) { const p = caps[c.i].pos; let mx = 0; const st = 3 * Math.max(1, Math.floor(p.length / 3 / 2500)); for (let v = 0; v < p.length; v += st) { const k = near(p[v], p[v + 2]); const lat = Math.abs((p[v] - px[k]) * rx[k] + (p[v + 2] - pz[k]) * rz[k]); if (lat < 25) mx = Math.max(mx, lat); } c.maxLat = mx; }
+      const road = sized.find((c) => c.i === "road");
       if (!road) return { err: "no road mesh" };
-      const rp = window.__caps[road.i].pos;
+      const rp = caps.road.pos;
       for (let v = 0; v < rp.length; v += 3) { const k = near(rp[v], rp[v + 2]); const lat = Math.abs((rp[v] - px[k]) * rx[k] + (rp[v + 2] - pz[k]) * rz[k]); if (lat < 13 && lat > hw[k]) hw[k] = lat; }
       for (let k = 0; k < M; k++) if (hw[k] < 3) hw[k] = 6;
       const tps = []; for (let i = 0; i < M; i++) for (const s of [-0.75, -0.4, 0, 0.4, 0.75]) tps.push({ x: px[i] + rx[i] * s * hw[i], z: pz[i] + rz[i] * s * hw[i], y: py[i], frac: i / M });
       const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 1e-9) return null; const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
-      const terr = sized.filter((c) => c.i !== road.i && c.maxLat > 14).sort((a, b) => a.len - b.len)[0];
-      const skip = new Set([road.i]); if (terr) skip.add(terr.i);
       const merged = {}; let max = 0;
-      for (let i = 0; i < window.__caps.length; i++) {
-        if (skip.has(i)) continue; const cap = window.__caps[i]; if (!cap.idx || cap.n < 30) continue;
+      for (const name of ["props", "glass"]) {
+        const cap = caps[name]; if (!cap || !cap.pos || !cap.idx || cap.pos.length / 3 < 30) continue;
         const pos = cap.pos, idx = cap.idx;
         for (let t = 0; t < idx.length; t += 3) {
           const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;

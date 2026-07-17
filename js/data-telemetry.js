@@ -10,7 +10,7 @@ const DataTelemetry = (function () {
 
   function create(ctx) {
     const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-            invalidateOther, COMPOUND, findTeam, cssColor, NO_TELEM_MSG } = ctx;
+            invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG } = ctx;
 
 
   function driverColor(d) {
@@ -304,10 +304,12 @@ const DataTelemetry = (function () {
         if (myGen !== telGen) return;
         if (syncChips) syncChips();
         openTelemPopup(tels);
-      }, function () {
+      }, function (err) {
         if (myGen !== telGen) return;
         clear(detail);
-        detail.appendChild(emptyMsg("Couldn't load telemetry."));
+        let msg = "Couldn't load telemetry.";
+        if (err && err.message && err.message.indexOf("Live F1 session") !== -1) msg = err.message;
+        detail.appendChild(emptyMsg(msg));
         const backBtn = el("button", "dh-livebtn", "BACK");
         backBtn.style.marginTop = "12px";
         backBtn.addEventListener("click", function() { if (syncChips) syncChips(); });

@@ -1,7 +1,7 @@
 # Image and Colour Grading Controls
 
 Date: 2026-07-17
-Status: Approved design
+Status: Implemented
 
 ## Goal
 

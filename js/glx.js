@@ -112,8 +112,18 @@ const GLX = (function () {
   let carShadowLightVP = new Float32Array(16);
   let _carShadowArmed = false;   // set by carShadowBegin, cleared each present()
   let _carShadowArms = 0;        // lifetime carShadowBegin count (debug introspection)
+  // Nearest-FLOODLIGHT spot shadow map (night, desktop): per-frame depth render
+  // from the single nearest lamp (perspective VP down its beam). LIT_FS PCF-tests
+  // it for that lamp only; GODRAY_FS samples it so the volumetric shaft is carved
+  // by the same occluders. See lampShadowBegin/lampShadowEnd.
+  let lampShadowFBO = null, lampShadowTex = null, lampShadowEnabled = false;
+  let lampShadowLightVP = new Float32Array(16);
+  let _lampShadowArmed = false;  // set by lampShadowBegin, cleared each present()
+  let _lampShadowIdx = -1;       // frame.lights record index of the mapped lamp
+  let _lampShadowArms = 0;       // lifetime lampShadowBegin count (debug introspection)
   const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier
   const CAR_SHADOW_SIZE = 1024;                    // dynamic car-only shadow map (desktop tier)
+  const LAMP_SHADOW_SIZE = 512;                    // nearest-floodlight spot map (desktop tier)
   let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
@@ -243,9 +253,9 @@ const GLX = (function () {
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak", "uFlareStreak2"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak", "uFlareStreak2"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
-    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor"]);
+    if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
     whiteTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -486,6 +496,10 @@ const GLX = (function () {
   // BLOCKER_FS lives in js/shaders/glx-shaders.js (uSrcTexel-parameterised).
   let blockerProg = null, blockerU = null, blockerTex = null, blockerFBO = null,
       blockerSampler = null, pcssEnabled = false;
+  // Light frustum the chunked shadow caster culls against: null = the static
+  // sun box (shadowLightVP); lampShadowBegin points it at the lamp's frustum
+  // for the duration of that pass.
+  let _castCullVP = null;
 
   function initShadowMap() {
     depthProg = link(DEPTH_VS, DEPTH_FS);
@@ -535,6 +549,30 @@ const GLX = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, carShadowFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, carShadowTex, 0);
       carShadowEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    // ── Nearest-floodlight spot shadow map: same creation pattern as the car
+    // map above (compare-mode depth texture = hardware PCF), but 512² and a
+    // PERSPECTIVE light — the depth render looks down the chosen lamp's beam.
+    // Desktop only, like the car map: per-frame depth passes and the extra
+    // sampler are exactly the discretionary cost the mobile tier sheds.
+    lampShadowEnabled = false;
+    if (ok && !MOBILE_TIER) {
+      lampShadowTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, lampShadowTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, LAMP_SHADOW_SIZE, LAMP_SHADOW_SIZE, 0,
+        gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+      lampShadowFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, lampShadowFBO);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, lampShadowTex, 0);
+      lampShadowEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
@@ -625,8 +663,9 @@ const GLX = (function () {
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uCarShadowMap", "uCarLightVP", "uCarShadowOn",
+      "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
-      "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
+      "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
@@ -1078,6 +1117,7 @@ const GLX = (function () {
     gl.uniform1f(litU.uMistShare,   T && T.mistShare   != null ? T.mistShare   : 1.5);
     gl.uniform1f(litU.uLampFogClip, T && T.fogClip     != null ? T.fogClip     : 0.7);
     gl.uniform1f(litU.uGlowAmp,     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
+    gl.uniform1f(litU.uBloomBoost,  T && T.neonBoost   != null ? T.neonBoost   : 0.6);
     gl.uniform1f(litU.uPcssPen,     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
     gl.uniform1f(litU.uKeyMul,      T && T.keyMul      != null ? T.keyMul      : 1.0);
     gl.uniform1f(litU.uFogTint,     T && T.fogTint     != null ? T.fogTint     : 0.0);
@@ -1113,9 +1153,14 @@ const GLX = (function () {
       let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
-      gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.0) * _hf);
+      // Clear-night moon shadows: floor the key-dim fade with the MOON SHADOWS
+      // knob scaled by the clear-night factor (game.js frame.moonK — bright
+      // moon, low cloud, dry road, no fog). 0 = old fade-to-nothing night.
+      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonK || 0);
+      if (_mSh > _hf) _hf = _mSh;
+      gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
-      gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 64.0);
+      gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 80.0);
       // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
       // snapped around (game.js shadow pass). It glides continuously with the
       // camera, so the fade front never jumps on a box recentre.
@@ -1134,9 +1179,26 @@ const GLX = (function () {
       } else {
         gl.uniform1f(litU.uCarShadowOn, 0.0);
       }
+      // Nearest-floodlight spot shadow map — unit 9, armed only on frames where
+      // game.js ran the lamp caster pass (lampShadowBegin). Same always-bound
+      // pattern as the car map: when disabled, uLampShadowMap stays at its
+      // default unit 0, which holds the static sun map — the SAME sampler type,
+      // so the program stays valid and the gated branch never samples it.
+      if (lampShadowEnabled) {
+        gl.activeTexture(gl.TEXTURE9);
+        gl.bindTexture(gl.TEXTURE_2D, lampShadowTex);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(litU.uLampShadowMap, 9);
+        gl.uniformMatrix4fv(litU.uLampShadowVP, false, lampShadowLightVP);
+        gl.uniform1f(litU.uLampShadowOn, _lampShadowArmed ? 1.0 : 0.0);
+        gl.uniform1i(litU.uLampShadowIdx, _lampShadowIdx);
+      } else {
+        gl.uniform1f(litU.uLampShadowOn, 0.0);
+      }
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);
       gl.uniform1f(litU.uCarShadowOn, 0.0);
+      gl.uniform1f(litU.uLampShadowOn, 0.0);
     }
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
@@ -1345,7 +1407,8 @@ const GLX = (function () {
     // Positions are now only referenced by the growable `bk.idx` arrays (as
     // indices, not coords) — drop the vertex coordinate copies before the
     // per-bucket IndexArray allocations below.
-    pos = null; data.pos = null;
+    pos = null;
+    if (!data._keepPositions) data.pos = null;
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();
@@ -1429,7 +1492,11 @@ const GLX = (function () {
     bindVAO(mesh.vao);
     gl.uniformMatrix4fv(depthU.uModel, false, model);
     if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
-    _extractPlanes(shadowLightVP, _fcPlanes);
+    // Cull against the ACTIVE depth pass's light frustum: the sun box by
+    // default, or the lamp's perspective frustum between lampShadowBegin/End —
+    // that tight cone is what keeps the per-frame lamp pass down to a handful
+    // of city chunks instead of the whole circuit.
+    _extractPlanes(_castCullVP || shadowLightVP, _fcPlanes);
     const chunks = mesh.chunks;
     for (let i = 0; i < chunks.length; i++) {
       const ch = chunks[i];
@@ -1633,8 +1700,11 @@ const GLX = (function () {
   function present(opts) {
     // Car shadow map must be re-armed by a fresh carShadowBegin every frame —
     // when game.js stops running the pass (night, knob off, menu) the stale map
-    // must not keep shadowing.
+    // must not keep shadowing. Same contract for the lamp spot map, but its
+    // armed state must survive until AFTER the godray pass below consumes it.
     _carShadowArmed = false;
+    const lampArmed = _lampShadowArmed;
+    _lampShadowArmed = false;
     if (!postEnabled) { _gpuTimerEnd(); return; }
     const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
     const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
@@ -1726,7 +1796,7 @@ const GLX = (function () {
       gl.uniform1f(godrayU.uCloudCover, frameCloud);
       gl.uniform1f(godrayU.uCloudSpeed, frameCloudSpeed);
       // Lamp volumetrics: upload the nearest-8 lamps to the eye + the haze gate.
-      let grNL = 0;
+      let grNL = 0, grLampIdx = -1;
       if (lampVol > 0 && frameLights) {
         const L = frameLights, total = (L.length / 15) | 0;
         const ex = frameEye[0], ey = frameEye[1], ez = frameEye[2];
@@ -1740,6 +1810,10 @@ const GLX = (function () {
         grNL = Math.min(12, total);
         for (let i = 0; i < grNL; i++) {
           const o = _grSel[i].o;
+          // Map the frame.lights record that has this frame's spot-shadow map
+          // to its slot in THIS pass's nearest-N ordering (the two differ: the
+          // lit pass indexes frame.lights directly, this pass re-sorts by eye).
+          if (lampArmed && o === _lampShadowIdx * 15) grLampIdx = i;
           _grPos[i*3]=L[o]; _grPos[i*3+1]=L[o+1]; _grPos[i*3+2]=L[o+2];
           _grCol[i*3]=L[o+3]; _grCol[i*3+1]=L[o+4]; _grCol[i*3+2]=L[o+5];
           _grRad[i]=L[o+6];
@@ -1757,6 +1831,17 @@ const GLX = (function () {
       gl.uniform1i(godrayU.uNumLights, grNL);
       gl.uniform1f(godrayU.uLampStr, lampVol);
       gl.uniform1f(godrayU.uMist, (opts && opts.mist) || 0);
+      // Nearest-floodlight spot shadow: the sampler must ALWAYS point at a real
+      // compare-mode depth texture on its own unit — left at the default unit 0
+      // it would alias uDepth (a plain sampler2D), and two sampler TYPES on one
+      // unit is a draw-time GL error even when the branch never samples. The
+      // sun map is the type-compatible stand-in when the lamp map is absent.
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, lampShadowTex || shadowMapTex);
+      gl.uniform1i(godrayU.uLampShadowMap, 2);
+      gl.uniformMatrix4fv(godrayU.uLampShadowVP, false, lampShadowLightVP);
+      gl.uniform1i(godrayU.uLampShadowIdx, grLampIdx);
+      gl.activeTexture(gl.TEXTURE0);
       // GOD-RAY FOCUS / HAZE knobs (defaults reproduce the shipped shaft phase).
       const GT = opts && opts.tune || null;
       gl.uniform1f(godrayU.uHgAniso, GT && GT.godrayAniso != null ? GT.godrayAniso : 0.60);
@@ -1853,6 +1938,9 @@ const GLX = (function () {
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, haveAO ? ssaoTex : whiteTex);
     gl.uniform1i(compU.uSSAO, 2);
+    // Half-res AO grid texel for the composite's depth-aware bilateral upsample;
+    // zeroed when AO is off so the shader takes the plain (1×1 white) fetch.
+    gl.uniform2f(compU.uAOTexel, haveAO ? 1 / ssaoW : 0, haveAO ? 1 / ssaoH : 0);
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
     gl.uniform1i(compU.uGodray, 3);
@@ -1901,6 +1989,27 @@ const GLX = (function () {
     // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
     // shipped grade so a missing tune object changes nothing.
     const CT = opts && opts.tune || null;
+    gl.uniform4f(compU.uTone0,
+      CT && CT.blacks != null ? CT.blacks : 0,
+      CT && CT.shadows != null ? CT.shadows : 0,
+      CT && CT.midtones != null ? CT.midtones : 0,
+      CT && CT.highlights != null ? CT.highlights : 0);
+    gl.uniform4f(compU.uTone1,
+      CT && CT.whites != null ? CT.whites : 0,
+      CT && CT.toe != null ? CT.toe : 0,
+      CT && CT.shoulder != null ? CT.shoulder : 0, 0);
+    gl.uniform3f(compU.uLift,
+      CT && CT.liftR != null ? CT.liftR : 0,
+      CT && CT.liftG != null ? CT.liftG : 0,
+      CT && CT.liftB != null ? CT.liftB : 0);
+    gl.uniform3f(compU.uGamma,
+      CT && CT.gammaR != null ? CT.gammaR : 1,
+      CT && CT.gammaG != null ? CT.gammaG : 1,
+      CT && CT.gammaB != null ? CT.gammaB : 1);
+    gl.uniform3f(compU.uGain,
+      CT && CT.gainR != null ? CT.gainR : 1,
+      CT && CT.gainG != null ? CT.gainG : 1,
+      CT && CT.gainB != null ? CT.gainB : 1);
     gl.uniform1f(compU.uContrast,   CT && CT.contrast   != null ? CT.contrast   : 1.12);
     gl.uniform1f(compU.uVibrance,   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
     gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
@@ -2095,12 +2204,42 @@ const GLX = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       gl.viewport(0, 0, width, height);
     },
+    // Nearest-floodlight spot shadow pass — same depth program as the passes
+    // above, into the 512² lamp map from a PERSPECTIVE lamp frustum. `lightIdx`
+    // is the lamp's record index in this frame's frame.lights (the lit pass
+    // gates its PCF to that loop slot; the godray pass re-maps it to its own
+    // nearest-N ordering). game.js guards on this method existing, so WGX
+    // silently keeps unshadowed lamp cones.
+    lampShadowBegin(lightVP, lightIdx) {
+      if (!lampShadowEnabled) return;
+      setDepthMask(true);
+      lampShadowLightVP.set(lightVP);
+      _lampShadowIdx = lightIdx | 0;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, lampShadowFBO);
+      gl.viewport(0, 0, LAMP_SHADOW_SIZE, LAMP_SHADOW_SIZE);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      useProg(depthProg);
+      gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
+      gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
+      _castCullVP = lampShadowLightVP;   // chunked casters cull to the lamp cone
+      _lampShadowArmed = true;
+      _lampShadowArms++;
+    },
+    lampShadowEnd() {
+      if (!lampShadowEnabled) return;
+      _castCullVP = null;
+      gl.enable(gl.CULL_FACE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
+      gl.viewport(0, 0, width, height);
+    },
     get width() { return width; },
     get height() { return height; },
     get aspect() { return aspect; },
     hdrMode: () => colorType === gl.HALF_FLOAT,
     // Debug introspection for the dynamic car shadow map (used by tests/tools).
     carShadowState: () => ({ enabled: carShadowEnabled, arms: _carShadowArms }),
+    // Same for the nearest-floodlight spot shadow map (idx = frame.lights slot).
+    lampShadowState: () => ({ enabled: lampShadowEnabled, arms: _lampShadowArms, idx: _lampShadowIdx }),
     msaa: () => msaaSamples,
     pcss: () => pcssEnabled,
     setRenderScale, getRenderScale,

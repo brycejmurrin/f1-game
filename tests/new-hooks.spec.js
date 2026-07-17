@@ -476,3 +476,43 @@ test.describe("obs().gear", () => {
     expect(obs.gear).toBeGreaterThanOrEqual(4);
   });
 });
+
+// ── shared track foundation diagnostics ─────────────────────────────────────
+
+test.describe("shared track foundation diagnostics", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("reports finite geometry and structured model outcomes", async ({ page }) => {
+    await load(page, "cota");
+    const result = await page.evaluate(() => ({
+      geometry: window.__apex.geometryDiagnostics(),
+      models: window.__apex.modelDiagnostics(),
+    }));
+    expect(result.geometry.length).toBeGreaterThan(5);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(Array.isArray(result.models.emitted)).toBe(true);
+    expect(Array.isArray(result.models.suppressed)).toBe(true);
+    expect(Array.isArray(result.models.invalid)).toBe(true);
+    expect(Array.isArray(result.models.unsafe)).toBe(true);
+    const hard = [...result.models.invalid, ...result.models.suppressed, ...result.models.unsafe]
+      .filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+    for (const span of result.models.emitted.filter((entry) => entry.overhead))
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+  });
+
+  test("night rebuilds expose a distinct validated props manifest", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const counts = await page.evaluate(() => {
+      window.__apex.race("singapore", "day", "dry");
+      const day = window.__apex.geometryDiagnostics().find((entry) => entry.name === "props").vertices;
+      window.__apex.race("singapore", "night", "dry");
+      const night = window.__apex.geometryDiagnostics().find((entry) => entry.name === "props").vertices;
+      return { day, night };
+    });
+    expect(counts.day).toBeGreaterThan(0);
+    expect(counts.night).toBeGreaterThan(0);
+    expect(counts.night).not.toBe(counts.day);
+  });
+});
