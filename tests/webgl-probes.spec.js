@@ -78,6 +78,17 @@ test.describe("WebGL renderer probes", () => {
     expect(nightLights).toBeGreaterThan(dayLights);
   });
 
+  test("day mode has zero floodlights (monza)", async ({ page }) => {
+    // Merged from the former lightstate.spec.js: a strict day==0 check (the
+    // night-transition test above only asserts night > day, hedged with a catch).
+    await loadRace(page);
+    await page.evaluate(() => window.__apex.setTimeOfDay("day"));
+    await page.waitForFunction(() => window.__apex.lightState().numLights === 0, { timeout: 5000 });
+    const ls = await page.evaluate(() => window.__apex.lightState());
+    expect(ls.numLights).toBe(0);
+    expect(ls.sunColor).toBeDefined();
+  });
+
   test("UBO light count matches lightState after setTimeOfDay — capped at 32", async ({ page }) => {
     await loadRace(page);
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));

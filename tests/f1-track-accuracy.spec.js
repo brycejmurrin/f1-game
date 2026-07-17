@@ -263,5 +263,11 @@ test("verify game track shapes against real GeoJSON outlines", async ({ page }) 
   // ── 7. Assert ─────────────────────────────────────────────────────────────
   expect(results.length).toBeGreaterThan(20);
   const monaco = results.find(r => r.gameId === "monaco");
-  if (monaco) expect(monaco.geoDir).toBe("CW");   // real Monaco is CW
+  if (monaco) {
+    expect(monaco.geoDir).toBe("CW");    // real Monaco is CW
+    // Game-side direction check, merged from the former
+    // f1-2025-circuit-directions.spec.js (which asserted only this): the game's
+    // own Monaco centreline must also traverse CW.
+    expect(monaco.gameDir).toBe("CW");
+  }
 });
