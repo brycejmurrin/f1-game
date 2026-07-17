@@ -16,11 +16,76 @@ The lit shader combines three sources:
 | Hemisphere ambient | `uAmbSky`, `uAmbGround` | Blended by surface normal Y component |
 | Point lights (up to 32) | uniform arrays — see below | Floodlights, emissives |
 
-The composite pass then applies: ACES tone-map → `colourGrade` (vibrance/contrast
-lift — the main "washed-out" lever) → bloom → lens flare → vignette.
+The composite pass combines AO, shafts, exposure and bloom in HDR, applies the
+live HDR image grade described below, then runs ACES → display-domain colour
+grade → lens flare → vignette, grain and dither.
 
 The sky shader's sun disc uses the same `sunDir` as the lighting uniforms, so the
 bright spot in the sky always aligns with where shadows fall.
+
+---
+
+## IMAGE & COLOUR grading
+
+The LIGHTING TUNER keeps one `IMAGE & COLOUR` tab with four internal sections:
+`TONAL RANGE`, `RGB LIFT / GAMMA / GAIN`, `COLOUR`, and `LENS & FINISH`.
+`TUNE_DEFS.section` only controls those headings; profile resolution, Reset,
+COPY VALUES and `__apex.lightTune()` continue to use the ordinary slider IDs.
+
+### Composite order
+
+1. Combine the HDR scene, AO, shafts and bloom; apply exposure.
+2. Apply RGB Lift/Gamma/Gain.
+3. Apply overlapping log-luminance Blacks, Shadows, Midtones, Highlights and
+   Whites exposure masks.
+4. Apply luminance-preserving Toe and Shoulder curves.
+5. Apply the existing ACES fit.
+6. Apply Contrast, Vibrance, Saturation, Warm/Cool, split tone and Black Floor.
+7. Apply lens/finish effects.
+
+The HDR grade is arithmetic in the existing composite pass. It adds no render
+pass, target or texture sample. Both shaders clamp `pow`/log inputs and curve
+divisors so every exposed slider extreme remains finite.
+
+### Tonal controls
+
+| ID | Range | Neutral | Purpose |
+|---|---:|---:|---|
+| `blacks` | −1…1 | 0 | Deepest near-black detail |
+| `shadows` | −1…1 | 0 | Dark asphalt, tyres and unlit surfaces |
+| `midtones` | −1…1 | 0 | Middle-grey paint and environment detail |
+| `highlights` | −1…1 | 0 | Bright surfaces below peak white |
+| `whites` | −1…1 | 0 | Brightest HDR values entering the ACES shoulder |
+| `toe` | −1…1 | 0 | Transition out of black |
+| `shoulder` | −1…1 | 0 | Highlight compression before ACES |
+
+These are distinct from the existing `blackLift` and `whitePoint` IDs, labelled
+**BLACK FLOOR** and **ACES WHITE SCALE** in the tuner. Their IDs and stored
+meaning are unchanged for preset compatibility.
+
+RGB grading exposes `liftR/G/B` (−0.15…0.15, neutral 0), `gammaR/G/B`
+(0.5…2, neutral 1), and `gainR/G/B` (0.5…1.5, neutral 1). The fitted transform
+maps input black to Lift, input white to Gain, and Gamma controls the midpoint.
+
+All new registry defaults are neutral. The shipped broadcast grade lives in
+`LightPresets["*"]`; track/time/weather presets and localStorage profiles retain
+their existing higher precedence.
+
+### WebGPU `CompositeU` packing
+
+`CompositeU` is **224 bytes** (14 aligned `vec4<f32>` records). The original
+nine records occupy bytes 0–143; grading appends:
+
+| Offset | Record | Components |
+|---:|---|---|
+| 144 | `tone0` | Blacks, Shadows, Midtones, Highlights |
+| 160 | `tone1` | Whites, Toe, Shoulder, padding |
+| 176 | `lift` | Lift R/G/B, padding |
+| 192 | `gamma` | Gamma R/G/B, padding |
+| 208 | `gain` | Gain R/G/B, padding |
+
+WebGL uploads the same five records as `uTone0`, `uTone1`, `uLift`, `uGamma`
+and `uGain`.
 
 ---
 

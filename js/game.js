@@ -689,6 +689,8 @@ const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new F
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
 // Dynamic car shadow pass scratches (per-frame car-only depth map).
 const _mCView = new Float32Array(16), _mCProj = new Float32Array(16), _mCVP = new Float32Array(16);
+// Nearest-floodlight spot-shadow pass scratches (per-frame 512² lamp depth map).
+const _mFlView = new Float32Array(16), _mFlProj = new Float32Array(16), _mFlVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
@@ -2270,11 +2272,11 @@ function resolveCollisions(ranked, dt) {
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
-        // Scoped to player contacts + near-slop nests so AI↔AI packs don't
-        // dump momentum on every mild close.
+        // Only when the PLAYER is the rear car closing: applying this to every
+        // player↔AI touch (e.g. grid pack with throttle held) drained the field.
         const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
         const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-        const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+        const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
         const sideContact = penLat < penLong && !forceRear;
         if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -2284,9 +2286,7 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          // Only scrub when we actually pushed — at-slop contact with corr=0 used
-          // to bleed speed forever while cars stayed longitudinally nested.
-          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
+          a.speed *= rubScrub; b.speed *= rubScrub;   // barely scrub speed on a side rub
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
@@ -2333,10 +2333,10 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-      // Match the relaxation pass for player nest-edge contacts.
+      // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-      const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+      const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
       const sideContact = penLat < penLong && !forceRear;
       if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
@@ -4283,6 +4283,59 @@ function render(dt) {
     const rig = buildStudioRig();
     if (rig) frame.lights = rig;
   }
+  // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
+  // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
+  // per-frame 512² depth map (perspective, looking down its beam) so the car
+  // driving under it throws a radial shadow away from the mast and walls carve
+  // its pool + volumetric shaft. The other 31 lamps stay cone-shaped (no
+  // per-light shadow cost). Casters: last frame's pooled car matrices (same
+  // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
+  // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
+  // has no lampShadowBegin, the mobile tier never creates the map.
+  if (gfx.lampShadowBegin && LT.lampShadow && frame.lights && !_studioRig &&
+      player && state !== "menu" && state !== "select") {
+    // Gate on the KEY being dim (true night): by day/dusk the sun owns the
+    // shadows, and a daytime-floods pool shadow would fight the sun's.
+    const _flk = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+    if (_flk <= 0.30) {
+      const L = frame.lights, nRec = (L.length / 15) | 0;
+      let flBest = -1, flScore = Infinity;
+      for (let i = 0; i < nRec; i++) {
+        const o = i * 15;
+        if (L[o + 6] < 12) continue;   // skip small movers (car tail-lights, washers)
+        const dx = L[o] - camEye[0], dy = L[o + 1] - camEye[1], dz = L[o + 2] - camEye[2];
+        // Nearest-strongest: distance² over luminance, so a bright flood bank
+        // beats a dim work lamp at similar range.
+        const s = (dx * dx + dy * dy + dz * dz) /
+                  Math.max(Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
+        if (s < flScore) { flScore = s; flBest = i; }
+      }
+      if (flBest >= 0) {
+        const o = flBest * 15;
+        const rad = L[o + 6];
+        // Perspective frustum down the beam: fov spans the OUTER cone (plus
+        // margin for the soft skirt), capped where 512² texel density and
+        // perspective-depth precision still hold up; far = the lamp radius
+        // (nothing beyond it receives this light anyway).
+        const fov = Math.min(2.6, 2 * Math.acos(clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
+        const up = Math.abs(L[o + 8]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
+        M4.lookAtTo(_mFlView, [L[o], L[o + 1], L[o + 2]],
+          [L[o] + L[o + 7], L[o + 1] + L[o + 8], L[o + 2] + L[o + 9]], up);
+        // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
+        // lamp position IS the visible lens box, with the head/arm right beside
+        // it, all part of the props caster mesh) — a closer near plane renders
+        // the fixture into the map and it eclipses its own beam, blacking out
+        // the whole pool. 2.5 m clips the fixture; every real occluder (cars,
+        // walls, the mast pole below the head) is farther out than that.
+        M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
+        M4.mulTo(_mFlVP, _mFlProj, _mFlView);
+        gfx.lampShadowBegin(_mFlVP, flBest);
+        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+        gfx.lampShadowEnd();
+      }
+    }
+  }
   // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
   // fog-weather night is the money shot while a clear night keeps only a hint.
   // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
@@ -6159,16 +6212,24 @@ function buildLightTunePanel() {
   if (!host.dataset.built) {
     host.dataset.built = "1";
     const groups = [];      // ordered distinct group names
-    let group = null, wrap = null;
+    let group = null, section = null, wrap = null;
     for (const d of TUNE_DEFS) {
       if (d.group !== group) {
         group = d.group; groups.push(group);
+        section = null;
         wrap = document.createElement("div");
         wrap.className = "lt-group"; wrap.dataset.group = group;
         const h = document.createElement("h3");
         h.className = "adv-sec"; h.textContent = group;
         wrap.appendChild(h);
         host.appendChild(wrap);
+      }
+      if (d.section && d.section !== section) {
+        section = d.section;
+        const sh = document.createElement("h4");
+        sh.className = "lt-section";
+        sh.textContent = section;
+        wrap.appendChild(sh);
       }
       const item = document.createElement("div");
       item.className = "adv-item";
