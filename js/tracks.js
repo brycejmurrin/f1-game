@@ -502,7 +502,9 @@ const Tracks = (function () {
     // Pivot around the centreline: inner and outer edges move equally in
     // opposite directions instead of turning the bank into a longitudinal hump.
     o.dy = signedLift * cx / (2 * w);
-    o.roll = -Math.atan2(signedLift, 2 * w);
+    // Match the actual road-plane slope. game.js rotates the car basis with this
+    // angle, making its up-axis perpendicular to the banked asphalt.
+    o.roll = Math.atan2(signedLift, 2 * w);
     return o;
   }
 

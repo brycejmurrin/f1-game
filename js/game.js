@@ -4038,7 +4038,9 @@ function render(dt) {
   // Car-follow cameras counter-rotate by the road bank so the car and asphalt
   // read level while the horizon carries the banking cue. Slip adds a small
   // dynamic lean on top; broadcast/debug cameras remain world-level.
-  {
+  if (dbgCam) {
+    camRoll = 0;
+  } else {
     const slip = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
     const targetRoll = roadCamRoll + clamp(slip, -1, 1) * 0.07;
     camRoll += (targetRoll - camRoll) * Math.min(1, dt / 0.15);
@@ -7405,7 +7407,7 @@ window.__apex = {
   // one is active, otherwise the game camera. `debug` flags which. (Previously
   // this always returned the game cam, masking an active view() override.)
   camState: () => dbgCam
-    ? { eye: Array.from(dbgCam.eye), tgt: Array.from(dbgCam.target), fov: dbgCam.fov, roll: camRoll, debug: true }
+    ? { eye: Array.from(dbgCam.eye), tgt: Array.from(dbgCam.target), fov: dbgCam.fov, roll: 0, debug: true }
     : { eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov, roll: camRoll, debug: false },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },

@@ -95,6 +95,26 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
     expect(rollDeg).toBeLessThan(14);
   });
 
+  test("bank roll matches the road surface slope", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+      const track = Tracks.buildCenterline(def);
+      const s = 0.75 * track.total;
+      const w = track.hw[Math.round(0.75 * track.n) % track.n];
+      const leftY = Tracks.banking(track, s, -w)?.dy || 0;
+      const rightY = Tracks.banking(track, s, w)?.dy || 0;
+      const roll = Tracks.banking(track, s, 0)?.roll || 0;
+      return {
+        roll,
+        surfaceRoll: Math.atan2(rightY - leftY, 2 * w),
+      };
+    });
+
+    expect(result.roll).toBeCloseTo(result.surfaceRoll, 5);
+  });
+
   test("chase camera follows the road bank instead of showing a sideways wall", async ({ page }) => {
     await startRace(page, "madrid");
     const result = await page.evaluate(() => {
@@ -105,15 +125,19 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       window.__apex.camera("chase");
       window.__apex.snapCam();
       const bankedRoll = window.__apex.camState().roll;
+      window.__apex.orbit(0.75, 45, 18, 45);
+      const debugRoll = window.__apex.camState().roll;
+      window.__apex.camera("chase");
       window.__apex.jump(0.60, 30, 0);
       window.__apex.snapCam();
       const flatRoll = window.__apex.camState().roll;
-      return { trackRoll, bankedRoll, flatRoll };
+      return { trackRoll, bankedRoll, debugRoll, flatRoll };
     });
 
     expect(Math.abs(result.bankedRoll) * 180 / Math.PI).toBeGreaterThan(13);
     expect(Math.abs(result.bankedRoll) * 180 / Math.PI).toBeLessThan(14);
     expect(result.bankedRoll).toBeCloseTo(-result.trackRoll, 4);
+    expect(result.debugRoll).toBe(0);
     expect(Math.abs(result.flatRoll) * 180 / Math.PI).toBeLessThan(1);
   });
 
