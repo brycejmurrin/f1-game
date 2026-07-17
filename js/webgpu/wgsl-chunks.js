@@ -171,7 +171,7 @@ struct FrameU {
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
-  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, _) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth
+  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, mistShare) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth, ground-mist share of the lamp-fog glow
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, _, _, _) — live wet-surface darkening
 };                            // size 384
@@ -672,7 +672,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
     let dRamp = clamp((in.dist - 8.0) / 45.0, 0.0, 1.0);
     let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp * 0.5;
-    let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * 1.5;
+    // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
+    let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
     color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.35));
   }
 

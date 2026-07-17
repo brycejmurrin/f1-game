@@ -1195,7 +1195,10 @@ const WGX = (function () {
       // Always pack the resolved value so 0 reads as a real "no cloud shade" and
       // is not confused with an unset slot (WGSL reads params5.z directly).
       d[86] = (T && T.cloudShadowDim != null) ? T.cloudShadowDim : 0.80;
-      d[87] = 0;
+      // params5.w: MIST GLOW SHARE (ground-mist share of the lamp-fog glow; GLX
+      // uMistShare parity). Always pack the resolved value so 0 reads as a real
+      // "no mist glow" and is not an unset slot (WGSL reads params5.w directly).
+      d[87] = (T && T.mistShare != null) ? T.mistShare : 1.5;
       // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
       // the shadow box is snapped around (game.js shadow pass; glides with the
       // camera so the LIT distance fade never jumps on a box recentre), w =
@@ -1556,7 +1559,12 @@ const WGX = (function () {
         const s = postScratch;
         s[0] = sunUVx; s[1] = sunUVy; s[2] = grStr; s[3] = 1.1;   // radialScale
         const sc = frameSunColor || [1, 0.95, 0.85];
-        s[4] = sc[0]; s[5] = sc[1]; s[6] = sc[2]; s[7] = 0.85;    // per-step decay
+        // SUN-SHAFT REACH knob (per-tap radial-march falloff). Default 0.82 =
+        // GLX uShaftDecay def — the old hardcoded 0.85 was a latent WGX drift
+        // from the shipped GLX look (the WGSL struct doc already reads "e.g.
+        // 0.82"); honouring the knob aligns both backends.
+        s[4] = sc[0]; s[5] = sc[1]; s[6] = sc[2];
+        s[7] = (T && T.sunShaftDecay != null) ? T.sunShaftDecay : 0.82;   // per-step decay
         device.queue.writeBuffer(godrayUBO, 0, s, 0, _Post.GODRAY_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: godrayView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
@@ -1600,7 +1608,10 @@ const WGX = (function () {
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
         const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(nLv - 1, 1) : 0;
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
-        s[0] = exposure; s[1] = bloomNorm; s[2] = haveGR ? 1.0 : 0.0; s[3] = flareStr;   // p0
+        // SCREEN SUN-SHAFT knob scales the composite shaft gate (GLX folds
+        // sunShaftMul into uSunShaft the same way). Default 1.0 = as-shipped.
+        const shaftMul = (T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0;
+        s[0] = exposure; s[1] = bloomNorm; s[2] = haveGR ? shaftMul : 0.0; s[3] = flareStr;   // p0
         s[4] = sunUVx; s[5] = sunUVy;
         s[6] = (T && T.whitePoint != null) ? T.whitePoint : 1.0;
         s[7] = (T && T.blackLift != null) ? T.blackLift : 0.005;                          // sunUV
