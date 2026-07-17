@@ -594,6 +594,59 @@ test.describe("shared track foundation diagnostics", () => {
     expect(result.groundGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
   });
 
+  test("Jeddah declares its migrated waterfront foundation contracts", async ({ page }) => {
+    await load(page, "jeddah");
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((entry) => entry.id === "jeddah");
+      const profile = window.__apex.trackProfile(360);
+      const terrainGaps = [];
+      for (let i = 0; i < 72; i++) {
+        for (const lat of [-6, -3, 0, 3, 6]) {
+          const gap = window.__apex.groundY(i / 72, lat).gap;
+          if (gap != null) terrainGaps.push(gap);
+        }
+      }
+      return {
+        def: {
+          sceneryCoordinates: def.sceneryCoordinates,
+          terrainOuter: def.terrainOuter,
+          dressingExclusions: def.dressingExclusions,
+        },
+        elevationRange: Math.max(...profile.map((entry) => entry.y)) -
+          Math.min(...profile.map((entry) => entry.y)),
+        maxTerrainGap: Math.max(...terrainGaps),
+        walls: window.__apex.wallStats(),
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+      };
+    });
+
+    expect(result.def.sceneryCoordinates).toBe("racing");
+    expect(result.def.terrainOuter).toBe(28);
+    expect(result.def.dressingExclusions).toEqual(expect.arrayContaining([
+      { kind: "city", s0: 0, s1: 1 },
+      { kind: "lamps", s0: 0, s1: 1 },
+      { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
+    ]));
+    expect(result.elevationRange).toBeLessThanOrEqual(3);
+    expect(result.maxTerrainGap).toBeLessThanOrEqual(0.18);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.99);
+    expect(result.walls.minOverHw).toBeGreaterThanOrEqual(0);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
+    const required = result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id);
+    expect(required).toEqual(expect.arrayContaining([
+      "jeddah-fountain", "jeddah-floating-mosque", "jeddah-flagpole",
+    ]));
+    const hard = [...result.models.invalid, ...result.models.suppressed, ...result.models.unsafe]
+      .filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+    const overhead = result.models.emitted.filter((entry) => entry.overhead);
+    expect(overhead).toHaveLength(2);
+    for (const span of overhead)
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+  });
+
   test("night rebuilds expose a distinct validated props manifest", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
