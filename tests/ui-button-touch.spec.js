@@ -112,6 +112,47 @@ test.describe("Race settings — portrait layout", () => {
   });
 });
 
+test.describe("Selection screen — iOS tablet portrait layout", () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+
+  test("track list owns an independent vertical scroll area", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.locator("#mb-race").click();
+    await page.locator("#select").waitFor({ state: "visible" });
+
+    const before = await page.locator("#sel-tracks").evaluate((list) => ({
+      clientHeight: list.clientHeight,
+      scrollHeight: list.scrollHeight,
+      overflowY: getComputedStyle(list).overflowY,
+    }));
+    expect(before.overflowY).toBe("auto");
+    expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
+
+    await page.locator("#sel-tracks").evaluate((list) => { list.scrollTop = 120; });
+    await expect.poll(() => page.locator("#sel-tracks").evaluate((list) => list.scrollTop)).toBeGreaterThan(0);
+  });
+});
+
+test.describe("Selection screen — iOS phone portrait touch scrolling", () => {
+  test.use({ viewport: PORTRAIT, hasTouch: true });
+
+  test("track list contains vertical scroll gestures", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.locator("#mb-race").click();
+    await page.locator("#select").waitFor({ state: "visible" });
+
+    const list = await page.locator("#sel-tracks").evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overscrollY: getComputedStyle(element).overscrollBehaviorY,
+    }));
+    expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(list.overscrollY).toBe("contain");
+  });
+});
+
 test.describe("Race settings — landscape layout", () => {
   test.use({ viewport: LANDSCAPE });
 

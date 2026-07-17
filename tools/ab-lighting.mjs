@@ -10,7 +10,7 @@
 //   node tools/ab-lighting.mjs list                    # print the knob catalog
 //   node tools/ab-lighting.mjs run all                 # A/B every knob
 //   node tools/ab-lighting.mjs run lampFog.base pcss.penScale ...
-//   node tools/ab-lighting.mjs run all --out /tmp/ab   # custom output dir
+//   node tools/ab-lighting.mjs run all --out artifacts/ab # custom output dir
 //
 // Exit code 1 if any knob produces NO visible change — "this constant no
 // longer does anything" is a caught regression, not a silent one. Per-lamp

@@ -131,32 +131,33 @@ test.describe("wall contact penalty on open circuits", () => {
     expect(result.speedAfter).toBeLessThan(result.speedBefore);
   });
 
-  test("barrier contact on Monza triggers rescue faster than open air stop", async ({ page }) => {
+  test("a car wedged against the barrier is auto-rescued back onto the track", async ({ page }) => {
     await loadRace(page, "monza");
     const result = await page.evaluate(() => {
       window.__apex.headless(true);
-      // Scenario A: car stopped against wall (wallT path → stuck sooner)
+      // Auto-rescue only fires when the car is stuck AND THROTTLE IS HELD — a
+      // driver who lets off the gas is deliberately never rescued (the
+      // `stoppedOnTrack = onThrottle && ...` guard in game.js updateCar). This
+      // wedges the car against the right barrier and holds throttle + full steer
+      // INTO the wall so it can't drive out; rescue must snap it back onto the
+      // track within the window. (The old test drove with throttle:false and a
+      // second open-track scenario — neither is a valid stuck state under the
+      // current throttle-gated rescue, so both silently never fired.)
       window.__apex.reset(0.05, 0, 0);
       const obs0 = window.__apex.obs();
-      window.__apex.jump(0.05, 0, obs0.wallR + 0.2);
-      let wallRescueFrame = -1;
+      window.__apex.jump(0.05, 0, obs0.wallR + 0.2);   // pinned against the right wall
+      let rescuedX = null, rescueFrame = -1;
       for (let i = 0; i < 420; i++) {  // 7 s window
-        window.__apex.act({ steer: 1.0, throttle: false, brake: false }, 1 / 60, 1);
-        if (window.__apex.physState().speed > 5) { wallRescueFrame = i; break; }
-      }
-      // Scenario B: car stopped in middle of track (stoppedOnTrack path → raceT > 2 needed)
-      window.__apex.reset(0.05, 0, 0);
-      let openRescueFrame = -1;
-      for (let i = 0; i < 420; i++) {
-        window.__apex.act({ steer: 0, throttle: false, brake: false }, 1 / 60, 1);
-        if (window.__apex.physState().speed > 5) { openRescueFrame = i; break; }
+        window.__apex.act({ steer: 1.0, throttle: true, brake: false }, 1 / 60, 1);
+        const x = window.__apex.probe().x;
+        if (x < obs0.wallR - 3) { rescuedX = +x.toFixed(1); rescueFrame = i; break; }  // snapped back inboard
       }
       window.__apex.headless(false);
-      return { wallRescueFrame, openRescueFrame };
+      return { rescueFrame, rescuedX, wallR: +obs0.wallR.toFixed(1) };
     });
-    // Both rescues should eventually fire
-    expect(result.wallRescueFrame).toBeGreaterThan(0);
-    expect(result.openRescueFrame).toBeGreaterThan(0);
+    // Rescue fired (car moved well inboard of the wall it was pinned against).
+    expect(result.rescueFrame).toBeGreaterThan(0);
+    expect(result.rescuedX).toBeLessThan(result.wallR - 3);
   });
 });
 
@@ -168,28 +169,36 @@ test.describe("wall contact penalty on open circuits", () => {
 test.describe("rescue cooldown reset", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("reset() clears rescue grace so re-rescue fires within 6 s", async ({ page }) => {
-    await loadRace(page);
-    const rescued = await page.evaluate(() => {
+  test("reset() clears rescue grace so a second rescue fires within the window", async ({ page }) => {
+    await loadRace(page, "monza");
+    const result = await page.evaluate(() => {
       window.__apex.headless(true);
-      // First episode: let a rescue happen (sit stopped for ~5 s)
-      window.__apex.reset(0.3, 0, 0);
-      for (let i = 0; i < 360; i++) {   // 6 s
-        window.__apex.act({ steer: 0, throttle: false, brake: false }, 1 / 60, 1);
-      }
-      // reset() — this must clear rescueLastT to -4
-      window.__apex.reset(0.3, 0, 0);
-      // Second episode: sit stopped again; with old bug this would be blocked by 4 s grace
-      let rescueHappened = false;
-      for (let i = 0; i < 420; i++) {   // 7 s window
-        window.__apex.act({ steer: 0, throttle: false, brake: false }, 1 / 60, 1);
-        const ps = window.__apex.physState();
-        if (ps.speed > 5) { rescueHappened = true; break; }   // rescue boosted speed
-      }
+      // Wedge against the barrier with throttle held — the only valid stuck state
+      // (rescue is throttle-gated; a car that lets off gas is never rescued). The
+      // old test drove throttle:false in both episodes, so NO rescue ever fired
+      // and it couldn't actually exercise the grace-period reset (Bug #7).
+      const wedgeUntilRescue = () => {
+        const o = window.__apex.obs();
+        window.__apex.jump(0.05, 0, o.wallR + 0.2);
+        for (let i = 0; i < 420; i++) {
+          window.__apex.act({ steer: 1.0, throttle: true, brake: false }, 1 / 60, 1);
+          if (window.__apex.probe().x < o.wallR - 3) return i;   // rescued back inboard
+        }
+        return -1;
+      };
+      // Episode 1: a rescue happens (sets rescueLastT).
+      window.__apex.reset(0.05, 0, 0);
+      const first = wedgeUntilRescue();
+      // reset() must clear rescueLastT so the 4 s post-rescue grace doesn't carry
+      // over and block the next episode's rescue.
+      window.__apex.reset(0.05, 0, 0);
+      const second = wedgeUntilRescue();
       window.__apex.headless(false);
-      return rescueHappened;
+      return { first, second };
     });
-    expect(rescued).toBe(true);
+    // Both episodes rescue — the second proves reset() cleared the grace period.
+    expect(result.first).toBeGreaterThan(0);
+    expect(result.second).toBeGreaterThan(0);
   });
 });
 

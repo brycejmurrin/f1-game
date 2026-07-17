@@ -388,7 +388,7 @@ Each entry: **what**, **why it helps maintenance today**, **effort (S/M/L)**,
 
 Ordered so each step is independently shippable, behaviour-preserving, and
 verifiable with the **existing** harness (`npm run test:visual` pixel-diff,
-`test:fast`, `inspect-scene`/`playwright-probe` deterministic screenshots,
+`test:fast`, `playwright-probe` deterministic screenshots,
 `__apex.lightState/probe/wallStats` numeric asserts, `verify-track.cjs` for any
 tracks.js touch). Every JS/CSS edit requires the `?v=N` + `version.json` bump
 (see `CLAUDE.md` / `bump-cache` skill).

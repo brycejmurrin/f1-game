@@ -3,12 +3,13 @@
 // Starts its own http.server on PORT, launches the preinstalled Chromium,
 // captures the props mesh, and reports (as JSON) the worst prop-over-road
 // intrusions with lap-fractions + world coords. With --shots it also writes
-// driver-eye + orbit screenshots per hotspot to /tmp/pov-<track>-*.png.
+// driver-eye + orbit screenshots per hotspot to artifacts/tmp/pov-<track>-*.png.
 //
 // This is the shared harness for the props-over-road fix pass. It mirrors the
 // geometry used by tests/props-over-road.spec.js so a number here matches CI.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 const TRACK = process.env.TRACK;
@@ -19,6 +20,8 @@ if (!TRACK) { console.error("set TRACK=<id>"); process.exit(2); }
 const CHROME = process.env.CHROME ||
   "/Users/bmurrin/Library/Caches/ms-playwright/chromium-1179/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const OUT = path.join(ROOT, "artifacts", "tmp");
+if (SHOTS) mkdirSync(OUT, { recursive: true });
 
 const srv = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, stdio: "ignore" });
 await new Promise((r) => setTimeout(r, 1200));
@@ -78,10 +81,10 @@ try {
     for (const f of fracs) {
       await p.evaluate((ff) => __apex.eyeAt(ff, 0, 2.2), f);
       await p.waitForTimeout(300);
-      await p.screenshot({ path: `/tmp/pov-${TRACK}-${String(f).replace(".", "p")}-eye.png` });
+      await p.screenshot({ path: path.join(OUT, `pov-${TRACK}-${String(f).replace(".", "p")}-eye.png`) });
       await p.evaluate((ff) => __apex.orbit(ff, 90, 8, 45), f);
       await p.waitForTimeout(300);
-      await p.screenshot({ path: `/tmp/pov-${TRACK}-${String(f).replace(".", "p")}-orbit.png` });
+      await p.screenshot({ path: path.join(OUT, `pov-${TRACK}-${String(f).replace(".", "p")}-orbit.png`) });
     }
   }
   await b.close();

@@ -33,7 +33,7 @@ async function globalSetup(config) {
 
   throw new Error(
     `Dev server did not respond at ${baseURL} after 5 attempts (~10 s).\n` +
-    `Start it with: python3 -m http.server 3456\n` +
+    `Use the npm test scripts so a server and free port are managed automatically.\n` +
     `Underlying error: ${lastError?.message ?? lastError}`
   );
 }

@@ -31,6 +31,7 @@ const F1API = (function () {
   let lastNetAt = 0;                    // time of last actual fetch start
   let latestSessionKey = null;          // tracked from latestSession() responses
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
+  const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
 
   /* ---------- cache ---------- */
 
@@ -232,6 +233,15 @@ const F1API = (function () {
     return TTL_LATEST;
   }
 
+  function meetingTtl(meetingKey) {
+    const ds = meetingDates[meetingKey];
+    if (!ds) return TTL_HISTORIC;
+    const age = Date.now() - Date.parse(ds);
+    return isFinite(age) && age >= 0 && age <= 7 * 24 * HOUR
+      ? TTL_LATEST
+      : TTL_HISTORIC;
+  }
+
   function mapSession(s) {
     s = s || {};
     const out = {
@@ -263,20 +273,22 @@ const F1API = (function () {
     return request(OPENF1 + "/meetings?year=" + encodeURIComponent(year), TTL_SCHEDULE).then(function (list) {
       return arr(list).map(function (m) {
         m = m || {};
-        return {
+        const out = {
           meetingKey: (m.meeting_key !== undefined && m.meeting_key !== null) ? m.meeting_key : null,
           name: str(m.meeting_name),
           country: str(m.country_name),
           circuit: str(m.circuit_short_name),
           dateStart: str(m.date_start)
         };
+        if (out.meetingKey !== null && out.dateStart) meetingDates[out.meetingKey] = out.dateStart;
+        return out;
       }).filter(function (m) { return m.meetingKey !== null; });
     });
   }
 
   // All sessions (FP/Qualifying/Sprint/Race) within one meeting.
   function sessionsForMeeting(meetingKey) {
-    return request(OPENF1 + "/sessions?meeting_key=" + encodeURIComponent(meetingKey), TTL_HISTORIC).then(function (list) {
+    return request(OPENF1 + "/sessions?meeting_key=" + encodeURIComponent(meetingKey), meetingTtl(meetingKey)).then(function (list) {
       return arr(list).map(mapSession).filter(function (s) { return s.sessionKey !== null; });
     });
   }

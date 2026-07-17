@@ -11,7 +11,9 @@ splits, etc.). Consult `index.html` directly for the full, current order:
 
 ```
 js/mat4.js     -> M4, V3
-js/glx.js      -> GLX        (WebGL2 renderer)
+js/glx.js      -> GLX        (default WebGL2 renderer)
+js/webgpu/*    -> WGX        (opt-in WebGPU renderer)
+js/gfx.js      -> Gfx        (renderer selection seam)
 js/teams.js    -> Teams      (2026 grid data)
 js/tracks/*.js -> TrackDefs   (one file per circuit; registers itself on the list)
 js/tracks.js   -> Tracks     (engine: spline + meshes; reads TrackDefs)
@@ -56,9 +58,12 @@ chain, SSAO/GODRAY/COMPOSITE/FXAA/DEPTH) as template-literal strings with no
 interpolation — pure data. `glx.js` destructures it at the top of its IIFE, so
 this file must load first (see index.html).
 
-## js/glx.js — `GLX`
+## js/glx.js / js/webgpu/wgx.js / js/gfx.js — renderers
 
-WebGL2 only. One standard lit shader for everything except the sky.
+GLX is the default WebGL2 renderer. WGX is selected through the active Gfx seam
+only when `apex26.gfxBackend=webgpu` opts in and WebGPU initializes successfully;
+otherwise game.js uses GLX. One standard lit shader handles everything except
+the sky on the GLX path.
 Shader source strings live in `js/shaders/glx-shaders.js` (global `GLXShaders`).
 
 ```
@@ -166,7 +171,7 @@ track = { def, total,                       // total = length of loop in meters
           // parallel typed arrays, length n (closed loop, sample i at s = i*total/n):
           px,py,pz, tx,ty,tz, rx,ry,rz,     // position, tangent, right (banked)
           hw,                               // half width
-          meshes: { road, terrain, props, gate },  // GLX mesh handles (created by build)
+          meshes: { road, terrain, props, gate },  // renderer mesh handles (created by build)
           map: [ [x,z], ... ] }             // ~200 pts for the DOM minimap, normalized 0..1
 
 Tracks.sample(track, s, out)   // s wraps; out = {p:[3], t:[3], r:[3], hw:number}
@@ -205,8 +210,8 @@ overhang the tarmac on a curving stretch — not just their inner-face point.
 ## js/car3d.js — `Car3D`
 
 ```
-Car3D.build(color, color2) -> meshData   // PLAIN data {pos,nrm,col,idx} for GLX.createMesh
-                                         // (game creates one GLX mesh per team, shared by both cars)
+Car3D.build(color, color2) -> meshData   // PLAIN data {pos,nrm,col,idx} for renderer.createMesh
+                                         // (game creates one renderer mesh per team, shared by both cars)
 ```
 Local space: origin at ground under center of gravity, **+Z forward, +Y up**.
 ~1.9 m wide, ~5.4 m long. Parts: floor, tapered nose, front wing + endplates,
@@ -288,7 +293,8 @@ tab switch / hub close). Load before data.js.
 ## js/data.js — `DataHub`
 
 DOM overlay (`#datahub` in index.html), tabs: SCHEDULE | STANDINGS |
-LAST RACE | LIVE. Builds DOM with createElement (no innerHTML for API data).
+LAST RACE | LIVE | TELEMETRY | EXPORT. Builds DOM with createElement (no
+innerHTML for API data).
 Loading spinners, stale-data note ("cached Xm ago"), graceful errors.
 Team color chips use `Teams.LIST` colors matched by name substring.
 
@@ -374,13 +380,15 @@ screen, pause menu, data hub root, touch buttons, help modal. `css/style.css`
 = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600` accents, bold
 italic headings); `css/data.css` = data hub only. Cache-bust every script/style
 URL with `?v=N`, where `N` is a monotonic per-build integer (check `index.html`
-for the current value — currently 539). `version.json` `{ "build": N }` mirrors
-the same `N`; the shell version guard uses it to force-refresh a stale installed
-PWA.
+for the current value). `version.json` `{ "build": N }` mirrors the same `N`;
+the shell version guard uses it to force-refresh a stale installed PWA.
 
 ## Deploy
 
-`.github/workflows/pages.yml`: deploy whole repo to Pages on push to
-`claude/f1-game-project-26h3ng` + workflow_dispatch. `manifest.json` PWA like
-driving-game. NOT affiliated with FIA/F1 — fan project disclaimer in README
-and menu footer ("Unofficial fan project").
+`.github/workflows/pages.yml`: on push to `claude/f1-game-project-26h3ng` or
+workflow_dispatch, stage the runtime subset in `_site` (`index.html`,
+`version.json`, `manifest.json`, `sw.js`, `js/`, `css/`, `icons/`, and `assets/`)
+and deploy that Pages artifact. Tests, tools, docs, and other repository-only
+files are not shipped. `manifest.json` defines the PWA. NOT affiliated with
+FIA/F1 — fan project disclaimer in README and menu footer ("Unofficial fan
+project").

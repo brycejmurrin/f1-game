@@ -7,7 +7,7 @@
 # Usage:
 #   tools/test-shards.sh smoke api collision          # npm test:<group> names
 #   WORKERS=2 tools/test-shards.sh circuit barriers   # workers per group
-#   LOGDIR=/tmp/logs BASEPORT=3470 tools/test-shards.sh smoke parts
+#   LOGDIR=artifacts/logs BASEPORT=3470 tools/test-shards.sh smoke parts
 #
 # Notes:
 #   - Groups come from package.json's test:<group> scripts.
@@ -15,14 +15,14 @@
 #     renders via SwiftShader (CPU), so 2-3 groups x 2 workers is the sweet
 #     spot — more just thrashes.
 #   - Logs: $LOGDIR/<group>.log (tail -f to watch). Reports/artifacts land in
-#     playwright-report-<port>/ and test-results-<port>/ per group.
+#     artifacts/report-<port>/ and artifacts/test-results-<port>/ per group.
 #   - Exit code is non-zero if ANY group fails; a per-group summary prints
 #     at the end.
 set -u
 IN=("$@")
 [ ${#IN[@]} -gt 0 ] || { echo "usage: $0 <group> [group...]   (runs npm test:<group> concurrently)"; exit 2; }
 WORKERS="${WORKERS:-2}"
-LOGDIR="${LOGDIR:-test-logs}"
+LOGDIR="${LOGDIR:-artifacts/logs}"
 BASEPORT="${BASEPORT:-3461}"
 mkdir -p "$LOGDIR"
 

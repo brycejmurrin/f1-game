@@ -136,7 +136,7 @@ AI, race logic).
 
 ## Testing & development
 
-The project ships a **Playwright test suite** with 100+ specs covering physics
+The project ships a **Playwright test suite** with 45 specs covering physics
 regression, AI behaviour, UI screens, and visual regression:
 
 ```sh

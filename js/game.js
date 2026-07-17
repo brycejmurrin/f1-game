@@ -1,6 +1,6 @@
 /* Apex 26 — main game: state machine, physics, AI, race logic, HUD.
    Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks,
-   Car3D,Input,GameAudio,F1API,DataHub. */
+   Car3D,Input,GameAudio,F1API,DataHub; optionally Gfx/WGX for WebGPU. */
 (async function () {
 "use strict";
 
@@ -237,6 +237,7 @@ function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
+  invalidateDecalTextures("custom");
   if (teamMeshes.custom && gfx.freeMesh) gfx.freeMesh(teamMeshes.custom);   // free the old GPU buffers first
   delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
   if (playerBodies.custom && gfx.freeMesh) gfx.freeMesh(playerBodies.custom);
@@ -469,7 +470,7 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 // Cloud cover target for the current session: set once in applyRaceSettings()
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
-const teamMeshes = {};   // teamId -> GLX mesh
+const teamMeshes = {};   // teamId -> renderer mesh handle
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -813,6 +814,15 @@ const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, getPedalBar } = CarMesh;
 const _decalTexCache = {};
+function invalidateDecalTextures(teamId) {
+  const prefix = teamId + ":";
+  Object.keys(_decalTexCache).forEach(function (key) {
+    if (key.indexOf(prefix) !== 0) return;
+    const tex = _decalTexCache[key];
+    if (tex && gfx.freeTexture) gfx.freeTexture(tex);
+    delete _decalTexCache[key];
+  });
+}
 function getCarDecalTexture(team, num) {
   if (typeof LiveryTex === "undefined" || !gfx.createTexture) return null;
   const key = team.id + ":" + getLiveryId(team.id) + ":" + (num == null ? "_" : num);
@@ -1160,6 +1170,14 @@ function _nightAmbientBand() {
   }
 }
 
+// Floodlights are used on ANY track at night/dusk/dawn, plus a night-default
+// track in default mode. Shared by applyRaceSettings (pre-build) and the render
+// loop (per-frame) so the two can't drift out of sync.
+function isFloodActiveSession() {
+  return raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
+    (raceTimeOfDay === "default" && track && track.def && track.def.night);
+}
+
 // ---------- race flow ----------
 function applyRaceSettings() {
   // Load the lighting-tuner profile for the current (track, time, weather) so
@@ -1195,8 +1213,7 @@ function applyRaceSettings() {
   // Pre-build the floodlight set at race start so the first dark-session frame is
   // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
   // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
-  const floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
-    raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && track && track.def && track.def.night);
+  const floodActive = isFloodActiveSession();
   if (floodActive && track && (!track._lights || !track._lights.length)) track._lights = buildTrackLights(track);
   if (raceTimeOfDay !== "default") {
     const night = raceTimeOfDay === "night";
@@ -3866,8 +3883,7 @@ function render(dt) {
   // sun dominates so they're normally left off (no washed-out daylight pools) —
   // UNLESS the DAYTIME FLOODS knob (LT.floodDay) is turned up, which lights the
   // pools under a blue sky for a lit-stadium look (handled in the else-branch).
-  const _floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
-    (raceTimeOfDay === "default" && track.def.night);
+  const _floodActive = isFloodActiveSession();
   // Daytime floods: only when the session isn't already a dark one AND the knob is
   // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
   const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
@@ -5558,7 +5574,10 @@ function setSound(b) {
   els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
   $("pm-sound").textContent = "SOUND: " + (b ? "ON" : "OFF");
   if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
-  else { if (state === "menu") GameAudio.startMusic(-1); }
+  else {
+    if (state === "menu") GameAudio.startMusic(-1);
+    else if (state === "race") GameAudio.startMusic(trackIdx);
+  }
 }
 els.soundbtn.onclick = () => setSound(!soundOn);
 

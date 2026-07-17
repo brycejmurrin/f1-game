@@ -806,20 +806,28 @@ void main() {
     // facets straddled the line and flipped between "sky" and "ground", reading
     // as an arbitrary light/dark panel patchwork instead of a reflection. A wide
     // band keeps the sweep cue but blends across facet seams.
-    float horiz = smoothstep(-0.12, 0.30, Rg.y);
-    vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rg.y, 0.0)));   // sqrt not pow(x,0.5): pow(0.0,0.5) NaNs on mobile
-    vec3 envCC = mix(uAmbGround * 0.6, skyR, horiz);
-    // LIVE env probe: when the cubemap around the player car is warm, the
-    // lacquer mirrors the REAL surroundings (trees, buildings, track, sky —
-    // including everything behind the camera that SSR can never see) instead of
-    // the analytic gradient above. Roughness picks the mip so rough paint sees
-    // a blurred world. uEnvStr fades analytic → real, so the first frames (and
-    // the probe-less setup viewer) keep the gradient fallback.
-    if (uEnvStr > 0.001) {
-      // Sharp mip (rough·2.5, was ·6.0): a crisp mirror so buildings/trees
-      // read as themselves rather than a blurred smear.
-      vec3 envReal = textureLod(uEnvCube, Rg, rough * 2.5).rgb;
-      envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
+    // When the probe is FULLY live (uEnvStr≈1) the mix below collapses to envReal,
+    // so the analytic gradient (smoothstep+mix+sqrt, ~10 ops/px on every clear-coated
+    // pixel) would be computed only to be discarded — skip it in that case. The
+    // common case (probe OFF, uEnvStr 0) still takes the analytic path and skips the
+    // cube fetch, so this only ever removes work, never adds a branch cost that matters.
+    vec3 envCC;
+    if (uEnvStr >= 0.999) {
+      // Sharp mip (rough·2.5): a crisp mirror so buildings/trees read as themselves.
+      envCC = textureLod(uEnvCube, Rg, rough * 2.5).rgb;
+    } else {
+      float horiz = smoothstep(-0.12, 0.30, Rg.y);
+      vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rg.y, 0.0)));   // sqrt not pow(x,0.5): pow(0.0,0.5) NaNs on mobile
+      envCC = mix(uAmbGround * 0.6, skyR, horiz);
+      // LIVE env probe (partial fade): when the cubemap around the player car is
+      // warm, the lacquer mirrors the REAL surroundings (trees, buildings, track,
+      // sky — including everything behind the camera that SSR can never see) instead
+      // of the analytic gradient above. uEnvStr fades analytic → real, so the first
+      // frames (and the probe-less setup viewer) keep the gradient fallback.
+      if (uEnvStr > 0.001) {
+        vec3 envReal = textureLod(uEnvCube, Rg, rough * 2.5).rgb;
+        envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
+      }
     }
     envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
@@ -842,9 +850,15 @@ void main() {
       vec3 cell = floor(vObjPos * 220.0);
       float h1 = hash21(cell.xy + cell.z * 19.7);
       float h2 = hash21(cell.yz + cell.x * 7.3);
-      vec3 fT = normalize(cross(Ngeo, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
-      vec3 fB = cross(Ngeo, fT);
-      vec3 gN = normalize(Ngeo + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
+      // Flake basis off the geometry normal. Ngeo is a well-defined car normal in
+      // practice (and litNoL>0 above already rejects a NaN normal), but harden the
+      // basis anyway: a fallback unit normal keeps cross()/normalize() finite even
+      // if a degenerate (zero-length) Ngeo ever reaches here, so a bad face can't
+      // spray NaN glints across the paint.
+      vec3 nN = length(Ngeo) > 1e-4 ? normalize(Ngeo) : vec3(0.0, 1.0, 0.0);
+      vec3 fT = normalize(cross(nN, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
+      vec3 fB = cross(nN, fT);
+      vec3 gN = normalize(nN + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
       // Tighter alignment window + lower gain than the original (0.965 / 3.0):
       // sparse individual glints that flash as the view moves, instead of a
       // dense sand-grain field that made the paint read dirty/matte.
@@ -1843,8 +1857,15 @@ vec3 caScene(vec2 uv) {
   return vec3(texture(uScene, uv + d * a).r, texture(uScene, uv).g, texture(uScene, uv - d * a).b);
 }
 
-// ACES fitted filmic tone-map (Stephen Hill's approximation).
+// ACES fitted filmic tone-map (Krzysztof Narkowicz's approximation — the
+// a=2.51,b=0.03,c=2.43,d=0.59,e=0.14 curve; NOT Stephen Hill's fit).
 // Preserves colour ratios better than Reinhard; keeps darks dark, rolls off highlights.
+// NOTE (display transfer): the composite writes these values straight to an RGBA8
+// canvas with no explicit OETF (no pow(1/2.2) / sRGB encode, and the context/FBO
+// is not sRGB). The whole look — uContrast, vibrance, black-lift, the baked light
+// presets and the pixel-diff baselines — is hand-calibrated on top of that direct
+// output. Adding a gamma encode here is therefore a deliberate, all-baselines-
+// regenerating change, not a drop-in fix; leave it unless re-grading the game.
 vec3 acesTonemap(vec3 x) {
   const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);

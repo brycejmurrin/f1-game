@@ -10,8 +10,8 @@
  * controlled values aren't overwritten.
  *
  * Usage:  (serve the repo first, e.g. `python3 -m http.server 8099`)
- *   node tools/audio-test.js            # uses http://localhost:8099
- *   node tools/audio-test.js <baseURL>
+ *   node tools/audio-test.cjs            # uses http://localhost:8099
+ *   node tools/audio-test.cjs <baseURL>
  *
  * What to look for:
  *   - within a gear, rate rises monotonically with rev (climb)

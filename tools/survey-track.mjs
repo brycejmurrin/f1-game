@@ -52,8 +52,9 @@ try {
   const browser = await chromium.launch({ executablePath: pickChromium(), args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
+  page.setDefaultTimeout(60000);
   await page.goto(`http://127.0.0.1:${PORT}/`);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 12000 });
+  await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
 
   // race the track (retry once if a concurrent edit briefly broke the page)
   let ok = false;
@@ -66,11 +67,18 @@ try {
   await sleep(1400);
   await page.evaluate(() => window.__apex.hud(false));
 
+  // page.screenshot({ clip }) grabs the current framebuffer via CDP directly and
+  // SKIPS Playwright's element-actionability/stability checks — those never settle
+  // on a continuously-animating WebGL canvas (and time out hard under the heavy
+  // SwiftShader/CPU load of several surveys running at once).
   async function shot(name, fn, arg) {
     await page.evaluate(fn, arg);
     await sleep(220);
     const path = `${OUT}/${label}-${name}.png`;
-    const buf = await page.locator("canvas#game").screenshot({ path });
+    const box = await page.locator("canvas#game").boundingBox();
+    const buf = box
+      ? await page.screenshot({ path, clip: box, timeout: 60000 })
+      : await page.screenshot({ path, timeout: 60000 });
     shots.push({ name: `${label}-${name}.png`, kb: +(buf.length / 1024).toFixed(0), blank: buf.length < 30000 });
   }
 

@@ -26,9 +26,9 @@ const DIFF = {
   hard:   { ai: 0.99, band: 0.03 },
 };
 
-// Player camera modes, cycled with the CAM button / C key and persisted. Each is
-// a distinct vantage computed in render(): a close action chase, a higher/wider
-// chase for race-craft, an in-cockpit eye, and a nose/hood cam. Index into CAM_MODES.
+// Thirteen player camera modes, cycled with the CAM button / C key and persisted.
+// render() supplies chase, far, drift, cockpit, hood, overhead, heli, reverse,
+// TV-side, cinematic, low, T-cam, and rear-facing vantages. Index into CAM_MODES.
 const CAM_MODES = [
   { id: "chase",     label: "CHASE" },
   { id: "far",       label: "FAR" },

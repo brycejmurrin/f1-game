@@ -1,16 +1,13 @@
 // @ts-check
 import { defineConfig, devices } from "@playwright/test";
 import fs from "fs";
+import os from "os";
 
-// Per-run server port so several `playwright test` invocations can run at the
-// same time without sharing (and tearing down) each other's static server —
-// with the default fixed port, run B reuses run A's server and dies with
-// net::ERR_CONNECTION_REFUSED when run A finishes and kills it.
-//   APEX_PORT=3461 npx playwright test tests/foo.spec.js
-// When APEX_PORT is set, report/artifact dirs get a -<port> suffix so
-// concurrent runs don't clobber each other's output either.
+// npm scripts use tools/run-playwright.mjs to allocate a unique port per run.
+// APEX_PORT remains available for test-shards.sh and direct CLI invocations.
+// Port-suffixed output prevents concurrent runs from clobbering each other.
 const PORT = Number(process.env.APEX_PORT || 3456);
-const SUF = process.env.APEX_PORT ? `-${PORT}` : "";
+const SUF = `-${PORT}`;
 
 // Portable chromium resolution: prefer PW_CHROMIUM, else the Linux sandbox path
 // only if it actually exists on disk, else omit executablePath so Playwright
@@ -20,6 +17,41 @@ const CHROMIUM_PATH =
   process.env.PW_CHROMIUM ||
   (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
 
+// Shared Chromium launch (SwiftShader software-GL). Both projects use it — the
+// "headless"/"render" split is about worker concurrency, not GL capability.
+const LAUNCH = {
+  ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  args: [
+    "--use-angle=swiftshader",
+    "--enable-unsafe-webgpu",
+    "--disable-background-timer-throttling",
+    "--disable-renderer-backgrounding",
+  ],
+};
+
+// The render suite: specs that take screenshots / pixel-diffs, drive real GL
+// rendering, or assert DOM visibility. SwiftShader renders on the CPU, so past
+// ~4-6 concurrent renderers a 16-core box THRASHES (measured) rather than speeds
+// up. These run in the "render" project (cap its workers via
+// `--project=render --workers=4`). Everything NOT in this list is a headless
+// physics/geometry/hook/data spec that scales wide — the "headless" project.
+// Keep this list exhaustive against tests/*.spec.js (a coverage-audit npm script
+// asserts every spec lands in exactly one project).
+const RENDER_SPECS = [
+  "dev-tools", "f1-track-accuracy", "hud-audit", "lighting-ab",
+  "parts-budget", "parts-catalog", "parts-persistence",
+  "ui-audit", "ui-button-touch", "ui-desktop",
+  "tracks-visual", "webgl-probes", "camera", "smoke", "season", "time-trial",
+].map((n) => `**/${n}.spec.js`);
+
+// Default worker cap: every worker owns a Chromium + SwiftShader process.
+// Override with APEX_WORKERS or Playwright's --workers=N.
+const LOCAL_WORKERS = Math.max(2, Math.min(4, Math.floor(os.cpus().length / 2)));
+const REQUESTED_WORKERS = Number.parseInt(process.env.APEX_WORKERS || "", 10);
+const WORKERS = Number.isFinite(REQUESTED_WORKERS) && REQUESTED_WORKERS > 0
+  ? REQUESTED_WORKERS
+  : (process.env.CI ? 2 : LOCAL_WORKERS);
+
 export default defineConfig({
   testDir: "./tests",
   // Scratch/scan suites are ad-hoc investigation scripts, not part of the
@@ -27,31 +59,35 @@ export default defineConfig({
   testIgnore: ["**/inspect/**", "**/blank-scan/**", "**/galleries/**"],
   globalSetup: './tests/global-setup.js',
   fullyParallel: true,
-  workers: process.env.CI ? 2 : undefined,
-  retries: 1,
+  workers: WORKERS,
+  // retries:1 hides flakiness the deterministic (mocked network, headless
+  // obs/act/reset, geometry) suite is designed to avoid — surface it locally,
+  // keep one retry in CI for genuine infra blips. live-reporter reports flaky
+  // (passed-on-retry) counts either way.
+  retries: process.env.CI ? 1 : 0,
   timeout: 120_000,
-  outputDir: `test-results${SUF}`,
+  outputDir: `artifacts/test-results${SUF}`,
   use: {
-    baseURL: `http://localhost:${PORT}`,
+    baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
   projects: [
     {
-      name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        launchOptions: {
-          ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
-          args: [
-            "--use-angle=swiftshader",
-            "--enable-unsafe-webgpu",
-            "--disable-background-timer-throttling",
-            "--disable-renderer-backgrounding",
-          ],
-        },
-      },
+      // Physics / geometry / hooks / data specs — assertion-only, scale wide.
+      // Everything NOT in RENDER_SPECS. Run alone (fast) with:
+      //   npx playwright test --project=headless --workers=8
+      name: "headless",
+      testIgnore: RENDER_SPECS,
+      use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
+    },
+    {
+      // Screenshot / GL-heavy / DOM specs — cap workers to avoid SwiftShader
+      // CPU thrash:  npx playwright test --project=render --workers=4
+      name: "render",
+      testMatch: RENDER_SPECS,
+      use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
   ],
   webServer: {
@@ -59,8 +95,14 @@ export default defineConfig({
     // `npx serve` (which cold-resolves the package and often missed the old 10 s
     // window — the cause of flaky net::ERR_CONNECTION_REFUSED on the first specs).
     command: `python3 -m http.server ${PORT}`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: true,
+    url: `http://127.0.0.1:${PORT}`,
+    // The npm wrapper owns an in-process server, while direct local CLI use may
+    // deliberately target a manually started :3456 server. Explicit APEX_PORT
+    // runs (test-shards/CI) must own their server to avoid teardown races.
+    reuseExistingServer:
+      process.env.APEX_MANAGED_SERVER === "1" ||
+      process.env.APEX_REUSE_SERVER === "1" ||
+      (!process.env.CI && !process.env.APEX_PORT),
     timeout: 60_000,
     // python http.server logs every GET to stderr — hundreds of noise lines
     // per test that drown the reporter output in piped logs. Server startup
@@ -72,7 +114,7 @@ export default defineConfig({
     // Live tail-able progress (see tests/live-reporter.js): timestamped
     // start/end line per test, written immediately — `tail -f` friendly.
     ["./tests/live-reporter.js"],
-    ["html", { open: "never", outputFolder: `playwright-report${SUF}` }],
-    ["junit", { outputFile: `test-results${SUF}/junit.xml` }],
+    ["html", { open: "never", outputFolder: `artifacts/report${SUF}` }],
+    ["junit", { outputFile: `artifacts/test-results${SUF}/junit.xml` }],
   ],
 });
