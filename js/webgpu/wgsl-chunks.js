@@ -745,6 +745,41 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(acesTonemap(hdr), 1.0);
 }`;
 
+  // ── BLOCKER: min-of-4 downsample of the sun shadow depth map into the 512²
+  //    r16float blocker map (PCSS-lite blocker-search source; GLX BLOCKER_FS
+  //    parity). This chunk was MISSING when wgx.js first referenced
+  //    WGSLChunks.BLOCKER — createShaderModule({code: undefined}) threw and
+  //    killed the whole WGX init (silent GLX fallback). Bindings must match
+  //    blockerG0Layout in wgx.js: 0 = shadow depth texture, 1 = non-filtering
+  //    sampler, 2 = BlockerU (xy = 1/SHADOW_SIZE source texel).
+  const BLOCKER = `
+struct BlockerU { srcTexel : vec4<f32> };   // xy = 1/SHADOW_SIZE
+@group(0) @binding(0) var depthTex : texture_depth_2d;
+@group(0) @binding(1) var depthSamp : sampler;
+@group(0) @binding(2) var<uniform> B : BlockerU;
+${fullscreenTri}
+struct VOut {
+  @builtin(position) pos : vec4<f32>,
+  @location(0)       uv  : vec2<f32>,
+};
+@vertex
+fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
+  var o : VOut;
+  let p = fsTriNDC(vi);
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>((p.x + 1.0) * 0.5, (1.0 - p.y) * 0.5);
+  return o;
+}
+@fragment
+fn fs_main(in : VOut) -> @location(0) vec4<f32> {
+  let t = B.srcTexel.xy;
+  let d0 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0, -1.0), 0);
+  let d1 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0, -1.0), 0);
+  let d2 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0,  1.0), 0);
+  let d3 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0,  1.0), 0);
+  return vec4<f32>(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
+}`;
+
   // ── SKY: the first real WGSL shader. A *reduced but faithful* port of SKY_FS
   //    (js/glx.js:901) — gradient (zenith/horizon), golden-hour horizon warmth,
   //    a basic procedural cloud layer, Mie sun corona + disc, stars, moon, and
@@ -915,6 +950,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY,
     LIT,
     BLIT,
+    BLOCKER,
     SHADOW,
     // byte size of the SkyU uniform block (mat4 64 + 7*vec4 112 = 176)
     SKY_UNIFORM_BYTES: 176,
