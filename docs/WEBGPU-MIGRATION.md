@@ -1,9 +1,18 @@
 # WebGPU migration plan — Apex 26
 
-Status: **planning document, nothing implemented.** This is a concrete,
-executable plan for adding an *additive* WebGPU rendering path alongside the
-existing WebGL2 renderer (`js/glx.js`), with WebGL2 remaining the default,
-always-present fallback.
+> **Status update (superseded in part):** this document is the original
+> *planning* doc. Since it was written, the additive WebGPU backend has been
+> **built and wired in, opt-in, through Phase 4b** — `index.html` loads
+> `js/webgpu/wgsl-chunks.js`, `js/webgpu/wgsl-post.js`, `js/webgpu/wgsl-fx.js`,
+> `js/webgpu/wgx.js` and `js/gfx.js`, and the backend activates only when
+> `localStorage apex26.gfxBackend = "webgpu"` is set (it falls back to WebGL2/GLX
+> on any failure). WebGL2 remains the default, always-present path. See the
+> `WEBGPU-PHASE0/2/3/4-NOTES.md` for the as-built state. The Phase table and
+> recommendation below are retained as the original design rationale.
+
+This is a concrete, executable plan for adding an *additive* WebGPU rendering
+path alongside the existing WebGL2 renderer (`js/glx.js`), with WebGL2 remaining
+the default, always-present fallback.
 
 ## TL;DR / recommendation
 
@@ -357,13 +366,13 @@ Introduce one new interface that both backends implement, so `game.js` never
 names `GLX` or `WGX` directly.
 
 ```
-js/gfx.js        Gfx           façade: feature-detects, picks a backend, re-exports the chosen device
-js/glx.js        GLX           existing WebGL2 backend (unchanged behaviour)
-js/wgx.js        WGX           new WebGPU backend (implements the same surface)
+js/gfx.js            Gfx       façade: feature-detects, picks a backend, re-exports the chosen device
+js/glx.js            GLX       existing WebGL2 backend (unchanged behaviour)
+js/webgpu/wgx.js     WGX       WebGPU backend (implements the same surface)
 ```
 
 - **The interface = today’s `GLX` return object** (1e). That is deliberate:
-  `GLX` already *is* the contract. `js/wgx.js` must expose the same ~35 methods
+  `GLX` already *is* the contract. `js/webgpu/wgx.js` must expose the same ~35 methods
   with the same signatures and the same `frame`/`opts` object shapes. No new
   abstraction is invented; the existing one is merely named and documented.
 - **`Gfx` façade** (`js/gfx.js`, loaded before `game.js`):
@@ -408,7 +417,7 @@ js/wgx.js        WGX           new WebGPU backend (implements the same surface)
 | Phase | Scope | Effort | Risk | Validate |
 |---|---|---|---|---|
 | **0. Abstraction seam** | Add `js/gfx.js` façade; make `game.js` boot async through `Gfx.create`; route all `GLX.` calls via the returned handle. **WebGL2 only, zero behaviour change.** | **M** | **Low** | Full existing Playwright suite passes unchanged (`npm run test:fast`, `test:visual`); pixel-diff regression shows **zero** delta. |
-| **1. WebGPU device + clear + swapchain** | `js/wgx.js`: adapter/device, `context.configure`, resize/DPR, a stub that clears to `frame.fogColor` and no-ops every draw. Wire feature detection. | **M** | **Low** | On an iOS 26 / Chrome device: boots, shows a cleared canvas, `__apex.gfxBackend()==='webgpu'`; on old iOS: still WebGL2. |
+| **1. WebGPU device + clear + swapchain** | `js/webgpu/wgx.js`: adapter/device, `context.configure`, resize/DPR, a stub that clears to `frame.fogColor` and no-ops every draw. Wire feature detection. | **M** | **Low** | On an iOS 26 / Chrome device: boots, shows a cleared canvas, `__apex.gfxBackend()==='webgpu'`; on old iOS: still WebGL2. |
 | **2. Lit + Sky pass** | Port `createMesh`/`createTexMesh` → GPUBuffers + vertex layouts; `FRAME` uniform buffer + light storage buffer; WGSL `LIT`/`SKY`; per-draw model/material via dynamic offsets; opaque + a couple of blend pipelines; render to an RGBA16F scene texture blitted to screen (no post yet). | **XL** | **High** | Side-by-side screenshot vs WebGL2 at fixed `__apex.park()` poses on ~5 tracks, day + night; car + track read correct. This is the make-or-break phase for shader fidelity. |
 | **3. Shadow + env probe** | Depth-only shadow pass + comparison sampler PCF; PCSS-lite blocker downsample; the 64² env cube (one face/frame). Wire `sampler2DShadow`→`textureSampleCompare`. | **L** | **Med** | Shadow acne/penumbra and car reflections match WebGL2 within tolerance; `wallStats`/lighting probes unaffected. |
 | **4. Post chain** | Bright/down/up bloom mips, SSAO+contact, god-ray march, composite (SSR + tonemap + grade + flare + vignette + grain), FXAA. MSAA via pipeline `resolveTarget`. | **XL** | **High** | Visual-regression specs (`test:visual`) pass on the WebGPU path; bloom/SSR/tonemap match within pixel tolerance; frame-time not worse than WebGL2 on a mid GPU. |

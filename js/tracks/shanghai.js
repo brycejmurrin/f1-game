@@ -28,19 +28,11 @@
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
-        forestEdge, cross, norm, MAT } = api;
+        forestEdge, cross, norm, MAT, runoffApron } = api;
       const K = (s) => Math.round(s * n) % n;
-
-      // ── strut(): thin cylinder between two world points (canopy masts/cables) ──
-      const strut = (a, c, rad, col, seg) => {
-        const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-        const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
-        const up = [d[0] / L, d[1] / L, d[2] / L];
-        const ref = Math.abs(up[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
-        const right = norm(cross(ref, up));
-        const fwd = norm(cross(up, right));
-        addCyl(out, a, rad, L, col, seg || 4, [right, up, fwd]);
-      };
+      // Unguarded emitter for intentional overhead spans (cars pass under) —
+      // same pattern as underpassPortal's RAW.addBox in tracks.js.
+      const rawBox = TrackGeom.addBox;
 
       // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
       const CONC  = [0.70, 0.72, 0.74];
@@ -49,6 +41,7 @@
       const SEAT  = [0.40, 0.42, 0.46];
       const DARK  = [0.30, 0.32, 0.36];
       const ASPH  = [0.50, 0.52, 0.54];
+      const PALE  = [0.58, 0.58, 0.60];   // Tilke asphalt runoff — cockpit-readable
       const MARSH = [0.34, 0.45, 0.28];
       const MARSH_N = [0.28, 0.38, 0.24];
       const RED   = [0.82, 0.16, 0.14];
@@ -71,191 +64,66 @@
       // Lamp post warm sodium glow (very bright amber for day-lit contrast)
       const LAMP_GLOW = [0.98, 0.86, 0.52];
 
-      // ================= START / FINISH — WINGED PIT COMPLEX (s 0.00, L) =================
-      // Long white pit/control building hugging the main straight.
+      // ================= START / FINISH — PIT BUILDING (s 0.00, L) =================
       building(K(0.00), -1, 2, 18, 14, 150, { wall: WHITE, window: WIN_LIT, floor: 4 });
       building(K(0.98), -1, 2, 16, 11,  90, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
-      // Paddock / hospitality block set further back behind the pit building —
-      // motorhome() gives the real two-tier team-unit body + awning canopy
-      // instead of a flat building() office-block mass.
-      motorhome(K(0.99), -1, 40, 26,  9, 110, { wall: [0.80, 0.82, 0.84], window: WIN_LIT });
-      motorhome(K(0.96), -1, 44, 20, 12,  60, { wall: WHITE, window: WIN_TOWER });
-      motorhome(K(0.02), -1, 42, 22,  8,  70, { wall: [0.82, 0.83, 0.85], window: WIN_LIT });
 
       // =================================================================================
-      // SIGNATURE SUSPENDED TOWER-BRIDGES — the iconic Shanghai pit-straight landmark.
-      //
-      // Real layout: two pagoda-like towers on the LEFT side of the pit straight,
-      // connected by skybridges to anchoring piers on the RIGHT side. Each tower is
-      // a self-contained frustum column with cap; skybridges hang between left-tower
-      // tops and right-side piers at matching heights. Structural pillars under each
-      // bridge deck carry the load to ground.
-      //
-      // To avoid interpenetration we place every part at its own correctly-computed
-      // height and keep all cylinders/boxes separated by at least their radius/half-
-      // height. Skybridges are centred on the mid-point between left and right anchors
-      // so they land cleanly on both sides.
+      // TWIN WING BRIDGES — Shanghai's pit-straight gateway.
+      // One long white main stand + two slim wing decks (~38 m) spanning the straight
+      // on end pillars. Collapses the old tower / cantilever / cable-canopy stack into
+      // the clean Tilke "press centre + sky restaurant" silhouette.
       // =================================================================================
-      (function wingedTowers() {
-        const sLap  = 0.005;
-        // Ground anchors on each side — dist=36 puts towers well behind the pit wall.
-        const aL = anchor(K(sLap), -1, 36), bL = [aL.r, aL.u, aL.t];
-        const aR = anchor(K(sLap),  1, 36), bR = [aR.r, aR.u, aR.t];
-
-        // ── LEFT SIDE: primary tower (the taller of the pair) ──────────────────
-        // tower() places a tapered frustum column with optional cap + mast.
-        tower(K(sLap), -1, 36, 7.0, 70, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast: 10 });
-
-        // ── LEFT SIDE: secondary tower staggered 12 m further back along the track ──
-        // (uses a different node so anchor() places it correctly downstream)
-        tower(K(0.008), -1, 36, 6.6, 66, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast:  8 });
-
-        // ── RIGHT SIDE: single matching pier tower ──────────────────────────────
-        tower(K(sLap),  1, 36, 6.4, 62, { col: WHITE, seg: 8, cap: true, capCol: STEEL, mast:  6 });
-
-        // ── SKYBRIDGES ──────────────────────────────────────────────────────────
-        // Bridge deck spans from just outside the left tower to just outside the
-        // right pier.  We compute the mid-point between the two ground anchors and
-        // place each bridge box centred there — this guarantees clean registration
-        // on both sides regardless of track curvature.
-        //
-        // For each bridge level:
-        //  • A pair of slim support cylinders rise from left-ground to bridge height,
-        //    then from right-ground to bridge height (no cylinder penetrates the deck).
-        //  • The bridge deck box sits at exactly that height.
-        //  • A thin structural beam is placed 1.4 m BELOW the deck — not inside it.
-        //
-        // Heights chosen so they clear the tower cap (tower h=70, cap adds ~1.3 m,
-        // so caps top out at ~71.3 m). Bridge lower deck = 44 m, upper deck = 56 m —
-        // both well below tower tops so the towers frame the bridges from above.
-
-        // World mid-point between the two ground anchors
-        const mc = [
-          (aL.c[0] + aR.c[0]) * 0.5,
-          (aL.c[1] + aR.c[1]) * 0.5,
-          (aL.c[2] + aR.c[2]) * 0.5,
-        ];
-        // Span in the right-direction: half the distance between the two anchors
-        // (the box width should equal the full anchor-to-anchor distance).
-        const spanR = Math.hypot(
-          aR.c[0] - aL.c[0],
-          aR.c[1] - aL.c[1],
-          aR.c[2] - aL.c[2]
-        );
-
-        for (const hgt of [44, 56]) {
-          // Left-side support pillars: rise from ground to just below the deck.
-          // Two slim cylinders spaced ±3 m along the track direction for elegance.
-          for (const tOff of [-3, 3]) {
-            const pillarBase = vadd(aL.c, aL.t, tOff);
-            addCyl(out, pillarBase, 0.7, hgt - 1.2, STEEL, 6, bL);
-          }
-          // Right-side pier pillars
-          for (const tOff of [-3, 3]) {
-            const pillarBase = vadd(aR.c, aR.t, tOff);
-            addCyl(out, pillarBase, 0.7, hgt - 1.2, STEEL, 6, bR);
-          }
-
-          // Bridge deck: centred between the two anchor ground points, raised to hgt.
-          // Width = spanR (anchor-to-anchor), depth = 10 m, height = 2.0 m.
-          const deckC = [mc[0] + aL.u[0] * hgt, mc[1] + aL.u[1] * hgt, mc[2] + aL.u[2] * hgt];
-          const bridgeCol = hgt === 44 ? GLASS : WHITE;
-          addBox(out, deckC, [spanR, 2.0, 10], bridgeCol, bL);
-
-          // Structural beam 1.8 m below the deck underside (deck centre - 1.0 - 1.8 = -2.8)
-          const beamC = [mc[0] + aL.u[0] * (hgt - 2.8), mc[1] + aL.u[1] * (hgt - 2.8), mc[2] + aL.u[2] * (hgt - 2.8)];
-          addBox(out, beamC, [spanR * 0.96, 0.5, 8.0], STEEL, bL);
-
-          // Handrail strips along each long edge of the deck
-          for (const zOff of [-4.6, 4.6]) {
-            const railC = [deckC[0] + aL.t[0] * zOff, deckC[1] + aL.t[1] * zOff + 1.2, deckC[2] + aL.t[2] * zOff];
-            addBox(out, railC, [spanR, 0.3, 0.25], STEEL, bL);
-          }
-
-          // Lit window strip in the bridge deck face (warm interior glow)
-          const winC = [deckC[0] + aL.r[0] * (spanR * 0.25), deckC[1] + aL.r[1] * (spanR * 0.25), deckC[2] + aL.r[2] * (spanR * 0.25)];
-          addBox(out, winC, [spanR * 0.5, 0.9, 0.4], WIN_LIT, bL);
+      (function twinWings() {
+        // Long white main stand (L) — simple raked tiers, flat roof, no cantilever clutter
+        for (let i = 0; i < 7; i++) {
+          const s = 0.012 + i * 0.011;
+          const a = anchor(K(s), -1, 20), b = [a.r, a.u, a.t];
+          addBox(out, vadd(vadd(a.c, a.u, 5), a.r, 6), [14, 10, 15], SEAT, b);
+          addBox(out, vadd(vadd(a.c, a.u, 7.5), a.r, 1), [14, 2.6, 5], CROWD, b);
+          addBox(out, vadd(vadd(a.c, a.u, 8), a.r, 14), [14, 16, 2.5], CONC, b);
+          addBox(out, vadd(vadd(a.c, a.u, 16.5), a.r, 4), [14.5, 1.1, 20], WHITE, b);
         }
 
-        // ── Lamp posts on each tower base (warm glow heads) ────────────────────
-        for (const [aP, bP] of [[aL, bL], [aR, bR]]) {
-          for (const tOff of [-8, 8]) {
-            const postBase = vadd(aP.c, aP.t, tOff);
-            addCyl(out, postBase, 0.12, 8.5, STEEL, 5, bP);
-            addBox(out, vadd(postBase, aP.u, 8.6), [0.6, 0.3, 0.6], LAMP_GLOW, bP);
-          }
-        }
-      })();
+        // Two slim wing decks: pillars off-edge (guarded); decks via rawBox so they
+        // can clear the racing line the way underpassPortal / gantry beams do.
+        for (const [sLap, hgt, deckD, col] of [
+          [0.004, 38, 8.0, WHITE],
+          [0.022, 36, 7.0, [0.86, 0.88, 0.90]],
+        ]) {
+          const aL = anchor(K(sLap), -1, 22), bL = [aL.r, aL.u, aL.t];
+          const aR = anchor(K(sLap),  1, 18), bR = [aR.r, aR.u, aR.t];
+          const mc = [
+            (aL.c[0] + aR.c[0]) * 0.5,
+            (aL.c[1] + aR.c[1]) * 0.5,
+            (aL.c[2] + aR.c[2]) * 0.5,
+          ];
+          const span = Math.hypot(
+            aR.c[0] - aL.c[0], aR.c[1] - aL.c[1], aR.c[2] - aL.c[2]
+          );
 
-      // ---- Signature CURVED CANTILEVER MAIN GRANDSTAND + overhanging roof (L) ----
-      // A long raked stand with a huge sweeping roof on a back wall of pillars that
-      // cantilevers out over the seating toward the track.
-      (function cantileverMain() {
-        const segN = 9;            // segments stepping along the straight
-        for (let i = 0; i < segN; i++) {
-          const s = 0.018 + i * 0.012;
-          const a = anchor(K(s), -1, 22), b = [a.r, a.u, a.t];
-          // raked seating block
-          addBox(out, vadd(vadd(a.c, a.u, 5), a.r, 7), [16, 11, 18], SEAT, b);
-          addBox(out, vadd(vadd(a.c, a.u, 8.5), a.r, 1), [16, 3.5, 6], CROWD, b);
-          // back support wall + columns
-          addBox(out, vadd(vadd(a.c, a.u, 9), a.r, 18), [16, 19, 3], CONC, b);
-          addCyl(out, vadd(vadd(a.c, a.u, 0), a.r, 16), 0.8, 18, STEEL, 6, b);
-          // big overhanging cantilever roof slab
-          addBox(out, vadd(vadd(a.c, a.u, 19), a.r, 4),  [16.5, 1.6, 30], WHITE, b);
-          addBox(out, vadd(vadd(a.c, a.u, 18), a.r, -8), [16.5, 0.7,  6], STEEL, b);
-          // leading-edge fascia of the roof
-          addBox(out, vadd(vadd(a.c, a.u, 17.3), a.r, -10.5), [16.5, 1.8, 1.0], STEEL, b);
-          // roof rib strip (steel grey perpendicular fin)
-          addBox(out, vadd(vadd(a.c, a.u, 19), a.r, 4), [0.4, 2.8, 30], [0.55, 0.58, 0.62], b);
-        }
-      })();
+          for (const tOff of [-2.4, 2.4]) {
+            addCyl(out, vadd(aL.c, aL.t, tOff), 0.45, hgt - 0.8, STEEL, 6, bL);
+            addCyl(out, vadd(aR.c, aR.t, tOff), 0.45, hgt - 0.8, STEEL, 6, bR);
+          }
 
-      // =================================================================================
-      // SIGNATURE CABLE-STAYED SWEEPING CANOPY — the great arced wing roof that soars
-      // over the main grandstand and cantilevers toward the pit straight. Built as a
-      // continuous faceted arc ribbon (bay-by-bay so it follows the road), carried on
-      // tall white masts every few bays with fanned cable stays from each mast top to
-      // the roof arc. This is Shanghai's instant architectural read from the straight.
-      // =================================================================================
-      (function cableCanopy() {
-        const bays   = 18;
-        const facets = 6;
-        const span   = 34;    // cross-section reach in +r (toward the track)
-        const rInner = -6;    // starts behind the mast, over the stand
-        const rise   = 13;    // arc crown height above baseY
-        const baseY  = 27;    // roof springing height
-        for (let i = 0; i < bays; i++) {
-          const s = 0.006 + i * 0.0072;              // covers the pit straight
-          const a = anchor(K(s), -1, 34), b = [a.r, a.u, a.t];
-          // arced roof facets (alternating white steel / hazed glass panels)
-          const nodeAt = (t) => vadd(vadd(a.c, a.r, rInner + t * span),
-                                     a.u, baseY + Math.sin(t * Math.PI) * rise);
-          for (let j = 0; j < facets; j++) {
-            const tm = (j + 0.5) / facets;
-            const c = nodeAt(tm);
-            out._mat = j % 2 ? MAT.METAL : MAT.GLASS;
-            addBox(out, c, [span / facets * 1.18, 0.5, 9.6], j % 2 ? WHITE : GLASS_HAZE, b);
-          }
-          // leading-edge fascia along the outer lip
-          out._mat = MAT.METAL;
-          addBox(out, nodeAt(1.0), [1.4, 0.9, 9.8], STEEL, b);
-          // masts + fanned cable stays every 4th bay
-          if (i % 4 === 0) {
-            const mastH = 46;
-            out._mat = MAT.METAL;
-            addCyl(out, a.c, 1.0, mastH, WHITE, 8, b);
-            const mastTop = vadd(a.c, a.u, mastH);
-            out._mat = 0;
-            addCone(out, mastTop, 0.9, 3.2, RED, 6, b);           // mast beacon
-            out._mat = MAT.METAL;
-            for (let j = 1; j <= facets; j++) {
-              strut(mastTop, nodeAt(j / facets), 0.07, [0.92, 0.93, 0.95], 3);
-            }
-            // back-stay anchoring the mast to the ground behind the stand
-            strut(mastTop, vadd(a.c, a.r, -14), 0.09, STEEL, 3);
-          }
-          out._mat = 0;
+          const deckC = [
+            mc[0] + aL.u[0] * hgt,
+            mc[1] + aL.u[1] * hgt,
+            mc[2] + aL.u[2] * hgt,
+          ];
+          rawBox(out, deckC, [span, 1.15, deckD], col, bL);
+          // thin steel fascia + warm interior strip (press / restaurant read)
+          rawBox(out, [
+            deckC[0] + aL.u[0] * 0.7,
+            deckC[1] + aL.u[1] * 0.7,
+            deckC[2] + aL.u[2] * 0.7,
+          ], [span, 0.32, 0.28], STEEL, bL);
+          rawBox(out, [
+            deckC[0] + aL.r[0] * (span * 0.18),
+            deckC[1] + aL.r[1] * (span * 0.18),
+            deckC[2] + aL.r[2] * (span * 0.18),
+          ], [span * 0.32, 0.65, 0.32], WIN_LIT, bL);
         }
       })();
 
@@ -278,36 +146,66 @@
         }
       });
 
-      // ---- LAKES by the pit complex (groundPlane water patches) ----
+      // ---- LAKES by the pit complex (Yu Garden paddock water) ----
       groundPlane(K(0.88), -1,  95, [180, 130], WATER);
       groundPlane(K(0.01), -1, 110, [150, 110], WATER);
-      // Modern dock / jetty structures at the water edge
       place(K(0.90), -1,  85, [10, 1.0, 5], CONC);
       place(K(0.02), -1, 115, [11, 0.9, 5], [0.65, 0.68, 0.72]);
-      // Smaller decorative water feature in the infield beyond T6
       groundPlane(K(0.32), -1, 220, [90, 65], [0.36, 0.48, 0.56]);
 
-      // ---- Light-pool patches beside the lake (pale reflective slabs) ----
-      // These sit on the ground just above the water plane and give a dawn/dusk
-      // reflective quality in the day palette.
-      (function lakePools() {
-        const spots = [[K(0.89), -1, 70], [K(0.90), -1, 120], [K(0.00), -1, 100]];
-        for (const [k, sd, d] of spots) {
-          const a = anchor(k, sd, d), b = [a.r, a.u, a.t];
-          addBox(out, a.c, [22, 0.18, 18], [0.58, 0.68, 0.78], b);
+      // ---- Yu Garden paddock — pavilion villas in the lakes (Shanghai's unique paddock) ----
+      (function yuGarden() {
+        const pavilions = [
+          [0.885, -1, 100, 10, 5.0, 8],
+          [0.905, -1, 118,  8, 4.5, 7],
+          [0.925, -1,  98,  9, 5.5, 8],
+          [0.955, -1, 112,  8, 4.0, 7],
+          [0.985, -1, 108, 11, 5.5, 9],
+          [0.010, -1, 122,  9, 5.0, 8],
+          [0.025, -1, 105,  8, 4.2, 7],
+          [0.040, -1, 128, 10, 5.5, 8],
+        ];
+        for (const [s, sd, d, w, h, len] of pavilions) {
+          const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
+          addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
+          // Red pagoda-ish roof (prism) — Yu Garden homage, not team motorhomes
+          addPrism(out, vadd(a.c, a.u, h + 1.1), [w * 1.2, 2.2, len * 1.2], RED, b);
+          // Tiny lit window band
+          addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
+                 [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
         }
       })();
 
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
-      grandstand(0.04,  -1, 18, 130, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.06,  -1, 22,  80, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.025, -1, 26,  70, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.04,  -1, 18, 100, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.055, -1, 24,  70, [0.42, 0.43, 0.48], SEAT);
       billboard(K(0.045), -1, 14, 16, 4.5, YELLOW);
 
-      // ================= SNAIL T1–3 RUN-OFF SLAB (s 0.06, R) =================
+      // ================= SNAIL T1–3 — coiling pale runoff (cockpit-readable) =================
       (function snailRunoff() {
-        const a = anchor(K(0.065), 1, 6), b = [a.r, a.u, a.t];
-        addBox(out, vadd(vadd(a.c, a.u, 0.15), a.r, 36), [80, 0.4, 120], ASPH, b);
+        // Stepped apron pads outside the decreasing-radius right — spiral read at speed
+        const pads = [
+          [0.050,  1, 3.5, [22, 0.32, 38]],
+          [0.058,  1, 4.5, [28, 0.32, 44]],
+          [0.068,  1, 6.0, [34, 0.32, 50]],
+          [0.078,  1, 8.0, [30, 0.32, 42]],
+          [0.088,  1, 10,  [26, 0.32, 36]],
+          [0.098,  1, 12,  [22, 0.32, 30]],
+          [0.108,  1, 14,  [18, 0.32, 26]],
+          [0.072, -1, 4.0, [14, 0.30, 28]],
+          [0.090, -1, 5.5, [16, 0.30, 24]],
+        ];
+        for (const [s, sd, gap, sz] of pads) {
+          runoffApron(K(s), sd, gap, sz, PALE);
+        }
+        // Stronger red/white kerb + verge rhythm through the coil
+        let j = 0;
+        along(0.048, 0.112, 2.6, (k) => {
+          place(k, 1, 2.4, [1.8, 0.26, 2.6], (j++) % 2 ? KERB_R : KERB_W);
+        });
+        along(0.055, 0.100, 5.5, (k) => {
+          place(k, 1, 3.8, [1.2, 0.35, 2.2], CONC);
+        });
       })();
       // Snail grandstands wrapping the coiling Turn 1–3 spiral.
       grandstand(0.05,  1, 95, 70, [0.43, 0.44, 0.49], SEAT);
@@ -320,83 +218,31 @@
       billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
 
-      // ================= CONTINUOUS HAZY SHANGHAI SKYLINE (wraps whole lap) =================
-      // backdrop() auto-detects tall buildings (sz[1]>26 && sz[1]>sz[2]) and adds
-      // window bands + parapet so the skyline reads as glass towers, not flat planes.
-      // Green-dominant colours render as organic mound silhouettes instead.
-      (function skylineBand() {
-        // Foreground band: LOW hazy mid-rise, greyed toward the sky haze — NOT a
-        // crisp glass metropolis. Real Jiading is suburban; the one sharp skyline
-        // is the distant Pudong cluster (s0.30) below. Shorter, sparser and
-        // pushed back so it reads as a hazy horizon, never looming over the lap.
-        for (let i = 0; i < 26; i++) {
-          const k = K(i / 26);
-          const side = (i % 2) ? 1 : -1;
-          const h = 22 + hash(i * 11) * 30;
-          const w = 18 + hash(i * 13) * 16;
-          backdrop(k, side, 240 + hash(i * 5) * 50,
-            [w, h, 22],
-            [0.60 + hash(i * 3) * 0.06, 0.63 + hash(i * 7) * 0.05, 0.68 + hash(i * 9) * 0.05]);
-        }
-        // Back ring: hazier mid-rise blocks receding into the mist.
-        for (let i = 0; i < 40; i++) {
-          const k = K(i / 40 + 0.013);
-          const side = (i % 2) ? -1 : 1;
-          const h = 38 + hash(i * 17 + 290) * 72;
-          const w = 22 + hash(i * 19 + 290) * 20;
-          backdrop(k, side, 260 + hash(i * 23) * 50,
-            [w, h, 26],
-            [0.65 + hash(i * 5) * 0.08, 0.67 + hash(i * 7) * 0.06, 0.70 + hash(i * 9) * 0.05]);
-        }
-        // Far ring: sky-haze silhouettes almost absorbed by fog.
-        for (let i = 0; i < 32; i++) {
-          const k = K(i / 32 + 0.025);
-          const side = (i % 2) ? 1 : -1;
-          const h = 44 + hash(i * 23 + 360) * 90;
-          const w = 28 + hash(i * 29 + 360) * 24;
-          backdrop(k, side, 330 + hash(i * 31) * 60,
-            [w, h, 30],
-            [SKY_HAZE[0], SKY_HAZE[1], SKY_HAZE[2]]);
-        }
-      })();
-
-      // ================= PUDONG SKYLINE CLUSTER (s 0.30, L far) =================
-      // Foreground Pudong towers framing the Pearl Tower landmark; backdrop() gives
-      // them window bands automatically. Further towers use backdrop() only.
+      // ================= ONE HAZY PUDONG CLUSTER (s 0.30, L far) =================
+      // Wraparound skyline rings culled — Jiading is marsh campus, not a megacity
+      // wall. One soft Pudong cue (Pearl + neighbours) at ~s0.30 is enough.
       (function pudongCluster() {
-        const a = anchor(K(0.30), -1, 260), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.30), -1, 300), b = [a.r, a.u, a.t];
         const u = b[1];
 
-        // Foreground layer: 12 tapered glass towers close in (30–90 m depth).
-        // addFrustum gives the tapered Pudong silhouette; kept tight count.
-        for (let i = 0; i < 12; i++) {
-          const off   = (i - 6) * 30 + (hash(i * 5) - 0.5) * 14;
-          const depth = 30 + hash(i * 7) * 60;
-          const h     = 80 + hash(i * 11) * 120;
-          const w     = 12 + hash(i * 13) * 10;
+        // Sparse hazed mid-rise skirt (not a tower wall)
+        for (let i = 0; i < 7; i++) {
+          const off   = (i - 3) * 36 + (hash(i * 5) - 0.5) * 12;
+          const depth = 40 + hash(i * 7) * 50;
+          const h     = 55 + hash(i * 11) * 70;
+          const w     = 14 + hash(i * 13) * 10;
           addFrustum(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0),
-                     w / 2, w / 3.8, h, GLASS, 5, b);
-          // window band at 72% height
-          if (hash(i * 17) > 0.4) {
-            const tBase = vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0);
-            addBox(out, vadd(tBase, u, h * 0.72), [w * 0.88, h * 0.052, w * 0.88], WIN_TOWER, b);
-          }
-          // slim spire on taller towers
-          if (h > 140) {
-            const tTop = vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, h);
-            addCyl(out, vadd(tTop, u, 0), 0.6, 14, STEEL, 4, b);
-          }
+                     w / 2, w / 3.8, h, GLASS_HAZE, 5, b);
         }
 
-        // Mid-distance band: backdrop() with glass tones (auto window bands).
-        for (let i = 0; i < 18; i++) {
-          const k2 = K(0.28 + i / 18 * 0.08);
-          const off = (i - 9) * 22;
-          const h   = 60 + hash(i * 19 + 100) * 100;
-          const w   = 24 + hash(i * 23 + 100) * 20;
-          backdrop(k2, -1, 130 + hash(i * 11) * 60 + Math.abs(off) * 0.4,
-            [w, h, 28],
-            [GLASS_HAZE[0] + hash(i * 7) * 0.06, GLASS_HAZE[1] + hash(i * 5) * 0.04, GLASS_HAZE[2]]);
+        // Soft backdrop band — fewer, farther, sky-haze tinted
+        for (let i = 0; i < 8; i++) {
+          const k2 = K(0.27 + i / 8 * 0.08);
+          const h   = 50 + hash(i * 19 + 100) * 70;
+          const w   = 22 + hash(i * 23 + 100) * 16;
+          backdrop(k2, -1, 220 + hash(i * 11) * 50,
+            [w, h, 26],
+            [SKY_HAZE[0], SKY_HAZE[1], SKY_HAZE[2]]);
         }
 
         // ── ORIENTAL PEARL TOWER ─────────────────────────────────────────────
@@ -441,25 +287,19 @@
         addCyl(out,  vadd(pc, u, spireBase),      0.9, 32, [0.88, 0.78, 0.72], 6, b);
         addCone(out, vadd(pc, u, spireBase + 32), 0.9, 12, [0.90, 0.82, 0.76], 6, b);
 
-        // ── SHANGHAI TOWER (J-shaped twisted supertall, ~55 m to the right) ──
-        // The real tower is 632 m; we scale to ~190 m to fit scenery context.
-        // A tapering frustum shaft reads as a glass spire without explicit twist.
-        const stC = vadd(vadd(a.c, a.r, 55), a.t, 48);
-        addFrustum(out, stC, 11, 6.5, 80, GLASS, 6, b);
-        addFrustum(out, vadd(stC, u, 80), 6.5, 3.2, 60, [0.56, 0.66, 0.76], 6, b);
-        addFrustum(out, vadd(stC, u, 140), 3.2, 1.0, 30, [0.60, 0.70, 0.80], 6, b);
+        // ── SHANGHAI TOWER (hazed glass spire, right of Pearl) ──
+        const stC = vadd(vadd(a.c, a.r, 55), a.t, 55);
+        addFrustum(out, stC, 11, 6.5, 80, GLASS_HAZE, 6, b);
+        addFrustum(out, vadd(stC, u, 80), 6.5, 3.2, 60, [0.62, 0.68, 0.74], 6, b);
+        addFrustum(out, vadd(stC, u, 140), 3.2, 1.0, 30, [0.66, 0.72, 0.78], 6, b);
         addBox(out, vadd(stC, u, 172), [2.5, 22, 2.5], STEEL, b);
-        // Window-band near the mid-section crown
-        addBox(out, vadd(stC, u, 118), [12, 3.5, 12], WIN_TOWER, b);
 
-        // ── JIN MAO TOWER (stepped pagoda-inspired spire, ~30 m left of Pearl) ──
-        const jmC = vadd(vadd(a.c, a.r, -32), a.t, 44);
-        addFrustum(out, jmC, 9.5, 7, 55, [0.72, 0.70, 0.68], 8, b);
-        addFrustum(out, vadd(jmC, u, 55), 7, 4.5, 35, [0.74, 0.72, 0.70], 8, b);
-        addFrustum(out, vadd(jmC, u, 90), 4.5, 1.8, 20, [0.76, 0.74, 0.72], 8, b);
+        // ── JIN MAO TOWER (stepped pagoda silhouette, left of Pearl) ──
+        const jmC = vadd(vadd(a.c, a.r, -32), a.t, 50);
+        addFrustum(out, jmC, 9.5, 7, 55, [0.70, 0.69, 0.68], 8, b);
+        addFrustum(out, vadd(jmC, u, 55), 7, 4.5, 35, [0.72, 0.71, 0.70], 8, b);
+        addFrustum(out, vadd(jmC, u, 90), 4.5, 1.8, 20, [0.74, 0.73, 0.72], 8, b);
         addCyl(out, vadd(jmC, u, 110), 0.7, 18, STEEL, 5, b);
-        // Stepped crown band
-        addBox(out, vadd(jmC, u, 88), [14, 3, 14], WIN_TOWER, b);
       })();
 
       // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
@@ -471,17 +311,20 @@
       marshalPost(K(0.45), 1, 12);
 
       // ================= MARSH / TREELINE (s 0.58–0.66, L far) =================
-      // backdrop() with green colours renders as organic mounds instead of flat slabs.
-      // dist≥90 keeps the mound footprint well off the racing surface.
-      for (let i = 0; i < 8; i++) {
-        const k = K(0.58 + i * 0.01);
-        const h = 6 + hash(i * 7) * 7;
-        const w = 50 + hash(i * 11) * 50;
-        backdrop(k, -1, 90 + hash(i * 5) * 40, [w, h, 22], MARSH_N);
+      // Primary backdrop identity: reclaimed marsh campus, not wraparound towers.
+      for (let i = 0; i < 10; i++) {
+        const k = K(0.56 + i * 0.012);
+        const h = 6 + hash(i * 7) * 8;
+        const w = 55 + hash(i * 11) * 55;
+        backdrop(k, -1, 85 + hash(i * 5) * 45, [w, h, 24], MARSH_N);
       }
-      // Low ground plane as wetland floor
-      groundPlane(K(0.62), -1, 85, [160, 120], MARSH);
+      groundPlane(K(0.62), -1, 85, [180, 130], MARSH);
       hedge(0.58, 0.66, -1, 24, 3.5, MARSH_N);
+      // Extra marsh strip along the long back-straight infield so open space reads
+      for (let i = 0; i < 6; i++) {
+        backdrop(K(0.74 + i * 0.02), -1, 100 + hash(i * 9) * 30,
+          [70 + hash(i * 3) * 40, 5 + hash(i * 5) * 6, 20], MARSH);
+      }
 
       // ================= LONG BACK STRAIGHT — open verges (s 0.78, R) =================
       fence(0.72, 0.88, 1, 8, 3.0, [0.70, 0.72, 0.76]);
@@ -512,11 +355,8 @@
       grandstand(0.88,  -1, 18, 70, [0.44, 0.45, 0.50], SEAT);
       grandstand(0.905, -1, 22, 70, [0.43, 0.44, 0.49], SEAT);
       grandstand(0.93,  -1, 24, 50, [0.42, 0.43, 0.48], SEAT);
-      // big run-off slab at the hairpin
-      (function hairpinRunoff() {
-        const a = anchor(K(0.90), 1, 6), b = [a.r, a.u, a.t];
-        addBox(out, vadd(vadd(a.c, a.u, 0.15), a.r, 24), [56, 0.4, 70], ASPH, b);
-      })();
+      // big pale runoff apron at the hairpin
+      runoffApron(K(0.90), 1, 4, [40, 0.35, 55], PALE);
       marshalPost(K(0.90), 1, 14);
 
       // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
@@ -524,20 +364,16 @@
       building(K(0.94), 1, 2, 10,  7, 34, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
       building(K(0.92), -1, 2, 12, 10, 40, { wall: WHITE, window: WIN_LIT, floor: 3 });
 
-      // ================= MODERN BUILDING STRIPS — cityFront facades =================
-      // Shanghai International Circuit sits in a modern commercial district: low-rise
-      // hotels and offices line the far side of the pit straight and the T14 approach.
-      // cityFront() aligns the inner facade cleanly and auto-varies heights/colours.
+      // Low commercial strips — kept short so they don't fight the marsh/Pudong read
       cityFront(0.92, 0.00, 1, 48, {
-        minH: 14, maxH: 38, depth: 26,
-        palette: [WHITE, CONC, [0.82, 0.83, 0.86], [0.78, 0.80, 0.83]],
-        step: 24,
+        minH: 10, maxH: 24, depth: 22,
+        palette: [WHITE, CONC, [0.82, 0.83, 0.86]],
+        step: 28,
       });
-      // Far side of the snail zone — low commercial blocks
-      cityFront(0.14, 0.22, -1, 32, {
-        minH: 10, maxH: 28, depth: 22,
-        palette: [[0.80, 0.82, 0.84], CONC, [0.76, 0.78, 0.80]],
-        step: 26,
+      cityFront(0.14, 0.20, -1, 36, {
+        minH: 8, maxH: 20, depth: 18,
+        palette: [[0.80, 0.82, 0.84], CONC],
+        step: 30,
       });
 
       // ---- Scattered marsh greenery + low treeline around the flat perimeter ----
@@ -563,16 +399,17 @@
       tyreWall(0.06,  0.09,  1, 4, YELLOW);
       tyreWall(0.30,  0.33, -1, 5, RED);
 
-      // Low red/white kerb-edge markers at apexes/exits.
+      // Low red/white kerb-edge markers — denser through the snail coil.
       (function kerbs() {
         const spots = [
-          [0.055, 0.075,  1], [0.085, 0.10,  1], [0.30, 0.32, -1],
+          [0.048, 0.112,  1], [0.070, 0.095, -1], [0.30, 0.32, -1],
           [0.46,  0.48,   1], [0.595, 0.61, -1], [0.895, 0.915, 1],
         ];
         for (const [s0, s1, sd] of spots) {
           let j = 0;
-          along(s0, s1, 3.2, (k) => {
-            place(k, sd, 3.0, [1.4, 0.22, 2.8], (j++) % 2 ? KERB_R : KERB_W);
+          const step = (s0 < 0.15) ? 2.4 : 3.2;
+          along(s0, s1, step, (k) => {
+            place(k, sd, 2.8, [1.6, 0.24, 2.6], (j++) % 2 ? KERB_R : KERB_W);
           });
         }
       })();
@@ -636,25 +473,22 @@
         tree(K(avS),  1, 20 + j * 8, 7, [0.20, 0.40, 0.18]);
       }
 
-      // ---- Distant low hazy treeline ring — backdrop() renders green as organic mounds ----
-      // Green-dominant colours trigger backdrop()'s mound path (addFrustum + dome cap)
-      // so the perimeter reads as wooded hills, not boxy slabs.
-      // dist≥170 ensures the mound footprint (~w/2) stays well beyond track envelope.
-      for (let i = 0; i < 36; i++) {
-        const k = K(i / 36);
+      // ---- Distant marsh treeline ring (green = organic mounds) — no tower rings ----
+      for (let i = 0; i < 28; i++) {
+        const k = K(i / 28);
         const side = (i % 2) ? 1 : -1;
         const h = 8 + hash(i * 7 + 180) * 8;
-        const w = 80 + hash(i * 11 + 180) * 60;
-        backdrop(k, side, 170 + hash(i * 5) * 40,
+        const w = 90 + hash(i * 11 + 180) * 50;
+        backdrop(k, side, 180 + hash(i * 5) * 40,
           [w, h, 24],
           [MARSH_N[0], MARSH_N[1], MARSH_N[2]]);
       }
-      for (let i = 0; i < 28; i++) {
-        const k = K(i / 28 + 0.018);
+      for (let i = 0; i < 18; i++) {
+        const k = K(i / 18 + 0.028);
         const side = (i % 2) ? -1 : 1;
-        const h = 10 + hash(i * 13 + 240) * 10;
-        const w = 100 + hash(i * 17 + 240) * 70;
-        backdrop(k, side, 220 + hash(i * 19) * 40,
+        const h = 10 + hash(i * 13 + 240) * 8;
+        const w = 110 + hash(i * 17 + 240) * 50;
+        backdrop(k, side, 240 + hash(i * 19) * 40,
           [w, h, 28],
           [0.26, 0.40, 0.22]);
       }

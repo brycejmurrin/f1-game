@@ -15,8 +15,8 @@ Essentially flat — reclaimed sea-level land. The only notable feature is the b
 | s | Side | Distance | Box-modelling description |
 |------|------|----------|----------------------------|
 | 0.00 | both | near | Pit straight: long low pit building L, stepped grandstand R as box rows |
-| 0.05 | L | near | T1-3 banked left complex; tall LED light tower boxes, green wall accents |
-| 0.15 | R | far | **Red Sea** opens up: vast flat black water box to horizon |
+| 0.05 | both | near | T1-3 banked left complex; pale grey canyon + green/gold accents; cool LED heads |
+| 0.15 | R | far | **Red Sea** opens up (no seaward city wall): vast flat black water box to horizon |
 | 0.20 | R | far | **King Fahd's Fountain**: thin tall white emissive column box far offshore |
 | 0.28 | L | mid | **Modern Jeddah buildings**: cluster of lit-window high-rise boxes |
 | 0.35 | both | near | Fast flowing esses (T4-12): continuous grey barrier walls hugging the line |
@@ -29,12 +29,12 @@ Essentially flat — reclaimed sea-level land. The only notable feature is the b
 | 0.96 | both | near | Walls + DRS straight back to start/finish |
 
 ## 5. Track features
-The world's fastest street circuit: long flat-out sweeps and the lengthy flowing T4-T12 sequence taken near full throttle. 27 corners, more than any F1 track. Concrete barrier walls perilously close everywhere — no runoff. Bright sawtooth kerbs (red/white box strips). One banked corner (T13). LED light towers ring the entire lap.
+The world's fastest street circuit: long flat-out sweeps and the lengthy flowing T4-T12 sequence taken near full throttle. 27 corners, more than any F1 track. Pale grey concrete canyon walls (~1.3–1.5 m) with intermittent Saudi green/gold accent stripes — not a solid green night rail. Bright sawtooth kerbs (red/white box strips). One banked corner (T13). Slim cool-white LED heads densify both sides (~every 40 m) as a light tunnel.
 
 ## 6. Modelling notes
-- Build a **continuous grey barrier wall** of boxes on both sides for the whole lap — the walls ARE the circuit; never open a gap.
+- Build a **continuous pale grey concrete canyon** on both sides for the whole lap; punctuate with intermittent green/gold stripe boxes (never a solid green wall).
 - Make corners flow: long gentle box-chains rather than sharp 90° turns, to read as high-speed sweeps.
-- Lean on **emissive faces** against the near-black sky — LED tower pools, lit windows, kerbs, billboards sell the night.
-- Hero silhouettes by shape alone: Fountain = single thin tall glowing column far offshore; yachts = low hulls + mast spikes; skyline = layered lit-window slabs.
-- Keep the Red Sea a flat black box with a few warm reflection specks; pin it on the outside (R) of the early/mid lap.
-- Punctuate with tall LED **light-tower boxes** (dark pole + bright cap) at regular intervals to ring the whole circuit.
+- Lean on **cool-white LED heads** as the primary night rhythm; keep tall floods/towers sparse.
+- Hero silhouettes by shape alone: Fountain = single thin tall glowing column far offshore; Floating Mosque; yachts = low hulls + mast spikes; skyline = inland lit-window slabs.
+- Keep the Red Sea open on the outside (R) of the early/mid lap (~s 0.05–0.40): no seaward cityFront/backdrop there — sea, mosque, and fountain must read.
+- City mass stays inland (L); only thin seaward frontage near the start/finish pocket.

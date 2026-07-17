@@ -302,7 +302,10 @@ const DataHub = (function () {
         if (place) subParts.push(place);
         main.appendChild(el("div", "dh-race-sub", subParts.join(" · ") || "—"));
         if (r.time) {
-          const t = new Date("1970-01-01T" + r.time);
+          // Combine with the real race date (not a fixed 1970 epoch) so the
+          // local time AND its zone label reflect that day's actual UTC offset
+          // (DST-aware). r.time is UTC ("HH:MM:SSZ" from the API).
+          const t = new Date((r.date ? r.date : "1970-01-01") + "T" + r.time);
           if (!isNaN(t.getTime())) {
             main.appendChild(el("div", "dh-race-time", t.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })));
           }
@@ -356,7 +359,7 @@ const DataHub = (function () {
           const row = el("div", "dh-row");
           row.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
           const ct = findTeam(s.name);
-          row.appendChild(teamChip(ct ? ct.short : s.name.slice(0, 3).toUpperCase(), s.name));
+          row.appendChild(teamChip(ct ? ct.short : (s.name ? s.name.slice(0, 3).toUpperCase() : "?"), s.name));
           row.appendChild(el("span", "dh-name", s.name || "—"));
           if (s.wins > 0) row.appendChild(el("span", "dh-wins", s.wins + "W"));
           row.appendChild(el("span", "dh-pts", s.points));
@@ -731,7 +734,7 @@ const DataHub = (function () {
   /* ================= TELEMETRY ================= */
   // Implementation: js/data-telemetry.js.
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
-    el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner,
+    el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
     ensureSession: ensureSession, buildPicker: buildPicker,
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
     cssColor: cssColor, NO_TELEM_MSG: NO_TELEM_MSG });

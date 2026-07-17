@@ -1,9 +1,23 @@
 // @ts-check
-// Shared helpers for per-track visual regression specs.
+// Shared helpers + data for the consolidated per-track visual regression suite
+// (tests/tracks-visual.spec.js). Previously each of the 24 circuits had its own
+// 5-line stub spec calling describeTrack(id) with 25 fractions each (600 golden
+// PNGs) AND a parallel visual-regression-circuits-N set — the two were redundant
+// pixel suites. Collapsed to ONE data-driven spec looping TRACKS at 6 fractions.
 import { test, expect } from "@playwright/test";
 
-// 25 evenly spaced positions per lap (every 4%): 0, 4, 8, ... 96%.
-export const LAP_FRACTIONS = Array.from({ length: 25 }, (_, i) => i * 0.04);
+// The 24 circuits, in Tracks.LIST order. Keep in sync with js/tracks/*.js.
+export const TRACKS = [
+  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring",
+  "imola", "interlagos", "jeddah", "madrid", "mexico", "miami",
+  "monaco", "montreal", "monza", "qatar", "redbull", "shanghai",
+  "silverstone", "singapore", "spa", "suzuka", "vegas", "zandvoort",
+];
+
+// 6 evenly spaced lap positions (~every 16.7%): 0, 17, 33, 50, 67, 83%. Enough
+// to catch gross scenery/geometry/clipping regressions per circuit without the
+// old 25-frac (×24 = 600-baseline) overkill. Bump if a regression slips through.
+export const LAP_FRACTIONS = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6];
 
 async function waitForTrack(page, timeout = 10_000) {
   await page.waitForFunction(
@@ -23,8 +37,7 @@ async function goToRace(page, circuit) {
 }
 
 // Place the car at `frac` with a forward-facing chase camera.
-// park() uses jump(f, 0) so the camera has no heading — snapCam after a
-// non-zero speed jump gives a deterministic, forward-facing view every time.
+// jump(f, 40) gives the camera a heading; snapCam aligns it with no damping lag.
 async function snapForward(page, frac) {
   await page.evaluate((f) => {
     window.__apex.camera("chase");
@@ -46,8 +59,8 @@ async function resetScene(page) {
   });
 }
 
-// Builds a 25-position visual regression suite for a single circuit.
-// Each screenshot is a forward-facing chase-cam view taken at 0%, 4%, ..., 96%.
+// Builds the LAP_FRACTIONS-position visual regression suite for one circuit:
+// a forward-facing chase-cam view at each fraction, pixel-diffed against a golden.
 export function describeTrack(circuit) {
   test.describe(circuit, () => {
     for (const frac of LAP_FRACTIONS) {

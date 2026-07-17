@@ -11,15 +11,15 @@ Bright, clear alpine daylight, vivid summer-green hills against forested dark-gr
 - Vivid green hills (foreground): `[0.36, 0.62, 0.24]`
 - Forested mountains (mid/far): `[0.18, 0.34, 0.20]`, hazed: `[0.40, 0.52, 0.46]`
 - Distant peaks: `[0.62, 0.68, 0.70]` (grey-blue, snow flecks white)
-- Tarmac: `[0.27, 0.28, 0.30]`; green/gravel run-off: `[0.40, 0.55, 0.30]`
+- Tarmac: `[0.27, 0.28, 0.30]`; green meadow run-off: `[0.32, 0.52, 0.24]` (ATM.alpineGreen sky + lush grass)
 - Kerbs: red `[0.80, 0.14, 0.14]` / white `[0.90, 0.90, 0.90]`
 - Red Bull brand red/navy: `[0.82, 0.10, 0.16]` / `[0.10, 0.14, 0.40]`
 
 ## 3. Elevation
-Big ~65 m swing per lap; the bowl makes climbs and drops very readable.
-- s≈0.00–0.10: launch uphill off the start straight, **steep climb** into Turn 1 (Niki Lauda Kurve).
-- s≈0.12–0.25: keep climbing to the **high point at Turn 3 (Remus)** — circuit's crest.
-- s≈0.25–0.55: **long descent** through Turn 4 (Schlossgold) and fast downhill sweepers.
+Big ~55–65 m swing per lap (cosine bumps on the GPS path); the bowl makes climbs and drops very readable.
+- s≈0.00–0.12: launch uphill off the start straight, **steep climb** into Turn 1 (Niki Lauda Kurve).
+- s≈0.12–0.25: keep climbing to the **high point at Turn 3 (Remus)** — circuit's crest (~+32 m bump).
+- s≈0.25–0.55: **long descent** through Turn 4 (Schlossgold) and fast downhill sweepers (~−28 m).
 - s≈0.70–1.00: undulating final sector dropping back down into the stadium / start straight.
 
 ## 4. Landmarks & surroundings by lap position
@@ -30,8 +30,9 @@ Big ~65 m swing per lap; the bowl makes climbs and drops very readable.
 | 0.05 | R | near | Pit-straight scoreboard / light gantry: tall thin pole-box with wide flat screen-box across the track |
 | 0.10 | L | far | Charging-bull statue: large dark bull-shape box under a tall archway box on a green hillside |
 | 0.18 | both | far | Forested Alpine mountains: stacked dark-green box ridges climbing the horizon |
-| 0.22 | R | near | Turn 3 (Remus) crest grandstand: tiered box at the high point, red brand-tint |
-| 0.30 | L | far | Ski-jump-like hillside: long steep smooth-green ramp box angling up the slope |
+| 0.22 | R | near–mid | Remus crest amphitheatre: tiered stands + green hillside ski-jump ramp |
+| 0.30 | both | mid | T3–T4 spectator amphitheatre: stacked green hillside mounds + pines on rim |
+| 0.34 | L | near–mid | Schlossgold amphitheatre bank + green runoff apron |
 | 0.45 | both | mid | Pine forest: dense clusters of tall narrow dark-green cone/box trees lining the descent |
 | 0.55 | R | far | Snow-flecked far peaks: low grey-blue box band, white-tint caps, haze-faded |
 | 0.70 | L | mid | Branded grandstand: tiered box, navy + red Red Bull-tint seat blocks |

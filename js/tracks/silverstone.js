@@ -15,7 +15,8 @@
     theme: "green",
     lengthKm: 5.9,
     baseHW: 8,
-    pal: { zenith: [0.28, 0.38, 0.58], horizon: [0.54, 0.62, 0.68], grass: [0.20, 0.44, 0.18], fogDensity: 0.0014, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.82, 0.86, 0.96], sunColor: [0.78, 0.82, 0.92] },
+    // British overcast (ATM.britishOvercast) — pale grey-blue sky, lush grass, soft fog.
+    pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.48, 0.46, 0.42], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },
     segs: [
       { t: 0, l: 260 }, { t: 60, l: 120 }, { t: -50, l: 90 }, { t: 80, l: 80 }, { t: -150, l: 160 }, { t: 0, l: 120 },
       { t: -70, l: 90 }, { t: 120, l: 150 }, { t: 40, l: 100 }, { t: 0, l: 160 }, { t: 70, l: 130 }, { t: -55, l: 70 },
@@ -24,22 +25,27 @@
     ],
     elevations: [{ s: 0.62, halfM: 360, rise: 9 }],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash,
+      const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash, pal,
               grandstand, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along,
-              tower, forestEdge } = api;
+              tower, forestEdge, ATM, runoffApron } = api;
       const k = (s) => Math.round(s * n) % n;
 
+      // 2. British overcast sky + lusher grass (ATM.britishOvercast).
+      if (ATM && ATM.britishOvercast) Object.assign(pal, ATM.britishOvercast);
+
       // ---- Palette (English-countryside green / overcast) ----
-      const COPSE  = [0.14, 0.34, 0.16];   // dark-green tree copses / hedgerows
-      const COPSE2 = [0.18, 0.38, 0.18];   // slightly lighter broadleaf
-      const PINEG  = [0.12, 0.28, 0.14];   // conifer needle green
-      const GRASS  = [0.22, 0.48, 0.18];
+      const COPSE  = [0.12, 0.36, 0.16];   // dark-green tree copses / hedgerows
+      const COPSE2 = [0.16, 0.40, 0.18];   // slightly lighter broadleaf
+      const PINEG  = [0.10, 0.30, 0.14];   // conifer needle green
+      const GRASS  = (ATM && ATM.britishOvercast && ATM.britishOvercast.grass) || [0.16, 0.40, 0.18];
       const WHITE  = [0.92, 0.92, 0.92];
       const RED    = [0.85, 0.15, 0.15];
       const STEEL  = [0.55, 0.56, 0.60];
       const CONC   = [0.74, 0.75, 0.76];
       const TARMAC = [0.22, 0.22, 0.24];
+      // Airfield asphalt apron — former runway concrete, slightly lighter than racing line
+      const APRON  = (ATM && ATM.britishOvercast && ATM.britishOvercast.runoff) || [0.48, 0.46, 0.42];
       // emissive-window tones (bright warm amber for lit interiors)
       const LIT_WIN = [0.95, 0.82, 0.40];  // warm amber — Wing/tower lit windows
       const LIT_COOL = [0.70, 0.85, 0.95]; // cool blue-white — upper control room
@@ -100,18 +106,30 @@
       // ---- Oak copses (Chapel/Cheese Copse, s≈0.15 L; scattered elsewhere) ----
       // Named Silverstone copses — dense broadleaf patches using forestEdge for
       // canopy-safe placement. gap = outer clearance; forestEdge adds canopy radius.
+      // Hangar Straight (≈0.18–0.28) kept OPEN — no dense outfield belt there.
       forestEdge(0.14, 0.17, -1, 84, { density: 0.8, hMin: 9, hMax: 14, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Chapel/Cheese Copse
       forestEdge(0.61, 0.64,  1, 69, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Abbey-side copse
       forestEdge(0.69, 0.71, -1, 64, { density: 0.8, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Loop infield copse
-      forestEdge(0.23, 0.26,  1, 104,{ density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Maggotts outfield
       forestEdge(0.44, 0.47, -1, 94, { density: 0.7, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Stowe far side
       forestEdge(0.77, 0.80,  1, 89, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Brooklands outer
       forestEdge(0.89, 0.92, -1, 79, { density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Woodcote area
       forestEdge(0.34, 0.36,  1, 114,{ density: 0.65,hMin: 8, hMax: 12, col: COPSE,  col2: COPSE2, pineFrac: 0.2  }); // Stowe outfield copse
       forestEdge(0.57, 0.60, -1, 104,{ density: 0.65,hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Abbey infield copse
       // sparse scattered broadleaf fringe around the full perimeter (old airfield feel)
-      forestEdge(0.0, 1.0, -1, 48, { density: 0.18, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
-      forestEdge(0.0, 1.0,  1, 48, { density: 0.18, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
+      // Density kept low so Hangar Straight still reads as open sky between hangars.
+      forestEdge(0.0, 1.0, -1, 48, { density: 0.12, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
+      forestEdge(0.0, 1.0,  1, 48, { density: 0.12, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
+
+      // 1. Vast airfield run-off aprons at the signature fast corners.
+      // Former runway slabs — wide, low, forgiving asphalt beyond the verge.
+      if (typeof runoffApron === "function") {
+        runoffApron(k(0.04),  1, 4, [38, 0.28, 58], APRON); // Copse R
+        runoffApron(k(0.12), -1, 4, [34, 0.28, 50], APRON); // Maggotts L
+        runoffApron(k(0.12),  1, 4, [32, 0.28, 48], APRON); // Maggotts R
+        runoffApron(k(0.30),  1, 5, [42, 0.28, 64], APRON); // Stowe R
+        runoffApron(k(0.40),  1, 4, [36, 0.28, 54], APRON); // Club R
+        runoffApron(k(0.55),  1, 5, [40, 0.28, 60], APRON); // Abbey R
+      }
 
       // ---- Big grandstands at the signature corners ----
       // Copse corner — large main straight view
@@ -292,29 +310,32 @@
       // ---- Pine windbreak rows (airfield perimeter) + outer broadleaf copse belts ----
       // Windbreaks: mix of conifer/broadleaf at mid-distances using forestEdge.
       // pineFrac=0.6 gives the classic Silverstone mixed-hedgerow/conifer windbreak feel.
-      forestEdge(0.14, 0.24,  1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right
-      forestEdge(0.32, 0.42,  1, 129, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right
+      // Hangar Straight (0.18–0.28) deliberately skipped — open airfield vista.
+      forestEdge(0.14, 0.17,  1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right (pre-Hangar)
+      forestEdge(0.29, 0.42,  1, 129, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right (post-Hangar)
       forestEdge(0.58, 0.68, -1, 119, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left
       forestEdge(0.78, 0.90, -1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
       forestEdge(0.05, 0.12, -1, 134, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
       forestEdge(0.44, 0.52,  1, 139, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
       // Outer broadleaf copse belts (the named Silverstone landscape copses)
-      forestEdge(0.17, 0.21, -1, 114, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer belt
+      // Maggotts outer belt ends before Hangar Straight; Stowe belt starts after.
+      forestEdge(0.14, 0.17, -1, 114, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer (pre-Hangar)
       forestEdge(0.49, 0.53,  1, 104, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
       forestEdge(0.71, 0.75,  1, 109, { density: 0.5,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Loop outer copse
       forestEdge(0.61, 0.65, -1, 124, { density: 0.45, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Abbey outer belt
       forestEdge(0.35, 0.39, -1, 139, { density: 0.4,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Stowe outer field copse
-      forestEdge(0.24, 0.28,  1, 124, { density: 0.4,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Maggotts outfield copse
+      // Very thin Hangar Straight fringe only — silhouette hangars need sky behind them
+      forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
+      forestEdge(0.18, 0.28, -1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
 
-      // ---- Low farm sheds / airfield hangars on the flat outfield ----
+      // ---- Low farm sheds on the flat outfield (hangars live on Hangar Straight below) ----
       for (const [s, side, d, w, h, ln] of [
-        [0.22, -1, 150, 22, 6, 30],
         [0.50,  1, 145, 24, 5, 34],
         [0.74,  1, 150, 20, 5, 26],
         [0.08,  1, 165, 20, 5, 28],
         [0.62,  1, 160, 18, 5, 24],
-        [0.36, -1, 155, 22, 5, 30],  // extra hangar
-        [0.82,  1, 155, 20, 5, 24],  // extra hangar
+        [0.36, -1, 155, 22, 5, 30],
+        [0.82,  1, 155, 20, 5, 24],
       ]) {
         const a = anchor(k(s), side, d);
         if (!onTrack(a.c[0], a.c[2], 18)) {
@@ -470,10 +491,17 @@
         out._mat = 0;
       }
 
-      // Bespoke arched WWII aircraft hangars on the former-airfield outfield.
-      hangar(k(0.20), -1, 150, 26, 7, 34);
+      // 3. Open Hangar Straight (≈0.18–0.28): mid-distance barrel hangar silhouettes
+      // on the former WWII airfield apron — reads against open sky, not forest wall.
+      hangar(k(0.19),  1,  95, 28, 8, 36);
+      hangar(k(0.21), -1, 100, 26, 7, 34);
+      hangar(k(0.24),  1, 105, 30, 8, 40);
+      hangar(k(0.26), -1,  98, 24, 7, 32);
+      hangar(k(0.275), 1, 112, 22, 7, 30);
+      // Far outfield hangars elsewhere (Wing / Loop / Maggotts far).
       hangar(k(0.52),  1, 150, 24, 7, 32);
       hangar(k(0.72),  1, 155, 22, 7, 30);
+      hangar(k(0.08), -1, 160, 22, 7, 28);
       // Northamptonshire farm barns + grain silos gridding the fields.
       barn(k(0.30), -1, 165);
       barn(k(0.62), -1, 170);

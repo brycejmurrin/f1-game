@@ -58,6 +58,10 @@
       // Street lamp sodium-yellow cap
       const LAMP   = [1.0, 0.90, 0.60];
 
+      // Cream/ochre canyon palette only (no terra/sage noise for the street wall)
+      const CANYON = [CREAM, OCHRE, DUSTY, [0.92, 0.86, 0.72]];
+      const { pastelStreetRow } = api;
+
       // ── Continuous Armco lining both sides — tight street feel ───────────
       wall(0.0, 1.0, -1, 0.4, 0.8, ARMCO, 0.22);
       wall(0.0, 0.48, 1, 0.4, 0.8, ARMCO, 0.22);
@@ -89,20 +93,28 @@
       }
 
       // ── SECTOR 2 — BEAU RIVAGE HILLSIDE CLIMB (s=0.08→0.26) ─────────────
-      // The hillside soars steeply on the LEFT (inland rock face). Dense cityFront
-      // close in, then green/rocky hillside backdrop mounds, then far towers.
-      // RIGHT side is close apartment facades.
-      // cityFront disabled: intrusions persist even at depth=5m.
-      // cityFront(0.08, 0.26, -1, 12, {
-      //   minH: 16, maxH: 34, depth: 5, step: 12,
-      //   palette: [CREAM, OCHRE, TERRA, DUSTY, SAGE],
-      //   lit: true, windowCol: WINLIT,
-      // });
-      // cityFront(0.08, 0.26,  1, 12, {
-      //   minH: 14, maxH: 30, depth: 5, step: 14,
-      //   palette: [STONE, CREAM, DUSTY, OCHRE],
-      //   lit: true, windowCol: WINLIT,
-      // });
+      // The hillside soars steeply on the LEFT (inland rock face). RIGHT side is
+      // close apartment facades. Dense cityFront stays DISABLED (intrusions).
+      // Top-3 #1: sparse close pastel canyon — 8–12 cream/ochre boxes, gap 2–4 m,
+      // depth ≤12. L skips the Casino mass at s≈0.20; Tabac inland is Top-3 #3.
+      {
+        // Hand-spaced Beau Rivage climb (L) — step helper would over-fill.
+        const spots = [
+          [0.09, -1], [0.13, -1], [0.16, -1],                 // L inland climb
+          [0.10,  1], [0.135, 1], [0.17, 1], [0.22, 1], [0.255, 1], // R street wall
+        ];
+        for (let i = 0; i < spots.length; i++) {
+          const [sf, sd] = spots[i];
+          const k = K(sf);
+          const hv = hash(k * 5.3 + sd * 0.9);
+          const w = 10 + hv * 8;
+          const h = 14 + hash(k * 9.1 + sd) * 12;
+          const gap = 2 + hash(k * 2.7) * 2;   // 2–4 m
+          building(k, sd, gap, w, h, 10,
+            { wall: CANYON[i % CANYON.length], window: WIN, floor: 3.5 + hv,
+              lit: true, windowCol: WINLIT });
+        }
+      }
       // Rocky/green hillside above the buildings — backdrop() with green renders
       // as organic rounded mounds, not boxy slabs.
       for (let i = 0; i < 6; i++) {
@@ -147,6 +159,25 @@
             const lc = vadd(vadd(a.c, a.t, o), a.u, 0);
             addCyl(out, lc, 0.10, 5.5, [0.72, 0.74, 0.76], 5, b);
             addCyl(out, vadd(lc, a.u, 5.3), 0.55, 0.18, LAMP, 6, b);
+          }
+        }
+      }
+
+      // ── HÔTEL DE PARIS — Casino Square twin (s≈0.21, R, opposite Casino) ──
+      // Top-3 #2: TV silhouette is Casino + this cream hotel mass, not Casino alone.
+      {
+        const k = K(0.21);
+        const HOTEL = [0.92, 0.88, 0.82];
+        building(k, 1, 3.5, 22, 40, 18,
+          { wall: HOTEL, window: WIN, floor: 5, lit: true, windowCol: WINLIT, setback: true });
+        // Ochre mansard / cornice strip + secondary wing toward the square
+        const a = anchor(k, 1, 3.5 + 11);
+        if (!onTrack(a.c[0], a.c[2], 12)) {
+          const b = [a.r, a.u, a.t];
+          addBox(out, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
+          addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
+          for (let f = 0; f < 5; f++) {
+            addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 4 + f * 5), [14.3, 1.6, 12.3], WIN, b);
           }
         }
       }
@@ -355,8 +386,16 @@
       }
 
       // ── TABAC / SWIMMING POOL SECTION (s=0.71→0.84) ─────────────────────
-      // Tabac waterfront buildings (RIGHT/inland side already covered by cityFront above).
-      // Swimming pool
+      // Top-3 #3 (+ #1 Tabac inland): pastel façade row facing the marina (R).
+      // Dense cityFront stays DISABLED — cream/terracotta slabs via pastelStreetRow.
+      {
+        pastelStreetRow(0.72, 0.82, 1, 3, {
+          palette: [CREAM, TERRA, OCHRE, DUSTY],
+          minH: 12, maxH: 20, depth: 9, step: 55,
+          window: WIN, windowCol: WINLIT, lit: true,
+        });
+      }
+      // Swimming pool (L / harbour side — keep clear of inland façades)
       {
         const k = K(0.80), a = anchor(k, -1, 8);
         if (!onTrack(a.c[0], a.c[2], 10)) {
@@ -372,7 +411,7 @@
           addBox(out, vadd(vadd(a.c, a.r, 7.4), a.u, 2.2), [1.4, 0.4, 4], [0.85, 0.86, 0.88], b);
         }
       }
-      // Waterfront terrace lips on Tabac stretch
+      // Waterfront terrace lips on Tabac stretch (behind façades)
       for (let i = 0; i < 5; i++) {
         const k = K(0.71 + i * 0.02);
         place(k, 1, 18, [20, 0.8, 1.2], [0.88, 0.86, 0.80]);

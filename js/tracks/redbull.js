@@ -15,17 +15,30 @@
     theme: "green",
     lengthKm: 4.3,
     baseHW: 7,
-    pal: { zenith: [0.18, 0.35, 0.65], horizon: [0.58, 0.68, 0.82], grass: [0.20, 0.48, 0.15], runoff: [0.44, 0.40, 0.32], fogDensity: 0.0012, sunDir: [0.59693248550091, 0.6446870843409829, 0.47754598840072804], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
+    // Near-field green identity: verdant runoff (not brown gravel). ATM.alpineGreen
+    // merges sky/grass/fog in scenery() when available.
+    pal: { zenith: [0.22, 0.48, 0.82], horizon: [0.55, 0.72, 0.88], grass: [0.14, 0.44, 0.18], runoff: [0.34, 0.50, 0.26], fogDensity: 0.0016, sunDir: [0.59693248550091, 0.6446870843409829, 0.47754598840072804], sun: [1, 0.96, 0.84], sunColor: [1, 0.96, 0.88] },
     segs: [
-      { t: 0, l: 280 }, { t: -90, l: 100, h: 12 }, { t: 90, l: 90 }, { t: -100, l: 110, h: 8 }, { t: 80, l: 90 }, { t: 0, l: 220, h: -10 },
-      { t: -70, l: 80 }, { t: 80, l: 90 }, { t: 0, l: 480, h: -10 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 },
+      // Amplified T1–T3 climb + post-Remus plunge (fallback if GPS path absent).
+      { t: 0, l: 280 }, { t: -90, l: 100, h: 22 }, { t: 90, l: 90, h: 8 }, { t: -100, l: 110, h: 14 }, { t: 80, l: 90, h: 6 }, { t: 0, l: 220, h: -18 },
+      { t: -70, l: 80, h: -10 }, { t: 80, l: 90, h: -8 }, { t: 0, l: 480, h: -14 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 },
     ],
-    // Steep alpine circuit (~65 m top-to-bottom): climb out of Turn 1, long
-    // descent through the back of the lap.
-    elevations: [{ s: 0.10, halfM: 240, rise: 10 }, { s: 0.40, halfM: 320, rise: -8 }],
+    // ~55–60 m top-to-bottom: Remus crest high, long post-Remus / T4 descent.
+    // (GPS path is flat — these cosine bumps are the live elevation.)
+    elevations: [
+      { s: 0.12, halfM: 300, rise: 22 },   // T1 / Niki Lauda climb
+      { s: 0.22, halfM: 240, rise: 32 },   // Remus crest — circuit high point
+      { s: 0.42, halfM: 400, rise: -28 },  // post-Remus descent through T4
+    ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge } = api;
+      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, runoffApron } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // Alpine-green atmosphere pack (cool sky + lush grass); keep runoff greener
+      // than the pack's default grey-gravel so near-field reads Styrian meadow.
+      if (ATM && ATM.alpineGreen) {
+        Object.assign(pal, ATM.alpineGreen, { runoff: [0.32, 0.52, 0.24] });
+      }
 
       // --- Styrian Alps: two concentric rings of organic peaks.
       // Inner ring (210m out): dense dark-green foothills with rocky detail, moderate snow.
@@ -112,6 +125,15 @@
       tyreWall(0.32, 0.37, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
       tyreWall(0.72, 0.77, -1, 6.0, rbNavy);
 
+      // Green runoff aprons at the heavy stops — alpine meadow pans, not grey gravel.
+      const GRN_APRON = (pal && pal.runoff) || [0.32, 0.52, 0.24];
+      runoffApron(K(0.10), 1, 5.5, [16, 0.32, 30], GRN_APRON);   // T1 outside
+      runoffApron(K(0.12), 1, 6.0, [14, 0.32, 26], GRN_APRON);
+      runoffApron(K(0.22), 1, 5.5, [15, 0.32, 28], GRN_APRON);   // T3 Remus crest
+      runoffApron(K(0.24), 1, 6.0, [14, 0.32, 24], GRN_APRON);
+      runoffApron(K(0.34), -1, 5.5, [15, 0.32, 28], GRN_APRON);  // T4 Schlossgold
+      runoffApron(K(0.36), -1, 6.0, [14, 0.32, 24], GRN_APRON);
+
       // Marshal posts spaced around the lap (orange-roofed huts + flag poles).
       for (const [s, side] of [[0.05, -1], [0.15, 1], [0.27, -1], [0.40, 1], [0.52, -1], [0.66, 1], [0.80, -1], [0.92, 1]]) {
         marshalPost(Math.round(n * s) % n, side, 5.5);
@@ -179,11 +201,16 @@
       });
 
       // ---------------- Signature landmarks ----------------
-      // Giant charging-bull statue on the green hillside above the lower sector,
-      // framed by a tall white archway (the Bull Plaza icon).
-      // All parts are anchored from ground level (a.c) upward — no floating.
+      // Giant charging-bull statue on a green hillside above the lower sector,
+      // framed by a tall white archway (the Bull Plaza icon). Mounds sit UNDER
+      // the plaza so the dark bull stays sky-silhouetted — no tall backdrop
+      // behind it on this sightline.
       {
-        const kb = Math.round(n * 0.10) % n, a = anchor(kb, -1, 70);
+        const kb = Math.round(n * 0.10) % n;
+        // Green hillside ramp pedestal (in front / under the plaza).
+        backdrop(kb, -1, 48, [70, 12, 42], [0.28, 0.52, 0.22]);
+        backdrop(kb, -1, 62, [55, 10, 36], [0.24, 0.48, 0.20]);
+        const a = anchor(kb, -1, 70);
         const white = [0.90, 0.90, 0.93], dark = [0.10, 0.10, 0.12];
         // Arch posts: center at h/2 = 12 above ground, height 24 → base sits at ground.
         addBox(out, vadd(vadd(a.c, a.r, -11), a.u, 12), [3, 24, 3], white, [a.r, a.u, a.t]);   // arch post L
@@ -231,11 +258,15 @@
       grandstand(0.07, 1, 14, 26, shell, rbNavy);
       // Turn 1 / Niki Lauda climb.
       grandstand(0.11, 1, 9, 26, shell, rbRed);
-      // Turn 3 (Remus) crest — the high point.
+      // Turn 3 (Remus) crest — punched amphitheatre high point.
+      grandstand(0.20, 1, 10, 32, shell, rbRed);
       grandstand(0.21, 1, 8, 30, shell, rbNavy);
-      grandstand(0.25, 1, 9, 24, shell, rbRed);
-      // Mid-sector descent sweepers.
-      grandstand(0.34, -1, 8, 24, shell, rbRed);
+      grandstand(0.23, 1, 10, 28, shell, rbRed);
+      grandstand(0.25, 1, 9, 26, shell, rbNavy);
+      // T4 / Schlossgold amphitheatre face (descent side).
+      grandstand(0.32, -1, 10, 28, shell, rbNavy);
+      grandstand(0.34, -1, 9, 26, shell, rbRed);
+      grandstand(0.36, -1, 8, 24, shell, rbNavy);
       grandstand(0.50, -1, 8, 26, shell, rbNavy);
       grandstand(0.62, 1, 8, 22, shell, rbRed);
       // Final sector dropping into the stadium bowl.
@@ -252,7 +283,8 @@
       // underside so stands read lit from the trackside camera at dusk/night.
       for (const [s, side, gap] of [
         [0.985, 1, 24], [0.005, 1, 24], [0.04, 1, 17], [0.07, 1, 14],
-        [0.11, 1, 13], [0.21, 1, 13], [0.25, 1, 13],
+        [0.11, 1, 13], [0.20, 1, 13], [0.21, 1, 13], [0.23, 1, 13], [0.25, 1, 13],
+        [0.32, -1, 13], [0.34, -1, 13], [0.36, -1, 13],
         [0.70, 1, 13], [0.72, -1, 13], [0.76, -1, 13], [0.88, 1, 13], [0.92, 1, 13], [0.95, 1, 13],
       ]) {
         const k = Math.round(n * s) % n;
@@ -290,18 +322,34 @@
         addBox(out, vadd(rA.c, rA.u, 44.5), [6.5, 0.25, 6.5], [1.0, 0.88, 0.50], [rA.r, rA.u, rA.t]);
       }
 
-      // --- Back-sector descent framing hills (s≈0.28–0.32): the circuit's dramatic
-      // high point before the long descent — Styrian rolling hills rendered as organic
-      // backdrop() mounds instead of sharp ridge prisms.
+      // --- Remus crest + T3–T4 spectator amphitheatre ---
+      // Green hillside ski-jump ramp packing the outside of Remus and the plunge
+      // into Schlossgold — the calendar's famous grassy bowl. Stepped near/mid/far
+      // mounds read as a continuous amphitheatre wall from the crest.
       {
-        for (const [sfrac, side, distOff, szW, szH] of [
-          [0.28, -1,  0, 100, 26], [0.28,  1,  0, 90, 22],
-          [0.30, -1, 12, 115, 30], [0.30,  1, 10, 95, 24],
-          [0.32, -1,  0, 100, 28], [0.32,  1,  0, 85, 22],
+        const GN = [0.28, 0.52, 0.22], GM = [0.22, 0.44, 0.18], GF = [0.16, 0.36, 0.14];
+        // Remus outside (R): climbing ski-jump face
+        backdrop(K(0.20), 1, 30, [75, 18, 52], GN);
+        backdrop(K(0.22), 1, 42, [95, 26, 62], GM);
+        backdrop(K(0.24), 1, 58, [115, 34, 72], GF);
+        backdrop(K(0.26), 1, 48, [100, 28, 65], GM);
+        // Crest→descent ridge (both sides) — taller than the old framing hills
+        for (const [sfrac, side, distOff, szW, szH, col] of [
+          [0.28, -1,  0, 110, 32, GM], [0.28,  1,  0, 100, 28, GN],
+          [0.30, -1, 14, 125, 38, GF], [0.30,  1, 12, 110, 32, GM],
+          [0.32, -1,  0, 115, 34, GM], [0.32,  1,  0,  95, 26, GN],
         ]) {
-          const kb = Math.round(n * sfrac) % n;
-          backdrop(kb, side, 55 + distOff, [szW, szH, 60], [0.20 + hash(kb * 47 + side) * 0.05, 0.38, 0.20]);
+          backdrop(K(sfrac), side, 52 + distOff, [szW, szH, 68], col);
         }
+        // T4 outside (L): amphitheatre bank on the descent
+        backdrop(K(0.33), -1, 34, [85, 20, 55], GN);
+        backdrop(K(0.35), -1, 50, [105, 28, 68], GM);
+        backdrop(K(0.37), -1, 68, [120, 34, 78], GF);
+        // Sparse pines crowning the Remus amphitheatre rim (keep bull clear at s≈0.10).
+        forestEdge(0.21, 0.36, 1, 72, { density: 0.32, hMin: 9, hMax: 15,
+          col: [0.10, 0.24, 0.12], col2: [0.16, 0.34, 0.15], pineFrac: 0.80 });
+        forestEdge(0.30, 0.38, -1, 70, { density: 0.28, hMin: 8, hMax: 14,
+          col: [0.11, 0.26, 0.13], col2: [0.18, 0.36, 0.16], pineFrac: 0.75 });
       }
 
       // --- Styrian natural spectator hill (s≈0.52 mid-sector right-hander).

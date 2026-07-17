@@ -1,8 +1,13 @@
 # Apex 26 — Architecture & Module Contract
 
-Pure JS/CSS/HTML, **no build step, no dependencies**. Served as static files
-(GitHub Pages). Every JS file is an IIFE that assigns ONE global. Load order
-(script tags in `index.html`):
+Pure JS/CSS/HTML, **no build step**. The **runtime has zero dependencies**;
+Playwright is the only `devDependency` (test harness, never shipped). Served as
+static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
+
+**The `<script>` tag order in `index.html` is the authoritative load order** —
+the abbreviated list below is a subset of it (the real file also loads the WebGPU
+backend, `js/gfx.js`, `js/circuits.js`, `js/track-geom.js`, the `js/game/*`
+splits, etc.). Consult `index.html` directly for the full, current order:
 
 ```
 js/mat4.js     -> M4, V3
@@ -123,7 +128,8 @@ that closes over buildProps state stays in tracks.js.
 
 One file per circuit. Each is a self-contained IIFE that pushes a plain data
 object onto the global `TrackDefs` list. No engine logic, no palette helpers —
-just raw fields. Loaded (in calendar order) *before* `js/tracks.js`.
+just raw fields. Loaded *before* `js/tracks.js`, in the order their `<script>`
+tags appear in `index.html` (this is **not** the real-world F1 calendar order).
 
 ```
 def = { id, name, gp, country, night, theme, lengthKm, baseHW,
@@ -131,7 +137,8 @@ def = { id, name, gp, country, night, theme, lengthKm, baseHW,
         pal: { ...palette overrides... },          // engine wraps with day/nightPal
         segs: [ {t,l,h?,b?,w?}, ... ],             // authored fallback if no OSM trace
         bridges?:   [ {s,halfM,rise}, ... ],       // figure-8 overpass deck (terrain stays flat)
-        elevations?:[ {s,halfM,rise}, ... ] }      // real elevation bumps (terrain follows road)
+        elevations?:[ {s,halfM,rise}, ... ],       // real elevation bumps (terrain follows road)
+        hwZones?:   [ {s0,s1,hw,ease?}, ... ] }    // half-width overlays (CircuitPaths ignores segs w:)
 ```
 
 ## js/tracks.js — `Tracks` (engine)
@@ -141,11 +148,10 @@ the OSM trace in `js/circuits.js` or the authored `segs`), samples a closed
 Catmull-Rom spline, and emits meshes.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 24 circuits: bahrain, monaco, silverstone, spa, monza,
-                                   // suzuka, singapore, cota, interlagos, vegas, madrid,
-                                   // zandvoort, imola, baku, jeddah, albert_park, shanghai,
-                                   // miami, mexico, montreal, qatar, redbull, hungaroring,
-                                   // abudhabi  (calendar order = load order)
+Tracks.LIST -> [ trackDef, ... ]   // 24 circuits. LIST order == the `<script>` load
+                                   // order in index.html (each tracks/<id>.js registers
+                                   // itself as it loads) — it is NOT the real F1 calendar
+                                   // order. Check index.html for the current order.
 trackDef = { id, name:"MONZA", gp:"Italian GP", country:"Italy",
              laps:3, night:false, lengthKm:5.79,
              palette: { zenith,horizon,sun:[r,g,b], grass:[r,g,b], runoff:[r,g,b],
@@ -217,10 +223,11 @@ Same shape as driving-game. Steering priority: keyboard > tilt > touch.
 Input.init(canvasEl, {onPause})
 Input.requestGyro() -> Promise<boolean>   // call from user gesture (iOS)
 Input.calibrate()                          // capture neutral tilt
-Input.steer() -> -1..1                     // deadzone 2.5deg, full lock 22deg, expo 1.4,
-                                           // low-pass tau~60ms, remap by screen.orientation.angle
+Input.steer() -> -1..1                     // deadzone 2.5deg, MAX_TILT=36deg for full lock,
+                                           // One-Euro low-pass, remap by screen.orientation.angle
 Input.braking() -> bool                    // ArrowDown/S or BRAKE touch button
-Input.boosting() -> bool                   // Space held, or BOOST touch button held
+Input.boosting() -> bool                   // boost is a TOGGLE (Space / BOOST button taps
+                                           // flip it on/off — not held)
 Input.consumeOvertake() -> bool            // X key or OT button tap (edge-triggered)
 Input.tiltActive() -> bool
 Input.setUseTilt(b) / Input.useTilt() -> bool
@@ -239,7 +246,7 @@ All synthesized, no assets. Engine = 2026 hybrid turbo: saw+square pair
 
 ```
 GameAudio.init()  GameAudio.setEnabled(b)  GameAudio.enabled() -> bool
-GameAudio.startEngine() / stopEngine() / setEngine(speed01, boost01, offroad)
+GameAudio.startEngine() / stopEngine() / setEngine(rev01, boost01, offroad, speed01, gear)
 GameAudio.setSkid(x 0..1)
 SFX: lightOn(i 0..4), lightsOut(), overtakeReady(), deployBoost(), collision(),
      offtrack(), lap(), finish(), uiTick(), uiSelect(), penalty()
@@ -320,28 +327,32 @@ stays in game.js.
 ## js/game.js — main
 
 States: `menu | select | count | race | results | seasonEnd`. Player + 21 AI.
-Position model: `s` meters along centerline (wraps), `x` lateral in meters
-(+right), heading relative to tangent. Physics: arcade — vmax base 92 m/s
-scaled by tier (player = tier1 equivalent), electric deploy adds up to +12 m/s
-but tapers to 0 above 80 m/s (2026 taper), boost drains energy bar (recharges
-under braking + slow corners), OVERTAKE: when gap to car ahead < 1.0 s, OT
-light on; activating gives 4 s full-taper-free deploy (then 12 s cooldown).
-Grass (|x| > hw) = heavy drag. Walls at hw+9: soft push back. Cars collide as
-circles r=1.4 m: lateral push + small speed loss. AI: follow racing-line
-offset = -curvatureAhead * k, brake by curvature, tier speed + rubber-band by
-difficulty (EASY/NORMAL/HARD). Start: grid 22 (player P12 default, tier
-order), five red lights (1 s apart) then out. Race = trackDef.laps. HUD (DOM):
-pos/lap/laptime/best, speed km/h, energy bar, OT indicator, gaps, minimap
-canvas 2D. Penalty: 4+ full-off-track shortcuts -> +5 s on results screen.
-Points per Teams.POINTS; SEASON mode = 12 races in calendar order, standings
-table between races, saved in `apex26.season`. localStorage: hiscore N/A,
-settings (team, difficulty, tilt, sound), season.
+Position model: the car drives in **world space** (`player.head` = world
+heading, `px/pz` world position); `s` (metres along centreline, wraps) and `x`
+(lateral metres, +right) are recovered by projection each frame. Physics:
+arcade — vmax base `VMAX = 72` m/s scaled by tier (player = tier1 equivalent),
+electric deploy (`DEPLOY_A = 3.0` m/s²) tapers to 0 across the `TAPER_LO..TAPER_HI`
+= 41–53 m/s band, boost drains energy bar (recharges under braking + slow
+corners), OVERTAKE: when gap to car ahead < 1.0 s, OT light on; activating gives
+4 s full-taper-free deploy (then 12 s cooldown). Grass (|x| > hw) = heavy drag.
+Walls sit at the per-node barrier limit from `Tracks.wallAt`: soft push back.
+Cars collide as ~4.8 × 2.0 m oriented boxes: lateral push + small speed loss.
+AI: follow racing-line offset = -curvatureAhead * k, brake by curvature, tier
+speed + rubber-band by difficulty (EASY/NORMAL/HARD). Start: grid 22 (player P12
+default, tier order), five red lights (1 s apart) then out. Race =
+`GAME_LAPS` (3). HUD (DOM): pos/lap/laptime/best, speed km/h, energy bar, OT
+indicator, gaps, minimap canvas 2D. Penalty: 4+ full-off-track shortcuts -> +5 s
+on results screen. Points per Teams.POINTS; SEASON mode = all 24 circuits
+(`Tracks.LIST.length`) in load order, standings table between races, saved in
+`apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
+sound), season.
 
-Camera: 12 player modes cycled with the CAM button / C key (persisted) —
-CHASE (close, behind+above), FAR (pulled back/up), COCKPIT (onboard eye, player
-car hidden), HOOD (nose cam), OVERHEAD (top-down drone), HELI (broadcast heli),
-REVERSE (mounted ahead looking back), TV SIDE (trackside panning), CINEMATIC
-(slow orbit), LOW (surface skimmer), T-CAM (roll-hoop broadcast), REAR CAM
+Camera: 13 player modes (`CAM_MODES` in `js/game/tables.js`) cycled with the CAM
+button / C key (persisted) — CHASE (close, behind+above), FAR (pulled back/up),
+DRIFT (swings outside on a slide), COCKPIT (onboard eye, player car hidden),
+HOOD (nose cam), OVERHEAD (top-down drone), HELI (broadcast heli), REVERSE
+(mounted ahead looking back), TV SIDE (trackside panning), CINEMATIC (slow
+orbit), LOW (surface skimmer), T-CAM (roll-hoop broadcast), REAR CAM
 (tail-mounted looking back). Chase modes anchor a fixed arc-length behind the
 car so they never lag at speed; onboard modes ride ON the car with very high
 damping. fov widens with speed; a debug free camera (`__apex.view`) can override
@@ -361,8 +372,11 @@ scenarios (rival/rivals/pair/jam). Full reference in
 `index.html` owns ALL static DOM: canvas `#game`, HUD, overlay menus, select
 screen, pause menu, data hub root, touch buttons, help modal. `css/style.css`
 = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600` accents, bold
-italic headings); `css/data.css` = data hub only. Cache-bust all
-script/style URLs with `?v=1`.
+italic headings); `css/data.css` = data hub only. Cache-bust every script/style
+URL with `?v=N`, where `N` is a monotonic per-build integer (check `index.html`
+for the current value — currently 539). `version.json` `{ "build": N }` mirrors
+the same `N`; the shell version guard uses it to force-refresh a stale installed
+PWA.
 
 ## Deploy
 

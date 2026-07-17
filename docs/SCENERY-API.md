@@ -17,6 +17,20 @@ see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 > `conifer`, …) is summarised in the **City & scenery dressing** section of
 > `CLAUDE.md`. This doc covers only the per-circuit `scenery(api)` toolkit.
 
+## Road half-width overlays (`hwZones`)
+
+CircuitPaths traces ignore segs `w:`. To squeeze a section (e.g. Baku castle),
+set on the track def:
+
+```js
+hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }]
+```
+
+`hw` is half-width in metres; `ease` is a soft blend shoulder in lap fraction
+(default `0.025`). Zones remapped with `startFrac`/`reverse` like elevations.
+
+---
+
 ## Positioning model
 
 Trackside helpers take `(k, side, dist, …)`:
@@ -58,6 +72,7 @@ sink their base ~0.8 m, which hides the small estimate-vs-ribbon gap.
 | `onTrack(x, z, margin)` | true if `(x,z)` is on any tarmac — guard distant props |
 | `groundYAt(k, dist)` | terrain height `dist` beyond the edge |
 | `hash(i)` | deterministic 0–1 pseudo-random |
+| `ATM` / `COL` | named atmosphere & colour packs from `track-scenery-data.js` (see below) |
 
 ### Geometry primitives (world coords — non-cube shapes)
 | Primitive | Shape |
@@ -93,12 +108,23 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 ### Composite models — structures
 | Model | Builds |
 |---|---|
-| `building(k, side, dist, w, h, d, opts)` | mass + window bands; `opts:{wall,window,floor,setback,roof}` |
+| `building(k, side, gap, w, h, d, opts)` | mass + window bands; 3rd arg is **clearance** `gap` (metres beyond the road edge; the emitter computes `dist = gap + w/2` so the inner face sits `gap` off the edge). `opts:{wall,window,floor,setback,roof}` |
 | `tower(k, side, dist, baseW, h, opts)` | tapered tower; `opts:{col,seg,cap,capCol,mast}` |
 | `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof |
 | `billboard(k, side, gap, w, h, col)` | advertising hoarding on two posts |
 | `gantry(s, h, col)` | overhead structure spanning the track (start/scoring) |
 | `marshalPost(k, side, gap)` | orange-roofed post + flag pole |
+| `underpassPortal(s, opts)` | dark overhead slab + off-edge piers (cars pass under). `opts:{h,thick,col,pierGap,pierW,depth}` |
+| `floodMast(k, side, dist, opts)` | tall dual-arm cool-white flood + optional ground pool. `opts:{h,cool,pool,arms}` |
+| `floodMastRing(stepM, opts)` | both sides every ~`stepM` m; forwards `opts` to `floodMast` (`opts.dist` default 14) |
+| `ledFacadeBands(c, h, opts)` | stacked emissive frustum bands (Flame Towers / Sphere). `opts:{r,bands,cols,seg,basis}` |
+| `sailCanopy(c, basis, opts)` | disc/ellipse sail on a hub mast. `opts:{rad,rx,rz,h,col,ribs,thick}` |
+| `gridshellCanopy(c, basis, opts)` | arched LED lattice veil. `opts:{w,depth,h,cols,rows,ledCols,strutCol}` |
+| `concreteCanyon(s0, s1, side, gap, opts)` | pale grey Jersey wall + optional accent stripes. `opts:{h,thick,col,stripeCol,stripeH,stripeEvery}` |
+| `runoffApron(k, side, gap, sz, col)` | wide low asphalt/gravel apron; `sz` = `[depth,thick,len]` or depth number |
+| `bankedKerbStrip(s0, s1, side, opts)` | tilted red/white kerbs + optional SAFER rail. `opts:{saferGap,safer,step,kerbRed,kerbWht,saferCol}` |
+| `bowlSeatWall(s0, s1, side, gap, opts)` | continuous eye-height seat/crowd wall. `opts:{h,thick,shell,step,crowdCols}` |
+| `pastelStreetRow(s0, s1, side, gap, opts)` | sparse Med apartment boxes. `opts:{palette,minH,maxH,depth,step,lit,windowCol}` |
 
 ### Composite models — barriers / track furniture
 | Model | Builds |
@@ -107,6 +133,33 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 | `fence(s0, s1, side, gap, h, col)` | catch/debris fence — posts + pale mesh |
 | `guardrail(s0, s1, side, gap, col)` | waist-high armco rail on posts |
 | `tyreWall(s0, s1, side, gap, capCol)` | stacked tyres + coloured conveyor cap |
+
+### Atmosphere / colour packs (`api.ATM` / `api.COL`)
+
+Exported from `js/track-scenery-data.js` and exposed on the scenery `api`.
+Merge into a track `pal` or use as literal colours:
+
+| Pack | Intent |
+|---|---|
+| `ATM.coolNight` | Near-black zenith, cool fog (night streets / desert floods) |
+| `ATM.warmNight` | Magenta/amber haze (Vegas) |
+| `ATM.dampArdennes` | Grey zenith/horizon, dense cool fog |
+| `ATM.britishOvercast` | Pale grey-blue sky, lush grass |
+| `ATM.dustyBowl` | Bleached straw-olive grass/runoff |
+| `ATM.alpineGreen` | Vivid green aprons + cool sky |
+| `ATM.rivieraDay` | Clear blue + warm pastels |
+| `COL.aquaRunoff` | Miami aqua apron RGB |
+| `COL.basinTeal` | Montreal basin / river RGB |
+| `COL.desertSand` | Warm tan runoff RGB |
+
+```js
+// Example: cool night retune inside scenery(api)
+const { ATM, underpassPortal, floodMastRing, concreteCanyon } = api;
+Object.assign(pal, ATM.coolNight);
+underpassPortal(0.18, { h: 6, depth: 18 });
+floodMastRing(48, { h: 38, dist: 16 });
+concreteCanyon(0.40, 0.55, -1, 0.6, { stripeCol: [0.05, 0.52, 0.28] });
+```
 
 > Verify a track builds: `node tools/verify-track.cjs <id>` (catches a scenery
 > that throws — which silently strands the game on the menu).

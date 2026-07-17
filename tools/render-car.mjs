@@ -60,9 +60,7 @@
 //   node tools/render-car.mjs --team=mclaren --preset=wing --aero=extreme         # 3 shots, one wing
 //   node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
 
-let chromium;
-try { ({ chromium } = await import('playwright')); }
-catch { ({ chromium } = await import('/opt/node22/lib/node_modules/playwright/index.mjs')); }
+import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -159,7 +157,7 @@ const W      = parseInt(arg('w', '900'), 10);
 const H      = parseInt(arg('h', '680'), 10);
 const URL    = arg('url', 'http://127.0.0.1:3456');
 const OUT    = resolve(HERE, arg('out', `render-out/${TEAM}`));
-const EXE    = process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium';
+const EXE    = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
 
 const PART_CATS = ['engine', 'aero', 'brakes', 'gearbox', 'ers', 'tyres', 'suspension', 'fuel'];
 const parts = {};
@@ -214,7 +212,7 @@ for (const [k, v] of Object.entries(parts)) qs.set(k, v);
 const pageUrl = `${URL}/tools/carview.html?${qs.toString()}`;
 
 const shots = [];
-const browser = await chromium.launch({ executablePath: EXE, args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
 try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));

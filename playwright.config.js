@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig, devices } from "@playwright/test";
+import fs from "fs";
 
 // Per-run server port so several `playwright test` invocations can run at the
 // same time without sharing (and tearing down) each other's static server —
@@ -11,8 +12,19 @@ import { defineConfig, devices } from "@playwright/test";
 const PORT = Number(process.env.APEX_PORT || 3456);
 const SUF = process.env.APEX_PORT ? `-${PORT}` : "";
 
+// Portable chromium resolution: prefer PW_CHROMIUM, else the Linux sandbox path
+// only if it actually exists on disk, else omit executablePath so Playwright
+// falls back to its own bundled browser (macOS/other dev machines).
+const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const CHROMIUM_PATH =
+  process.env.PW_CHROMIUM ||
+  (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
+
 export default defineConfig({
   testDir: "./tests",
+  // Scratch/scan suites are ad-hoc investigation scripts, not part of the
+  // regression suite — keep them out of default discovery.
+  testIgnore: ["**/inspect/**", "**/blank-scan/**", "**/galleries/**"],
   globalSetup: './tests/global-setup.js',
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
@@ -31,7 +43,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+          ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
           args: [
             "--use-angle=swiftshader",
             "--enable-unsafe-webgpu",

@@ -23,16 +23,17 @@ Bright, dry Spanish midday — hard sun, crisp shadows, minimal fog (a faint dus
 |------|------|------|-------------------------------|
 | 0.00 | R | close | Pit wall & main grandstand — long low grey box, thin white-roof cap |
 | 0.02 | both | mid | IFEMA exhibition halls — huge flat white rectangular boxes, glass-blue strip |
-| 0.08 | R | mid | T1 chicane braking zone — pale concrete wall boxes, red/white kerb strips |
+| 0.08 | both | mid | T1 chicane + **motorway overpass** — pale concrete portal deck cars pass under |
 | 0.20 | L | far | Dry plains scrub — flat straw-tan ground plane, sparse olive shrub cubes |
 | 0.35 | both | close | Elevated urban sector — grey concrete deck/wall boxes, ramp up |
-| 0.50 | R | close | El Búnker drop — sharp grey retaining-wall box, kerb on the dip |
+| 0.50 | R | close | El Búnker drop — tall grey retaining-wall boxes + bunker-slot band |
 | 0.62 | L | far | Sierra de Guadarrama — hazy blue-grey ridge boxes on the horizon |
-| 0.75 | both | close | **La Monumental** banked curve — tilted asphalt band + tall encircling grandstand boxes, white roofs |
-| 0.80 | both | mid | Monumental light towers — thin tall grey poles, small bright cap cubes |
+| 0.75 | both | close | **La Monumental** banked curve — continuous white nested bowl + flood ring |
+| 0.80 | both | mid | Monumental flood masts — tall dual-arm cool-white poles on the rim |
+| 0.84 | both | mid | **Valdebebas pelouse** — open straw runoff gap (no city facade) post-bowl |
 | 0.90 | R | mid | Modern IFEMA grandstands — stepped grey seating boxes, white canopy roofs |
 | 0.96 | L | mid | Valdebebas plains edge — straw-tan ground, low scrub, fence-line boxes |
-| all | both | close | Concrete barriers — continuous pale-grey thin boxes lining the street sections |
+| all | both | close | Street = pale concrete walls; permanent/Monumental = open guardrail |
 
 ## 5. Track features
 - **La Monumental:** signature ~24% banked stadium curve — render as a steeply tilted asphalt band wrapped 270° by tall grandstand boxes; the lap's hero feature.
@@ -40,9 +41,9 @@ Bright, dry Spanish midday — hard sun, crisp shadows, minimal fog (a faint dus
 - Bright red/white kerbs at chicanes and the banked entries; otherwise smooth modern flat tarmac.
 
 ## 6. Modelling notes
-- Make the banked Monumental ring of grandstand boxes the instant signature — exaggerate the tilt and encircle it fully.
-- Contrast clean white/glass IFEMA hall boxes against the warm straw-tan dry-plain ground to read as modern Madrid.
+- Make the banked Monumental ring of **continuous white** grandstand tiers the instant signature — nested bowl + flood ring; keep any Las Ventas brick arcade thin and behind the rim.
+- Contrast clean white/glass IFEMA hall boxes against the warm straw-tan dry-plain ground to read as modern Madrid — no lush forest edges.
+- Hybrid rhythm: continuous pale-grey concrete walls on street sectors; open guardrail + runoff on the permanent northern loop / Monumental / pelouse.
+- El Búnker retaining wall at the mid-lap climb/drop and a motorway overpass at the T1 chicane as silhouette landmarks.
 - Float a hazy blue-grey Sierra de Guadarrama ridge on the far horizon for depth; keep it low-detail.
-- Use continuous pale-grey concrete barrier boxes on street sectors vs. open kerbed run-off on the permanent northern loop to sell the hybrid identity.
-- Thin tall light-tower poles around the Monumental add modern stadium scale.
 - Keep palette bright and dry — hard sun, sharp shadows, near-zero fog except a faint horizon haze.

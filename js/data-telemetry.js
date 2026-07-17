@@ -1,14 +1,15 @@
 /* Apex 26 — the data hub's TELEMETRY tab (trace viewer, delta, map, playback).
    Split out of js/data.js; instantiated once by the DataHub shell via
    DataTelemetry.create(ctx) with the shell helpers it needs (el/clear/
-   emptyMsg/spinner DOM builders, ensureSession/buildPicker/invalidateOther
-   session plumbing, COMPOUND, findTeam). Uses the F1API global directly.
+   emptyMsg/spinner DOM builders, sel selection state, ensureSession/
+   buildPicker/invalidateOther session plumbing, COMPOUND, findTeam).
+   Uses the F1API global directly.
    Must load BEFORE js/data.js (see index.html). */
 const DataTelemetry = (function () {
   "use strict";
 
   function create(ctx) {
-    const { el, clear, emptyMsg, spinner, ensureSession, buildPicker,
+    const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
             invalidateOther, COMPOUND, findTeam, cssColor, NO_TELEM_MSG } = ctx;
 
 
@@ -162,6 +163,7 @@ const DataTelemetry = (function () {
   let telGen = 0;
   let telView = null;                 // the live telemetry view (for animation cleanup)
   let telemPopup = null;              // the full-screen player popup element
+  let telemKeyHandler = null;         // the Escape-to-close keydown listener (for cleanup)
 
   function stopTelAnim() {
     if (telView) {
@@ -172,6 +174,10 @@ const DataTelemetry = (function () {
 
   function closeTelemPopup() {
     stopTelAnim();
+    if (telemKeyHandler) {
+      document.removeEventListener("keydown", telemKeyHandler);
+      telemKeyHandler = null;
+    }
     if (telemPopup) {
       if (telemPopup.parentNode) telemPopup.parentNode.removeChild(telemPopup);
       telemPopup = null;
@@ -208,11 +214,11 @@ const DataTelemetry = (function () {
       if (e.target === overlay) closeTelemPopup();
     });
 
-    // Close on Escape (cleaned up when popup closes)
-    function onKey(e) {
-      if (e.key === "Escape") { closeTelemPopup(); document.removeEventListener("keydown", onKey); }
-    }
-    document.addEventListener("keydown", onKey);
+    // Close on Escape. Stored so closeTelemPopup() can remove it however the
+    // popup is dismissed (Escape, backdrop click, ✕, or tab change) — otherwise
+    // a document keydown listener leaks on every non-Escape close.
+    telemKeyHandler = function (e) { if (e.key === "Escape") closeTelemPopup(); };
+    document.addEventListener("keydown", telemKeyHandler);
 
     document.body.appendChild(overlay);
     telemPopup = overlay;

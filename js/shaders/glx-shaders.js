@@ -1570,7 +1570,7 @@ void main() {
   // depth buffer. If a nearby surface blocks the sun within a small distance, the
   // pixel is in contact shadow (grounds the car/objects where the sun map's texel
   // footprint is too coarse). Folded into AO so the composite multiply applies it.
-  if (uContact > 0.0 && uSunVS.z < 0.0) {     // sun in front of the camera-ish
+  if (uContact > 0.0 && uSunVS.z < 0.05) {     // sun at/in front of the camera plane
     float sh = 1.0;
     for (int i = 1; i <= 5; i++) {   // contact-shadow march 8→5
       vec3 q = P + uSunVS * (0.04 * float(i));   // up to ~0.32 m toward the sun
@@ -1593,7 +1593,12 @@ void main() {
       float aboveBias = 0.05 + 0.01 * max(-P.z - 6.0, 0.0);
       if (dz > 0.015 && dz < 0.5 && above > aboveBias) { sh = 1.0 - uContact; break; }
     }
-    ao *= sh;
+    // Smoothly fade the contact term as the sun crosses the camera plane so a
+    // chase-cam yaw doesn't flip the whole grounding shadow off in one frame (was
+    // a hard uSunVS.z < 0 cutoff — a visible pop). Behind the plane the march
+    // points away from view, so this fades to a no-op there (no spurious shadow).
+    float front = clamp(-uSunVS.z * 6.0, 0.0, 1.0);
+    ao *= mix(1.0, sh, front);
   }
   outColor = vec4(vec3(ao), 1.0);
 }`;
@@ -1737,6 +1742,7 @@ uniform sampler2D uBloom;
 uniform sampler2D uSSAO;     // ambient occlusion (1 = unoccluded)
 uniform sampler2D uGodray;   // additive volumetric sun shafts
 uniform float uBloomAmt;
+uniform float uBloomKnee;    // how much bloom is suppressed over bright pixels (def 0.5)
 uniform vec2 uSunUV;
 uniform float uFlareStr;
 uniform float uExposure;
@@ -1751,6 +1757,7 @@ uniform float uVibrance;     // selective saturation of dull pixels (default 0.2
 uniform float uSaturation;   // global saturation (1 = unchanged)
 uniform float uTint;         // warm(+)/cool(-) white-balance shift, -1..1 (default 0)
 uniform float uVignette;     // corner-darkening floor: 1 = none, lower = stronger (default 0.80)
+uniform float uVigSoft;      // vignette inner-edge radius / reach (default 0.35)
 uniform sampler2D uDepth;    // scene depth (for wet-road screen-space reflection)
 uniform mat4 uInvProj;       // clip → view (reconstruct view position from depth)
 uniform mat4 uProj;          // view → clip  (project the marched ray to screen)
@@ -1777,6 +1784,17 @@ vec3 ssrViewPos(vec2 uv) {
   float d = texture(uDepth, uv).r * 2.0 - 1.0;     // window depth → NDC z
   vec4 cp = uInvProj * vec4(uv * 2.0 - 1.0, d, 1.0);
   return cp.xyz / cp.w;
+}
+
+// Scene sample carrying the CHROMATIC ABERRATION radial R/B split, so the later
+// SPEED BLUR and SHARPEN passes sample in the SAME domain as CA instead of the
+// raw scene — otherwise stacking CA with speed blur / sharpen re-mixed
+// un-aberrated taps and largely cancelled the fringe. uChromAb = 0 → identity.
+vec3 caScene(vec2 uv) {
+  if (uChromAb <= 0.001) return texture(uScene, uv).rgb;
+  vec2 d = uv - 0.5;
+  float a = uChromAb * 0.004 * dot(d, d);
+  return vec3(texture(uScene, uv + d * a).r, texture(uScene, uv).g, texture(uScene, uv - d * a).b);
 }
 
 // ACES fitted filmic tone-map (Stephen Hill's approximation).
@@ -1843,7 +1861,7 @@ void main() {
     vec3 acc = c; float wsum = 1.0;
     for (int i = 1; i <= 4; i++) {
       float t = float(i) / 4.0 * uSpeedBlur * 0.05;
-      acc += texture(uScene, vUV - caDir * t).rgb;
+      acc += caScene(vUV - caDir * t);   // caScene carries CA so the two don't cancel
       wsum += 1.0;
     }
     c = acc / wsum;
@@ -1852,10 +1870,10 @@ void main() {
   // SHARPEN: unsharp mask against a 4-tap neighbour blur (uReflTexel is uploaded
   // every frame). Recovers kerb/wire crispness FXAA softens. 0 = off.
   if (uSharpen > 0.001) {
-    vec3 bl = (texture(uScene, vUV + vec2(uReflTexel.x, 0.0)).rgb
-             + texture(uScene, vUV - vec2(uReflTexel.x, 0.0)).rgb
-             + texture(uScene, vUV + vec2(0.0, uReflTexel.y)).rgb
-             + texture(uScene, vUV - vec2(0.0, uReflTexel.y)).rgb) * 0.25;
+    vec3 bl = (caScene(vUV + vec2(uReflTexel.x, 0.0))
+             + caScene(vUV - vec2(uReflTexel.x, 0.0))
+             + caScene(vUV + vec2(0.0, uReflTexel.y))
+             + caScene(vUV - vec2(0.0, uReflTexel.y))) * 0.25;
     c += (c - bl) * uSharpen * 0.9;
   }
 
@@ -2031,7 +2049,9 @@ void main() {
   // Improved bloom: add with a mild tone-aware mask so it doesn't wash out
   // already-bright pixels (reduce bloom addition proportionally in highlights).
   vec3 bloomSample = texture(uBloom, vUV).rgb;
-  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
+  // uBloomKnee (BLOOM ON HIGHLIGHTS) scales the highlight suppression: 0 = bloom
+  // everything evenly (milky), 1 = strongly hold bloom off blown pixels (crisp).
+  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * uBloomKnee;
   // Scale by uExposure to match the scene: the bright-pass samples the RAW
   // pre-exposure HDR target, but the scene above is already multiplied by
   // uExposure. Without this, a driven exposure (0.86–0.90 at night) dimmed the
@@ -2131,7 +2151,10 @@ void main() {
   float vAspect = uReflTexel.x > 0.0 ? uReflTexel.y / uReflTexel.x : 1.0;   // width/height
   q.x *= vAspect;
   float vr = length(q) * 0.70710678 / length(vec2(0.5 * vAspect, 0.5));
-  float vig = smoothstep(0.95, 0.35, vr);
+  // uVigSoft (VIGNETTE REACH) is the inner edge: lower = broad soft gradient
+  // reaching toward centre, higher = a thin ring hugging the corners. Kept below
+  // the fixed 0.95 outer edge so the smoothstep stays well-ordered.
+  float vig = smoothstep(0.95, min(uVigSoft, 0.94), vr);
   c *= mix(uVignette, 1.0, vig);
 
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to

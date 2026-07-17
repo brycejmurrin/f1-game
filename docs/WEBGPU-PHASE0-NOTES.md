@@ -1,15 +1,21 @@
 # WebGPU Phase 0 + Phase 1 skeleton — build notes
 
-Status: **implemented, additive, not yet wired in.** This document records the
-`Gfx` backend seam (Phase 0) and the WebGPU device/clear/sky skeleton (Phase 1)
-built per [`docs/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md) and the
+Status: **implemented, additive, and since wired in (opt-in).** This document
+records the `Gfx` backend seam (Phase 0) and the WebGPU device/clear/sky skeleton
+(Phase 1) built per [`docs/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md) and the
 "shader chunk" + "document the draw-API contract" recommendations in
 [`docs/WEBGPU-MAINTAINABILITY.md`](./WEBGPU-MAINTAINABILITY.md).
 
-**Nothing here is loaded by `index.html` yet** — integration is a deliberate
-later step (see [Wiring it in](#wiring-it-in-the-later-step)). No existing file
-was modified. The scaffolding is feature-detected and inert on unsupported
-browsers, so it cannot affect the shipping WebGL2 game.
+> **Update:** the "wiring it in" step below has since been done — `index.html`
+> now loads `js/webgpu/wgsl-chunks.js`, `js/webgpu/wgsl-post.js`,
+> `js/webgpu/wgsl-fx.js`, `js/webgpu/wgx.js` and `js/gfx.js`, and the whole stack
+> has advanced through **Phase 4b**. The backend is still strictly **opt-in**
+> (`localStorage apex26.gfxBackend = "webgpu"`) and falls back to WebGL2/GLX on
+> any failure, so the default shipping path is unchanged. The text below is the
+> original Phase 0/1 scaffolding record.
+
+The scaffolding is feature-detected and inert on unsupported browsers (and when
+not opted in), so it cannot affect the shipping WebGL2 game.
 
 ---
 

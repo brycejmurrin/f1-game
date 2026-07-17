@@ -22,15 +22,15 @@ Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone
 |--------|------|------|------------------------|
 | 0.00 | L | close | Pit/control building: long low white box, ~12 m, glass-grey top stripe |
 | 0.00 | R | close | Main Grandstand: stepped grey slab, ~20 m, dark seating face |
-| 0.00 | L | far | **Sakhir Tower**: tall curved sail tower, ~60 m, pale `[0.85,0.85,0.80]` |
+| 0.00 | L | far | **Sakhir Tower**: tall cream cylinder ~60 m, bright LED façade bands, **sail canopy** crown |
 | 0.05 | R | mid | Turn 1 Grandstand: angled stepped box, ~18 m, blue trim |
 | 0.18 | R | mid | University Grandstand (triple): three stacked grey slabs, ~16 m |
-| 0.20 | both | mid | Floodlight masts: thin dark poles + bright cap boxes, ~25 m |
+| 0.20 | both | mid | Floodlight masts: tall dual-arm cool-white poles + lens banks, **~36–42 m** |
 | 0.30 | L | far | Sculpted dunes: low rounded tan wedges, 3–6 m |
 | 0.42 | R | mid | Turn 8 hairpin grandstand: low grey arc, ~12 m |
-| 0.50 | both | far | Open desert sand flats, near-ground tan plane |
+| 0.50 | both | far | Open desert sand flats, near-ground tan plane (sparse dry scrub — no oasis planting) |
 | 0.62 | L | far | Marshal/timing huts: small white cubes, ~4 m |
-| 0.80 | R | mid | Back-straight catch-fence + light banks: dark verticals + white caps |
+| 0.80 | R | mid | Back-straight catch-fence + tall flood ring |
 | 0.95 | L | close | Pit entry wall + garage roofline returning to start |
 
 ## 5. Track features
@@ -38,8 +38,8 @@ No banking — flat throughout. Signature corners: **Turn 1** right-hand hairpin
 
 ## 6. Modelling notes
 - Light from above: bake bright top faces / floodlit pools so night track reads against black sky.
-- Use the pale curved **Sakhir Tower** as the single hero silhouette near start/finish — visible from multiple points.
-- Surround everything with a low warm tan sand plane and a few rounded dune wedges; keep desert sparse, not green.
-- Repeat dark floodlight masts with bright cap boxes around the lap to sell the night-race lighting.
-- Grandstands = stepped grey slabs with darker seating faces; vary height to distinguish main vs minor stands.
+- **Sakhir Tower** = cream cylinder + bright LED rings + sail canopy crown — single hero near start/finish.
+- Surround with warm tan sand and rounded dune wedges; keep desert **sparse** (dry scrub/rocks only — no green palm oasis or gateway clutter).
+- Repeat tall cool-white floodlight masts (~36–42 m) around the lap for night-race drama.
+- Grandstands = stepped cream slabs with darker/blue seating faces; vary height to distinguish main vs minor stands.
 - Saturated red/white kerb boxes at apexes give the strongest "this is Bahrain" colour pop against grey asphalt.

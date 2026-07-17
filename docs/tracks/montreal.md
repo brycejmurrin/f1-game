@@ -9,8 +9,8 @@ A semi-permanent racetrack laid across **Île Notre-Dame**, a man-made island bu
 Bright early-summer day, clear sky, soft greens of mid-June foliage, calm water. Light haze over the river for depth — no heavy fog.
 - Sky: `[0.50, 0.70, 0.93]` clear blue
 - Tarmac: `[0.33, 0.34, 0.36]` clean grey asphalt
-- River/canal: `[0.22, 0.45, 0.58]` cool St. Lawrence blue
-- Olympic Basin water: `[0.20, 0.50, 0.60]` flat rowing-lake teal
+- River/canal: `[0.08, 0.55, 0.62]` bright basin teal (`COL.basinTeal`)
+- Olympic Basin water: `[0.08, 0.55, 0.62]` flat rowing-lake teal (`COL.basinTeal`)
 - Grass/parkland: `[0.30, 0.55, 0.28]` park green
 - Trees: `[0.18, 0.42, 0.22]` deep foliage green
 - Concrete walls/barriers: `[0.78, 0.79, 0.80]` pale grey
@@ -26,26 +26,27 @@ Clockwise; s=0.0 at start/finish on the main straight.
 | 0.04 | both | close | Senna S (T1–2) chicane — angled wall boxes, red/white kerb slabs |
 | 0.10 | L | mid | Olympic Basin rowing lake — wide flat teal plane behind low wall |
 | 0.15 | both | mid | Parkland trees — clusters of green cube canopies on brown trunk boxes |
-| 0.25 | R | far | Casino de Montréal (Expo pavilion) — tall faceted pale block, glassy tint |
+| 0.25 | R | far | Casino de Montréal (Expo pavilion) — ~30 m pale finned mass, not a glass tower |
 | 0.30 | L | far | Biosphère dome — big light-grey hemisphere approximated as stacked boxes |
 | 0.38 | L | far | Montreal skyline across river — distant grey tower boxes of varied height |
 | 0.45 | R | close | Casino corner (T8–9) + footbridge — grey box spanning over the track |
 | 0.55 | both | close | L'Épingle hairpin (T10) — tight U of wall boxes, grandstand backdrop |
 | 0.60 | L | mid | Casino Straight flanked by Olympic Basin — long teal water plane to left |
 | 0.92 | both | close | Final chicane (T13–14) — red/white kerb boxes, tight wall funnel |
-| 0.96 | R | close | **Wall of Champions** — unbroken pale concrete wall box, "Bienvenue" graphic |
+| 0.96 | R | close | **Wall of Champions** — taller pale concrete wall + Bienvenue/Bonjour Québec panel |
 | all | both | close | Continuous concrete walls — thin pale-grey boxes lining both edges |
 
 ## 5. Track features
 - Long flat-out straights (main + Casino Straight) broken by sharp chicanes — a stop-go rhythm.
-- **Wall of Champions**: signature unbroken concrete wall right on the final-chicane exit, inches from the line.
+- **Wall of Champions**: taller pale concrete wall on the final-chicane exit with a Bienvenue/Bonjour Québec panel.
 - Tight concrete walls everywhere — minimal run-off, walls define the racing corridor.
 - Aggressive red-and-white kerbs at every chicane and the hairpin.
 
 ## 6. Modelling notes
 - Lead with the contrast of **grey tarmac + pale walls against green park and blue water** — that read says Montreal instantly.
-- Place the long flat **teal Olympic Basin plane** along the left of the Casino Straight as the signature water motif.
+- Place the long flat **teal Olympic Basin plane** (`COL.basinTeal`) along the Casino Straight and as the river surround.
 - Keep the whole island dead flat; use wall proximity and chicane kerbs, not elevation, for drama.
 - Dot green cube-canopy trees and grass strips between walls to sell the island-park setting.
-- Make the **Wall of Champions** a clean, prominent, unbroken pale box at the final chicane — a recognizable beat.
+- Make the **Wall of Champions** a tall pale hero wall at s≈0.955–0.99 R with Bienvenue/Bonjour Québec signage.
+- Casino = short Expo pavilion (~25–35 m) with vertical fins — not a glass skyscraper.
 - Background skyline (distant grey tower boxes) and the Biosphère hemisphere across the water give the island scale and identity.

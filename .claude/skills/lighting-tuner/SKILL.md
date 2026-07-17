@@ -6,7 +6,7 @@ description: Tune and validate scene lighting — the TUNE_DEFS slider knobs (vi
 # Tune and validate scene lighting via __apex probes
 
 **Reach for the tuner knobs FIRST.** Nearly every hand-tuned lighting value is a
-live `TUNE_DEFS` knob (game.js) read via `LT.<id>` each frame — sun/ambient,
+live `TUNE_DEFS` knob (js/game/lighting.js) read via `LT.<id>` each frame — sun/ambient,
 shadows, floodlights, bloom, fog/mist, reflections, car paint, image grade.
 Prefer adjusting a knob over editing a literal in `applyRaceSettings`:
 
@@ -61,7 +61,7 @@ node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw
 # 1. Capture baseline
 node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > /tmp/before.json
 
-# 2. Edit applyRaceSettings in js/game.js
+# 2. Edit applyRaceSettings in js/game.js (or a TUNE_DEFS default in js/game/lighting.js)
 # 3. Bump cache version, reload
 
 # 4. Capture after

@@ -150,6 +150,10 @@ const Liveries = (function () {
   // universal set.
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
+    // Optional extra paint carried on the team (custom "My Team" defines these via
+    // the MY TEAM panel). Additive: absent -> exact same default shape as before.
+    const ex = team.livery;
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 

@@ -6,12 +6,12 @@
 Carved into the hilly Ardennes forest of eastern Belgium. Roads thread through dense pine and deciduous woodland on steep terrain. Notoriously changeable weather — often misty, damp, and wet even when one part of the track is dry.
 
 ## 2. Atmosphere & palette
-Moody, overcast-leaning daylight. Walls of dark forest green crowding the asphalt, damp grey-blue tarmac and concrete. Heavier fog than most tracks; let distant boxes fade early.
-- Sky/haze: `[0.62, 0.66, 0.68]` (pale damp grey)
+Moody, overcast-leaning daylight (`ATM.dampArdennes`). Walls of dark forest green crowding the asphalt, damp grey-blue tarmac and concrete. Heavier fog than most tracks; let distant boxes fade early. **No mountain snowcaps** — summer Ardennes forest hills only.
+- Sky/haze: grey zenith/horizon (`[0.42, 0.48, 0.52]` / `[0.58, 0.62, 0.64]`)
 - Forest canopy: `[0.10, 0.32, 0.14]` deep, `[0.18, 0.42, 0.20]` mid
 - Tarmac: `[0.26, 0.27, 0.29]`; concrete/runoff: `[0.55, 0.55, 0.52]`
 - Kerbs: red `[0.78, 0.12, 0.12]` / white `[0.88, 0.88, 0.88]`
-- Fog tint: `[0.58, 0.63, 0.62]`, dense.
+- Fog tint: `[0.55, 0.60, 0.62]`, dense (`fogDensity` ≈ 0.0032).
 
 ## 3. Elevation
 Huge ~102 m total elevation change — the defining feature.
@@ -28,8 +28,8 @@ Huge ~102 m total elevation change — the defining feature.
 | 0.00 | R | mid | Main grandstand: tiered grey slab box facing pit straight |
 | 0.02 | R | near | La Source hairpin grandstand: short steep stack of seat-boxes |
 | 0.05 | both | far | Forest ridgelines: jagged green box silhouettes rising on both sides |
-| 0.06 | L | near | Eau Rouge: low concrete wall boxes at valley base, red/white kerb strip |
-| 0.08 | R | mid | Raidillon crest grandstand + giant-screen box on the climb |
+| 0.06 | L | near | Eau Rouge: thickened concrete wall at valley base, red/white kerb strip |
+| 0.07–0.09 | R | mid | **Gold 3** Raidillon amphitheatre: large dual-bay concrete stand + jumbotron + stepped banking slabs |
 | 0.10 | L | far | Old pit building: weathered cream/grey long box on the original straight |
 | 0.16 | R | mid | Les Combes grandstand: open tiered box, forest wall directly behind |
 | 0.40 | both | far | Dense forest banks: continuous dark-green box masses hemming the track |
@@ -49,5 +49,6 @@ Huge ~102 m total elevation change — the defining feature.
 - Crowd the track with tall dark-green forest boxes; the green theme should dominate every horizon.
 - Keep tarmac/concrete cool grey, kept dull to sell the damp, overcast mood.
 - Use heavier fog and earlier box fade than other tracks to evoke Ardennes mist.
-- Cluster grandstand seat-boxes only at La Source, Les Combes, Bus Stop and the pit straight; leave forest sections bare.
+- Cluster grandstand seat-boxes at La Source, Les Combes, Bus Stop, pit straight, and the oversized Raidillon Gold-3 amphitheatre; leave mid-forest sections bare.
 - Contrast the modern white pit/paddock box against the lone weathered old pit building for history.
+- Pouhon: orange marshal-post cluster on the left; Stavelot: grey runoff apron + tyre/armco against the treeline.

@@ -1,10 +1,12 @@
 # WebGPU migration — Phase 3 notes (sun shadows)
 
 Phase 3 fills the shadow-pass stubs on the WGX backend (`js/webgpu/wgx.js`) and
-the LIT shader (`js/webgpu/wgsl-chunks.js`). Additive only — nothing is wired
-into `index.html`, so the shipping WebGL2 game is untouched. Both files pass
-`node --check`. **It has NOT been run in a WebGPU browser** (this environment has
-no WebGPU); the risks below are paper-verified and flagged for a browser pass.
+the LIT shader (`js/webgpu/wgsl-chunks.js`). Additive and **opt-in**: the WebGPU
+backend is now loaded by `index.html` but only activates under
+`localStorage apex26.gfxBackend = "webgpu"` (WebGL2/GLX remains the default,
+always-present fallback), so the shipping WebGL2 game is untouched. Both files
+pass `node --check`. The risks below were paper-verified and flagged for a
+browser pass.
 
 ## What now renders
 
@@ -79,7 +81,10 @@ half of every scene — and every shadow caster — would have been clipped.
   blocks (wet-road, procedural materials/detail, clearcoat, car-paint, sparkle,
   lamp-fog) also land here — their scalars are already plumbed.
 - **Phase 3b (env probe)** — `envFaceBegin`/`envFaceEnd` cube-face render for car
-  paint reflections (still stubbed; off by default in-game).
+  paint reflections. **Since implemented (Phase 4b):** they render a real
+  RGBA16F cube one face/frame and the LIT shader samples it once a 6-face cycle
+  completes; the default reflection is the cheap analytic sky when no probe is
+  active. See `docs/WEBGPU-PHASE4-NOTES.md`.
 - **Phase 5** — instancing (`drawElementsInstanced` equivalent) for lamps/trees/
   wheels/blob-shadows to cut draw calls.
 - **Integration** — wire `js/gfx.js` into `index.html` + the async boot in

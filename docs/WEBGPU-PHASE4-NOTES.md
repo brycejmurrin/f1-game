@@ -1,9 +1,22 @@
 # WebGPU migration — Phase 4 notes (post chain + foreground FX)
 
 Scope of this pass: wire the Phase-4 post-processing chain and foreground FX into
-the WebGPU backend. **Only `js/webgpu/wgx.js` was edited** (plus this doc). The
-backend is still NOT loaded by `index.html` — `WGX.create()` returns `null` on any
-failure and the game falls back to GLX. `node --check js/webgpu/wgx.js` passes.
+the WebGPU backend. **Only `js/webgpu/wgx.js` was edited** (plus this doc).
+
+> **Update (Phase 4b):** the items this doc originally listed as deferred — the
+> wet-road **SSR** pass, the composite **chromatic aberration / unsharp sharpen /
+> radial speed-blur** image FX, and the **env-probe cube** — have since been
+> ported. `index.html` now loads the WebGPU stack (`js/webgpu/wgsl-chunks.js`,
+> `js/webgpu/wgsl-post.js`, `js/webgpu/wgsl-fx.js`, `js/webgpu/wgx.js`,
+> `js/gfx.js`); it is **opt-in** via `localStorage apex26.gfxBackend = "webgpu"`
+> and `WGX.create()` returns `null` on any failure so the game falls back to GLX.
+> The "Stubbed / reduced" section is annotated below with what has landed.
+>
+> **Still reduced vs WebGL2** (don't assume full parity): lamp-fog / ground-mist
+> **volumetrics**, the **PCSS** soft-shadow quality, **MSAA stays at 1**, and
+> there is **no `gpuTimer`** on the WebGPU path.
+
+`node --check js/webgpu/wgx.js` passes.
 
 Grounding references (cited inline in the code):
 - Backend being extended: `js/webgpu/wgx.js` (device/context, LIT pass into
@@ -160,18 +173,18 @@ the scene depth buffer.
   `multisample:{count:N}` on the lit + sky + FX pipelines, add `resolveTarget:
   sceneView` to the lit colour attachment, and add a depth-resolve (blit or manual
   min-depth) before SSAO — or gate SSAO off when N>1.
-- **Env probe (Phase 3/4)** — `envFaceBegin/envFaceEnd` still no-op; the LIT
-  env-mirror term remains deferred. **To implement:** create a cube
-  `GPUTexture` (rgba16float, `RENDER_ATTACHMENT|TEXTURE_BINDING`, 6 layers) + a
-  small depth, and per face record a `begin()`-equivalent lit+sky pass with the
-  face camera (`lookAt` down each ±X/±Y/±Z, 90° fov) into that layer's view;
-  after all 6 faces, expose the cube view + a `envProbeReady()` flag and add an
-  `@group(0)` cube binding + reflection term to `WGSLChunks.LIT`. Mirror the GLX
-  feedback-loop guard (don't sample the cube while rendering into it) and the
-  1×1 black dummy-cube for the probe-less path.
-- **COMPOSITE SSR / speed-blur / chromatic aberration (deferred in the shader)** —
-  `wgsl-post.js` itself drops these blocks, so nothing here drives them. `opts.
-  reflect/speedBlur/chromAb` are accepted but ignored.
+- **Env probe — DONE (Phase 4b).** `envFaceBegin/envFaceEnd` now render a real
+  RGBA16F cube one face/frame; `WGSLChunks.LIT` samples it once a 6-face cycle
+  completes (`envProbeReady()` gates it), with the cheap analytic-sky reflection
+  as the default when no probe is live. Implemented as originally sketched: a
+  6-layer cube `GPUTexture` + small depth, a per-face lit+sky pass, the
+  feedback-loop guard, and a 1×1 dummy cube for the probe-less path.
+- **COMPOSITE SSR / speed-blur / chromatic aberration — DONE (Phase 4b).** The
+  wet-road **SSR** march is now its own full-res `rgba16float` pass (`WGSLPost.SSR`),
+  fed back into the LIT wet-road reflection; the **chromatic aberration**,
+  **unsharp sharpen**, and radial **speed-blur** image FX are folded into the
+  COMPOSITE pass. `present()` `opts.reflect`/`opts.speedBlur` and the tuner's
+  `chromAb`/`sharpen` now drive them (SSR strength lags one frame by design).
 - **Instancing (Phase 5)** — true instancing needs `game.js` to supply per-instance
   transforms (out of scope; `game.js` untouched). The batched skid trail (one draw)
   and per-frame glow batch already cut the draw count; props still draw per chunk.

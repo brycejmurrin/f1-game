@@ -500,6 +500,10 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
+function sectorAt(s) {
+  const frac = wrapS(s) / track.total;
+  return frac < 1 / 3 ? 0 : frac < 2 / 3 ? 1 : 2;
+}
 // Render interpolation: blend a car's arc position between its previous and
 // current fixed-physics-step values by the leftover-accumulator fraction, so
 // motion stays smooth between steps (no judder on 120/144 Hz or uneven frames).
@@ -652,6 +656,7 @@ function makeCars() {
       cars.push({
         team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
+        fuelId: getTeamParts(team.id).fuel || "standard",   // tints the exhaust flame
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otCool: 0, deploying: false,
@@ -1038,10 +1043,15 @@ function _nightAmbientBand() {
   if (!frame.ambientSky || !frame.ambientGround) return;
   const _neonAmb = track && track.def &&
     (track.def.theme === "street_night" || track.def.theme === "modern");
-  const floorSky = _neonAmb ? [0.017, 0.017, 0.026] : [0.006, 0.0075, 0.016];
-  const floorGnd = _neonAmb ? [0.009, 0.008, 0.013] : [0.0026, 0.0032, 0.0085];
-  const capSky   = _neonAmb ? [0.048, 0.048, 0.068] : [0.020, 0.023, 0.042];
-  const capGnd   = _neonAmb ? [0.022, 0.020, 0.030] : [0.0085, 0.0098, 0.019];
+  // NIGHT AMBIENT knob scales the floor AND cap band directly — the "how dark is
+  // night" master. 0 crushes the band to black (only lamps/neon read), 1 = as
+  // shipped, >1 lifts the whole night. Applied to floor+cap together so the clamp
+  // window slides as one.
+  const _naL = LT.nightAmbLift != null ? LT.nightAmbLift : 1;
+  const floorSky = (_neonAmb ? [0.017, 0.017, 0.026] : [0.006, 0.0075, 0.016]).map((v) => v * _naL);
+  const floorGnd = (_neonAmb ? [0.009, 0.008, 0.013] : [0.0026, 0.0032, 0.0085]).map((v) => v * _naL);
+  const capSky   = (_neonAmb ? [0.048, 0.048, 0.068] : [0.020, 0.023, 0.042]).map((v) => v * _naL);
+  const capGnd   = (_neonAmb ? [0.022, 0.020, 0.030] : [0.0085, 0.0098, 0.019]).map((v) => v * _naL);
   frame.ambientSky    = frame.ambientSky.map((v, i)    => Math.min(capSky[i], Math.max(v, floorSky[i])));
   frame.ambientGround = frame.ambientGround.map((v, i) => Math.min(capGnd[i], Math.max(v, floorGnd[i])));
   const _cgA = frameSky.cityGlow;
@@ -1069,6 +1079,18 @@ function applyRaceSettings() {
   if (isNightSession && track && track.def) {
     const _ct = track.def.theme === "street_night" || track.def.theme === "modern";
     frameSky.cityGlow = _ct ? [0.050, 0.038, 0.055] : [0.024, 0.018, 0.012];
+    // SKYGLOW WARMTH knob: white-balance the glow dome (and, via _nightAmbientBand's
+    // hue-mix, the warm cast it throws into the night ambient). + warm sodium,
+    // − cool LED/mercury. Unclamped-style mix, floored at 0.
+    const _cgw = LT.cityGlowWarm || 0;
+    if (_cgw) {
+      const g = frameSky.cityGlow;
+      frameSky.cityGlow = [
+        Math.max(0, g[0] * (1 + 0.20 * _cgw)),
+        Math.max(0, g[1] * (1 - 0.02 * Math.abs(_cgw))),
+        Math.max(0, g[2] * (1 - 0.30 * _cgw)),
+      ];
+    }
   } else {
     frameSky.cityGlow = null;
   }
@@ -1282,7 +1304,9 @@ function applyRaceSettings() {
     // without overriding any explicit raceWeather or raceTimeOfDay choice.
     if (track && track.def) {
       const _def  = track.def;
-      const _pal  = _def.pal || {};
+      const _pal  = _def.palette || {};   // built def carries `palette` (not `pal`);
+                                          // the old `_def.pal` was always undefined,
+                                          // silently disabling the fog/sunDir nudges below.
       const _bias = _trackAtmoBias(_def);   // -1 (clear) … +1 (overcast)
 
       // Cloud cover: start from the existing base then nudge by the bias.
@@ -1334,13 +1358,19 @@ function applyRaceSettings() {
   // shadows) — clouds roll in and the sun is muted while ambient lifts. A full
   // storm ("rain") rolls in heavier cloud and mutes the sun more than a merely
   // damp track ("wet"), which sits between clear and storm.
+  // WEATHER SUN MUTE knob: scale how deeply bad weather dims the direct sun.
+  // Each branch below mutes the sun by a fixed factor f (<1); _mute reshapes that
+  // as 1−(1−f)·knob so 0 = weather never mutes the sun, 1 = as-shipped, >1 = deeper
+  // murk (floored at 0). No-op in clear/dry weather (branches skipped).
+  const _wsm = LT.weatherSunMute != null ? LT.weatherSunMute : 1;
+  const _mute = (f) => Math.max(0, 1 - (1 - f) * _wsm);
   if (isWetRoad()) {
     const _storm = isRaining();
     // Heavier cloud cover in the rain; cap at 0.96 to let the shader still vary
     _cloudBase = Math.min(0.96, _cloudBase + (_storm ? 0.52 : 0.32));
     frameSky.cloud = _cloudBase;
-    frame.sunColor = frame.sunColor.map((v) => v * (_storm ? 0.5 : 0.68));
-    frameSky.sunColor = frameSky.sunColor.map((v) => v * (_storm ? 0.65 : 0.80));
+    frame.sunColor = frame.sunColor.map((v) => v * _mute(_storm ? 0.5 : 0.68));
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * _mute(_storm ? 0.65 : 0.80));
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
@@ -1354,15 +1384,20 @@ function applyRaceSettings() {
     // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
     _cloudBase = Math.min(0.90, _cloudBase + 0.50);
     frameSky.cloud = _cloudBase;
-    frame.sunColor = frame.sunColor.map((v) => v * 0.7);
-    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.8);
+    frame.sunColor = frame.sunColor.map((v) => v * _mute(0.7));
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * _mute(0.8));
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.06));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
     // light) so heavy overcast reads atmospheric, not just a flat grey dim.
     frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
     if (raceTimeOfDay === "default") { frameSky.horizon = [0.74, 0.73, 0.74]; frame.skyHorizon = frameSky.horizon; }
-    if (frame.exposure == null || frame.exposure < 1.0) frame.exposure = 1.0;
+    // A night session must stay dark under overcast too — same guard the wet/fog
+    // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
+    // greying out the night and killing lamp-pool contrast.
+    const _ovcDark = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && isNightSession);
+    const _ovcFloor = _ovcDark ? 0.95 : 1.0;
+    if (frame.exposure == null || frame.exposure < _ovcFloor) frame.exposure = _ovcFloor;
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     frameSky.cloud = Math.min(0.85, _cloudBase + 0.35);
@@ -1373,8 +1408,8 @@ function applyRaceSettings() {
     // flatten the horizon to fog-grey in default mode. Sync frame.skyHorizon so
     // reflections (glass/wet road/clearcoat) match the grey dome, not a stale blue.
     if (raceTimeOfDay === "default") { frameSky.horizon = fc.slice(); frame.skyHorizon = frameSky.horizon; }
-    frame.sunColor = frame.sunColor.map((v) => v * 0.6);
-    frameSky.sunColor = frameSky.sunColor.map((v) => v * 0.7);
+    frame.sunColor = frame.sunColor.map((v) => v * _mute(0.6));
+    frameSky.sunColor = frameSky.sunColor.map((v) => v * _mute(0.7));
     frame.ambientSky = frame.ambientSky.map((v) => Math.min(1, v * 1.05));
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.05));
     // Lift for visibility in the murk — but a NIGHT fog must stay night: forcing
@@ -1551,7 +1586,7 @@ function startRace() {
   recomputePlayerMods();
   resultT = 0;
   camRoll = 0;
-  sectorIdx = 0; sectorStartT = 0;
+  sectorIdx = sectorAt(player.s); sectorStartT = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
@@ -1589,7 +1624,7 @@ function showTouchControls(show) {
   document.body.classList.toggle("steer-touch", t && steerMode === "touch");
 }
 
-function endRace() {
+function endRace(forcedOrder) {
   state = "results";
   document.body.classList.remove("in-race");
   els.pausebtn.hidden = true;
@@ -1601,7 +1636,7 @@ function endRace() {
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
   const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
-  const order = fin.concat(run);
+  const order = forcedOrder || fin.concat(run);
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (seasonMode) {
     order.forEach((c, i) => {
@@ -1861,7 +1896,6 @@ function update(dt) {
       for (const l of els.lights.children) l.classList.remove("on");
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
-      if (timeTrial) Ghost.startLap();
       cars.forEach((c) => { c.lapStart = 0; });
     }
     return;
@@ -1883,7 +1917,7 @@ function update(dt) {
   if (resultT === 0) {
     if (player.finished) resultT = 2.2;
     else if (cars.some((c) => c.finished)) resultT = 3.5;
-    else if (raceT > 360) resultT = 0.1;
+    else if (raceT > 360 * lapsTarget) resultT = 0.1;
   }
   if (resultT > 0) { resultT -= dt; if (resultT <= 0) { resultT = 0; endRace(); } }
 
@@ -2086,12 +2120,16 @@ function updateCar(c, dt, ranked) {
   c.otCool = Math.max(0, c.otCool - dt);
   if (c.otT > 0) c.otT -= dt;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
-  const wantBoost = c.isPlayer ? c.boostOn
-    : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25);
+  const wantBoost = (c.isPlayer ? c.boostOn
+    : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
+    || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   if (wantBoost && c.energy > 0) {
     const taper = c.otT > 0 ? 1 : clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
     deploy = DEPLOY_A * taper;
-    c.energy = Math.max(0, c.energy - DRAIN * dt);
+    // Only drain the battery when deploy actually produces thrust. Above the taper
+    // band (with no OT active) deploy is 0, so holding BOOST there must not silently
+    // waste ERS for zero benefit.
+    if (deploy > 0) c.energy = Math.max(0, c.energy - DRAIN * dt);
     c.deploying = deploy > 0.4;
     if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
   } else c.deploying = false;
@@ -2414,7 +2452,9 @@ function updateCar(c, dt, ranked) {
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
     const axEstTarget = braking ? -BRAKE
-      : (onThrottle ? DEPLOY_A * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) : -COAST_DRAG);
+      : (onThrottle
+          ? ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
@@ -2631,8 +2671,34 @@ function updateCar(c, dt, ranked) {
   }
   c.totalT += dt;
   c.lapTime += dt;
-  if (timeTrial && c.isPlayer) Ghost.record(c.lapTime, c.s, c.x);
   c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
+
+  // Sector detection: thirds of track. This must run before finish-line timing
+  // resets so a forward S3→S1 crossing records the completed S3 split.
+  if (c.isPlayer && state === "race" && track) {
+    const newSector = sectorAt(c.s);
+    if (newSector !== sectorIdx) {
+      if (ds > 0 && (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0))) {
+        // completed the current sector (forward progress only — a backward crossing
+        // of the start/finish line must not record a bogus sector time)
+        const elapsed = c.lapTime - sectorStartT;
+        const prevSector = sectorIdx;
+        const prevBest = sectorBests[prevSector];
+        sectorLast[prevSector] = elapsed;
+        // Delta is measured against the PREVIOUS best, before this split updates it,
+        // so a new personal best shows the actual improvement (not 0.000).
+        const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
+        if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
+        if (elapsed >= 2) {
+          const sign = delta <= 0 ? "▼ S" : "▲ S";
+          announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+        }
+      }
+      sectorIdx = newSector;
+      sectorStartT = c.lapTime;
+    }
+  }
+
   // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
@@ -2642,6 +2708,8 @@ function updateCar(c, dt, ranked) {
       if (lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
       if (c.isPlayer && timeTrial) onTTLap(lapDone);
+    } else if (c.isPlayer && timeTrial) {
+      Ghost.startLap();
     }
     c.lapTime = 0;
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
@@ -2652,36 +2720,7 @@ function updateCar(c, dt, ranked) {
       if (c.isPlayer) announce("FINISH!", 2);
     }
   }
-
-  // Sector detection: thirds of track
-  if (c.isPlayer && state === "race" && track) {
-    const sFrac = c.s / track.total;
-    const newSector = sFrac < 1/3 ? 0 : sFrac < 2/3 ? 1 : 2;
-    if (newSector !== sectorIdx) {
-      // Exactly one sector forward (0→1→2→0). `sectorIdx < newSector` alone
-      // also matched 0→2, i.e. REVERSING across the start line.
-      const forward = newSector === sectorIdx + 1 || (sectorIdx === 2 && newSector === 0);
-      if (forward) {
-        // completed the current sector
-        const elapsed = c.lapTime - sectorStartT;
-        const prevSector = sectorIdx;
-        sectorLast[prevSector] = elapsed;
-        // Delta vs the best BEFORE recording this run — updating first made
-        // delta = elapsed - min(best, elapsed), i.e. always >= 0, so the
-        // "▼ faster" arrow only ever fired on a new best (magnitude lost).
-        const delta = sectorBests[prevSector] < Infinity ? elapsed - sectorBests[prevSector] : 0;
-        if (elapsed < sectorBests[prevSector]) sectorBests[prevSector] = elapsed;
-        if (elapsed >= 2) {
-          const sign = delta <= 0 ? "▼ S" : "▲ S";
-          announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
-        }
-        // Only a FORWARD crossing starts the next split — a spin/reverse across
-        // the boundary must not reset sectorStartT (bogus next-sector time).
-        sectorIdx = newSector;
-        sectorStartT = c.lapTime;
-      }
-    }
-  }
+  if (timeTrial && c.isPlayer) Ghost.record(c.lapTime, c.s, c.x);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.isPlayer && state === "race" && !c.finished) {
@@ -2881,8 +2920,6 @@ function appendCarTailLights() {
   // frame.lights is always the per-frame copy (flicker copies every frame), so
   // appending here never mutates the cached track set.
   if (!L || L === track._lights || !player) return;
-  let budget = 32 - ((L.length / 15) | 0);
-  if (budget <= 0) return;
   _tlSel.length = 0;
   for (const c of cars) {
     const ds = Math.abs(c.s - player.s);
@@ -2890,7 +2927,17 @@ function appendCarTailLights() {
     if (d < 160) _tlSel.push({ c, d });
   }
   _tlSel.sort((a, b) => a.d - b.d);
-  const nT = Math.min(_tlSel.length, Math.min(5, budget));
+  const nT = Math.min(_tlSel.length, 5);
+  if (nT <= 0) return;
+  // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
+  // grid (Singapore/Vegas/Baku) the floodlights alone fill the 32-light cap, so
+  // simply appending here overflowed past 32 and the shader dropped the appended
+  // tail-lights — the red glow trailing nearby traffic vanished exactly where
+  // night traffic is most visible. Evict that many of the FARTHEST floods instead
+  // (setFrameLights sorts the dense-grid set ascending by distance, so the tail
+  // end is the farthest) — a flood 250 m back matters far less than a car ahead.
+  const room = 32 - ((L.length / 15) | 0);
+  if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   for (let j = 0; j < nT; j++) {
     const c = _tlSel[j].c;
     Tracks.sample(track, c.s, _tlSmp);
@@ -2909,7 +2956,7 @@ function appendCarTailLights() {
 
 // Cull the track light set to the nearest lamps (32 shader slots, minus a
 // small reservation for car tail lights in traffic) and flatten into
-// `frame.lights`. Called each frame only when the session is at night.
+// `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
@@ -3610,9 +3657,14 @@ function render(dt) {
       gfx.castShadow(track.meshes.terrain, MAT_IDENT);
       gfx.castShadow(track.meshes.road, MAT_IDENT);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
-      // map once the sun is below the horizon — directional sun shadows are
-      // invisible under the dim moonlight, so this is the biggest night saving.
-      if (sd[1] > -0.03) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      // map at NIGHT — directional sun shadows are invisible under the dim
+      // moonlight, so this is the biggest night saving. Gate on the KEY's actual
+      // BRIGHTNESS, not sunDir.y: the night moon-key is deliberately held high
+      // (sunDir.y ≈ 0.97) to drive the sky glow, so an elevation test never fired
+      // at night and the whole city rasterised into the shadow map every recentre.
+      // Matches the god-ray/flare brightness gate (max(sunColor) below ~0.35 = dark).
+      const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+      if (_shKey > 0.35) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
   }
@@ -3708,10 +3760,15 @@ function render(dt) {
   // Floodlights: EVERY track has them (see buildTrackLights); they're fed to the
   // shader whenever the scene is dark enough to read them — night, dusk, or dawn
   // on any circuit, or a night-default track in default mode. In bright day the
-  // sun dominates so they're left off (no washed-out daylight pools).
+  // sun dominates so they're normally left off (no washed-out daylight pools) —
+  // UNLESS the DAYTIME FLOODS knob (LT.floodDay) is turned up, which lights the
+  // pools under a blue sky for a lit-stadium look (handled in the else-branch).
   const _floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
     (raceTimeOfDay === "default" && track.def.night);
-  if (_floodActive) {
+  // Daytime floods: only when the session isn't already a dark one AND the knob is
+  // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
+  const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
+  if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
     // produce a full set once complete, so this self-heals in a frame.
@@ -3729,33 +3786,44 @@ function render(dt) {
     // glow (see _floodEmit below) — ramp by elevation ONLY for dusk/dawn, and
     // stay at full brightness for a real night session, same branching as
     // _floodEmit uses.
-    const _sy = frame.sunDir ? frame.sunDir[1] : -1;
-    // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
-    // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
-    // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
-    // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
-    const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-      ? Math.max(0.30, clamp(1 - _sy * 6, 0, 1))       // 0.30 = bright twilight floor, 1 = sun at/below horizon
-      : 1;                                              // night / default-night: full ramp
-    // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
-    // raw physical HDR values (16-20) — at full ceiling they overpowered the
-    // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
-    // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
-    // on top of the twilight ramp above.
-    const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
-    const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
     // LAMP TEMPERATURE: a signed white-balance layered over each lamp's own
     // colour + the automatic twilight warmth ramp. −1 warm (sodium ~2700K),
     // +1 cool (LED/broadcast ~6500K). Green held near-constant; red↑/blue↓ warm.
+    // Shared by the night and daytime-flood paths.
     const _lt = LT.lampTemp || 0;
     const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
     const _ltg = 1 - Math.abs(_lt) * 0.02;
     const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
-    const floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
+    let floodScale;
+    if (_floodActive) {
+      const _sy = frame.sunDir ? frame.sunDir[1] : -1;
+      // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
+      // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
+      // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
+      // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
+      const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
+        ? Math.max(0.30, clamp(1 - _sy * 6, 0, 1))       // 0.30 = bright twilight floor, 1 = sun at/below horizon
+        : 1;                                              // night / default-night: full ramp
+      // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
+      // raw physical HDR values (16-20) — at full ceiling they overpowered the
+      // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
+      // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
+      // on top of the twilight ramp above.
+      const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
+      const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
+      floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
+    } else {
+      // DAYTIME FLOODS: pools lit under a blue sky. No twilight warmth ramp (the
+      // "just switched on" amber glow is a dusk cue) — neutral white scaled by
+      // DAYTIME FLOODS × LAMP LEVEL, still honouring LAMP TEMPERATURE.
+      const lvl = _floodDayLvl * LT.lampLevel;
+      floodScale = [lvl * _ltr, lvl * _ltg, lvl * _ltb];
+    }
     // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
     setFrameLights(camEye, floodScale, _lightFwd);
-    appendCarTailLights();
+    // Car tail-lights are an after-dark cue only — skip them under daytime floods.
+    if (_floodActive) appendCarTailLights();
   } else {
     frame.lights = null;
   }
@@ -4030,14 +4098,23 @@ function render(dt) {
     // when braking" — you sit 2 m behind the P11 gearbox on the grid, and you
     // close right up on the car ahead under braking). The steady red LED gives
     // every rear an anchor light, like a real night race.
-    if ((wet && ((raceT * 4.4) % 1) < 0.55) || (!wet && night)) {
+    // Real-F1 touches: the LED brightness tracks the car's live ERS charge (dim
+    // when flat, bright when full — but never fully dark, so it stays an anchor),
+    // and it FLASHES the same ~4 Hz FIA pattern while harvesting/deploying (OT or
+    // active boost), exactly like the real rear light on a push lap.
+    const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
+    const _ledDeploy = (c.otT > 0) || (c.boostOn && c.energy > 0.01);
+    if ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe))) {
       const W = _ringWorld;
       W.set(tmpMat);
       // 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight.
       W[12] += W[4] * 0.50 - W[8] * 2.615;
       W[13] += W[5] * 0.50 - W[9] * 2.615;
       W[14] += W[6] * 0.50 - W[10] * 2.615;
-      gfx.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true });
+      // Brightness by ERS charge: 0.45 (flat) → 1.0 (full). Wet safety strobe
+      // stays full-bright regardless — a rain light must not dim with battery.
+      const _ledEmis = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
+      gfx.draw(getRainLight(), W, { emissive: _ledEmis, roughness: 0.9, specular: 0, noAlphaWrite: true });
     }
     // BOOST: blue-white plasma flame + strobing rear ERS strip while deploying
     // (any time of day); the strip glows steady dim while boost is armed.
@@ -4073,7 +4150,7 @@ function render(dt) {
       W[12] += W[4] * 0.40 - W[8] * 2.63;
       W[13] += W[5] * 0.40 - W[9] * 2.63;
       W[14] += W[6] * 0.40 - W[10] * 2.63;
-      gfx.draw(getExhaustFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
+      gfx.draw(getExhaustFlame(c.fuelId), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
@@ -4190,11 +4267,16 @@ function render(dt) {
   // Always a subtle beam glow whenever lamps are on (clear night air still
   // scatters a little), swelling with haze/rain into full volumetric shafts —
   // and coloured per lamp, so neon-spill lights throw coloured beams.
-  const _lampVol = frame.lights ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
+  // Gated to dark sessions (key below ~0.45): visible lamp beams in daylight (the
+  // DAYTIME FLOODS knob also sets frame.lights) would read as odd haze shafts.
+  const _lampVol = (frame.lights && _sunLumGR < 0.45) ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
-  // Contact shadows only when the sun is meaningfully above the horizon.
-  const _cs = _grSunY > 0.05 ? clamp(0.5 * LT.contactStr, 0, 1.5) : 0;
+  // Contact shadows only when the KEY is bright enough to cast them (day/dusk/dawn).
+  // Gate on key brightness, not sunDir.y — the night moon-key sits high (y≈0.97)
+  // so the old elevation test ran contact shadows all night for a black-ambient
+  // scene where they're invisible (wasted work). Matches _sunGateGR above.
+  const _cs = _sunLumGR > 0.35 ? clamp(0.5 * LT.contactStr, 0, 1.5) : 0;
   // Wet-road screen-space reflection of the scene: runs at ALL times of day so a
   // wet road mirrors the world — buildings/barriers/cars by day, neon + glowing
   // lamp heads at night — on top of the in-shader sky env reflection. Driven purely
@@ -4212,10 +4294,13 @@ function render(dt) {
   // Now the DRY NIGHT SHEEN tuner slider (LT.ssrDryNight, default 0.08).
   const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness * LT.ssrWetMul
              : (frame.lights ? LT.ssrDryNight : LT.ssrDryDay);
-  // Perf: skip the SSAO pass (+ its two blur passes) once the sun is well below
-  // the horizon. Night ambient is near-black, so the AO darkening is invisible
-  // anyway — and night street grids are where the frame budget is tightest.
-  const _ao = _grSunY > -0.04 ? 0.95 * LT.aoStr : 0;
+  // Perf: skip the SSAO pass (+ its two blur passes) at NIGHT. Night ambient is
+  // near-black, so the AO darkening is invisible anyway — and night street grids
+  // are where the frame budget is tightest. Gate on key BRIGHTNESS, not sunDir.y:
+  // the night moon-key is held high (y≈0.97), so the old elevation test kept SSAO
+  // (and its two blurs) running every night frame for no visible gain. Matches the
+  // contact-shadow + god-ray brightness gates.
+  const _ao = _sunLumGR > 0.35 ? 0.95 * LT.aoStr : 0;
   if (_grade) {
     // Read from the constant base, write to the reused output — the base str never
     // compounds frame-to-frame.
@@ -4539,6 +4624,7 @@ function renderStatBars(container, team) {
 let csActiveCat = null;   // id of the category tab currently open in CAR SETUP
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
+let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
 function buildSetup() {
   const team = Teams.LIST[teamIdx];
   const parts = getTeamParts(team.id);
@@ -4747,6 +4833,7 @@ function buildLiveryOptions(container, team) {
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
                      noseStripe: "", nose: "", pod: "", wing: "", halo: "" };
+      csLivEditId = null;
       csLivCreating = true;
       if (soundOn) GameAudio.uiSelect();
       buildSetup();
@@ -4771,6 +4858,22 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
 
     if (isCustom) {
+      const edit = document.createElement("span");
+      edit.className = "cs-liv-edit"; edit.textContent = "✎"; edit.title = "Edit this livery";
+      edit.onclick = (e) => {
+        e.stopPropagation();
+        csLivDraft = {
+          name: liv.name || "", c1: arrToHex(liv.c1), c2: arrToHex(liv.c2),
+          stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
+          accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
+          pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+        };
+        csLivEditId = liv.id;
+        csLivCreating = true;
+        if (soundOn) GameAudio.uiSelect();
+        buildSetup();
+      };
+      row.appendChild(edit);
       const del = document.createElement("span");
       del.className = "cs-liv-del"; del.textContent = "✕"; del.title = "Delete this livery";
       del.onclick = (e) => {
@@ -4806,7 +4909,7 @@ function buildLiveryCreator(container, team) {
   const wrap = document.createElement("div");
   wrap.className = "cs-liv-editor";
 
-  const head = document.createElement("div"); head.className = "cs-liv-ed-head"; head.textContent = "NEW PAINT JOB";
+  const head = document.createElement("div"); head.className = "cs-liv-ed-head"; head.textContent = csLivEditId ? "EDIT PAINT JOB" : "NEW PAINT JOB";
   wrap.appendChild(head);
 
   // Live swatch preview of the current draft (built from hex strings directly).
@@ -4857,10 +4960,10 @@ function buildLiveryCreator(container, team) {
 
   const btns = document.createElement("div"); btns.className = "cs-liv-ed-btns";
   const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cs-liv-ed-cancel"; cancel.textContent = "CANCEL";
-  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; livDraftOverride = null; _spMeshKey = ""; if (soundOn) GameAudio.uiTick(); buildSetup(); };
+  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; livDraftOverride = null; _spMeshKey = ""; if (soundOn) GameAudio.uiTick(); buildSetup(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
-    const id = "custom_" + livIdCounter();
+    const id = csLivEditId || ("custom_" + livIdCounter());
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     if (d.stripe) liv.stripe = hexToArr(d.stripe);
     if (d.noseStripe) liv.noseStripe = hexToArr(d.noseStripe);
@@ -4869,9 +4972,11 @@ function buildLiveryCreator(container, team) {
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
     if (d.halo) liv.halo = hexToArr(d.halo);
-    setCustomLiveries(team.id, getCustomLiveries(team.id).concat([liv]));
+    const existing = getCustomLiveries(team.id);
+    // Edit-in-place replaces the matching entry (same id); create appends.
+    setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === id ? liv : l)) : existing.concat([liv]));
     saveLiveryId(team.id, id);
-    csLivCreating = false; csLivDraft = null; livDraftOverride = null; _spMeshKey = "";
+    csLivCreating = false; csLivDraft = null; csLivEditId = null; livDraftOverride = null; _spMeshKey = "";
     if (soundOn) GameAudio.uiSelect();
     buildSetup();
   };
@@ -5820,6 +5925,18 @@ $("rs-go").onclick = () => {
 };
 
 // ---- customize my team ----
+// Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the
+// custom team as ct.livery, which Liveries.forTeam folds into its default paint.
+const CZ_LIV_FIELDS = [
+  ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
+  ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"], ["cz-halo", "halo"],
+];
+// A field is "NONE" when its colour input carries the cz-off class.
+function czSetLivField(domId, arr) {
+  const inp = $(domId), none = $(domId + "-none");
+  if (arr) { inp.value = rgbToHex(arr); inp.classList.remove("cz-off"); none.classList.remove("active"); }
+  else { inp.value = inp.value && /^#[0-9a-fA-F]{6}$/.test(inp.value) ? inp.value : "#ffffff"; inp.classList.add("cz-off"); none.classList.add("active"); }
+}
 function czPreview() {
   $("cz-swatch1").style.background = $("cz-color").value;
   $("cz-swatch2").style.background = $("cz-color2").value;
@@ -5836,11 +5953,18 @@ function openCustomize() {
   $("cz-driver").value = ct.drivers[0].name;
   $("cz-code").value = ct.drivers[0].code;
   $("cz-num").value = ct.drivers[0].num;
+  const liv = ct.livery || {};
+  CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
   czPreview();
   els.customize.hidden = false;
 }
 ["cz-name", "cz-short", "cz-color", "cz-color2", "cz-code", "cz-num"].forEach((id) => {
   $(id).addEventListener("input", czPreview);
+});
+// Extra-paint rows: editing the swatch re-enables the field; NONE clears it.
+CZ_LIV_FIELDS.forEach(([domId]) => {
+  $(domId).addEventListener("input", () => { $(domId).classList.remove("cz-off"); $(domId + "-none").classList.remove("active"); });
+  $(domId + "-none").onclick = () => { $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active"); if (soundOn) GameAudio.uiTick(); };
 });
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
 $("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
@@ -5858,18 +5982,24 @@ $("cs-unlimited").onclick = () => {
 $("cz-cancel").onclick = () => { els.customize.hidden = true; };
 $("cz-save").onclick = () => {
   const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
+  const prev = loadCustomTeam();
   const ct = {
     id: "custom", engine: "Custom", tier: 2, custom: true,
     name: clean($("cz-name").value, "My Team", 22),
     short: clean($("cz-short").value, "YOU", 4).toUpperCase(),
     color: hexToRgb($("cz-color").value),
     color2: hexToRgb($("cz-color2").value),
+    stats: prev.stats || DEFAULT_CUSTOM.stats,
     drivers: [{
       name: clean($("cz-driver").value, "Your Name", 22),
       code: clean($("cz-code").value, "YOU", 3).toUpperCase(),
       num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
     }],
   };
+  // Optional extra paint -> ct.livery (only the fields that aren't NONE).
+  const liv = {};
+  CZ_LIV_FIELDS.forEach(([domId, key]) => { if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value); });
+  if (Object.keys(liv).length) ct.livery = liv;
   store.set("customTeam", ct);
   syncCustomTeam();
   teamIdx = Teams.LIST.findIndex((t) => t.id === "custom");
@@ -6325,8 +6455,11 @@ window.__apex = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
     if (!player || !track) return false;
-    player.s = wrapS(frac * track.total);
-    player.prog = frac * track.total;
+    // Normalize frac to [0,1) so s (wrapped) and prog stay coupled even if the
+    // caller passes a value outside the unit range.
+    const f01 = (((frac || 0) % 1) + 1) % 1;
+    player.s = wrapS(f01 * track.total);
+    player.prog = f01 * track.total;
     player.angle = 0;   // teleport aligns the car with the track (deterministic)
     if (lateral !== undefined) player.x = lateral;
     if (speed !== undefined) player.speed = speed;
@@ -6969,6 +7102,7 @@ window.__apex = {
     const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
     const prog = f * track.total, s = wrapS(prog);
     const ai = cars.filter((c) => !c.isPlayer);
+    if (ai.length < 2) return false;   // needs ≥2 AI cars — unavailable in time trial
     const a = ai[0], b = ai[1];
     [a, b].forEach((c, i) => {
       c.prog = prog; c.s = s; c.speed = v;
@@ -7138,8 +7272,9 @@ window.__apex = {
   // Fixes the fallback-DOM-hack in ui-audit.spec.js (finishRace was missing).
   finishRace() {
     if (!track || state === "results" || state === "menu") return false;
+    const order = cars.slice().sort((a, b) => b.prog - a.prog);
     cars.forEach((c) => { if (!c.finished) { c.finished = true; c.finishT = raceT; } });
-    endRace();
+    endRace(order);
     return { state };
   },
 
@@ -7344,7 +7479,10 @@ window.__apex = {
     const rivalBehind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
 
     const inp = _testInput || {};
-    const done = !!player.wrongWay || (player.rescueT || 0) > 8;
+    // A rescue teleport resets rescueT to 0 the instant it fires (threshold >3), so
+    // the old rescueT>8 test could never trip. Signal "done" briefly after a rescue.
+    const done = !!player.wrongWay ||
+      (player.rescueLastT != null && (raceT - player.rescueLastT) < 0.5);
 
     return {
       // ── position & progress ──
@@ -7519,8 +7657,9 @@ window.__apex = {
     if (!track || !cars[idx]) return false;
     const c = cars[idx];
     if (c.isPlayer) return false;
-    c.s    = wrapS((frac != null ? frac : 0) * track.total);
-    c.prog = (c.lap || 0) * track.total + (frac != null ? frac : 0) * track.total;
+    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
+    c.s    = wrapS(f01 * track.total);
+    c.prog = (c.lap || 0) * track.total + f01 * track.total;
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
@@ -7641,8 +7780,9 @@ window.__apex = {
     state = "race"; raceT = 0;
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
-    player.s     = wrapS((frac  != null ? frac  : 0) * track.total);
-    player.prog  = (frac != null ? frac : 0) * track.total;
+    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
+    player.s     = wrapS(f01 * track.total);
+    player.prog  = f01 * track.total;
     player.speed = speed != null ? speed : 0;
     player.x     = x     != null ? x     : 0;
     player.xVis  = player.x;

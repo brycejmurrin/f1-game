@@ -15,17 +15,16 @@
     lengthKm: 4.9,
     baseHW: 6,
     street: true,
-    // Vivid night palette: brighter horizon glow from the city, stronger ambient
-    // so buildings read as lit objects not silhouettes, warm fog mimicking humid
-    // haze around the floodlights.
+    // Cool night: near-black zenith + cool fog/ambient so CBD glass & neon pop.
+    // Warm flood pools on tarmac stay in scenery (FLOOD/POOL) — not the sky.
     pal: {
-      horizon:      [0.38, 0.24, 0.12],
-      zenith:       [0.04, 0.05, 0.12],
-      sunColor:     [0.95, 0.85, 0.60],
-      ambientSky:   [0.55, 0.44, 0.30],
-      ambientGround:[0.55, 0.42, 0.22],
-      fogColor:     [0.26, 0.18, 0.10],
-      fogDensity:   0.0018,
+      horizon:      [0.10, 0.12, 0.20],
+      zenith:       [0.02, 0.02, 0.07],
+      sunColor:     [0.55, 0.62, 0.78],
+      ambientSky:   [0.22, 0.26, 0.36],
+      ambientGround:[0.18, 0.20, 0.26],
+      fogColor:     [0.06, 0.08, 0.14],
+      fogDensity:   0.0020,
     },
     segs: [
       { t: 0, l: 160 }, { t: -60, l: 70 }, { t: 70, l: 70 }, { t: -55, l: 70 }, { t: 0, l: 220 }, { t: -90, l: 70 },
@@ -39,13 +38,61 @@
       const { out, MAT, n, hw, px, pz, place, backdrop, groundPlane, groundYAt,
               building, billboard, anchor, along, every, onTrack, addBox, addCyl, addCone,
               addPrism, addPyramid, addFrustum, grandstand, gantry, marshalPost, palm, bush,
-              fence, guardrail, tyreWall, vadd, hash, cityFront, tower } = api;
+              fence, guardrail, tyreWall, vadd, hash, cityFront, tower, underpassPortal } = api;
       const K = (s) => Math.round(s * n) % n;
 
+      // Dark underpass portal (Sheares / under-grandstand). Full-span decks are
+      // rejected by rejBox; piers + verge canopies + abutment mouths survive and
+      // still read as "cars pass under" at speed. Prefer shared helper when present.
+      const portalInline = (s0, s1, opts) => {
+        const DARK = (opts && opts.col) || [0.08, 0.08, 0.10];
+        const DECK = [0.10, 0.10, 0.12];
+        const h = (opts && opts.h) || 7.2;
+        const pierGap = (opts && opts.gap) != null ? opts.gap : 1.7;
+        const canopy = (opts && opts.canopy) || 4.8;
+        along(s0, s1, 7, (k, spacing) => {
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, pierGap);
+            if (onTrack(a.c[0], a.c[2], 1.0)) continue;
+            const b = [a.r, a.u, a.t];
+            // Pier / retaining face — sits past the barrier, never on tarmac
+            addBox(out, vadd(a.c, a.u, h * 0.5), [1.6, h, spacing * 1.02], DARK, b);
+            // Verge canopy — cantilever over the roadside only (inner face past hw)
+            const ca = anchor(k, side, pierGap + canopy * 0.5);
+            addBox(out, vadd(ca.c, ca.u, h + 0.55), [canopy, 1.1, spacing * 1.02], DECK, [ca.r, ca.u, ca.t]);
+            // Underside shadow band (reads as soffit)
+            addBox(out, vadd(ca.c, ca.u, h - 0.15), [canopy * 0.92, 0.35, spacing * 0.95], [0.05, 0.05, 0.07], [ca.r, ca.u, ca.t]);
+          }
+        });
+        // Portal mouths at each end — thicker abutments + short canopy stubs
+        for (const s of [s0, s1]) {
+          const k = K(s);
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, pierGap);
+            if (onTrack(a.c[0], a.c[2], 1.2)) continue;
+            const b = [a.r, a.u, a.t];
+            addBox(out, vadd(a.c, a.u, (h + 1.2) * 0.5), [2.4, h + 1.2, 3.2], DARK, b);
+            const ca = anchor(k, side, pierGap + canopy * 0.45);
+            addBox(out, vadd(ca.c, ca.u, h + 0.7), [canopy * 0.9, 1.4, 3.6], DECK, [ca.r, ca.u, ca.t]);
+          }
+        }
+      };
+      const makePortal = (s0, s1, opts) => {
+        if (typeof underpassPortal === "function") {
+          // Shared helper takes a centre s; sample a few stations along the span.
+          const mid = (s0 + s1) * 0.5;
+          underpassPortal(s0, opts || {});
+          if (Math.abs(s1 - s0) > 0.02) underpassPortal(mid, opts || {});
+          underpassPortal(s1, opts || {});
+        } else {
+          portalInline(s0, s1, opts);
+        }
+      };
+
       // ---- Night colour palette ----
-      // Windows: warm incandescent, cool fluorescent, bright cyan office
-      const WIN_WARM = [1.00, 0.88, 0.68];   // warm incandescent
-      const WIN_COOL = [0.72, 0.82, 1.00];   // cool fluorescent
+      // Windows: cool fluorescent / cyan office dominant (warm floods stay on tarmac)
+      const WIN_WARM = [1.00, 0.88, 0.68];   // warm incandescent (hotels only)
+      const WIN_COOL = [0.68, 0.78, 0.98];   // cool fluorescent
       const WIN_CYAN = [0.55, 0.90, 1.00];   // bright cyan glass
       const WIN_GOLD = [1.00, 0.80, 0.40];   // golden hotel windows
       // Neon signage (vivid, high-saturation)
@@ -59,12 +106,19 @@
       const WALL_CBD  = [0.18, 0.20, 0.30];  // dark blue-grey CBD glass
       const WALL_LITE = [0.22, 0.24, 0.34];  // slightly lighter near tower
       const WALL_WARM = [0.26, 0.22, 0.18];  // warm concrete hotel
-      // Floodlight lamp colour — very bright warm white
+      // Floodlight lamp colour — warm white (ONLY warm cue on the asphalt)
       const FLOOD = [1.00, 0.98, 0.88];
       // Light pool on track — subtle warm patch below each mast
       const POOL  = [0.68, 0.62, 0.50];
       // Concrete barrier night grey
       const CONC  = [0.30, 0.31, 0.36];
+
+      // ===================================================================
+      // UNDERPASS PORTALS — Sheares Bridge (s≈0.10) + finish under-grandstand
+      // (s≈0.93–0.98). Dark soffit beat unique to Marina Bay night racing.
+      // ===================================================================
+      makePortal(0.085, 0.115, { h: 7.4, gap: 1.7, canopy: 5.0 });
+      makePortal(0.925, 0.985, { h: 6.8, gap: 1.8, canopy: 4.6 });
 
       // ===================================================================
       // FAR SILHOUETTE BAND — fills sky behind near facades; anchored far
@@ -115,8 +169,8 @@
 
       // ===================================================================
       // s 0.18 R — MARINA BAY SANDS: 3 towers + skypark slab
-      // Towers are separated by a fixed `gap` so they never intersect.
-      // Each tower has bright window bands + vertical light fins.
+      // Outer towers tip toward centre under the boat deck (postcard lean).
+      // Towers spaced so faces never intersect; skypark bridges the tops.
       // ===================================================================
       {
         const k    = K(0.18);
@@ -124,33 +178,49 @@
         const wall = [0.82, 0.84, 0.90];
         const winC = [0.62, 0.80, 1.00];    // strong blue-white façade glow
         const H      = 200;
-        const gap    = 36;    // centre-to-centre distance between towers
-        const TOWERW = 18;   // tower width — declared here so skypark can reference it
+        const gap    = 36;    // centre-to-centre distance between tower bases
+        const TOWERW = 18;
+        const LEAN   = 0.13;  // lateral tip per metre of height (~7.5°) toward centre
         const tops   = [];
 
         for (let t = -1; t <= 1; t++) {
-          // Centres spaced `gap` apart — TOWERW < gap so faces never overlap
-          const c = vadd(a.c, a.r, t * gap);
+          const base = vadd(a.c, a.r, t * gap);
+          // Outer towers lean inward (toward mid); centre stays vertical.
+          const tip = t === 0 ? 0 : -t * LEAN;   // t=-1 → +r, t=+1 → −r
+          let uT = a.u, rT = a.r, tT = a.t;
+          if (tip !== 0) {
+            // Tilted up-axis: blend track-up with lateral tip toward centre
+            const len = Math.hypot(a.u[0] + a.r[0] * tip, a.u[1], a.u[2] + a.r[2] * tip) || 1;
+            uT = [(a.u[0] + a.r[0] * tip) / len, a.u[1] / len, (a.u[2] + a.r[2] * tip) / len];
+            // Keep right roughly horizontal / orthogonal to lean plane
+            rT = a.r;
+            tT = a.t;
+          }
+          const b = [rT, uT, tT];
+          const mid = vadd(base, uT, H * 0.5);
           // Main shaft
-          addBox(out, vadd(c, a.u, H * 0.5),   [TOWERW, H, 28],             wall,               [a.r, a.u, a.t]);
+          addBox(out, mid,                         [TOWERW, H, 28],               wall,               b);
           // Window glazing face — slightly proud of the wall, covers 70% of height
-          addBox(out, vadd(c, a.u, H * 0.52),  [TOWERW + 0.6, H * 0.76, 28.6],  winC,          [a.r, a.u, a.t]);
+          addBox(out, vadd(base, uT, H * 0.52),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
           // Vertical lit fin, alternating blue & gold for night detail
           const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
-          addBox(out, vadd(c, a.u, H * 0.50),  [2.0, H * 0.60, 29.2],       finCol,             [a.r, a.u, a.t]);
+          addBox(out, vadd(base, uT, H * 0.50),    [2.0, H * 0.60, 29.2],         finCol,             b);
           // Bright crown at top of each tower
-          addBox(out, vadd(c, a.u, H * 0.92),  [TOWERW + 1, H * 0.10, 29],  [0.92, 0.95, 1.00], [a.r, a.u, a.t]);
-          tops.push(vadd(c, a.u, H));
+          addBox(out, vadd(base, uT, H * 0.92),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
+          tops.push(vadd(base, uT, H));
         }
 
         // Skypark slab bridging all three tops (boat hull profile)
         const mid = tops[1];
+        // Span follows leaned tops (outers closer together at the crown)
+        const spanR = Math.hypot(tops[2][0] - tops[0][0], tops[2][2] - tops[0][2]);
+        const skyW  = Math.max(spanR + TOWERW, gap * 2 + TOWERW * 0.7);
         // Main slab — lighter warm sand colour (the real MBS deck is sand-coloured)
-        addBox(out, vadd(mid, a.u, 3.5), [gap * 2 + TOWERW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
+        addBox(out, vadd(mid, a.u, 3.5), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
         // Glowing neon rim — the iconic cyan strip seen from every angle
-        addBox(out, vadd(mid, a.u, 6.0), [gap * 2 + TOWERW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
+        addBox(out, vadd(mid, a.u, 6.0), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
         // Rooftop pool and garden strip — warm amber
-        addBox(out, vadd(mid, a.u, 5.5), [gap * 2 + 4, 0.8, 10],           WIN_GOLD,             [a.r, a.u, a.t]);
+        addBox(out, vadd(mid, a.u, 5.5), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
       }
 
       // ===================================================================

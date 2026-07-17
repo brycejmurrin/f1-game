@@ -16,14 +16,15 @@ Fairly **flat** throughout. Only minor undulations: a gentle dip and rise approa
 |------|------|----------|---------------------------|
 | 0.00 | L | near | **Tribuna Centrale** main grandstand: stepped stack of long grey-blue boxes `[0.55,0.58,0.62]`, red trim row |
 | 0.00 | R | near | Pit wall + **podium tower** as tall slim white box `[0.90,0.90,0.88]` with red cap |
-| 0.04 | R | mid | **Variante del Rettifilo** chicane: red/white kerb boxes, gravel trap tan slab |
-| 0.10 | L+R | far | Dense pine wall flanking **Curva Grande** sweep, dark-green box rows |
-| 0.30 | L | near | **Variante della Roggia** chicane under tree shade; cooler green tint, fog band |
+| 0.04 | L+R | near | **Variante del Rettifilo** chicane: red/white kerb punctuation both sides, gravel trap |
+| 0.10 | L+R | mid | Dense **Curva Grande** pine wall both sides (~s 0.08–0.18), dark-green corridor |
+| 0.30 | L+R | near | **Variante della Roggia** chicane under tree shade; red/white kerbs, fog band |
 | 0.40 | R | far | **Park lake** (Villa Reale pond): flat reflective blue slab `[0.30,0.50,0.70]` |
 | 0.45 | R | mid | **Lesmo 1 & 2** curves hugging woodland; tight tree boxes |
 | 0.55 | L | far | Old **Sopraelevata** banking ruin: tilted grey concrete ramp boxes `[0.62,0.60,0.58]`, moss-green `[0.35,0.45,0.30]` |
 | 0.62 | R | far | Glimpse of **Villa Reale**: cream neoclassical box block `[0.86,0.80,0.66]` |
-| 0.78 | L+R | near | **Variante Ascari** chicane: triple kerb-box sequence, gravel run-offs |
+| 0.70–0.76 | — | over | **Ascari Sopraelevata flyover**: tilted concrete bridge over the racing line (cars pass under), weathered grey + moss wings |
+| 0.78 | L+R | near | **Variante Ascari** chicane: red/white kerb punctuation, gravel run-offs |
 | 0.90 | L | near | **Parabolica / Curva Alboreto**: long sweeping kerb arc, wide gravel slab outside |
 | 0.96 | R | far | Distant **Milan skyline** silhouette: faint grey box towers on horizon `[0.62,0.66,0.72]` |
 

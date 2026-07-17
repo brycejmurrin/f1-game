@@ -7,6 +7,7 @@
   {
     id: "baku",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    // TODO: startFrac not GPS-calibrated (defaults to 0)
     name: "BAKU",
     gp: "Azerbaijan GP",
     country: "Azerbaijan",
@@ -16,8 +17,14 @@
     lengthKm: 6,
     baseHW: 6,
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
+    // Castle Section squeeze (~7.6 m full width). CircuitPaths ignores segs `w:`;
+    // hwZones overlays half-width onto the real trace (see applyHwZones in tracks.js).
+    hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }],
+    // Castle Section (s≈0.42–0.50): narrow to ~7.6 m full width (w = half-width).
+    // segs `w:` still documents intent / applies if the CircuitPaths trace drops.
     segs: [
-      { t: 0, l: 200 }, { t: -90, l: 80 }, { t: 80, l: 70 }, { t: 0, l: 800 }, { t: -90, l: 80 }, { t: 0, l: 400 },
+      { t: 0, l: 200 }, { t: -90, l: 80 }, { t: 80, l: 70 }, { t: 0, l: 725 },
+      { t: 0, l: 75, w: 3.8 }, { t: -90, l: 80, w: 3.8 }, { t: 0, l: 50, w: 3.8 }, { t: 0, l: 350 },
       { t: 70, l: 70 }, { t: -60, l: 60 }, { t: 55, l: 60 }, { t: -60, l: 60 }, { t: 0, l: 600 }, { t: 80, l: 80 },
     ],
     // Baku's castle section: the old-city hairpin climbs steeply through the
@@ -28,7 +35,7 @@
         out, MAT, n, place, prop, backdrop, groundPlane, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
-        addFrustum, addPyramid, ferrisWheel, vadd, hash, cityFront,
+        addFrustum, addPyramid, ferrisWheel, vadd, hash, cityFront, ledFacadeBands,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -251,10 +258,9 @@
       });
 
       // ===================================================================
-      // s 0.22 R far — FLAME TOWERS: three iconic tapered towers.
-      // Each tower is self-contained. The "flame glow" cap is a NARROW
-      // cone, not a wide box, so towers never intersect each other.
-      // Spacing: 50m between tower centres (was 45 — slightly more spread).
+      // s 0.22 R far — FLAME TOWERS: three iconic tapered towers with
+      // full-height LED fire (stacked emissive orange/red/amber bands).
+      // Spacing: 50m between tower centres.
       // ===================================================================
       {
         const k  = K(0.22);
@@ -262,39 +268,46 @@
         const b  = [aF.r, aF.u, aF.t];
         const heights   = [210, 240, 210];   // scaled to scene metres
         const towerOffs = [-50, 0, 50];      // along track-right axis (a.r)
+        // Fire LED palette — orange / red / amber cycling full height
+        const FIRE_BANDS = [
+          FLAME, FLAME_PALE, [0.98, 0.42, 0.08], [0.88, 0.18, 0.06],
+          [1.00, 0.62, 0.20], [0.95, 0.30, 0.08], [0.90, 0.50, 0.12],
+        ];
 
         for (let t = 0; t < 3; t++) {
           const H  = heights[t];
           const tc = vadd(aF.c, aF.r, towerOffs[t]);
 
-          // Main tapered body (glass-clad curtain wall — curved facade with blue tint)
-          addFrustum(out, tc, 16, 3.0, H, [0.15, 0.22, 0.38], 8, b);
+          // Main tapered body (dark glass under the LED fire veil)
+          addFrustum(out, tc, 16, 3.0, H, [0.10, 0.12, 0.22], 8, b);
 
-          // Window bands — narrow addFrustum rings stacked every ~H/7
-          for (let band = 1; band <= 6; band++) {
-            const yFr   = band / 7;
-            const rAtY  = 16 * (1 - yFr) + 3.0 * yFr;
-            const rOuter = rAtY * 1.04;
-            const isFlame = band % 2 === 0;
-            addFrustum(out, vadd(tc, aF.u, yFr * H - H * 0.035),
-              rOuter, rOuter * 0.94, H * 0.055,
-              isFlame ? FLAME_PALE : WIN_WARM, 8, b);
+          // Full-height LED fire — prefer shared helper when Batch-1 toolkit lands
+          if (typeof ledFacadeBands === "function") {
+            ledFacadeBands(tc, H, {
+              r0: 16, r1: 3.0, bands: 16, colors: FIRE_BANDS, basis: b, up: aF.u,
+            });
+          } else {
+            const nBands = 16;
+            for (let band = 0; band < nBands; band++) {
+              const yFr  = (band + 0.5) / nBands;
+              const rAtY = 16 * (1 - yFr) + 3.0 * yFr;
+              const col  = FIRE_BANDS[band % FIRE_BANDS.length];
+              addFrustum(out, vadd(tc, aF.u, yFr * H - (H / nBands) * 0.45),
+                rAtY * 1.08, rAtY * 0.96, (H / nBands) * 0.88, col, 8, b);
+            }
           }
 
-          // Flame crown — stacked narrow cones (not a wide box).
-          addCone(out, vadd(tc, aF.u, H),        3.0, 10, FLAME,      8, b);
-          addCone(out, vadd(tc, aF.u, H + 10),   2.2,  8, FLAME_PALE, 8, b);
-          addCone(out, vadd(tc, aF.u, H + 18),   1.2,  6, WIN_WARM,   8, b);
-
-          // Emissive lit observation crown ring just below top
-          addFrustum(out, vadd(tc, aF.u, H - 14), 3.5, 3.0, 3, WIN_WARM, 8, b);
+          // Flame crown — stacked narrow cones above the LED shaft
+          addCone(out, vadd(tc, aF.u, H),        3.0, 12, FLAME,      8, b);
+          addCone(out, vadd(tc, aF.u, H + 12),   2.2,  9, FLAME_PALE, 8, b);
+          addCone(out, vadd(tc, aF.u, H + 21),   1.2,  6, [1.0, 0.72, 0.28], 8, b);
         }
 
-        // Uplit ground wash at the Flame Towers base
-        addBox(out, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.18, 0.10, 0.04], b);
+        // Uplit ground wash at the Flame Towers base (warm fire spill)
+        addBox(out, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.22, 0.08, 0.02], b);
         for (let t = 0; t < 3; t++) {
           const tc = vadd(aF.c, aF.r, (t - 1) * 50);
-          addBox(out, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.25, 0.14, 0.04], b);
+          addBox(out, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.30, 0.12, 0.03], b);
         }
       }
 
@@ -342,11 +355,11 @@
         }
       }
 
-      // Dense sandstone old-town behind the rampart — DISABLED FOR DEBUGGING
-      // cityFront(0.36, 0.56, 1, 24, {
-      //   minH: 6, maxH: 18, depth: 12, step: 16,
-      //   palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
-      // });
+      // Dense sandstone old-town behind the rampart
+      cityFront(0.36, 0.56, 1, 24, {
+        minH: 6, maxH: 18, depth: 12, step: 16,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+      });
 
       // Old-town minaret shafts — slim cylinders + domed cap, spaced
       // with enough distance so they don't overlap the rampart.
@@ -381,12 +394,13 @@
       });
 
       // ===================================================================
-      // s 0.42–0.50 — CASTLE SECTION: tall walls both sides, crenellated
+      // s 0.42–0.50 — CASTLE SECTION squeeze: ~1 m clearance both sides
+      // (pairs with hwZones hw:3.8 ≈ 7.6 m full width on CircuitPaths)
       // ===================================================================
-      wall(0.42, 0.50, -1, 3.5, 11, SAND, 1.4);
-      wall(0.42, 0.50,  1, 3.5, 11, SAND, 1.4);
+      wall(0.42, 0.50, -1, 0.95, 11, SAND, 1.4);
+      wall(0.42, 0.50,  1, 0.95, 11, SAND, 1.4);
       for (const side of [-1, 1]) {
-        const a = anchor(K(0.44), side, 3.5);
+        const a = anchor(K(0.44), side, 0.95);
         const b = [a.r, a.u, a.t];
         // Merlons on top of the 11m wall: y = 11 + 0.7 (half merlon)
         for (let j = 0; j < 8; j++) {
@@ -395,10 +409,10 @@
           }
         }
       }
-      // Gateway towers flanking the narrowest point
+      // Gateway towers flanking the narrowest point (~0.85 m clearance)
       {
-        const aL = anchor(K(0.46), -1, 1.5);
-        const aR = anchor(K(0.46),  1, 1.5);
+        const aL = anchor(K(0.46), -1, 0.85);
+        const aR = anchor(K(0.46),  1, 0.85);
         // Corner tower cylinder above wall height (y=11 upward)
         addCyl(out, vadd(aL.c, aL.u, 11), 1.4, 8, SAND, 8, [aL.r, aL.u, aL.t]);
         addCyl(out, vadd(aR.c, aR.u, 11), 1.4, 8, SAND, 8, [aR.r, aR.u, aR.t]);
@@ -526,25 +540,17 @@
       }
 
       // ===================================================================
-      // s 0.58 L — seafront: boulevard promenade + palm row
+      // s 0.58 L — Caspian void: keep near balustrade only; cull mid-ground
+      // (palms / cafes / pavilions / near piers) so reflective sea + far
+      // silhouettes read. Vert budget freed for Flame Towers LED bands.
       // ===================================================================
-      // Ornate promenade balustrade wall
+      // Ornate promenade balustrade wall (near-edge frame, not mid-ground)
       wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);
-      // Decorative balusters
-      for (let i = 0; i < 32; i++) {
-        const s = 0.58 + i * 0.0118;
+      // Sparse decorative balusters (thinned — was 32)
+      for (let i = 0; i < 12; i++) {
+        const s = 0.58 + i * 0.031;
         const a = anchor(K(s), -1, 5.7);
         addCyl(out, vadd(a.c, a.u, 0.7), 0.16, 1.1, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);
-      }
-      // Palm-lined promenade (gap=8 keeps palms behind balustrade)
-      for (let i = 0; i < 22; i++) {
-        const s = 0.58 + i * 0.018;
-        palm(K(s), -1, 8 + (i % 3) * 2, 9 + hash(i * 3) * 3.5, [0.18, 0.44, 0.24]);
-      }
-      // Seafront boulevard pavilion buildings (low, gap=18 behind palms)
-      for (let i = 0; i < 6; i++) {
-        const s = 0.58 + i * 0.025;
-        building(K(s), -1, 18, 14, 5 + i, 12, { wall: [0.38, 0.36, 0.34], window: WIN_WARM, floor: 2.5, lit: true });
       }
 
       // ===================================================================
@@ -555,55 +561,32 @@
       groundPlane(K(0.85), -1, 14, [300, 2.4, 340], SEA);
       groundPlane(K(0.92), -1, 14, [280, 2.4, 320], SEA);
 
-      // Distant cargo-vessel silhouettes on the water
-      for (let i = 0; i < 6; i++) {
-        const a = anchor(K(0.65 + i * 0.055), -1, 110 + hash(i * 5) * 80);
+      // Distant cargo-vessel silhouettes on the water (far only)
+      for (let i = 0; i < 5; i++) {
+        const a = anchor(K(0.66 + i * 0.06), -1, 160 + hash(i * 5) * 100);
         addBox(out, vadd(a.c, a.u, 3), [14 + hash(i) * 8, 5 + hash(i * 2) * 3, 3.5],
           [0.10, 0.12, 0.18], [a.r, a.u, a.t]);
       }
 
       // Supplemental Caspian harbour water panel
-      groundPlane(K(0.68), -1, 18, [300, 2, 260], [0.12, 0.18, 0.28]);
+      groundPlane(K(0.68), -1, 28, [300, 2, 260], [0.12, 0.18, 0.28]);
 
-      // Waterfront pavilion buildings (L side, modest gap past balustrade)
-      for (let i = 0; i < 4; i++) {
-        const s = 0.66 + i * 0.075;
-        building(K(s), -1, 22, 14, 9, 14, { wall: [0.30, 0.34, 0.42], window: WIN_COOL, floor: 3, lit: true });
-      }
-
-      // Pier/breakwater structures extending into the Caspian
-      for (let i = 0; i < 3; i++) {
-        const s = 0.68 + i * 0.12;
-        const a = anchor(K(s), -1, 14);
+      // One far breakwater silhouette only (near piers culled for sea void)
+      {
+        const a = anchor(K(0.78), -1, 90);
         const b = [a.r, a.u, a.t];
-        // Main pier deck
-        addBox(out, vadd(a.c, a.u, 0.5), [2.8, 1.1, 50], [0.52, 0.52, 0.56], b);
-        // Pier lamp posts
-        for (let pl = 0; pl < 3; pl++) {
-          const pc = vadd(a.c, a.t, (pl - 1) * 14);
-          addCyl(out, vadd(pc, a.u, 1.1), 0.12, 4, [0.24, 0.24, 0.28], 4, b);
-          addBox(out, vadd(pc, a.u, 5), [0.7, 0.25, 0.7], LAMP_WARM, b);
-        }
-        // Mooring bollards
-        addCyl(out, vadd(a.c, a.u, 1.1), 0.22, 1.4, [0.34, 0.34, 0.38], 5, b);
+        addBox(out, vadd(a.c, a.u, 0.5), [2.4, 1.0, 36], [0.40, 0.40, 0.46], b);
       }
 
       // ===================================================================
-      // s 0.75 L — Seaside fountain plaza: a circular fountain basin with
-      // a central plume cone (lit in cool white) visible from the straight.
+      // s 0.75 L — far fountain plume (pushed back; mid-ground plaza culled)
       // ===================================================================
       {
-        const aFt = anchor(K(0.75), -1, 24);
+        const aFt = anchor(K(0.75), -1, 72);
         const b   = [aFt.r, aFt.u, aFt.t];
-        // Basin ring (low wide frustum = pool rim)
-        addFrustum(out, vadd(aFt.c, aFt.u, 0.3), 8, 7, 1.0, [0.38, 0.38, 0.42], 12, b);
-        // Water surface (dark teal flat disc)
-        addFrustum(out, vadd(aFt.c, aFt.u, 0.5), 6.8, 6.8, 0.2, [0.04, 0.12, 0.20], 12, b);
-        // Central fountain plume — narrow tall cone, bright lit
-        addCone(out, vadd(aFt.c, aFt.u, 0.6), 1.2, 7, [0.60, 0.80, 0.95], 8, b);
-        addCone(out, vadd(aFt.c, aFt.u, 5.0), 0.6, 4, WIN_COOL, 6, b);
-        // Uplighting at fountain base
-        addFrustum(out, vadd(aFt.c, aFt.u, 0.4), 7.4, 7.0, 0.5, [0.18, 0.26, 0.36], 12, b);
+        addFrustum(out, vadd(aFt.c, aFt.u, 0.3), 6, 5.2, 0.8, [0.38, 0.38, 0.42], 10, b);
+        addCone(out, vadd(aFt.c, aFt.u, 0.6), 1.0, 6, [0.60, 0.80, 0.95], 8, b);
+        addCone(out, vadd(aFt.c, aFt.u, 4.5), 0.5, 3, WIN_COOL, 6, b);
       }
 
       // Continuous modern Caspian-front skyline R: aligned glass tower facades
@@ -673,27 +656,7 @@
       billboard(K(0.93), 1, 11, 18, 11, FLAME);
       billboard(K(0.99), -1, 8, 14, 8, WIN_COOL);
 
-      // ===================================================================
-      // Waterfront night bar/cafe strip — pavilion buildings with flat
-      // cantilevered roofs and warm lit interiors. Alternate orientation
-      // (some face the sea, some the road) for variety.
-      // ===================================================================
-      for (let i = 0; i < 6; i++) {
-        const s = 0.60 + i * 0.030;
-        const gp = 10 + (i % 3) * 3;
-        const a  = anchor(K(s), -1, gp);
-        const b  = [a.r, a.u, a.t];
-        const wd = 7 + (i % 2) * 3;
-        const dp = 9 + (i % 3) * 2;
-        // Building body
-        addBox(out, vadd(a.c, a.u, 2.2), [wd, 4.4, dp], [0.26, 0.28, 0.34], b);
-        // Warm lit window band
-        addBox(out, vadd(a.c, a.u, 2.8), [wd * 1.02, 1.4, dp * 1.02], WIN_WARM, b);
-        // Cantilevered flat roof overhang (slightly wider than body)
-        addBox(out, vadd(a.c, a.u, 4.6), [wd + 2, 0.35, dp + 2], [0.22, 0.24, 0.30], b);
-        // Outdoor seating area — low flat pad toward the sea side
-        addBox(out, vadd(vadd(a.c, a.r, wd * 0.6), a.u, 0.1), [3, 0.15, dp * 0.7], [0.32, 0.30, 0.28], b);
-      }
+      // Cafe / palm mid-ground strip culled — Neftchilar L reads as open Caspian
 
       // Seafront billboard (s≈0.15)
       billboard(K(0.15), -1, 20, 14, 5, [0.85, 0.35, 0.10]);
@@ -709,18 +672,16 @@
         groundPlane(K(0.62 + i * 0.06), -1, 26, [280, 1.2, 240], SEA, true);
       }
 
-      // ── BAKU EYE — Ferris wheel on the Caspian boulevard (seafront L) ────
-      ferrisWheel(K(0.80), -1, 46, 34);
-      // Warm/cool cabin accent ring + lit base plaza under the Baku Eye
+      // ── BAKU EYE — Ferris wheel pushed to far silhouette (sea void mid culled)
+      ferrisWheel(K(0.80), -1, 88, 28);
       {
-        const a = anchor(K(0.80), -1, 46);
+        const a = anchor(K(0.80), -1, 88);
         const b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 0.2), [40, 0.5, 40], [0.16, 0.14, 0.20], b);
-        addCyl(out, vadd(a.c, a.u, 34), 3.6, 3.4, WIN_COOL, 16, b);   // lit hub ring
+        addBox(out, vadd(a.c, a.u, 0.2), [32, 0.4, 32], [0.14, 0.12, 0.18], b);
+        addCyl(out, vadd(a.c, a.u, 28), 3.0, 2.8, WIN_COOL, 14, b);
       }
 
-      // ── CASPIAN MARINA — moored night yachts (bespoke builder) ──────────
-      // Sleek hull + navy waterline + two glowing cabin decks + radar mast.
+      // ── CASPIAN MARINA — sparse far yachts only (near marina culled)
       const nightYacht = (a, sc, hullCol) => {
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.90, 0.91, 0.94];
@@ -733,56 +694,41 @@
         addBox(out, vadd(sup, a.u, 4.2 * sc), [W * 0.82, 2.4 * sc, L * 0.5], [0.30, 0.34, 0.42], b);
         addBox(out, vadd(sup, a.u, 6.6 * sc), [W * 0.66, 2.0 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
         out._mat = 0;
-        // warm + cool lit cabin bands
         addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.5], WIN_WARM, b);
         addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.32], WIN_COOL, b);
-        // radar mast + nav light
         out._mat = MAT.METAL;
         addCyl(out, vadd(sup, a.u, 8.2 * sc), 0.12 * sc, 4.5 * sc, [0.80, 0.82, 0.86], 4, b);
         out._mat = 0;
         addBox(out, vadd(sup, a.u, 12.4 * sc), [0.4 * sc, 0.4 * sc, 0.4 * sc], [0.95, 0.30, 0.25], b);
       };
-      for (let i = 0; i < 9; i++) {
-        const k = K(0.60 + i * 0.035);
-        const a = anchor(k, -1, 16 + (i % 3) * 8 + hash(k * 7) * 4);
+      for (let i = 0; i < 3; i++) {
+        const k = K(0.64 + i * 0.10);
+        const a = anchor(k, -1, 95 + hash(k * 7) * 40);
         if (onTrack(a.c[0], a.c[2], 10)) continue;
-        const hull = (i % 4 === 0) ? [0.12, 0.14, 0.22] : (i % 3 === 0) ? [0.85, 0.86, 0.90] : [0.70, 0.72, 0.78];
-        nightYacht(a, 0.8 + hash(k * 9) * 0.7, hull);
+        const hull = (i % 2 === 0) ? [0.12, 0.14, 0.22] : [0.85, 0.86, 0.90];
+        nightYacht(a, 0.7 + hash(k * 9) * 0.5, hull);
       }
-      // Slim moored mast cluster further out on the water
-      for (let i = 0; i < 8; i++) {
-        const k = K(0.63 + i * 0.04), a = anchor(k, -1, 60 + hash(k) * 30);
+      // Slim mast cluster further out on the water (far silhouettes)
+      for (let i = 0; i < 5; i++) {
+        const k = K(0.65 + i * 0.055), a = anchor(k, -1, 110 + hash(k) * 40);
         addCyl(out, vadd(a.c, a.u, 6), 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
       }
 
-      // ── CARPET MUSEUM — iconic rolled-carpet building (seafront L) ───────
-      // Baku's museum is shaped like a giant rolled-up carpet. Built as a
-      // horizontal cylinder (the roll) on a plinth, with a peeled-back flap
-      // and warm patterned glow bands. Cylinder axis runs along the track
-      // tangent by swapping the up-slot of the basis to a.t.
+      // ── CARPET MUSEUM — pushed to far L silhouette (mid-ground culled)
       {
-        const a = anchor(K(0.72), -1, 40);
-        const rollB = [a.r, a.t, a.u];          // cyl 'up' = track tangent → horizontal roll
+        const a = anchor(K(0.72), -1, 78);
+        const rollB = [a.r, a.t, a.u];
         const b = [a.r, a.u, a.t];
-        // Stone plinth
         out._mat = MAT.STONE;
-        addBox(out, vadd(a.c, a.u, 3), [40, 6, 26], [0.34, 0.32, 0.30], b);
-        // Main carpet roll (horizontal cylinder) sitting on the plinth
+        addBox(out, vadd(a.c, a.u, 3), [36, 5, 22], [0.34, 0.32, 0.30], b);
         out._mat = MAT.FABRIC;
-        addCyl(out, vadd(vadd(a.c, a.t, -16), a.u, 13), 10, 32, [0.62, 0.24, 0.18], 16, rollB);
-        // Rolled inner core rings (lighter, at the open end)
-        addCyl(out, vadd(vadd(a.c, a.t, 16), a.u, 13), 10.2, 2.0, [0.78, 0.66, 0.40], 16, rollB);
-        addCyl(out, vadd(vadd(a.c, a.t, 16), a.u, 13), 6.0, 2.4, [0.85, 0.52, 0.30], 14, rollB);
-        // Peeled-back carpet flap draping down the front (a leaning slab)
-        addBox(out, vadd(vadd(a.c, a.r, -9), a.u, 9), [1.4, 18, 30], [0.70, 0.28, 0.20], b);
+        addCyl(out, vadd(vadd(a.c, a.t, -14), a.u, 12), 9, 28, [0.62, 0.24, 0.18], 14, rollB);
+        addCyl(out, vadd(vadd(a.c, a.t, 14), a.u, 12), 9.2, 1.8, [0.78, 0.66, 0.40], 14, rollB);
         out._mat = 0;
-        // Warm patterned uplight bands along the roll
-        for (let s = -3; s <= 3; s++) {
-          addBox(out, vadd(vadd(a.c, a.t, s * 4.2), a.u, 22), [4.0, 0.5, 3.0],
+        for (let s = -2; s <= 2; s++) {
+          addBox(out, vadd(vadd(a.c, a.t, s * 4.5), a.u, 20), [3.5, 0.4, 2.6],
                  s % 2 ? [0.90, 0.55, 0.20] : WIN_WARM, b);
         }
-        // Uplit forecourt wash
-        addBox(out, vadd(a.c, a.u, 0.1), [48, 0.5, 34], [0.20, 0.14, 0.08], b);
       }
     },
   }

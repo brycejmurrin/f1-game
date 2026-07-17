@@ -188,7 +188,7 @@ const F1API = (function () {
   }
 
   function lastRace() {
-    return request(JOLPICA + "/current/last/results.json", TTL_STANDINGS).then(function (json) {
+    return request(JOLPICA + "/2026/last/results.json", TTL_STANDINGS).then(function (json) {
       const race = jRaces(json)[0];
       if (!race) return null;
       return {

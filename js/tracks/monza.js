@@ -38,7 +38,7 @@
         onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
         grandstand, billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
         addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
-        px, pz } = api;
+        underpassPortal, px, pz } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Royal-park greens — warm Italian afternoon palette.
@@ -660,6 +660,91 @@
                  [0.96, 0.86, 0.52], [a.r, a.u, a.t]);
         out._mat = 0;
       })();
+
+      // =====================================================================
+      // 10. TOP-3 IDENTITY — Ascari Sopraelevata flyover, chicane kerb
+      //     punctuation, Curva Grande pine wall.
+      // =====================================================================
+
+      // 10a. Ascari Sopraelevata flyover — tilted concrete bridge over the
+      //     racing line ~s 0.70–0.76 (cars pass under). Distinct from the
+      //     off-track banking ruin at s~0.53: this is the historic oval
+      //     crossing the modern circuit on the Ascari approach.
+      (function sopraelevataFlyover() {
+        const conc = [0.66, 0.64, 0.60], concDk = [0.54, 0.52, 0.49];
+        const moss = [0.36, 0.48, 0.32];
+        // Overhead span via shared portal (RAW deck — intentionally over tarmac).
+        if (typeof underpassPortal === "function") {
+          for (const [s, depth] of [[0.70, 20], [0.72, 22], [0.74, 22], [0.76, 18]]) {
+            underpassPortal(s, {
+              h: 6.8, thick: 2.2, depth,
+              col: (s < 0.73) ? conc : concDk,
+              pierGap: 1.9, pierW: 2.4,
+            });
+          }
+        }
+        // Tilted banking wings both sides — sell the Sopraelevata bank silhouette
+        // rising toward the deck, moss-streaked weathered concrete.
+        along(0.695, 0.765, 11, (k) => {
+          const s = k / n;
+          const t = (s - 0.695) / 0.07;                 // 0→1 through the span
+          const rise = 5 + Math.sin(Math.min(1, Math.max(0, t)) * Math.PI) * 5.5;
+          for (const side of [-1, 1]) {
+            const hJ = hash(k * 13 + side + 3);
+            const gap = 10 + (1 - Math.sin(Math.min(1, Math.max(0, t)) * Math.PI)) * 5;
+            const a = anchor(k, side, gap);
+            // Lean outward (~banked oval look), matching the s~0.53 ruin tilt.
+            const tilt = 0.55;
+            const upv = [a.r[0] * side * tilt, 1, a.r[2] * side * tilt];
+            const ul = Math.hypot(upv[0], upv[1], upv[2]) || 1;
+            const uu = [upv[0] / ul, upv[1] / ul, upv[2] / ul];
+            const h = rise + hJ * 1.8;
+            const col = (k % 3 === 0) ? concDk : conc;
+            out._mat = MAT.CONCRETE;
+            addBox(out, vadd(a.c, a.u, h * 0.42), [7.5, h, 10], col, [a.r, uu, a.t]);
+            if (hJ > 0.45) {
+              addBox(out, vadd(vadd(a.c, a.r, side * 0.7), a.u, h * 0.38),
+                     [0.75, h * 0.48, 9], moss, [a.r, uu, a.t]);
+            }
+            out._mat = 0;
+          }
+        });
+      })();
+
+      // 10b. Chicane red/white kerb punctuation — Rettifilo, Roggia, Ascari.
+      //     Bright Italian sausage-kerb rhythm at the three heavy-braking zones
+      //     (start-straight strip in 8c stays; these punch the chicanes).
+      {
+        const kerbR = [0.88, 0.16, 0.12], kerbW = [0.94, 0.94, 0.92];
+        const strips = [
+          [0.025, 0.055,  1],   // Variante del Rettifilo — right
+          [0.028, 0.052, -1],   // Rettifilo — left
+          [0.285, 0.320, -1],   // Variante della Roggia — left
+          [0.290, 0.315,  1],   // Roggia — right
+          [0.765, 0.805, -1],   // Variante Ascari — left
+          [0.770, 0.800,  1],   // Ascari — right
+        ];
+        for (const [s0, s1, side] of strips) {
+          let i = 0;
+          along(s0, s1, 3.0, (k) => {
+            const a = anchor(k, side, 4.2);
+            addBox(out, vadd(a.c, a.u, 0.22), [0.95, 0.42, 2.6],
+                   (i++ % 2 === 0) ? kerbR : kerbW, [a.r, a.u, a.t]);
+          });
+        }
+      }
+
+      // 10c. Curva Grande pine wall — densify umbrella pines both sides
+      //     ~s 0.08–0.18 so the fast sweep reads as a green corridor at speed.
+      every(5, (k) => {
+        const s = k / n;
+        if (s < 0.08 || s > 0.18) return;
+        const h = hash(k * 19 + 11);
+        pine(k, -1, 9 + h * 2, 16 + h * 12, h < 0.4 ? PINE_D : PINE);
+        pine(k,  1, 9 + h * 2.5, 15 + h * 11, h < 0.5 ? PINE : PINE_D);
+        if (h > 0.40) pine(k, -1, 14 + h * 3, 18 + h * 10, PINE_D);
+        if (h > 0.50) pine(k,  1, 15 + h * 3, 17 + h * 9, PINE);
+      });
     },
   }
   );

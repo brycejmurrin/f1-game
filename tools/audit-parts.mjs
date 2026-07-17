@@ -5,9 +5,7 @@
 //   node tools/audit-parts.mjs [--cats=brakes,gearbox,ers] [--team=mclaren]
 //
 // Output: tools/render-out/audit/<cat>/<option>.png + <cat>/index.html
-let chromium;
-try { ({ chromium } = await import('playwright')); }
-catch { ({ chromium } = await import('/opt/node22/lib/node_modules/playwright/index.mjs')); }
+import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +14,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const h = process.argv.find(a => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };
 const TEAM = arg('team', 'mclaren');
 const URL = arg('url', 'http://127.0.0.1:3456');
-const EXE = process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium';
+const EXE = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
 
 // Best camera per category (az 0 = behind, 180 = head-on), + tod.
 const CAT_VIEW = {
@@ -31,7 +29,7 @@ const CAT_VIEW = {
 };
 const cats = (arg('cats', Object.keys(CAT_VIEW).join(','))).split(',').map(s => s.trim()).filter(Boolean);
 
-const browser = await chromium.launch({ executablePath: EXE, args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
 try {
   const page = await browser.newPage({ viewport: { width: 720, height: 560 } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));

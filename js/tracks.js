@@ -309,31 +309,55 @@ const Tracks = (function () {
     return corners;
   }
 
-  // Zandvoort-style banked corners. Returns null for every circuit except
-  // Zandvoort; otherwise per-node arrays describing how much the OUTER road
-  // edge rises (metres) and which side that outer edge is on. The lift is
-  // cosine-ramped to zero over the corner span plus a few run-in/out nodes,
-  // exactly like the localized BRIDGES bump on py — so the rest of the lap
-  // stays dead flat (no global tilt). buildRoad and buildTerrain both read this
-  // so the banked road edge and the terrain that meets it rise together.
+  // Author-driven banked corners. A track def can bank its corners two ways:
+  //   • `bankZones: [{ frac, angleDeg, widthM }]` — bank explicit fraction
+  //     windows at authored angles (used by Zandvoort's Hugenholtz/Luyendyk and
+  //     Madrid's La Monumental), OR
+  //   • `banked: true` — auto-pick the two highest-curvature corners and bank
+  //     them at ~18° (legacy fallback for any track without bankZones).
+  // Returns null when neither is present; otherwise per-node arrays describing how
+  // much the OUTER road edge rises (metres) and which side that outer edge is on.
+  // The lift is cosine-ramped to zero over the corner span, exactly like the
+  // localized BRIDGES bump on py — so the rest of the lap stays dead flat (no
+  // global tilt). buildRoad and buildTerrain both read this so the banked road
+  // edge and the terrain that meets it rise together; game.js makes the car,
+  // shadow and camera ride the banked surface (height + roll) so nothing floats.
   function bankingProfile(track) {
-    // Opt-in per circuit via the `banked` data flag. The road/terrain mesh raises
-    // its outer edge here; game.js makes the car, shadow and camera ride the
-    // banked surface (height + roll) so nothing floats. The terrain ribbon's bank
-    // lift already tapers to zero at its far edge (see buildTerrain), so the
-    // distant ground stays flat.
-    if (!track.def.banked) return null;
+    const def = track.def;
+    const zones = def.bankZones;
+    if (!def.banked && !(zones && zones.length)) return null;
     const n = track.n;
+    const ds = track.total / n;
+    const lift = new Float32Array(n);
+    const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
+
+    // Explicit authored zones take precedence over the curvature auto-pick.
+    if (zones && zones.length) {
+      for (const z of zones) {
+        const frac = (((z.frac || 0) % 1) + 1) % 1;
+        const kc = Math.round(frac * n) % n;
+        const tanA = Math.tan((z.angleDeg || 18) * Math.PI / 180);
+        const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
+        // outer edge is opposite the turn centre at the zone apex (curv + = right)
+        const outer = curvature(track, kc * ds) >= 0 ? -1 : 1;
+        for (let i = -half; i <= half; i++) {
+          const k = (kc + i + n) % n;
+          // cosine window: 1 at apex, 0 at the span edges
+          const t = 1 - Math.abs(i) / half;
+          const w = 0.5 * (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t))));
+          const add = 2 * track.hw[k] * tanA * w;
+          if (add > lift[k]) { lift[k] = add; bsign[k] = outer; }
+        }
+      }
+      return { lift, bsign };
+    }
+
+    // Legacy auto-pick: the two highest-curvature corners, banked at 18°.
     const corners = findCorners(track, 0.006);
     if (!corners.length) return null;
-    // pick the two highest-curvature corners (apex |curvature|)
-    const ds = track.total / n;
     const scored = corners.map((c) => ({ c, k: Math.abs(curvature(track, c.k * ds)) }));
     scored.sort((a, b) => b.k - a.k);
     const picks = scored.slice(0, 2).map((s) => s.c);
-
-    const lift = new Float32Array(n);
-    const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
     const TAN18 = Math.tan(18 * Math.PI / 180);
     const RUN = 6;                       // extra run-in/out nodes each side
     for (const c of picks) {
@@ -916,9 +940,9 @@ const Tracks = (function () {
     const RS = (s) => ((((phi || 0) - s) % 1) + 1) % 1;        // reversed+rotated fraction
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
-    for (const name of ["place", "prop", "backdrop", "anchor", "pine", "tree",
+    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
-                        "marshalPost", "bush", "signBoard"]) {
+                        "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), -side, ...r);
     }
     // (s, side, ...rest): single fraction + side
@@ -927,13 +951,16 @@ const Tracks = (function () {
     }
     // (s0, s1, side, ...rest): fraction RANGE + side — swap ends and mirror both
     for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
-                        "forestEdge", "cityFront", "recordBarrier"]) {
+                        "forestEdge", "cityFront", "recordBarrier", "concreteCanyon",
+                        "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow"]) {
       const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => f(RS(s1), RS(s0), -side, ...r);
     }
     // (s0, s1, stepM, fn): fraction range, no side
     if (api.along) w.along = (s0, s1, ...r) => api.along(RS(s1), RS(s0), ...r);
-    // (s, h, col): single fraction, no side
+    // (s, …): single fraction, no side (gantry / underpass portal)
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
+    if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);
+    // floodMastRing places BOTH sides via every() — no remapping needed
     // NOTE: node-index utilities (groundYAt, upOf) and the raw px/py/pz arrays are
     // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
     // scenery stay mutually consistent on the reversed centreline (cosmetic only).
@@ -945,7 +972,7 @@ const Tracks = (function () {
     // palettes, building styles) live in js/track-scenery-data.js.
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
             MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF,
-            STYLES, THEME_DEF } = TrackSceneryData;
+            STYLES, THEME_DEF, ATM, COL } = TrackSceneryData;
     const { n, px, py, pz, hw } = track;
     // Mobile geometry LOD: the street-circuit city facade is the single biggest GPU
     // allocation (the props VBO is ~88 MB on Vegas, ~73 on Baku), and the detailed
@@ -2803,6 +2830,323 @@ const Tracks = (function () {
       }
     }
 
+    // ── Shared scenery toolkit (identity pass) ──────────────────────────────
+    // Cross-track composite helpers. Footprints that must stay OFF the racing
+    // line use rejBox / full-box tests. Overhead decks that cars intentionally
+    // pass under (underpass slab, sail/gridshell spanning the track) emit via
+    // RAW.addBox so the guarded wrappers do not cull them.
+
+    // Dark overhead portal: slab spanning the track + support piers off-edge.
+    // opts: { h, thick, col, pierGap, pierW, depth }
+    const underpassPortal = (s, opts) => {
+      opts = opts || {};
+      const k = Math.round(s * n) % n;
+      const clearH = opts.h != null ? opts.h : 5.5;
+      const thick = opts.thick != null ? opts.thick : 1.4;
+      const col = opts.col || [0.10, 0.10, 0.12];
+      const pierGap = opts.pierGap != null ? opts.pierGap : 1.4;
+      const pierW = opts.pierW != null ? opts.pierW : 1.6;
+      const depth = opts.depth != null ? opts.depth : 14;
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const t = [track.tx[k], track.ty[k], track.tz[k]];
+      const u = upOf(track, k);
+      const b = [r, u, t];
+      // Piers sit beyond the road edge — full-footprint guard (not single-point).
+      for (const side of [-1, 1]) {
+        const a = anchor(k, side, pierGap + pierW / 2);
+        const pierSz = [pierW, clearH + thick * 0.5, depth * 0.55];
+        if (rejBox(a.c, pierSz, [a.r, a.u, a.t])) {
+          console.warn(`[scenery] underpassPortal pier SUPPRESSED at s=${s} side=${side}`);
+          continue;
+        }
+        addBox(out, vadd(a.c, a.u, pierSz[1] / 2), pierSz, col, [a.r, a.u, a.t]);
+        blockAt(k, side, pierGap, depth * 0.25);
+      }
+      // Overhead slab intentionally spans tarmac (cars pass under) → RAW.
+      const span = hw[k] * 2 + (pierGap + pierW) * 2 + 1.5;
+      const slabC = [px[k] + u[0] * (clearH + thick / 2),
+                     py[k] + u[1] * (clearH + thick / 2),
+                     pz[k] + u[2] * (clearH + thick / 2)];
+      RAW.addBox(out, slabC, [span, thick, depth], col, b);
+      // Underside soffit — slightly lighter so the portal mouth reads.
+      const soff = [Math.min(1, col[0] * 1.35 + 0.04), Math.min(1, col[1] * 1.35 + 0.04), Math.min(1, col[2] * 1.4 + 0.05)];
+      RAW.addBox(out, [px[k] + u[0] * (clearH + 0.12), py[k] + u[1] * (clearH + 0.12), pz[k] + u[2] * (clearH + 0.12)],
+                 [span * 0.96, 0.18, depth * 0.92], soff, b);
+    };
+
+    // Tall dual-arm cool-white flood mast + optional ground pool.
+    // dist = metres beyond road edge (mast centre). opts: { h, cool, pool, arms }
+    const floodMast = (k, side, dist, opts) => {
+      opts = opts || {};
+      const h = opts.h != null ? opts.h : 36;
+      const cool = opts.cool !== false;
+      const pool = opts.pool !== false;
+      const arms = opts.arms != null ? opts.arms : 2;
+      const poleCol = [0.14, 0.14, 0.17];
+      const lens = cool
+        ? (NIGHT ? [1.22, 1.28, 1.40] : [0.96, 1.00, 1.06])
+        : (NIGHT ? [1.30, 1.18, 0.88] : [1.02, 0.96, 0.82]);
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const foot = [2.8, h, 2.8];
+      if (rejBox(a.c, foot, b)) {
+        console.warn(`[scenery] floodMast SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
+      addCyl(out, a.c, 0.45, h, poleCol, 6, b);
+      const top = vadd(a.c, a.u, h);
+      // Dual (or multi) arms reaching toward the track (−side along r).
+      for (let i = 0; i < arms; i++) {
+        const along = (i - (arms - 1) / 2) * 1.8;
+        const arm = vadd(vadd(top, a.t, along), a.r, -side * 1.6);
+        addBox(out, arm, [3.4, 0.35, 0.55], poleCol, b);
+        addBox(out, vadd(arm, a.r, -side * 1.3), [1.6, 0.55, 1.1], lens, b);
+      }
+      // Crossbar / bank housing
+      addBox(out, top, [1.2, 0.9, arms * 1.9 + 0.6], [0.22, 0.22, 0.26], b);
+      if (pool) {
+        const poolCol = cool ? [0.72, 0.78, 0.88] : [0.82, 0.78, 0.62];
+        addBox(out, vadd(a.c, a.u, 0.10), [7.5, 0.18, 7.5], poolCol, b);
+      }
+      blockAt(k, side, dist - 0.6, 2);
+    };
+
+    // Ring of flood masts both sides every ~stepM metres. opts forwarded to floodMast;
+    // opts.dist defaults to 14 (beyond edge).
+    const floodMastRing = (stepM, opts) => {
+      opts = opts || {};
+      const dist = opts.dist != null ? opts.dist : 14;
+      every(stepM || 55, (k) => {
+        floodMast(k, -1, dist, opts);
+        floodMast(k, 1, dist, opts);
+      });
+    };
+
+    // Stacked emissive colour bands on a vertical shaft (Flame Towers / Sphere).
+    // c = world centre of base, h = total height. opts: { r, bands, cols, seg, basis }
+    const ledFacadeBands = (c, h, opts) => {
+      opts = opts || {};
+      const r0 = opts.r != null ? opts.r : 8;
+      const bands = opts.bands != null ? opts.bands : 10;
+      const cols = opts.cols || [[1.4, 0.35, 0.08], [1.5, 0.55, 0.12], [1.2, 0.18, 0.05], [1.6, 0.85, 0.20]];
+      const seg = opts.seg != null ? opts.seg : 8;
+      const basis = opts.basis || null;
+      const bh = h / bands;
+      // Guard widest frustum footprint once — if base covers track, skip all bands.
+      if (rejRad(c, r0, h, basis)) {
+        console.warn(`[scenery] ledFacadeBands SUPPRESSED at [${c[0]|0},${c[2]|0}]`);
+        return;
+      }
+      for (let i = 0; i < bands; i++) {
+        const t = i / Math.max(1, bands - 1);
+        const rB = r0 * (1 - t * 0.55);
+        const rT = r0 * (1 - (t + 1 / bands) * 0.55);
+        const col = cols[i % cols.length];
+        const mid = [c[0], c[1] + (i + 0.5) * bh, c[2]];
+        addFrustum(out, mid, rB, Math.max(0.4, rT), bh * 0.92, col, seg, basis);
+      }
+    };
+
+    // Pale grey Jersey / canyon wall with optional accent stripe boxes.
+    // opts: { h, thick, col, stripeCol, stripeH, stripeEvery }
+    const concreteCanyon = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const h = opts.h != null ? opts.h : 2.4;
+      const thick = opts.thick != null ? opts.thick : 0.55;
+      const col = opts.col || [0.72, 0.73, 0.76];
+      const stripeCol = opts.stripeCol || null;
+      const stripeH = opts.stripeH != null ? opts.stripeH : 0.35;
+      const stripeEvery = opts.stripeEvery != null ? opts.stripeEvery : 2;
+      recordBarrier(s0, s1, side, gap);
+      let stripeI = 0;
+      along(s0, s1, 5.5, (k, spacing) => {
+        const p = anchor(k, side, gap);
+        const sz = [thick, h, spacing];
+        if (rejBox(p.c, sz, [p.r, p.u, p.t])) {
+          console.warn(`[scenery] concreteCanyon SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
+        addBox(out, vadd(p.c, p.u, h / 2), sz, col, [p.r, p.u, p.t]);
+        if (stripeCol && (stripeI++ % stripeEvery === 0)) {
+          addBox(out, vadd(p.c, p.u, h * 0.55), [thick + 0.08, stripeH, spacing * 0.55], stripeCol, [p.r, p.u, p.t]);
+        }
+      });
+    };
+
+    // Disc / ellipse sail canopy at world centre c with basis [r,u,t].
+    // opts: { rad, h, col, ribs, thick } — ribs are radial struts under a thin disc.
+    const sailCanopy = (c, basis, opts) => {
+      opts = opts || {};
+      const rad = opts.rad != null ? opts.rad : 18;
+      const lift = opts.h != null ? opts.h : 14;
+      const col = opts.col || [0.92, 0.90, 0.84];
+      const ribs = opts.ribs != null ? opts.ribs : 8;
+      const thick = opts.thick != null ? opts.thick : 0.55;
+      const b = basis || [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      const u = b[1], r = b[0], f = b[2];
+      // Mast / hub under sail — guard footprint so the support never sits on tarmac.
+      const hub = [c[0], c[1], c[2]];
+      if (rejBox(hub, [3.5, lift, 3.5], b)) {
+        console.warn(`[scenery] sailCanopy SUPPRESSED at [${c[0]|0},${c[2]|0}]`);
+        return;
+      }
+      addCyl(out, hub, 0.55, lift, [0.28, 0.28, 0.32], 6, b);
+      const crown = vadd(hub, u, lift);
+      // Sail disc as a flat wide box (ellipse approximated by axis sizes).
+      const rx = opts.rx != null ? opts.rx : rad;
+      const rz = opts.rz != null ? opts.rz : rad * 0.72;
+      // If the sail itself covers tarmac, still draw it via RAW (overhead veil).
+      const sailC = vadd(crown, u, thick / 2);
+      if (rejBox(sailC, [rx * 2, thick, rz * 2], b)) {
+        RAW.addBox(out, sailC, [rx * 2, thick, rz * 2], col, b);
+      } else {
+        addBox(out, sailC, [rx * 2, thick, rz * 2], col, b);
+      }
+      for (let i = 0; i < ribs; i++) {
+        const a = (i / ribs) * Math.PI * 2;
+        const ox = Math.cos(a) * rx * 0.85, oz = Math.sin(a) * rz * 0.85;
+        const tip = vadd(vadd(crown, r, ox), f, oz);
+        const mid = [(crown[0] + tip[0]) / 2, (crown[1] + tip[1]) / 2 - 0.4, (crown[2] + tip[2]) / 2];
+        addBox(out, mid, [0.22, 0.22, Math.hypot(ox, oz) || 1], [0.35, 0.35, 0.40], b);
+      }
+    };
+
+    // LED lattice veil / gridshell canopy — arched node lattice over a span.
+    // opts: { w, depth, h, cols, rows, ledCols, strutCol }
+    const gridshellCanopy = (c, basis, opts) => {
+      opts = opts || {};
+      const w = opts.w != null ? opts.w : 40;
+      const depth = opts.depth != null ? opts.depth : 28;
+      const peakH = opts.h != null ? opts.h : 22;
+      const cols = opts.cols != null ? opts.cols : 7;
+      const rows = opts.rows != null ? opts.rows : 5;
+      const ledCols = opts.ledCols || [[0.2, 1.1, 1.2], [1.2, 0.25, 0.7], [1.1, 0.85, 0.25]];
+      const strutCol = opts.strutCol || [0.08, 0.09, 0.12];
+      const b = basis || [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      const r = b[0], u = b[1], f = b[2];
+      // Support feet at the four corners — full-box guard.
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const foot = vadd(vadd(c, r, sx * w * 0.42), f, sz * depth * 0.42);
+        if (rejBox(foot, [2.2, peakH * 0.4, 2.2], b)) {
+          console.warn(`[scenery] gridshellCanopy foot SUPPRESSED`);
+          return;
+        }
+        addCyl(out, foot, 0.5, peakH * 0.45, strutCol, 5, b);
+      }
+      for (let j = 0; j <= rows; j++) {
+        const zt = j / rows - 0.5;
+        let prev = null;
+        for (let i = 0; i <= cols; i++) {
+          const xt = i / cols - 0.5;
+          const arch = Math.cos(xt * Math.PI) * 0.55 + 0.45;   // peak at centre
+          const lift = peakH * arch * (0.75 + 0.25 * Math.cos(zt * Math.PI));
+          const node = vadd(vadd(vadd(c, u, lift), r, xt * w), f, zt * depth);
+          const col = ledCols[(i + j) % ledCols.length];
+          // Lattice nodes may overhang the track — RAW when footprint hits tarmac.
+          if (rejBox(node, [2.2, 1.2, 2.0], b)) RAW.addBox(out, node, [2.2, 1.2, 2.0], col, b);
+          else addBox(out, node, [2.2, 1.2, 2.0], col, b);
+          if (prev) {
+            const mid = [(prev[0] + node[0]) / 2, (prev[1] + node[1]) / 2, (prev[2] + node[2]) / 2];
+            const span = Math.hypot(node[0] - prev[0], node[1] - prev[1], node[2] - prev[2]) || 1;
+            if (rejBox(mid, [0.35, 0.35, span], b)) RAW.addBox(out, mid, [0.35, 0.35, span], strutCol, b);
+            else addBox(out, mid, [0.35, 0.35, span], strutCol, b);
+          }
+          prev = node;
+        }
+      }
+    };
+
+    // Wide low asphalt/gravel apron beyond the verge.
+    // sz = [depth, thick, length] or number depth with default length.
+    const runoffApron = (k, side, gap, sz, col) => {
+      let depth, thick, len;
+      if (Array.isArray(sz)) { depth = sz[0]; thick = sz[1] != null ? sz[1] : 0.35; len = sz[2] != null ? sz[2] : 24; }
+      else { depth = sz || 18; thick = 0.35; len = 24; }
+      const dist = gap + depth / 2;
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const box = [depth, thick, len];
+      if (rejBox(a.c, box, b)) {
+        console.warn(`[scenery] runoffApron SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        return;
+      }
+      addBox(out, vadd(a.c, a.u, thick / 2), box, col || [0.42, 0.40, 0.38], b);
+    };
+
+    // Tilted red/white kerb ribbon + optional SAFER-style outer rail (Zandvoort bowls).
+    // Track basis already banks with the road, so boxes read the bank tilt.
+    // opts: { saferGap, safer, step, saferStep, kerbRed, kerbWht, saferCol }
+    const bankedKerbStrip = (s0, s1, side, opts) => {
+      opts = opts || {};
+      const kerbRed = opts.kerbRed || [0.86, 0.12, 0.14];
+      const kerbWht = opts.kerbWht || [0.94, 0.94, 0.92];
+      const saferCol = opts.saferCol || [0.76, 0.78, 0.80];
+      const saferGap = opts.saferGap != null ? opts.saferGap : 7.0;
+      const doSafer = opts.safer !== false;
+      let stripe = 0;
+      along(s0, s1, opts.step || 3.2, (k, spacing) => {
+        const col = (stripe++ & 1) ? kerbWht : kerbRed;
+        const a = anchor(k, side, 1.35);
+        if (onTrack(a.c[0], a.c[2], 1.1)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.16), [1.05, 0.26, spacing * 0.90], col, b);
+        addBox(out, vadd(vadd(a.c, a.r, side * 0.38), a.u, 0.30),
+               [0.32, 0.42, spacing * 0.90], col, b);
+      });
+      if (!doSafer) return;
+      along(s0, s1, opts.saferStep || 4.0, (k, spacing) => {
+        const a = anchor(k, side, saferGap);
+        if (onTrack(a.c[0], a.c[2], 1.4)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.55), [0.58, 1.10, spacing * 0.94], saferCol, b);
+        addBox(out, vadd(a.c, a.u, 1.14), [0.62, 0.12, spacing * 0.94], kerbRed, b);
+        addCyl(out, vadd(a.c, a.r, side * 0.42), 0.10, 1.25,
+               [0.34, 0.34, 0.37], 5, b);
+      });
+    };
+
+    // Continuous eye-height seat/crowd wall (Foro Sol / baseball-bowl enclosure).
+    // opts: { h, thick, shell, step, crowdCols }
+    const bowlSeatWall = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const h = opts.h != null ? opts.h : 5.8;
+      const thick = opts.thick != null ? opts.thick : 3.4;
+      const shell = opts.shell || [0.55, 0.54, 0.56];
+      const crowdCols = opts.crowdCols || [
+        [0.92, 0.28, 0.55], [0.95, 0.45, 0.12], [0.18, 0.72, 0.42],
+        [0.98, 0.82, 0.10], [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24],
+      ];
+      along(s0, s1, opts.step || 7, (k, spacing) => {
+        const p = anchor(k, side, gap);
+        if (onTrack(p.c[0], p.c[2], thick / 2 + 2)) return;
+        const bv = [p.r, p.u, p.t];
+        addBox(out, vadd(p.c, p.u, h * 0.48), [thick, h * 0.95, spacing * 0.94], shell, bv);
+        addBox(out, vadd(vadd(p.c, p.u, h * 0.55), p.r, -side * (thick * 0.38)),
+               [0.55, h * 0.72, spacing * 0.88],
+               crowdCols[Math.floor(hash(k * 11 + side) * crowdCols.length) % crowdCols.length], bv);
+      });
+    };
+
+    // Sparse cream/ochre Med apartment boxes (Monaco canyon).
+    // opts: { palette, minH, maxH, depth, step, lit, windowCol, window, floor }
+    const pastelStreetRow = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const pal = opts.palette || [[0.92, 0.86, 0.72], [0.86, 0.72, 0.48]];
+      const minH = opts.minH != null ? opts.minH : 12;
+      const maxH = opts.maxH != null ? opts.maxH : 22;
+      const depth = opts.depth != null ? opts.depth : 10;
+      const step = opts.step != null ? opts.step : 40;
+      const win = opts.window || [0.35, 0.42, 0.52];
+      along(s0, s1, step, (k) => {
+        const hv = hash(k * 5.3 + side * 0.9);
+        const w = 10 + hv * 8;
+        const h = minH + hash(k * 9.1 + side) * (maxH - minH);
+        const g = gap + hash(k * 2.7) * 1.5;
+        building(k, side, g, w, h, depth,
+          { wall: pal[Math.floor(hash(k * 3.1) * pal.length) % pal.length],
+            window: win, floor: opts.floor != null ? opts.floor : (3.5 + hv),
+            lit: opts.lit !== false, windowCol: opts.windowCol || [0.95, 0.88, 0.55] });
+      });
+    };
+
     // --- iconic landmark: a ferris wheel beside the track (Suzuka, Singapore) ---
     function ferrisWheel(k, side, dist, radius) {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -2864,6 +3208,8 @@ const Tracks = (function () {
         // BOTH the day/night colour tint AND a real light-catching bump — no images,
         // no UVs. See docs/SCENERY-API.md.
         MAT,
+        // Named atmosphere / colour packs (js/track-scenery-data.js)
+        ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
         ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
         // richer primitives (world coords): non-cube shapes
@@ -2872,6 +3218,10 @@ const Tracks = (function () {
         pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge, conifer,
         // structures
         building, house, motorhome, tower, grandstand, billboard, gantry, marshalPost, cityFront,
+        // shared identity-pass toolkit
+        underpassPortal, floodMast, floodMastRing, ledFacadeBands,
+        concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
+        bankedKerbStrip, bowlSeatWall, pastelStreetRow,
         // signage
         signBoard,
         // barriers / track furniture
@@ -3148,12 +3498,49 @@ const Tracks = (function () {
     return pts;
   }
 
+  // Overlay half-width zones onto control points (CircuitPaths traces ignore segs
+  // `w:` — this is how Castle Section / hairpin squeezes land on real layouts).
+  // zones: [{ s0, s1, hw, ease? }] — s0→s1 may wrap (s1 < s0). Soft edges via ease
+  // (lap fraction, default 0.025). Multiple zones: lowest hw wins at each node.
+  function applyHwZones(pts, zones, baseHW) {
+    if (!zones || !zones.length || !pts || !pts.length) return;
+    const N = pts.length;
+    const smooth = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+    const weightAt = (s, s0, s1, ease) => {
+      // Normalise into [0,1) coverage along the zone, with eased shoulders.
+      const wrap = s1 < s0;
+      const inside = wrap ? (s >= s0 || s <= s1) : (s >= s0 && s <= s1);
+      if (inside) return 1;
+      // distance to nearest zone edge (shortest arc)
+      const dEdge = (a, b) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+      const d0 = dEdge(s, s0), d1 = dEdge(s, s1);
+      const d = Math.min(d0, d1);
+      if (d >= ease) return 0;
+      return smooth(1 - d / ease);
+    };
+    for (let i = 0; i < N; i++) {
+      const s = i / N;
+      let hw = pts[i][3];
+      let best = hw;
+      for (let z = 0; z < zones.length; z++) {
+        const zn = zones[z];
+        if (zn.hw == null || zn.s0 == null || zn.s1 == null) continue;
+        const ease = zn.ease != null ? zn.ease : 0.025;
+        const w = weightAt(s, zn.s0, zn.s1, ease);
+        if (w <= 0) continue;
+        const blended = baseHW + (zn.hw - baseHW) * w;
+        if (blended < best) best = blended;
+      }
+      pts[i][3] = best;
+    }
+  }
+
   const LIST = DEFS.map((d) => {
     const def = {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
-      street: !!d.street, banked: !!d.banked, bridges: d.bridges || null,
+      street: !!d.street, banked: !!d.banked, bankZones: d.bankZones || null, bridges: d.bridges || null,
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
       flatTerrain: !!d.flatTerrain,
@@ -3162,6 +3549,8 @@ const Tracks = (function () {
       // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
       // the points below and supersedes the authored cosine bumps.
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
+      // Half-width overlays for CircuitPaths traces (segs `w:` is ignored there).
+      hwZones: d.hwZones || null,
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
     };
@@ -3183,7 +3572,17 @@ const Tracks = (function () {
       const fmap = def.reverse ? (s) => (((phi - s) % 1) + 1) % 1 : (s) => (((s - phi) % 1) + 1) % 1;
       if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: fmap(e.s) }));
       if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: fmap(b.s) }));
+      if (def.hwZones) {
+        // Reverse flips endpoint order — swap so [s0,s1] stays a short forward arc
+        // (otherwise s1 < s0 wraps and the zone covers most of the lap).
+        def.hwZones = def.hwZones.map((z) => {
+          const a = fmap(z.s0), b = fmap(z.s1);
+          return Object.assign({}, z, def.reverse ? { s0: b, s1: a } : { s0: a, s1: b });
+        });
+      }
     }
+    // Apply after startFrac remap so authored s0/s1 stay in racing-lap space.
+    if (def.hwZones) applyHwZones(def.points, def.hwZones, d.baseHW);
     return def;
   });
 

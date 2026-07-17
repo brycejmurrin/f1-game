@@ -33,7 +33,7 @@
         tree, building, anchor, addBox, addCyl, addFrustum, addCone, vadd, hash,
         fence, guardrail, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         ferrisWheel, tower, onTrack, groundYAt, forestEdge, cityFront,
-        cross, norm, MAT } = api;
+        cross, norm, MAT, COL } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── strut(): thin cylinder between two world points (geodesic lattice) ────
@@ -61,9 +61,11 @@
 
       // ---- Île Notre-Dame palette (bright June day) ----
       const WALL     = [0.78, 0.79, 0.80];   // pale concrete
-      const RIVER    = [0.16, 0.26, 0.35];   // St. Lawrence — dark slate-grey river
-      const RIVER2   = [0.19, 0.30, 0.40];   // slightly lighter near-shore
-      const BASIN    = [0.11, 0.22, 0.34];   // Olympic rowing lake (dark clean blue)
+      // Bright teal Olympic Basin + St. Lawrence — COL.basinTeal when available
+      const TEAL     = (COL && COL.basinTeal) || [0.08, 0.55, 0.62];
+      const RIVER    = TEAL;                 // St. Lawrence — bright basin teal
+      const RIVER2   = [TEAL[0] + 0.06, TEAL[1] + 0.08, TEAL[2] + 0.06]; // lighter near-shore
+      const BASIN    = TEAL;                 // Olympic rowing lake (bright teal)
       const GRASS    = [0.22, 0.43, 0.20];   // park green (muted, avoids neon under sun)
       const FOLIAGE  = [0.16, 0.34, 0.18];   // deep tree green (darker summer deciduous)
       const FOLIAGE2 = [0.20, 0.40, 0.20];   // lighter June foliage
@@ -363,22 +365,35 @@
       }
 
       // ===================================================================
-      // s 0.25 R far — Casino de Montréal (faceted pale Expo pavilion)
+      // s 0.25 R far — Casino de Montréal (Expo 67 French Pavilion silhouette)
+      // Shorter finned pale mass (~30 m), NOT a 70 m glass tower.
       // ===================================================================
       {
-        // Main hall: inner face at gap 170 m, footprint 40 m wide × 40 m deep, 70 m tall
         const k = K(0.25);
-        building(k, 1, 170, 40, 70, 40,
-          { wall: [0.80, 0.82, 0.86], window: [0.60, 0.72, 0.84], floor: 6,
-            lit: true, windowCol: [0.90, 0.95, 1.0] });
-
-        // Stepped upper blocks placed via anchor, ABOVE the main hall roof.
-        const a = anchor(k, 1, 190);
+        const a = anchor(k, 1, 175);
+        const b = [a.r, a.u, a.t];
+        const PALE   = [0.82, 0.84, 0.88];   // Expo concrete / aluminium
+        const PALE2  = [0.88, 0.90, 0.93];   // brighter fin faces
+        const WIN    = [0.55, 0.68, 0.78];   // recessed glazing between fins
+        const H = 30;                        // pavilion height (~25–35 m band)
+        const W = 48, D = 36;                // wide low footprint
         out._mat = MAT.CONCRETE;
-        // First step: 30×30 × 16 m, rising from height 72 (2 m above roof to avoid z-fight)
-        addBox(out, vadd(a.c, a.u, 72 + 8),  [30, 16, 30], [0.84, 0.86, 0.90], [a.r, a.u, a.t]);
-        // Second step: 18×18 × 12 m, on top of first step
-        addBox(out, vadd(a.c, a.u, 72 + 16 + 2 + 6), [18, 12, 18], [0.87, 0.89, 0.93], [a.r, a.u, a.t]);
+        // Main hall mass
+        addBox(out, vadd(a.c, a.u, H / 2), [W, H, D], PALE, b);
+        // Recessed glass ribbon mid-façade (reads as Expo curtain wall between fins)
+        addBox(out, vadd(vadd(a.c, a.u, H * 0.42), a.r, -W / 2 - 0.15),
+               [0.4, H * 0.55, D * 0.88], WIN, b);
+        // Vertical fins along the track-facing façade (Expo 67 French Pavilion read)
+        const NFIN = 9;
+        for (let i = 0; i < NFIN; i++) {
+          const ot = ((i / (NFIN - 1)) - 0.5) * (D - 4);
+          addBox(out, vadd(vadd(vadd(a.c, a.u, H * 0.52), a.r, -W / 2 - 1.2), a.t, ot),
+                 [2.4, H * 0.92, 1.1], PALE2, b);
+        }
+        // Low podium plinth under the hall
+        addBox(out, vadd(a.c, a.u, 1.2), [W + 8, 2.4, D + 8], [0.76, 0.78, 0.82], b);
+        // Shallow roof cap / parapet
+        addBox(out, vadd(a.c, a.u, H + 1.0), [W + 2, 2.0, D + 2], PALE2, b);
         out._mat = 0;
       }
 
@@ -648,32 +663,37 @@
       grandstand(0.93, -1, 12, 70, [0.48, 0.49, 0.54], [0.58, 0.36, 0.32]);
 
       // ===================================================================
-      // s 0.95–0.99 R — Wall of Champions: iconic concrete wall + red stripe
+      // s 0.95–0.99 R — Wall of Champions: taller pale hero wall + signage
       // ===================================================================
-      // The outer wall sits at gap=0.8 m from the road edge, 1.8 m tall.
-      wall(0.955, 0.99, 1, 0.8, 1.8, [0.80, 0.81, 0.82], 0.6);
+      // Iconic outer wall right on the final-chicane exit — taller pale concrete
+      // so it reads as a hero beat at speed (not a low verge barrier).
+      wall(0.955, 0.99, 1, 0.8, 3.6, [0.84, 0.85, 0.87], 0.7);
 
       // Red "Bienvenue" signature stripe on the wall face.
       {
         const k = K(0.97);
         const a = anchor(k, 1, 0.78);
-        addBox(out, vadd(a.c, a.u, 1.0), [0.08, 0.50, 18], [0.88, 0.20, 0.18], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 1.8), [0.10, 0.70, 22], [0.88, 0.20, 0.18], [a.r, a.u, a.t]);
       }
-      // "Bonjour Québec" tourism banner above the Wall of Champions — the
-      // defining signage of the final-chicane exit. A long fleur-de-lis blue
-      // billboard panel raised on slim posts just behind the outer wall.
+      // "Bienvenue / Bonjour Québec" tourism panel — the defining signage of the
+      // Wall of Champions exit. Long Québec-blue board on posts just behind the
+      // outer wall, with a white cross band (fleur-de-lis read at distance).
       {
-        const k = K(0.965);
-        const a = anchor(k, 1, 2.2);
+        const k = K(0.972);
+        const a = anchor(k, 1, 2.4);
         const b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 2)) {
-          for (const ot of [-9, 9]) {
-            addCyl(out, vadd(a.c, a.t, ot), 0.12, 4.6, [0.30, 0.30, 0.33], 5, b);
+          for (const ot of [-11, -4, 4, 11]) {
+            addCyl(out, vadd(a.c, a.t, ot), 0.14, 5.8, [0.32, 0.32, 0.35], 5, b);
           }
-          // Banner panel: Québec blue field
-          addBox(out, vadd(a.c, a.u, 4.6), [0.12, 1.8, 19], [0.16, 0.34, 0.66], b);
-          // White fleur-de-lis cross band across the panel
-          addBox(out, vadd(vadd(a.c, a.u, 4.6), a.t, 0), [0.16, 0.45, 19], [0.92, 0.93, 0.96], b);
+          // Main panel: Québec blue field
+          addBox(out, vadd(a.c, a.u, 5.4), [0.14, 2.4, 26], [0.14, 0.32, 0.64], b);
+          // White horizontal cross band
+          addBox(out, vadd(a.c, a.u, 5.4), [0.18, 0.55, 26], [0.94, 0.95, 0.98], b);
+          // White vertical cross (centre fleur-de-lis stub)
+          addBox(out, vadd(a.c, a.u, 5.4), [0.18, 2.4, 0.7], [0.94, 0.95, 0.98], b);
+          // Thin red "Bienvenue" accent bar under the panel
+          addBox(out, vadd(a.c, a.u, 4.0), [0.12, 0.35, 22], [0.88, 0.18, 0.16], b);
         }
       }
       // Grandstand viewing the Wall + final chicane

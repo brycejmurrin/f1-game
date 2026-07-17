@@ -28,7 +28,7 @@
     scenery: function (api) {
       const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
-        grandstand, gantry, marshalPost, guardrail, tyreWall, palm,
+        grandstand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
         cityFront, onTrack, hash, every } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -41,26 +41,17 @@
       const WINGOLD = [1.0,  0.76, 0.28];   // deep sodium glow
       const WINTEAL = [0.42, 0.96, 0.94];   // teal accent glass
       const GREEN   = [0.10, 0.56, 0.24];   // Saudi-green livery stripe
+      const GOLD    = [0.95, 0.80, 0.12];   // Saudi gold accent
+      const GREY    = [0.72, 0.72, 0.74];   // pale concrete canyon wall
       const MAGENTA = [0.96, 0.28, 0.64];   // neon magenta accent
       const DARKPOLE= [0.09, 0.09, 0.12];   // lamp-pole shaft
-      const LAMPGLOW= [1.0,  0.88, 0.52];   // warm sodium lamp head
       const POOLAMB = [0.44, 0.38, 0.22];   // amber pool on tarmac
 
-      const WALL_SEA = [[0.20, 0.22, 0.30], [0.18, 0.20, 0.28],
-                        [0.22, 0.22, 0.32], [0.16, 0.18, 0.26]];
       const WALL_INL = [[0.17, 0.18, 0.23], [0.19, 0.20, 0.25],
                         [0.15, 0.16, 0.21], [0.21, 0.21, 0.26]];
 
       // ── Simple helpers ─────────────────────────────────────────────────────
-      // Lamp post: shaft + glowing head only (no pool — saves 1 box each)
-      const lampPost = (k, side, dist) => {
-        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 2)) return;
-        addCyl(out, a.c, 0.12, 8.0, DARKPOLE, 4, b);
-        addBox(out, vadd(a.c, a.u, 8.0), [0.6, 0.6, 0.6], LAMPGLOW, b);
-      };
-
-      // Floodlight mast: pole + lamp bar + ambient pool
+      // Floodlight mast: pole + lamp bar + ambient pool (sparse drama accents)
       const floodMast = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 5)) return;
@@ -69,7 +60,15 @@
         addBox(out, vadd(a.c, a.u, 0.20), [5.0, 0.28, 5.0], POOLAMB, b);
       };
 
-      // Light tower: slim column + cool LED head
+      // Slim cool-white LED head — light-tunnel identity (cheap: thin pole + cap)
+      const ledHead = (k, side, dist) => {
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 2)) return;
+        addCyl(out, a.c, 0.10, 7.5, DARKPOLE, 4, b);
+        addBox(out, vadd(a.c, a.u, 7.5), [0.55, 0.45, 0.55], LED, b);
+      };
+
+      // Light tower: slim column + cool LED head (taller accents)
       const lightTower = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 3)) return;
@@ -77,28 +76,49 @@
         addBox(out, vadd(a.c, a.u, 22.0), [3.0, 1.2, 3.0], LED, b);
       };
 
-      // ── Floodlight masts — 8 positions ────────────────────────────────────
-      for (let i = 0; i < 8; i++) {
-        floodMast(K(i / 8 + 0.015), (i % 2) ? -1 : 1, 18 + (i % 3) * 5);
+      // ── 1. Grey concrete canyon + intermittent Saudi green/gold accents ───
+      // Prefer shared helper when present; else pale wall() + sparse stripe boxes.
+      // Heights 1.3–1.5 m read as Jersey barriers (not the solid-green night rails).
+      const canyon = api.concreteCanyon || ((s0, s1, side, gap, opts) => {
+        const h = (opts && opts.h) != null ? opts.h : 1.4;
+        const col = (opts && opts.col) || GREY;
+        const thick = (opts && opts.thick) != null ? opts.thick : 0.45;
+        wall(s0, s1, side, gap, h, col, thick);
+        const step = (opts && opts.stripeStep) != null ? opts.stripeStep : 0.028;
+        let si = 0;
+        for (let s = s0; s < s1 - 1e-6; s += step, si++) {
+          if (hash(si * 7.3 + side * 2.1 + s * 40) > 0.38) continue; // intermittent
+          const stripe = (si % 2) ? GREEN : GOLD;
+          place(K(s), side, gap + 0.15, [0.12, 0.55, 3.2], stripe);
+        }
+      });
+      for (const side of [-1, 1]) {
+        canyon(0.00, 0.50, side, 1.05, { h: 1.35 + (side > 0 ? 0.05 : 0.10) });
+        canyon(0.50, 1.00, side, 1.05, { h: 1.40 + (side > 0 ? 0.08 : 0.00) });
       }
 
-      // ── LED light towers — 8 positions ───────────────────────────────────
-      for (let i = 0; i < 8; i++) {
-        lightTower(K(i / 8 + 0.06), (i % 2) ? 1 : -1, 10 + (i % 3) * 2);
+      // ── 3. Cool-white LED light tunnel — densify both sides ~every 40 m ───
+      if (typeof api.floodMastRing === "function") {
+        api.floodMastRing(40, { dist: 5.5, cool: true });
+      } else {
+        every(40, (k) => {
+          ledHead(k, 1, 5.0 + hash(k * 1.7) * 1.2);
+          ledHead(k, -1, 5.4 + hash(k * 2.3) * 1.4);
+        });
+      }
+      // Sparse tall flood / tower accents (not the primary tunnel rhythm)
+      for (let i = 0; i < 4; i++) {
+        floodMast(K(i / 4 + 0.02), (i % 2) ? -1 : 1, 20 + (i % 2) * 6);
+      }
+      for (let i = 0; i < 4; i++) {
+        lightTower(K(i / 4 + 0.08), (i % 2) ? 1 : -1, 11 + (i % 2) * 2);
       }
 
-      // ── Lamp posts — sparse along both sides ──────────────────────────────
-      for (let i = 0; i < 12; i++) {
-        lampPost(K(i / 12), 1, 4.5 + (i % 2) * 1.2);
-      }
-      for (let i = 0; i < 8; i++) {
-        lampPost(K(i / 8 + 0.01), -1, 5.2 + (i % 2) * 1.5);
-      }
-
-      // ── Palm trees: Corniche signature vegetation ──────────────────────────
+      // ── Palm trees: Corniche signature (inland + sparse marina/lagoon only) ─
+      // Cull palms on the open Red Sea corridor (s≈0.05–0.40 R) so water reads.
       const PALMFROND = [0.12, 0.44, 0.19];
-      for (let i = 0; i < 14; i++) {
-        palm(K(i / 14), 1, 10 + hash(i * 5) * 3, 6 + hash(i * 3) * 3, PALMFROND);
+      for (let i = 0; i < 8; i++) {
+        palm(K(0.42 + i * 0.04), 1, 10 + hash(i * 5) * 3, 6 + hash(i * 3) * 3, PALMFROND);
       }
       for (let i = 0; i < 8; i++) {
         palm(K(i / 8 + 0.01), -1, 12 + hash(i * 7) * 4, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
@@ -147,16 +167,13 @@
       grandstand(0.0,  1, 15, 60, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
       grandstand(0.02, 1, 15, 50, [0.13, 0.14, 0.18], [0.50, 0.42, 0.46]);
 
-      // ── CORNICHE STREET WALL — seaward (R), step=55m gives ~28 buildings total
-      cityFront(0.05, 0.40, 1, 20, {
-        minH: 12, maxH: 28, depth: 16,
-        palette: WALL_SEA, lit: true, windowCol: WINWARM,
-        step: 55, floor: 4,
-      });
-      cityFront(0.82, 0.98, 1, 20, {
-        minH: 10, maxH: 22, depth: 14,
-        palette: WALL_SEA, lit: true,
-        step: 55, floor: 4,
+      // ── 2. Open Red Sea corridor — no seaward cityFront on s≈0.05–0.40 ────
+      // Keep sea / fountain / mosque; city mass stays inland (L). Thin residual
+      // seaward frontage only near the start/finish pocket.
+      cityFront(0.88, 0.98, 1, 28, {
+        minH: 8, maxH: 16, depth: 12,
+        palette: WALL_INL, lit: true,
+        step: 70, floor: 3,
       });
 
       // ── INLAND CITY WALL — left (L), step=55m gives ~22 buildings total ──
@@ -206,13 +223,10 @@
       grandstand(0.50, 1, 18, 40, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
       tyreWall(0.485, 0.515, -1, 2.0, MAGENTA);
 
-      // ── CORNICHE LAGOON — s 0.55–0.64 R (water + lamp posts) ─────────────
+      // ── CORNICHE LAGOON — s 0.55–0.64 R (water; LEDs already ring the lap) ─
       for (let i = 0; i < 6; i++) {
         const a = anchor(K(0.55 + i * 0.015), 1, 65), b = [a.r, a.u, a.t];
         addBox(out, [a.c[0], pyMin - 1.4, a.c[2]], [200, 1.0, 65], [0.05, 0.08, 0.14], b);
-      }
-      for (let i = 0; i < 7; i++) {
-        lampPost(K(0.55 + i * 0.012), 1, 5.0 + (i % 2) * 0.8);
       }
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
@@ -330,7 +344,7 @@
       for (let i = 0; i < 5; i++) dhow(K(0.43 + i * 0.010), 56 + (i % 3) * 14, 1.0 + (i % 2) * 0.4);
       for (let i = 0; i < 3; i++) dhow(K(0.57 + i * 0.014), 46 + (i % 2) * 12, 0.9 + (i % 2) * 0.3);
 
-      // ── FAR SKYLINE BACKDROP — prevents sky gaps ──────────────────────────
+      // ── FAR SKYLINE BACKDROP — inland only (open Red Sea corridor seaward) ─
       // Use backdrop() for all distant geometry — far cheaper than building()
       for (let i = 0; i < 12; i++) {
         const s = i / 12;
@@ -339,11 +353,11 @@
         // (backdrop() auto-adds lit window bands on tall night silhouettes).
         backdrop(K(s), -1, 260 + (i % 4) * 20, [w, h, w], [0.22, 0.23, 0.31]);
       }
-      // A second ring on the seaward side for depth
-      for (let i = 0; i < 8; i++) {
-        const s = i / 8 + 0.04;
-        const w = 35 + hash(i * 13) * 25, h = 60 + hash(i * 9) * 80;
-        backdrop(K(s), 1, 220 + (i % 3) * 25, [w, h, w], [0.20, 0.20, 0.27]);
+      // Sparse seaward backdrop only outside the open water corridor (0.05–0.40)
+      for (let i = 0; i < 4; i++) {
+        const s = 0.55 + i * 0.10;
+        const w = 30 + hash(i * 13) * 20, h = 50 + hash(i * 9) * 60;
+        backdrop(K(s), 1, 240 + (i % 2) * 30, [w, h, w], [0.20, 0.20, 0.27]);
       }
     },
   }
