@@ -64,6 +64,11 @@ code:
 
 ### 1a. Shader programs
 
+> **Note (current tree):** the GLSL sources are no longer inline in `js/glx.js` —
+> they now live in `js/shaders/glx-shaders.js` as `GLXShaders.LIT_VS` / `LIT_FS` /
+> `SKY_*` / etc. (pure data, loaded before glx.js). The `file:line` column below is
+> the original inline layout this plan was written against; names are unchanged.
+
 | # | Program | VS / FS (file:line) | Role |
 |---|---------|--------------------|------|
 | 1 | **Lit** | `LIT_VS` 9 / `LIT_FS` 39 | The main surface shader (~850 lines of FS). PBR GGX + clearcoat + car-paint flake + analytic & cube env mirror, 14 procedural materials (`applyMaterialNormal`/`applyMaterial`, 159-319), 32 aimed spot/point lights (562-639), shadow sampling w/ PCSS-lite (337-393), cloud shadows, height fog + sun in-scatter, ground mist, wet-road model. **This is 80% of the port.** |
@@ -383,11 +388,10 @@ js/webgpu/wgx.js     WGX       WebGPU backend (implements the same surface)
       const wantGPU = navigator.gpu && (localStorage.getItem("apex26.gfxBackend") !== "webgl2");
       if (wantGPU) {
         try {
-          const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-          if (adapter) {
-            const dev = await WGX.init(canvas, adapter);   // may still fail → fall through
-            if (dev) return dev;
-          }
+          // WGX.create() requests its own adapter/device and returns null on any
+          // failure (see js/webgpu/wgx.js) → fall through to WebGL2.
+          const dev = await WGX.create(canvas, {});
+          if (dev) return dev;
         } catch (_) { /* fall through to WebGL2 */ }
       }
       return GLX.init(canvas) ? GLX : null;               // always-present fallback

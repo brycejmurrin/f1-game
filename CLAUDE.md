@@ -16,25 +16,33 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
 npx playwright test               # run all specs
 npx playwright test tests/<file>.spec.js   # single spec
 npx playwright test tests/ui-audit.spec.js # → tests/ui-screenshots/
-npx playwright test tests/visual-regression-*.spec.js  # pixel-diff regression
+npx playwright test tests/tracks-visual.spec.js  # per-circuit pixel-diff regression
 
 # Named test groups (via npm run <script>):
+npm run test:headless   # the whole headless project (all non-render specs, no GPU)
+npm run test:render     # the render project only (screenshots/pixel/GL) at --workers=4
 npm run test:smoke      # page load + __apex available
-npm run test:api        # __apex contract: dev-tools + headless + obs/act edge cases
-npm run test:headless   # headless control loop only (fast, no rendering)
-npm run test:physics    # physics regression + elevation
+npm run test:api        # __apex contract: dev-tools + headless + obs/act + new-hooks
+npm run test:hooks      # camera/driving/map/new __apex hook contracts
+npm run test:physics    # physics regression + elevation + projection
 npm run test:collision  # collision, drift, offtrack
-npm run test:behaviour  # collision + drift + offtrack + collision-ai-fixes (all behaviour)
+npm run test:behaviour  # collision + drift + offtrack + world-physics + physics-fixes
 npm run test:barriers   # track wall geometry + AI-fixes barrier tests
 npm run test:parts      # parts catalog, budget, persistence, physics
-npm run test:steering   # presets, sliders, steering modes
-npm run test:ui         # all UI screenshots (slow, ~5 min)
-npm run test:visual     # pixel-diff visual regression (slow)
+npm run test:steering   # presets, sliders, steering modes, gamepad
+npm run test:camera     # camera modes + camera hooks + driving hooks
+npm run test:ui         # UI screenshots: audit + button-touch + desktop + hud (slow)
+npm run test:visual     # pixel-diff visual regression (tracks-visual, slow)
+npm run test:scenery    # props/terrain over road + f1-track-accuracy
+npm run test:webgl      # webgl-probes + lighting-ab
+npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial game modes
-npm run test:circuit    # walls + autopilot + elevation (all circuit-level tests)
+npm run test:map        # minimap hooks
+npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
 npm run test:fast       # curated fast subset: smoke + api + collision + offtrack +
                         #   parts-physics + steering (~3 min)
 npm run test:ab         # lighting A/B pixel comparison (tests/lighting-ab.spec.js)
+npm run test:audit      # coverage guard: every spec must belong to ≥1 group
 ```
 
 ### Running tests without stalls (background + logs, parallel ports)
@@ -64,6 +72,14 @@ npm test -- tests/b.spec.js > artifacts/tmp/b.log 2>&1 &
 
 Reports land in `artifacts/report-<port>/`, artifacts in `artifacts/test-results-<port>/`
 (both gitignored). Direct `npx playwright test` still uses port 3456; prefer npm.
+
+**Two projects, not one.** `playwright.config.js` splits the suite into a
+`headless` project (physics/geometry/hook specs — the default, no GPU) and a
+`render` project (screenshot/pixel-diff/GL specs, listed in `RENDER_SPECS`). The
+old single `chromium` project is gone — target `--project=headless` or
+`--project=render` when filtering, not `--project=chromium`. `npm run test:render`
+runs the render project at `--workers=4` to cap SwiftShader (CPU-GL) concurrency;
+`npm run test:headless` runs everything else and can use more workers safely.
 
 **`tools/test-shards.sh`** wraps all of this — run whole npm groups concurrently,
 one port + log per group, with a pass/fail summary at the end:
@@ -113,6 +129,10 @@ delete those.
 js/mat4.js       M4, V3         matrix math
 js/shaders/glx-shaders.js  GLXShaders  all GLSL sources (pure data; loads before glx.js)
 js/glx.js        GLX            WebGL2 renderer
+js/gfx.js        Gfx            renderer façade — selects GLX (WebGL2) or WGX (WebGPU),
+                                  both expose the same surface to game.js
+js/webgpu/*.js   WGX            WebGPU backend (wgx.js) + WGSL sources
+                                  (wgsl-chunks/-post/-fx.js); feature-detected, GLX fallback
 js/teams.js      Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
 js/track-geom.js TrackGeom      pure geometry emitters (addBox/emit/addCyl/…) + MAT ids
 js/track-scenery-data.js  TrackSceneryData  static buildProps tables (BARRIER, FURN,
@@ -141,7 +161,7 @@ js/game/carmesh.js   CarMesh     car decal/effect/cockpit-instrument geometry
 js/game.js       (main)         game loop, physics, AI, race logic, __apex API
 css/style.css                   all styles
 index.html                      shell — script tags, DOM structure, cache-bust version
-tests/*.spec.js                 Playwright test suite (90+ specs)
+tests/*.spec.js                 Playwright test suite (45 specs)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -311,7 +331,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-90+ Playwright specs. Run groups with `npm run test:<group>` (see Key
+45 Playwright specs. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
