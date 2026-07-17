@@ -478,7 +478,7 @@
       // s 0.43–0.52 L mid — STADIUM-LOT ZONE: grandstands + cityFront + palms
       // ===================================================================
       for (let i = 0; i < 3; i++) {
-        grandstand(0.43 + i * 0.035, -1, 16, 85 + i * 10, GREYWHITE,
+        grandstand(0.43 + i * 0.035, -1, 22, 85 + i * 10, GREYWHITE,
           [PINK, TEAL, CORAL][i]);
       }
       cityFront(0.42, 0.53, -1, 24, {
