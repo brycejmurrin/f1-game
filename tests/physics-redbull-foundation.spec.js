@@ -4,22 +4,35 @@ import { test, expect } from "@playwright/test";
 const TOL = 0.18;
 
 test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) => {
-  test.setTimeout(180000);
+  test.setTimeout(240000);
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
 
   const result = await page.evaluate(() => {
+    const inspectSession = (time) => {
+      window.__apex.race("redbull", time, "dry");
+      const diagnostics = window.__apex.modelDiagnostics();
+      return {
+        geometry: window.__apex.geometryDiagnostics(),
+        diagnostics,
+        requiredFailures: [
+          ...diagnostics.invalid,
+          ...diagnostics.suppressed,
+          ...diagnostics.unsafe,
+        ].filter((entry) => entry.required),
+        walls: window.__apex.wallStats(),
+      };
+    };
+
     const def = Tracks.LIST.find((track) => track.id === "redbull");
-    window.__apex.race("redbull", "day", "dry");
+    const day = inspectSession("day");
+    const night = inspectSession("night");
     const profile = window.__apex.trackProfile(800);
     const peak = profile.reduce((best, point) => point.y > best.y ? point : best);
     const low = profile.reduce((best, point) => point.y < best.y ? point : best);
-    const diagnostics = window.__apex.modelDiagnostics();
-    const requiredFailures = [
-      ...diagnostics.invalid,
-      ...diagnostics.suppressed,
-      ...diagnostics.unsafe,
-    ].filter((entry) => entry.required);
     const clearanceProbes = [0.98, 0.335].flatMap((frac) =>
       [-24, -10, 10, 24].map((lat) => ({
         frac,
@@ -37,13 +50,11 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
         swing: peak.y - low.y,
         maxSlope: Math.max(...profile.map((point) => Math.abs(point.slope))),
       },
-      geometry: window.__apex.geometryDiagnostics(),
-      diagnostics,
-      requiredFailures,
-      walls: window.__apex.wallStats(),
+      sessions: { day, night },
       clearanceProbes,
     };
   });
+  await page.waitForTimeout(100);
 
   expect(result.coordinates).toBe("racing");
   expect(result.terrainOuter).toBeGreaterThanOrEqual(28);
@@ -56,19 +67,22 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
   expect(result.profile.low.frac).toBeLessThan(0.50);
   expect(result.profile.maxSlope).toBeLessThan(0.14);
 
-  expect(result.geometry.every((entry) => entry.ok)).toBe(true);
-  expect(result.diagnostics.invalid).toEqual([]);
-  expect(result.diagnostics.unsafe).toEqual([]);
-  expect(result.requiredFailures).toEqual([]);
-  expect(result.diagnostics.emitted.map((entry) => entry.id)).toEqual(
-    expect.arrayContaining(["redbull-wing", "redbull-bull-plaza"])
-  );
+  for (const [time, session] of Object.entries(result.sessions)) {
+    expect(session.geometry.every((entry) => entry.ok), `${time} geometry`).toBe(true);
+    expect(session.diagnostics.invalid, `${time} invalid models`).toEqual([]);
+    expect(session.diagnostics.unsafe, `${time} unsafe models`).toEqual([]);
+    expect(session.requiredFailures, `${time} required model failures`).toEqual([]);
+    expect(session.diagnostics.emitted.map((entry) => entry.id), `${time} hero models`).toEqual(
+      expect.arrayContaining(["redbull-wing", "redbull-bull-plaza"])
+    );
+    expect(session.walls.anyNaN, `${time} finite barriers`).toBe(false);
+    expect(session.walls.tightFrac, `${time} barrier coverage`).toBeGreaterThan(0.99);
+    expect(session.walls.minOverHw, `${time} barrier clearance`).toBeGreaterThan(0);
+  }
 
-  expect(result.walls.anyNaN).toBe(false);
-  expect(result.walls.tightFrac).toBeGreaterThan(0.99);
-  expect(result.walls.minOverHw).toBeGreaterThan(0);
   for (const probe of result.clearanceProbes) {
     expect(probe.gap === null || probe.gap <= TOL,
       `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);
   }
+  expect(pageErrors).toEqual([]);
 });
