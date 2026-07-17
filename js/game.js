@@ -7349,14 +7349,32 @@ window.__apex = {
   // For verifying every track keeps the car off the models and is recoverable.
   wallStats() {
     if (!track || !track.barR) return null;
-    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false;
+    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0;
     for (let k = 0; k < track.n; k++) {
       const r = track.barR[k], l = track.barL[k];
       if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
       minB = Math.min(minB, r, l); maxB = Math.max(maxB, r, l);
       minOverHw = Math.min(minOverHw, r - track.hw[k], l - track.hw[k]);
+      if (r < track.hw[k] + 8.99) tightSides++;
+      if (l < track.hw[k] + 8.99) tightSides++;
     }
-    return { minB, maxB, minOverHw, anyNaN, street: !!track.street, n: track.n };
+    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / (track.n * 2), street: !!track.street, n: track.n };
+  },
+  modelDiagnostics() {
+    if (!track || !track.modelDiagnostics) return null;
+    return JSON.parse(JSON.stringify(track.modelDiagnostics));
+  },
+  geometryDiagnostics() {
+    if (!track || !track.geometryDiagnostics) return null;
+    return JSON.parse(JSON.stringify(track.geometryDiagnostics));
+  },
+  trackGeometry(keep) {
+    if (typeof keep === "boolean") Tracks.setKeepGeometry(keep);
+    if (!track || !track.roadGeo || !track.terrainGeo) return null;
+    return {
+      road: track.roadGeo, terrain: track.terrainGeo,
+      props: track.propsGeo, glass: track.glassGeo, water: track.waterGeo,
+    };
   },
   // Largest amount any (non-finished) car is currently OUTSIDE its per-side
   // barrier — should stay ~0, proving nothing (player or AI) clips through a wall.

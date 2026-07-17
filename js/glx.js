@@ -1402,7 +1402,8 @@ const GLX = (function () {
     // Positions are now only referenced by the growable `bk.idx` arrays (as
     // indices, not coords) — drop the vertex coordinate copies before the
     // per-bucket IndexArray allocations below.
-    pos = null; data.pos = null;
+    pos = null;
+    if (!data._keepPositions) data.pos = null;
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();

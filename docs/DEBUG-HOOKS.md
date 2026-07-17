@@ -460,11 +460,24 @@ const near = __apex.nodesNear(0, 0, 4);
 console.log(near.map(n => `[${n.i}] ${(n.frac*100).toFixed(1)}% @ (${n.x},${n.z})`));
 ```
 
-### `wallStats() → {minB, maxB, minOverHw, anyNaN, street, n} | null`
+### `wallStats() → {minB, maxB, minOverHw, anyNaN, tightFrac, street, n} | null`
 Driving-boundary stats for the current track (both sides, all nodes): tightest
 (`minB`) / widest (`maxB`) lateral limit, the closest a barrier sits to the road
-edge (`minOverHw`), an `anyNaN` guard, the `street` flag and node count `n`. For
-verifying every track keeps the car off the models and is recoverable.
+edge (`minOverHw`), an `anyNaN` guard, and `tightFrac` (fraction of left/right
+node boundaries tightened from default runoff), plus the `street` flag and node
+count `n`. For verifying every track keeps the car off the models and is
+recoverable.
+
+### `modelDiagnostics() → {emitted, suppressed, invalid, unsafe} | null`
+Atomic scenery outcomes for the loaded track. Entries include model `id`,
+`required`, reason or vertex count, and overhead clearance where applicable.
+Any required entry in `suppressed`, `invalid`, or `unsafe` is a hard
+`verify-track` failure.
+
+### `geometryDiagnostics() → [{name, ok, vertices?, indices?, reason?}, …] | null`
+Validation manifest for floor, road, terrain, props, glass, water, gate, and
+start-line buffers. Non-finite or structurally invalid geometry is recorded and
+skipped before GPU upload.
 
 ### `maxWallOvershoot() → number | null`
 The largest distance any car is currently past its per-side barrier — should stay

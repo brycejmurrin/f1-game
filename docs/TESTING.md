@@ -27,6 +27,9 @@ npx playwright test tests/tracks-visual.spec.js            # per-circuit pixel-d
 
 npm test -- tests/ui-audit.spec.js
 # output: artifacts/galleries-<allocated-port>/ui-audit/
+
+node --test tests/track-foundation.test.mjs
+node tools/verify-track.cjs --all
 ```
 
 **Named test groups** (via `npm run test:<group>`):
@@ -130,6 +133,8 @@ The off-track specs were tightened this way after several thresholds drifted sta
 - `step()` + `physState()` / `probe()` — physics
 - `groundY()` / `Tracks.terrainY()` — rendered-terrain raycast; exact geometry
   (e.g. `terrain-over-road.spec.js`)
+- `modelDiagnostics()` / `geometryDiagnostics()` — required-model outcomes and
+  finite mesh manifests
 - `eyeAt()` / `orbit()` / `view()` — deterministic camera framing for screenshots
 
 **Legacy specs are coarser heuristics** and are inherently flakier:
@@ -178,7 +183,7 @@ hook values.
 | `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
-| `new-hooks.spec.js` | contract tests for the timing/field/energy hooks: `timing()`, `sectorState()`, `lapHistory()`, `fieldState()`, `aiPlace()`, `setEnergy()`, `setLap()`, `trackProfile()`, and `obs().gear` |
+| `new-hooks.spec.js` | contract tests for timing/field/energy hooks plus `modelDiagnostics()` / `geometryDiagnostics()` and day/night model manifests |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
 | `custom-team.spec.js` | custom-team livery editor: colour save frees/rebuilds the decal texture |
 | `data-lifecycle.spec.js` | data hub session plumbing: meeting/year/session/driver responses own their option lists (no stale races) |
@@ -196,6 +201,7 @@ hook values.
 | `galleries/*.spec.js` | explicit-path gallery emitters such as track traces and all-tracks building surveys (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line (roofs, canopies, buildings, crowds). Same point-in-triangle method against the props mesh, in 3D (0.2–5 m band above the road). Per-track `BASELINE` caps document justified overheads (Miami beach canopy, Mexico Foro Sol pass-through, gantries) and small tracked residuals; any new/worsened intrusion on a clean track fails. Measure one track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots` |
+| `track-foundation.test.mjs` | pure Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, and mesh validation |
 
 ---
 

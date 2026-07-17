@@ -48,6 +48,15 @@ test.describe("Apex 26 — track boundaries", () => {
     }
   });
 
+  test("full-lap visual barriers register collision boundaries across the wrap", async ({ page }) => {
+    await load(page);
+    const stats = await page.evaluate(() => {
+      window.__apex.race("montreal", "day", "dry");
+      return window.__apex.wallStats();
+    });
+    expect(stats.tightFrac, "Montreal full-lap walls tighten nearly every boundary node").toBeGreaterThan(0.95);
+  });
+
   test("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {
     await load(page);
     for (const id of ["monaco", "monza", "baku", "spa"]) {
