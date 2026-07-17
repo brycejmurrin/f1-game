@@ -92,11 +92,16 @@ function initRainDrops() {
   // field — light precipitation that reads as drizzle, not a downpour. "rain"
   // keeps the full storm density.
   const drizzle = isWetRoad() && !isRaining();
-  rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? 0.3 : 1)) }, () => ({
+  // DRIZZLE ratios: count/length/fall-speed of a WET-road drizzle relative to a
+  // full storm, each a live knob (defs 0.3/0.5/0.6 reproduce the shipped drizzle).
+  const dzCount = LT.drizzleCount != null ? LT.drizzleCount : 0.3;
+  const dzLen   = LT.drizzleLen   != null ? LT.drizzleLen   : 0.5;
+  const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6;
+  rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? dzCount : 1)) }, () => ({
     x: Math.random() * rainCanvas.width,
     y: Math.random() * rainCanvas.height,
-    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? 0.5 : 1),
-    speed: (380 + Math.random() * 360) * (drizzle ? 0.6 : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
+    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? dzLen : 1),
+    speed: (380 + Math.random() * 360) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
     opacity: 0.16 + Math.random() * 0.34,
   }));
 }
@@ -115,8 +120,10 @@ function drawRain(dt) {
   // and stretches into driving streaks (apparent velocity = fall + car speed).
   // Render-only — reads player.speed, never writes physics state.
   const vk = clamp(((player && player.speed) || 0) / 90, 0, 1);
-  const wind = LT.rainWind + vk * 0.9;
-  const lenMul = 1 + vk * 2;
+  // RAIN SPEED SHEAR: how much apparent wind slants (rainShearWind) and stretches
+  // (rainShearLen) the streaks at speed. Defs 0.9/2 reproduce the shipped shear.
+  const wind = LT.rainWind + vk * (LT.rainShearWind != null ? LT.rainShearWind : 0.9);
+  const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
   rainCtx2d.beginPath();
   for (const d of rainDrops) {
     d.y += d.speed * dt;
@@ -4169,6 +4176,16 @@ function render(dt) {
   frameSky.cloudSilver   = LT.cloudSilver;
   frameSky.coronaAureole = LT.coronaAureole;
   frameSky.sunDiscSize   = LT.sunDiscSize;
+  // STAR SIZE / TWINKLE, MOON DISC SIZE / HALO, SUN CORONA / SQUASH, CITY GLOW
+  // REACH and CLOUD DEFINITION knobs also ride the sky object (sky pass).
+  frameSky.starSize      = LT.starSize;
+  frameSky.starTwinkle   = LT.starTwinkle;
+  frameSky.moonDiscSize  = LT.moonDiscSize;
+  frameSky.moonHalo      = LT.moonHalo;
+  frameSky.sunCorona     = LT.sunCorona;
+  frameSky.sunSquash     = LT.sunSquash;
+  frameSky.cityGlowReach = LT.cityGlowReach;
+  frameSky.cloudDef      = LT.cloudDef;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -4217,24 +4234,27 @@ function render(dt) {
       }
     }
     if (_ltFlash > 0.001) {
-      // Decay: fast leading edge, then slow dying glow
-      _ltFlash *= Math.exp(-8 * dt);
+      // Decay: fast leading edge, then slow dying glow (LIGHTNING DECAY, def 8).
+      _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
       if (_ltFlash < 0.001) _ltFlash = 0;
     }
     if (_ltFlash > 0) {
       // Spike ambient to a cool blue-white; the decay reads as a natural flash.
       // A brief exposure lift too, so the whole frame bleaches for the strike.
       // Written IN PLACE (no per-frame array allocation — this ran every rain
-      // frame, exactly when the frame is already heaviest).
+      // frame, exactly when the frame is already heaviest). LIGHTNING FLASH (def
+      // 1) scales the ambient spike + exposure lift together; def reproduces the
+      // shipped 0.55/0.40/0.22 exactly.
+      const lf = LT.lightningFlash != null ? LT.lightningFlash : 1;
       const f = _ltFlash, aS = frame.ambientSky, aG = frame.ambientGround;
       for (let i = 0; i < 3; i++) {
-        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f);
-        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f);
+        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f * lf);
+        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f * lf);
       }
       // SET from the saved base (was `+=`: it accumulated every frame of the
       // ~0.9 s flash and was never restored — each strike permanently brightened
       // the scene by ~+1.65 exposure, washing a stormy race out to white).
-      frame.exposure = _ltBase.exposure + 0.22 * f;
+      frame.exposure = _ltBase.exposure + 0.22 * f * lf;
     } else {
       // Restore base ambient + exposure so normal ticks aren't tinted (in place).
       const aS = frame.ambientSky, aG = frame.ambientGround;
@@ -4245,7 +4265,7 @@ function render(dt) {
     // Weather flipped dry mid-flash: the decay above is inside the raining gate,
     // so without this the flash froze >0 and frameSky.lightning (set uncondition-
     // ally each frame) kept the sky partially bleached until the next storm.
-    _ltFlash *= Math.exp(-8 * dt);
+    _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
     if (_ltFlash < 0.001) _ltFlash = 0;
   }
 

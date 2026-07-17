@@ -1343,12 +1343,13 @@ const WGX = (function () {
       d.set(carShadowLVPData, 96);
       // params7 (floats 112..115): GLX-parity lit-shader knobs — FOG LAMP CLIP (.x,
       // uLampFogClip def 0.7), CAR SUN GLINT (.y, uCarSunGlint def 12.0), NEON BOOST
-      // (.z, uBloomBoost def 0.6). Always pack the resolved value; WGSL reads these
-      // lanes directly, so 0 is a real "off", not an unset slot. (.w pad.)
+      // (.z, uBloomBoost def 0.6), LAMP NEAR CLAMP (.w, uLampNearClamp def 4.0).
+      // Always pack the resolved value; WGSL reads these lanes directly, so 0 is a
+      // real "off", not an unset slot.
       d[112] = (T && T.fogClip != null) ? T.fogClip : 0.7;
       d[113] = (T && T.carSunGlint != null) ? T.carSunGlint : 12.0;
       d[114] = (T && T.neonBoost != null) ? T.neonBoost : 0.6;
-      d[115] = 0;
+      d[115] = (T && T.lampNearClamp != null) ? T.lampNearClamp : 4.0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1403,7 +1404,17 @@ const WGX = (function () {
       // p3.x: DAY SKY BLUE knob (GLX parity, def 1.0 = as-shipped). Always pack the
       // resolved value — WGSL reads the lane directly (0 is a valid "no band").
       skyData[48]=f.daySkyBlue    != null ? f.daySkyBlue    : 1;
-      skyData[49]=0; skyData[50]=0; skyData[51]=0;
+      // p3.yzw + p4: STAR SIZE / STAR TWINKLE / MOON DISC SIZE / MOON HALO / SUN
+      // CORONA RING / SUN HORIZON SQUASH / CITY GLOW REACH knobs (GLX parity).
+      // WGSL reads these lanes directly, so every unset lane must carry the real
+      // 1.0 default (= as-shipped), not 0.
+      skyData[49]=f.starSize      != null ? f.starSize      : 1;
+      skyData[50]=f.starTwinkle   != null ? f.starTwinkle   : 1;
+      skyData[51]=f.moonDiscSize  != null ? f.moonDiscSize  : 1;
+      skyData[52]=f.moonHalo      != null ? f.moonHalo      : 1;
+      skyData[53]=f.sunCorona     != null ? f.sunCorona     : 1;
+      skyData[54]=f.sunSquash     != null ? f.sunSquash     : 1;
+      skyData[55]=f.cityGlowReach != null ? f.cityGlowReach : 1;
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 

@@ -108,6 +108,11 @@ uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distanc
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
+uniform float uLampNearClamp;  // near-field distance floor on lamp 1/d² falloff (m, def 4.0) — tames close-by wall blow-out (dual: WGSL F.params7.w)
+uniform float uWindowSunFlash; // glossy-glass dry sun-flash reflection strength (def 1.0 = shipped 0.6)
+uniform float uSkyRimGlow;     // grazing-angle atmospheric sky-rim brightening strength (def 1.0 = shipped 0.18)
+uniform float uAmbContactDark; // ambient contact-darkening depth on downward faces (def 1.0 = shipped 0.88 floor)
+uniform float uLampWallSpill;  // out-of-beam lamp reflection floor on walls/road (def 1.0 = shipped 0.16/0.30)
 uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
 uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
 // Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
@@ -759,7 +764,7 @@ void main() {
     // then overshoots the wall by 10-20x, blowing it to solid white. Clamping
     // the near-field distance keeps the aim-point pool unchanged (dist there is
     // already well above the floor) while taming any close-by surface.
-    float distC = max(dist, 4.0);
+    float distC = max(dist, uLampNearClamp);   // LAMP NEAR CLAMP knob (def 4.0)
     float att = (win * win) / (distC * distC + 1.0);
     if (att < 1e-6) continue;
     // Aimed spot cone: how deep the surface sits inside the lamp's beam.
@@ -774,7 +779,7 @@ void main() {
     // not only inside its illumination cone. The floor is wetness-dependent:
     // high when wet (streaks from every visible lamp), lower when dry so a dry
     // night road keeps pool/valley contrast instead of a uniform specular sheet.
-    float spotS = mix(mix(0.16, 0.30, wet), 1.0, beam);
+    float spotS = mix(mix(0.16, 0.30, wet) * uLampWallSpill, 1.0, beam);   // LAMP WALL SPILL knob (def 1.0 = shipped floor)
     // Fog in-scatter: lamp irradiance reaching the fog column at this surface.
     // Windowed 1/d2 falloff (att) with a partial out-of-beam floor so the lens
     // glows the fog all around, brightest down the throw. Consumed by the fog
@@ -988,7 +993,7 @@ void main() {
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
-    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wet) * envBlend * 0.6;
+    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wet) * envBlend * 0.6 * uWindowSunFlash;   // WINDOW SUN FLASH knob (def 1.0 = shipped)
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square
@@ -1013,7 +1018,7 @@ void main() {
   // making surfaces look wet or plastic. Damped by roughness.
   {
     float rf = 1.0 - NoV; float rimFresnel = rf * rf * rf;
-    float rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18;
+    float rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18 * uSkyRimGlow;   // SKY RIM GLOW knob (def 1.0 = shipped)
     color += uSkyHorizon * rimAmt;
   }
 
@@ -1024,7 +1029,7 @@ void main() {
   // gentle extra crush in the darkest zones adds perceived depth.
   {
     float ao = pow(max(N.y * 0.5 + 0.5, 1e-4), 0.35);
-    color *= mix(0.88, 1.0, ao);
+    color *= mix(1.0 - 0.12 * uAmbContactDark, 1.0, ao);   // AMBIENT CONTACT DARK knob (def 1.0 = shipped 0.88 floor)
   }
 
   // Emissive: lerp toward unlit albedo (self-illumination, sun-independent) and,
@@ -1145,6 +1150,14 @@ uniform float uMieScatter; // sun-facing sky forward-scatter glow gain (def 1.0)
 uniform float uCloudSilver;// backlit cloud-edge silver-lining gain (def 1.0)
 uniform float uCoronaAureole; // wide sun aureole halo gain (def 1.0)
 uniform float uSunDiscSize;// angular size of the sun disc (def 1.0)
+uniform float uStarSize;   // star point-size multiplier (def 1.0)
+uniform float uStarTwinkle; // star twinkle amplitude scale (def 1.0)
+uniform float uMoonDiscSize;// moon disc angular-size multiplier (def 1.0)
+uniform float uMoonHalo;   // moon halo spread/strength scale (def 1.0)
+uniform float uSunCorona;  // tight sun corona ring gain (def 1.0)
+uniform float uSunSquash;  // sun horizon vertical-squash amount (def 1.0)
+uniform float uCityGlowReach; // city-glow horizon reach scale (def 1.0)
+uniform float uCloudDef;   // cloud edge definition/contrast (def 1.0)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -1276,7 +1289,9 @@ void main() {
       float billow = fbm(cp1 * 2.3 + vec2(11.7, 4.3));
       float defined = smoothstep(0.42, 0.80, f * 0.6 + billow * 0.45)
                     * smoothstep(0.013, 0.05, up);
-      cov = mix(cov, max(cov, defined), cloudRich * 0.85);
+      // CLOUD DEFINITION (uCloudDef, def 1) scales how strongly the billow octave
+      // carves lumpy cumulus edges onto the base coverage (0.85 = as-shipped blend).
+      cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * uCloudDef, 0.0, 1.0));
       // Horizon cloud-bank: distant cumulus bunched near the horizon on a
       // compressed plane, so the LOW gameplay sky band (just above the scenery)
       // is never a plain wash. Its own coverage + a band fade focused ~1–9°.
@@ -1366,10 +1381,13 @@ void main() {
   // Wide aureole: broader (lower exponent) and stronger at golden hour.
   // CORONA AUREOLE knob (def 1.0 = as-shipped) scales the broad sun halo glow.
   c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * uCoronaAureole;
-  c += sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;   // tight inner ring
+  // SUN CORONA RING knob (def 1.0 = as-shipped) scales the tight inner ring.
+  c += sunWarm * pow(sd, 300.0) * 0.95 * uSunCorona * coronaDamp;   // tight inner ring
   // Flatten the disc near the horizon (atmospheric refraction squashes it).
+  // SUN HORIZON SQUASH knob (def 1.0 = as-shipped): scales the golden-hour vertical
+  // squash of the disc (1.0 = round, higher = more oval near the horizon).
   vec3 dd = dir - uSunDir * sd;
-  float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
+  float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), uSunSquash)));
   // SUN DISC SIZE knob (def 1.0 = as-shipped): scales the disc's angular radius by
   // widening the smoothstep edge. Larger = a bigger, brighter sun.
   float disc = smoothstep(mix(0.018, 0.028, golden) * uSunDiscSize, 0.006 * uSunDiscSize, perp) * coronaDamp;
@@ -1395,9 +1413,12 @@ void main() {
       float d = length(dir - sdir);
       float bright = 0.30 + 0.55 * hash3(cell + 43.0);
       float phase = hash3(cell + 31.0) * 6.2832;
-      float twinkle = 0.80 + 0.20 * sin(uTime * 1.4 + phase);
+      // STAR TWINKLE knob (def 1.0 = as-shipped): scales the ±0.20 oscillation
+      // amplitude around the 0.80 base (0 = rock-steady stars).
+      float twinkle = 0.80 + 0.20 * uStarTwinkle * sin(uTime * 1.4 + phase);
       float giant = step(0.9995, h);                     // rare brighter star
-      float srad = mix(0.0016, 0.0028, giant);
+      // STAR SIZE knob (def 1.0 = as-shipped): scales each star's disc radius.
+      float srad = mix(0.0016, 0.0028, giant) * uStarSize;
       float star = smoothstep(srad, srad * 0.35, d)
                  * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
       c += vec3(star) * uStarBright;   // STAR BRIGHTNESS knob
@@ -1411,10 +1432,12 @@ void main() {
     vec3 moonDir = normalize(vec3(0.42, 0.72, 0.55));
     float md = dot(dir, moonDir);
     float moonPerp = length(dir - moonDir * max(md, 0.0));
-    // Moon disc: crisp soft edge
-    float moonDisc = smoothstep(0.025, 0.010, moonPerp) * uMoon;
-    // Moon halo: broad soft glow
-    float moonHalo = exp(-moonPerp * moonPerp * 140.0) * 0.28 * uMoon;
+    // Moon disc: crisp soft edge. MOON DISC SIZE knob (def 1.0 = as-shipped)
+    // scales the disc's angular radius via the smoothstep edges.
+    float moonDisc = smoothstep(0.025 * uMoonDiscSize, 0.010 * uMoonDiscSize, moonPerp) * uMoon;
+    // Moon halo: broad soft glow. MOON HALO SPREAD knob (def 1.0 = as-shipped)
+    // scales the halo strength (0.28) and widens its falloff (140 → 140/size).
+    float moonHalo = exp(-moonPerp * moonPerp * (140.0 / max(uMoonHalo, 0.001))) * 0.28 * uMoonHalo * uMoon;
     // Moon colour: cool blue-white
     vec3 moonCol = vec3(0.82, 0.88, 1.00);
     // The halo should only appear above the horizon and not wash out too much.
@@ -1427,7 +1450,9 @@ void main() {
   // hugs the horizon and fades fast with elevation, with a hint of cloud pickup
   // (clouds over a city glow from below). Zero when uCityGlow is black.
   if (uCityGlow.r + uCityGlow.g + uCityGlow.b > 0.001) {
-    float horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0);
+    // CITY GLOW REACH knob (def 1.0 = as-shipped): scales the horizon-hug exponent
+    // (lower = the glow climbs higher up the sky, higher = it hugs the horizon).
+    float horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * uCityGlowReach);
     c += uCityGlow * horiz;
     // Cloud pickup: the cloud deck over a lit city glows from BELOW — thick
     // bellies catch the most uplight, and the effect eases off toward the
