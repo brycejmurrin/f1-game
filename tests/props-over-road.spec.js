@@ -54,7 +54,7 @@ const BASELINE = {
   // terrain ribbon added for these tracks — verified via driver-eye as the wall,
   // not a lane obstruction. Migrated Vegas and Hungaroring are clean.
   monaco: 1.4, singapore: 1.3, baku: 1.3, jeddah: 0.7,
-  abudhabi: 1.2, albert_park: 0.7,
+  albert_park: 0.7,
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 
