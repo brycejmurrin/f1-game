@@ -13,6 +13,7 @@
     country: "Qatar",
     night: true,
     theme: "desert",
+    sceneryTheme: "night-event",
     sceneryCoordinates: "racing",
     flatTerrain: true,
     terrainOuter: 120,
@@ -34,8 +35,19 @@
         place, backdrop, anchor, addBox, addCyl, addFrustum,
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
-        modelGroup, groundPatch, floodMast, floodMastRing } = api;
+        modelGroup, groundPatch, floodMast, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:qatar:hospitality", frac: 0.86, side: -1, gap: 85,
+          size: [18, 9, 34], modules: 4, required: true,
+        });
+        circuitKit.marshalShelter({
+          id: "kit:qatar:marshal-shelter", frac: 0.76, side: 1, gap: 30,
+          size: [6, 3, 5], required: true,
+        });
+      }
 
       // ---- Palette (NIGHT desert) ----
       const DUNE   = [0.76, 0.64, 0.46], DUNE_N = [0.56, 0.48, 0.36];

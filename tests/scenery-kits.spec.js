@@ -61,3 +61,34 @@ test("shared scenery kits are bound and Silverstone diagnostics stay finite", as
   expect(hard).toEqual([]);
   expect(state.models.invalid.every((entry) => typeof entry.reason === "string")).toBe(true);
 });
+
+for (const [trackId, themeName] of [
+  ["singapore", "street"],
+  ["bahrain", "desert"],
+  ["albert_park", "park"],
+  ["silverstone", "permanent"],
+  ["qatar", "night-event"],
+]) {
+  test(`${trackId} emits validated ${themeName} kit facilities`, async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex?.race);
+    const state = await page.evaluate(([id]) => {
+      window.__apex.headless(true);
+      window.__apex.race(id, "day", "dry");
+      return {
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+      };
+    }, [trackId, themeName]);
+
+    const emitted = state.models.emitted.filter((entry) =>
+      entry.id.startsWith(`kit:${trackId}:`));
+    expect(emitted.length).toBeGreaterThanOrEqual(2);
+    expect(emitted.every((entry) =>
+      !entry.vertices || entry.vertices <= 50000)).toBe(true);
+    for (const bucket of ["invalid", "suppressed", "unsafe"])
+      expect(state.models[bucket].filter((entry) =>
+        entry.id.startsWith(`kit:${trackId}:`))).toEqual([]);
+    expect(state.geometry.every((entry) => entry.ok)).toBe(true);
+  });
+}

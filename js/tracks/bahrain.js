@@ -13,6 +13,7 @@
     country: "Bahrain",
     night: true,
     theme: "desert",
+    sceneryTheme: "desert",
     lengthKm: 5.4,
     sunAzimBias: -0.36,   // low desert-latitude sun sits east of overhead at race time (late-day GP)
     baseHW: 7,
@@ -36,8 +37,19 @@
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
         bush, grandstand, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
-        floodMast: apiFloodMast, floodMastRing, sailCanopy } = api;
+        floodMast: apiFloodMast, floodMastRing, sailCanopy, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:bahrain:hospitality", frac: 0.955, side: -1, gap: 100,
+          size: [18, 9, 34], modules: 4, required: true,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:bahrain:service-compound", frac: 0.55, side: -1, gap: 70,
+          size: [24, 6, 32], vehicles: 6, required: true,
+        });
+      }
 
       // ── Desert palette (night race, Sakhir) ──────────────────────────────
       // Base sand tones for dunes and desert backdrop
@@ -196,7 +208,7 @@
       // Main grandstands on the pit straight — large pale-cream shells with dark navy seats.
       // Bahrain's main stands are tall (sand/cream colours) with blue seats.
       grandstand(0.00,   1, 18, 140, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.985,  1, 20,  80, STAND_CREAM, SEAT_BLUE);
+      grandstand(0.985,  1, 32,  80, STAND_CREAM, SEAT_BLUE);
       // Second pit-side building: timing/media centre with cool lit windows
       building(K(0.01), -1, 2, 10, 9, 40,
         { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });

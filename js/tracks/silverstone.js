@@ -13,6 +13,7 @@
     country: "UK",
     night: false,
     theme: "green",
+    sceneryTheme: "permanent",
     lengthKm: 5.9,
     sunAzimBias: 0.28,   // high-summer northern sun, gentle SW tilt over the old airfield
     baseHW: 8,
@@ -43,8 +44,19 @@
               grandstand, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along,
               tower, forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
-              groundedSegments, recordBarrier } = api;
+              groundedSegments, recordBarrier, circuitKit } = api;
       const k = (s) => Math.round(s * n) % n;
+
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:silverstone:pit-building", frac: 0.97,
+          side: 1, gap: 180, size: [18, 10, 72], garages: 12, required: true,
+        });
+        circuitKit.cameraCrane({
+          id: "kit:silverstone:camera-crane", frac: 0.30,
+          side: -1, gap: 45, size: [6, 16, 6], required: true,
+        });
+      }
 
       // 2. British overcast sky + lusher grass (ATM.britishOvercast).
       if (ATM && ATM.britishOvercast) Object.assign(pal, ATM.britishOvercast);

@@ -13,6 +13,7 @@
     country: "Australia",
     night: false,
     theme: "green",
+    sceneryTheme: "park",
     lengthKm: 5.3,
     baseHW: 7,
     sceneryCoordinates: "racing",
@@ -35,8 +36,23 @@
               grandstand, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
-              forestEdge, cityFront, MAT } = api;
+              forestEdge, cityFront, MAT, circuitKit } = api;
       const k = (s) => Math.round(s * n) % n;
+
+      if (circuitKit) {
+        circuitKit.marshalShelter({
+          id: "kit:albert_park:marshal-shelter", frac: 0.72,
+          side: 1, gap: 35, size: [6, 3, 5], required: true,
+        });
+        circuitKit.recoveryBay({
+          id: "kit:albert_park:recovery-bay", frac: 0.70,
+          side: 1, gap: 55, size: [12, 5, 18], required: true,
+        });
+        circuitKit.trackSigns({
+          id: "kit:albert_park:track-signs", frac: 0.88,
+          side: 1, gap: 45, size: [3, 3, 42], count: 6, required: true,
+        });
+      }
 
       // ---- Palette (Melbourne lakeside parkland, bright day) ----
       const GRASS  = [0.32, 0.62, 0.28];

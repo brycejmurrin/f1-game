@@ -12,6 +12,7 @@
     country: "Singapore",
     night: true,
     theme: "street_night",
+    sceneryTheme: "street",
     lengthKm: 4.9,
     baseHW: 6,
     street: true,
@@ -54,8 +55,20 @@
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, grandstand, gantry, marshalPost, palm, bush,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
-              overheadSpan, waterSurface, floodMastRing } = api;
+              overheadSpan, waterSurface, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // Shared-kit adoption: bounded race operations outside the bay hero zones.
+      if (circuitKit) {
+        circuitKit.raceControl({
+          id: "kit:singapore:race-control", frac: 0.58, side: -1, gap: 72,
+          size: [12, 24, 14], style: "tapered", required: true,
+        });
+        circuitKit.pedestrianBridge({
+          id: "kit:singapore:pedestrian-bridge", frac: 0.72,
+          clearance: 7.2, thickness: 0.9, depth: 3, required: true,
+        });
+      }
 
       // Grade-aware portal beats. Short decks keep the declared underside
       // clearance true across Singapore's ramps instead of allowing a long flat

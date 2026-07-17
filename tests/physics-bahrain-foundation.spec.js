@@ -14,14 +14,15 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
     const caps = window.__apex.trackGeometry();
     if (!caps?.road) return { err: "no road mesh", max: 0, top: [] };
 
-    const M = 1000;
+    const M = 1200;
     const px = new Float64Array(M), pz = new Float64Array(M), py = new Float64Array(M);
     const rx = new Float64Array(M), rz = new Float64Array(M), hw = new Float64Array(M);
     const profile = window.__apex.trackProfile(M);
     for (let i = 0; i < M; i++) {
       const node = window.__apex.nodeAt(i / M);
       px[i] = node.x; pz[i] = node.z; py[i] = node.y;
-      rx[i] = node.rx; rz[i] = node.rz; hw[i] = profile[i].hw;
+      rx[i] = node.rx; rz[i] = node.rz;
+      hw[i] = profile[Math.floor(i / M * profile.length)].hw;
     }
 
     const gridSize = 10;
@@ -90,6 +91,9 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
                       +((ay + by + cy) / 3).toFixed(2),
                       +((az + bz + cz) / 3).toFixed(2),
                     ],
+                    sample: [
+                      +sample.x.toFixed(2), +sample.y.toFixed(2), +sample.z.toFixed(2),
+                    ],
                     vertices: [
                       [+ax.toFixed(2), +ay.toFixed(2), +az.toFixed(2)],
                       [+bx.toFixed(2), +by.toFixed(2), +bz.toFixed(2)],
@@ -151,7 +155,12 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   expect(audit.models.suppressed).toEqual([]);
   expect(audit.models.unsafe).toEqual([]);
   expect(audit.models.emitted.filter((entry) => entry.required).map((entry) => entry.id).sort())
-    .toEqual(["bahrain-back-straight-gantry", "bahrain-start-gantry"]);
+    .toEqual([
+      "bahrain-back-straight-gantry",
+      "bahrain-start-gantry",
+      "kit:bahrain:hospitality",
+      "kit:bahrain:service-compound",
+    ]);
 
   const night = await page.evaluate(() => {
     window.__apex.race("bahrain", "night", "dry");
