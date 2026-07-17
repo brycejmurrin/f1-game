@@ -106,7 +106,7 @@ const WGX = (function () {
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
-  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 384
+  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 448
   const FRAME_FLOATS = FRAME_BYTES / 4;                 // 96
   const LIGHT_STRIDE = WGSLChunks.LIGHT_STRIDE_BYTES;   // 64
   const MAX_LIGHTS = WGSLChunks.MAX_LIGHTS;             // 32
@@ -123,7 +123,8 @@ const WGX = (function () {
 
   // ── shadow map (Phase 3) ──
   const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;        // sun depth-map resolution
-  const SHADOW_SLOTS = 16;                              // caster draws per shadow pass
+  const CAR_SHADOW_SIZE = 1024;                         // dynamic car-only shadow map (matches GLX)
+  const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
   // ── vertex layout: interleaved [pos3, nrm3, col3, mat1], stride 40 ──
@@ -294,6 +295,10 @@ const WGX = (function () {
     let _shadowRendered = false, _shadowLightVP = null;
     const shadowLVPData = new Float32Array(16), shadowModelData = new Float32Array(16);
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
+    // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
+    let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
+    let _carShadowArmed = false;
+    const carShadowLVPData = new Float32Array(16);
 
     // Blocker map objects.
     let blockerTex = null, blockerView = null, blockerSampler = null;
@@ -348,6 +353,15 @@ const WGX = (function () {
       shadowView = shadowTex.createView();
       shadowSampler = device.createSampler({ compare: "less", magFilter: "linear", minFilter: "linear" });
 
+      // Dynamic CAR shadow map (GLX parity): car meshes only, re-rendered every
+      // frame — movers can't live in the snap-cached static map above. Created
+      // on every tier so binding 8 is always valid; the PASS itself is gated
+      // (carShadowBegin no-ops on the mobile tier, matching GLX blob-only).
+      carShadowTex = device.createTexture({
+        size: [CAR_SHADOW_SIZE, CAR_SHADOW_SIZE], format: DEPTH_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      carShadowView = carShadowTex.createView();
       // Blocker map (PCSS-lite downsampled sun shadow map)
       blockerTex = device.createTexture({
         size: [512, 512], format: "r16float",
@@ -390,7 +404,9 @@ const WGX = (function () {
           { binding: 6, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: "float" } },                          // SSR result
           { binding: 7, visibility: GPUShaderStage.FRAGMENT,
-            texture: { sampleType: "float" } },                          // blocker map
+            texture: { sampleType: "float" } },                          // blocker map (PCSS-lite)
+          { binding: 8, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "depth" } },                          // per-frame car shadow map
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -470,6 +486,12 @@ const WGX = (function () {
         layout: shadowG1Layout,
         entries: [{ binding: 0, resource: { buffer: shadowModelUBO, offset: 0, size: WGSLChunks.SHADOW_MODEL_BYTES } }],
       });
+      // Car shadow pass shares the depth pipeline + model ring; only the
+      // lightVP uniform differs, via its own group-0 bind group.
+      carShadowUBO = device.createBuffer({ size: WGSLChunks.SHADOW_LVP_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      carShadowG0BindGroup = device.createBindGroup({
+        layout: shadowG0Layout, entries: [{ binding: 0, resource: { buffer: carShadowUBO } }],
+      });
 
       // ── Blocker downsample pipeline ──
       blockerUBO = device.createBuffer({
@@ -502,9 +524,13 @@ const WGX = (function () {
           { binding: 2, resource: { buffer: blockerUBO } },
         ]
       });
-    } catch (err) {
-      console.error("WGX init failed:", err);
-      return null;   // any pipeline/buffer build failure -> fall back to GLX
+    } catch (e) {
+      // Fall back to GLX on any pipeline/buffer build failure — but never
+      // SILENTLY: this catch once hid a real init bug, and by the time create()
+      // returns null the canvas may already hold a webgpu context, which makes
+      // the GLX fallback's getContext("webgl2") fail too (blank "needs WebGL2").
+      try { console.warn("WGX init failed, falling back to WebGL2:", (e && e.message) || e); } catch (_) {}
+      return null;
     }
 
     // ── Phase-4 post-processing pipelines (size-independent; targets/BGs are
@@ -756,6 +782,7 @@ const WGX = (function () {
           { binding: 5, resource: linearSampler },
           { binding: 6, resource: nextSsrView },
           { binding: 7, resource: blockerView },
+          { binding: 8, resource: carShadowView },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group
@@ -1086,24 +1113,23 @@ const WGX = (function () {
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
       _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
 
-      // TAA Halton Jitter Scaffolding
-      const halton = [
-        [0.5, 1/3],
-        [0.25, 2/3],
-        [0.75, 1/9],
-        [0.125, 4/9],
-        [0.625, 7/9],
-        [0.375, 2/9],
-        [0.875, 5/9],
-        [0.0625, 8/9]
-      ];
-      _taaFrameIndex = (_taaFrameIndex + 1) % 8;
-      const sample = halton[_taaFrameIndex];
-      const jitterX = (sample[0] - 0.5) * 2.0 / width;
-      const jitterY = (sample[1] - 0.5) * 2.0 / height;
-
-      _vpGpu[8] += jitterX;
-      _vpGpu[9] += jitterY;
+      // TAA Halton jitter scaffolding — GATED OFF until a temporal RESOLVE pass
+      // exists. Jittering the projection each frame with nothing accumulating
+      // the history is pure sub-pixel shimmer over the whole image (the exact
+      // "flicker while driving" artifact class), so the offsets stay 0 for now.
+      // When a resolve lands: flip _TAA_ENABLED, and feed the per-frame jitter
+      // to the resolve pass so it can unjitter history lookups.
+      const _TAA_ENABLED = false;
+      if (_TAA_ENABLED) {
+        const halton = [
+          [0.5, 1/3], [0.25, 2/3], [0.75, 1/9], [0.125, 4/9],
+          [0.625, 7/9], [0.375, 2/9], [0.875, 5/9], [0.0625, 8/9],
+        ];
+        _taaFrameIndex = (_taaFrameIndex + 1) % 8;
+        const sample = halton[_taaFrameIndex];
+        _vpGpu[8] += (sample[0] - 0.5) * 2.0 / width;
+        _vpGpu[9] += (sample[1] - 0.5) * 2.0 / height;
+      }
 
       d.set(_vpGpu, 0);
       frameVPGpu.set(_vpGpu);   // persistent copy for the FX passes (post/fx)
@@ -1199,7 +1225,7 @@ const WGX = (function () {
       // Always pack the resolved value so 0 reads as a real "no cloud shade" and
       // is not confused with an unset slot (WGSL reads params5.z directly).
       d[86] = (T && T.cloudShadowDim != null) ? T.cloudShadowDim : 0.80;
-      d[87] = 0;
+      d[87] = 0;   // params5.w reserved (was a dead jitterX store — no shader reads it)
       // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
       // the shadow box is snapped around (game.js shadow pass; glides with the
       // camera so the LIT distance fade never jumps on a box recentre), w =
@@ -1207,10 +1233,16 @@ const WGX = (function () {
       // as GLX uShadowRange).
       const sctr = f.shadowCtr || f.eye || [0, 0, 0];
       d[88] = sctr[0]; d[89] = sctr[1]; d[90] = sctr[2];
-      d[91] = (T && T.shadowRange != null) ? T.shadowRange : 64.0;
-      // params6 (floats 92..95): wet-surface darkening parity with GLX.
+      d[91] = (T && T.shadowRange != null) ? T.shadowRange : 80.0;   // same fallback as GLX uShadowRange
+      // params6 (floats 92..95): wet-surface darkening parity with GLX (.x),
+      // car-shadow arm flag (.y — set only on frames where the car caster pass
+      // ran; reset each present so a stale map can't keep shadowing).
       d[92] = (T && T.wetDark != null) ? T.wetDark : 1.0;
-      d[93] = 0; d[94] = 0; d[95] = 0;
+      d[93] = _carShadowArmed ? 1.0 : 0.0;
+      d[94] = 0; d[95] = 0;
+      // carLightVP (floats 96..111): the Z01-remapped matrix the car map was
+      // rasterised with this frame (stale values are harmless — gated by d[93]).
+      d.set(carShadowLVPData, 96);
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1487,6 +1519,9 @@ const WGX = (function () {
     // ── present(opts): close the lit pass, run the Phase-4 post chain
     //    (SSAO -> godray -> bloom -> composite -> FXAA), fall back to the blit. ──
     function present(opts) {
+      // Car shadow map must be re-armed by a fresh carShadowBegin every frame
+      // (GLX parity): the flag was consumed by this frame's _writeFrame already.
+      _carShadowArmed = false;
       if (_lost || !encoder) return;
       if (litPass) { litPass.end(); litPass = null; }
       const o = opts || {};
@@ -1734,6 +1769,33 @@ const WGX = (function () {
       _shadowRendered = true;
     }
 
+    // ── Dynamic CAR shadow pass (GLX parity): car meshes only, every frame ──
+    // Shares the depth pipeline and the dynamic-offset model ring with the
+    // static pass (safe: shadowEnd submits before this Begin rewrites slots).
+    // Mobile tier keeps blob-only shadows, matching GLX. game.js drives this
+    // through the same carShadowBegin/castShadow/carShadowEnd sequence as GLX.
+    function carShadowBegin(lightVP) {
+      if (_lost || !carShadowView || MOBILE_TIER) return;
+      _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
+      _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
+      device.queue.writeBuffer(carShadowUBO, 0, carShadowLVPData);
+      _shadowSlot = 0;
+      shadowEncoder = device.createCommandEncoder();
+      shadowPass = shadowEncoder.beginRenderPass({
+        colorAttachments: [],
+        depthStencilAttachment: { view: carShadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
+      });
+      shadowPass.setPipeline(shadowPipeline);
+      shadowPass.setBindGroup(0, carShadowG0BindGroup);
+    }
+    function carShadowEnd() {
+      if (!shadowPass) return;
+      shadowPass.end(); shadowPass = null;
+      device.queue.submit([shadowEncoder.finish()]);
+      shadowEncoder = null;
+      _carShadowArmed = true;
+    }
+
     // ── Phase-4 foreground FX (recorded INTO the open lit pass, matching how
     //    game.js interleaves them with draw()/drawSky() before present()). ──
 
@@ -1919,6 +1981,9 @@ const WGX = (function () {
       castShadow,
       castShadowChunked,
       shadowEnd,
+      carShadowBegin,
+      carShadowEnd,
+
       // ── Env probe (Phase 4b) ──
       envFaceBegin,
       envFaceEnd,

@@ -151,7 +151,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 384 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 448 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -173,8 +173,9 @@ struct FrameU {
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
   params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, _) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
-  params6    : vec4<f32>,     // off 368  (wetDark, _, _, _) — live wet-surface darkening
-};                            // size 384
+  params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, _, _) — wet darkening + car-shadow arm flag
+  carLightVP : mat4x4<f32>,   // off 384  Z01-remapped car-shadow view-proj (per-frame car-only map)
+};                            // size 448
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -202,6 +203,8 @@ struct DrawU {
 @group(0) @binding(4) var envCube : texture_cube<f32>;
 @group(0) @binding(5) var envSamp : sampler;
 @group(0) @binding(6) var ssrTex  : texture_2d<f32>;
+@group(0) @binding(7) var blockerTex : texture_2d<f32>;      // PCSS-lite min-depth blocker map (512², r16float)
+@group(0) @binding(8) var carShadowTex : texture_depth_2d;   // per-frame car-only shadow map (shares shadowSamp)
 @group(1) @binding(0) var<uniform> D : DrawU;
 ${hash}
 ${vnoise}
@@ -437,10 +440,30 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
                     suv + vec2<f32>(f32(ox), f32(oy)) * pcfStep, refD);
         }
       }
+      var sh = s / 9.0;
+      // Dynamic CAR shadows (GLX parity): min-combine the per-frame car-only
+      // map — cars can't live in the snap-cached static map, so without this
+      // they cast nothing. Same slope/constant bias; params6.y arms it only on
+      // frames where wgx ran the car caster pass; carLightVP is the Z01-remapped
+      // matrix the car map was rasterised with.
+      if (F.params6.y > 0.5) {
+        let cc = F.carLightVP * vec4<f32>(in.wpos, 1.0);
+        let cn = cc.xyz / cc.w;
+        let cuv = vec2<f32>(cn.x * 0.5 + 0.5, 0.5 - cn.y * 0.5);
+        if (cuv.x > 0.0 && cuv.x < 1.0 && cuv.y > 0.0 && cuv.y < 1.0 && cn.z <= 1.0) {
+          let crefD = cn.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;
+          let ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
+          let csh = ( textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>(-ct, -ct), crefD)
+                    + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>( ct, -ct), crefD)
+                    + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>(-ct,  ct), crefD)
+                    + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>( ct,  ct), crefD) ) * 0.25;
+          sh = min(sh, csh);
+        }
+      }
       // Clamped like GLX: SHADOW DARKNESS reaches 2.0 and mix() extrapolates
       // above t=1 — unclamped, sh~0 went NEGATIVE (negative light -> psychedelic
       // grade output in shadowed areas).
-      shadow = max(0.0, mix(1.0, s / 9.0, F.params2.y * edgeFade));   // params2.y = shadow strength
+      shadow = max(0.0, mix(1.0, sh, F.params2.y * edgeFade));   // params2.y = shadow strength
     }
   }
   // Cloud dapple multiplies the cast shadow exactly like GLX (LIT_FS composite):
@@ -722,6 +745,41 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(acesTonemap(hdr), 1.0);
 }`;
 
+  // ── BLOCKER: min-of-4 downsample of the sun shadow depth map into the 512²
+  //    r16float blocker map (PCSS-lite blocker-search source; GLX BLOCKER_FS
+  //    parity). This chunk was MISSING when wgx.js first referenced
+  //    WGSLChunks.BLOCKER — createShaderModule({code: undefined}) threw and
+  //    killed the whole WGX init (silent GLX fallback). Bindings must match
+  //    blockerG0Layout in wgx.js: 0 = shadow depth texture, 1 = non-filtering
+  //    sampler, 2 = BlockerU (xy = 1/SHADOW_SIZE source texel).
+  const BLOCKER = `
+struct BlockerU { srcTexel : vec4<f32> };   // xy = 1/SHADOW_SIZE
+@group(0) @binding(0) var depthTex : texture_depth_2d;
+@group(0) @binding(1) var depthSamp : sampler;
+@group(0) @binding(2) var<uniform> B : BlockerU;
+${fullscreenTri}
+struct VOut {
+  @builtin(position) pos : vec4<f32>,
+  @location(0)       uv  : vec2<f32>,
+};
+@vertex
+fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
+  var o : VOut;
+  let p = fsTriNDC(vi);
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>((p.x + 1.0) * 0.5, (1.0 - p.y) * 0.5);
+  return o;
+}
+@fragment
+fn fs_main(in : VOut) -> @location(0) vec4<f32> {
+  let t = B.srcTexel.xy;
+  let d0 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0, -1.0), 0);
+  let d1 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0, -1.0), 0);
+  let d2 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0,  1.0), 0);
+  let d3 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0,  1.0), 0);
+  return vec4<f32>(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
+}`;
+
   // ── SKY: the first real WGSL shader. A *reduced but faithful* port of SKY_FS
   //    (js/glx.js:901) — gradient (zenith/horizon), golden-hour horizon warmth,
   //    a basic procedural cloud layer, Mie sun corona + disc, stars, moon, and
@@ -892,12 +950,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY,
     LIT,
     BLIT,
+    BLOCKER,
     SHADOW,
     // byte size of the SkyU uniform block (mat4 64 + 7*vec4 112 = 176)
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 384,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr)
+    FRAME_UNIFORM_BYTES: 448,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr +carLightVP)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
