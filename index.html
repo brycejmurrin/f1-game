@@ -574,6 +574,13 @@
 <script crossorigin="anonymous" src="js/api.js?v=574"></script>
 <script crossorigin="anonymous" src="js/data-telemetry.js?v=574"></script>
 <script crossorigin="anonymous" src="js/data-export.js?v=574"></script>
+<!-- data-hub tab modules — MUST load before data.js: its IIFE calls their
+     .create() at load time (DataSchedule is not defined -> DataHub never
+     assigned -> game.js dies at DataHub.init -> the game never boots). -->
+<script crossorigin="anonymous" src="js/data-schedule.js?v=574"></script>
+<script crossorigin="anonymous" src="js/data-standings.js?v=574"></script>
+<script crossorigin="anonymous" src="js/data-lastrace.js?v=574"></script>
+<script crossorigin="anonymous" src="js/data-live.js?v=574"></script>
 <script crossorigin="anonymous" src="js/data.js?v=574"></script>
 <script crossorigin="anonymous" src="js/parts.js?v=574"></script>
 <script crossorigin="anonymous" src="js/liveries.js?v=574"></script>
