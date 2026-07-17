@@ -16,7 +16,7 @@ export const SHARDS = Object.freeze([
   ["suzuka", "vegas", "zandvoort", "monza"],
 ].map(Object.freeze));
 
-export const CAMERA_FRACTIONS = Object.freeze({
+export const CAMERA_FRACTIONS = Object.freeze(Object.fromEntries(Object.entries({
   abudhabi: [0.08, 0.45, 0.88], albert_park: [0.10, 0.50, 0.88],
   bahrain: [0.01, 0.45, 0.81], baku: [0.15, 0.45, 0.75],
   cota: [0.15, 0.50, 0.85], hungaroring: [0.00, 0.35, 0.70],
@@ -29,7 +29,7 @@ export const CAMERA_FRACTIONS = Object.freeze({
   silverstone: [0.40, 0.65, 0.97], singapore: [0.35, 0.58, 0.72],
   spa: [0.10, 0.35, 0.70], suzuka: [0.00, 0.30, 0.86],
   vegas: [0.25, 0.66, 0.98], zandvoort: [0.30, 0.55, 0.80],
-});
+}).map(([track, fractions]) => [track, Object.freeze(fractions)])));
 
 export const SLIDER_GROUPS = Object.freeze([
   { id: "foundation", labels: ["SUN & MOON", "AMBIENT & BOUNCE"] },
@@ -38,13 +38,13 @@ export const SLIDER_GROUPS = Object.freeze([
   { id: "weather", labels: ["ATMOSPHERE", "SKY & WEATHER", "RAIN & LIGHTNING"] },
   { id: "surface", labels: ["REFLECTIONS & WET ROAD", "CAR"] },
   { id: "grade", labels: ["IMAGE & COLOUR"] },
-]);
+].map((group) => Object.freeze({ ...group, labels: Object.freeze(group.labels) })));
 
-export const REGIONS = Object.freeze({
+export const REGIONS = Object.freeze(Object.fromEntries(Object.entries({
   frame: [0, 0, 1, 1], road: [0.30, 0.60, 0.40, 0.16],
   near: [0.28, 0.74, 0.44, 0.14], fogwall: [0.34, 0.38, 0.32, 0.16],
   sky: [0.28, 0.05, 0.44, 0.20], wallL: [0.02, 0.34, 0.16, 0.22],
-});
+}).map(([region, bounds]) => [region, Object.freeze(bounds)])));
 
 export const GATES = Object.freeze({
   maxBlackClip: 0.08, maxWhiteClip: 0.03, minTonalRange: 45,
@@ -63,8 +63,16 @@ export function enumerateConditions(trackIds = TRACKS) {
 }
 
 export function validateConfig() {
-  if (new Set(SHARDS.flat()).size !== TRACKS.length) throw new Error("invalid shard coverage");
-  for (const track of TRACKS)
-    if (!CAMERA_FRACTIONS[track] || CAMERA_FRACTIONS[track].length !== 3)
+  const shardTracks = SHARDS.flat();
+  if (shardTracks.length !== TRACKS.length ||
+      new Set(shardTracks).size !== TRACKS.length ||
+      !shardTracks.every((track) => TRACKS.includes(track)))
+    throw new Error("invalid shard coverage");
+  for (const track of TRACKS) {
+    const fractions = CAMERA_FRACTIONS[track];
+    if (!fractions || fractions.length !== 3 ||
+        new Set(fractions).size !== 3 ||
+        !fractions.every((value) => Number.isFinite(value) && value >= 0 && value < 1))
       throw new Error(`invalid camera coverage: ${track}`);
+  }
 }
