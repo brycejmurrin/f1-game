@@ -1,11 +1,42 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   TRACKS, TODS, WEATHERS, CAMERA_FRACTIONS, SHARDS, SLIDER_GROUPS, REGIONS,
   conditionKey, enumerateConditions, validateConfig,
 } from "../tools/lighting-campaign/config.mjs";
 import { measurePixels, evaluateGates } from "../tools/lighting-campaign/metrics.mjs";
+import {
+  validateProfile,
+  validateRecord,
+  mergeRecords,
+  mergeFragments,
+  readJsonLines,
+  appendJsonLine,
+} from "../tools/lighting-campaign/io.mjs";
+
+const TEST_TUNE_DEFS = [
+  { id: "ambientMul", min: 0, max: 4 },
+  { id: "tint", min: -1, max: 1 },
+];
+
+function makeRecord(overrides = {}) {
+  const condition = enumerateConditions([TRACKS[0]])[0];
+  const record = {
+    schema: "apex26.lighting-campaign/v1",
+    track: condition.track,
+    tod: condition.tod,
+    weather: condition.weather,
+    key: condition.key,
+    views: [{ camera: 0 }, { camera: 1 }, { camera: 2 }],
+    profile: { ambientMul: 1.2 },
+    gates: { ok: true, failures: [] },
+  };
+  return { ...record, ...overrides };
+}
 
 async function importModifiedConfig(search, replacement) {
   const source = await readFile(new URL("../tools/lighting-campaign/config.mjs", import.meta.url), "utf8");
@@ -95,6 +126,58 @@ test("nested exported configuration is immutable", () => {
 test("condition keys use the shipped preset format", () => {
   assert.equal(conditionKey("monaco", "dusk", "wet"), "monaco|dusk|wet");
   assert.throws(() => conditionKey("../bad", "day", "dry"), /unknown track/);
+});
+
+test("profile validation rejects unknown and out-of-range controls", () => {
+  assert.deepEqual(validateProfile({ ambientMul: 1.2 }, TEST_TUNE_DEFS), { ambientMul: 1.2 });
+  assert.throws(() => validateProfile({ missing: 1 }, TEST_TUNE_DEFS), /unknown slider/i);
+  assert.throws(() => validateProfile({ tint: 2 }, TEST_TUNE_DEFS), /out of range/i);
+});
+
+test("record validation requires schema, canonical key, three views, and passing gates", () => {
+  assert.doesNotThrow(() => validateRecord(makeRecord()));
+  assert.throws(() => validateRecord(makeRecord({ schema: "wrong" })), /schema/i);
+  assert.throws(() => validateRecord(makeRecord({ key: "wrong|key|value" })), /key/i);
+  assert.throws(() => validateRecord(makeRecord({ views: [{}, {}] })), /three views/i);
+  assert.throws(() => validateRecord(makeRecord({ gates: { ok: false, failures: ["black-clip"] } })), /gate/i);
+});
+
+test("record merge requires one unique complete matrix record per key", () => {
+  const rows = enumerateConditions().map((condition) => ({
+    schema: "apex26.lighting-campaign/v1",
+    ...condition,
+    views: [{ camera: 0 }, { camera: 1 }, { camera: 2 }],
+    profile: {},
+    gates: { ok: true, failures: [] },
+  }));
+  const result = mergeRecords(rows.slice().reverse(), TEST_TUNE_DEFS);
+  const keys = Object.keys(result.presets);
+  assert.equal(keys.length, 480);
+  assert.deepEqual(keys, keys.slice().sort());
+  assert.equal(result.records.length, 480);
+  assert.equal(result.summary.totalRecords, 480);
+  assert.equal(result.summary.totalConditions, 480);
+  assert.equal(result.summary.missingConditions, 0);
+  assert.throws(() => mergeRecords([...rows, rows[0]], TEST_TUNE_DEFS), /duplicate condition/i);
+  assert.throws(() => mergeRecords(rows.slice(1), TEST_TUNE_DEFS), /missing condition/i);
+});
+
+test("json line fragments append, reread, and merge deterministically", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "lighting-campaign-"));
+  t.after(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  const shardA = join(dir, "a.jsonl");
+  const shardB = join(dir, "b.jsonl");
+  const rows = enumerateConditions();
+
+  appendJsonLine(shardA, makeRecord(rows[1]));
+  appendJsonLine(shardB, makeRecord(rows[0]));
+
+  assert.deepEqual(readJsonLines(shardA), [makeRecord(rows[1])]);
+  const merged = mergeFragments([shardA, shardB], TEST_TUNE_DEFS, { expectedConditions: rows.slice(0, 2) });
+  assert.deepEqual(Object.keys(merged.presets), [rows[0].key, rows[1].key]);
+  assert.equal(merged.summary.fragmentCount, 2);
 });
 
 test("pixel metrics report percentiles, clipping, and named regions", () => {
