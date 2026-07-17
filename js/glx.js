@@ -1380,7 +1380,8 @@ const GLX = (function () {
     // built — lowers the transient peak on ~5 M-vert street props. `pos` is still
     // needed below for triangle centroids/AABBs, so it's nulled after the bins.
     nrm = col = mat = null;
-    data.nrm = data.col = data.mat = null;
+    data.nrm = data.mat = null;
+    if (!data._keepPositions) data.col = null;
     // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
     // grid is bounded (tracks span a few km), so pack signed cell coords.
     const buckets = new Map();

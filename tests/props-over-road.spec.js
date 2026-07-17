@@ -90,7 +90,7 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
       for (let k = 0; k < M; k++) if (hw[k] < 3) hw[k] = 6;
       const tps = []; for (let i = 0; i < M; i++) for (const s of [-0.75, -0.4, 0, 0.4, 0.75]) tps.push({ x: px[i] + rx[i] * s * hw[i], z: pz[i] + rz[i] * s * hw[i], y: py[i], frac: i / M });
       const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 1e-9) return null; const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
-      const merged = {}; let max = 0;
+      const merged = {}; let max = 0, worst = null;
       for (const name of ["props", "glass"]) {
         const cap = caps[name]; if (!cap || !cap.pos || !cap.idx || cap.pos.length / 3 < 30) continue;
         const pos = cap.pos, idx = cap.idx;
@@ -104,19 +104,48 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
             const bc = pit(tp.x, tp.z, ax, az, bx, bz, cx, cz); if (!bc) continue;
             const yf = ay + bc.u * (cy - ay) + bc.vv * (by - ay);
             const over = yf - tp.y;
-            if (over > TOL && over < CEIL) { const f = Math.round(tp.frac * 200) / 2; merged[f] = Math.max(merged[f] || 0, +over.toFixed(2)); if (over > max) max = over; }
+            if (over > TOL && over < CEIL) {
+              const f = Math.round(tp.frac * 200) / 2;
+              merged[f] = Math.max(merged[f] || 0, +over.toFixed(2));
+              if (over > max) {
+                max = over;
+                const centerX = (ax + bx + cx) / 3;
+                const centerZ = (az + bz + cz) / 3;
+                const centerK = near(centerX, centerZ);
+                worst = {
+                  name, f, over: +over.toFixed(2),
+                  sourceFrac: +(centerK / M).toFixed(4),
+                  lateral: +((centerX - px[centerK]) * rx[centerK] +
+                    (centerZ - pz[centerK]) * rz[centerK]).toFixed(2),
+                  color: cap.col?.slice(idx[t] * 3, idx[t] * 3 + 3).map((v) => +v.toFixed(2)),
+                  center: [
+                    +centerX.toFixed(2),
+                    +((ay + by + cy) / 3).toFixed(2),
+                    +centerZ.toFixed(2),
+                  ],
+                  sample: [+tp.x.toFixed(2), +tp.y.toFixed(2), +tp.z.toFixed(2)],
+                  vertices: [
+                    [+ax.toFixed(2), +ay.toFixed(2), +az.toFixed(2)],
+                    [+bx.toFixed(2), +by.toFixed(2), +bz.toFixed(2)],
+                    [+cx.toFixed(2), +cy.toFixed(2), +cz.toFixed(2)],
+                  ],
+                };
+              }
+            }
           }
         }
       }
       const top = Object.entries(merged).map(([f, o]) => ({ f: +f, o })).sort((a, b) => b.o - a.o).slice(0, 6);
-      return { max: +max.toFixed(2), top };
+      return { max: +max.toFixed(2), top, worst };
     }, { CEIL, TOL });
     console.log(`props-over-road ${trk}: max=${r.max ?? "?"}${r.err ? " ERR:" + r.err : ""}${r.top && r.top.length ? " @" + JSON.stringify(r.top) : ""}`);
     if (r.err) { offenders.push(`${trk}: ${r.err}`); continue; }
     if (trk === "shanghai")
       expect(r.max, "Shanghai track-owned props remain at the shared clean tolerance").toBeLessThanOrEqual(TOL);
     const cap = ALLOW.has(trk) ? Infinity : (BASELINE[trk] ?? TOL);
-    if (r.max > cap) offenders.push(`${trk} PROP ${r.max}m over road (cap ${cap}) @${JSON.stringify(r.top)}`);
+    if (r.max > cap) offenders.push(
+      `${trk} PROP ${r.max}m over road (cap ${cap}) @${JSON.stringify(r.top)} worst=${JSON.stringify(r.worst)}`
+    );
   }
   expect(offenders, `circuits with props on/above the racing line:\n${offenders.join("\n")}`).toEqual([]);
 });

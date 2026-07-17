@@ -208,7 +208,7 @@
       // Main grandstands on the pit straight — large pale-cream shells with dark navy seats.
       // Bahrain's main stands are tall (sand/cream colours) with blue seats.
       grandstand(0.00,   1, 18, 140, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.985,  1, 32,  80, STAND_CREAM, SEAT_BLUE);
+      grandstand(0.985,  1, 90,  80, STAND_CREAM, SEAT_BLUE);
       // Second pit-side building: timing/media centre with cool lit windows
       building(K(0.01), -1, 2, 10, 9, 40,
         { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
