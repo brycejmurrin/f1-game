@@ -15,20 +15,29 @@
     theme: "desert",
     lengthKm: 5.3,
     baseHW: 8,
+    sceneryCoordinates: "racing",
+    dressingExclusions: [
+      // Preserve the authored leisure-island skyline and keep generic furniture
+      // out of the marina water, hotel footprint, and Ferrari World sightline.
+      { kinds: ["city", "foliage", "lamps"], s0: 0.50, s1: 0.76 },
+      { kinds: ["city", "foliage", "lamps"], s0: 0.76, s1: 0.92 },
+      { kinds: ["foliage", "lamps", "floodlights"], s0: 0.44, s1: 0.50 },
+      { kinds: ["city", "foliage", "lamps"], s0: 0.14, s1: 0.23, side: 1 },
+      { kinds: ["city", "foliage", "lamps"], s0: 0.97, s1: 0.08, side: 1 },
+      { kind: "floodlights", s0: 0.855, s1: 0.895 },
+    ],
     pal: { horizon: [0.32, 0.16, 0.08], zenith: [0.10, 0.06, 0.24], sunColor: [0.90, 0.68, 0.38], ambientSky: [0.36, 0.28, 0.24], ambientGround: [0.32, 0.20, 0.12], fogColor: [0.22, 0.12, 0.06], fogDensity: 0.0020, sunDir: [0.55, 0.15, 0.32], concrete: [0.28, 0.27, 0.26], runoff: [0.24, 0.23, 0.22], grass: [0.20, 0.18, 0.14] },
     segs: [
       { t: 0, l: 300 }, { t: 60, l: 90 }, { t: -70, l: 80 }, { t: 0, l: 400 }, { t: -90, l: 100 }, { t: 0, l: 200 },
       { t: -60, l: 90 }, { t: 0, l: 300 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: -90, l: 100 }, { t: 60, l: 80 },
     ],
-    // Yas Marina underpass: the circuit dips below the Yas Hotel near the end of the lap.
-    elevations: [{ s: 0.88, halfM: 160, rise: -4 }],
     scenery: function (api) {
       const { out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox,
         anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
-        fence, guardrail, tyreWall, marshalPost, wall, along,
+        fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel,
-        gridshellCanopy, underpassPortal } = api;
+        gridshellCanopy, underpassPortal, modelGroup, waterSurface, groundPatch } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -101,7 +110,9 @@
         windowCol: WIN_WARM, step: 55,
       });
       // Sparse inland pocket mid-lap (L) — kept short so dunes stay readable
-      cityFront(0.36, 0.46, -1, 80, {
+      // Stop before the T9/Marsa foldback: the former 0.38–0.46 tail placed a
+      // resort slab across the nearby racing corridor.
+      cityFront(0.36, 0.38, -1, 80, {
         minH: 10, maxH: 22, depth: 14, lit: true,
         palette: [[0.15, 0.17, 0.26], [0.18, 0.20, 0.28]],
         windowCol: WIN_EMI, step: 60,
@@ -202,18 +213,21 @@
       // s 0.42 L — banked Turn 9: runoff + grandstand boxes
       // ===================================================================
       grandstand(0.42, -1, 9, 80, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      place(K(0.42), -1, 32, [60, 0.4, 30], [0.20, 0.21, 0.22]);   // pale runoff apron
+      groundPatch(K(0.42), -1, 2, [42, 0.35, 34], [0.20, 0.21, 0.22],
+        { id: "turn-9-runoff", samples: 7 });
 
       // ===================================================================
       // s 0.52–0.74 R — MARINA CORRIDOR: continuous dark water basin, yacht
       // hierarchy (mega + mid + slim), warm dock lamps, hotel glow sightline.
       // ===================================================================
-      // Continuous overlapping water ribbon (basin, not scattered ponds)
+      // Continuous overlapping reflective-water ribbon (basin, not land boxes).
       for (let i = 0; i < 18; i++)
-        groundPlane(K(0.52 + i * 0.013), 1, 16, [170, 1.2, 130], WATER);
+        waterSurface(K(0.52 + i * 0.013), 1, 18, [78, 0.35, 76], WATER,
+          { id: `marina-inner-${i}` });
       // Outer water shelf for depth
       for (let i = 0; i < 10; i++)
-        groundPlane(K(0.53 + i * 0.022), 1, 48, [100, 1.0, 90], WATER);
+        waterSurface(K(0.53 + i * 0.022), 1, 70, [86, 0.35, 82], WATER,
+          { id: `marina-outer-${i}` });
 
       // Yacht hierarchy — fewer, clearer sizes (slim → mid → mega at 0.66)
       for (let i = 0; i < 14; i++) {
@@ -290,33 +304,36 @@
       {
         const k = K(0.88);
         const H = 100;
-        // Flanking twin towers — far enough out that podium never clips tarmac
+        // Flanking twin towers are atomic required hero models. Complete bounds
+        // keep a nearby foldback from partially clipping a tower.
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 30);
           const b = [a.r, a.u, a.t];
-          out._mat = MAT.GLASS;
-          addFrustum(out, a.c, 18, 14, H, [0.10, 0.11, 0.16], 8, b);
-          addBox(out, vadd(a.c, a.u, 5), [26, 10, 34], [0.08, 0.09, 0.13], b);
-          out._mat = 0;
-          addBox(out, vadd(a.c, a.u, 1.2), [28, 2.8, 36], [1.0, 0.80, 0.44], b);
-          addCyl(out, vadd(a.c, a.u, 0.12), 14, 0.22, POOL, 10, b);
-          out._mat = MAT.GLASS;
-          for (let fl = 0; fl < 5; fl++) {
-            const fy = 16 + fl * 15;
-            addBox(out, vadd(a.c, a.u, fy), [24, 3.5, 32], (fl % 2 === 0) ? WIN_EMI : WIN_WARM, b);
-          }
-          out._mat = 0;
-          // Sparse wrap LED bands (gridshell is the primary veil — cut face spam)
-          out._mat = MAT.METAL;
-          for (let gy = 0; gy < 6; gy++) {
-            const cc = vadd(a.c, a.u, 18 + gy * 12);
-            const col = LED_CYCLE[(gy + (side > 0 ? 1 : 0)) % 3];
-            addBox(out, vadd(cc, a.r, -side * 12), [0.7, 4.0, 8.0], col, b);
-          }
-          out._mat = 0;
-          addBox(out, vadd(a.c, a.u, H + 2), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
-          addBox(out, vadd(a.c, a.u, H + 5.5), [4, 5, 4], LED_MAG, b);
-          addBox(out, vadd(a.c, a.u, H - 1.5), [28, 1.5, 38], [1.0, 0.88, 0.38], b);
+          modelGroup(`yas-hotel-${side < 0 ? "left" : "right"}-tower`, {
+            center: vadd(a.c, a.u, 54), size: [30, 108, 40], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.GLASS;
+            addFrustum(stage, a.c, 18, 14, H, [0.10, 0.11, 0.16], 8, b);
+            addBox(stage, vadd(a.c, a.u, 5), [26, 10, 34], [0.08, 0.09, 0.13], b);
+            stage._mat = 0;
+            addBox(stage, vadd(a.c, a.u, 1.2), [28, 2.8, 36], [1.0, 0.80, 0.44], b);
+            addCyl(stage, vadd(a.c, a.u, 0.12), 14, 0.22, POOL, 10, b);
+            stage._mat = MAT.GLASS;
+            for (let fl = 0; fl < 5; fl++) {
+              const fy = 16 + fl * 15;
+              addBox(stage, vadd(a.c, a.u, fy), [24, 3.5, 32], (fl % 2 === 0) ? WIN_EMI : WIN_WARM, b);
+            }
+            stage._mat = MAT.METAL;
+            for (let gy = 0; gy < 6; gy++) {
+              const cc = vadd(a.c, a.u, 18 + gy * 12);
+              const col = LED_CYCLE[(gy + (side > 0 ? 1 : 0)) % 3];
+              addBox(stage, vadd(cc, a.r, -side * 12), [0.7, 4.0, 8.0], col, b);
+            }
+            stage._mat = 0;
+            addBox(stage, vadd(a.c, a.u, H + 2), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
+            addBox(stage, vadd(a.c, a.u, H + 5.5), [4, 5, 4], LED_MAG, b);
+            addBox(stage, vadd(a.c, a.u, H - 1.5), [28, 1.5, 38], [1.0, 0.88, 0.38], b);
+          }, { required: true });
         }
 
         // Continuous LED gridshell spanning the racing line (centreline base)
@@ -351,7 +368,8 @@
         });
 
         // Reflecting pool at hotel base (R, clear of racing line)
-        groundPlane(K(0.87), 1, 18, [70, 1.2, 55], WATER);
+        waterSurface(K(0.87), 1, 18, [70, 0.35, 55], WATER,
+          { id: "yas-hotel-reflecting-pool" });
         // Hotel dock lights
         for (let i = 0; i < 7; i++) {
           const dockK = K(0.86 + i * 0.003);
@@ -464,6 +482,9 @@
       fence(0.03, 0.30, -1, 4.5, 4.5, [0.42, 0.45, 0.50]);
       fence(0.50, 0.86, 1, 4.5, 4.5, [0.42, 0.45, 0.50]);
       fence(0.30, 0.48, -1, 4.5, 4.0, [0.42, 0.45, 0.50]);
+      recordBarrier(0.03, 0.30, -1, 4.5);
+      recordBarrier(0.50, 0.86, 1, 4.5);
+      recordBarrier(0.30, 0.48, -1, 4.5);
       // Pit-wall (solid concrete) along the start/finish straight, pit side
       wall(0.985, 0.07, 1, 3.0, 1.1, [0.80, 0.82, 0.86], 0.6);
       // Armco guardrails on the open runoff edges
@@ -498,8 +519,9 @@
       // modern garage block, motorhome row, fuel/tyre bays, paddock floodlights
       // ===================================================================
       {
-        // long paddock apron
-        place(K(0.02), 1, 40, [130, 0.5, 65], [0.20, 0.21, 0.23]);
+        // Long terrain-conforming paddock apron.
+        groundPatch(K(0.02), 1, 20, [74, 0.45, 68], [0.20, 0.21, 0.23],
+          { id: "yas-paddock-apron", samples: 10 });
         // team motorhome row (modern two-storey lit hospitality units) — was 3
         // stacked raw boxes per unit; now the purpose-built motorhome() model
         // (slide-out awning, window ribbon, livery accent stripe).
