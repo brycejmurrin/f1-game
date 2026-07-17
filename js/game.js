@@ -59,7 +59,24 @@ try {
     }
   }
 } catch (_) { gfx = null; }
-if (!gfx) { if (!GLX.init(canvas)) { $("nogl").hidden = false; return; } gfx = GLX; }
+if (!gfx) {
+  if (!GLX.init(canvas)) {
+    // A failed WebGPU opt-in may have already CLAIMED the canvas (getContext
+    // "webgpu" succeeded before init died) — then getContext("webgl2") can
+    // never attach on this load and the old path dead-ended at "needs WebGL2"
+    // forever. Clear the opt-in and reload once, the same recovery WGX's
+    // device-lost handler uses; the reset flag guarantees no reload loop.
+    let webgpuTried = false;
+    try { webgpuTried = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
+    if (webgpuTried) {
+      try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
+      try { location.reload(); } catch (_) {}
+      return;
+    }
+    $("nogl").hidden = false; return;
+  }
+  gfx = GLX;
+}
 
 // ---------- rain overlay ----------
 const rainCanvas = document.createElement("canvas");
