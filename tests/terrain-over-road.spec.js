@@ -29,7 +29,11 @@ test("Hungaroring terrain stays below the racing surface through the T2 basin", 
     [-6, -3, 0, 3, 6].map((lat) => window.__apex.groundY(0.163, lat).gap)
   );
 
-  expect(Math.max(...gaps)).toBeLessThanOrEqual(TOL);
+  for (const gap of gaps) {
+    // No covering terrain is also safe; any terrain that does cover the sample
+    // must remain below the asphalt within interpolation tolerance.
+    expect(gap === null || gap <= TOL).toBe(true);
+  }
 });
 
 test("no terrain/road faces over the racing line (all circuits)", async ({ page }) => {
