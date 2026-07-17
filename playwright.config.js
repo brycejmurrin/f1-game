@@ -24,7 +24,7 @@ export default defineConfig({
   testDir: "./tests",
   // Scratch/scan suites are ad-hoc investigation scripts, not part of the
   // regression suite — keep them out of default discovery.
-  testIgnore: ["**/inspect/**", "**/blank-scan/**"],
+  testIgnore: ["**/inspect/**", "**/blank-scan/**", "**/galleries/**"],
   globalSetup: './tests/global-setup.js',
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
