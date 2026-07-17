@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const GLSL = readFileSync(new URL("../js/shaders/glx-shaders.js", import.meta.url), "utf8");
+const WGSL = readFileSync(new URL("../js/webgpu/wgsl-post.js", import.meta.url), "utf8");
 const LUMA = [0.2126, 0.7152, 0.0722];
 const luma = (c) => c[0] * LUMA[0] + c[1] * LUMA[1] + c[2] * LUMA[2];
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -61,13 +62,45 @@ test("tonal masks target ordered luminance ranges", () => {
   assert.ok(bright[4] > bright[0]);
 });
 
-test("GLSL exposes the safe packed HDR grade contract", () => {
+test("GLSL exposes the exact safe packed HDR grade contract", () => {
   assert.match(GLSL, /uniform vec4 uTone0/);
   assert.match(GLSL, /uniform vec4 uTone1/);
   for (const name of ["uLift", "uGamma", "uGain"])
     assert.match(GLSL, new RegExp(`uniform vec3 ${name}`));
   assert.match(GLSL, /applyHdrGrade/);
-  assert.match(GLSL, /log2\(max\(/);
+  assert.match(GLSL, /float z = log2\(max\(y, 1e-6\) \/ 0\.18\)/);
+  assert.match(GLSL, /w0\.x = 1\.0 - smoothstep\(-5\.0, -2\.5, z\)/);
+  assert.match(GLSL, /w0\.y = smoothstep\(-5\.0, -2\.5, z\) \* \(1\.0 - smoothstep\(-1\.5, 0\.0, z\)\)/);
+  assert.match(GLSL, /w0\.z = smoothstep\(-2\.5, -0\.5, z\) \* \(1\.0 - smoothstep\(0\.5, 2\.5, z\)\)/);
+  assert.match(GLSL, /w0\.w = smoothstep\(0\.0, 1\.5, z\) \* \(1\.0 - smoothstep\(3\.0, 5\.0, z\)\)/);
+  assert.match(GLSL, /wWhite = smoothstep\(2\.5, 5\.0, z\)/);
+  assert.match(GLSL, /vec3 gain = max\(uGain, vec3\(1e-3\)\)/);
+  assert.match(GLSL, /vec3 invGamma = 1\.0 \/ max\(uGamma, vec3\(1e-3\)\)/);
+  assert.match(GLSL, /pow\(max\(c, vec3\(0\.0\)\), invGamma\)/);
+  assert.match(GLSL, /exp2\(clamp\(stops, -4\.0, 4\.0\)\)/);
+  assert.match(GLSL, /newY \/ max\(oldY, 1e-6\)/);
+});
+
+test("WGSL mirrors exact HDR masks, safety guards, and composite order", () => {
+  assert.match(WGSL, /fn gradeZoneWeights\(/);
+  assert.match(WGSL, /fn applyToeShoulder\(/);
+  assert.match(WGSL, /fn applyHdrGrade\(/);
+  assert.match(WGSL, /let z = log2\(max\(y, 1e-6\) \/ 0\.18\)/);
+  assert.match(WGSL, /1\.0 - smoothstep\(-5\.0, -2\.5, z\)/);
+  assert.match(WGSL, /smoothstep\(-5\.0, -2\.5, z\) \* \(1\.0 - smoothstep\(-1\.5, 0\.0, z\)\)/);
+  assert.match(WGSL, /smoothstep\(-2\.5, -0\.5, z\) \* \(1\.0 - smoothstep\(0\.5, 2\.5, z\)\)/);
+  assert.match(WGSL, /smoothstep\(0\.0, 1\.5, z\) \* \(1\.0 - smoothstep\(3\.0, 5\.0, z\)\)/);
+  assert.match(WGSL, /smoothstep\(2\.5, 5\.0, z\)/);
+  assert.match(WGSL, /max\(U\.gain\.xyz, vec3<f32>\(1e-3\)\)/);
+  assert.match(WGSL, /1\.0 \/ max\(U\.gamma\.xyz, vec3<f32>\(1e-3\)\)/);
+  assert.match(WGSL, /pow\(max\(c_in, vec3<f32>\(0\.0\)\)/);
+  assert.match(WGSL, /exp2\(clamp\(stops, -4\.0, 4\.0\)\)/);
+  assert.match(WGSL, /newY \/ max\(oldY, 1e-6\)/);
+  assert.match(
+    WGSL,
+    /c = c \+ bloomSample[\s\S]*?c = applyHdrGrade\(c\);[\s\S]*?c = acesTonemap\(/,
+    "HDR grade must run after bloom composition and before ACES",
+  );
 });
 
 test("neutral HDR grade preserves representative linear samples", () => {

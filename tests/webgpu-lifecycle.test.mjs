@@ -255,7 +255,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*384/);
-  assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*144/);
+  assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*224/);
 
   const h = makeGpuHarness();
   const gfx = await h.create();
@@ -263,22 +263,38 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
   const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 384);
-  const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 144);
+  const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 224);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 64], "shadowCtr must occupy floats 88..91");
   assert.deepEqual(frame.slice(92, 96), [1, 0, 0, 0], "wetDark params6 must occupy distinct floats 92..95");
   let composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 0.5);
   assert.ok(Math.abs(composite[32] - 0.35) < 1e-6);
+  assert.deepEqual(composite.slice(36, 44), [0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0]);
+  assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0]);
+  assert.deepEqual(composite.slice(52, 56), [1, 1, 1, 0]);
 
   assert.equal(gfx.begin({ tune: { wetDark: -7 }, shadowCtr: [44, 55, 66] }), true);
-  gfx.present({ tune: { bloomKnee: 4.25, vignetteSoft: -2.5 } });
+  gfx.present({ tune: {
+    bloomKnee: 4.25, vignetteSoft: -2.5,
+    blacks: 1, shadows: 2, midtones: 3, highlights: 4, whites: 5,
+    toe: 6, shoulder: 7,
+    liftR: 8, liftG: 9, liftB: 10,
+    gammaR: 11, gammaG: 12, gammaB: 13,
+    gainR: 14, gainG: 15, gainB: 16,
+  } });
   frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [44, 55, 66, 64], "wetDark must not overwrite shadowCtr");
   assert.equal(frame[92], -7);
   composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 4.25);
   assert.equal(composite[32], -2.5);
+  assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
+  assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 0], "tone1 must occupy floats 40..43");
+  assert.deepEqual(composite.slice(44, 48), [8, 9, 10, 0], "lift must occupy floats 44..47");
+  assert.deepEqual(composite.slice(48, 52), [11, 12, 13, 0], "gamma must occupy floats 48..51");
+  assert.deepEqual(composite.slice(52, 56), [14, 15, 16, 0], "gain must occupy floats 52..55");
 });
 
 test("WGSL consumes wet darkening, bloom knee, and vignette softness uniforms", () => {
