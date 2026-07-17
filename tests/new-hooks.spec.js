@@ -123,12 +123,21 @@ test.describe("__apex.sectorState()", () => {
 
   test("sector index is 0 in S1 and 1 in S2", async ({ page }) => {
     await load(page);
-    // Place in S1 (10%), step to let physics update sectorIdx
-    await page.evaluate(() => { window.__apex.jump(0.10, 40, 0); window.__apex.step(1 / 60, 3); });
+    // Place relative to this track's curated sector splits (not equal thirds).
+    const bounds = await page.evaluate(() => {
+      const sec = window.__apex.info().sectors || [1 / 3, 2 / 3];
+      return { s1: sec[0], s2: sec[1] };
+    });
+    await page.evaluate((midS1) => {
+      window.__apex.jump(midS1, 40, 0);
+      window.__apex.step(1 / 60, 3);
+    }, bounds.s1 * 0.5);
     const inS1 = await page.evaluate(() => window.__apex.sectorState().idx);
     expect(inS1).toBe(0);
-    // Place in S2 (40%), step to let physics update sectorIdx
-    await page.evaluate(() => { window.__apex.jump(0.40, 40, 0); window.__apex.step(1 / 60, 3); });
+    await page.evaluate(({ s1, s2 }) => {
+      window.__apex.jump((s1 + s2) * 0.5, 40, 0);
+      window.__apex.step(1 / 60, 3);
+    }, bounds);
     const inS2 = await page.evaluate(() => window.__apex.sectorState().idx);
     expect(inS2).toBe(1);
   });

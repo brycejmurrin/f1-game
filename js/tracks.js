@@ -2661,19 +2661,25 @@ const Tracks = (function () {
       }
     }
 
-    // ── Trackside SIGNAGE: auto-placed at every detected corner, on EVERY
-    // circuit — no per-track authoring needed. Corner-number boards approximate
-    // real FIA numbering (sequential by lap order); ~half the corners also get
-    // a 3-2-1 braking-distance trio on the approach; one pit-entry speed disc
-    // per lap. This was a genuine gap: no signage model existed at all before
-    // signBoard() (see the scenery audit).
+    // ── Trackside SIGNAGE: corner-number boards + braking markers + pit speed.
+    // Prefer curated FIA turn apexes (def.turns from CircuitMarkings); fall back
+    // to curvature-peak detection when a circuit has no markings table.
     {
       // NOTE: signBoard's `gap` forwards straight to anchor(k,side,gap), which
       // already adds hw[k] internally (dist = "beyond the edge") — passing
       // hw[k]+N here would double-count it and place every board ~2x too far
       // out. Pass the clearance alone, matching every other gap-based call in
       // this file (building/grandstand/marshalPost/…).
-      const laneCorners = findCorners(track, 0.007).slice().sort((a, b) => a.k - b.k);
+      let laneCorners;
+      if (def.turns && def.turns.length) {
+        laneCorners = def.turns.map((frac) => {
+          const k = Math.round((((frac % 1) + 1) % 1) * n) % n;
+          const sign = Math.sign(curvature(track, k * ds)) || 1;
+          return { k, sign, lo: 14 };
+        });
+      } else {
+        laneCorners = findCorners(track, 0.007).slice().sort((a, b) => a.k - b.k);
+      }
       laneCorners.forEach((c, idx) => {
         const outside = c.sign > 0 ? -1 : 1;
         signBoard(c.k, outside, 3.5, "corner", idx + 1);
@@ -2681,7 +2687,7 @@ const Tracks = (function () {
         // half the corners, spaced back along the approach — avoids clutter on
         // every single bend while still reading as a real trackside kit.
         if (hash(c.k * 3.1 + 7) > 0.5) {
-          const lo = Math.max(6, c.lo);
+          const lo = Math.max(6, c.lo || 14);
           const offs = [Math.round(lo * 0.85), Math.round(lo * 0.5), Math.round(lo * 0.18)];
           [3, 2, 1].forEach((stripes, si) => {
             const kk = ((c.k - offs[si]) % n + n) % n;
@@ -3598,6 +3604,10 @@ const Tracks = (function () {
       hwZones: d.hwZones || null,
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
+      // Curated FIA-aligned sector splits + turn apexes (js/circuit-markings.js).
+      // Authored in RACING-LAP space (post startFrac/reverse) — do not fmap.
+      sectors: (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].sectors) || null,
+      turns:   (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].turns)   || null,
     };
     def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
     // Lap-direction + start-line transform.
