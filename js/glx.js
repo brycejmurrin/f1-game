@@ -94,7 +94,7 @@ const GLX = (function () {
   let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
   let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
   let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
-  let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null, blackTex = null;
+  let ssaoBlurFBO = null, ssaoBlurTex = null, whiteTex = null, blackTex = null, dirtTex = null;
   let godrayProg = null, godrayU = null, godrayFBO = null, godrayTex = null;
   let godrayBlurFBO = null, godrayBlurTex = null;
   let godrayW = 0, godrayH = 0;
@@ -234,7 +234,7 @@ const GLX = (function () {
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur", "uDirt", "uLensDirt"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -249,7 +249,74 @@ const GLX = (function () {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    makeDirtTex();
     return true;
+  }
+
+  // LENS DIRT smudge map: a small procedural greyscale texture generated on a
+  // canvas at init (this repo ships no image assets). A low-frequency value-noise
+  // base (random coarse grid upscaled with bilinear smoothing) plus soft grime
+  // blobs, dust specks and faint wipe streaks. Deterministic LCG seed → every
+  // load gets the same lens. Sampled by COMPOSITE_FS to scatter bloom energy
+  // into a veil and to break the sun flare into a blotchy, smudged one.
+  function makeDirtTex() {
+    try {
+      const S = 256;
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = S;
+      const c2 = cv.getContext("2d");
+      if (!c2) return;
+      let seed = 0x9e3779b9;
+      const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+      c2.fillStyle = "#000"; c2.fillRect(0, 0, S, S);
+      // value-noise base: coarse random luminance grid, bilinearly upscaled
+      const N = 16;
+      const nc = document.createElement("canvas");
+      nc.width = nc.height = N;
+      const n2 = nc.getContext("2d");
+      const img = n2.createImageData(N, N);
+      for (let i = 0; i < N * N; i++) {
+        const v = (rnd() * 42) | 0;
+        img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+        img.data[i * 4 + 3] = 255;
+      }
+      n2.putImageData(img, 0, 0);
+      c2.imageSmoothingEnabled = true;
+      c2.globalCompositeOperation = "lighter";
+      c2.drawImage(nc, 0, 0, N, N, 0, 0, S, S);
+      // soft grime blobs (the "smudge" body)
+      for (let i = 0; i < 130; i++) {
+        const x = rnd() * S, y = rnd() * S, r = 3 + rnd() * rnd() * 30;
+        const a = 0.03 + rnd() * rnd() * 0.12;
+        const g = c2.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, "rgba(255,255,255," + a.toFixed(3) + ")");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        c2.fillStyle = g;
+        c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
+      }
+      // bright dust specks
+      for (let i = 0; i < 70; i++) {
+        const x = rnd() * S, y = rnd() * S, r = 0.6 + rnd() * 1.7;
+        c2.fillStyle = "rgba(255,255,255," + (0.10 + rnd() * 0.28).toFixed(3) + ")";
+        c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
+      }
+      // faint diagonal wipe streaks
+      for (let i = 0; i < 9; i++) {
+        const x = rnd() * S, y = rnd() * S, len = 30 + rnd() * 100, ang = rnd() * 6.2832;
+        c2.strokeStyle = "rgba(255,255,255," + (0.02 + rnd() * 0.05).toFixed(3) + ")";
+        c2.lineWidth = 1 + rnd() * 3;
+        c2.beginPath(); c2.moveTo(x, y);
+        c2.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+        c2.stroke();
+      }
+      dirtTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, dirtTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    } catch (e) { dirtTex = null; }   // no canvas 2D → knob becomes a no-op (black fallback)
   }
 
   // (Re)allocate the scene + bloom render targets at the current size.
@@ -1757,6 +1824,12 @@ const GLX = (function () {
     gl.uniform1f(compU.uWhitePoint, CT && CT.whitePoint != null ? CT.whitePoint : 1.0);
     gl.uniform1f(compU.uSpeedBlur,  opts && opts.speedBlur != null ? opts.speedBlur : 0.0);
     gl.uniform1f(compU.uSsrThick,   CT && CT.ssrThick   != null ? CT.ssrThick   : 0.20);
+    // LENS DIRT: bind the procedural smudge map (black fallback = veil term is
+    // zero even if the knob is up, so a failed canvas init degrades silently).
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, dirtTex || blackTex);
+    gl.uniform1i(compU.uDirt, 5);
+    gl.uniform1f(compU.uLensDirt, CT && CT.lensDirt != null ? CT.lensDirt : 0.15);
     // uReflTexel drives both SSR and SHARPEN, so upload it every frame (not only
     // inside the haveRefl block) — otherwise sharpen samples with a stale texel.
     gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);

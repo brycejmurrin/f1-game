@@ -1836,6 +1836,8 @@ uniform float uSharpen;      // unsharp-mask crispness (def 0)
 uniform float uBlackLift;    // raised black floor (def 0.005)
 uniform float uWhitePoint;   // highlight roll-off knee (def 1.0)
 uniform float uSpeedBlur;    // radial speed blur amount, 0 = off
+uniform sampler2D uDirt;     // procedural lens-dirt smudge map (generated at init)
+uniform float uLensDirt;     // lens-dirt veil strength (IMAGE & COLOUR knob, def 0.15)
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
@@ -1995,6 +1997,7 @@ void main() {
       vec3 pos = P, prevPos = P;
       float stepLen = 0.55;
       float hit = 0.0;
+      float hitDist = 0.0;                       // march distance to the hit (contact hardening)
       vec2 hitUV = vec2(0.0);
       bool found = false;
       for (int i = 0; i < 20; i++) {               // 28→20: slightly faster growth
@@ -2016,6 +2019,7 @@ void main() {
           }
           vec4 fc = uProj * vec4(b, 1.0);
           hitUV = fc.xy / fc.w * 0.5 + 0.5;
+          hitDist = length(b - P);
           vec2 e = abs(hitUV - 0.5) * 2.0;
           hit = 1.0 - pow(max(e.x, e.y), 4.0);     // screen-edge fade
           found = true;
@@ -2033,6 +2037,11 @@ void main() {
         float streak = (carTerm > roadTerm)
           ? uCarReflect * (0.006 + 0.030 * carSoft)
           : uReflect * (0.010 + 0.022 * clamp((0.62 - vUV.y) / 0.62, 0.0, 1.0));
+        // CONTACT HARDENING: real rough reflections blur with distance from the
+        // reflector — the reflection of an object touching the wet road is
+        // near-crisp, a distant tower smears. Scale the streak by the march's
+        // actual hit distance: sharp at contact (x0.3), softer far out (x1.6).
+        streak *= mix(0.3, 1.6, clamp(hitDist / 25.0, 0.0, 1.0));
         float w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
         hitCol  = texture(uScene, hitUV).rgb * w0;
         hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 0.5)).rgb * w1;
@@ -2117,6 +2126,16 @@ void main() {
   // scene while the halos kept full pre-exposure energy — over-strong bloom.
   c += bloomSample * uBloomAmt * bloomMask * uExposure;
 
+  // LENS DIRT veil: grime on the lens scatters incoming light into a smudgy
+  // film. Driven by the blurred bright-pass, so it only appears where the frame
+  // actually carries bright energy (sun, floodlights, neon) — a dark scene
+  // stays clean. The dirt value is reused by the flare modulation below.
+  float dirt = 0.0;
+  if (uLensDirt > 0.001) {
+    dirt = texture(uDirt, vUV).r;
+    c += bloomSample * uExposure * dirt * uLensDirt * 2.2;
+  }
+
   // Sun shafts / god-rays: radial samples from current pixel toward the sun's
   // screen position, reading the bright-pass (bloom[0] after bright-pass step).
   // Additively composited. Gated when uSunShaft > 0 (sun on-screen, above horizon).
@@ -2196,6 +2215,9 @@ void main() {
     // near-uniform band sit at 1.2 across the whole streak). Compressing keeps
     // the hot core near the sun bright while taming the wash further out.
     flare *= uFlareStr * sunVis;
+    // Lens dirt breaks the clean procedural flare into a blotchy, smudged one —
+    // bright spots where grime catches the glare, dimmer in the clean patches.
+    if (uLensDirt > 0.001) flare *= mix(1.0, 0.35 + dirt * 2.2, clamp(uLensDirt * 2.0, 0.0, 0.85));
     flare = flare / (1.0 + flare * 0.6);
   }
   c += flare;
