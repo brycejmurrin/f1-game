@@ -16,7 +16,7 @@ const Parts = (function () {
     {
       id: "engine", label: "ENGINE",
       options: [
-        { id: "stock",        label: "Stock",          cost:   0, desc: "Factory spec power unit",                                           speed: 1.00, accel: 1.00, visual: {"in": 0.85, "inlet": 1, "outlet": 1, podWidth: 1, shoulderHeight: 1, undercut: 1, coke: 1, tailWidth: 1, coverHeight: 1}, visualTier: 1 },
+        { id: "stock",        label: "Stock",          cost:   0, desc: "Factory spec power unit",                                           speed: 1.00, accel: 1.00, visual: { in: 0.85, inlet: 1, outlet: 1, podWidth: 1, shoulderHeight: 1, undercut: 1, coke: 1, tailWidth: 1, coverHeight: 1, servicePanel: 1, heatShield: 1 }, visualTier: 1 },
         { id: "lean_burn",    label: "Lean Burn",      cost:  30, desc: "Efficiency-tuned mapping — fuel saving with surprising torque",     accel: 1.05, visual: {"in": 0.72, "inlet": 0, "outlet": 0, podWidth: 0.88, shoulderHeight: 0.92, undercut: 1.18, coke: 1.15, tailWidth: 0.88, coverHeight: 0.90}, visualTier: 1 },
         { id: "performance",  label: "Performance",    cost:  60, desc: "Optimised mapping — peak acceleration gains",                       speed: 1.00, accel: 1.09, visual: {"in": 1.15, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.08, shoulderHeight: 1.12, undercut: 0.90, coke: 0.94, tailWidth: 1.08, coverHeight: 1.07}, visualTier: 2 },
         { id: "v_power",      label: "V-Power Spec",   cost:  70, desc: "Premium fuel-optimised mapping — balanced speed and accel",        speed: 1.02, accel: 1.07, visual: {"in": 1.1, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.04, shoulderHeight: 1.08, undercut: 0.96, coke: 1.02, tailWidth: 1.04, coverHeight: 1.03}, visualTier: 2 },
@@ -48,33 +48,33 @@ const Parts = (function () {
     {
       id: "aero", label: "AERO",
       options: [
-        { id: "minimal",       label: "Minimal",        cost:   0, desc: "+10% top speed — heavily reduced downforce",                     speed: 1.10, cornering: 0.78, visual: {"lvl": 0, "vane": 0}, visualTier: 0 },
-        { id: "le_mans",       label: "Le Mans Trim",   cost:  80, desc: "Hypercar ultra-low drag — extreme top speed, severe grip penalty", speed: 1.14, cornering: 0.80, visual: {"lvl": 0, "vane": 1}, visualTier: 0 },
-        { id: "low",           label: "Low DF",         cost:  40, desc: "+6% top speed — reduced cornering grip",                         speed: 1.06, cornering: 0.88, visual: {"lvl": 1, "vane": 1}, visualTier: 0 },
-        { id: "s_duct",        label: "S-Duct",         cost:  60, desc: "Shaped duct package — front aero efficiency with grip trade-off", speed: 1.04, cornering: 0.93, visual: {"lvl": 1, "vane": 2}, visualTier: 0 },
-        { id: "medium",        label: "Medium",         cost:   0, desc: "Balanced configuration for all circuit types",                   speed: 1.00, cornering: 1.00, visual: {"lvl": 2, "vane": 1}, visualTier: 1 },
-        { id: "beam_wing",     label: "Beam Wing",      cost:  50, desc: "Rear beam wing — cornering and braking from low-drag base",      speed: 0.99, cornering: 1.07, braking: 1.04, visual: {"lvl": 2, "beam": 1, "vane": 1}, visualTier: 2 },
-        { id: "rake_setup",    label: "Rake Setup",     cost:  90, desc: "High-rear rake — improved cornering and braking",                speed: 0.97, cornering: 1.10, braking: 1.08, visual: {"lvl": 3, "vane": 2}, visualTier: 2 },
-        { id: "diffuser",      label: "Diffuser Focus", cost: 100, desc: "Rear diffuser package — cornering and braking bias",             speed: 0.98, cornering: 1.18, braking: 1.06, visual: {"lvl": 3, "beam": 1, "vane": 2}, visualTier: 2 },
-        { id: "high",          label: "High DF",        cost:  80, desc: "−5% top speed, strong cornering grip",                          speed: 0.95, cornering: 1.15, visual: {"lvl": 3.25, "vane": 2}, visualTier: 2 },
-        { id: "underfloor",    label: "Underfloor Kit", cost: 120, desc: "Enhanced tunnel floors — high grip with less drag penalty",      speed: 0.94, cornering: 1.22, visual: {"lvl": 3, "beam": 1, "vane": 3}, visualTier: 2 },
-        { id: "extreme",       label: "Extreme DF",     cost: 130, desc: "Maximum downforce — Monaco / Singapore spec",                   speed: 0.89, cornering: 1.26, visual: {"lvl": 4, "vane": 3}, visualTier: 2 },
-        { id: "active_aero",   label: "Active Aero",    cost: 160, desc: "Adaptive aero surfaces — speed and cornering in one package",    speed: 1.03, cornering: 1.18, visual: {"lvl": 3, "drs": 1, "vane": 2}, visualTier: 2 },
-        { id: "ground_effect", label: "Ground Effect",  cost: 170, desc: "2026 tunnel floor package — peak grip and braking",              speed: 0.87, cornering: 1.32, braking: 1.10, visual: {"lvl": 4, "beam": 1, "vane": 3}, visualTier: 2 },
-        { id: "circuit_adaptive", label: "Circuit Adaptive", cost: 190, desc: "Linked flap and floor package — efficient grip across mixed-speed sectors", speed: 1.01, cornering: 1.22, braking: 1.06, visual: { lvl: 3.6, beam: 1, drs: 1, vane: 3 }, visualTier: 2 },
+        { id: "minimal",       label: "Minimal",        cost:   0, desc: "+10% top speed — heavily reduced downforce",                     speed: 1.10, cornering: 0.78, visual: { lvl: 0, vane: 0, frontSweep: -0.03, frontTaper: 1.05, frontRise: 0, rearSweep: -0.02, rearTaper: 1.04, floorEdge: 0.78, floorCut: 0.02, diffuserRise: 0.72 }, visualTier: 0 },
+        { id: "le_mans",       label: "Le Mans Trim",   cost:  80, desc: "Hypercar ultra-low drag — extreme top speed, severe grip penalty", speed: 1.14, cornering: 0.80, visual: { lvl: 0, vane: 1, frontSweep: 0.01, frontTaper: 0.94, frontRise: 0.01, rearSweep: 0.02, rearTaper: 0.90, floorEdge: 0.82, floorCut: 0.08, diffuserRise: 0.76 }, visualTier: 0 },
+        { id: "low",           label: "Low DF",         cost:  40, desc: "+6% top speed — reduced cornering grip",                         speed: 1.06, cornering: 0.88, visual: { lvl: 1, vane: 1, frontSweep: 0.03, frontTaper: 0.96, frontRise: 0.02, rearSweep: 0.04, rearTaper: 0.94, floorEdge: 0.88, floorCut: 0.06, diffuserRise: 0.82 }, visualTier: 0 },
+        { id: "s_duct",        label: "S-Duct",         cost:  60, desc: "Shaped duct package — front aero efficiency with grip trade-off", speed: 1.04, cornering: 0.93, visual: { lvl: 1, vane: 2, frontSweep: 0.08, frontTaper: 0.92, frontRise: 0.05, rearSweep: 0.03, rearTaper: 0.96, floorEdge: 0.90, floorCut: 0.10, diffuserRise: 0.84 }, visualTier: 0 },
+        { id: "medium",        label: "Medium",         cost:   0, desc: "Balanced configuration for all circuit types",                   speed: 1.00, cornering: 1.00, visual: { lvl: 2, vane: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }, visualTier: 1 },
+        { id: "beam_wing",     label: "Beam Wing",      cost:  50, desc: "Rear beam wing — cornering and braking from low-drag base",      speed: 0.99, cornering: 1.07, braking: 1.04, visual: { lvl: 2, beam: 1, vane: 1, frontSweep: 0.04, frontTaper: 0.97, frontRise: 0.04, rearSweep: 0.07, rearTaper: 0.93, floorEdge: 0.98, floorCut: 0.05, diffuserRise: 1.06 }, visualTier: 2 },
+        { id: "rake_setup",    label: "Rake Setup",     cost:  90, desc: "High-rear rake — improved cornering and braking",                speed: 0.97, cornering: 1.10, braking: 1.08, visual: { lvl: 3, vane: 2, frontSweep: 0.06, frontTaper: 0.94, frontRise: 0.07, rearSweep: 0.08, rearTaper: 0.94, floorEdge: 1.04, floorCut: 0.11, diffuserRise: 1.12 }, visualTier: 2 },
+        { id: "diffuser",      label: "Diffuser Focus", cost: 100, desc: "Rear diffuser package — cornering and braking bias",             speed: 0.98, cornering: 1.18, braking: 1.06, visual: { lvl: 3, beam: 1, vane: 2, frontSweep: 0.05, frontTaper: 0.96, frontRise: 0.06, rearSweep: 0.07, rearTaper: 0.92, floorEdge: 1.10, floorCut: 0.14, diffuserRise: 1.28 }, visualTier: 2 },
+        { id: "high",          label: "High DF",        cost:  80, desc: "−5% top speed, strong cornering grip",                          speed: 0.95, cornering: 1.15, visual: { lvl: 3.25, vane: 2, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.90, floorEdge: 1.08, floorCut: 0.10, diffuserRise: 1.16 }, visualTier: 2 },
+        { id: "underfloor",    label: "Underfloor Kit", cost: 120, desc: "Enhanced tunnel floors — high grip with less drag penalty",      speed: 0.94, cornering: 1.22, visual: { lvl: 3, beam: 1, vane: 3, frontSweep: 0.07, frontTaper: 0.93, frontRise: 0.08, rearSweep: 0.06, rearTaper: 0.94, floorEdge: 1.24, floorCut: 0.18, diffuserRise: 1.26 }, visualTier: 2 },
+        { id: "extreme",       label: "Extreme DF",     cost: 130, desc: "Maximum downforce — Monaco / Singapore spec",                   speed: 0.89, cornering: 1.26, visual: { lvl: 4, vane: 3, frontSweep: 0.12, frontTaper: 0.86, frontRise: 0.14, rearSweep: 0.12, rearTaper: 0.86, floorEdge: 1.18, floorCut: 0.16, diffuserRise: 1.30 }, visualTier: 2 },
+        { id: "active_aero",   label: "Active Aero",    cost: 160, desc: "Adaptive aero surfaces — speed and cornering in one package",    speed: 1.03, cornering: 1.18, visual: { lvl: 3, drs: 1, vane: 2, frontSweep: 0.10, frontTaper: 0.90, frontRise: 0.10, rearSweep: 0.14, rearTaper: 0.88, floorEdge: 1.06, floorCut: 0.12, diffuserRise: 1.14 }, visualTier: 2 },
+        { id: "ground_effect", label: "Ground Effect",  cost: 170, desc: "2026 tunnel floor package — peak grip and braking",              speed: 0.87, cornering: 1.32, braking: 1.10, visual: { lvl: 4, beam: 1, vane: 3, frontSweep: 0.09, frontTaper: 0.89, frontRise: 0.11, rearSweep: 0.10, rearTaper: 0.88, floorEdge: 1.30, floorCut: 0.22, diffuserRise: 1.36 }, visualTier: 2 },
+        { id: "circuit_adaptive", label: "Circuit Adaptive", cost: 190, desc: "Linked flap and floor package — efficient grip across mixed-speed sectors", speed: 1.01, cornering: 1.22, braking: 1.06, visual: { lvl: 3.6, beam: 1, drs: 1, vane: 3, frontSweep: 0.11, frontTaper: 0.88, frontRise: 0.12, rearSweep: 0.13, rearTaper: 0.87, floorEdge: 1.16, floorCut: 0.15, diffuserRise: 1.22 }, visualTier: 2 },
         { id: "sig_mclaren_flex", label: "Papaya Flex Wing", cost: 190, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "circuit_adaptive",
-          desc: "McLaren signature compliant flap package — Circuit Adaptive performance with a twin-vane form", speed: 1.01, cornering: 1.22, braking: 1.06, visual: { lvl: 3.55, beam: 1, drs: 1, vane: 2 }, visualTier: 2 },
+          desc: "McLaren signature compliant flap package — Circuit Adaptive performance with a twin-vane form", speed: 1.01, cornering: 1.22, braking: 1.06, visual: { lvl: 3.55, beam: 1, drs: 1, vane: 2, frontSweep: 0.15, frontTaper: 0.84, frontRise: 0.13, rearSweep: 0.16, rearTaper: 0.84, floorEdge: 1.14, floorCut: 0.17, diffuserRise: 1.20 }, visualTier: 2 },
         { id: "sig_williams_lowdrag", label: "Grove Low-Drag", cost: 40, teams: ["williams"], tag: "SIGNATURE", equivalent: "low",
-          desc: "Williams signature straight-line package — Low DF performance with stripped turning vanes", speed: 1.06, cornering: 0.88, visual: { lvl: 1.15, vane: 0, beam: 0, drs: 0 }, visualTier: 0 },
+          desc: "Williams signature straight-line package — Low DF performance with stripped turning vanes", speed: 1.06, cornering: 0.88, visual: { lvl: 1.15, vane: 0, beam: 0, drs: 0, frontSweep: -0.02, frontTaper: 1.02, frontRise: 0.01, rearSweep: 0.01, rearTaper: 0.92, floorEdge: 0.86, floorCut: 0.03, diffuserRise: 0.80 }, visualTier: 0 },
         { id: "sig_aston_tunnel", label: "Silverstone Tunnel", cost: 170, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "ground_effect",
-          desc: "Aston Martin signature tunnel floor — Ground Effect performance with an active upper flap", speed: 0.87, cornering: 1.32, braking: 1.10, visual: { lvl: 4, beam: 1, vane: 2, drs: 1 }, visualTier: 2 },
+          desc: "Aston Martin signature tunnel floor — Ground Effect performance with an active upper flap", speed: 0.87, cornering: 1.32, braking: 1.10, visual: { lvl: 4, beam: 1, vane: 2, drs: 1, frontSweep: 0.10, frontTaper: 0.87, frontRise: 0.12, rearSweep: 0.15, rearTaper: 0.82, floorEdge: 1.32, floorCut: 0.21, diffuserRise: 1.38 }, visualTier: 2 },
       ],
     },
     {
       id: "suspension", label: "SUSPENSION",
       options: [
         { id: "comfort",         label: "Comfort",         cost:   0, desc: "Softer springs — forgiving over kerbs, less cornering bite",            cornering: 0.94, visual: {"ride": 0.055, "arm": 0.8, "push": 0}, visualTier: 0 },
-        { id: "standard",        label: "Standard",        cost:   0, desc: "Factory road setup",                                                    cornering: 1.00, visual: {"ride": 0, "arm": 1, "push": 0}, visualTier: 1 },
+        { id: "standard",        label: "Standard",        cost:   0, desc: "Factory road setup",                                                    cornering: 1.00, visual: { ride: 0, arm: 1, push: 0, wishbone: 1, toe: 1 }, visualTier: 1 },
         { id: "sport",           label: "Sport",           cost:  50, desc: "Stiffer setup — improved cornering response",                            cornering: 1.08, visual: {"ride": -0.01, "arm": 1.05, "push": 0}, visualTier: 2 },
         { id: "carbon_pushrods", label: "Carbon Pushrods", cost:  60, desc: "Lightweight carbon arms — quick response and braking benefit",           cornering: 1.09, braking: 1.04, visual: {"ride": -0.015, "arm": 0.9, "push": 1}, visualTier: 2 },
         { id: "kerb_spec",       label: "Kerb Spec",       cost:  70, desc: "Circuit-tuned stiffness — helps cornering and braking",                  cornering: 1.11, braking: 1.05, visual: {"ride": 0.01, "arm": 1.1, "push": 0}, visualTier: 2 },
@@ -94,7 +94,7 @@ const Parts = (function () {
     {
       id: "brakes", label: "BRAKES",
       options: [
-        { id: "standard",    label: "Standard",         cost:   0, desc: "Factory steel brake discs",                                                 braking: 1.00, visual: {"cal": null, "duct": 0.55}, visualTier: 1 },
+        { id: "standard",    label: "Standard",         cost:   0, desc: "Factory steel brake discs",                                                 braking: 1.00, visual: { cal: null, duct: 0.55, caliperPos: 0, coverOpen: 0, rotor: 1, rotorScale: 1 }, visualTier: 1 },
         { id: "drilled",     label: "Drilled Steel",    cost:  30, desc: "Cross-drilled steel discs — improved heat management",                      braking: 1.05, visual: {"cal": null, "duct": 0.72}, visualTier: 1 },
         { id: "sport",       label: "Sport",            cost:  40, desc: "Improved pads and discs",                                                   braking: 1.08, visual: {"cal": [0.95, 0.45, 0.05], "duct": 0.95}, visualTier: 2 },
         { id: "titanium",    label: "Titanium Caliper", cost:  50, desc: "Lighter alloy calipers — better weight distribution and exit speed",        braking: 1.06, accel: 1.04, visual: {"cal": [0.7, 0.72, 0.78], "duct": 0.85}, visualTier: 1 },
@@ -135,7 +135,7 @@ const Parts = (function () {
     {
       id: "ers", label: "ERS",
       options: [
-        { id: "standard",       label: "Standard",      cost:   0, desc: "Balanced energy recovery and deployment",                                    speed: 1.00, accel: 1.00, visual: {"led": [0.15, 0.55, 1.6], "pack": 1.0}, visualTier: 1 },
+        { id: "standard",       label: "Standard",      cost:   0, desc: "Balanced energy recovery and deployment",                                    speed: 1.00, accel: 1.00, visual: { led: [0.15, 0.55, 1.6], pack: 1.0, cells: 3 }, visualTier: 1 },
         { id: "regen_plus",     label: "Regen+",        cost:  70, desc: "Enhanced braking recovery — harvests extra energy under braking",            braking: 1.05, accel: 1.05, visual: {"led": [0.12, 1.5, 0.55], "pack": 1.05}, visualTier: 1 },
         { id: "harvest",        label: "Harvest",       cost:  60, desc: "Aggressive recovery: +2% top speed, −5% accel",                             speed: 1.02, accel: 0.95, visual: {"led": [0.18, 1.35, 0.95], "pack": 0.95}, visualTier: 0 },
         { id: "split_deploy",   label: "Split Deploy",  cost:  90, desc: "Per-axle deployment control — improved cornering traction and accel",        accel: 1.06, cornering: 1.04, visual: {"led": [0.85, 0.55, 1.7], "pack": 1.1}, visualTier: 1 },
@@ -155,7 +155,7 @@ const Parts = (function () {
     {
       id: "gearbox", label: "GEARBOX",
       options: [
-        { id: "standard",      label: "Standard",       cost:   0, desc: "Factory sequential 8-speed — baseline shift performance",                    speed: 1.00, accel: 1.00, visual: {"strakes": 0, "fin": 0, "strakeH": 0.13, "casing": 0, "louvres": 0, "heat": 0}, visualTier: 1 },
+        { id: "standard",      label: "Standard",       cost:   0, desc: "Factory sequential 8-speed — baseline shift performance",                    speed: 1.00, accel: 1.00, visual: { strakes: 0, fin: 0, strakeH: 0.13, casing: 0, louvres: 0, heat: 0, caseWidth: 1 }, visualTier: 1 },
         { id: "close_ratio",   label: "Close Ratio",    cost:  50, desc: "Tighter gear spacing — stronger drive out of slow corners",                  accel: 1.06, speed: 0.98, visual: {"strakes": 2, "fin": 0, "strakeH": 0.13, "casing": 1, "louvres": 2, "heat": 0}, visualTier: 1 },
         { id: "long_ratio",    label: "Long Ratio",     cost:  40, desc: "Wider gear spacing — improved top speed on power circuits",                  speed: 1.04, accel: 0.97, visual: {"strakes": 2, "fin": 0, "strakeH": 0.16, "casing": 1, "louvres": 0, "heat": 1}, visualTier: 1 },
         { id: "short_stack",   label: "Short Stack",    cost:  70, desc: "Extra-short first gear — explosive launch and corner exit traction",         accel: 1.08, cornering: 1.03, visual: {"strakes": 3, "fin": 1, "strakeH": 0.15, "finSY": 0.11, "finSZ": 0.22, "casing": 2, "louvres": 3, "heat": 0}, visualTier: 2 },
@@ -170,7 +170,7 @@ const Parts = (function () {
     {
       id: "fuel", label: "FUEL",
       options: [
-        { id: "standard",      label: "Standard",       cost:   0, desc: "Baseline pump-spec fuel — meets FIA minimum grade",                          speed: 1.00, accel: 1.00, visual: {"cap": [0.55, 0.52, 0.6], "flame": [1.15, 0.42, 0.14], "fxFlame": [2.6, 1.05, 0.25]}, visualTier: 1 },
+        { id: "standard",      label: "Standard",       cost:   0, desc: "Baseline pump-spec fuel — meets FIA minimum grade",                          speed: 1.00, accel: 1.00, visual: { cap: [0.55, 0.52, 0.6], flame: [1.15, 0.42, 0.14], fxFlame: [2.6, 1.05, 0.25], line: 1 }, visualTier: 1 },
         { id: "high_octane",   label: "High Octane",    cost:  40, desc: "Higher octane blend — cleaner combustion and accel improvement",             accel: 1.05, visual: {"cap": [1.5, 1.15, 0.18], "flame": [1.75, 1.4, 0.45], "fxFlame": [2.7, 2.1, 0.7]}, visualTier: 1 },
         { id: "biofuel",       label: "Biofuel 100",    cost:  50, desc: "FIA-sustainable 100% biofuel — consistent burn and slight braking gain",     braking: 1.04, accel: 1.03, visual: {"cap": [0.18, 1.35, 0.5], "flame": [0.35, 1.65, 0.42], "fxFlame": [1.7, 1.9, 0.55]}, visualTier: 1 },
         { id: "race_blend",    label: "Race Blend",     cost:  90, desc: "F1-regulation compound — refined energy density for speed and accel",        speed: 1.02, accel: 1.06, visual: {"cap": [1.6, 0.6, 0.14], "flame": [1.95, 0.72, 0.14], "fxFlame": [2.9, 1.1, 0.25]}, visualTier: 1 },
@@ -194,19 +194,23 @@ const Parts = (function () {
   const VISUAL_FIELD_REGISTRY = Object.freeze({
     geometry: Object.freeze({
       engine: Object.freeze(["in", "snork", "twin", "inlet", "outlet",
-        "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight"]),
-      aero: Object.freeze(["lvl", "beam", "drs", "vane"]),
-      suspension: Object.freeze(["ride", "arm", "push", "pull"]),
-      brakes: Object.freeze(["duct"]),
+        "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight",
+        "servicePanel", "heatShield"]),
+      aero: Object.freeze(["lvl", "beam", "drs", "vane",
+        "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
+        "floorEdge", "floorCut", "diffuserRise"]),
+      suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe"]),
+      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale"]),
       tyres: Object.freeze(["grooved", "grooves", "grooveDepth", "bandWidth", "coverVanes"]),
-      ers: Object.freeze(["pack"]),
-      gearbox: Object.freeze(["strakes", "fin", "strakeH", "finSY", "finSZ", "casing", "louvres", "heat"]),
+      ers: Object.freeze(["pack", "cells"]),
+      gearbox: Object.freeze(["strakes", "fin", "strakeH", "finSY", "finSZ",
+        "casing", "louvres", "heat", "caseWidth"]),
     }),
     material: Object.freeze({
       brakes: Object.freeze(["cal", "rim"]),
       tyres: Object.freeze(["band"]),
       ers: Object.freeze(["led"]),
-      fuel: Object.freeze(["cap", "flame"]),
+      fuel: Object.freeze(["cap", "flame", "line"]),
     }),
     runtime: Object.freeze({
       fuel: Object.freeze(["fxFlame"]),

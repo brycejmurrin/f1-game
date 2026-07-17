@@ -509,6 +509,19 @@ test.describe("Parts module — visual recipes", () => {
         const parts = { engine: 1, _visual: { engine: { in: 1, inlet: 1, outlet: 1, ...engine } } };
         const anchors = Car3D.bodyAnchors(parts);
         const data = CarMesh.carDecalData(2, parts);
+        const title = LiveryTex.REGIONS.titleA, size = LiveryTex.SIZE;
+        const titleU = [title.x / size, (title.x + title.w) / size];
+        const titleV = [1 - (title.y + title.h) / size, 1 - title.y / size];
+        const titleVerts = [];
+        for (let i = 0; i < data.pos.length / 3; i++) {
+          const p = [data.pos[i*3], data.pos[i*3+1], data.pos[i*3+2]];
+          const uv = [data.uv[i*2], data.uv[i*2+1]];
+          if (Math.abs(p[0]) > 0.35 && p[2] >= -0.34 && p[2] <= 0.46 &&
+              uv[0] >= titleU[0] - 1e-7 && uv[0] <= titleU[1] + 1e-7 &&
+              uv[1] >= titleV[0] - 1e-7 && uv[1] <= titleV[1] + 1e-7) {
+            titleVerts.push({ side: Math.sign(p[0]), z: p[2], u: uv[0] });
+          }
+        }
         const triangles = [];
         for (let i = 0; i < data.idx.length; i += 3) {
           const points = [0, 1, 2].map((j) => {
@@ -538,6 +551,13 @@ test.describe("Parts module — visual recipes", () => {
           }),
           hasCreaseVertices: samples.some((p) => Math.abs(p.z - 0.22) < 1e-6),
           maxGap: Math.max(...samples.map((p) => p.gap)),
+          uvCoversRegion: Math.abs(Math.min(...titleVerts.map((p) => p.u)) - titleU[0]) < 1e-6 &&
+            Math.abs(Math.max(...titleVerts.map((p) => p.u)) - titleU[1]) < 1e-6,
+          uvContinuousAtCrease: [-1, 1].every((side) => {
+            const values = titleVerts.filter((p) => p.side === side && Math.abs(p.z - 0.22) < 1e-6)
+              .map((p) => p.u);
+            return values.length >= 4 && Math.max(...values) - Math.min(...values) < 1e-6;
+          }),
         };
       });
     });
@@ -546,6 +566,8 @@ test.describe("Parts module — visual recipes", () => {
       expect(variant.crossesCrease).toBe(false);
       expect(variant.hasCreaseVertices).toBe(true);
       expect(variant.maxGap).toBeLessThan(0.035);
+      expect(variant.uvCoversRegion).toBe(true);
+      expect(variant.uvContinuousAtCrease).toBe(true);
     }
   });
 
@@ -610,6 +632,88 @@ test.describe("Parts module — visual recipes", () => {
     expect(caps).toBe(0);
   });
 
+  test("every aero recipe declares consumed wing, floor, and diffuser geometry", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const fields = ["frontSweep", "frontTaper", "frontRise", "rearSweep",
+        "rearTaper", "floorEdge", "floorCut", "diffuserRise"];
+      const aero = Parts.CATALOG.find((cat) => cat.id === "aero");
+      const missing = aero.options.flatMap((opt) =>
+        fields.filter((field) => opt.visual[field] == null)
+          .map((field) => `${opt.id}:${field}`));
+      const registered = fields.filter((field) =>
+        Parts.VISUAL_FIELD_REGISTRY.geometry.aero.includes(field));
+      return { missing, registered, fields };
+    });
+    expect(result.missing).toEqual([]);
+    expect(result.registered.sort()).toEqual(result.fields.sort());
+  });
+
+  test("each aero shape field independently deforms procedural geometry", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const base = {
+        id: "probe", tier: 1, lvl: 2, beam: 0, drs: 0, vane: 1,
+        frontSweep: 0, frontTaper: 1, frontRise: 0,
+        rearSweep: 0, rearTaper: 1,
+        floorEdge: 1, floorCut: 0, diffuserRise: 1,
+      };
+      const build = (visual) => Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+        noWheels: true,
+        parts: { aero: 1, _visual: { aero: visual } },
+      });
+      const baseline = build(base);
+      const variants = {
+        frontSweep: build({ ...base, frontSweep: 0.16 }),
+        frontTaper: build({ ...base, frontTaper: 0.78 }),
+        frontRise: build({ ...base, frontRise: 0.12 }),
+        rearSweep: build({ ...base, rearSweep: 0.14 }),
+        rearTaper: build({ ...base, rearTaper: 0.76 }),
+        floorEdge: build({ ...base, floorEdge: 1.28 }),
+        floorCut: build({ ...base, floorCut: 0.18 }),
+        diffuserRise: build({ ...base, diffuserRise: 1.32 }),
+      };
+      const differs = {};
+      for (const [field, mesh] of Object.entries(variants)) {
+        differs[field] = mesh.pos.length !== baseline.pos.length ||
+          mesh.pos.some((value, index) => Math.abs(value - baseline.pos[index]) > 1e-6);
+      }
+      return differs;
+    });
+    for (const [field, differs] of Object.entries(result)) {
+      expect(differs, field).toBe(true);
+    }
+  });
+
+  test("hidden-system recipes expose serviceable engine, ERS, gearbox, and fuel cues", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const base = Parts.getVisualTiers({}, { id: "mclaren", engine: "Mercedes" });
+      const signature = (parts) => {
+        const mesh = Car3D.build([0.7,0.05,0.05], [0.95,0.8,0.1], { noWheels: true, parts });
+        return JSON.stringify([mesh.pos, mesh.col]);
+      };
+      const pair = (cat, a, b) => signature({
+        ...base, _visual: { ...base._visual, [cat]: { ...base._visual[cat], ...a } },
+      }) !== signature({
+        ...base, _visual: { ...base._visual, [cat]: { ...base._visual[cat], ...b } },
+      });
+      return {
+        engineService: pair("engine", { servicePanel: 0 }, { servicePanel: 3 }),
+        ersCells: pair("ers", { cells: 2 }, { cells: 7 }),
+        gearboxCase: pair("gearbox", { caseWidth: 0.8, casing: 3 },
+          { caseWidth: 1.3, casing: 3 }),
+        fuelLine: pair("fuel", { line: 0 }, { line: 1.35 }),
+      };
+    });
+    expect(result).toEqual({
+      engineService: true,
+      ersCells: true,
+      gearboxCase: true,
+      fuelLine: true,
+    });
+  });
+
   test("every option recipe builds valid procedural geometry", async ({ page }) => {
     await load(page);
     const failures = await page.evaluate(() => {
@@ -634,6 +738,69 @@ test.describe("Parts module — visual recipes", () => {
       return result;
     });
     expect(failures).toEqual([]);
+  });
+
+  test("every option in a category produces a distinct consumed mesh signature", async ({ page }) => {
+    await load(page);
+    const duplicates = await page.evaluate(() => {
+      const hashMesh = (mesh) => {
+        let h = 2166136261 >>> 0;
+        const add = (value) => {
+          const n = Math.round(value * 10000);
+          h ^= n; h = Math.imul(h, 16777619) >>> 0;
+        };
+        mesh.pos.forEach(add);
+        mesh.col.forEach(add);
+        (mesh.mat || []).forEach(add);
+        return `${mesh.pos.length}:${mesh.idx.length}:${h}`;
+      };
+      const failures = [];
+      for (const cat of Parts.CATALOG) {
+        const seen = new Map();
+        for (const opt of cat.options) {
+          const team = {
+            id: opt.teams?.[0] || opt.team || "mclaren",
+            engine: opt.suppliers?.[0] || opt.supplier || "Mercedes",
+          };
+          const parts = Parts.getVisualTiers({ [cat.id]: opt.id }, team);
+          const body = Car3D.build([0.7,0.05,0.05], [0.95,0.8,0.1],
+            { noWheels: true, parts });
+          const tyre = parts._visual.tyres, brake = parts._visual.brakes;
+          const wheel = Car3D.buildWheel(0.32, tyre.band, brake.cal, brake.rim,
+            !!tyre.grooved, tyre, brake);
+          const sig = hashMesh(body) + "|" + hashMesh(wheel);
+          if (seen.has(sig)) failures.push(`${cat.id}:${seen.get(sig)}=${opt.id}`);
+          else seen.set(sig, opt.id);
+        }
+      }
+      return failures;
+    });
+    expect(duplicates).toEqual([]);
+  });
+
+  test("factory presets retain distinct geometry with a neutral audit livery", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const signatures = {};
+      const duplicate = [];
+      for (const team of Teams.LIST.filter((entry) => Parts.FACTORY_PRESETS[entry.id])) {
+        const setup = Parts.getFactorySetup(team);
+        const parts = Parts.getVisualTiers(setup, team);
+        const mesh = Car3D.build([0.55,0.55,0.55], [0.15,0.15,0.15],
+          { noWheels: true, parts });
+        let h = 2166136261 >>> 0;
+        for (const value of mesh.pos) {
+          h ^= Math.round(value * 10000);
+          h = Math.imul(h, 16777619) >>> 0;
+        }
+        const sig = `${mesh.pos.length}:${mesh.idx.length}:${h}`;
+        if (signatures[sig]) duplicate.push(`${signatures[sig]}=${team.id}`);
+        else signatures[sig] = team.id;
+      }
+      return { count: Object.keys(signatures).length, duplicate };
+    });
+    expect(result.duplicate).toEqual([]);
+    expect(result.count).toBe(11);
   });
 
   test("single-option recipes stay within 1.5x the default triangle budget", async ({ page }) => {

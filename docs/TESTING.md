@@ -179,14 +179,15 @@ hook values.
 | `obs-act-edge.spec.js` | edge cases: `act(n=0)`, `reset(0.999)` lap seam, scan wrap-around, `done` semantics, numeric stability |
 | `ui-audit.spec.js` | portrait+landscape screenshots of all 10 screens |
 | `presets.spec.js`, `sliders.spec.js`, `steering.spec.js` | steering parameter tests |
-| `parts-physics.spec.js` | unified resolver, compatibility APIs, unique visual recipes, geometry/triangle budgets, signatures, factory presets, physics/costs |
+| `parts-physics.spec.js` | unified resolver, visual-field ownership, consumed mesh uniqueness, geometry/triangle budgets, signatures, factory presets, physics/costs |
 | `parts-budget.spec.js` | budget UI and unlimited toggle |
 | `parts-catalog.spec.js` | 8-category setup UI, universal/supplier/signature/factory badges, access filtering, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
 | `parts-setup-ids.spec.js` | stable `data-cs-cat` / `data-cs-opt` setup selectors |
-| `parts-mesh-cache.spec.js` | bounded player body, cockpit, and wheel mesh caches with GPU eviction |
+| `parts-mesh-cache.spec.js` | bounded body/cockpit/decal/layered-wheel caches with GPU eviction |
 | `parts-factory-presets.spec.js` | AI full-body meshes use deterministic team factory setups instead of player saves |
-| `carview-parts.spec.js` | isolated car viewer exposes controls for all eight categories |
+| `carview-parts.spec.js` | isolated car viewer exposes all categories, synchronized frames, and grounded-effect controls |
+| `car-effects.spec.js` | state-driven brake heat, ERS deployment, and throttle-lift after-fire contracts |
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
 | `new-hooks.spec.js` | contract tests for timing/field/energy hooks plus `modelDiagnostics()` / `geometryDiagnostics()` and day/night model manifests |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |

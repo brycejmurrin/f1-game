@@ -25,6 +25,7 @@ async function installMeshProbe(page) {
 
     const build = Car3D.build;
     const buildWheel = Car3D.buildWheel;
+    const buildWheelLayers = Car3D.buildWheelLayers;
     const createMesh = GLX.createMesh;
     const freeMesh = GLX.freeMesh;
 
@@ -37,6 +38,12 @@ async function installMeshProbe(page) {
     Car3D.buildWheel = function () {
       const data = buildWheel.apply(this, arguments);
       wheelData.add(data);
+      return data;
+    };
+    Car3D.buildWheelLayers = function () {
+      const data = buildWheelLayers.apply(this, arguments);
+      wheelData.add(data.rotating);
+      wheelData.add(data.fixed);
       return data;
     };
     GLX.createMesh = function (data) {
@@ -180,13 +187,12 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     expect(result.fractionalAeroDiffer).toBe(true);
   });
 
-  test("rotating wheels are axle-local layers while fixed wheels remain in the whole-car mesh", async ({ page }) => {
+  test("wheel assemblies separate rotating hardware from steering-only brake hardware", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     const layers = await page.evaluate(() => {
-      const body = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true });
-      const fixed = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1]);
-      const rotating = [Car3D.buildWheel(0.32), Car3D.buildWheel(0.38)];
+      const front = Car3D.buildWheelLayers(0.32, null, [0.9, 0.1, 0.05]);
+      const rear = Car3D.buildWheelLayers(0.38, null, [0.9, 0.1, 0.05]);
       const surfaces = Car3D.SURFACES || {};
       const materialCount = (mesh, id) => (mesh.mat || []).filter((value) => value === id).length;
       const bounds = (mesh) => {
@@ -199,29 +205,32 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       };
       return {
         hasSurfaceRegistry: Number.isInteger(surfaces.rubber),
-        fixedExtraTriangles: (fixed.idx.length - body.idx.length) / 3,
-        fixedRubberVertices: materialCount(fixed, surfaces.rubber),
-        bodyRubberVertices: materialCount(body, surfaces.rubber),
-        rotating: rotating.map((mesh) => ({
-          triangles: mesh.idx.length / 3,
-          bounds: bounds(mesh),
-          rubberVertices: materialCount(mesh, surfaces.rubber),
+        assemblies: [front, rear].map((layers) => ({
+          rotatingTriangles: layers.rotating.idx.length / 3,
+          fixedTriangles: layers.fixed.idx.length / 3,
+          rotatingBounds: bounds(layers.rotating),
+          fixedBounds: bounds(layers.fixed),
+          rotatingRubber: materialCount(layers.rotating, surfaces.rubber),
+          fixedRubber: materialCount(layers.fixed, surfaces.rubber),
+          fixedMetal: materialCount(layers.fixed, surfaces.metal),
         })),
       };
     });
     expect(layers.hasSurfaceRegistry).toBe(true);
-    expect(layers.fixedExtraTriangles).toBeGreaterThan(0);
-    expect(layers.fixedRubberVertices).toBeGreaterThan(layers.bodyRubberVertices);
-    for (const wheel of layers.rotating) {
-      expect(wheel.triangles).toBeGreaterThan(0);
-      expect(wheel.rubberVertices).toBeGreaterThan(0);
-      for (const axis of [wheel.bounds[1], wheel.bounds[2]]) {
+    for (const wheel of layers.assemblies) {
+      expect(wheel.rotatingTriangles).toBeGreaterThan(0);
+      expect(wheel.fixedTriangles).toBeGreaterThan(0);
+      expect(wheel.rotatingRubber).toBeGreaterThan(0);
+      expect(wheel.fixedRubber).toBe(0);
+      expect(wheel.fixedMetal).toBeGreaterThan(0);
+      for (const axis of [wheel.rotatingBounds[1], wheel.rotatingBounds[2]]) {
         expect(axis[0] + axis[1]).toBeCloseTo(0, 6);
         expect(axis[1] - axis[0]).toBeGreaterThan(0.65);
         expect(axis[1] - axis[0]).toBeLessThanOrEqual(0.68);
       }
     }
-    const [front, rear] = layers.rotating.map((wheel) => wheel.bounds[0][1] - wheel.bounds[0][0]);
+    const [front, rear] = layers.assemblies
+      .map((wheel) => wheel.rotatingBounds[0][1] - wheel.rotatingBounds[0][0]);
     expect(front).toBeGreaterThan(0);
     expect(rear).toBeGreaterThan(front);
   });
@@ -319,7 +328,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       await applyPartsAndPark(page);
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.wheelMeshes.length >= min,
-        (i + 1) * 2,
+        (i + 1) * 4,
         { timeout: 20_000 }
       );
       await quitRace(page);
@@ -331,15 +340,15 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       freed: window.__partsMeshProbe.freedCount("wheel"),
       freedIds: window.__partsMeshProbe.freed.filter((id) =>
         window.__partsMeshProbe.wheelMeshes.some((e) => e.id === id)),
-      oldestPairEvicted: window.__partsMeshProbe.wheelMeshes.slice(0, 2)
+      oldestPairEvicted: window.__partsMeshProbe.wheelMeshes.slice(0, 4)
         .every((entry) => window.__partsMeshProbe.freed.includes(entry.id)),
-      newestPairLive: window.__partsMeshProbe.wheelMeshes.slice(-2)
+      newestPairLive: window.__partsMeshProbe.wheelMeshes.slice(-4)
         .every((entry) => !window.__partsMeshProbe.freed.includes(entry.id)),
     }));
 
-    expect(stats.created).toBeGreaterThanOrEqual(18);
-    expect(stats.live).toBeLessThanOrEqual(16); // 8 pairs × F+R
-    expect(stats.freed).toBeGreaterThanOrEqual(2);
+    expect(stats.created).toBeGreaterThanOrEqual(36);
+    expect(stats.live).toBeLessThanOrEqual(32); // 8 pairs × rotating/fixed × F/R
+    expect(stats.freed).toBeGreaterThanOrEqual(4);
     expect(new Set(stats.freedIds).size).toBe(stats.freedIds.length);
     expect(stats.oldestPairEvicted).toBe(true);
     expect(stats.newestPairLive).toBe(true);

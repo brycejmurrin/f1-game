@@ -140,6 +140,33 @@ const Car3D = (function () {
     const F = frame(front), R = frame(rear);
     addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront, surface, frontSurface);
   }
+  // Wing element split into centre + outboard thirds so sweep, taper and tip
+  // rise alter the actual planform rather than only stacking more rectangles.
+  function addWingPlanform(out, spec, col, surface) {
+    const half = spec.half, inner = half * 0.34;
+    const sweep = spec.sweep || 0, taper = spec.taper == null ? 1 : spec.taper;
+    const rise = spec.rise || 0, thick = spec.thick;
+    const segments = [[-half, -inner], [-inner, inner], [inner, half]];
+    for (const segment of segments) {
+      const x0 = segment[0], x1 = segment[1];
+      const shape = (x, rear) => {
+        const edge = Math.max(0, (Math.abs(x) - inner) / Math.max(half - inner, 1e-6));
+        return [
+          rear ? x * taper : x,
+          (rear ? spec.yTrail : spec.yLead) + rise * edge,
+          (rear ? spec.zTrail : spec.zLead) - sweep * edge,
+        ];
+      };
+      const f0 = shape(x0, false), f1 = shape(x1, false);
+      const r0 = shape(x0, true), r1 = shape(x1, true);
+      addBlock(out, [
+        [f0[0], f0[1] - thick * 0.5, f0[2]], [f1[0], f1[1] - thick * 0.5, f1[2]],
+        [f1[0], f1[1] + thick * 0.5, f1[2]], [f0[0], f0[1] + thick * 0.5, f0[2]],
+        [r0[0], r0[1] - thick * 0.5, r0[2]], [r1[0], r1[1] - thick * 0.5, r1[2]],
+        [r1[0], r1[1] + thick * 0.5, r1[2]], [r0[0], r0[1] + thick * 0.5, r0[2]],
+      ], col, null, surface);
+    }
+  }
   // Join a short chain of arbitrary four-corner stations. This keeps low-poly
   // bodywork readable while allowing the sidepod floor and shoulder to follow
   // different curves (a rectangular loft cannot express a real undercut).
@@ -189,6 +216,22 @@ const Car3D = (function () {
       [x0 - px, y0 - py, zr], [x0 + px, y0 + py, zr], [x1 + px, y1 + py, zr], [x1 - px, y1 - py, zr],
     ], col, null, surface);
   }
+  function addBeamBetween(out, p0, p1, th, col, surface) {
+    let dx = p1[0]-p0[0], dy = p1[1]-p0[1], dz = p1[2]-p0[2];
+    const len = Math.hypot(dx, dy, dz) || 1; dx /= len; dy /= len; dz /= len;
+    let ux = -dz, uy = 0, uz = dx;
+    let ul = Math.hypot(ux, uy, uz);
+    if (ul < 1e-5) { ux = 1; uy = 0; uz = 0; ul = 1; }
+    ux = ux / ul * th * 0.5; uy = uy / ul * th * 0.5; uz = uz / ul * th * 0.5;
+    const vx = (dy*uz-dz*uy) * th * 0.5;
+    const vy = (dz*ux-dx*uz) * th * 0.5;
+    const vz = (dx*uy-dy*ux) * th * 0.5;
+    const station = (p) => [
+      [p[0]-ux-vx,p[1]-uy-vy,p[2]-uz-vz], [p[0]+ux-vx,p[1]+uy-vy,p[2]+uz-vz],
+      [p[0]+ux+vx,p[1]+uy+vy,p[2]+uz+vz], [p[0]-ux+vx,p[1]-uy+vy,p[2]-uz+vz],
+    ];
+    addBlock(out, station(p0).concat(station(p1)), col, null, surface);
+  }
 
   // Smooth dome (helmet): partial lat-long sphere, analytic normals.
   function addDome(out, cx, cy, cz, r, col, surface) {
@@ -218,11 +261,14 @@ const Car3D = (function () {
 
   // Wheel: smooth-shaded tyre tread (shared ring verts, radial normals) + flat
   // 2026-style cover disc + hub on both faces.
-  function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor, grooved, tyreStyle) {
+  function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
+                    grooved, tyreStyle, fixedOut, brakeStyle) {
     const RC = rimColor || RIM;
     const SEG = 18;
     const x0 = cx - w/2, x1 = cx + w/2;
     const rimR = r * 0.42;
+    const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
+    const rotorScale = brakeStyle && brakeStyle.rotorScale || 1;
     // Tread: a lofted profile of shared rings with analytic radial normals — the
     // highlight wraps around the tyre instead of stepping facet to facet. Dry
     // compounds are a flat 2-ring cylinder (r constant); the wet-weather
@@ -273,9 +319,31 @@ const Car3D = (function () {
       // and through the spoke gaps — with nothing to z-fight. That was the whole
       // "translucent tyre" bug: double-wound coincident faces flickering on real
       // mobile depth precision (SwiftShader tolerated it, so it looked solid headless).
-      addQuad(out, B0, B1, R1, R0, RC, SURFACES.metal); addTri(out, hub1, R0, R1, HUB, SURFACES.metal);   // right (+X)
+      addQuad(out, B0, B1, R1, R0, RC, SURFACES.metal);
+      if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0)
+        addTri(out, hub1, R0, R1, HUB, SURFACES.metal);   // right (+X)
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
-      addQuad(out, A0, A1, L1, L0, RC, SURFACES.metal); addTri(out, hub0, L0, L1, HUB, SURFACES.metal);   // left (−X)
+      addQuad(out, A0, A1, L1, L0, RC, SURFACES.metal);
+      if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0)
+        addTri(out, hub0, L0, L1, HUB, SURFACES.metal);   // left (−X)
+    }
+    // Brake rotor sits behind the cover; open-cover recipes expose alternating
+    // sectors while closed covers retain only a subtle metallic edge.
+    const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
+    const rotorInner = r * 0.17;
+    for (const face of [[x0 + 0.008, -1], [x1 - 0.008, 1]]) {
+      for (let i = 0; i < SEG; i++) {
+        const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
+        const P = (rad, a) => [face[0], cy + rad*Math.cos(a), cz + rad*Math.sin(a)];
+        addQuad(out, P(rotorOuter,a0), P(rotorOuter,a1), P(rotorInner,a1), P(rotorInner,a0),
+          [0.24,0.24,0.26], SURFACES.metal);
+      }
+      const rotorDetail = brakeStyle && brakeStyle.rotor || 0;
+      for (let i = 0; i < rotorDetail * 3; i++) {
+        const a = i / (rotorDetail * 3) * Math.PI * 2, rr = (rotorInner + rotorOuter) * 0.5;
+        addBox(out, face[0], cy + rr*Math.cos(a), cz + rr*Math.sin(a),
+          0.012, 0.018, 0.018, [0.07,0.07,0.08], SURFACES.carbon);
+      }
     }
     // Pirelli-style compound band: a bright ring on both sidewalls just inside
     // the tread — the classic modern-F1 tyre read (and a colour accent on an
@@ -332,17 +400,19 @@ const Car3D = (function () {
     // the wheel width and sits proud on both faces so it reads from the side/3-4,
     // in the brake package's accent colour with darker pad plates.
     if (caliperColor) {
+      const calOut = fixedOut || out;
       const cr = r * 0.78;                     // top edge, just inside the tread band
+      const calA = brakeStyle && brakeStyle.caliperPos || 0;
       const padCol = [caliperColor[0]*0.30, caliperColor[1]*0.30, caliperColor[2]*0.30];
       for (let i = 0; i < 3; i++) {
-        const a = (i - 1) * 0.17;              // ~±10° arc around the crown
-        addBox(out, cx, cy + Math.cos(a) * cr, cz + Math.sin(a) * cr,
+        const a = calA + (i - 1) * 0.17;       // ~±10° arc around selected clock position
+        addBox(calOut, cx, cy + Math.cos(a) * cr, cz + Math.sin(a) * cr,
                w * 1.06, 0.052, 0.055, caliperColor, SURFACES.metal);   // spans the width, proud past both faces
       }
       // pad plates hugging each disc face + the machined bridge over the crown
       for (const sgn of [-1, 1])
-        addBox(out, cx + sgn * (w * 0.52 + 0.006), cy + cr, cz, 0.02, 0.05, 0.11, padCol, SURFACES.metal);
-      addBox(out, cx, cy + cr + 0.04, cz, w * 1.0, 0.02, 0.10, caliperColor, SURFACES.metal);   // bridge rib
+        addBox(calOut, cx + sgn * (w * 0.52 + 0.006), cy + cr, cz, 0.02, 0.05, 0.11, padCol, SURFACES.metal);
+      addBox(calOut, cx, cy + cr + 0.04, cz, w * 1.0, 0.02, 0.10, caliperColor, SURFACES.metal);   // bridge rib
     }
   }
 
@@ -368,10 +438,21 @@ const Car3D = (function () {
   // A single wheel centred on the origin, axle along X — so the render layer can
   // spin it about X (∝ speed) and steer the fronts about Y, then translate it to
   // each corner. Used only for the player car (AI keep the baked static wheels).
-  function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle) {
+  function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle) {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
-    addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor, grooved, tyreStyle);
+    addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
+      grooved, tyreStyle, null, brakeStyle);
     return out;
+  }
+  function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle) {
+    const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    const width = w || 0.34;
+    addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
+      grooved, tyreStyle, fixed, brakeStyle);
+    // Upright and hub carrier give the wishbones/caliper a visible termination.
+    addBox(fixed, 0, 0, 0, width * 0.72, 0.12, 0.12, [0.18, 0.18, 0.20], SURFACES.metal);
+    return { rotating, fixed };
   }
 
   // Cosmetic tint tables for the TYRES/BRAKES visual tells — tier 1 always
@@ -407,6 +488,7 @@ const Car3D = (function () {
       outlet: tier === 0 ? 0 : tier === 2 ? 2 : 1,
       podWidth: 1, shoulderHeight: 1, undercut: 1,
       coke: 1, tailWidth: 1, coverHeight: 1,
+      servicePanel: tier === 2 ? 3 : 1, heatShield: 1,
     }, recipe);
   }
   function buildAeroParts(recipe, tier) {
@@ -414,6 +496,9 @@ const Car3D = (function () {
     return mergeRecipe({
       lvl, beam: tier === 2 ? 1 : 0, drs: 0,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
+      frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
+      rearSweep: 0.03, rearTaper: 0.98,
+      floorEdge: 1, floorCut: 0.04, diffuserRise: 1,
     }, recipe);
   }
   function buildSuspensionParts(recipe, tier) {
@@ -421,31 +506,35 @@ const Car3D = (function () {
       ride: tier === 0 ? 0.060 : tier === 2 ? -0.048 : 0,
       arm: tier === 0 ? 0.85 : tier === 2 ? 1.3 : 1,
       push: tier === 2 ? 1 : 0, pull: 0,
+      wishbone: 1, toe: 1,
     }, recipe);
   }
   function buildBrakeParts(recipe, tier) {
     return mergeRecipe({
       cal: BRAKE_CALIPER[tier], duct: tier === 0 ? 0.5 : tier === 2 ? 1.9 : 1,
-      rim: null,
+      rim: null, caliperPos: 0, coverOpen: tier === 2 ? 1 : 0,
+      rotor: tier === 2 ? 2 : 1, rotorScale: tier === 2 ? 1.12 : 1,
     }, recipe);
   }
   function buildTyreParts(recipe, tier) {
     return mergeRecipe({ band: TYRE_BAND[tier], grooved: false }, recipe);
   }
   function buildErsParts(recipe, tier, accent) {
-    return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1 }, recipe);
+    return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1, cells: tier === 2 ? 6 : 3 }, recipe);
   }
   function buildGearboxParts(recipe, tier) {
     return mergeRecipe({
       strakes: tier === 2 ? 5 : 0, fin: tier === 2 ? 1 : 0,
       strakeH: 0.13, finSY: 0.14, finSZ: 0.28,
       casing: tier === 2 ? 3 : 0, louvres: 0, heat: 0,
+      caseWidth: 1,
     }, recipe);
   }
   function buildFuelParts(recipe, tier) {
     return mergeRecipe({
       cap: tier === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60],
       flame: [1.15, 0.42, 0.14],
+      line: 1,
     }, recipe);
   }
   function buildPartRecipes(T, accent) {
@@ -749,6 +838,22 @@ const Car3D = (function () {
       }
     }
 
+    // Visible floor shoulder and edge wing. Aero recipes vary its exposure and
+    // rear cut so underfloor choices remain legible from normal 3/4 cameras.
+    const floorEdge = Math.max(0.72, Math.min(1.35, aeroStyle.floorEdge));
+    const floorCut = Math.max(0, Math.min(0.24, aeroStyle.floorCut));
+    for (const side of [-1, 1]) {
+      addSpan(out,
+        { z: 0.78, x: side * 0.69 * floorEdge, y: 0.105 + rideDY, w: 0.045, h: 0.035 },
+        { z: -0.42 - floorCut, x: side * 0.72 * floorEdge, y: 0.110 + rideDY, w: 0.038, h: 0.040 },
+        CARBON, null, SURFACES.carbon);
+      addSpan(out,
+        { z: -0.48 + floorCut, x: side * 0.70 * floorEdge, y: 0.112 + rideDY, w: 0.036, h: 0.040 },
+        { z: -1.58, x: side * (0.54 + floorCut * 0.35) * floorEdge,
+          y: 0.145 + rideDY, w: 0.028, h: 0.055 },
+        CARBON, null, SURFACES.carbon);
+    }
+
     // --- Airbox + engine cover: sit BEHIND the driver, so they're skipped in
     // the cockpit build (ckpt) — under brake pitch they'd otherwise swing up
     // into the top/back of the onboard frame ("the thing behind us cutting in").
@@ -801,6 +906,19 @@ const Car3D = (function () {
         // Central hot-air vent slot at the tail of the cover (broad-cooling specs).
         if (engOutlet >= 2) addBox(out, 0, coverGeom.tailVentY, -1.72, 0.13, 0.05, 0.18, INTAKE);
       }
+      // Removable power-unit service panels expose the hidden-system story on
+      // the cover flanks without cutting away the primary silhouette.
+      const servicePanels = Math.max(0, Math.min(4, Math.round(engStyle.servicePanel || 0)));
+      for (const s of [-1, 1]) for (let i = 0; i < servicePanels; i++) {
+        const z = -0.82 - i * 0.19, p = anchors.coverAt(z);
+        addBox(out, s*(p.x + 0.010), p.top - 0.18, z, 0.018, 0.10, 0.13,
+          [0.24,0.24,0.27], SURFACES.metal);
+      }
+      if (engStyle.heatShield) {
+        const p = anchors.coverAt(-1.58);
+        addBox(out, 0, p.top + 0.010, -1.58, 0.18 * engStyle.heatShield,
+          0.014, 0.30, [0.30,0.28,0.26], SURFACES.metal);
+      }
       // Engine-mode indicator LEDs across the airbox intake lip (HDR → bloom at
       // night): green (economy) → amber (standard) → red (max-attack power unit).
       const engLed = engT === 2 ? [2.4, 0.28, 0.12] : engT === 0 ? [0.15, 1.8, 0.55] : [1.9, 1.2, 0.15];
@@ -814,6 +932,14 @@ const Car3D = (function () {
       const fuelSurface = Math.max(fuelColor[0], fuelColor[1], fuelColor[2]) > 1.1 ? SURFACES.emissive : SURFACES.metal;
       addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelColor, fuelSurface);            // collar ring (proud)
       addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelColor, fuelSurface);            // cap dot
+      if (fuelStyle.line) {
+        const lineRear = anchors.coverAt(-1.30);
+        addSpan(out,
+          { z: -0.56, x: 0.12, y: 0.80, w: 0.018 * fuelStyle.line, h: 0.018 },
+          { z: -1.30, x: lineRear.x * 0.72, y: lineRear.top - 0.15,
+            w: 0.015 * fuelStyle.line, h: 0.015 },
+          fuelColor, null, fuelSurface);
+      }
     }
 
     addPodFlankSpan(0.46, -0.34, 0.55, 0.18, PANEL);
@@ -838,6 +964,14 @@ const Car3D = (function () {
                       0.91, 0.06, [0.03, 0.03, 0.04], SURFACES.carbon, 0.018);
       addPodFlankSpan(podGeom.conduit.z + half, podGeom.conduit.z - half,
                       0.97, 0.03, ersGlow, SURFACES.emissive, 0.025);
+      const cells = Math.max(1, Math.min(8, Math.round(ersStyle.cells || 3)));
+      for (const side of [-1, 1]) for (let i = 0; i < cells; i++) {
+        const z = podGeom.conduit.z + half - (i + 0.5) * (half * 2 / cells);
+        const p = anchors.podAt(z);
+        addBox(out, side*(p.x + 0.032), p.top + 0.006, z,
+          0.016, 0.032, Math.max(0.025, half * 1.5 / cells),
+          ersGlow, SURFACES.emissive);
+      }
     }
 
     // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
@@ -1113,6 +1247,9 @@ const Car3D = (function () {
     // count / endplate size / dive-plane reach (tier 1 = today's baseline). ---
     const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
     const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
+    const frontSweep = Math.max(-0.08, Math.min(0.22, aeroStyle.frontSweep));
+    const frontTaper = Math.max(0.72, Math.min(1.08, aeroStyle.frontTaper));
+    const frontRise = Math.max(-0.03, Math.min(0.16, aeroStyle.frontRise));
 
     // Front wing: a multi-element CASCADE — a wide, near-flat structural main
     // plane plus a stack of progressively larger flap elements, each a thin wedge
@@ -1130,9 +1267,14 @@ const Car3D = (function () {
     if (aLvl >= 1) fwElems.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.026, wingC]); // flap 2
     if (aLvl >= 3) fwElems.push([2.20, 0.210, 1.98, 0.282, 0.92, 0.024, wingC]); // flap 3
     if (aLvl >= 4) fwElems.push([2.08, 0.286, 1.88, 0.358, 0.88, 0.022, wingC]); // flap 4 (max DF)
-    for (const e of fwElems) {
-      addSpan(out, { z: e[0], y: e[1], w: 2.0 * fwHalf * e[4], h: e[5] },
-                   { z: e[2], y: e[3], w: 1.96 * fwHalf * e[4], h: e[5] * 1.5 }, e[6]);
+    for (let i = 0; i < fwElems.length; i++) {
+      const e = fwElems[i], half = fwHalf * e[4];
+      addWingPlanform(out, {
+        zLead: e[0], yLead: e[1], zTrail: e[2], yTrail: e[3],
+        half, thick: e[5], taper: frontTaper,
+        sweep: frontSweep * (0.75 + i * 0.10),
+        rise: frontRise * (0.65 + i * 0.12),
+      }, e[6], SURFACES.paint);
     }
     // Bold outboard upsweep: the top flap kicks sharply upward as it meets the
     // endplate — a much more pronounced flick than a flat trailing edge.
@@ -1223,14 +1365,18 @@ const Car3D = (function () {
       }
       // Clean swept two/three-element rear wing (leading edge low/forward →
       // trailing edge high/back). Main plane sits on the endplate centreline.
-      addSpan(out, { z: -2.30, y: epCY + 0.02, w: 1.02, h: 0.032 },
-                   { z: -2.52, y: epCY + 0.065, w: 1.02, h: 0.044 }, c1);  // main plane
+      const rearSweep = Math.max(-0.06, Math.min(0.20, aeroStyle.rearSweep));
+      const rearTaper = Math.max(0.72, Math.min(1.08, aeroStyle.rearTaper));
+      const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale) =>
+        addWingPlanform(out, {
+          zLead, yLead, zTrail, yTrail, half, thick,
+          taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
+        }, col, SURFACES.paint);
+      rearWing(-2.30, epCY + 0.02, -2.52, epCY + 0.065, 0.51, 0.032, c1, 0.8);
       if (aLvl >= 2) {
-        addSpan(out, { z: -2.34, y: epCY + 0.115, w: 1.02, h: 0.030 },
-                     { z: -2.56, y: epCY + 0.170, w: 1.02, h: 0.042 }, wingC);  // mid element (livery `wing` colour, else c2)
+        rearWing(-2.34, epCY + 0.115, -2.56, epCY + 0.170, 0.51, 0.030, wingC, 0.9);
       }
-      addSpan(out, { z: -2.38, y: epCY + 0.215, w: 1.02, h: 0.035 },
-                   { z: -2.64, y: epCY + 0.290, w: 1.02, h: 0.050 }, wingC);  // top flap (swept)
+      rearWing(-2.38, epCY + 0.215, -2.64, epCY + 0.290, 0.51, 0.035, wingC, 1.0);
       // Swan-neck mount: slim pylons sweeping UP and BACK from the rear crash
       // structure to the underside of the main plane — this is what visually hangs
       // the wing off the car (previously the mount sat above the plane, so the
@@ -1243,8 +1389,7 @@ const Car3D = (function () {
                    { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount
       if (aLvl >= 4) {
         // Extra proud top element + a T-wing ahead of it (max-DF look).
-        addSpan(out, { z: -2.42, y: epCY + 0.250, w: 1.00, h: 0.030 },
-                     { z: -2.66, y: epCY + 0.310, w: 1.00, h: 0.044 }, c2);   // topmost flap (kept near the crown, not spiking)
+        rearWing(-2.42, epCY + 0.250, -2.66, epCY + 0.310, 0.50, 0.030, c2, 1.1);
         addBox(out, 0, epCY + 0.20, -1.98, 0.34, 0.02, 0.09, c2);     // T-wing (tracks the lowered wing)
         // T-wing mount: a slim central pylon down to the engine-cover ridge — without
         // it the T-wing is a plank floating ~0.4m above the bodywork with nothing
@@ -1253,13 +1398,12 @@ const Car3D = (function () {
       }
       if (aBeam) {
         // Prominent beam wing slung low under the main plane, spanning the crash structure.
-        addSpan(out, { z: -2.36, y: 0.64 + rwLift * 0.4, w: 0.92, h: 0.032 },
-                     { z: -2.58, y: 0.68 + rwLift * 0.4, w: 0.92, h: 0.044 }, c1);
+        rearWing(-2.36, 0.64 + rwLift * 0.4, -2.58, 0.68 + rwLift * 0.4,
+          0.46, 0.032, c1, 0.65);
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
-        addSpan(out, { z: -2.44, y: epCY + 0.310, w: 0.98, h: 0.022 },
-                     { z: -2.60, y: epCY + 0.370, w: 0.98, h: 0.030 }, c2);
+        rearWing(-2.44, epCY + 0.310, -2.60, epCY + 0.370, 0.49, 0.022, c2, 1.15);
         // DRS-open indicator light on the actuator pod (HDR cyan → blooms).
         addBox(out, 0, epCY + 0.335, -2.50, 0.05, 0.022, 0.03,
                [0.2, 1.7, 2.3], SURFACES.emissive);
@@ -1286,8 +1430,9 @@ const Car3D = (function () {
       // reads as a diffuser ramp under the crash structure instead of a big flat
       // reflective "shelf" sticking out behind the tail — the underbody now
       // mirrors the sky/road, and a broad down-facing plane there caught it.
-      const diffW  = 0.72 + aLvl * 0.145;   // lvl0 0.72 → lvl4 1.30
-      const diffH1 = 0.40 + aLvl * 0.325;   // lvl0 0.40 → lvl4 1.70
+      const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));
+      const diffH1 = (0.40 + aLvl * 0.325) *
+        Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
       addLoft(out, -2.52, 0, 0.34, 1.12 * diffW, 0.30, -1.90, 0, 0.17, 0.92 * diffW, 0.14 * diffH1,
               [0.06, 0.06, 0.07], SURFACES.carbon);
 
@@ -1312,7 +1457,9 @@ const Car3D = (function () {
       // grows and gains structure with the spec (slim → ribbed tail case → broad
       // carbon case with side plates), so each 'box shows a distinct rear mass.
       if (gbCasing > 0) {
-        const cw = 0.15 + gbCasing * 0.05, ch = 0.13 + gbCasing * 0.03;
+        const cw = (0.15 + gbCasing * 0.05) *
+          Math.max(0.75, Math.min(1.35, gbStyle.caseWidth || 1));
+        const ch = 0.13 + gbCasing * 0.03;
         addBox(out, 0, 0.44, -2.02, cw, ch, 0.26, CARBON);                    // bellhousing bulge
         if (gbCasing >= 2) addBox(out, 0, 0.42, -2.17, cw * 0.78, ch * 0.78, 0.11, DARK); // tapered tail case
         if (gbCasing >= 3) for (const s of [-1, 1])
@@ -1362,19 +1509,44 @@ const Car3D = (function () {
     // Pullrod actuator runs the opposite diagonal to a pushrod (top-outboard →
     // bottom-inboard vs bottom-outboard → top-inboard) — a clear layout tell.
     const wbPull = suspStyle && suspStyle.pull ? 1 : 0;
+    const armTh = 0.026 * wbMul, suspC = [0.11, 0.11, 0.13];
+    const wishboneSpread = 0.20 * Math.max(0.72, Math.min(1.3, suspStyle.wishbone));
+    const toeScale = Math.max(0.7, Math.min(1.35, suspStyle.toe));
     for (const s of [-1, 1]) {
-      addBox(out, s*0.50, 0.24 + rideDY, AXLES.frontZ, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front lower
-      addBox(out, s*0.50, 0.42 + rideDY, AXLES.frontZ - 0.07, 0.36, 0.05 * wbMul, 0.06 * wbMul, DARK); // front upper
+      const fLower = [s*0.69, 0.27 + rideDY, AXLES.frontZ];
+      const fUpper = [s*0.69, 0.43 + rideDY, AXLES.frontZ];
+      for (const z of [AXLES.frontZ - wishboneSpread, AXLES.frontZ + wishboneSpread]) {
+        addBeamBetween(out, [s*0.31, 0.23 + rideDY, z], fLower, armTh, suspC, SURFACES.carbon);
+        addBeamBetween(out, [s*0.32, 0.44 + rideDY, z], fUpper, armTh, suspC, SURFACES.carbon);
+      }
+      addBeamBetween(out, [s*0.33, 0.34 + rideDY, AXLES.frontZ - 0.16],
+        [s*0.69, 0.35 + rideDY, AXLES.frontZ - 0.04*toeScale],
+        armTh*0.72*toeScale, suspC, SURFACES.carbon);
+      addBox(out, s*0.69, 0.35 + rideDY, AXLES.frontZ, 0.055, 0.23, 0.10,
+        [0.18,0.18,0.20], SURFACES.metal);
       if (wbPush) {
-        if (wbPull) addStrut(out, s*0.60, 0.44 + rideDY, s*0.32, 0.20 + rideDY, 1.66, 0.032, 0.032, DARK); // front pullrod
-        else        addStrut(out, s*0.60, 0.20 + rideDY, s*0.32, 0.44 + rideDY, 1.66, 0.032, 0.032, DARK); // front pushrod
+        const outer = wbPull ? fUpper : fLower;
+        const inner = wbPull ? [s*0.30,0.20+rideDY,AXLES.frontZ-0.05]
+          : [s*0.30,0.51+rideDY,AXLES.frontZ-0.05];
+        addBeamBetween(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
       }
       if (!ckpt) {
-        addBox(out, s*0.49, 0.26 + rideDY, AXLES.rearZ, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear lower
-        addBox(out, s*0.49, 0.44 + rideDY, AXLES.rearZ + 0.07, 0.34, 0.05 * wbMul, 0.06 * wbMul, DARK); // rear upper
+        const rLower = [s*0.67, 0.28 + rideDY, AXLES.rearZ];
+        const rUpper = [s*0.67, 0.45 + rideDY, AXLES.rearZ];
+        for (const z of [AXLES.rearZ - wishboneSpread*0.9, AXLES.rearZ + wishboneSpread*0.9]) {
+          addBeamBetween(out, [s*0.31, 0.25 + rideDY, z], rLower, armTh, suspC, SURFACES.carbon);
+          addBeamBetween(out, [s*0.32, 0.46 + rideDY, z], rUpper, armTh, suspC, SURFACES.carbon);
+        }
+        addBeamBetween(out, [s*0.31, 0.36 + rideDY, AXLES.rearZ + 0.16],
+          [s*0.67, 0.36 + rideDY, AXLES.rearZ + 0.04*toeScale],
+          armTh*0.72*toeScale, suspC, SURFACES.carbon);
+        addBox(out, s*0.67, 0.36 + rideDY, AXLES.rearZ, 0.055, 0.23, 0.10,
+          [0.18,0.18,0.20], SURFACES.metal);
         if (wbPush) {
-          if (wbPull) addStrut(out, s*0.58, 0.46 + rideDY, s*0.30, 0.22 + rideDY, -1.56, 0.032, 0.032, DARK); // rear pullrod
-          else        addStrut(out, s*0.58, 0.22 + rideDY, s*0.30, 0.46 + rideDY, -1.56, 0.032, 0.032, DARK); // rear pushrod
+          const outer = wbPull ? rUpper : rLower;
+          const inner = wbPull ? [s*0.29,0.22+rideDY,AXLES.rearZ+0.04]
+            : [s*0.29,0.53+rideDY,AXLES.rearZ+0.04];
+          addBeamBetween(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
         }
       }
     }
@@ -1388,14 +1560,16 @@ const Car3D = (function () {
       const rimColor = brakeStyle && brakeStyle.rim;   // premium alloy rims (else default dark)
       const grooved = !!(tyreStyle && tyreStyle.grooved);
       for (const s of [-1, 1]) {
-        addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32, tyreBand, caliperColor, rimColor, grooved, tyreStyle);
-        addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38, tyreBand, caliperColor, rimColor, grooved, tyreStyle);
+        addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
+          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle);
+        addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
+          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle);
       }
     }
 
     return out;
   }
 
-  return { build, buildWheel, bodyAnchors, SURFACES, TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
+  return { build, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            endplate: endplateGeom, numberBoard, aeroLevelOf };
 })();

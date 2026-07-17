@@ -225,16 +225,27 @@ AI physics remains team-tier driven and never reads the player's saved parts.
 ## js/car3d.js — `Car3D`
 
 ```
-Car3D.build(color, color2, {parts}) -> meshData // PLAIN {pos,nrm,col,idx}
+Car3D.build(color, color2, {parts}) -> meshData // PLAIN {pos,nrm,col,mat,idx}
 Car3D.buildWheel(width, band, caliper, rim, grooved, recipe) -> wheel meshData
+Car3D.buildWheelLayers(...) -> {rotating, fixed}
 ```
 Local space: origin at ground under center of gravity, **+Z forward, +Y up**.
 ~1.9 m wide, ~5.4 m long. Category builders resolve parametric recipes for
 engine, aero, suspension, brakes, tyres, ERS, gearbox, and fuel before emitting
-the body. Every catalog option therefore has distinct geometry/material tells;
-`visualTier` remains only a compatibility fallback. Player body, cockpit, and
-wheel GPU meshes use bounded caches because setup changes create new recipes.
+the body. `Car3D.SURFACES` classifies paint, carbon, rubber, metal, glass, and
+functional emissive vertices consistently across WebGL and WebGPU. Wings use
+recipe-driven swept/tapered planforms; service panels, ERS cells, fuel conduits,
+gearbox cases, wheel rotors, and real 3-D wishbone links expose mechanical parts.
+Every catalog option therefore has distinct consumed geometry/material tells;
+`visualTier` remains only a compatibility fallback. Player wheel assemblies
+separate spinning tyre/rotor meshes from steering-only caliper/upright meshes.
+Player body, cockpit, decal, and wheel GPU meshes use bounded caches.
 AI full-body mesh keys include `Parts.factoryKey(team)`.
+
+`js/game/carmesh.js` is the sole body-decal geometry implementation for both the
+race and isolated car viewer. Runtime effects are state-driven: brake glow
+tracks heat, ERS uses a status light without an exhaust flame, and combustion
+after-fire is a short throttle-lift transient.
 
 ## js/input.js — `Input`
 

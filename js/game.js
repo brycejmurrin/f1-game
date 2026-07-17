@@ -446,6 +446,12 @@ const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 18;         // crawl speed on grass
 const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
+function isErsDeploying(c) {
+  if (!c || c.energy <= 0 || !(c.boostOn || c.otT > 0)) return false;
+  const taper = c.otT > 0 ? 1 :
+    clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+  return DEPLOY_A * taper > 0.4;
+}
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const { TIER_V } = GameTables;
@@ -941,7 +947,7 @@ CarMesh.init(gfx);
 // js/game/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
-        getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight,
+        getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, getPedalBar } = CarMesh;
 const _decalTexCache = {};
@@ -1018,6 +1024,8 @@ const WHEELS = [
 ];
 const _wheelLocal = new Float32Array(16);
 const _wheelWorld = new Float32Array(16);
+const _fixedWheelLocal = new Float32Array(16);
+const _fixedWheelWorld = new Float32Array(16);
 const _ringWorld = new Float32Array(16);
 // Scratch opts for AI brake rings — mutated in place per frame so the car loop
 // doesn't allocate a fresh literal per ring (up to ~40/frame in a braking pack).
@@ -1148,6 +1156,8 @@ function freeWheelPair(m) {
   if (gfx.freeMesh) {
     if (m.F) gfx.freeMesh(m.F);
     if (m.R) gfx.freeMesh(m.R);
+    if (m.FFixed) gfx.freeMesh(m.FFixed);
+    if (m.RFixed) gfx.freeMesh(m.RFixed);
   }
 }
 function getPlayerWheelMeshes() {
@@ -1157,9 +1167,15 @@ function getPlayerWheelMeshes() {
     const caliper = playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
     const rim = playerBrakeVisual && playerBrakeVisual.rim;
     const grooved = !!(playerTyreVisual && playerTyreVisual.grooved);
+    const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, grooved,
+      playerTyreVisual, playerBrakeVisual);
+    const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, grooved,
+      playerTyreVisual, playerBrakeVisual);
     return {
-      F: gfx.createMesh(Car3D.buildWheel(0.32, band, caliper, rim, grooved, playerTyreVisual)),
-      R: gfx.createMesh(Car3D.buildWheel(0.38, band, caliper, rim, grooved, playerTyreVisual)),
+      F: gfx.createMesh(front.rotating),
+      R: gfx.createMesh(rear.rotating),
+      FFixed: gfx.createMesh(front.fixed),
+      RFixed: gfx.createMesh(rear.fixed),
     };
   }, WHEEL_MESH_CACHE_MAX, freeWheelPair);
 }
@@ -1186,6 +1202,13 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
     L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
     gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
+    const F = _fixedWheelLocal;
+    F[0] = cs*ws; F[1] = 0; F[2] = -ss*ws; F[3] = 0;
+    F[4] = 0; F[5] = 1; F[6] = 0; F[7] = 0;
+    F[8] = ss; F[9] = 0; F[10] = cs; F[11] = 0;
+    F[12] = L[12]; F[13] = L[13]; F[14] = L[14]; F[15] = 1;
+    M4.mulTo(_fixedWheelWorld, base, F);
+    gfx.draw(wd.rear ? wm.RFixed : wm.FFixed, _fixedWheelWorld, opt);
     // Hot brake discs: an emissive ring floating just off the outer wheel face,
     // ramping with the render-only brakeHeat (bright orange → blooms when hot).
     const heat = c.brakeHeat || 0;
@@ -2610,7 +2633,9 @@ function updateCar(c, dt, ranked) {
   // Suppress auto-throttle while wallT > 0 (just bounced off a wall) so the car
   // doesn't immediately re-pin itself: the player has to steer clear first.
   const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
-  const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || (_testInput ? !!_testInput.throttle : Input.throttle())) : true;
+  const onThrottle = c.isPlayer
+    ? (_testInput ? !!_testInput.throttle : ((autoThrottle() && !wallPinned) || Input.throttle()))
+    : true;
   if (braking) {
     if (c.speed > 0) {
       c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
@@ -3059,8 +3084,11 @@ function updateCar(c, dt, ranked) {
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
   }
   if (c.isPlayer) {
-    // Exhaust glow (render-only): rises on throttle, dies quickly off it.
-    c.exhaustPop = clamp((c.exhaustPop || 0) + (onThrottle && c.speed > 8 ? dt * 5 : -dt * 7), 0, 1);
+    // Combustion after-fire is a short throttle-lift transient, not a continuous
+    // arcade torch. ERS deployment is electric and never feeds this state.
+    const lifted = !!c.wasOnThrottle && !onThrottle && c.speed > 8;
+    c.exhaustPop = lifted ? 1 : Math.max(0, (c.exhaustPop || 0) - dt * 5);
+    c.wasOnThrottle = !!onThrottle;
   }
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
@@ -4720,7 +4748,7 @@ function render(dt) {
     // and it FLASHES the same ~4 Hz FIA pattern while harvesting/deploying (OT or
     // active boost), exactly like the real rear light on a push lap.
     const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
-    const _ledDeploy = (c.otT > 0) || (c.boostOn && c.energy > 0.01);
+    const _ledDeploy = isErsDeploying(c);
     if ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe))) {
       const W = _ringWorld;
       W.set(tmpMat);
@@ -4733,32 +4761,18 @@ function render(dt) {
       const _ledEmis = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
       gfx.draw(getRainLight(), W, { emissive: _ledEmis, roughness: 0.9, specular: 0, noAlphaWrite: true });
     }
-    // BOOST: blue-white plasma flame + strobing rear ERS strip while deploying
-    // (any time of day); the strip glows steady dim while boost is armed.
-    if (c.isPlayer && c.boostOn) {
-      const dep = c.energy > 0.01;
-      const fl = 0.65 + 0.35 * Math.sin(raceT * 47.0 + Math.sin(raceT * 19.0) * 4.0);
+    // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
+    if (c.isPlayer && isErsDeploying(c)) {
       const W = _ringWorld;
-      if (dep && c.speed > 5) {
-        // In the clear "pocket" between the rain-light LED plane (z -2.60) and
-        // the diffuser rear face (z -2.70): nothing occludes it from any rear
-        // camera — the housing/pipe are all forward of it, the diffuser is a
-        // backdrop behind it.
-        W.set(tmpMat);
-        W[12] += W[4] * 0.40 - W[8] * 2.66;
-        W[13] += W[5] * 0.40 - W[9] * 2.66;
-        W[14] += W[6] * 0.40 - W[10] * 2.66;
-        gfx.draw(getBoostFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: 0.45 + 0.5 * fl, noAlphaWrite: true });
-      }
       W.set(tmpMat);
       W[12] += W[4] * 0.605 - W[8] * 2.615;
       W[13] += W[5] * 0.605 - W[9] * 2.615;
       W[14] += W[6] * 0.605 - W[10] * 2.615;
       gfx.draw(getErsLight(), W, { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true,
-        alpha: dep ? (0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2)) : 0.35 });
+        alpha: 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2) });
     }
-    // Exhaust heat glow: night-only flicker behind the tailpipe on throttle.
-    if (night && c.isPlayer && (c.exhaustPop || 0) > 0.05) {
+    // Brief fuel-coloured throttle-lift after-fire, visible at any time of day.
+    if (c.isPlayer && (c.exhaustPop || 0) > 0.05) {
       const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
       const W = _ringWorld;
       W.set(tmpMat);
@@ -4778,7 +4792,7 @@ function render(dt) {
     // composite warp (which already skips car-paint pixels) sits in the air
     // wake rather than on the rear wing from chase cam.
     if (c.isPlayer) {
-      const _hzDep = c.boostOn && c.energy > 0.01 && c.speed > 5;
+      const _hzDep = isErsDeploying(c);
       _hazeStr = gfx.mobileTier ? 0 : (c.exhaustPop || 0) * (_hzDep ? 1.0 : 0.45);
       if (_hazeStr > 0.02) {
         // Behind/above the tailpipe (up +0.85, fwd −3.5 on the car frame).
@@ -8068,7 +8082,12 @@ window.__apex = {
   // Test helpers: override Input and pump physics at fixed dt.
   // setInput({ steer, throttle, brake }) — values held until clearInput().
   // step(dt, n) — run n physics ticks of dt seconds each (default 1 tick, 1/60 s).
-  setInput(v) { _testInput = v || null; },
+  setInput(v) {
+    const next = v || null;
+    if (player && _testInput && _testInput.throttle && next && !next.throttle && player.speed > 8)
+      player.exhaustPop = 1;
+    _testInput = next;
+  },
   clearInput() { _testInput = null; },
   step(dt, n) {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
@@ -8498,6 +8517,19 @@ window.__apex = {
   // setEnergy(v) — set player ERS charge (0..1). Clamps silently.
   // setBoost(on) — toggle the player's ERS boost (for tests/screenshots).
   setBoost(on) { if (player) player.boostOn = !!on; return player ? player.boostOn : false; },
+  carEffects() {
+    if (!player) return null;
+    const brakeGlowThreshold = 0.05;
+    const brakeHeat = +(player.brakeHeat || 0);
+    return {
+      exhaustFlame: (player.exhaustPop || 0) > 0.05,
+      brakeGlow: brakeHeat > brakeGlowThreshold,
+      ersDeploy: isErsDeploying(player),
+      boostFlame: false,
+      brakeHeat,
+      brakeGlowThreshold,
+    };
+  },
   setEnergy(v) {
     if (!player) return false;
     player.energy = Math.max(0, Math.min(1, +v || 0));

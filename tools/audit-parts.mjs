@@ -41,6 +41,11 @@ const esc = (value) => String(value).replace(/[&<>"]/g, (char) => ({
 const sheet = (title, cards) => `<!doctype html><meta charset=utf8><title>${esc(title)}</title>
 <style>body{margin:0;background:#111;color:#ccc;font:13px system-ui;padding:14px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}figure{margin:0;background:#000;border:1px solid #222;border-radius:6px;overflow:hidden}img{display:block;width:100%}figcaption{padding:5px 7px;color:#9ab;font-size:12px}</style>
 <h2 style="text-transform:uppercase;letter-spacing:.06em">${esc(title)}</h2><div class=grid>${cards.map(({ file, label }) => `<figure><img src="${esc(file)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>`).join("\n")}</div>`;
+async function setAndSettle(page, state) {
+  const before = await page.evaluate(() => window.CARVIEW.frame);
+  await page.evaluate((next) => window.CARVIEW.set(next), state);
+  await page.waitForFunction((frame) => window.CARVIEW.frame >= frame + 8, before);
+}
 
 const browser = await chromium.launch({
   ...(EXE ? { executablePath: EXE } : {}),
@@ -90,11 +95,10 @@ try {
     for (const option of options) {
       if (!option.team) throw new Error(`No eligible team found for ${cat}:${option.id}`);
       const parts = { ...audit.defaults, [cat]: option.id };
-      await page.evaluate((state) => window.CARVIEW.set(state), {
+      await setAndSettle(page, {
         team: option.team, colors: null, parts,
         az: view.az, el: view.el, dist: view.dist, tod: view.tod,
       });
-      await page.waitForTimeout(260);
       const file = `${assertSafePathToken(option.id, "option")}.png`;
       await page.screenshot({ path: resolveContainedChild(dir, file, "parts audit shot") });
       cards.push({ file, label: `${option.label} · ${option.team}` });
@@ -112,11 +116,10 @@ try {
   ];
   for (const factory of audit.factories) {
     for (const livery of liveries) {
-      await page.evaluate((state) => window.CARVIEW.set(state), {
+      await setAndSettle(page, {
         team: factory.id, livery: null, colors: livery.colors, parts: factory.parts,
         az: 40, el: 16, dist: 6.4, tod: "day",
       });
-      await page.waitForTimeout(260);
       const file = `${assertSafePathToken(factory.id, "factory team")}-${livery.id}.png`;
       await page.screenshot({ path: resolveContainedChild(factoryDir, file, "factory audit shot") });
       factoryCards.push({ file, label: `${factory.name} · ${livery.id}` });
@@ -124,6 +127,25 @@ try {
   }
   writeFileSync(resolveContainedChild(factoryDir, "index.html", "factory audit index"), sheet("factory presets · light / dark", factoryCards));
   console.log(`  factory: ${factoryCards.length} renders`);
+  const effectsDir = resolveRepoDefault(ROOT, "scratch", "renders", "parts", "effects");
+  mkdirSync(effectsDir, { recursive: true });
+  const effectCards = [];
+  for (const preset of [
+    { id: "after-fire", label: "Throttle-lift after-fire", effects: { exhaustFlame: true, brakeGlow: false, ersDeploy: false } },
+    { id: "brake-heat", label: "Hot brake rotors", effects: { exhaustFlame: false, brakeGlow: true, ersDeploy: false } },
+    { id: "ers-deploy", label: "Electric ERS deployment", effects: { exhaustFlame: false, brakeGlow: false, ersDeploy: true } },
+  ]) {
+    await setAndSettle(page, {
+      team: TEAM, colors: null, parts: audit.defaults,
+      az: 18, el: 10, dist: 4.8, look: -1.3, tod: "dusk", effects: preset.effects,
+    });
+    const file = `${preset.id}.png`;
+    await page.screenshot({ path: resolveContainedChild(effectsDir, file, "effects audit shot") });
+    effectCards.push({ file, label: preset.label });
+  }
+  writeFileSync(resolveContainedChild(effectsDir, "index.html", "effects audit index"),
+    sheet("grounded runtime effects", effectCards));
+  console.log(`  effects: ${effectCards.length} renders`);
   console.log("done -> scratch/renders/parts/");
 } finally {
   await browser.close();
