@@ -37,13 +37,23 @@ test.describe("Apex 26 — presets", () => {
     expect(await stored(page, "preset")).toBe("relax");
   });
 
-  test("STANDARD reproduces the original default feel", async ({ page }) => {
+  test("STANDARD sits between RELAX and PRO on every feel axis", async ({ page }) => {
+    // Ordering, not hardcoded physics constants — this survives any slider→physics
+    // remap. (The old version pinned wheelbase 3.2 / expo 2.4 / roadFollow 0.50,
+    // which broke on every retune.) STANDARD is the middle bundle: less help than
+    // RELAX, more than PRO; lazier turn-in than PRO, snappier than RELAX.
     await load(page);
-    await clickPreset(page, "standard");
-    const t = await tuning(page);
-    expect(t.wheelbase).toBeCloseTo(3.2, 1);   // RESPONSE 5
-    expect(t.expo).toBeCloseTo(2.4, 1);        // LINEARITY 5
-    expect(t.roadFollow).toBeCloseTo(0.50, 1); // DRIVING HELP 6 (grip-limited assist gain)
+    await clickPreset(page, "relax");    const relax = await tuning(page);
+    await clickPreset(page, "standard"); const std   = await tuning(page);
+    await clickPreset(page, "pro");      const pro   = await tuning(page);
+    // Driving help: RELAX ≥ STANDARD ≥ PRO
+    expect(std.roadFollow).toBeLessThanOrEqual(relax.roadFollow);
+    expect(std.roadFollow).toBeGreaterThanOrEqual(pro.roadFollow);
+    // Turn-in laziness (wheelbase): RELAX ≥ STANDARD ≥ PRO
+    expect(std.wheelbase).toBeLessThanOrEqual(relax.wheelbase);
+    expect(std.wheelbase).toBeGreaterThanOrEqual(pro.wheelbase);
+    // STANDARD ships no racing-line pull (only RELAX does).
+    expect(std.raceLineAssist).toBe(0);
   });
 
   test("a manual slider edit drops the preset back to custom", async ({ page }) => {

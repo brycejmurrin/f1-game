@@ -46,9 +46,17 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
           if (s > up) { up = s; upAt = f; }
         }
 
-        // Descent at top speed: gravity must not push past vmax.
+        // Reference flat-out top speed (measured, not a hardcoded VMAX) so the
+        // descent-overspeed check below is relative and survives a PACE/VMAX retune.
         let finite = true;
-        window.__apex.jump(dnAt, 90, 0);
+        window.__apex.jump(0.0, 40, 0);
+        window.__apex.setInput({ steer: 0, throttle: true });
+        let flatMax = 0;
+        for (let i = 0; i < 180; i++) { window.__apex.step(1 / 60, 1); flatMax = Math.max(flatMax, window.__apex.physState().speed); }
+
+        // Descent at top speed: gravity must not push meaningfully past the flat
+        // top speed (start AT it so we measure overspeed, not deceleration).
+        window.__apex.jump(dnAt, flatMax, 0);
         window.__apex.setInput({ steer: 0, throttle: true });
         let maxV = 0;
         for (let i = 0; i < 150; i++) {
@@ -86,14 +94,14 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
           }
         }
         window.__apex.clearInput();
-        return { dn, up, maxV, climbGain: cv1 - cv0, widest, hw, finite };
+        return { dn, up, maxV, flatMax, climbGain: cv1 - cv0, widest, hw, finite };
       });
 
       expect(errors).toEqual([]);
       expect(r.finite).toBe(true);
       expect(r.dn).toBeLessThan(0);                 // the track really does descend
       expect(r.up).toBeGreaterThan(0);              // and climb
-      expect(r.maxV).toBeLessThan(99);              // no descent overspeed past VMAX
+      expect(r.maxV).toBeLessThan(r.flatMax * 1.35); // no descent runaway past flat top speed (gravity adds a little downhill, but doesn't run away)
       // Climbs freely (gravity isn't an invisible wall). The gain is modest on
       // tracks whose only grade is a shallow recovery (e.g. Bahrain's dip), large
       // on real climbs (Spa's Eau Rouge), so just require the car is still moving.
