@@ -617,6 +617,15 @@ function hueRotateTint(rgb, deg) {
     m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072)),
   ];
 }
+// Scale an RGB colour's SATURATION around its luma-grey anchor by `amt`
+// (1 = unchanged, 0 = achromatic grey, >1 = more vivid). Same NTSC-luma grey
+// anchor as hueRotateTint, so a neutral colour stays put. Returns a fresh array
+// (never mutates the palette/frame source). Used by SKY/FOG COLOUR SATURATION.
+function satAdjust(rgb, amt) {
+  if (!rgb || amt === 1) return rgb;
+  const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;   // luma (grey anchor)
+  return [m + (rgb[0] - m) * amt, m + (rgb[1] - m) * amt, m + (rgb[2] - m) * amt];
+}
 const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 function fmtTime(t) {
   if (!isFinite(t) || t <= 0) return "-";
@@ -1672,6 +1681,21 @@ function applyRaceSettings() {
       frame.ambientSky = [frame.ambientSky[0] * ar * skyG, frame.ambientSky[1] * ag * skyG, frame.ambientSky[2] * abb * skyG];
       frame.ambientGround = [frame.ambientGround[0] * ar * grdG, frame.ambientGround[1] * ag * grdG, frame.ambientGround[2] * abb * grdG];
     }
+    // SKY COLOUR SATURATION — push the sky dome toward grey (0) or oversaturate
+    // (>1) around its luma anchor. Fresh arrays; the reflected sky (glass / wet
+    // road / SSR fallback reads frame.skyZenith/Horizon) is re-synced so the
+    // mirror matches the dome the player sees. Default 1 = exact no-op.
+    const _sat = LT.skyColorSat != null ? LT.skyColorSat : 1;
+    if (_sat !== 1) {
+      if (frameSky.zenith)  frameSky.zenith  = satAdjust(frameSky.zenith, _sat);
+      if (frameSky.horizon) frameSky.horizon = satAdjust(frameSky.horizon, _sat);
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
+    }
+    // FOG COLOUR SATURATION — same treatment for the distance-haze base colour,
+    // applied BEFORE the in-shader FOG WARM / COOL balance. Fresh array, def 1.
+    const _fsat = LT.fogColorSat != null ? LT.fogColorSat : 1;
+    if (_fsat !== 1 && frame.fogColor) frame.fogColor = satAdjust(frame.fogColor, _fsat);
   }
   // Save base ambient + exposure so the lightning system can restore them each
   // frame. Exposure matters: the flash SETS frame.exposure from this base — the
@@ -3170,7 +3194,7 @@ function ltFallback(id) {
 // Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
 // (not read per-frame in render). Changing one re-runs applyRaceSettings so it
 // updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance"]);
+const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance", "skyColorSat", "fogColorSat"]);
 function applyLightTune(fromApplyRace) {
   const layers = ltLayers();
   let rebuilt = false, reapply = false, reinit = false;
@@ -4765,14 +4789,22 @@ function render(dt) {
   // wet + cloud add). Sun shafts catch more in haze; lamp beams only show in it.
   // GROUND MIST knob applied here as well as at the uGroundMist upload, so the
   // god-ray / lamp-beam haze response tracks the mist the player actually sees.
-  const _mist = clamp((frame.groundMist || 0) * LT.mistDensity * 0.9 + (frame.wetness || 0) * 0.22
-                      + (frame.cloud || 0) * 0.12, 0, 1);
+  // WET / CLOUD HAZE SHARE knobs (def 0.22 / 0.12) set how much wet-road spray
+  // and cloud cover feed the volumetric haze the god-rays / lamp-beams scatter
+  // through, alongside the ground-mist term (GROUND MIST knob scales that).
+  const _hazeWet   = LT.hazeWetShare   != null ? LT.hazeWetShare   : 0.22;
+  const _hazeCloud = LT.hazeCloudShare != null ? LT.hazeCloudShare : 0.12;
+  const _mist = clamp((frame.groundMist || 0) * LT.mistDensity * 0.9 + (frame.wetness || 0) * _hazeWet
+                      + (frame.cloud || 0) * _hazeCloud, 0, 1);
   // Gate by the sun's actual BRIGHTNESS too: at night the key is dim moonlight
   // held above the horizon for sky glow, and ungated it marched faint stripey
   // "moon rays" through the cloud gaps.
   const _sunLumGR = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
   const _sunGateGR = clamp((_sunLumGR - 0.35) / 0.45, 0, 1);
-  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  // GOD-RAY LOW-SUN DRAMA knob (def 0.55) scales only the low-sun boost added on
+  // top of the flat 0.38 base; SUN GOD-RAYS (LT.grMul) scales the whole thing.
+  const _grLowBoost = LT.godrayLowBoost != null ? LT.godrayLowBoost : 0.55;
+  const _gr = (_grSunY > 0.02 ? (0.38 + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
