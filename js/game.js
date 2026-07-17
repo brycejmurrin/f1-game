@@ -973,6 +973,12 @@ async function loadCarModel(url) {
 // ---------- track loading ----------
 function loadTrack(idx) {
   const def = Tracks.LIST[idx];
+  // Invalidate the sun-shadow snap cache: it's only ever written inside the
+  // re-render gate, so a new track whose first snapped cell + sunDir happen to
+  // match the old track's last values would keep the PREVIOUS track's shadow
+  // silhouette until the camera moved a cell (~16 m).
+  _shadowSnapX = _shadowSnapZ = _shadowBox = null;
+  _shadowSunX = _shadowSunY = _shadowSunZ = null;
   // Buildings light up for the chosen SESSION time, not the track's default:
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a

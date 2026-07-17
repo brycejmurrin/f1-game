@@ -306,7 +306,11 @@ button:active { background: rgba(255, 255, 255, 0.2); }
 #sel-tracks {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  overflow: hidden;
+  /* overflow-X only: the portrait media query above sets overflow-y:auto at
+     EQUAL specificity, and this later base rule was clobbering it with the
+     `overflow` shorthand — leaving the portrait track list clipped to its
+     220px max-height and unscrollable. Same idiom as the dialog base rule. */
+  overflow-x: hidden;
   margin-top: 4px;
 }
 .track-row {

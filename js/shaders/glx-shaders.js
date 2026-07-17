@@ -457,7 +457,11 @@ float sampleShadow(vec3 wpos) {
   } else {
     sh = s * 0.25;
   }
-  return mix(1.0, sh, uShadowStr * edgeFade);
+  // Clamped: SHADOW DARKNESS goes to 2.0 and mix() EXTRAPOLATES above t=1 —
+  // at sh~0 the lighting factor hit -1, i.e. negative light, which the
+  // grade/tonemap renders as psychedelic orange/green in shadowed areas.
+  // Clamping crushes >1 toward black, as the knob's help text promises.
+  return max(0.0, mix(1.0, sh, uShadowStr * edgeFade));
 }
 
 void main() {
