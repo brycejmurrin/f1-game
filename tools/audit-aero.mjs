@@ -15,7 +15,7 @@ const VIEWS = [
   { name: 'front',     az: 180, el: 15, dist: 5.2 },
   { name: 'frontside', az: 150, el: 15, dist: 4.8 },
 ];
-const dir = resolve(HERE, 'render-out/aero-audit'); mkdirSync(dir, { recursive: true });
+const dir = resolve(HERE, '../scratch/renders/aero'); mkdirSync(dir, { recursive: true });
 const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
 try {
   const page = await browser.newPage({ viewport: { width: 640, height: 500 } });
@@ -45,5 +45,5 @@ thead th{color:#9ab;text-align:center}</style>
 <h2>AERO — ${TEAM} · behind / front / front-side</h2>
 <table><thead><tr><th></th><th>behind</th><th>front</th><th>front-side</th></tr></thead><tbody>
 ${rows.join('\n')}</tbody></table>`);
-  console.log(`done -> render-out/aero-audit/index.html`);
+  console.log(`done -> scratch/renders/aero/index.html`);
 } finally { await browser.close(); }

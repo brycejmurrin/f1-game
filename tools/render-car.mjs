@@ -47,7 +47,7 @@
 //   --refl=0.2            env-mirror strength 0..1 (0 = matte paint, 0.85 = default chrome)
 //   --bg=101014           background hex (overrides tod bg)
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
-//   --out=DIR             output dir. Default: tools/render-out/<team>
+//   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
 //   --url=...             base URL. Default http://127.0.0.1:3456
 //
@@ -156,7 +156,7 @@ const CUSTOM = (arg('az', null) != null || arg('el', null) != null || arg('dist'
 const W      = parseInt(arg('w', '900'), 10);
 const H      = parseInt(arg('h', '680'), 10);
 const URL    = arg('url', 'http://127.0.0.1:3456');
-const OUT    = resolve(HERE, arg('out', `render-out/${TEAM}`));
+const OUT    = resolve(HERE, arg('out', `../scratch/renders/cars/${TEAM}`));
 const EXE    = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
 
 const PART_CATS = ['engine', 'aero', 'brakes', 'gearbox', 'ers', 'tyres', 'suspension', 'fuel'];

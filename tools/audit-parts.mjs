@@ -4,7 +4,7 @@
 //
 //   node tools/audit-parts.mjs [--cats=brakes,gearbox,ers] [--team=mclaren]
 //
-// Output: tools/render-out/audit/<cat>/<option>.png + <cat>/index.html
+// Output: scratch/renders/parts/<cat>/<option>.png + <cat>/index.html
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -42,7 +42,7 @@ try {
   for (const cat of cats) {
     const v = CAT_VIEW[cat]; const opts = catalog[cat];
     if (!v || !opts) { console.log(`skip ${cat}`); continue; }
-    const dir = resolve(HERE, `render-out/audit/${cat}`); mkdirSync(dir, { recursive: true });
+    const dir = resolve(HERE, `../scratch/renders/parts/${cat}`); mkdirSync(dir, { recursive: true });
     const shots = [];
     for (const o of opts) {
       const parts = { ...defaults, [cat]: o.id };
@@ -56,7 +56,7 @@ try {
     writeFileSync(resolve(dir, 'index.html'), `<!doctype html><meta charset=utf8><title>${cat} audit</title>
 <style>body{margin:0;background:#111;color:#ccc;font:13px system-ui;padding:14px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}figure{margin:0;background:#000;border:1px solid #222;border-radius:6px;overflow:hidden}img{display:block;width:100%}figcaption{padding:4px 6px;color:#9ab;font-size:12px}</style>
 <h2 style="text-transform:uppercase;letter-spacing:.06em">${cat} — ${TEAM}</h2><div class=grid>${cards}</div>`);
-    console.log(`  ${cat}: ${shots.length} options -> render-out/audit/${cat}/`);
+    console.log(`  ${cat}: ${shots.length} options -> scratch/renders/parts/${cat}/`);
   }
   console.log('done');
 } finally { await browser.close(); }
