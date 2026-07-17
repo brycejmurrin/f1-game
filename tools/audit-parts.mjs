@@ -1,70 +1,130 @@
-// audit-parts.mjs — render EVERY option of chosen part categories through the
-// isolated car viewer (one page load) at the view that best shows each part, and
-// write a per-category contact sheet. For design review of js/car3d.js part tells.
+// Render every catalog option plus every team's factory preset through the
+// isolated car viewer. Requires a static server at http://127.0.0.1:3456.
 //
-//   node tools/audit-parts.mjs [--cats=brakes,gearbox,ers] [--team=mclaren]
+//   node tools/audit-parts.mjs [--cats=engine,aero] [--team=mclaren]
 //
-// Output: scratch/renders/parts/<cat>/<option>.png + <cat>/index.html
-import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Output: scratch/renders/parts/<category>/ and parts/factory/
+import { chromium } from "playwright";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   assertSafePathToken,
   resolveContainedChild,
   resolveRepoDefault,
-} from './output-paths.mjs';
+} from "./output-paths.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, '..');
-const arg = (k, d) => { const h = process.argv.find(a => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };
-const TEAM = assertSafePathToken(arg('team', 'mclaren'), 'team');
-const URL = arg('url', 'http://127.0.0.1:3456');
-const EXE = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
-
-// Best camera per category (az 0 = behind, 180 = head-on), + tod.
-const CAT_VIEW = {
-  engine:     { az: 322, el: 22, dist: 6.2, tod: 'day'  },  // airbox / exhaust / inlet
-  aero:       { az: 38,  el: 18, dist: 6.4, tod: 'day'  },  // rear wing + fin
-  suspension: { az: 152, el: 6,  dist: 5.8, tod: 'day'  },  // front wishbones
-  brakes:     { az: 104, el: 8,  dist: 5.6, tod: 'day'  },  // wheel caliper / nut
-  tyres:      { az: 96,  el: 8,  dist: 5.8, tod: 'day'  },  // Pirelli band
-  ers:        { az: 322, el: 16, dist: 5.6, tod: 'dusk' },  // sidepod glow bar
-  gearbox:    { az: 26,  el: 22, dist: 5.8, tod: 'day'  },  // rear casing
-  fuel:       { az: 6,   el: 15, dist: 6.0, tod: 'dusk' },  // exhaust ember + collar
+const ROOT = resolve(HERE, "..");
+const arg = (key, fallback) => {
+  const hit = process.argv.find((value) => value.startsWith(`--${key}=`));
+  return hit ? hit.slice(key.length + 3) : fallback;
 };
-const cats = (arg('cats', Object.keys(CAT_VIEW).join(','))).split(',').map(s => s.trim()).filter(Boolean)
-  .map((c) => assertSafePathToken(c, 'category'));
+const TEAM = assertSafePathToken(arg("team", "mclaren"), "team");
+const URL = arg("url", "http://127.0.0.1:3456");
+const EXE = process.env.PW_CHROMIUM;
+const CAT_VIEW = {
+  engine:     { az: 322, el: 22, dist: 6.2, tod: "day" },
+  aero:       { az: 38,  el: 18, dist: 6.4, tod: "day" },
+  suspension: { az: 152, el: 6,  dist: 5.8, tod: "day" },
+  brakes:     { az: 104, el: 8,  dist: 5.6, tod: "day" },
+  tyres:      { az: 96,  el: 8,  dist: 5.8, tod: "day" },
+  ers:        { az: 322, el: 16, dist: 5.6, tod: "dusk" },
+  gearbox:    { az: 26,  el: 22, dist: 5.8, tod: "day" },
+  fuel:       { az: 6,   el: 15, dist: 6.0, tod: "dusk" },
+};
+const cats = arg("cats", Object.keys(CAT_VIEW).join(",")).split(",")
+  .map((value) => assertSafePathToken(value.trim(), "category")).filter(Boolean);
+const esc = (value) => String(value).replace(/[&<>"]/g, (char) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;",
+}[char]));
+const sheet = (title, cards) => `<!doctype html><meta charset=utf8><title>${esc(title)}</title>
+<style>body{margin:0;background:#111;color:#ccc;font:13px system-ui;padding:14px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}figure{margin:0;background:#000;border:1px solid #222;border-radius:6px;overflow:hidden}img{display:block;width:100%}figcaption{padding:5px 7px;color:#9ab;font-size:12px}</style>
+<h2 style="text-transform:uppercase;letter-spacing:.06em">${esc(title)}</h2><div class=grid>${cards.map(({ file, label }) => `<figure><img src="${esc(file)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>`).join("\n")}</div>`;
 
-const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({
+  ...(EXE ? { executablePath: EXE } : {}),
+  args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"],
+});
 try {
   const page = await browser.newPage({ viewport: { width: 720, height: 560 } });
-  page.on('pageerror', e => console.log('PAGEERR', e.message));
-  await page.goto(`${URL}/tools/carview.html?team=${TEAM}&hud=0`, { waitUntil: 'load' });
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15000 });
+  page.on("pageerror", (error) => console.log("PAGEERR", error.message));
+  await page.goto(`${URL}/tools/carview.html?team=${TEAM}&hud=0`, { waitUntil: "load" });
+  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15_000 });
 
-  const catalog = await page.evaluate(() => Object.fromEntries(Parts.CATALOG.map(c => [c.id, c.options.map(o => ({ id: o.id, label: o.label }))])));
-  const defaults = await page.evaluate(() => Object.assign({}, Parts.DEFAULTS));
+  const audit = await page.evaluate((fallbackTeam) => {
+    const teams = Teams.LIST.filter((team) => Parts.FACTORY_PRESETS[team.id]);
+    const byId = Object.fromEntries(teams.map((team) => [team.id, team]));
+    const eligibleTeam = (option) => {
+      if (option.teams && option.teams.length) return byId[option.teams[0]]?.id;
+      if (option.team) return byId[option.team]?.id;
+      const suppliers = option.suppliers || (option.supplier ? [option.supplier] : []);
+      if (suppliers.length) return teams.find((team) => suppliers.includes(team.engine))?.id;
+      return byId[fallbackTeam] ? fallbackTeam : teams[0].id;
+    };
+    return {
+      defaults: { ...Parts.DEFAULTS },
+      catalog: Object.fromEntries(Parts.CATALOG.map((category) => [
+        category.id,
+        category.options.map((option) => ({
+          id: option.id,
+          label: option.label,
+          team: eligibleTeam(option),
+        })),
+      ])),
+      factories: teams.map((team) => ({
+        id: team.id,
+        name: team.name,
+        parts: Parts.getFactorySetup(team),
+      })),
+    };
+  }, TEAM);
 
   for (const cat of cats) {
-    const v = CAT_VIEW[cat]; const opts = catalog[cat];
-    if (!v || !opts) { console.log(`skip ${cat}`); continue; }
-    const dir = resolveRepoDefault(ROOT, 'scratch', 'renders', 'parts', cat);
+    const view = CAT_VIEW[cat];
+    const options = audit.catalog[cat];
+    if (!view || !options) throw new Error(`Unknown parts category: ${cat}`);
+    const dir = resolveRepoDefault(ROOT, "scratch", "renders", "parts", cat);
     mkdirSync(dir, { recursive: true });
-    const shots = [];
-    for (const o of opts) {
-      const parts = { ...defaults, [cat]: o.id };
-      await page.evaluate((s) => window.CARVIEW.set(s), { parts, az: v.az, el: v.el, dist: v.dist, tod: v.tod });
+    const cards = [];
+    for (const option of options) {
+      if (!option.team) throw new Error(`No eligible team found for ${cat}:${option.id}`);
+      const parts = { ...audit.defaults, [cat]: option.id };
+      await page.evaluate((state) => window.CARVIEW.set(state), {
+        team: option.team, colors: null, parts,
+        az: view.az, el: view.el, dist: view.dist, tod: view.tod,
+      });
       await page.waitForTimeout(260);
-      const file = `${assertSafePathToken(o.id, 'option')}.png`;
-      await page.screenshot({ path: resolveContainedChild(dir, file, 'parts audit shot') });
-      shots.push({ file, label: `${o.id}` });
+      const file = `${assertSafePathToken(option.id, "option")}.png`;
+      await page.screenshot({ path: resolveContainedChild(dir, file, "parts audit shot") });
+      cards.push({ file, label: `${option.label} · ${option.team}` });
     }
-    const cards = shots.map(s => `<figure><img src="${s.file}"><figcaption>${s.label}</figcaption></figure>`).join('\n');
-    writeFileSync(resolveContainedChild(dir, 'index.html', 'parts audit index'), `<!doctype html><meta charset=utf8><title>${cat} audit</title>
-<style>body{margin:0;background:#111;color:#ccc;font:13px system-ui;padding:14px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}figure{margin:0;background:#000;border:1px solid #222;border-radius:6px;overflow:hidden}img{display:block;width:100%}figcaption{padding:4px 6px;color:#9ab;font-size:12px}</style>
-<h2 style="text-transform:uppercase;letter-spacing:.06em">${cat} — ${TEAM}</h2><div class=grid>${cards}</div>`);
-    console.log(`  ${cat}: ${shots.length} options -> scratch/renders/parts/${cat}/`);
+    writeFileSync(resolveContainedChild(dir, "index.html", "parts audit index"), sheet(`${cat} parts`, cards));
+    console.log(`  ${cat}: ${cards.length} options`);
   }
-  console.log('done');
-} finally { await browser.close(); }
+
+  const factoryDir = resolveRepoDefault(ROOT, "scratch", "renders", "parts", "factory");
+  mkdirSync(factoryDir, { recursive: true });
+  const factoryCards = [];
+  const liveries = [
+    { id: "light", colors: [[0.88, 0.9, 0.94], [0.22, 0.25, 0.3]] },
+    { id: "dark", colors: [[0.035, 0.045, 0.06], [0.3, 0.34, 0.4]] },
+  ];
+  for (const factory of audit.factories) {
+    for (const livery of liveries) {
+      await page.evaluate((state) => window.CARVIEW.set(state), {
+        team: factory.id, livery: null, colors: livery.colors, parts: factory.parts,
+        az: 40, el: 16, dist: 6.4, tod: "day",
+      });
+      await page.waitForTimeout(260);
+      const file = `${assertSafePathToken(factory.id, "factory team")}-${livery.id}.png`;
+      await page.screenshot({ path: resolveContainedChild(factoryDir, file, "factory audit shot") });
+      factoryCards.push({ file, label: `${factory.name} · ${livery.id}` });
+    }
+  }
+  writeFileSync(resolveContainedChild(factoryDir, "index.html", "factory audit index"), sheet("factory presets · light / dark", factoryCards));
+  console.log(`  factory: ${factoryCards.length} renders`);
+  console.log("done -> scratch/renders/parts/");
+} finally {
+  await browser.close();
+}

@@ -167,7 +167,7 @@ const Car3D = (function () {
 
   // Wheel: smooth-shaded tyre tread (shared ring verts, radial normals) + flat
   // 2026-style cover disc + hub on both faces.
-  function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor, grooved) {
+  function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor, grooved, tyreStyle) {
     const RC = rimColor || RIM;
     const SEG = 18;
     const x0 = cx - w/2, x1 = cx + w/2;
@@ -178,10 +178,15 @@ const Car3D = (function () {
     // `grooved` profile dips the radius at three bands to cut real circumferential
     // tread grooves (the actual construction difference a wet tyre has, not just
     // a different sidewall colour).
-    const PROFILE = grooved
-      ? [[0, 1], [0.20, 1], [0.23, 0.955], [0.26, 1], [0.44, 1], [0.47, 0.955], [0.50, 1],
-         [0.68, 1], [0.71, 0.955], [0.74, 1], [1, 1]]
-      : [[0, 1], [1, 1]];
+    const grooveCount = tyreStyle && tyreStyle.grooves != null
+      ? tyreStyle.grooves : grooved ? 3 : 0;
+    const grooveDepth = tyreStyle && tyreStyle.grooveDepth || 0.045;
+    const PROFILE = [[0, 1]];
+    for (let g = 0; g < grooveCount; g++) {
+      const mid = (g + 1) / (grooveCount + 1);
+      PROFILE.push([mid - 0.025, 1], [mid, 1 - grooveDepth], [mid + 0.025, 1]);
+    }
+    PROFILE.push([1, 1]);
     const i0 = out.pos.length / 3;
     for (const [xf, rm] of PROFILE) {
       const x = x0 + (x1 - x0) * xf, rr = r * rm;
@@ -224,12 +229,14 @@ const Car3D = (function () {
     // the tread — the classic modern-F1 tyre read (and a colour accent on an
     // otherwise all-dark corner of the car). TYRES visualTier recolours it.
     const BAND = bandColor || [0.85, 0.10, 0.08];
+    const bandWidth = tyreStyle && tyreStyle.bandWidth != null ? tyreStyle.bandWidth : 0.09;
     for (const bs of [[x0, -1], [x1, 1]]) {
       const xb = bs[0] + bs[1] * 0.004;
       for (let i = 0; i < SEG; i++) {
         const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
         const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-        const A = P(r * 0.96, a0), B = P(r * 0.96, a1), C = P(r * 0.87, a1), D = P(r * 0.87, a0);
+        const outer = 0.96, inner = Math.max(0.76, outer - bandWidth);
+        const A = P(r * outer, a0), B = P(r * outer, a1), C = P(r * inner, a1), D = P(r * inner, a0);
         addQuad(out, A, B, C, D, BAND);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
       }
     }
@@ -242,10 +249,11 @@ const Car3D = (function () {
     // Cover vanes: six slim recessed-look blades sweeping out from the hub — subtle
     // but enough to read the wheel ROTATION (tread/cover are rotationally uniform).
     const VANE = [0.26, 0.26, 0.30];
+    const coverVanes = tyreStyle && tyreStyle.coverVanes || 6;
     for (const ss of [[x0, -1], [x1, 1]]) {
       const xs = ss[0] + ss[1] * 0.014;
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * Math.PI * 2 + 0.25;
+      for (let k = 0; k < coverVanes; k++) {
+        const a = (k / coverVanes) * Math.PI * 2 + 0.25;
         const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
         const hw = 0.010, ri = rimR * 0.46, ro = rimR * 0.98;
         const P = (rad, s) => [xs, cy + uy * rad + py * hw * s, cz + uz * rad + pz * hw * s];
@@ -308,9 +316,9 @@ const Car3D = (function () {
   // A single wheel centred on the origin, axle along X — so the render layer can
   // spin it about X (∝ speed) and steer the fronts about Y, then translate it to
   // each corner. Used only for the player car (AI keep the baked static wheels).
-  function buildWheel(w, bandColor, caliperColor, rimColor, grooved) {
+  function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
-    addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor, grooved);
+    addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor, grooved, tyreStyle);
     return out;
   }
 
@@ -318,44 +326,6 @@ const Car3D = (function () {
   // matches today's hardcoded literals so an unmodified car is byte-identical.
   const TYRE_BAND     = { 0: [0.92, 0.92, 0.90], 1: [0.85, 0.10, 0.08], 2: [0.95, 0.15, 0.05] };
   const BRAKE_CALIPER = { 0: null, 1: null, 2: [0.75, 0.08, 0.05] };
-  // Per-COMPOUND sidewall band colour (real Pirelli-style read), keyed by the
-  // resolved tyre option id — so each tyre choice reads distinctly on the car,
-  // not just in three tiers. Falls back to TYRE_BAND[tier] for any unmapped id.
-  const TYRE_PIRELLI = {
-    intermediate: [0.10, 0.72, 0.24],   // green
-    hard:         [0.90, 0.90, 0.93],   // white
-    medium:       [0.96, 0.80, 0.10],   // yellow
-    slick_track:  [0.80, 0.82, 0.88],   // silver slick
-    compound_c4:  [0.95, 0.42, 0.10],   // orange-soft
-    soft:         [0.92, 0.12, 0.10],   // red
-    compound_c5:  [0.97, 0.16, 0.12],   // bright red
-    supersoft:    [0.88, 0.10, 0.30],   // crimson
-    p_zero_red:   [0.97, 0.07, 0.07],   // hot red
-    qualigum:     [0.62, 0.12, 0.78],   // purple (quali)
-    hypersoft:    [0.98, 0.38, 0.62],   // pink
-  };
-  // Per-OPTION aero package keyed by resolved aero id: `lvl` is a continuous
-  // downforce level 0 (skinny low-drag) → 4 (towering high-DF) that drives wing
-  // size/height/element-count, plus flags — `beam` (a prominent beam wing) and
-  // `drs` (a slotted DRS gap in the top flap), and `vane` (bargeboard / turning-
-  // vane cluster style ahead of the sidepods: 0 none, 1 single fence, 2 twin
-  // fences, 3 curved triple cascade). Distinct silhouette per choice, not just
-  // three tiers. Unmapped ids fall back to the 0/1/2 tier.
-  const AERO_STYLE = {
-    minimal:       { lvl: 0, vane: 0 },
-    le_mans:       { lvl: 0, vane: 1 },   // low DF but Le Mans splitters
-    low:           { lvl: 1, vane: 1 },
-    s_duct:        { lvl: 1, vane: 2 },   // S-duct feeds twin turning vanes
-    medium:        { lvl: 2, vane: 1 },
-    beam_wing:     { lvl: 2, beam: 1, vane: 1 },
-    rake_setup:    { lvl: 3, vane: 2 },
-    diffuser:      { lvl: 3, beam: 1, vane: 2 },
-    high:          { lvl: 3, vane: 2 },
-    underfloor:    { lvl: 3, beam: 1, vane: 3 },  // full ground-effect vane cluster
-    extreme:       { lvl: 4, vane: 3 },
-    active_aero:   { lvl: 3, drs: 1, vane: 2 },
-    ground_effect: { lvl: 4, beam: 1, vane: 3 },
-  };
   // Rear-wing endplate geometry as a function of downforce level (0..4). SINGLE
   // SOURCE OF TRUTH — the wing build below AND the driver-number decal in game.js
   // (via Car3D.endplate / Car3D.numberBoard) both read this, so the endplate
@@ -374,114 +344,77 @@ const Car3D = (function () {
     const ep = endplateGeom(aLvl), h = 0.20;
     return { cy: ep.cy - ep.sy * 0.5 + 0.05 + h * 0.5, h };
   }
-  // Resolve the continuous 0..4 downforce level from a getVisualTiers() object
-  // (per-option when the aero id is known, else mapped from the coarse 0/1/2
-  // tier — AI / no-parts → medium, lvl 2). Mirrors the in-build derivation.
-  function aeroLevelOf(T) {
-    const aeroId = T && T._ids && T._ids.aero;
-    const st = (aeroId && AERO_STYLE[aeroId]) || null;
-    const aeroT = (T && T.aero != null) ? T.aero : 1;
-    return st ? st.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
+  function mergeRecipe(defaults, recipe) {
+    return Object.assign(defaults, recipe || {});
   }
-  // Per-OPTION engine airbox: `in` intake-mouth scale, `snork` raised snorkel,
-  // `twin` twin exhaust tips, `inlet` sidepod radiator-inlet SHAPE (0 slim
-  // low-drag letterbox, 1 stock rounded mouth, 2 wide high-flow scoop, 3 tall
-  // twin-nostril), `outlet` engine-cover hot-air cooling exit FORM (0 sealed
-  // low-drag deck, 1 slim gill pair, 2 broad shark-gill louvre bank + tail vent,
-  // 3 twin chimney stacks). Keyed by resolved engine id (else the 0/1/2 tier).
-  const ENGINE_STYLE = {
-    stock:        { in: 0.85, inlet: 1, outlet: 1 }, lean_burn:   { in: 0.72, inlet: 0, outlet: 0 },
-    performance:  { in: 1.15, twin: 1, inlet: 2, outlet: 1 }, v_power: { in: 1.10, twin: 1, inlet: 2, outlet: 1 },
-    turbo:        { in: 1.35, snork: 1, inlet: 2, outlet: 2 }, highrev: { in: 1.25, snork: 1, inlet: 3, outlet: 2 },
-    evo_kit:      { in: 1.20, twin: 1, inlet: 2, outlet: 1 }, sprint:  { in: 1.15, twin: 1, inlet: 3, outlet: 2 },
-    race:         { in: 1.55, snork: 1, twin: 1, inlet: 3, outlet: 3 },
-    torque_curve: { in: 1.00, inlet: 1, outlet: 1 }, hybrid_max: { in: 1.30, snork: 1, twin: 1, inlet: 2, outlet: 2 },
-    quali_engine: { in: 1.65, snork: 1, twin: 1, inlet: 3, outlet: 3 },
-    manu_mercedes:{ in: 1.55, snork: 1, twin: 1, inlet: 2, outlet: 2 }, manu_ferrari: { in: 1.55, snork: 1, twin: 1, inlet: 3, outlet: 3 },
-    manu_ford:    { in: 1.50, snork: 1, twin: 1, inlet: 2, outlet: 2 }, manu_honda:   { in: 1.50, snork: 1, twin: 1, inlet: 3, outlet: 3 },
-    manu_audi:    { in: 1.50, snork: 1, twin: 1, inlet: 2, outlet: 2 },
-  };
-  // Per-OPTION brake package: `cal` caliper accent colour (peeks through the rim
-  // spokes), `duct` brake-duct size. Keyed by resolved brake id (else tier).
-  const BRAKE_STYLE = {
-    standard:     { cal: null,               duct: 0.55 },
-    drilled:      { cal: null,               duct: 0.72 },
-    sport:        { cal: [0.95, 0.45, 0.05], duct: 0.95 },  // orange
-    titanium:     { cal: [0.70, 0.72, 0.78], duct: 0.85 },  // silver
-    endurance:    { cal: [0.95, 0.80, 0.10], duct: 1.05 },  // yellow
-    dual_caliper: { cal: [0.95, 0.72, 0.08], duct: 1.15 },  // amber
-    carbon:       { cal: [0.85, 0.12, 0.10], duct: 1.25 },  // red
-    ventilated:   { cal: [0.90, 0.15, 0.12], duct: 1.35 },  // red
-    carbon_mag:   { cal: [0.85, 0.66, 0.16], duct: 1.45 },  // gold
-    regen_brakes: { cal: [0.15, 0.78, 0.38], duct: 1.25 },  // green (energy)
-    ceramic:      { cal: [0.97, 0.10, 0.08], duct: 1.60, rim: [0.55, 0.56, 0.60] },  // bright red + pale rim
-    brembo_evo:   { cal: [0.98, 0.62, 0.05], duct: 1.75, rim: [0.42, 0.34, 0.12] },  // Brembo gold + bronze rim
-  };
-  // Premium alloy brakes get gold/pale magnesium rims (peek between the spokes).
-  BRAKE_STYLE.carbon_mag.rim = [0.48, 0.40, 0.16];   // magnesium bronze
-  BRAKE_STYLE.dual_caliper.rim = [0.30, 0.30, 0.34];
-  // Per-OPTION suspension: `ride` height offset (m), `arm` wishbone thickness
-  // mult, `push` a visible actuating strut, `pull` render that strut as a
-  // PULLROD (top-outboard → bottom-inboard diagonal) instead of a pushrod
-  // (bottom-outboard → top-inboard). Keyed by resolved option id.
-  const SUSP_STYLE = {
-    comfort:         { ride:  0.055, arm: 0.80, push: 0 },   // tall + soft
-    standard:        { ride:  0.000, arm: 1.00, push: 0 },
-    sport:           { ride: -0.010, arm: 1.05, push: 0 },
-    carbon_pushrods: { ride: -0.015, arm: 0.90, push: 1 },
-    kerb_spec:       { ride:  0.010, arm: 1.10, push: 0 },
-    low_ride:        { ride: -0.035, arm: 1.05, push: 0 },
-    racing:          { ride: -0.025, arm: 1.15, push: 1 },
-    triple_damper:   { ride: -0.020, arm: 1.20, push: 1 },
-    titanium_spring: { ride: -0.020, arm: 0.85, push: 1, pull: 1 },   // thin Ti pullrods
-    inboard_dampers: { ride: -0.020, arm: 1.10, push: 1, pull: 1 },   // pullrod, inboard dampers
-    track:           { ride: -0.040, arm: 1.30, push: 1 },   // slammed + stiff
-    heave_spring:    { ride: -0.030, arm: 1.20, push: 1, pull: 1 },
-    active:          { ride: -0.045, arm: 1.25, push: 1 },   // fully slammed
-  };
-  // Per-OPTION gearbox: `strakes` diffuser strake count, `strakeH` strake height,
-  // `fin` a rear crash-structure fin with `finSY`/`finSZ` size, `casing`
-  // bellhousing/gearbox-case bulge form (0 none · 1 slim · 2 ribbed tail case ·
-  // 3 broad carbon case with side plates), `louvres` cooling-louvre count on the
-  // case flanks, `heat` a titanium heat-shield plate over the 'box. Keyed by
-  // resolved option id — so every spec reads with a distinct rear silhouette.
-  const GBOX_STYLE = {
-    standard:       { strakes: 0, fin: 0, strakeH: 0.13, casing: 0, louvres: 0, heat: 0 },
-    close_ratio:    { strakes: 2, fin: 0, strakeH: 0.13, casing: 1, louvres: 2, heat: 0 },
-    long_ratio:     { strakes: 2, fin: 0, strakeH: 0.16, casing: 1, louvres: 0, heat: 1 },
-    short_stack:    { strakes: 3, fin: 1, strakeH: 0.15, finSY: 0.11, finSZ: 0.22, casing: 2, louvres: 3, heat: 0 },
-    sequential_pro: { strakes: 4, fin: 1, strakeH: 0.17, finSY: 0.17, finSZ: 0.32, casing: 2, louvres: 4, heat: 1 },
-    carbon_case:    { strakes: 4, fin: 1, strakeH: 0.19, finSY: 0.15, finSZ: 0.30, casing: 3, louvres: 0, heat: 1 },
-    f1_spec:        { strakes: 5, fin: 1, strakeH: 0.22, finSY: 0.22, finSZ: 0.40, casing: 3, louvres: 5, heat: 1 },
-  };
-  // Per-OPTION ERS: `led` HDR accent-strip colour (glows/blooms at night) + `pack`
-  // battery-pack size mult. Keyed by resolved ers id (else a tier fallback). Every
-  // ERS choice now reads distinctly — a coloured battery-pack light down the pods.
-  const ERS_STYLE = {
-    standard:       { led: [0.15, 0.55, 1.6],  pack: 1.00 },  // blue
-    regen_plus:     { led: [0.12, 1.5,  0.55], pack: 1.05 },  // green
-    harvest:        { led: [0.18, 1.35, 0.95], pack: 0.95 },  // teal
-    split_deploy:   { led: [0.85, 0.55, 1.7],  pack: 1.10 },  // violet
-    mgu_k_max:      { led: [1.7,  0.95, 0.15], pack: 1.15 },  // amber
-    deploy:         { led: [1.9,  0.4,  0.15], pack: 1.20 },  // orange
-    thermal_max:    { led: [1.95, 0.5,  0.08], pack: 1.05 },  // hot orange
-    torque_fill:    { led: [0.8,  0.3,  1.85], pack: 1.15 },  // purple
-    overtake_focus: { led: [2.05, 0.15, 0.55], pack: 1.20 },  // magenta
-    race_mode:      { led: [0.25, 0.95, 2.05], pack: 1.20 },  // cyan
-    full_attack:    { led: [2.25, 0.22, 0.16], pack: 1.30 },  // red
-    overcharge:     { led: [2.4,  0.75, 0.06], pack: 1.35 },  // gold-hot
-  };
-  // Per-OPTION fuel: filler-cap `cap` colour (a fuel-grade collar on the airbox)
-  // + `flame` — the HDR exhaust-ember tint at the tailpipes, so the fuel BLEND
-  // shows as the colour of the car's exhaust glow (what you see racing behind it).
-  const FUEL_STYLE = {
-    standard:       { cap: [0.55, 0.52, 0.60], flame: [1.15, 0.42, 0.14] },  // neutral / warm orange
-    high_octane:    { cap: [1.5,  1.15, 0.18], flame: [1.75, 1.40, 0.45] },  // yellow / yellow-white flame
-    biofuel:        { cap: [0.18, 1.35, 0.5],  flame: [0.35, 1.65, 0.42] },  // green
-    race_blend:     { cap: [1.6,  0.6,  0.14], flame: [1.95, 0.72, 0.14] },  // orange
-    quali_mix:      { cap: [0.95, 0.28, 1.5],  flame: [1.25, 0.35, 1.75] },  // violet
-    custom_formula: { cap: [1.9,  0.25, 1.25], flame: [1.85, 0.25, 1.40] },  // magenta
-  };
+  function buildEngineParts(recipe, tier) {
+    return mergeRecipe({
+      in: tier === 0 ? 0.52 : tier === 2 ? 1.65 : 1,
+      snork: tier === 2 ? 1 : 0, twin: tier === 2 ? 1 : 0,
+      inlet: tier === 0 ? 0 : tier === 2 ? 2 : 1,
+      outlet: tier === 0 ? 0 : tier === 2 ? 2 : 1,
+    }, recipe);
+  }
+  function buildAeroParts(recipe, tier) {
+    const lvl = tier === 0 ? 0 : tier === 2 ? 4 : 2;
+    return mergeRecipe({
+      lvl, beam: tier === 2 ? 1 : 0, drs: 0,
+      vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
+    }, recipe);
+  }
+  function buildSuspensionParts(recipe, tier) {
+    return mergeRecipe({
+      ride: tier === 0 ? 0.060 : tier === 2 ? -0.048 : 0,
+      arm: tier === 0 ? 0.85 : tier === 2 ? 1.3 : 1,
+      push: tier === 2 ? 1 : 0, pull: 0,
+    }, recipe);
+  }
+  function buildBrakeParts(recipe, tier) {
+    return mergeRecipe({
+      cal: BRAKE_CALIPER[tier], duct: tier === 0 ? 0.5 : tier === 2 ? 1.9 : 1,
+      rim: null,
+    }, recipe);
+  }
+  function buildTyreParts(recipe, tier) {
+    return mergeRecipe({ band: TYRE_BAND[tier], grooved: false }, recipe);
+  }
+  function buildErsParts(recipe, tier, accent) {
+    return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1 }, recipe);
+  }
+  function buildGearboxParts(recipe, tier) {
+    return mergeRecipe({
+      strakes: tier === 2 ? 5 : 0, fin: tier === 2 ? 1 : 0,
+      strakeH: 0.13, finSY: 0.14, finSZ: 0.28,
+      casing: tier === 2 ? 3 : 0, louvres: 0, heat: 0,
+    }, recipe);
+  }
+  function buildFuelParts(recipe, tier) {
+    return mergeRecipe({
+      cap: tier === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60],
+      flame: [1.15, 0.42, 0.14],
+    }, recipe);
+  }
+  function buildPartRecipes(T, accent) {
+    const tier = (id) => T[id] != null ? T[id] : 1;
+    const recipe = (id) => T._visual && T._visual[id] || null;
+    return {
+      engine: buildEngineParts(recipe("engine"), tier("engine")),
+      aero: buildAeroParts(recipe("aero"), tier("aero")),
+      suspension: buildSuspensionParts(recipe("suspension"), tier("suspension")),
+      brakes: buildBrakeParts(recipe("brakes"), tier("brakes")),
+      tyres: buildTyreParts(recipe("tyres"), tier("tyres")),
+      ers: buildErsParts(recipe("ers"), tier("ers"), accent),
+      gearbox: buildGearboxParts(recipe("gearbox"), tier("gearbox")),
+      fuel: buildFuelParts(recipe("fuel"), tier("fuel")),
+    };
+  }
+  // Resolve the continuous 0..4 downforce level from a getVisualTiers() object.
+  // Resolved recipes are authoritative; the coarse tier remains a stale-bundle
+  // fallback for AI/no-parts builds.
+  function aeroLevelOf(T) {
+    T = T || {};
+    return buildAeroParts(T._visual && T._visual.aero, T.aero != null ? T.aero : 1).lvl;
+  }
   // Per-DRIVER helmet crown-stripe palette (indexed by car number) so team-mates
   // and the field carry distinct helmets.
   const HELMET_ACCENT = [
@@ -507,13 +440,21 @@ const Car3D = (function () {
     const podC  = liv.pod  || null;
     const wingC = liv.wing || c2;   // flap colour (front + rear) — c2 keeps today's look
     const haloTint = liv.halo || null;
-    // Parts-driven visual identity: opts.parts is { categoryId: 0|1|2 } (see
-    // Parts.getVisualTiers in parts.js). Every lookup defaults to 1 (neutral/
-    // today's-baseline) when absent, so AI/no-parts builds are unaffected.
+    // Parts-driven visual identity: `_visual` contains the resolved parametric
+    // recipe for every category; coarse tiers remain neutral fallbacks.
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
+    const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
+    const design = buildPartRecipes(T, ersC2);
     const suspT = tier("suspension");
-    const suspStyle = (T._ids && T._ids.suspension && SUSP_STYLE[T._ids.suspension]) || null;
+    const suspStyle = design.suspension;
+    const engStyle = design.engine;
+    const brakeStyle = design.brakes;
+    const tyreStyle = design.tyres;
+    const ersStyle = design.ers;
+    const gbStyle = design.gearbox;
+    const fuelStyle = design.fuel;
+    const aeroStyle = design.aero;
 
     // --- Floor plank (flat) --- per-OPTION suspension shifts ride height.
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
@@ -557,7 +498,6 @@ const Car3D = (function () {
     // ERS tier tints the two flat accent-colour "livery tell" panels (hood
     // stripe + shark fin below) HDR at the top tier — same ">1 albedo glows
     // at night" convention PANEL already uses; plain team colour otherwise.
-    const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
     // Cockpit view: the hood is a LOW dash cowl that stops BEHIND the nose
     // number deck (z~1.1) — so the driver looks over the cowl and sees the long
     // nose stretching out ahead past the steering wheel (with the number on it),
@@ -614,11 +554,9 @@ const Car3D = (function () {
     // the cockpit build (ckpt) — under brake pitch they'd otherwise swing up
     // into the top/back of the onboard frame ("the thing behind us cutting in").
     if (!ckpt) {
-      // Airbox: trapezoid block above the cockpit (dark intake front). Per-OPTION
-      // via ENGINE_STYLE: intake-mouth scale, a raised snorkel, cover louvres.
+      // Airbox: trapezoid block above the cockpit (dark intake front). The
+      // resolved engine recipe controls intake scale, snorkel and cover louvres.
       const engT = tier("engine");
-      const engId = T._ids && T._ids.engine;
-      const engStyle = (engId && ENGINE_STYLE[engId]) || null;
       const inScale = engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0);
       const engSnork = engStyle ? !!engStyle.snork : engT === 2;
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
@@ -662,9 +600,7 @@ const Car3D = (function () {
       // night): green (economy) → amber (standard) → red (max-attack power unit).
       const engLed = engT === 2 ? [2.4, 0.28, 0.12] : engT === 0 ? [0.15, 1.8, 0.55] : [1.9, 1.2, 0.15];
       for (const lx of [-0.06, 0, 0.06]) addBox(out, lx, 0.885, -0.30, 0.02, 0.014, 0.02, engLed);
-      // FUEL: per-OPTION filler cap colour (HDR blends glow at night).
-      const fuelId = T._ids && T._ids.fuel;
-      const fuelStyle = (fuelId && FUEL_STYLE[fuelId]) || null;
+      // FUEL: per-option filler cap colour (HDR blends glow at night).
       const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
       // Fuel filler on the airbox shoulder: a dark housing ringed by a bright
       // fuel-grade COLLAR in the blend colour + a cap dot — a clear grade placard.
@@ -693,8 +629,6 @@ const Car3D = (function () {
     // number of lit cells + a battery-pack bulge grow with the pack spec, so every
     // ERS choice reads distinctly at a glance (the old thin strip was too subtle).
     // Runs ABOVE the sponsor band (titleA y 0.19–0.45) so it never washes the wordmark.
-    const ersId = T._ids && T._ids.ers;
-    const ersStyle = (ersId && ERS_STYLE[ersId]) || null;
     const ersLed = ersStyle ? ersStyle.led : (tier("ers") === 2 ? ersC2 : null);
     const ersPack = ersStyle ? ersStyle.pack : 1.0;
     if (ersLed) {
@@ -715,8 +649,7 @@ const Car3D = (function () {
     // the sidepod front (SHAPE varies per ENGINE_STYLE.inlet), and a row of
     // little floor-edge fences — the fiddly ground-effect furniture that reads
     // as a modern car. Tiny HDR floor-edge LED accents bloom at night. ---
-    const engStyleG = (T._ids && T._ids.engine && ENGINE_STYLE[T._ids.engine]) || null;
-    const engInlet = engStyleG && engStyleG.inlet != null ? engStyleG.inlet
+    const engInlet = engStyle && engStyle.inlet != null ? engStyle.inlet
                    : (tier("engine") === 2 ? 2 : tier("engine") === 0 ? 0 : 1);
     const floorLed = [0.12, 0.9, 1.9];   // cool-cyan floor-edge marker (HDR → blooms)
     for (const s of [-1, 1]) {
@@ -889,16 +822,15 @@ const Car3D = (function () {
 
     // --- Exhaust outlet poking from the tail cap --- per ENGINE option: a lone
     // slim pipe at low spec, a fat central tailpipe flanked by two extra tips
-    // for the `twin` engines (see ENGINE_STYLE).
-    const exhStyle = (T._ids && T._ids.engine && ENGINE_STYLE[T._ids.engine]) || null;
-    const exhTwin = exhStyle ? !!exhStyle.twin : tier("engine") === 2;
-    const exhR = exhStyle ? (exhStyle.twin ? 0.09 : (exhStyle.in < 0.9 ? 0.05 : 0.07))
+    // for engine recipes with the `twin` flag.
+    const exhTwin = engStyle ? !!engStyle.twin : tier("engine") === 2;
+    const exhR = engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
     addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17]);
     // Heat-glazed tailpipe mouth: a dark bore with an HDR ember at the tip TINTED
-    // BY THE FUEL BLEND (see FUEL_STYLE.flame) — so the exhaust glow is the fuel's
+    // BY THE FUEL BLEND recipe — so the exhaust glow is the fuel's
     // signature colour (green biofuel, violet quali mix, …), read racing behind it.
-    const fuelFlame = (T._ids && T._ids.fuel && FUEL_STYLE[T._ids.fuel] && FUEL_STYLE[T._ids.fuel].flame) || [1.15, 0.42, 0.14];
+    const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
     const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04]);
     addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012, fuelFlame);
@@ -934,9 +866,8 @@ const Car3D = (function () {
     // parts → medium, lvl 2). See endplateGeom / numberBoard (single source of
     // truth, shared with the game.js number decal via Car3D.*).
     const aeroT = tier("aero");
-    const aeroId = T._ids && T._ids.aero;
-    const aeroStyle = (aeroId && AERO_STYLE[aeroId]) || null;
-    const aLvl  = aeroStyle ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
+    const aLvl = aeroStyle && aeroStyle.lvl != null
+      ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
 
     // rear-wing endplate driver-number BOARD — placed by numberBoard(aLvl) so it
     // sits low on the plate at every downforce level (the game.js number decal
@@ -1127,9 +1058,7 @@ const Car3D = (function () {
               [0.06, 0.06, 0.07]);
 
       // --- Gearbox visual tell: per-OPTION diffuser strake count + a rear crash
-      // structure fin (GBOX_STYLE). More strakes = higher-spec 'box. ---
-      const gbId = T._ids && T._ids.gearbox;
-      const gbStyle = (gbId && GBOX_STYLE[gbId]) || null;
+      // structure fin. More strakes = higher-spec 'box. ---
       const gbStrakes = gbStyle ? gbStyle.strakes : (tier("gearbox") === 2 ? 5 : 0);
       const gbFin = gbStyle ? gbStyle.fin : (tier("gearbox") === 2 ? 1 : 0);
       const gbStrakeH = gbStyle && gbStyle.strakeH ? gbStyle.strakeH : 0.13;
@@ -1166,8 +1095,6 @@ const Car3D = (function () {
     // --- Brake duct fairings (front + rear wheels) --- per BRAKES option: duct
     // size + a big-brake winglet. Cockpit build keeps only the FRONT ducts.
     const brakesT = tier("brakes");
-    const brakeId = T._ids && T._ids.brakes;
-    const brakeStyle = (brakeId && BRAKE_STYLE[brakeId]) || null;
     const ductMul = brakeStyle ? brakeStyle.duct : (brakesT === 0 ? 0.5 : brakesT === 2 ? 1.9 : 1.0);
     // Hot-brake glow: high-spec carbon brakes run their discs cherry-red — an HDR
     // disc peeking through the wheel that intensifies with the brake package. The
@@ -1217,25 +1144,22 @@ const Car3D = (function () {
     }
 
     // --- Wheels --- (skipped for the player car, which draws animated wheels)
-    // Per-compound Pirelli band colour when the resolved tyre id is known
-    // (opts.parts._ids.tyres), else the coarse tier tint. BRAKES tier 2 adds
-    // a caliper accent.
+    // Per-compound band and tread treatment from the resolved tyre recipe.
     if (!noWheels) {
-      const tyreId = T._ids && T._ids.tyres;
-      const tyreBand = (tyreId && TYRE_PIRELLI[tyreId]) || TYRE_BAND[tier("tyres")];
+      const tyreBand = tyreStyle && tyreStyle.band || TYRE_BAND[tier("tyres")];
       // Per-option caliper accent peeking through the rim spokes, else tier.
       const caliperColor = brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT];
       const rimColor = brakeStyle && brakeStyle.rim;   // premium alloy rims (else default dark)
-      const grooved = tyreId === "intermediate";   // wet-weather compound cuts real tread grooves
+      const grooved = !!(tyreStyle && tyreStyle.grooved);
       for (const s of [-1, 1]) {
-        addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32, tyreBand, caliperColor, rimColor, grooved);
-        addWheel(out, s*0.76, 0.34, -1.6, 0.34, 0.38, tyreBand, caliperColor, rimColor, grooved);
+        addWheel(out, s*0.79, 0.34,  1.7, 0.34, 0.32, tyreBand, caliperColor, rimColor, grooved, tyreStyle);
+        addWheel(out, s*0.76, 0.34, -1.6, 0.34, 0.38, tyreBand, caliperColor, rimColor, grooved, tyreStyle);
       }
     }
 
     return out;
   }
 
-  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER, TYRE_PIRELLI, BRAKE_STYLE,
+  return { build, buildWheel, TYRE_BAND, BRAKE_CALIPER,
            endplate: endplateGeom, numberBoard, aeroLevelOf };
 })();

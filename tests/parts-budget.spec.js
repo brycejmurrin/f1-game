@@ -11,6 +11,11 @@ async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
 }
 
+async function pickOpt(page, catId, optId) {
+  await page.locator(`#cs-tabs [data-cs-cat="${catId}"]`).click();
+  await page.locator(`#cs-options [data-cs-opt="${optId}"]`).click();
+}
+
 async function openSetup(page) {
   await page.goto("/");
   await waitReady(page);
@@ -55,9 +60,7 @@ test.describe("Budget system — display", () => {
 test.describe("Budget system — part selection", () => {
   test("selecting race engine (160cr) reduces budget to 440", async ({ page }) => {
     await openSetup(page);
-    // Click the Race engine chip
-    await page.locator(".cs-chip").filter({ hasText: "Race" }).first().click();
-    await page.waitForTimeout(200);
+    await pickOpt(page, "engine", "race");
     const text = await page.locator("#cs-budget").textContent();
     expect(text).toContain("440");
     await page.screenshot({ path: galleryPath("parts-budget", "budget-race-engine.png") });
@@ -65,8 +68,7 @@ test.describe("Budget system — part selection", () => {
 
   test("budget fill bar increases after selecting a paid part", async ({ page }) => {
     await openSetup(page);
-    await page.locator(".cs-chip").filter({ hasText: "Race" }).first().click();
-    await page.waitForTimeout(200);
+    await pickOpt(page, "engine", "race");
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
       el.style.transform
     );
@@ -78,13 +80,12 @@ test.describe("Budget system — part selection", () => {
     await openSetup(page);
     // Spend 450cr: Overcharge ERS (230) + F1 Spec gearbox (180) + High Octane fuel (40)
     // — with 150cr remaining, expensive options like Race engine (160cr) become over-budget
-    await page.locator(".cs-chip").filter({ hasText: "Overcharge" }).first().click();
-    await page.waitForTimeout(100);
-    await page.locator(".cs-chip").filter({ hasText: "F1 Spec" }).first().click();
-    await page.waitForTimeout(100);
-    await page.locator(".cs-chip").filter({ hasText: "High Octane" }).first().click();
-    await page.waitForTimeout(200);
-    const overBudgetCount = await page.locator(".cs-chip.over-budget").count();
+    await pickOpt(page, "ers", "overcharge");
+    await pickOpt(page, "gearbox", "f1_spec");
+    await pickOpt(page, "fuel", "high_octane");
+    // Switch to engine so over-budget options are visible in #cs-options
+    await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
+    const overBudgetCount = await page.locator("#cs-options .cs-opt.over-budget").count();
     expect(overBudgetCount).toBeGreaterThan(0);
     await page.screenshot({ path: galleryPath("parts-budget", "budget-over-budget.png") });
   });
@@ -93,16 +94,11 @@ test.describe("Budget system — part selection", () => {
     await openSetup(page);
     // Use unlimited mode to select a combo totalling 610cr, then disable to reveal "over" state
     await page.locator("#cs-unlimited").click();
-    await page.waitForTimeout(100);
-    await page.locator(".cs-chip").filter({ hasText: "Overcharge" }).first().click();
-    await page.waitForTimeout(100);
-    await page.locator(".cs-chip").filter({ hasText: "F1 Spec" }).first().click();
-    await page.waitForTimeout(100);
-    await page.locator(".cs-chip").filter({ hasText: "Custom Formula" }).first().click();
-    await page.waitForTimeout(100);
+    await pickOpt(page, "ers", "overcharge");
+    await pickOpt(page, "gearbox", "f1_spec");
+    await pickOpt(page, "fuel", "custom_formula");
     // Disable unlimited — 610cr > 600 so budget label becomes "over"
     await page.locator("#cs-unlimited").click();
-    await page.waitForTimeout(200);
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");
     await page.screenshot({ path: galleryPath("parts-budget", "budget-exceeded.png") });
@@ -120,7 +116,6 @@ test.describe("Budget system — unlimited toggle", () => {
   test("clicking unlimited button enables FREE BUILD mode", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click();
-    await page.waitForTimeout(200);
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");
     await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-on.png") });
@@ -129,7 +124,6 @@ test.describe("Budget system — unlimited toggle", () => {
   test("unlimited mode hides budget fill bar", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click();
-    await page.waitForTimeout(200);
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
       el.style.transform
     );
@@ -139,22 +133,20 @@ test.describe("Budget system — unlimited toggle", () => {
   test("unlimited button gets 'on' class when active", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click();
-    await page.waitForTimeout(200);
     const cls = await page.locator("#cs-unlimited").getAttribute("class");
     expect(cls).toContain("on");
   });
 
-  test("unlimited mode removes over-budget chip classes", async ({ page }) => {
+  test("unlimited mode removes over-budget option classes", async ({ page }) => {
     await openSetup(page);
     // First fill up the budget so something is over-budget
-    await page.locator(".cs-chip").filter({ hasText: "Overcharge" }).first().click();
-    await page.locator(".cs-chip").filter({ hasText: "F1 Spec" }).first().click();
-    await page.locator(".cs-chip").filter({ hasText: "Custom Formula" }).first().click();
-    await page.waitForTimeout(100);
+    await pickOpt(page, "ers", "overcharge");
+    await pickOpt(page, "gearbox", "f1_spec");
+    await pickOpt(page, "fuel", "custom_formula");
     // Now enable unlimited
     await page.locator("#cs-unlimited").click();
-    await page.waitForTimeout(200);
-    const overBudgetCount = await page.locator(".cs-chip.over-budget").count();
+    await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
+    const overBudgetCount = await page.locator("#cs-options .cs-opt.over-budget").count();
     expect(overBudgetCount).toBe(0);
     await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-no-over.png") });
   });
@@ -162,7 +154,6 @@ test.describe("Budget system — unlimited toggle", () => {
   test("unlimited state persists after page reload", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click();
-    await page.waitForTimeout(200);
     // Reload page and re-open setup
     await page.reload();
     await waitReady(page);
@@ -178,9 +169,7 @@ test.describe("Budget system — unlimited toggle", () => {
   test("toggling unlimited OFF restores normal budget display", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click(); // ON
-    await page.waitForTimeout(100);
     await page.locator("#cs-unlimited").click(); // OFF
-    await page.waitForTimeout(200);
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("600");
     const cls = await page.locator("#cs-unlimited").getAttribute("class");

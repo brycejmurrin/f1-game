@@ -1,15 +1,15 @@
 # Testing reference
 
-46 root Playwright spec files (`tests/*.spec.js`), plus 24-file
+52 root Playwright spec files (`tests/*.spec.js`), plus 24-file
 `tests/blank-scan/` and `tests/inspect/` per-circuit suites and explicit-path
 helpers under `tests/galleries/`. **`inspect/**`, `blank-scan/**`, and
 `galleries/**` are excluded from default test discovery** via `testIgnore` in
-`playwright.config.js`, so a bare `npx playwright test` runs the 46 root specs
+`playwright.config.js`, so a bare `npx playwright test` runs the 52 root specs
 only; run the excluded suites by naming them explicitly. The suite covers
 physics, behaviour, geometry, cameras, UI, parts, steering, lighting, scenery,
 gamepad, timing/field hooks, headless RL, and per-circuit blank-frame detection.
 
-The 46 root specs are split into two Playwright projects (see
+The 52 root specs are split into two Playwright projects (see
 `playwright.config.js`): a **`headless`** project (physics/geometry/hook specs,
 no GPU — the default) and a **`render`** project (screenshot/pixel-diff/GL specs
 in `RENDER_SPECS`, run at `--workers=4` to cap SwiftShader concurrency). The old
@@ -45,7 +45,7 @@ node tools/verify-track.cjs --all
 | `collision` | collision, drift, offtrack |
 | `behaviour` | collision + drift + offtrack + world-physics + physics-fixes |
 | `barriers` | track wall geometry + AI-fixes barrier tests |
-| `parts` | parts catalog, budget, persistence, physics |
+| `parts` | parts catalog, recipes, factory presets, caches, viewer, budget, persistence, physics |
 | `steering` | presets, sliders, steering modes, gamepad |
 | `camera` | camera modes + camera hooks + driving hooks |
 | `ui` | UI screenshots: audit + button-touch + desktop + hud (slow) |
@@ -178,10 +178,14 @@ hook values.
 | `obs-act-edge.spec.js` | edge cases: `act(n=0)`, `reset(0.999)` lap seam, scan wrap-around, `done` semantics, numeric stability |
 | `ui-audit.spec.js` | portrait+landscape screenshots of all 10 screens |
 | `presets.spec.js`, `sliders.spec.js`, `steering.spec.js` | steering parameter tests |
-| `parts-physics.spec.js` | Parts module unit tests (getMods, getCost, statMult) |
+| `parts-physics.spec.js` | unified resolver, compatibility APIs, unique visual recipes, geometry/triangle budgets, signatures, factory presets, physics/costs |
 | `parts-budget.spec.js` | budget UI and unlimited toggle |
-| `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
+| `parts-catalog.spec.js` | 8-category setup UI, universal/supplier/signature/factory badges, access filtering, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
+| `parts-setup-ids.spec.js` | stable `data-cs-cat` / `data-cs-opt` setup selectors |
+| `parts-mesh-cache.spec.js` | bounded player body, cockpit, and wheel mesh caches with GPU eviction |
+| `parts-factory-presets.spec.js` | AI full-body meshes use deterministic team factory setups instead of player saves |
+| `carview-parts.spec.js` | isolated car viewer exposes controls for all eight categories |
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
 | `new-hooks.spec.js` | contract tests for timing/field/energy hooks plus `modelDiagnostics()` / `geometryDiagnostics()` and day/night model manifests |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |

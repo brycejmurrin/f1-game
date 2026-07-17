@@ -141,19 +141,14 @@ function getRainLight() {
 }
 // Exhaust flame: a tiny HDR quad behind the tailpipe, flickering while the
 // player is on throttle after dark — an arcade heat-glow cue.
-// Flame tint by fuel spec (the chosen Parts.CATALOG.fuel id): different burns
-// read as different colours. standard = pump amber, biofuel = cooler green-amber,
-// quali_mix = hot blue-white. Cached per tier (built lazily, keyed by id).
-const EXHAUST_TINT = {
-  standard:  [2.6, 1.05, 0.25],   // amber (baseline — unchanged)
-  biofuel:   [1.7, 1.9,  0.55],   // green-amber (biofuel burns cooler/greener)
-  quali_mix: [1.5, 1.7,  2.4],    // hot blue-white (max energy density)
-};
+// Flame tint comes from the resolved Parts fuel recipe; this module only owns
+// the generic effect geometry and caches meshes by colour.
 const _exhaustMeshes = {};
-function getExhaustFlame(fuelId) {
-  const key = EXHAUST_TINT[fuelId] ? fuelId : "standard";
+function getExhaustFlame(color) {
+  const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
+  const key = R.join(",");
   if (_exhaustMeshes[key]) return _exhaustMeshes[key];
-  const R = EXHAUST_TINT[key], out = { pos: [], nrm: [], col: [], idx: [] };
+  const out = { pos: [], nrm: [], col: [], idx: [] };
   const w = 0.035, h = 0.030;
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }

@@ -194,6 +194,279 @@ test.describe("Parts module — getCost()", () => {
   });
 });
 
+test.describe("Parts module — resolveSetup()", () => {
+  test("resolves ids, setup, cost, modifiers, tiers, and visual recipes in one pass", async ({ page }) => {
+    await load(page);
+    const resolved = await page.evaluate(() =>
+      Parts.resolveSetup({ engine: "race", aero: "minimal" }, { id: "mclaren", engine: "Mercedes" })
+    );
+    expect(resolved.setup.engine).toBe("race");
+    expect(resolved.setup.aero).toBe("minimal");
+    expect(resolved.ids.engine).toBe("race");
+    expect(resolved.cost).toBe(160);
+    expect(resolved.mods.speed).toBeGreaterThan(1);
+    expect(resolved.tiers.aero).toBe(0);
+    expect(resolved.visual.engine.id).toBe("race");
+    expect(resolved.visual.engine.tier).toBe(2);
+  });
+
+  test("unknown saved ids fall back to stable category defaults", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => ({
+      resolved: Parts.resolveSetup(
+        { engine: "removed_part", fuel: "also_removed" },
+        { id: "mclaren", engine: "Mercedes" }
+      ),
+      defaults: Parts.DEFAULTS,
+    }));
+    expect(result.resolved.setup.engine).toBe(result.defaults.engine);
+    expect(result.resolved.setup.fuel).toBe(result.defaults.fuel);
+    expect(result.resolved.ids.engine).toBe(result.defaults.engine);
+    expect(result.resolved.ids.fuel).toBe(result.defaults.fuel);
+  });
+
+  test("supplier locks support both legacy engine strings and team contexts", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => ({
+      legacy: Parts.resolveSetup({ engine: "manu_mercedes" }, "Mercedes").ids.engine,
+      matching: Parts.resolveSetup(
+        { engine: "manu_mercedes" },
+        { id: "mclaren", engine: "Mercedes" }
+      ).ids.engine,
+      mismatch: Parts.resolveSetup(
+        { engine: "manu_mercedes" },
+        { id: "ferrari", engine: "Ferrari" }
+      ).ids.engine,
+      defaultEngine: Parts.DEFAULTS.engine,
+    }));
+    expect(result.legacy).toBe("manu_mercedes");
+    expect(result.matching).toBe("manu_mercedes");
+    expect(result.mismatch).toBe(result.defaultEngine);
+  });
+
+  test("team and supplier access rules must both match when both are present", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const option = { suppliers: ["Mercedes"], teams: ["mclaren"] };
+      return {
+        matching: Parts.isOptionAvailable(option, { id: "mclaren", engine: "Mercedes" }),
+        wrongTeam: Parts.isOptionAvailable(option, { id: "mercedes", engine: "Mercedes" }),
+        wrongSupplier: Parts.isOptionAvailable(option, { id: "mclaren", engine: "Ferrari" }),
+      };
+    });
+    expect(result).toEqual({ matching: true, wrongTeam: false, wrongSupplier: false });
+  });
+
+  test("legacy helper APIs are wrappers over the unified result", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const setup = { engine: "race", gearbox: "close_ratio" };
+      const team = { id: "mclaren", engine: "Mercedes" };
+      const resolved = Parts.resolveSetup(setup, team);
+      return {
+        resolved,
+        mods: Parts.getMods(setup, team),
+        cost: Parts.getCost(setup, team),
+        visual: Parts.getVisualTiers(setup, team),
+      };
+    });
+    expect(result.mods).toEqual(result.resolved.mods);
+    expect(result.cost).toBe(result.resolved.cost);
+    expect(result.visual._ids).toEqual(result.resolved.ids);
+    expect(result.visual._visual).toEqual(result.resolved.visual);
+  });
+});
+
+test.describe("Parts module — visual recipes", () => {
+  test("every catalog option owns a non-empty category recipe", async ({ page }) => {
+    await load(page);
+    const missing = await page.evaluate(() => {
+      const result = [];
+      for (const cat of Parts.CATALOG) {
+        for (const opt of cat.options) {
+          if (!opt.visual || Object.keys(opt.visual).length === 0) result.push(cat.id + ":" + opt.id);
+        }
+      }
+      return result;
+    });
+    expect(missing).toEqual([]);
+  });
+
+  test("resolved recipe data is consumed ahead of legacy option ids", async ({ page }) => {
+    await load(page);
+    const level = await page.evaluate(() => Car3D.aeroLevelOf({
+      aero: 1,
+      _ids: { aero: "not_a_catalog_option" },
+      _visual: { aero: { id: "test", tier: 1, lvl: 4, vane: 3 } },
+    }));
+    expect(level).toBe(4);
+  });
+
+  test("every fuel recipe owns baked and runtime flame colours", async ({ page }) => {
+    await load(page);
+    const invalid = await page.evaluate(() => {
+      const fuel = Parts.CATALOG.find((cat) => cat.id === "fuel");
+      return fuel.options
+        .filter((opt) => !Array.isArray(opt.visual?.flame) || !Array.isArray(opt.visual?.fxFlame))
+        .map((opt) => opt.id);
+    });
+    expect(invalid).toEqual([]);
+  });
+
+  test("every option recipe builds valid procedural geometry", async ({ page }) => {
+    await load(page);
+    const failures = await page.evaluate(() => {
+      const result = [];
+      for (const cat of Parts.CATALOG) {
+        for (const opt of cat.options) {
+          try {
+            const team = {
+              id: opt.teams?.[0] || opt.team || "mclaren",
+              engine: opt.suppliers?.[0] || opt.supplier || "Mercedes",
+            };
+            const parts = Parts.getVisualTiers({ [cat.id]: opt.id }, team);
+            const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { parts });
+            if (!mesh.pos.length || !mesh.idx.length || mesh.pos.some((n) => !Number.isFinite(n))) {
+              result.push(cat.id + ":" + opt.id + ":invalid");
+            }
+          } catch (error) {
+            result.push(cat.id + ":" + opt.id + ":" + error.message);
+          }
+        }
+      }
+      return result;
+    });
+    expect(failures).toEqual([]);
+  });
+
+  test("single-option recipes stay within 1.5x the default triangle budget", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const teamFor = (opt) => ({
+        id: opt.teams?.[0] || opt.team || "mclaren",
+        engine: opt.suppliers?.[0] || opt.supplier || "Mercedes",
+      });
+      const baseParts = Parts.getVisualTiers({}, { id: "mclaren", engine: "Mercedes" });
+      const baseTriangles = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { parts: baseParts }).idx.length / 3;
+      const overBudget = [];
+      for (const cat of Parts.CATALOG) {
+        for (const opt of cat.options) {
+          const team = teamFor(opt);
+          const parts = Parts.getVisualTiers({ [cat.id]: opt.id }, team);
+          const triangles = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { parts }).idx.length / 3;
+          if (triangles > baseTriangles * 1.5) overBudget.push(`${cat.id}:${opt.id}:${triangles}`);
+        }
+      }
+      return { baseTriangles, overBudget };
+    });
+    expect(result.baseTriangles).toBeGreaterThan(0);
+    expect(result.overBudget).toEqual([]);
+  });
+
+  test("every recipe has primary and secondary visual parameters", async ({ page }) => {
+    await load(page);
+    const underspecified = await page.evaluate(() => {
+      const result = [];
+      for (const cat of Parts.CATALOG) {
+        for (const opt of cat.options) {
+          if (Object.keys(opt.visual || {}).length < 2) result.push(cat.id + ":" + opt.id);
+        }
+      }
+      return result;
+    });
+    expect(underspecified).toEqual([]);
+  });
+
+  test("recipe fingerprints are unique within every category", async ({ page }) => {
+    await load(page);
+    const duplicates = await page.evaluate(() => {
+      const stable = (value) => JSON.stringify(
+        Object.fromEntries(Object.keys(value || {}).sort().map((key) => [key, value[key]]))
+      );
+      const result = [];
+      for (const cat of Parts.CATALOG) {
+        const seen = new Map();
+        for (const opt of cat.options) {
+          const fingerprint = stable(opt.visual);
+          if (seen.has(fingerprint)) result.push(cat.id + ":" + seen.get(fingerprint) + "=" + opt.id);
+          else seen.set(fingerprint, opt.id);
+        }
+      }
+      return result;
+    });
+    expect(duplicates).toEqual([]);
+  });
+});
+
+test.describe("Parts module — team signatures and factory presets", () => {
+  test("every team has a valid deterministic factory preset with its signature", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => Teams.LIST.filter((team) => !team.custom).map((team) => {
+      const first = Parts.getFactorySetup(team);
+      const second = Parts.getFactorySetup(team);
+      const invalid = Parts.CATALOG.flatMap((cat) => {
+        const opt = cat.options.find((item) => item.id === first[cat.id]);
+        return !opt || !Parts.isOptionAvailable(opt, team) ? [cat.id + ":" + first[cat.id]] : [];
+      });
+      const signatures = Parts.CATALOG.flatMap((cat) =>
+        cat.options.filter((opt) => opt.tag === "SIGNATURE" && opt.id === first[cat.id]).map((opt) => opt.id)
+      );
+      return {
+        id: team.id,
+        deterministic: JSON.stringify(first) === JSON.stringify(second),
+        key: Parts.factoryKey(team),
+        invalid,
+        signatures,
+      };
+    }));
+    for (const team of result) {
+      expect(team.deterministic, team.id).toBe(true);
+      expect(team.key, team.id).toBeTruthy();
+      expect(team.invalid, team.id).toEqual([]);
+      expect(team.signatures.length, team.id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("signature options match a universal equivalent's price and physics", async ({ page }) => {
+    await load(page);
+    const mismatches = await page.evaluate(() => {
+      const stats = ["speed", "accel", "cornering", "braking"];
+      const result = [];
+      for (const cat of Parts.CATALOG) {
+        for (const opt of cat.options.filter((item) => item.tag === "SIGNATURE")) {
+          const equivalent = cat.options.find((item) => item.id === opt.equivalent);
+          if (!equivalent || equivalent.teams || equivalent.team || equivalent.tag === "SIGNATURE") {
+            result.push(cat.id + ":" + opt.id + ":missing-equivalent");
+            continue;
+          }
+          if (opt.cost !== equivalent.cost || stats.some((key) => (opt[key] || 1) !== (equivalent[key] || 1))) {
+            result.push(cat.id + ":" + opt.id + ":unbalanced");
+          }
+        }
+      }
+      return result;
+    });
+    expect(mismatches).toEqual([]);
+  });
+
+  test("a signature selected by the wrong team falls back to the category default", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const signature = Parts.CATALOG.flatMap((cat) =>
+        cat.options.filter((opt) => opt.tag === "SIGNATURE").map((opt) => ({ cat, opt }))
+      )[0];
+      const wrongTeam = Teams.LIST.find((team) => !signature.opt.teams.includes(team.id));
+      const resolved = Parts.resolveSetup({ [signature.cat.id]: signature.opt.id }, wrongTeam);
+      return {
+        category: signature.cat.id,
+        selected: resolved.ids[signature.cat.id],
+        fallback: Parts.DEFAULTS[signature.cat.id],
+      };
+    });
+    expect(result.selected).toBe(result.fallback);
+  });
+});
+
 test.describe("Parts module — statMult()", () => {
   test("stat 0 → ~0.85 multiplier", async ({ page }) => {
     await load(page);

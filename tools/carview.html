@@ -42,9 +42,12 @@
   <div class="row"><span class="k">Livery</span><select id="ui-livery"></select></div>
   <div class="row"><span class="k">Engine</span><select id="ui-engine"></select></div>
   <div class="row"><span class="k">Aero</span><select id="ui-aero"></select></div>
+  <div class="row"><span class="k">Suspension</span><select id="ui-suspension"></select></div>
   <div class="row"><span class="k">Brakes</span><select id="ui-brakes"></select></div>
+  <div class="row"><span class="k">Tyres</span><select id="ui-tyres"></select></div>
   <div class="row"><span class="k">Gearbox</span><select id="ui-gearbox"></select></div>
   <div class="row"><span class="k">ERS</span><select id="ui-ers"></select></div>
+  <div class="row"><span class="k">Fuel</span><select id="ui-fuel"></select></div>
   <div class="row"><span class="k">Light</span><select id="ui-tod"></select></div>
   <div class="row"><span class="k">Rig</span><select id="ui-rig"></select></div>
   <div class="row"><span class="k">Reflect</span><input id="ui-refl" type="range" min="0" max="1" step="0.05" style="width:120px"></div>
@@ -165,6 +168,7 @@
   const S = {
     team: qp("team", "mclaren"),
     livery: qp("livery", null),
+    colors: null,
     num: qp("num", null),
     parts: {},
     az: parseFloat(qp("az", "35")), el: parseFloat(qp("el", "14")), dist: parseFloat(qp("dist", "6.2")),
@@ -181,8 +185,9 @@
     spin: qp("spin", "0") !== "0",
     sweep: qp("sweep", "0") !== "0",     // a bright point light orbiting the car (reflection test)
   };
+  const PART_CATS = ["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel"];
   let sweepA = 0;
-  for (const cat of ["engine", "aero", "brakes", "gearbox", "tyres", "ers", "suspension", "fuel"]) {
+  for (const cat of PART_CATS) {
     if (Q.has(cat)) S.parts[cat] = Q.get(cat);
   }
   if (!S.hud) document.getElementById("hud").style.display = "none";
@@ -213,7 +218,7 @@
   function resolveLiv(team) {
     const list = liveryList(team);
     const l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
-    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
+    return { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              noseStripe: l.noseStripe || null };
   }
@@ -225,7 +230,7 @@
   function rebuild() {
     const team = teamObj();
     const liv = resolveLiv(team);
-    const tiers = Parts.getVisualTiers(S.parts, team.engine);
+    const tiers = Parts.getVisualTiers(S.parts, team);
     const num = driverNum(team);
     if (carMesh) GLX.freeMesh(carMesh);
     carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
@@ -319,17 +324,17 @@
       sel.appendChild(o);
     }
   }
-  function partOptions(catId) {
+  function partOptions(catId, team) {
     const cat = Parts.CATALOG.find(c => c.id === catId);
-    return cat ? cat.options : [];
+    return cat ? cat.options.filter(o => Parts.isOptionAvailable(o, team)) : [];
   }
   function buildUI() {
     const team = teamObj();
     opt(document.getElementById("ui-team"), Teams.LIST, S.team);
     opt(document.getElementById("ui-livery"), liveryList(team), S.livery || "default");
-    for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"]) {
+    for (const cat of PART_CATS) {
       const cur = S.parts[cat] || (Parts.DEFAULTS && Parts.DEFAULTS[cat]) || "";
-      opt(document.getElementById("ui-" + cat), partOptions(cat), cur);
+      opt(document.getElementById("ui-" + cat), partOptions(cat, team), cur);
     }
     opt(document.getElementById("ui-tod"), Object.keys(TOD).map(k => ({ id: k, name: k })), S.tod);
     opt(document.getElementById("ui-rig"), RIGS.map(k => ({ id: k, name: k })), S.rig);
@@ -337,7 +342,7 @@
   }
   document.getElementById("ui-team").onchange = e => { S.team = e.target.value; S.livery = null; buildUI(); rebuild(); };
   document.getElementById("ui-livery").onchange = e => { S.livery = e.target.value; rebuild(); };
-  for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"])
+  for (const cat of PART_CATS)
     document.getElementById("ui-" + cat).onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
   document.getElementById("ui-tod").onchange = e => { S.tod = e.target.value; };
   document.getElementById("ui-rig").onchange = e => { S.rig = e.target.value; };
@@ -375,6 +380,7 @@
       o = o || {};
       let reb = false;
       for (const k of ["team", "livery", "num"]) if (o[k] !== undefined) { S[k] = o[k]; reb = true; }
+      if (o.colors !== undefined) { S.colors = o.colors; reb = true; }
       if (o.parts) { Object.assign(S.parts, o.parts); reb = true; }
       if (o.lights !== undefined) S.lights = o.lights || [];
       for (const k of ["az", "el", "dist", "look", "lookX", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];

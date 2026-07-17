@@ -250,12 +250,40 @@ function ttBoardAdd(trackId, entry) {
 
 const { DEFAULT_CUSTOM } = GameTables;
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
-function invalidateCustomMeshCache(cache) {
+function invalidateCustomMeshCache(cache, order) {
   Object.keys(cache).forEach((key) => {
     if (key.indexOf("custom:") !== 0) return;
     if (cache[key] && gfx.freeMesh) gfx.freeMesh(cache[key]);
     delete cache[key];
+    if (order) {
+      const i = order.indexOf(key);
+      if (i >= 0) order.splice(i, 1);
+    }
   });
+}
+// Bound a key→mesh cache to `max` most-recent entries. Evicted meshes are freed
+// via gfx.freeMesh exactly once (deleted from the map before free). `freeOne`
+// optional — defaults to freeMesh(mesh); wheel pairs pass a custom freer.
+function putBoundedMesh(cache, order, key, create, max, freeOne) {
+  if (cache[key]) {
+    if (order[order.length - 1] !== key) {
+      const i = order.indexOf(key);
+      if (i >= 0) order.splice(i, 1);
+      order.push(key);
+    }
+    return cache[key];
+  }
+  const mesh = create();
+  cache[key] = mesh;
+  order.push(key);
+  const free = freeOne || ((m) => { if (m && gfx.freeMesh) gfx.freeMesh(m); });
+  while (order.length > max) {
+    const old = order.shift();
+    const victim = cache[old];
+    delete cache[old];
+    free(victim);
+  }
+  return mesh;
 }
 function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
@@ -263,8 +291,8 @@ function syncCustomTeam() {
   Teams.LIST.push(loadCustomTeam());
   invalidateDecalTextures("custom");
   invalidateCustomMeshCache(teamMeshes);
-  invalidateCustomMeshCache(playerBodies);
-  invalidateCustomMeshCache(cockpitBodies);
+  invalidateCustomMeshCache(playerBodies, playerBodyOrder);
+  invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
 }
 function hexToRgb(h) {
   return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
@@ -759,7 +787,7 @@ function resolveLivery(team) {
 // read the cached playerVisualKey (refreshed in recomputePlayerMods) below.
 function partsVisualKey(teamId) {
   const team = teamById(teamId);
-  const vt = Parts.getVisualTiers(getTeamParts(teamId), team ? team.engine : null);
+  const vt = Parts.getVisualTiers(getTeamParts(teamId), team);
   // Key on the resolved OPTION id per category — the option fully determines the
   // visual (engine airbox, aero package, brake ducts/caliper, tyre compound all
   // vary per option now, not just per tier), so the mesh cache rebuilds whenever
@@ -773,6 +801,7 @@ function partsVisualKey(teamId) {
 // reads these directly — cheap per-frame variable reads, not a per-frame
 // Parts.getVisualTiers() call). Refreshed whenever parts change (below).
 let playerTyreTier = 1, playerBrakesTier = 1, playerTyreId = "medium", playerBrakeId = "standard";
+let playerTyreVisual = null, playerBrakeVisual = null;
 // Full 8-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
 // once here (parts only change from the setup screen, which calls this on close)
 // so the render loop reads a cached string instead of rebuilding it via
@@ -784,17 +813,19 @@ function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const setup = getTeamParts(team.id);
-  const mods = Parts.getMods(setup, team.engine);
+  const mods = Parts.getMods(setup, team);
   playerMods = {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
     cornering: Parts.statMult(stats.cornering) * mods.cornering,
     braking:   Parts.statMult(stats.braking)   * mods.braking,
   };
-  const vt = Parts.getVisualTiers(setup, team.engine);
+  const vt = Parts.getVisualTiers(setup, team);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
   playerTyreId = vt._ids ? vt._ids.tyres : "medium";
   playerBrakeId = vt._ids ? vt._ids.brakes : "standard";
+  playerTyreVisual = vt._visual && vt._visual.tyres || null;
+  playerBrakeVisual = vt._visual && vt._visual.brakes || null;
   // Key on the full set of resolved option ids + the chosen livery (see partsVisualKey).
   playerVisualKey = (vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
                              : Parts.CATALOG.map((c) => vt[c.id]).join(""))
@@ -810,8 +841,11 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
+    const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const savedParts = ti === teamIdx ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     team.drivers.forEach((d, di) => {
       const isP = ti === teamIdx && di === driverIdx;
+      const resolvedParts = isP ? savedParts : factoryParts;
       // Spread the field's preferred lanes evenly across the track width (with a
       // little jitter) so the AI fan out instead of all stacking on the racing
       // line. Used as a fraction of half-width in updateCar.
@@ -821,7 +855,8 @@ function makeCars() {
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
-        fuelId: getTeamParts(team.id).fuel || "standard",   // tints the exhaust flame
+        fuelId: resolvedParts.ids.fuel,
+        fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otCool: 0, deploying: false,
@@ -869,11 +904,16 @@ function buildCarData(team) {
     try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: liv.c1 }); }
     catch (e) { /* any parse trouble: fall through to the procedural car */ }
   }
-  return Car3D.build(liv.c1, liv.c2, { livery: liv, num: team.drivers && team.drivers[0] && team.drivers[0].num });
+  const factorySetup = Parts.getFactorySetup(team);
+  return Car3D.build(liv.c1, liv.c2, {
+    livery: liv,
+    num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    parts: Parts.getVisualTiers(factorySetup, team),
+  });
 }
 
 function teamMesh(team) {
-  const key = team.id + ":" + getLiveryId(team.id);   // rebuild when the paint job changes
+  const key = team.id + ":" + getLiveryId(team.id) + ":" + Parts.factoryKey(team);
   if (!teamMeshes[key]) teamMeshes[key] = gfx.createMesh(buildCarData(team));
   return teamMeshes[key];
 }
@@ -920,19 +960,22 @@ function carDecalNum(team, car) {
 // A team's rear-wing downforce level (0..4), driving which endplate-number mesh
 // to draw. getVisualTiers is a small 8-category loop and the resulting mesh is
 // cached per level, so resolving this per car/frame is negligible.
-const _aeroLevelCache = new Map();   // team.id -> {val, rev}; invalidated by store.rev
-function teamAeroLevel(team) {
+const _aeroLevelCache = new Map();   // "player|factory:team.id" -> {val, rev}
+function teamAeroLevel(team, usePlayerSetup) {
   if (!Car3D.aeroLevelOf) return 2;   // stale-bundle guard → medium-DF board
-  const c = _aeroLevelCache.get(team.id);
-  if (c && c.rev === store.rev) return c.val;
-  const val = Car3D.aeroLevelOf(Parts.getVisualTiers(getTeamParts(team.id), team.engine));
-  _aeroLevelCache.set(team.id, { val, rev: store.rev });
+  const key = (usePlayerSetup ? "player:" : "factory:") + team.id;
+  const rev = usePlayerSetup ? store.rev : -1;
+  const c = _aeroLevelCache.get(key);
+  if (c && c.rev === rev) return c.val;
+  const setup = usePlayerSetup ? getTeamParts(team.id) : Parts.getFactorySetup(team);
+  const val = Car3D.aeroLevelOf(Parts.getVisualTiers(setup, team));
+  _aeroLevelCache.set(key, { val, rev });
   return val;
 }
-function drawCarDecals(team, modelMat, night, num, cockpit) {
+function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   // Cockpit build draws only the forward (nose) number — the rear wing is behind
   // the camera — so aero level is irrelevant there.
-  const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh(teamAeroLevel(team));
+  const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh(teamAeroLevel(team, usePlayerSetup));
   const tex = getCarDecalTexture(team, num);
   if (mesh && tex) gfx.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
 }
@@ -942,7 +985,12 @@ function drawCarDecals(team, modelMat, night, num, cockpit) {
 // car — a loaded glb model is one piece, so playerBodyMesh returns null and the
 // player falls back to the full static mesh. Wheel meshes are cached per
 // TYRES/BRAKES visual tier below (getPlayerWheelMeshes), not team-keyed.
+// Bounded to the latest N visual keys so parts-expansion doesn't leak GPU meshes.
+const PLAYER_BODY_CACHE_MAX = 3;
+const COCKPIT_BODY_CACHE_MAX = 3;
+const WHEEL_MESH_CACHE_MAX = 8;
 const playerBodies = {};
+const playerBodyOrder = [];
 const WHEELS = [
   { x: -0.79, y: 0.34, z:  1.7, front: true,  rear: false },
   { x:  0.79, y: 0.34, z:  1.7, front: true,  rear: false },
@@ -972,17 +1020,17 @@ const _bankScratchP = { dy: 0, roll: 0 };
 // The cockpit body: the REAL car (livery, nose, mirrors, number board) minus
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
 const cockpitBodies = {};
+const cockpitBodyOrder = [];
 function cockpitBodyMesh(team) {
   // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
   // is always this team's key — no per-frame partsVisualKey() rebuild.
   const key = team.id + ":" + playerVisualKey;
-  if (!cockpitBodies[key]) {
+  return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
     const liv = resolveLivery(team);
-    cockpitBodies[key] = gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+    return gfx.createMesh(Car3D.build(liv.c1, liv.c2,
       { livery: liv, noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
-        parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
-  }
-  return cockpitBodies[key];
+        parts: Parts.getVisualTiers(getTeamParts(team.id), team) }));
+  }, COCKPIT_BODY_CACHE_MAX);
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
 // steering roll + per-element LCD offsets.
@@ -1007,7 +1055,7 @@ function drawCockpitRig(c, base, dt, paint) {
   gfx.draw(cockpitBodyMesh(c.team), base, paint);
   // Forward decal: the driver number on the nose plate ahead of the driver (the
   // nose is identical to the chase build, so this lands exactly on the plate).
-  drawCarDecals(c.team, base, nite, carDecalNum(c.team, c), true);
+  drawCarDecals(c.team, base, nite, carDecalNum(c.team, c), true, true);
   drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.30, 1.4);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
@@ -1065,31 +1113,36 @@ function playerBodyMesh(team) {
   // key — no per-frame partsVisualKey() rebuild.
   const key = team.id + ":" + playerVisualKey;
   const liv = resolveLivery(team);
-  if (!playerBodies[key]) playerBodies[key] = gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+  return putBoundedMesh(playerBodies, playerBodyOrder, key, () => gfx.createMesh(Car3D.build(liv.c1, liv.c2,
     { livery: liv, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
-      parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
-  return playerBodies[key];
+      parts: Parts.getVisualTiers(getTeamParts(team.id), team) })), PLAYER_BODY_CACHE_MAX);
 }
 // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
 // colour + caliper accent) so a parts change rebuilds the right mesh instead
 // of drawing stale geometry. Tier "1:1" (both default) matches today's shared
 // wheelMeshF/wheelMeshR exactly — same team-independent, dark-tyre meshes.
+// Bounded to the latest WHEEL_MESH_CACHE_MAX tyre:brake pairs.
 const wheelMeshCache = {};
+const wheelMeshOrder = [];
+function freeWheelPair(m) {
+  if (!m) return;
+  if (gfx.freeMesh) {
+    if (m.F) gfx.freeMesh(m.F);
+    if (m.R) gfx.freeMesh(m.R);
+  }
+}
 function getPlayerWheelMeshes() {
   const key = playerTyreId + ":" + playerBrakeId;
-  let m = wheelMeshCache[key];
-  if (!m) {
-    const band = (Car3D.TYRE_PIRELLI && Car3D.TYRE_PIRELLI[playerTyreId]) || Car3D.TYRE_BAND[playerTyreTier];
-    const bs = Car3D.BRAKE_STYLE && Car3D.BRAKE_STYLE[playerBrakeId];
-    const caliper = bs ? bs.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
-    const rim = bs && bs.rim;
-    const grooved = playerTyreId === "intermediate";
-    m = wheelMeshCache[key] = {
-      F: gfx.createMesh(Car3D.buildWheel(0.32, band, caliper, rim, grooved)),
-      R: gfx.createMesh(Car3D.buildWheel(0.38, band, caliper, rim, grooved)),
+  return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
+    const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
+    const caliper = playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
+    const rim = playerBrakeVisual && playerBrakeVisual.rim;
+    const grooved = !!(playerTyreVisual && playerTyreVisual.grooved);
+    return {
+      F: gfx.createMesh(Car3D.buildWheel(0.32, band, caliper, rim, grooved, playerTyreVisual)),
+      R: gfx.createMesh(Car3D.buildWheel(0.38, band, caliper, rim, grooved, playerTyreVisual)),
     };
-  }
-  return m;
+  }, WHEEL_MESH_CACHE_MAX, freeWheelPair);
 }
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
 // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
@@ -1144,6 +1197,11 @@ async function loadCarModel(url) {
     carModelBuf = buf;
     for (const k in teamMeshes) { if (gfx.freeMesh) gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
     for (const k in playerBodies) { if (gfx.freeMesh) gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
+    playerBodyOrder.length = 0;
+    for (const k in cockpitBodies) { if (gfx.freeMesh) gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
+    cockpitBodyOrder.length = 0;
+    for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
+    wheelMeshOrder.length = 0;
     return true;
   } catch (e) { return false; }
 }
@@ -3682,7 +3740,7 @@ function getSetupPreviewMesh() {
     _spMesh = gfx.createMesh(Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
-      parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine),
+      parts: Parts.getVisualTiers(getTeamParts(team.id), team),
     }));
     _spMeshKey = key;
   }
@@ -3732,7 +3790,8 @@ function renderSetupPreview(dt) {
   // roughness past that cutoff so this preview has NO reflection source at all.
   spMat.roughness = 0.55;
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
-  drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
+  drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false,
+    carDecalNum(Teams.LIST[teamIdx], null), false, true);
   gfx.present();
 }
 
@@ -4604,11 +4663,11 @@ function render(dt) {
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
+      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c), false, true);
       drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
     } else {
       gfx.draw(teamMesh(c.team), tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
+      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c), false, c.isPlayer);
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
       // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
@@ -4691,7 +4750,8 @@ function render(dt) {
       W[12] += W[4] * 0.40 - W[8] * 2.63;
       W[13] += W[5] * 0.40 - W[9] * 2.63;
       W[14] += W[6] * 0.40 - W[10] * 2.63;
-      gfx.draw(getExhaustFlame(c.fuelId), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
+      gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W,
+        { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
     }
     // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
     // strength for this frame (projected to screen UV just before present()).
@@ -5257,7 +5317,7 @@ const CS_STATS = [
 // container. Shared by the select screen (always-on) and the setup panel.
 function renderStatBars(container, team) {
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(getTeamParts(team.id), team.engine);
+  const mods = Parts.getMods(getTeamParts(team.id), team);
   container.textContent = "";
   for (const { key, label } of CS_STATS) {
     const base = stats[key] || 75;
@@ -5313,7 +5373,7 @@ function buildSetup() {
     const selId = parts[cat.id];
     if (selId) {
       const opt = cat.options.find((o) => o.id === selId);
-      if (opt && opt.supplier && opt.supplier !== team.engine) {
+      if (opt && !Parts.isOptionAvailable(opt, team)) {
         delete parts[cat.id];
         partsChanged = true;
       }
@@ -5321,7 +5381,7 @@ function buildSetup() {
   }
   if (partsChanged) saveTeamParts(team.id, parts);
 
-  const spent = Parts.getCost(parts, team.engine);
+  const spent = Parts.getCost(parts, team);
   const remaining = Parts.BUDGET - spent;
 
   $("cs-team").textContent = team.name.toUpperCase();
@@ -5354,7 +5414,7 @@ function buildSetup() {
   // Resolve the currently-fitted option for a category (respecting supplier lock).
   const resolveOpt = (cat) => {
     const id = parts[cat.id] || Parts.DEFAULTS[cat.id];
-    return cat.options.find((o) => o.id === id && (!o.supplier || o.supplier === team.engine))
+    return cat.options.find((o) => o.id === id && Parts.isOptionAvailable(o, team))
         || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
   };
 
@@ -5366,6 +5426,7 @@ function buildSetup() {
     const upgraded = cur && cur.id !== Parts.DEFAULTS[cat.id];
     const tab = document.createElement("button");
     tab.className = "cs-tab" + (cat.id === csActiveCat ? " active" : "") + (upgraded ? " upgraded" : "");
+    tab.dataset.csCat = cat.id;
     const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = cat.label;
     const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = cur ? cur.label : "";
     tab.append(lbl, sub);
@@ -5384,6 +5445,7 @@ function buildSetup() {
     const painted = getLiveryId(team.id) !== "default";
     const tab = document.createElement("button");
     tab.className = "cs-tab" + (csActiveCat === "livery" ? " active" : "") + (painted ? " upgraded" : "");
+    tab.dataset.csCat = "livery";
     const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = "LIVERY";
     const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = curLiv ? curLiv.name : "Team";
     tab.append(lbl, sub);
@@ -5403,21 +5465,36 @@ function buildSetup() {
   if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
+  const factorySetup = Parts.getFactorySetup(team);
   for (const opt of activeCat.options) {
-    if (opt.supplier && opt.supplier !== team.engine) continue;   // hide other suppliers' exclusives
+    if (!Parts.isOptionAvailable(opt, team)) continue;
     const active = curOpt && curOpt.id === opt.id;
     const costDelta = (opt.cost || 0) - curCost;
     const wouldExceed = !active && !unlimitedBudget && (spent + costDelta > Parts.BUDGET);
 
     const row = document.createElement("button");
-    row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "") + (opt.tag ? " exclusive" : "");
+    const restricted = opt.supplier || opt.suppliers || opt.team || opt.teams;
+    row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "") + (restricted ? " exclusive" : "");
+    row.dataset.csOpt = opt.id;
+    row.dataset.csCat = activeCat.id;
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
 
     const main = document.createElement("div"); main.className = "cs-opt-main";
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
     nameRow.appendChild(document.createTextNode(opt.label));
-    if (opt.tag) { const tg = document.createElement("span"); tg.className = "cs-opt-tag"; tg.textContent = opt.tag; nameRow.appendChild(tg); }
+    const badges = [];
+    if (opt.tag) badges.push(opt.tag);
+    if (opt.supplier || opt.suppliers) badges.push("SUPPLIER");
+    if (opt.team || opt.teams) badges.push("SIGNATURE");
+    if (!restricted && !opt.tag) badges.push("UNIVERSAL");
+    if (factorySetup[activeCat.id] === opt.id) badges.push("FACTORY SETUP");
+    if (badges.length) {
+      const tg = document.createElement("span");
+      tg.className = "cs-opt-tag";
+      tg.textContent = Array.from(new Set(badges)).join(" · ");
+      nameRow.appendChild(tg);
+    }
     main.appendChild(nameRow);
     const deltas = statDeltaChips(opt);
     if (deltas) main.appendChild(deltas);
@@ -5434,7 +5511,7 @@ function buildSetup() {
       const p = getTeamParts(team.id);
       const co = activeCat.options.find((o) => o.id === (p[activeCat.id] || Parts.DEFAULTS[activeCat.id]));
       const cc = co ? (co.cost || 0) : 0;
-      if (!unlimitedBudget && (Parts.getCost(p, team.engine) - cc + (opt.cost || 0)) > Parts.BUDGET) {
+      if (!unlimitedBudget && (Parts.getCost(p, team) - cc + (opt.cost || 0)) > Parts.BUDGET) {
         row.classList.add("budget-reject");
         row.addEventListener("animationend", () => row.classList.remove("budget-reject"), { once: true });
         if (soundOn) GameAudio.uiTick();
