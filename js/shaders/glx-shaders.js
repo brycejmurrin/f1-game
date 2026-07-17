@@ -110,6 +110,14 @@ uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides
 uniform highp sampler2DShadow uCarShadowMap;
 uniform mat4 uCarLightVP;
 uniform float uCarShadowOn;
+// Nearest-FLOODLIGHT spot shadow (night, desktop): a 512² depth map rendered
+// per frame from the single nearest lamp to the camera (perspective VP down its
+// beam). Only the light-loop slot uLampShadowIdx pays the 4-tap PCF — every
+// other lamp skips the branch, so the whole feature costs one lamp's shadow.
+uniform highp sampler2DShadow uLampShadowMap;
+uniform mat4 uLampShadowVP;
+uniform float uLampShadowOn;
+uniform int uLampShadowIdx;
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -767,9 +775,33 @@ void main() {
     // and ground-mist tints below - everything here is already computed.
     lampFog += uLightCol[i] * (att * mix(0.35, 1.0, beam));
     float NoLl = max(dot(N, Ld), 0.0);
+    // Per-lamp SHADOW for the one mapped floodlight: cars/walls between this
+    // surface and the lamp block its pool — the radial shadow swinging around
+    // a car as it passes under a mast is the marquee night cue the sun map
+    // can't provide (no per-light shadows elsewhere; the cone shapes those).
+    // Direct terms only (diffuse pool + GGX/clearcoat specular below): the
+    // bounce fill and fog in-scatter stay unshadowed — they are indirect.
+    float lampSh = 1.0;
+    if (uLampShadowOn > 0.5 && i == uLampShadowIdx) {
+      vec4 lpc = uLampShadowVP * vec4(vWorldPos, 1.0);
+      if (lpc.w > 0.0) {
+        vec3 lps = lpc.xyz / lpc.w * 0.5 + 0.5;
+        if (lps.x > 0.002 && lps.x < 0.998 && lps.y > 0.002 && lps.y < 0.998 && lps.z < 1.0) {
+          // Perspective depth is nonlinear (most precision at the lens), so the
+          // receiver — the road, near the far plane — needs a slope-boosted
+          // constant bias against acne rather than the sun map's texel-scaled one.
+          float lpz = lps.z - (0.0012 + 0.004 * (1.0 - NoLl));
+          float lpt = 1.5 / 512.0;
+          lampSh = ( texture(uLampShadowMap, vec3(lps.xy + vec2(-lpt, -lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2( lpt, -lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2(-lpt,  lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2( lpt,  lpt), lpz)) ) * 0.25;
+        }
+      }
+    }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * uLightCol[i] * (att * spotD) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
+    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
@@ -784,7 +816,7 @@ void main() {
     float Dl = D_GGX(NoHl, a);
     float Vl = V_SmithGGX(NoV, NoLl, a);
     vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-    vec3 radianceS = uLightCol[i] * (att * spotS);
+    vec3 radianceS = uLightCol[i] * (att * spotS * lampSh);
     vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
     color += lspec / (1.0 + lspec);
     // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
@@ -1764,6 +1796,13 @@ uniform vec2 uLightCone[GR_MAX_LIGHTS];   // (cosInner, cosOuter)
 uniform float uLightVolW[GR_MAX_LIGHTS];  // per-lamp volumetric weight (beam character)
 uniform float uMist;       // haze density gate for in-scatter (0 = none)
 uniform float uLampStr;    // night lamp-volumetric strength (0 = off, e.g. day)
+// Nearest-floodlight spot shadow map (same 512² map the lit pass PCF-tests):
+// beam steps that the lamp can't see stay dark, so the volumetric shaft is
+// carved by cars/walls instead of glowing straight through them. uLampShadowIdx
+// is the lamp's slot in THIS pass's nearest-N selection (-1 = no mapped lamp).
+uniform sampler2DShadow uLampShadowMap;
+uniform mat4 uLampShadowVP;
+uniform int uLampShadowIdx;
 out vec4 outColor;
 vec3 worldPos(vec2 uv, float d) {
   vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
@@ -1846,7 +1885,20 @@ void main() {
         float spot = smoothstep(uLightCone[li].y, uLightCone[li].x, cd);
         float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
         float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
-        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14)) * uLightVolW[li] * hLamp * trans;
+        // Shadowed shaft: test this march step against the mapped lamp's depth
+        // map — an occluded step contributes no in-scatter, so the beam shows
+        // the silhouette of whatever blocks the lamp (one tap × 16 steps,
+        // and only for the single mapped lamp).
+        float lampLit = 1.0;
+        if (li == uLampShadowIdx) {
+          vec4 lq = uLampShadowVP * vec4(p, 1.0);
+          if (lq.w > 0.0) {
+            vec3 lqs = lq.xyz / lq.w * 0.5 + 0.5;
+            if (lqs.x > 0.002 && lqs.x < 0.998 && lqs.y > 0.002 && lqs.y < 0.998 && lqs.z < 1.0)
+              lampLit = texture(uLampShadowMap, vec3(lqs.xy, lqs.z - 0.004));
+          }
+        }
+        lampAccum += uLightCol[li] * (att * spot * (0.12 + hgL * 0.14) * lampLit) * uLightVolW[li] * hLamp * trans;
       }
     }
   }
