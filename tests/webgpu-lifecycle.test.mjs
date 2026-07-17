@@ -252,24 +252,30 @@ test("the same target size retries after the allocation cooldown", async () => {
 
 test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads", async () => {
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*wetDark/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*368/);
+  assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
+  assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*384/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*144/);
 
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  assert.equal(gfx.begin({ tune: {} }), true);
+  assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 368);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 384);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 144);
-  assert.equal(h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values[88], 1.0);
+  let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
+  assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 64], "shadowCtr must occupy floats 88..91");
+  assert.deepEqual(frame.slice(92, 96), [1, 0, 0, 0], "wetDark params6 must occupy distinct floats 92..95");
   let composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 0.5);
   assert.ok(Math.abs(composite[32] - 0.35) < 1e-6);
 
-  assert.equal(gfx.begin({ tune: { wetDark: -7 } }), true);
+  assert.equal(gfx.begin({ tune: { wetDark: -7 }, shadowCtr: [44, 55, 66] }), true);
   gfx.present({ tune: { bloomKnee: 4.25, vignetteSoft: -2.5 } });
-  assert.equal(h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values[88], -7);
+  frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
+  assert.deepEqual(frame.slice(88, 92), [44, 55, 66, 64], "wetDark must not overwrite shadowCtr");
+  assert.equal(frame[92], -7);
   composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 4.25);
   assert.equal(composite[32], -2.5);
