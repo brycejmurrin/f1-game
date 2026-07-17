@@ -15,8 +15,8 @@ const smooth = (a, b, x) => {
 function zoneWeights(y) {
   const z = Math.log2(Math.max(y, 1e-6) / 0.18);
   return [
-    1 - smooth(-5, -2.5, z),
-    smooth(-5, -2.5, z) * (1 - smooth(-1.5, 0, z)),
+    1 - smooth(-4, -0.75, z),
+    smooth(-4, -1.5, z) * (1 - smooth(-1, 0.75, z)),
     smooth(-2.5, -0.5, z) * (1 - smooth(0.5, 2.5, z)),
     smooth(0, 1.5, z) * (1 - smooth(3, 5, z)),
     smooth(2.5, 5, z),
@@ -69,8 +69,8 @@ test("GLSL exposes the exact safe packed HDR grade contract", () => {
     assert.match(GLSL, new RegExp(`uniform vec3 ${name}`));
   assert.match(GLSL, /applyHdrGrade/);
   assert.match(GLSL, /float z = log2\(max\(y, 1e-6\) \/ 0\.18\)/);
-  assert.match(GLSL, /w0\.x = 1\.0 - smoothstep\(-5\.0, -2\.5, z\)/);
-  assert.match(GLSL, /w0\.y = smoothstep\(-5\.0, -2\.5, z\) \* \(1\.0 - smoothstep\(-1\.5, 0\.0, z\)\)/);
+  assert.match(GLSL, /w0\.x = 1\.0 - smoothstep\(-4\.0, -0\.75, z\)/);
+  assert.match(GLSL, /w0\.y = smoothstep\(-4\.0, -1\.5, z\) \* \(1\.0 - smoothstep\(-1\.0, 0\.75, z\)\)/);
   assert.match(GLSL, /w0\.z = smoothstep\(-2\.5, -0\.5, z\) \* \(1\.0 - smoothstep\(0\.5, 2\.5, z\)\)/);
   assert.match(GLSL, /w0\.w = smoothstep\(0\.0, 1\.5, z\) \* \(1\.0 - smoothstep\(3\.0, 5\.0, z\)\)/);
   assert.match(GLSL, /wWhite = smoothstep\(2\.5, 5\.0, z\)/);
@@ -90,8 +90,8 @@ test("WGSL mirrors exact HDR masks, safety guards, and composite order", () => {
   assert.match(WGSL, /fn applyToeShoulder\(/);
   assert.match(WGSL, /fn applyHdrGrade\(/);
   assert.match(WGSL, /let z = log2\(max\(y, 1e-6\) \/ 0\.18\)/);
-  assert.match(WGSL, /1\.0 - smoothstep\(-5\.0, -2\.5, z\)/);
-  assert.match(WGSL, /smoothstep\(-5\.0, -2\.5, z\) \* \(1\.0 - smoothstep\(-1\.5, 0\.0, z\)\)/);
+  assert.match(WGSL, /1\.0 - smoothstep\(-4\.0, -0\.75, z\)/);
+  assert.match(WGSL, /smoothstep\(-4\.0, -1\.5, z\) \* \(1\.0 - smoothstep\(-1\.0, 0\.75, z\)\)/);
   assert.match(WGSL, /smoothstep\(-2\.5, -0\.5, z\) \* \(1\.0 - smoothstep\(0\.5, 2\.5, z\)\)/);
   assert.match(WGSL, /smoothstep\(0\.0, 1\.5, z\) \* \(1\.0 - smoothstep\(3\.0, 5\.0, z\)\)/);
   assert.match(WGSL, /smoothstep\(2\.5, 5\.0, z\)/);

@@ -456,8 +456,11 @@ struct GradeZoneWeights {
 fn gradeZoneWeights(y : f32) -> GradeZoneWeights {
   let z = log2(max(y, 1e-6) / 0.18);
   var w : GradeZoneWeights;
-  w.tone0.x = 1.0 - smoothstep(-5.0, -2.5, z);
-  w.tone0.y = smoothstep(-5.0, -2.5, z) * (1.0 - smoothstep(-1.5, 0.0, z));
+  // ACES compresses roughly the bottom four linear stops into the first few
+  // display values. Wider low-end masks keep BLACKS and SHADOWS visible after
+  // that compression instead of letting the later black-floor clamp erase them.
+  w.tone0.x = 1.0 - smoothstep(-4.0, -0.75, z);
+  w.tone0.y = smoothstep(-4.0, -1.5, z) * (1.0 - smoothstep(-1.0, 0.75, z));
   w.tone0.z = smoothstep(-2.5, -0.5, z) * (1.0 - smoothstep(0.5, 2.5, z));
   w.tone0.w = smoothstep(0.0, 1.5, z) * (1.0 - smoothstep(3.0, 5.0, z));
   w.white = smoothstep(2.5, 5.0, z);

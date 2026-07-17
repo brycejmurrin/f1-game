@@ -2096,8 +2096,11 @@ vec3 caScene(vec2 uv) {
 // Five overlapping exposure masks in log2 stops around 18% middle grey.
 void gradeZoneWeights(float y, out vec4 w0, out float wWhite) {
   float z = log2(max(y, 1e-6) / 0.18);
-  w0.x = 1.0 - smoothstep(-5.0, -2.5, z);
-  w0.y = smoothstep(-5.0, -2.5, z) * (1.0 - smoothstep(-1.5, 0.0, z));
+  // ACES compresses roughly the bottom four linear stops into the first few
+  // display values. Wider low-end masks keep BLACKS and SHADOWS visible after
+  // that compression instead of letting the later black-floor clamp erase them.
+  w0.x = 1.0 - smoothstep(-4.0, -0.75, z);
+  w0.y = smoothstep(-4.0, -1.5, z) * (1.0 - smoothstep(-1.0, 0.75, z));
   w0.z = smoothstep(-2.5, -0.5, z) * (1.0 - smoothstep(0.5, 2.5, z));
   w0.w = smoothstep(0.0, 1.5, z) * (1.0 - smoothstep(3.0, 5.0, z));
   wWhite = smoothstep(2.5, 5.0, z);

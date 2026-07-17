@@ -119,6 +119,19 @@ function tonalChanges(before, after) {
   };
 }
 
+function rangeChanges(before, after, low, high) {
+  let absolute = 0, signed = 0, count = 0;
+  for (let i = 0; i < before.length; i += 4) {
+    const y = luminance(before, i);
+    if (y < low || y > high) continue;
+    const change = luminance(after, i) - y;
+    absolute += Math.abs(change);
+    signed += change;
+    count++;
+  }
+  return { absolute: absolute / count, signed: signed / count, count };
+}
+
 function channelChanges(before, after) {
   const sums = [0, 0, 0];
   let count = 0;
@@ -154,6 +167,19 @@ function histogramStats(data) {
 test.describe("rendered image grade", () => {
   test.describe.configure({ mode: "serial" });
   test.setTimeout(180_000);
+
+  test("blacks visibly change the deepest image detail", async ({ page }) => {
+    await boot(page);
+    await pixels(page);
+    const baseline = await pixels(page);
+    await setTune(page, { blacks: 1 });
+    const raised = rangeChanges(baseline, await pixels(page), 2, 30);
+    await setTune(page, { blacks: -1 });
+    const crushed = rangeChanges(baseline, await pixels(page), 2, 30);
+    expect(raised.count).toBeGreaterThan(1000);
+    expect(raised.signed).toBeGreaterThan(1);
+    expect(crushed.signed).toBeLessThan(-1);
+  });
 
   test("shadows predominantly change dark pixels", async ({ page }) => {
     await boot(page);
