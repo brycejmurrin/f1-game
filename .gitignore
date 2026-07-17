@@ -6,40 +6,12 @@
 # Node
 node_modules/
 
-# ── Regenerable output — two standard dirs (see CLAUDE.md "Output dirs") ──
-# scratch/    interactive screenshot galleries from tools (survey, aerial,
-#             apex-capture, ab-lighting) — human review, regenerate on demand.
-# artifacts/  all batch/test output: Playwright test-results[-port]/ +
-#             report[-port]/ + junit, test-shards logs/, and the tmp/ scratchpad
-#             (replaces /tmp for tool log/screenshot dumps).
+# Regenerable output
 scratch/
 artifacts/
 
-# regenerable screenshot dumps written via page.screenshot()/fs.writeFileSync
-# (lap-audit, baku-audit, ui/parts/dev-tools captures). These are human-review
-# galleries with NO toHaveScreenshot assertions — regenerate on demand. The
-# golden visual-regression baselines live in tests/*-snapshots/ and stay tracked.
-tests/ui-screenshots/
-
-# generated follow-cam track traces (tests/track-trace.spec.js) — regenerable
-tests/track-trace/
-
-# generated test output directories
-tests/f1-track-accuracy/
-tests/f1-circuit-directions/
-tests/monaco-cam/
-tests/scenery-shots/
-tests/trackmap-shots/
-tests/hooks-demo/
-tests/monaco-scenery/
-tests/all-tracks-buildings/
-tests/monaco-tour/
-tools/render-out/
-
-# transient headless probe/screenshot scripts (agents & local debugging)
+# Transient agent/debug scripts must be underscore-prefixed.
 tools/_*.mjs
-tools/*probe*.mjs
-tools/*shot*.mjs
 
 # git worktrees for isolated agent work
 .worktrees/

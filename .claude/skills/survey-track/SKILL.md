@@ -34,10 +34,10 @@ table and palette (what's missing, wrong-coloured, wrong-shaped, or floating).
 ### 2 · Survey the current scene — **one command**
 Don't guess: screenshot the real game and probe its geometry in a single pass.
 ```sh
-node tools/survey-track.mjs <id> before     # → scratch/survey-<id>/ + a flagged probe table
+node tools/survey-track.mjs <id> before     # → scratch/captures/survey-track/<id>/ + a flagged probe table
 ```
 This self-boots the game (no server needed) and produces, in one boot:
-- **screenshots** in `scratch/survey-<id>/` — a whole-track aerial plus an **orbit**
+- **screenshots** in `scratch/captures/survey-track/<id>/` — a whole-track aerial plus an **orbit**
   and a **driver's-eye** shot at 0/25/50/75 % (the EYE shots are what expose
   floating props and gaps). **Read the PNGs** against the brief.
 - the **lateral ground-profile probe** as a table, with the classic failure modes
@@ -86,7 +86,7 @@ get a clean before/after and confirm the flags cleared:
 ```sh
 node tools/survey-track.mjs <id> after
 ```
-Compare `scratch/survey-<id>/before-*.png` vs `after-*.png`; confirm the probe table
+Compare `scratch/captures/survey-track/<id>/before-*.png` vs `after-*.png`; confirm the probe table
 is now flag-free and the eye shots show props on real ground.
 
 ### 6 · Test & ship

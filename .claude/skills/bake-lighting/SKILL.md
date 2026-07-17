@@ -41,7 +41,8 @@ you don't merge by hand.
    (keep the `window.LightPresets = …;` wrapper or just the `{…}` — the helper
    accepts either):
    ```sh
-   cat > "$SCRATCH/presets.txt" <<'BLOB'
+   mkdir -p artifacts/tmp
+   cat > artifacts/tmp/presets.txt <<'BLOB'
    <paste the user's window.LightPresets = {…}; here>
    BLOB
    ```
@@ -49,7 +50,7 @@ you don't merge by hand.
 2. **Bake + bump** (writes `js/light-presets.js`, increments `?v=` across
    `index.html` + `version.json`; validates shape, never commits):
    ```sh
-   node .claude/skills/bake-lighting/bake.mjs "$SCRATCH/presets.txt"
+   node .claude/skills/bake-lighting/bake.mjs artifacts/tmp/presets.txt
    ```
 
 3. **Review + syntax-check:**

@@ -6,7 +6,8 @@ description: Capture a headless V8 CPU flame chart of the game loop via Playwrig
 # Headless CPU profiling via Playwright + CDP
 
 Captures a V8 `.cpuprofile` of the running game loop without opening a browser
-manually.  Uses Playwright's `newCDPSession()` to drive the built-in V8 profiler.
+manually. Uses Playwright's `newCDPSession()` to drive the built-in V8 profiler and
+writes the default capture to `scratch/profiles/gameloop.cpuprofile`.
 
 ## Quick capture (copy-paste harness)
 

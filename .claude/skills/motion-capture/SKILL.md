@@ -47,7 +47,7 @@ It records a throttle-held chase-cam clip, extracts frames, and prints:
 - **`mean` and `max` are noisy** — dominated by occasional big scene-change
   frames (a wall/building entering view) and by how far the car happened to drive
   that run. Do NOT A/B on these.
-- Frames + the `.webm` are written to `scratch/motion-<track>/` for eyeballing.
+- Frames + the `.webm` are written to `scratch/captures/motion-capture/<track>/` for eyeballing.
 
 ## A/B a rendering change (the real use)
 

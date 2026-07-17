@@ -57,8 +57,8 @@ floodlights built; 0 = bright day).
 ## Validate visually
 
 ```sh
-node tools/apex-capture.mjs tracks scratch/tracks            # one orbit PNG per circuit
-node tools/apex-capture.mjs tracks scratch/tracks spa monza  # just these two
+node tools/apex-capture.mjs tracks scratch/captures/apex-capture/tracks            # one orbit PNG per circuit
+node tools/apex-capture.mjs tracks scratch/captures/apex-capture/tracks spa monza  # just these two
 ```
 The manifest flags any `blank:true` render. For geometry regressions the full
 suite's `terrain-over-road.spec.js` and `tracks-walls.spec.js` are the assertions;

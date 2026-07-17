@@ -15,7 +15,7 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
                                   #   Fast pre-push guard for tracks.js scenery edits.
 npx playwright test               # run all specs
 npx playwright test tests/<file>.spec.js   # single spec
-npx playwright test tests/ui-audit.spec.js # → tests/ui-screenshots/
+npx playwright test tests/ui-audit.spec.js # → artifacts/galleries-<port>/ui-audit/
 npx playwright test tests/tracks-visual.spec.js  # per-circuit pixel-diff regression
 
 # Named test groups (via npm run <script>):
@@ -109,17 +109,20 @@ still use Python; after an uncatchable SIGKILL, check for an orphan with
 All regenerable output lives in **two** top-level gitignored dirs — never `/tmp`,
 never scattered at the repo root:
 
-- **`scratch/`** — interactive screenshot galleries from tools (`survey-track`,
-  aerial dumps, `apex-capture`, `ab-lighting`). Human-review, regenerate on demand.
-- **`artifacts/`** — batch/test output. Subdirs: `test-results[-port]/` +
-  `report[-port]/` + junit (Playwright, via `playwright.config.js`), `logs/`
-  (`test-shards.sh`), and `tmp/` (the `/tmp` replacement for tool log/screenshot
-  scratch, e.g. `measure-props-over-road --shots`, `photoshoot`).
+- **`artifacts/test-results-<port>/`** — test failures, traces, attachments, JUnit
+- **`artifacts/report-<port>/`** — HTML report
+- **`artifacts/logs/`** — shard and batch logs
+- **`artifacts/galleries-<port>/`** — test-emitted screenshots/reports
+- **`artifacts/tmp/`** — one-off batch probes
+- **`scratch/captures/`** — interactive tool captures
+- **`scratch/renders/`** — car/parts/aero review sheets
+- **`scratch/profiles/`** — CPU/GPU profiles
 
-Both are created on demand. `tools/render-out/` (car/parts render sheets) and the
-`tests/*` gallery dirs stay where they are (namespaced, separately ignored). The
-golden visual-regression baselines in `tests/*-snapshots/` are **tracked** — never
-delete those.
+Both roots are created on demand. `assets/`, committed generated sources, and the
+tracked golden baselines in `tests/*-snapshots/` stay outside these roots. The
+current consolidated visual suite has no tracked replacement baselines yet; do the
+Linux/SwiftShader regeneration as a separate required operation before treating
+`npm run test:visual` as a reliable regression gate.
 
 ---
 

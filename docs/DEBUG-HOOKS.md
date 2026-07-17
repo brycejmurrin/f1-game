@@ -942,7 +942,7 @@ const out = await page.evaluate(() => {
 // screenshot of a corner from a chosen camera
 await page.evaluate(() => { window.__apex.park(0.06); window.__apex.view({ s: 0.06, radius: 220 }); });
 await page.waitForTimeout(400);             // let a few frames flush
-await page.locator("canvas#game").screenshot({ path: "t1.png" });
+await page.locator("canvas#game").screenshot({ path: "artifacts/tmp/t1.png" });
 ```
 
 `race()` is more robust than clicking through the menus and is the recommended

@@ -1,13 +1,13 @@
 # Testing reference
 
-45 root Playwright spec files (`tests/*.spec.js`), plus a 24-file
-`tests/blank-scan/` per-circuit blank-frame suite and a 24-file `tests/inspect/`
-suite. **`inspect/**` and `blank-scan/**` are excluded from default test
-discovery** via `testIgnore` in `playwright.config.js`, so a bare
-`npx playwright test` runs the 45 root specs only; run the excluded suites by
-naming them explicitly. The suite covers physics, behaviour, geometry, cameras,
-UI, parts, steering, lighting, scenery, gamepad, timing/field hooks, headless RL,
-and per-circuit blank-frame detection.
+45 root Playwright spec files (`tests/*.spec.js`), plus 24-file
+`tests/blank-scan/` and `tests/inspect/` per-circuit suites and explicit-path
+helpers under `tests/galleries/`. **`inspect/**`, `blank-scan/**`, and
+`galleries/**` are excluded from default test discovery** via `testIgnore` in
+`playwright.config.js`, so a bare `npx playwright test` runs the 45 root specs
+only; run the excluded suites by naming them explicitly. The suite covers
+physics, behaviour, geometry, cameras, UI, parts, steering, lighting, scenery,
+gamepad, timing/field hooks, headless RL, and per-circuit blank-frame detection.
 
 The 45 root specs are split into two Playwright projects (see
 `playwright.config.js`): a **`headless`** project (physics/geometry/hook specs,
@@ -23,8 +23,10 @@ single `chromium` project is gone; filter with `--project=headless` /
 ```sh
 npx playwright test                                         # run all specs
 npx playwright test tests/<file>.spec.js                   # single spec
-npx playwright test tests/ui-audit.spec.js                 # → tests/ui-screenshots/
 npx playwright test tests/tracks-visual.spec.js            # per-circuit pixel-diff regression
+
+npm test -- tests/ui-audit.spec.js
+# output: artifacts/galleries-<allocated-port>/ui-audit/
 ```
 
 **Named test groups** (via `npm run test:<group>`):
@@ -86,7 +88,16 @@ get three extras at zero per-test cost:
 
 `playwright.config.js` — baseURL `localhost:3456` (per-run free port via
 `tools/run-playwright.mjs`), retries 1, SwiftShader headless GPU, and the
-`headless` / `render` project split.
+`headless` / `render` project split. The npm wrapper allocates a free port per
+run and writes:
+
+- `artifacts/report-<port>/` — HTML report
+- `artifacts/test-results-<port>/` — failures, traces, attachments, JUnit
+- `artifacts/galleries-<port>/<suite>/` — screenshots and suite-emitted reports
+
+Run excluded suites explicitly by path, e.g. `npm test -- tests/inspect/monaco.spec.js`,
+`npm test -- tests/blank-scan/monaco.spec.js`, or
+`npm test -- tests/galleries/track-trace.spec.js`.
 
 ---
 
@@ -172,6 +183,7 @@ hook values.
 | `audio-smoke.spec.js` | WebAudio engine/sfx smoke (objective pitch, no listening) |
 | `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `inspect/*.spec.js` | 24 per-circuit inspection/screenshot specs (**excluded from default discovery** via `testIgnore`; run explicitly) |
+| `galleries/*.spec.js` | explicit-path gallery emitters such as track traces and all-tracks building surveys (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line (roofs, canopies, buildings, crowds). Same point-in-triangle method against the props mesh, in 3D (0.2–5 m band above the road). Per-track `BASELINE` caps document justified overheads (Miami beach canopy, Mexico Foro Sol pass-through, gantries) and small tracked residuals; any new/worsened intrusion on a clean track fails. Measure one track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots` |
 

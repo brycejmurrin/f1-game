@@ -8,7 +8,7 @@ direction.
 
 ```sh
 node tools/ab-lighting.mjs list          # the catalog (marks which knobs are value-sweepable)
-node tools/ab-lighting.mjs run all       # render A/B for every knob → scratch/ab/
+node tools/ab-lighting.mjs run all       # render A/B for every knob → scratch/captures/ab-lighting/
 node tools/ab-lighting.mjs run lampFog.base pcss.penScale
 npm run test:ab                          # fast invariants + catalog integrity
 ```
