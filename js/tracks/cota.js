@@ -149,63 +149,20 @@
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
       building(K(0.05), -1, 16, 16, 18, 22, { wall: cotaBlue, window: glass, floor: 5, roof: darkSteel });
 
-      // ---- COTA Observation Tower — the iconic 77m red structure at Turn 1 (s≈0.085, L far) ----
-      // Placed at 78 m from road edge so it never overlaps any parallel segment.
-      const kt = K(0.085);
-      const at = anchor(kt, -1, 78), tb = [at.r, at.u, at.t];
-      const tBase = at.c;
-      // tapered concrete/steel shaft in 3 stages (total 74 m to deck level)
-      out._mat = MAT.METAL;
-      addFrustum(out, tBase,                         5.8, 4.6, 32, [0.80, 0.81, 0.85], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 32),         4.6, 3.8, 32, [0.78, 0.79, 0.83], 8, tb);
-      addFrustum(out, vadd(tBase, at.u, 64),         3.8, 2.8, 10, [0.76, 0.77, 0.81], 8, tb);
-      out._mat = 0;
-      // iconic multicolour LED ring bands wrapping the shaft (COTA's night signature)
-      const ringCols = [[0.90, 0.20, 0.20], [0.95, 0.55, 0.12], [0.95, 0.85, 0.20],
-                        [0.20, 0.72, 0.36], [0.18, 0.46, 0.86], [0.56, 0.30, 0.76]];
-      ringCols.forEach((rc, i) => {
-        const ry = 8 + i * 11, rr = 5.6 - (ry / 74) * 2.6;
-        addCyl(out, vadd(tBase, at.u, ry), rr, 1.35, rc, 9, tb);
-      });
-      // broad observation deck assembly (the iconic RED feature, r=8.5 m)
-      const deckH = 74;
-      const deckCen = vadd(tBase, at.u, deckH);
-      out._mat = MAT.METAL;
-      addCyl(out, deckCen, 8.5, 2.4, redSteel, 10, tb);             // RED deck ring
-      // deck floor: contained inside the ring (14 m < 17 m diameter) — no protrusion
-      addBox(out, vadd(tBase, at.u, deckH + 1.2), [14, 1.6, 14], [0.92, 0.92, 0.94], tb);
-      // upper viewing platform — raised 3 m above deck floor, slightly narrower
-      addCyl(out, vadd(tBase, at.u, deckH + 2.8), 7.0, 1.8, [0.74, 0.76, 0.82], 8, tb);
-      // crown cap (sits on top of upper platform — gap-free)
-      addCone(out, vadd(tBase, at.u, deckH + 4.6), 4.2, 3.8, [0.65, 0.66, 0.70], 8, tb);
-      // slender antenna mast above the cone apex
-      addCyl(out, vadd(tBase, at.u, deckH + 8.4),  0.32, 9.0, redSteel, 5, tb);
-      // aviation-warning beacon at mast tip (warm amber)
-      addBox(out, vadd(tBase, at.u, deckH + 17.4), [0.7, 0.7, 0.7], [1.0, 0.82, 0.25], tb);
-      // RED railing posts radiating around the deck edge
-      for (let i = 0; i < 8; i++) {
-        const ang = (i / 8) * 6.2832;
-        const rPost = vadd(
-          vadd(deckCen, at.r, Math.cos(ang) * 9.2),
-          at.t, Math.sin(ang) * 9.2
-        );
-        addBox(out, [rPost[0], rPost[1] + 0.8, rPost[2]], [0.5, 1.4, 0.5], redSteel, tb);
+      // ---- Turn 1 = Big Red only: red-soil climb + packed crowd + stands (no tower) ----
+      // Signature silhouette is the uphill amphitheatre of dirt and fans — the
+      // Observation Tower lives with the concert amphitheater at T16–18.
+      {
+        const k1 = K(0.10);
+        const a1 = anchor(k1, 1, 16);
+        addPrism(out, vadd(a1.c, a1.u, 4), [20, 12, 60], redSoil, [a1.t, a1.u, a1.r]);
+        // large outer mound on the left side of the hill
+        const a1L = anchor(k1, -1, 26);
+        addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.58, 0.36, 0.26], [a1L.t, a1L.u, a1L.r]);
+        // extra red-soil apron on the climb apex (outside) — sells the Big Red bank
+        const a1R = anchor(K(0.085), 1, 22);
+        addPrism(out, vadd(a1R.c, a1R.u, 2.5), [16, 7, 48], redSoil, [a1R.t, a1R.u, a1R.r]);
       }
-      out._mat = 0;
-      // base facilities: control/mechanical room at tower base
-      prop(kt, -1, 62, [16, 7, 18], [0.84, 0.84, 0.86]);
-      // emissive window strip on the deck band — lit interior (day+night)
-      out._mat = MAT.GLASS;
-      addBox(out, vadd(tBase, at.u, deckH + 0.6), [15.5, 0.8, 15.5], litWin, tb);
-      out._mat = 0;
-
-      // ---- Uphill Turn 1: dramatic red-soil embankment — the amphitheatre climb ----
-      const k1 = K(0.10);
-      const a1 = anchor(k1, 1, 16);
-      addPrism(out, vadd(a1.c, a1.u, 4), [20, 12, 60], redSoil, [a1.t, a1.u, a1.r]);
-      // large outer mound on the left side of the hill
-      const a1L = anchor(k1, -1, 26);
-      addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.58, 0.36, 0.26], [a1L.t, a1L.u, a1L.r]);
 
       // ---- Esses spectator viewing mounds (s≈0.18, both sides) ----
       const ke = K(0.18);
@@ -214,16 +171,75 @@
       const me2 = anchor(ke, 1, 32);
       addPrism(out, vadd(me2.c, me2.u, 2), [34, 6, 64], scrub, [me2.t, me2.u, me2.r]);
 
-      // ---- Austin360 Amphitheater: bespoke concert stage behind Turn 12 (s≈0.64, R) ----
-      amphiStage(0.64, 1, 70);
-
       // ---- Turn-1 amphitheatre crowd hill — PACKED terraced fans on the famous climb ----
       // Sits behind/above the stock grandstands, reading as the wall of spectators
-      // that lines COTA's Turn-1 hairpin hill.
+      // that lines COTA's Turn-1 hairpin hill. This is the T1 hero — not the tower.
       crowdBank(0.095, -1, 40, 110, 7, 2.0);
       crowdBank(0.135, -1, 46, 70, 6, 2.2);
       // Final-corner / main-straight packed terrace (s≈0.98, R)
       crowdBank(0.975, 1, 34, 120, 6, 2.2);
+
+      // ---- Austin360 Amphitheater + Observation Tower (T16–18, s≈0.76–0.80, R) ----
+      // Real COTA: 251 ft Miró Rivera tower sits ON the amphitheater — pale shaft
+      // with a cascading red tube veil that forms the stage canopy. Not at Turn 1.
+      amphiStage(0.76, 1, 68);
+
+      // Observation Tower — pale shaft + red tube veil (no rainbow rings)
+      {
+        const kt = K(0.78);
+        const at = anchor(kt, 1, 82), tb = [at.r, at.u, at.t];
+        if (!onTrack(at.c[0], at.c[2], 36)) {
+          const tBase = at.c;
+          const pale = [0.86, 0.87, 0.90];
+          const pale2 = [0.80, 0.81, 0.85];
+          const deckH = 70;
+          // pale elevator shaft in 3 tapered stages
+          out._mat = MAT.METAL;
+          addFrustum(out, tBase,                 4.6, 3.8, 28, pale,  8, tb);
+          addFrustum(out, vadd(tBase, at.u, 28), 3.8, 3.2, 28, pale2, 8, tb);
+          addFrustum(out, vadd(tBase, at.u, 56), 3.2, 2.6, 14, pale,  8, tb);
+          // observation deck — pale ring + floor (red is reserved for the veil)
+          const deckCen = vadd(tBase, at.u, deckH);
+          addCyl(out, deckCen, 7.8, 2.2, pale2, 10, tb);
+          addBox(out, vadd(tBase, at.u, deckH + 1.1), [13, 1.4, 13], white, tb);
+          addCyl(out, vadd(tBase, at.u, deckH + 2.6), 6.4, 1.6, [0.74, 0.76, 0.82], 8, tb);
+          addCone(out, vadd(tBase, at.u, deckH + 4.2), 3.8, 3.4, [0.68, 0.69, 0.74], 8, tb);
+          addCyl(out, vadd(tBase, at.u, deckH + 7.8), 0.28, 8.0, pale2, 5, tb);
+          addBox(out, vadd(tBase, at.u, deckH + 16.0), [0.6, 0.6, 0.6], [1.0, 0.82, 0.25], tb);
+          out._mat = 0;
+          // red tube veil — ~14 thin tubes on the amphitheater face, full height
+          out._mat = MAT.METAL;
+          for (let i = 0; i < 14; i++) {
+            const tOff = (i - 6.5) * 0.85;
+            const rOff = 3.2 + Math.abs(tOff) * 0.08;
+            addCyl(out, vadd(vadd(tBase, at.r, rOff), at.t, tOff),
+                   0.20, deckH - 2, redSteel, 5, tb);
+          }
+          // cascading canopy flare — tubes spill outward/down over the stage
+          for (let i = 0; i < 11; i++) {
+            const tOff = (i - 5) * 3.2;
+            const flare = 10 + i * 0.35;
+            const y = 18 - Math.abs(i - 5) * 0.8;
+            addBox(out,
+              vadd(vadd(vadd(tBase, at.r, flare), at.u, y), at.t, tOff),
+              [14 + Math.abs(i - 5) * 1.2, 0.32, 0.38], redSteel, tb);
+          }
+          // lower veil ribs tying shaft to stage canopy
+          for (let i = 0; i < 7; i++) {
+            const tOff = (i - 3) * 4.0;
+            addBox(out,
+              vadd(vadd(vadd(tBase, at.r, 18), at.u, 8), at.t, tOff),
+              [22, 0.28, 0.32], redSteel, tb);
+          }
+          out._mat = 0;
+          // base plant room
+          prop(kt, 1, 66, [14, 6, 16], [0.84, 0.84, 0.86]);
+          // deck glass strip
+          out._mat = MAT.GLASS;
+          addBox(out, vadd(tBase, at.u, deckH + 0.5), [14.2, 0.7, 14.2], litWin, tb);
+          out._mat = 0;
+        }
+      }
 
       // ---- Red-and-white grandstand framework / tower (s≈0.65, R far) ----
       const redFramework = (k, side, dist) => {
@@ -240,27 +256,7 @@
       redFramework(K(0.84), 1, 52);    // red framework at the triple-apex sweeper
       redFramework(K(0.30), 1, 62);    // red framework over the dry-grass field
 
-      // ---- Velocity Tower — iconic colourful Austin landmark (s≈0.36, R far) ----
-      const kv = K(0.36), av = anchor(kv, 1, 98), vb = [av.r, av.u, av.t];
-      if (!onTrack(av.c[0], av.c[2], 32)) {
-        addFrustum(out, av.c,                   8.2, 6.5, 26, [0.32, 0.34, 0.38], 6, vb);
-        addFrustum(out, vadd(av.c, av.u, 26),   6.5, 5.8,  6, [0.96, 0.64, 0.12], 8, vb);
-        addFrustum(out, vadd(av.c, av.u, 32),   5.8, 4.0, 18, [0.32, 0.34, 0.38], 6, vb);
-        addCone(out, vadd(av.c, av.u, 50),       4.0, 5.2, [0.84, 0.38, 0.18], 8, vb);
-        addCyl(out, vadd(av.c, av.u, 55.2),     0.28, 6.8, [0.30, 0.32, 0.36], 4, vb);
-        addBox(out, vadd(av.c, av.u, 28),       [13.5, 1.0, 13.5], [1.0, 0.70, 0.20], vb);
-      }
-
-      // ---- Texas water tower — classic regional silhouette landmark (s≈0.68, L far) ----
-      const kw = K(0.68), aw = anchor(kw, -1, 112), wb = [aw.r, aw.u, aw.t];
-      if (!onTrack(aw.c[0], aw.c[2], 36)) {
-        for (const leg of [[-3.6, -3.6], [3.6, -3.6], [-3.6, 3.6], [3.6, 3.6]]) {
-          addCyl(out, vadd(vadd(aw.c, aw.r, leg[0]), aw.t, leg[1]),
-                 0.48, 21, [0.68, 0.70, 0.76], 4, wb);
-        }
-        addFrustum(out, vadd(aw.c, aw.u, 21), 7.2, 7.0, 7, [0.82, 0.84, 0.88], 12, wb);
-        addCone(out,   vadd(aw.c, aw.u, 28), 7.0, 4.8, [0.72, 0.74, 0.80], 12, wb);
-      }
+      // Velocity Tower + water tower culled — open Hill Country frame (Top-3 #3).
 
       // ---- Texas Hill Country ridgelines — LOW organic hills on the horizon ----
       // Use backdrop() for cheap rounded hill mounds instead of full mountain() meshes.
@@ -305,13 +301,13 @@
         }
       }
 
-      // ================= AUSTIN DOWNTOWN SKYLINE (s 0.28–0.65, L far) =================
-      // Use cityFront() — steps efficiently along the track and auto-varies heights/widths.
-      cityFront(0.28, 0.65, -1, 235, {
-        minH: 48,
-        maxH: 115,
-        depth: 22,
-        step: 30,
+      // ================= AUSTIN DOWNTOWN — thinned haze (Hill Country first) =================
+      // Short, sparse, far skyline so ridgelines + tower read; not a city wall.
+      cityFront(0.38, 0.55, -1, 320, {
+        minH: 28,
+        maxH: 55,
+        depth: 16,
+        step: 48,
         lit: false,
         palette: [
           [0.52, 0.54, 0.62],

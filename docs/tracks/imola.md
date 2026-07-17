@@ -15,16 +15,16 @@ Notably **hilly** in the mid-to-late lap. Flat river-side run to Tosa (~s 0.00�
 | s | Side | Distance | Box-modelling description |
 |------|------|----------|---------------------------|
 | 0.00 | L | near | **Old pit building** + main grandstand: long stacked pale-grey boxes `[0.58,0.60,0.63]`, red trim row |
-| 0.00 | R | near | **Santerno river** flat slab `[0.30,0.42,0.34]` running parallel to start straight |
+| 0.00 | R | near | **Santerno river** continuous ribbon `[0.30,0.42,0.34]` + grass bank — pit straight through Tamburello |
 | 0.05 | L | near | **Tamburello** chicane: red/white kerb boxes + **Ayrton Senna memorial** statue area, small bronze box `[0.45,0.40,0.30]` on green lawn |
 | 0.12 | L | near | **Villeneuve** chicane kerbs; gravel trap tan slab beyond |
-| 0.20 | R | mid | River + tree line hugging the back run to Tosa |
+| 0.00–0.18 | R | near–mid | Deciduous riverbank treeline (poplar/willow, almost no pine) hugging the water |
 | 0.28 | L | near | **Tosa** tight hairpin: stepped grandstand box, gravel run-off |
-| 0.35 | L+R | far | **Piratella** blind hill-crest: dark wooded green box walls, ground rises |
-| 0.50 | R | mid | **Acque Minerali** right-left in a green hollow: dense trees `[0.11,0.30,0.15]`, fog band |
-| 0.60 | L | far | **Wooded hills** backdrop: tiered dark-green box ridges on horizon `[0.16,0.34,0.18]` |
-| 0.66 | L+R | near | **Variante Alta** chicane over a crest: tall sausage **kerb** boxes |
-| 0.80 | L | mid | **Rivazza** double-left descent: grass banks, gravel, grandstand box |
+| 0.35 | L+R | far | **Piratella** blind hill-crest: dark deciduous wooded walls, ground rises |
+| 0.45–0.55 | both | mid | **Acque Minerali** enclosed deciduous hollow: dark broadleaf `[0.06,0.18,0.09]`, mist bands, sparse cypress only |
+| 0.60 | L | far | **Wooded hills** backdrop: tiered dark-green box ridges on horizon `[0.12,0.28,0.14]` |
+| 0.64–0.68 | L+R | near | **Variante Alta** crest: tall sausage **kerb** boxes (~1.3–1.4 m) + tight wooded walls |
+| 0.80 | L | mid | **Rivazza** plunge amphitheatre: grass banks, gravel, tiered hillside stands |
 | 0.92 | R | near | **Variante Bassa** / pit approach kerbs back toward river and pit straight |
 
 ## 5. Track features
@@ -34,9 +34,9 @@ Notably **hilly** in the mid-to-late lap. Flat river-side run to Tosa (~s 0.00�
 - Strong **elevation** through the wooded second half; flat river straight up front.
 
 ## 6. Modelling notes
-- Pair a flat river slab (right of the start straight) with dense green tree walls to sell "circuit beside a river in a park."
+- Chain overlapping Santerno water + bank slabs on the right from Variante Bassa through pit → Tamburello so the river reads continuous at race speed.
+- Mid-lap (Piratella / Acque Minerali) is **deciduous hollow** — `pineFrac: 0`, dark broadleaf + mist planes; cypress only as sparse Italian punctuation.
+- Variante Alta needs **tall sausage kerbs** (~1.3 m) and tight wooded crest walls; Rivazza is a grass amphitheatre plunge (tiered hillside stands), not a flat stand.
 - Keep the first third flat, then ramp ground-box tops up for Piratella/Acque Minerali and drop them into Rivazza.
-- Tier dark-green box ridges on the horizon for the Imola hills enclosing the back of the lap.
-- Punctuate the lap with red/white kerb-box clusters at each chicane for rhythm.
+- Thin far mountain rings before stacking hero riverside / hollow / crest geometry.
 - A small bronze statue box on a green lawn near Tamburello reads as the Senna memorial — a quiet landmark.
-- Thin fog boxes in the river valley and shaded hollows add old-school mood.

@@ -33,6 +33,7 @@
     scenery: function (api) {
       const { out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
               addBox, addCyl, addPrism, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
+              along, runoffApron,
               mountain, peak, bush, hedge, grandstand, tower,
               pine, tree, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost } = api;
@@ -54,6 +55,44 @@
       const shellLt   = [0.40, 0.41, 0.46];
       const fenceCol  = [0.74, 0.76, 0.80];
       const railRW    = [0.86, 0.20, 0.18];   // red/white armco
+      const kerbRed   = [0.80, 0.14, 0.14];
+      const kerbWht   = [0.92, 0.92, 0.92];
+      const saferCol  = [0.76, 0.78, 0.80];   // SAFER foam face
+      const gravel    = [0.62, 0.55, 0.42];
+
+      // -----------------------------------------------------------------------
+      // BANKED KERB STRIP — tilted red/white kerbs + SAFER-style outer rail.
+      // Track basis already banks with the road, so boxes read the bowl tilt.
+      // TODO(shared): use bankedKerbStrip when available on api
+      // -----------------------------------------------------------------------
+      function bankedKerbStrip(s0, s1, side, opts) {
+        opts = opts || {};
+        const saferGap = opts.saferGap != null ? opts.saferGap : 7.0;
+        const doSafer = opts.safer !== false;
+        let stripe = 0;
+        along(s0, s1, 3.2, (k, spacing) => {
+          const col = (stripe++ & 1) ? kerbWht : kerbRed;
+          const a = anchor(k, side, 1.35);
+          if (onTrack(a.c[0], a.c[2], 1.1)) return;
+          const b = [a.r, a.u, a.t];
+          // Low kerb ribbon — banks with a.r/a.u
+          addBox(out, vadd(a.c, a.u, 0.16), [1.05, 0.26, spacing * 0.90], col, b);
+          // Raised outer lip exaggerates the bank read at speed
+          addBox(out, vadd(vadd(a.c, a.r, side * 0.38), a.u, 0.30),
+                 [0.32, 0.42, spacing * 0.90], col, b);
+        });
+        // SAFER-style energy-absorbing outer rail (visual — behind tyre walls)
+        if (!doSafer) return;
+        along(s0, s1, 4.0, (k, spacing) => {
+          const a = anchor(k, side, saferGap);
+          if (onTrack(a.c[0], a.c[2], 1.4)) return;
+          const b = [a.r, a.u, a.t];
+          addBox(out, vadd(a.c, a.u, 0.55), [0.58, 1.10, spacing * 0.94], saferCol, b);
+          addBox(out, vadd(a.c, a.u, 1.14), [0.62, 0.12, spacing * 0.94], kerbRed, b);
+          addCyl(out, vadd(a.c, a.r, side * 0.42), 0.10, 1.25,
+                 [0.34, 0.34, 0.37], 5, b);
+        });
+      }
 
       // -----------------------------------------------------------------------
       // Track centre + approximate lap radius (used for sea/beach placement)
@@ -111,17 +150,39 @@
       // -----------------------------------------------------------------------
 
       // 1. Inner dune mounds — organic, rough, close
+      // Mid-lap (Hunserug→Scheivlak) pulls in to 42–68 m so sand reads first;
+      // elsewhere stays at the classic 80–110 m belt.
       every(24, (k) => {
+        const frac = k / n;
+        const midLap = frac >= 0.20 && frac <= 0.58;
         for (const side of [-1, 1]) {
-          const dist = 80 + hash(k * 72 + side) * 30;   // 80–110 m from verge
+          const dist = midLap
+            ? 42 + hash(k * 72 + side) * 26     // 42–68 m — sand-first
+            : 80 + hash(k * 72 + side) * 30;    // 80–110 m
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 18)) continue;
-          const h = 9 + hash(k * 73 + side) * 13;       // 9–22 m
-          const w = 28 + hash(k * 74 + side) * 24;      // 28–52 m base radius
+          const h = (midLap ? 7 : 9) + hash(k * 73 + side) * (midLap ? 11 : 13);
+          const w = (midLap ? 22 : 28) + hash(k * 74 + side) * (midLap ? 20 : 24);
           mountain(a.c[0], a.c[2], a.c[1], w, h, {
             seg: 8, seed: k * 13 + side, rough: 0.6, snowline: 2,
             forest: marramT, rock: sandDk, snow: sand,
           });
+        }
+      });
+
+      // 1b. Extra close sand shoulders on the mid-lap dune weave
+      every(16, (k) => {
+        const frac = k / n;
+        if (frac < 0.22 || frac > 0.56) return;
+        for (const side of [-1, 1]) {
+          if (hash(k * 88 + side) > 0.55) continue;
+          const dist = 28 + hash(k * 89 + side) * 14;   // 28–42 m
+          const a = anchor(k, side, dist);
+          if (onTrack(a.c[0], a.c[2], 12)) continue;
+          peak(a.c[0], a.c[2], a.c[1],
+               16 + hash(k * 90 + side) * 14,
+               5 + hash(k * 91 + side) * 8,
+               hash(k * 92 + side) < 0.5 ? sand : sandLt);
         }
       });
 
@@ -160,17 +221,17 @@
       const pineCol  = [0.16, 0.34, 0.12];   // dark coastal pine
       const pineCol2 = [0.20, 0.38, 0.14];   // slightly lighter broadleaf scrub
 
-      // Inland-side dune pine belt — sectors where inland forest exists
-      forestEdge(0.22, 0.46,  1, 65, { density: 0.42, hMin: 7, hMax: 13,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.88 }); // gap 55→65
-      forestEdge(0.22, 0.46, -1, 48, { density: 0.38, hMin: 6, hMax: 12,
+      // Inland-side dune pine belt — thinned mid-lap so sand + marram dominate
+      forestEdge(0.22, 0.46,  1, 65, { density: 0.28, hMin: 6, hMax: 11,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.88 });
+      forestEdge(0.22, 0.46, -1, 52, { density: 0.24, hMin: 5, hMax: 10,
                                        col: pineCol, col2: pineCol2, pineFrac: 0.85 });
-      forestEdge(0.56, 0.82,  1, 65, { density: 0.40, hMin: 7, hMax: 14,
-                                       col: pineCol, col2: pineCol2, pineFrac: 0.80 }); // gap 50→65
-      forestEdge(0.56, 0.82, -1, 45, { density: 0.35, hMin: 6, hMax: 11,
+      forestEdge(0.56, 0.82,  1, 65, { density: 0.32, hMin: 6, hMax: 12,
+                                       col: pineCol, col2: pineCol2, pineFrac: 0.80 });
+      forestEdge(0.56, 0.82, -1, 48, { density: 0.26, hMin: 5, hMax: 10,
                                        col: pineCol, col2: pineCol2, pineFrac: 0.82 });
       // Thinner pine fringe on the approaches to the grandstand complex
-      forestEdge(0.88, 0.99,  1, 28, { density: 0.30, hMin: 6, hMax: 10,
+      forestEdge(0.88, 0.99,  1, 28, { density: 0.28, hMin: 5, hMax: 9,
                                        col: pineCol, col2: pineCol2, pineFrac: 0.75 });
 
       // -----------------------------------------------------------------------
@@ -196,14 +257,15 @@
       });
 
       // -----------------------------------------------------------------------
-      // MARRAM HEDGE BANDS — continuous clipped dune-grass fringe along the verge.
-      // Gap = 22 etc. means inner face is that far from road edge — safe clearance.
+      // MARRAM HEDGE BANDS — thin clipped dune-grass fringe (sand shows through).
+      // Mid-lap hedges are lower + further out so the sand-first read wins.
       // -----------------------------------------------------------------------
-      hedge(0.10, 0.50, 1,  26, 1.8, marramT);
-      hedge(0.20, 0.60, -1, 22, 1.8, marramG);
-      hedge(0.55, 0.85, 1,  24, 1.8, marramG);
-      hedge(0.65, 0.98, -1, 20, 1.8, marramT);
-      hedge(0.80, 0.95, 1,  26, 1.8, marramG);
+      hedge(0.10, 0.22, 1,  26, 1.6, marramT);
+      hedge(0.22, 0.55, 1,  32, 1.1, marramT);   // mid-lap thin
+      hedge(0.20, 0.58, -1, 28, 1.1, marramG);   // mid-lap thin
+      hedge(0.55, 0.85, 1,  26, 1.5, marramG);
+      hedge(0.65, 0.98, -1, 22, 1.5, marramT);
+      hedge(0.80, 0.95, 1,  28, 1.4, marramG);
 
       // -----------------------------------------------------------------------
       // BUSH CLUMPS — low dune shrubs between tufts and hedges
@@ -302,13 +364,45 @@
       });
 
       // -----------------------------------------------------------------------
-      // SEA GLIMPSE SLIVERS — blue peek over the dune ridge at several lap points
+      // SEA GLIMPSE SLIVERS — intermittent North Sea peeks over seaward dune crests.
+      // Placed in gaps between closer mid-lap dunes so blue flashes through at speed.
       // -----------------------------------------------------------------------
-      for (const s of [0.35, 0.42, 0.68, 0.78]) {
-        const a = anchor(K(s), 1, 190);
-        if (!onTrack(a.c[0], a.c[2], 22))
-          addBox(out, vadd(a.c, a.u, 1.2), [60, 3, 60], seaCol, [a.r, a.u, a.t]);
+      for (const [s, dist, w, h] of [
+        [0.26, 132, 42, 2.2],
+        [0.32, 148, 50, 2.6],
+        [0.38, 138, 46, 2.4],
+        [0.44, 155, 52, 2.8],
+        [0.51, 142, 44, 2.2],
+        [0.58, 160, 48, 2.5],
+        [0.66, 150, 50, 2.6],
+        [0.72, 145, 46, 2.3],
+        [0.79, 165, 48, 2.4],
+      ]) {
+        const a = anchor(K(s), 1, dist);
+        if (onTrack(a.c[0], a.c[2], 18)) continue;
+        // Slightly raised so the patch peeks over the crest silhouette
+        addBox(out, vadd(a.c, a.u, h * 0.45), [w, h, w * 0.65], seaCol, [a.r, a.u, a.t]);
       }
+      // Two reflective water peeks (groundPlane) for stronger coastal silhouette beats
+      groundPlane(K(0.40), 1, 175, [70, 1.0, 55], seaCol, true);
+      groundPlane(K(0.70), 1, 185, [65, 1.0, 50], seaCol, true);
+
+      // -----------------------------------------------------------------------
+      // GRAVEL APRONS — tan runoff at Tarzan + Scheivlak (sand-first mid-lap beat)
+      // -----------------------------------------------------------------------
+      runoffApron(K(0.040),  1, 4.5, [16, 0.32, 28], gravel);  // Tarzan outer
+      runoffApron(K(0.055), -1, 5.0, [14, 0.32, 22], gravel);  // Tarzan exit
+      runoffApron(K(0.490), -1, 5.0, [18, 0.32, 30], gravel);  // Scheivlak approach
+      runoffApron(K(0.520),  1, 5.5, [16, 0.32, 28], gravel);  // Scheivlak outer
+      runoffApron(K(0.535), -1, 5.0, [14, 0.32, 24], gravel);  // Scheivlak exit
+
+      // -----------------------------------------------------------------------
+      // BANKED-CORNER VISUAL KIT — Hugenholtz (L) + Arie Luyendyk (R)
+      // -----------------------------------------------------------------------
+      bankedKerbStrip(0.115, 0.185, -1, { saferGap: 7.2 });           // Hugenholtz outer + SAFER
+      bankedKerbStrip(0.120, 0.175,  1, { safer: false });            // Hugenholtz inner kerbs
+      bankedKerbStrip(0.885, 0.955,  1, { saferGap: 7.5 });           // Luyendyk outer + SAFER
+      bankedKerbStrip(0.890, 0.950, -1, { safer: false });            // Luyendyk inner kerbs
 
       // -----------------------------------------------------------------------
       // TRACK BARRIERS & FURNITURE

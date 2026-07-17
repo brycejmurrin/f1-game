@@ -15,7 +15,9 @@
     theme: "modern",
     lengthKm: 4.3,
     baseHW: 8,
-    pal: { zenith: [0.58, 0.74, 0.94], horizon: [0.72, 0.68, 0.60], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fogDensity: 0.0015, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
+    // Cool thin-air haze: pale blue-grey horizon + slightly denser fog so far
+    // Sierra Nevada peaks read as altitude, not flat desert glare.
+    pal: { zenith: [0.56, 0.72, 0.92], horizon: [0.68, 0.72, 0.78], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fog: [0.70, 0.74, 0.80], fogDensity: 0.0022, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
     segs: [
       { t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 },
       { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 },
@@ -24,12 +26,19 @@
     // then climbs back out through the banked Peraltada run — ~12 m real change.
     elevations: [{ s: 0.62, halfM: 260, rise: -7 }, { s: 0.74, halfM: 220, rise: 5 }],
     scenery: function (api) {
-      const { out, MAT, n, place, backdrop, groundPlane,
+      const { out, MAT, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
               building, motorhome, grandstand, billboard, tree, hedge, fence, palm, pine,
-              guardrail, tyreWall, marshalPost, tower, gantry,
+              guardrail, tyreWall, marshalPost, tower, gantry, mountain,
               cityFront, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // Track centre + radius for far horizon rings
+      let cx = 0, cz = 0;
+      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
+      cx /= n; cz /= n;
+      let rad = 0;
+      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
 
       // ── Festive Mexican palette ───────────────────────────────────────────────
       const PINK     = [0.92, 0.28, 0.55];
@@ -83,6 +92,25 @@
       // ════════════ BESPOKE FORO SOL CROWD-BOWL MODELS ════════════
       const crowdCols = [PINK, ORANGE, GREEN, [0.98, 0.82, 0.10],
                          [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24]];
+      // Continuous eye-height seat wall (baseball bowl enclosure).
+      // TODO(shared): use bowlSeatWall when available.
+      // Leaves bright entry/exit apertures by only spanning s0→s1.
+      const bowlSeatWall = (s0, s1, side, gap, opts) => {
+        opts = opts || {};
+        const h = opts.h != null ? opts.h : 5.8;
+        const thick = opts.thick != null ? opts.thick : 3.4;
+        const shell = opts.shell || CONCRETE;
+        along(s0, s1, opts.step || 7, (k, spacing) => {
+          const p = anchor(k, side, gap);
+          if (onTrack(p.c[0], p.c[2], thick / 2 + 2)) return;
+          const bv = [p.r, p.u, p.t];
+          addBox(out, vadd(p.c, p.u, h * 0.48), [thick, h * 0.95, spacing * 0.94], shell, bv);
+          // Speckled seat/crowd face toward the track
+          addBox(out, vadd(vadd(p.c, p.u, h * 0.55), p.r, -side * (thick * 0.38)),
+                 [0.55, h * 0.72, spacing * 0.88],
+                 crowdCols[Math.floor(hash(k * 11 + side) * crowdCols.length) % crowdCols.length], bv);
+        });
+      };
       // Steep raked PACKED crowd terrace on a concrete wedge (dense speckled fans)
       const crowdBank = (s, side, gap, len, rows) => {
         const k = K(s), a = anchor(k, side, gap);
@@ -172,10 +200,20 @@
       marshalPost(K(0.06), 1, 6);
 
       // ════════════════════════════════════════════════════════════════════════
-      // s=0.06  PARK TREE-LINE (right side, leafy park — Bosque de Chapultepec feel)
+      // s=0.06  PARK TREE-LINE — DRS straight Mixhuca green (park-first)
+      // Dense broadleaf corridor so the long straight reads as park before city.
       // ════════════════════════════════════════════════════════════════════════
-      hedge(0.04, 0.12, 1, 28, 3.2, TREEGRN);
-      forestEdge(0.04, 0.12, 1, 30, { density: 0.75, hMin: 8, hMax: 14, col: TREEGRN, col2: PARKGRN, pineFrac: 0.3 });
+      hedge(0.04, 0.14, 1, 22, 3.2, TREEGRN);
+      hedge(0.04, 0.12, -1, 28, 2.8, PARKGRN);
+      forestEdge(0.04, 0.14, 1, 26, { density: 0.92, hMin: 8, hMax: 15, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
+      forestEdge(0.04, 0.14, -1, 34, { density: 0.72, hMin: 7, hMax: 13, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
+      // Second rank behind the near treeline (depth without city walls)
+      forestEdge(0.05, 0.13, 1, 48, { density: 0.55, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.35 });
+
+      // Mid-lap park densify (T1 → Horquilla approach) — Mixhuca before skyline
+      forestEdge(0.14, 0.30, 1, 20, { density: 0.78, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.14, 0.28, -1, 44, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      forestEdge(0.30, 0.48, 1, 24, { density: 0.62, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.20 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.12  TURN 1 GRANDSTAND
@@ -193,33 +231,33 @@
       kerb(0.20, -1, 7); kerb(0.205, 1, 7);
 
       // ════════════════════════════════════════════════════════════════════════
-      // MEXICO CITY URBAN SKYLINE — continuous aligned cityfront, lit windows
-      // Two depth bands: near facade + mid-distance backdrop buildings
+      // MEXICO CITY URBAN SKYLINE — PUSHED BACK (park-first composition)
+      // Near cityFront thinned + set well beyond Mixhuca green so sprawl reads
+      // as backdrop, not street canyon. Stadium approach left mostly open.
       // ════════════════════════════════════════════════════════════════════════
-      // Near facade: aligned street wall
-      cityFront(0.22, 0.50, -1, 28, {
-        minH: 18, maxH: 52, depth: 22, lit: true,
+      cityFront(0.24, 0.48, -1, 72, {
+        minH: 14, maxH: 36, depth: 18, lit: true,
         palette: [[0.64, 0.62, 0.58], [0.70, 0.68, 0.62], [0.58, 0.56, 0.54], [0.66, 0.60, 0.56]],
-        windowCol: [0.96, 0.88, 0.58], step: 22
+        windowCol: [0.96, 0.88, 0.58], step: 38
       });
-      cityFront(0.58, 0.72, -1, 28, {
-        minH: 14, maxH: 40, depth: 20, lit: true,
+      cityFront(0.58, 0.68, -1, 80, {
+        minH: 12, maxH: 30, depth: 16, lit: true,
         palette: [[0.62, 0.60, 0.58], [0.68, 0.64, 0.60], [0.56, 0.54, 0.52], [0.60, 0.58, 0.56]],
-        windowCol: [0.94, 0.84, 0.55], step: 22
+        windowCol: [0.94, 0.84, 0.55], step: 40
       });
-      cityFront(0.30, 0.46, 1, 28, {
-        minH: 16, maxH: 44, depth: 20, lit: true,
+      cityFront(0.32, 0.46, 1, 78, {
+        minH: 12, maxH: 32, depth: 16, lit: true,
         palette: [[0.60, 0.62, 0.66], [0.66, 0.64, 0.60], [0.56, 0.58, 0.62], [0.68, 0.62, 0.58]],
-        windowCol: [0.90, 0.82, 0.52], step: 24
+        windowCol: [0.90, 0.82, 0.52], step: 42
       });
 
-      // Mid-distance backdrop skyline — taller buildings further back
-      every(32, (k) => {
+      // Mid-distance backdrop skyline — further back, sparser (city second)
+      every(42, (k) => {
         for (const side of [-1, 1]) {
-          const d = 200 + hash(k * 82 + side) * 120 + (k & 1) * 20;
-          const h = 30 + hash(k * 83 + side) * 50;
-          const tone = 0.60 + hash(k * 84 + side) * 0.10;
-          backdrop(k, side, d, [100, h, 45], [tone, tone * 0.99, tone * 0.97]);
+          const d = 280 + hash(k * 82 + side) * 140 + (k & 1) * 24;
+          const h = 26 + hash(k * 83 + side) * 40;
+          const tone = 0.62 + hash(k * 84 + side) * 0.10;
+          backdrop(k, side, d, [100, h, 45], [tone * 0.98, tone, tone * 1.02]);
         }
       });
 
@@ -240,9 +278,10 @@
         building(k, -1, 28 + hash(k) * 32, 24, 9 + hash(k * 3) * 5, 20,
                  { wall: [0.86, 0.86, 0.84], window: [0.40, 0.46, 0.50], floor: 2 });
       }
-      // Park trees both sides of the sports facility section
-      forestEdge(0.50, 0.62, 1, 18, { density: 0.65, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
-      forestEdge(0.50, 0.62, -1, 50, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
+      // Park trees both sides of the sports facility section — denser toward stadium
+      forestEdge(0.48, 0.68, 1, 16, { density: 0.82, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.48, 0.68, -1, 48, { density: 0.68, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      forestEdge(0.62, 0.70, 1, 22, { density: 0.70, hMin: 8, hMax: 14, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
 
       // Palacio de los Deportes — the landmark copper geodesic dome that sits in
       // this very sports park. A wide, low hyperbolic-paraboloid roof clad in
@@ -281,50 +320,57 @@
       // ════════════════════════════════════════════════════════════════════════
       // HERO: FORO SOL BASEBALL STADIUM (s≈0.72–0.88)
       //
-      // The Autódromo Hermann Rodríguez track passes THROUGH the Foro Sol
-      // baseball/concert stadium. Grandstands rise on BOTH sides of the track
-      // forming a complete enclosed bowl.
-      //
-      // Implementation: three nested grandstand() tiers per side, stacked
-      // outward using increasing gap values. grandstand() uses groundYAt()
-      // internally so tiers stay correctly grounded on the elevation dip.
-      //
-      //   Inner tier:  gap=10  → shell at gap+7.5=17.5 m from road edge
-      //   Middle tier: gap=26  → shell at gap+7.5=33.5 m
-      //   Outer tier:  gap=44  → shell at gap+7.5=51.5 m (stadium rim)
-      //
-      // Floodlight masts ring the rim at dist~56 m above the outer tier.
+      // Enclosed baseball bowl: continuous eye-height seat walls along the
+      // interior (s 0.73–0.86), bright ENTRY gap (~0.70–0.725) and EXIT gap
+      // (~0.86–0.89), green/dirt bowl floor between track and stands (off
+      // tarmac), nested grandstand tiers + rim caps behind the apertures.
       // ════════════════════════════════════════════════════════════════════════
 
-      // FORO SOL — inner tier (closest to track, most visible crowd)
-      // len reduced 340→180 to prevent roof/shell overhang on curved stadium section
-      grandstand(0.72, -1, 10, 180, CONCRETE, fiesta[0]);   // pink crowd
-      grandstand(0.72,  1, 10, 180, CONCRETE, fiesta[1]);   // orange crowd
-
-      // Middle tier — wider shell, different crowd colour for visual variety
-      grandstand(0.72, -1, 26, 180, [0.66, 0.64, 0.62], fiesta[2]);  // green
-      grandstand(0.72,  1, 26, 180, [0.66, 0.64, 0.62], fiesta[3]);  // yellow
-
-      // Outer tier — tallest, forms stadium rim silhouette
-      grandstand(0.72, -1, 44, 180, [0.58, 0.56, 0.54], SEATS);
-      grandstand(0.72,  1, 44, 180, [0.58, 0.56, 0.54], SEATS);
-
-      // Bespoke steep PACKED speckled upper terraces cresting the rim (both sides,
-      // stepped along the stadium run) — turns the tiers into a wall of close fans.
-      // len reduced 88→60 to prevent tangential overhang into curved track sections
-      for (const s of [0.735, 0.775, 0.815, 0.855]) {
-        crowdBank(s, -1, 60, 60, 8);
-        crowdBank(s,  1, 60, 60, 8);
+      // Bowl floor — former baseball field / concert pad beside the corridor.
+      // gap kept large enough that rejBox/onTrack never clips the racing line.
+      const FIELD = [0.30, 0.44, 0.24];
+      const DIRT  = [0.50, 0.40, 0.28];
+      for (const s of [0.74, 0.77, 0.80, 0.83]) {
+        groundPlane(K(s), -1, 11, [22, 0.55, 36], s < 0.79 ? FIELD : DIRT);
+        groundPlane(K(s),  1, 11, [22, 0.55, 36], s < 0.79 ? DIRT : FIELD);
       }
-      // Curved crowd END-CAPS closing the horseshoe at the entry and exit ends —
-      // wrap around behind the track so the bowl reads as fully enclosed.
-      foroSolCap(0.715, -1, 66, Math.PI, 7, 24);
-      foroSolCap(0.715,  1, 66, Math.PI, 7, 24);
-      foroSolCap(0.875, -1, 66, Math.PI, 7, 24);
-      foroSolCap(0.875,  1, 66, Math.PI, 7, 24);
+      // Wider infield pad at mid-bowl (off tarmac)
+      groundPlane(K(0.785), -1, 28, [40, 0.6, 48], FIELD);
+      groundPlane(K(0.785),  1, 28, [40, 0.6, 48], DIRT);
 
-      // Foro Sol floodlight masts — ring the outer rim, tall enough to overtop
-      for (const s of [0.73, 0.76, 0.79, 0.82, 0.85, 0.87]) {
+      // Continuous eye-height seat wall — BOTH sides, spanning the bowl only
+      // (entry/exit apertures left open so the corridor brightens in/out)
+      bowlSeatWall(0.73, 0.86, -1, 8,  { h: 6.2, thick: 3.6, shell: CONCRETE, step: 10 });
+      bowlSeatWall(0.73, 0.86,  1, 8,  { h: 6.2, thick: 3.6, shell: CONCRETE, step: 10 });
+      // Upper continuous bank behind the eye wall (taller enclosure silhouette)
+      bowlSeatWall(0.735, 0.855, -1, 18, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 12 });
+      bowlSeatWall(0.735, 0.855,  1, 18, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 12 });
+
+      // Nested grandstand tiers at mid-bowl + rim only — seat walls carry the
+      // continuous enclosure; keep shell count modest for the vert budget.
+      for (const s of [0.76, 0.82]) {
+        grandstand(s, -1, 12, 70, CONCRETE, fiesta[0]);
+        grandstand(s,  1, 12, 70, CONCRETE, fiesta[1]);
+        grandstand(s, -1, 28, 70, [0.66, 0.64, 0.62], fiesta[2]);
+        grandstand(s,  1, 28, 70, [0.66, 0.64, 0.62], fiesta[3]);
+        grandstand(s, -1, 46, 70, [0.58, 0.56, 0.54], SEATS);
+        grandstand(s,  1, 46, 70, [0.58, 0.56, 0.54], SEATS);
+      }
+
+      // Packed upper terraces cresting the rim (both sides)
+      for (const s of [0.76, 0.82]) {
+        crowdBank(s, -1, 58, 48, 7);
+        crowdBank(s,  1, 58, 48, 7);
+      }
+      // Curved crowd END-CAPS behind the apertures — close the horseshoe
+      // WITHOUT filling the bright entry/exit gaps on the driving line.
+      foroSolCap(0.715, -1, 72, Math.PI * 0.85, 6, 16);
+      foroSolCap(0.715,  1, 72, Math.PI * 0.85, 6, 16);
+      foroSolCap(0.875, -1, 72, Math.PI * 0.85, 6, 16);
+      foroSolCap(0.875,  1, 72, Math.PI * 0.85, 6, 16);
+
+      // Foro Sol floodlight masts — ring the outer rim
+      for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
         lightMast(K(s), -1, 58, 52);
         lightMast(K(s),  1, 58, 52);
       }
@@ -333,9 +379,8 @@
       {
         const k = K(0.80);
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 90);  // pushed out 62→76→90 m to fully clear wide jumbotron
+          const a = anchor(k, side, 90);
           if (!onTrack(a.c[0], a.c[2], 25)) {
-            // Big jumbotron screen (narrowed from 36/38 to 32/34 to reduce overhang)
             addBox(out, vadd(a.c, a.u, 28), [32, 14, 2.0], [0.04, 0.04, 0.06],  [a.r, a.u, a.t]);
             addBox(out, vadd(a.c, a.u, 28), [34, 15, 1.0], [0.24, 0.26, 0.30],  [a.r, a.u, a.t]);
           }
@@ -343,27 +388,22 @@
       }
 
       // Festive banners inside the bowl — papel picado at trackside level
-      for (const s of [0.72, 0.74, 0.77, 0.80, 0.83, 0.86]) {
+      for (const s of [0.74, 0.77, 0.80, 0.83]) {
         banners(s, -1, 9); banners(s, 1, 9);
       }
 
-      // Interior fencing at trackside (safety fence inside stadium)
-      fence(0.72, 0.88, -1, 7, 3.8, [0.82, 0.84, 0.88]);
-      fence(0.72, 0.88,  1, 7, 3.8, [0.82, 0.84, 0.88]);
+      // Interior fencing at trackside (safety fence inside stadium) — bowl only
+      fence(0.73, 0.86, -1, 7, 3.8, [0.82, 0.84, 0.88]);
+      fence(0.73, 0.86,  1, 7, 3.8, [0.82, 0.84, 0.88]);
       tyreWall(0.755, 0.775, -1, 5, ORANGE);
       tyreWall(0.795, 0.815,  1, 5, PINK);
       kerb(0.76, -1, 8); kerb(0.80, 1, 8);
 
       // Mexican flag colours on the stadium outer wall fascia (visible from outside)
-      along(0.72, 0.88, 18, (k) => {
-        const s = k / n;
+      along(0.73, 0.86, 18, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 58);
           if (onTrack(a.c[0], a.c[2], 4)) continue;
-          // Mexican flag: three vertical colour bands SIDE BY SIDE along the
-          // wall (green / white / red). Offset along the tangent so they read as
-          // a striped flag — the old code stacked all three at the same point,
-          // z-fighting into a single colour.
           const fb = vadd(a.c, a.u, 11);
           const bands = [[-1, [0.10, 0.58, 0.26]], [0, [0.94, 0.94, 0.92]], [1, [0.86, 0.12, 0.16]]];
           for (const [j, col] of bands) addBox(out, vadd(fb, a.t, j * 2.4), [1.0, 20, 2.3], col, [a.r, a.u, a.t]);
@@ -371,9 +411,11 @@
       });
 
       // ════════════════════════════════════════════════════════════════════════
-      // s=0.88  FORO SOL EXIT — transition gap back to open track
+      // s=0.88  FORO SOL EXIT — bright aperture back to open track
       // ════════════════════════════════════════════════════════════════════════
       billboard(K(0.88), 1, 8, 14, 6, fiesta[1]);
+      // Soft park trees just past the exit gap (not walling it shut)
+      forestEdge(0.89, 0.94, -1, 28, { density: 0.55, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.2 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.92  PERALTADA / ESTADIO STAND
@@ -493,35 +535,41 @@
       }
 
       // ════════════════════════════════════════════════════════════════════════
-      // DISTANT HAZED SKYLINE RING (high-altitude Mexico City, ~2285 m)
-      // Hazy blue-grey tone to suggest thin air / urban smog
+      // SIERRA NEVADA — far volcano / mountain ring + cool thin-air haze
+      // Popocatépetl / Iztaccíhuatl silhouette on the high-altitude horizon.
+      // Sparse, far, cool blue-grey rock under denser fog (see pal.fogDensity).
       // ════════════════════════════════════════════════════════════════════════
-      every(32, (k) => {
-        for (const side of [-1, 1]) {
-          const d = 380 + hash(k * 82 + side) * 130 + (k & 1) * 25;
-          const h = 32 + hash(k * 83 + side) * 40;
-          const tone = 0.63 + hash(k * 84 + side) * 0.11;
-          backdrop(k, side, d, [110, h, 50], [tone, tone * 0.99, tone * 0.98]);
+      for (const [extra, wMin, hMin, count, rock, snowL] of [
+        [980,  360, 150, 16, [0.50, 0.55, 0.62], 0.74],
+        [1260, 460, 210, 12, [0.56, 0.60, 0.66], 0.68],
+      ]) {
+        const ring = rad + extra;
+        for (let i = 0; i < count; i++) {
+          const a = (i + (hash(i * 5 + extra) - 0.5) * 0.45) / count * 6.2832;
+          const hv = hash(i * 7 + extra), j = hash(i * 11 + extra);
+          const rr = ring - wMin * 0.12 + hash(i * 17 + extra) * wMin * 0.22;
+          mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin,
+                   wMin + hv * 150, hMin + j * 110,
+                   { seg: 6, seed: i * 13 + extra, snowline: snowL, rock,
+                     forest: [0.40, 0.46, 0.48], snow: [0.88, 0.90, 0.94] });
         }
-      });
+      }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // MEXICO CITY SKYLINE — distributed mid-distance landmark towers
-      // ════════════════════════════════════════════════════════════════════════
-      for (let i = 0; i < 16; i++) {
-        const f = i / 16;
+      // Mid/far city tower ring — thinned + pushed so mountains win the horizon
+      for (let i = 0; i < 10; i++) {
+        const f = i / 10;
         const k = K(f);
         const side = i % 2 === 0 ? -1 : 1;
-        const d = 260 + hash(i * 29) * 140 + (i % 3) * 30;
-        const h = 38 + hash(i * 37) * 72;
-        const w = 20 + hash(i * 53) * 18;
+        const d = 380 + hash(i * 29) * 160 + (i % 3) * 30;
+        const h = 32 + hash(i * 37) * 58;
+        const w = 18 + hash(i * 53) * 16;
         const p = anchor(k, side, d);
         if (!onTrack(p.c[0], p.c[2], 20)) {
-          const tone = 0.58 + hash(i * 41) * 0.12;
+          const tone = 0.60 + hash(i * 41) * 0.10;
           building(k, side, d - w / 2, w, h, w,
-            { wall: [tone, tone * 0.99, tone * 0.98],
+            { wall: [tone * 0.98, tone, tone * 1.02],
               window: [tone * 0.68, tone * 0.72, tone * 0.82],
-              lit: true, windowCol: [0.94, 0.84, 0.54], floor: 8 });
+              lit: true, windowCol: [0.94, 0.84, 0.54], floor: 7 });
         }
       }
     },

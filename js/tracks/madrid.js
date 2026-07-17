@@ -38,7 +38,8 @@
               mountain, grandstand, building, motorhome, tower, tree, bush, hedge,
               billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
               addBox, addCyl, addCone, addPrism, addPyramid, addFrustum,
-              anchor, vadd, cityFront, forestEdge, backdrop, groundPlane } = api;
+              anchor, vadd, cityFront, backdrop, groundPlane,
+              floodMast, underpassPortal } = api;
 
       // ── PALETTE ──────────────────────────────────────────────────────────────
       // Madrid: bright dry Mediterranean day. Warm whites, pale stone, blue sky,
@@ -162,38 +163,42 @@
         }
       }
 
-      // ── (3) LA MONUMENTAL: the HERO banked stadium bowl (s≈0.75). ───────────
-      // Tall tiered grandstands wrapping ~270° on both sides, white shells,
-      // plus a ring of modern floodlight towers (every 3 steps to avoid clipping).
+      // ── (3) LA MONUMENTAL: HERO continuous white stadium bowl (s≈0.68–0.84). ─
+      // Nested white grandstand tiers wrap the banked curve so it reads as a
+      // modern bullring envelope (official MADRING stadium, not Old City brick).
+      // Long shells (Mexico Foro Sol pattern) keep the continuous silhouette
+      // without stepping a short stand at every node. Flood masts ring the rim;
+      // the Las Ventas brick arcade stays thin and set well behind.
       const kmono = Math.round(n * 0.75) % n;
       const step = Math.max(1, Math.round(n / 54));
-      for (let i = -13; i <= 13; i++) {
-        const k = ((kmono + i * step) % n + n) % n;
-        grandstand(k / n, 1, 7, 30, [0.88, 0.89, 0.92], [0.50, 0.30, 0.30]);
-        grandstand(k / n, -1, 9, 30, [0.88, 0.89, 0.92], [0.52, 0.32, 0.32]);
-      }
-      // Floodlight towers (every 3 steps = ~18 m spacing to avoid crowding)
-      for (let i = -12; i <= 12; i += 3) {
-        const k = ((kmono + i * step) % n + n) % n;
+      const BOWL_W = [0.90, 0.91, 0.93];
+      const BOWL_CROWD = [0.48, 0.28, 0.28];
+      // Continuous envelope: staggered long shells along the ~270° bank.
+      for (const s of [0.70, 0.73, 0.76, 0.79, 0.82]) {
         for (const side of [1, -1]) {
-          const A = anchor(k, side, hw[k] + 50);
-          const base = A.c;
-          if (onTrack(base[0], base[2], 3)) continue;
-          const poleTop = vadd(base, A.u, 46);
-          addCyl(out, vadd(base, A.u, 23), 0.85, 46, LAMPGREY, 6, [A.r, A.u, A.t]);
-          addBox(out, vadd(poleTop, A.u, 1.5), [10, 2.2, 2.4], [0.28, 0.30, 0.34], [A.r, A.u, A.t]);
-          for (let g = -1; g <= 1; g++)
-            addBox(out, vadd(vadd(poleTop, A.u, 1.8), A.r, g * 3.0),
-                   [1.9, 1.3, 1.5], AMBER, [A.r, A.u, A.t]);
-          addBox(out, vadd(base, A.u, 0.05), [14, 0.12, 14], [0.88, 0.82, 0.68], [A.r, A.u, A.t]);
+          grandstand(s, side, 8,  72, BOWL_W, BOWL_CROWD);           // inner
+          grandstand(s, side, 24, 72, [0.88, 0.89, 0.91], BOWL_CROWD); // mid
+          grandstand(s, side, 42, 68, WHITE, BOWL_CROWD);              // rim
         }
       }
-      // Stadium backdrop — tall grandstand building masses behind the bowl using
-      // backdrop() so they get automatic window bands and a parapet roofline.
+      // End-caps close the horseshoe at entry / exit.
+      for (const s of [0.685, 0.835]) {
+        for (const side of [1, -1]) {
+          grandstand(s, side, 14, 48, BOWL_W, BOWL_CROWD);
+          grandstand(s, side, 36, 48, WHITE, BOWL_CROWD);
+        }
+      }
+      // Floodlight ring on the outer rim (cool-white dual-arm masts).
+      for (let i = -12; i <= 12; i += 3) {
+        const k = ((kmono + i * step) % n + n) % n;
+        floodMast(k,  1, 56, { h: 42, cool: true, pool: true });
+        floodMast(k, -1, 58, { h: 42, cool: true, pool: true });
+      }
+      // Soft white backdrop masses behind the rim (parapet / concourse).
       for (let i = -5; i <= 5; i += 2) {
         const k = ((kmono + i * step) % n + n) % n;
         for (const side of [1, -1]) {
-          backdrop(k, side, 64, [36, 48, 8], [0.86, 0.87, 0.90]);
+          backdrop(k, side, 72, [40, 36, 10], [0.90, 0.91, 0.93]);
         }
       }
 
@@ -316,9 +321,9 @@
         addBox(out, vadd(A.c, A.u, 0.05), [4, 0.1, 4], [0.86, 0.80, 0.64], [A.r, A.u, A.t]);
       }
 
-      // ── (8) URBAN STREET CONTEXT (s≈0.10–0.75) ──────────────────────────────
-      // cityFront() for coherent aligned street-walls, plus backdrop() slabs for
-      // the mid-distance city silhouette behind the facades.
+      // ── (8) URBAN STREET CONTEXT (s≈0.10–0.68) ──────────────────────────────
+      // cityFront() for coherent aligned street-walls on STREET sectors only.
+      // Post-Monumental (s≈0.82–0.88) stays open as Valdebebas pelouse — no facade.
       //
       // Sector A: turning complex after T1–T3 (s≈0.10–0.28)
       cityFront(0.10, 0.28,  1, 32, {
@@ -342,23 +347,23 @@
         palette: [[0.74, 0.72, 0.68], OFFWHITE, [0.80, 0.78, 0.74], [0.70, 0.68, 0.64]],
         lit: false, step: 20,
       });
-      // Sector C: approach to La Monumental bowl (s≈0.55–0.72)
-      cityFront(0.55, 0.70,  1, 38, {
-        minH: 18, maxH: 40, depth: 24,
+      // Sector C: approach to La Monumental — stop short so the bowl + pelouse
+      // read as open permanent circuit, not continuous canyon.
+      cityFront(0.55, 0.66,  1, 38, {
+        minH: 18, maxH: 36, depth: 22,
         palette: [[0.66, 0.68, 0.72], [0.72, 0.70, 0.66], [0.64, 0.66, 0.70], [0.78, 0.76, 0.72]],
         lit: false, step: 24,
       });
-      cityFront(0.55, 0.70, -1, 36, {
-        minH: 16, maxH: 36, depth: 22,
+      cityFront(0.55, 0.66, -1, 36, {
+        minH: 16, maxH: 32, depth: 20,
         palette: [[0.70, 0.68, 0.64], [0.62, 0.64, 0.68], [0.76, 0.74, 0.70], [0.60, 0.62, 0.66]],
         lit: false, step: 22,
       });
 
-      // Mid-distance city backdrop slabs — seen above the street facades, give
-      // depth to the urban canyon. backdrop() auto-adds window bands + parapet.
+      // Mid-distance city backdrop slabs — street sectors only (not pelouse).
       for (let i = 0; i < n; i += Math.max(1, Math.round(n / 18))) {
         const f = i / n;
-        const inUrban = (f > 0.10 && f < 0.28) || (f > 0.30 && f < 0.48) || (f > 0.55 && f < 0.72);
+        const inUrban = (f > 0.10 && f < 0.28) || (f > 0.30 && f < 0.48) || (f > 0.55 && f < 0.66);
         if (!inUrban) continue;
         for (const side of [1, -1]) {
           const bh = 40 + hash(i * 7 + side) * 40;
@@ -391,23 +396,55 @@
         }
       }
 
-      // ── (10) TRACKSIDE BARRIERS & FURNITURE ─────────────────────────────────
+      // ── (10) TRACKSIDE BARRIERS — hybrid street vs permanent rhythm ─────────
+      // Street sectors: continuous pale concrete walls. Permanent / Monumental /
+      // Valdebebas: open guardrail + runoff (no canyon walls).
       wall(0.005, 0.087,  1, 1.4, 1.15, CONCRETE, 0.48);
       wall(0.005, 0.087, -1, 1.4, 1.15, CONCRETE, 0.48);
-      wall(0.30,  0.40,   1, 1.5, 1.35, CONCRETE, 0.5);
-      wall(0.30,  0.40,  -1, 1.5, 1.35, CONCRETE, 0.5);
-      wall(0.47,  0.54,   1, 1.5, 1.4, [0.70, 0.70, 0.72], 0.58);
+      wall(0.10,  0.28,   1, 1.5, 1.25, CONCRETE, 0.48);
+      wall(0.10,  0.28,  -1, 1.5, 1.25, CONCRETE, 0.48);
+      wall(0.30,  0.48,   1, 1.5, 1.35, CONCRETE, 0.5);
+      wall(0.30,  0.48,  -1, 1.5, 1.35, CONCRETE, 0.5);
       fence(0.005, 0.087,  1, 3.0, 2.9, [0.62, 0.64, 0.66]);
-      fence(0.30,  0.40,  -1, 3.0, 2.9, [0.62, 0.64, 0.66]);
-      fence(0.47,  0.54,   1, 3.0, 2.9, [0.62, 0.64, 0.66]);
-      guardrail(0.54, 0.73,  1, 4.8, [0.80, 0.80, 0.82]);
-      guardrail(0.54, 0.73, -1, 4.8, [0.80, 0.80, 0.82]);
+      fence(0.30,  0.48,  -1, 3.0, 2.9, [0.62, 0.64, 0.66]);
+      // Permanent loop: open armco into Monumental + post-bowl pelouse
+      guardrail(0.54, 0.86,  1, 4.8, [0.80, 0.80, 0.82]);
+      guardrail(0.54, 0.86, -1, 4.8, [0.80, 0.80, 0.82]);
       guardrail(0.86, 0.97, -1, 4.8, [0.80, 0.80, 0.82]);
       tyreWall(0.075, 0.10,   1, 3, [0.90, 0.30, 0.20]);
       tyreWall(0.133, 0.162, -1, 3, [0.20, 0.40, 0.85]);
       tyreWall(0.50,  0.53,   1, 3, [0.95, 0.80, 0.15]);
       tyreWall(0.70,  0.75,   1, 4, [0.90, 0.30, 0.20]);
       tyreWall(0.135, 0.165, -1, 3, [0.95, 0.75, 0.15]);
+
+      // ── (10b) EL BÚNKER retaining wall + MOTORWAY bridge landmarks ──────────
+      // El Búnker: tall grey retaining face on the climb/drop (elev crest ~0.60).
+      for (let f = 0.52; f <= 0.62; f += 0.018) {
+        const k = Math.round(f * n) % n;
+        const A = anchor(k, 1, hw[k] + 3.2);
+        if (onTrack(A.c[0], A.c[2], 4)) continue;
+        const h = 5.5 + hash(k * 3) * 3.5;
+        addBox(out, vadd(A.c, A.u, h * 0.5), [1.4, h, 18], CONCRETE, [A.r, A.u, A.t]);
+        // Cap beam + faint bunker-slot shadow band
+        addBox(out, vadd(A.c, A.u, h + 0.25), [1.8, 0.45, 18], [0.62, 0.63, 0.65], [A.r, A.u, A.t]);
+        addBox(out, vadd(vadd(A.c, A.u, h * 0.55), A.r, -0.55),
+               [0.25, 0.9, 14], [0.42, 0.43, 0.45], [A.r, A.u, A.t]);
+      }
+      // Companion low retaining stub on the inside of the drop.
+      wall(0.54, 0.60, -1, 2.2, 2.8, [0.70, 0.70, 0.72], 0.7);
+
+      // Motorway overpass at the T1 chicane — cars pass under a pale deck.
+      underpassPortal(0.085, {
+        h: 6.2, thick: 1.6, depth: 22,
+        col: [0.58, 0.59, 0.61], pierGap: 1.8, pierW: 2.0,
+      });
+      // Approach embankment slabs either side of the portal (motorway shoulders).
+      for (const [frac, side] of [[0.075, 1], [0.075, -1], [0.095, 1], [0.095, -1]]) {
+        const k = Math.round(frac * n) % n;
+        const A = anchor(k, side, hw[k] + 14);
+        if (onTrack(A.c[0], A.c[2], 8)) continue;
+        addBox(out, vadd(A.c, A.u, 2.2), [10, 4.4, 16], [0.66, 0.66, 0.68], [A.r, A.u, A.t]);
+      }
 
       // ── (11) BILLBOARDS & MARSHAL POSTS ────────────────────────────────────
       const adCols = [[0.90, 0.25, 0.20], [0.15, 0.45, 0.85], [0.95, 0.78, 0.15],
@@ -429,66 +466,53 @@
         marshalPost(k, side, 4);
       }
 
-      // ── (12) URBAN GREENERY: clipped hedges, boulevard trees, forestEdge ──
-      hedge(0.09, 0.20, -1, 8,  1.6, [0.30, 0.42, 0.26]);
-      hedge(0.22, 0.32,  1, 9,  1.6, [0.30, 0.42, 0.26]);
-      hedge(0.85, 0.96,  1, 10, 1.6, [0.30, 0.42, 0.26]);
-      hedge(0.10, 0.25, -1, 8,  1.8, [0.32, 0.44, 0.28]);
-      hedge(0.32, 0.42,  1, 10, 1.8, [0.32, 0.44, 0.28]);
-      hedge(0.54, 0.62, -1, 9,  1.7, [0.32, 0.44, 0.28]);
+      // ── (12) URBAN GREENERY: clipped hedges + sparse boulevard trees ────────
+      // Castilian identity = straw scrub, not lush woodland. No forestEdge.
+      hedge(0.09, 0.20, -1, 8,  1.4, OLIVE);
+      hedge(0.22, 0.32,  1, 9,  1.4, OLIVE);
+      hedge(0.85, 0.96,  1, 10, 1.4, OLIVE);
 
-      // forestEdge() in open sections between urban zones and the stadium.
-      forestEdge(0.48, 0.55, -1, 18, {
-        density: 0.5, hMin: 6, hMax: 11,
-        col: [0.30, 0.42, 0.24], col2: [0.36, 0.46, 0.28], pineFrac: 0.3,
-      });
-      forestEdge(0.72, 0.82,  1, 22, {
-        density: 0.45, hMin: 7, hMax: 13,
-        col: [0.28, 0.40, 0.22], col2: [0.34, 0.44, 0.26], pineFrac: 0.35,
-      });
-      forestEdge(0.72, 0.82, -1, 20, {
-        density: 0.4, hMin: 6, hMax: 12,
-        col: [0.30, 0.42, 0.24], col2: [0.32, 0.44, 0.26], pineFrac: 0.3,
-      });
-
-      // Boulevard plane trees in urban zones
-      for (let i = 0; i < n; i += 5) {
+      // Boulevard plane trees in street zones only (sparse)
+      for (let i = 0; i < n; i += 6) {
         const f = i / n;
-        const inStreet = (f < 0.20) || (f > 0.28 && f < 0.55) || (f > 0.85);
+        const inStreet = (f < 0.20) || (f > 0.28 && f < 0.50);
         if (!inStreet) continue;
         for (const side of [-1, 1]) {
-          if (hash(i * 13 + side) > 0.52) continue;
+          if (hash(i * 13 + side) > 0.45) continue;
           const d = 13 + hash(i * 7 + side) * 7;
           if (onTrack(px[i], pz[i], 16)) continue;
-          tree(i, side, d, 6.5 + hash(i * 5) * 3.5, [0.28, 0.42, 0.24]);
+          tree(i, side, d, 6.0 + hash(i * 5) * 3.0, OLIVE);
         }
       }
 
       // ── (13) DRY CASTILIAN PLAINS: straw-tan open ground + sparse scrub ─────
-      // The defining Madrid contrast is clean white IFEMA boxes against WARM
-      // straw-tan dry plain — not green grass. Lay broad flat straw slabs over
-      // the open stretches (airport plain s≈0.15-0.28, Valdebebas edge s≈0.88-
-      // 0.98) so the ground reads Castilian, then dot it with dry scrub.
-      for (const [f0, f1, side] of [[0.15, 0.28, -1], [0.88, 0.98, -1], [0.20, 0.26, 1]]) {
-        for (let f = f0; f < f1; f += 0.03) {
+      // Defining contrast: clean white IFEMA halls against WARM straw plains.
+      // Broad slabs on open stretches + post-Monumental pelouse (s≈0.82–0.88).
+      for (const [f0, f1, side, gap] of [
+        [0.14, 0.30, -1, 22], [0.18, 0.28,  1, 28],
+        [0.48, 0.56, -1, 26], [0.48, 0.54,  1, 30],
+        [0.82, 0.90, -1, 20], [0.82, 0.88,  1, 24],
+        [0.90, 0.98, -1, 22], [0.92, 0.98,  1, 36],
+      ]) {
+        for (let f = f0; f < f1; f += 0.025) {
           const k = ((Math.round(f * n) % n) + n) % n;
-          const A = anchor(k, side, 40);
-          if (onTrack(A.c[0], A.c[2], 24)) continue;
-          groundPlane(k, side, 24, [70, 90], hash(k * 7) < 0.5 ? STRAW : STRAW2);
+          const A = anchor(k, side, gap + 16);
+          if (onTrack(A.c[0], A.c[2], 20)) continue;
+          groundPlane(k, side, gap, [78, 100], hash(k * 7) < 0.5 ? STRAW : STRAW2);
         }
       }
       for (let i = 0; i < n; i += 4) {
         for (const side of [-1, 1]) {
-          if (hash(i * 31 + side) > 0.58) continue;
+          if (hash(i * 31 + side) > 0.55) continue;
           const d = 72 + hash(i * 17 + side) * 95;
           const k = ((i % n) + n) % n;
           const A = anchor(k, side, d);
           if (onTrack(A.c[0], A.c[2], 20)) continue;
           const r = hash(i * 41 + side);
-          // Mostly dry straw-toned scrub; a minority stays olive for variety.
-          const col = r < 0.62 ? [0.62, 0.58, 0.40] : OLIVE;
-          if (r < 0.50) bush(k, side, d, col);
-          else if (r < 0.78) tree(k, side, d, 5 + hash(i * 53) * 4, col);
+          // Mostly dry straw-toned scrub; minority olive for variety.
+          const col = r < 0.70 ? [0.62, 0.58, 0.40] : OLIVE;
+          if (r < 0.55) bush(k, side, d, col);
+          else if (r < 0.78) tree(k, side, d, 4.5 + hash(i * 53) * 3.5, col);
         }
       }
 
@@ -516,33 +540,26 @@
         }
       }
 
-      // ── (16) BESPOKE: LA MONUMENTAL ARENA ARCADE — a Las Ventas-inspired
-      //    neo-Mudéjar brick facade ring wrapping the banked stadium bowl:
-      //    a two-tier arcade of horseshoe arches behind the white grandstands.
-      //    LOCAL model, curved to follow the corner. ─────────────────────────
+      // ── (16) THIN Las Ventas arcade — set well behind the white bowl so the
+      //    modern stadium silhouette wins; brick is a secondary Las Ventas nod. ─
       const BRICK  = [0.60, 0.33, 0.25], BRICK_L = [0.68, 0.41, 0.31];
       const ARC_LANTERN = [0.98, 0.80, 0.42];
       function archBay(k, side, gap) {
         const A = anchor(k, side, gap);
         const b = [A.r, A.u, A.t], c = A.c;
-        if (onTrack(c[0], c[2], 6)) return;
-        // Lower pier + arcade lintel (arch head suggested by a pointed prism).
+        if (onTrack(c[0], c[2], 8)) return;
+        // Slim pier + short arcade lintel (half the old height).
         out._mat = MAT.BRICK;
-        addBox(out, vadd(c, A.u, 6.5), [2.4, 13, 2.4], BRICK, b);
-        addBox(out, vadd(c, A.u, 13.4), [2.6, 1.6, 7.2], BRICK_L, b);
-        addPrism(out, vadd(c, A.u, 14.9), [2.6, 1.5, 7.2], BRICK, b);
-        // Warm arcade-glow strip glimpsed through each opening.
+        addBox(out, vadd(c, A.u, 4.0), [1.6, 8, 1.6], BRICK, b);
+        addBox(out, vadd(c, A.u, 8.4), [1.8, 1.0, 5.0], BRICK_L, b);
+        addPrism(out, vadd(c, A.u, 9.4), [1.8, 1.0, 5.0], BRICK, b);
         out._mat = MAT.GLASS;
-        addBox(out, vadd(c, A.u, 9), [0.4, 4.5, 5.4], ARC_LANTERN, b);
-        // Upper gallery colonnade + cornice.
-        out._mat = MAT.STONE;
-        addBox(out, vadd(c, A.u, 17.5), [1.8, 5, 1.8], BRICK_L, b);
-        addBox(out, vadd(c, A.u, 20.4), [3.0, 0.9, 7.2], [0.74, 0.66, 0.52], b);
+        addBox(out, vadd(c, A.u, 5.5), [0.3, 2.8, 3.6], ARC_LANTERN, b);
         out._mat = 0;
       }
-      for (let i = -12; i <= 12; i += 2) {
+      for (let i = -10; i <= 10; i += 4) {
         const k = ((kmono + i * step) % n + n) % n;
-        for (const side of [1, -1]) archBay(k, side, hw[k] + 34);
+        for (const side of [1, -1]) archBay(k, side, hw[k] + 52);
       }
 
       // ── (17) BESPOKE: IFEMA CONVENTION-CENTRE HALLS — vast pavilions with the

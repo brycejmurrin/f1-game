@@ -17,14 +17,14 @@ Suzuka constantly **undulates**. From the start/finish the track climbs through 
 |---|---|---|---|
 | 0.00 | R | near | Tall pit/paddock building: long low grey box + slab roof, pit-lane wall strip |
 | 0.00 | L | near | Main grandstand: stepped stacked dark-blue box rows under flat canopy |
-| 0.08 | L | far | Giant **Ferris wheel** (Motopia): white ring + red spoke posts, tall column box |
+| 0.02 | L | far | Giant **Ferris wheel** (Motopia): white ring on main straight — decluttered Motopia behind |
 | 0.15 | R | mid | Esses grandstand: low tiered box terraces facing the climb |
 | 0.18 | both | far | Forested **Mie hills**: big layered green box silhouettes, haze-fade |
-| 0.20 | L | mid | **Cherry trees**: small pink-topped box clusters along the rise |
-| 0.37 | over | near | **Crossover underpass**: dark recessed box where back loop dips under straight |
+| 0.18–0.22 | L | mid | **Cherry trees**: sparse pink sakura along the Esses climb (not Motopia) |
+| 0.37 | over | near | **Crossover underpass**: dark enlarged portal where back loop dips under straight |
 | 0.45 | R | mid | Hairpin grandstand: compact stacked box bank, advertising hoarding strip |
 | 0.62 | L | mid | Spoon grandstand: low curved box terrace at the low point |
-| 0.82 | over | near | **Crossover bridge**: green-tinted span box lifting line over the main straight |
+| 0.81 | over | near | **Crossover bridge**: bold green span lifting line over the main straight |
 | 0.84 | R | mid | 130R grandstand: thin tall box bank tight to the flat-out left |
 | 0.94 | both | near | **Casio Triangle** stands: paired box terraces framing the final chicane |
 
@@ -33,8 +33,8 @@ Figure-8 **crossover** (underpass at s≈0.37, bridge at s≈0.82); the high-spe
 
 ## 6. Modelling notes
 - Lean green: layered hill boxes at three haze-depths sell the forested Mie backdrop more than any single object.
-- Make the **Ferris wheel** the hero skyline landmark — visible from the Esses, instantly reads as "Suzuka."
-- Model the two **crossover** events distinctly: a dark sunken underpass box, then a raised green bridge span — they define the figure-8.
-- Use the **undulation**: vary box base heights so grandstands sit on visible climbs/drops, not a flat plane.
-- Sprinkle small pink cherry-box clusters sparingly for accent against the dominant green.
+- Make the **Ferris wheel** the hero skyline landmark on the main straight (s≈0.02) — Motopia behind it stays sparse (no coaster/swing clutter).
+- Model the two **crossover** events distinctly: a dark enlarged underpass portal at s≈0.37, then a bold green bridge span at s≈0.81.
+- Use the **undulation**: Esses climb rise is punched so grandstands sit on a visible hill, not a flat plane.
+- Sprinkle small pink cherry-box clusters sparsely on the Esses climb only (s≈0.18–0.22 L).
 - Keep kerb boxes thin, bright red/white, and tightly hugging the S-Curves and chicane to read the rhythm.

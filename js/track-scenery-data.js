@@ -118,11 +118,14 @@ const TrackSceneryData = (function () {
     vegas:     { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
     singapore: { a: [0.92, 0.93, 0.96], b: [0.10, 0.34, 0.74], c: [0.90, 0.12, 0.18], night: [0.12, 0.16, 0.32], tyre: [0.10, 0.34, 0.74] },  // white/blue + flag red
     baku:      { a: [0.93, 0.94, 0.96], b: [0.00, 0.62, 0.58], c: [0.95, 0.45, 0.08], night: [0.08, 0.22, 0.22], tyre: [0.00, 0.62, 0.58] },  // teal/white + flame orange
-    jeddah:    { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.07, 0.20, 0.13], tyre: [0.05, 0.52, 0.28] },  // Saudi green/white + gold
+    // Jeddah night: pale grey concrete rail (not solid green) + green/gold day accents
+    jeddah:    { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.42, 0.44, 0.48], tyre: [0.05, 0.52, 0.28] },
     madrid:    { a: [0.90, 0.12, 0.14], b: [0.97, 0.81, 0.12], c: [0.55, 0.12, 0.42], night: [0.26, 0.13, 0.06], tyre: [0.97, 0.81, 0.12] },  // Spain red/gold + crimson-purple
     miami:     { a: [0.97, 0.32, 0.56], b: [0.08, 0.74, 0.78], c: [0.97, 0.80, 0.22], night: [0.30, 0.10, 0.32], tyre: [0.97, 0.32, 0.56] },  // vice pink/teal + sun gold
     shanghai:  { a: [0.90, 0.12, 0.14], b: [0.95, 0.95, 0.96], c: [0.97, 0.80, 0.12], night: [0.22, 0.10, 0.13], tyre: [0.90, 0.12, 0.14] },  // China red/white + gold
     mexico:    { a: [0.05, 0.55, 0.26], b: [0.95, 0.95, 0.96], c: [0.90, 0.12, 0.14], night: [0.09, 0.20, 0.11], tyre: [0.05, 0.55, 0.26] },  // flag green/white/red
+    // Yas Marina: teal / magenta / amber accents on pale rails
+    abudhabi:  { a: [0.90, 0.92, 0.94], b: [0.00, 0.72, 0.68], c: [0.92, 0.18, 0.55], night: [0.10, 0.18, 0.22], tyre: [1.00, 0.62, 0.18] },
   };
 
   // ── Per-track street / scenery furniture: lamp posts + roadside trees ──
@@ -134,17 +137,18 @@ const TrackSceneryData = (function () {
   // behind their existing scenery. Trees/lamps never call blockAt and respect
   // onTrack(), so they add depth without touching the driving boundary.
   const FURN = {
-    monaco:    { tree: "broad", fol: [0.28, 0.44, 0.22], lamp: "globe", lc: [1.0, 0.92, 0.70] },
+    monaco:    { tree: "palm",  fol: [0.28, 0.44, 0.22], lamp: "globe", lc: [1.0, 0.92, 0.70] },  // Riviera palms
     vegas:     { tree: "palm",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
     singapore: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
-    baku:      { tree: "broad", fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },
+    baku:      { tree: "palm",  fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },  // Caspian boulevard palms
     jeddah:    { tree: "palm",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
     madrid:    { tree: "broad", fol: [0.30, 0.40, 0.18], lamp: "post",  lc: [1.0, 0.90, 0.66] },
     miami:     { tree: "palm",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
     shanghai:  { tree: "broad", fol: [0.24, 0.42, 0.22], lamp: "post",  lc: [0.90, 0.96, 1.0] },
     mexico:    { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
-    bahrain:   { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.78, 0.42] },
-    qatar:     { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.80, 0.45] },
+    // Sakhir: sparse desert — cool-white lamps, thin palm line (not oasis green)
+    bahrain:   { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [0.88, 0.94, 1.0], sparse: true },
+    qatar:     { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [0.90, 0.95, 1.0], sparse: true },
     abudhabi:  { tree: "palm",  fol: [0.26, 0.42, 0.20], lamp: "arm",   lc: [1.0, 0.82, 0.50] },
     spa:         { tree: "fir",   fol: [0.14, 0.31, 0.21], lamp: "none" },                 // dark Ardennes spruce, blue-green
     silverstone: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "none" },                 // English oak copses, mid-green
@@ -187,10 +191,12 @@ const TrackSceneryData = (function () {
     monaco:    { neon: [NC.gold, NC.teal, NC.white, NC.rose], bias: 0.12, fh: [9, 17], bh: [14, 28],
                  kinds: ["setback", "slab", "podium", "tiered", "chevron", "dome", "hall"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.88, 0.81, 0.66] },
                  dayPal: [DC.cream, DC.peach, DC.tan, DC.ochre, DC.terra, DC.pink, DC.sand] },
+    // IFEMA / Castilian campus: white / glass / steel / stone (not ochre brick canyon)
     madrid:    { neon: [NC.red, NC.gold, NC.white, NC.cyan, NC.violet], bias: 0.28, fh: [14, 38], bh: [30, 70],
                  kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron", "arch"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] },
-                 dayPal: [DC.cream, DC.ochre, DC.terra, DC.brick, DC.sand, DC.stone, DC.tan] },
-    shanghai:  { neon: [NC.cyan, NC.blue, NC.white, NC.teal, NC.purple, NC.pink], bias: 0.42, fh: [22, 54], bh: [56, 110],
+                 dayPal: [DC.white, DC.bluglass, DC.steel, DC.stone, DC.paleblue, DC.concrete, DC.darkglass, DC.cream] },
+    // Marsh campus, not megacity wall — lower back-row + neon bias
+    shanghai:  { neon: [NC.cyan, NC.blue, NC.white, NC.teal, NC.purple, NC.pink], bias: 0.28, fh: [18, 42], bh: [36, 72],
                  kinds: ["cylinder", "spire", "setback", "podium", "twin", "slab", "fin", "notch", "antenna", "drum"], neonKinds: ["clad", "screen", "antenna"], tone: { n: [0.12, 0.13, 0.18], d: [0.46, 0.48, 0.52] },
                  dayPal: [DC.steel, DC.bluglass, DC.greyblue, DC.slate, DC.darkglass, DC.white, DC.teal, DC.stone] },
     mexico:    { neon: [NC.pink, NC.green, NC.orange, NC.gold, NC.cyan], bias: 0.34, fh: [12, 34], bh: [28, 64],
@@ -210,5 +216,51 @@ const TrackSceneryData = (function () {
                     dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.slate, DC.stone, DC.teal, DC.cream] },
   };
 
-  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF };
+  // Named atmosphere / colour packs for scenery(api) and track `pal` merges.
+  // Tracks may Object.assign into def.pal or read ATM/COL from api / TrackSceneryData.
+  const ATM = {
+    coolNight: {
+      zenith: [0.02, 0.03, 0.08], horizon: [0.06, 0.08, 0.14], fog: [0.05, 0.06, 0.10],
+      fogDensity: 0.0026, ambientSky: [0.48, 0.54, 0.68], ambientGround: [0.28, 0.28, 0.32],
+      sunColor: [0.55, 0.60, 0.72], grass: [0.10, 0.12, 0.11], runoff: [0.22, 0.22, 0.24],
+    },
+    warmNight: {
+      zenith: [0.08, 0.04, 0.10], horizon: [0.22, 0.10, 0.18], fog: [0.14, 0.08, 0.12],
+      fogDensity: 0.0024, ambientSky: [0.58, 0.42, 0.52], ambientGround: [0.40, 0.30, 0.28],
+      sunColor: [0.85, 0.55, 0.40], grass: [0.14, 0.14, 0.12], runoff: [0.28, 0.24, 0.22],
+    },
+    dampArdennes: {
+      zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], fog: [0.55, 0.60, 0.62],
+      fogDensity: 0.0032, ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26],
+      sunColor: [0.88, 0.90, 0.92], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34],
+    },
+    britishOvercast: {
+      zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], fog: [0.68, 0.72, 0.78],
+      fogDensity: 0.0020, ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28],
+      sunColor: [0.92, 0.94, 0.96], grass: [0.16, 0.40, 0.18], runoff: [0.48, 0.46, 0.42],
+    },
+    dustyBowl: {
+      zenith: [0.55, 0.62, 0.78], horizon: [0.78, 0.72, 0.58], fog: [0.72, 0.68, 0.55],
+      fogDensity: 0.0022, ambientSky: [0.62, 0.58, 0.50], ambientGround: [0.40, 0.36, 0.28],
+      sunColor: [1.0, 0.94, 0.78], grass: [0.42, 0.40, 0.22], runoff: [0.58, 0.50, 0.34],
+    },
+    alpineGreen: {
+      zenith: [0.22, 0.48, 0.82], horizon: [0.55, 0.72, 0.88], fog: [0.58, 0.72, 0.82],
+      fogDensity: 0.0016, ambientSky: [0.48, 0.58, 0.72], ambientGround: [0.24, 0.32, 0.22],
+      sunColor: [1.0, 0.96, 0.88], grass: [0.12, 0.42, 0.18], runoff: [0.40, 0.42, 0.32],
+    },
+    rivieraDay: {
+      zenith: [0.20, 0.48, 0.88], horizon: [0.70, 0.82, 0.92], fog: [0.72, 0.82, 0.90],
+      fogDensity: 0.0014, ambientSky: [0.55, 0.62, 0.78], ambientGround: [0.36, 0.34, 0.28],
+      sunColor: [1.0, 0.96, 0.88], grass: [0.22, 0.42, 0.20], runoff: [0.55, 0.52, 0.46],
+    },
+  };
+
+  const COL = {
+    aquaRunoff:  [0.12, 0.72, 0.78],   // Miami Dolphins apron
+    basinTeal:   [0.08, 0.55, 0.62],   // Montreal Olympic Basin / river
+    desertSand:  [0.72, 0.58, 0.38],   // warm tan runoff sandwich
+  };
+
+  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL };
 })();

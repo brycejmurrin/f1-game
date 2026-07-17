@@ -233,7 +233,7 @@ const GLX = (function () {
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -951,12 +951,16 @@ void main() {
       gl.uniformMatrix4fv(litU.uLightVP, false, shadowLightVP);
       // SHADOW BIAS / DARKNESS knobs (repair + artistic; defaults mirror TUNE_DEFS).
       gl.uniform1f(litU.uShadowBias, T && T.shadowBias != null ? T.shadowBias : 0.001);
-      // Fade the cast shadow out as the sun sinks through the horizon: props stop
-      // casting into the map below sunY -0.03 (game.js shadow-pass perf skip), so
-      // without this ramp their shadows POPPED off in one frame when the SUN
-      // ELEVATION slider (or an animated time-of-day flip) crossed the threshold.
-      const _sunY2 = frame.sunDir ? frame.sunDir[1] : 1;
-      let _hf = (_sunY2 + 0.03) / 0.05;
+      // Fade the cast shadow out as the KEY light dims toward moonlight: props stop
+      // casting into the map once the key is dim (game.js shadow-pass perf skip is
+      // now gated on key brightness, not sunDir.y — the night moon-key is held high
+      // at y≈0.97 for the sky glow, so an elevation test never detected night and
+      // left full-strength shadows on at night). Fading by key luminance keeps the
+      // two in lock-step: as the key dims the terrain/road shadows fade out exactly
+      // as the props stop casting, so nothing POPs when the SUN ELEVATION slider or
+      // a time-of-day flip crosses into night.
+      const _kl = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+      let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
       gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.0) * _hf);
@@ -1679,6 +1683,8 @@ void main() {
     gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
     gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
     gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
+    gl.uniform1f(compU.uVigSoft,    CT && CT.vignetteSoft != null ? CT.vignetteSoft : 0.35);
+    gl.uniform1f(compU.uBloomKnee,  CT && CT.bloomKnee  != null ? CT.bloomKnee  : 0.5);
     gl.uniform1f(compU.uCarReflect, CT && CT.carReflect != null ? CT.carReflect : 0.05);
     gl.uniform1f(compU.uCarGloss, CT && CT.carGloss != null ? CT.carGloss : 1.0);
     // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).

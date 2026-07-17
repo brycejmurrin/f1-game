@@ -15,7 +15,8 @@
     theme: "green",
     lengthKm: 7,
     baseHW: 8,
-    pal: { zenith: [0.27, 0.39, 0.53], horizon: [0.53, 0.61, 0.70], grass: [0.12, 0.34, 0.14], runoff: [0.4, 0.4, 0.4], fog: [0.62, 0.67, 0.72], fogDensity: 0.0026, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.98, 0.84, 0.64], sunColor: [0.9, 0.8, 0.62] },
+    // Cool damp Ardennes overcast (ATM.dampArdennes) — grey sky/fog, no warm sun.
+    pal: { zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34], fog: [0.55, 0.60, 0.62], fogDensity: 0.0032, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.88, 0.90, 0.92], sunColor: [0.88, 0.90, 0.92], ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26] },
     segs: [
       { t: 0, l: 120 }, { t: 170, l: 80, h: -4 }, { t: 0, l: 140, h: -18 }, { t: -40, l: 60, h: 6 }, { t: 50, l: 60, h: 14 }, { t: -30, l: 80, h: 16 },
       { t: 0, l: 480, h: 18 }, { t: 70, l: 90 }, { t: -60, l: 90, h: -6 }, { t: 50, l: 140, h: -12 }, { t: -90, l: 160, h: -10 }, { t: 40, l: 90 },
@@ -26,19 +27,23 @@
     // top-to-bottom), then the long descent back through the second sector.
     elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, every, prop, place, backdrop,
+      const { out, MAT, n, px, pz, pyMin, hash, every, prop, place, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor, onTrack,
               mountain, pine, tree, forestEdge, grandstand, building, motorhome,
-              marshalPost, gantry, billboard, fence, guardrail, tyreWall } = api;
+              marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
+              ATM, runoffApron } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
+      if (ATM && ATM.dampArdennes) Object.assign(pal, ATM.dampArdennes);
 
       // Start gantry over the line (every circuit has one; the start-gantry
       // downlights in buildTrackLights need this structure to hang from).
       gantry(0.0, 7.5, [0.26, 0.28, 0.32]);
 
-      // --- Encircling Ardennes mountains: a near forested range with light snow
-      // only on the highest tops, and a far hazed range. Centre-based ring so the
-      // forested peaks sit on the horizon, not scattered across the infield.
+      // --- Encircling Ardennes forested hills (NO snowcaps — summer Belgian GP).
+      // Centre-based ring so the forested peaks sit on the horizon, not scattered
+      // across the infield. snowline ≥ 2 keeps summits forest/rock only.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
@@ -47,17 +52,17 @@
       // Three concentric rings of organic peaks. Each ring is densely packed and
       // angularly offset from its neighbours so the summits OVERLAP into one
       // continuous forested wall with no gaps anywhere around the lap. Low `seg`
-      // keeps each peak cheap so we can afford many. Snow only on the far tops.
+      // keeps each peak cheap so we can afford many.
       const ranges = [
         // near forested wall — wMin/wVar sized so max(w)*0.62 < extra-8 (guard won't fire)
         { extra: 280, wMin: 160, hMin: 56, hVar: 54, wVar: 80, count: 32, phase: 0.0,
-          opts: { seg: 7, rough: 0.30, forest: [0.10, 0.32, 0.14], rock: [0.28, 0.32, 0.28], snow: [0.90, 0.93, 0.96], snowline: 1.2 } },
+          opts: { seg: 7, rough: 0.30, forest: [0.10, 0.32, 0.14], rock: [0.28, 0.32, 0.28], snowline: 2 } },
         // mid forested wall — offset to fill the seams of the near ring
         { extra: 290, wMin: 340, hMin: 92, hVar: 70, wVar: 150, count: 26, phase: 0.5,
-          opts: { seg: 7, rough: 0.32, forest: [0.13, 0.36, 0.17], rock: [0.34, 0.38, 0.36], snow: [0.90, 0.93, 0.96], snowline: 0.92 } },
-        // far hazed range — paler damp grey-green, light snow on the very tops
+          opts: { seg: 7, rough: 0.32, forest: [0.13, 0.36, 0.17], rock: [0.34, 0.38, 0.36], snowline: 2 } },
+        // far hazed range — paler damp grey-green (no snow)
         { extra: 450, wMin: 380, hMin: 132, hVar: 110, wVar: 150, count: 22, phase: 0.0,
-          opts: { seg: 7, rough: 0.34, forest: [0.18, 0.42, 0.20], rock: [0.46, 0.50, 0.50], snow: [0.92, 0.94, 0.97], snowline: 0.78 } },
+          opts: { seg: 7, rough: 0.34, forest: [0.18, 0.42, 0.20], rock: [0.46, 0.50, 0.50], snowline: 2 } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;
@@ -127,14 +132,20 @@
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
       building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
 
-      // --- Grandstands: La Source, Eau Rouge, Les Combes, Bus Stop, pit straight.
+      // --- Grandstands: La Source, Raidillon Gold-3 amphitheatre, Les Combes, Bus Stop, pit.
       const shell = [0.42, 0.43, 0.47];
+      const GOLD3 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 3 mass
       grandstand(0.00, 1, 8, 40, shell, [0.50, 0.52, 0.56]);   // main grandstand, pit straight
       grandstand(0.02, 1, 8, 26, shell, [0.62, 0.16, 0.16]);   // La Source hairpin
-      grandstand(0.07, 1, 8, 28, shell, [0.20, 0.36, 0.62]);   // Eau Rouge / Raidillon
-      // Giant screen on the Raidillon climb (a jumbotron beside the stand — a
-      // signature of the Eau Rouge/Raidillon amphitheatre).
-      billboard(Math.round(n * 0.085) % n, 1, 12, 13, 7.5, [0.05, 0.06, 0.09]);
+      // 2. Raidillon amphitheatre hero (Gold 3 scale) — bulky concrete stand + screen
+      // dominating the climb at s≈0.07–0.09 R.
+      grandstand(0.078, 1, 8, 52, GOLD3, [0.20, 0.36, 0.62]);
+      grandstand(0.088, 1, 9, 36, GOLD3, [0.18, 0.32, 0.58]);  // second bay up the crest
+      billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
+      // Stepped banking slabs climbing the R hillside behind/beside the stands.
+      place(K(0.072), 1, 22, [10, 2.4, 16], GOLD3);
+      place(K(0.080), 1, 26, [11, 3.6, 18], [0.44, 0.45, 0.48]);
+      place(K(0.090), 1, 30, [12, 4.8, 20], [0.42, 0.43, 0.46]);
       grandstand(0.16, 1, 8, 30, shell, [0.50, 0.52, 0.56]);   // Les Combes
       grandstand(0.92, 1, 8, 28, shell, [0.46, 0.48, 0.52]);   // Bus Stop chicane
 
@@ -147,11 +158,26 @@
       marshalPost(Math.round(n * 0.97) % n, -1, 4);
       marshalPost(Math.round(n * 0.97) % n, 1, 4);
 
-      // --- Eau Rouge: low concrete runoff wall boxes at the valley base (s≈0.06, left).
-      {
-        const kw = Math.round(n * 0.06) % n;
-        place(kw, -1, 4, [1.0, 1.4, 22], [0.55, 0.55, 0.52]);
+      // 3a. Pouhon marshal cluster (s≈0.55 L) — orange-capped posts at the sweeper.
+      for (const ds of [-0.010, -0.004, 0.002, 0.008]) {
+        marshalPost(K(0.55 + ds), -1, 4.2);
       }
+
+      // --- Eau Rouge: thickened concrete runoff wall at the valley base (s≈0.055–0.075 L).
+      wall(0.055, 0.075, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
+      place(K(0.060), -1, 5.2, [1.6, 1.6, 28], [0.52, 0.52, 0.50]);
+      place(K(0.068), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);
+
+      // 3b. Stavelot runoff + barriers against the treeline (s≈0.75–0.80 R).
+      if (typeof runoffApron === "function") {
+        runoffApron(K(0.775), 1, 3.2, [16, 0.35, 42], [0.42, 0.42, 0.40]);
+        runoffApron(K(0.790), 1, 3.5, [14, 0.35, 36], [0.40, 0.40, 0.38]);
+      } else {
+        place(K(0.775), 1, 10, [16, 0.35, 42], [0.42, 0.42, 0.40]);
+        place(K(0.790), 1, 10, [14, 0.35, 36], [0.40, 0.40, 0.38]);
+      }
+      tyreWall(0.762, 0.798, 1, 5.0, [0.55, 0.55, 0.52]);
+      guardrail(0.748, 0.810, 1, 3.5, [0.84, 0.85, 0.88]);
 
       // ======================================================================
       // BESPOKE ARDENNES LANDMARKS — local models built from raw primitives
@@ -266,8 +292,11 @@
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
 
       // Deeper forest ranks for an even denser Ardennes wall in the mid sectors.
-      forestEdge(0.18, 0.45, -1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
-      forestEdge(0.55, 0.88,  1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
+      // Pouhon (0.42–0.58) and Blanchimont approach get denser sweeper walls.
+      forestEdge(0.18, 0.42, -1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
+      forestEdge(0.42, 0.58, -1, 11, { density: 0.78, hMin: 13, hMax: 24, col: [0.08, 0.26, 0.12], col2: [0.12, 0.34, 0.15], pineFrac: 0.9 });
+      forestEdge(0.55, 0.74,  1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
+      forestEdge(0.74, 0.88,  1, 12, { density: 0.72, hMin: 12, hMax: 23, col: [0.08, 0.27, 0.12], col2: [0.13, 0.35, 0.16], pineFrac: 0.88 });
       // A few broadleaf oaks softening the pit-straight and Les Combes verges.
       for (const [s, side] of [[0.01, 1], [0.16, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
         for (let j = 0; j < 3; j++) tree(K(s) + j, side, 18 + hash(K(s) * 5 + j) * 14, 10 + hash(K(s) * 9 + j) * 5, [0.13, 0.34, 0.16]);
@@ -276,7 +305,7 @@
       // --- Barriers: catch fence at the packed stands, armco on the fast forest
       //     sweepers, tyre stacks at the heavy braking zones.
       fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
-      fence(0.06, 0.10, 1, 7, 4.4, [0.74, 0.76, 0.80]);       // Raidillon stand
+      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-3 amphitheatre
       fence(0.15, 0.18, 1, 7, 4.2, [0.74, 0.76, 0.80]);       // Les Combes
       fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
       guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep

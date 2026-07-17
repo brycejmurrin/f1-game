@@ -6,7 +6,7 @@
 A floodlit night street race threading the public roads around Marina Bay in downtown Singapore. Cars run anticlockwise past harbourside boulevards, low road bridges, and a wall of illuminated skyscrapers reflected in black bay water. Dense, humid, neon-soaked, and hemmed in by concrete barriers on every side.
 
 ## 2. Atmosphere & palette
-Near-black sky `[0.02, 0.02, 0.06]` with no stars (light pollution). Buildings glow as grids of lit windows in cool blues/whites `[0.6, 0.7, 0.95]` accented by saturated neon signage (magenta, cyan, amber). Track surface is bright under warm floodlights `[1.0, 0.92, 0.7]`. Add faint warm haze near lights to read as tropical humidity. Bay water is a dark mirror catching colored reflections `[0.05, 0.08, 0.15]`.
+Near-black cool sky (`zenith` ≈ `[0.02, 0.02, 0.07]`, cool horizon/fog) with no stars (light pollution). Buildings glow as grids of lit windows in cool blues/whites `[0.6, 0.7, 0.95]` accented by saturated neon signage (magenta, cyan, amber). Warmth is reserved for flood pools on tarmac `[1.0, 0.92, 0.7]` — not the sky/ambient. Bay water is a dark mirror catching colored reflections `[0.05, 0.08, 0.15]`.
 
 ## 3. Elevation
 Essentially flat (sea-level reclaimed land). Only gentle ramps: a slight rise/dip crossing Anderson Bridge (~s 0.62) and the underpass beneath the Benjamin Sheares Bridge (~s 0.10). No meaningful gradient elsewhere.
@@ -27,6 +27,7 @@ Essentially flat (sea-level reclaimed land). Only gentle ramps: a slight rise/di
 | 0.70 | L | mid | The Padang: dark flat open box (field) behind low rail |
 | 0.80 | R | mid | **Helix Bridge**: white spiraling lattice tube box arcing over water |
 | 0.86 | R | near | **Singapore Flyer**: large vertical ring box (Ferris wheel), rim lit cyan `[0.4,0.8,1.0]` |
+| 0.93–0.98 | both | near | Dark under-grandstand portal (finish straight) — pier + soffit canopies |
 | 0.92 | both | near | Illuminated billboards + barrier walls funnel back to start |
 
 ## 5. Track features

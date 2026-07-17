@@ -23,14 +23,15 @@
     ],
     // Rolling esses climb then the drop toward the Degners (~40 m of relief over
     // the lap). Kept clear of the figure-8 crossover at s≈0.81 (that's a bridge).
-    elevations: [{ s: 0.20, halfM: 300, rise: 7 }, { s: 0.45, halfM: 260, rise: -5 }],
+    // Esses rise bumped so the 0.18–0.22 climb reads as a real hill at speed.
+    elevations: [{ s: 0.20, halfM: 300, rise: 11 }, { s: 0.45, halfM: 260, rise: -5 }],
     bridges: [{ s: 0.811, halfM: 150, rise: 7 }],
     scenery: function (api) {
       const { out, track, n, px, py, pz, hw, pyMin, place, prop, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
               gantry, marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
-              cross, norm, MAT } = api;
+              cross, norm, MAT, underpassPortal } = api;
 
       // ── strut(): a thin cylinder spanning two arbitrary world points ─────────
       //    Builds an oriented basis from the span direction so cables / diagonal
@@ -108,23 +109,19 @@
       }
 
       // ── Motopia theme park + giant Ferris wheel ──────────────────────────────
-      // The wheel is Suzuka's signature landmark. It sits on the outside of the
-      // main straight near Turn 1 (s≈0.075). We use the engine's built-in
-      // ferrisWheel() which places the hub, legs, and cabin ring correctly.
-      // Support accent towers flank the wheel at DIFFERENT distances so they
-      // don't overlap the wheel footprint (wheel dist=58, radius=35 ⟹ edge ≈93 m;
-      // flanking towers at dist=100 and dist=105 are safely clear).
-      const wheelK = Math.round(n * 0.075) % n;
-      ferrisWheel(wheelK, -1, 58, 35);     // 35 m radius — iconic tall silhouette
+      // Hero silhouette on the MAIN STRAIGHT (s≈0.02), left/outside — readable
+      // from the Esses climb and start/finish. Decluttered: no coaster loops or
+      // chair-swing clutter competing with the wheel rim.
+      const wheelK = Math.round(n * 0.02) % n;
+      ferrisWheel(wheelK, -1, 62, 38);     // 38 m radius — tall main-straight silhouette
 
-      // Flanking ride towers: at distinct k-positions AND safe lateral distance
-      tower(Math.round(n * 0.062) % n, -1, 98, 8, 44, { col: [0.78, 0.80, 0.84], seg: 8, cap: true, capCol: neonRed, mast: 6 });
-      tower(Math.round(n * 0.090) % n, -1, 102, 7, 40, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
+      // Single flanking accent tower (aft of wheel) — keeps Motopia colour without crowding
+      tower(Math.round(n * 0.038) % n, -1, 105, 7, 42, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
 
       // ── Lamp posts ringing the wheel area — warm sodium emissive heads ────────
-      for (let i = 0; i < 8; i++) {
-        const lk = (wheelK + i - 4 + n) % n;
-        const ldist = 30 + (i % 4) * 7;   // 30–51 m — well clear of wheel at 58
+      for (let i = 0; i < 6; i++) {
+        const lk = (wheelK + i - 3 + n) % n;
+        const ldist = 32 + (i % 3) * 8;   // 32–48 m — clear of wheel at 62
         if (onTrack(px[lk] + track.rx[lk] * (-1) * (hw[lk] + ldist),
                     pz[lk] + track.rz[lk] * (-1) * (hw[lk] + ldist), 3)) continue;
         const lp = anchor(lk, -1, ldist), lb = [lp.r, lp.u, lp.t];
@@ -132,30 +129,27 @@
         addBox(out, vadd(lp.c, lp.u, 9.4), [1.6, 0.5, 1.0], lampWarm, lb); // lamp head
       }
 
-      // ── Amusement-park complex behind the wheel ───────────────────────────────
-      const parkA = Math.round(n * 0.055) % n;
+      // ── Amusement-park complex behind the wheel (sparse Motopia) ─────────────
+      const parkA = Math.round(n * 0.995) % n;   // just before S/F, behind the wheel
 
-      // Motopia Hotel block — 5-storey, at a k well clear of the wheel k
-      building(parkA, -1, 72, 32, 38, 24, { wall: [0.74, 0.74, 0.78], window: litWin, floor: 5, setback: true, roof: true });
-      // Secondary hotel/pavilion
-      building(Math.round(n * 0.038) % n, -1, 88, 26, 28, 18, { wall: [0.76, 0.76, 0.80], window: litWin, floor: 4, roof: true });
+      // Motopia Hotel block — 5-storey, clear of the wheel footprint
+      building(Math.round(n * 0.005) % n, -1, 95, 30, 36, 22, { wall: [0.74, 0.74, 0.78], window: litWin, floor: 5, setback: true, roof: true });
+      // Secondary pavilion
+      building(Math.round(n * 0.985) % n, -1, 110, 24, 26, 16, { wall: [0.76, 0.76, 0.80], window: litWin, floor: 4, roof: true });
 
-      // Drop-tower thrill ride (tall slim)
-      tower(Math.round(n * 0.105) % n, -1, 76, 7, 52, { col: [0.84, 0.28, 0.30], seg: 7, cap: true, capCol: neonYel, mast: 7 });
-
-      // Domed pavilion / central gathering structure
+      // Domed pavilion / central gathering structure (deep behind wheel)
       {
-        const pk = Math.round(n * 0.048) % n;
-        const p = anchor(pk, -1, 118), b = [p.r, p.u, p.t];
-        addCyl(out, p.c, 12, 12, [0.92, 0.92, 0.95], 12, b);
-        addCone(out, vadd(p.c, p.u, 12), 13, 11, [0.88, 0.36, 0.38], 14, b);
-        addCyl(out, vadd(p.c, p.u, 11), 12.8, 0.8, neonRed, 14, b);
+        const pk = Math.round(n * 0.01) % n;
+        const p = anchor(pk, -1, 128), b = [p.r, p.u, p.t];
+        addCyl(out, p.c, 11, 11, [0.92, 0.92, 0.95], 12, b);
+        addCone(out, vadd(p.c, p.u, 11), 12, 10, [0.88, 0.36, 0.38], 14, b);
+        addCyl(out, vadd(p.c, p.u, 10), 11.8, 0.8, neonRed, 14, b);
       }
 
-      // Carousel / pavilion canopies
-      for (let i = 0; i < 8; i++) {
-        const kk = (parkA + i * 4 + 2) % n;
-        const dist = 50 + i * 9;
+      // Sparse pavilion canopies (was 8 — cut to 4 so the Ferris owns the skyline)
+      for (let i = 0; i < 4; i++) {
+        const kk = (parkA + i * 5 + 2) % n;
+        const dist = 78 + i * 14;
         const sz = [11 + (i % 3) * 2.5, 7 + (i % 2) * 2.5, 13 + (i % 4) * 1.5];
         place(kk, -1, dist, sz, parkCol[i % parkCol.length]);
         const p = anchor(kk, -1, dist), b = [p.r, p.u, p.t];
@@ -165,26 +159,25 @@
                [parkCol[(i + 1) % parkCol.length][0], parkCol[(i + 1) % parkCol.length][1], parkCol[(i + 1) % parkCol.length][2]], 8, b);
       }
 
-      // Flag-poles / ride masts along park perimeter
-      for (let i = 0; i < 10; i++) {
-        const kk = (parkA + i * 2 + 1) % n;
-        const fdist = 34 + (i % 5) * 5;
+      // Flag-poles / ride masts — thinned
+      for (let i = 0; i < 5; i++) {
+        const kk = (parkA + i * 3 + 1) % n;
+        const fdist = 42 + (i % 4) * 6;
         const p = anchor(kk, -1, fdist), b = [p.r, p.u, p.t];
         addCyl(out, p.c, 0.12, 10 + (i % 3) * 2.2, steel, 4, b);
         addBox(out, vadd(p.c, p.u, 9 + (i % 3)), [0.12, 1.6, 2.4], parkCol[i % parkCol.length], b);
       }
 
       // Small vendor kiosks
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 3; i++) {
         const kk = (parkA + i * 6 + 3) % n;
-        const dist = 55 + i * 14;
+        const dist = 70 + i * 16;
         place(kk, -1, dist, [8, 4, 8], [0.88, 0.76, 0.54]);
       }
 
       // ── BESPOKE MOTOPIA FAIRGROUND RIDES ─────────────────────────────────────
-      //    Hand-built from primitives so the infield behind the wheel reads as a
-      //    real amusement park, not a scatter of boxes. All placed LEFT (park side)
-      //    at safe distances well clear of the wheel footprint & the racing line.
+      //    Keep carousel + one drop tower only — coaster loops / chair-swing were
+      //    competing with the Ferris rim silhouette on the main-straight skyline.
 
       // Carousel (merry-go-round): striped conical canopy on a central pole, a ring
       // of horse-poles with painted horses, and a bright valance rim.
@@ -229,70 +222,13 @@
         out._mat = 0;
       };
 
-      // Chair swing / chair-o-plane: central column, a spun top canopy, and a ring
-      // of chairs hung on slanting chains (drawn with strut() so the chains splay).
-      const swingRide = (k, side, dist, h) => {
-        const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
-        if (onTrack(p.c[0], p.c[2], 4)) return;
-        out._mat = MAT.METAL;
-        addCyl(out, p.c, 1.0, h, [0.86, 0.88, 0.92], 8, b);
-        out._mat = MAT.FABRIC;
-        addCone(out, vadd(p.c, p.u, h), 6.5, 2.8, parkCol[4], 14, b);    // canopy top
-        addCyl(out, vadd(p.c, p.u, h - 0.4), 5.4, 0.5, neonYel, 14, b);
-        out._mat = 0;
-        for (let i = 0; i < 12; i++) {
-          const a = i / 12 * 6.2832, rTop = 4.6, rBot = 6.6;
-          const top = vadd(vadd(vadd(p.c, p.u, h - 0.6), p.r, Math.cos(a) * rTop), p.t, Math.sin(a) * rTop);
-          const bot = vadd(vadd(vadd(p.c, p.u, h - 4.4), p.r, Math.cos(a) * rBot), p.t, Math.sin(a) * rBot);
-          out._mat = MAT.METAL;
-          strut(top, bot, 0.03, steel, 3);
-          out._mat = 0;
-          addBox(out, bot, [0.5, 0.5, 0.7], parkCol[i % parkCol.length], b);
-        }
-        out._mat = 0;
-      };
-
-      // Roller-coaster vertical loop: two support legs and a ring of segments in the
-      // right–up plane — the instantly-readable coaster silhouette.
-      const coasterLoop = (k, side, dist, R) => {
-        const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
-        if (onTrack(p.c[0], p.c[2], 5)) return;
-        const cen = vadd(p.c, p.u, R + 2);
-        out._mat = MAT.METAL;
-        for (const ro of [-R * 0.6, R * 0.6]) addCyl(out, vadd(p.c, p.r, ro), 0.4, R + 2, steel, 5, b);
-        const segN = 22;
-        for (let i = 0; i < segN; i++) {
-          const a = i / segN * 6.2832;
-          const pt = vadd(vadd(cen, p.r, Math.cos(a) * R), p.u, Math.sin(a) * R);
-          addBox(out, pt, [0.55, 0.9, 0.55], i % 2 ? neonRed : neonYel, b);
-        }
-        out._mat = 0;
-      };
-
-      // Lift hill: a rank of climbing columns capped by rail segments feeding the loop.
-      const liftHill = (k, side, dist, cnt) => {
-        for (let i = 0; i < cnt; i++) {
-          const p = anchor((k + i) % n, side, dist), b = [p.r, p.u, p.t];
-          if (onTrack(p.c[0], p.c[2], 4)) continue;
-          const h = 6 + i * 2.4;
-          out._mat = MAT.METAL;
-          addCyl(out, p.c, 0.3, h, steel, 4, b);
-          addBox(out, vadd(p.c, p.u, h), [0.5, 0.5, 3.4], neonBlue, b);
-          out._mat = 0;
-        }
-      };
-
-      carousel(Math.round(n * 0.044) % n, -1, 62, 8);
-      dropRide(Math.round(n * 0.100) % n, -1, 118, 62);   // the tall drop-tower thrill ride
-      swingRide(Math.round(n * 0.070) % n, -1, 132, 26);
-      coasterLoop(Math.round(n * 0.058) % n, -1, 150, 14);
-      coasterLoop(Math.round(n * 0.065) % n, -1, 168, 11);
-      liftHill(Math.round(n * 0.048) % n, -1, 138, 6);
+      carousel(Math.round(n * 0.992) % n, -1, 88, 8);
+      dropRide(Math.round(n * 0.032) % n, -1, 125, 58);   // single tall drop — behind Ferris
 
       // ── Lamp posts along the park perimeter ─────────────────────────────────
-      for (let i = 0; i < 14; i++) {
-        const lk2 = (parkA + i * 3) % n;
-        const ldist2 = 28 + (i % 6) * 6;
+      for (let i = 0; i < 8; i++) {
+        const lk2 = (parkA + i * 4) % n;
+        const ldist2 = 36 + (i % 5) * 7;
         if (onTrack(px[lk2] + track.rx[lk2] * (-1) * (hw[lk2] + ldist2),
                     pz[lk2] + track.rz[lk2] * (-1) * (hw[lk2] + ldist2), 3)) continue;
         const lp2 = anchor(lk2, -1, ldist2), lb2 = [lp2.r, lp2.u, lp2.t];
@@ -378,26 +314,22 @@
       forestEdge(0.92, 0.10,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
         col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
 
-      // ── Sakura cherry-blossom trees at signature corners ──────────────────────
-      //    Placed at safe dist (18–28 m) well beyond road + canopy radius.
-      //    Use every(28) for a scattered-but-repeating pattern around the lap.
-      every(28, (k) => {
-        const s = hash(k * 53);
-        if (s < 0.25) return;
-        tree(k, s < 0.6 ? -1 : 1, 20 + s * 10, 7 + s * 4, sakuraPink);
-        if (s > 0.55) tree(k, s < 0.6 ? 1 : -1, 24 + s * 8, 6 + s * 4, sakuraLight);
-      });
-
-      // Explicit sakura clusters at Turns 1–8, Degner, Spoon (iconic spots)
+      // ── Sakura cherry-blossom — Esses climb identity only ─────────────────────
+      //    Sparse pink accent on the left rise (s≈0.18–0.22). Motopia / lap-wide
+      //    sakura thinned so the climb reads as the seasonal beat.
       {
-        const blossomFracs = [0.048, 0.062, 0.078, 0.098, 0.115, 0.145, 0.035, 0.120];
-        const blossomSides = [-1, 1, -1, 1, -1, 1, 1, -1];
-        const blossomDists = [22, 26, 20, 28, 24, 20, 21, 26];
-        for (let i = 0; i < blossomFracs.length; i++) {
-          const bk = Math.round(n * blossomFracs[i]) % n;
-          const bh = 6.5 + hash(bk * 37) * 5;
-          tree(bk, blossomSides[i], blossomDists[i], bh, sakuraPink);
+        const essesSakura = [
+          [0.175, 20, 7.5], [0.188, 24, 8.2], [0.200, 18, 7.0],
+          [0.210, 26, 8.8], [0.220, 22, 7.8], [0.228, 28, 6.8],
+        ];
+        for (let i = 0; i < essesSakura.length; i++) {
+          const [sf, dist, h] = essesSakura[i];
+          const bk = Math.round(n * sf) % n;
+          tree(bk, -1, dist, h, i % 2 ? sakuraLight : sakuraPink);
         }
+        // One light echo at Degner / Spoon — not Motopia density
+        tree(Math.round(n * 0.28) % n, 1, 24, 7, sakuraPink);
+        tree(Math.round(n * 0.62) % n, -1, 22, 6.5, sakuraLight);
       }
 
       // ── Low shrub clusters at road margin (replaces over-close bush loops) ────
@@ -427,60 +359,66 @@
         billboard(Math.round(n * s) % n, sd, 7, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
       }
 
-      // ── Figure-8 crossover bridge: the iconic span at s≈0.81 ─────────────────
-      //    A cable-stayed deck lifting the racing line over the main straight.
-      //    Two concrete piers carry a green deck; twin A-frame pylons rise above
-      //    the deck and fan diagonal cable stays down to the deck edges.
+      // ── Figure-8 crossover bridge: bold green span at s≈0.81 ─────────────────
+      //    Cable-stayed deck lifting the racing line over the main straight —
+      //    oversized green deck so the overpass reads at speed vs the underpass.
       {
         const bk = Math.round(n * 0.81) % n;
         const ab = anchor(bk, -1, 14);
         const basis = [ab.r, ab.u, ab.t];
-        const colH = 14, deckLen = 34;
+        const colH = 15, deckLen = 42;
+        const greenDeck = [0.18, 0.52, 0.26];
+        const greenBold = [0.14, 0.58, 0.28];
         // support piers
         out._mat = MAT.CONCRETE;
-        addBox(out, vadd(ab.c, ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
-        addBox(out, vadd(vadd(ab.c, ab.t, 16), ab.u, colH / 2), [1.8, colH, 1.8], concrete, basis);
+        addBox(out, vadd(ab.c, ab.u, colH / 2), [2.2, colH, 2.2], concrete, basis);
+        addBox(out, vadd(vadd(ab.c, ab.t, 18), ab.u, colH / 2), [2.2, colH, 2.2], concrete, basis);
         out._mat = 0;
-        // deck + running surface
-        addBox(out, vadd(ab.c, ab.u, colH + 0.7), [10, 1.2, deckLen], [0.25, 0.47, 0.29], basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 3.5), [11, 0.5, deckLen + 1], [0.27, 0.49, 0.31], basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 2.8), [8, 0.15, 28], lampWarm, basis);
+        // deck + running surface — bold green silhouette
+        addBox(out, vadd(ab.c, ab.u, colH + 0.8), [12, 1.5, deckLen], greenDeck, basis);
+        addBox(out, vadd(ab.c, ab.u, colH + 3.8), [13.5, 0.6, deckLen + 2], greenBold, basis);
+        addBox(out, vadd(ab.c, ab.u, colH + 3.0), [9, 0.18, 32], lampWarm, basis);
         // parapet rail posts
         out._mat = MAT.METAL;
-        for (let i = -4; i <= 4; i++) {
-          const off = i * (deckLen / 9);
-          const rc = [ab.c[0] + ab.t[0] * off, ab.c[1] + colH + 1.4, ab.c[2] + ab.t[2] * off];
-          addCyl(out, rc, 0.10, 1.4, steel, 4, basis);
+        for (let i = -5; i <= 5; i++) {
+          const off = i * (deckLen / 11);
+          const rc = [ab.c[0] + ab.t[0] * off, ab.c[1] + colH + 1.5, ab.c[2] + ab.t[2] * off];
+          addCyl(out, rc, 0.12, 1.6, steel, 4, basis);
         }
         // Twin A-frame pylons rising above the deck at each pier, with fanned stays.
-        const deckTopY = colH + 4.0;
-        for (const tOff of [4, 12]) {
+        const deckTopY = colH + 4.2;
+        for (const tOff of [5, 14]) {
           const legTop = vadd(vadd(ab.c, ab.t, tOff), ab.u, deckTopY);
-          const apex = vadd(legTop, ab.u, 15);                 // pylon apex 15 m above deck
-          // two splayed legs of the A-frame (across the deck width)
-          const legL = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, -3.5), ab.u, deckTopY);
-          const legR = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, 3.5), ab.u, deckTopY);
-          strut(legL, apex, 0.28, [0.86, 0.87, 0.90], 5);
-          strut(legR, apex, 0.28, [0.86, 0.87, 0.90], 5);
-          // cable stays fanning to the deck edges fore and aft
-          for (const dOff of [-12, -6, 6, 12]) {
-            const anchorPt = vadd(vadd(vadd(ab.c, ab.t, tOff + dOff), ab.r, tOff === 4 ? -4.8 : 4.8), ab.u, deckTopY + 0.3);
+          const apex = vadd(legTop, ab.u, 16);
+          const legL = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, -4.0), ab.u, deckTopY);
+          const legR = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, 4.0), ab.u, deckTopY);
+          strut(legL, apex, 0.32, [0.86, 0.87, 0.90], 5);
+          strut(legR, apex, 0.32, [0.86, 0.87, 0.90], 5);
+          for (const dOff of [-14, -7, 7, 14]) {
+            const anchorPt = vadd(vadd(vadd(ab.c, ab.t, tOff + dOff), ab.r, tOff === 5 ? -5.2 : 5.2), ab.u, deckTopY + 0.3);
             strut(apex, anchorPt, 0.05, [0.94, 0.94, 0.96], 3);
           }
         }
         out._mat = 0;
       }
 
-      // ── Underpass structure (back loop dips under Esses exit at s≈0.37) ───────
+      // ── Underpass (back loop dips under at s≈0.37) — dark + enlarged ─────────
+      //    Shared underpassPortal for the overhead mouth, plus a deeper dark mass
+      //    beside the line so the figure-8 dip reads against the green bridge.
+      if (typeof underpassPortal === "function") {
+        underpassPortal(0.37, { h: 6.5, thick: 2.2, depth: 22, col: [0.06, 0.06, 0.08],
+          pierGap: 1.6, pierW: 2.0 });
+      }
       {
         const uk = Math.round(n * 0.37) % n;
-        const au = anchor(uk, 1, 12);
+        const au = anchor(uk, 1, 14);
         const ubasis = [au.r, au.u, au.t];
-        addBox(out, vadd(au.c, au.u, 2.5), [12, 5, 28], [0.18, 0.18, 0.20], ubasis);
-        addBox(out, vadd(au.c, au.u, 3.5), [1.5, 7, 1.5], concrete, ubasis);
-        addBox(out, vadd(vadd(au.c, au.u, 3.5), au.t, 13), [1.5, 7, 1.5], concrete, ubasis);
-        addBox(out, vadd(au.c, au.u, 7.2), [13, 0.7, 29], [0.20, 0.20, 0.22], ubasis);
-        addBox(out, vadd(au.c, au.u, 1.5), [11, 0.2, 0.3], litWin, ubasis);
+        const dark = [0.08, 0.08, 0.10];
+        addBox(out, vadd(au.c, au.u, 3.0), [16, 7, 36], dark, ubasis);
+        addBox(out, vadd(au.c, au.u, 4.0), [2.0, 9, 2.0], concrete, ubasis);
+        addBox(out, vadd(vadd(au.c, au.u, 4.0), au.t, 16), [2.0, 9, 2.0], concrete, ubasis);
+        addBox(out, vadd(au.c, au.u, 8.5), [17, 1.0, 38], [0.10, 0.10, 0.12], ubasis);
+        addBox(out, vadd(au.c, au.u, 1.8), [14, 0.25, 0.4], litWin, ubasis);
       }
 
       // ── Honda orange accent on main grandstand (start/finish left side) ───────

@@ -37,10 +37,6 @@
       const WATER  = [0.20, 0.45, 0.62];
       const WHITE  = [0.92, 0.92, 0.92], RED = [0.80, 0.15, 0.15];
       const SHELL  = [0.46, 0.47, 0.52], CROWD = [0.70, 0.60, 0.55];
-      // Night-ready: bright warm window colour for CBD towers (glows at night)
-      const CBD_WIN_LIT = [0.82, 0.78, 0.52];   // warm amber — lit office windows
-      const CBD_WIN_DAY = [0.55, 0.65, 0.80];   // cool glass reflection (day)
-
       // ---- Track centre (for skyline / lake placement reference) ----
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
@@ -123,80 +119,42 @@
       }
 
       // ====================================================================
-      // MELBOURNE CBD SKYLINE — dense layered towers across the lake
-      // (s≈0.19–0.52 R). Iconic landmarks dominate; mid-rise base with varied
-      // window colour. All towers placed at dist≥190 so they stay well clear.
-      // Night-ready: window bands use CBD_WIN_LIT (warm amber) for glow.
+      // MELBOURNE CBD SKYLINE — coplanar with the lake (same side, beyond water).
+      // Postcard read: water → fountain → 3–5 hero towers on the far shore.
+      // Culled the old ~80-building R-side wall; heroes sit at dist ≥ 320 m so
+      // they clear the lake planes (≈40–120 m) and read as one lakeside frame.
       // ====================================================================
-      const CBD_N = 42, CBD_S0 = 0.19, CBD_S1 = 0.51;
-      for (let i = 0; i < CBD_N; i++) {
-        const f = i / (CBD_N - 1);
-        const s = CBD_S0 + f * (CBD_S1 - CBD_S0);
-        const dist = 230 + hash(i * 7) * 100;
-        const w = 16 + hash(i * 3) * 14;
-        const h = 70 + hash(i * 11) * 150;
-        const wallCol = [0.28 + hash(i * 5) * 0.12, 0.34 + hash(i * 2) * 0.10, 0.50 + hash(i * 4) * 0.06];
-        const winCol = (hash(i * 19) > 0.45) ? CBD_WIN_LIT : CBD_WIN_DAY;
-        building(k(s), 1, dist - w / 2, w, h, w, {
-          wall: wallCol, window: winCol, floor: 6,
-          setback: hash(i * 13) > 0.50, roof: hash(i * 17) > 0.60,
-        });
-      }
-      // Iconic signature towers: Eureka Tower + Rialto dominate the skyline
-      for (const [s, dist, bw, th, mast] of [
-        [0.26, 290, 30, 270, 42],   // Eureka-like iconic spire — tallest
-        [0.34, 270, 26, 230, 28],   // Rialto-like tower — second major landmark
-        [0.41, 300, 28, 250,  0],   // further eastern major tower
-        [0.21, 280, 24, 200, 35],   // mid-range signature
-        [0.47, 285, 26, 220, 22],   // eastern precinct anchor
+      // Hero towers: Eureka-like spire + Australia 108 dark slab + mid cluster
+      for (const [s, dist, bw, th, mast, col] of [
+        [0.42, 340, 28, 280, 48, [0.28, 0.36, 0.48]],  // Eureka-like — tallest + mast
+        [0.46, 355, 32, 250,  0, [0.18, 0.20, 0.24]],  // Australia 108-like dark slab
+        [0.38, 360, 24, 210, 22, [0.32, 0.40, 0.52]],  // western mid hero
+        [0.50, 350, 22, 190, 18, [0.30, 0.38, 0.50]],  // eastern mid hero
+        [0.44, 375, 20, 170, 12, [0.34, 0.42, 0.54]],  // depth filler behind Eureka
       ]) {
-        tower(k(s), 1, dist, bw, th, { col: [0.30, 0.38, 0.50], seg: 8,
-          cap: true, capCol: [0.20, 0.28, 0.40], mast });
+        tower(k(s), -1, dist, bw, th, { col, seg: 8,
+          cap: true, capCol: [0.20, 0.26, 0.36], mast });
       }
-      // Far-horizon silhouette band — distant CBD depth layer (grey-blue so
-      // backdrop() renders them as city towers with window bands, not green mounds)
-      for (let i = 0; i < 10; i++) {
-        const f = i / 9;
-        const bh = 55 + hash(i * 13) * 110;   // 55–165 m tower heights
-        const bw = 28 + hash(i * 9) * 24;      // 28–52 m wide
-        backdrop(k(CBD_S0 - 0.03 + f * (CBD_S1 - CBD_S0 + 0.06)), 1,
-                 390 + hash(i * 5) * 120,
-                 [bw, bh, 26],
-                 [0.36 + hash(i * 7) * 0.08, 0.40 + hash(i * 3) * 0.06, 0.52 + hash(i * 11) * 0.06]);
-      }
-      // Mid-rise foreground layer — lighter, Yarra riverside buildings
-      for (let i = 0; i < 18; i++) {
-        const f = i / 17;
-        const s = CBD_S0 + f * (CBD_S1 - CBD_S0);
-        const w = 22 + hash(i * 31) * 16, h = 38 + hash(i * 37) * 45;
-        const winFg = (i % 3 === 1) ? CBD_WIN_LIT : [0.56, 0.66, 0.80];
-        building(k(s), 1, 200 + hash(i * 41) * 28, w, h, w, {
-          wall: [0.44, 0.50, 0.60], window: winFg, floor: 6 });
-      }
-      // ---- Yarra precinct + cultural landmarks (Federation Sq area) ----
-      const CBD_LANDMARKS = [
-        [0.22, 230, 24, 160, [0.36, 0.44, 0.56]],
-        [0.28, 248, 20, 190, [0.38, 0.46, 0.58]],
-        [0.32, 222, 26, 180, [0.34, 0.42, 0.54]],
-        [0.38, 262, 18, 210, [0.36, 0.44, 0.56]],
-        [0.44, 238, 22, 195, [0.38, 0.46, 0.58]],
-        [0.50, 252, 20, 220, [0.34, 0.42, 0.54]],
-      ];
-      for (const [s, dist, bw, bh, wc] of CBD_LANDMARKS) {
-        building(k(s), 1, dist, bw, bh, bw, { wall: wc, window: CBD_WIN_LIT, floor: 8 });
+      // Thin haze silhouette band — distant mid-rise depth, not a wall
+      for (let i = 0; i < 6; i++) {
+        const f = i / 5;
+        const bh = 50 + hash(i * 13) * 70;
+        const bw = 22 + hash(i * 9) * 18;
+        backdrop(k(0.36 + f * 0.16), -1, 400 + hash(i * 5) * 50,
+                 [bw, bh, 20],
+                 [0.38 + hash(i * 7) * 0.06, 0.42 + hash(i * 3) * 0.05, 0.54 + hash(i * 11) * 0.05]);
       }
 
       // ====================================================================
       // PARKLAND HORIZON — rounded green mound backdrop, both sides.
       // backdrop() auto-detects green-dominant colour → renders as organic
-      // stacked-frustum mounds rather than flat slabs.  Replaces old flat
-      // [120,18,100] slab loop.  Placed at dist 160–240 m so they sit well
-      // behind forestEdge treelines and don't clip them.
+      // stacked-frustum mounds rather than flat slabs.  Placed at dist 160–240 m
+      // so they sit behind forestEdge treelines. Skip lakeside L (s≈0.27–0.65)
+      // so mounds don't fight the lake + CBD coplanar frame.
       // ====================================================================
       every(100, (kk) => {
         for (const side of [-1, 1]) {
-          // Skip the CBD side (s≈0.19–0.55 R) so mounds don't fight skyline
-          if (side === 1 && kk >= k(0.17) && kk <= k(0.57)) continue;
+          if (side === -1 && kk >= k(0.27) && kk <= k(0.65)) continue;
           const dist = 165 + hash(kk * 6 + side) * 60;
           const w    = 130 + hash(kk * 11 + side) * 60;  // 130–190 m footprint (wider, fewer)
           const h    =  24 + hash(kk * 17 + side) * 16;  // 24–40 m mound height
@@ -206,98 +164,91 @@
       });
 
       // ====================================================================
-      // PARKLAND TREE LINES — lush dense broadleaf + native foliage
-      // Albert Park is renowned for its leafy green parkland character.
+      // EUCALYPTUS PARKLAND — broadleaf only (pineFrac: 0), greyer-green canopy.
+      // Melbourne parkland reads dusty olive/grey-green, not Alpine pine forest.
+      // ALL foliage via forestEdge() (canopy-radius aware). Gap clears barriers.
       //
-      // ALL foliage placed via forestEdge() which accounts for canopy radius
-      // so no tree/pine canopy can clip through barriers or fences.
-      // Gap values are set to stay clear of the outermost barrier/fence/stand.
-      //
-      // Circuit zones (approximate, from visual + real-layout reference):
+      // Circuit zones:
       //   s=0.00–0.10  main straight + pit lane → grandstands both sides
-      //   s=0.10–0.27  fast sweeps T1–T4 → light forest parkland
-      //   s=0.27–0.65  LAKESIDE — LHS is lake shore; RHS parkland, CBD beyond
-      //   s=0.65–0.85  southern park loop — dense eucalyptus / native trees
+      //   s=0.10–0.27  fast sweeps T1–T4 → light parkland
+      //   s=0.27–0.65  LAKESIDE — L water + CBD beyond; R parkland strip
+      //   s=0.65–0.85  southern park loop — denser eucalyptus
       //   s=0.85–1.00  pit approach straight
       // ====================================================================
+      const EUC  = [0.30, 0.42, 0.28];   // grey-green eucalyptus
+      const EUC2 = [0.34, 0.46, 0.30];   // slightly lighter canopy twin
 
       // ---- Main straight LHS (pit wall side) — sparse, behind grandstand ----
-      // grandstand at gap=12, fence at gap=9 → forestEdge gap 20 keeps clear
       forestEdge(0.00, 0.10, -1, 20, {
-        density: 0.45, hMin: 8, hMax: 14,
-        col: [0.16, 0.36, 0.16], col2: [0.20, 0.42, 0.18], pineFrac: 0.30,
+        density: 0.45, hMin: 9, hMax: 16,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Main straight RHS — grandstands + hospitality, tight parkland strip ----
-      // grandstand at gap=14, fence at gap=10 → forest at gap 22
       forestEdge(0.00, 0.10, 1, 22, {
-        density: 0.40, hMin: 7, hMax: 12,
-        col: [0.17, 0.38, 0.17], col2: [0.21, 0.43, 0.19], pineFrac: 0.25,
+        density: 0.40, hMin: 8, hMax: 14,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Fast sweeps T1–T4 (s=0.10–0.27), both sides — lush parkland ----
-      // hedges removed; forestEdge with gap 16 (fence at 9–10 → 7m clearance for canopy)
+      // ---- Fast sweeps T1–T4 (s=0.10–0.27), both sides ----
       forestEdge(0.10, 0.27, -1, 16, {
-        density: 0.65, hMin: 9, hMax: 15,
-        col: [0.17, 0.40, 0.18], col2: [0.21, 0.45, 0.20], pineFrac: 0.35,
+        density: 0.60, hMin: 10, hMax: 17,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
       forestEdge(0.10, 0.27, 1, 18, {
-        density: 0.60, hMin: 8, hMax: 14,
-        col: [0.18, 0.41, 0.18], col2: [0.22, 0.46, 0.20], pineFrac: 0.30,
+        density: 0.55, hMin: 9, hMax: 16,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Lakeside RHS (s=0.27–0.65) — parkland strip between track and CBD ----
-      // grandstand at gap=14–16; forest behind at gap 26 to stay clear
+      // ---- Lakeside RHS (s=0.27–0.65) — parkland strip (CBD is now beyond water L) ----
       forestEdge(0.27, 0.65, 1, 26, {
-        density: 0.50, hMin: 9, hMax: 16,
-        col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.20,
+        density: 0.45, hMin: 10, hMax: 17,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Lakeside LHS (s=0.27–0.65) — shore-line Morton Bay figs + eucalyptus ----
-      // guardrail at gap=3, grandstands at gap=16; forest well back at gap 32
-      // so canopy inner edge stays beyond the stand shell (~gap+15m outer face)
-      forestEdge(0.27, 0.65, -1, 32, {
-        density: 0.70, hMin: 10, hMax: 18,
-        col: [0.20, 0.44, 0.20], col2: [0.24, 0.48, 0.22], pineFrac: 0.20,
+      // ---- Lakeside LHS — sparse shore figs/eucalyptus so water + skyline read ----
+      forestEdge(0.27, 0.65, -1, 36, {
+        density: 0.40, hMin: 11, hMax: 18,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Southern park loop (s=0.65–0.85) — dense native/eucalyptus ----
+      // ---- Southern park loop (s=0.65–0.85) — denser native eucalyptus ----
       forestEdge(0.65, 0.85, -1, 16, {
-        density: 0.75, hMin: 10, hMax: 18,
-        col: [0.19, 0.43, 0.19], col2: [0.23, 0.47, 0.21], pineFrac: 0.25,
+        density: 0.70, hMin: 11, hMax: 19,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
       forestEdge(0.65, 0.85, 1, 18, {
-        density: 0.70, hMin: 9, hMax: 16,
-        col: [0.20, 0.44, 0.20], col2: [0.24, 0.48, 0.22], pineFrac: 0.28,
+        density: 0.65, hMin: 10, hMax: 18,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Pit approach (s=0.85–1.00) — both sides, lighter canopy ----
       forestEdge(0.85, 1.00, -1, 16, {
-        density: 0.50, hMin: 8, hMax: 13,
-        col: [0.17, 0.39, 0.17], col2: [0.21, 0.43, 0.19], pineFrac: 0.30,
+        density: 0.45, hMin: 9, hMax: 15,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
       forestEdge(0.85, 1.00, 1, 22, {
-        density: 0.45, hMin: 7, hMax: 12,
-        col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.25,
+        density: 0.40, hMin: 8, hMax: 14,
+        col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Additional native tree clusters at chicane complex (s=0.75–0.82) ----
-      // Botanical garden character — taller specimens, rich greens, both sides
+      // ---- Chicane complex (s=0.75–0.82) — taller eucalyptus specimens ----
       forestEdge(0.75, 0.82, -1, 20, {
-        density: 0.80, hMin: 12, hMax: 20,
-        col: [0.21, 0.45, 0.20], col2: [0.25, 0.49, 0.23], pineFrac: 0.15,
+        density: 0.70, hMin: 13, hMax: 20,
+        col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
       forestEdge(0.75, 0.82, 1, 22, {
-        density: 0.75, hMin: 11, hMax: 18,
-        col: [0.22, 0.46, 0.21], col2: [0.26, 0.50, 0.24], pineFrac: 0.18,
+        density: 0.65, hMin: 12, hMax: 19,
+        col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
 
-      // ---- Far-background forest canopy (atmospheric depth, horizon) ----
+      // ---- Far-background eucalyptus canopy (atmospheric depth) ----
       every(60, (kk) => {
         for (const side of [-1, 1]) {
+          if (side === -1 && kk >= k(0.27) && kk <= k(0.65)) continue; // keep lake sightline open
           if (hash(kk * 53 + side) > 0.45) continue;
           const dist = 92 + hash(kk * 57 + side) * 72;
-          tree(kk, side, dist, 12 + hash(kk * 61 + side) * 7, [0.17, 0.38, 0.17]);
+          tree(kk, side, dist, 13 + hash(kk * 61 + side) * 8, EUC);
         }
       });
 
@@ -396,29 +347,69 @@
       }
 
       // ====================================================================
-      // KERBS + run-off framing at corner apexes / chicanes
+      // KERBS — bold red/white densification at T1 and chicane complexes.
+      // Taller sausage strips (h≈0.28) so they punch at race speed; gap 1.8–2.2
+      // keeps footprints clear of tarmac (rejBox). Mid-lap apexes stay lighter.
       // ====================================================================
-      for (const [s, side] of [[0.04, 1], [0.06, -1], [0.30, 1], [0.62, 1],
-                                [0.78, -1], [0.78, 1], [0.80, -1], [0.97, 1]]) {
+      // T1–T2 sweep (s≈0.03–0.08) — alternating sausage kerbs both sides
+      for (const [s, side, col] of [
+        [0.030,  1, RED],   [0.035,  1, WHITE], [0.040,  1, RED],   [0.045,  1, WHITE],
+        [0.050,  1, RED],   [0.055, -1, WHITE], [0.060, -1, RED],   [0.065, -1, WHITE],
+        [0.070, -1, RED],   [0.075,  1, WHITE],
+      ]) {
+        place(k(s), side, 1.9, [0.55, 0.28, 7.5], col);
+      }
+      // Chicane complex (s≈0.76–0.82) — dense alternating kerbs
+      for (const [s, side, col] of [
+        [0.760, -1, RED],   [0.765, -1, WHITE], [0.770, -1, RED],   [0.775, -1, WHITE],
+        [0.780,  1, RED],   [0.785,  1, WHITE], [0.790,  1, RED],   [0.795,  1, WHITE],
+        [0.800, -1, RED],   [0.805, -1, WHITE], [0.810,  1, RED],   [0.815,  1, WHITE],
+      ]) {
+        place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
+      }
+      // Lighter mid-lap apex flashes + grass run-off framing
+      for (const [s, side] of [[0.30, 1], [0.62, 1], [0.97, 1]]) {
         place(k(s), side, 2, [0.5, 0.25, 6], side > 0 ? RED : WHITE);
-        place(k(s), side, 7, [10, 0.1, 12], GRASS); // grass run-off framing
+        place(k(s), side, 7, [10, 0.1, 12], GRASS);
+      }
+      // Grass run-off pads at T1 / chicane exits
+      for (const [s, side] of [[0.04, 1], [0.06, -1], [0.78, -1], [0.78, 1], [0.80, -1]]) {
+        place(k(s), side, 7, [10, 0.1, 12], GRASS);
       }
 
       // ====================================================================
-      // TRACKSIDE FURNITURE — catch fences, armco guardrails, tyre walls,
-      // marshal posts.
+      // TEMPORARY BARRIERS — armco + catch fence densification (street-circuit
+      // tension). Longer runs at T1 and the chicane; lakeside armco kept.
       // ====================================================================
-      fence(0.00, 0.09, -1,  9, 4.0, [0.74, 0.76, 0.80]);
-      fence(0.04, 0.14,  1, 10, 3.6, [0.74, 0.76, 0.80]);
-      fence(0.60, 0.70,  1,  9, 3.6, [0.74, 0.76, 0.80]);
-      fence(0.76, 0.82, -1,  9, 3.6, [0.74, 0.76, 0.80]);
+      const FENCE_COL = [0.74, 0.76, 0.80];
+      const ARMCO    = [0.90, 0.90, 0.92];
+      const ARMCO_R  = [0.85, 0.18, 0.16];
 
-      guardrail(0.42, 0.58, -1, 3.0, [0.85, 0.18, 0.16]);
-      guardrail(0.20, 0.30,  1, 3.0, [0.90, 0.90, 0.92]);
-      guardrail(0.85, 0.95,  1, 3.0, [0.90, 0.90, 0.92]);
+      // Main straight / T1 approach — catch fence both sides
+      fence(0.00, 0.12, -1,  9, 4.0, FENCE_COL);
+      fence(0.02, 0.14,  1, 10, 3.6, FENCE_COL);
+      // T1–T4 armco (temporary street rails)
+      guardrail(0.03, 0.12,  1, 2.8, ARMCO);
+      guardrail(0.04, 0.10, -1, 2.8, ARMCO);
+      // Lakeside Drive armco (red accent strip on L shore)
+      guardrail(0.42, 0.58, -1, 3.0, ARMCO_R);
+      // Mid parkland rail
+      guardrail(0.20, 0.30,  1, 3.0, ARMCO);
+      // Southern loop approach fence
+      fence(0.60, 0.72,  1,  9, 3.6, FENCE_COL);
+      // Chicane complex — dense temporary barriers both sides
+      fence(0.74, 0.84, -1,  9, 3.6, FENCE_COL);
+      fence(0.74, 0.84,  1,  9, 3.6, FENCE_COL);
+      guardrail(0.75, 0.83, -1, 2.8, ARMCO);
+      guardrail(0.75, 0.83,  1, 2.8, ARMCO);
+      // Pit approach
+      guardrail(0.85, 0.95,  1, 3.0, ARMCO);
+      fence(0.90, 0.99, -1,  9, 3.6, FENCE_COL);
 
-      tyreWall(0.77, 0.80,  1, 3.5, RED);
-      tyreWall(0.78, 0.81, -1, 3.5, WHITE);
+      tyreWall(0.04, 0.07,  1, 3.2, RED);
+      tyreWall(0.05, 0.08, -1, 3.2, WHITE);
+      tyreWall(0.77, 0.81,  1, 3.5, RED);
+      tyreWall(0.78, 0.82, -1, 3.5, WHITE);
 
       for (const [s, side] of [[0.05, 1], [0.30, 1], [0.55, -1],
                                 [0.62, 1], [0.78, -1], [0.90, 1]]) {
@@ -480,7 +471,7 @@
           addBox(out, vadd(a.c, a.u, 8.0), [0.8, 0.5, 1.8], LAMP_COL, [a.r, a.u, a.t]);
         }
       }
-      // Zone C — lakeside Drive (s=0.42–0.60, L side only — R is water)
+      // Zone C — lakeside Drive (s=0.42–0.60, L shore — water + CBD beyond)
       for (let j = 0; j < 16; j++) {
         const a = anchor((k(0.42) + j * 10) % n, -1, 11);
         if (onTrack(a.c[0], a.c[2], 1)) continue;

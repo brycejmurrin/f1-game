@@ -31,9 +31,10 @@ Essentially **flat** — sea-level reclaimed land, no real gradient. Only camber
 Two long straights (a 1km+ run) punctuated by tight hairpins and chicane-tight corners — a stop-and-go rhythm. The signature is the **hotel-straddle**: the Yas Hotel's LED lattice arches *over* the track near the finish. A working **marina** of moored yachts lines the second half (Monaco-vibe). Wide tarmac runoff (not walls) at most corners; crisp red/white sawtooth kerbs throughout.
 
 ## 6. Modelling notes
-- Make the **Yas Hotel** the hero: two curved tower boxes flanking the track joined by an overhead arch/lattice box, all faced with emissive panels that cycle colour — visible from far out and unmistakable at the line.
+- Make the **Yas Hotel** the hero: twin towers flanking the track joined by a continuous LED **gridshell** veil + monocoque bridge deck (cars pass under at s≈0.88). Prefer `gridshellCanopy` + `underpassPortal` over scattered face tiles.
 - Sell **dusk-to-night** with a vertical sky gradient (warm bottom, indigo top) and lean hard on emissive faces: floodlit tarmac, lit windows, dock lamps, kerbs.
-- Build the **marina** as a flat black water box with repeated slim hull boxes + vertical mast spikes and a scatter of warm reflection specks.
+- Build the **marina corridor** (s≈0.52–0.74) as a continuous dark water basin with yacht hierarchy (mega + mid + slim) and a clear sightline to the hotel glow.
+- Keep the **island skyline thin** — sparse resort pockets only; dunes + Ferrari World red + hotel LEDs must dominate (not a continuous mid-rise cityFront wall).
 - Contrast geometry: long clean straight box-chains vs. abrupt tight-hairpin clusters reads as Yas's stop-go layout.
 - Drop **Ferrari World** as one big red roof box + logo disc on the desert side mid-lap; keep the rest of the horizon flat sand under a glowing sky.
 - Ring the lap with tall **light-tower boxes** (dark pole, bright cap) to justify the night lighting.

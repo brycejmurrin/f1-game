@@ -15,35 +15,45 @@
     theme: "green",
     lengthKm: 4.4,
     baseHW: 7,
-    pal: { zenith: [0.26, 0.44, 0.72], horizon: [0.74, 0.76, 0.76], grass: [0.26, 0.50, 0.22], runoff: [0.48, 0.44, 0.34], fogDensity: 0.0016, sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1, 0.88, 0.66], sunColor: [1, 0.86, 0.64] },
+    // ATM.dustyBowl — bleached straw-olive grass/runoff, warm hazy sky (baked into pal
+    // so buildRoad/buildTerrain pick it up; scenery also Object.assigns for live lighting).
+    pal: { zenith: [0.55, 0.62, 0.78], horizon: [0.78, 0.72, 0.58], fog: [0.72, 0.68, 0.55], fogDensity: 0.0022, grass: [0.42, 0.40, 0.22], runoff: [0.58, 0.50, 0.34], ambientSky: [0.62, 0.58, 0.50], ambientGround: [0.40, 0.36, 0.28], sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1.0, 0.94, 0.78], sunColor: [1.0, 0.94, 0.78] },
     segs: [
       { t: 0, l: 300 }, { t: 70, l: 90 }, { t: -50, l: 80 }, { t: 60, l: 80 }, { t: 0, l: 200 }, { t: -80, l: 100 },
       { t: 50, l: 80 }, { t: -60, l: 80 }, { t: 60, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 200 }, { t: -90, l: 100 },
       { t: 70, l: 90 },
     ],
-    // Undulating amphitheatre (~36 m): climb from Turn 1, long descent into the back.
-    elevations: [{ s: 0.20, halfM: 280, rise: 7 }, { s: 0.55, halfM: 320, rise: -8 }],
+    // Undulating amphitheatre (~36 m): SF high → T1 plunge → climb mid → home.
+    elevations: [
+      { s: 0.00, halfM: 240, rise: 14 },   // SF plateau high
+      { s: 0.12, halfM: 340, rise: -22 },  // T1 plunge / T2–4 basin low
+      { s: 0.52, halfM: 380, rise: 16 },   // mid-sector climb crest (T10–11)
+    ],
     scenery: function (api) {
       const { out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
               billboard, gantry, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
-              forestEdge, along } = api;
+              forestEdge, along, pal, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ---- Palette: dry Hungarian summer ----
-      const GRASS  = [0.42, 0.55, 0.27];    // sun-baked grass
-      const GRASS2 = [0.38, 0.52, 0.24];    // richer mid-green
-      const AMPH   = [0.32, 0.50, 0.20];    // amphitheatre grassy banking — strongly green-dominant
-      const AMPH2  = [0.36, 0.54, 0.22];    // sunlit terrace variant
-      const TREE   = [0.20, 0.34, 0.18];    // dark oak/tree masses
-      const TREE2  = [0.26, 0.40, 0.20];    // mid tree green
-      const SCRUB  = [0.46, 0.50, 0.28];    // dry scrub bush
-      const HAZE   = [0.60, 0.62, 0.44];    // far haze-tinted hills
-      const HAZE2  = [0.68, 0.68, 0.54];    // furthest hazed ridge
+      // 1. Dry dusty Hungarian bowl — straw-olive grass/runoff, warm haze.
+      if (ATM && ATM.dustyBowl) Object.assign(pal, ATM.dustyBowl);
+
+      // ---- Palette: dry dusty bowl (straw-olive; amph still G-dominant for rounded mounds) ----
+      const GRASS  = [0.46, 0.50, 0.26];    // sun-baked straw-olive grass
+      const GRASS2 = [0.42, 0.46, 0.24];    // deeper straw verge
+      const AMPH   = [0.48, 0.54, 0.28];    // amphitheatre banking — G-dom → rounded mound
+      const AMPH2  = [0.54, 0.58, 0.32];    // sun-bleached terrace variant
+      const TREE   = [0.28, 0.36, 0.18];    // dry oak / olive tree masses
+      const TREE2  = [0.34, 0.42, 0.20];    // mid dusty canopy
+      const SCRUB  = [0.52, 0.48, 0.28];    // dry scrub bush
+      const HAZE   = [0.68, 0.64, 0.48];    // far haze-tinted hills (dustyBowl fog)
+      const HAZE2  = [0.74, 0.70, 0.56];    // furthest hazed ridge
       const SHELL  = [0.46, 0.47, 0.50];    // grandstand back shell
       const SHELL2 = [0.40, 0.42, 0.46];    // darker shell
       const WHITE  = [0.90, 0.91, 0.93];
+      const GREY   = [0.72, 0.74, 0.78];
       const RED    = [0.82, 0.18, 0.18];
       const STEEL  = [0.66, 0.68, 0.72];
       const WATER  = [0.14, 0.28, 0.32];
@@ -54,6 +64,7 @@
       const CROWD = [[0.55, 0.32, 0.30], [0.50, 0.52, 0.58], [0.62, 0.58, 0.40], [0.48, 0.50, 0.54]];
       const WIN_WARM = [0.92, 0.78, 0.42];
       const WIN_COOL = [0.78, 0.84, 0.96];
+      const ROOF_DK  = [0.20, 0.21, 0.24];  // covered tribune dark roof
 
       // ---- Track centre + radius ----
       let cx = 0, cz = 0;
@@ -80,12 +91,9 @@
       }
 
       // ====================================================================
-      // AMPHITHEATRE BOWL WALLS — green backdrop() rounded mounds
-      // The Hungaroring's signature feature: natural grassy hillsides visible
-      // through the fences all the way around the circuit. Green-dominant
-      // colours trigger the ROUNDED ORGANIC MOUND rendering path (frustum+dome
-      // cap instead of a flat box), so these read as true hillsides.
-      // 12 mounds total (same count as original backdrop zones) for perf parity.
+      // AMPHITHEATRE BOWL WALLS — straw-olive backdrop() rounded mounds
+      // G-dominant colours still trigger the ROUNDED ORGANIC MOUND path
+      // (frustum+dome), so banking reads as dusty hillsides, not boxes.
       // ====================================================================
       const amphPts = [
         [0.05, 1, 180], [0.15, -1, 195], [0.25, 1, 185],
@@ -95,8 +103,7 @@
       ];
       for (const [s, side, dist] of amphPts) {
         const hh = hash(Math.round(s * n) * 11 + side * 3);
-        // Strongly green-dominant (G > R and G > B*1.05) → renders as rounded hill
-        backdrop(K(s), side, dist, [120 + hh * 40, 34 + hh * 14, 110], AMPH);
+        backdrop(K(s), side, dist, [120 + hh * 40, 34 + hh * 14, 110], hh < 0.5 ? AMPH : AMPH2);
       }
 
       // Mid-ring tree-capped mounds at the amphitheatre bowl crest
@@ -111,13 +118,9 @@
       }
 
       // ====================================================================
-      // STADIUM SECTION — Turns 1–4 cluster (large natural-bowl grandstands)
-      // The famous Hungaroring stadium section has tiered stands on both sides.
+      // STADIUM SECTION — Turns 1–4 + mid-lap stands (s=0 main tribune is bespoke below)
       // ====================================================================
-      // Grid stands: pit straight right, main covered Tribune
-      grandstand(0.00, 1, 12, 100, SHELL,  CROWD[1]);   // Grid 1 (main straight)
-      grandstand(0.00, 1, 31,  90, SHELL2, CROWD[0]);   // Grid 2 (behind Grid 1)
-      billboard(K(0.00), 1, 28, 26, 7, RED);
+      billboard(K(0.00), 1, 38, 22, 6, RED);
       // T1 grandstand group: outside of Turn 1 braking zone
       grandstand(0.06,  1, 11,  70, SHELL,  CROWD[0]);
       // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
@@ -143,8 +146,6 @@
         addBox(out, vadd(a.c, a.u, 13.15), [0.3, 0.5, len + 2], FASCIA, b);
         addBox(out, vadd(a.c, a.u, 7.5), [0.2, 0.6, len - 2], FASCIA2, b);
       };
-      standAccent(0.00, 1, 12,  100);
-      standAccent(0.00, 1, 31,  90);
       standAccent(0.06, 1, 11,   70);
       standAccent(0.10, -1, 10, 56);
       standAccent(0.12, -1, 10, 44);
@@ -157,7 +158,6 @@
 
       // Grandstand lit-window concourse strips
       const gsLit = [
-        { s: 0.00, side: 1, gap: 21, len: 96 },
         { s: 0.06, side: 1, gap: 18, len: 66 },
         { s: 0.10, side: -1, gap: 15, len: 52 },
         { s: 0.35, side: -1, gap: 17, len: 44 },
@@ -262,35 +262,70 @@
       }
 
       // ====================================================================
-      // PIT COMPLEX (inside, s≈0) + MAIN GRANDSTAND (outside, s≈0)
+      // 3. MODERN s=0 PIT (L) + COVERED MAIN TRIBUNE (R) — 2024 rebuild silhouette
       // ====================================================================
-      building(K(0.00), -1, 2, 14, 9, 70, { wall: WHITE, window: WIN_WARM, lit: true, floor: 4 });
+      // Long low white/grey pit slab + tiered VIP terrace stacked on top (L).
+      (function modernPit() {
+        const a = anchor(K(0.00), -1, 11);
+        if (onTrack(a.c[0], a.c[2], 20)) return;
+        const b = [a.r, a.u, a.t];
+        out._mat = MAT.CONCRETE;
+        // Garage body — long low slab
+        addBox(out, vadd(a.c, a.u, 3.4), [11, 6.8, 78], WHITE, b);
+        // Garage-door rhythm (dark bays)
+        for (let i = -4; i <= 4; i++)
+          addBox(out, vadd(vadd(a.c, a.u, 2.6), a.t, i * 8.2), [11.4, 4.0, 1.1], [0.28, 0.30, 0.34], b);
+        // Mid cladding band
+        addBox(out, vadd(a.c, a.u, 6.0), [11.6, 0.45, 78], GREY, b);
+        // VIP terrace stacked on top
+        addBox(out, vadd(a.c, a.u, 8.6), [9.5, 3.6, 68], [0.88, 0.89, 0.92], b);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(a.c, a.u, 10.7), [10.5, 0.4, 70], GREY, b);           // terrace roof
+        // Pit-lane canopy overhang toward the track (+r from left side)
+        addBox(out, vadd(vadd(a.c, a.r, 5.5), a.u, 7.0), [8, 0.4, 76], [0.82, 0.84, 0.88], b);
+        out._mat = 0;
+        // Warm VIP glass strip facing the straight
+        addBox(out, vadd(vadd(a.c, a.r, 4.6), a.u, 9.0), [0.2, 1.8, 60], WIN_WARM, b);
+        addBox(out, vadd(vadd(a.c, a.r, 4.6), a.u, 4.2), [0.2, 1.4, 64], WIN_COOL, b);
+      })();
       groundPlane(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK);
-      // Rear hospitality/paddock building — motorhome() reads as a team unit
-      // instead of a generic 4-floor office block.
-      motorhome(K(0.03), -1, 32, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
-      // Comms/broadcast tower — vertical landmark
-      tower(K(0.02), -1, 44, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: true });
+      // Rear hospitality — motorhome row behind the pit slab
+      motorhome(K(0.03), -1, 34, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
+      tower(K(0.02), -1, 46, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: true });
       // Pit wall + kerb trim
       place(K(0.02), -1, 3, [0.8, 1.3, 70], WHITE);
       place(K(0.02), -1, 2, [0.4, 0.3, 70], RED);
-      // Start/finish gantry
       gantry(0.005, 7.5, [0.30, 0.32, 0.36]);
 
-      // Pit building lit window detail
-      {
-        const aW = anchor(K(0.00), -1, 9);
-        for (let wi = 0; wi < 6; wi++) {
-          const tOff = (wi - 2.5) * 10;
-          addBox(out, vadd(vadd(aW.c, aW.t, tOff), aW.u, 2.6),
-                 [0.18, 1.6, 3.8], WIN_WARM, [aW.r, aW.u, aW.t]);
+      // Covered main tribune — big stepped wedge + dark roof box over pale seating (R).
+      (function coveredMainTribune() {
+        const len = 96;
+        for (let t = 0; t < 5; t++) {
+          const a = anchor(K(0.00), 1, 12 + t * 4.2);
+          if (t === 0 && onTrack(a.c[0], a.c[2], len * 0.35)) return;
+          const b = [a.r, a.u, a.t];
+          const h = 2.4 + t * 2.6;
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [5.2, h, len - t * 2], t % 2 ? SHELL : SHELL2, b);
+          out._mat = MAT.FABRIC;
+          addBox(out, vadd(a.c, a.u, h + 0.65), [4.6, 1.2, len - t * 2 - 2], CROWD[t % 4], b);
+          out._mat = 0;
+          addBox(out, vadd(a.c, a.u, h + 1.4), [4.9, 0.25, len - t * 2], [0.90, 0.88, 0.80], b);
         }
-        for (let wi = 0; wi < 6; wi++) {
-          const tOff = (wi - 2.5) * 10;
-          addBox(out, vadd(vadd(aW.c, aW.t, tOff), aW.u, 6.8),
-                 [0.18, 1.6, 3.8], WIN_COOL, [aW.r, aW.u, aW.t]);
-        }
-      }
+        // Dark roof canopy covering the wedge (cantilever toward track)
+        const aR = anchor(K(0.00), 1, 20);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(aR.c, aR.u, 16.2), [20, 0.9, len + 4], ROOF_DK, [aR.r, aR.u, aR.t]);
+        // Leading-edge fascia
+        addBox(out, vadd(vadd(aR.c, aR.r, -8), aR.u, 15.4), [1.2, 1.6, len + 2], [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
+        // Back shell wall behind the top tier
+        const aB = anchor(K(0.00), 1, 34);
+        out._mat = MAT.CONCRETE;
+        addBox(out, vadd(aB.c, aB.u, 9), [3.5, 18, len], SHELL2, [aB.r, aB.u, aB.t]);
+        out._mat = 0;
+        // Under-roof warm strip (reads occupied even in day)
+        addBox(out, vadd(aR.c, aR.u, 15.5), [14, 0.22, len - 4], [1.15, 1.00, 0.72], [aR.r, aR.u, aR.t]);
+      })();
 
       // ====================================================================
       // ACCENT FEATURES — water pond, hedge, Hungarian flags
@@ -375,19 +410,19 @@
                [0.22, 0.23, 0.26], [aR.r, aR.u, aR.t]);
         out._mat = 0;
       }
-      // A near-continuous wall of terraced stands ringing the amphitheatre —
-      // packed tiers on nearly every sweep, both sides of the bowl.
+      // A near-continuous wall of thin terraced stands ringing the amphitheatre —
+      // packed tiers on the main bowl sweeps (vert-light; main tribune owns s=0).
       for (const [s, side, gap, len, tiers] of [
-        [0.06, 1, 24, 70, 5],   // Turn 1 down-hill hillside — the big one
-        [0.12, -1, 20, 56, 4],  // inside the slow complex
-        [0.20, 1, 24, 48, 4],
-        [0.30, -1, 24, 44, 4],
-        [0.40, 1, 26, 46, 4],
-        [0.48, -1, 22, 46, 4],
-        [0.58, 1, 22, 52, 4],
-        [0.68, -1, 20, 48, 4],
-        [0.78, 1, 22, 50, 4],
-        [0.90, 1, 20, 60, 5],   // Club-corner hillside back to the line
+        [0.06, 1, 26, 64, 4],   // Turn 1 downhill hillside
+        [0.12, -1, 22, 48, 3],  // inside the slow complex
+        [0.20, 1, 26, 42, 3],
+        [0.30, -1, 26, 40, 3],
+        [0.40, 1, 28, 42, 3],
+        [0.48, -1, 24, 40, 3],
+        [0.58, 1, 24, 46, 3],
+        [0.68, -1, 22, 42, 3],
+        [0.78, 1, 24, 44, 3],
+        [0.90, 1, 22, 54, 4],   // Club-corner hillside back to the line
       ]) terracedHillStand(s, side, gap, len, tiers);
 
       // ── Trackside jumbotron — a big screen on a truss frame facing the bowl. ──

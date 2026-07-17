@@ -22,13 +22,14 @@ Clear, bright midday sun, sharp shadows, warm Riviera glow. Minimal fog — just
 |------|------|-------|-------------------------------|
 | 0.03 | R | close | Pit wall & start grandstand — long low grey box w/ thin railing boxes |
 | 0.05 | R | mid | Sainte Devote chapel — small cream box, dark pitched-roof cap |
-| 0.10 | both | mid | Beau Rivage climb buildings — stacked pastel blocks rising in tiers |
+| 0.10 | both | close | Beau Rivage pastel street canyon — sparse cream/ochre boxes gap 2–4 m (not dense cityFront) |
 | 0.20 | L | close | Casino de Monte-Carlo — ornate cream box w/ green-tinted roof boxes |
+| 0.21 | R | close | Hôtel de Paris — Casino Square twin, cream mass + ochre mansard opposite Casino |
 | 0.22 | both | close | Casino Square — high-point plaza, low planter boxes, grey kerbs |
 | 0.40 | R | close | Fairmont hairpin hotel — tall pale block wrapping the tight bend |
 | 0.55 | both | close | Tunnel — dark grey box roof + side walls enclosing the track |
 | 0.65 | L | mid | Harbour & yachts — deep-blue water plane + white deck-stacked boxes, thin mast boxes |
-| 0.75 | R | mid | Tabac waterfront buildings — pastel block row facing the marina |
+| 0.72–0.82 | R | close | Tabac–pool inland pastel façade row — cream/terracotta slabs facing marina |
 | 0.80 | L | close | Swimming Pool section — turquoise `[0.20,0.60,0.65]` rectangle, white pool-edge boxes |
 | 0.90 | R | close | Rascasse / paddock buildings — low cream sheds, marina railing |
 | all | both | close | Armco barriers — continuous thin grey boxes lining both sides |

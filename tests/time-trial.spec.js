@@ -46,12 +46,61 @@ test.describe("Time Trial — ghost delta HUD", () => {
     // Should show "REC —" when no time set yet
     expect(gapB).toMatch(/REC/);
   });
+
+  test("records only one monotonic flying lap in the persisted ghost", async ({ page }) => {
+    await enterTT(page);
+    const result = await page.evaluate(() => {
+      localStorage.removeItem("apex26.ghost.v1");
+
+      // Run the real countdown from the grid, then cross once to begin the
+      // flying lap. Sampling staged points makes the regression deterministic.
+      window.__apex.step(1 / 60, 480);
+      window.__apex.jump(0.999, 80, 0);
+      window.__apex.step(1 / 60, 10);
+
+      for (const frac of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.999]) {
+        window.__apex.jump(frac, 80, 0);
+        window.__apex.step(1 / 60, frac === 0.999 ? 10 : 4);
+      }
+
+      const total = window.__apex.info().total;
+      const store = JSON.parse(localStorage.getItem("apex26.ghost.v1") || "{}");
+      return { ghost: store.monza, total };
+    });
+
+    expect(result.ghost.s.length).toBeGreaterThanOrEqual(8);
+    expect(result.ghost.s[0]).toBeLessThan(result.total * 0.02);
+    expect(result.ghost.s.every((s, i) => i === 0 || s >= result.ghost.s[i - 1])).toBe(true);
+  });
 });
 
 // ── Sector splits ─────────────────────────────────────────────────────────────
 
 test.describe("Time Trial — sector splits", () => {
   test.use({ viewport: LANDSCAPE });
+
+  test("initializes sector timing from the player's grid sector", async ({ page }) => {
+    await enterTT(page);
+    const sector = await page.evaluate(() => window.__apex.sectorState());
+    expect(sector.idx).toBe(2);
+  });
+
+  test("records S3 before resetting timing at the finish line", async ({ page }) => {
+    await enterTT(page);
+    const result = await page.evaluate(() => {
+      window.__apex.go();
+      window.__apex.jump(0.999, 80, 0);
+      window.__apex.step(1 / 60, 10);
+      return {
+        timing: window.__apex.timing(),
+        sectors: window.__apex.sectorState()
+      };
+    });
+    expect(result.timing.lap).toBeGreaterThanOrEqual(1);
+    expect(result.sectors.idx).toBe(0);
+    expect(result.sectors.last[2]).not.toBeNull();
+    expect(result.sectors.last[2]).toBeGreaterThan(0);
+  });
 
   test("sector announce fires when crossing S1→S2 boundary", async ({ page }) => {
     await enterTT(page);

@@ -23,11 +23,12 @@
     // Yas Marina underpass: the circuit dips below the Yas Hotel near the end of the lap.
     elevations: [{ s: 0.88, halfM: 160, rise: -4 }],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, place, prop, groundPlane, addBox,
+      const { out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox,
         anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along,
-        cityFront, forestEdge, backdrop, mountain, ferrisWheel } = api;
+        cityFront, forestEdge, backdrop, mountain, ferrisWheel,
+        gridshellCanopy, underpassPortal } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -88,57 +89,42 @@
       }
 
       // ===================================================================
-      // Yas Island skyline: cityFront() street-wall facades with lit windows
-      // Wrap the far side of the circuit in a continuous resort/hotel streetscape.
-      // Using cityFront() instead of scattered ring-boxes so buildings are ALIGNED,
-      // CONTINUOUS, and properly lit for night/dusk legibility.
+      // Thin island skyline — sparse resort pockets only. Cull continuous
+      // cityFront walls so dunes + Ferrari World red + Yas Hotel LEDs dominate
+      // (open leisure island, not downtown strip). Marina sector left open
+      // for hotel sightline (s≈0.52–0.74).
       // ===================================================================
-      // Main Yas island hotel/resort strip — far right of the pit straight
-      cityFront(0.15, 0.35, 1, 55, {
-        minH: 22, maxH: 58, depth: 26, lit: true,
-        palette: [[0.18, 0.20, 0.30], [0.22, 0.22, 0.32], [0.16, 0.18, 0.28], [0.20, 0.24, 0.34]],
-        windowCol: WIN_WARM, step: 24,
+      // Sparse resort pocket near Ferrari World approach (R) — short + spaced
+      cityFront(0.12, 0.22, 1, 72, {
+        minH: 10, maxH: 24, depth: 16, lit: true,
+        palette: [[0.18, 0.20, 0.30], [0.22, 0.22, 0.32], [0.16, 0.18, 0.28]],
+        windowCol: WIN_WARM, step: 55,
       });
-      // Marina/resort strip along the back section — left side
-      cityFront(0.35, 0.55, -1, 52, {
-        minH: 18, maxH: 44, depth: 22, lit: true,
-        palette: [[0.15, 0.17, 0.26], [0.18, 0.20, 0.28], [0.20, 0.22, 0.30]],
-        windowCol: WIN_EMI, step: 22,
+      // Sparse inland pocket mid-lap (L) — kept short so dunes stay readable
+      cityFront(0.36, 0.46, -1, 80, {
+        minH: 10, maxH: 22, depth: 14, lit: true,
+        palette: [[0.15, 0.17, 0.26], [0.18, 0.20, 0.28]],
+        windowCol: WIN_EMI, step: 60,
       });
-      // Yas island east side — opposite the marina
-      cityFront(0.56, 0.76, -1, 50, {
-        minH: 16, maxH: 42, depth: 22, lit: true,
-        palette: [[0.14, 0.16, 0.24], [0.18, 0.19, 0.27], [0.16, 0.18, 0.26]],
-        windowCol: WIN_WARM, step: 20,
-      });
-      // Final sector resort/hotel strip (approach to hotel)
-      cityFront(0.76, 0.88, 1, 54, {
-        minH: 20, maxH: 52, depth: 24, lit: true,
-        palette: [[0.17, 0.19, 0.27], [0.20, 0.21, 0.30], [0.22, 0.22, 0.32]],
-        windowCol: WIN_EMI, step: 22,
-      });
+      // No cityFront opposite the marina or on the hotel approach — keeps the
+      // yacht→hotel glow corridor and open island silhouette.
 
       // ===================================================================
-      // Mid-depth resort backdrop: use backdrop() at track nodes so buildings
-      // are track-aligned and properly lit. backdrop() auto-adds window bands
-      // for tall boxes and lifts night walls off black — replacing the raw
-      // polar-angle box loop (was 56 addBox calls) with 16 backdrop() calls.
+      // Mid-depth resort backdrop — thinned to 8 slots, skipping marina + hotel
+      // sectors so heroes read against dark sky / dunes.
       // ===================================================================
       {
-        // Sample evenly around the lap — every ~6% gives 16 points
-        const slots = [0.02, 0.08, 0.14, 0.20, 0.26, 0.32, 0.38, 0.44,
-                       0.50, 0.58, 0.64, 0.70, 0.77, 0.82, 0.89, 0.94];
+        const slots = [0.04, 0.14, 0.24, 0.34, 0.44, 0.80, 0.92, 0.98];
         for (let i = 0; i < slots.length; i++) {
           const k = K(slots[i]);
           const side = (i % 2) ? 1 : -1;
           const h = hash(i * 17 + 3);
-          const bh = 24 + h * 22;   // 24–46m — tall enough for backdrop() window bands
-          const bw = 50 + h * 60;   // wide facade unit
+          const bh = 16 + h * 14;   // 16–30m — shorter than before
+          const bw = 40 + h * 40;
           const col = i % 3 === 0 ? [0.14, 0.15, 0.20]
                     : i % 3 === 1 ? [0.16, 0.17, 0.22]
                                   : [0.12, 0.14, 0.19];
-          // dist 95–130m back: far enough to not clash with cityFront street wall
-          backdrop(k, side, 95 + h * 35, [bw, bh, 30], col);
+          backdrop(k, side, 110 + h * 40, [bw, bh, 26], col);
         }
       }
 
@@ -219,76 +205,75 @@
       place(K(0.42), -1, 32, [60, 0.4, 30], [0.20, 0.21, 0.22]);   // pale runoff apron
 
       // ===================================================================
-      // s 0.55 R mid — MARINA opens: dark water planes + yacht fleet
-      // White hulls with masts + mooring posts.
+      // s 0.52–0.74 R — MARINA CORRIDOR: continuous dark water basin, yacht
+      // hierarchy (mega + mid + slim), warm dock lamps, hotel glow sightline.
       // ===================================================================
-      for (let i = 0; i < 10; i++) groundPlane(K(0.52 + i * 0.030), 1, 14, [140, 1.2, 140], WATER);
-      for (let i = 0; i < 24; i++) {
-        const k = K(0.53 + (i % 12) * 0.020);
-        const a = anchor(k, 1, 22 + (i % 4) * 10);
-        const off = ((i % 6) - 2.5) * 9.0;
+      // Continuous overlapping water ribbon (basin, not scattered ponds)
+      for (let i = 0; i < 18; i++)
+        groundPlane(K(0.52 + i * 0.013), 1, 16, [170, 1.2, 130], WATER);
+      // Outer water shelf for depth
+      for (let i = 0; i < 10; i++)
+        groundPlane(K(0.53 + i * 0.022), 1, 48, [100, 1.0, 90], WATER);
+
+      // Yacht hierarchy — fewer, clearer sizes (slim → mid → mega at 0.66)
+      for (let i = 0; i < 14; i++) {
+        const k = K(0.53 + (i % 10) * 0.020);
+        const a = anchor(k, 1, 24 + (i % 3) * 12);
+        const off = ((i % 5) - 2) * 10.0;
         const hc = vadd(a.c, a.t, off);
-        const big = (i % 5 === 0) ? 1.5 : (i % 3 === 1 ? 1.2 : 1.0);
-        // hull
-        addBox(out, vadd(hc, a.u, 1.2 * big), [4.8 * big, 2.5 * big, 12 * big], [0.94, 0.95, 0.96], [a.r, a.u, a.t]);
-        // mast
-        addCyl(out, vadd(hc, a.u, 9.0 * big), 0.20, 12 * big, [0.86, 0.88, 0.92], 4, [a.r, a.u, a.t]);
-        // warm reflection speck (water highlight)
-        addBox(out, vadd(hc, a.u, 0.5), [5.2 * big, 0.4, 12.5 * big], [1.0, 0.85, 0.50], [a.r, a.u, a.t]);
-        // cabin on larger boats
-        if (big > 1.2) addBox(out, vadd(hc, a.u, 2.5 * big), [2.4 * big, 1.4 * big, 4.5 * big], [0.82, 0.84, 0.90], [a.r, a.u, a.t]);
+        const big = (i % 7 === 0) ? 1.35 : (i % 3 === 1 ? 1.1 : 0.85);
+        addBox(out, vadd(hc, a.u, 1.1 * big), [4.2 * big, 2.2 * big, 11 * big], [0.94, 0.95, 0.96], [a.r, a.u, a.t]);
+        addCyl(out, vadd(hc, a.u, 8.0 * big), 0.18, 11 * big, [0.86, 0.88, 0.92], 4, [a.r, a.u, a.t]);
+        addBox(out, vadd(hc, a.u, 0.4), [4.6 * big, 0.35, 11.5 * big], [1.0, 0.85, 0.50], [a.r, a.u, a.t]);
+        if (big > 1.2)
+          addBox(out, vadd(hc, a.u, 2.3 * big), [2.2 * big, 1.3 * big, 4.2 * big], [0.82, 0.84, 0.90], [a.r, a.u, a.t]);
       }
-      // mooring posts and buoys
-      for (let i = 0; i < 10; i++) {
-        const k = K(0.54 + i * 0.033);
-        const a = anchor(k, 1, 28 + (i % 3) * 7);
-        // post
+      // Mooring posts
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.54 + i * 0.028);
+        const a = anchor(k, 1, 30 + (i % 2) * 8);
         addCyl(out, a.c, 0.35, 3.2, [0.72, 0.54, 0.28], 6, [a.r, a.u, a.t]);
-        // top ring
         addBox(out, vadd(a.c, a.u, 3.5), [1.6, 0.8, 1.6], [0.85, 0.22, 0.12], [a.r, a.u, a.t]);
       }
 
       // ===================================================================
-      // s 0.62 R mid — MARINA HOTEL cluster: modern white/glass resort slab +
-      // warm base uplight, flanked by two shorter wings.
-      // Emissive lit window highlights: bright overlay so glass reads lit at night.
-      // Using lit:true on building() for proper window glow effect.
+      // s 0.62 R mid — MARINA HOTEL cluster (sightline target from yacht basin)
       // ===================================================================
-      building(K(0.62), 1, 25, 54, 60, 32, { wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
-      building(K(0.60), 1, 30, 36, 36, 26, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_WARM, floor: 5 });
-      building(K(0.64), 1, 30, 36, 40, 26, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 5 });
-      // Bright crown caps — lit top floors glow against the night sky
+      building(K(0.62), 1, 28, 48, 52, 28, { wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
+      building(K(0.60), 1, 34, 30, 32, 22, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_WARM, floor: 5 });
+      building(K(0.64), 1, 34, 30, 36, 22, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 5 });
       {
-        const aH = anchor(K(0.62), 1, 25 + 27);   // dist = gap + w/2
-        addBox(out, vadd(aH.c, aH.u, 62), [56, 8, 34], WIN_EMI, [aH.r, aH.u, aH.t]);
+        const aH = anchor(K(0.62), 1, 28 + 24);
+        addBox(out, vadd(aH.c, aH.u, 54), [50, 7, 30], WIN_EMI, [aH.r, aH.u, aH.t]);
       }
       {
-        const aW1 = anchor(K(0.60), 1, 30 + 18);
-        addBox(out, vadd(aW1.c, aW1.u, 38), [38, 6, 28], WIN_WARM, [aW1.r, aW1.u, aW1.t]);
-        const aW2 = anchor(K(0.64), 1, 30 + 18);
-        addBox(out, vadd(aW2.c, aW2.u, 42), [38, 6, 28], WIN_EMI, [aW2.r, aW2.u, aW2.t]);
+        const aW1 = anchor(K(0.60), 1, 34 + 15);
+        addBox(out, vadd(aW1.c, aW1.u, 34), [32, 5, 24], WIN_WARM, [aW1.r, aW1.u, aW1.t]);
+        const aW2 = anchor(K(0.64), 1, 34 + 15);
+        addBox(out, vadd(aW2.c, aW2.u, 38), [32, 5, 24], WIN_EMI, [aW2.r, aW2.u, aW2.t]);
       }
-      place(K(0.62), 1, 52, [58, 4.2, 9], [1.0, 0.82, 0.46]);   // prominent warm uplit base band
-      place(K(0.60), 1, 46, [38, 3.5, 8], [0.98, 0.78, 0.44]);
-      place(K(0.64), 1, 46, [38, 3.5, 8], [0.98, 0.78, 0.44]);
+      place(K(0.62), 1, 56, [52, 4.0, 8], [1.0, 0.82, 0.46]);
+      place(K(0.60), 1, 50, [32, 3.2, 7], [0.98, 0.78, 0.44]);
+      place(K(0.64), 1, 50, [32, 3.2, 7], [0.98, 0.78, 0.44]);
 
       // ===================================================================
       // s 0.70 R near — marina-side grandstand + amber dock-lamp row
-      // Each post is anchored individually so they sit on the ground correctly.
-      // Light pools on the quayside below each lamp.
       // ===================================================================
       grandstand(0.69, 1, 14, 35, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
       grandstand(0.72, 1, 14, 35, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      for (let i = 0; i < 10; i++) {
-        // Space posts along the track using slightly different K values
+      for (let i = 0; i < 12; i++) {
         const lampK = K(0.68 + i * 0.004);
         const a = anchor(lampK, 1, 11);
-        // Dark steel post
         addCyl(out, a.c, 0.14, 5.5, [0.28, 0.24, 0.17], 4, [a.r, a.u, a.t]);
-        // Warm amber lantern head
         addBox(out, vadd(a.c, a.u, 5.5), [1.4, 1.2, 1.4], WARM, [a.r, a.u, a.t]);
-        // Small warm light pool on the dock below
         addCyl(out, vadd(a.c, a.u, 0.08), 3.5, 0.15, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
+      }
+
+      // Water reflection streaks + dock glow (hotel approach reads from basin)
+      for (let i = 0; i < 8; i++) {
+        const ak = anchor(K(0.53 + i * 0.028), 1, 22 + (i % 3) * 6);
+        addBox(out, vadd(ak.c, ak.u, -0.2), [56, 0.35, 2.5], [1.0, 0.86, 0.44], [ak.r, ak.u, ak.t]);
+        addBox(out, vadd(ak.c, ak.u, -0.5), [56, 0.30, 2.5], [0.45, 0.62, 0.84], [ak.r, ak.u, ak.t]);
       }
 
       // ===================================================================
@@ -298,97 +283,109 @@
       grandstand(0.80, -1, 8, 70, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
 
       // ===================================================================
-      // s 0.88 OVER — W YAS HOTEL (hero): twin tall curved towers with sweeping
-      // LED-lit lattice arch spanning the track. Night-race hero landmark.
-      // The iconic Yas Viceroy hotel straddles the circuit with a glowing LED
-      // grid-shell canopy — teal/magenta/amber LEDs, lit glass facades.
+      // s 0.88 OVER — W YAS HOTEL (hero): twin towers + continuous LED gridshell
+      // veil + monocoque bridge deck. Clear drive-under (elevation dip −4 m
+      // already at s≈0.88). Towers sit well off the verge; lattice/bridge span.
       // ===================================================================
       {
         const k = K(0.88);
-        const H = 105;  // tower height
-        // Flanking twin curved towers
+        const H = 100;
+        // Flanking twin towers — far enough out that podium never clips tarmac
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 16);
+          const a = anchor(k, side, 30);
+          const b = [a.r, a.u, a.t];
           out._mat = MAT.GLASS;
-          // Tapered tower core — dark glass
-          addFrustum(out, a.c, 22, 16, H, [0.10, 0.11, 0.16], 8, [a.r, a.u, a.t]);
-          // Dark glass podium base
-          addBox(out, vadd(a.c, a.u, 6), [38, 12, 44], [0.08, 0.09, 0.13], [a.r, a.u, a.t]);
+          addFrustum(out, a.c, 18, 14, H, [0.10, 0.11, 0.16], 8, b);
+          addBox(out, vadd(a.c, a.u, 5), [26, 10, 34], [0.08, 0.09, 0.13], b);
           out._mat = 0;
-          // Warm uplit base band
-          addBox(out, vadd(a.c, a.u, 1.4), [41, 3.2, 47], [1.0, 0.80, 0.44], [a.r, a.u, a.t]);
-          // Plaza light pool under each tower — large glowing oval on the ground
-          addCyl(out, vadd(a.c, a.u, 0.12), 18, 0.25, POOL, 12, [a.r, a.u, a.t]);
-          addCyl(out, vadd(a.c, a.u, 0.06), 32, 0.10, POOL_SOFT, 12, [a.r, a.u, a.t]);
+          addBox(out, vadd(a.c, a.u, 1.2), [28, 2.8, 36], [1.0, 0.80, 0.44], b);
+          addCyl(out, vadd(a.c, a.u, 0.12), 14, 0.22, POOL, 10, b);
           out._mat = MAT.GLASS;
-          // Emissive lit floors — bright window bands at several heights
-          for (let fl = 0; fl < 6; fl++) {
-            const fy = 14 + fl * 14;
-            const col = (fl % 2 === 0) ? WIN_EMI : WIN_WARM;
-            addBox(out, vadd(a.c, a.u, fy), [36, 4, 42], col, [a.r, a.u, a.t]);
+          for (let fl = 0; fl < 5; fl++) {
+            const fy = 16 + fl * 15;
+            addBox(out, vadd(a.c, a.u, fy), [24, 3.5, 32], (fl % 2 === 0) ? WIN_EMI : WIN_WARM, b);
           }
+          out._mat = 0;
+          // Sparse wrap LED bands (gridshell is the primary veil — cut face spam)
           out._mat = MAT.METAL;
-          // LED grid-shell facing the track — larger, brighter panels
-          for (let gy = 0; gy < 10; gy++) for (let gx = 0; gx < 5; gx++) {
-            const cc = vadd(vadd(a.c, a.u, 12 + gy * 7), a.t, (gx - 2) * 8.0);
-            const col = LED_CYCLE[(gx + gy + k) % 3];
-            addBox(out, vadd(cc, a.r, -side * 16.5), [0.8, 5.0, 6.0], col, [a.r, a.u, a.t]);
-          }
-          // Wrap-around LED band on the side face
-          for (let gy = 0; gy < 10; gy++) {
-            const cc = vadd(a.c, a.u, 12 + gy * 7);
-            const col = LED_CYCLE[(gy + k + 1) % 3];
-            addBox(out, vadd(cc, a.t, side * 21.0), [0.8, 5.0, 5.0], col, [a.r, a.u, a.t]);
+          for (let gy = 0; gy < 6; gy++) {
+            const cc = vadd(a.c, a.u, 18 + gy * 12);
+            const col = LED_CYCLE[(gy + (side > 0 ? 1 : 0)) % 3];
+            addBox(out, vadd(cc, a.r, -side * 12), [0.7, 4.0, 8.0], col, b);
           }
           out._mat = 0;
-          // Crown cap (bright) + magenta beacon
-          addBox(out, vadd(a.c, a.u, H + 2), [20, 4, 24], [1.0, 0.98, 0.88], [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, H + 6), [5, 6, 5], LED_MAG, [a.r, a.u, a.t]);
-          // Warm gold LED strip along roof line
-          addBox(out, vadd(a.c, a.u, H - 1.5), [42, 1.8, 54], [1.0, 0.88, 0.38], [a.r, a.u, a.t]);
+          addBox(out, vadd(a.c, a.u, H + 2), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
+          addBox(out, vadd(a.c, a.u, H + 5.5), [4, 5, 4], LED_MAG, b);
+          addBox(out, vadd(a.c, a.u, H - 1.5), [28, 1.5, 38], [1.0, 0.88, 0.38], b);
         }
-        // SWEEPING CANOPY ARCH — the iconic LED gridshell spanning over the track.
-        // Stronger glow: larger node boxes, bright mid-arch strip colour.
-        for (const side of [-1, 1]) {
-          const a = anchor(k, side, 16);
-          out._mat = MAT.METAL;
-          for (let band = -2; band <= 2; band++) {
-            const foff = band * 9.0;
-            let prevPt = null;
-            for (let j = 0; j <= 8; j++) {
-              const t = j / 8;
-              const dist = 16 - t * 11;                      // 16 → 5m off track edge
-              const ap = anchor(k, side, dist);
-              const lift = 26 + Math.sin(t * Math.PI) * 28;  // arc peak ~54m
-              const c = vadd(vadd(ap.c, ap.u, lift), ap.t, foff);
-              // Mid-arch (t≈0.5) gets extra bright white; shoulders get colour cycle
-              const col = (j >= 3 && j <= 5) ? FLOOD : LED_CYCLE[((j + Math.round(band) + side) % 3 + 3) % 3];
-              addBox(out, c, [4.0, 2.0, 3.5], col, [ap.r, ap.u, ap.t]);
-              // Dark structural strut between nodes
-              if (prevPt) {
-                const mid = [(prevPt[0] + c[0]) / 2, (prevPt[1] + c[1]) / 2, (prevPt[2] + c[2]) / 2];
-                addBox(out, mid, [3.5, 0.9, 1.4], [0.06, 0.07, 0.10], [ap.r, ap.u, ap.t]);
+
+        // Continuous LED gridshell spanning the racing line (centreline base)
+        const basis = (() => {
+          const a = anchor(k, 1, 0);
+          return [a.r, a.u, a.t];
+        })();
+        const shellC = [px[k], py[k], pz[k]];
+        if (typeof gridshellCanopy === "function") {
+          // w large enough that corner feet sit beyond hw (~8 m) + clearance
+          gridshellCanopy(shellC, basis, {
+            w: 56, depth: 40, h: 34, cols: 9, rows: 6,
+            ledCols: LED_CYCLE, strutCol: [0.06, 0.07, 0.10],
+          });
+          // Second shallower veil slightly ahead — reads as continuous shell
+          const k2 = K(0.875);
+          const a2 = anchor(k2, 1, 0);
+          gridshellCanopy([px[k2], py[k2], pz[k2]], [a2.r, a2.u, a2.t], {
+            w: 52, depth: 28, h: 30, cols: 7, rows: 5,
+            ledCols: [LED_MAG, LED_TEAL, LED_AMBER], strutCol: [0.06, 0.07, 0.10],
+          });
+        } else {
+          // TODO(shared): use gridshellCanopy — inline arch fallback
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, 18);
+            out._mat = MAT.METAL;
+            for (let band = -1; band <= 1; band++) {
+              let prevPt = null;
+              for (let j = 0; j <= 8; j++) {
+                const t = j / 8;
+                const dist = 18 - t * 12;
+                const ap = anchor(k, side, dist);
+                const lift = 28 + Math.sin(t * Math.PI) * 26;
+                const c = vadd(vadd(ap.c, ap.u, lift), ap.t, band * 8);
+                const col = (j >= 3 && j <= 5) ? FLOOD : LED_CYCLE[(j + band + 3) % 3];
+                addBox(out, c, [3.5, 1.8, 3.0], col, [ap.r, ap.u, ap.t]);
+                if (prevPt) {
+                  const mid = [(prevPt[0] + c[0]) / 2, (prevPt[1] + c[1]) / 2, (prevPt[2] + c[2]) / 2];
+                  addBox(out, mid, [3.0, 0.8, 1.2], [0.06, 0.07, 0.10], [ap.r, ap.u, ap.t]);
+                }
+                prevPt = c;
               }
-              prevPt = c;
             }
+            out._mat = 0;
           }
-          out._mat = 0;
         }
-        // Reflecting pool at hotel base
-        groundPlane(K(0.87), 1, 12, [80, 1.2, 70], WATER);
-        // Marina water light-reflection streaks (warm + cool)
-        for (let i = 0; i < 6; i++) {
-          const ak = anchor(K(0.53 + i * 0.035), 1, 22 + (i % 3) * 6);
-          addBox(out, vadd(ak.c, ak.u, -0.2), [52, 0.35, 2.5], [1.0, 0.86, 0.44], [ak.r, ak.u, ak.t]);
-          addBox(out, vadd(ak.c, ak.u, -0.5), [52, 0.30, 2.5], [0.45, 0.62, 0.84], [ak.r, ak.u, ak.t]);
+
+        // Monocoque bridge deck — clear drive-under soffit over the racing line
+        if (typeof underpassPortal === "function") {
+          underpassPortal(0.88, {
+            h: 9.5, thick: 2.4, depth: 32, pierGap: 2.2, pierW: 2.0,
+            col: [0.08, 0.09, 0.12],
+          });
+          underpassPortal(0.875, {
+            h: 9.2, thick: 1.8, depth: 22, pierGap: 2.2, pierW: 1.8,
+            col: [0.10, 0.11, 0.14],
+          });
+        } else {
+          // TODO(shared): use underpassPortal — RAW span via wide place is unsafe;
+          // leave elevation dip alone as the underpass cue.
         }
-        // Hotel dock lights — each as a separate anchor so spacing reads naturally
+
+        // Reflecting pool at hotel base (R, clear of racing line)
+        groundPlane(K(0.87), 1, 18, [70, 1.2, 55], WATER);
+        // Hotel dock lights
         for (let i = 0; i < 7; i++) {
           const dockK = K(0.86 + i * 0.003);
-          const da = anchor(dockK, 1, 9);
+          const da = anchor(dockK, 1, 10);
           addBox(out, vadd(da.c, da.u, 0.4), [2.4, 0.6, 2.4], LED_AMBER, [da.r, da.u, da.t]);
-          addBox(out, vadd(da.c, da.u, -0.2), [2.6, 0.22, 2.6], [1.0, 0.84, 0.42], [da.r, da.u, da.t]);
-          // tiny dock light pool
           addCyl(out, vadd(da.c, da.u, 0.08), 2.8, 0.12, [0.98, 0.88, 0.50], 7, [da.r, da.u, da.t]);
         }
       }
@@ -438,18 +435,16 @@
         addCyl(out, vadd(pa.c, pa.u, 0.1), 8, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
       }
 
-      // additional yacht mooring: 12 smaller boats behind the main marina fleet
-      for (let i = 0; i < 12; i++) {
+      // Additional slim yachts on the outer marina shelf (hierarchy: mega at 0.66
+      // is the hero; these fill the far basin without cluttering the sightline)
+      for (let i = 0; i < 8; i++) {
         const k = K(0.58 + (i % 6) * 0.024);
-        const a = anchor(k, 1, 32 + (i % 2) * 14);
+        const a = anchor(k, 1, 42 + (i % 2) * 12);
         const off = ((i % 4) - 1.5) * 9;
         const hc = vadd(a.c, a.t, off);
-        // smaller hull
-        addBox(out, vadd(hc, a.u, 1.0), [3.5, 2.0, 9], [0.90, 0.91, 0.93], [a.r, a.u, a.t]);
-        // mast
-        addCyl(out, vadd(hc, a.u, 7), 0.15, 10, [0.84, 0.85, 0.88], 4, [a.r, a.u, a.t]);
-        // deck light reflection
-        addBox(out, vadd(hc, a.u, 0.3), [4.0, 0.3, 9.5], LED_AMBER, [a.r, a.u, a.t]);
+        addBox(out, vadd(hc, a.u, 1.0), [3.2, 1.8, 8], [0.90, 0.91, 0.93], [a.r, a.u, a.t]);
+        addCyl(out, vadd(hc, a.u, 6.5), 0.14, 9, [0.84, 0.85, 0.88], 4, [a.r, a.u, a.t]);
+        addBox(out, vadd(hc, a.u, 0.3), [3.6, 0.25, 8.5], LED_AMBER, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
@@ -669,9 +664,9 @@
       // cutting across the view. Two passes: mid-field ridge + far hazy horizon.
       // ----
       {
-        // Mid-field low ridges (dist 200–280m) — warm ochre desert floor
+        // Mid-field low ridges — skip marina corridor (0.52–0.74) so water + hotel glow read
         const midSlots = [0.04, 0.12, 0.20, 0.28, 0.36, 0.44,
-                          0.52, 0.60, 0.68, 0.76, 0.84, 0.92];
+                          0.78, 0.86, 0.94];
         for (let i = 0; i < midSlots.length; i++) {
           const k = K(midSlots[i]);
           const side = (i % 2) ? 1 : -1;
@@ -680,8 +675,8 @@
           const ridgeW = 220 + h * 120;
           backdrop(k, side, 200 + h * 80, [ridgeW, ridgeH, 100], [0.64, 0.52, 0.36]);
         }
-        // Far hazy dune horizon (dist 340–440m) — muted dusty tones
-        const farSlots = [0.06, 0.18, 0.30, 0.42, 0.54, 0.66, 0.78, 0.90];
+        // Far hazy dune horizon
+        const farSlots = [0.06, 0.18, 0.30, 0.42, 0.80, 0.92];
         for (let i = 0; i < farSlots.length; i++) {
           const k = K(farSlots[i]);
           const side = (i % 2) ? 1 : -1;
@@ -745,9 +740,9 @@
       };
       arena(K(0.50), -1, 110);
 
-      // ── Observation wheel — Yas leisure-district landmark ───────────────
+      // ── Observation wheel — Yas leisure-district landmark (one only; second
+      // wheel at marina cluttered the hotel sightline)
       ferrisWheel(K(0.20), 1, 150, 34);
-      ferrisWheel(K(0.62), 1, 130, 26);
     },
   }
   );

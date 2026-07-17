@@ -31,15 +31,16 @@ pale dusty green-gray.
 |------|------|----------|-----------------------|
 | 0.00 | R | near | Main grandstand: long tall stepped box, dark grey with light seat rows |
 | 0.02 | L | near | Pit/paddock block: flat low wide box, white/grey |
-| 0.09 | L | far | 251 ft Observation Tower: tall slender box + small viewing-deck box on top, white/grey |
+| 0.09–0.13 | L | mid | Turn 1 Big Red: packed crowd terrace + stands on red-soil climb (no tower) |
 | 0.10 | R | mid | Uphill Turn 1: red-soil bank box rising sharply, kerb stripe at apex |
 | 0.18 | both | far | Esses spectator mounds: low green grass-ramp boxes flanking the track |
 | 0.30 | R | far | Scattered oak/cedar: small dark-green clustered boxes on dry-grass field |
+| 0.38–0.55 | L | far | Thin Austin skyline haze: sparse low boxes only — Hill Country first |
 | 0.46 | L | mid | Back-straight grandstand: low thin seating box, then open green run |
 | 0.55 | R | far | Hill Country ridgeline: long low layered green-gray silhouette boxes |
 | 0.63 | R | near | Turn 12 hairpin braking zone: wide grey runoff box, big kerb |
-| 0.64 | R | mid | Austin360 Amphitheater: large fan-shaped canopy box on a green slope box |
 | 0.65 | R | far | Red-and-white grandstand framework/tower: open red lattice box + white panels |
+| 0.76–0.80 | R | mid/far | Austin360 Amphitheater + 251 ft Observation Tower: pale shaft + red tube veil canopy over stage (T16–18) |
 | 0.83 | L | far | Multi-apex sweeper backdrop: dry-grass field + oak/cedar cluster boxes |
 | 0.95 | R | near | Final-corner grandstand: stepped seating box leading onto main straight |
 
@@ -52,12 +53,15 @@ pale dusty green-gray.
 - **Kerbs:** bold red/white striped low boxes at every apex and exit.
 
 ## 6. Modelling Notes
-- Lead with the **251 ft tower** as a single tall pale spike near T1 — the instant
-  silhouette read for COTA.
-- Sell **Turn 1** with a steep red-soil bank box and a sharp kerb stripe at the crest.
-- Layer **ridgeline boxes** in receding green-gray bands on the horizon for depth.
+- Lead with the **251 ft Observation Tower** as a pale shaft + cascading **red tube
+  veil** at the amphitheater (T16–18, `s≈0.76–0.80`) — not at Turn 1. The veil
+  spills down to form the stage canopy; drop rainbow LED rings.
+- Sell **Turn 1 as Big Red only**: steep red-soil banks, packed crowd terraces, and
+  hill stands — no tower competing for the climb silhouette.
+- Keep the frame **Hill Country first**: sparse far skyline haze, no Velocity Tower
+  / fantasy mid-ground landmarks; layer ridgeline boxes for depth.
 - Keep infield **open and grassy** — few boxes, warm yellow-green ground plane.
-- Use the **red lattice grandstand** and **amphitheater fan canopy** as the second
-  landmark cluster around T12.
+- Use the **red lattice grandstand** and **amphitheater + tower** as the mid/late-lap
+  landmark cluster.
 - Dust the mid-distance with sparse **dark-green oak/cedar clusters** over dry grass;
   fade everything into thin warm haze at the edges.

@@ -500,6 +500,10 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
+function sectorAt(s) {
+  const frac = wrapS(s) / track.total;
+  return frac < 1 / 3 ? 0 : frac < 2 / 3 ? 1 : 2;
+}
 // Render interpolation: blend a car's arc position between its previous and
 // current fixed-physics-step values by the leftover-accumulator fraction, so
 // motion stays smooth between steps (no judder on 120/144 Hz or uneven frames).
@@ -652,6 +656,7 @@ function makeCars() {
       cars.push({
         team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
+        fuelId: getTeamParts(team.id).fuel || "standard",   // tints the exhaust flame
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otCool: 0, deploying: false,
@@ -1581,7 +1586,7 @@ function startRace() {
   recomputePlayerMods();
   resultT = 0;
   camRoll = 0;
-  sectorIdx = 0; sectorStartT = 0;
+  sectorIdx = sectorAt(player.s); sectorStartT = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
@@ -1891,7 +1896,6 @@ function update(dt) {
       for (const l of els.lights.children) l.classList.remove("on");
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
-      if (timeTrial) Ghost.startLap();
       cars.forEach((c) => { c.lapStart = 0; });
     }
     return;
@@ -2648,32 +2652,12 @@ function updateCar(c, dt, ranked) {
   }
   c.totalT += dt;
   c.lapTime += dt;
-  if (timeTrial && c.isPlayer) Ghost.record(c.lapTime, c.s, c.x);
   c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
-  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
-  if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
-    c.lap++;
-    if (c.lap > 1) {
-      const lapDone = c.lapTime;
-      c.lastLap = lapDone;
-      if (lapDone < c.best) c.best = lapDone;
-      if (c.isPlayer && soundOn) GameAudio.lap();
-      if (c.isPlayer && timeTrial) onTTLap(lapDone);
-    }
-    c.lapTime = 0;
-    if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
-    if (c.isPlayer && c.lap === lapsTarget) announce("FINAL LAP", 1.6);
-    if (c.lap > lapsTarget) {
-      c.finished = true;
-      c.finishT = raceT;
-      if (c.isPlayer) announce("FINISH!", 2);
-    }
-  }
 
-  // Sector detection: thirds of track
+  // Sector detection: thirds of track. This must run before finish-line timing
+  // resets so a forward S3→S1 crossing records the completed S3 split.
   if (c.isPlayer && state === "race" && track) {
-    const sFrac = c.s / track.total;
-    const newSector = sFrac < 1/3 ? 0 : sFrac < 2/3 ? 1 : 2;
+    const newSector = sectorAt(c.s);
     if (newSector !== sectorIdx) {
       if (ds > 0 && (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0))) {
         // completed the current sector (forward progress only — a backward crossing
@@ -2695,6 +2679,29 @@ function updateCar(c, dt, ranked) {
       sectorStartT = c.lapTime;
     }
   }
+
+  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
+  if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
+    c.lap++;
+    if (c.lap > 1) {
+      const lapDone = c.lapTime;
+      c.lastLap = lapDone;
+      if (lapDone < c.best) c.best = lapDone;
+      if (c.isPlayer && soundOn) GameAudio.lap();
+      if (c.isPlayer && timeTrial) onTTLap(lapDone);
+    } else if (c.isPlayer && timeTrial) {
+      Ghost.startLap();
+    }
+    c.lapTime = 0;
+    if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
+    if (c.isPlayer && c.lap === lapsTarget) announce("FINAL LAP", 1.6);
+    if (c.lap > lapsTarget) {
+      c.finished = true;
+      c.finishT = raceT;
+      if (c.isPlayer) announce("FINISH!", 2);
+    }
+  }
+  if (timeTrial && c.isPlayer) Ghost.record(c.lapTime, c.s, c.x);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.isPlayer && state === "race" && !c.finished) {
@@ -4065,14 +4072,23 @@ function render(dt) {
     // when braking" — you sit 2 m behind the P11 gearbox on the grid, and you
     // close right up on the car ahead under braking). The steady red LED gives
     // every rear an anchor light, like a real night race.
-    if ((wet && ((raceT * 4.4) % 1) < 0.55) || (!wet && night)) {
+    // Real-F1 touches: the LED brightness tracks the car's live ERS charge (dim
+    // when flat, bright when full — but never fully dark, so it stays an anchor),
+    // and it FLASHES the same ~4 Hz FIA pattern while harvesting/deploying (OT or
+    // active boost), exactly like the real rear light on a push lap.
+    const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
+    const _ledDeploy = (c.otT > 0) || (c.boostOn && c.energy > 0.01);
+    if ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe))) {
       const W = _ringWorld;
       W.set(tmpMat);
       // 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight.
       W[12] += W[4] * 0.50 - W[8] * 2.615;
       W[13] += W[5] * 0.50 - W[9] * 2.615;
       W[14] += W[6] * 0.50 - W[10] * 2.615;
-      gfx.draw(getRainLight(), W, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true });
+      // Brightness by ERS charge: 0.45 (flat) → 1.0 (full). Wet safety strobe
+      // stays full-bright regardless — a rain light must not dim with battery.
+      const _ledEmis = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
+      gfx.draw(getRainLight(), W, { emissive: _ledEmis, roughness: 0.9, specular: 0, noAlphaWrite: true });
     }
     // BOOST: blue-white plasma flame + strobing rear ERS strip while deploying
     // (any time of day); the strip glows steady dim while boost is armed.
@@ -4108,7 +4124,7 @@ function render(dt) {
       W[12] += W[4] * 0.40 - W[8] * 2.63;
       W[13] += W[5] * 0.40 - W[9] * 2.63;
       W[14] += W[6] * 0.40 - W[10] * 2.63;
-      gfx.draw(getExhaustFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
+      gfx.draw(getExhaustFlame(c.fuelId), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;

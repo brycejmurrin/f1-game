@@ -22,14 +22,12 @@ Essentially flat — Strip and surrounding streets sit at one grade. Only trivia
 | 0.00 | R | near | Pit/paddock grandstand: long low white-LED box block, bright rim |
 | 0.05 | L | mid | Illuminated billboard towers: thin tall boxes, magenta/cyan faces |
 | 0.15 | both | near | Concrete barriers + debris fence: continuous low grey box wall |
-| 0.30 | L | near | MSG Sphere: huge sphere faked as faceted glowing cube, color-cycling `[0.2,0.4,0.9]`→`[0.9,0.3,0.6]` |
-| 0.35 | R | mid | Venetian tower cluster: tall warm-cream box stack with lit grid |
-| 0.45 | R | far | Distant red-rock mountains: low flat dark-maroon `[0.18,0.08,0.07]` silhouette boxes |
-| 0.50 | L | mid | Strip casino wall — Strip straight begins; Mirage/Caesars: stacked warm-glow towers |
-| 0.58 | L | mid | Caesars Palace: wide ivory box, gold up-lights `[1.0,0.8,0.4]` |
-| 0.64 | L | near | Paris Las Vegas — Eiffel replica: tapering lattice of thin dark boxes, amber spotlights |
-| 0.70 | R | near | High Roller observation wheel: tall ring approximated by thin boxes ringed with cyan LED dots |
-| 0.74 | L | mid | Bellagio: long low elegant box, soft warm wash + blue fountain-pool strip |
+| 0.30 | L | near | MSG Sphere: single-hue cyan-blue LED orb (few frustum bands + equatorial wash) |
+| 0.49 | L | mid | Venetian / Palazzo at Strip entry: warm-cream tower cluster + campanile |
+| 0.55 | L | mid | High Roller (LINQ, east of Blvd): tall cyan-lit observation wheel |
+| 0.62 | R | mid | Caesars Palace: wide ivory box, gold up-lights `[1.0,0.8,0.4]` |
+| 0.68 | R | mid | Bellagio + fountains + reflective lake: long elegant box, blue pool strip |
+| 0.74 | L | near | Paris Las Vegas — Eiffel replica: tapering tower, amber spotlights |
 | 0.85 | both | near | Strip-side neon billboards + barrier walls flanking final straight |
 | 0.95 | R | near | Harmon Ave chicane grandstands: tiered dark boxes with bright crowd-light flecks |
 
@@ -43,7 +41,8 @@ Essentially flat — Strip and surrounding streets sit at one grade. Only trivia
 ## 6. Modelling Notes
 - Light does the work: keep geometry blocky and let emissive tints sell the neon. Buildings are simple tall boxes with bright self-lit faces.
 - Layer three depth bands: barrier walls (near), casino facades (mid), mountain silhouette (far) — mountains nearly black against the void sky.
-- The Sphere is the hero landmark: oversize it, give it a slow color cycle so it reads instantly even as a faceted cube.
+- The Sphere is the hero of its sector: one oversized single-hue LED orb (not a rainbow onion); keep Venetian off ~s 0.30.
+- Strip corridor order (southbound): Venetian L → High Roller L/east → Caesars R → Bellagio+lake R → Paris/Eiffel L → Harmon. Cull off-route Luxor / Welcome / MGM.
 - Make the Strip straight feel vast — taller, denser, warmer box clusters than the Sphere sector to contrast the canyon vs. the open paddock.
 - Saturate accents (magenta/cyan/gold) but keep asphalt and sky near-black so glow pops.
-- Mirror lights with faint ground reflection strips (dim emissive boxes on the asphalt) to imply wet-look Strip shine.
+- Wet-look neon as thin emissive strips on the verge only (never centerline / tarmac pools).

@@ -139,18 +139,26 @@ function getRainLight() {
   rainLightMesh = _gfx.createMesh(out);
   return rainLightMesh;
 }
-// Exhaust flame: a tiny HDR-amber quad behind the tailpipe, flickering while
-// the player is on throttle after dark — an arcade heat-glow cue.
-let exhaustMesh = null;
-function getExhaustFlame() {
-  if (exhaustMesh) return exhaustMesh;
-  const R = [2.6, 1.05, 0.25], out = { pos: [], nrm: [], col: [], idx: [] };
+// Exhaust flame: a tiny HDR quad behind the tailpipe, flickering while the
+// player is on throttle after dark — an arcade heat-glow cue.
+// Flame tint by fuel spec (the chosen Parts.CATALOG.fuel id): different burns
+// read as different colours. standard = pump amber, biofuel = cooler green-amber,
+// quali_mix = hot blue-white. Cached per tier (built lazily, keyed by id).
+const EXHAUST_TINT = {
+  standard:  [2.6, 1.05, 0.25],   // amber (baseline — unchanged)
+  biofuel:   [1.7, 1.9,  0.55],   // green-amber (biofuel burns cooler/greener)
+  quali_mix: [1.5, 1.7,  2.4],    // hot blue-white (max energy density)
+};
+const _exhaustMeshes = {};
+function getExhaustFlame(fuelId) {
+  const key = EXHAUST_TINT[fuelId] ? fuelId : "standard";
+  if (_exhaustMeshes[key]) return _exhaustMeshes[key];
+  const R = EXHAUST_TINT[key], out = { pos: [], nrm: [], col: [], idx: [] };
   const w = 0.035, h = 0.030;
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  exhaustMesh = _gfx.createMesh(out);
-  return exhaustMesh;
+  return (_exhaustMeshes[key] = _gfx.createMesh(out));
 }
 // Boost flame: a larger blue-white plasma quad behind the tailpipe while ERS
 // boost is deploying — visible at every time of day.

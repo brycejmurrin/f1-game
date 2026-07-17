@@ -25,9 +25,10 @@
     elevations: [{ s: 0.03, halfM: 260, rise: -4 }, { s: 0.45, halfM: 340, rise: -7 }],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, hash, vadd,
-        place, anchor, addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
-        palm, bush, grandstand, building, cityFront, tower, billboard, gantry, marshalPost,
-        mountain, backdrop, fence, wall, guardrail, tyreWall, onTrack, every } = api;
+        place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
+        bush, grandstand, building, cityFront, tower, billboard, gantry, marshalPost,
+        mountain, backdrop, fence, wall, guardrail, tyreWall,
+        floodMast: apiFloodMast, floodMastRing, sailCanopy } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Desert palette (night race, Sakhir) ──────────────────────────────
@@ -43,16 +44,17 @@
       const STEEL       = [0.16, 0.16, 0.19];
       const PIT_CREAM   = [0.91, 0.89, 0.84];  // cream-white for main pit building
       const STAND_CREAM = [0.84, 0.82, 0.76];  // slightly warm for grandstand shells
-      // Floodlights: bright near-white lamp caps + warm pool halo on the ground
-      const FLOOD       = [0.95, 0.95, 0.88];
-      const POOL        = [0.82, 0.80, 0.68];  // pale warm disc on tarmac/sand
+      // Floodlights: cool-white lens + cool pool (night-race drama)
+      const FLOOD       = [1.10, 1.14, 1.22];
+      const POOL        = [0.72, 0.78, 0.88];
       // Night-lit windows: warm amber (office glow), cool blue (control/tech rooms)
       const WIN_WARM    = [0.92, 0.80, 0.44];  // office/hospitality lit window — warm amber
       const WIN_COOL    = [0.52, 0.70, 0.94];  // timing/technical lit window — cool blue
-      // Sakhir Tower: pale cream cylindrical shaft + LED video façade bands
+      // Sakhir Tower: pale cream cylindrical shaft + bright LED video façade bands
       const TOWER_CYL   = [0.84, 0.83, 0.79];
       const TOWER_PALE  = [0.85, 0.85, 0.80];
-      const TOWER_LED   = [0.92, 0.88, 0.55];  // warm LED glow on façade rings
+      const TOWER_LED   = [1.45, 1.28, 0.62];  // HDR warm LED rings (brighten for night read)
+      const SAIL_COL    = [0.96, 0.94, 0.90];
       // Night-race beacon: warm amber nav light + cool video-screen accent
       const BEACON_WARM = [0.98, 0.75, 0.35];
       const BEACON_COOL = [0.70, 0.88, 0.98];
@@ -121,14 +123,18 @@
         }
       })();
 
-      // ── Floodlight mast: dark pole + bright lamp-bank cap + ground pool ──
-      // Gap is measured from road edge — always call with gap >= 16 to clear barriers.
+      // ── Floodlight mast: prefer shared api (~36–42 m cool-white dual-arm) ──
+      // Gap is metres beyond road edge — keep gap >= 16 to clear barriers.
       const floodMast = (k, side, gap, h) => {
+        const mastH = (h != null ? h : 36 + hash(k * 13) * 6); // 36–42 m when jittered
+        if (typeof apiFloodMast === "function") {
+          apiFloodMast(k, side, gap, { h: mastH, cool: true, pool: true });
+          return;
+        }
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        addCyl(out, a.c, 0.4, h, STEEL, 6, b);
-        addBox(out, vadd(a.c, a.u, h), [5.25, 1.75, 2.0], FLOOD, b);  // lamp bank
-        // light pool: flat pale disc (box) at ground level under the mast
-        addBox(out, vadd(a.c, a.u, 0.12), [8.0, 0.25, 8.0], POOL, b);
+        addCyl(out, a.c, 0.45, mastH, STEEL, 6, b);
+        addBox(out, vadd(a.c, a.u, mastH), [5.4, 1.6, 2.2], FLOOD, b);
+        addBox(out, vadd(a.c, a.u, 0.12), [8.0, 0.22, 8.0], POOL, b);
       };
 
       // ── Sculpted organic dune mound (replaces flat frustum wedge) ───────
@@ -143,11 +149,11 @@
         });
       };
 
-      // ── Three-pole light bank (cluster of masts) ─────────────────────────
+      // ── Three-pole light bank (cluster of tall cool-white masts) ─────────
       const lightBank = (k, side, gap) => {
         for (const off of [-6, 0, 6]) {
           const kk = (k + off + n) % n;
-          floodMast(kk, side, gap, 24 + hash(kk * 3) * 4);
+          floodMast(kk, side, gap, 36 + hash(kk * 3) * 6);
         }
       };
 
@@ -185,21 +191,26 @@
         { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
 
       // ── Sakhir Tower ─────────────────────────────────────────────────────
-      // Iconic 8-storey cylindrical tower with LED video façade, placed on
-      // the left well back from the pit building (L, 52 m gap).
-      // Structure: base cylinder → LED ring bands → crown cap → antenna beacon.
+      // Iconic cylindrical tower with bright LED façade + sail canopy crown.
+      // Placed left of pit complex (L, 52 m gap). Shaft → LED bands → sail.
       (function sakhirTower() {
         const a = anchor(K(0.005), -1, 52), b = [a.r, a.u, a.t];
         const BASE = a.c;
-        // Main shaft: tapered pale-cream cylinder
+        // Main shaft: pale-cream cylinder
         addCyl(out, BASE, 7.2, 62, TOWER_CYL, 12, b);
-        // Eight horizontal LED bands — frustums protruding just beyond the shaft
+        // Eight horizontal LED bands — brightened for night-race silhouette
         for (let i = 0; i < 8; i++) {
           const yBase = 4 + (i / 7) * 54;
-          addFrustum(out, vadd(BASE, b[1], yBase), 8.4, 8.0, 1.0, TOWER_LED, 12, b);
+          addFrustum(out, vadd(BASE, b[1], yBase), 8.5, 8.1, 1.15, TOWER_LED, 12, b);
         }
-        // Crown cap: wider disc on top of the shaft at 62 m
-        addCyl(out, vadd(BASE, b[1], 62), 9.0, 2.5, FLOOD, 10, b);
+        // Sail canopy over the shaft (shared helper when available)
+        if (typeof sailCanopy === "function") {
+          sailCanopy(BASE, b, {
+            rad: 16, rx: 18, rz: 12, h: 64, col: SAIL_COL, ribs: 10, thick: 0.7,
+          });
+        } else {
+          addCyl(out, vadd(BASE, b[1], 62), 9.0, 2.5, FLOOD, 10, b);
+        }
         // Antenna / beacon above the crown
         addCyl(out, vadd(BASE, b[1], 64.5), 0.4, 6.0, STEEL, 5, b);
         addCone(out, vadd(BASE, b[1], 64.5), 3.8, 5.0, BEACON_WARM, 8, b);
@@ -231,8 +242,8 @@
       // Inside of T1: access road + small pit buildings
       accessBox(K(0.03), -1, 36, 10, 6, 16);
       lightBank(K(0.06), 1, 36);
-      floodMast(K(0.05), 1, 32, 26);
-      floodMast(K(0.03), -1, 32, 25);
+      floodMast(K(0.05), 1, 32, 40);
+      floodMast(K(0.03), -1, 32, 38);
       billboard(K(0.07), -1, 10, 14, 4, [0.85, 0.12, 0.12]);
       billboard(K(0.08),  1, 10, 12, 3.5, [0.05, 0.45, 0.75]);
       billboard(K(0.10),  1, 11, 12, 4, [0.10, 0.30, 0.70]);
@@ -252,13 +263,12 @@
         grandstand(0.18 + ds, 1, dGap, seLen, STAND_CREAM, seatC);
       }
       billboard(K(0.15), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
-      floodMast(K(0.16), 1, 34, 26);
+      floodMast(K(0.16), 1, 34, 39);
 
-      // ================= FLOODLIGHT MASTS (s 0.18–0.28, both sides) =================
-      floodMast(K(0.20), -1, 30, 25);
-      floodMast(K(0.20),  1, 30, 25);
-      floodMast(K(0.23), -1, 32, 24);
-      floodMast(K(0.16), -1, 34, 26);
+      // ================= FLOODLIGHT MASTS (s 0.18–0.28 hero accents) =================
+      // Perimeter ring (below) owns lap density; keep a few corner heroes only.
+      floodMast(K(0.20), -1, 30, 40);
+      floodMast(K(0.20),  1, 30, 40);
 
       // ================= SCULPTED DUNES (s 0.28–0.36, L far) =================
       // Organic desert dune mounds on the far left — pushed well back (gap 64+)
@@ -287,19 +297,12 @@
       backdrop(K(0.24), -1, 120, [200, 14, 12], SAND_DARK);
 
       // ================= TURNS 5-6-7 SWEEP (s 0.32–0.42) =================
-      // This long sweeping section has open desert on the left and a grandstand
-      // on the right. Palms are placed on BOTH sides but well back — minimum 20m
-      // from road edge to keep canopy clear of barriers. Scrub min dist 16m.
-      for (let i = 0; i < 14; i++) {
-        const k = (K(0.32) + Math.round(i * n * 0.006)) % n;
+      // Open desert left + grandstand right. Sparse dry scrub only — no green palms.
+      for (let i = 0; i < 8; i++) {
+        const k = (K(0.32) + Math.round(i * n * 0.010)) % n;
         const side = (i % 3 === 0) ? 1 : -1;
-        // Minimum 20m from road edge for palm canopy clearance (fronds ~4m wide)
-        const d = 20 + (i % 4) * 8 + hash(k * 7 + i) * 10;
-        palm(k, side, d, 7 + hash(k * 11 + i) * 4, [0.16, 0.34, 0.14]);
-        // Dried desert scrub clusters only where there's ample clearance — min 16m
-        if (hash(k * 13 + i) > 0.5 && d > 26) {
-          bush((k + 1) % n, side, d - 6, SCRUB_DRY);
-        }
+        const d = 22 + (i % 3) * 10 + hash(k * 7 + i) * 12;
+        if (hash(k * 13 + i) > 0.35) bush(k, side, d, SCRUB_DRY);
       }
       lightBank(K(0.35), -1, 36);
       grandstand(0.37,  1, 26, 48, STAND_CREAM, SEAT_BLUE);
@@ -312,8 +315,8 @@
       grandstand(0.42,  1, 22, 64, STAND_CREAM, SEAT_BLUE);
       grandstand(0.40,  1, 24, 48, STAND_CREAM, SEAT_BLUE);
       grandstand(0.44,  1, 24, 56, [0.80, 0.78, 0.72], [0.20, 0.30, 0.50]);
-      floodMast(K(0.42), 1, 34, 24);
-      floodMast(K(0.44), -1, 32, 24);
+      floodMast(K(0.42), 1, 34, 38);
+      floodMast(K(0.44), -1, 32, 37);
       tyreWall(0.405, 0.44, 1, 4, TYRE_CAP);
       fence(0.40, 0.46, -1, 7, 3.2, [0.70, 0.72, 0.76]);
       billboard(K(0.43), 1, 11, 12, 4, [0.05, 0.45, 0.75]);
@@ -330,11 +333,6 @@
         const k = (K(0.49) + Math.round(i * n * 0.014)) % n;
         for (const side of [-1, 1]) {
           duneWedge(k, side, 48 + i * 16, 35 + hash(k * 3 + side) * 24, 3.3 + hash(k * 5) * 2.2);
-        }
-        // Palms well back from road (min 22m)
-        if (i % 3 === 0) {
-          const ps = 22 + i * 8;
-          palm(k, (i % 2 === 0) ? -1 : 1, ps, 6.5 + hash(k * 9) * 3, [0.15, 0.32, 0.13]);
         }
       }
       grandstand(0.52,  1, 28, 52, STAND_CREAM, SEAT);
@@ -355,8 +353,8 @@
       // Timing/control buildings: proper lit structures replacing bare `place()` cubes
       accessBox(K(0.62), -1, 36, 8, 5, 12);
       accessBox(K(0.65), -1, 32, 7, 4, 10);
-      floodMast(K(0.60),  1, 34, 25);
-      floodMast(K(0.66),  1, 32, 24);
+      floodMast(K(0.60),  1, 34, 39);
+      floodMast(K(0.66),  1, 32, 37);
 
       // ================= TURN 9-10 (s 0.58–0.66) =================
       tyreWall(0.585, 0.62, 1, 4, TYRE_CAP);
@@ -379,10 +377,9 @@
       fence(0.74, 0.88, 1, 6, 3.2, [0.70, 0.72, 0.76]);
       tyreWall(0.74, 0.88, 1, 5, TYRE_CAP);
       guardrail(0.73, 0.90, -1, 8, [0.80, 0.80, 0.82]);
-      floodMast(K(0.77),  1, 32, 26);
-      floodMast(K(0.80),  1, 32, 26);
-      floodMast(K(0.84),  1, 32, 26);
-      floodMast(K(0.79), -1, 32, 25);
+      floodMast(K(0.77),  1, 32, 40);
+      floodMast(K(0.84),  1, 32, 39);
+      floodMast(K(0.79), -1, 32, 38);
       lightBank(K(0.76), 1, 36);
       lightBank(K(0.86), 1, 36);
       // Back straight grandstands: large cream shells, blue navy seats
@@ -432,51 +429,32 @@
       billboard(K(0.02), -1, 11, 12, 4, [0.10, 0.55, 0.30]);
 
       // ================= ROAMING PERIMETER FLOODLIGHTS =================
-      // Dense floodlight infrastructure around the whole lap — key night-race visual.
-      // All placed at gap >= 28 to avoid clipping barriers/fences.
-      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 22))) {
-        const side = hash(k * 9) < 0.5 ? -1 : 1;
-        const gap = 28 + hash(k * 11) * 18;
-        floodMast(k, side, gap, 26 + hash(k * 13) * 5);
+      // Tall cool-white ring (~36–42 m) — primary night-race identity beat.
+      // Prefer shared floodMastRing; fallback walks one side every ~55 m.
+      if (typeof floodMastRing === "function") {
+        floodMastRing(55, { dist: 30, h: 39, cool: true, pool: true });
+      } else {
+        for (let k = 0; k < n; k += Math.max(1, Math.round(n / 18))) {
+          const side = hash(k * 9) < 0.5 ? -1 : 1;
+          const gap = 28 + hash(k * 11) * 18;
+          floodMast(k, side, gap, 36 + hash(k * 13) * 6);
+        }
       }
 
       // ================= EXTRA CATCH-FENCE RIBBONS =================
       fence(0.10, 0.16,  1, 7, 3.0, [0.70, 0.72, 0.76]);
       fence(0.66, 0.72, -1, 7, 3.0, [0.70, 0.72, 0.76]);
 
-      // ================= DESERT PALMS (oasis planting — well clear of barriers) =================
-      // Minimum 20m from road edge to keep fronds (~4m canopy) clear of all barriers.
-      // The half-track barrier gap is typically 7m + fence at 6m = ~13m, so 20m is safe.
-      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 56))) {
-        for (const side of [-1, 1]) {
-          if (hash(k * 17 + side * 3) > 0.54) continue;
-          const d = 20 + hash(k * 19 + side) * 26;
-          const palmH = 8 + hash(k * 23 + side) * 5;
-          palm(k, side, d, palmH, [0.18, 0.36, 0.15]);
-          if (hash(k * 29 + side) > 0.58) {
-            palm((k + 2) % n, side, d + 8 + hash(k * 31) * 8,
-              7 + hash(k * 37 + side) * 4, [0.16, 0.34, 0.14]);
-          }
-          if (hash(k * 47 + side) > 0.72) {
-            palm((k + 4) % n, side, d + 14 + hash(k * 53) * 6,
-              6 + hash(k * 59 + side) * 3, [0.15, 0.32, 0.13]);
-          }
-        }
-      }
-
-      // ================= DESERT SCRUB / ROCKS (min 16m from road edge) =================
-      // Low dried scrub clumps and sand-coloured rocks — minimum distance 16m.
-      // Scrub colour is warm ochre (dried desert vegetation), not green.
-      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 80))) {
+      // ================= DESERT SCRUB / ROCKS (sparse, min 18 m) =================
+      // Dried ochre scrub + sand rocks only — green palms/oases culled for sand-island read.
+      for (let k = 0; k < n; k += Math.max(1, Math.round(n / 55))) {
         for (const side of [-1, 1]) {
           const r = hash(k * 41 + side * 7);
-          if (r > 0.52) continue;
-          const d = 16 + hash(k * 43 + side) * 20;
-          if (r < 0.26) {
-            // dried desert scrub — warm ochre, not green
+          if (r > 0.42) continue;
+          const d = 18 + hash(k * 43 + side) * 22;
+          if (r < 0.22) {
             bush(k, side, d, hash(k * 71 + side) > 0.5 ? SCRUB_DRY : SCRUB_MID);
           } else {
-            // small sand-coloured rock/rubble box
             place(k, side, d,
               [1.4 + hash(k * 47) * 2.0, 0.8 + hash(k * 53) * 1.4, 1.5 + hash(k * 59) * 1.8],
               SAND_DARK);
@@ -529,10 +507,9 @@
       }
 
       // ================= BESPOKE SAKHIR MODELS =============================
-      // Locale-specific landmarks built from primitives: barjeel wind-towers,
-      // Arabesque hospitality marquees, a desert oasis, a ceremonial gateway,
-      // and grandstand video walls. These give Bahrain a distinct Gulf identity
-      // beyond the generic stand/floodlight kit.
+      // Locale-specific landmarks: barjeel wind-towers, Arabesque marquees,
+      // and grandstand video walls. Oasis pools / ceremonial gateway culled
+      // so the sand-island silhouette stays sparse.
 
       // ── Barjeel wind-tower — traditional Gulf wind-catcher ───────────────
       // Tapered sand shaft topped by a slotted open crown with a warm interior
@@ -569,39 +546,6 @@
         out._mat = 0;
       };
 
-      // ── Desert oasis — dark water pool ringed by palms + scrub ───────────
-      const oasis = (k, side, gap, r) => {
-        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        out._mat = MAT.SAND;
-        addBox(out, vadd(a.c, a.u, 0.20), [r * 2.4, 0.30, r * 3.0], SAND_DARK, b);   // sandy rim
-        out._mat = 0;
-        addBox(out, vadd(a.c, a.u, 0.26), [r * 2.0, 0.24, r * 2.6], [0.09, 0.20, 0.22], b); // water
-        for (let i = 0; i < 6; i++) {
-          const kk = (k + (i - 3) + n) % n;
-          palm(kk, side, gap + r + 2 + (i % 2) * 4, 7 + hash(kk * 7 + i) * 4, [0.16, 0.34, 0.14]);
-          if (hash(kk * 11 + i) > 0.5) bush(kk, side, gap + r + 6, SCRUB_MID);
-        }
-      };
-
-      // ── Ceremonial Arabesque gateway — keel-arch landmark ────────────────
-      // Two cream piers capped by small onion domes, joined by a pointed prism
-      // lintel. A hero silhouette behind the pit complex. gap is large (behind
-      // the paddock) so it never intrudes on the track.
-      const gateway = (k, side, gap) => {
-        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        out._mat = MAT.STONE;
-        for (const dx of [-7, 7]) {
-          const pc = vadd(a.c, a.r, dx);
-          addFrustum(out, pc, 2.4, 1.8, 15, PIT_CREAM, 6, b);              // pier
-          addCone(out, vadd(pc, a.u, 15), 2.0, 4.5, TOWER_LED, 8, b);      // lit onion dome
-          addBox(out, vadd(pc, a.u, 14), [3.4, 1.0, 3.4], STAND_CREAM, b); // pier cap
-        }
-        addBox(out, vadd(a.c, a.u, 13.5), [14, 2.2, 3.0], STAND_CREAM, b);         // lintel
-        addPrism(out, vadd(a.c, a.u, 15.6), [14, 4.0, 3.0], PIT_CREAM, b);         // pointed keel arch
-        out._mat = 0;
-        addBox(out, vadd(a.c, a.u, 12.4), [11, 1.0, 2.0], WIN_WARM, b);            // lit soffit
-      };
-
       // ── Grandstand video wall — dark frame + bright cool screen face ─────
       const videoWall = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
@@ -615,8 +559,6 @@
       };
 
       // ── Placement ────────────────────────────────────────────────────────
-      // Ceremonial gateway on the access road behind the pit complex (hero).
-      gateway(K(0.005), -1, 108);
       // Barjeel wind-towers around the paddock, hospitality and infield zones.
       windTower(K(0.985), -1, 52, 16);
       windTower(K(0.02),  -1, 46, 14);
@@ -628,9 +570,6 @@
       marquee(K(0.83),  1, 40, 11, 36);
       marquee(K(0.26),  1, 54, 12, 40);
       marquee(K(0.50), -1, 62, 11, 34);
-      // Desert oasis pools in the open flats (far from the racing line).
-      oasis(K(0.31), -1, 78, 7);
-      oasis(K(0.49),  1, 92, 6);
       // Video walls facing the main and T1 grandstands.
       videoWall(K(0.02),  1, 40, 12, 7);
       videoWall(K(0.055), 1, 46, 11, 6.5);

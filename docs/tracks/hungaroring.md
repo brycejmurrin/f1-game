@@ -6,10 +6,10 @@
 A tight, twisty permanent circuit carved into a natural valley basin in the dusty hills outside Budapest. The track snakes along the valley floor and up its grassy slopes, with spectator hills forming a continuous natural amphitheatre. "Monaco without the walls" — slow, technical, hemmed in by green banking rather than barriers. Open sky, low tree lines, sun-baked grass.
 
 ## 2. Atmosphere & palette
-Hot, hazy summer afternoon. Pale washed-out blue sky, strong overhead sun, dry heat shimmer. Grass hills are a dry yellow-green, not lush: base grass `[0.42, 0.55, 0.27]`, sun-bleached banking `[0.58, 0.62, 0.34]`, darker tree masses `[0.20, 0.34, 0.18]`. Tarmac `[0.26, 0.27, 0.30]`. Light dust/heat haze at distance; thin warm fog tint `[0.80, 0.82, 0.70]` for far hills. Kerb red/white and white walls pop against green.
+Hot, hazy summer afternoon. Pale washed-out blue sky, strong overhead sun, dry heat shimmer. Grass hills are dry straw-olive, not lush lawn — `ATM.dustyBowl`: grass `[0.42, 0.40, 0.22]`, runoff `[0.58, 0.50, 0.34]`, fog `[0.72, 0.68, 0.55]`. Amphitheatre banking stays slightly greener G-dominant (`[0.48, 0.54, 0.28]`) so mounds still read as rounded hills. Tarmac dark; kerb red/white and white walls pop against straw.
 
 ## 3. Elevation
-Undulating valley, ~36 m total relief. Start/finish sits high on a plateau; the lap plunges DOWN into the basin at Turn 1 (s≈0.06). Lowest point through the slow Turn 2–4 complex (s≈0.10–0.18). Gradual CLIMB back up through the twisty middle sector (s≈0.30–0.65), cresting near Turns 10–11, then rolling descent and climb back to the line.
+Undulating valley, ~36 m total relief (authored cosine bumps ≈38 m peak-to-trough). Start/finish sits high on a plateau (`rise: +14` at s≈0); the lap plunges DOWN into the basin at Turn 1 / T2–4 (`rise: −22` at s≈0.12). Gradual CLIMB back up through the twisty middle sector, cresting near Turns 10–11 (`rise: +16` at s≈0.52), then rolling home.
 
 ## 4. Landmarks & surroundings by lap position
 

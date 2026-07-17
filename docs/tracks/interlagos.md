@@ -21,17 +21,17 @@ Variable tropical sky — bright sun one moment, brooding grey cloud and rain th
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Dist | Landmark — box-modelling note |
 |------|------|------|-------------------------------|
-| 0.00 | R | close | Pit/control tower + pit building — tall slab box w/ stacked window-band boxes |
-| 0.02 | L | mid | Main grandstand — long stepped grey box, thin railing slats |
-| 0.05 | both | close | Senna S — narrow downhill left-right-left, red/white kerb boxes inside each apex |
-| 0.15 | L | far | Colourful favela hillside — clustered small saturated cubes climbing a green slope |
+| 0.00 | R | close | Pit/control tower — tall concrete slab with stacked dark window bands + mast; pit garages beside |
+| 0.02 | L | mid | Main grandstand — yellow/green Brazilian crowd terraces (Arquibancada Curva 1) |
+| 0.05 | both | close | Senna S hero corridor — thick red/white kerbs each apex, tropical forest frame, packed yellow/green stands |
+| 0.15 | L | far | Favela hillside — fewer taller colourful house rows climbing a green slope (clear SP silhouette) |
 | 0.25 | R | mid | Reta Oposta straight — open green banks, low advert-board boxes |
 | 0.35 | L | far | Lago/Guarapiranga water — muddy blue-green plane beyond the trees |
 | 0.45 | both | mid | Descida do Lago — downhill left-handers, grass run-off boxes, gravel tan trap |
 | 0.60 | R | far | São Paulo high-rise skyline — row of tall haze-grey slab boxes on horizon |
 | 0.70 | L | mid | Ferradura / infield esses — green banks, tyre-wall boxes (dark grey stacks) |
 | 0.82 | L | close | Junção — tight uphill left, kerb boxes, start of the climb |
-| 0.92 | both | mid | Climb to s/f (Subida dos Boxes) — banked grey ramp, pit-wall slab boxes on right |
+| 0.92 | both | mid | Subida dos Boxes — stepped banked grey retaining slabs + pit wall climbing to the control tower |
 
 ## 5. Track features
 - Anti-clockwise direction — most corners turn left.
@@ -42,8 +42,9 @@ Variable tropical sky — bright sun one moment, brooding grey cloud and rain th
 
 ## 6. Modelling notes
 - Make the **downhill plunge into the Senna S** and the **uphill banked drag to the line** the two defining elevation beats — exaggerate the ramp.
-- Cluster bright saturated favela cubes up a green hillside as the instant São Paulo signifier.
+- Pack yellow/green Brazilian crowd on Curva 1 stands; thick red/white kerbs + tropical forest frame the Senna S corridor.
+- Cluster fewer, taller favela cubes up a green hillside as the instant São Paulo signifier.
 - Ring the horizon with desaturated haze-grey high-rise slabs to read as a big-city park, not open countryside.
 - Use a muddy blue-green lake plane beyond the trees on the lake side of the infield.
 - Lean on vivid tropical-green bank boxes everywhere to contrast the grey tarmac and city haze.
-- Keep the pit/control tower a tall distinctive slab — the circuit's most recognisable built structure.
+- Keep the pit/control tower a tall distinctive slab with stacked window bands — the circuit's most recognisable built structure.
