@@ -43,11 +43,12 @@
     flatTerrain: true,
     terrainOuter: 70,
     scenery: function (api) {
-      const { out, n, pyMin, place, backdrop, wall, grandstand,
+      const { out, n, py, pyMin, place, backdrop, wall, grandstand,
         building, anchor, addBox, addCyl, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
-        overheadSpan, waterSurface, groundPatch, cross, norm, MAT, COL } = api;
+        modelGroup, overheadSpan, waterSurface, groundPatch,
+        cross, norm, MAT, COL } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── strut(): thin cylinder between two world points (geodesic lattice) ────
@@ -487,13 +488,34 @@
       // s 0.45 R close — Casino corner footbridge spanning the track
       // ===================================================================
       {
+        const k = K(0.45);
+        const deckY = py[k] + 8;
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, 5);
+          const h = deckY - a.c[1];
+          const legH = h - 0.4;
+          const center = vadd(a.c, a.u, h / 2);
+          const basis = [a.r, a.u, a.t];
+          modelGroup(`montreal-casino-footbridge-support-${side < 0 ? "left" : "right"}`, {
+            center,
+            size: [1.1, h, 3.4],
+            basis,
+          }, (stage) => {
+            for (const along of [-1.2, 1.2]) {
+              addBox(stage, vadd(vadd(a.c, a.t, along), a.u, legH / 2),
+                [0.65, legH, 0.65], [0.60, 0.62, 0.64], basis);
+            }
+            addBox(stage, vadd(a.c, a.u, h - 0.2),
+              [1.1, 0.4, 3.4], [0.66, 0.68, 0.70], basis);
+          }, { required: true });
+        }
         overheadSpan({
           id: "montreal-casino-footbridge",
           frac: 0.45,
           clearance: 8,
           thickness: 1,
           depth: 4,
-          supportGap: 2.5,
+          supportGap: 5,
           color: [0.68, 0.70, 0.72],
           required: true,
         });
