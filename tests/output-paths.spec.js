@@ -21,3 +21,11 @@ test("gallery paths reject traversal and empty segments", () => {
   expect(() => galleryPath("suite", "..", "frame.png")).toThrow(/safe path segment/);
   expect(() => galleryPath("suite", "")).toThrow(/safe path segment/);
 });
+
+test("each producer can own a stable suite directory", () => {
+  const port = process.env.APEX_PORT || "3456";
+  expect(galleryPath("ui-audit", "portrait-main.png"))
+    .toContain(`/artifacts/galleries-${port}/ui-audit/portrait-main.png`);
+  expect(galleryPath("parts-budget", "budget-default.png"))
+    .toContain(`/artifacts/galleries-${port}/parts-budget/budget-default.png`);
+});

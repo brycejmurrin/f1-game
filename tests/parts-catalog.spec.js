@@ -6,6 +6,7 @@
 // - Part descriptions update when a chip is selected
 // - Category labels match expected values
 import { test, expect } from "@playwright/test";
+import { galleryPath } from "./output-paths.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -37,7 +38,7 @@ test.describe("Car setup catalog — all categories render", () => {
     for (const label of ["ENGINE", "AERO", "SUSPENSION", "BRAKES", "TYRES", "ERS", "GEARBOX", "FUEL"]) {
       await expect(page.locator(".cs-cat").filter({ hasText: label })).toBeVisible();
     }
-    await page.screenshot({ path: "tests/ui-screenshots/catalog-all-categories.png" });
+    await page.screenshot({ path: galleryPath("parts-catalog", "catalog-all-categories.png") });
   });
 
   test("GEARBOX section contains Standard and F1 Spec options", async ({ page }) => {
@@ -105,7 +106,7 @@ test.describe("Car setup catalog — chip interaction", () => {
     await gearboxSection.locator(".cs-chip", { hasText: "Close Ratio" }).click();
     await page.waitForTimeout(200);
     await expect(gearboxSection.locator(".cs-chip.active")).toHaveText(/Close Ratio/);
-    await page.screenshot({ path: "tests/ui-screenshots/catalog-gearbox-close-ratio.png" });
+    await page.screenshot({ path: galleryPath("parts-catalog", "catalog-gearbox-close-ratio.png") });
   });
 
   test("clicking High Octane fuel makes it active", async ({ page }) => {
@@ -117,7 +118,7 @@ test.describe("Car setup catalog — chip interaction", () => {
     await fuelSection.locator(".cs-chip", { hasText: "High Octane" }).click();
     await page.waitForTimeout(200);
     await expect(fuelSection.locator(".cs-chip.active")).toHaveText(/High Octane/);
-    await page.screenshot({ path: "tests/ui-screenshots/catalog-fuel-high-octane.png" });
+    await page.screenshot({ path: galleryPath("parts-catalog", "catalog-fuel-high-octane.png") });
   });
 
   test("description updates when a chip is selected", async ({ page }) => {
@@ -161,7 +162,7 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
     await openSetup(page);
     const engineSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "ENGINE" }) });
     await expect(engineSection.locator(".cs-chip", { hasText: "AMG HPP" })).toBeVisible();
-    await page.screenshot({ path: "tests/ui-screenshots/catalog-mercedes-factory.png" });
+    await page.screenshot({ path: galleryPath("parts-catalog", "catalog-mercedes-factory.png") });
   });
 
   test("AMG HPP chip NOT visible when team is not Mercedes", async ({ page }) => {
@@ -177,7 +178,7 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
     await openSetup(page);
     const engineSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "ENGINE" }) });
     await expect(engineSection.locator(".cs-chip", { hasText: "AMG HPP" })).toHaveCount(0);
-    await page.screenshot({ path: "tests/ui-screenshots/catalog-non-mercedes.png" });
+    await page.screenshot({ path: galleryPath("parts-catalog", "catalog-non-mercedes.png") });
   });
 
   test("factory chip has FACTORY tag badge", async ({ page }) => {
@@ -203,6 +204,6 @@ test.describe("Car setup catalog — screenshots", () => {
     await page.goto("/");
     await waitReady(page);
     await openSetup(page);
-    await page.screenshot({ path: "tests/ui-screenshots/catalog-portrait.png" });
+    await page.screenshot({ path: galleryPath("parts-catalog", "catalog-portrait.png") });
   });
 });

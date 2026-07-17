@@ -6,6 +6,7 @@
 // - DONE button returns to the select screen
 // - Selecting a new part updates localStorage immediately
 import { test, expect } from "@playwright/test";
+import { galleryPath } from "./output-paths.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -119,7 +120,7 @@ test.describe("Parts persistence — survives page reload", () => {
 
     const gearboxSection2 = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "GEARBOX" }) });
     await expect(gearboxSection2.locator(".cs-chip.active")).toHaveText(/Carbon Case/);
-    await page.screenshot({ path: "tests/ui-screenshots/persistence-gearbox-reload.png" });
+    await page.screenshot({ path: galleryPath("parts-persistence", "persistence-gearbox-reload.png") });
   });
 
   test("selected fuel part active after reload", async ({ page }) => {
@@ -141,7 +142,7 @@ test.describe("Parts persistence — survives page reload", () => {
 
     const fuelSection2 = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "FUEL" }) });
     await expect(fuelSection2.locator(".cs-chip.active")).toHaveText(/Qualifying Mix/);
-    await page.screenshot({ path: "tests/ui-screenshots/persistence-fuel-reload.png" });
+    await page.screenshot({ path: galleryPath("parts-persistence", "persistence-fuel-reload.png") });
   });
 
   test("budget reflects saved parts after reload", async ({ page }) => {
@@ -214,6 +215,6 @@ test.describe("Parts persistence — navigation", () => {
     await page.locator("#cs-done").click();
     await page.locator("#select").waitFor({ state: "visible" });
     await expect(page.locator("#carsetup")).toBeHidden();
-    await page.screenshot({ path: "tests/ui-screenshots/persistence-done-button.png" });
+    await page.screenshot({ path: galleryPath("parts-persistence", "persistence-done-button.png") });
   });
 });

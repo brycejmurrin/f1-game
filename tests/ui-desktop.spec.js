@@ -1,6 +1,7 @@
 // @ts-check
 // Desktop / large-screen UI audit — iPad (1024×768) and 1080p desktop
 import { test } from "@playwright/test";
+import { galleryPath } from "./output-paths.js";
 
 const IPAD      = { width: 1024, height: 768 };
 const DESKTOP   = { width: 1280, height: 800 };
@@ -10,7 +11,7 @@ async function waitReady(page) {
 }
 async function shot(page, name) {
   await page.waitForTimeout(300);
-  await page.screenshot({ path: `tests/ui-screenshots/${name}.png`, fullPage: false });
+  await page.screenshot({ path: galleryPath("ui-desktop", `${name}.png`), fullPage: false });
 }
 
 for (const [label, vp] of [["ipad", IPAD], ["desktop", DESKTOP]]) {

@@ -2,6 +2,7 @@
 // Tests for button/touch steer mode: auto-throttle, hidden calibrate button,
 // and race-settings layout (portrait + landscape).
 import { test, expect } from "@playwright/test";
+import { galleryPath } from "./output-paths.js";
 
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
@@ -41,7 +42,7 @@ test.describe("Pause menu — tilt mode", () => {
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeVisible();
-    await page.screenshot({ path: "tests/ui-screenshots/pause-tilt-landscape.png" });
+    await page.screenshot({ path: galleryPath("ui-button-touch", "pause-tilt-landscape.png") });
   });
 });
 
@@ -56,7 +57,7 @@ test.describe("Pause menu — button mode", () => {
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeHidden();
-    await page.screenshot({ path: "tests/ui-screenshots/pause-button-landscape.png" });
+    await page.screenshot({ path: galleryPath("ui-button-touch", "pause-button-landscape.png") });
   });
 });
 
@@ -71,7 +72,7 @@ test.describe("Pause menu — touch mode", () => {
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeHidden();
-    await page.screenshot({ path: "tests/ui-screenshots/pause-touch-landscape.png" });
+    await page.screenshot({ path: galleryPath("ui-button-touch", "pause-touch-landscape.png") });
   });
 });
 
@@ -91,7 +92,7 @@ test.describe("Auto-throttle in button/touch mode", () => {
     if (await throttleBtn.count() > 0) {
       await expect(throttleBtn).toBeVisible();
     }
-    await page.screenshot({ path: "tests/ui-screenshots/hud-button-mode.png" });
+    await page.screenshot({ path: galleryPath("ui-button-touch", "hud-button-mode.png") });
   });
 });
 
@@ -108,7 +109,7 @@ test.describe("Race settings — portrait layout", () => {
     await page.waitForTimeout(300);
     // RACE! button must be visible without scrolling
     await expect(page.locator("#rs-go")).toBeVisible();
-    await page.screenshot({ path: "tests/ui-screenshots/race-settings-portrait.png" });
+    await page.screenshot({ path: galleryPath("ui-button-touch", "race-settings-portrait.png") });
   });
 });
 
@@ -170,6 +171,6 @@ test.describe("Race settings — landscape layout", () => {
       return panel ? panel.scrollHeight > panel.clientHeight : false;
     });
     expect(scrollable).toBe(false);
-    await page.screenshot({ path: "tests/ui-screenshots/race-settings-landscape.png" });
+    await page.screenshot({ path: galleryPath("ui-button-touch", "race-settings-landscape.png") });
   });
 });

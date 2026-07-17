@@ -5,6 +5,7 @@
 // - Over-budget parts show visual warning and can't be selected (without unlimited)
 // - Unlimited toggle removes cap and persists via localStorage
 import { test, expect } from "@playwright/test";
+import { galleryPath } from "./output-paths.js";
 
 async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
@@ -33,7 +34,7 @@ test.describe("Budget system — display", () => {
     const text = await page.locator("#cs-budget").textContent();
     expect(text).toContain("600");
     expect(text).toContain("600");
-    await page.screenshot({ path: "tests/ui-screenshots/budget-default.png" });
+    await page.screenshot({ path: galleryPath("parts-budget", "budget-default.png") });
   });
 
   test("budget label has no 'over' class at defaults", async ({ page }) => {
@@ -59,7 +60,7 @@ test.describe("Budget system — part selection", () => {
     await page.waitForTimeout(200);
     const text = await page.locator("#cs-budget").textContent();
     expect(text).toContain("440");
-    await page.screenshot({ path: "tests/ui-screenshots/budget-race-engine.png" });
+    await page.screenshot({ path: galleryPath("parts-budget", "budget-race-engine.png") });
   });
 
   test("budget fill bar increases after selecting a paid part", async ({ page }) => {
@@ -85,7 +86,7 @@ test.describe("Budget system — part selection", () => {
     await page.waitForTimeout(200);
     const overBudgetCount = await page.locator(".cs-chip.over-budget").count();
     expect(overBudgetCount).toBeGreaterThan(0);
-    await page.screenshot({ path: "tests/ui-screenshots/budget-over-budget.png" });
+    await page.screenshot({ path: galleryPath("parts-budget", "budget-over-budget.png") });
   });
 
   test("budget label gets 'over' class when spending exceeds 600", async ({ page }) => {
@@ -104,7 +105,7 @@ test.describe("Budget system — part selection", () => {
     await page.waitForTimeout(200);
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");
-    await page.screenshot({ path: "tests/ui-screenshots/budget-exceeded.png" });
+    await page.screenshot({ path: galleryPath("parts-budget", "budget-exceeded.png") });
   });
 });
 
@@ -122,7 +123,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.waitForTimeout(200);
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");
-    await page.screenshot({ path: "tests/ui-screenshots/budget-unlimited-on.png" });
+    await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-on.png") });
   });
 
   test("unlimited mode hides budget fill bar", async ({ page }) => {
@@ -155,7 +156,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.waitForTimeout(200);
     const overBudgetCount = await page.locator(".cs-chip.over-budget").count();
     expect(overBudgetCount).toBe(0);
-    await page.screenshot({ path: "tests/ui-screenshots/budget-unlimited-no-over.png" });
+    await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-no-over.png") });
   });
 
   test("unlimited state persists after page reload", async ({ page }) => {
@@ -171,7 +172,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.locator("#carsetup").waitFor({ state: "visible" });
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");
-    await page.screenshot({ path: "tests/ui-screenshots/budget-unlimited-persisted.png" });
+    await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-persisted.png") });
   });
 
   test("toggling unlimited OFF restores normal budget display", async ({ page }) => {

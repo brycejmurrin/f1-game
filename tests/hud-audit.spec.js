@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { galleryPath } from "./output-paths.js";
 
 const LS = { width: 844, height: 390 };
 const PT = { width: 390, height: 844 };
@@ -28,7 +29,7 @@ async function loadWithMode(page, steerMode, manual = false) {
 
 async function shot(page, name) {
   await page.waitForTimeout(200);
-  await page.screenshot({ path: `tests/ui-screenshots/hud-audit-${name}.png`, fullPage: false });
+  await page.screenshot({ path: galleryPath("hud-audit", `hud-audit-${name}.png`), fullPage: false });
 }
 
 // Assert the HUD actually rendered (not a blank/broken canvas that screenshots
