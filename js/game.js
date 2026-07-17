@@ -2272,11 +2272,11 @@ function resolveCollisions(ranked, dt) {
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
-        // Scoped to player contacts + near-slop nests so AI↔AI packs don't
-        // dump momentum on every mild close.
+        // Only when the PLAYER is the rear car closing: applying this to every
+        // player↔AI touch (e.g. grid pack with throttle held) drained the field.
         const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
         const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-        const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+        const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
         const sideContact = penLat < penLong && !forceRear;
         if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -2286,9 +2286,7 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          // Only scrub when we actually pushed — at-slop contact with corr=0 used
-          // to bleed speed forever while cars stayed longitudinally nested.
-          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
+          a.speed *= rubScrub; b.speed *= rubScrub;   // barely scrub speed on a side rub
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
@@ -2335,10 +2333,10 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-      // Match the relaxation pass for player nest-edge contacts.
+      // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-      const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+      const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
       const sideContact = penLat < penLong && !forceRear;
       if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
