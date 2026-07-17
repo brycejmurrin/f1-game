@@ -19,7 +19,23 @@
 // look); weather is dry|wet|rain|fog|overcast.
 window.LightPresets = {
   "*": {
-    "carGloss": 0.35
+    "carGloss": 0.35,
+    "blacks": -0.06,
+    "shadows": 0.04,
+    "midtones": 0.03,
+    "highlights": -0.06,
+    "whites": -0.08,
+    "toe": 0.05,
+    "shoulder": 0.14,
+    "liftR": 0.0,
+    "liftG": 0.0,
+    "liftB": 0.0,
+    "gammaR": 1.0,
+    "gammaG": 1.0,
+    "gammaB": 1.0,
+    "gainR": 1.01,
+    "gainG": 1.0,
+    "gainB": 0.99
   },
   "abudhabi|dawn|dry": {
     "sunElev": -20,
