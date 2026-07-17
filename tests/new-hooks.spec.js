@@ -520,10 +520,20 @@ test.describe("shared track foundation diagnostics", () => {
       .filter((entry) => entry.required)
       .map((entry) => entry.id);
     expect(requiredIds).toEqual(expect.arrayContaining([
-      "silverstone-wing",
       "silverstone-control-tower",
       "silverstone-start-gantry",
     ]));
+    const wingSegments = result.models.emitted
+      .filter((entry) => entry.id.startsWith("silverstone-wing-facade-"));
+    expect(wingSegments.map((entry) => entry.id)).toEqual([
+      "silverstone-wing-facade-1",
+      "silverstone-wing-facade-2",
+      "silverstone-wing-facade-3",
+      "silverstone-wing-facade-4",
+    ]);
+    expect(wingSegments.every((entry) =>
+      entry.required && entry.vertices >= 96
+    )).toBe(true);
     const hard = [
       ...result.models.invalid,
       ...result.models.suppressed,

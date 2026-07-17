@@ -169,26 +169,27 @@
       // Chapel corner — fans favourite viewpoint
       grandstand(0.17, -1, 30, 50,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
 
-      // ---- The Wing building (s≈0.45 R) — one required, atomic landmark ----
+      // ---- The Wing building (s≈0.43–0.47 R) — four grounded atomic bays ----
+      // Four overlapping 64 m bays follow the pit-straight ground/heading and
+      // restore the full ~240 m body, glazing and roof treatment without one
+      // long chord crossing the road. Each required group declares complete bounds.
       {
-        const a = anchor(k(0.45), 1, 14);
-        const b = [a.r, a.u, a.t];
-        groundedSegments({
-          id: "silverstone-wing-grounded-shell",
-          points: [0.43, 0.44, 0.45, 0.46, 0.47].map((s) => ({
-            k: k(s), side: 1, dist: 14,
-          })),
-          width: 20, height: 11, color: [0.86, 0.86, 0.88],
-        });
-        modelGroup("silverstone-wing", {
-          center: vadd(a.c, a.u, 9.2), size: [24, 8, 72], basis: b,
-        }, (stage) => {
-          stage._mat = MAT.GLASS;
-          TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 70], [0.10, 0.14, 0.22], b);
-          TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [18, 3.2, 68], LIT_WIN, b);
-          stage._mat = MAT.METAL;
-          TrackGeom.addBox(stage, vadd(a.c, a.u, 12.7), [24, 1.4, 72], [0.90, 0.92, 0.96], b);
-        }, { required: true });
+        const wingFracs = [0.435, 0.445, 0.455, 0.465];
+        for (let i = 0; i < wingFracs.length; i++) {
+          const a = anchor(k(wingFracs[i]), 1, 16);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`silverstone-wing-facade-${i + 1}`, {
+            center: vadd(a.c, a.u, 6.7), size: [24, 13.4, 64], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            TrackGeom.addBox(stage, vadd(a.c, a.u, 5.5), [20, 11, 64], [0.86, 0.86, 0.88], b);
+            stage._mat = MAT.GLASS;
+            TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 62], [0.10, 0.14, 0.22], b);
+            TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [18, 3.2, 60], LIT_WIN, b);
+            stage._mat = MAT.METAL;
+            TrackGeom.addBox(stage, vadd(a.c, a.u, 12.7), [24, 1.4, 64], [0.90, 0.92, 0.96], b);
+          }, { required: true });
+        }
       }
 
       // Wing grandstand (behind pit building, s≈0.46 R)
