@@ -1209,7 +1209,12 @@ const WGX = (function () {
       d[91] = (T && T.shadowRange != null) ? T.shadowRange : 64.0;
       // params6 (floats 92..95): wet-surface darkening parity with GLX.
       d[92] = (T && T.wetDark != null) ? T.wetDark : 1.0;
-      d[93] = 0; d[94] = 0; d[95] = 0;
+      // params6.y/z: CAR SPARKLE (def 1.6) + FOG SUN CORE (def 0.6) pure-look
+      // knobs (GLX parity). Always pack the resolved value — WGSL reads these
+      // lanes directly, so 0 is a real "off", not an unset slot. params6.w free.
+      d[93] = (T && T.carSparkle != null) ? T.carSparkle : 1.6;
+      d[94] = (T && T.fogSunCore != null) ? T.fogSunCore : 0.6;
+      d[95] = 0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1253,6 +1258,14 @@ const WGX = (function () {
       // SKY GRADIENT / STAR DENSITY knobs (GLX parity); defaults reproduce shipped.
       skyData[42]=f.skyGrad     != null ? f.skyGrad     : 0.35;
       skyData[43]=f.starDensity != null ? f.starDensity : 1;
+      // p2: MIE SCATTER / CLOUD SILVER / SUN AUREOLE / SUN DISC SIZE pure-look
+      // knobs (GLX parity). Always pack the resolved value — WGSL reads these
+      // lanes directly (0 is a valid "off" for the first three), so an unset
+      // lane must carry the real 1.0 default, not be treated as "no knob".
+      skyData[44]=f.mieScatter    != null ? f.mieScatter    : 1;
+      skyData[45]=f.cloudSilver   != null ? f.cloudSilver   : 1;
+      skyData[46]=f.coronaAureole != null ? f.coronaAureole : 1;
+      skyData[47]=f.sunDiscSize   != null ? f.sunDiscSize   : 1;
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
@@ -1634,9 +1647,11 @@ const WGX = (function () {
         s[29] = (T && T.sharpen != null) ? T.sharpen : 0.0;
         s[30] = (o.speedBlur != null) ? o.speedBlur : ((T && T.speedBlur != null) ? T.speedBlur : 0.0);
         s[31] = (T && T.bloomKnee != null) ? T.bloomKnee : 0.5;
-        // tuneFx (off 128): vignette reach; remaining lanes reserved/aligned.
+        // tuneFx (off 128): vignette reach + FLARE CORE STREAK (def 0.5; GLX
+        // parity, read directly so 0 is a real "off"). s[34]/s[35] reserved.
         s[32] = (T && T.vignetteSoft != null) ? T.vignetteSoft : 0.35;
-        s[33] = 0; s[34] = 0; s[35] = 0;
+        s[33] = (T && T.flareStreak2 != null) ? T.flareStreak2 : 0.5;
+        s[34] = 0; s[35] = 0;
         device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });

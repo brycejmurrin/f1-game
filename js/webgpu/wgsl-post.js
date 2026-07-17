@@ -402,7 +402,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          sharpen  = unsharp-mask crispness
   //                                          speedBlur= radial centre->edge smear
   //                                                     (GLX folds car speed in)
-  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, _pad, _pad, _pad)
+  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, _pad, _pad)
   //    NOTE: sunShaft (p0.z) here is an extra scalar multiplier on the godray
   //    contribution; the godray strength itself lives in the GODRAY uniform.
   // ════════════════════════════════════════════════════════════════════════
@@ -476,6 +476,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let speedBlur  = U.imgFx.z;
   let bloomKnee  = U.imgFx.w;
   let vignetteSoft = U.tuneFx.x;
+  // FLARE CORE STREAK knob (U.tuneFx.y; GLX parity, def 0.5). Read directly — 0 is
+  // a valid "single-streak flare", so the uploader always packs the resolved value.
+  let flareStreak2 = U.tuneFx.y;
   let texel      = U.texel.xy;
 
   var c = textureSampleLevel(sceneTex, samp, in.uv, 0.0).rgb;
@@ -542,7 +545,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     let streakX = exp(-abs(in.uv.x - sunUV.x) * 7.0);
     flare = flare + vec3<f32>(1.0, 0.80, 0.52) * streakY * streakX * 0.75;
     let streakX2 = exp(-abs(in.uv.x - sunUV.x) * 10.0);
-    flare = flare + vec3<f32>(1.0, 0.92, 0.78) * exp(-abs(in.uv.y - sunUV.y) * 320.0) * streakX2 * 0.5;
+    flare = flare + vec3<f32>(1.0, 0.92, 0.78) * exp(-abs(in.uv.y - sunUV.y) * 320.0) * streakX2 * flareStreak2;
     let toCenter = vec2<f32>(0.5) - sunUV;
     let d0 = length(in.uv - (sunUV + toCenter * 0.5));
     flare = flare + vec3<f32>(1.0, 0.88, 0.65) * smoothstep(0.055, 0.020, d0) * 0.35;

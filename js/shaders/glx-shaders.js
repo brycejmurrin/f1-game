@@ -100,6 +100,9 @@ uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 uniform float uCloudSpeed;  // cloud drift-rate multiplier (matches SKY uCloudSpeed; 0 = frozen)
 uniform float uCloudShadowDim; // how darkly cloud shadows dim the sun (def 0.80)
+uniform float uCarSunGlint; // clearcoat sun-disc reflection punch on car paint (def 12.0)
+uniform float uCarSparkle;  // metallic-flake sparkle glint gain (def 1.6)
+uniform float uFogSunCore;  // tight hot core of the sun in-scatter through fog (def 0.6)
 uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distance haze
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
@@ -887,7 +890,7 @@ void main() {
         envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
       }
     }
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * uCarSunGlint * shadow;  // sun disc (CAR SUN GLINT knob, def 12.0) — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
@@ -921,7 +924,8 @@ void main() {
       // sparse individual glints that flash as the view moves, instead of a
       // dense sand-grain field that made the paint read dirty/matte.
       float glint = smoothstep(0.990, 1.0, dot(gN, H));
-      color += uSunColor * litNoL * glint * 1.6 * uCarPaint * spFade;
+      // CAR SPARKLE knob (def 1.6 = as-shipped) sets the metallic-flake glint gain.
+      color += uSunColor * litNoL * glint * uCarSparkle * uCarPaint * spFade;
     }
   }
 
@@ -1026,7 +1030,8 @@ void main() {
   // adds a hot bloom right at the sun.
   float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
   vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmt, 4.0));
-  fogCol += uSunColor * pow(sunAmt, 16.0) * 0.6;
+  // FOG SUN CORE knob (def 0.6 = as-shipped): the tight hot bloom right at the sun.
+  fogCol += uSunColor * pow(sunAmt, 16.0) * uFogSunCore;
   // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
   fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
                  1.0 - abs(uFogTint) * 0.02,
@@ -1093,6 +1098,10 @@ uniform float uCloudSpeed; // cloud drift/evolution rate multiplier (def 1.0)
 uniform float uSkyGrad;    // horizon→zenith gradient exponent (def 0.35)
 uniform float uStarDensity;// star-field spawn-window multiplier (def 1.0)
 uniform float uDaySkyBlue; // day deep-blue mid-band strength (def 1.0)
+uniform float uMieScatter; // sun-facing sky forward-scatter glow gain (def 1.0)
+uniform float uCloudSilver;// backlit cloud-edge silver-lining gain (def 1.0)
+uniform float uCoronaAureole; // wide sun aureole halo gain (def 1.0)
+uniform float uSunDiscSize;// angular size of the sun disc (def 1.0)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -1268,7 +1277,8 @@ void main() {
     // most intense at golden hour — the defining dramatic-cloud cue. Pushed much
     // harder at twilight so sunset/sunrise clouds get blazing fire-lit rims.
     float silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + golden) * (1.0 - overcast * 0.7);
-    lit += uSunColor * silver * (1.3 + twilight * 1.6);
+    // CLOUD SILVER LINING knob (def 1.0 = as-shipped) scales the backlit rim glow.
+    lit += uSunColor * silver * (1.3 + twilight * 1.6) * uCloudSilver;
     // Twilight: a broad warm wash across the sun-facing cloud field (not just the
     // thin rim) so the whole sky catches fire at the magic hour.
     lit += uSunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6);
@@ -1286,7 +1296,9 @@ void main() {
   // Damped under overcast (corona hidden behind cloud).
   float upPos = max(up, 0.0);
   float mieDamp = 1.0 - overcast * 0.85;
-  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp);
+  // MIE SCATTER knob (def 1.0 = as-shipped) scales the sun-facing sky glow; clamp
+  // keeps the mix blend valid when the knob pushes the amount past 1.
+  c = mix(c, uSunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp * uMieScatter, 0.0, 1.0));
 
   // --- Horizon glow in the sun's compass direction ---
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
@@ -1309,12 +1321,15 @@ void main() {
   float golden = 1.0 - smoothstep(0.0, 0.45, sunE);
   vec3 sunWarm = mix(uSunColor, uSunColor * vec3(1.18, 0.52, 0.24), golden);
   // Wide aureole: broader (lower exponent) and stronger at golden hour.
-  c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp;
+  // CORONA AUREOLE knob (def 1.0 = as-shipped) scales the broad sun halo glow.
+  c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * uCoronaAureole;
   c += sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;   // tight inner ring
   // Flatten the disc near the horizon (atmospheric refraction squashes it).
   vec3 dd = dir - uSunDir * sd;
   float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
-  float disc = smoothstep(mix(0.018, 0.028, golden), 0.006, perp) * coronaDamp;
+  // SUN DISC SIZE knob (def 1.0 = as-shipped): scales the disc's angular radius by
+  // widening the smoothstep edge. Larger = a bigger, brighter sun.
+  float disc = smoothstep(mix(0.018, 0.028, golden) * uSunDiscSize, 0.006 * uSunDiscSize, perp) * coronaDamp;
   // Bright HDR core (>1) so it blooms into glare; warm-white high, deep amber low.
   vec3 discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
   c += discCore * disc;
@@ -1927,6 +1942,7 @@ uniform float uHazeStr;      // exhaust heat-haze strength (0 = off; boost pushe
 uniform float uHazeTime;     // seconds — scrolls the shimmer upward
 uniform float uShaftDecay;   // screen-space sun-shaft per-tap falloff (def 0.82)
 uniform float uFlareStreak;  // anamorphic flare horizontal tightness (def 7.0)
+uniform float uFlareStreak2; // second thin hot-core flare streak strength (def 0.5)
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
@@ -2307,9 +2323,9 @@ void main() {
     float streakY = exp(-abs(vUV.y - uSunUV.y) * 110.0);
     float streakX = exp(-abs(vUV.x - uSunUV.x) * uFlareStreak);   // FLARE STREAK knob (def 7.0)
     flare += vec3(1.0, 0.80, 0.52) * streakY * streakX * 0.75;
-    // A second thinner hot core streak.
+    // A second thinner hot core streak (FLARE CORE STREAK knob, def 0.5).
     float streakX2 = exp(-abs(vUV.x - uSunUV.x) * 10.0);
-    flare += vec3(1.0, 0.92, 0.78) * exp(-abs(vUV.y - uSunUV.y) * 320.0) * streakX2 * 0.5;
+    flare += vec3(1.0, 0.92, 0.78) * exp(-abs(vUV.y - uSunUV.y) * 320.0) * streakX2 * uFlareStreak2;
 
     // Lens ghost circles along sun-to-center axis
     vec2 toCenter = vec2(0.5) - uSunUV;

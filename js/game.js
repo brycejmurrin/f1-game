@@ -4082,6 +4082,11 @@ function render(dt) {
   frameSky.skyGrad     = LT.skyGrad;
   frameSky.starDensity = LT.starDensity;
   frameSky.daySkyBlue  = LT.daySkyBlue;
+  // MIE SCATTER / CLOUD SILVER / CORONA AUREOLE / SUN DISC SIZE knobs (sky pass).
+  frameSky.mieScatter    = LT.mieScatter;
+  frameSky.cloudSilver   = LT.cloudSilver;
+  frameSky.coronaAureole = LT.coronaAureole;
+  frameSky.sunDiscSize   = LT.sunDiscSize;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;

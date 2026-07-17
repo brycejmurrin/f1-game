@@ -173,7 +173,7 @@ struct FrameU {
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
   params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, mistShare) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth, ground-mist share of the lamp-fog glow
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
-  params6    : vec4<f32>,     // off 368  (wetDark, _, _, _) — live wet-surface darkening
+  params6    : vec4<f32>,     // off 368  (wetDark, carSparkle, fogSunCore, _) — wet-surface darkening + pure-look sparkle/fog knobs (always packed; WGSL reads yz directly). carSunGlint has no WGSL site (GLX-only)
 };                            // size 384
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
@@ -591,7 +591,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let fB = cross(nN, fT);
       let gN = normalize(nN + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
       let glint = smoothstep(0.990, 1.0, dot(gN, H));
-      color = color + F.sunColor.xyz * litNoL * glint * 1.6 * carPaint * spFade;
+      // CAR SPARKLE knob (F.params6.y; GLX parity, def 1.6). Read directly — 0 is
+      // a valid "no sparkle", so the uploader always packs the resolved value.
+      color = color + F.sunColor.xyz * litNoL * glint * F.params6.y * carPaint * spFade;
     }
   }
 
@@ -646,7 +648,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let rd = normalize(in.wpos - F.eye.xyz);
   let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
   var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
-  fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * 0.6;
+  // FOG SUN CORE knob (F.params6.z; GLX parity, def 0.6). Read directly — 0 is a
+  // valid "no hot core", so the uploader always packs the resolved value.
+  fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * F.params6.z;
   // FOG TINT knob (params3.y, -1..1): warm (+) or cool (-) the distance haze.
   let fTint = F.params3.y;
   fogCol = fogCol * vec3<f32>(1.0 + fTint * 0.16, 1.0 - abs(fTint) * 0.02, 1.0 - fTint * 0.16);
@@ -745,6 +749,7 @@ struct SkyU {
   cityGlow    : vec4<f32>,     // xyz night light-pollution dome
   p0          : vec4<f32>,     // (stars, cloud, time, moon)
   p1          : vec4<f32>,     // (starBright, cloudSpeed, skyGrad, starDensity)
+  p2          : vec4<f32>,     // (mieScatter, cloudSilver, coronaAureole, sunDiscSize) — pure-look knobs; read directly (0 is a real "off"), uploader always packs the resolved default
 };
 @group(0) @binding(0) var<uniform> U : SkyU;
 ${hash}
@@ -783,6 +788,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // SKY GRADIENT / STAR DENSITY knobs (GLX parity). Defaults reproduce shipped.
   let skyGrad = select(0.35, U.p1.z, U.p1.z > 0.0);
   let starDensity = select(1.0, U.p1.w, U.p1.w > 0.0);
+  // Pure-look knobs (GLX parity). Read DIRECTLY — 0 is a valid "off" for the
+  // first three, so a select-on-zero would wrongly snap them back to 1.0. The
+  // uploader always packs the resolved value (default 1.0 reproduces the ship).
+  let mieScatter    = U.p2.x;
+  let cloudSilver   = U.p2.y;
+  let coronaAureole = U.p2.z;
+  let sunDiscSize   = max(U.p2.w, 1e-3);   // disc size scales a divisor-like edge; keep > 0
 
   let sunE = clamp(sunDir.y * 1.4, 0.0, 1.0);
   let daytime = smoothstep(0.35, 0.60, sunE);
@@ -822,21 +834,23 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let cloudBot = vec3<f32>(0.26, 0.27, 0.34) * (0.24 + 0.44 * sunBright);
     var lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
     let silver = pow(sd, 6.0) * (1.0 - thick);
-    lit = lit + sunColor * silver * 1.3;
+    lit = lit + sunColor * silver * 1.3 * cloudSilver;   // CLOUD SILVER LINING knob
     c = mix(c, lit, cov);
   }
 
   // --- Mie forward scatter + sun corona/disc ---
   let upPos = max(up, 0.0);
-  c = mix(c, sunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0));
+  // MIE SCATTER knob (clamp keeps the mix blend valid past 1).
+  c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieScatter, 0.0, 1.0));
   let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
   let coronaDamp = 1.0 - nightSky;
   let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
-  c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp;
+  c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
   c = c + sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;
   let dd = dir - sunDir * sd;
   let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
-  let disc = smoothstep(mix(0.018, 0.028, golden), 0.006, perp) * coronaDamp;
+  // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
+  let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
   let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
   c = c + discCore * disc;
 
@@ -894,8 +908,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     LIT,
     BLIT,
     SHADOW,
-    // byte size of the SkyU uniform block (mat4 64 + 7*vec4 112 = 176)
-    SKY_UNIFORM_BYTES: 176,
+    // byte size of the SkyU uniform block (mat4 64 + 8*vec4 128 = 192)
+    SKY_UNIFORM_BYTES: 192,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
     FRAME_UNIFORM_BYTES: 384,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr)
