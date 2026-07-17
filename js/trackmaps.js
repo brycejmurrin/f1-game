@@ -34,11 +34,24 @@ const TrackMaps = (function () {
       const tr = Tracks.buildCenterline(def);
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
-        const crns = detectCorners(tr);
+        const m = tr.map.length;
+        // Prefer curated FIA turn apexes when present on the def.
+        let crns;
+        if (def.turns && def.turns.length) {
+          crns = def.turns.map(function (frac, i) {
+            const f = (((frac % 1) + 1) % 1);
+            const idx = Math.floor(f * m) % m;
+            const mp = tr.map[idx];
+            return { n: i + 1, x: mp[0], y: mp[1], v: 0 };
+          });
+        } else {
+          crns = detectCorners(tr);
+        }
         const dir = circuitDirection(tr);
         const elevRange = elevationRange(tr);
         const drsZones = detectDRS(tr);
-        out = { pts: pts, py: tr.py, corners: crns, turns: crns.length, dir: dir, elevRange: elevRange, drsZones: drsZones };
+        const sectors = (def.sectors && def.sectors.length === 2) ? def.sectors.slice() : null;
+        out = { pts: pts, py: tr.py, corners: crns, turns: crns.length, dir: dir, elevRange: elevRange, drsZones: drsZones, sectors: sectors };
       }
     } catch (e) {
       out = null;
@@ -212,11 +225,14 @@ const TrackMaps = (function () {
       }
       g.closePath();
       g.stroke();
-      // Draw three coloured sectors on top
+      // Draw three coloured sectors on top (curated splits when available)
       const m = pts.length;
+      const splits = (data.sectors && data.sectors.length === 2)
+        ? [0, data.sectors[0], data.sectors[1], 1]
+        : [0, 1 / 3, 2 / 3, 1];
       for (let s = 0; s < 3; s++) {
-        const from = Math.floor((s / 3) * m);
-        const to = s === 2 ? m - 1 : Math.floor(((s + 1) / 3) * m);
+        const from = Math.floor(splits[s] * m);
+        const to = s === 2 ? m - 1 : Math.max(from, Math.floor(splits[s + 1] * m));
         g.strokeStyle = SECTOR_COLORS[s];
         g.lineWidth = width;
         g.beginPath();

@@ -15,6 +15,9 @@
     theme: "green",
     lengthKm: 4.4,
     baseHW: 7,
+    // Keep the terrain ribbon inside the compact foldbacks. The default 120 m
+    // outer span chords from the raised T3 approach across the lower T2 basin.
+    terrainOuter: 90,
     // ATM.dustyBowl — bleached straw-olive grass/runoff, warm hazy sky (baked into pal
     // so buildRoad/buildTerrain pick it up; scenery also Object.assigns for live lighting).
     pal: { zenith: [0.55, 0.62, 0.78], horizon: [0.78, 0.72, 0.58], fog: [0.72, 0.68, 0.55], fogDensity: 0.0022, grass: [0.42, 0.40, 0.22], runoff: [0.58, 0.50, 0.34], ambientSky: [0.62, 0.58, 0.50], ambientGround: [0.40, 0.36, 0.28], sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1.0, 0.94, 0.78], sunColor: [1.0, 0.94, 0.78] },

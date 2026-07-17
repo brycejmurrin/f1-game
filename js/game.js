@@ -631,6 +631,10 @@ function announce(msg, dur) {
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
 function sectorAt(s) {
   const frac = wrapS(s) / track.total;
+  const sec = track.def && track.def.sectors;
+  if (sec && sec.length === 2) {
+    return frac < sec[0] ? 0 : frac < sec[1] ? 1 : 2;
+  }
   return frac < 1 / 3 ? 0 : frac < 2 / 3 ? 1 : 2;
 }
 // Render interpolation: blend a car's arc position between its previous and
@@ -1205,8 +1209,12 @@ function _nightAmbientBand() {
   const _cgA = frameSky.cityGlow;
   if (_cgA) {
     const _cgm = Math.max(_cgA[0], _cgA[1], _cgA[2]) || 1;
-    frame.ambientSky    = frame.ambientSky.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
-    frame.ambientGround = frame.ambientGround.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
+    // SKYGLOW ON AMBIENT knob scales the shipped tint deviation (def 0.28): the
+    // dominant glow channel is boosted, the others cut, so the night ambient picks
+    // up the city's neon/sodium hue. _cgMix 1 = as-shipped, 0 = neutral ambient.
+    const _cgMix = (LT.cityGlowTint != null ? LT.cityGlowTint : 0.28) / 0.28;
+    frame.ambientSky    = frame.ambientSky.map((v, i) => v * (1 + _cgMix * (0.82 + 0.28 * _cgA[i] / _cgm - 1)));
+    frame.ambientGround = frame.ambientGround.map((v, i) => v * (1 + _cgMix * (0.82 + 0.28 * _cgA[i] / _cgm - 1)));
   }
 }
 
@@ -2936,19 +2944,23 @@ function updateCar(c, dt, ranked) {
     const newSector = sectorAt(c.s);
     if (newSector !== sectorIdx) {
       if (ds > 0 && (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0))) {
-        // completed the current sector (forward progress only — a backward crossing
-        // of the start/finish line must not record a bogus sector time)
-        const elapsed = c.lapTime - sectorStartT;
-        const prevSector = sectorIdx;
-        const prevBest = sectorBests[prevSector];
-        sectorLast[prevSector] = elapsed;
-        // Delta is measured against the PREVIOUS best, before this split updates it,
-        // so a new personal best shows the actual improvement (not 0.000).
-        const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
-        if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
-        if (elapsed >= 2) {
-          const sign = delta <= 0 ? "▼ S" : "▲ S";
-          announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+        // Grid sits just before the line (in S3). The first start/finish crossing
+        // only starts the flying lap (lap 0→1) — do NOT stamp that formation
+        // segment as an S3 split/best, or the HUD shows a bogus ~few-second S3
+        // the moment the race begins.
+        if (c.lap >= 1) {
+          const elapsed = c.lapTime - sectorStartT;
+          const prevSector = sectorIdx;
+          const prevBest = sectorBests[prevSector];
+          sectorLast[prevSector] = elapsed;
+          // Delta is measured against the PREVIOUS best, before this split updates it,
+          // so a new personal best shows the actual improvement (not 0.000).
+          const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
+          if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
+          if (elapsed >= 2) {
+            const sign = delta <= 0 ? "▼ S" : "▲ S";
+            announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+          }
         }
       }
       sectorIdx = newSector;
@@ -3127,7 +3139,7 @@ function ltFallback(id) {
 // Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
 // (not read per-frame in render). Changing one re-runs applyRaceSettings so it
 // updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "ambTemp", "ambBalance"]);
+const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance"]);
 function applyLightTune(fromApplyRace) {
   const layers = ltLayers();
   let rebuilt = false, reapply = false, reinit = false;
@@ -3178,10 +3190,11 @@ function appendCarTailLights() {
   // appending here never mutates the cached track set.
   if (!L || L === track._lights || !player) return;
   _tlSel.length = 0;
+  const tlRange = LT.tailRange != null ? LT.tailRange : 160;   // TAIL-LIGHT RANGE knob
   for (const c of cars) {
     const ds = Math.abs(c.s - player.s);
     const d = Math.min(ds, track.total - ds);
-    if (d < 160) _tlSel.push({ c, d });
+    if (d < tlRange) _tlSel.push({ c, d });
   }
   _tlSel.sort((a, b) => a.d - b.d);
   const nT = Math.min(_tlSel.length, 5);
@@ -3195,8 +3208,12 @@ function appendCarTailLights() {
   // end is the farthest) — a flood 250 m back matters far less than a car ahead.
   const room = 32 - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
+  // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
+  // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
+  // hard cutoff (as-shipped), so the fade term is 1 for every selected car.
+  const tlFade = LT.tailFade != null ? LT.tailFade : 0;
   for (let j = 0; j < nT; j++) {
-    const c = _tlSel[j].c;
+    const sel = _tlSel[j], c = sel.c;
     Tracks.sample(track, c.s, _tlSmp);
     const tx = _tlSmp.t[0], tz = _tlSmp.t[2];
     // rear-facing, tilted down: the glow lands on the road behind the car
@@ -3206,7 +3223,8 @@ function appendCarTailLights() {
     // the render-only 0..1 disc-heat ramp every car already tracks (rises under
     // braking, cools after) — read-only here, physics untouched.
     const bAmt = clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul;
-    const tlm = LT.tailLightMul * (1 + bAmt * 1.6);
+    const fadeF = tlFade > 0 ? clamp((tlRange - sel.d) / tlFade, 0, 1) : 1;
+    const tlm = LT.tailLightMul * (1 + bAmt * 1.6) * fadeF;
     L.push(
       _tlSmp.p[0] + _tlSmp.r[0] * c.x - tx * 2.4,
       _tlSmp.p[1] + 0.55,
@@ -3234,7 +3252,7 @@ function setFrameLights(eye, scale, fwd) {
   // dense city night grids — exactly the traffic-glow scenario it was built
   // for. Four lamps out of 32, ranked farthest-of-set, are visually covered
   // by the distance tail-fade below.
-  const CAP = cars.length > 1 ? 28 : 32;
+  const CAP = cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32;
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
@@ -3264,9 +3282,15 @@ function setFrameLights(eye, scale, fwd) {
     // FLICKER knob so 0 still means rock-steady.
     let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
               + LT.lampFlicker * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
-    const wu = Math.min(1, Math.max(0, (tNow - _lampWarmT0) / (4 + hsh * 4)));
-    f *= 0.70 + 0.30 * wu;
-    const cold = 1 - wu;   // 1 = just struck (dim, sodium-orange), 0 = settled
+    // LAMP WARM-UP knob scales the strike-to-full duration (def 1 = the 4+hsh*4 s
+    // ramp). 0 = instant on (wu pinned to 1, no dip/warmth); higher = a longer,
+    // more staggered warm-up. WARM-UP DIP sets how dim the strike starts, WARM-UP
+    // WARMTH how orange it glows before settling.
+    const warmDur = (4 + hsh * 4) * (LT.lampWarmup != null ? LT.lampWarmup : 1);
+    const wu = warmDur > 0 ? Math.min(1, Math.max(0, (tNow - _lampWarmT0) / warmDur)) : 1;
+    const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
+    f *= (1 - dip) + dip * wu;
+    const cold = (1 - wu) * (LT.lampWarmupWarm != null ? LT.lampWarmupWarm : 1);   // 1 = just struck (dim, sodium-orange), 0 = settled
     _flScr[0] = f * (1 + cold * 0.22);
     _flScr[1] = f * (1 - cold * 0.10);
     _flScr[2] = f * (1 - cold * 0.38);
@@ -3311,7 +3335,9 @@ function setFrameLights(eye, scale, fwd) {
     const b = dx * fx + dz * fz;
     if (b < 0) {
       const dl = Math.sqrt(dx * dx + dz * dz) || 1;
-      d *= 1 + 5.25 * Math.min(1, (-b) / (flen * dl * 0.25));
+      // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
+      // nearest-N rank (def 5.25 = as-shipped forward push).
+      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, (-b) / (flen * dl * 0.25));
     }
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
@@ -3345,10 +3371,11 @@ function setFrameLights(eye, scale, fwd) {
   // path for its sorting), there is no set boundary, and fading "the farthest
   // of the set" would black out a real lamp that used to be lit.
   const truncated = count > CAP;
+  const _cullBand = dEdge * (LT.lampCullFade != null ? LT.lampCullFade : 0.35);   // LAMP CULL FADE knob
   out.length = 0;
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
-    const cullF = truncated ? Math.max(0, Math.min(1, (dEdge - e.d) / (dEdge * 0.35))) : 1;
+    const cullF = truncated ? Math.max(0, Math.min(1, (dEdge - e.d) / _cullBand)) : 1;
     const f = fl(o);
     out.push(src[o], src[o+1], src[o+2],
       src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
@@ -4125,8 +4152,11 @@ function render(dt) {
       // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
       // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
       // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
+      // TWILIGHT FLOOR + TWILIGHT RAMP knobs: the dawn/dusk floor level and how
+      // steeply floods climb to full as the sun sets (def 0.30 / 6 = as-shipped).
       const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.max(0.30, clamp(1 - _sy * 6, 0, 1))       // 0.30 = bright twilight floor, 1 = sun at/below horizon
+        ? Math.max(LT.twilightFloor != null ? LT.twilightFloor : 0.30,
+                   clamp(1 - _sy * (LT.twilightRamp != null ? LT.twilightRamp : 6), 0, 1))
         : 1;                                              // night / default-night: full ramp
       // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
       // raw physical HDR values (16-20) — at full ceiling they overpowered the
@@ -4134,7 +4164,9 @@ function render(dt) {
       // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
       // on top of the twilight ramp above.
       const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
-      const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
+      // TWILIGHT WARMTH knob scales the amber cast of the "just switched on" floods
+      // (def 1 = as-shipped 0.14 red boost / 0.22 blue cut).
+      const warmth = (1 - nightF) * (LT.twilightWarm != null ? LT.twilightWarm : 1);   // 1 at twilight → 0 deep night
       floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
     } else {
       // DAYTIME FLOODS: pools lit under a blue sky. No twilight warmth ramp (the
@@ -4872,14 +4904,22 @@ function drawMinimap() {
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
     const SC = ["rgba(192,132,252,0.8)", "rgba(225,6,0,0.8)", "rgba(163,230,53,0.8)"];
+    // Same curated splits as TrackMaps.draw / sectorAt (equal thirds fallback).
+    const sec = track.def && track.def.sectors;
+    const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
     for (let s = 0; s < 3; s++) {
-      const from = Math.floor((s / 3) * n), to = Math.floor(((s + 1) / 3) * n);
+      const from = Math.floor(splits[s] * n);
+      const to = s === 2 ? n - 1 : Math.max(from, Math.floor(splits[s + 1] * n));
       mc.strokeStyle = SC[s];
       mc.beginPath();
       for (let i = from; i <= to; i++) {
         const p = map[i % n];
         const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
         i === from ? mc.moveTo(x, y) : mc.lineTo(x, y);
+      }
+      if (s === 2) {
+        const p0 = map[0];
+        mc.lineTo(8 + p0[0] * (W - 16), 8 + p0[1] * (H - 16));
       }
       mc.stroke();
     }
@@ -7012,7 +7052,12 @@ window.__apex = {
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
-  info: () => ({ state, track: (state === "race" || state === "count") ? (track && track.def.id) : null, n: track && track.n, total: track && track.total, timeTrial, seasonMode }),
+  info: () => ({
+    state, track: (state === "race" || state === "count") ? (track && track.def.id) : null,
+    n: track && track.n, total: track && track.total, timeTrial, seasonMode,
+    sectors: track && track.def && track.def.sectors ? track.def.sectors.slice() : null,
+    turns: track && track.def && track.def.turns ? track.def.turns.length : null,
+  }),
   // Reports the camera ACTUALLY being rendered: the view() debug free-cam when
   // one is active, otherwise the game camera. `debug` flags which. (Previously
   // this always returned the game cam, masking an active view() override.)

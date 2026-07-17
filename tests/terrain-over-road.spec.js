@@ -18,6 +18,20 @@ const TRACKS = [
 // absorbs banking/elevation interpolation noise and z-fight-scale slivers.
 const TOL = 0.18;
 
+test("Hungaroring terrain stays below the racing surface through the T2 basin", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
+  await page.evaluate(() => window.__apex.race("hungaroring", "day", "dry"));
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15000 });
+  await page.waitForTimeout(1500);
+
+  const gaps = await page.evaluate(() =>
+    [-6, -3, 0, 3, 6].map((lat) => window.__apex.groundY(0.163, lat).gap)
+  );
+
+  expect(Math.max(...gaps)).toBeLessThanOrEqual(TOL);
+});
+
 test("no terrain/road faces over the racing line (all circuits)", async ({ page }) => {
   test.setTimeout(600000);
   await page.goto("/");
