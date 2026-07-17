@@ -1,0 +1,70 @@
+export const TODS = Object.freeze(["dawn", "day", "dusk", "night"]);
+export const WEATHERS = Object.freeze(["dry", "wet", "rain", "fog", "overcast"]);
+export const TRACKS = Object.freeze([
+  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring",
+  "imola", "interlagos", "jeddah", "madrid", "mexico", "miami",
+  "monaco", "montreal", "monza", "qatar", "redbull", "shanghai",
+  "silverstone", "singapore", "spa", "suzuka", "vegas", "zandvoort",
+]);
+
+export const SHARDS = Object.freeze([
+  ["abudhabi", "albert_park", "baku", "cota"],
+  ["bahrain", "hungaroring", "jeddah", "madrid"],
+  ["imola", "interlagos", "miami", "monaco"],
+  ["mexico", "montreal", "qatar", "redbull"],
+  ["shanghai", "silverstone", "singapore", "spa"],
+  ["suzuka", "vegas", "zandvoort", "monza"],
+].map(Object.freeze));
+
+export const CAMERA_FRACTIONS = Object.freeze({
+  abudhabi: [0.08, 0.45, 0.88], albert_park: [0.10, 0.50, 0.88],
+  bahrain: [0.01, 0.45, 0.81], baku: [0.15, 0.45, 0.75],
+  cota: [0.15, 0.50, 0.85], hungaroring: [0.00, 0.35, 0.70],
+  imola: [0.10, 0.40, 0.75], interlagos: [0.05, 0.40, 0.75],
+  jeddah: [0.10, 0.40, 0.70], madrid: [0.05, 0.35, 0.70],
+  mexico: [0.10, 0.45, 0.80], miami: [0.23, 0.50, 0.70],
+  monaco: [0.05, 0.22, 0.45], montreal: [0.15, 0.50, 0.80],
+  monza: [0.30, 0.55, 0.85], qatar: [0.40, 0.70, 0.90],
+  redbull: [0.10, 0.45, 0.80], shanghai: [0.10, 0.40, 0.75],
+  silverstone: [0.40, 0.65, 0.97], singapore: [0.35, 0.58, 0.72],
+  spa: [0.10, 0.35, 0.70], suzuka: [0.00, 0.30, 0.86],
+  vegas: [0.25, 0.66, 0.98], zandvoort: [0.30, 0.55, 0.80],
+});
+
+export const SLIDER_GROUPS = Object.freeze([
+  { id: "foundation", labels: ["SUN & MOON", "AMBIENT & BOUNCE"] },
+  { id: "shadows", labels: ["SHADOWS"] },
+  { id: "night", labels: ["TRACK LIGHTS", "NIGHT GLOW & BLOOM"] },
+  { id: "weather", labels: ["ATMOSPHERE", "SKY & WEATHER", "RAIN & LIGHTNING"] },
+  { id: "surface", labels: ["REFLECTIONS & WET ROAD", "CAR"] },
+  { id: "grade", labels: ["IMAGE & COLOUR"] },
+]);
+
+export const REGIONS = Object.freeze({
+  frame: [0, 0, 1, 1], road: [0.30, 0.60, 0.40, 0.16],
+  near: [0.28, 0.74, 0.44, 0.14], fogwall: [0.34, 0.38, 0.32, 0.16],
+  sky: [0.28, 0.05, 0.44, 0.20], wallL: [0.02, 0.34, 0.16, 0.22],
+});
+
+export const GATES = Object.freeze({
+  maxBlackClip: 0.08, maxWhiteClip: 0.03, minTonalRange: 45,
+});
+
+export function conditionKey(track, tod, weather) {
+  if (!TRACKS.includes(track)) throw new Error(`unknown track: ${track}`);
+  if (!TODS.includes(tod)) throw new Error(`unknown time: ${tod}`);
+  if (!WEATHERS.includes(weather)) throw new Error(`unknown weather: ${weather}`);
+  return `${track}|${tod}|${weather}`;
+}
+
+export function enumerateConditions(trackIds = TRACKS) {
+  return trackIds.flatMap((track) => TODS.flatMap((tod) =>
+    WEATHERS.map((weather) => ({ track, tod, weather, key: conditionKey(track, tod, weather) }))));
+}
+
+export function validateConfig() {
+  if (new Set(SHARDS.flat()).size !== TRACKS.length) throw new Error("invalid shard coverage");
+  for (const track of TRACKS)
+    if (!CAMERA_FRACTIONS[track] || CAMERA_FRACTIONS[track].length !== 3)
+      throw new Error(`invalid camera coverage: ${track}`);
+}
