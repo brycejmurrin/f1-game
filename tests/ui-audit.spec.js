@@ -2,7 +2,7 @@
 // UI audit — captures every screen/menu in portrait and landscape.
 // Run with: npm test -- tests/ui-audit.spec.js
 // Output: artifacts/galleries-<port>/ui-audit/
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 import { setupApiMocks } from "./f1-api-mock.js";
 import { galleryPath } from "./output-paths.js";
 

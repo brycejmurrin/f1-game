@@ -622,10 +622,10 @@
       // Start/finish gantry + halfway scoring gantry
       gantry(0.0, 7.5, [0.12, 0.12, 0.16]);
       gantry(0.5, 7.0, [0.12, 0.12, 0.16]);
-      // Lit start-light cluster on the gantry
+      // Lit start-light cluster on the gantry (overhead → unguarded raw emit)
       {
         const a = anchor(K(0.0), 0, 0);
-        addBox(out, vadd(a.c, a.u, 7.6), [4.5, 1.4, 0.9], [0.95, 0.05, 0.05], null);
+        TrackGeom.addBox(out, vadd(a.c, a.u, 7.6), [4.5, 1.4, 0.9], [0.95, 0.05, 0.05], null);
       }
 
       // ===================================================================

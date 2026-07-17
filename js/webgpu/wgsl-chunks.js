@@ -151,7 +151,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 368 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 384 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -173,7 +173,8 @@ struct FrameU {
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
   params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, _, _) — env-cube probe strength (0 = analytic sky only) + cloud-shadow drift rate
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
-};                            // size 368
+  params6    : vec4<f32>,     // off 368  (wetDark, _, _, _) — live wet-surface darkening
+};                            // size 384
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -359,7 +360,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     wet = wetness * upFace;
     let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet;
-    albedo = albedo * mix(1.0, 0.42, wet);      // wet asphalt absorbs light (uWetDark=1 floor)
+    albedo = albedo * mix(1.0, clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0), wet);
     albedo = albedo * mix(1.0, 0.50, puddle);
     rough = mix(rough, 0.15, wet);
     rough = mix(rough, 0.05, puddle);
@@ -559,9 +560,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let cell = floor(in.wpos * 45.0);
       let h1 = hash3(cell);
       let h2 = hash3(cell + vec3<f32>(19.7, 7.3, 3.1));
-      let fT = normalize(cross(Ngeo, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
-      let fB = cross(Ngeo, fT);
-      let gN = normalize(Ngeo + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
+      // Mirror the GLSL finite-basis guard: malformed/degenerate geometry must
+      // not feed normalize(0) and spray NaN glints across the paint.
+      var nN = vec3<f32>(0.0, 1.0, 0.0);
+      if (length(Ngeo) > 1e-4) {
+        nN = normalize(Ngeo);
+      }
+      let fT = normalize(cross(nN, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+      let fB = cross(nN, fT);
+      let gN = normalize(nN + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
       let glint = smoothstep(0.990, 1.0, dot(gN, H));
       color = color + F.sunColor.xyz * litNoL * glint * 1.6 * carPaint * spFade;
     }
@@ -864,7 +871,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 368,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4 +params5; +shadowCtr)
+    FRAME_UNIFORM_BYTES: 384,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

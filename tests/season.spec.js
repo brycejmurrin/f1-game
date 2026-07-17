@@ -91,4 +91,46 @@ test.describe("Season — standings panel", () => {
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
   });
+
+  test("migrates legacy code points to a stable identity before a custom code edit", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.team", "11");
+      localStorage.setItem("apex26.driver", "0");
+      localStorage.setItem("apex26.customTeam", JSON.stringify({
+        id: "custom",
+        engine: "Custom",
+        tier: 2,
+        custom: true,
+        name: "My Team",
+        short: "YOU",
+        color: [0.15, 0.45, 0.95],
+        color2: [0.95, 0.15, 0.25],
+        stats: { speed: 85, accel: 85, cornering: 85, braking: 85 },
+        drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
+      }));
+      localStorage.setItem("apex26.season", JSON.stringify({
+        round: 1,
+        pts: { YOU: 25 },
+        teamPts: { custom: 25 },
+      }));
+    });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.locator("#mb-season").click();
+    await page.locator("#sel-customize").click();
+    await page.locator("#cz-code").fill("NEW");
+    await page.locator("#cz-save").click();
+    await page.locator("#sel-go").click();
+    await page.locator("#rs-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    await page.evaluate(() => {
+      window.__apex.park(0.9);
+      window.__apex.finishRace();
+    });
+
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.season")));
+    expect(saved.pts["custom:0"]).toBe(50);
+    expect(saved.pts.NEW).toBeUndefined();
+    expect(await page.locator("#results-table").innerText()).toContain("NEW");
+  });
 });

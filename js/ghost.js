@@ -74,10 +74,12 @@ const Ghost = (function () {
 
   // Record one frame. t = seconds since this lap began; s = arc-distance along
   // the centreline; x = lateral offset (m). Throttled to HZ so storage stays
-  // small regardless of frame rate.
+  // small regardless of frame rate. Reverse-progress samples are discarded so
+  // the timed lap remains in the monotonic distance domain used by timeAt().
   function record(t, s, x) {
     if (!rec) return;
     if (rec.t.length && t - lastSampleT < 1 / HZ) return;
+    if (rec.s.length && s < rec.s[rec.s.length - 1]) return;
     lastSampleT = t;
     rec.t.push(round(t, 3));
     rec.s.push(round(s, 2));
@@ -130,8 +132,8 @@ const Ghost = (function () {
   }
 
   // Inverse lookup: given the player's current arc-distance s, return the ghost's
-  // lap time when it was at that same position. Uses binary search on best.s[]
-  // (which is monotonically increasing). Returns null if no ghost exists.
+  // lap time when it was at that same position. Uses binary search on best.s[];
+  // record() retains only forward-progress samples. Returns null without a ghost.
   function timeAt(s) {
     if (!enabled || !best || !best.s.length) return null;
     const ss = best.s, ts = best.t, n = ss.length;

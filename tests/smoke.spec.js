@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 // Helper: wait for the game's __apex hook to report a non-null track,
 // meaning loadTrack() has finished and the renderer is up.
@@ -34,7 +34,7 @@ async function park(page, frac = 0) {
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 test.describe("Apex 26 — smoke", () => {
-  test("page loads without WebGL error", async ({ page }) => {
+  test("page loads without WebGL error", async ({ page, pageErrors }) => {
     const errors = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") errors.push(msg.text());
@@ -55,6 +55,7 @@ test.describe("Apex 26 — smoke", () => {
 
     // No console errors during load
     expect(errors.filter((e) => !e.includes("favicon"))).toHaveLength(0);
+    expect(pageErrors).toEqual([]);
   });
 
   test("select screen shows team and track chips", async ({ page }) => {

@@ -170,6 +170,7 @@ const DataTelemetry = (function () {
   let telView = null;                 // the live telemetry view (for animation cleanup)
   let telemPopup = null;              // the full-screen player popup element
   let telemKeyHandler = null;         // the Escape-to-close keydown listener (for cleanup)
+  let telemReturnFocus = null;
 
   function stopTelAnim() {
     if (telView) {
@@ -179,6 +180,7 @@ const DataTelemetry = (function () {
   }
 
   function closeTelemPopup() {
+    const restore = telemPopup ? telemReturnFocus : null;
     stopTelAnim();
     if (telemKeyHandler) {
       document.removeEventListener("keydown", telemKeyHandler);
@@ -188,17 +190,24 @@ const DataTelemetry = (function () {
       if (telemPopup.parentNode) telemPopup.parentNode.removeChild(telemPopup);
       telemPopup = null;
     }
+    telemReturnFocus = null;
+    if (restore && restore.isConnected && restore.focus) restore.focus();
   }
 
   function openTelemPopup(tels) {
     closeTelemPopup();
+    telemReturnFocus = document.activeElement;
     const overlay = el("div", "dh-tpopup");
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "dh-tpopup-title");
 
     const card = el("div", "dh-tpopup-card");
 
     // Header: driver name(s) + session context + close button
     const hdr = el("div", "dh-tpopup-hdr");
     const titleEl = el("div", "dh-tpopup-title");
+    titleEl.id = "dh-tpopup-title";
     titleEl.appendChild(el("span", null, tels.map(function (t) { return t.d.name || dcode(t.d); }).join(" vs ")));
     if (sel.meta) {
       const sub = [sel.meta.name || sel.meta.type, sel.meta.circuit || sel.meta.country].filter(Boolean).join(" · ");
@@ -206,6 +215,8 @@ const DataTelemetry = (function () {
     }
     hdr.appendChild(titleEl);
     const closeBtn = el("button", "dh-close", "✕");
+    closeBtn.type = "button";
+    closeBtn.setAttribute("aria-label", "Close telemetry");
     closeBtn.addEventListener("click", closeTelemPopup);
     hdr.appendChild(closeBtn);
     card.appendChild(hdr);
@@ -223,11 +234,26 @@ const DataTelemetry = (function () {
     // Close on Escape. Stored so closeTelemPopup() can remove it however the
     // popup is dismissed (Escape, backdrop click, ✕, or tab change) — otherwise
     // a document keydown listener leaks on every non-Escape close.
-    telemKeyHandler = function (e) { if (e.key === "Escape") closeTelemPopup(); };
+    telemKeyHandler = function (e) {
+      if (e.key === "Escape") { closeTelemPopup(); return; }
+      if (e.key !== "Tab" || !telemPopup) return;
+      const items = Array.prototype.filter.call(
+        telemPopup.querySelectorAll("button, select, input, textarea, [href], [tabindex]"),
+        function (node) { return !node.disabled && node.tabIndex >= 0; }
+      );
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    };
     document.addEventListener("keydown", telemKeyHandler);
 
     document.body.appendChild(overlay);
     telemPopup = overlay;
+    closeBtn.focus();
 
     // Build after layout so clientWidth measurements are real
     setTimeout(function () {
@@ -240,7 +266,11 @@ const DataTelemetry = (function () {
   function loadTelemetrySet(sessionKey, picked, detail) {
     const myGen = ++telGen;
     stopTelAnim();
-    if (!picked.length) return;
+    if (!picked.length) {
+      clear(detail);
+      detail.appendChild(emptyMsg("← Pick a driver to load their fastest lap."));
+      return;
+    }
     clear(detail);
     detail.appendChild(spinner());
     Promise.all(picked.map(function (d, i) { return fetchDriverTel(sessionKey, d, i === 0); }))

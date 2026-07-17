@@ -821,6 +821,6 @@ const GameAudio = (function () {
       return den > 0 ? Math.round(num / den) : 0;
     },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
-    debug: function () { return { samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
+    debug: function () { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
 })();

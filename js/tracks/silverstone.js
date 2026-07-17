@@ -477,18 +477,21 @@
 
       // --- Start-light gantry cluster spanning the National straight: twin masts,
       //     a top beam, the five red start-light boxes and two TV-camera pods.
+      // Overhead parts use TrackGeom.addBox (unguarded) so the on-road footprint
+      // cull does not drop the span — same pattern as gantry() / underpassPortal.
       function startGantryCluster(s) {
+        const rawBox = TrackGeom.addBox;
         const kb = k(s), L = anchor(kb, -1, 4), R = anchor(kb, 1, 4);
         const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]), bL = [L.r, L.u, L.t], H = 8;
         out._mat = MAT.METAL;
         addCyl(out, L.c, 0.4, H, [0.20, 0.21, 0.24], 6, bL);
         addCyl(out, R.c, 0.4, H, [0.20, 0.21, 0.24], 6, [R.r, R.u, R.t]);
         const beam = vadd(vadd(L.c, L.u, H), L.r, span / 2);
-        addBox(out, beam, [span, 0.7, 1.4], [0.16, 0.17, 0.20], bL);
+        rawBox(out, beam, [span, 0.7, 1.4], [0.16, 0.17, 0.20], bL);
         for (let i = 0; i < 5; i++)
-          addBox(out, vadd(vadd(beam, L.u, -1.6), L.r, (i - 2) * 1.6), [0.9, 1.2, 0.9], [0.65, 0.10, 0.10], bL);
+          rawBox(out, vadd(vadd(beam, L.u, -1.6), L.r, (i - 2) * 1.6), [0.9, 1.2, 0.9], [0.65, 0.10, 0.10], bL);
         for (const o of [-span * 0.3, span * 0.3])
-          addBox(out, vadd(vadd(beam, L.r, o), L.u, 0.6), [0.8, 0.8, 1.4], [0.10, 0.10, 0.12], bL);
+          rawBox(out, vadd(vadd(beam, L.r, o), L.u, 0.6), [0.8, 0.8, 1.4], [0.10, 0.10, 0.12], bL);
         out._mat = 0;
       }
 
