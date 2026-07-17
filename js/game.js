@@ -96,7 +96,7 @@ function initRainDrops() {
     x: Math.random() * rainCanvas.width,
     y: Math.random() * rainCanvas.height,
     len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? 0.5 : 1),
-    speed: (380 + Math.random() * 360) * (drizzle ? 0.6 : 1),
+    speed: (380 + Math.random() * 360) * (drizzle ? 0.6 : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
     opacity: 0.16 + Math.random() * 0.34,
   }));
 }
@@ -108,7 +108,9 @@ function drawRain(dt) {
   // (one beginPath/stroke instead of one per drop). The blur/motion of a rain field
   // hides that the per-drop opacity is now uniform. Drizzle draws fainter.
   rainCtx2d.strokeStyle = "#afc8e8";
-  rainCtx2d.globalAlpha = isRaining() ? 0.25 : 0.16;   // ~mean of the 0.16..0.50 per-drop range
+  // RAIN OPACITY knob (def 1) scales the streak-layer alpha; def reproduces the
+  // shipped 0.25/0.16 exactly. Clamped to canvas' valid 0..1 globalAlpha range.
+  rainCtx2d.globalAlpha = clamp((isRaining() ? 0.25 : 0.16) * (LT.rainOpacity != null ? LT.rainOpacity : 1), 0, 1);   // ~mean of the 0.16..0.50 per-drop range
   // SPEED-REACTIVE streaks: at speed the rain shears toward the camera's motion
   // and stretches into driving streaks (apparent velocity = fall + car speed).
   // Render-only — reads player.speed, never writes physics state.
@@ -633,6 +635,22 @@ function hueRotateTint(rgb, deg) {
     m + (r * (0.213 - c * 0.213 + s * 0.143) + g * (0.715 + c * 0.285 + s * 0.140) + b * (0.072 - c * 0.072 - s * 0.283)),
     m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072)),
   ];
+}
+// Scale an RGB colour's SATURATION around its luma-grey anchor by `amt`
+// (1 = unchanged, 0 = achromatic grey, >1 = more vivid). Same NTSC-luma grey
+// anchor as hueRotateTint, so a neutral colour stays put. Returns a fresh array
+// (never mutates the palette/frame source). Used by SKY/FOG COLOUR SATURATION.
+function satAdjust(rgb, amt) {
+  if (!rgb || amt === 1) return rgb;
+  const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;   // luma (grey anchor)
+  // Clamp to >=0: at amt>1 a channel below the grey anchor can overshoot past
+  // black into negative radiance, which then subtracts in the additive sky/fog/
+  // reflection mixes (skyZenith/Horizon + fogColor feed the dome, glass, wet
+  // road and SSR fallback) and inverts hue. Default amt===1 early-returns above,
+  // so this stays byte-identical at the shipped setting.
+  return [Math.max(0, m + (rgb[0] - m) * amt),
+          Math.max(0, m + (rgb[1] - m) * amt),
+          Math.max(0, m + (rgb[2] - m) * amt)];
 }
 const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 function fmtTime(t) {
@@ -1604,7 +1622,7 @@ function applyRaceSettings() {
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
     // light) so heavy overcast reads atmospheric, not just a flat grey dim.
-    frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
+    frame.fogDensity = (frame.fogDensity || 0.0016) * (LT.overcastFogMul != null ? LT.overcastFogMul : 1.7);
     if (raceTimeOfDay === "default") { frameSky.horizon = [0.74, 0.73, 0.74]; frame.skyHorizon = frameSky.horizon; }
     // A night session must stay dark under overcast too — same guard the wet/fog
     // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
@@ -1615,7 +1633,7 @@ function applyRaceSettings() {
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     frameSky.cloud = Math.min(0.85, _cloudBase + 0.35);
-    frame.fogDensity = (frame.fogDensity || 0.0017) * 3.0;
+    frame.fogDensity = (frame.fogDensity || 0.0017) * (LT.fogWxMul != null ? LT.fogWxMul : 3.0);
     const fc = [0.74, 0.76, 0.78];
     frame.fogColor = fc;
     // Don't erase an explicit twilight horizon (dawn magenta / dusk coral) — only
@@ -1691,6 +1709,21 @@ function applyRaceSettings() {
       frame.ambientSky = [frame.ambientSky[0] * ar * skyG, frame.ambientSky[1] * ag * skyG, frame.ambientSky[2] * abb * skyG];
       frame.ambientGround = [frame.ambientGround[0] * ar * grdG, frame.ambientGround[1] * ag * grdG, frame.ambientGround[2] * abb * grdG];
     }
+    // SKY COLOUR SATURATION — push the sky dome toward grey (0) or oversaturate
+    // (>1) around its luma anchor. Fresh arrays; the reflected sky (glass / wet
+    // road / SSR fallback reads frame.skyZenith/Horizon) is re-synced so the
+    // mirror matches the dome the player sees. Default 1 = exact no-op.
+    const _sat = LT.skyColorSat != null ? LT.skyColorSat : 1;
+    if (_sat !== 1) {
+      if (frameSky.zenith)  frameSky.zenith  = satAdjust(frameSky.zenith, _sat);
+      if (frameSky.horizon) frameSky.horizon = satAdjust(frameSky.horizon, _sat);
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
+    }
+    // FOG COLOUR SATURATION — same treatment for the distance-haze base colour,
+    // applied BEFORE the in-shader FOG WARM / COOL balance. Fresh array, def 1.
+    const _fsat = LT.fogColorSat != null ? LT.fogColorSat : 1;
+    if (_fsat !== 1 && frame.fogColor) frame.fogColor = satAdjust(frame.fogColor, _fsat);
   }
   // Save base ambient + exposure so the lightning system can restore them each
   // frame. Exposure matters: the flash SETS frame.exposure from this base — the
@@ -2214,10 +2247,13 @@ function update(dt) {
   }
 }
 
-// Shift a car along the track. prog (cumulative) and s (wrapped, used for
-// rendering/curvature) advance together, so a longitudinal collision push must
-// move BOTH or the visible car won't budge.
-function shiftLong(c, d) { c.prog += d; c.s = wrapS(c.s + d); }
+// Shift a car along the track. AI prog and s advance together. Player prog is
+// derived from Δs each frame after collisions, so only move s here — otherwise
+// the push is counted twice (shiftLong.prog + next-tick ds).
+function shiftLong(c, d) {
+  c.s = wrapS(c.s + d);
+  if (!c.isPlayer) c.prog += d;
+}
 
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
@@ -2256,13 +2292,15 @@ function resolveCollisions(ranked, dt) {
     for (let ii = 0; ii < ranked.length; ii++) {
       const i = fwd ? ii : ranked.length - 1 - ii;
       const a = ranked[i];
-      for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
-        const b = ranked[j];               // a is ahead (higher prog), b behind
+      // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
+      // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
+      for (let j = i + 1; j < ranked.length; j++) {
+        const b = ranked[j];
         let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
         const L = track.total;
         dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-        if (Math.abs(dProg) > LCAR) continue;            // sorted by prog: the rest are farther
+        if (Math.abs(dProg) > LCAR) continue;
         const dX = a.x - b.x;
         if (!Number.isFinite(dX)) continue;
         const penLong = LCAR - Math.abs(dProg);
@@ -2286,7 +2324,9 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= rubScrub; b.speed *= rubScrub;   // barely scrub speed on a side rub
+          // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
+          // side contact was draining speed without separating the cars.
+          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
@@ -2320,7 +2360,7 @@ function resolveCollisions(ranked, dt) {
   const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
-    for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
+    for (let j = i + 1; j < ranked.length; j++) {
       const b = ranked[j];
       let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
@@ -2513,8 +2553,9 @@ function updateCar(c, dt, ranked) {
     }
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else if (!onThrottle) {
-    // coasting: gentle engine-braking/drag, plus a little energy recovery
-    c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0)
+    if (c.speed > 0) c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    else if (c.speed < 0) c.speed = Math.min(0, c.speed + COAST_DRAG * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
     const a = (ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
@@ -2625,27 +2666,22 @@ function updateCar(c, dt, ranked) {
     // oscillation, and it doesn't fight the collision push (same direction).
     const MIN_GAP = 2.8;
     let sep = 0;
-    // Walk OUTWARD from our rank; break once |prog delta| exceeds 6.5 (prog-sorted,
-    // so the window is a contiguous index range — same neighbours, no full-field scan).
+    // Full field with wrapped Δprog — rank-neighbour walks miss lapped cars
+    // that share the same stretch of track.
     const ci2 = (c.rank || 1) - 1;
-    for (let up = ci2 - 1; up >= 0; up--) {   // ahead of us
-      const o = ranked[up];
-      const dp = o.prog - c.prog;             // >0
-      if (dp > 6.5) break;                    // only cars roughly alongside
+    const Ltrk = track.total;
+    for (let k = 0; k < ranked.length; k++) {
+      if (k === ci2) continue;
+      const o = ranked[k];
+      let dp = o.prog - c.prog;
+      if (!Number.isFinite(dp)) continue;
+      dp = ((dp + Ltrk / 2) % Ltrk + Ltrk) % Ltrk - Ltrk / 2;
+      const adp = Math.abs(dp);
+      if (adp > 6.5) continue;
       const dx = c.x - o.x, adx = Math.abs(dx);
       const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
-    }
-    for (let dn = ci2 + 1; dn < ranked.length; dn++) {   // behind us
-      const o = ranked[dn];
-      const dpr = o.prog - c.prog;            // <0
-      if (dpr < -6.5) break;                  // only cars roughly alongside
-      const dp = -dpr;                        // |prog delta|
-      const dx = c.x - o.x, adx = Math.abs(dx);
-      const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
+      if (deficit <= 0) continue;
+      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
     // clamp the combined target to the drivable surface so overtake/unstuck/
@@ -2669,7 +2705,7 @@ function updateCar(c, dt, ranked) {
   // that isn't moving can't be steered sideways, so tilting while stopped no
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
-  const latFac = clamp(c.speed / 18, 0, 1);
+  const latFac = clamp(Math.abs(c.speed) / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   // Banking: computed once, shared between player and AI so both get grip boost.
@@ -2698,12 +2734,12 @@ function updateCar(c, dt, ranked) {
     }
     // Fade the lateral model out toward a standstill so a parked car can't be
     // spun by steering (slip angle is undefined at zero speed).
-    const sp = clamp(c.speed / 3, 0, 1);
+    const sp = clamp(Math.abs(c.speed) / 3, 0, 1);
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     // --- road-wheel steer angle: driver lock (eased a little at speed) + the
     // DRIVING-HELP assist that steers toward the road curvature for you. Both
     // act through the front tyre below, so neither can exceed available grip.
-    const lockTaper = Math.max(0.4, 1 - c.speed / STEER_SPEED_REF);
+    const lockTaper = Math.max(0.4, 1 - Math.abs(c.speed) / STEER_SPEED_REF);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
@@ -2799,7 +2835,9 @@ function updateCar(c, dt, ranked) {
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
     // well-conditioned at low speed.
-    const vx = Math.max(c.speed, 4);
+    // Signed longitudinal speed (floored away from 0) so reverse slip angles
+    // stay well-conditioned instead of collapsing to +4 m/s forward.
+    const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
@@ -2899,7 +2937,9 @@ function updateCar(c, dt, ranked) {
       // driver input (sign = turn direction); `into` is ±1 for the wall side.
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
-        c.speed = Math.max(0, c.speed - pushIn * (track.street ? 40 : 16) * dt);
+        const scrub = pushIn * (track.street ? 40 : 16) * dt;
+        if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
+        else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
         c.wallT = 0.35;     // brief auto-throttle suppress
       }
       // Nose/steer pointing AWAY = peeling off: speed and heading left alone so
@@ -3187,7 +3227,7 @@ function ltFallback(id) {
 // Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
 // (not read per-frame in render). Changing one re-runs applyRaceSettings so it
 // updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance"]);
+const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance", "skyColorSat", "fogColorSat"]);
 function applyLightTune(fromApplyRace) {
   const layers = ltLayers();
   let rebuilt = false, reapply = false, reinit = false;
@@ -4124,6 +4164,11 @@ function render(dt) {
   frameSky.skyGrad     = LT.skyGrad;
   frameSky.starDensity = LT.starDensity;
   frameSky.daySkyBlue  = LT.daySkyBlue;
+  // MIE SCATTER / CLOUD SILVER / CORONA AUREOLE / SUN DISC SIZE knobs (sky pass).
+  frameSky.mieScatter    = LT.mieScatter;
+  frameSky.cloudSilver   = LT.cloudSilver;
+  frameSky.coronaAureole = LT.coronaAureole;
+  frameSky.sunDiscSize   = LT.sunDiscSize;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -4857,14 +4902,23 @@ function render(dt) {
   // wet + cloud add). Sun shafts catch more in haze; lamp beams only show in it.
   // GROUND MIST knob applied here as well as at the uGroundMist upload, so the
   // god-ray / lamp-beam haze response tracks the mist the player actually sees.
-  const _mist = clamp((frame.groundMist || 0) * LT.mistDensity * 0.9 + (frame.wetness || 0) * 0.22
-                      + (frame.cloud || 0) * 0.12, 0, 1);
+  // WET / CLOUD HAZE SHARE knobs (def 0.22 / 0.12) set how much wet-road spray
+  // and cloud cover feed the volumetric haze the god-rays / lamp-beams scatter
+  // through, alongside the ground-mist term (GROUND MIST knob scales that).
+  const _hazeWet   = LT.hazeWetShare   != null ? LT.hazeWetShare   : 0.22;
+  const _hazeCloud = LT.hazeCloudShare != null ? LT.hazeCloudShare : 0.12;
+  const _mist = clamp((frame.groundMist || 0) * LT.mistDensity * 0.9 + (frame.wetness || 0) * _hazeWet
+                      + (frame.cloud || 0) * _hazeCloud, 0, 1);
   // Gate by the sun's actual BRIGHTNESS too: at night the key is dim moonlight
   // held above the horizon for sky glow, and ungated it marched faint stripey
   // "moon rays" through the cloud gaps.
   const _sunLumGR = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
   const _sunGateGR = clamp((_sunLumGR - 0.35) / 0.45, 0, 1);
-  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  // GOD-RAY LOW-SUN DRAMA knob (def 0.55) scales only the low-sun boost added on
+  // top of the flat GOD-RAY BASE (def 0.38); SUN GOD-RAYS (LT.grMul) scales the whole thing.
+  const _grLowBoost = LT.godrayLowBoost != null ? LT.godrayLowBoost : 0.55;
+  const _grBase     = LT.godrayBase != null ? LT.godrayBase : 0.38;
+  const _gr = (_grSunY > 0.02 ? (_grBase + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated

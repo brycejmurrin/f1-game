@@ -71,13 +71,12 @@ fn fbm(p_in: vec2<f32>) -> f32 {
   //    of the "single-source" candidates (acesTonemap, js/glx.js:1644). Not used
   //    by the sky (which outputs HDR straight to an LDR swapchain here), but
   //    included as the seed of the shared post-math the Composite port will use.
+  // Coefficients are passed in (TONE CURVE knobs on the composite path; the BLIT
+  // stand-in passes the shipped defaults). Defaults 2.51/0.03/2.43/0.59/0.14
+  // reproduce the Narkowicz curve byte-for-byte. e is floored >0 by the slider
+  // min so the denominator can't reach 0 for x>=0.
   const tonemap = `
-fn acesTonemap(x: vec3<f32>) -> vec3<f32> {
-  let a = 2.51;
-  let b = 0.03;
-  let c = 2.43;
-  let d = 0.59;
-  let e = 0.14;
+fn acesTonemap(x: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f32> {
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }`;
 
@@ -151,7 +150,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 448 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 464 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -171,11 +170,12 @@ struct FrameU {
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
-  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, _) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth
+  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, mistShare) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth, ground-mist share of the lamp-fog glow
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
-  params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, _, _) — wet darkening + car-shadow arm flag
+  params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, carSparkle, fogSunCore) — wet darkening + car-shadow arm flag + pure-look sparkle/fog knobs (zw always packed; WGSL reads them directly)
   carLightVP : mat4x4<f32>,   // off 384  Z01-remapped car-shadow view-proj (per-frame car-only map)
-};                            // size 448
+  params7    : vec4<f32>,     // off 448  (fogClip, carSunGlint, neonBoost, _pad) — GLX-parity lit-shader knobs (uLampFogClip / uCarSunGlint / uBloomBoost); always packed, WGSL reads them directly
+};                            // size 464
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -534,6 +534,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       envCol = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyRT);
       strength = carReflect;
     }
+    // CAR SUN GLINT knob (F.params7.y = uCarSunGlint, def 12.0; GLX js/shaders/glx-shaders.js:927):
+    // a tight sun disc reflected in the lacquer. Folded into the env colour so it rides
+    // the same mirror weight (envF·strength) exactly as GLX adds it to envCC before ×envW.
+    // Base floored at 1e-4 — pow(0.0, 400.0) is NaN on mobile GPUs (log2(0) = -Inf).
+    envCol = envCol + F.sunColor.xyz * pow(max(dot(R, F.sunDir.xyz), 1e-4), 400.0) * F.params7.y * shadow;
     let envF = F_Schlick(NoV, f0, clamp(1.0 - rough, 0.0, 1.0));
     let refl = envCol * envF * strength * (1.0 - rough * 0.5);
     color = color + refl;
@@ -614,7 +619,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let fB = cross(nN, fT);
       let gN = normalize(nN + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
       let glint = smoothstep(0.990, 1.0, dot(gN, H));
-      color = color + F.sunColor.xyz * litNoL * glint * 1.6 * carPaint * spFade;
+      // CAR SPARKLE knob (F.params6.z; GLX parity, def 1.6). Read directly — 0 is
+      // a valid "no sparkle", so the uploader always packs the resolved value.
+      color = color + F.sunColor.xyz * litNoL * glint * F.params6.z * carPaint * spFade;
     }
   }
 
@@ -653,7 +660,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = mix(color, albedo, emissive);
     let bright = max(albedo.r, max(albedo.g, albedo.b));
     let glow = smoothstep(0.50, 0.95, bright) * emissive;
-    color = color + albedo * glow * F.params1.y;   // params1.y = uGlowAmp
+    // NEON BOOST knob (F.params7.z = uBloomBoost, def 0.6; GLX js/shaders/glx-shaders.js:1054-1055):
+    // albedos authored ABOVE white (neon bands ~2.5, lamp lenses 1.06-1.40) are the
+    // "this surface IS a light source" tag — scale the extra HDR push by how far past
+    // white the albedo is so neon/signage bloom harder without dragging every emissive
+    // surface (and the fog) up with a bigger uGlowAmp.
+    let hdrTag = max(bright - 1.0, 0.0);
+    color = color + albedo * glow * F.params1.y * (1.0 + hdrTag * F.params7.z);   // params1.y = uGlowAmp
   }
 
   // Height-based fog + sun in-scatter (GLX LIT_FS js/glx.js:841-877; lamp-fog /
@@ -669,7 +682,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let rd = normalize(in.wpos - F.eye.xyz);
   let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
   var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
-  fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * 0.6;
+  // FOG SUN CORE knob (F.params6.w; GLX parity, def 0.6). Read directly — 0 is a
+  // valid "no hot core", so the uploader always packs the resolved value.
+  fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * F.params6.w;
   // FOG TINT knob (params3.y, -1..1): warm (+) or cool (-) the distance haze.
   let fTint = F.params3.y;
   fogCol = fogCol * vec3<f32>(1.0 + fTint * 0.16, 1.0 - abs(fTint) * 0.02, 1.0 - fTint * 0.16);
@@ -678,7 +693,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // fixed soft-clip, no uLampFog knob). lampFog is 0 with no lamps, so it is a no-op
   // by day; the mix by fAmt gates it so clear near air gets no halo.
   let lf = lampFog * 0.6;
-  let lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b));
+  // FOG LAMP CLIP knob (F.params7.x = uLampFogClip, def 0.7; GLX js/shaders/glx-shaders.js:1092):
+  // scales the soft-clip denominator so a lamp cluster can never push the fog wall
+  // past the night bloom threshold into a white wash. lampFogC is reused by the
+  // ground-mist glow below, so the knob shapes both halos.
+  let lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * F.params7.x);
   fogCol = fogCol + lampFogC;
   color = mix(color, fogCol, fAmt);
 
@@ -695,7 +714,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
     let dRamp = clamp((in.dist - 8.0) / 45.0, 0.0, 1.0);
     let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp * 0.5;
-    let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * 1.5;
+    // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
+    let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
     color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.35));
   }
 
@@ -742,7 +762,9 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let hdr = textureSampleLevel(srcTex, srcSamp, in.uv, 0.0).rgb * B.params.x;
-  return vec4<f32>(acesTonemap(hdr), 1.0);
+  // Stand-in resolve: fixed shipped ACES coefficients (the TONE CURVE knobs only
+  // reach the full composite path, not this fallback blit).
+  return vec4<f32>(acesTonemap(hdr, 2.51, 0.03, 2.43, 0.59, 0.14), 1.0);
 }`;
 
   // ── BLOCKER: min-of-4 downsample of the sun shadow depth map into the 512²
@@ -802,6 +824,8 @@ struct SkyU {
   cityGlow    : vec4<f32>,     // xyz night light-pollution dome
   p0          : vec4<f32>,     // (stars, cloud, time, moon)
   p1          : vec4<f32>,     // (starBright, cloudSpeed, skyGrad, starDensity)
+  p2          : vec4<f32>,     // (mieScatter, cloudSilver, coronaAureole, sunDiscSize) — pure-look knobs; read directly (0 is a real "off"), uploader always packs the resolved default
+  p3          : vec4<f32>,     // (daySkyBlue, _pad, _pad, _pad) — GLX-parity day-gradient deep-blue band (uDaySkyBlue); read directly, uploader always packs the resolved default (1.0 = as-shipped)
 };
 @group(0) @binding(0) var<uniform> U : SkyU;
 ${hash}
@@ -840,19 +864,42 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // SKY GRADIENT / STAR DENSITY knobs (GLX parity). Defaults reproduce shipped.
   let skyGrad = select(0.35, U.p1.z, U.p1.z > 0.0);
   let starDensity = select(1.0, U.p1.w, U.p1.w > 0.0);
+  // Pure-look knobs (GLX parity). Read DIRECTLY — 0 is a valid "off" for the
+  // first three, so a select-on-zero would wrongly snap them back to 1.0. The
+  // uploader always packs the resolved value (default 1.0 reproduces the ship).
+  let mieScatter    = U.p2.x;
+  let cloudSilver   = U.p2.y;
+  let coronaAureole = U.p2.z;
+  let sunDiscSize   = max(U.p2.w, 1e-3);   // disc size scales a divisor-like edge; keep > 0
+  // DAY SKY BLUE knob (GLX parity, def 1.0). Read directly — 0 is a valid "no
+  // deep-blue band", so the uploader always packs the resolved value.
+  let daySkyBlue    = U.p3.x;
 
   let sunE = clamp(sunDir.y * 1.4, 0.0, 1.0);
-  let daytime = smoothstep(0.35, 0.60, sunE);
   // NIGHT gate (parity with GLX): at night sunDir stays HIGH as the moon
   // key-light direction, which the sunElevation math reads as midday and paints
   // a bright white sun disc among the stars. Suppress the sun corona/disc at
   // night; the moon disc below is drawn separately.
   let nightSky = step(0.5, stars);
+  // Gate daytime by (1 - nightSky) so the day-only deep-blue band never paints a
+  // blue gradient among the stars (GLX js/shaders/glx-shaders.js:1195).
+  let daytime = smoothstep(0.35, 0.60, sunE) * (1.0 - nightSky);
+  // Overcast factor: fades the deep-blue band under heavy cloud so grey days are
+  // untouched (GLX js/shaders/glx-shaders.js:1199).
+  let overcast = smoothstep(0.5, 1.0, cloud);
 
   // --- Sky gradient ---
   var c : vec3<f32>;
   if (up >= 0.0) {
     c = mix(U.horizon.xyz, U.zenith.xyz, pow(max(up, 0.0), skyGrad));
+    // Day gradient LIFE (GLX js/shaders/glx-shaders.js:1216-1221): a deeper
+    // saturated blue pushed into the low/mid band so the gameplay sky strip isn't
+    // a flat pale wash. Day-only and faded under overcast, so dusk/dawn/night and
+    // grey days are untouched. DAY SKY BLUE knob scales the band; clamp keeps the
+    // blend valid when the knob pushes past 1.
+    let bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
+    let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
+    c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
     // Golden-hour warm band near the horizon when the sun is low.
     let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up));
     let goldenColor = mix(vec3<f32>(0.70, 0.22, 0.04), vec3<f32>(0.92, 0.55, 0.16),
@@ -879,21 +926,23 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let cloudBot = vec3<f32>(0.26, 0.27, 0.34) * (0.24 + 0.44 * sunBright);
     var lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
     let silver = pow(sd, 6.0) * (1.0 - thick);
-    lit = lit + sunColor * silver * 1.3;
+    lit = lit + sunColor * silver * 1.3 * cloudSilver;   // CLOUD SILVER LINING knob
     c = mix(c, lit, cov);
   }
 
   // --- Mie forward scatter + sun corona/disc ---
   let upPos = max(up, 0.0);
-  c = mix(c, sunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0));
+  // MIE SCATTER knob (clamp keeps the mix blend valid past 1).
+  c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieScatter, 0.0, 1.0));
   let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
   let coronaDamp = 1.0 - nightSky;
   let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
-  c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp;
+  c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
   c = c + sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;
   let dd = dir - sunDir * sd;
   let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
-  let disc = smoothstep(mix(0.018, 0.028, golden), 0.006, perp) * coronaDamp;
+  // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
+  let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
   let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
   c = c + discCore * disc;
 
@@ -952,11 +1001,11 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     BLIT,
     BLOCKER,
     SHADOW,
-    // byte size of the SkyU uniform block (mat4 64 + 7*vec4 112 = 176)
-    SKY_UNIFORM_BYTES: 176,
+    // byte size of the SkyU uniform block (mat4 64 + 9*vec4 144 = 208)
+    SKY_UNIFORM_BYTES: 208,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 448,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr +carLightVP)
+    FRAME_UNIFORM_BYTES: 464,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr +carLightVP; +params7 GLX-parity lit knobs)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

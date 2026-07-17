@@ -2765,20 +2765,9 @@ const Tracks = (function () {
       const off = def.barrierGap != null ? def.barrierGap : (def.id === "monaco" ? 2.0 : 0.35);
       for (let k = 0; k < n; k++) { markBarrier(k, -1, off); markBarrier(k, 1, off); }
     }
-    // floodlights for night tracks
-    if (def.night) every(70, (k) => {
-      for (const side of [-1, 1]) {
-        if (dressingExcluded("floodlights", k, side)) continue;
-        place(k, side, 10, [0.5, 9, 0.5], [0.1, 0.1, 0.12]);
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const o = side * (hw[k] + 10);
-        // HDR-bright lens at night so the floodlight reads as a glowing source AND
-        // is mirrored by the wet-road SSR like neon/streetlamps (a real reflected
-        // glow, not just the analytic pool). Painted housing by day.
-        const lens = NIGHT ? [1.18, 1.18, 1.14] : [1, 1, 0.95];
-        addBox(out, [px[k] + r[0] * o, py[k] + 8.6, pz[k] + r[2] * o], [3, 1, 1.4], lens, [r, [0, 1, 0], [track.tx[k], 0, track.tz[k]]]);
-      }
-    });
+    // floodlights for night tracks: generic mast ring (~22 m) covers these —
+    // the old every-70 poles duplicated geometry on Bahrain/Singapore/etc.
+    // (kept marker so night tracks still opt into buildTrackLights via def.night)
     // tire barriers at outside of tight corners on permanent (non-street) circuits
     if (!def.street) {
       for (const c of findCorners(track, 0.014)) {
@@ -2911,23 +2900,13 @@ const Tracks = (function () {
     if (!def.street) {
       every(270, (k) => {
         const side = hash(k * 7) < 0.5 ? -1 : 1;
-        place(k, side, hw[k] + 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
-        place(k, side, hw[k] + 25, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
+        place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+        place(k, side, 25, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
       });
     }
 
     if (theme === "green") {
-      every(26, (k) => {
-        const s = hash(k);
-        for (const side of [-1, 1]) {
-          if (hash(k * 2 + side) < 0.5) continue;
-          const h = 5 + s * 6, d = 9 + s * 8;
-          place(k, side, d, [1.2, 1.4, 1.2], [0.32, 0.22, 0.12]);   // trunk
-          place(k, side, d, [3.5, h, 3.5], [0.12 + s * 0.06, 0.36, 0.14]);  // canopy
-        }
-      });
-      // denser forest for Spa (Ardennes forest setting)
-      
+      // FURN already plants real trees; legacy box trunk/canopy forest removed.
       // occasional grandstand
       every(140, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
     } else if (theme === "desert") {
@@ -3635,6 +3614,8 @@ const Tracks = (function () {
       ambientSky: [0.45, 0.52, 0.62], ambientGround: [0.22, 0.22, 0.18],
       sunColor: [1, 0.95, 0.82], sunDir: [0.4, 0.72, 0.3],
     }, o);
+    // Tracks historically authored fogColor; runtime reads fog.
+    if (o && o.fogColor && o.fog == null) p.fog = o.fogColor;
     p.sunDir = norm(p.sunDir);   // data files store raw sunDir; normalize here
     return p;
   }
@@ -3647,6 +3628,7 @@ const Tracks = (function () {
       ambientSky: [0.62, 0.64, 0.76], ambientGround: [0.44, 0.44, 0.48],
       sunColor: [0.7, 0.72, 0.8], sunDir: [0.1, 0.9, 0.2],
     }, o);
+    if (o && o.fogColor && o.fog == null) p.fog = o.fogColor;
     p.sunDir = norm(p.sunDir);
     return p;
   }

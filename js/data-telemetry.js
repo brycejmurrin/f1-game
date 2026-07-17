@@ -10,7 +10,7 @@ const DataTelemetry = (function () {
 
   function create(ctx) {
     const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-            invalidateOther, COMPOUND, findTeam, cssColor, NO_TELEM_MSG } = ctx;
+            invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG } = ctx;
 
 
   function driverColor(d) {
