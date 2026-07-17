@@ -44,8 +44,13 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   await page.locator("#lt-copy").click();
   await expect(page.locator("#lt-json")).toHaveValue(/"gainB": 1\.25/);
   await page.locator("#lt-reset").click();
-  expect(await page.evaluate(() => {
+  const reset = await page.evaluate(() => {
     const tune = window.__apex.lightTune();
     return { shadows: tune.shadows, gammaG: tune.gammaG, gainB: tune.gainB };
-  })).toEqual({ shadows: 0, gammaG: 1, gainB: 1 });
+  });
+  const shipped = await page.evaluate(() => {
+    const p = window.LightPresets?.["*"] || {};
+    return { shadows: p.shadows ?? 0, gammaG: p.gammaG ?? 1, gainB: p.gainB ?? 1 };
+  });
+  expect(reset).toEqual(shipped);
 });

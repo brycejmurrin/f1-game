@@ -78,7 +78,11 @@ test("GLSL exposes the exact safe packed HDR grade contract", () => {
   assert.match(GLSL, /vec3 invGamma = 1\.0 \/ max\(uGamma, vec3\(1e-3\)\)/);
   assert.match(GLSL, /pow\(max\(c, vec3\(0\.0\)\), invGamma\)/);
   assert.match(GLSL, /exp2\(clamp\(stops, -4\.0, 4\.0\)\)/);
+  assert.match(GLSL, /dot\(c, vec3\(0\.2126, 0\.7152, 0\.0722\)\)/);
+  assert.match(GLSL, /exp2\(clamp\(toe, -1\.0, 1\.0\)\)/);
+  assert.match(GLSL, /exp2\(clamp\(-shoulder, -1\.0, 1\.0\)\)/);
   assert.match(GLSL, /newY \/ max\(oldY, 1e-6\)/);
+  assert.match(GLSL, /return max\(c, vec3\(0\.0\)\)/);
 });
 
 test("WGSL mirrors exact HDR masks, safety guards, and composite order", () => {
@@ -95,7 +99,11 @@ test("WGSL mirrors exact HDR masks, safety guards, and composite order", () => {
   assert.match(WGSL, /1\.0 \/ max\(U\.gamma\.xyz, vec3<f32>\(1e-3\)\)/);
   assert.match(WGSL, /pow\(max\(c_in, vec3<f32>\(0\.0\)\)/);
   assert.match(WGSL, /exp2\(clamp\(stops, -4\.0, 4\.0\)\)/);
+  assert.match(WGSL, /dot\(c, vec3<f32>\(0\.2126, 0\.7152, 0\.0722\)\)/);
+  assert.match(WGSL, /exp2\(clamp\(toe, -1\.0, 1\.0\)\)/);
+  assert.match(WGSL, /exp2\(clamp\(-shoulder, -1\.0, 1\.0\)\)/);
   assert.match(WGSL, /newY \/ max\(oldY, 1e-6\)/);
+  assert.match(WGSL, /return max\(c, vec3<f32>\(0\.0\)\)/);
   assert.match(
     WGSL,
     /c = c \+ bloomSample[\s\S]*?c = applyHdrGrade\(c\);[\s\S]*?c = acesTonemap\(/,
