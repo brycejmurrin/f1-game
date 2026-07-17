@@ -421,25 +421,41 @@ const DataTelemetry = (function () {
 
     // Resize canvases when the popup is resized (e.g. orientation change)
     if (typeof ResizeObserver !== "undefined") {
-      let lastW = detail.clientWidth;
-      const ro = new ResizeObserver(function () {
-        const w = detail.clientWidth;
-        if (Math.abs(w - lastW) > 20) {
-          lastW = w;
-          const ls = window.innerWidth > window.innerHeight && window.innerHeight < 520;
-          const sw = ls ? 225 : 0;
-          const newCW = Math.min(600, Math.max(260, w - sw - 28));
-          if (view.chart && view.chart.width !== newCW) {
-            const newCH = Math.round(newCW * (220 / 600));
-            view.chart.width = newCW; view.chart.height = newCH;
-            view.chartBase = makeOffscreen(newCW, newCH);
-            if (view.delta) {
-              const dh = Math.round(newCW * (72 / 600));
-              view.delta.width = newCW; view.delta.height = dh;
-              view.deltaBase = makeOffscreen(newCW, dh);
-            }
+      const ro = new ResizeObserver(() => {
+        if (!view.chart || !mainArea.isConnected) return;
+        const mainW = mainArea.clientWidth - 32; // minus padding
+        if (mainW <= 0) return;
+        
+        const newCW = Math.min(800, mainW);
+        const newCH = Math.round(newCW * (220 / 600));
+        
+        let resized = false;
+        if (view.chart.width !== newCW || view.chart.height !== newCH) {
+          view.chart.width = newCW;
+          view.chart.height = newCH;
+          view.chartBase = makeOffscreen(newCW, newCH);
+          if (view.delta) {
+            const dh = Math.round(newCW * (72 / 600));
+            view.delta.width = newCW;
+            view.delta.height = dh;
+            view.deltaBase = makeOffscreen(newCW, dh);
           }
-          buildBases(view); paintFrame(view);
+          resized = true;
+        }
+        
+        if (view.map && sideArea.isConnected) {
+          const sideW = sideArea.clientWidth - 24;
+          if (sideW > 0 && view.map.width !== sideW) {
+            view.map.width = sideW;
+            view.map.height = sideW;
+            view.mapBase = makeOffscreen(sideW, sideW);
+            resized = true;
+          }
+        }
+        
+        if (resized) {
+          buildBases(view);
+          paintFrame(view);
         }
       });
       ro.observe(detail);
