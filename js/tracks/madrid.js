@@ -254,7 +254,7 @@
       // Glass canopy over IFEMA grandstands — steel-and-glass prism roofs
       for (const [frac, side] of [[0.88, 1], [0.91, 1], [0.89, -1]]) {
         const k = Math.round(frac * n) % n;
-        const A = anchor(k, side, hw[k] + 36);
+        const A = anchor(k, side, 36);
         if (!onTrack(A.c[0], A.c[2], 20))
           addPrism(out, vadd(A.c, A.u, 16), [42, 3.5, 32], [0.52, 0.64, 0.74], [A.r, A.u, A.t]);
       }
@@ -269,7 +269,7 @@
       for (let s = 0.986; s < 1.083; s += 0.011) {
         const f = s % 1;
         const k = Math.round(f * n) % n;
-        const A = anchor(k, 1, hw[k] + 17);
+        const A = anchor(k, 1, 17);
         if (onTrack(A.c[0], A.c[2], 9)) continue;
         addBox(out, vadd(A.c, A.u, 5.0), [16, 10.0, 25], WHITE,    [A.r, A.u, A.t]);
         addBox(out, vadd(A.c, A.u, 10.2), [16.5, 0.8, 25], STEEL,  [A.r, A.u, A.t]);
@@ -285,7 +285,7 @@
       for (let s = 0.992; s < 1.058; s += 0.018) {
         const f = s % 1, k = Math.round(f * n) % n;
         const h = 7.5 + hash(k * 3) * 4.0;
-        motorhome(k, 1, hw[k] + 35, 14, h, 18,
+        motorhome(k, 1, 35, 14, h, 18,
           { wall: hash(k) > 0.5 ? WHITE : OFFWHITE, window: LITWIN, accent: DKGLASS });
       }
 
@@ -298,7 +298,7 @@
         const f = s % 1;
         const k = Math.round(f * n) % n;
         for (const side of [1, -1]) {
-          const A = anchor(k, side, hw[k] + 5.5);
+          const A = anchor(k, side, 5.5);
           if (onTrack(A.c[0], A.c[2], 2.5)) continue;
           addCyl(out, vadd(A.c, A.u, 5.5), 0.12, 11, LAMPGREY, 5, [A.r, A.u, A.t]);
           addBox(out, vadd(A.c, A.u, 11.4), [3.0, 0.5, 0.5], LAMPGREY, [A.r, A.u, A.t]);
@@ -312,7 +312,7 @@
         const f = s % 1;
         const k = Math.round(f * n) % n;
         const side = (Math.round(s * 10) % 2 === 0) ? 1 : -1;
-        const A = anchor(k, side, hw[k] + 5.0);
+        const A = anchor(k, side, 5.0);
         if (onTrack(A.c[0], A.c[2], 2.5)) continue;
         addCyl(out, vadd(A.c, A.u, 5.5), 0.12, 11, LAMPGREY, 5, [A.r, A.u, A.t]);
         addBox(out, vadd(A.c, A.u, 11.4), [2.5, 0.5, 0.5], LAMPGREY, [A.r, A.u, A.t]);
@@ -421,7 +421,7 @@
       // El Búnker: tall grey retaining face on the climb/drop (elev crest ~0.60).
       for (let f = 0.52; f <= 0.62; f += 0.018) {
         const k = Math.round(f * n) % n;
-        const A = anchor(k, 1, hw[k] + 3.2);
+        const A = anchor(k, 1, 3.2);
         if (onTrack(A.c[0], A.c[2], 4)) continue;
         const h = 5.5 + hash(k * 3) * 3.5;
         addBox(out, vadd(A.c, A.u, h * 0.5), [1.4, h, 18], CONCRETE, [A.r, A.u, A.t]);
@@ -441,7 +441,7 @@
       // Approach embankment slabs either side of the portal (motorway shoulders).
       for (const [frac, side] of [[0.075, 1], [0.075, -1], [0.095, 1], [0.095, -1]]) {
         const k = Math.round(frac * n) % n;
-        const A = anchor(k, side, hw[k] + 14);
+        const A = anchor(k, side, 14);
         if (onTrack(A.c[0], A.c[2], 8)) continue;
         addBox(out, vadd(A.c, A.u, 2.2), [10, 4.4, 16], [0.66, 0.66, 0.68], [A.r, A.u, A.t]);
       }
@@ -559,7 +559,7 @@
       }
       for (let i = -10; i <= 10; i += 4) {
         const k = ((kmono + i * step) % n + n) % n;
-        for (const side of [1, -1]) archBay(k, side, hw[k] + 52);
+        for (const side of [1, -1]) archBay(k, side, 52);
       }
 
       // ── (17) BESPOKE: IFEMA CONVENTION-CENTRE HALLS — vast pavilions with the

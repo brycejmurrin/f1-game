@@ -2214,10 +2214,13 @@ function update(dt) {
   }
 }
 
-// Shift a car along the track. prog (cumulative) and s (wrapped, used for
-// rendering/curvature) advance together, so a longitudinal collision push must
-// move BOTH or the visible car won't budge.
-function shiftLong(c, d) { c.prog += d; c.s = wrapS(c.s + d); }
+// Shift a car along the track. AI prog and s advance together. Player prog is
+// derived from Δs each frame after collisions, so only move s here — otherwise
+// the push is counted twice (shiftLong.prog + next-tick ds).
+function shiftLong(c, d) {
+  c.s = wrapS(c.s + d);
+  if (!c.isPlayer) c.prog += d;
+}
 
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
@@ -2517,8 +2520,9 @@ function updateCar(c, dt, ranked) {
     }
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else if (!onThrottle) {
-    // coasting: gentle engine-braking/drag, plus a little energy recovery
-    c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0)
+    if (c.speed > 0) c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    else if (c.speed < 0) c.speed = Math.min(0, c.speed + COAST_DRAG * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
     const a = (ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
@@ -2702,7 +2706,7 @@ function updateCar(c, dt, ranked) {
     // --- road-wheel steer angle: driver lock (eased a little at speed) + the
     // DRIVING-HELP assist that steers toward the road curvature for you. Both
     // act through the front tyre below, so neither can exceed available grip.
-    const lockTaper = Math.max(0.4, 1 - c.speed / STEER_SPEED_REF);
+    const lockTaper = Math.max(0.4, 1 - Math.abs(c.speed) / STEER_SPEED_REF);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
@@ -2900,7 +2904,9 @@ function updateCar(c, dt, ranked) {
       // driver input (sign = turn direction); `into` is ±1 for the wall side.
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
-        c.speed = Math.max(0, c.speed - pushIn * (track.street ? 40 : 16) * dt);
+        const scrub = pushIn * (track.street ? 40 : 16) * dt;
+        if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
+        else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
         c.wallT = 0.35;     // brief auto-throttle suppress
       }
       // Nose/steer pointing AWAY = peeling off: speed and heading left alone so
