@@ -131,6 +131,25 @@ test.describe("__apex.finishRace()", () => {
     const rows = await page.locator(".res-row").count();
     expect(rows).toBeGreaterThan(0);
   });
+
+  test("uses current field order for results classification", async ({ page }) => {
+    await loadParked(page);
+    const expected = await page.evaluate(() => {
+      const field = window.__apex.fieldState();
+      for (const car of field) {
+        const frac = (car.id + 1) / (field.length + 1);
+        if (car.isPlayer) window.__apex.jump(frac, 0, 0);
+        else window.__apex.aiPlace(car.id, frac, 0, 0);
+      }
+      return window.__apex.fieldState().map((car) => car.code);
+    });
+
+    await page.evaluate(() => window.__apex.finishRace());
+    await page.locator("#results").waitFor({ state: "visible" });
+    const actual = await page.locator("#results-table > .res-row .res-name").allTextContents();
+
+    expect(actual.map((name) => name.trim().split(/\s+/)[0])).toEqual(expected);
+  });
 });
 
 test.describe("__apex.info()", () => {

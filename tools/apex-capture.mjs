@@ -7,6 +7,7 @@
 //   node tools/apex-capture.mjs cameras [track] [outdir]    # 12 camera modes
 //   node tools/apex-capture.mjs modes   [outdir]            # menu/race day,wet,night/results/timetrial
 //   node tools/apex-capture.mjs tracks  [outdir] [id ...]   # one orbit shot per track (default: all 24)
+//   node tools/apex-capture.mjs identity [outdir] [id ...]  # 3 lean scenery shots × track (4 parallel pages)
 //   node tools/apex-capture.mjs lap-tour [track] [speed] [outdir]  # chase-cam at every 5% of a lap (20 shots)
 //
 // A frame under ~5 KB is flagged blank:true. Runs locally and in the web sandbox
@@ -15,7 +16,7 @@
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { createServer } from "node:net";
+import { createServer, connect } from "node:net";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
@@ -45,7 +46,18 @@ async function startServers(n) {
     procs.push(spawn("python3", ["-m", "http.server", String(port)], { cwd: ROOT, stdio: "ignore" }));
     ports.push(port);
   }
-  await sleep(700);
+  // Wait until each port accepts connections (fixed sleep was flaky under load).
+  for (const port of ports) {
+    let ok = false;
+    for (let t = 0; t < 50 && !ok; t++) {
+      ok = await new Promise((res) => {
+        const c = connect(port, "127.0.0.1", () => { c.end(); res(true); });
+        c.on("error", () => res(false));
+      });
+      if (!ok) await sleep(100);
+    }
+    if (!ok) throw new Error(`http.server on ${port} never became ready`);
+  }
   return { ports, kill: () => procs.forEach((p) => { try { p.kill(); } catch {} }) };
 }
 async function open(browser, port, viewport = LAND) {
@@ -56,7 +68,7 @@ async function open(browser, port, viewport = LAND) {
 }
 async function race(page, track) {
   await page.evaluate((t) => window.__apex.race(t), track);
-  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 15000 });
+  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 45000 });
   await sleep(1600);
 }
 async function shot(page, dir, name, sel = "canvas#game") {
@@ -110,6 +122,42 @@ async function main() {
       await sleep(250);
       return shot(pg, dir, `track-${id}`);
     });
+    kill();
+  } else if (cmd === "identity") {
+    // Lean scenery glance: 3 shots/track (not survey-track's 9). Fan across N
+    // parallel pages/servers so all 24 finish in one Chromium process.
+    //   aerial  — whole-circuit silhouette / palette
+    //   orbit   — mid-lap three-quarter (s=0.25)
+    //   eye     — driver's-eye props/gaps (s=0.55)
+    // Env: APEX_WORKERS=N (default 4; drop to 2 if other Playwright runs contend).
+    const dir = (rest[0] && (rest[0].includes("/") || rest[0].startsWith(".")) ? rest.shift() : `${ROOT}/scratch/identity`);
+    mkdirSync(dir, { recursive: true });
+    const workers = Math.max(1, Math.min(8, parseInt(process.env.APEX_WORKERS || "4", 10) || 4));
+    const { ports, kill } = await startServers(workers);
+    const VP = { width: 1280, height: 720 };
+    const pages = await Promise.all(ports.map((p) => open(browser, p, VP)));
+    let ids = rest.filter((x) => !x.includes("/"));
+    if (!ids.length) ids = await pages[0].evaluate(() => window.__apex.tracks().map((t) => t.id || t));
+    console.error(`[identity] ${ids.length} tracks × 3 shots, ${workers} parallel pages → ${dir}`);
+    manifest = await fanout(pages, ids, async (pg, id) => {
+      const t0 = Date.now();
+      console.error(`[identity] start ${id}`);
+      await race(pg, id);
+      await pg.evaluate(() => window.__apex.hud(false));
+      const out = [];
+      const take = async (name, fn) => {
+        await pg.evaluate(fn);
+        await sleep(220);
+        out.push(await shot(pg, dir, `${id}-${name}`));
+      };
+      await take("aerial", () => window.__apex.view());
+      await take("orbit", () => { window.__apex.park(0.25); window.__apex.orbit(0.25, 45, 18, 45); });
+      await take("eye", () => window.__apex.eyeAt(0.55, 0, 2.2));
+      console.error(`[identity] done  ${id} (${Date.now() - t0}ms)`);
+      return out;
+    });
+    // fanout flattens one level; identity returns arrays — flatten again
+    manifest = manifest.flat();
     kill();
   } else if (cmd === "lap-tour") {
     // Chase-camera sweep: jump to every 5% of the lap, snap chase cam, screenshot

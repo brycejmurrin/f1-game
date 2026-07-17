@@ -92,25 +92,8 @@
       // ════════════ BESPOKE FORO SOL CROWD-BOWL MODELS ════════════
       const crowdCols = [PINK, ORANGE, GREEN, [0.98, 0.82, 0.10],
                          [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24]];
-      // Continuous eye-height seat wall (baseball bowl enclosure).
-      // TODO(shared): use bowlSeatWall when available.
-      // Leaves bright entry/exit apertures by only spanning s0→s1.
-      const bowlSeatWall = (s0, s1, side, gap, opts) => {
-        opts = opts || {};
-        const h = opts.h != null ? opts.h : 5.8;
-        const thick = opts.thick != null ? opts.thick : 3.4;
-        const shell = opts.shell || CONCRETE;
-        along(s0, s1, opts.step || 7, (k, spacing) => {
-          const p = anchor(k, side, gap);
-          if (onTrack(p.c[0], p.c[2], thick / 2 + 2)) return;
-          const bv = [p.r, p.u, p.t];
-          addBox(out, vadd(p.c, p.u, h * 0.48), [thick, h * 0.95, spacing * 0.94], shell, bv);
-          // Speckled seat/crowd face toward the track
-          addBox(out, vadd(vadd(p.c, p.u, h * 0.55), p.r, -side * (thick * 0.38)),
-                 [0.55, h * 0.72, spacing * 0.88],
-                 crowdCols[Math.floor(hash(k * 11 + side) * crowdCols.length) % crowdCols.length], bv);
-        });
-      };
+      const bowlSeatWall = (s0, s1, side, gap, opts) =>
+        api.bowlSeatWall(s0, s1, side, gap, Object.assign({ crowdCols }, opts || {}));
       // Steep raked PACKED crowd terrace on a concrete wedge (dense speckled fans)
       const crowdBank = (s, side, gap, len, rows) => {
         const k = K(s), a = anchor(k, side, gap);

@@ -137,7 +137,8 @@ def = { id, name, gp, country, night, theme, lengthKm, baseHW,
         pal: { ...palette overrides... },          // engine wraps with day/nightPal
         segs: [ {t,l,h?,b?,w?}, ... ],             // authored fallback if no OSM trace
         bridges?:   [ {s,halfM,rise}, ... ],       // figure-8 overpass deck (terrain stays flat)
-        elevations?:[ {s,halfM,rise}, ... ] }      // real elevation bumps (terrain follows road)
+        elevations?:[ {s,halfM,rise}, ... ],       // real elevation bumps (terrain follows road)
+        hwZones?:   [ {s0,s1,hw,ease?}, ... ] }    // half-width overlays (CircuitPaths ignores segs w:)
 ```
 
 ## js/tracks.js — `Tracks` (engine)

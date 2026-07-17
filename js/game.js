@@ -1624,7 +1624,7 @@ function showTouchControls(show) {
   document.body.classList.toggle("steer-touch", t && steerMode === "touch");
 }
 
-function endRace() {
+function endRace(forcedOrder) {
   state = "results";
   document.body.classList.remove("in-race");
   els.pausebtn.hidden = true;
@@ -1636,7 +1636,7 @@ function endRace() {
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
   const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
-  const order = fin.concat(run);
+  const order = forcedOrder || fin.concat(run);
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (seasonMode) {
     order.forEach((c, i) => {
@@ -1917,7 +1917,7 @@ function update(dt) {
   if (resultT === 0) {
     if (player.finished) resultT = 2.2;
     else if (cars.some((c) => c.finished)) resultT = 3.5;
-    else if (raceT > 360) resultT = 0.1;
+    else if (raceT > 360 * lapsTarget) resultT = 0.1;
   }
   if (resultT > 0) { resultT -= dt; if (resultT <= 0) { resultT = 0; endRace(); } }
 
@@ -4598,6 +4598,7 @@ function renderStatBars(container, team) {
 let csActiveCat = null;   // id of the category tab currently open in CAR SETUP
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
+let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
 function buildSetup() {
   const team = Teams.LIST[teamIdx];
   const parts = getTeamParts(team.id);
@@ -4806,6 +4807,7 @@ function buildLiveryOptions(container, team) {
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
                      noseStripe: "", nose: "", pod: "", wing: "", halo: "" };
+      csLivEditId = null;
       csLivCreating = true;
       if (soundOn) GameAudio.uiSelect();
       buildSetup();
@@ -4830,6 +4832,22 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
 
     if (isCustom) {
+      const edit = document.createElement("span");
+      edit.className = "cs-liv-edit"; edit.textContent = "✎"; edit.title = "Edit this livery";
+      edit.onclick = (e) => {
+        e.stopPropagation();
+        csLivDraft = {
+          name: liv.name || "", c1: arrToHex(liv.c1), c2: arrToHex(liv.c2),
+          stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
+          accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
+          pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+        };
+        csLivEditId = liv.id;
+        csLivCreating = true;
+        if (soundOn) GameAudio.uiSelect();
+        buildSetup();
+      };
+      row.appendChild(edit);
       const del = document.createElement("span");
       del.className = "cs-liv-del"; del.textContent = "✕"; del.title = "Delete this livery";
       del.onclick = (e) => {
@@ -4865,7 +4883,7 @@ function buildLiveryCreator(container, team) {
   const wrap = document.createElement("div");
   wrap.className = "cs-liv-editor";
 
-  const head = document.createElement("div"); head.className = "cs-liv-ed-head"; head.textContent = "NEW PAINT JOB";
+  const head = document.createElement("div"); head.className = "cs-liv-ed-head"; head.textContent = csLivEditId ? "EDIT PAINT JOB" : "NEW PAINT JOB";
   wrap.appendChild(head);
 
   // Live swatch preview of the current draft (built from hex strings directly).
@@ -4916,10 +4934,10 @@ function buildLiveryCreator(container, team) {
 
   const btns = document.createElement("div"); btns.className = "cs-liv-ed-btns";
   const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cs-liv-ed-cancel"; cancel.textContent = "CANCEL";
-  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; livDraftOverride = null; _spMeshKey = ""; if (soundOn) GameAudio.uiTick(); buildSetup(); };
+  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; livDraftOverride = null; _spMeshKey = ""; if (soundOn) GameAudio.uiTick(); buildSetup(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
-    const id = "custom_" + livIdCounter();
+    const id = csLivEditId || ("custom_" + livIdCounter());
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     if (d.stripe) liv.stripe = hexToArr(d.stripe);
     if (d.noseStripe) liv.noseStripe = hexToArr(d.noseStripe);
@@ -4928,9 +4946,11 @@ function buildLiveryCreator(container, team) {
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
     if (d.halo) liv.halo = hexToArr(d.halo);
-    setCustomLiveries(team.id, getCustomLiveries(team.id).concat([liv]));
+    const existing = getCustomLiveries(team.id);
+    // Edit-in-place replaces the matching entry (same id); create appends.
+    setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === id ? liv : l)) : existing.concat([liv]));
     saveLiveryId(team.id, id);
-    csLivCreating = false; csLivDraft = null; livDraftOverride = null; _spMeshKey = "";
+    csLivCreating = false; csLivDraft = null; csLivEditId = null; livDraftOverride = null; _spMeshKey = "";
     if (soundOn) GameAudio.uiSelect();
     buildSetup();
   };
@@ -5879,6 +5899,18 @@ $("rs-go").onclick = () => {
 };
 
 // ---- customize my team ----
+// Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the
+// custom team as ct.livery, which Liveries.forTeam folds into its default paint.
+const CZ_LIV_FIELDS = [
+  ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
+  ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"], ["cz-halo", "halo"],
+];
+// A field is "NONE" when its colour input carries the cz-off class.
+function czSetLivField(domId, arr) {
+  const inp = $(domId), none = $(domId + "-none");
+  if (arr) { inp.value = rgbToHex(arr); inp.classList.remove("cz-off"); none.classList.remove("active"); }
+  else { inp.value = inp.value && /^#[0-9a-fA-F]{6}$/.test(inp.value) ? inp.value : "#ffffff"; inp.classList.add("cz-off"); none.classList.add("active"); }
+}
 function czPreview() {
   $("cz-swatch1").style.background = $("cz-color").value;
   $("cz-swatch2").style.background = $("cz-color2").value;
@@ -5895,11 +5927,18 @@ function openCustomize() {
   $("cz-driver").value = ct.drivers[0].name;
   $("cz-code").value = ct.drivers[0].code;
   $("cz-num").value = ct.drivers[0].num;
+  const liv = ct.livery || {};
+  CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
   czPreview();
   els.customize.hidden = false;
 }
 ["cz-name", "cz-short", "cz-color", "cz-color2", "cz-code", "cz-num"].forEach((id) => {
   $(id).addEventListener("input", czPreview);
+});
+// Extra-paint rows: editing the swatch re-enables the field; NONE clears it.
+CZ_LIV_FIELDS.forEach(([domId]) => {
+  $(domId).addEventListener("input", () => { $(domId).classList.remove("cz-off"); $(domId + "-none").classList.remove("active"); });
+  $(domId + "-none").onclick = () => { $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active"); if (soundOn) GameAudio.uiTick(); };
 });
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
 $("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
@@ -5917,18 +5956,24 @@ $("cs-unlimited").onclick = () => {
 $("cz-cancel").onclick = () => { els.customize.hidden = true; };
 $("cz-save").onclick = () => {
   const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
+  const prev = loadCustomTeam();
   const ct = {
     id: "custom", engine: "Custom", tier: 2, custom: true,
     name: clean($("cz-name").value, "My Team", 22),
     short: clean($("cz-short").value, "YOU", 4).toUpperCase(),
     color: hexToRgb($("cz-color").value),
     color2: hexToRgb($("cz-color2").value),
+    stats: prev.stats || DEFAULT_CUSTOM.stats,
     drivers: [{
       name: clean($("cz-driver").value, "Your Name", 22),
       code: clean($("cz-code").value, "YOU", 3).toUpperCase(),
       num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
     }],
   };
+  // Optional extra paint -> ct.livery (only the fields that aren't NONE).
+  const liv = {};
+  CZ_LIV_FIELDS.forEach(([domId, key]) => { if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value); });
+  if (Object.keys(liv).length) ct.livery = liv;
   store.set("customTeam", ct);
   syncCustomTeam();
   teamIdx = Teams.LIST.findIndex((t) => t.id === "custom");
@@ -7201,8 +7246,9 @@ window.__apex = {
   // Fixes the fallback-DOM-hack in ui-audit.spec.js (finishRace was missing).
   finishRace() {
     if (!track || state === "results" || state === "menu") return false;
+    const order = cars.slice().sort((a, b) => b.prog - a.prog);
     cars.forEach((c) => { if (!c.finished) { c.finished = true; c.finishT = raceT; } });
-    endRace();
+    endRace(order);
     return { state };
   },
 

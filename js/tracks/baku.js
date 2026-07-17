@@ -17,9 +17,11 @@
     lengthKm: 6,
     baseHW: 6,
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
+    // Castle Section squeeze (~7.6 m full width). CircuitPaths ignores segs `w:`;
+    // hwZones overlays half-width onto the real trace (see applyHwZones in tracks.js).
+    hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }],
     // Castle Section (s≈0.42–0.50): narrow to ~7.6 m full width (w = half-width).
-    // NOTE: while CircuitPaths.baku is present these segs are fallback-only for
-    // the centreline; w: still documents intent and applies if the trace drops.
+    // segs `w:` still documents intent / applies if the CircuitPaths trace drops.
     segs: [
       { t: 0, l: 200 }, { t: -90, l: 80 }, { t: 80, l: 70 }, { t: 0, l: 725 },
       { t: 0, l: 75, w: 3.8 }, { t: -90, l: 80, w: 3.8 }, { t: 0, l: 50, w: 3.8 }, { t: 0, l: 350 },
@@ -392,13 +394,13 @@
       });
 
       // ===================================================================
-      // s 0.42–0.50 — CASTLE SECTION squeeze: ~1–2 m clearance both sides
-      // (pairs with segs w:3.8 ≈ 7.6 m full width when segs drive geometry)
+      // s 0.42–0.50 — CASTLE SECTION squeeze: ~1 m clearance both sides
+      // (pairs with hwZones hw:3.8 ≈ 7.6 m full width on CircuitPaths)
       // ===================================================================
-      wall(0.42, 0.50, -1, 1.4, 11, SAND, 1.4);
-      wall(0.42, 0.50,  1, 1.4, 11, SAND, 1.4);
+      wall(0.42, 0.50, -1, 0.95, 11, SAND, 1.4);
+      wall(0.42, 0.50,  1, 0.95, 11, SAND, 1.4);
       for (const side of [-1, 1]) {
-        const a = anchor(K(0.44), side, 1.4);
+        const a = anchor(K(0.44), side, 0.95);
         const b = [a.r, a.u, a.t];
         // Merlons on top of the 11m wall: y = 11 + 0.7 (half merlon)
         for (let j = 0; j < 8; j++) {
@@ -407,10 +409,10 @@
           }
         }
       }
-      // Gateway towers flanking the narrowest point (~1 m clearance)
+      // Gateway towers flanking the narrowest point (~0.85 m clearance)
       {
-        const aL = anchor(K(0.46), -1, 1.0);
-        const aR = anchor(K(0.46),  1, 1.0);
+        const aL = anchor(K(0.46), -1, 0.85);
+        const aR = anchor(K(0.46),  1, 0.85);
         // Corner tower cylinder above wall height (y=11 upward)
         addCyl(out, vadd(aL.c, aL.u, 11), 1.4, 8, SAND, 8, [aL.r, aL.u, aL.t]);
         addCyl(out, vadd(aR.c, aR.u, 11), 1.4, 8, SAND, 8, [aR.r, aR.u, aR.t]);

@@ -325,59 +325,30 @@
           return [a.r, a.u, a.t];
         })();
         const shellC = [px[k], py[k], pz[k]];
-        if (typeof gridshellCanopy === "function") {
-          // w large enough that corner feet sit beyond hw (~8 m) + clearance
-          gridshellCanopy(shellC, basis, {
-            w: 56, depth: 40, h: 34, cols: 9, rows: 6,
-            ledCols: LED_CYCLE, strutCol: [0.06, 0.07, 0.10],
-          });
-          // Second shallower veil slightly ahead — reads as continuous shell
+        // w large enough that corner feet sit beyond hw (~8 m) + clearance
+        gridshellCanopy(shellC, basis, {
+          w: 56, depth: 40, h: 34, cols: 9, rows: 6,
+          ledCols: LED_CYCLE, strutCol: [0.06, 0.07, 0.10],
+        });
+        // Second shallower veil slightly ahead — reads as continuous shell
+        {
           const k2 = K(0.875);
           const a2 = anchor(k2, 1, 0);
           gridshellCanopy([px[k2], py[k2], pz[k2]], [a2.r, a2.u, a2.t], {
             w: 52, depth: 28, h: 30, cols: 7, rows: 5,
             ledCols: [LED_MAG, LED_TEAL, LED_AMBER], strutCol: [0.06, 0.07, 0.10],
           });
-        } else {
-          // TODO(shared): use gridshellCanopy — inline arch fallback
-          for (const side of [-1, 1]) {
-            const a = anchor(k, side, 18);
-            out._mat = MAT.METAL;
-            for (let band = -1; band <= 1; band++) {
-              let prevPt = null;
-              for (let j = 0; j <= 8; j++) {
-                const t = j / 8;
-                const dist = 18 - t * 12;
-                const ap = anchor(k, side, dist);
-                const lift = 28 + Math.sin(t * Math.PI) * 26;
-                const c = vadd(vadd(ap.c, ap.u, lift), ap.t, band * 8);
-                const col = (j >= 3 && j <= 5) ? FLOOD : LED_CYCLE[(j + band + 3) % 3];
-                addBox(out, c, [3.5, 1.8, 3.0], col, [ap.r, ap.u, ap.t]);
-                if (prevPt) {
-                  const mid = [(prevPt[0] + c[0]) / 2, (prevPt[1] + c[1]) / 2, (prevPt[2] + c[2]) / 2];
-                  addBox(out, mid, [3.0, 0.8, 1.2], [0.06, 0.07, 0.10], [ap.r, ap.u, ap.t]);
-                }
-                prevPt = c;
-              }
-            }
-            out._mat = 0;
-          }
         }
 
         // Monocoque bridge deck — clear drive-under soffit over the racing line
-        if (typeof underpassPortal === "function") {
-          underpassPortal(0.88, {
-            h: 9.5, thick: 2.4, depth: 32, pierGap: 2.2, pierW: 2.0,
-            col: [0.08, 0.09, 0.12],
-          });
-          underpassPortal(0.875, {
-            h: 9.2, thick: 1.8, depth: 22, pierGap: 2.2, pierW: 1.8,
-            col: [0.10, 0.11, 0.14],
-          });
-        } else {
-          // TODO(shared): use underpassPortal — RAW span via wide place is unsafe;
-          // leave elevation dip alone as the underpass cue.
-        }
+        underpassPortal(0.88, {
+          h: 9.5, thick: 2.4, depth: 32, pierGap: 2.2, pierW: 2.0,
+          col: [0.08, 0.09, 0.12],
+        });
+        underpassPortal(0.875, {
+          h: 9.2, thick: 1.8, depth: 22, pierGap: 2.2, pierW: 1.8,
+          col: [0.10, 0.11, 0.14],
+        });
 
         // Reflecting pool at hotel base (R, clear of racing line)
         groundPlane(K(0.87), 1, 18, [70, 1.2, 55], WATER);

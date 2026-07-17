@@ -951,7 +951,8 @@ const Tracks = (function () {
     }
     // (s0, s1, side, ...rest): fraction RANGE + side — swap ends and mirror both
     for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
-                        "forestEdge", "cityFront", "recordBarrier", "concreteCanyon"]) {
+                        "forestEdge", "cityFront", "recordBarrier", "concreteCanyon",
+                        "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow"]) {
       const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => f(RS(s1), RS(s0), -side, ...r);
     }
     // (s0, s1, stepM, fn): fraction range, no side
@@ -3070,6 +3071,82 @@ const Tracks = (function () {
       addBox(out, vadd(a.c, a.u, thick / 2), box, col || [0.42, 0.40, 0.38], b);
     };
 
+    // Tilted red/white kerb ribbon + optional SAFER-style outer rail (Zandvoort bowls).
+    // Track basis already banks with the road, so boxes read the bank tilt.
+    // opts: { saferGap, safer, step, saferStep, kerbRed, kerbWht, saferCol }
+    const bankedKerbStrip = (s0, s1, side, opts) => {
+      opts = opts || {};
+      const kerbRed = opts.kerbRed || [0.86, 0.12, 0.14];
+      const kerbWht = opts.kerbWht || [0.94, 0.94, 0.92];
+      const saferCol = opts.saferCol || [0.76, 0.78, 0.80];
+      const saferGap = opts.saferGap != null ? opts.saferGap : 7.0;
+      const doSafer = opts.safer !== false;
+      let stripe = 0;
+      along(s0, s1, opts.step || 3.2, (k, spacing) => {
+        const col = (stripe++ & 1) ? kerbWht : kerbRed;
+        const a = anchor(k, side, 1.35);
+        if (onTrack(a.c[0], a.c[2], 1.1)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.16), [1.05, 0.26, spacing * 0.90], col, b);
+        addBox(out, vadd(vadd(a.c, a.r, side * 0.38), a.u, 0.30),
+               [0.32, 0.42, spacing * 0.90], col, b);
+      });
+      if (!doSafer) return;
+      along(s0, s1, opts.saferStep || 4.0, (k, spacing) => {
+        const a = anchor(k, side, saferGap);
+        if (onTrack(a.c[0], a.c[2], 1.4)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.55), [0.58, 1.10, spacing * 0.94], saferCol, b);
+        addBox(out, vadd(a.c, a.u, 1.14), [0.62, 0.12, spacing * 0.94], kerbRed, b);
+        addCyl(out, vadd(a.c, a.r, side * 0.42), 0.10, 1.25,
+               [0.34, 0.34, 0.37], 5, b);
+      });
+    };
+
+    // Continuous eye-height seat/crowd wall (Foro Sol / baseball-bowl enclosure).
+    // opts: { h, thick, shell, step, crowdCols }
+    const bowlSeatWall = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const h = opts.h != null ? opts.h : 5.8;
+      const thick = opts.thick != null ? opts.thick : 3.4;
+      const shell = opts.shell || [0.55, 0.54, 0.56];
+      const crowdCols = opts.crowdCols || [
+        [0.92, 0.28, 0.55], [0.95, 0.45, 0.12], [0.18, 0.72, 0.42],
+        [0.98, 0.82, 0.10], [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24],
+      ];
+      along(s0, s1, opts.step || 7, (k, spacing) => {
+        const p = anchor(k, side, gap);
+        if (onTrack(p.c[0], p.c[2], thick / 2 + 2)) return;
+        const bv = [p.r, p.u, p.t];
+        addBox(out, vadd(p.c, p.u, h * 0.48), [thick, h * 0.95, spacing * 0.94], shell, bv);
+        addBox(out, vadd(vadd(p.c, p.u, h * 0.55), p.r, -side * (thick * 0.38)),
+               [0.55, h * 0.72, spacing * 0.88],
+               crowdCols[Math.floor(hash(k * 11 + side) * crowdCols.length) % crowdCols.length], bv);
+      });
+    };
+
+    // Sparse cream/ochre Med apartment boxes (Monaco canyon).
+    // opts: { palette, minH, maxH, depth, step, lit, windowCol, window, floor }
+    const pastelStreetRow = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const pal = opts.palette || [[0.92, 0.86, 0.72], [0.86, 0.72, 0.48]];
+      const minH = opts.minH != null ? opts.minH : 12;
+      const maxH = opts.maxH != null ? opts.maxH : 22;
+      const depth = opts.depth != null ? opts.depth : 10;
+      const step = opts.step != null ? opts.step : 40;
+      const win = opts.window || [0.35, 0.42, 0.52];
+      along(s0, s1, step, (k) => {
+        const hv = hash(k * 5.3 + side * 0.9);
+        const w = 10 + hv * 8;
+        const h = minH + hash(k * 9.1 + side) * (maxH - minH);
+        const g = gap + hash(k * 2.7) * 1.5;
+        building(k, side, g, w, h, depth,
+          { wall: pal[Math.floor(hash(k * 3.1) * pal.length) % pal.length],
+            window: win, floor: opts.floor != null ? opts.floor : (3.5 + hv),
+            lit: opts.lit !== false, windowCol: opts.windowCol || [0.95, 0.88, 0.55] });
+      });
+    };
+
     // --- iconic landmark: a ferris wheel beside the track (Suzuka, Singapore) ---
     function ferrisWheel(k, side, dist, radius) {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -3144,6 +3221,7 @@ const Tracks = (function () {
         // shared identity-pass toolkit
         underpassPortal, floodMast, floodMastRing, ledFacadeBands,
         concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
+        bankedKerbStrip, bowlSeatWall, pastelStreetRow,
         // signage
         signBoard,
         // barriers / track furniture
@@ -3471,6 +3549,8 @@ const Tracks = (function () {
       // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
       // the points below and supersedes the authored cosine bumps.
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
+      // Half-width overlays for CircuitPaths traces (segs `w:` is ignored there).
+      hwZones: d.hwZones || null,
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
     };
@@ -3492,7 +3572,17 @@ const Tracks = (function () {
       const fmap = def.reverse ? (s) => (((phi - s) % 1) + 1) % 1 : (s) => (((s - phi) % 1) + 1) % 1;
       if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: fmap(e.s) }));
       if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: fmap(b.s) }));
+      if (def.hwZones) {
+        // Reverse flips endpoint order — swap so [s0,s1] stays a short forward arc
+        // (otherwise s1 < s0 wraps and the zone covers most of the lap).
+        def.hwZones = def.hwZones.map((z) => {
+          const a = fmap(z.s0), b = fmap(z.s1);
+          return Object.assign({}, z, def.reverse ? { s0: b, s1: a } : { s0: a, s1: b });
+        });
+      }
     }
+    // Apply after startFrac remap so authored s0/s1 stay in racing-lap space.
+    if (def.hwZones) applyHwZones(def.points, def.hwZones, d.baseHW);
     return def;
   });
 

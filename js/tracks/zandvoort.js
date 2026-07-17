@@ -59,40 +59,7 @@
       const kerbWht   = [0.92, 0.92, 0.92];
       const saferCol  = [0.76, 0.78, 0.80];   // SAFER foam face
       const gravel    = [0.62, 0.55, 0.42];
-
-      // -----------------------------------------------------------------------
-      // BANKED KERB STRIP — tilted red/white kerbs + SAFER-style outer rail.
-      // Track basis already banks with the road, so boxes read the bowl tilt.
-      // TODO(shared): use bankedKerbStrip when available on api
-      // -----------------------------------------------------------------------
-      function bankedKerbStrip(s0, s1, side, opts) {
-        opts = opts || {};
-        const saferGap = opts.saferGap != null ? opts.saferGap : 7.0;
-        const doSafer = opts.safer !== false;
-        let stripe = 0;
-        along(s0, s1, 3.2, (k, spacing) => {
-          const col = (stripe++ & 1) ? kerbWht : kerbRed;
-          const a = anchor(k, side, 1.35);
-          if (onTrack(a.c[0], a.c[2], 1.1)) return;
-          const b = [a.r, a.u, a.t];
-          // Low kerb ribbon — banks with a.r/a.u
-          addBox(out, vadd(a.c, a.u, 0.16), [1.05, 0.26, spacing * 0.90], col, b);
-          // Raised outer lip exaggerates the bank read at speed
-          addBox(out, vadd(vadd(a.c, a.r, side * 0.38), a.u, 0.30),
-                 [0.32, 0.42, spacing * 0.90], col, b);
-        });
-        // SAFER-style energy-absorbing outer rail (visual — behind tyre walls)
-        if (!doSafer) return;
-        along(s0, s1, 4.0, (k, spacing) => {
-          const a = anchor(k, side, saferGap);
-          if (onTrack(a.c[0], a.c[2], 1.4)) return;
-          const b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, 0.55), [0.58, 1.10, spacing * 0.94], saferCol, b);
-          addBox(out, vadd(a.c, a.u, 1.14), [0.62, 0.12, spacing * 0.94], kerbRed, b);
-          addCyl(out, vadd(a.c, a.r, side * 0.42), 0.10, 1.25,
-                 [0.34, 0.34, 0.37], 5, b);
-        });
-      }
+      const { bankedKerbStrip } = api;
 
       // -----------------------------------------------------------------------
       // Track centre + approximate lap radius (used for sea/beach placement)
@@ -399,10 +366,10 @@
       // -----------------------------------------------------------------------
       // BANKED-CORNER VISUAL KIT — Hugenholtz (L) + Arie Luyendyk (R)
       // -----------------------------------------------------------------------
-      bankedKerbStrip(0.115, 0.185, -1, { saferGap: 7.2 });           // Hugenholtz outer + SAFER
-      bankedKerbStrip(0.120, 0.175,  1, { safer: false });            // Hugenholtz inner kerbs
-      bankedKerbStrip(0.885, 0.955,  1, { saferGap: 7.5 });           // Luyendyk outer + SAFER
-      bankedKerbStrip(0.890, 0.950, -1, { safer: false });            // Luyendyk inner kerbs
+      bankedKerbStrip(0.115, 0.185, -1, { saferGap: 7.2, kerbRed, kerbWht, saferCol });
+      bankedKerbStrip(0.120, 0.175,  1, { safer: false, kerbRed, kerbWht });
+      bankedKerbStrip(0.885, 0.955,  1, { saferGap: 7.5, kerbRed, kerbWht, saferCol });
+      bankedKerbStrip(0.890, 0.950, -1, { safer: false, kerbRed, kerbWht });
 
       // -----------------------------------------------------------------------
       // TRACK BARRIERS & FURNITURE

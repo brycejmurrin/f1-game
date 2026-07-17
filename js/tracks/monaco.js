@@ -59,8 +59,8 @@
       const LAMP   = [1.0, 0.90, 0.60];
 
       // Cream/ochre canyon palette only (no terra/sage noise for the street wall)
-      // TODO(shared): prefer api.pastelStreetRow when exposed
       const CANYON = [CREAM, OCHRE, DUSTY, [0.92, 0.86, 0.72]];
+      const { pastelStreetRow } = api;
 
       // ── Continuous Armco lining both sides — tight street feel ───────────
       wall(0.0, 1.0, -1, 0.4, 0.8, ARMCO, 0.22);
@@ -98,30 +98,21 @@
       // Top-3 #1: sparse close pastel canyon — 8–12 cream/ochre boxes, gap 2–4 m,
       // depth ≤12. L skips the Casino mass at s≈0.20; Tabac inland is Top-3 #3.
       {
-        // Hand-spaced so the count stays sparse (pastelStreetRow step would over-fill).
+        // Hand-spaced Beau Rivage climb (L) — step helper would over-fill.
         const spots = [
           [0.09, -1], [0.13, -1], [0.16, -1],                 // L inland climb
           [0.10,  1], [0.135, 1], [0.17, 1], [0.22, 1], [0.255, 1], // R street wall
         ];
-        if (typeof api.pastelStreetRow === 'function') {
-          api.pastelStreetRow(0.08, 0.18, -1, 3, {
-            palette: CANYON, minH: 14, maxH: 26, depth: 10, step: 90,
-          });
-          api.pastelStreetRow(0.08, 0.26, 1, 3, {
-            palette: CANYON, minH: 12, maxH: 24, depth: 10, step: 90,
-          });
-        } else {
-          for (let i = 0; i < spots.length; i++) {
-            const [sf, sd] = spots[i];
-            const k = K(sf);
-            const hv = hash(k * 5.3 + sd * 0.9);
-            const w = 10 + hv * 8;
-            const h = 14 + hash(k * 9.1 + sd) * 12;
-            const gap = 2 + hash(k * 2.7) * 2;   // 2–4 m
-            building(k, sd, gap, w, h, 10,
-              { wall: CANYON[i % CANYON.length], window: WIN, floor: 3.5 + hv,
-                lit: true, windowCol: WINLIT });
-          }
+        for (let i = 0; i < spots.length; i++) {
+          const [sf, sd] = spots[i];
+          const k = K(sf);
+          const hv = hash(k * 5.3 + sd * 0.9);
+          const w = 10 + hv * 8;
+          const h = 14 + hash(k * 9.1 + sd) * 12;
+          const gap = 2 + hash(k * 2.7) * 2;   // 2–4 m
+          building(k, sd, gap, w, h, 10,
+            { wall: CANYON[i % CANYON.length], window: WIN, floor: 3.5 + hv,
+              lit: true, windowCol: WINLIT });
         }
       }
       // Rocky/green hillside above the buildings — backdrop() with green renders
@@ -396,26 +387,13 @@
 
       // ── TABAC / SWIMMING POOL SECTION (s=0.71→0.84) ─────────────────────
       // Top-3 #3 (+ #1 Tabac inland): pastel façade row facing the marina (R).
-      // Dense cityFront stays DISABLED — 4–6 cream/terracotta slabs, step ~25 m.
+      // Dense cityFront stays DISABLED — cream/terracotta slabs via pastelStreetRow.
       {
-        if (typeof api.pastelStreetRow === 'function') {
-          api.pastelStreetRow(0.72, 0.82, 1, 3, {
-            palette: [CREAM, TERRA, OCHRE, DUSTY],
-            minH: 12, maxH: 20, depth: 9, step: 55,
-          });
-        } else {
-          const facades = [0.72, 0.745, 0.77, 0.795, 0.82];
-          for (let i = 0; i < facades.length; i++) {
-            const k = K(facades[i]);
-            const hv = hash(k * 4.1 + i);
-            const w = 11 + hv * 6;
-            const h = 12 + hash(k * 7.3) * 8;   // 12–20
-            const gap = 2.5 + hash(k * 3.1) * 1.5;
-            building(k, 1, gap, w, h, 8 + hv * 2,
-              { wall: [CREAM, TERRA, OCHRE, DUSTY][i % 4], window: WIN, floor: 3.5,
-                lit: true, windowCol: WINLIT });
-          }
-        }
+        pastelStreetRow(0.72, 0.82, 1, 3, {
+          palette: [CREAM, TERRA, OCHRE, DUSTY],
+          minH: 12, maxH: 20, depth: 9, step: 55,
+          window: WIN, windowCol: WINLIT, lit: true,
+        });
       }
       // Swimming pool (L / harbour side — keep clear of inland façades)
       {

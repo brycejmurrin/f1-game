@@ -4,13 +4,16 @@ import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function startSeasonRace(page) {
+async function startSeasonRace(page, laps) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
   await page.locator("#mb-season").click();
   // Accept defaults in select screen
   await page.locator("#sel-go").click();
-  // Accept defaults in race-settings screen
+  if (laps != null) {
+    await page.locator("#rs-laps .sel-chip").filter({ hasText: new RegExp(`^${laps}(?: \\(FULL\\))?$`) }).click();
+  }
+  // Accept race settings
   await page.locator("#rs-go").click();
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
@@ -29,6 +32,19 @@ test.describe("Season — mode flags", () => {
     expect(info.seasonMode).toBe(true);
     expect(info.timeTrial).toBe(false);
   });
+
+  for (const laps of [10, 25, 57]) {
+    test(`does not end a ${laps}-lap race at 360 seconds`, async ({ page }) => {
+      await startSeasonRace(page, laps);
+      const state = await page.evaluate(() => {
+        window.__apex.go();
+        window.__apex.headless(true);
+        window.__apex.step(1, 361);
+        return window.__apex.info().state;
+      });
+      expect(state).toBe("race");
+    });
+  }
 });
 
 // ── Points & standings ────────────────────────────────────────────────────────

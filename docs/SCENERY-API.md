@@ -17,6 +17,20 @@ see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 > `conifer`, …) is summarised in the **City & scenery dressing** section of
 > `CLAUDE.md`. This doc covers only the per-circuit `scenery(api)` toolkit.
 
+## Road half-width overlays (`hwZones`)
+
+CircuitPaths traces ignore segs `w:`. To squeeze a section (e.g. Baku castle),
+set on the track def:
+
+```js
+hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }]
+```
+
+`hw` is half-width in metres; `ease` is a soft blend shoulder in lap fraction
+(default `0.025`). Zones remapped with `startFrac`/`reverse` like elevations.
+
+---
+
 ## Positioning model
 
 Trackside helpers take `(k, side, dist, …)`:
@@ -108,6 +122,9 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 | `gridshellCanopy(c, basis, opts)` | arched LED lattice veil. `opts:{w,depth,h,cols,rows,ledCols,strutCol}` |
 | `concreteCanyon(s0, s1, side, gap, opts)` | pale grey Jersey wall + optional accent stripes. `opts:{h,thick,col,stripeCol,stripeH,stripeEvery}` |
 | `runoffApron(k, side, gap, sz, col)` | wide low asphalt/gravel apron; `sz` = `[depth,thick,len]` or depth number |
+| `bankedKerbStrip(s0, s1, side, opts)` | tilted red/white kerbs + optional SAFER rail. `opts:{saferGap,safer,step,kerbRed,kerbWht,saferCol}` |
+| `bowlSeatWall(s0, s1, side, gap, opts)` | continuous eye-height seat/crowd wall. `opts:{h,thick,shell,step,crowdCols}` |
+| `pastelStreetRow(s0, s1, side, gap, opts)` | sparse Med apartment boxes. `opts:{palette,minH,maxH,depth,step,lit,windowCol}` |
 
 ### Composite models — barriers / track furniture
 | Model | Builds |
