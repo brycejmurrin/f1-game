@@ -1195,8 +1195,7 @@ const WGX = (function () {
       // Always pack the resolved value so 0 reads as a real "no cloud shade" and
       // is not confused with an unset slot (WGSL reads params5.z directly).
       d[86] = (T && T.cloudShadowDim != null) ? T.cloudShadowDim : 0.80;
-      d[87] = jitterX; // Store jitterX, wait, no, jitterY is needed too. 
-      // Since jitterY can't fit in d[87], let's pack both in d[87]? Wait, no. I'll put jitterY in d[93].
+      d[87] = 0;
       // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
       // the shadow box is snapped around (game.js shadow pass; glides with the
       // camera so the LIT distance fade never jumps on a box recentre), w =
@@ -1207,7 +1206,7 @@ const WGX = (function () {
       d[91] = (T && T.shadowRange != null) ? T.shadowRange : 64.0;
       // params6 (floats 92..95): wet-surface darkening parity with GLX.
       d[92] = (T && T.wetDark != null) ? T.wetDark : 1.0;
-      d[93] = jitterY; d[94] = 0; d[95] = 0;
+      d[93] = 0; d[94] = 0; d[95] = 0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
