@@ -871,6 +871,18 @@ window.LightPresets = {
     "keyMul": 0.98,
     "mistDensity": 1.1
   },
+  "interlagos|night|dry": {
+    "keyMul": 0.45,
+    "shadowStr": 0.6,
+    "ambientMul": 1.15,
+    "lampLevel": 0.36,
+    "poolEnergy": 0.7,
+    "glowAmp": 2.6,
+    "floodEmitMul": 1.12,
+    "starBright": 0.5,
+    "cityGlowMul": 1.15,
+    "lampTemp": 0.12
+  },
   "jeddah|dawn|dry": {
     "keyMul": 0.75,
     "sunTemp": -0.35,
@@ -1122,6 +1134,15 @@ window.LightPresets = {
     "bloomMul": 1.4,
     "tint": 0.05
   },
+  "miami|dawn|dry": {
+    "sunTemp": 0.2,
+    "grMul": 1.45,
+    "sunElev": -24,
+    "mistDensity": 1.3,
+    "lampLevel": 0.34,
+    "tint": 0.1,
+    "bloomMul": 1.1
+  },
   "miami|day|dry": {
     "shadowTintAmt": 0.25,
     "tint": 0.12,
@@ -1165,6 +1186,17 @@ window.LightPresets = {
     "tint": -0.05,
     "keyMul": 0.95,
     "cloudCover": 0.15
+  },
+  "miami|dusk|dry": {
+    "sunElev": -10,
+    "sunTemp": -0.35,
+    "floodEmitMul": 1.1,
+    "glowAmp": 2.6,
+    "lampLevel": 0.33,
+    "keyMul": 0.95,
+    "grMul": 1.6,
+    "tint": 0.22,
+    "bloomMul": 1.15
   },
   "miami|dusk|fog": {
     "sunElev": -8,
@@ -1210,6 +1242,16 @@ window.LightPresets = {
     "tint": 0.25,
     "bloomMul": 1.25,
     "grMul": 1.6
+  },
+  "miami|night|dry": {
+    "cityGlowMul": 1.1,
+    "glowAmp": 2.45,
+    "floodEmitMul": 1.15,
+    "lampLevel": 0.4,
+    "lampTemp": -0.1,
+    "starBright": 0.45,
+    "bloomMul": 1.05,
+    "tint": 0.1
   },
   "miami|night|fog": {
     "fogDensityMul": 1.9,
@@ -1380,6 +1422,13 @@ window.LightPresets = {
     "ambientMul": 1.15,
     "tint": 0.05
   },
+  "montreal|day|dry": {
+    "keyMul": 1.05,
+    "shadowTintAmt": 0.18,
+    "cloudCover": 0.1,
+    "tint": -0.04,
+    "saturation": 1.02
+  },
   "montreal|day|fog": {
     "fogDensityMul": 2.2,
     "mistDensity": 1.5,
@@ -1483,6 +1532,13 @@ window.LightPresets = {
     "ambientMul": 0.85,
     "tint": -0.15,
     "exposureMul": 0.95
+  },
+  "monza|day|dry": {
+    "keyMul": 1.12,
+    "shadowTintAmt": 0.15,
+    "tint": 0.08,
+    "saturation": 1.04,
+    "grMul": 1.25
   },
   "monza|day|fog": {
     "fogDensityMul": 2,
@@ -1896,6 +1952,14 @@ window.LightPresets = {
     "mistDensity": 1.2,
     "tint": 0.05,
     "exposureMul": 0.9
+  },
+  "silverstone|day|dry": {
+    "keyMul": 0.92,
+    "ambientMul": 1.1,
+    "shadowStr": 0.75,
+    "cloudCover": 0.15,
+    "tint": -0.1,
+    "saturation": 0.96
   },
   "silverstone|day|fog": {
     "fogDensityMul": 2.2,
