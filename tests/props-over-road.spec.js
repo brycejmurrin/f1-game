@@ -40,8 +40,8 @@ const CEIL = 5.0;
 // interlagos, montreal, monza, qatar, redbull, shanghai, silverstone, singapore,
 // spa, suzuka, vegas, zandvoort. The remaining caps are small residuals; miami
 // is a verified design-intent overhead (beach-club parasol canopy ~7.5 m up,
-// car passes safely under), mexico is the Foro Sol stadium the track runs
-// through. The rest are minor edge-proximity readings (< ~1.1 m) from props
+// car passes safely under). Mexico's Foro Sol stands are now segmented around
+// the route and fully clean. The rest are minor edge-proximity readings (< ~1.1 m) from props
 // hugging the runoff on curves — safe to drive but tracked so they can't grow.
 // Cap = measured max + small margin. A track NOT in this map must read <= TOL.
 const BASELINE = {
@@ -50,8 +50,7 @@ const BASELINE = {
   // circuit-specific migration pass removes or repositions them.
   bahrain: 4.8,
   miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
-  mexico: 4.1, mexico_note: "Foro Sol stadium — track runs through by design",
-  // Unmigrated street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
+  // street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
   // road edge (the track boundary the car stays inside), now sitting on the real
   // terrain ribbon added for these tracks — verified via driver-eye as the wall,
   // not a lane obstruction. Vegas moved its wall outward during its track-owned

@@ -55,6 +55,63 @@ test("Red Bull Ring terrain stays below both nearby road sections", async ({ pag
   }
 });
 
+test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overhead", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
+  await page.evaluate(() => window.__apex.race("mexico", "day", "dry"));
+  await page.waitForFunction(() => window.__apex.info().track === "mexico", { timeout: 15000 });
+  await page.waitForTimeout(1200);
+
+  const audit = await page.evaluate(() => {
+    const profile = window.__apex.trackProfile(240);
+    const models = window.__apex.modelDiagnostics();
+    const geometry = window.__apex.geometryDiagnostics();
+    const def = window.TrackDefs.find((track) => track.id === "mexico");
+    const grounds = [0.735, 0.78, 0.84, 0.855].flatMap((frac) =>
+      [-18, -10, 0, 10, 18].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).gap }))
+    );
+    return {
+      elevationRange: Math.max(...profile.map((point) => point.y)) -
+        Math.min(...profile.map((point) => point.y)),
+      maxSlope: Math.max(...profile.map((point) => Math.abs(point.slope))),
+      models,
+      geometry,
+      walls: window.__apex.wallStats(),
+      grounds,
+      sceneryCoordinates: def?.sceneryCoordinates,
+      terrainOuter: def?.terrainOuter,
+      dressingExclusions: def?.dressingExclusions,
+    };
+  });
+
+  expect(audit.sceneryCoordinates).toBe("racing");
+  expect(audit.terrainOuter).toBe(120);
+  expect(audit.dressingExclusions).toEqual(expect.arrayContaining([
+    expect.objectContaining({ kind: "city", s0: 0.04, s1: 0.94 }),
+    expect.objectContaining({ kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 }),
+  ]));
+  expect(audit.elevationRange, "Mexico remains essentially flat").toBeLessThanOrEqual(1.0);
+  expect(audit.maxSlope, "no invented stadium/start-finish grade").toBeLessThan(0.01);
+  expect(audit.models.suppressed).toEqual([]);
+  expect(audit.models.invalid).toEqual([]);
+  expect(audit.models.unsafe).toEqual([]);
+  expect(audit.models.emitted.filter((model) => model.required).map((model) => model.id))
+    .toEqual(expect.arrayContaining([
+      "mexico-palacio-deportes", "foro-scoreboard",
+    ]));
+  const overhead = audit.models.emitted.filter((model) => model.overhead);
+  expect(overhead.length, "the legitimate start gantry remains").toBeGreaterThan(0);
+  expect(overhead.every((model) => model.clearance >= 4.8)).toBe(true);
+  expect(audit.geometry.every((entry) => entry.ok), JSON.stringify(audit.geometry)).toBe(true);
+  expect(audit.walls.anyNaN).toBe(false);
+  expect(audit.walls.minOverHw).toBeGreaterThan(0);
+  expect(audit.walls.tightFrac, "Foro Sol concrete walls register collision").toBeGreaterThan(0.3);
+  for (const probe of audit.grounds) {
+    expect(probe.gap === null || probe.gap <= TOL,
+      `Mexico terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);
+  }
+});
+
 test("no terrain/road faces over the racing line (all circuits)", async ({ page }) => {
   test.setTimeout(600000);
   await page.goto("/");

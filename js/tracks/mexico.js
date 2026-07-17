@@ -15,6 +15,15 @@
     theme: "modern",
     lengthKm: 4.3,
     baseHW: 8,
+    sceneryCoordinates: "racing",
+    terrainOuter: 120,
+    dressingExclusions: [
+      // The bespoke park and stadium dressing define these sectors. Generic
+      // modern-city blocks would turn Mixhuca into a street canyon, while shared
+      // furniture inside Foro Sol can close its deliberately bright apertures.
+      { kind: "city", s0: 0.04, s1: 0.94 },
+      { kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 },
+    ],
     // Cool thin-air haze: pale blue-grey horizon + slightly denser fog so far
     // Sierra Nevada peaks read as altitude, not flat desert glare.
     pal: { zenith: [0.56, 0.72, 0.92], horizon: [0.68, 0.72, 0.78], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fog: [0.70, 0.74, 0.80], fogDensity: 0.0022, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
@@ -22,14 +31,16 @@
       { t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 },
       { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 },
     ],
-    // Stadium section: dips into the baseball/football stadium complex (Foro Sol)
-    // then climbs back out through the banked Peraltada run — ~12 m real change.
-    elevations: [{ s: 0.62, halfM: 260, rise: -7 }, { s: 0.74, halfM: 220, rise: 5 }],
+    // The real circuit is effectively flat. These source-coordinate undulations
+    // put less than a metre of relief under the final Estadio/Peraltada complex;
+    // the previous ±7 m pair remapped across start/finish and invented a 12 m hill.
+    elevations: [{ s: 0.535, halfM: 180, rise: 0.7 }, { s: 0.605, halfM: 150, rise: -0.25 }],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
               building, motorhome, grandstand, billboard, tree, hedge, fence, palm, pine,
-              guardrail, tyreWall, marshalPost, tower, gantry, mountain,
+              guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
+              modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -63,15 +74,20 @@
       // ── Floodlight mast: pole + lamp head + emissive glow bar ────────────────
       const lightMast = (k, side, dist, h) => {
         const p = anchor(k, side, dist);
-        if (onTrack(p.c[0], p.c[2], 2)) return;
-        addCyl(out, p.c, 0.45, h, [0.55, 0.56, 0.58], 6, [p.r, p.u, p.t]);
-        addBox(out, vadd(p.c, p.u, h - 0.8), [5.0, 1.6, 1.4], [0.28, 0.30, 0.34], [p.r, p.u, p.t]);
-        for (let i = -1; i <= 1; i++) {
-          addBox(out, vadd(vadd(p.c, p.u, h - 0.3), p.r, side * i * 1.5),
-                 [1.1, 0.9, 1.0], [1.00, 0.97, 0.78], [p.r, p.u, p.t]);
-        }
-        addBox(out, vadd(p.c, p.u, 0.05),
-               [10, 0.08, 10], [0.82, 0.76, 0.52], [p.r, p.u, p.t]);
+        modelGroup(`mexico-flood-${k}-${side}`, {
+          center: vadd(p.c, p.u, h / 2),
+          size: [10, h + 1, 10],
+          basis: [p.r, p.u, p.t],
+        }, (stage) => {
+          addCyl(stage, p.c, 0.45, h, [0.55, 0.56, 0.58], 6, [p.r, p.u, p.t]);
+          addBox(stage, vadd(p.c, p.u, h - 0.8), [5.0, 1.6, 1.4], [0.28, 0.30, 0.34], [p.r, p.u, p.t]);
+          for (let i = -1; i <= 1; i++) {
+            addBox(stage, vadd(vadd(p.c, p.u, h - 0.3), p.r, side * i * 1.5),
+                   [1.1, 0.9, 1.0], [1.00, 0.97, 0.78], [p.r, p.u, p.t]);
+          }
+          addBox(stage, vadd(p.c, p.u, 0.05),
+                 [10, 0.08, 10], [0.82, 0.76, 0.52], [p.r, p.u, p.t]);
+        });
       };
 
       // ── Lamp post: smaller roadside post ─────────────────────────────────────
@@ -94,47 +110,56 @@
                          [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24]];
       const bowlSeatWall = (s0, s1, side, gap, opts) =>
         api.bowlSeatWall(s0, s1, side, gap, Object.assign({ crowdCols }, opts || {}));
-      // Steep raked PACKED crowd terrace on a concrete wedge (dense speckled fans)
+      // Bounded crowd terrace. The old single-point guard let the long tangent
+      // chord sweep across a nearby bend; the complete group is now preflighted.
       const crowdBank = (s, side, gap, len, rows) => {
         const k = K(s), a = anchor(k, side, gap);
-        if (onTrack(a.c[0], a.c[2], 8)) return;
-        const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.9, seats = Math.floor(len / 2.0);
-        out._mat = MAT.CONCRETE;
-        addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
-                 [rows * step, rows * rise, len], [0.50, 0.49, 0.52], [a.t, a.u, a.r]);
-        out._mat = 0;
-        for (let r = 0; r < rows; r++)
-          for (let c = 0; c < seats; c++) {
-            const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
-            const p = vadd(vadd(vadd(a.c, a.r, r * step), a.u, r * rise + 1.2), a.t, off);
-            addBox(out, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
-          }
+        const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.9, seats = Math.max(6, Math.floor(len / 3.2));
+        modelGroup(`mexico-crowd-bank-${k}-${side}`, {
+          center: vadd(vadd(a.c, a.r, side * rows * step / 2), a.u, rows * rise / 2),
+          size: [rows * step + 2, rows * rise + 3, len + 2],
+          basis: bv,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addPrism(stage, vadd(vadd(a.c, a.r, side * rows * step / 2), a.u, rows * rise * 0.5),
+                   [rows * step, rows * rise, len], [0.50, 0.49, 0.52], bv);
+          stage._mat = MAT.FABRIC;
+          for (let r = 0; r < rows; r++)
+            for (let c = 0; c < seats; c++) {
+              const off = (c - (seats - 1) / 2) * 3.2;
+              const p = vadd(vadd(vadd(a.c, a.r, side * r * step), a.u, r * rise + 1.2), a.t, off);
+              addBox(stage, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
+            }
+          stage._mat = 0;
+        });
       };
-      // Curved raked crowd END-CAP wrapping a stadium corner (closes the horseshoe).
-      // Semicircular wall bulging AWAY from the track so it never intrudes.
-      const foroSolCap = (s, side, dist, span, rows, cnt) => {
-        const k = K(s), a = anchor(k, side, dist);
-        if (onTrack(a.c[0], a.c[2], 26)) return;
-        const bv = [a.r, a.u, a.t], arcR = 32;
-        for (let r = 0; r < rows; r++) {
-          const rr = arcR + r * 2.6, up = r * 1.9 + 1.2;
-          for (let i = 0; i < cnt; i++) {
-            const ang = -span / 2 + (i / (cnt - 1)) * span;
-            const p = vadd(vadd(vadd(a.c, a.t, Math.sin(ang) * rr), a.r, Math.cos(ang) * rr), a.u, up);
-            addBox(out, p, [0.9, 1.1, 0.9], crowdCols[(r * 3 + i) % crowdCols.length], bv);
-          }
-        }
+      // Short, atomic upper-deck segments follow the winding stadium route.
+      // Their roofs remain legitimate architecture but never chord across tarmac.
+      const boundedStand = (s, side, gap, len, col, crowd, required) => {
+        const k = K(s), depth = 12, a = anchor(k, side, gap + depth / 2);
+        const bv = [a.r, a.u, a.t], h = 12;
+        modelGroup(`mexico-stand-${k}-${side}-${gap}`, {
+          center: vadd(a.c, a.u, h / 2),
+          size: [depth, h + 1, len],
+          basis: bv,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 5.5), [depth, 11, len], col, bv);
+          addBox(stage, vadd(vadd(a.c, a.r, -side * 4.7), a.u, 6.2),
+                 [1.0, 7.8, len - 1.2], crowd, bv);
+          // High roof: underside > 11 m, and its bounded footprint stays off-road.
+          addBox(stage, vadd(a.c, a.u, 11.8), [depth + 2, 0.8, len + 1], [0.84, 0.85, 0.87], bv);
+        }, { required: !!required });
       };
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.00  MAIN GRANDSTAND + START/FINISH STRAIGHT
       // ════════════════════════════════════════════════════════════════════════
-      // Two-tier main grandstand (right side, s/f straight)
-      grandstand(0.00, 1, 11, 120, SEATS,    PINK);  // pushed out 9→11 to clear roof overhang
-      grandstand(0.00, 1, 24, 120, CONCRETE, GREEN);  // pushed out 22→24 to match inner tier shift
-
-      grandstand(0.99, 1,  9,  70, SEATS,    ORANGE);
-      grandstand(0.97, 1, 22,  80, CONCRETE, PINK);
+      // Segment the long stand so its crowd and roof follow the final bend rather
+      // than cutting a low tangent chord across the racing line.
+      for (const s of [0.972, 0.990, 0.008, 0.026]) {
+        boundedStand(s, 1, 16, 26, SEATS, s < 0.98 ? ORANGE : PINK, s === 0.008);
+        boundedStand(s, 1, 34, 28, CONCRETE, GREEN, false);
+      }
 
       // Banners along stand fronts
       banners(0.00, 1, 8);
@@ -255,7 +280,6 @@
       // ════════════════════════════════════════════════════════════════════════
       // s=0.55  PARK / SPORTS FACILITY (Parque Deportivo)
       // ════════════════════════════════════════════════════════════════════════
-      groundPlane(K(0.55), -1, 24, [200, 1.2, 160], PARKGRN);
       for (const s of [0.510, 0.530, 0.550, 0.570, 0.590]) {
         const k = K(s);
         building(k, -1, 28 + hash(k) * 32, 24, 9 + hash(k * 3) * 5, 20,
@@ -273,17 +297,21 @@
       {
         const k = K(0.575), d = 96;
         const p = anchor(k, -1, d), bv = [p.r, p.u, p.t];
-        if (!onTrack(p.c[0], p.c[2], 30)) {
+        modelGroup("mexico-palacio-deportes", {
+          center: vadd(p.c, p.u, 15),
+          size: [82, 31, 82],
+          basis: bv,
+        }, (stage) => {
           const COP = [0.66, 0.44, 0.30], COP2 = [0.57, 0.46, 0.35];   // copper sheen + patina
           const rings = [[40, 35, 5, COP2], [35, 27, 7, COP], [27, 17, 7, COP2], [17, 7, 6, COP]];
           let y = 0;
-          for (const [rB, rT, h, c] of rings) { addFrustum(out, vadd(p.c, p.u, y), rB, rT, h, c, 12, bv); y += h; }
-          addCone(out, vadd(p.c, p.u, y), 7, 4, COP, 12, bv);          // crown
+          for (const [rB, rT, h, c] of rings) { addFrustum(stage, vadd(p.c, p.u, y), rB, rT, h, c, 12, bv); y += h; }
+          addCone(stage, vadd(p.c, p.u, y), 7, 4, COP, 12, bv);          // crown
           for (const [ex, ez] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
             const cp = vadd(vadd(p.c, p.r, ex * 37), p.t, ez * 37);
-            addBox(out, vadd(cp, p.u, 4.5), [3, 9, 3], [0.50, 0.40, 0.34], bv);   // saddle corner pylon
+            addBox(stage, vadd(cp, p.u, 4.5), [3, 9, 3], [0.50, 0.40, 0.34], bv);   // saddle corner pylon
           }
-        }
+        }, { required: true });
       }
 
       // ════════════════════════════════════════════════════════════════════════
@@ -314,60 +342,61 @@
       const FIELD = [0.30, 0.44, 0.24];
       const DIRT  = [0.50, 0.40, 0.28];
       for (const s of [0.74, 0.77, 0.80, 0.83]) {
-        groundPlane(K(s), -1, 11, [22, 0.55, 36], s < 0.79 ? FIELD : DIRT);
-        groundPlane(K(s),  1, 11, [22, 0.55, 36], s < 0.79 ? DIRT : FIELD);
+        groundPatch(K(s), -1, 11, [22, 0.55, 30], s < 0.79 ? FIELD : DIRT,
+                    { id: `foro-floor-l-${K(s)}`, samples: 4 });
+        groundPatch(K(s),  1, 11, [22, 0.55, 30], s < 0.79 ? DIRT : FIELD,
+                    { id: `foro-floor-r-${K(s)}`, samples: 4 });
       }
       // Wider infield pad at mid-bowl (off tarmac)
-      groundPlane(K(0.785), -1, 28, [40, 0.6, 48], FIELD);
-      groundPlane(K(0.785),  1, 28, [40, 0.6, 48], DIRT);
+      groundPatch(K(0.785), -1, 28, [36, 0.6, 36], FIELD,
+                  { id: "foro-infield-left", samples: 6 });
+      groundPatch(K(0.785),  1, 28, [36, 0.6, 36], DIRT,
+                  { id: "foro-infield-right", samples: 6 });
 
       // Continuous eye-height seat wall — BOTH sides, spanning the bowl only
       // (entry/exit apertures left open so the corridor brightens in/out)
-      bowlSeatWall(0.73, 0.86, -1, 8,  { h: 6.2, thick: 3.6, shell: CONCRETE, step: 10 });
-      bowlSeatWall(0.73, 0.86,  1, 8,  { h: 6.2, thick: 3.6, shell: CONCRETE, step: 10 });
+      bowlSeatWall(0.73, 0.86, -1, 10, { h: 6.2, thick: 3.6, shell: CONCRETE, step: 8 });
+      bowlSeatWall(0.73, 0.86,  1, 10, { h: 6.2, thick: 3.6, shell: CONCRETE, step: 8 });
       // Upper continuous bank behind the eye wall (taller enclosure silhouette)
-      bowlSeatWall(0.735, 0.855, -1, 18, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 12 });
-      bowlSeatWall(0.735, 0.855,  1, 18, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 12 });
+      bowlSeatWall(0.735, 0.855, -1, 22, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 10 });
+      bowlSeatWall(0.735, 0.855,  1, 22, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 10 });
 
-      // Nested grandstand tiers at mid-bowl + rim only — seat walls carry the
-      // continuous enclosure; keep shell count modest for the vert budget.
-      for (const s of [0.76, 0.82]) {
-        grandstand(s, -1, 12, 70, CONCRETE, fiesta[0]);
-        grandstand(s,  1, 12, 70, CONCRETE, fiesta[1]);
-        grandstand(s, -1, 28, 70, [0.66, 0.64, 0.62], fiesta[2]);
-        grandstand(s,  1, 28, 70, [0.66, 0.64, 0.62], fiesta[3]);
-        grandstand(s, -1, 46, 70, [0.58, 0.56, 0.54], SEATS);
-        grandstand(s,  1, 46, 70, [0.58, 0.56, 0.54], SEATS);
+      // The route bends sharply inside Foro Sol. Short bounded tiers follow that
+      // shape; the old 70 m tangent stands chorded across the road at 3.92 m.
+      for (const s of [0.75, 0.78, 0.81, 0.84]) {
+        boundedStand(s, -1, 30, 24, [0.66, 0.64, 0.62], fiesta[0], s === 0.78);
+        boundedStand(s, -1, 50, 26, [0.58, 0.56, 0.54], fiesta[2], false);
+        if (s !== 0.75) boundedStand(s, 1, 30, 24, [0.66, 0.64, 0.62], fiesta[1], s === 0.78);
+        if (s === 0.78 || s === 0.84) boundedStand(s, 1, 50, 26, [0.58, 0.56, 0.54], fiesta[3], false);
       }
 
       // Packed upper terraces cresting the rim (both sides)
-      for (const s of [0.76, 0.82]) {
-        crowdBank(s, -1, 58, 48, 7);
-        crowdBank(s,  1, 58, 48, 7);
+      for (const s of [0.755, 0.805, 0.845]) {
+        crowdBank(s, -1, 68, 28, 6);
+        if (s === 0.845) crowdBank(s, 1, 68, 28, 6);
       }
-      // Curved crowd END-CAPS behind the apertures — close the horseshoe
-      // WITHOUT filling the bright entry/exit gaps on the driving line.
-      foroSolCap(0.715, -1, 72, Math.PI * 0.85, 6, 16);
-      foroSolCap(0.715,  1, 72, Math.PI * 0.85, 6, 16);
-      foroSolCap(0.875, -1, 72, Math.PI * 0.85, 6, 16);
-      foroSolCap(0.875,  1, 72, Math.PI * 0.85, 6, 16);
+      // Entry/exit end caps stay behind the bright apertures.
+      boundedStand(0.715, -1, 68, 20, [0.58, 0.56, 0.54], fiesta[2], false);
+      boundedStand(0.875, -1, 68, 20, [0.58, 0.56, 0.54], fiesta[0], false);
+      boundedStand(0.875,  1, 68, 20, [0.58, 0.56, 0.54], fiesta[1], false);
 
       // Foro Sol floodlight masts — ring the outer rim
       for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
         lightMast(K(s), -1, 58, 52);
-        lightMast(K(s),  1, 58, 52);
+        if (s >= 0.80) lightMast(K(s), 1, 58, 52);
       }
 
       // Foro Sol scoreboard / jumbotron at the far end of the stadium (s≈0.80)
       {
-        const k = K(0.80);
-        for (const side of [-1, 1]) {
-          const a = anchor(k, side, 90);
-          if (!onTrack(a.c[0], a.c[2], 25)) {
-            addBox(out, vadd(a.c, a.u, 28), [32, 14, 2.0], [0.04, 0.04, 0.06],  [a.r, a.u, a.t]);
-            addBox(out, vadd(a.c, a.u, 28), [34, 15, 1.0], [0.24, 0.26, 0.30],  [a.r, a.u, a.t]);
-          }
-        }
+        const k = K(0.80), a = anchor(k, -1, 90);
+        modelGroup("foro-scoreboard", {
+          center: vadd(a.c, a.u, 28),
+          size: [34, 15, 2],
+          basis: [a.r, a.u, a.t],
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 28), [32, 14, 2.0], [0.04, 0.04, 0.06], [a.r, a.u, a.t]);
+          addBox(stage, vadd(a.c, a.u, 28), [34, 15, 1.0], [0.24, 0.26, 0.30], [a.r, a.u, a.t]);
+        }, { required: true });
       }
 
       // Festive banners inside the bowl — papel picado at trackside level
@@ -376,22 +405,24 @@
       }
 
       // Interior fencing at trackside (safety fence inside stadium) — bowl only
-      fence(0.73, 0.86, -1, 7, 3.8, [0.82, 0.84, 0.88]);
-      fence(0.73, 0.86,  1, 7, 3.8, [0.82, 0.84, 0.88]);
+      fence(0.735, 0.855, -1, 10, 3.8, [0.82, 0.84, 0.88]);
+      fence(0.735, 0.855,  1, 10, 3.8, [0.82, 0.84, 0.88]);
+      wall(0.735, 0.855, -1, 9, 1.0, CONCRETE, 0.45);
+      wall(0.735, 0.855,  1, 9, 1.0, CONCRETE, 0.45);
       tyreWall(0.755, 0.775, -1, 5, ORANGE);
       tyreWall(0.795, 0.815,  1, 5, PINK);
       kerb(0.76, -1, 8); kerb(0.80, 1, 8);
 
       // Mexican flag colours on the stadium outer wall fascia (visible from outside)
-      along(0.73, 0.86, 18, (k) => {
-        for (const side of [-1, 1]) {
-          const a = anchor(k, side, 58);
-          if (onTrack(a.c[0], a.c[2], 4)) continue;
-          const fb = vadd(a.c, a.u, 11);
-          const bands = [[-1, [0.10, 0.58, 0.26]], [0, [0.94, 0.94, 0.92]], [1, [0.86, 0.12, 0.16]]];
-          for (const [j, col] of bands) addBox(out, vadd(fb, a.t, j * 2.4), [1.0, 20, 2.3], col, [a.r, a.u, a.t]);
-        }
-      });
+      for (const side of [-1, 1]) {
+        const points = [];
+        along(0.73, 0.86, 18, (k) => points.push({ k, side, dist: 58 }));
+        groundedSegments({
+          id: `foro-outer-fascia-${side}`,
+          points, width: 1.0, height: 20,
+          color: side < 0 ? [0.10, 0.58, 0.26] : [0.86, 0.12, 0.16],
+        });
+      }
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.88  FORO SOL EXIT — bright aperture back to open track
@@ -404,8 +435,10 @@
       // s=0.92  PERALTADA / ESTADIO STAND
       // The banked Peraltada corner passes the old Estadio Azteca-style grandstand.
       // ════════════════════════════════════════════════════════════════════════
-      grandstand(0.92, 1,  9, 100, SEATS,    PINK);
-      grandstand(0.92, 1, 24, 100, CONCRETE, GREEN);
+      for (const s of [0.90, 0.92, 0.94]) {
+        boundedStand(s, 1, 14, 24, SEATS, PINK, false);
+        boundedStand(s, 1, 32, 26, CONCRETE, GREEN, false);
+      }
       // Packed upper terrace behind the banked Peraltada/Estadio stand
       crowdBank(0.92, 1, 40, 110, 7);
       // Taller floodlights flanking the Peraltada
