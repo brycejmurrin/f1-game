@@ -83,10 +83,19 @@ test("verify game track shapes against real GeoJSON outlines", async ({ page }) 
   fs.mkdirSync(OUT, { recursive: true });
 
   // ── 1. Fetch GeoJSON from GitHub (Node.js context, not browser) ───────────
+  // This is the ONE external dependency in the suite. A network hiccup / offline
+  // CI must not fail a GEOMETRY test for a non-geometry reason — skip gracefully
+  // so the failure signal stays meaningful.
   console.log("\nFetching bacinger/f1-circuits GeoJSON from GitHub...");
-  const geoJSON = await fetchGeoJSON(
-    "https://raw.githubusercontent.com/bacinger/f1-circuits/master/f1-circuits.geojson"
-  );
+  let geoJSON;
+  try {
+    geoJSON = await fetchGeoJSON(
+      "https://raw.githubusercontent.com/bacinger/f1-circuits/master/f1-circuits.geojson"
+    );
+  } catch (e) {
+    test.skip(true, `GeoJSON fetch failed (offline?) — skipping real-outline comparison: ${e.message}`);
+    return;
+  }
   console.log(`GeoJSON: ${geoJSON.features.length} circuits`);
 
   // Index by feature id

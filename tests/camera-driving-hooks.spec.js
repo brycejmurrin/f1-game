@@ -82,10 +82,11 @@ test("cinematic camera outside right corner (k>0)", async ({ page }) => {
     if (!rightCorner) return null;
     return __apex.cinematic(rightCorner.frac);
   });
-  if (res) {
-    // For a right-hand corner (k>0), az should be negative (camera on the left/outside)
-    expect(res.az).toBeLessThan(0);
-  }
+  // Monaco has right-hand corners — a null here means trackProfile/curvature
+  // regressed, so assert non-null instead of silently passing (was `if (res)`).
+  expect(res).not.toBeNull();
+  // For a right-hand corner (k>0), az should be negative (camera on the left/outside)
+  expect(res.az).toBeLessThan(0);
 });
 
 test("cinematic camera outside left corner (k<0)", async ({ page }) => {
@@ -97,10 +98,10 @@ test("cinematic camera outside left corner (k<0)", async ({ page }) => {
     if (!leftCorner) return null;
     return __apex.cinematic(leftCorner.frac);
   });
-  if (res) {
-    // For a left-hand corner (k<0), az should be positive (camera on the right/outside)
-    expect(res.az).toBeGreaterThan(0);
-  }
+  // Monaco has left-hand corners — assert non-null instead of silently passing.
+  expect(res).not.toBeNull();
+  // For a left-hand corner (k<0), az should be positive (camera on the right/outside)
+  expect(res.az).toBeGreaterThan(0);
 });
 
 // ── carOrbit() ────────────────────────────────────────────────────────────────

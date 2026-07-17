@@ -7,7 +7,8 @@ test("mapPts and trackBounds hooks", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex, { timeout: 15000 });
 
-  // Before a track is loaded both return null
+  // A default track pre-loads on startup, so mapPts() is already populated here
+  // (it is NOT null before an explicit race() — the old comment claimed otherwise).
   const nullPts = await page.evaluate(() => __apex.mapPts());
   expect(nullPts).not.toBeNull(); // default track pre-loads on startup
 

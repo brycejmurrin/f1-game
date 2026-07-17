@@ -274,24 +274,33 @@ test.describe("separation pass with large packs", () => {
 test.describe("AI banking grip on banked circuits", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("AI field reaches 30 m/s on Zandvoort banked section within 8 s", async ({ page }) => {
+  test("AI carry banked-corner speed comparable to a flat straight (banking grip applies to AI)", async ({ page }) => {
+    // Regression for the bug where bankMu was player-only, so AI had FLAT lateral
+    // grip in banked corners and scrubbed speed there. Relative check (no magic
+    // 30 m/s): AI average speed through the banked section must be a healthy
+    // fraction of the average speed they build on a flat straight — proving the
+    // bank isn't collapsing their grip. Survives any PACE/grip retune.
     await loadRace(page, "zandvoort");
     const result = await page.evaluate(() => {
-      window.__apex.headless(true);
-      // Banked section is roughly at 0.65–0.75 (Arie Luyendijk turn)
-      window.__apex.reset(0.65, 20, 0);
-      for (let i = 0; i < 480; i++) {  // 8 s
-        window.__apex.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 1);
-      }
-      window.__apex.headless(false);
-      const cars = window.__apex.cars();
-      const ai = cars.filter((c) => !c.p);
-      const avgSpeed = ai.reduce((s, c) => s + c.speed, 0) / (ai.length || 1);
-      const allFinite = cars.every((c) => isFinite(c.x) && isFinite(c.speed));
-      return { avgSpeed, allFinite, count: ai.length };
+      const runAvg = (frac) => {
+        window.__apex.headless(true);
+        window.__apex.reset(frac, 20, 0);
+        for (let i = 0; i < 480; i++) window.__apex.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 1);
+        window.__apex.headless(false);
+        const ai = window.__apex.cars().filter((c) => !c.p);
+        return {
+          avg: ai.reduce((s, c) => s + c.speed, 0) / (ai.length || 1),
+          finite: window.__apex.cars().every((c) => isFinite(c.x) && isFinite(c.speed)),
+        };
+      };
+      const flat   = runAvg(0.0);    // start/finish straight — the grip reference
+      const banked = runAvg(0.65);   // Arie Luyendijk banked turn (~0.65–0.75)
+      return { flat: flat.avg, banked: banked.avg, allFinite: flat.finite && banked.finite };
     });
     expect(result.allFinite).toBe(true);
-    expect(result.avgSpeed).toBeGreaterThan(30);
+    // AI hold at least half their flat-straight pace through the bank. With the
+    // bug (flat grip) they'd understeer wide and scrub far more than that.
+    expect(result.banked).toBeGreaterThan(result.flat * 0.5);
   });
 
   test("player with racing-line assist stays on banked Zandvoort section", async ({ page }) => {

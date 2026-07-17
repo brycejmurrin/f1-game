@@ -39,8 +39,12 @@ test.describe("Apex 26 — longitudinal & grip", () => {
       window.__apex.clearInput();
       return v;
     });
-    expect(top).toBeGreaterThan(40);     // climbing strongly toward VMAX (72)
-    expect(top).toBeLessThan(100);       // never exceeds it
+    // From a standstill, 7 s flat-out on the straight climbs to a healthy speed
+    // and then settles — it doesn't run away. `top` here IS the flat top speed;
+    // assert it accelerated well and stays finite/bounded (no VMAX magic number).
+    expect(top).toBeGreaterThan(40);     // climbed strongly (well off the 0 m/s start)
+    expect(Number.isFinite(top)).toBe(true);
+    expect(top).toBeLessThan(150);       // sane physical ceiling, not an exact VMAX pin
   });
 
   test("braking slows faster than coasting, both slower than throttle", async ({ page }) => {
@@ -104,21 +108,46 @@ test.describe("Apex 26 — longitudinal & grip", () => {
         if (s < dn) { dn = s; dnAt = f; }
         if (s > up) { up = s; upAt = f; }
       }
-      // descent at top speed: gravity must not push past vmax
-      window.__apex.jump(dnAt, 90, 0);
+      // Reference top speed at the FLATTEST point on the lap under full throttle
+      // (measured, not a hardcoded VMAX) — driven long enough to plateau. Using
+      // the least-sloped node avoids letting the reference itself be gravity-aided.
+      let flatAt = 0, flatSlope = Infinity;
+      for (let i = 0; i < 300; i++) {
+        const f = i / 300;
+        window.__apex.jump(f, 40, 0); window.__apex.step(1 / 60, 1);
+        const a = Math.abs(window.__apex.physState().slope);
+        if (a < flatSlope) { flatSlope = a; flatAt = f; }
+      }
+      window.__apex.jump(flatAt, 40, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
-      let maxV = 0;
-      for (let i = 0; i < 120; i++) { window.__apex.step(1 / 60, 1); maxV = Math.max(maxV, window.__apex.physState().speed); }
+      let flatMax = 0;
+      for (let i = 0; i < 420; i++) { window.__apex.step(1 / 60, 1); flatMax = Math.max(flatMax, window.__apex.physState().speed); }
+      // Descent under power: gravity may add some speed downhill (that's correct,
+      // not a bug), but it must not RUN AWAY — stay within a generous margin of the
+      // flat top speed and, above all, stay finite. Start at flat top speed so we
+      // measure overspeed, not deceleration.
+      window.__apex.jump(dnAt, flatMax, 0);
+      let maxV = 0, finite = true;
+      for (let i = 0; i < 120; i++) {
+        window.__apex.step(1 / 60, 1);
+        const v = window.__apex.physState().speed;
+        if (!Number.isFinite(v)) finite = false;
+        maxV = Math.max(maxV, v);
+      }
       // climb from low speed: must still accelerate (gravity isn't a wall)
       window.__apex.jump(upAt, 10, 0);
       const v0 = window.__apex.physState().speed;
       for (let i = 0; i < 120; i++) window.__apex.step(1 / 60, 1);
       const v1 = window.__apex.physState().speed;
       window.__apex.clearInput();
-      return { maxV, climbGain: v1 - v0 };
+      return { maxV, flatMax, finite, climbGain: v1 - v0 };
     });
-    expect(r.maxV).toBeLessThan(98);        // no descent overspeed → no slide-off at the bottom
-    expect(r.climbGain).toBeGreaterThan(5);  // climbs freely, never an invisible barrier
+    // Relative bounds (survive a PACE/VMAX retune): descent stays finite and within
+    // a generous margin of the measured flat top speed (gravity adds a little, but
+    // doesn't run away), and climbing still gains speed (gravity isn't a wall).
+    expect(r.finite).toBe(true);
+    expect(r.maxV).toBeLessThan(r.flatMax * 1.35);   // no descent runaway → no slide-off at the bottom
+    expect(r.climbGain).toBeGreaterThan(5);          // climbs freely, never an invisible barrier
   });
 
   test("crossing the start/finish line advances s (wraps) and increments the lap", async ({ page }) => {

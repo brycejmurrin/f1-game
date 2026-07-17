@@ -1,5 +1,5 @@
 // @ts-check
-import { test } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
 const LS = { width: 844, height: 390 };
 const PT = { width: 390, height: 844 };
@@ -31,46 +31,58 @@ async function shot(page, name) {
   await page.screenshot({ path: `tests/ui-screenshots/hud-audit-${name}.png`, fullPage: false });
 }
 
+// Assert the HUD actually rendered (not a blank/broken canvas that screenshots
+// silently), and that button/touch modes show their on-screen controls. Without
+// hasTouch:true (added to the describes below) the game applies body.desktop and
+// HIDES the steer/gas buttons, so these shots used to capture the wrong thing.
+async function assertHud(page, steerMode) {
+  await expect(page.locator("#hud")).toBeVisible();
+  if (steerMode === "buttons" || steerMode === "touch") {
+    // In-race on-screen steering controls must be present in these modes.
+    await expect(page.locator("#btn-steer-left, #btn-throttle").first()).toBeVisible();
+  }
+}
+
 // ── LANDSCAPE ────────────────────────────────────────────
 test.describe("HUD landscape", () => {
-  test.use({ viewport: LS });
+  test.use({ viewport: LS, hasTouch: true });
 
   test("tilt auto-gear", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "tilt", false);
-    await shot(page, "ls-tilt-auto");
+    await assertHud(page, "tilt"); await shot(page, "ls-tilt-auto");
   });
   test("tilt manual-gear", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "tilt", true);
-    await shot(page, "ls-tilt-manual");
+    await assertHud(page, "tilt"); await shot(page, "ls-tilt-manual");
   });
   test("buttons", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "buttons", false);
-    await shot(page, "ls-buttons");
+    await assertHud(page, "buttons"); await shot(page, "ls-buttons");
   });
   test("touch", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "touch", false);
-    await shot(page, "ls-touch");
+    await assertHud(page, "touch"); await shot(page, "ls-touch");
   });
 });
 
 // ── PORTRAIT ─────────────────────────────────────────────
 test.describe("HUD portrait", () => {
-  test.use({ viewport: PT });
+  test.use({ viewport: PT, hasTouch: true });
 
   test("tilt auto-gear", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "tilt", false);
-    await shot(page, "pt-tilt-auto");
+    await assertHud(page, "tilt"); await shot(page, "pt-tilt-auto");
   });
   test("tilt manual-gear", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "tilt", true);
-    await shot(page, "pt-tilt-manual");
+    await assertHud(page, "tilt"); await shot(page, "pt-tilt-manual");
   });
   test("buttons", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "buttons", false);
-    await shot(page, "pt-buttons");
+    await assertHud(page, "buttons"); await shot(page, "pt-buttons");
   });
   test("touch", async ({ page }) => {
     await page.goto("/"); await loadWithMode(page, "touch", false);
-    await shot(page, "pt-touch");
+    await assertHud(page, "touch"); await shot(page, "pt-touch");
   });
 });
