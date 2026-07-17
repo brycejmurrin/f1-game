@@ -1687,11 +1687,13 @@ const WGX = (function () {
         s[30] = (o.speedBlur != null) ? o.speedBlur : ((T && T.speedBlur != null) ? T.speedBlur : 0.0);
         s[31] = (T && T.bloomKnee != null) ? T.bloomKnee : 0.5;
         // tuneFx (off 128): vignette reach + FLARE CORE STREAK (def 0.5; GLX
-        // parity, read directly so 0 is a real "off") + ACES curve coeff e in .z.
+        // parity, read directly so 0 is a real "off") + ACES curve coeff e in .z
+        // + FLARE STREAK width (def 7.0) in .w. Streak default matches the literal
+        // the shader used before this lane, so the shipped look is byte-identical.
         s[32] = (T && T.vignetteSoft != null) ? T.vignetteSoft : 0.35;
         s[33] = (T && T.flareStreak2 != null) ? T.flareStreak2 : 0.5;
         s[34] = (T && T.acesE != null) ? T.acesE : 0.14;   // tuneFx.z = ACES e
-        s[35] = 0;
+        s[35] = (T && T.flareStreak != null) ? T.flareStreak : 7.0;   // tuneFx.w = FLARE STREAK width
         // HDR grade (off 144..223): five tonal zones, toe/shoulder, RGB lift/gamma/gain.
         s[36] = (T && T.blacks     != null) ? T.blacks     : 0;
         s[37] = (T && T.shadows    != null) ? T.shadows    : 0;

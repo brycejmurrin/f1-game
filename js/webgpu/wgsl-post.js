@@ -402,7 +402,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          sharpen  = unsharp-mask crispness
   //                                          speedBlur= radial centre->edge smear
   //                                                     (GLX folds car speed in)
-  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, acesE, _pad)
+  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, acesE, flareStreak)
   //      tone0       : vec4<f32>  off 144   (blacks, shadows, midtones, highlights)
   //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, _pad)
   //      lift        : vec4<f32>  off 176   (RGB lift, _pad)
@@ -536,6 +536,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // FLARE CORE STREAK knob (U.tuneFx.y; GLX parity, def 0.5). Read directly — 0 is
   // a valid "single-streak flare", so the uploader always packs the resolved value.
   let flareStreak2 = U.tuneFx.y;
+  // FLARE STREAK width (U.tuneFx.w; GLX parity, def 7.0). The main anamorphic
+  // streak's horizontal tightness — the uploader packs the resolved value; the
+  // default reproduces the literal 7.0 this pass used before, so byte-identical.
+  let flareStreak = U.tuneFx.w;
   let texel      = U.texel.xy;
 
   var c = textureSampleLevel(sceneTex, samp, in.uv, 0.0).rgb;
@@ -604,7 +608,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       sunUV.y >= 0.0 && sunUV.y <= 1.0) {
     var flare = vec3<f32>(0.0);
     let streakY = exp(-abs(in.uv.y - sunUV.y) * 110.0);
-    let streakX = exp(-abs(in.uv.x - sunUV.x) * 7.0);
+    let streakX = exp(-abs(in.uv.x - sunUV.x) * flareStreak);
     flare = flare + vec3<f32>(1.0, 0.80, 0.52) * streakY * streakX * 0.75;
     let streakX2 = exp(-abs(in.uv.x - sunUV.x) * 10.0);
     flare = flare + vec3<f32>(1.0, 0.92, 0.78) * exp(-abs(in.uv.y - sunUV.y) * 320.0) * streakX2 * flareStreak2;

@@ -277,9 +277,11 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   let composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 0.5);
   assert.ok(Math.abs(composite[32] - 0.35) < 1e-6);
-  // tuneFx.y/z = FLARE CORE STREAK (0.5) + ACES tone-curve e (0.14) defaults.
+  // tuneFx.y/z/w = FLARE CORE STREAK (0.5) + ACES tone-curve e (0.14) + FLARE
+  // STREAK width (7.0) defaults.
   assert.ok(Math.abs(composite[33] - 0.5) < 1e-6, "flareStreak2 default in tuneFx.y (float 33)");
   assert.ok(Math.abs(composite[34] - 0.14) < 1e-6, "acesE default in tuneFx.z (float 34)");
+  assert.ok(Math.abs(composite[35] - 7.0) < 1e-6, "flareStreak default in tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(36, 44), [0, 0, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0]);
   assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0]);
@@ -298,7 +300,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(gfx.begin({ tune: { wetDark: -7, carSparkle: 0.25, fogSunCore: 0.75 }, shadowCtr: [44, 55, 66] }), true);
   gfx.present({ tune: {
     bloomKnee: 4.25, vignetteSoft: -2.5,
-    flareStreak2: 1.75,
+    flareStreak2: 1.75, flareStreak: 3.5,
     acesA: 3, acesB: 0.25, acesC: 3.5, acesD: 0.75, acesE: 0.5,
     blacks: 1, shadows: 2, midtones: 3, highlights: 4, whites: 5,
     toe: 6, shoulder: 7,
@@ -316,6 +318,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(composite[32], -2.5);
   assert.equal(composite[33], 1.75, "flareStreak2 must occupy tuneFx.y (float 33)");
   assert.equal(composite[34], 0.5, "acesE must occupy tuneFx.z (float 34)");
+  assert.equal(composite[35], 3.5, "flareStreak must occupy tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(56, 60), [3, 0.25, 3.5, 0.75], "aces a,b,c,d must occupy floats 56..59");
   assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
   assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 0], "tone1 must occupy floats 40..43");
