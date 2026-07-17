@@ -234,7 +234,7 @@ const GLX = (function () {
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -1810,6 +1810,27 @@ const GLX = (function () {
     // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
     // shipped grade so a missing tune object changes nothing.
     const CT = opts && opts.tune || null;
+    gl.uniform4f(compU.uTone0,
+      CT && CT.blacks != null ? CT.blacks : 0,
+      CT && CT.shadows != null ? CT.shadows : 0,
+      CT && CT.midtones != null ? CT.midtones : 0,
+      CT && CT.highlights != null ? CT.highlights : 0);
+    gl.uniform4f(compU.uTone1,
+      CT && CT.whites != null ? CT.whites : 0,
+      CT && CT.toe != null ? CT.toe : 0,
+      CT && CT.shoulder != null ? CT.shoulder : 0, 0);
+    gl.uniform3f(compU.uLift,
+      CT && CT.liftR != null ? CT.liftR : 0,
+      CT && CT.liftG != null ? CT.liftG : 0,
+      CT && CT.liftB != null ? CT.liftB : 0);
+    gl.uniform3f(compU.uGamma,
+      CT && CT.gammaR != null ? CT.gammaR : 1,
+      CT && CT.gammaG != null ? CT.gammaG : 1,
+      CT && CT.gammaB != null ? CT.gammaB : 1);
+    gl.uniform3f(compU.uGain,
+      CT && CT.gainR != null ? CT.gainR : 1,
+      CT && CT.gainG != null ? CT.gainG : 1,
+      CT && CT.gainB != null ? CT.gainB : 1);
     gl.uniform1f(compU.uContrast,   CT && CT.contrast   != null ? CT.contrast   : 1.12);
     gl.uniform1f(compU.uVibrance,   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
     gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
