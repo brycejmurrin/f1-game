@@ -82,5 +82,5 @@ const SceneryThemes = (function () {
     return choices[(hash >>> 0) % choices.length];
   }
 
-  return { resolve, variant, THEMES };
+  return { resolve, variant };
 })();

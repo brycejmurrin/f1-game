@@ -14,7 +14,7 @@ function load(file, name, globals = {}) {
   return sandbox[name];
 }
 
-test("SceneryThemes resolves neutral defaults, named theme, and track overrides", () => {
+test("SceneryThemes resolves named themes and track overrides", () => {
   const Themes = load("js/scenery-themes.js", "SceneryThemes");
   const theme = Themes.resolve("desert", {
     palette: { accent: [1, 0, 0] },
@@ -25,6 +25,24 @@ test("SceneryThemes resolves neutral defaults, named theme, and track overrides"
   assert.equal(theme.budgets.hero, 50000);
   assert.equal(theme.budgets.facility, 12000);
   assert.ok(theme.palette.window.every(Number.isFinite));
+});
+
+test("SceneryThemes resolves neutral defaults and unknown themes fall back to neutral", () => {
+  const Themes = load("js/scenery-themes.js", "SceneryThemes");
+  const neutral = Themes.resolve();
+  const unknown = Themes.resolve("not-a-theme");
+
+  assert.equal(neutral.name, "neutral");
+  assert.equal(neutral.spacing.furniture, 80);
+  assert.equal(neutral.budgets.hero, 50000);
+  assert.deepEqual(unknown, neutral);
+});
+
+test("SceneryThemes exposes only the immutable public operations", () => {
+  const Themes = load("js/scenery-themes.js", "SceneryThemes");
+
+  assert.deepEqual(Object.keys(Themes).sort(), ["resolve", "variant"]);
+  assert.equal(Themes.THEMES, undefined);
 });
 
 test("SceneryThemes variant selection is stable and bounded", () => {
