@@ -93,7 +93,7 @@ test.describe("Apex 26 — rendering", () => {
   // These are SMOKE checks: confirm the WebGL scene actually renders a non-blank
   // frame, not a pixel-exact regression (the scene has procedural scenery /
   // time-of-day variation, so it differs 10-30% run-to-run under SwiftShader —
-  // pixel comparison belongs in the dedicated visual-regression-*.spec.js suite).
+  // pixel comparison belongs in tests/tracks-visual.spec.js).
   // A rendered 3D scene PNG is tens of KB; a blank/solid canvas is < ~2 KB.
   test("grid start renders a non-blank frame", async ({ page }) => {
     const errors = [];

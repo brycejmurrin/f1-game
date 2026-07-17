@@ -433,7 +433,7 @@ payoff is real (see below).
 
 Validation infrastructure already exists and should be reused verbatim: the
 `playwright-probe` deterministic screenshot harness, the
-`tests/visual-regression-*.spec.js` pixel-diff suite, `__apex.park/jump/orbit`
+`tests/tracks-visual.spec.js` pixel-diff suite, `__apex.park/jump/orbit`
 for fixed poses, and `__apex.lightState/probe/wallStats` for numeric assertions.
 Add a backend switch so each spec can run twice.
 
@@ -445,7 +445,7 @@ Add a backend switch so each spec can run twice.
 |---|---|---|---|
 | R1 | **Two shader languages, no build step, no compiler to catch drift.** `LIT_FS`+`COMPOSITE_FS` are ~1,240 lines of hot, frequently-edited GLSL. Every future art tweak must be made twice and can silently diverge. | **Critical** | The whole reason the recommendation is "Phase 0 only." Mitigate by factoring shared math (noise/BRDF/tonemap) into concatenated string fragments used by both; consider generating WGSL offline from GLSL as a seed. There is no full mitigation without adding a build step, which the project forbids. |
 | R2 | **The crash-prone devices get nothing.** `MOBILE_TIER` iPhones on the WKWebView jetsam budget (`js/glx.js:2031-2044`) are pre-iOS-26 → no WebGPU. The memory work that actually helps them is all in the WebGL2 path already. | **High** | Accept and state plainly: WebGPU is an upside for *new* hardware, not a fix for the current failure mode. Any effort spent here is not spent on the devices that crash. |
-| R3 | **Testing matrix doubles.** 50+ specs × 2 backends, plus the visual-regression tolerances must be re-baselined for WebGPU (subtly different filtering/rounding will never be bit-identical to WebGL2). | **High** | Backend switch on every spec (Step 3); accept per-backend golden images; gate CI on both. |
+| R3 | **Testing matrix doubles.** 50+ specs × 2 backends, plus the tracks-visual tolerances must be re-baselined for WebGPU (subtly different filtering/rounding will never be bit-identical to WebGL2). | **High** | Backend switch on every spec (Step 3); accept per-backend golden images; gate CI on both. |
 | R4 | **Fidelity gap on the lit/composite port.** ~2,000 lines of hand-tuned, mobile-GPU-quirk-laden GLSL (note the many `pow(0,x)` NaN guards, e.g. 688/704/718/849 — added for real mobile-driver bugs). Reproducing the exact look in WGSL is fiddly and un-fun. | **High** | Phase 2/4 side-by-side screenshot gates; port the NaN guards verbatim (WGSL `pow` has the same footguns). |
 | R5 | **Async init reshapes boot.** `getContext("webgl2")` is sync; `requestAdapter/requestDevice` are promises. `game.js:39` and everything assuming a ready renderer at module-eval time must tolerate an await. | **Med** | Contained by Phase 0/1: the façade returns a ready device or the WebGL2 fallback; game start gates on the promise. |
 | R6 | **Effort vs payoff.** Realistic full port is **XL+XL+L+L+M** of specialist graphics work on a solo, no-framework codebase, for a visual result intended to *match* (not exceed) the current one, on a minority of devices. | **High** | This is the core recommendation input. Do Phase 0; treat 2-5 as opt-in R&D with a named payoff. |

@@ -9,17 +9,22 @@
 // geometry used by tests/props-over-road.spec.js so a number here matches CI.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { assertSafePathToken } from "./output-paths.mjs";
 
 const TRACK = process.env.TRACK;
 const PORT = +(process.env.PORT || 3499);
 const SHOTS = process.argv.includes("--shots");
 if (!TRACK) { console.error("set TRACK=<id>"); process.exit(2); }
+const safeTrack = assertSafePathToken(TRACK, "track id");
 
-const CHROME = process.env.CHROME ||
-  "/Users/bmurrin/Library/Caches/ms-playwright/chromium-1179/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+// Prefer CHROME / PW_CHROMIUM; else sandbox paths; else Playwright's bundled browser.
+const CHROME = process.env.CHROME || process.env.PW_CHROMIUM ||
+  ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"]
+    .find(existsSync);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "artifacts", "tmp");
 if (SHOTS) mkdirSync(OUT, { recursive: true });
 
@@ -29,7 +34,10 @@ await new Promise((r) => setTimeout(r, 1200));
 const CEIL = 5.0, TOL = 0.15;
 let out = { track: TRACK, max: 0, top: [], err: null };
 try {
-  const b = await chromium.launch({ executablePath: CHROME, args: ["--use-angle=swiftshader"] });
+  const b = await chromium.launch({
+    ...(CHROME ? { executablePath: CHROME } : {}),
+    args: ["--use-angle=swiftshader"],
+  });
   const p = await b.newPage({ viewport: { width: 900, height: 600 } });
   await p.goto(`http://localhost:${PORT}/`);
   await p.waitForFunction(() => window.__apex?.race, null, { timeout: 30000 });
@@ -81,10 +89,10 @@ try {
     for (const f of fracs) {
       await p.evaluate((ff) => __apex.eyeAt(ff, 0, 2.2), f);
       await p.waitForTimeout(300);
-      await p.screenshot({ path: path.join(OUT, `pov-${TRACK}-${String(f).replace(".", "p")}-eye.png`) });
+      await p.screenshot({ path: path.join(OUT, `pov-${safeTrack}-${String(f).replace(".", "p")}-eye.png`) });
       await p.evaluate((ff) => __apex.orbit(ff, 90, 8, 45), f);
       await p.waitForTimeout(300);
-      await p.screenshot({ path: path.join(OUT, `pov-${TRACK}-${String(f).replace(".", "p")}-orbit.png`) });
+      await p.screenshot({ path: path.join(OUT, `pov-${safeTrack}-${String(f).replace(".", "p")}-orbit.png`) });
     }
   }
   await b.close();

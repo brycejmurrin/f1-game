@@ -58,7 +58,7 @@ When a spec fails, first decide **stale expectation vs real regression**: read t
 actual `__apex` hook values the test asserts on (`physState()`, `obs()`,
 `wallStats()`, `groundY()`) and check whether the assertion still matches the
 intended design. Magnitude-threshold specs and the legacy `blank-scan/*` /
-`visual-regression-*` heuristics drift; geometry/behaviour hooks are ground truth.
+pixel soft-asserts in `tracks-visual` drift; geometry/behaviour hooks are ground truth.
 Don't "fix" code to satisfy a threshold that itself went stale — fix the threshold,
 or confirm the behaviour is genuinely wrong first.
 

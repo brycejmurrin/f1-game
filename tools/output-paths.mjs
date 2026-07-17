@@ -1,3 +1,5 @@
+// Tool/CLI path containment helpers for scratch/artifacts defaults.
+// Playwright gallery writers use tests/output-paths.js instead.
 import { isAbsolute, relative, resolve } from "node:path";
 
 const SAFE_TOKEN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;

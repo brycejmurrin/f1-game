@@ -10,8 +10,9 @@
 // so an agent can reason about scale.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   assertSafePathToken,
   resolveContainedChild,
@@ -24,9 +25,11 @@ const LABEL = assertSafePathToken(process.argv[2] || "survey", "label");
 if (!TRACK) { console.error("set TRACK=<id>"); process.exit(2); }
 const safeTrack = assertSafePathToken(TRACK, "track id");
 
-const CHROME = process.env.CHROME ||
-  "/Users/bmurrin/Library/Caches/ms-playwright/chromium-1179/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+// Prefer CHROME / PW_CHROMIUM; else sandbox paths; else Playwright's bundled browser.
+const CHROME = process.env.CHROME || process.env.PW_CHROMIUM ||
+  ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"]
+    .find(existsSync);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = resolveRepoDefault(ROOT, "scratch", "captures", "aerial-survey", safeTrack);
 mkdirSync(OUT, { recursive: true });
 
@@ -34,7 +37,10 @@ const srv = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, s
 await new Promise((r) => setTimeout(r, 1200));
 
 try {
-  const b = await chromium.launch({ executablePath: CHROME, args: ["--use-angle=swiftshader"] });
+  const b = await chromium.launch({
+    ...(CHROME ? { executablePath: CHROME } : {}),
+    args: ["--use-angle=swiftshader"],
+  });
   const p = await b.newPage({ viewport: { width: 1100, height: 780 } });
   await p.goto(`http://localhost:${PORT}/`);
   await p.waitForFunction(() => window.__apex?.race, null, { timeout: 30000 });

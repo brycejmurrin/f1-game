@@ -11,7 +11,8 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **apex-capture.mjs** | Parallel headless screenshot capture across cameras/tracks/modes for visual validation. Default output lives under `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
 | **motion-capture.mjs** | Capture RENDERED MOTION (screenshots can't — headless rAF is frozen at 0 fps). Records a driven clip via `recordVideo` (which ticks the loop), extracts frames, scores per-frame flicker. For temporal artifacts (z-fight/clipping flicker, shadow crawl, pop-in) and A/B-verifying a renderer fix. Default output: `scratch/captures/motion-capture/<track>/`. `motion-capture.mjs <track> [sec] [speed]`. | motion-capture |
 | **survey-track.mjs** | One-command circuit survey — self-boots the game and emits screenshots (aerial + orbit + driver's-eye per spot → `scratch/captures/survey-track/<id>/`) **and** a lateral ground-profile probe table with auto-flagged holes/steps. `survey-track.mjs <id> [label] [fracs]`. | survey-track |
-| **carshot.mjs** | Screenshot a car / livery via the orbit camera. | playwright-probe |
+| **carshot.mjs** | Cropped studio-orbit car JPEG (+ paint report). Self-boots. `carshot.mjs [az] [tod] [teamIdx] [outPath]` → `artifacts/tmp/carshot.jpg`. | playwright-probe / car-viewer |
+| **shot-car.mjs** | Full-frame chase-cam static + moving PNGs. Self-boots. → `artifacts/tmp/car-static.png` + `car-moving.png`. | playwright-probe |
 | **check-bank.mjs**, **check-grip.mjs**, **check-roadfollow.mjs**, **check-steer.mjs** | Physics stability probes — verify no-NaN / forward-motion / banking grip / steering authority via the headless loop. | tune-physics |
 | **audio-test.cjs** | Objective engine-audio pitch test (we can't listen headless). | audio-debug |
 | **bake-elevation.mjs** | Offline elevation baker — precompute per-track elevation profiles. | new-track |
@@ -40,7 +41,8 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   flagged probe). For a one-off framed shot use `.claude/skills/playwright-probe/shot.mjs`;
   for a parallel multi-track screenshot sweep use `apex-capture.mjs`; for a quick
   numbers-only terrain re-probe use `.claude/skills/survey-track/ground-profile.mjs`.
-- **Chromium:** scripts auto-pick `/opt/pw-browsers/...`; `playwright` resolves
-  from the repo. Servers bind a free port (or `:3456`).
+- **Chromium:** prefer `CHROME` / `PW_CHROMIUM`, then `/opt/pw-browsers/...`
+  when present; otherwise Playwright's bundled browser. Servers bind a free
+  port (or `:3456`).
 - Anything that edits `js/*`/`css/*` still needs a `?v=N` cache bump (bump-cache).
 - Never write disposable output to `/tmp`; use `artifacts/tmp/` or the standard `scratch/` subtrees.
