@@ -325,4 +325,49 @@ test.describe("Apex 26 — collisions (deep)", () => {
     expect(errors).toEqual([]);
     expect(r.finite).toBe(true);
   });
+
+  // Regression: least-penetration axis picks "side" once |dx|≈WCAR even while
+  // cars are still nested 1–4 m longitudinally. Side-rub then scrubs speed every
+  // frame with corr≈0 (at slop) and never runs rear-end momentum transfer — the
+  // player grinds to a crawl ("stuck after hitting another car").
+  test("closing into a traffic nest does not speed-death via perpetual side-rub", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.race("monaco", "day", "dry"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.go());
+    const r = await page.evaluate(() => {
+      window.__apex.headless(true);
+      window.__apex.setPhysics({ drift: 0 });
+      window.__apex.jump(0.22, 48, 0);
+      // Slow car ahead + cars on both flanks so the player cannot dodge clear.
+      window.__apex.rivals([
+        { dProg: 2.2, dx: 0, speed: 12 },
+        { dProg: 0.5, dx: -2.2, speed: 40 },
+        { dProg: 0.5, dx: 2.2, speed: 40 },
+      ]);
+      let locked = 0, minSpeed = 999;
+      for (let i = 0; i < 120; i++) {
+        window.__apex.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 1);
+        const cars = window.__apex.cars();
+        const p = cars.find((c) => c.p);
+        const others = cars.filter((c) => !c.p);
+        let ov = false;
+        for (const o of others) {
+          const penL = 4.8 - Math.abs(o.prog - p.prog);
+          const penX = 2.0 - Math.abs(o.x - p.x);
+          if (penL > 0 && penX > 0) { ov = true; break; }
+        }
+        if (ov) locked++;
+        minSpeed = Math.min(minSpeed, p.speed);
+      }
+      window.__apex.headless(false);
+      window.__apex.clearInput();
+      return { locked, minSpeed: +minSpeed.toFixed(1) };
+    });
+    // Without the fix: ~100 frames locked, minSpeed ~7. With rear-end resolving
+    // closing nests: contact clears sooner and speed stays near pack pace.
+    expect(r.minSpeed).toBeGreaterThan(18);
+    expect(r.locked).toBeLessThan(90);
+  });
 });

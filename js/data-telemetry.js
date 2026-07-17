@@ -118,7 +118,35 @@ const DataTelemetry = (function () {
         drivers.forEach(function (d) {
           chipByNum[d.num].classList.toggle("dh-active", picked.indexOf(d) !== -1);
         });
+        clear(detail);
+        if (picked.length === 0) {
+          detail.appendChild(emptyMsg("← Pick 1 or 2 drivers to view their fastest lap."));
+        } else {
+          const summary = el("div", "dh-livecard");
+          summary.appendChild(el("h3", "dh-section", "SELECTED DRIVERS"));
+          picked.forEach(function (d) {
+            const row = el("div", "dh-row");
+            const chip = el("span", "dh-codechip", dcode(d));
+            const col = driverColor(d);
+            chip.style.background = cssColor(col);
+            chip.style.color = textColorOn(col);
+            row.appendChild(chip);
+            row.appendChild(el("span", "dh-name", d.name || "—"));
+            summary.appendChild(row);
+          });
+          const loadBtn = el("button", "dh-livebtn");
+          loadBtn.textContent = picked.length === 1 ? "LOAD LAP" : "COMPARE LAPS";
+          loadBtn.style.marginTop = "12px";
+          loadBtn.style.width = "100%";
+          loadBtn.type = "button";
+          loadBtn.addEventListener("click", function () {
+            loadTelemetrySet(meta.sessionKey, picked.slice(), detail, syncChips);
+          });
+          summary.appendChild(loadBtn);
+          detail.appendChild(summary);
+        }
       }
+
       drivers.forEach(function (d) {
         const b = el("button", "dh-dchip", dcode(d));
         b.type = "button";
@@ -128,15 +156,14 @@ const DataTelemetry = (function () {
           if (idx !== -1) picked.splice(idx, 1);
           else { picked.push(d); if (picked.length > 2) picked.shift(); }
           syncChips();
-          loadTelemetrySet(meta.sessionKey, picked.slice(), detail);
         });
         chipByNum[d.num] = b;
         pick.appendChild(b);
       });
 
+      syncChips();
       // Driver chips → left pane; chart detail → right pane
       leftPane.appendChild(pick);
-      detail.appendChild(emptyMsg("← Pick a driver to load their fastest lap."));
       rightPane.appendChild(detail);
     }, function () {
       if (myDriverGen !== driverGen) return;
@@ -263,12 +290,11 @@ const DataTelemetry = (function () {
     }, 0);
   }
 
-  function loadTelemetrySet(sessionKey, picked, detail) {
+  function loadTelemetrySet(sessionKey, picked, detail, syncChips) {
     const myGen = ++telGen;
     stopTelAnim();
     if (!picked.length) {
-      clear(detail);
-      detail.appendChild(emptyMsg("← Pick a driver to load their fastest lap."));
+      if (syncChips) syncChips();
       return;
     }
     clear(detail);
@@ -276,13 +302,16 @@ const DataTelemetry = (function () {
     Promise.all(picked.map(function (d, i) { return fetchDriverTel(sessionKey, d, i === 0); }))
       .then(function (tels) {
         if (myGen !== telGen) return;
-        clear(detail);
-        detail.appendChild(emptyMsg("← Pick a driver to load their fastest lap."));
+        if (syncChips) syncChips();
         openTelemPopup(tels);
       }, function () {
         if (myGen !== telGen) return;
         clear(detail);
         detail.appendChild(emptyMsg("Couldn't load telemetry."));
+        const backBtn = el("button", "dh-livebtn", "BACK");
+        backBtn.style.marginTop = "12px";
+        backBtn.addEventListener("click", function() { if (syncChips) syncChips(); });
+        detail.appendChild(backBtn);
       });
   }
 
