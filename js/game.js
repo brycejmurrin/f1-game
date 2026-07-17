@@ -672,6 +672,8 @@ const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new F
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
 // Dynamic car shadow pass scratches (per-frame car-only depth map).
 const _mCView = new Float32Array(16), _mCProj = new Float32Array(16), _mCVP = new Float32Array(16);
+// Nearest-floodlight spot-shadow pass scratches (per-frame 512² lamp depth map).
+const _mFlView = new Float32Array(16), _mFlProj = new Float32Array(16), _mFlVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
@@ -4265,6 +4267,59 @@ function render(dt) {
   if (_studioRig) {
     const rig = buildStudioRig();
     if (rig) frame.lights = rig;
+  }
+  // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
+  // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
+  // per-frame 512² depth map (perspective, looking down its beam) so the car
+  // driving under it throws a radial shadow away from the mast and walls carve
+  // its pool + volumetric shaft. The other 31 lamps stay cone-shaped (no
+  // per-light shadow cost). Casters: last frame's pooled car matrices (same
+  // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
+  // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
+  // has no lampShadowBegin, the mobile tier never creates the map.
+  if (gfx.lampShadowBegin && LT.lampShadow && frame.lights && !_studioRig &&
+      player && state !== "menu" && state !== "select") {
+    // Gate on the KEY being dim (true night): by day/dusk the sun owns the
+    // shadows, and a daytime-floods pool shadow would fight the sun's.
+    const _flk = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+    if (_flk <= 0.30) {
+      const L = frame.lights, nRec = (L.length / 15) | 0;
+      let flBest = -1, flScore = Infinity;
+      for (let i = 0; i < nRec; i++) {
+        const o = i * 15;
+        if (L[o + 6] < 12) continue;   // skip small movers (car tail-lights, washers)
+        const dx = L[o] - camEye[0], dy = L[o + 1] - camEye[1], dz = L[o + 2] - camEye[2];
+        // Nearest-strongest: distance² over luminance, so a bright flood bank
+        // beats a dim work lamp at similar range.
+        const s = (dx * dx + dy * dy + dz * dz) /
+                  Math.max(Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
+        if (s < flScore) { flScore = s; flBest = i; }
+      }
+      if (flBest >= 0) {
+        const o = flBest * 15;
+        const rad = L[o + 6];
+        // Perspective frustum down the beam: fov spans the OUTER cone (plus
+        // margin for the soft skirt), capped where 512² texel density and
+        // perspective-depth precision still hold up; far = the lamp radius
+        // (nothing beyond it receives this light anyway).
+        const fov = Math.min(2.6, 2 * Math.acos(clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
+        const up = Math.abs(L[o + 8]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
+        M4.lookAtTo(_mFlView, [L[o], L[o + 1], L[o + 2]],
+          [L[o] + L[o + 7], L[o + 1] + L[o + 8], L[o + 2] + L[o + 9]], up);
+        // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
+        // lamp position IS the visible lens box, with the head/arm right beside
+        // it, all part of the props caster mesh) — a closer near plane renders
+        // the fixture into the map and it eclipses its own beam, blacking out
+        // the whole pool. 2.5 m clips the fixture; every real occluder (cars,
+        // walls, the mast pole below the head) is farther out than that.
+        M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
+        M4.mulTo(_mFlVP, _mFlProj, _mFlView);
+        gfx.lampShadowBegin(_mFlVP, flBest);
+        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+        gfx.lampShadowEnd();
+      }
+    }
   }
   // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
   // fog-weather night is the money shot while a clear night keeps only a hint.
