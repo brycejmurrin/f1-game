@@ -1256,20 +1256,21 @@ const Tracks = (function () {
       }
       return false;
     };
+    const frameAt = (frac) => {
+      const k = Math.round(TrackSpace.wrap01(frac) * n) % n;
+      return {
+        k, c: [px[k], py[k], pz[k]],
+        r: [track.rx[k], track.ry[k], track.rz[k]],
+        u: upOf(track, k),
+        t: [track.tx[k], track.ty[k], track.tz[k]],
+        hw: hw[k],
+      };
+    };
     const models = TrackModels.create({
       out, water: waterBuf, diagnostics,
       preflight: (bounds) => !rejBox(bounds.center, bounds.size, bounds.basis),
       emitBox: (buf, c, size, col, basis) => RAW.addBox(buf, c, size, col, basis),
-      frameAt: (frac) => {
-        const k = Math.round(TrackSpace.wrap01(frac) * n) % n;
-        return {
-          k, c: [px[k], py[k], pz[k]],
-          r: [track.rx[k], track.ry[k], track.rz[k]],
-          u: upOf(track, k),
-          t: [track.tx[k], track.ty[k], track.tz[k]],
-          hw: hw[k],
-        };
-      },
+      frameAt,
       supportClear: (frame, spec) => {
         if (spec.supports === false) return true;
         const gap = spec.supportGap != null ? spec.supportGap : 1.5;
@@ -1294,6 +1295,37 @@ const Tracks = (function () {
         return [px[i] + r[0] * o, y, pz[i] + r[2] * o];
       },
     });
+    let sceneryTheme = null, landmarkKit = null, circuitKit = null;
+    try {
+      if (typeof SceneryThemes !== "undefined" && SceneryThemes &&
+          typeof SceneryThemes.resolve === "function") {
+        const themeName = def.sceneryTheme ||
+          (def.street ? "street" : def.theme === "desert" ? "desert" : "permanent");
+        sceneryTheme = SceneryThemes.resolve(
+          themeName,
+          def.sceneryThemeOverrides,
+          { night: NIGHT, weather: track._weather || "dry" },
+        );
+      }
+      if (sceneryTheme && typeof LandmarkKit !== "undefined" && LandmarkKit &&
+          typeof LandmarkKit.create === "function") {
+        landmarkKit = LandmarkKit.create({
+          box: (stage, c, size, color, basis) => addBox(stage, c, size, color, basis),
+          prism: (stage, c, size, color, basis) => addPrism(stage, c, size, color, basis),
+          cylinder: (stage, c, radius, height, color, seg, basis) =>
+            addCyl(stage, c, radius, height, color, seg, basis),
+        });
+      }
+      if (sceneryTheme && landmarkKit && typeof CircuitKit !== "undefined" && CircuitKit &&
+          typeof CircuitKit.create === "function") {
+        circuitKit = CircuitKit.create({
+          models, landmarks: landmarkKit, theme: sceneryTheme,
+          frameAt, groundHeight: groundYAt, hash,
+        });
+      }
+    } catch (_) {
+      sceneryTheme = landmarkKit = circuitKit = null;
+    }
     const modelGroup = (id, bounds, emit, opts) => models.modelGroup(id, bounds, emit, opts);
     const overheadSpan = (spec) => models.overheadSpan(spec);
     const waterSurface = (k, side, gap, sz, col, opts) => {
@@ -3370,6 +3402,9 @@ const Tracks = (function () {
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
         modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
+        // Resolved data and opt-in architectural/facility helpers. Merely binding
+        // these does not emit geometry; each circuit remains responsible for calls.
+        sceneryTheme, landmarkKit, circuitKit,
         modelDiagnostics: diagnostics,
         ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
         // richer primitives (world coords): non-cube shapes
