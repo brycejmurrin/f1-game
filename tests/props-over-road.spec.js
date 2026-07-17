@@ -56,7 +56,7 @@ const BASELINE = {
   // terrain ribbon added for these tracks — verified via driver-eye as the wall,
   // not a lane obstruction. Bumped from the pre-ribbon caps accordingly.
   monaco: 1.4, singapore: 1.3, vegas: 1.3, baku: 1.7, jeddah: 1.4,
-  hungaroring: 0.9, abudhabi: 1.2, albert_park: 0.7, zandvoort: 0.8,
+  abudhabi: 1.2, albert_park: 0.7, zandvoort: 0.8,
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 
