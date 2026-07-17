@@ -7,18 +7,15 @@
 //   3. Snaps the chase camera instantly (snapCam) so no damping lag
 //   4. Waits one render frame and screenshots canvas#game
 //
-// Output:  tests/ui-screenshots/lap-audit/<circuit>/<circuit>-<pct>.png
-// Gallery: tests/ui-screenshots/lap-audit/index.html  (generated in afterAll)
+// npm test -- tests/galleries/track-lap-audit.spec.js
+// Output: artifacts/galleries-<port>/track-lap-audit/
 //
-// Run all:       npx playwright test track-lap-audit
-// Single track:  npx playwright test track-lap-audit --grep baku
-// Update snaps:  npx playwright test track-lap-audit --update-snapshots
-
 import { test } from "@playwright/test";
 import path from "path";
 import fs from "fs";
+import { galleryDir } from "../output-paths.js";
 
-const BASE_OUT  = path.join(import.meta.dirname, "ui-screenshots", "lap-audit");
+const BASE_OUT  = galleryDir("track-lap-audit");
 const POSITIONS = 25;    // every 4 % of the lap
 const SPEED_MS  = 60;    // m/s — camera FOV widens with speed; 60 is realistic
 

@@ -3,12 +3,12 @@
 // held for every frame so the sequence reads as one continuous on-board-style
 // tour of the circuit.
 //
-//   TRACK=suzuka FRAMES=60 npx playwright test tests/track-trace.spec.js
+// TRACK=suzuka FRAMES=60 npm test -- tests/galleries/track-trace.spec.js
 //
-// Output: tests/track-trace/<track>/<NN>-<pct>.png
+// Output: artifacts/galleries-<port>/track-trace/<track>/
 import { test, expect } from "@playwright/test";
-import fs from "fs";
 import path from "path";
+import { galleryDir } from "../output-paths.js";
 
 const TRACK  = process.env.TRACK  || "suzuka";
 const FRAMES = parseInt(process.env.FRAMES || "60", 10);
@@ -21,8 +21,7 @@ test.describe(`track trace: ${TRACK}`, () => {
   test(`follow-cam sweep (${FRAMES} frames)`, async ({ page }) => {
     test.setTimeout(180_000);
 
-    const outDir = path.join("tests", "track-trace", TRACK);
-    fs.mkdirSync(outDir, { recursive: true });
+    const outDir = galleryDir("track-trace", TRACK);
 
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
