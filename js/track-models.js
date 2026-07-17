@@ -50,6 +50,7 @@ const TrackModels = (function () {
 
     function modelGroup(id, bounds, emit, options) {
       const required = !!(options && options.required);
+      const kind = options && options.kind || "model";
       if (!id || !bounds || !finiteArray(bounds.center, 3) || !validSize(bounds.size)) {
         diagnostics.invalid.push({ id: id || "(unnamed)", required, reason: "invalid bounds" });
         return false;
@@ -71,8 +72,24 @@ const TrackModels = (function () {
         diagnostics.invalid.push({ id, required, reason: error && error.message || String(error) });
         return false;
       }
+      const vertices = stage.pos.length / 3;
+      if (options && Object.prototype.hasOwnProperty.call(options, "maxVertices")) {
+        const maximum = options.maxVertices;
+        if (typeof maximum !== "number" || !Number.isFinite(maximum) || maximum < 0) {
+          diagnostics.invalid.push({
+            id, required, reason: "invalid vertex budget", maximum, kind,
+          });
+          return false;
+        }
+        if (vertices > maximum) {
+          diagnostics.invalid.push({
+            id, required, reason: "vertex budget exceeded", vertices, maximum, kind,
+          });
+          return false;
+        }
+      }
       appendBuffer(out, stage);
-      diagnostics.emitted.push({ id, required, vertices: stage.pos.length / 3 });
+      diagnostics.emitted.push({ id, required, vertices, kind });
       return true;
     }
 

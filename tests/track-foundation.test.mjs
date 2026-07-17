@@ -101,6 +101,87 @@ test("TrackModels groups are atomic and invalid or unsafe models are diagnosed",
   assert.ok(api.diagnostics.unsafe.some((d) => d.id === "low"));
 });
 
+function budgetFixture() {
+  const TrackModels = loadGlobal("js/track-models.js", "TrackModels");
+  const out = {
+    pos: [9, 9, 9],
+    nrm: [0, 1, 0],
+    col: [0.5, 0.5, 0.5],
+    idx: [0],
+  };
+  const api = TrackModels.create({
+    out,
+    emitBox(stage, center) {
+      const base = stage.pos.length / 3;
+      stage.pos.push(...center);
+      stage.nrm.push(0, 1, 0);
+      stage.col.push(1, 1, 1);
+      stage.idx.push(base);
+    },
+  });
+  const emitTwo = (stage) => {
+    api.box(stage, [0, 0, 0], [1, 1, 1]);
+    api.box(stage, [1, 0, 0], [1, 1, 1]);
+  };
+  return { api, out, emitTwo };
+}
+
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+test("TrackModels atomically rejects staged geometry above its vertex budget", () => {
+  const { api, out, emitTwo } = budgetFixture();
+  const before = JSON.parse(JSON.stringify(out));
+  const ok = api.modelGroup("too-large", {
+    center: [0, 0, 0], size: [2, 1, 1],
+  }, emitTwo, { required: true, maxVertices: 1, kind: "facility" });
+
+  assert.equal(ok, false);
+  assert.deepEqual(out, before);
+  assert.deepEqual(plain(api.diagnostics.invalid), [{
+    id: "too-large",
+    required: true,
+    reason: "vertex budget exceeded",
+    vertices: 2,
+    maximum: 1,
+    kind: "facility",
+  }]);
+  assert.equal(api.diagnostics.emitted.length, 0);
+});
+
+test("TrackModels preserves unbudgeted groups and accepts exact vertex budgets", () => {
+  for (const entry of [
+    { id: "unbudgeted", options: undefined, kind: "model" },
+    { id: "boundary", options: { maxVertices: 2, kind: "hero" }, kind: "hero" },
+  ]) {
+    const { api, out, emitTwo } = budgetFixture();
+    assert.equal(api.modelGroup(entry.id, {
+      center: [0, 0, 0], size: [2, 1, 1],
+    }, emitTwo, entry.options), true);
+    assert.equal(out.pos.length, 9);
+    assert.deepEqual(plain(api.diagnostics.emitted), [{
+      id: entry.id,
+      required: false,
+      vertices: 2,
+      kind: entry.kind,
+    }]);
+    assert.equal(api.diagnostics.invalid.length, 0);
+  }
+});
+
+test("TrackModels rejects invalid configured vertex budgets without committing", () => {
+  for (const maximum of [NaN, Infinity, -1, "2"]) {
+    const { api, out, emitTwo } = budgetFixture();
+    const before = JSON.parse(JSON.stringify(out));
+    assert.equal(api.modelGroup("invalid-budget", {
+      center: [0, 0, 0], size: [2, 1, 1],
+    }, emitTwo, { maxVertices: maximum }), false);
+    assert.deepEqual(out, before);
+    assert.equal(api.diagnostics.invalid.length, 1);
+    assert.equal(api.diagnostics.invalid[0].reason, "invalid vertex budget");
+    assert.equal(api.diagnostics.emitted.length, 0);
+  }
+});
+
 test("TrackModels ground helpers sample terrain instead of one endpoint", () => {
   const TrackModels = loadGlobal("js/track-models.js", "TrackModels");
   const emitted = [];
