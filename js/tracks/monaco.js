@@ -20,8 +20,9 @@
       // Keep generic city furniture out of the tunnel and the Casino sightline.
       { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.50, s1: 0.60 },
       { kind: "city", s0: 0.17, s1: 0.24 },
-      // The harbour side is track-owned water, quay furniture, palms and yachts.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.58, s1: 0.98, side: -1 },
+      // Exclusions are always racing-space, even though bespoke scenery is source-space.
+      // The harbour occupies the right side of the racing lap from Portier to Rascasse.
+      { kinds: ["city", "foliage", "lamps"], s0: 0.29, s1: 0.70, side: 1 },
     ],
     // The bundled GPS trace (js/circuits.js) runs counter-clockwise; real Monaco
     // is driven CLOCKWISE. `reverse` flips the lap direction in the engine
@@ -580,10 +581,16 @@
       // ── Reflective Mediterranean harbour (groundPlane water:true) ─────────
       // A true reflective water buffer that mirrors the sky, laid across the
       // whole harbour basin behind the promenade. Sits below the quay lip.
-      for (const [i, sf] of [[0, 0.69], [1, 0.735], [2, 0.915]]) {
-        waterSurface(KR(sf), racingSide(-1), 22,
-          [46, 0.35, 48], i % 2 ? SEA2 : SEA,
-          { id: `monaco-harbour-water-${i}`, required: true });
+      // Three longitudinal stations × eight outward ranks form a bounded tiled
+      // basin. Individual 46×48 m panels cannot chord across Monaco's foldbacks.
+      const harbourStations = [0.365, 0.545, 0.59]; // racing fractions
+      const harbourRanks = [22, 68, 114, 252, 298, 344, 390, 436];
+      for (let station = 0; station < harbourStations.length; station++) {
+        for (let rank = 0; rank < harbourRanks.length; rank++) {
+          waterSurface(K(harbourStations[station]), 1, harbourRanks[rank],
+            [46, 0.35, 48], (station + rank) % 2 ? SEA2 : SEA,
+            { id: `monaco-harbour-water-${station}-${rank}`, required: true });
+        }
       }
 
       // ── FLAGSHIP SUPERYACHT — bespoke multi-deck megayacht ───────────────

@@ -8,11 +8,23 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
 
   const result = await page.evaluate(() => {
     const definition = window.TrackDefs.find((entry) => entry.id === "monaco");
+    window.__apex.trackGeometry(true);
     const inspect = (timeOfDay) => {
       window.__apex.race("monaco", timeOfDay, "dry");
       const profile = window.__apex.trackProfile(400);
       const models = window.__apex.modelDiagnostics();
       const geometry = window.__apex.geometryDiagnostics();
+      const waterMesh = window.__apex.trackGeometry().water;
+      let projectedArea = 0;
+      for (let i = 0; i < waterMesh.idx.length; i += 3) {
+        const a = waterMesh.idx[i] * 3, b = waterMesh.idx[i + 1] * 3;
+        const c = waterMesh.idx[i + 2] * 3;
+        const abx = waterMesh.pos[b] - waterMesh.pos[a];
+        const abz = waterMesh.pos[b + 2] - waterMesh.pos[a + 2];
+        const acx = waterMesh.pos[c] - waterMesh.pos[a];
+        const acz = waterMesh.pos[c + 2] - waterMesh.pos[a + 2];
+        projectedArea += Math.abs(abx * acz - abz * acx) * 0.5;
+      }
       const ys = profile.map((point) => point.y);
       const maxY = Math.max(...ys), minY = Math.min(...ys);
       return {
@@ -24,6 +36,12 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
         walls: window.__apex.wallStats(),
         models,
         geometry,
+        waterCoverage: {
+          models: models.emitted.filter((entry) => entry.water).length,
+          vertices: waterMesh.pos.length / 3,
+          // Closed boxes contribute matching top and bottom projected faces.
+          area: projectedArea / 2,
+        },
         ground: [
           window.__apex.groundY(0.18, -10),
           window.__apex.groundY(0.18, 10),
@@ -46,6 +64,12 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
   expect(result.definition.terrainOuter).toBe(28);
   expect(result.definition.sceneryCoordinates).toBe("source");
   expect(result.definition.dressingExclusions.length).toBeGreaterThanOrEqual(3);
+  expect(result.definition.dressingExclusions).toContainEqual({
+    kinds: ["city", "foliage", "lamps"],
+    s0: 0.29,
+    s1: 0.70,
+    side: 1,
+  });
 
   for (const session of [result.day, result.night]) {
     expect(session.elevation.range).toBeGreaterThanOrEqual(38);
@@ -60,6 +84,9 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
 
     expect(session.geometry.every((entry) => entry.ok)).toBe(true);
     expect(session.geometry.find((entry) => entry.name === "water").vertices).toBeGreaterThan(0);
+    expect(session.waterCoverage.models).toBeGreaterThanOrEqual(20);
+    expect(session.waterCoverage.vertices).toBeGreaterThanOrEqual(480);
+    expect(session.waterCoverage.area).toBeGreaterThanOrEqual(45_000);
     expect(session.ground.every((sample) =>
       sample && Number.isFinite(sample.roadY) &&
       Number.isFinite(sample.terrainY) && sample.gap <= 0.25)).toBe(true);
@@ -69,7 +96,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
     expect(session.models.unsafe).toEqual([]);
     const required = session.models.emitted.filter((entry) => entry.required);
     expect(required.some((entry) => entry.id === "monaco-sainte-devote")).toBe(true);
-    expect(required.filter((entry) => entry.water)).toHaveLength(3);
+    expect(required.filter((entry) => entry.water).length).toBeGreaterThanOrEqual(20);
     const tunnelRoofs = required.filter((entry) => entry.id.startsWith("monaco-tunnel-roof-"));
     expect(tunnelRoofs.length).toBeGreaterThan(20);
     expect(required.filter((entry) => entry.overhead)
