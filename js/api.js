@@ -70,7 +70,20 @@ const F1API = (function () {
           return fetchRetry(url, attempt + 1);
         });
       }
-      if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
+      if (!res.ok) {
+        return res.text().then(function (txt) {
+          try {
+            const j = JSON.parse(txt);
+            if (j.detail) throw new Error(j.detail);
+            if (j.error) throw new Error(j.error);
+          } catch (e) {
+            if (e.message && e.message !== "Unexpected end of JSON input" && e.message.indexOf("Unexpected token") === -1 && e.message !== "Unexpected EOF") {
+              throw e;
+            }
+          }
+          throw new Error("HTTP " + res.status + " for " + url);
+        });
+      }
       return res.json();
     });
   }

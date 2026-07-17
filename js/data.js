@@ -296,7 +296,7 @@ const DataHub = (function () {
       state[id] = null;
       if (openFlag && active === id) {
         clear(contentEl);
-        contentEl.appendChild(errorBlock(id));
+        contentEl.appendChild(errorBlock(id, err));
       }
     });
   }
@@ -308,9 +308,13 @@ const DataHub = (function () {
     return w;
   }
 
-  function errorBlock(id) {
+  function errorBlock(id, err) {
     const w = el("div", "dh-error");
-    w.appendChild(el("div", "dh-error-msg", "Couldn't load data. Check your connection and try again."));
+    let msg = "Couldn't load data. Check your connection and try again.";
+    if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
+      msg = err.message;
+    }
+    w.appendChild(el("div", "dh-error-msg", msg));
     const retry = el("button", "dh-retry", "RETRY");
     retry.type = "button";
     retry.addEventListener("click", function () { loadTab(id); });

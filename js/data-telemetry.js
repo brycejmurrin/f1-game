@@ -304,10 +304,12 @@ const DataTelemetry = (function () {
         if (myGen !== telGen) return;
         if (syncChips) syncChips();
         openTelemPopup(tels);
-      }, function () {
+      }, function (err) {
         if (myGen !== telGen) return;
         clear(detail);
-        detail.appendChild(emptyMsg("Couldn't load telemetry."));
+        let msg = "Couldn't load telemetry.";
+        if (err && err.message && err.message.indexOf("Live F1 session") !== -1) msg = err.message;
+        detail.appendChild(emptyMsg(msg));
         const backBtn = el("button", "dh-livebtn", "BACK");
         backBtn.style.marginTop = "12px";
         backBtn.addEventListener("click", function() { if (syncChips) syncChips(); });
