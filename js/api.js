@@ -106,7 +106,10 @@ const F1API = (function () {
         return json;
       })
       .catch(function (err) {
-        if (hit) {
+        // Never paper over live-session auth lockouts with stale cache — that
+        // makes LIVE look "updated" while silently serving old classification.
+        const msg = (err && err.message) || "";
+        if (hit && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
           console.warn("apex26: fetch failed, serving stale cache for " + url, err);
           return hit.data;
         }

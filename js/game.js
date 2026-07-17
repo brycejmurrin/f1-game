@@ -2256,13 +2256,15 @@ function resolveCollisions(ranked, dt) {
     for (let ii = 0; ii < ranked.length; ii++) {
       const i = fwd ? ii : ranked.length - 1 - ii;
       const a = ranked[i];
-      for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
-        const b = ranked[j];               // a is ahead (higher prog), b behind
+      // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
+      // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
+      for (let j = i + 1; j < ranked.length; j++) {
+        const b = ranked[j];
         let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
         const L = track.total;
         dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-        if (Math.abs(dProg) > LCAR) continue;            // sorted by prog: the rest are farther
+        if (Math.abs(dProg) > LCAR) continue;
         const dX = a.x - b.x;
         if (!Number.isFinite(dX)) continue;
         const penLong = LCAR - Math.abs(dProg);
@@ -2286,7 +2288,9 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= rubScrub; b.speed *= rubScrub;   // barely scrub speed on a side rub
+          // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
+          // side contact was draining speed without separating the cars.
+          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
@@ -2320,7 +2324,7 @@ function resolveCollisions(ranked, dt) {
   const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
-    for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
+    for (let j = i + 1; j < ranked.length; j++) {
       const b = ranked[j];
       let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
@@ -2625,27 +2629,22 @@ function updateCar(c, dt, ranked) {
     // oscillation, and it doesn't fight the collision push (same direction).
     const MIN_GAP = 2.8;
     let sep = 0;
-    // Walk OUTWARD from our rank; break once |prog delta| exceeds 6.5 (prog-sorted,
-    // so the window is a contiguous index range — same neighbours, no full-field scan).
+    // Full field with wrapped Δprog — rank-neighbour walks miss lapped cars
+    // that share the same stretch of track.
     const ci2 = (c.rank || 1) - 1;
-    for (let up = ci2 - 1; up >= 0; up--) {   // ahead of us
-      const o = ranked[up];
-      const dp = o.prog - c.prog;             // >0
-      if (dp > 6.5) break;                    // only cars roughly alongside
+    const Ltrk = track.total;
+    for (let k = 0; k < ranked.length; k++) {
+      if (k === ci2) continue;
+      const o = ranked[k];
+      let dp = o.prog - c.prog;
+      if (!Number.isFinite(dp)) continue;
+      dp = ((dp + Ltrk / 2) % Ltrk + Ltrk) % Ltrk - Ltrk / 2;
+      const adp = Math.abs(dp);
+      if (adp > 6.5) continue;
       const dx = c.x - o.x, adx = Math.abs(dx);
       const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
-    }
-    for (let dn = ci2 + 1; dn < ranked.length; dn++) {   // behind us
-      const o = ranked[dn];
-      const dpr = o.prog - c.prog;            // <0
-      if (dpr < -6.5) break;                  // only cars roughly alongside
-      const dp = -dpr;                        // |prog delta|
-      const dx = c.x - o.x, adx = Math.abs(dx);
-      const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
+      if (deficit <= 0) continue;
+      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
     // clamp the combined target to the drivable surface so overtake/unstuck/
@@ -2669,7 +2668,7 @@ function updateCar(c, dt, ranked) {
   // that isn't moving can't be steered sideways, so tilting while stopped no
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
-  const latFac = clamp(c.speed / 18, 0, 1);
+  const latFac = clamp(Math.abs(c.speed) / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   // Banking: computed once, shared between player and AI so both get grip boost.
@@ -2698,7 +2697,7 @@ function updateCar(c, dt, ranked) {
     }
     // Fade the lateral model out toward a standstill so a parked car can't be
     // spun by steering (slip angle is undefined at zero speed).
-    const sp = clamp(c.speed / 3, 0, 1);
+    const sp = clamp(Math.abs(c.speed) / 3, 0, 1);
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     // --- road-wheel steer angle: driver lock (eased a little at speed) + the
     // DRIVING-HELP assist that steers toward the road curvature for you. Both
@@ -2799,7 +2798,9 @@ function updateCar(c, dt, ranked) {
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
     // well-conditioned at low speed.
-    const vx = Math.max(c.speed, 4);
+    // Signed longitudinal speed (floored away from 0) so reverse slip angles
+    // stay well-conditioned instead of collapsing to +4 m/s forward.
+    const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness

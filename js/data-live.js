@@ -65,13 +65,22 @@ const DataLive = (function () {
         const myGen = ++liveRefreshGen;
         clear(dataEl);
         dataEl.appendChild(spinner());
+        let gateErr = null;
+        function catchLive(err) {
+          if (err && err.message && err.message.indexOf("Live F1 session") !== -1) gateErr = err;
+          return null;
+        }
         Promise.all([
-          F1API.weather(meta.sessionKey).catch(() => null),
-          F1API.positions(meta.sessionKey).catch(() => null),
-          F1API.sessionDrivers(meta.sessionKey).catch(() => null)
+          F1API.weather(meta.sessionKey).catch(catchLive),
+          F1API.positions(meta.sessionKey).catch(catchLive),
+          F1API.sessionDrivers(meta.sessionKey).catch(catchLive)
         ]).then(res => {
           if (myGen !== liveRefreshGen) return;
           clear(dataEl);
+          if (gateErr) {
+            dataEl.appendChild(emptyMsg(gateErr.message));
+            return;
+          }
           fillLive(dataEl, res[0], res[1], res[2]);
           stamp.textContent = "updated " + new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         }, () => {

@@ -489,7 +489,7 @@ const DataHub = (function () {
     el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
     ensureSession: ensureSession, buildPicker: buildPicker,
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
-    cssColor: cssColor, NO_TELEM_MSG: NO_TELEM_MSG });
+    cssColor: cssColor, textColorOn: textColorOn, NO_TELEM_MSG: NO_TELEM_MSG });
   /* ================= EXPORT tab (dev) ================= */
   // Implementation: js/data-export.js.
   const { loadExport } = DataExport.create({ el: el, clear: clear });
