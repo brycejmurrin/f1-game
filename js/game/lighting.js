@@ -121,7 +121,14 @@ const TUNE_DEFS = [
   { id: "wetDark",      label: "WET ROAD DARKEN", group: "ROAD & REFLECTIONS", min: 0, max: 2, step: 0.01, def: 1.0, u: "uWetDark", help: "How much darker wet asphalt reads (water absorption). Independent of the wetness amount." },
   // ── CAR ──
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0,   max: 2.5, step: 0.01, def: 0.05, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork." },
-  { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.02, def: 0.0,  help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). OFF by default — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass). It's a 0..1 cross-fade so the range is already exact — only the step got finer." },
+  { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0,   max: 1,   step: 0.02,
+    // Desktop default ON (0.3): the live probe pass is cheap there and the paint
+    // mirroring the real surroundings is a marquee look. Mobile stays OFF — the
+    // extra per-frame world pass + HDR cube can exhaust memory-limited mobile
+    // GPUs and drop the WebGL context (tier-gated at the def, so presets /
+    // localStorage still override either way).
+    def: (typeof GLX !== "undefined" && GLX.isMobile) ? 0.0 : 0.3,
+    help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). Default ON (0.3) on desktop; OFF on phones — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass). It's a 0..1 cross-fade so the range is already exact — only the step got finer." },
   { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0, max: 1.6, step: 0.02, def: 1.0,  u: "uCarGloss", help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness). Range now tracks the SSR-streak formula's own clamp window (roughly 0..1.4): below 0 or above ~1.4 the old slider was pushing a value the shader already saturates on." },
   { id: "carSpecular",  label: "PAINT SPECULAR",  group: "CAR", min: 0,   max: 3.5,   step: 0.02, def: 1.0,  help: "Brightness of the specular highlight rolling over the bodywork." },
   { id: "carClearcoat", label: "CLEARCOAT",       group: "CAR", min: 0,   max: 3.5,   step: 0.01, def: 0.05, help: "Lacquer coat that catches crisp sun / lamp glints over the base colour." },

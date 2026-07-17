@@ -14,6 +14,7 @@
     night: true,
     theme: "desert",
     lengthKm: 5.4,
+    sunAzimBias: -0.36,   // low desert-latitude sun sits east of overhead at race time (late-day GP)
     baseHW: 7,
     pal: { horizon: [0.20, 0.10, 0.05], zenith: [0.06, 0.05, 0.16], sunColor: [0.80, 0.62, 0.40], ambientSky: [0.30, 0.22, 0.16], ambientGround: [0.28, 0.18, 0.10], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0028, sunDir: [0.5, 0.14, 0.4], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] },
     segs: [

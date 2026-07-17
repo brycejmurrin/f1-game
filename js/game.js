@@ -1251,17 +1251,28 @@ function applyRaceSettings() {
       // pink/coral-magenta horizon (the defining first-light colour), not a muddy
       // brown-orange. Warm sun, with the DIRECT sun slightly warmer/stronger than
       // the sky tint (sky is always a touch cooler/dimmer than the key light).
-      frameSky.zenith  = [0.07, 0.12, 0.27];
-      frameSky.horizon = [0.88, 0.50, 0.40];
-      frameSky.sunColor = [1.0, 0.74, 0.44];
-      frameSky.sunDir  = V3.norm([-0.62, 0.08, 0.28]);
+      // Per-track variety (same clr/ovc pattern as the day branch): clear/arid
+      // circuits get the vivid coral-magenta first light and crisp air; overcast
+      // ones (Spa, Silverstone) a paler, mistier, grey-rose daybreak.
+      const _dwBias = track && track.def ? _trackAtmoBias(track.def) : 0;
+      const _dwClr = Math.max(0, -_dwBias);   // 0 … 0.55 clearness
+      const _dwOvc = Math.max(0, _dwBias);    // 0 … 0.85 overcast
+      frameSky.zenith  = [0.07 + _dwOvc * 0.09, 0.12 + _dwOvc * 0.09, 0.27 + _dwOvc * 0.04 - _dwClr * 0.03];
+      frameSky.horizon = [0.88 - _dwOvc * 0.26 + _dwClr * 0.08, 0.50 - _dwOvc * 0.06, 0.40 + _dwOvc * 0.12 - _dwClr * 0.06];
+      frameSky.sunColor = [1.0, 0.74 - _dwClr * 0.06 + _dwOvc * 0.10, 0.44 - _dwClr * 0.08 + _dwOvc * 0.16];
+      // Sun rising in the east; azimuth varies per circuit (mirrors _duskAz) so
+      // the low raking light doesn't strike every track from the same angle.
+      const _dawnAz = track && track.def ? ((_trackAtmoBias(track.def) * 0.28) - 0.14) : 0;
+      frameSky.sunDir  = V3.norm([-0.62 - _dawnAz, 0.08, 0.28]);
       frame.sunDir     = frameSky.sunDir;
-      frame.sunColor   = [1.0, 0.80, 0.50];
+      frame.sunColor   = [1.0 - _dwOvc * 0.10, 0.80 - _dwClr * 0.04 + _dwOvc * 0.06, 0.50 - _dwClr * 0.08 + _dwOvc * 0.16];
       // Cool teal fill from the sky, soft warm rose bounce from the ground
-      frame.ambientGround = [0.20, 0.13, 0.10];
-      frame.ambientSky    = [0.22, 0.26, 0.40];
-      frame.fogColor      = [0.52, 0.36, 0.34];
-      frame.fogDensity    = 0.0028;
+      frame.ambientGround = [0.20 - _dwOvc * 0.03, 0.13 + _dwOvc * 0.02, 0.10 + _dwOvc * 0.04];
+      frame.ambientSky    = [0.22 + _dwOvc * 0.05, 0.26 + _dwOvc * 0.05, 0.40 + _dwOvc * 0.03];
+      // Fog: overcast dawns wake up under a thick grey-rose mist bank; clear
+      // desert dawns are crisp with only a thin warm haze at the horizon.
+      frame.fogColor      = [0.52 + _dwOvc * 0.06 - _dwClr * 0.02, 0.36 + _dwOvc * 0.10, 0.34 + _dwOvc * 0.14 - _dwClr * 0.04];
+      frame.fogDensity    = 0.0028 + _dwOvc * 0.0018 - _dwClr * 0.0012;
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0.30;   // fading moon still visible in the pre-dawn sky
@@ -1273,20 +1284,28 @@ function applyRaceSettings() {
     } else if (raceTimeOfDay === "dusk") {
       // Richer golden hour: deeper indigo zenith, warmer coral/amber horizon,
       // a sun closer to the deck for that low-angle drama.
-      frameSky.zenith  = [0.08, 0.10, 0.28];
-      frameSky.horizon = [0.72, 0.34, 0.08];
-      frameSky.sunColor = [1.0, 0.55, 0.18];
+      // Per-track variety (same clr/ovc pattern as the day/dawn branches):
+      // clear circuits burn a saturated amber-orange sunset; overcast ones cool
+      // and grey it toward a muted rose-slate evening.
+      const _dkBias = track && track.def ? _trackAtmoBias(track.def) : 0;
+      const _dkClr = Math.max(0, -_dkBias);   // 0 … 0.55 clearness
+      const _dkOvc = Math.max(0, _dkBias);    // 0 … 0.85 overcast
+      frameSky.zenith  = [0.08 + _dkOvc * 0.08, 0.10 + _dkOvc * 0.08, 0.28 + _dkOvc * 0.03];
+      frameSky.horizon = [0.72 - _dkOvc * 0.20 + _dkClr * 0.10, 0.34 + _dkOvc * 0.02, 0.08 + _dkOvc * 0.14 - _dkClr * 0.02];
+      frameSky.sunColor = [1.0, 0.55 + _dkOvc * 0.10 - _dkClr * 0.05, 0.18 + _dkOvc * 0.16 - _dkClr * 0.05];
       // Sun low in the west; vary azimuth slightly per track so not every
       // circuit has identical low-angle raking light.
       const _duskAz = track && track.def ? ((_trackAtmoBias(track.def) * 0.28) - 0.14) : 0;
       frameSky.sunDir  = V3.norm([0.50 + _duskAz, 0.10, 0.22]);
       frame.sunDir     = frameSky.sunDir;
-      frame.sunColor   = [1.0, 0.62, 0.22];
+      frame.sunColor   = [1.0 - _dkOvc * 0.12, 0.62 + _dkOvc * 0.04 - _dkClr * 0.05, 0.22 + _dkOvc * 0.14 - _dkClr * 0.06];
       // Warm amber ground bounce, cool sky fill from the blue zenith overhead
-      frame.ambientGround = [0.28, 0.16, 0.06];
-      frame.ambientSky    = [0.32, 0.22, 0.28];
-      frame.fogColor      = [0.58, 0.28, 0.10];
-      frame.fogDensity    = 0.0022;
+      frame.ambientGround = [0.28 - _dkOvc * 0.05, 0.16 + _dkOvc * 0.01, 0.06 + _dkOvc * 0.05];
+      frame.ambientSky    = [0.32 + _dkOvc * 0.03, 0.22 + _dkOvc * 0.04, 0.28 + _dkOvc * 0.04];
+      // Fog: overcast evenings thicken into a grey-mauve murk; clear ones keep
+      // a thin amber haze hugging the horizon.
+      frame.fogColor      = [0.58 - _dkOvc * 0.08, 0.28 + _dkOvc * 0.06, 0.10 + _dkOvc * 0.14];
+      frame.fogDensity    = 0.0022 + _dkOvc * 0.0014 - _dkClr * 0.0008;
       frame.skyZenith     = frameSky.zenith;
       frame.skyHorizon    = frameSky.horizon;
       frameSky.moon = 0;
@@ -1314,7 +1333,11 @@ function applyRaceSettings() {
       // building shadows for depth; azimuth varies per track so shadows fall
       // differently circuit to circuit. (Track palettes may ship a low/odd sun
       // tuned for their default ambience — override it for a clean day session.)
-      const _dayAz = _bias * 0.6;
+      // Circuits with a real-world sun geography carry an explicit
+      // def.sunAzimBias (radians-ish horizontal offset, ±0.5 = strong tilt);
+      // everything else falls back to the atmosphere-bias heuristic.
+      const _dayAz = (track && track.def && track.def.sunAzimBias != null)
+        ? track.def.sunAzimBias : _bias * 0.6;
       frameSky.sunDir = V3.norm([0.46 + _dayAz, 0.58, 0.42]);
       frame.sunDir    = frameSky.sunDir;
       // Strong WARM sun vs a cooler, slightly darker sky-fill: neutral concrete
@@ -1439,8 +1462,9 @@ function applyRaceSettings() {
       // cosmetic tweak applied only when the palette supplies a sunDir.
       if (_pal.sunDir && !isNightSession) {
         const _sd = _pal.sunDir.slice();
-        // Derive a stable per-track hash in -1..+1 from the track id chars
-        const _azOffset = _bias * 0.12;   // mild tilt proportional to bias
+        // def.sunAzimBias (real-world sun geography) wins; otherwise a mild
+        // tilt proportional to the atmosphere bias.
+        const _azOffset = _def.sunAzimBias != null ? _def.sunAzimBias * 0.2 : _bias * 0.12;
         // Rotate the horizontal (X,Z) components by _azOffset radians
         const _sx = _sd[0], _sz = _sd[2];
         const _cos = Math.cos(_azOffset), _sin = Math.sin(_azOffset);

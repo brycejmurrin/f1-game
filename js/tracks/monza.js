@@ -14,6 +14,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.8,
+    sunAzimBias: 0.16,   // royal-park afternoon: western sun raking through the trees onto the Curva Grande
     baseHW: 8,
     pal: {
       zenith:        [0.20, 0.40, 0.70],

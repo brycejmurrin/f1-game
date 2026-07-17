@@ -14,6 +14,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.9,
+    sunAzimBias: 0.28,   // high-summer northern sun, gentle SW tilt over the old airfield
     baseHW: 8,
     // British overcast (ATM.britishOvercast) — pale grey-blue sky, lush grass, soft fog.
     pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.48, 0.46, 0.42], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },

@@ -14,6 +14,7 @@
     night: true,
     theme: "desert",
     lengthKm: 5.4,
+    sunAzimBias: -0.30,   // Losail's late-afternoon sun hangs low to the NE-facing main straight
     baseHW: 8,
     // Warm pal.runoff = tan sand beyond the green verge (brief / COL.desertSand)
     pal: { horizon: [0.08, 0.10, 0.14], zenith: [0.03, 0.04, 0.09], ambientSky: [0.15, 0.16, 0.20], ambientGround: [0.12, 0.12, 0.14], fogColor: [0.10, 0.12, 0.16], fogDensity: 0.0015, concrete: [0.17, 0.17, 0.19], runoff: [0.72, 0.58, 0.38], grass: [0.20, 0.42, 0.22] },
