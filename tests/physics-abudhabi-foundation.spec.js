@@ -1,6 +1,29 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
 
+const OVERHEAD_IDS = [
+  "yas-hotel-gridshell-arch-1",
+  "yas-hotel-gridshell-arch-2",
+  "yas-hotel-gridshell-arch-3",
+  "yas-hotel-gridshell-arch-4",
+  "yas-hotel-gridshell-arch-5",
+  "yas-hotel-gridshell-arch-6",
+  "yas-hotel-gridshell-arch-7",
+  "yas-hotel-bridge-main",
+  "yas-hotel-bridge-forward",
+];
+
+const SUPPORT_IDS = [
+  "yas-hotel-gridshell-front-left-support",
+  "yas-hotel-gridshell-front-right-support",
+  "yas-hotel-gridshell-rear-left-support",
+  "yas-hotel-gridshell-rear-right-support",
+  "yas-hotel-bridge-main-left-pier",
+  "yas-hotel-bridge-main-right-pier",
+  "yas-hotel-bridge-forward-left-pier",
+  "yas-hotel-bridge-forward-right-pier",
+];
+
 async function loadAbuDhabi(page, timeOfDay) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, undefined, { timeout: 15000 });
@@ -53,10 +76,25 @@ for (const timeOfDay of ["day", "night"]) {
     expect(result.models.invalid).toEqual([]);
     expect(result.models.unsafe).toEqual([]);
 
-    const emittedIds = new Set(result.models.emitted.map((entry) => entry.id));
+    const emittedById = new Map(result.models.emitted.map((entry) => [entry.id, entry]));
+    const emittedIds = new Set(emittedById.keys());
     expect(emittedIds.has("yas-hotel-left-tower")).toBe(true);
     expect(emittedIds.has("yas-hotel-right-tower")).toBe(true);
     expect(result.models.emitted.filter((entry) => entry.water).length).toBeGreaterThan(8);
+    for (const id of OVERHEAD_IDS) {
+      const span = emittedById.get(id);
+      expect(span, `${id} did not emit`).toBeDefined();
+      expect(span.required).toBe(true);
+      expect(span.overhead).toBe(true);
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+    }
+    for (const id of SUPPORT_IDS) {
+      const support = emittedById.get(id);
+      expect(support, `${id} did not emit`).toBeDefined();
+      expect(support.required).toBe(true);
+      expect(support.overhead).not.toBe(true);
+      expect(support.vertices).toBeGreaterThan(0);
+    }
     for (const span of result.models.emitted.filter((entry) => entry.overhead))
       expect(span.clearance).toBeGreaterThanOrEqual(4.8);
 

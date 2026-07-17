@@ -37,7 +37,7 @@
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel,
-        gridshellCanopy, underpassPortal, modelGroup, waterSurface, groundPatch } = api;
+        modelGroup, overheadSpan, waterSurface, groundPatch } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -298,8 +298,8 @@
 
       // ===================================================================
       // s 0.88 OVER — W YAS HOTEL (hero): twin towers + continuous LED gridshell
-      // veil + monocoque bridge deck. Clear drive-under (elevation dip −4 m
-      // already at s≈0.88). Towers sit well off the verge; lattice/bridge span.
+      // veil + monocoque bridge deck. Towers and supports sit beyond the verge;
+      // every road-crossing member declares and validates its safe clearance.
       // ===================================================================
       {
         const k = K(0.88);
@@ -336,36 +336,71 @@
           }, { required: true });
         }
 
-        // Continuous LED gridshell spanning the racing line (centreline base)
-        const basis = (() => {
-          const a = anchor(k, 1, 0);
-          return [a.r, a.u, a.t];
-        })();
-        const shellC = [px[k], py[k], pz[k]];
-        // w large enough that corner feet sit beyond hw (~8 m) + clearance
-        gridshellCanopy(shellC, basis, {
-          w: 56, depth: 40, h: 34, cols: 9, rows: 6,
-          ledCols: LED_CYCLE, strutCol: [0.06, 0.07, 0.10],
-        });
-        // Second shallower veil slightly ahead — reads as continuous shell
-        {
-          const k2 = K(0.875);
-          const a2 = anchor(k2, 1, 0);
-          gridshellCanopy([px[k2], py[k2], pz[k2]], [a2.r, a2.u, a2.t], {
-            w: 52, depth: 28, h: 30, cols: 7, rows: 5,
-            ledCols: [LED_MAG, LED_TEAL, LED_AMBER], strutCol: [0.06, 0.07, 0.10],
+        // Bounded atomic supports. `gap` is clear space beyond the road edge;
+        // bounds match the complete emitted pier, so a foldback rejects it whole.
+        const hotelSupport = (id, frac, side, gap, width, height, depth, col, mat) => {
+          const sk = K(frac);
+          const a = anchor(sk, side, gap + width / 2);
+          const b = [a.r, a.u, a.t];
+          const size = [width, height, depth];
+          const center = vadd(a.c, a.u, height / 2);
+          modelGroup(id, { center, size, basis: b }, (stage) => {
+            stage._mat = mat;
+            addBox(stage, center, size, col, b);
+            stage._mat = 0;
+          }, { required: true });
+        };
+
+        // Four corner legs retain the hotel veil silhouette while keeping every
+        // foot well outside the road corridor.
+        for (const [label, frac] of [["front", 0.872], ["rear", 0.888]]) {
+          for (const side of [-1, 1])
+            hotelSupport(`yas-hotel-gridshell-${label}-${side < 0 ? "left" : "right"}-support`,
+              frac, side, 14.5, 1.2, 15.5, 2.2, [0.06, 0.07, 0.10], MAT.METAL);
+        }
+
+        // Colour-cycling validated cross-members form the arched gridshell veil.
+        // Their underside rises toward the centre of the hotel, preserving the
+        // teal→magenta→amber identity without raw road-crossing geometry.
+        const shellClearances = [18, 22, 27, 31, 27, 22, 18];
+        for (let i = 0; i < shellClearances.length; i++) {
+          const frac = 0.872 + i * (0.016 / (shellClearances.length - 1));
+          overheadSpan({
+            id: `yas-hotel-gridshell-arch-${i + 1}`,
+            frac, clearance: shellClearances[i], minimumClearance: 4.8,
+            thickness: 0.65, depth: 2.2, span: 56,
+            supportGap: 14.5, supportWidth: 1.2,
+            color: LED_CYCLE[i % LED_CYCLE.length], required: true,
           });
         }
 
-        // Monocoque bridge deck — clear drive-under soffit over the racing line
-        underpassPortal(0.88, {
-          h: 9.5, thick: 2.4, depth: 32, pierGap: 2.2, pierW: 2.0,
-          col: [0.08, 0.09, 0.12],
-        });
-        underpassPortal(0.875, {
-          h: 9.2, thick: 1.8, depth: 22, pierGap: 2.2, pierW: 1.8,
-          col: [0.10, 0.11, 0.14],
-        });
+        // Two validated monocoque decks preserve the original 9m+ drive-under
+        // opening. Each deck's visible piers are separate required atomic models.
+        const bridges = [
+          { id: "yas-hotel-bridge-main", frac: 0.88, clearance: 9.5,
+            thickness: 2.4, depth: 32, span: 27, gap: 2.2, pierW: 2.0,
+            col: [0.08, 0.09, 0.12] },
+          { id: "yas-hotel-bridge-forward", frac: 0.875, clearance: 9.2,
+            thickness: 1.8, depth: 22, span: 26, gap: 2.2, pierW: 1.8,
+            col: [0.10, 0.11, 0.14] },
+        ];
+        for (const bridge of bridges) {
+          overheadSpan({
+            id: bridge.id, frac: bridge.frac, clearance: bridge.clearance,
+            minimumClearance: 4.8, thickness: bridge.thickness,
+            depth: bridge.depth, span: bridge.span,
+            supportGap: bridge.gap, supportWidth: bridge.pierW,
+            color: bridge.col, required: true,
+          });
+          for (const side of [-1, 1]) {
+            hotelSupport(`${bridge.id}-${side < 0 ? "left" : "right"}-pier`,
+              bridge.frac, side, bridge.gap, bridge.pierW,
+              bridge.clearance + bridge.thickness * 0.5,
+              bridge.depth * 0.55, bridge.col, MAT.CONCRETE);
+            recordBarrier(bridge.frac - bridge.depth / 2 / 5300,
+              bridge.frac + bridge.depth / 2 / 5300, side, bridge.gap);
+          }
+        }
 
         // Reflecting pool at hotel base (R, clear of racing line)
         waterSurface(K(0.87), 1, 18, [70, 0.35, 55], WATER,
