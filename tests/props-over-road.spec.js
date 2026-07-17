@@ -48,7 +48,6 @@ const BASELINE = {
   // Shared TrackSurface grounding raises these previously floating props onto
   // their actual terrain. Keep the resulting overlaps visible until the
   // circuit-specific migration pass removes or repositions them.
-  bahrain: 4.8,
   miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
   // street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
   // road edge (the track boundary the car stays inside), now sitting on the real
