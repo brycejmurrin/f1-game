@@ -11,9 +11,9 @@
 //
 // Usage:
 //   node tools/motion-capture.mjs <track> [seconds] [speed] [outdir]
-//     writes scratch/motion-<track>/clip.webm + f_*.png frames, prints a flicker report.
+//     writes scratch/captures/motion-capture/<track>/clip.webm + f_*.png frames, prints a flicker report.
 //   node tools/motion-capture.mjs monaco 4 50
-//   node tools/motion-capture.mjs spa 6 60 scratch/spa-eau-rouge
+//   node tools/motion-capture.mjs spa 6 60 scratch/captures/custom/spa-eau-rouge
 //
 // A/B a rendering change: run once on your branch, revert the change, run again,
 // compare the p90 flicker (the typical-frame floor — more stable than the mean,
@@ -40,7 +40,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const [track = "monaco", secArg = "4", speedArg = "50", outArg] = process.argv.slice(2);
 const SEC = +secArg, SPEED = +speedArg;
-const vdir = outArg || `${ROOT}/scratch/motion-${track}`;
+const vdir = outArg || `${ROOT}/scratch/captures/motion-capture/${track}`;
 rmSync(vdir, { recursive: true, force: true });
 mkdirSync(vdir, { recursive: true });
 

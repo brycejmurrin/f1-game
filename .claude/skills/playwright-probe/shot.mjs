@@ -3,6 +3,7 @@
 // Usage: node .claude/skills/playwright-probe/shot.mjs <trackId> <frac> [cam] [out.png]
 //   cam = park | eye | orbit | cinematic | trackside   (default: orbit)
 // Boots a static server, waits for __apex, freezes, frames the camera, writes PNG.
+// Default output path: scratch/captures/playwright-probe/<track>-<pct>-<cam>.png
 
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -17,7 +18,7 @@ const { chromium } = require("playwright");
 const [trackId = "monza", fracArg = "0.1", cam = "orbit", outArg] =
   process.argv.slice(2);
 const frac = parseFloat(fracArg);
-const out = resolve(outArg || `scratch/${trackId}-${Math.round(frac * 100)}-${cam}.png`);
+const out = resolve(outArg || `scratch/captures/playwright-probe/${trackId}-${Math.round(frac * 100)}-${cam}.png`);
 
 mkdirSync(dirname(out), { recursive: true });
 

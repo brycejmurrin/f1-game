@@ -18,7 +18,13 @@
 //
 // Env: APEX_WORKERS=N  (default 2 for identity/tracks — 4+ OOMs SwiftShader on laptops)
 // Logs/redirects: use artifacts/tmp/ (never /tmp) — e.g.
-//   node tools/apex-capture.mjs identity scratch/identity > artifacts/tmp/apex-identity.log 2>&1 &
+//   node tools/apex-capture.mjs identity scratch/captures/apex-capture/identity > artifacts/tmp/apex-identity.log 2>&1 &
+// Default output roots when [outdir] is omitted:
+//   cameras  -> scratch/captures/apex-capture/cameras
+//   tracks   -> scratch/captures/apex-capture/tracks
+//   identity -> scratch/captures/apex-capture/identity
+//   lap-tour -> scratch/captures/apex-capture/lap-tour
+//   modes    -> scratch/captures/apex-capture/modes
 // A frame under ~5 KB is flagged blank:true.
 
 import { createRequire } from "node:module";
@@ -269,7 +275,7 @@ async function main() {
     if (cmd === "cameras") {
       // Same track loaded once per page — tabs in one browser are fine here.
       const track = rest[0] && !rest[0].includes("/") && !rest[0].startsWith(".") ? rest[0] : "monza";
-      const dir = (rest[1] || `${ROOT}/scratch/cameras`); mkdirSync(dir, { recursive: true });
+      const dir = (rest[1] || `${ROOT}/scratch/captures/apex-capture/cameras`); mkdirSync(dir, { recursive: true });
       const CAMS = ["chase","far","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"];
       const staticSrv = await startStaticServer();
       cleanup = async () => { await staticSrv.kill(); };
@@ -287,7 +293,7 @@ async function main() {
     } else if (cmd === "tracks" || cmd === "identity") {
       const isIdentity = cmd === "identity";
       const dirArg = rest[0] && (rest[0].includes("/") || rest[0].startsWith(".")) ? rest.shift() : null;
-      const dir = dirArg || `${ROOT}/scratch/${isIdentity ? "identity" : "tracks"}`;
+      const dir = dirArg || `${ROOT}/scratch/captures/apex-capture/${isIdentity ? "identity" : "tracks"}`;
       mkdirSync(dir, { recursive: true });
       const n = workersEnv(2);
       const staticSrv = await startStaticServer();
@@ -346,7 +352,7 @@ async function main() {
     } else if (cmd === "lap-tour") {
       const track = rest.find((x) => !x.includes("/") && !x.startsWith(".") && !/^\d/.test(x)) || "monza";
       const speed = parseFloat(rest.find((x) => /^\d+(\.\d+)?$/.test(x)) || "60");
-      const dir = rest.find((x) => x.includes("/") || x.startsWith(".")) || `${ROOT}/scratch/lap-tour`;
+      const dir = rest.find((x) => x.includes("/") || x.startsWith(".")) || `${ROOT}/scratch/captures/apex-capture/lap-tour`;
       mkdirSync(dir, { recursive: true });
       const staticSrv = await startStaticServer();
       const browser = await launchBrowser();
@@ -371,7 +377,7 @@ async function main() {
       await staticSrv.kill();
       cleanup = async () => {};
     } else { // modes
-      const dir = (rest[0] || `${ROOT}/scratch/modes`); mkdirSync(dir, { recursive: true });
+      const dir = (rest[0] || `${ROOT}/scratch/captures/apex-capture/modes`); mkdirSync(dir, { recursive: true });
       // Independent scenes — one Chromium per job (real parallelism).
       const staticSrv = await startStaticServer();
       const jobs = [

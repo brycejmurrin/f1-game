@@ -2,7 +2,7 @@
 // One-command track survey for scenery/geometry work. Self-booting: no server, no
 // manual setup. Boots the game headless ONCE and produces everything an agent needs
 // to judge a circuit's scenery in a single pass:
-//   • screenshots → scratch/survey-<id>/   (aerial + orbit + driver's-eye per spot)
+//   • screenshots → scratch/captures/survey-track/<id>/   (aerial + orbit + driver's-eye per spot)
 //   • lateral ground-profile probe, printed as a table with auto-flagged problems
 //     (floating props / channels / sagging ribbon) so you don't have to eyeball it
 //   • a one-line verdict + any page errors
@@ -28,7 +28,7 @@ const [id, label = "survey", fracsArg] = process.argv.slice(2);
 if (!id) { console.error("usage: survey-track.mjs <id> [label] [fracs]"); process.exit(2); }
 const FRACS = (fracsArg || "0,0.25,0.5,0.75").split(",").map(Number);
 const LATS = [8, 12, 20, 30, 45, 70, 110];   // lateral metres for the ground probe
-const OUT = `${ROOT}/scratch/survey-${id}`;
+const OUT = `${ROOT}/scratch/captures/survey-track/${id}`;
 mkdirSync(OUT, { recursive: true });
 
 const freePort = () => new Promise((res, rej) => {
@@ -112,7 +112,7 @@ try {
 
 // ---- report -------------------------------------------------------------
 console.log(`\n=== SURVEY ${id} (${label}) ===`);
-console.log(`shots → scratch/survey-${id}/`);
+console.log(`shots → scratch/captures/survey-track/${id}/`);
 for (const s of shots) console.log(`  ${s.blank ? "⚠ BLANK " : "        "}${s.name.padEnd(22)} ${s.kb}KB`);
 
 // ground-profile table with auto-flagging of the classic failure modes

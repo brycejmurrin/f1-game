@@ -1,7 +1,7 @@
 // Top-down + high-oblique aerial survey of ONE circuit, for spotting floor gaps,
 // floating models, terrain holes, and props sitting off the ground.
 // Usage: TRACK=monaco PORT=3510 node tools/aerial-survey.mjs [label]
-// Writes to scratch/aerial-<track>/:
+// Writes to scratch/captures/aerial-survey/<track>/:
 //   <label>-topdown.png        straight-down plan view of the whole circuit
 //   <label>-obliqueN/E/S/W.png four high oblique aerials (45° elevation) — these
 //                              reveal vertical gaps (a prop hovering, a void under
@@ -21,7 +21,7 @@ if (!TRACK) { console.error("set TRACK=<id>"); process.exit(2); }
 const CHROME = process.env.CHROME ||
   "/Users/bmurrin/Library/Caches/ms-playwright/chromium-1179/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const OUT = path.join(ROOT, "scratch", `aerial-${TRACK}`);
+const OUT = path.join(ROOT, "scratch", "captures", "aerial-survey", TRACK);
 mkdirSync(OUT, { recursive: true });
 
 const srv = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, stdio: "ignore" });
