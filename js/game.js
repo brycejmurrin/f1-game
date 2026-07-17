@@ -716,6 +716,9 @@ function teamMesh(team) {
 // Car decal / effect-quad / cockpit-instrument geometry lives in
 // js/game/carmesh.js (CarMesh; renderer handle injected below at boot).
 CarMesh.init(gfx);
+// Transient FX particle pool (tyre smoke / sparks / kickup / rain spray) —
+// js/game/particles.js; same injected-renderer pattern as CarMesh above.
+Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
@@ -1595,6 +1598,7 @@ function startRace() {
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
+  Particles.clear();   // no stale smoke/spray teleporting into the new session
   els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
@@ -1949,6 +1953,10 @@ function collideFx(a, b, impact) {
   shake = Math.min(1, shake + impact * 0.45);
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
+  // Visual-only spark cue: render() consumes this flag and fires a Particles
+  // burst at the car's world position (collideFx has no world coords here).
+  // Never read by physics — headless runs are unaffected.
+  pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
   if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) {} }
   Input.rumble(0.4 + impact * 0.6, 120);
 }
@@ -4173,6 +4181,82 @@ function render(dt) {
         skidFrameT = 0;
       }
     }
+    // ── Transient particle FX emitters (visual-only: they READ car state and
+    // write none of it, so headless physics is untouched). They live HERE
+    // because the car's world basis (tmpMat / tmpP / tmpF / tmpR) is already
+    // computed. Emission is rate-gated with Math.random() < rate·dt so it is
+    // framerate-independent; far cars are skipped (sub-pixel puffs would only
+    // starve the shared pool).
+    if (state !== "menu" && state !== "select") {
+      const fdx = tmpP[0] - camEye[0], fdz = tmpP[2] - camEye[2];
+      if (fdx * fdx + fdz * fdz < 110 * 110) {
+        // Collision sparks — flag set by collideFx during the physics step
+        // (it has no world coords there); consumed once, at the car.
+        if (c.fxSparkI) {
+          Particles.sparks(tmpMat[12], tmpMat[13] + 0.18, tmpMat[14],
+            -tmpF[0], -tmpF[2], 4 + c.fxSparkI * 10, 6 + Math.round(c.fxSparkI * 14));
+          c.fxSparkI = 0;
+        }
+        // Player wall-scrape sparks: read-only proximity check against the
+        // same solid-barrier boundary physics clamps to (Tracks.wallAt).
+        if (c.isPlayer && c.speed > 14 && Math.random() < dt * 22) {
+          const side = c.x > Tracks.wallAt(track, c.s, 1) - 0.12 ? 1
+                     : c.x < -Tracks.wallAt(track, c.s, -1) + 0.12 ? -1 : 0;
+          if (side) {
+            Particles.sparks(tmpMat[12] + tmpR[0] * side * 0.95, tmpMat[13] + 0.12,
+              tmpMat[14] + tmpR[2] * side * 0.95, -tmpF[0], -tmpF[2], 4 + c.speed * 0.22, 5);
+          }
+        }
+        // Tyre smoke (player): cornering scrub via skidIntensity, real lateral
+        // slip (vLat — drifts and trail-braking slides, since the friction
+        // ellipse converts overdriven braking into lateral slip), and launch
+        // wheelspin (hard accel at crawling speed; peak engine ax is ~7 m/s²,
+        // so the 4.5 floor only fires on genuine full-throttle getaways).
+        let smokeI = (c.isPlayer && !c.offroad) ? (c.skidIntensity || 0) : 0;
+        if (c.isPlayer && !c.offroad) {
+          const _pax = c.axEstSm || 0, _pvl = Math.abs(c.vLat || 0);
+          if (c.speed > 10) smokeI = Math.max(smokeI, clamp((_pvl - 3) / 5, 0, 1));
+          if (c.speed > 0.5 && c.speed < 12)
+            smokeI = Math.max(smokeI, clamp((_pax - 4.5) / 2.5, 0, 1) * clamp((12 - c.speed) / 9, 0, 1));
+        }
+        if (smokeI > 0.25) {
+          const wd = WHEELS[2 + ((Math.random() * 2) | 0)];   // one rear wheel per event
+          Particles.tyreSmoke(
+            tmpMat[12] + tmpMat[0] * wd.x + tmpMat[8] * wd.z,
+            tmpMat[13] + tmpMat[1] * wd.x + tmpMat[9] * wd.z + 0.10,
+            tmpMat[14] + tmpMat[2] * wd.x + tmpMat[10] * wd.z,
+            -tmpF[0] * (1.5 + c.speed * 0.12), -tmpF[2] * (1.5 + c.speed * 0.12),
+            Math.min(smokeI, 1),
+            dt * (16 + 44 * Math.min(smokeI, 1)));            // fractional rate·dt count
+        }
+        // Gravel/grass kickup: any off-track car at speed throws surface bits.
+        if (c.offroad && c.speed > 10) {
+          const wd = WHEELS[2 + ((Math.random() * 2) | 0)];
+          const dirt = Math.random() < 0.5;   // mix dusty-earth and grass tints
+          Particles.kickup(
+            tmpMat[12] + tmpMat[0] * wd.x + tmpMat[8] * wd.z,
+            tmpMat[13] + tmpMat[1] * wd.x + tmpMat[9] * wd.z,
+            tmpMat[14] + tmpMat[2] * wd.x + tmpMat[10] * wd.z,
+            -tmpF[0] * c.speed * 0.35, -tmpF[2] * c.speed * 0.35,
+            dirt ? 0.46 : 0.30, dirt ? 0.40 : 0.36, dirt ? 0.26 : 0.15,
+            dt * 30);
+        }
+        // Rain spray: every car at speed on a wet road drags a rooster tail —
+        // lighter on "wet" (drying line) than under full "rain".
+        if (wet && c.speed > 15) {
+          const str = clamp((c.speed - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
+          if (str > 0) {
+            const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre
+            Particles.spray(
+              tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,
+              tmpMat[13] + 0.28,
+              tmpMat[14] + tmpMat[2] * sxo - tmpF[2] * 2.1,
+              -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
+              dt * (14 + 34 * str));
+          }
+        }
+      }
+    }
   }
   // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
   // depthMask are set once for the whole field instead of ping-ponging with the
@@ -4214,6 +4298,13 @@ function render(dt) {
       }
     }
   }
+
+  // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced
+  // with the RENDER dt and drawn into the HDR scene before present, so smoke
+  // and spray tone-map with the world and the HDR spark tints feed bloom.
+  // Render-path only — headless physics never touches the pool.
+  Particles.update(dt);
+  Particles.draw();
 
   // Per-time cinematic grade + bloom. DRAMATIC = high contrast, deep shadows,
   // bloom ONLY on genuinely bright sources (floodlights, sun disc, neon) against

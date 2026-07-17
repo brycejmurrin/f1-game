@@ -156,6 +156,9 @@ const TUNE_DEFS = [
   { id: "flareMul",     label: "LENS FLARE",      group: "IMAGE & COLOUR", min: 0, max: 3.5, step: 0.02, def: 1.0, help: "Sun/lamp anamorphic streak + ghost strength. 0 = off, 1 = as-shipped." },
   { id: "sharpen",      label: "SHARPEN",         group: "IMAGE & COLOUR", min: 0, max: 2, step: 0.02, def: 0.0, u: "uSharpen", help: "Crispness recovered after FXAA — counteracts softening on kerbs, wires and distant detail." },
   { id: "speedBlur",    label: "SPEED BLUR",      group: "IMAGE & COLOUR", min: 0, max: 2, step: 0.02, def: 0.0, u: "uSpeedBlur", help: "Radial blur from screen centre that grows with car speed — a velocity cue at high speed." },
+
+  // ── FX ── transient particle effects (js/game/particles.js pool)
+  { id: "particleMul",  label: "PARTICLE FX",     group: "FX", min: 0, max: 2, step: 0.05, def: 1.0, help: "Transient particle amount — tyre smoke, collision sparks, gravel kickup and rain spray. 0 = off, 1 = as-shipped, 2 = double the emission rate." },
 ];
 // LT holds the LIVE values the driver reads every frame. They are resolved from
 // a per-CONDITION profile store: each (track, time-of-day, weather) combination

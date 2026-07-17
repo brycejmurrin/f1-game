@@ -7,7 +7,7 @@
 
 const GLX = (function () {
   // GLSL sources live in js/shaders/glx-shaders.js (loaded before this file).
-  const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS } = GLXShaders;
+  const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS } = GLXShaders;
 
   let gl = null;
   let canvas = null;
@@ -46,6 +46,7 @@ const GLX = (function () {
   let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null;
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null;
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
+  let particleProg = null, particleU = null, particleVAO = null, particleVBO = null;
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
@@ -508,6 +509,7 @@ const GLX = (function () {
     markProg = link(SHADOW_VS, MARK_FS);
     markBatchProg = link(MARK_BATCH_VS, MARK_FS);
     glowProg = link(GLOW_VS, GLOW_FS);
+    particleProg = link(PARTICLE_VS, PARTICLE_FS);
     decalProg = link(DECAL_VS, DECAL_FS);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
@@ -550,6 +552,22 @@ const GLX = (function () {
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, st, 8);
       gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, st, 20);
       gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 32);
+      gl.bindVertexArray(null);
+    }
+    if (particleProg) {
+      particleU = locs(particleProg, ["uViewProj", "uEye", "uAdditive"]);
+      // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b,
+      // size, alpha] ×6 verts/particle (filled by js/game/particles.js).
+      particleVAO = gl.createVertexArray();
+      gl.bindVertexArray(particleVAO);
+      particleVBO = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
+      const pst = 10 * 4;   // 10 floats per vertex
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, pst, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, pst, 8);
+      gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, pst, 20);
+      gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, pst, 32);
+      gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 1, gl.FLOAT, false, pst, 36);
       gl.bindVertexArray(null);
     }
 
@@ -1426,6 +1444,35 @@ const GLX = (function () {
     gl.enable(gl.CULL_FACE);
   }
 
+  // Transient FX particle batch (tyre smoke / sparks / kickup / rain spray).
+  // `data` is an interleaved Float32Array ([cornerX, cornerY, center xyz,
+  // colour rgb, size, alpha] ×6 verts per particle); `floatCount` floats are
+  // live. Two blend groups per frame: additive=false → classic alpha smoke/
+  // dust/spray; additive=true → ONE/ONE sparks whose HDR tints feed bloom.
+  // Depth-TESTED (puffs hide behind walls/cars) but never depth-written, and
+  // the scene alpha channel (the SSR car-paint tag — see draw()) is masked.
+  // Must be called while the HDR scene target is bound (before present) so
+  // particles tone-map and bloom with the scene.
+  function drawParticles(data, floatCount, additive) {
+    if (!particleProg || !data || !(floatCount > 0) || !frameEye) return;
+    useProg(particleProg);
+    gl.uniformMatrix4fv(particleU.uViewProj, false, frameViewProj);
+    gl.uniform3fv(particleU.uEye, frameEye);
+    gl.uniform1f(particleU.uAdditive, additive ? 1 : 0);
+    bindVAO(particleVAO);
+    gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, floatCount), gl.DYNAMIC_DRAW);
+    setBlend(true);
+    if (additive) gl.blendFunc(gl.ONE, gl.ONE);
+    setDepthMask(false);
+    gl.disable(gl.CULL_FACE);
+    gl.colorMask(true, true, true, false);
+    gl.drawArrays(gl.TRIANGLES, 0, (floatCount / 10) | 0);
+    gl.colorMask(true, true, true, true);
+    if (additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.CULL_FACE);
+  }
+
   // Resolve the HDR scene to the screen: extract bright areas, blur them into a
   // bloom buffer, then composite scene + bloom with tonemap + vignette. No-op when
   // post is disabled (the scene was drawn straight to the screen already).
@@ -1793,6 +1840,7 @@ const GLX = (function () {
     drawMark,
     drawSkidBatch,
     drawGlow,
+    drawParticles,
     present,
     envFaceBegin,
     envFaceEnd,

@@ -1415,6 +1415,48 @@ void main() {
   outColor = vec4(vColor * a, 1.0);   // additive (blendFunc ONE, ONE)
 }`;
 
+  // ---- Transient FX particles (tyre smoke / sparks / kickup / rain spray) ----
+  // Camera-facing soft billboards, batched by js/game/particles.js into one
+  // interleaved buffer per blend group. uAdditive switches the output packing:
+  // 0 = classic alpha transparency (smoke/dust/spray), 1 = premultiplied energy
+  // for the ONE/ONE spark group (HDR tints feed bloom).
+  const PARTICLE_VS = `#version 300 es
+layout(location=0) in vec2 aCorner;   // quad corner in {-1,+1}²
+layout(location=1) in vec3 aCenter;   // particle world position
+layout(location=2) in vec3 aColor;    // tint (HDR allowed for the additive group)
+layout(location=3) in float aSize;    // half-size (m)
+layout(location=4) in float aAlpha;   // per-particle opacity
+uniform mat4 uViewProj;
+uniform vec3 uEye;
+out vec2 vUV;
+out vec3 vColor;
+out float vAlpha;
+void main() {
+  vec3 fwd = normalize(uEye - aCenter);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd) + vec3(1e-4, 0.0, 0.0));
+  vec3 upv = cross(fwd, right);
+  vec3 wp = aCenter + (right * aCorner.x + upv * aCorner.y) * aSize;
+  vUV = aCorner;
+  vColor = aColor;
+  vAlpha = aAlpha;
+  gl_Position = uViewProj * vec4(wp, 1.0);
+}`;
+
+  const PARTICLE_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;        // -1..1 across the quad
+in vec3 vColor;
+in float vAlpha;
+uniform float uAdditive;
+out vec4 outColor;
+void main() {
+  float r2 = dot(vUV, vUV);
+  float fall = max(1.0 - r2, 0.0);
+  fall *= fall;                       // smooth soft-disc falloff, zero at the rim
+  float a = vAlpha * fall;
+  outColor = mix(vec4(vColor, a), vec4(vColor * a, 1.0), uAdditive);
+}`;
+
   // ---- Post-processing (HDR scene target -> bloom -> tonemap + vignette) ----
   // Fullscreen triangle via gl_VertexID; vUV in 0..1.
   const POST_VS = `#version 300 es
@@ -2248,5 +2290,5 @@ void main() {
   o = vec4(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
 }`;
 
-  return { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS };
+  return { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS };
 })();
