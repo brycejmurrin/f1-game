@@ -501,6 +501,37 @@ test.describe("shared track foundation diagnostics", () => {
       expect(span.clearance).toBeGreaterThanOrEqual(4.8);
   });
 
+  test("Miami emits validated water, grouped heroes, and safe overpasses", async ({ page }) => {
+    test.slow();
+    await load(page, "miami");
+    const result = await page.evaluate(() => ({
+      geometry: window.__apex.geometryDiagnostics(),
+      models: window.__apex.modelDiagnostics(),
+      profile: window.__apex.trackProfile(240),
+      walls: window.__apex.wallStats(),
+      groundGaps: [0.20, 0.42, 0.66].flatMap((frac) =>
+        [-6, 0, 6].map((lat) => window.__apex.groundY(frac, lat).gap)),
+    }));
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    const hard = [...result.models.invalid, ...result.models.suppressed, ...result.models.unsafe]
+      .filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+    const ids = new Set(result.models.emitted.map((entry) => entry.id));
+    for (const id of [
+      "beach-club-sand", "beach-club-pool", "beach-club-cabana",
+      "mia-marina-water-0", "mia-marina-water-1", "mia-marina-water-2",
+      "msc-yacht-club",
+    ]) expect(ids.has(id), id).toBe(true);
+    const spans = result.models.emitted.filter((entry) => entry.id.startsWith("turnpike-overpass-"));
+    expect(spans).toHaveLength(2);
+    expect(spans.every((entry) => entry.overhead && entry.clearance >= 4.8)).toBe(true);
+    const peak = result.profile.reduce((best, point) => point.y > best.y ? point : best);
+    expect(Math.abs(peak.frac - 0.66)).toBeLessThan(0.04);
+    expect(peak.y).toBeGreaterThan(3);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.35);
+    expect(result.groundGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
+  });
+
   test("night rebuilds expose a distinct validated props manifest", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });

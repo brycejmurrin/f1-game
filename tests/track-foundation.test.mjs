@@ -45,6 +45,19 @@ test("TrackSpace converts nodes, samples source data, and preserves legacy scene
   assert.ok(Math.abs(TrackSpace.sceneryFrac({ startFrac: 0.25, sceneryCoordinates: "racing" }, 0.4) - 0.4) < 1e-12);
 });
 
+test("Miami declares explicit racing scenery and source-mapped Turnpike elevation", () => {
+  const TrackSpace = loadGlobal("js/track-space.js", "TrackSpace");
+  const [miami] = loadGlobal("js/tracks/miami.js", "TrackDefs");
+  assert.equal(miami.id, "miami");
+  assert.equal(miami.sceneryCoordinates, "racing");
+  assert.equal(miami.flatTerrain, true);
+  assert.equal(miami.terrainOuter, 90);
+  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.66) < 1e-12);
+  assert.ok(miami.dressingExclusions.some((rule) =>
+    rule.s0 === 0 && rule.s1 === 1 &&
+    rule.kinds.includes("city") && rule.kinds.includes("foliage")));
+});
+
 test("TrackSurface creates monotonic rails and one terrain/grounding height contract", () => {
   const TrackSurface = loadGlobal("js/track-surface.js", "TrackSurface");
   const track = {
