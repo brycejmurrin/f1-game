@@ -1,15 +1,15 @@
 # Testing reference
 
-45 root Playwright spec files (`tests/*.spec.js`), plus 24-file
+46 root Playwright spec files (`tests/*.spec.js`), plus 24-file
 `tests/blank-scan/` and `tests/inspect/` per-circuit suites and explicit-path
 helpers under `tests/galleries/`. **`inspect/**`, `blank-scan/**`, and
 `galleries/**` are excluded from default test discovery** via `testIgnore` in
-`playwright.config.js`, so a bare `npx playwright test` runs the 45 root specs
+`playwright.config.js`, so a bare `npx playwright test` runs the 46 root specs
 only; run the excluded suites by naming them explicitly. The suite covers
 physics, behaviour, geometry, cameras, UI, parts, steering, lighting, scenery,
 gamepad, timing/field hooks, headless RL, and per-circuit blank-frame detection.
 
-The 45 root specs are split into two Playwright projects (see
+The 46 root specs are split into two Playwright projects (see
 `playwright.config.js`): a **`headless`** project (physics/geometry/hook specs,
 no GPU — the default) and a **`render`** project (screenshot/pixel-diff/GL specs
 in `RENDER_SPECS`, run at `--workers=4` to cap SwiftShader concurrency). The old
@@ -61,35 +61,45 @@ npm test -- tests/ui-audit.spec.js
 
 ## Infrastructure
 
-### Global setup (`tests/global-setup.js`)
+### Server lifecycle
 
-Pings `localhost:3456` up to 5 times (~10 s total) before any spec runs. If the
-server doesn't respond the run aborts immediately with a clear message:
+The npm wrapper (`tools/run-playwright.mjs`) starts an in-process static server
+on a free ephemeral port, passes that port to Playwright, and closes the server
+when the child exits. Independent npm test commands therefore do not share a
+server or output directories.
 
-```
-Dev server did not respond at http://localhost:3456 after 5 attempts (~10 s).
-Start it with: python3 -m http.server 3456
-```
-
-Start the server first: `npx serve -l 3456 .` or `python3 -m http.server 3456`.
+Direct `npx playwright test` defaults to port 3456 and lets Playwright start its
+configured Python server. A direct local run may reuse an already-running
+server; explicit `APEX_PORT` runs own their server unless
+`APEX_REUSE_SERVER=1` is set. `tests/global-setup.js` checks the selected port
+before specs begin.
 
 ### Fixtures (`tests/fixtures.js`)
 
 Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test` to
-get three extras at zero per-test cost:
+get four fixtures:
 
 | Fixture | What it provides |
 |---|---|
 | `context` (auto) | Injects `window.__TEST_MODE = true`; mocks all Jolpica + OpenF1 API calls with minimal stub JSON so tests run offline and results are deterministic |
 | `pageErrors` | `string[]` — collects uncaught JS exceptions. Assert `expect(pageErrors).toHaveLength(0)` after exercising game logic to catch silent errors |
 | `racePage` | Navigates to `/`, waits up to 10 s for `window.__apex` to be available, then hands the loaded page to the test — saves the goto + waitForFunction boilerplate |
+| `loadTrack` | Returns a helper that loads a circuit, waits for its build, and starts the race |
+
+The shared fixture also attaches an `__apex` state snapshot after failures.
+Its audited consumers are `audio-smoke.spec.js` and `smoke.spec.js` for page
+errors/failure telemetry, `f1-track-accuracy.spec.js` for test mode/failure
+telemetry, and `ui-audit.spec.js` for deterministic API defaults alongside its
+scenario-specific mocks. `tools/fixture-consumer-audit.mjs` enforces those
+imports; other specs may continue using the base Playwright fixture when they do
+not depend on these guarantees.
 
 ### Playwright config
 
-`playwright.config.js` — baseURL `localhost:3456` (per-run free port via
-`tools/run-playwright.mjs`), retries 1, SwiftShader headless GPU, and the
-`headless` / `render` project split. The npm wrapper allocates a free port per
-run and writes:
+`playwright.config.js` — baseURL on the selected local port (per-run free port
+via `tools/run-playwright.mjs`), zero local retries and one CI retry,
+SwiftShader headless GPU, and the `headless` / `render` project split. The npm
+wrapper writes:
 
 - `artifacts/report-<port>/` — HTML report
 - `artifacts/test-results-<port>/` — failures, traces, attachments, JUnit

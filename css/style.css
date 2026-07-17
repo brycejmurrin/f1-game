@@ -548,13 +548,15 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   background: rgba(255,255,255,0.05); border-style: dashed;
 }
 .cs-liv-create { border-style: dashed; border-color: rgba(255,255,255,0.2); }
+.cs-liv-row { display: flex; align-items: stretch; gap: 6px; width: 100%; }
+.cs-liv-row > .cs-liv { flex: 1 1 auto; min-width: 0; width: auto; }
 /* delete affordance on a custom livery row */
 .cs-liv-del {
   flex: 0 0 auto; align-self: center; width: 24px; height: 24px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 700; color: rgba(255,120,110,0.85);
   background: rgba(255,60,50,0.1); border: 1px solid rgba(255,80,70,0.25);
-  cursor: pointer;
+  cursor: pointer; margin: 0; padding: 0;
 }
 .cs-liv-del:hover { background: rgba(255,60,50,0.22); color: #fff; }
 /* edit affordance on a custom livery row */
@@ -563,7 +565,7 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 700; color: rgba(120,200,255,0.9);
   background: rgba(60,150,255,0.1); border: 1px solid rgba(80,170,255,0.28);
-  cursor: pointer; margin-right: 6px;
+  cursor: pointer; margin: 0; padding: 0;
 }
 .cs-liv-edit:hover { background: rgba(60,150,255,0.24); color: #fff; }
 .cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: #4df; }

@@ -38,8 +38,9 @@
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
       if (ATM && ATM.dampArdennes) Object.assign(pal, ATM.dampArdennes);
 
-      // Start gantry over the line (every circuit has one; the start-gantry
-      // downlights in buildTrackLights need this structure to hang from).
+      // Start gantry over the line (every circuit gets one). Point lights over
+      // the S/F are placed independently in buildTrackLights — not hung from
+      // this mesh.
       gantry(0.0, 7.5, [0.26, 0.28, 0.32]);
 
       // --- Encircling Ardennes forested hills (NO snowcaps — summer Belgian GP).

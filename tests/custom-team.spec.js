@@ -63,3 +63,106 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   expect(probe.freedTextureIds).toContain(firstTextureId);
   expect(secondTextureId).not.toBe(firstTextureId);
 });
+
+test("custom-team save frees every cached car-body mesh variant", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
+
+  await page.evaluate(() => {
+    const customData = new WeakSet();
+    const customMeshes = [];
+    const freedMeshes = new Set();
+    const build = Car3D.build;
+    const createMesh = GLX.createMesh;
+    const freeMesh = GLX.freeMesh;
+
+    Car3D.build = function (c1, c2, opts) {
+      const data = build(c1, c2, opts);
+      const team = Teams.LIST.find((candidate) => candidate.id === "custom");
+      const same = (a, b) => a && b && a.length === b.length &&
+        a.every((value, index) => Math.abs(value - b[index]) < 1e-6);
+      // Setup preview meshes have opts.parts but do not live in the three
+      // team-keyed caches under test. Player/cockpit bodies use noWheels.
+      if (team && same(c1, team.color) && same(c2, team.color2) &&
+          (opts.noWheels || !opts.parts)) customData.add(data);
+      return data;
+    };
+    GLX.createMesh = function (data) {
+      const mesh = createMesh(data);
+      if (customData.has(data)) customMeshes.push(mesh);
+      return mesh;
+    };
+    GLX.freeMesh = function (mesh) {
+      if (customMeshes.includes(mesh)) freedMeshes.add(mesh);
+      return freeMesh(mesh);
+    };
+    window.__customTeamMeshProbe = { customMeshes, freedMeshes };
+  });
+
+  await page.locator("#mb-race").click();
+  await page.locator("#sel-customize").click();
+  await page.locator("#cz-save").click();
+
+  // Chase and cockpit cameras build the two player-only body cache variants.
+  await page.locator("#sel-go").click();
+  await page.locator("#rs-go").click();
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+  await page.evaluate(() => window.__apex.park(0.1));
+  await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 1);
+  await page.evaluate(() => window.__apex.camera("cockpit"));
+  await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 2);
+
+  await page.locator("#pausebtn").click();
+  await page.locator("#pm-quit").click();
+  await page.locator("#mb-race").click();
+  await page.locator("#sel-customize").click();
+  await page.locator("#cz-color").fill("#123456");
+  await page.locator("#cz-save").click();
+
+  const counts = await page.evaluate(() => ({
+    created: window.__customTeamMeshProbe.customMeshes.length,
+    freed: window.__customTeamMeshProbe.freedMeshes.size,
+  }));
+  expect(counts.created).toBeGreaterThanOrEqual(2);
+  expect(counts.freed).toBe(counts.created);
+});
+
+test("custom livery actions are independent keyboard buttons", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("apex26.livery.custom.mclaren", JSON.stringify([{
+      id: "test-paint",
+      name: "Test Paint",
+      c1: [0.1, 0.2, 0.3],
+      c2: [0.8, 0.7, 0.6]
+    }]));
+    localStorage.setItem("apex26.livery.mclaren", JSON.stringify("default"));
+  });
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
+  await page.locator("#mb-race").click();
+  await page.locator("#sel-setup").click();
+  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await page.getByRole("button", { name: /LIVERY/ }).click();
+
+  const select = page.getByRole("button", { name: "Select Test Paint livery" });
+  const edit = page.getByRole("button", { name: "Edit Test Paint livery" });
+  const remove = page.getByRole("button", { name: "Delete Test Paint livery" });
+  await expect(select).toBeVisible();
+  await expect(edit).toBeVisible();
+  await expect(remove).toBeVisible();
+  expect(await select.evaluate((row, action) => row.parentElement === action.parentElement, await edit.elementHandle())).toBe(true);
+  expect(await select.evaluate((row, action) => row.parentElement === action.parentElement, await remove.elementHandle())).toBe(true);
+
+  await select.focus();
+  await page.keyboard.press("Tab");
+  await expect(edit).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".cs-liv-editor")).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.livery.mclaren")))).toBe("default");
+
+  await page.locator(".cs-liv-ed-cancel").click();
+  await page.getByRole("button", { name: "Delete Test Paint livery" }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Select Test Paint livery" })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.livery.mclaren")))).toBe("default");
+});

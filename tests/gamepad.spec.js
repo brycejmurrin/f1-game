@@ -22,6 +22,7 @@ async function poll(page, { axisX = 0, buttons = {}, connected = true } = {}, re
         ? { connected: true, mapping: "standard", axes: [axisX, 0, 0, 0], buttons: btns }
         : null;
       navigator.getGamepads = () => [pad, null, null, null];
+      window.dispatchEvent(new Event(connected ? "gamepadconnected" : "gamepaddisconnected"));
       Input.poll();
       // eslint-disable-next-line no-eval
       return (0, eval)("(" + readSrc + ")")();
@@ -114,4 +115,61 @@ test("disconnecting the pad clears its state", async ({ page }) => {
   expect(r.connected).toBe(false);
   expect(Math.abs(r.steer)).toBeLessThan(0.001);
   expect(r.throttle).toBe(false);
+});
+
+test("keyboard driving remains active after using a HUD button", async ({ page }) => {
+  await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+  await page.waitForFunction(() => window.__apex.info().track === "monza", { timeout: 10_000 });
+  await page.evaluate(() => {
+    window.__apex.go();
+    Input.reset();
+  });
+  const camera = page.getByRole("button", { name: "Camera" });
+  await expect(camera).toBeVisible();
+  await camera.click();
+  await expect(camera).toBeFocused();
+
+  await page.keyboard.down("KeyW");
+  expect(await page.evaluate(() => Input.throttle())).toBe(true);
+  await page.keyboard.up("KeyW");
+  expect(await page.evaluate(() => Input.throttle())).toBe(false);
+});
+
+async function holdKeyboardPointerAndTouch(page) {
+  return page.evaluate(() => {
+    Input.setSteerMode("touch");
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
+    document.getElementById("btn-throttle").dispatchEvent(
+      new PointerEvent("pointerdown", { pointerId: 41, bubbles: true })
+    );
+    const touch = new Event("touchstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(touch, "changedTouches", {
+      value: [{ identifier: 7, clientX: window.innerWidth - 1 }],
+    });
+    document.getElementById("game").dispatchEvent(touch);
+    return { brake: Input.braking(), throttle: Input.throttle(), steer: Input.steer() };
+  });
+}
+
+test("window blur releases held keyboard, pointer, and touch input", async ({ page }) => {
+  const held = await holdKeyboardPointerAndTouch(page);
+  expect(held).toEqual({ brake: true, throttle: true, steer: 1 });
+
+  const released = await page.evaluate(() => {
+    window.dispatchEvent(new Event("blur"));
+    return { brake: Input.braking(), throttle: Input.throttle(), steer: Input.steer() };
+  });
+  expect(released).toEqual({ brake: false, throttle: false, steer: 0 });
+});
+
+test("document becoming hidden releases held keyboard, pointer, and touch input", async ({ page }) => {
+  const held = await holdKeyboardPointerAndTouch(page);
+  expect(held).toEqual({ brake: true, throttle: true, steer: 1 });
+
+  const released = await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    return { brake: Input.braking(), throttle: Input.throttle(), steer: Input.steer() };
+  });
+  expect(released).toEqual({ brake: false, throttle: false, steer: 0 });
 });

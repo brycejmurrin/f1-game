@@ -30,6 +30,71 @@ async function cycleToPauseSteerMode(page, targetText) {
   }
 }
 
+async function openLightingPhotoMode(page) {
+  await openPauseMenu(page);
+  await page.locator("#pm-lighting").click();
+  await page.locator("#pc-toggle").click();
+  await expect(page.locator("body")).toHaveClass(/lt-open/);
+  await expect(page.locator("body")).toHaveClass(/photo-mode/);
+}
+
+async function expectNormalRaceControls(page) {
+  const state = await page.evaluate(() => ({
+    lightingHidden: document.getElementById("lighting").hidden,
+    pauseHidden: document.getElementById("pausemenu").hidden,
+    photoControlsHidden: document.getElementById("photo-controls").hidden,
+    ltOpen: document.body.classList.contains("lt-open"),
+    photoMode: document.body.classList.contains("photo-mode"),
+    pauseButtonHidden: document.getElementById("pausebtn").hidden,
+  }));
+  expect(state).toEqual({
+    lightingHidden: true,
+    pauseHidden: true,
+    photoControlsHidden: true,
+    ltOpen: false,
+    photoMode: false,
+    pauseButtonHidden: false,
+  });
+}
+
+test.describe("Lighting tuner — pause lifecycle", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  test("Escape leaves tuner-owned photo mode and restores race controls", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    await page.keyboard.press("Escape");
+    await expectNormalRaceControls(page);
+  });
+
+  test("pause key leaves tuner-owned photo mode and restores race controls", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    await page.evaluate(() => window.dispatchEvent(
+      new KeyboardEvent("keydown", { code: "KeyP", bubbles: true })
+    ));
+    await expectNormalRaceControls(page);
+  });
+
+  test("gamepad pause leaves tuner-owned photo mode and restores race controls", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    await page.evaluate(() => {
+      const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0, touched: false }));
+      const pad = { connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons };
+      navigator.getGamepads = () => [pad, null, null, null];
+      window.dispatchEvent(new Event("gamepadconnected"));
+      Input.poll();
+      buttons[9] = { pressed: true, value: 1, touched: true };
+      Input.poll();
+    });
+    await expectNormalRaceControls(page);
+  });
+});
+
 // hasTouch prevents game from adding body.desktop class (which hides steer/calib btns)
 test.describe("Pause menu — tilt mode", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });

@@ -151,7 +151,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 352 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 384 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -171,8 +171,10 @@ struct FrameU {
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
-  params5    : vec4<f32>,     // off 336  (envProbeStr, _, _, _) — real env-cube probe strength (0 = analytic sky only)
-};                            // size 352
+  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, _, _) — env-cube probe strength (0 = analytic sky only) + cloud-shadow drift rate
+  shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
+  params6    : vec4<f32>,     // off 368  (wetDark, _, _, _) — live wet-surface darkening
+};                            // size 384
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -204,6 +206,29 @@ struct DrawU {
 ${hash}
 ${vnoise}
 ${brdf}
+
+// Drifting cloud-shadow dapple (GLX parity, js/shaders/glx-shaders.js
+// cloudFBM/cloudShadow): FBM sampled where the sun ray through the receiver
+// meets a 360 m cloud deck, drifted by time × CLOUD SPEED so the ground dapple
+// moves in lockstep with the sky. cover = F.params1.w, cloudSpeed = F.params5.y.
+// Was entirely missing from the WebGPU port — partly-cloudy day tracks read
+// uniformly lit while WebGL2 showed cloud shadows crossing the track.
+fn cloudFBM(p_in: vec2<f32>) -> f32 {
+  var p = p_in; var s = 0.0; var a = 0.5;
+  for (var i = 0; i < 2; i = i + 1) { s = s + a * vnoise(p); p = p * 2.03 + 1.7; a = a * 0.5; }
+  return s;
+}
+fn cloudShadow(wp: vec3<f32>) -> f32 {
+  let cover = F.params1.w;
+  // Divisor floored at 0.15 (not the 0.06 cutoff): near-grazing sun rays blow
+  // the deck-intersection offset up and over-sample the noise into stripes —
+  // same fix as GLX.
+  if (cover <= 0.001 || F.sunDir.y <= 0.06) { return 0.0; }
+  let t = (360.0 - wp.y) / max(F.sunDir.y, 0.15);
+  let cT = F.params0.z * F.params5.y;
+  let cp = (wp.xz + F.sunDir.xz * t) * 0.0052 + vec2<f32>(cT * 0.012, cT * 0.005);
+  return smoothstep(0.54 - cover * 0.40, 0.92, cloudFBM(cp)) * cover;
+}
 
 struct VSOut {
   @builtin(position) clip  : vec4<f32>,
@@ -335,7 +360,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     wet = wetness * upFace;
     let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet;
-    albedo = albedo * mix(1.0, 0.42, wet);      // wet asphalt absorbs light (uWetDark=1 floor)
+    albedo = albedo * mix(1.0, clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0), wet);
     albedo = albedo * mix(1.0, 0.50, puddle);
     rough = mix(rough, 0.15, wet);
     rough = mix(rough, 0.05, puddle);
@@ -363,8 +388,27 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
     let ndc = sc.xyz / sc.w;
     let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && ndc.z <= 1.0) {
-      let refD = ndc.z - max(F.params2.w, 0.0);   // SHADOW BIAS knob (params2.w)
+    // Distance + border fade (GLX sampleShadow parity, js/shaders/glx-shaders.js).
+    // Dissolve shadows by receiver distance from the UNSNAPPED box anchor
+    // (F.shadowCtr.xyz, glides with the camera) instead of hard-cutting at the
+    // box border: the box recentres in sBox/4 = 16 m snaps (game.js shadow pass),
+    // so an unfaded border made the whole shadow field's edge JUMP 16 m at a time
+    // while driving. The UV border fade stays as a safety clamp for worst-case
+    // box alignments. shadowCtr.w = shadowRange (box half-size, m).
+    let shRange = max(F.shadowCtr.w, 1.0);
+    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, F.shadowCtr.xyz));
+    let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
+           * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
+    edgeFade = edgeFade * ef.x * ef.y;
+    if (edgeFade > 0.0 && ndc.z <= 1.0) {
+      // Slope-scale bias (GLX parity, js/shaders/glx-shaders.js sampleShadow):
+      // a constant-only bias can't cover grazing sun angles on walls / banked
+      // kerbs — acne that shimmers while driving — and raising the constant
+      // knob to hide it peter-pans flat ground instead. Same clamp band, and
+      // the knob contributes HALVED exactly like GLX (uShadowBias * 0.5).
+      let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
+      let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
+      let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
       // PENUMBRA: pcfStep = texel * (1 + pcssPen). pcssPen=0 -> unchanged.
       let pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0));   // params2.z = 1/shadowMapSize
       var s = 0.0;
@@ -374,9 +418,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
                     suv + vec2<f32>(f32(ox), f32(oy)) * pcfStep, refD);
         }
       }
-      shadow = mix(1.0, s / 9.0, F.params2.y);   // params2.y = shadow strength
+      // Clamped like GLX: SHADOW DARKNESS reaches 2.0 and mix() extrapolates
+      // above t=1 — unclamped, sh~0 went NEGATIVE (negative light -> psychedelic
+      // grade output in shadowed areas).
+      shadow = max(0.0, mix(1.0, s / 9.0, F.params2.y * edgeFade));   // params2.y = shadow strength
     }
   }
+  // Cloud dapple multiplies the cast shadow exactly like GLX (LIT_FS composite):
+  // applied outside the depth-map gate, so broken cloud still shades the ground
+  // even where/when the sun shadow map is off.
+  shadow = shadow * (1.0 - cloudShadow(in.wpos) * 0.80);
   let litNoL = NoL * keyMul * shadow;
   // SHADOW TINT (F.params4.y = shadowTintAmt): push shadowed regions toward a cool
   // colour (sky-fill bias), applied to the hemisphere ambient so cast shadows read
@@ -509,9 +560,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let cell = floor(in.wpos * 45.0);
       let h1 = hash3(cell);
       let h2 = hash3(cell + vec3<f32>(19.7, 7.3, 3.1));
-      let fT = normalize(cross(Ngeo, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
-      let fB = cross(Ngeo, fT);
-      let gN = normalize(Ngeo + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
+      // Mirror the GLSL finite-basis guard: malformed/degenerate geometry must
+      // not feed normalize(0) and spray NaN glints across the paint.
+      var nN = vec3<f32>(0.0, 1.0, 0.0);
+      if (length(Ngeo) > 1e-4) {
+        nN = normalize(Ngeo);
+      }
+      let fT = normalize(cross(nN, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+      let fB = cross(nN, fT);
+      let gN = normalize(nN + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
       let glint = smoothstep(0.990, 1.0, dot(gN, H));
       color = color + F.sunColor.xyz * litNoL * glint * 1.6 * carPaint * spFade;
     }
@@ -814,7 +871,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 176,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 352,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4 +params5)
+    FRAME_UNIFORM_BYTES: 384,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

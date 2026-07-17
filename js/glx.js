@@ -90,6 +90,8 @@ const GLX = (function () {
   let frameSkyHi = null;
   let frameSkyLo = null;
   let frameSunColor = null;
+  let frameDecalSun = null;   // keyMul-scaled sun for the decal pass (raw frameSunColor feeds god rays)
+  const _decalSunScr = [0, 0, 0];
   let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal lighting
   let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
   let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
@@ -103,16 +105,15 @@ const GLX = (function () {
 
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
-  // Static-scene depth copy for the per-frame car-caster overlay: the snap-cached
-  // terrain/road/props render lands in the STATIC target, and shadowCasters()
-  // re-composites it into the SAMPLED map (blit + redraw the moving cars on top)
-  // every frame — real car sun shadows without re-rasterising the whole scene,
-  // and without stale car silhouettes baking into the cached map.
-  let shadowStaticFBO = null, shadowStaticTex = null;
-  let shadowOverlayOk = false;   // static/sampled pair complete → shadowCasters() live
-  let shadowOverlayDirty = false; // sampled map holds a car overlay (needs a clean blit when casters vanish)
   let shadowLightVP = new Float32Array(16);
+  // Dynamic per-frame CAR shadow map (see initShadowMap) — separate from the
+  // snap-cached static map so moving cars get live sun shadows.
+  let carShadowFBO = null, carShadowTex = null, carShadowEnabled = false;
+  let carShadowLightVP = new Float32Array(16);
+  let _carShadowArmed = false;   // set by carShadowBegin, cleared each present()
+  let _carShadowArms = 0;        // lifetime carShadowBegin count (debug introspection)
   const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier
+  const CAR_SHADOW_SIZE = 1024;                    // dynamic car-only shadow map (desktop tier)
   let shadowEnabled = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
@@ -510,6 +511,33 @@ const GLX = (function () {
     const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+    // ── Dynamic CAR shadow map: cars are NOT in the cached static map above (it
+    // only re-renders on a snap-cell change, so a moving car would leave a stale
+    // smear). This small map holds ONLY the car meshes and re-renders every
+    // frame (~22 tiny body meshes — trivial), giving real sun-projected car
+    // shadows with correct direction/length and car-on-car shadowing; the blob
+    // decal stays as the contact-AO term. Desktop only: the mobile tier keeps
+    // blob-only (memory + fill cost), and WGX has no car pass yet (game.js
+    // guards on gfx.carShadowBegin).
+    carShadowEnabled = false;
+    if (ok && !MOBILE_TIER) {
+      carShadowTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, carShadowTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, CAR_SHADOW_SIZE, CAR_SHADOW_SIZE, 0,
+        gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+      carShadowFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, carShadowFBO);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, carShadowTex, 0);
+      carShadowEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
     // ── PCSS-lite blocker map: a 512-square R16F min-depth downsample of the
     // shadow map, rebuilt only when the shadow map re-renders (the snap-grid
     // cache means once per ~10 m of travel, not per frame). LIT_FS samples it
@@ -542,56 +570,7 @@ const GLX = (function () {
         }
       }
     }
-
-    // Car-caster overlay: second depth target with the SAME size/format as the
-    // sampled map so a depth blitFramebuffer between them is legal. No compare
-    // mode / linear filter needed — it's only ever a blit SOURCE. Skipped on the
-    // mobile tier (game.js never calls shadowCasters there; save the 4-12 MB).
-    shadowOverlayOk = false;
-    if (ok && !MOBILE_TIER) {
-      shadowStaticTex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, shadowStaticTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
-        gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      shadowStaticFBO = gl.createFramebuffer();
-      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowStaticFBO);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowStaticTex, 0);
-      shadowOverlayOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    }
     return ok;
-  }
-
-  // Copy the snap-cached static scene depth into the sampled shadow map (the
-  // base layer the per-frame car casters draw on top of). Formats/sizes match
-  // by construction; nothing else (scissor etc.) is enabled that affects blits.
-  function blitStaticDepth() {
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, shadowStaticFBO);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, shadowMapFBO);
-    gl.blitFramebuffer(0, 0, SHADOW_SIZE, SHADOW_SIZE, 0, 0, SHADOW_SIZE, SHADOW_SIZE,
-      gl.DEPTH_BUFFER_BIT, gl.NEAREST);
-  }
-
-  // Refresh the PCSS-lite blocker map from the current sampled shadow depth.
-  // Shared by shadowEnd (snap-cache re-render) and shadowCasters (per-frame
-  // car overlay) so the blocker search always sees the map that's bound.
-  function refreshBlocker() {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
-    gl.viewport(0, 0, 512, 512);
-    useProg(blockerProg);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
-    gl.bindSampler(0, blockerSampler);
-    gl.uniform1i(blockerU.uDepthTex, 0);
-    gl.uniform2f(blockerU.uSrcTexel, 1 / SHADOW_SIZE, 1 / SHADOW_SIZE);
-    gl.disable(gl.DEPTH_TEST); setBlend(false);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.bindSampler(0, null);
-    gl.enable(gl.DEPTH_TEST);
   }
 
   function init(canvasEl) {
@@ -644,7 +623,8 @@ const GLX = (function () {
     litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
-      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange",
+      "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
+      "uCarShadowMap", "uCarLightVP", "uCarShadowOn",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
@@ -868,7 +848,7 @@ const GLX = (function () {
       _decalVPToken = _frameToken;
       gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
       gl.uniform3fv(decalU.uSunDir, frameSunDir);
-      gl.uniform3fv(decalU.uSunColor, frameSunColor);
+      gl.uniform3fv(decalU.uSunColor, frameDecalSun || frameSunColor);
       gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
       gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
     }
@@ -1064,7 +1044,7 @@ const GLX = (function () {
     gl.uniform3fv(litU.uSunDir, frame.sunDir);
     gl.uniform3fv(litU.uSunColor, frame.sunColor);
     // Live tunables (LIGHTING TUNER / __apex.lightTune) ride in on frame.tune;
-    // defaults here MUST mirror game.js TUNE_DEFS so a missing tune object
+    // defaults here MUST mirror LightTune.TUNE_DEFS (js/game/lighting.js) so a missing tune object
     // (unit harnesses driving GLX directly) renders the shipped look.
     const T = frame.tune || null;
     const _ambM = T && T.ambientMul != null ? T.ambientMul : 1;
@@ -1074,9 +1054,24 @@ const GLX = (function () {
       _ambScratchS[0] = s[0] * _ambM; _ambScratchS[1] = s[1] * _ambM; _ambScratchS[2] = s[2] * _ambM;
       gl.uniform3fv(litU.uAmbGround, _ambScratchG);
       gl.uniform3fv(litU.uAmbSky, _ambScratchS);
+      // The decal pass reads frameAmb* — point it at the SAME scaled ambient the
+      // lit pass just uploaded. Decals used the raw frame colours, so moving the
+      // AMBIENT slider re-lit the bodywork but not the sponsor marks on it.
+      frameAmbSky = _ambScratchS; frameAmbGround = _ambScratchG;
     } else {
       gl.uniform3fv(litU.uAmbGround, frame.ambientGround);
       gl.uniform3fv(litU.uAmbSky, frame.ambientSky);
+    }
+    // Same for the KEY LIGHT slider on the decals' sun term (raw frameSunColor
+    // stays untouched for the god-ray/flare passes, which are not keyMul-lit).
+    const _kM = T && T.keyMul != null ? T.keyMul : 1.0;
+    if (_kM !== 1 && frameSunColor) {
+      _decalSunScr[0] = frameSunColor[0] * _kM;
+      _decalSunScr[1] = frameSunColor[1] * _kM;
+      _decalSunScr[2] = frameSunColor[2] * _kM;
+      frameDecalSun = _decalSunScr;
+    } else {
+      frameDecalSun = frameSunColor;
     }
     gl.uniform1f(litU.uBounceK,     T && T.bounceK     != null ? T.bounceK     : 0.04);
     gl.uniform1f(litU.uMistShare,   T && T.mistShare   != null ? T.mistShare   : 1.5);
@@ -1125,9 +1120,27 @@ const GLX = (function () {
       gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
       gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 80.0);
+      // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
+      // snapped around (game.js shadow pass). It glides continuously with the
+      // camera, so the fade front never jumps on a box recentre.
+      gl.uniform3fv(litU.uShadowCtr, frame.shadowCtr || frame.eye || [0, 0, 0]);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHADOW_SIZE);
+      // Dynamic car shadow map — unit 8, armed only on frames where game.js ran
+      // the car caster pass (carShadowBegin). The texture is always bound while
+      // enabled so the sampler2DShadow stays complete even when gated off.
+      if (carShadowEnabled) {
+        gl.activeTexture(gl.TEXTURE8);
+        gl.bindTexture(gl.TEXTURE_2D, carShadowTex);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(litU.uCarShadowMap, 8);
+        gl.uniformMatrix4fv(litU.uCarLightVP, false, carShadowLightVP);
+        gl.uniform1f(litU.uCarShadowOn, _carShadowArmed ? 1.0 : 0.0);
+      } else {
+        gl.uniform1f(litU.uCarShadowOn, 0.0);
+      }
     } else {
       gl.uniform1f(litU.uShadowStr, 0.0);
+      gl.uniform1f(litU.uCarShadowOn, 0.0);
     }
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
@@ -1218,7 +1231,11 @@ const GLX = (function () {
     if (sparkle   !== _matSpark)    { gl.uniform1f(litU.uSparkle,   sparkle);   _matSpark    = sparkle; }
     // Each draw declares the full render state it needs (no restores afterwards),
     // so runs of same-state draws collapse to a single real toggle via the cache.
-    setDepthMask(true);
+    // Translucent draws (ghost car, boost flame, pulsing rain light) must NOT
+    // write depth: a 35%-alpha ghost that lands in the depth buffer culls the
+    // cars/props drawn after it (they pop invisible "through" the ghost) and
+    // registers in sceneDepth as a solid wall for SSAO/SSR/god-rays.
+    setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
     // Scene alpha is the SSR car-paint tag (see LIT_FS outColor), written only
@@ -1606,6 +1623,10 @@ const GLX = (function () {
   // bloom buffer, then composite scene + bloom with tonemap + vignette. No-op when
   // post is disabled (the scene was drawn straight to the screen already).
   function present(opts) {
+    // Car shadow map must be re-armed by a fresh carShadowBegin every frame —
+    // when game.js stops running the pass (night, knob off, menu) the stale map
+    // must not keep shadowing.
+    _carShadowArmed = false;
     if (!postEnabled) { _gpuTimerEnd(); return; }
     const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
     const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
@@ -1728,6 +1749,10 @@ const GLX = (function () {
       gl.uniform1i(godrayU.uNumLights, grNL);
       gl.uniform1f(godrayU.uLampStr, lampVol);
       gl.uniform1f(godrayU.uMist, (opts && opts.mist) || 0);
+      // GOD-RAY FOCUS / HAZE knobs (defaults reproduce the shipped shaft phase).
+      const GT = opts && opts.tune || null;
+      gl.uniform1f(godrayU.uHgAniso, GT && GT.godrayAniso != null ? GT.godrayAniso : 0.60);
+      gl.uniform1f(godrayU.uHgFloor, GT && GT.godrayFloor != null ? GT.godrayFloor : 0.020);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       useProg(blurProg);
       gl.uniform1i(blurU.uTex, 0);
@@ -1995,9 +2020,7 @@ const GLX = (function () {
       // before begin(), so declare the state explicitly rather than assuming it.
       setDepthMask(true);
       shadowLightVP.set(lightVP);
-      // With the car-caster overlay available, the static scene renders into its
-      // own depth target; shadowEnd publishes it to the sampled map with a blit.
-      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowOverlayOk ? shadowStaticFBO : shadowMapFBO);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
       gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
@@ -2013,44 +2036,44 @@ const GLX = (function () {
     shadowEnd() {
       if (!shadowEnabled) return;
       gl.enable(gl.CULL_FACE);
-      // Publish the freshly-rendered static depth into the sampled map, so the
-      // sampled map is valid even on frames where no car overlay follows.
-      if (shadowOverlayOk) { blitStaticDepth(); shadowOverlayDirty = false; }
       // Refresh the PCSS blocker map from the just-rendered shadow depth.
       // Zero per-frame cost: shadowEnd only runs when the snap cell changed.
-      if (pcssEnabled) refreshBlocker();
+      if (pcssEnabled) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
+        gl.viewport(0, 0, 512, 512);
+        useProg(blockerProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
+        gl.bindSampler(0, blockerSampler);
+        gl.uniform1i(blockerU.uDepthTex, 0);
+        gl.uniform2f(blockerU.uSrcTexel, 1 / SHADOW_SIZE, 1 / SHADOW_SIZE);
+        gl.disable(gl.DEPTH_TEST); setBlend(false);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindSampler(0, null);
+        gl.enable(gl.DEPTH_TEST);
+      }
       gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       gl.viewport(0, 0, width, height);
     },
-    // Per-frame moving-caster overlay: re-composite the snap-cached static depth
-    // (blit) and rasterise the given casters on top, then refresh the blocker
-    // map. items[i] = { mesh, model } (pooled by the caller); count = live slots.
-    // Falls back to a no-op when the split static target isn't available
-    // (mobile tier / FBO incomplete) — callers keep their blob shadows anyway.
-    shadowCasters(items, count) {
-      if (!shadowEnabled || !shadowOverlayOk) return;
-      // count 0 with a clean map: nothing to do. count 0 with a stale overlay:
-      // do ONE clean re-blit so the last car silhouettes don't linger.
-      if (!count && !shadowOverlayDirty) return;
+    // Dynamic CAR shadow pass — same depth program/caster as shadowBegin, but
+    // into the small per-frame car map. Runs before begin() each frame (game.js
+    // guards on this method existing, so WGX silently keeps blob-only shadows).
+    carShadowBegin(lightVP) {
+      if (!carShadowEnabled) return;
       setDepthMask(true);
-      blitStaticDepth();
-      shadowOverlayDirty = count > 0;
-      if (count) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
-        gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
-        useProg(depthProg);
-        gl.uniformMatrix4fv(depthU.uLightVP, false, shadowLightVP);
-        gl.disable(gl.CULL_FACE);  // as shadowBegin: back faces avoid peter-panning
-        for (let i = 0; i < count; i++) {
-          const it = items[i];
-          if (!it || !it.mesh) continue;
-          bindVAO(it.mesh.vao);
-          gl.uniformMatrix4fv(depthU.uModel, false, it.model);
-          gl.drawElements(gl.TRIANGLES, it.mesh.count, it.mesh.indexType, 0);
-        }
-        gl.enable(gl.CULL_FACE);
-      }
-      if (pcssEnabled) refreshBlocker();
+      carShadowLightVP.set(lightVP);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, carShadowFBO);
+      gl.viewport(0, 0, CAR_SHADOW_SIZE, CAR_SHADOW_SIZE);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      useProg(depthProg);
+      gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
+      gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
+      _carShadowArmed = true;
+      _carShadowArms++;
+    },
+    carShadowEnd() {
+      if (!carShadowEnabled) return;
+      gl.enable(gl.CULL_FACE);
       gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       gl.viewport(0, 0, width, height);
     },
@@ -2058,6 +2081,8 @@ const GLX = (function () {
     get height() { return height; },
     get aspect() { return aspect; },
     hdrMode: () => colorType === gl.HALF_FLOAT,
+    // Debug introspection for the dynamic car shadow map (used by tests/tools).
+    carShadowState: () => ({ enabled: carShadowEnabled, arms: _carShadowArms }),
     msaa: () => msaaSamples,
     pcss: () => pcssEnabled,
     setRenderScale, getRenderScale,

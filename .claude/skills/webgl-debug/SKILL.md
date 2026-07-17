@@ -58,7 +58,8 @@ There is **no UBO**. `frame.lights` is a flat JS array of 15-float records:
 [x, y, z,  r, g, b,  radius,  aimX, aimY, aimZ,  coneIn, coneOut,  bleed, volW, glareW]
 ```
 
-`setFrameLights()` (game.js) culls to the nearest 32 lamps each frame and GLX
+`setFrameLights()` (game.js) culls to the nearest CAP lamps each frame
+(`LT.lampCull` def 28 with traffic, else 32) and GLX
 uploads plain uniform arrays (`uLightPos[i]`, `uLightCol[i]`, `uNumLights`,
 plus per-lamp cone/volumetric/glare arrays for the god-ray pass). If light
 positions look scrambled, the usual culprit is a record pushed with the wrong

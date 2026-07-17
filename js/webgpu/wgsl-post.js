@@ -377,7 +377,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    + godray, * exposure, + bloom (tone-masked), ACES tonemap (shared leaf),
   //    lift-gamma-gain colour grade (contrast / vibrance / saturation / tint /
   //    split-tone shadow+hi / black-lift), soft lens-flare + ghosts, vignette,
-  //    dither, film grain. SSR / speed-blur / chromatic-aberration DEFERRED.
+  //    dither, film grain, chromatic aberration, radial speed blur and sharpen.
+  //    SSR is implemented as the separate pass documented above.
   //
   //    BIND GROUP 0:
   //      @binding(0) sceneTex  : texture_2d<f32>   scene HDR (full-res)
@@ -386,7 +387,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(3) godrayTex : texture_2d<f32>   additive shafts
   //      @binding(4) samp      : sampler           linear clamp (all four)
   //      @binding(5) U         : uniform  CompositeU
-  //    UNIFORM CompositeU (128 B):
+  //    UNIFORM CompositeU (144 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
   //      grade       : vec4<f32>  off  32   (contrast, vibrance, saturation, tint)
@@ -395,12 +396,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      gradeHi     : vec4<f32>  off  80   (xyz split-tone highlight tint, w _pad)
   //      texel       : vec4<f32>  off  96   (1/w, 1/h, _pad, _pad) — also the
   //                                          sharpen unsharp-blur tap offset
-  //      imgFx       : vec4<f32>  off 112   (chromAb, sharpen, speedBlur, _pad)
+  //      imgFx       : vec4<f32>  off 112   (chromAb, sharpen, speedBlur, bloomKnee)
   //                                          NEW Phase-4b image FX. Each 0 = no-op:
   //                                          chromAb  = radial R/B split amount
   //                                          sharpen  = unsharp-mask crispness
   //                                          speedBlur= radial centre->edge smear
   //                                                     (GLX folds car speed in)
+  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, _pad, _pad, _pad)
   //    NOTE: sunShaft (p0.z) here is an extra scalar multiplier on the godray
   //    contribution; the godray strength itself lives in the GODRAY uniform.
   // ════════════════════════════════════════════════════════════════════════
@@ -414,6 +416,7 @@ struct CompositeU {
   gradeHi     : vec4<f32>,
   texel       : vec4<f32>,
   imgFx       : vec4<f32>,
+  tuneFx      : vec4<f32>,
 };
 @group(0) @binding(0) var sceneTex  : texture_2d<f32>;
 @group(0) @binding(1) var bloomTex  : texture_2d<f32>;
@@ -471,6 +474,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let chromAb    = U.imgFx.x;
   let sharpen    = U.imgFx.y;
   let speedBlur  = U.imgFx.z;
+  let bloomKnee  = U.imgFx.w;
+  let vignetteSoft = U.tuneFx.x;
   let texel      = U.texel.xy;
 
   var c = textureSampleLevel(sceneTex, samp, in.uv, 0.0).rgb;
@@ -519,7 +524,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   // Bloom: tone-aware mask so already-bright pixels don't over-wash.
   let bloomSample = textureSampleLevel(bloomTex, samp, in.uv, 0.0).rgb;
-  let bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * 0.5;
+  let bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * bloomKnee;
   // Scale by exposure to match the scene (parity with GLX): the bright-pass is
   // pre-exposure, but the scene above is already * exposure — so a driven
   // exposure would otherwise leave the halos over-strong.
@@ -558,7 +563,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let vAspect = select(1.0, texel.y / texel.x, texel.x > 0.0);
   q.x = q.x * vAspect;
   let vr = length(q) * 0.70710678 / length(vec2<f32>(0.5 * vAspect, 0.5));
-  let vig = smoothstep(0.95, 0.35, vr);
+  let vig = smoothstep(0.95, min(vignetteSoft, 0.94), vr);
   c = c * mix(vignette, 1.0, vig);
 
   // Triangular-PDF dither (breaks 8-bit banding in sky/fog gradients).
@@ -820,7 +825,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     BLOOM_UP_UNIFORM_BYTES: 16,     // BloomUpU
     SSAO_UNIFORM_BYTES: 176,        // SsaoU  (2×mat4 128 + 3×vec4 48)
     GODRAY_UNIFORM_BYTES: 32,       // GodrayU (2×vec4)
-    COMPOSITE_UNIFORM_BYTES: 128,   // CompositeU (8×vec4) — +imgFx (chromAb/sharpen/speedBlur)
+    COMPOSITE_UNIFORM_BYTES: 144,   // CompositeU (9×vec4) — +imgFx/tuneFx controls
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
     SSR_UNIFORM_BYTES: 192,         // SsrU  (2×mat4 128 + 4×vec4 64)
     // chain description

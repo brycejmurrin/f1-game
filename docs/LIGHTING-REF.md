@@ -38,8 +38,9 @@ arrays consumed by the lit shader and the god-ray pass. Every
 `lights.push(...)` in `buildTrackLights` (`js/game/lighting.js`) must be
 exactly 15 values.
 
-`setFrameLights()` re-uploads every frame: it sorts all active floodlights by
-distance to camera and keeps the nearest 32 (`MAX_LIGHTS`).
+`setFrameLights()` re-uploads every frame: it sorts active floodlights by
+distance to camera (with behind-camera bias) and keeps the nearest CAP —
+`LT.lampCull` (def 28) when there is traffic, otherwise 32 (`MAX_LIGHTS`).
 
 ---
 
@@ -97,9 +98,9 @@ Colour is chosen by `floodColor(theme)`:
 position using the same stride/offset/side — masts are visible day and night, so
 each light pool reads as physically cast by a real structure.
 
-`setFrameLights()` culls the full list to the nearest 32 to camera each frame and
-uploads the light uniforms. When the sun dominates (bright day) it sets `numLights = 0` and
-skips the upload.
+`setFrameLights()` culls the full list to the nearest CAP lamps each frame
+(`lampCull` / 32 solo) and uploads the light uniforms. When the sun dominates
+(bright day) it sets `numLights = 0` and skips the upload.
 
 ---
 

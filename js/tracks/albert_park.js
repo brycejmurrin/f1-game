@@ -378,8 +378,9 @@
       }
 
       // ====================================================================
-      // TEMPORARY BARRIERS — armco + catch fence densification (street-circuit
-      // tension). Longer runs at T1 and the chicane; lakeside armco kept.
+      // Street-circuit temporary-style barriers — armco + catch fence densified
+      // for park-road tension (permanent dressing in this build). Longer runs
+      // at T1 and the chicane; lakeside armco kept.
       // ====================================================================
       const FENCE_COL = [0.74, 0.76, 0.80];
       const ARMCO    = [0.90, 0.90, 0.92];

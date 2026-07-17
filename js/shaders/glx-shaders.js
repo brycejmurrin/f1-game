@@ -89,7 +89,7 @@ uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
 uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
 // Live-tunable constants (LIGHTING TUNER panel / __apex.lightTune) — defaults
-// mirror game.js TUNE_DEFS; uploaded per frame from frame.tune in begin().
+// mirror LightTune.TUNE_DEFS (js/game/lighting.js); uploaded per frame from frame.tune in begin().
 uniform float uBounceK;     // per-lamp bounce-fill strength (was literal 0.04)
 uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
 uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)
@@ -104,6 +104,12 @@ uniform float uMistHeight;  // ground-mist layer height band (world m scale, def
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
 uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
+uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
+// Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
+// map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor.
+uniform highp sampler2DShadow uCarShadowMap;
+uniform mat4 uCarLightVP;
+uniform float uCarShadowOn;
 // Point lights (floodlights / street lights — mainly for night tracks). Each is
 // {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
 const int MAX_LIGHTS = 32;
@@ -402,16 +408,26 @@ float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.z >= 1.0) return 1.0;
-  // Distance fade: dissolve shadows by RECEIVER distance from the camera, well
-  // inside the shadow box (uShadowRange = box half-size, def ±80 m). Anchored
-  // to the camera, this front glides smoothly as you drive — the old UV-space
-  // border fade was anchored to the BOX, which recentres in sBox/4 jumps, so
-  // the fade band visibly JUMPED forward every recentre at racing speed.
-  float edgeFade = 1.0 - smoothstep(uShadowRange * 0.54, uShadowRange * 0.72, vDist);
-  // UV border fade kept as a safety clamp for the worst-case box alignments
-  // (camera up to sBox/8 off-centre) where the border can undercut the
-  // distance fade — the residual moving band is small and far away.
-  vec2 ef = smoothstep(0.0, 0.12, sc.xy) * (1.0 - smoothstep(0.88, 1.0, sc.xy));
+  // Distance fade: dissolve shadows by RECEIVER distance from uShadowCtr — the
+  // unsnapped forward-biased ground anchor the box is snapped around (game.js
+  // shadow pass). The anchor glides smoothly with the camera, so the fade front
+  // never jumps on a box recentre (a BOX-anchored fade stepped sBox/4 = 16 m at
+  // a time while driving — the visible shadow pop/jump at racing speed). The box
+  // is guaranteed to cover 0.875·range from the anchor (snap slack = range/8),
+  // so completing the fade at 0.84·range retains shadows to ~74 m ahead of the
+  // camera at a 64 m box (the shipped default is 80 m, which reaches further
+  // still) — vs 46 m when this faded from the eye, which had to absorb the
+  // chase-cam offset AND the snap slack in one worst case.
+  // (Camera-height-independent too: fading by eye distance erased every shadow
+  // from high/aerial cameras, where vDist ≥ altitude for the whole ground.)
+  float aDist = distance(wpos, uShadowCtr);
+  float edgeFade = 1.0 - smoothstep(uShadowRange * 0.62, uShadowRange * 0.84, aDist);
+  // UV border fade kept as a thin safety feather only: the distance fade above
+  // completes at 0.84·range while the box guarantees 0.875·range from the anchor,
+  // so anything this feather touches is already ≤~4% strength. Keep it THIN —
+  // it is anchored to the BOX, which recentres in sBox/4 jumps, so any visible
+  // strength it gates would step 16 m at a time while driving.
+  vec2 ef = smoothstep(0.0, 0.03, sc.xy) * (1.0 - smoothstep(0.97, 1.0, sc.xy));
   edgeFade *= ef.x * ef.y;
   if (edgeFade <= 0.0) return 1.0;
   float t = uShadowTexel;
@@ -420,7 +436,11 @@ float sampleShadow(vec3 wpos) {
   // as sqrt(1-c²)/c (same value, no trig).
   float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.05, 1.0);
   float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
-  float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
+  // Shared by the static map below AND the car map at the bottom — the A/B
+  // harness (tools/ab-lighting.mjs shadow.biasClamp) pins this pattern to ONE
+  // site, so keep the bias term factored here rather than repeating the clamp.
+  float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
+  float z = sc.z - biasTerm;
   // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
   // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
   // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
@@ -431,14 +451,15 @@ float sampleShadow(vec3 wpos) {
   // Distance LOD: full 8-tap Poisson + PCSS-lite blocker search near the camera
   // (crisp tyre/kerb contact shadows), a cheap 4-tap disk on distant ground where
   // the shadow is small on screen. Halves shadow bandwidth over most of the frame.
-  // Boundary SCALES with SHADOW DISTANCE (was a fixed 55.0 m). At a raised box the
-  // fade band (uShadowRange*0.54..0.72 above) keeps shadows at full strength well past
-  // 55 m, so a fixed cutoff parked a hard 8-tap→4-tap / PCSS-off quality ring in the
-  // MIDDLE of still-strong shadows — and, anchored to the camera, that ring swept across
-  // the ground as you drove. 0.86 places the switch just past the 0.72 fade-out at every
-  // range, so it always lands where shadows are already faint (invisible); at the
-  // old 64 m box it matched the original fixed 55 m cutoff (0.86*64 ≈ 55).
-  bool near = vDist < uShadowRange * 0.86;
+  // Boundary SCALES with SHADOW DISTANCE (was a fixed 55.0 m) and is anchored to
+  // the SAME gliding anchor as the distance fade above (aDist, not the eye): a
+  // fixed or eye-anchored cutoff parked a hard 8-tap→4-tap / PCSS-off quality
+  // ring in the MIDDLE of still-strong shadows — and swept it across the ground
+  // as you drove. 0.80 places the switch deep into the 0.62→0.84 fade band
+  // (shadows already dimmed to ~7% strength there), so the ring is invisible at
+  // every SHADOW DISTANCE setting, and it can never jump: the anchor glides
+  // continuously with the camera.
+  bool near = aDist < uShadowRange * 0.80;
   float R = 3.0;
   if (near && uPcss > 0.5) {
     // PCSS-lite: blocker search scales the Poisson radius by the receiver-blocker
@@ -475,6 +496,24 @@ float sampleShadow(vec3 wpos) {
     sh = s * 0.125;
   } else {
     sh = s * 0.25;
+  }
+  // Dynamic CAR shadows: min-combine with the per-frame car-only map so cars
+  // cast real sun-projected shadows (direction/length correct, car-on-car
+  // works) on top of the cached static map. Same slope/constant bias; a small
+  // fixed 4-tap PCF (the map is tiny and its content moves every frame, so the
+  // static map's dither/PCSS machinery buys nothing here).
+  if (uCarShadowOn > 0.5) {
+    vec4 cc = uCarLightVP * vec4(wpos, 1.0);
+    vec3 cs = cc.xyz * 0.5 + 0.5;
+    if (cs.x > 0.0 && cs.x < 1.0 && cs.y > 0.0 && cs.y < 1.0 && cs.z < 1.0) {
+      float cz = cs.z - biasTerm;
+      float ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
+      float csh = ( texture(uCarShadowMap, vec3(cs.xy + vec2(-ct, -ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2( ct, -ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2(-ct,  ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2( ct,  ct), cz)) ) * 0.25;
+      sh = min(sh, csh);
+    }
   }
   // Clamped: SHADOW DARKNESS goes to 2.0 and mix() EXTRAPOLATES above t=1 —
   // at sh~0 the lighting factor hit -1, i.e. negative light, which the

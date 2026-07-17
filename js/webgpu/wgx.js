@@ -106,8 +106,8 @@ const WGX = (function () {
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
-  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 224
-  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 56
+  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 384
+  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 96
   const LIGHT_STRIDE = WGSLChunks.LIGHT_STRIDE_BYTES;   // 64
   const MAX_LIGHTS = WGSLChunks.MAX_LIGHTS;             // 32
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 2048
@@ -297,7 +297,8 @@ const WGX = (function () {
 
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
-        depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0;
+        depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0,
+        _targetRetryAt = 0, _targetRetryW = 0, _targetRetryH = 0;
 
     // ── Phase-4 post targets/pipelines (size-independent pipelines built once in
     //    _buildPost; size-dependent targets + bind groups (re)built in
@@ -452,7 +453,7 @@ const WGX = (function () {
     }
 
     // ── Phase-4 post-processing pipelines (size-independent; targets/BGs are
-    //    built per-size in _allocPostTargets). A failure here only disables the
+    //    built per-size in ensureTargets). A failure here only disables the
     //    post chain (present falls back to the tonemap blit) — it does NOT fail
     //    WGX.create(), so lit+sky+shadow still render. ──
     const _UCD = GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST;
@@ -656,9 +657,12 @@ const WGX = (function () {
         // removes the faces you should see and keeps the interior back faces, so solid
         // boxes (buildings) render hollow — you see through the front wall to the inside.
         // It also fixes the fs_main @builtin(front_facing) two-sided normal flip, which
-        // was inverted for the same reason. alpha draws still write depth.
+        // was inverted for the same reason. Translucent (blend) draws must NOT
+        // write depth (GLX draw() parity): a 35%-alpha ghost car in the depth
+        // buffer culls the cars/props drawn after it, and lands in the depth
+        // texture as a solid wall for the SSAO/SSR post passes.
         primitive: { topology: "triangle-list", cullMode: dbl ? "none" : "back", frontFace: "cw" },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less-equal" },
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal" },
       });
       _litPipelines.set(key, p);
       return p;
@@ -684,7 +688,7 @@ const WGX = (function () {
     // Frame bind group (group 0 for the LIT pass) — rebuilt whenever a bound view
     // changes: the SSR result texture is resize-dependent, and the env cube swaps
     // from placeholder to real when the probe runs.
-    function _rebuildFrameBG() {
+    function _makeFrameBGs(nextSsrView) {
       if (!g0Layout || !frameUBO) return;
       const base = (cubeView) => ({
         layout: g0Layout,
@@ -695,169 +699,202 @@ const WGX = (function () {
           { binding: 3, resource: shadowSampler },
           { binding: 4, resource: cubeView },
           { binding: 5, resource: linearSampler },
-          { binding: 6, resource: ssrView },
+          { binding: 6, resource: nextSsrView },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group
       // ALWAYS binds the placeholder so a face is never sampled while it is the render
       // target (read/write feedback — undefined behaviour). draw() picks via _activeFrameBG.
-      frameBindGroup = device.createBindGroup(base(envCubeView));
-      _envFrameBG = device.createBindGroup(base(_envPlaceView || envCubeView));
+      return {
+        main: device.createBindGroup(base(envCubeView)),
+        env: device.createBindGroup(base(_envPlaceView || envCubeView)),
+      };
+    }
+    function _rebuildFrameBG() {
+      const groups = _makeFrameBGs(ssrView);
+      if (!groups) return;
+      frameBindGroup = groups.main;
+      _envFrameBG = groups.env;
       if (!_activeFrameBG || _activeFrameBG !== _envFrameBG) _activeFrameBG = frameBindGroup;
+    }
+
+    function _destroyTargetSet(t) {
+      if (!t) return;
+      const textures = [t.sceneTex, t.depthTex, t.ssaoTex, t.godrayTex, t.ldrTex, t.ssrTex];
+      for (let i = 0; i < textures.length; i++) if (textures[i]) textures[i].destroy();
+      const levels = t.bloomLv || [];
+      for (let i = 0; i < levels.length; i++) levels[i].tex.destroy();
+      const buffers = (t.bloomDownUBO || []).concat(t.bloomUpUBO || []);
+      for (let i = 0; i < buffers.length; i++) buffers[i].destroy();
     }
 
     function ensureTargets() {
       if (width < 1 || height < 1) return;
       if (sceneTex && _texW === width && _texH === height) return;
-      if (sceneTex) sceneTex.destroy();
-      if (depthTex) depthTex.destroy();
-      sceneTex = device.createTexture({
-        size: [width, height], format: SCENE_FORMAT,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      // depthTex gains TEXTURE_BINDING (Phase 4) so SSAO can sample it as a
-      // texture_depth_2d — the depth buffer stores WebGPU-convention z (0..1)
-      // because the lit pass rasterises with the Z01-remapped view-proj.
-      depthTex = device.createTexture({
-        size: [width, height], format: DEPTH_FORMAT,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      sceneView = sceneTex.createView();
-      depthView = depthTex.createView();
-      depthSampleView = depthTex.createView({ aspect: "depth-only" });
-      blitBindGroup = device.createBindGroup({
-        layout: blitPipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: sceneView },
-          { binding: 1, resource: linearSampler },
-          { binding: 2, resource: { buffer: blitUBO } },
-        ],
-      });
-      _texW = width; _texH = height;
-      _allocPostTargets();
-    }
-
-    // Allocate the Phase-4 post targets + their (size-dependent) bind groups.
-    // Destroy-before-recreate; runs from ensureTargets on every size change.
-    // No-op (leaving _postReady false for this frame's present) if the post
-    // pipelines never built.
-    function _allocPostTargets() {
-      if (!pComposite) return;
+      // Keep rendering through the old transactional target set after a failed
+      // resize, but avoid rebuilding and discarding a scene pair every frame.
+      // A new size retries immediately; the same size retries after a short
+      // cooldown so a transient memory-pressure failure can still recover.
+      if (_targetRetryW === width && _targetRetryH === height && Date.now() < _targetRetryAt) return;
       const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
+      const next = { bloomLv: [], bloomDownUBO: [], bloomUpUBO: [],
+        bloomDownBG: [], bloomUpBG: [], postReady: false, ssrReady: false };
       try {
-        if (ssaoTex) ssaoTex.destroy();
-        if (godrayTex) godrayTex.destroy();
-        if (ldrTex) ldrTex.destroy();
-        if (ssrTex) ssrTex.destroy();
-        for (let i = 0; i < bloomLv.length; i++) bloomLv[i].tex.destroy();
-        bloomLv = []; bloomDownUBO = []; bloomUpUBO = []; bloomDownBG = []; bloomUpBG = [];
+        next.sceneTex = device.createTexture({
+          size: [width, height], format: SCENE_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+        next.depthTex = device.createTexture({
+          size: [width, height], format: DEPTH_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+        next.sceneView = next.sceneTex.createView();
+        next.depthView = next.depthTex.createView();
+        next.depthSampleView = next.depthTex.createView({ aspect: "depth-only" });
+        next.blitBindGroup = device.createBindGroup({
+          layout: blitPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: next.sceneView },
+            { binding: 1, resource: linearSampler },
+            { binding: 2, resource: { buffer: blitUBO } },
+          ],
+        });
 
-        ssaoTex = device.createTexture({ size: [halfW, halfH], format: SSAO_FORMAT,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-        godrayTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-        ldrTex = device.createTexture({ size: [width, height], format: LDR_FORMAT,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-        ssaoView = ssaoTex.createView();
-        godrayView = godrayTex.createView();
-        ldrView = ldrTex.createView();
-        ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-        ssrView = ssrTex.createView();
-
-        // Bloom mip chain: mip0 = half-res, each subsequent level halved, capped
-        // at BLOOM_MAX_LEVELS and stopping before a dimension drops below 4 px.
-        let bw = halfW, bh = halfH;
-        for (let i = 0; i < BLOOM_MAX_LEVELS; i++) {
-          if (i > 0) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); }
-          if (i > 0 && (bw < 4 || bh < 4)) break;
-          const tex = device.createTexture({ size: [bw, bh], format: SCENE_FORMAT,
+        // A missing post pipeline keeps the safe tonemap blit path. The scene
+        // pair still swaps transactionally.
+        if (!pComposite) {
+          next.frameGroups = _makeFrameBGs(ssrView);
+        } else {
+          next.ssaoTex = device.createTexture({ size: [halfW, halfH], format: SSAO_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-          bloomLv.push({ tex, view: tex.createView(), w: bw, h: bh });
-        }
-        const nLv = bloomLv.length;
-        // Down UBOs/BGs: mip0 reads scene (threshold gate), mip i>0 reads mip i-1.
-        for (let i = 0; i < nLv; i++) {
-          const ubo = device.createBuffer({ size: _Post.BLOOM_DOWN_UNIFORM_BYTES,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-          bloomDownUBO.push(ubo);
-          bloomDownBG.push(device.createBindGroup({
-            layout: pBloomDown.getBindGroupLayout(0),
-            entries: [
-              { binding: 0, resource: i === 0 ? sceneView : bloomLv[i - 1].view },
-              { binding: 1, resource: linearSampler },
-              { binding: 2, resource: { buffer: ubo } },
-            ],
-          }));
-        }
-        // Up UBOs/BGs: target level i (0..nLv-2) reads the smaller source i+1.
-        for (let i = 0; i < nLv - 1; i++) {
-          const ubo = device.createBuffer({ size: _Post.BLOOM_UP_UNIFORM_BYTES,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-          bloomUpUBO.push(ubo);
-          bloomUpBG.push(device.createBindGroup({
-            layout: pBloomUp.getBindGroupLayout(0),
-            entries: [
-              { binding: 0, resource: bloomLv[i + 1].view },
-              { binding: 1, resource: linearSampler },
-              { binding: 2, resource: { buffer: ubo } },
-            ],
-          }));
-        }
+          next.godrayTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          next.ldrTex = device.createTexture({ size: [width, height], format: LDR_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          next.ssaoView = next.ssaoTex.createView();
+          next.godrayView = next.godrayTex.createView();
+          next.ldrView = next.ldrTex.createView();
+          next.ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          next.ssrView = next.ssrTex.createView();
 
-        ssaoBG = device.createBindGroup({
-          layout: pSSAO.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: depthSampleView },
-            { binding: 1, resource: pointSampler },
-            { binding: 2, resource: { buffer: ssaoUBO } },
-          ],
-        });
-        godrayBG = device.createBindGroup({
-          layout: pGodray.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: sceneView },
-            { binding: 1, resource: linearSampler },
-            { binding: 2, resource: { buffer: godrayUBO } },
-          ],
-        });
-        compositeBG = device.createBindGroup({
-          layout: pComposite.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: sceneView },
-            { binding: 1, resource: bloomLv[0].view },
-            { binding: 2, resource: ssaoView },
-            { binding: 3, resource: godrayView },
-            { binding: 4, resource: linearSampler },
-            { binding: 5, resource: { buffer: compositeUBO } },
-          ],
-        });
-        fxaaBG = device.createBindGroup({
-          layout: pFXAA.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: ldrView },
-            { binding: 1, resource: linearSampler },
-            { binding: 2, resource: { buffer: fxaaUBO } },
-          ],
-        });
-        if (pSSR) {
-          ssrBG = device.createBindGroup({
-            layout: pSSR.getBindGroupLayout(0),
+          let bw = halfW, bh = halfH;
+          for (let i = 0; i < BLOOM_MAX_LEVELS; i++) {
+            if (i > 0) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); }
+            if (i > 0 && (bw < 4 || bh < 4)) break;
+            const tex = device.createTexture({ size: [bw, bh], format: SCENE_FORMAT,
+              usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+            const level = { tex, view: null, w: bw, h: bh };
+            next.bloomLv.push(level);   // take ownership before createView can throw
+            level.view = tex.createView();
+          }
+          const nLv = next.bloomLv.length;
+          for (let i = 0; i < nLv; i++) {
+            const ubo = device.createBuffer({ size: _Post.BLOOM_DOWN_UNIFORM_BYTES,
+              usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            next.bloomDownUBO.push(ubo);
+            next.bloomDownBG.push(device.createBindGroup({
+              layout: pBloomDown.getBindGroupLayout(0),
+              entries: [
+                { binding: 0, resource: i === 0 ? next.sceneView : next.bloomLv[i - 1].view },
+                { binding: 1, resource: linearSampler },
+                { binding: 2, resource: { buffer: ubo } },
+              ],
+            }));
+          }
+          for (let i = 0; i < nLv - 1; i++) {
+            const ubo = device.createBuffer({ size: _Post.BLOOM_UP_UNIFORM_BYTES,
+              usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            next.bloomUpUBO.push(ubo);
+            next.bloomUpBG.push(device.createBindGroup({
+              layout: pBloomUp.getBindGroupLayout(0),
+              entries: [
+                { binding: 0, resource: next.bloomLv[i + 1].view },
+                { binding: 1, resource: linearSampler },
+                { binding: 2, resource: { buffer: ubo } },
+              ],
+            }));
+          }
+          next.ssaoBG = device.createBindGroup({
+            layout: pSSAO.getBindGroupLayout(0),
             entries: [
-              { binding: 0, resource: sceneView },
-              { binding: 1, resource: depthSampleView },
-              { binding: 2, resource: linearSampler },
-              { binding: 3, resource: pointSampler },
-              { binding: 4, resource: { buffer: ssrUBO } },
+              { binding: 0, resource: next.depthSampleView },
+              { binding: 1, resource: pointSampler },
+              { binding: 2, resource: { buffer: ssaoUBO } },
             ],
           });
-          _ssrReady = true;
-          _rebuildFrameBG();   // frame group binding 6 now points at the real SSR texture
+          next.godrayBG = device.createBindGroup({
+            layout: pGodray.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: next.sceneView },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: godrayUBO } },
+            ],
+          });
+          next.compositeBG = device.createBindGroup({
+            layout: pComposite.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: next.sceneView },
+              { binding: 1, resource: next.bloomLv[0].view },
+              { binding: 2, resource: next.ssaoView },
+              { binding: 3, resource: next.godrayView },
+              { binding: 4, resource: linearSampler },
+              { binding: 5, resource: { buffer: compositeUBO } },
+            ],
+          });
+          next.fxaaBG = device.createBindGroup({
+            layout: pFXAA.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: next.ldrView },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: fxaaUBO } },
+            ],
+          });
+          if (pSSR) {
+            next.ssrBG = device.createBindGroup({
+              layout: pSSR.getBindGroupLayout(0),
+              entries: [
+                { binding: 0, resource: next.sceneView },
+                { binding: 1, resource: next.depthSampleView },
+                { binding: 2, resource: linearSampler },
+                { binding: 3, resource: pointSampler },
+                { binding: 4, resource: { buffer: ssrUBO } },
+              ],
+            });
+            next.ssrReady = true;
+          }
+          next.frameGroups = _makeFrameBGs(next.ssrView);
+          next.postReady = true;
         }
-        _postReady = true;
       } catch (_) {
-        _postReady = false;
+        _destroyTargetSet(next);
+        _targetRetryW = width; _targetRetryH = height;
+        _targetRetryAt = Date.now() + 1000;
+        return;
       }
+
+      const old = { sceneTex, depthTex, ssaoTex, godrayTex, ldrTex, ssrTex,
+        bloomLv, bloomDownUBO, bloomUpUBO };
+      sceneTex = next.sceneTex; depthTex = next.depthTex;
+      sceneView = next.sceneView; depthView = next.depthView;
+      depthSampleView = next.depthSampleView; blitBindGroup = next.blitBindGroup;
+      ssaoTex = next.ssaoTex || null; godrayTex = next.godrayTex || null;
+      ldrTex = next.ldrTex || null; ssrTex = next.ssrTex || null;
+      ssaoView = next.ssaoView || null; godrayView = next.godrayView || null;
+      ldrView = next.ldrView || null; ssrView = next.ssrView || ssrView;
+      bloomLv = next.bloomLv; bloomDownUBO = next.bloomDownUBO;
+      bloomUpUBO = next.bloomUpUBO; bloomDownBG = next.bloomDownBG;
+      bloomUpBG = next.bloomUpBG; ssaoBG = next.ssaoBG || null;
+      godrayBG = next.godrayBG || null; compositeBG = next.compositeBG || null;
+      fxaaBG = next.fxaaBG || null; ssrBG = next.ssrBG || null;
+      if (next.frameGroups) {
+        frameBindGroup = next.frameGroups.main;
+        _envFrameBG = next.frameGroups.env;
+        _activeFrameBG = frameBindGroup;
+      }
+      _postReady = next.postReady;
+      _ssrReady = next.ssrReady;
+      _texW = width; _texH = height;
+      _targetRetryAt = 0;
+      _destroyTargetSet(old);
     }
 
     // ── buffer helper: create a GPUBuffer initialised from a typed array ──
@@ -1035,9 +1072,24 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      d[73] = (T && T.shadowStr != null) ? T.shadowStr : 1.15;      // SHADOW STRENGTH knob
+      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/glx.js lit
+      // begin): the night moon-key is deliberately held HIGH (sunDir.y ≈ 0.97
+      // drives the sky glow), so the binary sunUp gate above never fires at
+      // night — without this fade WebGPU kept full-strength terrain/road sun
+      // shadows under moonlight, and prop shadows POPPED when the day↔night
+      // key crossed the game.js cast gate instead of fading through dusk in
+      // lockstep with it.
+      const _kl = f.sunColor ? Math.max(f.sunColor[0], f.sunColor[1], f.sunColor[2]) : 1;
+      let _hf = (_kl - 0.28) / 0.14;
+      _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
+      _hf = _hf * _hf * (3 - 2 * _hf);
+      // Clear-night moon shadows (GLX parity): floor the key-dim fade with the
+      // MOON SHADOWS knob scaled by the clear-night factor (game.js frame.moonK).
+      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonK || 0);
+      if (_mSh > _hf) _hf = _mSh;
+      d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.15) * _hf;
       d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
-      d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.0015;  // SHADOW BIAS knob
+      d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.001;   // SHADOW BIAS knob (same 0.001 fallback as GLX)
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
       d[76] = (T && T.bounceK     != null) ? T.bounceK     : 0.04;  // BOUNCE (per-lamp bounce-fill strength, == GLX uBounceK; NOT ambient)
       d[77] = (T && T.fogTint     != null) ? T.fogTint     : 0.0;   // FOG TINT (-1..1)
@@ -1064,7 +1116,21 @@ const WGX = (function () {
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
       d[84] = (_envProbeLive && T && T.carEnvCube != null) ? T.carEnvCube : 0.0;
-      d[85] = 0; d[86] = 0; d[87] = 0;
+      // params5.y: CLOUD SPEED (drives the LIT cloud-shadow dapple drift, same
+      // 1.0 fallback as GLX uCloudSpeed).
+      d[85] = f.cloudSpeed != null ? f.cloudSpeed : 1.0;
+      d[86] = 0; d[87] = 0;
+      // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
+      // the shadow box is snapped around (game.js shadow pass; glides with the
+      // camera so the LIT distance fade never jumps on a box recentre), w =
+      // shadowRange (SHADOW DISTANCE knob, box half-size in m — same 64 fallback
+      // as GLX uShadowRange).
+      const sctr = f.shadowCtr || f.eye || [0, 0, 0];
+      d[88] = sctr[0]; d[89] = sctr[1]; d[90] = sctr[2];
+      d[91] = (T && T.shadowRange != null) ? T.shadowRange : 64.0;
+      // params6 (floats 92..95): wet-surface darkening parity with GLX.
+      d[92] = (T && T.wetDark != null) ? T.wetDark : 1.0;
+      d[93] = 0; d[94] = 0; d[95] = 0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1474,11 +1540,14 @@ const WGX = (function () {
         s[19] = grade && grade.str != null ? grade.str : 0;                              // gradeShadow (w=str)
         s[20] = ghi[0]; s[21] = ghi[1]; s[22] = ghi[2]; s[23] = 0;                        // gradeHi
         s[24] = 1 / width; s[25] = 1 / height; s[26] = 0; s[27] = 0;                      // texel
-        // imgFx (off 112): chromatic aberration, sharpen, speed-blur (all 0 = no-op).
+        // imgFx (off 112): chromatic aberration, sharpen, speed-blur, bloom knee.
         s[28] = (T && T.chromAb != null) ? T.chromAb : 0.0;
         s[29] = (T && T.sharpen != null) ? T.sharpen : 0.0;
         s[30] = (o.speedBlur != null) ? o.speedBlur : ((T && T.speedBlur != null) ? T.speedBlur : 0.0);
-        s[31] = 0;
+        s[31] = (T && T.bloomKnee != null) ? T.bloomKnee : 0.5;
+        // tuneFx (off 128): vignette reach; remaining lanes reserved/aligned.
+        s[32] = (T && T.vignetteSoft != null) ? T.vignetteSoft : 0.35;
+        s[33] = 0; s[34] = 0; s[35] = 0;
         device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
@@ -1751,11 +1820,6 @@ const WGX = (function () {
       castShadow,
       castShadowChunked,
       shadowEnd,
-      // Per-frame moving-caster overlay (GLX re-composites cars onto a cached
-      // static depth). Not implemented on the WebGPU path yet — no-op keeps the
-      // backend surface uniform; cars keep their blob shadows.
-      shadowCasters() {},
-
       // ── Env probe (Phase 4b) ──
       envFaceBegin,
       envFaceEnd,

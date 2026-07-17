@@ -233,15 +233,21 @@ function ttBoardAdd(trackId, entry) {
 
 const { DEFAULT_CUSTOM } = GameTables;
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
+function invalidateCustomMeshCache(cache) {
+  Object.keys(cache).forEach((key) => {
+    if (key.indexOf("custom:") !== 0) return;
+    if (cache[key] && gfx.freeMesh) gfx.freeMesh(cache[key]);
+    delete cache[key];
+  });
+}
 function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
   invalidateDecalTextures("custom");
-  if (teamMeshes.custom && gfx.freeMesh) gfx.freeMesh(teamMeshes.custom);   // free the old GPU buffers first
-  delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
-  if (playerBodies.custom && gfx.freeMesh) gfx.freeMesh(playerBodies.custom);
-  delete playerBodies.custom; // and the body-only (animated-wheel) variant
+  invalidateCustomMeshCache(teamMeshes);
+  invalidateCustomMeshCache(playerBodies);
+  invalidateCustomMeshCache(cockpitBodies);
 }
 function hexToRgb(h) {
   return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
@@ -269,7 +275,40 @@ function gearsManual() {
 // Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
 // the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
 function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
-let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
+let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
+function seasonDriverId(teamId, driverIndex) { return teamId + ":" + driverIndex; }
+function seasonRoster() {
+  const roster = [];
+  Teams.LIST.forEach((team) => team.drivers.forEach((driver, driverIndex) => {
+    roster.push({
+      id: seasonDriverId(team.id, driverIndex),
+      code: driver.code,
+    });
+  }));
+  return roster;
+}
+function migrateSeasonPoints() {
+  if (!season) return;
+  const oldPts = season.pts && typeof season.pts === "object" ? season.pts : {};
+  const roster = seasonRoster();
+  const nextPts = {};
+  const codes = Object.assign({}, season.driverCodes || {});
+  // Legacy display-code keys cannot be disambiguated after historical code collisions, so migration is best-effort.
+  Object.entries(oldPts).forEach(([key, value]) => {
+    const driver = roster.find((candidate) => candidate.id === key || candidate.code === key);
+    const id = driver ? driver.id : key;
+    nextPts[id] = (nextPts[id] || 0) + (Number(value) || 0);
+    if (driver) codes[id] = driver.code;
+    else if (!codes[id]) codes[id] = key;
+  });
+  roster.forEach((driver) => {
+    if (Object.prototype.hasOwnProperty.call(nextPts, driver.id)) codes[driver.id] = driver.code;
+  });
+  season.pts = nextPts;
+  season.driverCodes = codes;
+  season.teamPts = season.teamPts && typeof season.teamPts === "object" ? season.teamPts : {};
+  store.set("season", season);
+}
 
 // ---------- physics constants ----------
 const VMAX = 72;            // m/s base (~259 km/h) — F1 race pace; scales all speeds
@@ -339,7 +378,7 @@ const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer 
 let ROAD_FOLLOW = 0.7;
 // Combined-slip friction ellipse: grip used braking/accelerating is taken out of
 // the cornering budget. LONG_GRIP is the longitudinal axis of the ellipse (m/s²),
-// set a little above BRAKE (27) so straight-line braking keeps most grip, but
+// set a little above BRAKE (22) so straight-line braking keeps most grip, but
 // braking hard WHILE turning washes the front wide; easing off the brake as you
 // turn in (trail-braking) hands grip back to cornering. Higher = more forgiving.
 const LONG_GRIP = 34;
@@ -590,8 +629,13 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
+// Curated CircuitMarkings splits when present; equal thirds only as fallback.
 function sectorAt(s) {
   const frac = wrapS(s) / track.total;
+  const sec = track.def && track.def.sectors;
+  if (sec && sec.length === 2) {
+    return frac < sec[0] ? 0 : frac < sec[1] ? 1 : 2;
+  }
   return frac < 1 / 3 ? 0 : frac < 2 / 3 ? 1 : 2;
 }
 // Render interpolation: blend a car's arc position between its previous and
@@ -626,6 +670,8 @@ const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const MAT_REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _mProj = new Float32Array(16), _mView = new Float32Array(16), _mVP = new Float32Array(16);
 const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
+// Dynamic car shadow pass scratches (per-frame car-only depth map).
+const _mCView = new Float32Array(16), _mCProj = new Float32Array(16), _mCVP = new Float32Array(16);
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
@@ -633,6 +679,7 @@ const _upVS = new Float32Array(3);   // world-up expressed in view space (wet-ro
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
+const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
 // ---------- parts / player mods ----------
 function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
@@ -744,7 +791,7 @@ function makeCars() {
         + (Math.random() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
       cars.push({
-        team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
+        team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
         fuelId: getTeamParts(team.id).fuel || "standard",   // tints the exhaust flame
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
@@ -885,13 +932,8 @@ const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaW
 // shadow matrix and flush them all in one state block after the body loop. Shadows
 // are depth-tested but write no depth, so drawing them last is visually identical.
 const _shadowMats = [];   // pool of Float32Array(16), reused across frames
+const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shadow caster pass
 let _shadowCount = 0;
-// Real car sun-shadows: pooled { mesh, model } slots handed to gfx.shadowCasters()
-// each frame — the moving cars are re-composited over the snap-cached static
-// shadow depth (see the caster block after the shadow pass in render()). These
-// are NOT the blob-shadow mats above; the blob pass stays on as the contact term.
-const _casterItems = [];                  // pool of { mesh, model: Float32Array(16) }
-const _casterIdx = [], _casterD2 = [];    // nearest-N selection scratch (indices + dist²)
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
 // one for the render loop (both called once per car per frame) so banking() no
 // longer allocates a fresh object ~23×/frame.
@@ -1171,8 +1213,12 @@ function _nightAmbientBand() {
   const _cgA = frameSky.cityGlow;
   if (_cgA) {
     const _cgm = Math.max(_cgA[0], _cgA[1], _cgA[2]) || 1;
-    frame.ambientSky    = frame.ambientSky.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
-    frame.ambientGround = frame.ambientGround.map((v, i) => v * (0.82 + 0.28 * _cgA[i] / _cgm));
+    // SKYGLOW ON AMBIENT knob scales the shipped tint deviation (def 0.28): the
+    // dominant glow channel is boosted, the others cut, so the night ambient picks
+    // up the city's neon/sodium hue. _cgMix 1 = as-shipped, 0 = neutral ambient.
+    const _cgMix = (LT.cityGlowTint != null ? LT.cityGlowTint : 0.28) / 0.28;
+    frame.ambientSky    = frame.ambientSky.map((v, i) => v * (1 + _cgMix * (0.82 + 0.28 * _cgA[i] / _cgm - 1)));
+    frame.ambientGround = frame.ambientGround.map((v, i) => v * (1 + _cgMix * (0.82 + 0.28 * _cgA[i] / _cgm - 1)));
   }
 }
 
@@ -1423,8 +1469,12 @@ function applyRaceSettings() {
     // in sync with the sky dome so glass/wet-road/clearcoat mirror the sky the
     // player actually sees (the weather post-modifiers below re-sync on their side).
     frame.skyZenith = frameSky.zenith; frame.skyHorizon = frameSky.horizon;
-    // "default" — driven by the track palette; set moon for night tracks
+    // "default" — driven by the track palette; set moon + stars for night tracks.
+    // stars must be reset here symmetrically with moon: only the explicit-TOD
+    // branch used to write it, so a live explicit-night → default flip (any
+    // applyRaceSettings re-run without a track reload) kept stars in a day sky.
     frameSky.moon = isNightSession ? 0.85 : 0;
+    frameSky.stars = isNightSession ? 1 : 0;
     // Dim the SCENE sun to soft moonlight at night. Many night palettes ship a
     // bright, near-overhead sun (it drives the sky glow) — left undimmed it lit
     // the road/scenery like daytime, which is why night looked washed (Singapore).
@@ -1754,7 +1804,7 @@ function startRace() {
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
   const manual = gearsManual();   // only ever true in tilt mode
-  // GAS pedal whenever throttle is manual (tilt); auto-throttle (touch/button) hides it
+  // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
@@ -1787,7 +1837,8 @@ function endRace(forcedOrder) {
   if (seasonMode) {
     order.forEach((c, i) => {
       const pts = Teams.POINTS[i] || 0;
-      season.pts[c.code] = (season.pts[c.code] || 0) + pts;
+      season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
+      season.driverCodes[c.driverId] = c.code;
       season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
     });
     season.round++;
@@ -1823,14 +1874,14 @@ function buildResults(order) {
     head.style.cssText = "margin-top:14px;color:#e10600;font-weight:800;font-style:italic";
     head.textContent = "DRIVERS — AFTER ROUND " + season.round;
     els.resultsTable.appendChild(head);
-    const all = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0)).slice(0, 10);
+    const all = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0)).slice(0, 10);
     all.forEach((c, i) => {
       const row = document.createElement("div");
       row.className = "res-row" + (c.isPlayer ? " you" : "");
       const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
       const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(c.team.color);
       const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code + "  " + c.name;
-      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.code] || 0) + " pts";
+      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
       row.append(pos, sw, nm, pt);
       els.resultsTable.appendChild(row);
     });
@@ -1920,7 +1971,12 @@ function buildTTResults() {
     const clrBtn = document.createElement("button");
     clrBtn.style.cssText = "font-size:11px;padding:4px 10px;opacity:0.6";
     clrBtn.textContent = "✕ CLEAR GHOST";
-    clrBtn.onclick = () => { Ghost.clear(track.def.id); ttRecord = Infinity; buildTTResults(); };
+    clrBtn.onclick = () => {
+      Ghost.clear(track.def.id);
+      const remaining = ttBoard(track.def.id);
+      ttRecord = remaining.length ? remaining[0].t : Infinity;
+      buildTTResults();
+    };
     clrRow.appendChild(clrBtn);
     els.resultsTable.appendChild(clrRow);
   }
@@ -1934,10 +1990,9 @@ function hexToArr(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [
 function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); return "#" + f(a[0]) + f(a[1]) + f(a[2]); }
 
 function quitToMenu() {
-  if (photoMode) exitPhotoMode();   // drop the fly-cam override before leaving the race
+  closeLightTuner(false);
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
-  document.body.classList.remove("lt-open");
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
@@ -1971,8 +2026,9 @@ function buildStandings() {
 
   const drList = Object.entries(season.pts)
     .sort((a, b) => b[1] - a[1]);
-  drList.forEach(([code, pts], i) => {
-    const c = cars.find((x) => x.code === code);
+  drList.forEach(([driverId, pts], i) => {
+    const c = cars.find((x) => x.driverId === driverId);
+    const code = c ? c.code : ((season.driverCodes && season.driverCodes[driverId]) || driverId);
     const row = document.createElement("div");
     row.className = "res-row" + (c && c.isPlayer ? " you" : "");
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
@@ -2886,25 +2942,29 @@ function updateCar(c, dt, ranked) {
   c.lapTime += dt;
   c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
 
-  // Sector detection: thirds of track. This must run before finish-line timing
-  // resets so a forward S3→S1 crossing records the completed S3 split.
+  // Sector detection (curated splits via sectorAt). Must run before finish-line
+  // timing resets so a forward S3→S1 crossing records the completed S3 split.
   if (c.isPlayer && state === "race" && track) {
     const newSector = sectorAt(c.s);
     if (newSector !== sectorIdx) {
       if (ds > 0 && (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0))) {
-        // completed the current sector (forward progress only — a backward crossing
-        // of the start/finish line must not record a bogus sector time)
-        const elapsed = c.lapTime - sectorStartT;
-        const prevSector = sectorIdx;
-        const prevBest = sectorBests[prevSector];
-        sectorLast[prevSector] = elapsed;
-        // Delta is measured against the PREVIOUS best, before this split updates it,
-        // so a new personal best shows the actual improvement (not 0.000).
-        const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
-        if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
-        if (elapsed >= 2) {
-          const sign = delta <= 0 ? "▼ S" : "▲ S";
-          announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+        // Grid sits just before the line (in S3). The first start/finish crossing
+        // only starts the flying lap (lap 0→1) — do NOT stamp that formation
+        // segment as an S3 split/best, or the HUD shows a bogus ~few-second S3
+        // the moment the race begins.
+        if (c.lap >= 1) {
+          const elapsed = c.lapTime - sectorStartT;
+          const prevSector = sectorIdx;
+          const prevBest = sectorBests[prevSector];
+          sectorLast[prevSector] = elapsed;
+          // Delta is measured against the PREVIOUS best, before this split updates it,
+          // so a new personal best shows the actual improvement (not 0.000).
+          const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
+          if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
+          if (elapsed >= 2) {
+            const sign = delta <= 0 ? "▼ S" : "▲ S";
+            announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
+          }
         }
       }
       sectorIdx = newSector;
@@ -3083,7 +3143,7 @@ function ltFallback(id) {
 // Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
 // (not read per-frame in render). Changing one re-runs applyRaceSettings so it
 // updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "ambTemp", "ambBalance"]);
+const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance"]);
 function applyLightTune(fromApplyRace) {
   const layers = ltLayers();
   let rebuilt = false, reapply = false, reinit = false;
@@ -3134,25 +3194,28 @@ function appendCarTailLights() {
   // appending here never mutates the cached track set.
   if (!L || L === track._lights || !player) return;
   _tlSel.length = 0;
+  const tlRange = LT.tailRange != null ? LT.tailRange : 160;   // TAIL-LIGHT RANGE knob
   for (const c of cars) {
     const ds = Math.abs(c.s - player.s);
     const d = Math.min(ds, track.total - ds);
-    if (d < 160) _tlSel.push({ c, d });
+    if (d < tlRange) _tlSel.push({ c, d });
   }
   _tlSel.sort((a, b) => a.d - b.d);
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
-  // grid (Singapore/Vegas/Baku) the floodlights alone fill the 32-light cap, so
-  // simply appending here overflowed past 32 and the shader dropped the appended
-  // tail-lights — the red glow trailing nearby traffic vanished exactly where
-  // night traffic is most visible. Evict that many of the FARTHEST floods instead
-  // (setFrameLights sorts the dense-grid set ascending by distance, so the tail
-  // end is the farthest) — a flood 250 m back matters far less than a car ahead.
+  // grid the floodlights alone can fill the shader's 32-light cap (or the tighter
+  // lampCull CAP from setFrameLights), so appending overflowed and the shader
+  // dropped the tail-lights. Evict that many of the FARTHEST floods instead
+  // (setFrameLights sorts ascending by distance, so the tail end is farthest).
   const room = 32 - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
+  // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
+  // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
+  // hard cutoff (as-shipped), so the fade term is 1 for every selected car.
+  const tlFade = LT.tailFade != null ? LT.tailFade : 0;
   for (let j = 0; j < nT; j++) {
-    const c = _tlSel[j].c;
+    const sel = _tlSel[j], c = sel.c;
     Tracks.sample(track, c.s, _tlSmp);
     const tx = _tlSmp.t[0], tz = _tlSmp.t[2];
     // rear-facing, tilted down: the glow lands on the road behind the car
@@ -3162,7 +3225,8 @@ function appendCarTailLights() {
     // the render-only 0..1 disc-heat ramp every car already tracks (rises under
     // braking, cools after) — read-only here, physics untouched.
     const bAmt = clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul;
-    const tlm = LT.tailLightMul * (1 + bAmt * 1.6);
+    const fadeF = tlFade > 0 ? clamp((tlRange - sel.d) / tlFade, 0, 1) : 1;
+    const tlm = LT.tailLightMul * (1 + bAmt * 1.6) * fadeF;
     L.push(
       _tlSmp.p[0] + _tlSmp.r[0] * c.x - tx * 2.4,
       _tlSmp.p[1] + 0.55,
@@ -3172,13 +3236,13 @@ function appendCarTailLights() {
   }
 }
 
-// Cull the track light set to the nearest lamps (32 shader slots, minus a
-// small reservation for car tail lights in traffic) and flatten into
+// Cull the track light set to the nearest CAP lamps (shader max 32; traffic uses
+// LT.lampCull, def 28, leaving room for car tail lights) and flatten into
 // `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
-const _lightHeap = [];         // pooled max-heap (≤32 entries) for the nearest-32 partial selection
+const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
@@ -3186,11 +3250,9 @@ function setFrameLights(eye, scale, fwd) {
   const src = track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
-  // cull, and with a full 32-lamp selection its budget was always zero on
-  // dense city night grids — exactly the traffic-glow scenario it was built
-  // for. Four lamps out of 32, ranked farthest-of-set, are visually covered
-  // by the distance tail-fade below.
-  const CAP = cars.length > 1 ? 28 : 32;
+  // cull. With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader
+  // slots stay free; solo runs use the full 32.
+  const CAP = cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32;
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
@@ -3220,15 +3282,27 @@ function setFrameLights(eye, scale, fwd) {
     // FLICKER knob so 0 still means rock-steady.
     let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
               + LT.lampFlicker * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
-    const wu = Math.min(1, Math.max(0, (tNow - _lampWarmT0) / (4 + hsh * 4)));
-    f *= 0.70 + 0.30 * wu;
-    const cold = 1 - wu;   // 1 = just struck (dim, sodium-orange), 0 = settled
+    // LAMP WARM-UP knob scales the strike-to-full duration (def 1 = the 4+hsh*4 s
+    // ramp). 0 = instant on (wu pinned to 1, no dip/warmth); higher = a longer,
+    // more staggered warm-up. WARM-UP DIP sets how dim the strike starts, WARM-UP
+    // WARMTH how orange it glows before settling.
+    const warmDur = (4 + hsh * 4) * (LT.lampWarmup != null ? LT.lampWarmup : 1);
+    const wu = warmDur > 0 ? Math.min(1, Math.max(0, (tNow - _lampWarmT0) / warmDur)) : 1;
+    const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
+    f *= (1 - dip) + dip * wu;
+    const cold = (1 - wu) * (LT.lampWarmupWarm != null ? LT.lampWarmupWarm : 1);   // 1 = just struck (dim, sodium-orange), 0 = settled
     _flScr[0] = f * (1 + cold * 0.22);
     _flScr[1] = f * (1 - cold * 0.10);
     _flScr[2] = f * (1 - cold * 0.38);
     return _flScr;
   };
-  if (count <= 32) {
+  // Cheap unsorted copy ONLY when every lamp fits with the full 5-slot tail-light
+  // reserve to spare. It used to run for any count ≤ 32, which broke two promises
+  // downstream: appendCarTailLights evicts overflow from the array TAIL on the
+  // assumption the set is sorted farthest-last (it wasn't — on a 29-32-lamp track
+  // it could snap off the nearest floods instead), and the CAP reservation was
+  // silently ignored. 24+-lamp tracks now take the sorted heap path below.
+  if (count + 5 <= CAP) {
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
     out.length = 0;
     for (let i = 0; i < src.length; i += 15) {
@@ -3240,14 +3314,13 @@ function setFrameLights(eye, scale, fwd) {
     frame.lights = out;
     return;
   }
-  // distance-rank: select the nearest 32. Reuse a pooled object array + the
+  // Distance-rank: select the nearest CAP. Reuse a pooled object array + the
   // output buffer so a dense night grid doesn't allocate fresh garbage every
   // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
-  // Lights BEHIND the camera rank as ~2.5x farther (x6.25 in squared space):
-  // a purely radial nearest-32 wastes half the budget on lamps you can't see,
-  // ending the lit road in a hard dark boundary ~150-250 m ahead that follows
-  // the camera ("hard shadow line that recedes as you approach"). The forward
-  // bias pushes that boundary ~2x further out — past the night fog wall.
+  // Lights BEHIND the camera rank farther: a purely radial nearest-N wastes
+  // half the budget on lamps you can't see, ending the lit road in a hard dark
+  // boundary ahead. The forward bias (LT.lampBehindBias) pushes that boundary
+  // further out — past the night fog wall.
   const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
   const flen = Math.hypot(fx, fz) || 1;
   const buf = _lightCullBuf;
@@ -3261,15 +3334,16 @@ function setFrameLights(eye, scale, fwd) {
     const b = dx * fx + dz * fz;
     if (b < 0) {
       const dl = Math.sqrt(dx * dx + dz * dz) || 1;
-      d *= 1 + 5.25 * Math.min(1, (-b) / (flen * dl * 0.25));
+      // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
+      // nearest-N rank (def 5.25 = as-shipped forward push).
+      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, (-b) / (flen * dl * 0.25));
     }
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
   }
   buf.length = count;
-  // Partial selection: keep only the nearest 32 in a max-heap instead of sorting
-  // all ~count entries every frame (O(count·log32) vs O(count·log count)). Same
-  // nearest-32 set as the old full .sort()+slice, just cheaper on a dense grid.
+  // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
+  // all ~count entries every frame (O(count·log CAP) vs O(count·log count)).
   const heap = _lightHeap; heap.length = 0;
   for (let i = 0; i < count; i++) {
     const e = buf[i];
@@ -3290,10 +3364,16 @@ function setFrameLights(eye, scale, fwd) {
   // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
   // membership changes are invisible.
   const dEdge = heap[heap.length - 1].d || 1;
+  // The boundary fade only makes sense when lamps were actually culled — if the
+  // whole baked set fit inside CAP (the 24-32-lamp tracks that now take this
+  // path for its sorting), there is no set boundary, and fading "the farthest
+  // of the set" would black out a real lamp that used to be lit.
+  const truncated = count > CAP;
+  const _cullBand = dEdge * (LT.lampCullFade != null ? LT.lampCullFade : 0.35);   // LAMP CULL FADE knob
   out.length = 0;
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
-    const cullF = Math.max(0, Math.min(1, (dEdge - e.d) / (dEdge * 0.35)));
+    const cullF = truncated ? Math.max(0, Math.min(1, (dEdge - e.d) / _cullBand)) : 1;
     const f = fl(o);
     out.push(src[o], src[o+1], src[o+2],
       src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
@@ -3895,11 +3975,27 @@ function render(dt) {
     let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
     const xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
     const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
-    const cx = smp.p[0], cy = smp.p[1], cz = smp.p[2];
     // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
     // only on the position snap), so the slider responds without driving.
     const sBox = LT.shadowRange || 64;
     const step = sBox / 4;
+    // Forward-biased CAMERA anchor, not the raw player position: the box budget
+    // goes where you look. Centred on the car, up to sBox/8 of snap slack plus
+    // the ~10 m chase-cam offset sat BEHIND the camera, so the shader's fade had
+    // to dissolve shadows by 0.72·range (≈46 m at the default 64) to stay inside
+    // the worst-case border — the "shadow horizon" ~46 m ahead. Anchoring at
+    // camera + a forward bias makes the safe radius symmetric around the view
+    // (0.875·sBox from the anchor), letting the fade reach ~0.84·range — shadows
+    // hold ~74 m ahead of the camera at the same texel density. Height comes from
+    // the LOOK TARGET (subject/ground level — right for chase, cockpit, TV and
+    // orbit/aerial debug cams alike), NOT the camera eye: fading by eye distance
+    // erased ALL shadows from any high/aerial camera (vDist ≥ altitude).
+    let fbx = camTgt[0] - camEye[0], fbz = camTgt[2] - camEye[2];
+    const fbl = Math.hypot(fbx, fbz), fBias = Math.min(20, sBox * 0.3);
+    if (fbl > 1e-6) { fbx = fbx / fbl * fBias; fbz = fbz / fbl * fBias; } else { fbx = 0; fbz = 0; }
+    _shadowCtr[0] = camEye[0] + fbx; _shadowCtr[1] = camTgt[1]; _shadowCtr[2] = camEye[2] + fbz;
+    frame.shadowCtr = _shadowCtr;
+    const cx = _shadowCtr[0], cy = _shadowCtr[1], cz = _shadowCtr[2];
     const lu = Math.round((xx * cx + xy * cy + xz * cz) / step) * step;
     const lv = Math.round((yx * cx + yy * cy + yz * cz) / step) * step;
     // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
@@ -3916,9 +4012,10 @@ function render(dt) {
       const wy = xy * lu + yy * lv + zy * lw;
       const wz = xz * lu + yz * lv + zz * lw;
       M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
-      // Half-size box (default ±80 m / 160 m) snapped to the camera; sampleShadow
-      // fades shadows out by camera distance well inside its border. Bigger =
-      // more reach, smaller = crisper contacts (texel density = 2048/box).
+      // Half-size box (default ±80 m / 160 m) snapped around the anchor;
+      // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
+      // inside its border. Bigger = more reach, smaller = crisper contacts
+      // (texel density = 2048/box).
       M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
       gfx.shadowBegin(_mLVP);
@@ -3930,82 +4027,44 @@ function render(dt) {
       // BRIGHTNESS, not sunDir.y: the night moon-key is deliberately held high
       // (sunDir.y ≈ 0.97) to drive the sky glow, so an elevation test never fired
       // at night and the whole city rasterised into the shadow map every recentre.
-      // Matches the god-ray/flare brightness gate (max(sunColor) below ~0.35 = dark).
+      // Cutoff 0.28 = the BOTTOM of the renderer's key-luminance strength fade
+      // (uShadowStr ramps over key 0.28→0.42): props only leave the map once the
+      // whole shadow pass has faded to zero strength. The old 0.35 cutoff sat in
+      // the MIDDLE of that band, so prop shadows popped out at ~50% strength on
+      // a dusk→night flip / SUN ELEVATION drag while terrain shadows lingered.
       const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Clear-night moon shadows re-open the gate: props must be in the map for
       // the moonlight floor to have anything to cast (snap-cached, so the night
       // saving only goes when MOON SHADOWS is active and the sky is clear).
-      if (_shKey > 0.35 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
-  }
-
-  // Car casters → sun shadow map. The static map above is snap-cached, but cars
-  // move every frame, so gfx.shadowCasters() re-composites the nearest cars onto
-  // a per-frame copy of the static depth (no stale car-shadow trails). Read-only
-  // over physics state — matrices are render-side, like the body draw below.
-  // Mobile tier keeps blob shadows only (the per-frame depth blit is too hot
-  // there); blob shadows also stay ON for everyone as the contact/ambient term.
-  if (track && gfx.shadowCasters && !gfx.mobileTier) {
-    let _cCount = 0;
-    // Same visibility gate as the prop pass above (key brightness, or the
-    // clear-night moon-shadow floor): don't pay for silhouettes the shadow
-    // fade has already dissolved to nothing.
-    const _cKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-    if (_cKey > 0.35 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) {
-      // Pick the nearest casters inside the shadow box (cap 8 — car shadows past
-      // the receiver-distance fade would cost silhouettes nobody can see).
-      const _cRange = LT.shadowRange || 80, _cR2 = _cRange * _cRange;
-      const CAST_MAX = 8;
-      let _cn = 0;
-      for (let ci = 0; ci < cars.length; ci++) {
-        const cc = cars[ci];
-        Tracks.sample(track, cc.s, smp2);
-        const dx = smp2.p[0] + smp2.r[0] * cc.x - camEye[0];
-        const dz = smp2.p[2] + smp2.r[2] * cc.x - camEye[2];
-        const d2 = dx * dx + dz * dz;
-        if (d2 > _cR2) continue;
-        _casterIdx[_cn] = ci; _casterD2[_cn] = d2; _cn++;
+    // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
+    // the snap-cached static map above; that's why cars only had blob shadows).
+    // Casts LAST frame's pooled car matrices (_shadowMats/_shadowTeams fill
+    // during the car draw loop later this frame): a one-frame lag, ≤1.3 m at
+    // top speed, on a shadow that moves with its caster — invisible. ±42 m box
+    // on the same gliding anchor (a car shadow beyond that is sub-pixel), same
+    // depth program and key-luminance gate as the props above. Guards: WGX has
+    // no carShadowBegin yet (blob-only there); menu/select skip (the car loop
+    // doesn't run, so the pooled matrices would be stale race positions).
+    if (gfx.carShadowBegin && LT.carShadow && _shadowCount > 0 && player &&
+        state !== "menu" && state !== "select") {
+      const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+      // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
+      // the moonlight floor active (game.js frame.moonK), cars keep casting so
+      // they throw faint moon shadows too instead of popping to blob-only.
+      if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) {
+        M4.lookAtTo(_mCView,
+          [_shadowCtr[0] + sd[0] * 150, _shadowCtr[1] + sd[1] * 150, _shadowCtr[2] + sd[2] * 150],
+          _shadowCtr, up);
+        M4.orthoTo(_mCProj, -42, 42, -42, 42, 1.0, 320);
+        M4.mulTo(_mCVP, _mCProj, _mCView);
+        gfx.carShadowBegin(_mCVP);
+        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        gfx.carShadowEnd();
       }
-      if (_cn > CAST_MAX) {   // partial selection sort: keep the CAST_MAX nearest
-        for (let a = 0; a < CAST_MAX; a++) {
-          let m = a;
-          for (let b = a + 1; b < _cn; b++) if (_casterD2[b] < _casterD2[m]) m = b;
-          if (m !== a) {
-            const ti = _casterIdx[a]; _casterIdx[a] = _casterIdx[m]; _casterIdx[m] = ti;
-            const td = _casterD2[a]; _casterD2[a] = _casterD2[m]; _casterD2[m] = td;
-          }
-        }
-        _cn = CAST_MAX;
-      }
-      for (let a = 0; a < _cn; a++) {
-        const cc = cars[_casterIdx[a]];
-        let slot = _casterItems[a];
-        if (!slot) { slot = { mesh: null, model: new Float32Array(16) }; _casterItems[a] = slot; }
-        // Interpolated arc + smoothed lateral (as the body draw), heading-only
-        // basis — pitch/roll wobble is silhouette-irrelevant in a 2048² map.
-        const cS = lerpS(cc.rPrevS, cc.s, renderAlpha);
-        const rX = (cc.xVis !== undefined) ? cc.xVis : cc.x;
-        Tracks.sample(track, cS, smp2);
-        tmpP[0] = smp2.p[0] + smp2.r[0] * rX;
-        tmpP[1] = smp2.p[1];
-        tmpP[2] = smp2.p[2] + smp2.r[2] * rX;
-        const cy = Math.cos(cc.yawVis || 0), sy = Math.sin(cc.yawVis || 0);
-        for (let i = 0; i < 3; i++) {
-          tmpF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
-          tmpR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
-        }
-        tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
-        tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
-        tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
-        basisMat(tmpR, tmpU, tmpF, tmpP, slot.model);
-        slot.mesh = teamMesh(cc.team);
-      }
-      _cCount = _cn;
     }
-    // Always called (count 0 when shadows are invisible): the renderer does one
-    // clean re-blit when the casters vanish so no silhouette lingers in the map.
-    gfx.shadowCasters(_casterItems, _cCount);
   }
 
   // ── Sky animation & weather FX ──────────────────────────────────────────
@@ -4016,6 +4075,10 @@ function render(dt) {
   // STAR BRIGHTNESS / CLOUD SPEED tuner knobs ride on the sky object.
   frameSky.starBright = LT.starBright;
   frameSky.cloudSpeed = LT.cloudSpeed;
+  // SKY GRADIENT / STAR DENSITY / DAY SKY BLUE knobs also ride the sky object.
+  frameSky.skyGrad     = LT.skyGrad;
+  frameSky.starDensity = LT.starDensity;
+  frameSky.daySkyBlue  = LT.daySkyBlue;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -4139,8 +4202,11 @@ function render(dt) {
       // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
       // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
       // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
+      // TWILIGHT FLOOR + TWILIGHT RAMP knobs: the dawn/dusk floor level and how
+      // steeply floods climb to full as the sun sets (def 0.30 / 6 = as-shipped).
       const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.max(0.30, clamp(1 - _sy * 6, 0, 1))       // 0.30 = bright twilight floor, 1 = sun at/below horizon
+        ? Math.max(LT.twilightFloor != null ? LT.twilightFloor : 0.30,
+                   clamp(1 - _sy * (LT.twilightRamp != null ? LT.twilightRamp : 6), 0, 1))
         : 1;                                              // night / default-night: full ramp
       // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
       // raw physical HDR values (16-20) — at full ceiling they overpowered the
@@ -4148,7 +4214,9 @@ function render(dt) {
       // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
       // on top of the twilight ramp above.
       const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
-      const warmth = (1 - nightF);                       // 1 at twilight → 0 deep night
+      // TWILIGHT WARMTH knob scales the amber cast of the "just switched on" floods
+      // (def 1 = as-shipped 0.14 red boost / 0.22 blue cut).
+      const warmth = (1 - nightF) * (LT.twilightWarm != null ? LT.twilightWarm : 1);   // 1 at twilight → 0 deep night
       floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
     } else {
       // DAYTIME FLOODS: pools lit under a blue sky. No twilight warmth ramp (the
@@ -4369,6 +4437,7 @@ function render(dt) {
     let _sm = _shadowMats[_shadowCount];
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
     _sm.set(tmpMat);
+    _shadowTeams[_shadowCount] = c.team;   // for next frame's car-shadow caster pass
     _shadowCount++;
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the stabilized track basis
@@ -4886,14 +4955,22 @@ function drawMinimap() {
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
     const SC = ["rgba(192,132,252,0.8)", "rgba(225,6,0,0.8)", "rgba(163,230,53,0.8)"];
+    // Same CircuitMarkings splits as TrackMaps.draw / sectorAt (thirds if missing).
+    const sec = track.def && track.def.sectors;
+    const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
     for (let s = 0; s < 3; s++) {
-      const from = Math.floor((s / 3) * n), to = Math.floor(((s + 1) / 3) * n);
+      const from = Math.floor(splits[s] * n);
+      const to = s === 2 ? n - 1 : Math.max(from, Math.floor(splits[s + 1] * n));
       mc.strokeStyle = SC[s];
       mc.beginPath();
       for (let i = from; i <= to; i++) {
         const p = map[i % n];
         const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
         i === from ? mc.moveTo(x, y) : mc.lineTo(x, y);
+      }
+      if (s === 2) {
+        const p0 = map[0];
+        mc.lineTo(8 + p0[0] * (W - 16), 8 + p0[1] * (H - 16));
       }
       mc.stroke();
     }
@@ -5302,7 +5379,14 @@ function buildLiveryOptions(container, team) {
     const active = liv.id === cur;
     const isCustom = customIds.has(liv.id);
     const row = document.createElement("button");
+    row.type = "button";
     row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
+    row.setAttribute("aria-label", "Select " + liv.name + " livery");
+    const rowWrap = isCustom ? document.createElement("div") : null;
+    if (rowWrap) {
+      rowWrap.className = "cs-liv-row";
+      rowWrap.appendChild(row);
+    }
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
     row.appendChild(livSwatch(liv));
@@ -5315,10 +5399,12 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
 
     if (isCustom) {
-      const edit = document.createElement("span");
-      edit.className = "cs-liv-edit"; edit.textContent = "✎"; edit.title = "Edit this livery";
-      edit.onclick = (e) => {
-        e.stopPropagation();
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "cs-liv-edit"; edit.textContent = "✎";
+      edit.title = "Edit this livery";
+      edit.setAttribute("aria-label", "Edit " + liv.name + " livery");
+      edit.onclick = () => {
         csLivDraft = {
           name: liv.name || "", c1: arrToHex(liv.c1), c2: arrToHex(liv.c2),
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
@@ -5330,17 +5416,19 @@ function buildLiveryOptions(container, team) {
         if (soundOn) GameAudio.uiSelect();
         buildSetup();
       };
-      row.appendChild(edit);
-      const del = document.createElement("span");
-      del.className = "cs-liv-del"; del.textContent = "✕"; del.title = "Delete this livery";
-      del.onclick = (e) => {
-        e.stopPropagation();
+      rowWrap.appendChild(edit);
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "cs-liv-del"; del.textContent = "✕";
+      del.title = "Delete this livery";
+      del.setAttribute("aria-label", "Delete " + liv.name + " livery");
+      del.onclick = () => {
         setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
         if (active) saveLiveryId(team.id, "default");
         if (soundOn) GameAudio.uiTick();
         buildSetup();
       };
-      row.appendChild(del);
+      rowWrap.appendChild(del);
     } else {
       const tag = document.createElement("span");
       tag.className = "cs-opt-cost free";
@@ -5354,7 +5442,7 @@ function buildLiveryOptions(container, team) {
       if (soundOn) GameAudio.uiSelect();
       buildSetup();
     };
-    container.appendChild(row);
+    container.appendChild(rowWrap || row);
   }
 }
 
@@ -5925,7 +6013,7 @@ $("mb-tt").onclick = () => {
 $("mb-season").onclick = () => {
   seasonMode = true; timeTrial = false;
   if (!season || season.round >= Tracks.LIST.length) {
-    season = { round: 0, pts: {}, teamPts: {} };
+    season = { round: 0, pts: {}, teamPts: {}, driverCodes: {} };
     store.set("season", season);
   }
   trackIdx = season.round;
@@ -6093,15 +6181,17 @@ $("pm-lighting").onclick = () => {
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pausemenu.hidden = true;      // unobstructed live preview
 };
-$("lt-close").onclick = () => {
+function closeLightTuner(showPauseMenu) {
   if (photoMode) exitPhotoMode();
   // Restore the race's real time & weather (preview was transient).
   if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
   if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);
+  _ltPrevTOD = null; _ltPrevWx = null;
   $("lighting").hidden = true;
   document.body.classList.remove("lt-open");   // restore race HUD + touch controls
-  if (paused) els.pausemenu.hidden = false;
-};
+  if (showPauseMenu && paused) els.pausemenu.hidden = false;
+}
+$("lt-close").onclick = () => closeLightTuner(true);
 
 // ---------- Photo mode (free-fly camera) ----------
 // Seed the fly-cam from the camera currently on screen so it starts exactly
@@ -6211,7 +6301,7 @@ function setPhotoUiHidden(hide) {
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
 function photoKeyHandler(e) {
   const tag = (document.activeElement && document.activeElement.tagName) || "";
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;  // typing in a slider
+  if (e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;  // typing in a slider
   const down = e.type === "keydown";
   let hit = true;
   switch (e.code) {
@@ -6226,7 +6316,7 @@ function photoKeyHandler(e) {
     case "ArrowLeft": photoKeys.yl = down; break;
     case "ArrowRight": photoKeys.yr = down; break;
     case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
-    case "Escape": if (down) exitPhotoMode(); hit = true; break;
+    case "Escape": if (down) setPaused(false); hit = true; break;
     default: hit = false;
   }
   if (hit) { e.preventDefault(); e.stopPropagation(); }
@@ -6475,7 +6565,7 @@ els.resNext.onclick = () => {
     if (season.round >= Tracks.LIST.length) {
       if (els.resNext.textContent !== "MAIN MENU") {
         // First click: build champion panel, stay on results screen
-        const sorted = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0));
+        const sorted = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0));
         const champ = sorted[0];
         const champColor = cssCol(champ.team.color);
         els.resultsTitle.textContent = "WORLD CHAMPION";
@@ -6499,7 +6589,7 @@ els.resNext.onclick = () => {
           const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
           const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(c.team.color);
           const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
-          const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.code] || 0) + " pts";
+          const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
           row.append(pos, sw, nm, pt);
           els.resultsTable.appendChild(row);
         });
@@ -6523,9 +6613,10 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return;
   paused = p;
+  if (!p) closeLightTuner(false);
   els.pausemenu.hidden = !p;
   if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
-  if (!p) { $("advanced").hidden = true; $("lighting").hidden = true; }   // never leave the overlays up after resume
+  if (!p) $("advanced").hidden = true;   // never leave an overlay up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
@@ -6887,6 +6978,7 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
 }
 
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
+migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
 { const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;
@@ -7011,7 +7103,13 @@ window.__apex = {
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
-  info: () => ({ state, track: (state === "race" || state === "count") ? (track && track.def.id) : null, n: track && track.n, total: track && track.total, timeTrial, seasonMode }),
+  // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.
+  info: () => ({
+    state, track: (state === "race" || state === "count") ? (track && track.def.id) : null,
+    n: track && track.n, total: track && track.total, timeTrial, seasonMode,
+    sectors: track && track.def && track.def.sectors ? track.def.sectors.slice() : null,
+    turns: track && track.def && track.def.turns ? track.def.turns.length : null,
+  }),
   // Reports the camera ACTUALLY being rendered: the view() debug free-cam when
   // one is active, otherwise the game camera. `debug` flags which. (Previously
   // this always returned the game cam, masking an active view() override.)
@@ -7652,7 +7750,9 @@ window.__apex = {
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
   })),
-  // lap fractions of corner apexes (local maxima of |curvature|), for parking
+  // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
+  // Distinct from curated FIA turns on track.def.turns / info().turns — use those
+  // for official turn counts; this hook is for physics/parking at sharp bends.
   corners() {
     if (!track) return [];
     const n = track.n, total = track.total, kv = [];
@@ -7729,7 +7829,6 @@ window.__apex = {
   // ── New dev / test helpers ─────────────────────────────────────────────────
 
   // Trigger the race-results screen cleanly, as if all cars crossed the line.
-  // Fixes the fallback-DOM-hack in ui-audit.spec.js (finishRace was missing).
   finishRace() {
     if (!track || state === "results" || state === "menu") return false;
     const order = cars.slice().sort((a, b) => b.prog - a.prog);
@@ -8036,10 +8135,10 @@ window.__apex = {
 
   // ── Timing & field hooks ──────────────────────────────────────────────────
 
-  // sectorState() — live S1/S2/S3 timing.
-  // idx: current sector (0=S1, 1=S2, 2=S3). elapsed: seconds into it.
-  // bests: personal-best times per sector (null until first completed lap).
-  // last: sector times from the most recently completed lap.
+  // sectorState() — live S1/S2/S3 timing (boundaries from CircuitMarkings via
+  // sectorAt). idx: current sector (0=S1, 1=S2, 2=S3). elapsed: seconds into it.
+  // bests: PB per sector (null until that sector is completed with lap ≥ 1).
+  // last: times from the most recently completed sector crossings.
   sectorState() {
     if (!player || !track) return null;
     const elapsed = (player.lapTime || 0) - sectorStartT;
