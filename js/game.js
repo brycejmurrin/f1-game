@@ -1078,6 +1078,14 @@ function _nightAmbientBand() {
   }
 }
 
+// Floodlights are used on ANY track at night/dusk/dawn, plus a night-default
+// track in default mode. Shared by applyRaceSettings (pre-build) and the render
+// loop (per-frame) so the two can't drift out of sync.
+function isFloodActiveSession() {
+  return raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
+    (raceTimeOfDay === "default" && track && track.def && track.def.night);
+}
+
 // ---------- race flow ----------
 function applyRaceSettings() {
   // Load the lighting-tuner profile for the current (track, time, weather) so
@@ -1113,8 +1121,7 @@ function applyRaceSettings() {
   // Pre-build the floodlight set at race start so the first dark-session frame is
   // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
   // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
-  const floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
-    raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && track && track.def && track.def.night);
+  const floodActive = isFloodActiveSession();
   if (floodActive && track && (!track._lights || !track._lights.length)) track._lights = buildTrackLights(track);
   if (raceTimeOfDay !== "default") {
     const night = raceTimeOfDay === "night";
@@ -3779,8 +3786,7 @@ function render(dt) {
   // sun dominates so they're normally left off (no washed-out daylight pools) —
   // UNLESS the DAYTIME FLOODS knob (LT.floodDay) is turned up, which lights the
   // pools under a blue sky for a lit-stadium look (handled in the else-branch).
-  const _floodActive = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
-    (raceTimeOfDay === "default" && track.def.night);
+  const _floodActive = isFloodActiveSession();
   // Daytime floods: only when the session isn't already a dark one AND the knob is
   // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
   const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
