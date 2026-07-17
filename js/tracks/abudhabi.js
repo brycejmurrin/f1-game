@@ -526,14 +526,17 @@
 
       // ===================================================================
       // START GANTRY DETAIL — five red lights bar over the line + camera gantry
+      // Overhead light boxes span tarmac → TrackGeom.addBox (unguarded), same
+      // pattern as gantry() beam / underpassPortal slab.
       // ===================================================================
       {
+        const rawBox = TrackGeom.addBox;
         const aL = anchor(K(0.0), -1, 7), aR = anchor(K(0.0), 1, 7);
         for (let j = 0; j < 5; j++) {
           const t = (j + 0.5) / 5;
           const bx = aL.c[0] + (aR.c[0] - aL.c[0]) * t;
           const bz = aL.c[2] + (aR.c[2] - aL.c[2]) * t;
-          addBox(out, [bx, aL.c[1] + 8.5, bz], [1.6, 1.6, 0.8], [0.85, 0.10, 0.08], [aL.r, aL.u, aL.t]);
+          rawBox(out, [bx, aL.c[1] + 8.5, bz], [1.6, 1.6, 0.8], [0.85, 0.10, 0.08], [aL.r, aL.u, aL.t]);
         }
         // a second photo/scoring gantry just before T1
         gantry(0.96, 9, DARK);

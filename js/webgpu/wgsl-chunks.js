@@ -171,7 +171,7 @@ struct FrameU {
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
-  params5    : vec4<f32>,     // off 336  (envProbeStr, _, _, _) — real env-cube probe strength (0 = analytic sky only)
+  params5    : vec4<f32>,     // off 336  (envProbeStr, wetDark, _, _) — env-cube probe strength + live wet darkening
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
 };                            // size 368
 struct Light {
@@ -336,7 +336,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     wet = wetness * upFace;
     let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet;
-    albedo = albedo * mix(1.0, 0.42, wet);      // wet asphalt absorbs light (uWetDark=1 floor)
+    albedo = albedo * mix(1.0, clamp(1.0 - 0.58 * F.params5.y, 0.0, 1.0), wet);
     albedo = albedo * mix(1.0, 0.50, puddle);
     rough = mix(rough, 0.15, wet);
     rough = mix(rough, 0.05, puddle);
@@ -525,9 +525,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let cell = floor(in.wpos * 45.0);
       let h1 = hash3(cell);
       let h2 = hash3(cell + vec3<f32>(19.7, 7.3, 3.1));
-      let fT = normalize(cross(Ngeo, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
-      let fB = cross(Ngeo, fT);
-      let gN = normalize(Ngeo + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
+      // Mirror the GLSL finite-basis guard: malformed/degenerate geometry must
+      // not feed normalize(0) and spray NaN glints across the paint.
+      var nN = vec3<f32>(0.0, 1.0, 0.0);
+      if (length(Ngeo) > 1e-4) {
+        nN = normalize(Ngeo);
+      }
+      let fT = normalize(cross(nN, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+      let fB = cross(nN, fT);
+      let gN = normalize(nN + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
       let glint = smoothstep(0.990, 1.0, dot(gN, H));
       color = color + F.sunColor.xyz * litNoL * glint * 1.6 * carPaint * spFade;
     }

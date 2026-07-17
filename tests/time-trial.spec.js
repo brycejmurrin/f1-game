@@ -72,6 +72,26 @@ test.describe("Time Trial — ghost delta HUD", () => {
     expect(result.ghost.s[0]).toBeLessThan(result.total * 0.02);
     expect(result.ghost.s.every((s, i) => i === 0 || s >= result.ghost.s[i - 1])).toBe(true);
   });
+
+  test("drops reverse-progress samples from ghost recording and delta lookup", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => typeof Ghost !== "undefined");
+    const result = await page.evaluate(() => {
+      Ghost.clear("monza");
+      Ghost.setTrack("monza");
+      Ghost.startLap();
+      [0, 100, 200, 150, 300, 400, 500, 600, 700, 800].forEach((s, i) => {
+        Ghost.record(i * 0.06, s, 0);
+      });
+      Ghost.finishLap(1);
+      const saved = JSON.parse(localStorage.getItem("apex26.ghost.v1")).monza;
+      return { distances: saved.s, timeAt250: Ghost.timeAt(250) };
+    });
+
+    expect(result.distances).not.toContain(150);
+    expect(result.distances.every((s, i) => i === 0 || s >= result.distances[i - 1])).toBe(true);
+    expect(result.timeAt250).toBeCloseTo(0.18, 2);
+  });
 });
 
 // ── Sector splits ─────────────────────────────────────────────────────────────
@@ -152,5 +172,30 @@ test.describe("Time Trial — results panel", () => {
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
     const nextText = await page.locator("#res-next").innerText();
     expect(nextText).toBe("TRY AGAIN");
+  });
+
+  test("clearing the ghost retains the persisted leaderboard record", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.ttlb.monza", JSON.stringify([
+        { t: 75, teamId: "mclaren", code: "NOR", name: "Lando Norris", ts: 1 },
+      ]));
+      localStorage.setItem("apex26.ghost.v1", JSON.stringify({
+        monza: {
+          time: 75,
+          t: [0, 10, 20, 30, 40, 50, 60, 75],
+          s: [0, 700, 1400, 2100, 2800, 3500, 4200, 5000],
+          x: [0, 0, 0, 0, 0, 0, 0, 0],
+        },
+      }));
+    });
+    await enterTT(page);
+    await page.evaluate(() => {
+      window.__apex.park(0);
+      window.__apex.finishRace();
+    });
+    await page.getByRole("button", { name: "✕ CLEAR GHOST" }).click();
+    await page.locator("#res-next").click();
+    await page.evaluate(() => window.__apex.park(0.1));
+    await expect(page.locator("#hud-gap-behind")).toContainText("REC 1:15.00");
   });
 });

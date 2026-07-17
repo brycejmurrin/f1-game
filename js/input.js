@@ -293,7 +293,11 @@ const Input = (function () {
   function onKey(e, down) {
     const active = document.activeElement;
     const tag = (active && active.tagName) || (e.target && e.target.tagName) || "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    const interactive = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+      tag === "BUTTON" || tag === "A" || (active && active.isContentEditable);
+    const hudControl = active && active.matches &&
+      active.matches("#btn-cam, #pausebtn, #hud-restore, .touchbtn");
+    if (interactive && !hudControl) return;
     switch (e.code) {
       case "ArrowLeft": case "KeyA":
         keyLeft = down; if (down) e.preventDefault(); break;
@@ -554,8 +558,8 @@ const Input = (function () {
     return steerMode;
   }
 
-  // Tilt tuning, driven by the in-game sliders. deg = tilt for full lock
-  // (higher = less sensitive); slew = max steer-units/s of change (lower = smoother).
+  // Tilt sensitivity, driven by the in-game TILT RANGE slider. deg = tilt for
+  // full lock (higher = less sensitive).
   function setTiltSensitivity(deg) {
     if (typeof deg === "number" && isFinite(deg)) MAX_TILT = Math.max(8, Math.min(60, deg));
   }
@@ -586,6 +590,10 @@ const Input = (function () {
 
     window.addEventListener("keydown", function (e) { onKey(e, true); });
     window.addEventListener("keyup", function (e) { onKey(e, false); });
+    window.addEventListener("blur", reset);
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) reset();
+    });
 
     canvas.addEventListener("touchstart", onTouchStart, { passive: false });
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });

@@ -143,9 +143,10 @@ test.describe("Apex 26 — collisions (deep)", () => {
         maxAbsX = Math.max(maxAbsX, Math.abs(p.x)); vEnd = p.speed;
       }
       window.__apex.clearInput();
-      return { maxAbsX, hw, vEnd };
+      return { maxAbsX, hw, vEnd, maxWallOvershoot: window.__apex.maxWallOvershoot() };
     });
-    expect(r.maxAbsX).toBeLessThan(r.hw);    // street barrier sits just inside the edge
+    expect(r.maxAbsX).toBeGreaterThan(r.hw * 0.8); // reached the street barrier
+    expect(r.maxWallOvershoot).toBeLessThan(0.01); // hard boundary kept the car pinned
     expect(r.vEnd).toBeLessThan(40);         // pinned against the wall = scrubbed speed
   });
 

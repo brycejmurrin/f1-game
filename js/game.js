@@ -233,15 +233,21 @@ function ttBoardAdd(trackId, entry) {
 
 const { DEFAULT_CUSTOM } = GameTables;
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
+function invalidateCustomMeshCache(cache) {
+  Object.keys(cache).forEach((key) => {
+    if (key.indexOf("custom:") !== 0) return;
+    if (cache[key] && gfx.freeMesh) gfx.freeMesh(cache[key]);
+    delete cache[key];
+  });
+}
 function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
   invalidateDecalTextures("custom");
-  if (teamMeshes.custom && gfx.freeMesh) gfx.freeMesh(teamMeshes.custom);   // free the old GPU buffers first
-  delete teamMeshes.custom;   // force the mesh to rebuild with the latest colours
-  if (playerBodies.custom && gfx.freeMesh) gfx.freeMesh(playerBodies.custom);
-  delete playerBodies.custom; // and the body-only (animated-wheel) variant
+  invalidateCustomMeshCache(teamMeshes);
+  invalidateCustomMeshCache(playerBodies);
+  invalidateCustomMeshCache(cockpitBodies);
 }
 function hexToRgb(h) {
   return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
@@ -269,7 +275,40 @@ function gearsManual() {
 // Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
 // the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
 function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
-let season = store.get("season", null);      // {round, pts:{code:n}, teamPts:{id:n}}
+let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
+function seasonDriverId(teamId, driverIndex) { return teamId + ":" + driverIndex; }
+function seasonRoster() {
+  const roster = [];
+  Teams.LIST.forEach((team) => team.drivers.forEach((driver, driverIndex) => {
+    roster.push({
+      id: seasonDriverId(team.id, driverIndex),
+      code: driver.code,
+    });
+  }));
+  return roster;
+}
+function migrateSeasonPoints() {
+  if (!season) return;
+  const oldPts = season.pts && typeof season.pts === "object" ? season.pts : {};
+  const roster = seasonRoster();
+  const nextPts = {};
+  const codes = Object.assign({}, season.driverCodes || {});
+  // Legacy display-code keys cannot be disambiguated after historical code collisions, so migration is best-effort.
+  Object.entries(oldPts).forEach(([key, value]) => {
+    const driver = roster.find((candidate) => candidate.id === key || candidate.code === key);
+    const id = driver ? driver.id : key;
+    nextPts[id] = (nextPts[id] || 0) + (Number(value) || 0);
+    if (driver) codes[id] = driver.code;
+    else if (!codes[id]) codes[id] = key;
+  });
+  roster.forEach((driver) => {
+    if (Object.prototype.hasOwnProperty.call(nextPts, driver.id)) codes[driver.id] = driver.code;
+  });
+  season.pts = nextPts;
+  season.driverCodes = codes;
+  season.teamPts = season.teamPts && typeof season.teamPts === "object" ? season.teamPts : {};
+  store.set("season", season);
+}
 
 // ---------- physics constants ----------
 const VMAX = 72;            // m/s base (~259 km/h) — F1 race pace; scales all speeds
@@ -339,7 +378,7 @@ const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer 
 let ROAD_FOLLOW = 0.7;
 // Combined-slip friction ellipse: grip used braking/accelerating is taken out of
 // the cornering budget. LONG_GRIP is the longitudinal axis of the ellipse (m/s²),
-// set a little above BRAKE (27) so straight-line braking keeps most grip, but
+// set a little above BRAKE (22) so straight-line braking keeps most grip, but
 // braking hard WHILE turning washes the front wide; easing off the brake as you
 // turn in (trail-braking) hands grip back to cornering. Higher = more forgiving.
 const LONG_GRIP = 34;
@@ -745,7 +784,7 @@ function makeCars() {
         + (Math.random() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
       cars.push({
-        team, name: d.name, code: d.code, num: d.num, isPlayer: isP,
+        team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
         fuelId: getTeamParts(team.id).fuel || "standard",   // tints the exhaust flame
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
@@ -1749,7 +1788,7 @@ function startRace() {
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
   const manual = gearsManual();   // only ever true in tilt mode
-  // GAS pedal whenever throttle is manual (tilt); auto-throttle (touch/button) hides it
+  // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
@@ -1782,7 +1821,8 @@ function endRace(forcedOrder) {
   if (seasonMode) {
     order.forEach((c, i) => {
       const pts = Teams.POINTS[i] || 0;
-      season.pts[c.code] = (season.pts[c.code] || 0) + pts;
+      season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
+      season.driverCodes[c.driverId] = c.code;
       season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
     });
     season.round++;
@@ -1818,14 +1858,14 @@ function buildResults(order) {
     head.style.cssText = "margin-top:14px;color:#e10600;font-weight:800;font-style:italic";
     head.textContent = "DRIVERS — AFTER ROUND " + season.round;
     els.resultsTable.appendChild(head);
-    const all = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0)).slice(0, 10);
+    const all = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0)).slice(0, 10);
     all.forEach((c, i) => {
       const row = document.createElement("div");
       row.className = "res-row" + (c.isPlayer ? " you" : "");
       const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
       const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(c.team.color);
       const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code + "  " + c.name;
-      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.code] || 0) + " pts";
+      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
       row.append(pos, sw, nm, pt);
       els.resultsTable.appendChild(row);
     });
@@ -1915,7 +1955,12 @@ function buildTTResults() {
     const clrBtn = document.createElement("button");
     clrBtn.style.cssText = "font-size:11px;padding:4px 10px;opacity:0.6";
     clrBtn.textContent = "✕ CLEAR GHOST";
-    clrBtn.onclick = () => { Ghost.clear(track.def.id); ttRecord = Infinity; buildTTResults(); };
+    clrBtn.onclick = () => {
+      Ghost.clear(track.def.id);
+      const remaining = ttBoard(track.def.id);
+      ttRecord = remaining.length ? remaining[0].t : Infinity;
+      buildTTResults();
+    };
     clrRow.appendChild(clrBtn);
     els.resultsTable.appendChild(clrRow);
   }
@@ -1929,10 +1974,9 @@ function hexToArr(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [
 function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); return "#" + f(a[0]) + f(a[1]) + f(a[2]); }
 
 function quitToMenu() {
-  if (photoMode) exitPhotoMode();   // drop the fly-cam override before leaving the race
+  closeLightTuner(false);
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
-  document.body.classList.remove("lt-open");
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
@@ -1966,8 +2010,9 @@ function buildStandings() {
 
   const drList = Object.entries(season.pts)
     .sort((a, b) => b[1] - a[1]);
-  drList.forEach(([code, pts], i) => {
-    const c = cars.find((x) => x.code === code);
+  drList.forEach(([driverId, pts], i) => {
+    const c = cars.find((x) => x.driverId === driverId);
+    const code = c ? c.code : ((season.driverCodes && season.driverCodes[driverId]) || driverId);
     const row = document.createElement("div");
     row.className = "res-row" + (c && c.isPlayer ? " you" : "");
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
@@ -5224,7 +5269,14 @@ function buildLiveryOptions(container, team) {
     const active = liv.id === cur;
     const isCustom = customIds.has(liv.id);
     const row = document.createElement("button");
+    row.type = "button";
     row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
+    row.setAttribute("aria-label", "Select " + liv.name + " livery");
+    const rowWrap = isCustom ? document.createElement("div") : null;
+    if (rowWrap) {
+      rowWrap.className = "cs-liv-row";
+      rowWrap.appendChild(row);
+    }
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
     row.appendChild(livSwatch(liv));
@@ -5237,10 +5289,12 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
 
     if (isCustom) {
-      const edit = document.createElement("span");
-      edit.className = "cs-liv-edit"; edit.textContent = "✎"; edit.title = "Edit this livery";
-      edit.onclick = (e) => {
-        e.stopPropagation();
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "cs-liv-edit"; edit.textContent = "✎";
+      edit.title = "Edit this livery";
+      edit.setAttribute("aria-label", "Edit " + liv.name + " livery");
+      edit.onclick = () => {
         csLivDraft = {
           name: liv.name || "", c1: arrToHex(liv.c1), c2: arrToHex(liv.c2),
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
@@ -5252,17 +5306,19 @@ function buildLiveryOptions(container, team) {
         if (soundOn) GameAudio.uiSelect();
         buildSetup();
       };
-      row.appendChild(edit);
-      const del = document.createElement("span");
-      del.className = "cs-liv-del"; del.textContent = "✕"; del.title = "Delete this livery";
-      del.onclick = (e) => {
-        e.stopPropagation();
+      rowWrap.appendChild(edit);
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "cs-liv-del"; del.textContent = "✕";
+      del.title = "Delete this livery";
+      del.setAttribute("aria-label", "Delete " + liv.name + " livery");
+      del.onclick = () => {
         setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
         if (active) saveLiveryId(team.id, "default");
         if (soundOn) GameAudio.uiTick();
         buildSetup();
       };
-      row.appendChild(del);
+      rowWrap.appendChild(del);
     } else {
       const tag = document.createElement("span");
       tag.className = "cs-opt-cost free";
@@ -5276,7 +5332,7 @@ function buildLiveryOptions(container, team) {
       if (soundOn) GameAudio.uiSelect();
       buildSetup();
     };
-    container.appendChild(row);
+    container.appendChild(rowWrap || row);
   }
 }
 
@@ -5847,7 +5903,7 @@ $("mb-tt").onclick = () => {
 $("mb-season").onclick = () => {
   seasonMode = true; timeTrial = false;
   if (!season || season.round >= Tracks.LIST.length) {
-    season = { round: 0, pts: {}, teamPts: {} };
+    season = { round: 0, pts: {}, teamPts: {}, driverCodes: {} };
     store.set("season", season);
   }
   trackIdx = season.round;
@@ -6015,15 +6071,17 @@ $("pm-lighting").onclick = () => {
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pausemenu.hidden = true;      // unobstructed live preview
 };
-$("lt-close").onclick = () => {
+function closeLightTuner(showPauseMenu) {
   if (photoMode) exitPhotoMode();
   // Restore the race's real time & weather (preview was transient).
   if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
   if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);
+  _ltPrevTOD = null; _ltPrevWx = null;
   $("lighting").hidden = true;
   document.body.classList.remove("lt-open");   // restore race HUD + touch controls
-  if (paused) els.pausemenu.hidden = false;
-};
+  if (showPauseMenu && paused) els.pausemenu.hidden = false;
+}
+$("lt-close").onclick = () => closeLightTuner(true);
 
 // ---------- Photo mode (free-fly camera) ----------
 // Seed the fly-cam from the camera currently on screen so it starts exactly
@@ -6133,7 +6191,7 @@ function setPhotoUiHidden(hide) {
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
 function photoKeyHandler(e) {
   const tag = (document.activeElement && document.activeElement.tagName) || "";
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;  // typing in a slider
+  if (e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;  // typing in a slider
   const down = e.type === "keydown";
   let hit = true;
   switch (e.code) {
@@ -6148,7 +6206,7 @@ function photoKeyHandler(e) {
     case "ArrowLeft": photoKeys.yl = down; break;
     case "ArrowRight": photoKeys.yr = down; break;
     case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
-    case "Escape": if (down) exitPhotoMode(); hit = true; break;
+    case "Escape": if (down) setPaused(false); hit = true; break;
     default: hit = false;
   }
   if (hit) { e.preventDefault(); e.stopPropagation(); }
@@ -6397,7 +6455,7 @@ els.resNext.onclick = () => {
     if (season.round >= Tracks.LIST.length) {
       if (els.resNext.textContent !== "MAIN MENU") {
         // First click: build champion panel, stay on results screen
-        const sorted = cars.slice().sort((a, b) => (season.pts[b.code] || 0) - (season.pts[a.code] || 0));
+        const sorted = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0));
         const champ = sorted[0];
         const champColor = cssCol(champ.team.color);
         els.resultsTitle.textContent = "WORLD CHAMPION";
@@ -6421,7 +6479,7 @@ els.resNext.onclick = () => {
           const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
           const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(c.team.color);
           const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
-          const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.code] || 0) + " pts";
+          const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
           row.append(pos, sw, nm, pt);
           els.resultsTable.appendChild(row);
         });
@@ -6445,9 +6503,10 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return;
   paused = p;
+  if (!p) closeLightTuner(false);
   els.pausemenu.hidden = !p;
   if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
-  if (!p) { $("advanced").hidden = true; $("lighting").hidden = true; }   // never leave the overlays up after resume
+  if (!p) $("advanced").hidden = true;   // never leave an overlay up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
@@ -6809,6 +6868,7 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
 }
 
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
+migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
 { const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;

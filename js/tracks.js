@@ -2441,20 +2441,29 @@ const Tracks = (function () {
       blockAt(k, side, gap, w * 0.4);   // posts + panel face → stop before it
     };
     // Overhead gantry spanning the track (start/scoring/DRS): two legs + a beam.
+    // Legs sit beyond the edge (guarded). Beam + under-beam lenses intentionally
+    // span the racing line so cars pass under — emit via RAW, same pattern as
+    // underpassPortal, or the footprint guard silently drops the span and leaves
+    // two lonely posts that no longer straddle the track.
     const gantry = (s, h, col) => {
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
-      addCyl(out, aL.c, 0.3, h, c, 6, [aL.r, u, aL.t]); addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
+      const b = [aL.r, u, aL.t];
+      addCyl(out, aL.c, 0.3, h, c, 6, b);
+      addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
-      addBox(out, beam, [hw[k] * 2 + 5, 0.9, 1.4], c, [aL.r, u, aL.t]);
+      // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
+      RAW.addBox(out, beam, [hw[k] * 2 + 5, 0.9, 1.4], c, b);
       // Downlight lens fixtures under the beam — the visible sources for the
       // start-gantry downlights buildTrackLights hangs over the line. Bright
       // cool-white at night (bloom via the emissive path), muted housings by day.
       const gl = NIGHT ? [1.28, 1.30, 1.38] : [0.80, 0.81, 0.85];
       const r0 = [track.rx[k], track.ry[k], track.rz[k]];
       for (const lat of [-hw[k] * 0.55, 0, hw[k] * 0.55]) {
-        addBox(out, [beam[0] + r0[0] * lat - u[0] * 0.62, beam[1] - u[1] * 0.62 + 0, beam[2] + r0[2] * lat - u[2] * 0.62],
-               [1.1, 0.35, 1.0], gl, [aL.r, u, aL.t]);
+        RAW.addBox(out, [beam[0] + r0[0] * lat - u[0] * 0.62,
+                         beam[1] + u[1] * (-0.62),
+                         beam[2] + r0[2] * lat - u[2] * 0.62],
+                   [1.1, 0.35, 1.0], gl, b);
       }
     };
     // Waving marshal flag: a two-sided quad hinged on the pole. Each vertex is
@@ -2860,8 +2869,8 @@ const Tracks = (function () {
     // ── Shared scenery toolkit (identity pass) ──────────────────────────────
     // Cross-track composite helpers. Footprints that must stay OFF the racing
     // line use rejBox / full-box tests. Overhead decks that cars intentionally
-    // pass under (underpass slab, sail/gridshell spanning the track) emit via
-    // RAW.addBox so the guarded wrappers do not cull them.
+    // pass under (gantry beam, underpass slab, sail/gridshell spanning the
+    // track) emit via RAW.addBox so the guarded wrappers do not cull them.
 
     // Dark overhead portal: slab spanning the track + support piers off-edge.
     // opts: { h, thick, col, pierGap, pierW, depth }
@@ -3385,21 +3394,30 @@ const Tracks = (function () {
 
   function buildGate(track) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
-    const r = [track.rx[0], track.ry[0], track.rz[0]];
-    const t = [track.tx[0], track.ty[0], track.tz[0]];
-    const u = upOf(track, 0);
-    const w = track.hw[0];
-    // Move gate back along track tangent to avoid clipping car at start position
-    const backDist = -15;
-    const gateX = track.px[0] + t[0] * backDist;
-    const gateY = track.py[0];
-    const gateZ = track.pz[0] + t[2] * backDist;
+    // Sit the gate ~15 m BEFORE the start/finish along the lap centreline —
+    // NOT along node-0's tangent chord. On a curved pit straight the chord
+    // drifts off the racing line (COTA/Shanghai/Jeddah were 4–8 m sideways,
+    // planting one red leg on the asphalt).
+    const backDist = 15;
+    const tmp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    sample(track, track.total - backDist, tmp);
+    const r = norm(tmp.r), t = norm(tmp.t), u = norm(cross(r, t));
+    const w = tmp.hw;
+    const gateX = tmp.p[0], gateY = tmp.p[1], gateZ = tmp.p[2];
+    const basis = [r, u, t];
     for (const side of [-1, 1]) {
       const o = side * (w + 1.5);
-      addBox(out, [gateX + r[0] * o, gateY + 3, gateZ + r[2] * o], [1, 6, 1], [0.85, 0.1, 0.1], [r, u, t]);
+      // Legs sit on the road plane (u-up from the sampled centreline).
+      addBox(out,
+        [gateX + r[0] * o + u[0] * 3, gateY + r[1] * o + u[1] * 3, gateZ + r[2] * o + u[2] * 3],
+        [1, 6, 1], [0.85, 0.1, 0.1], basis);
     }
-    addBox(out, [gateX, gateY + 6.2, gateZ], [w * 2 + 4, 0.8, 1.2], [0.1, 0.1, 0.12], [r, u, t]);
-    addBox(out, [gateX, gateY + 6.8, gateZ], [w * 1.4, 0.6, 0.6], [0.95, 0.95, 0.97], [r, u, t]);
+    addBox(out,
+      [gateX + u[0] * 6.2, gateY + u[1] * 6.2, gateZ + u[2] * 6.2],
+      [w * 2 + 4, 0.8, 1.2], [0.1, 0.1, 0.12], basis);
+    addBox(out,
+      [gateX + u[0] * 6.8, gateY + u[1] * 6.8, gateZ + u[2] * 6.8],
+      [w * 1.4, 0.6, 0.6], [0.95, 0.95, 0.97], basis);
     return out;
   }
 

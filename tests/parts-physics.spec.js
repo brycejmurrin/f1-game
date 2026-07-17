@@ -177,8 +177,8 @@ test.describe("Parts module — getCost()", () => {
   test("max setup exceeds budget of 600", async ({ page }) => {
     await load(page);
     // Max everything — total should be well over 600
-    const cost = await page.evaluate(() =>
-      Parts.getCost({
+    const { cost, budget } = await page.evaluate(() => ({
+      cost: Parts.getCost({
         engine: "race",
         aero: "active_aero",
         suspension: "active",
@@ -187,9 +187,10 @@ test.describe("Parts module — getCost()", () => {
         ers: "overcharge",
         gearbox: "f1_spec",
         fuel: "custom_formula",
-      }, "")
-    );
-    expect(cost).toBeGreaterThan(Parts.BUDGET);
+      }, ""),
+      budget: Parts.BUDGET,
+    }));
+    expect(cost).toBeGreaterThan(budget);
   });
 });
 

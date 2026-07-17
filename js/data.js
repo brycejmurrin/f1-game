@@ -35,6 +35,7 @@ const DataHub = (function () {
   let tabButtons = {};            // id -> button element
   let openFlag = false;
   let active = "schedule";
+  let returnFocus = null;
   const state = {};               // id -> {node, at, gen}
   const gen = {};                 // id -> load generation (ignores stale resolutions)
 
@@ -131,12 +132,17 @@ const DataHub = (function () {
     if (root || !rootEl) return;
     root = rootEl;
     root.classList.add("dh-overlay");
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.setAttribute("aria-labelledby", "dh-title");
 
     const card = el("div", "dh-card");
 
     // header
     const header = el("div", "dh-header");
-    header.appendChild(el("h2", "dh-title", "F1 DATA HUB"));
+    const title = el("h2", "dh-title", "F1 DATA HUB");
+    title.id = "dh-title";
+    header.appendChild(title);
     const closeBtn = el("button", "dh-close", "✕");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Close data hub");
@@ -146,9 +152,16 @@ const DataHub = (function () {
 
     // tabs
     const tabs = el("div", "dh-tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Data hub sections");
     TABS.forEach(function (t) {
       const b = el("button", "dh-tab", t.label);
       b.type = "button";
+      b.id = "dh-tab-" + t.id;
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-controls", "dh-panel");
+      b.setAttribute("aria-selected", "false");
+      b.tabIndex = -1;
       b.addEventListener("click", function () { showTab(t.id); });
       tabButtons[t.id] = b;
       tabs.appendChild(b);
@@ -157,20 +170,64 @@ const DataHub = (function () {
 
     // content
     contentEl = el("div", "dh-content");
+    contentEl.id = "dh-panel";
+    contentEl.setAttribute("role", "tabpanel");
     card.appendChild(contentEl);
 
     root.appendChild(card);
 
     document.addEventListener("keydown", function (ev) {
-      if (openFlag && ev.key === "Escape") close();
+      if (!openFlag || document.querySelector(".dh-tpopup")) return;
+      if (ev.key === "Escape") { close(); return; }
+      const target = ev.target;
+      if (target && target.getAttribute && target.getAttribute("role") === "tab") {
+        const ids = TABS.map(function (t) { return t.id; });
+        let idx = ids.indexOf(active);
+        if (ev.key === "ArrowRight") idx = (idx + 1) % ids.length;
+        else if (ev.key === "ArrowLeft") idx = (idx + ids.length - 1) % ids.length;
+        else if (ev.key === "Home") idx = 0;
+        else if (ev.key === "End") idx = ids.length - 1;
+        else idx = -1;
+        if (idx !== -1) {
+          ev.preventDefault();
+          showTab(ids[idx]);
+          tabButtons[ids[idx]].focus();
+          return;
+        }
+      }
+      if (ev.key === "Tab") trapFocus(root, ev);
     });
+  }
+
+  function focusables(scope) {
+    return Array.prototype.filter.call(
+      scope.querySelectorAll("button, select, input, textarea, [href], [tabindex]"),
+      function (node) {
+        if (node.disabled || node.tabIndex < 0 || node.hidden || !node.getClientRects().length) return false;
+        const style = window.getComputedStyle(node);
+        return style.display !== "none" && style.visibility !== "hidden";
+      }
+    );
+  }
+
+  function trapFocus(scope, ev) {
+    const items = focusables(scope);
+    if (!items.length) { ev.preventDefault(); return; }
+    const first = items[0], last = items[items.length - 1];
+    if (ev.shiftKey && document.activeElement === first) {
+      ev.preventDefault(); last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+      ev.preventDefault(); first.focus();
+    }
   }
 
   function open() {
     if (!root) return;
+    returnFocus = document.activeElement;
     root.hidden = false;
     openFlag = true;
     showTab(active);
+    if (tabButtons[active]) tabButtons[active].focus();
   }
 
   function close() {
@@ -179,6 +236,8 @@ const DataHub = (function () {
     closeTelemPopup();
     root.hidden = true;
     openFlag = false;
+    if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
+    returnFocus = null;
   }
 
   function isOpen() { return openFlag; }
@@ -196,9 +255,12 @@ const DataHub = (function () {
     active = id;
     for (const k in tabButtons) {
       tabButtons[k].classList.toggle("dh-active", k === id);
+      tabButtons[k].setAttribute("aria-selected", k === id ? "true" : "false");
+      tabButtons[k].tabIndex = k === id ? 0 : -1;
     }
     // Scroll the active tab button into view on narrow screens where tabs overflow
     const activeBtn = tabButtons[id];
+    if (contentEl && activeBtn) contentEl.setAttribute("aria-labelledby", activeBtn.id);
     if (activeBtn && activeBtn.scrollIntoView) {
       activeBtn.scrollIntoView({ inline: "nearest", behavior: "smooth", block: "nearest" });
     }
@@ -435,7 +497,6 @@ const DataHub = (function () {
 
   const YEARS = [2026, 2025, 2024, 2023];   // OpenF1 data starts in 2023
   const sel = { year: null, meetingKey: null, sessionKey: null, meta: null };
-  let pickerGen = 0;
 
   function ensureSession() {
     if (sel.sessionKey !== null) return Promise.resolve(sel.meta);
@@ -470,6 +531,7 @@ const DataHub = (function () {
   // Year / Grand Prix / Session controls. onPick(meta) fires only on a user
   // change (not initial population). Selection defaults to the latest session.
   function buildPicker(onPick) {
+    let pickerGen = 0;
     const box = el("div", "dh-picker");
     const yearRow = el("div", "dh-pick-years");
     YEARS.forEach(function (y) {
@@ -567,6 +629,7 @@ const DataHub = (function () {
 
   const LIVE_REFRESH = 30 * 1000;   // auto-refresh interval
   let liveTimer = null;
+  let liveRefreshGen = 0;
   const liveOpts = { auto: false, sort: "pos" };
 
   function stopLiveAuto() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
@@ -623,6 +686,7 @@ const DataHub = (function () {
     rightPane.appendChild(dataEl);
 
     function refresh() {
+      const myGen = ++liveRefreshGen;
       clear(dataEl);
       dataEl.appendChild(spinner());
       Promise.all([
@@ -630,10 +694,12 @@ const DataHub = (function () {
         F1API.positions(meta.sessionKey).catch(function () { return null; }),
         F1API.sessionDrivers(meta.sessionKey).catch(function () { return null; })
       ]).then(function (res) {
+        if (myGen !== liveRefreshGen) return;
         clear(dataEl);
         fillLive(dataEl, res[0], res[1], res[2]);
         stamp.textContent = "updated " + new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       }, function () {
+        if (myGen !== liveRefreshGen) return;
         clear(dataEl); dataEl.appendChild(emptyMsg(NO_LIVE_MSG));
       });
     }

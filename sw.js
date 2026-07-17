@@ -17,6 +17,7 @@
 // a fresh cache generation and the old one is swept on activate — no manual
 // cache-invalidation step to remember.
 const CACHE_PREFIX = "apex26-";
+const INSTALL_COMPLETE_URL = "__apex_install_complete__";
 
 let _cacheNamePromise = null;
 function currentCacheName() {
@@ -28,42 +29,61 @@ function currentCacheName() {
   return _cacheNamePromise;
 }
 
-// Parse the shell's own tags so the core precache list can never drift from
-// what index.html actually loads (adding/removing a <script> just works).
-async function coreAssetList() {
-  const urls = new Set(["./", "index.html", "manifest.json", "version.json"]);
-  try {
-    const html = await (await fetch("index.html", { cache: "no-store" })).text();
-    const re = /<(?:script|link)[^>]+(?:src|href)="([^"]+)"/g;
-    let m;
-    while ((m = re.exec(html))) {
-      const u = m[1];
-      if (/^([a-z]+:)?\/\//i.test(u)) continue;   // skip any absolute/cross-origin URL
-      urls.add(u);
+// Parse the shell's own tags so the precache lists cannot drift from what
+// index.html actually loads. The shell and executable styles/scripts are
+// essential; metadata and icons improve the install but are best-effort.
+async function precacheAssetLists() {
+  const essential = new Set(["./", "index.html", "version.json"]);
+  const optional = new Set(["manifest.json"]);
+  const shell = await fetch("index.html", { cache: "no-store" });
+  if (!shell || !shell.ok) throw new Error("Unable to fetch the application shell");
+  const html = await shell.text();
+  const re = /<(script|link)\b[^>]*>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    const ref = m[0].match(/\b(?:src|href)="([^"]+)"/i);
+    if (!ref) continue;
+    const u = ref[1];
+    if (/^([a-z]+:)?\/\//i.test(u)) continue;   // skip any absolute/cross-origin URL
+    if (m[1].toLowerCase() === "script" || /\brel="stylesheet"/i.test(m[0])) {
+      essential.add(u);
+    } else {
+      optional.add(u);
     }
-  } catch (_) { /* offline install (rare) — the shell itself is likely already cached */ }
-  return Array.from(urls);
+  }
+  return { essential: Array.from(essential), optional: Array.from(optional) };
+}
+
+async function cacheRequiredAsset(cache, url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res || !res.ok) throw new Error("Unable to precache essential asset: " + url);
+  await cache.put(url, res);
+}
+
+async function cacheOptionalAsset(cache, url) {
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (res && res.ok) await cache.put(url, res);
+  } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
 }
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
-    const [name, urls] = await Promise.all([currentCacheName(), coreAssetList()]);
+    const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
     const cache = await caches.open(name);
-    // Cache each individually — cache.addAll() is all-or-nothing, so one
-    // missing/renamed asset would otherwise fail the entire install.
-    await Promise.all(urls.map(async (u) => {
-      try {
-        const res = await fetch(u, { cache: "no-store" });
-        if (res && res.ok) await cache.put(u, res);
-      } catch (_) {}
-    }));
-    self.skipWaiting();
+    await Promise.all(urls.essential.map((u) => cacheRequiredAsset(cache, u)));
+    await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
+    await Promise.all(urls.optional.map((u) => cacheOptionalAsset(cache, u)));
+    await self.skipWaiting();
   })());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    const [name, keys] = await Promise.all([currentCacheName(), caches.keys()]);
+    const name = await currentCacheName();
+    const cache = await caches.open(name);
+    if (!(await cache.match(INSTALL_COMPLETE_URL))) return;
+    const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== name).map((k) => caches.delete(k)));
     await self.clients.claim();
   })());
@@ -89,15 +109,17 @@ self.addEventListener("fetch", (event) => {
   // fallback should win once it's clearly not going to resolve promptly; the
   // real network response, if it does eventually land, still gets cached.
   if (req.mode === "navigate" || url.pathname.endsWith("version.json")) {
+    const network = fetch(req, { cache: "no-store" }).then(async (res) => {
+      if (res && res.ok) {
+        const cache = await caches.open(await currentCacheName());
+        await cache.put(req, res.clone());
+      }
+      return res;
+    });
+    // If the timeout wins, respondWith() no longer protects the late refresh.
+    // Keep the worker alive until both the fetch and its cache write settle.
+    event.waitUntil(network.then(() => undefined, () => undefined));
     event.respondWith((async () => {
-      const network = fetch(req, { cache: "no-store" }).then(async (res) => {
-        if (res && res.ok) (await caches.open(await currentCacheName())).put(req, res.clone());
-        return res;
-      });
-      // A late rejection/resolution after the timeout already won the race is
-      // expected (slow connection catching up) — swallow it so it never
-      // surfaces as an unhandled promise rejection.
-      network.catch(() => {});
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
       try {
         const res = await Promise.race([network, timeout]);
@@ -116,7 +138,10 @@ self.addEventListener("fetch", (event) => {
     if (cached) return cached;
     try {
       const res = await fetch(req);
-      if (res && res.ok) (await caches.open(await currentCacheName())).put(req, res.clone());
+      if (res && res.ok) {
+        const cache = await caches.open(await currentCacheName());
+        await cache.put(req, res.clone());
+      }
       return res;
     } catch (_) {
       return Response.error();
