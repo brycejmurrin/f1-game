@@ -668,8 +668,9 @@ const GLX = (function () {
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
+      "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (markBatchProg) {
@@ -1215,6 +1216,13 @@ const GLX = (function () {
     gl.uniform1f(litU.uCarSunGlint, T && T.carSunGlint != null ? T.carSunGlint : 12.0);
     gl.uniform1f(litU.uCarSparkle,  T && T.carSparkle  != null ? T.carSparkle  : 1.6);
     gl.uniform1f(litU.uFogSunCore,  T && T.fogSunCore  != null ? T.fogSunCore  : 0.6);
+    // LAMP NEAR CLAMP / WINDOW SUN FLASH / SKY RIM GLOW / AMBIENT CONTACT DARK /
+    // LAMP WALL SPILL knobs (defaults = shipped look).
+    gl.uniform1f(litU.uLampNearClamp,  T && T.lampNearClamp  != null ? T.lampNearClamp  : 4.0);
+    gl.uniform1f(litU.uWindowSunFlash, T && T.windowSunFlash != null ? T.windowSunFlash : 1.0);
+    gl.uniform1f(litU.uSkyRimGlow,     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
+    gl.uniform1f(litU.uAmbContactDark, T && T.ambContactDark != null ? T.ambContactDark : 1.0);
+    gl.uniform1f(litU.uLampWallSpill,  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
     // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
@@ -1536,6 +1544,14 @@ const GLX = (function () {
     gl.uniform1f(skyU.uCloudSilver, sky.cloudSilver !== undefined ? sky.cloudSilver : 1);
     gl.uniform1f(skyU.uCoronaAureole, sky.coronaAureole !== undefined ? sky.coronaAureole : 1);
     gl.uniform1f(skyU.uSunDiscSize, sky.sunDiscSize !== undefined ? sky.sunDiscSize : 1);
+    gl.uniform1f(skyU.uStarSize,     sky.starSize     !== undefined ? sky.starSize     : 1);
+    gl.uniform1f(skyU.uStarTwinkle,  sky.starTwinkle  !== undefined ? sky.starTwinkle  : 1);
+    gl.uniform1f(skyU.uMoonDiscSize, sky.moonDiscSize !== undefined ? sky.moonDiscSize : 1);
+    gl.uniform1f(skyU.uMoonHalo,     sky.moonHalo     !== undefined ? sky.moonHalo     : 1);
+    gl.uniform1f(skyU.uSunCorona,    sky.sunCorona    !== undefined ? sky.sunCorona    : 1);
+    gl.uniform1f(skyU.uSunSquash,    sky.sunSquash    !== undefined ? sky.sunSquash    : 1);
+    gl.uniform1f(skyU.uCityGlowReach, sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1);
+    gl.uniform1f(skyU.uCloudDef,     sky.cloudDef     !== undefined ? sky.cloudDef     : 1);
     setBlend(false);
     setDepthMask(false);
     bindVAO(skyVAO);

@@ -174,7 +174,7 @@ struct FrameU {
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, carSparkle, fogSunCore) — wet darkening + car-shadow arm flag + pure-look sparkle/fog knobs (zw always packed; WGSL reads them directly)
   carLightVP : mat4x4<f32>,   // off 384  Z01-remapped car-shadow view-proj (per-frame car-only map)
-  params7    : vec4<f32>,     // off 448  (fogClip, carSunGlint, neonBoost, _pad) — GLX-parity lit-shader knobs (uLampFogClip / uCarSunGlint / uBloomBoost); always packed, WGSL reads them directly
+  params7    : vec4<f32>,     // off 448  (fogClip, carSunGlint, neonBoost, lampNearClamp) — GLX-parity lit-shader knobs (uLampFogClip / uCarSunGlint / uBloomBoost / uLampNearClamp); always packed, WGSL reads them directly
 };                            // size 464
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
@@ -558,7 +558,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let Ld = LP / max(dist, 1e-3);
     let dn = dist / rad;
     let win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);
-    let distC = max(dist, 4.0);
+    let distC = max(dist, F.params7.w);   // LAMP NEAR CLAMP knob (uLampNearClamp, def 4.0)
     let att = (win * win) / (distC * distC + 1.0);
     if (att < 1e-6) { continue; }
     let lcol  = lights[i].colBleed.xyz;
@@ -825,7 +825,8 @@ struct SkyU {
   p0          : vec4<f32>,     // (stars, cloud, time, moon)
   p1          : vec4<f32>,     // (starBright, cloudSpeed, skyGrad, starDensity)
   p2          : vec4<f32>,     // (mieScatter, cloudSilver, coronaAureole, sunDiscSize) — pure-look knobs; read directly (0 is a real "off"), uploader always packs the resolved default
-  p3          : vec4<f32>,     // (daySkyBlue, _pad, _pad, _pad) — GLX-parity day-gradient deep-blue band (uDaySkyBlue); read directly, uploader always packs the resolved default (1.0 = as-shipped)
+  p3          : vec4<f32>,     // (daySkyBlue, starSize, starTwinkle, moonDiscSize) — GLX-parity sky knobs; read directly, uploader always packs the resolved default (1.0 = as-shipped)
+  p4          : vec4<f32>,     // (moonHalo, sunCorona, sunSquash, cityGlowReach) — GLX-parity sky knobs; read directly, uploader always packs the resolved default (1.0 = as-shipped)
 };
 @group(0) @binding(0) var<uniform> U : SkyU;
 ${hash}
@@ -874,6 +875,16 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // DAY SKY BLUE knob (GLX parity, def 1.0). Read directly — 0 is a valid "no
   // deep-blue band", so the uploader always packs the resolved value.
   let daySkyBlue    = U.p3.x;
+  // More GLX-parity sky knobs (def 1.0). Read directly — 0 is a valid "off" for
+  // most; the two that scale a divisor (disc/halo sizes) are floored > 0. The
+  // uploader always packs the resolved value.
+  let starSize      = max(U.p3.y, 1e-3);   // scales a smoothstep radius; keep > 0
+  let starTwinkle   = U.p3.z;
+  let moonDiscSize  = max(U.p3.w, 1e-3);   // scales smoothstep edges; keep > 0
+  let moonHaloK     = max(U.p4.x, 1e-3);   // divides a falloff; keep > 0
+  let sunCorona     = U.p4.y;
+  let sunSquash     = U.p4.z;
+  let cityGlowReach = U.p4.w;
 
   let sunE = clamp(sunDir.y * 1.4, 0.0, 1.0);
   // NIGHT gate (parity with GLX): at night sunDir stays HIGH as the moon
@@ -938,9 +949,10 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let coronaDamp = 1.0 - nightSky;
   let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
   c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
-  c = c + sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;
+  c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp;   // SUN CORONA RING knob
   let dd = dir - sunDir * sd;
-  let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
+  // SUN HORIZON SQUASH knob: scales the golden-hour vertical squash of the disc.
+  let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), sunSquash)));
   // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
   let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
   let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
@@ -959,9 +971,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       let dstar = length(dir - sdir);
       let bright = 0.30 + 0.55 * hash3(cell + 43.0);
       let phase = hash3(cell + 31.0) * 6.2832;
-      let twinkle = 0.80 + 0.20 * sin(time * 1.4 + phase);
+      let twinkle = 0.80 + 0.20 * starTwinkle * sin(time * 1.4 + phase);   // STAR TWINKLE knob
       let giant = step(0.9995, h);
-      let srad = mix(0.0016, 0.0028, giant);
+      let srad = mix(0.0016, 0.0028, giant) * starSize;   // STAR SIZE knob
       let star = smoothstep(srad, srad * 0.35, dstar) * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
       c = c + vec3<f32>(star) * starBright;
     }
@@ -972,8 +984,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let moonDir = normalize(vec3<f32>(0.42, 0.72, 0.55));
     let md = dot(dir, moonDir);
     let moonPerp = length(dir - moonDir * max(md, 0.0));
-    let moonDisc = smoothstep(0.025, 0.010, moonPerp) * moon;
-    let moonHalo = exp(-moonPerp * moonPerp * 140.0) * 0.28 * moon;
+    let moonDisc = smoothstep(0.025 * moonDiscSize, 0.010 * moonDiscSize, moonPerp) * moon;   // MOON DISC SIZE knob
+    let moonHalo = exp(-moonPerp * moonPerp * (140.0 / moonHaloK)) * 0.28 * moonHaloK * moon;   // MOON HALO knob
     if (up > 0.0 && md > 0.0) {
       c = c + vec3<f32>(0.82, 0.88, 1.00) * (moonDisc * 1.10 + moonHalo);
     }
@@ -981,7 +993,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
 
   // --- City skyglow ---
   if (U.cityGlow.x + U.cityGlow.y + U.cityGlow.z > 0.001) {
-    let horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0);
+    let horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * cityGlowReach);   // CITY GLOW REACH knob
     c = c + U.cityGlow.xyz * horiz;
   }
 
@@ -1001,8 +1013,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     BLIT,
     BLOCKER,
     SHADOW,
-    // byte size of the SkyU uniform block (mat4 64 + 9*vec4 144 = 208)
-    SKY_UNIFORM_BYTES: 208,
+    // byte size of the SkyU uniform block (mat4 64 + 10*vec4 160 = 224)
+    SKY_UNIFORM_BYTES: 224,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
     FRAME_UNIFORM_BYTES: 464,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr +carLightVP; +params7 GLX-parity lit knobs)
