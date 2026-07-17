@@ -13,38 +13,42 @@
     country: "Qatar",
     night: true,
     theme: "desert",
+    sceneryCoordinates: "racing",
+    flatTerrain: true,
+    terrainOuter: 120,
+    dressingExclusions: [
+      // Qatar owns its sparse palms/scrub; generic foliage muddies the open desert.
+      { kind: "foliage", s0: 0, s1: 1 },
+    ],
     lengthKm: 5.4,
     sunAzimBias: -0.30,   // Losail's late-afternoon sun hangs low to the NE-facing main straight
     baseHW: 8,
     // Warm pal.runoff = tan sand beyond the green verge (brief / COL.desertSand)
-    pal: { horizon: [0.08, 0.10, 0.14], zenith: [0.03, 0.04, 0.09], ambientSky: [0.15, 0.16, 0.20], ambientGround: [0.12, 0.12, 0.14], fogColor: [0.10, 0.12, 0.16], fogDensity: 0.0015, concrete: [0.17, 0.17, 0.19], runoff: [0.72, 0.58, 0.38], grass: [0.20, 0.42, 0.22] },
+    pal: { horizon: [0.08, 0.10, 0.14], zenith: [0.03, 0.04, 0.09], ambientSky: [0.15, 0.16, 0.20], ambientGround: [0.12, 0.12, 0.14], fogColor: [0.10, 0.12, 0.16], fogDensity: 0.0015, concrete: [0.17, 0.17, 0.19], runoff: [0.72, 0.58, 0.38], grass: [0.48, 0.36, 0.22] },
     segs: [
       { t: 0, l: 300 }, { t: -60, l: 90 }, { t: 80, l: 100 }, { t: -70, l: 90 }, { t: 60, l: 90 }, { t: 0, l: 300 },
       { t: -80, l: 100 }, { t: 70, l: 90 }, { t: 0, l: 400 }, { t: -60, l: 90 }, { t: 70, l: 90 }, { t: 0, l: 300 },
     ],
-    // Losail: gentle desert undulation through the far hairpin section.
-    elevations: [{ s: 0.55, halfM: 380, rise: 5 }],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, vadd, every,
+      const { out, MAT, n, px, pz, pyMin, night, hash, vadd, every,
         place, backdrop, anchor, addBox, addCyl, addFrustum,
-        palm, grandstand, building, fence, wall, mountain, guardrail, tyreWall,
+        palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
-        floodMast, floodMastRing, runoffApron, sailCanopy, COL } = api;
+        modelGroup, groundPatch, floodMast, floodMastRing } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette (NIGHT desert) ----
       const DUNE   = [0.76, 0.64, 0.46], DUNE_N = [0.56, 0.48, 0.36];
       const SAND   = [0.64, 0.52, 0.36], SAND_D = [0.45, 0.36, 0.24];
       const STEEL  = [0.13, 0.13, 0.16];
-      const FLOOD  = [0.98, 0.98, 0.95];
-      const LAMP   = [0.92, 0.92, 0.88];
-      const POOL   = [0.85, 0.85, 0.80];
+      const FLOOD  = night ? [1.22, 1.28, 1.40] : [0.96, 1.00, 1.06];
+      const LAMP   = night ? [1.08, 1.12, 1.20] : [0.88, 0.90, 0.94];
+      const POOL   = night ? [0.82, 0.86, 0.96] : [0.66, 0.68, 0.72];
       const WIN_WARM = [0.88, 0.72, 0.32];
       const WIN_COOL = [0.52, 0.68, 0.88];
       const BEACON = [0.72, 0.90, 0.98];
       const FROND  = [0.12, 0.28, 0.12];
       const GRASS  = [0.20, 0.42, 0.22];
-      const SAND_COL = (COL && COL.desertSand) || [0.72, 0.58, 0.38];
       const WHITE  = [0.94, 0.94, 0.92];
       const AD = [
         [0.85, 0.18, 0.16], [0.16, 0.36, 0.72], [0.92, 0.74, 0.14],
@@ -73,6 +77,33 @@
       const lightPool = (k, side, gap, r) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         addCyl(out, vadd(a.c, a.u, 0.05), r, 0.07, POOL, 10, b);
+      };
+      // Lusail's stands are long, low Tilke slabs. The generic grandstand model
+      // carries dense individual spectators, which made Qatar's overlapping
+      // crescent segments dominate the whole track's prop budget. Keep the
+      // silhouette with one atomic, terrain-anchored shell per segment.
+      const qatarStand = (id, s, side, gap, len, shell, crowd, required) => {
+        const depth = 15, h = 18;
+        const a = anchor(K(s), side, gap + depth / 2), b = [a.r, a.u, a.t];
+        return modelGroup(id, {
+          center: vadd(a.c, a.u, (h + 1) / 2),
+          size: [depth + 4, h + 1, len + 2],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, h * 0.28), [depth, h * 0.56, len], shell, b);
+          addBox(stage,
+            vadd(vadd(a.c, a.u, h * 0.62), a.r, -side * (depth * 0.34)),
+            [depth * 0.32, h * 0.48, len * 0.94], crowd, b);
+          addBox(stage, vadd(a.c, a.u, h), [depth + 3, 0.7, len + 1.5], WHITE, b);
+          addBox(stage,
+            vadd(vadd(a.c, a.u, h * 0.96), a.r, -side * (depth * 0.52)),
+            [0.25, 0.45, len * 0.90], FLOOD, b);
+          for (const dz of [-len * 0.42, len * 0.42]) {
+            addBox(stage,
+              vadd(vadd(vadd(a.c, a.u, h * 0.5), a.r, side * depth * 0.45), a.t, dz),
+              [0.55, h, 0.55], STEEL, b);
+          }
+        }, { required: !!required });
       };
 
       // ---- LOW SAND-DUNE RING (culled from 3 tall rocky rings → 2 low rings) ----
@@ -128,8 +159,18 @@
 
       // ================= START / FINISH — record pit slab + crescent =========
       // Tilke 402 m pit building: long low white slab + horizontal banding.
-      building(K(0.00), -1, 1.2, 16, 11, 210,
-        { wall: WHITE, window: WIN_WARM, floor: 3.6 });
+      (function pitSlab() {
+        const a = anchor(K(0.00), -1, 9.2), b = [a.r, a.u, a.t];
+        const c = vadd(a.c, a.u, 6.0);
+        modelGroup("qatar-pit-slab", {
+          center: c, size: [18, 13, 212], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, 210], WHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05), [0.25, 0.5, 208], [0.78, 0.78, 0.76], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, 8.08), [0.22, 1.2, 206], WIN_WARM, b);
+          addBox(stage, vadd(a.c, a.u, 11.35), [17.2, 0.7, 211], WHITE, b);
+        }, { required: true });
+      })();
       building(K(0.01), -1, 17, 13, 8, 160,
         { wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
       // Horizontal banding stripe along the pit face (Tilke language)
@@ -165,16 +206,10 @@
 
       // Main grandstand (R): long curved crescent stepped slab.
       (function crescentStand() {
-        for (let i = 0; i < 10; i++) {
-          const s = 0.950 + i * 0.011;
-          grandstand(s % 1, 1, 16, 60, [0.86, 0.86, 0.84], [0.20, 0.20, 0.24]);
-        }
-        for (let i = 0; i < 10; i++) {
-          const a = anchor(K((0.950 + i * 0.011) % 1), 1, 24), b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, 25), [16, 3.2, 74], WHITE, b);
-          addBox(out, vadd(a.c, a.u, 12.5), [0.8, 25, 0.8], [0.88, 0.88, 0.86], b);
-          addBox(out, vadd(vadd(a.c, a.u, 26.2), a.r, -9), [0.45, 1.6, 44], AD[i % AD.length], b);
-          addBox(out, vadd(vadd(a.c, a.u, 24.2), a.r, -9), [0.22, 0.5, 44], FLOOD, b);
+        for (let i = 0; i < 5; i++) {
+          const s = 0.950 + i * 0.022;
+          qatarStand(`qatar-main-stand-${i}`, s % 1, 1, 16, 72,
+            [0.86, 0.86, 0.84], [0.20, 0.20, 0.24], i === 0);
         }
       })();
 
@@ -188,13 +223,10 @@
       })();
 
       // ================= TURN 1 — North stand + Tilke VVIP canopy ============
-      grandstand(0.053, 1, 20, 95, [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
-      grandstand(0.070, 1, 20, 65, [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
-      for (let i = 0; i < 7; i++) {
-        const a = anchor(K((0.053 + i * 0.012) % 1), 1, 26), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 24), [17, 3.0, 66], [0.92, 0.92, 0.90], b);
-        addBox(out, vadd(vadd(a.c, a.u, 23.2), a.r, -10), [0.2, 0.45, 65], FLOOD, b);
-      }
+      qatarStand("qatar-t1-stand-a", 0.053, 1, 20, 95,
+        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21], true);
+      qatarStand("qatar-t1-stand-b", 0.070, 1, 20, 65,
+        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
       tyreWall(0.04, 0.085, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.05), -1, 6);
       billboard(K(0.065), 1, 6, 12, 3.8, AD[0]);
@@ -206,19 +238,17 @@
         building(K(0.058), -1, 40, 14, 7, 24,
           { wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
         const a = anchor(K(0.052), -1, 48), b = [a.r, a.u, a.t];
-        if (typeof sailCanopy === "function") {
-          sailCanopy(a.c, b, { rad: 28, rx: 30, rz: 18, h: 16, col: WHITE, ribs: 10, thick: 0.6 });
-        } else {
-          // Fallback: tree-branch canopy as clustered white boxes + mast
-          addCyl(out, a.c, 0.55, 16, STEEL, 6, b);
-          addBox(out, vadd(a.c, a.u, 16.4), [52, 0.55, 28], WHITE, b);
+        modelGroup("qatar-t1-vvip-canopy", {
+          center: vadd(a.c, a.u, 8.3), size: [62, 17, 38], basis: b,
+        }, (stage) => {
+          addCyl(stage, a.c, 0.55, 16, STEEL, 8, b);
+          addBox(stage, vadd(a.c, a.u, 16.0), [58, 0.65, 32], WHITE, b);
           for (const dx of [-18, -9, 0, 9, 18]) {
-            addBox(out, vadd(vadd(a.c, a.u, 12), a.r, dx * 0.15), [0.35, 8, 0.35], STEEL, b);
-            addBox(out, vadd(vadd(a.c, a.u, 16.2), a.t, dx), [8, 0.4, 0.4], LAMP, b);
+            addBox(stage, vadd(vadd(a.c, a.u, 12), a.r, dx * 0.15), [0.35, 8, 0.35], STEEL, b);
+            addBox(stage, vadd(vadd(a.c, a.u, 16.2), a.t, dx * 0.75), [54, 0.28, 0.35], LAMP, b);
           }
-        }
-        // Lit under-canopy strip
-        addBox(out, vadd(a.c, a.u, 15.6), [40, 0.25, 1.2], FLOOD, b);
+          addBox(stage, vadd(a.c, a.u, 15.6), [48, 0.25, 1.2], FLOOD, b);
+        }, { required: true });
       })();
 
       // ================= SPARSE PALMS (culled — vert budget for flood ring) ===
@@ -228,14 +258,9 @@
       }
 
       // ================= T2/T3 PAIRED GRANDSTANDS ============================
-      grandstand(0.162, 1, 22, 52, [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
-      grandstand(0.183, 1, 22, 52, [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
-      grandstand(0.204, 1, 22, 52, [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
-      for (const s of [0.162, 0.183, 0.204]) {
-        const a = anchor(K(s), 1, 27), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 17), [15, 2.4, 56], [0.92, 0.92, 0.90], b);
-        addBox(out, vadd(vadd(a.c, a.u, 16.4), a.r, -9), [0.2, 0.4, 55], FLOOD, b);
-        addBox(out, vadd(vadd(a.c, a.u, 18.2), a.r, -9), [0.4, 1.2, 55], WIN_WARM, b);
+      for (const [i, s] of [0.162, 0.183, 0.204].entries()) {
+        qatarStand(`qatar-t23-stand-${i}`, s, 1, 22, 52,
+          [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
       }
       // Small hospitality villa terrace at T2/T3 (replaces fantasy marquees)
       for (let i = 0; i < 3; i++) {
@@ -329,14 +354,10 @@
       marshalPost(K(0.88), 1, 6);
 
       // ================= TURN 16 GRANDSTAND + PIT ENTRY =====================
-      grandstand(0.930, 1, 17, 75, [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
-      grandstand(0.952, 1, 17, 55, [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
-      for (const s of [0.930, 0.952]) {
-        const a = anchor(K(s), 1, 24), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 18), [15, 2.4, 58], [0.92, 0.92, 0.90], b);
-        addBox(out, vadd(vadd(a.c, a.u, 17.4), a.r, -9), [0.2, 0.4, 57], FLOOD, b);
-        addBox(out, vadd(vadd(a.c, a.u, 19.0), a.r, -9), [0.4, 1.2, 57], WIN_WARM, b);
-      }
+      qatarStand("qatar-t16-stand-a", 0.930, 1, 17, 75,
+        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
+      qatarStand("qatar-t16-stand-b", 0.952, 1, 17, 55,
+        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
       tyreWall(0.91, 0.945, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.94), -1, 6);
       billboard(K(0.92), 1, 6, 12, 3.6, AD[5]);
@@ -353,20 +374,14 @@
       });
 
       // ================= 2. GREEN VERGE → WARM SAND SANDWICH ================
-      // Continuous artificial-grass band hugging both edges, then warm sand
-      // runoff aprons beyond — the Lusail edge signature.
-      every(20, (k) => {
+      // Continuous artificial-grass band hugging both edges, with the warm
+      // sand-coloured terrain immediately beyond — the Lusail edge signature.
+      // This is a visual ground patch, not a solid `place()` box, so it conforms
+      // to the shared terrain profile without creating phantom boundaries.
+      every(24, (k) => {
         for (const side of [-1, 1]) {
-          place(k, side, 1.5, [2.6, 0.22, 14], GRASS);
-        }
-      });
-      every(32, (k) => {
-        for (const side of [-1, 1]) {
-          if (typeof runoffApron === "function") {
-            runoffApron(k, side, 4.2, [16, 0.28, 26], SAND_COL);
-          } else {
-            place(k, side, 12, [16, 0.28, 26], SAND_COL);
-          }
+          groundPatch(k, side, 0.3, [3.6, 0.16, 28], GRASS,
+            { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
       });
     },
