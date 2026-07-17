@@ -6214,16 +6214,24 @@ function buildLightTunePanel() {
   if (!host.dataset.built) {
     host.dataset.built = "1";
     const groups = [];      // ordered distinct group names
-    let group = null, wrap = null;
+    let group = null, section = null, wrap = null;
     for (const d of TUNE_DEFS) {
       if (d.group !== group) {
         group = d.group; groups.push(group);
+        section = null;
         wrap = document.createElement("div");
         wrap.className = "lt-group"; wrap.dataset.group = group;
         const h = document.createElement("h3");
         h.className = "adv-sec"; h.textContent = group;
         wrap.appendChild(h);
         host.appendChild(wrap);
+      }
+      if (d.section && d.section !== section) {
+        section = d.section;
+        const sh = document.createElement("h4");
+        sh.className = "lt-section";
+        sh.textContent = section;
+        wrap.appendChild(sh);
       }
       const item = document.createElement("div");
       item.className = "adv-item";

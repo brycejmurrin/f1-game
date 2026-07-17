@@ -1665,6 +1665,23 @@ const WGX = (function () {
         // tuneFx (off 128): vignette reach; remaining lanes reserved/aligned.
         s[32] = (T && T.vignetteSoft != null) ? T.vignetteSoft : 0.35;
         s[33] = 0; s[34] = 0; s[35] = 0;
+        // HDR grade (off 144..223): five tonal zones, toe/shoulder, RGB lift/gamma/gain.
+        s[36] = (T && T.blacks     != null) ? T.blacks     : 0;
+        s[37] = (T && T.shadows    != null) ? T.shadows    : 0;
+        s[38] = (T && T.midtones   != null) ? T.midtones   : 0;
+        s[39] = (T && T.highlights != null) ? T.highlights : 0;                           // tone0
+        s[40] = (T && T.whites     != null) ? T.whites     : 0;
+        s[41] = (T && T.toe        != null) ? T.toe        : 0;
+        s[42] = (T && T.shoulder   != null) ? T.shoulder   : 0; s[43] = 0;                 // tone1
+        s[44] = (T && T.liftR      != null) ? T.liftR      : 0;
+        s[45] = (T && T.liftG      != null) ? T.liftG      : 0;
+        s[46] = (T && T.liftB      != null) ? T.liftB      : 0; s[47] = 0;                 // lift
+        s[48] = (T && T.gammaR     != null) ? T.gammaR     : 1;
+        s[49] = (T && T.gammaG     != null) ? T.gammaG     : 1;
+        s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1; s[51] = 0;                 // gamma
+        s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
+        s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
+        s[54] = (T && T.gainB      != null) ? T.gainB      : 1; s[55] = 0;                 // gain
         device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });

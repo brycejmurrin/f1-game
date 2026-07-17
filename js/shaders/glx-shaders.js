@@ -1965,6 +1965,11 @@ uniform float uSaturation;   // global saturation (1 = unchanged)
 uniform float uTint;         // warm(+)/cool(-) white-balance shift, -1..1 (default 0)
 uniform float uVignette;     // corner-darkening floor: 1 = none, lower = stronger (default 0.80)
 uniform float uVigSoft;      // vignette inner-edge radius / reach (default 0.35)
+uniform vec4 uTone0;         // blacks, shadows, midtones, highlights (stops)
+uniform vec4 uTone1;         // whites (stops), toe, shoulder, padding
+uniform vec3 uLift;          // per-channel lift (0 = neutral)
+uniform vec3 uGamma;         // per-channel gamma (1 = neutral)
+uniform vec3 uGain;          // per-channel gain (1 = neutral)
 uniform sampler2D uDepth;    // scene depth (for wet-road screen-space reflection)
 uniform mat4 uInvProj;       // clip → view (reconstruct view position from depth)
 uniform mat4 uProj;          // view → clip  (project the marched ray to screen)
@@ -2009,6 +2014,45 @@ vec3 caScene(vec2 uv) {
   vec2 d = uv - 0.5;
   float a = uChromAb * 0.004 * dot(d, d);
   return vec3(texture(uScene, uv + d * a).r, texture(uScene, uv).g, texture(uScene, uv - d * a).b);
+}
+
+// Five overlapping exposure masks in log2 stops around 18% middle grey.
+void gradeZoneWeights(float y, out vec4 w0, out float wWhite) {
+  float z = log2(max(y, 1e-6) / 0.18);
+  w0.x = 1.0 - smoothstep(-5.0, -2.5, z);
+  w0.y = smoothstep(-5.0, -2.5, z) * (1.0 - smoothstep(-1.5, 0.0, z));
+  w0.z = smoothstep(-2.5, -0.5, z) * (1.0 - smoothstep(0.5, 2.5, z));
+  w0.w = smoothstep(0.0, 1.5, z) * (1.0 - smoothstep(3.0, 5.0, z));
+  wWhite = smoothstep(2.5, 5.0, z);
+}
+
+// Monotonic power curves pivoted at middle grey. Toe affects only luminance
+// below the pivot; shoulder affects only luminance above it. RGB is rescaled by
+// the luminance ratio, preserving hue and making zero on both controls identity.
+vec3 applyToeShoulder(vec3 c, float toe, float shoulder) {
+  c = max(c, vec3(0.0));
+  float oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6);
+  float exponent = oldY < 0.18
+    ? exp2(clamp(toe, -1.0, 1.0))
+    : exp2(clamp(-shoulder, -1.0, 1.0));
+  float newY = 0.18 * pow(oldY / 0.18, exponent);
+  return c * (newY / max(oldY, 1e-6));
+}
+
+vec3 applyHdrGrade(vec3 c) {
+  vec3 lift = uLift;
+  vec3 gain = max(uGain, vec3(1e-3));
+  vec3 invGamma = 1.0 / max(uGamma, vec3(1e-3));
+  c = lift + (gain - lift) * pow(max(c, vec3(0.0)), invGamma);
+
+  float y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 1e-6);
+  vec4 w0; float wWhite;
+  gradeZoneWeights(y, w0, wWhite);
+  float stops = dot(w0, uTone0) + wWhite * uTone1.x;
+  c *= exp2(clamp(stops, -4.0, 4.0));
+
+  c = applyToeShoulder(c, uTone1.y, uTone1.z);
+  return max(c, vec3(0.0));
 }
 
 // ACES fitted filmic tone-map (Krzysztof Narkowicz's approximation — the
@@ -2383,6 +2427,10 @@ void main() {
       c += shaft * uSunShaft * radial * radial * 0.60;
     }
   }
+
+  // Professional HDR grade runs after all linear-light bloom/shaft composition
+  // and before the display-referred ACES curve.
+  c = applyHdrGrade(c);
 
   // Filmic tone-map (ACES) + colour grading. WHITE POINT scales the input knee:
   // lower clips highlights sooner (punchy), higher preserves highlight detail.
