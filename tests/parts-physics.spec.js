@@ -278,6 +278,59 @@ test.describe("Parts module — resolveSetup()", () => {
 });
 
 test.describe("Parts module — visual recipes", () => {
+  test("every declared recipe field belongs to a known visual consumer registry", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const registry = Parts.VISUAL_FIELD_REGISTRY;
+      const knownConsumers = new Set(["geometry", "material", "runtime"]);
+      const registered = new Map();
+      const declared = new Set();
+      const invalidConsumers = [];
+      const malformed = [];
+      for (const [consumer, categories] of Object.entries(registry || {})) {
+        if (!knownConsumers.has(consumer)) invalidConsumers.push(consumer);
+        for (const [category, fields] of Object.entries(categories || {})) {
+          if (!Array.isArray(fields)) {
+            malformed.push(consumer + ":" + category);
+            continue;
+          }
+          for (const field of fields) {
+            const key = category + "." + field;
+            const owners = registered.get(key) || [];
+            owners.push(consumer);
+            registered.set(key, owners);
+          }
+        }
+      }
+      const missing = [];
+      for (const cat of Parts.CATALOG) {
+        for (const opt of cat.options) {
+          for (const field of Object.keys(opt.visual || {})) {
+            const key = cat.id + "." + field;
+            declared.add(key);
+            if (!registered.has(key)) missing.push(cat.id + ":" + opt.id + ":" + field);
+          }
+        }
+      }
+      return {
+        exists: !!registry,
+        invalidConsumers,
+        malformed,
+        missing,
+        stale: [...registered.keys()].filter((key) => !declared.has(key)),
+        duplicateOwners: [...registered.entries()]
+          .filter(([, owners]) => owners.length !== 1)
+          .map(([key, owners]) => key + ":" + owners.join(",")),
+      };
+    });
+    expect(result.exists).toBe(true);
+    expect(result.invalidConsumers).toEqual([]);
+    expect(result.malformed).toEqual([]);
+    expect(result.missing).toEqual([]);
+    expect(result.stale).toEqual([]);
+    expect(result.duplicateOwners).toEqual([]);
+  });
+
   test("every catalog option owns a non-empty category recipe", async ({ page }) => {
     await load(page);
     const missing = await page.evaluate(() => {
@@ -311,6 +364,250 @@ test.describe("Parts module — visual recipes", () => {
         .map((opt) => opt.id);
     });
     expect(invalid).toEqual([]);
+  });
+
+  test("every engine recipe owns a unique consumed bodywork shape", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const engine = Parts.CATALOG.find((cat) => cat.id === "engine");
+      const fields = ["podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight"];
+      const missing = [];
+      const fingerprints = new Map();
+      for (const opt of engine.options) {
+        const visual = opt.visual || {};
+        const absent = fields.filter((field) => !Number.isFinite(visual[field]));
+        if (absent.length) missing.push(opt.id + ":" + absent.join(","));
+        const key = fields.map((field) => visual[field]).join("|");
+        const owners = fingerprints.get(key) || [];
+        owners.push(opt.id);
+        fingerprints.set(key, owners);
+      }
+      return {
+        missing,
+        duplicates: [...fingerprints.values()].filter((owners) => owners.length > 1),
+        registered: fields.filter((field) =>
+          Parts.VISUAL_FIELD_REGISTRY.geometry.engine.includes(field)),
+      };
+    });
+    expect(result.missing).toEqual([]);
+    expect(result.duplicates).toEqual([]);
+    expect(result.registered).toHaveLength(6);
+  });
+
+  test("each engine bodywork field independently deforms its owned anchor", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const base = {
+        in: 1, inlet: 1, outlet: 1,
+        podWidth: 1, shoulderHeight: 1, undercut: 1,
+        coke: 1, tailWidth: 1, coverHeight: 1,
+      };
+      const anchors = (engine) => Car3D.bodyAnchors({
+        engine: 1, _visual: { engine },
+      });
+      const low = anchors(base);
+      return {
+        podWidth: [low.podAt(0.22).x, anchors({ ...base, podWidth: 1.22 }).podAt(0.22).x],
+        shoulderHeight: [low.podAt(0.22).top,
+          anchors({ ...base, shoulderHeight: 1.22 }).podAt(0.22).top],
+        undercut: [low.podAt(0.62).bottom,
+          anchors({ ...base, undercut: 1.25 }).podAt(0.62).bottom],
+        coke: [low.podAt(-0.62).x, anchors({ ...base, coke: 1.28 }).podAt(-0.62).x],
+        tailWidth: [low.podAt(-1.48).x,
+          anchors({ ...base, tailWidth: 1.20 }).podAt(-1.48).x],
+        coverHeight: [low.coverAt(-0.55).top,
+          anchors({ ...base, coverHeight: 1.25 }).coverAt(-0.55).top],
+        axles: Car3D.AXLES,
+      };
+    });
+    for (const field of ["podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight"]) {
+      expect(result[field][1], field).not.toBeCloseTo(result[field][0], 3);
+    }
+    expect(result.axles).toEqual({ frontZ: 1.7, rearZ: -1.6, wheelY: 0.34 });
+  });
+
+  test("sidepod and nose details stay attached across extreme engine recipes", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const inspect = (engine) => {
+        const parts = { engine: 1, ers: 2, _visual: {
+          engine,
+          ers: { id: "probe", tier: 2, led: [0.31, 1.71, 2.31], pack: 1.2 },
+        } };
+        const accent = [0.123, 0.456, 0.789];
+        const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+          noWheels: true, livery: { accent }, parts,
+        });
+        const anchors = Car3D.bodyAnchors(parts);
+        const decals = CarMesh.carDecalData(2, parts);
+        const verticesFor = (color) => {
+          const points = [];
+          for (let i = 0; i < mesh.pos.length; i += 3) {
+            if (mesh.col[i] === color[0] && mesh.col[i + 1] === color[1] && mesh.col[i + 2] === color[2]) {
+              points.push([mesh.pos[i], mesh.pos[i + 1], mesh.pos[i + 2]]);
+            }
+          }
+          return points;
+        };
+        const podDecals = [];
+        const noseDecals = [];
+        for (let i = 0; i < decals.pos.length; i += 3) {
+          const p = [decals.pos[i], decals.pos[i + 1], decals.pos[i + 2]];
+          if (Math.abs(p[0]) > 0.35 && p[2] > -0.40 && p[2] < 0.50) podDecals.push(p);
+          if (Math.abs(p[0]) < 0.30 && p[2] > 1.10 && p[2] < 2.20) noseDecals.push(p);
+        }
+        const podGap = (p) => Math.abs(Math.abs(p[0]) - anchors.podAt(p[2]).x);
+        const noseGap = (p) => Math.abs(p[1] - anchors.noseAt(p[2]).top);
+        const accentPod = verticesFor(accent).filter((p) => p[2] < 0.5 && p[2] > -0.5);
+        const drls = verticesFor([2.4, 2.4, 2.7]);
+        return {
+          podDecalZ: [...new Set(podDecals.map((p) => Number(p[2].toFixed(3))))],
+          podDecalMaxGap: Math.max(...podDecals.map(podGap)),
+          podDecalsInBounds: podDecals.every((p) => {
+            const a = anchors.podAt(p[2]);
+            return p[1] >= a.bottom - 0.02 && p[1] <= a.top + 0.02;
+          }),
+          noseDecalMaxGap: Math.max(...noseDecals.map(noseGap)),
+          accentPodMaxGap: Math.max(...accentPod.map(podGap)),
+          drlNoseMaxGap: Math.max(...drls.map((p) =>
+            Math.min(
+              Math.abs(p[1] - anchors.noseAt(p[2]).top),
+              Math.abs(Math.abs(p[0]) - anchors.noseAt(p[2]).side),
+            ))),
+        };
+      };
+      const base = {
+        in: 1, inlet: 1, outlet: 1,
+        podWidth: 1, shoulderHeight: 1, undercut: 1,
+        coke: 1, tailWidth: 1, coverHeight: 1,
+      };
+      return [
+        inspect({ ...base, podWidth: 0.72, shoulderHeight: 0.76, undercut: 1.38,
+          coke: 1.38, tailWidth: 0.70, coverHeight: 0.78 }),
+        inspect({ ...base, podWidth: 1.28, shoulderHeight: 1.28, undercut: 0.72,
+          coke: 0.72, tailWidth: 1.30, coverHeight: 1.28 }),
+      ];
+    });
+    for (const variant of result) {
+      expect(variant.podDecalZ).toContain(0.22);
+      expect(variant.podDecalsInBounds).toBe(true);
+      expect(variant.podDecalMaxGap).toBeLessThan(0.035);
+      expect(variant.noseDecalMaxGap).toBeLessThan(0.025);
+      expect(variant.accentPodMaxGap).toBeLessThan(0.04);
+      expect(variant.drlNoseMaxGap).toBeLessThan(0.04);
+    }
+  });
+
+  test("sidepod sponsor quads follow every crossed loft interval", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const recipes = [
+        { podWidth: 0.72, shoulderHeight: 0.76, undercut: 1.38, coke: 1.38, tailWidth: 0.70, coverHeight: 0.78 },
+        { podWidth: 1.28, shoulderHeight: 1.28, undercut: 0.72, coke: 0.72, tailWidth: 1.30, coverHeight: 1.28 },
+      ];
+      return recipes.map((engine) => {
+        const parts = { engine: 1, _visual: { engine: { in: 1, inlet: 1, outlet: 1, ...engine } } };
+        const anchors = Car3D.bodyAnchors(parts);
+        const data = CarMesh.carDecalData(2, parts);
+        const triangles = [];
+        for (let i = 0; i < data.idx.length; i += 3) {
+          const points = [0, 1, 2].map((j) => {
+            const k = data.idx[i + j] * 3;
+            return [data.pos[k], data.pos[k + 1], data.pos[k + 2]];
+          });
+          if (points.every((p) => Math.abs(p[0]) > 0.35 && p[2] >= -0.34 && p[2] <= 0.46)) {
+            triangles.push(points);
+          }
+        }
+        const samples = [];
+        for (const tri of triangles) {
+          for (const weights of [[1,0,0], [0,1,0], [0,0,1], [1/3,1/3,1/3]]) {
+            const p = [0, 1, 2].map((axis) =>
+              tri.reduce((sum, point, j) => sum + point[axis] * weights[j], 0));
+            samples.push({
+              z: p[2],
+              gap: Math.abs(Math.abs(p[0]) - anchors.podAt(p[2]).x),
+            });
+          }
+        }
+        return {
+          triangleCount: triangles.length,
+          crossesCrease: triangles.some((tri) => {
+            const zs = tri.map((p) => p[2]);
+            return Math.min(...zs) < 0.22 && Math.max(...zs) > 0.22;
+          }),
+          hasCreaseVertices: samples.some((p) => Math.abs(p.z - 0.22) < 1e-6),
+          maxGap: Math.max(...samples.map((p) => p.gap)),
+        };
+      });
+    });
+    for (const variant of result) {
+      expect(variant.triangleCount).toBeGreaterThanOrEqual(8);
+      expect(variant.crossesCrease).toBe(false);
+      expect(variant.hasCreaseVertices).toBe(true);
+      expect(variant.maxGap).toBeLessThan(0.035);
+    }
+  });
+
+  test("imported bodies keep legacy decal anchors when engine setup changes", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(async () => {
+      const low = { engine: 1, _visual: { engine: {
+        in: 1, inlet: 1, outlet: 1, podWidth: 0.72, shoulderHeight: 0.76,
+        undercut: 1.38, coke: 1.38, tailWidth: 0.70, coverHeight: 0.78,
+      } } };
+      const high = { engine: 1, _visual: { engine: {
+        in: 1, inlet: 1, outlet: 1, podWidth: 1.28, shoulderHeight: 1.28,
+        undercut: 0.72, coke: 0.72, tailWidth: 1.30, coverHeight: 1.28,
+      } } };
+      const importedLow = CarMesh.carDecalData(2, low, true);
+      const importedHigh = CarMesh.carDecalData(2, high, true);
+      const proceduralLow = CarMesh.carDecalData(2, low, false);
+      const proceduralHigh = CarMesh.carDecalData(2, high, false);
+      const importedMesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true });
+      const realFetch = window.fetch;
+      window.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+      GLTF.toMesh = () => importedMesh;
+      const realBodyAnchors = Car3D.bodyAnchors;
+      window.__importAnchorInputs = [];
+      Car3D.bodyAnchors = (parts) => {
+        window.__importAnchorInputs.push(parts);
+        return realBodyAnchors(parts);
+      };
+      const loaded = await __apex.loadCarModel("memory://static-car.glb");
+      window.fetch = realFetch;
+      CarMesh.getCarDecalMesh(2, low, true);
+      CarMesh.getCarDecalMesh(2, high, true);
+      return {
+        loaded,
+        importedPositionsEqual: JSON.stringify(importedLow.pos) === JSON.stringify(importedHigh.pos),
+        proceduralPositionsEqual: JSON.stringify(proceduralLow.pos) === JSON.stringify(proceduralHigh.pos),
+      };
+    });
+    await page.waitForTimeout(100);
+    const runtimeAnchors = await page.evaluate(() => window.__importAnchorInputs);
+    expect(result.loaded).toBe(true);
+    expect(result.importedPositionsEqual).toBe(true);
+    expect(result.proceduralPositionsEqual).toBe(false);
+    expect(runtimeAnchors.length).toBeGreaterThan(0);
+    expect(runtimeAnchors.every((parts) => parts == null)).toBe(true);
+  });
+
+  test("continuous sidepod loft omits coincident internal station caps", async ({ page }) => {
+    await load(page);
+    const caps = await page.evaluate(() => {
+      const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true });
+      const internalZ = new Set([0.22, -0.62]);
+      let count = 0;
+      for (let i = 0; i < mesh.idx.length; i += 3) {
+        const ia = mesh.idx[i] * 3, ib = mesh.idx[i + 1] * 3, ic = mesh.idx[i + 2] * 3;
+        const z = mesh.pos[ia + 2];
+        if (!internalZ.has(z) || mesh.pos[ib + 2] !== z || mesh.pos[ic + 2] !== z) continue;
+        if (mesh.col[ia] === 0.7 && mesh.col[ia + 1] === 0.05 && mesh.col[ia + 2] === 0.05) count++;
+      }
+      return count;
+    });
+    expect(caps).toBe(0);
   });
 
   test("every option recipe builds valid procedural geometry", async ({ page }) => {
@@ -361,6 +658,173 @@ test.describe("Parts module — visual recipes", () => {
     });
     expect(result.baseTriangles).toBeGreaterThan(0);
     expect(result.overBudget).toEqual([]);
+  });
+
+  test("Car3D emits one valid surface id per vertex with core material classes", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1]);
+      const surfaces = Car3D.SURFACES;
+      return {
+        vertexCount: mesh.pos.length / 3,
+        mat: mesh.mat,
+        surfaces,
+        used: mesh.mat ? [...new Set(mesh.mat)] : [],
+      };
+    });
+    expect(result.surfaces).toEqual(expect.objectContaining({
+      paint: expect.any(Number),
+      carbon: expect.any(Number),
+      rubber: expect.any(Number),
+      metal: expect.any(Number),
+    }));
+    const requiredIds = ["paint", "carbon", "rubber", "metal"]
+      .map((name) => result.surfaces[name]);
+    expect(new Set(requiredIds).size).toBe(4);
+    expect(result.mat).toHaveLength(result.vertexCount);
+    expect(result.mat.every((id) => Number.isFinite(id) && Number.isInteger(id))).toBe(true);
+    const allowed = new Set(Object.values(result.surfaces));
+    expect(result.mat.every((id) => allowed.has(id))).toBe(true);
+    for (const name of ["paint", "carbon", "rubber", "metal"]) {
+      expect(result.used).toContain(result.surfaces[name]);
+    }
+  });
+
+  test("Car3D keeps glowing panels, glass visors, and bright custom paint semantically distinct", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const brightPaint = [2.2, 1.9, 1.7];
+      const mesh = Car3D.build(brightPaint, [0.95, 0.8, 0.1]);
+      const materialsFor = (color) => {
+        const result = new Set();
+        for (let i = 0; i < mesh.col.length; i += 3) {
+          if (mesh.col[i] === color[0] && mesh.col[i + 1] === color[1] && mesh.col[i + 2] === color[2]) {
+            result.add(mesh.mat[i / 3]);
+          }
+        }
+        return [...result];
+      };
+      return {
+        surfaces: Car3D.SURFACES,
+        panel: materialsFor([1.12, 1.12, 1.16]),
+        visor: materialsFor([0.08, 0.08, 0.09]),
+        brightPaint: materialsFor(brightPaint),
+      };
+    });
+    expect(result.panel).toEqual([result.surfaces.functionalEmissive]);
+    expect(result.visor).toEqual([result.surfaces.glass]);
+    expect(result.brightPaint).toEqual([result.surfaces.paint]);
+  });
+
+  test("every canonical Car3D build mode emits an aligned valid material stream", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const meshes = {
+        noWheels: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true }),
+        cockpit: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1],
+          { noWheels: true, noDriver: true, cockpit: true }),
+        frontWheel: Car3D.buildWheel(0.32),
+        rearWheel: Car3D.buildWheel(0.38),
+      };
+      const allowed = new Set(Object.values(Car3D.SURFACES));
+      return Object.fromEntries(Object.entries(meshes).map(([name, mesh]) => {
+        const vertexCount = mesh.pos.length / 3;
+        return [name, {
+          vertexCount,
+          materialCount: mesh.mat && mesh.mat.length,
+          valid: !!mesh.mat && mesh.mat.every((id) =>
+            Number.isFinite(id) && Number.isInteger(id) && allowed.has(id)),
+        }];
+      }));
+    });
+    for (const mode of Object.values(result)) {
+      expect(mode.vertexCount).toBeGreaterThan(0);
+      expect(mode.materialCount).toBe(mode.vertexCount);
+      expect(mode.valid).toBe(true);
+    }
+  });
+
+  test("WebGL and WebGPU share the same car environment-surface gate", async ({ page }) => {
+    await load(page);
+    const sources = await page.evaluate(() => ({
+      glsl: GLXShaders.LIT_FS,
+      wgsl: WGSLChunks.LIT,
+    }));
+    expect(sources.glsl).toContain(
+      "bool envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;"
+    );
+    expect(sources.wgsl).toContain(
+      "let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;"
+    );
+    expect(sources.glsl).toContain("if (envSurface) {");
+    expect(sources.wgsl).toContain("&& envSurface) {");
+  });
+
+  test("canonical mesh streams remain structurally valid without freezing topology", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true });
+      const vertexCount = mesh.pos.length / 3;
+      return {
+        vertexCount,
+        triangleCount: mesh.idx.length / 3,
+        aligned: mesh.pos.length === mesh.nrm.length && mesh.pos.length === mesh.col.length,
+        finite: [...mesh.pos, ...mesh.nrm, ...mesh.col].every(Number.isFinite),
+        validIndices: mesh.idx.every((index) =>
+          Number.isInteger(index) && index >= 0 && index < vertexCount),
+        boundedNormals: mesh.nrm.every((_, i) => i % 3 !== 0 || Math.hypot(
+          mesh.nrm[i], mesh.nrm[i + 1], mesh.nrm[i + 2]
+        ) <= 1.0001),
+        nonZeroNormalRatio: mesh.nrm.filter((_, i) => i % 3 === 0 && Math.hypot(
+          mesh.nrm[i], mesh.nrm[i + 1], mesh.nrm[i + 2]
+        ) > 0.5).length / vertexCount,
+        validColours: mesh.col.every((value) => value >= 0 && value <= 4),
+      };
+    });
+    expect(result.vertexCount).toBeGreaterThan(0);
+    expect(result.triangleCount).toBeGreaterThan(0);
+    expect(result.aligned).toBe(true);
+    expect(result.finite).toBe(true);
+    expect(result.validIndices).toBe(true);
+    expect(result.boundedNormals).toBe(true);
+    expect(result.nonZeroNormalRatio).toBeGreaterThan(0.99);
+    expect(result.validColours).toBe(true);
+  });
+
+  test("canonical car bounds remain plausible for a modern F1 car", async ({ page }) => {
+    await load(page);
+    const size = await page.evaluate(() => {
+      const pos = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1]).pos;
+      const bounds = [[Infinity, -Infinity], [Infinity, -Infinity], [Infinity, -Infinity]];
+      for (let i = 0; i < pos.length; i++) {
+        bounds[i % 3][0] = Math.min(bounds[i % 3][0], pos[i]);
+        bounds[i % 3][1] = Math.max(bounds[i % 3][1], pos[i]);
+      }
+      return bounds.map(([lo, hi]) => hi - lo);
+    });
+    expect(size[0]).toBeGreaterThan(1.8);
+    expect(size[0]).toBeLessThan(2.2);
+    expect(size[1]).toBeGreaterThan(0.85);
+    expect(size[1]).toBeLessThan(1.2);
+    expect(size[2]).toBeGreaterThan(5.2);
+    expect(size[2]).toBeLessThan(6.2);
+  });
+
+  test("car mesh layers stay below absolute triangle ceilings", async ({ page }) => {
+    await load(page);
+    const triangles = await page.evaluate(() => ({
+      body: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true }).idx.length / 3,
+      cockpit: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1],
+        { noWheels: true, noDriver: true, cockpit: true }).idx.length / 3,
+      frontWheel: Car3D.buildWheel(0.32).idx.length / 3,
+      rearWheel: Car3D.buildWheel(0.38).idx.length / 3,
+      decals: CarMesh.carDecalData(2).idx.length / 3,
+    }));
+    expect(triangles.body).toBeLessThanOrEqual(2400);
+    expect(triangles.cockpit).toBeLessThanOrEqual(1500);
+    expect(triangles.frontWheel).toBeLessThanOrEqual(400);
+    expect(triangles.rearWheel).toBeLessThanOrEqual(400);
+    expect(triangles.decals).toBeLessThanOrEqual(32);
   });
 
   test("every recipe has primary and secondary visual parameters", async ({ page }) => {

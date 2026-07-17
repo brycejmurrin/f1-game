@@ -977,21 +977,24 @@ function carDecalNum(team, car) {
 // to draw. getVisualTiers is a small 8-category loop and the resulting mesh is
 // cached per level, so resolving this per car/frame is negligible.
 const _aeroLevelCache = new Map();   // "player|factory:team.id" -> {val, rev}
-function teamAeroLevel(team, usePlayerSetup) {
-  if (!Car3D.aeroLevelOf) return 2;   // stale-bundle guard → medium-DF board
+function teamDecalState(team, usePlayerSetup) {
   const key = (usePlayerSetup ? "player:" : "factory:") + team.id;
   const rev = usePlayerSetup ? store.rev : -1;
   const c = _aeroLevelCache.get(key);
-  if (c && c.rev === rev) return c.val;
+  if (c && c.rev === rev) return c;
   const setup = usePlayerSetup ? getTeamParts(team.id) : Parts.getFactorySetup(team);
-  const val = Car3D.aeroLevelOf(Parts.getVisualTiers(setup, team));
-  _aeroLevelCache.set(key, { val, rev });
-  return val;
+  const parts = Parts.getVisualTiers(setup, team);
+  const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2, parts, rev };
+  _aeroLevelCache.set(key, state);
+  return state;
 }
 function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
-  // Cockpit build draws only the forward (nose) number — the rear wing is behind
-  // the camera — so aero level is irrelevant there.
-  const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh(teamAeroLevel(team, usePlayerSetup));
+  const state = teamDecalState(team, usePlayerSetup);
+  // A loaded GLB is a static body and does not consume procedural part recipes;
+  // keep its overlay on stable default/legacy anchors as setup options change.
+  const legacyBody = !!carModelBuf;
+  const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts) :
+    getCarDecalMesh(state.val, state.parts, legacyBody);
   const tex = getCarDecalTexture(team, num);
   if (mesh && tex) gfx.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
 }
@@ -3790,21 +3793,6 @@ function renderSetupPreview(dt) {
   });
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
-  // Menu car reads as team livery, not the in-race chrome mirror. The frame's
-  // noEnv flag (above) drops the probe-less env term to a gentle sheen even
-  // when a stale race cube lingers (per-draw material opts carry no env knob).
-  // The wheels are baked into this single mesh (Car3D.build) and drawn with the
-  // SAME paint material — the env/clearcoat sheen reads as an ugly grey gloss on
-  // the near-black tyres. Kill clearcoat entirely (no reflective lacquer coat in
-  // the menu preview) and drop specular so the rubber goes matte; the bodywork
-  // still reads as painted via its base colour + the reduced specular.
-  spMat.clearcoat = 0; spMat.specular = 0.35;
-  // clearcoat isn't the only reflection source: the lit shader has a SEPARATE
-  // analytic sky-mirror gated purely by roughness (glx.js envBlend, active
-  // below ~0.40) — PAINT_DRY_DAY's 0.22 sails right through it regardless of
-  // clearcoat/carEnvCube, which is what kept reading as a residual sheen. Push
-  // roughness past that cutoff so this preview has NO reflection source at all.
-  spMat.roughness = 0.55;
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false,
     carDecalNum(Teams.LIST[teamIdx], null), false, true);

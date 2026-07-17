@@ -590,7 +590,31 @@ void main() {
   // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
   // they must not roughen the mirror shell (that's what read as "ghostly" before).
   vec3 Ngeo = N;
-  if (uCarPaint > 0.001) {
+  // Car3D surface ids occupy 20..25, above TrackGeom's 0..15 material range.
+  // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
+  int surfaceId = int(vMat + 0.5);
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 25;
+  bool paintSurface = surfaceId == 20;
+  bool carbonSurface = surfaceId == 21;
+  bool rubberSurface = surfaceId == 22;
+  bool metalSurface = surfaceId == 23;
+  bool glassSurface = surfaceId == 24;
+  bool emissiveSurface = surfaceId == 25;
+  float carPaint = classifiedCar ? (paintSurface ? uCarPaint : 0.0) : uCarPaint;
+  float clearcoat = classifiedCar
+    ? (paintSurface ? uClearcoat : (glassSurface ? uClearcoat * 0.45 : 0.0))
+    : uClearcoat;
+  float metalness = classifiedCar
+    ? (metalSurface ? max(uMetalness, 0.78) : (carbonSurface ? 0.08 : 0.0))
+    : uMetalness;
+  float specular = classifiedCar
+    ? (rubberSurface ? 0.18 : (metalSurface ? 1.0 : (carbonSurface ? 0.48 : uSpecular)))
+    : uSpecular;
+  float emissive = classifiedCar
+    ? (emissiveSurface ? max(uEmissive, 1.0) : (paintSurface ? uEmissive : 0.0))
+    : uEmissive;
+  bool envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
+  if (carPaint > 0.001) {
     // Two scales: coarse orange-peel waviness + fine metallic-flake sparkle.
     // Keyed to OBJECT space so the pattern is glued to the panels instead of
     // streaming across the bodywork as the car drives (texture-swimming).
@@ -608,7 +632,7 @@ void main() {
       // 0.22 (was 0.7): at 0.7 the perturbation broke the base-coat specular into
       // per-pixel noise and the paint read sandy/matte — keep a whisper of live
       // shimmer, let the clearcoat lobe + env mirror carry the gloss.
-      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * uCarPaint * pFade));
+      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
     }
   }
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
@@ -673,6 +697,11 @@ void main() {
     albedo = max(albedo, vec3(0.0));
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
+  if (carbonSurface) rough = max(rough, 0.56);
+  if (rubberSurface) rough = max(rough, 0.90);
+  if (metalSurface) rough = min(rough, 0.16);
+  if (glassSurface) rough = min(rough, 0.13);
+  if (emissiveSurface) rough = max(rough, 0.32);
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
@@ -685,7 +714,7 @@ void main() {
   float saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
   rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
   float a = rough * rough;
-  vec3 f0 = mix(vec3(0.08 * uSpecular), albedo, uMetalness);
+  vec3 f0 = mix(vec3(0.08 * specular), albedo, metalness);
 
   // ── Wet surface (rain) ──────────────────────────────────────────────────────
   // Rain darkens and polishes surfaces. Strongest on up-facing ground (water
@@ -728,7 +757,7 @@ void main() {
   float litNoL = NoL * shadow * uKeyMul;
 
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
-  vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - uMetalness));
+  vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - metalness));
   // SHADOW COOLNESS: bias sun-starved (shadowed / ambient-only) pixels toward a
   // cool blue for a sunny-day contrast look. 0 = neutral (shipped).
   if (uShadowTintAmt > 0.001) {
@@ -812,12 +841,12 @@ void main() {
     }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
+    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wet * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
-    color += albedo * uLightCol[i] * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - uMetalness);
+    color += albedo * uLightCol[i] * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
     // real wet-night streak); on glass/car paint it's the city-light glint.
@@ -832,11 +861,11 @@ void main() {
     color += lspec / (1.0 + lspec);
     // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
     // car bodies at night, over the softer base-coat highlight.
-    if (uClearcoat > 0.001) {
+    if (clearcoat > 0.001) {
       float Dcc = D_GGX(NoHl, 0.03);
       float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
       float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
-      vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * uClearcoat;
+      vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
       color += 2.2 * ccl / (2.2 + ccl);
     }
   }
@@ -854,7 +883,7 @@ void main() {
   // even where the base coat is rougher, which is what gives cars their glossy
   // showroom read. The bodywork is smooth-shaded (car3d.js lofts), so the lobe
   // sweeps across the curved panels per-pixel instead of flashing whole facets.
-  if (uClearcoat > 0.001) {
+  if (clearcoat > 0.001) {
     // Roughness ~0.19 (a=0.035): wide enough that the streak is VISIBLE sweeping
     // the curved panels (at 0.1 the cone is ~2 degrees — sub-pixel, reads matte).
     // Soft-clipped to a 2.6 HDR ceiling instead of 1.0: the hot core punches past
@@ -872,7 +901,7 @@ void main() {
     // uKeyMul included so KEY LIGHT dims this lobe with the rest of the direct
     // sun (it was the one direct term missing it — a keyMul of 0 left every
     // clearcoated car with a full-brightness sun streak).
-    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uKeyMul * uClearcoat;
+    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uKeyMul * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color += ccCol;
   }
@@ -888,7 +917,7 @@ void main() {
   // car). Energy-conserving: the base is DARKENED under the mirror weight first,
   // then the reflected sky is added over it (a mirror on gloss, not a milky wash),
   // so the livery still reads through it face-on while the car goes mirror-bright.
-  if (uCarPaint > 0.001 && uClearcoat > 0.001) {
+  if (envSurface) {
     vec3 Rg = reflect(-V, Ngeo);
     float NoVc = max(dot(Ngeo, V), 1e-4);
     float ccFb = 1.0 - NoVc; float ccF = ccFb * ccFb;      // fresnel², rim-concentrated (mul not pow(_,2): pow(0,2) NaNs on mobile)
@@ -900,7 +929,7 @@ void main() {
     // The grazing Fresnel rim (0.28·ccF) stays in both — a subtle edge, not a wash.
     float probeLive = clamp(uEnvStr, 0.0, 1.0);
     float baseRefl = mix(0.14, 0.72, probeLive);
-    float envW = clamp(uClearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
+    float envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     // Soft horizon: bright sky above, dark ground tone below. Was a hard step
     // (-0.03..0.06) — on the faceted engine cover / sidepod shoulders adjacent
     // facets straddled the line and flipped between "sky" and "ground", reading
@@ -940,7 +969,7 @@ void main() {
   // facet half-aligns with the sun (view-dependent, so the sparkle field shifts
   // as the camera moves). HDR gain so flashes bloom. Distance-faded to nothing so
   // it never aliases at range. Additive white glint — leaves the pigment alone.
-  if (uCarPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
+  if (carPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
     float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * uSparkle;
     // Flakes live in the COLOUR coat: near-black albedo (tyres, carbon floor,
     // wings, trim) has no metallic pigment, so gate the glitter out there — the
@@ -964,7 +993,7 @@ void main() {
       // dense sand-grain field that made the paint read dirty/matte.
       float glint = smoothstep(0.990, 1.0, dot(gN, H));
       // CAR SPARKLE knob (def 1.6 = as-shipped) sets the metallic-flake glint gain.
-      color += uSunColor * litNoL * glint * uCarSparkle * uCarPaint * spFade;
+      color += uSunColor * litNoL * glint * uCarSparkle * carPaint * spFade;
     }
   }
 
@@ -976,7 +1005,7 @@ void main() {
   // Roughness > 0.4 = no visible reflection; < 0.15 = mirror-like sky in road.
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
-  float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
+  float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
   envBlend = max(envBlend, wet * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
   if (envBlend > 0.001) {
     vec3 R = Rv;
@@ -1008,7 +1037,7 @@ void main() {
     // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
     // Reinhard shoulder on the brightest channel keeps it bright where the scene
     // is dim and caps it where it would over-saturate.
-    vec3 envAdd = envWet * envFresnel * envBlend * roughDamp * (1.0 - uMetalness);
+    vec3 envAdd = envWet * envFresnel * envBlend * roughDamp * (1.0 - metalness);
     float envM = max(max(envAdd.r, envAdd.g), envAdd.b);
     color += envAdd / (1.0 + envM);
   }
@@ -1036,13 +1065,13 @@ void main() {
   // for bright/warm surfaces (lit windows, floodlight lenses, neon), add an extra
   // additive lift that pushes the value past 1.0 so the bloom bright-pass picks it
   // up and the surface actually *glows* at night rather than just reading flat.
-  if (uEmissive > 0.0) {
-    color = mix(color, albedo, uEmissive);
+  if (emissive > 0.0) {
+    color = mix(color, albedo, emissive);
     // Glow weight: how "lamp-like" the albedo is. Bright (high luminance) AND
     // warm-or-neutral colours qualify; dark/muddy colours get no lift so emissive
     // walls don't bloom. Uses max channel for brightness, scaled smoothly in.
     float bright = max(albedo.r, max(albedo.g, albedo.b));
-    float glow = smoothstep(0.50, 0.95, bright) * uEmissive;
+    float glow = smoothstep(0.50, 0.95, bright) * emissive;
     // Push the glow well PAST 1.0 (HDR) so lit windows / neon / lamp lenses read
     // as actual light SOURCES — they punch through the dark and bloom into halos,
     // instead of sitting as flat bright paint.
@@ -1115,7 +1144,7 @@ void main() {
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
   // channel is free): the composite SSR pass reflects the real world on car
   // bodywork every frame — the same world-mirror the wet road gets.
-  outColor = vec4(color, uCarPaint > 0.001 ? 0.35 : uAlpha);
+  outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha);
 }`;
 
   const SKY_VS = `#version 300 es

@@ -82,9 +82,10 @@
   const qp = (k, d) => Q.has(k) ? Q.get(k) : d;
 
   // ---- decal mesh (mirrors game.js carDecalData; U pre-flipped for REFLECT_X) ----
-  function carDecalData(aLvl) {
+  function carDecalData(aLvl, parts) {
     const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
     const out = { pos: [], nrm: [], uv: [], idx: [] };
+    const anchors = Car3D.bodyAnchors(parts);
     const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
     const quad = (c, n, region) => {
       const u = uvOf(region), i = out.pos.length / 3;
@@ -92,17 +93,28 @@
       for (let k = 0; k < 4; k++) { out.pos.push(c[k][0], c[k][1], c[k][2]); out.nrm.push(n[0], n[1], n[2]); out.uv.push(uvs[k][0], uvs[k][1]); }
       out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
     };
-    const yB = 0.19, yT = 0.45, zF = 0.46, zR = -0.34;
-    quad([[0.715, yB, zF], [0.715, yB, zR], [0.715, yT, zR], [0.715, yT, zF]], [1, 0, 0], R.titleA);
-    quad([[-0.715, yB, zR], [-0.715, yB, zF], [-0.715, yT, zF], [-0.715, yT, zR]], [-1, 0, 0], R.titleA);
-    quad([[-0.15, 0.565, -0.62], [0.15, 0.565, -0.62], [0.15, 0.6, -1.28], [-0.15, 0.6, -1.28]], [0, 1, 0.06], R.crest);
+    const zF = 0.46, zR = -0.34, pf = anchors.podAt(zF), pr = anchors.podAt(zR);
+    const pY = (p, f) => p.bottom + (p.top - p.bottom) * f;
+    quad([[pf.x+0.018, pY(pf,0.24), zF], [pr.x+0.018, pY(pr,0.24), zR],
+          [pr.x+0.018, pY(pr,0.84), zR], [pf.x+0.018, pY(pf,0.84), zF]], [1, 0, 0], R.titleA);
+    quad([[-pr.x-0.018, pY(pr,0.24), zR], [-pf.x-0.018, pY(pf,0.24), zF],
+          [-pf.x-0.018, pY(pf,0.84), zF], [-pr.x-0.018, pY(pr,0.84), zR]], [-1, 0, 0], R.titleA);
+    const cf = anchors.coverAt(-0.62), cr = anchors.coverAt(-1.28);
+    quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
+          [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
     const fX = 0.023, fyB = 0.655, fyT = 0.945, fzF = -0.82, fzR = -1.56;
     quad([[fX, fyB, fzF], [fX, fyB, fzR], [fX, fyT, fzR], [fX, fyT, fzF]], [1, 0, 0], R.fin);
     quad([[-fX, fyB, fzR], [-fX, fyB, fzF], [-fX, fyT, fzF], [-fX, fyT, fzR]], [-1, 0, 0], R.fin);
-    quad([[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]], [0, 1, 0.05], R.num);
-    quad([[-0.14, 0.556, 1.16], [0.14, 0.556, 1.16], [0.14, 0.504, 1.66], [-0.14, 0.504, 1.66]], [0, 1, 0.10], R.titleB);
-    quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
-    quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
+    const nR = anchors.noseAt(1.72), nF = anchors.noseAt(2.10);
+    quad([[-nR.topSide*0.84, nR.top+0.020, 1.72], [nR.topSide*0.84, nR.top+0.020, 1.72],
+          [nF.topSide*0.84, nF.top+0.020, 2.10], [-nF.topSide*0.84, nF.top+0.020, 2.10]], [0, 1, 0.05], R.num);
+    const nsR = anchors.noseAt(1.16), nsF = anchors.noseAt(1.66);
+    quad([[-nsR.topSide*0.82, nsR.top+0.014, 1.16], [nsR.topSide*0.82, nsR.top+0.014, 1.16],
+          [nsF.topSide*0.82, nsF.top+0.014, 1.66], [-nsF.topSide*0.82, nsF.top+0.014, 1.66]], [0, 1, 0.10], R.titleB);
+    quad([[pf.x+0.020, pY(pf,0.08), zF], [pr.x+0.020, pY(pr,0.08), zR],
+          [pr.x+0.020, pY(pr,0.30), zR], [pf.x+0.020, pY(pf,0.30), zF]], [1, 0, 0], R.strip);
+    quad([[-pr.x-0.020, pY(pr,0.08), zR], [-pf.x-0.020, pY(pf,0.08), zF],
+          [-pf.x-0.020, pY(pf,0.30), zF], [-pr.x-0.020, pY(pr,0.30), zR]], [-1, 0, 0], R.strip);
     const nb = Car3D.numberBoard(aLvl == null ? 2 : aLvl);   // tracks the rear wing (mirrors game.js)
     const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
     quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
@@ -236,7 +248,7 @@
     carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
     // Rebuild the decal mesh every time — the rear-wing number height tracks aero.
     if (decalMesh && GLX.freeMesh) GLX.freeMesh(decalMesh);
-    if (GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData(Car3D.aeroLevelOf(tiers)));
+    if (GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData(Car3D.aeroLevelOf(tiers), tiers));
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
     paint = paintFromRefl(S.refl);   // kept live in frame() too, so CARVIEW.set({refl}) responds without a rebuild
@@ -282,7 +294,7 @@
     }
   }
 
-  let ready = false;
+  let ready = false, frameSeq = 0;
   function frame() {
     GLX.resize();
     if (S.spin) S.az = (S.az + 0.4) % 360;
@@ -310,6 +322,7 @@
     if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
     if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
     GLX.present({ exposure: S.exp });
+    frameSeq++;
     ready = true;
     requestAnimationFrame(frame);
   }
@@ -372,6 +385,7 @@
   // ---- headless API ----
   window.CARVIEW = {
     get ready() { return ready; },
+    get frame() { return frameSeq; },
     angle(az, el, dist) { if (az != null) S.az = az; if (el != null) S.el = el; if (dist != null) S.dist = dist; },
     // Add a point light for reflection testing: addLight([x,y,z], [r,g,b], intensity, radius)
     addLight(pos, col, intensity, radius) { S.lights.push({ pos, col: col || [1, 1, 1], intensity: intensity != null ? intensity : 2, radius: radius || 16 }); },

@@ -16,33 +16,33 @@ const Parts = (function () {
     {
       id: "engine", label: "ENGINE",
       options: [
-        { id: "stock",        label: "Stock",          cost:   0, desc: "Factory spec power unit",                                           speed: 1.00, accel: 1.00, visual: {"in": 0.85, "inlet": 1, "outlet": 1}, visualTier: 1 },
-        { id: "lean_burn",    label: "Lean Burn",      cost:  30, desc: "Efficiency-tuned mapping — fuel saving with surprising torque",     accel: 1.05, visual: {"in": 0.72, "inlet": 0, "outlet": 0}, visualTier: 1 },
-        { id: "performance",  label: "Performance",    cost:  60, desc: "Optimised mapping — peak acceleration gains",                       speed: 1.00, accel: 1.09, visual: {"in": 1.15, "twin": 1, "inlet": 2, "outlet": 1}, visualTier: 2 },
-        { id: "v_power",      label: "V-Power Spec",   cost:  70, desc: "Premium fuel-optimised mapping — balanced speed and accel",        speed: 1.02, accel: 1.07, visual: {"in": 1.1, "twin": 1, "inlet": 2, "outlet": 1}, visualTier: 2 },
-        { id: "turbo",        label: "Turbo",          cost:  80, desc: "Broader power band — balanced speed and accel",                    speed: 1.03, accel: 1.06, visual: {"in": 1.35, "snork": 1, "inlet": 2, "outlet": 2}, visualTier: 1 },
-        { id: "highrev",      label: "High-Rev",       cost: 100, desc: "High-RPM spec — top speed focus, mild accel gain",                 speed: 1.05, accel: 1.04, visual: {"in": 1.25, "snork": 1, "inlet": 3, "outlet": 2}, visualTier: 1 },
-        { id: "evo_kit",      label: "EVO Kit",        cost: 120, desc: "Engine evolution package — well-rounded gains across all metrics", speed: 1.04, accel: 1.07, cornering: 1.02, visual: {"in": 1.2, "twin": 1, "inlet": 2, "outlet": 1}, visualTier: 2 },
-        { id: "sprint",       label: "Sprint",         cost: 140, desc: "Torque-focused unit — explosive accel, lower top speed",           speed: 0.97, accel: 1.14, visual: {"in": 1.15, "twin": 1, "inlet": 3, "outlet": 2}, visualTier: 2 },
-        { id: "race",         label: "Race",           cost: 160, desc: "Maximum power output across the rev range",                        speed: 1.06, accel: 1.11, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3}, visualTier: 2 },
-        { id: "split_turbo",  label: "Split Turbo",    cost: 180, desc: "Separated compressor layout — sharp response with strong terminal speed",   speed: 1.06, accel: 1.12, visual: { in: 1.42, snork: 1, twin: 0, inlet: 3, outlet: 2 }, visualTier: 2 },
+        { id: "stock",        label: "Stock",          cost:   0, desc: "Factory spec power unit",                                           speed: 1.00, accel: 1.00, visual: {"in": 0.85, "inlet": 1, "outlet": 1, podWidth: 1, shoulderHeight: 1, undercut: 1, coke: 1, tailWidth: 1, coverHeight: 1}, visualTier: 1 },
+        { id: "lean_burn",    label: "Lean Burn",      cost:  30, desc: "Efficiency-tuned mapping — fuel saving with surprising torque",     accel: 1.05, visual: {"in": 0.72, "inlet": 0, "outlet": 0, podWidth: 0.88, shoulderHeight: 0.92, undercut: 1.18, coke: 1.15, tailWidth: 0.88, coverHeight: 0.90}, visualTier: 1 },
+        { id: "performance",  label: "Performance",    cost:  60, desc: "Optimised mapping — peak acceleration gains",                       speed: 1.00, accel: 1.09, visual: {"in": 1.15, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.08, shoulderHeight: 1.12, undercut: 0.90, coke: 0.94, tailWidth: 1.08, coverHeight: 1.07}, visualTier: 2 },
+        { id: "v_power",      label: "V-Power Spec",   cost:  70, desc: "Premium fuel-optimised mapping — balanced speed and accel",        speed: 1.02, accel: 1.07, visual: {"in": 1.1, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.04, shoulderHeight: 1.08, undercut: 0.96, coke: 1.02, tailWidth: 1.04, coverHeight: 1.03}, visualTier: 2 },
+        { id: "turbo",        label: "Turbo",          cost:  80, desc: "Broader power band — balanced speed and accel",                    speed: 1.03, accel: 1.06, visual: {"in": 1.35, "snork": 1, "inlet": 2, "outlet": 2, podWidth: 1.13, shoulderHeight: 1.18, undercut: 0.86, coke: 0.92, tailWidth: 1.12, coverHeight: 1.12}, visualTier: 1 },
+        { id: "highrev",      label: "High-Rev",       cost: 100, desc: "High-RPM spec — top speed focus, mild accel gain",                 speed: 1.05, accel: 1.04, visual: {"in": 1.25, "snork": 1, "inlet": 3, "outlet": 2, podWidth: 1.06, shoulderHeight: 1.14, undercut: 0.92, coke: 1.08, tailWidth: 0.96, coverHeight: 1.16}, visualTier: 1 },
+        { id: "evo_kit",      label: "EVO Kit",        cost: 120, desc: "Engine evolution package — well-rounded gains across all metrics", speed: 1.04, accel: 1.07, cornering: 1.02, visual: {"in": 1.2, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.10, shoulderHeight: 1.10, undercut: 0.88, coke: 0.98, tailWidth: 1.06, coverHeight: 1.09}, visualTier: 2 },
+        { id: "sprint",       label: "Sprint",         cost: 140, desc: "Torque-focused unit — explosive accel, lower top speed",           speed: 0.97, accel: 1.14, visual: {"in": 1.15, "twin": 1, "inlet": 3, "outlet": 2, podWidth: 1.12, shoulderHeight: 1.16, undercut: 0.84, coke: 0.90, tailWidth: 1.10, coverHeight: 1.11}, visualTier: 2 },
+        { id: "race",         label: "Race",           cost: 160, desc: "Maximum power output across the rev range",                        speed: 1.06, accel: 1.11, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.16, shoulderHeight: 1.20, undercut: 0.82, coke: 0.88, tailWidth: 1.14, coverHeight: 1.18}, visualTier: 2 },
+        { id: "split_turbo",  label: "Split Turbo",    cost: 180, desc: "Separated compressor layout — sharp response with strong terminal speed",   speed: 1.06, accel: 1.12, visual: { in: 1.42, snork: 1, twin: 0, inlet: 3, outlet: 2, podWidth: 1.09, shoulderHeight: 1.13, undercut: 1.04, coke: 0.86, tailWidth: 1.02, coverHeight: 1.14 }, visualTier: 2 },
         // Manufacturer-exclusive power units — shown only when team.engine matches
         { id: "manu_mercedes", label: "AMG HPP",        cost: 200, supplier: "Mercedes",      tag: "FACTORY",
-          desc: "Mercedes-AMG High Performance Powertrains — 2026 peak spec",                   speed: 1.08, accel: 1.14, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2}, visualTier: 2 },
+          desc: "Mercedes-AMG High Performance Powertrains — 2026 peak spec",                   speed: 1.08, accel: 1.14, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 0.78, shoulderHeight: 0.96, undercut: 1.28, coke: 1.28, tailWidth: 0.76, coverHeight: 0.94}, visualTier: 2 },
         { id: "manu_ferrari",  label: "Ferrari 066/12", cost: 200, supplier: "Ferrari",       tag: "FACTORY",
-          desc: "Scuderia Ferrari power unit — strong top speed and precision braking",          speed: 1.09, accel: 1.11, braking: 1.04, visual: {"in": 1.58, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3}, visualTier: 2 },
+          desc: "Scuderia Ferrari power unit — strong top speed and precision braking",          speed: 1.09, accel: 1.11, braking: 1.04, visual: {"in": 1.58, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.18, shoulderHeight: 1.22, undercut: 0.80, coke: 0.86, tailWidth: 1.16, coverHeight: 1.20}, visualTier: 2 },
         { id: "manu_ford",     label: "Ford Powertrains", cost: 200, supplier: "Red Bull Ford", tag: "FACTORY",
-          desc: "Ford/Red Bull 2026 unit — explosive torque delivery out of slow corners",       speed: 1.06, accel: 1.16, visual: {"in": 1.5, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2}, visualTier: 2 },
+          desc: "Ford/Red Bull 2026 unit — explosive torque delivery out of slow corners",       speed: 1.06, accel: 1.16, visual: {"in": 1.5, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.14, shoulderHeight: 1.19, undercut: 0.83, coke: 0.89, tailWidth: 1.12, coverHeight: 1.16}, visualTier: 2 },
         { id: "manu_honda",    label: "Honda RA626H",   cost: 200, supplier: "Honda",         tag: "FACTORY",
-          desc: "Honda RA626H — balanced power with exceptional traction assist",                speed: 1.07, accel: 1.12, cornering: 1.04, visual: {"in": 1.5, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3}, visualTier: 2 },
+          desc: "Honda RA626H — balanced power with exceptional traction assist",                speed: 1.07, accel: 1.12, cornering: 1.04, visual: {"in": 1.5, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.11, shoulderHeight: 1.17, undercut: 0.87, coke: 0.93, tailWidth: 1.08, coverHeight: 1.15}, visualTier: 2 },
         { id: "manu_audi",     label: "Audi P.U.",      cost: 200, supplier: "Audi",          tag: "FACTORY",
-          desc: "Audi 2026 power unit — strong braking recovery and mid-range punch",            speed: 1.07, accel: 1.12, braking: 1.06, visual: {"in": 1.48, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2}, visualTier: 2 },
+          desc: "Audi 2026 power unit — strong braking recovery and mid-range punch",            speed: 1.07, accel: 1.12, braking: 1.06, visual: {"in": 1.48, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.07, shoulderHeight: 1.13, undercut: 0.94, coke: 1.00, tailWidth: 0.98, coverHeight: 1.12}, visualTier: 2 },
         // Non-exclusive upgrades above factory level
-        { id: "torque_curve",  label: "Torque Curve",  cost:  40, desc: "Rebalanced mapping — strong traction out of slow corners",        accel: 1.06, cornering: 1.03, visual: {"in": 1.0, "inlet": 1, "outlet": 1}, visualTier: 1 },
-        { id: "hybrid_max",    label: "Hybrid Max",    cost: 150, desc: "Full MGU-K/H synergy — broad power gains across all four metrics", speed: 1.05, accel: 1.08, cornering: 1.03, visual: {"in": 1.3, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2}, visualTier: 2 },
+        { id: "torque_curve",  label: "Torque Curve",  cost:  40, desc: "Rebalanced mapping — strong traction out of slow corners",        accel: 1.06, cornering: 1.03, visual: {"in": 1.0, "inlet": 1, "outlet": 1, podWidth: 0.98, shoulderHeight: 1.04, undercut: 1.02, coke: 1.06, tailWidth: 0.95, coverHeight: 1.00}, visualTier: 1 },
+        { id: "hybrid_max",    label: "Hybrid Max",    cost: 150, desc: "Full MGU-K/H synergy — broad power gains across all four metrics", speed: 1.05, accel: 1.08, cornering: 1.03, visual: {"in": 1.3, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.08, shoulderHeight: 1.15, undercut: 0.89, coke: 0.95, tailWidth: 1.06, coverHeight: 1.13}, visualTier: 2 },
         { id: "sig_mercedes_zero", label: "Zero-Sidepod PU", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "hybrid_max",
-          desc: "Mercedes signature compact installation — Hybrid Max performance in a tighter cooling form", speed: 1.05, accel: 1.08, cornering: 1.03, visual: { in: 1.38, snork: 1, twin: 1, inlet: 2, outlet: 3 }, visualTier: 2 },
-        { id: "quali_engine",  label: "Quali Mode",    cost: 220, desc: "Unrestricted qualifying spec — peak power, no thermal limits",    speed: 1.10, accel: 1.09, visual: {"in": 1.65, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3}, visualTier: 2 },
+          desc: "Mercedes signature compact installation — Hybrid Max performance in a tighter cooling form", speed: 1.05, accel: 1.08, cornering: 1.03, visual: { in: 1.38, snork: 1, twin: 1, inlet: 2, outlet: 3, podWidth: 0.72, shoulderHeight: 0.90, undercut: 1.35, coke: 1.34, tailWidth: 0.70, coverHeight: 0.90 }, visualTier: 2 },
+        { id: "quali_engine",  label: "Quali Mode",    cost: 220, desc: "Unrestricted qualifying spec — peak power, no thermal limits",    speed: 1.10, accel: 1.09, visual: {"in": 1.65, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, coke: 0.84, tailWidth: 1.18, coverHeight: 1.22}, visualTier: 2 },
       ],
     },
     {
@@ -189,6 +189,30 @@ const Parts = (function () {
     gearbox: "standard", fuel: "standard",
   };
 
+  // Every option.visual field has one declared consumer. Keep this registry
+  // beside the catalog so new recipe keys cannot silently become dead data.
+  const VISUAL_FIELD_REGISTRY = Object.freeze({
+    geometry: Object.freeze({
+      engine: Object.freeze(["in", "snork", "twin", "inlet", "outlet",
+        "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight"]),
+      aero: Object.freeze(["lvl", "beam", "drs", "vane"]),
+      suspension: Object.freeze(["ride", "arm", "push", "pull"]),
+      brakes: Object.freeze(["duct"]),
+      tyres: Object.freeze(["grooved", "grooves", "grooveDepth", "bandWidth", "coverVanes"]),
+      ers: Object.freeze(["pack"]),
+      gearbox: Object.freeze(["strakes", "fin", "strakeH", "finSY", "finSZ", "casing", "louvres", "heat"]),
+    }),
+    material: Object.freeze({
+      brakes: Object.freeze(["cal", "rim"]),
+      tyres: Object.freeze(["band"]),
+      ers: Object.freeze(["led"]),
+      fuel: Object.freeze(["cap", "flame"]),
+    }),
+    runtime: Object.freeze({
+      fuel: Object.freeze(["fxFlame"]),
+    }),
+  });
+
   // Fixed visual identity for the 2026 grid. These are never read from player
   // saves and never alter AI physics; they only select deterministic car meshes.
   const FACTORY_PRESETS = {
@@ -308,7 +332,7 @@ const Parts = (function () {
   }
 
   return {
-    CATALOG, DEFAULTS, FACTORY_PRESETS, BUDGET,
+    CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
     getMods, getCost, getVisualTiers, statMult,

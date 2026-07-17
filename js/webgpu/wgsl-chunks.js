@@ -282,10 +282,30 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   //    looks are unchanged. detail=mat1.y, clearcoat=mat1.z, carPaint=mat1.w,
   //    sparkle=mat2.x, wetness=F.params1.z.
   let detail    = D.mat1.y;
-  let clearcoat = D.mat1.z;
-  let carPaint  = D.mat1.w;
+  var clearcoat = D.mat1.z;
+  var carPaint  = D.mat1.w;
   let sparkle   = D.mat2.x;
   let wetness   = F.params1.z;
+  // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
+  // the legacy whole-draw path for imported/custom meshes.
+  let surfaceId = i32(in.matId + 0.5);
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 25;
+  let paintSurface = surfaceId == 20;
+  let carbonSurface = surfaceId == 21;
+  let rubberSurface = surfaceId == 22;
+  let metalSurface = surfaceId == 23;
+  let glassSurface = surfaceId == 24;
+  let emissiveSurface = surfaceId == 25;
+  if (classifiedCar) {
+    if (paintSurface) {
+      carPaint = D.mat1.w;
+      clearcoat = D.mat1.z;
+    } else {
+      carPaint = 0.0;
+      clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface);
+    }
+  }
+  let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
 
   // [Block 1a] Ground/terrain detail MICRO-NORMAL (mirrors GLX LIT_FS js/glx.js:405-422).
   // Two-scale value-noise gradient perturbs N so procedurally-textured ground gets
@@ -335,12 +355,26 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let VoH = max(dot(V, H), 0.0);
 
   var albedo    = in.col;
-  let emissive  = D.mat0.x;
+  var emissive  = D.mat0.x;
   let alpha     = D.mat0.y;
-  let metalness = D.mat0.w;
-  let specular  = D.mat1.x;
+  var metalness = D.mat0.w;
+  var specular  = D.mat1.x;
   var rough     = clamp(D.mat0.z, 0.04, 1.0);
   let keyMul    = F.params1.x;
+  if (classifiedCar) {
+    metalness = select(0.0, max(D.mat0.w, 0.78), metalSurface);
+    if (carbonSurface) { metalness = 0.08; }
+    if (rubberSurface) { specular = 0.18; }
+    if (metalSurface) { specular = 1.0; }
+    if (carbonSurface) { specular = 0.48; }
+    emissive = select(0.0, D.mat0.x, paintSurface);
+    if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
+    if (carbonSurface) { rough = max(rough, 0.56); }
+    if (rubberSurface) { rough = max(rough, 0.90); }
+    if (metalSurface) { rough = min(rough, 0.16); }
+    if (glassSurface) { rough = min(rough, 0.13); }
+    if (emissiveSurface) { rough = max(rough, 0.32); }
+  }
 
   // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/glx.js:473-507,
   // reduced: coarse+fine value-noise grain + repair-patch tint/roughness; the sparse
@@ -522,7 +556,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // textureSampleLevel (explicit LOD 0) keeps the cube sample legal in this branch.
   let carReflect  = max(F.params4.z, 0.0);
   let envProbeStr = max(F.params5.x, 0.0);
-  if ((carReflect > 0.001 || envProbeStr > 0.001) && (carPaint > 0.001 || clearcoat > 0.001)) {
+  if ((carReflect > 0.001 || envProbeStr > 0.001) && envSurface) {
     let R = reflect(-V, Ngeo);
     var envCol : vec3<f32>;
     var strength : f32;
