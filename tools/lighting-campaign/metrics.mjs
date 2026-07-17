@@ -4,15 +4,16 @@ const luma = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 const percentile = (values, p) => values[Math.floor((values.length - 1) * p)];
 
 function measureRegion(data, width, height, [rx, ry, rw, rh]) {
-  const x0 = Math.max(0, Math.floor(rx * width));
+  const x0 = Math.min(width - 1, Math.max(0, Math.floor(rx * width)));
   const x1 = Math.min(width, Math.max(x0 + 1, Math.ceil((rx + rw) * width)));
-  const y0 = Math.max(0, Math.floor(ry * height));
+  const y0 = Math.min(height - 1, Math.max(0, Math.floor(ry * height)));
   const y1 = Math.min(height, Math.max(y0 + 1, Math.ceil((ry + rh) * height)));
   const values = [];
   let sum = 0;
   let black = 0;
   let white = 0;
   let edge = 0;
+  let edgeComparisons = 0;
 
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
@@ -25,6 +26,7 @@ function measureRegion(data, width, height, [rx, ry, rw, rh]) {
       if (x > x0) {
         const j = i - 4;
         edge += Math.abs(value - luma(data[j], data[j + 1], data[j + 2]));
+        edgeComparisons++;
       }
     }
   }
@@ -38,7 +40,7 @@ function measureRegion(data, width, height, [rx, ry, rw, rh]) {
     p95: percentile(values, 0.95),
     blackClipFraction: black / values.length,
     whiteClipFraction: white / values.length,
-    edgeEnergy: edge / values.length,
+    edgeEnergy: edgeComparisons ? edge / edgeComparisons : 0,
   };
 }
 

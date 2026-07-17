@@ -118,3 +118,37 @@ test("hard gates reject clipping, WebGL errors, and missing night lights", () =>
   assert.equal(bad.ok, false);
   assert.deepEqual(new Set(bad.failures), new Set(["black-clip", "webgl-error", "night-lights"]));
 });
+
+test("pixel metrics bound regions beyond the frame to a deterministic edge pixel", () => {
+  const data = new Uint8ClampedArray([
+    0, 0, 0, 255, 32, 32, 32, 255,
+    128, 128, 128, 255, 255, 255, 255, 255,
+  ]);
+  const result = measurePixels(data, 2, 2, { beyond: [1.2, 1.4, 0.1, 0.1] });
+  assert.equal(result.beyond.count, 1);
+  assert.ok(Math.abs(result.beyond.mean - 255) < 1e-12);
+  assert.equal(result.beyond.p05, result.beyond.mean);
+  assert.equal(result.beyond.p50, result.beyond.mean);
+  assert.equal(result.beyond.p95, result.beyond.mean);
+  assert.equal(result.beyond.blackClipFraction, 0);
+  assert.equal(result.beyond.whiteClipFraction, 1);
+  assert.equal(result.beyond.edgeEnergy, 0);
+});
+
+test("pixel metrics report mean absolute horizontal edge energy", () => {
+  const data = new Uint8ClampedArray([
+    0, 0, 0, 255, 10, 10, 10, 255, 40, 40, 40, 255,
+  ]);
+  const result = measurePixels(data, 3, 1, { frame: [0, 0, 1, 1] });
+  assert.ok(Math.abs(result.frame.edgeEnergy - 20) < 1e-12);
+});
+
+test("hard gates report white clipping, narrow tonal range, and page errors", () => {
+  const bad = evaluateGates({
+    metrics: { frame: { blackClipFraction: 0, whiteClipFraction: 0.03, p05: 20, p95: 64 } },
+    lightState: { numLights: 0, ambientSky: [0.1, 0.1, 0.1] },
+    webglError: 0, pageErrors: ["render failed"], tod: "day",
+  });
+  assert.equal(bad.ok, false);
+  assert.deepEqual(new Set(bad.failures), new Set(["white-clip", "tonal-range", "page-error"]));
+});
