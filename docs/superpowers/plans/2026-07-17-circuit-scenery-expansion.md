@@ -18,7 +18,20 @@
 - Hero landmarks default to 50,000 vertices, facilities to 25,000, and repeated furniture to 10,000 vertices per sector.
 - No helper may contain an unbounded per-node emission loop.
 - Land the current per-track agent batch before starting representative circuit migrations.
-- Any JS change requires one uniform cache-version increment in `index.html` and matching `version.json`.
+- Every task that changes JS must run the following cache step immediately
+  before its commit and stage `index.html` plus `version.json` with that task:
+
+```bash
+current="$(rg -o '\?v=[0-9]+' index.html | sort -u | cut -d= -f2)"
+test -n "$current"
+next="$((current + 1))"
+sed -i '' -E "s/\?v=[0-9]+/?v=${next}/g" index.html
+printf '{ "build": %s }\n' "$next" > version.json
+git add index.html version.json
+```
+
+  A rebase preserves the greater existing build before this step; it does not
+  count as the task's one logical cache increment.
 
 ---
 
@@ -575,9 +588,9 @@ Expected: FAIL until modules are loaded and bound.
 In `index.html`, after `track-models.js`:
 
 ```html
-<script crossorigin="anonymous" src="js/scenery-themes.js?v=583"></script>
-<script crossorigin="anonymous" src="js/landmark-kit.js?v=583"></script>
-<script crossorigin="anonymous" src="js/circuit-kit.js?v=583"></script>
+<script crossorigin="anonymous" src="js/scenery-themes.js?v=587"></script>
+<script crossorigin="anonymous" src="js/landmark-kit.js?v=587"></script>
+<script crossorigin="anonymous" src="js/circuit-kit.js?v=587"></script>
 ```
 
 Load the same files in `tools/verify-track.cjs` after `track-models.js`.
@@ -740,8 +753,6 @@ git commit -m "Adopt scenery kits across representative circuits"
 ### Task 7: Full Safety, Performance, and Cache Verification
 
 **Files:**
-- Modify: `index.html`
-- Modify: `version.json`
 - Modify: `docs/TESTING.md` only if actual commands differ from Task 5 documentation.
 
 **Interfaces:**
@@ -797,20 +808,7 @@ expect(diagnostics.emitted.every((d) =>
   !d.vertices || d.vertices <= 50000)).toBe(true);
 ```
 
-- [ ] **Step 5: Bump cache version exactly once**
-
-Read the current `?v=N` after all merges. Compute `N + 1`, update every asset
-query, and write the matching JSON:
-
-```bash
-current="$(rg -o '\?v=[0-9]+' index.html | sort -u | cut -d= -f2)"
-test -n "$current"
-next="$((current + 1))"
-sed -i '' -E "s/\?v=[0-9]+/?v=${next}/g" index.html
-printf '{ "build": %s }\n' "$next" > version.json
-```
-
-- [ ] **Step 6: Verify cache consistency and clean diff**
+- [ ] **Step 5: Verify cache consistency and clean diff**
 
 Run:
 
@@ -823,10 +821,10 @@ git status --short
 Expected: one distinct cache value, matching `version.json`, with no whitespace
 errors or unintended files.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit any verification documentation change**
 
 ```bash
-git add index.html version.json docs/TESTING.md
-git commit -m "Verify and release circuit scenery expansion"
+git add docs/TESTING.md
+git diff --cached --quiet || git commit -m "Document scenery expansion verification"
 ```
 
