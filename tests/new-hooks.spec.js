@@ -441,6 +441,26 @@ test.describe("__apex.trackProfile()", () => {
     const minY = Math.min(...pts.map((p) => p.y));
     expect(maxY - minY).toBeGreaterThan(10);
   });
+
+  test("Shanghai stays nearly flat with two subtle rises", async ({ page }) => {
+    await load(page, "shanghai");
+    const result = await page.evaluate(() => {
+      const pts = window.__apex.trackProfile(400);
+      const at = (frac) => pts.reduce((best, point) =>
+        Math.abs(point.frac - frac) < Math.abs(best.frac - frac) ? point : best);
+      const minY = Math.min(...pts.map((point) => point.y));
+      const maxY = Math.max(...pts.map((point) => point.y));
+      return {
+        range: maxY - minY,
+        turnOneRise: at(0.06).y - minY,
+        turnSixRise: at(0.30).y - minY,
+      };
+    });
+    expect(result.range).toBeGreaterThanOrEqual(0.5);
+    expect(result.range).toBeLessThanOrEqual(2);
+    expect(result.turnOneRise).toBeGreaterThan(0.35);
+    expect(result.turnSixRise).toBeGreaterThan(0.35);
+  });
 });
 
 // ── obs().gear ──────────────────────────────────────────────────────────────
@@ -780,5 +800,39 @@ test.describe("Madrid track foundation migration", () => {
       };
     });
     assertSession(night);
+  });
+
+  test("Shanghai declares safe required heroes and reflective water", async ({ page }) => {
+    await load(page, "shanghai");
+    const sessions = await page.evaluate(() => {
+      const inspect = () => ({
+        models: window.__apex.modelDiagnostics(),
+        geometry: window.__apex.geometryDiagnostics(),
+        walls: window.__apex.wallStats(),
+        ground: [0, 0.06, 0.30, 0.62, 0.90].flatMap((frac) =>
+          [-6, 0, 6].map((lat) => window.__apex.groundY(frac, lat).gap)),
+      });
+      const day = inspect();
+      window.__apex.race("shanghai", "night", "dry");
+      return { day, night: inspect() };
+    });
+    for (const [time, state] of Object.entries(sessions)) {
+      const diagnostics = state.models;
+      const emitted = new Map(diagnostics.emitted.map((entry) => [entry.id, entry]));
+      for (const id of ["shanghai-wing-east", "shanghai-wing-west", "shanghai-pudong"])
+        expect(emitted.get(id)?.required, `${time}: ${id}`).toBe(true);
+      expect([...emitted.values()].filter((entry) =>
+        entry.overhead && entry.id.startsWith("shanghai-wing-"))).toHaveLength(2);
+      for (const id of ["shanghai-yu-lake-south", "shanghai-yu-lake-north", "shanghai-marsh-pool"])
+        expect(emitted.get(id)?.water, `${time}: ${id}`).toBe(true);
+      expect([...diagnostics.invalid, ...diagnostics.suppressed, ...diagnostics.unsafe]
+        .filter((entry) => entry.required)).toEqual([]);
+      expect(state.geometry.every((entry) => entry.ok)).toBe(true);
+      expect(state.walls.anyNaN).toBe(false);
+      expect(state.walls.minB).toBeGreaterThan(1);
+      expect(state.walls.maxB).toBeLessThan(60);
+      expect(state.walls.minOverHw).toBeGreaterThan(-1.5);
+      expect(state.ground.every((gap) => gap == null || gap <= 0.18)).toBe(true);
+    }
   });
 });

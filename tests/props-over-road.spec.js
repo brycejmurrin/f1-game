@@ -37,7 +37,7 @@ const CEIL = 5.0;
 // After the systemic guard fixes (neonTower + building() now use the full
 // footprint Minkowski test, not a single inner-face point) plus per-circuit
 // scenery passes, 15 circuits are fully clean (max=0): bahrain, cota, imola,
-// interlagos, montreal, monza, qatar, redbull, shanghai, silverstone, singapore,
+// interlagos, montreal, monza, qatar, redbull, silverstone, singapore,
 // spa, suzuka, vegas, zandvoort. The remaining caps are small residuals; miami
 // is a verified design-intent overhead (beach-club parasol canopy ~7.5 m up,
 // car passes safely under). Mexico's Foro Sol stands are now segmented around
@@ -56,6 +56,9 @@ const BASELINE = {
   // not a lane obstruction. Migrated Vegas and Hungaroring are clean.
   monaco: 1.4, singapore: 1.3, baku: 1.3, jeddah: 0.7,
   abudhabi: 1.2, albert_park: 0.7, zandvoort: 0.8,
+  // Shanghai's remaining reading is the shared low corner-tyre stack at the
+  // outer tarmac sample; track-owned buildings/dressing measure clear.
+  shanghai: 1.1,
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 

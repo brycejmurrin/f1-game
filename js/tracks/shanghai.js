@@ -15,24 +15,35 @@
     theme: "modern",
     lengthKm: 5.5,
     baseHW: 8,
+    sceneryCoordinates: "racing",
+    flatTerrain: true,
+    terrainOuter: 120,
+    dressingExclusions: [
+      // Shanghai owns its sparse marsh campus, lamp lines, and one Pudong cue;
+      // generic modern-city dressing otherwise recreates the tower wall this
+      // circuit deliberately removed and can chord across the folded layout.
+      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+    ],
     pal: { zenith: [0.28, 0.4, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.26, 0.42, 0.22], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.002, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
     segs: [
       { t: 0, l: 400 }, { t: 50, l: 130 }, { t: 180, l: 200 }, { t: 50, l: 100 }, { t: 0, l: 250 }, { t: -90, l: 100 },
       { t: 0, l: 550 }, { t: -60, l: 90 }, { t: 60, l: 80 }, { t: -70, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 200 },
     ],
-    // Mostly flat — a mild rise on the long back straight.
-    elevations: [{ s: 0.45, halfM: 360, rise: 6 }],
+    // Elevations use source-trace fractions. With startFrac 0.1525 these place
+    // subtle racing-lap rises at T1–2 (~0.06) and T6 (~0.30).
+    elevations: [
+      { s: 0.2125, halfM: 105, rise: 0.8 },
+      { s: 0.4525, halfM: 120, rise: 1.0 },
+    ],
     scenery: function (api) {
       const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,
-        place, prop, backdrop, groundPlane, groundYAt, anchor, addBox, addCyl, addCone,
+        place, prop, backdrop, groundYAt, anchor, addBox, addCyl, addCone,
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
-        forestEdge, cross, norm, MAT, runoffApron } = api;
+        forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan,
+        waterSurface, groundPatch } = api;
       const K = (s) => Math.round(s * n) % n;
-      // Unguarded emitter for intentional overhead spans (cars pass under) —
-      // same pattern as underpassPortal's RAW.addBox in tracks.js.
-      const rawBox = TrackGeom.addBox;
 
       // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
       const CONC  = [0.70, 0.72, 0.74];
@@ -66,7 +77,8 @@
 
       // ================= START / FINISH — PIT BUILDING (s 0.00, L) =================
       building(K(0.00), -1, 2, 18, 14, 150, { wall: WHITE, window: WIN_LIT, floor: 4 });
-      building(K(0.98), -1, 2, 16, 11,  90, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
+      building(K(0.98), -1, 14, 16, 11, 55,
+        { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
 
       // =================================================================================
       // TWIN WING BRIDGES — Shanghai's pit-straight gateway.
@@ -85,19 +97,14 @@
           addBox(out, vadd(vadd(a.c, a.u, 16.5), a.r, 4), [14.5, 1.1, 20], WHITE, b);
         }
 
-        // Two slim wing decks: pillars off-edge (guarded); decks via rawBox so they
-        // can clear the racing line the way underpassPortal / gantry beams do.
-        for (const [sLap, hgt, deckD, col] of [
-          [0.004, 38, 8.0, WHITE],
-          [0.022, 36, 7.0, [0.86, 0.88, 0.90]],
+        // Two slim wing decks: guarded off-edge pillars plus intentional overhead
+        // spans with explicit underside clearance and required diagnostics.
+        for (const [id, sLap, hgt, deckD, col] of [
+          ["shanghai-wing-east", 0.004, 38, 8.0, WHITE],
+          ["shanghai-wing-west", 0.022, 36, 7.0, [0.86, 0.88, 0.90]],
         ]) {
-          const aL = anchor(K(sLap), -1, 22), bL = [aL.r, aL.u, aL.t];
-          const aR = anchor(K(sLap),  1, 18), bR = [aR.r, aR.u, aR.t];
-          const mc = [
-            (aL.c[0] + aR.c[0]) * 0.5,
-            (aL.c[1] + aR.c[1]) * 0.5,
-            (aL.c[2] + aR.c[2]) * 0.5,
-          ];
+          const aL = anchor(K(sLap), -1, 20), bL = [aL.r, aL.u, aL.t];
+          const aR = anchor(K(sLap),  1, 20), bR = [aR.r, aR.u, aR.t];
           const span = Math.hypot(
             aR.c[0] - aL.c[0], aR.c[1] - aL.c[1], aR.c[2] - aL.c[2]
           );
@@ -107,23 +114,10 @@
             addCyl(out, vadd(aR.c, aR.t, tOff), 0.45, hgt - 0.8, STEEL, 6, bR);
           }
 
-          const deckC = [
-            mc[0] + aL.u[0] * hgt,
-            mc[1] + aL.u[1] * hgt,
-            mc[2] + aL.u[2] * hgt,
-          ];
-          rawBox(out, deckC, [span, 1.15, deckD], col, bL);
-          // thin steel fascia + warm interior strip (press / restaurant read)
-          rawBox(out, [
-            deckC[0] + aL.u[0] * 0.7,
-            deckC[1] + aL.u[1] * 0.7,
-            deckC[2] + aL.u[2] * 0.7,
-          ], [span, 0.32, 0.28], STEEL, bL);
-          rawBox(out, [
-            deckC[0] + aL.r[0] * (span * 0.18),
-            deckC[1] + aL.r[1] * (span * 0.18),
-            deckC[2] + aL.r[2] * (span * 0.18),
-          ], [span * 0.32, 0.65, 0.32], WIN_LIT, bL);
+          overheadSpan({
+            id, frac: sLap, clearance: hgt, thickness: 1.15, depth: deckD,
+            span: span + 1, color: col, supportGap: 20, required: true,
+          });
         }
       })();
 
@@ -131,11 +125,9 @@
       gantry(0.004, 9, STEEL);
 
       // ---- Pit wall + low garage boxes (R, near) red-edged ----
-      wall(0.965, 0.05, 1, 3, 1.1, WHITE);
-      place(K(0.99), 1, 10, [5, 2.4, 40], CONC);
-      place(K(0.99), 1, 10, [5, 0.6, 40], RED);
-      billboard(K(0.02), 1, 18, 16, 4.5, RED);
-      billboard(K(0.97), 1, 18, 14, 4.0, YELLOW);
+      wall(0.965, 0.05, 1, 6, 1.1, WHITE);
+      place(K(0.99), 1, 10, [5, 2.4, 12], CONC);
+      place(K(0.99), 1, 10, [5, 0.6, 12], RED);
 
       // ---- Lamp posts down the pit straight — warm sodium heads ----
       along(0.00, 0.04, 18, (k) => {
@@ -147,11 +139,14 @@
       });
 
       // ---- LAKES by the pit complex (Yu Garden paddock water) ----
-      groundPlane(K(0.88), -1,  95, [180, 130], WATER);
-      groundPlane(K(0.01), -1, 110, [150, 110], WATER);
+      waterSurface(K(0.88), -1,  95, [180, 0.18, 130], WATER,
+        { id: "shanghai-yu-lake-south", required: true });
+      waterSurface(K(0.01), -1, 98, [28, 0.18, 110], WATER,
+        { id: "shanghai-yu-lake-north", required: true });
       place(K(0.90), -1,  85, [10, 1.0, 5], CONC);
       place(K(0.02), -1, 115, [11, 0.9, 5], [0.65, 0.68, 0.72]);
-      groundPlane(K(0.32), -1, 220, [90, 65], [0.36, 0.48, 0.56]);
+      waterSurface(K(0.62), -1, 120, [70, 0.18, 80], [0.36, 0.48, 0.56],
+        { id: "shanghai-marsh-pool", required: true });
 
       // ---- Yu Garden paddock — pavilion villas in the lakes (Shanghai's unique paddock) ----
       (function yuGarden() {
@@ -177,8 +172,10 @@
       })();
 
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
-      grandstand(0.04,  -1, 18, 100, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.055, -1, 24,  70, [0.42, 0.43, 0.48], SEAT);
+      // Short, locally oriented modules follow the flat terrain without their
+      // unguarded crowd risers chord-cutting the nearby start/finish foldback.
+      grandstand(0.032, -1, 20, 28, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.052, -1, 24, 28, [0.42, 0.43, 0.48], SEAT);
       billboard(K(0.045), -1, 14, 16, 4.5, YELLOW);
 
       // ================= SNAIL T1–3 — coiling pale runoff (cockpit-readable) =================
@@ -208,12 +205,11 @@
         });
       })();
       // Snail grandstands wrapping the coiling Turn 1–3 spiral.
-      grandstand(0.05,  1, 95, 70, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.085, 1, 85, 60, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.10,  -1, 45, 60, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.065, 1, 70, 60, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.115, -1, 40, 50, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.13,  1, 70, 50, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.05,  1, 95, 30, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.085, 1, 85, 28, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.10,  -1, 45, 28, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.115, -1, 42, 26, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.13,  1, 72, 26, [0.43, 0.44, 0.49], SEAT);
       billboard(K(0.07),  1, 56, 16, 5, YELLOW);
       billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
@@ -250,63 +246,68 @@
         // Anchored 50 m forward from cluster anchor, 2 m in r-offset so it stands
         // slightly aside from the background tower mass.
         const pc = vadd(vadd(a.c, a.r, -2), a.t, 50);
-
-        // Tripod legs: three vertical cylinders in a triangular footprint.
-        // All stop at legH=48 m, well below the lower sphere base at 54 m.
-        const legH = 48, legR = 2.2, legCol = [0.74, 0.72, 0.70];
-        for (const [ro, to] of [[-10, 0], [5, -9], [5, 9]]) {
-          addCyl(out, vadd(vadd(pc, a.r, ro), a.t, to), legR, legH, legCol, 8, b);
-        }
-        // Base ring tying the legs
-        addFrustum(out, pc, 14, 8, 8, [0.68, 0.66, 0.64], 12, b);
-
-        // Lower sphere (salmon-pink): frustum sandwich simulating a sphere.
-        const lSphBase = 54, lSphR = 15;
-        addFrustum(out, vadd(pc, u, lSphBase),             lSphR * 0.7, lSphR, 4,        PEARL, 12, b);
-        addFrustum(out, vadd(pc, u, lSphBase + 2),         lSphR, lSphR, lSphR * 1.6,   PEARL, 12, b);
-        addFrustum(out, vadd(pc, u, lSphBase + lSphR*1.6+2), lSphR, lSphR*0.7, 4,       PEARL, 12, b);
-        addFrustum(out, vadd(pc, u, lSphBase + lSphR * 0.8),
-                   lSphR * 1.02, lSphR * 1.02, lSphR * 0.5, WIN_LIT, 12, b);
-
-        // Connector shaft + balcony
-        const connBase = 84, connTop = 108;
-        addCyl(out, vadd(pc, u, connBase), 3.2, connTop - connBase, [0.80, 0.70, 0.66], 8, b);
-        addFrustum(out, vadd(pc, u, connBase + (connTop-connBase)*0.5 - 1),
-                   4.5, 4.5, 2.5, [0.74, 0.66, 0.62], 12, b);
-
-        // Upper sphere (slightly deeper terracotta)
-        const uSphBase = connTop, uSphR = 10;
-        addFrustum(out, vadd(pc, u, uSphBase),               uSphR*0.7, uSphR, 4,        [0.80, 0.66, 0.60], 10, b);
-        addFrustum(out, vadd(pc, u, uSphBase + 2),           uSphR, uSphR, uSphR*1.6,    [0.82, 0.68, 0.62], 10, b);
-        addFrustum(out, vadd(pc, u, uSphBase+uSphR*1.6+2),   uSphR, uSphR*0.7, 4,        [0.80, 0.66, 0.60], 10, b);
-        addFrustum(out, vadd(pc, u, uSphBase + uSphR*0.8),
-                   uSphR*1.03, uSphR*1.03, uSphR*0.4, WIN_LIT, 10, b);
-
-        // Spire: slim cylinder + cone tip
-        const spireBase = uSphBase + uSphR*1.6 + 4 + 2;
-        addCyl(out,  vadd(pc, u, spireBase),      0.9, 32, [0.88, 0.78, 0.72], 6, b);
-        addCone(out, vadd(pc, u, spireBase + 32), 0.9, 12, [0.90, 0.82, 0.76], 6, b);
-
-        // ── SHANGHAI TOWER (hazed glass spire, right of Pearl) ──
         const stC = vadd(vadd(a.c, a.r, 55), a.t, 55);
-        addFrustum(out, stC, 11, 6.5, 80, GLASS_HAZE, 6, b);
-        addFrustum(out, vadd(stC, u, 80), 6.5, 3.2, 60, [0.62, 0.68, 0.74], 6, b);
-        addFrustum(out, vadd(stC, u, 140), 3.2, 1.0, 30, [0.66, 0.72, 0.78], 6, b);
-        addBox(out, vadd(stC, u, 172), [2.5, 22, 2.5], STEEL, b);
-
-        // ── JIN MAO TOWER (stepped pagoda silhouette, left of Pearl) ──
         const jmC = vadd(vadd(a.c, a.r, -32), a.t, 50);
-        addFrustum(out, jmC, 9.5, 7, 55, [0.70, 0.69, 0.68], 8, b);
-        addFrustum(out, vadd(jmC, u, 55), 7, 4.5, 35, [0.72, 0.71, 0.70], 8, b);
-        addFrustum(out, vadd(jmC, u, 90), 4.5, 1.8, 20, [0.74, 0.73, 0.72], 8, b);
-        addCyl(out, vadd(jmC, u, 110), 0.7, 18, STEEL, 5, b);
+        const heroCenter = vadd(vadd(a.c, a.r, 12), a.t, 52);
+        modelGroup("shanghai-pudong", {
+          center: vadd(heroCenter, u, 98),
+          size: [130, 205, 80],
+          basis: b,
+        }, (stage) => {
+          const cyl = (c, rad, h, col, seg) =>
+            TrackGeom.addCyl(stage, c, rad, h, col, seg, b);
+          const cone = (c, rad, h, col, seg) =>
+            TrackGeom.addCone(stage, c, rad, h, col, seg, b);
+          const frustum = (c, r0, r1, h, col, seg) =>
+            TrackGeom.addFrustum(stage, c, r0, r1, h, col, seg, b);
+          const box = (c, size, col) => TrackGeom.addBox(stage, c, size, col, b);
+
+          // Oriental Pearl tripod, observation spheres, connector, and spire.
+          const legH = 48, legR = 2.2, legCol = [0.74, 0.72, 0.70];
+          for (const [ro, to] of [[-10, 0], [5, -9], [5, 9]])
+            cyl(vadd(vadd(pc, a.r, ro), a.t, to), legR, legH, legCol, 8);
+          frustum(pc, 14, 8, 8, [0.68, 0.66, 0.64], 12);
+
+          const lSphBase = 54, lSphR = 15;
+          frustum(vadd(pc, u, lSphBase), lSphR * 0.7, lSphR, 4, PEARL, 12);
+          frustum(vadd(pc, u, lSphBase + 2), lSphR, lSphR, lSphR * 1.6, PEARL, 12);
+          frustum(vadd(pc, u, lSphBase + lSphR * 1.6 + 2), lSphR, lSphR * 0.7, 4, PEARL, 12);
+          frustum(vadd(pc, u, lSphBase + lSphR * 0.8),
+            lSphR * 1.02, lSphR * 1.02, lSphR * 0.5, WIN_LIT, 12);
+
+          const connBase = 84, connTop = 108;
+          cyl(vadd(pc, u, connBase), 3.2, connTop - connBase, [0.80, 0.70, 0.66], 8);
+          frustum(vadd(pc, u, connBase + (connTop - connBase) * 0.5 - 1),
+            4.5, 4.5, 2.5, [0.74, 0.66, 0.62], 12);
+
+          const uSphBase = connTop, uSphR = 10;
+          frustum(vadd(pc, u, uSphBase), uSphR * 0.7, uSphR, 4, [0.80, 0.66, 0.60], 10);
+          frustum(vadd(pc, u, uSphBase + 2), uSphR, uSphR, uSphR * 1.6, [0.82, 0.68, 0.62], 10);
+          frustum(vadd(pc, u, uSphBase + uSphR * 1.6 + 2),
+            uSphR, uSphR * 0.7, 4, [0.80, 0.66, 0.60], 10);
+          frustum(vadd(pc, u, uSphBase + uSphR * 0.8),
+            uSphR * 1.03, uSphR * 1.03, uSphR * 0.4, WIN_LIT, 10);
+          const spireBase = uSphBase + uSphR * 1.6 + 6;
+          cyl(vadd(pc, u, spireBase), 0.9, 32, [0.88, 0.78, 0.72], 6);
+          cone(vadd(pc, u, spireBase + 32), 0.9, 12, [0.90, 0.82, 0.76], 6);
+
+          // Shanghai Tower and Jin Mao complete the compact three-tower cue.
+          frustum(stC, 11, 6.5, 80, GLASS_HAZE, 6);
+          frustum(vadd(stC, u, 80), 6.5, 3.2, 60, [0.62, 0.68, 0.74], 6);
+          frustum(vadd(stC, u, 140), 3.2, 1.0, 30, [0.66, 0.72, 0.78], 6);
+          box(vadd(stC, u, 172), [2.5, 22, 2.5], STEEL);
+          frustum(jmC, 9.5, 7, 55, [0.70, 0.69, 0.68], 8);
+          frustum(vadd(jmC, u, 55), 7, 4.5, 35, [0.72, 0.71, 0.70], 8);
+          frustum(vadd(jmC, u, 90), 4.5, 1.8, 20, [0.74, 0.73, 0.72], 8);
+          cyl(vadd(jmC, u, 110), 0.7, 18, STEEL, 5);
+        }, { required: true });
       })();
 
       // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
-      grandstand(0.45, 1, 16, 90, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.47, 1, 20, 60, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.42, 1, 18, 60, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.50, 1, 16, 50, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.42, 1, 22, 30, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.45, 1, 20, 34, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.48, 1, 22, 30, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.50, 1, 20, 28, [0.43, 0.44, 0.49], SEAT);
       billboard(K(0.46), 1, 12, 16, 4.5, RED);
       marshalPost(K(0.45), 1, 12);
 
@@ -318,7 +319,8 @@
         const w = 55 + hash(i * 11) * 55;
         backdrop(k, -1, 85 + hash(i * 5) * 45, [w, h, 24], MARSH_N);
       }
-      groundPlane(K(0.62), -1, 85, [180, 130], MARSH);
+      groundPatch(K(0.62), -1, 18, [95, 0.24, 130], MARSH,
+        { id: "shanghai-marsh-shelf", samples: 8 });
       hedge(0.58, 0.66, -1, 24, 3.5, MARSH_N);
       // Extra marsh strip along the long back-straight infield so open space reads
       for (let i = 0; i < 6; i++) {
@@ -334,11 +336,9 @@
       marshalPost(K(0.80), 1, 14);
       marshalPost(K(0.74), 1, 12);
       // small grandstand banks lining the long back straight
-      grandstand(0.755, 1, 28, 70, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.80,  1, 28, 70, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.845, 1, 28, 60, [0.43, 0.44, 0.49], SEAT);
-      // low treeline along the verges behind the stands
-      hedge(0.72, 0.88, 1, 55, 3.2, MARSH_N);
+      grandstand(0.755, 1, 38, 34, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.80,  1, 38, 34, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.845, 1, 38, 32, [0.43, 0.44, 0.49], SEAT);
       // sparse low shrub clumps on the verge (were 0.9 m green box slabs)
       for (let i = 0; i < 4; i++) {
         bush((K(0.74) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, MARSH);
@@ -352,9 +352,9 @@
       });
 
       // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
-      grandstand(0.88,  -1, 18, 70, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.905, -1, 22, 70, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.93,  -1, 24, 50, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.88,  -1, 24, 30, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.905, -1, 28, 32, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.93,  -1, 30, 28, [0.42, 0.43, 0.48], SEAT);
       // big pale runoff apron at the hairpin
       runoffApron(K(0.90), 1, 4, [40, 0.35, 55], PALE);
       marshalPost(K(0.90), 1, 14);
@@ -362,10 +362,9 @@
       // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
       building(K(0.96), 1, 2, 12,  9, 50, { wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
       building(K(0.94), 1, 2, 10,  7, 34, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
-      building(K(0.92), -1, 2, 12, 10, 40, { wall: WHITE, window: WIN_LIT, floor: 3 });
 
       // Low commercial strips — kept short so they don't fight the marsh/Pudong read
-      cityFront(0.92, 0.00, 1, 48, {
+      cityFront(0.92, 0.965, 1, 48, {
         minH: 10, maxH: 24, depth: 22,
         palette: [WHITE, CONC, [0.82, 0.83, 0.86]],
         step: 28,
@@ -388,16 +387,18 @@
       }
 
       // ================= TRACKSIDE FURNITURE — barriers, kerbs, signage (whole lap) =================
-      guardrail(0.10, 0.42,  1, 5, STEEL);
+      guardrail(0.10, 0.27,  1, 5, STEEL);
+      guardrail(0.32, 0.42,  1, 5, STEEL);
       guardrail(0.50, 0.70, -1, 5, STEEL);
       guardrail(0.10, 0.42, -1, 6, STEEL);
-      fence(0.12, 0.40, 1, 7, 3.2, [0.70, 0.72, 0.76]);
+      fence(0.12, 0.27, 1, 7, 3.2, [0.70, 0.72, 0.76]);
+      fence(0.32, 0.40, 1, 7, 3.2, [0.70, 0.72, 0.76]);
       fence(0.50, 0.70, -1, 7, 3.2, [0.70, 0.72, 0.76]);
 
       // Tyre walls protecting the heavy corners.
       tyreWall(0.885, 0.915, 1, 4, RED);
       tyreWall(0.06,  0.09,  1, 4, YELLOW);
-      tyreWall(0.30,  0.33, -1, 5, RED);
+      tyreWall(0.305, 0.325, -1, 10, RED);
 
       // Low red/white kerb-edge markers — denser through the snail coil.
       (function kerbs() {
@@ -420,7 +421,7 @@
       marshalPost(K(0.55),  1, 19);
       marshalPost(K(0.66), -1, 19);
       billboard(K(0.18),  1, 12, 14, 4, YELLOW);
-      billboard(K(0.33), -1, 20, 16, 4.5, RED);
+      billboard(K(0.34), -1, 35, 16, 4.5, RED);
       billboard(K(0.55),  1, 14, 14, 4, RED);
       billboard(K(0.66), -1, 16, 14, 4, YELLOW);
 
