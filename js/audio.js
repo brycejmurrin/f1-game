@@ -115,7 +115,7 @@ const GameAudio = (function () {
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
     // the edge of a gesture — an unhandled rejection would surface as a crash.
-    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(function () {}); }
+    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(() => {}); }
     loadEngineSamples();
     return true;
   }
@@ -178,10 +178,10 @@ const GameAudio = (function () {
     if (isGesture) lastFailedResume = Date.now();
     const p = ctx.resume();
     if (p && p.then) {
-      p.then(function () {
+      p.then(() => {
         rebuildTries = 0;
         lastFailedResume = 0;
-      }).catch(function () {});
+      }).catch(() => {});
     }
   }
 
@@ -692,7 +692,7 @@ const GameAudio = (function () {
   }
 
   function finish() {
-    [523, 659, 784, 1047, 784, 1047].forEach(function (f, i) {
+    [523, 659, 784, 1047, 784, 1047].forEach((f, i) => {
       blip(f, "square", 0.2, 0.01, 0.2, null, i * 0.11);
     });
   }
@@ -758,17 +758,15 @@ const GameAudio = (function () {
     musicOn = true;
     currentUrl = url;
     const token = ++musicToken;
-    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(function () {}); }
+    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(() => {}); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
     fetch(url)
-      .then(function (r) { return r.arrayBuffer(); })
-      .then(function (ab) {
-        return new Promise(function (res, rej) {
-          ctx.decodeAudioData(ab, res, rej);     // callback form: older Safari
-        });
-      })
-      .then(function (buf) { musicBuffers[url] = buf; playMusicBuffer(buf, token); })
-      .catch(function () { /* music is optional — ignore load/decode errors */ });
+      .then(r => r.arrayBuffer())
+      .then(ab => new Promise((res, rej) => {
+        ctx.decodeAudioData(ab, res, rej);     // callback form: older Safari
+      }))
+      .then(buf => { musicBuffers[url] = buf; playMusicBuffer(buf, token); })
+      .catch(() => { /* music is optional — ignore load/decode errors */ });
   }
 
   function stopMusic() {
@@ -811,8 +809,8 @@ const GameAudio = (function () {
     // centroidHz() is the spectral centroid of the live output (a stable
     // brightness/pitch proxy, unlike the single loudest bin which hops between
     // harmonics). Together they let tests verify pitch vs gear/throttle.
-    rate: function () { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
-    centroidHz: function () {
+    rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
+    centroidHz() {
       if (!dbgAnalyser || !ctx) return 0;
       const n = dbgAnalyser.frequencyBinCount, arr = new Float32Array(n);
       dbgAnalyser.getFloatFrequencyData(arr);
@@ -821,6 +819,6 @@ const GameAudio = (function () {
       return den > 0 ? Math.round(num / den) : 0;
     },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
-    debug: function () { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady: samplesReady, usingSamples: usingSamples, engineOn: engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
+    debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
 })();

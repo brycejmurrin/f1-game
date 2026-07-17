@@ -182,7 +182,7 @@ const Input = (function () {
     if (typeof DeviceOrientationEvent.requestPermission === "function") {
       try {
         return DeviceOrientationEvent.requestPermission()
-          .then(function (res) {
+          .then(res => {
             if (res === "granted") {
               attachGyro();
               return true;
@@ -190,7 +190,7 @@ const Input = (function () {
             gyroDenied = true;
             return false;
           })
-          .catch(function () {
+          .catch(() => {
             gyroDenied = true;
             return false;
           });
@@ -375,7 +375,7 @@ const Input = (function () {
     const el = document.getElementById(id);
     if (!el) return;
     const ids = new Set();
-    el.addEventListener("pointerdown", function (e) {
+    el.addEventListener("pointerdown", e => {
       // Capture the pointer so the hold survives the finger/cursor drifting off
       // the button — without this a tiny move fires pointerleave and drops the
       // press the instant you start holding (gas "won't stay on" until settled).

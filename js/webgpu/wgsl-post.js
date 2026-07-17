@@ -744,17 +744,17 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let V = normalize(-P);
   let R = reflect(-V, Nv);         // points up toward the world above the road
 
-  // Short march (mobile): 12 steps, gentle geometric growth.
+  // Higher-fidelity march (optimized): 24 steps, fine-grained geometric growth.
   var pos = P;
   var prevPos = P;
-  var stepLen = 0.55;
+  var stepLen = 0.40;
   var found = false;
   var hitUV = vec2<f32>(0.0);
   var hitEdge = 0.0;
-  for (var i = 0; i < 12; i = i + 1) {
+  for (var i = 0; i < 24; i = i + 1) {
     prevPos = pos;
     pos = pos + R * stepLen;
-    stepLen = stepLen * 1.28;
+    stepLen = stepLen * 1.15;
     let sp = ssrProjUV(pos);
     if (sp.z <= 0.0) { break; }              // behind the eye
     let suv = sp.xy;
@@ -763,7 +763,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     if (dz > thick && dz < 5.0) {            // thickness gate (reject far sky)
       var a = prevPos;
       var b = pos;
-      for (var j = 0; j < 4; j = j + 1) {    // binary refine -> crisp hit
+      for (var j = 0; j < 5; j = j + 1) {    // binary refine -> crisp hit
         let mid = (a + b) * 0.5;
         let muv = ssrProjUV(mid).xy;
         if (ssrViewPos(muv).z - mid.z > 0.20) { b = mid; } else { a = mid; }

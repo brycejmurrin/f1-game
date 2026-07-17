@@ -2171,7 +2171,9 @@ function update(dt) {
   ranked.length = 0;
   for (const c of cars) ranked.push(c);
   ranked.sort((a, b) => b.prog - a.prog);
-  ranked.forEach((c, i) => { c.rank = i + 1; });
+  for (let i = 0; i < ranked.length; i++) {
+    ranked[i].rank = i + 1;
+  }
 
   for (const c of cars) updateCar(c, dt, ranked);
 
@@ -2237,9 +2239,11 @@ function resolveCollisions(ranked, dt) {
       const a = ranked[i];
       for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
         const b = ranked[j];               // a is ahead (higher prog), b behind
-        const dProg = a.prog - b.prog;
+        let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
-        if (dProg > LCAR) break;            // sorted by prog: the rest are farther
+        const L = track.total;
+        dProg = ((dProg + L / 2) % L + L) % L - L / 2;
+        if (Math.abs(dProg) > LCAR) continue;            // sorted by prog: the rest are farther
         const dX = a.x - b.x;
         if (!Number.isFinite(dX)) continue;
         const penLong = LCAR - Math.abs(dProg);
@@ -2260,14 +2264,20 @@ function resolveCollisions(ranked, dt) {
         } else {
           // rear-end: separate along the track and nudge speeds together (gentle,
           // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
+          const sgn = dProg >= 0 ? 1 : -1;
           const corr = Math.max(penLong - 0.05, 0) * 0.4;
-          shiftLong(a, corr * (iA / iSum));
-          shiftLong(b, -corr * (iB / iSum));
-          const relV = b.speed - a.speed;   // >0 means the rear car is closing
+          shiftLong(a, sgn * corr * (iA / iSum));
+          shiftLong(b, -sgn * corr * (iB / iSum));
+          const relV = sgn >= 0 ? b.speed - a.speed : a.speed - b.speed;   // >0 means the rear car is closing
           if (relV > 0) {
             const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
-            b.speed = Math.max(0, b.speed - iB * jImp);
-            a.speed += iA * jImp * 0.8;
+            if (sgn >= 0) {
+              b.speed = Math.max(0, b.speed - iB * jImp);
+              a.speed += iA * jImp * 0.8;
+            } else {
+              a.speed = Math.max(0, a.speed - iA * jImp);
+              b.speed += iB * jImp * 0.8;
+            }
             a.contactT = b.contactT = 0.22;
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           }
@@ -2284,9 +2294,11 @@ function resolveCollisions(ranked, dt) {
     const a = ranked[i];
     for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
       const b = ranked[j];
-      const dProg = a.prog - b.prog;
+      let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
-      if (dProg > LCAR) break;
+      const L = track.total;
+      dProg = ((dProg + L / 2) % L + L) % L - L / 2;
+      if (Math.abs(dProg) > LCAR) continue;
       const dX = a.x - b.x;
       if (!Number.isFinite(dX)) continue;
       const penLong = LCAR - Math.abs(dProg);
@@ -2302,8 +2314,9 @@ function resolveCollisions(ranked, dt) {
       } else {
         const c = Math.max(penLong - SLOP, 0) * 0.6;
         if (c <= 0) continue;
-        shiftLong(a, c * (iA / iSum));
-        shiftLong(b, -c * (iB / iSum));
+        const sgn = dProg >= 0 ? 1 : -1;
+        shiftLong(a, sgn * c * (iA / iSum));
+        shiftLong(b, -sgn * c * (iB / iSum));
       }
     }
   }
@@ -2323,7 +2336,7 @@ function resolveCollisions(ranked, dt) {
 }
 
 function updateCar(c, dt, ranked) {
-  if (c.finished) { coast(c, dt); return; }
+  if (c.finished) { coast(c, dt); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -2354,28 +2367,20 @@ function updateCar(c, dt, ranked) {
     // Walk OUTWARD from our rank in the prog-sorted field, breaking once the prog
     // delta leaves the [-6, +18] window — same neighbours as scanning all of ranked,
     // without the O(n) per-car pass (mirrors resolveCollisions' break pattern).
-    const ci = (c.rank || 1) - 1;
-    for (let up = ci - 1; up >= 0; up--) {    // ahead of us: prog rises, dprog rises
-      const o = ranked[up];
-      const dprog = o.prog - c.prog;          // >0 = ahead of us
-      if (dprog > 18) break;
+    const L = track.total;
+    for (let i = 0; i < ranked.length; i++) {
+      const o = ranked[i];
+      if (o === c) continue;
+      let dprog = o.prog - c.prog;
+      if (!Number.isFinite(dprog)) continue;
+      dprog = ((dprog + L / 2) % L + L) % L - L / 2;
+      if (dprog < -6 || dprog > 18) continue;
       const dx = o.x - c.x;
       if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
       }
       if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
-    }
-    for (let dn = ci + 1; dn < ranked.length; dn++) {   // behind us: prog falls, dprog falls
-      const o = ranked[dn];
-      const dprog = o.prog - c.prog;          // <0 = behind us
-      if (dprog < -6) break;
-      const dx = o.x - c.x;
-      if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
-        if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
-        else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
-      }
-      // (no blocker test here — dprog <= 0 for everything behind us)
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
     const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
@@ -2526,10 +2531,10 @@ function updateCar(c, dt, ranked) {
       c.cuts++;
       // Penalty applies to EVERY car (it feeds race classification) so the AI
       // can't cut corners for free; only the player gets the on-screen cues.
-      if (c.cuts >= 4 && c.penalty === 0) {
-        c.penalty = 5;
+      if (c.cuts >= 4) {
+        c.penalty += 5;
         if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2); if (soundOn) GameAudio.penalty(); }
-      } else if (c.cuts < 4 && c.isPlayer) {
+      } else if (c.isPlayer) {
         announce("TRACK LIMITS " + c.cuts + "/4", 1.2);
         if (soundOn) GameAudio.offtrack();
       }
@@ -2799,7 +2804,6 @@ function updateCar(c, dt, ranked) {
     // desync from a separate world position.
     let tX = smp.t[0], tZ = smp.t[2]; const tL = Math.hypot(tX, tZ) || 1; tX /= tL; tZ /= tL;
     let rX = smp.r[0], rZ = smp.r[2]; const rL = Math.hypot(rX, rZ) || 1; rX /= rL; rZ /= rL;
-    c._prevS = c.s;
     c.s = wrapS(c.s + (vWx * tX + vWz * tZ) * dt);   // progress = velocity · tangent
     c.x += (vWx * rX + vWz * rZ) * dt;               // lateral  = velocity · right
     steer = clamp(shaped, -1, 1);   // steer vis = driver input only, not assist
@@ -2922,7 +2926,7 @@ function updateCar(c, dt, ranked) {
 
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
-  const oldS = c.isPlayer ? (c._prevS ?? c.s) : c.s;
+  const oldS = c._prevS ?? c.s;
   if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
   // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
@@ -3040,6 +3044,7 @@ function updateCar(c, dt, ranked) {
       c.rescueT = 0; c.offT = 0; c.stuckT = 0;
     }
   }
+  c._prevS = c.s;
 }
 
 // Put the player back on the racing line at its CURRENT progress, facing forward
@@ -3322,7 +3327,7 @@ function setFrameLights(eye, scale, fwd) {
   // boundary ahead. The forward bias (LT.lampBehindBias) pushes that boundary
   // further out — past the night fog wall.
   const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
-  const flen = Math.hypot(fx, fz) || 1;
+  const flen2 = fx * fx + fz * fz || 1;
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
     const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
@@ -3333,10 +3338,11 @@ function setFrameLights(eye, scale, fwd) {
     // yaw flipped the half-space for many lamps at once, a whole-field shudder).
     const b = dx * fx + dz * fz;
     if (b < 0) {
-      const dl = Math.sqrt(dx * dx + dz * dz) || 1;
+      const dl2 = dx * dx + dz * dz || 1;
+      const ratio2 = (b * b) / (flen2 * dl2 * 0.0625);
       // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
       // nearest-N rank (def 5.25 = as-shipped forward push).
-      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, (-b) / (flen * dl * 0.25));
+      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, ratio2);
     }
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
@@ -5958,20 +5964,21 @@ applyResMode();
 // WebGPU. WebGPU is opt-in and browser-untested, so the default stays WebGL2;
 // flipping writes apex26.gfxBackend (the raw key gfx.js reads) and reloads so
 // Gfx.create() re-runs the backend selection at boot.
-(function () {
+{
   const rb = $("pm-renderer");
-  if (!rb || typeof navigator === "undefined" || !navigator.gpu) return;
-  const read = () => { try { return localStorage.getItem("apex26.gfxBackend") === "webgpu" ? "webgpu" : "webgl2"; } catch (_) { return "webgl2"; } };
-  rb.hidden = false;
-  rb.textContent = "RENDERER: " + read().toUpperCase();
-  rb.onclick = () => {
-    if (soundOn) GameAudio.uiSelect();
-    const next = read() === "webgpu" ? "webgl2" : "webgpu";
-    try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
-    rb.textContent = "RENDERER: " + next.toUpperCase() + " — RELOADING…";
-    setTimeout(() => location.reload(), 350);
-  };
-})();
+  if (rb && typeof navigator !== "undefined" && navigator.gpu) {
+    const read = () => { try { return localStorage.getItem("apex26.gfxBackend") === "webgpu" ? "webgpu" : "webgl2"; } catch (_) { return "webgl2"; } };
+    rb.hidden = false;
+    rb.textContent = "RENDERER: " + read().toUpperCase();
+    rb.onclick = () => {
+      if (soundOn) GameAudio.uiSelect();
+      const next = read() === "webgpu" ? "webgl2" : "webgpu";
+      try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
+      rb.textContent = "RENDERER: " + next.toUpperCase() + " — RELOADING…";
+      setTimeout(() => location.reload(), 350);
+    };
+  }
+}
 
 // GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
 // defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade

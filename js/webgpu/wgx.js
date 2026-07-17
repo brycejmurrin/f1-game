@@ -295,6 +295,13 @@ const WGX = (function () {
     const shadowLVPData = new Float32Array(16), shadowModelData = new Float32Array(16);
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
 
+    // Blocker map objects.
+    let blockerTex = null, blockerView = null, blockerSampler = null;
+    let blockerUBO = null, blockerBG = null, blockerPipeline = null, blockerG0Layout = null;
+
+    // TAA Halton Jitter state.
+    let _taaFrameIndex = 0;
+
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
         depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0,
@@ -341,6 +348,19 @@ const WGX = (function () {
       shadowView = shadowTex.createView();
       shadowSampler = device.createSampler({ compare: "less", magFilter: "linear", minFilter: "linear" });
 
+      // Blocker map (PCSS-lite downsampled sun shadow map)
+      blockerTex = device.createTexture({
+        size: [512, 512], format: "r16float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      blockerView = blockerTex.createView();
+      blockerSampler = device.createSampler({
+        magFilter: "nearest",
+        minFilter: "nearest",
+        addressModeU: "clamp-to-edge",
+        addressModeV: "clamp-to-edge",
+      });
+
       // Placeholder env-cube (1×1×6) + SSR (1×1) so the LIT frame bind group's new
       // bindings 4/5/6 are always valid; the env probe / SSR pass swap in real
       // views later. carReflect/ssrStrength stay 0 until then, so these are no-ops.
@@ -369,6 +389,8 @@ const WGX = (function () {
             sampler: { type: "filtering" } },                            // env/SSR sampler
           { binding: 6, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: "float" } },                          // SSR result
+          { binding: 7, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "float" } },                          // blocker map
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -448,7 +470,40 @@ const WGX = (function () {
         layout: shadowG1Layout,
         entries: [{ binding: 0, resource: { buffer: shadowModelUBO, offset: 0, size: WGSLChunks.SHADOW_MODEL_BYTES } }],
       });
-    } catch (_) {
+
+      // ── Blocker downsample pipeline ──
+      blockerUBO = device.createBuffer({
+        size: 16, // size of BlockerU
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      });
+      // srcTexel uniform data (1/SHADOW_SIZE, 1/SHADOW_SIZE, 0, 0)
+      const blockerUBOData = new Float32Array([1.0 / SHADOW_SIZE, 1.0 / SHADOW_SIZE, 0.0, 0.0]);
+      device.queue.writeBuffer(blockerUBO, 0, blockerUBOData);
+
+      blockerG0Layout = device.createBindGroupLayout({
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
+          { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+        ]
+      });
+      const blockerModule = device.createShaderModule({ code: WGSLChunks.BLOCKER });
+      blockerPipeline = device.createRenderPipeline({
+        layout: device.createPipelineLayout({ bindGroupLayouts: [blockerG0Layout] }),
+        vertex: { module: blockerModule, entryPoint: "vs_main" },
+        fragment: { module: blockerModule, entryPoint: "fs_main", targets: [{ format: "r16float" }] },
+        primitive: { topology: "triangle-list" },
+      });
+      blockerBG = device.createBindGroup({
+        layout: blockerG0Layout,
+        entries: [
+          { binding: 0, resource: shadowView },
+          { binding: 1, resource: blockerSampler },
+          { binding: 2, resource: { buffer: blockerUBO } },
+        ]
+      });
+    } catch (err) {
+      console.error("WGX init failed:", err);
       return null;   // any pipeline/buffer build failure -> fall back to GLX
     }
 
@@ -700,6 +755,7 @@ const WGX = (function () {
           { binding: 4, resource: cubeView },
           { binding: 5, resource: linearSampler },
           { binding: 6, resource: nextSsrView },
+          { binding: 7, resource: blockerView },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group
@@ -1029,6 +1085,26 @@ const WGX = (function () {
       const d = frameData;
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
       _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+
+      // TAA Halton Jitter Scaffolding
+      const halton = [
+        [0.5, 1/3],
+        [0.25, 2/3],
+        [0.75, 1/9],
+        [0.125, 4/9],
+        [0.625, 7/9],
+        [0.375, 2/9],
+        [0.875, 5/9],
+        [0.0625, 8/9]
+      ];
+      _taaFrameIndex = (_taaFrameIndex + 1) % 8;
+      const sample = halton[_taaFrameIndex];
+      const jitterX = (sample[0] - 0.5) * 2.0 / width;
+      const jitterY = (sample[1] - 0.5) * 2.0 / height;
+
+      _vpGpu[8] += jitterX;
+      _vpGpu[9] += jitterY;
+
       d.set(_vpGpu, 0);
       frameVPGpu.set(_vpGpu);   // persistent copy for the FX passes (post/fx)
       const eye = f.eye || [0,0,0], sd = f.sunDir || [0.3,0.6,0.5], sc = f.sunColor || [1,0.95,0.9];
@@ -1119,7 +1195,12 @@ const WGX = (function () {
       // params5.y: CLOUD SPEED (drives the LIT cloud-shadow dapple drift, same
       // 1.0 fallback as GLX uCloudSpeed).
       d[85] = f.cloudSpeed != null ? f.cloudSpeed : 1.0;
-      d[86] = 0; d[87] = 0;
+      // params5.z: CLOUD SHADOW DEPTH (how darkly clouds dim the sun; GLX parity).
+      // Always pack the resolved value so 0 reads as a real "no cloud shade" and
+      // is not confused with an unset slot (WGSL reads params5.z directly).
+      d[86] = (T && T.cloudShadowDim != null) ? T.cloudShadowDim : 0.80;
+      d[87] = jitterX; // Store jitterX, wait, no, jitterY is needed too. 
+      // Since jitterY can't fit in d[87], let's pack both in d[87]? Wait, no. I'll put jitterY in d[93].
       // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
       // the shadow box is snapped around (game.js shadow pass; glides with the
       // camera so the LIT distance fade never jumps on a box recentre), w =
@@ -1130,7 +1211,7 @@ const WGX = (function () {
       d[91] = (T && T.shadowRange != null) ? T.shadowRange : 64.0;
       // params6 (floats 92..95): wet-surface darkening parity with GLX.
       d[92] = (T && T.wetDark != null) ? T.wetDark : 1.0;
-      d[93] = 0; d[94] = 0; d[95] = 0;
+      d[93] = jitterY; d[94] = 0; d[95] = 0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1171,7 +1252,9 @@ const WGX = (function () {
       skyData[39]=f.moon != null ? f.moon : 0;
       skyData[40]=f.starBright != null ? f.starBright : 1;
       skyData[41]=f.cloudSpeed != null ? f.cloudSpeed : 1;
-      skyData[42]=0; skyData[43]=0;
+      // SKY GRADIENT / STAR DENSITY knobs (GLX parity); defaults reproduce shipped.
+      skyData[42]=f.skyGrad     != null ? f.skyGrad     : 0.35;
+      skyData[43]=f.starDensity != null ? f.starDensity : 1;
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
@@ -1630,6 +1713,23 @@ const WGX = (function () {
     function shadowEnd() {
       if (!shadowPass) return;
       shadowPass.end(); shadowPass = null;
+
+      // Run blocker map min-reduction pass (WebGL2 parity uBlockerMap)
+      if (blockerPipeline && blockerBG && blockerView) {
+        const blockerPass = shadowEncoder.beginRenderPass({
+          colorAttachments: [{
+            view: blockerView,
+            loadOp: "clear",
+            clearValue: { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+            storeOp: "store"
+          }]
+        });
+        blockerPass.setPipeline(blockerPipeline);
+        blockerPass.setBindGroup(0, blockerBG);
+        blockerPass.draw(3, 1, 0, 0);
+        blockerPass.end();
+      }
+
       device.queue.submit([shadowEncoder.finish()]);
       shadowEncoder = null;
       _shadowRendered = true;
