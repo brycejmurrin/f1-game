@@ -1870,6 +1870,7 @@ in vec2 vUV;
 uniform sampler2D uScene;
 uniform sampler2D uBloom;
 uniform sampler2D uSSAO;     // ambient occlusion (1 = unoccluded)
+uniform vec2 uAOTexel;       // 1/ssaoW, 1/ssaoH (half-res grid) — 0 when AO is off
 uniform sampler2D uGodray;   // additive volumetric sun shafts
 uniform float uBloomAmt;
 uniform float uBloomKnee;    // how much bloom is suppressed over bright pixels (def 0.5)
@@ -2035,7 +2036,41 @@ void main() {
   // Ambient occlusion: darken creases/contacts before bloom + tonemap so the
   // grounding reads in linear light (under cars, barrier feet, kerbs, building
   // bases). 1.0 = no change, so it's a no-op when SSAO is disabled.
-  c *= texture(uSSAO, vUV).r;
+  // The AO buffer is HALF resolution — a plain bilinear fetch averages AO
+  // straight across depth discontinuities, so the dark crease AO hugging a near
+  // surface bleeds onto the far side of every silhouette (a soft grey halo
+  // tracing the car roofline / wing tips against sky and road). Depth-aware
+  // 4-tap bilateral upsample instead: the four half-res texels around this
+  // pixel keep their bilinear weights, re-weighted by how close each tap's
+  // depth is to THIS pixel's full-res depth — taps that belong to the other
+  // side of an edge lose their vote, so AO stays pinned to its own surface.
+  // uAOTexel is zeroed when AO is off (1×1 white bound): plain fetch, no cost.
+  float aoV = 1.0;
+  if (uAOTexel.x > 0.0) {
+    float aoDc = texture(uDepth, vUV).r;
+    vec2 aoG = vUV / uAOTexel - 0.5;
+    vec2 aoF = fract(aoG);
+    vec2 aoB = (floor(aoG) + 0.5) * uAOTexel;
+    float aoSum = 0.0, aoW = 0.0;
+    for (int ai = 0; ai < 4; ai++) {
+      vec2 auv = aoB + vec2(ai == 1 || ai == 3 ? uAOTexel.x : 0.0,
+                            ai >= 2 ? uAOTexel.y : 0.0);
+      float bw = (ai == 0 ? (1.0 - aoF.x) * (1.0 - aoF.y)
+                : ai == 1 ? aoF.x * (1.0 - aoF.y)
+                : ai == 2 ? (1.0 - aoF.x) * aoF.y
+                          : aoF.x * aoF.y) + 1e-4;
+      // Depth similarity as a ratio weight: silhouettes are big steps in window
+      // depth, same-surface slope is tiny, so no linearisation is needed — the
+      // scale cancels in the normalisation below.
+      float w = bw / (1e-4 + abs(aoDc - texture(uDepth, auv).r) * 30.0);
+      aoSum += texture(uSSAO, auv).r * w;
+      aoW += w;
+    }
+    aoV = aoSum / aoW;
+  } else {
+    aoV = texture(uSSAO, vUV).r;
+  }
+  c *= aoV;
 
   // Volumetric sun shafts: additive in-scattered sunlight (0 when disabled).
   c += texture(uGodray, vUV).rgb;
@@ -2154,6 +2189,14 @@ void main() {
       // the reflected sky bands ran upside-down vs the road's own paint mirror.
       vec3 skyRefl = mix(uReflSkyHi, uReflSkyLo, clamp(R.y, 0.0, 1.0));
       vec3 reflCol = found ? hitCol : skyRefl;
+      // SPECULAR OCCLUSION: the diffuse AO above never touched the reflection
+      // terms, so a mirrored wet road / glossy deck inside an occluded crease
+      // (under the car, wheel wells, barrier feet) still GLOWED with reflected
+      // scene/sky — bright streaks exactly where the surface should be buried.
+      // Lagarde-style ao² (specular visibility shrinks faster than diffuse)
+      // on the reflected colour keeps open road untouched (ao ≈ 1) while
+      // creases keep their darkness through the mirror substitution.
+      reflCol *= aoV * aoV;
       // Soft-clip the reflected colour BEFORE it's substituted in: a bright HDR
       // hit (neon signage, a lit window, the sun disc, a floodlight lens) was
       // injected raw, so a handful of very bright reflected pixels could blow
