@@ -5,6 +5,7 @@ import {
   TRACKS, TODS, WEATHERS, CAMERA_FRACTIONS, SHARDS, SLIDER_GROUPS, REGIONS,
   conditionKey, enumerateConditions, validateConfig,
 } from "../tools/lighting-campaign/config.mjs";
+import { measurePixels, evaluateGates } from "../tools/lighting-campaign/metrics.mjs";
 
 async function importModifiedConfig(search, replacement) {
   const source = await readFile(new URL("../tools/lighting-campaign/config.mjs", import.meta.url), "utf8");
@@ -94,4 +95,26 @@ test("nested exported configuration is immutable", () => {
 test("condition keys use the shipped preset format", () => {
   assert.equal(conditionKey("monaco", "dusk", "wet"), "monaco|dusk|wet");
   assert.throws(() => conditionKey("../bad", "day", "dry"), /unknown track/);
+});
+
+test("pixel metrics report percentiles, clipping, and named regions", () => {
+  const data = new Uint8ClampedArray([
+    0, 0, 0, 255, 32, 32, 32, 255,
+    128, 128, 128, 255, 255, 255, 255, 255,
+  ]);
+  const result = measurePixels(data, 2, 2, { frame: [0, 0, 1, 1] });
+  assert.equal(result.frame.count, 4);
+  assert.equal(result.frame.blackClipFraction, 0.25);
+  assert.equal(result.frame.whiteClipFraction, 0.25);
+  assert.ok(result.frame.p95 > result.frame.p05);
+});
+
+test("hard gates reject clipping, WebGL errors, and missing night lights", () => {
+  const bad = evaluateGates({
+    metrics: { frame: { blackClipFraction: 0.09, whiteClipFraction: 0, p05: 0, p95: 100 } },
+    lightState: { numLights: 0, ambientSky: [0.1, 0.1, 0.1] },
+    webglError: 1282, pageErrors: [], tod: "night",
+  });
+  assert.equal(bad.ok, false);
+  assert.deepEqual(new Set(bad.failures), new Set(["black-clip", "webgl-error", "night-lights"]));
 });
