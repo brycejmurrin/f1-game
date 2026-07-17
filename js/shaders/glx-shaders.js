@@ -419,7 +419,14 @@ float sampleShadow(vec3 wpos) {
   // Distance LOD: full 8-tap Poisson + PCSS-lite blocker search near the camera
   // (crisp tyre/kerb contact shadows), a cheap 4-tap disk on distant ground where
   // the shadow is small on screen. Halves shadow bandwidth over most of the frame.
-  bool near = vDist < 55.0;
+  // Boundary SCALES with SHADOW DISTANCE (was a fixed 55.0 m). At a raised box the
+  // fade band (uShadowRange*0.54..0.72 above) keeps shadows at full strength well past
+  // 55 m, so a fixed cutoff parked a hard 8-tap→4-tap / PCSS-off quality ring in the
+  // MIDDLE of still-strong shadows — and, anchored to the camera, that ring swept across
+  // the ground as you drove. 0.86 places the switch just past the 0.72 fade-out at every
+  // range, so it always lands where shadows are already faint (invisible), and is
+  // byte-identical to the old 55 m at the default box (0.86*64 ≈ 55).
+  bool near = vDist < uShadowRange * 0.86;
   float R = 3.0;
   if (near && uPcss > 0.5) {
     // PCSS-lite: blocker search scales the Poisson radius by the receiver-blocker
