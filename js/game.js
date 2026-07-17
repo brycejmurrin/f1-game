@@ -1418,8 +1418,12 @@ function applyRaceSettings() {
     // in sync with the sky dome so glass/wet-road/clearcoat mirror the sky the
     // player actually sees (the weather post-modifiers below re-sync on their side).
     frame.skyZenith = frameSky.zenith; frame.skyHorizon = frameSky.horizon;
-    // "default" — driven by the track palette; set moon for night tracks
+    // "default" — driven by the track palette; set moon + stars for night tracks.
+    // stars must be reset here symmetrically with moon: only the explicit-TOD
+    // branch used to write it, so a live explicit-night → default flip (any
+    // applyRaceSettings re-run without a track reload) kept stars in a day sky.
     frameSky.moon = isNightSession ? 0.85 : 0;
+    frameSky.stars = isNightSession ? 1 : 0;
     // Dim the SCENE sun to soft moonlight at night. Many night palettes ship a
     // bright, near-overhead sun (it drives the sky glow) — left undimmed it lit
     // the road/scenery like daytime, which is why night looked washed (Singapore).
@@ -3223,7 +3227,13 @@ function setFrameLights(eye, scale, fwd) {
     _flScr[2] = f * (1 - cold * 0.38);
     return _flScr;
   };
-  if (count <= 32) {
+  // Cheap unsorted copy ONLY when every lamp fits with the full 5-slot tail-light
+  // reserve to spare. It used to run for any count ≤ 32, which broke two promises
+  // downstream: appendCarTailLights evicts overflow from the array TAIL on the
+  // assumption the set is sorted farthest-last (it wasn't — on a 29-32-lamp track
+  // it could snap off the nearest floods instead), and the CAP reservation was
+  // silently ignored. 24+-lamp tracks now take the sorted heap path below.
+  if (count + 5 <= CAP) {
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
     out.length = 0;
     for (let i = 0; i < src.length; i += 15) {
@@ -3285,10 +3295,15 @@ function setFrameLights(eye, scale, fwd) {
   // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
   // membership changes are invisible.
   const dEdge = heap[heap.length - 1].d || 1;
+  // The boundary fade only makes sense when lamps were actually culled — if the
+  // whole baked set fit inside CAP (the 24-32-lamp tracks that now take this
+  // path for its sorting), there is no set boundary, and fading "the farthest
+  // of the set" would black out a real lamp that used to be lit.
+  const truncated = count > CAP;
   out.length = 0;
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
-    const cullF = Math.max(0, Math.min(1, (dEdge - e.d) / (dEdge * 0.35)));
+    const cullF = truncated ? Math.max(0, Math.min(1, (dEdge - e.d) / (dEdge * 0.35))) : 1;
     const f = fl(o);
     out.push(src[o], src[o+1], src[o+2],
       src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
@@ -3923,9 +3938,13 @@ function render(dt) {
       // BRIGHTNESS, not sunDir.y: the night moon-key is deliberately held high
       // (sunDir.y ≈ 0.97) to drive the sky glow, so an elevation test never fired
       // at night and the whole city rasterised into the shadow map every recentre.
-      // Matches the god-ray/flare brightness gate (max(sunColor) below ~0.35 = dark).
+      // Cutoff 0.28 = the BOTTOM of the renderer's key-luminance strength fade
+      // (uShadowStr ramps over key 0.28→0.42): props only leave the map once the
+      // whole shadow pass has faded to zero strength. The old 0.35 cutoff sat in
+      // the MIDDLE of that band, so prop shadows popped out at ~50% strength on
+      // a dusk→night flip / SUN ELEVATION drag while terrain shadows lingered.
       const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-      if (_shKey > 0.35) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      if (_shKey > 0.28) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
   }

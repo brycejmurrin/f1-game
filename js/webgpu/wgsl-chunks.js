@@ -171,7 +171,7 @@ struct FrameU {
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
   params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
-  params5    : vec4<f32>,     // off 336  (envProbeStr, _, _, _) — real env-cube probe strength (0 = analytic sky only)
+  params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, _, _) — env-cube probe strength (0 = analytic sky only) + cloud-shadow drift rate
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
 };                            // size 368
 struct Light {
@@ -205,6 +205,29 @@ struct DrawU {
 ${hash}
 ${vnoise}
 ${brdf}
+
+// Drifting cloud-shadow dapple (GLX parity, js/shaders/glx-shaders.js
+// cloudFBM/cloudShadow): FBM sampled where the sun ray through the receiver
+// meets a 360 m cloud deck, drifted by time × CLOUD SPEED so the ground dapple
+// moves in lockstep with the sky. cover = F.params1.w, cloudSpeed = F.params5.y.
+// Was entirely missing from the WebGPU port — partly-cloudy day tracks read
+// uniformly lit while WebGL2 showed cloud shadows crossing the track.
+fn cloudFBM(p_in: vec2<f32>) -> f32 {
+  var p = p_in; var s = 0.0; var a = 0.5;
+  for (var i = 0; i < 2; i = i + 1) { s = s + a * vnoise(p); p = p * 2.03 + 1.7; a = a * 0.5; }
+  return s;
+}
+fn cloudShadow(wp: vec3<f32>) -> f32 {
+  let cover = F.params1.w;
+  // Divisor floored at 0.15 (not the 0.06 cutoff): near-grazing sun rays blow
+  // the deck-intersection offset up and over-sample the noise into stripes —
+  // same fix as GLX.
+  if (cover <= 0.001 || F.sunDir.y <= 0.06) { return 0.0; }
+  let t = (360.0 - wp.y) / max(F.sunDir.y, 0.15);
+  let cT = F.params0.z * F.params5.y;
+  let cp = (wp.xz + F.sunDir.xz * t) * 0.0052 + vec2<f32>(cT * 0.012, cT * 0.005);
+  return smoothstep(0.54 - cover * 0.40, 0.92, cloudFBM(cp)) * cover;
+}
 
 struct VSOut {
   @builtin(position) clip  : vec4<f32>,
@@ -377,7 +400,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
            * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
     edgeFade = edgeFade * ef.x * ef.y;
     if (edgeFade > 0.0 && ndc.z <= 1.0) {
-      let refD = ndc.z - max(F.params2.w, 0.0);   // SHADOW BIAS knob (params2.w)
+      // Slope-scale bias (GLX parity, js/shaders/glx-shaders.js sampleShadow):
+      // a constant-only bias can't cover grazing sun angles on walls / banked
+      // kerbs — acne that shimmers while driving — and raising the constant
+      // knob to hide it peter-pans flat ground instead. Same clamp band, and
+      // the knob contributes HALVED exactly like GLX (uShadowBias * 0.5).
+      let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
+      let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
+      let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
       // PENUMBRA: pcfStep = texel * (1 + pcssPen). pcssPen=0 -> unchanged.
       let pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0));   // params2.z = 1/shadowMapSize
       var s = 0.0;
@@ -393,6 +423,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       shadow = max(0.0, mix(1.0, s / 9.0, F.params2.y * edgeFade));   // params2.y = shadow strength
     }
   }
+  // Cloud dapple multiplies the cast shadow exactly like GLX (LIT_FS composite):
+  // applied outside the depth-map gate, so broken cloud still shades the ground
+  // even where/when the sun shadow map is off.
+  shadow = shadow * (1.0 - cloudShadow(in.wpos) * 0.80);
   let litNoL = NoL * keyMul * shadow;
   // SHADOW TINT (F.params4.y = shadowTintAmt): push shadowed regions toward a cool
   // colour (sky-fill bias), applied to the hemisphere ambient so cast shadows read

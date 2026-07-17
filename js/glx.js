@@ -90,6 +90,8 @@ const GLX = (function () {
   let frameSkyHi = null;
   let frameSkyLo = null;
   let frameSunColor = null;
+  let frameDecalSun = null;   // keyMul-scaled sun for the decal pass (raw frameSunColor feeds god rays)
+  const _decalSunScr = [0, 0, 0];
   let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal lighting
   let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
   let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
@@ -811,7 +813,7 @@ const GLX = (function () {
       _decalVPToken = _frameToken;
       gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
       gl.uniform3fv(decalU.uSunDir, frameSunDir);
-      gl.uniform3fv(decalU.uSunColor, frameSunColor);
+      gl.uniform3fv(decalU.uSunColor, frameDecalSun || frameSunColor);
       gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
       gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
     }
@@ -1017,9 +1019,24 @@ const GLX = (function () {
       _ambScratchS[0] = s[0] * _ambM; _ambScratchS[1] = s[1] * _ambM; _ambScratchS[2] = s[2] * _ambM;
       gl.uniform3fv(litU.uAmbGround, _ambScratchG);
       gl.uniform3fv(litU.uAmbSky, _ambScratchS);
+      // The decal pass reads frameAmb* — point it at the SAME scaled ambient the
+      // lit pass just uploaded. Decals used the raw frame colours, so moving the
+      // AMBIENT slider re-lit the bodywork but not the sponsor marks on it.
+      frameAmbSky = _ambScratchS; frameAmbGround = _ambScratchG;
     } else {
       gl.uniform3fv(litU.uAmbGround, frame.ambientGround);
       gl.uniform3fv(litU.uAmbSky, frame.ambientSky);
+    }
+    // Same for the KEY LIGHT slider on the decals' sun term (raw frameSunColor
+    // stays untouched for the god-ray/flare passes, which are not keyMul-lit).
+    const _kM = T && T.keyMul != null ? T.keyMul : 1.0;
+    if (_kM !== 1 && frameSunColor) {
+      _decalSunScr[0] = frameSunColor[0] * _kM;
+      _decalSunScr[1] = frameSunColor[1] * _kM;
+      _decalSunScr[2] = frameSunColor[2] * _kM;
+      frameDecalSun = _decalSunScr;
+    } else {
+      frameDecalSun = frameSunColor;
     }
     gl.uniform1f(litU.uBounceK,     T && T.bounceK     != null ? T.bounceK     : 0.04);
     gl.uniform1f(litU.uMistShare,   T && T.mistShare   != null ? T.mistShare   : 1.5);
@@ -1160,7 +1177,11 @@ const GLX = (function () {
     if (sparkle   !== _matSpark)    { gl.uniform1f(litU.uSparkle,   sparkle);   _matSpark    = sparkle; }
     // Each draw declares the full render state it needs (no restores afterwards),
     // so runs of same-state draws collapse to a single real toggle via the cache.
-    setDepthMask(true);
+    // Translucent draws (ghost car, boost flame, pulsing rain light) must NOT
+    // write depth: a 35%-alpha ghost that lands in the depth buffer culls the
+    // cars/props drawn after it (they pop invisible "through" the ghost) and
+    // registers in sceneDepth as a solid wall for SSAO/SSR/god-rays.
+    setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
     // Scene alpha is the SSR car-paint tag (see LIT_FS outColor), written only

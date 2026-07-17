@@ -656,9 +656,12 @@ const WGX = (function () {
         // removes the faces you should see and keeps the interior back faces, so solid
         // boxes (buildings) render hollow — you see through the front wall to the inside.
         // It also fixes the fs_main @builtin(front_facing) two-sided normal flip, which
-        // was inverted for the same reason. alpha draws still write depth.
+        // was inverted for the same reason. Translucent (blend) draws must NOT
+        // write depth (GLX draw() parity): a 35%-alpha ghost car in the depth
+        // buffer culls the cars/props drawn after it, and lands in the depth
+        // texture as a solid wall for the SSAO/SSR post passes.
         primitive: { topology: "triangle-list", cullMode: dbl ? "none" : "back", frontFace: "cw" },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less-equal" },
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal" },
       });
       _litPipelines.set(key, p);
       return p;
@@ -1035,9 +1038,20 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      d[73] = (T && T.shadowStr != null) ? T.shadowStr : 1.0;       // SHADOW STRENGTH knob
+      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/glx.js lit
+      // begin): the night moon-key is deliberately held HIGH (sunDir.y ≈ 0.97
+      // drives the sky glow), so the binary sunUp gate above never fires at
+      // night — without this fade WebGPU kept full-strength terrain/road sun
+      // shadows under moonlight, and prop shadows POPPED when the day↔night
+      // key crossed the game.js cast gate (max(sunColor) > 0.35) instead of
+      // fading through dusk in lockstep with it.
+      const _kl = f.sunColor ? Math.max(f.sunColor[0], f.sunColor[1], f.sunColor[2]) : 1;
+      let _hf = (_kl - 0.28) / 0.14;
+      _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
+      _hf = _hf * _hf * (3 - 2 * _hf);
+      d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.0) * _hf;
       d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
-      d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.0015;  // SHADOW BIAS knob
+      d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.001;   // SHADOW BIAS knob (same 0.001 fallback as GLX)
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
       d[76] = (T && T.bounceK     != null) ? T.bounceK     : 0.04;  // BOUNCE (per-lamp bounce-fill strength, == GLX uBounceK; NOT ambient)
       d[77] = (T && T.fogTint     != null) ? T.fogTint     : 0.0;   // FOG TINT (-1..1)
@@ -1064,7 +1078,10 @@ const WGX = (function () {
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
       d[84] = (_envProbeLive && T && T.carEnvCube != null) ? T.carEnvCube : 0.0;
-      d[85] = 0; d[86] = 0; d[87] = 0;
+      // params5.y: CLOUD SPEED (drives the LIT cloud-shadow dapple drift, same
+      // 1.0 fallback as GLX uCloudSpeed).
+      d[85] = f.cloudSpeed != null ? f.cloudSpeed : 1.0;
+      d[86] = 0; d[87] = 0;
       // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
       // the shadow box is snapped around (game.js shadow pass; glides with the
       // camera so the LIT distance fade never jumps on a box recentre), w =
