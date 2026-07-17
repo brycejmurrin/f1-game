@@ -1541,7 +1541,11 @@ void main() {
   float d = texture(uDepth, vUV).r;
   if (d >= 0.99999) { outColor = vec4(1.0); return; }   // sky
   vec3 P = viewPos(vUV);
-  vec3 N = normalize(cross(dFdx(P), dFdy(P)));
+  // Guarded: at depth silhouettes the derivatives can be parallel/zero and
+  // normalize(0) is NaN — a speckled AO pixel. Fall back to eye-facing.
+  vec3 crN = cross(dFdx(P), dFdy(P));
+  float crL = length(crN);
+  vec3 N = crL > 1e-6 ? crN / crL : vec3(0.0, 0.0, 1.0);
   // Screen-space sample radius shrinks with distance so the world radius (~0.6 m)
   // stays roughly constant; clamp so near/far stay sane.
   float radius = uRadius;
@@ -1753,6 +1757,7 @@ uniform mat4 uProj;          // view → clip  (project the marched ray to scree
 uniform vec3 uUpVS;          // world-up in view space (pick out up-facing road)
 uniform vec2 uReflTexel;     // 1/width, 1/height
 uniform float uReflect;      // wet-road SSR strength (0 = off)
+uniform float uSsrOk;        // 1 when depth+proj inputs are bound this frame (0 = probe-less path: skip SSR entirely)
 uniform float uCarReflect;   // car-bodywork SSR strength (CAR tuner group; default 0.05)
 uniform float uCarGloss;     // car paint gloss (CAR tuner group; default 1.0) — widens the car's SSR streak as it drops
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
@@ -1873,13 +1878,17 @@ void main() {
   // Car-paint pixels (alpha tag < 0.5) reflect the world in EVERY session —
   // dry or wet — through the same march as the wet road.
   float carPx = 1.0 - smoothstep(0.42, 0.55, scn.a);
-  if ((uReflect > 0.001 || carPx > 0.3) && texture(uDepth, vUV).r < 0.9999 && vUV.y < 0.62) {
+  if (uSsrOk > 0.5 && (uReflect > 0.001 || carPx > 0.3) && texture(uDepth, vUV).r < 0.9999 && vUV.y < 0.62) {
     vec3 P = ssrViewPos(vUV);
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
     // the road-mask + march thickness test reject the bad cases).
     vec3 dpx = ssrViewPos(vUV + vec2(uReflTexel.x, 0.0)) - P;
     vec3 dpy = ssrViewPos(vUV + vec2(0.0, uReflTexel.y)) - P;
-    vec3 Nv = normalize(cross(dpx, dpy));
+    // Guarded like the SSAO normal: parallel/zero derivatives at silhouettes
+    // NaN the normalize and sparkle the far field.
+    vec3 crv = cross(dpx, dpy);
+    float crvL = length(crv);
+    vec3 Nv = crvL > 1e-6 ? crv / crvL : vec3(0.0, 0.0, 1.0);
     if (Nv.z < 0.0) Nv = -Nv;                     // face the eye (view space looks down -z)
     float upDot = dot(Nv, normalize(uUpVS));
     // Up-facing AND not the very-near cockpit (z near 0). P.z is negative ahead.
@@ -2191,5 +2200,26 @@ void main() { gl_Position = uLightVP * uModel * vec4(aPos, 1.0); }`;
   const DEPTH_FS = `#version 300 es
 void main() {}`;
 
-  return { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS };
+  // PCSS blocker map: conservative min-of-4 downsample of the sun shadow map
+  // (SHADOW_SIZE² -> 512²), one tap at the centre of each quadrant of this dest
+  // texel's source footprint. uSrcTexel = 1/SHADOW_SIZE: the old hardcoded
+  // 1/512*0.25 offset happened to equal one source texel on the desktop 2048
+  // map (identical output) but sampled only a half-texel window on the 1024
+  // mobile map — under-sampled blockers, optimistic penumbra, tier-dependent.
+  const BLOCKER_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uDepthTex;
+uniform vec2 uSrcTexel;
+out vec4 o;
+void main() {
+  vec2 t = uSrcTexel;
+  float d0 = texture(uDepthTex, vUV + t * vec2(-1.0, -1.0)).r;
+  float d1 = texture(uDepthTex, vUV + t * vec2( 1.0, -1.0)).r;
+  float d2 = texture(uDepthTex, vUV + t * vec2(-1.0,  1.0)).r;
+  float d3 = texture(uDepthTex, vUV + t * vec2( 1.0,  1.0)).r;
+  o = vec4(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
+}`;
+
+  return { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS };
 })();

@@ -7,7 +7,7 @@
 
 const GLX = (function () {
   // GLSL sources live in js/shaders/glx-shaders.js (loaded before this file).
-  const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS } = GLXShaders;
+  const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS } = GLXShaders;
 
   let gl = null;
   let canvas = null;
@@ -233,7 +233,7 @@ const GLX = (function () {
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uGodray", "uBloomAmt", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -288,6 +288,16 @@ const GLX = (function () {
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sceneDepth, 0);
+    // The CRITICAL target: every 3D pixel goes through it when post is on. On a
+    // driver where RGBA16F + depth-texture isn't a renderable combo (possible
+    // even with EXT_color_buffer_float present), skipping this check left
+    // postEnabled true and the whole view black — the designed fallback is
+    // direct-to-screen rendering, so take it. (Same pattern as msFBO below.)
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      postEnabled = false;
+      return;
+    }
     // MSAA scene target: multisampled colour + depth renderbuffers, resolved into
     // sceneTex/sceneDepth at present(). Falls back silently (msaaSamples = 0) if
     // the combo doesn't yield a complete FBO on this driver.
@@ -325,6 +335,14 @@ const GLX = (function () {
       const fbo = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      // Level 0 proves the RGBA16F-colour-only combo renders on this driver;
+      // deeper levels are the same format, so one check covers the chain.
+      if (i === 0 && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        gl.deleteTexture(tex); gl.deleteFramebuffer(fbo);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        postEnabled = false;
+        return;
+      }
       bloomLv.push({ fbo, tex, w: bw, h: bh });
       bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
     }
@@ -388,19 +406,7 @@ const GLX = (function () {
 
   // Min-of-4 downsample of the shadow depth map (conservative nearest-blocker
   // per cell) - the PCSS-lite blocker-search source.
-  const BLOCKER_FS = `#version 300 es
-precision highp float;
-in vec2 vUV;
-uniform sampler2D uDepthTex;
-out vec4 o;
-void main() {
-  vec2 t = vec2(1.0 / 512.0);
-  float d0 = texture(uDepthTex, vUV + t * vec2(-0.25, -0.25)).r;
-  float d1 = texture(uDepthTex, vUV + t * vec2( 0.25, -0.25)).r;
-  float d2 = texture(uDepthTex, vUV + t * vec2(-0.25,  0.25)).r;
-  float d3 = texture(uDepthTex, vUV + t * vec2( 0.25,  0.25)).r;
-  o = vec4(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
-}`;
+  // BLOCKER_FS lives in js/shaders/glx-shaders.js (uSrcTexel-parameterised).
   let blockerProg = null, blockerU = null, blockerTex = null, blockerFBO = null,
       blockerSampler = null, pcssEnabled = false;
 
@@ -439,7 +445,7 @@ void main() {
     if (ok) {
       blockerProg = link(POST_VS, BLOCKER_FS);
       if (blockerProg) {
-        blockerU = locs(blockerProg, ["uDepthTex"]);
+        blockerU = locs(blockerProg, ["uDepthTex", "uSrcTexel"]);
         blockerTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, blockerTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, 512, 512, 0, gl.RED, gl.HALF_FLOAT, null);
@@ -709,15 +715,21 @@ void main() {
   // Draw textured decals over the just-drawn car body: depth test ON, depth write
   // OFF (decals are proud of the panel so they never z-fight), alpha-blended, and
   // the alpha channel is NOT written (the car's SSR paint tag underneath survives).
+  let _decalVPToken = -1;
   function drawDecal(mesh, modelMat, tex, opts) {
     if (!decalProg || !mesh || !tex) return;
     useProg(decalProg);
     gl.uniformMatrix4fv(decalU.uModel, false, modelMat);
-    gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
-    gl.uniform3fv(decalU.uSunDir, frameSunDir);
-    gl.uniform3fv(decalU.uSunColor, frameSunColor);
-    gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
-    gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
+    // Frame-constant uniforms once per frame (same token pattern as
+    // drawShadow/drawMark) — this runs once per car livery, ~22x/frame.
+    if (_decalVPToken !== _frameToken) {
+      _decalVPToken = _frameToken;
+      gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
+      gl.uniform3fv(decalU.uSunDir, frameSunDir);
+      gl.uniform3fv(decalU.uSunColor, frameSunColor);
+      gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
+      gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
+    }
     gl.uniform1f(decalU.uGlow, (opts && opts.glow) || 0);
     // Bind the decal texture to a SPARE unit (5), NOT unit 0 — the lit pass keeps
     // the shadow map bound to TEXTURE0 for the whole frame, so clobbering unit 0
@@ -1058,10 +1070,12 @@ void main() {
     setDepthMask(true);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
-    // Blended FX quads (flames, glow rings) must not write the alpha channel —
-    // scene alpha is the SSR car-paint tag (see LIT_FS outColor); a low-alpha
-    // flame blended over the buffer would fake/blur that tag for the composite.
-    const noAW = opts && opts.noAlphaWrite;
+    // Scene alpha is the SSR car-paint tag (see LIT_FS outColor), written only
+    // by OPAQUE draws — so ANY blended draw masks alpha writes automatically
+    // (default blending blends the alpha channel too, dragging a stored 0.35
+    // tag across the composite's 0.42-0.55 threshold). noAlphaWrite remains as
+    // an explicit opt-out for opaque FX quads.
+    const noAW = (opts && opts.noAlphaWrite) || alpha < 1;
     if (noAW) gl.colorMask(true, true, true, false);
     // doubleSided: render back faces too (cull off) — for the wheels + car body,
     // whose single-winding tyre walls must show from every angle without any
@@ -1694,20 +1708,22 @@ void main() {
     gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
     // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
     const reflStr = (opts && opts.reflect) || 0;
-    // SSR inputs bind every frame now — car paint reflects the world even in
-    // dry sessions (the shader's carPx tag gates the work to car pixels).
+    // Depth is ALWAYS bound: the shader's car-paint branch fires on the carPx
+    // tag alone, so on a probe-less path (setup preview never sets frame.proj)
+    // it used to sample whatever texture unit 4 last held, against the
+    // PREVIOUS race's stale matrices. uSsrOk gates the whole branch instead.
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
+    gl.uniform1i(compU.uDepth, 4);
     const haveRefl = frameInvProj && frameProj && frameUpVS;
     if (haveRefl) {
-      gl.activeTexture(gl.TEXTURE4);
-      gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
-      gl.uniform1i(compU.uDepth, 4);
       gl.uniformMatrix4fv(compU.uInvProj, false, frameInvProj);
       gl.uniformMatrix4fv(compU.uProj, false, frameProj);
       gl.uniform3fv(compU.uUpVS, frameUpVS);
-      gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
       gl.uniform3fv(compU.uReflSkyHi, frameSkyHi || [0.05, 0.06, 0.09]);
       gl.uniform3fv(compU.uReflSkyLo, frameSkyLo || [0.02, 0.025, 0.05]);
     }
+    gl.uniform1f(compU.uSsrOk, haveRefl ? 1 : 0);
     gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -1809,6 +1825,7 @@ void main() {
         gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
         gl.bindSampler(0, blockerSampler);
         gl.uniform1i(blockerU.uDepthTex, 0);
+        gl.uniform2f(blockerU.uSrcTexel, 1 / SHADOW_SIZE, 1 / SHADOW_SIZE);
         gl.disable(gl.DEPTH_TEST); setBlend(false);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindSampler(0, null);
