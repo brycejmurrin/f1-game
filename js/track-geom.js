@@ -13,7 +13,13 @@ const TrackGeom = (function () {
   // original look). Exposed to per-track scenery() via api.MAT.
   const MAT = { FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5,
                 FOLIAGE: 6, FABRIC: 7, SAND: 8, GRASS: 9, ROCK: 10, SNOW: 11,
-                ROOF: 12, STONE: 13, RUST: 14 };
+                ROOF: 12, STONE: 13, RUST: 14,
+                // FLAG (15): waving cloth. The lit VERTEX shader displaces these
+                // verts with a travelling sine; the FRACTIONAL part of the stamped
+                // id (15.0..15.4) encodes the per-vertex wave weight (0 = hoist
+                // edge pinned to the pole → 0.4 = free edge, weight 1). Emitted
+                // per-vertex by tracks.js flagQuad, not via out._mat.
+                FLAG: 15 };
 
   // ---------- small vec math (self-contained; doesn't depend on M4/V3) ----------
   function cross(a, b) {

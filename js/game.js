@@ -3655,6 +3655,14 @@ const _gradeDawn  = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0
 const _gradeDay   = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
 const _gradeOut = { shadow: null, hi: null, str: 0 };
 const _presentOpts = {};
+// ── Exhaust heat haze (composite post) ───────────────────────────────────────
+// The player-car draw loop records the tailpipe's world position + plume
+// strength; render() projects it to screen UV just before present() and hands
+// {u, v, str} to the composite pass, which UV-warps a small rising region
+// (COMPOSITE_FS uHaze*). Off on memory-limited phones (mobileTier).
+const _hazeWorld = [0, 0, 0];
+let _hazeStr = 0;
+const _hazeOpts = { u: 0, v: 0, str: 0 };
 function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
@@ -4370,6 +4378,21 @@ function render(dt) {
       W[14] += W[6] * 0.40 - W[10] * 2.63;
       gfx.draw(getExhaustFlame(c.fuelId), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
     }
+    // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
+    // strength for this frame (projected to screen UV just before present()).
+    // Any time of day, throttle-driven via exhaustPop, strongest under active
+    // boost. Skipped on memory-limited phones (mobileTier — same gate as the
+    // other post extras).
+    if (c.isPlayer) {
+      const _hzDep = c.boostOn && c.energy > 0.01 && c.speed > 5;
+      _hazeStr = gfx.mobileTier ? 0 : (c.exhaustPop || 0) * (_hzDep ? 1.0 : 0.45);
+      if (_hazeStr > 0.02) {
+        // Just behind/above the tailpipe (up +0.55, fwd −2.9 on the car frame).
+        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.55 - tmpMat[8] * 2.9;
+        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.55 - tmpMat[9] * 2.9;
+        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.55 - tmpMat[10] * 2.9;
+      }
+    }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
       if ((skid > 0.25 || c.offroad) && c.speed > 10) {
@@ -4620,6 +4643,23 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade; po.ssao = _ao;
   po.godray = _gr; po.contact = _cs; po.reflect = _ssr; po.lampVol = _lampVol; po.mist = _mist;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
+  // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
+  // frame's view-proj to a screen UV for the composite warp. Near-field only —
+  // fades out past ~45 m so TV/orbit long shots stay clean.
+  po.haze = null;
+  if (_hazeStr > 0.02) {
+    const m = _mVP, hx = _hazeWorld[0], hy = _hazeWorld[1], hz = _hazeWorld[2];
+    const cw = m[3] * hx + m[7] * hy + m[11] * hz + m[15];
+    if (cw > 0.1) {
+      const cu = (m[0] * hx + m[4] * hy + m[8] * hz + m[12]) / cw * 0.5 + 0.5;
+      const cv = (m[1] * hx + m[5] * hy + m[9] * hz + m[13]) / cw * 0.5 + 0.5;
+      if (cu > -0.2 && cu < 1.2 && cv > -0.2 && cv < 1.2) {
+        _hazeOpts.u = cu; _hazeOpts.v = cv;
+        _hazeOpts.str = _hazeStr * clamp(1.4 - cw / 40, 0, 1);
+        if (_hazeOpts.str > 0.02) po.haze = _hazeOpts;
+      }
+    }
+  }
   gfx.present(po);
   if (isWetRoad() && rainDrops.length) {
     // Onboard views get water ON the glass (beading drops + wiper) instead of

@@ -2457,6 +2457,28 @@ const Tracks = (function () {
                [1.1, 0.35, 1.0], gl, [aL.r, u, aL.t]);
       }
     };
+    // Waving marshal flag: a two-sided quad hinged on the pole. Each vertex is
+    // stamped MAT.FLAG plus a fractional wave weight (0 at the hoist edge →
+    // 0.4 at the free edge); the lit VERTEX shader (LIT_VS) displaces FLAG
+    // verts along their normal with a travelling sine scaled by that weight,
+    // so the cloth flutters in the wind while the hoist stays pinned.
+    const flagQuad = (c, t, u, w, h, col) => {
+      const nv = norm(cross(t, u));   // face normal (shared by both sides)
+      const push = (reverse) => {
+        const base = out.pos.length / 3;
+        for (const [ft, fu] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+          out.pos.push(c[0] + t[0] * ft * w + u[0] * fu * h,
+                       c[1] + t[1] * ft * w + u[1] * fu * h,
+                       c[2] + t[2] * ft * w + u[2] * fu * h);
+          out.nrm.push(nv[0], nv[1], nv[2]);
+          out.col.push(col[0], col[1], col[2]);
+          out.mat.push(MAT.FLAG + ft * 0.4);   // per-vertex wave weight in the fraction
+        }
+        if (reverse) out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+        else out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      };
+      push(false); push(true);   // both windings → visible from either side
+    };
     // Marshal post / flag bunker: a small orange-roofed box with a pole.
     const marshalPost = (k, side, gap) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
@@ -2466,10 +2488,15 @@ const Tracks = (function () {
       }
       addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
       addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
-      addCyl(out, vadd(p.c, p.r, side * 1.4), 0.08, 4, [0.4, 0.4, 0.42], 4, b);
+      const polePos = vadd(p.c, p.r, side * 1.4);
+      addCyl(out, polePos, 0.08, 4, [0.4, 0.4, 0.42], 4, b);
+      // Marshal flag on the pole — waving cloth (see flagQuad above). Mostly
+      // yellow (the flag a marshal post actually flies), occasionally blue.
+      flagQuad(vadd(polePos, p.u, 3.3), p.t, p.u,
+               1.05, 0.62, hash(k) < 0.72 ? [1.30, 1.02, 0.08] : [0.10, 0.42, 1.25]);
       // Marshal watch-lamp: a small amber beacon on the flag pole after dark so
       // the marshal line dots the circuit like real night-race infrastructure.
-      if (NIGHT) addBox(out, vadd(vadd(p.c, p.r, side * 1.4), p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
+      if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
     };
     // Draw one digit centred at `c`, spanning [w,h] in the (t=horizontal,

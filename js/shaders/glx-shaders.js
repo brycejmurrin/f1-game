@@ -14,6 +14,7 @@ layout(location=3) in float aMat;   // per-vertex material id (0 = FLAT/untextur
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform vec3 uEye;
+uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave
 out vec3 vNrm;
 out vec3 vCol;
 out vec3 vWorldPos;
@@ -21,7 +22,18 @@ out vec3 vObjPos;
 out float vDist;
 flat out float vMat;
 void main() {
-  vec4 wp = uModel * vec4(aPos, 1.0);
+  vec3 pos = aPos;
+  // FLAG material (id 15, aMat 15.0..15.4): cloth wind-wave. The FRACTIONAL
+  // part of aMat encodes a per-vertex wave weight (0 = hoist edge pinned to
+  // the pole, 0.4 → weight 1 = free edge); a travelling two-sine ripple
+  // displaces along the face normal, so marshal flags flutter while every
+  // other material keeps the exact static path (pos == aPos).
+  if (aMat >= 15.0 && aMat < 16.0) {
+    float fw = fract(aMat) * 2.5;
+    float ph = uTime * 5.5 + aPos.x * 1.9 + aPos.z * 1.9;
+    pos += aNrm * ((sin(ph) * 0.085 + sin(ph * 2.17 + 1.3) * 0.045) * fw);
+  }
+  vec4 wp = uModel * vec4(pos, 1.0);
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
   vNrm = mat3(uModel) * aNrm;     // is glued to the panels, not streaming in world.
@@ -206,7 +218,7 @@ float matBumpHeight(int mid, vec2 uv) {
 // existing ground micro-relief above. GLASS (3) is intentionally left flat —
 // bump would blur its mirror-reflection read.
 void applyMaterialNormal(int mid, inout vec3 N, float vd) {
-  if (mid == 0 || mid == 3) return;
+  if (mid == 0 || mid == 3 || mid == 15) return;   // FLAT/GLASS/FLAG: no procedural bump
   float bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (bumpFade <= 0.005) return;
   bool wallLike = mid == 1 || mid == 2 || mid == 4 || mid == 5 || mid == 7 || mid == 12 || mid == 13 || mid == 14;
@@ -1838,6 +1850,9 @@ uniform float uWhitePoint;   // highlight roll-off knee (def 1.0)
 uniform float uSpeedBlur;    // radial speed blur amount, 0 = off
 uniform sampler2D uDirt;     // procedural lens-dirt smudge map (generated at init)
 uniform float uLensDirt;     // lens-dirt veil strength (IMAGE & COLOUR knob, def 0.15)
+uniform vec2 uHazeUV;        // player tailpipe screen UV (heat-haze plume anchor)
+uniform float uHazeStr;      // exhaust heat-haze strength (0 = off; boost pushes ~1)
+uniform float uHazeTime;     // seconds — scrolls the shimmer upward
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
@@ -1904,7 +1919,20 @@ vec3 colourGrade(vec3 c) {
 }
 
 void main() {
-  vec4 scn = texture(uScene, vUV);   // one fetch: .rgb colour + .a SSR car tag
+  // EXHAUST HEAT HAZE: a small rising shimmer plume anchored just above the
+  // player's tailpipe screen position — refracts (UV-warps) the scene fetch
+  // inside a soft elliptical region. Gaussian falloff keeps the warp local;
+  // the travelling phase (uHazeTime) makes it boil upward frame to frame.
+  vec2 hazeUV = vUV;
+  if (uHazeStr > 0.002) {
+    vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.045)) * vec2(2.4, 1.1);   // tall plume, centred above the pipe
+    float hm = exp(-dot(hd, hd) * 55.0) * uHazeStr;
+    if (hm > 0.003) {
+      float hp = vUV.y * 90.0 - uHazeTime * 11.0;
+      hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+    }
+  }
+  vec4 scn = texture(uScene, hazeUV);   // one fetch: .rgb colour + .a SSR car tag
   vec3 c = scn.rgb;
   vec2 caDir = vUV - 0.5;
 
@@ -1912,8 +1940,8 @@ void main() {
   // quadratically toward the frame corners (real lens dispersion). 0 = off.
   if (uChromAb > 0.001) {
     float caAmt = uChromAb * 0.004 * dot(caDir, caDir);
-    c.r = texture(uScene, vUV + caDir * caAmt).r;
-    c.b = texture(uScene, vUV - caDir * caAmt).b;
+    c.r = texture(uScene, hazeUV + caDir * caAmt).r;
+    c.b = texture(uScene, hazeUV - caDir * caAmt).b;
   }
 
   // SPEED BLUR: radial smear from the frame centre outward, growing with the
