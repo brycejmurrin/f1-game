@@ -1997,6 +1997,68 @@ function buildStandings() {
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
 const ranked = [];
+// ── Live weather switch (shared path) ────────────────────────────────────────
+// The single way weather changes mid-session: sets raceWeather, re-seeds the
+// rain overlay, flips the rain audio and re-applies the frame lighting. Used by
+// __apex.weather() and the dynamic weather-arc progression below, so every
+// consumer (rain layer, audio, lighting, AI grip, wetness ramp target) follows
+// no matter who initiated the change.
+function setWeatherLive(w) {
+  raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
+  if (isWetRoad()) {
+    initRainDrops();   // always re-seed: the drizzle↔storm tiers differ in density
+    if (rainCanvas) rainCanvas.style.display = "block";
+  } else if (rainCanvas) {
+    rainCanvas.style.display = "none";
+  }
+  if (soundOn) { if (isWetRoad()) GameAudio.startRain(isRaining() ? undefined : 0.022); else GameAudio.stopRain(); }
+  // Re-apply the frame lighting NOW: without this a live weather change only
+  // moved the wetness ramp / rain overlay — the cloud cover, muted sun,
+  // ambient lift, fog density and exposure branches in applyRaceSettings
+  // silently kept the previous weather (fog looked like a clear day).
+  if (track) applyRaceSettings();
+  return raceWeather;
+}
+
+// ── Dynamic weather progression (weather arc) ────────────────────────────────
+// Optional scripted per-race weather transition — OFF by default (no arc unless
+// started via __apex.weatherArc(from, to, secs); a race-settings surface can
+// hook in later). The arc walks the dry↔wet↔rain ladder stage by stage over its
+// duration (lateral conditions like fog/overcast jump direct), flipping each
+// stage through setWeatherLive() so the rain overlay/audio/lighting/AI grip all
+// follow, and frame.wetness ramps via the existing per-frame ramp. Ticked from
+// update() on the fixed physics clock, so it also runs under __apex.headless.
+let weatherArc = null;   // { from, to, t, dur, seq }
+const _WX_LADDER = ["dry", "wet", "rain"];
+const _WX_VALID = ["dry", "wet", "rain", "overcast", "fog"];
+function weatherArcSeq(from, to) {
+  const a = _WX_LADDER.indexOf(from), b = _WX_LADDER.indexOf(to);
+  if (a >= 0 && b >= 0 && a !== b) {
+    const seq = [];
+    for (let i = a; (a < b) ? i <= b : i >= b; i += (a < b) ? 1 : -1) seq.push(_WX_LADDER[i]);
+    return seq;   // e.g. dry→rain = [dry, wet, rain]; rain→dry = [rain, wet, dry]
+  }
+  return [from, to];
+}
+function startWeatherArc(from, to, dur) {
+  if (_WX_VALID.indexOf(from) < 0 || _WX_VALID.indexOf(to) < 0 || from === to) return null;
+  weatherArc = { from, to, t: 0, dur: Math.max(1, dur || 60), seq: weatherArcSeq(from, to) };
+  if (raceWeather !== from) setWeatherLive(from);
+  return weatherArc;
+}
+function tickWeatherArc(dt) {
+  if (!weatherArc) return;
+  weatherArc.t += dt;
+  const f = Math.min(1, weatherArc.t / weatherArc.dur);
+  const seq = weatherArc.seq;
+  const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
+  if (raceWeather !== want) setWeatherLive(want);
+  if (f >= 1) {
+    if (raceWeather !== weatherArc.to) setWeatherLive(weatherArc.to);
+    weatherArc = null;   // arc complete — weather stays at `to`
+  }
+}
+
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
@@ -2025,6 +2087,7 @@ function update(dt) {
   }
   if (state !== "race") return;
   raceT += dt;
+  tickWeatherArc(dt);   // dynamic weather progression (no-op unless an arc is armed)
   // ranks by progress (reuse module-scope buffer, no per-step allocation)
   ranked.length = 0;
   for (const c of cars) ranked.push(c);
@@ -7541,20 +7604,22 @@ window.__apex = {
   // rain + lightning. Toggles the rain layer + audio live for mid-race changes.
   weather(w) {
     if (w === undefined) return raceWeather;
-    raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
-    if (isWetRoad()) {
-      initRainDrops();   // always re-seed: the drizzle↔storm tiers differ in density
-      if (rainCanvas) rainCanvas.style.display = "block";
-    } else if (rainCanvas) {
-      rainCanvas.style.display = "none";
+    return setWeatherLive(w);   // shared live path (rain layer, audio, lighting)
+  },
+
+  // Dynamic weather progression: weatherArc(from, to, seconds) arms a scripted
+  // transition that walks the dry↔wet↔rain ladder over `seconds` of race time
+  // (fog/overcast jump direct), flipping each stage through the same live
+  // weather path as weather(w). weatherArc() → current arc snapshot or null;
+  // weatherArc(null) cancels an armed arc (weather stays wherever it got to).
+  weatherArc(from, to, seconds) {
+    if (from === undefined) {
+      return weatherArc ? { from: weatherArc.from, to: weatherArc.to, t: weatherArc.t,
+                            dur: weatherArc.dur, weather: raceWeather, wetness: frame.wetness || 0 } : null;
     }
-    if (soundOn) { if (isWetRoad()) GameAudio.startRain(isRaining() ? undefined : 0.022); else GameAudio.stopRain(); }
-    // Re-apply the frame lighting NOW: without this a live weather change only
-    // moved the wetness ramp / rain overlay — the cloud cover, muted sun,
-    // ambient lift, fog density and exposure branches in applyRaceSettings
-    // silently kept the previous weather (fog looked like a clear day).
-    if (track) applyRaceSettings();
-    return raceWeather;
+    if (from === null || from === false) { weatherArc = null; return null; }
+    const arc = startWeatherArc(from, to, seconds);
+    return arc ? { from: arc.from, to: arc.to, t: arc.t, dur: arc.dur, weather: raceWeather } : null;
   },
 
   // Live time-of-day change without reloading assets. Sets the session time and
