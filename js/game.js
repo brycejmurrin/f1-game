@@ -4661,15 +4661,17 @@ function render(dt) {
     // strength for this frame (projected to screen UV just before present()).
     // Any time of day, throttle-driven via exhaustPop, strongest under active
     // boost. Skipped on memory-limited phones (mobileTier — same gate as the
-    // other post extras).
+    // other post extras). Anchor is pushed well behind/above the body so the
+    // composite warp (which already skips car-paint pixels) sits in the air
+    // wake rather than on the rear wing from chase cam.
     if (c.isPlayer) {
       const _hzDep = c.boostOn && c.energy > 0.01 && c.speed > 5;
       _hazeStr = gfx.mobileTier ? 0 : (c.exhaustPop || 0) * (_hzDep ? 1.0 : 0.45);
       if (_hazeStr > 0.02) {
-        // Just behind/above the tailpipe (up +0.55, fwd −2.9 on the car frame).
-        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.55 - tmpMat[8] * 2.9;
-        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.55 - tmpMat[9] * 2.9;
-        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.55 - tmpMat[10] * 2.9;
+        // Behind/above the tailpipe (up +0.85, fwd −3.5 on the car frame).
+        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.85 - tmpMat[8] * 3.5;
+        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.85 - tmpMat[9] * 3.5;
+        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.85 - tmpMat[10] * 3.5;
       }
     }
     if (c.isPlayer && state === "race") {

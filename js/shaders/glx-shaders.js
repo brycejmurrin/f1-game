@@ -2112,13 +2112,20 @@ void main() {
   // player's tailpipe screen position — refracts (UV-warps) the scene fetch
   // inside a soft elliptical region. Gaussian falloff keeps the warp local;
   // the travelling phase (uHazeTime) makes it boil upward frame to frame.
+  // Skip the warp on car-paint pixels (SSR alpha tag): from chase cam the
+  // plume sits on the rear body, and warping those UVs made the car look
+  // wavy whenever throttle was held (exhaustPop > 0). Air/road behind still
+  // shimmers.
   vec2 hazeUV = vUV;
   if (uHazeStr > 0.002) {
-    vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.045)) * vec2(2.4, 1.1);   // tall plume, centred above the pipe
-    float hm = exp(-dot(hd, hd) * 55.0) * uHazeStr;
-    if (hm > 0.003) {
-      float hp = vUV.y * 90.0 - uHazeTime * 11.0;
-      hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+    float carHere = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
+    if (carHere < 0.25) {
+      vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.08)) * vec2(3.2, 1.0);   // tall plume, centred above the pipe
+      float hm = exp(-dot(hd, hd) * 70.0) * uHazeStr;
+      if (hm > 0.003) {
+        float hp = vUV.y * 90.0 - uHazeTime * 11.0;
+        hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+      }
     }
   }
   vec4 scn = texture(uScene, hazeUV);   // one fetch: .rgb colour + .a SSR car tag

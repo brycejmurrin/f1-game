@@ -53,10 +53,11 @@ const GameAudio = (function () {
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
   const MENU_TRACK = "assets/music/menu.mp3";
+  // Race currently shares the menu track (race_a/b + night kept on disk for later).
   const RACE_TRACKS = [
-    "assets/music/race_a.wav",   // bs-mm-metal (CC0)
-    "assets/music/race_b.wav",   // bs-p1-ps-md (CC0)
-    "assets/music/night.wav",    // bs-cyb-city-night — race / night circuits (CC0)
+    MENU_TRACK,
+    MENU_TRACK,
+    MENU_TRACK,
   ];
 
   let listenersAttached = false;
