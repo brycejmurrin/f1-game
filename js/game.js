@@ -886,6 +886,12 @@ const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaW
 // are depth-tested but write no depth, so drawing them last is visually identical.
 const _shadowMats = [];   // pool of Float32Array(16), reused across frames
 let _shadowCount = 0;
+// Real car sun-shadows: pooled { mesh, model } slots handed to gfx.shadowCasters()
+// each frame — the moving cars are re-composited over the snap-cached static
+// shadow depth (see the caster block after the shadow pass in render()). These
+// are NOT the blob-shadow mats above; the blob pass stays on as the contact term.
+const _casterItems = [];                  // pool of { mesh, model: Float32Array(16) }
+const _casterIdx = [], _casterD2 = [];    // nearest-N selection scratch (indices + dist²)
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
 // one for the render loop (both called once per car per frame) so banking() no
 // longer allocates a fresh object ~23×/frame.
@@ -3910,6 +3916,73 @@ function render(dt) {
       if (_shKey > 0.35) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
+  }
+
+  // Car casters → sun shadow map. The static map above is snap-cached, but cars
+  // move every frame, so gfx.shadowCasters() re-composites the nearest cars onto
+  // a per-frame copy of the static depth (no stale car-shadow trails). Read-only
+  // over physics state — matrices are render-side, like the body draw below.
+  // Mobile tier keeps blob shadows only (the per-frame depth blit is too hot
+  // there); blob shadows also stay ON for everyone as the contact/ambient term.
+  if (track && gfx.shadowCasters && !gfx.mobileTier) {
+    let _cCount = 0;
+    // Same key-brightness visibility gate as the prop pass above: don't pay for
+    // silhouettes the shadow fade has already dissolved to nothing.
+    const _cKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+    if (_cKey > 0.35) {
+      // Pick the nearest casters inside the shadow box (cap 8 — car shadows past
+      // the receiver-distance fade would cost silhouettes nobody can see).
+      const _cRange = LT.shadowRange || 80, _cR2 = _cRange * _cRange;
+      const CAST_MAX = 8;
+      let _cn = 0;
+      for (let ci = 0; ci < cars.length; ci++) {
+        const cc = cars[ci];
+        Tracks.sample(track, cc.s, smp2);
+        const dx = smp2.p[0] + smp2.r[0] * cc.x - camEye[0];
+        const dz = smp2.p[2] + smp2.r[2] * cc.x - camEye[2];
+        const d2 = dx * dx + dz * dz;
+        if (d2 > _cR2) continue;
+        _casterIdx[_cn] = ci; _casterD2[_cn] = d2; _cn++;
+      }
+      if (_cn > CAST_MAX) {   // partial selection sort: keep the CAST_MAX nearest
+        for (let a = 0; a < CAST_MAX; a++) {
+          let m = a;
+          for (let b = a + 1; b < _cn; b++) if (_casterD2[b] < _casterD2[m]) m = b;
+          if (m !== a) {
+            const ti = _casterIdx[a]; _casterIdx[a] = _casterIdx[m]; _casterIdx[m] = ti;
+            const td = _casterD2[a]; _casterD2[a] = _casterD2[m]; _casterD2[m] = td;
+          }
+        }
+        _cn = CAST_MAX;
+      }
+      for (let a = 0; a < _cn; a++) {
+        const cc = cars[_casterIdx[a]];
+        let slot = _casterItems[a];
+        if (!slot) { slot = { mesh: null, model: new Float32Array(16) }; _casterItems[a] = slot; }
+        // Interpolated arc + smoothed lateral (as the body draw), heading-only
+        // basis — pitch/roll wobble is silhouette-irrelevant in a 2048² map.
+        const cS = lerpS(cc.rPrevS, cc.s, renderAlpha);
+        const rX = (cc.xVis !== undefined) ? cc.xVis : cc.x;
+        Tracks.sample(track, cS, smp2);
+        tmpP[0] = smp2.p[0] + smp2.r[0] * rX;
+        tmpP[1] = smp2.p[1];
+        tmpP[2] = smp2.p[2] + smp2.r[2] * rX;
+        const cy = Math.cos(cc.yawVis || 0), sy = Math.sin(cc.yawVis || 0);
+        for (let i = 0; i < 3; i++) {
+          tmpF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
+          tmpR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
+        }
+        tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
+        tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
+        tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+        basisMat(tmpR, tmpU, tmpF, tmpP, slot.model);
+        slot.mesh = teamMesh(cc.team);
+      }
+      _cCount = _cn;
+    }
+    // Always called (count 0 when shadows are invisible): the renderer does one
+    // clean re-blit when the casters vanish so no silhouette lingers in the map.
+    gfx.shadowCasters(_casterItems, _cCount);
   }
 
   // ── Sky animation & weather FX ──────────────────────────────────────────

@@ -44,6 +44,9 @@
  * Frame protocol (per rendered frame, in this order):
  *   shadowBegin(lightVP) -> castShadow(mesh,model) / castShadowChunked(mesh,model)
  *     -> shadowEnd()
+ *   shadowCasters(items, count)   per-frame moving-caster overlay: re-composite
+ *     the cached static shadow depth + rasterise items[i]={mesh,model} on top
+ *     (GLX; the WGX backend stubs it as a no-op)
  *   [optional env probe, up to one cube face per frame]:
  *     envFaceBegin(face, eye, frame) -> (redraw world) -> envFaceEnd(face)
  *     envProbeReady()->bool ; envProbeReset()

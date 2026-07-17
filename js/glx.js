@@ -103,6 +103,14 @@ const GLX = (function () {
 
   let depthProg = null, depthU = null;
   let shadowMapFBO = null, shadowMapTex = null;
+  // Static-scene depth copy for the per-frame car-caster overlay: the snap-cached
+  // terrain/road/props render lands in the STATIC target, and shadowCasters()
+  // re-composites it into the SAMPLED map (blit + redraw the moving cars on top)
+  // every frame — real car sun shadows without re-rasterising the whole scene,
+  // and without stale car silhouettes baking into the cached map.
+  let shadowStaticFBO = null, shadowStaticTex = null;
+  let shadowOverlayOk = false;   // static/sampled pair complete → shadowCasters() live
+  let shadowOverlayDirty = false; // sampled map holds a car overlay (needs a clean blit when casters vanish)
   let shadowLightVP = new Float32Array(16);
   const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier
   let shadowEnabled = false;
@@ -534,7 +542,56 @@ const GLX = (function () {
         }
       }
     }
+
+    // Car-caster overlay: second depth target with the SAME size/format as the
+    // sampled map so a depth blitFramebuffer between them is legal. No compare
+    // mode / linear filter needed — it's only ever a blit SOURCE. Skipped on the
+    // mobile tier (game.js never calls shadowCasters there; save the 4-12 MB).
+    shadowOverlayOk = false;
+    if (ok && !MOBILE_TIER) {
+      shadowStaticTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, shadowStaticTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
+        gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      shadowStaticFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowStaticFBO);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowStaticTex, 0);
+      shadowOverlayOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
     return ok;
+  }
+
+  // Copy the snap-cached static scene depth into the sampled shadow map (the
+  // base layer the per-frame car casters draw on top of). Formats/sizes match
+  // by construction; nothing else (scissor etc.) is enabled that affects blits.
+  function blitStaticDepth() {
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, shadowStaticFBO);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, shadowMapFBO);
+    gl.blitFramebuffer(0, 0, SHADOW_SIZE, SHADOW_SIZE, 0, 0, SHADOW_SIZE, SHADOW_SIZE,
+      gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+  }
+
+  // Refresh the PCSS-lite blocker map from the current sampled shadow depth.
+  // Shared by shadowEnd (snap-cache re-render) and shadowCasters (per-frame
+  // car overlay) so the blocker search always sees the map that's bound.
+  function refreshBlocker() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
+    gl.viewport(0, 0, 512, 512);
+    useProg(blockerProg);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
+    gl.bindSampler(0, blockerSampler);
+    gl.uniform1i(blockerU.uDepthTex, 0);
+    gl.uniform2f(blockerU.uSrcTexel, 1 / SHADOW_SIZE, 1 / SHADOW_SIZE);
+    gl.disable(gl.DEPTH_TEST); setBlend(false);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindSampler(0, null);
+    gl.enable(gl.DEPTH_TEST);
   }
 
   function init(canvasEl) {
@@ -1933,7 +1990,9 @@ const GLX = (function () {
       // before begin(), so declare the state explicitly rather than assuming it.
       setDepthMask(true);
       shadowLightVP.set(lightVP);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
+      // With the car-caster overlay available, the static scene renders into its
+      // own depth target; shadowEnd publishes it to the sampled map with a blit.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowOverlayOk ? shadowStaticFBO : shadowMapFBO);
       gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
@@ -1949,22 +2008,44 @@ const GLX = (function () {
     shadowEnd() {
       if (!shadowEnabled) return;
       gl.enable(gl.CULL_FACE);
+      // Publish the freshly-rendered static depth into the sampled map, so the
+      // sampled map is valid even on frames where no car overlay follows.
+      if (shadowOverlayOk) { blitStaticDepth(); shadowOverlayDirty = false; }
       // Refresh the PCSS blocker map from the just-rendered shadow depth.
       // Zero per-frame cost: shadowEnd only runs when the snap cell changed.
-      if (pcssEnabled) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
-        gl.viewport(0, 0, 512, 512);
-        useProg(blockerProg);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, shadowMapTex);
-        gl.bindSampler(0, blockerSampler);
-        gl.uniform1i(blockerU.uDepthTex, 0);
-        gl.uniform2f(blockerU.uSrcTexel, 1 / SHADOW_SIZE, 1 / SHADOW_SIZE);
-        gl.disable(gl.DEPTH_TEST); setBlend(false);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.bindSampler(0, null);
-        gl.enable(gl.DEPTH_TEST);
+      if (pcssEnabled) refreshBlocker();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
+      gl.viewport(0, 0, width, height);
+    },
+    // Per-frame moving-caster overlay: re-composite the snap-cached static depth
+    // (blit) and rasterise the given casters on top, then refresh the blocker
+    // map. items[i] = { mesh, model } (pooled by the caller); count = live slots.
+    // Falls back to a no-op when the split static target isn't available
+    // (mobile tier / FBO incomplete) — callers keep their blob shadows anyway.
+    shadowCasters(items, count) {
+      if (!shadowEnabled || !shadowOverlayOk) return;
+      // count 0 with a clean map: nothing to do. count 0 with a stale overlay:
+      // do ONE clean re-blit so the last car silhouettes don't linger.
+      if (!count && !shadowOverlayDirty) return;
+      setDepthMask(true);
+      blitStaticDepth();
+      shadowOverlayDirty = count > 0;
+      if (count) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
+        gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
+        useProg(depthProg);
+        gl.uniformMatrix4fv(depthU.uLightVP, false, shadowLightVP);
+        gl.disable(gl.CULL_FACE);  // as shadowBegin: back faces avoid peter-panning
+        for (let i = 0; i < count; i++) {
+          const it = items[i];
+          if (!it || !it.mesh) continue;
+          bindVAO(it.mesh.vao);
+          gl.uniformMatrix4fv(depthU.uModel, false, it.model);
+          gl.drawElements(gl.TRIANGLES, it.mesh.count, it.mesh.indexType, 0);
+        }
+        gl.enable(gl.CULL_FACE);
       }
+      if (pcssEnabled) refreshBlocker();
       gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       gl.viewport(0, 0, width, height);
     },

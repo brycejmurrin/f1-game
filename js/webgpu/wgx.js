@@ -1751,6 +1751,10 @@ const WGX = (function () {
       castShadow,
       castShadowChunked,
       shadowEnd,
+      // Per-frame moving-caster overlay (GLX re-composites cars onto a cached
+      // static depth). Not implemented on the WebGPU path yet — no-op keeps the
+      // backend surface uniform; cars keep their blob shadows.
+      shadowCasters() {},
 
       // ── Env probe (Phase 4b) ──
       envFaceBegin,
