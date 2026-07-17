@@ -14,7 +14,7 @@
 // Purely geometric — no rendering, so it runs under SwiftShader in CI.
 import { test, expect } from "@playwright/test";
 
-const TRACKS = [
+const TRACKS = process.env.TRACK ? [process.env.TRACK] : [
   "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
   "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
   "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
@@ -48,7 +48,6 @@ const BASELINE = {
   // their actual terrain. Keep the resulting overlaps visible until the
   // circuit-specific migration pass removes or repositions them.
   bahrain: 4.8,
-  madrid: 3.9,
   miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
   mexico: 4.1, mexico_note: "Foro Sol stadium — track runs through by design",
   // street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the

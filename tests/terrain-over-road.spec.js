@@ -7,7 +7,7 @@
 // sample points across the whole lap — purely geometric, no rendering.
 import { test, expect } from "@playwright/test";
 
-const TRACKS = [
+const TRACKS = process.env.TRACK ? [process.env.TRACK] : [
   "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
   "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
   "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",

@@ -603,3 +603,67 @@ test.describe("shared track foundation diagnostics", () => {
     expect(result.elevation.highFrac).toBeCloseTo(0.62, 1);
   });
 });
+
+test.describe("Madrid track foundation migration", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("owns safe grounded scenery with the intended urban elevation profile", async ({ page }) => {
+    test.setTimeout(300000);
+    await load(page, "madrid");
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((track) => track.id === "madrid");
+      const profile = window.__apex.trackProfile(240);
+      const min = profile.reduce((a, b) => a.y < b.y ? a : b);
+      const max = profile.reduce((a, b) => a.y > b.y ? a : b);
+      return {
+        sceneryCoordinates: def.sceneryCoordinates,
+        terrainOuter: def.terrainOuter,
+        dressingExclusions: def.dressingExclusions,
+        elevation: { range: max.y - min.y, maxFrac: max.frac },
+        walls: window.__apex.wallStats(),
+        day: {
+          geometry: window.__apex.geometryDiagnostics(),
+          models: window.__apex.modelDiagnostics(),
+        },
+      };
+    });
+
+    expect(result.sceneryCoordinates).toBe("racing");
+    expect(result.terrainOuter).toBeGreaterThanOrEqual(48);
+    expect(result.dressingExclusions).toContainEqual(
+      expect.objectContaining({ kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 }),
+    );
+    expect(result.elevation.range).toBeGreaterThanOrEqual(20);
+    expect(result.elevation.range).toBeLessThanOrEqual(32);
+    expect(result.elevation.maxFrac).toBeGreaterThan(0.30);
+    expect(result.elevation.maxFrac).toBeLessThan(0.50);
+    expect(result.walls.anyNaN).toBe(false);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.90);
+
+    const assertSession = (session) => {
+      expect(session.geometry.every((entry) => entry.ok)).toBe(true);
+      expect(session.geometry.find((entry) => entry.name === "props").vertices).toBeLessThan(250000);
+      const hard = [...session.models.invalid, ...session.models.suppressed, ...session.models.unsafe]
+        .filter((entry) => entry.required);
+      expect(hard).toEqual([]);
+      const ids = session.models.emitted.map((entry) => entry.id);
+      expect(ids).toEqual(expect.arrayContaining([
+        "madrid-ifema-hall",
+        "madrid-monumental",
+        "madrid-motorway-overpass",
+      ]));
+      for (const span of session.models.emitted.filter((entry) => entry.overhead))
+        expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+    };
+    assertSession(result.day);
+
+    const night = await page.evaluate(() => {
+      window.__apex.race("madrid", "night", "dry");
+      return {
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+      };
+    });
+    assertSession(night);
+  });
+});
