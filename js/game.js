@@ -2250,7 +2250,16 @@ function resolveCollisions(ranked, dt) {
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
         const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-        if (penLat < penLong) {
+        // Closing into a nest at the lateral slop must be rear-end. Least-
+        // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
+        // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
+        // Scoped to player contacts + near-slop nests so AI↔AI packs don't
+        // dump momentum on every mild close.
+        const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
+        const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
+        const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+        const sideContact = penLat < penLong && !forceRear;
+        if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
           // both cars "in contact" so the AI eases off steering this way and
           // stops fighting the push (the cause of the side-by-side vibration).
@@ -2258,7 +2267,9 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          a.speed *= rubScrub; b.speed *= rubScrub;   // barely scrub speed on a side rub
+          // Only scrub when we actually pushed — at-slop contact with corr=0 used
+          // to bleed speed forever while cars stayed longitudinally nested.
+          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
         } else {
@@ -2305,7 +2316,12 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-      if (penLat < penLong) {
+      // Match the relaxation pass for player nest-edge contacts.
+      const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
+      const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
+      const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+      const sideContact = penLat < penLong && !forceRear;
+      if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
@@ -2926,17 +2942,23 @@ function updateCar(c, dt, ranked) {
 
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
-  const oldS = c._prevS ?? c.s;
+  let oldS = c._prevS ?? c.s;
   if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
   // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
   // coupled to s, and going backwards (a spin/reverse) correctly DECREASES prog
   // instead of cheating progress forward.
   const L = track.total;
-  let ds;
+  let ds = c.s - oldS;
+  if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap
+  
+  // If ds is huge, the car was teleported (jump/park). Reset to prevent glitches.
+  if (Math.abs(ds) > 20) {
+    ds = c.speed * dt;
+    oldS = wrapS(c.s - ds);
+  }
+
   if (c.isPlayer) {
-    ds = c.s - oldS;
-    if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap
     c.prog += ds;
   } else {
     ds = c.speed * dt;
