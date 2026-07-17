@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig, devices } from "@playwright/test";
 import fs from "fs";
+import os from "os";
 
 // Per-run server port so several `playwright test` invocations can run at the
 // same time without sharing (and tearing down) each other's static server —
@@ -20,6 +21,38 @@ const CHROMIUM_PATH =
   process.env.PW_CHROMIUM ||
   (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
 
+// Shared Chromium launch (SwiftShader software-GL). Both projects use it — the
+// "headless"/"render" split is about worker concurrency, not GL capability.
+const LAUNCH = {
+  ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  args: [
+    "--use-angle=swiftshader",
+    "--enable-unsafe-webgpu",
+    "--disable-background-timer-throttling",
+    "--disable-renderer-backgrounding",
+  ],
+};
+
+// The render suite: specs that take screenshots / pixel-diffs, drive real GL
+// rendering, or assert DOM visibility. SwiftShader renders on the CPU, so past
+// ~4-6 concurrent renderers a 16-core box THRASHES (measured) rather than speeds
+// up. These run in the "render" project (cap its workers via
+// `--project=render --workers=4`). Everything NOT in this list is a headless
+// physics/geometry/hook/data spec that scales wide — the "headless" project.
+// Keep this list exhaustive against tests/*.spec.js (a coverage-audit npm script
+// asserts every spec lands in exactly one project).
+const RENDER_SPECS = [
+  "dev-tools", "f1-track-accuracy", "hud-audit", "lighting-ab",
+  "parts-budget", "parts-catalog", "parts-persistence",
+  "ui-audit", "ui-button-touch", "ui-desktop",
+  "tracks-visual", "webgl-probes", "camera", "smoke", "season", "time-trial",
+].map((n) => `**/${n}.spec.js`);
+
+// Default worker cap: SwiftShader is CPU-bound, so cap at ~half the cores (min 4)
+// to avoid the render-thrash the old `undefined` (= 50% cores, but unbounded by
+// render cost) allowed. Override per run with --workers=N.
+const WORKERS = process.env.CI ? 2 : Math.max(4, Math.floor((os.cpus().length || 8) / 4));
+
 export default defineConfig({
   testDir: "./tests",
   // Scratch/scan suites are ad-hoc investigation scripts, not part of the
@@ -27,8 +60,12 @@ export default defineConfig({
   testIgnore: ["**/inspect/**", "**/blank-scan/**", "**/galleries/**"],
   globalSetup: './tests/global-setup.js',
   fullyParallel: true,
-  workers: process.env.CI ? 2 : undefined,
-  retries: 1,
+  workers: WORKERS,
+  // retries:1 hides flakiness the deterministic (mocked network, headless
+  // obs/act/reset, geometry) suite is designed to avoid — surface it locally,
+  // keep one retry in CI for genuine infra blips. live-reporter reports flaky
+  // (passed-on-retry) counts either way.
+  retries: process.env.CI ? 1 : 0,
   timeout: 120_000,
   outputDir: `test-results${SUF}`,
   use: {
@@ -39,19 +76,19 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        launchOptions: {
-          ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
-          args: [
-            "--use-angle=swiftshader",
-            "--enable-unsafe-webgpu",
-            "--disable-background-timer-throttling",
-            "--disable-renderer-backgrounding",
-          ],
-        },
-      },
+      // Physics / geometry / hooks / data specs — assertion-only, scale wide.
+      // Everything NOT in RENDER_SPECS. Run alone (fast) with:
+      //   npx playwright test --project=headless --workers=8
+      name: "headless",
+      testIgnore: RENDER_SPECS,
+      use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
+    },
+    {
+      // Screenshot / GL-heavy / DOM specs — cap workers to avoid SwiftShader
+      // CPU thrash:  npx playwright test --project=render --workers=4
+      name: "render",
+      testMatch: RENDER_SPECS,
+      use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
   ],
   webServer: {
