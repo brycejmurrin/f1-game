@@ -299,7 +299,13 @@ button:active { background: rgba(255, 255, 255, 0.2); }
   #sel-preview-elev { height: 22px; margin-top: 4px; }
   #sel-preview-facts { justify-content: flex-start; }
   /* Track list scrolls independently so it's visible without scrolling the whole panel */
-  #sel-tracks { max-height: 220px; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+  #sel-tracks {
+    max-height: 220px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* ---------- track picker: compact text rows (no per-item mini-maps) ---------- */
@@ -312,6 +318,17 @@ button:active { background: rgba(255, 255, 255, 0.2); }
      220px max-height and unscrollable. Same idiom as the dialog base rule. */
   overflow-x: hidden;
   margin-top: 4px;
+}
+/* Portrait tablets sit between the phone and 900px desktop layouts. Without a
+   height constraint their 24-row list expands in full, so only #select scrolls. */
+@media (orientation: portrait) and (min-width: 521px) and (max-width: 899px) {
+  #sel-tracks {
+    max-height: min(32dvh, 320px);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;
