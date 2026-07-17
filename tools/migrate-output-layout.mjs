@@ -3,7 +3,6 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
-  renameSync,
   rmSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -52,16 +51,27 @@ function availableDestination(wanted) {
 
 function movePreserving(source, wanted) {
   if (!existsSync(source)) return;
-  const destination = availableDestination(wanted);
-  console.log(`${APPLY ? "move" : "would move"} ${source} -> ${destination}`);
-  if (!APPLY) return;
-  mkdirSync(dirname(destination), { recursive: true });
-  try {
-    renameSync(source, destination);
-  } catch (error) {
-    if (error?.code !== "EXDEV") throw error;
-    cpSync(source, destination, { recursive: true, errorOnExist: true });
-    rmSync(source, { recursive: true });
+  if (!APPLY) {
+    const destination = availableDestination(wanted);
+    console.log(`would move ${source} -> ${destination}`);
+    return;
+  }
+  for (;;) {
+    const destination = availableDestination(wanted);
+    console.log(`move ${source} -> ${destination}`);
+    mkdirSync(dirname(destination), { recursive: true });
+    try {
+      cpSync(source, destination, {
+        recursive: true,
+        errorOnExist: true,
+        force: false,
+      });
+      rmSync(source, { recursive: true });
+      return;
+    } catch (error) {
+      if (error?.code === "EEXIST") continue;
+      throw error;
+    }
   }
 }
 

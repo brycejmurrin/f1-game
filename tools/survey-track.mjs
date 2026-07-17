@@ -19,16 +19,23 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
+import {
+  assertSafePathToken,
+  resolveContainedChild,
+  resolveRepoDefault,
+} from "./output-paths.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
 const { chromium } = require("playwright");
 
-const [id, label = "survey", fracsArg] = process.argv.slice(2);
-if (!id) { console.error("usage: survey-track.mjs <id> [label] [fracs]"); process.exit(2); }
+const [idArg, labelArg = "survey", fracsArg] = process.argv.slice(2);
+if (!idArg) { console.error("usage: survey-track.mjs <id> [label] [fracs]"); process.exit(2); }
+const id = assertSafePathToken(idArg, "track id");
+const label = assertSafePathToken(labelArg, "label");
 const FRACS = (fracsArg || "0,0.25,0.5,0.75").split(",").map(Number);
 const LATS = [8, 12, 20, 30, 45, 70, 110];   // lateral metres for the ground probe
-const OUT = `${ROOT}/scratch/captures/survey-track/${id}`;
+const OUT = resolveRepoDefault(ROOT, "scratch", "captures", "survey-track", id);
 mkdirSync(OUT, { recursive: true });
 
 const freePort = () => new Promise((res, rej) => {
@@ -74,7 +81,11 @@ try {
   async function shot(name, fn, arg) {
     await page.evaluate(fn, arg);
     await sleep(220);
-    const path = `${OUT}/${label}-${name}.png`;
+    const path = resolveContainedChild(
+      OUT,
+      `${label}-${name}.png`,
+      "survey screenshot path"
+    );
     const box = await page.locator("canvas#game").boundingBox();
     const buf = box
       ? await page.screenshot({ path, clip: box, timeout: 60000 })

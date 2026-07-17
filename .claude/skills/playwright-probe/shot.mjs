@@ -10,6 +10,10 @@ import { createRequire } from "node:module";
 import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
+import {
+  assertSafePathToken,
+  resolveRepoDefault,
+} from "../../../tools/output-paths.mjs";
 
 const ROOT = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
@@ -17,8 +21,18 @@ const { chromium } = require("playwright");
 
 const [trackId = "monza", fracArg = "0.1", cam = "orbit", outArg] =
   process.argv.slice(2);
+const safeTrackId = assertSafePathToken(trackId, "track id");
+const safeCam = assertSafePathToken(cam, "camera");
 const frac = parseFloat(fracArg);
-const out = resolve(outArg || `scratch/captures/playwright-probe/${trackId}-${Math.round(frac * 100)}-${cam}.png`);
+const out = outArg
+  ? resolve(outArg)
+  : resolveRepoDefault(
+      ROOT,
+      "scratch",
+      "captures",
+      "playwright-probe",
+      `${safeTrackId}-${Math.round(frac * 100)}-${safeCam}.png`
+    );
 
 mkdirSync(dirname(out), { recursive: true });
 
@@ -60,7 +74,7 @@ try {
   await page.goto(`http://127.0.0.1:${PORT}/`);
   await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
 
-  await page.evaluate((id) => window.__apex.race(id), trackId);
+  await page.evaluate((id) => window.__apex.race(id), safeTrackId);
   await page.waitForFunction(
     () => window.__apex.info().track != null,
     { timeout: 15_000 }
