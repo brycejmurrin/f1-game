@@ -466,8 +466,8 @@ const Tracks = (function () {
     return 0;
   }
 
-  // Banking under a car at arc-distance s, lateral offset x: how far the surface
-  // is raised there (dy, metres) and the roll of that surface about the tangent
+  // Banking under a car at arc-distance s, lateral offset x: the surface offset
+  // from the centreline (dy, metres) and its roll about the tangent
   // (rad, + tips the car toward the corner's inside). Lets game.js sit the car,
   // its shadow and the camera ON the banked road instead of the flat centreline.
   // Returns null on un-banked circuits/sections.
@@ -490,15 +490,19 @@ const Tracks = (function () {
     const bp = track.bankP;
     if (!bp) return null;
     const n = track.n, L = track.total;
-    const k = Math.floor((((s % L) + L) % L) / L * n) % n;
-    const lift = bp.lift[k];
-    if (!lift) return null;
-    const side = bp.bsign[k], w = track.hw[k];
-    let frac = (side * x + w) / (2 * w);
-    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+    const pos = (((s % L) + L) % L) / L * n;
+    const k = Math.floor(pos) % n, j = (k + 1) % n, f = pos - Math.floor(pos);
+    // Interpolate the signed cross-track lift so cars and cameras do not jump
+    // between the road mesh's ~4 m longitudinal nodes.
+    const signedLift = lerp(bp.lift[k] * bp.bsign[k], bp.lift[j] * bp.bsign[j], f);
+    if (!signedLift) return null;
+    const w = lerp(track.hw[k], track.hw[j], f);
+    const cx = x < -w ? -w : x > w ? w : x;
     const o = out || {};
-    o.dy = lift * frac;
-    o.roll = -side * Math.atan2(lift, 2 * w);
+    // Pivot around the centreline: inner and outer edges move equally in
+    // opposite directions instead of turning the bank into a longitudinal hump.
+    o.dy = signedLift * cx / (2 * w);
+    o.roll = -Math.atan2(signedLift, 2 * w);
     return o;
   }
 
@@ -609,10 +613,12 @@ const Tracks = (function () {
         const o = offs[v];
         let by = 0;
         if (bankLift > 0) {
-          // fraction across road: 0 at inner edge (-bankSide*w), 1 at outer (+bankSide*w)
+          // Pivot around the centreline: -lift/2 at the inner edge, +lift/2
+          // at the outer edge. This preserves the intended crossfall without
+          // raising the whole road into a short longitudinal hump.
           let frac = (bankSide * o + w) / (2 * w);
           frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-          by = bankLift * frac;
+          by = bankLift * (frac - 0.5);
         }
         const wx = px[k] + r[0] * o + u[0] * (rise[v] + by);
         let   wy = py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02;
@@ -769,14 +775,13 @@ const Tracks = (function () {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const t = NTV <= 1 ? 1 : v / (NTV - 1);
           const yBase = surface.heightAt(k, Math.abs(lats[v]));
-          // match the road's banked outer edge: rise along up by the same lift,
-          // tapering across the ribbon (full at inner edge, 0 at outer) so the
-          // far ground stays flat. frac uses the same formula as buildRoad.
+          // Match the centre-pivoted road bank at the verge, then taper its
+          // signed height offset to zero so the far ground stays flat.
           let by = 0;
           if (bankLift > 0) {
             let frac = (bankSide * o + w) / (2 * w);
             frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-            by = bankLift * frac * (1 - t);
+            by = bankLift * (frac - 0.5) * (1 - t);
           }
           const wx = px[k] + r[0] * o + u[0] * by;
           const wz = pz[k] + r[2] * o + u[2] * by;

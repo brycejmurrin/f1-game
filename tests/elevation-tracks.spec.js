@@ -30,6 +30,32 @@ async function startRace(page, id) {
 }
 
 test.describe("Apex 26 — elevation & banking tracks", () => {
+  test("banking pivots around the centreline with smooth edge transitions", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const audits = await page.evaluate(() => {
+      return ["zandvoort", "madrid"].map((id) => {
+        const def = Tracks.LIST.find((entry) => entry.id === id);
+        const track = Tracks.buildCenterline(def);
+        const stepM = 1;
+        let maxCentreLift = 0, maxEdgeGrade = 0;
+        for (let s = 0; s < track.total; s += stepM) {
+          const centre = Tracks.banking(track, s, 0);
+          maxCentreLift = Math.max(maxCentreLift, Math.abs(centre?.dy || 0));
+          const edge = Tracks.banking(track, s, 7)?.dy || 0;
+          const nextEdge = Tracks.banking(track, s + stepM, 7)?.dy || 0;
+          maxEdgeGrade = Math.max(maxEdgeGrade, Math.abs(nextEdge - edge) / stepM);
+        }
+        return { id, maxCentreLift, maxEdgeGrade };
+      });
+    });
+
+    for (const audit of audits) {
+      expect(audit.maxCentreLift, `${audit.id} centreline lift`).toBeLessThan(0.01);
+      expect(audit.maxEdgeGrade, `${audit.id} bank transition grade`).toBeLessThan(0.08);
+    }
+  });
+
   for (const id of ELEVATION_TRACKS) {
     test(`${id}: slope gravity behaves + road-following holds on the grade`, async ({ page }) => {
       const errors = [];

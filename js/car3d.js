@@ -158,8 +158,12 @@ const Car3D = (function () {
       const x0 = segment[0], x1 = segment[1];
       const shape = (x, rear) => {
         const edge = Math.max(0, (Math.abs(x) - inner) / Math.max(half - inner, 1e-6));
+        const atTip = Math.abs(Math.abs(x) - half) < 1e-6;
+        const attachedX = atTip && spec.attachHalf != null
+          ? Math.sign(x || 1) * spec.attachHalf
+          : null;
         return [
-          rear ? x * taper : x,
+          attachedX != null ? attachedX : (rear ? x * taper : x),
           (rear ? spec.yTrail : spec.yLead) + rise * edge,
           (rear ? spec.zTrail : spec.zLead) - sweep * edge,
         ];
@@ -1268,6 +1272,7 @@ const Car3D = (function () {
         half, thick: e[5], taper: frontTaper,
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12),
+        attachHalf: fwHalf + 0.03,
       }, e[6], SURFACES.paint);
     }
     // Bold outboard upsweep: the top flap kicks sharply upward as it meets the
@@ -1358,16 +1363,25 @@ const Car3D = (function () {
       // trailing edge high/back). Main plane sits on the endplate centreline.
       const rearSweep = Math.max(-0.06, Math.min(0.20, aeroStyle.rearSweep));
       const rearTaper = Math.max(0.72, Math.min(1.08, aeroStyle.rearTaper));
+      const crownY = _ep.rear.top - 0.018;
+      // Reserve the crown slot for the max-DF/DRS element. Lower packages place
+      // their top plane directly under the rail; taller stacks shift the regular
+      // three planes down so every tip remains captured by the endplate.
+      const upperTrailY = crownY - (aLvl >= 4 || aDrs ? 0.075 : 0);
       const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale) =>
         addWingPlanform(out, {
           zLead, yLead, zTrail, yTrail, half, thick,
           taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
+          attachHalf: 0.50,
         }, col, SURFACES.paint);
-      rearWing(-2.30, epCY + 0.02, -2.52, epCY + 0.065, 0.51, 0.032, c1, 0.8);
+      rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
+        0.51, 0.032, c1, 0.8);
       if (aLvl >= 2) {
-        rearWing(-2.34, epCY + 0.115, -2.56, epCY + 0.170, 0.51, 0.030, wingC, 0.9);
+        rearWing(-2.34, upperTrailY - 0.170, -2.56, upperTrailY - 0.115,
+          0.51, 0.030, wingC, 0.9);
       }
-      rearWing(-2.38, epCY + 0.215, -2.64, epCY + 0.290, 0.51, 0.035, wingC, 1.0);
+      rearWing(-2.38, upperTrailY - 0.075, -2.64, upperTrailY,
+        0.51, 0.035, wingC, 1.0);
       // Swan-neck mount: slim pylons sweeping UP and BACK from the rear crash
       // structure to the underside of the main plane — this is what visually hangs
       // the wing off the car (previously the mount sat above the plane, so the
@@ -1378,9 +1392,9 @@ const Car3D = (function () {
       }
       addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
                    { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount
-      if (aLvl >= 4) {
+      if (aLvl >= 4 && !aDrs) {
         // Extra proud top element + a T-wing ahead of it (max-DF look).
-        rearWing(-2.42, epCY + 0.250, -2.66, epCY + 0.310, 0.50, 0.030, c2, 1.1);
+        rearWing(-2.42, crownY - 0.055, -2.66, crownY, 0.50, 0.030, c2, 1.1);
         addBox(out, 0, epCY + 0.20, -1.98, 0.34, 0.02, 0.09, c2);     // T-wing (tracks the lowered wing)
         // T-wing mount: a slim central pylon down to the engine-cover ridge — without
         // it the T-wing is a plank floating ~0.4m above the bodywork with nothing
@@ -1394,7 +1408,7 @@ const Car3D = (function () {
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
-        rearWing(-2.44, epCY + 0.310, -2.60, epCY + 0.370, 0.49, 0.022, c2, 1.15);
+        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.022, c2, 1.15);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       addBox(out, 0, epCY + 0.265, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod

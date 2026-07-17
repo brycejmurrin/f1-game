@@ -709,6 +709,94 @@ test.describe("Parts module — visual recipes", () => {
     ]);
   });
 
+  test("every rear-wing top plane reaches both endplates after taper and sweep", async ({ page }) => {
+    await load(page);
+    const detached = await page.evaluate(() => {
+      const aero = Parts.CATALOG.find((category) => category.id === "aero");
+      return aero.options.flatMap((option) => {
+        const style = option.visual;
+        const level = style.lvl;
+        const ep = Car3D.endplate(level);
+        const sweep = Math.max(-0.06, Math.min(0.20, style.rearSweep));
+        const crownY = ep.rear.top - 0.018;
+        const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0)
+          + 0.035 * 0.5;
+        const expectedZ = -2.64 - sweep;
+        const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+          noWheels: true,
+          parts: { aero: 1, _visual: { aero: style } },
+        });
+        let maxX = 0;
+        for (let i = 0; i < mesh.pos.length; i += 3) {
+          if (Math.abs(mesh.pos[i + 1] - expectedY) > 1e-5
+            || Math.abs(mesh.pos[i + 2] - expectedZ) > 1e-5) continue;
+          maxX = Math.max(maxX, Math.abs(mesh.pos[i]));
+        }
+        return maxX >= 0.495 ? [] : [`${option.id}:${maxX.toFixed(3)}`];
+      });
+    });
+    expect(detached).toEqual([]);
+  });
+
+  test("every rear-wing top plane stays vertically inside its endplate crown", async ({ page }) => {
+    await load(page);
+    const detached = await page.evaluate(() => {
+      const aero = Parts.CATALOG.find((category) => category.id === "aero");
+      return aero.options.flatMap((option) => {
+        const ep = Car3D.endplate(option.visual.lvl);
+        const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+          noWheels: true,
+          parts: { aero: 1, _visual: { aero: option.visual } },
+        });
+        let maxY = -Infinity;
+        for (let i = 0; i < mesh.mat.length; i++) {
+          const x = Math.abs(mesh.pos[i * 3]), y = mesh.pos[i * 3 + 1], z = mesh.pos[i * 3 + 2];
+          if (mesh.mat[i] === Car3D.SURFACES.paint && x >= 0.495 && z < -2.50) {
+            maxY = Math.max(maxY, y);
+          }
+        }
+        const crownTop = ep.rear.top + 0.012;
+        return maxY <= crownTop + 1e-6 ? [] : [`${option.id}:${(maxY - crownTop).toFixed(3)}`];
+      });
+    });
+    expect(detached).toEqual([]);
+  });
+
+  test("every front-wing top flap reaches its endplates after taper and tip rise", async ({ page }) => {
+    await load(page);
+    const detached = await page.evaluate(() => {
+      const aero = Parts.CATALOG.find((category) => category.id === "aero");
+      const elements = [
+        [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],
+        [2.34, 0.148, 2.10, 0.212, 0.95, 0.026],
+        [2.20, 0.210, 1.98, 0.282, 0.92, 0.024],
+        [2.08, 0.286, 1.88, 0.358, 0.88, 0.022],
+      ];
+      return aero.options.flatMap((option) => {
+        const style = option.visual, level = style.lvl;
+        const topIndex = level >= 4 ? 3 : level >= 3 ? 2 : level >= 1 ? 1 : 0;
+        const element = elements[topIndex], planformIndex = topIndex + 1;
+        const span = level <= 0 ? 0.74 : level === 1 ? 0.88 : 1;
+        const endplateX = 0.92 * span + 0.03;
+        const expectedY = element[3] + style.frontRise * (0.65 + planformIndex * 0.12)
+          + element[5] * 0.5;
+        const expectedZ = element[2] - style.frontSweep * (0.75 + planformIndex * 0.10);
+        const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+          noWheels: true,
+          parts: { aero: 1, _visual: { aero: style } },
+        });
+        let maxX = 0;
+        for (let i = 0; i < mesh.pos.length; i += 3) {
+          if (Math.abs(mesh.pos[i + 1] - expectedY) > 1e-5
+            || Math.abs(mesh.pos[i + 2] - expectedZ) > 1e-5) continue;
+          maxX = Math.max(maxX, Math.abs(mesh.pos[i]));
+        }
+        return maxX >= endplateX - 0.005 ? [] : [`${option.id}:${maxX.toFixed(3)}`];
+      });
+    });
+    expect(detached).toEqual([]);
+  });
+
   test("hidden-system recipes expose serviceable engine, ERS, gearbox, and fuel cues", async ({ page }) => {
     await load(page);
     const result = await page.evaluate(() => {
