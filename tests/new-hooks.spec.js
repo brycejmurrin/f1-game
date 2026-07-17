@@ -515,4 +515,60 @@ test.describe("shared track foundation diagnostics", () => {
     expect(counts.night).toBeGreaterThan(0);
     expect(counts.night).not.toBe(counts.day);
   });
+
+  test("Singapore migration keeps models, walls, terrain, and elevation intentional", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const result = await page.evaluate(() => {
+      window.__apex.race("singapore", "day", "dry");
+      const day = {
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+      };
+      window.__apex.race("singapore", "night", "dry");
+      const geometry = window.__apex.geometryDiagnostics();
+      const models = window.__apex.modelDiagnostics();
+      const profile = window.__apex.trackProfile(720);
+      const low = profile.reduce((a, b) => b.y < a.y ? b : a);
+      const high = profile.reduce((a, b) => b.y > a.y ? b : a);
+      const terrainGaps = [];
+      for (let i = 0; i < 120; i++) {
+        for (const lat of [-6, 0, 6])
+          terrainGaps.push(window.__apex.groundY(i / 120, lat).gap);
+      }
+      return {
+        day, geometry,
+        models,
+        walls: window.__apex.wallStats(),
+        props: geometry.find((entry) => entry.name === "props")?.vertices,
+        elevation: { range: high.y - low.y, lowFrac: low.frac, highFrac: high.frac },
+        terrainGaps,
+      };
+    });
+
+    expect(result.day.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.day.models.invalid).toEqual([]);
+    expect(result.day.models.suppressed).toEqual([]);
+    expect(result.day.models.unsafe).toEqual([]);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.props).toBeGreaterThan(0);
+    expect(result.props).toBeLessThan(700_000);
+    expect(result.models.invalid).toEqual([]);
+    expect(result.models.suppressed).toEqual([]);
+    expect(result.models.unsafe).toEqual([]);
+    const emitted = new Set(result.models.emitted.map((entry) => entry.id));
+    for (const id of [
+      "marina-bay-sands", "marina-water-30", "marina-water-84",
+      "sheares-deck-0", "finish-underpass-deck-2", "start-light-cluster",
+    ]) expect(emitted.has(id), id).toBe(true);
+    for (const span of result.models.emitted.filter((entry) => entry.overhead))
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+    expect(result.walls.tightFrac).toBe(1);
+    expect(result.walls.minOverHw).toBeGreaterThanOrEqual(0);
+    expect(result.terrainGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
+    expect(result.elevation.range).toBeGreaterThan(4);
+    expect(result.elevation.range).toBeLessThan(6);
+    expect(result.elevation.lowFrac).toBeCloseTo(0.10, 1);
+    expect(result.elevation.highFrac).toBeCloseTo(0.62, 1);
+  });
 });
