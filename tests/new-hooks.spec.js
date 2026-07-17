@@ -482,6 +482,58 @@ test.describe("obs().gear", () => {
 test.describe("shared track foundation diagnostics", () => {
   test.use({ viewport: LANDSCAPE });
 
+  test("Silverstone uses grounded required landmarks and airfield-scale terrain", async ({ page }) => {
+    await load(page, "silverstone");
+    const result = await page.evaluate(() => {
+      const profile = window.__apex.trackProfile(400);
+      const peak = profile.reduce((a, b) => b.y > a.y ? b : a);
+      const trough = profile.reduce((a, b) => b.y < a.y ? b : a);
+      const ground = [0.04, 0.12, 0.45, 0.55, 0.85].flatMap((frac) =>
+        [-30, 0, 30].map((lat) => ({
+          lat, sample: window.__apex.groundY(frac, lat),
+        }))
+      );
+      return {
+        elevationRange: peak.y - trough.y,
+        peakFrac: peak.frac,
+        troughFrac: trough.frac,
+        ground,
+        walls: window.__apex.wallStats(),
+        models: window.__apex.modelDiagnostics(),
+        geometry: window.__apex.geometryDiagnostics(),
+      };
+    });
+
+    expect(result.elevationRange).toBeGreaterThanOrEqual(10);
+    expect(result.elevationRange).toBeLessThanOrEqual(20);
+    expect(Math.abs(result.peakFrac - 0.12)).toBeLessThan(0.03);
+    expect(Math.abs(result.troughFrac - 0.55)).toBeLessThan(0.03);
+    expect(result.ground.every(({ lat, sample }) =>
+      (lat === 0 || sample.terrainY != null) &&
+      (sample.gap == null || sample.gap <= 0.18)
+    )).toBe(true);
+    expect(result.walls.anyNaN).toBe(false);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.15);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+
+    const requiredIds = result.models.emitted
+      .filter((entry) => entry.required)
+      .map((entry) => entry.id);
+    expect(requiredIds).toEqual(expect.arrayContaining([
+      "silverstone-wing",
+      "silverstone-control-tower",
+      "silverstone-start-gantry",
+    ]));
+    const hard = [
+      ...result.models.invalid,
+      ...result.models.suppressed,
+      ...result.models.unsafe,
+    ].filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+    for (const span of result.models.emitted.filter((entry) => entry.overhead))
+      expect(span.clearance).toBeGreaterThanOrEqual(4.8);
+  });
+
   test("reports finite geometry and structured model outcomes", async ({ page }) => {
     await load(page, "cota");
     const result = await page.evaluate(() => ({

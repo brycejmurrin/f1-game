@@ -7,12 +7,13 @@
 // sample points across the whole lap — purely geometric, no rendering.
 import { test, expect } from "@playwright/test";
 
-const TRACKS = process.env.TRACK ? [process.env.TRACK] : [
+const ALL_TRACKS = [
   "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
   "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
   "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
   "suzuka", "vegas", "zandvoort",
 ];
+const TRACKS = process.env.TRACK ? [process.env.TRACK] : ALL_TRACKS;
 
 // A face poking this far above the asphalt counts as a defect. Small tolerance
 // absorbs banking/elevation interpolation noise and z-fight-scale slivers.

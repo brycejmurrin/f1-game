@@ -14,12 +14,13 @@
 // Purely geometric — no rendering, so it runs under SwiftShader in CI.
 import { test, expect } from "@playwright/test";
 
-const TRACKS = process.env.TRACK ? [process.env.TRACK] : [
+const ALL_TRACKS = [
   "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
   "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
   "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
   "suzuka", "vegas", "zandvoort",
 ];
+const TRACKS = process.env.TRACK ? [process.env.TRACK] : ALL_TRACKS;
 
 // Vertical band that counts as an intrusion. Below TOL is ground-level dressing
 // (kerbs, tyre-wall bases) that legitimately hugs the edge; above CEIL is

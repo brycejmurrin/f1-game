@@ -16,6 +16,15 @@
     lengthKm: 5.9,
     sunAzimBias: 0.28,   // high-summer northern sun, gentle SW tilt over the old airfield
     baseHW: 8,
+    sceneryCoordinates: "racing",
+    // Broad, level former-airfield ground. Keep the ribbon wide enough to ground
+    // the close stands/aprons without reaching the distant farmland models.
+    terrainOuter: 110,
+    flatTerrain: true,
+    dressingExclusions: [
+      { kinds: ["foliage", "lamps", "floodlights"], s0: 0.18, s1: 0.28 },
+      { kinds: ["foliage", "lamps"], s0: 0.42, s1: 0.52, side: 1 },
+    ],
     // British overcast (ATM.britishOvercast) — pale grey-blue sky, lush grass, soft fog.
     pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.48, 0.46, 0.42], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },
     segs: [
@@ -24,12 +33,17 @@
       { t: 60, l: 70 }, { t: -55, l: 70 }, { t: 50, l: 70 }, { t: 0, l: 300 }, { t: 75, l: 110 }, { t: -40, l: 90 },
       { t: 95, l: 90 }, { t: 60, l: 90 },
     ],
-    elevations: [{ s: 0.62, halfM: 360, rise: 9 }],
+    // Source-trace fractions mapping to racing s≈0.12 (rise) and s≈0.55 (dip).
+    elevations: [
+      { s: 0.76, halfM: 420, rise: 7 },
+      { s: 0.19, halfM: 480, rise: -7 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash, pal,
               grandstand, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along,
-              tower, forestEdge, ATM, runoffApron } = api;
+              tower, forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
+              groundedSegments, recordBarrier } = api;
       const k = (s) => Math.round(s * n) % n;
 
       // 2. British overcast sky + lusher grass (ATM.britishOvercast).
@@ -52,7 +66,7 @@
       const LIT_COOL = [0.70, 0.85, 0.95]; // cool blue-white — upper control room
 
       // ---- LOW distant Northamptonshire treeline backdrop (flat — no snow) ----
-      every(38, (kk) => {
+      every(110, (kk) => {
         for (const side of [-1, 1]) {
           backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], [0.16, 0.30, 0.16]);
           backdrop(kk, side, 260 + hash(kk * 9 + side) * 70, [170, 12, 170], [0.14, 0.28, 0.15]);
@@ -69,9 +83,9 @@
       // These rings read as a distant WOODLAND treeline, not hills, so heights
       // are kept low (were 18-40 m, which looked like mountains).
       for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
-        [270, 42, 180,  9, 6, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
-        [370, 36, 220, 11, 7, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
-        [470, 30, 260, 14, 8, [0.12, 0.28, 0.14], [0.18, 0.34, 0.18]],
+        [270, 20, 180,  9, 6, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
+        [370, 18, 220, 11, 7, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
+        [470, 16, 260, 14, 8, [0.12, 0.28, 0.14], [0.18, 0.34, 0.18]],
       ]) {
         const ring = rad + extra;
         const span = 2 * Math.PI * ring / count;
@@ -118,25 +132,27 @@
       forestEdge(0.57, 0.60, -1, 104,{ density: 0.65,hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Abbey infield copse
       // sparse scattered broadleaf fringe around the full perimeter (old airfield feel)
       // Density kept low so Hangar Straight still reads as open sky between hangars.
-      forestEdge(0.0, 1.0, -1, 48, { density: 0.12, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
-      forestEdge(0.0, 1.0,  1, 48, { density: 0.12, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
+      forestEdge(0.0, 1.0, -1, 48, { density: 0.06, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
+      forestEdge(0.0, 1.0,  1, 48, { density: 0.06, hMin: 7, hMax: 11, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
 
       // 1. Vast airfield run-off aprons at the signature fast corners.
       // Former runway slabs — wide, low, forgiving asphalt beyond the verge.
-      if (typeof runoffApron === "function") {
-        runoffApron(k(0.04),  1, 4, [38, 0.28, 58], APRON); // Copse R
-        runoffApron(k(0.12), -1, 4, [34, 0.28, 50], APRON); // Maggotts L
-        runoffApron(k(0.12),  1, 4, [32, 0.28, 48], APRON); // Maggotts R
-        runoffApron(k(0.30),  1, 5, [42, 0.28, 64], APRON); // Stowe R
-        runoffApron(k(0.40),  1, 4, [36, 0.28, 54], APRON); // Club R
-        runoffApron(k(0.55),  1, 5, [40, 0.28, 60], APRON); // Abbey R
-      }
+      for (const [id, s, side, gap, size] of [
+        ["copse", 0.04, 1, 4, [38, 0.28, 58]],
+        ["maggotts-left", 0.12, -1, 4, [34, 0.28, 50]],
+        ["maggotts-right", 0.12, 1, 4, [32, 0.28, 48]],
+        ["stowe", 0.30, 1, 5, [42, 0.28, 64]],
+        ["club", 0.40, 1, 4, [36, 0.28, 54]],
+        ["abbey", 0.55, 1, 5, [40, 0.28, 60]],
+      ]) groundPatch(k(s), side, gap, size, APRON, {
+        id: `silverstone-runoff-${id}`, samples: 6,
+      });
 
       // ---- Big grandstands at the signature corners ----
       // Copse corner — large main straight view
-      grandstand(0.04,  1, 12, 80,  [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
+      grandstand(0.04,  1, 32, 80,  [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
       // Maggotts/Becketts complex
-      grandstand(0.12, -1, 14, 60,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
+      grandstand(0.12, -1, 32, 60,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
       // Stowe — large sweeping stand
       grandstand(0.30,  1, 16, 85,  [0.44, 0.45, 0.50], [0.54, 0.28, 0.28]);
       // Club — fast corner seating
@@ -147,26 +163,32 @@
       // Brooklands/Luffield — signature view
       grandstand(0.85, -1, 14, 65,  [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
       // Abbey (fast) — wide run-off viewing
-      grandstand(0.55,  1, 16, 70,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
+      grandstand(0.55,  1, 34, 70,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
       // Maggotts secondary stand (larger complex)
-      grandstand(0.10,  1, 18, 55,  [0.42, 0.44, 0.48], [0.50, 0.30, 0.28]);
+      grandstand(0.10,  1, 32, 55,  [0.42, 0.44, 0.48], [0.50, 0.30, 0.28]);
       // Chapel corner — fans favourite viewpoint
-      grandstand(0.17, -1, 14, 50,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
+      grandstand(0.17, -1, 30, 50,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
 
-      // ---- The Wing building (s≈0.45 R) — Silverstone's long white pit/paddock facade ----
-      // Long low white slab. gap=4, w=20 → dist=14 from centre. Height 11m, length 240m.
-      building(k(0.45), 1, 4, 20, 11, 240, {
-        wall: [0.86, 0.86, 0.88], window: [0.12, 0.16, 0.22], floor: 4 });
-
-      // Thin cantilevered roof fin (above building top, anchored at dist=14, elevated to h=11+3=14)
+      // ---- The Wing building (s≈0.45 R) — one required, atomic landmark ----
       {
         const a = anchor(k(0.45), 1, 14);
-        // roof blade sitting cleanly ON TOP of the 11m building (vadd by 11+1 = 12m, blade is 1.4m tall)
-        addBox(out, vadd(a.c, a.u, 12.7), [26, 1.4, 240], [0.90, 0.92, 0.96], [a.r, a.u, a.t]);
-        // slim glazing strip just below the roof blade — track-facing dark glass (h=3m, sits 7–10m up)
-        addBox(out, vadd(a.c, a.u, 5.0), [20, 6, 242], [0.10, 0.14, 0.22], [a.r, a.u, a.t]);
-        // warm amber lit windows behind the glass (interior band, offset slightly inward)
-        addBox(out, vadd(a.c, a.u, 5.2), [18, 5.4, 238], LIT_WIN, [a.r, a.u, a.t]);
+        const b = [a.r, a.u, a.t];
+        groundedSegments({
+          id: "silverstone-wing-grounded-shell",
+          points: [0.43, 0.44, 0.45, 0.46, 0.47].map((s) => ({
+            k: k(s), side: 1, dist: 14,
+          })),
+          width: 20, height: 11, color: [0.86, 0.86, 0.88],
+        });
+        modelGroup("silverstone-wing", {
+          center: vadd(a.c, a.u, 9.2), size: [24, 8, 72], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.GLASS;
+          TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 70], [0.10, 0.14, 0.22], b);
+          TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [18, 3.2, 68], LIT_WIN, b);
+          stage._mat = MAT.METAL;
+          TrackGeom.addBox(stage, vadd(a.c, a.u, 12.7), [24, 1.4, 72], [0.90, 0.92, 0.96], b);
+        }, { required: true });
       }
 
       // Wing grandstand (behind pit building, s≈0.46 R)
@@ -176,21 +198,21 @@
       // Placed at dist=32, anchored cleanly off track — uses tower() composite helper
       {
         const tDist = 32;
-        // tower() uses dist as the centre distance (not gap like building)
         const ta = anchor(k(0.44), 1, tDist);
-        if (!onTrack(ta.c[0], ta.c[2], 5)) {
-          // Tapered shaft: base 6m wide → 4m at top, 26m tall
-          addFrustum(out, ta.c, 3.0, 2.0, 26, [0.82, 0.83, 0.86], 8, [ta.r, ta.u, ta.t]);
-          // control room glaze cap — dark glazing with emissive cool-blue interior
-          addBox(out, vadd(ta.c, ta.u, 26), [5.0, 3.0, 5.0], [0.10, 0.14, 0.20], [ta.r, ta.u, ta.t]);
-          addBox(out, vadd(ta.c, ta.u, 27.0), [4.4, 1.8, 4.4], LIT_COOL, [ta.r, ta.u, ta.t]);
-          // antenna mast
-          addCyl(out, vadd(ta.c, ta.u, 29.0), 0.16, 10, [0.32, 0.32, 0.34], 4, [ta.r, ta.u, ta.t]);
-          // red aviation warning light at mast tip
-          addCyl(out, vadd(ta.c, ta.u, 38.8), 0.28, 0.5, [0.90, 0.20, 0.20], 6, [ta.r, ta.u, ta.t]);
-          // mid-tower emissive band (lit office floor ~13m up)
-          addBox(out, vadd(ta.c, ta.u, 13.5), [4.6, 1.2, 4.6], LIT_WIN, [ta.r, ta.u, ta.t]);
-        }
+        const b = [ta.r, ta.u, ta.t];
+        modelGroup("silverstone-control-tower", {
+          center: vadd(ta.c, ta.u, 19.5), size: [7, 39, 7], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          TrackGeom.addFrustum(stage, ta.c, 3, 2, 26, [0.82, 0.83, 0.86], 8, b);
+          stage._mat = MAT.GLASS;
+          TrackGeom.addBox(stage, vadd(ta.c, ta.u, 26), [5, 3, 5], [0.10, 0.14, 0.20], b);
+          TrackGeom.addBox(stage, vadd(ta.c, ta.u, 27), [4.4, 1.8, 4.4], LIT_COOL, b);
+          stage._mat = MAT.METAL;
+          TrackGeom.addCyl(stage, vadd(ta.c, ta.u, 29), 0.16, 10, [0.32, 0.32, 0.34], 4, b);
+          TrackGeom.addCyl(stage, vadd(ta.c, ta.u, 38.8), 0.28, 0.5, [0.90, 0.20, 0.20], 6, b);
+          TrackGeom.addBox(stage, vadd(ta.c, ta.u, 13.5), [4.6, 1.2, 4.6], LIT_WIN, b);
+        }, { required: true });
       }
 
       // flag-mast cluster on the Wing apron
@@ -205,12 +227,14 @@
       }
 
       // low pit-lane wall along the start straight in front of the Wing
-      {
-        const a = anchor(k(0.46), 1, 2.5);
-        if (!onTrack(a.c[0], a.c[2], 0.3)) {
-          addBox(out, vadd(a.c, a.u, 0.6), [0.6, 1.2, 160], CONC, [a.r, a.u, a.t]);
-        }
-      }
+      groundedSegments({
+        id: "silverstone-pit-wall",
+        points: [0.44, 0.4475, 0.455, 0.4625, 0.47, 0.4775, 0.485, 0.4925, 0.50].map((s) => ({
+          k: k(s), side: 1, dist: 4,
+        })),
+        width: 0.6, height: 1.2, color: CONC,
+      });
+      recordBarrier(0.44, 0.50, 1, 4);
 
       // BRDC clubhouse set back (s≈0.48 R) — pale historical building
       building(k(0.48), 1, 28, 22, 9, 20, { wall: [0.76, 0.76, 0.72], window: [0.18, 0.24, 0.30] });
@@ -304,9 +328,6 @@
       billboard(k(0.55),  1, 14, 14, 5.0, [0.18, 0.38, 0.68]);  // Abbey
       billboard(k(0.54), -1, 14, 14, 5.0, [0.86, 0.28, 0.18]);
       billboard(k(0.30),  1, 22, 14, 5.0, [0.18, 0.38, 0.68]);  // Stowe
-
-      // ---- Start gantry over start/finish ----
-      gantry(0.0, 7.5, [0.28, 0.30, 0.34]);
 
       // ---- Pine windbreak rows (airfield perimeter) + outer broadleaf copse belts ----
       // Windbreaks: mix of conifer/broadleaf at mid-distances using forestEdge.
@@ -476,22 +497,22 @@
       }
 
       // --- Start-light gantry cluster spanning the National straight: twin masts,
-      //     a top beam, the five red start-light boxes and two TV-camera pods.
-      // Overhead parts use TrackGeom.addBox (unguarded) so the on-road footprint
-      // cull does not drop the span — same pattern as gantry() / underpassPortal.
+      //     a typed overhead span and five red start-light boxes.
       function startGantryCluster(s) {
-        const rawBox = TrackGeom.addBox;
-        const kb = k(s), L = anchor(kb, -1, 4), R = anchor(kb, 1, 4);
-        const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]), bL = [L.r, L.u, L.t], H = 8;
+        const kb = k(s), L = anchor(kb, -1, 2.4), R = anchor(kb, 1, 2.4);
+        const bL = [L.r, L.u, L.t], H = 8;
+        overheadSpan({
+          id: "silverstone-start-gantry", frac: s, clearance: H,
+          thickness: 0.7, depth: 1.4, supportGap: 2, supportWidth: 0.8,
+          color: [0.16, 0.17, 0.20], required: true,
+        });
         out._mat = MAT.METAL;
         addCyl(out, L.c, 0.4, H, [0.20, 0.21, 0.24], 6, bL);
         addCyl(out, R.c, 0.4, H, [0.20, 0.21, 0.24], 6, [R.r, R.u, R.t]);
-        const beam = vadd(vadd(L.c, L.u, H), L.r, span / 2);
-        rawBox(out, beam, [span, 0.7, 1.4], [0.16, 0.17, 0.20], bL);
+        const beam = vadd([px[kb], api.py[kb], pz[kb]], L.u, H + 0.35);
         for (let i = 0; i < 5; i++)
-          rawBox(out, vadd(vadd(beam, L.u, -1.6), L.r, (i - 2) * 1.6), [0.9, 1.2, 0.9], [0.65, 0.10, 0.10], bL);
-        for (const o of [-span * 0.3, span * 0.3])
-          rawBox(out, vadd(vadd(beam, L.r, o), L.u, 0.6), [0.8, 0.8, 1.4], [0.10, 0.10, 0.12], bL);
+          TrackGeom.addBox(out, vadd(vadd(beam, L.u, -1.2), L.r, (i - 2) * 1.6),
+                           [0.9, 1.2, 0.9], [0.65, 0.10, 0.10], bL);
         out._mat = 0;
       }
 
@@ -517,6 +538,7 @@
 
       // silence unused-guard lint helpers (destructured but not called directly)
       void GRASS; void STEEL; void TARMAC; void prop; void WHITE; void tower; void bush;
+      void gantry; void building; void addFrustum;
     },
   }
   );
