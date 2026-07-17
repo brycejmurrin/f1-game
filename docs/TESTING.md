@@ -179,7 +179,7 @@ hook values.
 | `obs-act-edge.spec.js` | edge cases: `act(n=0)`, `reset(0.999)` lap seam, scan wrap-around, `done` semantics, numeric stability |
 | `ui-audit.spec.js` | portrait+landscape screenshots of all 10 screens |
 | `presets.spec.js`, `sliders.spec.js`, `steering.spec.js` | steering parameter tests |
-| `parts-physics.spec.js` | unified resolver, visual-field ownership, consumed mesh uniqueness, geometry/triangle budgets, signatures, factory presets, physics/costs |
+| `parts-physics.spec.js` | unified resolver, visual-field ownership, consumed mesh uniqueness, geometry/triangle budgets, surface/material semantics, static-emissive bounds, signatures, factory presets, physics/costs |
 | `parts-budget.spec.js` | budget UI and unlimited toggle |
 | `parts-catalog.spec.js` | 8-category setup UI, universal/supplier/signature/factory badges, access filtering, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |

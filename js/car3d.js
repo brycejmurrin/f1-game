@@ -17,13 +17,13 @@ const Car3D = (function () {
   // Material 0 remains the generic/imported/custom compatibility path.
   const SURFACES = Object.freeze({
     custom: 0, paint: 20, carbon: 21, rubber: 22,
-    metal: 23, glass: 24, panel: 24,
-    emissive: 25, functionalEmissive: 25,
+    metal: 23, glass: 24,
+    emissive: 25, functionalEmissive: 25, panel: 26,
   });
   const DARK   = [0.05, 0.05, 0.05];
   const CARBON = [0.07, 0.07, 0.08];
   const VISOR  = [0.08, 0.08, 0.09];          // tinted visor
-  const PANEL  = [1.12, 1.12, 1.16];          // sponsor / number plate — slightly HDR so it glows at night
+  const PANEL  = [0.82, 0.82, 0.86];          // matte sponsor / number plate
   const TYRE   = [0.06, 0.06, 0.07];
   const RIM    = [0.11, 0.11, 0.13];
   const HUB    = [0.28, 0.28, 0.31];
@@ -55,7 +55,7 @@ const Car3D = (function () {
     if (col === TYRE) return SURFACES.rubber;
     if (col === RIM || col === HUB || col === HALO) return SURFACES.metal;
     if (col === VISOR) return SURFACES.glass;
-    if (col === PANEL) return SURFACES.functionalEmissive;
+    if (col === PANEL) return SURFACES.panel;
     return SURFACES.paint;
   }
 
@@ -66,11 +66,18 @@ const Car3D = (function () {
     const l = Math.hypot(nx, ny, nz) || 1;
     nx /= l; ny /= l; nz /= l;
     const base = out.pos.length / 3;
+    const material = surfaceOf(col, surface);
+    // Paint is reflective, not a light source. Some team accent palettes are
+    // intentionally HDR for LEDs; cap them when those colors dress bodywork so
+    // wings and panels do not bloom like neon tubes.
+    const rgb = material === SURFACES.paint
+      ? [Math.min(col[0], 1), Math.min(col[1], 1), Math.min(col[2], 1)]
+      : col;
     for (const p of [a, b, c]) {
       out.pos.push(p[0], p[1], p[2]);
       out.nrm.push(nx, ny, nz);
-      out.col.push(col[0], col[1], col[2]);
-      out.mat.push(surfaceOf(col, surface));
+      out.col.push(rgb[0], rgb[1], rgb[2]);
+      out.mat.push(material);
     }
     out.idx.push(base, base + 1, base + 2);
   }
@@ -159,12 +166,14 @@ const Car3D = (function () {
       };
       const f0 = shape(x0, false), f1 = shape(x1, false);
       const r0 = shape(x0, true), r1 = shape(x1, true);
-      addBlock(out, [
-        [f0[0], f0[1] - thick * 0.5, f0[2]], [f1[0], f1[1] - thick * 0.5, f1[2]],
-        [f1[0], f1[1] + thick * 0.5, f1[2]], [f0[0], f0[1] + thick * 0.5, f0[2]],
-        [r0[0], r0[1] - thick * 0.5, r0[2]], [r1[0], r1[1] - thick * 0.5, r1[2]],
-        [r1[0], r1[1] + thick * 0.5, r1[2]], [r0[0], r0[1] + thick * 0.5, r0[2]],
-      ], col, null, surface);
+      // Wings are thin aero skins, not six-faced bars. One double-sided surface
+      // per planform section preserves sweep/taper while avoiding invisible
+      // internal and underside faces in the always-double-sided car draw.
+      const y = thick * 0.5;
+      addQuad(out,
+        [f0[0], f0[1] + y, f0[2]], [f1[0], f1[1] + y, f1[2]],
+        [r1[0], r1[1] + y, r1[2]], [r0[0], r0[1] + y, r0[2]],
+        col, surface);
     }
   }
   // Join a short chain of arbitrary four-corner stations. This keeps low-poly
@@ -237,6 +246,10 @@ const Car3D = (function () {
   function addDome(out, cx, cy, cz, r, col, surface) {
     const STACKS = 5, SLICES = 12;
     const i0 = out.pos.length / 3;
+    const material = surfaceOf(col, surface);
+    const rgb = material === SURFACES.paint
+      ? [Math.min(col[0], 1), Math.min(col[1], 1), Math.min(col[2], 1)]
+      : col;
     for (let st = 0; st <= STACKS; st++) {
       const phi = (st / STACKS) * (Math.PI / 2);   // 0 = top, π/2 = equator
       const y = Math.cos(phi), rr = Math.sin(phi);
@@ -245,8 +258,8 @@ const Car3D = (function () {
         const nx = rr * Math.cos(a), nz = rr * Math.sin(a);
         out.pos.push(cx + nx * r, cy + y * r, cz + nz * r);
         out.nrm.push(nx, y, nz);
-        out.col.push(col[0], col[1], col[2]);
-        out.mat.push(surfaceOf(col, surface));
+        out.col.push(rgb[0], rgb[1], rgb[2]);
+        out.mat.push(material);
       }
     }
     for (let st = 0; st < STACKS; st++) {
@@ -266,7 +279,7 @@ const Car3D = (function () {
     const RC = rimColor || RIM;
     const SEG = 18;
     const x0 = cx - w/2, x1 = cx + w/2;
-    const rimR = r * 0.42;
+    const rimR = r * 0.68;
     const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
     const rotorScale = brakeStyle && brakeStyle.rotorScale || 1;
     // Tread: a lofted profile of shared rings with analytic radial normals — the
@@ -303,7 +316,9 @@ const Car3D = (function () {
         out.idx.push(A, B, C, A, C, D);
       }
     }
-    // Sidewalls (flat): full face from tread radius to rim disc + hub fans.
+    // Sidewalls (flat): rubber shoulder from tread to the aero-cover edge, then
+    // a distinct metal/carbon cover fan. Keeping the outer annulus rubber avoids
+    // the old full-wheel silver dinner-plate look.
     const hub0 = [x0-0.012, cy, cz], hub1 = [x1+0.012, cy, cz];
     for (let i = 0; i < SEG; i++) {
       const a0 = (i / SEG) * Math.PI * 2, a1 = ((i+1) / SEG) * Math.PI * 2;
@@ -319,11 +334,11 @@ const Car3D = (function () {
       // and through the spoke gaps — with nothing to z-fight. That was the whole
       // "translucent tyre" bug: double-wound coincident faces flickering on real
       // mobile depth precision (SwiftShader tolerated it, so it looked solid headless).
-      addQuad(out, B0, B1, R1, R0, RC, SURFACES.metal);
+      addQuad(out, B0, B1, R1, R0, TYRE, SURFACES.rubber);
       if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0)
         addTri(out, hub1, R0, R1, HUB, SURFACES.metal);   // right (+X)
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
-      addQuad(out, A0, A1, L1, L0, RC, SURFACES.metal);
+      addQuad(out, A0, A1, L1, L0, TYRE, SURFACES.rubber);
       if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0)
         addTri(out, hub0, L0, L1, HUB, SURFACES.metal);   // left (−X)
     }
@@ -467,7 +482,18 @@ const Car3D = (function () {
   // flattens so max-DF doesn't tower. cy = vertical centre, sy = full height.
   function endplateGeom(aLvl) {
     const aN = (aLvl || 0) / 4;
-    return { cy: 0.60 + 0.20 * Math.pow(aN, 0.7), sy: 0.28 + 0.30 * Math.pow(aN, 0.7) };
+    const cy = 0.60 + 0.20 * Math.pow(aN, 0.7);
+    const sy = 0.28 + 0.30 * Math.pow(aN, 0.7);
+    const profile = (z, sectionCy, sectionSy) => ({
+      z, cy: sectionCy, sy: sectionSy,
+      bottom: sectionCy - sectionSy * 0.5,
+      top: sectionCy + sectionSy * 0.5,
+    });
+    return {
+      cy, sy, chord: 0.54,
+      front: profile(-2.15, cy - 0.035, sy * 0.76),
+      rear: profile(-2.69, cy + 0.015, sy),
+    };
   }
   // The driver-number board on the endplate: a fixed-height board anchored LOW,
   // its bottom a small gap above the plate base. The plate base barely moves with
@@ -774,7 +800,7 @@ const Car3D = (function () {
     addTopBevel(out, hF, hR, 0.026, c1);
     // Accent stripe down the vanity deck crown (team colour).
     addBox(out, 0, ckpt ? 0.73 : 0.665, ckpt ? 0.90 : 0.45, 0.10, 0.02, ckpt ? 1.75 : 0.80,
-           ersC2, tier("ers") === 2 ? SURFACES.emissive : SURFACES.paint);
+           ersC2, SURFACES.paint);
 
     // --- Cockpit-side head-protection bolsters: the raised survival-cell edges
     // flanking the cockpit opening. They frame the driver's view left/right in
@@ -919,68 +945,62 @@ const Car3D = (function () {
         addBox(out, 0, p.top + 0.010, -1.58, 0.18 * engStyle.heatShield,
           0.014, 0.30, [0.30,0.28,0.26], SURFACES.metal);
       }
-      // Engine-mode indicator LEDs across the airbox intake lip (HDR → bloom at
-      // night): green (economy) → amber (standard) → red (max-attack power unit).
-      const engLed = engT === 2 ? [2.4, 0.28, 0.12] : engT === 0 ? [0.15, 1.8, 0.55] : [1.9, 1.2, 0.15];
+      // Engine-spec identification dots across the airbox intake lip.
+      const engLed = engT === 2 ? [0.95, 0.22, 0.10] : engT === 0 ? [0.12, 0.82, 0.38] : [0.90, 0.62, 0.12];
       for (const lx of [-0.06, 0, 0.06])
-        addBox(out, lx, 0.885, -0.30, 0.02, 0.014, 0.02, engLed, SURFACES.emissive);
-      // FUEL: per-option filler cap colour (HDR blends glow at night).
+        addBox(out, lx, 0.885, -0.30, 0.02, 0.014, 0.02, engLed, SURFACES.metal);
+      // FUEL: per-option filler cap colour.
       const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
+      const fuelDisplay = fuelColor.map((value) => Math.min(value, 1));
       // Fuel filler on the airbox shoulder: a dark housing ringed by a bright
       // fuel-grade COLLAR in the blend colour + a cap dot — a clear grade placard.
       addBox(out, 0.12, 0.795, -0.50, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing
-      const fuelSurface = Math.max(fuelColor[0], fuelColor[1], fuelColor[2]) > 1.1 ? SURFACES.emissive : SURFACES.metal;
-      addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelColor, fuelSurface);            // collar ring (proud)
-      addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelColor, fuelSurface);            // cap dot
+      const fuelSurface = SURFACES.metal;
+      addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
+      addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
       if (fuelStyle.line) {
         const lineRear = anchors.coverAt(-1.30);
         addSpan(out,
           { z: -0.56, x: 0.12, y: 0.80, w: 0.018 * fuelStyle.line, h: 0.018 },
           { z: -1.30, x: lineRear.x * 0.72, y: lineRear.top - 0.15,
             w: 0.015 * fuelStyle.line, h: 0.015 },
-          fuelColor, null, fuelSurface);
+          fuelDisplay, null, fuelSurface);
       }
     }
 
     addPodFlankSpan(0.46, -0.34, 0.55, 0.18, PANEL);
     addPodFlankSpan(0.46, -0.34, 0.16, 0.08, c2);
 
-    // ERS: a glowing ENERGY-CELL CONDUIT sweeping up from the sidepod shoulder
-    // onto the engine-cover flank — per-OPTION colour (HDR → blooms at night). The
-    // number of lit cells + a battery-pack bulge grow with the pack spec, so every
+    // ERS: a color-coded ENERGY-CELL CONDUIT sweeping up from the sidepod shoulder
+    // onto the engine-cover flank. The number of cells + a battery-pack bulge grow with the pack spec, so every
     // ERS choice reads distinctly at a glance (the old thin strip was too subtle).
     // Runs ABOVE the sponsor band (titleA y 0.19–0.45) so it never washes the wordmark.
     const ersLed = ersStyle ? ersStyle.led : (tier("ers") === 2 ? ersC2 : null);
     const ersPack = ersStyle ? ersStyle.pack : 1.0;
     if (ersLed) {
-      // ERS energy glow tucked into the coke-bottle shoulder at the sidepod REAR
-      // (back + inboard, toward the engine cover), recessed in a dark housing so the
-      // HDR strip GLOWS and BLOOMS at night. Per-OPTION colour; length + a battery
-      // module grow with the pack spec.
+      // ERS conduit tucked into the coke-bottle shoulder at the sidepod rear.
       const half = 0.16 + (ersPack - 0.9) * 0.09;
-      const g = 1.7;                                    // glow boost so it blooms
-      const ersGlow = [Math.min(2.9, ersLed[0]*g), Math.min(2.9, ersLed[1]*g), Math.min(2.9, ersLed[2]*g)];
+      const ersGlow = ersLed.map((value) => Math.min(value, 1));
       addPodFlankSpan(podGeom.conduit.z + half + 0.025, podGeom.conduit.z - half - 0.025,
                       0.91, 0.06, [0.03, 0.03, 0.04], SURFACES.carbon, 0.018);
       addPodFlankSpan(podGeom.conduit.z + half, podGeom.conduit.z - half,
-                      0.97, 0.03, ersGlow, SURFACES.emissive, 0.025);
+                      0.97, 0.03, ersGlow, SURFACES.metal, 0.025);
       const cells = Math.max(1, Math.min(8, Math.round(ersStyle.cells || 3)));
       for (const side of [-1, 1]) for (let i = 0; i < cells; i++) {
         const z = podGeom.conduit.z + half - (i + 0.5) * (half * 2 / cells);
         const p = anchors.podAt(z);
         addBox(out, side*(p.x + 0.032), p.top + 0.006, z,
           0.016, 0.032, Math.max(0.025, half * 1.5 / cells),
-          ersGlow, SURFACES.emissive);
+          ersGlow, SURFACES.metal);
       }
     }
 
     // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
     // the sidepod front (SHAPE varies per ENGINE_STYLE.inlet), and a row of
     // little floor-edge fences — the fiddly ground-effect furniture that reads
-    // as a modern car. Tiny HDR floor-edge LED accents bloom at night. ---
+    // as a modern car. ---
     const engInlet = engStyle && engStyle.inlet != null ? engStyle.inlet
                    : (tier("engine") === 2 ? 2 : tier("engine") === 0 ? 0 : 1);
-    const floorLed = [0.12, 0.9, 1.9];   // cool-cyan floor-edge marker (HDR → blooms)
     for (const s of [-1, 1]) {
       const inlet = podGeom.inlet;
       // Inlet mouth: 0 slim letterbox · 1 stock rounded · 2 wide high-flow scoop ·
@@ -1000,12 +1020,6 @@ const Car3D = (function () {
       for (const fz of [0.42, 0.06, -0.30, -0.66, -1.02]) {
         const fp = anchors.podAt(fz);
         addBox(out, s*(fp.x + 0.012), fp.bottom + 0.025, fz, 0.014, 0.05, 0.13, CARBON);
-      }
-      // Floor-edge LED accents between the fences.
-      for (const lz of [0.24, -0.48]) {
-        const lp = anchors.podAt(lz);
-        addBox(out, s*(lp.x + 0.014), lp.bottom + 0.008,
-               lz, 0.012, 0.016, 0.05, floorLed, SURFACES.emissive);
       }
     }
 
@@ -1090,20 +1104,6 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
-    // --- Nose headlights: a pair of subtle HDR white running lights (DRL /
-    // marker style) low on the nose sides near the tip. F1 doesn't really have
-    // them, but the >1 albedo blooms at night for a stylish forward glow. A
-    // thin HDR accent line links the pair across the nose front. ---
-    const drlC = [2.4, 2.4, 2.7];
-    for (const s of [-1, 1]) {
-      const drl = anchors.noseAt(2.62);
-      addBox(out, s*(drl.side + 0.010), (drl.bottom + drl.top) * 0.5, 2.62,
-             0.020, Math.min(0.045, (drl.top-drl.bottom)*0.55), 0.05, drlC, SURFACES.emissive);
-    }
-    const drlLink = anchors.noseAt(2.70);
-    addBox(out, 0, drlLink.bottom - 0.002, 2.70,
-           Math.min(0.20, drlLink.side*1.8), 0.012, 0.024, drlC, SURFACES.emissive);
-
     // --- Cockpit opening (dark) + halo + front pillar ---
     addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05], SURFACES.carbon);
     for (const s of [-1, 1]) {
@@ -1113,8 +1113,7 @@ const Car3D = (function () {
     addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
     addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
 
-    // --- Side mirrors --- with an HDR marker light on the stalk (blooms at
-    // night). In cockpit view they're moved FORWARD (ahead of the eye at z0.32)
+    // --- Side mirrors ---. In cockpit view they're moved FORWARD (ahead of the eye at z0.32)
     // and out on longer stalks so they read at the sides of the onboard frame
     // like real F1 wing mirrors; the chase build keeps the tucked position.
     const mz = ckpt ? 0.62 : 0.24, mx = ckpt ? 0.44 : 0.34, msx = ckpt ? 0.40 : 0.30;
@@ -1129,7 +1128,6 @@ const Car3D = (function () {
       addBox(out, s*mx, 0.735, mz, 0.032, 0.155, 0.115, [0.09, 0.09, 0.11], SURFACES.carbon); // cleaner dark carbon housing
       addBox(out, s*mx, 0.735, mz + 0.062, 0.020, 0.135, 0.024, [0.10, 0.11, 0.14], SURFACES.glass); // glass bezel / surround
       addBox(out, s*mx, 0.735, mz + 0.066, 0.024, 0.108, 0.018, [0.46, 0.56, 0.78], SURFACES.glass); // brighter blue reflective glass
-      addBox(out, s*(mx-0.005), 0.70, mz + 0.005, 0.02, 0.014, 0.02, [2.1, 1.2, 0.1], SURFACES.emissive); // stalk marker
     }
 
     // --- Driver helmet: smooth dome + visor + crown stripe ---
@@ -1156,8 +1154,7 @@ const Car3D = (function () {
     if (!(opts && opts.noDriver)) {
       addBox(out, 0, 0.885, -0.30, 0.035, 0.09, 0.035, DARK);   // stalk
       addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
-      // T-cam status beacon: small HDR green marker atop the mast (blooms at night).
-      addBox(out, 0, 0.988, -0.30, 0.03, 0.02, 0.03, [0.2, 2.2, 0.5], SURFACES.emissive);
+      addBox(out, 0, 0.988, -0.30, 0.03, 0.02, 0.03, [0.12, 0.75, 0.28], SURFACES.paint);
     }
 
     // --- Halo: the titanium cockpit-protection hoop (defining modern-F1 read).
@@ -1173,11 +1170,6 @@ const Car3D = (function () {
         addSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
                      { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 }, haloC, null, SURFACES.metal); // rear arc to collar
       }
-      // Halo LED strip: FIA-style row of tell-tale lights along the top of the
-      // hoop (HDR team-accent → glows and blooms at night).
-      const haloLed = [Math.min(2.4, c2[0]*1.8 + 0.3), Math.min(2.4, c2[1]*1.8 + 0.15), Math.min(2.4, c2[2]*1.8 + 0.1)];
-      for (const lz of [0.44, 0.30, 0.16, 0.02])
-        addBox(out, 0, 0.842 + (0.49 - lz) * 0.02, lz, 0.05, 0.012, 0.03, haloLed, SURFACES.emissive);
     }
 
     // --- Exhaust outlet poking from the tail cap --- per ENGINE option: a lone
@@ -1187,17 +1179,19 @@ const Car3D = (function () {
     const exhR = engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
     addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17], SURFACES.metal);
-    // Heat-glazed tailpipe mouth: a dark bore with an HDR ember at the tip TINTED
-    // BY THE FUEL BLEND recipe — so the exhaust glow is the fuel's
+    // Heat-glazed tailpipe mouth: a dark bore tinted by the fuel blend; transient
+    // after-fire is rendered separately from live throttle state.
     // signature colour (green biofuel, violet quali mix, …), read racing behind it.
     const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
     const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04], SURFACES.carbon);
-    addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012, fuelFlame, SURFACES.emissive);
+    addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012,
+           fuelFlame.map((value) => Math.min(value * 0.45, 0.65)), SURFACES.metal);
     if (exhTwin) {
       for (const s of [-1, 1]) {
         addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, [0.16, 0.16, 0.17], SURFACES.metal);
-        addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012, fTwin, SURFACES.emissive); // twin-tip ember
+        addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012,
+               fTwin.map((value) => Math.min(value * 0.45, 0.65)), SURFACES.metal);
       }
     }
 
@@ -1302,11 +1296,6 @@ const Car3D = (function () {
         addSpan(out, { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.030, h: 0.12 },
                      { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.030, h: 0.18 }, c1);
       }
-      // Endplate-crown LED tell-strip: a run of three HDR-amber markers climbing
-      // the swept crown (glows and blooms at night — a clear new light signature).
-      for (let i = 0; i < 3; i++)
-        addBox(out, epX + s*0.05, 0.30 + i*0.058, 2.10 - i*0.06,
-               0.022, 0.022, 0.03, [2.6, 0.6, 0.06], SURFACES.emissive);
       addBox(out, s*0.10, 0.19, 2.46, 0.055, 0.20, 0.17, c1);                 // nose pylon
     }
 
@@ -1350,18 +1339,20 @@ const Car3D = (function () {
       const _ep    = endplateGeom(aLvl);
       const epSY   = _ep.sy;   // lvl0 0.28 → lvl2 0.47 → lvl4 0.58 (capped)
       const epCY   = _ep.cy;   // lvl0 0.60 → lvl2 0.72 → lvl4 0.80 (slow rise)
-      // HDR-lit crown accent (team colour pushed >1 so it glows / blooms at night
-      // like a modern rear-wing tell-tale strip).
-      const railLed = [Math.min(2.2, c2[0]*1.7 + 0.25), Math.min(2.2, c2[1]*1.7 + 0.12), Math.min(2.2, c2[2]*1.7 + 0.08)];
       // Tall SLIM swept endplates with a louvre cut-out cluster near the rear edge
-      // and a glowing top-rail strip along the crown.
+      // and a painted team-color top rail along the crown.
       for (const s of [-1, 1]) {
-        addBox(out, s*0.50, epCY, -2.42, 0.045, epSY, 0.54, DARK);
+        addSpan(out,
+          { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.045, h: _ep.front.sy },
+          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.cy, w: 0.045, h: _ep.rear.sy },
+          DARK);
         // Louvre detail: a stack of thin recessed slots near the top-rear corner.
         for (let i = 0; i < 4; i++)
           addBox(out, s*0.515, epCY + epSY*0.5 - 0.07 - i*0.06, -2.30, 0.018, 0.016, 0.18, INTAKE);
-        // Glowing top-rail strip (HDR team accent) running the endplate crown.
-        addBox(out, s*0.50, epCY + epSY*0.5, -2.44, 0.050, 0.022, 0.52, railLed, SURFACES.emissive);
+        addSpan(out,
+          { z: _ep.front.z, x: s*0.50, y: _ep.front.top, w: 0.050, h: 0.022 },
+          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.050, h: 0.022 },
+          c2, null, SURFACES.paint);
       }
       // Clean swept two/three-element rear wing (leading edge low/forward →
       // trailing edge high/back). Main plane sits on the endplate centreline.
@@ -1404,16 +1395,9 @@ const Car3D = (function () {
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
         rearWing(-2.44, epCY + 0.310, -2.60, epCY + 0.370, 0.49, 0.022, c2, 1.15);
-        // DRS-open indicator light on the actuator pod (HDR cyan → blooms).
-        addBox(out, 0, epCY + 0.335, -2.50, 0.05, 0.022, 0.03,
-               [0.2, 1.7, 2.3], SURFACES.emissive);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       addBox(out, 0, epCY + 0.265, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
-      // Rear-wing endplate marker lights (HDR amber) — small blooming tell each side.
-      for (const s of [-1, 1])
-        addBox(out, s*0.50, epCY + epSY * 0.42, -2.60,
-               0.03, 0.03, 0.025, [1.9, 0.95, 0.12], SURFACES.emissive);
 
       // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
       // structure. The >1 albedo glows through the night emissive path (and blooms),
@@ -1477,28 +1461,14 @@ const Car3D = (function () {
     // size + a big-brake winglet. Cockpit build keeps only the FRONT ducts.
     const brakesT = tier("brakes");
     const ductMul = brakeStyle ? brakeStyle.duct : (brakesT === 0 ? 0.5 : brakesT === 2 ? 1.9 : 1.0);
-    // Hot-brake glow: high-spec carbon brakes run their discs cherry-red — an HDR
-    // disc peeking through the wheel that intensifies with the brake package. The
-    // hotter the spec (higher ductMul), the brighter AND whiter-orange the glow
-    // (green channel climbs so the top brakes read as glazed orange-white heat),
-    // and the disc itself grows a touch — a clear staged brake-temperature read.
-    const brakeGlow = ductMul > 1.15 ? [
-      Math.min(3.2, 0.5 + ductMul * 1.25),
-      Math.min(1.1, 0.10 * ductMul + (ductMul - 1.15) * 0.85),
-      0.05,
-    ] : null;
-    const glowScale = 1 + (ductMul - 1.15) * 0.5;   // disc grows with the package
+    // Brake packages alter duct and caliper hardware. Heat glow is emitted only
+    // by the runtime brake-ring effect once live brake temperature crosses its
+    // threshold; baking it into high-spec meshes made parked cars look overheated.
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, AXLES.frontZ + 0.19, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
       // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
       if (ductMul >= 1.3) addBox(out, s*0.65, 0.42, AXLES.frontZ + 0.16, 0.11, 0.02, 0.15, CARBON);
       if (!ckpt) addBox(out, s*0.58, 0.30, AXLES.rearZ - 0.20, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
-      if (brakeGlow) {
-        addBox(out, s*0.71, AXLES.wheelY, AXLES.frontZ, 0.02, 0.13 * glowScale, 0.13 * glowScale,
-               brakeGlow, SURFACES.emissive);           // front disc
-        if (!ckpt) addBox(out, s*0.69, AXLES.wheelY, AXLES.rearZ, 0.02, 0.15 * glowScale, 0.15 * glowScale,
-                          brakeGlow, SURFACES.emissive); // rear disc
-      }
     }
 
     // --- Suspension wishbones --- SUSPENSION tier scales thickness + follows

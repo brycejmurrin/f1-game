@@ -685,6 +685,30 @@ test.describe("Parts module — visual recipes", () => {
     }
   });
 
+  test("rear endplates use a swept tapered profile that still contains the number board", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => [0, 2, 4].map((level) => {
+      const plate = Car3D.endplate(level);
+      const board = Car3D.numberBoard(level);
+      if (!plate.front || !plate.rear) {
+        return { tapered: false, swept: false, boardInside: false };
+      }
+      const midBottom = (plate.front.bottom + plate.rear.bottom) * 0.5;
+      const midTop = (plate.front.top + plate.rear.top) * 0.5;
+      return {
+        tapered: plate.front.sy < plate.rear.sy,
+        swept: plate.front.top < plate.rear.top,
+        boardInside: board.cy - board.h * 0.5 > midBottom
+          && board.cy + board.h * 0.5 < midTop,
+      };
+    }));
+    expect(result).toEqual([
+      { tapered: true, swept: true, boardInside: true },
+      { tapered: true, swept: true, boardInside: true },
+      { tapered: true, swept: true, boardInside: true },
+    ]);
+  });
+
   test("hidden-system recipes expose serviceable engine, ERS, gearbox, and fuel cues", async ({ page }) => {
     await load(page);
     const result = await page.evaluate(() => {
@@ -857,30 +881,73 @@ test.describe("Parts module — visual recipes", () => {
     }
   });
 
-  test("Car3D keeps glowing panels, glass visors, and bright custom paint semantically distinct", async ({ page }) => {
+  test("Car3D keeps matte panels, glass, paint, and functional emissives semantically distinct", async ({ page }) => {
     await load(page);
     const result = await page.evaluate(() => {
       const brightPaint = [2.2, 1.9, 1.7];
       const mesh = Car3D.build(brightPaint, [0.95, 0.8, 0.1]);
-      const materialsFor = (color) => {
-        const result = new Set();
+      const colorsForMaterial = (material) => {
+        const result = [];
         for (let i = 0; i < mesh.col.length; i += 3) {
-          if (mesh.col[i] === color[0] && mesh.col[i + 1] === color[1] && mesh.col[i + 2] === color[2]) {
-            result.add(mesh.mat[i / 3]);
+          if (mesh.mat[i / 3] === material) {
+            result.push(mesh.col.slice(i, i + 3));
           }
         }
-        return [...result];
+        return result;
       };
       return {
         surfaces: Car3D.SURFACES,
-        panel: materialsFor([1.12, 1.12, 1.16]),
-        visor: materialsFor([0.08, 0.08, 0.09]),
-        brightPaint: materialsFor(brightPaint),
+        used: [...new Set(mesh.mat)],
+        paintColors: colorsForMaterial(Car3D.SURFACES.paint),
       };
     });
-    expect(result.panel).toEqual([result.surfaces.functionalEmissive]);
-    expect(result.visor).toEqual([result.surfaces.glass]);
-    expect(result.brightPaint).toEqual([result.surfaces.paint]);
+    const distinct = ["paint", "panel", "glass", "functionalEmissive"]
+      .map((name) => result.surfaces[name]);
+    expect(new Set(distinct).size).toBe(4);
+    expect(result.used).toContain(result.surfaces.panel);
+    expect(result.used).toContain(result.surfaces.glass);
+    expect(result.paintColors.length).toBeGreaterThan(0);
+    expect(Math.max(...result.paintColors.flat())).toBeLessThanOrEqual(1);
+  });
+
+  test("wheel sidewalls remain rubber outside a distinct metal aero cover", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const mesh = Car3D.buildWheel(0.34, [0.85, 0.1, 0.08]);
+      const outer = new Set(), cover = new Set();
+      for (let i = 0; i < mesh.mat.length; i++) {
+        const x = Math.abs(mesh.pos[i * 3]);
+        const radius = Math.hypot(mesh.pos[i * 3 + 1], mesh.pos[i * 3 + 2]);
+        if (x > 0.165 && radius > 0.30) outer.add(mesh.mat[i]);
+        if (x > 0.165 && radius > 0.08 && radius < 0.21) cover.add(mesh.mat[i]);
+      }
+      return { outer: [...outer], cover: [...cover], surfaces: Car3D.SURFACES };
+    });
+    expect(result.outer).toContain(result.surfaces.rubber);
+    expect(result.outer).not.toContain(result.surfaces.metal);
+    expect(result.cover).toContain(result.surfaces.metal);
+  });
+
+  test("static car geometry across brake packages reserves emissive surfaces for the FIA rain light", async ({ page }) => {
+    await load(page);
+    const offenders = await page.evaluate(() => {
+      const result = [];
+      const brakes = Parts.CATALOG.find((category) => category.id === "brakes");
+      for (const option of brakes.options) {
+        const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+          noWheels: true,
+          parts: { brakes: 1, _visual: { brakes: option.visual } },
+        });
+        for (let i = 0; i < mesh.mat.length; i++) {
+          if (mesh.mat[i] !== Car3D.SURFACES.functionalEmissive) continue;
+          const x = mesh.pos[i * 3], y = mesh.pos[i * 3 + 1], z = mesh.pos[i * 3 + 2];
+          const rainLight = Math.abs(x) <= 0.07 && y >= 0.39 && y <= 0.61 && z <= -2.50;
+          if (!rainLight) result.push([option.id, x, y, z]);
+        }
+      }
+      return result;
+    });
+    expect(offenders).toEqual([]);
   });
 
   test("every canonical Car3D build mode emits an aligned valid material stream", async ({ page }) => {

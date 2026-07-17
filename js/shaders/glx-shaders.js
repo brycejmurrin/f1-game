@@ -590,16 +590,17 @@ void main() {
   // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
   // they must not roughen the mirror shell (that's what read as "ghostly" before).
   vec3 Ngeo = N;
-  // Car3D surface ids occupy 20..25, above TrackGeom's 0..15 material range.
+  // Car3D surface ids occupy 20..26, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 25;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 26;
   bool paintSurface = surfaceId == 20;
   bool carbonSurface = surfaceId == 21;
   bool rubberSurface = surfaceId == 22;
   bool metalSurface = surfaceId == 23;
   bool glassSurface = surfaceId == 24;
   bool emissiveSurface = surfaceId == 25;
+  bool panelSurface = surfaceId == 26;
   float carPaint = classifiedCar ? (paintSurface ? uCarPaint : 0.0) : uCarPaint;
   float clearcoat = classifiedCar
     ? (paintSurface ? uClearcoat : (glassSurface ? uClearcoat * 0.45 : 0.0))
@@ -608,7 +609,7 @@ void main() {
     ? (metalSurface ? max(uMetalness, 0.78) : (carbonSurface ? 0.08 : 0.0))
     : uMetalness;
   float specular = classifiedCar
-    ? (rubberSurface ? 0.18 : (metalSurface ? 1.0 : (carbonSurface ? 0.48 : uSpecular)))
+    ? (rubberSurface ? 0.18 : (metalSurface ? 1.0 : (carbonSurface ? 0.48 : (panelSurface ? 0.35 : uSpecular))))
     : uSpecular;
   float emissive = classifiedCar
     ? (emissiveSurface ? max(uEmissive, 1.0) : (paintSurface ? uEmissive : 0.0))
@@ -702,6 +703,7 @@ void main() {
   if (metalSurface) rough = min(rough, 0.16);
   if (glassSurface) rough = min(rough, 0.13);
   if (emissiveSurface) rough = max(rough, 0.32);
+  if (panelSurface) rough = max(rough, 0.72);
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);

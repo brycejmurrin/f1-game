@@ -289,13 +289,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(in.matId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 25;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 26;
   let paintSurface = surfaceId == 20;
   let carbonSurface = surfaceId == 21;
   let rubberSurface = surfaceId == 22;
   let metalSurface = surfaceId == 23;
   let glassSurface = surfaceId == 24;
   let emissiveSurface = surfaceId == 25;
+  let panelSurface = surfaceId == 26;
   if (classifiedCar) {
     if (paintSurface) {
       carPaint = D.mat1.w;
@@ -367,6 +368,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (rubberSurface) { specular = 0.18; }
     if (metalSurface) { specular = 1.0; }
     if (carbonSurface) { specular = 0.48; }
+    if (panelSurface) { specular = 0.35; }
     emissive = select(0.0, D.mat0.x, paintSurface);
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
     if (carbonSurface) { rough = max(rough, 0.56); }
@@ -374,6 +376,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (metalSurface) { rough = min(rough, 0.16); }
     if (glassSurface) { rough = min(rough, 0.13); }
     if (emissiveSurface) { rough = max(rough, 0.32); }
+    if (panelSurface) { rough = max(rough, 0.72); }
   }
 
   // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/glx.js:473-507,
