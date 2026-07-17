@@ -94,6 +94,7 @@ uniform float uBounceK;     // per-lamp bounce-fill strength (was literal 0.04)
 uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
 uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)
 uniform float uGlowAmp;     // emissive HDR glow push (was literal 2.3)
+uniform float uBloomBoost;  // extra HDR push per unit of OVER-WHITE albedo (neon/lens tag)
 uniform float uPcssPen;     // PCSS penumbra growth rate (was literal 80.0)
 uniform float uKeyMul;      // direct sun/key-light intensity multiplier (default 1)
 uniform float uTime;        // seconds (drives cloud-shadow drift)
@@ -1036,7 +1037,16 @@ void main() {
     // instead of sitting as flat bright paint.
     // HDR push kept moderate (was 3.2): windows/heads GLOW, they don't glare —
     // the night energy budget lives or dies on this multiplier.
-    color += albedo * glow * uGlowAmp;
+    // PER-MATERIAL bloom weight: albedos authored ABOVE white (the neon crown
+    // bands at ~2.5, neon-tinted panes, the LENS_NIGHT lamp albedos at
+    // 1.06-1.40 — see tracks.js) are the scenery's "this surface IS a light
+    // source" tag, while generic emissive (lit concrete, night road/terrain
+    // glow, warm office panes) sits at or under 1.0. Scaling an extra push by
+    // how far past white the albedo is lets neon/signage/lenses bloom harder
+    // WITHOUT raising uGlowAmp or lowering the global bloom threshold (both of
+    // which drag every emissive surface — and the fog — up with them).
+    float hdrTag = max(bright - 1.0, 0.0);
+    color += albedo * glow * uGlowAmp * (1.0 + hdrTag * uBloomBoost);
   }
 
   // Height-based fog: density falls off exponentially with altitude above eye level.
