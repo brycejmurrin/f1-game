@@ -536,7 +536,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let NoHg = max(dot(Ngeo, Hg), 0.0);
     let NoVg = max(dot(Ngeo, V), 1e-4);
     let NoLg = max(dot(Ngeo, L), 0.0);
-    let ccA = 0.035;
+    // Specular AA (GLX parity): widen the fixed lobe by the geometric-normal
+    // variance so the streak stops strobing on tight curvature; flat panels
+    // keep the crisp 0.035. Capped so silhouette edges can't matte it out.
+    let ccDx = dpdx(Ngeo); let ccDy = dpdy(Ngeo);
+    let ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
+    let ccA = min(sqrt(0.035 * 0.035 + ccSaaVar * 0.25), 0.30);
     let Dc = D_GGX(NoHg, ccA);
     let Vc = V_SmithGGX(NoVg, NoLg, ccA);
     let Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3<f32>(0.05), 1.0).x;
@@ -959,6 +964,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   }
 
   // --- Procedural cloud layer (basic) ---
+  // covRay: cloud coverage seen along this ray, hoisted for the star-occlusion
+  // term below (GLX parity — stars fade out behind the deck).
+  var covRay = 0.0;
   if (cloud > 0.001 && up > 0.012) {
     let cp = dir.xz / up * 0.42;
     let cT = time * cloudSpeed;
@@ -966,6 +974,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let cp2 = cp + vec2<f32>(cT * 0.0017, cT * 0.0023);
     let f = fbm(cp1);
     let cov = smoothstep(0.50 - cloud * 0.42, 0.84, f) * smoothstep(0.013, 0.05, up);
+    covRay = cov;
     let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
     let sl = pow(sd, 2.0);
     let sunBright = max(sunColor.r, max(sunColor.g, sunColor.b));
@@ -1012,7 +1021,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       let giant = step(0.9995, h);
       let srad = mix(0.0016, 0.0028, giant) * starSize;   // STAR SIZE knob
       let star = smoothstep(srad, srad * 0.35, dstar) * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
-      c = c + vec3<f32>(star) * starBright;
+      // Cloud occlusion (GLX parity): stars sit behind the deck.
+      c = c + vec3<f32>(star) * starBright * (1.0 - covRay);
     }
   }
 
@@ -1033,6 +1043,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * cityGlowReach);   // CITY GLOW REACH knob
     c = c + U.cityGlow.xyz * horiz;
   }
+
+  // ~1/255 interleaved-gradient dither on the dome output (GLX SKY_FS parity):
+  // breaks the night-gradient banding at scene write; time-stepped shimmer.
+  let skyDth = fract(52.9829189 * fract(dot(
+    in.pos.xy + 5.588238 * (floor(time * 60.0) % 64.0),
+    vec2<f32>(0.06711056, 0.00583715))));
+  c = c + vec3<f32>((skyDth - 0.5) * (1.0 / 255.0));
 
   return vec4<f32>(c, 1.0);
 }`;
