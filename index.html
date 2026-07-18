@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/style.css?v=621">
-<link rel="stylesheet" href="css/data.css?v=621">
+<link rel="stylesheet" href="css/style.css?v=623">
+<link rel="stylesheet" href="css/data.css?v=623">
 <script>
 // ── SHELL VERSION GUARD ──────────────────────────────────────────────────────
 // index.html is the ONE file with no ?v= cache-buster on itself, so an installed
@@ -150,19 +150,29 @@
   <h2>PAUSED</h2>
   <button id="pm-resume">RESUME</button>
   <button id="pm-restart">RESTART RACE</button>
-  <button id="pm-steer">STEER: TILT</button>
-  <button id="pm-calib">RECALIBRATE TILT</button>
-  <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
-  <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
-  <button id="pm-gears">GEARS: AUTO</button>
-  <button id="pm-sound">SOUND: ON</button>
-  <button id="pm-music">MUSIC: ON</button>
-  <button id="pm-res">RESOLUTION: AUTO</button>
-  <button id="pm-renderer" hidden>RENDERER: WEBGL2</button>
-  <button id="pm-gfx" hidden>GRAPHICS: STANDARD</button>
-  <button id="pm-hidehud">HIDE HUD</button>
+  <button id="pm-settings">SETTINGS&hellip;</button>
   <button id="pm-quit">QUIT TO MENU</button>
   <button id="pm-standings" hidden>STANDINGS</button>
+</div>
+
+<!-- settings sub-menu — opened from the pause menu; keeps the pause screen itself
+     down to the essentials. All the tuning/toggle controls live here. -->
+<div id="pmsettings" hidden>
+  <div id="pmsettings-inner" class="panel">
+    <h2>SETTINGS</h2>
+    <button id="pm-steer">STEER: TILT</button>
+    <button id="pm-calib">RECALIBRATE TILT</button>
+    <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
+    <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
+    <button id="pm-gears">GEARS: AUTO</button>
+    <button id="pm-sound">SOUND: ON</button>
+    <button id="pm-music">MUSIC: ON</button>
+    <button id="pm-hidehud">HIDE HUD</button>
+    <button id="pm-res">RESOLUTION: AUTO</button>
+    <button id="pm-renderer" hidden>RENDERER: WEBGL2</button>
+    <button id="pm-gfx" hidden>GRAPHICS: STANDARD</button>
+    <button id="pm-settings-close">BACK</button>
+  </div>
 </div>
 
 <!-- main menu -->
@@ -337,15 +347,23 @@
         Pause <span class="key">P</span> / <span class="key">Esc</span>
       </dd>
       <dt>TOUCH / MOBILE</dt>
-      <dd>Pick <span class="key">STEER</span> in the pause menu: TILT your phone (auto-calibrates at the lights), on-screen BUTTONS, or tap left/right screen HALVES. In button and touch modes the car accelerates for you &mdash; just steer and brake</dd>
+      <dd>Pick <span class="key">STEER</span> in <span class="key">SETTINGS</span> (pause &rarr; SETTINGS): TILT your phone (auto-calibrates at the lights), on-screen BUTTONS, or tap left/right screen HALVES. In button and touch modes the car accelerates for you &mdash; just steer and brake</dd>
       <dt>&#9889; BOOST</dt>
       <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
       <dt>OVERTAKE</dt>
       <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 DRS replacement</dd>
       <dt>GEARS</dt>
-      <dd>Toggle <span class="key">GEARS: MANUAL</span> in the pause menu. Shift up near the redline, down for corner exits. The tachometer + gear indicator sit bottom-centre</dd>
+      <dd>Toggle <span class="key">GEARS: MANUAL</span> in <span class="key">SETTINGS</span>. Shift up near the redline, down for corner exits. The tachometer + gear indicator sit bottom-centre</dd>
       <dt>&#127909; CAMERA</dt>
       <dd>Tap the <span class="key">CAM</span> button (top-right) or press <span class="key">C</span> to cycle CHASE &rarr; FAR &rarr; COCKPIT &rarr; HOOD. Your choice is remembered</dd>
+      <dt>&#9881; SETTINGS</dt>
+      <dd>Pause (<span class="key">P</span> / <span class="key">Esc</span> or the <span class="key">&#10074;&#10074;</span> button) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
+      <dt>&#127918; CHANGE STEERING</dt>
+      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles the input method (tilt / buttons / touch). <span class="key">ADVANCED STEERING</span> opens presets (RELAX / STANDARD / PRO) plus sliders for sensitivity, driving help, steer lock and the racing line. Everything applies instantly and is saved</dd>
+      <dt>&#128161; LIGHTING</dt>
+      <dd>In <span class="key">SETTINGS</span> tap <span class="key">LIGHTING TUNER</span> for a live tuner &mdash; time of day, exposure, colour grade and more, with a real-time preview. Values are saved per track / time / weather</dd>
+      <dt>&#128266; SOUND &amp; HUD</dt>
+      <dd>In <span class="key">SETTINGS</span>: toggle <span class="key">SOUND</span> and <span class="key">MUSIC</span>, or <span class="key">HIDE HUD</span> for a clean cinematic view (the small eye icon brings it back)</dd>
       <dt>TRACK LIMITS</dt>
       <dd>Grass is slow. Cutting the track repeatedly earns a +5 s penalty</dd>
       <dt>RACE</dt>
@@ -526,75 +544,75 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<script crossorigin="anonymous" src="js/mat4.js?v=621"></script>
-<script crossorigin="anonymous" src="js/shaders/glx-shaders.js?v=621"></script>
-<script crossorigin="anonymous" src="js/glx.js?v=621"></script>
+<script crossorigin="anonymous" src="js/mat4.js?v=623"></script>
+<script crossorigin="anonymous" src="js/shaders/glx-shaders.js?v=623"></script>
+<script crossorigin="anonymous" src="js/glx.js?v=623"></script>
 <!-- WebGPU backend (opt-in; inert unless apex26.gfxBackend=webgpu). Load order:
      chunks -> post -> fx -> wgx (consumes them) -> gfx (selects backend). -->
-<script crossorigin="anonymous" src="js/webgpu/wgsl-chunks.js?v=621"></script>
-<script crossorigin="anonymous" src="js/webgpu/wgsl-post.js?v=621"></script>
-<script crossorigin="anonymous" src="js/webgpu/wgsl-fx.js?v=621"></script>
-<script crossorigin="anonymous" src="js/webgpu/wgx.js?v=621"></script>
-<script crossorigin="anonymous" src="js/gfx.js?v=621"></script>
-<script crossorigin="anonymous" src="js/gltf.js?v=621"></script>
-<script crossorigin="anonymous" src="js/teams.js?v=621"></script>
-<script crossorigin="anonymous" src="js/circuits.js?v=621"></script>
-<script crossorigin="anonymous" src="js/track-geom.js?v=621"></script>
-<script crossorigin="anonymous" src="js/track-scenery-data.js?v=621"></script>
-<script crossorigin="anonymous" src="js/circuit-markings.js?v=621"></script>
-<script crossorigin="anonymous" src="js/track-space.js?v=621"></script>
-<script crossorigin="anonymous" src="js/track-surface.js?v=621"></script>
-<script crossorigin="anonymous" src="js/track-models.js?v=621"></script>
-<script crossorigin="anonymous" src="js/scenery-themes.js?v=621"></script>
-<script crossorigin="anonymous" src="js/landmark-kit.js?v=621"></script>
-<script crossorigin="anonymous" src="js/circuit-kit.js?v=621"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgsl-chunks.js?v=623"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgsl-post.js?v=623"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgsl-fx.js?v=623"></script>
+<script crossorigin="anonymous" src="js/webgpu/wgx.js?v=623"></script>
+<script crossorigin="anonymous" src="js/gfx.js?v=623"></script>
+<script crossorigin="anonymous" src="js/gltf.js?v=623"></script>
+<script crossorigin="anonymous" src="js/teams.js?v=623"></script>
+<script crossorigin="anonymous" src="js/circuits.js?v=623"></script>
+<script crossorigin="anonymous" src="js/track-geom.js?v=623"></script>
+<script crossorigin="anonymous" src="js/track-scenery-data.js?v=623"></script>
+<script crossorigin="anonymous" src="js/circuit-markings.js?v=623"></script>
+<script crossorigin="anonymous" src="js/track-space.js?v=623"></script>
+<script crossorigin="anonymous" src="js/track-surface.js?v=623"></script>
+<script crossorigin="anonymous" src="js/track-models.js?v=623"></script>
+<script crossorigin="anonymous" src="js/scenery-themes.js?v=623"></script>
+<script crossorigin="anonymous" src="js/landmark-kit.js?v=623"></script>
+<script crossorigin="anonymous" src="js/circuit-kit.js?v=623"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script crossorigin="anonymous" src="js/tracks/bahrain.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/monaco.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/silverstone.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/spa.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/monza.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/suzuka.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/singapore.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/cota.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/interlagos.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/vegas.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/madrid.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/zandvoort.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/jeddah.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/albert_park.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/shanghai.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/miami.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/imola.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/montreal.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/redbull.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/hungaroring.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/baku.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/mexico.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/qatar.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks/abudhabi.js?v=621"></script>
-<script crossorigin="anonymous" src="js/tracks.js?v=621"></script>
-<script crossorigin="anonymous" src="js/trackmaps.js?v=621"></script>
-<script crossorigin="anonymous" src="js/car3d.js?v=621"></script>
-<script crossorigin="anonymous" src="js/input.js?v=621"></script>
-<script crossorigin="anonymous" src="js/audio.js?v=621"></script>
-<script crossorigin="anonymous" src="js/api.js?v=621"></script>
-<script crossorigin="anonymous" src="js/data-telemetry.js?v=621"></script>
-<script crossorigin="anonymous" src="js/data-export.js?v=621"></script>
-<script crossorigin="anonymous" src="js/data-schedule.js?v=621"></script>
-<script crossorigin="anonymous" src="js/data-standings.js?v=621"></script>
-<script crossorigin="anonymous" src="js/data-lastrace.js?v=621"></script>
-<script crossorigin="anonymous" src="js/data-live.js?v=621"></script>
-<script crossorigin="anonymous" src="js/data.js?v=621"></script>
-<script crossorigin="anonymous" src="js/parts.js?v=621"></script>
-<script crossorigin="anonymous" src="js/liveries.js?v=621"></script>
-<script crossorigin="anonymous" src="js/liverytex.js?v=621"></script>
-<script crossorigin="anonymous" src="js/ghost.js?v=621"></script>
-<script crossorigin="anonymous" src="js/light-presets.js?v=621"></script>
-<script crossorigin="anonymous" src="js/game/tables.js?v=621"></script>
-<script crossorigin="anonymous" src="js/game/lighting.js?v=621"></script>
-<script crossorigin="anonymous" src="js/game/carmesh.js?v=621"></script>
-<script crossorigin="anonymous" src="js/game/particles.js?v=621"></script>
-<script crossorigin="anonymous" src="js/game.js?v=621"></script>
+<script crossorigin="anonymous" src="js/tracks/bahrain.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/monaco.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/silverstone.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/spa.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/monza.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/suzuka.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/singapore.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/cota.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/interlagos.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/vegas.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/madrid.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/zandvoort.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/jeddah.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/albert_park.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/shanghai.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/miami.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/imola.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/montreal.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/redbull.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/hungaroring.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/baku.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/mexico.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/qatar.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks/abudhabi.js?v=623"></script>
+<script crossorigin="anonymous" src="js/tracks.js?v=623"></script>
+<script crossorigin="anonymous" src="js/trackmaps.js?v=623"></script>
+<script crossorigin="anonymous" src="js/car3d.js?v=623"></script>
+<script crossorigin="anonymous" src="js/input.js?v=623"></script>
+<script crossorigin="anonymous" src="js/audio.js?v=623"></script>
+<script crossorigin="anonymous" src="js/api.js?v=623"></script>
+<script crossorigin="anonymous" src="js/data-telemetry.js?v=623"></script>
+<script crossorigin="anonymous" src="js/data-export.js?v=623"></script>
+<script crossorigin="anonymous" src="js/data-schedule.js?v=623"></script>
+<script crossorigin="anonymous" src="js/data-standings.js?v=623"></script>
+<script crossorigin="anonymous" src="js/data-lastrace.js?v=623"></script>
+<script crossorigin="anonymous" src="js/data-live.js?v=623"></script>
+<script crossorigin="anonymous" src="js/data.js?v=623"></script>
+<script crossorigin="anonymous" src="js/parts.js?v=623"></script>
+<script crossorigin="anonymous" src="js/liveries.js?v=623"></script>
+<script crossorigin="anonymous" src="js/liverytex.js?v=623"></script>
+<script crossorigin="anonymous" src="js/ghost.js?v=623"></script>
+<script crossorigin="anonymous" src="js/light-presets.js?v=623"></script>
+<script crossorigin="anonymous" src="js/game/tables.js?v=623"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=623"></script>
+<script crossorigin="anonymous" src="js/game/carmesh.js?v=623"></script>
+<script crossorigin="anonymous" src="js/game/particles.js?v=623"></script>
+<script crossorigin="anonymous" src="js/game.js?v=623"></script>
 </body>
 </html>
