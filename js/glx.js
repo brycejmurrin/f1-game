@@ -36,6 +36,7 @@ const GLX = (function () {
   // gpuMs() returns -1) when the extension is missing — notably iOS Safari,
   // where it's unreliable/absent, so this is a Chrome/Android profiling aid.
   let _gpuTimerExt = null, _gpuTimerOn = false, _gpuQPending = [], _gpuMs = -1;
+  let _anisoExt = null, _anisoMax = 0;   // EXT_texture_filter_anisotropic (capped 4×)
   let _gpuQActive = null;   // query open between begin() and present() this frame
   let litProg = null, litU = null;
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
@@ -236,7 +237,7 @@ const GLX = (function () {
     if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    downU = locs(downProg, ["uTex", "uTexel"]);
+    downU = locs(downProg, ["uTex", "uTexel", "uKaris"]);
     upU = locs(upProg, ["uTex", "uTexel", "uSpread"]);
     // MSAA: pick the sample count the HDR colour format actually supports (many
     // mobile GPUs render RGBA16F but not multisampled RGBA16F — query, don't assume).
@@ -637,6 +638,17 @@ const GLX = (function () {
     // actual querying is gated behind gpuTimer(true).
     try { _gpuTimerExt = gl.getExtension("EXT_disjoint_timer_query_webgl2"); } catch (_) { _gpuTimerExt = null; }
 
+    // Anisotropic filtering (ubiquitous, but still an extension in WebGL2).
+    // Applied at a modest 4× to the mippy content textures (decal atlases,
+    // env cube) so decals stay legible at grazing angles instead of smearing
+    // into the LINEAR_MIPMAP_LINEAR blur. Query once; 0 = unavailable.
+    try {
+      _anisoExt = gl.getExtension("EXT_texture_filter_anisotropic")
+               || gl.getExtension("WEBKIT_EXT_texture_filter_anisotropic");
+      _anisoMax = _anisoExt
+        ? Math.min(4, gl.getParameter(_anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 0) : 0;
+    } catch (_) { _anisoExt = null; _anisoMax = 0; }
+
     // WebGL context-loss recovery. Mobile tile GPUs can drop the context under
     // memory pressure (the per-frame env-probe cube adds load). Without a handler
     // the loss is permanent and later gl calls cascade into errors. preventDefault
@@ -679,7 +691,7 @@ const GLX = (function () {
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (markBatchProg) {
@@ -880,6 +892,9 @@ const GLX = (function () {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // 4× anisotropy: decal atlases are read at grazing angles on the bodywork —
+    // trilinear alone smears the sponsors/numbers into mip blur there.
+    if (_anisoMax > 1) gl.texParameterf(gl.TEXTURE_2D, _anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, _anisoMax);
     gl.bindTexture(gl.TEXTURE_2D, null);
     return tex;
   }
@@ -954,6 +969,9 @@ const GLX = (function () {
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // 4× anisotropy on the env cube: the clearcoat mirror samples it along
+    // grazing reflection rays where plain trilinear over-blurs.
+    if (_anisoMax > 1) gl.texParameterf(gl.TEXTURE_CUBE_MAP, _anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, _anisoMax);
     gl.generateMipmap(gl.TEXTURE_CUBE_MAP);   // texture-complete (black) from frame 0
     ensureEnvDummy();
     envDepthRB = gl.createRenderbuffer();
@@ -1562,6 +1580,7 @@ const GLX = (function () {
     gl.uniform1f(skyU.uSunSquash,    sky.sunSquash    !== undefined ? sky.sunSquash    : 1);
     gl.uniform1f(skyU.uCityGlowReach, sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1);
     gl.uniform1f(skyU.uCloudDef,     sky.cloudDef     !== undefined ? sky.cloudDef     : 1);
+    gl.uniform1f(skyU.uLightning,   sky.lightning   !== undefined ? sky.lightning   : 0);
     setBlend(false);
     setDepthMask(false);
     bindVAO(skyVAO);
@@ -1917,6 +1936,10 @@ const GLX = (function () {
         gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
         gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
         gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+        // Karis partial luma weighting on the FIRST downsample only — that's
+        // where sub-pixel HDR spikes (the bloom "fireflies") get averaged in;
+        // later mips are already low-pass and keep the plain 13-tap kernel.
+        gl.uniform1f(downU.uKaris, i === 1 ? 1 : 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
       useProg(upProg);

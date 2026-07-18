@@ -885,6 +885,19 @@ void main() {
   specCol = specCol / (1.0 + specCol);
   color += specCol;
 
+  // Specular AA for the CLEARCOAT lobes below: the base-coat saaVar above
+  // widens only the base roughness — the fixed-a clearcoat streak and the
+  // pow-400 env sun disc ran unwidened, so on curved bodywork (where the
+  // geometric normal swings fast per pixel) the tight lobes strobed frame to
+  // frame. Variance of Ngeo (NOT N — the lacquer shades on the smooth shell,
+  // and the flake micro-normal must not blur it). uClearcoat is a uniform, so
+  // the branch is uniform control flow and the derivatives stay defined.
+  float ccSaaVar = 0.0;
+  if (uClearcoat > 0.001) {
+    vec3 ccDx = dFdx(Ngeo), ccDy = dFdy(Ngeo);
+    ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
+  }
+
   // Clearcoat: a second, fixed-low-roughness specular lobe over the base coat —
   // the thin lacquer shell of automotive paint. It keeps a crisp sun highlight
   // even where the base coat is rougher, which is what gives cars their glossy
@@ -901,7 +914,11 @@ void main() {
     float NoHg = max(dot(Ngeo, Hg), 0.0);
     float NoVg = max(dot(Ngeo, V), 1e-4);
     float NoLg = max(dot(Ngeo, L), 0.0);
-    float ccA = 0.035;
+    // Widened by the geometric-normal variance (specular AA, same recipe as
+    // the base coat): flat panels keep the crisp 0.035 lobe, tight curvature
+    // fattens it just enough to stop the per-pixel strobing. Capped so a hard
+    // silhouette edge can't matte the lacquer out entirely.
+    float ccA = min(sqrt(0.035 * 0.035 + ccSaaVar * 0.25), 0.30);
     float Dc = D_GGX(NoHg, ccA);
     float Vc = V_SmithGGX(NoVg, NoLg, ccA);
     float Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), 1.0).x;
@@ -965,7 +982,13 @@ void main() {
         envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
       }
     }
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * uCarSunGlint * shadow;  // sun disc (CAR SUN GLINT knob, def 12.0) — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    // Sun disc in the mirror: pow-400 ≈ a GGX lobe of alpha ~0.0705 — widen
+    // that alpha by the same geometric variance (specular AA) and map back to
+    // an exponent, so the disc softens on tight curvature instead of strobing;
+    // flat panels keep the exact 400. Floor 32 caps how soft an edge can get.
+    float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+    float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow;  // CAR SUN GLINT knob (def 12.0) — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
@@ -1196,6 +1219,7 @@ uniform float uSunCorona;  // tight sun corona ring gain (def 1.0)
 uniform float uSunSquash;  // sun horizon vertical-squash amount (def 1.0)
 uniform float uCityGlowReach; // city-glow horizon reach scale (def 1.0)
 uniform float uCloudDef;   // cloud edge definition/contrast (def 1.0)
+uniform float uLightning;  // storm strike flash 1→0 (0 = none, backward-compatible)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -1383,9 +1407,25 @@ void main() {
       float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
       lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
     }
+    // LIGHTNING: during a strike (uLightning 1→0, the same decay that spikes
+    // ambient/exposure in game.js) the cloud deck itself flares — a storm flash
+    // is diffused THROUGH the clouds, so thick billowing bellies light up
+    // brightest (the bolt is inside/behind the deck) while thin wisps bleach
+    // less. Cool blue-white, HDR >1 so the flash blooms like the real thing.
+    if (uLightning > 0.001) {
+      vec3 ltFlash = vec3(0.82, 0.94, 1.30) * (1.0 + thick * 1.2);
+      lit = mix(lit, ltFlash, clamp(uLightning * (0.40 + 0.60 * thick), 0.0, 1.0));
+    }
     c = mix(c, lit, cov);
     cityCov = cov;
     cityThick = thick;
+  }
+
+  // LIGHTNING sky-gradient lift: the clear dome between the clouds also picks
+  // up a gentler cool bleach during a strike (scattered flash light), weighted
+  // DOWN where the cloud deck already flared above so the energy isn't doubled.
+  if (uLightning > 0.001 && up > 0.0) {
+    c += vec3(0.10, 0.13, 0.20) * uLightning * (1.0 - cityCov * 0.6);
   }
 
   // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
@@ -1459,7 +1499,10 @@ void main() {
       float srad = mix(0.0016, 0.0028, giant) * uStarSize;
       float star = smoothstep(srad, srad * 0.35, d)
                  * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
-      c += vec3(star) * uStarBright;   // STAR BRIGHTNESS knob
+      // Cloud occlusion: stars sit BEHIND the cloud deck, so coverage along
+      // this ray (cityCov, hoisted from the cloud pass above) fades them out —
+      // an overcast night shows few/no stars instead of stars ON the clouds.
+      c += vec3(star) * uStarBright * (1.0 - cityCov);   // STAR BRIGHTNESS knob
     }
   }
 
@@ -1500,6 +1543,16 @@ void main() {
                  * clamp(1.0 - dir.y * 1.6, 0.0, 1.0);
     c += uCityGlow * pickup * 0.45;
   }
+
+  // ~1/255 interleaved-gradient dither on the dome output: the night gradient
+  // spans just a handful of 8-bit steps, and on the RGBA8 fallback path the
+  // quantisation happens right here at scene write — the composite's own
+  // dither can't repair steps that were baked into its input. Time-stepped so
+  // it shimmers like noise instead of etching a fixed pattern.
+  float skyDth = fract(52.9829189 * fract(dot(
+    gl_FragCoord.xy + 5.588238 * mod(floor(uTime * 60.0), 64.0),
+    vec2(0.06711056, 0.00583715))));
+  c += (skyDth - 0.5) * (1.0 / 255.0);
 
   outColor = vec4(c, 1.0);
 }`;
@@ -1692,7 +1745,15 @@ out vec4 outColor;
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
   float l = max(max(c.r, c.g), c.b);
-  float k = max(0.0, l - uThreshold) / max(l, 1e-4);
+  // Quadratic soft knee (half-width = threshold/2) instead of the old hard
+  // max(0, l-t) cut: pixels ramp smoothly into the bloom as they approach the
+  // threshold, so a small lamp crossing it at distance FADES in over a few
+  // frames instead of popping its whole halo on in one. Above the knee the
+  // response is identical to the hard threshold.
+  float knee = uThreshold * 0.5 + 1e-4;
+  float soft = clamp(l - uThreshold + knee, 0.0, 2.0 * knee);
+  soft = soft * soft / (4.0 * knee);
+  float k = max(soft, l - uThreshold) / max(l, 1e-4);
   outColor = vec4(c * k, 1.0);
 }`;
 
@@ -1723,6 +1784,7 @@ precision highp float;
 in vec2 vUV;
 uniform sampler2D uTex;
 uniform vec2 uTexel;
+uniform float uKaris;   // 1 on the FIRST mip only: partial luma weighting (firefly fix)
 out vec4 outColor;
 void main() {
   vec2 t = uTexel;
@@ -1739,9 +1801,32 @@ void main() {
   vec3 k = texture(uTex, vUV + t * vec2( 1.0,  1.0)).rgb;
   vec3 l = texture(uTex, vUV + t * vec2(-1.0, -1.0)).rgb;
   vec3 m = texture(uTex, vUV + t * vec2( 1.0, -1.0)).rgb;
-  vec3 s = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625
-         + (j + k + l + m) * 0.125;
-  outColor = vec4(s, 1.0);
+  // The 13 taps form 5 overlapping quads (Jimenez): 4 corner quads at weight
+  // 0.125 each + the centre quad at 0.5 (same totals as the flat sum below).
+  vec3 g0 = (a + b + d + e) * 0.25;
+  vec3 g1 = (b + c + e + f) * 0.25;
+  vec3 g2 = (d + e + g + h) * 0.25;
+  vec3 g3 = (e + f + h + i) * 0.25;
+  vec3 g4 = (j + k + l + m) * 0.25;
+  if (uKaris > 0.5) {
+    // Karis partial luma weighting, FIRST mip only: weight each quad by
+    // 1/(1+luma) and renormalise. A single sub-pixel HDR spike (specular
+    // glint, distant lamp) is pulled toward its neighbourhood instead of
+    // dominating the whole downsample — the classic bloom-firefly popping —
+    // while uniform regions renormalise back to the plain average, so overall
+    // bloom energy is roughly preserved.
+    float w0 = 0.125 / (1.0 + max(g0.r, max(g0.g, g0.b)));
+    float w1 = 0.125 / (1.0 + max(g1.r, max(g1.g, g1.b)));
+    float w2 = 0.125 / (1.0 + max(g2.r, max(g2.g, g2.b)));
+    float w3 = 0.125 / (1.0 + max(g3.r, max(g3.g, g3.b)));
+    float w4 = 0.5   / (1.0 + max(g4.r, max(g4.g, g4.b)));
+    vec3 s = (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4)
+           / (w0 + w1 + w2 + w3 + w4);
+    outColor = vec4(s, 1.0);
+  } else {
+    vec3 s = (g0 + g1 + g2 + g3) * 0.125 + g4 * 0.5;
+    outColor = vec4(s, 1.0);
+  }
 }`;
 
   // Mip-chain bloom upsample: 9-tap tent filter, drawn ADDITIVELY (ONE, ONE) into
@@ -2605,10 +2690,14 @@ void main() {
 
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to
   // break the 8-bit banding that otherwise stamps visible steps onto smooth sky
-  // and fog gradients (and rescues the RGBA8 fallback path). Two hashes → a
-  // triangular distribution in [-1,1]; cheap, per-pixel.
-  float d0 = fract(sin(dot(vUV, vec2(12.9898, 78.233))) * 43758.5453);
-  float d1 = fract(sin(dot(vUV, vec2(39.3468, 11.135))) * 24634.6345);
+  // and fog gradients (and rescues the RGBA8 fallback path). Interleaved-
+  // gradient hashes on PIXEL coords (the old vUV-seeded sin-hash was screen-
+  // locked white noise — a frozen speckle welded to the panel), stepped each
+  // frame by the golden-ratio IGN offset so the pattern re-randomises in time
+  // like real sensor noise. Two decorrelated hashes → triangular in [-1,1].
+  vec2 dc = gl_FragCoord.xy + 5.588238 * mod(floor(uGrainTime * 60.0), 64.0);
+  float d0 = fract(52.9829189 * fract(dot(dc, vec2(0.06711056, 0.00583715))));
+  float d1 = fract(52.9829189 * fract(dot(dc + 17.31, vec2(0.00583715, 0.06711056))));
   c += (d0 + d1 - 1.0) / 255.0;
   // FILM GRAIN: luminance-weighted per-pixel noise (mid-tones grain most, blacks
   // and clipped whites least — where real sensor grain lives). 0 = off.

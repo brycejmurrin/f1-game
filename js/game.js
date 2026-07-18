@@ -1044,6 +1044,28 @@ const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shad
 const _shadowCars = [];   // parallel refs: the live player transform replaces its stale pooled entry
 const _livePlayerShadowMat = new Float32Array(16);
 let _shadowCount = 0;
+// Deferred car-decal batch (same pattern as the blob shadows above): the car
+// loop used to interleave gfx.draw(body) with gfx.drawDecal per car — ~2
+// program+state flips per car, ~44/frame with a full field. Record each drawn
+// car's decal params here and flush them in ONE decal-program block right
+// after the loop. Decals are depth-tested but write neither depth nor alpha,
+// so drawing them after the bodies/wheels/rings resolves identically.
+const _decalMats = [];    // pool of Float32Array(16), reused across frames
+const _decalTeams = [];
+const _decalNums = [];
+const _decalCockpit = [];
+const _decalSetup = [];
+let _decalCount = 0;
+function queueCarDecals(team, modelMat, num, cockpit, usePlayerSetup) {
+  let m = _decalMats[_decalCount];
+  if (!m) { m = new Float32Array(16); _decalMats[_decalCount] = m; }
+  m.set(modelMat);
+  _decalTeams[_decalCount] = team;
+  _decalNums[_decalCount] = num;
+  _decalCockpit[_decalCount] = !!cockpit;
+  _decalSetup[_decalCount] = !!usePlayerSetup;
+  _decalCount++;
+}
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
 // one for the render loop (both called once per car per frame) so banking() no
 // longer allocates a fresh object ~23×/frame.
@@ -1129,7 +1151,9 @@ function drawCockpitRig(c, base, dt, paint) {
   gfx.draw(cockpitBodyMesh(c.team), base, paint);
   // Forward decal: the driver number on the nose plate ahead of the driver (the
   // nose is identical to the chase build, so this lands exactly on the plate).
-  drawCarDecals(c.team, base, nite, carDecalNum(c.team, c), true, true);
+  // Queued with the field's decals and flushed after the car loop. The player
+  // cockpit is the one queued decal that renders the PLAYER's setup parts.
+  queueCarDecals(c.team, base, carDecalNum(c.team, c), true, true);
   drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.30, 1.4);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
@@ -3417,7 +3441,6 @@ function persistLightTune() { store.set("lightTune", _ltStore); }
 // a red glow trailing each car on the road surface.
 const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
-const _byD = (a, b) => a.d - b.d;   // hoisted comparator (a per-frame closure otherwise)
 const _rainLightOpts = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
 const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
@@ -3441,8 +3464,8 @@ function appendCarTailLights() {
       _tlN++;
     }
   }
-  _tlSel.length = _tlN;
-  _tlSel.sort(_byD);
+  _tlSel.length = _tlN;      // drop stale entries from earlier (busier) frames
+  _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
@@ -3485,6 +3508,7 @@ const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
 const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
+const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-frame closure)
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
@@ -3600,7 +3624,8 @@ function setFrameLights(eye, scale, fwd) {
     }
   }
   // Sort just those 32 ascending so the tail fade eases the farthest of the set.
-  heap.sort(_byD);
+  // (Comparator hoisted to module scope — this runs every lit frame.)
+  heap.sort(_byDistAsc);
   // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
   // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
   // visible stepping as the set shifted at speed). Fading by closeness to the set
@@ -4166,22 +4191,21 @@ function render(dt) {
   frame.sunViewDir = _sunVS;
   frame.upViewDir = _upVS;
   frame.eye = camEye;
-  // Mobile free-cam draw-distance cap: the far plane is the chunked scenery's ONLY
-  // distance cull, so an altitude/wide vantage with the pushed-out photo-mode far
-  // plane can frame an entire street circuit's ~5 M-vert city in one frame and
-  // jetsam-kill the tab. Cap the RADIAL draw distance on mobile (fog hides the
-  // edge) so the chunk count stays bounded no matter how high or wide the free
-  // camera flies. 0 = disabled (normal play + desktop keep the full vista).
-  // Fog-wall radial cull: past ~95% fog opacity (ln(20)/density ≈ 3/density)
-  // a chunk is invisible anyway, so skip it. Only kicks in when that distance
-  // is inside the 900 m far plane (night 0.004 → 750 m, fog/rain closer);
-  // clear day (0.0012 → 2.5 km) stays uncapped — zero visual change there.
+  // Radial draw-distance cull for chunked scenery.
+  // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
+  // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
+  // keeps the full vista (gfx.begin also thins the fog under dbgCam, so a
+  // fog-derived cull would visibly pop there).
+  // Normal play: fog-wall radial cull — past ~95% fog opacity (3/density) a
+  // chunk is invisible anyway, so skip it. Only kicks in when that distance is
+  // inside the 900 m far plane (night city 0.004 -> 750 m, fog/rain closer);
+  // clear day (0.0012 -> 2.5 km) stays uncapped — zero visual change there.
+  // Feature-shedding tier 3+ also caps the radius at the far plane: scenery
+  // vertex/draw load is the one big cost class the resolution scale and shed
+  // passes don't touch, and by tier 3 the device has proven it can't afford
+  // the full vista (the fog wall hides most of the cut).
   const _fogCull = frame.fogDensity > 3 / 900 ? Math.ceil(3 / frame.fogDensity) : 0;
-  frame.cullDist = (dbgCam && gfx.isMobile) ? 700
-    // Feature-shedding tier 3+ also caps the RADIAL draw distance: scenery
-    // vertex/draw load is the one big cost class that neither the resolution
-    // scale nor the shed passes touch, and by tier 3 the device has proven it
-    // can't afford the full vista (the fog wall hides most of the cut).
+  frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
     : (_perfTier >= 3 ? Math.min(900, _fogCull || 900) : _fogCull);
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
@@ -4630,7 +4654,9 @@ function render(dt) {
     gfx.begin(frame);
     frame.fogDensity = bf;
   } else gfx.begin(frame);
-  M4.invertTo(_mInvVP, _mVP);
+  // _mInvVP still holds this frame's inverse (computed once, right after _mVP,
+  // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
+  // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
   gfx.drawSky(frameSky);
   // (`wet` is already declared above in the sky/lightning block)
@@ -4678,6 +4704,7 @@ function render(dt) {
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
+  _decalCount = 0;    // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
     if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
@@ -4815,13 +4842,13 @@ function render(dt) {
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c), false, true);
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, true);
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team), wholeCarMat, paint);
-      drawCarDecals(c.team, wholeCarMat, night, carDecalNum(c.team, c), false, c.isPlayer);
+      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
       // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
@@ -5002,6 +5029,10 @@ function render(dt) {
       }
     }
   }
+  // Flush all accumulated car decals in one decal-program block — previously
+  // interleaved with the lit body draws (~2 program+state flips per car).
+  for (let i = 0; i < _decalCount; i++)
+    drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i]);
   // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
   // depthMask are set once for the whole field instead of ping-ponging with the
   // lit body program every car.
