@@ -82,18 +82,6 @@ const DataTelemetry = (function () {
     const v = ch.get(c);
     return (v === null || v === undefined || isNaN(v)) ? null : v;
   }
-  // compact per-channel value for the legend readouts (units live on the axes)
-  function shortVal(ch, c) {
-    if (!c) return "—";
-    const v = chanRaw(ch, c);
-    if (ch.id === "drs") return v ? "OPEN" : "—";
-    if (v === null) return "—";
-    if (ch.id === "speed") return String(Math.round(v));
-    if (ch.id === "throttle" || ch.id === "brake") return Math.round(v) + "%";
-    if (ch.id === "gear") return v ? "G" + v : "N";
-    if (ch.id === "rpm") return (v / 1000).toFixed(1) + "k";
-    return String(Math.round(v));
-  }
   // normalize a sample to 0..1 of the plot height for the given channel
   function chanNorm(ch, c, view) {
     const v = chanRaw(ch, c);
@@ -468,7 +456,6 @@ const DataTelemetry = (function () {
     }
 
     const legend = el("div", "dh-legend");
-    view._legVals = {};
     if (view.compare) {
       // driver key: each code chip in that driver's trace/dot colour
       tels.forEach(function (t, i) {
@@ -504,8 +491,7 @@ const DataTelemetry = (function () {
         return;
       }
       // Compare mode: one group per channel — the label toggles both lines,
-      // and each driver's line (solid / dashed) has its own toggle chip with
-      // its live at-cursor value.
+      // each driver's line (solid / dashed) has its own toggle chip.
       const cP = ch.id === "speed" ? cssColor(view.colP) : ch.color;
       const cC = ch.id === "speed" ? cssColor(view.colC) : ch.color;
       const grp = el("span", "dh-leg-group");
@@ -515,15 +501,12 @@ const DataTelemetry = (function () {
       const b1 = toggleBtn("dh-leg-line", view.visible[ch.id],
         "Show / hide " + dcode(view.primary.d) + " " + ch.label + " (solid)");
       const d1 = el("span", "dh-legend-dot"); d1.style.background = cP;
-      const v1 = el("span", "dh-legval", "—"); v1.style.color = cP;
-      b1.appendChild(d1); b1.appendChild(v1);
+      b1.appendChild(d1);
       const b2 = toggleBtn("dh-leg-line", view.visibleC[ch.id],
         "Show / hide " + dcode(view.compare.d) + " " + ch.label + " (dashed)");
       const d2 = el("span", "dh-legend-dot");
       d2.style.background = "repeating-linear-gradient(90deg, " + cC + " 0 3px, transparent 3px 6px)";
-      const v2 = el("span", "dh-legval dh-legval2", "—"); v2.style.color = cC;
-      b2.appendChild(d2); b2.appendChild(v2);
-      view._legVals[ch.id] = [v1, v2];
+      b2.appendChild(d2);
       function repaint() {
         setState(b1, view.visible[ch.id]);
         setState(b2, view.visibleC[ch.id]);
@@ -879,20 +862,6 @@ const DataTelemetry = (function () {
       }
     }
     updateGauges(view);
-    updateLegendVals(view);
-  }
-  // compare-mode legend readouts: both drivers' channel values at the cursor
-  function updateLegendVals(view) {
-    if (!view._legVals || !view.compare) return;
-    const T = view.cursorT === null ? 0 : view.cursorT;
-    const c1 = sampleAt(view.primary.car, T);
-    const c2 = sampleAt(view.compare.car, T);
-    CHANNELS.forEach(function (ch) {
-      const refs = view._legVals[ch.id];
-      if (!refs) return;
-      refs[0].textContent = shortVal(ch, c1);
-      refs[1].textContent = shortVal(ch, c2);
-    });
   }
   function drawCarDot(g, view, tel, t, fill, rscale) {
     const best = locAt(view, tel, t);
