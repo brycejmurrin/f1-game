@@ -259,12 +259,17 @@
 button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dh-legend-item.dh-off { opacity: 0.35; }
 .dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
-/* compare-mode live readouts inside legend items: primary then compare */
-.dh-legval {
-  font-weight: 800; font-variant-numeric: tabular-nums;
-  min-width: 3ch; text-align: right;
+/* compare-mode legend group: [LABEL][solid chip][dashed chip] — the label
+   toggles both lines, each chip toggles that driver's line */
+.dh-leg-group {
+  display: inline-flex; align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 6px;
+  overflow: hidden;
 }
-.dh-legval2 { opacity: 0.62; }
+.dh-leg-group .dh-legend-item { padding: 3px 6px; border-radius: 0; }
+.dh-leg-lbl { font-weight: 700; }
+.dh-leg-line { border-left: 1px solid rgba(255, 255, 255, 0.09); }
+.dh-leg-line .dh-legend-dot { width: 14px; }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 
 /* ---------- lap-replay transport + gauge dashboard ---------- */
