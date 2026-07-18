@@ -348,16 +348,23 @@ const DataTelemetry = (function () {
     const sideArea = el("div", "dh-telem-side");
 
     tels.forEach(function (t, i) {
+      // compact one-line header: swatch · name · fastest-lap time, so the
+      // chart and the info below it fit on screen
       const head = el("div", "dh-livecard");
-      const ht = el("div", "dh-live-title");
-      ht.appendChild(el("span", null, (t.d.name || dcode(t.d))));
-      const sw = el("span", "dh-swatch"); sw.style.background = cssColor(i === 0 ? pcols.p : pcols.c); sw.style.marginLeft = "8px";
+      const ht = el("div", "dh-live-title dh-thead");
+      const sw = el("span", "dh-swatch"); sw.style.background = cssColor(i === 0 ? pcols.p : pcols.c);
       ht.appendChild(sw);
+      ht.appendChild(el("span", null, (t.d.name || dcode(t.d))));
+      if (t.lap) {
+        const lapEl = el("span", "dh-tlap",
+          (t.lap.lapNumber !== null ? "L" + t.lap.lapNumber + " · " : "") + fmtLap(t.lap.lapDuration));
+        lapEl.title = "Fastest lap";
+        ht.appendChild(lapEl);
+      }
       head.appendChild(ht);
-      head.appendChild(el("div", "dh-live-sub", t.lap
-        ? "Fastest lap " + (t.lap.lapNumber !== null ? "(L" + t.lap.lapNumber + ") " : "") + fmtLap(t.lap.lapDuration)
-        : "No timed lap found in this session."));
-      if (t.lap && t.lap.s1 !== null && t.lap.s2 !== null && t.lap.s3 !== null) {
+      if (!t.lap) {
+        head.appendChild(el("div", "dh-live-sub", "No timed lap found in this session."));
+      } else if (t.lap.s1 !== null && t.lap.s2 !== null && t.lap.s3 !== null) {
         head.appendChild(el("div", "dh-live-sub dh-sectors",
           "S1 " + t.lap.s1.toFixed(3) + "  ·  S2 " + t.lap.s2.toFixed(3) + "  ·  S3 " + t.lap.s3.toFixed(3)));
       }

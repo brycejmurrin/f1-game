@@ -540,6 +540,18 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   display: flex; flex-direction: column; gap: 10px;
   padding: 14px 16px;
 }
+/* Compact driver headers inside the popup — small titles with the lap time
+   inline, so the chart plus the gauges/map below it fit on screen */
+.dh-tpopup .dh-livecard { gap: 2px; }
+.dh-tpopup .dh-live-title { font-size: 13px; }
+.dh-tpopup .dh-live-sub { font-size: 10px; }
+.dh-thead { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.dh-thead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dh-tlap {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: 11px; font-weight: 700; font-style: normal;
+  color: #b4b4b8; font-variant-numeric: tabular-nums;
+}
 .dh-telem-side {
   display: flex; flex-direction: column; gap: 10px;
   padding: 0 16px 14px;
@@ -581,10 +593,6 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   .dh-tpopup .dh-transport { gap: 5px; flex-wrap: nowrap; margin: 2px 0; }
   .dh-tpopup .dh-thint { display: none; }
   .dh-tpopup .dh-tbtn { padding: 5px 11px; font-size: 11px; }
-  /* Compact driver header in landscape popup */
-  .dh-tpopup .dh-livecard { gap: 2px; }
-  .dh-tpopup .dh-live-title { font-size: 13px; }
-  .dh-tpopup .dh-live-sub { font-size: 10px; }
   /* Compact gauges in side panel */
   .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
   .dh-telem-side .dh-gval { font-size: 15px; }
