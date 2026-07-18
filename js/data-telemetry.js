@@ -51,7 +51,7 @@ const DataTelemetry = (function () {
     // DRS draws as a thick strip just below the chart's top edge, present only
     // while the wing is OPEN (closed samples return null so nothing is drawn) —
     // a full-height 0/1 square wave would bury every other trace.
-    { id: "drs",      label: "DRS",      color: "#00e0c0", w: 3, lo: 0, hi: 1.1, step: true, noGhost: true, get: function (c) { return c.drs === null || c.drs === undefined ? null : (drsOpen(c.drs) ? 1 : null); }, fmt: function (v) { return v ? "OPEN" : "—"; } }
+    { id: "drs",      label: "DRS",      color: "#00e0c0", w: 3, lo: 0, hi: 1.1, step: true, get: function (c) { return c.drs === null || c.drs === undefined ? null : (drsOpen(c.drs) ? 1 : null); }, fmt: function (v) { return v ? "OPEN" : "—"; } }
   ];
 
   // Chart plot-area insets: PADL leaves a gutter for the km/h axis labels,
@@ -419,7 +419,9 @@ const DataTelemetry = (function () {
       chartBase: null, mapBase: null, deltaBase: null, mapT: null,
       sectors: null, g: null, playBtn: null
     };
-    CHANNELS.forEach(function (ch) { view.visible[ch.id] = !ch.off; });
+    // per-driver visibility: visible = primary (solid), visibleC = compare (dashed)
+    view.visibleC = {};
+    CHANNELS.forEach(function (ch) { view.visible[ch.id] = view.visibleC[ch.id] = !ch.off; });
     view.colP = pcols.p; view.colC = pcols.c;
     function scan(car) {
       for (let i = 0; i < car.length; i++) {
@@ -478,41 +480,65 @@ const DataTelemetry = (function () {
       });
     }
     CHANNELS.forEach(function (ch) {
-      const item = el("button", "dh-legend-item" + (view.visible[ch.id] ? "" : " dh-off"));
-      item.type = "button";
-      item.title = "Show / hide " + ch.label;
-      item.setAttribute("aria-pressed", view.visible[ch.id] ? "true" : "false");
-      if (ch.id === "speed" && view.compare) {
-        // in compare mode the speed traces wear the driver colours
-        const d1 = el("span", "dh-legend-dot"); d1.style.background = cssColor(view.colP);
-        const d2 = el("span", "dh-legend-dot"); d2.style.background = cssColor(view.colC);
-        item.appendChild(d1); item.appendChild(d2);
-      } else {
+      function toggleBtn(cls, on, title) {
+        const b = el("button", "dh-legend-item " + cls + (on ? "" : " dh-off"));
+        b.type = "button"; b.title = title;
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        return b;
+      }
+      function setState(b, on) {
+        b.classList.toggle("dh-off", !on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+      if (!view.compare) {
+        const item = toggleBtn("", view.visible[ch.id], "Show / hide " + ch.label);
         const dot = el("span", "dh-legend-dot"); dot.style.background = ch.color;
         item.appendChild(dot);
+        item.appendChild(document.createTextNode(ch.label));
+        item.addEventListener("click", function () {
+          view.visible[ch.id] = !view.visible[ch.id];
+          setState(item, view.visible[ch.id]);
+          buildBases(view); paintFrame(view);
+        });
+        legend.appendChild(item);
+        return;
       }
-      item.appendChild(document.createTextNode(ch.label));
-      if (view.compare) {
-        // live at-cursor readouts for both drivers, updated by paintFrame
-        const v1 = el("span", "dh-legval", "—");
-        const v2 = el("span", "dh-legval dh-legval2", "—");
-        if (ch.id === "speed") {
-          v1.style.color = cssColor(view.colP);
-          v2.style.color = cssColor(view.colC);
-        } else {
-          v1.style.color = ch.color;
-          v2.style.color = ch.color;
-        }
-        item.appendChild(v1); item.appendChild(v2);
-        view._legVals[ch.id] = [v1, v2];
-      }
-      item.addEventListener("click", function () {
-        view.visible[ch.id] = !view.visible[ch.id];
-        item.classList.toggle("dh-off", !view.visible[ch.id]);
-        item.setAttribute("aria-pressed", view.visible[ch.id] ? "true" : "false");
+      // Compare mode: one group per channel — the label toggles both lines,
+      // and each driver's line (solid / dashed) has its own toggle chip with
+      // its live at-cursor value.
+      const cP = ch.id === "speed" ? cssColor(view.colP) : ch.color;
+      const cC = ch.id === "speed" ? cssColor(view.colC) : ch.color;
+      const grp = el("span", "dh-leg-group");
+      const lbl = toggleBtn("dh-leg-lbl", view.visible[ch.id] || view.visibleC[ch.id],
+        "Show / hide " + ch.label + " for both drivers");
+      lbl.appendChild(document.createTextNode(ch.label));
+      const b1 = toggleBtn("dh-leg-line", view.visible[ch.id],
+        "Show / hide " + dcode(view.primary.d) + " " + ch.label + " (solid)");
+      const d1 = el("span", "dh-legend-dot"); d1.style.background = cP;
+      const v1 = el("span", "dh-legval", "—"); v1.style.color = cP;
+      b1.appendChild(d1); b1.appendChild(v1);
+      const b2 = toggleBtn("dh-leg-line", view.visibleC[ch.id],
+        "Show / hide " + dcode(view.compare.d) + " " + ch.label + " (dashed)");
+      const d2 = el("span", "dh-legend-dot");
+      d2.style.background = "repeating-linear-gradient(90deg, " + cC + " 0 3px, transparent 3px 6px)";
+      const v2 = el("span", "dh-legval dh-legval2", "—"); v2.style.color = cC;
+      b2.appendChild(d2); b2.appendChild(v2);
+      view._legVals[ch.id] = [v1, v2];
+      function repaint() {
+        setState(b1, view.visible[ch.id]);
+        setState(b2, view.visibleC[ch.id]);
+        setState(lbl, view.visible[ch.id] || view.visibleC[ch.id]);
         buildBases(view); paintFrame(view);
+      }
+      b1.addEventListener("click", function () { view.visible[ch.id] = !view.visible[ch.id]; repaint(); });
+      b2.addEventListener("click", function () { view.visibleC[ch.id] = !view.visibleC[ch.id]; repaint(); });
+      lbl.addEventListener("click", function () {
+        const on = !(view.visible[ch.id] || view.visibleC[ch.id]);
+        view.visible[ch.id] = on; view.visibleC[ch.id] = on;
+        repaint();
       });
-      legend.appendChild(item);
+      grp.appendChild(lbl); grp.appendChild(b1); grp.appendChild(b2);
+      legend.appendChild(grp);
     });
     mainArea.appendChild(legend);
 
@@ -800,15 +826,15 @@ const DataTelemetry = (function () {
     const X = chartX(view, T, W);
     cg.strokeStyle = "rgba(255,255,255,0.55)"; cg.lineWidth = 1;
     cg.beginPath(); cg.moveTo(X, PADY); cg.lineTo(X, H - PADY); cg.stroke();
-    if (view.visible.speed) {
-      if (view.compare) {
-        const c2 = sampleAt(view.compare.car, T);
-        const f2 = chanNorm(CHANNELS[0], c2, view);
-        if (f2 !== null) {
-          cg.fillStyle = cssColor(view.colC);
-          cg.beginPath(); cg.arc(X, H - PADY - f2 * (H - 2 * PADY), 3, 0, Math.PI * 2); cg.fill();
-        }
+    if (view.compare && view.visibleC.speed) {
+      const c2 = sampleAt(view.compare.car, T);
+      const f2 = chanNorm(CHANNELS[0], c2, view);
+      if (f2 !== null) {
+        cg.fillStyle = cssColor(view.colC);
+        cg.beginPath(); cg.arc(X, H - PADY - f2 * (H - 2 * PADY), 3, 0, Math.PI * 2); cg.fill();
       }
+    }
+    if (view.visible.speed) {
       const c = sampleAt(view.primary.car, T);
       const f = chanNorm(CHANNELS[0], c, view);
       if (f !== null) {
@@ -938,10 +964,12 @@ const DataTelemetry = (function () {
     const X = function (t) { return chartX(view, t, W); };
     const Y = function (f) { return H - PADY - f * (H - 2 * PADY); };
     g.font = "10px system-ui, sans-serif";
+    // an axis shows while either driver's line for its unit is visible
+    function anyVis(id) { return view.visible[id] || (view.compare && view.visibleC[id]); }
     // Per-unit axes, each in its channel's colour:
     //   left gutter = speed km/h · left inner = rpm · right gutter = gear ·
     //   right inner = % (throttle/brake)
-    if (view.visible.speed) {
+    if (anyVis("speed")) {
       const step = view.speedMax > 260 ? 100 : (view.speedMax > 130 ? 50 : 25);
       g.textAlign = "right"; g.textBaseline = "middle";
       for (let v = step; v <= view.speedMax; v += step) {
@@ -956,7 +984,7 @@ const DataTelemetry = (function () {
       g.fillStyle = "rgba(57,208,255,0.6)";
       g.fillText("km/h", 2, 3);
     }
-    if (view.visible.rpm) {
+    if (anyVis("rpm")) {
       g.textAlign = "left"; g.textBaseline = "middle";
       g.fillStyle = "rgba(192,132,252,0.65)";
       [4000, 8000, 12000].forEach(function (v) {
@@ -968,12 +996,12 @@ const DataTelemetry = (function () {
       g.textBaseline = "top";
       g.fillText("rpm", 2, 15);
     }
-    if (view.visible.gear) {
+    if (anyVis("gear")) {
       g.textAlign = "right"; g.textBaseline = "middle";
       g.fillStyle = "rgba(246,210,0,0.7)";
       [2, 4, 6, 8].forEach(function (gr) { g.fillText("G" + gr, W - 2, Y(gr / 8)); });
     }
-    if (view.visible.throttle || view.visible.brake) {
+    if (anyVis("throttle") || anyVis("brake")) {
       g.textAlign = "right"; g.textBaseline = "middle";
       g.fillStyle = "rgba(63,185,80,0.55)";
       [25, 50, 75].forEach(function (p) { g.fillText(p + "%", W - PADR - 22, Y(p / 100)); });
@@ -1017,11 +1045,18 @@ const DataTelemetry = (function () {
       g.globalAlpha = 0.5;
       for (let k = CHANNELS.length - 1; k >= 1; k--) {
         const ch = CHANNELS[k];
-        // noGhost: the DRS strip would land exactly on the primary's — skip
-        if (view.visible[ch.id] && !ch.noGhost) line(view.compare.car, ch, ch.color, Math.max(1.2, ch.w - 0.4));
+        if (!view.visibleC[ch.id]) continue;
+        if (ch.id === "drs") {
+          // nudge the compare DRS strip below the primary's so both read
+          g.save(); g.translate(0, 5);
+          line(view.compare.car, ch, ch.color, Math.max(1.2, ch.w - 0.4));
+          g.restore();
+        } else {
+          line(view.compare.car, ch, ch.color, Math.max(1.2, ch.w - 0.4));
+        }
       }
       g.globalAlpha = 1;
-      if (view.visible.speed) line(view.compare.car, CHANNELS[0], cssColor(view.colC), 1.8);
+      if (view.visibleC.speed) line(view.compare.car, CHANNELS[0], cssColor(view.colC), 1.8);
       g.setLineDash([]);
     }
     for (let k = CHANNELS.length - 1; k >= 0; k--) {
