@@ -1466,6 +1466,16 @@ void main() {
     c += uCityGlow * pickup * 0.45;
   }
 
+  // ~1/255 interleaved-gradient dither on the dome output: the night gradient
+  // spans just a handful of 8-bit steps, and on the RGBA8 fallback path the
+  // quantisation happens right here at scene write — the composite's own
+  // dither can't repair steps that were baked into its input. Time-stepped so
+  // it shimmers like noise instead of etching a fixed pattern.
+  float skyDth = fract(52.9829189 * fract(dot(
+    gl_FragCoord.xy + 5.588238 * mod(floor(uTime * 60.0), 64.0),
+    vec2(0.06711056, 0.00583715))));
+  c += (skyDth - 0.5) * (1.0 / 255.0);
+
   outColor = vec4(c, 1.0);
 }`;
 
@@ -2530,10 +2540,14 @@ void main() {
 
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to
   // break the 8-bit banding that otherwise stamps visible steps onto smooth sky
-  // and fog gradients (and rescues the RGBA8 fallback path). Two hashes → a
-  // triangular distribution in [-1,1]; cheap, per-pixel.
-  float d0 = fract(sin(dot(vUV, vec2(12.9898, 78.233))) * 43758.5453);
-  float d1 = fract(sin(dot(vUV, vec2(39.3468, 11.135))) * 24634.6345);
+  // and fog gradients (and rescues the RGBA8 fallback path). Interleaved-
+  // gradient hashes on PIXEL coords (the old vUV-seeded sin-hash was screen-
+  // locked white noise — a frozen speckle welded to the panel), stepped each
+  // frame by the golden-ratio IGN offset so the pattern re-randomises in time
+  // like real sensor noise. Two decorrelated hashes → triangular in [-1,1].
+  vec2 dc = gl_FragCoord.xy + 5.588238 * mod(floor(uGrainTime * 60.0), 64.0);
+  float d0 = fract(52.9829189 * fract(dot(dc, vec2(0.06711056, 0.00583715))));
+  float d1 = fract(52.9829189 * fract(dot(dc + 17.31, vec2(0.00583715, 0.06711056))));
   c += (d0 + d1 - 1.0) / 255.0;
   // FILM GRAIN: luminance-weighted per-pixel noise (mid-tones grain most, blacks
   // and clipped whites least — where real sensor grain lives). 0 = off.

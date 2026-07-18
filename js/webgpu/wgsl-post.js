@@ -591,8 +591,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   c = c * mix(vignette, 1.0, vig);
 
   // Triangular-PDF dither (breaks 8-bit banding in sky/fog gradients).
-  let dh0 = fract(sin(dot(in.uv, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-  let dh1 = fract(sin(dot(in.uv, vec2<f32>(39.3468, 11.135))) * 24634.6345);
+  // Interleaved-gradient hashes on pixel coords, stepped per frame by the
+  // golden-ratio IGN offset (GLX COMPOSITE parity) — animated noise, not a
+  // frozen speckle welded to the panel.
+  let dhc = in.pos.xy + 5.588238 * (floor(U.fx.z * 60.0) % 64.0);
+  let dh0 = fract(52.9829189 * fract(dot(dhc, vec2<f32>(0.06711056, 0.00583715))));
+  let dh1 = fract(52.9829189 * fract(dot(dhc + 17.31, vec2<f32>(0.00583715, 0.06711056))));
   c = c + vec3<f32>((dh0 + dh1 - 1.0) / 255.0);
 
   // Film grain: luma-weighted (mids grain most). 0 = off. Animated per frame via

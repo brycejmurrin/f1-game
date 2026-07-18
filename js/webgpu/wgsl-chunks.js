@@ -946,6 +946,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     c = c + U.cityGlow.xyz * horiz;
   }
 
+  // ~1/255 interleaved-gradient dither on the dome output (GLX SKY_FS parity):
+  // breaks the night-gradient banding at scene write; time-stepped shimmer.
+  let skyDth = fract(52.9829189 * fract(dot(
+    in.pos.xy + 5.588238 * (floor(time * 60.0) % 64.0),
+    vec2<f32>(0.06711056, 0.00583715))));
+  c = c + vec3<f32>((skyDth - 0.5) * (1.0 / 255.0));
+
   return vec4<f32>(c, 1.0);
 }`;
 
