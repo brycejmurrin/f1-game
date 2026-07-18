@@ -76,6 +76,7 @@ const GLX = (function () {
   const _grPos = new Float32Array(36), _grCol = new Float32Array(36),
         _grRad = new Float32Array(12), _grDir = new Float32Array(36),
         _grCone = new Float32Array(24), _grVolW = new Float32Array(12), _grSel = [];
+  const _grByD = (a, b) => a.d - b.d;   // hoisted comparator (was a per-frame closure)
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors _gr* above.
@@ -253,7 +254,7 @@ const GLX = (function () {
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak", "uFlareStreak2"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak", "uFlareStreak2"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -342,10 +343,18 @@ const GLX = (function () {
   function createTargets() {
     if (!postEnabled) return;
     const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
-    const mk = (w, h) => {
+    // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
+    // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
+    // are alpha-less positive HDR colour -> R11F_G11F_B10F (half the bytes;
+    // renderable under the same EXT_color_buffer_float the HDR path requires).
+    // LDR fallback keeps RGBA8 everywhere.
+    const hdrOk = colorType === gl.HALF_FLOAT;
+    const mk = (w, h, fmt) => {
       const tex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
+      if (fmt === "r8") gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, null);
+      else if (fmt === "hdr3" && hdrOk) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
+      else gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -418,7 +427,7 @@ const GLX = (function () {
     let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
     let bh = Math.max(1, Math.floor(height / BLOOM_DIV));
     for (let i = 0; i < BLOOM_LEVELS_MAX && bw >= 8 && bh >= 8; i++) {
-      const tex = mk(bw, bh);
+      const tex = mk(bw, bh, "hdr3");
       const fbo = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
@@ -443,12 +452,12 @@ const GLX = (function () {
       if (!ssaoBlurFBO) ssaoBlurFBO = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
       if (ssaoTex) gl.deleteTexture(ssaoTex);
-      ssaoTex = mk(ssaoW, ssaoH);
+      ssaoTex = mk(ssaoW, ssaoH, "r8");
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoTex, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
       if (ssaoBlurTex) gl.deleteTexture(ssaoBlurTex);
-      ssaoBlurTex = mk(ssaoW, ssaoH);
+      ssaoBlurTex = mk(ssaoW, ssaoH, "r8");
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoBlurTex, 0);
     }
@@ -460,12 +469,12 @@ const GLX = (function () {
       if (!godrayBlurFBO) godrayBlurFBO = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
       if (godrayTex) gl.deleteTexture(godrayTex);
-      godrayTex = mk(godrayW, godrayH);
+      godrayTex = mk(godrayW, godrayH, "hdr3");
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayTex, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
       if (godrayBlurTex) gl.deleteTexture(godrayBlurTex);
-      godrayBlurTex = mk(godrayW, godrayH);
+      godrayBlurTex = mk(godrayW, godrayH, "hdr3");
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
     }
@@ -1823,7 +1832,7 @@ const GLX = (function () {
           const e = _grSel[i]; if (e) { e.d = d; e.o = o; } else _grSel[i] = { d: d, o: o };
         }
         _grSel.length = total;
-        _grSel.sort((a, b) => a.d - b.d);
+        _grSel.sort(_grByD);
         grNL = Math.min(12, total);
         for (let i = 0; i < grNL; i++) {
           const o = _grSel[i].o;
@@ -2030,6 +2039,19 @@ const GLX = (function () {
     gl.uniform1f(compU.uContrast,   CT && CT.contrast   != null ? CT.contrast   : 1.12);
     gl.uniform1f(compU.uVibrance,   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
     gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
+    // Skip the whole HDR lift/gamma/gain/tone block when every knob sits at
+    // neutral (the shipped default): applyHdrGrade is then a mathematical
+    // no-op, but it still cost ~20 ALU incl. 4-5 transcendentals on every
+    // full-screen pixel of every frame.
+    const _hg = CT && (
+      (CT.blacks || 0) !== 0 || (CT.shadows || 0) !== 0 || (CT.midtones || 0) !== 0 ||
+      (CT.highlights || 0) !== 0 || (CT.whites || 0) !== 0 || (CT.toe || 0) !== 0 ||
+      (CT.shoulder || 0) !== 0 || (CT.liftR || 0) !== 0 || (CT.liftG || 0) !== 0 ||
+      (CT.liftB || 0) !== 0 || (CT.gammaR != null && CT.gammaR !== 1) ||
+      (CT.gammaG != null && CT.gammaG !== 1) || (CT.gammaB != null && CT.gammaB !== 1) ||
+      (CT.gainR != null && CT.gainR !== 1) || (CT.gainG != null && CT.gainG !== 1) ||
+      (CT.gainB != null && CT.gainB !== 1));
+    gl.uniform1f(compU.uHdrGradeOn, _hg ? 1.0 : 0.0);
     gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
     gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
     gl.uniform1f(compU.uVigSoft,    CT && CT.vignetteSoft != null ? CT.vignetteSoft : 0.35);

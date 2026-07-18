@@ -767,7 +767,6 @@ void main() {
   }
 
   // Reflected view ray — reused by the wet-road lamp reflections and the sky env.
-  vec3 Rv = reflect(-V, N);
 
   // ── Physically-based punctual lights (floodlights / street lamps) ─────────
   // Each lamp is a REAL spotlight: windowed inverse-square falloff (the standard
@@ -852,23 +851,29 @@ void main() {
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
     // real wet-night streak); on glass/car paint it's the city-light glint.
-    vec3 Hl = normalize(Ld + V);
-    float NoHl = max(dot(N, Hl), 0.0);
-    float VoHl = max(dot(V, Hl), 0.0);
-    float Dl = D_GGX(NoHl, a);
-    float Vl = V_SmithGGX(NoV, NoLl, a);
-    vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-    vec3 radianceS = uLightCol[i] * (att * spotS * lampSh);
-    vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
-    color += lspec / (1.0 + lspec);
-    // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
-    // car bodies at night, over the softer base-coat highlight.
-    if (clearcoat > 0.001) {
-      float Dcc = D_GGX(NoHl, 0.03);
-      float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
-      float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
-      vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
-      color += 2.2 * ccl / (2.2 + ccl);
+    // Gated on NoLl: every term below is multiplied by NoLl at the end, so a
+    // fragment facing AWAY from this lamp (~half the lamps for any given wall
+    // or road pixel) contributed exactly 0 while still paying the full GGX +
+    // clearcoat cost — the dominant per-fragment waste on 28-32-lamp nights.
+    if (NoLl > 0.0) {
+      vec3 Hl = normalize(Ld + V);
+      float NoHl = max(dot(N, Hl), 0.0);
+      float VoHl = max(dot(V, Hl), 0.0);
+      float Dl = D_GGX(NoHl, a);
+      float Vl = V_SmithGGX(NoV, NoLl, a);
+      vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+      vec3 radianceS = uLightCol[i] * (att * spotS * lampSh);
+      vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+      color += lspec / (1.0 + lspec);
+      // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
+      // car bodies at night, over the softer base-coat highlight.
+      if (clearcoat > 0.001) {
+        float Dcc = D_GGX(NoHl, 0.03);
+        float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+        float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
+        vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+        color += 2.2 * ccl / (2.2 + ccl);
+      }
     }
   }
 
@@ -1010,7 +1015,9 @@ void main() {
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
   envBlend = max(envBlend, wet * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
   if (envBlend > 0.001) {
-    vec3 R = Rv;
+    // reflect() computed here, not at the top: envBlend is ~0 for the matte
+    // majority of the scene (road/terrain/walls), where Rv was pure waste.
+    vec3 R = reflect(-V, N);
     // Lower exponent shows more of the horizon→zenith gradient in the reflection
     // (vertical glass mostly reflects up into a near-uniform zenith, which reads
     // flat — this lets the brighter horizon band into the reflected sky).
@@ -1102,7 +1109,7 @@ void main() {
   // view ray points toward the sun, the fog glows toward the sun's colour
   // (forward Mie scatter), staying neutral away from it. Gives volumetric depth
   // and makes a low warm sun bleed dramatically through dawn/dusk haze.
-  vec3 rd = normalize(vWorldPos - uEye);
+  vec3 rd = -V;   // == normalize(vWorldPos - uEye); V is already normalized above
   float sunAmount = max(dot(rd, uSunDir), 0.0);
   // Wider exponent (4) = the warm sun-glow in the haze spreads across a broader
   // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
@@ -1924,7 +1931,6 @@ float gCloud(vec3 wp){
 void main() {
   float d = texture(uDepth, vUV).r;
   // End point: scene hit, or (for sky) a far point along the view ray.
-  vec3 near = worldPos(vUV, 0.0);
   vec3 viewDir = normalize(worldPos(vUV, 0.5) - uEye);
   vec3 endP = (d >= 0.99999) ? uEye + viewDir * 400.0 : worldPos(vUV, d);
   vec3 ro = uEye;
@@ -1977,7 +1983,8 @@ void main() {
         float cd = dot(-Ld, uLightDir[li]);
         float spot = smoothstep(uLightCone[li].y, uLightCone[li].x, cd);
         float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
-        float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
+        float hgLd = 1.36 - 1.2 * cosL;                              // HG g=0.6; d >= 0.16, sqrt safe
+        float hgL = (1.0 - 0.36) / (hgLd * sqrt(hgLd));              // == pow(d, 1.5) minus the transcendental
         // Shadowed shaft: test this march step against the mapped lamp's depth
         // map — an occluded step contributes no in-scatter, so the beam shows
         // the silhouette of whatever blocks the lamp (one tap × 16 steps,
@@ -2004,7 +2011,8 @@ void main() {
   // GOD-RAY FOCUS knob (def 0.60 = as-shipped); clamped <0.95 to keep the HG
   // denominator well-behaved. GOD-RAY HAZE knob (def 0.020) is the isotropic floor.
   float g = clamp(uHgAniso, 0.0, 0.95);
-  float hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosT, 1.5);
+  float hgD = 1.0 + g * g - 2.0 * g * cosT;   // >= (1-g)^2 > 0 at the clamp, sqrt safe
+  float hg = (1.0 - g * g) / (hgD * sqrt(hgD));   // == pow(d, 1.5) minus the transcendental
   float phase = hg * 0.16 + uHgFloor;
   outColor = vec4(uSunColor * accum * phase * uStr + lampAccum, 1.0);
 }`;
@@ -2041,6 +2049,7 @@ uniform vec4 uTone1;         // whites (stops), toe, shoulder, padding
 uniform vec3 uLift;          // per-channel lift (0 = neutral)
 uniform vec3 uGamma;         // per-channel gamma (1 = neutral)
 uniform vec3 uGain;          // per-channel gain (1 = neutral)
+uniform float uHdrGradeOn;   // 1 only when any lift/gamma/gain/tone knob is off-neutral (skips the block)
 uniform sampler2D uDepth;    // scene depth (for wet-road screen-space reflection)
 uniform mat4 uInvProj;       // clip → view (reconstruct view position from depth)
 uniform mat4 uProj;          // view → clip  (project the marched ray to screen)
@@ -2520,8 +2529,10 @@ void main() {
   }
 
   // Professional HDR grade runs after all linear-light bloom/shaft composition
-  // and before the display-referred ACES curve.
-  c = applyHdrGrade(c);
+  // and before the display-referred ACES curve. Gated: at neutral knobs the
+  // whole block is an identity that still cost ~20 ALU + 4 transcendentals
+  // per pixel — uHdrGradeOn is 1 only when a knob is actually off-neutral.
+  if (uHdrGradeOn > 0.5) c = applyHdrGrade(c);
 
   // Filmic tone-map (ACES) + colour grading. WHITE POINT scales the input knee:
   // lower clips highlights sooner (punchy), higher preserves highlight detail.

@@ -1004,8 +1004,11 @@ function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts) :
     getCarDecalMesh(state.val, state.parts, legacyBody);
   const tex = getCarDecalTexture(team, num);
-  if (mesh && tex) gfx.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
+  if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
+// Pooled decal opts — drawCarDecals runs once per drawn car per frame; a fresh
+// literal there was ~20 allocations/frame feeding the night-track GC jitter.
+const _decalOpts = { glow: 0 };
 
 // Player car gets animated wheels: a body-only mesh + four separate wheel meshes
 // the render layer spins (∝ speed) and steers (fronts). Only for the procedural
@@ -1313,7 +1316,7 @@ function loadTrack(idx) {
       gfx.freeMesh(track.meshes.road);
       gfx.freeMesh(track.meshes.terrain);
       if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
-      if (track.meshes.glass) gfx.freeMesh(track.meshes.glass);
+      if (track.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.glass); else gfx.freeMesh(track.meshes.glass); }
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
       gfx.freeMesh(track.meshes.gate);
       gfx.freeMesh(track.meshes.startline);
@@ -3414,6 +3417,11 @@ function persistLightTune() { store.set("lightTune", _ltStore); }
 // a red glow trailing each car on the road surface.
 const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
+const _byD = (a, b) => a.d - b.d;   // hoisted comparator (a per-frame closure otherwise)
+const _rainLightOpts = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
+const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
+const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
+const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
 function appendCarTailLights() {
   const L = frame.lights;
   // frame.lights is always the per-frame copy (flicker copies every frame), so
@@ -3421,12 +3429,20 @@ function appendCarTailLights() {
   if (!L || L === track._lights || !player) return;
   _tlSel.length = 0;
   const tlRange = LT.tailRange != null ? LT.tailRange : 160;   // TAIL-LIGHT RANGE knob
+  let _tlN = 0;
   for (const c of cars) {
     const ds = Math.abs(c.s - player.s);
     const d = Math.min(ds, track.total - ds);
-    if (d < tlRange) _tlSel.push({ c, d });
+    if (d < tlRange) {
+      // Reuse pooled {c,d} entries in place (same pattern as _lightCullBuf) —
+      // fresh objects here were per-car-per-frame GC churn on night tracks.
+      const e = _tlSel[_tlN];
+      if (e) { e.c = c; e.d = d; } else _tlSel[_tlN] = { c: c, d: d };
+      _tlN++;
+    }
   }
-  _tlSel.sort((a, b) => a.d - b.d);
+  _tlSel.length = _tlN;
+  _tlSel.sort(_byD);
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
@@ -3584,7 +3600,7 @@ function setFrameLights(eye, scale, fwd) {
     }
   }
   // Sort just those 32 ascending so the tail fade eases the farthest of the set.
-  heap.sort((a, b) => a.d - b.d);
+  heap.sort(_byD);
   // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
   // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
   // visible stepping as the set shifted at speed). Fading by closeness to the set
@@ -3951,7 +3967,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass) gfx.draw(track.meshes.glass, MAT_IDENT, _wmGlass);
+  if (!hideMeshes.props && track.meshes.glass) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
@@ -4156,7 +4172,17 @@ function render(dt) {
   // jetsam-kill the tab. Cap the RADIAL draw distance on mobile (fog hides the
   // edge) so the chunk count stays bounded no matter how high or wide the free
   // camera flies. 0 = disabled (normal play + desktop keep the full vista).
-  frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
+  // Fog-wall radial cull: past ~95% fog opacity (ln(20)/density ≈ 3/density)
+  // a chunk is invisible anyway, so skip it. Only kicks in when that distance
+  // is inside the 900 m far plane (night 0.004 → 750 m, fog/rain closer);
+  // clear day (0.0012 → 2.5 km) stays uncapped — zero visual change there.
+  const _fogCull = frame.fogDensity > 3 / 900 ? Math.ceil(3 / frame.fogDensity) : 0;
+  frame.cullDist = (dbgCam && gfx.isMobile) ? 700
+    // Feature-shedding tier 3+ also caps the RADIAL draw distance: scenery
+    // vertex/draw load is the one big cost class that neither the resolution
+    // scale nor the shed passes touch, and by tier 3 the device has proven it
+    // can't afford the full vista (the fog wall hides most of the cut).
+    : (_perfTier >= 3 ? Math.min(900, _fogCull || 900) : _fogCull);
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
@@ -4274,7 +4300,7 @@ function render(dt) {
     // depth program and key-luminance gate as the props above. WGX mobile tiers
     // may no-op the pass (blob fallback); menu/select skip because the car loop
     // doesn't run and its pooled AI matrices would be stale race positions.
-    if (gfx.carShadowBegin && LT.carShadow && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
+    if (gfx.carShadowBegin && LT.carShadow && _perfTier < 3 && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
         state !== "menu" && state !== "select") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
@@ -4494,7 +4520,7 @@ function render(dt) {
   // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
   // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
   // has no lampShadowBegin, the mobile tier never creates the map.
-  if (gfx.lampShadowBegin && LT.lampShadow && frame.lights && !_studioRig &&
+  if (gfx.lampShadowBegin && LT.lampShadow && _perfTier < 2 && frame.lights && !_studioRig &&
       player && state !== "menu" && state !== "select") {
     // Gate on the KEY being dim (true night): by day/dusk the sun owns the
     // shadows, and a daytime-floods pool shadow would fight the sun's.
@@ -4585,7 +4611,7 @@ function render(dt) {
   // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
   // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
   // for a 64px blurred reflection probe).
-  if (player && !_envProbeOff && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && !_envProbeOff && _perfTier < 1 && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -4790,7 +4816,8 @@ function render(dt) {
     if (body) {
       gfx.draw(body, tmpMat, paint);
       drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c), false, true);
-      drawPlayerWheels(c, _groundMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
+      _wheelOpts.emissive = night ? 0.12 : 0;
+      drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team), wholeCarMat, paint);
@@ -4840,8 +4867,8 @@ function render(dt) {
       W[14] += W[6] * 0.50 - W[10] * 2.615;
       // Brightness by ERS charge: 0.45 (flat) → 1.0 (full). Wet safety strobe
       // stays full-bright regardless — a rain light must not dim with battery.
-      const _ledEmis = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
-      gfx.draw(getRainLight(), W, { emissive: _ledEmis, roughness: 0.9, specular: 0, noAlphaWrite: true });
+      _rainLightOpts.emissive = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
+      gfx.draw(getRainLight(), W, _rainLightOpts);
     }
     // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
     if (c.isPlayer && isErsDeploying(c)) {
@@ -4850,8 +4877,8 @@ function render(dt) {
       W[12] += W[4] * 0.605 - W[8] * 2.615;
       W[13] += W[5] * 0.605 - W[9] * 2.615;
       W[14] += W[6] * 0.605 - W[10] * 2.615;
-      gfx.draw(getErsLight(), W, { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true,
-        alpha: 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2) });
+      _ersLightOpts.alpha = 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2);
+      gfx.draw(getErsLight(), W, _ersLightOpts);
     }
     // Brief fuel-coloured throttle-lift after-fire, visible at any time of day.
     if (c.isPlayer && (c.exhaustPop || 0) > 0.05) {
@@ -4863,8 +4890,8 @@ function render(dt) {
       W[12] += W[4] * 0.40 - W[8] * 2.63;
       W[13] += W[5] * 0.40 - W[9] * 2.63;
       W[14] += W[6] * 0.40 - W[10] * 2.63;
-      gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W,
-        { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
+      _flameOpts.alpha = (0.30 + 0.55 * fl) * c.exhaustPop;
+      gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W, _flameOpts);
     }
     // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
     // strength for this frame (projected to screen UV just before present()).
@@ -5082,7 +5109,23 @@ function render(dt) {
   // top of the flat GOD-RAY BASE (def 0.38); SUN GOD-RAYS (LT.grMul) scales the whole thing.
   const _grLowBoost = LT.godrayLowBoost != null ? LT.godrayLowBoost : 0.55;
   const _grBase     = LT.godrayBase != null ? LT.godrayBase : 0.38;
-  const _gr = (_grSunY > 0.02 ? (_grBase + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  let _gr = (_grSunY > 0.02 ? (_grBase + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  // Sun-off-screen gate: the volumetric march + its four half-res blur passes
+  // ran even facing directly AWAY from the sun, contributing ~nothing visible.
+  // Project the sun DIRECTION through the view-proj (w-term only — a direction,
+  // not a point) and skip the pass when it's behind the camera or far outside
+  // the frame. Wide 1.7-NDC margin: shafts legitimately streak in from a sun
+  // just off-screen, and the gate must never visibly clip them.
+  if (_gr > 0) {
+    const sd = frame.sunDir, M = _mVP;
+    const cw = M[3] * sd[0] + M[7] * sd[1] + M[11] * sd[2];
+    if (cw <= 0.001) _gr = 0;   // sun behind the camera plane
+    else {
+      const cx = (M[0] * sd[0] + M[4] * sd[1] + M[8] * sd[2]) / cw;
+      const cy = (M[1] * sd[0] + M[5] * sd[1] + M[9] * sd[2]) / cw;
+      if (cx < -1.7 || cx > 1.7 || cy < -1.7 || cy > 1.7) _gr = 0;
+    }
+  }
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
@@ -5138,9 +5181,18 @@ function render(dt) {
   // smear only appears at speed (zero when parked; ramps in above ~40% of VMAX).
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / VMAX - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
-  po.exposure = frame.exposure * LT.exposureMul; po.bloom = _bloom * LT.bloomMul;
-  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade; po.ssao = _ao;
-  po.godray = _gr; po.contact = _cs; po.reflect = _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // Bloom joins the last shedding tier: bloomAmt 0 skips the whole ~9-pass
+  // bright+mip chain in present() — the single biggest post-chain saving left
+  // on a device that has already shed everything else.
+  po.exposure = frame.exposure * LT.exposureMul; po.bloom = _perfTier >= 4 ? 0 : _bloom * LT.bloomMul;
+  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
+  // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
+  // passes whose cost doesn't shrink with the render target, so a device still
+  // slow at the scale floor sheds those instead. Tier 2 drops the wet-road SSR
+  // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
+  po.ssao = _perfTier >= 4 ? 0 : _ao;
+  po.godray = _perfTier >= 4 ? 0 : _gr;
+  po.contact = _cs; po.reflect = _perfTier >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
   // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
   // frame's view-proj to a screen UV for the composite warp. Near-field only —
@@ -5343,6 +5395,18 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 // only downscales when clearly missing 60 fps (>19 ms EMA) so a healthy
 // vsync-capped display never degrades; upscales slowly to avoid oscillation.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true;
+// ── Feature-shedding tiers: the governor's SECOND stage ──────────────────────
+// Resolution scaling can't rescue costs that don't shrink with the render
+// target: the per-frame car/lamp shadow depth passes, the env-probe world
+// re-render, SSAO's three passes, the god-ray march, the SSR march. When the
+// scale has already bottomed out and frames are STILL slow, shed features one
+// tier at a time — cheapest visual loss first — and restore them only under
+// clear sustained headroom at FULL resolution, so the ladder can't oscillate:
+//   1  env probe off        (car paint falls back to the analytic sky mirror)
+//   2  lamp spot shadow + wet-road SSR off
+//   3  car sun-shadow map off (the blob contact shadow remains)
+//   4  SSAO + god rays + bloom off
+let _perfTier = 0;
 function perfGovernor(dtMs) {
   if (!_autoRes) return;
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
@@ -5351,10 +5415,13 @@ function perfGovernor(dtMs) {
   if (++_govT < 45) return;   // evaluate ~every 45 frames
   _govT = 0;
   const cur = gfx.getRenderScale ? gfx.getRenderScale() : 1;
-  if (_frameEMA > 19 && cur > 0.5) {          // <~53 fps: drop resolution
-    if (gfx.setRenderScale(cur - 0.1)) _govCool = 30;
-  } else if (_frameEMA < 14 && cur < 1) {     // >~71 fps headroom: restore
-    if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30;
+  if (_frameEMA > 19) {                        // <~53 fps: degrade
+    if (cur > 0.5) { if (gfx.setRenderScale(cur - 0.1)) _govCool = 30; }
+    else if (_perfTier < 4) { _perfTier++; _govCool = 90; }   // scale floor hit — shed a feature
+  } else if (_frameEMA < 14) {                 // >~71 fps headroom: restore
+    if (cur < 1) { if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30; }
+    // Features come back only at full res with strong headroom, one per ~3 s.
+    else if (_perfTier > 0 && _frameEMA < 12.5) { _perfTier--; _govCool = 180; }
   }
 }
 const PHYS_DT = 1 / 60;          // fixed physics step
@@ -8363,7 +8430,7 @@ window.__apex = {
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
   // win (softer 3D view; HUD stays crisp).
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes, tier: _perfTier };
     if (v === true) { _autoRes = true; return this.renderScale(); }
     _autoRes = false; gfx.setRenderScale(+v); return this.renderScale();
   },

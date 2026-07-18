@@ -434,7 +434,10 @@ const GameAudio = (function () {
   // gear (optional 1..8) gives each gear a distinct base/ceiling so an
   // upshift is clearly heard and 2nd vs 6th differ even at equal rev01.
   function setEngine(rev01, boost01, offroad, speed01, gear) {
-    if (!engineOn || !ctx) return;
+    // Muted = master gain 0 but engineOn stays true — without this return the
+    // ~10 setTargetAtTime calls per frame kept scheduling on the audio thread
+    // while producing silence.
+    if (!engineOn || !ctx || !isEnabled) return;
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
