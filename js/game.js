@@ -3978,13 +3978,24 @@ function render(dt) {
   frame.sunViewDir = _sunVS;
   frame.upViewDir = _upVS;
   frame.eye = camEye;
-  // Mobile free-cam draw-distance cap: the far plane is the chunked scenery's ONLY
-  // distance cull, so an altitude/wide vantage with the pushed-out photo-mode far
-  // plane can frame an entire street circuit's ~5 M-vert city in one frame and
-  // jetsam-kill the tab. Cap the RADIAL draw distance on mobile (fog hides the
-  // edge) so the chunk count stays bounded no matter how high or wide the free
-  // camera flies. 0 = disabled (normal play + desktop keep the full vista).
-  frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
+  // Radial draw-distance cull for chunked scenery.
+  // Free/debug camera: keep the old behaviour — mobile caps at 700 m (the
+  // pushed-out photo-mode far plane can frame a whole ~5 M-vert city and
+  // jetsam-kill the tab), desktop keeps the full vista (gfx.begin also thins
+  // the fog under dbgCam, so a fog-derived cull would visibly pop there).
+  // Normal play: derive the cull from the LIVE fog. The exp2 fog transmittance
+  // is exp(-(d·density)²), which is <1% once d ≥ sqrt(ln 100)/density ≈
+  // 2.15/density — chunks past that are a flat fog-colour wall the far plane
+  // was still paying to draw (biggest win: night city circuits, density
+  // ~0.004 → cull ≈ 600 m). Clamped to [600, 4000] so thin-fog days keep the
+  // full vista and a mis-tuned density can't cull the mid-ground; 0 (off)
+  // when fog is disabled entirely.
+  if (dbgCam) {
+    frame.cullDist = gfx.isMobile ? 700 : 0;
+  } else {
+    const _fogD = frame.fogDensity || 0;
+    frame.cullDist = _fogD > 0 ? clamp(2.15 / _fogD, 600, 4000) : 0;
+  }
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
