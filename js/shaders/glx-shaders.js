@@ -1136,6 +1136,7 @@ uniform float uCloudSpeed; // cloud drift/evolution rate multiplier (def 1.0)
 uniform float uSkyGrad;    // horizon→zenith gradient exponent (def 0.35)
 uniform float uStarDensity;// star-field spawn-window multiplier (def 1.0)
 uniform float uDaySkyBlue; // day deep-blue mid-band strength (def 1.0)
+uniform float uLightning;  // storm strike flash 1→0 (0 = none, backward-compatible)
 out vec4 outColor;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -1320,9 +1321,25 @@ void main() {
       float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
       lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
     }
+    // LIGHTNING: during a strike (uLightning 1→0, the same decay that spikes
+    // ambient/exposure in game.js) the cloud deck itself flares — a storm flash
+    // is diffused THROUGH the clouds, so thick billowing bellies light up
+    // brightest (the bolt is inside/behind the deck) while thin wisps bleach
+    // less. Cool blue-white, HDR >1 so the flash blooms like the real thing.
+    if (uLightning > 0.001) {
+      vec3 ltFlash = vec3(0.82, 0.94, 1.30) * (1.0 + thick * 1.2);
+      lit = mix(lit, ltFlash, clamp(uLightning * (0.40 + 0.60 * thick), 0.0, 1.0));
+    }
     c = mix(c, lit, cov);
     cityCov = cov;
     cityThick = thick;
+  }
+
+  // LIGHTNING sky-gradient lift: the clear dome between the clouds also picks
+  // up a gentler cool bleach during a strike (scattered flash light), weighted
+  // DOWN where the cloud deck already flared above so the energy isn't doubled.
+  if (uLightning > 0.001 && up > 0.0) {
+    c += vec3(0.10, 0.13, 0.20) * uLightning * (1.0 - cityCov * 0.6);
   }
 
   // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---

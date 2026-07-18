@@ -668,7 +668,7 @@ const GLX = (function () {
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (markBatchProg) {
@@ -1526,6 +1526,7 @@ const GLX = (function () {
     gl.uniform1f(skyU.uSkyGrad,     sky.skyGrad     !== undefined ? sky.skyGrad     : 0.35);
     gl.uniform1f(skyU.uStarDensity, sky.starDensity !== undefined ? sky.starDensity : 1);
     gl.uniform1f(skyU.uDaySkyBlue,  sky.daySkyBlue  !== undefined ? sky.daySkyBlue  : 1);
+    gl.uniform1f(skyU.uLightning,   sky.lightning   !== undefined ? sky.lightning   : 0);
     setBlend(false);
     setDepthMask(false);
     bindVAO(skyVAO);
