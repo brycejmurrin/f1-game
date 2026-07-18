@@ -58,7 +58,7 @@
         out, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
         modelGroup, overheadSpan, groundPatch, groundedSegments,
         addBox, addCyl, addPrism, addFrustum,
-        mountain, floodMast, tree, bush, hedge,
+        ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
       } = api;
 
@@ -156,10 +156,15 @@
         });
       }
 
-      // IFEMA's horizontal white exhibition halls frame the pit straight.
+      // IFEMA's horizontal white exhibition halls frame the pit straight. The
+      // real campus is a grid of ~12 giant sheds, so a deeper second rank keeps
+      // the venue reading as a campus rather than three isolated boxes.
       ifemaHall("madrid-ifema-hall", 0.975, 1, 32, true);
       ifemaHall("madrid-ifema-hall-east", 0.035, 1, 34, false);
       ifemaHall("madrid-ifema-hall-west", 0.965, -1, 30, false);
+      ifemaHall("madrid-ifema-hall-north", 0.945, -1, 38, false);
+      ifemaHall("madrid-ifema-hall-northeast", 0.008, -1, 52, false);
+      ifemaHall("madrid-ifema-hall-far", 0.075, 1, 42, false);
 
       // IFEMA's glazed south entrance and alternating roof lanterns make the
       // exhibition campus read as a public venue rather than anonymous sheds.
@@ -183,15 +188,17 @@
           12, 9 + (i % 2), 20, i % 2 ? OFFWHITE : WHITE);
       }
 
-      // La Monumental: short atomic stand bays follow the 270-degree bank without
-      // a long roof footprint sweeping across another part of the racing line.
-      const standFracs = [0.69, 0.715, 0.74, 0.765, 0.79, 0.815];
+      // La Monumental: a CONTINUOUS 270-degree bowl — contiguous 34 m stand
+      // bays at ~34 m pitch (0.0062 lap frac) so the ring reads as one
+      // unbroken white nested bowl from the aerial and trackside, per the
+      // brief's hero-feature note, instead of six isolated bays.
       for (const side of [-1, 1]) {
-        for (let i = 0; i < standFracs.length; i++) {
-          const id = side === 1 && i === 2
+        let i = 0;
+        for (let f = 0.680; f <= 0.845; f += 0.0062, i++) {
+          const id = side === 1 && i === 11
             ? "madrid-monumental"
             : `madrid-monumental-${side < 0 ? "l" : "r"}-${i}`;
-          monumentalStand(id, standFracs[i], side, 16, side === 1 && i === 2);
+          monumentalStand(id, f, side, 16, side === 1 && i === 11);
         }
       }
       // A thin Las Ventas-inspired arcade and crowd crown sits behind the white
@@ -303,13 +310,41 @@
 
       // Chamartín-style mid-rises bridge the scale between the avenue and the
       // Cuatro Torres silhouettes, creating a second deterministic depth layer.
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 9; i++) {
         const frac = 0.275 + i * 0.011;
         const side = i % 2 ? 1 : -1;
         const h = 30 + hash(900 + i * 13) * 18;
         urbanBlock(`madrid-skyline-midrise-${i}`, frac, side, 42 + (i % 2) * 5,
           13 + (i % 3), h, 17, i % 2 ? CONCRETE : OFFWHITE);
       }
+      // A second depth rank behind the urban avenue: distant low-rise Madrid
+      // rooftops so the skyline doesn't stop dead behind the first row.
+      for (let i = 0; i < 8; i++) {
+        const frac = 0.12 + i * 0.02;
+        const side = i % 2 ? -1 : 1;
+        const h = 16 + hash(950 + i * 17) * 12;
+        urbanBlock(`madrid-backdrop-${i}`, frac, side, 58 + (i % 3) * 8,
+          16 + (i % 4), h, 24, i % 2 ? OFFWHITE : [0.74, 0.71, 0.66]);
+      }
+
+      // Modern IFEMA grandstands on the return leg: stepped seating tiers under
+      // a white canopy (brief s≈0.90 R), between the pelouse and the pit entry.
+      function ifemaStand(id, frac, side) {
+        venueGroup(id, frac, side, 14, [18, 17, 30], false, (stage, a) => {
+          const b = basis(a);
+          for (let tier = 0; tier < 4; tier++) {
+            const c = vadd(vadd(a.c, a.r, side * tier * 2.0), a.u, 1.8 + tier * 2.2);
+            addBox(stage, c, [12 - tier, 3.6, 27], tier % 2 ? CONCRETE : CROWD, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, side * 7.6), a.u, 6.2),
+            [0.8, 12.4, 27], STEEL, b);
+          addPrism(stage, vadd(vadd(a.c, a.r, side * 3.2), a.u, 13.0),
+            [16, 2.6, 29], WHITE, b);
+        });
+      }
+      ifemaStand("madrid-ifema-stand-0", 0.893, 1);
+      ifemaStand("madrid-ifema-stand-1", 0.902, 1);
+      ifemaStand("madrid-ifema-stand-2", 0.911, 1);
 
       // Warm terrain-conforming plazas and pelouse replace broad flat land boxes.
       for (const [frac, side, gap, col] of [
@@ -336,6 +371,16 @@
       // Sparse, deliberate furniture keeps the dry Castilian venue readable.
       hedge(0.12, 0.24, -1, 8, 1.3, OLIVE);
       hedge(0.84, 0.94, 1, 9, 1.3, OLIVE);
+      // Castilian scrub fields: sparse olive shrub scatter over the straw
+      // plains (brief s≈0.20 L and s≈0.96 L) — clustered, never near the edge.
+      for (let i = 0; i < 22; i++) {
+        const f = 0.155 + hash(300 + i * 7) * 0.10;
+        bush(at(f), -1, 13 + hash(310 + i * 3) * 26, OLIVE);
+      }
+      for (let i = 0; i < 16; i++) {
+        const f = 0.905 + hash(400 + i * 7) * 0.07;
+        bush(at(f), -1, 12 + hash(410 + i * 3) * 22, OLIVE);
+      }
       for (const [frac, side] of [
         [0.05, 1], [0.18, -1], [0.34, 1], [0.47, -1],
         [0.59, 1], [0.67, -1], [0.86, 1], [0.94, -1],
@@ -347,8 +392,12 @@
         else bush(k, side, 13, OLIVE);
       }
 
-      // Low-detail Sierra de Guadarrama ring, intentionally grounded at the
-      // universal horizon floor rather than pretending to be trackside terrain.
+      // Low-detail Sierra de Guadarrama: a hazy blue-grey RIDGE line floated at
+      // the horizon floor. Chained prism ridges replace the old green/snow-cone
+      // mountains, which read as cartoon volcanoes against the dry plains —
+      // the brief wants a low distant blue-grey range, not alpine summits.
+      const SIERRA = [0.55, 0.60, 0.66];
+      const SIERRA_FAR = [0.61, 0.66, 0.72];
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n;
@@ -356,15 +405,19 @@
       let radius = 0;
       for (let i = 0; i < n; i++)
         radius = Math.max(radius, Math.hypot(px[i] - cx, pz[i] - cz));
-      for (let i = 0; i < 12; i++) {
-        const angle = i / 12 * Math.PI * 2;
-        mountain(
-          cx + Math.cos(angle) * (radius + 900),
-          cz + Math.sin(angle) * (radius + 900),
+      for (let i = 0; i < 16; i++) {
+        const angle = i / 16 * Math.PI * 2;
+        const R = radius + 1150 + hash(i * 3) * 180;
+        const along = angle + Math.PI / 2 + (hash(i * 7) - 0.5) * 0.45;
+        ridge(
+          cx + Math.cos(angle) * R,
+          cz + Math.sin(angle) * R,
           pyMin - 1,
-          300 + hash(i * 5) * 100,
-          90 + hash(i * 11) * 55,
-          { seg: 6, seed: i * 19, snowline: 1.2, rock: [0.55, 0.59, 0.65] },
+          along,
+          540 + hash(i * 5) * 260,
+          170,
+          52 + hash(i * 11) * 58,
+          i % 2 ? SIERRA : SIERRA_FAR,
         );
       }
     },
