@@ -19,11 +19,13 @@
     sceneryCoordinates: "racing",
     terrainOuter: 26,
     barrierGap: 1.0,
-    // Vegas owns its casino corridor, palms, and boulevard lamps. Keep the
-    // shared floodlight rig (and its analytic lights), but do not layer generic
-    // city/furniture over the curated landmarks and open Sphere sightline.
+    // The generic street-night city generator, boulevard lamps and foliage
+    // carry most of Vegas's density — the bespoke landmarks layer ON TOP of
+    // them, they don't replace them. Only carve out the curated sightlines:
+    // the open Sphere approach (mid-ground stays clear so the orb reads
+    // alone) and the floodlight gaps at the Sphere and the Bellagio lake.
     dressingExclusions: [
-      { kinds: ["city", "lamps", "foliage"], s0: 0, s1: 1 },
+      { kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 },
       { kind: "floodlights", s0: 0.27, s1: 0.36, side: -1 },
       { kind: "floodlights", s0: 0.65, s1: 0.71, side: 1 },
     ],
@@ -144,14 +146,16 @@
         addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
-      // --- DISTANT NIGHT SKYLINE: sparse clusters, not a cloned tower ring. ---
+      // --- DISTANT NIGHT SKYLINE: a dense glowing horizon wherever you look,
+      //     with per-tower radius jitter so it never reads as a cloned ring. ---
       {
         const sky = trad + 300;
-        const skyN = 18;
+        const skyN = 44;
         const SKYTINT = [CYAN, WARM, VIOLET, BLUE, ROSE];
         for (let i = 0; i < skyN; i++) {
           const a = i / skyN * 6.2832, h = hash(i * 11 + 17), h2 = hash(i * 23 + 5);
-          const mx = cx + Math.cos(a) * sky, mz = cz + Math.sin(a) * sky;
+          const rr = sky + (hash(i * 31 + 9) - 0.5) * 160;
+          const mx = cx + Math.cos(a) * rr, mz = cz + Math.sin(a) * rr;
           if (onTrack(mx, mz, 80)) continue;
           const bh = 50 + h * 130, bw = 34 + h2 * 30, bd = 34 + h2 * 26;
           const tint = SKYTINT[i % SKYTINT.length];

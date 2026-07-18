@@ -24,6 +24,17 @@ const DataTelemetry = (function () {
   }
 
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  // Dot/trace colours for the two drivers on the map. Team-mates share a team
+  // colour, so if the two picks are near-identical the compare one is lightened
+  // toward white to stay tellable-apart.
+  function pairColors(dP, dC) {
+    const a = driverColor(dP);
+    if (!dC) return { p: a, c: null };
+    let b = driverColor(dC);
+    const dist = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+    if (dist < 0.3) b = [b[0] * 0.4 + 0.6, b[1] * 0.4 + 0.6, b[2] * 0.4 + 0.6];
+    return { p: a, c: b };
+  }
   function dcode(d) { return d.code || ("#" + d.num); }
   // OpenF1 DRS codes: 10/12/14 = wing open, everything else closed/eligible.
   function drsOpen(v) { return v === 10 || v === 12 || v === 14; }
@@ -35,10 +46,37 @@ const DataTelemetry = (function () {
     { id: "speed",    label: "SPEED",    color: "#39d0ff", w: 2,   norm: "speed", get: function (c) { return c.speed; },    fmt: function (v) { return Math.round(v) + " km/h"; } },
     { id: "throttle", label: "THR",      color: "#3fb950", w: 1.5, lo: 0, hi: 100, get: function (c) { return c.throttle; }, fmt: function (v) { return Math.round(v) + "%"; } },
     { id: "brake",    label: "BRAKE",    color: "#ff4d4d", w: 1.5, lo: 0, hi: 100, get: function (c) { return c.brake; },    fmt: function (v) { return Math.round(v) + "%"; } },
-    { id: "gear",     label: "GEAR",     color: "#f6d200", w: 1.5, lo: 0, hi: 8, step: true, off: true, get: function (c) { return c.gear; }, fmt: function (v) { return v ? "G" + v : "N"; } },
-    { id: "rpm",      label: "RPM",      color: "#c084fc", w: 1.5, norm: "rpm", off: true, get: function (c) { return c.rpm; }, fmt: function (v) { return Math.round(v); } },
-    { id: "drs",      label: "DRS",      color: "#00e0c0", w: 1.5, lo: 0, hi: 1, step: true, off: true, get: function (c) { return c.drs === null || c.drs === undefined ? null : (drsOpen(c.drs) ? 1 : 0); }, fmt: function (v) { return v ? "OPEN" : "—"; } }
+    { id: "gear",     label: "GEAR",     color: "#f6d200", w: 1.5, lo: 0, hi: 8, step: true, get: function (c) { return c.gear; }, fmt: function (v) { return v ? "G" + v : "N"; } },
+    { id: "rpm",      label: "RPM",      color: "#c084fc", w: 1.5, norm: "rpm", get: function (c) { return c.rpm; }, fmt: function (v) { return Math.round(v); } },
+    // DRS draws as a thick strip just below the chart's top edge, present only
+    // while the wing is OPEN (closed samples return null so nothing is drawn) —
+    // a full-height 0/1 square wave would bury every other trace.
+    { id: "drs",      label: "DRS",      color: "#00e0c0", w: 3, lo: 0, hi: 1.1, step: true, noGhost: true, get: function (c) { return c.drs === null || c.drs === undefined ? null : (drsOpen(c.drs) ? 1 : null); }, fmt: function (v) { return v ? "OPEN" : "—"; } }
   ];
+
+  // Chart plot-area insets: PADL leaves a gutter for the km/h axis labels,
+  // PADY is the vertical inset. Shared by the trace chart, the delta strip
+  // and the scrub mapping so the cursor stays aligned across all of them.
+  const PADL = 36, PADR = 8, PADY = 6;
+  function chartX(view, t, W) { return PADL + (t / view.tMax) * (W - PADL - PADR); }
+  // short-landscape phone: the popup splits into columns and vertical space
+  // is the scarce axis
+  function shortLS() {
+    return typeof window !== "undefined" && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
+  }
+  // chart canvas height for a given width — slightly shorter on narrow
+  // screens; in compare mode on a short-landscape phone, capped to the
+  // viewport so chart + delta strip + legend fit together
+  function chartH(w, compact) {
+    const base = Math.round(w * (w < 480 ? 190 : 220) / 600);
+    if (compact && shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.38));
+    return base;
+  }
+  function deltaH(w) {
+    const base = Math.round(w * (72 / 600));
+    if (shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.12));
+    return base;
+  }
 
   function chanRaw(ch, c) {
     const v = ch.get(c);
@@ -321,27 +359,35 @@ const DataTelemetry = (function () {
     stopTelAnim();
     const primary = tels[0];
     const compare = tels[1] || null;
+    const pcols = pairColors(primary.d, compare && compare.d);
 
     // Main column: driver headers, transport, chart, legend, stints
     const mainArea = el("div", "dh-telem-main");
     // Side column: gauges + map
     const sideArea = el("div", "dh-telem-side");
 
-    tels.forEach(function (t) {
-      const head = el("div", "dh-livecard");
-      const ht = el("div", "dh-live-title");
-      ht.appendChild(el("span", null, (t.d.name || dcode(t.d))));
-      const sw = el("span", "dh-swatch"); sw.style.background = cssColor(driverColor(t.d)); sw.style.marginLeft = "8px";
+    tels.forEach(function (t, i) {
+      // one-line header per driver: swatch · name · sectors · fastest lap.
+      // The popup title bar already names the drivers, so this row only needs
+      // to key the colour and carry the lap numbers — keep it short so the
+      // chart gets the vertical space.
+      const ht = el("div", "dh-live-title dh-thead");
+      const sw = el("span", "dh-swatch"); sw.style.background = cssColor(i === 0 ? pcols.p : pcols.c);
       ht.appendChild(sw);
-      head.appendChild(ht);
-      head.appendChild(el("div", "dh-live-sub", t.lap
-        ? "Fastest lap " + (t.lap.lapNumber !== null ? "(L" + t.lap.lapNumber + ") " : "") + fmtLap(t.lap.lapDuration)
-        : "No timed lap found in this session."));
-      if (t.lap && t.lap.s1 !== null && t.lap.s2 !== null && t.lap.s3 !== null) {
-        head.appendChild(el("div", "dh-live-sub dh-sectors",
-          "S1 " + t.lap.s1.toFixed(3) + "  ·  S2 " + t.lap.s2.toFixed(3) + "  ·  S3 " + t.lap.s3.toFixed(3)));
+      ht.appendChild(el("span", "dh-tname", (t.d.name || dcode(t.d))));
+      if (!t.lap) {
+        ht.appendChild(el("span", "dh-tsect", "No timed lap found in this session."));
+      } else {
+        if (t.lap.s1 !== null && t.lap.s2 !== null && t.lap.s3 !== null) {
+          ht.appendChild(el("span", "dh-tsect",
+            "S1 " + t.lap.s1.toFixed(3) + " · S2 " + t.lap.s2.toFixed(3) + " · S3 " + t.lap.s3.toFixed(3)));
+        }
+        const lapEl = el("span", "dh-tlap",
+          (t.lap.lapNumber !== null ? "L" + t.lap.lapNumber + " · " : "") + fmtLap(t.lap.lapDuration));
+        lapEl.title = "Fastest lap";
+        ht.appendChild(lapEl);
       }
-      mainArea.appendChild(head);
+      mainArea.appendChild(ht);
     });
 
     if (!primary.car || !primary.car.length) {
@@ -362,6 +408,7 @@ const DataTelemetry = (function () {
       sectors: null, g: null, playBtn: null
     };
     CHANNELS.forEach(function (ch) { view.visible[ch.id] = !ch.off; });
+    view.colP = pcols.p; view.colC = pcols.c;
     function scan(car) {
       for (let i = 0; i < car.length; i++) {
         if (car[i].t > view.tMax) view.tMax = car[i].t;
@@ -388,7 +435,7 @@ const DataTelemetry = (function () {
     const CW = detail.clientWidth > 40
       ? Math.min(600, Math.max(260, detail.clientWidth - sideW - 28))
       : (isLS ? 360 : 330);
-    const CH_CHART = Math.round(CW * (220 / 600));
+    const CH_CHART = chartH(CW, !!view.compare);
 
     const c1 = el("canvas", "dh-canvas");
     c1.width = CW; c1.height = CH_CHART; c1.style.touchAction = "none";
@@ -397,7 +444,7 @@ const DataTelemetry = (function () {
     view.chartBase = makeOffscreen(CW, CH_CHART);
 
     if (view.compare) {
-      const CD_H = Math.round(CW * (72 / 600));
+      const CD_H = deltaH(CW);
       const cd = el("canvas", "dh-canvas dh-delta");
       cd.width = CW; cd.height = CD_H; cd.style.touchAction = "none";
       mainArea.appendChild(cd);
@@ -407,29 +454,40 @@ const DataTelemetry = (function () {
     }
 
     const legend = el("div", "dh-legend");
+    if (view.compare) {
+      // driver key: each code chip in that driver's trace/dot colour
+      tels.forEach(function (t, i) {
+        const chip = el("span", "dh-codechip", dcode(t.d));
+        const col = i === 0 ? view.colP : view.colC;
+        chip.style.background = cssColor(col);
+        chip.style.color = textColorOn(col);
+        legend.appendChild(chip);
+      });
+    }
     CHANNELS.forEach(function (ch) {
       const item = el("button", "dh-legend-item" + (view.visible[ch.id] ? "" : " dh-off"));
       item.type = "button";
-      const dot = el("span", "dh-legend-dot"); dot.style.background = ch.color;
-      item.appendChild(dot); item.appendChild(document.createTextNode(ch.label));
+      item.title = "Show / hide " + ch.label;
+      item.setAttribute("aria-pressed", view.visible[ch.id] ? "true" : "false");
+      if (ch.id === "speed" && view.compare) {
+        // in compare mode the speed traces wear the driver colours
+        const d1 = el("span", "dh-legend-dot"); d1.style.background = cssColor(view.colP);
+        const d2 = el("span", "dh-legend-dot"); d2.style.background = cssColor(view.colC);
+        item.appendChild(d1); item.appendChild(d2);
+      } else {
+        const dot = el("span", "dh-legend-dot"); dot.style.background = ch.color;
+        item.appendChild(dot);
+      }
+      item.appendChild(document.createTextNode(ch.label));
       item.addEventListener("click", function () {
         view.visible[ch.id] = !view.visible[ch.id];
         item.classList.toggle("dh-off", !view.visible[ch.id]);
+        item.setAttribute("aria-pressed", view.visible[ch.id] ? "true" : "false");
         buildBases(view); paintFrame(view);
       });
       legend.appendChild(item);
     });
-    if (view.compare) {
-      const item = el("span", "dh-legend-item dh-legend-static");
-      const dot = el("span", "dh-legend-dot"); dot.style.background = cssColor(driverColor(view.compare.d));
-      item.appendChild(dot);
-      item.appendChild(document.createTextNode(dcode(view.compare.d) + " SPEED"));
-      legend.appendChild(item);
-    }
     mainArea.appendChild(legend);
-
-    // Stints/pits below the chart in the main column
-    appendStintsPits(mainArea, primary);
 
     // Gauges + map → side column
     sideArea.appendChild(buildGauges(view));
@@ -440,7 +498,28 @@ const DataTelemetry = (function () {
       sideArea.appendChild(c2);
       view.map = c2;
       view.mapBase = makeOffscreen(320, 320);
+      // colour key for the car dots on the map
+      const mkey = el("div", "dh-maplegend");
+      function mchip(col, code) {
+        const item = el("span", "dh-legend-item dh-legend-static");
+        const dot = el("span", "dh-legend-dot dh-mapdot"); dot.style.background = cssColor(col);
+        item.appendChild(dot); item.appendChild(document.createTextNode(code));
+        return item;
+      }
+      mkey.appendChild(mchip(view.colP, dcode(primary.d)));
+      if (view.compare) mkey.appendChild(mchip(view.colC, dcode(view.compare.d)));
+      // track colouring key: slow (blue) -> fast (red), sectors marked S2/S3
+      const gi = el("span", "dh-legend-item dh-legend-static");
+      gi.appendChild(document.createTextNode("SLOW"));
+      gi.appendChild(el("span", "dh-gradbar"));
+      gi.appendChild(document.createTextNode("FAST"));
+      mkey.appendChild(gi);
+      sideArea.appendChild(mkey);
     }
+
+    // Stints/pits last (below the map), so the lap player — chart, gauges,
+    // map — stays together at the top on portrait phones
+    appendStintsPits(sideArea, primary);
 
     detail.appendChild(mainArea);
     detail.appendChild(sideArea);
@@ -458,15 +537,15 @@ const DataTelemetry = (function () {
         if (mainW <= 0) return;
         
         const newCW = Math.min(800, mainW);
-        const newCH = Math.round(newCW * (220 / 600));
-        
+        const newCH = chartH(newCW, !!view.compare);
+
         let resized = false;
         if (view.chart.width !== newCW || view.chart.height !== newCH) {
           view.chart.width = newCW;
           view.chart.height = newCH;
           view.chartBase = makeOffscreen(newCW, newCH);
           if (view.delta) {
-            const dh = Math.round(newCW * (72 / 600));
+            const dh = deltaH(newCW);
             view.delta.width = newCW;
             view.delta.height = dh;
             view.deltaBase = makeOffscreen(newCW, dh);
@@ -633,7 +712,9 @@ const DataTelemetry = (function () {
   function attachScrub(canvas, view) {
     function at(ev) {
       const r = canvas.getBoundingClientRect();
-      view.cursorT = clamp((ev.clientX - r.left) / (r.width || 1), 0, 1) * view.tMax;
+      // map into bitmap px, then invert the plot-area (axis gutter) transform
+      const bx = (ev.clientX - r.left) / (r.width || 1) * canvas.width;
+      view.cursorT = clamp((bx - PADL) / ((canvas.width - PADL - PADR) || 1), 0, 1) * view.tMax;
       paintFrame(view);
     }
     canvas.addEventListener("pointerdown", function (ev) {
@@ -686,17 +767,27 @@ const DataTelemetry = (function () {
     const T = view.cursorT === null ? 0 : view.cursorT;
     // ---- trace chart ----
     const cg = view.chart.getContext("2d");
-    const W = view.chart.width, H = view.chart.height, pad = 6;
+    const W = view.chart.width, H = view.chart.height;
     cg.clearRect(0, 0, W, H);
     cg.drawImage(view.chartBase, 0, 0);
-    const X = pad + (T / view.tMax) * (W - 2 * pad);
+    const X = chartX(view, T, W);
     cg.strokeStyle = "rgba(255,255,255,0.55)"; cg.lineWidth = 1;
-    cg.beginPath(); cg.moveTo(X, pad); cg.lineTo(X, H - pad); cg.stroke();
-    const c = sampleAt(view.primary.car, T);
-    const f = chanNorm(CHANNELS[0], c, view);
-    if (f !== null) {
-      cg.fillStyle = CHANNELS[0].color;
-      cg.beginPath(); cg.arc(X, H - pad - f * (H - 2 * pad), 3.5, 0, Math.PI * 2); cg.fill();
+    cg.beginPath(); cg.moveTo(X, PADY); cg.lineTo(X, H - PADY); cg.stroke();
+    if (view.visible.speed) {
+      if (view.compare) {
+        const c2 = sampleAt(view.compare.car, T);
+        const f2 = chanNorm(CHANNELS[0], c2, view);
+        if (f2 !== null) {
+          cg.fillStyle = cssColor(view.colC);
+          cg.beginPath(); cg.arc(X, H - PADY - f2 * (H - 2 * PADY), 3, 0, Math.PI * 2); cg.fill();
+        }
+      }
+      const c = sampleAt(view.primary.car, T);
+      const f = chanNorm(CHANNELS[0], c, view);
+      if (f !== null) {
+        cg.fillStyle = view.compare ? cssColor(view.colP) : CHANNELS[0].color;
+        cg.beginPath(); cg.arc(X, H - PADY - f * (H - 2 * PADY), 3.5, 0, Math.PI * 2); cg.fill();
+      }
     }
     // ---- delta strip ----
     if (view.delta) {
@@ -704,7 +795,7 @@ const DataTelemetry = (function () {
       const DW = view.delta.width, DH = view.delta.height;
       dgx.clearRect(0, 0, DW, DH);
       dgx.drawImage(view.deltaBase, 0, 0);
-      const dx = pad + (T / view.tMax) * (DW - 2 * pad);
+      const dx = chartX(view, T, DW);
       dgx.strokeStyle = "rgba(255,255,255,0.55)"; dgx.lineWidth = 1;
       dgx.beginPath(); dgx.moveTo(dx, 0); dgx.lineTo(dx, DH); dgx.stroke();
     }
@@ -725,13 +816,13 @@ const DataTelemetry = (function () {
         mg.rotate(-ang - Math.PI / 2);     // heading -> up
         mg.translate(-p0[0], -p0[1]);
         mg.drawImage(view.mapBase, 0, 0);
-        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(driverColor(view.compare.d)), 1 / ZOOM);
-        drawCarDot(mg, view, view.primary, T, "#fff", 1 / ZOOM);
+        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(view.colC), 1 / ZOOM);
+        drawCarDot(mg, view, view.primary, T, cssColor(view.colP), 1 / ZOOM);
         mg.restore();
       } else {
         mg.drawImage(view.mapBase, 0, 0);
-        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(driverColor(view.compare.d)), 1);
-        drawCarDot(mg, view, view.primary, T, "#fff", 1);
+        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(view.colC), 1);
+        drawCarDot(mg, view, view.primary, T, cssColor(view.colP), 1);
       }
     }
     updateGauges(view);
@@ -740,8 +831,12 @@ const DataTelemetry = (function () {
     const best = locAt(view, tel, t);
     if (!best) return;
     const p = mapPoint(view, best);
-    const r = 5.5 * (rscale || 1);
-    g.fillStyle = fill; g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 2 * (rscale || 1);
+    const rs = rscale || 1, r = 5.5 * rs;
+    // dark halo + white ring keep a team-coloured dot readable on any
+    // speed-coloured track segment
+    g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 3.5 * rs;
+    g.beginPath(); g.arc(p[0], p[1], r, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = fill; g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = 1.5 * rs;
     g.beginPath(); g.arc(p[0], p[1], r, 0, Math.PI * 2); g.fill(); g.stroke();
   }
 
@@ -795,28 +890,69 @@ const DataTelemetry = (function () {
     if (view.delta) renderDelta(view.deltaBase.getContext("2d"), view.deltaBase.width, view.deltaBase.height, view);
   }
 
-  // multi-channel traces for the primary driver (+ compare speed overlay),
-  // with faint sector-boundary markers.
+  // multi-channel traces for the primary driver (+ dashed compare overlays),
+  // with a km/h axis, gear ticks and faint sector-boundary markers.
   function renderTraces(g, W, H, view) {
-    const pad = 6;
     g.clearRect(0, 0, W, H);
-    const X = function (t) { return pad + (t / view.tMax) * (W - 2 * pad); };
-    const Y = function (f) { return H - pad - f * (H - 2 * pad); };
+    const X = function (t) { return chartX(view, t, W); };
+    const Y = function (f) { return H - PADY - f * (H - 2 * PADY); };
+    g.font = "10px system-ui, sans-serif";
+    // Per-unit axes, each in its channel's colour:
+    //   left gutter = speed km/h · left inner = rpm · right gutter = gear ·
+    //   right inner = % (throttle/brake)
+    if (view.visible.speed) {
+      const step = view.speedMax > 260 ? 100 : (view.speedMax > 130 ? 50 : 25);
+      g.textAlign = "right"; g.textBaseline = "middle";
+      for (let v = step; v <= view.speedMax; v += step) {
+        const y = Y(v / view.speedMax);
+        g.strokeStyle = "rgba(255,255,255,0.09)"; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(PADL, y); g.lineTo(W - PADR, y); g.stroke();
+        if (y < 17) continue;   // would collide with the km/h unit label
+        g.fillStyle = "rgba(57,208,255,0.8)";
+        g.fillText(String(v), PADL - 5, y);
+      }
+      g.textAlign = "left"; g.textBaseline = "top";
+      g.fillStyle = "rgba(57,208,255,0.6)";
+      g.fillText("km/h", 2, 3);
+    }
+    if (view.visible.rpm) {
+      g.textAlign = "left"; g.textBaseline = "middle";
+      g.fillStyle = "rgba(192,132,252,0.65)";
+      [4000, 8000, 12000].forEach(function (v) {
+        if (v > view.rpmMax) return;
+        const y = Y(v / view.rpmMax);
+        if (y < 26) return;   // keep clear of the unit labels
+        g.fillText(Math.round(v / 1000) + "k", PADL + 4, y);
+      });
+      g.textBaseline = "top";
+      g.fillText("rpm", 2, 15);
+    }
+    if (view.visible.gear) {
+      g.textAlign = "right"; g.textBaseline = "middle";
+      g.fillStyle = "rgba(246,210,0,0.7)";
+      [2, 4, 6, 8].forEach(function (gr) { g.fillText("G" + gr, W - 2, Y(gr / 8)); });
+    }
+    if (view.visible.throttle || view.visible.brake) {
+      g.textAlign = "right"; g.textBaseline = "middle";
+      g.fillStyle = "rgba(63,185,80,0.55)";
+      [25, 50, 75].forEach(function (p) { g.fillText(p + "%", W - PADR - 22, Y(p / 100)); });
+    }
+    g.textAlign = "left"; g.font = "9px system-ui, sans-serif";
     // sector dividers + labels
     if (view.sectors) {
-      g.font = "9px system-ui, sans-serif"; g.textBaseline = "top";
+      g.textBaseline = "top";
       const bounds = [0].concat(view.sectors).concat([view.tMax]);
       g.strokeStyle = "rgba(255,255,255,0.18)"; g.lineWidth = 1;
       view.sectors.forEach(function (sb) {
         const x = X(sb);
         g.setLineDash([3, 3]);
-        g.beginPath(); g.moveTo(x, pad); g.lineTo(x, H - pad); g.stroke();
+        g.beginPath(); g.moveTo(x, PADY); g.lineTo(x, H - PADY); g.stroke();
         g.setLineDash([]);
       });
       g.fillStyle = "rgba(255,255,255,0.4)";
       for (let s = 0; s < 3; s++) {
         const mid = X((bounds[s] + bounds[s + 1]) / 2);
-        g.fillText("S" + (s + 1), mid - 6, pad + 1);
+        g.fillText("S" + (s + 1), mid - 6, PADY + 1);
       }
     }
     function line(car, ch, color, width) {
@@ -832,14 +968,26 @@ const DataTelemetry = (function () {
       }
       g.strokeStyle = color; g.lineWidth = width; g.lineJoin = "round"; g.stroke();
     }
+    // Compare mode: both drivers' SPEED traces in their own driver colours
+    // (matching the map dots / header swatches); the compare driver's other
+    // visible channels ghost underneath, dashed and dimmed, in the channel hue.
     if (view.compare) {
-      g.setLineDash([4, 3]);
-      line(view.compare.car, CHANNELS[0], cssColor(driverColor(view.compare.d)), 1.5);
+      g.setLineDash([5, 4]);
+      g.globalAlpha = 0.5;
+      for (let k = CHANNELS.length - 1; k >= 1; k--) {
+        const ch = CHANNELS[k];
+        // noGhost: the DRS strip would land exactly on the primary's — skip
+        if (view.visible[ch.id] && !ch.noGhost) line(view.compare.car, ch, ch.color, Math.max(1.2, ch.w - 0.4));
+      }
+      g.globalAlpha = 1;
+      if (view.visible.speed) line(view.compare.car, CHANNELS[0], cssColor(view.colC), 1.8);
       g.setLineDash([]);
     }
     for (let k = CHANNELS.length - 1; k >= 0; k--) {
       const ch = CHANNELS[k];
-      if (view.visible[ch.id]) line(view.primary.car, ch, ch.color, ch.w);
+      if (!view.visible[ch.id]) continue;
+      const col = (ch.id === "speed" && view.compare) ? cssColor(view.colP) : ch.color;
+      line(view.primary.car, ch, col, ch.w);
     }
   }
 
@@ -863,14 +1011,14 @@ const DataTelemetry = (function () {
     const ds = deltaSamples(view);
     view._delta = ds;
     const span = Math.max(0.15, ds.mx - ds.mn);
-    const X = function (t) { return pad + (t / view.tMax) * (W - 2 * pad); };
+    const X = function (t) { return chartX(view, t, W); };
     const Y = function (v) { return pad + (ds.mx - v) / span * (H - 2 * pad); };
     const y0 = Y(0);
     // zero line
     g.strokeStyle = "rgba(255,255,255,0.25)"; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(pad, y0); g.lineTo(W - pad, y0); g.stroke();
+    g.beginPath(); g.moveTo(PADL, y0); g.lineTo(W - PADR, y0); g.stroke();
     // filled gap area, split at the zero crossing colour-wise
-    const col = cssColor(driverColor(view.primary.d));
+    const col = cssColor(view.colP);
     g.beginPath();
     g.moveTo(X(0), y0);
     for (let i = 0; i < car.length; i++) g.lineTo(X(car[i].t), Y(ds.d[i]));
@@ -884,7 +1032,7 @@ const DataTelemetry = (function () {
     }
     g.strokeStyle = col; g.lineWidth = 1.5; g.lineJoin = "round"; g.stroke();
     g.fillStyle = "rgba(255,255,255,0.45)"; g.font = "9px system-ui, sans-serif";
-    g.textBaseline = "top"; g.fillText("GAP TO " + dcode(view.compare.d) + " (s)", pad + 2, 2);
+    g.textBaseline = "top"; g.fillText("GAP TO " + dcode(view.compare.d) + " (s)", PADL + 2, 2);
   }
 
   // screen transform for the track map (from the primary lap's x/y bounds)
