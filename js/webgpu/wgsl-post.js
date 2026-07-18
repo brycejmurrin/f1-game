@@ -510,8 +510,18 @@ fn applyHdrGrade(c_in : vec3<f32>) -> vec3<f32> {
 
   let y = max(dot(max(c, vec3<f32>(0.0)), vec3<f32>(0.2126, 0.7152, 0.0722)), 1e-6);
   let weights = gradeZoneWeights(y);
-  let stops = dot(weights.tone0, U.tone0) + weights.white * U.tone1.x;
+  // Wider stop swing for the two dark zones (blacks x3, shadows x2): a plain
+  // +/-1 stop multiply barely moves the low end after ACES compression, so
+  // SHADOWS looked weak. Neutral (0) stays an exact identity. Mirrors GLX.
+  let toneGain = U.tone0 * vec4<f32>(3.0, 2.0, 1.0, 1.0);
+  let stops = dot(weights.tone0, toneGain) + weights.white * U.tone1.x;
   c = c * exp2(clamp(stops, -4.0, 4.0));
+  // Additive low-end offset: a multiply can never move a near-black pixel
+  // (x*0 stays 0), which is why BLACKS "did nothing" on dark scenes. A small
+  // signed lift weighted to the black/shadow zones reveals near-black detail
+  // (+) or crushes it to true black (-). Neutral adds nothing. Mirrors GLX.
+  c = c + vec3<f32>(weights.tone0.x * U.tone0.x * 0.05 + weights.tone0.y * U.tone0.y * 0.025);
+  c = max(c, vec3<f32>(0.0));
 
   c = applyToeShoulder(c, U.tone1.y, U.tone1.z);
   return max(c, vec3<f32>(0.0));

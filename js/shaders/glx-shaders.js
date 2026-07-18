@@ -2222,8 +2222,22 @@ vec3 applyHdrGrade(vec3 c) {
   float y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 1e-6);
   vec4 w0; float wWhite;
   gradeZoneWeights(y, w0, wWhite);
-  float stops = dot(w0, uTone0) + wWhite * uTone1.x;
+  // Per-zone exposure gain. The two dark zones get a wider stop swing than the
+  // 1:1 mid/high zones: a plain +/-1 stop multiply barely moves the low end once
+  // ACES compresses it, so SHADOWS looked weak. Scaling their contribution
+  // (blacks x3, shadows x2) makes both bite harder, while neutral (0) stays an
+  // exact identity.
+  vec4 toneGain = uTone0 * vec4(3.0, 2.0, 1.0, 1.0);
+  float stops = dot(w0, toneGain) + wWhite * uTone1.x;
   c *= exp2(clamp(stops, -4.0, 4.0));
+  // Additive low-end offset for BLACKS/SHADOWS. A multiply can never move a
+  // near-black pixel (x*0 stays 0), which is exactly why BLACKS "did nothing" on
+  // dark night/dusk scenes. A small signed additive lift, weighted to the black
+  // and shadow zones, is what actually reveals near-black detail (+) or crushes
+  // it to a true black (-) — the DaVinci-style Lift the labels describe. Neutral
+  // (0) adds nothing, so identity is preserved; the clamp keeps blacks solid.
+  c += w0.x * uTone0.x * 0.05 + w0.y * uTone0.y * 0.025;
+  c = max(c, vec3(0.0));
 
   c = applyToeShoulder(c, uTone1.y, uTone1.z);
   return max(c, vec3(0.0));
