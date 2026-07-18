@@ -3267,7 +3267,7 @@ function appendCarTailLights() {
     const d = Math.min(ds, track.total - ds);
     if (d < tlRange) _tlSel.push({ c, d });
   }
-  _tlSel.sort((a, b) => a.d - b.d);
+  _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
@@ -3310,6 +3310,7 @@ const _lightCullBuf = [];
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 const _lightScaleBuf = [];
 const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
+const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-frame closure)
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
@@ -3425,7 +3426,8 @@ function setFrameLights(eye, scale, fwd) {
     }
   }
   // Sort just those 32 ascending so the tail fade eases the farthest of the set.
-  heap.sort((a, b) => a.d - b.d);
+  // (Comparator hoisted to module scope — this runs every lit frame.)
+  heap.sort(_byDistAsc);
   // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
   // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
   // visible stepping as the set shifted at speed). Fading by closeness to the set
@@ -4433,7 +4435,9 @@ function render(dt) {
     gfx.begin(frame);
     frame.fogDensity = bf;
   } else gfx.begin(frame);
-  M4.invertTo(_mInvVP, _mVP);
+  // _mInvVP still holds this frame's inverse (computed once, right after _mVP,
+  // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
+  // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
   gfx.drawSky(frameSky);
   // (`wet` is already declared above in the sky/lightning block)
