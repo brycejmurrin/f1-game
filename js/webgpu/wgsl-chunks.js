@@ -499,7 +499,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let NoHg = max(dot(Ngeo, Hg), 0.0);
     let NoVg = max(dot(Ngeo, V), 1e-4);
     let NoLg = max(dot(Ngeo, L), 0.0);
-    let ccA = 0.035;
+    // Specular AA (GLX parity): widen the fixed lobe by the geometric-normal
+    // variance so the streak stops strobing on tight curvature; flat panels
+    // keep the crisp 0.035. Capped so silhouette edges can't matte it out.
+    let ccDx = dpdx(Ngeo); let ccDy = dpdy(Ngeo);
+    let ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
+    let ccA = min(sqrt(0.035 * 0.035 + ccSaaVar * 0.25), 0.30);
     let Dc = D_GGX(NoHg, ccA);
     let Vc = V_SmithGGX(NoVg, NoLg, ccA);
     let Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3<f32>(0.05), 1.0).x;

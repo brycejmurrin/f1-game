@@ -841,6 +841,19 @@ void main() {
   specCol = specCol / (1.0 + specCol);
   color += specCol;
 
+  // Specular AA for the CLEARCOAT lobes below: the base-coat saaVar above
+  // widens only the base roughness — the fixed-a clearcoat streak and the
+  // pow-400 env sun disc ran unwidened, so on curved bodywork (where the
+  // geometric normal swings fast per pixel) the tight lobes strobed frame to
+  // frame. Variance of Ngeo (NOT N — the lacquer shades on the smooth shell,
+  // and the flake micro-normal must not blur it). uClearcoat is a uniform, so
+  // the branch is uniform control flow and the derivatives stay defined.
+  float ccSaaVar = 0.0;
+  if (uClearcoat > 0.001) {
+    vec3 ccDx = dFdx(Ngeo), ccDy = dFdy(Ngeo);
+    ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
+  }
+
   // Clearcoat: a second, fixed-low-roughness specular lobe over the base coat —
   // the thin lacquer shell of automotive paint. It keeps a crisp sun highlight
   // even where the base coat is rougher, which is what gives cars their glossy
@@ -857,7 +870,11 @@ void main() {
     float NoHg = max(dot(Ngeo, Hg), 0.0);
     float NoVg = max(dot(Ngeo, V), 1e-4);
     float NoLg = max(dot(Ngeo, L), 0.0);
-    float ccA = 0.035;
+    // Widened by the geometric-normal variance (specular AA, same recipe as
+    // the base coat): flat panels keep the crisp 0.035 lobe, tight curvature
+    // fattens it just enough to stop the per-pixel strobing. Capped so a hard
+    // silhouette edge can't matte the lacquer out entirely.
+    float ccA = min(sqrt(0.035 * 0.035 + ccSaaVar * 0.25), 0.30);
     float Dc = D_GGX(NoHg, ccA);
     float Vc = V_SmithGGX(NoVg, NoLg, ccA);
     float Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), 1.0).x;
@@ -921,7 +938,13 @@ void main() {
         envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
       }
     }
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), 400.0) * 12.0 * shadow;  // sun disc — base floored 1e-4: pow(0.0,400.0)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    // Sun disc in the mirror: pow-400 ≈ a GGX lobe of alpha ~0.0705 — widen
+    // that alpha by the same geometric variance (specular AA) and map back to
+    // an exponent, so the disc softens on tight curvature instead of strobing;
+    // flat panels keep the exact 400. Floor 32 caps how soft an edge can get.
+    float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+    float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * 12.0 * shadow;  // base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
