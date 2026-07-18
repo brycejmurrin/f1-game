@@ -677,6 +677,49 @@ const Tracks = (function () {
         idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
       }
     }
+    // ── Edge skirts: close the slot under the road plane on elevation ────────
+    // The road is a one-sided ribbon and the terrain's inner rail deliberately
+    // sits below it (heightAt's -0.3 seam drop, and the clip passes above trench
+    // it to py-1.6 near elevation mounds). Approaching a climbing corner the
+    // camera looks at that slot edge-on and sees daylight/floor UNDER the road —
+    // kerbs appear to float over a gap at every crest. Hang a vertical earth
+    // skirt from each grass-shoulder edge vert (v=0 / v=13, their final clipped
+    // positions) down past the deepest the adjacent terrain can sit, so the road
+    // always reads as continuous ground. Double-sided (both windings) so it
+    // shows from any angle; the below-terrain part is simply occluded.
+    {
+      const surf = track.surface ||
+        (typeof TrackSurface !== "undefined" ? TrackSurface.profile(track.def, track) : null);
+      if (surf) {
+        const innerLat = surf.rails[0];
+        const topC = [grass[0] * 0.72, grass[1] * 0.72, grass[2] * 0.72];
+        const botC = [grass[0] * 0.42, grass[1] * 0.42, grass[2] * 0.42];
+        const skirt = (v) => {
+          const base = pos.length / 3;
+          const sgn = v === 0 ? -1 : 1;
+          for (let k = 0; k < n; k++) {
+            const i3 = (k * V + v) * 3;
+            const ex = pos[i3], ey = pos[i3 + 1], ez = pos[i3 + 2];
+            // Deep enough for both the seam drop and the clip trench…
+            let bottom = Math.min(surf.heightAt(k, innerLat), py[k] - 1.6) - 0.6;
+            // …but on bridge spans stay a shallow deck fascia: the ground below
+            // is meant to show under the deck (pillars carry it visually).
+            if (py[k] - surf.ground[k] > 0.5) bottom = Math.max(bottom, py[k] - 1.2);
+            if (bottom > ey - 0.3) bottom = ey - 0.3;
+            const nx = track.rx[k] * sgn, nz = track.rz[k] * sgn;
+            pos.push(ex, ey, ez, ex, bottom, ez);
+            nrm.push(nx, 0, nz, nx, 0, nz);
+            col.push(topC[0], topC[1], topC[2], botC[0], botC[1], botC[2]);
+          }
+          for (let k = 0; k < n; k++) {
+            const a = base + k * 2, b = base + ((k + 1) % n) * 2;
+            idxArr.push(a, a + 1, b, a + 1, b + 1, b);
+            idxArr.push(a, b, a + 1, a + 1, b, b + 1);
+          }
+        };
+        skirt(0); skirt(13);
+      }
+    }
     buildKerbs(track, { pos, nrm, col, idx: idxArr });
     return { pos, nrm, col, idx: idxArr };
   }
