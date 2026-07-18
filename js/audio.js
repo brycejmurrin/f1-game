@@ -53,10 +53,11 @@ const GameAudio = (function () {
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
   const MENU_TRACK = "assets/music/menu.mp3";
+  // Race currently shares the menu track (race_a/b + night kept on disk for later).
   const RACE_TRACKS = [
-    "assets/music/race_a.wav",   // bs-mm-metal (CC0)
-    "assets/music/race_b.wav",   // bs-p1-ps-md (CC0)
-    "assets/music/night.wav",    // bs-cyb-city-night — race / night circuits (CC0)
+    MENU_TRACK,
+    MENU_TRACK,
+    MENU_TRACK,
   ];
 
   let listenersAttached = false;
@@ -433,7 +434,10 @@ const GameAudio = (function () {
   // gear (optional 1..8) gives each gear a distinct base/ceiling so an
   // upshift is clearly heard and 2nd vs 6th differ even at equal rev01.
   function setEngine(rev01, boost01, offroad, speed01, gear) {
-    if (!engineOn || !ctx) return;
+    // Muted = master gain 0 but engineOn stays true — without this return the
+    // ~10 setTargetAtTime calls per frame kept scheduling on the audio thread
+    // while producing silence.
+    if (!engineOn || !ctx || !isEnabled) return;
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));

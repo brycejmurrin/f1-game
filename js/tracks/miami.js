@@ -15,6 +15,20 @@
     theme: "modern",
     lengthKm: 5.4,
     baseHW: 7,
+    sceneryCoordinates: "racing",
+    // The campus is laterally level; keep a broad grounded shelf under the
+    // marina, beach club, parking lots, and stadium approaches.
+    flatTerrain: true,
+    terrainOuter: 90,
+    // Miami already owns a complete bespoke layer of facades and palms. Disable
+    // duplicate generic city/foliage so hero sightlines stay open and the large
+    // campus does not upload hundreds of thousands of redundant vertices.
+    dressingExclusions: [
+      { kinds: ["city", "foliage"], s0: 0, s1: 1 },
+      { kind: "lamps", s0: 0.94, s1: 0.08, side: 1 },
+      { kind: "lamps", s0: 0.26, s1: 0.38, side: 1 },
+      { kind: "lamps", s0: 0.60, s1: 0.72 },
+    ],
     // Aqua runoff = Dolphins identity (COL.aquaRunoff); soft tropical haze so
     // the Hard Rock bowl owns the near horizon over a distant downtown.
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.12, 0.72, 0.78], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
@@ -22,15 +36,17 @@
       { t: 0, l: 300 }, { t: 60, l: 80 }, { t: -65, l: 70 }, { t: 0, l: 200 }, { t: -80, l: 90 }, { t: 90, l: 100 },
       { t: -70, l: 80 }, { t: 0, l: 400 }, { t: 80, l: 90 }, { t: -80, l: 90 }, { t: 0, l: 240 },
     ],
-    // Florida Turnpike tech sector: crest under the overpasses (T14–15), ~11 ft.
-    elevations: [{ s: 0.66, halfM: 220, rise: 3.5 }],
+    // Elevations are authored in source-trace coordinates. 0.8925 maps through
+    // startFrac 0.2325 to racing s=0.66: the Turnpike T14–15 crest, ~11 ft.
+    elevations: [{ s: 0.8925, halfM: 220, rise: 3.5 }],
     scenery: function (api) {
       const {
-        out, MAT, COL, n, px, pz, pyMin, place, prop, backdrop, groundPlane, grandstand,
+        out, MAT, COL, n, px, pz, pyMin, place, prop, backdrop, grandstand,
         building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
         marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
         addCone, addFrustum, vadd, hash, onTrack, every, cityFront, forestEdge,
-        runoffApron,
+        runoffApron, modelGroup, overheadSpan, waterSurface, groundPatch, recordBarrier,
+        circuitKit,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -78,19 +94,25 @@
       const beachClub = (s, side, dist) => {
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 26)) return;
-        // sand deck
-        out._mat = MAT.SAND;
-        addBox(out, vadd(a.c, a.u, 0.15), [40, 0.3, 30], [0.92, 0.86, 0.66], bv);
-        out._mat = 0;
-        // pool (bright teal, non-reflective slab) — left as water/FLAT
-        addBox(out, vadd(vadd(a.c, a.r, 6), a.u, 0.28), [14, 0.5, 8], TEAL, bv);
-        addBox(out, vadd(vadd(a.c, a.r, 6), a.u, 0.30), [12, 0.5, 6], [0.30, 0.86, 0.86], bv);
-        // DJ cabana with coral awning
-        addBox(out, vadd(vadd(a.c, a.t, -14), a.u, 1.7), [6, 3.4, 8], WHITE, bv);
-        out._mat = MAT.FABRIC;
-        addBox(out, vadd(vadd(a.c, a.t, -14), a.u, 3.6), [6.6, 0.6, 8.6], CORAL, bv);
-        out._mat = 0;
+        // Terrain-conforming sand and typed reflective pool water.
+        groundPatch(k, side, dist - 20, [40, 0.3, 30], [0.92, 0.86, 0.66],
+          { id: "beach-club-sand", samples: 5, required: true });
+        waterSurface(k, side, dist, [12, 0.18, 6], [0.30, 0.86, 0.86],
+          { id: "beach-club-pool", required: true });
+        // The cabana is atomic: never leave a roof without its supporting shell.
+        const cabana = vadd(vadd(a.c, a.t, -14), a.u, 2.0);
+        modelGroup("beach-club-cabana", {
+          center: cabana, size: [6.6, 4.2, 8.6], basis: bv,
+        }, (stage) => {
+          addBox(stage, vadd(vadd(a.c, a.t, -14), a.u, 1.7), [6, 3.4, 8], WHITE, bv);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.t, -14), a.u, 3.6), [6.6, 0.6, 8.6], CORAL, bv);
+          stage._mat = 0;
+        }, { required: true });
         // parasols (cone canopies on poles) + sun loungers scattered on the sand
+        // One canopy overlaps the nearby folded-back road footprint by ~4.2 m,
+        // but its underside is ~7.5 m above that road. This intentional, safe
+        // overhead geometry is kept outside the ground-model preflight.
         for (let i = 0; i < 8; i++) {
           const along = (hash(k + i) - 0.5) * 30, out2 = (hash(k * 3 + i) - 0.5) * 18 + 2;
           const base = vadd(vadd(a.c, a.t, along), a.r, out2);
@@ -110,18 +132,21 @@
       const carPark = (s, side, dist, rows, cols) => {
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 20)) return;
-        addBox(out, vadd(a.c, a.u, 0.1), [rows * 6 + 4, 0.2, cols * 2.6 + 4], [0.30, 0.30, 0.33], bv);
-        // white bay lines
-        for (let c = 0; c <= cols; c++)
-          addBox(out, vadd(vadd(a.c, a.u, 0.2), a.t, (c - cols / 2) * 2.6), [rows * 6, 0.05, 0.12], WHITE, bv);
-        for (let r = 0; r < rows; r++)
-          for (let c = 0; c < cols; c++) {
-            if (hash(k + r * 13 + c * 7) > 0.82) continue;   // empty bays
-            const p = vadd(vadd(vadd(a.c, a.r, (r - rows / 2) * 6), a.u, 0.75), a.t, (c - cols / 2) * 2.6);
-            const t = hash(k * 5 + r * 11 + c);
-            addBox(out, p, [4.4, 1.4, 2.1],
-                   [0.28 + t * 0.5, 0.30 + hash(c * 3) * 0.4, 0.34 + hash(r * 7) * 0.42], bv);
-          }
+        const size = [rows * 6 + 4, 1.6, cols * 2.6 + 4];
+        modelGroup(`car-park-${k}`, { center: vadd(a.c, a.u, 0.8), size, basis: bv }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 0.1), [size[0], 0.2, size[2]], [0.30, 0.30, 0.33], bv);
+          // white bay lines
+          for (let c = 0; c <= cols; c++)
+            addBox(stage, vadd(vadd(a.c, a.u, 0.2), a.t, (c - cols / 2) * 2.6), [rows * 6, 0.05, 0.12], WHITE, bv);
+          for (let r = 0; r < rows; r++)
+            for (let c = 0; c < cols; c++) {
+              if (hash(k + r * 13 + c * 7) > 0.82) continue;   // empty bays
+              const p = vadd(vadd(vadd(a.c, a.r, (r - rows / 2) * 6), a.u, 0.75), a.t, (c - cols / 2) * 2.6);
+              const t = hash(k * 5 + r * 11 + c);
+              addBox(stage, p, [4.4, 1.4, 2.1],
+                     [0.28 + t * 0.5, 0.30 + hash(c * 3) * 0.4, 0.34 + hash(r * 7) * 0.42], bv);
+            }
+        });
       };
 
       // ===================================================================
@@ -133,34 +158,25 @@
       // ===================================================================
       const buildOverpass = (s) => {
         const k = K(s);
-        const aL = anchor(k, -1, 1), aR = anchor(k, 1, 1);
-        const span = Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]) + 16;
-        const mid = vadd(aL.c, [(aR.c[0] - aL.c[0]), 0, (aR.c[2] - aL.c[2])], 0.5);
-        // Main deck — concrete top, darker underside shadow band
-        addBox(out, vadd(mid, aL.u, 13.2), [span, 2.8, 16], CONCRETE,               [aL.r, aL.u, aL.t]);
-        addBox(out, vadd(mid, aL.u, 11.4), [span, 1.2, 16], [0.50, 0.50, 0.54],     [aL.r, aL.u, aL.t]);
-        addBox(out, vadd(mid, aL.u, 10.8), [span, 0.8, 16], [0.24, 0.24, 0.26],     [aL.r, aL.u, aL.t]);
-        // Two pillars per side — kept within ±38 % of the half-span so they
-        // cannot drift into adjacent start-line geometry.
-        const pillarReach = span * 0.38;
-        for (let pi = 0; pi < 4; pi++) {
-          // positions: -pillarReach, -pillarReach*0.33, +pillarReach*0.33, +pillarReach
-          const t = [-1, -0.33, 0.33, 1][pi];
-          const pillarOff = t * pillarReach;
-          const pc = [
-            mid[0] + aL.r[0] * pillarOff,
-            mid[1],
-            mid[2] + aL.r[2] * pillarOff,
-          ];
-          // Pillar body — height 10.4 so top cap sits flush under the deck underside at 10.8
-          addBox(out, vadd(pc, aL.u, 5.2),  [3.4, 10.4, 3.4], CONCRETE,              [aL.r, aL.u, aL.t]);
-          // Pillar cap bracket — centred at 10.8 (deck underside)
-          addBox(out, vadd(pc, aL.u, 10.6), [4.0,  0.4,  4.0], [0.45, 0.45, 0.47],  [aL.r, aL.u, aL.t]);
+        const supportGap = 4.0, supportWidth = 3.4, clearance = 10.4;
+        overheadSpan({
+          id: `turnpike-overpass-${k}`, frac: s, clearance,
+          thickness: 4.4, depth: 16, supportGap, supportWidth,
+          color: CONCRETE, required: true,
+        });
+        // One atomic pier per side, entirely beyond the runoff boundary.
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, supportGap + supportWidth / 2);
+          const bv = [a.r, a.u, a.t];
+          modelGroup(`turnpike-pier-${k}-${side}`, {
+            center: vadd(a.c, a.u, clearance / 2),
+            size: [4.0, clearance, 4.0], basis: bv,
+          }, (stage) => {
+            addBox(stage, vadd(a.c, a.u, 5.2), [supportWidth, 10.4, 3.4], CONCRETE, bv);
+            addBox(stage, vadd(a.c, a.u, 10.2), [4.0, 0.4, 4.0], [0.45, 0.45, 0.47], bv);
+          }, { required: true });
+          recordBarrier(s - 0.002, s + 0.002, side, supportGap);
         }
-        // Day: thin white road-marking stripe on the deck top
-        addBox(out, vadd(mid, aL.u, 14.8), [span, 0.1, 1.2], WHITE,      [aL.r, aL.u, aL.t]);
-        // Night / atmosphere: amber under-deck sodium lights (emissive look)
-        addBox(out, vadd(mid, aL.u, 10.5), [span * 0.7, 0.3, 0.6], WIN_AMBER, [aL.r, aL.u, aL.t]);
       };
 
       // ===================================================================
@@ -212,11 +228,14 @@
       // ahead of the hazed downtown. Floor anchors to pyMin.
       // ===================================================================
       {
-        const a = anchor(K(0.0), 1, 100);
+        // The old 100 m anchor let the 132 m bowl sweep back across the S/F
+        // footprint. Move the complete model outward while keeping it prominent.
+        const a = anchor(K(0.0), 1, 155);
         const r = a.r, u = a.u, t = a.t;
         const RA = 132, RB = 100;
         const segC = 48;
         const stadiumFloorY = pyMin;
+        const stadiumBase = [a.c[0], stadiumFloorY, a.c[2]];
         for (let i = 0; i < segC; i++) {
           const ang = i / segC * 6.2832;
           const ca = Math.cos(ang), sa = Math.sin(ang);
@@ -263,16 +282,15 @@
           addBox(out, vadd(c, u, 0.05), [20, 0.2, 20], [0.96, 0.96, 0.88], [r, u, t]);
         }
         // Massive curved roof cap
-        addFrustum(out, vadd([a.c[0], stadiumFloorY, a.c[2]], u, 56), 118, 74, 18,
+        addFrustum(out, vadd(stadiumBase, u, 56), 118, 74, 18,
           [0.82, 0.84, 0.86], 48, [r, u, t]);
-        addFrustum(out, vadd([a.c[0], stadiumFloorY, a.c[2]], u, 55), 120, 76, 0.8,
+        addFrustum(out, vadd(stadiumBase, u, 55), 120, 76, 0.8,
           [0.55, 0.55, 0.57], 48, [r, u, t]);
         // Concourse hospitality ring
         for (let i = 0; i < 8; i++) {
           const ang = i / 8 * 6.2832;
           const ex = Math.cos(ang) * (RA - 22), ez = Math.sin(ang) * (RB - 22);
-          const hc = vadd(vadd([a.c[0], stadiumFloorY, a.c[2]], t, ex), r, ez);
-          if (onTrack(hc[0], hc[2], 8)) continue;
+          const hc = vadd(vadd(stadiumBase, t, ex), r, ez);
           addBox(out, [hc[0], stadiumFloorY + 5, hc[2]], [15, 11, 15],
             (i % 2) ? TEAL : CORAL, null);
           addBox(out, [hc[0], stadiumFloorY + 11.2, hc[2]], [15.2, 1.0, 15.2],
@@ -380,16 +398,19 @@
       // hero + a few large yacht silhouettes (cull the old dense fleet).
       // ===================================================================
 
-      // Painted marina water ground planes — large flat NON-reflective slabs
-      for (let m = 0; m < 5; m++) {
-        const k = K(0.27 + m * 0.026);
-        groundPlane(k, 1, 7.0, [210, 190], WATER_DEEP);
-        groundPlane(k, 1, 5.5, [170, 150], WATER);
-        // thin teal wake stripe (still flat / non-reflective)
-        groundPlane(k, 1, 5.0, [140, 8], [0.18, 0.62, 0.70]);
-        // Pontoon walkway along the marina edge
-        groundPlane(k, 1, 4.6, [160, 6], [0.68, 0.68, 0.66]);
+      // Typed water surfaces feed the reflective water buffer. The old 2D
+      // groundPlane sizes were invalid under the shared foundation contract and
+      // silently emitted no marina at all.
+      for (let m = 0; m < 3; m++) {
+        const k = K(0.285 + m * 0.032);
+        waterSurface(k, 1, 7.0, [72, 0.18, 110],
+          m === 1 ? WATER : WATER_DEEP,
+          { id: `mia-marina-water-${m}`, required: true });
+        // Terrain-conforming pontoon edge; unlike the water it remains walkable.
+        groundPatch(k, 1, 4.6, [7, 0.24, 96], [0.68, 0.68, 0.66],
+          { id: `mia-marina-pontoon-${m}`, samples: 3 });
       }
+      guardrail(0.26, 0.38, 1, 2.8, GREYWHITE);
 
       // Fewer larger yacht silhouettes (6 boats, not ~50)
       for (let i = 0; i < 6; i++) {
@@ -398,13 +419,18 @@
         const c = vadd(a.c, a.t, (i % 2 ? 8 : -8));
         const len = 22 + hash(i * 4) * 16;          // 22–38 m hulls
         const trim = (i % 3 === 0) ? TEAL : ((i % 3 === 1) ? CORAL : PINK);
-        addBox(out, vadd(c, a.u, 1.4),      [6.5, 3.2, len],        WHITE,     [a.r, a.u, a.t]);
-        addBox(out, vadd(c, a.u, 3.0),      [6.8, 0.9, len],        trim,      [a.r, a.u, a.t]);
-        addBox(out, vadd(c, a.u, 4.4),      [5.0, 2.8, len * 0.55], GREYWHITE, [a.r, a.u, a.t]);
-        addBox(out, vadd(c, a.u, 6.6),      [3.2, 2.0, len * 0.34], GLASS,     [a.r, a.u, a.t]);
-        addCyl(out, vadd(c, a.u, 7.4), 0.22, 12 + hash(i) * 4, GREYWHITE, 5, [a.r, a.u, a.t]);
-        addBox(out, vadd(c, a.u, 5.2), [5.1, 0.5, len * 0.54],
-          [WIN_AMBER[0] * 0.6, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], [a.r, a.u, a.t]);
+        const bv = [a.r, a.u, a.t];
+        modelGroup(`marina-yacht-${i}`, {
+          center: vadd(c, a.u, 12), size: [7, 26, len], basis: bv,
+        }, (yacht) => {
+          addBox(yacht, vadd(c, a.u, 1.4),      [6.5, 3.2, len],        WHITE,     bv);
+          addBox(yacht, vadd(c, a.u, 3.0),      [6.8, 0.9, len],        trim,      bv);
+          addBox(yacht, vadd(c, a.u, 4.4),      [5.0, 2.8, len * 0.55], GREYWHITE, bv);
+          addBox(yacht, vadd(c, a.u, 6.6),      [3.2, 2.0, len * 0.34], GLASS,     bv);
+          addCyl(yacht, vadd(c, a.u, 7.4), 0.22, 12 + hash(i) * 4, GREYWHITE, 5, bv);
+          addBox(yacht, vadd(c, a.u, 5.2), [5.1, 0.5, len * 0.54],
+            [WIN_AMBER[0] * 0.6, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], bv);
+        });
       }
 
       // MSC Yacht Club — one multi-deck hospitality mass (~50 ft / ~80 m read).
@@ -413,30 +439,34 @@
         const k = K(0.32);
         const a = anchor(k, 1, 38);
         const bv = [a.r, a.u, a.t];
+        modelGroup("msc-yacht-club", {
+          center: vadd(a.c, a.u, 16), size: [16.4, 33, 78], basis: bv,
+        }, (msc) => {
         // Hull / pontoon base
-        addBox(out, vadd(a.c, a.u,  2.0), [16,  4.0, 78], WHITE,      bv);
+        addBox(msc, vadd(a.c, a.u,  2.0), [16,  4.0, 78], WHITE,      bv);
         // Deck 1 hospitality
-        addBox(out, vadd(a.c, a.u,  5.5), [15,  4.5, 72], GREYWHITE,  bv);
-        addBox(out, vadd(a.c, a.u,  5.5), [15.4, 1.2, 70], TEAL,      bv); // glass band
+        addBox(msc, vadd(a.c, a.u,  5.5), [15,  4.5, 72], GREYWHITE,  bv);
+        addBox(msc, vadd(a.c, a.u,  5.5), [15.4, 1.2, 70], TEAL,      bv); // glass band
         // Deck 2
-        addBox(out, vadd(a.c, a.u,  9.5), [13,  4.0, 58], WHITE,      bv);
-        addBox(out, vadd(a.c, a.u,  9.5), [13.4, 1.0, 56], CORAL,     bv);
+        addBox(msc, vadd(a.c, a.u,  9.5), [13,  4.0, 58], WHITE,      bv);
+        addBox(msc, vadd(a.c, a.u,  9.5), [13.4, 1.0, 56], CORAL,     bv);
         // Deck 3 / bridge
-        addBox(out, vadd(a.c, a.u, 13.2), [10,  3.6, 40], GREYWHITE,  bv);
-        addBox(out, vadd(a.c, a.u, 13.2), [10.4, 0.9, 38], GLASS,     bv);
+        addBox(msc, vadd(a.c, a.u, 13.2), [10,  3.6, 40], GREYWHITE,  bv);
+        addBox(msc, vadd(a.c, a.u, 13.2), [10.4, 0.9, 38], GLASS,     bv);
         // Top sundeck / helipad
-        addBox(out, vadd(a.c, a.u, 16.2), [8,   2.2, 26], WHITE,      bv);
-        addCyl(out, vadd(a.c, a.u, 17.6), 5.5, 0.5, [0.50, 0.52, 0.54], 12, bv);
-        addCyl(out, vadd(a.c, a.u, 18.2), 5.0, 0.3, [0.85, 0.10, 0.10], 12, bv);
+        addBox(msc, vadd(a.c, a.u, 16.2), [8,   2.2, 26], WHITE,      bv);
+        addCyl(msc, vadd(a.c, a.u, 17.6), 5.5, 0.5, [0.50, 0.52, 0.54], 12, bv);
+        addCyl(msc, vadd(a.c, a.u, 18.2), 5.0, 0.3, [0.85, 0.10, 0.10], 12, bv);
         // Lit porthole strips
-        addBox(out, vadd(a.c, a.u,  4.0), [16.2, 0.9, 74],
+        addBox(msc, vadd(a.c, a.u,  4.0), [16.2, 0.9, 74],
           [WIN_AMBER[0] * 0.65, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], bv);
-        addBox(out, vadd(a.c, a.u,  7.8), [15.2, 0.7, 68],
+        addBox(msc, vadd(a.c, a.u,  7.8), [15.2, 0.7, 68],
           [WIN_AMBER[0] * 0.60, WIN_AMBER[1] * 0.45, WIN_AMBER[2] * 0.12], bv);
         // Radar / communication mast
-        addCyl(out, vadd(a.c, a.u, 18.0), 0.22, 14, GREYWHITE, 4, bv);
+        addCyl(msc, vadd(a.c, a.u, 18.0), 0.22, 14, GREYWHITE, 4, bv);
         // MSC blue/teal identity stripe along the hull
-        addBox(out, vadd(a.c, a.u,  2.8), [16.4, 1.0, 76], AQUA, bv);
+        addBox(msc, vadd(a.c, a.u,  2.8), [16.4, 1.0, 76], AQUA, bv);
+        }, { required: true });
       }
 
       // Marina promenade palms — placed via forestEdge so no barrier clipping
@@ -449,7 +479,7 @@
       // s 0.43–0.52 L mid — STADIUM-LOT ZONE: grandstands + cityFront + palms
       // ===================================================================
       for (let i = 0; i < 3; i++) {
-        grandstand(0.43 + i * 0.035, -1, 16, 85 + i * 10, GREYWHITE,
+        grandstand(0.43 + i * 0.035, -1, 22, 85 + i * 10, GREYWHITE,
           [PINK, TEAL, CORAL][i]);
       }
       cityFront(0.42, 0.53, -1, 24, {
@@ -461,6 +491,87 @@
       // Campus stadium car-park lots — the "car-park circuit" signature
       carPark(0.47, -1, 60, 4, 18);
       carPark(0.55,  1, 66, 4, 16);
+
+      // ===================================================================
+      // MIAMI CAMPUS HERO INFRASTRUCTURE — five bounded, high-value additions.
+      // These stay at fixed fractions and well beyond the barrier line; no new
+      // full-lap density is introduced into an already richly dressed circuit.
+      // ===================================================================
+
+      // 1) Hard Rock campus arrival court: low pastel pavilions and a broad
+      // shade canopy make the stadium foreground read as an event campus.
+      {
+        const a = anchor(K(0.025), 1, 82);
+        const bv = [a.r, a.u, a.t];
+        modelGroup("miami-campus-arrival-court", {
+          center: vadd(a.c, a.u, 5.5), size: [31, 12, 58], basis: bv,
+        }, (campus) => {
+          addBox(campus, vadd(a.c, a.u, 0.15), [30, 0.3, 58], [0.76, 0.78, 0.76], bv);
+          for (let i = -1; i <= 1; i++) {
+            const p = vadd(vadd(a.c, a.t, i * 18), a.u, 3.2);
+            addBox(campus, p, [22, 6.4, 12], (i === 0) ? WHITE : GREYWHITE, bv);
+            addBox(campus, vadd(p, a.u, 3.5), [25, 0.7, 14],
+              [CORAL, TEAL, PINK][i + 1], bv);
+          }
+          addBox(campus, vadd(vadd(a.c, a.r, -11), a.u, 8.2),
+            [5, 0.7, 54], WHITE, bv);
+        }, { required: true });
+      }
+
+      // 2) Marina hospitality deck: two glass-fronted tiers and a striped
+      // rooftop canopy deepen the temporary "marina" illusion behind the yachts.
+      {
+        const a = anchor(K(0.355), 1, 78);
+        const bv = [a.r, a.u, a.t];
+        modelGroup("miami-marina-hospitality-deck", {
+          center: vadd(a.c, a.u, 7.5), size: [28, 16, 64], basis: bv,
+        }, (deck) => {
+          addBox(deck, vadd(a.c, a.u, 1.0), [28, 2.0, 64], GREYWHITE, bv);
+          addBox(deck, vadd(a.c, a.u, 4.2), [25, 4.8, 59], WHITE, bv);
+          addBox(deck, vadd(vadd(a.c, a.r, -12.7), a.u, 4.4), [0.8, 3.0, 57], GLASS, bv);
+          addBox(deck, vadd(a.c, a.u, 8.0), [22, 2.8, 52], GREYWHITE, bv);
+          addBox(deck, vadd(vadd(a.c, a.r, -11.2), a.u, 8.1), [0.7, 1.8, 50], GLASS, bv);
+          addBox(deck, vadd(a.c, a.u, 10.0), [25, 0.8, 56], TEAL, bv);
+          for (let i = -2; i <= 2; i++)
+            addBox(deck, vadd(vadd(a.c, a.t, i * 10), a.u, 10.6),
+              [24, 0.35, 4.8], (i % 2) ? CORAL : PINK, bv);
+        }, { required: true });
+      }
+
+      // 3) Two Miami Vice pedestrian bridges punctuate the campus transitions.
+      // overheadSpan owns the complete deck/support clearance preflight.
+      overheadSpan({
+        id: "miami-teal-pedestrian-bridge", frac: 0.235, clearance: 7.4,
+        thickness: 1.0, depth: 3.2, supportGap: 5.5, supportWidth: 1.4,
+        color: TEAL, required: true,
+      });
+      overheadSpan({
+        id: "miami-coral-pedestrian-bridge", frac: 0.405, clearance: 7.4,
+        thickness: 1.0, depth: 3.2, supportGap: 5.5, supportWidth: 1.4,
+        color: CORAL, required: true,
+      });
+
+      // 4) Paired broadcast/logistics compounds fill otherwise empty service
+      // ground without becoming a roadside wall.
+      if (circuitKit) {
+        circuitKit.serviceCompound({
+          id: "kit:miami:broadcast-compound", frac: 0.205, side: 1, gap: 70,
+          size: [28, 6, 42], vehicles: 10, required: true,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:miami:operations-compound", frac: 0.735, side: -1, gap: 62,
+          size: [26, 6, 38], vehicles: 8, required: true,
+        });
+      }
+
+      // 5) Curated palm courts frame the campus gate and marina exit. Their
+      // generous offsets preserve the driver's braking and corner sightlines.
+      for (let i = 0; i < 6; i++) {
+        palm(K(0.012 + i * 0.006), 1, 64 + (i % 2) * 12,
+          10 + hash(i * 71) * 3, (i % 2) ? PALM_DARK : PALM_GREEN);
+        palm(K(0.365 + i * 0.006), 1, 66 + (i % 3) * 9,
+          9 + hash(i * 73) * 3, (i % 2) ? PALM_GREEN : PALM_DARK);
+      }
 
       // ===================================================================
       // AQUA RUNOFF APRONS — Dolphins identity at heavy-brake corners.
@@ -589,8 +700,9 @@
       tyreWall(0.645, 0.66,  1, 2.4, CORAL);
       tyreWall(0.66,  0.69, -1, 2.4, TEAL);
       tyreWall(0.155, 0.175, -1, 2.4, PINK);
-      // Marshal posts
-      every(180, (k) => { if (!onTrack(px[k], pz[k], 9)) marshalPost(k, 1, 5); });
+      // marshalPost performs its own off-track footprint guard. The previous
+      // centreline onTrack check was always true, so Miami emitted no posts.
+      every(180, (k) => marshalPost(k, 1, 5));
       // Low shrubs
       for (let i = 0; i < 10; i++) {
         bush(K(0.72 + i * 0.006), -1, 6 + (i % 2) * 3, PALM_GREEN);

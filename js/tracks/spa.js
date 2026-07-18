@@ -16,6 +16,13 @@
     lengthKm: 7,
     sunAzimBias: 0.44,   // afternoon sun swings SW over the Ardennes ridge — long shadows down the Kemmel straight
     baseHW: 8,
+    sceneryCoordinates: "racing",
+    // Keep the rendered hillside beneath Spa's camps, chalets and forest edge,
+    // but stop before the outer ribbon starts bridging the compact foldbacks.
+    terrainOuter: 90,
+    // Spa owns its woodland composition. Suppress the generic foliage pass so it
+    // cannot duplicate the curated forest or place untracked trees in sightlines.
+    dressingExclusions: [{ kind: "foliage", s0: 0, s1: 1 }],
     // Cool damp Ardennes overcast (ATM.dampArdennes) — grey sky/fog, no warm sun.
     pal: { zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34], fog: [0.55, 0.60, 0.62], fogDensity: 0.0032, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.88, 0.90, 0.92], sunColor: [0.88, 0.90, 0.92], ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26] },
     segs: [
@@ -26,13 +33,18 @@
     ],
     // Eau Rouge dip, the Raidillon/Kemmel climb (the calendar's biggest, ~100 m
     // top-to-bottom), then the long descent back through the second sector.
-    elevations: [{ s: 0.10, halfM: 280, rise: -6 }, { s: 0.17, halfM: 440, rise: 16 }, { s: 0.46, halfM: 520, rise: -8 }],
+    elevations: [
+      { s: 0.075, halfM: 360, rise: -18 }, // Eau Rouge compression
+      { s: 0.155, halfM: 920, rise: 84 },  // Raidillon crest / Kemmel plateau
+      { s: 0.46, halfM: 760, rise: 24 },   // rolling high ground before the descent
+      { s: 0.72, halfM: 680, rise: -18 },  // Stavelot valley
+    ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, every, prop, place, backdrop, pal,
-              addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor, onTrack,
+      const { out, MAT, n, px, pz, pyMin, hash, every, place, backdrop, pal,
+              addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               mountain, pine, tree, forestEdge, grandstand, building, motorhome,
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
-              ATM, runoffApron } = api;
+              modelGroup, overheadSpan, groundPatch, circuitKit, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
@@ -120,11 +132,6 @@
 
       // --- Modern pit/paddock building: long low white-grey mass on the pit straight.
       building(0, -1, 9, 14, 11, 64, { wall: [0.90, 0.91, 0.93], window: [0.40, 0.46, 0.50], floor: 5 });
-      {
-        // Thin cantilever roof blade over the pit lane.
-        const a = anchor(0, -1, 20);
-        addBox(out, vadd(a.c, a.u, 12.5), [16, 0.8, 60], [0.82, 0.84, 0.88], [a.r, a.u, a.t]);
-      }
       // Paddock hospitality row set back behind the pit building — Spa's
       // paddock was missing a team-motorhome row entirely (just the pit slab
       // + one old building); motorhome() adds the two-tier body + awning.
@@ -144,7 +151,7 @@
       // stand lays its crowd along ONE node's flat tangent, so on this steep,
       // curved climb the far rows flung up into the air / over the track. Short
       // bays each seat on their own local slope, so the crowd stays grounded.
-      for (const [s, gp] of [[0.070, 8], [0.079, 8], [0.088, 9], [0.097, 9]]) {
+      for (const [s, gp] of [[0.070, 8], [0.088, 9], [0.097, 9]]) {
         grandstand(s, 1, gp, 18, GOLD3, [0.20, 0.36, 0.62]);
       }
       billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
@@ -175,13 +182,10 @@
       place(K(0.068), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);
 
       // 3b. Stavelot runoff + barriers against the treeline (s≈0.75–0.80 R).
-      if (typeof runoffApron === "function") {
-        runoffApron(K(0.775), 1, 3.2, [16, 0.35, 42], [0.42, 0.42, 0.40]);
-        runoffApron(K(0.790), 1, 3.5, [14, 0.35, 36], [0.40, 0.40, 0.38]);
-      } else {
-        place(K(0.775), 1, 10, [16, 0.35, 42], [0.42, 0.42, 0.40]);
-        place(K(0.790), 1, 10, [14, 0.35, 36], [0.40, 0.40, 0.38]);
-      }
+      groundPatch(K(0.775), 1, 3.2, [16, 0.35, 42], [0.42, 0.42, 0.40],
+                  { id: "spa-stavelot-runoff-a", samples: 6 });
+      groundPatch(K(0.790), 1, 3.5, [14, 0.35, 36], [0.40, 0.40, 0.38],
+                  { id: "spa-stavelot-runoff-b", samples: 6 });
       tyreWall(0.762, 0.798, 1, 5.0, [0.55, 0.55, 0.52]);
       guardrail(0.748, 0.810, 1, 3.5, [0.84, 0.85, 0.88]);
 
@@ -193,18 +197,20 @@
       //     stone chimney + a warm-lit gable window. The regional forest farmhouse.
       function chalet(k, side, dist, w, h, d, wallCol, roofCol) {
         const a = anchor(k, side, dist);
-        if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.6 + 3)) return;
         const b = [a.r, a.u, a.t];
-        out._mat = MAT.STONE;
-        addBox(out, vadd(a.c, a.u, h / 2), [w, h, d], wallCol, b);                  // body
-        out._mat = MAT.ROOF;
-        addPrism(out, vadd(a.c, a.u, h), [w * 1.05, h * 0.7, d], roofCol, b);       // steep roof
-        out._mat = MAT.STONE;
-        addBox(out, vadd(vadd(vadd(a.c, a.u, h + h * 0.5), a.t, d * 0.28), a.r, w * 0.26),
-               [w * 0.16, h * 0.85, w * 0.16], [0.42, 0.40, 0.38], b);              // stone chimney
-        out._mat = 0;
-        addBox(out, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.06)),
-               [0.12, h * 0.34, d * 0.42], [0.98, 0.85, 0.50], b);                  // warm-lit window
+        const bounds = { center: vadd(a.c, a.u, h), size: [w * 1.2, h * 2, d * 1.1], basis: b };
+        modelGroup(`spa-chalet-${k}-${side}`, bounds, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, h / 2), [w, h, d], wallCol, b);              // body
+          stage._mat = MAT.ROOF;
+          addPrism(stage, vadd(a.c, a.u, h), [w * 1.05, h * 0.7, d], roofCol, b);   // steep roof
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(vadd(vadd(a.c, a.u, h + h * 0.5), a.t, d * 0.28), a.r, w * 0.26),
+                 [w * 0.16, h * 0.85, w * 0.16], [0.42, 0.40, 0.38], b);            // stone chimney
+          stage._mat = 0;
+          addBox(stage, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.06)),
+                 [0.12, h * 0.34, d * 0.42], [0.98, 0.85, 0.50], b);                // warm-lit window
+        });
       }
 
       // --- Forest campsite / RV village: the campervans + ridge tents that pack
@@ -212,52 +218,60 @@
       //     little caravans and tents, a shared awning and a glowing campfire.
       function rvCamp(k, side, dist, count) {
         const a = anchor(k, side, dist);
-        if (onTrack(a.c[0], a.c[2], 24)) return;
         const b = [a.r, a.u, a.t];
         const vanCols = [[0.86, 0.87, 0.88], [0.80, 0.44, 0.26], [0.72, 0.74, 0.78], [0.60, 0.66, 0.58]];
         const tentCols = [[0.78, 0.30, 0.24], [0.24, 0.44, 0.62], [0.86, 0.74, 0.30], [0.40, 0.56, 0.34]];
-        for (let i = 0; i < count; i++) {
-          const row = i % 2, col = (i / 2) | 0;
-          const off = (col - count / 4) * 9;
-          const base = vadd(vadd(a.c, a.t, off), a.r, -side * (row * 9));
-          if (hash(k * 3 + i) < 0.55) {
-            const vc = vanCols[(hash(k * 7 + i) * 4) | 0];
-            out._mat = MAT.METAL;
-            addBox(out, vadd(base, a.u, 1.9), [3.0, 2.6, 6.2], vc, b);              // caravan body
-            addBox(out, vadd(base, a.u, 3.3), [3.1, 0.5, 6.2],
-                   [vc[0] * 0.8, vc[1] * 0.8, vc[2] * 0.8], b);                     // roof cap
-            out._mat = 0;
-          } else {
-            const tc = tentCols[(hash(k * 11 + i) * 4) | 0];
-            out._mat = MAT.FABRIC;
-            addPrism(out, vadd(base, a.u, 0.2), [3.4, 1.9, 4.2], tc, b);            // ridge tent
-            out._mat = 0;
+        const centre = vadd(a.c, a.r, -side * 4.5);
+        modelGroup(`spa-rv-camp-${k}-${side}`, {
+          center: vadd(centre, a.u, 2.5), size: [14, 5, Math.max(28, count * 4.5)], basis: b,
+        }, (stage) => {
+          for (let i = 0; i < count; i++) {
+            const row = i % 2, col = (i / 2) | 0;
+            const off = (col - count / 4) * 9;
+            const base = vadd(vadd(a.c, a.t, off), a.r, -side * (row * 9));
+            if (hash(k * 3 + i) < 0.55) {
+              const vc = vanCols[(hash(k * 7 + i) * 4) | 0];
+              stage._mat = MAT.METAL;
+              addBox(stage, vadd(base, a.u, 1.9), [3.0, 2.6, 6.2], vc, b);          // caravan body
+              addBox(stage, vadd(base, a.u, 3.3), [3.1, 0.5, 6.2],
+                     [vc[0] * 0.8, vc[1] * 0.8, vc[2] * 0.8], b);                 // roof cap
+              stage._mat = 0;
+            } else {
+              const tc = tentCols[(hash(k * 11 + i) * 4) | 0];
+              stage._mat = MAT.FABRIC;
+              addPrism(stage, vadd(base, a.u, 0.2), [3.4, 1.9, 4.2], tc, b);        // ridge tent
+              stage._mat = 0;
+            }
           }
-        }
-        out._mat = MAT.FABRIC;
-        addBox(out, vadd(a.c, a.u, 2.6), [7, 0.15, 5], [0.90, 0.90, 0.86], b);      // shared awning
-        out._mat = 0;
-        addCone(out, a.c, 0.6, 1.0, [0.95, 0.55, 0.15], 5, b);                      // campfire glow
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(a.c, a.u, 2.6), [7, 0.15, 5], [0.90, 0.90, 0.86], b); // shared awning
+          stage._mat = 0;
+          addCone(stage, a.c, 0.6, 1.0, [0.95, 0.55, 0.15], 5, b);                 // campfire glow
+        });
       }
 
       // --- Historic Spa timing / control tower: a stepped stack (office box →
       //     tapered shaft → glazed timing box) with a clock face and flag mast.
       function timingTower(k, side, dist) {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-        out._mat = MAT.CONCRETE;
-        addBox(out, vadd(a.c, a.u, 6), [8, 12, 8], [0.80, 0.78, 0.72], b);          // base office
-        out._mat = MAT.METAL;
-        addFrustum(out, vadd(a.c, a.u, 12), 3.4, 2.6, 10, [0.84, 0.82, 0.76], 6, b);// shaft
-        out._mat = MAT.GLASS;
-        addBox(out, vadd(a.c, a.u, 23), [5.5, 3.2, 5.5], [0.18, 0.22, 0.28], b);    // glazed timing box
-        out._mat = 0;
-        addBox(out, vadd(a.c, a.u, 23), [5.6, 1.6, 5.6], [0.90, 0.92, 0.86], b);    // lit interior band
-        out._mat = MAT.METAL;
-        addBox(out, vadd(a.c, a.u, 26.6), [6, 0.6, 6], [0.30, 0.30, 0.34], b);      // roof slab
-        addCyl(out, vadd(a.c, a.u, 27), 0.12, 6, [0.42, 0.42, 0.46], 4, b);         // flag mast
-        out._mat = 0;
-        addBox(out, vadd(vadd(a.c, a.u, 18), a.r, -side * 4.05), [0.2, 2.4, 2.4],
-               [0.94, 0.93, 0.88], b);                                             // trackside clock face
+        modelGroup("spa-timing-tower", {
+          center: vadd(a.c, a.u, 16), size: [10, 32, 10], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 6), [8, 12, 8], [0.80, 0.78, 0.72], b);      // base office
+          stage._mat = MAT.METAL;
+          addFrustum(stage, vadd(a.c, a.u, 12), 3.4, 2.6, 10, [0.84, 0.82, 0.76], 6, b);// shaft
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(a.c, a.u, 23), [5.5, 3.2, 5.5], [0.18, 0.22, 0.28], b);// glazed timing box
+          stage._mat = 0;
+          addBox(stage, vadd(a.c, a.u, 23), [5.6, 1.6, 5.6], [0.90, 0.92, 0.86], b);// lit interior band
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 26.6), [6, 0.6, 6], [0.30, 0.30, 0.34], b);  // roof slab
+          addCyl(stage, vadd(a.c, a.u, 27), 0.12, 6, [0.42, 0.42, 0.46], 4, b);     // flag mast
+          stage._mat = 0;
+          addBox(stage, vadd(vadd(a.c, a.u, 18), a.r, -side * 4.05), [0.2, 2.4, 2.4],
+                 [0.94, 0.93, 0.88], b);                                           // trackside clock face
+        }, { required: true });
       }
 
       // --- Spectator footbridge spanning the track: two stair towers + a decked
@@ -265,18 +279,21 @@
       function footbridge(s, deckCol) {
         const kb = K(s);
         const L = anchor(kb, -1, 3), R = anchor(kb, 1, 3);
-        const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]);
-        const bL = [L.r, L.u, L.t], bR = [R.r, R.u, R.t], h = 6.5;
-        out._mat = MAT.METAL;
-        addBox(out, vadd(L.c, L.u, h / 2), [3, h, 3], [0.55, 0.56, 0.58], bL);      // stair tower L
-        addBox(out, vadd(R.c, R.u, h / 2), [3, h, 3], [0.55, 0.56, 0.58], bR);      // stair tower R
-        out._mat = MAT.WOOD;
-        const mid = vadd(vadd(L.c, L.u, h), L.r, span / 2);
-        addBox(out, mid, [span, 0.5, 3.4], deckCol, bL);                           // deck
-        out._mat = MAT.METAL;
-        for (const t of [1.6, -1.6])                                               // railings
-          addBox(out, vadd(vadd(mid, L.u, 0.9), L.t, t), [span, 0.12, 0.12], [0.30, 0.30, 0.32], bL);
-        out._mat = 0;
+        const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]) + 3;
+        const h = 6.5, id = `spa-footbridge-${Math.round(s * 1000)}`;
+        for (const [suffix, a] of [["left", L], ["right", R]]) {
+          const b = [a.r, a.u, a.t], c = vadd(a.c, a.u, h / 2);
+          modelGroup(`${id}-${suffix}-support`, {
+            center: c, size: [3, h, 3], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            addBox(stage, c, [3, h, 3], [0.55, 0.56, 0.58], b);
+          }, { required: true });
+        }
+        overheadSpan({
+          id, frac: s, clearance: h, thickness: 0.5, depth: 3.4, span,
+          supportGap: 1.5, supportWidth: 3, color: deckCol, required: true,
+        });
       }
 
       // Ardennes chalets tucked on the wooded hillsides around the lap.
@@ -296,6 +313,55 @@
       timingTower(K(0.985), -1, 30);
       footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
+
+      // --- Dress-pass hero additions: concentrated depth at Spa's natural
+      // amphitheatres while leaving Kemmel and Blanchimont's road-level views open.
+
+      // 4. Raidillon elevation theatre — two distant, staggered woodland ranks
+      // rise behind the Gold 3 stands and camps. The large gaps keep the crest
+      // and braking sightline clear while making the climb read through tree depth.
+      forestEdge(0.050, 0.112, -1, 30, { density: 0.64, hMin: 14, hMax: 25,
+        col: [0.07, 0.24, 0.11], col2: [0.13, 0.34, 0.15], pineFrac: 0.94 });
+      forestEdge(0.058, 0.108,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
+        col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
+
+      // 5. Pouhon's grassy bowl gets short individually grounded crowd bays.
+      // They sit beyond the marshal rail on the outside hillside; short spans
+      // follow the slope and avoid forming a wall across the fast double-left.
+      for (const [s, gap] of [[0.532, 11], [0.543, 13], [0.555, 15]]) {
+        grandstand(s, -1, gap, 16, [0.36, 0.38, 0.39], [0.74, 0.28, 0.20]);
+      }
+
+      // 6. Small cabin hamlets on the Les Combes and Stavelot high ground.
+      // Paired buildings, rather than a continuous row, retain the rural Ardennes
+      // character and remain well beyond the road-edge forest line.
+      chalet(K(0.205),  1, 64, 7, 4.8, 10, [0.72, 0.69, 0.62], [0.28, 0.19, 0.15]);
+      chalet(K(0.214),  1, 72, 6, 4.3, 9,  [0.76, 0.73, 0.66], [0.31, 0.21, 0.16]);
+      chalet(K(0.706), -1, 62, 7, 4.7, 11, [0.75, 0.72, 0.65], [0.29, 0.19, 0.15]);
+
+      // 7. Purpose-built marshal and recovery infrastructure at the three remote
+      // high-speed sectors. CircuitKit groups preflight complete footprints and
+      // fail closed if a folded section makes any placement unsafe.
+      if (circuitKit) {
+        circuitKit.marshalShelter({ id: "kit:spa:les-combes-shelter", frac: 0.168,
+          side: -1, gap: 7, size: [5, 3.2, 5] });
+        circuitKit.recoveryBay({ id: "kit:spa:pouhon-recovery", frac: 0.565,
+          side: -1, gap: 18, size: [12, 4.5, 18] });
+        circuitKit.marshalShelter({ id: "kit:spa:blanchimont-shelter", frac: 0.858,
+          side: 1, gap: 8, size: [5, 3.2, 5] });
+      }
+
+      // 8. Mid-distance ridge shoulders frame the Pouhon valley and Stavelot
+      // descent below the far horizon ring. Broad, low, forest-only forms keep
+      // Spa wooded rather than alpine and remain more than 200 m off the road.
+      for (const [s, side, seed] of [[0.50, -1, 811], [0.57, -1, 827],
+                                    [0.70,  1, 843], [0.79,  1, 859]]) {
+        const a = anchor(K(s), side, 230 + hash(seed) * 35);
+        mountain(a.c[0], a.c[2], a.c[1] - 2, 142 + hash(seed + 1) * 34,
+                 42 + hash(seed + 2) * 18, { seg: 7, seed,
+                   rough: 0.28, forest: [0.12, 0.31, 0.14],
+                   rock: [0.30, 0.35, 0.31], snowline: 2 });
+      }
 
       // Deeper forest ranks for an even denser Ardennes wall in the mid sectors.
       // Pouhon (0.42–0.58) and Blanchimont approach get denser sweeper walls.

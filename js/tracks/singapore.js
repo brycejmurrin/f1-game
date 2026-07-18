@@ -12,11 +12,23 @@
     country: "Singapore",
     night: true,
     theme: "street_night",
+    sceneryTheme: "street",
     lengthKm: 4.9,
     baseHW: 6,
     street: true,
+    barrierGap: 1.2,
+    terrainOuter: 48,
+    sceneryCoordinates: "racing",
+    dressingExclusions: [
+      // Singapore owns its dense skyline and race lighting. Keep shared dressing
+      // out of the bay/hero sightlines and avoid duplicate lamp/flood-mast rings.
+      { kind: "city", s0: 0, s1: 1 },
+      { kinds: ["foliage", "lamps"], s0: 0.15, s1: 0.48, side: 1 },
+      { kinds: ["foliage", "lamps"], s0: 0.78, s1: 0.90, side: 1 },
+      { kind: "floodlights", s0: 0, s1: 1 },
+    ],
     // Cool night: near-black zenith + cool fog/ambient so CBD glass & neon pop.
-    // Warm flood pools on tarmac stay in scenery (FLOOD/POOL) — not the sky.
+    // Warm flood pools on tarmac stay in scenery — not the sky.
     pal: {
       horizon:      [0.10, 0.12, 0.20],
       zenith:       [0.02, 0.02, 0.07],
@@ -31,61 +43,58 @@
       { t: 0, l: 200 }, { t: -95, l: 70 }, { t: 90, l: 80 }, { t: -80, l: 60 }, { t: 60, l: 70 }, { t: -90, l: 90 },
       { t: 0, l: 180 }, { t: -90, l: 70 }, { t: -90, l: 70 }, { t: 85, l: 60 }, { t: -95, l: 80 },
     ],
-    // Marina Bay: Anderson Bridge descent into the Padang section, then the climb
-    // back up through the Singapore Sling complex — real change ~10 m.
-    elevations: [{ s: 0.40, halfM: 360, rise: -7 }, { s: 0.65, halfM: 300, rise: 8 }],
+    // Elevations are source-trace fractions. Keep reclaimed-land Singapore nearly
+    // flat, with only the Sheares underpass dip (racing s≈0.10) and Anderson
+    // Bridge rise (racing s≈0.62).
+    elevations: [
+      { s: 0.6075, halfM: 120, rise: -2.5 },
+      { s: 0.1275, halfM: 120, rise: 2.5 },
+    ],
     scenery: function (api) {
-      const { out, MAT, n, hw, px, pz, place, backdrop, groundPlane, groundYAt,
-              building, billboard, anchor, along, every, onTrack, addBox, addCyl, addCone,
-              addPrism, addPyramid, addFrustum, grandstand, gantry, marshalPost, palm, bush,
-              fence, guardrail, tyreWall, vadd, hash, cityFront, tower, underpassPortal } = api;
+      const { out, MAT, n, place, backdrop,
+              building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
+              addPrism, addFrustum, grandstand, gantry, marshalPost, palm, bush,
+              fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
+              overheadSpan, waterSurface, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Dark underpass portal (Sheares / under-grandstand). Full-span decks are
-      // rejected by rejBox; piers + verge canopies + abutment mouths survive and
-      // still read as "cars pass under" at speed. Prefer shared helper when present.
-      const portalInline = (s0, s1, opts) => {
-        const DARK = (opts && opts.col) || [0.08, 0.08, 0.10];
-        const DECK = [0.10, 0.10, 0.12];
-        const h = (opts && opts.h) || 7.2;
-        const pierGap = (opts && opts.gap) != null ? opts.gap : 1.7;
-        const canopy = (opts && opts.canopy) || 4.8;
-        along(s0, s1, 7, (k, spacing) => {
-          for (const side of [-1, 1]) {
-            const a = anchor(k, side, pierGap);
-            if (onTrack(a.c[0], a.c[2], 1.0)) continue;
-            const b = [a.r, a.u, a.t];
-            // Pier / retaining face — sits past the barrier, never on tarmac
-            addBox(out, vadd(a.c, a.u, h * 0.5), [1.6, h, spacing * 1.02], DARK, b);
-            // Verge canopy — cantilever over the roadside only (inner face past hw)
-            const ca = anchor(k, side, pierGap + canopy * 0.5);
-            addBox(out, vadd(ca.c, ca.u, h + 0.55), [canopy, 1.1, spacing * 1.02], DECK, [ca.r, ca.u, ca.t]);
-            // Underside shadow band (reads as soffit)
-            addBox(out, vadd(ca.c, ca.u, h - 0.15), [canopy * 0.92, 0.35, spacing * 0.95], [0.05, 0.05, 0.07], [ca.r, ca.u, ca.t]);
-          }
+      // Shared-kit adoption: bounded race operations outside the bay hero zones.
+      if (circuitKit) {
+        circuitKit.raceControl({
+          id: "kit:singapore:race-control", frac: 0.58, side: -1, gap: 72,
+          size: [12, 24, 14], style: "tapered", required: true,
         });
-        // Portal mouths at each end — thicker abutments + short canopy stubs
-        for (const s of [s0, s1]) {
+        circuitKit.pedestrianBridge({
+          id: "kit:singapore:pedestrian-bridge", frac: 0.72,
+          clearance: 7.2, thickness: 0.9, depth: 3, required: true,
+        });
+      }
+
+      // Grade-aware portal beats. Short decks keep the declared underside
+      // clearance true across Singapore's ramps instead of allowing a long flat
+      // slab to approach the rising road at either end.
+      const makePortal = (id, s0, s1, opts) => {
+        const h = opts.h;
+        const gap = opts.gap;
+        const col = opts.col || [0.08, 0.08, 0.10];
+        const stations = [s0, (s0 + s1) * 0.5, s1];
+        for (let i = 0; i < stations.length; i++) {
+          const s = stations[i];
           const k = K(s);
+          overheadSpan({
+            id: `${id}-deck-${i}`, frac: s, clearance: h, thickness: 0.9,
+            depth: 6, supportGap: gap, color: col, required: true,
+          });
           for (const side of [-1, 1]) {
-            const a = anchor(k, side, pierGap);
-            if (onTrack(a.c[0], a.c[2], 1.2)) continue;
-            const b = [a.r, a.u, a.t];
-            addBox(out, vadd(a.c, a.u, (h + 1.2) * 0.5), [2.4, h + 1.2, 3.2], DARK, b);
-            const ca = anchor(k, side, pierGap + canopy * 0.45);
-            addBox(out, vadd(ca.c, ca.u, h + 0.7), [canopy * 0.9, 1.4, 3.6], DECK, [ca.r, ca.u, ca.t]);
+            const a = anchor(k, side, gap);
+            const size = [1.2, h, 6];
+            const center = vadd(a.c, a.u, h * 0.5);
+            modelGroup(`${id}-support-${i}-${side < 0 ? "l" : "r"}`, {
+              center, size, basis: [a.r, a.u, a.t],
+            }, (stage) => {
+              TrackGeom.addBox(stage, center, size, col, [a.r, a.u, a.t]);
+            }, { required: true });
           }
-        }
-      };
-      const makePortal = (s0, s1, opts) => {
-        if (typeof underpassPortal === "function") {
-          // Shared helper takes a centre s; sample a few stations along the span.
-          const mid = (s0 + s1) * 0.5;
-          underpassPortal(s0, opts || {});
-          if (Math.abs(s1 - s0) > 0.02) underpassPortal(mid, opts || {});
-          underpassPortal(s1, opts || {});
-        } else {
-          portalInline(s0, s1, opts);
         }
       };
 
@@ -106,19 +115,12 @@
       const WALL_CBD  = [0.18, 0.20, 0.30];  // dark blue-grey CBD glass
       const WALL_LITE = [0.22, 0.24, 0.34];  // slightly lighter near tower
       const WALL_WARM = [0.26, 0.22, 0.18];  // warm concrete hotel
-      // Floodlight lamp colour — warm white (ONLY warm cue on the asphalt)
-      const FLOOD = [1.00, 0.98, 0.88];
-      // Light pool on track — subtle warm patch below each mast
-      const POOL  = [0.68, 0.62, 0.50];
-      // Concrete barrier night grey
-      const CONC  = [0.30, 0.31, 0.36];
-
       // ===================================================================
       // UNDERPASS PORTALS — Sheares Bridge (s≈0.10) + finish under-grandstand
       // (s≈0.93–0.98). Dark soffit beat unique to Marina Bay night racing.
       // ===================================================================
-      makePortal(0.085, 0.115, { h: 7.4, gap: 1.7, canopy: 5.0 });
-      makePortal(0.925, 0.985, { h: 6.8, gap: 1.8, canopy: 4.6 });
+      makePortal("sheares", 0.085, 0.115, { h: 7.4, gap: 2.2 });
+      makePortal("finish-underpass", 0.925, 0.985, { h: 6.8, gap: 2.4 });
 
       // ===================================================================
       // FAR SILHOUETTE BAND — fills sky behind near facades; anchored far
@@ -183,6 +185,11 @@
         const LEAN   = 0.13;  // lateral tip per metre of height (~7.5°) toward centre
         const tops   = [];
 
+        modelGroup("marina-bay-sands", {
+          center: vadd(a.c, a.u, H * 0.5 + 4),
+          size: [100, H + 16, 40],
+          basis: [a.r, a.u, a.t],
+        }, (stage) => {
         for (let t = -1; t <= 1; t++) {
           const base = vadd(a.c, a.r, t * gap);
           // Outer towers lean inward (toward mid); centre stays vertical.
@@ -199,14 +206,14 @@
           const b = [rT, uT, tT];
           const mid = vadd(base, uT, H * 0.5);
           // Main shaft
-          addBox(out, mid,                         [TOWERW, H, 28],               wall,               b);
+          TrackGeom.addBox(stage, mid,                         [TOWERW, H, 28],               wall,               b);
           // Window glazing face — slightly proud of the wall, covers 70% of height
-          addBox(out, vadd(base, uT, H * 0.52),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
+          TrackGeom.addBox(stage, vadd(base, uT, H * 0.52),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
           // Vertical lit fin, alternating blue & gold for night detail
           const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
-          addBox(out, vadd(base, uT, H * 0.50),    [2.0, H * 0.60, 29.2],         finCol,             b);
+          TrackGeom.addBox(stage, vadd(base, uT, H * 0.50),    [2.0, H * 0.60, 29.2],         finCol,             b);
           // Bright crown at top of each tower
-          addBox(out, vadd(base, uT, H * 0.92),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
+          TrackGeom.addBox(stage, vadd(base, uT, H * 0.92),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
           tops.push(vadd(base, uT, H));
         }
 
@@ -216,11 +223,12 @@
         const spanR = Math.hypot(tops[2][0] - tops[0][0], tops[2][2] - tops[0][2]);
         const skyW  = Math.max(spanR + TOWERW, gap * 2 + TOWERW * 0.7);
         // Main slab — lighter warm sand colour (the real MBS deck is sand-coloured)
-        addBox(out, vadd(mid, a.u, 3.5), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 3.5), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
         // Glowing neon rim — the iconic cyan strip seen from every angle
-        addBox(out, vadd(mid, a.u, 6.0), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 6.0), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
         // Rooftop pool and garden strip — warm amber
-        addBox(out, vadd(mid, a.u, 5.5), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 5.5), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
+        }, { required: true });
       }
 
       // ===================================================================
@@ -345,7 +353,7 @@
         // Ground-level colonnade warm uplighting strip (the Fullerton's signature
         // amber wash that makes the columns glow at night)
         {
-          const a = anchor(k, -1, 18);
+          const a = anchor(k, -1, 42);
           addBox(out, vadd(a.c, a.u, 2.5), [50, 4.5, 36], [1.00, 0.82, 0.50], [a.r, a.u, a.t]);
           // Upper cornice band — bright cream highlight
           addBox(out, vadd(a.c, a.u, 26.5), [49, 1.8, 35], [1.00, 0.92, 0.68], [a.r, a.u, a.t]);
@@ -403,7 +411,7 @@
           }
         }
         // Waterfront promenade terrace in front of Esplanade
-        const ta = anchor(k, -1, 20);
+        const ta = anchor(k, -1, 26);
         addBox(out, vadd(ta.c, ta.u, 0.3), [40, 0.5, 55], [0.30, 0.28, 0.24], [ta.r, ta.u, ta.t]);
       }
 
@@ -437,54 +445,9 @@
         }
       }
 
-      // ===================================================================
-      // s 0.86 R — SINGAPORE FLYER: ferris wheel (hub + spokes + lit rim)
-      // ===================================================================
-      {
-        const k = K(0.86);
-        const a = anchor(k, 1, 58);
-        const WHEEL_R = 44, WHEEL_H = 138;
-
-        // Central support hub
-        addCyl(out, vadd(a.c, a.u, WHEEL_H), 2.4, 2.5, [0.35, 0.35, 0.38], 8, [a.r, a.u, a.t]);
-
-        // 8 spokes from rim to hub
-        for (let i = 0; i < 8; i++) {
-          const ang   = (i / 8) * Math.PI * 2;
-          const dx    = Math.cos(ang) * WHEEL_R;
-          const dz    = Math.sin(ang) * WHEEL_R;
-          const rimPt = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
-                         a.c[1] + a.u[1] * WHEEL_H,
-                         a.c[2] + a.r[2] * dx + a.t[2] * dz];
-          addCyl(out, vadd(rimPt, a.u, -WHEEL_H * 0.5), 0.45, WHEEL_H, [0.55, 0.55, 0.60], 5, [a.r, a.u, a.t]);
-          // Glass capsule / observation cabin (bright cyan)
-          addBox(out, rimPt, [3.4, 4.0, 3.4], WIN_CYAN, [a.r, a.u, a.t]);
-        }
-
-        // Lit necklace rim — 36 bright segments (cyan/white alternating)
-        const SEG = 36;
-        for (let i = 0; i < SEG; i++) {
-          const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
-          const p0 = [a.c[0] + a.r[0] * Math.cos(a0) * WHEEL_R + a.t[0] * Math.sin(a0) * WHEEL_R,
-                      a.c[1] + a.u[1] * WHEEL_H,
-                      a.c[2] + a.r[2] * Math.cos(a0) * WHEEL_R + a.t[2] * Math.sin(a0) * WHEEL_R];
-          const p1 = [a.c[0] + a.r[0] * Math.cos(a1) * WHEEL_R + a.t[0] * Math.sin(a1) * WHEEL_R,
-                      a.c[1] + a.u[1] * WHEEL_H,
-                      a.c[2] + a.r[2] * Math.cos(a1) * WHEEL_R + a.t[2] * Math.sin(a1) * WHEEL_R];
-          const segCol = (i % 3 === 0) ? NEON[0] : NEON[1];
-          addBox(out,
-            [(p0[0] + p1[0]) * 0.5, a.c[1] + a.u[1] * WHEEL_H, (p0[2] + p1[2]) * 0.5],
-            [1.1, 0.9, (WHEEL_R * 2 * Math.PI / SEG)],
-            segCol, [a.r, a.u, a.t]
-          );
-        }
-
-        // Support leg structure (A-frame)
-        for (const side2 of [-1, 1]) {
-          const legC = vadd(a.c, a.r, side2 * 30);
-          addCyl(out, vadd(legC, a.u, WHEEL_H * 0.45), 1.2, WHEEL_H * 0.9, [0.38, 0.38, 0.42], 6, [a.r, a.u, a.t]);
-        }
-      }
+      // s 0.86 R — SINGAPORE FLYER. The shared wheel is a true vertical ring;
+      // the old bespoke model accidentally laid its rim flat in the XZ plane.
+      ferrisWheel(K(0.86), 1, 58, 44);
 
       // ===================================================================
       // s 0.92–0.05 — pit straight: neon billboard funnel back to start,
@@ -529,66 +492,15 @@
       }
 
       // ===================================================================
-      // BAY WATER — dark mirror ground planes along open harbour stretches.
+      // BAY WATER — dark mirror used by the typed reflective-water model below.
       // ===================================================================
       const BAY = [0.06, 0.08, 0.14];
-      for (const s of [0.20, 0.30, 0.40, 0.45, 0.82, 0.86]) {
-        groundPlane(K(s), 1, 38, [70, 60], BAY);
-      }
 
       // ===================================================================
-      // FLOODLIGHT MASTS — key night feature. Dense, bright, warm-white.
-      // Every 75 m; all masts are kept, skip probability reduced to 0.15.
-      // Each mast has: pole, head bar, 5 bright lamp boxes, halo glow ring,
-      // and a LIGHT POOL patch on the ground below.
+      // FLOODLIGHT MASTS — one intentional warm-white ring. Shared generic
+      // floodlights are excluded above, avoiding duplicate poles and pools.
       // ===================================================================
-      every(75, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 3 + side) < 0.15) continue;   // keep ~85% of masts
-          const a = anchor(k, side, 11 + hash(k + side) * 5);
-          const H = 20 + hash(k * 7 + side) * 8;
-
-          // Pole (dark grey)
-          addCyl(out, vadd(a.c, a.u, H * 0.5), 0.52, H, [0.12, 0.12, 0.15], 6, [a.r, a.u, a.t]);
-          // Head cross-bar
-          const head = vadd(a.c, a.u, H);
-          addBox(out, head, [7.0, 0.90, 2.0], [0.14, 0.14, 0.18], [a.r, a.u, a.t]);
-
-          // 5 very bright flood lamps along the bar
-          for (let j = -2; j <= 2; j++) {
-            const lampC = vadd(head, a.r, j * 1.35);
-            // Lamp housing (extremely bright warm white)
-            addBox(out, lampC, [1.5, 1.5, 0.9], FLOOD, [a.r, a.u, a.t]);
-            // Wide halo glow ring around each lamp
-            addBox(out, vadd(lampC, a.u, 0.8), [2.2, 0.25, 1.4], [0.95, 0.90, 0.75], [a.r, a.u, a.t]);
-          }
-
-          // Base mounting bracket
-          addBox(out, vadd(a.c, a.u, 1.8), [4.0, 1.4, 2.2], [0.18, 0.18, 0.22], [a.r, a.u, a.t]);
-
-          // Light pool — a warm glowing slab on the ground just inboard of the mast,
-          // simulating the cone of illumination hitting the track surface.
-          // Placed 4 m inboard (towards the track centreline) and kept thin.
-          const poolOff = side * -4;  // towards track
-          const poolC   = vadd(vadd(a.c, a.r, poolOff), a.u, 0.1);
-          addBox(out, poolC, [14, 0.18, 18], POOL, [a.r, a.u, a.t]);
-        }
-      });
-
-      // ===================================================================
-      // LAMP POSTS along the promenade and grandstand straight — smaller
-      // street-scale lights between the floodlight masts.
-      // ===================================================================
-      every(22, (k) => {
-        for (const side of [-1, 1]) {
-          if (hash(k * 11 + side) < 0.40) continue;
-          const a = anchor(k, side, 9 + hash(k * 2) * 3);
-          addCyl(out, vadd(a.c, a.u, 4),    0.12, 8,  [0.25, 0.25, 0.28], 5, [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 8.5),  [0.7, 0.7, 0.7], WIN_WARM,         [a.r, a.u, a.t]);
-          // Tiny glow halo around the lamp head
-          addBox(out, vadd(a.c, a.u, 8.8),  [1.2, 0.2, 1.2], [0.90, 0.82, 0.60], [a.r, a.u, a.t]);
-        }
-      });
+      floodMastRing(75, { h: 24, dist: 12, cool: false, pool: true, arms: 3 });
 
       // ===================================================================
       // MAIN STRAIGHT — pit building (L) + Float@Marina Bay grandstands (R),
@@ -613,20 +525,20 @@
       }
 
       // Grandstands on the right of the main straight
-      grandstand(0.99,  1, 8,  62, [0.20, 0.22, 0.28], [0.48, 0.34, 0.44]);
-      grandstand(0.02,  1, 8,  62, [0.20, 0.22, 0.28], [0.44, 0.30, 0.40]);
-      grandstand(0.05,  1, 8,  50, [0.22, 0.24, 0.30], [0.50, 0.36, 0.46]);
-      grandstand(0.93,  1, 8,  52, [0.20, 0.22, 0.28], [0.46, 0.32, 0.42]);
+      grandstand(0.99,  1, 12, 62, [0.20, 0.22, 0.28], [0.48, 0.34, 0.44]);
+      grandstand(0.02,  1, 12, 62, [0.20, 0.22, 0.28], [0.44, 0.30, 0.40]);
+      grandstand(0.05,  1, 12, 50, [0.22, 0.24, 0.30], [0.50, 0.36, 0.46]);
       grandstand(0.70, -1, 30, 48, [0.20, 0.22, 0.28], [0.42, 0.30, 0.40]);
 
       // Start/finish gantry + halfway scoring gantry
       gantry(0.0, 7.5, [0.12, 0.12, 0.16]);
       gantry(0.5, 7.0, [0.12, 0.12, 0.16]);
-      // Lit start-light cluster on the gantry (overhead → unguarded raw emit)
-      {
-        const a = anchor(K(0.0), 0, 0);
-        TrackGeom.addBox(out, vadd(a.c, a.u, 7.6), [4.5, 1.4, 0.9], [0.95, 0.05, 0.05], null);
-      }
+      // Lit start-light cluster is an explicit safe overhead model.
+      overheadSpan({
+        id: "start-light-cluster", frac: 0, clearance: 6.9,
+        thickness: 1.4, depth: 0.9, span: 4.5,
+        color: [0.95, 0.05, 0.05], required: true, supports: false,
+      });
 
       // ===================================================================
       // MARSHAL POSTS at corner approaches
@@ -642,7 +554,8 @@
         [0.00, 0.18, -1], [0.20, 0.40, -1], [0.42, 0.62, -1], [0.64, 0.85, -1], [0.87, 0.99, -1],
         [0.00, 0.16,  1], [0.30, 0.44,  1], [0.55, 0.66,  1], [0.92, 0.99,  1],
       ]) {
-        fence(s0, s1, side, 1.4, 3.4, [0.66, 0.70, 0.78]);
+        // Sit behind the 1.2 m concrete wall rather than sharing its edge.
+        fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
       }
 
       // ===================================================================
@@ -708,11 +621,93 @@
       // BESPOKE MARINA BAY WATERFRONT MODELS
       // ═══════════════════════════════════════════════════════════════════
 
-      // ── Reflective Marina Bay water (groundPlane water:true) ─────────────
+      // ── Reflective Marina Bay water ──────────────────────────────────────
       // A true reflective buffer mirroring the lit skyline across the bay,
       // laid along the R (waterfront) side of the bay sections.
-      for (const s of [0.20, 0.30, 0.40, 0.84]) {
-        groundPlane(K(s), 1, 40, [120, 1.2, 90], [0.05, 0.07, 0.13], true);
+      for (const s of [0.30, 0.84]) {
+        waterSurface(K(s), 1, 40, [80, 0.3, 64], BAY, {
+          id: `marina-water-${Math.round(s * 100)}`,
+          required: true,
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // 2026 SCENERY DRESS PASS — six bounded Marina Bay hero layers.
+      // All structures use footprint-tested helpers and sit well beyond the
+      // narrow street walls; fixed fractions keep the result deterministic.
+      // ═══════════════════════════════════════════════════════════════════
+
+      // 1) s 0.39–0.43 L — Raffles / City Hall illuminated hotel terrace.
+      // Stepped setbacks preserve the braking-zone view while warm windows and
+      // bright cornices distinguish the hotel district from the cool CBD glass.
+      for (const [s, gap, w, h, d] of [
+        [0.390, 34, 30, 48, 24],
+        [0.410, 54, 34, 62, 26],
+        [0.430, 76, 38, 76, 28],
+      ]) {
+        building(K(s), -1, gap, w, h, d, {
+          wall: WALL_WARM, window: WIN_GOLD, floor: 6, lit: true, roof: true,
+        });
+        const a = anchor(K(s), -1, gap + w * 0.5);
+        addBox(out, vadd(a.c, a.u, h + 0.9), [w + 1.2, 1.4, d + 1.2],
+          [1.00, 0.88, 0.58], [a.r, a.u, a.t]);
+      }
+
+      // 2) s 0.46–0.52 R — layered financial-district crowns across the bay.
+      // Three different depths create parallax behind the promenade rather
+      // than another continuous facade wall.
+      for (const [s, dist, baseW, h, capCol] of [
+        [0.460, 150, 30, 138, WIN_CYAN],
+        [0.490, 188, 34, 176, WIN_COOL],
+        [0.520, 226, 28, 154, WIN_GOLD],
+      ]) {
+        tower(K(s), 1, dist, baseW, h, {
+          col: WALL_CBD, cap: true, capCol, mast: 14, seg: 8,
+        });
+      }
+
+      // 3) s 0.20 / 0.44 R — extra reflective water shelves and pier lights.
+      // These overlap the bay visually, but remain separate bounded water
+      // models so the waterfront has foreground, middle and far depth.
+      for (const [s, gap, depth] of [[0.20, 52, 52], [0.44, 58, 58]]) {
+        waterSurface(K(s), 1, gap, [66, 0.3, depth], BAY, {
+          id: `marina-water-depth-${Math.round(s * 100)}`,
+        });
+        const a = anchor(K(s), 1, 30);
+        for (let i = -2; i <= 2; i++) {
+          const c = vadd(vadd(a.c, a.t, i * 9), a.u, 1.2);
+          addBox(out, c, [1.0, 2.0, 5.5], i % 2 ? WIN_GOLD : WIN_CYAN,
+            [a.r, a.u, a.t]);
+        }
+      }
+
+      // 4) s 0.735–0.785 — Padang / Esplanade spectator theatre.
+      // Stands are staggered and kept 20+ m behind the walls, concentrating
+      // crowd density at the civic hero sector without forming a blind canyon.
+      grandstand(0.735, -1, 22, 54, [0.20, 0.22, 0.28], [0.52, 0.34, 0.42]);
+      grandstand(0.765,  1, 26, 48, [0.18, 0.21, 0.28], [0.42, 0.34, 0.52]);
+      grandstand(0.785, -1, 24, 46, [0.22, 0.24, 0.30], [0.50, 0.38, 0.30]);
+
+      // 5) s 0.445 — Bayfront pedestrian link, high and shallow so it reads
+      // as a bridge beat without blocking the skyline on corner approach.
+      overheadSpan({
+        id: "bayfront-pedestrian-link", frac: 0.445, clearance: 7.4,
+        thickness: 0.8, depth: 2.6, supportGap: 4.2,
+        color: [0.30, 0.48, 0.66],
+      });
+
+      // 6) s 0.50–0.57 and 0.70–0.78 — deliberate tropical boulevards.
+      // Alternating palms and low shrubs form two sparse ranks; the inner rank
+      // remains outside the barriers and no canopy is placed over sightlines.
+      for (const [s, side] of [
+        [0.500, -1], [0.525, -1], [0.550, -1], [0.575, -1],
+        [0.705,  1], [0.730,  1], [0.755,  1], [0.780,  1],
+      ]) {
+        const k = K(s);
+        const h = 10 + hash(k * 11) * 3;
+        palm(k, side, 14, h, [0.18, 0.46, 0.22]);
+        palm(k, side, 22, h + 2, [0.14, 0.38, 0.18]);
+        bush(k, side, 10, [0.16, 0.40, 0.18]);
       }
 
       // ── THE MERLION — Singapore's icon: lion head + fish body + water jet ─

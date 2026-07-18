@@ -1,0 +1,254 @@
+// @ts-check
+import { test, expect } from "@playwright/test";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+
+const CAPTURE_DIR = process.env.IMAGE_GRADE_CAPTURE_DIR;
+if (CAPTURE_DIR) mkdirSync(CAPTURE_DIR, { recursive: true });
+
+const GRADE_NEUTRAL = {
+  blacks: 0, shadows: 0, midtones: 0, highlights: 0, whites: 0,
+  toe: 0, shoulder: 0,
+  liftR: 0, liftG: 0, liftB: 0,
+  gammaR: 1, gammaG: 1, gammaB: 1,
+  gainR: 1, gainG: 1, gainB: 1,
+};
+
+const GRADE_MIN = {
+  blacks: -1, shadows: -1, midtones: -1, highlights: -1, whites: -1,
+  toe: -1, shoulder: -1,
+  liftR: -0.15, liftG: -0.15, liftB: -0.15,
+  gammaR: 0.5, gammaG: 0.5, gammaB: 0.5,
+  gainR: 0.5, gainG: 0.5, gainB: 0.5,
+};
+
+const GRADE_MAX = {
+  blacks: 1, shadows: 1, midtones: 1, highlights: 1, whites: 1,
+  toe: 1, shoulder: 1,
+  liftR: 0.15, liftG: 0.15, liftB: 0.15,
+  gammaR: 2, gammaG: 2, gammaB: 2,
+  gainR: 1.5, gainG: 1.5, gainB: 1.5,
+};
+
+async function waitForTune(page, values) {
+  await page.waitForFunction((expected) => {
+    const tune = window.__apex?.lightTune?.();
+    return tune && Object.entries(expected).every(([id, value]) =>
+      Math.abs(tune[id] - value) < 0.0001);
+  }, values, { timeout: 15_000 });
+  await page.waitForTimeout(250);
+}
+
+async function setTune(page, values) {
+  await page.evaluate((next) => window.__apex.lightTune(next), values);
+  await waitForTune(page, values);
+}
+
+async function boot(page, {
+  track = "bahrain", tod = "day", weather = "dry", frac = 0.1,
+  neutralGrade = true,
+} = {}) {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex?.race, { timeout: 15_000 });
+  await page.evaluate(({ track, tod, weather }) =>
+    window.__apex.race(track, tod, weather), { track, tod, weather });
+  await page.waitForFunction((id) => {
+    const info = window.__apex.info();
+    return info.track === id;
+  }, track, { timeout: 30_000 });
+  await page.evaluate(({ frac }) => {
+    window.__apex.park(frac);
+    window.__apex.hud(false);
+    window.__apex.eyeAt(frac, 0.2, 1.35);
+    document.body.classList.add("hud-hidden");
+    document.getElementById("hud-restore")?.style.setProperty("display", "none", "important");
+  }, { frac });
+  await page.waitForFunction(({ tod, weather }) => {
+    const info = window.__apex.info();
+    return info.state === "race" &&
+      window.__apex.weather() === weather &&
+      window.__apex.setTimeOfDay() === tod &&
+      window.__apex.camState().debug === true;
+  }, { tod, weather }, { timeout: 45_000 });
+  if (neutralGrade) await setTune(page, GRADE_NEUTRAL);
+}
+
+async function pixels(page) {
+  const buf = await page.screenshot({ type: "jpeg", quality: 90, timeout: 60_000 });
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = "data:image/jpeg;base64," + b64;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    return Array.from(cx.getImageData(0, 0, c.width, c.height).data);
+  }, buf.toString("base64"));
+}
+
+function luminance(data, i) {
+  return 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+}
+
+function tonalChanges(before, after) {
+  let darkDelta = 0, darkCount = 0, brightDelta = 0, brightCount = 0;
+  let darkSigned = 0, brightSigned = 0;
+  for (let i = 0; i < before.length; i += 4) {
+    const y = luminance(before, i);
+    const signed = luminance(after, i) - y;
+    const delta = Math.abs(signed);
+    if (y >= 8 && y <= 55) {
+      darkDelta += delta;
+      darkSigned += signed;
+      darkCount++;
+    } else if (y >= 160 && y <= 247) {
+      brightDelta += delta;
+      brightSigned += signed;
+      brightCount++;
+    }
+  }
+  return {
+    dark: darkDelta / darkCount,
+    bright: brightDelta / brightCount,
+    darkSigned: darkSigned / darkCount,
+    brightSigned: brightSigned / brightCount,
+    darkCount,
+    brightCount,
+  };
+}
+
+function rangeChanges(before, after, low, high) {
+  let absolute = 0, signed = 0, count = 0;
+  for (let i = 0; i < before.length; i += 4) {
+    const y = luminance(before, i);
+    if (y < low || y > high) continue;
+    const change = luminance(after, i) - y;
+    absolute += Math.abs(change);
+    signed += change;
+    count++;
+  }
+  return { absolute: absolute / count, signed: signed / count, count };
+}
+
+function channelChanges(before, after) {
+  const sums = [0, 0, 0];
+  let count = 0;
+  for (let i = 0; i < before.length; i += 4) {
+    const y = luminance(before, i);
+    if (y < 8 || y > 247) continue;
+    sums[0] += Math.abs(after[i] - before[i]);
+    sums[1] += Math.abs(after[i + 1] - before[i + 1]);
+    sums[2] += Math.abs(after[i + 2] - before[i + 2]);
+    count++;
+  }
+  return sums.map((sum) => sum / count);
+}
+
+function histogramStats(data) {
+  const values = [];
+  let black = 0, white = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    values.push(luminance(data, i));
+    if (data[i] <= 1 && data[i + 1] <= 1 && data[i + 2] <= 1) black++;
+    if (data[i] >= 254 && data[i + 1] >= 254 && data[i + 2] >= 254) white++;
+  }
+  values.sort((a, b) => a - b);
+  const percentile = (p) => values[Math.floor((values.length - 1) * p)];
+  return {
+    p05: percentile(0.05),
+    p95: percentile(0.95),
+    blackClipFraction: black / values.length,
+    whiteClipFraction: white / values.length,
+  };
+}
+
+test.describe("rendered image grade", () => {
+  test.describe.configure({ mode: "serial" });
+  test.setTimeout(180_000);
+
+  test("blacks visibly change the deepest image detail", async ({ page }) => {
+    await boot(page);
+    await pixels(page);
+    const baseline = await pixels(page);
+    await setTune(page, { blacks: 1 });
+    const raised = rangeChanges(baseline, await pixels(page), 2, 30);
+    await setTune(page, { blacks: -1 });
+    const crushed = rangeChanges(baseline, await pixels(page), 2, 30);
+    expect(raised.count).toBeGreaterThan(1000);
+    expect(raised.signed).toBeGreaterThan(1);
+    expect(crushed.signed).toBeLessThan(-1);
+  });
+
+  test("shadows predominantly change dark pixels", async ({ page }) => {
+    await boot(page);
+    await pixels(page); // discard first composited frame while render caches settle
+    const baseline = await pixels(page);
+    await setTune(page, { shadows: 0.5 });
+    const changed = await pixels(page);
+    const delta = tonalChanges(baseline, changed);
+    expect(delta.darkCount).toBeGreaterThan(1000);
+    expect(delta.brightCount).toBeGreaterThan(1000);
+    expect(delta.darkSigned).toBeGreaterThan(0.5);
+    expect(delta.dark).toBeGreaterThanOrEqual(delta.bright * 2);
+  });
+
+  test("highlights predominantly change bright pixels", async ({ page }) => {
+    await boot(page);
+    await pixels(page);
+    const baseline = await pixels(page);
+    await setTune(page, { highlights: 0.5 });
+    const changed = await pixels(page);
+    const delta = tonalChanges(baseline, changed);
+    expect(delta.bright).toBeGreaterThanOrEqual(delta.dark * 2);
+  });
+
+  test("red gain predominantly changes the red channel", async ({ page }) => {
+    await boot(page);
+    await pixels(page);
+    const baseline = await pixels(page);
+    await setTune(page, { gainR: 1.2 });
+    const changed = await pixels(page);
+    const [red, green, blue] = channelChanges(baseline, changed);
+    expect(red).toBeGreaterThan(green * 1.5);
+    expect(red).toBeGreaterThan(blue * 1.5);
+  });
+
+  test("grade extremes keep the race canvas renderable", async ({ page }) => {
+    await boot(page);
+    for (const values of [GRADE_MIN, GRADE_MAX]) {
+      await setTune(page, values);
+      const image = await pixels(page);
+      const state = await page.evaluate(() => window.__apex.info().state);
+      expect(state).toBe("race");
+      expect(image.length).toBe(640 * 360 * 4);
+      expect(new Set(image).size).toBeGreaterThan(16);
+    }
+  });
+});
+
+const REPRESENTATIVE_CONDITIONS = [
+  { track: "bahrain", tod: "day", weather: "dry", frac: 0.1 },
+  { track: "monaco", tod: "dawn", weather: "dry", frac: 0.1 },
+  { track: "silverstone", tod: "day", weather: "overcast", frac: 0.1 },
+  { track: "singapore", tod: "night", weather: "dry", frac: 0.35 },
+  { track: "spa", tod: "day", weather: "rain", frac: 0.1 },
+];
+
+for (const condition of REPRESENTATIVE_CONDITIONS) {
+  test(`${condition.track} ${condition.tod} ${condition.weather} retains broad tonal range`, async ({ page }) => {
+    test.setTimeout(180_000);
+    await boot(page, { ...condition, neutralGrade: false });
+    if (CAPTURE_DIR) {
+      await page.screenshot({
+        path: join(CAPTURE_DIR, `${condition.track}-${condition.tod}-${condition.weather}.png`),
+        timeout: 60_000,
+      });
+    }
+    const stats = histogramStats(await pixels(page));
+    expect(stats.blackClipFraction).toBeLessThan(0.08);
+    expect(stats.whiteClipFraction).toBeLessThan(0.03);
+    expect(stats.p95 - stats.p05).toBeGreaterThan(45);
+  });
+}

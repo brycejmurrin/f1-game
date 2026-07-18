@@ -17,10 +17,16 @@ function init(gfx) { _gfx = gfx; }
 // ONE shared decal-quad mesh (fixed panel UVs into the LiveryTex atlas layout);
 // the per-team atlas TEXTURE carries the actual logos/sponsors, so the geometry
 // is team-independent. Drawn over the painted body each frame (gfx.drawDecal).
-const _carDecalMeshes = {};   // keyed by downforce level (rear-wing number tracks it)
-function carDecalData(aLvl) {
+const _carDecalMeshes = {};
+const _carDecalOrder = [];
+const CAR_DECAL_CACHE_MAX = 24;
+function carDecalData(aLvl, parts, legacyBody) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
+  // Imported GLBs are static and do not consume the procedural parts recipe.
+  // Resolve their overlays against the default body once, regardless of setup.
+  const anchorParts = legacyBody ? null : parts;
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
@@ -34,14 +40,50 @@ function carDecalData(aLvl) {
     for (let k = 0; k < 4; k++) { out.pos.push(c[k][0], c[k][1], c[k][2]); out.nrm.push(n[0], n[1], n[2]); out.uv.push(uvs[k][0], uvs[k][1]); }
     out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
   };
+  const quadUv = (c, n, uvs) => {
+    const i = out.pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      out.pos.push(c[k][0], c[k][1], c[k][2]);
+      out.nrm.push(n[0], n[1], n[2]);
+      out.uv.push(uvs[k][0], uvs[k][1]);
+    }
+    out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  };
   // Sidepod flanks → primary sponsor. Right side reads front→back; left mirrors so
   // the wordmark is upright on both flanks. zF=front(+Z), zR=rear(−Z).
-  const yB = 0.19, yT = 0.45, zF = 0.46, zR = -0.34;
-  quad([[0.715, yB, zF], [0.715, yB, zR], [0.715, yT, zR], [0.715, yT, zF]], [1, 0, 0], R.titleA);
-  quad([[-0.715, yB, zR], [-0.715, yB, zF], [-0.715, yT, zF], [-0.715, yT, zR]], [-1, 0, 0], R.titleA);
+  const zF = 0.46, zR = -0.34;
+  const pY = (p, f) => p.bottom + (p.top - p.bottom) * f;
+  const podAt = (z) => anchors ? anchors.podAt(z) :
+    { x: 0.707, bottom: 0.12 + 0.025 * (z - zR) / (zF - zR),
+      top: 0.41 + 0.07 * (z - zR) / (zF - zR) };
+  const podStops = (front, rear) => {
+    const internal = anchors && anchors.podStations ?
+      anchors.podStations.map((p) => p.z) : [0.22, -0.62];
+    return [front, ...internal.filter((z) => z < front && z > rear), rear]
+      .sort((a, b) => b - a);
+  };
+  const podDecal = (region, yBottom, yTop, proud) => {
+    const u = uvOf(region), stops = podStops(zF, zR);
+    for (let i = 0; i < stops.length - 1; i++) {
+      const aZ = stops[i], bZ = stops[i + 1], a = podAt(aZ), b = podAt(bZ);
+      const ta = (zF - aZ) / (zF - zR), tb = (zF - bZ) / (zF - zR);
+      const rU = (t) => u.uR + (u.uL - u.uR) * t;
+      const lU = (t) => u.uL + (u.uR - u.uL) * t;
+      quadUv([[a.x+proud, pY(a,yBottom), aZ], [b.x+proud, pY(b,yBottom), bZ],
+              [b.x+proud, pY(b,yTop), bZ], [a.x+proud, pY(a,yTop), aZ]], [1, 0, 0],
+             [[rU(ta),u.vB], [rU(tb),u.vB], [rU(tb),u.vT], [rU(ta),u.vT]]);
+      quadUv([[-b.x-proud, pY(b,yBottom), bZ], [-a.x-proud, pY(a,yBottom), aZ],
+              [-a.x-proud, pY(a,yTop), aZ], [-b.x-proud, pY(b,yTop), bZ]], [-1, 0, 0],
+             [[lU(tb),u.vB], [lU(ta),u.vB], [lU(ta),u.vT], [lU(tb),u.vT]]);
+    }
+  };
+  podDecal(R.titleA, 0.24, 0.84, 0.018);
   // Engine-cover top → team crest + tail livery graphic (reads from the chase
   // cam; top = toward the tail).
-  quad([[-0.15, 0.565, -0.62], [0.15, 0.565, -0.62], [0.15, 0.6, -1.28], [-0.15, 0.6, -1.28]], [0, 1, 0.06], R.crest);
+  const cf = anchors ? anchors.coverAt(-0.62) : { x: 0.27, top: 0.81 };
+  const cr = anchors ? anchors.coverAt(-1.28) : { x: 0.20, top: 0.69 };
+  quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
+        [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
   // Shark-fin flanks → the SAME tail graphic (the big vertical rear canvas — the
   // "tail wrap" à la a real F1 shark fin). Fin is ~0.03 wide on x=0; sit the decal
   // just proud of each face. Front→back reading, mirrored per side.
@@ -51,15 +93,20 @@ function carDecalData(aLvl) {
   // Nose-top plate → big driver NUMBER (top of the digit toward the nose tip).
   // The nose block is IDENTICAL in the chase and cockpit builds, so this reads
   // upright from chase, hood AND cockpit cameras (all look forward over the nose).
-  quad([[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]], [0, 1, 0.05], R.num);
+  const nR = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
+  const nF = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
+  quad([[-nR.topSide*0.84, nR.top+0.020, 1.72], [nR.topSide*0.84, nR.top+0.020, 1.72],
+        [nF.topSide*0.84, nF.top+0.020, 2.10], [-nF.topSide*0.84, nF.top+0.020, 2.10]], [0, 1, 0.05], R.num);
   // Nose-rear deck (behind the number) → secondary sponsor. The nose crown SLOPES
   // UP toward the bulkhead, so the decal quad follows that slope (rear corners
   // higher than front) — a flat horizontal quad floated/tilted off the surface
   // and read "detached". Corner heights track the crown so it lies painted-on.
-  quad([[-0.14, 0.556, 1.16], [0.14, 0.556, 1.16], [0.14, 0.504, 1.66], [-0.14, 0.504, 1.66]], [0, 1, 0.10], R.titleB);
+  const nsR = anchors ? anchors.noseAt(1.16) : { top: 0.54, topSide: 0.15 };
+  const nsF = anchors ? anchors.noseAt(1.66) : { top: 0.48, topSide: 0.14 };
+  quad([[-nsR.topSide*0.82, nsR.top+0.014, 1.16], [nsR.topSide*0.82, nsR.top+0.014, 1.16],
+        [nsF.topSide*0.82, nsF.top+0.014, 1.66], [-nsF.topSide*0.82, nsF.top+0.014, 1.66]], [0, 1, 0.10], R.titleB);
   // Sidepod lower flank → long sponsor strip.
-  quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
-  quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
+  podDecal(R.strip, 0.08, 0.30, 0.020);
   // Rear-wing endplate number boards → the driver number again (classic F1 — the
   // number reads on the nose AND the rear-wing endplates). The board height/pos
   // TRACKS the wing: Car3D.numberBoard(aLvl) is the SAME function the car mesh
@@ -73,10 +120,21 @@ function carDecalData(aLvl) {
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   return out;
 }
-function getCarDecalMesh(aLvl) {
+function getCarDecalMesh(aLvl, parts, legacyBody) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
-  const k = (aLvl == null ? 2 : aLvl) | 0;   // one mesh per downforce level (endplate number height)
-  if (!_carDecalMeshes[k]) _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(k));
+  const anchorParts = legacyBody ? null : parts;
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts) : { key: "legacy" };
+  const level = aLvl == null ? 2 : Number(aLvl);
+  const k = level + "|" + (legacyBody ? "imported|" : "") + anchors.key;
+  if (!_carDecalMeshes[k]) {
+    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody));
+    _carDecalOrder.push(k);
+    while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
+      const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];
+      if (mesh && _gfx.freeMesh) _gfx.freeMesh(mesh);
+      delete _carDecalMeshes[old];
+    }
+  }
   return _carDecalMeshes[k];
 }
 // Cockpit view draws only the FORWARD decals (the nose number), since the
@@ -84,7 +142,7 @@ function getCarDecalMesh(aLvl) {
 // ckpt body omits those surfaces. The nose is identical in both builds, so the
 // number lands exactly on the nose plate ahead of the driver.
 let _cockpitDecalMesh = null;
-function getCockpitDecalMesh() {
+function getCockpitDecalMesh(parts) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   if (!_cockpitDecalMesh) {
     const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
@@ -92,7 +150,11 @@ function getCockpitDecalMesh() {
     // The ckpt hood is now a LOW cowl that stops behind the nose deck, so the
     // nose number is visible out ahead of the driver — use the same nose-plate
     // placement as the chase build (nose geometry is identical in both builds).
-    const c = [[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]];
+    const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts) : null;
+    const nr = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
+    const nf = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
+    const c = [[-nr.topSide*0.84, nr.top+0.020, 1.72], [nr.topSide*0.84, nr.top+0.020, 1.72],
+               [nf.topSide*0.84, nf.top+0.020, 2.10], [-nf.topSide*0.84, nf.top+0.020, 2.10]];
     // U pre-flipped to compensate the det −1 car model matrix (see quad() above).
     const uvs = [[u.uR, u.vB], [u.uL, u.vB], [u.uL, u.vT], [u.uR, u.vT]];
     const d = { pos: [], nrm: [], uv: [], idx: [] };
@@ -141,19 +203,14 @@ function getRainLight() {
 }
 // Exhaust flame: a tiny HDR quad behind the tailpipe, flickering while the
 // player is on throttle after dark — an arcade heat-glow cue.
-// Flame tint by fuel spec (the chosen Parts.CATALOG.fuel id): different burns
-// read as different colours. standard = pump amber, biofuel = cooler green-amber,
-// quali_mix = hot blue-white. Cached per tier (built lazily, keyed by id).
-const EXHAUST_TINT = {
-  standard:  [2.6, 1.05, 0.25],   // amber (baseline — unchanged)
-  biofuel:   [1.7, 1.9,  0.55],   // green-amber (biofuel burns cooler/greener)
-  quali_mix: [1.5, 1.7,  2.4],    // hot blue-white (max energy density)
-};
+// Flame tint comes from the resolved Parts fuel recipe; this module only owns
+// the generic effect geometry and caches meshes by colour.
 const _exhaustMeshes = {};
-function getExhaustFlame(fuelId) {
-  const key = EXHAUST_TINT[fuelId] ? fuelId : "standard";
+function getExhaustFlame(color) {
+  const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
+  const key = R.join(",");
   if (_exhaustMeshes[key]) return _exhaustMeshes[key];
-  const R = EXHAUST_TINT[key], out = { pos: [], nrm: [], col: [], idx: [] };
+  const out = { pos: [], nrm: [], col: [], idx: [] };
   const w = 0.035, h = 0.030;
   out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
   for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }

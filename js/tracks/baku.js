@@ -16,6 +16,15 @@
     street: true,
     lengthKm: 6,
     baseHW: 6,
+    sceneryCoordinates: "racing",
+    dressingExclusions: [
+      // Baku supplies its own continuous city frontage; the generic neon city
+      // duplicates it and obscures the Old City/Flame Tower sightlines.
+      { kind: "city", s0: 0, s1: 1 },
+      { kinds: ["lamps", "foliage", "floodlights"], s0: 0.36, s1: 0.56 },
+      // Preserve the Caspian void on the left of Neftchilar Avenue.
+      { kinds: ["lamps", "foliage", "floodlights"], s0: 0.58, s1: 0.97, side: -1 },
+    ],
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
     // Castle Section squeeze (~7.6 m full width). CircuitPaths ignores segs `w:`;
     // hwZones overlays half-width onto the real trace (see applyHwZones in tracks.js).
@@ -27,15 +36,16 @@
       { t: 0, l: 75, w: 3.8 }, { t: -90, l: 80, w: 3.8 }, { t: 0, l: 50, w: 3.8 }, { t: 0, l: 350 },
       { t: 70, l: 70 }, { t: -60, l: 60 }, { t: 55, l: 60 }, { t: -60, l: 60 }, { t: 0, l: 600 }, { t: 80, l: 80 },
     ],
-    // Baku's castle section: the old-city hairpin climbs steeply through the
-    // medieval walls (~14 m), then the circuit descends back to the corniche level.
-    elevations: [{ s: 0.35, halfM: 560, rise: 14 }, { s: 0.58, halfM: 320, rise: -10 }],
+    // Baku's castle section climbs from the Old City approach to a ~14 m crest
+    // at the gate, then returns smoothly to sea level before the long straight.
+    elevations: [{ s: 0.46, halfM: 500, rise: 14 }],
     scenery: function (api) {
       const {
-        out, MAT, n, place, prop, backdrop, groundPlane, building, tower, wall,
+        out, MAT, n, backdrop, groundPatch, waterSurface, modelGroup, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
-        addFrustum, addPyramid, ferrisWheel, vadd, hash, cityFront, ledFacadeBands,
+        addFrustum, ferrisWheel, vadd, hash, cityFront,
+        circuitKit,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -79,6 +89,20 @@
         [0.52, 0.48, 0.43],
         [0.38, 0.37, 0.35],
       ];
+
+      // Proper street-race infrastructure at the flat-out finish approach.
+      // The pit building sits behind the existing pit-wall frontage; the bridge
+      // supplies one deliberate event beat without cluttering the castle climb.
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:baku:pit-building", frac: 0.975, side: 1, gap: 30,
+          size: [18, 11, 76], garages: 14, required: true,
+        });
+        circuitKit.pedestrianBridge({
+          id: "kit:baku:finish-bridge", frac: 0.91,
+          clearance: 7.2, thickness: 0.9, depth: 3.2, required: true,
+        });
+      }
 
       // ===================================================================
       // Continuous concrete walls + catch-fence lining the whole lap
@@ -274,41 +298,52 @@
           [1.00, 0.62, 0.20], [0.95, 0.30, 0.08], [0.90, 0.50, 0.12],
         ];
 
-        for (let t = 0; t < 3; t++) {
-          const H  = heights[t];
-          const tc = vadd(aF.c, aF.r, towerOffs[t]);
+        modelGroup("baku-flame-towers", {
+          center: vadd(aF.c, aF.u, 133.5),
+          size: [140, 267, 50],
+          basis: b,
+        }, (stage) => {
+          for (let t = 0; t < 3; t++) {
+            const H  = heights[t];
+            const tc = vadd(aF.c, aF.r, towerOffs[t]);
 
-          // Main tapered body (dark glass under the LED fire veil)
-          addFrustum(out, tc, 16, 3.0, H, [0.10, 0.12, 0.22], 8, b);
+            // Main tapered body (dark glass under the LED fire veil)
+            addFrustum(stage, tc, 16, 3.0, H, [0.10, 0.12, 0.22], 8, b);
 
-          // Full-height LED fire — prefer shared helper when Batch-1 toolkit lands
-          if (typeof ledFacadeBands === "function") {
-            ledFacadeBands(tc, H, {
-              r0: 16, r1: 3.0, bands: 16, colors: FIRE_BANDS, basis: b, up: aF.u,
-            });
-          } else {
+            // Full-height fire veil stays inside the atomic landmark group.
             const nBands = 16;
             for (let band = 0; band < nBands; band++) {
               const yFr  = (band + 0.5) / nBands;
               const rAtY = 16 * (1 - yFr) + 3.0 * yFr;
               const col  = FIRE_BANDS[band % FIRE_BANDS.length];
-              addFrustum(out, vadd(tc, aF.u, yFr * H - (H / nBands) * 0.45),
+              addFrustum(stage, vadd(tc, aF.u, yFr * H - (H / nBands) * 0.45),
                 rAtY * 1.08, rAtY * 0.96, (H / nBands) * 0.88, col, 8, b);
+              // A brighter road-facing fire core breaks up the ring silhouette
+              // and makes each tower read as an LED-clad flame rather than a cone.
+              if (band % 2 === 0) {
+                const hot = vadd(vadd(tc, aF.u, yFr * H), aF.r, -rAtY * 1.10);
+                addBox(stage, hot, [0.7, (H / nBands) * 0.62, 4.2],
+                  band % 4 ? FLAME_PALE : [1.0, 0.72, 0.28], b);
+              }
             }
+
+            // Flame crown — stacked narrow cones above the LED shaft
+            addCone(stage, vadd(tc, aF.u, H),        3.0, 12, FLAME,      8, b);
+            addCone(stage, vadd(tc, aF.u, H + 12),   2.2,  9, FLAME_PALE, 8, b);
+            addCone(stage, vadd(tc, aF.u, H + 21),   1.2,  6, [1.0, 0.72, 0.28], 8, b);
           }
 
-          // Flame crown — stacked narrow cones above the LED shaft
-          addCone(out, vadd(tc, aF.u, H),        3.0, 12, FLAME,      8, b);
-          addCone(out, vadd(tc, aF.u, H + 12),   2.2,  9, FLAME_PALE, 8, b);
-          addCone(out, vadd(tc, aF.u, H + 21),   1.2,  6, [1.0, 0.72, 0.28], 8, b);
-        }
-
-        // Uplit ground wash at the Flame Towers base (warm fire spill)
-        addBox(out, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.22, 0.08, 0.02], b);
-        for (let t = 0; t < 3; t++) {
-          const tc = vadd(aF.c, aF.r, (t - 1) * 50);
-          addBox(out, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.30, 0.12, 0.03], b);
-        }
+          // Uplit ground wash at the Flame Towers base (warm fire spill)
+          addBox(stage, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.22, 0.08, 0.02], b);
+          // Stepped dark hillside podium anchors the skyline above the city.
+          addBox(stage, vadd(aF.c, aF.u, 1.0), [130, 2.0, 44], SAND_DARK, b);
+          addBox(stage, vadd(aF.c, aF.u, 3.0), [110, 2.0, 38], [0.30, 0.25, 0.20], b);
+          addBox(stage, vadd(aF.c, aF.u, 5.0), [88, 2.0, 32], [0.22, 0.20, 0.19], b);
+          for (let t = 0; t < 3; t++) {
+            const tc = vadd(aF.c, aF.r, (t - 1) * 50);
+            addBox(stage, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.30, 0.12, 0.03], b);
+          }
+        }, { required: true });
       }
 
       // ===================================================================
@@ -328,6 +363,19 @@
         minH: 18, maxH: 48, depth: 18, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
+      // Repeating projecting balconies give the Boulevard frontage a specific
+      // Baku residential/hotel rhythm. Kept on the Caspian side so the Flame
+      // Towers remain unobstructed on the right-hand skyline.
+      for (let i = 0; i < 6; i++) {
+        const a = anchor(K(0.245 + i * 0.017), -1, 16.5);
+        const b = [a.r, a.u, a.t];
+        for (let floor = 0; floor < 3; floor++) {
+          const deck = vadd(a.c, a.u, 5.0 + floor * 4.0);
+          addBox(out, deck, [3.2, 0.28, 7.6], [0.66, 0.62, 0.54], b);
+          const rail = vadd(vadd(deck, a.r, 1.48), a.u, 0.55);
+          addBox(out, rail, [0.16, 1.0, 7.7], [0.78, 0.73, 0.64], b);
+        }
+      }
       // Boulevard palm row along the Caspian-side of the main straight
       for (let i = 0; i < 14; i++) {
         const s = 0.23 + i * 0.009;
@@ -353,6 +401,18 @@
             addBox(out, mc, [2.4, 1.8, 2.2], SAND, [a.r, a.u, a.t]);
           }
         }
+      }
+
+      // Low buttresses and warm uplights articulate the long outer rampart.
+      // Fractions stop before 0.42 and resume after 0.50: the castle squeeze,
+      // gate sightline, and its close walls remain untouched.
+      for (const s of [0.365, 0.385, 0.405, 0.515, 0.535, 0.555]) {
+        const a = anchor(K(s), 1, 19.4);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 4.5), [2.6, 9.0, 3.2], SAND_DARK, b);
+        addBox(out, vadd(a.c, a.u, 0.18), [3.4, 0.34, 3.8], SAND_LIT, b);
+        addBox(out, vadd(vadd(a.c, a.u, 2.4), a.r, -0.75), [0.28, 3.2, 1.2],
+          WIN_WARM, b);
       }
 
       // Dense sandstone old-town behind the rampart
@@ -394,25 +454,23 @@
       });
 
       // ===================================================================
-      // s 0.42–0.50 — CASTLE SECTION squeeze: ~1 m clearance both sides
+      // s 0.42–0.50 — CASTLE SECTION squeeze: ~2 m clearance both sides
       // (pairs with hwZones hw:3.8 ≈ 7.6 m full width on CircuitPaths)
       // ===================================================================
-      wall(0.42, 0.50, -1, 0.95, 11, SAND, 1.4);
-      wall(0.42, 0.50,  1, 0.95, 11, SAND, 1.4);
-      for (const side of [-1, 1]) {
-        const a = anchor(K(0.44), side, 0.95);
-        const b = [a.r, a.u, a.t];
-        // Merlons on top of the 11m wall: y = 11 + 0.7 (half merlon)
-        for (let j = 0; j < 8; j++) {
-          if (j % 2 === 0) {
-            addBox(out, vadd(vadd(a.c, a.t, (j - 3.5) * 3.6), a.u, 11.7), [1.8, 1.4, 2.2], SAND, b);
-          }
+      wall(0.42, 0.50, -1, 2.0, 11, SAND, 1.4);
+      wall(0.42, 0.50,  1, 2.0, 11, SAND, 1.4);
+      // Follow the curved wall node-by-node. The former tangent-offset row was
+      // straight in world space and cut back across the road before the crest.
+      along(0.42, 0.50, 7.2, (k) => {
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, 2.0);
+          addBox(out, vadd(a.c, a.u, 11.7), [1.8, 1.4, 2.2], SAND, [a.r, a.u, a.t]);
         }
-      }
-      // Gateway towers flanking the narrowest point (~0.85 m clearance)
+      });
+      // Gateway towers flank the narrowest point without entering the road mesh.
       {
-        const aL = anchor(K(0.46), -1, 0.85);
-        const aR = anchor(K(0.46),  1, 0.85);
+        const aL = anchor(K(0.46), -1, 2.0);
+        const aR = anchor(K(0.46),  1, 2.0);
         // Corner tower cylinder above wall height (y=11 upward)
         addCyl(out, vadd(aL.c, aL.u, 11), 1.4, 8, SAND, 8, [aL.r, aL.u, aL.t]);
         addCyl(out, vadd(aR.c, aR.u, 11), 1.4, 8, SAND, 8, [aR.r, aR.u, aR.t]);
@@ -448,43 +506,52 @@
       // ===================================================================
       {
         const k = K(0.52);
-        const a = anchor(k, -1, 8);
+        // The 24m-wide footprint needs a centre offset, not an edge clearance.
+        const a = anchor(k, -1, 16);
         const b = [a.r, a.u, a.t];
 
-        // Square stone base platform (buried 0.5m into ground for solid footing)
-        addBox(out, vadd(a.c, a.u, 1.5), [22, 3, 22], SAND_DARK, b);
+        modelGroup("baku-maiden-tower", {
+          center: vadd(a.c, a.u, 25.5),
+          size: [24, 51, 24],
+          basis: b,
+        }, (stage) => {
+          // Square stone base platform (buried 0.5m into ground for solid footing)
+          addBox(stage, vadd(a.c, a.u, 1.5), [22, 3, 22], SAND_DARK, b);
 
-        // Octagonal base ring flare — wider than drum, creates distinct pediment
-        addFrustum(out, vadd(a.c, a.u, 3), 11.5, 9.2, 2, [0.55, 0.44, 0.30], 8, b);
+          // Octagonal base ring flare — wider than drum, creates distinct pediment
+          addFrustum(stage, vadd(a.c, a.u, 3), 11.5, 9.2, 2, [0.55, 0.44, 0.30], 8, b);
 
-        // Main cylindrical drum (the famous tower body)
-        addCyl(out, vadd(a.c, a.u, 5), 9.2, 28, SAND, 12, b);
+          // Main cylindrical drum (the famous tower body)
+          addCyl(stage, vadd(a.c, a.u, 5), 9.2, 28, SAND, 12, b);
 
-        // Stone band window slits — narrow emissive strips along the drum face
-        for (let wl = 0; wl < 4; wl++) {
-          const wy = 5 + 5 + wl * 6;
-          addFrustum(out, vadd(a.c, a.u, wy), 9.3, 9.3, 1.2, WIN_WARM, 12, b);
-        }
+          // Stone band window slits — narrow emissive strips along the drum face
+          for (let wl = 0; wl < 4; wl++) {
+            const wy = 5 + 5 + wl * 6;
+            addFrustum(stage, vadd(a.c, a.u, wy), 9.3, 9.3, 1.2, WIN_WARM, 12, b);
+          }
 
-        // Projecting cornice ring (slightly wider than drum — sits on top at y=33)
-        addFrustum(out, vadd(a.c, a.u, 33), 10.0, 9.5, 1.5, SAND_LIT, 12, b);
-        // Inward step back (y=34.5..36)
-        addFrustum(out, vadd(a.c, a.u, 34.5), 9.5, 7.0, 1.5, SAND, 12, b);
+          // Projecting cornice ring (slightly wider than drum — sits on top at y=33)
+          addFrustum(stage, vadd(a.c, a.u, 33), 10.0, 9.5, 1.5, SAND_LIT, 12, b);
+          // Inward step back (y=34.5..36)
+          addFrustum(stage, vadd(a.c, a.u, 34.5), 9.5, 7.0, 1.5, SAND, 12, b);
 
-        // Upper tapering section (y=36..42)
-        addFrustum(out, vadd(a.c, a.u, 36), 7.0, 4.5, 6, SAND_LIT, 12, b);
+          // Upper tapering section (y=36..42)
+          addFrustum(stage, vadd(a.c, a.u, 36), 7.0, 4.5, 6, SAND_LIT, 12, b);
 
-        // Cone cap — base radius matches upper frustum top (4.5, y=42..49)
-        addCone(out, vadd(a.c, a.u, 42), 4.5, 7, SAND_LIT, 12, b);
+          // Cone cap — base radius matches upper frustum top (4.5, y=42..49)
+          addCone(stage, vadd(a.c, a.u, 42), 4.5, 7, SAND_LIT, 12, b);
 
-        // Finial: small lit stone block at the very tip (y=49..51)
-        addBox(out, vadd(a.c, a.u, 49), [2.0, 2.0, 2.0], [0.94, 0.84, 0.64], b);
+          // Finial: small lit stone block at the very tip (y=49..51)
+          addBox(stage, vadd(a.c, a.u, 49), [2.0, 2.0, 2.0], [0.94, 0.84, 0.64], b);
 
-        // Uplit glow ring at base (ground-level uplit stone look)
-        addFrustum(out, vadd(a.c, a.u, 3.2), 12.0, 11.5, 0.8, SAND_LIT, 8, b);
+          // Uplit glow ring at base (ground-level uplit stone look)
+          addFrustum(stage, vadd(a.c, a.u, 3.2), 12.0, 11.5, 0.8, SAND_LIT, 8, b);
+        }, { required: true });
 
-        // Uplit forecourt at Maiden Tower
-        addBox(out, vadd(a.c, a.u, 0.1), [30, 0.5, 30], [0.20, 0.16, 0.08], b);
+        // Terrain-conforming forecourt; unlike a raw slab this cannot float on
+        // the Old City descent or bridge a nearby foldback.
+        groundPatch(k, -1, 1, [30, 0.5, 30], [0.20, 0.16, 0.08],
+          { id: "baku-maiden-forecourt", samples: 6 });
       }
 
       // ===================================================================
@@ -556,20 +623,12 @@
       // ===================================================================
       // s 0.65–0.95 — CASPIAN-FRONT straight: dark sea left, lit skyline R
       // ===================================================================
-      groundPlane(K(0.65), -1, 14, [300, 2.4, 340], SEA);
-      groundPlane(K(0.75), -1, 14, [320, 2.4, 360], SEA);
-      groundPlane(K(0.85), -1, 14, [300, 2.4, 340], SEA);
-      groundPlane(K(0.92), -1, 14, [280, 2.4, 320], SEA);
-
       // Distant cargo-vessel silhouettes on the water (far only)
       for (let i = 0; i < 5; i++) {
         const a = anchor(K(0.66 + i * 0.06), -1, 160 + hash(i * 5) * 100);
         addBox(out, vadd(a.c, a.u, 3), [14 + hash(i) * 8, 5 + hash(i * 2) * 3, 3.5],
           [0.10, 0.12, 0.18], [a.r, a.u, a.t]);
       }
-
-      // Supplemental Caspian harbour water panel
-      groundPlane(K(0.68), -1, 28, [300, 2, 260], [0.12, 0.18, 0.28]);
 
       // One far breakwater silhouette only (near piers culled for sea void)
       {
@@ -665,11 +724,13 @@
       // BESPOKE CASPIAN WATERFRONT MODELS
       // ═══════════════════════════════════════════════════════════════════
 
-      // ── Reflective Caspian Sea (groundPlane water:true) ─────────────────
+      // ── Reflective Caspian Sea ──────────────────────────────────────────
       // A genuine reflective water buffer mirroring the night sky/skyline,
-      // laid across the seafront left of the long straight.
-      for (let i = 0; i < 6; i++) {
-        groundPlane(K(0.62 + i * 0.06), -1, 26, [280, 1.2, 240], SEA, true);
+      // laid across the seafront left of the long straight. Narrow overlapping
+      // panels avoid spanning the circuit's nearby foldbacks.
+      for (let i = 0; i < 5; i++) {
+        waterSurface(K(0.63 + i * 0.075), -1, 16, [120, 1.2, 220], SEA,
+          { id: `baku-caspian-${i}` });
       }
 
       // ── BAKU EYE — Ferris wheel pushed to far silhouette (sea void mid culled)

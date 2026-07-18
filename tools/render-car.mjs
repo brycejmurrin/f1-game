@@ -229,9 +229,24 @@ try {
   const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15000 }).then(() => true).catch(() => false);
   if (!ok) { console.error('carview did not become ready — is the server running and the car building?'); process.exit(2); }
 
+  let renderedTod = TOD, firstShot = true;
   for (const s of shotDefs) {
-    await page.evaluate((p) => window.CARVIEW.set(p), { az: s.az, el: s.el, dist: s.dist, look: s.look || 0, tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
-    await page.waitForTimeout(260);   // let a couple of frames render at the new angle/lighting
+    const frame = await page.evaluate((p) => {
+      const before = window.CARVIEW.frame;
+      window.CARVIEW.set(p);
+      return before;
+    }, { az: s.az, el: s.el, dist: s.dist, look: s.look || 0, tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
+    // SwiftShader can spend far longer than a fixed delay compiling or rebuilding
+    // the dusk/night reflection probe. Eight completed post-change frames covers
+    // that slow path and gives the browser compositor a presented canvas.
+    await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, frame, { timeout: 15_000 });
+    // Chromium's screenshot compositor can still expose the discarded/blank
+    // WebGL back buffer during the first capture or while an env probe changes.
+    // A one-time/tod-change settle covers that compositor boundary; subsequent
+    // same-lighting orbit shots remain frame-synchronised and fast.
+    if (firstShot || s.tod !== renderedTod) await page.waitForTimeout(2_000);
+    firstShot = false;
+    renderedTod = s.tod;
     const file = lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
     await page.screenshot({ path: resolveContainedChild(OUT, file, 'render output path') });
     shots.push({ file, label: s.label, group: s.group, tod: s.tod });

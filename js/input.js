@@ -574,9 +574,16 @@ const Input = (function () {
     if (typeof deg === "number" && isFinite(deg)) DEADZONE = Math.max(0, Math.min(Math.min(15, MAX_TILT - 1), deg));
   }
 
+  // Cached MediaQueryList: this is called from the per-tick physics path
+  // (autoThrottle/manualGears), and window.matchMedia() allocates a fresh
+  // MediaQueryList every call. mql.matches stays LIVE on the cached object,
+  // so convertible/hybrid devices still flip correctly.
+  let _coarseMql = null;
   function touchControlsNeeded() {
-    return !!(typeof window !== "undefined" && window.matchMedia &&
-              window.matchMedia("(pointer: coarse)").matches);
+    if (_coarseMql === null && typeof window !== "undefined" && window.matchMedia) {
+      try { _coarseMql = window.matchMedia("(pointer: coarse)"); } catch (_) { _coarseMql = false; }
+    }
+    return !!(_coarseMql && _coarseMql.matches);
   }
 
   function onScreenRotate() {

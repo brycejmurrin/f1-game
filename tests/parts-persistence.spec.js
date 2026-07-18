@@ -43,7 +43,18 @@ async function openSetup(page) {
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-setup").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.waitForTimeout(200);
+}
+
+async function pickOpt(page, catId, optId) {
+  await page.locator(`#cs-tabs [data-cs-cat="${catId}"]`).click();
+  await page.locator(`#cs-options [data-cs-opt="${optId}"]`).click();
+}
+
+async function reopenSetup(page) {
+  await page.locator("#mb-race").click();
+  await page.locator("#select").waitFor({ state: "visible" });
+  await page.locator("#sel-setup").click();
+  await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
 test.describe("Parts persistence — localStorage writes", () => {
@@ -55,9 +66,7 @@ test.describe("Parts persistence — localStorage writes", () => {
     await openSetup(page);
 
     const teamId = await getTeamId(page);
-    const gearboxSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "GEARBOX" }) });
-    await gearboxSection.locator(".cs-chip", { hasText: "Sequential Pro" }).click();
-    await page.waitForTimeout(300);
+    await pickOpt(page, "gearbox", "sequential_pro");
 
     const stored = await getStoredParts(page, teamId);
     expect(stored?.gearbox).toBe("sequential_pro");
@@ -69,9 +78,7 @@ test.describe("Parts persistence — localStorage writes", () => {
     await openSetup(page);
 
     const teamId = await getTeamId(page);
-    const fuelSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "FUEL" }) });
-    await fuelSection.locator(".cs-chip", { hasText: "Race Blend" }).click();
-    await page.waitForTimeout(300);
+    await pickOpt(page, "fuel", "race_blend");
 
     const stored = await getStoredParts(page, teamId);
     expect(stored?.fuel).toBe("race_blend");
@@ -83,13 +90,8 @@ test.describe("Parts persistence — localStorage writes", () => {
     await openSetup(page);
 
     const teamId = await getTeamId(page);
-    const gearboxSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "GEARBOX" }) });
-    const fuelSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "FUEL" }) });
-
-    await gearboxSection.locator(".cs-chip", { hasText: "Close Ratio" }).click();
-    await page.waitForTimeout(100);
-    await fuelSection.locator(".cs-chip", { hasText: "High Octane" }).click();
-    await page.waitForTimeout(300);
+    await pickOpt(page, "gearbox", "close_ratio");
+    await pickOpt(page, "fuel", "high_octane");
 
     const stored = await getStoredParts(page, teamId);
     expect(stored?.gearbox).toBe("close_ratio");
@@ -105,21 +107,14 @@ test.describe("Parts persistence — survives page reload", () => {
     await waitReady(page);
     await openSetup(page);
 
-    const gearboxSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "GEARBOX" }) });
-    await gearboxSection.locator(".cs-chip", { hasText: "Carbon Case" }).click();
-    await page.waitForTimeout(300);
+    await pickOpt(page, "gearbox", "carbon_case");
 
-    // Navigate away and back
     await page.reload();
     await waitReady(page);
-    await page.locator("#mb-race").click();
-    await page.locator("#select").waitFor({ state: "visible" });
-    await page.locator("#sel-setup").click();
-    await page.locator("#carsetup").waitFor({ state: "visible" });
-    await page.waitForTimeout(200);
+    await reopenSetup(page);
 
-    const gearboxSection2 = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "GEARBOX" }) });
-    await expect(gearboxSection2.locator(".cs-chip.active")).toHaveText(/Carbon Case/);
+    await page.locator('#cs-tabs [data-cs-cat="gearbox"]').click();
+    await expect(page.locator('#cs-options [data-cs-opt="carbon_case"]')).toHaveClass(/active/);
     await page.screenshot({ path: galleryPath("parts-persistence", "persistence-gearbox-reload.png") });
   });
 
@@ -128,20 +123,14 @@ test.describe("Parts persistence — survives page reload", () => {
     await waitReady(page);
     await openSetup(page);
 
-    const fuelSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "FUEL" }) });
-    await fuelSection.locator(".cs-chip", { hasText: "Qualifying Mix" }).click();
-    await page.waitForTimeout(300);
+    await pickOpt(page, "fuel", "quali_mix");
 
     await page.reload();
     await waitReady(page);
-    await page.locator("#mb-race").click();
-    await page.locator("#select").waitFor({ state: "visible" });
-    await page.locator("#sel-setup").click();
-    await page.locator("#carsetup").waitFor({ state: "visible" });
-    await page.waitForTimeout(200);
+    await reopenSetup(page);
 
-    const fuelSection2 = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "FUEL" }) });
-    await expect(fuelSection2.locator(".cs-chip.active")).toHaveText(/Qualifying Mix/);
+    await page.locator('#cs-tabs [data-cs-cat="fuel"]').click();
+    await expect(page.locator('#cs-options [data-cs-opt="quali_mix"]')).toHaveClass(/active/);
     await page.screenshot({ path: galleryPath("parts-persistence", "persistence-fuel-reload.png") });
   });
 
@@ -150,18 +139,11 @@ test.describe("Parts persistence — survives page reload", () => {
     await waitReady(page);
     await openSetup(page);
 
-    // Select race engine (160cr)
-    const engineSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "ENGINE" }) });
-    await engineSection.locator(".cs-chip", { hasText: "Race" }).first().click();
-    await page.waitForTimeout(300);
+    await pickOpt(page, "engine", "race");
 
     await page.reload();
     await waitReady(page);
-    await page.locator("#mb-race").click();
-    await page.locator("#select").waitFor({ state: "visible" });
-    await page.locator("#sel-setup").click();
-    await page.locator("#carsetup").waitFor({ state: "visible" });
-    await page.waitForTimeout(200);
+    await reopenSetup(page);
 
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("440");
@@ -175,15 +157,11 @@ test.describe("Parts persistence — team isolation", () => {
     await page.goto("/");
     await waitReady(page);
 
-    // Select McLaren (default, index 2) and pick a gearbox
     await openSetup(page);
-    const gearboxSection = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "GEARBOX" }) });
-    await gearboxSection.locator(".cs-chip", { hasText: "F1 Spec" }).click();
-    await page.waitForTimeout(200);
+    await pickOpt(page, "gearbox", "f1_spec");
     await page.locator("#cs-done").click();
     await page.locator("#select").waitFor({ state: "visible" });
 
-    // Switch to a different team
     await page.evaluate(() => {
       const idx = Teams.LIST.findIndex((t) => t.id !== Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")].id);
       if (idx >= 0) { localStorage.setItem("apex26.team", String(idx)); }
@@ -191,16 +169,10 @@ test.describe("Parts persistence — team isolation", () => {
     await page.reload();
     await waitReady(page);
 
-    await page.locator("#mb-race").click();
-    await page.locator("#select").waitFor({ state: "visible" });
-    await page.locator("#sel-setup").click();
-    await page.locator("#carsetup").waitFor({ state: "visible" });
-    await page.waitForTimeout(200);
+    await reopenSetup(page);
 
-    const gearboxSection2 = page.locator(".cs-cat-section").filter({ has: page.locator(".cs-cat", { hasText: "GEARBOX" }) });
-    // New team should show Standard as default, not the F1 Spec we picked for McLaren
-    const activeText = await gearboxSection2.locator(".cs-chip.active").textContent();
-    expect(activeText).toContain("Standard");
+    await page.locator('#cs-tabs [data-cs-cat="gearbox"]').click();
+    await expect(page.locator('#cs-options [data-cs-opt="standard"]')).toHaveClass(/active/);
   });
 });
 

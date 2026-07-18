@@ -16,60 +16,78 @@
     lengthKm: 6.2,
     baseHW: 7,
     street: true,
+    sceneryCoordinates: "racing",
+    terrainOuter: 26,
+    barrierGap: 1.0,
+    // Vegas owns its casino corridor, palms, and boulevard lamps. Keep the
+    // shared floodlight rig (and its analytic lights), but do not layer generic
+    // city/furniture over the curated landmarks and open Sphere sightline.
+    dressingExclusions: [
+      { kinds: ["city", "lamps", "foliage"], s0: 0, s1: 1 },
+      { kind: "floodlights", s0: 0.27, s1: 0.36, side: -1 },
+      { kind: "floodlights", s0: 0.65, s1: 0.71, side: 1 },
+    ],
     pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12] },
     segs: [
       { t: 0, l: 140 }, { t: -90, l: 70 }, { t: 60, l: 60 }, { t: -60, l: 60 }, { t: 0, l: 120 }, { t: 60, l: 60 },
       { t: -70, l: 60 }, { t: 55, l: 60 }, { t: 0, l: 360 }, { t: -90, l: 80 }, { t: 50, l: 70 }, { t: 0, l: 900, t2: 0 },
       { t: 20, l: 200 }, { t: -90, l: 90 }, { t: 60, l: 60 }, { t: -70, l: 70 }, { t: -65, l: 120 },
     ],
-    // Las Vegas Strip: the tunnel section under Las Vegas Boulevard dips below
-    // road level near the T14 hairpin complex.
-    elevations: [{ s: 0.65, halfM: 240, rise: -4 }],
+    // Elevations are authored in SOURCE space. Source 0.2075 maps to racing
+    // s=0.35 with startFrac 0.8575: a shallow Sphere-sector underpass dip,
+    // while the Strip remains essentially level as in the circuit brief.
+    elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
     scenery: function (api) {
       const { out, MAT, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
-        cityFront } = api;
+        cityFront, modelGroup, overheadSpan, waterSurface, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Helper: Ferris Wheel — tall rotating observation wheel with lit cabins.
-      // Uses anchor() so it sits on terrain instead of floating.
+      // High Roller: one atomic, fully-grounded vertical wheel. The old model
+      // used a wide horizontal cylinder as its "rim", which read as a floating
+      // platter and could be partially suppressed.
       const ferrisWheel = (k, side, dist, radius) => {
         const a = anchor(k, side, dist);
-        const b = [a.r, a.u, a.t];
-        const baseC = a.c;
-        out._mat = MAT.METAL;
-        // Central axle column from ground to hub height
-        addCyl(out, baseC, 1.8, radius, [0.20, 0.20, 0.22], 8, b);
-        out._mat = 0;
-        // Outer rim ring represented by 16 slim vertical struts around the perimeter
-        for (let i = 0; i < 16; i++) {
-          const angle = (i / 16) * 6.2832;
-          // Position around wheel in the right/forward plane
-          const rimX = a.r[0] * Math.cos(angle) * radius + a.t[0] * Math.sin(angle) * radius;
-          const rimZ = a.r[2] * Math.cos(angle) * radius + a.t[2] * Math.sin(angle) * radius;
-          const rimY = radius * 0.5; // mid-height of the rim
-          const strutBase = [baseC[0] + rimX, baseC[1] + rimY, baseC[2] + rimZ];
-          // Lit gondola cab at each spoke end
-          const cabCol = (i % 4 === 0) ? [0.15, 0.90, 1.00] :
-                         (i % 4 === 1) ? [1.00, 0.20, 0.80] :
-                         (i % 4 === 2) ? [1.00, 0.85, 0.20] : [0.30, 1.00, 0.80];
-          addBox(out, [strutBase[0], strutBase[1], strutBase[2]], [2.0, 2.0, 2.0], cabCol, b);
-        }
-        // Bright white LED rim band at hub height (visible from distance)
-        addCyl(out, vadd(baseC, a.u, radius * 0.5), radius * 0.92, 2.0, [0.95, 0.98, 1.00], 20, b);
-        // Support legs: two A-frame legs from ground out to base of column
-        out._mat = MAT.METAL;
-        for (const legSide of [-1, 1]) {
-          const legOff = radius * 0.38;
-          const legBase = [
-            baseC[0] + a.r[0] * legSide * legOff,
-            baseC[1],
-            baseC[2] + a.r[2] * legSide * legOff
-          ];
-          addCyl(out, legBase, 0.9, radius * 0.55, [0.22, 0.22, 0.25], 5, b);
-        }
-        out._mat = 0;
+        const hub = vadd(a.c, a.u, radius + 5);
+        modelGroup("vegas-high-roller", {
+          center: hub,
+          size: [10, radius * 2 + 14, radius * 2 + 14],
+          basis: [a.r, a.u, a.t],
+        }, (stage) => {
+          const rim = [];
+          const seg = 16;
+          stage._mat = MAT.METAL;
+          for (const along of [-4, 4]) {
+            const foot = vadd(a.c, a.t, along);
+            addBox(stage, vadd(foot, a.u, (radius + 5) / 2),
+              [1.4, radius + 5, 1.4], [0.22, 0.22, 0.25], [a.r, a.u, a.t]);
+          }
+          const strut = (p0, p1, thick, col) => {
+            const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+            const len = Math.hypot(d[0], d[1], d[2]) || 1;
+            const axis = [d[0] / len, d[1] / len, d[2] / len];
+            const face = [
+              a.r[1] * axis[2] - a.r[2] * axis[1],
+              a.r[2] * axis[0] - a.r[0] * axis[2],
+              a.r[0] * axis[1] - a.r[1] * axis[0],
+            ];
+            addBox(stage,
+              [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2],
+              [thick, len, thick], col, [a.r, axis, face]);
+          };
+          for (let i = 0; i < seg; i++) {
+            const ang = i / seg * 6.2832;
+            rim.push(vadd(vadd(hub, a.t, Math.cos(ang) * radius), a.u, Math.sin(ang) * radius));
+          }
+          for (let i = 0; i < seg; i++) {
+            strut(hub, rim[i], 0.28, [0.34, 0.36, 0.42]);
+            strut(rim[i], rim[(i + 1) % seg], 0.38, [0.82, 0.90, 1.00]);
+            const cabCol = [CYAN, MAGENTA, GOLD, LIME][i % 4];
+            addBox(stage, vadd(rim[i], a.u, -1.2), [2.4, 2.2, 2.4], cabCol, [a.r, a.u, a.t]);
+          }
+          addBox(stage, hub, [3.5, 3.5, 3.5], [0.72, 0.78, 0.88], [a.r, a.u, a.t]);
+        }, { required: true });
       };
 
       // Neon night palette — hyper-saturated Vegas colours
@@ -126,11 +144,10 @@
         addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
-      // --- DISTANT NIGHT SKYLINE RING: a far band of lit highrise blocks all the way
-      //     around, so wherever you look there's a glowing city horizon (not empty). ---
+      // --- DISTANT NIGHT SKYLINE: sparse clusters, not a cloned tower ring. ---
       {
         const sky = trad + 300;
-        const skyN = 56;
+        const skyN = 18;
         const SKYTINT = [CYAN, WARM, VIOLET, BLUE, ROSE];
         for (let i = 0; i < skyN; i++) {
           const a = i / skyN * 6.2832, h = hash(i * 11 + 17), h2 = hash(i * 23 + 5);
@@ -142,7 +159,7 @@
           // moderate band: above the shader's emissive glow gate (~0.55) so it
           // reads as lit, but well below HDR so the distant ring doesn't bloom into
           // the blown-out pink/cyan blobs it did before.
-          const lvl = 0.6 + h2 * 0.22;
+          const lvl = 0.46 + h2 * 0.16;
           const skin = [tint[0] * lvl + 0.06, tint[1] * lvl + 0.06, tint[2] * lvl + 0.08];
           const baseH = bh * 0.78;
           addBox(out, [mx, pyMin + baseH / 2, mz], [bw, baseH, bd], skin);
@@ -271,20 +288,25 @@
         // Single cool cyan-blue LED wash (reads as one orb at race speed)
         const SPHERE = [0.18, 0.55, 1.00];
         const SPHERE_HI = [0.55, 0.85, 1.00];
-        addFrustum(out, [a.c[0], baseY, a.c[2]], rad * 0.32, rad * 0.28, rad * 0.18,
-          [0.25, 0.25, 0.28], 16, null);
-        const bands = 5;
-        for (let i = 0; i < bands; i++) {
-          const t0 = i / bands, t1 = (i + 1) / bands;
-          const phi0 = t0 * Math.PI, phi1 = t1 * Math.PI;
-          const rB = rad * Math.sin(phi0), rT = rad * Math.sin(phi1);
-          const yB = baseY + rad * (1 - Math.cos(phi0));
-          const hB = rad * (Math.cos(phi0) - Math.cos(phi1));
-          const tint = (i === 2) ? SPHERE_HI : SPHERE;
-          addFrustum(out, [a.c[0], yB, a.c[2]], Math.max(rB, 2), Math.max(rT, 2),
-            Math.max(hB, 1), tint, 24, null);
-        }
-        addCyl(out, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.90, 6.0, SPHERE_HI, 28, null);
+        modelGroup("vegas-sphere", {
+          center: [a.c[0], baseY + rad, a.c[2]],
+          size: [rad * 2.05, rad * 2.05, rad * 2.05],
+        }, (stage) => {
+          addFrustum(stage, [a.c[0], baseY, a.c[2]], rad * 0.32, rad * 0.28, rad * 0.18,
+            [0.25, 0.25, 0.28], 16, null);
+          const bands = 5;
+          for (let i = 0; i < bands; i++) {
+            const t0 = i / bands, t1 = (i + 1) / bands;
+            const phi0 = t0 * Math.PI, phi1 = t1 * Math.PI;
+            const rB = rad * Math.sin(phi0), rT = rad * Math.sin(phi1);
+            const yB = baseY + rad * (1 - Math.cos(phi0));
+            const hB = rad * (Math.cos(phi0) - Math.cos(phi1));
+            const tint = (i === 2) ? SPHERE_HI : SPHERE;
+            addFrustum(stage, [a.c[0], yB, a.c[2]], Math.max(rB, 2), Math.max(rT, 2),
+              Math.max(hB, 1), tint, 24, null);
+          }
+          addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.90, 6.0, SPHERE_HI, 28, null);
+        }, { required: true });
       }
 
       // --- s 0.45 R far: extra red-rock silhouette ---
@@ -319,15 +341,14 @@
       // --- s ~0.68 R: Bellagio + fountains + reflective lake ---
       building(K(0.68), 1, 40, 60, 55, 40, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
       place(K(0.68), 1, 22, [80, 2.0, 10], [1.0, 0.75, 0.20]);
-      place(K(0.68), 1, 26, [20, 1.0, 70], [0.15, 0.50, 0.95]);
-      place(K(0.69), 1, 26, [16, 0.8, 52], [0.10, 0.60, 1.00]);
       for (let i = 0; i < 8; i++) {
         const a = anchor(K(0.68 + i * 0.003), 1, 30);
         const jetCols = [CYAN, [0.15, 0.50, 1.00], LED, [0.30, 0.85, 1.00], BLUE, MAGENTA, [0.20, 0.90, 0.95], ROSE];
         const jetCol = jetCols[i % jetCols.length];
         addBox(out, vadd(a.c, a.u, 9), [0.8, 18, 0.8], jetCol, [a.r, a.u, a.t]);
       }
-      groundPlane(K(0.685), 1, 20, [110, 1.2, 44], [0.05, 0.10, 0.18], true);
+      waterSurface(K(0.685), 1, 20, [110, 1.2, 44], [0.05, 0.10, 0.18],
+        { id: "vegas-bellagio-lake", required: true });
 
       // --- s ~0.74 L: Paris Las Vegas — Eiffel replica ---
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
@@ -427,13 +448,9 @@
       billboard(K(0.18), 1, 34, 14, 9, ROSE);
       billboard(K(0.26), -1, 36, 14, 9, BLUE);
 
-      // --- s 0.38–0.47: Sphere approach → Strip entry gap fill ---
-      // Open mid-ground so the Sphere reads alone; casino wall starts at Strip entry.
+      // --- s 0.38–0.47: Sphere approach ---
+      // Keep this mid-ground open so the Sphere reads as a standalone landmark.
       building(K(0.40), -1, 64, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
-      cityFront(0.38, 0.47, -1, 72, { minH: 24, maxH: 55, depth: 20, step: 36,
-        palette: [[0.20, 0.18, 0.24], [0.22, 0.19, 0.22]], lit: true, windowCol: VIOLET });
-      cityFront(0.38, 0.47,  1, 72, { minH: 22, maxH: 50, depth: 18, step: 36,
-        palette: [[0.20, 0.20, 0.22], [0.18, 0.18, 0.26]], lit: true, windowCol: GOLD });
 
       // --- Extra near red-rock desert outcrops (dark, denser silhouette layer) ---
       for (let j = 0; j < 6; j++) {
@@ -445,15 +462,12 @@
         const mw = 180 + h * 140, mh = 18 + h * 22;
         addFrustum(out, [mx, pyMin, mz], mw * 0.5, mw * 0.3, mh, DARKROCK, 5, null);
       }
-      // Neon finish arch/halo at s≈0.98 — bright magenta circle framing the finish line
-      {
-        const k = K(0.98);
-        const a = anchor(k, 0, 0);
-        // Main arch ring
-        addCyl(out, vadd(a.c, a.u, 9), 9.5, 1.0, MAGENTA, 14, [a.r, a.u, a.t]);
-        // Secondary accent ring—alternating neon color
-        addCyl(out, vadd(a.c, a.u, 6), 8, 0.6, CYAN, 14, [a.r, a.u, a.t]);
-      }
+      // The finish halo intentionally crosses the track; declare the safe
+      // underside instead of relying on ordinary prop rejection.
+      overheadSpan({
+        id: "vegas-finish-halo", frac: 0.98, clearance: 7.2,
+        thickness: 0.8, depth: 1.4, color: MAGENTA, required: true,
+      });
 
       // ═══════════════════════════════════════════════════════════════════
       // BESPOKE STRIP ACCENTS (off-route Luxor / Welcome / MGM culled)
@@ -478,16 +492,11 @@
           out._mat = 0;
           addBox(out, vadd(pc, u, 6), [2.8, 10, 0.8], sd > 0 ? CYAN : MAGENTA, b);   // neon strip
         }
-        // Arched neon voussoirs (a fan of glowing boxes over the road)
-        const arcCols = [MAGENTA, CYAN, VIOLET, LIME, GOLD, ROSE, BLUE];
-        for (let j = -5; j <= 5; j++) {
-          const frac = j / 5;
-          const rise = 12.5 + Math.cos(frac * 1.3) * 2.6;
-          addBox(out, vadd(vadd(base, r, frac * span * 0.5 * 0.82), u, rise),
-                 [span * 0.11, 1.4, 1.6], arcCols[(j + 5) % arcCols.length], b);
-        }
-        // Bright LED apex sign panel
-        addBox(out, vadd(base, u, 15.2), [14, 3, 1.0], LED, b);
+        overheadSpan({
+          id: "vegas-strip-gateway", frac: 0.66, clearance: 12.5,
+          thickness: 1.4, depth: 1.8, span: span * 0.96,
+          color: MAGENTA, required: true,
+        });
       }
     },
   }

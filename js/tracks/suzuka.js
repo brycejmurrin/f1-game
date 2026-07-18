@@ -8,6 +8,7 @@
     id: "suzuka",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     startFrac: 0.6125, // GPS-derived (OpenF1 2025, conf=0.281)
+    sceneryCoordinates: "racing",
     name: "SUZUKA",
     gp: "Japanese GP",
     country: "Japan",
@@ -16,39 +17,32 @@
     lengthKm: 5.8,
     sunAzimBias: -0.14,   // Pacific-coast morning race slot — sun still east of the crossover
     baseHW: 7,
+    terrainOuter: 120,
+    dressingExclusions: [
+      { kinds: ["foliage", "floodlights"], s0: 0.34, s1: 0.40 },
+      { kinds: ["foliage", "floodlights"], s0: 0.79, s1: 0.84 },
+    ],
     pal: { zenith: [0.35, 0.50, 0.70], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2], sunDir: [0.8846517369293829, 0.44232586846469146, 0.14744195615489716], sun: [1, 0.90, 0.65], sunColor: [1, 0.82, 0.55] },
     segs: [
       { t: 0, l: 440, h: -6 }, { t: 50, l: 120 }, { t: -35, l: 100, h: 6 }, { t: 45, l: 110, h: 6 }, { t: -30, l: 100, h: 4 }, { t: 55, l: 120 },
       { t: 60, l: 110 }, { t: 80, l: 120, h: -4 }, { t: 70, l: 120, h: -6 }, { t: 0, l: 300 }, { t: 45, l: 120, h: 6 }, { t: -20, l: 90 },
       { t: 40, l: 140 },
     ],
-    // Rolling esses climb then the drop toward the Degners (~40 m of relief over
-    // the lap). Kept clear of the figure-8 crossover at s≈0.81 (that's a bridge).
-    // Esses rise bumped so the 0.18–0.22 climb reads as a real hill at speed.
-    elevations: [{ s: 0.20, halfM: 300, rise: 11 }, { s: 0.45, halfM: 260, rise: -5 }],
-    bridges: [{ s: 0.811, halfM: 150, rise: 7 }],
+    // Elevations and bridges are authored in source-trace space. These source
+    // fractions map through startFrac=0.6125 to racing s≈0.20, 0.45, and 0.811.
+    // Keeping that contract explicit prevents the crossover lift from landing on
+    // the Esses while its scenery remains at the real figure-8 crossing.
+    elevations: [{ s: 0.8125, halfM: 300, rise: 11 }, { s: 0.0625, halfM: 260, rise: -5 }],
+    bridges: [{ s: 0.4235, halfM: 150, rise: 7 }],
     scenery: function (api) {
-      const { out, track, n, px, py, pz, hw, pyMin, place, prop, every, ferrisWheel,
+      const { out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
-              gantry, marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
+              marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
-              cross, norm, MAT, underpassPortal } = api;
-
-      // ── strut(): a thin cylinder spanning two arbitrary world points ─────────
-      //    Builds an oriented basis from the span direction so cables / diagonal
-      //    braces slant correctly (used by the fairground rides + crossover cables).
-      const strut = (a, c, rad, col, seg) => {
-        const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-        const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
-        const up = [d[0] / L, d[1] / L, d[2] / L];
-        const ref = Math.abs(up[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
-        const right = norm(cross(ref, up));
-        const fwd = norm(cross(up, right));
-        addCyl(out, a, rad, L, col, seg || 4, [right, up, fwd]);
-      };
+              MAT, modelGroup, overheadSpan, circuitKit } = api;
+      const K = (s) => Math.round(s * n) % n;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
-      const blue      = [0.26, 0.38, 0.64];
       const navy      = [0.18, 0.26, 0.46];
       const crowdMix  = [0.78, 0.45, 0.40];   // warm packed-crowd colour
       const concrete  = [0.62, 0.63, 0.67];
@@ -65,11 +59,9 @@
       const sakuraPink  = [0.96, 0.72, 0.80];
       const sakuraLight = [0.98, 0.80, 0.88];
 
-      // ── Grandstand helper: raked crowd + back shell + Honda-blue front band ─
+      // ── Grandstand helper: terrain-seated raked crowd + back shell ───────────
       const stand = (s, side, gap, len, shell) => {
         grandstand(s, side, gap, len, shell || steel, crowdMix);
-        const k = Math.round(s * n) % n;
-        prop(k, side, gap, [3, 4.5, len - 4], blue);   // blue front fan band
       };
 
       // ── Forested Mie-prefecture hills: three depth-haze rings of wooded summits
@@ -118,6 +110,21 @@
 
       // Single flanking accent tower (aft of wheel) — keeps Motopia colour without crowding
       tower(Math.round(n * 0.038) % n, -1, 105, 7, 42, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
+
+      // Motopia arrival gate: a compact red/white Japanese event arch frames the
+      // park perimeter without adding another tall silhouette beside the wheel.
+      {
+        const g = anchor(K(0.055), -1, 52), gb = [g.r, g.u, g.t];
+        const gc = vadd(g.c, g.u, 5.2);
+        modelGroup("suzuka-motopia-arrival-gate", {
+          center: gc, size: [14, 10.5, 4], basis: gb,
+        }, (stage) => {
+          addBox(stage, vadd(g.c, g.r, -5.5), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
+          addBox(stage, vadd(g.c, g.r,  5.5), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
+          addBox(stage, vadd(g.c, g.u, 8.2), [13.2, 1.5, 2.2], neonRed, gb);
+          addBox(stage, vadd(g.c, g.u, 9.5), [9.0, 0.55, 2.5], [0.96, 0.96, 0.94], gb);
+        }, { required: true });
+      }
 
       // ── Lamp posts ringing the wheel area — warm sodium emissive heads ────────
       for (let i = 0; i < 6; i++) {
@@ -240,9 +247,23 @@
       // ── Pit & paddock complex (right side of main straight) ───────────────────
       building(Math.round(n * 0.985) % n, 1, 9, 14, 9, 60, { wall: concrete, window: litWin, floor: 3, roof: false });
       building(Math.round(n * 0.990) % n, 1, 30, 22, 16, 28, { wall: [0.80, 0.80, 0.84], window: litWin, floor: 4, setback: true, roof: true });
+      // Japanese GP hospitality village: low, modular event suites behind the
+      // paddock preserve the pit-straight sightline while deepening race-weekend scale.
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:suzuka:paddock-hospitality", frac: 0.975, side: 1, gap: 58,
+          size: [18, 9, 34], modules: 5, required: true,
+        });
+        circuitKit.marshalShelter({
+          id: "kit:suzuka:degner-marshal-shelter", frac: 0.315, side: 1, gap: 18,
+          size: [6, 3.2, 5], required: true,
+        });
+      }
       guardrail(0.965, 0.04, 1, 2.5, [0.88, 0.88, 0.90]);
       tower(Math.round(n * 0.995) % n, 1, 22, 9, 30, { col: [0.86, 0.87, 0.90], seg: 6, cap: true, capCol: navy, mast: 7 });
-      gantry(0.0, 9, [0.14, 0.14, 0.18]);
+      overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2,
+        thickness: 0.9, depth: 1.8, supportGap: 2.5, supportWidth: 1.0,
+        color: [0.14, 0.14, 0.18], required: true });
 
       // Pit-straight lamp posts (right side)
       for (let i = 0; i < 8; i++) {
@@ -258,32 +279,33 @@
       }
 
       // ── Spectator footbridges ─────────────────────────────────────────────────
-      const footbridge = (s, deckH) => {
+      // Intentional overhead spans carry an explicit underside clearance. Their
+      // terrain-grounded side towers are committed atomically, so a nearby foldback
+      // can suppress the complete support instead of leaving half a model behind.
+      const footbridge = (id, s, deckH) => {
         const k = Math.round(s * n) % n;
-        const aL = anchor(k, -1, 2), aR = anchor(k, 1, 2);
-        const u = aL.u;
-        const span = hw[k] * 2 + 14;
-        for (const a of [aL, aR]) {
-          const b = [a.r, u, a.t];
-          addBox(out, vadd(a.c, u, deckH / 2), [2.2, deckH, 2.6], concrete, b);
-          addBox(out, vadd(a.c, u, deckH + 0.8), [3.4, 1.2, 3.4], steel, b);
-        }
-        const deckC = [px[k], py[k] + deckH, pz[k]];
-        addBox(out, deckC, [span, 1.4, 4.5], [0.30, 0.50, 0.34], [aL.r, u, aL.t]);
-        addBox(out, [px[k], py[k] + deckH + 2.6, pz[k]], [span, 0.6, 5.2], [0.24, 0.44, 0.30], [aL.r, u, aL.t]);
-        addBox(out, [px[k], py[k] + deckH + 2.0, pz[k]], [span * 0.7, 0.18, 4.0], lampWarm, [aL.r, u, aL.t]);
-        for (let i = -4; i <= 4; i++) {
-          const off = i * (span / 9);
-          const rc = [px[k] + aL.r[0] * off, py[k] + deckH + 1.5, pz[k] + aL.r[2] * off];
-          addCyl(out, rc, 0.10, 1.6, steel, 4, [aL.r, u, aL.t]);
+        overheadSpan({ id, frac: s, clearance: deckH, thickness: 1.2, depth: 4.5,
+          supportGap: 2.8, supportWidth: 2.2, color: [0.30, 0.50, 0.34],
+          required: true });
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, 3.9), b = [a.r, a.u, a.t];
+          const towerC = vadd(a.c, a.u, deckH / 2);
+          modelGroup(`${id}-${side < 0 ? "left" : "right"}-tower`, {
+            center: towerC, size: [2.2, deckH, 2.8], basis: b,
+          }, (stage) => {
+            addBox(stage, towerC, [2.2, deckH, 2.8], concrete, b);
+            addBox(stage, vadd(a.c, a.u, deckH + 0.6), [3.2, 1.2, 3.4], steel, b);
+          }, { required: true });
         }
       };
-      footbridge(0.135, 9.0);
-      footbridge(0.500, 8.5);
+      footbridge("suzuka-esses-footbridge", 0.135, 8.0);
+      footbridge("suzuka-hairpin-footbridge", 0.500, 7.5);
 
       // ── Overhead camera / scoring gantries ───────────────────────────────────
-      gantry(0.30, 8, steel);
-      gantry(0.86, 8, steel);
+      overheadSpan({ id: "suzuka-degner-gantry", frac: 0.30, clearance: 7.0,
+        thickness: 0.8, depth: 1.6, supportGap: 2.4, color: steel, required: true });
+      overheadSpan({ id: "suzuka-130r-gantry", frac: 0.86, clearance: 7.0,
+        thickness: 0.8, depth: 1.6, supportGap: 2.4, color: steel, required: true });
 
       // ── Hillside forest treelines using forestEdge() — REPLACES raw pine loops
       //    and hedge slabs. Safe gap ensures no canopy clips barriers/walls.
@@ -304,6 +326,12 @@
         col:  [0.12, 0.32, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.60 });
       forestEdge(0.55, 0.72, -1, 12, { density: 0.68, hMin: 8, hMax: 14,
         col:  [0.13, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.58 });
+      // A sparse second woodland rank closes the distant Hairpin/Spoon backdrop;
+      // the 34 m gap leaves the first-rank trees and braking sightlines legible.
+      forestEdge(0.42, 0.54, -1, 34, { density: 0.34, hMin: 10, hMax: 17,
+        col: [0.11, 0.30, 0.13], col2: [0.16, 0.36, 0.15], pineFrac: 0.66 });
+      forestEdge(0.57, 0.70, 1, 34, { density: 0.32, hMin: 10, hMax: 16,
+        col: [0.12, 0.31, 0.14], col2: [0.17, 0.37, 0.16], pineFrac: 0.62 });
 
       // Back straight / 130R / Casio sector
       forestEdge(0.72, 0.92,  1, 12, { density: 0.65, hMin: 8, hMax: 13,
@@ -357,78 +385,46 @@
       }
       // Trackside billboards
       for (const [s, sd] of [[0.20, 1], [0.46, 1], [0.63, -1], [0.88, 1]]) {
-        billboard(Math.round(n * s) % n, sd, 7, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
+        const gap = s === 0.88 ? 14 : 7;
+        billboard(Math.round(n * s) % n, sd, gap, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
       }
 
-      // ── Figure-8 crossover bridge: bold green span at s≈0.81 ─────────────────
-      //    Cable-stayed deck lifting the racing line over the main straight —
-      //    oversized green deck so the overpass reads at speed vs the underpass.
-      {
-        const bk = Math.round(n * 0.81) % n;
-        const ab = anchor(bk, -1, 14);
-        const basis = [ab.r, ab.u, ab.t];
-        const colH = 15, deckLen = 42;
-        const greenDeck = [0.18, 0.52, 0.26];
-        const greenBold = [0.14, 0.58, 0.28];
-        // support piers
-        out._mat = MAT.CONCRETE;
-        addBox(out, vadd(ab.c, ab.u, colH / 2), [2.2, colH, 2.2], concrete, basis);
-        addBox(out, vadd(vadd(ab.c, ab.t, 18), ab.u, colH / 2), [2.2, colH, 2.2], concrete, basis);
-        out._mat = 0;
-        // deck + running surface — bold green silhouette
-        addBox(out, vadd(ab.c, ab.u, colH + 0.8), [12, 1.5, deckLen], greenDeck, basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 3.8), [13.5, 0.6, deckLen + 2], greenBold, basis);
-        addBox(out, vadd(ab.c, ab.u, colH + 3.0), [9, 0.18, 32], lampWarm, basis);
-        // parapet rail posts
-        out._mat = MAT.METAL;
-        for (let i = -5; i <= 5; i++) {
-          const off = i * (deckLen / 11);
-          const rc = [ab.c[0] + ab.t[0] * off, ab.c[1] + colH + 1.5, ab.c[2] + ab.t[2] * off];
-          addCyl(out, rc, 0.12, 1.6, steel, 4, basis);
-        }
-        // Twin A-frame pylons rising above the deck at each pier, with fanned stays.
-        const deckTopY = colH + 4.2;
-        for (const tOff of [5, 14]) {
-          const legTop = vadd(vadd(ab.c, ab.t, tOff), ab.u, deckTopY);
-          const apex = vadd(legTop, ab.u, 16);
-          const legL = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, -4.0), ab.u, deckTopY);
-          const legR = vadd(vadd(vadd(ab.c, ab.t, tOff), ab.r, 4.0), ab.u, deckTopY);
-          strut(legL, apex, 0.32, [0.86, 0.87, 0.90], 5);
-          strut(legR, apex, 0.32, [0.86, 0.87, 0.90], 5);
-          for (const dOff of [-14, -7, 7, 14]) {
-            const anchorPt = vadd(vadd(vadd(ab.c, ab.t, tOff + dOff), ab.r, tOff === 5 ? -5.2 : 5.2), ab.u, deckTopY + 0.3);
-            strut(apex, anchorPt, 0.05, [0.94, 0.94, 0.96], 3);
-          }
-        }
-        out._mat = 0;
-      }
-
-      // ── Underpass (back loop dips under at s≈0.37) — dark + enlarged ─────────
-      //    Shared underpassPortal for the overhead mouth, plus a deeper dark mass
-      //    beside the line so the figure-8 dip reads against the green bridge.
-      if (typeof underpassPortal === "function") {
-        underpassPortal(0.37, { h: 6.5, thick: 2.2, depth: 22, col: [0.06, 0.06, 0.08],
-          pierGap: 1.6, pierW: 2.0 });
-      }
-      {
-        const uk = Math.round(n * 0.37) % n;
-        const au = anchor(uk, 1, 14);
-        const ubasis = [au.r, au.u, au.t];
-        const dark = [0.08, 0.08, 0.10];
-        addBox(out, vadd(au.c, au.u, 3.0), [16, 7, 36], dark, ubasis);
-        addBox(out, vadd(au.c, au.u, 4.0), [2.0, 9, 2.0], concrete, ubasis);
-        addBox(out, vadd(vadd(au.c, au.u, 4.0), au.t, 16), [2.0, 9, 2.0], concrete, ubasis);
-        addBox(out, vadd(au.c, au.u, 8.5), [17, 1.0, 38], [0.10, 0.10, 0.12], ubasis);
-        addBox(out, vadd(au.c, au.u, 1.8), [14, 0.25, 0.4], litWin, ubasis);
+      // ── Figure-8 crossover ────────────────────────────────────────────────────
+      // The road bridge is raised by `bridges` at racing s≈0.811. At the lower
+      // crossing (s≈0.37), this intentional span supplies the visible green deck
+      // and guarantees a safe 6.5 m underside instead of relying on unguarded raw
+      // boxes. The shared bridge builder supplies grounded piers beside the upper
+      // racing line.
+      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.37, clearance: 6.5,
+        minimumClearance: 4.8, thickness: 1.5, depth: 22, span: hw[Math.round(0.37 * n) % n] * 2 + 8,
+        supportGap: 2.8, supportWidth: 1.8, color: [0.18, 0.52, 0.26],
+        required: true });
+      // Concrete abutment houses and Honda-red caps make the figure-eight
+      // crossing read as engineered infrastructure rather than a floating deck.
+      for (const side of [-1, 1]) {
+        const ca = anchor(K(0.37), side, 8.5), cb = [ca.r, ca.u, ca.t];
+        const cc = vadd(ca.c, ca.u, 2.6);
+        modelGroup(`suzuka-crossover-abutment-${side < 0 ? "left" : "right"}`, {
+          center: cc, size: [7.6, 6.2, 12.8], basis: cb,
+        }, (stage) => {
+          addBox(stage, cc, [6.5, 5.2, 12], concrete, cb);
+          addBox(stage, vadd(ca.c, ca.u, 5.35), [7.0, 0.45, 12.5], neonRed, cb);
+          addBox(stage, vadd(vadd(ca.c, ca.r, side * 3.55), ca.u, 3.0),
+                 [0.35, 3.0, 10.5], steel, cb);
+        }, { required: true });
       }
 
       // ── Honda orange accent on main grandstand (start/finish left side) ───────
       {
         const hk = Math.round(n * 0.00) % n;
-        const ah = anchor(hk, -1, 11);
+        const ah = anchor(hk, -1, 22);
         const bh = [ah.r, ah.u, ah.t];
-        addBox(out, vadd(ah.c, ah.u, 16),   [3.2, 2.4, 75], [0.98, 0.52, 0.08], bh);  // Honda orange
-        addBox(out, vadd(ah.c, ah.u, 18.8), [3.0, 1.2, 75], [0.92, 0.92, 0.94], bh);  // white accent
+        modelGroup("suzuka-main-stand-crown", {
+          center: vadd(ah.c, ah.u, 17.5), size: [3.2, 5.0, 44], basis: bh,
+        }, (stage) => {
+          addBox(stage, vadd(ah.c, ah.u, 16), [3.2, 2.4, 44], [0.98, 0.52, 0.08], bh);
+          addBox(stage, vadd(ah.c, ah.u, 18.8), [3.0, 1.2, 44], [0.92, 0.92, 0.94], bh);
+        }, { required: true });
       }
 
       // ── Scenic towers on mid-lap hills (Spoon / back sector) ─────────────────
@@ -447,8 +443,8 @@
       });
 
       // ── Grandstands at all signature corners ─────────────────────────────────
-      stand(0.00, -1, 9, 82, navy);  // Main grandstand — dark-blue front terraces
-      stand(0.15,  1, 9, 42);        // Esses
+      stand(0.00, -1, 15, 52, navy); // Main grandstand — clear of the curved pit approach
+      stand(0.15,  1, 15, 28);       // Esses — compact bank on the rising outside
       stand(0.28, -1, 9, 28);        // Degner entry
       stand(0.45,  1, 9, 38);        // Hairpin
       stand(0.62, -1, 9, 38);        // Spoon
@@ -457,6 +453,10 @@
       stand(0.94,  1, 9, 35);        // Casio Triangle right
       stand(0.94, -1, 9, 35);        // Casio Triangle left
       stand(0.50,  1, 8, 24);        // Mid-circuit flex stand
+      // Compact packed fan terraces at the two strongest driver-eye hero beats.
+      // Grandstand shells guard the crowd geometry and keep it behind catch fencing.
+      stand(0.205, 1, 20, 22, [0.82, 0.84, 0.86]); // Esses crest crowd
+      stand(0.875, 1, 18, 24, navy);                  // 130R exit crowd
     },
   }
   );

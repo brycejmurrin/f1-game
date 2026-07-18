@@ -14,7 +14,20 @@
     night: true,
     theme: "street_night",
     street: true,
-    barrierGap: 0.6,
+    barrierGap: 3.4,
+    terrainOuter: 28,
+    sceneryCoordinates: "racing",
+    dressingExclusions: [
+      // Bespoke cityFront sectors define the inland skyline; the generic city
+      // otherwise fills the waterfront and obscures the circuit's landmarks.
+      { kind: "city", s0: 0, s1: 1 },
+      // The bespoke 40 m LED-head rhythm is the circuit's lighting identity;
+      // generic street lamps crowd the wall and clip the fastest curved sweeps.
+      { kind: "lamps", s0: 0, s1: 1 },
+      // The Red Sea, marina, and lagoon stay open on the seaward side. Bespoke
+      // palms below supply the intentional waterfront planting.
+      { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
+    ],
     lengthKm: 6.2,
     baseHW: 6,
     pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.05, 0.05, 0.15], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, concrete: [0.28, 0.27, 0.26], runoff: [0.25, 0.24, 0.22], grass: [0.2, 0.18, 0.14] },
@@ -22,14 +35,14 @@
       { t: 0, l: 700 }, { t: 80, l: 70 }, { t: -75, l: 60 }, { t: 0, l: 120 }, { t: 70, l: 65 }, { t: -70, l: 60 },
       { t: 0, l: 300 }, { t: -90, l: 80 }, { t: 0, l: 600 }, { t: -90, l: 80 }, { t: 65, l: 70 }, { t: -70, l: 70 },
     ],
-    // Jeddah Corniche: the circuit grades down from the sweeping first sector
-    // then recovers along the seafront — real circuit has ~12 m total change.
-    elevations: [{ s: 0.30, halfM: 480, rise: -8 }, { s: 0.62, halfM: 400, rise: 6 }],
+    // Reclaimed seafront: retain only a subtle drainage-scale grade. The
+    // circuit's notable vertical character is camber, not a 14 m hill.
+    elevations: [{ s: 0.30, halfM: 480, rise: -1.2 }, { s: 0.62, halfM: 400, rise: 1.0 }],
     scenery: function (api) {
       const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
-        cityFront, onTrack, hash, every } = api;
+        cityFront, modelGroup, waterSurface, onTrack, hash, every, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
@@ -49,6 +62,20 @@
 
       const WALL_INL = [[0.17, 0.18, 0.23], [0.19, 0.20, 0.25],
                         [0.15, 0.16, 0.21], [0.21, 0.21, 0.26]];
+
+      // ── Corniche hospitality decks — pit lane and marina hero pockets ─────
+      // Atomic kit models stay well behind the barriers and frame the event
+      // without adding tall masses to the circuit's high-speed sightlines.
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:jeddah:pit-hospitality", frac: 0.035, side: -1, gap: 72,
+          size: [20, 10, 42], modules: 6,
+        });
+        circuitKit.hospitality({
+          id: "kit:jeddah:marina-hospitality", frac: 0.455, side: 1, gap: 112,
+          size: [22, 11, 46], modules: 6,
+        });
+      }
 
       // ── Simple helpers ─────────────────────────────────────────────────────
       // Floodlight mast: pole + lamp bar + ambient pool (sparse drama accents)
@@ -93,8 +120,9 @@
         }
       });
       for (const side of [-1, 1]) {
-        canyon(0.00, 0.50, side, 1.05, { h: 1.35 + (side > 0 ? 0.05 : 0.10) });
-        canyon(0.50, 1.00, side, 1.05, { h: 1.40 + (side > 0 ? 0.08 : 0.00) });
+        canyon(0.00, 0.47, side, 3.50, { h: 1.35 + (side > 0 ? 0.05 : 0.10) });
+        canyon(0.47, 0.53, side, 4.20, { h: 1.40 + (side > 0 ? 0.08 : 0.00) });
+        canyon(0.53, 1.00, side, 3.50, { h: 1.40 + (side > 0 ? 0.08 : 0.00) });
       }
 
       // ── 3. Cool-white LED light tunnel — densify both sides ~every 40 m ───
@@ -118,42 +146,55 @@
       // Cull palms on the open Red Sea corridor (s≈0.05–0.40 R) so water reads.
       const PALMFROND = [0.12, 0.44, 0.19];
       for (let i = 0; i < 8; i++) {
-        palm(K(0.42 + i * 0.04), 1, 10 + hash(i * 5) * 3, 6 + hash(i * 3) * 3, PALMFROND);
+        palm(K(0.42 + i * 0.04), 1, 18 + hash(i * 5) * 4, 6 + hash(i * 3) * 3, PALMFROND);
       }
       for (let i = 0; i < 8; i++) {
-        palm(K(i / 8 + 0.01), -1, 12 + hash(i * 7) * 4, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
+        palm(K(i / 8 + 0.01), -1, 22 + hash(i * 7) * 5, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
+      }
+      // Dense, low Corniche promenade avenue around the lagoon hero sector.
+      // The 13 m setback keeps trunks behind the concrete canyon and leaves the
+      // open-sea straight (s 0.05–0.40) visually unobstructed.
+      for (let i = 0; i < 9; i++) {
+        palm(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
+          6.5 + hash(i * 17 + 4) * 2.5, (i % 3) ? PALMFROND : [0.16, 0.50, 0.22]);
       }
 
       // ── Marshal posts ─────────────────────────────────────────────────────
       for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],
         [0.62, -1], [0.74, 1], [0.81, -1], [0.92, 1]]) {
-        marshalPost(K(s), side, 1.8);
+        marshalPost(K(s), side, 2.4);
       }
 
-      // ── Red Sea: two near-water planes (reduced from 3 layers × 92 boxes) ─
-      for (let i = 0; i < 10; i++) {
-        const k = K(i / 10);
-        const a = anchor(k, 1, 140);
-        addBox(out, [a.c[0], pyMin - 1.8, a.c[2]], [380, 1.2, 130], SEA, [a.r, a.u, a.t]);
-      }
+      // ── Red Sea: typed reflective surfaces, segmented around foldbacks ─────
       for (let i = 0; i < 8; i++) {
-        const k = K(i / 8);
-        const a = anchor(k, 1, 380);
-        addBox(out, [a.c[0], pyMin - 2.4, a.c[2]], [680, 1.6, 170], [0.018, 0.035, 0.080], [a.r, a.u, a.t]);
+        const s = 0.06 + i * 0.045;
+        waterSurface(K(s), 1, 35, [110, 0.5, 100], SEA, { id: `jeddah-red-sea-${i}` });
       }
-      // Amber/cool reflection spangles — 8 spots
-      for (let i = 0; i < 8; i++) {
-        const a = anchor(K(i / 8), 1, 90 + hash(i * 5) * 150);
-        const col = (i % 3 === 0) ? MAGENTA : (i % 3 === 1) ? LED : SPANGLE;
-        addBox(out, [a.c[0], pyMin - 1.2, a.c[2]], [7, 0.22, 7], col);
+      for (let i = 0; i < 7; i++) {
+        const s = 0.43 + i * 0.035;
+        waterSurface(K(s), 1, 28, [90, 0.45, 85], [0.018, 0.035, 0.080],
+          { id: `jeddah-marina-water-${i}` });
+      }
+      // Waterfront light ribbon: waist-high amber/cool bollards, concentrated
+      // at the marina rather than repeated around the full lap.
+      for (let i = 0; i < 11; i++) {
+        const s = 0.425 + i * 0.019;
+        const k = K(s), col = (i % 3 === 0) ? WINTEAL : SPANGLE;
+        place(k, 1, 12 + (i % 2) * 1.5, [0.34, 1.7, 0.34], col);
+        place(k, 1, 14.5 + (i % 2), [2.8, 0.12, 1.2], col);
       }
 
       // ── King Fahd's Fountain — offshore landmark ──────────────────────────
       {
         const a = anchor(K(0.20), 1, 380);
-        addCyl(out, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, [a.r, a.u, a.t]);
-        addCone(out, [a.c[0], pyMin + 255, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, [a.r, a.u, a.t]);
-        addCyl(out, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, [a.r, a.u, a.t]);
+        const b = [a.r, a.u, a.t];
+        modelGroup("jeddah-fountain", {
+          center: [a.c[0], pyMin + 154, a.c[2]], size: [16, 312, 16], basis: b,
+        }, (stage) => {
+          addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, b);
+          addCone(stage, [a.c[0], pyMin + 255, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
+          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, b);
+        }, { required: true });
       }
 
       // ── START/FINISH gantries ─────────────────────────────────────────────
@@ -197,6 +238,14 @@
       building(K(0.27), -1, 55, 28, 115, 26, { wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
       building(K(0.30), -1, 88, 24, 172, 22, { wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
       tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
+      // Layered Corniche hotel frontage below the three landmark silhouettes.
+      // Mid-rise spacing maintains depth while leaving the driver-facing edge
+      // clear through the very fast sweep.
+      cityFront(0.245, 0.335, -1, 96, {
+        minH: 24, maxH: 62, depth: 20,
+        palette: WALL_INL, lit: true, windowCol: WINCOOL,
+        step: 68, floor: 5,
+      });
 
       // ── MARINA — 6 yachts at s 0.42–0.48 R ───────────────────────────────
       for (let i = 0; i < 6; i++) {
@@ -221,12 +270,16 @@
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
       grandstand(0.50, 1, 18, 40, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
-      tyreWall(0.485, 0.515, -1, 2.0, MAGENTA);
+      // Packed night-event bowl: flanking stands create a concentrated crowd
+      // wall at T13, with generous setbacks and gaps between each structure.
+      grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
+      grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
+      tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
       // ── CORNICHE LAGOON — s 0.55–0.64 R (water; LEDs already ring the lap) ─
       for (let i = 0; i < 6; i++) {
-        const a = anchor(K(0.55 + i * 0.015), 1, 65), b = [a.r, a.u, a.t];
-        addBox(out, [a.c[0], pyMin - 1.4, a.c[2]], [200, 1.0, 65], [0.05, 0.08, 0.14], b);
+        waterSurface(K(0.55 + i * 0.015), 1, 22, [72, 0.4, 55], [0.05, 0.08, 0.14],
+          { id: `jeddah-lagoon-${i}` });
       }
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
@@ -248,15 +301,16 @@
 
       // ── FINAL SECTOR GRANDSTAND — s 0.89 R ───────────────────────────────
       grandstand(0.89, 1, 16, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
+      grandstand(0.925, 1, 22, 58, [0.12, 0.13, 0.17], [0.62, 0.42, 0.50]);
       lightTower(K(0.90),  1, 11);
       lightTower(K(0.93), -1, 11);
       floodMast(K(0.91), -1, 24);
 
       // ── CORNER PROTECTION ─────────────────────────────────────────────────
-      tyreWall(0.07, 0.10, -1, 2.0, GREEN);
-      tyreWall(0.79, 0.82,  1, 2.0, SPANGLE);
-      guardrail(0.34, 0.38, -1, 1.8, [0.55, 0.56, 0.6]);
-      guardrail(0.96, 0.99,  1, 1.8, [0.55, 0.56, 0.6]);
+      tyreWall(0.07, 0.10, -1, 2.8, GREEN);
+      tyreWall(0.79, 0.82,  1, 2.8, SPANGLE);
+      guardrail(0.34, 0.38, -1, 2.4, [0.55, 0.56, 0.6]);
+      guardrail(0.96, 0.99,  1, 2.4, [0.55, 0.56, 0.6]);
 
       // ── DRS STRAIGHT + CORNICHE SIGNAGE ──────────────────────────────────
       billboard(K(0.95),  1, 22, 10, 10, GREEN);
@@ -285,43 +339,48 @@
       const floatingMosque = (k, gap) => {
         const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
         const base = [a.c[0], pyMin - 0.3, a.c[2]];   // sit on the sea plane
-        out._mat = MAT.STONE;
-        addBox(out, vadd(base, a.u, 2.0), [26, 4, 26], [0.90, 0.90, 0.86], b);      // podium
-        addBox(out, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);           // lit podium rim
-        addBox(out, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);      // prayer hall
-        addBox(out, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);             // lit arcade windows
-        // rounded main dome: frustum drum + cap cone
-        addFrustum(out, vadd(base, a.u, 11), 7.2, 4.6, 5, [0.95, 0.95, 0.92], 12, b);
-        addCone(out, vadd(base, a.u, 16), 4.7, 5.5, [0.96, 0.96, 0.93], 12, b);
-        // four corner cupolas
-        for (const dx of [-6.5, 6.5]) for (const dz of [-6.5, 6.5]) {
-          const cc = vadd(vadd(vadd(base, a.u, 11), a.r, dx), a.t, dz);
-          addCone(out, cc, 1.4, 3.2, [0.95, 0.95, 0.92], 8, b);
-        }
-        // minaret
-        const mc = vadd(base, a.r, 14);
-        addCyl(out, vadd(mc, a.u, 2), 1.4, 26, [0.94, 0.94, 0.91], 8, b);
-        addFrustum(out, vadd(mc, a.u, 28), 2.0, 1.1, 3, WINWARM, 8, b);             // lit balcony
-        addCyl(out, vadd(mc, a.u, 31), 1.0, 5, [0.94, 0.94, 0.91], 8, b);
-        addCone(out, vadd(mc, a.u, 36), 1.5, 4.5, [0.96, 0.90, 0.66], 8, b);        // lit spire
-        out._mat = 0;
-        addBox(out, vadd(mc, a.u, 41), [0.5, 2.2, 0.5], SPANGLE, b);                // crescent finial glow
+        modelGroup("jeddah-floating-mosque", {
+          center: vadd(base, a.u, 21), size: [34, 44, 30], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(base, a.u, 2.0), [26, 4, 26], [0.90, 0.90, 0.86], b);
+          addBox(stage, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);
+          addBox(stage, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);
+          addBox(stage, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);
+          addFrustum(stage, vadd(base, a.u, 11), 7.2, 4.6, 5, [0.95, 0.95, 0.92], 12, b);
+          addCone(stage, vadd(base, a.u, 16), 4.7, 5.5, [0.96, 0.96, 0.93], 12, b);
+          for (const dx of [-6.5, 6.5]) for (const dz of [-6.5, 6.5]) {
+            const cc = vadd(vadd(vadd(base, a.u, 11), a.r, dx), a.t, dz);
+            addCone(stage, cc, 1.4, 3.2, [0.95, 0.95, 0.92], 8, b);
+          }
+          const mc = vadd(base, a.r, 14);
+          addCyl(stage, vadd(mc, a.u, 2), 1.4, 26, [0.94, 0.94, 0.91], 8, b);
+          addFrustum(stage, vadd(mc, a.u, 28), 2.0, 1.1, 3, WINWARM, 8, b);
+          addCyl(stage, vadd(mc, a.u, 31), 1.0, 5, [0.94, 0.94, 0.91], 8, b);
+          addCone(stage, vadd(mc, a.u, 36), 1.5, 4.5, [0.96, 0.90, 0.66], 8, b);
+          stage._mat = 0;
+          addBox(stage, vadd(mc, a.u, 41), [0.5, 2.2, 0.5], SPANGLE, b);
+        }, { required: true });
       };
       floatingMosque(K(0.165), 230);
 
       // ── Jeddah Flagpole — the record 171 m mast + giant green flag ───────
       {
         const a = anchor(K(0.30), -1, 130), b = [a.r, a.u, a.t];
-        out._mat = MAT.CONCRETE;
-        addFrustum(out, a.c, 4.0, 2.6, 14, [0.55, 0.56, 0.60], 8, b);               // pedestal
-        out._mat = MAT.METAL;
-        addCyl(out, vadd(a.c, a.u, 14), 1.15, 152, [0.82, 0.84, 0.88], 8, b);       // mast
-        out._mat = 0;
-        addBox(out, vadd(a.c, a.u, 166), [1.2, 0.8, 1.2], SPANGLE, b);              // masthead light
-        out._mat = MAT.FABRIC;
-        addBox(out, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.4, 24, 44], GREEN, b);   // giant flag
-        addBox(out, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.5, 4, 44], [0.95, 0.96, 0.98], b); // flag emblem band
-        out._mat = 0;
+        modelGroup("jeddah-flagpole", {
+          center: vadd(vadd(a.c, a.u, 84), a.t, 23), size: [10, 170, 50], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addFrustum(stage, a.c, 4.0, 2.6, 14, [0.55, 0.56, 0.60], 8, b);
+          stage._mat = MAT.METAL;
+          addCyl(stage, vadd(a.c, a.u, 14), 1.15, 152, [0.82, 0.84, 0.88], 8, b);
+          stage._mat = 0;
+          addBox(stage, vadd(a.c, a.u, 166), [1.2, 0.8, 1.2], SPANGLE, b);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.4, 24, 44], GREEN, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
+          stage._mat = 0;
+        }, { required: true });
       }
 
       // ── Dhow — traditional lateen-sail boat moored at the waterfront ─────

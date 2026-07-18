@@ -13,24 +13,59 @@
     country: "Bahrain",
     night: true,
     theme: "desert",
+    sceneryTheme: "desert",
     lengthKm: 5.4,
     sunAzimBias: -0.36,   // low desert-latitude sun sits east of overhead at race time (late-day GP)
     baseHW: 7,
+    sceneryCoordinates: "racing",
+    dressingExclusions: [
+      // Bahrain owns its dry scrub and 36–42 m flood-mast ring below. Suppress
+      // the generic duplicates so the open Sakhir desert stays sparse.
+      { kinds: ["foliage", "floodlights"], s0: 0, s1: 1 },
+    ],
     pal: { horizon: [0.20, 0.10, 0.05], zenith: [0.06, 0.05, 0.16], sunColor: [0.80, 0.62, 0.40], ambientSky: [0.30, 0.22, 0.16], ambientGround: [0.28, 0.18, 0.10], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0028, sunDir: [0.5, 0.14, 0.4], concrete: [0.27, 0.26, 0.25], runoff: [0.24, 0.23, 0.22], grass: [0.19, 0.17, 0.14] },
     segs: [
       { t: 0, l: 520 }, { t: 90, l: 100 }, { t: -40, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 240 }, { t: 80, l: 100 },
       { t: -30, l: 80 }, { t: 70, l: 100 }, { t: 0, l: 300 }, { t: 60, l: 90 }, { t: 0, l: 120 }, { t: 60, l: 110 },
     ],
-    // T1 approach descends ~4 m from the start/finish line; mid-lap drops ~7 m
-    // further to the lowest point (~15 m total relief on the real circuit).
-    elevations: [{ s: 0.03, halfM: 260, rise: -4 }, { s: 0.45, halfM: 340, rise: -7 }],
+    // Elevation entries use source-trace coordinates. With startFrac 0.225,
+    // source 0.645/0.725 place the gentle T8 descent and T9–10 rise at racing
+    // fractions 0.42/0.50 instead of the old, misplaced T1/back-straight humps.
+    elevations: [{ s: 0.645, halfM: 260, rise: -3 }, { s: 0.725, halfM: 180, rise: 2 }],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
-        bush, grandstand, building, cityFront, tower, billboard, gantry, marshalPost,
+        bush, grandstand, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
-        floodMast: apiFloodMast, floodMastRing, sailCanopy } = api;
+        floodMast: apiFloodMast, floodMastRing, sailCanopy, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      if (circuitKit) {
+        // A guarded second tier behind the legacy pit facade gives the Sakhir
+        // main straight the deep garage/operations profile seen from the grid.
+        circuitKit.pitBuilding({
+          id: "kit:bahrain:pit-operations", frac: 0.992, side: -1, gap: 24,
+          size: [18, 11, 72], garages: 18, required: true,
+        });
+        circuitKit.hospitality({
+          id: "kit:bahrain:hospitality", frac: 0.955, side: -1, gap: 100,
+          size: [18, 9, 34], modules: 4, required: true,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:bahrain:service-compound", frac: 0.55, side: -1, gap: 70,
+          size: [24, 6, 32], vehicles: 6, required: true,
+        });
+        // Back-straight support campus: sparse, well behind the left-side
+        // guardrail and separated from the open desert sightline.
+        circuitKit.serviceCompound({
+          id: "kit:bahrain:back-straight-service", frac: 0.705, side: -1, gap: 76,
+          size: [28, 6, 38], vehicles: 8, required: true,
+        });
+        circuitKit.recoveryBay({
+          id: "kit:bahrain:back-straight-recovery", frac: 0.735, side: -1, gap: 58,
+          size: [14, 5, 18], required: true,
+        });
+      }
 
       // ── Desert palette (night race, Sakhir) ──────────────────────────────
       // Base sand tones for dunes and desert backdrop
@@ -90,6 +125,23 @@
             forest: forestCol, rock: rockCol, snow: DUNE_LIT,
           });
         }
+      }
+
+      // ── Jebel ad Dukhan directional relief (s 0.54–0.60 horizon) ─────────
+      // Bahrain's low western high point reads as one restrained, hazed ridge
+      // rather than another full skyline ring. Three fixed summits preserve the
+      // open desert while giving the technical middle sector a distant landmark.
+      for (const [s, dist, w, h] of [
+        [0.545, 430, 210, 34],
+        [0.570, 500, 260, 46],
+        [0.595, 450, 190, 31],
+      ]) {
+        const k = K(s), a = anchor(k, -1, dist);
+        mountain(a.c[0], a.c[2], pyMin, w, h, {
+          seg: 8, seed: Math.round(s * 10000),
+          rough: 0.18, snowline: 99,
+          forest: SAND_DARK, rock: SAND, snow: DUNE_LIT,
+        });
       }
 
       // ── Distant Manama skyline: lit towers on the night horizon ──────────
@@ -182,11 +234,14 @@
         { wall: PIT_CREAM, window: WIN_WARM, lit: true, floor: 4, setback: true });
       // Pit wall + start gantry
       wall(0.97, 0.04, -1, 3, 1.1, [0.85, 0.85, 0.85]);
-      gantry(0.005, 8.5, STEEL);
+      overheadSpan({
+        id: "bahrain-start-gantry", frac: 0.005, clearance: 8.5,
+        thickness: 0.9, depth: 1.6, supportGap: 2, color: STEEL, required: true,
+      });
       // Main grandstands on the pit straight — large pale-cream shells with dark navy seats.
       // Bahrain's main stands are tall (sand/cream colours) with blue seats.
       grandstand(0.00,   1, 18, 140, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.985,  1, 20,  80, STAND_CREAM, SEAT_BLUE);
+      grandstand(0.985,  1, 90,  80, STAND_CREAM, SEAT_BLUE);
       // Second pit-side building: timing/media centre with cool lit windows
       building(K(0.01), -1, 2, 10, 9, 40,
         { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
@@ -277,6 +332,16 @@
       for (let i = 0; i < 6; i++) {
         const k = (K(0.27) + i * Math.round(n * 0.015)) % n;
         duneWedge(k, -1, 64 + i * 14, 40 + hash(k) * 28, 3.5 + hash(k * 5) * 3);
+      }
+
+      // T1-to-University berm field: low, broad banks only on the far outside,
+      // leaving braking references and the inside desert vista unobstructed.
+      for (const [s, gap, w, h] of [
+        [0.095, 82, 54, 4.2],
+        [0.115, 104, 68, 5.0],
+        [0.138, 126, 76, 5.8],
+      ]) {
+        duneWedge(K(s), 1, gap, w, h);
       }
 
       // ================= TURN 3/4 COMPLEX (s 0.22–0.28) =================
@@ -375,8 +440,10 @@
 
       // ================= BACK STRAIGHT (s 0.68–0.90) =================
       // The long back straight has grandstands on the right and desert on the left.
-      fence(0.74, 0.88, 1, 6, 3.2, [0.70, 0.72, 0.76]);
-      tyreWall(0.74, 0.88, 1, 5, TYRE_CAP);
+      // The terrain-grounded tyre conveyor needs extra runoff through the
+      // s≈0.83 bend; the legacy 5 m offset swept its cap over the racing line.
+      fence(0.74, 0.88, 1, 8, 3.2, [0.70, 0.72, 0.76]);
+      tyreWall(0.74, 0.88, 1, 8, TYRE_CAP);
       guardrail(0.73, 0.90, -1, 8, [0.80, 0.80, 0.82]);
       floodMast(K(0.77),  1, 32, 40);
       floodMast(K(0.84),  1, 32, 39);
@@ -384,9 +451,12 @@
       lightBank(K(0.76), 1, 36);
       lightBank(K(0.86), 1, 36);
       // Back straight grandstands: large cream shells, blue navy seats
-      grandstand(0.80,  1, 24, 74, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.84,  1, 24, 54, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.78,  1, 26, 64, [0.80, 0.78, 0.72], SEAT);
+      // Their raw crowd rows bypass ordinary footprint rejection, so keep the
+      // long curved stands well behind the runoff instead of allowing the
+      // s≈0.84 crowd deck to chord across the racing surface.
+      grandstand(0.78, 1, 32, 32, [0.80, 0.78, 0.72], SEAT);
+      grandstand(0.82, 1, 34, 34, STAND_CREAM, SEAT_BLUE);
+      grandstand(0.86, 1, 32, 30, STAND_CREAM, SEAT_BLUE);
       billboard(K(0.75), -1, 12, 14, 4, BILLBOARD_LITE);
       billboard(K(0.78),  1, 14, 14, 4, [0.05, 0.45, 0.75]);
       billboard(K(0.82), -1, 11, 12, 4, [0.85, 0.12, 0.12]);
@@ -394,7 +464,10 @@
       marshalPost(K(0.82),  1, 24);
       marshalPost(K(0.86), -1, 26);
       // Mid-straight scoring gantry
-      gantry(0.81, 8.2, STEEL);
+      overheadSpan({
+        id: "bahrain-back-straight-gantry", frac: 0.81, clearance: 8.2,
+        thickness: 0.9, depth: 1.6, supportGap: 2, color: STEEL, required: true,
+      });
       // Back straight desert buildings (R/L far): sandy compound structures
       building(K(0.72), -1, 48, 14, 10, 22,
         { wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
@@ -403,6 +476,14 @@
       // Desert backdrop slabs along the back straight left (desert) side
       backdrop(K(0.75), -1, 130, [300, 16, 13], SAND_DARK);
       backdrop(K(0.85), -1, 150, [260, 18, 13], SAND);
+
+      // ================= VICTORY GRANDSTAND / FINAL CORNER (s 0.91–0.94) ===
+      // A compact roofed spectator hero closes the lap without crowding pit
+      // entry. Paired cool masts make its cream shell readable at race night.
+      grandstand(0.925, 1, 34, 58, STAND_CREAM, SEAT_BLUE);
+      floodMast(K(0.912), 1, 42, 40);
+      floodMast(K(0.940), 1, 42, 40);
+      billboard(K(0.925), 1, 20, 14, 4, BILLBOARD_LITE);
 
       // ================= PIT ENTRY (s 0.93–0.99, L) =================
       // Second pit building: media/control centre with cool lit windows
@@ -421,7 +502,7 @@
       building(K(0.97), -1, 68, 22, 24, 28,
         { wall: [0.78, 0.76, 0.70], window: WIN_COOL, lit: true, floor: 6, setback: true });
       tower(K(0.95), -1, 88, 5, 40,
-        { col: TOWER_PALE, seg: 6, cap: true, capCol: FLOOD, mast: true });
+        { col: TOWER_PALE, seg: 6, cap: true, capCol: FLOOD, mast: 6 });
       // Pit-lane furniture
       tyreWall(0.90, 0.98, -1, 5, TYRE_CAP);
       guardrail(0.985, 0.06, 1, 9, [0.80, 0.80, 0.82]);

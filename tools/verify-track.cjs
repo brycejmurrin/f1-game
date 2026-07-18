@@ -70,6 +70,12 @@ function buildContext() {
     createMesh: function (buf) {
       const verts    = buf && buf.pos ? buf.pos.length / 3 : 0;
       const idxCount = buf && buf.idx ? buf.idx.length     : 0;
+      if (!buf || !buf.pos || buf.pos.length % 3) throw new Error("mesh has invalid position layout");
+      if (buf.nrm && (buf.nrm.length !== buf.pos.length || buf.nrm.some(v => !Number.isFinite(v))))
+        throw new Error("mesh has invalid/non-finite normals");
+      if (buf.pos.some(v => !Number.isFinite(v))) throw new Error("mesh has non-finite positions");
+      if (buf.idx && buf.idx.some(i => !Number.isInteger(i) || i < 0 || i >= verts))
+        throw new Error("mesh has invalid indices");
       return { verts, idxCount };
     },
   };
@@ -103,6 +109,12 @@ function buildContext() {
   runFile("js/track-geom.js");  // provides TrackGeom (emitters; tracks.js destructures it)
   runFile("js/track-scenery-data.js");  // provides TrackSceneryData (buildProps tables)
   runFile("js/circuit-markings.js");    // provides CircuitMarkings (sectors + turn apexes)
+  runFile("js/track-space.js");         // explicit source/racing coordinate transforms
+  runFile("js/track-surface.js");       // shared terrain + grounding profile
+  runFile("js/track-models.js");        // atomic/overhead/water model helpers
+  runFile("js/scenery-themes.js");      // deterministic resolved scenery styles
+  runFile("js/landmark-kit.js");        // staged architectural forms
+  runFile("js/circuit-kit.js");         // complete facilities through TrackModels
   // Each circuit's definition lives in js/tracks/<id>.js and pushes itself onto
   // window.TrackDefs; tracks.js reads that list at load time (DEFS = window.
   // TrackDefs), so these must run BEFORE it — mirroring the <script> order in
@@ -136,6 +148,13 @@ function verifyTrack(id) {
   // Run the full build — exercises buildRoad, buildTerrain, buildProps, buildGate
   // via the GLX stub.  Any throw here means the game strands on the menu.
   const track = Tracks.build(def);
+  const diagnostics = track.modelDiagnostics;
+  if (diagnostics) {
+    const hard = diagnostics.invalid.filter(d => d.required)
+      .concat(diagnostics.unsafe.filter(d => d.required))
+      .concat(diagnostics.suppressed.filter(d => d.required));
+    if (hard.length) throw new Error(`required model diagnostics: ${JSON.stringify(hard)}`);
+  }
 
   const road    = track.meshes.road    ? track.meshes.road.verts    : 0;
   const terrain = track.meshes.terrain ? track.meshes.terrain.verts : 0;

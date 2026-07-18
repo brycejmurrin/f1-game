@@ -9,13 +9,17 @@ async function load(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
 }
-const trackIds = (page) => page.evaluate(() => Tracks.LIST.map((t) => t.id));
+const ONLY_TRACK = process.env.TRACK;
+const trackIds = (page) => ONLY_TRACK
+  ? Promise.resolve([ONLY_TRACK])
+  : page.evaluate(() => Tracks.LIST.map((t) => t.id));
 
 test.describe("Apex 26 — track boundaries", () => {
   test("every track has a finite, sane driving boundary on both sides", async ({ page }) => {
     await load(page);
     const ids = await trackIds(page);
-    expect(ids.length).toBeGreaterThan(10);
+    if (ONLY_TRACK) expect(ids).toEqual([ONLY_TRACK]);
+    else expect(ids.length).toBeGreaterThan(10);
     for (const id of ids) {
       const s = await page.evaluate((tid) => {
         window.__apex.race(tid, "day", "dry");
@@ -46,6 +50,15 @@ test.describe("Apex 26 — track boundaries", () => {
       expect(stats[id].street, `${id} flagged street`).toBe(true);
       expect(stats[id].minOverHw, `${id} barrier near edge`).toBeLessThan(3);
     }
+  });
+
+  test("full-lap visual barriers register collision boundaries across the wrap", async ({ page }) => {
+    await load(page);
+    const stats = await page.evaluate(() => {
+      window.__apex.race("montreal", "day", "dry");
+      return window.__apex.wallStats();
+    });
+    expect(stats.tightFrac, "Montreal full-lap walls tighten nearly every boundary node").toBeGreaterThan(0.95);
   });
 
   test("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {

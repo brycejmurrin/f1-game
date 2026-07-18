@@ -101,10 +101,18 @@ uniform float uTime;        // seconds (drives cloud-shadow drift)
 uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
 uniform float uCloudSpeed;  // cloud drift-rate multiplier (matches SKY uCloudSpeed; 0 = frozen)
 uniform float uCloudShadowDim; // how darkly cloud shadows dim the sun (def 0.80)
+uniform float uCarSunGlint; // clearcoat sun-disc reflection punch on car paint (def 12.0)
+uniform float uCarSparkle;  // metallic-flake sparkle glint gain (def 1.6)
+uniform float uFogSunCore;  // tight hot core of the sun in-scatter through fog (def 0.6)
 uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distance haze
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
+uniform float uLampNearClamp;  // near-field distance floor on lamp 1/d² falloff (m, def 4.0) — tames close-by wall blow-out (dual: WGSL F.params7.w)
+uniform float uWindowSunFlash; // glossy-glass dry sun-flash reflection strength (def 1.0 = shipped 0.6)
+uniform float uSkyRimGlow;     // grazing-angle atmospheric sky-rim brightening strength (def 1.0 = shipped 0.18)
+uniform float uAmbContactDark; // ambient contact-darkening depth on downward faces (def 1.0 = shipped 0.88 floor)
+uniform float uLampWallSpill;  // out-of-beam lamp reflection floor on walls/road (def 1.0 = shipped 0.16/0.30)
 uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
 uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
 // Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
@@ -582,7 +590,32 @@ void main() {
   // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
   // they must not roughen the mirror shell (that's what read as "ghostly" before).
   vec3 Ngeo = N;
-  if (uCarPaint > 0.001) {
+  // Car3D surface ids occupy 20..26, above TrackGeom's 0..15 material range.
+  // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
+  int surfaceId = int(vMat + 0.5);
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 26;
+  bool paintSurface = surfaceId == 20;
+  bool carbonSurface = surfaceId == 21;
+  bool rubberSurface = surfaceId == 22;
+  bool metalSurface = surfaceId == 23;
+  bool glassSurface = surfaceId == 24;
+  bool emissiveSurface = surfaceId == 25;
+  bool panelSurface = surfaceId == 26;
+  float carPaint = classifiedCar ? (paintSurface ? uCarPaint : 0.0) : uCarPaint;
+  float clearcoat = classifiedCar
+    ? (paintSurface ? uClearcoat : (glassSurface ? uClearcoat * 0.45 : 0.0))
+    : uClearcoat;
+  float metalness = classifiedCar
+    ? (metalSurface ? max(uMetalness, 0.78) : (carbonSurface ? 0.08 : 0.0))
+    : uMetalness;
+  float specular = classifiedCar
+    ? (rubberSurface ? 0.18 : (metalSurface ? 1.0 : (carbonSurface ? 0.48 : (panelSurface ? 0.35 : uSpecular))))
+    : uSpecular;
+  float emissive = classifiedCar
+    ? (emissiveSurface ? max(uEmissive, 1.0) : (paintSurface ? uEmissive : 0.0))
+    : uEmissive;
+  bool envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
+  if (carPaint > 0.001) {
     // Two scales: coarse orange-peel waviness + fine metallic-flake sparkle.
     // Keyed to OBJECT space so the pattern is glued to the panels instead of
     // streaming across the bodywork as the car drives (texture-swimming).
@@ -600,7 +633,7 @@ void main() {
       // 0.22 (was 0.7): at 0.7 the perturbation broke the base-coat specular into
       // per-pixel noise and the paint read sandy/matte — keep a whisper of live
       // shimmer, let the clearcoat lobe + env mirror carry the gloss.
-      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * uCarPaint * pFade));
+      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
     }
   }
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
@@ -665,6 +698,12 @@ void main() {
     albedo = max(albedo, vec3(0.0));
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
+  if (carbonSurface) rough = max(rough, 0.56);
+  if (rubberSurface) rough = max(rough, 0.90);
+  if (metalSurface) rough = min(rough, 0.16);
+  if (glassSurface) rough = min(rough, 0.13);
+  if (emissiveSurface) rough = max(rough, 0.32);
+  if (panelSurface) rough = max(rough, 0.72);
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
@@ -677,7 +716,7 @@ void main() {
   float saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
   rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
   float a = rough * rough;
-  vec3 f0 = mix(vec3(0.08 * uSpecular), albedo, uMetalness);
+  vec3 f0 = mix(vec3(0.08 * specular), albedo, metalness);
 
   // ── Wet surface (rain) ──────────────────────────────────────────────────────
   // Rain darkens and polishes surfaces. Strongest on up-facing ground (water
@@ -720,7 +759,7 @@ void main() {
   float litNoL = NoL * shadow * uKeyMul;
 
   // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
-  vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - uMetalness));
+  vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - metalness));
   // SHADOW COOLNESS: bias sun-starved (shadowed / ambient-only) pixels toward a
   // cool blue for a sunny-day contrast look. 0 = neutral (shipped).
   if (uShadowTintAmt > 0.001) {
@@ -728,7 +767,6 @@ void main() {
   }
 
   // Reflected view ray — reused by the wet-road lamp reflections and the sky env.
-  vec3 Rv = reflect(-V, N);
 
   // ── Physically-based punctual lights (floodlights / street lamps) ─────────
   // Each lamp is a REAL spotlight: windowed inverse-square falloff (the standard
@@ -756,7 +794,7 @@ void main() {
     // then overshoots the wall by 10-20x, blowing it to solid white. Clamping
     // the near-field distance keeps the aim-point pool unchanged (dist there is
     // already well above the floor) while taming any close-by surface.
-    float distC = max(dist, 4.0);
+    float distC = max(dist, uLampNearClamp);   // LAMP NEAR CLAMP knob (def 4.0)
     float att = (win * win) / (distC * distC + 1.0);
     if (att < 1e-6) continue;
     // Aimed spot cone: how deep the surface sits inside the lamp's beam.
@@ -771,7 +809,7 @@ void main() {
     // not only inside its illumination cone. The floor is wetness-dependent:
     // high when wet (streaks from every visible lamp), lower when dry so a dry
     // night road keeps pool/valley contrast instead of a uniform specular sheet.
-    float spotS = mix(mix(0.16, 0.30, wet), 1.0, beam);
+    float spotS = mix(mix(0.16, 0.30, wet) * uLampWallSpill, 1.0, beam);   // LAMP WALL SPILL knob (def 1.0 = shipped floor)
     // Fog in-scatter: lamp irradiance reaching the fog column at this surface.
     // Windowed 1/d2 falloff (att) with a partial out-of-beam floor so the lens
     // glows the fog all around, brightest down the throw. Consumed by the fog
@@ -804,32 +842,38 @@ void main() {
     }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - uMetalness) * (1.0 - wet * 0.85);
+    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wet * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
-    color += albedo * uLightCol[i] * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - uMetalness);
+    color += albedo * uLightCol[i] * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
     // real wet-night streak); on glass/car paint it's the city-light glint.
-    vec3 Hl = normalize(Ld + V);
-    float NoHl = max(dot(N, Hl), 0.0);
-    float VoHl = max(dot(V, Hl), 0.0);
-    float Dl = D_GGX(NoHl, a);
-    float Vl = V_SmithGGX(NoV, NoLl, a);
-    vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-    vec3 radianceS = uLightCol[i] * (att * spotS * lampSh);
-    vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
-    color += lspec / (1.0 + lspec);
-    // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
-    // car bodies at night, over the softer base-coat highlight.
-    if (uClearcoat > 0.001) {
-      float Dcc = D_GGX(NoHl, 0.03);
-      float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
-      float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
-      vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * uClearcoat;
-      color += 2.2 * ccl / (2.2 + ccl);
+    // Gated on NoLl: every term below is multiplied by NoLl at the end, so a
+    // fragment facing AWAY from this lamp (~half the lamps for any given wall
+    // or road pixel) contributed exactly 0 while still paying the full GGX +
+    // clearcoat cost — the dominant per-fragment waste on 28-32-lamp nights.
+    if (NoLl > 0.0) {
+      vec3 Hl = normalize(Ld + V);
+      float NoHl = max(dot(N, Hl), 0.0);
+      float VoHl = max(dot(V, Hl), 0.0);
+      float Dl = D_GGX(NoHl, a);
+      float Vl = V_SmithGGX(NoV, NoLl, a);
+      vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+      vec3 radianceS = uLightCol[i] * (att * spotS * lampSh);
+      vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+      color += lspec / (1.0 + lspec);
+      // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
+      // car bodies at night, over the softer base-coat highlight.
+      if (clearcoat > 0.001) {
+        float Dcc = D_GGX(NoHl, 0.03);
+        float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+        float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
+        vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+        color += 2.2 * ccl / (2.2 + ccl);
+      }
     }
   }
 
@@ -859,7 +903,7 @@ void main() {
   // even where the base coat is rougher, which is what gives cars their glossy
   // showroom read. The bodywork is smooth-shaded (car3d.js lofts), so the lobe
   // sweeps across the curved panels per-pixel instead of flashing whole facets.
-  if (uClearcoat > 0.001) {
+  if (clearcoat > 0.001) {
     // Roughness ~0.19 (a=0.035): wide enough that the streak is VISIBLE sweeping
     // the curved panels (at 0.1 the cone is ~2 degrees — sub-pixel, reads matte).
     // Soft-clipped to a 2.6 HDR ceiling instead of 1.0: the hot core punches past
@@ -881,7 +925,7 @@ void main() {
     // uKeyMul included so KEY LIGHT dims this lobe with the rest of the direct
     // sun (it was the one direct term missing it — a keyMul of 0 left every
     // clearcoated car with a full-brightness sun streak).
-    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uKeyMul * uClearcoat;
+    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uKeyMul * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color += ccCol;
   }
@@ -897,7 +941,7 @@ void main() {
   // car). Energy-conserving: the base is DARKENED under the mirror weight first,
   // then the reflected sky is added over it (a mirror on gloss, not a milky wash),
   // so the livery still reads through it face-on while the car goes mirror-bright.
-  if (uCarPaint > 0.001 && uClearcoat > 0.001) {
+  if (envSurface) {
     vec3 Rg = reflect(-V, Ngeo);
     float NoVc = max(dot(Ngeo, V), 1e-4);
     float ccFb = 1.0 - NoVc; float ccF = ccFb * ccFb;      // fresnel², rim-concentrated (mul not pow(_,2): pow(0,2) NaNs on mobile)
@@ -909,7 +953,7 @@ void main() {
     // The grazing Fresnel rim (0.28·ccF) stays in both — a subtle edge, not a wash.
     float probeLive = clamp(uEnvStr, 0.0, 1.0);
     float baseRefl = mix(0.14, 0.72, probeLive);
-    float envW = clamp(uClearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
+    float envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     // Soft horizon: bright sky above, dark ground tone below. Was a hard step
     // (-0.03..0.06) — on the faceted engine cover / sidepod shoulders adjacent
     // facets straddled the line and flipped between "sky" and "ground", reading
@@ -944,7 +988,7 @@ void main() {
     // flat panels keep the exact 400. Floor 32 caps how soft an edge can get.
     float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
     float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * 12.0 * shadow;  // base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow;  // CAR SUN GLINT knob (def 12.0) — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
@@ -955,7 +999,7 @@ void main() {
   // facet half-aligns with the sun (view-dependent, so the sparkle field shifts
   // as the camera moves). HDR gain so flashes bloom. Distance-faded to nothing so
   // it never aliases at range. Additive white glint — leaves the pigment alone.
-  if (uCarPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
+  if (carPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
     float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * uSparkle;
     // Flakes live in the COLOUR coat: near-black albedo (tyres, carbon floor,
     // wings, trim) has no metallic pigment, so gate the glitter out there — the
@@ -978,7 +1022,8 @@ void main() {
       // sparse individual glints that flash as the view moves, instead of a
       // dense sand-grain field that made the paint read dirty/matte.
       float glint = smoothstep(0.990, 1.0, dot(gN, H));
-      color += uSunColor * litNoL * glint * 1.6 * uCarPaint * spFade;
+      // CAR SPARKLE knob (def 1.6 = as-shipped) sets the metallic-flake glint gain.
+      color += uSunColor * litNoL * glint * uCarSparkle * carPaint * spFade;
     }
   }
 
@@ -990,10 +1035,12 @@ void main() {
   // Roughness > 0.4 = no visible reflection; < 0.15 = mirror-like sky in road.
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
-  float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * uSpecular;
+  float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
   envBlend = max(envBlend, wet * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
   if (envBlend > 0.001) {
-    vec3 R = Rv;
+    // reflect() computed here, not at the top: envBlend is ~0 for the matte
+    // majority of the scene (road/terrain/walls), where Rv was pure waste.
+    vec3 R = reflect(-V, N);
     // Lower exponent shows more of the horizon→zenith gradient in the reflection
     // (vertical glass mostly reflects up into a near-uniform zenith, which reads
     // flat — this lets the brighter horizon band into the reflected sky).
@@ -1007,7 +1054,7 @@ void main() {
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
-    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wet) * envBlend * 0.6;
+    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wet) * envBlend * 0.6 * uWindowSunFlash;   // WINDOW SUN FLASH knob (def 1.0 = shipped)
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square
@@ -1022,7 +1069,7 @@ void main() {
     // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
     // Reinhard shoulder on the brightest channel keeps it bright where the scene
     // is dim and caps it where it would over-saturate.
-    vec3 envAdd = envWet * envFresnel * envBlend * roughDamp * (1.0 - uMetalness);
+    vec3 envAdd = envWet * envFresnel * envBlend * roughDamp * (1.0 - metalness);
     float envM = max(max(envAdd.r, envAdd.g), envAdd.b);
     color += envAdd / (1.0 + envM);
   }
@@ -1032,7 +1079,7 @@ void main() {
   // making surfaces look wet or plastic. Damped by roughness.
   {
     float rf = 1.0 - NoV; float rimFresnel = rf * rf * rf;
-    float rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18;
+    float rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18 * uSkyRimGlow;   // SKY RIM GLOW knob (def 1.0 = shipped)
     color += uSkyHorizon * rimAmt;
   }
 
@@ -1043,20 +1090,20 @@ void main() {
   // gentle extra crush in the darkest zones adds perceived depth.
   {
     float ao = pow(max(N.y * 0.5 + 0.5, 1e-4), 0.35);
-    color *= mix(0.88, 1.0, ao);
+    color *= mix(1.0 - 0.12 * uAmbContactDark, 1.0, ao);   // AMBIENT CONTACT DARK knob (def 1.0 = shipped 0.88 floor)
   }
 
   // Emissive: lerp toward unlit albedo (self-illumination, sun-independent) and,
   // for bright/warm surfaces (lit windows, floodlight lenses, neon), add an extra
   // additive lift that pushes the value past 1.0 so the bloom bright-pass picks it
   // up and the surface actually *glows* at night rather than just reading flat.
-  if (uEmissive > 0.0) {
-    color = mix(color, albedo, uEmissive);
+  if (emissive > 0.0) {
+    color = mix(color, albedo, emissive);
     // Glow weight: how "lamp-like" the albedo is. Bright (high luminance) AND
     // warm-or-neutral colours qualify; dark/muddy colours get no lift so emissive
     // walls don't bloom. Uses max channel for brightness, scaled smoothly in.
     float bright = max(albedo.r, max(albedo.g, albedo.b));
-    float glow = smoothstep(0.50, 0.95, bright) * uEmissive;
+    float glow = smoothstep(0.50, 0.95, bright) * emissive;
     // Push the glow well PAST 1.0 (HDR) so lit windows / neon / lamp lenses read
     // as actual light SOURCES — they punch through the dark and bloom into halos,
     // instead of sitting as flat bright paint.
@@ -1085,14 +1132,15 @@ void main() {
   // view ray points toward the sun, the fog glows toward the sun's colour
   // (forward Mie scatter), staying neutral away from it. Gives volumetric depth
   // and makes a low warm sun bleed dramatically through dawn/dusk haze.
-  vec3 rd = normalize(vWorldPos - uEye);
+  vec3 rd = -V;   // == normalize(vWorldPos - uEye); V is already normalized above
   float sunAmount = max(dot(rd, uSunDir), 0.0);
   // Wider exponent (4) = the warm sun-glow in the haze spreads across a broader
   // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
   // adds a hot bloom right at the sun.
   float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
   vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmt, 4.0));
-  fogCol += uSunColor * pow(sunAmt, 16.0) * 0.6;
+  // FOG SUN CORE knob (def 0.6 = as-shipped): the tight hot bloom right at the sun.
+  fogCol += uSunColor * pow(sunAmt, 16.0) * uFogSunCore;
   // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
   fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
                  1.0 - abs(uFogTint) * 0.02,
@@ -1128,7 +1176,7 @@ void main() {
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
   // channel is free): the composite SSR pass reflects the real world on car
   // bodywork every frame — the same world-mirror the wet road gets.
-  outColor = vec4(color, uCarPaint > 0.001 ? 0.35 : uAlpha);
+  outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha);
 }`;
 
   const SKY_VS = `#version 300 es
@@ -1159,6 +1207,18 @@ uniform float uCloudSpeed; // cloud drift/evolution rate multiplier (def 1.0)
 uniform float uSkyGrad;    // horizon→zenith gradient exponent (def 0.35)
 uniform float uStarDensity;// star-field spawn-window multiplier (def 1.0)
 uniform float uDaySkyBlue; // day deep-blue mid-band strength (def 1.0)
+uniform float uMieScatter; // sun-facing sky forward-scatter glow gain (def 1.0)
+uniform float uCloudSilver;// backlit cloud-edge silver-lining gain (def 1.0)
+uniform float uCoronaAureole; // wide sun aureole halo gain (def 1.0)
+uniform float uSunDiscSize;// angular size of the sun disc (def 1.0)
+uniform float uStarSize;   // star point-size multiplier (def 1.0)
+uniform float uStarTwinkle; // star twinkle amplitude scale (def 1.0)
+uniform float uMoonDiscSize;// moon disc angular-size multiplier (def 1.0)
+uniform float uMoonHalo;   // moon halo spread/strength scale (def 1.0)
+uniform float uSunCorona;  // tight sun corona ring gain (def 1.0)
+uniform float uSunSquash;  // sun horizon vertical-squash amount (def 1.0)
+uniform float uCityGlowReach; // city-glow horizon reach scale (def 1.0)
+uniform float uCloudDef;   // cloud edge definition/contrast (def 1.0)
 uniform float uLightning;  // storm strike flash 1→0 (0 = none, backward-compatible)
 out vec4 outColor;
 float hash3(vec3 p) {
@@ -1291,7 +1351,9 @@ void main() {
       float billow = fbm(cp1 * 2.3 + vec2(11.7, 4.3));
       float defined = smoothstep(0.42, 0.80, f * 0.6 + billow * 0.45)
                     * smoothstep(0.013, 0.05, up);
-      cov = mix(cov, max(cov, defined), cloudRich * 0.85);
+      // CLOUD DEFINITION (uCloudDef, def 1) scales how strongly the billow octave
+      // carves lumpy cumulus edges onto the base coverage (0.85 = as-shipped blend).
+      cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * uCloudDef, 0.0, 1.0));
       // Horizon cloud-bank: distant cumulus bunched near the horizon on a
       // compressed plane, so the LOW gameplay sky band (just above the scenery)
       // is never a plain wash. Its own coverage + a band fade focused ~1–9°.
@@ -1335,7 +1397,8 @@ void main() {
     // most intense at golden hour — the defining dramatic-cloud cue. Pushed much
     // harder at twilight so sunset/sunrise clouds get blazing fire-lit rims.
     float silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + golden) * (1.0 - overcast * 0.7);
-    lit += uSunColor * silver * (1.3 + twilight * 1.6);
+    // CLOUD SILVER LINING knob (def 1.0 = as-shipped) scales the backlit rim glow.
+    lit += uSunColor * silver * (1.3 + twilight * 1.6) * uCloudSilver;
     // Twilight: a broad warm wash across the sun-facing cloud field (not just the
     // thin rim) so the whole sky catches fire at the magic hour.
     lit += uSunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6);
@@ -1369,7 +1432,9 @@ void main() {
   // Damped under overcast (corona hidden behind cloud).
   float upPos = max(up, 0.0);
   float mieDamp = 1.0 - overcast * 0.85;
-  c = mix(c, uSunColor, pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp);
+  // MIE SCATTER knob (def 1.0 = as-shipped) scales the sun-facing sky glow; clamp
+  // keeps the mix blend valid when the knob pushes the amount past 1.
+  c = mix(c, uSunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp * uMieScatter, 0.0, 1.0));
 
   // --- Horizon glow in the sun's compass direction ---
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
@@ -1392,12 +1457,18 @@ void main() {
   float golden = 1.0 - smoothstep(0.0, 0.45, sunE);
   vec3 sunWarm = mix(uSunColor, uSunColor * vec3(1.18, 0.52, 0.24), golden);
   // Wide aureole: broader (lower exponent) and stronger at golden hour.
-  c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp;
-  c += sunWarm * pow(sd, 300.0) * 0.95 * coronaDamp;   // tight inner ring
+  // CORONA AUREOLE knob (def 1.0 = as-shipped) scales the broad sun halo glow.
+  c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * uCoronaAureole;
+  // SUN CORONA RING knob (def 1.0 = as-shipped) scales the tight inner ring.
+  c += sunWarm * pow(sd, 300.0) * 0.95 * uSunCorona * coronaDamp;   // tight inner ring
   // Flatten the disc near the horizon (atmospheric refraction squashes it).
+  // SUN HORIZON SQUASH knob (def 1.0 = as-shipped): scales the golden-hour vertical
+  // squash of the disc (1.0 = round, higher = more oval near the horizon).
   vec3 dd = dir - uSunDir * sd;
-  float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, 1.6, golden)));
-  float disc = smoothstep(mix(0.018, 0.028, golden), 0.006, perp) * coronaDamp;
+  float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), uSunSquash)));
+  // SUN DISC SIZE knob (def 1.0 = as-shipped): scales the disc's angular radius by
+  // widening the smoothstep edge. Larger = a bigger, brighter sun.
+  float disc = smoothstep(mix(0.018, 0.028, golden) * uSunDiscSize, 0.006 * uSunDiscSize, perp) * coronaDamp;
   // Bright HDR core (>1) so it blooms into glare; warm-white high, deep amber low.
   vec3 discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
   c += discCore * disc;
@@ -1420,9 +1491,12 @@ void main() {
       float d = length(dir - sdir);
       float bright = 0.30 + 0.55 * hash3(cell + 43.0);
       float phase = hash3(cell + 31.0) * 6.2832;
-      float twinkle = 0.80 + 0.20 * sin(uTime * 1.4 + phase);
+      // STAR TWINKLE knob (def 1.0 = as-shipped): scales the ±0.20 oscillation
+      // amplitude around the 0.80 base (0 = rock-steady stars).
+      float twinkle = 0.80 + 0.20 * uStarTwinkle * sin(uTime * 1.4 + phase);
       float giant = step(0.9995, h);                     // rare brighter star
-      float srad = mix(0.0016, 0.0028, giant);
+      // STAR SIZE knob (def 1.0 = as-shipped): scales each star's disc radius.
+      float srad = mix(0.0016, 0.0028, giant) * uStarSize;
       float star = smoothstep(srad, srad * 0.35, d)
                  * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
       // Cloud occlusion: stars sit BEHIND the cloud deck, so coverage along
@@ -1439,10 +1513,12 @@ void main() {
     vec3 moonDir = normalize(vec3(0.42, 0.72, 0.55));
     float md = dot(dir, moonDir);
     float moonPerp = length(dir - moonDir * max(md, 0.0));
-    // Moon disc: crisp soft edge
-    float moonDisc = smoothstep(0.025, 0.010, moonPerp) * uMoon;
-    // Moon halo: broad soft glow
-    float moonHalo = exp(-moonPerp * moonPerp * 140.0) * 0.28 * uMoon;
+    // Moon disc: crisp soft edge. MOON DISC SIZE knob (def 1.0 = as-shipped)
+    // scales the disc's angular radius via the smoothstep edges.
+    float moonDisc = smoothstep(0.025 * uMoonDiscSize, 0.010 * uMoonDiscSize, moonPerp) * uMoon;
+    // Moon halo: broad soft glow. MOON HALO SPREAD knob (def 1.0 = as-shipped)
+    // scales the halo strength (0.28) and widens its falloff (140 → 140/size).
+    float moonHalo = exp(-moonPerp * moonPerp * (140.0 / max(uMoonHalo, 0.001))) * 0.28 * uMoonHalo * uMoon;
     // Moon colour: cool blue-white
     vec3 moonCol = vec3(0.82, 0.88, 1.00);
     // The halo should only appear above the horizon and not wash out too much.
@@ -1455,7 +1531,9 @@ void main() {
   // hugs the horizon and fades fast with elevation, with a hint of cloud pickup
   // (clouds over a city glow from below). Zero when uCityGlow is black.
   if (uCityGlow.r + uCityGlow.g + uCityGlow.b > 0.001) {
-    float horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0);
+    // CITY GLOW REACH knob (def 1.0 = as-shipped): scales the horizon-hug exponent
+    // (lower = the glow climbs higher up the sky, higher = it hugs the horizon).
+    float horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * uCityGlowReach);
     c += uCityGlow * horiz;
     // Cloud pickup: the cloud deck over a lit city glows from BELOW — thick
     // bellies catch the most uplight, and the effect eases off toward the
@@ -1938,7 +2016,6 @@ float gCloud(vec3 wp){
 void main() {
   float d = texture(uDepth, vUV).r;
   // End point: scene hit, or (for sky) a far point along the view ray.
-  vec3 near = worldPos(vUV, 0.0);
   vec3 viewDir = normalize(worldPos(vUV, 0.5) - uEye);
   vec3 endP = (d >= 0.99999) ? uEye + viewDir * 400.0 : worldPos(vUV, d);
   vec3 ro = uEye;
@@ -1991,7 +2068,8 @@ void main() {
         float cd = dot(-Ld, uLightDir[li]);
         float spot = smoothstep(uLightCone[li].y, uLightCone[li].x, cd);
         float cosL = max(dot(rd, Ld), 0.0);                          // forward scatter
-        float hgL = (1.0 - 0.36) / pow(1.36 - 1.2 * cosL, 1.5);      // HG g=0.6
+        float hgLd = 1.36 - 1.2 * cosL;                              // HG g=0.6; d >= 0.16, sqrt safe
+        float hgL = (1.0 - 0.36) / (hgLd * sqrt(hgLd));              // == pow(d, 1.5) minus the transcendental
         // Shadowed shaft: test this march step against the mapped lamp's depth
         // map — an occluded step contributes no in-scatter, so the beam shows
         // the silhouette of whatever blocks the lamp (one tap × 16 steps,
@@ -2018,7 +2096,8 @@ void main() {
   // GOD-RAY FOCUS knob (def 0.60 = as-shipped); clamped <0.95 to keep the HG
   // denominator well-behaved. GOD-RAY HAZE knob (def 0.020) is the isotropic floor.
   float g = clamp(uHgAniso, 0.0, 0.95);
-  float hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosT, 1.5);
+  float hgD = 1.0 + g * g - 2.0 * g * cosT;   // >= (1-g)^2 > 0 at the clamp, sqrt safe
+  float hg = (1.0 - g * g) / (hgD * sqrt(hgD));   // == pow(d, 1.5) minus the transcendental
   float phase = hg * 0.16 + uHgFloor;
   outColor = vec4(uSunColor * accum * phase * uStr + lampAccum, 1.0);
 }`;
@@ -2050,6 +2129,12 @@ uniform float uSaturation;   // global saturation (1 = unchanged)
 uniform float uTint;         // warm(+)/cool(-) white-balance shift, -1..1 (default 0)
 uniform float uVignette;     // corner-darkening floor: 1 = none, lower = stronger (default 0.80)
 uniform float uVigSoft;      // vignette inner-edge radius / reach (default 0.35)
+uniform vec4 uTone0;         // blacks, shadows, midtones, highlights (stops)
+uniform vec4 uTone1;         // whites (stops), toe, shoulder, padding
+uniform vec3 uLift;          // per-channel lift (0 = neutral)
+uniform vec3 uGamma;         // per-channel gamma (1 = neutral)
+uniform vec3 uGain;          // per-channel gain (1 = neutral)
+uniform float uHdrGradeOn;   // 1 only when any lift/gamma/gain/tone knob is off-neutral (skips the block)
 uniform sampler2D uDepth;    // scene depth (for wet-road screen-space reflection)
 uniform mat4 uInvProj;       // clip → view (reconstruct view position from depth)
 uniform mat4 uProj;          // view → clip  (project the marched ray to screen)
@@ -2068,6 +2153,11 @@ uniform float uGrainTime;    // seconds — animates the grain so it isn't a fro
 uniform float uSharpen;      // unsharp-mask crispness (def 0)
 uniform float uBlackLift;    // raised black floor (def 0.005)
 uniform float uWhitePoint;   // highlight roll-off knee (def 1.0)
+uniform float uAcesA;        // ACES curve num-quad coeff a (def 2.51)
+uniform float uAcesB;        // ACES curve num-lin  coeff b (def 0.03)
+uniform float uAcesC;        // ACES curve den-quad coeff c (def 2.43)
+uniform float uAcesD;        // ACES curve den-lin  coeff d (def 0.59)
+uniform float uAcesE;        // ACES curve den-const coeff e (def 0.14, floored >0)
 uniform float uSpeedBlur;    // radial speed blur amount, 0 = off
 uniform sampler2D uDirt;     // procedural lens-dirt smudge map (generated at init)
 uniform float uLensDirt;     // lens-dirt veil strength (IMAGE & COLOUR knob, def 0.15)
@@ -2076,6 +2166,7 @@ uniform float uHazeStr;      // exhaust heat-haze strength (0 = off; boost pushe
 uniform float uHazeTime;     // seconds — scrolls the shimmer upward
 uniform float uShaftDecay;   // screen-space sun-shaft per-tap falloff (def 0.82)
 uniform float uFlareStreak;  // anamorphic flare horizontal tightness (def 7.0)
+uniform float uFlareStreak2; // second thin hot-core flare streak strength (def 0.5)
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
@@ -2096,6 +2187,48 @@ vec3 caScene(vec2 uv) {
   return vec3(texture(uScene, uv + d * a).r, texture(uScene, uv).g, texture(uScene, uv - d * a).b);
 }
 
+// Five overlapping exposure masks in log2 stops around 18% middle grey.
+void gradeZoneWeights(float y, out vec4 w0, out float wWhite) {
+  float z = log2(max(y, 1e-6) / 0.18);
+  // ACES compresses roughly the bottom four linear stops into the first few
+  // display values. Wider low-end masks keep BLACKS and SHADOWS visible after
+  // that compression instead of letting the later black-floor clamp erase them.
+  w0.x = 1.0 - smoothstep(-4.0, -0.75, z);
+  w0.y = smoothstep(-4.0, -1.5, z) * (1.0 - smoothstep(-1.0, 0.75, z));
+  w0.z = smoothstep(-2.5, -0.5, z) * (1.0 - smoothstep(0.5, 2.5, z));
+  w0.w = smoothstep(0.0, 1.5, z) * (1.0 - smoothstep(3.0, 5.0, z));
+  wWhite = smoothstep(2.5, 5.0, z);
+}
+
+// Monotonic power curves pivoted at middle grey. Toe affects only luminance
+// below the pivot; shoulder affects only luminance above it. RGB is rescaled by
+// the luminance ratio, preserving hue and making zero on both controls identity.
+vec3 applyToeShoulder(vec3 c, float toe, float shoulder) {
+  c = max(c, vec3(0.0));
+  float oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6);
+  float exponent = oldY < 0.18
+    ? exp2(clamp(toe, -1.0, 1.0))
+    : exp2(clamp(-shoulder, -1.0, 1.0));
+  float newY = 0.18 * pow(oldY / 0.18, exponent);
+  return c * (newY / max(oldY, 1e-6));
+}
+
+vec3 applyHdrGrade(vec3 c) {
+  vec3 lift = uLift;
+  vec3 gain = max(uGain, vec3(1e-3));
+  vec3 invGamma = 1.0 / max(uGamma, vec3(1e-3));
+  c = lift + (gain - lift) * pow(max(c, vec3(0.0)), invGamma);
+
+  float y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 1e-6);
+  vec4 w0; float wWhite;
+  gradeZoneWeights(y, w0, wWhite);
+  float stops = dot(w0, uTone0) + wWhite * uTone1.x;
+  c *= exp2(clamp(stops, -4.0, 4.0));
+
+  c = applyToeShoulder(c, uTone1.y, uTone1.z);
+  return max(c, vec3(0.0));
+}
+
 // ACES fitted filmic tone-map (Krzysztof Narkowicz's approximation — the
 // a=2.51,b=0.03,c=2.43,d=0.59,e=0.14 curve; NOT Stephen Hill's fit).
 // Preserves colour ratios better than Reinhard; keeps darks dark, rolls off highlights.
@@ -2105,8 +2238,12 @@ vec3 caScene(vec2 uv) {
 // presets and the pixel-diff baselines — is hand-calibrated on top of that direct
 // output. Adding a gamma encode here is therefore a deliberate, all-baselines-
 // regenerating change, not a drop-in fix; leave it unless re-grading the game.
+// Coefficients come from the TONE CURVE tuner knobs (uAcesA..E). Their defaults
+// (2.51/0.03/2.43/0.59/0.14) reproduce the shipped Narkowicz curve byte-for-byte
+// — same values, same expression, so the default output is bit-identical. e is
+// floored >0 by the slider min so the denominator can't reach 0 for x>=0.
 vec3 acesTonemap(vec3 x) {
-  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  float a = uAcesA, b = uAcesB, c = uAcesC, d = uAcesD, e = uAcesE;
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
@@ -2153,13 +2290,20 @@ void main() {
   // player's tailpipe screen position — refracts (UV-warps) the scene fetch
   // inside a soft elliptical region. Gaussian falloff keeps the warp local;
   // the travelling phase (uHazeTime) makes it boil upward frame to frame.
+  // Skip the warp on car-paint pixels (SSR alpha tag): from chase cam the
+  // plume sits on the rear body, and warping those UVs made the car look
+  // wavy whenever throttle was held (exhaustPop > 0). Air/road behind still
+  // shimmers.
   vec2 hazeUV = vUV;
   if (uHazeStr > 0.002) {
-    vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.045)) * vec2(2.4, 1.1);   // tall plume, centred above the pipe
-    float hm = exp(-dot(hd, hd) * 55.0) * uHazeStr;
-    if (hm > 0.003) {
-      float hp = vUV.y * 90.0 - uHazeTime * 11.0;
-      hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+    float carHere = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
+    if (carHere < 0.25) {
+      vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.08)) * vec2(3.2, 1.0);   // tall plume, centred above the pipe
+      float hm = exp(-dot(hd, hd) * 70.0) * uHazeStr;
+      if (hm > 0.003) {
+        float hp = vUV.y * 90.0 - uHazeTime * 11.0;
+        hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+      }
     }
   }
   vec4 scn = texture(uScene, hazeUV);   // one fetch: .rgb colour + .a SSR car tag
@@ -2469,6 +2613,12 @@ void main() {
     }
   }
 
+  // Professional HDR grade runs after all linear-light bloom/shaft composition
+  // and before the display-referred ACES curve. Gated: at neutral knobs the
+  // whole block is an identity that still cost ~20 ALU + 4 transcendentals
+  // per pixel — uHdrGradeOn is 1 only when a knob is actually off-neutral.
+  if (uHdrGradeOn > 0.5) c = applyHdrGrade(c);
+
   // Filmic tone-map (ACES) + colour grading. WHITE POINT scales the input knee:
   // lower clips highlights sooner (punchy), higher preserves highlight detail.
   c = acesTonemap(c / uWhitePoint);
@@ -2498,9 +2648,9 @@ void main() {
     float streakY = exp(-abs(vUV.y - uSunUV.y) * 110.0);
     float streakX = exp(-abs(vUV.x - uSunUV.x) * uFlareStreak);   // FLARE STREAK knob (def 7.0)
     flare += vec3(1.0, 0.80, 0.52) * streakY * streakX * 0.75;
-    // A second thinner hot core streak.
+    // A second thinner hot core streak (FLARE CORE STREAK knob, def 0.5).
     float streakX2 = exp(-abs(vUV.x - uSunUV.x) * 10.0);
-    flare += vec3(1.0, 0.92, 0.78) * exp(-abs(vUV.y - uSunUV.y) * 320.0) * streakX2 * 0.5;
+    flare += vec3(1.0, 0.92, 0.78) * exp(-abs(vUV.y - uSunUV.y) * 320.0) * streakX2 * uFlareStreak2;
 
     // Lens ghost circles along sun-to-center axis
     vec2 toCenter = vec2(0.5) - uSunUV;

@@ -42,9 +42,15 @@
   <div class="row"><span class="k">Livery</span><select id="ui-livery"></select></div>
   <div class="row"><span class="k">Engine</span><select id="ui-engine"></select></div>
   <div class="row"><span class="k">Aero</span><select id="ui-aero"></select></div>
+  <div class="row"><span class="k">Suspension</span><select id="ui-suspension"></select></div>
   <div class="row"><span class="k">Brakes</span><select id="ui-brakes"></select></div>
+  <div class="row"><span class="k">Tyres</span><select id="ui-tyres"></select></div>
   <div class="row"><span class="k">Gearbox</span><select id="ui-gearbox"></select></div>
   <div class="row"><span class="k">ERS</span><select id="ui-ers"></select></div>
+  <div class="row"><span class="k">Fuel</span><select id="ui-fuel"></select></div>
+  <div class="row"><span class="k">After-fire</span><input id="ui-exhaust-flame" type="checkbox"></div>
+  <div class="row"><span class="k">Brake heat</span><input id="ui-brake-glow" type="checkbox"></div>
+  <div class="row"><span class="k">ERS deploy</span><input id="ui-ers-deploy" type="checkbox"></div>
   <div class="row"><span class="k">Light</span><select id="ui-tod"></select></div>
   <div class="row"><span class="k">Rig</span><select id="ui-rig"></select></div>
   <div class="row"><span class="k">Reflect</span><input id="ui-refl" type="range" min="0" max="1" step="0.05" style="width:120px"></div>
@@ -60,6 +66,7 @@
 <script src="../js/car3d.js"></script>
 <script src="../js/liveries.js"></script>
 <script src="../js/liverytex.js"></script>
+<script src="../js/game/carmesh.js"></script>
 <script>
 "use strict";
 (function () {
@@ -67,6 +74,7 @@
   const errEl = document.getElementById("err");
   const fail = (m) => { errEl.style.display = "grid"; errEl.textContent = m; };
   if (!GLX.init(canvas)) { fail("WebGL2 unavailable"); return; }
+  CarMesh.init(GLX);
 
   // Car is drawn through an X-reflection: the in-race car model matrix is a
   // reflection (det −1), and the decal UVs are authored for that handedness, so
@@ -77,35 +85,6 @@
   // ---- URL params ----
   const Q = new URLSearchParams(location.search);
   const qp = (k, d) => Q.has(k) ? Q.get(k) : d;
-
-  // ---- decal mesh (mirrors game.js carDecalData; U pre-flipped for REFLECT_X) ----
-  function carDecalData(aLvl) {
-    const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
-    const out = { pos: [], nrm: [], uv: [], idx: [] };
-    const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
-    const quad = (c, n, region) => {
-      const u = uvOf(region), i = out.pos.length / 3;
-      const uvs = [[u.uR, u.vB], [u.uL, u.vB], [u.uL, u.vT], [u.uR, u.vT]];
-      for (let k = 0; k < 4; k++) { out.pos.push(c[k][0], c[k][1], c[k][2]); out.nrm.push(n[0], n[1], n[2]); out.uv.push(uvs[k][0], uvs[k][1]); }
-      out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
-    };
-    const yB = 0.19, yT = 0.45, zF = 0.46, zR = -0.34;
-    quad([[0.715, yB, zF], [0.715, yB, zR], [0.715, yT, zR], [0.715, yT, zF]], [1, 0, 0], R.titleA);
-    quad([[-0.715, yB, zR], [-0.715, yB, zF], [-0.715, yT, zF], [-0.715, yT, zR]], [-1, 0, 0], R.titleA);
-    quad([[-0.15, 0.565, -0.62], [0.15, 0.565, -0.62], [0.15, 0.6, -1.28], [-0.15, 0.6, -1.28]], [0, 1, 0.06], R.crest);
-    const fX = 0.023, fyB = 0.655, fyT = 0.945, fzF = -0.82, fzR = -1.56;
-    quad([[fX, fyB, fzF], [fX, fyB, fzR], [fX, fyT, fzR], [fX, fyT, fzF]], [1, 0, 0], R.fin);
-    quad([[-fX, fyB, fzR], [-fX, fyB, fzF], [-fX, fyT, fzF], [-fX, fyT, fzR]], [-1, 0, 0], R.fin);
-    quad([[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]], [0, 1, 0.05], R.num);
-    quad([[-0.14, 0.556, 1.16], [0.14, 0.556, 1.16], [0.14, 0.504, 1.66], [-0.14, 0.504, 1.66]], [0, 1, 0.10], R.titleB);
-    quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
-    quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
-    const nb = Car3D.numberBoard(aLvl == null ? 2 : aLvl);   // tracks the rear wing (mirrors game.js)
-    const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
-    quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
-    quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
-    return out;
-  }
 
   // ---- lighting rigs + point lights ----
   // Light record layout (15 floats): pos(3) energy(3) radius dir(3) cone(3) spot on
@@ -165,6 +144,7 @@
   const S = {
     team: qp("team", "mclaren"),
     livery: qp("livery", null),
+    colors: null,
     num: qp("num", null),
     parts: {},
     az: parseFloat(qp("az", "35")), el: parseFloat(qp("el", "14")), dist: parseFloat(qp("dist", "6.2")),
@@ -180,9 +160,11 @@
     hud: qp("hud", "1") !== "0",
     spin: qp("spin", "0") !== "0",
     sweep: qp("sweep", "0") !== "0",     // a bright point light orbiting the car (reflection test)
+    effects: { exhaustFlame: false, brakeGlow: false, ersDeploy: false, boostFlame: false },
   };
+  const PART_CATS = ["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel"];
   let sweepA = 0;
-  for (const cat of ["engine", "aero", "brakes", "gearbox", "tyres", "ers", "suspension", "fuel"]) {
+  for (const cat of PART_CATS) {
     if (Q.has(cat)) S.parts[cat] = Q.get(cat);
   }
   if (!S.hud) document.getElementById("hud").style.display = "none";
@@ -213,7 +195,7 @@
   function resolveLiv(team) {
     const list = liveryList(team);
     const l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
-    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
+    return { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              noseStripe: l.noseStripe || null };
   }
@@ -225,13 +207,13 @@
   function rebuild() {
     const team = teamObj();
     const liv = resolveLiv(team);
-    const tiers = Parts.getVisualTiers(S.parts, team.engine);
+    const tiers = Parts.getVisualTiers(S.parts, team);
     const num = driverNum(team);
     if (carMesh) GLX.freeMesh(carMesh);
     carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
-    // Rebuild the decal mesh every time — the rear-wing number height tracks aero.
-    if (decalMesh && GLX.freeMesh) GLX.freeMesh(decalMesh);
-    if (GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData(Car3D.aeroLevelOf(tiers)));
+    // Shared runtime implementation: same body anchors, segmentation and bounded
+    // cache as the race renderer.
+    decalMesh = CarMesh.getCarDecalMesh(Car3D.aeroLevelOf(tiers), tiers, false);
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
     paint = paintFromRefl(S.refl);   // kept live in frame() too, so CARVIEW.set({refl}) responds without a rebuild
@@ -277,7 +259,7 @@
     }
   }
 
-  let ready = false;
+  let ready = false, frameSeq = 0;
   function frame() {
     GLX.resize();
     if (S.spin) S.az = (S.az + 0.4) % 360;
@@ -304,7 +286,24 @@
     if (paint) Object.assign(paint, paintFromRefl(S.refl));   // live reflection strength (sparkle/doubleSided untouched by draw, harmless to reassign)
     if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
     if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
+    const effectWorld = (y, z, x) => {
+      const W = new Float32Array(REFLECT_X);
+      W[12] += W[0] * (x || 0) + W[4] * y + W[8] * z;
+      W[13] += W[1] * (x || 0) + W[5] * y + W[9] * z;
+      W[14] += W[2] * (x || 0) + W[6] * y + W[10] * z;
+      return W;
+    };
+    if (S.effects.brakeGlow) for (const x of [-0.985, 0.985])
+      GLX.draw(CarMesh.getBrakeRing(), effectWorld(0.34, 1.70, x),
+        { emissive: 1, roughness: 0.9, specular: 0, alpha: 0.9, noAlphaWrite: true });
+    if (S.effects.exhaustFlame)
+      GLX.draw(CarMesh.getExhaustFlame(), effectWorld(0.40, -2.63, 0),
+        { emissive: 1, roughness: 1, specular: 0, alpha: 0.85, noAlphaWrite: true });
+    if (S.effects.ersDeploy)
+      GLX.draw(CarMesh.getErsLight(), effectWorld(0.605, -2.615, 0),
+        { emissive: 1, roughness: 1, specular: 0, alpha: 0.9, noAlphaWrite: true });
     GLX.present({ exposure: S.exp });
+    frameSeq++;
     ready = true;
     requestAnimationFrame(frame);
   }
@@ -319,29 +318,34 @@
       sel.appendChild(o);
     }
   }
-  function partOptions(catId) {
+  function partOptions(catId, team) {
     const cat = Parts.CATALOG.find(c => c.id === catId);
-    return cat ? cat.options : [];
+    return cat ? cat.options.filter(o => Parts.isOptionAvailable(o, team)) : [];
   }
   function buildUI() {
     const team = teamObj();
     opt(document.getElementById("ui-team"), Teams.LIST, S.team);
     opt(document.getElementById("ui-livery"), liveryList(team), S.livery || "default");
-    for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"]) {
+    for (const cat of PART_CATS) {
       const cur = S.parts[cat] || (Parts.DEFAULTS && Parts.DEFAULTS[cat]) || "";
-      opt(document.getElementById("ui-" + cat), partOptions(cat), cur);
+      opt(document.getElementById("ui-" + cat), partOptions(cat, team), cur);
     }
     opt(document.getElementById("ui-tod"), Object.keys(TOD).map(k => ({ id: k, name: k })), S.tod);
     opt(document.getElementById("ui-rig"), RIGS.map(k => ({ id: k, name: k })), S.rig);
     document.getElementById("ui-refl").value = S.refl;
+    document.getElementById("ui-exhaust-flame").checked = S.effects.exhaustFlame;
+    document.getElementById("ui-brake-glow").checked = S.effects.brakeGlow;
+    document.getElementById("ui-ers-deploy").checked = S.effects.ersDeploy;
   }
   document.getElementById("ui-team").onchange = e => { S.team = e.target.value; S.livery = null; buildUI(); rebuild(); };
   document.getElementById("ui-livery").onchange = e => { S.livery = e.target.value; rebuild(); };
-  for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"])
+  for (const cat of PART_CATS)
     document.getElementById("ui-" + cat).onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
   document.getElementById("ui-tod").onchange = e => { S.tod = e.target.value; };
   document.getElementById("ui-rig").onchange = e => { S.rig = e.target.value; };
   document.getElementById("ui-refl").oninput = e => { S.refl = parseFloat(e.target.value); };
+  for (const [id, key] of [["ui-exhaust-flame","exhaustFlame"], ["ui-brake-glow","brakeGlow"], ["ui-ers-deploy","ersDeploy"]])
+    document.getElementById(id).onchange = e => { S.effects[key] = !!e.target.checked; };
 
   // ---- mouse / keys ----
   let drag = null;
@@ -367,6 +371,8 @@
   // ---- headless API ----
   window.CARVIEW = {
     get ready() { return ready; },
+    get frame() { return frameSeq; },
+    get effects() { return { ...S.effects }; },
     angle(az, el, dist) { if (az != null) S.az = az; if (el != null) S.el = el; if (dist != null) S.dist = dist; },
     // Add a point light for reflection testing: addLight([x,y,z], [r,g,b], intensity, radius)
     addLight(pos, col, intensity, radius) { S.lights.push({ pos, col: col || [1, 1, 1], intensity: intensity != null ? intensity : 2, radius: radius || 16 }); },
@@ -375,7 +381,13 @@
       o = o || {};
       let reb = false;
       for (const k of ["team", "livery", "num"]) if (o[k] !== undefined) { S[k] = o[k]; reb = true; }
+      if (o.colors !== undefined) { S.colors = o.colors; reb = true; }
       if (o.parts) { Object.assign(S.parts, o.parts); reb = true; }
+      if (o.effects) {
+        Object.assign(S.effects, o.effects);
+        S.effects.boostFlame = false;
+        buildUI();
+      }
       if (o.lights !== undefined) S.lights = o.lights || [];
       for (const k of ["az", "el", "dist", "look", "lookX", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
       if (reb) { buildUI(); rebuild(); }

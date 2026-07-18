@@ -30,6 +30,117 @@ async function startRace(page, id) {
 }
 
 test.describe("Apex 26 — elevation & banking tracks", () => {
+  test("banking pivots around the centreline with smooth edge transitions", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const audits = await page.evaluate(() => {
+      return ["zandvoort", "madrid"].map((id) => {
+        const def = Tracks.LIST.find((entry) => entry.id === id);
+        const track = Tracks.buildCenterline(def);
+        const stepM = 1;
+        let maxCentreLift = 0, maxPivotError = 0, maxEdgeGrade = 0;
+        for (let s = 0; s < track.total; s += stepM) {
+          const centre = Tracks.banking(track, s, 0);
+          maxCentreLift = Math.max(maxCentreLift, Math.abs(centre?.dy || 0));
+          const leftEdge = Tracks.banking(track, s, -Infinity)?.dy || 0;
+          const edge = Tracks.banking(track, s, Infinity)?.dy || 0;
+          const nextEdge = Tracks.banking(track, s + stepM, Infinity)?.dy || 0;
+          maxPivotError = Math.max(maxPivotError, Math.abs(leftEdge + edge));
+          maxEdgeGrade = Math.max(maxEdgeGrade, Math.abs(nextEdge - edge) / stepM);
+        }
+        return { id, maxCentreLift, maxPivotError, maxEdgeGrade };
+      });
+    });
+
+    for (const audit of audits) {
+      expect(audit.maxCentreLift, `${audit.id} centreline lift`).toBeLessThan(0.01);
+      expect(audit.maxPivotError, `${audit.id} edge symmetry`).toBeLessThan(0.01);
+      expect(audit.maxEdgeGrade, `${audit.id} bank transition grade`).toBeLessThan(0.08);
+    }
+  });
+
+  test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((entry) => entry.id === "zandvoort");
+      const track = Tracks.buildCenterline(def);
+      const rollDeg = (frac) => {
+        const bank = Tracks.banking(track, frac * track.total, 0);
+        return Math.abs((bank?.roll || 0) * 180 / Math.PI);
+      };
+      return {
+        turns: [rollDeg(0.1575), rollDeg(0.9687)],
+        oldStraightZones: [rollDeg(0.135), rollDeg(0.915)],
+      };
+    });
+
+    expect(result.turns[0], "Hugenholtz banking").toBeGreaterThan(15);
+    expect(result.turns[1], "Arie Luyendyk banking").toBeGreaterThan(15);
+    expect(result.oldStraightZones[0], "old Hugenholtz approach zone").toBeLessThan(1);
+    expect(result.oldStraightZones[1], "old final-straight zone").toBeLessThan(1);
+  });
+
+  test("Madrid converts La Monumental's 24 percent bank to degrees", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const rollDeg = await page.evaluate(() => {
+      const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+      const track = Tracks.buildCenterline(def);
+      const bank = Tracks.banking(track, 0.75 * track.total, 0);
+      return Math.abs((bank?.roll || 0) * 180 / Math.PI);
+    });
+
+    expect(rollDeg).toBeGreaterThan(13);
+    expect(rollDeg).toBeLessThan(14);
+  });
+
+  test("bank roll matches the road surface slope", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+      const track = Tracks.buildCenterline(def);
+      const s = 0.75 * track.total;
+      const w = track.hw[Math.round(0.75 * track.n) % track.n];
+      const leftY = Tracks.banking(track, s, -w)?.dy || 0;
+      const rightY = Tracks.banking(track, s, w)?.dy || 0;
+      const roll = Tracks.banking(track, s, 0)?.roll || 0;
+      return {
+        roll,
+        surfaceRoll: Math.atan2(rightY - leftY, 2 * w),
+      };
+    });
+
+    expect(result.roll).toBeCloseTo(result.surfaceRoll, 5);
+  });
+
+  test("chase camera follows the road bank instead of showing a sideways wall", async ({ page }) => {
+    await startRace(page, "madrid");
+    const result = await page.evaluate(() => {
+      const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+      const track = Tracks.buildCenterline(def);
+      const trackRoll = Tracks.banking(track, 0.75 * track.total, 0)?.roll || 0;
+      window.__apex.jump(0.75, 30, 0);
+      window.__apex.camera("chase");
+      window.__apex.snapCam();
+      const bankedRoll = window.__apex.camState().roll;
+      window.__apex.orbit(0.75, 45, 18, 45);
+      const debugRoll = window.__apex.camState().roll;
+      window.__apex.camera("chase");
+      window.__apex.jump(0.60, 30, 0);
+      window.__apex.snapCam();
+      const flatRoll = window.__apex.camState().roll;
+      return { trackRoll, bankedRoll, debugRoll, flatRoll };
+    });
+
+    expect(Math.abs(result.bankedRoll) * 180 / Math.PI).toBeGreaterThan(13);
+    expect(Math.abs(result.bankedRoll) * 180 / Math.PI).toBeLessThan(14);
+    expect(result.bankedRoll).toBeCloseTo(-result.trackRoll, 4);
+    expect(result.debugRoll).toBe(0);
+    expect(Math.abs(result.flatRoll) * 180 / Math.PI).toBeLessThan(1);
+  });
+
   for (const id of ELEVATION_TRACKS) {
     test(`${id}: slope gravity behaves + road-following holds on the grade`, async ({ page }) => {
       const errors = [];

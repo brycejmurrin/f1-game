@@ -92,11 +92,16 @@ function initRainDrops() {
   // field — light precipitation that reads as drizzle, not a downpour. "rain"
   // keeps the full storm density.
   const drizzle = isWetRoad() && !isRaining();
-  rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? 0.3 : 1)) }, () => ({
+  // DRIZZLE ratios: count/length/fall-speed of a WET-road drizzle relative to a
+  // full storm, each a live knob (defs 0.3/0.5/0.6 reproduce the shipped drizzle).
+  const dzCount = LT.drizzleCount != null ? LT.drizzleCount : 0.3;
+  const dzLen   = LT.drizzleLen   != null ? LT.drizzleLen   : 0.5;
+  const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6;
+  rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? dzCount : 1)) }, () => ({
     x: Math.random() * rainCanvas.width,
     y: Math.random() * rainCanvas.height,
-    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? 0.5 : 1),
-    speed: (380 + Math.random() * 360) * (drizzle ? 0.6 : 1),
+    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? dzLen : 1),
+    speed: (380 + Math.random() * 360) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
     opacity: 0.16 + Math.random() * 0.34,
   }));
 }
@@ -108,13 +113,17 @@ function drawRain(dt) {
   // (one beginPath/stroke instead of one per drop). The blur/motion of a rain field
   // hides that the per-drop opacity is now uniform. Drizzle draws fainter.
   rainCtx2d.strokeStyle = "#afc8e8";
-  rainCtx2d.globalAlpha = isRaining() ? 0.25 : 0.16;   // ~mean of the 0.16..0.50 per-drop range
+  // RAIN OPACITY knob (def 1) scales the streak-layer alpha; def reproduces the
+  // shipped 0.25/0.16 exactly. Clamped to canvas' valid 0..1 globalAlpha range.
+  rainCtx2d.globalAlpha = clamp((isRaining() ? 0.25 : 0.16) * (LT.rainOpacity != null ? LT.rainOpacity : 1), 0, 1);   // ~mean of the 0.16..0.50 per-drop range
   // SPEED-REACTIVE streaks: at speed the rain shears toward the camera's motion
   // and stretches into driving streaks (apparent velocity = fall + car speed).
   // Render-only — reads player.speed, never writes physics state.
   const vk = clamp(((player && player.speed) || 0) / 90, 0, 1);
-  const wind = LT.rainWind + vk * 0.9;
-  const lenMul = 1 + vk * 2;
+  // RAIN SPEED SHEAR: how much apparent wind slants (rainShearWind) and stretches
+  // (rainShearLen) the streaks at speed. Defs 0.9/2 reproduce the shipped shear.
+  const wind = LT.rainWind + vk * (LT.rainShearWind != null ? LT.rainShearWind : 0.9);
+  const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
   rainCtx2d.beginPath();
   for (const d of rainDrops) {
     d.y += d.speed * dt;
@@ -250,12 +259,40 @@ function ttBoardAdd(trackId, entry) {
 
 const { DEFAULT_CUSTOM } = GameTables;
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
-function invalidateCustomMeshCache(cache) {
+function invalidateCustomMeshCache(cache, order) {
   Object.keys(cache).forEach((key) => {
     if (key.indexOf("custom:") !== 0) return;
     if (cache[key] && gfx.freeMesh) gfx.freeMesh(cache[key]);
     delete cache[key];
+    if (order) {
+      const i = order.indexOf(key);
+      if (i >= 0) order.splice(i, 1);
+    }
   });
+}
+// Bound a key→mesh cache to `max` most-recent entries. Evicted meshes are freed
+// via gfx.freeMesh exactly once (deleted from the map before free). `freeOne`
+// optional — defaults to freeMesh(mesh); wheel pairs pass a custom freer.
+function putBoundedMesh(cache, order, key, create, max, freeOne) {
+  if (cache[key]) {
+    if (order[order.length - 1] !== key) {
+      const i = order.indexOf(key);
+      if (i >= 0) order.splice(i, 1);
+      order.push(key);
+    }
+    return cache[key];
+  }
+  const mesh = create();
+  cache[key] = mesh;
+  order.push(key);
+  const free = freeOne || ((m) => { if (m && gfx.freeMesh) gfx.freeMesh(m); });
+  while (order.length > max) {
+    const old = order.shift();
+    const victim = cache[old];
+    delete cache[old];
+    free(victim);
+  }
+  return mesh;
 }
 function syncCustomTeam() {
   const i = Teams.LIST.findIndex((t) => t.id === "custom");
@@ -263,8 +300,8 @@ function syncCustomTeam() {
   Teams.LIST.push(loadCustomTeam());
   invalidateDecalTextures("custom");
   invalidateCustomMeshCache(teamMeshes);
-  invalidateCustomMeshCache(playerBodies);
-  invalidateCustomMeshCache(cockpitBodies);
+  invalidateCustomMeshCache(playerBodies, playerBodyOrder);
+  invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
 }
 function hexToRgb(h) {
   return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
@@ -409,6 +446,12 @@ const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 18;         // crawl speed on grass
 const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
+function isErsDeploying(c) {
+  if (!c || c.energy <= 0 || !(c.boostOn || c.otT > 0)) return false;
+  const taper = c.otT > 0 ? 1 :
+    clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+  return DEPLOY_A * taper > 0.4;
+}
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 const { TIER_V } = GameTables;
@@ -634,6 +677,22 @@ function hueRotateTint(rgb, deg) {
     m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072)),
   ];
 }
+// Scale an RGB colour's SATURATION around its luma-grey anchor by `amt`
+// (1 = unchanged, 0 = achromatic grey, >1 = more vivid). Same NTSC-luma grey
+// anchor as hueRotateTint, so a neutral colour stays put. Returns a fresh array
+// (never mutates the palette/frame source). Used by SKY/FOG COLOUR SATURATION.
+function satAdjust(rgb, amt) {
+  if (!rgb || amt === 1) return rgb;
+  const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;   // luma (grey anchor)
+  // Clamp to >=0: at amt>1 a channel below the grey anchor can overshoot past
+  // black into negative radiance, which then subtracts in the additive sky/fog/
+  // reflection mixes (skyZenith/Horizon + fogColor feed the dome, glass, wet
+  // road and SSR fallback) and inverts hue. Default amt===1 early-returns above,
+  // so this stays byte-identical at the shipped setting.
+  return [Math.max(0, m + (rgb[0] - m) * amt),
+          Math.max(0, m + (rgb[1] - m) * amt),
+          Math.max(0, m + (rgb[2] - m) * amt)];
+}
 const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 function fmtTime(t) {
   if (!isFinite(t) || t <= 0) return "-";
@@ -674,9 +733,11 @@ function basisMat(r, u, f, p, out) {
   return out;
 }
 const tmpMat = new Float32Array(16);
+const _groundMat = new Float32Array(16);
 const _cockMat = new Float32Array(16), _cockU = [0, 1, 0];   // stabilized cockpit-interior basis
 const _cockP = [0, 0, 0];   // camera-anchored rig origin (see the cockpit branch)
 const tmpR = [0, 0, 0], tmpF = [0, 0, 0], tmpU = [0, 1, 0], tmpP = [0, 0, 0];
+const _groundR = [0, 0, 0], _groundF = [0, 0, 0], _groundU = [0, 1, 0];
 // Pre-allocated scratch matrices — zero-GC hot-path matrix math.
 const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 // The in-race car model matrix is a REFLECTION (det −1, see basisMat/tmpU). The
@@ -750,7 +811,7 @@ function resolveLivery(team) {
 // read the cached playerVisualKey (refreshed in recomputePlayerMods) below.
 function partsVisualKey(teamId) {
   const team = teamById(teamId);
-  const vt = Parts.getVisualTiers(getTeamParts(teamId), team ? team.engine : null);
+  const vt = Parts.getVisualTiers(getTeamParts(teamId), team);
   // Key on the resolved OPTION id per category — the option fully determines the
   // visual (engine airbox, aero package, brake ducts/caliper, tyre compound all
   // vary per option now, not just per tier), so the mesh cache rebuilds whenever
@@ -764,6 +825,7 @@ function partsVisualKey(teamId) {
 // reads these directly — cheap per-frame variable reads, not a per-frame
 // Parts.getVisualTiers() call). Refreshed whenever parts change (below).
 let playerTyreTier = 1, playerBrakesTier = 1, playerTyreId = "medium", playerBrakeId = "standard";
+let playerTyreVisual = null, playerBrakeVisual = null;
 // Full 8-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
 // once here (parts only change from the setup screen, which calls this on close)
 // so the render loop reads a cached string instead of rebuilding it via
@@ -775,17 +837,19 @@ function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const setup = getTeamParts(team.id);
-  const mods = Parts.getMods(setup, team.engine);
+  const mods = Parts.getMods(setup, team);
   playerMods = {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
     cornering: Parts.statMult(stats.cornering) * mods.cornering,
     braking:   Parts.statMult(stats.braking)   * mods.braking,
   };
-  const vt = Parts.getVisualTiers(setup, team.engine);
+  const vt = Parts.getVisualTiers(setup, team);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
   playerTyreId = vt._ids ? vt._ids.tyres : "medium";
   playerBrakeId = vt._ids ? vt._ids.brakes : "standard";
+  playerTyreVisual = vt._visual && vt._visual.tyres || null;
+  playerBrakeVisual = vt._visual && vt._visual.brakes || null;
   // Key on the full set of resolved option ids + the chosen livery (see partsVisualKey).
   playerVisualKey = (vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
                              : Parts.CATALOG.map((c) => vt[c.id]).join(""))
@@ -801,8 +865,11 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
+    const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const savedParts = ti === teamIdx ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     team.drivers.forEach((d, di) => {
       const isP = ti === teamIdx && di === driverIdx;
+      const resolvedParts = isP ? savedParts : factoryParts;
       // Spread the field's preferred lanes evenly across the track width (with a
       // little jitter) so the AI fan out instead of all stacking on the racing
       // line. Used as a fraction of half-width in updateCar.
@@ -812,7 +879,8 @@ function makeCars() {
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num, isPlayer: isP,
         color: team.color, tier: team.tier,
-        fuelId: getTeamParts(team.id).fuel || "standard",   // tints the exhaust flame
+        fuelId: resolvedParts.ids.fuel,
+        fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otCool: 0, deploying: false,
@@ -860,11 +928,16 @@ function buildCarData(team) {
     try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: liv.c1 }); }
     catch (e) { /* any parse trouble: fall through to the procedural car */ }
   }
-  return Car3D.build(liv.c1, liv.c2, { livery: liv, num: team.drivers && team.drivers[0] && team.drivers[0].num });
+  const factorySetup = Parts.getFactorySetup(team);
+  return Car3D.build(liv.c1, liv.c2, {
+    livery: liv,
+    num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    parts: Parts.getVisualTiers(factorySetup, team),
+  });
 }
 
 function teamMesh(team) {
-  const key = team.id + ":" + getLiveryId(team.id);   // rebuild when the paint job changes
+  const key = team.id + ":" + getLiveryId(team.id) + ":" + Parts.factoryKey(team);
   if (!teamMeshes[key]) teamMeshes[key] = gfx.createMesh(buildCarData(team));
   return teamMeshes[key];
 }
@@ -876,7 +949,7 @@ CarMesh.init(gfx);
 // js/game/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
-        getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight,
+        getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, getPedalBar } = CarMesh;
 const _decalTexCache = {};
@@ -911,29 +984,43 @@ function carDecalNum(team, car) {
 // A team's rear-wing downforce level (0..4), driving which endplate-number mesh
 // to draw. getVisualTiers is a small 8-category loop and the resulting mesh is
 // cached per level, so resolving this per car/frame is negligible.
-const _aeroLevelCache = new Map();   // team.id -> {val, rev}; invalidated by store.rev
-function teamAeroLevel(team) {
-  if (!Car3D.aeroLevelOf) return 2;   // stale-bundle guard → medium-DF board
-  const c = _aeroLevelCache.get(team.id);
-  if (c && c.rev === store.rev) return c.val;
-  const val = Car3D.aeroLevelOf(Parts.getVisualTiers(getTeamParts(team.id), team.engine));
-  _aeroLevelCache.set(team.id, { val, rev: store.rev });
-  return val;
+const _aeroLevelCache = new Map();   // "player|factory:team.id" -> {val, rev}
+function teamDecalState(team, usePlayerSetup) {
+  const key = (usePlayerSetup ? "player:" : "factory:") + team.id;
+  const rev = usePlayerSetup ? store.rev : -1;
+  const c = _aeroLevelCache.get(key);
+  if (c && c.rev === rev) return c;
+  const setup = usePlayerSetup ? getTeamParts(team.id) : Parts.getFactorySetup(team);
+  const parts = Parts.getVisualTiers(setup, team);
+  const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2, parts, rev };
+  _aeroLevelCache.set(key, state);
+  return state;
 }
-function drawCarDecals(team, modelMat, night, num, cockpit) {
-  // Cockpit build draws only the forward (nose) number — the rear wing is behind
-  // the camera — so aero level is irrelevant there.
-  const mesh = cockpit ? getCockpitDecalMesh() : getCarDecalMesh(teamAeroLevel(team));
+function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
+  const state = teamDecalState(team, usePlayerSetup);
+  // A loaded GLB is a static body and does not consume procedural part recipes;
+  // keep its overlay on stable default/legacy anchors as setup options change.
+  const legacyBody = !!carModelBuf;
+  const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts) :
+    getCarDecalMesh(state.val, state.parts, legacyBody);
   const tex = getCarDecalTexture(team, num);
-  if (mesh && tex) gfx.drawDecal(mesh, modelMat, tex, { glow: night ? 0.35 : 0 });
+  if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
+// Pooled decal opts — drawCarDecals runs once per drawn car per frame; a fresh
+// literal there was ~20 allocations/frame feeding the night-track GC jitter.
+const _decalOpts = { glow: 0 };
 
 // Player car gets animated wheels: a body-only mesh + four separate wheel meshes
 // the render layer spins (∝ speed) and steers (fronts). Only for the procedural
 // car — a loaded glb model is one piece, so playerBodyMesh returns null and the
 // player falls back to the full static mesh. Wheel meshes are cached per
 // TYRES/BRAKES visual tier below (getPlayerWheelMeshes), not team-keyed.
+// Bounded to the latest N visual keys so parts-expansion doesn't leak GPU meshes.
+const PLAYER_BODY_CACHE_MAX = 3;
+const COCKPIT_BODY_CACHE_MAX = 3;
+const WHEEL_MESH_CACHE_MAX = 8;
 const playerBodies = {};
+const playerBodyOrder = [];
 const WHEELS = [
   { x: -0.79, y: 0.34, z:  1.7, front: true,  rear: false },
   { x:  0.79, y: 0.34, z:  1.7, front: true,  rear: false },
@@ -942,6 +1029,8 @@ const WHEELS = [
 ];
 const _wheelLocal = new Float32Array(16);
 const _wheelWorld = new Float32Array(16);
+const _fixedWheelLocal = new Float32Array(16);
+const _fixedWheelWorld = new Float32Array(16);
 const _ringWorld = new Float32Array(16);
 // Scratch opts for AI brake rings — mutated in place per frame so the car loop
 // doesn't allocate a fresh literal per ring (up to ~40/frame in a braking pack).
@@ -952,6 +1041,8 @@ const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaW
 // are depth-tested but write no depth, so drawing them last is visually identical.
 const _shadowMats = [];   // pool of Float32Array(16), reused across frames
 const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shadow caster pass
+const _shadowCars = [];   // parallel refs: the live player transform replaces its stale pooled entry
+const _livePlayerShadowMat = new Float32Array(16);
 let _shadowCount = 0;
 // Deferred car-decal batch (same pattern as the blob shadows above): the car
 // loop used to interleave gfx.draw(body) with gfx.drawDecal per car — ~2
@@ -963,14 +1054,16 @@ const _decalMats = [];    // pool of Float32Array(16), reused across frames
 const _decalTeams = [];
 const _decalNums = [];
 const _decalCockpit = [];
+const _decalSetup = [];
 let _decalCount = 0;
-function queueCarDecals(team, modelMat, num, cockpit) {
+function queueCarDecals(team, modelMat, num, cockpit, usePlayerSetup) {
   let m = _decalMats[_decalCount];
   if (!m) { m = new Float32Array(16); _decalMats[_decalCount] = m; }
   m.set(modelMat);
   _decalTeams[_decalCount] = team;
   _decalNums[_decalCount] = num;
   _decalCockpit[_decalCount] = !!cockpit;
+  _decalSetup[_decalCount] = !!usePlayerSetup;
   _decalCount++;
 }
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
@@ -979,21 +1072,61 @@ function queueCarDecals(team, modelMat, num, cockpit) {
 const _bankScratch = { dy: 0, roll: 0 };
 const _bankScratchP = { dy: 0, roll: 0 };
 
+function cameraFollowsBank(mode) {
+  return mode === "chase" || mode === "far" || mode === "drift" ||
+         mode === "cockpit" || mode === "hood" || mode === "reverse" ||
+         mode === "low" || mode === "tcam" || mode === "rear";
+}
+
+// Build the grounded transform needed by the pre-scene car-shadow pass. The main
+// car loop runs later, after shadow maps are already consumed by the lit shader,
+// so the player matrix must be resolved here instead of reusing last frame's
+// pooled transform (which trails by speed × frame time on slower devices).
+function currentCarGroundMat(c, out, dt) {
+  const cS = lerpS(c.rPrevS, c.s, renderAlpha);
+  const cX = (c.rPrevX === undefined) ? c.x
+           : c.rPrevX + (c.x - c.rPrevX) * renderAlpha;
+  // Predict the same damping step the later body loop will apply, without
+  // mutating xVis twice. Shadow and body therefore share one lateral position.
+  const renderX = c.xVis === undefined ? cX : damp(c.xVis, cX, 30, dt);
+  Tracks.sample(track, cS, smp2);
+  const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
+  tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
+  tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
+  tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
+  const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
+  for (let i = 0; i < 3; i++) {
+    _groundF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
+    _groundR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
+  }
+  _groundU[0] = _groundR[1] * _groundF[2] - _groundR[2] * _groundF[1];
+  _groundU[1] = _groundR[2] * _groundF[0] - _groundR[0] * _groundF[2];
+  _groundU[2] = _groundR[0] * _groundF[1] - _groundR[1] * _groundF[0];
+  if (bankC && bankC.roll) {
+    const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
+    for (let i = 0; i < 3; i++) {
+      const r = _groundR[i], u = _groundU[i];
+      _groundR[i] = r * cr + u * sr;
+      _groundU[i] = u * cr - r * sr;
+    }
+  }
+  return basisMat(_groundR, _groundU, _groundF, tmpP, out);
+}
 
 // The cockpit body: the REAL car (livery, nose, mirrors, number board) minus
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
 const cockpitBodies = {};
+const cockpitBodyOrder = [];
 function cockpitBodyMesh(team) {
   // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
   // is always this team's key — no per-frame partsVisualKey() rebuild.
   const key = team.id + ":" + playerVisualKey;
-  if (!cockpitBodies[key]) {
+  return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
     const liv = resolveLivery(team);
-    cockpitBodies[key] = gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+    return gfx.createMesh(Car3D.build(liv.c1, liv.c2,
       { livery: liv, noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
-        parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
-  }
-  return cockpitBodies[key];
+        parts: Parts.getVisualTiers(getTeamParts(team.id), team) }));
+  }, COCKPIT_BODY_CACHE_MAX);
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
 // steering roll + per-element LCD offsets.
@@ -1018,8 +1151,9 @@ function drawCockpitRig(c, base, dt, paint) {
   gfx.draw(cockpitBodyMesh(c.team), base, paint);
   // Forward decal: the driver number on the nose plate ahead of the driver (the
   // nose is identical to the chase build, so this lands exactly on the plate).
-  // Queued with the field's decals and flushed after the car loop.
-  queueCarDecals(c.team, base, carDecalNum(c.team, c), true);
+  // Queued with the field's decals and flushed after the car loop. The player
+  // cockpit is the one queued decal that renders the PLAYER's setup parts.
+  queueCarDecals(c.team, base, carDecalNum(c.team, c), true, true);
   drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.30, 1.4);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
@@ -1077,31 +1211,44 @@ function playerBodyMesh(team) {
   // key — no per-frame partsVisualKey() rebuild.
   const key = team.id + ":" + playerVisualKey;
   const liv = resolveLivery(team);
-  if (!playerBodies[key]) playerBodies[key] = gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+  return putBoundedMesh(playerBodies, playerBodyOrder, key, () => gfx.createMesh(Car3D.build(liv.c1, liv.c2,
     { livery: liv, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
-      parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine) }));
-  return playerBodies[key];
+      parts: Parts.getVisualTiers(getTeamParts(team.id), team) })), PLAYER_BODY_CACHE_MAX);
 }
 // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
 // colour + caliper accent) so a parts change rebuilds the right mesh instead
 // of drawing stale geometry. Tier "1:1" (both default) matches today's shared
 // wheelMeshF/wheelMeshR exactly — same team-independent, dark-tyre meshes.
+// Bounded to the latest WHEEL_MESH_CACHE_MAX tyre:brake pairs.
 const wheelMeshCache = {};
+const wheelMeshOrder = [];
+function freeWheelPair(m) {
+  if (!m) return;
+  if (gfx.freeMesh) {
+    if (m.F) gfx.freeMesh(m.F);
+    if (m.R) gfx.freeMesh(m.R);
+    if (m.FFixed) gfx.freeMesh(m.FFixed);
+    if (m.RFixed) gfx.freeMesh(m.RFixed);
+  }
+}
 function getPlayerWheelMeshes() {
   const key = playerTyreId + ":" + playerBrakeId;
-  let m = wheelMeshCache[key];
-  if (!m) {
-    const band = (Car3D.TYRE_PIRELLI && Car3D.TYRE_PIRELLI[playerTyreId]) || Car3D.TYRE_BAND[playerTyreTier];
-    const bs = Car3D.BRAKE_STYLE && Car3D.BRAKE_STYLE[playerBrakeId];
-    const caliper = bs ? bs.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
-    const rim = bs && bs.rim;
-    const grooved = playerTyreId === "intermediate";
-    m = wheelMeshCache[key] = {
-      F: gfx.createMesh(Car3D.buildWheel(0.32, band, caliper, rim, grooved)),
-      R: gfx.createMesh(Car3D.buildWheel(0.38, band, caliper, rim, grooved)),
+  return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
+    const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
+    const caliper = playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
+    const rim = playerBrakeVisual && playerBrakeVisual.rim;
+    const grooved = !!(playerTyreVisual && playerTyreVisual.grooved);
+    const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, grooved,
+      playerTyreVisual, playerBrakeVisual);
+    const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, grooved,
+      playerTyreVisual, playerBrakeVisual);
+    return {
+      F: gfx.createMesh(front.rotating),
+      R: gfx.createMesh(rear.rotating),
+      FFixed: gfx.createMesh(front.fixed),
+      RFixed: gfx.createMesh(rear.fixed),
     };
-  }
-  return m;
+  }, WHEEL_MESH_CACHE_MAX, freeWheelPair);
 }
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
 // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
@@ -1126,6 +1273,13 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
     L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
     gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
+    const F = _fixedWheelLocal;
+    F[0] = cs*ws; F[1] = 0; F[2] = -ss*ws; F[3] = 0;
+    F[4] = 0; F[5] = 1; F[6] = 0; F[7] = 0;
+    F[8] = ss; F[9] = 0; F[10] = cs; F[11] = 0;
+    F[12] = L[12]; F[13] = L[13]; F[14] = L[14]; F[15] = 1;
+    M4.mulTo(_fixedWheelWorld, base, F);
+    gfx.draw(wd.rear ? wm.RFixed : wm.FFixed, _fixedWheelWorld, opt);
     // Hot brake discs: an emissive ring floating just off the outer wheel face,
     // ramping with the render-only brakeHeat (bright orange → blooms when hot).
     const heat = c.brakeHeat || 0;
@@ -1156,6 +1310,11 @@ async function loadCarModel(url) {
     carModelBuf = buf;
     for (const k in teamMeshes) { if (gfx.freeMesh) gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
     for (const k in playerBodies) { if (gfx.freeMesh) gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
+    playerBodyOrder.length = 0;
+    for (const k in cockpitBodies) { if (gfx.freeMesh) gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
+    cockpitBodyOrder.length = 0;
+    for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
+    wheelMeshOrder.length = 0;
     return true;
   } catch (e) { return false; }
 }
@@ -1181,7 +1340,7 @@ function loadTrack(idx) {
       gfx.freeMesh(track.meshes.road);
       gfx.freeMesh(track.meshes.terrain);
       if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
-      if (track.meshes.glass) gfx.freeMesh(track.meshes.glass);
+      if (track.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.glass); else gfx.freeMesh(track.meshes.glass); }
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
       gfx.freeMesh(track.meshes.gate);
       gfx.freeMesh(track.meshes.startline);
@@ -1625,7 +1784,7 @@ function applyRaceSettings() {
     frame.ambientGround = frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
     // light) so heavy overcast reads atmospheric, not just a flat grey dim.
-    frame.fogDensity = (frame.fogDensity || 0.0016) * 1.7;
+    frame.fogDensity = (frame.fogDensity || 0.0016) * (LT.overcastFogMul != null ? LT.overcastFogMul : 1.7);
     if (raceTimeOfDay === "default") { frameSky.horizon = [0.74, 0.73, 0.74]; frame.skyHorizon = frameSky.horizon; }
     // A night session must stay dark under overcast too — same guard the wet/fog
     // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
@@ -1636,7 +1795,7 @@ function applyRaceSettings() {
   } else if (raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     frameSky.cloud = Math.min(0.85, _cloudBase + 0.35);
-    frame.fogDensity = (frame.fogDensity || 0.0017) * 3.0;
+    frame.fogDensity = (frame.fogDensity || 0.0017) * (LT.fogWxMul != null ? LT.fogWxMul : 3.0);
     const fc = [0.74, 0.76, 0.78];
     frame.fogColor = fc;
     // Don't erase an explicit twilight horizon (dawn magenta / dusk coral) — only
@@ -1712,6 +1871,21 @@ function applyRaceSettings() {
       frame.ambientSky = [frame.ambientSky[0] * ar * skyG, frame.ambientSky[1] * ag * skyG, frame.ambientSky[2] * abb * skyG];
       frame.ambientGround = [frame.ambientGround[0] * ar * grdG, frame.ambientGround[1] * ag * grdG, frame.ambientGround[2] * abb * grdG];
     }
+    // SKY COLOUR SATURATION — push the sky dome toward grey (0) or oversaturate
+    // (>1) around its luma anchor. Fresh arrays; the reflected sky (glass / wet
+    // road / SSR fallback reads frame.skyZenith/Horizon) is re-synced so the
+    // mirror matches the dome the player sees. Default 1 = exact no-op.
+    const _sat = LT.skyColorSat != null ? LT.skyColorSat : 1;
+    if (_sat !== 1) {
+      if (frameSky.zenith)  frameSky.zenith  = satAdjust(frameSky.zenith, _sat);
+      if (frameSky.horizon) frameSky.horizon = satAdjust(frameSky.horizon, _sat);
+      frame.skyZenith  = frameSky.zenith;
+      frame.skyHorizon = frameSky.horizon;
+    }
+    // FOG COLOUR SATURATION — same treatment for the distance-haze base colour,
+    // applied BEFORE the in-shader FOG WARM / COOL balance. Fresh array, def 1.
+    const _fsat = LT.fogColorSat != null ? LT.fogColorSat : 1;
+    if (_fsat !== 1 && frame.fogColor) frame.fogColor = satAdjust(frame.fogColor, _fsat);
   }
   // Save base ambient + exposure so the lightning system can restore them each
   // frame. Exposure matters: the flash SETS frame.exposure from this base — the
@@ -1788,12 +1962,14 @@ function _trackAtmoBias(def) {
 function snapGameCam() {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch);
-  const v = camVantage(CAM_MODES[camMode].id, player.s, player.x, player.speed || 0, 0, {
+  const mode = CAM_MODES[camMode].id;
+  const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
   });
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
+  camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
 }
 
 function startRace() {
@@ -2235,10 +2411,13 @@ function update(dt) {
   }
 }
 
-// Shift a car along the track. prog (cumulative) and s (wrapped, used for
-// rendering/curvature) advance together, so a longitudinal collision push must
-// move BOTH or the visible car won't budge.
-function shiftLong(c, d) { c.prog += d; c.s = wrapS(c.s + d); }
+// Shift a car along the track. AI prog and s advance together. Player prog is
+// derived from Δs each frame after collisions, so only move s here — otherwise
+// the push is counted twice (shiftLong.prog + next-tick ds).
+function shiftLong(c, d) {
+  c.s = wrapS(c.s + d);
+  if (!c.isPlayer) c.prog += d;
+}
 
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
@@ -2277,13 +2456,15 @@ function resolveCollisions(ranked, dt) {
     for (let ii = 0; ii < ranked.length; ii++) {
       const i = fwd ? ii : ranked.length - 1 - ii;
       const a = ranked[i];
-      for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
-        const b = ranked[j];               // a is ahead (higher prog), b behind
+      // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
+      // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
+      for (let j = i + 1; j < ranked.length; j++) {
+        const b = ranked[j];
         let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
         const L = track.total;
         dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-        if (Math.abs(dProg) > LCAR) continue;            // sorted by prog: the rest are farther
+        if (Math.abs(dProg) > LCAR) continue;
         const dX = a.x - b.x;
         if (!Number.isFinite(dX)) continue;
         const penLong = LCAR - Math.abs(dProg);
@@ -2293,11 +2474,11 @@ function resolveCollisions(ranked, dt) {
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
-        // Scoped to player contacts + near-slop nests so AI↔AI packs don't
-        // dump momentum on every mild close.
+        // Only when the PLAYER is the rear car closing: applying this to every
+        // player↔AI touch (e.g. grid pack with throttle held) drained the field.
         const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
         const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-        const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+        const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
         const sideContact = penLat < penLong && !forceRear;
         if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -2307,8 +2488,8 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
           a.x += sgn * corr * (iA / iSum);
           b.x -= sgn * corr * (iB / iSum);
-          // Only scrub when we actually pushed — at-slop contact with corr=0 used
-          // to bleed speed forever while cars stayed longitudinally nested.
+          // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
+          // side contact was draining speed without separating the cars.
           if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
           if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
@@ -2343,7 +2524,7 @@ function resolveCollisions(ranked, dt) {
   const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
-    for (let j = i + 1; j < ranked.length && j <= i + 10; j++) {
+    for (let j = i + 1; j < ranked.length; j++) {
       const b = ranked[j];
       let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
@@ -2356,10 +2537,10 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
-      // Match the relaxation pass for player nest-edge contacts.
+      // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-      const forceRear = nestEdge && (a.isPlayer || b.isPlayer);
+      const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
       const sideContact = penLat < penLong && !forceRear;
       if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
@@ -2525,7 +2706,9 @@ function updateCar(c, dt, ranked) {
   // Suppress auto-throttle while wallT > 0 (just bounced off a wall) so the car
   // doesn't immediately re-pin itself: the player has to steer clear first.
   const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
-  const onThrottle = c.isPlayer ? ((autoThrottle() && !wallPinned) || (_testInput ? !!_testInput.throttle : Input.throttle())) : true;
+  const onThrottle = c.isPlayer
+    ? (_testInput ? !!_testInput.throttle : ((autoThrottle() && !wallPinned) || Input.throttle()))
+    : true;
   if (braking) {
     if (c.speed > 0) {
       c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
@@ -2536,8 +2719,9 @@ function updateCar(c, dt, ranked) {
     }
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else if (!onThrottle) {
-    // coasting: gentle engine-braking/drag, plus a little energy recovery
-    c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0)
+    if (c.speed > 0) c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
+    else if (c.speed < 0) c.speed = Math.min(0, c.speed + COAST_DRAG * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
     const a = (ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
@@ -2648,27 +2832,22 @@ function updateCar(c, dt, ranked) {
     // oscillation, and it doesn't fight the collision push (same direction).
     const MIN_GAP = 2.8;
     let sep = 0;
-    // Walk OUTWARD from our rank; break once |prog delta| exceeds 6.5 (prog-sorted,
-    // so the window is a contiguous index range — same neighbours, no full-field scan).
+    // Full field with wrapped Δprog — rank-neighbour walks miss lapped cars
+    // that share the same stretch of track.
     const ci2 = (c.rank || 1) - 1;
-    for (let up = ci2 - 1; up >= 0; up--) {   // ahead of us
-      const o = ranked[up];
-      const dp = o.prog - c.prog;             // >0
-      if (dp > 6.5) break;                    // only cars roughly alongside
+    const Ltrk = track.total;
+    for (let k = 0; k < ranked.length; k++) {
+      if (k === ci2) continue;
+      const o = ranked[k];
+      let dp = o.prog - c.prog;
+      if (!Number.isFinite(dp)) continue;
+      dp = ((dp + Ltrk / 2) % Ltrk + Ltrk) % Ltrk - Ltrk / 2;
+      const adp = Math.abs(dp);
+      if (adp > 6.5) continue;
       const dx = c.x - o.x, adx = Math.abs(dx);
       const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
-    }
-    for (let dn = ci2 + 1; dn < ranked.length; dn++) {   // behind us
-      const o = ranked[dn];
-      const dpr = o.prog - c.prog;            // <0
-      if (dpr < -6.5) break;                  // only cars roughly alongside
-      const dp = -dpr;                        // |prog delta|
-      const dx = c.x - o.x, adx = Math.abs(dx);
-      const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;             // already spaced — leave alone
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - dp / 6.5);
+      if (deficit <= 0) continue;
+      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
     // clamp the combined target to the drivable surface so overtake/unstuck/
@@ -2692,7 +2871,7 @@ function updateCar(c, dt, ranked) {
   // that isn't moving can't be steered sideways, so tilting while stopped no
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
-  const latFac = clamp(c.speed / 18, 0, 1);
+  const latFac = clamp(Math.abs(c.speed) / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
   const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
   // Banking: computed once, shared between player and AI so both get grip boost.
@@ -2721,12 +2900,12 @@ function updateCar(c, dt, ranked) {
     }
     // Fade the lateral model out toward a standstill so a parked car can't be
     // spun by steering (slip angle is undefined at zero speed).
-    const sp = clamp(c.speed / 3, 0, 1);
+    const sp = clamp(Math.abs(c.speed) / 3, 0, 1);
     const shaped = Math.sign(steer) * Math.pow(Math.abs(steer), STEER_EXPO);
     // --- road-wheel steer angle: driver lock (eased a little at speed) + the
     // DRIVING-HELP assist that steers toward the road curvature for you. Both
     // act through the front tyre below, so neither can exceed available grip.
-    const lockTaper = Math.max(0.4, 1 - c.speed / STEER_SPEED_REF);
+    const lockTaper = Math.max(0.4, 1 - Math.abs(c.speed) / STEER_SPEED_REF);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
@@ -2822,7 +3001,9 @@ function updateCar(c, dt, ranked) {
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
     // well-conditioned at low speed.
-    const vx = Math.max(c.speed, 4);
+    // Signed longitudinal speed (floored away from 0) so reverse slip angles
+    // stay well-conditioned instead of collapsing to +4 m/s forward.
+    const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
@@ -2922,7 +3103,9 @@ function updateCar(c, dt, ranked) {
       // driver input (sign = turn direction); `into` is ±1 for the wall side.
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
-        c.speed = Math.max(0, c.speed - pushIn * (track.street ? 40 : 16) * dt);
+        const scrub = pushIn * (track.street ? 40 : 16) * dt;
+        if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
+        else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
         c.wallT = 0.35;     // brief auto-throttle suppress
       }
       // Nose/steer pointing AWAY = peeling off: speed and heading left alone so
@@ -2974,8 +3157,11 @@ function updateCar(c, dt, ranked) {
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
   }
   if (c.isPlayer) {
-    // Exhaust glow (render-only): rises on throttle, dies quickly off it.
-    c.exhaustPop = clamp((c.exhaustPop || 0) + (onThrottle && c.speed > 8 ? dt * 5 : -dt * 7), 0, 1);
+    // Combustion after-fire is a short throttle-lift transient, not a continuous
+    // arcade torch. ERS deployment is electric and never feeds this state.
+    const lifted = !!c.wasOnThrottle && !onThrottle && c.speed > 8;
+    c.exhaustPop = lifted ? 1 : Math.max(0, (c.exhaustPop || 0) - dt * 5);
+    c.wasOnThrottle = !!onThrottle;
   }
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
@@ -3210,7 +3396,7 @@ function ltFallback(id) {
 // Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
 // (not read per-frame in render). Changing one re-runs applyRaceSettings so it
 // updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance"]);
+const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance", "skyColorSat", "fogColorSat"]);
 function applyLightTune(fromApplyRace) {
   const layers = ltLayers();
   let rebuilt = false, reapply = false, reinit = false;
@@ -3255,6 +3441,10 @@ function persistLightTune() { store.set("lightTune", _ltStore); }
 // a red glow trailing each car on the road surface.
 const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
+const _rainLightOpts = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
+const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
+const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
+const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
 function appendCarTailLights() {
   const L = frame.lights;
   // frame.lights is always the per-frame copy (flicker copies every frame), so
@@ -3262,11 +3452,19 @@ function appendCarTailLights() {
   if (!L || L === track._lights || !player) return;
   _tlSel.length = 0;
   const tlRange = LT.tailRange != null ? LT.tailRange : 160;   // TAIL-LIGHT RANGE knob
+  let _tlN = 0;
   for (const c of cars) {
     const ds = Math.abs(c.s - player.s);
     const d = Math.min(ds, track.total - ds);
-    if (d < tlRange) _tlSel.push({ c, d });
+    if (d < tlRange) {
+      // Reuse pooled {c,d} entries in place (same pattern as _lightCullBuf) —
+      // fresh objects here were per-car-per-frame GC churn on night tracks.
+      const e = _tlSel[_tlN];
+      if (e) { e.c = c; e.d = d; } else _tlSel[_tlN] = { c: c, d: d };
+      _tlN++;
+    }
   }
+  _tlSel.length = _tlN;      // drop stale entries from earlier (busier) frames
   _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
@@ -3676,7 +3874,7 @@ function getSetupPreviewMesh() {
     _spMesh = gfx.createMesh(Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
-      parts: Parts.getVisualTiers(getTeamParts(team.id), team.engine),
+      parts: Parts.getVisualTiers(getTeamParts(team.id), team),
     }));
     _spMeshKey = key;
   }
@@ -3710,23 +3908,9 @@ function renderSetupPreview(dt) {
   });
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
-  // Menu car reads as team livery, not the in-race chrome mirror. The frame's
-  // noEnv flag (above) drops the probe-less env term to a gentle sheen even
-  // when a stale race cube lingers (per-draw material opts carry no env knob).
-  // The wheels are baked into this single mesh (Car3D.build) and drawn with the
-  // SAME paint material — the env/clearcoat sheen reads as an ugly grey gloss on
-  // the near-black tyres. Kill clearcoat entirely (no reflective lacquer coat in
-  // the menu preview) and drop specular so the rubber goes matte; the bodywork
-  // still reads as painted via its base colour + the reduced specular.
-  spMat.clearcoat = 0; spMat.specular = 0.35;
-  // clearcoat isn't the only reflection source: the lit shader has a SEPARATE
-  // analytic sky-mirror gated purely by roughness (glx.js envBlend, active
-  // below ~0.40) — PAINT_DRY_DAY's 0.22 sails right through it regardless of
-  // clearcoat/carEnvCube, which is what kept reading as a residual sheen. Push
-  // roughness past that cutoff so this preview has NO reflection source at all.
-  spMat.roughness = 0.55;
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
-  drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false, carDecalNum(Teams.LIST[teamIdx], null));
+  drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false,
+    carDecalNum(Teams.LIST[teamIdx], null), false, true);
   gfx.present();
 }
 
@@ -3808,7 +3992,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass) gfx.draw(track.meshes.glass, MAT_IDENT, _wmGlass);
+  if (!hideMeshes.props && track.meshes.glass) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
@@ -3844,7 +4028,7 @@ function render(dt) {
   _frameNo++;
 
   // camera
-  let eyeT, tgtT, fovT;
+  let eyeT, tgtT, fovT, roadCamRoll = 0;
   if (state === "menu" || state === "select") {
     // slow flyby
     const s = wrapS((performance.now() * 0.012) % track.total);
@@ -3864,6 +4048,7 @@ function render(dt) {
     const bankCam = Tracks.banking(track, pS, px);
     const bankDy = bankCam ? bankCam.dy : 0;
     const mode = CAM_MODES[camMode].id;
+    roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
@@ -3928,10 +4113,15 @@ function render(dt) {
   }
   camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
 
-  // Camera roll: lean ~2-4° into corners proportional to lateral slip, like Codemasters F1/GRID
-  {
+  // Car-follow cameras counter-rotate by the road bank so the car and asphalt
+  // read level while the horizon carries the banking cue. Slip adds a small
+  // dynamic lean on top; broadcast/debug cameras remain world-level.
+  if (dbgCam) {
+    camRoll = 0;
+  } else {
     const slip = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
-    camRoll += (clamp(slip, -1, 1) * 0.07 - camRoll) * Math.min(1, dt / 0.15);
+    const targetRoll = roadCamRoll + clamp(slip, -1, 1) * 0.07;
+    camRoll += (targetRoll - camRoll) * Math.min(1, dt / 0.15);
   }
 
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
@@ -4002,23 +4192,21 @@ function render(dt) {
   frame.upViewDir = _upVS;
   frame.eye = camEye;
   // Radial draw-distance cull for chunked scenery.
-  // Free/debug camera: keep the old behaviour — mobile caps at 700 m (the
-  // pushed-out photo-mode far plane can frame a whole ~5 M-vert city and
-  // jetsam-kill the tab), desktop keeps the full vista (gfx.begin also thins
-  // the fog under dbgCam, so a fog-derived cull would visibly pop there).
-  // Normal play: derive the cull from the LIVE fog. The exp2 fog transmittance
-  // is exp(-(d·density)²), which is <1% once d ≥ sqrt(ln 100)/density ≈
-  // 2.15/density — chunks past that are a flat fog-colour wall the far plane
-  // was still paying to draw (biggest win: night city circuits, density
-  // ~0.004 → cull ≈ 600 m). Clamped to [600, 4000] so thin-fog days keep the
-  // full vista and a mis-tuned density can't cull the mid-ground; 0 (off)
-  // when fog is disabled entirely.
-  if (dbgCam) {
-    frame.cullDist = gfx.isMobile ? 700 : 0;
-  } else {
-    const _fogD = frame.fogDensity || 0;
-    frame.cullDist = _fogD > 0 ? clamp(2.15 / _fogD, 600, 4000) : 0;
-  }
+  // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
+  // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
+  // keeps the full vista (gfx.begin also thins the fog under dbgCam, so a
+  // fog-derived cull would visibly pop there).
+  // Normal play: fog-wall radial cull — past ~95% fog opacity (3/density) a
+  // chunk is invisible anyway, so skip it. Only kicks in when that distance is
+  // inside the 900 m far plane (night city 0.004 -> 750 m, fog/rain closer);
+  // clear day (0.0012 -> 2.5 km) stays uncapped — zero visual change there.
+  // Feature-shedding tier 3+ also caps the radius at the far plane: scenery
+  // vertex/draw load is the one big cost class the resolution scale and shed
+  // passes don't touch, and by tier 3 the device has proven it can't afford
+  // the full vista (the fog wall hides most of the cut).
+  const _fogCull = frame.fogDensity > 3 / 900 ? Math.ceil(3 / frame.fogDensity) : 0;
+  frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
+    : (_perfTier >= 3 ? Math.min(900, _fogCull || 900) : _fogCull);
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
@@ -4038,6 +4226,12 @@ function render(dt) {
     frame.moonK = raceWeather === "fog" ? 0
       : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
   }
+
+  // Resolve the moving player before any shadow-map pass. AI keeps using the
+  // pooled matrices from the preceding frame; only the player's high-speed,
+  // chase-camera shadow makes that latency visible.
+  const _hasLivePlayerShadow = !!(player && state !== "menu" && state !== "select");
+  if (_hasLivePlayerShadow) currentCarGroundMat(player, _livePlayerShadowMat, dt);
 
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
@@ -4122,14 +4316,15 @@ function render(dt) {
     }
     // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
     // the snap-cached static map above; that's why cars only had blob shadows).
-    // Casts LAST frame's pooled car matrices (_shadowMats/_shadowTeams fill
-    // during the car draw loop later this frame): a one-frame lag, ≤1.3 m at
-    // top speed, on a shadow that moves with its caster — invisible. ±42 m box
-    // on the same gliding anchor (a car shadow beyond that is sub-pixel), same
-    // depth program and key-luminance gate as the props above. Guards: WGX has
-    // no carShadowBegin yet (blob-only there); menu/select skip (the car loop
-    // doesn't run, so the pooled matrices would be stale race positions).
-    if (gfx.carShadowBegin && LT.carShadow && _shadowCount > 0 && player &&
+    // AI casts use the preceding frame's pooled transforms; the player is
+    // rebuilt above from the current interpolation state. Reusing its old matrix
+    // trailed the shadow by speed × frame time (6–12 m on low-FPS devices).
+    // ±42 m box on the same gliding anchor (a car shadow beyond that is
+    // sub-pixel), same
+    // depth program and key-luminance gate as the props above. WGX mobile tiers
+    // may no-op the pass (blob fallback); menu/select skip because the car loop
+    // doesn't run and its pooled AI matrices would be stale race positions.
+    if (gfx.carShadowBegin && LT.carShadow && _perfTier < 3 && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
         state !== "menu" && state !== "select") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
@@ -4142,7 +4337,10 @@ function render(dt) {
         M4.orthoTo(_mCProj, -42, 42, -42, 42, 1.0, 320);
         M4.mulTo(_mCVP, _mCProj, _mCView);
         gfx.carShadowBegin(_mCVP);
-        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        for (let i = 0; i < _shadowCount; i++) {
+          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        }
         gfx.carShadowEnd();
       }
     }
@@ -4160,6 +4358,21 @@ function render(dt) {
   frameSky.skyGrad     = LT.skyGrad;
   frameSky.starDensity = LT.starDensity;
   frameSky.daySkyBlue  = LT.daySkyBlue;
+  // MIE SCATTER / CLOUD SILVER / CORONA AUREOLE / SUN DISC SIZE knobs (sky pass).
+  frameSky.mieScatter    = LT.mieScatter;
+  frameSky.cloudSilver   = LT.cloudSilver;
+  frameSky.coronaAureole = LT.coronaAureole;
+  frameSky.sunDiscSize   = LT.sunDiscSize;
+  // STAR SIZE / TWINKLE, MOON DISC SIZE / HALO, SUN CORONA / SQUASH, CITY GLOW
+  // REACH and CLOUD DEFINITION knobs also ride the sky object (sky pass).
+  frameSky.starSize      = LT.starSize;
+  frameSky.starTwinkle   = LT.starTwinkle;
+  frameSky.moonDiscSize  = LT.moonDiscSize;
+  frameSky.moonHalo      = LT.moonHalo;
+  frameSky.sunCorona     = LT.sunCorona;
+  frameSky.sunSquash     = LT.sunSquash;
+  frameSky.cityGlowReach = LT.cityGlowReach;
+  frameSky.cloudDef      = LT.cloudDef;
   // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
   frame.time = _skyT;
   frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
@@ -4208,24 +4421,27 @@ function render(dt) {
       }
     }
     if (_ltFlash > 0.001) {
-      // Decay: fast leading edge, then slow dying glow
-      _ltFlash *= Math.exp(-8 * dt);
+      // Decay: fast leading edge, then slow dying glow (LIGHTNING DECAY, def 8).
+      _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
       if (_ltFlash < 0.001) _ltFlash = 0;
     }
     if (_ltFlash > 0) {
       // Spike ambient to a cool blue-white; the decay reads as a natural flash.
       // A brief exposure lift too, so the whole frame bleaches for the strike.
       // Written IN PLACE (no per-frame array allocation — this ran every rain
-      // frame, exactly when the frame is already heaviest).
+      // frame, exactly when the frame is already heaviest). LIGHTNING FLASH (def
+      // 1) scales the ambient spike + exposure lift together; def reproduces the
+      // shipped 0.55/0.40/0.22 exactly.
+      const lf = LT.lightningFlash != null ? LT.lightningFlash : 1;
       const f = _ltFlash, aS = frame.ambientSky, aG = frame.ambientGround;
       for (let i = 0; i < 3; i++) {
-        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f);
-        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f);
+        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f * lf);
+        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f * lf);
       }
       // SET from the saved base (was `+=`: it accumulated every frame of the
       // ~0.9 s flash and was never restored — each strike permanently brightened
       // the scene by ~+1.65 exposure, washing a stormy race out to white).
-      frame.exposure = _ltBase.exposure + 0.22 * f;
+      frame.exposure = _ltBase.exposure + 0.22 * f * lf;
     } else {
       // Restore base ambient + exposure so normal ticks aren't tinted (in place).
       const aS = frame.ambientSky, aG = frame.ambientGround;
@@ -4236,7 +4452,7 @@ function render(dt) {
     // Weather flipped dry mid-flash: the decay above is inside the raining gate,
     // so without this the flash froze >0 and frameSky.lightning (set uncondition-
     // ally each frame) kept the sky partially bleached until the next storm.
-    _ltFlash *= Math.exp(-8 * dt);
+    _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
     if (_ltFlash < 0.001) _ltFlash = 0;
   }
 
@@ -4328,7 +4544,7 @@ function render(dt) {
   // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
   // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
   // has no lampShadowBegin, the mobile tier never creates the map.
-  if (gfx.lampShadowBegin && LT.lampShadow && frame.lights && !_studioRig &&
+  if (gfx.lampShadowBegin && LT.lampShadow && _perfTier < 2 && frame.lights && !_studioRig &&
       player && state !== "menu" && state !== "select") {
     // Gate on the KEY being dim (true night): by day/dusk the sun owns the
     // shadows, and a daytime-floods pool shadow would fight the sun's.
@@ -4366,7 +4582,10 @@ function render(dt) {
         M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
         M4.mulTo(_mFlVP, _mFlProj, _mFlView);
         gfx.lampShadowBegin(_mFlVP, flBest);
-        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        for (let i = 0; i < _shadowCount; i++) {
+          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         gfx.lampShadowEnd();
       }
@@ -4416,7 +4635,7 @@ function render(dt) {
   // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
   // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
   // for a 64px blurred reflection probe).
-  if (player && !_envProbeOff && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && !_envProbeOff && _perfTier < 1 && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -4537,6 +4756,21 @@ function render(dt) {
     tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
     tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
     tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
+    // Grounded assembly basis: follows track slope, yaw, and road banking, but
+    // excludes chassis-only brake dive/throttle squat and cornering lean. Those
+    // animations must not lift a wheel centre away from its contact patch.
+    for (let i = 0; i < 3; i++) {
+      _groundR[i] = tmpR[i]; _groundF[i] = tmpF[i]; _groundU[i] = tmpU[i];
+    }
+    if (bankC && bankC.roll) {
+      const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
+      for (let i = 0; i < 3; i++) {
+        const r = _groundR[i], u = _groundU[i];
+        _groundR[i] = r * cr + u * sr;
+        _groundU[i] = u * cr - r * sr;
+      }
+    }
+    basisMat(_groundR, _groundU, _groundF, tmpP, _groundMat);
     // Pitch: rotate forward+up around the right axis by pitchVis (positive = nose up).
     // This gives throttle-squat (nose lifts) and brake-dive (nose dips) without
     // moving the contact point — it's purely a mesh animation.
@@ -4573,8 +4807,9 @@ function render(dt) {
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
     let _sm = _shadowMats[_shadowCount];
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
-    _sm.set(tmpMat);
-    _shadowTeams[_shadowCount] = c.team;   // for next frame's car-shadow caster pass
+    _sm.set(_groundMat);
+    _shadowTeams[_shadowCount] = c.team;   // for next frame's AI car-shadow caster pass
+    _shadowCars[_shadowCount] = c;
     _shadowCount++;
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the stabilized track basis
@@ -4607,11 +4842,13 @@ function render(dt) {
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c));
-      drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, true);
+      _wheelOpts.emissive = night ? 0.12 : 0;
+      drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
     } else {
-      gfx.draw(teamMesh(c.team), tmpMat, paint);
-      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c));
+      const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
+      gfx.draw(teamMesh(c.team), wholeCarMat, paint);
+      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
       // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
@@ -4626,7 +4863,7 @@ function render(dt) {
             const wd = WHEELS[w];
             const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
             const W = _ringWorld;
-            W.set(tmpMat);
+            W.set(wholeCarMat);
             W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
             W[13] += W[1] * tx + W[5] * wd.y + W[9] * wd.z;
             W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
@@ -4647,7 +4884,7 @@ function render(dt) {
     // and it FLASHES the same ~4 Hz FIA pattern while harvesting/deploying (OT or
     // active boost), exactly like the real rear light on a push lap.
     const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
-    const _ledDeploy = (c.otT > 0) || (c.boostOn && c.energy > 0.01);
+    const _ledDeploy = isErsDeploying(c);
     if ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe))) {
       const W = _ringWorld;
       W.set(tmpMat);
@@ -4657,35 +4894,21 @@ function render(dt) {
       W[14] += W[6] * 0.50 - W[10] * 2.615;
       // Brightness by ERS charge: 0.45 (flat) → 1.0 (full). Wet safety strobe
       // stays full-bright regardless — a rain light must not dim with battery.
-      const _ledEmis = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
-      gfx.draw(getRainLight(), W, { emissive: _ledEmis, roughness: 0.9, specular: 0, noAlphaWrite: true });
+      _rainLightOpts.emissive = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
+      gfx.draw(getRainLight(), W, _rainLightOpts);
     }
-    // BOOST: blue-white plasma flame + strobing rear ERS strip while deploying
-    // (any time of day); the strip glows steady dim while boost is armed.
-    if (c.isPlayer && c.boostOn) {
-      const dep = c.energy > 0.01;
-      const fl = 0.65 + 0.35 * Math.sin(raceT * 47.0 + Math.sin(raceT * 19.0) * 4.0);
+    // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
+    if (c.isPlayer && isErsDeploying(c)) {
       const W = _ringWorld;
-      if (dep && c.speed > 5) {
-        // In the clear "pocket" between the rain-light LED plane (z -2.60) and
-        // the diffuser rear face (z -2.70): nothing occludes it from any rear
-        // camera — the housing/pipe are all forward of it, the diffuser is a
-        // backdrop behind it.
-        W.set(tmpMat);
-        W[12] += W[4] * 0.40 - W[8] * 2.66;
-        W[13] += W[5] * 0.40 - W[9] * 2.66;
-        W[14] += W[6] * 0.40 - W[10] * 2.66;
-        gfx.draw(getBoostFlame(), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: 0.45 + 0.5 * fl, noAlphaWrite: true });
-      }
       W.set(tmpMat);
       W[12] += W[4] * 0.605 - W[8] * 2.615;
       W[13] += W[5] * 0.605 - W[9] * 2.615;
       W[14] += W[6] * 0.605 - W[10] * 2.615;
-      gfx.draw(getErsLight(), W, { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true,
-        alpha: dep ? (0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2)) : 0.35 });
+      _ersLightOpts.alpha = 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2);
+      gfx.draw(getErsLight(), W, _ersLightOpts);
     }
-    // Exhaust heat glow: night-only flicker behind the tailpipe on throttle.
-    if (night && c.isPlayer && (c.exhaustPop || 0) > 0.05) {
+    // Brief fuel-coloured throttle-lift after-fire, visible at any time of day.
+    if (c.isPlayer && (c.exhaustPop || 0) > 0.05) {
       const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
       const W = _ringWorld;
       W.set(tmpMat);
@@ -4694,21 +4917,24 @@ function render(dt) {
       W[12] += W[4] * 0.40 - W[8] * 2.63;
       W[13] += W[5] * 0.40 - W[9] * 2.63;
       W[14] += W[6] * 0.40 - W[10] * 2.63;
-      gfx.draw(getExhaustFlame(c.fuelId), W, { emissive: 1.0, roughness: 1, specular: 0, alpha: (0.30 + 0.55 * fl) * c.exhaustPop, noAlphaWrite: true });
+      _flameOpts.alpha = (0.30 + 0.55 * fl) * c.exhaustPop;
+      gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W, _flameOpts);
     }
     // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
     // strength for this frame (projected to screen UV just before present()).
     // Any time of day, throttle-driven via exhaustPop, strongest under active
     // boost. Skipped on memory-limited phones (mobileTier — same gate as the
-    // other post extras).
+    // other post extras). Anchor is pushed well behind/above the body so the
+    // composite warp (which already skips car-paint pixels) sits in the air
+    // wake rather than on the rear wing from chase cam.
     if (c.isPlayer) {
-      const _hzDep = c.boostOn && c.energy > 0.01 && c.speed > 5;
+      const _hzDep = isErsDeploying(c);
       _hazeStr = gfx.mobileTier ? 0 : (c.exhaustPop || 0) * (_hzDep ? 1.0 : 0.45);
       if (_hazeStr > 0.02) {
-        // Just behind/above the tailpipe (up +0.55, fwd −2.9 on the car frame).
-        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.55 - tmpMat[8] * 2.9;
-        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.55 - tmpMat[9] * 2.9;
-        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.55 - tmpMat[10] * 2.9;
+        // Behind/above the tailpipe (up +0.85, fwd −3.5 on the car frame).
+        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.85 - tmpMat[8] * 3.5;
+        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.85 - tmpMat[9] * 3.5;
+        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.85 - tmpMat[10] * 3.5;
       }
     }
     if (c.isPlayer && state === "race") {
@@ -4806,7 +5032,7 @@ function render(dt) {
   // Flush all accumulated car decals in one decal-program block — previously
   // interleaved with the lit body draws (~2 program+state flips per car).
   for (let i = 0; i < _decalCount; i++)
-    drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i]);
+    drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i]);
   // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
   // depthMask are set once for the whole field instead of ping-ponging with the
   // lit body program every car.
@@ -4898,14 +5124,39 @@ function render(dt) {
   // wet + cloud add). Sun shafts catch more in haze; lamp beams only show in it.
   // GROUND MIST knob applied here as well as at the uGroundMist upload, so the
   // god-ray / lamp-beam haze response tracks the mist the player actually sees.
-  const _mist = clamp((frame.groundMist || 0) * LT.mistDensity * 0.9 + (frame.wetness || 0) * 0.22
-                      + (frame.cloud || 0) * 0.12, 0, 1);
+  // WET / CLOUD HAZE SHARE knobs (def 0.22 / 0.12) set how much wet-road spray
+  // and cloud cover feed the volumetric haze the god-rays / lamp-beams scatter
+  // through, alongside the ground-mist term (GROUND MIST knob scales that).
+  const _hazeWet   = LT.hazeWetShare   != null ? LT.hazeWetShare   : 0.22;
+  const _hazeCloud = LT.hazeCloudShare != null ? LT.hazeCloudShare : 0.12;
+  const _mist = clamp((frame.groundMist || 0) * LT.mistDensity * 0.9 + (frame.wetness || 0) * _hazeWet
+                      + (frame.cloud || 0) * _hazeCloud, 0, 1);
   // Gate by the sun's actual BRIGHTNESS too: at night the key is dim moonlight
   // held above the horizon for sky glow, and ungated it marched faint stripey
   // "moon rays" through the cloud gaps.
   const _sunLumGR = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
   const _sunGateGR = clamp((_sunLumGR - 0.35) / 0.45, 0, 1);
-  const _gr = (_grSunY > 0.02 ? (0.38 + 0.55 * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  // GOD-RAY LOW-SUN DRAMA knob (def 0.55) scales only the low-sun boost added on
+  // top of the flat GOD-RAY BASE (def 0.38); SUN GOD-RAYS (LT.grMul) scales the whole thing.
+  const _grLowBoost = LT.godrayLowBoost != null ? LT.godrayLowBoost : 0.55;
+  const _grBase     = LT.godrayBase != null ? LT.godrayBase : 0.38;
+  let _gr = (_grSunY > 0.02 ? (_grBase + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  // Sun-off-screen gate: the volumetric march + its four half-res blur passes
+  // ran even facing directly AWAY from the sun, contributing ~nothing visible.
+  // Project the sun DIRECTION through the view-proj (w-term only — a direction,
+  // not a point) and skip the pass when it's behind the camera or far outside
+  // the frame. Wide 1.7-NDC margin: shafts legitimately streak in from a sun
+  // just off-screen, and the gate must never visibly clip them.
+  if (_gr > 0) {
+    const sd = frame.sunDir, M = _mVP;
+    const cw = M[3] * sd[0] + M[7] * sd[1] + M[11] * sd[2];
+    if (cw <= 0.001) _gr = 0;   // sun behind the camera plane
+    else {
+      const cx = (M[0] * sd[0] + M[4] * sd[1] + M[8] * sd[2]) / cw;
+      const cy = (M[1] * sd[0] + M[5] * sd[1] + M[9] * sd[2]) / cw;
+      if (cx < -1.7 || cx > 1.7 || cy < -1.7 || cy > 1.7) _gr = 0;
+    }
+  }
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
@@ -4961,9 +5212,18 @@ function render(dt) {
   // smear only appears at speed (zero when parked; ramps in above ~40% of VMAX).
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / VMAX - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
-  po.exposure = frame.exposure * LT.exposureMul; po.bloom = _bloom * LT.bloomMul;
-  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade; po.ssao = _ao;
-  po.godray = _gr; po.contact = _cs; po.reflect = _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // Bloom joins the last shedding tier: bloomAmt 0 skips the whole ~9-pass
+  // bright+mip chain in present() — the single biggest post-chain saving left
+  // on a device that has already shed everything else.
+  po.exposure = frame.exposure * LT.exposureMul; po.bloom = _perfTier >= 4 ? 0 : _bloom * LT.bloomMul;
+  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
+  // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
+  // passes whose cost doesn't shrink with the render target, so a device still
+  // slow at the scale floor sheds those instead. Tier 2 drops the wet-road SSR
+  // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
+  po.ssao = _perfTier >= 4 ? 0 : _ao;
+  po.godray = _perfTier >= 4 ? 0 : _gr;
+  po.contact = _cs; po.reflect = _perfTier >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
   // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
   // frame's view-proj to a screen UV for the composite warp. Near-field only —
@@ -5166,6 +5426,18 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 // only downscales when clearly missing 60 fps (>19 ms EMA) so a healthy
 // vsync-capped display never degrades; upscales slowly to avoid oscillation.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true;
+// ── Feature-shedding tiers: the governor's SECOND stage ──────────────────────
+// Resolution scaling can't rescue costs that don't shrink with the render
+// target: the per-frame car/lamp shadow depth passes, the env-probe world
+// re-render, SSAO's three passes, the god-ray march, the SSR march. When the
+// scale has already bottomed out and frames are STILL slow, shed features one
+// tier at a time — cheapest visual loss first — and restore them only under
+// clear sustained headroom at FULL resolution, so the ladder can't oscillate:
+//   1  env probe off        (car paint falls back to the analytic sky mirror)
+//   2  lamp spot shadow + wet-road SSR off
+//   3  car sun-shadow map off (the blob contact shadow remains)
+//   4  SSAO + god rays + bloom off
+let _perfTier = 0;
 function perfGovernor(dtMs) {
   if (!_autoRes) return;
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
@@ -5174,10 +5446,13 @@ function perfGovernor(dtMs) {
   if (++_govT < 45) return;   // evaluate ~every 45 frames
   _govT = 0;
   const cur = gfx.getRenderScale ? gfx.getRenderScale() : 1;
-  if (_frameEMA > 19 && cur > 0.5) {          // <~53 fps: drop resolution
-    if (gfx.setRenderScale(cur - 0.1)) _govCool = 30;
-  } else if (_frameEMA < 14 && cur < 1) {     // >~71 fps headroom: restore
-    if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30;
+  if (_frameEMA > 19) {                        // <~53 fps: degrade
+    if (cur > 0.5) { if (gfx.setRenderScale(cur - 0.1)) _govCool = 30; }
+    else if (_perfTier < 4) { _perfTier++; _govCool = 90; }   // scale floor hit — shed a feature
+  } else if (_frameEMA < 14) {                 // >~71 fps headroom: restore
+    if (cur < 1) { if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30; }
+    // Features come back only at full res with strong headroom, one per ~3 s.
+    else if (_perfTier > 0 && _frameEMA < 12.5) { _perfTier--; _govCool = 180; }
   }
 }
 const PHYS_DT = 1 / 60;          // fixed physics step
@@ -5254,7 +5529,7 @@ const CS_STATS = [
 // container. Shared by the select screen (always-on) and the setup panel.
 function renderStatBars(container, team) {
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(getTeamParts(team.id), team.engine);
+  const mods = Parts.getMods(getTeamParts(team.id), team);
   container.textContent = "";
   for (const { key, label } of CS_STATS) {
     const base = stats[key] || 75;
@@ -5310,7 +5585,7 @@ function buildSetup() {
     const selId = parts[cat.id];
     if (selId) {
       const opt = cat.options.find((o) => o.id === selId);
-      if (opt && opt.supplier && opt.supplier !== team.engine) {
+      if (opt && !Parts.isOptionAvailable(opt, team)) {
         delete parts[cat.id];
         partsChanged = true;
       }
@@ -5318,7 +5593,7 @@ function buildSetup() {
   }
   if (partsChanged) saveTeamParts(team.id, parts);
 
-  const spent = Parts.getCost(parts, team.engine);
+  const spent = Parts.getCost(parts, team);
   const remaining = Parts.BUDGET - spent;
 
   $("cs-team").textContent = team.name.toUpperCase();
@@ -5351,7 +5626,7 @@ function buildSetup() {
   // Resolve the currently-fitted option for a category (respecting supplier lock).
   const resolveOpt = (cat) => {
     const id = parts[cat.id] || Parts.DEFAULTS[cat.id];
-    return cat.options.find((o) => o.id === id && (!o.supplier || o.supplier === team.engine))
+    return cat.options.find((o) => o.id === id && Parts.isOptionAvailable(o, team))
         || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
   };
 
@@ -5363,6 +5638,7 @@ function buildSetup() {
     const upgraded = cur && cur.id !== Parts.DEFAULTS[cat.id];
     const tab = document.createElement("button");
     tab.className = "cs-tab" + (cat.id === csActiveCat ? " active" : "") + (upgraded ? " upgraded" : "");
+    tab.dataset.csCat = cat.id;
     const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = cat.label;
     const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = cur ? cur.label : "";
     tab.append(lbl, sub);
@@ -5381,6 +5657,7 @@ function buildSetup() {
     const painted = getLiveryId(team.id) !== "default";
     const tab = document.createElement("button");
     tab.className = "cs-tab" + (csActiveCat === "livery" ? " active" : "") + (painted ? " upgraded" : "");
+    tab.dataset.csCat = "livery";
     const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = "LIVERY";
     const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = curLiv ? curLiv.name : "Team";
     tab.append(lbl, sub);
@@ -5400,21 +5677,36 @@ function buildSetup() {
   if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
+  const factorySetup = Parts.getFactorySetup(team);
   for (const opt of activeCat.options) {
-    if (opt.supplier && opt.supplier !== team.engine) continue;   // hide other suppliers' exclusives
+    if (!Parts.isOptionAvailable(opt, team)) continue;
     const active = curOpt && curOpt.id === opt.id;
     const costDelta = (opt.cost || 0) - curCost;
     const wouldExceed = !active && !unlimitedBudget && (spent + costDelta > Parts.BUDGET);
 
     const row = document.createElement("button");
-    row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "") + (opt.tag ? " exclusive" : "");
+    const restricted = opt.supplier || opt.suppliers || opt.team || opt.teams;
+    row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "") + (restricted ? " exclusive" : "");
+    row.dataset.csOpt = opt.id;
+    row.dataset.csCat = activeCat.id;
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
 
     const main = document.createElement("div"); main.className = "cs-opt-main";
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
     nameRow.appendChild(document.createTextNode(opt.label));
-    if (opt.tag) { const tg = document.createElement("span"); tg.className = "cs-opt-tag"; tg.textContent = opt.tag; nameRow.appendChild(tg); }
+    const badges = [];
+    if (opt.tag) badges.push(opt.tag);
+    if (opt.supplier || opt.suppliers) badges.push("SUPPLIER");
+    if (opt.team || opt.teams) badges.push("SIGNATURE");
+    if (!restricted && !opt.tag) badges.push("UNIVERSAL");
+    if (factorySetup[activeCat.id] === opt.id) badges.push("FACTORY SETUP");
+    if (badges.length) {
+      const tg = document.createElement("span");
+      tg.className = "cs-opt-tag";
+      tg.textContent = Array.from(new Set(badges)).join(" · ");
+      nameRow.appendChild(tg);
+    }
     main.appendChild(nameRow);
     const deltas = statDeltaChips(opt);
     if (deltas) main.appendChild(deltas);
@@ -5431,7 +5723,7 @@ function buildSetup() {
       const p = getTeamParts(team.id);
       const co = activeCat.options.find((o) => o.id === (p[activeCat.id] || Parts.DEFAULTS[activeCat.id]));
       const cc = co ? (co.cost || 0) : 0;
-      if (!unlimitedBudget && (Parts.getCost(p, team.engine) - cc + (opt.cost || 0)) > Parts.BUDGET) {
+      if (!unlimitedBudget && (Parts.getCost(p, team) - cc + (opt.cost || 0)) > Parts.BUDGET) {
         row.classList.add("budget-reject");
         row.addEventListener("animationend", () => row.classList.remove("budget-reject"), { once: true });
         if (soundOn) GameAudio.uiTick();
@@ -6255,16 +6547,24 @@ function buildLightTunePanel() {
   if (!host.dataset.built) {
     host.dataset.built = "1";
     const groups = [];      // ordered distinct group names
-    let group = null, wrap = null;
+    let group = null, section = null, wrap = null;
     for (const d of TUNE_DEFS) {
       if (d.group !== group) {
         group = d.group; groups.push(group);
+        section = null;
         wrap = document.createElement("div");
         wrap.className = "lt-group"; wrap.dataset.group = group;
         const h = document.createElement("h3");
         h.className = "adv-sec"; h.textContent = group;
         wrap.appendChild(h);
         host.appendChild(wrap);
+      }
+      if (d.section && d.section !== section) {
+        section = d.section;
+        const sh = document.createElement("h4");
+        sh.className = "lt-section";
+        sh.textContent = section;
+        wrap.appendChild(sh);
       }
       const item = document.createElement("div");
       item.className = "adv-item";
@@ -7256,8 +7556,8 @@ window.__apex = {
   // one is active, otherwise the game camera. `debug` flags which. (Previously
   // this always returned the game cam, masking an active view() override.)
   camState: () => dbgCam
-    ? { eye: Array.from(dbgCam.eye), tgt: Array.from(dbgCam.target), fov: dbgCam.fov, debug: true }
-    : { eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov, debug: false },
+    ? { eye: Array.from(dbgCam.eye), tgt: Array.from(dbgCam.target), fov: dbgCam.fov, roll: 0, debug: true }
+    : { eye: Array.from(camEye), tgt: Array.from(camTgt), fov: camFov, roll: camRoll, debug: false },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { hideMeshes = Object.assign({}, hideMeshes, o || {}); return hideMeshes; },
   // Return all track nodes within radius r of world position (wx, wz).
@@ -7382,14 +7682,32 @@ window.__apex = {
   // For verifying every track keeps the car off the models and is recoverable.
   wallStats() {
     if (!track || !track.barR) return null;
-    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false;
+    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0;
     for (let k = 0; k < track.n; k++) {
       const r = track.barR[k], l = track.barL[k];
       if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
       minB = Math.min(minB, r, l); maxB = Math.max(maxB, r, l);
       minOverHw = Math.min(minOverHw, r - track.hw[k], l - track.hw[k]);
+      if (r < track.hw[k] + 8.99) tightSides++;
+      if (l < track.hw[k] + 8.99) tightSides++;
     }
-    return { minB, maxB, minOverHw, anyNaN, street: !!track.street, n: track.n };
+    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / (track.n * 2), street: !!track.street, n: track.n };
+  },
+  modelDiagnostics() {
+    if (!track || !track.modelDiagnostics) return null;
+    return JSON.parse(JSON.stringify(track.modelDiagnostics));
+  },
+  geometryDiagnostics() {
+    if (!track || !track.geometryDiagnostics) return null;
+    return JSON.parse(JSON.stringify(track.geometryDiagnostics));
+  },
+  trackGeometry(keep) {
+    if (typeof keep === "boolean") Tracks.setKeepGeometry(keep);
+    if (!track || !track.roadGeo || !track.terrainGeo) return null;
+    return {
+      road: track.roadGeo, terrain: track.terrainGeo,
+      props: track.propsGeo, glass: track.glassGeo, water: track.waterGeo,
+    };
   },
   // Largest amount any (non-finished) car is currently OUTSIDE its per-side
   // barrier — should stay ~0, proving nothing (player or AI) clips through a wall.
@@ -7944,7 +8262,12 @@ window.__apex = {
   // Test helpers: override Input and pump physics at fixed dt.
   // setInput({ steer, throttle, brake }) — values held until clearInput().
   // step(dt, n) — run n physics ticks of dt seconds each (default 1 tick, 1/60 s).
-  setInput(v) { _testInput = v || null; },
+  setInput(v) {
+    const next = v || null;
+    if (player && _testInput && _testInput.throttle && next && !next.throttle && player.speed > 8)
+      player.exhaustPop = 1;
+    _testInput = next;
+  },
   clearInput() { _testInput = null; },
   step(dt, n) {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
@@ -8138,7 +8461,7 @@ window.__apex = {
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
   // win (softer 3D view; HUD stays crisp).
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes, tier: _perfTier };
     if (v === true) { _autoRes = true; return this.renderScale(); }
     _autoRes = false; gfx.setRenderScale(+v); return this.renderScale();
   },
@@ -8374,6 +8697,19 @@ window.__apex = {
   // setEnergy(v) — set player ERS charge (0..1). Clamps silently.
   // setBoost(on) — toggle the player's ERS boost (for tests/screenshots).
   setBoost(on) { if (player) player.boostOn = !!on; return player ? player.boostOn : false; },
+  carEffects() {
+    if (!player) return null;
+    const brakeGlowThreshold = 0.05;
+    const brakeHeat = +(player.brakeHeat || 0);
+    return {
+      exhaustFlame: (player.exhaustPop || 0) > 0.05,
+      brakeGlow: brakeHeat > brakeGlowThreshold,
+      ersDeploy: isErsDeploying(player),
+      boostFlame: false,
+      brakeHeat,
+      brakeGlowThreshold,
+    };
+  },
   setEnergy(v) {
     if (!player) return false;
     player.energy = Math.max(0, Math.min(1, +v || 0));

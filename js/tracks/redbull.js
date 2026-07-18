@@ -8,6 +8,7 @@
     id: "redbull",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     startFrac: 0.1875, // GPS-derived (OpenF1 2025, conf=0.310)
+    sceneryCoordinates: "racing",
     name: "RED BULL RING",
     gp: "Austrian GP",
     country: "Austria",
@@ -15,6 +16,15 @@
     theme: "green",
     lengthKm: 4.3,
     baseHW: 7,
+    // Keep the alpine terrain local to each road section. The default 120 m
+    // ribbon overlaps the steep start/final-sector foldback near s≈0.98.
+    terrainOuter: 48,
+    dressingExclusions: [
+      // Preserve clean sightlines to The Wing, the bull plaza and pit gantries.
+      { kinds: ["foliage", "floodlights"], s0: 0.96, s1: 0.14 },
+      // Bespoke stands and forest rims own the Remus amphitheatre.
+      { kind: "foliage", s0: 0.18, s1: 0.38, side: 1 },
+    ],
     // Near-field green identity: verdant runoff (not brown gravel). ATM.alpineGreen
     // merges sky/grass/fog in scenery() when available.
     pal: { zenith: [0.22, 0.48, 0.82], horizon: [0.55, 0.72, 0.88], grass: [0.14, 0.44, 0.18], runoff: [0.34, 0.50, 0.26], fogDensity: 0.0016, sunDir: [0.59693248550091, 0.6446870843409829, 0.47754598840072804], sun: [1, 0.96, 0.84], sunColor: [1, 0.96, 0.88] },
@@ -23,15 +33,16 @@
       { t: 0, l: 280 }, { t: -90, l: 100, h: 22 }, { t: 90, l: 90, h: 8 }, { t: -100, l: 110, h: 14 }, { t: 80, l: 90, h: 6 }, { t: 0, l: 220, h: -18 },
       { t: -70, l: 80, h: -10 }, { t: 80, l: 90, h: -8 }, { t: 0, l: 480, h: -14 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 },
     ],
-    // ~55–60 m top-to-bottom: Remus crest high, long post-Remus / T4 descent.
-    // (GPS path is flat — these cosine bumps are the live elevation.)
+    // ~60 m top-to-bottom: Remus crest high, long post-Remus / T4 descent.
+    // Elevations use SOURCE coordinates. startFrac=0.1875 maps these centres to
+    // racing s≈0.12/0.22/0.42; broad shoulders cap the steepest grade near 12%.
     elevations: [
-      { s: 0.12, halfM: 300, rise: 22 },   // T1 / Niki Lauda climb
-      { s: 0.22, halfM: 240, rise: 32 },   // Remus crest — circuit high point
-      { s: 0.42, halfM: 400, rise: -28 },  // post-Remus descent through T4
+      { s: 0.3075, halfM: 360, rise: 22 },  // racing 0.12: T1 / Niki Lauda climb
+      { s: 0.4075, halfM: 430, rise: 32 },  // racing 0.22: Remus crest / high point
+      { s: 0.6075, halfM: 430, rise: -28 }, // racing 0.42: post-Remus / T4 descent
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, runoffApron } = api;
+      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Alpine-green atmosphere pack (cool sky + lush grass); keep runoff greener
@@ -127,12 +138,12 @@
 
       // Green runoff aprons at the heavy stops — alpine meadow pans, not grey gravel.
       const GRN_APRON = (pal && pal.runoff) || [0.32, 0.52, 0.24];
-      runoffApron(K(0.10), 1, 5.5, [16, 0.32, 30], GRN_APRON);   // T1 outside
-      runoffApron(K(0.12), 1, 6.0, [14, 0.32, 26], GRN_APRON);
-      runoffApron(K(0.22), 1, 5.5, [15, 0.32, 28], GRN_APRON);   // T3 Remus crest
-      runoffApron(K(0.24), 1, 6.0, [14, 0.32, 24], GRN_APRON);
-      runoffApron(K(0.34), -1, 5.5, [15, 0.32, 28], GRN_APRON);  // T4 Schlossgold
-      runoffApron(K(0.36), -1, 6.0, [14, 0.32, 24], GRN_APRON);
+      groundPatch(K(0.10), 1, 5.5, [16, 0.32, 30], GRN_APRON, { id: "redbull-t1-runoff-a", samples: 5 });
+      groundPatch(K(0.12), 1, 6.0, [14, 0.32, 26], GRN_APRON, { id: "redbull-t1-runoff-b", samples: 5 });
+      groundPatch(K(0.22), 1, 5.5, [15, 0.32, 28], GRN_APRON, { id: "redbull-remus-runoff-a", samples: 5 });
+      groundPatch(K(0.24), 1, 6.0, [14, 0.32, 24], GRN_APRON, { id: "redbull-remus-runoff-b", samples: 5 });
+      groundPatch(K(0.34), -1, 5.5, [15, 0.32, 28], GRN_APRON, { id: "redbull-t4-runoff-a", samples: 5 });
+      groundPatch(K(0.36), -1, 6.0, [14, 0.32, 24], GRN_APRON, { id: "redbull-t4-runoff-b", samples: 5 });
 
       // Marshal posts spaced around the lap (orange-roofed huts + flag poles).
       for (const [s, side] of [[0.05, -1], [0.15, 1], [0.27, -1], [0.40, 1], [0.52, -1], [0.66, 1], [0.80, -1], [0.92, 1]]) {
@@ -146,15 +157,21 @@
       ]) billboard(Math.round(n * s) % n, side, 7, 11, 3.4, col);
 
       // ---------------- The Wing — pit & paddock complex ----------------
-      // Long low white pit building with thin cantilevered roof blade.
-      prop(0, -1, 6, [11, 8, 70], [0.92, 0.93, 0.95]);
+      // Long low white pit building with thin cantilevered roof blade. The
+      // complete hero model is preflighted and committed atomically.
       {
-        const a = anchor(0, -1, 10);
-        addBox(out, vadd(a.c, a.u, 11), [14, 0.7, 66], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);  // roof blade
-        // slim pillars under the blade — spaced along the building length
-        for (let i = -2; i <= 2; i++) addCyl(out, vadd(a.c, a.t, i * 14), 0.3, 11, [0.70, 0.72, 0.76], 5, [a.r, a.u, a.t]);
-        // night-ready: emissive light strip under the canopy edge (bright warm strip)
-        addBox(out, vadd(vadd(a.c, a.r, -6.5), a.u, 10.4), [0.25, 0.18, 64], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
+        const a = anchor(K(0), -1, 13);
+        modelGroup("redbull-wing", {
+          center: vadd(a.c, a.u, 6),
+          size: [14.5, 12.5, 70],
+          basis: [a.r, a.u, a.t],
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 3.2), [11, 8, 70], [0.92, 0.93, 0.95], [a.r, a.u, a.t]);
+          addBox(stage, vadd(a.c, a.u, 11), [14, 0.7, 66], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+          for (let i = -2; i <= 2; i++)
+            addCyl(stage, vadd(a.c, a.t, i * 14), 0.3, 11, [0.70, 0.72, 0.76], 5, [a.r, a.u, a.t]);
+          addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 10.4), [0.25, 0.18, 64], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
+        }, { required: true });
       }
       // Paddock hospitality blocks behind the pits — motorhome() gives the
       // real two-tier team-unit body + awning canopy instead of a flat
@@ -165,11 +182,31 @@
       motorhome(K(0.04), -1, 26, 16, 7, 18, { wall: [0.80, 0.82, 0.86], window: [0.22, 0.32, 0.42] });
       motorhome(K(0.96), -1, 26, 16, 8, 20, { wall: [0.86, 0.88, 0.92], window: [0.20, 0.30, 0.42] });
       // Race-control / media tower over the start.
-      tower(0.01, -1, 18, 9, 26, { col: [0.80, 0.82, 0.86], cap: true, capCol: rbNavy, mast: 7 });
+      tower(K(0.01), -1, 18, 9, 26, { col: [0.80, 0.82, 0.86], cap: true, capCol: rbNavy, mast: 7 });
 
-      // Start/finish gantry + a second scoring gantry down the straight.
-      gantry(0.005, 7.5, [0.12, 0.13, 0.16]);
-      gantry(0.045, 7.0, [0.12, 0.13, 0.16]);
+      // Start/finish gantry + a second scoring gantry down the straight. Their
+      // supports sit beyond the full rendered shoulder; the shared 1.5 m support
+      // offset intersects Red Bull's broad road mesh near s≈0.045.
+      const scoringGantry = (s, h, id) => {
+        const k = K(s), col = [0.12, 0.13, 0.16];
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, 4.0);
+          addCyl(out, a.c, 0.3, h, col, 6, [a.r, a.u, a.t]);
+        }
+        overheadSpan({
+          id,
+          frac: s,
+          clearance: h - 0.45,
+          thickness: 0.9,
+          depth: 1.4,
+          supportGap: 4.0,
+          span: hw[k] * 2 + 10,
+          color: col,
+          required: true,
+        });
+      };
+      scoringGantry(0.005, 7.5, "redbull-start-gantry");
+      scoringGantry(0.045, 7.0, "redbull-scoring-gantry");
 
       // ---------------- Lamp posts (day visibility / night readiness) ----------------
       // Double-head aluminium lamp posts every ~60 m around the pit straight & stadium.
@@ -212,34 +249,33 @@
         backdrop(kb, -1, 62, [55, 10, 36], [0.24, 0.48, 0.20]);
         const a = anchor(kb, -1, 70);
         const white = [0.90, 0.90, 0.93], dark = [0.10, 0.10, 0.12];
-        // Arch posts: center at h/2 = 12 above ground, height 24 → base sits at ground.
-        addBox(out, vadd(vadd(a.c, a.r, -11), a.u, 12), [3, 24, 3], white, [a.r, a.u, a.t]);   // arch post L
-        addBox(out, vadd(vadd(a.c, a.r, 11), a.u, 12), [3, 24, 3], white, [a.r, a.u, a.t]);    // arch post R
-        addBox(out, vadd(a.c, a.u, 24), [26, 3, 4.5], white, [a.r, a.u, a.t]);                  // lintel
-        // Pedestal: half-height = 1.5, center at 1.5 → base at ground level (flush).
-        addBox(out, vadd(a.c, a.u, 1.5), [12, 3, 7], [0.55, 0.56, 0.58], [a.r, a.u, a.t]);
-        // Bull body: top of pedestal = y=3, body half-height=3.25, center at y=6.25.
-        addBox(out, vadd(a.c, a.u, 6.25), [13, 6.5, 5], dark, [a.r, a.u, a.t]);                 // body
-        // Head: sits atop the body front; body top = y=9.75, head center ~y=9.
-        addBox(out, vadd(vadd(a.c, a.t, 7), a.u, 9.0), [4.5, 5, 3.5], dark, [a.r, a.u, a.t]);  // head
-        // Horns: above head, head top ≈ y=11.5.
-        addPrism(out, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, -1.4), [1, 2.6, 0.6], white, [a.t, a.u, a.r]); // horn L
-        addPrism(out, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, 1.4), [1, 2.6, 0.6], white, [a.t, a.u, a.r]);  // horn R
-        // Legs: four pillars from ground (y=0) upward; center at y=2.5, height=5.
-        for (const o of [-4, 4]) for (const f of [-3.5, 4.5]) {
-          addBox(out, vadd(vadd(vadd(a.c, a.r, o), a.t, f), a.u, 2.5), [1.4, 5, 1.4], dark, [a.r, a.u, a.t]);
-        }
-        // Small night-accent: a golden spotlight on the pedestal face.
-        addBox(out, vadd(vadd(a.c, a.t, -4.5), a.u, 3.2), [0.4, 0.3, 0.3], [1.0, 0.88, 0.40], [a.r, a.u, a.t]);
+        modelGroup("redbull-bull-plaza", {
+          center: vadd(a.c, a.u, 14),
+          size: [30, 28, 28],
+          basis: [a.r, a.u, a.t],
+        }, (stage) => {
+          // Arch posts: center at h/2 = 12 above ground, height 24 → base sits at ground.
+          addBox(stage, vadd(vadd(a.c, a.r, -11), a.u, 12), [3, 24, 3], white, [a.r, a.u, a.t]);
+          addBox(stage, vadd(vadd(a.c, a.r, 11), a.u, 12), [3, 24, 3], white, [a.r, a.u, a.t]);
+          addBox(stage, vadd(a.c, a.u, 24), [26, 3, 4.5], white, [a.r, a.u, a.t]);
+          addBox(stage, vadd(a.c, a.u, 1.5), [12, 3, 7], [0.55, 0.56, 0.58], [a.r, a.u, a.t]);
+          addBox(stage, vadd(a.c, a.u, 6.25), [13, 6.5, 5], dark, [a.r, a.u, a.t]);
+          addBox(stage, vadd(vadd(a.c, a.t, 7), a.u, 9.0), [4.5, 5, 3.5], dark, [a.r, a.u, a.t]);
+          addPrism(stage, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, -1.4), [1, 2.6, 0.6], white, [a.t, a.u, a.r]);
+          addPrism(stage, vadd(vadd(vadd(a.c, a.t, 9.5), a.u, 11.5), a.r, 1.4), [1, 2.6, 0.6], white, [a.t, a.u, a.r]);
+          for (const o of [-4, 4]) for (const f of [-3.5, 4.5])
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, o), a.t, f), a.u, 2.5), [1.4, 5, 1.4], dark, [a.r, a.u, a.t]);
+          addBox(stage, vadd(vadd(a.c, a.t, -4.5), a.u, 3.2), [0.4, 0.3, 0.3], [1.0, 0.88, 0.40], [a.r, a.u, a.t]);
+        }, { required: true });
       }
 
       // Sponsor / energy-drink towers — tall slim branded pylons by the start area
       // and at the stadium. Red-cap tops, multiple for visual richness.
-      tower(0.01, 1, 30, 6.5, 40, { col: rbNavy, seg: 6, cap: true, capCol: rbRed, mast: 6 });
-      tower(0.03, -1, 32, 5.5, 36, { col: [0.95, 0.60, 0.15], seg: 6, cap: true, capCol: rbRed, mast: 5 });
-      tower(0.50, -1, 34, 5.5, 32, { col: rbRed, seg: 6, cap: true, capCol: [0.95, 0.95, 0.97], mast: 5 });
-      tower(0.90, 1, 30, 6, 36, { col: [0.92, 0.93, 0.95], seg: 6, cap: true, capCol: rbRed, mast: 5 });
-      tower(0.96, -1, 28, 5, 32, { col: rbNavy, seg: 6, cap: true, capCol: [0.95, 0.65, 0.10], mast: 5 });
+      tower(K(0.01), 1, 30, 6.5, 40, { col: rbNavy, seg: 6, cap: true, capCol: rbRed, mast: 6 });
+      tower(K(0.03), -1, 32, 5.5, 36, { col: [0.95, 0.60, 0.15], seg: 6, cap: true, capCol: rbRed, mast: 5 });
+      tower(K(0.50), -1, 34, 5.5, 32, { col: rbRed, seg: 6, cap: true, capCol: [0.95, 0.95, 0.97], mast: 5 });
+      tower(K(0.90), 1, 30, 6, 36, { col: [0.92, 0.93, 0.95], seg: 6, cap: true, capCol: rbRed, mast: 5 });
+      tower(K(0.96), -1, 28, 5, 32, { col: rbNavy, seg: 6, cap: true, capCol: [0.95, 0.65, 0.10], mast: 5 });
 
       // Big freestanding sponsor billboards (oversized hoardings on the hills).
       billboard(Math.round(n * 0.18) % n, -1, 20, 20, 8, [0.95, 0.60, 0.15]);
@@ -492,6 +528,89 @@
       campTerrace(K(0.15),  1, 46, 8);
       campTerrace(K(0.25), -1, 50, 7);
       campTerrace(K(0.85), -1, 44, 8);
+
+      // =======================================================================
+      // 2026 SCENERY DRESS PASS — six bounded, hero-sector additions
+      // =======================================================================
+
+      // 1) Remus and stadium hillside crowd terraces. These sit well behind the
+      // primary fence line so the orange/navy crowd blocks read across the bowl
+      // without narrowing braking-zone sightlines.
+      grandstand(0.265, 1, 38, 22, shell, [0.96, 0.38, 0.04]);
+      grandstand(0.285, 1, 44, 20, shell, rbNavy);
+      grandstand(0.825, -1, 32, 22, shell, [0.96, 0.38, 0.04]);
+
+      // 2) A dedicated far treeline adds woodland depth behind the open downhill
+      // sweep and stadium approach while leaving the near verge deliberately clear.
+      forestEdge(0.39, 0.48, -1, 54, { density: 0.34, hMin: 11, hMax: 18,
+        col: [0.08, 0.22, 0.11], col2: [0.15, 0.32, 0.14], pineFrac: 0.82 });
+      forestEdge(0.58, 0.68, 1, 48, { density: 0.30, hMin: 10, hMax: 17,
+        col: [0.09, 0.24, 0.12], col2: [0.17, 0.34, 0.15], pineFrac: 0.76 });
+
+      // 3) Styrian farmyard: a timber barn, broad Alpine roof, silo and equipment
+      // shed form one atomically guarded compound beyond the existing chalet row.
+      {
+        const a = anchor(K(0.58), -1, 76), b = [a.r, a.u, a.t];
+        modelGroup("redbull-styrian-farmyard", {
+          center: vadd(a.c, a.u, 9),
+          size: [42, 18, 38],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 4.5), [18, 9, 24], [0.52, 0.32, 0.18], b);
+          addPrism(stage, vadd(a.c, a.u, 9), [22, 5.5, 27], [0.34, 0.18, 0.12], b);
+          const silo = vadd(vadd(a.c, a.r, 14), a.t, -5);
+          addCyl(stage, silo, 3.2, 14, [0.68, 0.70, 0.68], 8, b);
+          addCone(stage, vadd(silo, a.u, 14), 3.4, 2.8, [0.40, 0.42, 0.40], 8, b);
+          addBox(stage, vadd(vadd(vadd(a.c, a.r, -13), a.t, 5), a.u, 2.5),
+                 [8, 5, 12], [0.64, 0.48, 0.28], b);
+        });
+      }
+
+      // 4) Paddock depth behind The Wing: a second, farther hospitality row makes
+      // the start complex read as a full event campus rather than one facade.
+      motorhome(K(0.975), -1, 43, 15, 7, 18,
+        { wall: [0.78, 0.80, 0.84], window: [0.16, 0.24, 0.34] });
+      motorhome(K(0.02), -1, 46, 18, 8, 20,
+        { wall: [0.90, 0.90, 0.92], window: [0.18, 0.28, 0.40] });
+      motorhome(K(0.055), -1, 42, 14, 7, 17,
+        { wall: [0.74, 0.76, 0.80], window: [0.20, 0.28, 0.38] });
+
+      // 5) Stadium fan village and event screen. The guarded footprint contains
+      // the full tent, screen and flag avenue, all far behind the spectator shell.
+      {
+        const a = anchor(K(0.84), -1, 58), b = [a.r, a.u, a.t];
+        modelGroup("redbull-stadium-fan-village", {
+          center: vadd(a.c, a.u, 8),
+          size: [44, 16, 40],
+          basis: b,
+        }, (stage) => {
+          addPrism(stage, vadd(a.c, a.u, 0.3), [20, 8, 20], [0.92, 0.92, 0.94], b);
+          const screen = vadd(vadd(a.c, a.r, 13), a.t, -5);
+          addBox(stage, vadd(screen, a.u, 6), [1.0, 11, 14], rbNavy, b);
+          addBox(stage, vadd(vadd(screen, a.r, -0.6), a.u, 7), [0.3, 3.2, 10], rbRed, b);
+          addBox(stage, vadd(vadd(screen, a.r, -0.8), a.u, 7), [0.2, 1.0, 5.5], rbYel, b);
+          for (const [i, col] of [[-1, rbRed], [0, rbYel], [1, rbNavy]]) {
+            const mast = vadd(vadd(a.c, a.r, -11), a.t, i * 8);
+            addCyl(stage, mast, 0.12, 12, [0.70, 0.70, 0.72], 5, b);
+            addBox(stage, vadd(vadd(mast, a.u, 10.5), a.r, -0.8),
+                   [0.12, 2.2, 3.4], col, b);
+          }
+        });
+      }
+
+      // 6) Three high, distant peaks frame the Remus crest from the downhill
+      // camera. Their centres are over 300 m off the edge, preserving the bull
+      // plaza skyline and adding a focused Alpine hero backdrop rather than noise.
+      {
+        const a = anchor(K(0.235), -1, 330);
+        for (const [off, w, h, seed] of [[-150, 240, 112, 701], [0, 290, 148, 709], [165, 230, 105, 719]]) {
+          const c = vadd(a.c, a.t, off);
+          mountain(c[0], c[2], pyMin - 4, w, h, {
+            seg: 5, seed, rough: 0.38, forest: [0.12, 0.26, 0.14],
+            rock: [0.42, 0.43, 0.42], snow: [0.94, 0.95, 0.98], snowline: 0.68,
+          });
+        }
+      }
     },
   }
   );

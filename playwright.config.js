@@ -38,8 +38,9 @@ const LAUNCH = {
 // Keep this list exhaustive against tests/*.spec.js (a coverage-audit npm script
 // asserts every spec lands in exactly one project).
 const RENDER_SPECS = [
-  "dev-tools", "f1-track-accuracy", "hud-audit", "lighting-ab",
-  "parts-budget", "parts-catalog", "parts-persistence",
+  "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
+  "lighting-ab", "lighting-tuner-grade",
+  "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "ui-audit", "ui-button-touch", "ui-desktop",
   "tracks-visual", "webgl-probes", "camera", "smoke", "season", "time-trial",
 ].map((n) => `**/${n}.spec.js`);

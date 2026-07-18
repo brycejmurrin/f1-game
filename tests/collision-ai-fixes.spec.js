@@ -336,39 +336,36 @@ test.describe("AI banking grip on banked circuits", () => {
 
 // ── Jeddah barrier physics (barrier audit) ───────────────────────────────────
 // Bug: Jeddah's custom addBox barrier panels were not registered with
-// recordBarrier, so the physics limit was 0.25 m too loose (auto-street
-// 0.35 m gap vs visual 0.6 m gap).
+// recordBarrier. The migrated wall clearance must keep the physics boundary
+// aligned with the visible wall after curved-panel road intrusions are removed.
 
 test.describe("Jeddah barrier physics matches visual placement", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("Jeddah wallAt() is tighter than auto-street default at 0.6 m gap", async ({ page }) => {
+  test("Jeddah wallAt() matches the migrated visual wall clearance", async ({ page }) => {
     await loadRace(page, "jeddah");
     const result = await page.evaluate(() => {
       const obs = window.__apex.reset(0.1, 0, 0);
-      return { hw: obs.hw, wallR: obs.wallR };
+      const barrierGap = Tracks.LIST.find((entry) => entry.id === "jeddah").barrierGap;
+      return { hw: obs.hw, wallR: obs.wallR, barrierGap };
     });
-    // With recordBarrier at 0.6 m: limit ≈ hw + 0.6 − 1.1 = hw − 0.5
-    // Without fix (auto-street 0.35 m): limit ≈ hw + 0.35 − 1.1 = hw − 0.75
-    // wallR must be CLOSER to hw than the old loose boundary
-    const looseLimit = result.hw - 0.75;   // old auto-street value
-    expect(result.wallR).toBeGreaterThan(looseLimit);  // tighter than old value
+    expect(result.barrierGap).toBe(3.4);
+    expect(result.wallR).toBeCloseTo(result.hw + result.barrierGap - 1.1, 1);
   });
 
-  test("car cannot drive 1 m past the expected Jeddah barrier face", async ({ page }) => {
+  test("car cannot drive past the migrated Jeddah barrier face", async ({ page }) => {
     await loadRace(page, "jeddah");
     const result = await page.evaluate(() => {
       window.__apex.headless(true);
       const obs0 = window.__apex.reset(0.1, 20, 0);
       const hw = obs0.hw;
-      // Try to push 1 m past expected barrier face (hw + 0.6)
-      window.__apex.jump(0.1, 20, hw + 1.0);
+      const barrierGap = Tracks.LIST.find((entry) => entry.id === "jeddah").barrierGap;
+      window.__apex.jump(0.1, 20, hw + barrierGap + 0.4);
       window.__apex.act({ steer: 1, throttle: false, brake: false }, 1 / 60, 3);
       window.__apex.headless(false);
       const obs = window.__apex.obs();
-      return { x: obs.x, hw };
+      return { x: obs.x, hw, barrierGap };
     });
-    // Physics should clamp the car well before hw + 0.6
-    expect(result.x).toBeLessThan(result.hw + 0.6);
+    expect(result.x).toBeLessThan(result.hw + result.barrierGap);
   });
 });

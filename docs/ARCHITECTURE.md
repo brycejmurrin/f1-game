@@ -207,18 +207,49 @@ wrapped in a full-footprint Minkowski test (`rejBox`/`onRoadHit`) against the ro
 half-width, so `building()`/`neonTower`/floodlight masts drop any part that would
 overhang the tarmac on a curving stretch — not just their inner-face point.
 
+## js/parts.js — `Parts`
+
+Eight ordered categories (`engine`, `aero`, `suspension`, `brakes`, `tyres`,
+`ers`, `gearbox`, `fuel`) share one catalog. Each option owns its physics
+modifiers and a co-located `visual` recipe; optional `supplier(s)` and `team(s)`
+fields restrict access. `SIGNATURE` options have universal equivalents with the
+same price and physics, so team identity does not create a competitive advantage.
+
+`Parts.resolveSetup(setup, team)` is the authoritative resolver. It validates
+saved IDs and access rules in one pass and returns resolved setup IDs, modifiers,
+cost, compatibility tiers, option records, and category visual recipes. The
+legacy `getMods`, `getCost`, and `getVisualTiers` APIs delegate to it.
+`FACTORY_PRESETS` gives each 2026 team a deterministic visual setup for AI cars;
+AI physics remains team-tier driven and never reads the player's saved parts.
+
 ## js/car3d.js — `Car3D`
 
 ```
-Car3D.build(color, color2) -> meshData   // PLAIN data {pos,nrm,col,idx} for renderer.createMesh
-                                         // (game creates one renderer mesh per team, shared by both cars)
+Car3D.build(color, color2, {parts}) -> meshData // PLAIN {pos,nrm,col,mat,idx}
+Car3D.buildWheel(width, band, caliper, rim, grooved, recipe) -> wheel meshData
+Car3D.buildWheelLayers(...) -> {rotating, fixed}
 ```
 Local space: origin at ground under center of gravity, **+Z forward, +Y up**.
-~1.9 m wide, ~5.4 m long. Parts: floor, tapered nose, front wing + endplates,
-sidepods, cockpit + halo (3 thin boxes), engine cover spine + airbox, rear
-wing on endplates, 4 wheel boxes (dark `[0.05,0.05,0.05]`, slightly rounded
-via chamfer prisms ok). color = livery body, color2 = wings/accents. Flat
-shading (duplicated verts, face normals).
+~1.9 m wide, ~5.4 m long. Category builders resolve parametric recipes for
+engine, aero, suspension, brakes, tyres, ERS, gearbox, and fuel before emitting
+the body. `Car3D.SURFACES` classifies paint, carbon, rubber, metal, glass, matte
+panel, and functional emissive vertices consistently across WebGL and WebGPU.
+Paint albedo is capped to the non-HDR range, sponsor boards remain matte, and
+static emissive geometry is reserved for the FIA rain light. Wings and rear
+endplates use swept/tapered profiles; service panels, ERS cells, fuel conduits,
+gearbox cases, wheel rotors, and real 3-D wishbone links expose mechanical parts.
+Every catalog option therefore has distinct consumed geometry/material tells;
+`visualTier` remains only a compatibility fallback. Player wheel assemblies
+separate spinning tyre/rotor meshes from steering-only caliper/upright meshes;
+rubber sidewalls surround a distinct inset aero cover rather than a full-face
+metal disc.
+Player body, cockpit, decal, and wheel GPU meshes use bounded caches.
+AI full-body mesh keys include `Parts.factoryKey(team)`.
+
+`js/game/carmesh.js` is the sole body-decal geometry implementation for both the
+race and isolated car viewer. Other luminous effects are state-driven: brake glow
+tracks heat, ERS uses a status light without an exhaust flame, and combustion
+after-fire is a short throttle-lift transient.
 
 ## js/input.js — `Input`
 

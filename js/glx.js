@@ -77,6 +77,7 @@ const GLX = (function () {
   const _grPos = new Float32Array(36), _grCol = new Float32Array(36),
         _grRad = new Float32Array(12), _grDir = new Float32Array(36),
         _grCone = new Float32Array(24), _grVolW = new Float32Array(12), _grSel = [];
+  const _grByD = (a, b) => a.d - b.d;   // hoisted comparator (was a per-frame closure)
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors _gr* above.
@@ -254,7 +255,7 @@ const GLX = (function () {
       msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
       if (msaaSamples < 2) msaaSamples = 0;
     } catch (e) { msaaSamples = 0; }
-    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak"]);
+    compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak", "uFlareStreak2"]);
     if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
     if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
     // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -343,10 +344,18 @@ const GLX = (function () {
   function createTargets() {
     if (!postEnabled) return;
     const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
-    const mk = (w, h) => {
+    // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
+    // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
+    // are alpha-less positive HDR colour -> R11F_G11F_B10F (half the bytes;
+    // renderable under the same EXT_color_buffer_float the HDR path requires).
+    // LDR fallback keeps RGBA8 everywhere.
+    const hdrOk = colorType === gl.HALF_FLOAT;
+    const mk = (w, h, fmt) => {
       const tex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
+      if (fmt === "r8") gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, null);
+      else if (fmt === "hdr3" && hdrOk) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
+      else gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -419,7 +428,7 @@ const GLX = (function () {
     let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
     let bh = Math.max(1, Math.floor(height / BLOOM_DIV));
     for (let i = 0; i < BLOOM_LEVELS_MAX && bw >= 8 && bh >= 8; i++) {
-      const tex = mk(bw, bh);
+      const tex = mk(bw, bh, "hdr3");
       const fbo = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
@@ -444,12 +453,12 @@ const GLX = (function () {
       if (!ssaoBlurFBO) ssaoBlurFBO = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
       if (ssaoTex) gl.deleteTexture(ssaoTex);
-      ssaoTex = mk(ssaoW, ssaoH);
+      ssaoTex = mk(ssaoW, ssaoH, "r8");
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoTex, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
       if (ssaoBlurTex) gl.deleteTexture(ssaoBlurTex);
-      ssaoBlurTex = mk(ssaoW, ssaoH);
+      ssaoBlurTex = mk(ssaoW, ssaoH, "r8");
       gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoBlurTex, 0);
     }
@@ -461,12 +470,12 @@ const GLX = (function () {
       if (!godrayBlurFBO) godrayBlurFBO = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
       if (godrayTex) gl.deleteTexture(godrayTex);
-      godrayTex = mk(godrayW, godrayH);
+      godrayTex = mk(godrayW, godrayH, "hdr3");
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayTex, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
       if (godrayBlurTex) gl.deleteTexture(godrayBlurTex);
-      godrayBlurTex = mk(godrayW, godrayH);
+      godrayBlurTex = mk(godrayW, godrayH, "hdr3");
       gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
     }
@@ -679,8 +688,10 @@ const GLX = (function () {
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
+      "uCarSunGlint", "uCarSparkle", "uFogSunCore",
+      "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
-    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uLightning"]);
+    skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (markBatchProg) {
@@ -1228,6 +1239,17 @@ const GLX = (function () {
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     gl.uniform1f(litU.uCloudSpeed,  frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
     gl.uniform1f(litU.uCloudShadowDim, T && T.cloudShadowDim != null ? T.cloudShadowDim : 0.80);
+    // CAR SUN GLINT / CAR SPARKLE / FOG SUN CORE knobs (defaults = shipped look).
+    gl.uniform1f(litU.uCarSunGlint, T && T.carSunGlint != null ? T.carSunGlint : 12.0);
+    gl.uniform1f(litU.uCarSparkle,  T && T.carSparkle  != null ? T.carSparkle  : 1.6);
+    gl.uniform1f(litU.uFogSunCore,  T && T.fogSunCore  != null ? T.fogSunCore  : 0.6);
+    // LAMP NEAR CLAMP / WINDOW SUN FLASH / SKY RIM GLOW / AMBIENT CONTACT DARK /
+    // LAMP WALL SPILL knobs (defaults = shipped look).
+    gl.uniform1f(litU.uLampNearClamp,  T && T.lampNearClamp  != null ? T.lampNearClamp  : 4.0);
+    gl.uniform1f(litU.uWindowSunFlash, T && T.windowSunFlash != null ? T.windowSunFlash : 1.0);
+    gl.uniform1f(litU.uSkyRimGlow,     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
+    gl.uniform1f(litU.uAmbContactDark, T && T.ambContactDark != null ? T.ambContactDark : 1.0);
+    gl.uniform1f(litU.uLampWallSpill,  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
     // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
@@ -1398,7 +1420,8 @@ const GLX = (function () {
     // built — lowers the transient peak on ~5 M-vert street props. `pos` is still
     // needed below for triangle centroids/AABBs, so it's nulled after the bins.
     nrm = col = mat = null;
-    data.nrm = data.col = data.mat = null;
+    data.nrm = data.mat = null;
+    if (!data._keepPositions) data.col = null;
     // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
     // grid is bounded (tracks span a few km), so pack signed cell coords.
     const buckets = new Map();
@@ -1420,7 +1443,8 @@ const GLX = (function () {
     // Positions are now only referenced by the growable `bk.idx` arrays (as
     // indices, not coords) — drop the vertex coordinate copies before the
     // per-bucket IndexArray allocations below.
-    pos = null; data.pos = null;
+    pos = null;
+    if (!data._keepPositions) data.pos = null;
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();
@@ -1544,6 +1568,18 @@ const GLX = (function () {
     gl.uniform1f(skyU.uSkyGrad,     sky.skyGrad     !== undefined ? sky.skyGrad     : 0.35);
     gl.uniform1f(skyU.uStarDensity, sky.starDensity !== undefined ? sky.starDensity : 1);
     gl.uniform1f(skyU.uDaySkyBlue,  sky.daySkyBlue  !== undefined ? sky.daySkyBlue  : 1);
+    gl.uniform1f(skyU.uMieScatter,  sky.mieScatter  !== undefined ? sky.mieScatter  : 1);
+    gl.uniform1f(skyU.uCloudSilver, sky.cloudSilver !== undefined ? sky.cloudSilver : 1);
+    gl.uniform1f(skyU.uCoronaAureole, sky.coronaAureole !== undefined ? sky.coronaAureole : 1);
+    gl.uniform1f(skyU.uSunDiscSize, sky.sunDiscSize !== undefined ? sky.sunDiscSize : 1);
+    gl.uniform1f(skyU.uStarSize,     sky.starSize     !== undefined ? sky.starSize     : 1);
+    gl.uniform1f(skyU.uStarTwinkle,  sky.starTwinkle  !== undefined ? sky.starTwinkle  : 1);
+    gl.uniform1f(skyU.uMoonDiscSize, sky.moonDiscSize !== undefined ? sky.moonDiscSize : 1);
+    gl.uniform1f(skyU.uMoonHalo,     sky.moonHalo     !== undefined ? sky.moonHalo     : 1);
+    gl.uniform1f(skyU.uSunCorona,    sky.sunCorona    !== undefined ? sky.sunCorona    : 1);
+    gl.uniform1f(skyU.uSunSquash,    sky.sunSquash    !== undefined ? sky.sunSquash    : 1);
+    gl.uniform1f(skyU.uCityGlowReach, sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1);
+    gl.uniform1f(skyU.uCloudDef,     sky.cloudDef     !== undefined ? sky.cloudDef     : 1);
     gl.uniform1f(skyU.uLightning,   sky.lightning   !== undefined ? sky.lightning   : 0);
     setBlend(false);
     setDepthMask(false);
@@ -1815,7 +1851,7 @@ const GLX = (function () {
           const e = _grSel[i]; if (e) { e.d = d; e.o = o; } else _grSel[i] = { d: d, o: o };
         }
         _grSel.length = total;
-        _grSel.sort((a, b) => a.d - b.d);
+        _grSel.sort(_grByD);
         grNL = Math.min(12, total);
         for (let i = 0; i < grNL; i++) {
           const o = _grSel[i].o;
@@ -2002,9 +2038,43 @@ const GLX = (function () {
     // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
     // shipped grade so a missing tune object changes nothing.
     const CT = opts && opts.tune || null;
+    gl.uniform4f(compU.uTone0,
+      CT && CT.blacks != null ? CT.blacks : 0,
+      CT && CT.shadows != null ? CT.shadows : 0,
+      CT && CT.midtones != null ? CT.midtones : 0,
+      CT && CT.highlights != null ? CT.highlights : 0);
+    gl.uniform4f(compU.uTone1,
+      CT && CT.whites != null ? CT.whites : 0,
+      CT && CT.toe != null ? CT.toe : 0,
+      CT && CT.shoulder != null ? CT.shoulder : 0, 0);
+    gl.uniform3f(compU.uLift,
+      CT && CT.liftR != null ? CT.liftR : 0,
+      CT && CT.liftG != null ? CT.liftG : 0,
+      CT && CT.liftB != null ? CT.liftB : 0);
+    gl.uniform3f(compU.uGamma,
+      CT && CT.gammaR != null ? CT.gammaR : 1,
+      CT && CT.gammaG != null ? CT.gammaG : 1,
+      CT && CT.gammaB != null ? CT.gammaB : 1);
+    gl.uniform3f(compU.uGain,
+      CT && CT.gainR != null ? CT.gainR : 1,
+      CT && CT.gainG != null ? CT.gainG : 1,
+      CT && CT.gainB != null ? CT.gainB : 1);
     gl.uniform1f(compU.uContrast,   CT && CT.contrast   != null ? CT.contrast   : 1.12);
     gl.uniform1f(compU.uVibrance,   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
     gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
+    // Skip the whole HDR lift/gamma/gain/tone block when every knob sits at
+    // neutral (the shipped default): applyHdrGrade is then a mathematical
+    // no-op, but it still cost ~20 ALU incl. 4-5 transcendentals on every
+    // full-screen pixel of every frame.
+    const _hg = CT && (
+      (CT.blacks || 0) !== 0 || (CT.shadows || 0) !== 0 || (CT.midtones || 0) !== 0 ||
+      (CT.highlights || 0) !== 0 || (CT.whites || 0) !== 0 || (CT.toe || 0) !== 0 ||
+      (CT.shoulder || 0) !== 0 || (CT.liftR || 0) !== 0 || (CT.liftG || 0) !== 0 ||
+      (CT.liftB || 0) !== 0 || (CT.gammaR != null && CT.gammaR !== 1) ||
+      (CT.gammaG != null && CT.gammaG !== 1) || (CT.gammaB != null && CT.gammaB !== 1) ||
+      (CT.gainR != null && CT.gainR !== 1) || (CT.gainG != null && CT.gainG !== 1) ||
+      (CT.gainB != null && CT.gainB !== 1));
+    gl.uniform1f(compU.uHdrGradeOn, _hg ? 1.0 : 0.0);
     gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
     gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
     gl.uniform1f(compU.uVigSoft,    CT && CT.vignetteSoft != null ? CT.vignetteSoft : 0.35);
@@ -2018,10 +2088,17 @@ const GLX = (function () {
     gl.uniform1f(compU.uSharpen,    CT && CT.sharpen    != null ? CT.sharpen    : 0.0);
     gl.uniform1f(compU.uBlackLift,  CT && CT.blackLift  != null ? CT.blackLift  : 0.005);
     gl.uniform1f(compU.uWhitePoint, CT && CT.whitePoint != null ? CT.whitePoint : 1.0);
+    // ACES TONE CURVE knobs (defaults = the shipped Narkowicz coefficients).
+    gl.uniform1f(compU.uAcesA, CT && CT.acesA != null ? CT.acesA : 2.51);
+    gl.uniform1f(compU.uAcesB, CT && CT.acesB != null ? CT.acesB : 0.03);
+    gl.uniform1f(compU.uAcesC, CT && CT.acesC != null ? CT.acesC : 2.43);
+    gl.uniform1f(compU.uAcesD, CT && CT.acesD != null ? CT.acesD : 0.59);
+    gl.uniform1f(compU.uAcesE, CT && CT.acesE != null ? CT.acesE : 0.14);
     gl.uniform1f(compU.uSpeedBlur,  opts && opts.speedBlur != null ? opts.speedBlur : 0.0);
     // SUN-SHAFT REACH / FLARE STREAK knobs (defaults reproduce the shipped look).
     gl.uniform1f(compU.uShaftDecay,  CT && CT.sunShaftDecay != null ? CT.sunShaftDecay : 0.82);
     gl.uniform1f(compU.uFlareStreak, CT && CT.flareStreak   != null ? CT.flareStreak   : 7.0);
+    gl.uniform1f(compU.uFlareStreak2, CT && CT.flareStreak2 != null ? CT.flareStreak2  : 0.5);
     // EXHAUST HEAT HAZE: screen-anchored shimmer plume (opts.haze = {u, v, str}
     // computed by the caller from the player tailpipe projection; absent = off).
     const hz = opts && opts.haze;

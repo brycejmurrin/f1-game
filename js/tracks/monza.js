@@ -14,6 +14,18 @@
     night: false,
     theme: "green",
     lengthKm: 5.8,
+    // Bespoke landmarks below are authored against the racing lap used by the
+    // Monza brief (0 = start/finish), not the unrotated source trace.
+    sceneryCoordinates: "racing",
+    // Keep the royal-park terrain under the deep forest ranks and hero models.
+    terrainOuter: 120,
+    dressingExclusions: [
+      { kind: "foliage", s0: 0.93, s1: 0.07 },          // pits / Tribuna Centrale
+      { kinds: ["foliage", "lamps"], s0: 0.20, s1: 0.27, side: -1 }, // west lake
+      { kinds: ["foliage", "lamps"], s0: 0.37, s1: 0.43, side: 1 },  // Villa lake
+      { kind: "foliage", s0: 0.49, s1: 0.59, side: -1 }, // banking ruin sightline
+      { kind: "foliage", s0: 0.69, s1: 0.77 },           // flyover approaches
+    ],
     sunAzimBias: 0.16,   // royal-park afternoon: western sun raking through the trees onto the Curva Grande
     baseHW: 8,
     pal: {
@@ -32,14 +44,19 @@
       { t: 70, l: 70 }, { t: 75, l: 130 }, { t: 60, l: 120 }, { t: 0, l: 260 }, { t: -50, l: 55 }, { t: 65, l: 70 },
       { t: 0, l: 360 }, { t: 150, l: 220 },
     ],
-    // Royal-park circuit is nearly flat — a gentle rise through the Lesmos.
-    elevations: [{ s: 0.55, halfM: 320, rise: 7 }],
+    // Source-trace coordinates: a shallow Roggia dip and modest Lesmo crest.
+    // startFrac=0.0125 maps these to racing s≈0.30 and s≈0.48.
+    elevations: [
+      { s: 0.3125, halfM: 220, rise: -1.5 },
+      { s: 0.4925, halfM: 340, rise: 4.5 },
+    ],
     scenery: function (api) {
-      const { out, MAT, n, ds, pyMin, place, prop, backdrop, groundPlane, groundYAt, every,
+      const { out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
         onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
         grandstand, billboard, gantry, marshalPost, wall, fence, guardrail, tyreWall,
         addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
-        underpassPortal, px, pz } = api;
+        modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
+        px, pz } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Royal-park greens — warm Italian afternoon palette.
@@ -53,7 +70,7 @@
       //    Ranks A-D provide depth; Lesmo section adds extra close-canopy trees.
       // =====================================================================
       // Rank A — front pines close to verge (umbrella pines).
-      every(13, (k) => {
+      every(24, (k) => {
         const h = hash(k * 31);
         if (h < 0.08) return;
         const side = h < 0.5 ? -1 : 1;
@@ -61,7 +78,7 @@
         if (h > 0.25) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
       });
       // Rank B — broadleaf trees interleaved with pines (oaks, maples, ashes).
-      every(15, (k) => {
+      every(28, (k) => {
         const h = hash(k * 53 + 9);
         if (h < 0.15) return;
         const side = h < 0.5 ? -1 : 1;
@@ -69,7 +86,7 @@
         if (h > 0.48) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
       });
       // Rank C — set-back taller pines (deep-park wall).
-      every(18, (k) => {
+      every(36, (k) => {
         const h = hash(k * 41 + 3);
         if (h < 0.20) return;
         const side = h < 0.5 ? -1 : 1;
@@ -78,14 +95,14 @@
         if (h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
       });
       // Rank D — outermost broadleaf rank blending to backdrop.
-      every(24, (k) => {
+      every(55, (k) => {
         const h = hash(k * 67 + 17);
         if (h < 0.35) return;
         tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
         if (h > 0.7) tree(k, h > 0.85 ? -1 : 1, 55 + h * 22, 11 + h * 8, LEAF);
       });
       // Low underbrush / shrubs along the verge for ground texture.
-      every(11, (k) => {
+      every(24, (k) => {
         const h = hash(k * 97 + 23);
         if (h < 0.50) return;
         bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4,
@@ -99,9 +116,9 @@
       hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
       // Lesmo 1 & 2 (s≈0.43–0.54) — famous woodland curves: extra pines to
-      // reinforce the canopy through these fast sweeps. every(5)≈20m spacing
-      // keeps SwiftShader safe while creating a convincing tree tunnel effect.
-      every(5, (k) => {
+      // reinforce the canopy through these fast sweeps. A dedicated ~14 m rank
+      // keeps the corridor dense without duplicating the four full-lap layers.
+      every(14, (k) => {
         const s = k / n;
         if (s < 0.43 || s > 0.54) return;
         const h = hash(k * 13 + 7);
@@ -156,19 +173,26 @@
           { wall: pitWall, window: [0.30, 0.34, 0.40], floor: 4.5, roof: true });
       }
       // New permanent tensile roofing structure over the pit building.
-      // Raised to full-height permanent canopy. Anchored via `out` (not anchor().out).
+      // Atomic hero group: preflight the complete 72 m footprint before emitting
+      // any roof geometry, so a foldback can never leave a partial canopy.
       {
         const aPit = anchor(K(0.99), 1, 18);
-        // Main roof panel — permanent hard structure, slightly warmed grey.
-        addBox(out, vadd(aPit.c, aPit.u, 11), [5.2, 0.8, 72], [0.86, 0.84, 0.80], [aPit.r, aPit.u, aPit.t]);
-        // ── Lit under-canopy strip (warm amber at night, subtly bright at day) ──
-        addBox(out, vadd(aPit.c, aPit.u, 10.2), [4.8, 0.25, 70], [0.96, 0.88, 0.56], [aPit.r, aPit.u, aPit.t]);
-        // Support pillars — raised clear of the roof panel so they don't interpenetrate it.
-        // Pillar top is at y+9 (below the roof at y+11), leaving a visible gap.
+        const canopyCenter = vadd(aPit.c, aPit.u, 10.7);
+        modelGroup("monza-pit-canopy", {
+          center: canopyCenter,
+          size: [5.4, 1.3, 72],
+          basis: [aPit.r, aPit.u, aPit.t],
+        }, (stage) => {
+          addBox(stage, vadd(aPit.c, aPit.u, 11), [5.2, 0.8, 72],
+            [0.86, 0.84, 0.80], [aPit.r, aPit.u, aPit.t]);
+          addBox(stage, vadd(aPit.c, aPit.u, 10.2), [4.8, 0.25, 70],
+            [0.96, 0.88, 0.56], [aPit.r, aPit.u, aPit.t]);
+        }, { required: true });
+
+        // Terrain-anchored columns remain wholly behind the pit building.
         for (let j = 0; j < 4; j++) {
           const s2 = 0.965 + j * 0.025;
           const a2 = anchor(K(s2), 1, 16);
-          // Pillar from ground to y+9; roof panel starts at y+10.6 so no intersection.
           addCyl(out, a2.c, 0.35, 9, [0.72, 0.70, 0.68], 8, null);
         }
       }
@@ -213,16 +237,21 @@
       // 3. CHICANES & PARABOLICA — gravel traps, kerb trim, tyre walls, stands
       // =====================================================================
       // Variante del Rettifilo (s~0.04) — heavy braking, big gravel, tyre wall.
-      groundPlane(K(0.04), 1, 5, [24, 34], GRAVEL);
+      groundPatch(K(0.04), 1, 5, [24, 0.18, 34], GRAVEL,
+        { id: "monza-rettifilo-gravel", samples: 6 });
       tyreWall(0.03, 0.055, 1, 4, [0.88, 0.20, 0.18]);
       grandstand(0.05, -1, 12, 76, [0.56, 0.58, 0.60], [0.72, 0.30, 0.26]);
       marshalPost(K(0.045), 1, 10);
 
       // Variante della Roggia (s~0.30) — shaded chicane, gravel both sides, fog detail.
-      groundPlane(K(0.30), -1, 6, [22, 28], GRAVEL);
-      groundPlane(K(0.305), 1, 5, [20, 26], GRAVEL);
+      groundPatch(K(0.30), -1, 6, [22, 0.18, 28], GRAVEL,
+        { id: "monza-roggia-gravel-left", samples: 6 });
+      groundPatch(K(0.305), 1, 5, [20, 0.18, 26], GRAVEL,
+        { id: "monza-roggia-gravel-right", samples: 6 });
       tyreWall(0.29, 0.315, -1, 4, [0.20, 0.40, 0.85]);
-      grandstand(0.30, 1, 13, 70, [0.55, 0.57, 0.59], [0.70, 0.30, 0.26]);
+      // Keep the stand compact and set back: crowdBank uses intentionally cheap
+      // raw spectators, so its full footprint must stay clear of the chicane arc.
+      grandstand(0.30, 1, 20, 52, [0.55, 0.57, 0.59], [0.70, 0.30, 0.26]);
       // Thin drifting fog boxes under tree shade (Roggia's signature element).
       const fogCol = [0.76, 0.74, 0.68];   // warm tan-grey fog
       for (let i = 0; i < 3; i++) {
@@ -234,20 +263,25 @@
       marshalPost(K(0.31), -1, 9);
 
       // Lesmo 1 & 2 (s~0.45–0.52) — tight woodland curves, gravel + tyre.
-      groundPlane(K(0.46), 1, 5, [18, 26], GRAVEL);
-      groundPlane(K(0.51), 1, 5, [18, 24], GRAVEL);
+      groundPatch(K(0.46), 1, 5, [18, 0.18, 26], GRAVEL,
+        { id: "monza-lesmo-one-gravel", samples: 5 });
+      groundPatch(K(0.51), 1, 5, [18, 0.18, 24], GRAVEL,
+        { id: "monza-lesmo-two-gravel", samples: 5 });
       tyreWall(0.45, 0.47, 1, 4, [0.85, 0.78, 0.20]);
       marshalPost(K(0.48), 1, 9);
 
       // Variante Ascari (s~0.78) — triple chicane, gravel run-offs, grandstand.
-      groundPlane(K(0.78), -1, 6, [28, 40], GRAVEL);
-      groundPlane(K(0.795), 1, 6, [24, 32], GRAVEL);
+      groundPatch(K(0.78), -1, 6, [28, 0.18, 40], GRAVEL,
+        { id: "monza-ascari-gravel-left", samples: 7 });
+      groundPatch(K(0.795), 1, 6, [24, 0.18, 32], GRAVEL,
+        { id: "monza-ascari-gravel-right", samples: 6 });
       tyreWall(0.77, 0.80, -1, 4, [0.88, 0.20, 0.18]);
       grandstand(0.78, -1, 14, 80, [0.56, 0.58, 0.60], [0.72, 0.30, 0.26]);
       marshalPost(K(0.785), 1, 9);
 
       // Parabolica / Curva Alboreto (s~0.88–0.93) — wide outer gravel, big arc stand.
-      groundPlane(K(0.90), -1, 8, [50, 110], GRAVEL);
+      groundPatch(K(0.90), -1, 8, [50, 0.18, 110], GRAVEL,
+        { id: "monza-parabolica-gravel", samples: 10 });
       grandstand(0.905, 1, 14, 96, [0.55, 0.57, 0.59], [0.74, 0.32, 0.28]);
       tyreWall(0.885, 0.92, -1, 6, [0.88, 0.20, 0.18]);
       marshalPost(K(0.91), 1, 11);
@@ -259,6 +293,16 @@
       fence(0.295, 0.32, 1, 8, 4, [0.74, 0.76, 0.80]);
       fence(0.77, 0.80, -1, 9, 4, [0.74, 0.76, 0.80]);
       fence(0.89, 0.93, 1, 9, 4, [0.74, 0.76, 0.80]);
+
+      // Royal-park armco is the visible solid boundary between major runoff
+      // zones. The shared helper grounds every segment and registers matching
+      // collision, eliminating the old long stretches of scenery-only edge.
+      for (const [s0, s1] of [
+        [0.07, 0.28], [0.32, 0.44], [0.53, 0.76], [0.81, 0.88],
+      ]) {
+        guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
+      }
 
       // Marshal posts sprinkled around the rest of the lap.
       for (const s of [0.12, 0.20, 0.38, 0.58, 0.66, 0.84, 0.96]) {
@@ -273,92 +317,33 @@
       //    well off-track in the infield/park so it reads as a historic relic.
       // =====================================================================
       (function buildBanking() {
-        // Refined weathered concrete tones: main grey, darker in shadows, moss-green streaks
         const conc = [0.66, 0.64, 0.60], concDk = [0.54, 0.52, 0.49], moss = [0.36, 0.48, 0.32];
-        const crackCol = [0.50, 0.48, 0.44]; // darker cracks/shadows
-        // Anchor the structure in the park to the LEFT of the Lesmo area.
-        const a = anchor(K(0.535), -1, 95);
-        // Lay the banking as a gentle arc of N tilted panels.
-        const N = 16, arcSpan = 1.9, radius = 120;
-        // Base Y is the ground level at this anchor point.
-        const baseY = a.c[1];
-
-        // ── Pillar heights — computed first so we can size panels to clear them ──
-        // Pillars: ground → pillarH. Panels: ground → ground + panelH.
-        // To avoid interpenetration the panel base must sit AT OR ABOVE pillarH,
-        // OR the panel must be positioned so its lowest extent is above pillar top.
-        // Strategy: panels are centered at baseY + h*0.5 (half the slab height),
-        // so their bottom edge is at baseY. Pillars are also baseY-based.
-        // We offset panels upward slightly (baseY + 0.4) so the bottom clears ground
-        // and pillars run from baseY (ground) to pillarH — they share the lower
-        // region but panels are WIDER laterally, not overlapping pillar centres.
-        // Pillars are placed at the arc midpoints between panels (every 2nd i)
-        // at a slight inward offset, so their cylinder footprint doesn't hit panels.
-
-        for (let i = 0; i < N; i++) {
-          const f = i / (N - 1);
-          const ang = -arcSpan / 2 + f * arcSpan;
-          // centre of this panel out along the arc (in r/t plane)
-          const ox = Math.sin(ang) * radius, oz = (1 - Math.cos(ang)) * radius;
-          const cx = a.c[0] + a.r[0] * ox + a.t[0] * oz;
-          const cz = a.c[2] + a.r[2] * ox + a.t[2] * oz;
-          if (onTrack(cx, cz, 18)) continue;
-          // tilt the panel so its top leans outward → banked look.
-          const owx = a.r[0] * Math.sin(ang) + a.t[0] * Math.cos(ang);
-          const owz = a.r[2] * Math.sin(ang) + a.t[2] * Math.cos(ang);
-          const owl = Math.hypot(owx, owz) || 1;
-          const od = [owx / owl, 0, owz / owl];
-          const tilt = 0.65; // 80% gradient
-          const upv = [od[0] * tilt, 1, od[2] * tilt];
-          const ul = Math.hypot(upv[0], upv[1], upv[2]);
-          const u = [upv[0] / ul, upv[1] / ul, upv[2] / ul];
-          // forward along the arc (tangent)
-          const tfx = a.r[0] * Math.cos(ang) - a.t[0] * Math.sin(ang);
-          const tfz = a.r[2] * Math.cos(ang) - a.t[2] * Math.sin(ang);
-          const tfl = Math.hypot(tfx, tfz) || 1;
-          const fw = [tfx / tfl, 0, tfz / tfl];
-          const rr = od; // right = outward
-          const h = 11 + (i % 3) * 1.5;
-          const col = (i % 4 === 0) ? concDk : conc;
-          // Banked slab: center elevated to baseY + h*0.5 so bottom sits at baseY.
-          // Shifted up by 0.4 m so the slab bottom clears the ground plane cleanly.
-          addBox(out, [cx, baseY + h * 0.5 + 0.4, cz], [8.5, h, 14], col, [rr, u, fw]);
-          // Moss streak band on the face (algae from decades of weathering).
-          if (i % 2 === 0)
-            addBox(out, [cx + od[0] * 0.7, baseY + h * 0.42 + 0.4, cz + od[2] * 0.7],
-                   [0.8, h * 0.55, 13], moss, [rr, u, fw]);
-          // Weathering cracks: vertical stress lines from tree roots and freeze-thaw.
-          if (i % 3 === 1) {
-            addBox(out, [cx + od[0] * 0.25, baseY + h * 0.5 + 0.4, cz + od[2] * 0.25],
-                   [0.18, h * 0.75, 12.5], crackCol, [rr, u, fw]);
+        const tierPoints = (dist) => {
+          const points = [];
+          for (let s = 0.50; s <= 0.58 + 1e-9; s += 0.01) {
+            const arc = Math.sin(((s - 0.50) / 0.08) * Math.PI);
+            points.push({ k: K(s), side: -1, dist: dist + arc * 10 });
           }
-        }
-
-        // Crumbling support pillars along the base of the bank.
-        // Pillars are placed at every-other arc position, offset INWARD from the
-        // panel face by 1.5 m so they don't interpenetrate the slab bodies.
-        for (let i = 0; i < N; i += 2) {
-          const f = i / (N - 1);
-          const ang = -arcSpan / 2 + f * arcSpan;
-          const ox = Math.sin(ang) * radius, oz = (1 - Math.cos(ang)) * radius;
-          // Inward offset: move the pillar 1.8 m toward the arc centre
-          // so its radius (1.2 m) clears the inner face of the panel slab.
-          const inOx = Math.sin(ang) * (radius - 1.8);
-          const inOz = (1 - Math.cos(ang)) * (radius - 1.8);
-          const cx = a.c[0] + a.r[0] * inOx + a.t[0] * inOz;
-          const cz = a.c[2] + a.r[2] * inOx + a.t[2] * inOz;
-          if (onTrack(cx, cz, 6)) continue;
-          const pillarH = 7 + (i % 4) * 1.0;  // slightly shorter — tops well below slab centre
-          // Start pillar at ground level (baseY) — no negative offset to avoid floating.
-          addCyl(out, [cx, baseY, cz], 1.1, pillarH, concDk, 8, null);
-          // Weathered/crumbling moss detail on pillar — clamped to pillar body.
-          if (i % 4 === 0) {
-            const mossH = pillarH * 0.38;
-            const mossY = baseY + pillarH * 0.58;  // upper third of pillar
-            addCyl(out, [cx + (hash(i) - 0.5) * 0.3, mossY, cz + (hash(i * 2) - 0.5) * 0.3],
-                   0.35, mossH, moss, 6, null);
-          }
-        }
+          return points;
+        };
+        // Three terrain-following steps preserve the steep oval silhouette while
+        // sampling every endpoint instead of freezing a 120 m model to one Y.
+        groundedSegments({
+          id: "monza-banking-lower", points: tierPoints(68),
+          width: 8.5, height: 4.5, color: concDk,
+        });
+        groundedSegments({
+          id: "monza-banking-middle", points: tierPoints(75),
+          width: 8.5, height: 8.5, color: conc,
+        });
+        groundedSegments({
+          id: "monza-banking-upper", points: tierPoints(82),
+          width: 8.5, height: 12.5, color: concDk,
+        });
+        groundedSegments({
+          id: "monza-banking-moss", points: tierPoints(66.8),
+          width: 0.8, height: 3.2, color: moss,
+        });
       })();
 
       // =====================================================================
@@ -403,9 +388,12 @@
         motorhome(k, -1, 55 + h * 10, 10, 4, 6, { wall: [0.6 + h * 0.3, 0.6, 0.62] });
       });
 
-      // Ornamental park lakes (reflective blue slabs).
-      groundPlane(K(0.40), 1, 95, [180, 230], [0.30, 0.50, 0.70]);
-      groundPlane(K(0.24), -1, 90, [140, 170], [0.28, 0.48, 0.68]);
+      // Ornamental park lakes use the reflective water buffer and explicit model
+      // intent; required diagnostics catch accidental suppression or bad sizing.
+      waterSurface(K(0.40), 1, 95, [180, 0.18, 230], [0.30, 0.50, 0.70],
+        { id: "monza-villa-lake", required: true });
+      waterSurface(K(0.24), -1, 90, [140, 0.18, 170], [0.28, 0.48, 0.68],
+        { id: "monza-west-park-lake", required: true });
       // A few lakeside broadleaf clusters.
       for (const [s, sd] of [[0.40, 1], [0.24, -1]]) {
         for (let i = 0; i < 4; i++) tree(K(s + (i - 2) * 0.01), sd, 70 + i * 8, 12 + i, LEAF_L);
@@ -673,42 +661,50 @@
       //     crossing the modern circuit on the Ascari approach.
       (function sopraelevataFlyover() {
         const conc = [0.66, 0.64, 0.60], concDk = [0.54, 0.52, 0.49];
-        const moss = [0.36, 0.48, 0.32];
-        // Overhead span via shared portal (RAW deck — intentionally over tarmac).
-        if (typeof underpassPortal === "function") {
-          for (const [s, depth] of [[0.70, 20], [0.72, 22], [0.74, 22], [0.76, 18]]) {
-            underpassPortal(s, {
-              h: 6.8, thick: 2.2, depth,
-              col: (s < 0.73) ? conc : concDk,
-              pierGap: 1.9, pierW: 2.4,
-            });
-          }
+        const bridgeS = 0.73, clearance = 6.8;
+        // One declared crossing replaces four overlapping legacy portals. The
+        // required span records its 6.8 m underside clearance explicitly.
+        overheadSpan({
+          id: "monza-sopraelevata-flyover",
+          frac: bridgeS,
+          clearance,
+          thickness: 2.2,
+          depth: 72,
+          span: 28,
+          // Supports are emitted and preflighted as the two required groups
+          // below; disable the span helper's generic depth-sized support boxes.
+          supports: false,
+          color: concDk,
+          required: true,
+        });
+
+        // Atomic, terrain-seated piers at the same footprints validated above.
+        for (const side of [-1, 1]) {
+          const a = anchor(K(bridgeS), side, 4.2);
+          modelGroup(`monza-sopraelevata-pier-${side < 0 ? "left" : "right"}`, {
+            center: vadd(a.c, a.u, clearance / 2),
+            size: [2.4, clearance, 4],
+            basis: [a.r, a.u, a.t],
+          }, (stage) => {
+            addCyl(stage, a.c, 1.2, clearance, concDk, 8, [a.r, a.u, a.t]);
+          }, { required: true });
         }
-        // Tilted banking wings both sides — sell the Sopraelevata bank silhouette
-        // rising toward the deck, moss-streaked weathered concrete.
-        along(0.695, 0.765, 11, (k) => {
-          const s = k / n;
-          const t = (s - 0.695) / 0.07;                 // 0→1 through the span
-          const rise = 5 + Math.sin(Math.min(1, Math.max(0, t)) * Math.PI) * 5.5;
-          for (const side of [-1, 1]) {
-            const hJ = hash(k * 13 + side + 3);
-            const gap = 10 + (1 - Math.sin(Math.min(1, Math.max(0, t)) * Math.PI)) * 5;
-            const a = anchor(k, side, gap);
-            // Lean outward (~banked oval look), matching the s~0.53 ruin tilt.
-            const tilt = 0.55;
-            const upv = [a.r[0] * side * tilt, 1, a.r[2] * side * tilt];
-            const ul = Math.hypot(upv[0], upv[1], upv[2]) || 1;
-            const uu = [upv[0] / ul, upv[1] / ul, upv[2] / ul];
-            const h = rise + hJ * 1.8;
-            const col = (k % 3 === 0) ? concDk : conc;
-            out._mat = MAT.CONCRETE;
-            addBox(out, vadd(a.c, a.u, h * 0.42), [7.5, h, 10], col, [a.r, uu, a.t]);
-            if (hJ > 0.45) {
-              addBox(out, vadd(vadd(a.c, a.r, side * 0.7), a.u, h * 0.38),
-                     [0.75, h * 0.48, 9], moss, [a.r, uu, a.t]);
-            }
-            out._mat = 0;
-          }
+
+        // The surviving oval banks rise from sampled terrain along both sides,
+        // rather than sharing one midpoint height and floating over the approach.
+        const points = (side) => {
+          const result = [];
+          for (let s = 0.695; s <= 0.765 + 1e-9; s += 0.01)
+            result.push({ k: K(s), side, dist: 10 });
+          return result;
+        };
+        groundedSegments({
+          id: "monza-sopraelevata-wing-left",
+          points: points(-1), width: 7.5, height: 8.5, color: conc,
+        });
+        groundedSegments({
+          id: "monza-sopraelevata-wing-right",
+          points: points(1), width: 7.5, height: 8.5, color: conc,
         });
       })();
 
@@ -737,7 +733,7 @@
 
       // 10c. Curva Grande pine wall — densify umbrella pines both sides
       //     ~s 0.08–0.18 so the fast sweep reads as a green corridor at speed.
-      every(5, (k) => {
+      every(14, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
@@ -746,6 +742,101 @@
         if (h > 0.40) pine(k, -1, 14 + h * 3, 18 + h * 10, PINE_D);
         if (h > 0.50) pine(k,  1, 15 + h * 3, 17 + h * 9, PINE);
       });
+
+      // =====================================================================
+      // 11. ROYAL-PARK HERO LAYERS — deeper woodland, banking archaeology,
+      //     tifosi camps, the old Vedano approach and braking-zone crowds.
+      //     All additions stay in short hero sectors and well behind barriers.
+      // =====================================================================
+
+      // 11a. Sparse second-canopy sentinels close only Curva Grande and Lesmo.
+      // The 30–38 m setback leaves the fast driver's sightline open; a coarse
+      // 42 m cadence adds depth without another expensive continuous tree wall.
+      every(42, (k) => {
+        const s = k / n;
+        const grande = s >= 0.09 && s <= 0.155;
+        const lesmo = s >= 0.445 && s <= 0.525;
+        if (!grande && !lesmo) return;
+        const h = hash(k * 23 + 41);
+        pine(k, -1, 30 + h * 6, 16 + h * 8, h < 0.5 ? PINE_D : PINE);
+        tree(k, 1, 32 + h * 6, 13 + h * 7, h < 0.45 ? LEAF_D : LEAF);
+        if (lesmo && h > 0.58)
+          pine(k, h > 0.78 ? -1 : 1, 38 + h * 5, 18 + h * 7, PINE_D);
+      });
+
+      // 11b. Abandoned oval control hut above the surviving Sopraelevata tiers.
+      // A faded scoring panel and concrete stair ribs make the ruin read as
+      // motorsport archaeology rather than a generic retaining wall.
+      building(K(0.545), -1, 94, 13, 9, 10, {
+        wall: [0.57, 0.55, 0.51], window: [0.28, 0.30, 0.29], floor: 4.5,
+      });
+      billboard(K(0.545), -1, 91, 12, 4.5, [0.72, 0.68, 0.58]);
+      for (let i = 0; i < 4; i++) {
+        const a = anchor(K(0.515 + i * 0.018), -1, 87);
+        addBox(out, vadd(a.c, a.u, 3.2), [1.1, 6.4, 5.5],
+          i % 2 ? [0.53, 0.51, 0.48] : [0.61, 0.59, 0.55],
+          [a.r, a.u, a.t]);
+      }
+
+      // 11c. Compact race-weekend camps in woodland clearings: striped ridge
+      // tents, support vans and Italian flag markers. Each clearing is one
+      // bounded atomic model, far enough out to preserve high-speed sightlines.
+      function tifosiCamp(id, s, side, gap) {
+        const a = anchor(K(s), side, gap);
+        const b = [a.r, a.u, a.t];
+        modelGroup(id, {
+          center: vadd(a.c, a.u, 4),
+          size: [24, 8, 44],
+          basis: b,
+        }, (stage) => {
+          const tentCols = [
+            [0.84, 0.16, 0.13], [0.92, 0.90, 0.82], [0.20, 0.48, 0.24],
+          ];
+          for (let i = 0; i < 6; i++) {
+            const row = i % 2, alongOff = (Math.floor(i / 2) - 1) * 12;
+            const across = (row ? 1 : -1) * 5;
+            const p = vadd(vadd(a.c, a.r, across), a.t, alongOff);
+            addPrism(stage, vadd(p, a.u, 1.5), [5.5, 3, 6.5],
+              tentCols[i % tentCols.length], b);
+          }
+          for (let i = 0; i < 2; i++) {
+            const p = vadd(vadd(a.c, a.r, 7.5), a.t, (i - 0.5) * 18);
+            addBox(stage, vadd(p, a.u, 1.4), [3.2, 2.8, 7],
+              [0.82, 0.82, 0.78], b);
+          }
+          const flagBase = vadd(vadd(a.c, a.r, -8), a.t, 17);
+          addCyl(stage, flagBase, 0.10, 8, [0.30, 0.30, 0.31], 6, b);
+          addBox(stage, vadd(vadd(flagBase, a.u, 6.8), a.t, 1.4),
+            [0.16, 1.8, 4.2], [0.18, 0.58, 0.25], b);
+        });
+      }
+      tifosiCamp("monza-tifosi-camp-curva-grande", 0.185, -1, 54);
+      tifosiCamp("monza-tifosi-camp-ascari", 0.825, 1, 56);
+
+      // 11d. Vedano-side historic entrance: a cream masonry arch and pediment
+      // set deep behind Parabolica, suggesting the old park gateway without
+      // creating an overhead obstruction on the racing circuit.
+      {
+        const a = anchor(K(0.945), 1, 58);
+        const b = [a.r, a.u, a.t], stone = [0.84, 0.80, 0.70];
+        modelGroup("monza-vedano-gate", {
+          center: vadd(a.c, a.u, 7),
+          size: [7, 14, 24],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(vadd(a.c, a.t, -9), a.u, 5), [6, 10, 4.2], stone, b);
+          addBox(stage, vadd(vadd(a.c, a.t, 9), a.u, 5), [6, 10, 4.2], stone, b);
+          addBox(stage, vadd(a.c, a.u, 10.2), [6, 2.2, 22], [0.77, 0.72, 0.62], b);
+          addPrism(stage, vadd(a.c, a.u, 12.3), [6.4, 2.5, 23],
+            [0.88, 0.84, 0.74], b);
+        });
+      }
+
+      // 11e. Opposing, compact tifosi stands at the three major braking zones.
+      // Their 28–32 m clearances keep marker boards and corner entry visible.
+      grandstand(0.032, 1, 32, 54, [0.54, 0.55, 0.57], [0.82, 0.24, 0.20]);
+      grandstand(0.295, -1, 28, 50, [0.53, 0.54, 0.56], [0.80, 0.25, 0.20]);
+      grandstand(0.775, 1, 30, 58, [0.54, 0.55, 0.57], [0.82, 0.25, 0.20]);
     },
   }
   );

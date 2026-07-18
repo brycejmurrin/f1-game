@@ -411,7 +411,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(3) godrayTex : texture_2d<f32>   additive shafts
   //      @binding(4) samp      : sampler           linear clamp (all four)
   //      @binding(5) U         : uniform  CompositeU
-  //    UNIFORM CompositeU (144 B):
+  //    UNIFORM CompositeU (256 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
   //      grade       : vec4<f32>  off  32   (contrast, vibrance, saturation, tint)
@@ -426,7 +426,18 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          sharpen  = unsharp-mask crispness
   //                                          speedBlur= radial centre->edge smear
   //                                                     (GLX folds car speed in)
-  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, _pad, _pad, _pad)
+  //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, acesE, flareStreak)
+  //      tone0       : vec4<f32>  off 144   (blacks, shadows, midtones, highlights)
+  //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, _pad)
+  //      lift        : vec4<f32>  off 176   (RGB lift, _pad)
+  //      gamma       : vec4<f32>  off 192   (RGB gamma, _pad)
+  //      gain        : vec4<f32>  off 208   (RGB gain, _pad)
+  //      aces        : vec4<f32>  off 224   (acesA, acesB, acesC, acesD) — ACES
+  //                                          TONE CURVE knobs; defaults 2.51/0.03/
+  //                                          2.43/0.59 (+ acesE 0.14 in tuneFx.z)
+  //      dirtFx      : vec4<f32>  off 240   (lensDirt, _pad, _pad, _pad) — LENS
+  //                                          DIRT veil + flare blotch (def 0.15);
+  //                                          samples binding(6) dirtTex grime map
   //    NOTE: sunShaft (p0.z) here is an extra scalar multiplier on the godray
   //    contribution; the godray strength itself lives in the GODRAY uniform.
   // ════════════════════════════════════════════════════════════════════════
@@ -441,6 +452,13 @@ struct CompositeU {
   texel       : vec4<f32>,
   imgFx       : vec4<f32>,
   tuneFx      : vec4<f32>,
+  tone0       : vec4<f32>,
+  tone1       : vec4<f32>,
+  lift        : vec4<f32>,
+  gamma       : vec4<f32>,
+  gain        : vec4<f32>,
+  aces        : vec4<f32>,
+  dirtFx      : vec4<f32>,     // off 240   (lensDirt, _pad, _pad, _pad) — LENS DIRT knob
 };
 @group(0) @binding(0) var sceneTex  : texture_2d<f32>;
 @group(0) @binding(1) var bloomTex  : texture_2d<f32>;
@@ -448,9 +466,56 @@ struct CompositeU {
 @group(0) @binding(3) var godrayTex : texture_2d<f32>;
 @group(0) @binding(4) var samp      : sampler;
 @group(0) @binding(5) var<uniform> U : CompositeU;
+@group(0) @binding(6) var dirtTex   : texture_2d<f32>;   // LENS DIRT grime map (linear clamp via samp)
 ${fullscreenTri}
 ${tonemap}
 ${POST_VS}
+
+struct GradeZoneWeights {
+  tone0 : vec4<f32>,
+  white : f32,
+};
+
+// Five overlapping exposure masks in log2 stops around 18% middle grey.
+fn gradeZoneWeights(y : f32) -> GradeZoneWeights {
+  let z = log2(max(y, 1e-6) / 0.18);
+  var w : GradeZoneWeights;
+  // ACES compresses roughly the bottom four linear stops into the first few
+  // display values. Wider low-end masks keep BLACKS and SHADOWS visible after
+  // that compression instead of letting the later black-floor clamp erase them.
+  w.tone0.x = 1.0 - smoothstep(-4.0, -0.75, z);
+  w.tone0.y = smoothstep(-4.0, -1.5, z) * (1.0 - smoothstep(-1.0, 0.75, z));
+  w.tone0.z = smoothstep(-2.5, -0.5, z) * (1.0 - smoothstep(0.5, 2.5, z));
+  w.tone0.w = smoothstep(0.0, 1.5, z) * (1.0 - smoothstep(3.0, 5.0, z));
+  w.white = smoothstep(2.5, 5.0, z);
+  return w;
+}
+
+// Monotonic power curves pivoted at middle grey. RGB rescaling preserves hue.
+fn applyToeShoulder(c_in : vec3<f32>, toe : f32, shoulder : f32) -> vec3<f32> {
+  let c = max(c_in, vec3<f32>(0.0));
+  let oldY = max(dot(c, vec3<f32>(0.2126, 0.7152, 0.0722)), 1e-6);
+  var exponent = exp2(clamp(-shoulder, -1.0, 1.0));
+  if (oldY < 0.18) {
+    exponent = exp2(clamp(toe, -1.0, 1.0));
+  }
+  let newY = 0.18 * pow(oldY / 0.18, exponent);
+  return c * (newY / max(oldY, 1e-6));
+}
+
+fn applyHdrGrade(c_in : vec3<f32>) -> vec3<f32> {
+  var c = U.lift.xyz
+    + (max(U.gain.xyz, vec3<f32>(1e-3)) - U.lift.xyz)
+    * pow(max(c_in, vec3<f32>(0.0)), 1.0 / max(U.gamma.xyz, vec3<f32>(1e-3)));
+
+  let y = max(dot(max(c, vec3<f32>(0.0)), vec3<f32>(0.2126, 0.7152, 0.0722)), 1e-6);
+  let weights = gradeZoneWeights(y);
+  let stops = dot(weights.tone0, U.tone0) + weights.white * U.tone1.x;
+  c = c * exp2(clamp(stops, -4.0, 4.0));
+
+  c = applyToeShoulder(c, U.tone1.y, U.tone1.z);
+  return max(c, vec3<f32>(0.0));
+}
 
 // Lift-gamma-gain colour grade (GLX colourGrade, js/glx.js:1660), reduced.
 fn colourGrade(c_in : vec3<f32>) -> vec3<f32> {
@@ -500,6 +565,17 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let speedBlur  = U.imgFx.z;
   let bloomKnee  = U.imgFx.w;
   let vignetteSoft = U.tuneFx.x;
+  // FLARE CORE STREAK knob (U.tuneFx.y; GLX parity, def 0.5). Read directly — 0 is
+  // a valid "single-streak flare", so the uploader always packs the resolved value.
+  let flareStreak2 = U.tuneFx.y;
+  // FLARE STREAK width (U.tuneFx.w; GLX parity, def 7.0). The main anamorphic
+  // streak's horizontal tightness — the uploader packs the resolved value; the
+  // default reproduces the literal 7.0 this pass used before, so byte-identical.
+  let flareStreak = U.tuneFx.w;
+  // LENS DIRT knob (U.dirtFx.x; GLX parity, def 0.15). Grime on the lens scatters
+  // bright energy into a smudgy veil + breaks the clean flare into blotches. Read
+  // directly — 0 is a valid "clean lens", so the uploader always packs the value.
+  let lensDirt = U.dirtFx.x;
   let texel      = U.texel.xy;
 
   var c = textureSampleLevel(sceneTex, samp, in.uv, 0.0).rgb;
@@ -554,8 +630,24 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // exposure would otherwise leave the halos over-strong.
   c = c + bloomSample * bloomAmt * bloomMask * exposure;
 
+  // LENS DIRT veil (GLX js/shaders/glx-shaders.js:2420-2428): grime on the lens
+  // scatters incoming light into a smudgy film. Driven by the blurred bright-pass
+  // (bloomSample), so it only appears where the frame carries bright energy (sun,
+  // floodlights, neon) — a dark scene stays clean. The dirt value is reused by the
+  // flare modulation below (declared here so it stays in scope).
+  var dirt = 0.0;
+  if (lensDirt > 0.001) {
+    dirt = textureSampleLevel(dirtTex, samp, in.uv, 0.0).r;
+    c = c + bloomSample * exposure * dirt * lensDirt * 2.2;
+  }
+
+  // Professional HDR grade runs after linear-light composition and before ACES.
+  c = applyHdrGrade(c);
+
   // Filmic tonemap (shared leaf) + colour grade. White point scales the knee.
-  c = acesTonemap(c / max(whitePoint, 1e-3));
+  // ACES TONE CURVE knobs (aces.xyzw = a,b,c,d; tuneFx.z = e). Defaults reproduce
+  // the shipped Narkowicz coefficients; the JS uploader always packs them.
+  c = acesTonemap(c / max(whitePoint, 1e-3), U.aces.x, U.aces.y, U.aces.z, U.aces.w, U.tuneFx.z);
   c = colourGrade(c);
 
   // Lens flare: anamorphic streak + ghost circles (GLX js/glx.js:1934).
@@ -563,10 +655,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       sunUV.y >= 0.0 && sunUV.y <= 1.0) {
     var flare = vec3<f32>(0.0);
     let streakY = exp(-abs(in.uv.y - sunUV.y) * 110.0);
-    let streakX = exp(-abs(in.uv.x - sunUV.x) * 7.0);
+    let streakX = exp(-abs(in.uv.x - sunUV.x) * flareStreak);
     flare = flare + vec3<f32>(1.0, 0.80, 0.52) * streakY * streakX * 0.75;
     let streakX2 = exp(-abs(in.uv.x - sunUV.x) * 10.0);
-    flare = flare + vec3<f32>(1.0, 0.92, 0.78) * exp(-abs(in.uv.y - sunUV.y) * 320.0) * streakX2 * 0.5;
+    flare = flare + vec3<f32>(1.0, 0.92, 0.78) * exp(-abs(in.uv.y - sunUV.y) * 320.0) * streakX2 * flareStreak2;
     let toCenter = vec2<f32>(0.5) - sunUV;
     let d0 = length(in.uv - (sunUV + toCenter * 0.5));
     flare = flare + vec3<f32>(1.0, 0.88, 0.65) * smoothstep(0.055, 0.020, d0) * 0.35;
@@ -575,6 +667,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     let d2 = length(in.uv - (sunUV + toCenter * 1.8));
     flare = flare + vec3<f32>(0.50, 1.00, 0.70) * smoothstep(0.028, 0.008, d2) * 0.18;
     flare = flare * flareStr;
+    // LENS DIRT breaks the clean procedural flare into a blotchy, smudged one —
+    // bright spots where grime catches the glare, dimmer in the clean patches
+    // (GLX js/shaders/glx-shaders.js:2515). Reuses the dirt sample from the veil.
+    if (lensDirt > 0.001) {
+      flare = flare * mix(vec3<f32>(1.0), vec3<f32>(0.35 + dirt * 2.2), clamp(lensDirt * 2.0, 0.0, 0.85));
+    }
     flare = flare / (1.0 + flare * 0.6);
     c = c + flare;
   }
@@ -853,7 +951,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     BLOOM_UP_UNIFORM_BYTES: 16,     // BloomUpU
     SSAO_UNIFORM_BYTES: 176,        // SsaoU  (2×mat4 128 + 3×vec4 48)
     GODRAY_UNIFORM_BYTES: 32,       // GodrayU (2×vec4)
-    COMPOSITE_UNIFORM_BYTES: 144,   // CompositeU (9×vec4) — +imgFx/tuneFx controls
+    COMPOSITE_UNIFORM_BYTES: 256,   // CompositeU (16×vec4) — +HDR grading + ACES tone curve + LENS DIRT
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
     SSR_UNIFORM_BYTES: 192,         // SsrU  (2×mat4 128 + 4×vec4 64)
     // chain description

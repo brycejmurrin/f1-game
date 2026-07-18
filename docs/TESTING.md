@@ -1,15 +1,15 @@
 # Testing reference
 
-46 root Playwright spec files (`tests/*.spec.js`), plus 24-file
+69 root Playwright spec files (`tests/*.spec.js`), plus 24-file
 `tests/blank-scan/` and `tests/inspect/` per-circuit suites and explicit-path
 helpers under `tests/galleries/`. **`inspect/**`, `blank-scan/**`, and
 `galleries/**` are excluded from default test discovery** via `testIgnore` in
-`playwright.config.js`, so a bare `npx playwright test` runs the 46 root specs
+`playwright.config.js`, so a bare `npx playwright test` runs the 69 root specs
 only; run the excluded suites by naming them explicitly. The suite covers
 physics, behaviour, geometry, cameras, UI, parts, steering, lighting, scenery,
 gamepad, timing/field hooks, headless RL, and per-circuit blank-frame detection.
 
-The 46 root specs are split into two Playwright projects (see
+The 69 root specs are split into two Playwright projects (see
 `playwright.config.js`): a **`headless`** project (physics/geometry/hook specs,
 no GPU — the default) and a **`render`** project (screenshot/pixel-diff/GL specs
 in `RENDER_SPECS`, run at `--workers=4` to cap SwiftShader concurrency). The old
@@ -27,6 +27,9 @@ npx playwright test tests/tracks-visual.spec.js            # per-circuit pixel-d
 
 npm test -- tests/ui-audit.spec.js
 # output: artifacts/galleries-<allocated-port>/ui-audit/
+
+node --test tests/track-foundation.test.mjs
+node tools/verify-track.cjs --all
 ```
 
 **Named test groups** (via `npm run test:<group>`):
@@ -42,7 +45,7 @@ npm test -- tests/ui-audit.spec.js
 | `collision` | collision, drift, offtrack |
 | `behaviour` | collision + drift + offtrack + world-physics + physics-fixes |
 | `barriers` | track wall geometry + AI-fixes barrier tests |
-| `parts` | parts catalog, budget, persistence, physics |
+| `parts` | parts catalog, recipes, factory presets, caches, viewer, budget, persistence, physics |
 | `steering` | presets, sliders, steering modes, gamepad |
 | `camera` | camera modes + camera hooks + driving hooks |
 | `ui` | UI screenshots: audit + button-touch + desktop + hud (slow) |
@@ -53,6 +56,7 @@ npm test -- tests/ui-audit.spec.js
 | `modes` | season + time-trial game modes |
 | `map` | minimap hooks |
 | `circuit` | walls + autopilot + elevation + audit (all circuit-level) |
+| `tooling` | Node tooling/foundation contracts, including scenery themes and kits |
 | `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min) |
 | `ab` | lighting A/B pixel comparison (`lighting-ab.spec.js`) |
 | `audit` | coverage guard: every spec must belong to ≥1 group (`tools/test-coverage-audit.mjs`) |
@@ -130,6 +134,8 @@ The off-track specs were tightened this way after several thresholds drifted sta
 - `step()` + `physState()` / `probe()` — physics
 - `groundY()` / `Tracks.terrainY()` — rendered-terrain raycast; exact geometry
   (e.g. `terrain-over-road.spec.js`)
+- `modelDiagnostics()` / `geometryDiagnostics()` — required-model outcomes and
+  finite mesh manifests
 - `eyeAt()` / `orbit()` / `view()` — deterministic camera framing for screenshots
 
 **Legacy specs are coarser heuristics** and are inherently flakier:
@@ -173,12 +179,17 @@ hook values.
 | `obs-act-edge.spec.js` | edge cases: `act(n=0)`, `reset(0.999)` lap seam, scan wrap-around, `done` semantics, numeric stability |
 | `ui-audit.spec.js` | portrait+landscape screenshots of all 10 screens |
 | `presets.spec.js`, `sliders.spec.js`, `steering.spec.js` | steering parameter tests |
-| `parts-physics.spec.js` | Parts module unit tests (getMods, getCost, statMult) |
+| `parts-physics.spec.js` | unified resolver, visual-field ownership, consumed mesh uniqueness, geometry/triangle budgets, surface/material semantics, static-emissive bounds, signatures, factory presets, physics/costs |
 | `parts-budget.spec.js` | budget UI and unlimited toggle |
-| `parts-catalog.spec.js` | 8-category setup UI, factory parts, chip interaction |
+| `parts-catalog.spec.js` | 8-category setup UI, universal/supplier/signature/factory badges, access filtering, chip interaction |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
+| `parts-setup-ids.spec.js` | stable `data-cs-cat` / `data-cs-opt` setup selectors |
+| `parts-mesh-cache.spec.js` | bounded body/cockpit/decal/layered-wheel caches with GPU eviction |
+| `parts-factory-presets.spec.js` | AI full-body meshes use deterministic team factory setups instead of player saves |
+| `carview-parts.spec.js` | isolated car viewer exposes all categories, synchronized frames, and grounded-effect controls |
+| `car-effects.spec.js` | state-driven brake heat, ERS deployment, and throttle-lift after-fire contracts |
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
-| `new-hooks.spec.js` | contract tests for the timing/field/energy hooks: `timing()`, `sectorState()`, `lapHistory()`, `fieldState()`, `aiPlace()`, `setEnergy()`, `setLap()`, `trackProfile()`, and `obs().gear` |
+| `new-hooks.spec.js` | contract tests for timing/field/energy hooks plus `modelDiagnostics()` / `geometryDiagnostics()` and day/night model manifests |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
 | `custom-team.spec.js` | custom-team livery editor: colour save frees/rebuilds the decal texture |
 | `data-lifecycle.spec.js` | data hub session plumbing: meeting/year/session/driver responses own their option lists (no stale races) |
@@ -196,6 +207,9 @@ hook values.
 | `galleries/*.spec.js` | explicit-path gallery emitters such as track traces and all-tracks building surveys (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line (roofs, canopies, buildings, crowds). Same point-in-triangle method against the props mesh, in 3D (0.2–5 m band above the road). Per-track `BASELINE` caps document justified overheads (Miami beach canopy, Mexico Foro Sol pass-through, gantries) and small tracked residuals; any new/worsened intrusion on a clean track fails. Measure one track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots` |
+| `track-foundation.test.mjs` | pure Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, and mesh validation |
+| `scenery-kits.test.mjs` | pure Node contracts for deterministic themes, all LandmarkKit forms, all CircuitKit facilities, bounded counts, budgets, atomic routing, and fail-closed behavior |
+| `scenery-kits.spec.js` | browser runtime binding of resolved theme/LandmarkKit/CircuitKit into Silverstone `scenery(api)`, plus finite geometry and no required model-diagnostic failures |
 
 ---
 

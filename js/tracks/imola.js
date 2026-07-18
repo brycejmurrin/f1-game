@@ -8,6 +8,7 @@
     id: "imola",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     startFrac: 0.4950, // GPS-derived (OpenF1 2025, conf=0.383)
+    sceneryCoordinates: "racing",
     name: "IMOLA",
     gp: "Emilia Romagna GP",
     country: "Italy",
@@ -15,23 +16,40 @@
     theme: "green",
     lengthKm: 4.9,
     baseHW: 7,
+    terrainOuter: 120,
+    dressingExclusions: [
+      // Bespoke parkland and selective lamps below own the full circuit.
+      { kinds: ["foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+    ],
     pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.80, 0.72, 0.56], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
     segs: [
       { t: 0, l: 450 }, { t: 90, l: 100 }, { t: -60, l: 90 }, { t: 0, l: 300 }, { t: 70, l: 90 }, { t: -60, l: 80 },
       { t: -80, l: 100 }, { t: 0, l: 400 }, { t: -80, l: 100 }, { t: 60, l: 80 }, { t: 0, l: 180 }, { t: -80, l: 90 },
       { t: 100, l: 110 },
     ],
-    // Hilly Italian classic (~40 m): dip to Acque Minerali, climb to Piratella,
-    // then the descent through the Rivazza.
-    elevations: [{ s: 0.28, halfM: 300, rise: -6 }, { s: 0.52, halfM: 340, rise: 6 }, { s: 0.78, halfM: 240, rise: -5 }],
+    // Elevations are source-trace fractions. These map to racing fractions
+    // 0.34 Piratella, 0.48 Acque Minerali, 0.64 Variante Alta and 0.80 Rivazza.
+    elevations: [
+      { s: 0.835, halfM: 380, rise: 14 },
+      { s: 0.975, halfM: 260, rise: -10 },
+      { s: 0.135, halfM: 360, rise: 16 },
+      { s: 0.295, halfM: 320, rise: -14 },
+    ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
+      const { out, MAT, n, px, pz, pyMin, hash, every, place, prop, backdrop,
+              groundPatch, waterSurface, modelGroup,
               groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               along, mountain, tree, pine, hedge, bush,
               grandstand, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall,
               forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
+      const terrainPatch = (id, s, side, gap, size, col, opts) =>
+        groundPatch(K(s), side, gap, [size[0], 0.18, size[1]], col,
+          Object.assign({ id, samples: Math.max(3, Math.ceil(size[0] / 10)) }, opts));
+      const riverSurface = (id, s, side, gap, size, col, opts) =>
+        waterSurface(K(s), side, gap, [size[0], 0.16, size[1]], col,
+          Object.assign({ id }, opts));
 
       // ---- Palette (Imola riverside parkland: rich greens, warm Italian earth, Santerno blues) ----
       const CANOPY2 = [0.17, 0.44, 0.19];
@@ -84,21 +102,23 @@
 
       // Pit straight + Tamburello approach (wraps around 0) — left standside mixed;
       // right riverside = willow/poplar (no pine wall).
-      forestEdge(0.88, 1.00, -1, 8, { density: 0.42, hMin: 10, hMax: 16,
+      forestEdge(0.88, 1.00, -1, 12, { density: 0.42, hMin: 10, hMax: 16,
         col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.25 });
-      forestEdge(0.88, 1.00,  1, 10, { density: 0.48, hMin: 10, hMax: 16,
+      forestEdge(0.88, 1.00,  1, 12, { density: 0.48, hMin: 10, hMax: 16,
         col: [0.14, 0.36, 0.16], col2: [0.20, 0.44, 0.20], pineFrac: 0.05 });
 
       // Tamburello chicane through Villeneuve — riverside deciduous hug continues +1
-      forestEdge(0.00, 0.14, -1, 8, { density: 0.42, hMin: 10, hMax: 16,
+      forestEdge(0.00, 0.14, -1, 12, { density: 0.42, hMin: 10, hMax: 16,
         col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.20 });
-      forestEdge(0.00, 0.14,  1, 8, { density: 0.50, hMin: 10, hMax: 16,
+      forestEdge(0.00, 0.14,  1, 12, { density: 0.50, hMin: 10, hMax: 16,
         col: [0.12, 0.34, 0.15], col2: [0.18, 0.42, 0.19], pineFrac: 0.05 });
 
       // Villeneuve to Tosa — river fades; still mostly broadleaf
-      forestEdge(0.14, 0.30, -1, 8, { density: 0.36, hMin: 9, hMax: 14,
+      forestEdge(0.14, 0.17, -1, 12, { density: 0.36, hMin: 9, hMax: 14,
         col: WOODS, col2: WOODS2, pineFrac: 0.15 });
-      forestEdge(0.14, 0.30,  1, 6, { density: 0.38, hMin: 9, hMax: 14,
+      forestEdge(0.22, 0.30, -1, 12, { density: 0.36, hMin: 9, hMax: 14,
+        col: WOODS, col2: WOODS2, pineFrac: 0.15 });
+      forestEdge(0.14, 0.30,  1, 20, { density: 0.38, hMin: 9, hMax: 14,
         col: [0.12, 0.32, 0.15], col2: [0.18, 0.40, 0.18], pineFrac: 0.08 });
 
       // Tosa → Piratella climb — dark deciduous tunnel (Parco Acque Minerali character)
@@ -132,12 +152,14 @@
         [0.03, 20, [56, 150]], [0.06, 20, [54, 145]], [0.09, 20, [52, 140]],
         [0.12, 19, [50, 130]], [0.15, 18, [48, 120]], [0.18, 18, [46, 100]],
       ];
-      for (const [s, gap, sz] of SANTERNO) groundPlane(K(s), 1, gap, sz, RIVER);
+      SANTERNO.forEach(([s, gap, sz], i) =>
+        riverSurface(`santerno-water-${i}`, s, 1, gap, sz, RIVER, { required: true }));
       const SANTERNO_BANK = [
         [0.95, 9,  [12, 120]], [0.00, 9,  [12, 140]], [0.04, 9,  [12, 130]],
         [0.08, 10, [12, 120]], [0.12, 10, [11, 110]], [0.16, 10, [11, 90]],
       ];
-      for (const [s, gap, sz] of SANTERNO_BANK) groundPlane(K(s), 1, gap, sz, BANK);
+      SANTERNO_BANK.forEach(([s, gap, sz], i) =>
+        terrainPatch(`santerno-bank-${i}`, s, 1, gap, sz, BANK));
 
       // ---- Piratella hill-crest backdrop: staggered compact mounds ----
       backdrop(K(0.34), -1, 72, [40, 28, 58], [0.12, 0.28, 0.14]);
@@ -146,11 +168,11 @@
       backdrop(K(0.38), -1, 58, [32, 22, 48], [0.11, 0.26, 0.13]);
 
       // ---- TOP-2: Acque Minerali valley — dark hollow floor + mist bands ----
-      groundPlane(K(0.45),  1, 14, [48, 80], [0.72, 0.78, 0.74]);
-      groundPlane(K(0.48),  1, 16, [46, 78], [0.74, 0.80, 0.76]);
-      groundPlane(K(0.51),  1, 15, [44, 72], [0.70, 0.76, 0.72]);
-      groundPlane(K(0.54),  1, 14, [42, 65], [0.73, 0.79, 0.75]);
-      groundPlane(K(0.48), -1, 12, [36, 55], [0.71, 0.77, 0.73]);
+      terrainPatch("acque-mist-0", 0.45,  1, 14, [48, 80], [0.72, 0.78, 0.74]);
+      terrainPatch("acque-mist-1", 0.48,  1, 16, [46, 78], [0.74, 0.80, 0.76]);
+      terrainPatch("acque-mist-2", 0.51,  1, 15, [44, 72], [0.70, 0.76, 0.72]);
+      terrainPatch("acque-mist-3", 0.54,  1, 14, [42, 65], [0.73, 0.79, 0.75]);
+      terrainPatch("acque-mist-4", 0.48, -1, 12, [36, 55], [0.71, 0.77, 0.73]);
       // Extra dark canopy walls for the enclosed park-in-the-loop read
       backdrop(K(0.46),  1, 42, [34, 20, 50], [0.08, 0.20, 0.10]);
       backdrop(K(0.50),  1, 48, [36, 24, 52], [0.07, 0.18, 0.09]);
@@ -185,7 +207,7 @@
       grandstand(0.93, -1, 10, 70, [0.55, 0.58, 0.62], RED);
 
       // ---- Tamburello chicane + Senna memorial ----
-      groundPlane(K(0.05), -1, 8, [26, 30], BANK);
+      terrainPatch("tamburello-lawn", 0.05, -1, 12, [18, 20], BANK);
       place(K(0.05), -1, 14, [2, 3.2, 2], [0.45, 0.40, 0.30]);
       place(K(0.05), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
@@ -195,14 +217,14 @@
       }
 
       // ---- Villeneuve chicane kerbs + gravel trap ----
-      groundPlane(K(0.12), -1, 5, [24, 30], GRAVEL);
+      terrainPatch("villeneuve-gravel", 0.12, -1, 5, [24, 30], GRAVEL);
       place(K(0.12), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.13), -1, 2, [0.4, 0.3, 7], WHITE);
 
       // ---- Tosa tight hairpin: grandstands + gravel ----
       grandstand(0.28, -1, 12, 60, [0.52, 0.55, 0.60], RED);
       grandstand(0.31, -1, 12, 50, [0.54, 0.57, 0.61], [0.20, 0.42, 0.72]);
-      groundPlane(K(0.28), -1, 6, [34, 40], GRAVEL);
+      terrainPatch("tosa-gravel", 0.28, -1, 6, [34, 40], GRAVEL);
 
       // ---- TOP-3: Variante Alta — tall sausage kerbs + crest vegetation ----
       for (const side of [-1, 1]) {
@@ -220,11 +242,11 @@
       // ---- Rivazza double-left: gravel apron + grass amphitheatre banks ----
       grandstand(0.80, -1, 12, 55, [0.52, 0.55, 0.60], RED);
       grandstand(0.84, -1, 12, 48, [0.54, 0.57, 0.61], [0.78, 0.30, 0.22]);
-      groundPlane(K(0.79), -1, 6, [32, 55], GRAVEL);
-      groundPlane(K(0.81), -1, 7, [34, 58], GRAVEL);
-      groundPlane(K(0.80), -1, 18, [40, 62], BANK);
-      groundPlane(K(0.83), -1, 22, [38, 58], BANK);
-      groundPlane(K(0.82),  1, 16, [28, 40], BANK);
+      terrainPatch("rivazza-gravel-0", 0.79, -1, 6, [32, 55], GRAVEL);
+      terrainPatch("rivazza-gravel-1", 0.81, -1, 7, [34, 58], GRAVEL);
+      terrainPatch("rivazza-bank-0", 0.80, -1, 18, [40, 62], BANK);
+      terrainPatch("rivazza-bank-1", 0.83, -1, 22, [38, 58], BANK);
+      terrainPatch("rivazza-bank-2", 0.82,  1, 16, [28, 40], BANK);
 
       // ---- Italian town buildings at Variante Alta / Rivazza ----
       const TOWN_POS = [
@@ -272,9 +294,9 @@
 
       // ---- Hillside old town with church (far left of pit straight / T1) ----
       {
-        const at = anchor(K(0.02), -1, 150);
+        const at = anchor(K(0.02), -1, 110);
         const r = at.r, u = at.u, t = at.t;
-        const baseY = groundYAt(K(0.02), 150);
+        const baseY = groundYAt(K(0.02), 110);
         const base = [at.c[0], baseY, at.c[2]];
         const put = (alongM, outM, rise, w, h, d, col) => {
           const foot = vadd(vadd(vadd(base, t, alongM), r, -outM), u, rise);
@@ -319,12 +341,12 @@
       guardrail(0.00, 0.18, 1, 3, [0.78, 0.78, 0.80]);
       guardrail(0.20, 0.30, -1, 3, [0.78, 0.78, 0.80]);
       guardrail(0.60, 0.70,  1, 3, [0.78, 0.78, 0.80]);
-      tyreWall(0.05,  0.075, -1, 2, RED);
-      tyreWall(0.115, 0.135, -1, 2, [0.20, 0.40, 0.70]);
-      tyreWall(0.27,  0.295, -1, 2, RED);
-      tyreWall(0.655, 0.675,  1, 2, [0.20, 0.40, 0.70]);
-      tyreWall(0.79,  0.815, -1, 2, RED);
-      tyreWall(0.915, 0.93,   1, 2, RED);
+      tyreWall(0.05,  0.075, -1, 4, RED);
+      tyreWall(0.115, 0.135, -1, 4, [0.20, 0.40, 0.70]);
+      tyreWall(0.27,  0.295, -1, 4, RED);
+      tyreWall(0.655, 0.675,  1, 4, [0.20, 0.40, 0.70]);
+      tyreWall(0.79,  0.815, -1, 4, RED);
+      tyreWall(0.915, 0.93,   1, 4, RED);
 
       // ---- Billboards at key viewing areas ----
       billboard(K(0.05),  1, 18, 14, 5, [0.86, 0.16, 0.14]);
@@ -395,35 +417,39 @@
         const a = anchor(K(0.075), -1, 20);
         const b = [a.r, a.u, a.t], base = a.c;
         const bronze = [0.34, 0.30, 0.22], stone = [0.80, 0.78, 0.72];
-        // Lawn dais the memorial sits on.
-        out._mat = MAT.GRASS;
-        addBox(out, vadd(base, a.u, 0.15), [12, 0.3, 12], [0.30, 0.48, 0.24], b);
-        // Stepped stone plinth.
-        out._mat = MAT.STONE;
-        addBox(out, vadd(base, a.u, 0.75), [4.5, 1.2, 4.5], stone, b);
-        addBox(out, vadd(base, a.u, 1.7),  [3.0, 0.9, 3.0], [0.86, 0.83, 0.76], b);
-        // Abstract seated bronze figure (Senna, pensive) — legs, torso, head.
-        out._mat = MAT.METAL;
-        addBox(out, vadd(base, a.u, 2.5),  [1.8, 0.6, 1.4], bronze, b);
-        addBox(out, vadd(base, a.u, 3.3),  [1.2, 1.4, 1.0], bronze, b);
-        addCyl(out, vadd(base, a.u, 4.4),  0.42, 0.7, bronze, 7, b);
-        // Three flag poles — Brazilian tricolour (green / yellow / blue).
-        const flagCols = [[0.10, 0.55, 0.24], [0.94, 0.82, 0.16], [0.14, 0.30, 0.62]];
-        for (let i = 0; i < 3; i++) {
-          const p = vadd(vadd(base, a.t, (i - 1) * 3.0), a.r, -4);
-          out._mat = MAT.METAL;
-          addCyl(out, p, 0.12, 9, [0.85, 0.85, 0.87], 6, b);
-          out._mat = MAT.FABRIC;
-          addBox(out, vadd(vadd(p, a.u, 7.6), a.t, 1.1), [0.15, 1.3, 2.0], flagCols[i], b);
-        }
-        out._mat = 0;
-        // Semicircle of floral tributes at the foot.
-        for (let i = 0; i < 7; i++) {
-          const ang = (i / 6 - 0.5) * Math.PI;
-          const p = vadd(vadd(base, a.t, Math.sin(ang) * 4), a.r, -Math.cos(ang) * 4 + 3);
-          addBox(out, vadd(p, a.u, 0.5), [0.7, 0.4, 0.7],
-                 [[0.86, 0.20, 0.18], WHITE, [0.90, 0.80, 0.24]][i % 3], b);
-        }
+        modelGroup("senna-memorial", {
+          center: vadd(base, a.u, 5), size: [16, 11, 16], basis: b,
+        }, (stage) => {
+          // Lawn dais the memorial sits on.
+          stage._mat = MAT.GRASS;
+          addBox(stage, vadd(base, a.u, 0.15), [12, 0.3, 12], [0.30, 0.48, 0.24], b);
+          // Stepped stone plinth.
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(base, a.u, 0.75), [4.5, 1.2, 4.5], stone, b);
+          addBox(stage, vadd(base, a.u, 1.7),  [3.0, 0.9, 3.0], [0.86, 0.83, 0.76], b);
+          // Abstract seated bronze figure (Senna, pensive) — legs, torso, head.
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(base, a.u, 2.5),  [1.8, 0.6, 1.4], bronze, b);
+          addBox(stage, vadd(base, a.u, 3.3),  [1.2, 1.4, 1.0], bronze, b);
+          addCyl(stage, vadd(base, a.u, 4.4),  0.42, 0.7, bronze, 7, b);
+          // Three flag poles — Brazilian tricolour (green / yellow / blue).
+          const flagCols = [[0.10, 0.55, 0.24], [0.94, 0.82, 0.16], [0.14, 0.30, 0.62]];
+          for (let i = 0; i < 3; i++) {
+            const p = vadd(vadd(base, a.t, (i - 1) * 3.0), a.r, -4);
+            stage._mat = MAT.METAL;
+            addCyl(stage, p, 0.12, 9, [0.85, 0.85, 0.87], 6, b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(vadd(p, a.u, 7.6), a.t, 1.1), [0.15, 1.3, 2.0], flagCols[i], b);
+          }
+          stage._mat = 0;
+          // Semicircle of floral tributes at the foot.
+          for (let i = 0; i < 7; i++) {
+            const ang = (i / 6 - 0.5) * Math.PI;
+            const p = vadd(vadd(base, a.t, Math.sin(ang) * 4), a.r, -Math.cos(ang) * 4 + 3);
+            addBox(stage, vadd(p, a.u, 0.5), [0.7, 0.4, 0.7],
+                   [[0.86, 0.20, 0.18], WHITE, [0.90, 0.80, 0.24]][i % 3], b);
+          }
+        }, { required: true });
       })();
 
       // ── Stone footbridge over the Santerno (riverside, s~0.10 R) — piers,
@@ -432,18 +458,22 @@
         const a = anchor(K(0.10), 1, 26);
         const b = [a.r, a.u, a.t], base = a.c;
         const stone = [0.72, 0.68, 0.60];
-        out._mat = MAT.STONE;
-        // Two piers straddling the water.
-        for (const sg of [-1, 1]) {
-          addBox(out, vadd(vadd(base, a.t, sg * 9), a.u, 2), [4, 4, 3], stone, b);
-        }
-        // Arched deck (triangular prism gives a humped span).
-        addPrism(out, vadd(base, a.u, 4.4), [5, 1.6, 22], [0.78, 0.74, 0.66], b);
-        addBox(out, vadd(base, a.u, 4.2), [5, 0.6, 22], stone, b);
-        // Parapet walls both edges.
-        for (const sg of [-1, 1])
-          addBox(out, vadd(vadd(base, a.r, sg * 2.2), a.u, 5.4), [0.5, 1.0, 22], [0.80, 0.76, 0.68], b);
-        out._mat = 0;
+        modelGroup("santerno-footbridge", {
+          center: vadd(base, a.u, 3.5), size: [7, 7, 26], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          // Two piers straddling the water.
+          for (const sg of [-1, 1]) {
+            addBox(stage, vadd(vadd(base, a.t, sg * 9), a.u, 2), [4, 4, 3], stone, b);
+          }
+          // Arched deck (triangular prism gives a humped span).
+          addPrism(stage, vadd(base, a.u, 4.4), [5, 1.6, 22], [0.78, 0.74, 0.66], b);
+          addBox(stage, vadd(base, a.u, 4.2), [5, 0.6, 22], stone, b);
+          // Parapet walls both edges.
+          for (const sg of [-1, 1])
+            addBox(stage, vadd(vadd(base, a.r, sg * 2.2), a.u, 5.4), [0.5, 1.0, 22], [0.80, 0.76, 0.68], b);
+          stage._mat = 0;
+        }, { required: true });
       })();
 
       // ── Terraced hillside tifosi bowls at Tosa & Rivazza — bespoke stepped
@@ -484,6 +514,112 @@
       tieredBowl(0.795, -1, 14, 68, 5);
       tieredBowl(0.835, -1, 18, 52, 4);
       tieredBowl(0.51, 1, 22, 48, 3);     // Acque Minerali (kept lighter — hollow is the hero)
+
+      // ====================================================================
+      // AUTHENTIC HERO-SECTOR DRESS PASS — five bounded additions that deepen
+      // the park circuit without closing the driver's sightline to each apex.
+      // ====================================================================
+
+      // 1) Santerno park woodland: irregular veteran broadleaf groves and low
+      // understory at Piratella / Acque Minerali, set behind the first treeline.
+      const PARK_GROVES = [
+        [0.345, -1, 22, 16], [0.372,  1, 25, 14],
+        [0.438, -1, 24, 17], [0.468,  1, 28, 18],
+        [0.505, -1, 26, 16], [0.538,  1, 30, 17],
+      ];
+      PARK_GROVES.forEach(([s, side, dist, h], i) => {
+        tree(K(s), side, dist, h + hash(i * 19 + 71) * 3,
+             i % 2 ? [0.12, 0.32, 0.15] : [0.09, 0.27, 0.12]);
+        bush(K(s + 0.004), side, dist - 5,
+             i % 2 ? [0.18, 0.40, 0.18] : [0.14, 0.35, 0.16]);
+        bush(K(s - 0.004), side, dist + 4, [0.11, 0.30, 0.13]);
+      });
+
+      // 2) Historic Autodromo race office: a restrained stucco-and-terracotta
+      // pavilion behind the old pit approach, with an arcade and timing turret.
+      (function historicRaceOffice() {
+        const a = anchor(K(0.905), -1, 40);
+        const b = [a.r, a.u, a.t], base = a.c;
+        modelGroup("imola-historic-race-office", {
+          center: vadd(base, a.u, 8), size: [34, 18, 38], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(base, a.u, 3.5), [26, 7, 30], [0.88, 0.82, 0.70], b);
+          addPrism(stage, vadd(base, a.u, 8.4), [28, 3.2, 32], TERRA, b);
+          // Shallow track-facing arcade: five pale piers and dark recessed bays.
+          for (let i = 0; i < 5; i++) {
+            const z = (i - 2) * 5.4;
+            addBox(stage, vadd(vadd(vadd(base, a.r, -12.6), a.t, z), a.u, 2.3),
+                   [0.7, 4.6, 0.8], STONE3, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(vadd(base, a.r, -13.05), a.t, z + 2.2), a.u, 4.6),
+                   [0.25, 1.4, 3.0], [0.22, 0.30, 0.32], b);
+            stage._mat = MAT.STONE;
+          }
+          // Compact timing turret, intentionally below the nearby tree crowns.
+          const turret = vadd(vadd(base, a.r, 7), a.t, -9);
+          addBox(stage, vadd(turret, a.u, 6.5), [7, 13, 8], STONE2, b);
+          addPrism(stage, vadd(turret, a.u, 14.2), [8, 2.4, 9], TERRA, b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(turret, a.r, -3.6), a.u, 9.5),
+                 [0.25, 2.2, 5.4], WIN_LIT, b);
+          stage._mat = 0;
+        }, { required: true });
+      })();
+
+      // 3) Piratella hillside homes: a sparse stepped line of warm villas whose
+      // terracotta roofs break the treeline, rather than forming a city wall.
+      const PIRATELLA_VILLAS = [
+        [0.325, -1, 58, 13, 9, 14],
+        [0.347, -1, 66, 15, 11, 16],
+        [0.369, -1, 62, 12, 8, 13],
+        [0.392, -1, 72, 16, 12, 17],
+        [0.414, -1, 64, 13, 9, 15],
+      ];
+      PIRATELLA_VILLAS.forEach(([s, side, gap, w, h, d], i) => {
+        building(K(s), side, gap, w, h, d, {
+          wall: i % 3 === 0 ? STONE3 : (i % 3 === 1 ? TERRA2 : STONE2),
+          window: WIN_LIT, floor: 3, roof: true, lit: true,
+        });
+        cypress(K(s + 0.005), side, gap + w + 5, 12 + (i % 3) * 2);
+      });
+
+      // 4) Tamburello remembrance garden: a low tribute wall behind the Senna
+      // sculpture, with plaque bays and Italian event flags kept above eye-line.
+      (function tamburelloTributeWall() {
+        const a = anchor(K(0.082), -1, 32);
+        const b = [a.r, a.u, a.t], base = a.c;
+        modelGroup("imola-tamburello-tribute-wall", {
+          center: vadd(base, a.u, 4.5), size: [10, 10, 24], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(base, a.u, 1.2), [1.2, 2.4, 18], [0.76, 0.74, 0.69], b);
+          stage._mat = MAT.METAL;
+          for (let i = 0; i < 5; i++) {
+            addBox(stage, vadd(vadd(vadd(base, a.r, -0.66), a.t, (i - 2) * 3.2), a.u, 1.35),
+                   [0.12, 0.9, 2.1], [0.30, 0.28, 0.24], b);
+          }
+          const tri = [[0.08, 0.48, 0.22], WHITE, [0.82, 0.14, 0.13]];
+          for (let i = 0; i < 3; i++) {
+            const p = vadd(vadd(base, a.r, 3.4), a.t, (i - 1) * 5.2);
+            addCyl(stage, p, 0.10, 8, [0.76, 0.77, 0.79], 6, b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(vadd(p, a.u, 6.7), a.t, 0.9),
+                   [0.14, 1.2, 1.8], tri[i], b);
+            stage._mat = MAT.METAL;
+          }
+          stage._mat = 0;
+        }, { required: true });
+      })();
+
+      // 5) Layered period-circuit safety furniture: inner armco plus a set-back
+      // catch fence at the three event-heavy exteriors. The fence remains open
+      // mesh, preserving views to the memorial, hollow and Rivazza crowd banks.
+      guardrail(0.015, 0.145, -1, 2.8, [0.76, 0.77, 0.79]);
+      fence(0.015, 0.145, -1, 6.8, 4.2, [0.58, 0.61, 0.62]);
+      guardrail(0.43, 0.56, 1, 2.8, [0.74, 0.75, 0.77]);
+      fence(0.43, 0.49, 1, 6.5, 4.0, [0.56, 0.59, 0.60]);
+      guardrail(0.775, 0.86, -1, 2.8, [0.76, 0.77, 0.79]);
     },
   }
   );

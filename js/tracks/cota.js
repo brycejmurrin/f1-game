@@ -15,17 +15,30 @@
     theme: "green",
     lengthKm: 5.5,
     baseHW: 8,
+    sceneryCoordinates: "racing",
+    // COTA folds back tightly around the back straight. The shared 120 m ribbon
+    // chords across that lower section; 48 m still carries the runoff and near
+    // furniture while leaving distant Hill Country dressing on the safe floor.
+    terrainOuter: 48,
+    dressingExclusions: [
+      { kind: "foliage", s0: 0.94, s1: 0.16 },          // pits + Big Red sightline
+      { kinds: ["foliage", "lamps"], s0: 0.72, s1: 0.86, side: 1 }, // tower/amphitheater
+    ],
     pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.36, 0.44, 0.20], runoff: [0.58, 0.38, 0.24], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
     segs: [
       { t: 0, l: 220, h: 30 }, { t: -120, l: 110, h: -6 }, { t: 0, l: 80, h: -22 }, { t: 60, l: 60 }, { t: -55, l: 60 }, { t: 60, l: 60 },
       { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 }, { t: 0, l: 460 },
       { t: -150, l: 130 }, { t: 70, l: 70 }, { t: -60, l: 70 }, { t: 80, l: 90 }, { t: 90, l: 160 }, { t: -130, l: 110 },
     ],
-    // Turn 1: the calendar's most famous climb — kept as the circuit's signature
-    // rise but eased to ~3.2% grade so the chase-cam doesn't read it as a wall.
-    elevations: [{ s: 0.06, halfM: 340, rise: 7 }],
+    // Elevations are SOURCE-trace fractions. With startFrac=0.515 these map to
+    // racing s≈0.108 (Big Red), 0.52 (back-straight crest), and 0.84 (sweepers).
+    elevations: [
+      { s: 0.6233, halfM: 420, rise: 18 },
+      { s: 0.0350, halfM: 280, rise: 3 },
+      { s: 0.3550, halfM: 240, rise: 2.5 },
+    ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, hw, pyMin, place, prop, addBox, addPrism, addPyramid, addCyl, addCone, addFrustum, every, along, onTrack, anchor, vadd, hash, grandstand, building, motorhome, billboard, gantry, marshalPost, fence, guardrail, tyreWall, wall, tree, bush, pine, mountain, forestEdge, cityFront, backdrop } = api;
+      const { out, MAT, n, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, grandstand, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ======================= BESPOKE COTA MODELS =======================
@@ -61,39 +74,43 @@
       // -- Bespoke: Austin360 Amphitheater — proscenium shell + PA towers + LED wall + lawn --
       const amphiStage = (s, side, dist) => {
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 40)) return;
-        // raised black stage deck
-        out._mat = MAT.CONCRETE;
-        addBox(out, vadd(a.c, a.u, 2.4), [28, 4.8, 22], [0.18, 0.18, 0.21], bv);
-        out._mat = 0;
-        // fan roof canopy — three tiered arcs stepping back over the stage
-        out._mat = MAT.METAL;
-        for (let i = 0; i < 3; i++) {
-          addFrustum(out, vadd(vadd(a.c, a.u, 17 + i * 3), a.r, i * 5),
-                     27 - i * 5, 23 - i * 5, 2.6, [0.82 - i * 0.06, 0.82 - i * 0.06, 0.86], 18, bv);
-        }
-        out._mat = 0;
-        // proscenium back wall + big glowing LED video wall
-        out._mat = MAT.CONCRETE;
-        addBox(out, vadd(vadd(a.c, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
-        out._mat = 0;
-        addBox(out, vadd(vadd(a.c, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
-        // PA line-array towers flanking the stage
-        out._mat = MAT.METAL;
-        for (const so of [-1, 1]) {
-          const base = vadd(a.c, a.t, so * 17);
-          addCyl(out, base, 0.55, 20, [0.12, 0.12, 0.14], 4, bv);
-          for (let j = 0; j < 5; j++)
-            addBox(out, vadd(base, a.u, 11 + j * 1.5), [1.7, 1.3, 2.6], [0.06, 0.06, 0.08], bv);
-        }
-        out._mat = 0;
-        // packed lawn crowd OUTWARD of the stage (away from the track), speckled
-        for (let r = 0; r < 6; r++)
-          for (let c = 0; c < 22; c++) {
-            const p = vadd(vadd(vadd(a.c, a.r, 8 + r * 3), a.u, 0.9),
-                           a.t, (c - 11) * 2.1 + (hash(r * 31 + c) - 0.5));
-            addBox(out, p, [0.8, 1.0, 0.7], crowdCols[(r * 7 + c) % crowdCols.length], bv);
+        const center = vadd(vadd(a.c, a.r, 8), a.u, 13);
+        modelGroup("cota-amphitheater", {
+          center, size: [52, 30, 56], basis: bv,
+        }, (stage) => {
+          // raised black stage deck
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 2.4), [28, 4.8, 22], [0.18, 0.18, 0.21], bv);
+          stage._mat = 0;
+          // fan roof canopy — three tiered arcs stepping back over the stage
+          stage._mat = MAT.METAL;
+          for (let i = 0; i < 3; i++) {
+            addFrustum(stage, vadd(vadd(a.c, a.u, 17 + i * 3), a.r, i * 5),
+                       27 - i * 5, 23 - i * 5, 2.6, [0.82 - i * 0.06, 0.82 - i * 0.06, 0.86], 18, bv);
           }
+          stage._mat = 0;
+          // proscenium back wall + big glowing LED video wall
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(vadd(a.c, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
+          stage._mat = 0;
+          addBox(stage, vadd(vadd(a.c, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
+          // PA line-array towers flanking the stage
+          stage._mat = MAT.METAL;
+          for (const so of [-1, 1]) {
+            const base = vadd(a.c, a.t, so * 17);
+            addCyl(stage, base, 0.55, 20, [0.12, 0.12, 0.14], 4, bv);
+            for (let j = 0; j < 5; j++)
+              addBox(stage, vadd(base, a.u, 11 + j * 1.5), [1.7, 1.3, 2.6], [0.06, 0.06, 0.08], bv);
+          }
+          stage._mat = 0;
+          // packed lawn crowd OUTWARD of the stage (away from the track), speckled
+          for (let r = 0; r < 6; r++)
+            for (let c = 0; c < 22; c++) {
+              const p = vadd(vadd(vadd(a.c, a.r, 8 + r * 3), a.u, 0.9),
+                             a.t, (c - 11) * 2.1 + (hash(r * 31 + c) - 0.5));
+              addBox(stage, p, [0.8, 1.0, 0.7], crowdCols[(r * 7 + c) % crowdCols.length], bv);
+            }
+        }, { required: true });
       };
 
       // -- Palette (Texas Hill Country, DAY) --
@@ -149,6 +166,14 @@
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
       building(K(0.05), -1, 16, 16, 18, 22, { wall: cotaBlue, window: glass, floor: 5, roof: darkSteel });
 
+      // ---- 2026 dress pass: deeper paddock support campus (s≈0.01–0.04, L far) ----
+      // Low team hospitality and scrutineering blocks sit behind the existing pit
+      // lane buildings, adding depth without closing the driver's main-straight view.
+      motorhome(K(0.012), -1, 72, 24, 7, 38, { wall: white, window: glass });
+      building(K(0.035), -1, 70, 20, 6, 34, {
+        wall: [0.72, 0.74, 0.78], window: litWin, floor: 2, roof: cotaBlue,
+      });
+
       // ---- Turn 1 = Big Red only: red-soil climb + packed crowd + stands (no tower) ----
       // Signature silhouette is the uphill amphitheatre of dirt and fans — the
       // Observation Tower lives with the concert amphitheater at T16–18.
@@ -188,58 +213,96 @@
       {
         const kt = K(0.78);
         const at = anchor(kt, 1, 82), tb = [at.r, at.u, at.t];
-        if (!onTrack(at.c[0], at.c[2], 36)) {
+        const towerCenter = vadd(vadd(at.c, at.r, 12), at.u, 43);
+        modelGroup("cota-observation-tower", {
+          center: towerCenter, size: [58, 90, 42], basis: tb,
+        }, (stage) => {
           const tBase = at.c;
           const pale = [0.86, 0.87, 0.90];
           const pale2 = [0.80, 0.81, 0.85];
           const deckH = 70;
           // pale elevator shaft in 3 tapered stages
-          out._mat = MAT.METAL;
-          addFrustum(out, tBase,                 4.6, 3.8, 28, pale,  8, tb);
-          addFrustum(out, vadd(tBase, at.u, 28), 3.8, 3.2, 28, pale2, 8, tb);
-          addFrustum(out, vadd(tBase, at.u, 56), 3.2, 2.6, 14, pale,  8, tb);
+          stage._mat = MAT.METAL;
+          addFrustum(stage, tBase,                 4.6, 3.8, 28, pale,  8, tb);
+          addFrustum(stage, vadd(tBase, at.u, 28), 3.8, 3.2, 28, pale2, 8, tb);
+          addFrustum(stage, vadd(tBase, at.u, 56), 3.2, 2.6, 14, pale,  8, tb);
           // observation deck — pale ring + floor (red is reserved for the veil)
           const deckCen = vadd(tBase, at.u, deckH);
-          addCyl(out, deckCen, 7.8, 2.2, pale2, 10, tb);
-          addBox(out, vadd(tBase, at.u, deckH + 1.1), [13, 1.4, 13], white, tb);
-          addCyl(out, vadd(tBase, at.u, deckH + 2.6), 6.4, 1.6, [0.74, 0.76, 0.82], 8, tb);
-          addCone(out, vadd(tBase, at.u, deckH + 4.2), 3.8, 3.4, [0.68, 0.69, 0.74], 8, tb);
-          addCyl(out, vadd(tBase, at.u, deckH + 7.8), 0.28, 8.0, pale2, 5, tb);
-          addBox(out, vadd(tBase, at.u, deckH + 16.0), [0.6, 0.6, 0.6], [1.0, 0.82, 0.25], tb);
-          out._mat = 0;
+          addCyl(stage, deckCen, 7.8, 2.2, pale2, 10, tb);
+          addBox(stage, vadd(tBase, at.u, deckH + 1.1), [13, 1.4, 13], white, tb);
+          addCyl(stage, vadd(tBase, at.u, deckH + 2.6), 6.4, 1.6, [0.74, 0.76, 0.82], 8, tb);
+          addCone(stage, vadd(tBase, at.u, deckH + 4.2), 3.8, 3.4, [0.68, 0.69, 0.74], 8, tb);
+          addCyl(stage, vadd(tBase, at.u, deckH + 7.8), 0.28, 8.0, pale2, 5, tb);
+          addBox(stage, vadd(tBase, at.u, deckH + 16.0), [0.6, 0.6, 0.6], [1.0, 0.82, 0.25], tb);
+          stage._mat = 0;
           // red tube veil — ~14 thin tubes on the amphitheater face, full height
-          out._mat = MAT.METAL;
+          stage._mat = MAT.METAL;
           for (let i = 0; i < 14; i++) {
             const tOff = (i - 6.5) * 0.85;
             const rOff = 3.2 + Math.abs(tOff) * 0.08;
-            addCyl(out, vadd(vadd(tBase, at.r, rOff), at.t, tOff),
+            addCyl(stage, vadd(vadd(tBase, at.r, rOff), at.t, tOff),
                    0.20, deckH - 2, redSteel, 5, tb);
+          }
+          // Upper fan ribs widen beneath the deck, strengthening the tower's
+          // unmistakable red-veil silhouette from the T16–18 sweepers.
+          for (let i = 0; i < 9; i++) {
+            const tOff = (i - 4) * 2.45;
+            addBox(stage,
+              vadd(vadd(vadd(tBase, at.r, 6.8 + Math.abs(i - 4) * 0.65),
+                         at.u, deckH - 5.5), at.t, tOff),
+              [9.5 + Math.abs(i - 4) * 1.3, 0.32, 0.34], redSteel, tb);
           }
           // cascading canopy flare — tubes spill outward/down over the stage
           for (let i = 0; i < 11; i++) {
             const tOff = (i - 5) * 3.2;
             const flare = 10 + i * 0.35;
             const y = 18 - Math.abs(i - 5) * 0.8;
-            addBox(out,
+            addBox(stage,
               vadd(vadd(vadd(tBase, at.r, flare), at.u, y), at.t, tOff),
               [14 + Math.abs(i - 5) * 1.2, 0.32, 0.38], redSteel, tb);
           }
           // lower veil ribs tying shaft to stage canopy
           for (let i = 0; i < 7; i++) {
             const tOff = (i - 3) * 4.0;
-            addBox(out,
+            addBox(stage,
               vadd(vadd(vadd(tBase, at.r, 18), at.u, 8), at.t, tOff),
               [22, 0.28, 0.32], redSteel, tb);
           }
-          out._mat = 0;
+          stage._mat = 0;
           // base plant room
-          prop(kt, 1, 66, [14, 6, 16], [0.84, 0.84, 0.86]);
+          const plant = anchor(kt, 1, 73);
+          addBox(stage, vadd(plant.c, plant.u, 2.2), [14, 6, 16], [0.84, 0.84, 0.86], [plant.r, plant.u, plant.t]);
           // deck glass strip
-          out._mat = MAT.GLASS;
-          addBox(out, vadd(tBase, at.u, deckH + 0.5), [14.2, 0.7, 14.2], litWin, tb);
-          out._mat = 0;
-        }
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(tBase, at.u, deckH + 0.5), [14.2, 0.7, 14.2], litWin, tb);
+          stage._mat = 0;
+        }, { required: true });
       }
+
+      // ---- 2026 dress pass: amphitheatre lawn bowl (s≈0.73–0.80, R) ----
+      // Three low, raked earth terraces frame the stage/tower campus. They stay
+      // below eye level near the circuit and rise only toward the concert lawn.
+      for (const [sf, dist, width, rise, len] of [
+        [0.735, 44, 24, 4.0, 54],
+        [0.758, 50, 28, 5.0, 62],
+        [0.798, 48, 26, 4.5, 56],
+      ]) {
+        const aa = anchor(K(sf), 1, dist);
+        addPrism(out, vadd(aa.c, aa.u, rise * 0.35),
+                 [width, rise, len], dryGrass, [aa.t, aa.u, aa.r]);
+      }
+
+      // ---- 2026 dress pass: packed hill spectators at COTA's braking heroes ----
+      // Compact banks remain behind their terrace shells and existing barriers.
+      crowdBank(0.112, 1, 48, 54, 4, 2.25);
+      crowdBank(0.642, 1, 40, 72, 5, 2.15);
+
+      // ---- 2026 dress pass: Texas red/white/blue event ribbons at T12 ----
+      // Sparse sponsor-scale boards color the braking-zone bowl without forming
+      // a continuous wall or obscuring apex and distance-marker sightlines.
+      billboard(K(0.615), 1, 32, 13, 4.2, redSteel);
+      billboard(K(0.628), 1, 34, 13, 4.2, white);
+      billboard(K(0.641), 1, 32, 13, 4.2, cotaBlue);
 
       // ---- Red-and-white grandstand framework / tower (s≈0.65, R far) ----
       const redFramework = (k, side, dist) => {
@@ -349,16 +412,44 @@
       forestEdge(0.84, 0.96, -1, 18, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
       forestEdge(0.84, 0.92,  1, 20, { density: 0.35, hMin: 6, hMax: 10, col: cedar, col2: oak,   pineFrac: 0.35 });
 
-      // ---- Start/finish gantry over the main straight (s≈0.00) ----
-      gantry(0.00, 7.5, darkSteel);
-      // scoring / DRS-detection gantry on the back straight (s≈0.50)
-      gantry(0.50, 7.0, darkSteel);
+      // ---- COTA gantries: intentional overheads with validated clearance and feet ----
+      const cotaGantry = (s, id, clearance) => {
+        const k = K(s), supportGap = 4.5, supportWidth = 0.8, thick = 0.9;
+        const ok = overheadSpan({
+          id, frac: s, clearance, thickness: thick, depth: 1.4,
+          supportGap, supportWidth,
+          span: hw[k] * 2 + supportGap * 2 + supportWidth * 2,
+          color: darkSteel, required: true,
+        });
+        if (!ok) return;
+        for (const side of [-1, 1]) {
+          const a = anchor(k, side, supportGap + supportWidth / 2);
+          const mastH = clearance + thick;
+          modelGroup(`${id}-support-${side < 0 ? "left" : "right"}`, {
+            center: vadd(a.c, a.u, mastH / 2),
+            size: [supportWidth, mastH, 1.4],
+            basis: [a.r, a.u, a.t],
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            addCyl(stage, a.c, supportWidth / 2, mastH, darkSteel, 6, [a.r, a.u, a.t]);
+          }, { required: true });
+        }
+      };
+      cotaGantry(0.00, "cota-start-gantry", 7.5);
+      cotaGantry(0.50, "cota-drs-gantry", 7.0);
+
+      // Ground-conforming runoff at COTA's two defining braking zones.
+      groundPatch(K(0.108), 1, 1.2, [18, 0.16, 76], redSoil,
+                  { id: "cota-t1-runoff", samples: 6 });
+      groundPatch(K(0.63), 1, 1.2, [24, 0.16, 96], [0.48, 0.49, 0.51],
+                  { id: "cota-t12-runoff", samples: 8 });
 
       // ---- Catch fences behind the kerbs ----
       fence(0.00, 0.06,  1, 5, 3.4, [0.62, 0.64, 0.68]);   // main straight, R
       fence(0.94, 1.00,  1, 5, 3.4, [0.62, 0.64, 0.68]);   // final corner, R
       fence(0.46, 0.62, -1, 6, 3.4, [0.62, 0.64, 0.68]);   // back straight, L
       fence(0.08, 0.14, -1, 8, 3.4, [0.62, 0.64, 0.68]);   // T1 hill, L
+      wall(0.94, 0.06, -1, 2.2, 1.1, [0.72, 0.73, 0.76], 0.35); // pit wall
 
       // ---- Armco guardrails ----
       guardrail(0.15, 0.28,  1, 4, [0.80, 0.80, 0.82]);    // Esses, R
