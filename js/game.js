@@ -3660,7 +3660,14 @@ function camVantage(mode, s, x, spd, now, extra) {
       // Look height at eye level (tilt slightly DOWN vs the old +0.4) so the
       // raised hood / nose deck ahead fills the lower-centre of the frame,
       // while the horizon still sits high enough to read the track ahead.
-      const straight = [p[0] + t[0] * 30, p[1] + eyeUp - 0.15, p[2] + t[2] * 30];
+      // Follow the road's gradient: aim 30 m along the FULL 3D tangent — t[1] is
+      // the slope (+uphill / −downhill), so the look point rises on a climb and
+      // drops on a descent. Without this vertical term the eye stayed locked to
+      // the horizon while the car nosed over crests and dropped into dips, so
+      // the view felt detached from the elevation; now the cockpit pitches with
+      // the road like a camera bolted to the chassis. Flat road (t[1]=0) is
+      // unchanged. The look-target damping (lT≈7) smooths crest/dip transitions.
+      const straight = [p[0] + t[0] * 30, p[1] + eyeUp - 0.15 + t[1] * 30, p[2] + t[2] * 30];
       const lead = aheadPt(30, eyeUp - 0.15, x * 0.4);
       tgt = [straight[0] * 0.85 + lead[0] * 0.15,
              straight[1] * 0.85 + lead[1] * 0.15,
