@@ -3839,6 +3839,15 @@ function renderSetupPreview(dt) {
   });
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
+  // Matte preview: the glossy clear-coat + sharp speculars from the studio ring
+  // lights bloom across the bodywork and wash the livery out to a pale sheen.
+  // Soften them here so the setup screen shows the TRUE livery colour. This is a
+  // preview-only override — the in-race PAINT_* materials are untouched, so the
+  // car still reads glossy on track.
+  spMat.clearcoat = 0.1;
+  spMat.specular = 0.22;
+  spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
+  spMat.metalness = Math.min(spMat.metalness, 0.05);
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false,
     carDecalNum(Teams.LIST[teamIdx], null), false, true);
