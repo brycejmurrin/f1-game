@@ -326,6 +326,27 @@ test("campaign page creation cleans up a page that fails to initialize", async (
   assert.equal(page.closeCalls, 1);
 });
 
+test("campaign page creation closes its context when newPage fails", async () => {
+  const { createCampaignPage } = await importCaptureModule();
+  const context = {
+    closeCalls: 0,
+    async newPage() {
+      throw new Error("page allocation failed");
+    },
+    async close() {
+      this.closeCalls++;
+    },
+  };
+  const browser = {
+    async newContext() {
+      return context;
+    },
+  };
+
+  await assert.rejects(() => createCampaignPage(browser, 1234), /page allocation failed/);
+  assert.equal(context.closeCalls, 1);
+});
+
 test("campaign page creation gives navigation and WebGL readiness explicit timeouts", async () => {
   const { createCampaignPage } = await importCaptureModule();
   let gotoOptions;

@@ -233,10 +233,11 @@ export async function createCampaignPage(browser, port) {
   const ownedContext = typeof browser.newContext === "function"
     ? await browser.newContext({ viewport })
     : null;
-  const page = ownedContext
-    ? await ownedContext.newPage()
-    : await browser.newPage({ viewport });
+  let page;
   try {
+    page = ownedContext
+      ? await ownedContext.newPage()
+      : await browser.newPage({ viewport });
     page[PAGE_ERRORS] = [];
     page[PAGE_META] = { port };
     page.on("pageerror", (error) => {
@@ -256,7 +257,7 @@ export async function createCampaignPage(browser, port) {
     return page;
   } catch (error) {
     if (ownedContext) await ownedContext.close();
-    else await page.close();
+    else if (page) await page.close();
     throw error;
   }
 }
