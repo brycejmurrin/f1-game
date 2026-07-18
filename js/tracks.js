@@ -216,7 +216,10 @@ const Tracks = (function () {
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
       track.waterGeo = waterGeo;
-      track.meshes.glass = GLX.createMesh(glassGeo);
+      // Glass rides the SAME chunk grid as the props: it was one un-culled
+      // createMesh draw of every window pane in the whole city, every frame —
+      // full clearcoat+env fill for panes behind the camera and past the fog.
+      track.meshes.glass = GLX.createChunkedMesh ? GLX.createChunkedMesh(glassGeo, 72) : GLX.createMesh(glassGeo);
       track.meshes.water = GLX.createMesh(waterGeo);
       track.meshes.gate = GLX.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = GLX.createMesh(safe("startline", buildStartLine(track)));
