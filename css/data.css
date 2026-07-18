@@ -312,8 +312,14 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: 4px; transition: width 0.05s linear; }
-.dh-gdrs-pill { font-size: 14px; font-weight: 800; letter-spacing: 0.05em; color: #5a5a65; line-height: 1; margin-top: 2px; }
+.dh-gdrs-pill { font-size: 14px; font-weight: 800; letter-spacing: 0.05em; color: #5a5a65; line-height: 1; margin-top: 2px; display: inline-block; margin-right: 8px; }
 .dh-gdrs-pill.dh-on { color: #00e0c0; text-shadow: 0 0 8px rgba(0, 224, 192, 0.6); }
+/* compare-mode dual gauges: primary value/bar first, compare second */
+.dh-gvalrow { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.dh-gval2 { font-size: 0.8em; opacity: 0.85; }
+.dh-gbar2 { height: 5px; margin-top: 3px; }
+.dh-gfill2 { opacity: 0.6; }
+.dh-gdrs-pill.dh-gdrs2 { font-size: 11px; opacity: 0.85; }
 .dh-gdelta.dh-pos { color: #3fb950; }
 .dh-gdelta.dh-neg { color: #ff6b6b; }
 

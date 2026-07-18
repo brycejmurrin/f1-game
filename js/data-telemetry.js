@@ -689,19 +689,35 @@ const DataTelemetry = (function () {
 
   function buildGauges(view) {
     const card = el("div", "dh-dash");
+    const cmp = view.compare;
+    // In compare mode every gauge is dual: primary first (driver colour /
+    // full-height bar), compare second (dimmed / thin bar).
     function valCell(cls, label) {
       const w = el("div", "dh-gcell " + cls);
       w.appendChild(el("div", "dh-glabel", label));
-      const v = el("div", "dh-gval", "—"); w.appendChild(v);
-      card.appendChild(w); return v;
+      if (!cmp) {
+        const v = el("div", "dh-gval", "—"); w.appendChild(v);
+        card.appendChild(w); return [v];
+      }
+      const row = el("div", "dh-gvalrow");
+      const v1 = el("span", "dh-gval", "—"); v1.style.color = cssColor(view.colP);
+      const v2 = el("span", "dh-gval dh-gval2", "—"); v2.style.color = cssColor(view.colC);
+      row.appendChild(v1); row.appendChild(v2);
+      w.appendChild(row); card.appendChild(w); return [v1, v2];
     }
     function barCell(cls, label, color) {
       const w = el("div", "dh-gcell " + cls);
       w.appendChild(el("div", "dh-glabel", label));
+      const out = [];
       const track = el("div", "dh-gbar");
       const fill = el("div", "dh-gfill"); fill.style.background = color;
-      track.appendChild(fill); w.appendChild(track);
-      card.appendChild(w); return fill;
+      track.appendChild(fill); w.appendChild(track); out.push(fill);
+      if (cmp) {
+        const track2 = el("div", "dh-gbar dh-gbar2");
+        const fill2 = el("div", "dh-gfill dh-gfill2"); fill2.style.background = color;
+        track2.appendChild(fill2); w.appendChild(track2); out.push(fill2);
+      }
+      card.appendChild(w); return out;
     }
     const g = {};
     g.speed = valCell("dh-gspeed", "SPEED km/h");
@@ -711,9 +727,14 @@ const DataTelemetry = (function () {
     g.rpm = barCell("dh-grpm", "RPM", "#c084fc");
     const drsCell = el("div", "dh-gcell dh-gdrscell");
     drsCell.appendChild(el("div", "dh-glabel", "DRS"));
-    g.drs = el("div", "dh-gdrs-pill", "—");
-    drsCell.appendChild(g.drs); card.appendChild(drsCell);
-    if (view.compare) {
+    g.drs = [el("div", "dh-gdrs-pill", "—")];
+    drsCell.appendChild(g.drs[0]);
+    if (cmp) {
+      const p2 = el("div", "dh-gdrs-pill dh-gdrs2", "—");
+      drsCell.appendChild(p2); g.drs.push(p2);
+    }
+    card.appendChild(drsCell);
+    if (cmp) {
       const dcell = el("div", "dh-gcell dh-gdeltacell");
       dcell.appendChild(el("div", "dh-glabel", "Δ " + dcode(view.compare.d)));
       g.delta = el("div", "dh-gval dh-gdelta", "—");
@@ -725,16 +746,20 @@ const DataTelemetry = (function () {
   function updateGauges(view) {
     const g = view.g; if (!g) return;
     const t = view.cursorT === null ? 0 : view.cursorT;
-    const c = sampleAt(view.primary.car, t);
-    if (!c) return;
-    g.speed.textContent = c.speed === null ? "—" : Math.round(c.speed);
-    g.gear.textContent = (c.gear === null || c.gear === undefined) ? "—" : (c.gear ? "G" + c.gear : "N");
-    g.thr.style.width = (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) + "%";
-    g.brk.style.width = (c.brake === null ? 0 : clamp(c.brake, 0, 100)) + "%";
-    g.rpm.style.width = (c.rpm === null ? 0 : clamp(c.rpm / view.rpmMax * 100, 0, 100)) + "%";
-    const open = c.drs !== null && c.drs !== undefined && drsOpen(c.drs);
-    g.drs.textContent = open ? "OPEN" : "—";
-    g.drs.classList.toggle("dh-on", open);
+    const cars = [sampleAt(view.primary.car, t),
+                  view.compare ? sampleAt(view.compare.car, t) : null];
+    if (!cars[0]) return;
+    for (let i = 0; i < g.speed.length; i++) {
+      const c = cars[i]; if (!c) continue;
+      g.speed[i].textContent = c.speed === null ? "—" : Math.round(c.speed);
+      g.gear[i].textContent = (c.gear === null || c.gear === undefined) ? "—" : (c.gear ? "G" + c.gear : "N");
+      g.thr[i].style.width = (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) + "%";
+      g.brk[i].style.width = (c.brake === null ? 0 : clamp(c.brake, 0, 100)) + "%";
+      g.rpm[i].style.width = (c.rpm === null ? 0 : clamp(c.rpm / view.rpmMax * 100, 0, 100)) + "%";
+      const open = c.drs !== null && c.drs !== undefined && drsOpen(c.drs);
+      g.drs[i].textContent = open ? "OPEN" : "—";
+      g.drs[i].classList.toggle("dh-on", open);
+    }
     if (g.delta && view.compare) {
       const dP = distAtT(view.primary.cum, t);
       const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
