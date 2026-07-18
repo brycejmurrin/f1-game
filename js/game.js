@@ -953,6 +953,26 @@ const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaW
 const _shadowMats = [];   // pool of Float32Array(16), reused across frames
 const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shadow caster pass
 let _shadowCount = 0;
+// Deferred car-decal batch (same pattern as the blob shadows above): the car
+// loop used to interleave gfx.draw(body) with gfx.drawDecal per car — ~2
+// program+state flips per car, ~44/frame with a full field. Record each drawn
+// car's decal params here and flush them in ONE decal-program block right
+// after the loop. Decals are depth-tested but write neither depth nor alpha,
+// so drawing them after the bodies/wheels/rings resolves identically.
+const _decalMats = [];    // pool of Float32Array(16), reused across frames
+const _decalTeams = [];
+const _decalNums = [];
+const _decalCockpit = [];
+let _decalCount = 0;
+function queueCarDecals(team, modelMat, num, cockpit) {
+  let m = _decalMats[_decalCount];
+  if (!m) { m = new Float32Array(16); _decalMats[_decalCount] = m; }
+  m.set(modelMat);
+  _decalTeams[_decalCount] = team;
+  _decalNums[_decalCount] = num;
+  _decalCockpit[_decalCount] = !!cockpit;
+  _decalCount++;
+}
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
 // one for the render loop (both called once per car per frame) so banking() no
 // longer allocates a fresh object ~23×/frame.
@@ -998,7 +1018,8 @@ function drawCockpitRig(c, base, dt, paint) {
   gfx.draw(cockpitBodyMesh(c.team), base, paint);
   // Forward decal: the driver number on the nose plate ahead of the driver (the
   // nose is identical to the chase build, so this lands exactly on the plate).
-  drawCarDecals(c.team, base, nite, carDecalNum(c.team, c), true);
+  // Queued with the field's decals and flushed after the car loop.
+  queueCarDecals(c.team, base, carDecalNum(c.team, c), true);
   drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.30, 1.4);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
@@ -4460,6 +4481,7 @@ function render(dt) {
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
+  _decalCount = 0;    // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
     if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
@@ -4581,11 +4603,11 @@ function render(dt) {
     const body = c.isPlayer ? playerBodyMesh(c.team) : null;
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c));
       drawPlayerWheels(c, tmpMat, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: night ? 0.12 : 0, doubleSided: true });
     } else {
       gfx.draw(teamMesh(c.team), tmpMat, paint);
-      drawCarDecals(c.team, tmpMat, night, carDecalNum(c.team, c));
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c));
       // AI brake glow: rings at the four baked wheel positions (outer face).
       // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
       // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
@@ -4777,6 +4799,10 @@ function render(dt) {
       }
     }
   }
+  // Flush all accumulated car decals in one decal-program block — previously
+  // interleaved with the lit body draws (~2 program+state flips per car).
+  for (let i = 0; i < _decalCount; i++)
+    drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i]);
   // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
   // depthMask are set once for the whole field instead of ping-ponging with the
   // lit body program every car.
