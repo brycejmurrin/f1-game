@@ -19,10 +19,11 @@
     flatTerrain: true,
     terrainOuter: 120,
     dressingExclusions: [
-      // Shanghai owns its sparse marsh campus, lamp lines, and one Pudong cue;
-      // generic modern-city dressing otherwise recreates the tower wall this
-      // circuit deliberately removed and can chord across the folded layout.
-      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+      // Shanghai deliberately removed the generic tower wall (one Pudong cue
+      // only) — keep "city" excluded. The generic foliage/lamp/floodlight
+      // furniture is the campus's density base though; the guarded emitters
+      // already stop anything chording across the folded layout.
+      { kind: "city", s0: 0, s1: 1 },
     ],
     pal: { zenith: [0.28, 0.4, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.26, 0.42, 0.22], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.002, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
     segs: [

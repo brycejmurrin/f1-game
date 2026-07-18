@@ -20,11 +20,14 @@
     // marina, beach club, parking lots, and stadium approaches.
     flatTerrain: true,
     terrainOuter: 90,
-    // Miami already owns a complete bespoke layer of facades and palms. Disable
-    // duplicate generic city/foliage so hero sightlines stay open and the large
-    // campus does not upload hundreds of thousands of redundant vertices.
+    // The generic city/foliage base layer carries the campus's density; the
+    // bespoke facades and palms sit on top of it. Keep it (and the lamp rows)
+    // out of the curated hero zones only: the Hard Rock bowl horizon, the
+    // marina, and the beach club.
     dressingExclusions: [
-      { kinds: ["city", "foliage"], s0: 0, s1: 1 },
+      { kinds: ["city", "foliage"], s0: 0.94, s1: 0.08 },
+      { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
       { kind: "lamps", s0: 0.94, s1: 0.08, side: 1 },
       { kind: "lamps", s0: 0.26, s1: 0.38, side: 1 },
       { kind: "lamps", s0: 0.60, s1: 0.72 },

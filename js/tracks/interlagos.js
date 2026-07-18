@@ -18,9 +18,11 @@
     baseHW: 7,
     terrainOuter: 45,
     dressingExclusions: [
-      // Bespoke forests, palms and skyline already cover the full lap; suppress
-      // generic layers so they do not obscure the reservoir and hero sightlines.
-      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+      // Generic roadside foliage/lamps/floodlights are the density base under
+      // the bespoke forests and skyline — keep them, carving only the open
+      // reservoir sightline. No generic city wall on this green parkland bowl.
+      { kind: "city", s0: 0, s1: 1 },
+      { kinds: ["foliage", "lamps", "floodlights"], s0: 0.30, s1: 0.42, side: -1 },
     ],
     pal: { zenith: [0.34, 0.54, 0.78], horizon: [0.64, 0.72, 0.62], grass: [0.30, 0.55, 0.26], fog: [0.56, 0.62, 0.56], fogDensity: 0.0018, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
     segs: [

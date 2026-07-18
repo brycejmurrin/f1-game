@@ -21,10 +21,14 @@
     bankZones: [
       { frac: 0.75, angleDeg: 13.5, widthM: 180 }, // 24% grade = atan(0.24)
     ],
-    // Madrid owns its venue dressing. Generic city blocks and furniture obscure
-    // the IFEMA/Monumental sightlines and were the source of the old road overlap.
+    // The generic city/furniture base layer carries most of the circuit's
+    // density — the bespoke IFEMA halls and La Monumental bowl layer on top of
+    // it, they don't replace it. Only carve their curated sightlines (the
+    // exhibition-hall pit straight and the banked bullring sector); the old
+    // road-overlap risk is handled by the guarded emitters, not exclusions.
     dressingExclusions: [
-      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+      { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
+      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.68, s1: 0.83 },
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],

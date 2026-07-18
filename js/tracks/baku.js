@@ -18,12 +18,12 @@
     baseHW: 6,
     sceneryCoordinates: "racing",
     dressingExclusions: [
-      // Baku supplies its own continuous city frontage; the generic neon city
-      // duplicates it and obscures the Old City/Flame Tower sightlines.
-      { kind: "city", s0: 0, s1: 1 },
-      { kinds: ["lamps", "foliage", "floodlights"], s0: 0.36, s1: 0.56 },
+      // Baku's bespoke frontage is the NEAR wall; the generic neon city is the
+      // mid/far density behind it. Exclude it only from the curated zones: the
+      // Old City / castle section and the open Caspian side of Neftchilar Ave.
+      { kinds: ["city", "lamps", "foliage", "floodlights"], s0: 0.36, s1: 0.56 },
       // Preserve the Caspian void on the left of Neftchilar Avenue.
-      { kinds: ["lamps", "foliage", "floodlights"], s0: 0.58, s1: 0.97, side: -1 },
+      { kinds: ["city", "lamps", "foliage", "floodlights"], s0: 0.58, s1: 0.97, side: -1 },
     ],
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
     // Castle Section squeeze (~7.6 m full width). CircuitPaths ignores segs `w:`;

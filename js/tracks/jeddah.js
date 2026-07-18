@@ -18,9 +18,10 @@
     terrainOuter: 28,
     sceneryCoordinates: "racing",
     dressingExclusions: [
-      // Bespoke cityFront sectors define the inland skyline; the generic city
-      // otherwise fills the waterfront and obscures the circuit's landmarks.
-      { kind: "city", s0: 0, s1: 1 },
+      // The generic city supplies the deep inland skyline behind the bespoke
+      // cityFront sectors; only the Red Sea waterfront stays open so the
+      // corniche landmarks read against the water.
+      { kind: "city", s0: 0.05, s1: 0.66, side: 1 },
       // The bespoke 40 m LED-head rhythm is the circuit's lighting identity;
       // generic street lamps crowd the wall and clip the fastest curved sweeps.
       { kind: "lamps", s0: 0, s1: 1 },

@@ -18,10 +18,12 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      // The bespoke park and stadium dressing define these sectors. Generic
-      // modern-city blocks would turn Mixhuca into a street canyon, while shared
-      // furniture inside Foro Sol can close its deliberately bright apertures.
-      { kind: "city", s0: 0.04, s1: 0.94 },
+      // The generic city base is the surrounding capital the park sits inside —
+      // exclude it only where the bespoke dressing curates the view: the
+      // Mixhuca park tree corridor (park-first DRS straight) and the Foro Sol
+      // stadium sector, whose bright apertures shared furniture would close.
+      { kind: "city", s0: 0.02, s1: 0.14 },
+      { kind: "city", s0: 0.60, s1: 0.94 },
       { kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 },
     ],
     // Cool thin-air haze: pale blue-grey horizon + slightly denser fog so far

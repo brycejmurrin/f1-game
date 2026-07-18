@@ -20,11 +20,12 @@
     terrainOuter: 48,
     sceneryCoordinates: "racing",
     dressingExclusions: [
-      // Singapore owns its dense skyline and race lighting. Keep shared dressing
-      // out of the bay/hero sightlines and avoid duplicate lamp/flood-mast rings.
-      { kind: "city", s0: 0, s1: 1 },
-      { kinds: ["foliage", "lamps"], s0: 0.15, s1: 0.48, side: 1 },
-      { kinds: ["foliage", "lamps"], s0: 0.78, s1: 0.90, side: 1 },
+      // The generic street-night city is the CBD density base under the bespoke
+      // facades; keep it (and shared foliage/lamps) out of the bay/hero
+      // sightlines only. Floodlights stay excluded lap-wide — the bespoke
+      // floodMastRing IS the race-lighting rig (no duplicate poles/pools).
+      { kinds: ["city", "foliage", "lamps"], s0: 0.15, s1: 0.48, side: 1 },
+      { kinds: ["city", "foliage", "lamps"], s0: 0.78, s1: 0.90, side: 1 },
       { kind: "floodlights", s0: 0, s1: 1 },
     ],
     // Cool night: near-black zenith + cool fog/ambient so CBD glass & neon pop.

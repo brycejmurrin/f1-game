@@ -644,7 +644,7 @@ test.describe("shared track foundation diagnostics", () => {
     expect(result.def.sceneryCoordinates).toBe("racing");
     expect(result.def.terrainOuter).toBe(28);
     expect(result.def.dressingExclusions).toEqual(expect.arrayContaining([
-      { kind: "city", s0: 0, s1: 1 },
+      { kind: "city", s0: 0.05, s1: 0.66, side: 1 },
       { kind: "lamps", s0: 0, s1: 1 },
       { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
     ]));
@@ -765,9 +765,10 @@ test.describe("Madrid track foundation migration", () => {
 
     expect(result.sceneryCoordinates).toBe("racing");
     expect(result.terrainOuter).toBeGreaterThanOrEqual(48);
-    expect(result.dressingExclusions).toContainEqual(
-      expect.objectContaining({ kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0, s1: 1 }),
-    );
+    expect(result.dressingExclusions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 }),
+      expect.objectContaining({ kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.68, s1: 0.83 }),
+    ]));
     expect(result.elevation.range).toBeGreaterThanOrEqual(20);
     expect(result.elevation.range).toBeLessThanOrEqual(32);
     expect(result.elevation.maxFrac).toBeGreaterThan(0.30);

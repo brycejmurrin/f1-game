@@ -37,7 +37,7 @@ test.describe("Las Vegas track foundation migration", () => {
     expect(result.barrierGap).toBe(1);
     expect(result.elevationFrac).toBeCloseTo(0.35, 3);
     expect(result.exclusions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kinds: ["city", "lamps", "foliage"], s0: 0, s1: 1 }),
+      expect.objectContaining({ kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 }),
     ]));
     const byFrac = Object.fromEntries(result.samples.map((sample) => [sample.frac, sample.y]));
     expect(byFrac[0.35]).toBeLessThan(byFrac[0.30] - 0.4);
