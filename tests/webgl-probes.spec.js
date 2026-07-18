@@ -33,6 +33,49 @@ test.describe("WebGL renderer probes", () => {
     expect(typeof hdrMode).toBe("boolean");
   });
 
+  test("dynamic player shadow uses the current-frame car transform", async ({ page }) => {
+    await loadRace(page, "madrid");
+    await page.waitForTimeout(300);
+    const result = await page.evaluate(async () => {
+      const frames = (n) => new Promise((resolve) => {
+        const next = () => { if (--n <= 0) resolve(); else requestAnimationFrame(next); };
+        requestAnimationFrame(next);
+      });
+      window.__apex.jump(0.20, 60, 0);
+      await frames(2); // seed the old pooled transform away from the target
+
+      const passes = [];
+      let activePass = null;
+      const begin = GLX.carShadowBegin.bind(GLX);
+      const cast = GLX.castShadow.bind(GLX);
+      const end = GLX.carShadowEnd.bind(GLX);
+      GLX.carShadowBegin = (...args) => {
+        activePass = [];
+        passes.push(activePass);
+        return begin(...args);
+      };
+      GLX.castShadow = (mesh, model) => {
+        if (activePass) activePass.push([model[12], model[14]]);
+        return cast(mesh, model);
+      };
+      GLX.carShadowEnd = (...args) => {
+        activePass = null;
+        return end(...args);
+      };
+
+      const target = window.__apex.nodeAt(0.75);
+      window.__apex.jump(0.75, 60, 0);
+      await frames(1);
+      const firstPass = passes[0] || [];
+      const minDistance = firstPass.reduce((best, p) =>
+        Math.min(best, Math.hypot(p[0] - target.x, p[1] - target.z)), Infinity);
+      return { minDistance, casterCount: firstPass.length };
+    });
+
+    expect(result.casterCount).toBeGreaterThan(0);
+    expect(result.minDistance).toBeLessThan(5);
+  });
+
   test("lightState() returns expected shape after race()", async ({ page }) => {
     await loadRace(page);
     const ls = await page.evaluate(() => window.__apex.lightState());

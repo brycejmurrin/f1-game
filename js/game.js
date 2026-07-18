@@ -1038,6 +1038,8 @@ const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaW
 // are depth-tested but write no depth, so drawing them last is visually identical.
 const _shadowMats = [];   // pool of Float32Array(16), reused across frames
 const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shadow caster pass
+const _shadowCars = [];   // parallel refs: the live player transform replaces its stale pooled entry
+const _livePlayerShadowMat = new Float32Array(16);
 let _shadowCount = 0;
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
 // one for the render loop (both called once per car per frame) so banking() no
@@ -1049,6 +1051,41 @@ function cameraFollowsBank(mode) {
   return mode === "chase" || mode === "far" || mode === "drift" ||
          mode === "cockpit" || mode === "hood" || mode === "reverse" ||
          mode === "low" || mode === "tcam" || mode === "rear";
+}
+
+// Build the grounded transform needed by the pre-scene car-shadow pass. The main
+// car loop runs later, after shadow maps are already consumed by the lit shader,
+// so the player matrix must be resolved here instead of reusing last frame's
+// pooled transform (which trails by speed × frame time on slower devices).
+function currentCarGroundMat(c, out, dt) {
+  const cS = lerpS(c.rPrevS, c.s, renderAlpha);
+  const cX = (c.rPrevX === undefined) ? c.x
+           : c.rPrevX + (c.x - c.rPrevX) * renderAlpha;
+  // Predict the same damping step the later body loop will apply, without
+  // mutating xVis twice. Shadow and body therefore share one lateral position.
+  const renderX = c.xVis === undefined ? cX : damp(c.xVis, cX, 30, dt);
+  Tracks.sample(track, cS, smp2);
+  const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
+  tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
+  tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
+  tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
+  const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
+  for (let i = 0; i < 3; i++) {
+    _groundF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
+    _groundR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
+  }
+  _groundU[0] = _groundR[1] * _groundF[2] - _groundR[2] * _groundF[1];
+  _groundU[1] = _groundR[2] * _groundF[0] - _groundR[0] * _groundF[2];
+  _groundU[2] = _groundR[0] * _groundF[1] - _groundR[1] * _groundF[0];
+  if (bankC && bankC.roll) {
+    const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
+    for (let i = 0; i < 3; i++) {
+      const r = _groundR[i], u = _groundU[i];
+      _groundR[i] = r * cr + u * sr;
+      _groundU[i] = u * cr - r * sr;
+    }
+  }
+  return basisMat(_groundR, _groundU, _groundF, tmpP, out);
 }
 
 // The cockpit body: the REAL car (livery, nose, mirrors, number board) minus
@@ -4140,6 +4177,12 @@ function render(dt) {
       : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
   }
 
+  // Resolve the moving player before any shadow-map pass. AI keeps using the
+  // pooled matrices from the preceding frame; only the player's high-speed,
+  // chase-camera shadow makes that latency visible.
+  const _hasLivePlayerShadow = !!(player && state !== "menu" && state !== "select");
+  if (_hasLivePlayerShadow) currentCarGroundMat(player, _livePlayerShadowMat, dt);
+
   // Shadow pass — render terrain + road from sun's perspective.
   // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
   // (20 m at the default 80 m box) so the map only re-renders when the camera
@@ -4223,14 +4266,15 @@ function render(dt) {
     }
     // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
     // the snap-cached static map above; that's why cars only had blob shadows).
-    // Casts LAST frame's pooled car matrices (_shadowMats/_shadowTeams fill
-    // during the car draw loop later this frame): a one-frame lag, ≤1.3 m at
-    // top speed, on a shadow that moves with its caster — invisible. ±42 m box
-    // on the same gliding anchor (a car shadow beyond that is sub-pixel), same
-    // depth program and key-luminance gate as the props above. Guards: WGX has
-    // no carShadowBegin yet (blob-only there); menu/select skip (the car loop
-    // doesn't run, so the pooled matrices would be stale race positions).
-    if (gfx.carShadowBegin && LT.carShadow && _shadowCount > 0 && player &&
+    // AI casts use the preceding frame's pooled transforms; the player is
+    // rebuilt above from the current interpolation state. Reusing its old matrix
+    // trailed the shadow by speed × frame time (6–12 m on low-FPS devices).
+    // ±42 m box on the same gliding anchor (a car shadow beyond that is
+    // sub-pixel), same
+    // depth program and key-luminance gate as the props above. WGX mobile tiers
+    // may no-op the pass (blob fallback); menu/select skip because the car loop
+    // doesn't run and its pooled AI matrices would be stale race positions.
+    if (gfx.carShadowBegin && LT.carShadow && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
         state !== "menu" && state !== "select") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
@@ -4243,7 +4287,10 @@ function render(dt) {
         M4.orthoTo(_mCProj, -42, 42, -42, 42, 1.0, 320);
         M4.mulTo(_mCVP, _mCProj, _mCView);
         gfx.carShadowBegin(_mCVP);
-        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        for (let i = 0; i < _shadowCount; i++) {
+          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        }
         gfx.carShadowEnd();
       }
     }
@@ -4485,7 +4532,10 @@ function render(dt) {
         M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
         M4.mulTo(_mFlVP, _mFlProj, _mFlView);
         gfx.lampShadowBegin(_mFlVP, flBest);
-        for (let i = 0; i < _shadowCount; i++) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        for (let i = 0; i < _shadowCount; i++) {
+          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+        }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         gfx.lampShadowEnd();
       }
@@ -4705,7 +4755,8 @@ function render(dt) {
     let _sm = _shadowMats[_shadowCount];
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
     _sm.set(_groundMat);
-    _shadowTeams[_shadowCount] = c.team;   // for next frame's car-shadow caster pass
+    _shadowTeams[_shadowCount] = c.team;   // for next frame's AI car-shadow caster pass
+    _shadowCars[_shadowCount] = c;
     _shadowCount++;
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the stabilized track basis
