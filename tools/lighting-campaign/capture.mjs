@@ -22,6 +22,7 @@ const MIME = Object.freeze({
 
 const PAGE_ERRORS = Symbol("campaignPageErrors");
 const PAGE_META = Symbol("campaignPageMeta");
+const RETRY_BROWSER = Symbol("campaignRetryBrowser");
 
 function safeClose(server) {
   return new Promise((resolveClose, rejectClose) => {
@@ -60,6 +61,18 @@ function wait(ms) {
 function waitForTwoFrames(page) {
   return page.evaluate(() => new Promise((resolveFrames) =>
     requestAnimationFrame(() => requestAnimationFrame(resolveFrames))));
+}
+
+export async function captureConfiguredViews(track, captureView) {
+  const fractions = CAMERA_FRACTIONS[track];
+  if (!fractions || fractions.length !== 3) {
+    throw new Error(`capture requires exactly three camera views: ${track}`);
+  }
+  const views = [];
+  for (let index = 0; index < fractions.length; index++) {
+    views.push(await captureView(fractions[index], index));
+  }
+  return views;
 }
 
 async function readPngPixels(page, imagePath) {
@@ -110,10 +123,9 @@ async function captureAttempt(page, condition, profile, outDir) {
 
   const viewDir = join(outDir, condition.key.replace(/[^a-z0-9|_-]+/gi, "_").replace(/\|/g, "__"));
   mkdirSync(viewDir, { recursive: true });
-  const views = [];
   let lightState = null;
 
-  for (const frac of CAMERA_FRACTIONS[condition.track]) {
+  const views = await captureConfiguredViews(condition.track, async (frac, index) => {
     await page.evaluate((viewFrac) => {
       window.__apex.park(viewFrac);
       window.__apex.hud(false);
@@ -121,7 +133,7 @@ async function captureAttempt(page, condition, profile, outDir) {
     }, frac);
     await waitForTwoFrames(page);
 
-    const image = join(viewDir, `${views.length + 1}-f${frac.toFixed(2)}.png`);
+    const image = join(viewDir, `${index + 1}-f${frac.toFixed(2)}.png`);
     await page.locator("canvas#game").screenshot({ path: image, type: "png" });
     const pixels = await readPngPixels(page, image);
     const metrics = measurePixels(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height, REGIONS);
@@ -135,15 +147,15 @@ async function captureAttempt(page, condition, profile, outDir) {
       tod: condition.tod,
       webglError: frameState.webglError,
     });
-    views.push({
+    return {
       frac,
       image,
       metrics,
       webglError: frameState.webglError,
       pageErrors,
       gates,
-    });
-  }
+    };
+  });
 
   const failures = Array.from(new Set(views.flatMap((view) => view.gates.failures)));
   return {
@@ -156,11 +168,25 @@ async function captureAttempt(page, condition, profile, outDir) {
   };
 }
 
-async function freshRetryPage(page) {
-  const browser = page.context().browser();
+export async function createCampaignRetryPage(page, hooks = {}) {
   const { port } = page[PAGE_META];
-  await page.close();
-  return createCampaignPage(browser, port);
+  const launchBrowser = hooks.launchBrowser || launchCampaignBrowser;
+  const createPage = hooks.createPage || createCampaignPage;
+  const browser = await launchBrowser();
+  try {
+    const retryPage = await createPage(browser, port);
+    retryPage[RETRY_BROWSER] = browser;
+    return retryPage;
+  } catch (error) {
+    await browser.close();
+    throw error;
+  }
+}
+
+export async function closeCampaignRetryPage(page) {
+  const browser = page[RETRY_BROWSER];
+  if (browser) await browser.close();
+  else await page.close();
 }
 
 export async function startStaticServer(root) {
@@ -203,53 +229,89 @@ export async function launchCampaignBrowser() {
 }
 
 export async function createCampaignPage(browser, port) {
-  const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
-  page[PAGE_ERRORS] = [];
-  page[PAGE_META] = { port };
-  page.on("pageerror", (error) => {
-    page[PAGE_ERRORS].push(String(error?.message || error));
-  });
-  page.on("console", (msg) => {
-    if (msg.type() === "error") page[PAGE_ERRORS].push(msg.text());
-  });
-  await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
-  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() =>
-    window.__apex && document.querySelector("#game")?.getContext("webgl2"));
-  page[PAGE_META].hdrMode = await page.evaluate(() => !!window.GLX?.hdrMode?.());
-  return page;
+  const viewport = { width: 960, height: 540 };
+  const ownedContext = typeof browser.newContext === "function"
+    ? await browser.newContext({ viewport })
+    : null;
+  const page = ownedContext
+    ? await ownedContext.newPage()
+    : await browser.newPage({ viewport });
+  try {
+    page[PAGE_ERRORS] = [];
+    page[PAGE_META] = { port };
+    page.on("pageerror", (error) => {
+      page[PAGE_ERRORS].push(String(error?.message || error));
+    });
+    page.on("console", (msg) => {
+      if (msg.type() === "error") page[PAGE_ERRORS].push(msg.text());
+    });
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
+    await page.goto(`http://127.0.0.1:${port}/index.html`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    await page.waitForFunction(() =>
+      window.__apex && document.querySelector("#game")?.getContext("webgl2"), null, { timeout: 60_000 });
+    page[PAGE_META].hdrMode = await page.evaluate(() => !!window.GLX?.hdrMode?.());
+    return page;
+  } catch (error) {
+    if (ownedContext) await ownedContext.close();
+    else await page.close();
+    throw error;
+  }
 }
 
-export async function captureCondition(page, condition, profile, outDir) {
+export async function captureCondition(page, condition, profile, outDir, hooks = {}) {
+  const attemptCapture = hooks.captureAttempt || captureAttempt;
+  const createRetryPage = hooks.createRetryPage || createCampaignRetryPage;
   let currentPage = page;
   let lastResult = null;
   let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const result = await captureAttempt(currentPage, condition, profile, outDir);
-      if (result.gates.ok) return result;
-      lastResult = result;
-      lastError = new Error(`capture gates failed: ${result.gates.failures.join(",")}`);
-    } catch (error) {
-      lastError = error;
+  const ownedRetryPages = new Set();
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await attemptCapture(currentPage, condition, profile, outDir);
+        if (result.gates.ok) return result;
+        lastResult = result;
+        lastError = new Error(`capture gates failed: ${result.gates.failures.join(",")}`);
+      } catch (error) {
+        lastError = error;
+      }
+      if (currentPage !== page) {
+        await closeCampaignRetryPage(currentPage);
+        ownedRetryPages.delete(currentPage);
+      }
+      if (attempt < 2) {
+        try {
+          currentPage = await createRetryPage(page);
+          ownedRetryPages.add(currentPage);
+        } catch (error) {
+          lastError = error;
+          break;
+        }
+      }
     }
-    if (attempt < 2) currentPage = await freshRetryPage(currentPage);
-  }
 
-  if (lastResult) {
-    const failures = Array.from(new Set(["blocked", ...lastResult.gates.failures]));
-    return { ...lastResult, gates: { ok: false, failures } };
-  }
+    if (lastResult) {
+      const failures = Array.from(new Set(["blocked", ...lastResult.gates.failures]));
+      return { ...lastResult, gates: { ok: false, failures } };
+    }
 
-  return {
-    condition,
-    profile,
-    resolved: null,
-    lightState: null,
-    views: [],
-    gates: {
-      ok: false,
-      failures: ["blocked", "capture-error", String(lastError?.message || lastError || "unknown-error")],
-    },
-  };
+    return {
+      condition,
+      profile,
+      resolved: null,
+      lightState: null,
+      views: [],
+      gates: {
+        ok: false,
+        failures: ["blocked", "capture-error", String(lastError?.message || lastError || "unknown-error")],
+      },
+    };
+  } finally {
+    await Promise.allSettled(
+      Array.from(ownedRetryPages, (retryPage) => closeCampaignRetryPage(retryPage)),
+    );
+  }
 }

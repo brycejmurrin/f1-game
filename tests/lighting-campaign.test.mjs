@@ -221,6 +221,209 @@ test("each campaign server receives its own ephemeral port", async (t) => {
   assert.equal(await (await fetch(`http://127.0.0.1:${a.port}/`)).text(), "ok");
 });
 
+function fakePage(id) {
+  return {
+    id,
+    closeCalls: 0,
+    async close() {
+      this.closeCalls++;
+    },
+  };
+}
+
+function failedCapture(page) {
+  return {
+    condition: { key: "monza|day|dry" },
+    profile: {},
+    resolved: {},
+    lightState: {},
+    views: [{ page: page.id }, { page: page.id }, { page: page.id }],
+    gates: { ok: false, failures: ["tonal-range"] },
+  };
+}
+
+test("configured capture visits exactly three camera fractions in order", async () => {
+  const { captureConfiguredViews } = await importCaptureModule();
+  const seen = [];
+  const views = await captureConfiguredViews("monza", async (frac, index) => {
+    seen.push({ frac, index });
+    return `${index}:${frac}`;
+  });
+  assert.deepEqual(seen, CAMERA_FRACTIONS.monza.map((frac, index) => ({ frac, index })));
+  assert.deepEqual(views, CAMERA_FRACTIONS.monza.map((frac, index) => `${index}:${frac}`));
+  assert.equal(views.length, 3);
+});
+
+test("capture retries preserve the caller page and clean up fresh retry pages", async () => {
+  const { captureCondition } = await importCaptureModule();
+  const original = fakePage("original");
+  const retries = [];
+  const attempted = [];
+  const result = await captureCondition(original, {}, {}, "unused", {
+    captureAttempt: async (page) => {
+      attempted.push(page.id);
+      if (attempted.length < 3) return failedCapture(page);
+      return { ...failedCapture(page), gates: { ok: true, failures: [] } };
+    },
+    createRetryPage: async () => {
+      const page = fakePage(`retry-${retries.length + 1}`);
+      retries.push(page);
+      return page;
+    },
+  });
+
+  assert.equal(result.gates.ok, true);
+  assert.deepEqual(attempted, ["original", "retry-1", "retry-2"]);
+  assert.equal(original.closeCalls, 0);
+  assert.deepEqual(retries.map((page) => page.closeCalls), [1, 1]);
+});
+
+test("capture stops after three failed attempts and returns a blocked result", async () => {
+  const { captureCondition } = await importCaptureModule();
+  const original = fakePage("original");
+  const retries = [];
+  let attempts = 0;
+  const result = await captureCondition(original, {}, {}, "unused", {
+    captureAttempt: async (page) => {
+      attempts++;
+      return failedCapture(page);
+    },
+    createRetryPage: async () => {
+      const page = fakePage(`retry-${retries.length + 1}`);
+      retries.push(page);
+      return page;
+    },
+  });
+
+  assert.equal(attempts, 3);
+  assert.equal(result.gates.ok, false);
+  assert.deepEqual(result.gates.failures, ["blocked", "tonal-range"]);
+  assert.equal(original.closeCalls, 0);
+  assert.deepEqual(retries.map((page) => page.closeCalls), [1, 1]);
+});
+
+test("campaign page creation cleans up a page that fails to initialize", async () => {
+  const { createCampaignPage } = await importCaptureModule();
+  const page = {
+    closeCalls: 0,
+    on() {},
+    async addInitScript() {},
+    async goto() {},
+    async waitForFunction() {
+      throw new Error("WebGL readiness timed out");
+    },
+    async close() {
+      this.closeCalls++;
+    },
+  };
+  const browser = {
+    async newPage() {
+      return page;
+    },
+  };
+
+  await assert.rejects(() => createCampaignPage(browser, 1234), /WebGL readiness timed out/);
+  assert.equal(page.closeCalls, 1);
+});
+
+test("campaign page creation gives navigation and WebGL readiness explicit timeouts", async () => {
+  const { createCampaignPage } = await importCaptureModule();
+  let gotoOptions;
+  let waitOptions;
+  const page = {
+    on() {},
+    async addInitScript() {},
+    async goto(url, options) {
+      gotoOptions = options;
+    },
+    async waitForFunction(fn, arg, options) {
+      waitOptions = options;
+    },
+    async evaluate() {
+      return false;
+    },
+    async close() {},
+  };
+  const browser = {
+    async newPage() {
+      return page;
+    },
+  };
+
+  await createCampaignPage(browser, 1234);
+  assert.equal(gotoOptions.timeout, 60_000);
+  assert.equal(waitOptions.timeout, 60_000);
+});
+
+test("retry pages use an isolated owned browser that is cleaned up", async () => {
+  const {
+    createCampaignPage, createCampaignRetryPage, closeCampaignRetryPage,
+  } = await importCaptureModule();
+  const original = fakePage("original");
+  const context = {
+    async newPage() {
+      original.on = () => {};
+      original.addInitScript = async () => {};
+      original.goto = async () => {};
+      original.waitForFunction = async () => {};
+      original.evaluate = async () => false;
+      return original;
+    },
+  };
+  await createCampaignPage(context, 1234);
+  const retry = fakePage("retry");
+  const retryBrowser = {
+    closeCalls: 0,
+    async close() {
+      this.closeCalls++;
+    },
+  };
+  const retryPage = await createCampaignRetryPage(original, {
+    launchBrowser: async () => retryBrowser,
+    createPage: async (browser, port) => {
+      assert.equal(browser, retryBrowser);
+      assert.equal(port, 1234);
+      return retry;
+    },
+  });
+  await closeCampaignRetryPage(retryPage);
+
+  assert.equal(retryPage, retry);
+  assert.equal(retryBrowser.closeCalls, 1);
+  assert.equal(retry.closeCalls, 0);
+  assert.equal(original.closeCalls, 0);
+});
+
+test("initial campaign pages use an explicit reusable browser context", async () => {
+  const { createCampaignPage } = await importCaptureModule();
+  const page = fakePage("original");
+  page.on = () => {};
+  page.addInitScript = async () => {};
+  page.goto = async () => {};
+  page.waitForFunction = async () => {};
+  page.evaluate = async () => false;
+  const context = {
+    async newPage() {
+      page.context = () => context;
+      return page;
+    },
+  };
+  const browser = {
+    newContextOptions: null,
+    async newContext(options) {
+      this.newContextOptions = options;
+      return context;
+    },
+    async newPage() {
+      throw new Error("browser.newPage must not own the campaign context");
+    },
+  };
+
+  const created = await createCampaignPage(browser, 1234);
+  assert.equal(created, page);
+  assert.deepEqual(browser.newContextOptions.viewport, { width: 960, height: 540 });
+});
+
 test("pixel metrics report percentiles, clipping, and named regions", () => {
   const data = new Uint8ClampedArray([
     0, 0, 0, 255, 32, 32, 32, 255,
