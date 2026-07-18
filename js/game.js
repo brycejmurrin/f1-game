@@ -4156,7 +4156,12 @@ function render(dt) {
   // jetsam-kill the tab. Cap the RADIAL draw distance on mobile (fog hides the
   // edge) so the chunk count stays bounded no matter how high or wide the free
   // camera flies. 0 = disabled (normal play + desktop keep the full vista).
-  frame.cullDist = (dbgCam && gfx.isMobile) ? 700 : 0;
+  frame.cullDist = (dbgCam && gfx.isMobile) ? 700
+    // Feature-shedding tier 3+ also caps the RADIAL draw distance: scenery
+    // vertex/draw load is the one big cost class that neither the resolution
+    // scale nor the shed passes touch, and by tier 3 the device has proven it
+    // can't afford the full vista (the fog wall hides most of the cut).
+    : (_perfTier >= 3 ? 900 : 0);
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
@@ -4274,7 +4279,7 @@ function render(dt) {
     // depth program and key-luminance gate as the props above. WGX mobile tiers
     // may no-op the pass (blob fallback); menu/select skip because the car loop
     // doesn't run and its pooled AI matrices would be stale race positions.
-    if (gfx.carShadowBegin && LT.carShadow && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
+    if (gfx.carShadowBegin && LT.carShadow && _perfTier < 3 && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
         state !== "menu" && state !== "select") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
@@ -4494,7 +4499,7 @@ function render(dt) {
   // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
   // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
   // has no lampShadowBegin, the mobile tier never creates the map.
-  if (gfx.lampShadowBegin && LT.lampShadow && frame.lights && !_studioRig &&
+  if (gfx.lampShadowBegin && LT.lampShadow && _perfTier < 2 && frame.lights && !_studioRig &&
       player && state !== "menu" && state !== "select") {
     // Gate on the KEY being dim (true night): by day/dusk the sun owns the
     // shadows, and a daytime-floods pool shadow would fight the sun's.
@@ -4585,7 +4590,7 @@ function render(dt) {
   // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
   // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
   // for a 64px blurred reflection probe).
-  if (player && !_envProbeOff && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && !_envProbeOff && _perfTier < 1 && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -5139,8 +5144,14 @@ function render(dt) {
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / VMAX - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
   po.exposure = frame.exposure * LT.exposureMul; po.bloom = _bloom * LT.bloomMul;
-  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade; po.ssao = _ao;
-  po.godray = _gr; po.contact = _cs; po.reflect = _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
+  // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
+  // passes whose cost doesn't shrink with the render target, so a device still
+  // slow at the scale floor sheds those instead. Tier 2 drops the wet-road SSR
+  // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
+  po.ssao = _perfTier >= 4 ? 0 : _ao;
+  po.godray = _perfTier >= 4 ? 0 : _gr;
+  po.contact = _cs; po.reflect = _perfTier >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
   // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
   // frame's view-proj to a screen UV for the composite warp. Near-field only —
@@ -5343,6 +5354,18 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 // only downscales when clearly missing 60 fps (>19 ms EMA) so a healthy
 // vsync-capped display never degrades; upscales slowly to avoid oscillation.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true;
+// ── Feature-shedding tiers: the governor's SECOND stage ──────────────────────
+// Resolution scaling can't rescue costs that don't shrink with the render
+// target: the per-frame car/lamp shadow depth passes, the env-probe world
+// re-render, SSAO's three passes, the god-ray march, the SSR march. When the
+// scale has already bottomed out and frames are STILL slow, shed features one
+// tier at a time — cheapest visual loss first — and restore them only under
+// clear sustained headroom at FULL resolution, so the ladder can't oscillate:
+//   1  env probe off        (car paint falls back to the analytic sky mirror)
+//   2  lamp spot shadow + wet-road SSR off
+//   3  car sun-shadow map off (the blob contact shadow remains)
+//   4  SSAO + god rays off
+let _perfTier = 0;
 function perfGovernor(dtMs) {
   if (!_autoRes) return;
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
@@ -5351,10 +5374,13 @@ function perfGovernor(dtMs) {
   if (++_govT < 45) return;   // evaluate ~every 45 frames
   _govT = 0;
   const cur = gfx.getRenderScale ? gfx.getRenderScale() : 1;
-  if (_frameEMA > 19 && cur > 0.5) {          // <~53 fps: drop resolution
-    if (gfx.setRenderScale(cur - 0.1)) _govCool = 30;
-  } else if (_frameEMA < 14 && cur < 1) {     // >~71 fps headroom: restore
-    if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30;
+  if (_frameEMA > 19) {                        // <~53 fps: degrade
+    if (cur > 0.5) { if (gfx.setRenderScale(cur - 0.1)) _govCool = 30; }
+    else if (_perfTier < 4) { _perfTier++; _govCool = 90; }   // scale floor hit — shed a feature
+  } else if (_frameEMA < 14) {                 // >~71 fps headroom: restore
+    if (cur < 1) { if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30; }
+    // Features come back only at full res with strong headroom, one per ~3 s.
+    else if (_perfTier > 0 && _frameEMA < 12.5) { _perfTier--; _govCool = 180; }
   }
 }
 const PHYS_DT = 1 / 60;          // fixed physics step
@@ -8363,7 +8389,7 @@ window.__apex = {
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
   // win (softer 3D view; HUD stays crisp).
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes, tier: _perfTier };
     if (v === true) { _autoRes = true; return this.renderScale(); }
     _autoRes = false; gfx.setRenderScale(+v); return this.renderScale();
   },
