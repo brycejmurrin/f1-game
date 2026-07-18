@@ -224,10 +224,30 @@
   border-radius: 8px; display: block;
   cursor: ew-resize;
 }
-.dh-canvas.dh-map { cursor: default; max-width: 320px; margin: 0 auto; aspect-ratio: 1 / 1; }
+.dh-canvas.dh-map { cursor: default; max-width: 320px; max-width: min(320px, 42dvh); margin: 0 auto; aspect-ratio: 1 / 1; }
+/* colour key for the car dots under the track map */
+.dh-maplegend {
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px;
+  font-size: 11px; color: #9a9aa5; margin-top: -4px;
+}
+.dh-legend-dot.dh-mapdot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+/* slow->fast swatch matching the map's speed colouring */
+.dh-gradbar {
+  display: inline-block; width: 44px; height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, #2222ff, #ccb4cc, #ff2222);
+}
 /* On landscape phone, cap the track map smaller so content doesn't overflow */
 @media (orientation: landscape) and (max-height: 520px) {
   .dh-canvas.dh-map { max-width: 220px; }
+}
+/* Portrait phone: smaller track map so the lap view needs little-to-no
+   scrolling (paddings tightened next to the .dh-telem-* base rules below) */
+@media (orientation: portrait) and (max-width: 620px) {
+  .dh-canvas.dh-map { max-width: 256px; max-width: min(256px, 34dvh); }
 }
 .dh-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11px; color: #9a9aa5; margin-top: -2px; }
 .dh-legend-item {
@@ -523,6 +543,11 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dh-telem-side {
   display: flex; flex-direction: column; gap: 10px;
   padding: 0 16px 14px;
+}
+/* Portrait phone: tighter popup padding (pairs with the smaller map above) */
+@media (orientation: portrait) and (max-width: 620px) {
+  .dh-telem-main { padding: 10px 12px; gap: 8px; }
+  .dh-telem-side { padding: 0 12px 10px; gap: 8px; }
 }
 
 /* Landscape: chart in left column, gauges + map in right sidebar */
