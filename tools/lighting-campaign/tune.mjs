@@ -56,19 +56,24 @@ function normalizeEvidenceView(view, index) {
 function reproductionSucceeded(result) {
   if (typeof result === "boolean") return result;
   if (!isPlainObject(result)) return false;
+  const gateChanged = result.gateStatusChanged === true ||
+    result.gatesChanged === true ||
+    result.gateChanged === true;
+  if (gateChanged) return false;
+  if (Object.hasOwn(result, "gates")) {
+    if (!isPlainObject(result.gates) || result.gates.ok !== true) return false;
+    if (Array.isArray(result.gates.failures) && result.gates.failures.length) return false;
+  }
   if (typeof result.ok === "boolean") return result.ok;
   if (typeof result.pass === "boolean") return result.pass;
   if (typeof result.accepted === "boolean") return result.accepted;
 
-  const gateChanged = result.gateStatusChanged === true ||
-    result.gatesChanged === true ||
-    result.gateChanged === true;
   const views = Array.isArray(result.viewDeltas)
     ? result.viewDeltas
     : Array.isArray(result.views)
       ? result.views
       : null;
-  if (!views || gateChanged) return false;
+  if (!views) return false;
   return views.every((view) =>
     Number(view.meanDelta) <= SENSITIVITY_TOLERANCE &&
     Math.abs(Number(view.blackClipDelta || 0)) <= CLIP_TOLERANCE &&
@@ -131,14 +136,22 @@ export async function minimalProfile(baseline, selected, reproduce) {
   if (typeof reproduce !== "function") throw new Error("minimal profile requires a reproduce function");
 
   let profile = profileDiff(baseline, selected);
-  for (const key of Object.keys(profile)) {
-    const candidateProfile = { ...profile };
-    delete candidateProfile[key];
-    const candidate = { ...baseline, ...candidateProfile };
-    if (reproductionSucceeded(await reproduce(candidate, { removed: key, profile: sortedObject(candidateProfile) }))) {
-      profile = candidateProfile;
+  const completeBaseline = sortedObject(baseline);
+  if (reproductionSucceeded(await reproduce(completeBaseline, { removed: null, profile: {} }))) return {};
+
+  let removed;
+  do {
+    removed = false;
+    for (const key of Object.keys(profile)) {
+      const candidateProfile = { ...profile };
+      delete candidateProfile[key];
+      const candidate = sortedObject({ ...baseline, ...candidateProfile });
+      if (reproductionSucceeded(await reproduce(candidate, { removed: key, profile: sortedObject(candidateProfile) }))) {
+        profile = candidateProfile;
+        removed = true;
+      }
     }
-  }
+  } while (removed);
   return sortedObject(profile);
 }
 

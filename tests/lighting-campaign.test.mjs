@@ -167,13 +167,68 @@ test("minimal profile removes values that reproduce without an override", async 
     { ambientMul: 1.2, tint: 0.1 },
     async (candidate) => {
       seen.push({ ...candidate });
-      return candidate.tint === 0;
+      return candidate.ambientMul === 1.2 && candidate.tint === 0;
     },
   );
   assert.deepEqual(profile, { ambientMul: 1.2 });
   assert.deepEqual(seen, [
+    { ambientMul: 1, tint: 0 },
     { ambientMul: 1, tint: 0.1 },
     { ambientMul: 1.2, tint: 0 },
+    { ambientMul: 1, tint: 0 },
+  ]);
+});
+
+test("minimal profile rejects capture results with failed gates", async () => {
+  const profile = await minimalProfile(
+    { ambientMul: 1 },
+    { ambientMul: 1.2 },
+    async () => ({
+      gates: { ok: false, failures: ["white-clip"] },
+      views: [
+        { meanDelta: 0.01, blackClipDelta: 0, whiteClipDelta: 0 },
+        { meanDelta: 0.01, blackClipDelta: 0, whiteClipDelta: 0 },
+        { meanDelta: 0.01, blackClipDelta: 0, whiteClipDelta: 0 },
+      ],
+    }),
+  );
+  assert.deepEqual(profile, { ambientMul: 1.2 });
+});
+
+test("minimal profile removes coupled overrides when the complete baseline reproduces", async () => {
+  const baseline = { lift: 0, offset: 0 };
+  const selected = { lift: 1, offset: -1 };
+  const seen = [];
+  const profile = await minimalProfile(baseline, selected, async (candidate) => {
+    seen.push({ ...candidate });
+    return candidate.lift + candidate.offset === 0;
+  });
+
+  assert.deepEqual(profile, {});
+  assert.deepEqual(seen, [baseline]);
+});
+
+test("minimal profile repeats deterministic passes after a successful removal", async () => {
+  const baseline = { alpha: 0, beta: 0, gamma: 0 };
+  const selected = { alpha: 1, beta: 1, gamma: 1 };
+  const seen = [];
+  const profile = await minimalProfile(baseline, selected, async (candidate) => {
+    seen.push({ ...candidate });
+    const active = Object.keys(candidate)
+      .filter((key) => candidate[key] !== baseline[key])
+      .join(",");
+    return active === "alpha,gamma" || active === "gamma";
+  });
+
+  assert.deepEqual(profile, { gamma: 1 });
+  assert.deepEqual(seen, [
+    { alpha: 0, beta: 0, gamma: 0 },
+    { alpha: 0, beta: 1, gamma: 1 },
+    { alpha: 1, beta: 0, gamma: 1 },
+    { alpha: 1, beta: 0, gamma: 0 },
+    { alpha: 0, beta: 0, gamma: 1 },
+    { alpha: 0, beta: 0, gamma: 0 },
+    { alpha: 0, beta: 0, gamma: 0 },
   ]);
 });
 
