@@ -2430,22 +2430,35 @@ void main() {
       vec3 R = reflect(-V, Nv);                    // points up toward the city
       // Finer refined march: small fixed steps (dense near/mid) so small/distant
       // emissive lamp heads + neon aren't stepped over (was a coarse 12×1.42 march).
+      // JITTERED: an un-jittered march quantizes the hit at identical step
+      // boundaries down whole pixel columns, slicing the mirrored city into hard
+      // vertical slats with flat sky-fallback stripes between them on a fully wet
+      // road. Interleaved-gradient-noise offsets each pixel's march start by a
+      // sub-step, dithering that banding into fine noise the streak blur + bloom
+      // absorb. Growth eased 1.22→1.16 (+4 steps keeps the ~120 m reach) so late
+      // steps stay small enough for the refine to land on thin distant emitters.
+      float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
       vec3 pos = P, prevPos = P;
       float stepLen = 0.55;
+      pos += R * (stepLen * ign);                  // sub-step start offset per pixel
       float hit = 0.0;
       float hitDist = 0.0;                       // march distance to the hit (contact hardening)
       vec2 hitUV = vec2(0.0);
       bool found = false;
-      for (int i = 0; i < 20; i++) {               // 28→20: slightly faster growth
-        prevPos = pos;                             // keeps reach at ~30% less fill
+      for (int i = 0; i < 24; i++) {
+        prevPos = pos;
         pos += R * stepLen;
-        stepLen *= 1.22;                           // gentle growth
+        stepLen *= 1.16;                           // gentle growth
         vec4 cp = uProj * vec4(pos, 1.0);
         if (cp.w <= 0.0) break;
         vec2 suv = cp.xy / cp.w * 0.5 + 0.5;
         if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
         float dz = ssrViewPos(suv).z - pos.z;      // >0 = ray passed behind a surface
-        if (dz > uSsrThick && dz < 5.0) {          // SSR THICKNESS gate (reject far sky)
+        // SSR THICKNESS gate. The far-sky reject window must scale with the
+        // current step: late steps span many metres, so a fixed 5 m ceiling
+        // rejected legitimate hits mid-distance — the other source of the
+        // striped hit/miss alternation on strongly reflective roads.
+        if (dz > uSsrThick && dz < max(5.0, stepLen * 1.5)) {
           vec3 a = prevPos, b = pos;               // binary-search refine → crisp hit
           for (int j = 0; j < 4; j++) {
             vec3 mid = (a + b) * 0.5;
