@@ -44,7 +44,7 @@
               billboard, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
               forestEdge, along, modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
-              recordBarrier, pal, ATM } = api;
+              recordBarrier, circuitKit, pal, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // 1. Dry dusty Hungarian bowl — straw-olive grass/runoff, warm haze.
@@ -519,6 +519,69 @@
         groundPatch(k, side, dist, [90, 1.0, 80],
                     hash(k * 5) < 0.5 ? [0.78, 0.72, 0.36] : [0.72, 0.66, 0.34],
                     { id: `hungaroring-field-${s}`, samples: 6 });
+      }
+
+      // ====================================================================
+      // AUTHENTIC DEPTH PASS — bounded hero-sector additions
+      // ====================================================================
+
+      // 1. Close bowl-viewing berms behind the T1/T2 and final-corner stands.
+      // Low crowd blankets sit well back on the bank and preserve corner sightlines.
+      for (const [s, side, dist, len] of [
+        [0.075,  1, 92, 46], [0.115, -1, 88, 40], [0.905, 1, 86, 48],
+      ]) {
+        const k = K(s);
+        const hh = hash(k * 41 + side * 17);
+        backdrop(k, side, dist, [76 + hh * 18, 12 + hh * 4, len + 20], AMPH2);
+        prop(k, side, 62 + hh * 8, [14, 0.45, len], CROWD[(k + (side > 0 ? 1 : 0)) % CROWD.length]);
+      }
+
+      // 2. A sparse second woodland layer on the quiet outer perimeter. Fixed
+      // fractions create depth without closing the fast S2 driver sightlines.
+      for (const [s, side, dist] of [
+        [0.205, 1, 32], [0.235, 1, 42], [0.275, 1, 35],
+        [0.715, -1, 34], [0.755, -1, 44], [0.825, -1, 36],
+      ]) {
+        const k = K(s), h = hash(k * 53 + side * 7);
+        tree(k, side, dist, 10 + h * 5, h < 0.5 ? TREE : TREE2);
+        pine(k, side, dist + 9, 12 + h * 5, TREE);
+      }
+
+      // 3–4. Deeper paddock/event operations and proper intervention points.
+      // CircuitKit stages each complete facility atomically and rejects unsafe
+      // footprints on this compact, tightly folded circuit.
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:hungaroring:paddock-hospitality", frac: 0.012,
+          side: -1, gap: 92, size: [18, 9, 38], modules: 5,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:hungaroring:paddock-service", frac: 0.035,
+          side: -1, gap: 112, size: [26, 6, 34], vehicles: 7,
+        });
+        for (const [id, frac, side] of [
+          ["t4", 0.285, -1], ["t11", 0.625, 1],
+        ]) {
+          circuitKit.marshalShelter({
+            id: `kit:hungaroring:marshal-${id}`, frac, side,
+            gap: 18, size: [6, 3, 5],
+          });
+        }
+        circuitKit.recoveryBay({
+          id: "kit:hungaroring:recovery-t12", frac: 0.705,
+          side: 1, gap: 34, size: [13, 5, 18],
+        });
+      }
+
+      // 5. Localised Buda/Cserhát-style relief beyond the eastern bowl edge.
+      // A short, low ridge arc adds regional layering without making Hungary alpine.
+      for (let i = 0; i < 5; i++) {
+        const a = 0.15 + i * 0.16;
+        const h = hash(730 + i * 29);
+        const rr = rad + 390 + h * 45;
+        ridge(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin,
+              a + Math.PI / 2, 190 + h * 65, 105 + h * 35,
+              22 + h * 10, i % 2 ? HAZE : HAZE2);
       }
     },
   }

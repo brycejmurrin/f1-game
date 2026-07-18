@@ -92,6 +92,29 @@
         addBox(out, vadd(a.c, a.u, h - 0.7), [0.04, 1.4, 2.4], col, b);
       };
 
+      // Olympic Basin officials' tower: a narrow stacked concrete-and-glass
+      // silhouette, kept compact so it punctuates the water without closing the view.
+      const rowingTower = (id, s, side, dist, h) => {
+        const a = anchor(K(s), side, dist);
+        const b = [a.r, a.u, a.t];
+        modelGroup(id, {
+          center: vadd(a.c, a.u, h * 0.5 + 1.5),
+          size: [8, h + 3.5, 9],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, h * 0.48),
+            [4.6, h * 0.96, 6.2], [0.78, 0.80, 0.82], b);
+          for (const y of [h * 0.34, h * 0.62, h * 0.82]) {
+            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -2.36),
+              [0.22, 1.55, 5.2], [0.30, 0.46, 0.56], b);
+          }
+          addBox(stage, vadd(a.c, a.u, h + 0.2),
+            [7.2, 0.5, 8.0], [0.90, 0.91, 0.92], b);
+          addCyl(stage, vadd(a.c, a.u, h + 0.45),
+            0.10, 2.8, [0.36, 0.37, 0.39], 5, b);
+        });
+      };
+
       // St. Lawrence River: typed water strips begin beyond the 70 m terrain
       // ribbon. Segmenting the surround keeps each footprint away from foldbacks
       // and sends reflections through the dedicated water mesh.
@@ -259,6 +282,24 @@
         backdrop(k, -1, 140 + hash(i * 11) * 25, [20, 7 + hash(i * 5) * 5, 20], [0.16, 0.30, 0.17]);
       }
 
+      // Olympic rowing identity: paired officials' silhouettes and sparse lane
+      // marker floats across the open basin. All remain well beyond the fence.
+      rowingTower("montreal-rowing-tower-north", 0.135, -1, 49, 17);
+      for (let i = 0; i < 4; i++) {
+        const s = 0.088 + i * 0.023;
+        for (let lane = 0; lane < 3; lane++) {
+          const a = anchor(K(s), -1, 30 + lane * 8);
+          addBox(out, vadd(a.c, a.u, 0.18), [0.8, 0.35, 1.8],
+            ((i + lane) % 2) ? [0.92, 0.84, 0.22] : [0.88, 0.24, 0.20],
+            [a.r, a.u, a.t]);
+        }
+      }
+
+      // Basin-entry spectator hero beat, opposite the water so the long view
+      // remains open while the braking zone gains a recognisable event crowd.
+      grandstand(0.165, 1, 17, 66,
+        [0.48, 0.50, 0.54], [0.62, 0.34, 0.30]);
+
       // ── s 0.10 L — Rowing regatta spectator platform overlooking the basin ──
       // A simple concrete deck on stilts — like the permanent grandstand at the
       // 1976 Olympic rowing venue on the island.
@@ -319,6 +360,16 @@
       forestEdge(0.35, 0.48, -1, 12, {
         density: 0.55, hMin: 7, hMax: 12,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
+      });
+      // Deep woodland shoulders bridge the previously open transition into
+      // L'Épingle without planting the hairpin's braking or apex sightline.
+      forestEdge(0.495, 0.535, -1, 24, {
+        density: 0.62, hMin: 8, hMax: 15,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.12
+      });
+      forestEdge(0.655, 0.688, 1, 42, {
+        density: 0.58, hMin: 8, hMax: 14,
+        col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.16
       });
       // Scattered bushes in the mid-island infield near the Casino approach
       for (let i = 0; i < 10; i++) {
@@ -484,6 +535,14 @@
                  [22, 100 + hash(i * 13) * 70, 22], [0.54, 0.58, 0.64]);
       }
 
+      // Restrained Habitat 67 cue on the nearer city bearing: stepped pale
+      // modular silhouettes, low enough to remain a hint beneath downtown.
+      for (let i = 0; i < 5; i++) {
+        backdrop(K(0.332 + i * 0.0055), -1, 790 + hash(i * 23) * 55,
+          [14 + hash(i * 7) * 7, 18 + hash(i * 13) * 13, 20],
+          (i % 2) ? [0.67, 0.66, 0.62] : [0.74, 0.72, 0.67]);
+      }
+
       // ===================================================================
       // s 0.45 R close — Casino corner footbridge spanning the track
       // ===================================================================
@@ -569,6 +628,8 @@
         addBox(out, vadd(a.c, a.u, 3.0), [2.0, 6.0, 2.0], [0.86, 0.87, 0.90], b);
         addBox(out, vadd(a.c, a.u, 6.2), [2.6, 0.5, 2.6], [0.70, 0.72, 0.76], b);
       }
+      // Finish/announcer tower anchors the long Olympic Basin straight.
+      rowingTower("montreal-rowing-tower-finish", 0.625, 1, 48, 19);
       // Right verge: island parkland trees on the FAR bank beyond the basin
       forestEdge(0.575, 0.65, 1, 38, {
         density: 0.70, hMin: 8, hMax: 14,

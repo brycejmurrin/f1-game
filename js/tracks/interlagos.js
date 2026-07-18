@@ -170,6 +170,16 @@
         const k = K(s);
         motorhome(k, 1, 36 + hash(k) * 16, 11, 7, 18, { wall: [0.82, 0.84, 0.86] });
       }
+      // Dress-pass improvement 1: a guarded second row of low paddock service
+      // buildings. Their shallow silhouettes add garage/workshop depth without
+      // competing with the pit tower or closing the uphill driver's sightline.
+      for (const [s, col] of [
+        [0.965, [0.72, 0.74, 0.76]], [0.015, [0.80, 0.80, 0.78]], [0.045, [0.68, 0.72, 0.76]],
+      ]) {
+        building(K(s), 1, 58, 14, 6.5, 20, {
+          wall: col, window: [0.22, 0.28, 0.34], floor: 3.1, roof: [0.48, 0.50, 0.52],
+        });
+      }
 
       // Pit wall: solid low concrete barrier on the R of the pit straight
       wall(0.96, 0.06, 1, 2.4, 1.1, [0.82, 0.82, 0.84], 0.45);
@@ -298,6 +308,9 @@
       favelaPatch(0.13, -1, 72, 8, 7, 2.6);
       favelaPatch(0.17, -1, 68, 9, 7, 2.7);
       favelaPatch(0.22, -1, 72, 8, 6, 2.5);
+      // Dress-pass improvement 2: continue the hillside community toward the
+      // Reta Oposta reveal, but with a smaller patch so the straight remains open.
+      favelaPatch(0.265, -1, 82, 6, 6, 2.3);
       // A couple of taller finished landmark blocks poking above the shanties
       for (let i = 0; i < 3; i++) {
         const s = 0.14 + (i / 3) * 0.10;
@@ -311,6 +324,9 @@
       for (const s of [0.22, 0.25, 0.28]) billboard(K(s), 1, 10, 13, 5, [0.92, 0.92, 0.90]);
       hedge(0.20, 0.32, 1, 15, 2.4, GREEN);
       grandstand(0.27, -1, 12, 72, [0.43, 0.44, 0.49], [0.32, 0.52, 0.36]);
+      // Dress-pass improvement 3: a packed upper terrace behind the Reta Oposta
+      // stand, biased to Brazil's yellow/green event colour.
+      crowdBank(0.275, -1, 31, 78, 6);
       marshalPost(K(0.24), 1, 8);
 
       // ===================================================================
@@ -318,10 +334,10 @@
       // Water planes pushed well off-track; dense shoreline vegetation with
       // forestEdge so no foliage pokes through barriers.
       // ===================================================================
-      waterSurface(K(0.42), -1, 430, [260, 2, 230], [0.21, 0.41, 0.50],
-                   { id: "interlagos-guarapiranga-near", required: true });
-      waterSurface(K(0.42), -1, 700, [260, 2, 200], [0.20, 0.40, 0.48],
-                   { id: "interlagos-guarapiranga-far", required: true });
+      // One continuous distant reservoir reads as a shoreline, rather than two
+      // detached rectangular water tiles floating at different setbacks.
+      waterSurface(K(0.42), -1, 520, [380, 0.5, 460], [0.20, 0.40, 0.49],
+                   { id: "interlagos-guarapiranga", required: true });
 
       // Dense shoreline forestEdge — guaranteed no barrier clipping
       forestEdge(0.28, 0.48, -1, 28, { density: 0.80, hMin: 10, hMax: 18,
@@ -362,6 +378,17 @@
         step: 110,
         floor: 8,
       });
+      // Dress-pass improvement 4: sparse outer skyline layer. Taller, cooler
+      // towers create São Paulo depth behind the coherent mid-distance frontage.
+      cityFront(0.49, 0.74, 1, 285, {
+        minH: 58, maxH: 104,
+        depth: 34,
+        palette: [[0.42, 0.46, 0.54], [0.50, 0.52, 0.58], [0.56, 0.55, 0.52]],
+        lit: true,
+        windowCol: [0.90, 0.82, 0.42],
+        step: 165,
+        floor: 9,
+      });
 
       // ---- Distant SP city silhouette using backdrop() — auto-renders as building with window bands ----
       // Replaces the old raw addBox horizon ring that looked like floating grey cubes.
@@ -389,6 +416,15 @@
       // ===================================================================
       tyreWall(0.67, 0.73, -1, 4, [0.92, 0.80, 0.22]);
       grandstand(0.71, 1, 12, 64, [0.40, 0.41, 0.46], [0.32, 0.52, 0.36]);
+      // Dress-pass improvement 5: dense event-colour ribbon through the
+      // Ferradura/Juncão amphitheatre, with a second packed terrace at the
+      // braking-zone hero view. All pieces remain behind guarded stand shells.
+      crowdBank(0.805, 1, 30, 72, 6);
+      for (const [s, side, col] of [
+        [0.675, 1, [0.96, 0.82, 0.16]], [0.705, 1, [0.12, 0.58, 0.30]],
+        [0.735, 1, [0.16, 0.38, 0.72]], [0.795, 1, [0.96, 0.82, 0.16]],
+        [0.825, 1, [0.12, 0.58, 0.30]],
+      ]) billboard(K(s), side, 20, 12, 4.5, col);
       marshalPost(K(0.70), -1, 9);
       // Use forestEdge for clean treeline (no poke-through)
       forestEdge(0.64, 0.76, -1, 18, { density: 0.55, hMin: 9, hMax: 14,

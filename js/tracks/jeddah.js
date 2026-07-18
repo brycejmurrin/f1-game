@@ -42,7 +42,7 @@
       const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
-        cityFront, modelGroup, waterSurface, onTrack, hash, every } = api;
+        cityFront, modelGroup, waterSurface, onTrack, hash, every, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
@@ -62,6 +62,20 @@
 
       const WALL_INL = [[0.17, 0.18, 0.23], [0.19, 0.20, 0.25],
                         [0.15, 0.16, 0.21], [0.21, 0.21, 0.26]];
+
+      // ── Corniche hospitality decks — pit lane and marina hero pockets ─────
+      // Atomic kit models stay well behind the barriers and frame the event
+      // without adding tall masses to the circuit's high-speed sightlines.
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:jeddah:pit-hospitality", frac: 0.035, side: -1, gap: 72,
+          size: [20, 10, 42], modules: 6,
+        });
+        circuitKit.hospitality({
+          id: "kit:jeddah:marina-hospitality", frac: 0.455, side: 1, gap: 112,
+          size: [22, 11, 46], modules: 6,
+        });
+      }
 
       // ── Simple helpers ─────────────────────────────────────────────────────
       // Floodlight mast: pole + lamp bar + ambient pool (sparse drama accents)
@@ -137,6 +151,13 @@
       for (let i = 0; i < 8; i++) {
         palm(K(i / 8 + 0.01), -1, 22 + hash(i * 7) * 5, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
       }
+      // Dense, low Corniche promenade avenue around the lagoon hero sector.
+      // The 13 m setback keeps trunks behind the concrete canyon and leaves the
+      // open-sea straight (s 0.05–0.40) visually unobstructed.
+      for (let i = 0; i < 9; i++) {
+        palm(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
+          6.5 + hash(i * 17 + 4) * 2.5, (i % 3) ? PALMFROND : [0.16, 0.50, 0.22]);
+      }
 
       // ── Marshal posts ─────────────────────────────────────────────────────
       for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],
@@ -153,6 +174,14 @@
         const s = 0.43 + i * 0.035;
         waterSurface(K(s), 1, 28, [90, 0.45, 85], [0.018, 0.035, 0.080],
           { id: `jeddah-marina-water-${i}` });
+      }
+      // Waterfront light ribbon: waist-high amber/cool bollards, concentrated
+      // at the marina rather than repeated around the full lap.
+      for (let i = 0; i < 11; i++) {
+        const s = 0.425 + i * 0.019;
+        const k = K(s), col = (i % 3 === 0) ? WINTEAL : SPANGLE;
+        place(k, 1, 12 + (i % 2) * 1.5, [0.34, 1.7, 0.34], col);
+        place(k, 1, 14.5 + (i % 2), [2.8, 0.12, 1.2], col);
       }
 
       // ── King Fahd's Fountain — offshore landmark ──────────────────────────
@@ -209,6 +238,14 @@
       building(K(0.27), -1, 55, 28, 115, 26, { wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
       building(K(0.30), -1, 88, 24, 172, 22, { wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
       tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
+      // Layered Corniche hotel frontage below the three landmark silhouettes.
+      // Mid-rise spacing maintains depth while leaving the driver-facing edge
+      // clear through the very fast sweep.
+      cityFront(0.245, 0.335, -1, 96, {
+        minH: 24, maxH: 62, depth: 20,
+        palette: WALL_INL, lit: true, windowCol: WINCOOL,
+        step: 68, floor: 5,
+      });
 
       // ── MARINA — 6 yachts at s 0.42–0.48 R ───────────────────────────────
       for (let i = 0; i < 6; i++) {
@@ -233,6 +270,10 @@
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
       grandstand(0.50, 1, 18, 40, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
+      // Packed night-event bowl: flanking stands create a concentrated crowd
+      // wall at T13, with generous setbacks and gaps between each structure.
+      grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
+      grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
       // ── CORNICHE LAGOON — s 0.55–0.64 R (water; LEDs already ring the lap) ─
@@ -260,6 +301,7 @@
 
       // ── FINAL SECTOR GRANDSTAND — s 0.89 R ───────────────────────────────
       grandstand(0.89, 1, 16, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
+      grandstand(0.925, 1, 22, 58, [0.12, 0.13, 0.17], [0.62, 0.42, 0.50]);
       lightTower(K(0.90),  1, 11);
       lightTower(K(0.93), -1, 11);
       floodMast(K(0.91), -1, 24);

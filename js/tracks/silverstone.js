@@ -52,6 +52,16 @@
           id: "kit:silverstone:pit-building", frac: 0.97,
           side: 1, gap: 180, size: [18, 10, 72], garages: 12, required: true,
         });
+        // Set-back Wing hospitality and paddock logistics deepen the event campus
+        // without closing the view down the pit straight.
+        circuitKit.hospitality({
+          id: "kit:silverstone:wing-hospitality", frac: 0.465,
+          side: 1, gap: 76, size: [20, 9, 58], modules: 6,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:silverstone:paddock-service", frac: 0.935,
+          side: 1, gap: 92, size: [30, 5, 54], vehicles: 10,
+        });
         circuitKit.cameraCrane({
           id: "kit:silverstone:camera-crane", frac: 0.30,
           side: -1, gap: 45, size: [6, 16, 6], required: true,
@@ -180,6 +190,17 @@
       grandstand(0.10,  1, 32, 55,  [0.42, 0.44, 0.48], [0.50, 0.30, 0.28]);
       // Chapel corner — fans favourite viewpoint
       grandstand(0.17, -1, 30, 50,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
+
+      // 4. Broad spectator fields: secondary stand ranks fill the three famous
+      // viewing bowls, while Hangar Straight itself remains deliberately open.
+      for (const [s, side, gap, len, crowd] of [
+        [0.105, -1, 52, 48, [0.50, 0.28, 0.26]], // Maggotts approach
+        [0.145,  1, 48, 54, [0.46, 0.30, 0.30]], // Becketts exit
+        [0.285,  1, 48, 58, [0.54, 0.28, 0.26]], // Stowe entry
+        [0.325, -1, 52, 52, [0.48, 0.30, 0.28]], // Stowe exit
+        [0.815, -1, 44, 52, [0.52, 0.28, 0.26]], // Brooklands approach
+        [0.875, -1, 42, 58, [0.48, 0.30, 0.30]], // Luffield/Woodcote
+      ]) grandstand(s, side, gap, len, [0.42, 0.44, 0.48], crowd);
 
       // ---- The Wing building (s≈0.43–0.47 R) — four grounded atomic bays ----
       // Four overlapping 64 m bays follow the pit-straight ground/heading and
@@ -548,6 +569,57 @@
       heritagePlane(k(0.50), 1, 120);
       // Rich start-light gantry cluster spanning the National straight.
       startGantryCluster(0.995);
+
+      // 5. Former-runway remnant beside Hangar Straight. A single broad slab and
+      // sparse threshold bars read as airfield heritage without building a wall
+      // against the intentionally open rural horizon.
+      groundPatch(k(0.235), 1, 64, [28, 0.16, 190], [0.36, 0.37, 0.38], {
+        id: "silverstone-heritage-runway", samples: 8,
+      });
+      for (const d of [69, 75, 81, 87]) {
+        place(k(0.235), 1, d, [1.4, 0.12, 14], [0.84, 0.84, 0.80]);
+      }
+
+      // 6. Event service roads: narrow, subdued asphalt links behind the Wing,
+      // National paddock and the Luffield camping fields.
+      for (const [id, s, side, gap, len] of [
+        ["wing",     0.475, 1, 54, 92],
+        ["paddock",  0.930, 1, 58, 84],
+        ["camping",  0.775, 1, 48, 110],
+      ]) groundPatch(k(s), side, gap, [8, 0.12, len], [0.28, 0.29, 0.30], {
+        id: `silverstone-service-road-${id}`, samples: 7,
+      });
+
+      // 7. British GP camping fields: three bounded, atomic clusters of white
+      // caravans and small coloured tents, well behind the Luffield perimeter.
+      for (let field = 0; field < 3; field++) {
+        const s = 0.735 + field * 0.045;
+        const a = anchor(k(s), 1, 104 + field * 8);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`silverstone-camping-field-${field + 1}`, {
+          center: vadd(a.c, a.u, 2.8), size: [54, 5.6, 58], basis: b,
+        }, (stage) => {
+          for (let i = 0; i < 8; i++) {
+            const row = i < 4 ? -1 : 1;
+            const slot = i % 4;
+            const c = vadd(vadd(a.c, a.r, row * (9 + hash(field * 31 + i) * 4)),
+                           a.t, (slot - 1.5) * 12);
+            const tent = (i + field) % 3 === 0;
+            if (tent) {
+              stage._mat = MAT.FABRIC;
+              TrackGeom.addPrism(stage, vadd(c, a.u, 1.35), [4.8, 2.7, 6.5],
+                                 i % 2 ? [0.78, 0.20, 0.18] : [0.20, 0.38, 0.62], b);
+            } else {
+              stage._mat = MAT.METAL;
+              TrackGeom.addBox(stage, vadd(c, a.u, 1.25), [3.2, 2.5, 6.8],
+                               [0.88, 0.88, 0.84], b);
+              stage._mat = MAT.GLASS;
+              TrackGeom.addBox(stage, vadd(vadd(c, a.u, 1.45), a.r, -1.62),
+                               [0.12, 0.8, 2.2], [0.22, 0.30, 0.36], b);
+            }
+          }
+        });
+      }
 
       // silence unused-guard lint helpers (destructured but not called directly)
       void GRASS; void STEEL; void TARMAC; void prop; void WHITE; void tower; void bush;

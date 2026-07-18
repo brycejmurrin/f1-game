@@ -39,7 +39,8 @@
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
-              MAT, modelGroup, overheadSpan } = api;
+              MAT, modelGroup, overheadSpan, circuitKit } = api;
+      const K = (s) => Math.round(s * n) % n;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
       const navy      = [0.18, 0.26, 0.46];
@@ -109,6 +110,21 @@
 
       // Single flanking accent tower (aft of wheel) — keeps Motopia colour without crowding
       tower(Math.round(n * 0.038) % n, -1, 105, 7, 42, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
+
+      // Motopia arrival gate: a compact red/white Japanese event arch frames the
+      // park perimeter without adding another tall silhouette beside the wheel.
+      {
+        const g = anchor(K(0.055), -1, 52), gb = [g.r, g.u, g.t];
+        const gc = vadd(g.c, g.u, 5.2);
+        modelGroup("suzuka-motopia-arrival-gate", {
+          center: gc, size: [14, 10.5, 4], basis: gb,
+        }, (stage) => {
+          addBox(stage, vadd(g.c, g.r, -5.5), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
+          addBox(stage, vadd(g.c, g.r,  5.5), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
+          addBox(stage, vadd(g.c, g.u, 8.2), [13.2, 1.5, 2.2], neonRed, gb);
+          addBox(stage, vadd(g.c, g.u, 9.5), [9.0, 0.55, 2.5], [0.96, 0.96, 0.94], gb);
+        }, { required: true });
+      }
 
       // ── Lamp posts ringing the wheel area — warm sodium emissive heads ────────
       for (let i = 0; i < 6; i++) {
@@ -231,6 +247,18 @@
       // ── Pit & paddock complex (right side of main straight) ───────────────────
       building(Math.round(n * 0.985) % n, 1, 9, 14, 9, 60, { wall: concrete, window: litWin, floor: 3, roof: false });
       building(Math.round(n * 0.990) % n, 1, 30, 22, 16, 28, { wall: [0.80, 0.80, 0.84], window: litWin, floor: 4, setback: true, roof: true });
+      // Japanese GP hospitality village: low, modular event suites behind the
+      // paddock preserve the pit-straight sightline while deepening race-weekend scale.
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:suzuka:paddock-hospitality", frac: 0.975, side: 1, gap: 58,
+          size: [18, 9, 34], modules: 5, required: true,
+        });
+        circuitKit.marshalShelter({
+          id: "kit:suzuka:degner-marshal-shelter", frac: 0.315, side: 1, gap: 18,
+          size: [6, 3.2, 5], required: true,
+        });
+      }
       guardrail(0.965, 0.04, 1, 2.5, [0.88, 0.88, 0.90]);
       tower(Math.round(n * 0.995) % n, 1, 22, 9, 30, { col: [0.86, 0.87, 0.90], seg: 6, cap: true, capCol: navy, mast: 7 });
       overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2,
@@ -298,6 +326,12 @@
         col:  [0.12, 0.32, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.60 });
       forestEdge(0.55, 0.72, -1, 12, { density: 0.68, hMin: 8, hMax: 14,
         col:  [0.13, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.58 });
+      // A sparse second woodland rank closes the distant Hairpin/Spoon backdrop;
+      // the 34 m gap leaves the first-rank trees and braking sightlines legible.
+      forestEdge(0.42, 0.54, -1, 34, { density: 0.34, hMin: 10, hMax: 17,
+        col: [0.11, 0.30, 0.13], col2: [0.16, 0.36, 0.15], pineFrac: 0.66 });
+      forestEdge(0.57, 0.70, 1, 34, { density: 0.32, hMin: 10, hMax: 16,
+        col: [0.12, 0.31, 0.14], col2: [0.17, 0.37, 0.16], pineFrac: 0.62 });
 
       // Back straight / 130R / Casio sector
       forestEdge(0.72, 0.92,  1, 12, { density: 0.65, hMin: 8, hMax: 13,
@@ -365,6 +399,20 @@
         minimumClearance: 4.8, thickness: 1.5, depth: 22, span: hw[Math.round(0.37 * n) % n] * 2 + 8,
         supportGap: 2.8, supportWidth: 1.8, color: [0.18, 0.52, 0.26],
         required: true });
+      // Concrete abutment houses and Honda-red caps make the figure-eight
+      // crossing read as engineered infrastructure rather than a floating deck.
+      for (const side of [-1, 1]) {
+        const ca = anchor(K(0.37), side, 8.5), cb = [ca.r, ca.u, ca.t];
+        const cc = vadd(ca.c, ca.u, 2.6);
+        modelGroup(`suzuka-crossover-abutment-${side < 0 ? "left" : "right"}`, {
+          center: cc, size: [7.6, 6.2, 12.8], basis: cb,
+        }, (stage) => {
+          addBox(stage, cc, [6.5, 5.2, 12], concrete, cb);
+          addBox(stage, vadd(ca.c, ca.u, 5.35), [7.0, 0.45, 12.5], neonRed, cb);
+          addBox(stage, vadd(vadd(ca.c, ca.r, side * 3.55), ca.u, 3.0),
+                 [0.35, 3.0, 10.5], steel, cb);
+        }, { required: true });
+      }
 
       // ── Honda orange accent on main grandstand (start/finish left side) ───────
       {
@@ -405,6 +453,10 @@
       stand(0.94,  1, 9, 35);        // Casio Triangle right
       stand(0.94, -1, 9, 35);        // Casio Triangle left
       stand(0.50,  1, 8, 24);        // Mid-circuit flex stand
+      // Compact packed fan terraces at the two strongest driver-eye hero beats.
+      // Grandstand shells guard the crowd geometry and keep it behind catch fencing.
+      stand(0.205, 1, 20, 22, [0.82, 0.84, 0.86]); // Esses crest crowd
+      stand(0.875, 1, 18, 24, navy);                  // 130R exit crowd
     },
   }
   );

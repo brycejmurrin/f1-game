@@ -36,7 +36,7 @@
               grandstand, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
-              forestEdge, cityFront, MAT, circuitKit } = api;
+              forestEdge, cityFront, bowlSeatWall, MAT, circuitKit } = api;
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -51,6 +51,16 @@
         circuitKit.trackSigns({
           id: "kit:albert_park:track-signs", frac: 0.88,
           side: 1, gap: 45, size: [3, 3, 42], count: 6, required: true,
+        });
+        // Temporary Melbourne GP village: premium suites by the lake and the
+        // bounded support compound tucked behind the pit-entry tree line.
+        circuitKit.hospitality({
+          id: "kit:albert_park:lakeside-hospitality", frac: 0.635,
+          side: 1, gap: 72, size: [20, 9, 38], modules: 5,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:albert_park:pit-entry-service", frac: 0.965,
+          side: -1, gap: 76, size: [24, 6, 34], vehicles: 7,
         });
       }
 
@@ -133,6 +143,29 @@
       lakeFountain(k(0.46), 96, 1.4);    // hero fountain, mid-lake
       lakeFountain(k(0.56), 78, 0.85);   // smaller companion jet nearer shore
 
+      // Low reed islets make the near/mid/far shore read as layered parkland
+      // without lifting a visual wall across the lake, fountains, or skyline.
+      for (const [s, dist, seed] of [[0.34, 68, 31], [0.47, 74, 47], [0.60, 66, 61]]) {
+        const a = anchor(k(s), -1, dist), b = [a.r, a.u, a.t];
+        modelGroup(`albert-shore-reeds-${seed}`, {
+          center: vadd(a.c, a.u, 2.2),
+          size: [15, 4.5, 15],
+          basis: b,
+        }, (stage) => {
+          addFrustum(stage, vadd(a.c, a.u, 0.15), 6.2, 5.0, 0.45,
+                     [0.24, 0.44, 0.22], 10, b);
+          for (let j = 0; j < 7; j++) {
+            const lateral = (hash(seed + j * 7) - 0.5) * 8;
+            const along = (hash(seed + j * 11) - 0.5) * 8;
+            const stem = vadd(vadd(a.c, a.r, lateral), a.t, along);
+            addCyl(stage, vadd(stem, a.u, 0.35), 0.10, 2.1 + hash(seed + j * 13) * 1.2,
+                   [0.34, 0.48, 0.20], 4, b);
+            addCone(stage, vadd(stem, a.u, 2.1), 0.55, 1.0,
+                    [0.42, 0.54, 0.24], 5, b);
+          }
+        });
+      }
+
       // ---- Lakeside jetty / boardwalk pier reaching into the water (s≈0.50 L) ----
       {
         const a = anchor(k(0.50), -1, 40), b = [a.r, a.u, a.t];
@@ -173,6 +206,13 @@
         backdrop(k(0.36 + f * 0.16), -1, 400 + hash(i * 5) * 50,
                  [bw, bh, 20],
                  [0.38 + hash(i * 7) * 0.06, 0.42 + hash(i * 3) * 0.05, 0.54 + hash(i * 11) * 0.05]);
+      }
+      // Far-shore South Melbourne mid-rises bridge the scale between park trees
+      // and the CBD heroes while remaining low enough to preserve open sky.
+      for (let i = 0; i < 4; i++) {
+        backdrop(k(0.35 + i * 0.055), -1, 455 + hash(80 + i) * 34,
+                 [18 + hash(90 + i) * 12, 38 + hash(100 + i) * 28, 16],
+                 [0.43, 0.47, 0.56]);
       }
 
       // ====================================================================
@@ -272,6 +312,17 @@
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
 
+      // A second, looser rank behind the eastern sweeps and southern loop gives
+      // the temporary road circuit genuine avenue depth rather than a flat hedge.
+      forestEdge(0.12, 0.25, 1, 48, {
+        density: 0.30, hMin: 13, hMax: 20,
+        col: EUC, col2: EUC2, pineFrac: 0,
+      });
+      forestEdge(0.68, 0.84, -1, 46, {
+        density: 0.34, hMin: 14, hMax: 21,
+        col: EUC, col2: EUC2, pineFrac: 0,
+      });
+
       // ---- Far-background eucalyptus canopy (atmospheric depth) ----
       every(60, (kk) => {
         for (const side of [-1, 1]) {
@@ -323,6 +374,17 @@
       grandstand(0.95, -1, 16, 48, SHELL, CROWD);   // pit-approach bank L
       grandstand(0.20,  1, 16, 46, SHELL, CROWD);   // fast section R
       grandstand(0.45, -1, 16, 44, SHELL, CROWD);   // lakeside bank L
+
+      // Packed, low crowd banks at the two broadcast hero sectors. Their short
+      // bounded runs sit behind the barriers and keep corner-exit sightlines open.
+      bowlSeatWall(0.145, 0.205, -1, 18, {
+        h: 4.8, thick: 3.2, shell: [0.50, 0.51, 0.54], step: 10,
+        crowdCols: [[0.82, 0.22, 0.18], [0.92, 0.78, 0.24], [0.22, 0.46, 0.72]],
+      });
+      bowlSeatWall(0.755, 0.815, 1, 18, {
+        h: 5.2, thick: 3.4, shell: [0.48, 0.49, 0.52], step: 9,
+        crowdCols: [[0.86, 0.24, 0.18], [0.88, 0.86, 0.82], [0.18, 0.52, 0.36]],
+      });
 
       // ---- Pit building + garages: long low white box row, dark roof (s≈0.0 R) ----
       building(k(0.0), 1, 5, 14, 9, 180, { wall: [0.86, 0.87, 0.88], window: [0.18, 0.22, 0.28], floor: 4 });

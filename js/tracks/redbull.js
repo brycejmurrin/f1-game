@@ -528,6 +528,89 @@
       campTerrace(K(0.15),  1, 46, 8);
       campTerrace(K(0.25), -1, 50, 7);
       campTerrace(K(0.85), -1, 44, 8);
+
+      // =======================================================================
+      // 2026 SCENERY DRESS PASS — six bounded, hero-sector additions
+      // =======================================================================
+
+      // 1) Remus and stadium hillside crowd terraces. These sit well behind the
+      // primary fence line so the orange/navy crowd blocks read across the bowl
+      // without narrowing braking-zone sightlines.
+      grandstand(0.265, 1, 38, 22, shell, [0.96, 0.38, 0.04]);
+      grandstand(0.285, 1, 44, 20, shell, rbNavy);
+      grandstand(0.825, -1, 32, 22, shell, [0.96, 0.38, 0.04]);
+
+      // 2) A dedicated far treeline adds woodland depth behind the open downhill
+      // sweep and stadium approach while leaving the near verge deliberately clear.
+      forestEdge(0.39, 0.48, -1, 54, { density: 0.34, hMin: 11, hMax: 18,
+        col: [0.08, 0.22, 0.11], col2: [0.15, 0.32, 0.14], pineFrac: 0.82 });
+      forestEdge(0.58, 0.68, 1, 48, { density: 0.30, hMin: 10, hMax: 17,
+        col: [0.09, 0.24, 0.12], col2: [0.17, 0.34, 0.15], pineFrac: 0.76 });
+
+      // 3) Styrian farmyard: a timber barn, broad Alpine roof, silo and equipment
+      // shed form one atomically guarded compound beyond the existing chalet row.
+      {
+        const a = anchor(K(0.58), -1, 76), b = [a.r, a.u, a.t];
+        modelGroup("redbull-styrian-farmyard", {
+          center: vadd(a.c, a.u, 9),
+          size: [42, 18, 38],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 4.5), [18, 9, 24], [0.52, 0.32, 0.18], b);
+          addPrism(stage, vadd(a.c, a.u, 9), [22, 5.5, 27], [0.34, 0.18, 0.12], b);
+          const silo = vadd(vadd(a.c, a.r, 14), a.t, -5);
+          addCyl(stage, silo, 3.2, 14, [0.68, 0.70, 0.68], 8, b);
+          addCone(stage, vadd(silo, a.u, 14), 3.4, 2.8, [0.40, 0.42, 0.40], 8, b);
+          addBox(stage, vadd(vadd(vadd(a.c, a.r, -13), a.t, 5), a.u, 2.5),
+                 [8, 5, 12], [0.64, 0.48, 0.28], b);
+        });
+      }
+
+      // 4) Paddock depth behind The Wing: a second, farther hospitality row makes
+      // the start complex read as a full event campus rather than one facade.
+      motorhome(K(0.975), -1, 43, 15, 7, 18,
+        { wall: [0.78, 0.80, 0.84], window: [0.16, 0.24, 0.34] });
+      motorhome(K(0.02), -1, 46, 18, 8, 20,
+        { wall: [0.90, 0.90, 0.92], window: [0.18, 0.28, 0.40] });
+      motorhome(K(0.055), -1, 42, 14, 7, 17,
+        { wall: [0.74, 0.76, 0.80], window: [0.20, 0.28, 0.38] });
+
+      // 5) Stadium fan village and event screen. The guarded footprint contains
+      // the full tent, screen and flag avenue, all far behind the spectator shell.
+      {
+        const a = anchor(K(0.84), -1, 58), b = [a.r, a.u, a.t];
+        modelGroup("redbull-stadium-fan-village", {
+          center: vadd(a.c, a.u, 8),
+          size: [44, 16, 40],
+          basis: b,
+        }, (stage) => {
+          addPrism(stage, vadd(a.c, a.u, 0.3), [20, 8, 20], [0.92, 0.92, 0.94], b);
+          const screen = vadd(vadd(a.c, a.r, 13), a.t, -5);
+          addBox(stage, vadd(screen, a.u, 6), [1.0, 11, 14], rbNavy, b);
+          addBox(stage, vadd(vadd(screen, a.r, -0.6), a.u, 7), [0.3, 3.2, 10], rbRed, b);
+          addBox(stage, vadd(vadd(screen, a.r, -0.8), a.u, 7), [0.2, 1.0, 5.5], rbYel, b);
+          for (const [i, col] of [[-1, rbRed], [0, rbYel], [1, rbNavy]]) {
+            const mast = vadd(vadd(a.c, a.r, -11), a.t, i * 8);
+            addCyl(stage, mast, 0.12, 12, [0.70, 0.70, 0.72], 5, b);
+            addBox(stage, vadd(vadd(mast, a.u, 10.5), a.r, -0.8),
+                   [0.12, 2.2, 3.4], col, b);
+          }
+        });
+      }
+
+      // 6) Three high, distant peaks frame the Remus crest from the downhill
+      // camera. Their centres are over 300 m off the edge, preserving the bull
+      // plaza skyline and adding a focused Alpine hero backdrop rather than noise.
+      {
+        const a = anchor(K(0.235), -1, 330);
+        for (const [off, w, h, seed] of [[-150, 240, 112, 701], [0, 290, 148, 709], [165, 230, 105, 719]]) {
+          const c = vadd(a.c, a.t, off);
+          mountain(c[0], c[2], pyMin - 4, w, h, {
+            seg: 5, seed, rough: 0.38, forest: [0.12, 0.26, 0.14],
+            rock: [0.42, 0.43, 0.42], snow: [0.94, 0.95, 0.98], snowline: 0.68,
+          });
+        }
+      }
     },
   }
   );

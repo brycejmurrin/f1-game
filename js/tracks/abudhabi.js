@@ -37,7 +37,7 @@
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel,
-        modelGroup, overheadSpan, waterSurface, groundPatch } = api;
+        modelGroup, overheadSpan, waterSurface, groundPatch, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -58,6 +58,56 @@
       const FERRARI   = [0.85, 0.08, 0.10];
       const DARK      = [0.10, 0.10, 0.14];
       const DUSK      = [0.30, 0.16, 0.20];    // deep dusk masonry
+
+      // ===================================================================
+      // YAS MARINA EVENT OPERATIONS — bounded, atomic facilities add the
+      // race-week layer behind existing heroes without filling open desert.
+      // ===================================================================
+      if (circuitKit) {
+        // Control tower closes the pit complex at the final-corner end.
+        circuitKit.raceControl({
+          id: "kit:abudhabi:race-control", frac: 0.985, side: 1, gap: 78,
+          size: [12, 26, 14], style: "tapered", required: true,
+        });
+        // Marina-club suites deepen the hospitality edge beyond the yacht basin.
+        circuitKit.hospitality({
+          id: "kit:abudhabi:marina-hospitality", frac: 0.735, side: 1, gap: 58,
+          size: [18, 10, 42], modules: 6, required: true,
+        });
+        // A compact TV/service compound sits behind T9, away from sightlines.
+        circuitKit.serviceCompound({
+          id: "kit:abudhabi:event-service", frac: 0.405, side: 1, gap: 74,
+          size: [24, 6, 34], vehicles: 8, required: true,
+        });
+        // Broadcast cranes mark the two major spectator bowls.
+        circuitKit.cameraCrane({
+          id: "kit:abudhabi:north-hairpin-camera", frac: 0.285,
+          side: -1, gap: 34, size: [6, 18, 6], required: true,
+        });
+        circuitKit.cameraCrane({
+          id: "kit:abudhabi:marsa-camera", frac: 0.790,
+          side: -1, gap: 34, size: [6, 18, 6], required: true,
+        });
+      }
+
+      // Illuminated roof markers make the packed hairpin/T9 stands read as
+      // deliberate night-event zones. Each short canopy is footprint-checked
+      // atomically and remains behind the existing grandstand shell.
+      const spectatorCanopy = (id, s, side, col) => {
+        const a = anchor(K(s), side, 27);
+        const b = [a.r, a.u, a.t];
+        const center = vadd(a.c, a.u, 12);
+        modelGroup(id, { center, size: [18, 5, 28], basis: b }, (stage) => {
+          stage._mat = MAT.METAL;
+          addBox(stage, center, [18, 1.0, 28], [0.15, 0.16, 0.22], b);
+          addBox(stage, vadd(vadd(center, a.u, -1.2), a.r, -side * 8.2),
+            [0.8, 2.2, 27], col, b);
+          stage._mat = 0;
+        }, { required: true });
+      };
+      spectatorCanopy("yas-north-hairpin-led-left", 0.280, -1, LED_TEAL);
+      spectatorCanopy("yas-north-hairpin-led-right", 0.280, 1, LED_AMBER);
+      spectatorCanopy("yas-turn-9-led-canopy", 0.420, -1, LED_MAG);
 
       // ===================================================================
       // Flat far horizon: desert-sand dune band ringing the lap (golden sands

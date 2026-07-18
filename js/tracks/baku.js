@@ -45,6 +45,7 @@
         fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
+        circuitKit,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -88,6 +89,20 @@
         [0.52, 0.48, 0.43],
         [0.38, 0.37, 0.35],
       ];
+
+      // Proper street-race infrastructure at the flat-out finish approach.
+      // The pit building sits behind the existing pit-wall frontage; the bridge
+      // supplies one deliberate event beat without cluttering the castle climb.
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:baku:pit-building", frac: 0.975, side: 1, gap: 30,
+          size: [18, 11, 76], garages: 14, required: true,
+        });
+        circuitKit.pedestrianBridge({
+          id: "kit:baku:finish-bridge", frac: 0.91,
+          clearance: 7.2, thickness: 0.9, depth: 3.2, required: true,
+        });
+      }
 
       // ===================================================================
       // Continuous concrete walls + catch-fence lining the whole lap
@@ -303,6 +318,13 @@
               const col  = FIRE_BANDS[band % FIRE_BANDS.length];
               addFrustum(stage, vadd(tc, aF.u, yFr * H - (H / nBands) * 0.45),
                 rAtY * 1.08, rAtY * 0.96, (H / nBands) * 0.88, col, 8, b);
+              // A brighter road-facing fire core breaks up the ring silhouette
+              // and makes each tower read as an LED-clad flame rather than a cone.
+              if (band % 2 === 0) {
+                const hot = vadd(vadd(tc, aF.u, yFr * H), aF.r, -rAtY * 1.10);
+                addBox(stage, hot, [0.7, (H / nBands) * 0.62, 4.2],
+                  band % 4 ? FLAME_PALE : [1.0, 0.72, 0.28], b);
+              }
             }
 
             // Flame crown — stacked narrow cones above the LED shaft
@@ -313,6 +335,10 @@
 
           // Uplit ground wash at the Flame Towers base (warm fire spill)
           addBox(stage, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.22, 0.08, 0.02], b);
+          // Stepped dark hillside podium anchors the skyline above the city.
+          addBox(stage, vadd(aF.c, aF.u, 1.0), [130, 2.0, 44], SAND_DARK, b);
+          addBox(stage, vadd(aF.c, aF.u, 3.0), [110, 2.0, 38], [0.30, 0.25, 0.20], b);
+          addBox(stage, vadd(aF.c, aF.u, 5.0), [88, 2.0, 32], [0.22, 0.20, 0.19], b);
           for (let t = 0; t < 3; t++) {
             const tc = vadd(aF.c, aF.r, (t - 1) * 50);
             addBox(stage, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.30, 0.12, 0.03], b);
@@ -337,6 +363,19 @@
         minH: 18, maxH: 48, depth: 18, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
+      // Repeating projecting balconies give the Boulevard frontage a specific
+      // Baku residential/hotel rhythm. Kept on the Caspian side so the Flame
+      // Towers remain unobstructed on the right-hand skyline.
+      for (let i = 0; i < 6; i++) {
+        const a = anchor(K(0.245 + i * 0.017), -1, 16.5);
+        const b = [a.r, a.u, a.t];
+        for (let floor = 0; floor < 3; floor++) {
+          const deck = vadd(a.c, a.u, 5.0 + floor * 4.0);
+          addBox(out, deck, [3.2, 0.28, 7.6], [0.66, 0.62, 0.54], b);
+          const rail = vadd(vadd(deck, a.r, 1.48), a.u, 0.55);
+          addBox(out, rail, [0.16, 1.0, 7.7], [0.78, 0.73, 0.64], b);
+        }
+      }
       // Boulevard palm row along the Caspian-side of the main straight
       for (let i = 0; i < 14; i++) {
         const s = 0.23 + i * 0.009;
@@ -362,6 +401,18 @@
             addBox(out, mc, [2.4, 1.8, 2.2], SAND, [a.r, a.u, a.t]);
           }
         }
+      }
+
+      // Low buttresses and warm uplights articulate the long outer rampart.
+      // Fractions stop before 0.42 and resume after 0.50: the castle squeeze,
+      // gate sightline, and its close walls remain untouched.
+      for (const s of [0.365, 0.385, 0.405, 0.515, 0.535, 0.555]) {
+        const a = anchor(K(s), 1, 19.4);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 4.5), [2.6, 9.0, 3.2], SAND_DARK, b);
+        addBox(out, vadd(a.c, a.u, 0.18), [3.4, 0.34, 3.8], SAND_LIT, b);
+        addBox(out, vadd(vadd(a.c, a.u, 2.4), a.r, -0.75), [0.28, 3.2, 1.2],
+          WIN_WARM, b);
       }
 
       // Dense sandstone old-town behind the rampart

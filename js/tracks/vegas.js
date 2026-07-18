@@ -41,7 +41,7 @@
       const { out, MAT, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
-        cityFront, modelGroup, overheadSpan, waterSurface } = api;
+        cityFront, modelGroup, overheadSpan, waterSurface, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // High Roller: one atomic, fully-grounded vertical wheel. The old model
@@ -144,11 +144,10 @@
         addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
-      // --- DISTANT NIGHT SKYLINE RING: a far band of lit highrise blocks all the way
-      //     around, so wherever you look there's a glowing city horizon (not empty). ---
+      // --- DISTANT NIGHT SKYLINE: sparse clusters, not a cloned tower ring. ---
       {
         const sky = trad + 300;
-        const skyN = 56;
+        const skyN = 18;
         const SKYTINT = [CYAN, WARM, VIOLET, BLUE, ROSE];
         for (let i = 0; i < skyN; i++) {
           const a = i / skyN * 6.2832, h = hash(i * 11 + 17), h2 = hash(i * 23 + 5);
@@ -160,7 +159,7 @@
           // moderate band: above the shader's emissive glow gate (~0.55) so it
           // reads as lit, but well below HDR so the distant ring doesn't bloom into
           // the blown-out pink/cyan blobs it did before.
-          const lvl = 0.6 + h2 * 0.22;
+          const lvl = 0.46 + h2 * 0.16;
           const skin = [tint[0] * lvl + 0.06, tint[1] * lvl + 0.06, tint[2] * lvl + 0.08];
           const baseH = bh * 0.78;
           addBox(out, [mx, pyMin + baseH / 2, mz], [bw, baseH, bd], skin);
@@ -449,13 +448,9 @@
       billboard(K(0.18), 1, 34, 14, 9, ROSE);
       billboard(K(0.26), -1, 36, 14, 9, BLUE);
 
-      // --- s 0.38–0.47: Sphere approach → Strip entry gap fill ---
-      // Open mid-ground so the Sphere reads alone; casino wall starts at Strip entry.
+      // --- s 0.38–0.47: Sphere approach ---
+      // Keep this mid-ground open so the Sphere reads as a standalone landmark.
       building(K(0.40), -1, 64, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
-      cityFront(0.38, 0.47, -1, 72, { minH: 24, maxH: 55, depth: 20, step: 36,
-        palette: [[0.20, 0.18, 0.24], [0.22, 0.19, 0.22]], lit: true, windowCol: VIOLET });
-      cityFront(0.38, 0.47,  1, 72, { minH: 22, maxH: 50, depth: 18, step: 36,
-        palette: [[0.20, 0.20, 0.22], [0.18, 0.18, 0.26]], lit: true, windowCol: GOLD });
 
       // --- Extra near red-rock desert outcrops (dark, denser silhouette layer) ---
       for (let j = 0; j < 6; j++) {

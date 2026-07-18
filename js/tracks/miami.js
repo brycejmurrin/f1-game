@@ -46,6 +46,7 @@
         marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
         addCone, addFrustum, vadd, hash, onTrack, every, cityFront, forestEdge,
         runoffApron, modelGroup, overheadSpan, waterSurface, groundPatch, recordBarrier,
+        circuitKit,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -490,6 +491,87 @@
       // Campus stadium car-park lots — the "car-park circuit" signature
       carPark(0.47, -1, 60, 4, 18);
       carPark(0.55,  1, 66, 4, 16);
+
+      // ===================================================================
+      // MIAMI CAMPUS HERO INFRASTRUCTURE — five bounded, high-value additions.
+      // These stay at fixed fractions and well beyond the barrier line; no new
+      // full-lap density is introduced into an already richly dressed circuit.
+      // ===================================================================
+
+      // 1) Hard Rock campus arrival court: low pastel pavilions and a broad
+      // shade canopy make the stadium foreground read as an event campus.
+      {
+        const a = anchor(K(0.025), 1, 82);
+        const bv = [a.r, a.u, a.t];
+        modelGroup("miami-campus-arrival-court", {
+          center: vadd(a.c, a.u, 5.5), size: [31, 12, 58], basis: bv,
+        }, (campus) => {
+          addBox(campus, vadd(a.c, a.u, 0.15), [30, 0.3, 58], [0.76, 0.78, 0.76], bv);
+          for (let i = -1; i <= 1; i++) {
+            const p = vadd(vadd(a.c, a.t, i * 18), a.u, 3.2);
+            addBox(campus, p, [22, 6.4, 12], (i === 0) ? WHITE : GREYWHITE, bv);
+            addBox(campus, vadd(p, a.u, 3.5), [25, 0.7, 14],
+              [CORAL, TEAL, PINK][i + 1], bv);
+          }
+          addBox(campus, vadd(vadd(a.c, a.r, -11), a.u, 8.2),
+            [5, 0.7, 54], WHITE, bv);
+        }, { required: true });
+      }
+
+      // 2) Marina hospitality deck: two glass-fronted tiers and a striped
+      // rooftop canopy deepen the temporary "marina" illusion behind the yachts.
+      {
+        const a = anchor(K(0.355), 1, 78);
+        const bv = [a.r, a.u, a.t];
+        modelGroup("miami-marina-hospitality-deck", {
+          center: vadd(a.c, a.u, 7.5), size: [28, 16, 64], basis: bv,
+        }, (deck) => {
+          addBox(deck, vadd(a.c, a.u, 1.0), [28, 2.0, 64], GREYWHITE, bv);
+          addBox(deck, vadd(a.c, a.u, 4.2), [25, 4.8, 59], WHITE, bv);
+          addBox(deck, vadd(vadd(a.c, a.r, -12.7), a.u, 4.4), [0.8, 3.0, 57], GLASS, bv);
+          addBox(deck, vadd(a.c, a.u, 8.0), [22, 2.8, 52], GREYWHITE, bv);
+          addBox(deck, vadd(vadd(a.c, a.r, -11.2), a.u, 8.1), [0.7, 1.8, 50], GLASS, bv);
+          addBox(deck, vadd(a.c, a.u, 10.0), [25, 0.8, 56], TEAL, bv);
+          for (let i = -2; i <= 2; i++)
+            addBox(deck, vadd(vadd(a.c, a.t, i * 10), a.u, 10.6),
+              [24, 0.35, 4.8], (i % 2) ? CORAL : PINK, bv);
+        }, { required: true });
+      }
+
+      // 3) Two Miami Vice pedestrian bridges punctuate the campus transitions.
+      // overheadSpan owns the complete deck/support clearance preflight.
+      overheadSpan({
+        id: "miami-teal-pedestrian-bridge", frac: 0.235, clearance: 7.4,
+        thickness: 1.0, depth: 3.2, supportGap: 5.5, supportWidth: 1.4,
+        color: TEAL, required: true,
+      });
+      overheadSpan({
+        id: "miami-coral-pedestrian-bridge", frac: 0.405, clearance: 7.4,
+        thickness: 1.0, depth: 3.2, supportGap: 5.5, supportWidth: 1.4,
+        color: CORAL, required: true,
+      });
+
+      // 4) Paired broadcast/logistics compounds fill otherwise empty service
+      // ground without becoming a roadside wall.
+      if (circuitKit) {
+        circuitKit.serviceCompound({
+          id: "kit:miami:broadcast-compound", frac: 0.205, side: 1, gap: 70,
+          size: [28, 6, 42], vehicles: 10, required: true,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:miami:operations-compound", frac: 0.735, side: -1, gap: 62,
+          size: [26, 6, 38], vehicles: 8, required: true,
+        });
+      }
+
+      // 5) Curated palm courts frame the campus gate and marina exit. Their
+      // generous offsets preserve the driver's braking and corner sightlines.
+      for (let i = 0; i < 6; i++) {
+        palm(K(0.012 + i * 0.006), 1, 64 + (i % 2) * 12,
+          10 + hash(i * 71) * 3, (i % 2) ? PALM_DARK : PALM_GREEN);
+        palm(K(0.365 + i * 0.006), 1, 66 + (i % 3) * 9,
+          9 + hash(i * 73) * 3, (i % 2) ? PALM_GREEN : PALM_DARK);
+      }
 
       // ===================================================================
       // AQUA RUNOFF APRONS — Dolphins identity at heavy-brake corners.

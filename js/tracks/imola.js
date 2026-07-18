@@ -514,6 +514,112 @@
       tieredBowl(0.795, -1, 14, 68, 5);
       tieredBowl(0.835, -1, 18, 52, 4);
       tieredBowl(0.51, 1, 22, 48, 3);     // Acque Minerali (kept lighter — hollow is the hero)
+
+      // ====================================================================
+      // AUTHENTIC HERO-SECTOR DRESS PASS — five bounded additions that deepen
+      // the park circuit without closing the driver's sightline to each apex.
+      // ====================================================================
+
+      // 1) Santerno park woodland: irregular veteran broadleaf groves and low
+      // understory at Piratella / Acque Minerali, set behind the first treeline.
+      const PARK_GROVES = [
+        [0.345, -1, 22, 16], [0.372,  1, 25, 14],
+        [0.438, -1, 24, 17], [0.468,  1, 28, 18],
+        [0.505, -1, 26, 16], [0.538,  1, 30, 17],
+      ];
+      PARK_GROVES.forEach(([s, side, dist, h], i) => {
+        tree(K(s), side, dist, h + hash(i * 19 + 71) * 3,
+             i % 2 ? [0.12, 0.32, 0.15] : [0.09, 0.27, 0.12]);
+        bush(K(s + 0.004), side, dist - 5,
+             i % 2 ? [0.18, 0.40, 0.18] : [0.14, 0.35, 0.16]);
+        bush(K(s - 0.004), side, dist + 4, [0.11, 0.30, 0.13]);
+      });
+
+      // 2) Historic Autodromo race office: a restrained stucco-and-terracotta
+      // pavilion behind the old pit approach, with an arcade and timing turret.
+      (function historicRaceOffice() {
+        const a = anchor(K(0.905), -1, 40);
+        const b = [a.r, a.u, a.t], base = a.c;
+        modelGroup("imola-historic-race-office", {
+          center: vadd(base, a.u, 8), size: [34, 18, 38], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(base, a.u, 3.5), [26, 7, 30], [0.88, 0.82, 0.70], b);
+          addPrism(stage, vadd(base, a.u, 8.4), [28, 3.2, 32], TERRA, b);
+          // Shallow track-facing arcade: five pale piers and dark recessed bays.
+          for (let i = 0; i < 5; i++) {
+            const z = (i - 2) * 5.4;
+            addBox(stage, vadd(vadd(vadd(base, a.r, -12.6), a.t, z), a.u, 2.3),
+                   [0.7, 4.6, 0.8], STONE3, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(vadd(base, a.r, -13.05), a.t, z + 2.2), a.u, 4.6),
+                   [0.25, 1.4, 3.0], [0.22, 0.30, 0.32], b);
+            stage._mat = MAT.STONE;
+          }
+          // Compact timing turret, intentionally below the nearby tree crowns.
+          const turret = vadd(vadd(base, a.r, 7), a.t, -9);
+          addBox(stage, vadd(turret, a.u, 6.5), [7, 13, 8], STONE2, b);
+          addPrism(stage, vadd(turret, a.u, 14.2), [8, 2.4, 9], TERRA, b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(turret, a.r, -3.6), a.u, 9.5),
+                 [0.25, 2.2, 5.4], WIN_LIT, b);
+          stage._mat = 0;
+        }, { required: true });
+      })();
+
+      // 3) Piratella hillside homes: a sparse stepped line of warm villas whose
+      // terracotta roofs break the treeline, rather than forming a city wall.
+      const PIRATELLA_VILLAS = [
+        [0.325, -1, 58, 13, 9, 14],
+        [0.347, -1, 66, 15, 11, 16],
+        [0.369, -1, 62, 12, 8, 13],
+        [0.392, -1, 72, 16, 12, 17],
+        [0.414, -1, 64, 13, 9, 15],
+      ];
+      PIRATELLA_VILLAS.forEach(([s, side, gap, w, h, d], i) => {
+        building(K(s), side, gap, w, h, d, {
+          wall: i % 3 === 0 ? STONE3 : (i % 3 === 1 ? TERRA2 : STONE2),
+          window: WIN_LIT, floor: 3, roof: true, lit: true,
+        });
+        cypress(K(s + 0.005), side, gap + w + 5, 12 + (i % 3) * 2);
+      });
+
+      // 4) Tamburello remembrance garden: a low tribute wall behind the Senna
+      // sculpture, with plaque bays and Italian event flags kept above eye-line.
+      (function tamburelloTributeWall() {
+        const a = anchor(K(0.082), -1, 32);
+        const b = [a.r, a.u, a.t], base = a.c;
+        modelGroup("imola-tamburello-tribute-wall", {
+          center: vadd(base, a.u, 4.5), size: [10, 10, 24], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(base, a.u, 1.2), [1.2, 2.4, 18], [0.76, 0.74, 0.69], b);
+          stage._mat = MAT.METAL;
+          for (let i = 0; i < 5; i++) {
+            addBox(stage, vadd(vadd(vadd(base, a.r, -0.66), a.t, (i - 2) * 3.2), a.u, 1.35),
+                   [0.12, 0.9, 2.1], [0.30, 0.28, 0.24], b);
+          }
+          const tri = [[0.08, 0.48, 0.22], WHITE, [0.82, 0.14, 0.13]];
+          for (let i = 0; i < 3; i++) {
+            const p = vadd(vadd(base, a.r, 3.4), a.t, (i - 1) * 5.2);
+            addCyl(stage, p, 0.10, 8, [0.76, 0.77, 0.79], 6, b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(vadd(p, a.u, 6.7), a.t, 0.9),
+                   [0.14, 1.2, 1.8], tri[i], b);
+            stage._mat = MAT.METAL;
+          }
+          stage._mat = 0;
+        }, { required: true });
+      })();
+
+      // 5) Layered period-circuit safety furniture: inner armco plus a set-back
+      // catch fence at the three event-heavy exteriors. The fence remains open
+      // mesh, preserving views to the memorial, hollow and Rivazza crowd banks.
+      guardrail(0.015, 0.145, -1, 2.8, [0.76, 0.77, 0.79]);
+      fence(0.015, 0.145, -1, 6.8, 4.2, [0.58, 0.61, 0.62]);
+      guardrail(0.43, 0.56, 1, 2.8, [0.74, 0.75, 0.77]);
+      fence(0.43, 0.49, 1, 6.5, 4.0, [0.56, 0.59, 0.60]);
+      guardrail(0.775, 0.86, -1, 2.8, [0.76, 0.77, 0.79]);
     },
   }
   );

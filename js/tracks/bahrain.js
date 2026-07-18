@@ -41,6 +41,12 @@
       const K = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
+        // A guarded second tier behind the legacy pit facade gives the Sakhir
+        // main straight the deep garage/operations profile seen from the grid.
+        circuitKit.pitBuilding({
+          id: "kit:bahrain:pit-operations", frac: 0.992, side: -1, gap: 24,
+          size: [18, 11, 72], garages: 18, required: true,
+        });
         circuitKit.hospitality({
           id: "kit:bahrain:hospitality", frac: 0.955, side: -1, gap: 100,
           size: [18, 9, 34], modules: 4, required: true,
@@ -48,6 +54,16 @@
         circuitKit.serviceCompound({
           id: "kit:bahrain:service-compound", frac: 0.55, side: -1, gap: 70,
           size: [24, 6, 32], vehicles: 6, required: true,
+        });
+        // Back-straight support campus: sparse, well behind the left-side
+        // guardrail and separated from the open desert sightline.
+        circuitKit.serviceCompound({
+          id: "kit:bahrain:back-straight-service", frac: 0.705, side: -1, gap: 76,
+          size: [28, 6, 38], vehicles: 8, required: true,
+        });
+        circuitKit.recoveryBay({
+          id: "kit:bahrain:back-straight-recovery", frac: 0.735, side: -1, gap: 58,
+          size: [14, 5, 18], required: true,
         });
       }
 
@@ -109,6 +125,23 @@
             forest: forestCol, rock: rockCol, snow: DUNE_LIT,
           });
         }
+      }
+
+      // ── Jebel ad Dukhan directional relief (s 0.54–0.60 horizon) ─────────
+      // Bahrain's low western high point reads as one restrained, hazed ridge
+      // rather than another full skyline ring. Three fixed summits preserve the
+      // open desert while giving the technical middle sector a distant landmark.
+      for (const [s, dist, w, h] of [
+        [0.545, 430, 210, 34],
+        [0.570, 500, 260, 46],
+        [0.595, 450, 190, 31],
+      ]) {
+        const k = K(s), a = anchor(k, -1, dist);
+        mountain(a.c[0], a.c[2], pyMin, w, h, {
+          seg: 8, seed: Math.round(s * 10000),
+          rough: 0.18, snowline: 99,
+          forest: SAND_DARK, rock: SAND, snow: DUNE_LIT,
+        });
       }
 
       // ── Distant Manama skyline: lit towers on the night horizon ──────────
@@ -301,6 +334,16 @@
         duneWedge(k, -1, 64 + i * 14, 40 + hash(k) * 28, 3.5 + hash(k * 5) * 3);
       }
 
+      // T1-to-University berm field: low, broad banks only on the far outside,
+      // leaving braking references and the inside desert vista unobstructed.
+      for (const [s, gap, w, h] of [
+        [0.095, 82, 54, 4.2],
+        [0.115, 104, 68, 5.0],
+        [0.138, 126, 76, 5.8],
+      ]) {
+        duneWedge(K(s), 1, gap, w, h);
+      }
+
       // ================= TURN 3/4 COMPLEX (s 0.22–0.28) =================
       grandstand(0.24,  1, 24, 60, STAND_CREAM, SEAT_BLUE);
       grandstand(0.26, -1, 26, 50, STAND_CREAM, SEAT);
@@ -433,6 +476,14 @@
       // Desert backdrop slabs along the back straight left (desert) side
       backdrop(K(0.75), -1, 130, [300, 16, 13], SAND_DARK);
       backdrop(K(0.85), -1, 150, [260, 18, 13], SAND);
+
+      // ================= VICTORY GRANDSTAND / FINAL CORNER (s 0.91–0.94) ===
+      // A compact roofed spectator hero closes the lap without crowding pit
+      // entry. Paired cool masts make its cream shell readable at race night.
+      grandstand(0.925, 1, 34, 58, STAND_CREAM, SEAT_BLUE);
+      floodMast(K(0.912), 1, 42, 40);
+      floodMast(K(0.940), 1, 42, 40);
+      billboard(K(0.925), 1, 20, 14, 4, BILLBOARD_LITE);
 
       // ================= PIT ENTRY (s 0.93–0.99, L) =================
       // Second pit building: media/control centre with cool lit windows

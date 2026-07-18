@@ -742,6 +742,101 @@
         if (h > 0.40) pine(k, -1, 14 + h * 3, 18 + h * 10, PINE_D);
         if (h > 0.50) pine(k,  1, 15 + h * 3, 17 + h * 9, PINE);
       });
+
+      // =====================================================================
+      // 11. ROYAL-PARK HERO LAYERS — deeper woodland, banking archaeology,
+      //     tifosi camps, the old Vedano approach and braking-zone crowds.
+      //     All additions stay in short hero sectors and well behind barriers.
+      // =====================================================================
+
+      // 11a. Sparse second-canopy sentinels close only Curva Grande and Lesmo.
+      // The 30–38 m setback leaves the fast driver's sightline open; a coarse
+      // 42 m cadence adds depth without another expensive continuous tree wall.
+      every(42, (k) => {
+        const s = k / n;
+        const grande = s >= 0.09 && s <= 0.155;
+        const lesmo = s >= 0.445 && s <= 0.525;
+        if (!grande && !lesmo) return;
+        const h = hash(k * 23 + 41);
+        pine(k, -1, 30 + h * 6, 16 + h * 8, h < 0.5 ? PINE_D : PINE);
+        tree(k, 1, 32 + h * 6, 13 + h * 7, h < 0.45 ? LEAF_D : LEAF);
+        if (lesmo && h > 0.58)
+          pine(k, h > 0.78 ? -1 : 1, 38 + h * 5, 18 + h * 7, PINE_D);
+      });
+
+      // 11b. Abandoned oval control hut above the surviving Sopraelevata tiers.
+      // A faded scoring panel and concrete stair ribs make the ruin read as
+      // motorsport archaeology rather than a generic retaining wall.
+      building(K(0.545), -1, 94, 13, 9, 10, {
+        wall: [0.57, 0.55, 0.51], window: [0.28, 0.30, 0.29], floor: 4.5,
+      });
+      billboard(K(0.545), -1, 91, 12, 4.5, [0.72, 0.68, 0.58]);
+      for (let i = 0; i < 4; i++) {
+        const a = anchor(K(0.515 + i * 0.018), -1, 87);
+        addBox(out, vadd(a.c, a.u, 3.2), [1.1, 6.4, 5.5],
+          i % 2 ? [0.53, 0.51, 0.48] : [0.61, 0.59, 0.55],
+          [a.r, a.u, a.t]);
+      }
+
+      // 11c. Compact race-weekend camps in woodland clearings: striped ridge
+      // tents, support vans and Italian flag markers. Each clearing is one
+      // bounded atomic model, far enough out to preserve high-speed sightlines.
+      function tifosiCamp(id, s, side, gap) {
+        const a = anchor(K(s), side, gap);
+        const b = [a.r, a.u, a.t];
+        modelGroup(id, {
+          center: vadd(a.c, a.u, 4),
+          size: [24, 8, 44],
+          basis: b,
+        }, (stage) => {
+          const tentCols = [
+            [0.84, 0.16, 0.13], [0.92, 0.90, 0.82], [0.20, 0.48, 0.24],
+          ];
+          for (let i = 0; i < 6; i++) {
+            const row = i % 2, alongOff = (Math.floor(i / 2) - 1) * 12;
+            const across = (row ? 1 : -1) * 5;
+            const p = vadd(vadd(a.c, a.r, across), a.t, alongOff);
+            addPrism(stage, vadd(p, a.u, 1.5), [5.5, 3, 6.5],
+              tentCols[i % tentCols.length], b);
+          }
+          for (let i = 0; i < 2; i++) {
+            const p = vadd(vadd(a.c, a.r, 7.5), a.t, (i - 0.5) * 18);
+            addBox(stage, vadd(p, a.u, 1.4), [3.2, 2.8, 7],
+              [0.82, 0.82, 0.78], b);
+          }
+          const flagBase = vadd(vadd(a.c, a.r, -8), a.t, 17);
+          addCyl(stage, flagBase, 0.10, 8, [0.30, 0.30, 0.31], 6, b);
+          addBox(stage, vadd(vadd(flagBase, a.u, 6.8), a.t, 1.4),
+            [0.16, 1.8, 4.2], [0.18, 0.58, 0.25], b);
+        });
+      }
+      tifosiCamp("monza-tifosi-camp-curva-grande", 0.185, -1, 54);
+      tifosiCamp("monza-tifosi-camp-ascari", 0.825, 1, 56);
+
+      // 11d. Vedano-side historic entrance: a cream masonry arch and pediment
+      // set deep behind Parabolica, suggesting the old park gateway without
+      // creating an overhead obstruction on the racing circuit.
+      {
+        const a = anchor(K(0.945), 1, 58);
+        const b = [a.r, a.u, a.t], stone = [0.84, 0.80, 0.70];
+        modelGroup("monza-vedano-gate", {
+          center: vadd(a.c, a.u, 7),
+          size: [7, 14, 24],
+          basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(vadd(a.c, a.t, -9), a.u, 5), [6, 10, 4.2], stone, b);
+          addBox(stage, vadd(vadd(a.c, a.t, 9), a.u, 5), [6, 10, 4.2], stone, b);
+          addBox(stage, vadd(a.c, a.u, 10.2), [6, 2.2, 22], [0.77, 0.72, 0.62], b);
+          addPrism(stage, vadd(a.c, a.u, 12.3), [6.4, 2.5, 23],
+            [0.88, 0.84, 0.74], b);
+        });
+      }
+
+      // 11e. Opposing, compact tifosi stands at the three major braking zones.
+      // Their 28–32 m clearances keep marker boards and corner entry visible.
+      grandstand(0.032, 1, 32, 54, [0.54, 0.55, 0.57], [0.82, 0.24, 0.20]);
+      grandstand(0.295, -1, 28, 50, [0.53, 0.54, 0.56], [0.80, 0.25, 0.20]);
+      grandstand(0.775, 1, 30, 58, [0.54, 0.55, 0.57], [0.82, 0.25, 0.20]);
     },
   }
   );

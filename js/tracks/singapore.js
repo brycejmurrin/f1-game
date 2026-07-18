@@ -631,6 +631,85 @@
         });
       }
 
+      // ═══════════════════════════════════════════════════════════════════
+      // 2026 SCENERY DRESS PASS — six bounded Marina Bay hero layers.
+      // All structures use footprint-tested helpers and sit well beyond the
+      // narrow street walls; fixed fractions keep the result deterministic.
+      // ═══════════════════════════════════════════════════════════════════
+
+      // 1) s 0.39–0.43 L — Raffles / City Hall illuminated hotel terrace.
+      // Stepped setbacks preserve the braking-zone view while warm windows and
+      // bright cornices distinguish the hotel district from the cool CBD glass.
+      for (const [s, gap, w, h, d] of [
+        [0.390, 34, 30, 48, 24],
+        [0.410, 54, 34, 62, 26],
+        [0.430, 76, 38, 76, 28],
+      ]) {
+        building(K(s), -1, gap, w, h, d, {
+          wall: WALL_WARM, window: WIN_GOLD, floor: 6, lit: true, roof: true,
+        });
+        const a = anchor(K(s), -1, gap + w * 0.5);
+        addBox(out, vadd(a.c, a.u, h + 0.9), [w + 1.2, 1.4, d + 1.2],
+          [1.00, 0.88, 0.58], [a.r, a.u, a.t]);
+      }
+
+      // 2) s 0.46–0.52 R — layered financial-district crowns across the bay.
+      // Three different depths create parallax behind the promenade rather
+      // than another continuous facade wall.
+      for (const [s, dist, baseW, h, capCol] of [
+        [0.460, 150, 30, 138, WIN_CYAN],
+        [0.490, 188, 34, 176, WIN_COOL],
+        [0.520, 226, 28, 154, WIN_GOLD],
+      ]) {
+        tower(K(s), 1, dist, baseW, h, {
+          col: WALL_CBD, cap: true, capCol, mast: 14, seg: 8,
+        });
+      }
+
+      // 3) s 0.20 / 0.44 R — extra reflective water shelves and pier lights.
+      // These overlap the bay visually, but remain separate bounded water
+      // models so the waterfront has foreground, middle and far depth.
+      for (const [s, gap, depth] of [[0.20, 52, 52], [0.44, 58, 58]]) {
+        waterSurface(K(s), 1, gap, [66, 0.3, depth], BAY, {
+          id: `marina-water-depth-${Math.round(s * 100)}`,
+        });
+        const a = anchor(K(s), 1, 30);
+        for (let i = -2; i <= 2; i++) {
+          const c = vadd(vadd(a.c, a.t, i * 9), a.u, 1.2);
+          addBox(out, c, [1.0, 2.0, 5.5], i % 2 ? WIN_GOLD : WIN_CYAN,
+            [a.r, a.u, a.t]);
+        }
+      }
+
+      // 4) s 0.735–0.785 — Padang / Esplanade spectator theatre.
+      // Stands are staggered and kept 20+ m behind the walls, concentrating
+      // crowd density at the civic hero sector without forming a blind canyon.
+      grandstand(0.735, -1, 22, 54, [0.20, 0.22, 0.28], [0.52, 0.34, 0.42]);
+      grandstand(0.765,  1, 26, 48, [0.18, 0.21, 0.28], [0.42, 0.34, 0.52]);
+      grandstand(0.785, -1, 24, 46, [0.22, 0.24, 0.30], [0.50, 0.38, 0.30]);
+
+      // 5) s 0.445 — Bayfront pedestrian link, high and shallow so it reads
+      // as a bridge beat without blocking the skyline on corner approach.
+      overheadSpan({
+        id: "bayfront-pedestrian-link", frac: 0.445, clearance: 7.4,
+        thickness: 0.8, depth: 2.6, supportGap: 4.2,
+        color: [0.30, 0.48, 0.66],
+      });
+
+      // 6) s 0.50–0.57 and 0.70–0.78 — deliberate tropical boulevards.
+      // Alternating palms and low shrubs form two sparse ranks; the inner rank
+      // remains outside the barriers and no canopy is placed over sightlines.
+      for (const [s, side] of [
+        [0.500, -1], [0.525, -1], [0.550, -1], [0.575, -1],
+        [0.705,  1], [0.730,  1], [0.755,  1], [0.780,  1],
+      ]) {
+        const k = K(s);
+        const h = 10 + hash(k * 11) * 3;
+        palm(k, side, 14, h, [0.18, 0.46, 0.22]);
+        palm(k, side, 22, h + 2, [0.14, 0.38, 0.18]);
+        bush(k, side, 10, [0.16, 0.40, 0.18]);
+      }
+
       // ── THE MERLION — Singapore's icon: lion head + fish body + water jet ─
       // Placed on the bayfront (R) facing Marina Bay, spouting a cyan jet.
       {

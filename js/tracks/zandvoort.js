@@ -40,7 +40,7 @@
     scenery: function (api) {
       const { out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
               addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
-              along, runoffApron,
+              along, runoffApron, bowlSeatWall,
               modelGroup, waterSurface, groundPatch,
               mountain, peak, bush, hedge, grandstand, tower,
               pine, tree, forestEdge,
@@ -88,10 +88,8 @@
       // DUNE BELT — the dominant visual.  The circuit weaves through the
       // Zandvoort dune belt; mounds should feel close, sandy and textured.
       //
-      // Three staggered rings:
-      //   1. Inner verge mounds   — every 24m, 9–22m tall, tight to the road
-      //   2. Mid ridge band       — every 18m, set back 60-90m, fills gaps
-      //   3. Far backdrop peaks   — every 48m, distant horizon dunes
+      // Three sparse, broad layers. Dunes are low coastal landforms, not a
+      // continuous ring of Alpine pyramids.
       //
       // All use anchor() so they sit on the terrain surface, never float.
       // mountain() baseY = a.c[1] (terrain-anchored ground Y at that lateral dist).
@@ -100,7 +98,7 @@
       // 1. Inner dune mounds — organic, rough, close
       // Mid-lap (Hunserug→Scheivlak) pulls in to 42–68 m so sand reads first;
       // elsewhere stays at the classic 80–110 m belt.
-      every(24, (k) => {
+      every(55, (k) => {
         const frac = k / n;
         const midLap = frac >= 0.20 && frac <= 0.58;
         for (const side of [-1, 1]) {
@@ -112,62 +110,58 @@
           if (side === 1 && frac >= 0.61 && frac <= 0.67) dist += 56;
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 18)) continue;
-          const h = (midLap ? 7 : 9) + hash(k * 73 + side) * (midLap ? 11 : 13);
-          const w = (midLap ? 22 : 28) + hash(k * 74 + side) * (midLap ? 20 : 24);
+          const h = (midLap ? 4 : 5) + hash(k * 73 + side) * (midLap ? 7 : 8);
+          const w = (midLap ? 34 : 42) + hash(k * 74 + side) * (midLap ? 26 : 34);
           mountain(a.c[0], a.c[2], a.c[1], w, h, {
-            seg: 8, seed: k * 13 + side, rough: 0.6, snowline: 2,
+            seg: 10, seed: k * 13 + side, rough: 0.35, snowline: 2,
             forest: marramT, rock: sandDk, snow: sand,
           });
         }
       });
 
       // 1b. Extra close sand shoulders on the mid-lap dune weave
-      every(16, (k) => {
+      every(42, (k) => {
         const frac = k / n;
         if (frac < 0.22 || frac > 0.56) return;
         for (const side of [-1, 1]) {
-          if (hash(k * 88 + side) > 0.55) continue;
-          const dist = 36 + hash(k * 89 + side) * 14;   // 36–50 m
+          if (hash(k * 88 + side) > 0.30) continue;
+          const dist = 42 + hash(k * 89 + side) * 18;
           const a = anchor(k, side, dist);
-          const w = 16 + hash(k * 90 + side) * 14;
-          const h = 5 + hash(k * 91 + side) * 8;
-          const col = hash(k * 92 + side) < 0.5 ? sand : sandLt;
-          modelGroup(`close-dune-${k}-${side}`, {
-            center: [a.c[0], a.c[1] + h * 0.5 - 1, a.c[2]],
-            size: [w * 1.5, h + 2, w * 1.5],
-          }, (stage) => {
-            stage._mat = MAT.ROCK;
-            addPyramid(stage, [a.c[0], a.c[1], a.c[2]], [w, h, w], col, null);
-            addPyramid(stage, [a.c[0], a.c[1] - 2, a.c[2]],
-                       [w * 1.5, h * 0.45, w * 1.5],
-                       [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
+          const w = 30 + hash(k * 90 + side) * 18;
+          const h = 3 + hash(k * 91 + side) * 5;
+          mountain(a.c[0], a.c[2], a.c[1], w, h, {
+            seg: 10, seed: k * 17 + side, rough: 0.25, snowline: 2,
+            forest: marramT, rock: sandDk, snow: sand,
           });
         }
       });
 
       // 2. Mid dune ridge band — slightly larger, set back further
-      every(18, (k) => {
+      every(72, (k) => {
         for (const side of [-1, 1]) {
           const frac = k / n;
           let dist = 120 + hash(k * 81 + side) * 38;  // 120–158 m
           if (side === 1 && frac >= 0.61 && frac <= 0.67) dist += 70;
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 18)) continue;
-          const w = 32 + hash(k * 83 + side) * 28;      // 32–60 m
-          const h = 14 + hash(k * 82 + side) * 16;      // 14–30 m
-          peak(a.c[0], a.c[2], a.c[1], w, h,
-               hash(k * 84 + side) < 0.5 ? sand : sandLt);
+          const w = 58 + hash(k * 83 + side) * 42;
+          const h = 8 + hash(k * 82 + side) * 10;
+          mountain(a.c[0], a.c[2], a.c[1], w, h, {
+            seg: 10, seed: k * 19 + side, rough: 0.28, snowline: 2,
+            forest: marramT, rock: sandDk,
+            snow: hash(k * 84 + side) < 0.5 ? sand : sandLt,
+          });
         }
       });
 
       // 3. Far backdrop dunes — distant horizon, rooted at pyMin
-      every(48, (k) => {
+      every(130, (k) => {
         for (const side of [-1, 1]) {
           const dist = 160 + hash(k * 42 + side) * 100;  // 160–260 m
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 16)) continue;
-          peak(a.c[0], a.c[2], pyMin, 70 + hash(k * 43 + side) * 60,
-               18 + hash(k * 44 + side) * 16, sand);
+          peak(a.c[0], a.c[2], pyMin, 110 + hash(k * 43 + side) * 70,
+               10 + hash(k * 44 + side) * 10, sand);
         }
       });
 
@@ -254,6 +248,111 @@
       grandstand(0.915, 1,  28, 80, shell,   orange); // Arie Luyendyk banked R (massive) (gap 22→28: VERY banked, roof overhang)
       grandstand(0.96,  1,  28, 32, shellLt, orange); // Luyendyk exit R (gap 22→28: post-banked transition)
       grandstand(0.97, -1,  22, 34, shellLt, orange); // pit straight L
+
+      // -----------------------------------------------------------------------
+      // HERO-SECTOR COASTAL SPECTACLE — five bounded, track-specific layers.
+      // Keep the fast dune weave open at eye level: crowds sit on the outside
+      // bowls, clubs remain behind the crest, and surf stays on the far beach.
+      // -----------------------------------------------------------------------
+
+      // 1. Orange Army dune bowls at the Scheivlak approach and the run toward
+      // Kumho. Low shells read as spectator-covered dune banks without adding
+      // roofs that would hide the banking or the next apex.
+      bowlSeatWall(0.405, 0.445, -1, 22, {
+        h: 5.5, thick: 2.2, shell: sandDk, step: 9,
+        crowdCols: [orange, [1.00, 0.58, 0.08], [0.88, 0.24, 0.02]],
+      });
+      bowlSeatWall(0.735, 0.775, -1, 24, {
+        h: 5.0, thick: 2.0, shell: sand, step: 9,
+        crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
+      });
+
+      // 2. Two compact beach-club terraces behind the seaward dune crest.
+      // Each terrace is one guarded atomic model: boardwalk, low clubhouse,
+      // windbreak and parasols all disappear together if the footprint is unsafe.
+      for (const [idx, s, dist] of [[0, 0.34, 112], [1, 0.675, 118]]) {
+        const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
+        modelGroup(`zandvoort-beach-terrace-${idx}`, {
+          center: vadd(a.c, a.u, 4.5),
+          size: [30, 10, 38],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.WOOD;
+          addBox(stage, vadd(a.c, a.u, 0.45), [28, 0.9, 36], [0.66, 0.52, 0.34], b);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(vadd(a.c, a.r, 5), a.u, 2.6),
+                 [14, 4.4, 18], [0.91, 0.89, 0.82], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(vadd(a.c, a.r, -2.2), a.u, 2.8), a.t, 0),
+                 [0.5, 2.4, 14], [0.30, 0.53, 0.63], b);
+          stage._mat = MAT.ROOF;
+          addPrism(stage, vadd(vadd(a.c, a.r, 5), a.u, 4.8),
+                   [14.8, 1.8, 19], idx ? [0.88, 0.40, 0.18] : [0.20, 0.48, 0.65], b);
+          for (const off of [-12, 0, 12]) {
+            stage._mat = MAT.METAL;
+            addCyl(stage, vadd(vadd(a.c, a.t, off), a.u, 0.8),
+                   0.10, 3.8, [0.48, 0.48, 0.46], 5, b);
+            stage._mat = MAT.FABRIC;
+            addCone(stage, vadd(vadd(a.c, a.t, off), a.u, 4.6),
+                    3.2, 1.0, off === 0 ? orange : [0.94, 0.90, 0.72], 8, b);
+          }
+        });
+      }
+
+      // 3. Orange fan camps on two inland dune shoulders. Tents and flag poles
+      // are enclosed by a conservative footprint and kept well behind barriers.
+      for (const [idx, s, side] of [[0, 0.205, -1], [1, 0.815, -1]]) {
+        const a = anchor(K(s), side, 44), b = [a.r, a.u, a.t];
+        modelGroup(`zandvoort-orange-camp-${idx}`, {
+          center: vadd(a.c, a.u, 3.5),
+          size: [25, 8, 34],
+          basis: b,
+        }, (stage) => {
+          for (let i = -2; i <= 2; i++) {
+            const p = vadd(vadd(a.c, a.t, i * 6), a.r, (i & 1) ? 3 : -2);
+            stage._mat = MAT.FABRIC;
+            addPrism(stage, vadd(p, a.u, 1.4), [4.4, 2.8, 4.8],
+                     i % 2 ? [0.94, 0.91, 0.82] : orange, b);
+          }
+          for (const off of [-13, 13]) {
+            stage._mat = MAT.METAL;
+            addCyl(stage, vadd(vadd(a.c, a.t, off), a.u, 0.5),
+                   0.09, 6.0, [0.34, 0.34, 0.36], 5, b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(vadd(vadd(a.c, a.t, off), a.u, 5.6), a.r, -side * 0.8),
+                   [0.12, 1.6, 2.4], orange, b);
+          }
+        });
+      }
+
+      // 4. Windswept crest vegetation: sparse Scots pine sentinels and marram
+      // scrub define the inland dune backs while preserving open sand windows.
+      for (const [s0, s1, side] of [[0.255, 0.365, -1], [0.615, 0.745, -1]]) {
+        along(s0, s1, 34, (k) => {
+          const seed = k * 137 + side;
+          bush(k, side, 30 + hash(seed) * 7,
+               hash(seed + 1) < 0.5 ? marramG : marramT);
+          if (hash(seed + 2) < 0.46)
+            pine(k, side, 42 + hash(seed + 3) * 8,
+                 6.5 + hash(seed + 4) * 2.5, pineCol);
+        });
+      }
+
+      // 5. North Sea surf lines between the beach patches and reflective water.
+      // Thin, far-off guarded strips create wind-whipped white breakers at speed.
+      for (const [idx, s] of [0.31, 0.43, 0.56, 0.69].entries()) {
+        const a = anchor(K(s), 1, 258), b = [a.r, a.u, a.t];
+        modelGroup(`zandvoort-surf-${idx}`, {
+          center: vadd(a.c, a.u, 0.25),
+          size: [48, 1.0, 7],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.FLAT;
+          addBox(stage, vadd(a.c, a.u, 0.20), [46, 0.35, 2.2], [0.86, 0.91, 0.91], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 0.12), a.r, 4.5),
+                 [38, 0.22, 1.2], [0.72, 0.84, 0.87], b);
+        });
+      }
 
       // -----------------------------------------------------------------------
       // PIT BUILDING — long low white-grey structure with garage bay accents

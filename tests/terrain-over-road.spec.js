@@ -113,6 +113,26 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   }
 });
 
+test("Madrid terrain drops away from the road instead of forming a raised floor", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
+  const terrain = await page.evaluate(() => {
+    const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+    const track = Tracks.buildCenterline(def);
+    const surface = TrackSurface.profile(def, track);
+    const k = Math.round(0.75 * track.n) % track.n;
+    return {
+      flatTerrain: def.flatTerrain,
+      drop20: track.py[k] - surface.heightAt(k, 20),
+      drop40: track.py[k] - surface.heightAt(k, 40),
+    };
+  });
+
+  expect(terrain.flatTerrain).toBe(false);
+  expect(terrain.drop20).toBeGreaterThan(2);
+  expect(terrain.drop40).toBeGreaterThan(5);
+});
+
 test("no terrain/road faces over the racing line (all circuits)", async ({ page }) => {
   test.setTimeout(600000);
   await page.goto("/");
@@ -137,7 +157,21 @@ test("no terrain/road faces over the racing line (all circuits)", async ({ page 
       const road = sized.find((c) => c.i === "road");
       if (!road) return { err: "no road mesh" };
       const rp = caps.road.pos; for (let v = 0; v < rp.length; v += 3) { const k = near(rp[v], rp[v + 2]); const lat = Math.abs((rp[v] - px[k]) * rx[k] + (rp[v + 2] - pz[k]) * rz[k]); if (lat < 13 && lat > hw[k]) hw[k] = lat; } for (let k = 0; k < M; k++) if (hw[k] < 3) hw[k] = 6;
-      const tps = []; for (let i = 0; i < M; i++) for (const s of [-0.6, -0.3, 0, 0.3, 0.6]) tps.push({ x: px[i] + rx[i] * s * hw[i], z: pz[i] + rz[i] * s * hw[i], y: py[i], frac: i / M });
+      const def = Tracks.LIST.find((entry) => entry.id === __apex.info().track);
+      const bankTrack = Tracks.buildCenterline(def);
+      const tps = [];
+      for (let i = 0; i < M; i++) {
+        for (const s of [-0.6, -0.3, 0, 0.3, 0.6]) {
+          const lat = s * hw[i];
+          const bank = Tracks.banking(bankTrack, i / M * bankTrack.total, lat);
+          tps.push({
+            x: px[i] + rx[i] * lat,
+            z: pz[i] + rz[i] * lat,
+            y: py[i] + (bank?.dy || 0),
+            frac: i / M,
+          });
+        }
+      }
       const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 1e-9) return null; const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
       const scan = (name) => {
         const cap = caps[name];

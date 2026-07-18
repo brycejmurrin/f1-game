@@ -207,6 +207,16 @@
       tower(K(0.04), -1, 6, 9, 26, { col: [0.82, 0.82, 0.86], cap: true, capCol: [0.20, 0.22, 0.26], mast: 7 });
       marshalPost(K(0.06), 1, 6);
 
+      // Paddock depth: a restrained second row of team hospitality buildings.
+      // These sit behind the garages/motorhomes so the pit straight remains open.
+      for (const s of [0.014, 0.034, 0.054]) {
+        const k = K(s), warm = hash(k * 107) > 0.5;
+        building(k, -1, 40, 12, 8 + hash(k * 109) * 3, 18, {
+          wall: warm ? [0.78, 0.30, 0.25] : [0.24, 0.42, 0.60],
+          window: [0.56, 0.62, 0.68], floor: 2,
+        });
+      }
+
       // ════════════════════════════════════════════════════════════════════════
       // s=0.06  PARK TREE-LINE — DRS straight Mixhuca green (park-first)
       // Dense broadleaf corridor so the long straight reads as park before city.
@@ -257,6 +267,21 @@
         minH: 12, maxH: 32, depth: 16, lit: true,
         palette: [[0.60, 0.62, 0.66], [0.66, 0.64, 0.60], [0.56, 0.58, 0.62], [0.68, 0.62, 0.58]],
         windowCol: [0.90, 0.82, 0.52], step: 42
+      });
+
+      // Reforma-inspired landmark cluster above the general Mexico City sprawl.
+      // Three separated silhouettes give the skyline a readable focal rhythm.
+      tower(K(0.31), -1, 142, 18, 74, {
+        col: [0.52, 0.58, 0.64], seg: 6, cap: true,
+        capCol: [0.74, 0.78, 0.82], mast: 8,
+      });
+      tower(K(0.37), -1, 166, 16, 92, {
+        col: [0.46, 0.52, 0.60], seg: 6, cap: true,
+        capCol: [0.84, 0.72, 0.42], mast: 11,
+      });
+      tower(K(0.62), -1, 154, 20, 68, {
+        col: [0.58, 0.56, 0.54], seg: 6, cap: true,
+        capCol: [0.70, 0.74, 0.78], mast: 6,
       });
 
       // Mid-distance backdrop skyline — further back, sparser (city second)
@@ -380,6 +405,10 @@
       boundedStand(0.875, -1, 68, 20, [0.58, 0.56, 0.54], fiesta[0], false);
       boundedStand(0.875,  1, 68, 20, [0.58, 0.56, 0.54], fiesta[1], false);
 
+      // Sparse outer upper decks complete the bowl silhouette without filling
+      // the bright entry/exit apertures or tightening the driver's sightline.
+      boundedStand(0.835, -1, 74, 20, [0.56, 0.55, 0.54], fiesta[2], false);
+
       // Foro Sol floodlight masts — ring the outer rim
       for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
         lightMast(K(s), -1, 58, 52);
@@ -402,6 +431,15 @@
       // Festive banners inside the bowl — papel picado at trackside level
       for (const s of [0.74, 0.77, 0.80, 0.83]) {
         banners(s, -1, 9); banners(s, 1, 9);
+      }
+
+      // Large festive crowd mosaics on the outer tier fronts. Short panels keep
+      // each footprint local to the winding stadium and safely behind the shell.
+      for (const [s, side, ci] of [
+        [0.748, -1, 0], [0.772, 1, 1], [0.798, -1, 2],
+        [0.822, 1, 3], [0.846, -1, 1],
+      ]) {
+        place(K(s), side, 61, [0.8, 4.5, 12], fiesta[ci]);
       }
 
       // Interior fencing at trackside (safety fence inside stadium) — bowl only
@@ -428,6 +466,11 @@
       // s=0.88  FORO SOL EXIT — bright aperture back to open track
       // ════════════════════════════════════════════════════════════════════════
       billboard(K(0.88), 1, 8, 14, 6, fiesta[1]);
+      // Low media/hospitality wing outside the entry throat, behind the stands.
+      building(K(0.695), -1, 46, 22, 14, 28, {
+        wall: [0.76, 0.74, 0.72], window: [0.30, 0.38, 0.46],
+        floor: 3, roof: [0.88, 0.24, 0.44],
+      });
       // Soft park trees just past the exit gap (not walling it shut)
       forestEdge(0.89, 0.94, -1, 28, { density: 0.55, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.2 });
 
@@ -569,6 +612,23 @@
                    { seg: 6, seed: i * 13 + extra, snowline: snowL, rock,
                      forest: [0.40, 0.46, 0.48], snow: [0.88, 0.90, 0.94] });
         }
+      }
+
+      // Hero twin-volcano relief: Popocatépetl's steep snowy cone and the lower,
+      // longer Iztaccíhuatl mass rise above the generic Sierra Nevada ring.
+      {
+        const popo = anchor(K(0.34), -1, 1180);
+        mountain(popo.c[0], popo.c[2], pyMin, 560, 350, {
+          seg: 8, seed: 2601, rough: 0.24, snowline: 0.66,
+          rock: [0.42, 0.46, 0.52], forest: [0.34, 0.40, 0.40],
+          snow: [0.92, 0.93, 0.96],
+        });
+        const izta = anchor(K(0.37), -1, 1320);
+        mountain(izta.c[0], izta.c[2], pyMin, 720, 245, {
+          seg: 8, seed: 2602, rough: 0.38, snowline: 0.72,
+          rock: [0.48, 0.51, 0.57], forest: [0.37, 0.42, 0.42],
+          snow: [0.89, 0.91, 0.94],
+        });
       }
 
       // Mid/far city tower ring — thinned + pushed so mountains win the horizon

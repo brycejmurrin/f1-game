@@ -166,6 +166,14 @@
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
       building(K(0.05), -1, 16, 16, 18, 22, { wall: cotaBlue, window: glass, floor: 5, roof: darkSteel });
 
+      // ---- 2026 dress pass: deeper paddock support campus (s≈0.01–0.04, L far) ----
+      // Low team hospitality and scrutineering blocks sit behind the existing pit
+      // lane buildings, adding depth without closing the driver's main-straight view.
+      motorhome(K(0.012), -1, 72, 24, 7, 38, { wall: white, window: glass });
+      building(K(0.035), -1, 70, 20, 6, 34, {
+        wall: [0.72, 0.74, 0.78], window: litWin, floor: 2, roof: cotaBlue,
+      });
+
       // ---- Turn 1 = Big Red only: red-soil climb + packed crowd + stands (no tower) ----
       // Signature silhouette is the uphill amphitheatre of dirt and fans — the
       // Observation Tower lives with the concert amphitheater at T16–18.
@@ -235,6 +243,15 @@
             addCyl(stage, vadd(vadd(tBase, at.r, rOff), at.t, tOff),
                    0.20, deckH - 2, redSteel, 5, tb);
           }
+          // Upper fan ribs widen beneath the deck, strengthening the tower's
+          // unmistakable red-veil silhouette from the T16–18 sweepers.
+          for (let i = 0; i < 9; i++) {
+            const tOff = (i - 4) * 2.45;
+            addBox(stage,
+              vadd(vadd(vadd(tBase, at.r, 6.8 + Math.abs(i - 4) * 0.65),
+                         at.u, deckH - 5.5), at.t, tOff),
+              [9.5 + Math.abs(i - 4) * 1.3, 0.32, 0.34], redSteel, tb);
+          }
           // cascading canopy flare — tubes spill outward/down over the stage
           for (let i = 0; i < 11; i++) {
             const tOff = (i - 5) * 3.2;
@@ -261,6 +278,31 @@
           stage._mat = 0;
         }, { required: true });
       }
+
+      // ---- 2026 dress pass: amphitheatre lawn bowl (s≈0.73–0.80, R) ----
+      // Three low, raked earth terraces frame the stage/tower campus. They stay
+      // below eye level near the circuit and rise only toward the concert lawn.
+      for (const [sf, dist, width, rise, len] of [
+        [0.735, 44, 24, 4.0, 54],
+        [0.758, 50, 28, 5.0, 62],
+        [0.798, 48, 26, 4.5, 56],
+      ]) {
+        const aa = anchor(K(sf), 1, dist);
+        addPrism(out, vadd(aa.c, aa.u, rise * 0.35),
+                 [width, rise, len], dryGrass, [aa.t, aa.u, aa.r]);
+      }
+
+      // ---- 2026 dress pass: packed hill spectators at COTA's braking heroes ----
+      // Compact banks remain behind their terrace shells and existing barriers.
+      crowdBank(0.112, 1, 48, 54, 4, 2.25);
+      crowdBank(0.642, 1, 40, 72, 5, 2.15);
+
+      // ---- 2026 dress pass: Texas red/white/blue event ribbons at T12 ----
+      // Sparse sponsor-scale boards color the braking-zone bowl without forming
+      // a continuous wall or obscuring apex and distance-marker sightlines.
+      billboard(K(0.615), 1, 32, 13, 4.2, redSteel);
+      billboard(K(0.628), 1, 34, 13, 4.2, white);
+      billboard(K(0.641), 1, 32, 13, 4.2, cotaBlue);
 
       // ---- Red-and-white grandstand framework / tower (s≈0.65, R far) ----
       const redFramework = (k, side, dist) => {

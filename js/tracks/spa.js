@@ -44,7 +44,7 @@
               addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               mountain, pine, tree, forestEdge, grandstand, building, motorhome,
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
-              modelGroup, overheadSpan, groundPatch, ATM } = api;
+              modelGroup, overheadSpan, groundPatch, circuitKit, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
@@ -151,7 +151,7 @@
       // stand lays its crowd along ONE node's flat tangent, so on this steep,
       // curved climb the far rows flung up into the air / over the track. Short
       // bays each seat on their own local slope, so the crowd stays grounded.
-      for (const [s, gp] of [[0.070, 8], [0.079, 8], [0.088, 9], [0.097, 9]]) {
+      for (const [s, gp] of [[0.070, 8], [0.088, 9], [0.097, 9]]) {
         grandstand(s, 1, gp, 18, GOLD3, [0.20, 0.36, 0.62]);
       }
       billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
@@ -313,6 +313,55 @@
       timingTower(K(0.985), -1, 30);
       footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
+
+      // --- Dress-pass hero additions: concentrated depth at Spa's natural
+      // amphitheatres while leaving Kemmel and Blanchimont's road-level views open.
+
+      // 4. Raidillon elevation theatre — two distant, staggered woodland ranks
+      // rise behind the Gold 3 stands and camps. The large gaps keep the crest
+      // and braking sightline clear while making the climb read through tree depth.
+      forestEdge(0.050, 0.112, -1, 30, { density: 0.64, hMin: 14, hMax: 25,
+        col: [0.07, 0.24, 0.11], col2: [0.13, 0.34, 0.15], pineFrac: 0.94 });
+      forestEdge(0.058, 0.108,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
+        col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
+
+      // 5. Pouhon's grassy bowl gets short individually grounded crowd bays.
+      // They sit beyond the marshal rail on the outside hillside; short spans
+      // follow the slope and avoid forming a wall across the fast double-left.
+      for (const [s, gap] of [[0.532, 11], [0.543, 13], [0.555, 15]]) {
+        grandstand(s, -1, gap, 16, [0.36, 0.38, 0.39], [0.74, 0.28, 0.20]);
+      }
+
+      // 6. Small cabin hamlets on the Les Combes and Stavelot high ground.
+      // Paired buildings, rather than a continuous row, retain the rural Ardennes
+      // character and remain well beyond the road-edge forest line.
+      chalet(K(0.205),  1, 64, 7, 4.8, 10, [0.72, 0.69, 0.62], [0.28, 0.19, 0.15]);
+      chalet(K(0.214),  1, 72, 6, 4.3, 9,  [0.76, 0.73, 0.66], [0.31, 0.21, 0.16]);
+      chalet(K(0.706), -1, 62, 7, 4.7, 11, [0.75, 0.72, 0.65], [0.29, 0.19, 0.15]);
+
+      // 7. Purpose-built marshal and recovery infrastructure at the three remote
+      // high-speed sectors. CircuitKit groups preflight complete footprints and
+      // fail closed if a folded section makes any placement unsafe.
+      if (circuitKit) {
+        circuitKit.marshalShelter({ id: "kit:spa:les-combes-shelter", frac: 0.168,
+          side: -1, gap: 7, size: [5, 3.2, 5] });
+        circuitKit.recoveryBay({ id: "kit:spa:pouhon-recovery", frac: 0.565,
+          side: -1, gap: 18, size: [12, 4.5, 18] });
+        circuitKit.marshalShelter({ id: "kit:spa:blanchimont-shelter", frac: 0.858,
+          side: 1, gap: 8, size: [5, 3.2, 5] });
+      }
+
+      // 8. Mid-distance ridge shoulders frame the Pouhon valley and Stavelot
+      // descent below the far horizon ring. Broad, low, forest-only forms keep
+      // Spa wooded rather than alpine and remain more than 200 m off the road.
+      for (const [s, side, seed] of [[0.50, -1, 811], [0.57, -1, 827],
+                                    [0.70,  1, 843], [0.79,  1, 859]]) {
+        const a = anchor(K(s), side, 230 + hash(seed) * 35);
+        mountain(a.c[0], a.c[2], a.c[1] - 2, 142 + hash(seed + 1) * 34,
+                 42 + hash(seed + 2) * 18, { seg: 7, seed,
+                   rough: 0.28, forest: [0.12, 0.31, 0.14],
+                   rock: [0.30, 0.35, 0.31], snowline: 2 });
+      }
 
       // Deeper forest ranks for an even denser Ardennes wall in the mid sectors.
       // Pouhon (0.42–0.58) and Blanchimont approach get denser sweeper walls.

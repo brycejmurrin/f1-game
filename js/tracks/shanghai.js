@@ -42,7 +42,7 @@
         building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan,
-        waterSurface, groundPatch } = api;
+        waterSurface, groundPatch, sailCanopy } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
@@ -120,6 +120,16 @@
           });
         }
       })();
+
+      // Restore the circuit's signature pit-campus mass with short, atomic
+      // race-control and hospitality blocks. The previous migration reduced
+      // this whole area to one low stand, leaving the pit straight anonymous.
+      building(K(0.042), -1, 70, 20, 28, 34, {
+        wall: CONC, window: WIN_TOWER, floor: 5, lit: true,
+      });
+      building(K(0.072), -1, 76, 20, 20, 38, {
+        wall: [0.82, 0.84, 0.86], window: WIN_LIT, floor: 4, lit: true,
+      });
 
       // Start gantry over the line.
       gantry(0.004, 9, STEEL);
@@ -210,9 +220,41 @@
       grandstand(0.10,  -1, 45, 28, [0.42, 0.43, 0.48], SEAT);
       grandstand(0.115, -1, 42, 26, [0.43, 0.44, 0.49], SEAT);
       grandstand(0.13,  1, 72, 26, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.064, 1, 112, 28, [0.41, 0.42, 0.47], CROWD);
+      grandstand(0.098, 1, 104, 30, [0.42, 0.43, 0.48], CROWD);
+      grandstand(0.142, -1, 50, 28, [0.42, 0.43, 0.48], SEAT);
       billboard(K(0.07),  1, 56, 16, 5, YELLOW);
       billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
+
+      // Lotus-petal roofs above the T1–3 spectator bowl. Separate oval sails
+      // follow the coil without forming a solid wall across the driver's view.
+      for (const [s, side, dist, rx, rz] of [
+        [0.050,  1, 106, 18, 10],
+        [0.085,  1,  96, 17, 10],
+        [0.115, -1,  53, 16,  9],
+      ]) {
+        const a = anchor(K(s), side, dist);
+        sailCanopy(a.c, [a.r, a.u, a.t], {
+          rx, rz, h: 15, col: WHITE, ribs: 8, thick: 0.65,
+        });
+      }
+
+      // Dense but bounded fan terraces behind the snail stands. These low
+      // colour blocks sit beyond the guarded grandstand shells.
+      (function snailFanTerraces() {
+        for (const [s, side, dist] of [
+          [0.060, 1, 120],
+          [0.098, 1, 110],
+        ]) {
+          const a = anchor(K(s), side, dist), b = [a.r, a.u, a.t];
+          for (let i = 0; i < 6; i++) {
+            const c = vadd(vadd(a.c, a.t, (i - 2.5) * 7), a.u, 1.4);
+            addBox(out, c, [7.5, 2.8, 4.8],
+              i % 3 === 0 ? RED : (i % 3 === 1 ? YELLOW : CROWD), b);
+          }
+        }
+      })();
 
       // ================= ONE HAZY PUDONG CLUSTER (s 0.30, L far) =================
       // Wraparound skyline rings culled — Jiading is marsh campus, not a megacity
@@ -221,9 +263,10 @@
         const a = anchor(K(0.30), -1, 300), b = [a.r, a.u, a.t];
         const u = b[1];
 
-        // Sparse hazed mid-rise skirt (not a tower wall)
-        for (let i = 0; i < 7; i++) {
-          const off   = (i - 3) * 36 + (hash(i * 5) - 0.5) * 12;
+        // Localized hazed mid-rise skirt: enough mass to frame the four heroes,
+        // but still one Pudong cluster rather than the removed wraparound wall.
+        for (let i = 0; i < 11; i++) {
+          const off   = (i - 5) * 30 + (hash(i * 5) - 0.5) * 12;
           const depth = 40 + hash(i * 7) * 50;
           const h     = 55 + hash(i * 11) * 70;
           const w     = 14 + hash(i * 13) * 10;
@@ -231,9 +274,9 @@
                      w / 2, w / 3.8, h, GLASS_HAZE, 5, b);
         }
 
-        // Soft backdrop band — fewer, farther, sky-haze tinted
-        for (let i = 0; i < 8; i++) {
-          const k2 = K(0.27 + i / 8 * 0.08);
+        // Soft local backdrop band, farther and sky-haze tinted.
+        for (let i = 0; i < 12; i++) {
+          const k2 = K(0.25 + i / 12 * 0.12);
           const h   = 50 + hash(i * 19 + 100) * 70;
           const w   = 22 + hash(i * 23 + 100) * 16;
           backdrop(k2, -1, 220 + hash(i * 11) * 50,
@@ -248,6 +291,7 @@
         const pc = vadd(vadd(a.c, a.r, -2), a.t, 50);
         const stC = vadd(vadd(a.c, a.r, 55), a.t, 55);
         const jmC = vadd(vadd(a.c, a.r, -32), a.t, 50);
+        const swC = vadd(vadd(a.c, a.r, 26), a.t, 63);
         const heroCenter = vadd(vadd(a.c, a.r, 12), a.t, 52);
         modelGroup("shanghai-pudong", {
           center: vadd(heroCenter, u, 98),
@@ -300,6 +344,13 @@
           frustum(vadd(jmC, u, 55), 7, 4.5, 35, [0.72, 0.71, 0.70], 8);
           frustum(vadd(jmC, u, 90), 4.5, 1.8, 20, [0.74, 0.73, 0.72], 8);
           cyl(vadd(jmC, u, 110), 0.7, 18, STEEL, 5);
+
+          // Shanghai World Financial Center: a slim blue-grey shaft with the
+          // unmistakable open "bottle opener" crown.
+          frustum(swC, 10, 7, 114, [0.58, 0.66, 0.74], 6);
+          box(vadd(vadd(swC, u, 132), a.r, -5), [4, 36, 11], GLASS);
+          box(vadd(vadd(swC, u, 132), a.r,  5), [4, 36, 11], GLASS);
+          box(vadd(swC, u, 149), [14, 3, 11], STEEL);
         }, { required: true });
       })();
 
@@ -308,8 +359,24 @@
       grandstand(0.45, 1, 20, 34, [0.43, 0.44, 0.49], SEAT);
       grandstand(0.48, 1, 22, 30, [0.42, 0.43, 0.48], SEAT);
       grandstand(0.50, 1, 20, 28, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.435, 1, 46, 30, [0.40, 0.42, 0.47], CROWD);
+      grandstand(0.475, 1, 48, 30, [0.41, 0.43, 0.48], CROWD);
+      grandstand(0.515, 1, 46, 28, [0.42, 0.44, 0.49], SEAT);
       billboard(K(0.46), 1, 12, 16, 4.5, RED);
       marshalPost(K(0.45), 1, 12);
+
+      // Modern spectator footbridge at the mid-sector arena. High clearance
+      // preserves braking references and gives the clustered stands a gateway.
+      overheadSpan({
+        id: "shanghai-mid-arena-bridge",
+        frac: 0.472,
+        clearance: 7.2,
+        thickness: 1.0,
+        depth: 4.5,
+        supportGap: 13,
+        color: WHITE,
+        required: true,
+      });
 
       // ================= MARSH / TREELINE (s 0.58–0.66, L far) =================
       // Primary backdrop identity: reclaimed marsh campus, not wraparound towers.
@@ -337,8 +404,11 @@
       marshalPost(K(0.74), 1, 12);
       // small grandstand banks lining the long back straight
       grandstand(0.755, 1, 38, 34, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.775, 1, 62, 30, [0.40, 0.42, 0.47], CROWD);
       grandstand(0.80,  1, 38, 34, [0.42, 0.43, 0.48], SEAT);
+      grandstand(0.823, 1, 62, 30, [0.41, 0.43, 0.48], CROWD);
       grandstand(0.845, 1, 38, 32, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.865, 1, 58, 28, [0.42, 0.44, 0.49], SEAT);
       // sparse low shrub clumps on the verge (were 0.9 m green box slabs)
       for (let i = 0; i < 4; i++) {
         bush((K(0.74) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, MARSH);
@@ -353,11 +423,68 @@
 
       // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
       grandstand(0.88,  -1, 24, 30, [0.44, 0.45, 0.50], SEAT);
+      grandstand(0.892, -1, 48, 28, [0.42, 0.43, 0.48], CROWD);
       grandstand(0.905, -1, 28, 32, [0.43, 0.44, 0.49], SEAT);
+      grandstand(0.918, -1, 52, 28, [0.41, 0.43, 0.48], CROWD);
       grandstand(0.93,  -1, 30, 28, [0.42, 0.43, 0.48], SEAT);
+      // A second lotus-roof family makes the T14 hairpin the visual counterpoint
+      // to the T1 bowl while leaving the corner exit and pit-entry sightline open.
+      for (const [s, dist, rx] of [
+        [0.880, 35, 16],
+        [0.905, 39, 17],
+        [0.930, 41, 15],
+      ]) {
+        const a = anchor(K(s), -1, dist);
+        sailCanopy(a.c, [a.r, a.u, a.t], {
+          rx, rz: 9, h: 15, col: [0.88, 0.89, 0.91], ribs: 8, thick: 0.65,
+        });
+      }
       // big pale runoff apron at the hairpin
       runoffApron(K(0.90), 1, 4, [40, 0.35, 55], PALE);
       marshalPost(K(0.90), 1, 14);
+
+      // Yu Garden lake boardwalk: a raised pedestrian causeway with sparse
+      // supports, entirely within the far-side paddock-water context.
+      (function lakeBoardwalk() {
+        const a = anchor(K(0.915), -1, 112), b = [a.r, a.u, a.t];
+        modelGroup("shanghai-lake-boardwalk", {
+          center: vadd(a.c, a.u, 3.2),
+          size: [12, 7, 82],
+          basis: b,
+        }, (stage) => {
+          const box = (c, size, col) => TrackGeom.addBox(stage, c, size, col, b);
+          const cyl = (c, rad, h, col, seg) =>
+            TrackGeom.addCyl(stage, c, rad, h, col, seg, b);
+          box(vadd(a.c, a.u, 3.0), [5.5, 0.7, 78], [0.76, 0.74, 0.68]);
+          for (const tOff of [-34, -17, 0, 17, 34]) {
+            cyl(vadd(a.c, a.t, tOff), 0.32, 2.8, STEEL, 6);
+          }
+          for (const rOff of [-2.5, 2.5]) {
+            box(vadd(vadd(vadd(a.c, a.r, rOff), a.u, 4.0), a.t, 0),
+              [0.18, 1.6, 78], WHITE);
+          }
+        }, { required: true });
+      })();
+
+      // Marsh islets and reed clumps break up the broad lake plane without
+      // filling the open back-straight horizon.
+      for (const [i, s, gap, size] of [
+        [0, 0.885, 122, [18, 0.24, 24]],
+        [1, 0.905, 142, [14, 0.24, 19]],
+        [2, 0.945, 118, [16, 0.24, 21]],
+      ]) {
+        groundPatch(K(s), -1, gap, size, MARSH_N, {
+          id: `shanghai-lake-islet-${i}`,
+          samples: 4,
+        });
+        const a = anchor(K(s), -1, gap), b = [a.r, a.u, a.t];
+        for (let j = 0; j < 5; j++) {
+          const c = vadd(vadd(a.c, a.r, (hash(i * 17 + j) - 0.5) * 9),
+            a.t, (hash(i * 31 + j + 9) - 0.5) * 12);
+          addCyl(out, c, 0.09, 1.4 + hash(i * 13 + j) * 0.8,
+            [0.48, 0.52, 0.24], 5, b);
+        }
+      }
 
       // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
       building(K(0.96), 1, 2, 12,  9, 50, { wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
@@ -369,10 +496,17 @@
         palette: [WHITE, CONC, [0.82, 0.83, 0.86]],
         step: 28,
       });
-      cityFront(0.14, 0.20, -1, 36, {
-        minH: 8, maxH: 20, depth: 18,
-        palette: [[0.80, 0.82, 0.84], CONC],
-        step: 30,
+      cityFront(0.14, 0.28, -1, 58, {
+        minH: 14, maxH: 38, depth: 22,
+        palette: [[0.80, 0.82, 0.84], CONC, [0.72, 0.76, 0.82]],
+        lit: true, windowCol: WIN_LIT,
+        step: 42,
+      });
+      cityFront(0.36, 0.56, 1, 82, {
+        minH: 18, maxH: 46, depth: 24,
+        palette: [[0.72, 0.75, 0.80], [0.66, 0.70, 0.76], CONC],
+        lit: true, windowCol: WIN_TOWER,
+        step: 54,
       });
 
       // ---- Scattered marsh greenery + low treeline around the flat perimeter ----

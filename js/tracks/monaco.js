@@ -718,6 +718,115 @@
         const k = K(sf), a = anchor(k, -1, 58 + hash(k) * 10);
         if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY);
       }
+
+      // ── DEEP-WATER MARINA PONTOONS + SAILBOATS (s=0.63→0.79, L) ─────────
+      // Finger piers and a far rank of masts make the harbour read as a basin,
+      // rather than a single row of yachts beside the circuit.
+      for (let i = 0; i < 4; i++) {
+        const k = K(0.63 + i * 0.052);
+        const a = anchor(k, -1, 66 + (i & 1) * 8);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`monaco-marina-pontoon-${i}`, {
+          center: vadd(a.c, a.u, 1.4), size: [14, 3, 46], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 0.35), [3.2, 0.7, 42], [0.68, 0.58, 0.42], b);
+          addBox(stage, vadd(vadd(a.c, a.t, 19), a.u, 0.35), [13, 0.7, 3.2], [0.68, 0.58, 0.42], b);
+          for (const o of [-18, -6, 6, 18]) {
+            addCyl(stage, vadd(vadd(a.c, a.t, o), a.u, 0.7), 0.12, 2.0, [0.78, 0.80, 0.82], 5, b);
+          }
+        });
+      }
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.625 + i * 0.032);
+        const a = anchor(k, -1, 104 + (i % 3) * 13);
+        const b = [a.r, a.u, a.t];
+        const sc = 0.72 + hash(k * 4.7) * 0.24;
+        modelGroup(`monaco-far-sailboat-${i}`, {
+          center: vadd(a.c, a.u, 8 * sc), size: [8 * sc, 18 * sc, 20 * sc], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 1.2 * sc), [5.5 * sc, 2.4 * sc, 17 * sc], [0.95, 0.96, 0.98], b);
+          addCyl(stage, vadd(a.c, a.u, 2.0 * sc), 0.12 * sc, 14 * sc, [0.82, 0.84, 0.86], 4, b);
+          addPrism(stage, vadd(vadd(a.c, a.r, 1.5 * sc), a.u, 9 * sc),
+            [0.25 * sc, 11 * sc, 9 * sc], i & 1 ? CREAM : DUSTY, b);
+        });
+      }
+
+      // ── BELLE ÉPOQUE CASINO-HOTEL WINGS (s=0.18→0.24) ───────────────────
+      // Secondary cream masses frame Casino Square and stop the hero buildings
+      // from reading as isolated towers.
+      for (const [sf, side, gap, w, h, d, col] of [
+        [0.182,  1, 7, 18, 31, 16, [0.94, 0.90, 0.83]],
+        [0.238,  1, 6, 20, 34, 17, [0.88, 0.82, 0.72]],
+        [0.226, -1, 9, 16, 27, 14, [0.93, 0.88, 0.78]],
+      ]) {
+        building(K(sf), side, gap, w, h, d, {
+          wall: col, window: WIN, floor: 4.6, lit: true,
+          windowCol: WINLIT, setback: true,
+        });
+      }
+
+      // ── PACKED MIRABEAU HILLSIDE APARTMENTS (s=0.28→0.38, L) ────────────
+      // Narrow vertical slabs climb behind the descent, with repeated balcony
+      // lips facing the circuit. Each complete block is footprint-preflighted.
+      for (let i = 0; i < 4; i++) {
+        const k = K(0.285 + i * 0.029);
+        const a = anchor(k, -1, 35 + (i & 1) * 9);
+        const b = [a.r, a.u, a.t];
+        const h = 29 + hash(k * 6.3) * 12;
+        const w = 14 + hash(k * 2.1) * 4;
+        modelGroup(`monaco-mirabeau-balconies-${i}`, {
+          center: vadd(a.c, a.u, h * 0.5), size: [w + 2, h + 2, 13], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, 11], PASTELS[(i + 2) % PASTELS.length], b);
+          for (let floor = 1; floor * 4.3 < h - 1; floor++) {
+            const fc = vadd(vadd(a.c, a.t, -5.8), a.u, floor * 4.3);
+            addBox(stage, fc, [w + 1.2, 0.35, 1.5], [0.84, 0.82, 0.78], b);
+            addBox(stage, vadd(fc, a.u, 1.0), [w + 0.8, 0.18, 0.25], [0.48, 0.52, 0.54], b);
+          }
+        });
+      }
+
+      // ── TUNNEL HILLSIDE CONTEXT + VENT PAVILIONS (s=0.51/0.585) ─────────
+      // Hotel/rock masses sit beyond both portals while compact ventilation
+      // pavilions crown the tunnel shoulders, preserving the road opening.
+      for (const [sf, side] of [[0.515, -1], [0.575, 1]]) {
+        const k = K(sf);
+        building(k, side, 12, 22, 28, 24, {
+          wall: [0.82, 0.80, 0.75], window: WIN, floor: 4.5,
+          lit: true, windowCol: WINLIT, setback: true,
+        });
+        const a = anchor(k, side, 31);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`monaco-tunnel-vent-${side < 0 ? "entry" : "exit"}`, {
+          center: vadd(a.c, a.u, 6), size: [11, 12, 11], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 3.4), [10, 6.8, 10], STONE, b);
+          addFrustum(stage, vadd(a.c, a.u, 8.2), 4.2, 3.2, 3.0, [0.46, 0.48, 0.46], 8, b);
+          addBox(stage, vadd(a.c, a.u, 10.2), [4.8, 1.0, 4.8], [0.34, 0.36, 0.36], b);
+        });
+      }
+
+      // ── HARBOUR-FACING BALCONY WALL (s=0.66→0.82, R) ────────────────────
+      // A sparse set of broad apartment fronts gives the Tabac/pool cameras a
+      // packed Monaco backdrop while retaining gaps at corner sightlines.
+      for (let i = 0; i < 4; i++) {
+        const k = K(0.66 + i * 0.052);
+        const a = anchor(k, 1, 25 + (i & 1) * 7);
+        const b = [a.r, a.u, a.t];
+        const h = 22 + hash(k * 8.2) * 8;
+        modelGroup(`monaco-harbour-balcony-wall-${i}`, {
+          center: vadd(a.c, a.u, h * 0.5), size: [24, h + 2, 12], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, h * 0.5), [22, h, 10], PASTELS[(i * 2 + 1) % PASTELS.length], b);
+          for (let floor = 1; floor * 4.2 < h - 1; floor++) {
+            const fc = vadd(vadd(a.c, a.t, -5.3), a.u, floor * 4.2);
+            addBox(stage, fc, [23, 0.32, 1.2], CREAM, b);
+            for (const x of [-8, -4, 0, 4, 8]) {
+              addCyl(stage, vadd(vadd(fc, a.r, x), a.u, 0.45), 0.05, 0.9, [0.50, 0.52, 0.54], 3, b);
+            }
+          }
+        });
+      }
     },
   }
   );

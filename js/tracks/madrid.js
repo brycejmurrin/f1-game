@@ -12,7 +12,6 @@
     // Hybrid venue: Madrid supplies its own street walls and open permanent-loop
     // armco instead of the engine's unconditional full-lap street barrier.
     street: false,
-    flatTerrain: true,
     reverse: false,
     sceneryCoordinates: "racing",
     lengthKm: 5.5,
@@ -39,7 +38,7 @@
       { t: 0, l: 320 }, { t: 70, l: 70 }, { t: -65, l: 70 },
       { t: 50, l: 120 }, { t: 0, l: 360 }, { t: 90, l: 80 },
       { t: -85, l: 70 }, { t: 90, l: 80 }, { t: 0, l: 140 },
-      { t: 180, l: 240, b: 0.42, w: 9 }, { t: 0, l: 80 },
+      { t: 180, l: 240, w: 9 }, { t: 0, l: 80 },
       { t: -60, l: 90, h: 6 }, { t: 70, l: 90, h: -4 },
       { t: -50, l: 80 }, { t: 80, l: 90 }, { t: 60, l: 130 },
     ],
@@ -66,6 +65,8 @@
       const CONCRETE = [0.72, 0.73, 0.75];
       const STEEL = [0.46, 0.49, 0.54];
       const STONE = [0.76, 0.70, 0.54];
+      const MADRID_RED = [0.58, 0.22, 0.16];
+      const ARCADE_DARK = [0.25, 0.14, 0.13];
       const STRAW = [0.76, 0.68, 0.45];
       const STRAW_DARK = [0.67, 0.59, 0.39];
       const OLIVE = [0.40, 0.46, 0.28];
@@ -122,10 +123,54 @@
         });
       }
 
+      function avenueOffice(id, frac, side, gap, h) {
+        venueGroup(id, frac, side, gap, [20, h + 5, 32], false, (stage, a) => {
+          const b = basis(a);
+          addBox(stage, vadd(a.c, a.u, h * 0.5), [17, h, 29], OFFWHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -side * 8.7), a.u, h * 0.56),
+            [0.7, h * 0.72, 26], DARK_GLASS, b);
+          for (let bay = -2; bay <= 2; bay++) {
+            const col = vadd(vadd(a.c, a.t, bay * 5.1), a.r, -side * 9.3);
+            addBox(stage, vadd(col, a.u, 3.4), [0.65, 6.8, 0.65], STEEL, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, -side * 10.0), a.u, 7.1),
+            [3.0, 0.7, 29], WHITE, b);
+        });
+      }
+
+      function monumentalArcade(id, frac, side) {
+        venueGroup(id, frac, side, 35, [20, 18, 36], false, (stage, a) => {
+          const b = basis(a);
+          addBox(stage, vadd(a.c, a.u, 4.5), [17, 9, 33], MADRID_RED, b);
+          for (let bay = -3; bay <= 3; bay++) {
+            const opening = vadd(vadd(a.c, a.t, bay * 4.2), a.r, -side * 8.7);
+            addBox(stage, vadd(opening, a.u, 4.3), [0.7, 5.4, 2.4], ARCADE_DARK, b);
+          }
+          addBox(stage, vadd(a.c, a.u, 9.5), [18, 1.0, 34], WHITE, b);
+          addBox(stage, vadd(a.c, a.u, 12.0), [15, 4.0, 31], CROWD, b);
+          addPrism(stage, vadd(a.c, a.u, 15.0), [17, 2.2, 34], WHITE, b);
+        });
+      }
+
       // IFEMA's horizontal white exhibition halls frame the pit straight.
       ifemaHall("madrid-ifema-hall", 0.975, 1, 32, true);
       ifemaHall("madrid-ifema-hall-east", 0.035, 1, 34, false);
       ifemaHall("madrid-ifema-hall-west", 0.965, -1, 30, false);
+
+      // IFEMA's glazed south entrance and alternating roof lanterns make the
+      // exhibition campus read as a public venue rather than anonymous sheds.
+      venueGroup("madrid-ifema-south-entrance", 0.055, -1, 24,
+        [30, 22, 50], false, (stage, a) => {
+          const b = basis(a);
+          addBox(stage, vadd(a.c, a.u, 6.5), [26, 13, 46], GLASS, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, 9.0), [9, 18, 44], WHITE, b);
+          for (let i = -2; i <= 2; i++) {
+            addPrism(stage, vadd(vadd(a.c, a.t, i * 8.5), a.u, 14.5),
+              [25, 2.4, 7.2], i % 2 ? STEEL : WHITE, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, 14.0), a.u, 7.0),
+            [3.0, 1.0, 34], MADRID_RED, b);
+        });
 
       // Pits and paddock use bounded, terrain-seated modules rather than one long
       // floating slab that can chord across the start-line curve.
@@ -144,6 +189,11 @@
             : `madrid-monumental-${side < 0 ? "l" : "r"}-${i}`;
           monumentalStand(id, standFracs[i], side, 16, side === 1 && i === 2);
         }
+      }
+      // A thin Las Ventas-inspired arcade and crowd crown sits behind the white
+      // bowl rim, adding Madrid identity without narrowing the banked sightline.
+      for (let i = 0; i < 3; i++) {
+        monumentalArcade(`madrid-monumental-arcade-${i}`, 0.705 + i * 0.05, 1);
       }
       for (const frac of [0.70, 0.74, 0.78, 0.82]) {
         const k = at(frac);
@@ -172,6 +222,18 @@
         depth: 1.8,
         supportGap: 2.0,
         color: STEEL,
+      });
+      // A lightweight IFEMA access bridge marks the return from the permanent
+      // loop while retaining generous clearance and narrow off-edge supports.
+      overheadSpan({
+        id: "madrid-ifema-access-bridge",
+        frac: 0.885,
+        clearance: 6.4,
+        thickness: 0.8,
+        depth: 4.2,
+        supportGap: 2.8,
+        supportWidth: 0.9,
+        color: GLASS,
       });
       for (const side of [-1, 1]) {
         venueGroup(`madrid-overpass-pier-${side}`, 0.085, side, 2.6,
@@ -214,6 +276,14 @@
         }
       }
 
+      // Paired colonnaded office fronts define the wide public-road avenue.
+      // Their deep setbacks preserve the fast urban-sector braking sightlines.
+      for (let i = 0; i < 3; i++) {
+        const frac = 0.175 + i * 0.025;
+        avenueOffice(`madrid-avenue-left-${i}`, frac, -1, 24, 18 + i * 3);
+        avenueOffice(`madrid-avenue-right-${i}`, frac + 0.006, 1, 26, 21 - i * 2);
+      }
+
       // Cuatro Torres forms a restrained skyline cluster behind the urban sector.
       for (let i = 0; i < 4; i++) {
         const frac = 0.335 + i * 0.012;
@@ -225,6 +295,16 @@
             addFrustum(stage, vadd(a.c, a.u, h), 5.0, 1.6, 7, GLASS, 6, b);
             addCyl(stage, vadd(a.c, a.u, h + 7), 0.18, 4, STEEL, 5, b);
           });
+      }
+
+      // Chamartín-style mid-rises bridge the scale between the avenue and the
+      // Cuatro Torres silhouettes, creating a second deterministic depth layer.
+      for (let i = 0; i < 5; i++) {
+        const frac = 0.275 + i * 0.011;
+        const side = i % 2 ? 1 : -1;
+        const h = 30 + hash(900 + i * 13) * 18;
+        urbanBlock(`madrid-skyline-midrise-${i}`, frac, side, 42 + (i % 2) * 5,
+          13 + (i % 3), h, 17, i % 2 ? CONCRETE : OFFWHITE);
       }
 
       // Warm terrain-conforming plazas and pelouse replace broad flat land boxes.

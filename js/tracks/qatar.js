@@ -43,6 +43,17 @@
           id: "kit:qatar:hospitality", frac: 0.86, side: -1, gap: 85,
           size: [18, 9, 34], modules: 4, required: true,
         });
+        // Dress-pass addition 1: a compact modern paddock operations campus
+        // beyond pit entry. The two bounded facilities read as service/support
+        // infrastructure without filling the open desert sectors.
+        circuitKit.serviceCompound({
+          id: "kit:qatar:paddock-service", frac: 0.895, side: -1, gap: 72,
+          size: [24, 7, 42], vehicles: 8, required: true,
+        });
+        circuitKit.recoveryBay({
+          id: "kit:qatar:recovery-bay", frac: 0.845, side: -1, gap: 58,
+          size: [16, 6, 20], required: true,
+        });
         circuitKit.marshalShelter({
           id: "kit:qatar:marshal-shelter", frac: 0.76, side: 1, gap: 30,
           size: [6, 3, 5], required: true,
@@ -213,6 +224,25 @@
         addBox(out, vadd(a.c, a.u, 8 + hf * 3), [14, 0.55, 16], WHITE, b);
       }
 
+      // Dress-pass addition 2: illuminated paddock media/operations centre.
+      // Kept behind the pit complex so its long, low horizontal silhouette
+      // layers the S/F background without narrowing the driver's sightline.
+      (function paddockMediaCentre() {
+        const a = anchor(K(0.925), -1, 72), b = [a.r, a.u, a.t];
+        modelGroup("qatar-paddock-media-centre", {
+          center: vadd(a.c, a.u, 5.5), size: [30, 12, 76], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 4.5), [28, 9, 74], [0.82, 0.83, 0.84], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 6.8), a.r, 14.05),
+            [0.24, 2.0, 68], WIN_COOL, b);
+          addBox(stage, vadd(a.c, a.u, 9.3), [30, 0.65, 76], WHITE, b);
+          for (const dz of [-26, -13, 0, 13, 26]) {
+            addBox(stage, vadd(vadd(a.c, a.u, 9.8), a.t, dz),
+              [24, 0.20, 0.38], LAMP, b);
+          }
+        }, { required: true });
+      })();
+
       gantry(0.012, 7.5, [0.12, 0.12, 0.14]);
       tower(K(0.985), -1, 8, 6, 26, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
@@ -242,6 +272,18 @@
       tyreWall(0.04, 0.085, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.05), -1, 6);
       billboard(K(0.065), 1, 6, 12, 3.8, AD[0]);
+
+      // Dress-pass addition 3: North-grandstand rear concourse and lightbox.
+      // These low white hospitality volumes sit well behind the stand shell,
+      // adding Lusail's modern event architecture rather than trackside clutter.
+      building(K(0.060), 1, 54, 16, 7, 34,
+        { wall: WHITE, window: WIN_WARM, floor: 3.0 });
+      building(K(0.078), 1, 58, 13, 6, 24,
+        { wall: [0.86, 0.87, 0.88], window: WIN_COOL, floor: 3.0 });
+      {
+        const a = anchor(K(0.068), 1, 63), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 8.2), [20, 0.30, 42], FLOOD, b);
+      }
 
       // T1 VVIP — white villa + ~60 m branch-style sail canopy (replaces mosque)
       (function t1Vvip() {
@@ -312,6 +354,19 @@
       guardrail(0.36, 0.50, -1, 4, [0.78, 0.78, 0.80]);
       marshalPost(K(0.43), 1, 6);
 
+      // Dress-pass addition 4: low western desert horizon. Sparse, broad berms
+      // remain below the flood masts and preserve the open T4–T10 sightlines.
+      for (let i = 0; i < 6; i++) {
+        const s = 0.46 + i * 0.042;
+        const w = 58 + hash(i * 17 + 4) * 28;
+        const h = 3.0 + hash(i * 23 + 9) * 2.2;
+        const gap = 155 + hash(i * 31 + 2) * 55;
+        const a = anchor(K(s), 1, gap);
+        mountain(a.c[0], a.c[2], pyMin, w, h,
+          { seg: 6, seed: 620 + i * 13, rough: 0.30, snowline: 1.6,
+            forest: DUNE, rock: DUNE_N, snow: DUNE_N });
+      }
+
       // ================= DISTANT LUSAIL / DOHA SKYLINE (thinned) =============
       (function skyline() {
         const LA = [0.30, 0.33, 0.42], LB = [0.24, 0.27, 0.38];
@@ -358,6 +413,16 @@
       billboard(K(0.72), 1, 6, 10, 3.2, AD[1]);
       billboard(K(0.80), -1, 6, 10, 3.2, AD[4]);
 
+      // Dress-pass addition 5: fixed television-corner lighting crowns.
+      // The full-lap ring establishes continuity; these three paired stations
+      // make the T10 and fast final-sector complexes visibly floodlit heroes.
+      if (typeof floodMast === "function") {
+        for (const s of [0.63, 0.72, 0.80]) {
+          floodMast(K(s), -1, 38, { h: 41, cool: true, pool: true, arms: 2 });
+          floodMast(K(s),  1, 42, { h: 41, cool: true, pool: true, arms: 2 });
+        }
+      }
+
       // ================= SPARSE PALM ROW (s 0.86) ===========================
       for (let i = 0; i < 8; i++) {
         const k = (K(0.84) + i * Math.round(n * 0.008)) % n;
@@ -373,6 +438,15 @@
       tyreWall(0.91, 0.945, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.94), -1, 6);
       billboard(K(0.92), 1, 6, 12, 3.6, AD[5]);
+      // Rear hospitality deck completes the authentic T16 spectator campus.
+      building(K(0.942), 1, 50, 15, 7, 38,
+        { wall: WHITE, window: WIN_WARM, floor: 3.1 });
+      {
+        const a = anchor(K(0.942), 1, 58), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 8.2), [18, 0.45, 42], WHITE, b);
+        addBox(out, vadd(vadd(a.c, a.u, 7.8), a.r, -8.9),
+          [0.24, 0.7, 36], FLOOD, b);
+      }
 
       // Sparse desert scrub only (palms/oasis water culled)
       every(120, (k) => {
