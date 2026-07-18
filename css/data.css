@@ -578,8 +578,14 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
     border-radius: 10px;
     width: 100%;
   }
-  .dh-tpopup-hdr { padding: 8px 14px; }
-  .dh-tpopup-title { font-size: 13px; }
+  /* Ultra-slim one-line header so the chart column gets the height */
+  .dh-tpopup-hdr { padding: 2px 10px; gap: 8px; }
+  .dh-tpopup-title {
+    font-size: 12px; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0;
+  }
+  .dh-tpopup-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dh-tpopup-sub { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dh-tpopup .dh-close { width: 26px; height: 26px; font-size: 13px; border-radius: 6px; }
   .dh-tpopup-body {
     flex-direction: row;
     overflow: hidden;
@@ -597,6 +603,9 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
     border-left: 1px solid rgba(255, 255, 255, 0.08);
     gap: 8px;
   }
+  /* Compact legend rows in landscape popup */
+  .dh-tpopup .dh-legend { gap: 3px 8px; font-size: 10px; margin-top: -4px; }
+  .dh-tpopup .dh-legend-item { padding: 2px 4px; }
   /* Compact transport in landscape popup */
   .dh-tpopup .dh-transport { gap: 5px; flex-wrap: nowrap; margin: 2px 0; }
   .dh-tpopup .dh-thint { display: none; }
