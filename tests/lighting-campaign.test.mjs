@@ -16,6 +16,12 @@ import {
   readJsonLines,
   appendJsonLine,
 } from "../tools/lighting-campaign/io.mjs";
+import {
+  candidateValues,
+  classifySensitivity,
+  minimalProfile,
+  buildConditionRecord,
+} from "../tools/lighting-campaign/tune.mjs";
 
 const TEST_TUNE_DEFS = [
   { id: "ambientMul", min: 0, max: 4 },
@@ -138,6 +144,70 @@ test("profile validation rejects unknown and out-of-range controls", () => {
   assert.deepEqual(validateProfile({ ambientMul: 1.2 }, TEST_TUNE_DEFS), { ambientMul: 1.2 });
   assert.throws(() => validateProfile({ missing: 1 }, TEST_TUNE_DEFS), /unknown slider/i);
   assert.throws(() => validateProfile({ tint: 2 }, TEST_TUNE_DEFS), /out of range/i);
+});
+
+test("candidate values are bounded, distinct, and include baseline", () => {
+  assert.deepEqual(candidateValues({ min: 0, max: 4, step: 0.02 }, 1), [0, 1, 2, 4]);
+  assert.deepEqual(candidateValues({ min: -1, max: 1, step: 0.01 }, 0), [-1, -0.5, 0, 0.5, 1]);
+  assert.deepEqual(candidateValues({ min: 0, max: 1, step: 0.2 }, 0.91), [0, 1]);
+});
+
+test("sensitivity requires all three views to remain below tolerance", () => {
+  const same = [{ meanDelta: 0.01 }, { meanDelta: 0.02 }, { meanDelta: 0.01 }];
+  const changed = [{ meanDelta: 0.01 }, { meanDelta: 0.40 }, { meanDelta: 0.01 }];
+  assert.equal(classifySensitivity(same).active, false);
+  assert.equal(classifySensitivity(changed).active, true);
+  assert.equal(classifySensitivity(changed, changed, { controlChanged: false }).active, false);
+});
+
+test("minimal profile removes values that reproduce without an override", async () => {
+  const seen = [];
+  const profile = await minimalProfile(
+    { ambientMul: 1, tint: 0 },
+    { ambientMul: 1.2, tint: 0.1 },
+    async (candidate) => {
+      seen.push({ ...candidate });
+      return candidate.tint === 0;
+    },
+  );
+  assert.deepEqual(profile, { ambientMul: 1.2 });
+  assert.deepEqual(seen, [
+    { ambientMul: 1, tint: 0.1 },
+    { ambientMul: 1.2, tint: 0 },
+  ]);
+});
+
+test("condition records preserve tuning evidence and canonical condition data", () => {
+  const condition = enumerateConditions(["monza"])[0];
+  const baselineViews = [{ camera: 0 }, { camera: 1 }, { camera: 2 }];
+  const finalViews = [{ camera: 0, final: true }, { camera: 1, final: true }, { camera: 2, final: true }];
+  const record = buildConditionRecord({
+    condition,
+    baseline: { ambientMul: 1, tint: 0 },
+    selected: { ambientMul: 1.2, tint: 0.1 },
+    profile: { ambientMul: 1.2 },
+    sensitivity: {
+      control: "ambientMul",
+      active: true,
+      gateExplanation: "all three views exceeded the mean delta tolerance",
+      views: [{ meanDelta: 0.3 }, { meanDelta: 0.25 }, { meanDelta: 0.22 }],
+    },
+    rejectedCandidates: [{ value: 4, gateExplanation: "white-clip" }],
+    rationale: "ambient lift helped dusk road readability",
+    baselineViews,
+    finalViews,
+    gates: { ok: true, failures: [] },
+  });
+
+  assert.equal(record.schema, "apex26.lighting-campaign/v1");
+  assert.equal(record.key, condition.key);
+  assert.deepEqual(record.profile, { ambientMul: 1.2 });
+  assert.deepEqual(record.baseline, { ambientMul: 1, tint: 0 });
+  assert.deepEqual(record.selected, { ambientMul: 1.2, tint: 0.1 });
+  assert.equal(record.sensitivity.gateExplanation, "all three views exceeded the mean delta tolerance");
+  assert.deepEqual(record.rejectedCandidates, [{ value: 4, gateExplanation: "white-clip" }]);
+  assert.deepEqual(record.baselineViews, baselineViews);
+  assert.deepEqual(record.views, finalViews);
 });
 
 test("record validation requires schema, canonical key, three views, and passing gates", () => {
