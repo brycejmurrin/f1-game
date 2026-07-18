@@ -48,7 +48,10 @@ const DataTelemetry = (function () {
     { id: "brake",    label: "BRAKE",    color: "#ff4d4d", w: 1.5, lo: 0, hi: 100, get: function (c) { return c.brake; },    fmt: function (v) { return Math.round(v) + "%"; } },
     { id: "gear",     label: "GEAR",     color: "#f6d200", w: 1.5, lo: 0, hi: 8, step: true, get: function (c) { return c.gear; }, fmt: function (v) { return v ? "G" + v : "N"; } },
     { id: "rpm",      label: "RPM",      color: "#c084fc", w: 1.5, norm: "rpm", get: function (c) { return c.rpm; }, fmt: function (v) { return Math.round(v); } },
-    { id: "drs",      label: "DRS",      color: "#00e0c0", w: 1.5, lo: 0, hi: 1, step: true, off: true, get: function (c) { return c.drs === null || c.drs === undefined ? null : (drsOpen(c.drs) ? 1 : 0); }, fmt: function (v) { return v ? "OPEN" : "—"; } }
+    // DRS draws as a thick strip just below the chart's top edge, present only
+    // while the wing is OPEN (closed samples return null so nothing is drawn) —
+    // a full-height 0/1 square wave would bury every other trace.
+    { id: "drs",      label: "DRS",      color: "#00e0c0", w: 3, lo: 0, hi: 1.1, step: true, noGhost: true, get: function (c) { return c.drs === null || c.drs === undefined ? null : (drsOpen(c.drs) ? 1 : null); }, fmt: function (v) { return v ? "OPEN" : "—"; } }
   ];
 
   // Chart plot-area insets: PADL leaves a gutter for the km/h axis labels,
@@ -56,8 +59,24 @@ const DataTelemetry = (function () {
   // and the scrub mapping so the cursor stays aligned across all of them.
   const PADL = 36, PADR = 8, PADY = 6;
   function chartX(view, t, W) { return PADL + (t / view.tMax) * (W - PADL - PADR); }
-  // chart canvas height for a given width — slightly shorter on narrow screens
-  function chartH(w) { return Math.round(w * (w < 480 ? 190 : 220) / 600); }
+  // short-landscape phone: the popup splits into columns and vertical space
+  // is the scarce axis
+  function shortLS() {
+    return typeof window !== "undefined" && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
+  }
+  // chart canvas height for a given width — slightly shorter on narrow
+  // screens; in compare mode on a short-landscape phone, capped to the
+  // viewport so chart + delta strip + legend fit together
+  function chartH(w, compact) {
+    const base = Math.round(w * (w < 480 ? 190 : 220) / 600);
+    if (compact && shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.38));
+    return base;
+  }
+  function deltaH(w) {
+    const base = Math.round(w * (72 / 600));
+    if (shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.12));
+    return base;
+  }
 
   function chanRaw(ch, c) {
     const v = ch.get(c);
@@ -416,7 +435,7 @@ const DataTelemetry = (function () {
     const CW = detail.clientWidth > 40
       ? Math.min(600, Math.max(260, detail.clientWidth - sideW - 28))
       : (isLS ? 360 : 330);
-    const CH_CHART = chartH(CW);
+    const CH_CHART = chartH(CW, !!view.compare);
 
     const c1 = el("canvas", "dh-canvas");
     c1.width = CW; c1.height = CH_CHART; c1.style.touchAction = "none";
@@ -425,7 +444,7 @@ const DataTelemetry = (function () {
     view.chartBase = makeOffscreen(CW, CH_CHART);
 
     if (view.compare) {
-      const CD_H = Math.round(CW * (72 / 600));
+      const CD_H = deltaH(CW);
       const cd = el("canvas", "dh-canvas dh-delta");
       cd.width = CW; cd.height = CD_H; cd.style.touchAction = "none";
       mainArea.appendChild(cd);
@@ -518,15 +537,15 @@ const DataTelemetry = (function () {
         if (mainW <= 0) return;
         
         const newCW = Math.min(800, mainW);
-        const newCH = chartH(newCW);
-        
+        const newCH = chartH(newCW, !!view.compare);
+
         let resized = false;
         if (view.chart.width !== newCW || view.chart.height !== newCH) {
           view.chart.width = newCW;
           view.chart.height = newCH;
           view.chartBase = makeOffscreen(newCW, newCH);
           if (view.delta) {
-            const dh = Math.round(newCW * (72 / 600));
+            const dh = deltaH(newCW);
             view.delta.width = newCW;
             view.delta.height = dh;
             view.deltaBase = makeOffscreen(newCW, dh);
@@ -957,7 +976,8 @@ const DataTelemetry = (function () {
       g.globalAlpha = 0.5;
       for (let k = CHANNELS.length - 1; k >= 1; k--) {
         const ch = CHANNELS[k];
-        if (view.visible[ch.id]) line(view.compare.car, ch, ch.color, Math.max(1.2, ch.w - 0.4));
+        // noGhost: the DRS strip would land exactly on the primary's — skip
+        if (view.visible[ch.id] && !ch.noGhost) line(view.compare.car, ch, ch.color, Math.max(1.2, ch.w - 0.4));
       }
       g.globalAlpha = 1;
       if (view.visible.speed) line(view.compare.car, CHANNELS[0], cssColor(view.colC), 1.8);
