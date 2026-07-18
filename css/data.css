@@ -540,17 +540,25 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   display: flex; flex-direction: column; gap: 10px;
   padding: 14px 16px;
 }
-/* Compact driver headers inside the popup — small titles with the lap time
-   inline, so the chart plus the gauges/map below it fit on screen */
+/* Compact one-line driver headers inside the popup — swatch · name ·
+   sectors · lap time, so the chart gets the vertical space */
 .dh-tpopup .dh-livecard { gap: 2px; }
-.dh-tpopup .dh-live-title { font-size: 13px; }
+.dh-tpopup .dh-live-title { font-size: 12px; }
 .dh-tpopup .dh-live-sub { font-size: 10px; }
-.dh-thead { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.dh-thead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dh-thead { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dh-thead .dh-swatch { width: 10px; height: 10px; }
+.dh-tname { flex: 0 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dh-tsect {
+  flex: 1 1 auto; min-width: 0; margin-left: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: right;
+  font-size: 10px; font-weight: 600; font-style: normal;
+  color: #9a9aa5; font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
 .dh-tlap {
-  margin-left: auto; flex: 0 0 auto;
+  flex: 0 0 auto;
   font-size: 11px; font-weight: 700; font-style: normal;
-  color: #b4b4b8; font-variant-numeric: tabular-nums;
+  color: #e8e8ee; font-variant-numeric: tabular-nums;
 }
 .dh-telem-side {
   display: flex; flex-direction: column; gap: 10px;
