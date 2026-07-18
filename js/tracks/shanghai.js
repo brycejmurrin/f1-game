@@ -24,6 +24,11 @@
       // furniture is the campus's density base though; the guarded emitters
       // already stop anything chording across the folded layout.
       { kind: "city", s0: 0, s1: 1 },
+      // Two curve pinch points where a generic conifer's canopy tiers overhang
+      // the fence line (props-over-road audit hotspots) — keep just these
+      // slivers tree-free.
+      { kind: "foliage", s0: 0.425, s1: 0.445 },
+      { kind: "foliage", s0: 0.720, s1: 0.765 },
     ],
     pal: { zenith: [0.28, 0.4, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.26, 0.42, 0.22], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.002, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
     segs: [
