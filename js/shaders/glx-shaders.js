@@ -1402,7 +1402,10 @@ void main() {
       float srad = mix(0.0016, 0.0028, giant);
       float star = smoothstep(srad, srad * 0.35, d)
                  * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
-      c += vec3(star) * uStarBright;   // STAR BRIGHTNESS knob
+      // Cloud occlusion: stars sit BEHIND the cloud deck, so coverage along
+      // this ray (cityCov, hoisted from the cloud pass above) fades them out —
+      // an overcast night shows few/no stars instead of stars ON the clouds.
+      c += vec3(star) * uStarBright * (1.0 - cityCov);   // STAR BRIGHTNESS knob
     }
   }
 

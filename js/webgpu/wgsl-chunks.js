@@ -864,6 +864,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   }
 
   // --- Procedural cloud layer (basic) ---
+  // covRay: cloud coverage seen along this ray, hoisted for the star-occlusion
+  // term below (GLX parity — stars fade out behind the deck).
+  var covRay = 0.0;
   if (cloud > 0.001 && up > 0.012) {
     let cp = dir.xz / up * 0.42;
     let cT = time * cloudSpeed;
@@ -871,6 +874,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let cp2 = cp + vec2<f32>(cT * 0.0017, cT * 0.0023);
     let f = fbm(cp1);
     let cov = smoothstep(0.50 - cloud * 0.42, 0.84, f) * smoothstep(0.013, 0.05, up);
+    covRay = cov;
     let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
     let sl = pow(sd, 2.0);
     let sunBright = max(sunColor.r, max(sunColor.g, sunColor.b));
@@ -914,7 +918,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       let giant = step(0.9995, h);
       let srad = mix(0.0016, 0.0028, giant);
       let star = smoothstep(srad, srad * 0.35, dstar) * min(0.88, bright * twinkle * (1.0 + giant * 0.6));
-      c = c + vec3<f32>(star) * starBright;
+      // Cloud occlusion (GLX parity): stars sit behind the deck.
+      c = c + vec3<f32>(star) * starBright * (1.0 - covRay);
     }
   }
 
