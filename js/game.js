@@ -27,7 +27,7 @@ const els = {
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
   pmStandings: $("pm-standings"),
-  pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), btnCam: $("btn-cam"),
+  pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
   btnThrottle: $("btn-throttle"),
@@ -6385,12 +6385,19 @@ $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
-// Advanced steering: opened from the pause menu, closes back to it.
+// ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
+// every tuning + toggle control lives on this page. Opening it hides the pause
+// menu (one panel at a time); BACK (or resume) returns to it.
+function openSettings() { els.pmsettings.hidden = false; els.pausemenu.hidden = true; }
+function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; }
+$("pm-settings").onclick = openSettings;
+$("pm-settings-close").onclick = closeSettings;
+// Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
-// ── LIGHTING TUNER ── opened from the pause menu; the pause menu hides while
+// ── LIGHTING TUNER ── opened from the settings sub-menu; that menu hides while
 // it's open so the live preview is unobstructed (tick() keeps render() running
-// with physics paused), and DONE returns to the pause menu. Rows are generated
+// with physics paused), and DONE returns to it. Rows are generated
 // once from TUNE_DEFS; values persist via localStorage (apex26.lightTune).
 function fmtTune(d, v) {
   if (d.fmt === "auto" && v < 0) return "AUTO";
@@ -6545,7 +6552,7 @@ $("pm-lighting").onclick = () => {
   $("lt-json").hidden = true;
   $("lighting").hidden = false;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
-  els.pausemenu.hidden = true;      // unobstructed live preview
+  els.pmsettings.hidden = true;     // unobstructed live preview (opened from settings)
 };
 function closeLightTuner(showPauseMenu) {
   if (photoMode) exitPhotoMode();
@@ -6555,7 +6562,7 @@ function closeLightTuner(showPauseMenu) {
   _ltPrevTOD = null; _ltPrevWx = null;
   $("lighting").hidden = true;
   document.body.classList.remove("lt-open");   // restore race HUD + touch controls
-  if (showPauseMenu && paused) els.pausemenu.hidden = false;
+  if (showPauseMenu && paused) els.pmsettings.hidden = false;   // back to the settings menu
 }
 $("lt-close").onclick = () => closeLightTuner(true);
 
@@ -6987,6 +6994,7 @@ function setPaused(p) {
   paused = p;
   if (!p) closeLightTuner(false);
   els.pausemenu.hidden = !p;
+  if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
   if (!p) $("advanced").hidden = true;   // never leave an overlay up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
@@ -7355,7 +7363,12 @@ if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
 { const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;
   $("mb-standings").hidden = !hasSeason; }
-Input.init(canvas, { onPause: () => setPaused(!paused) });
+// Pause key: when the settings sub-menu is open it acts as a BACK to the pause
+// menu; otherwise it toggles pause as usual.
+Input.init(canvas, { onPause: () => {
+  if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
+  setPaused(!paused);
+} });
 if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · 24 real circuits"; }
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);

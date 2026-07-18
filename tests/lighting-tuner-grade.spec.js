@@ -8,6 +8,8 @@ async function openImageTuner(page) {
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.locator("#pausebtn").click();
+  await page.locator("#pm-settings").click();
+  await page.locator("#pmsettings").waitFor({ state: "visible" });
   await page.locator("#pm-lighting").click();
   await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
 }
@@ -15,6 +17,8 @@ async function openImageTuner(page) {
 async function reopenImageTuner(page) {
   await page.evaluate(() => window.__apex.park(0.1));
   await page.locator("#pausebtn").click();
+  await page.locator("#pm-settings").click();
+  await page.locator("#pmsettings").waitFor({ state: "visible" });
   await page.locator("#pm-lighting").click();
   await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
 }

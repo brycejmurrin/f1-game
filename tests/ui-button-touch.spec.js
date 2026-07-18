@@ -20,6 +20,13 @@ async function openPauseMenu(page) {
   await page.locator("#pausemenu").waitFor({ state: "visible" });
 }
 
+// Steering / lighting / gears controls now live on the SETTINGS sub-menu.
+async function openPauseSettings(page) {
+  await openPauseMenu(page);
+  await page.locator("#pm-settings").click();
+  await page.locator("#pmsettings").waitFor({ state: "visible" });
+}
+
 async function cycleToPauseSteerMode(page, targetText) {
   // Click pm-steer up to 3 times to cycle to the desired mode
   for (let i = 0; i < 3; i++) {
@@ -31,7 +38,7 @@ async function cycleToPauseSteerMode(page, targetText) {
 }
 
 async function openLightingPhotoMode(page) {
-  await openPauseMenu(page);
+  await openPauseSettings(page);
   await page.locator("#pm-lighting").click();
   await page.locator("#pc-toggle").click();
   await expect(page.locator("body")).toHaveClass(/lt-open/);
@@ -102,7 +109,7 @@ test.describe("Pause menu — tilt mode", () => {
   test("calibrate button visible in tilt mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseMenu(page);
+    await openPauseSettings(page);
     await cycleToPauseSteerMode(page, "tilt");
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
@@ -117,7 +124,7 @@ test.describe("Pause menu — button mode", () => {
   test("calibrate button hidden in button mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseMenu(page);
+    await openPauseSettings(page);
     await cycleToPauseSteerMode(page, "button");
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
@@ -132,7 +139,7 @@ test.describe("Pause menu — touch mode", () => {
   test("calibrate button hidden in touch mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseMenu(page);
+    await openPauseSettings(page);
     await cycleToPauseSteerMode(page, "touch");
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
@@ -147,8 +154,9 @@ test.describe("Auto-throttle in button/touch mode", () => {
   test("throttle button visible in button mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseMenu(page);
+    await openPauseSettings(page);
     await cycleToPauseSteerMode(page, "button");
+    await page.locator("#pm-settings-close").click();   // back to the pause menu
     await page.locator("#pm-resume").click();
     await page.locator("#pausemenu").waitFor({ state: "hidden" });
 
