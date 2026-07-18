@@ -162,13 +162,37 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let k = textureSampleLevel(srcTex, srcSamp, uv + t * vec2<f32>( 1.0,  1.0), 0.0).rgb;
   let l = textureSampleLevel(srcTex, srcSamp, uv + t * vec2<f32>(-1.0, -1.0), 0.0).rgb;
   let m = textureSampleLevel(srcTex, srcSamp, uv + t * vec2<f32>( 1.0, -1.0), 0.0).rgb;
-  var s = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625
-        + (j + k + l + m) * 0.125;
-  // Bright-pass gate (first mip only). Keeps the portion above the threshold.
+  // The 13 taps form 5 overlapping quads (Jimenez): 4 corner quads at weight
+  // 0.125 + the centre quad at 0.5 — identical totals to the old flat sum.
+  let g0 = (a + b + d + e) * 0.25;
+  let g1 = (b + c + e + f) * 0.25;
+  let g2 = (d + e + g + h) * 0.25;
+  let g3 = (e + f + h + i) * 0.25;
+  let g4 = (j + k + l + m) * 0.25;
+  var s : vec3<f32>;
   if (U.threshold > 0.0) {
-    let lum = max(max(s.r, s.g), s.b);
-    let bp  = max(0.0, lum - U.threshold) / max(lum, 1e-4);
+    // FIRST mip: Karis partial luma weighting (GLX DOWN_FS parity) — weight
+    // each quad by 1/(1+luma) and renormalise, so a sub-pixel HDR spike (the
+    // bloom "firefly") can't dominate the downsample; uniform regions
+    // renormalise back to the plain average (energy roughly preserved).
+    let w0 = 0.125 / (1.0 + max(g0.r, max(g0.g, g0.b)));
+    let w1 = 0.125 / (1.0 + max(g1.r, max(g1.g, g1.b)));
+    let w2 = 0.125 / (1.0 + max(g2.r, max(g2.g, g2.b)));
+    let w3 = 0.125 / (1.0 + max(g3.r, max(g3.g, g3.b)));
+    let w4 = 0.5   / (1.0 + max(g4.r, max(g4.g, g4.b)));
+    s = (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4)
+      / (w0 + w1 + w2 + w3 + w4);
+    // Bright-pass gate with a quadratic soft knee (GLX BRIGHT_FS parity):
+    // pixels ramp into the bloom as they approach the threshold instead of
+    // popping their whole halo on in one frame.
+    let lum  = max(max(s.r, s.g), s.b);
+    let knee = U.threshold * 0.5 + 1e-4;
+    var soft = clamp(lum - U.threshold + knee, 0.0, 2.0 * knee);
+    soft = soft * soft / (4.0 * knee);
+    let bp = max(soft, lum - U.threshold) / max(lum, 1e-4);
     s = s * bp;
+  } else {
+    s = (g0 + g1 + g2 + g3) * 0.125 + g4 * 0.5;
   }
   return vec4<f32>(s, 1.0);
 }`;

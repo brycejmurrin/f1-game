@@ -235,7 +235,7 @@ const GLX = (function () {
     if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
     brightU = locs(brightProg, ["uScene", "uThreshold"]);
     blurU = locs(blurProg, ["uTex", "uDir"]);
-    downU = locs(downProg, ["uTex", "uTexel"]);
+    downU = locs(downProg, ["uTex", "uTexel", "uKaris"]);
     upU = locs(upProg, ["uTex", "uTexel", "uSpread"]);
     // MSAA: pick the sample count the HDR colour format actually supports (many
     // mobile GPUs render RGBA16F but not multisampled RGBA16F — query, don't assume).
@@ -1882,6 +1882,10 @@ const GLX = (function () {
         gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
         gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
         gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+        // Karis partial luma weighting on the FIRST downsample only — that's
+        // where sub-pixel HDR spikes (the bloom "fireflies") get averaged in;
+        // later mips are already low-pass and keep the plain 13-tap kernel.
+        gl.uniform1f(downU.uKaris, i === 1 ? 1 : 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
       useProg(upProg);

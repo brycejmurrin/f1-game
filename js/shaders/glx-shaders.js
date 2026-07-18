@@ -1634,7 +1634,15 @@ out vec4 outColor;
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
   float l = max(max(c.r, c.g), c.b);
-  float k = max(0.0, l - uThreshold) / max(l, 1e-4);
+  // Quadratic soft knee (half-width = threshold/2) instead of the old hard
+  // max(0, l-t) cut: pixels ramp smoothly into the bloom as they approach the
+  // threshold, so a small lamp crossing it at distance FADES in over a few
+  // frames instead of popping its whole halo on in one. Above the knee the
+  // response is identical to the hard threshold.
+  float knee = uThreshold * 0.5 + 1e-4;
+  float soft = clamp(l - uThreshold + knee, 0.0, 2.0 * knee);
+  soft = soft * soft / (4.0 * knee);
+  float k = max(soft, l - uThreshold) / max(l, 1e-4);
   outColor = vec4(c * k, 1.0);
 }`;
 
@@ -1665,6 +1673,7 @@ precision highp float;
 in vec2 vUV;
 uniform sampler2D uTex;
 uniform vec2 uTexel;
+uniform float uKaris;   // 1 on the FIRST mip only: partial luma weighting (firefly fix)
 out vec4 outColor;
 void main() {
   vec2 t = uTexel;
@@ -1681,9 +1690,32 @@ void main() {
   vec3 k = texture(uTex, vUV + t * vec2( 1.0,  1.0)).rgb;
   vec3 l = texture(uTex, vUV + t * vec2(-1.0, -1.0)).rgb;
   vec3 m = texture(uTex, vUV + t * vec2( 1.0, -1.0)).rgb;
-  vec3 s = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625
-         + (j + k + l + m) * 0.125;
-  outColor = vec4(s, 1.0);
+  // The 13 taps form 5 overlapping quads (Jimenez): 4 corner quads at weight
+  // 0.125 each + the centre quad at 0.5 (same totals as the flat sum below).
+  vec3 g0 = (a + b + d + e) * 0.25;
+  vec3 g1 = (b + c + e + f) * 0.25;
+  vec3 g2 = (d + e + g + h) * 0.25;
+  vec3 g3 = (e + f + h + i) * 0.25;
+  vec3 g4 = (j + k + l + m) * 0.25;
+  if (uKaris > 0.5) {
+    // Karis partial luma weighting, FIRST mip only: weight each quad by
+    // 1/(1+luma) and renormalise. A single sub-pixel HDR spike (specular
+    // glint, distant lamp) is pulled toward its neighbourhood instead of
+    // dominating the whole downsample — the classic bloom-firefly popping —
+    // while uniform regions renormalise back to the plain average, so overall
+    // bloom energy is roughly preserved.
+    float w0 = 0.125 / (1.0 + max(g0.r, max(g0.g, g0.b)));
+    float w1 = 0.125 / (1.0 + max(g1.r, max(g1.g, g1.b)));
+    float w2 = 0.125 / (1.0 + max(g2.r, max(g2.g, g2.b)));
+    float w3 = 0.125 / (1.0 + max(g3.r, max(g3.g, g3.b)));
+    float w4 = 0.5   / (1.0 + max(g4.r, max(g4.g, g4.b)));
+    vec3 s = (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4)
+           / (w0 + w1 + w2 + w3 + w4);
+    outColor = vec4(s, 1.0);
+  } else {
+    vec3 s = (g0 + g1 + g2 + g3) * 0.125 + g4 * 0.5;
+    outColor = vec4(s, 1.0);
+  }
 }`;
 
   // Mip-chain bloom upsample: 9-tap tent filter, drawn ADDITIVELY (ONE, ONE) into
