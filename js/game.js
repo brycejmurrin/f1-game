@@ -508,6 +508,7 @@ const photoMove = { x: 0, y: 0 };   // touch move stick: x=strafe, y=forward (�
 const photoLook = { x: 0, y: 0 };   // touch look stick: x=yaw, y=pitch (−1..1)
 const photoMouse = { dx: 0, dy: 0, drag: false, px: 0, py: 0 };
 let photoAlt = 0;                    // touch up/down buttons: +1 up, −1 down
+let photoVertT = 0;                  // how long vertical input has been held (s) — ramps the climb rate
 // Studio light rig (__apex.studio): a ring of test lamps that follows the player
 // car — inspect paint/reflection response on any track at any time of day,
 // independent of the session's real lamps. null = off.
@@ -6648,7 +6649,7 @@ function initPhotoCam() {
   photoCam.fov = camFov;
   const fv = $("pc-fov"); if (fv) fv.value = Math.round(camFov);
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
-  photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoAlt = 0;
+  photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoAlt = 0; photoVertT = 0;
   for (const k in photoKeys) photoKeys[k] = false;
 }
 // Integrate held input into the fly-cam each paused frame and publish dbgCam.
@@ -6669,7 +6670,13 @@ function updatePhotoCam(dt) {
   // buttons ride the WORLD vertical so you can climb straight up.
   const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y;   // stick UP (dy<0) = forward
   const ms = (photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x;
-  const mv = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + photoAlt;
+  // Vertical input (R/F keys + up/down buttons) ramps with hold time so height
+  // can be framed precisely: a tap nudges ~0.4 m, a hold accelerates to the
+  // full fly speed over ~2 s.
+  const mvIn = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + photoAlt;
+  photoVertT = mvIn ? photoVertT + dt : 0;
+  const vRamp = Math.min(1, 0.12 + 0.88 * Math.pow(Math.min(photoVertT / 2.2, 1), 1.6));
+  const mv = mvIn * vRamp;
   const k = spd * dt;
   photoCam.pos[0] += (fwd[0] * mf + rgt[0] * ms) * k;
   photoCam.pos[1] += (fwd[1] * mf + mv) * k;
