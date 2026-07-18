@@ -871,9 +871,16 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let R = reflect(-V, Nv);         // points up toward the world above the road
 
   // Higher-fidelity march (optimized): 24 steps, fine-grained geometric growth.
+  // JITTERED (mirrors the GLX fix): an un-jittered march quantizes the hit at
+  // identical step boundaries down whole pixel columns, slicing the mirrored
+  // city into hard vertical slats with flat sky-fallback stripes between them.
+  // IGN offsets each pixel's march start by a sub-step; the far-sky reject
+  // window scales with the step so late (multi-metre) steps keep their hits.
+  let ign = fract(52.9829189 * fract(dot(in.pos.xy, vec2<f32>(0.06711056, 0.00583715))));
   var pos = P;
   var prevPos = P;
   var stepLen = 0.40;
+  pos = pos + R * (stepLen * ign);           // sub-step start offset per pixel
   var found = false;
   var hitUV = vec2<f32>(0.0);
   var hitEdge = 0.0;
@@ -886,7 +893,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     let suv = sp.xy;
     if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) { break; }
     let dz = ssrViewPos(suv).z - pos.z;      // >0 = ray passed behind a surface
-    if (dz > thick && dz < 5.0) {            // thickness gate (reject far sky)
+    if (dz > thick && dz < max(5.0, stepLen * 1.5)) {   // step-scaled far-sky reject
       var a = prevPos;
       var b = pos;
       for (var j = 0; j < 5; j = j + 1) {    // binary refine -> crisp hit
