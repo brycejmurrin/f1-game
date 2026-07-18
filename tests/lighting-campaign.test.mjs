@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -42,6 +41,13 @@ async function importModifiedConfig(search, replacement) {
   const source = await readFile(new URL("../tools/lighting-campaign/config.mjs", import.meta.url), "utf8");
   assert.ok(source.includes(search), `config fixture contains ${search}`);
   return import(`data:text/javascript,${encodeURIComponent(source.replace(search, replacement))}`);
+}
+
+const CAPTURE_MODULE_URL = new URL("../tools/lighting-campaign/capture.mjs", import.meta.url);
+const CAPTURE_MODULE_PATH = CAPTURE_MODULE_URL.pathname;
+
+async function importCaptureModule() {
+  return import(CAPTURE_MODULE_URL);
 }
 
 test("lighting campaign enumerates the complete unique matrix", () => {
@@ -178,6 +184,41 @@ test("json line fragments append, reread, and merge deterministically", async (t
   const merged = mergeFragments([shardA, shardB], TEST_TUNE_DEFS, { expectedConditions: rows.slice(0, 2) });
   assert.deepEqual(Object.keys(merged.presets), [rows[0].key, rows[1].key]);
   assert.equal(merged.summary.fragmentCount, 2);
+});
+
+test("capture module exports the isolated WebGL campaign contract with no fixed port", async () => {
+  const source = await readFile(CAPTURE_MODULE_PATH, "utf8");
+  assert.match(source, /export\s+async\s+function\s+startStaticServer\b/);
+  assert.match(source, /export\s+async\s+function\s+launchCampaignBrowser\b/);
+  assert.match(source, /export\s+async\s+function\s+createCampaignPage\b/);
+  assert.match(source, /export\s+async\s+function\s+captureCondition\b/);
+  assert.doesNotMatch(source, /3456|last-port|campaign port/i);
+
+  const capture = await importCaptureModule();
+  assert.equal(typeof capture.startStaticServer, "function");
+  assert.equal(typeof capture.launchCampaignBrowser, "function");
+  assert.equal(typeof capture.createCampaignPage, "function");
+  assert.equal(typeof capture.captureCondition, "function");
+});
+
+test("each campaign server receives its own ephemeral port", async (t) => {
+  const tmpRoot = join(process.cwd(), "artifacts", "tmp");
+  await mkdir(tmpRoot, { recursive: true });
+  const dir = await mkdtemp(join(tmpRoot, "lighting-campaign-server-"));
+  t.after(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  await writeFile(join(dir, "index.html"), "ok");
+  await access(CAPTURE_MODULE_PATH);
+  const { startStaticServer } = await importCaptureModule();
+  const a = await startStaticServer(dir);
+  const b = await startStaticServer(dir);
+  t.after(async () => {
+    await a.close();
+    await b.close();
+  });
+  assert.notEqual(a.port, b.port);
+  assert.equal(await (await fetch(`http://127.0.0.1:${a.port}/`)).text(), "ok");
 });
 
 test("pixel metrics report percentiles, clipping, and named regions", () => {
