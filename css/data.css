@@ -259,6 +259,12 @@
 button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dh-legend-item.dh-off { opacity: 0.35; }
 .dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
+/* compare-mode live readouts inside legend items: primary then compare */
+.dh-legval {
+  font-weight: 800; font-variant-numeric: tabular-nums;
+  min-width: 3ch; text-align: right;
+}
+.dh-legval2 { opacity: 0.62; }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 
 /* ---------- lap-replay transport + gauge dashboard ---------- */

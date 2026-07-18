@@ -82,6 +82,18 @@ const DataTelemetry = (function () {
     const v = ch.get(c);
     return (v === null || v === undefined || isNaN(v)) ? null : v;
   }
+  // compact per-channel value for the legend readouts (units live on the axes)
+  function shortVal(ch, c) {
+    if (!c) return "—";
+    const v = chanRaw(ch, c);
+    if (ch.id === "drs") return v ? "OPEN" : "—";
+    if (v === null) return "—";
+    if (ch.id === "speed") return String(Math.round(v));
+    if (ch.id === "throttle" || ch.id === "brake") return Math.round(v) + "%";
+    if (ch.id === "gear") return v ? "G" + v : "N";
+    if (ch.id === "rpm") return (v / 1000).toFixed(1) + "k";
+    return String(Math.round(v));
+  }
   // normalize a sample to 0..1 of the plot height for the given channel
   function chanNorm(ch, c, view) {
     const v = chanRaw(ch, c);
@@ -454,6 +466,7 @@ const DataTelemetry = (function () {
     }
 
     const legend = el("div", "dh-legend");
+    view._legVals = {};
     if (view.compare) {
       // driver key: each code chip in that driver's trace/dot colour
       tels.forEach(function (t, i) {
@@ -479,6 +492,20 @@ const DataTelemetry = (function () {
         item.appendChild(dot);
       }
       item.appendChild(document.createTextNode(ch.label));
+      if (view.compare) {
+        // live at-cursor readouts for both drivers, updated by paintFrame
+        const v1 = el("span", "dh-legval", "—");
+        const v2 = el("span", "dh-legval dh-legval2", "—");
+        if (ch.id === "speed") {
+          v1.style.color = cssColor(view.colP);
+          v2.style.color = cssColor(view.colC);
+        } else {
+          v1.style.color = ch.color;
+          v2.style.color = ch.color;
+        }
+        item.appendChild(v1); item.appendChild(v2);
+        view._legVals[ch.id] = [v1, v2];
+      }
       item.addEventListener("click", function () {
         view.visible[ch.id] = !view.visible[ch.id];
         item.classList.toggle("dh-off", !view.visible[ch.id]);
@@ -826,6 +853,20 @@ const DataTelemetry = (function () {
       }
     }
     updateGauges(view);
+    updateLegendVals(view);
+  }
+  // compare-mode legend readouts: both drivers' channel values at the cursor
+  function updateLegendVals(view) {
+    if (!view._legVals || !view.compare) return;
+    const T = view.cursorT === null ? 0 : view.cursorT;
+    const c1 = sampleAt(view.primary.car, T);
+    const c2 = sampleAt(view.compare.car, T);
+    CHANNELS.forEach(function (ch) {
+      const refs = view._legVals[ch.id];
+      if (!refs) return;
+      refs[0].textContent = shortVal(ch, c1);
+      refs[1].textContent = shortVal(ch, c2);
+    });
   }
   function drawCarDot(g, view, tel, t, fill, rscale) {
     const best = locAt(view, tel, t);
