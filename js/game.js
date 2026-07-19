@@ -5465,6 +5465,19 @@ const CS_STATS = [
   { key: "braking",   label: "BRAKING" },
 ];
 
+// Map a raw base×mods rating to the displayed stat. At/below 100 it's the raw
+// value; above 100 a soft asymptotic knee (→ ~120) compresses the top. The old
+// hard Math.min(110,…) pegged every strong part to the same number — a top
+// team's CORNERING read 110 for Diffuser, High-DF, Extreme-DF, Active Aero and
+// more alike, so swapping parts appeared to do nothing. This knee is strictly
+// increasing, so a stronger part always nudges the number up while an elite car
+// still reads "over 100". Display-only — physics uses statMult()×mods (see
+// recomputePlayerMods), which this does not touch.
+const STAT_KNEE = 100, STAT_CAP = 120, STAT_KNEE_SCALE = 26;
+function displayStat(raw) {
+  if (raw <= STAT_KNEE) return raw;
+  return STAT_KNEE + (STAT_CAP - STAT_KNEE) * (1 - Math.exp(-(raw - STAT_KNEE) / STAT_KNEE_SCALE));
+}
 // Render the four stat bars (base + part boost overlay) for a team into a
 // container. Shared by the select screen (always-on) and the setup panel.
 function renderStatBars(container, team) {
@@ -5473,7 +5486,7 @@ function renderStatBars(container, team) {
   container.textContent = "";
   for (const { key, label } of CS_STATS) {
     const base = stats[key] || 75;
-    const effective = Math.round(Math.min(110, base * mods[key]));
+    const effective = Math.round(displayStat(base * mods[key]));
     const delta = effective - base;
 
     const row = document.createElement("div");
@@ -5493,8 +5506,9 @@ function renderStatBars(container, team) {
     const boostBar = document.createElement("div");
     boostBar.className = "cs-stat-boost" + (delta < 0 ? " penalty" : "");
     if (delta >= 0) {
-      boostBar.style.left = Math.min(base, 100) + "%";
-      boostBar.style.width = Math.min(delta, 10) + "%";
+      const b = Math.min(base, 100);
+      boostBar.style.left = b + "%";
+      boostBar.style.width = Math.min(delta, 100 - b) + "%";   // fill to the wrap edge; the number carries the exact value
     } else {
       boostBar.style.left = Math.max(0, base + delta) + "%";
       boostBar.style.width = Math.min(-delta, base) + "%";
