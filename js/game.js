@@ -5081,22 +5081,12 @@ function render(dt) {
   const _grLowBoost = LT.godrayLowBoost != null ? LT.godrayLowBoost : 0.55;
   const _grBase     = LT.godrayBase != null ? LT.godrayBase : 0.38;
   let _gr = (_grSunY > 0.02 ? (_grBase + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
-  // Sun-off-screen gate: the volumetric march + its four half-res blur passes
-  // ran even facing directly AWAY from the sun, contributing ~nothing visible.
-  // Project the sun DIRECTION through the view-proj (w-term only — a direction,
-  // not a point) and skip the pass when it's behind the camera or far outside
-  // the frame. Wide 1.7-NDC margin: shafts legitimately streak in from a sun
-  // just off-screen, and the gate must never visibly clip them.
-  if (_gr > 0) {
-    const sd = frame.sunDir, M = _mVP;
-    const cw = M[3] * sd[0] + M[7] * sd[1] + M[11] * sd[2];
-    if (cw <= 0.001) _gr = 0;   // sun behind the camera plane
-    else {
-      const cx = (M[0] * sd[0] + M[4] * sd[1] + M[8] * sd[2]) / cw;
-      const cy = (M[1] * sd[0] + M[5] * sd[1] + M[9] * sd[2]) / cw;
-      if (cx < -1.7 || cx > 1.7 || cy < -1.7 || cy > 1.7) _gr = 0;
-    }
-  }
+  // NOTE: a sun-off-screen gate (project sunDir through the view-proj, zero _gr
+  // when the sun is behind the camera or outside a 1.7-NDC margin) was reverted.
+  // It saved the volumetric march when facing away from the sun, but it also
+  // cut the world-space light shafts that legitimately streak ACROSS the scene
+  // from a sun off to the side — so god-rays "only showed when the sun was in
+  // frame". The march now runs by orientation-independent strength again.
   // Night lamp volumetrics: visible light beams in the air from the lamps when
   // floodlights are on (frame.lights) and there's haze to catch them. Scales with
   // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
