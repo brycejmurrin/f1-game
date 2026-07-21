@@ -216,6 +216,7 @@ const Tracks = (function () {
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
       track.waterGeo = waterGeo;
+      glassGeo._keepPositions = keepGeometry;
       // Glass rides the SAME chunk grid as the props: it was one un-culled
       // createMesh draw of every window pane in the whole city, every frame —
       // full clearcoat+env fill for panes behind the camera and past the fog.

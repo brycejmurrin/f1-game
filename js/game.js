@@ -883,12 +883,15 @@ function invalidateDecalTextures(teamId) {
     delete _decalTexCache[key];
   });
 }
-function getCarDecalTexture(team, num) {
+function getCarDecalTexture(team, num, isPlayer) {
   if (typeof LiveryTex === "undefined" || !gfx.createTexture) return null;
-  const key = team.id + ":" + getLiveryId(team.id) + ":" + (num == null ? "_" : num);
+  // isPlayer is part of the key: on the mobile tier the player's atlas uploads
+  // at 512² and AI atlases at 256², so a team the player later switches to
+  // must not reuse a cached AI-resolution atlas (and vice versa).
+  const key = team.id + ":" + getLiveryId(team.id) + ":" + (num == null ? "_" : num) + (isPlayer ? ":P" : "");
   if (!(key in _decalTexCache)) {
     let t = null;
-    try { t = gfx.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num)); }
+    try { t = gfx.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num, !!isPlayer)); }
     catch (e) { t = null; }
     _decalTexCache[key] = t;
   }
@@ -924,7 +927,7 @@ function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   const legacyBody = !!carModelBuf;
   const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts) :
     getCarDecalMesh(state.val, state.parts, legacyBody);
-  const tex = getCarDecalTexture(team, num);
+  const tex = getCarDecalTexture(team, num, usePlayerSetup);
   if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
 // Pooled decal opts — drawCarDecals runs once per drawn car per frame; a fresh
@@ -1266,6 +1269,13 @@ function loadTrack(idx) {
       gfx.freeMesh(track.meshes.gate);
       gfx.freeMesh(track.meshes.startline);
     }
+    // Drop the old track object BEFORE building the new one: the build's
+    // transient peak (plain-JS geometry arrays for up to ~5 M verts) is the
+    // moment a near-limit phone gets jetsam-killed, and holding the previous
+    // track's terrainGeo/_lights/mesh handles through it stacks old + new
+    // resident at once. loadTrack is synchronous, so nothing can observe the
+    // null between here and the assignment below.
+    track = null;
     track = Tracks.build(def, { night: sessionDark });
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
@@ -1919,6 +1929,12 @@ function startRace() {
   resultT = 0;
   camRoll = 0;
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
+  // Arm the crash sentinel (mobile only) and, after a strike, start the
+  // session pre-scaled-down — the governor may restore upward, but only under
+  // the clear sustained headroom that proves the device can afford it.
+  _sentinelArm(true);
+  if (_crashStrikes > 0 && _autoRes && gfx.setRenderScale && gfx.getRenderScale)
+    gfx.setRenderScale(Math.min(gfx.getRenderScale(), _crashStrikes >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
   Particles.clear();   // no stale smoke/spray teleporting into the new session
@@ -1958,6 +1974,7 @@ function showTouchControls(show) {
 }
 
 function endRace(forcedOrder) {
+  _sentinelCleanRace();   // finished cleanly — disarm + pay a crash strike down
   state = "results";
   document.body.classList.remove("in-race");
   els.pausebtn.hidden = true;
@@ -2127,6 +2144,7 @@ function hexToArr(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [
 function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); return "#" + f(a[0]) + f(a[1]) + f(a[2]); }
 
 function quitToMenu() {
+  _sentinelArm(false);   // deliberate exit — not a crash
   closeLightTuner(false);
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
@@ -3441,8 +3459,13 @@ function setFrameLights(eye, scale, fwd) {
   if (!src || !src.length) { frame.lights = null; return; }
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
   // cull. With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader
-  // slots stay free; solo runs use the full 32.
-  const CAP = cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32;
+  // slots stay free; solo runs use the full 32. Mobile tier clamps both paths
+  // to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
+  // dominant night fill cost on phones, and clamping HERE (not the knob's def)
+  // means a per-track preset can't push a phone back up to 32.
+  const CAP = Math.min(
+    cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32,
+    gfx.mobileTier ? 24 : 32);
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
@@ -5096,7 +5119,14 @@ function render(dt) {
   // and coloured per lamp, so neon-spill lights throw coloured beams.
   // Gated to dark sessions (key below ~0.45): visible lamp beams in daylight (the
   // DAYTIME FLOODS knob also sets frame.lights) would read as odd haze shafts.
-  const _lampVol = (frame.lights && _sunLumGR < 0.45) ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
+  // Mobile tier sheds the beams entirely: any non-zero value keeps the whole
+  // god-ray block alive every night frame (volumetric march with a per-step
+  // lamp loop + 4 blur passes + a nearest-lamp re-sort) — a top GPU cost on
+  // the phones that overheat/jetsam at night. Shedding it up-front beats
+  // waiting for the perf governor to watch the device struggle to tier 4.
+  // Same hard gate as the exhaust-haze pass above (gfx.mobileTier).
+  const _lampVol = (frame.lights && _sunLumGR < 0.45 && !gfx.mobileTier)
+    ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
   // SSAO grounds the scene (creases/contacts) at every time of day.
   // Contact shadows only when the KEY is bright enough to cast them (day/dusk/dawn).
@@ -5367,7 +5397,45 @@ let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true;
 //   2  lamp spot shadow + wet-road SSR off
 //   3  car sun-shadow map off (the blob contact shadow remains)
 //   4  SSAO + god rays + bloom off
-let _perfTier = 0;
+// ── Crash sentinel ───────────────────────────────────────────────────────────
+// A jetsam/OOM kill leaves NO signal — no pagehide, no contextlost, no error.
+// The only detectable trace is the in-race flag persisted at race start still
+// being set at the NEXT boot. Mobile tier only: desktop tabs don't get
+// jetsam-killed, and the desktop test suite must never enter safe mode. The
+// flag is disarmed whenever the tab is hidden (a background kill is normal iOS
+// housekeeping, not our crash) and re-armed on return. Strikes pre-degrade the
+// governor at boot so a phone that died mid-race last session starts
+// conservative instead of dying the same way again; each cleanly FINISHED race
+// pays one strike back down, so a recovered device climbs back to full quality.
+const SENT_ACTIVE = "apex26.raceActive", SENT_STRIKES = "apex26.crashStrikes";
+let _crashStrikes = 0;
+if (gfx && gfx.mobileTier) {
+  try {
+    _crashStrikes = Math.min(4, parseInt(localStorage.getItem(SENT_STRIKES), 10) || 0);
+    if (localStorage.getItem(SENT_ACTIVE) === "1") {
+      _crashStrikes = Math.min(4, _crashStrikes + 1);
+      localStorage.setItem(SENT_STRIKES, String(_crashStrikes));
+      localStorage.removeItem(SENT_ACTIVE);
+    }
+  } catch (_) {}
+}
+// Safe-mode floor the governor's restore path can't climb below (per session —
+// only strikes paying off across boots lift it): one strike starts with
+// lamp-shadow/SSR-class features shed (tier 2), two or more shed the whole
+// heavy post stack too (tier 4).
+const _perfTierFloor = _crashStrikes >= 2 ? 4 : (_crashStrikes >= 1 ? 2 : 0);
+function _sentinelArm(on) {
+  if (!gfx || !gfx.mobileTier) return;
+  try { if (on) localStorage.setItem(SENT_ACTIVE, "1"); else localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
+}
+function _sentinelCleanRace() {
+  _sentinelArm(false);
+  if (_crashStrikes > 0) {
+    _crashStrikes--;
+    try { localStorage.setItem(SENT_STRIKES, String(_crashStrikes)); } catch (_) {}
+  }
+}
+let _perfTier = _perfTierFloor;
 function perfGovernor(dtMs) {
   if (!_autoRes) return;
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
@@ -5381,8 +5449,9 @@ function perfGovernor(dtMs) {
     else if (_perfTier < 4) { _perfTier++; _govCool = 90; }   // scale floor hit — shed a feature
   } else if (_frameEMA < 14) {                 // >~71 fps headroom: restore
     if (cur < 1) { if (gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 30; }
-    // Features come back only at full res with strong headroom, one per ~3 s.
-    else if (_perfTier > 0 && _frameEMA < 12.5) { _perfTier--; _govCool = 180; }
+    // Features come back only at full res with strong headroom, one per ~3 s —
+    // and never below the crash-sentinel floor.
+    else if (_perfTier > _perfTierFloor && _frameEMA < 12.5) { _perfTier--; _govCool = 180; }
   }
 }
 const PHYS_DT = 1 / 60;          // fixed physics step
@@ -7369,7 +7438,13 @@ $("pm-gears").onclick = () => {
 };
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "race") setPaused(true);
+  // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
+  // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
+  // return to a live session.
+  if (document.hidden) _sentinelArm(false);
+  else if (state === "race" || state === "count") _sentinelArm(true);
 });
+window.addEventListener("pagehide", () => { _sentinelArm(false); });
 
 // ---------- boot ----------
 // Inert in production; only attaches when a test harness pre-sets the flag.
@@ -8424,7 +8499,7 @@ window.__apex = {
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
   // win (softer 3D view; HUD stays crisp).
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes, tier: _perfTier };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, _frameEMA)).toFixed(1), auto: _autoRes, tier: _perfTier, tierFloor: _perfTierFloor, crashStrikes: _crashStrikes };
     if (v === true) { _autoRes = true; return this.renderScale(); }
     _autoRes = false; gfx.setRenderScale(+v); return this.renderScale();
   },

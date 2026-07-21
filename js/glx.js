@@ -15,7 +15,13 @@ const GLX = (function () {
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
   // phones/tablets. (iPadOS 13+ masquerades as Mac; catch it via touch points.)
-  const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+  // apex26.forceMobileTier=1 makes a desktop browser take every mobile-tier
+  // path — the only way Playwright/desktop DevTools can exercise and A/B the
+  // phone-only downgrades (lamp budget, beams-off, atlas sizes, shadow sizes).
+  let _forceMobile = false;
+  try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
+  const IS_MOBILE = _forceMobile ||
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
   // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
   // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
@@ -1442,9 +1448,12 @@ const GLX = (function () {
     }
     // Positions are now only referenced by the growable `bk.idx` arrays (as
     // indices, not coords) — drop the vertex coordinate copies before the
-    // per-bucket IndexArray allocations below.
+    // per-bucket IndexArray allocations below. The source index array is also
+    // fully consumed by the bins: dropping it matters most — on a ~5 M-vert
+    // street circuit it's a multi-million-element JS array that would otherwise
+    // stay resident for the whole session via track.propsGeo/glassGeo.
     pos = null;
-    if (!data._keepPositions) data.pos = null;
+    if (!data._keepPositions) { data.pos = null; data.idx = null; }
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();

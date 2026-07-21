@@ -69,8 +69,11 @@
 "use strict";
 
 const WGX = (function () {
-  // Mirror GLX's mobile-tier detection (IS_MOBILE/MOBILE_TIER).
-  const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+  // Mirror GLX's mobile-tier detection (IS_MOBILE/MOBILE_TIER/forceMobileTier).
+  let _forceMobile = false;
+  try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
+  const IS_MOBILE = _forceMobile ||
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
   let _gfxHigh = false;
   try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}

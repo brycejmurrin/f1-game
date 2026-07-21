@@ -9,9 +9,13 @@ const LiveryTex = (function () {
   // Mobile tier (must match glx.js): upload atlases at half size — 22 cars ×
   // 1024² RGBA + mips was ~117 MB of GPU memory, the biggest consumer on iOS
   // web apps, whose jetsam budget counts GPU allocations.
-  let _gfxHigh = false;
-  try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
-  const IS_MOBILE = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+  let _gfxHigh = false, _forceMobile = false;
+  try {
+    _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1";
+    _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1";
+  } catch (_) {}
+  const IS_MOBILE = (_forceMobile ||
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))) && !_gfxHigh;
 
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
@@ -754,7 +758,7 @@ const LiveryTex = (function () {
   }
 
   // ── main ─────────────────────────────────────────────────────────────────
-  function buildAtlas(teamId, colors, numberOverride) {
+  function buildAtlas(teamId, colors, numberOverride, isPlayer) {
     const canvas = document.createElement("canvas");
     canvas.width = SIZE;
     canvas.height = SIZE;
@@ -804,9 +808,13 @@ const LiveryTex = (function () {
     // SIZE (UVs are FRACTIONS of the atlas — resolution-independent), only the
     // uploaded texture shrinks: 5.3 MB → 1.3 MB per atlas, ×22 cars ≈ −88 MB —
     // the single biggest GPU consumer on iOS web apps (tight jetsam budget).
+    // AI cars drop a further step to 256² (−0.98 MB each, ~−20 MB per grid):
+    // they're never seen closer than a few car lengths at mobile DPR, only the
+    // player's own car (and the setup preview) needs the 512² read.
     if (IS_MOBILE) {
       const small = document.createElement("canvas");
-      small.width = SIZE / 2; small.height = SIZE / 2;
+      const div = isPlayer ? 2 : 4;
+      small.width = SIZE / div; small.height = SIZE / div;
       small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
       return small;
     }
