@@ -146,3 +146,40 @@ test.describe("WebGL renderer probes", () => {
     expect(ls.numLights).toBeLessThanOrEqual(32);
   });
 });
+
+// Mobile STANDARD tier (mobileTier = mobile UA + no GRAPHICS: HIGH opt-in):
+// the car/lamp shadow maps are never created, so carShadowBegin/lampShadowBegin
+// no-op — but game.js still issues the castShadow calls each frame. Those casts
+// must no-op too; before the _depthPassOn guard they drew every car mesh under
+// whatever program/framebuffer was left bound, spamming GL_INVALID_OPERATION
+// every frame (the "STANDARD is buggy and laggy while HIGH runs great" bug).
+test.describe("mobile standard tier renders without GL errors", () => {
+  test.use({
+    viewport: { width: 844, height: 390 },
+    hasTouch: true,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+      "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+  });
+
+  test("no INVALID_OPERATION spam on the standard mobile tier", async ({ page }) => {
+    const glErrors = [];
+    page.on("console", (m) => {
+      if (/INVALID_OPERATION|INVALID_ENUM|INVALID_VALUE/.test(m.text())) glErrors.push(m.text());
+    });
+    await loadRace(page);
+    // Confirm the emulation actually engaged the memory-safe tier.
+    const tier = await page.evaluate(() =>
+      typeof GLX !== "undefined" ? { mobile: GLX.isMobile, std: GLX.mobileTier } : null);
+    expect(tier).toEqual({ mobile: true, std: true });
+    // Drive + render real frames — the car shadow pass runs per rendered frame.
+    await page.evaluate(async () => {
+      window.__apex.jump(0.1, 50, 0);
+      await new Promise((resolve) => {
+        let n = 90;
+        const next = () => { if (--n <= 0) resolve(); else requestAnimationFrame(next); };
+        requestAnimationFrame(next);
+      });
+    });
+    expect(glErrors).toEqual([]);
+  });
+});

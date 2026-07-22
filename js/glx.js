@@ -127,6 +127,15 @@ const GLX = (function () {
   const CAR_SHADOW_SIZE = 1024;                    // dynamic car-only shadow map (desktop tier)
   const LAMP_SHADOW_SIZE = 512;                    // nearest-floodlight spot map (desktop tier)
   let shadowEnabled = false;
+  // True only between a shadow/carShadow/lampShadow Begin that actually bound
+  // its depth FBO + program and the matching End. castShadow/castShadowChunked
+  // gate on THIS, not shadowEnabled: on the mobile tier the car/lamp maps are
+  // never created, so their Begins no-op — but game.js still issues the caster
+  // draws, which previously ran under whatever program/framebuffer was left
+  // bound (per-draw GL errors + stray fills every frame = the "standard tier
+  // is buggy and laggy" report). Mirrors WGX, whose casts no-op when no pass
+  // is open.
+  let _depthPassOn = false;
 
   // Post-processing state. postEnabled stays false (and rendering goes straight
   // to the default framebuffer, exactly as before) if any target/program setup
@@ -1524,7 +1533,7 @@ const GLX = (function () {
   // off-camera building can still cast INTO view, so we cull by the light-VP, not
   // the camera). Runs under depthProg (bound by shadowBegin).
   function castShadowChunked(mesh, model) {
-    if (!shadowEnabled || !mesh) return;
+    if (!_depthPassOn || !mesh) return;
     bindVAO(mesh.vao);
     gl.uniformMatrix4fv(depthU.uModel, false, model);
     if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
@@ -2215,14 +2224,16 @@ const GLX = (function () {
       useProg(depthProg);
       gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
       gl.disable(gl.CULL_FACE);  // render back faces to avoid peter-panning
+      _depthPassOn = true;
     },
     castShadow(mesh, model) {
-      if (!shadowEnabled || !mesh) return;
+      if (!_depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(depthU.uModel, false, model);
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     },
     shadowEnd() {
+      _depthPassOn = false;
       if (!shadowEnabled) return;
       gl.enable(gl.CULL_FACE);
       // Refresh the PCSS blocker map from the just-rendered shadow depth.
@@ -2257,10 +2268,12 @@ const GLX = (function () {
       useProg(depthProg);
       gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
+      _depthPassOn = true;
       _carShadowArmed = true;
       _carShadowArms++;
     },
     carShadowEnd() {
+      _depthPassOn = false;
       if (!carShadowEnabled) return;
       gl.enable(gl.CULL_FACE);
       gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
@@ -2284,10 +2297,12 @@ const GLX = (function () {
       gl.uniformMatrix4fv(depthU.uLightVP, false, lightVP);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
       _castCullVP = lampShadowLightVP;   // chunked casters cull to the lamp cone
+      _depthPassOn = true;
       _lampShadowArmed = true;
       _lampShadowArms++;
     },
     lampShadowEnd() {
+      _depthPassOn = false;
       if (!lampShadowEnabled) return;
       _castCullVP = null;
       gl.enable(gl.CULL_FACE);
