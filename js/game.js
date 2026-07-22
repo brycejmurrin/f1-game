@@ -7123,8 +7123,11 @@ function setSteerMode(mode) {
   Input.setSteerMode(mode);
   if (mode === "tilt") enableTilt();   // (re)request motion permission within this gesture
   $("pm-steer").textContent = steerLabel();
-  $("pm-calib").hidden = mode !== "tilt";
-  refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle hides off-tilt
+  // DISABLE (don't hide): hiding reflowed the settings grid mid-tap, so the
+  // next tap landed on whatever button slid under the finger (worst case
+  // HIDE HUD, which closes the whole menu). Same for the GEARS toggle below.
+  $("pm-calib").disabled = mode !== "tilt";
+  refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle disables off-tilt
   // Only refresh touch buttons when in an active race — don't bleed controls onto
   // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
   if (state === "race" || state === "count" || state === "pause") showTouchControls(true);
@@ -7355,9 +7358,10 @@ $("adv-more").onclick = () => {
 // Any granular Advanced edit refreshes the simplified controls (events bubble up).
 $("advanced-inner").addEventListener("input", refreshMacros);
 applySteerTuning();
-// GEARS toggle: show when thumbs are free (tilt or desktop keyboard).
+// GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
+// Disabled — not hidden — otherwise (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
-  $("pm-gears").hidden = Input.touchControlsNeeded() && steerMode !== "tilt";
+  $("pm-gears").disabled = Input.touchControlsNeeded() && steerMode !== "tilt";
   $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
 }
 $("pm-gears").onclick = () => {
@@ -7393,7 +7397,7 @@ if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
-$("pm-calib").hidden = steerMode !== "tilt";
+$("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 setSound(soundOn);
 setMusic(musicEnabled);

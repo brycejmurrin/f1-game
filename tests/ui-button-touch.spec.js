@@ -1,6 +1,6 @@
 // @ts-check
-// Tests for button/touch steer mode: auto-throttle, hidden calibrate button,
-// and race-settings layout (portrait + landscape).
+// Tests for button/touch steer mode: auto-throttle, disabled calibrate button,
+// stable settings-menu layout, and race-settings layout (portrait + landscape).
 import { test, expect } from "@playwright/test";
 import { galleryPath } from "./output-paths.js";
 
@@ -106,7 +106,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
 test.describe("Pause menu — tilt mode", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
-  test("calibrate button visible in tilt mode", async ({ page }) => {
+  test("calibrate button enabled in tilt mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openPauseSettings(page);
@@ -114,6 +114,7 @@ test.describe("Pause menu — tilt mode", () => {
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeVisible();
+    await expect(calib).toBeEnabled();
     await page.screenshot({ path: galleryPath("ui-button-touch", "pause-tilt-landscape.png") });
   });
 });
@@ -121,14 +122,17 @@ test.describe("Pause menu — tilt mode", () => {
 test.describe("Pause menu — button mode", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
-  test("calibrate button hidden in button mode", async ({ page }) => {
+  test("calibrate button disabled (still visible) in button mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openPauseSettings(page);
     await cycleToPauseSteerMode(page, "button");
     await page.waitForTimeout(200);
+    // Disabled, NOT hidden — hiding it reflowed the settings grid so the next
+    // tap landed on a different button (see setSteerMode in game.js).
     const calib = page.locator("#pm-calib");
-    await expect(calib).toBeHidden();
+    await expect(calib).toBeVisible();
+    await expect(calib).toBeDisabled();
     await page.screenshot({ path: galleryPath("ui-button-touch", "pause-button-landscape.png") });
   });
 });
@@ -136,15 +140,54 @@ test.describe("Pause menu — button mode", () => {
 test.describe("Pause menu — touch mode", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
-  test("calibrate button hidden in touch mode", async ({ page }) => {
+  test("calibrate button disabled (still visible) in touch mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openPauseSettings(page);
     await cycleToPauseSteerMode(page, "touch");
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
-    await expect(calib).toBeHidden();
+    await expect(calib).toBeVisible();
+    await expect(calib).toBeDisabled();
     await page.screenshot({ path: galleryPath("ui-button-touch", "pause-touch-landscape.png") });
+  });
+});
+
+// Regression: changing STEER used to hide pm-calib/pm-gears, reflowing the
+// settings grid mid-interaction — the next tap aimed at one button landed on
+// another (worst case HIDE HUD, which closed the whole menu). Every settings
+// button must keep its exact position across a steer-mode change.
+test.describe("Pause settings — stable layout", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  test("buttons keep their positions when steer mode changes", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openPauseSettings(page);
+    await cycleToPauseSteerMode(page, "tilt");
+    await page.waitForTimeout(200);
+
+    const ids = ["pm-steer", "pm-calib", "pm-advanced", "pm-lighting", "pm-gears",
+      "pm-sound", "pm-music", "pm-hidehud", "pm-res", "pm-settings-close"];
+    const grab = () => page.evaluate((ids) => {
+      const out = {};
+      for (const id of ids) {
+        const r = document.getElementById(id).getBoundingClientRect();
+        out[id] = { x: Math.round(r.x), y: Math.round(r.y) };
+      }
+      return out;
+    }, ids);
+
+    const before = await grab();
+    await page.locator("#pm-steer").click();   // tilt -> buttons (hides nothing now)
+    await page.waitForTimeout(200);
+    const after = await grab();
+    expect(after).toEqual(before);
+
+    // and the button aimed at AFTER the change still receives the tap
+    await page.locator("#pm-sound").click();
+    await expect(page.locator("#pm-sound")).toHaveText(/SOUND: OFF/);
+    await expect(page.locator("#pmsettings")).toBeVisible();   // menu did not collapse
   });
 });
 
