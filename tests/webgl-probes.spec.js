@@ -162,6 +162,10 @@ test.describe("mobile standard tier renders without GL errors", () => {
   });
 
   test("no INVALID_OPERATION spam on the standard mobile tier", async ({ page }) => {
+    // SwiftShader + mobile-tier boot + rendered frames overruns the default
+    // 120 s budget under render-project worker contention; the bug this guards
+    // against spammed errors EVERY frame, so a few dozen frames is plenty.
+    test.setTimeout(240_000);
     const glErrors = [];
     page.on("console", (m) => {
       if (/INVALID_OPERATION|INVALID_ENUM|INVALID_VALUE/.test(m.text())) glErrors.push(m.text());
@@ -175,7 +179,7 @@ test.describe("mobile standard tier renders without GL errors", () => {
     await page.evaluate(async () => {
       window.__apex.jump(0.1, 50, 0);
       await new Promise((resolve) => {
-        let n = 90;
+        let n = 30;
         const next = () => { if (--n <= 0) resolve(); else requestAnimationFrame(next); };
         requestAnimationFrame(next);
       });
