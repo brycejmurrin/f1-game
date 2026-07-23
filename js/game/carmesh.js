@@ -20,13 +20,15 @@ function init(gfx) { _gfx = gfx; }
 const _carDecalMeshes = {};
 const _carDecalOrder = [];
 const CAR_DECAL_CACHE_MAX = 24;
-function carDecalData(aLvl, parts, legacyBody) {
+function carDecalData(aLvl, parts, legacyBody, teamId) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
   // Imported GLBs are static and do not consume the procedural parts recipe.
   // Resolve their overlays against the default body once, regardless of setup.
+  // teamId threads the per-team chassis style into the anchors so decals stay
+  // glued to a styled (longer/slimmer/drooped) nose and inlet.
   const anchorParts = legacyBody ? null : parts;
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts) : null;
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
@@ -120,14 +122,16 @@ function carDecalData(aLvl, parts, legacyBody) {
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   return out;
 }
-function getCarDecalMesh(aLvl, parts, legacyBody) {
+function getCarDecalMesh(aLvl, parts, legacyBody, teamId) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   const anchorParts = legacyBody ? null : parts;
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts) : { key: "legacy" };
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
+  // anchors.key already folds in the team style, so styled and default noses
+  // cache as distinct decal meshes.
   const k = level + "|" + (legacyBody ? "imported|" : "") + anchors.key;
   if (!_carDecalMeshes[k]) {
-    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody));
+    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId));
     _carDecalOrder.push(k);
     while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
       const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];
@@ -141,16 +145,25 @@ function getCarDecalMesh(aLvl, parts, legacyBody) {
 // engine-cover / sidepod / hood decals sit behind or beside the driver and the
 // ckpt body omits those surfaces. The nose is identical in both builds, so the
 // number lands exactly on the nose plate ahead of the driver.
-let _cockpitDecalMesh = null;
-function getCockpitDecalMesh(parts) {
+let _cockpitDecalMesh = null, _cockpitDecalKey = "";
+function getCockpitDecalMesh(parts, teamId) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
+  // Player-only, so a single-slot cache suffices — but keyed by team + anchors
+  // now that the nose profile is per-team (switching teams re-anchors the number).
+  const anchorsForKey = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts, teamId) : null;
+  const wantKey = (teamId || "") + "|" + (anchorsForKey ? anchorsForKey.key : "legacy");
+  if (_cockpitDecalMesh && _cockpitDecalKey !== wantKey) {
+    if (_gfx.freeMesh) _gfx.freeMesh(_cockpitDecalMesh);
+    _cockpitDecalMesh = null;
+  }
   if (!_cockpitDecalMesh) {
+    _cockpitDecalKey = wantKey;
     const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
     const u = { uL: R.num.x / S, uR: (R.num.x + R.num.w) / S, vT: 1 - R.num.y / S, vB: 1 - (R.num.y + R.num.h) / S };
     // The ckpt hood is now a LOW cowl that stops behind the nose deck, so the
     // nose number is visible out ahead of the driver — use the same nose-plate
     // placement as the chase build (nose geometry is identical in both builds).
-    const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts) : null;
+    const anchors = anchorsForKey;
     const nr = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
     const nf = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
     const c = [[-nr.topSide*0.84, nr.top+0.020, 1.72], [nr.topSide*0.84, nr.top+0.020, 1.72],
