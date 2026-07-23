@@ -378,12 +378,41 @@ const Input = (function () {
 
   /* ---------------- on-screen buttons ---------------- */
 
+  // Every wireHold button registers here so its private pressed-pointer set can
+  // be cleared from OUTSIDE the closure. Two nets hang off this list:
+  //   1. window-level capture-phase pointerup/pointercancel (init) release that
+  //      pointerId from EVERY hold button — a pointer that lifted anywhere is by
+  //      definition no longer holding anything, even when the button itself never
+  //      received the event (retargeted lift, missed lostpointercapture).
+  //   2. reset() (blur / tab-hidden) clears every set outright, covering OS
+  //      interruptions where NO pointer event is delivered at all.
+  // Without these, an interruption mid-hold left a ghost pointerId in the set:
+  // reset() zeroed btnThrottle but couldn't reach the closure, so after the next
+  // press+release the set never emptied again ("held until every pointer
+  // releases" counted a pointer that no longer existed) and the throttle could
+  // be switched ON but never OFF — intermittent because an OS that happens to
+  // REUSE the same pointerId self-heals. The stuck throttle then endlessly
+  // re-trips the off-track auto-rescue ("throttle held but not moving").
+  const holdBtns = [];
+  function holdReleasePointer(pointerId) {
+    for (const h of holdBtns) {
+      if (h.ids.delete(pointerId) && h.ids.size === 0) h.apply(false);
+    }
+  }
+  function holdReleaseAll() {
+    for (const h of holdBtns) {
+      h.ids.clear();
+      h.apply(false);
+    }
+  }
+
   // Hold semantics, multi-pointer safe: the button stays "held" until
   // every pointer that pressed it has been released/cancelled/left.
   function wireHold(id, apply) {
     const el = document.getElementById(id);
     if (!el) return;
     const ids = new Set();
+    holdBtns.push({ ids, apply });
     el.addEventListener("pointerdown", e => {
       // Capture the pointer so the hold survives the finger/cursor drifting off
       // the button — without this a tiny move fires pointerleave and drops the
@@ -624,6 +653,12 @@ const Input = (function () {
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) reset();
     });
+    // Safety net for the hold buttons (see holdBtns): any pointer that lifts or
+    // cancels ANYWHERE on the page stops holding every button, even when the
+    // button element itself never receives the event. Capture phase, so an
+    // overlay or stopPropagation between here and the button can't swallow it.
+    window.addEventListener("pointerup", function (e) { holdReleasePointer(e.pointerId); }, true);
+    window.addEventListener("pointercancel", function (e) { holdReleasePointer(e.pointerId); }, true);
 
     canvas.addEventListener("touchstart", onTouchStart, { passive: false });
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -656,6 +691,9 @@ const Input = (function () {
   function reset() {
     touches.clear();
     touchSteer = 0;
+    // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
+    // just the exported booleans — see holdBtns for why both must happen.
+    holdReleaseAll();
     btnThrottle = btnBrake = false;
     btnSteerLeft = btnSteerRight = false;
     keyLeft = keyRight = keyBrake = keyThrottle = false;
@@ -675,9 +713,28 @@ const Input = (function () {
     padPrevButtons.length = 0;
   }
 
+  // Live per-source input snapshot for diagnosis (surfaced as
+  // __apex.inputState()): shows WHICH source is asserting throttle/brake and
+  // whether any hold button still tracks pressed pointers. If a "stuck
+  // throttle" report ever recurs, this pinpoints the culprit in one call.
+  function debugState() {
+    return {
+      steerMode,
+      key: { left: keyLeft, right: keyRight, throttle: keyThrottle, brake: keyBrake },
+      btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight },
+      pad: { connected: padConnected, steer: padSteer, throttle: padThrottle, brake: padBrake },
+      touchSteer,
+      canvasTouches: touches.size,
+      holdPointers: holdBtns.map((h) => h.ids.size),   // pressed-pointer count per hold button
+      throttle: throttle(),
+      braking: braking(),
+    };
+  }
+
   return {
     init,
     reset,
+    debugState,
     poll: pollGamepad,
     rumble,
     requestGyro,
