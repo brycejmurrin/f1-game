@@ -54,6 +54,11 @@ button {
 }
 button:hover { background: rgba(255, 255, 255, 0.12); }
 button:active { background: rgba(255, 255, 255, 0.2); }
+/* Mode-dependent menu toggles (RECALIBRATE TILT, GEARS) disable instead of
+   hiding: removing them reflowed the settings grid under the player's finger,
+   so the next tap hit the wrong button. Dim, keep the slot. */
+button:disabled { opacity: 0.35; cursor: default; }
+button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
 
 .bigbtn {
   display: block;

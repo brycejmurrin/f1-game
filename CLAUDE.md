@@ -349,7 +349,9 @@ See `docs/TESTING.md` for spec coverage table, fixture docs, and philosophy.
 `steerMode`: `"tilt"` | `"buttons"` | `"touch"`. Set via `#pm-steer` in pause
 menu. `autoThrottle()` returns true **only** in `"touch"` mode (hides the gas
 pedal); `"buttons"` mode gets an explicit GAS control. Calibrate button
-(`#pm-calib`) hidden unless mode is `"tilt"`.
+(`#pm-calib`) and the GEARS toggle (`#pm-gears`) are **disabled, not hidden**,
+when unavailable — hiding them reflowed the settings grid so the next tap hit
+the wrong button.
 
 ---
 
