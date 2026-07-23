@@ -852,6 +852,7 @@ function buildCarData(team) {
   const factorySetup = Parts.getFactorySetup(team);
   return Car3D.build(liv.c1, liv.c2, {
     livery: liv,
+    teamId: team.id,   // per-team chassis style (nose/airbox/fin/mirrors/inlet)
     num: team.drivers && team.drivers[0] && team.drivers[0].num,
     parts: Parts.getVisualTiers(factorySetup, team),
   });
@@ -925,8 +926,8 @@ function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   // A loaded GLB is a static body and does not consume procedural part recipes;
   // keep its overlay on stable default/legacy anchors as setup options change.
   const legacyBody = !!carModelBuf;
-  const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts) :
-    getCarDecalMesh(state.val, state.parts, legacyBody);
+  const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
+    getCarDecalMesh(state.val, state.parts, legacyBody, team.id);
   const tex = getCarDecalTexture(team, num, usePlayerSetup);
   if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
@@ -1048,7 +1049,7 @@ function cockpitBodyMesh(team) {
   return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
     const liv = resolveLivery(team);
     return gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-      { livery: liv, noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
         parts: Parts.getVisualTiers(getTeamParts(team.id), team) }));
   }, COCKPIT_BODY_CACHE_MAX);
 }
@@ -1136,7 +1137,7 @@ function playerBodyMesh(team) {
   const key = team.id + ":" + playerVisualKey;
   const liv = resolveLivery(team);
   return putBoundedMesh(playerBodies, playerBodyOrder, key, () => gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-    { livery: liv, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    { livery: liv, teamId: team.id, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team) })), PLAYER_BODY_CACHE_MAX);
 }
 // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
@@ -3827,6 +3828,7 @@ function getSetupPreviewMesh() {
     const liv = resolveLivery(team);
     _spMesh = gfx.createMesh(Car3D.build(liv.c1, liv.c2, {
       livery: liv,
+      teamId: team.id,   // per-team chassis style shows in the setup turntable too
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
     }));
@@ -5828,11 +5830,11 @@ function buildLiveryOptions(container, team) {
     row.type = "button";
     row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
     row.setAttribute("aria-label", "Select " + liv.name + " livery");
-    const rowWrap = isCustom ? document.createElement("div") : null;
-    if (rowWrap) {
-      rowWrap.className = "cs-liv-row";
-      rowWrap.appendChild(row);
-    }
+    // Every row gets the wrap now: custom rows carry edit+delete, stock rows a
+    // duplicate ("start from this") button that prefills the creator.
+    const rowWrap = document.createElement("div");
+    rowWrap.className = "cs-liv-row";
+    rowWrap.appendChild(row);
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
     row.appendChild(livSwatch(liv));
@@ -5880,6 +5882,28 @@ function buildLiveryOptions(container, team) {
       tag.className = "cs-opt-cost free";
       tag.textContent = active ? "FITTED" : "PAINT";
       row.appendChild(tag);
+      // Duplicate: open the creator PREFILLED from this stock scheme (including
+      // its detail colours), so customising starts from a look the player likes
+      // instead of always from bare team colours. Saves as a new custom livery.
+      const dup = document.createElement("button");
+      dup.type = "button";
+      dup.className = "cs-liv-edit"; dup.textContent = "⧉";
+      dup.title = "Customize a copy of this livery";
+      dup.setAttribute("aria-label", "Customize a copy of " + liv.name);
+      dup.onclick = () => {
+        csLivDraft = {
+          name: (liv.name || "Custom").slice(0, 14) + " MK2",
+          c1: arrToHex(liv.c1), c2: arrToHex(liv.c2),
+          stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
+          accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
+          pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+        };
+        csLivEditId = null;   // create-new: never overwrites the stock scheme
+        csLivCreating = true;
+        if (soundOn) GameAudio.uiSelect();
+        buildSetup();
+      };
+      rowWrap.appendChild(dup);
     }
 
     row.onclick = () => {
@@ -5888,7 +5912,7 @@ function buildLiveryOptions(container, team) {
       if (soundOn) GameAudio.uiSelect();
       buildSetup();
     };
-    container.appendChild(rowWrap || row);
+    container.appendChild(rowWrap);
   }
 }
 
