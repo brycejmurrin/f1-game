@@ -298,7 +298,7 @@ const Input = (function () {
     const hudControl = active && active.matches &&
       active.matches("#btn-cam, #pausebtn, #hud-restore, .touchbtn");
     // Guard key PRESSES only: typing in a field or activating a control must not
-    // also drive the car. RELEASES are ALWAYS processed — if a movement key went
+    // also drive the car. RELEASES are still processed — if a movement key went
     // down with the game focused and focus then moved to a button (e.g. a control
     // tapped during an off-track scramble), swallowing its keyup here would latch
     // that key ON with no way to clear it. A stuck-on throttle then keeps
@@ -306,7 +306,21 @@ const Input = (function () {
     // isn't moving), so the car floors itself off the track and gets reset again
     // and again — the "throttle stuck on after a reset" bug. Clearing a key that
     // was never registered as down is a harmless no-op.
-    if (down && interactive && !hudControl) return;
+    // While an interactive element has focus, a release must ONLY clear the
+    // held-key latches — never fall through to the main switch: its Space case
+    // calls preventDefault unconditionally, and preventDefault on Space KEYUP
+    // cancels the focused button's activation click (buttons activate on Space
+    // keyup), which broke every Space/keyboard press of a menu button.
+    if (interactive && !hudControl) {
+      if (down) return;
+      switch (e.code) {
+        case "ArrowLeft": case "KeyA": keyLeft = false; break;
+        case "ArrowRight": case "KeyD": keyRight = false; break;
+        case "ArrowUp": case "KeyW": keyThrottle = false; break;
+        case "ArrowDown": case "KeyS": keyBrake = false; break;
+      }
+      return;
+    }
     switch (e.code) {
       case "ArrowLeft": case "KeyA":
         keyLeft = down; if (down) e.preventDefault(); break;

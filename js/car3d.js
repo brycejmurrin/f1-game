@@ -49,6 +49,54 @@ const Car3D = (function () {
     ]),
   });
 
+  // ── Per-team chassis identity ────────────────────────────────────────────
+  // Each team gets a distinct SILHOUETTE independent of parts and livery: nose
+  // profile (length/width/droop), airbox intake scale, an optional engine-cover
+  // dorsal fin, mirror housing style and sidepod-inlet aspect. All knobs are
+  // bounded multipliers/offsets around the shared chassis datums so wheelbase,
+  // physics reference points and decal anchoring stay untouched (bodyAnchors
+  // consumes the SAME styled stations the bodywork lofts from).
+  //   noseTipZ  m   +longer / −shorter nose tip           (±0.10)
+  //   noseSlim  ×   tip width+height scale                (0.82..1.18)
+  //   noseDroop m   tip vertical drop (classic droop nose) (−0.03..+0.01)
+  //   airbox    ×   intake scale multiplier on the engine recipe
+  //   fin       0|1|2  engine-cover dorsal fin: none / low blade / shark fin
+  //   mirror    0|1|2  housing style: standard / swept-wide / low-slung
+  //   inlet     m   sidepod inlet-top bias: +taller / −squashed (±0.035)
+  const DEFAULT_STYLE = Object.freeze({ noseTipZ: 0, noseSlim: 1, noseDroop: 0,
+    airbox: 1, fin: 0, mirror: 0, inlet: 0 });
+  const TEAM_STYLE = Object.freeze({
+    mercedes:    Object.freeze({ noseTipZ:  0.08, noseSlim: 0.86, noseDroop:  0,      airbox: 0.94, fin: 0, mirror: 1, inlet: -0.022 }),
+    ferrari:     Object.freeze({ noseTipZ:  0,    noseSlim: 1.04, noseDroop: -0.024,  airbox: 1.00, fin: 1, mirror: 0, inlet:  0.018 }),
+    mclaren:     Object.freeze({ noseTipZ: -0.06, noseSlim: 0.92, noseDroop:  0.008,  airbox: 0.92, fin: 0, mirror: 2, inlet: -0.028 }),
+    redbull:     Object.freeze({ noseTipZ:  0.06, noseSlim: 0.88, noseDroop: -0.012,  airbox: 1.06, fin: 2, mirror: 0, inlet:  0 }),
+    alpine:      Object.freeze({ noseTipZ:  0,    noseSlim: 1.10, noseDroop:  0,      airbox: 1.00, fin: 1, mirror: 1, inlet:  0.014 }),
+    racingbulls: Object.freeze({ noseTipZ:  0.04, noseSlim: 0.95, noseDroop:  0,      airbox: 1.08, fin: 2, mirror: 0, inlet: -0.010 }),
+    haas:        Object.freeze({ noseTipZ: -0.10, noseSlim: 1.14, noseDroop:  0.006,  airbox: 0.98, fin: 0, mirror: 0, inlet:  0.028 }),
+    williams:    Object.freeze({ noseTipZ:  0.10, noseSlim: 0.82, noseDroop: -0.006,  airbox: 0.90, fin: 1, mirror: 1, inlet: -0.020 }),
+    audi:        Object.freeze({ noseTipZ: -0.05, noseSlim: 1.08, noseDroop:  0,      airbox: 1.12, fin: 1, mirror: 2, inlet:  0.020 }),
+    astonmartin: Object.freeze({ noseTipZ:  0.05, noseSlim: 0.96, noseDroop: -0.030,  airbox: 0.96, fin: 2, mirror: 1, inlet: -0.014 }),
+    cadillac:    Object.freeze({ noseTipZ: -0.08, noseSlim: 1.18, noseDroop:  0.010,  airbox: 1.10, fin: 1, mirror: 2, inlet:  0.034 }),
+  });
+  function teamStyleOf(teamId) {
+    return (teamId && TEAM_STYLE[teamId]) || DEFAULT_STYLE;
+  }
+  // Nose stations adjusted for a team style. The TIP takes the full effect; the
+  // MID station blends 40% of the slim/droop so the taper stays continuous into
+  // the fixed bulkhead station. Returns plain copies — CHASSIS stays frozen.
+  function styledNoseStations(style) {
+    const s = style || DEFAULT_STYLE;
+    if (s === DEFAULT_STYLE || (!s.noseTipZ && s.noseSlim === 1 && !s.noseDroop)) return CHASSIS.nose;
+    const tip = CHASSIS.nose[0], mid = CHASSIS.nose[1];
+    return [
+      { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
+        w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
+      { z: mid.z, y: mid.y + s.noseDroop * 0.4,
+        w: mid.w * (1 + (s.noseSlim - 1) * 0.4), h: mid.h, t: mid.t },
+      CHASSIS.nose[2],
+    ];
+  }
+
   function surfaceOf(col, surface) {
     if (surface != null) return surface;
     if (col === CARBON || col === DARK || col === INTAKE) return SURFACES.carbon;
@@ -595,11 +643,11 @@ const Car3D = (function () {
     [0.15, 0.75, 0.35], [0.85, 0.40, 0.90], [0.98, 0.50, 0.10], [0.10, 0.80, 0.80],
   ];
 
-  function buildSharedChassis(out, c1, rideDY) {
+  function buildSharedChassis(out, c1, rideDY, noseStations) {
     const floor = CHASSIS.floor;
     addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
-    const nose = CHASSIS.nose;
+    const nose = noseStations || CHASSIS.nose;
     addSpan(out, nose[0], nose[1], c1);
     addTopBevel(out, nose[0], nose[1], 0.022, c1);
     addSpan(out, nose[1], nose[2], c1);
@@ -634,7 +682,7 @@ const Car3D = (function () {
     return Object.assign({}, stations[0], { z });
   }
 
-  function sidepodStations(eng) {
+  function sidepodStations(eng, style) {
     const podWidth = Math.max(0.72, Math.min(1.28, eng.podWidth));
     const shoulder = Math.max(0.76, Math.min(1.28, eng.shoulderHeight));
     const undercut = Math.max(0.72, Math.min(1.38, eng.undercut));
@@ -646,9 +694,14 @@ const Car3D = (function () {
     const outerTail = (0.38 - 0.09 * (coke - 1)) * tailWidth;
     const inletFloor = 0.235 + 0.11 * (undercut - 1);
     const shoulderTop = 0.49 + 0.23 * (shoulder - 1);
+    // Team-style inlet aspect: +bias = taller/prouder inlet mouth, − = squashed
+    // letterbox. Only the front (inlet) station moves — the shoulder onward is
+    // engine-recipe territory, so parts and team identity stay orthogonal.
+    const inletBias = style ? (style.inlet || 0) : 0;
     return [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
-        outerBottom: 0.245 + 0.06 * (undercut - 1), innerTop: 0.45, outerTop: 0.46 },
+        outerBottom: 0.245 + 0.06 * (undercut - 1),
+        innerTop: 0.45 + inletBias, outerTop: 0.46 + inletBias * 0.6 },
       { z: 0.22, inner: 0.29, outer: outerShoulder,
         innerBottom: 0.20 + 0.13 * (undercut - 1), outerBottom: 0.12,
         innerTop: shoulderTop, outerTop: shoulderTop - 0.015 },
@@ -661,11 +714,14 @@ const Car3D = (function () {
     ];
   }
 
-  function bodyAnchors(parts) {
+  function bodyAnchors(parts, teamId) {
     const T = parts || {};
     const tier = T.engine != null ? T.engine : 1;
     const eng = buildEngineParts(T._visual && T._visual.engine, tier);
-    const podStations = sidepodStations(eng);
+    // Team style shapes the SAME stations the bodywork lofts from, so decal /
+    // stripe / detail anchoring stays glued to the styled silhouette.
+    const style = teamStyleOf(teamId);
+    const podStations = sidepodStations(eng, style);
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth,
@@ -674,13 +730,14 @@ const Car3D = (function () {
       { z: -2.00, x: 0.13 * eng.tailWidth,
         bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight },
     ];
-    const noseStations = CHASSIS.nose.map((station) => ({
+    const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
       bottom: station.y - station.h * 0.5, top: station.y + station.h * 0.5,
     }));
     return {
       key: [eng.podWidth, eng.shoulderHeight, eng.undercut, eng.coke,
-            eng.tailWidth, eng.coverHeight].join(","),
+            eng.tailWidth, eng.coverHeight,
+            style === DEFAULT_STYLE ? "" : (teamId || "")].join(","),
       podAt(z) {
         const p = sampleStations(podStations, z);
         return { z, x: p.outer, inner: p.inner, bottom: p.outerBottom, top: p.outerTop,
@@ -774,11 +831,15 @@ const Car3D = (function () {
     const gbStyle = design.gearbox;
     const fuelStyle = design.fuel;
     const aeroStyle = design.aero;
-    const anchors = bodyAnchors(T);
+    // Per-team chassis identity (opts.teamId): nose profile, airbox scale,
+    // dorsal fin, mirror style, sidepod-inlet aspect. Absent → shared default
+    // silhouette, byte-identical to before.
+    const teamStyle = teamStyleOf(opts && opts.teamId);
+    const anchors = bodyAnchors(T, opts && opts.teamId);
 
     // --- Shared chassis --- per-OPTION suspension shifts only ride height.
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
-    buildSharedChassis(out, c1, rideDY);
+    buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle));
 
     // --- Hood / vanity deck: a raised central panel over the monocoque, rising
     // to a hump right in front of the cockpit. This is the "hood" the driver
@@ -892,7 +953,9 @@ const Car3D = (function () {
       // Airbox: trapezoid block above the cockpit (dark intake front). The
       // resolved engine recipe controls intake scale, snorkel and cover louvres.
       const engT = tier("engine");
-      const inScale = engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0);
+      // Team style scales the intake on top of the engine recipe (e.g. Audi's
+      // oversized ram inlet vs Williams' slimline duct).
+      const inScale = (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox;
       const engSnork = engStyle ? !!engStyle.snork : engT === 2;
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
                    { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, c1, INTAKE);
@@ -948,6 +1011,20 @@ const Car3D = (function () {
         const p = anchors.coverAt(-1.58);
         addBox(out, 0, p.top + 0.010, -1.58, 0.18 * engStyle.heatShield,
           0.014, 0.30, [0.30,0.28,0.26], SURFACES.metal);
+      }
+      // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
+      // 2 = full shark fin. Body-colour plate with an accent crest line — a
+      // strong per-team silhouette tell from chase and TV cameras. Starts
+      // behind the snorkel zone (z −0.95) so the two never intersect.
+      if (teamStyle.fin) {
+        const finH = teamStyle.fin >= 2 ? 0.19 : 0.095;
+        const ff = anchors.coverAt(-0.95), fr = anchors.coverAt(-1.85);
+        addSpan(out,
+          { z: ff.z, y: ff.top + finH * 0.5, w: 0.016, h: finH },
+          { z: fr.z, y: fr.top + finH * 0.33, w: 0.014, h: finH * 0.66 }, c1);
+        addSpan(out,
+          { z: ff.z, y: ff.top + finH + 0.006, w: 0.020, h: 0.014 },
+          { z: fr.z, y: fr.top + finH * 0.66 + 0.005, w: 0.018, h: 0.012 }, accentC);
       }
       // Engine-spec identification dots across the airbox intake lip.
       const engLed = engT === 2 ? [0.95, 0.22, 0.10] : engT === 0 ? [0.12, 0.82, 0.38] : [0.90, 0.62, 0.12];
@@ -1120,18 +1197,28 @@ const Car3D = (function () {
     // --- Side mirrors ---. In cockpit view they're moved FORWARD (ahead of the eye at z0.32)
     // and out on longer stalks so they read at the sides of the onboard frame
     // like real F1 wing mirrors; the chase build keeps the tucked position.
-    const mz = ckpt ? 0.62 : 0.24, mx = ckpt ? 0.44 : 0.34, msx = ckpt ? 0.40 : 0.30;
+    // Team mirror style: 1 = swept-wide (housing pushed outboard, wider and
+    // shorter), 2 = low-slung (dropped toward the pod shoulder). The cockpit
+    // build keeps the proven onboard framing regardless of style.
+    const mSty = ckpt ? 0 : teamStyle.mirror;
+    const mz = ckpt ? 0.62 : 0.24;
+    const mx = (ckpt ? 0.44 : 0.34) + (mSty === 1 ? 0.035 : 0);
+    const msx = ckpt ? 0.40 : 0.30;
+    const mY = 0.735 + (mSty === 2 ? -0.032 : 0);
+    const mH = mSty === 1 ? 0.125 : 0.155;   // swept style: wider, shorter housing
+    const mW = mSty === 1 ? 0.042 : 0.032;
     for (const s of [-1, 1]) {
       // Tapered aero arm (wide at the tub, narrow at the housing) instead of a
       // flat box — real F1 mirror stalks are swept aero elements, not a plain post.
       const xi = s * (msx - 0.04), xo = s * mx;
+      const aY = mY - 0.735;   // style drop carries into the stalk too
       addBlock(out, [
-        [xi, 0.68, mz - 0.045], [xi, 0.68, mz + 0.045], [xi, 0.72, mz + 0.045], [xi, 0.72, mz - 0.045],
-        [xo, 0.71, mz - 0.02],  [xo, 0.71, mz + 0.02],  [xo, 0.74, mz + 0.02],  [xo, 0.74, mz - 0.02],
+        [xi, 0.68 + aY, mz - 0.045], [xi, 0.68 + aY, mz + 0.045], [xi, 0.72 + aY, mz + 0.045], [xi, 0.72 + aY, mz - 0.045],
+        [xo, 0.71 + aY, mz - 0.02],  [xo, 0.71 + aY, mz + 0.02],  [xo, 0.74 + aY, mz + 0.02],  [xo, 0.74 + aY, mz - 0.02],
       ], DARK);
-      addBox(out, s*mx, 0.735, mz, 0.032, 0.155, 0.115, [0.09, 0.09, 0.11], SURFACES.carbon); // cleaner dark carbon housing
-      addBox(out, s*mx, 0.735, mz + 0.062, 0.020, 0.135, 0.024, [0.10, 0.11, 0.14], SURFACES.glass); // glass bezel / surround
-      addBox(out, s*mx, 0.735, mz + 0.066, 0.024, 0.108, 0.018, [0.46, 0.56, 0.78], SURFACES.glass); // brighter blue reflective glass
+      addBox(out, s*mx, mY, mz, mW, mH, 0.115, [0.09, 0.09, 0.11], SURFACES.carbon); // cleaner dark carbon housing
+      addBox(out, s*mx, mY, mz + 0.062, 0.020, mH * 0.87, 0.024, [0.10, 0.11, 0.14], SURFACES.glass); // glass bezel / surround
+      addBox(out, s*mx, mY, mz + 0.066, 0.024, mH * 0.70, 0.018, [0.46, 0.56, 0.78], SURFACES.glass); // brighter blue reflective glass
     }
 
     // --- Driver helmet: smooth dome + visor + crown stripe ---
@@ -1555,5 +1642,6 @@ const Car3D = (function () {
   }
 
   return { build, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
+           TEAM_STYLE, teamStyleOf,
            endplate: endplateGeom, numberBoard, aeroLevelOf };
 })();
