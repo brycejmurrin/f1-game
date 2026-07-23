@@ -312,4 +312,57 @@ test.describe("Apex 26 — keyboard latch", () => {
     expect(r.held).toBe(true);              // pedal engaged
     expect(r.afterCaptureLost).toBe(false); // FIX: capture loss releases the hold
   });
+
+  // Ghost-pointer latch: an OS interruption mid-hold (notification, call, app
+  // switch — fires blur/visibilitychange with NO pointer events delivered) left
+  // the pressed pointerId orphaned inside wireHold's closure Set. reset() zeroed
+  // btnThrottle but couldn't reach the Set, so after the next press with a NEW
+  // pointerId the release left the orphan behind (size 1 ≠ 0) and apply(false)
+  // never ran again — throttle could be switched ON but never OFF. Intermittent
+  // because an OS that reuses the SAME pointerId self-heals. The stuck throttle
+  // then endlessly re-trips the off-track auto-rescue.
+  test("hold survives an OS interruption without latching (ghost pointerId)", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", { timeout: 8000 });
+    const r = await page.evaluate(() => {
+      const el = document.getElementById("btn-throttle");
+      const pe = (type, id, target) => (target || el).dispatchEvent(
+        new PointerEvent(type, { pointerId: id, bubbles: true, cancelable: true }));
+      // 1) Hold with pointer 7, then an OS interruption: only blur-style reset
+      //    runs, no pointer event ever reaches the pedal.
+      pe("pointerdown", 7);
+      Input.reset();
+      const clearedByReset = Input.throttle();          // reset must fully clear
+      // 2) Press again with a DIFFERENT pointerId (iOS reassigns them), release.
+      pe("pointerdown", 8);
+      const rePressed = Input.throttle();
+      pe("pointerup", 8);
+      const afterRelease = Input.throttle();            // must be OFF (was stuck pre-fix)
+      return { clearedByReset, rePressed, afterRelease, holds: Input.debugState().holdPointers };
+    });
+    expect(r.clearedByReset).toBe(false);
+    expect(r.rePressed).toBe(true);
+    expect(r.afterRelease).toBe(false);
+    expect(Math.max(...r.holds)).toBe(0);   // no ghost pointers tracked anywhere
+  });
+
+  // Retargeted lift: the finger goes down on the pedal but its pointerup lands
+  // on another element (overlay appeared under a stationary finger; capture
+  // missing/not honoured). The window-level capture-phase listener must treat a
+  // pointer that lifted ANYWHERE as no longer holding any button.
+  test("a pointerup landing on another element still releases the pedal", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", { timeout: 8000 });
+    const r = await page.evaluate(() => {
+      const el = document.getElementById("btn-throttle");
+      el.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 5, bubbles: true, cancelable: true }));
+      const held = Input.throttle();
+      // Lift dispatched to body — never touches the pedal element.
+      document.body.dispatchEvent(new PointerEvent("pointerup", { pointerId: 5, bubbles: true, cancelable: true }));
+      const afterBodyUp = Input.throttle();
+      return { held, afterBodyUp };
+    });
+    expect(r.held).toBe(true);
+    expect(r.afterBodyUp).toBe(false);
+  });
 });

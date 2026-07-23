@@ -8404,6 +8404,12 @@ window.__apex = {
     return this.physState();
   },
 
+  // Live per-source input snapshot (keyboard / on-screen buttons / gamepad /
+  // canvas touch), plus each hold-button's pressed-pointer count. The one-call
+  // diagnosis for "throttle/brake/steer seems stuck": shows exactly which
+  // source is asserting it.
+  inputState() { return Input.debugState(); },
+
   // Detailed telemetry for a single car by index (from cars() list).
   carAt(idx) {
     const c = typeof idx === "number" ? cars[idx] : cars.find((x) => x.isPlayer);
