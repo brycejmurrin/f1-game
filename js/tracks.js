@@ -643,7 +643,11 @@ const Tracks = (function () {
             if (dd * ds < 6) continue;
             const ex = wx - px[j], ez = wz - pz[j];
             const lim = hw[j] - 0.3;
-            if (ex * ex + ez * ez < lim * lim && wy > py[j] - 0.05) wy = py[j] - 0.05;
+            // Bury only near-grade chords. A shoulder well ABOVE the other road
+            // is a bridge deck passing over it (Suzuka figure-8): burying it
+            // tears a full-height green curtain from deck edge to lower grade.
+            if (ex * ex + ez * ez < lim * lim && wy > py[j] - 0.05 && wy < py[j] + 3)
+              wy = py[j] - 0.05;
           }
         }
         pos.push(wx, wy, wz);
