@@ -244,3 +244,44 @@ test.describe("Apex 26 — steering", () => {
     expect((dxPush - dxOff) * inside).toBeLessThan(-0.2);
   });
 });
+
+// Regression: a held throttle key must never latch ON. onKey() guards key
+// PRESSES while a text field / control is focused (so typing doesn't drive the
+// car), but must ALWAYS process RELEASES — otherwise a keyup that fires while
+// focus sits on a non-HUD control is swallowed and the key stays "held" forever.
+// A stuck-on throttle then keeps re-tripping the off-track auto-rescue, so the
+// car floors itself off the track and gets reset over and over ("throttle stuck
+// on after a reset"). Exercises the real DOM keyboard path via the Input global.
+test.describe("Apex 26 — keyboard latch", () => {
+  test("keyup clears throttle even when focus moved to a non-HUD control", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", { timeout: 8000 });
+    const r = await page.evaluate(() => {
+      const el = document.createElement("input");   // interactive, NOT a HUD control
+      el.type = "text";
+      document.body.appendChild(el);
+      const key = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: "ArrowUp", bubbles: true }));
+      try {
+        // 1) Press the throttle with the game focused (nothing interactive active).
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        key("keydown");
+        const pressed = Input.throttle();
+        // 2) Focus the text field, THEN release — the release must still register.
+        el.focus();
+        key("keyup");
+        const afterRelease = Input.throttle();
+        // 3) A press WHILE the field is focused must stay suppressed (typing).
+        key("keydown");
+        const pressedWhileTyping = Input.throttle();
+        return { pressed, afterRelease, pressedWhileTyping };
+      } finally {
+        el.blur();
+        key("keyup");   // clear any latched state for later tests
+        el.remove();
+      }
+    });
+    expect(r.pressed).toBe(true);              // throttle engages on keydown
+    expect(r.afterRelease).toBe(false);        // FIX: release clears it despite focus
+    expect(r.pressedWhileTyping).toBe(false);  // press still suppressed while typing
+  });
+});
