@@ -5,6 +5,12 @@
 // values, SOUND/MUSIC/GEARS on-off, HIDE HUD), the lighting tuner, and the
 // in-race camera picker + per-mode touch controls.
 // Output: artifacts/galleries-<port>/menu-survey/
+//
+// Menu navigation is driven with in-page element.click() (via page.evaluate),
+// NOT Playwright's auto-waiting locator.click(): the game canvas renders every
+// frame, and the actionability hit-test on a button layered over that canvas can
+// spin until the test timeout even though the button is perfectly clickable.
+// In-page clicks fire the handler directly; we then poll the DOM for the result.
 import { test, expect } from "./fixtures.js";
 import { galleryPath } from "./output-paths.js";
 
@@ -14,37 +20,35 @@ const LANDSCAPE = { width: 844, height: 390 };
 async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
 }
-
 async function shot(page, name) {
   await page.waitForTimeout(250);
   await page.screenshot({ path: galleryPath("menu-survey", `${name}.png`), fullPage: false });
 }
+// Fire a button's click handler in-page (bypasses canvas hit-test flakiness).
+const clickId = (page, id) => page.evaluate((id) => document.getElementById(id).click(), id);
+const labelOf = (page, id) => page.evaluate((id) => document.getElementById(id).textContent || "", id);
 
-// Race + park, then reveal the pause SETTINGS sub-menu. Hides the rotate-device
-// overlay (portrait) so it can't intercept clicks, and opens the panels via the
-// same DOM path a player would.
+// Race + park, then reveal the pause SETTINGS sub-menu.
 async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
   await page.evaluate(({ track, tod, wx }) => window.__apex.race(track, tod, wx), { track, tod, wx });
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+  await page.waitForFunction((t) => { try { return window.__apex.info().track === t; } catch (_) { return false; } }, track, { timeout: 10_000 });
   await page.evaluate(() => {
     window.__apex.park(0.1);
     const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
     document.getElementById("pausemenu").hidden = false;
+    document.getElementById("pm-settings").click();
   });
-  await page.locator("#pm-settings").click();
-  await page.locator("#pmsettings").waitFor({ state: "visible" });
+  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 8_000 });
   await page.waitForTimeout(200);
 }
-
-// Cycle a labelled button until its text contains `want`, capped at `max` clicks.
+// Cycle a labelled toggle in-page until its text contains `want`.
 async function cycleTo(page, id, want, max = 4) {
-  for (let i = 0; i < max; i++) {
-    const t = (await page.locator(`#${id}`).textContent()) || "";
-    if (t.toUpperCase().includes(want.toUpperCase())) return t;
-    await page.locator(`#${id}`).click({ force: true });
-    await page.waitForTimeout(150);
-  }
-  return (await page.locator(`#${id}`).textContent()) || "";
+  await page.evaluate(({ id, want, max }) => {
+    const b = document.getElementById(id);
+    for (let i = 0; i < max && !b.textContent.toUpperCase().includes(want.toUpperCase()); i++) b.click();
+  }, { id, want, max });
+  await page.waitForTimeout(120);
+  return labelOf(page, id);
 }
 
 test.describe("Menu survey — settings sub-menu (portrait)", () => {
@@ -60,14 +64,14 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("31 settings menu — steer BUTTONS", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
-    await cycleTo(page, "pm-steer", "BUTTONS");
+    expect(await cycleTo(page, "pm-steer", "BUTTONS")).toContain("BUTTONS");
     await shot(page, "portrait-31-settings-steer-buttons");
   });
 
   test("32 settings menu — steer TOUCH", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
-    await cycleTo(page, "pm-steer", "TOUCH");
+    expect(await cycleTo(page, "pm-steer", "TOUCH")).toContain("TOUCH");
     await shot(page, "portrait-32-settings-steer-touch");
   });
 
@@ -97,8 +101,8 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("36 lighting tuner", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page, "singapore", "night", "dry");
-    await page.locator("#pm-lighting").click();
-    await page.locator("#lighting").waitFor({ state: "visible" });
+    await clickId(page, "pm-lighting");
+    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { timeout: 8_000 });
     await page.waitForTimeout(400);
     await shot(page, "portrait-36-lighting-tuner");
   });
@@ -108,21 +112,13 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
   async function startDriving(page, mode /* "touch"|"buttons"|"tilt" */) {
-    await page.evaluate((m) => {
-      window.__apex.race("bahrain");
-    }, mode);
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
-    // set steer mode via the pause settings, then resume
-    await page.evaluate(() => {
-      window.__apex.park(0.1);
-      document.getElementById("pausemenu").hidden = false;
-    });
-    await page.locator("#pm-settings").click();
-    await page.locator("#pmsettings").waitFor({ state: "visible" });
+    await openSettings(page);                 // race bahrain + open settings
     await cycleTo(page, "pm-steer", mode);
-    await page.locator("#pm-settings-close").click();
-    await page.locator("#pm-resume").click();
-    await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
+    await page.evaluate(() => {
+      document.getElementById("pm-settings-close").click();
+      document.getElementById("pm-resume").click();
+      window.__apex.jump(0.1, 50, 0); window.__apex.snapCam();
+    });
     await page.waitForTimeout(500);
   }
 
@@ -155,8 +151,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
-    // Long-press opens the picker; fire it via a real contextmenu on the CAM btn.
-    await page.locator("#btn-cam").dispatchEvent("contextmenu");
+    await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent
     await page.locator("#campicker").waitFor({ state: "visible" }).catch(() => {});
     await page.waitForTimeout(300);
     await shot(page, "landscape-43-camera-picker");
