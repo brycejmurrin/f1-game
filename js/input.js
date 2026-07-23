@@ -402,6 +402,20 @@ const Input = (function () {
     // With pointer capture, pointerleave no longer fires mid-hold; it stays as a
     // fallback for the (rare) case where capture couldn't be acquired.
     el.addEventListener("pointerleave", release);
+    // Catch-all release: lostpointercapture fires whenever the element's pointer
+    // capture ends for ANY reason. Critically it fires when the button is HIDDEN
+    // or removed mid-hold (a HUD/pause/tuner state change sets the pedal to
+    // display:none) — an IMPLICIT capture release where pointerup/pointercancel
+    // may never be dispatched to the element, so the finger's eventual lift lands
+    // on some other element and this button would otherwise stay "held" forever.
+    // That is the "throttle stuck on after an off-track recovery" bug: a latched
+    // GAS button keeps satisfying the auto-rescue trigger (throttle held but the
+    // car isn't moving), so the car floors itself off the track and is reset over
+    // and over. Because capture is retained on a normal press-and-release, the
+    // pointerup path already covers the non-hidden case; whenever capture is lost
+    // instead, this fires and releases. Together they make a stuck-on hold
+    // impossible. A duplicate release for an already-cleared id is a no-op.
+    el.addEventListener("lostpointercapture", release);
   }
 
   function wireTap(id, fire) {
