@@ -284,4 +284,32 @@ test.describe("Apex 26 — keyboard latch", () => {
     expect(r.afterRelease).toBe(false);        // FIX: release clears it despite focus
     expect(r.pressedWhileTyping).toBe(false);  // press still suppressed while typing
   });
+
+  // The on-screen GAS pedal (tilt + buttons steer modes) holds via pointer
+  // capture. If the pedal is hidden mid-hold (a HUD/pause/tuner state change),
+  // capture is released IMPLICITLY: the browser fires lostpointercapture but the
+  // finger's eventual pointerup lands on some other element, so pointerup/
+  // pointercancel never reach the pedal. Without a lostpointercapture handler the
+  // button stays "held" — throttle stuck on, which then keeps re-tripping the
+  // off-track auto-rescue. Verify lostpointercapture releases the hold.
+  test("on-screen GAS releases when pointer capture is lost mid-hold", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", { timeout: 8000 });
+    const r = await page.evaluate(() => {
+      const el = document.getElementById("btn-throttle");   // wired via wireHold at init
+      const pe = (type) => el.dispatchEvent(new PointerEvent(type, { pointerId: 1, bubbles: true, cancelable: true }));
+      // Hold the pedal.
+      pe("pointerdown");
+      const held = Input.throttle();
+      // The pedal is hidden by a state change → capture is lost implicitly. The
+      // pointerup never reaches this element; only lostpointercapture fires here.
+      el.hidden = true;
+      pe("lostpointercapture");
+      const afterCaptureLost = Input.throttle();
+      el.hidden = false;
+      return { held, afterCaptureLost };
+    });
+    expect(r.held).toBe(true);              // pedal engaged
+    expect(r.afterCaptureLost).toBe(false); // FIX: capture loss releases the hold
+  });
 });
