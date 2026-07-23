@@ -1588,8 +1588,13 @@ const Tracks = (function () {
       // Sit on the ACTUAL rendered terrain when available (exact — no float/sink
       // where the ribbon is carved or sags); fall back to the groundYAt estimate
       // for points the terrain mesh doesn't cover (far out / off the ribbon).
+      // The returned point is sunk 0.3 m below the sample: it's a SINGLE-point
+      // reading, so on any slope a flat-based model placed exactly at it floats
+      // on the downhill side. Every anchored model (engine helpers AND raw
+      // per-track props) inherits the embed; tops drop by the same 0.3, which
+      // is visually negligible on multi-metre props.
       const ty = terrainYAt(cx, cz);
-      return { c: [cx, ty == null ? groundYAt(k, dist) : ty, cz], r, u, t };
+      return { c: [cx, (ty == null ? groundYAt(k, dist) : ty) - 0.3, cz], r, u, t };
     };
     // Conifer/pine: tapered trunk + stacked cones. col = needle green. Three
     // silhouette variants selected per-instance so a treeline doesn't read as
@@ -1703,20 +1708,28 @@ const Tracks = (function () {
       // Gently curved trunk: three tapering segments each leaning a touch further
       // (palms arc toward the light) instead of one dead-straight pole.
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
-      let base = a.c, seg = h / 3;
+      const seg = h / 3;
       out._mat = MAT.WOOD;
       // buried root stub: keeps the slim trunk grounded on sloped/uneven terrain
       addCyl(out, vadd(a.c, a.u, -0.6), 0.38, 0.75, [0.42, 0.34, 0.21], 6, b);
+      // Curved trunk as a CONNECTED chain: each segment runs joint-to-joint with
+      // its own tilted up-vector (like the dead-tree branches). The old form
+      // stacked vertical cylinders at per-segment lateral offsets — with any
+      // lean the top segment detached sideways and floated as a bare stick.
+      const joint = (t) => vadd(vadd(a.c, a.u, t * seg), a.r, lean * t * t * 0.4 * side);
       for (let t = 0; t < 3; t++) {
-        const bend = vadd(a.c, a.r, lean * (t + 1) * (t + 1) * 0.4 * side);
-        const c = [bend[0], base[1] + seg / 2, bend[2]];
-        addCyl(out, c, 0.34 - t * 0.06, seg, [0.45 - t * 0.03, 0.36, 0.22], 6, b);
-        base = vadd(base, a.u, seg);
+        const p0 = joint(t), p1 = joint(t + 1);
+        const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+        const L = Math.hypot(d[0], d[1], d[2]) || seg;
+        addCyl(out, p0, 0.34 - t * 0.06, L, [0.45 - t * 0.03, 0.36, 0.22], 6,
+               [a.r, [d[0] / L, d[1] / L, d[2] / L], a.t]);
       }
+      const base = joint(3);
       out._mat = MAT.FOLIAGE;
       // Crown sits AT the trunk top (was seg/2 ≈ h/6 below it — a bare pole
       // stuck up through the fronds, reading as a floating stick from distance).
-      const top = vadd(vadd(base, a.r, lean * 3.6 * side), a.u, -0.35);
+      // `base` (= joint(3)) already carries the full lean offset.
+      const top = vadd(base, a.u, -0.35);
       const frCol = frond || [0.18, 0.40, 0.16];
       const frDark = [frCol[0] * 0.8, frCol[1] * 0.82, frCol[2] * 0.78];
       // Solid crown core: thin fronds alias away at range, so keep a visible
@@ -1897,7 +1910,7 @@ const Tracks = (function () {
           console.warn(`[scenery] wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addBox(out, vadd(p.c, p.u, h / 2), [a, h, spacing], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, (h - 0.4) / 2), [a, h + 0.4, spacing], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]);   // base sunk 0.4 — no slope float
       });
     };
     // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
@@ -1908,7 +1921,7 @@ const Tracks = (function () {
           console.warn(`[scenery] fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addCyl(out, p.c, 0.13, h, [0.28, 0.28, 0.30], 5, [p.r, p.u, p.t]);          // post
+        addCyl(out, vadd(p.c, p.u, -0.4), 0.13, h + 0.4, [0.28, 0.28, 0.30], 5, [p.r, p.u, p.t]);   // post, base sunk
         addBox(out, vadd(p.c, p.u, h * 0.55), [0.05, h * 0.9, spacing], col || [0.72, 0.74, 0.78], [p.r, p.u, p.t]);  // mesh
       });
     };
@@ -1921,7 +1934,7 @@ const Tracks = (function () {
           console.warn(`[scenery] guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addCyl(out, p.c, 0.09, 0.7, [0.5, 0.5, 0.52], 4, [p.r, p.u, p.t]);
+        addCyl(out, vadd(p.c, p.u, -0.35), 0.09, 1.05, [0.5, 0.5, 0.52], 4, [p.r, p.u, p.t]);   // post, base sunk
         addBox(out, vadd(p.c, p.u, 0.7), [0.18, 0.45, spacing], col || [0.82, 0.82, 0.85], [p.r, p.u, p.t]);
       });
     };
@@ -1934,7 +1947,7 @@ const Tracks = (function () {
           console.warn(`[scenery] tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addCyl(out, p.c, 1.0, 0.9, [0.10, 0.10, 0.11], 7, [p.r, p.u, p.t]);
+        addCyl(out, vadd(p.c, p.u, -0.35), 1.0, 1.25, [0.10, 0.10, 0.11], 7, [p.r, p.u, p.t]);   // base sunk
         addBox(out, vadd(p.c, p.u, 0.95), [2.0, 0.3, spacing], capCol || [0.9, 0.9, 0.92], [p.r, p.u, p.t]);
       });
     };
@@ -1946,7 +1959,7 @@ const Tracks = (function () {
           console.warn(`[scenery] hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addBox(out, vadd(p.c, p.u, h / 2), [2.4, h, spacing], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);
+        addBox(out, vadd(p.c, p.u, (h - 0.4) / 2), [2.4, h + 0.4, spacing], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);   // base sunk 0.4
       });
     };
     // forestEdge(): a DENSE treeline (mix of pine/tree) from s0→s1 on `side`,
@@ -2642,7 +2655,7 @@ const Tracks = (function () {
         console.warn(`[scenery] tower SUPPRESSED at k=${k} side=${side}: dist=${dist} baseW=${baseW}`);
         return;
       }
-      addFrustum(out, p.c, baseW * 0.5, baseW * 0.32, h, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);
+      addFrustum(out, vadd(p.c, p.u, -0.6), baseW * 0.5, baseW * 0.335, h + 0.6, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);   // base sunk 0.6
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
       blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
@@ -2654,7 +2667,7 @@ const Tracks = (function () {
         console.warn(`[scenery] billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (need gap>${(w/2+1).toFixed(1)})`);
         return;
       }
-      for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(p.c, p.t, o), 0.12, h, [0.2, 0.2, 0.22], 4, b);
+      for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(vadd(p.c, p.t, o), p.u, -0.4), 0.12, h + 0.4, [0.2, 0.2, 0.22], 4, b);   // posts, base sunk
       // Backlit at night: trackside advertising is illuminated at real races —
       // the lifted albedo rides the emissive path so panels glow softly.
       let face = col || [0.9, 0.85, 0.2];
@@ -2723,10 +2736,10 @@ const Tracks = (function () {
         console.warn(`[scenery] marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
-      addBox(out, vadd(p.c, p.u, 1.3), [2.2, 2.6, 2.2], [0.85, 0.86, 0.88], b);
+      addBox(out, vadd(p.c, p.u, 1.1), [2.2, 3.0, 2.2], [0.85, 0.86, 0.88], b);   // base sunk 0.4
       addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
       const polePos = vadd(p.c, p.r, side * 1.4);
-      addCyl(out, polePos, 0.08, 4, [0.4, 0.4, 0.42], 4, b);
+      addCyl(out, vadd(polePos, p.u, -0.35), 0.08, 4.35, [0.4, 0.4, 0.42], 4, b);   // base sunk
       // Marshal flag on the pole — waving cloth (see flagQuad above). Mostly
       // yellow (the flag a marshal post actually flies), occasionally blue.
       flagQuad(vadd(polePos, p.u, 3.3), p.t, p.u,
@@ -2761,7 +2774,7 @@ const Tracks = (function () {
       }
       const postH = 1.35;
       const proud = -side * 0.05;   // segment relief toward the viewer
-      addCyl(out, p.c, 0.06, postH, [0.55, 0.55, 0.58], 4, b);
+      addCyl(out, vadd(p.c, p.u, -0.3), 0.06, postH + 0.3, [0.55, 0.55, 0.58], 4, b);   // base sunk
       if (kind === "speed") {
         const R = 0.52, cc = vadd(p.c, p.u, postH + R);
         addFrustum(out, cc, R, R, 0.05, [0.85, 0.16, 0.14], 12, b);                       // red rim disc
@@ -3410,11 +3423,15 @@ const Tracks = (function () {
       const tn = [track.tx[k] / tl, 0, track.tz[k] / tl];   // horizontal tangent
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-      const hubY = py[k] + radius + 5;
+      // Ground the wheel on the TERRAIN at its own footprint, not the road
+      // height at k — at 60+ m out the park ground can sit well below the road,
+      // which left the support legs (and the whole wheel) floating.
+      const gy = groundYAt(k, dist);
+      const hubY = gy + radius + 5;
       const hub = [cx, hubY, cz];
       for (const lo of [-3, 3]) {                            // support legs
-        addBox(out, [cx + tn[0] * lo, py[k] + (hubY - py[k]) / 2 - 0.3, cz + tn[2] * lo],
-               [1.6, hubY - py[k], 1.6], [0.32, 0.33, 0.38]);
+        addBox(out, [cx + tn[0] * lo, gy + (hubY - gy) / 2 - 0.5, cz + tn[2] * lo],
+               [1.6, hubY - gy + 0.4, 1.6], [0.32, 0.33, 0.38]);
       }
       addBox(out, hub, [3, 3, 3], [0.3, 0.3, 0.34]);         // hub
       const seg = 16;
