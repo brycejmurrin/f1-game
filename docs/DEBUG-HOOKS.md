@@ -660,6 +660,14 @@ Force-rescue the player immediately — same mechanism as the 3-second auto-resc
 `physState()` so a test can confirm the car was repositioned. Returns `false` if
 no race is active.
 
+### `inputState() → {steerMode, key, btn, pad, touchSteer, canvasTouches, holdPointers, throttle, braking}`
+Live per-source input snapshot: which source (keyboard `key`, on-screen buttons
+`btn`, gamepad `pad`, canvas touch) is asserting throttle/brake/steer right now,
+plus `holdPointers` — the pressed-pointer count each on-screen hold button is
+tracking (all zeros when nothing is held; a non-zero entry with no finger down
+means a stuck/ghost pointer). The one-call diagnosis for any "input seems stuck
+on" report.
+
 ---
 
 ## Scenario setup (collision / AI tests)

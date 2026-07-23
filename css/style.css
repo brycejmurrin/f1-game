@@ -105,7 +105,25 @@ button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
    advanced-steering / lighting-tuner panels that open on top of it. */
 #pmsettings { position: fixed; inset: 0; z-index: 35; background: rgba(0, 0, 0, 0.6); }
 #pmsettings-inner { width: min(94vw, 520px); }
-#pm-settings-close { margin-top: 14px; border-color: var(--red); color: var(--red); }
+/* Grouped controls: DRIVING / AUDIO / DISPLAY, so 11 toggles read as three
+   short scannable lists instead of one long undifferentiated stack. The groups
+   are the panel's scroll region — SETTINGS title and BACK stay fixed, so the
+   way out never scrolls off screen. */
+#pmsettings-inner { display: flex; flex-direction: column; overflow: hidden; }
+#pmsettings-inner h2,
+#pm-settings-close { flex-shrink: 0; }
+.pm-groups {
+  display: flex; flex-direction: column; gap: 15px; margin: 6px 0 2px;
+  overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+}
+.pm-group { display: flex; flex-direction: column; }
+.pm-group-h {
+  color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 0.11em;
+  margin: 0 0 7px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.pm-group button { margin: 4px 0; }
+#pm-settings-close { margin-top: 16px; border-color: var(--red); color: var(--red); }
 
 /* ---------- advanced steering panel ---------- */
 #advanced { position: fixed; inset: 0; z-index: 41; background: rgba(0, 0, 0, 0.6); }
@@ -123,7 +141,13 @@ button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
   max-height: none;
   background: rgba(12, 14, 20, 0.86);
   padding: 14px 18px;
+  /* Fixed head (title / preview chips / tabs) + scrolling #lt-rows + fixed
+     RESET/COPY/DONE footer — with 80+ sliders the actions used to live at the
+     end of the scroll, a full panel-length swipe away. */
+  display: flex; flex-direction: column; overflow: hidden;
 }
+#lt-rows { flex: 1 1 auto; overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+#lt-json { flex-shrink: 0; }
 #lighting-inner .adv-item { margin: 7px 0; }
 #lighting-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
 #lighting-inner.lt-show-help .adv-help { display: block; }   /* …then every row explains itself */
@@ -132,14 +156,14 @@ button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
   font-size: 11px; opacity: 0.8; cursor: pointer;
 }
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
-/* Category tabs — split the 80+ sliders into one group at a time. Sticky so the
-   chips stay reachable while scrolling a long group (e.g. IMAGE & COLOUR). */
+/* Category tabs — split the 80+ sliders into one group at a time. Part of the
+   panel's fixed head (only #lt-rows scrolls), so the chips are always visible. */
 .lt-tabs {
-  position: sticky; top: -14px; z-index: 3;
   display: flex; flex-wrap: wrap; gap: 4px;
   margin: 2px -18px 6px; padding: 6px 18px 8px;
   background: rgba(12, 14, 20, 0.94);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
 }
 #lt-tabs .lt-tab {
   display: inline-flex; width: auto; margin: 0;
@@ -172,7 +196,11 @@ button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
 .lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
-#lighting-inner .sel-actions { display: flex; gap: 8px; }
+#lighting-inner .sel-actions {
+  display: flex; gap: 8px; flex-shrink: 0;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
 #lighting-inner .sel-actions button { margin: 0; }
 #lt-json {
   width: 100%; height: 72px; margin-top: 10px; resize: none;
@@ -1201,14 +1229,18 @@ body.hud-hidden #hud-restore { display: block; }
 }
 
 /* ---------- results ---------- */
-#results .sel-actions {
-  position: sticky;
-  bottom: 0;
-  width: 100%;
-  background: rgba(6, 6, 10, 0.96);
-  padding: 10px 0 6px;
-  margin-top: 10px;
-  z-index: 1;
+/* Header + scrolling table + fixed action bar. The bar was position:sticky over
+   the scrolling panel — rows ghosted through its translucent backing and bled
+   into the panel's bottom padding strip. Scrolling only the table keeps
+   MENU / RACE AGAIN solid and always tappable. */
+#results, #standings { display: flex; flex-direction: column; overflow: hidden; }
+#results-table, #standings-body { overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+#results .sel-actions,
+#standings .sel-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
   justify-content: center;
 }
 #results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -1230,15 +1262,18 @@ body.hud-hidden #hud-restore { display: block; }
 /* ---------- how to play ---------- */
 #howtoplay { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); }
 #howtoplay-inner { width: min(92vw, 560px); }
+/* Same fixed-footer pattern as #results: title + scrollable body (.panel-scroll
+   / dl) + solid DONE bar, replacing the sticky bar that floated over content. */
+#howtoplay-inner,
+#advanced-inner { display: flex; flex-direction: column; overflow: hidden; }
+#howtoplay-inner dl,
+#advanced-inner .panel-scroll { overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 #howtoplay-inner .sel-actions,
 #advanced-inner .sel-actions {
-  position: sticky;
-  bottom: 0;
-  width: 100%;
-  background: rgba(6, 6, 10, 0.96);
-  padding: 10px 0 6px;
-  margin-top: 10px;
-  z-index: 1;
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
   justify-content: center;
 }
 #howtoplay dl {
@@ -1314,17 +1349,27 @@ body.hud-hidden #hud-restore { display: block; }
   #pm-resume { grid-column: 1 / -1; }
   #pm-standings { grid-column: 1 / -1; }
 
-  /* settings sub-menu: 2 columns so its longer list of toggles fits a sideways
-     phone without scrolling */
-  #pmsettings-inner {
+  /* settings sub-menu: two columns — DRIVING + AUDIO stacked left, DISPLAY
+     right — placed explicitly on a grid. (CSS `columns` balanced nicely in
+     Chromium but WebKit carries the previous group's bottom margin to the top
+     of column 2, so the DISPLAY header sat visibly lower than DRIVING on
+     iPhone. Grid rows pin both column tops level in every engine.) */
+  #pmsettings-inner { max-height: calc(100dvh - var(--sat) - var(--sab) - 16px); }
+  .pm-groups {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    column-gap: 10px;
-    max-height: calc(100dvh - var(--sat) - var(--sab) - 16px);
+    column-gap: 14px; row-gap: 8px;
+    align-items: start;
+    margin: 4px 0 0;
   }
-  #pmsettings-inner h2 { grid-column: 1 / -1; }
-  #pmsettings-inner button { margin: 4px 0; font-size: 11.5px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #pm-settings-close { grid-column: 1 / -1; margin-top: 8px; }
+  .pm-group:nth-child(1) { grid-column: 1; grid-row: 1; }   /* DRIVING */
+  .pm-group:nth-child(2) { grid-column: 1; grid-row: 2; }   /* AUDIO   */
+  .pm-group:nth-child(3) { grid-column: 2; grid-row: 1 / span 2; }   /* DISPLAY */
+  .pm-group-h { margin-bottom: 4px; }
+  /* margin 2px (not 4): the tallest column is 6 buttons + 2 headers — every
+     vertical px ×6 decides whether BACK fits a 390px-high phone unscrolled */
+  #pmsettings-inner button { margin: 2px 0; font-size: 11.5px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pm-settings-close { margin-top: 8px; }
   #results { max-width: 600px; }
   /* race settings: 2-column grid so LAPS+WEATHER share one row, TIME+actions share another */
   #race-settings {
