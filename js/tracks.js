@@ -1714,9 +1714,14 @@ const Tracks = (function () {
         base = vadd(base, a.u, seg);
       }
       out._mat = MAT.FOLIAGE;
-      const top = vadd(vadd(base, a.r, lean * 3.6 * side), a.u, -seg / 2 + 0.2);
+      // Crown sits AT the trunk top (was seg/2 ≈ h/6 below it — a bare pole
+      // stuck up through the fronds, reading as a floating stick from distance).
+      const top = vadd(vadd(base, a.r, lean * 3.6 * side), a.u, -0.35);
       const frCol = frond || [0.18, 0.40, 0.16];
       const frDark = [frCol[0] * 0.8, frCol[1] * 0.82, frCol[2] * 0.78];
+      // Solid crown core: thin fronds alias away at range, so keep a visible
+      // green mass at the hub — without it a distant palm is just a brown pole.
+      addBox(out, top, [1.7, 1.2, 1.7], frDark, b);
       // 9 drooping fronds: each arcs outward then down (own tilted up-vector),
       // with per-frond length/droop jitter so the crown reads full, not a star.
       for (let i = 0; i < 9; i++) {
@@ -1724,9 +1729,9 @@ const Tracks = (function () {
         const fr = [dir[0] * a.r[0] + dir[2] * a.t[0], 0, dir[0] * a.r[2] + dir[2] * a.t[2]];
         const droop = 0.45 + hash(k * 2.1 + i) * 0.5;            // how far the frond bends down
         const fu = [fr[0] * droop + a.u[0] * (1 - droop), a.u[1] * (1 - droop * 0.7), fr[2] * droop + a.u[2] * (1 - droop)];
-        const len = 4.2 + hash(k + i * 3.3) * 1.8;
-        const fc = vadd(vadd(top, fr, 2.2), a.u, 0.2);
-        addPrism(out, fc, [1.5, 0.45, len], i % 2 ? frCol : frDark, [fr, fu, [-fr[2], 0, fr[0]]]);
+        const len = 5.0 + hash(k + i * 3.3) * 2.0;
+        const fc = vadd(vadd(top, fr, 2.4), a.u, 0.15);
+        addPrism(out, fc, [1.9, 0.5, len], i % 2 ? frCol : frDark, [fr, fu, [-fr[2], 0, fr[0]]]);
       }
       // Coconut cluster tucked under the crown.
       out._mat = MAT.WOOD;
