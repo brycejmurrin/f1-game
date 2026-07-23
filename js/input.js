@@ -297,7 +297,16 @@ const Input = (function () {
       tag === "BUTTON" || tag === "A" || (active && active.isContentEditable);
     const hudControl = active && active.matches &&
       active.matches("#btn-cam, #pausebtn, #hud-restore, .touchbtn");
-    if (interactive && !hudControl) return;
+    // Guard key PRESSES only: typing in a field or activating a control must not
+    // also drive the car. RELEASES are ALWAYS processed — if a movement key went
+    // down with the game focused and focus then moved to a button (e.g. a control
+    // tapped during an off-track scramble), swallowing its keyup here would latch
+    // that key ON with no way to clear it. A stuck-on throttle then keeps
+    // re-tripping the auto-rescue (it fires when throttle is held but the car
+    // isn't moving), so the car floors itself off the track and gets reset again
+    // and again — the "throttle stuck on after a reset" bug. Clearing a key that
+    // was never registered as down is a harmless no-op.
+    if (down && interactive && !hudControl) return;
     switch (e.code) {
       case "ArrowLeft": case "KeyA":
         keyLeft = down; if (down) e.preventDefault(); break;
