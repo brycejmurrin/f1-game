@@ -19,8 +19,8 @@
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "floodlights"], s0: 0.34, s1: 0.40 },
-      { kinds: ["foliage", "floodlights"], s0: 0.79, s1: 0.84 },
+      { kinds: ["foliage", "floodlights"], s0: 0.19, s1: 0.26 },
+      { kinds: ["foliage", "floodlights"], s0: 0.79, s1: 0.85 },
     ],
     pal: { zenith: [0.35, 0.50, 0.70], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2], sunDir: [0.8846517369293829, 0.44232586846469146, 0.14744195615489716], sun: [1, 0.90, 0.65], sunColor: [1, 0.82, 0.55] },
     segs: [
@@ -29,11 +29,16 @@
       { t: 40, l: 140 },
     ],
     // Elevations and bridges are authored in source-trace space. These source
-    // fractions map through startFrac=0.6125 to racing s≈0.20, 0.45, and 0.811.
+    // fractions map through startFrac=0.6125 to racing s≈0.20, 0.45, and 0.817.
     // Keeping that contract explicit prevents the crossover lift from landing on
     // the Esses while its scenery remains at the real figure-8 crossing.
+    // The bridge peak sits exactly on the measured self-crossing (lower road
+    // racing s≈0.226, upper s≈0.817). The lower road there is already lifted to
+    // y≈5.4 by the Esses elevation, so rise must clear it: 13.5 − 5.4 ≈ 8.1 m of
+    // road-to-road daylight — the crossover deck (6.5 m underside + 1.5 m deck)
+    // tucks exactly beneath the upper ribbon instead of clipping through it.
     elevations: [{ s: 0.8125, halfM: 300, rise: 11 }, { s: 0.0625, halfM: 260, rise: -5 }],
-    bridges: [{ s: 0.4235, halfM: 150, rise: 7 }],
+    bridges: [{ s: 0.4298, halfM: 160, rise: 13.5 }],
     scenery: function (api) {
       const { out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
@@ -390,19 +395,20 @@
       }
 
       // ── Figure-8 crossover ────────────────────────────────────────────────────
-      // The road bridge is raised by `bridges` at racing s≈0.811. At the lower
-      // crossing (s≈0.37), this intentional span supplies the visible green deck
-      // and guarantees a safe 6.5 m underside instead of relying on unguarded raw
-      // boxes. The shared bridge builder supplies grounded piers beside the upper
-      // racing line.
-      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.37, clearance: 6.5,
-        minimumClearance: 4.8, thickness: 1.5, depth: 22, span: hw[Math.round(0.37 * n) % n] * 2 + 8,
+      // The road bridge is raised by `bridges` at racing s≈0.817. The LOWER road
+      // passes beneath it at racing s≈0.226 (measured self-crossing — NOT 0.37;
+      // the deck used to float there over open road). This intentional span
+      // supplies the visible green deck and guarantees a safe 6.5 m underside
+      // instead of relying on unguarded raw boxes. The shared bridge builder
+      // supplies grounded piers beside the upper racing line.
+      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.226, clearance: 6.5,
+        minimumClearance: 4.8, thickness: 1.5, depth: 22, span: hw[Math.round(0.226 * n) % n] * 2 + 8,
         supportGap: 2.8, supportWidth: 1.8, color: [0.18, 0.52, 0.26],
         required: true });
       // Concrete abutment houses and Honda-red caps make the figure-eight
       // crossing read as engineered infrastructure rather than a floating deck.
       for (const side of [-1, 1]) {
-        const ca = anchor(K(0.37), side, 8.5), cb = [ca.r, ca.u, ca.t];
+        const ca = anchor(K(0.226), side, 8.5), cb = [ca.r, ca.u, ca.t];
         const cc = vadd(ca.c, ca.u, 2.6);
         modelGroup(`suzuka-crossover-abutment-${side < 0 ? "left" : "right"}`, {
           center: cc, size: [7.6, 6.2, 12.8], basis: cb,
