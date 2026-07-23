@@ -1606,7 +1606,9 @@ const Tracks = (function () {
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
       out._mat = MAT.WOOD;
-      addCyl(out, a.c, 0.35 + h * 0.02, h * 0.4, [0.30, 0.22, 0.13], 6, b);
+      // Trunk starts 0.5 m BELOW the anchor: anchor() samples the terrain at one
+      // point, so on a slope a flat-based trunk floats on the downhill side.
+      addCyl(out, vadd(a.c, a.u, -0.5), 0.35 + h * 0.02, h * 0.4 + 0.5, [0.30, 0.22, 0.13], 6, b);
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
       const sparse = vr > 0.82;                          // ~18% thinner 3-tier trees
       const lean = !sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0;   // ~27% windswept lean
@@ -1641,7 +1643,7 @@ const Tracks = (function () {
         // not the tree's vertical `a.u`, or the branches would draw straight up.
         const th = h * 0.7;
         out._mat = MAT.WOOD;
-        addCyl(out, a.c, 0.32, th, [0.28, 0.22, 0.16], 6, b);
+        addCyl(out, vadd(a.c, a.u, -0.5), 0.32, th + 0.5, [0.28, 0.22, 0.16], 6, b);   // sunk base — no slope float
         const top = vadd(a.c, a.u, th);
         for (let i = 0; i < 3; i++) {
           const bh = hash(k * 11 + i * 3.1 + dist);
@@ -1658,8 +1660,27 @@ const Tracks = (function () {
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;   // asymmetric crown, ~35% of instances
       out._mat = MAT.WOOD;
-      addCyl(out, a.c, 0.4, h * 0.4, [0.32, 0.23, 0.13], 6, b);
+      // Trunk reaches well into the crown (0.55h): the skirt cone is nearly flat,
+      // so from road level its top surface backface-culls and the crown would
+      // otherwise appear to start at the SECOND cone — a floating canopy with a
+      // see-through band above a too-short trunk (Albert Park eucalyptus rows).
+      addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b);   // sunk base — no slope float
       out._mat = MAT.FOLIAGE;
+      // Close the crown's UNDERSIDE: a shallow inverted skirt from the widest
+      // ring down to the trunk, faces oriented downward (ref sits above), so
+      // low/flat viewpoints see a shaded canopy bottom instead of a culled hole.
+      {
+        const usR = (3.5 + h * 0.135) * j;
+        const ringY = h * 0.34, apexY = h * 0.20;
+        const usCol = [col[0] * 0.5, col[1] * 0.52, col[2] * 0.5];
+        const uref = vadd(a.c, a.u, h * 0.7);
+        const apex = vadd(a.c, a.u, apexY);
+        for (let i = 0; i < 9; i++) {
+          const a0 = i / 9 * 6.2832, a1 = (i + 1) / 9 * 6.2832;
+          const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, Math.cos(ang) * usR), a.t, Math.sin(ang) * usR);
+          emit(out, [ring(a0), ring(a1), apex], usCol, uref);
+        }
+      }
       // ROUNDED broadleaf canopy: bulges widest in the middle and is capped by a
       // squat dome — a full, billowing crown that reads clearly as a deciduous
       // tree rather than the narrow pointed cone-stack of conifer() (the two used
@@ -1684,6 +1705,8 @@ const Tracks = (function () {
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
       let base = a.c, seg = h / 3;
       out._mat = MAT.WOOD;
+      // buried root stub: keeps the slim trunk grounded on sloped/uneven terrain
+      addCyl(out, vadd(a.c, a.u, -0.6), 0.38, 0.75, [0.42, 0.34, 0.21], 6, b);
       for (let t = 0; t < 3; t++) {
         const bend = vadd(a.c, a.r, lean * (t + 1) * (t + 1) * 0.4 * side);
         const c = [bend[0], base[1] + seg / 2, bend[2]];
@@ -1721,7 +1744,7 @@ const Tracks = (function () {
       if (onTrack(a.c[0], a.c[2], 3)) return;
       const c2 = [col[0] * 0.86, col[1] * 0.92, col[2] * 0.82];
       out._mat = MAT.WOOD;
-      addCyl(out, a.c, 0.3, h * 0.20, [0.34, 0.24, 0.15], 5, b);                 // trunk
+      addCyl(out, vadd(a.c, a.u, -0.5), 0.3, h * 0.20 + 0.5, [0.34, 0.24, 0.15], 5, b);   // trunk, sunk base
       out._mat = MAT.FOLIAGE;
       addCone(out, vadd(a.c, a.u, h * 0.14), 2.1 + h * 0.06, h * 0.44, col, 7, b);
       addCone(out, vadd(a.c, a.u, h * 0.42), 1.6 + h * 0.05, h * 0.38, col, 6, b);
@@ -2476,7 +2499,7 @@ const Tracks = (function () {
       // dimmed (the head geometry glow is independent of the light scale).
       const lit = NIGHT ? [head[0] * 1.4, head[1] * 1.4, head[2] * 1.4]
                         : [head[0] * 0.72, head[1] * 0.72, head[2] * 0.70];
-      addCyl(out, a.c, 0.18, h, pole, 6, b);                                                 // column
+      addCyl(out, vadd(a.c, a.u, -0.4), 0.18, h + 0.4, pole, 6, b);                          // column, sunk base
       if (lstyle === "globe") {                                                              // heritage twin-globe
         const top = vadd(a.c, a.u, h);
         for (const e of [-1, 1]) {
@@ -2785,7 +2808,9 @@ const Tracks = (function () {
         const lx = Math.cos(ang) * off, lz = Math.sin(ang) * off;
         const lc = vadd(vadd(p.c, p.r, lx), p.t, lz);
         const rad = (1.1 + lh * 0.9) * (lobes > 1 ? 0.82 : 1.15);
-        addCone(out, vadd(lc, p.u, 0.25 + lh * 0.2), rad, 1.7 + lh * 1.0, i === 0 ? bc : c2, 6, b);
+        // lobe base sits BELOW grade (was +0.25..0.45 → visibly hovering); the
+        // buried part is occluded, the crown height barely changes.
+        addCone(out, vadd(lc, p.u, -0.3 + lh * 0.1), rad, 2.2 + lh * 1.0, i === 0 ? bc : c2, 6, b);
       }
     };
 
