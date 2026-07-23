@@ -401,9 +401,13 @@
       // supplies the visible green deck and guarantees a safe 6.5 m underside
       // instead of relying on unguarded raw boxes. The shared bridge builder
       // supplies grounded piers beside the upper racing line.
-      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.226, clearance: 6.5,
-        minimumClearance: 4.8, thickness: 1.5, depth: 22, span: hw[Math.round(0.226 * n) % n] * 2 + 8,
-        supportGap: 2.8, supportWidth: 1.8, color: [0.18, 0.52, 0.26],
+      // Deck top must stay BELOW the upper ribbon (8.07 m above the lower road
+      // at the crossing): clearance 5 + thickness 1.7 puts the top at 6.7 m —
+      // ~1.4 m of tuck — so it reads as girder structure under the bridge, not
+      // a grass platform level with the racing surface. Girder green, not turf.
+      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.226, clearance: 5.0,
+        minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.226 * n) % n] * 2 + 8,
+        supportGap: 2.8, supportWidth: 1.8, color: [0.13, 0.33, 0.21],
         required: true });
       // Concrete abutment houses and Honda-red caps make the figure-eight
       // crossing read as engineered infrastructure rather than a floating deck.
