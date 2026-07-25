@@ -2286,7 +2286,13 @@ const Tracks = (function () {
           const by = topY * (0.5 + hash(k * 2.3 + side) * 0.32);
           addBox(out, vadd(p.c, p.u, by), [topW * 1.05, 0.7, topD * 1.05], neon, b);
         }
-        if (h > 38) addBox(out, vadd(p.c, p.u, topY + 2.4), [1.1, 1.1, 1.1], [3.2, 0.4, 0.3], b);  // red beacon
+        if (h > 38) {
+          // Beacon sits 2.4 m over the roof, so it needs the mast a real
+          // aviation light stands on — without it the red cube hung in clear
+          // air above every tall tower on every city circuit.
+          addCyl(out, vadd(p.c, p.u, topY), 0.14, 2.4, [0.30, 0.30, 0.34], 4, b);          // beacon mast
+          addBox(out, vadd(p.c, p.u, topY + 2.4), [1.1, 1.1, 1.1], [3.2, 0.4, 0.3], b);    // red beacon
+        }
       }
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
     };
