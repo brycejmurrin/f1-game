@@ -5,19 +5,20 @@
 // Boots a static server, waits for __apex, freezes, frames the camera, writes PNG.
 // Default output path: scratch/captures/playwright-probe/<track>-<pct>-<cam>.png
 
-import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
-import { existsSync, mkdirSync } from "node:fs";
-import { createServer } from "node:net";
+import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import {
+  launchChromium,
+  shutdown,
+  sleep,
+  startStaticServer,
+} from "../../../tools/harness.mjs";
 import {
   assertSafePathToken,
   resolveRepoDefault,
 } from "../../../tools/output-paths.mjs";
 
 const ROOT = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
 
 const [trackId = "monza", fracArg = "0.1", cam = "orbit", outArg] =
   process.argv.slice(2);
@@ -36,42 +37,18 @@ const out = outArg
 
 mkdirSync(dirname(out), { recursive: true });
 
-function freePort() {
-  return new Promise((res, rej) => {
-    const s = createServer();
-    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-    s.on("error", rej);
-  });
-}
-
-function pickChromium() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-  return undefined; // fall back to playwright's bundled build
-}
-
-const PORT = await freePort();
-
-// Static server (python3 http.server matches the Playwright config webServer).
-const server = spawn("python3", ["-m", "http.server", String(PORT)], {
-  cwd: ROOT,
-  stdio: "ignore",
-});
-const done = () => { try { server.kill(); } catch {} };
-process.on("exit", done);
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Static server runs in THIS process (see tools/harness.mjs) — a spawned
+// `python3 -m http.server` outlived every signalled run.
+const srv = await startStaticServer(ROOT);
 
 try {
-  await sleep(700); // let the server come up
-  const browser = await chromium.launch({
-    executablePath: pickChromium(),
+  const browser = await launchChromium({
     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"],
   });
   const page = await browser.newPage({
     viewport: { width: 1280, height: 720 },
   });
-  await page.goto(`http://127.0.0.1:${PORT}/`);
+  await page.goto(srv.url);
   await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
 
   await page.evaluate((id) => window.__apex.race(id), safeTrackId);
@@ -100,11 +77,9 @@ try {
   const buf = await page.locator("canvas#game").screenshot({ path: out });
   const kb = (buf.length / 1024).toFixed(1);
   console.log(`wrote ${out} (${kb} KB)` + (buf.length < 5000 ? "  ⚠ looks blank (<5KB)" : ""));
-
-  await browser.close();
 } catch (err) {
   console.error("shot failed:", err.message);
   process.exitCode = 1;
 } finally {
-  done();
+  await shutdown(); // browser + server, on the throw path too
 }

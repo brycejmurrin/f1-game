@@ -14,48 +14,29 @@
 // Pair this with eye/orbit screenshots (playwright-probe/shot.mjs) — numbers find the
 // gap, pictures confirm the read. See the survey-track SKILL.
 
-import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
-import { createServer } from "node:net";
+import {
+  launchChromium,
+  shutdown,
+  sleep,
+  startStaticServer,
+} from "../../../tools/harness.mjs";
 
 const ROOT = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
 
 const [trackId = "montreal", fracsArg, latsArg] = process.argv.slice(2);
 const fracs = (fracsArg || "0,0.12,0.25,0.5,0.65,0.8").split(",").map(Number);
 const lats = (latsArg || "8,12,20,30,45,70,110").split(",").map(Number);
 
-function freePort() {
-  return new Promise((res, rej) => {
-    const s = createServer();
-    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-    s.on("error", rej);
-  });
-}
-function pickChromium() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-  return undefined;
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const PORT = await freePort();
-const server = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, stdio: "ignore" });
-const done = () => { try { server.kill(); } catch {} };
-process.on("exit", done);
+const srv = await startStaticServer(ROOT);
 
 try {
-  await sleep(700);
-  const browser = await chromium.launch({
-    executablePath: pickChromium(),
+  const browser = await launchChromium({
     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"],
   });
   const page = await browser.newPage({ viewport: { width: 800, height: 480 } });
   const errs = [];
   page.on("pageerror", (e) => errs.push(String(e).split("\n")[0]));
-  await page.goto(`http://127.0.0.1:${PORT}/`);
+  await page.goto(srv.url);
   await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
   await page.evaluate((id) => window.__apex.race(id), trackId);
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });

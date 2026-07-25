@@ -15,34 +15,15 @@
 // the npm playwright build doesn't match (executablePath fallback), and resolves
 // playwright from the project even when run from elsewhere.
 
-import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { createServer } from "node:net";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
 
 const argv = process.argv.slice(2);
 const raw = argv.includes("--raw");
 const rest = argv.filter((a) => a !== "--raw");
 const track = rest[0] || "monza";
 const expr = rest[1] || "a.info()";
-
-function freePort() {
-  return new Promise((res, rej) => {
-    const s = createServer();
-    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-    s.on("error", rej);
-  });
-}
-function pickChromium() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-  return undefined; // fall back to playwright's bundled build
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const SHAPE = function () {
   window.__shape = function (v, d = 0) {
@@ -65,20 +46,14 @@ const SHAPE = function () {
 };
 
 (async () => {
-  const port = await freePort();
-  const server = spawn("python3", ["-m", "http.server", String(port)], { cwd: ROOT, stdio: "ignore" });
-  const cleanup = () => { try { server.kill(); } catch {} };
-  process.on("exit", cleanup);
+  const srv = await startStaticServer(ROOT);
 
-  let browser;
   try {
-    await sleep(600);
-    browser = await chromium.launch({
-      executablePath: pickChromium(),
+    const browser = await launchChromium({
       args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
     });
     const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
-    await page.goto(`http://127.0.0.1:${port}/`);
+    await page.goto(srv.url);
     await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
     await page.evaluate(SHAPE);
     await page.evaluate((t) => window.__apex.race(t), track);
@@ -95,11 +70,12 @@ const SHAPE = function () {
     }, { expr, raw });
 
     console.log(JSON.stringify(result.ok ? result.val : result, null, 2));
-    await browser.close();
   } catch (e) {
     console.error("apex-eval failed:", e.message);
     process.exitCode = 1;
   } finally {
-    cleanup();
+    // Closes the browser too — it must not survive a throw above (that is how
+    // stray chrome/crashpad processes used to pile up).
+    await shutdown();
   }
 })();
