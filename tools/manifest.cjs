@@ -87,6 +87,7 @@ const FULL = [
   "js/game/setup-ui.js",
   "js/game/menus.js",
   "js/game/photomode.js",
+  "js/game/tuner.js",
   "js/game/perf.js",
   "js/game/cameras.js",
   "js/game/hud.js",

@@ -1451,6 +1451,9 @@ const G = {
   applyResMode: (...a) => applyResMode(...a),
   setPaused: (...a) => setPaused(...a),
   ltKey: (...a) => ltKey(...a),
+  // Stable helpers consumed by js/game/tuner.js.
+  setLightTune: (...a) => setLightTune(...a),
+  exitPhotoMode: (...a) => exitPhotoMode(...a),   // const initialised below — defer
   // Stable helpers consumed by js/game/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
@@ -1466,7 +1469,8 @@ const G = {
   GAME_LAPS, TT_LAPS, LONG_GRIP,
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   camVantage, endRace, gridUp, gripMult, isErsDeploying,
-  loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
+  loadCarModel, loadTrack, persistLightTune,
+  refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   startRace, startWeatherArc, update, wrapS,
 };
@@ -1484,6 +1488,8 @@ const { buildSetup, openSetup, renderStatBars } = SetupUI.create(G);
 const { buildSelect, updateTrackPreview, openTrackDetail } = Menus.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
+// LIGHTING TUNER panel UI (js/game/tuner.js).
+const { buildLightTunePanel, refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
@@ -4371,172 +4377,8 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // it's open so the live preview is unobstructed (tick() keeps render() running
 // with physics paused), and DONE returns to it. Rows are generated
 // once from TUNE_DEFS; values persist via localStorage (apex26.lightTune).
-function fmtTune(d, v) {
-  if (d.fmt === "auto" && v < 0) return "AUTO";
-  const dec = (String(d.step).split(".")[1] || "").length;
-  const s = v.toFixed(Math.min(dec, 3));
-  return d.fmt === "signed" && v > 0 ? "+" + s : s;
-}
-// PREVIEW conditions: the tuner tunes GLOBAL values that only take visible
-// effect under the right conditions (night sliders do nothing on a day track,
-// wet reflections need a wet road). So a track with a FIXED time/weather could
-// hide half the controls. These buttons flip the live session's time-of-day and
-// weather so every value can be dialled in on any circuit; the original race
-// settings are captured on open and restored on DONE, so previewing never
-// changes the race you go back to.
-let _ltPrevTOD = null, _ltPrevWx = null;
-const LT_TODS = ["dawn", "day", "dusk", "night", "default"];
-const LT_WX = ["dry", "wet", "rain", "fog", "overcast"];
-function refreshLtPreviewActive() {
-  const tod = __apex.setTimeOfDay(), wx = __apex.weather();
-  for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("on", t === tod); }
-  for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("on", w === wx); }
-}
-// Show which per-condition profile is being edited, e.g. "MONZA · NIGHT · WET".
-function updateLtProfileLabel() {
-  const host = $("lt-profile"); if (!host) return;
-  const key = ltKey();
-  if (!key) { host.textContent = ""; return; }
-  const [id, tod, wx] = key.split("|");
-  const name = (track && track.def && track.def.name) || id;
-  const nOver = _ltStore[key] ? Object.keys(_ltStore[key]).length : 0;
-  host.textContent = name.toUpperCase() + " · " + tod.toUpperCase() + " · " + wx.toUpperCase() +
-    (nOver ? "  (" + nOver + " tuned)" : "  (defaults)");
-}
-function buildLtPreview() {
-  const host = $("lt-preview");
-  if (host.dataset.built) return;
-  host.dataset.built = "1";
-  // Compact one-line-each preset rows: a small inline label + tight chips, so the
-  // condition switchers don't eat the top of the panel.
-  const mkGroup = (title, ids, labels, onPick, prefix) => {
-    const row = document.createElement("div");
-    row.className = "lt-preview-row";
-    const lb = document.createElement("span"); lb.className = "lt-preview-lbl"; lb.textContent = title;
-    row.appendChild(lb);
-    ids.forEach((id, i) => {
-      const btn = document.createElement("button");
-      btn.className = "opt-btn lt-preview-btn"; btn.id = prefix + id; btn.textContent = labels[i];
-      // Switching a condition re-applies that condition's profile (via
-      // applyRaceSettings→applyLightTune), so reload the sliders + label too.
-      btn.onclick = () => { onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
-      row.appendChild(btn);
-    });
-    host.appendChild(row);
-  };
-  mkGroup("TIME", LT_TODS, ["DAWN", "DAY", "DUSK", "NIGHT", "TRACK"],
-    (t) => __apex.setTimeOfDay(t), "lt-tod-");
-  mkGroup("WEATHER", LT_WX, ["DRY", "WET", "RAIN", "FOG", "CLOUD"],
-    (w) => __apex.weather(w), "lt-wx-");
-}
-let _ltActiveGroup = null;   // currently-shown tuner category (tab)
-// Show one tuner category at a time (tab click). Toggles the .active class on the
-// matching group wrapper + its tab chip so only that group's sliders render —
-// the panel was an 82-slider scroll before this split it into 12 tabs.
-function setLtTab(group) {
-  _ltActiveGroup = group;
-  const rows = $("lt-rows"), tabs = $("lt-tabs");
-  if (rows) for (const g of rows.children) g.classList.toggle("active", g.dataset.group === group);
-  if (tabs) for (const t of tabs.children) {
-    const on = t.dataset.group === group;
-    t.classList.toggle("on", on);
-    t.setAttribute("aria-selected", on ? "true" : "false");
-  }
-  if (rows) rows.scrollTop = 0;
-}
-function buildLightTunePanel() {
-  buildLtPreview();
-  const host = $("lt-rows"), tabs = $("lt-tabs");
-  if (!host.dataset.built) {
-    host.dataset.built = "1";
-    const groups = [];      // ordered distinct group names
-    let group = null, section = null, wrap = null;
-    for (const d of TUNE_DEFS) {
-      if (d.group !== group) {
-        group = d.group; groups.push(group);
-        section = null;
-        wrap = document.createElement("div");
-        wrap.className = "lt-group"; wrap.dataset.group = group;
-        const h = document.createElement("h3");
-        h.className = "adv-sec"; h.textContent = group;
-        wrap.appendChild(h);
-        host.appendChild(wrap);
-      }
-      if (d.section && d.section !== section) {
-        section = d.section;
-        const sh = document.createElement("h4");
-        sh.className = "lt-section";
-        sh.textContent = section;
-        wrap.appendChild(sh);
-      }
-      const item = document.createElement("div");
-      item.className = "adv-item";
-      const lab = document.createElement("label"); lab.className = "tune-row";
-      const span = document.createElement("span"); span.className = "tune-label";
-      span.textContent = d.label + " ";
-      const b = document.createElement("b"); b.id = "lt-v-" + d.id;
-      span.appendChild(b);
-      const inp = document.createElement("input");
-      inp.type = "range"; inp.min = d.min; inp.max = d.max; inp.step = d.step;
-      inp.id = "lt-in-" + d.id;
-      inp.setAttribute("aria-label", d.label);
-      inp.oninput = () => {
-        setLightTune(d.id, parseFloat(inp.value));
-        b.textContent = fmtTune(d, LT[d.id]);
-        persistLightTune();
-      };
-      lab.appendChild(span); lab.appendChild(inp);
-      item.appendChild(lab);
-      if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
-      wrap.appendChild(item);
-    }
-    // Build one tab chip per group.
-    if (tabs) {
-      tabs.textContent = "";
-      for (const g of groups) {
-        const t = document.createElement("button");
-        t.type = "button"; t.className = "lt-tab"; t.dataset.group = g;
-        t.textContent = g; t.setAttribute("role", "tab");
-        t.onclick = () => setLtTab(g);
-        tabs.appendChild(t);
-      }
-    }
-    _ltActiveGroup = groups[0];
-  }
-  document.getElementById("lighting-inner").classList.toggle("lt-show-help", $("lt-help-on").checked);
-  // Restore the last-viewed category (or default to the first).
-  setLtTab(_ltActiveGroup || (TUNE_DEFS[0] && TUNE_DEFS[0].group));
-  refreshLightTunePanel();
-}
-function refreshLightTunePanel() {
-  for (const d of TUNE_DEFS) {
-    const inp = $("lt-in-" + d.id), b = $("lt-v-" + d.id);
-    if (inp) inp.value = LT[d.id];
-    if (b) b.textContent = fmtTune(d, LT[d.id]);
-  }
-  updateLtProfileLabel();
-}
-$("pm-lighting").onclick = () => {
-  buildLightTunePanel();
-  _ltPrevTOD = __apex.setTimeOfDay();   // capture the race's real conditions
-  _ltPrevWx = __apex.weather();
-  refreshLtPreviewActive();
-  $("lt-json").hidden = true;
-  $("lighting").hidden = false;
-  document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
-  els.pmsettings.hidden = true;     // unobstructed live preview (opened from settings)
-};
-function closeLightTuner(showPauseMenu) {
-  if (photoMode) exitPhotoMode();
-  // Restore the race's real time & weather (preview was transient).
-  if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
-  if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);
-  _ltPrevTOD = null; _ltPrevWx = null;
-  $("lighting").hidden = true;
-  document.body.classList.remove("lt-open");   // restore race HUD + touch controls
-  if (showPauseMenu && paused) els.pmsettings.hidden = false;   // back to the settings menu
-}
-$("lt-close").onclick = () => closeLightTuner(true);
+// The LIGHTING TUNER panel UI lives in js/game/tuner.js
+// (TunerPanel.create(G) — wired after the G façade).
 
 // ---------- Photo mode (free-fly camera) ----------
 // Seed the fly-cam from the camera currently on screen so it starts exactly
