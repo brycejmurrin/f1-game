@@ -94,7 +94,9 @@
           addBox(stage, vadd(a.c, a.u, 8), [32, 16, 74], WHITE, b);
           addBox(stage, vadd(a.c, a.u, 12.5), [32.4, 2.2, 74.4], GLASS, b);
           for (let i = -2; i <= 2; i++) {
-            const roof = vadd(vadd(a.c, a.t, i * 13), a.u, 18);
+            // Roof bays sit ON the hall (its box spans a.u 0..16). addPrism
+            // anchors at its BASE, so 18 left a 2 m gap under every bay.
+            const roof = vadd(vadd(a.c, a.t, i * 13), a.u, 16);
             addPrism(stage, roof, [31, 3.2, 11], i % 2 ? STEEL : GLASS, b);
           }
           const entrance = vadd(vadd(a.c, a.r, -side * 11), a.u, 6);
