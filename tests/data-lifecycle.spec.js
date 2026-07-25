@@ -8,10 +8,10 @@ async function dataReady(page) {
   await page.evaluate(() => {
     window.Teams = { LIST: [] };
   });
-  await page.addScriptTag({ url: "/js/api.js" });
-  await page.addScriptTag({ url: "/js/data-telemetry.js" });
-  await page.addScriptTag({ url: "/js/data-export.js" });
-  await page.addScriptTag({ url: "/js/data.js" });
+  await page.addScriptTag({ url: "/js/data/api.js" });
+  await page.addScriptTag({ url: "/js/data/telemetry.js" });
+  await page.addScriptTag({ url: "/js/data/export.js" });
+  await page.addScriptTag({ url: "/js/data/hub.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
 }
 
@@ -121,7 +121,7 @@ test("meeting session lists refresh recent meetings but retain historic lists", 
 
   await page.goto("/version.json");
   await page.setContent("<div></div>");
-  await page.addScriptTag({ url: "/js/api.js" });
+  await page.addScriptTag({ url: "/js/data/api.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined");
   await page.evaluate(async () => {
     localStorage.clear();

@@ -127,7 +127,7 @@ function buildContext() {
 
   const Tracks = ctx.Tracks;
   if (!Tracks || !Tracks.LIST) {
-    throw new Error("js/tracks.js did not define global Tracks.LIST");
+    throw new Error("js/track/tracks.js did not define global Tracks.LIST");
   }
   return Tracks;
 }
