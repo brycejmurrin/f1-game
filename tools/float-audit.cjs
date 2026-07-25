@@ -50,7 +50,8 @@ function buildContext(opts) {
   const captures = [];
   const capture = (buf) => {
     const verts = buf && buf.pos ? buf.pos.length / 3 : 0;
-    const rec = { verts, pos: buf && buf.pos ? buf.pos : [] };
+    const rec = { verts, pos: buf && buf.pos ? buf.pos : [],
+                  idx: buf && buf.idx ? buf.idx : null };
     captures.push(rec);
     return { verts, idxCount: buf && buf.idx ? buf.idx.length : 0, __cap: rec };
   };
@@ -213,11 +214,61 @@ function audit(id) {
     return surface.heightAt(best, lat);
   };
 
-  const groundAt = (ix, iz) => {
-    const g = groundTop.get(ck(ix, iz));
-    if (g !== undefined) return g;
-    return surfaceGround((ix + 0.5) * CELL, (iz + 0.5) * CELL);
+  // Ground as a SURFACE, not a scatter of vertices. Binning vertices per cell
+  // misreads any cell spanned by a large triangle that keeps its vertices
+  // elsewhere, so props above it look like they float. Index the ground
+  // triangles and interpolate the exact height, the way the game's own
+  // terrainYAt() does when it anchors a prop.
+  const TC = 8;                      // triangle-grid cell (m)
+  const triGrid = new Map();
+  const TRI = [];
+  for (const name of groundMeshes) {
+    const m = M[name];
+    if (!m || !m.__cap || !m.__cap.idx) continue;
+    const pos = m.__cap.pos, idx = m.__cap.idx;
+    for (let t = 0; t + 2 < idx.length; t += 3) {
+      const ia = idx[t] * 3, ib = idx[t + 1] * 3, ic = idx[t + 2] * 3;
+      const base = TRI.length;
+      TRI.push(pos[ia], pos[ia + 1], pos[ia + 2],
+               pos[ib], pos[ib + 1], pos[ib + 2],
+               pos[ic], pos[ic + 1], pos[ic + 2]);
+      const x0 = Math.min(pos[ia], pos[ib], pos[ic]), x1 = Math.max(pos[ia], pos[ib], pos[ic]);
+      const z0 = Math.min(pos[ia + 2], pos[ib + 2], pos[ic + 2]);
+      const z1 = Math.max(pos[ia + 2], pos[ib + 2], pos[ic + 2]);
+      if ((x1 - x0) > 400 || (z1 - z0) > 400) continue;      // skip degenerate spans
+      for (let gx = Math.floor(x0 / TC); gx <= Math.floor(x1 / TC); gx++)
+        for (let gz = Math.floor(z0 / TC); gz <= Math.floor(z1 / TC); gz++) {
+          const k = ck(gx, gz);
+          let a = triGrid.get(k); if (!a) triGrid.set(k, a = []);
+          a.push(base);
+        }
+    }
+  }
+  const surfaceY = (x, z) => {
+    const arr = triGrid.get(ck(Math.floor(x / TC), Math.floor(z / TC)));
+    if (!arr) return null;
+    let best = null;
+    for (const b of arr) {
+      const ax = TRI[b], ay = TRI[b + 1], az = TRI[b + 2];
+      const bx = TRI[b + 3], by = TRI[b + 4], bz = TRI[b + 5];
+      const cx2 = TRI[b + 6], cy = TRI[b + 7], cz2 = TRI[b + 8];
+      const v0x = cx2 - ax, v0z = cz2 - az, v1x = bx - ax, v1z = bz - az;
+      const v2x = x - ax, v2z = z - az;
+      const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z;
+      const d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z;
+      const den = d00 * d11 - d01 * d01; if (Math.abs(den) < 1e-9) continue;
+      const u = (d11 * d20 - d01 * d21) / den, vv = (d00 * d21 - d01 * d20) / den;
+      if (u < -0.01 || vv < -0.01 || u + vv > 1.01) continue;
+      const y = ay + u * (cy - ay) + vv * (by - ay);
+      if (best === null || y > best) best = y;
+    }
+    return best;
   };
+  const groundAtXZ = (x, z) => {
+    const y = surfaceY(x, z);
+    return y !== null ? y : surfaceGround(x, z);
+  };
+  const groundAt = (ix, iz) => groundAtXZ((ix + 0.5) * CELL, (iz + 0.5) * CELL);
 
   // ---- support-chain analysis --------------------------------------------
   // The real question is per-MODEL: "what is this piece resting on?" Cell
@@ -272,9 +323,7 @@ function audit(id) {
   // Seed: primitives that touch the ground themselves.
   let pending = [];
   for (const p of sorted) {
-    const gx = Math.floor((p.minX + p.maxX) / 2 / CELL);
-    const gz = Math.floor((p.minZ + p.maxZ) / 2 / CELL);
-    const g = groundAt(gx, gz);
+    const g = groundAtXZ((p.minX + p.maxX) / 2, (p.minZ + p.maxZ) / 2);
     p._g = g;
     if (g !== null && p.minY <= g + GROUNDED_EPS) addGrounded(p);
     else pending.push(p);
