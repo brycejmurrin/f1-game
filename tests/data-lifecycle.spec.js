@@ -8,9 +8,15 @@ async function dataReady(page) {
   await page.evaluate(() => {
     window.Teams = { LIST: [] };
   });
+  // hub.js calls every tab module's create() at IIFE-eval time (see
+  // HARD_EDGES in tools/manifest.cjs), so ALL data modules must load first.
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
   await page.addScriptTag({ url: "/js/data/export.js" });
+  await page.addScriptTag({ url: "/js/data/schedule.js" });
+  await page.addScriptTag({ url: "/js/data/standings.js" });
+  await page.addScriptTag({ url: "/js/data/lastrace.js" });
+  await page.addScriptTag({ url: "/js/data/live.js" });
   await page.addScriptTag({ url: "/js/data/hub.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
 }
