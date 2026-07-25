@@ -440,5 +440,227 @@ function buildTrackLights(track) {
   return lights;
 }
 
-  return { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights };
+// ── Per-frame light assembly (extracted from js/game.js) ─────────────────────
+const _clampNum = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+// Car rain lights as REAL light sources after dark: the nearest few cars carry a
+// small red point light at the tail, so traffic reads as moving light sources —
+// a red glow trailing each car on the road surface.
+const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _tlSel = [];
+function appendCarTailLights(frame, track, cars, player) {
+  const L = frame.lights;
+  // frame.lights is always the per-frame copy (flicker copies every frame), so
+  // appending here never mutates the cached track set.
+  if (!L || L === track._lights || !player) return;
+  _tlSel.length = 0;
+  const tlRange = LT.tailRange != null ? LT.tailRange : 160;   // TAIL-LIGHT RANGE knob
+  let _tlN = 0;
+  for (const c of cars) {
+    const ds = Math.abs(c.s - player.s);
+    const d = Math.min(ds, track.total - ds);
+    if (d < tlRange) {
+      // Reuse pooled {c,d} entries in place (same pattern as _lightCullBuf) —
+      // fresh objects here were per-car-per-frame GC churn on night tracks.
+      const e = _tlSel[_tlN];
+      if (e) { e.c = c; e.d = d; } else _tlSel[_tlN] = { c: c, d: d };
+      _tlN++;
+    }
+  }
+  _tlSel.length = _tlN;      // drop stale entries from earlier (busier) frames
+  _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
+  const nT = Math.min(_tlSel.length, 5);
+  if (nT <= 0) return;
+  // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
+  // grid the floodlights alone can fill the shader's 32-light cap (or the tighter
+  // lampCull CAP from setFrameLights), so appending overflowed and the shader
+  // dropped the tail-lights. Evict that many of the FARTHEST floods instead
+  // (setFrameLights sorts ascending by distance, so the tail end is farthest).
+  const room = 32 - ((L.length / 15) | 0);
+  if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
+  // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
+  // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
+  // hard cutoff (as-shipped), so the fade term is 1 for every selected car.
+  const tlFade = LT.tailFade != null ? LT.tailFade : 0;
+  for (let j = 0; j < nT; j++) {
+    const sel = _tlSel[j], c = sel.c;
+    Tracks.sample(track, c.s, _tlSmp);
+    const tx = _tlSmp.t[0], tz = _tlSmp.t[2];
+    // rear-facing, tilted down: the glow lands on the road behind the car
+    let dx = -tx * 0.87, dy = -0.5, dz = -tz * 0.87;
+    const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+    // BRAKE FLARE: the tail glow surges while the car is braking. brakeHeat is
+    // the render-only 0..1 disc-heat ramp every car already tracks (rises under
+    // braking, cools after) — read-only here, physics untouched.
+    const bAmt = _clampNum(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul;
+    const fadeF = tlFade > 0 ? _clampNum((tlRange - sel.d) / tlFade, 0, 1) : 1;
+    const tlm = LT.tailLightMul * (1 + bAmt * 1.6) * fadeF;
+    L.push(
+      _tlSmp.p[0] + _tlSmp.r[0] * c.x - tx * 2.4,
+      _tlSmp.p[1] + 0.55,
+      _tlSmp.p[2] + _tlSmp.r[2] * c.x - tz * 2.4,
+      4.5 * tlm, 0.14 * tlm, 0.10 * tlm,
+      8 * (1 + bAmt * 0.45), dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
+  }
+}
+
+// Cull the track light set to the nearest CAP lamps (shader max 32; traffic uses
+// LT.lampCull, def 28, leaving room for car tail lights) and flatten into
+// `frame.lights`. Called each frame only when floodlights are lit.
+const _lightCullBuf = [];
+const _lightScaleBuf = [];
+const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
+const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-frame closure)
+let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
+let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
+const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
+function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier) {
+  const src = track._lights;
+  if (!src || !src.length) { frame.lights = null; return; }
+  // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
+  // cull. With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader
+  // slots stay free; solo runs use the full 32. Mobile tier clamps both paths
+  // to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
+  // dominant night fill cost on phones, and clamping HERE (not the knob's def)
+  // means a per-track preset can't push a phone back up to 32.
+  const CAP = Math.min(
+    cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32,
+    mobileTier ? 24 : 32);
+  // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
+  // + warmth: dim & warm at twilight, full & neutral at deep night).
+  const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
+  const sg = Array.isArray(scale) ? scale[1] : sr;
+  const sb = Array.isArray(scale) ? scale[2] : sr;
+  const count = src.length / 15;
+  const out = _lightScaleBuf;
+  // Per-lamp FLICKER, computed CPU-side each frame (zero shader cost): healthy
+  // lamps barely breathe (±2%), the occasional aging tube visibly pulses (±10%).
+  // Hash on the lamp's stable source offset so the same lamp always flickers the
+  // same way — the night stops being a frozen still.
+  const tNow = performance.now() * 0.001;
+  // WARMUP: when the floods switch on (race start on a night track, a live
+  // day→night flip) discharge lamps don't snap to full — they run slightly dim
+  // and sodium-warm and settle to their true colour over a few seconds, each
+  // lamp on its own stagger. A >1 s gap since the last copy means the floods
+  // were off, so this frame is a fresh switch-on. Per-frame copy only — the
+  // baked track records are never touched.
+  if (tNow - _lampLastT > 1.0) _lampWarmT0 = tNow;
+  _lampLastT = tNow;
+  const fl = (o) => {
+    const x = Math.sin((o + 13) * 91.17) * 43758.5453;
+    const hsh = x - Math.floor(x);
+    const amp = hsh > 0.90 ? LT.lampFlicker : LT.lampFlicker * 0.2;
+    // Fast flicker (the odd aging tube) + a slow BREATHE every lamp carries
+    // (mains/arc drift, ~±1.5% at the default knob). Both scale with the LAMP
+    // FLICKER knob so 0 still means rock-steady.
+    let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
+              + LT.lampFlicker * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
+    // LAMP WARM-UP knob scales the strike-to-full duration (def 1 = the 4+hsh*4 s
+    // ramp). 0 = instant on (wu pinned to 1, no dip/warmth); higher = a longer,
+    // more staggered warm-up. WARM-UP DIP sets how dim the strike starts, WARM-UP
+    // WARMTH how orange it glows before settling.
+    const warmDur = (4 + hsh * 4) * (LT.lampWarmup != null ? LT.lampWarmup : 1);
+    const wu = warmDur > 0 ? Math.min(1, Math.max(0, (tNow - _lampWarmT0) / warmDur)) : 1;
+    const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
+    f *= (1 - dip) + dip * wu;
+    const cold = (1 - wu) * (LT.lampWarmupWarm != null ? LT.lampWarmupWarm : 1);   // 1 = just struck (dim, sodium-orange), 0 = settled
+    _flScr[0] = f * (1 + cold * 0.22);
+    _flScr[1] = f * (1 - cold * 0.10);
+    _flScr[2] = f * (1 - cold * 0.38);
+    return _flScr;
+  };
+  // Cheap unsorted copy ONLY when every lamp fits with the full 5-slot tail-light
+  // reserve to spare. It used to run for any count ≤ 32, which broke two promises
+  // downstream: appendCarTailLights evicts overflow from the array TAIL on the
+  // assumption the set is sorted farthest-last (it wasn't — on a 29-32-lamp track
+  // it could snap off the nearest floods instead), and the CAP reservation was
+  // silently ignored. 24+-lamp tracks now take the sorted heap path below.
+  if (count + 5 <= CAP) {
+    // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
+    out.length = 0;
+    for (let i = 0; i < src.length; i += 15) {
+      const f = fl(i);
+      out.push(src[i], src[i+1], src[i+2],
+        src[i+3] * sr * f[0], src[i+4] * sg * f[1], src[i+5] * sb * f[2], src[i+6],
+        src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13], src[i+14]);
+    }
+    frame.lights = out;
+    return;
+  }
+  // Distance-rank: select the nearest CAP. Reuse a pooled object array + the
+  // output buffer so a dense night grid doesn't allocate fresh garbage every
+  // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
+  // Lights BEHIND the camera rank farther: a purely radial nearest-N wastes
+  // half the budget on lamps you can't see, ending the lit road in a hard dark
+  // boundary ahead. The forward bias (LT.lampBehindBias) pushes that boundary
+  // further out — past the night fog wall.
+  const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
+  const flen2 = fx * fx + fz * fz || 1;
+  const buf = _lightCullBuf;
+  for (let i = 0; i < count; i++) {
+    const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
+    let d = dx * dx + dy * dy + dz * dz;
+    // Behind-camera penalty RAMPED in over ~14° past the camera plane (was a hard
+    // sign test ×6.25: the instant a lamp crossed the plane its rank leapt several
+    // places in ONE frame, stepping its pool's brightness — and a fast chase-cam
+    // yaw flipped the half-space for many lamps at once, a whole-field shudder).
+    const b = dx * fx + dz * fz;
+    if (b < 0) {
+      const dl2 = dx * dx + dz * dz || 1;
+      const ratio2 = (b * b) / (flen2 * dl2 * 0.0625);
+      // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
+      // nearest-N rank (def 5.25 = as-shipped forward push).
+      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, ratio2);
+    }
+    const e = buf[i];
+    if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
+  }
+  buf.length = count;
+  // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
+  // all ~count entries every frame (O(count·log CAP) vs O(count·log count)).
+  const heap = _lightHeap; heap.length = 0;
+  for (let i = 0; i < count; i++) {
+    const e = buf[i];
+    if (heap.length < CAP) {
+      let ci = heap.length; heap.push(e);
+      while (ci > 0) { const pi = (ci - 1) >> 1; if (heap[pi].d < heap[ci].d) { const t = heap[pi]; heap[pi] = heap[ci]; heap[ci] = t; ci = pi; } else break; }
+    } else if (e.d < heap[0].d) {
+      heap[0] = e;
+      let pi = 0;
+      for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < CAP && heap[l].d > heap[lg].d) lg = l; if (rr < CAP && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
+    }
+  }
+  // Sort just those 32 ascending so the tail fade eases the farthest of the set.
+  // (Comparator hoisted to module scope — this runs every lit frame.)
+  heap.sort(_byDistAsc);
+  // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
+  // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
+  // visible stepping as the set shifted at speed). Fading by closeness to the set
+  // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
+  // membership changes are invisible.
+  const dEdge = heap[heap.length - 1].d || 1;
+  // The boundary fade only makes sense when lamps were actually culled — if the
+  // whole baked set fit inside CAP (the 24-32-lamp tracks that now take this
+  // path for its sorting), there is no set boundary, and fading "the farthest
+  // of the set" would black out a real lamp that used to be lit.
+  const truncated = count > CAP;
+  const _cullBand = dEdge * (LT.lampCullFade != null ? LT.lampCullFade : 0.35);   // LAMP CULL FADE knob
+  out.length = 0;
+  for (let i = 0; i < heap.length; i++) {
+    const e = heap[i], o = e.o;
+    const cullF = truncated ? Math.max(0, Math.min(1, (dEdge - e.d) / _cullBand)) : 1;
+    const f = fl(o);
+    out.push(src[o], src[o+1], src[o+2],
+      src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
+      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13],
+      // glareW fades with the cull too: drawGlow normalises the lamp colour, so a
+      // colour-only fade barely dims the halo — it blinked off at ~full brightness
+      // when the lamp left the set.
+      src[o+14] * cullF);
+  }
+  frame.lights = out;
+}
+
+  return { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights,
+           setFrameLights, appendCarTailLights };
 })();

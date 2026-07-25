@@ -82,6 +82,12 @@ const FULL = [
   "js/game/lighting.js",
   "js/game/carmesh.js",
   "js/game/particles.js",
+  "js/game/store.js",
+  "js/game/perf.js",
+  "js/game/cameras.js",
+  "js/game/hud.js",
+  "js/game/results.js",
+  "js/game/apex.js",
   "js/game.js",
 ];
 
@@ -141,6 +147,8 @@ const HARD_EDGES = [
   ["js/data/standings.js", "js/data/hub.js"],
   ["js/data/lastrace.js", "js/data/hub.js"],
   ["js/data/live.js", "js/data/hub.js"],
+  ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
+  ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
 ];
 
 // Named paths for direct single-file consumers (tests/tools that load one

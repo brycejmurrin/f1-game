@@ -229,5 +229,100 @@ function draw() {
   if (pb) _gfx.drawParticles(_vertB, pb, true);
 }
 
-return { init, clear, count, update, draw, tyreSmoke, sparks, kickup, spray };
+// ---------- 2D rain overlay (falling streaks on a DOM canvas) ----------
+// Extracted from js/game.js. Draws OVER the WebGL canvas on its own 2D canvas
+// (created lazily on first show). game.js decides the weather (drizzle vs
+// storm) and hands booleans in; live tuning comes from LightTune.LT.
+let _rainCanvas = null, _rainCtx = null, _rainDrops = [];
+
+const _clamp01 = (v) => Math.max(0, Math.min(1, v));
+function _lt() {
+  return (typeof LightTune !== "undefined" && LightTune.LT) || {};
+}
+
+function _rainEnsure() {
+  if (_rainCanvas) return;
+  _rainCanvas = document.createElement("canvas");
+  _rainCanvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;display:none;";
+  document.body.appendChild(_rainCanvas);
+  _rainCtx = _rainCanvas.getContext("2d");
+}
+
+function rainShow(on) {
+  _rainEnsure();
+  if (!on && _rainCtx) {
+    // Clear any lingering streaks so a live rain→wet switch doesn't freeze the
+    // last rain frame on the (now hidden) overlay.
+    _rainCtx.clearRect(0, 0, _rainCanvas.width, _rainCanvas.height);
+  }
+  _rainCanvas.style.display = on ? "block" : "none";
+}
+
+function rainActive() { return _rainDrops.length > 0; }
+
+function rainSeed(drizzle) {
+  _rainEnsure();
+  const LT = _lt();
+  _rainCanvas.width = window.innerWidth;
+  _rainCanvas.height = window.innerHeight;
+  // DRIZZLE tier: "wet" (damp track, no storm) gets a sparse, shorter, slower
+  // field — light precipitation that reads as drizzle, not a downpour. "rain"
+  // keeps the full storm density.
+  // DRIZZLE ratios: count/length/fall-speed of a WET-road drizzle relative to a
+  // full storm, each a live knob (defs 0.3/0.5/0.6 reproduce the shipped drizzle).
+  const dzCount = LT.drizzleCount != null ? LT.drizzleCount : 0.3;
+  const dzLen   = LT.drizzleLen   != null ? LT.drizzleLen   : 0.5;
+  const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6;
+  _rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? dzCount : 1)) }, () => ({
+    x: Math.random() * _rainCanvas.width,
+    y: Math.random() * _rainCanvas.height,
+    len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? dzLen : 1),
+    speed: (380 + Math.random() * 360) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
+    opacity: 0.16 + Math.random() * 0.34,
+  }));
+}
+
+function rainDraw(dt, speed, raining) {
+  const LT = _lt();
+  const w = _rainCanvas.width, h = _rainCanvas.height;
+  _rainCtx.clearRect(0, 0, w, h);
+  _rainCtx.lineWidth = 1;
+  // Constant colour + a single averaged alpha so every drop rides ONE batched path
+  // (one beginPath/stroke instead of one per drop). The blur/motion of a rain field
+  // hides that the per-drop opacity is now uniform. Drizzle draws fainter.
+  _rainCtx.strokeStyle = "#afc8e8";
+  // RAIN OPACITY knob (def 1) scales the streak-layer alpha; def reproduces the
+  // shipped 0.25/0.16 exactly. Clamped to canvas' valid 0..1 globalAlpha range.
+  _rainCtx.globalAlpha = _clamp01((raining ? 0.25 : 0.16) * (LT.rainOpacity != null ? LT.rainOpacity : 1));   // ~mean of the 0.16..0.50 per-drop range
+  // SPEED-REACTIVE streaks: at speed the rain shears toward the camera's motion
+  // and stretches into driving streaks (apparent velocity = fall + car speed).
+  // Render-only — reads the handed-in speed, never writes physics state.
+  const vk = _clamp01((speed || 0) / 90);
+  // RAIN SPEED SHEAR: how much apparent wind slants (rainShearWind) and stretches
+  // (rainShearLen) the streaks at speed. Defs 0.9/2 reproduce the shipped shear.
+  const wind = LT.rainWind + vk * (LT.rainShearWind != null ? LT.rainShearWind : 0.9);
+  const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
+  _rainCtx.beginPath();
+  for (const d of _rainDrops) {
+    d.y += d.speed * dt;
+    d.x += d.speed * dt * wind;
+    if (d.y - d.len > h || d.x > w || d.x < 0) { d.y = -d.len; d.x = Math.random() * w; }
+    _rainCtx.moveTo(d.x, d.y);
+    _rainCtx.lineTo(d.x + d.len * lenMul * wind, d.y + d.len * lenMul);
+  }
+  _rainCtx.stroke();
+  _rainCtx.globalAlpha = 1;
+}
+
+// Lightning veil: drawn on top of rain drops so it bleaches the rain too.
+function rainFlash(alpha) {
+  _rainCtx.save();
+  _rainCtx.globalAlpha = alpha;
+  _rainCtx.fillStyle = "#dcecff";
+  _rainCtx.fillRect(0, 0, _rainCanvas.width, _rainCanvas.height);
+  _rainCtx.restore();
+}
+
+return { init, clear, count, update, draw, tyreSmoke, sparks, kickup, spray,
+         rainShow, rainSeed, rainDraw, rainFlash, rainActive };
 })();
