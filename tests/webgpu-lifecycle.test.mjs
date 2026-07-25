@@ -4,10 +4,11 @@ import test from "node:test";
 import vm from "node:vm";
 
 const ROOT = new URL("../", import.meta.url);
+const P = (await import("node:module")).createRequire(import.meta.url)("../tools/manifest.cjs").PATHS;
 const [CHUNKS_SOURCE, POST_SOURCE, WGX_SOURCE] = await Promise.all([
-  readFile(new URL("js/webgpu/wgsl-chunks.js", ROOT), "utf8"),
-  readFile(new URL("js/webgpu/wgsl-post.js", ROOT), "utf8"),
-  readFile(new URL("js/webgpu/wgx.js", ROOT), "utf8"),
+  readFile(new URL(P.WGSL_CHUNKS, ROOT), "utf8"),
+  readFile(new URL(P.WGSL_POST, ROOT), "utf8"),
+  readFile(new URL(P.WGX, ROOT), "utf8"),
 ]);
 
 function makeGpuHarness() {

@@ -4,8 +4,10 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const MANIFEST = createRequire(import.meta.url)("../tools/manifest.cjs");
 
 function loadBaku() {
   const makeMesh = (geo) => ({
@@ -28,17 +30,11 @@ function loadBaku() {
     const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
     vm.runInContext(source, context, { filename: file });
   };
-  for (const file of [
-    "js/circuits.js",
-    "js/track-geom.js",
-    "js/track-scenery-data.js",
-    "js/track-space.js",
-    "js/track-surface.js",
-    "js/track-models.js",
-    "js/circuit-markings.js",
-    "js/tracks/baku.js",
-    "js/tracks.js",
-  ]) run(file);
+  // TRACK_VM from tools/manifest.cjs, with "@circuits" narrowed to Baku only.
+  for (const entry of MANIFEST.TRACK_VM) {
+    if (entry === "@circuits") run(`${MANIFEST.CIRCUITS_DIR}/baku.js`);
+    else run(entry);
+  }
   return {
     raw: context.TrackDefs.find((definition) => definition.id === "baku"),
     def: context.Tracks.LIST.find((definition) => definition.id === "baku"),

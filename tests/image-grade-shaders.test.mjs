@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const GLSL = readFileSync(new URL("../js/shaders/glx-shaders.js", import.meta.url), "utf8");
-const WGSL = readFileSync(new URL("../js/webgpu/wgsl-post.js", import.meta.url), "utf8");
+const P = (await import("node:module")).createRequire(import.meta.url)("../tools/manifest.cjs").PATHS;
+const GLSL = readFileSync(new URL(`../${P.GLX_SHADERS}`, import.meta.url), "utf8");
+const WGSL = readFileSync(new URL(`../${P.WGSL_POST}`, import.meta.url), "utf8");
 const LUMA = [0.2126, 0.7152, 0.0722];
 const luma = (c) => c[0] * LUMA[0] + c[1] * LUMA[1] + c[2] * LUMA[2];
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));

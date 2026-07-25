@@ -10,6 +10,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
+const MANIFEST = require("../tools/manifest.cjs");
 
 function buildHarness() {
   let meshObserver = null;
@@ -40,18 +41,18 @@ function buildHarness() {
       .replace(/^const\b/gm, "var");
     vm.runInContext(src, ctx, { filename: relPath });
   };
-  runFile("js/circuits.js");
-  runFile("js/track-geom.js");
-  runFile("js/track-scenery-data.js");
-  runFile("js/track-space.js");
-  runFile("js/track-surface.js");
-  runFile("js/track-models.js");
-  runFile("js/circuit-markings.js");
-  for (const file of fs.readdirSync(path.join(ROOT, "js/tracks"))
-    .filter((name) => name.endsWith(".js")).sort()) {
-    runFile(path.join("js/tracks", file));
+  // Load list comes from tools/manifest.cjs (TRACK_VM) — the same source of
+  // truth verify-track.cjs and the load-order test use.
+  for (const entry of MANIFEST.TRACK_VM) {
+    if (entry === "@circuits") {
+      for (const file of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
+        .filter((name) => name.endsWith(".js")).sort()) {
+        runFile(path.join(MANIFEST.CIRCUITS_DIR, file));
+      }
+    } else {
+      runFile(entry);
+    }
   }
-  runFile("js/tracks.js");
   return {
     ctx,
     Tracks: ctx.Tracks,

@@ -23,7 +23,9 @@ const repoRoot = join(__dirname, "..");
 // --- load js/gltf.js into this context ---
 // TextDecoder is global in modern Node; atob exists too, but the module also
 // supports Buffer, which we rely on for base64.
-const src = readFileSync(join(repoRoot, "js", "gltf.js"), "utf8");
+const src = readFileSync(
+  join(repoRoot, (await import("node:module")).createRequire(import.meta.url)("./manifest.cjs").PATHS.GLTF),
+  "utf8");
 // The module does `const GLTF = (function(){...})();` at top level. Eval'd in a
 // function scope that const stays local, so append an assignment to export it.
 const factory = new Function("globalThis", "TextDecoder", "Buffer", "atob",
