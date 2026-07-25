@@ -575,6 +575,11 @@
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           for (let i = 0; i < 5; i++) {
             const off = (i - 2) * 12;
+            // Terrace under the crowd: the banked slab used to start 4.9 m up
+            // with open air beneath it, so the spectators read as a block
+            // hovering beside the circuit rather than a stand.
+            addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 2.45), a.r, 2),
+                   [9, 4.9, 5], [0.42, 0.43, 0.47], b);
             addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 6), a.r, 2),
                    [9, 2.2, 5], i % 2 ? CROWD : [0.50, 0.34, 0.40], b);
           }
