@@ -99,6 +99,16 @@ const TrackGeom = (function () {
 
   // Triangular prism / ridge: base sz[0] wide × sz[2] long, rising to a ridge
   // line along the LENGTH at height sz[1]. A-frame roofs, mountain ridges.
+  //
+  // ⚠ `c` is the BASE CENTRE, not the centroid — the prism occupies c → c+u*sz[1].
+  // addBox/addPyramid centre their `c` instead, so a roof written as
+  //   addPrism(out, vadd(top, u, roofH / 2), …)   // WRONG — floats by roofH/2
+  // hangs clear of whatever it is meant to cap. Seat it flush on the surface:
+  //   addPrism(out, top, …)                        // right
+  // This asymmetry produced seven separate floating-roof defects (neonTower
+  // chevron/hall, interlagos + cota terraces, zandvoort huts, madrid bays,
+  // imola village) — check it before adding a caller. addCyl/addCone/addFrustum
+  // are base-anchored the same way.
   function addPrism(out, c, sz, col, basis) {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const hx = sz[0] / 2, hl = sz[2] / 2, h = sz[1], ref = vadd(c, u, h * 0.4);
