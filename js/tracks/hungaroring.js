@@ -243,7 +243,11 @@
           const a = anchor(kk, side, 8);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
-          addCyl(out, a.c, 0.12, 10, LAMP_POST, 5, b);
+          addCyl(out, vadd(a.c, a.u, -0.4), 0.12, 10.4, LAMP_POST, 5, b);
+          // Cantilever arm bridging pole -> head. Without it the head hung 1.8 m
+          // out from the column with clear sky between them, so every lamp on
+          // the circuit read as a small box floating beside a bare pole.
+          addBox(out, vadd(vadd(a.c, a.u, 9.2), a.r, side * 0.9), [1.9, 0.16, 0.18], LAMP_POST, b);
           const headC = vadd(vadd(a.c, a.u, 9.2), a.r, side * 1.8);
           addBox(out, headC, [1.0, 0.3, 0.7], LAMP_HEAD, b);
         }
