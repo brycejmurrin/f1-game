@@ -178,6 +178,15 @@ bury, the terrain over-track clip). Two gaps remain:
   crossover regressed precisely because its deck was authored 720 m away from
   the crossing it was meant to span, and no check related the two.
 
-The same VM harness can answer both: it already has every primitive's oriented
-bounds. A `--clip` mode that reports primitive pairs sharing volume across
-different models would close the prop-vs-prop gap using machinery that exists.
+`float-audit.cjs --clip` implements the first half of this: it reports primitive
+pairs sharing significant volume, filtered to trackside props of comparable size
+(landforms are excluded — mountains and backdrop mounds are *built* to
+interpenetrate, and unfiltered they drown everything else).
+
+**It is exploratory, not a defect count.** Dense scenery interpenetrates by
+design — forest canopies, crowd boxes, stacked building detail — and the pass
+cannot separate those from mistakes because it has no model identity: on Monza
+it reports ~15 700 pairs, nearly all legitimate. Finishing it means tagging each
+primitive with its emitting call site (the machinery `--why` already uses) and
+reporting only pairs from DIFFERENT models. That is the remaining work; until
+then the ranked list is a lead, not a verdict.

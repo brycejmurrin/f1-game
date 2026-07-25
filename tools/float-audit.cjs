@@ -404,6 +404,82 @@ function printOne(res, top) {
   }
 }
 
+// --clip: prop-vs-prop interpenetration. along() warns that a box longer than
+// the true node spacing shares real volume with its neighbour (z-fighting on
+// straights, visible overlap on hairpins) but nothing enforces it. Report pairs
+// sharing significant volume, skipping CONTAINMENT (a window band inside a wall
+// is deliberate detailing, not a clip).
+function clipAudit(id) {
+  const { Tracks, prims } = buildContext();
+  const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
+  // Landforms (mountains, ridges, backdrop mounds) are BUILT to interpenetrate,
+  // and they dwarf everything else, so an unfiltered pass is all noise. Restrict
+  // to trackside props of comparable size — where along()'s overlap hazard and
+  // real modelling mistakes actually live.
+  const MAXDIM = 25, NEAR = 70;
+  const span = (p) => Math.max(p.maxX - p.minX, p.maxY - p.minY, p.maxZ - p.minZ);
+  const nearTrack = (p) => {
+    const cx = (p.minX + p.maxX) / 2, cz = (p.minZ + p.maxZ) / 2;
+    for (let k = 0; k < track.n; k += 4) {
+      const dx = cx - track.px[k], dz = cz - track.pz[k];
+      if (dx * dx + dz * dz < NEAR * NEAR) return true;
+    }
+    return false;
+  };
+  const G = 10, grid = new Map(), hits = [];
+  const vol = (p) => (p.maxX - p.minX) * (p.maxY - p.minY) * (p.maxZ - p.minZ);
+  prims.forEach((p, i) => {
+    if (vol(p) < 0.05 || span(p) > MAXDIM || !nearTrack(p)) return;
+    for (let gx = Math.floor(p.minX / G); gx <= Math.floor(p.maxX / G); gx++)
+      for (let gz = Math.floor(p.minZ / G); gz <= Math.floor(p.maxZ / G); gz++) {
+        const k = ck(gx, gz);
+        let a = grid.get(k); if (!a) grid.set(k, a = []);
+        a.push(i);
+      }
+  });
+  const seen = new Set();
+  for (const [, arr] of grid) {
+    for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
+      const a = prims[arr[i]], b = prims[arr[j]];
+      const key = arr[i] < arr[j] ? arr[i] * 1e7 + arr[j] : arr[j] * 1e7 + arr[i];
+      if (seen.has(key)) continue; seen.add(key);
+      const ox = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX);
+      const oy = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY);
+      const oz = Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ);
+      if (ox <= 0.02 || oy <= 0.02 || oz <= 0.02) continue;
+      const ov = ox * oy * oz, va = vol(a), vb = vol(b), small = Math.min(va, vb);
+      if (ov < 0.5) continue;
+      if (ov > small * 0.85) continue;              // containment: intentional detail
+      if (ov / small < 0.30) continue;              // incidental touch
+      if (Math.max(va, vb) / small > 8) continue;   // detail inside a mass
+      hits.push({ ov, a, b });
+    }
+  }
+  hits.sort((x, y) => y.ov - x.ov);
+  return { id, pairs: hits.length, top: hits.slice(0, 8) };
+}
+
+if (args.includes("--clip")) {
+  const ids = args[0] === "--all" ? buildContext().Tracks.LIST.map((d) => d.id) : [args[0]];
+  let total = 0;
+  for (const id of ids) {
+    const r = clipAudit(id);
+    total += r.pairs;
+    console.log(`\n${r.id.padEnd(13)} ${r.pairs} interpenetrating pair(s)  ` +
+                `[EXPLORATORY — see note below]`);
+    for (const h of r.top)
+      console.log(`   ${h.ov.toFixed(1).padStart(7)} m3  ${h.a.name} x ${h.b.name}  ` +
+                  `@(${((h.a.minX + h.a.maxX) / 2).toFixed(0)}, ${((h.a.minZ + h.a.maxZ) / 2).toFixed(0)})`);
+  }
+  console.log(`\nNOTE: counts are NOT yet actionable. Dense scenery interpenetrates
+by design — forest canopies, crowd boxes, stacked building detail — and this
+pass cannot tell those from mistakes because it has no model identity. To make
+it useful, tag primitives with their emitting call site (as --why does) and
+report only pairs from DIFFERENT models. Until then treat the ranked list as a
+lead, not a defect count.`);
+  process.exit(0);
+}
+
 if (args[0] === "--all") {
   const { Tracks } = buildContext();
   const ids = Tracks.LIST.map((d) => d.id);
