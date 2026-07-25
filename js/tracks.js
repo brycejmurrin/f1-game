@@ -2732,7 +2732,10 @@ const Tracks = (function () {
       }
       addFrustum(out, vadd(p.c, p.u, -0.6), baseW * 0.5, baseW * 0.335, h + 0.6, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);   // base sunk 0.6
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
-      if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
+      // Mast stands on the CAP's top face. The cap box is centred at h with
+      // height baseW*0.18, so its top is h + baseW*0.09 — using the full 0.18
+      // left the mast hanging half a cap-height above it.
+      if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.09 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
       blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
     };
     // Advertising hoarding / billboard: a panel on two slim posts.
