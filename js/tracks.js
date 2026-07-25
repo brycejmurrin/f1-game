@@ -1832,7 +1832,12 @@ const Tracks = (function () {
         // safely behind the shell never trips it, so intended crowds are unchanged.
         out._mat = MAT.CONCRETE;
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
-        if (!rejBox(riserC, [1.3, 1.5, len], b)) RAW.addBox(out, riserC, [1.3, 1.5, len], riser, b);
+        // If the riser is rejected, this row has no seating — so skip its
+        // spectators too. The bodies below go out through RAW (unguarded), so
+        // without this they stayed behind as a row of people sitting on thin
+        // air where the stand had been dropped.
+        if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
+        RAW.addBox(out, riserC, [1.3, 1.5, len], riser, b);
         out._mat = MAT.FABRIC;
         for (let s2 = 0; s2 < perRow; s2++) {
           if (s2 % 10 === 9) continue;                       // aisle / vomitory gap
@@ -2430,7 +2435,10 @@ const Tracks = (function () {
       } else if (kind === "chevron") {                           // pitched / gabled roof block
         const bh = h * 0.82;
         sec(0, w, bh, d, k * 3.7 + side * 1.9);
-        addPrism(out, vadd(a.c, a.u, bh + h * 0.09), [w, h * 0.18, d], cap, b);                              // gable roof (ridge along tangent)
+        // addPrism takes its `c` as the BASE, not the centre (unlike addBox), so
+        // adding half the roof height here lifted the gable clear of the tower —
+        // h*0.09 of open sky under every chevron roof (9 m on a 100 m tower).
+        addPrism(out, vadd(a.c, a.u, bh), [w, h * 0.18, d], cap, b);                                         // gable roof (ridge along tangent)
         if (neonOn) addBox(out, vadd(a.c, a.u, bh + h * 0.18), [w * 1.02, 0.5, d * 1.02], neon, b);          // eave neon
       } else if (kind === "notch") {                             // twin slabs split by a vertical slot
         const podH = h * 0.22, off = w * 0.30;
@@ -2480,7 +2488,7 @@ const Tracks = (function () {
       } else if (kind === "hall") {                              // low wide gabled hall (market / depot)
         const hh = h * 0.5;
         sec(0, w, hh * 0.7, d, k * 3.3 + side);                                             // low body
-        addPrism(out, vadd(a.c, a.u, hh * 0.7 + hh * 0.15), [w, hh * 0.3, d], cap, b);      // gable roof
+        addPrism(out, vadd(a.c, a.u, hh * 0.7), [w, hh * 0.3, d], cap, b);                  // gable roof (base-anchored)
         if (neonOn) addBox(out, vadd(a.c, a.u, hh * 0.7), [w * 1.02, 0.4, d * 1.02], neon, b);  // eave neon
       } else { // setback
         const setH = h * 0.84;

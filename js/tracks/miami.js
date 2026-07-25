@@ -255,8 +255,11 @@
           addBox(out, vadd(vadd(c, u, h * 0.5),  rad2,  6), [12, h + 2, segW], GREYWHITE, [rad2, u, tan]);
           // upper shell tier
           addBox(out, vadd(vadd(c, u, h + 10),   rad2,  9), [11, 18, segW + 1], WHITE,     [rad2, u, tan]);
-          // coral/teal rim crown — thicker identity band
-          addBox(out, vadd(vadd(c, u, h + 22),   rad2,  9), [12, 4.2, segW + 2],
+          // coral/teal rim crown — thicker identity band. Seated ON the shell
+          // tier (which tops out at h+19): at h+22 its underside sat at h+19.9,
+          // leaving a 0.9 m slot right around the 48-segment ring ~78 m up —
+          // a band of boxes visibly hanging in the sky beside the circuit.
+          addBox(out, vadd(vadd(c, u, h + 20.9), rad2,  9), [12, 4.2, segW + 2],
             (i % 2) ? CORAL : TEAL, [rad2, u, tan]);
           // outer aqua accent stripe (Dolphins cue on the bowl shell)
           if (i % 2 === 0)
