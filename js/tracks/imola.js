@@ -298,8 +298,16 @@
         const r = at.r, u = at.u, t = at.t;
         const baseY = groundYAt(K(0.02), 110);
         const base = [at.c[0], baseY, at.c[2]];
+        // Ground every building at ITS OWN position. A single sample taken at
+        // (K(0.02), 110) was reused for a village spread ±80 m along the track
+        // and out past 180 m, so on Imola's hillside the huts stood up to 47 m
+        // clear of the land they were meant to sit on.
+        const dsM = Math.hypot(px[1] - px[0], pz[1] - pz[0]) || 1;   // node spacing
         const put = (alongM, outM, rise, w, h, d, col) => {
-          const foot = vadd(vadd(vadd(base, t, alongM), r, -outM), u, rise);
+          const kk = ((K(0.02) + Math.round(alongM / dsM)) % n + n) % n;
+          const gy = groundYAt(kk, 110 + outM);
+          const here = [base[0], Number.isFinite(gy) ? gy : base[1], base[2]];
+          const foot = vadd(vadd(vadd(here, t, alongM), r, -outM), u, rise);
           addBox(out, vadd(foot, u, h / 2), [w, h, d], col, [r, u, t]);
           // Roof sits ON the wall box (which spans foot .. foot+h). addPrism
           // anchors at its BASE, so the +1.0 left every village roof hovering.
