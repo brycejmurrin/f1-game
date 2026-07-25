@@ -103,8 +103,14 @@
           basis: [a.t, a.u, a.r],
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addPrism(stage, vadd(a.c, a.u, rows * rise * 0.5),
-                   [rows * step, rows * rise, len], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
+          // Terrace mass under the seating. Was an addPrism lifted by half the
+          // bank height — but addPrism anchors at its BASE, so the ramp started
+          // in mid-air, and its footprint axes were swapped relative to the
+          // seats (which spread by `len` along a.t and step by rows*step along
+          // a.r), leaving whole rows over nothing. A box on the ground covering
+          // the real seating footprint carries every row.
+          addBox(stage, vadd(a.c, a.u, rows * rise * 0.5),
+                 [len, rows * rise, rows * step], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
           stage._mat = 0;
           for (let r = 0; r < rows; r++)
             for (let c = 0; c < seats; c++) {

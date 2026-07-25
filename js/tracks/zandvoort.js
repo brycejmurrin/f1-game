@@ -422,8 +422,9 @@
           // Center at a.c + u*(hutH/2) so base = a.c[1], no floating
           addBox(out, vadd(vadd(a.c, a.u, hutH / 2), a.t, offset),
                  [5.5, hutH, 5.5], hutCol, b);
-          // A-frame roof prism on top of each hut
-          addPrism(out, vadd(vadd(a.c, a.u, hutH + 0.8), a.t, offset),
+          // A-frame roof prism on top of each hut. addPrism anchors at its BASE,
+          // so the extra half-height floated every roof 0.8 m over its hut.
+          addPrism(out, vadd(vadd(a.c, a.u, hutH), a.t, offset),
                    [5.8, 1.6, 5.8], [0.72, 0.34, 0.18], b);
         }
       });
