@@ -3903,9 +3903,14 @@ const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0
 const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0 };
 const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0 };
 const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0 };
-const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0 };
-const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 };
-const _wmStartD = { roughness: 0.80, specular: 0.22, detail: 0 };
+// depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
+// bias its depth toward the camera rather than relying on the small geometric
+// lift alone — that lift is fixed in metres and loses to depth quantisation at
+// range, which is what makes a decal shimmer and drop out as you approach.
+const _startBias = [-1, -2];
+const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0, depthBias: _startBias };
+const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
+const _wmStartD = { roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
 const _wmPropsWetN = { emissive: 0, roughness: 0.55, specular: 0.38 };
 const _wmPropsWetD = { roughness: 0.55, specular: 0.38 };
 const _wmPropsDryN = { emissive: 0, roughness: 0.85, specular: 0.20 };

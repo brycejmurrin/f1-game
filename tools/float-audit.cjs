@@ -107,7 +107,7 @@ function buildContext(opts) {
           if (y < minY) minY = y; if (y > maxY) maxY = y;
           if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
         }
-        const rec = { name, minX, maxX, minY, maxY, minZ, maxZ };
+        const rec = { name, minX, maxX, minY, maxY, minZ, maxZ, mat: out._mat || 0 };
         // --why: capture the emitting source line, but only for primitives the
         // first pass already flagged. The build is deterministic, so the second
         // pass reproduces identical geometry and this stays cheap.
@@ -133,7 +133,7 @@ function buildContext(opts) {
   runFile("js/tracks.js");
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
-  return { Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, prims };
+  return { Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, TrackGeom: ctx.TrackGeom, prims };
 }
 
 // ---------------------------------------------------------------------------
@@ -457,6 +457,76 @@ function clipAudit(id) {
   }
   hits.sort((x, y) => y.ov - x.ov);
   return { id, pairs: hits.length, top: hits.slice(0, 8) };
+}
+
+// --foliage: canopy pushing through barriers. forestEdge() sizes its `dist` by
+// canopy radius so foliage cannot reach a wall, but raw per-track tree()/pine()
+// calls at a small gap have no such guard. Material tags separate the two
+// populations without needing call-site capture.
+function foliageAudit(id) {
+  const { Tracks, TrackGeom, prims } = buildContext();
+  const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
+  const M = TrackGeom.MAT || {};
+  const FOL = M.FOLIAGE, WOOD = M.WOOD;
+  const isFol = (p) => p.mat === FOL || p.mat === WOOD;
+  // A barrier is hard material sitting close to the racing line.
+  const nearEdge = (p) => {
+    const cx = (p.minX + p.maxX) / 2, cz = (p.minZ + p.maxZ) / 2;
+    let best = Infinity;
+    for (let k = 0; k < track.n; k += 2) {
+      const dx = cx - track.px[k], dz = cz - track.pz[k];
+      const d = Math.sqrt(dx * dx + dz * dz) - track.hw[k];
+      if (d < best) best = d;
+    }
+    return best;
+  };
+  const bar = [], fol = [];
+  for (const p of prims) {
+    if (isFol(p)) { fol.push(p); continue; }
+    if (p.mat === M.CONCRETE || p.mat === M.METAL || p.mat === 0) {
+      const h = p.maxY - p.minY, w = Math.max(p.maxX - p.minX, p.maxZ - p.minZ);
+      if (h > 0.5 && h < 6 && w < 12) bar.push(p);   // wall/fence/guardrail-shaped
+    }
+  }
+  const G = 8, grid = new Map();
+  for (const b of bar) {
+    if (nearEdge(b) > 6) continue;                   // only true trackside barriers
+    for (let gx = Math.floor(b.minX / G); gx <= Math.floor(b.maxX / G); gx++)
+      for (let gz = Math.floor(b.minZ / G); gz <= Math.floor(b.maxZ / G); gz++) {
+        const k = ck(gx, gz); let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(b);
+      }
+  }
+  const hits = [];
+  for (const f of fol) {
+    const seen = new Set();
+    for (let gx = Math.floor(f.minX / G); gx <= Math.floor(f.maxX / G); gx++)
+      for (let gz = Math.floor(f.minZ / G); gz <= Math.floor(f.maxZ / G); gz++) {
+        const arr = grid.get(ck(gx, gz)); if (!arr) continue;
+        for (const b of arr) {
+          if (seen.has(b)) continue; seen.add(b);
+          const ox = Math.min(f.maxX, b.maxX) - Math.max(f.minX, b.minX);
+          const oy = Math.min(f.maxY, b.maxY) - Math.max(f.minY, b.minY);
+          const oz = Math.min(f.maxZ, b.maxZ) - Math.max(f.minZ, b.minZ);
+          if (ox > 0.05 && oy > 0.05 && oz > 0.05)
+            hits.push({ pen: Math.min(ox, oz), ov: ox * oy * oz, f, b });
+        }
+      }
+  }
+  hits.sort((x, y) => y.pen - x.pen);
+  return { id, hits };
+}
+
+if (args.includes("--foliage")) {
+  const ids = args[0] === "--all" ? buildContext().Tracks.LIST.map((d) => d.id) : [args[0]];
+  for (const id of ids) {
+    const r = foliageAudit(id);
+    console.log(`\n${r.id.padEnd(13)} ${r.hits.length} canopy/barrier intersection(s)`);
+    for (const h of r.hits.slice(0, 6))
+      console.log(`   ${h.pen.toFixed(2).padStart(6)} m into a ${h.b.name}  ` +
+                  `canopy ${h.f.name} @(${((h.f.minX + h.f.maxX) / 2).toFixed(0)}, ` +
+                  `${((h.f.minZ + h.f.maxZ) / 2).toFixed(0)})`);
+  }
+  process.exit(0);
 }
 
 if (args.includes("--clip")) {

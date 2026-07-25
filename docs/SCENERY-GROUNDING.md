@@ -190,3 +190,39 @@ it reports ~15 700 pairs, nearly all legitimate. Finishing it means tagging each
 primitive with its emitting call site (the machinery `--why` already uses) and
 reporting only pairs from DIFFERENT models. That is the remaining work; until
 then the ranked list is a lead, not a verdict.
+
+## 7. Clipping you can fix in the RENDERER, without moving models
+
+Not every visual "clip" is a placement bug. Two classes are pure rendering:
+
+**Z-fighting on deliberately coplanar surfaces** (decals on tarmac, window
+bands on facades, kerb ribbons). The usual workaround is a small geometric lift
+— but a lift is fixed in metres while depth precision is not: the main camera
+runs a `0.3 m` near plane against a `900 m` far plane, and a non-reversed depth
+buffer spends almost all its precision in the first few metres. So a lift that
+looks right in the pit lane quantises away at distance and the decal shimmers or
+drops out.
+
+The fix is `POLYGON_OFFSET_FILL`, now supported via `opts.depthBias =
+[factor, units]` in `GLX.draw()` and used by the start line. Polygon offset
+scales with the fragment's depth slope, so it wins at every distance and
+grazing angle, costs nothing, and **moves no geometry**. Use it for any new
+decal rather than lifting the mesh.
+
+Further render-side options, in order of value if decal shimmer persists:
+raise the near plane (biggest single win for depth precision — it is the
+*ratio* that matters, so `0.3 → 0.6` roughly halves the error), then reversed-Z
+with `WEBGL_clip_control` where available, and only then a logarithmic depth
+shader (it writes `gl_FragDepth` and disables early-Z, so it is a real cost).
+
+**Canopy pushing through barriers.** `float-audit.cjs <track> --foliage`
+reports foliage primitives intersecting trackside barrier-shaped geometry, with
+the penetration depth. `forestEdge()` already sizes its `dist` by canopy radius
+so it cannot reach a wall; raw per-track `tree()`/`pine()` calls at a small gap
+have no such guard, and that is where the intersections come from.
+
+⚠ Same caveat as `--clip`: the barrier side is classified by *shape and
+material* (untagged or hard-material boxes 0.5–6 m tall within 6 m of the road
+edge), which also catches marshal posts, signage and stand fronts. Suzuka
+reports 641 and Monza 1 — the ordering is meaningful, the absolute counts are
+not. Tightening it needs the same call-site tagging as `--clip`.
